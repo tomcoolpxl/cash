@@ -1,0 +1,138 @@
+//! Argument encoding for `cmd.exe` — **D32** — and for native processes generally.
+//!
+//! Windows has no `execve`: `CreateProcessW` takes a single command-line *string*, and
+//! the callee parses it again. For ordinary executables that means encoding arguments
+//! the way the Microsoft C runtime expects. For `.bat` and `.cmd`, it means surviving a
+//! second parse by `cmd.exe`, which has its own metacharacters — `& | ^ < > ( ) %` — and
+//! its own idea of quoting.
+//!
+//! D32 accepts that "correct for all inputs" is unachievable here and requires the gap
+//! to be documented rather than papered over. [`is_safe_for_cmd`] is that documentation
+//! in executable form.
+//!
+//! This is **not** a conflict with D4. D4 forbids rewriting arguments *semantically* —
+//! guessing which ones are paths. This is quoting for a specific, known interpreter that
+//! cash is deliberately invoking.
+
+/// Encode one argument the way the Microsoft C runtime parses it.
+///
+/// The rules are unintuitive but exact: backslashes are literal except when they
+/// immediately precede a quote, where they must be doubled; a literal quote is escaped
+/// with a backslash.
+#[must_use]
+pub fn quote_argument(arg: &str) -> String {
+    // A non-empty argument with nothing special in it needs no quoting at all.
+    if !arg.is_empty() && !arg.contains([' ', '\t', '\n', '\u{b}', '"']) {
+        return arg.to_string();
+    }
+
+    let mut out = String::with_capacity(arg.len() + 2);
+    out.push('"');
+
+    let mut backslashes = 0usize;
+    for ch in arg.chars() {
+        match ch {
+            '\\' => {
+                backslashes += 1;
+                out.push('\\');
+            }
+            '"' => {
+                // Double the run of backslashes, then escape the quote itself.
+                out.extend(std::iter::repeat_n('\\', backslashes + 1));
+                out.push('"');
+                backslashes = 0;
+            }
+            _ => {
+                backslashes = 0;
+                out.push(ch);
+            }
+        }
+    }
+
+    // Backslashes immediately before the closing quote would otherwise escape it.
+    out.extend(std::iter::repeat_n('\\', backslashes));
+    out.push('"');
+    out
+}
+
+/// Build a full command line for `CreateProcessW`.
+#[must_use]
+pub fn build_command_line(program: &str, args: &[String]) -> String {
+    let mut line = quote_argument(program);
+    for arg in args {
+        line.push(' ');
+        line.push_str(&quote_argument(arg));
+    }
+    line
+}
+
+/// Characters `cmd.exe` treats specially outside of quotes.
+const CMD_METACHARACTERS: &[char] = &['(', ')', '%', '!', '^', '"', '<', '>', '&', '|'];
+
+/// Encode one argument to survive `cmd.exe`'s parse *and* the callee's (D32).
+///
+/// Applies CRT quoting first, then caret-escapes every character `cmd` would otherwise
+/// act on. The caret survives `cmd`'s parse and is removed before the callee sees it.
+#[must_use]
+pub fn escape_for_cmd(arg: &str) -> String {
+    let quoted = quote_argument(arg);
+
+    let mut out = String::with_capacity(quoted.len() * 2);
+    for ch in quoted.chars() {
+        if CMD_METACHARACTERS.contains(&ch) {
+            out.push('^');
+        }
+        out.push(ch);
+    }
+    out
+}
+
+/// Build the command line for `cmd.exe /d /s /c` (D8's `.bat` / `.cmd` dispatch).
+///
+/// `/d` skips AutoRun commands from the registry, `/s` makes the outer quoting rules
+/// predictable, and `/c` runs and exits.
+#[must_use]
+pub fn build_cmd_command_line(script: &str, args: &[String]) -> String {
+    let mut inner = escape_for_cmd(script);
+    for arg in args {
+        inner.push(' ');
+        inner.push_str(&escape_for_cmd(arg));
+    }
+
+    // /s plus the outer quotes means cmd strips exactly the first and last quote and
+    // treats everything between as the command.
+    format!("cmd.exe /d /s /c \"{inner}\"")
+}
+
+/// Why an argument cannot be passed safely through `cmd.exe`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CmdHazard {
+    /// Contains a newline. `cmd` treats it as a command separator and there is no
+    /// escape that survives.
+    Newline,
+    /// Contains a NUL byte, which cannot appear in a Win32 command line at all.
+    Nul,
+    /// Contains `%`, which `cmd` may expand as a variable reference. Caret-escaping
+    /// helps outside quotes but is not reliable within them.
+    PercentExpansion,
+}
+
+/// Report whether an argument survives `cmd.exe` intact — D32's residual gaps, made
+/// checkable rather than merely documented.
+///
+/// A caller that wants D26's fail-loudly posture can refuse these; D32 as decided lets
+/// them through and documents the risk. `cash doctor` (D35) can use this to explain a
+/// `.bat` invocation that behaved strangely.
+#[must_use]
+pub fn is_safe_for_cmd(arg: &str) -> Result<(), CmdHazard> {
+    if arg.contains('\0') {
+        return Err(CmdHazard::Nul);
+    }
+    if arg.contains('\n') || arg.contains('\r') {
+        return Err(CmdHazard::Newline);
+    }
+    if arg.contains('%') {
+        return Err(CmdHazard::PercentExpansion);
+    }
+    Ok(())
+}

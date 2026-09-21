@@ -1,8 +1,8 @@
 //! Process queries that the job-object layer and D42's elevated-child tracking need.
 
-use windows_sys::Win32::Foundation::{CloseHandle, FALSE};
+use windows_sys::Win32::Foundation::{CloseHandle, FALSE, FILETIME};
 use windows_sys::Win32::System::Threading::{
-    GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
+    GetExitCodeProcess, GetProcessTimes, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
 };
 
 /// `GetExitCodeProcess` reports this while a process is still running.
@@ -33,4 +33,51 @@ pub fn is_pid_alive(pid: u32) -> bool {
     }
 
     ok != 0 && code == STILL_ACTIVE
+}
+
+/// Total CPU time a process has consumed, in 100-nanosecond units.
+///
+/// The honest way to verify D19's suspend actually works: a suspended process stops
+/// accruing CPU time immediately and deterministically, whereas observing side effects
+/// like file writes is slow and racy.
+///
+/// Returns `None` if the process cannot be opened, which usually means it has exited.
+#[must_use]
+pub fn cpu_time(pid: u32) -> Option<u64> {
+    // SAFETY: OpenProcess returns null rather than a bad handle on failure.
+    let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid) };
+    if handle.is_null() {
+        return None;
+    }
+
+    let mut creation = FILETIME { dwLowDateTime: 0, dwHighDateTime: 0 };
+    let mut exit = FILETIME { dwLowDateTime: 0, dwHighDateTime: 0 };
+    let mut kernel = FILETIME { dwLowDateTime: 0, dwHighDateTime: 0 };
+    let mut user = FILETIME { dwLowDateTime: 0, dwHighDateTime: 0 };
+
+    // SAFETY: handle is valid and all four out-params are valid FILETIMEs.
+    let ok = unsafe {
+        GetProcessTimes(
+            handle,
+            &raw mut creation,
+            &raw mut exit,
+            &raw mut kernel,
+            &raw mut user,
+        )
+    };
+    // SAFETY: closing a handle we just opened, exactly once.
+    unsafe {
+        CloseHandle(handle);
+    }
+
+    if ok == 0 {
+        return None;
+    }
+
+    Some(as_u64(kernel) + as_u64(user))
+}
+
+/// Combine a `FILETIME`'s halves into a single count of 100ns intervals.
+const fn as_u64(time: FILETIME) -> u64 {
+    ((time.dwHighDateTime as u64) << 32) | (time.dwLowDateTime as u64)
 }
