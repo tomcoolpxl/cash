@@ -81,3 +81,30 @@ pub fn cpu_time(pid: u32) -> Option<u64> {
 const fn as_u64(time: FILETIME) -> u64 {
     ((time.dwHighDateTime as u64) << 32) | (time.dwLowDateTime as u64)
 }
+
+/// Terminate a process immediately (`kill -9`, D21).
+///
+/// Uncatchable, as `SIGKILL` is on POSIX. `TerminateProcess` runs no cleanup in the
+/// target, which is the point: this is what you reach for when asking politely has
+/// already failed.
+pub fn terminate(pid: u32) -> std::io::Result<()> {
+    use windows_sys::Win32::System::Threading::{PROCESS_TERMINATE, TerminateProcess};
+
+    // SAFETY: OpenProcess returns null rather than a bad handle on failure.
+    let handle = unsafe { OpenProcess(PROCESS_TERMINATE, FALSE, pid) };
+    if handle.is_null() {
+        return Err(std::io::Error::last_os_error());
+    }
+
+    // SAFETY: handle is valid and carries PROCESS_TERMINATE.
+    let ok = unsafe { TerminateProcess(handle, 1) };
+    // SAFETY: closing a handle we just opened, exactly once.
+    unsafe {
+        CloseHandle(handle);
+    }
+
+    if ok == 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    Ok(())
+}

@@ -36,7 +36,12 @@ impl builtins::Command for KillCommand {
         let mut signal_zero = false;
 
         // Default signal is SIGKILL.
-        let mut trap_signal = TrapSignal::Signal(nix::sys::signal::Signal::SIGKILL);
+        //
+        // cash: named rather than reached for through `nix`, which is Unix-only. That
+        // one reference was the sole reason this builtin was gated to Unix, leaving
+        // Windows with no `kill` at all — so D21 and D22 were unreachable and `kill`
+        // fell through to whatever external kill.exe happened to be on PATH.
+        let mut trap_signal = TrapSignal::try_from("KILL")?;
 
         // Try parsing the signal name (if specified).
         if let Some(signal_name) = &self.signal_name {

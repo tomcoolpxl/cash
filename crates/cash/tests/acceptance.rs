@@ -395,3 +395,67 @@ fn the_session_job_is_installed() {
         "D6's containment was not in force: {stderr}"
     );
 }
+
+// ---------------------------------------------------------------------------
+// D13 / D19 / D21 / D22 — signals.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn traps_are_accepted_for_signals_cash_can_deliver() {
+    // §9 measured `trap INT` rejected outright: Signal was an empty enum on Windows, so
+    // nothing signal-shaped worked at all.
+    for signal in ["INT", "TERM", "HUP", "QUIT", "SIGINT", "EXIT"] {
+        let out = cash(&format!(r#"trap "echo caught" {signal}; echo ok"#));
+        assert!(
+            out.stdout.contains("ok"),
+            "trap {signal} was rejected: {}{}",
+            out.stdout,
+            out.stderr
+        );
+    }
+}
+
+#[test]
+fn the_exit_trap_actually_fires() {
+    assert_eq!(cash(r#"trap "echo cleanup" EXIT; echo body"#).stdout, "body\ncleanup");
+}
+
+#[test]
+fn a_signal_with_no_win32_mechanism_is_refused_not_faked() {
+    // Accepting a trap that could never fire is the silent-failure pattern D20 and D26
+    // both reject. There is no Win32 mechanism behind SIGUSR1, so say so.
+    for signal in ["USR1", "USR2", "PIPE", "ALRM", "CHLD"] {
+        let out = cash(&format!(r#"trap "echo x" {signal}"#));
+        assert!(
+            out.stderr.contains("invalid signal"),
+            "trap {signal} should have been refused, got: {}{}",
+            out.stdout,
+            out.stderr
+        );
+    }
+}
+
+#[test]
+fn kill_is_a_builtin_and_lists_real_signal_numbers() {
+    // kill was gated to Unix by a single `nix::` reference, so Windows had no kill
+    // builtin at all and fell through to whatever kill.exe was on PATH.
+    assert!(cash("type kill").stdout.contains("builtin"));
+
+    let listed = cash("kill -l").stdout;
+    for expected in ["1) HUP", "2) INT", "9) KILL", "15) TERM"] {
+        assert!(listed.contains(expected), "kill -l missing {expected}:\n{listed}");
+    }
+    // Only what cash can actually deliver: no ILL, PIPE, USR1 that would never fire.
+    assert!(!listed.contains("USR1"), "kill -l lists a signal cash cannot deliver");
+}
+
+#[test]
+fn signal_names_and_numbers_round_trip() {
+    // These come from the enum's discriminants, because shared code converts with
+    // `s as i32`. Declaration order would make `kill -l KILL` answer 4 rather than 9.
+    assert_eq!(cash("kill -l 9").stdout, "KILL");
+    assert_eq!(cash("kill -l KILL").stdout, "9");
+    assert_eq!(cash("kill -l 15").stdout, "TERM");
+    assert_eq!(cash("kill -l TERM").stdout, "15");
+    assert_eq!(cash("kill -l 2").stdout, "INT");
+}

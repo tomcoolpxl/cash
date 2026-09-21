@@ -8,11 +8,10 @@ pub(crate) mod network;
 pub use crate::sys::stubs::poll;
 pub use crate::sys::stubs::resource;
 
-/// Signal processing utilities
-pub mod signal {
-    pub(crate) use crate::sys::stubs::signal::*;
-    pub(crate) use tokio::signal::ctrl_c as await_ctrl_c;
-}
+/// Signal processing utilities — cash's own (D13, D19, D21, D22), replacing the stub
+/// whose `Signal` was an empty enum.
+#[path = "windows/signal.rs"]
+pub mod signal;
 
 pub use crate::sys::stubs::terminal;
 pub use crate::sys::tokio_process as process;

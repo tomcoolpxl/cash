@@ -318,6 +318,28 @@ tested against bash. This is the largest single piece of owned code.
 Consequence: **signal semantics become cash's problem** — D13 (Ctrl-C), D19 (suspend),
 D21 and D22 (`kill`).
 
+**Status.** `sys/windows/signal.rs` replaces the stub whose `Signal` was an empty enum,
+so `trap` and `kill` work for the signals Windows can honestly deliver — `INT`, `TERM`,
+`HUP`, `QUIT`, `KILL`, `STOP`, `TSTP`, `CONT` — each backed by a real Win32 mechanism.
+Signals with no mechanism behind them (`USR1`, `PIPE`, `ALRM`, `CHLD`) are *refused*
+rather than accepted-and-ignored, because a trap that can never fire is the silent
+failure D20 and D26 both reject.
+
+`kill` is also now a builtin on Windows. It had been gated to Unix by a single `nix::`
+reference for its default signal, which meant `kill` fell through to whatever external
+`kill.exe` happened to be on `PATH`.
+
+**Known limitation — background job process tracking.** `$!` is empty and `kill %1`
+fails, because a background job is created as `JobTask::Internal(join_handle)`: a tokio
+task running the whole and-or list, not a tracked process. The child's pid lives inside
+that task and never reaches the job.
+
+This is inherited rather than Windows-specific — it behaves the same on Linux — but D11
+claims cash owns job control, so it is cash's to fix. Doing so means representing a
+background job by the process it actually spawned, which is a change to how jobs are
+built rather than a signal-layer fix. Until then `jobs`, `fg` and `bg` work while
+anything needing a pid does not.
+
 ### D12 — The name is cash
 
 crates.io is clear. The npm [dthree/cash](https://github.com/dthree/cash) collision is a
