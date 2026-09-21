@@ -19,6 +19,17 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
     ///
     /// * `target_dir` - The path to set as the working directory.
     pub fn set_working_dir(&mut self, target_dir: impl AsRef<Path>) -> Result<(), error::Error> {
+        // cash (D3/D10): this is the first of two chokepoints. Accept every spelling a
+        // script or a Windows tool might produce — `C:/src`, `C:\src`, `/c/src`, `/tmp`
+        // — and store the canonical form, so `$PWD` renders correctly for free because
+        // the rest of the shell simply echoes what was stored here.
+        #[cfg(windows)]
+        let abs_path = {
+            let spelled = target_dir.as_ref().to_string_lossy().into_owned();
+            let accepted = cash_win32::path::accept_path(&spelled);
+            self.absolute_path(accepted.as_path())
+        };
+        #[cfg(not(windows))]
         let abs_path = self.absolute_path(target_dir.as_ref());
 
         match std::fs::metadata(&abs_path) {
@@ -35,6 +46,20 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         // Normalize the path (but don't canonicalize it).
         let cleaned_path = abs_path.normalize();
 
+        // cash (D3/D10): store the canonical spelling in the shell's own cwd state, not
+        // just in `$PWD`. Anything reading `working_dir()` — the `pwd` builtin, relative
+        // path resolution, the prompt — then renders correctly without each one having
+        // to remember to convert.
+        #[cfg(windows)]
+        let cleaned_path = std::path::PathBuf::from(cash_win32::path::render(&cleaned_path));
+
+        // cash (D3): render the one canonical spelling — drive letter, forward slashes.
+        // `pwd` prints `C:/src/infra`, never `C:\src\infra`, because rendered paths
+        // usually become arguments to native executables where the wrong spelling is
+        // fatal rather than cosmetic: `terraform -chdir="$(pwd)/modules"` must work.
+        #[cfg(windows)]
+        let pwd = cash_win32::path::render(&cleaned_path);
+        #[cfg(not(windows))]
         let pwd = cleaned_path.to_string_lossy().to_string();
 
         self.env.update_or_add(
@@ -46,9 +71,15 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         )?;
         let oldpwd = std::mem::replace(self.working_dir_mut(), cleaned_path);
 
+        // cash (D3): `cd -` echoes $OLDPWD, so it must carry the same spelling as $PWD.
+        #[cfg(windows)]
+        let oldpwd = cash_win32::path::render(&oldpwd);
+        #[cfg(not(windows))]
+        let oldpwd = oldpwd.to_string_lossy().to_string();
+
         self.env.update_or_add(
             "OLDPWD",
-            variables::ShellValueLiteral::Scalar(oldpwd.to_string_lossy().to_string()),
+            variables::ShellValueLiteral::Scalar(oldpwd),
             |_| Ok(()),
             EnvironmentLookup::Anywhere,
             EnvironmentScope::Global,
