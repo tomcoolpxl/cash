@@ -1,0 +1,92 @@
+name: ci
+
+# Split per D43: bash language conformance runs on Linux, where a real bash
+# exists to diff against. Windows behaviour gets its own acceptance corpus and
+# is NOT compared to a bash reference — §4's divergences are deliberate, and a
+# bash reference would report every one as a failure.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # D43: language conformance. ~2,631 differential cases, each running the same
+  # script under brush and real bash and diffing stdout, stderr, exit status and
+  # filesystem effects. This is the suite cash inherits and must not regress.
+  conformance-linux:
+    name: Language conformance (Linux)
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        shell: bash
+        working-directory: vendor/brush
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: vendor/brush
+
+      - name: Reference bash version
+        run: bash --version
+
+      - name: Differential test suite
+        run: cargo xtask test integration
+
+  # The Windows build must stay clean: the workspace sets warnings = "deny",
+  # so any new warning fails the build rather than accumulating quietly.
+  build-windows:
+    name: Build (Windows)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: vendor/brush
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: vendor/brush
+
+      - name: Build
+        run: cargo build --release
+
+      # M1 replaces this with cash's own Windows acceptance corpus: one test
+      # per row of §4, plus the Starship prompt test required by D37.
+      - name: Smoke
+        run: ./target/release/brush.exe -c 'echo smoke-ok'
+
+  lint:
+    name: Format and lint
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        shell: bash
+        working-directory: vendor/brush
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: vendor/brush
+
+      - name: Format
+        run: cargo xtask check fmt
+
+      - name: Lint
+        run: cargo xtask check lint
