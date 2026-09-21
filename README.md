@@ -58,19 +58,28 @@ That list is meant to stay short.
 ## Layout
 
 ```
-crates/cash          the binary
-crates/cash-win32    the Win32 semantics layer — job objects, signals, paths, encoding
-vendor/brush         the language layer, vendored as a git subtree
-spec.md              47 decisions, with the reasoning behind each
-musings.md           the original exploration this came out of
+crates/cash              the binary
+crates/cash-win32        the Win32 semantics layer — job objects, signals, paths, encoding
+crates/cash-core         shell runtime: expansion, control flow, traps
+crates/cash-parser       bash grammar — tokenizer and parser
+crates/cash-builtins     the standard builtins
+crates/cash-interactive  line editing, history, completion
+crates/cash-shell        the shell library that crates/cash drives
+xtask/                   test orchestration
+spec.md                  the decisions, with the reasoning behind each
+NOTICE                   brush attribution and the list of modifications
 ```
 
-`cash-win32` lives outside `vendor/` on purpose: keeping the Win32 layer in its own crate
-keeps `vendor/` close to upstream and the two concerns separable.
+The `cash-core`, `cash-parser`, `cash-builtins`, `cash-interactive`, `cash-shell` and
+`cash-test-harness` crates are **absorbed from brush** at upstream commit `737dd57` and
+modified. Both projects are MIT, so this is a straightforward absorption rather than a
+dependency; see [NOTICE](NOTICE) for attribution and the list of changes.
 
-cash is a **hard fork** — bugs found in brush are fixed in `vendor/` rather than reported,
-and nothing is upstreamed. The upstream ref stays recorded so a future `git subtree pull`
-remains possible, but it will be a merge rather than a fast-forward.
+Nothing is upstreamed. The trade is a coherent codebase instead of a patched copy of
+someone else's, at the cost of porting future upstream improvements by hand.
+
+`cash-win32` stays a separate crate so the Windows semantics and the shell language
+remain separable.
 
 ## Build
 
@@ -105,12 +114,12 @@ MIT. Vendored brush is MIT, © Reuben Olinsky.
 
 ## Working on this
 
-The brush workspace is large. Release builds of it take ~2 minutes; **debug builds take
+The absorbed language layer is large. Release builds of it take ~2 minutes; **debug builds take
 ~45 seconds**, and per-crate tests are near-instant:
 
 ```bash
-cargo build -p brush-shell            # debug, for iterating
-cargo test -p brush-parser            # 235 tests, 0.12s
+cargo build -p cash                   # debug, for iterating
+cargo test -p cash-parser             # 235 tests, 0.12s
 cargo test -p cash-win32              # 72 tests
 ```
 
