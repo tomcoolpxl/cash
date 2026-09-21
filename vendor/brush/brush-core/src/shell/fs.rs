@@ -230,6 +230,21 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
     /// * `path` - The path to get the absolute form of.
     pub fn absolute_path(&self, path: impl AsRef<Path>) -> PathBuf {
         let path = path.as_ref();
+
+        // cash (D3/D10): the second chokepoint. Every path the shell resolves funnels
+        // through here, so accepting the Unix spellings once means `cat /c/Users/x`,
+        // `> /c/tmp/out` and `[ -f /c/Windows/win.ini` all work without each call site
+        // knowing about it. Relative paths and ordinary Windows paths pass through
+        // unchanged.
+        //
+        // `/dev/null` and friends never reach this point — `open_file` intercepts them
+        // first, because under D29's `\\?\` prefix `NUL` would name a file rather than
+        // the device (D7, D28).
+        #[cfg(windows)]
+        let accepted = cash_win32::path::accept_path(&path.to_string_lossy());
+        #[cfg(windows)]
+        let path = accepted.as_path();
+
         if path.as_os_str().is_empty() || path.is_absolute() {
             path.to_owned()
         } else {
