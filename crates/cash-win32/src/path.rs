@@ -247,3 +247,31 @@ pub fn to_unix(path: &Path) -> String {
 pub fn to_backslash(path: &Path) -> String {
     render(path).replace('/', "\\")
 }
+
+/// Win32 device names that are reserved in the ordinary path namespace (D28).
+///
+/// Reserved with *any* extension, so `nul.txt` is the device too.
+const RESERVED_NAMES: &[&str] = &[
+    "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
+    "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+];
+
+/// Whether a path's final component is a reserved Win32 device name (D28).
+///
+/// Such a path can only be opened as an ordinary file through the `\?\` namespace,
+/// which bypasses reserved-name parsing. D28 wants `touch nul` to create a file called
+/// `nul`, exactly as on Linux, because a POSIX script never means the device — it writes
+/// `/dev/null`, which D7 maps explicitly.
+#[must_use]
+pub fn is_reserved_name(path: &Path) -> bool {
+    let Some(name) = path.file_name() else {
+        return false;
+    };
+    let name = name.to_string_lossy();
+
+    // The name before the first dot is what Win32 matches against.
+    let stem = name.split('.').next().unwrap_or(&name);
+    RESERVED_NAMES
+        .iter()
+        .any(|reserved| stem.eq_ignore_ascii_case(reserved))
+}

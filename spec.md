@@ -575,20 +575,45 @@ symlink (D46), and `.lnk` shortcuts are a shell concept, not a filesystem one.
 
 cash follows symlinks and junctions transparently, as Win32 does by default.
 
-### D28 — Reserved names are ordinary filenames
+### D28 — REVOKED. Reserved names stay devices
 
-`nul`, `con`, `com1`–`com9`, `lpt1`–`lpt9`, `aux`, `prn` — and those names with any
-extension — are treated as regular files, not devices. `touch nul` creates a file called
-`nul`, exactly as on Linux.
+**Originally:** `nul`, `con`, `com1`–`com9`, `lpt1`–`lpt9`, `aux`, `prn` would be treated
+as ordinary files, so `touch nul` created a file called `nul` exactly as on Linux. The
+reasoning was sound — a POSIX script never means the device, it writes `/dev/null` — and
+D29's `\?\` prefix made it mechanically possible.
 
-Rationale: a POSIX script never means the device. It writes `/dev/null`, which D7 maps to
-the null device explicitly. Treating the bare name as a device would make `touch nul`
-silently write to a device instead of creating a file.
+**Revoked on implementation evidence.** It was built, and it worked at the shell layer:
 
-Enabled directly by D29 — the `\\?\` prefix bypasses Win32's reserved-name parsing. D7
-carves `/dev/null` back out so the discard case still works.
+```
+echo x > nul      created a real file
+[ -f nul ]        true
+ls                nul
+```
 
-Accepted cost: other Windows programs will disagree about that name.
+and then broke in a way that made it worse than not having it:
+
+```
+rm -f nul         builtin rm: fails, file remains
+cat nul           builtin cat: "Incorrect function"
+```
+
+**D28 and D48 are irreconcilable.** The bundled uutils builtins (D48) are third-party
+code with their own argument parsing; they open paths directly rather than through cash's
+file-open boundary, so they never see the `\?\` form that makes a reserved name
+reachable. Making them see it would mean cash translating path-shaped arguments for 165
+commands whose argument grammars it does not know — which is precisely the guessing that
+D4 exists to forbid, and the road that ends at `MSYS2_ARG_CONV_EXCL`.
+
+So the choice was between them, and D48 wins on measured value: self-contained, 2.2x
+faster, and it dissolves most of D35's problem. D28 was a niche convenience that, half
+implemented, produced files cash's own `rm` could not delete.
+
+**Standing behaviour:** `nul` and friends are devices, as every other Windows program
+sees them. `/dev/null` remains the way to discard output (D7), which is what a POSIX
+script writes anyway — so nothing the target use case needs is lost.
+
+`cash_win32::path::is_reserved_name` is kept: `cash doctor` (D35) can warn when a script
+redirects to a bare `nul` expecting a file.
 
 ### D29 — Always `\\?\`-prefixed UTF-16 paths internally
 
