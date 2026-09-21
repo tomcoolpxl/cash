@@ -25,15 +25,12 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: vendor/brush
     steps:
       - uses: actions/checkout@v4
 
       - uses: dtolnay/rust-toolchain@stable
 
       - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: vendor/brush
 
       - name: Reference bash version
         run: bash --version
@@ -49,23 +46,20 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: vendor/brush
     steps:
       - uses: actions/checkout@v4
 
       - uses: dtolnay/rust-toolchain@stable
 
       - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: vendor/brush
 
       - name: Build
-        run: cargo build --release
+        run: cargo build --release -p cash
 
       # M1 replaces this with cash's own Windows acceptance corpus: one test
       # per row of §4, plus the Starship prompt test required by D37.
       - name: Smoke
-        run: ./target/release/brush.exe -c 'echo smoke-ok'
+        run: ./target/release/cash.exe -c 'echo smoke-ok'
 
   lint:
     name: Format and lint
@@ -73,7 +67,6 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: vendor/brush
     steps:
       - uses: actions/checkout@v4
 
@@ -82,8 +75,6 @@ jobs:
           components: rustfmt, clippy
 
       - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: vendor/brush
 
       - name: Format
         run: cargo xtask check fmt

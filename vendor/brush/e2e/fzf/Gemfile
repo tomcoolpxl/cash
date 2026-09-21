@@ -1,3 +1,0 @@
-source 'https://rubygems.org'
-gem 'minitest', '5.25.4'
-gem 'minitest-ci'

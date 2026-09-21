@@ -1,0 +1,52 @@
+# Third-party notices
+
+## brush
+
+cash absorbs and modifies substantial portions of [brush](https://github.com/reubeno/brush),
+a bash/POSIX-compatible shell in Rust by Reuben Olinsky. The crates
+`brush-core`, `brush-parser`, `brush-builtins`, `brush-interactive`,
+`brush-shell`, `brush-coreutils-builtins` and `brush-test-harness`, and the
+`xtask` build tooling, originate there and have been modified.
+
+Absorbed at upstream commit `737dd57e3fec83448a0358b7099b5ae305e9a853`.
+
+Both projects are MIT licensed, so the code is used under the terms below. The
+copyright notice is reproduced as that licence requires.
+
+```
+MIT License
+
+Copyright (c) 2024 reuben olinsky
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+### Modifications
+
+Changes made to the absorbed code are marked in-source with `cash (Dnn)`
+comments referencing the decision in [spec.md](spec.md). As of absorption:
+
+- `brush-parser`: `case` constructs are consumed whole inside command
+  substitution, in both the tokenizer and the word parser (§9.1)
+- `brush-core`: CRLF line terminators in command substitution (D20), UTF-8 BOM
+  stripping when sourcing scripts (D41), the path model in `set_working_dir`
+  and `absolute_path` (D3/D10), and a dependency on `cash-win32`
+- `brush-builtins`: CRLF line terminators in `read` (D20)
+- Removed: `brush` (a binstall alias crate), `brush-experimental-builtins`,
+  `fuzz`, `benchmarks`, upstream documentation, CI and release tooling
