@@ -1096,8 +1096,23 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
                 }
 
                 // We trim trailing newlines, per spec.
-                let trimmed_len = cmd_output.trim_end_matches('\n').len();
-                cmd_output.truncate(trimmed_len);
+                //
+                // cash (D20): on Windows a CRLF terminator must lose its `\r` too.
+                // Otherwise `v=$(python get_version.py)` yields "1.2.0\r", and
+                // `[ "$v" = "1.2.0" ]` fails while *printing identically*, because the
+                // `\r` merely returns the cursor. Python, .NET, classic Win32 tools and
+                // cmd.exe all emit CRLF and cannot be fixed at their source.
+                #[cfg(windows)]
+                {
+                    let trimmed_len =
+                        cash_win32::text::trim_substitution_output(&cmd_output).len();
+                    cmd_output.truncate(trimmed_len);
+                }
+                #[cfg(not(windows))]
+                {
+                    let trimmed_len = cmd_output.trim_end_matches('\n').len();
+                    cmd_output.truncate(trimmed_len);
+                }
 
                 Expansion::from(ExpansionPiece::Splittable(cmd_output))
             }

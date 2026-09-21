@@ -513,6 +513,19 @@ fn read_line_with_reader(
                 if let Some(delim) = config.delimiter
                     && ch == delim
                 {
+                    // cash (D20): a CRLF terminator loses its `\r` as well, so
+                    // `while read -r l` over a CRLF file yields the same values it
+                    // would on Linux. Only when the delimiter is the default newline —
+                    // an explicit `-d` means the caller has its own framing, and a lone
+                    // `\r` with no `\n` is data, not a terminator.
+                    #[cfg(windows)]
+                    if delim == DEFAULT_DELIMITER
+                        && let Some(stripped) = line.strip_suffix('\r')
+                    {
+                        let stripped_len = stripped.len();
+                        line.truncate(stripped_len);
+                    }
+
                     return Ok(ReadResult::Line(line));
                 }
 

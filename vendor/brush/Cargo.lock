@@ -408,6 +408,7 @@ dependencies = [
  "bon",
  "brush-parser",
  "cached",
+ "cash-win32",
  "cfg-if",
  "check_elevation",
  "chrono",
@@ -748,6 +749,13 @@ checksum = "5abbd6eeda6885048d357edc66748eea6e0268e3dd11f326fff5bd248d779c26"
 dependencies = [
  "core_maths",
  "displaydoc",
+]
+
+[[package]]
+name = "cash-win32"
+version = "0.1.0"
+dependencies = [
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

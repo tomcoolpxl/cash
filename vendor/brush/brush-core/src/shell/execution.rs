@@ -134,6 +134,26 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         call_type: callstack::ScriptCallType,
     ) -> Result<ExecutionResult, error::Error> {
         let mut reader = std::io::BufReader::new(file);
+
+        // cash (D41): strip a leading UTF-8 BOM before parsing.
+        //
+        // Windows editors write one, and it is otherwise invisible while breaking the
+        // script completely: the shebang is not recognised and the first token carries
+        // three phantom bytes, producing `command not found: ﻿echo`.
+        #[cfg(windows)]
+        {
+            use std::io::BufRead;
+            let bom_len = match reader.fill_buf() {
+                Ok(buffer) if buffer.starts_with(cash_win32::text::BOM) => {
+                    cash_win32::text::BOM.len()
+                }
+                _ => 0,
+            };
+            if bom_len > 0 {
+                reader.consume(bom_len);
+            }
+        }
+
         let mut parser = brush_parser::Parser::new(&mut reader, &self.parser_options());
 
         tracing::debug!(target: trace_categories::PARSE, "Parsing sourced file: {}", source_info.source);

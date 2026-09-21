@@ -61,6 +61,9 @@ tokio = { version = "1.52.3", features = [
 ] }
 
 [target.'cfg(windows)'.dependencies]
+# cash: the Win32 semantics layer (D3, D20, D28, D41, ...). Lives outside vendor/ so
+# the shell semantics and the platform layer stay separable.
+cash-win32 = { path = "../../../crates/cash-win32" }
 check_elevation = "0.2.7"
 whoami = "2.1.1"
 
