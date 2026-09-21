@@ -108,8 +108,9 @@ with its own syntax is a coherent project; it is simply a different one, and "ru
 Terraform scripts unmodified" goes with it.
 
 **Accepted risk:** brush is one maintainer's project and Windows is explicitly preview.
-Abandonment would leave cash owning a ~40k-line fork. Survivable — MIT licence, clean
-build — but real, and a reason to keep §6.1's upstreaming path open.
+Abandonment would leave cash owning a ~40k-line fork. Under D9 that is the situation
+regardless — cash owns its copy and upstreams nothing — so abandonment costs only future
+fixes, not the existing code. MIT licence, clean build, 235 parser tests that run here.
 
 ### D2 — Compatibility target: unmodified POSIX-shaped `.sh` scripts
 

@@ -95,3 +95,22 @@ aliases whose target app is not installed. None of those announce themselves.
 ## Licence
 
 MIT. Vendored brush is MIT, © Reuben Olinsky.
+
+## Working on this
+
+The brush workspace is large. Release builds of it take ~2 minutes; **debug builds take
+~45 seconds**, and per-crate tests are near-instant:
+
+```bash
+cargo build -p brush-shell            # debug, for iterating
+cargo test -p brush-parser            # 235 tests, 0.12s
+cargo test -p cash-win32              # 72 tests
+```
+
+Reach for `--release` only when measuring performance or producing a binary to ship.
+Iterating on a parser change with full release rebuilds wastes minutes per attempt.
+
+When a parse is going wrong, trace the tokenizer rather than reasoning about it. Dropping
+a temporary `eprintln!` into `consume_nested_construct` found a bug in one run that three
+rounds of careful reading had missed — the token text carries the blank that preceded it,
+so `" esac"` arrives rather than `"esac"`.
