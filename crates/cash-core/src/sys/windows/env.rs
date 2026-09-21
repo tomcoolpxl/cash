@@ -4,6 +4,7 @@
 //! canonical POSIX forms (e.g. `Path` → `PATH`), and `HOME` is synthesized
 //! from `USERPROFILE` or `HOMEDRIVE`+`HOMEPATH` if not already present.
 
+use super::render_canonical_path;
 use std::collections::BTreeMap;
 
 /// Retrieves environment variables from the host process, applying
@@ -52,8 +53,19 @@ where
             Some(format!("{d}{p}"))
         });
         if let Some(home) = home {
+            // cash (D3): render canonically. $HOME is the root of ~ expansion,
+            // $HISTFILE and the .cashrc path, so a backslash spelling here leaks into
+            // all of them and leaves $PWD and $HOME disagreeing.
             vars.insert("HOME".to_string(), home);
         }
+    }
+
+    // cash (D3): render HOME canonically whether it was synthesized above or inherited
+    // from the Windows environment, which is the common case. Otherwise `$PWD` reads
+    // `C:/Users/me` while `$HOME` reads `C:\Users\me`, and string comparisons
+    // between them silently fail.
+    if let Some(home) = vars.get("HOME").cloned() {
+        vars.insert("HOME".to_string(), render_canonical_path(&home));
     }
 
     // Copy TEMP/TMP to TMPDIR if TMPDIR doesn't already exist.

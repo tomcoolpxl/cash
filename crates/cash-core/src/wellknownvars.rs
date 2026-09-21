@@ -323,9 +323,17 @@ pub(crate) fn init_well_known_vars(
         && let Some(home_dir) = shell.home_dir()
     {
         let histfile = home_dir.join(".cash_history");
+
+        // cash (D3): render after joining — joining a forward-slash path inserts a
+        // backslash separator, which would leave `C:/Users/me\.cash_history`.
+        #[cfg(windows)]
+        let histfile_str = cash_win32::path::render(&histfile);
+        #[cfg(not(windows))]
+        let histfile_str = histfile.to_string_lossy().to_string();
+
         shell.env_mut().set_global(
             "HISTFILE",
-            ShellVariable::new(ShellValue::String(histfile.to_string_lossy().to_string())),
+            ShellVariable::new(ShellValue::String(histfile_str)),
         )?;
     }
 

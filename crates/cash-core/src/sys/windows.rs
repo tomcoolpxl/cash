@@ -18,6 +18,12 @@ pub use crate::sys::stubs::terminal;
 pub use crate::sys::tokio_process as process;
 pub(crate) mod users;
 
+
+/// Render a path string in cash's canonical spelling: drive letter, forward slashes (D3).
+pub(crate) fn render_canonical_path(path: &str) -> String {
+    cash_win32::path::render(std::path::Path::new(path))
+}
+
 /// Platform-specific errors.
 #[derive(Debug, thiserror::Error)]
 pub enum PlatformError {}

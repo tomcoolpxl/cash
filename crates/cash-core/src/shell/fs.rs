@@ -104,12 +104,21 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
 
     /// Returns the shell's current home directory, if available.
     pub(crate) fn home_dir(&self) -> Option<PathBuf> {
-        if let Some(home) = self.env.get_str("HOME", self) {
+        let home = if let Some(home) = self.env.get_str("HOME", self) {
             Some(PathBuf::from(home.to_string()))
         } else {
             // HOME isn't set, so let's sort it out ourselves.
             users::get_current_user_home_dir()
-        }
+        };
+
+        // cash (D3): one canonical spelling. Everything derived from the home directory
+        // — `~` expansion, `$HISTFILE`, the default `.cashrc` path — inherits whatever
+        // this returns, so rendering here keeps them all consistent rather than leaving
+        // `$PWD` as `C:/Users/thraa` while `$HISTFILE` is `C:\Users\thraa\.cash_history`.
+        #[cfg(windows)]
+        let home = home.map(|h| PathBuf::from(cash_win32::path::render(&h)));
+
+        home
     }
 
     /// Finds executables with the given name in the shell's current PATH, yielding each match
