@@ -76,7 +76,40 @@ cash is its own binary providing a Win32 semantics layer, built on `brush-core` 
 suite.
 
 *How* it builds on them — library dependency versus fork — is D9, decided after the seam
-analysis in §5. D1 asserts only that the language layer is not rewritten.
+analysis in §6. D1 asserts only that the language layer is not rewritten.
+
+**Sizing, measured at M0.** The question "is brush worth it, or should cash be written
+from scratch?" was re-examined against numbers rather than intuition:
+
+| Crate | Lines |
+|---|---|
+| `brush-core` | 22,972 |
+| `brush-parser` | 9,667 |
+| `brush-builtins` | 7,636 |
+| `brush-interactive` | 4,177 |
+| **language layer** | **~40,300** |
+| Differential test cases | **2,631** across 118 files |
+
+Against an estimated 5–8k lines for cash's Win32 layer.
+
+**The decisive evidence is §9's failure distribution.** Every probe failure — paths,
+CRLF, `nul`, `exec 3>&1`, `trap INT`, BOM, process substitution — was in the *stubbed
+Win32 layer*, which cash writes from scratch either way. Nothing failed in the language,
+across functions, nested command substitution, `while read`, globbing, parameter
+expansion, arithmetic, pipelines and redirections. The single language-level bug found is
+§9.1's parser edge case.
+
+So from-scratch buys nothing on the hard Windows parts — they are stubs regardless — and
+costs the entire language plus the encoded edge-case knowledge in 2,631 differential
+tests.
+
+**The one honest case for from-scratch is dropping D2.** A purpose-built Windows shell
+with its own syntax is a coherent project; it is simply a different one, and "runs my
+Terraform scripts unmodified" goes with it.
+
+**Accepted risk:** brush is one maintainer's project and Windows is explicitly preview.
+Abandonment would leave cash owning a ~40k-line fork. Survivable — MIT licence, clean
+build — but real, and a reason to keep §6.1's upstreaming path open.
 
 ### D2 — Compatibility target: unmodified POSIX-shaped `.sh` scripts
 
@@ -244,6 +277,11 @@ reason — it is the minimal-diff way to get D3, which makes rebasing survivable
 
 Anything outside that table that starts needing patches is a signal to reconsider. The
 table is the early-warning system, so it must be updated whenever a decision adds to it.
+
+**Amended by §6.1.** M0 reconnaissance found that most of the "replaced" and "patched"
+rows land inside brush's existing internal `sys/windows/` abstraction, and most of those
+files **do not exist yet** — so the work is additive rather than invasive, and new files
+cannot conflict on rebase. Only process spawning is a genuine replacement.
 
 ### D10 — Path rendering via two chokepoints, not a core rewrite
 
@@ -934,8 +972,52 @@ Two specifics that matter:
 
 Seam 4 drove D10. Seams 1–3 drove D9.
 
-**Conclusion:** embedding gets the language for free but not a clean seam for the Win32
-layer, which is why D9 is a soft fork rather than a library dependency.
+**Conclusion:** embedding gets the language for free but not a clean *public* seam for
+the Win32 layer, which is why D9 is a soft fork rather than a library dependency.
+
+### 6.1 M0 reconnaissance — the `sys` layer (amends the above)
+
+Reading the actual source changes the picture in cash's favour. There **is** a clean
+platform seam; it is simply internal rather than public, which is fine for a fork.
+
+`brush-core/src/sys/` splits by platform — `unix.rs`, `windows.rs`, `wasm/`, and a shared
+`stubs/`. Each platform module is a short manifest naming which subsystems are real and
+which fall back to stubs. `windows.rs` is 20 lines, and it is the single most useful file
+in the repository for this project:
+
+| Subsystem | Windows today | cash decisions that need it |
+|---|---|---|
+| `env` | **real**, 184 lines | D5, D31 |
+| `fs` | **real**, 395 lines | D3, D29, D33 |
+| `users`, `network` | **real** | — |
+| `process` | shared `tokio_process` | D6, D36 — *the one true replacement* |
+| `commands` | **stub** | D8, D32 |
+| `signal` | **stub** — `Signal` is an *empty enum* | D13, D19, D21, D22 |
+| `terminal` | **stub** | ConPTY, D39 |
+| `fd` | **stub** | D26 |
+| `input`, `poll`, `async_pipe` | **stub** | D18 |
+| `resource` | **stub** | not needed |
+
+For comparison, `unix.rs` implements all twelve; Unix pulls in `nix`, `libc` and
+`command-fds`, while Windows pulls in only `check_elevation` and `whoami`. The Windows
+port is genuinely minimal, exactly as "preview" implies.
+
+**Why this materially improves D9.** The diff surface is far less invasive than assumed:
+
+- **Most of cash's work is *additive*** — writing `sys/windows/{signal,terminal,commands,
+  fd,poll,input}.rs`, files that do not exist yet. A new file cannot conflict on rebase.
+  Signals in particular are pure greenfield: `Signal::from_str` currently always returns
+  `InvalidSignal`, so `trap SIGINT` and `kill -TERM` simply do not work on Windows today.
+- **Only `process` is a true replacement**, because `tokio_process` is shared with Unix.
+  That is precisely what upstream #1377 is designing a seam for — so the one invasive
+  change is the one already being solved in the open.
+
+**Consequence for the upstreaming stance.** D9 chose "soft fork, upstream
+opportunistically" on the assumption that cash's work would be scattered patches. It is
+not: "implement the Windows half of brush's existing `sys` abstraction" is close to the
+most upstreamable contribution possible. D9 stands for now — velocity still matters at
+M0 — but the case for upstreaming is stronger than when it was decided, and this should be
+revisited once `sys/windows/signal.rs` exists and works.
 
 ---
 
@@ -981,3 +1063,60 @@ real simultaneously.
 **Acceptance corpus.** M2 generalises into the spec's executable form: a collection of
 real scripts that must pass, plus a test per row of §4. Worth starting early — it converts
 prose decisions into tests and reveals which open questions actually matter in practice.
+
+---
+
+## 9. M0 baseline — measured, not assumed
+
+Environment: Windows 11 26200, Rust 1.98.0 `stable-x86_64-pc-windows-msvc`, brush at
+`737dd57`. Release build: **3m00s, zero warnings** — meaningful because the workspace
+sets `warnings = "deny"`, so the Windows MSVC build is genuinely clean.
+
+Measured by running probe scripts under `brush.exe`. This is the baseline D9's diff
+surface is measured against.
+
+| Behaviour | brush on Windows today | Gap for cash |
+|---|---|---|
+| `pwd` rendering | `C:\Users\thraa\...` — backslashes | **D3/D10** |
+| `cd C:/Windows` | works | — |
+| `cd /c/Windows` | **fails** | **D3** |
+| `/tmp` | works | partial already |
+| `$HOME`, `~` | `C:\Users\thraa` | D24 satisfied; rendering per D3 |
+| `$PATH` form | `C:\...;C:\...` — semicolons | **D5** |
+| `$PATH` / `$TEMP` populated, `$Path` / `$Temp` empty | names uppercased on import, lookup still case-sensitive | **D31** half done |
+| `> /dev/null` | works | — |
+| `[ -e /dev/null ]` | false | **D7** |
+| `cmd.exe /c "exit 300"` → `$?` | `44` (low byte) | D15 base done; NTSTATUS map missing |
+| `git`, `cargo` bare-name resolution | works, PATHEXT visible | D8 largely done |
+| **glob `*.txt` vs `Upper.TXT`** | **already case-insensitive** | **D16 already satisfied** |
+| `v=$(cat crlf.txt)` | 4 bytes — `val\r` retained | **D20** |
+| `read` from CRLF file | 2 bytes — `b\r` retained | **D20** |
+| `: > nul` | goes to the device, not a file | **D28** |
+| `exec 3>&1` | rejected | **D26** |
+| `cat <(echo x)` | fails | **D17** |
+| `trap INT` | **rejected** | **D13/D14** greenfield |
+| `kill -l` | prints HUP/INT/QUIT/… | cosmetic only — no real signals behind it |
+| Script with UTF-8 BOM | `command not found: ﻿echo` | **D41**, exactly as predicted |
+
+Two observations worth carrying forward:
+
+- **D16 needs no work.** Case-insensitive globbing already falls out of the filesystem.
+  The `shopt -u nocaseglob` half of D16 is untested.
+- **`kill -l` lists signals that do not exist.** The builtin prints a table while
+  `Signal` is an empty enum and `trap INT` is rejected. Cosmetic inconsistency upstream;
+  cash's D11 replacement removes it.
+
+### 9.1 Upstream bug found
+
+`case` inside command substitution fails to parse:
+
+```bash
+x=$(case abc in a*) echo matched;; *) echo no;; esac)
+```
+
+- real bash (Git Bash 2.55): `matched`
+- brush `737dd57`: `syntax error at line 1 col 33`
+
+Minimal, reproducible, and squarely in `brush-parser` — which D9's diff table marks
+*untouched*. That makes it a clean upstream contribution rather than a fork patch, and a
+good first interaction with the maintainer ahead of the #1377 conversation in §6.
