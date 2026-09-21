@@ -21,6 +21,7 @@ pub mod job;
 pub mod path;
 pub mod process;
 pub mod resolve;
+pub mod session;
 pub mod spawn;
 pub mod text;
 

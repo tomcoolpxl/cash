@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/cash-win32"]
+members = ["crates/cash", "crates/cash-win32"]
 
 # vendor/brush is its own workspace (the D9 soft fork). Keeping it excluded
 # means cash's crates build independently and the vendor diff stays minimal.
