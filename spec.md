@@ -1047,9 +1047,19 @@ M0 as originally framed — "prove `brush-core` is embeddable as a library" — 
 by §6 before any code was written: **not cleanly**, which is what produced D9. The
 milestone is re-scoped accordingly.
 
-**M0 — fork bootstrap.** Vendor brush; get it building on Windows and its differential
-suite running on Linux CI (D43). Establishes the baseline that D9's diff surface is
-measured against. No cash semantics yet.
+**M0 — fork bootstrap. ✅ Complete.** Vendor brush; get it building on Windows and its
+differential suite running on Linux CI (D43). Establishes the baseline that D9's diff
+surface is measured against. No cash semantics yet.
+
+| Item | Result |
+|---|---|
+| Repo | initialised; `.gitattributes` enforces LF, excludes `vendor/**` and CRLF/BOM fixtures |
+| Vendoring | `git subtree` at `vendor/brush`, upstream pinned at `737dd57`, `subtree pull` path intact |
+| Windows build | clean, 2m30s, **zero warnings** (workspace sets `warnings = "deny"`) |
+| Smoke | `brush.exe -c` runs; reports `BASH_VERSION` 5.2.37(1)-release |
+| CI | Linux conformance via `cargo xtask test integration`; Windows build + smoke; fmt/lint |
+| Baseline | §9, measured rather than assumed |
+| Bonus | §9.1 upstream parser bug found |
 
 **M1 — the two headline behaviours.** Replace the spawner with raw `CreateProcessW` plus
 per-job nested job objects (D6), and implement D13's Ctrl-C escalation. Add the Starship
