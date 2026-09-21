@@ -65,9 +65,12 @@ spec.md              47 decisions, with the reasoning behind each
 musings.md           the original exploration this came out of
 ```
 
-`cash-win32` lives outside `vendor/` on purpose. Writing it into the fork would make
-every line permanent divergence; keeping it separate means `vendor/` is still
-byte-identical to upstream, and the crate could be upstreamed on its own.
+`cash-win32` lives outside `vendor/` on purpose: keeping the Win32 layer in its own crate
+keeps `vendor/` close to upstream and the two concerns separable.
+
+cash is a **hard fork** — bugs found in brush are fixed in `vendor/` rather than reported,
+and nothing is upstreamed. The upstream ref stays recorded so a future `git subtree pull`
+remains possible, but it will be a merge rather than a fast-forward.
 
 ## Build
 
@@ -88,9 +91,13 @@ winget install Microsoft.Coreutils   # coreutils + find/xargs + grep
 scoop install sed gawk               # NOT in the MS bundle — separate GNU projects
 ```
 
-A planned `cash doctor` reports what it found — missing `sed`/`awk`, BusyBox applets
+`cash doctor` reports what it found — missing `sed`/`awk`, BusyBox applets
 shadowing fuller implementations, DOS `find`/`sort` winning over the Unix ones, Store
 aliases whose target app is not installed. None of those announce themselves.
+
+Worth knowing: the answer depends on which shell launched cash. On the machine this was
+designed against, `cash doctor` reports fourteen warnings under PowerShell's `PATH` and
+one under Git Bash's.
 
 ## Licence
 
