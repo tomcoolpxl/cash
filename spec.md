@@ -1,0 +1,983 @@
+# cash — Cool Again Shell
+
+**Status:** early design, internally consistent as of the 2026-09-21 audit.
+Decisions are settled unless marked OPEN. Background reasoning lives in
+[musings.md](musings.md); this file is the spec.
+
+---
+
+## 1. Premise
+
+cash is a **bash-language shell whose execution model is Win32**, hosted in Windows
+Terminal via ConPTY. It is not a POSIX emulation layer and it is not a terminal
+emulator.
+
+The target user is someone running ordinary-complexity bash scripts on Windows —
+Terraform wrappers, CI glue, pipelines with `xargs`, `sed`, `grep`, `jq` — who does
+not want WSL, a VM, or an `msys-2.0.dll` underneath.
+
+**Non-goal:** running arbitrary Linux bash scripts with perfect fidelity. That road
+ends at reinventing Cygwin.
+
+### Daily-driver requirements
+
+cash has to be pleasant enough to replace the user's current shell, not merely correct.
+Stated requirements, as opposed to nice-to-haves:
+
+- **Starship must work.** The user runs it on every machine and every shell. A hard
+  requirement, not a compatibility bonus — see D37.
+
+---
+
+## 2. Landscape (as of 2026-09)
+
+Two things shipped that change the design:
+
+| Piece | State | Consequence for cash |
+|---|---|---|
+| [brush](https://github.com/reubeno/brush) | MIT, Rust, bash/POSIX-compatible, ~2,500 differential tests vs bash, modular crates, Windows in preview | The shell *language* is largely solved. cash should not rewrite it. |
+| [Coreutils for Windows](https://github.com/microsoft/coreutils) | Microsoft-maintained, native Win32, Rust uutils + findutils (`find`, `xargs`) + GNU-compatible `grep`, on winget | Most of the *userland* is solved — but not all of it. See D35. |
+
+Note the second row carefully: it is **not** a complete userland. MS Coreutils ships no
+`sed` and no `awk`, because those are separate GNU projects. D35 covers the consequences.
+
+Two premises from `musings.md` are revised:
+
+- **`fork()` is not the central problem.** A Rust shell cannot safely `fork()` on any
+  platform (threads + async make post-fork state undefined), so any Rust shell already
+  implements subshells, `$(...)` and pipeline stages as in-process cloned shell state.
+  Choosing Rust deletes that entire chapter.
+- **Process-tree kill is a Windows *strength*, not a gap.** On Linux, killing bash does
+  not reliably kill its descendants — they reparent to init and survive; cleanup relies
+  on cooperative SIGHUP-to-process-group, defeated by `nohup` / `setsid`. Windows
+  [job objects](https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects)
+  are kernel-enforced: a process cannot leave its job, children join automatically, and
+  `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` reaps the whole tree. Nesting has worked since
+  Windows 8, so cash running inside Windows Terminal's own job is fine.
+
+### The gap cash fills
+
+Coreutils for Windows deliberately withholds `kill`, `timeout`, `whoami`, `dir`,
+`expand`, `more`, and warns about `date`, `echo`, `mkdir`, `cat`, `ls`, `rm`, `sort`,
+`tee` — purely because those names collide with PowerShell aliases and cmd builtins.
+**Under cash that conflict table is void**; cash owns name resolution. Their other
+documented limitations — no `/dev/null`, CRLF breaking byte-oriented tools, utilities
+emitting backslash-separated paths that poison downstream pipes — are all fixable at
+the shell layer, which is precisely where cash sits.
+
+---
+
+## 3. Decisions
+
+### D1 — Build on brush's code
+
+cash is its own binary providing a Win32 semantics layer, built on `brush-core` and
+`brush-parser` rather than starting from scratch. It inherits the bash compatibility test
+suite.
+
+*How* it builds on them — library dependency versus fork — is D9, decided after the seam
+analysis in §5. D1 asserts only that the language layer is not rewritten.
+
+### D2 — Compatibility target: unmodified POSIX-shaped `.sh` scripts
+
+Existing scripts run as-is. Windows-ness is the substrate, not the surface syntax.
+
+Deliberate exceptions are enumerated in §4 — that list is meant to stay short.
+
+### D3 — Path model: Windows first-class, Unix spellings accepted
+
+**The canonical spelling is `C:/test/dir` — drive letter, forward slashes.** Never
+backslashes on output.
+
+- **Accept** `C:/src`, `/c/src`, `/tmp`, `/dev/null` as input — everywhere, always.
+- **Render** drive-letter + forward slash, always: after `cd /c/src/infra`, `pwd` prints
+  `C:/src/infra`. One canonical form; no modes, no provenance tracking.
+- Rationale: rendered paths usually become arguments to native `.exe` files, where the
+  wrong spelling is fatal rather than cosmetic. `terraform -chdir="$(pwd)/modules"`
+  must work. Win32 file APIs accept `/` as a separator, so this costs nothing.
+- **Known casualty:** `case $PWD in /c/*)` stops matching. Accepted.
+- Internally: `\\?\`-prefixed UTF-16 (D29). UNC paths supported.
+
+**One documented exception to the rendering rule: `$PATH` (D5).** It renders Unix-style,
+because colon-separation is incompatible with `C:` drive letters. So `echo $PWD` gives
+`C:/src` while `echo $PATH` gives `/c/tools:/c/Windows`. This asymmetry is deliberate and
+is the only one.
+
+#### Backslashes: accepted as input where the grammar allows, never rendered
+
+`C:\test\dir` **cannot** work unquoted, and this is not a choice cash gets to make.
+Backslash is bash's escape character, so `cd C:\test\dir` lexes to `C:testdir` before the
+path layer ever sees it. Supporting it would mean breaking bash's quoting rules, which is
+a direct hit on D2.
+
+Quoted, it works — and must, because you will paste paths from Explorer and from Windows
+error messages, and native tools emit backslash paths in their output:
+
+```bash
+cd "C:\Users\thraa"          # works: \t and \U are not escapes inside double quotes
+cd 'C:\Users\thraa'          # works: single quotes are literal
+out=$(some-tool.exe --path)  # emits C:\foo\bar
+cd "$out"                    # works: the string holds real backslashes
+```
+
+The rule: **the path layer accepts either separator in whatever string reaches it.**
+Whether a backslash survives to that layer is the lexer's business and follows bash rules
+exactly. Clean separation, no special cases in the grammar.
+
+**A caveat on forward slashes.** A few old DOS-lineage tools parse a leading `/` as a
+switch prefix and can misread `C:/foo` style arguments. Rare in the toolchain from §1
+(Terraform, git, MS Coreutils are all fine), but it is why D4 matters: if a tool needs
+backslashes, you spell them yourself — or use `winpath` (D45) — and cash passes the result
+through untouched.
+
+### D4 — Never rewrite arguments
+
+No scanning of argv for things that look like paths. This is where MSYS2 went wrong and
+why it needs `MSYS2_ARG_CONV_EXCL`. If a variable holds a string, the child gets that
+string.
+
+The deliberate escape hatch is `winpath` (D45). The one narrow exception is quoting for
+`cmd.exe`, which is not semantic rewriting — see D32.
+
+### D5 — `PATH` is the single exception, translated at the process boundary
+
+`PATH` is the one variable cash has semantic knowledge of.
+
+- **Rendered to scripts** Unix-style: colon-separated, `/c/...`. So
+  `IFS=: read -ra dirs <<< "$PATH"` works, and `PATH=/foo:$PATH` works.
+- **Held internally** as a typed list used for command lookup.
+- **Converted to semicolon-separated Windows form** only in the environment block handed
+  to a child process, so `terraform.exe` and `git.exe` get a `PATH` they understand.
+- **No other variable is translated.** `GOPATH`, `PYTHONPATH`, `CLASSPATH` pass through
+  verbatim. A known-list would be a maintenance surface and a source of silent surprise.
+
+Interacts with D31: lookup is case-insensitive, so `$Path` and `$PATH` are the same
+variable and both render Unix-style.
+
+### D6 — Process lifetime: per-job nested job objects
+
+Every pipeline / background job gets its own nested job object. Killing a job reaps its
+whole tree. A session-level job with `KILL_ON_JOB_CLOSE` means nothing survives cash —
+including cash being killed from Task Manager.
+
+**Three documented exceptions to that guarantee.** They must be stated wherever the
+guarantee is claimed:
+
+| Exception | Why | Ref |
+|---|---|---|
+| Elevated processes | Cannot be assigned across an integrity boundary | D42 |
+| `detach`ed processes | Requires `JOB_OBJECT_LIMIT_BREAKAWAY_OK` on the session job, which any child can then exploit | D45 |
+| Prompt commands | Share a pooled job rather than getting their own | D36 |
+
+Resolved sub-questions: `trap EXIT` ordering → D14; the `detach` builtin → D45.
+
+### D7 — No modes. Compat behaviours are always on
+
+Every compat behaviour is a *superset* that cannot break a Windows-native script —
+accepting `/c/foo` costs nothing if you never type it. So: no `--posix` flag, no
+shebang sniffing, no `set -o` switch.
+
+Always on:
+
+- `/dev/null`, `/dev/stdin`, `/dev/stdout`, `/dev/stderr`, `/dev/fd/N`
+- CRLF tolerated in script parsing (D20 covers CRLF in *data*)
+- UTF-8 BOM stripped from scripts (D41)
+- Virtual `/usr/bin/env`, so `#!/usr/bin/env bash` resolves with no fake filesystem
+- Unix path spellings accepted as input (D3)
+
+**`/dev/null` needs a carve-out from D29.** D28 makes reserved names ordinary files, and
+D29's blanket `\\?\` prefix is the mechanism that achieves it — so `\\?\C:\...\NUL` would
+open a *file* named `NUL`, not the null device. `/dev/null` must therefore resolve to the
+device explicitly (`\\.\NUL`), bypassing D29's prefix rule for this specific mapping.
+
+Consequence, and it is consistent rather than accidental: `> /dev/null` discards, while
+`> NUL` creates a file called `NUL` (D28). A POSIX script means the former; only a
+Windows-ism means the latter.
+
+### D8 — Command resolution is cash's own
+
+```
+1. builtin / function / alias
+2. resolution cache
+3. PATH search, honouring PATHEXT
+4. dispatch by type, extension checked BEFORE any file read:
+     .exe .com         -> CreateProcessW
+     .cmd .bat         -> cmd.exe /d /s /c   (arguments escaped per D32)
+     .ps1              -> pwsh.exe (fallback powershell.exe)
+     extensionless     -> read first bytes; shebang -> named interpreter
+```
+
+**Extension before read is load-bearing, not stylistic.** App Execution Aliases are
+0-byte reparse points (D46), so reading one yields nothing. Checking PATHEXT first means
+`python.exe` dispatches as a native exe and the empty read never happens.
+
+Scoop shims are not special-cased — they are ordinary executables on `PATH` (D25). cash
+must never *require* Scoop.
+
+### D9 — Soft fork of brush, upstream opportunistically
+
+Vendor brush and patch freely; send changes up when convenient rather than blocking on
+review. Velocity over sync.
+
+The mitigation for divergence is **diff discipline**: keep the patch surface localized
+and replace whole subsystems rather than sprinkling changes. D10 exists partly for this
+reason — it is the minimal-diff way to get D3, which makes rebasing survivable.
+
+**Defined diff surface against upstream:**
+
+| Area | Relationship | Ref |
+|---|---|---|
+| Parser, expansion, control flow, traps, most builtins | untouched — this is what the fork is *for* | — |
+| Job control, signals, suspend | **replaced wholesale** | D11, D13, D19, D21, D22 |
+| External process spawning | **replaced** — raw `CreateProcessW` + job objects | D6, D36 |
+| Command name resolution | **replaced** | D8 |
+| `cd` / `pwd` / `realpath` builtins | **replaced** | D10 |
+| History persistence | **replaced** — immediate append | D44 |
+| New cash-only builtins | **added** | D45 |
+| File-open boundary | **patched** — Unix spellings, `/dev/*`, sharing flags | D7, D10, D33 |
+| Child environment construction | **patched** — PATH translation | D5 |
+| Script reader | **patched** — CRLF and BOM tolerance | D7, D41 |
+| Globbing | **patched** — case-insensitivity | D16 |
+| Line-boundary interpretation | **patched** — CRLF as terminator | D20 |
+| Completion | **patched** — case-insensitive, auto-quote | D40 |
+| Interactive layer | **reused unchanged, for now** | D18 |
+
+Anything outside that table that starts needing patches is a signal to reconsider. The
+table is the early-warning system, so it must be updated whenever a decision adds to it.
+
+### D10 — Path rendering via two chokepoints, not a core rewrite
+
+D3's "always renders `C:/...`" is achieved without diffuse changes:
+
+1. **cash's own `cd` builtin** stores the Windows-canonical form into shell cwd state.
+   `$PWD` then renders correctly for free, because core just echoes what `cd` stored.
+2. **The file-open boundary** accepts Unix spellings (`/c/...`, `/tmp`, `/dev/null`) and
+   normalizes to `\\?\`-prefixed UTF-16 (D29).
+
+**Known gap:** paths the core computes itself — glob results, `realpath`, tilde
+expansion — bypass both chokepoints. Under D9 these are patchable as they surface; each
+is a small localized fix rather than an argument for rewriting path handling.
+
+### D11 — cash owns job control entirely
+
+brush's job manager is disabled. cash implements `jobs`, `fg`, `bg`, `kill`, suspend and
+resume in Win32 terms, so there is exactly one notion of "a job" and it is the one backed
+by a job object (D6). Avoids two bookkeeping systems drifting apart.
+
+Cost accepted: reimplementing a fiddly subsystem that already works upstream and is
+tested against bash. This is the largest single piece of owned code.
+
+Consequence: **signal semantics become cash's problem** — D13 (Ctrl-C), D19 (suspend),
+D21 and D22 (`kill`).
+
+### D12 — The name is cash
+
+crates.io is clear. The npm [dthree/cash](https://github.com/dthree/cash) collision is a
+different ecosystem and a dormant project. Accepted cost: "cash shell" will never be a
+clean search term.
+
+### D13 — Ctrl-C escalates; the job object is the backstop, not the first move
+
+```
+1st Ctrl-C  -> console control event to the foreground job's process group
+2nd Ctrl-C  -> escalate
+3rd Ctrl-C  -> TerminateJobObject
+```
+
+**The grace period is the user, not a timer.** Terraform's own interrupt handling is
+already two-stage — the first interrupt finishes the *current* operation, which can
+legitimately take minutes mid-`aws_rds_instance`. Any fixed timeout either guillotines a
+valid apply or is long enough to feel broken. The user is never more than one keypress
+from escalating.
+
+This makes D13 and D14 one mechanism rather than two. D21's `kill -TERM` keeps a real
+timer, because no user is present to press anything.
+
+**Rationale for graceful-first:** Ctrl-C during `terraform apply` must let Terraform
+catch SIGINT and release its state lock. Reaping the job object first leaves a lock on
+remote state and a `force-unlock` to recover from. D6's kernel-enforced tree kill is the
+guarantee that nothing *survives*, not the mechanism for routine interruption.
+
+**Two documented Windows traps, both of which have caught other projects:**
+
+- **`CTRL_C_EVENT` cannot be delivered to a specific process group.**
+  `GenerateConsoleCtrlEvent` with a nonzero group id *succeeds* but the signal is never
+  received. Only `CTRL_BREAK_EVENT` is deliverable to a group. cash must therefore use
+  `CTRL_BREAK_EVENT` for targeted delivery. Go's runtime maps both events to
+  `os.Interrupt`, so the Go toolchain in §1 — Terraform, `gh`, `kubectl` — handles this
+  correctly.
+  - OPEN: non-Go tools that handle `CTRL_C_EVENT` but ignore `CTRL_BREAK_EVENT`. Needs a
+    survey against the real corpus, not reasoning.
+- **`CREATE_NEW_PROCESS_GROUP` disables Ctrl-C handling in the child by default**, which
+  is a well-documented source of the "Ctrl-C does nothing" bug. Group creation flags must
+  be chosen with this in mind, and covered by a test.
+
+### D14 — `trap EXIT` runs to completion; a second Ctrl-C forces teardown
+
+No timeout by default — cleanup is sacred, and a guillotined cleanup is worse than a
+slow one (releasing a remote lock over a bad connection legitimately takes time). The
+escape hatch is a second interrupt during trap execution, which forces immediate
+teardown.
+
+Requires a signal path that remains live *while traps are running*. That is a design
+constraint on the interactive/signal layer, not an afterthought — and it is D18's named
+replacement trigger.
+
+### D15 — Exit codes truncate, but crashes map to bash's 128+n convention
+
+- Normal exit codes: low byte, as bash does.
+- NTSTATUS exception ranges: mapped the way bash reports fatal signals — access
+  violation → `139`, the same value a segfault yields on Linux. Scripts testing for
+  `139` work unchanged.
+- Rationale: naive truncation alone is unsafe. `0xC0000100` truncates to `0` — a crash
+  silently reported as success.
+- Cost accepted: a hand-maintained NTSTATUS → signal-number mapping table.
+
+### D16 — Globbing is case-insensitive by default, and `nocaseglob` is honoured
+
+Divergence from bash, chosen deliberately. On a case-insensitive volume `main.tf` and
+`main.TF` cannot coexist, so case-insensitive globbing can only remove false negatives —
+it can never introduce ambiguity. `for f in *.sh` matching `Setup.SH` is almost certainly
+what the script author meant.
+
+Equivalent to bash's `nocaseglob`, **on by default**.
+
+`shopt -u nocaseglob` genuinely turns it off and globbing becomes case-sensitive. It is
+cheap to honour, and a script that explicitly asks for case-sensitive matching has made a
+deliberate choice cash should not override.
+
+### D17 — Process substitution uses temp files
+
+`<(...)` and `>(...)` materialise a temp file and pass its path. Works with every
+program, including ones that seek or stat for a regular file.
+
+Rejected alternative: named pipes (`\\.\pipe\cash-NNNN` passed as the filename). Elegant
+and truly streaming, but breaks for any tool that seeks or reopens the path.
+
+**Known limitation, accepted:** no streaming. A non-terminating producer —
+`while read l; do ...; done < <(tail -f app.log)` — collects forever instead of
+streaming, and will appear to hang. Document prominently; consider detecting and warning.
+
+**Cleanup is `FILE_FLAG_DELETE_ON_CLOSE`.** The kernel deletes the file when the last
+handle closes — including on `TerminateProcess`, since the kernel closes handles during
+process teardown. Cleanup therefore cannot depend on cash running an exit path, which
+matters because D6 tears down without unwinding.
+
+Pleasing symmetry: the same kernel-enforced, cannot-be-escaped property that makes D6's
+job objects better than Linux process groups also solves temp file cleanup.
+
+- OPEN: cash creates the file with `FILE_SHARE_DELETE` per D33, but the *child* chooses
+  its own sharing mode when opening the path, and an incompatible choice will fail the
+  open. Needs a test against real tools. Named fallback if it proves fragile: a
+  per-session temp directory swept at startup.
+
+### D18 — Reuse `brush-interactive` now, replace when it blocks
+
+Line editing, history and highlighting for free. Consistent with D9's velocity-first
+stance, and it is why Starship works on day one (D37).
+
+**Trigger for replacement** (named now, so it is not re-litigated later): the first time
+D13's escalation or D14's second-Ctrl-C cannot be implemented because the input loop owns
+the console. At that point the interactive layer moves into D9's diff surface table, and
+D37's Starship test becomes the regression baseline.
+
+### D19 — Suspend via thread enumeration, documented APIs only
+
+`Ctrl-Z` and `kill -STOP` enumerate the target's threads and `SuspendThread` each; resume
+reverses it. This is what Process Explorer's Suspend does. No undocumented
+`NtSuspendProcess`.
+
+**Scope follows D22**: `kill -STOP %1` suspends the job's whole tree; `kill -STOP 1234`
+suspends that process only. `Ctrl-Z` targets the foreground job, so it is tree-wide.
+
+Accepted costs: racy against thread creation during the sweep, and a process could in
+principle resume itself. Neither matters for the workloads in §1.
+
+### D20 — `\r\n` is a line terminator wherever cash interprets line boundaries
+
+Not "strip `\r` from data". The rule, in one sentence:
+
+> Wherever cash itself decides where a line ends, `\r\n` terminates a line exactly as
+> `\n` does.
+
+That covers `$(...)` and backticks, `read`, `while read`, `mapfile` / `readarray`,
+here-strings and here-documents. Bytes flowing through a pipe between two external
+programs are **never** touched — `a.exe | b.exe` stays byte-transparent.
+
+**Why this is necessary and not merely convenient.** Repo files are fixable at source
+with `.gitattributes` (`* text eol=lf`) and should be. Other programs' stdout is not:
+
+| Source | Emits | Fixable upstream? |
+|---|---|---|
+| Go tools — `terraform`, `gh`, `docker` | LF | n/a |
+| Rust tools — MS Coreutils, `rg`, `fd` | LF | n/a |
+| Python `print()` (text-mode stdout translates on Windows) | **CRLF** | No |
+| .NET tools (`Environment.NewLine`) | **CRLF** | No |
+| Classic Win32 — `ipconfig`, `reg`, `findstr`, `sc` | **CRLF** | No |
+| `cmd.exe` builtins and `.bat` output | **CRLF** | No |
+
+`version=$(python get_version.py)` yields `1.2.0\r`, which then fails `[ "$version" =
+"1.2.0" ]` while *printing identically* — the `\r` just returns the cursor. Note that
+assignment performs no word splitting, so `IFS` cannot address this.
+
+Risk is near zero: `$(...)` is already not byte-transparent in bash (it strips trailing
+newlines and drops NUL bytes), so nothing legitimate passes binary through it.
+
+cash's own builtins emit LF unconditionally.
+
+### D21 — `kill -TERM` escalates asynchronously; `kill -9` terminates immediately
+
+`kill -TERM` sends the console control event and **returns at once**, so the POSIX
+idiom — `kill -TERM $pid` followed by the script's own `wait` or timeout loop — keeps
+working. A background timer then terminates the target if it is still alive.
+
+`kill -9` is an immediate `TerminateJobObject` / `TerminateProcess`, no grace.
+
+Consistent with D13's graceful-first stance, but without D13's ability to use the user as
+the timer: the shell is not waiting on a foreground job here, so a real timer is required.
+
+Cost accepted: pending escalation timers are live state cash must track, cancel when the
+target exits on its own, and tear down at exit.
+
+### D22 — Job specs kill trees; bare PIDs kill one process
+
+- `kill %1` → the job's entire tree, via its job object (D6).
+- `kill 1234` → that process only, as on Unix.
+
+The spelling tells you the scope, so a ported script using `kill $pid` gets exactly
+POSIX semantics and nothing surprising. D19 follows the same rule for suspend.
+
+Note this does not weaken D6: a child orphaned by `kill $pid` is still inside the job
+object and still dies when the job or session is torn down.
+
+### D23 — `test -x` requires an execute ACL **and** a discriminator
+
+```
+test -x FILE  ==  ACL grants FILE_EXECUTE
+                  AND ( extension in PATHEXT  OR  file begins with #! )
+```
+
+`chmod +x` adds the execute ACE if it is somehow missing — usually a no-op — and returns
+0, so `chmod +x deploy.sh && ./deploy.sh` works. On volumes with no ACLs (FAT32, some
+network shares) the discriminator alone decides. `chmod -x` is D34.
+
+**Why not ACLs alone.** Default NTFS inheritance grants a file's owner Full Control,
+which includes `FILE_EXECUTE`. Every file in your profile therefore carries the execute
+right, so `[ -x README.md ]` would be true and `for f in *; do [ -x "$f" ] && ./"$f";
+done` would try to run everything. ACLs are the real permission model but on Windows
+they do not *discriminate* — practically nothing sets a meaningful execute ACE.
+
+**Why not the heuristic alone.** It invents a permission model that isn't there, and
+`chmod -x` becomes a silent lie.
+
+Requiring both keeps `test -x` honest about permissions while retaining actual signal.
+
+### D24 — `~/.bashrc` is read automatically; `~/.cashrc` overrides
+
+`$HOME` is `%USERPROFILE%`. Maximum continuity, inheriting brush's "your .bashrc just
+works" behaviour.
+
+**Accepted risk:** a `.bashrc` written for Linux sets `PATH` entries that do not exist
+here and aliases tools that are not installed, producing noise or breakage at every
+startup. D30 is the mitigation.
+
+### D25 — Scoop shims are executed, not resolved through
+
+cash has **no Scoop knowledge**. A shim is just another executable found on `PATH`,
+honouring D8's "cash must never require Scoop" and keeping Scoop a package source rather
+than a coupling.
+
+Cost accepted: an extra process in every job tree, and `jobs` shows the shim rather than
+the underlying command. Revisit only if job-tree noise becomes a real problem in use.
+
+### D26 — File descriptors above 2 work where cash controls both ends
+
+- **cash builtins and cash-to-cash:** full fd table, `3>&1` and friends work.
+- **Arbitrary native exes:** a redirection above 2 is a **documented error**, not a
+  silent no-op. Windows exes have no POSIX fd ABI; failing loudly beats vanishing.
+
+Consistent with D20's principle that invisible failure is the enemy.
+
+Rejected: passing fds through the MSVC CRT's `STARTUPINFO` reserved-field table. It
+genuinely works for MSVC-built targets including CPython, but behaviour would then vary
+by how the callee was compiled — Go and Rust binaries would still not see fd 3 — which
+trades a clear error for an inconsistent one.
+
+### D27 — `ln -s`: real symlink, junction for directories, error otherwise
+
+```
+directory + privileged    -> CreateSymbolicLinkW
+directory + unprivileged  -> directory junction
+file      + privileged    -> CreateSymbolicLinkW
+file      + unprivileged  -> error, naming Developer Mode as the fix
+```
+
+`CreateSymbolicLinkW` needs admin rights or Developer Mode. Junctions need no privilege
+and are genuine reparse points, so a directory link behaves correctly and `test -L`
+reports true honestly.
+
+Rejected: falling back to hard links for files. A hard link is not a symlink — `test -L`
+is false and deleting the target does not dangle it — so a script that creates a link and
+then inspects it gets silently wrong answers. Failing loudly is better, per D20 and D26.
+
+**`test -L` checks the reparse *tag*, not the attribute.** True only for
+`IO_REPARSE_TAG_SYMLINK` and `IO_REPARSE_TAG_MOUNT_POINT`. Checking
+`FILE_ATTRIBUTE_REPARSE_POINT` instead would make every App Execution Alias look like a
+symlink (D46), and `.lnk` shortcuts are a shell concept, not a filesystem one.
+
+cash follows symlinks and junctions transparently, as Win32 does by default.
+
+### D28 — Reserved names are ordinary filenames
+
+`nul`, `con`, `com1`–`com9`, `lpt1`–`lpt9`, `aux`, `prn` — and those names with any
+extension — are treated as regular files, not devices. `touch nul` creates a file called
+`nul`, exactly as on Linux.
+
+Rationale: a POSIX script never means the device. It writes `/dev/null`, which D7 maps to
+the null device explicitly. Treating the bare name as a device would make `touch nul`
+silently write to a device instead of creating a file.
+
+Enabled directly by D29 — the `\\?\` prefix bypasses Win32's reserved-name parsing. D7
+carves `/dev/null` back out so the discard case still works.
+
+Accepted cost: other Windows programs will disagree about that name.
+
+### D29 — Always `\\?\`-prefixed UTF-16 paths internally
+
+No `MAX_PATH` limit, on any machine, regardless of the long-path registry setting. This
+matters in practice: nested `node_modules` and Terraform plugin cache directories blow
+past 260 characters routinely, and the resulting error surfaces far from its cause.
+
+Three consequences:
+
+- `\\?\` requires **absolute, backslash-separated** paths, so the conversion from D3's
+  canonical `C:/foo` happens here. This is the one place backslashes are mandatory.
+- `\\?\` **disables OS path normalization** — `.` and `..` are no longer resolved for
+  you. cash must canonicalize them itself, which D10's chokepoints already require.
+- It bypasses reserved-name parsing, which is what makes D28 work — and why D7 needs an
+  explicit carve-out for `/dev/null`.
+
+### D30 — `.bashrc` errors warn per occurrence, then summarise
+
+Each failing command prints as bash would, and startup continues. Startup then ends with
+a one-line summary — `3 errors in ~/.bashrc` — so the fact cannot be missed.
+
+Directly serves D24's accepted risk: a Linux-authored `.bashrc` will fail here, and
+silence is what would make that expensive to diagnose.
+
+### D31 — Environment variable lookup is case-insensitive; POSIX names canonicalise to uppercase
+
+Windows environment blocks conventionally use `Path`, `ProgramFiles`, `Temp`,
+`UserProfile`. Bash lookup is case-sensitive. Left alone, `$PATH` would come back
+**empty** on a Windows-supplied environment while `$Path` worked — probably the
+highest-frequency breakage available.
+
+- Lookup is case-insensitive: `$PATH`, `$Path` and `$path` all resolve.
+- Well-known POSIX names (`PATH`, `HOME`, `TMPDIR`, `USER`, …) normalise to uppercase on
+  import, so scripts see the spelling they expect.
+
+Accepted cost: a script using `$Foo` and `$FOO` as distinct variables breaks. This does
+not happen in practice, and Windows itself could not represent it.
+
+### D32 — `.bat` / `.cmd` arguments are escaped for cmd, with documented residual gaps
+
+D8 routes `.bat` and `.cmd` through `cmd.exe /d /s /c`, and cmd re-parses the command
+line with its own rules: `&`, `|`, `^`, `<`, `>` are special, and `%VAR%` expansion can
+pull values into an argument that the script never intended.
+
+cash applies cmd's caret-escaping and neutralises `%` expansion so ordinary arguments
+survive intact. cmd's parser has genuinely ambiguous corners, so "correct for all inputs"
+is not achievable — the documentation must state where it stops rather than implying
+total fidelity.
+
+Not a conflict with D4: D4 forbids rewriting arguments *semantically* (guessing at
+paths). This is quoting for a specific, known interpreter that cash is deliberately
+invoking.
+
+### D33 — Maximal file sharing, and POSIX delete semantics
+
+- cash opens files with `FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE`, so an
+  external `rm` can always delete a file cash holds open.
+- cash's own deletes use `FILE_DISPOSITION_FLAG_POSIX_SEMANTICS`, which unlinks the name
+  immediately while existing handles stay valid — real POSIX unlink on Windows.
+
+Makes `tool > log & rm log` behave as it does on Linux, rather than failing with a
+sharing violation.
+
+No fallback path is needed: D47 sets the floor above the version where this appeared.
+
+### D34 — `chmod -x` warns and returns 0
+
+Revoking execute properly means either editing an inherited Full Control ACE — which
+requires breaking inheritance — or adding a Deny ACE, which is blunt and can lock you out
+of your own file. Neither is worth it.
+
+`chmod -x` therefore warns and returns 0. It does not silently lie (rejected, per D20 and
+D26) and it does not construct Deny ACEs.
+
+Asymmetric with D23's `chmod +x`, which genuinely can add the ACE if absent. That
+asymmetry is inherent to Windows ACLs, not a design choice.
+
+### D35 — Userland-agnostic, with a `cash doctor` diagnostic
+
+cash requires no particular userland and resolves whatever is on `PATH` (D8). It ships a
+`cash doctor` that reports what it found and names the fix.
+
+**Why a diagnostic rather than a dependency.** "The userland is solved" is not quite
+true. MS Coreutils ships coreutils + `find`/`xargs` + `grep` — and **no `sed`, no `awk`**,
+since those are separate GNU projects. So no single install is a complete answer, and the
+failure modes are quiet. A real machine surveyed during design had:
+
+- every Unix command shimmed to **BusyBox** — `sed`, `awk`, `xargs`, `ls`, `cat`,
+  `grep`, `sort`, `find` — so `awk` was a POSIX subset with no gawk extensions
+- GnuWin32 `coreutils` and GNU `grep` installed but **unreachable**, their shims
+  overwritten by a later BusyBox install
+- `find` and `sort` shadowed again by DOS `C:\WINDOWS\system32\find.exe` and `sort.exe`
+  winning on `PATH` (position 6 versus 42), so `find . -name '*.tf'` silently hit the DOS
+  tool
+
+None of that announces itself. `cash doctor` should detect:
+
+- missing `sed` / `awk`
+- BusyBox applets shadowing fuller implementations
+- DOS `find` / `sort` / `more` winning over the Unix ones
+- shims pointing somewhere unexpected
+- App Execution Aliases whose target app is not installed, which silently open the
+  Microsoft Store instead of running — the notorious `python` behaviour (D46)
+
+Recommended (documented, never enforced): MS Coreutils via winget, plus GNU `sed` and
+`gawk` from any source.
+
+### D36 — Short-lived prompt commands use a pooled job object
+
+`PROMPT_COMMAND` and `PS1` command substitutions run in a long-lived, reused job object
+rather than getting a freshly created nested one per invocation.
+
+**Why this is not premature optimisation.** Starship spawns a process on *every prompt
+render*, so D6's per-job setup — `CreateJobObject`, `SetInformationJobObject`,
+`AssignProcessToJobObject`, handle close — lands on the single most latency-sensitive
+path in the shell, paid on every keystroke-to-prompt cycle. Windows process creation is
+already expensive enough that Starship feels slower here than on Linux.
+
+D6's containment is preserved: prompt commands are still inside a job, just a shared one.
+They share a kill scope, which is acceptable because they are by definition trivial and
+short-lived.
+
+### D37 — Starship is a stated requirement, tested from M1
+
+Not a compatibility bonus. The user runs Starship on every machine and every shell, so
+"Starship renders a correct prompt" is a first-class acceptance test from M1, not a
+manual smoke check.
+
+brush already advertises Starship compatibility, along with `PROMPT_COMMAND`, right
+prompts, DEBUG/ERR/EXIT traps, fzf/atuin, and zsh-style precmd/preexec hooks. Starship's
+bash init needs `PROMPT_COMMAND` and the DEBUG trap for command-duration timing, so this
+is inherited via D9 rather than built.
+
+When D18's replacement trigger fires, Starship becomes a **regression risk**. The M1 test
+exists precisely to have a baseline at that moment.
+
+Starship is Rust and emits `\n`, so D20 never touches its output.
+
+### D38 — Ships via winget and Scoop, with a Windows Terminal profile fragment
+
+- **winget** — matches how MS Coreutils installs, and where a Windows-native shell is
+  looked for.
+- **Scoop** — matches the existing workflow of the target user.
+- **Windows Terminal profile fragment** — cash appears automatically as a terminal
+  profile on install. No Unix-ported shell bothers with this, and it is most of the
+  difference between "a binary you run" and "your shell".
+
+Cost accepted: three artifacts to keep in sync per release. `cargo install` remains
+available and is the M0–M2 distribution channel, when the audience is one person.
+
+### D39 — Terminal shell integration is on by default
+
+cash emits OSC 133 (prompt / command / exit-code marks) and OSC 9;9 (cwd reporting).
+Windows Terminal and VS Code then give clickable command blocks, jump-to-previous-command,
+exit-code decorations, and cwd-aware new tabs. brush already does VS Code integration, so
+this is partly inherited.
+
+Serves §1's "pleasant enough to replace your shell" bar for very little implementation.
+
+- OPEN: which path spelling OSC 9;9 reports. Windows Terminal needs something it can
+  reuse for "duplicate tab here", and `C:/...` may or may not be accepted where `C:\...`
+  is expected. `winpath` (D45) does the conversion if needed. Needs testing, not
+  reasoning.
+
+### D40 — Completion is case-insensitive and auto-quotes
+
+- Case-insensitive, consistent with D16.
+- Auto-quotes results containing spaces: `C:/Prog<TAB>` → `"C:/Program Files/"`.
+  `C:/Program Files` is the most common path on Windows and breaks unquoted every time.
+- Completes both spellings: `C:/Prog<TAB>` and `/c/Prog<TAB>` both work, per D3.
+
+- OPEN: auto-quoting must compose correctly with quoting already typed — completing
+  inside an existing `"` should not add another.
+
+### D41 — BOM stripped on read; console code page set to UTF-8
+
+- **BOM:** `EF BB BF` at the start of a script is stripped before parsing. Windows editors
+  write it, and it otherwise breaks the shebang and prefixes the first token with three
+  invisible bytes. Same family as D7's CRLF tolerance.
+- **Console:** cash sets the console to UTF-8 (65001).
+
+**Scope of the code page decision, stated honestly.** It fixes console *display* and
+console-attached children. It does **not** affect pipeline bytes: when cash pipes a
+child's output it reads raw bytes and the console code page is never consulted. Runtimes
+that pick an encoding for piped output generally consult the **ANSI** code page instead —
+Python writing to a pipe uses `cp1252` regardless of `SetConsoleOutputCP`.
+
+**Risk assessment.** Anything Go or Rust writes Unicode via `WriteConsoleW` or emits UTF-8
+directly, so `terraform`, `gh`, `argocd`, `istioctl`, `kustomize`, `k3d`, `ripgrep`, MS
+Coreutils, `jq`, `curl` and `git` are unaffected. Residual exposure:
+
+- **JDK before 18** used the legacy code page for `System.out` (UTF-8 became default in
+  JDK 18). Relevant where `openjdk17` / `maven` are in use.
+- `.bat` with non-ASCII, especially `for /f` — already best-effort per D32.
+- DOS-lineage `findstr` / `find` / `sort` / `more` handle Unicode poorly regardless.
+- Old .NET **Framework** console apps (not .NET 5+).
+
+The pre-1803 console-input bug under 65001 is long fixed and below D47's floor. Windows
+ships a system-wide UTF-8 option and PowerShell 7 defaults to UTF-8, so this follows the
+platform.
+
+**Rejected:** injecting `PYTHONUTF8`, `JAVA_TOOL_OPTIONS` and similar into the child
+environment to fix the pipe case. It would work, and it directly contradicts D5 — PATH is
+the only variable cash touches. That known-list magic is what D5 exists to prevent.
+
+### D42 — Elevated processes are a documented hole in D6
+
+**D6's guarantee does not cross an integrity boundary.** This is a platform limit, not a
+design choice:
+
+- An elevated child cannot be started with `CreateProcessW`. Elevation goes through
+  `ShellExecuteEx` with the `runas` verb, routed via the AppInfo service — so the
+  elevated process is not even cash's child.
+- `AssignProcessToJobObject` fails against it regardless, because a medium-integrity
+  process cannot acquire `PROCESS_SET_QUOTA` / `PROCESS_TERMINATE` on a high-integrity
+  one.
+
+cash therefore records elevated children by PID and attempts to terminate them at exit,
+while documenting plainly that the kernel-enforced guarantee stops at the boundary.
+`elevate` (D45) is the first-class verb so cash sees the elevation rather than having it
+happen behind its back via `sudo.exe`.
+
+Acknowledged tension: "best-effort tracking" is precisely the cooperative cleanup D6 was
+built to replace. It is retained because `sudo`-style elevation is in real daily use and
+refusing it outright is worse. The documentation must not overstate D6 because of this.
+
+### D43 — Language conformance on Linux CI; Windows has its own acceptance corpus
+
+brush's ~2,500 differential tests run the same script under brush and real bash. They
+stay on Linux CI, where a real bash exists, and cover the *language*.
+
+Windows behaviour is tested against its own corpus of real scripts (§6), not against a
+bash reference.
+
+**Why not Git Bash or WSL as a Windows reference.** Both would produce diffs dominated by
+false positives, because the §4 divergences are *deliberate* and a bash reference would
+report every one as a failure — and Git Bash adds MSYS2 path translation while WSL adds
+Linux filesystem semantics over `/mnt/c`. The comparison would measure the wrong thing.
+
+### D44 — History appends immediately, concurrency-safe
+
+Each command is appended as it runs, not written at exit.
+
+Two Windows-shaped reasons, both consequences of other decisions:
+
+- **D6 terminates without unwinding.** Bash's write-on-exit means a force-kill, a Task
+  Manager kill, or D6 teardown silently loses the whole session's history.
+- Multiple Windows Terminal tabs are concurrent writers to one file, so appends must be
+  safe under contention rather than last-writer-wins.
+
+Cost accepted: one file append per command, on the command path.
+
+- OPEN: Atuin-compatible backend as an option. brush already supports Atuin, so this is
+  likely cheap, but it is a second history path to keep consistent.
+
+### D45 — cash-specific builtins
+
+Four, all justified by decisions made above rather than invented:
+
+| Builtin | Purpose |
+|---|---|
+| `winpath` | Explicit conversion between `C:/foo`, `C:\foo` and `/c/foo`. D4 forbids cash rewriting arguments automatically, so this is the deliberate escape hatch when a tool genuinely needs backslashes. |
+| `detach` | Deliberate job-object breakaway — start something meant to outlive the shell. |
+| `elevate` | UAC elevation as a first-class verb, so cash can warn that the child escapes D6 and register it for D42's tracking. |
+| `start` | Open a file or URL with its default handler — the Windows `xdg-open`. |
+
+**`detach` has a cost, listed as an exception in D6.** For a child to leave the session
+job, that job must be created with `JOB_OBJECT_LIMIT_BREAKAWAY_OK`, which means *any*
+child can request breakaway by passing `CREATE_BREAKAWAY_FROM_JOB`. Having `detach`
+therefore slightly weakens D6's guarantee for everyone. Accepted as the price of an
+explicit escape hatch.
+
+### D46 — App Execution Aliases work, with three specific caveats
+
+Store aliases in `%LOCALAPPDATA%\Microsoft\WindowsApps` — `python.exe`, `bash.exe` and
+dozens of others — are **0-byte files carrying `IO_REPARSE_TAG_APPEXECLINK`**. They
+execute because `CreateProcessW` resolves that reparse tag natively, so cash launching one
+is no different from launching any other `.exe`. No special support required.
+
+1. **Resolve by extension before reading the file.** A read of an AppExecLink returns
+   nothing. Handled by D8's ordering.
+2. **`test -L` must check the reparse tag, not the attribute.** Handled by D27.
+3. **`[ -s python.exe ]` is false.** They are genuinely 0 bytes, so a script that
+   sanity-checks a binary by size gets a wrong answer. Unfixable; documented in §4.
+
+- OPEN: whether a packaged app launched via an alias lands in cash's job object (D6).
+  Full-trust desktop-bridge packages like Store Python are ordinary children and should
+  inherit it; true UWP apps launched via a broker may behave like D42's elevation case.
+  Needs testing, not reasoning.
+
+### D47 — Minimum platform: Windows 10 1809; Windows 11 is the target
+
+Several decisions depend on a platform floor, and leaving it unstated left fallback paths
+open that do not need to exist:
+
+| Requirement | Introduced | Ref |
+|---|---|---|
+| Nested job objects | Windows 8 | D6 |
+| Unprivileged symlinks with Developer Mode | 1703 | D27 |
+| `FILE_DISPOSITION_FLAG_POSIX_SEMANTICS` | 1709 | D33 |
+| Console input fixed under CP 65001 | 1803 | D41 |
+| ConPTY | **1809** | §1 |
+
+ConPTY binds. Windows 10 reached end of support in October 2025, so **Windows 11 is the
+supported target** and 1809 is the theoretical floor. No pre-1709 fallback is needed for
+D33, and D41's historical console bug is below the floor.
+
+---
+
+## 4. Deliberate divergences from bash
+
+D2 promises unmodified POSIX scripts run as-is. These are the places cash knowingly
+differs. **The list is meant to stay short** — every entry is a future bug report from
+someone who expected bash, so additions need to earn their place.
+
+| # | Divergence | Why | Ref |
+|---|---|---|---|
+| 1 | `pwd` prints `C:/src`, not `/c/src` | Rendered paths become native exe arguments | D3 |
+| 2 | `$PATH` renders Unix-style while other paths render Windows-style | Colon separation is incompatible with `C:` | D5 |
+| 3 | Globbing is case-insensitive by default | Case-sensitive matching can only produce false negatives on a case-insensitive volume | D16 |
+| 4 | `\r\n` terminates a line in `$(...)`, `read`, `mapfile`, here-docs | Python/.NET/cmd emit CRLF and cannot be fixed at source | D20 |
+| 5 | Redirections above fd 2 error for native exes | Windows exes have no POSIX fd ABI | D26 |
+| 6 | Environment lookup is case-insensitive | Windows supplies `Path`, not `PATH` | D31 |
+| 7 | `test -x` requires ACL **and** extension/shebang | Default ACLs make every file execute-granted | D23 |
+| 8 | `chmod -x` warns and does nothing | Revoking execute needs Deny ACEs | D34 |
+| 9 | `kill -STOP` suspends threads, not a real `SIGSTOP` | Windows has no `SIGSTOP` for arbitrary exes | D19 |
+| 10 | Process substitution does not stream | Temp files, not pipes | D17 |
+| 11 | `[ -s file ]` is false for App Execution Aliases | They are genuinely 0 bytes | D46 |
+| 12 | Elevated and `detach`ed processes survive cash | Integrity boundary; breakaway flag | D42, D45 |
+
+---
+
+## 5. Architecture
+
+```
+Windows Terminal
+      |
+    ConPTY
+      |
+   cash.exe
+      |
+      +-- brush-parser      (bash grammar)
+      +-- brush-core        (expansion, control flow, traps, most builtins)
+      +-- brush-interactive (line editing, history UI — reused, D18)
+      |
+      +-- cash Win32 layer  <-- the part that is actually ours
+      |     path model                                   (D3, D10, D29)
+      |     command resolution + PATHEXT dispatch        (D8)
+      |     child env construction, PATH translation     (D5)
+      |     CreateProcessW + job objects                 (D6, D36)
+      |     job control, signals, suspend                (D11, D13, D19, D21, D22)
+      |     redirection: /dev/*, fd table -> HANDLEs     (D7, D26)
+      |     cash builtins: winpath detach elevate start  (D45)
+      |
+      +-- native Windows processes
+            MS Coreutils, sed, gawk, terraform.exe, git.exe, Scoop shims
+```
+
+---
+
+## 6. The `brush-core` seam analysis
+
+`brush-core` is genuinely built for embedding: `Shell`, `ShellBuilder`, a
+`ShellExtensions` trait re-exported at the crate root, custom builtin registration via
+`Shell::builder().builtin(name, ...)`, and an `ErrorFormatter` convention the maintainer
+is actively extending.
+
+But cash needs seams at four points, and only one of them exists or is planned:
+
+| # | Seam cash needs | Status upstream |
+|---|---|---|
+| 1 | Command **name resolution** (PATHEXT, `.cmd` / `.ps1` dispatch) | No seam. Not proposed. |
+| 2 | Child **environment construction** (PATH translation, D5) | No seam. Not proposed. |
+| 3 | **Process creation** (raw `CreateProcessW`, job object assignment) | Proposed in [#1377](https://github.com/reubeno/brush/issues/1377) as `ExternalCommandSpawner` |
+| 4 | **Path rendering / acceptance** throughout builtins and redirection | No seam; threaded through core. |
+
+Two specifics that matter:
+
+- **#1377's seam sits in the wrong place for us.** It hands the spawner a fully composed
+  `std::process::Command` *after* name resolution and environment setup — i.e. after
+  seams 1 and 2, which is exactly where cash's differentiator lives. The maintainer
+  notes an earlier draft put the seam at `CommandExecutor` (before name resolution) and
+  set it aside as too hard. Worth engaging on now, while it is still being designed.
+- **`std::process::Command` is too weak for job-object-safe spawning.** Assigning a child
+  to a nested job after `spawn()` leaves a race window where a fast-forking grandchild
+  escapes. The clean fix is `CREATE_SUSPENDED` → assign to job → resume, but
+  `std::process::Child` does not expose the thread handle. cash needs raw
+  `CreateProcessW`. Mitigating factor: if cash itself is in the session job, children
+  inherit it automatically, so the *session-level* guarantee (D6) holds regardless. Only
+  *per-job* nesting races.
+
+Seam 4 drove D10. Seams 1–3 drove D9.
+
+**Conclusion:** embedding gets the language for free but not a clean seam for the Win32
+layer, which is why D9 is a soft fork rather than a library dependency.
+
+---
+
+## 7. Remaining open questions
+
+All of the original Q1–Q16 are resolved into decisions. What remains is genuinely small,
+and most of it needs a **test** rather than an argument:
+
+**Needs testing, not deciding:**
+
+- OSC 9;9 path spelling that Windows Terminal accepts (D39)
+- Whether `FILE_SHARE_DELETE` on process-substitution temp files survives real tools'
+  sharing modes (D17)
+- Whether packaged apps launched via an alias land in cash's job object (D46)
+- Which non-Go tools handle `CTRL_C_EVENT` but ignore `CTRL_BREAK_EVENT` (D13)
+
+**Needs deciding, but not yet:**
+
+- Atuin-compatible history backend (D44)
+- Auto-quote composition with already-typed quotes (D40)
+
+---
+
+## 8. Milestones
+
+M0 as originally framed — "prove `brush-core` is embeddable as a library" — was answered
+by §6 before any code was written: **not cleanly**, which is what produced D9. The
+milestone is re-scoped accordingly.
+
+**M0 — fork bootstrap.** Vendor brush; get it building on Windows and its differential
+suite running on Linux CI (D43). Establishes the baseline that D9's diff surface is
+measured against. No cash semantics yet.
+
+**M1 — the two headline behaviours.** Replace the spawner with raw `CreateProcessW` plus
+per-job nested job objects (D6), and implement D13's Ctrl-C escalation. Add the Starship
+prompt test (D37) as a regression baseline. Proves the thing Windows does better than
+Linux, and proves it without breaking `terraform apply`.
+
+**M2 — a real script runs.** One actual Terraform wrapper from daily use, unmodified,
+against MS Coreutils plus `sed` and `gawk`. Forces D3, D5, D8, D15, D20 and D31 to all be
+real simultaneously.
+
+**Acceptance corpus.** M2 generalises into the spec's executable form: a collection of
+real scripts that must pass, plus a test per row of §4. Worth starting early — it converts
+prose decisions into tests and reveals which open questions actually matter in practice.
