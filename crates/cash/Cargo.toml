@@ -16,7 +16,7 @@ workspace = true
 
 [dependencies]
 # The language layer (D1/D9): parser, expansion, control flow, traps, builtins.
-brush-shell = { path = "../brush-shell" }
+cash-shell = { path = "../cash-shell" }
 
 [target.'cfg(windows)'.dependencies]
 cash-win32 = { path = "../cash-win32" }

@@ -3,13 +3,13 @@ resolver = "3"
 members = [
     "crates/cash",
     "crates/cash-win32",
-    "crates/brush-core",
-    "crates/brush-parser",
-    "crates/brush-builtins",
-    "crates/brush-coreutils-builtins",
-    "crates/brush-interactive",
-    "crates/brush-shell",
-    "crates/brush-test-harness",
+    "crates/cash-core",
+    "crates/cash-parser",
+    "crates/cash-builtins",
+    "crates/cash-coreutils-builtins",
+    "crates/cash-interactive",
+    "crates/cash-shell",
+    "crates/cash-test-harness",
     "xtask",
 ]
 default-members = ["crates/cash"]

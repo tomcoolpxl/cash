@@ -43,5 +43,5 @@ fn main() {
         }
     }
 
-    brush_shell::entry::run();
+    cash_shell::entry::run();
 }

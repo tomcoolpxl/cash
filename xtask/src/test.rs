@@ -343,7 +343,7 @@ fn run_integration_tests_wasi(
             "--target",
             "wasm32-wasip2",
             "-p",
-            "brush-shell",
+            "cash-shell",
             "--bin",
             "brush",
             "--no-default-features",
