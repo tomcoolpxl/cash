@@ -8,7 +8,11 @@
 //! installs the session job object, so that every process cash ever starts is already
 //! contained. See `cash_win32::session`.
 
+#[cfg(windows)]
+mod doctor;
+
 fn main() {
+    // D6's outermost guarantee, installed before anything can spawn.
     #[cfg(windows)]
     let state = cash_win32::session::install_and_leak();
 
@@ -22,6 +26,21 @@ fn main() {
             if state.utf8_console { "on" } else { "unavailable" },
             if state.nested { "yes" } else { "no" },
         );
+    }
+
+    // `cash doctor` (D35) is handled before the shell sees argv, because it diagnoses
+    // the environment rather than running anything in it.
+    //
+    // A file named `doctor` in the working directory wins, so the subcommand can never
+    // shadow a script the user actually meant to run. `cash ./doctor` is unambiguous
+    // either way.
+    #[cfg(windows)]
+    {
+        let mut args = std::env::args();
+        let is_doctor = args.nth(1).as_deref() == Some("doctor") && args.next().is_none();
+        if is_doctor && !std::path::Path::new("doctor").exists() {
+            std::process::exit(i32::from(doctor::run()));
+        }
     }
 
     brush_shell::entry::run();
