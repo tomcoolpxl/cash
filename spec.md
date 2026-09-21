@@ -1084,7 +1084,17 @@ byte-identical to upstream `737dd57`.**
 | `cmd` | D32 | CRT quoting, caret escaping, `is_safe_for_cmd` |
 | `process` | D42 | `is_pid_alive`, `cpu_time` |
 
+Plus `crates/cash`: the binary, and `cash doctor` (D35).
+
 **72 tests, zero warnings** (the workspace sets `warnings = "deny"`).
+
+**`cash doctor` works and is useful today.** Run against the machine this was designed
+on, it independently rediscovered everything §9 found by hand — BusyBox applets
+masquerading as `sed`, `awk` and `grep` through Scoop shims, and DOS `find`/`sort`/`more`
+winning from System32. It also surfaced something the manual survey missed: **the
+userland depends on which shell launched cash.** Under PowerShell's `PATH` the machine
+reports fourteen warnings; under Git Bash's, which puts Git's MSYS tools first, it
+reports one. Same machine, same binary.
 
 **D6 verified end to end.** `cash(outer) → cash(inner) → ping`, then `Stop-Process
 -Force` on the outer alone — `TerminateProcess`, so no cleanup runs, no signal is sent
