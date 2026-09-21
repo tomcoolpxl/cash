@@ -18,30 +18,10 @@ pkg-url = "{ repo }/releases/download/{ name }-v{ version }/cash-{ target }{ arc
 [lib]
 bench = false
 
-[[test]]
-name = "cash-compat-tests"
-path = "tests/compat_tests.rs"
-harness = false
 
-[[test]]
-name = "cash-integration-tests"
-path = "tests/integration_tests.rs"
-harness = false
 
-[[test]]
-name = "cash-version-tests"
-path = "tests/version_tests.rs"
 
-[[test]]
-name = "cash-interactive-tests"
-path = "tests/interactive_tests.rs"
 
-[[test]]
-name = "cash-completion-tests"
-path = "tests/completion_tests.rs"
-
-# N.B. tests/pty_startup_tests.rs and tests/reedline_interactive_tests.rs are
-# deliberately left auto-discovered (no `cash-*-tests` name): the CI
 # `cash_*_tests-*` artifact glob would otherwise ship them to the os-tests
 # jobs, which run prebuilt test binaries outside a cargo target dir and so
 # can't run pty-based tests (see the interactive/version test skips there).

@@ -56,8 +56,15 @@ jobs:
       - name: Build
         run: cargo build --release -p cash
 
-      # M1 replaces this with cash's own Windows acceptance corpus: one test
-      # per row of §4, plus the Starship prompt test required by D37.
+      # D43: Windows behaviour is asserted against cash's own corpus, not against
+      # a bash reference — §4's divergences are deliberate and a reference would
+      # report every one as a failure.
+      - name: Acceptance corpus
+        run: cargo test -p cash --test acceptance
+
+      - name: Win32 layer
+        run: cargo test -p cash-win32
+
       - name: Smoke
         run: ./target/release/cash.exe -c 'echo smoke-ok'
 

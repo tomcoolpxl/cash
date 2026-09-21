@@ -443,8 +443,35 @@ dependencies = [
 name = "cash"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "assert_cmd",
+ "assert_fs",
+ "cash-parser",
  "cash-shell",
+ "cash-test-harness",
  "cash-win32",
+ "clap",
+ "colored",
+ "descape",
+ "diff",
+ "glob",
+ "indent",
+ "indexmap",
+ "junit-report",
+ "os-release",
+ "predicates",
+ "pretty_assertions",
+ "regex",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "strip-ansi-escapes",
+ "tempfile",
+ "test-with",
+ "tokio",
+ "version-compare",
+ "walkdir",
+ "which",
 ]
 
 [[package]]

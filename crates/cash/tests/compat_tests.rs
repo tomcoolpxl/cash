@@ -1,3 +1,8 @@
+// cash (D43): on Windows this file compiles to a stub that skips, so everything the
+// Linux path needs is unused there. Denying warnings workspace-wide would otherwise
+// make the stub impossible.
+#![cfg_attr(windows, allow(unused, dead_code))]
+
 //! Compatibility test harness for brush shell.
 //!
 //! This test harness runs YAML-based test cases comparing brush output against
@@ -135,6 +140,24 @@ async fn run_compat_tests(mut options: TestOptions) -> Result<bool> {
 }
 
 fn main() -> Result<()> {
+    // cash (D43): the differential suite diffs against a reference bash and needs a
+    // PTY, neither of which exists on Windows. Conformance therefore runs on Linux CI;
+    // Windows behaviour is covered by cash's own acceptance corpus, because §4's
+    // divergences are deliberate and a bash reference would flag every one as a failure.
+    //
+    // Skipping rather than failing keeps `cargo test --workspace` meaningful on a
+    // Windows dev machine.
+    #[cfg(windows)]
+    {
+        eprintln!(
+            "skipped: the differential suite runs on Linux (D43).              Windows is covered by `cargo test -p cash --test acceptance`."
+        );
+        return Ok(());
+    }
+
+    #[cfg(not(windows))]
+    {
+
     let unparsed_args: Vec<_> = std::env::args().collect();
     let options = TestOptions::parse_from(unparsed_args);
 
@@ -149,4 +172,5 @@ fn main() -> Result<()> {
     }
 
     Ok(())
+    }
 }
