@@ -1,0 +1,30 @@
+# cash's own sources are LF, always, regardless of the user's core.autocrlf.
+# This is the practice D20 recommends to everyone else.
+* text=auto eol=lf
+
+*.rs    text eol=lf
+*.sh    text eol=lf
+*.md    text eol=lf
+*.toml  text eol=lf
+*.yaml  text eol=lf
+*.yml   text eol=lf
+
+# Windows script formats genuinely want CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Vendored upstream: preserve bytes exactly. Normalising these would pollute
+# every diff against upstream, which is what D9's diff discipline depends on.
+vendor/** -text
+
+# Test fixtures whose line endings ARE the test (D20, D41). Never normalise.
+tests/fixtures/crlf/** -text
+tests/fixtures/bom/**  -text
+*.crlf  -text
+*.bom   -text
+
+# Binaries
+*.exe binary
+*.dll binary
+*.pdb binary
