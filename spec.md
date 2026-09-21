@@ -896,6 +896,46 @@ ConPTY binds. Windows 10 reached end of support in October 2025, so **Windows 11
 supported target** and 1809 is the theoretical floor. No pre-1709 fallback is needed for
 D33, and D41's historical console bug is below the floor.
 
+### D48 — coreutils are bundled as in-process builtins, on by default
+
+cash ships 165 uutils coreutils as builtins rather than requiring them on `PATH`.
+Measured before deciding:
+
+| | |
+|---|---|
+| Binary size | 11 MB → **15 MB** |
+| Utilities gained | **165** |
+| `PATH=""` then `echo x \| cat` | **works** |
+| 300 × `echo x \| cat > /dev/null` | **4s** builtin vs **9s** spawning |
+
+The speed difference is the Windows story in miniature: process creation costs
+milliseconds here, so a pipeline in a loop pays for every spawn. That cost is why
+BusyBox ends up installed on Windows machines in the first place.
+
+**It largely dissolves D35's problem.** Everything `cash doctor` found on the machine
+this was designed against — BusyBox applets masquerading as `sed`, DOS `find` winning
+from System32, Store aliases opening the Microsoft Store — stops applying to the
+commands cash carries itself.
+
+**Builtins take precedence, as in bash**, with bash's own escape hatch: `enable -n cat`
+disables the builtin and the `PATH` executable is used instead. Verified working.
+
+Normally "builtin shadows the real tool" is a silent-substitution hazard of exactly the
+kind D20 and D26 reject. Here it mostly is not: **Microsoft's Coreutils *is* uutils**,
+and so are these builtins. On the recommended setup (D35) the builtin and the `PATH`
+copy are the same implementation, so preferring the builtin substitutes nothing and
+merely skips the spawn. The divergence is real only for someone running GNU coreutils,
+and `enable -n` covers them.
+
+**The gap stays open: still no `sed`, no `awk`.** uutils does not implement them — they
+are separate GNU projects. So cash is *not* a complete userland in one executable, and
+D35's diagnostic keeps its job. Confirmed: `type sed` reports not found even with the
+bundle enabled.
+
+- OPEN: whether to also bundle a `sed` and `awk` implementation. Rust ones exist but
+  none is a drop-in for GNU, and shipping a subtly different `awk` is precisely the
+  silent-substitution problem this decision otherwise avoids.
+
 ---
 
 ## 4. Deliberate divergences from bash
