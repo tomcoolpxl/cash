@@ -629,6 +629,22 @@ impl<'a, R: ?Sized + std::io::BufRead> Tokenizer<'a, R> {
         let mut pending_here_doc_tokens = vec![];
         let mut drain_here_doc_tokens = false;
 
+        // cash (D2): `case` awareness, so that a pattern's unbalanced `)` does not end
+        // the construct.
+        //
+        // `$(case a in a*) echo m;; esac)` is valid bash, but a plain paren count sees
+        // the `)` of `a*)` — which has no opener — and stops there, truncating the
+        // substitution to `case a in a*`. The rest then parses as stray tokens and the
+        // error surfaces at the `;;`, far from the real cause.
+        //
+        // A case pattern's `)` appears in exactly two places: after `in`, and after a
+        // clause terminator (`;;`, `;&`, `;;&`). Tracking that is enough to tell a
+        // pattern's paren from a real one, and `(a*)` still balances normally because
+        // its opener is counted.
+        let mut case_depth: u32 = 0;
+        let mut expecting_pattern = false;
+        let mut pattern_had_open_paren = false;
+
         loop {
             let cur_token = if drain_here_doc_tokens && !pending_here_doc_tokens.is_empty() {
                 if pending_here_doc_tokens.len() == 1 {
@@ -661,8 +677,37 @@ impl<'a, R: ?Sized + std::io::BufRead> Tokenizer<'a, R> {
             if let Some(cur_token_value) = cur_token.token {
                 state.append_str(cur_token_value.to_str());
 
-                if matches!(cur_token_value, Token::Operator(o, _) if o == nesting_open) {
+                // Token text carries any leading blank that preceded it, so " esac"
+                // arrives rather than "esac". Compare trimmed.
+                match &cur_token_value {
+                    Token::Word(word, _) => match word.trim() {
+                        "case" => {
+                            case_depth += 1;
+                            expecting_pattern = false;
+                        }
+                        // `in` only introduces patterns inside a case; in `for x in ...`
+                        // it means something else entirely.
+                        "in" if case_depth > 0 => expecting_pattern = true,
+                        "esac" => {
+                            case_depth = case_depth.saturating_sub(1);
+                            expecting_pattern = false;
+                        }
+                        _ => (),
+                    },
+                    Token::Operator(op, _) => {
+                        if matches!(op.trim(), ";;" | ";&" | ";;&") {
+                            expecting_pattern = case_depth > 0;
+                        }
+                    }
+                }
+
+                if matches!(&cur_token_value, Token::Operator(o, _) if o == nesting_open) {
                     nesting_count += 1;
+                    // A parenthesised pattern — `(a*)` — brings its own opener, so its
+                    // closer must balance normally rather than being skipped.
+                    if expecting_pattern {
+                        pattern_had_open_paren = true;
+                    }
                 }
             }
 
@@ -672,6 +717,19 @@ impl<'a, R: ?Sized + std::io::BufRead> Tokenizer<'a, R> {
                 }
                 TokenEndReason::NonNewLineBlank => state.append_char(' '),
                 TokenEndReason::SpecifiedTerminatingChar => {
+                    // A case pattern's closing paren has no opener, so it must not be
+                    // counted — otherwise the construct appears to end here.
+                    if case_depth > 0 && expecting_pattern && !pattern_had_open_paren {
+                        expecting_pattern = false;
+                        state.append_char(self.next_char()?.unwrap());
+                        continue;
+                    }
+
+                    if pattern_had_open_paren {
+                        pattern_had_open_paren = false;
+                        expecting_pattern = false;
+                    }
+
                     nesting_count -= 1;
                     if nesting_count == 0 {
                         break;
@@ -1650,6 +1708,33 @@ HERE2
     #[test]
     fn tokenize_command_substitution_with_subshell() -> Result<()> {
         assert_ron_snapshot!(test_tokenizer("$( (:) )")?);
+        Ok(())
+    }
+
+    #[test]
+    fn tokenize_command_substitution_containing_case() -> Result<()> {
+        // cash (D2): a case pattern's `)` has no opener, so a plain paren count stops
+        // the substitution at `a*)` and truncates it to `case a in a*`. The whole
+        // construct must survive as one token.
+        let tokens = tokenize_str("$(case a in a*) echo m;; esac)")?;
+        assert_eq!(tokens.len(), 1, "expected one token, got {tokens:?}");
+        assert_eq!(tokens[0].to_str(), "$(case a in a*) echo m;; esac)");
+
+        // A parenthesised pattern brings its own opener and must still balance.
+        let tokens = tokenize_str("$(case a in (a*) echo m;; esac)")?;
+        assert_eq!(tokens[0].to_str(), "$(case a in (a*) echo m;; esac)");
+
+        // Nested cases, and `esac` appearing inside a quoted string.
+        let tokens = tokenize_str("$(case a in a) case b in b) echo n;; esac;; esac)")?;
+        assert_eq!(tokens.len(), 1, "nested case not consumed whole: {tokens:?}");
+
+        let tokens = tokenize_str("$(case a in a) echo \"an esac here\";; esac)")?;
+        assert_eq!(tokens.len(), 1, "quoted esac ended the construct: {tokens:?}");
+
+        // A word merely containing `esac` must not terminate anything.
+        let tokens = tokenize_str("$(echo esacular)")?;
+        assert_eq!(tokens[0].to_str(), "$(echo esacular)");
+
         Ok(())
     }
 

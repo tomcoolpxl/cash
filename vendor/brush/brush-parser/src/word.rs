@@ -916,8 +916,49 @@ peg::parser! {
         // TODO(parser): Find a way to remove the special-case logic for extglob + subshell commands
         rule unquoted_literal_text_piece<T>(stop_condition: rule<T>, in_command: bool) =
             is_true(in_command) extglob_pattern() /
+            is_true(in_command) case_command() /
             is_true(in_command) subshell_command() /
             !stop_condition() !normal_escape_sequence() !enabled_tilde_expr_after_colon() [^'\'' | '\"' | '$' | '`'] {}
+
+        // cash (D2): a `case` construct inside `$( ... )` must be consumed whole.
+        //
+        // Case patterns carry a closing parenthesis with no opener — `a*)` — so without
+        // this the scanner treats that `)` as the end of the command substitution and
+        // `$(case abc in a*) echo m;; esac)` fails to parse. Real bash accepts it, and
+        // the parenthesised spelling `(a*)` already worked here only because it happens
+        // to balance.
+        //
+        // This scans rather than parses: the goal is only to find where the construct
+        // ends, so that the enclosing substitution's real closing paren is the one that
+        // terminates it.
+        rule case_command() =
+            case_keyword() case_inner_piece()* esac_keyword()
+
+        rule case_inner_piece() =
+            case_command() /                        // nested case ... esac
+            single_quoted_literal_text() {} /       // quotes may contain `esac` harmlessly
+            double_quoted_sequence() {} /
+            subshell_command() /
+            !esac_keyword() [_] {}
+
+        rule case_keyword() = prev_is_word_break() "case" &word_break()
+        rule esac_keyword() = prev_is_word_break() "esac" &word_break()
+
+        // `esac` only ends a case construct when it stands alone as a word; a variable
+        // called `xesac` must not terminate anything.
+        rule word_break() = [' ' | '\t' | '\n' | ';' | ')' | '&' | '|'] {} / ![_]
+
+        rule prev_is_word_break() = #{|input, pos| {
+            if pos == 0 {
+                return peg::RuleResult::Matched(pos, ());
+            }
+            match input.as_bytes()[pos - 1] {
+                b' ' | b'\t' | b'\n' | b';' | b'(' | b')' | b'&' | b'|' => {
+                    peg::RuleResult::Matched(pos, ())
+                }
+                _ => peg::RuleResult::Failed,
+            }
+        }}
 
         rule enabled_tilde_expr_after_colon() -> WordPiece =
             tilde_exprs_after_colon_enabled() last_char_is_colon() piece:tilde_expression_piece() { piece }

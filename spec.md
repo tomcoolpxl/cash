@@ -247,10 +247,22 @@ Windows-ism means the latter.
 Scoop shims are not special-cased — they are ordinary executables on `PATH` (D25). cash
 must never *require* Scoop.
 
-### D9 — Soft fork of brush, upstream opportunistically
+### D9 — Hard fork of brush. Nothing is upstreamed
 
-Vendor brush and patch freely; send changes up when convenient rather than blocking on
-review. Velocity over sync.
+Vendor brush and fix everything here. No patches are sent upstream, and no work blocks on
+someone else's review.
+
+**Amended from "soft fork, upstream opportunistically".** The original wording kept an
+upstreaming path open, and §6.1 argued the path had become attractive once M0 showed most
+of cash's work would be additive. That is now explicitly declined: cash owns its copy.
+
+Consequences, accepted deliberately:
+
+- Bugs found in brush are fixed in `vendor/` rather than reported. §9.1 was the first.
+- Divergence will compound, and `git subtree pull` will eventually become a merge rather
+  than a fast-forward. The upstream ref stays recorded so that remains possible.
+- The diff table below stops being a warning sign and becomes simply a map of what has
+  been changed.
 
 The mitigation for divergence is **diff discipline**: keep the patch surface localized
 and replace whole subsystems rather than sprinkling changes. D10 exists partly for this
@@ -1012,12 +1024,12 @@ port is genuinely minimal, exactly as "preview" implies.
   That is precisely what upstream #1377 is designing a seam for — so the one invasive
   change is the one already being solved in the open.
 
-**Consequence for the upstreaming stance.** D9 chose "soft fork, upstream
-opportunistically" on the assumption that cash's work would be scattered patches. It is
-not: "implement the Windows half of brush's existing `sys` abstraction" is close to the
-most upstreamable contribution possible. D9 stands for now — velocity still matters at
-M0 — but the case for upstreaming is stronger than when it was decided, and this should be
-revisited once `sys/windows/signal.rs` exists and works.
+**On upstreaming — withdrawn.** This section originally argued that "implement the
+Windows half of brush's existing `sys` abstraction" was close to the most upstreamable
+contribution possible, and that D9 should be revisited. That was reconsidered and
+declined: D9 is now a hard fork and nothing goes upstream. The observation that the work
+is *additive* still holds and still matters — it keeps the fork tractable — but it is no
+longer an argument about contribution.
 
 ---
 
@@ -1175,6 +1187,20 @@ x=$(case abc in a*) echo matched;; *) echo no;; esac)
 - real bash (Git Bash 2.55): `matched`
 - brush `737dd57`: `syntax error at line 1 col 33`
 
-Minimal, reproducible, and squarely in `brush-parser` — which D9's diff table marks
-*untouched*. That makes it a clean upstream contribution rather than a fork patch, and a
-good first interaction with the maintainer ahead of the #1377 conversation in §6.
+**Fixed here (D9), in two places.** Both the tokenizer and the word parser counted
+parentheses without understanding `case`, so a pattern's unbalanced `)` — `a*)` — looked
+like the end of the substitution.
+
+- `brush-parser/src/tokenizer.rs`: `consume_nested_construct` now tracks `case`/`esac`
+  depth and whether a pattern is expected (after `in`, or after `;;` / `;&` / `;;&`). A
+  pattern's `)` is consumed without decrementing the nesting count; `(a*)` still balances
+  normally because its opener is counted.
+- `brush-parser/src/word.rs`: `unquoted_literal_text_piece` gained a `case_command()`
+  rule so the same construct survives the word-level scan.
+
+Both were needed: the quoted path (`"$(case ...)"`) goes through the word parser, the
+unquoted path (`x=$(case ...)`) through the tokenizer. Fixing one left the other failing.
+
+Verified against real bash across twelve cases including nested `case`, parenthesised
+patterns, `esac` inside a quoted string, and `esacular` as a bare word. brush's own
+parser suite still passes — 235 tests, including a new regression test.
