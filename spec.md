@@ -71,8 +71,8 @@ the shell layer, which is precisely where cash sits.
 
 ### D1 — Build on brush's code
 
-cash is its own binary providing a Win32 semantics layer, built on `brush-core` and
-`brush-parser` rather than starting from scratch. It inherits the bash compatibility test
+cash is its own binary providing a Win32 semantics layer, built on `cash-core` and
+`cash-parser` rather than starting from scratch. It inherits the bash compatibility test
 suite.
 
 *How* it builds on them — library dependency versus fork — is D9, decided after the seam
@@ -83,8 +83,8 @@ from scratch?" was re-examined against numbers rather than intuition:
 
 | Crate | Lines |
 |---|---|
-| `brush-core` | 22,972 |
-| `brush-parser` | 9,667 |
+| `cash-core` | 22,972 |
+| `cash-parser` | 9,667 |
 | `brush-builtins` | 7,636 |
 | `brush-interactive` | 4,177 |
 | **language layer** | **~40,300** |
@@ -248,53 +248,50 @@ Windows-ism means the latter.
 Scoop shims are not special-cased — they are ordinary executables on `PATH` (D25). cash
 must never *require* Scoop.
 
-### D9 — Hard fork of brush. Nothing is upstreamed
+### D9 — brush is absorbed, not vendored
 
-Vendor brush and fix everything here. No patches are sent upstream, and no work blocks on
-someone else's review.
+brush is MIT and so is cash, so the code is simply **absorbed**: the crates live in
+`crates/` as cash's own, renamed `cash-*`, and are edited directly. Nothing is
+upstreamed.
 
-**Amended from "soft fork, upstream opportunistically".** The original wording kept an
-upstreaming path open, and §6.1 argued the path had become attractive once M0 showed most
-of cash's work would be additive. That is now explicitly declined: cash owns its copy.
+**Amended twice.** It began as "soft fork, upstream opportunistically", became "hard
+fork, fix everything here", and is now full absorption. Each step removed machinery that
+had stopped paying for itself:
 
-Consequences, accepted deliberately:
+- Upstreaming was declined, which made "what did we change versus upstream?" a question
+  nobody needed answered.
+- That in turn made the `vendor/` boundary pure overhead. It forced a second workspace, a
+  second `Cargo.lock`, and a cross-workspace path dependency
+  (`../../../crates/cash-win32`) just to let the shell see its own platform layer.
 
-- Bugs found in brush are fixed in `vendor/` rather than reported. §9.1 was the first.
-- Divergence will compound, and `git subtree pull` will eventually become a merge rather
-  than a fast-forward. The upstream ref stays recorded so that remains possible.
-- The diff table below stops being a warning sign and becomes simply a map of what has
-  been changed.
+So the diff-surface table that used to live here is gone. It existed to police divergence
+from an upstream cash no longer tracks; keeping it would have meant maintaining a map of
+a border that no longer exists.
 
-The mitigation for divergence is **diff discipline**: keep the patch surface localized
-and replace whole subsystems rather than sprinkling changes. D10 exists partly for this
-reason — it is the minimal-diff way to get D3, which makes rebasing survivable.
+**What was absorbed** — at upstream commit `737dd57`:
 
-**Defined diff surface against upstream:**
+| Crate | Was |
+|---|---|
+| `cash-core` | `cash-core` |
+| `cash-parser` | `cash-parser` |
+| `cash-builtins` | `brush-builtins` |
+| `cash-interactive` | `brush-interactive` |
+| `cash-shell` | `brush-shell` (library only; `crates/cash` is the binary) |
+| `cash-coreutils-builtins` | `brush-coreutils-builtins` |
+| `cash-test-harness` | `brush-test-harness` |
 
-| Area | Relationship | Ref |
-|---|---|---|
-| Parser, expansion, control flow, traps, most builtins | untouched — this is what the fork is *for* | — |
-| Job control, signals, suspend | **replaced wholesale** | D11, D13, D19, D21, D22 |
-| External process spawning | **replaced** — raw `CreateProcessW` + job objects | D6, D36 |
-| Command name resolution | **replaced** | D8 |
-| `cd` / `pwd` / `realpath` builtins | **replaced** | D10 |
-| History persistence | **replaced** — immediate append | D44 |
-| New cash-only builtins | **added** | D45 |
-| File-open boundary | **patched** — Unix spellings, `/dev/*`, sharing flags | D7, D10, D33 |
-| Child environment construction | **patched** — PATH translation | D5 |
-| Script reader | **patched** — CRLF and BOM tolerance | D7, D41 |
-| Globbing | **patched** — case-insensitivity | D16 |
-| Line-boundary interpretation | **patched** — CRLF as terminator | D20 |
-| Completion | **patched** — case-insensitive, auto-quote | D40 |
-| Interactive layer | **reused unchanged, for now** | D18 |
+**What was discarded:** the `brush` binstall alias crate, `brush-experimental-builtins`,
+fuzzing, benchmarks, upstream documentation, CI, devcontainer and release tooling, and a
+test that validated upstream's README.
 
-Anything outside that table that starts needing patches is a signal to reconsider. The
-table is the early-warning system, so it must be updated whenever a decision adds to it.
+**Attribution.** MIT requires the copyright notice to travel with the code. `LICENSE`
+carries cash's MIT plus a derivation notice; `NOTICE` reproduces brush's copyright,
+records the absorbed commit, and lists every modification made to the absorbed code.
+In-source changes are marked `cash (Dnn)` against the decision that motivated them.
 
-**Amended by §6.1.** M0 reconnaissance found that most of the "replaced" and "patched"
-rows land inside brush's existing internal `sys/windows/` abstraction, and most of those
-files **do not exist yet** — so the work is additive rather than invasive, and new files
-cannot conflict on rebase. Only process spawning is a genuine replacement.
+**Accepted cost.** Pulling a future upstream improvement is now a manual port rather than
+a merge. That is the deliberate trade for owning a coherent codebase instead of a patched
+copy of someone else's.
 
 ### D10 — Path rendering via two chokepoints, not a core rewrite
 
@@ -952,9 +949,9 @@ Windows Terminal
 
 ---
 
-## 6. The `brush-core` seam analysis
+## 6. The `cash-core` seam analysis
 
-`brush-core` is genuinely built for embedding: `Shell`, `ShellBuilder`, a
+`cash-core` is genuinely built for embedding: `Shell`, `ShellBuilder`, a
 `ShellExtensions` trait re-exported at the crate root, custom builtin registration via
 `Shell::builder().builtin(name, ...)`, and an `ErrorFormatter` convention the maintainer
 is actively extending.
@@ -1056,7 +1053,7 @@ and most of it needs a **test** rather than an argument:
 
 ## 8. Milestones
 
-M0 as originally framed — "prove `brush-core` is embeddable as a library" — was answered
+M0 as originally framed — "prove `cash-core` is embeddable as a library" — was answered
 by §6 before any code was written: **not cleanly**, which is what produced D9. The
 milestone is re-scoped accordingly.
 
@@ -1066,8 +1063,8 @@ surface is measured against. No cash semantics yet.
 
 | Item | Result |
 |---|---|
-| Repo | initialised; `.gitattributes` enforces LF, excludes `vendor/**` and CRLF/BOM fixtures |
-| Vendoring | `git subtree` at `vendor/brush`, upstream pinned at `737dd57`, `subtree pull` path intact |
+| Repo | initialised; `.gitattributes` enforces LF, excludes CRLF/BOM test fixtures |
+| Vendoring | `git subtree` at `crates`, upstream pinned at `737dd57`, `subtree pull` path intact |
 | Windows build | clean, 2m30s, **zero warnings** (workspace sets `warnings = "deny"`) |
 | Smoke | `brush.exe -c` runs; reports `BASH_VERSION` 5.2.37(1)-release |
 | CI | Linux conformance via `cargo xtask test integration`; Windows build + smoke; fmt/lint |
@@ -1079,9 +1076,10 @@ surface is measured against. No cash semantics yet.
 escalation. Proves the thing Windows does better than Linux, without breaking
 `terraform apply`.
 
-Delivered as `crates/cash-win32` — deliberately outside `vendor/`, so the fork needs only
-thin wiring and the crate stays independently upstreamable (§6.1). **`vendor/` is still
-byte-identical to upstream `737dd57`.**
+Delivered as `crates/cash-win32`, kept as its own crate so the Windows semantics and the
+shell language stay separable. (It was originally outside a `vendor/` directory to keep
+that tree pristine; D9's absorption made the boundary unnecessary, but the separation of
+concerns was worth keeping.)
 
 | Module | Decisions | State |
 |---|---|---|

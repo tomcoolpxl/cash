@@ -14,10 +14,6 @@
 *.cmd text eol=crlf
 *.ps1 text eol=crlf
 
-# Vendored upstream: preserve bytes exactly. Normalising these would pollute
-# every diff against upstream, which is what D9's diff discipline depends on.
-vendor/** -text
-
 # Test fixtures whose line endings ARE the test (D20, D41). Never normalise.
 tests/fixtures/crlf/** -text
 tests/fixtures/bom/**  -text

@@ -18,5 +18,10 @@ workspace = true
 # The language layer (D1/D9): parser, expansion, control flow, traps, builtins.
 cash-shell = { path = "../cash-shell" }
 
+[features]
+# D35 note: bundling uutils coreutils as in-process builtins, so cash needs no
+# external userland for the common commands. Measured before adopting.
+bundled-coreutils = ["cash-shell/experimental-bundled-coreutils"]
+
 [target.'cfg(windows)'.dependencies]
 cash-win32 = { path = "../cash-win32" }
