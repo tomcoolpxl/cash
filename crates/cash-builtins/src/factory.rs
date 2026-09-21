@@ -225,5 +225,16 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
         );
     }
 
+    // cash (D45): Windows-specific builtins. Not feature-gated per builtin — they only
+    // exist on Windows at all, and each is the documented escape hatch for a decision
+    // made elsewhere (D4, D6, D42).
+    #[cfg(windows)]
+    {
+        m.insert("winpath".into(), builtin::<win::WinPathCommand, SE>());
+        m.insert("start".into(), builtin::<win::StartCommand, SE>());
+        m.insert("elevate".into(), builtin::<win::ElevateCommand, SE>());
+        m.insert("detach".into(), builtin::<win::DetachCommand, SE>());
+    }
+
     m
 }

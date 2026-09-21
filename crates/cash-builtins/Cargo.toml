@@ -175,3 +175,6 @@ procfs = "0.18.0"
 [dev-dependencies]
 anyhow = "1.0.102"
 pretty_assertions = { version = "1.4.1", features = ["unstable"] }
+
+[target.'cfg(windows)'.dependencies]
+cash-win32 = { path = "../cash-win32" }

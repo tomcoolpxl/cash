@@ -454,6 +454,7 @@ dependencies = [
  "anyhow",
  "cash-core",
  "cash-parser",
+ "cash-win32",
  "cfg-if",
  "chrono",
  "clap",

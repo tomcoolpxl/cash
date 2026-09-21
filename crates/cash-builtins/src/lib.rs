@@ -9,6 +9,10 @@
     reason = "builtins implement a trait whose `execute` is async by contract"
 )]
 
+// cash (D45): Windows-specific builtins — winpath, start, elevate, detach.
+#[cfg(windows)]
+mod win;
+
 #[cfg(feature = "builtin.alias")]
 mod alias;
 #[cfg(feature = "builtin.bg")]

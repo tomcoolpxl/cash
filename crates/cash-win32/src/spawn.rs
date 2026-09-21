@@ -243,3 +243,52 @@ pub fn in_any_job() -> bool {
     let ok = unsafe { IsProcessInJob(GetCurrentProcess(), std::ptr::null_mut(), &raw mut result) };
     ok != 0 && result != 0
 }
+
+/// Start a process that deliberately leaves cash's job object (D45's `detach`).
+///
+/// `CREATE_BREAKAWAY_FROM_JOB` only succeeds if the enclosing job permits it, which is
+/// why the session job is created with `JOB_OBJECT_LIMIT_BREAKAWAY_OK`
+/// ([`crate::job::JobConfig::session`]). D45 records the cost of that: once breakaway is
+/// permitted, *any* child can request it, so this escape hatch weakens D6's guarantee
+/// slightly for everything.
+///
+/// `DETACHED_PROCESS` additionally gives the child no console, so it does not die with
+/// the terminal and does not scribble on cash's output.
+pub fn spawn_detached(command_line: &str) -> io::Result<Child> {
+    use windows_sys::Win32::System::Threading::{CREATE_BREAKAWAY_FROM_JOB, DETACHED_PROCESS};
+
+    let mut command = to_wide(command_line);
+
+    let mut startup: STARTUPINFOW = unsafe { std::mem::zeroed() };
+    startup.cb = u32::try_from(size_of::<STARTUPINFOW>()).expect("struct size fits in u32");
+
+    let mut info: PROCESS_INFORMATION = unsafe { std::mem::zeroed() };
+
+    // SAFETY: command is a live, writable UTF-16 buffer; every other pointer is null or
+    // points at a correctly-sized local that outlives the call.
+    let created = unsafe {
+        CreateProcessW(
+            std::ptr::null(),
+            command.as_mut_ptr(),
+            std::ptr::null(),
+            std::ptr::null(),
+            FALSE, // do not inherit handles: a detached process should hold none of ours
+            CREATE_BREAKAWAY_FROM_JOB | DETACHED_PROCESS | CREATE_UNICODE_ENVIRONMENT,
+            std::ptr::null(),
+            std::ptr::null(),
+            &raw const startup,
+            &raw mut info,
+        )
+    };
+
+    if created == 0 {
+        return Err(io::Error::last_os_error());
+    }
+
+    Ok(Child {
+        process: info.hProcess,
+        thread: info.hThread,
+        pid: info.dwProcessId,
+        group_id: None,
+    })
+}
