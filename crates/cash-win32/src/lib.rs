@@ -13,7 +13,11 @@
 
 #![cfg(windows)]
 
+pub mod env;
+pub mod exit;
 pub mod job;
+pub mod path;
 pub mod process;
+pub mod text;
 
 pub use job::{JobConfig, JobObject};
