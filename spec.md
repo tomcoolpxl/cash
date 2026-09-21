@@ -1061,10 +1061,48 @@ surface is measured against. No cash semantics yet.
 | Baseline | §9, measured rather than assumed |
 | Bonus | §9.1 upstream parser bug found |
 
-**M1 — the two headline behaviours.** Replace the spawner with raw `CreateProcessW` plus
-per-job nested job objects (D6), and implement D13's Ctrl-C escalation. Add the Starship
-prompt test (D37) as a regression baseline. Proves the thing Windows does better than
-Linux, and proves it without breaking `terraform apply`.
+**M1 — the two headline behaviours. 🔶 Largely complete.** Replace the spawner with raw
+`CreateProcessW` plus per-job nested job objects (D6), and implement D13's Ctrl-C
+escalation. Proves the thing Windows does better than Linux, without breaking
+`terraform apply`.
+
+Delivered as `crates/cash-win32` — deliberately outside `vendor/`, so the fork needs only
+thin wiring and the crate stays independently upstreamable (§6.1). **`vendor/` is still
+byte-identical to upstream `737dd57`.**
+
+| Module | Decisions | State |
+|---|---|---|
+| `job` | D6, D45 | job objects, `process_ids`, breakaway opt-in |
+| `spawn` | D6, D13 | `CREATE_SUSPENDED` → assign → resume; `wait`/`try_wait` |
+| `session` | D6, D41 | session job installed before anything runs |
+| `console` | D13, D19, D41 | escalation state machine, `CTRL_BREAK_EVENT`, suspend/resume |
+| `path` | D3, D7, D29 | accept every spelling, render `C:/`, `\\?\` + lexical `..` |
+| `env` | D5, D31 | PATH translated at the boundary; case-insensitive lookup |
+| `text` | D20, D41 | CRLF as terminator, BOM stripping |
+| `exit` | D15 | truncation plus NTSTATUS → `128 + n` |
+| `resolve` | D8, D46 | PATHEXT dispatch, extension before read, real on-disk casing |
+| `cmd` | D32 | CRT quoting, caret escaping, `is_safe_for_cmd` |
+| `process` | D42 | `is_pid_alive`, `cpu_time` |
+
+**72 tests, zero warnings** (the workspace sets `warnings = "deny"`).
+
+**D6 verified end to end.** `cash(outer) → cash(inner) → ping`, then `Stop-Process
+-Force` on the outer alone — `TerminateProcess`, so no cleanup runs, no signal is sent
+and nothing can cooperate. Both descendants died. On Linux the same test leaves the
+descendants alive, reparented to init.
+
+`cash.exe` runs, reports `BASH_VERSION 5.2.37(1)-release`, and confirms `session job
+installed, utf8 console on, nested in another job yes` — nesting inside Windows
+Terminal's own job behaving exactly as D6 predicted.
+
+Still outstanding for M1:
+
+- Wiring the Win32 layer into brush's `sys/windows/*`, which is the invasive part and
+  the first real entry in D9's diff table
+- D37's Starship prompt test, which depends on that wiring
+- ConPTY (`sys/windows/terminal.rs`) and the fd table (D26)
+- D45's builtins: `winpath`, `detach`, `elevate`, `start` — the path conversions behind
+  `winpath` already exist in `cash_win32::path`
 
 **M2 — a real script runs.** One actual Terraform wrapper from daily use, unmodified,
 against MS Coreutils plus `sed` and `gawk`. Forces D3, D5, D8, D15, D20 and D31 to all be
