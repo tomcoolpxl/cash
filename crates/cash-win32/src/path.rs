@@ -275,3 +275,34 @@ pub fn is_reserved_name(path: &Path) -> bool {
         .iter()
         .any(|reserved| stem.eq_ignore_ascii_case(reserved))
 }
+
+/// If an argument is spelled `/x/...` for some drive letter `x`, return the Windows
+/// spelling it would have.
+///
+/// D4 forbids cash rewriting arguments, so this never *changes* anything — it exists so
+/// the shell can explain a failure. `/c/src/main.tf` resolves fine for operations cash
+/// performs itself (D3), but is passed verbatim to a command, and any tool without its
+/// own MSYS-style translation has no idea what it means. That includes MS Coreutils and
+/// the bundled builtins, so the failure is common and the error message —
+/// "The system cannot find the path specified" — explains nothing.
+///
+/// Matches any drive letter, not just `C`.
+#[must_use]
+pub fn unix_drive_spelling(arg: &str) -> Option<PathBuf> {
+    let rest = arg.strip_prefix('/')?;
+    let mut chars = rest.chars();
+
+    let letter = chars.next()?;
+    if !letter.is_ascii_alphabetic() {
+        return None;
+    }
+
+    // The letter must be the whole first segment: `/cash/foo` is not drive C.
+    match chars.next() {
+        None => {}
+        Some('/') => {}
+        Some(_) => return None,
+    }
+
+    Some(accept_path(arg))
+}

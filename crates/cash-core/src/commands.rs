@@ -578,6 +578,43 @@ pub(crate) fn execute_external_command(
         })
         .collect::<Vec<_>>();
 
+    // cash (D3/D4): explain the `/x/...` cliff rather than letting it fail silently.
+    //
+    // D3 accepts Unix drive spellings for paths cash resolves itself — `cd /c/src`,
+    // `[ -f /d/data/x ]`, `> /e/out` all work. But D4 forbids rewriting arguments, so a
+    // command receives `/c/src/main.tf` verbatim and any tool without its own MSYS-style
+    // translation cannot open it. That includes MS Coreutils and the bundled builtins.
+    //
+    // The tool's own error — "The system cannot find the path specified" — explains
+    // nothing, and this is the single easiest mistake to make in cash. So: warn only
+    // when the literal spelling does not exist *and* the translated one does. That makes
+    // false positives essentially impossible, and says the useful thing.
+    #[cfg(windows)]
+    {
+        use std::io::Write as _;
+
+        for arg in &cmd_args {
+            let Some(translated) = cash_win32::path::unix_drive_spelling(arg) else {
+                continue;
+            };
+            if std::path::Path::new(arg.as_str()).exists() || !translated.exists() {
+                continue;
+            }
+
+            let mut stderr = context.stderr();
+            let _ = writeln!(
+                stderr,
+                "cash: {}: passed to '{}' as written; commands do not get Unix drive \
+                 spellings translated (D4). Try {} or \"$(winpath {})\"",
+                arg,
+                context.command_name,
+                cash_win32::path::render(&translated),
+                arg,
+            );
+            break;
+        }
+    }
+
     // Before we lose ownership of the open files, figure out if stdin will be a terminal.
     let child_stdin_is_terminal = context
         .try_fd(openfiles::OpenFiles::STDIN_FD)
