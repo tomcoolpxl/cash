@@ -117,8 +117,22 @@ impl From<ExecutionWaitResult> for ExecutionResult {
 impl From<std::process::Output> for ExecutionResult {
     fn from(output: std::process::Output) -> Self {
         if let Some(code) = output.status.code() {
-            #[expect(clippy::cast_sign_loss)]
-            return Self::new((code & 0xFF) as u8);
+            // cash (D15): truncating to the low byte is right for ordinary exit codes
+            // but unsafe on its own. A process killed by an exception reports an
+            // NTSTATUS, and `0xC0000100 & 0xFF` is **zero** — a crash indistinguishable
+            // from success, which would silently pass an `&&` chain. Known crash classes
+            // map to bash's `128 + n` instead, so an access violation is `139`, exactly
+            // what a segfault yields on Linux.
+            #[cfg(windows)]
+            {
+                #[expect(clippy::cast_sign_loss)]
+                return Self::new(cash_win32::exit::from_windows(code as u32));
+            }
+            #[cfg(not(windows))]
+            {
+                #[expect(clippy::cast_sign_loss)]
+                return Self::new((code & 0xFF) as u8);
+            }
         }
 
         #[cfg(unix)]
