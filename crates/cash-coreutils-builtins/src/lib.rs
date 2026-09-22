@@ -207,5 +207,84 @@ pub fn bundled_commands() -> HashMap<String, fn(Vec<OsString>) -> i32> {
     register!(m, "coreutils.whoami", "whoami", uu_whoami);
     register!(m, "coreutils.yes", "yes", uu_yes);
 
+    // cash: the listing commands colour by default when they are writing to a terminal.
+    #[cfg(feature = "coreutils.ls")]
+    m.insert("ls".to_string(), colouring_ls as fn(Vec<OsString>) -> i32);
+    #[cfg(feature = "coreutils.dir")]
+    m.insert("dir".to_string(), colouring_dir as fn(Vec<OsString>) -> i32);
+    #[cfg(feature = "coreutils.vdir")]
+    m.insert(
+        "vdir".to_string(),
+        colouring_vdir as fn(Vec<OsString>) -> i32,
+    );
+
     m
+}
+
+/// Whether the caller already said something about colour, in any of its spellings.
+///
+/// `--color`, `--colour`, `--color=never` and `-N`-style bundles all count: if the
+/// command line mentions it, cash has no business having an opinion.
+#[cfg(any(
+    feature = "coreutils.ls",
+    feature = "coreutils.dir",
+    feature = "coreutils.vdir"
+))]
+fn colour_already_decided(args: &[OsString]) -> bool {
+    args.iter().any(|arg| {
+        let arg = arg.to_string_lossy();
+        arg.starts_with("--color") || arg.starts_with("--colour")
+    })
+}
+
+/// cash: ask for colour when nothing else has.
+///
+/// Every Linux distribution ships `alias ls='ls --color=auto'` in `/etc/bash.bashrc` or
+/// the like, which is why `ls` looks coloured on Linux and looks plain here: GNU's `ls`
+/// does not colour by default either, and Windows has no system rc file to carry the
+/// alias. Adding one to `~/.cashrc` works, but it has to be done again on every machine,
+/// and — because `ls` is a builtin (D48) — an alias is also the one spelling that has no
+/// path behind it for a script that wants one.
+///
+/// `auto` is what makes this safe: uutils checks whether *its* stdout is a terminal, so a
+/// pipe or a redirection is still plain text and nothing that parses `ls` changes
+/// (§4 #24). An explicit `--color=never` still wins, because the caller said so.
+#[cfg(any(
+    feature = "coreutils.ls",
+    feature = "coreutils.dir",
+    feature = "coreutils.vdir"
+))]
+fn with_colour_auto(mut args: Vec<OsString>) -> Vec<OsString> {
+    if colour_already_decided(&args) {
+        return args;
+    }
+
+    // After argv[0], so it is an option rather than an operand, and ahead of any `--`.
+    let at = usize::from(!args.is_empty());
+    args.insert(at, OsString::from("--color=auto"));
+    args
+}
+
+#[cfg(feature = "coreutils.ls")]
+fn colouring_ls(args: Vec<OsString>) -> i32 {
+    prepare_uutil_runtime(stringify!(uu_ls));
+    let code = uu_ls::uumain(with_colour_auto(args).into_iter());
+    finalize_uutil_runtime();
+    code
+}
+
+#[cfg(feature = "coreutils.dir")]
+fn colouring_dir(args: Vec<OsString>) -> i32 {
+    prepare_uutil_runtime(stringify!(uu_dir));
+    let code = uu_dir::uumain(with_colour_auto(args).into_iter());
+    finalize_uutil_runtime();
+    code
+}
+
+#[cfg(feature = "coreutils.vdir")]
+fn colouring_vdir(args: Vec<OsString>) -> i32 {
+    prepare_uutil_runtime(stringify!(uu_vdir));
+    let code = uu_vdir::uumain(with_colour_auto(args).into_iter());
+    finalize_uutil_runtime();
+    code
 }

@@ -1175,6 +1175,7 @@ someone who expected bash, so additions need to earn their place.
 | 21 | `$SHELL` names cash, replacing whatever launched it | `make`, `npm run` and editors read it to decide what to launch | D5 |
 | 22 | A bundled producer prints `write error: Broken pipe` when its consumer leaves | Windows has no `SIGPIPE`, so uutils reports the failed write instead of dying silently | D48 |
 | 23 | `disown` forgets a job but does not make it outlive cash | A process cannot leave a Windows job object once assigned; `detach` starts one outside it | D6, D45 |
+| 24 | `ls` colours when stdout is a terminal | Linux gets this from an alias in a system rc file; Windows has none, and an alias is the one spelling a builtin has no path behind | D48 |
 
 `select` was missing outright until recently: it was a reserved word with no grammar
 rule, so `select x in a b; do …; done` was a syntax error that took the whole file with

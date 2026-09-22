@@ -146,7 +146,26 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
         } else {
             if self.options.interactive {
                 match rc_behavior {
-                    _ if self.options.sh_mode => (),
+                    // cash: an interactive `sh` read nothing at all. POSIX puts the
+                    // interactive shell's configuration in `$ENV`, and bash honours that
+                    // in sh mode — it is the only rc file a POSIX shell has.
+                    _ if self.options.sh_mode => {
+                        if !rc_behavior.skip()
+                            && let Some(value) = self.env.get_str("ENV", self)
+                        {
+                            let value = value.to_string();
+                            let expanded =
+                                crate::expansion::basic_expand_word(self, &params, value.as_str())
+                                    .await?;
+                            if !expanded.is_empty() {
+                                self.source_if_exists(
+                                    std::path::Path::new(expanded.as_str()),
+                                    &params,
+                                )
+                                .await?;
+                            }
+                        }
+                    }
                     RcLoadBehavior::Skip => (),
                     RcLoadBehavior::LoadCustom(rc_file) => {
                         // If an explicit rc file is provided, source it.
@@ -177,14 +196,22 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
                     "BASH_ENV"
                 };
 
-                if self.env.is_set(env_var_name) {
-                    //
-                    // TODO(well-known-vars): look at $ENV/BASH_ENV; source its expansion if that
-                    // file exists
-                    //
-                    return error::unimp(
-                        "load config from $ENV/BASH_ENV for non-interactive, non-login shell",
-                    );
+                // cash: this refused outright, and refusing is a failure of the *shell*,
+                // not of the file — `BASH_ENV=setup.sh cash script.sh` died before
+                // running the script at all. bash expands the value, sources the file if
+                // it is there, and says nothing if it is not. `make`, CI harnesses and
+                // anything that sets `SHELL=bash` may hand this down.
+                if let Some(value) = self.env.get_str(env_var_name, self) {
+                    let value = value.to_string();
+                    let expanded =
+                        crate::expansion::basic_expand_word(self, &params, value.as_str()).await?;
+
+                    // bash uses the expanded value as a file name and does not search
+                    // `PATH` for it.
+                    if !expanded.is_empty() {
+                        self.source_if_exists(std::path::Path::new(expanded.as_str()), &params)
+                            .await?;
+                    }
                 }
             }
         }
