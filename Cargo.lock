@@ -493,6 +493,7 @@ dependencies = [
  "cfg-if",
  "chrono",
  "clap",
+ "crossterm",
  "fancy-regex",
  "itertools 0.14.0",
  "nix 0.31.3",

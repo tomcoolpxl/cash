@@ -18,6 +18,11 @@ mod win;
 #[cfg(windows)]
 mod ps;
 
+// cash (D48): one pager behind both `less` and `more`. `less` is not coreutils, and the
+// bundled `more` corrupted a pipe.
+#[cfg(windows)]
+mod pager;
+
 #[cfg(feature = "builtin.alias")]
 mod alias;
 #[cfg(feature = "builtin.bg")]

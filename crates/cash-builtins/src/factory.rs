@@ -237,6 +237,8 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
         m.insert("elevate".into(), builtin::<win::ElevateCommand, SE>());
         m.insert("detach".into(), builtin::<win::DetachCommand, SE>());
         m.insert("ps".into(), builtin::<ps::PsCommand, SE>());
+        m.insert("less".into(), builtin::<pager::LessCommand, SE>());
+        m.insert("more".into(), builtin::<pager::MoreCommand, SE>());
     }
 
     m

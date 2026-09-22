@@ -178,3 +178,6 @@ pretty_assertions = { version = "1.4.1", features = ["unstable"] }
 
 [target.'cfg(windows)'.dependencies]
 cash-win32 = { path = "../cash-win32" }
+# D48: the `less`/`more` pager needs the terminal size and raw-mode keys. Same
+# version cash-interactive already pulls in, so this adds no new tree.
+crossterm = "0.29.0"
