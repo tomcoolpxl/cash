@@ -68,6 +68,29 @@ where
         vars.insert("HOME".to_string(), render_canonical_path(&home));
     }
 
+    // cash (D5): PATH is rendered Unix-style to scripts — colon-separated, `/c/...`.
+    //
+    // D5 is explicit that this is the one variable cash has semantic knowledge of, and
+    // that scripts see the Unix form so `IFS=: read -ra dirs <<< "$PATH"` works and
+    // `PATH=/foo:$PATH` composes. It was never implemented: `echo $PATH` returned the
+    // raw Windows value, semicolons and backslashes, so both of those idioms produced
+    // nonsense. The Windows form is rebuilt in the environment block handed to a child,
+    // which is where `terraform.exe` and `git.exe` need it.
+    if let Some(path) = vars.get("PATH").cloned() {
+        vars.insert("PATH".to_string(), cash_win32::env::path_to_unix(&path));
+    }
+
+    // cash: `$SHELL` names *this* shell.
+    //
+    // It is inherited from whatever launched cash — Git Bash, PowerShell, Windows
+    // Terminal — so it pointed at another shell entirely. Anything that reads it to
+    // decide how to run a command (`make`, `npm run`, an editor's integrated terminal,
+    // `git rebase -i`) would launch that other shell instead, and every cash guarantee
+    // would stop at that boundary. `$0` already names cash; `$SHELL` now agrees.
+    if let Ok(own) = std::env::current_exe() {
+        vars.insert("SHELL".to_string(), cash_win32::path::render(&own));
+    }
+
     // Copy TEMP/TMP to TMPDIR if TMPDIR doesn't already exist.
     if !vars.contains_key("TMPDIR")
         && let Some(tmp) = vars.get("TEMP").or_else(|| vars.get("TMP")).cloned()

@@ -32,6 +32,11 @@ mod which;
 #[cfg(windows)]
 mod chmod;
 
+// cash (D48): uutils' `id` is Unix-only, and the MSYS stand-in reports a uid Windows
+// does not have.
+#[cfg(windows)]
+mod identity;
+
 #[cfg(feature = "builtin.alias")]
 mod alias;
 #[cfg(feature = "builtin.bg")]

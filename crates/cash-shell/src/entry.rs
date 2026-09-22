@@ -490,6 +490,18 @@ async fn instantiate_shell_from_args(
         None
     };
 
+    // cash (D3): $0 is a path when cash was invoked by one, and the OS hands it over with
+    // backslashes. A script doing `dirname "$0"` or `case "$0" in */foo) …` then sees a
+    // spelling D3 says cash never renders.
+    #[cfg(windows)]
+    let shell_name = shell_name.map(|name| {
+        if name.contains('\\') {
+            cash_win32::path::render(std::path::Path::new(&name))
+        } else {
+            name
+        }
+    });
+
     // Compute positional shell arguments.
     let shell_args = if args.command.is_some() {
         Some(args.script_args.iter().skip(1).cloned().collect())

@@ -2115,21 +2115,32 @@ async fn setup_process_substitution_win(
 }
 
 fn setup_open_file_with_contents(contents: &str) -> Result<OpenFile, error::Error> {
-    let (reader, mut writer) = std::io::pipe()?;
-
     let bytes = contents.as_bytes();
 
-    #[cfg(any(target_os = "linux", target_os = "android"))]
+    // cash: on Windows a pipe deadlocks above 4096 bytes, because nothing is draining it
+    // until the command that reads the here-document starts. See
+    // `sys::windows::fs::open_temp_with_contents`.
+    #[cfg(windows)]
     {
-        use std::os::fd::AsFd as _;
-
-        let len = i32::try_from(bytes.len())
-            .map_err(|_err| error::Error::from(error::ErrorKind::TooMuchData))?;
-        nix::fcntl::fcntl(reader.as_fd(), nix::fcntl::FcntlArg::F_SETPIPE_SZ(len))?;
+        Ok(crate::sys::fs::open_temp_with_contents(bytes)?.into())
     }
 
-    writer.write_all(bytes)?;
-    drop(writer);
+    #[cfg(not(windows))]
+    {
+        let (reader, mut writer) = std::io::pipe()?;
 
-    Ok(reader.into())
+        #[cfg(any(target_os = "linux", target_os = "android"))]
+        {
+            use std::os::fd::AsFd as _;
+
+            let len = i32::try_from(bytes.len())
+                .map_err(|_err| error::Error::from(error::ErrorKind::TooMuchData))?;
+            nix::fcntl::fcntl(reader.as_fd(), nix::fcntl::FcntlArg::F_SETPIPE_SZ(len))?;
+        }
+
+        writer.write_all(bytes)?;
+        drop(writer);
+
+        Ok(reader.into())
+    }
 }

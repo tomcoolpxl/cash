@@ -85,6 +85,11 @@ path = "tests/completion_tests.rs"
 name = "completion-windows"
 path = "tests/completion_windows.rs"
 
+# D3/D5: what a script sees of its environment, and the here-document deadlock.
+[[test]]
+name = "environment-contract"
+path = "tests/environment_contract.rs"
+
 # D3/D7/D8/D34/D35: what cash says it will run vs what it runs.
 [[test]]
 name = "resolution-honesty"

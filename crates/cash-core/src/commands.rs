@@ -199,7 +199,20 @@ pub fn compose_std_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
             // that are set (i.e., have a value). This means a variable that
             // shows up in `declare -p` but has no *set* value will be omitted.
             if v.value().is_set() {
-                cmd.env(k.as_str(), v.value().to_cow_str(context.shell).as_ref());
+                let value = v.value().to_cow_str(context.shell);
+
+                // cash (D5): PATH goes back to the semicolon-separated Windows form at
+                // the process boundary. The shell holds and shows the Unix form so that
+                // `IFS=: read -ra dirs <<< "$PATH"` works, but `git.exe` and
+                // `terraform.exe` cannot read that — a child handed `/c/tools:/c/bin`
+                // finds nothing at all.
+                #[cfg(windows)]
+                if k.eq_ignore_ascii_case("PATH") {
+                    cmd.env(k.as_str(), cash_win32::env::path_to_windows(value.as_ref()));
+                    continue;
+                }
+
+                cmd.env(k.as_str(), value.as_ref());
             }
         }
         // Set _ to the resolved command path for external commands.

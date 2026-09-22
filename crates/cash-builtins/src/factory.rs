@@ -241,6 +241,8 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
         m.insert("more".into(), builtin::<pager::MoreCommand, SE>());
         m.insert("which".into(), builtin::<which::WhichCommand, SE>());
         m.insert("chmod".into(), builtin::<chmod::ChmodCommand, SE>());
+        m.insert("id".into(), builtin::<identity::IdCommand, SE>());
+        m.insert("groups".into(), builtin::<identity::GroupsCommand, SE>());
     }
 
     m

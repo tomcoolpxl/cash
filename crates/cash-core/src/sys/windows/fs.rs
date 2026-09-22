@@ -130,11 +130,22 @@ impl crate::sys::fs::PathExt for Path {
     }
 }
 
-/// Splits a platform-specific PATH-like value into individual paths.
+/// Splits a PATH-like value into individual paths.
 ///
-/// On Windows, this delegates to [`std::env::split_paths`].
-pub fn split_paths<T: AsRef<OsStr> + ?Sized>(s: &T) -> std::env::SplitPaths<'_> {
-    std::env::split_paths(s)
+/// cash (D5): `$PATH` is rendered Unix-style to scripts — colon-separated, `/c/...` —
+/// so this cannot be [`std::env::split_paths`], which splits on `;` alone and would
+/// hand back the whole value as one entry. It splits on either separator, rejoins a
+/// drive letter that a colon-split would have torn in half (`C:/tools`), and converts
+/// each entry to the native spelling the filesystem needs.
+///
+/// Without this, `PATH=/c/foo:$PATH` — which D5 gives as a worked example — left the
+/// shell unable to find any command at all.
+pub fn split_paths<T: AsRef<OsStr> + ?Sized>(s: &T) -> std::vec::IntoIter<PathBuf> {
+    let value = s.as_ref().to_string_lossy().into_owned();
+    cash_win32::env::split_path(&value)
+        .map(cash_win32::path::accept_path)
+        .collect::<Vec<_>>()
+        .into_iter()
 }
 
 /// Opens a null file that will discard all I/O.
@@ -312,6 +323,51 @@ pub fn normalize_path_separators(s: &str) -> std::borrow::Cow<'_, str> {
 ///
 /// Lives in a per-session directory so that a sweep at startup can clear anything left
 /// by a session that was terminated without unwinding — which D6 does routinely.
+/// Back a here-document or here-string with a temp file rather than a pipe.
+///
+/// A pipe deadlocks above its buffer. The shell writes the whole document before the
+/// command that reads it has started, so once the write fills the pipe — 4096 bytes on
+/// Windows, exactly — it blocks forever waiting for a reader that cannot exist yet.
+/// Measured: a here-string of 4090 bytes worked and one of 4096 hung the shell. `$PATH`
+/// on this machine is 4425 bytes, so D5's own worked example,
+/// `IFS=: read -ra dirs <<< "$PATH"`, was a hang.
+///
+/// Linux avoids it by growing the pipe with `F_SETPIPE_SZ`. Windows has no equivalent,
+/// so this does what bash does for here-documents anyway: writes a temp file.
+///
+/// `FILE_FLAG_DELETE_ON_CLOSE` is right here even though D17 had to reject it for
+/// process substitution. The difference is who opens the file: a process substitution
+/// hands the *child* a path, and a delete-pending file cannot be opened afresh, whereas
+/// a here-document hands over the inherited *handle* and no path is ever used. The
+/// kernel reclaims the file when the last handle closes, including when cash is
+/// terminated without unwinding — which D6 does routinely.
+pub(crate) fn open_temp_with_contents(contents: &[u8]) -> std::io::Result<std::fs::File> {
+    use std::io::{Seek, SeekFrom, Write};
+    use std::os::windows::fs::OpenOptionsExt;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    /// Delete the file as soon as the last handle to it closes.
+    const FILE_FLAG_DELETE_ON_CLOSE: u32 = 0x0400_0000;
+    /// Let the child inherit and read it, and let the delete proceed while open.
+    const SHARE_ALL: u32 = 0x0000_0001 | 0x0000_0002 | 0x0000_0004;
+
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+    let path = std::env::temp_dir().join(std::format!("cash-here-{}-{n}", std::process::id()));
+
+    let mut file = std::fs::OpenOptions::new()
+        .create_new(true)
+        .read(true)
+        .write(true)
+        .share_mode(SHARE_ALL)
+        .custom_flags(FILE_FLAG_DELETE_ON_CLOSE)
+        .open(&path)?;
+
+    file.write_all(contents)?;
+    file.seek(SeekFrom::Start(0))?;
+    Ok(file)
+}
+
 pub(crate) fn process_substitution_temp_path() -> PathBuf {
     use std::sync::atomic::{AtomicU64, Ordering};
     static COUNTER: AtomicU64 = AtomicU64::new(0);

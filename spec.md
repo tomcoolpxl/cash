@@ -1170,7 +1170,9 @@ someone who expected bash, so additions need to earn their place.
 | 16 | `kill -1` is refused | "every process I may signal" on Windows reaches far past anything a script could mean | D22 |
 | 17 | `sh` and `bash` are cash, ahead of `PATH` | Otherwise `bash` is the WSL launcher and a script continues under Linux | D7 |
 | 18 | `chmod` changes only the read-only attribute | Windows has no execute or read bit outside ACLs; the rest warns and returns 0 | D23, D34 |
-| 19 | `which` reports builtins, and `stat`/`id`/`groups` are not carried | `which` must agree with the shell; the uutils versions of the other three are Unix-only | D8, D48 |
+| 19 | `which` reports builtins; `stat` is not carried | `which` must agree with the shell; uutils' `stat` is Unix-only | D8, D48 |
+| 20 | `id` reports a SID and a RID, not a uid | Windows identifies a user by SID; the MSYS stand-in invented a uid nothing else recognises | D48 |
+| 21 | `$SHELL` names cash, replacing whatever launched it | `make`, `npm run` and editors read it to decide what to launch | D5 |
 
 **One near-miss, recorded because it was nearly an entry of its own.** The bundled
 utilities are portable Rust, so the few that *construct* an absolute path spelled it
@@ -1357,6 +1359,7 @@ concerns was worth keeping.)
 | `cmd` | D32 | CRT quoting, caret escaping, `is_safe_for_cmd` |
 | `process` | D42, D48 | `is_pid_alive`, `cpu_time`, process listing for `ps` |
 | `pathsearch` (core) | D7 | `sh` and `bash` resolve to cash, ahead of `PATH` |
+| `sys::windows::fs` (core) | D5 | `PATH` split on either separator; here-docs backed by a temp file |
 | `jobreg` | D6 | per-spawn nested job registry, tree kill, sweep |
 
 Plus `crates/cash`: the binary, and `cash doctor` (D35).
