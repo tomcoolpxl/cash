@@ -619,10 +619,13 @@ pub(crate) fn execute_external_command(
             let mut stderr = context.stderr();
             let _ = writeln!(
                 stderr,
-                "cash: {}: passed to '{}' as written; commands do not get Unix drive \
-                 spellings translated (D4). Try {} or \"$(winpath {})\"",
+                // The command is deliberately not named. A bundled builtin (D48)
+                // re-enters this binary to dispatch, so `command_name` there is cash's
+                // own path rather than the `cat` the user typed, which would mislead.
+                "cash: {}: a command receives this path as written; cash does not \
+                 translate Unix path spellings in arguments (D4). Try {} or \
+                 \"$(winpath {})\"",
                 arg,
-                context.command_name,
                 cash_win32::path::render(&translated),
                 arg,
             );

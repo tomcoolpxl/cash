@@ -343,3 +343,29 @@ fn a_subshell_and_its_parent_agree_on_the_job_list() {
 fn a_subshell_with_no_parent_jobs_lists_nothing() {
     assert_eq!(cash(r#"printf '[%s]' "$(jobs -p)""#).stdout, "[]");
 }
+
+#[test]
+fn the_tmp_spelling_is_explained_too() {
+    // `/tmp/x` resolves for operations cash performs but not for a command handed it,
+    // including a bundled builtin (D48), which opens paths directly. Same cliff as
+    // `/c/x`, so it gets the same explanation.
+    let out = cash(r#"echo hi > /tmp/cash-edge-tmp.txt; cat /tmp/cash-edge-tmp.txt; rm -f /tmp/cash-edge-tmp.txt"#);
+    assert!(
+        out.stderr.contains("winpath"),
+        "no hint for a /tmp argument: {}",
+        out.stderr
+    );
+}
+
+#[test]
+fn the_diagnostic_does_not_name_a_misleading_command() {
+    // A bundled builtin re-enters the cash binary to dispatch, so naming the resolved
+    // command would report cash.exe rather than the `cat` the user typed.
+    let out = cash(r#"echo hi > /tmp/cash-edge-name.txt; cat /tmp/cash-edge-name.txt; rm -f /tmp/cash-edge-name.txt"#);
+    assert!(
+        !out.stderr.contains("cash.exe as written"),
+        "named the re-entrant binary: {}",
+        out.stderr
+    );
+    assert!(out.stderr.contains("a command receives this path"), "got {}", out.stderr);
+}

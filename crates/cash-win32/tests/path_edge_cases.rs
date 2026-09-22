@@ -253,3 +253,15 @@ fn tmp_mapping_handles_a_bare_prefix_correctly() {
     };
     assert!(is_absolute(&real), "/tmp/x did not resolve: {}", render(&real));
 }
+
+#[test]
+fn the_tmp_spelling_is_also_diagnosable() {
+    // `/tmp/x` resolves for operations cash performs but not for a command handed it —
+    // including a bundled builtin, which opens paths directly. Same cliff as `/c/x`.
+    assert!(unix_drive_spelling("/tmp/x").is_some());
+    assert!(unix_drive_spelling("/tmp").is_some());
+
+    // A directory that merely starts with the letters is not /tmp.
+    assert_eq!(unix_drive_spelling("/tmpfoo"), None);
+    assert_eq!(unix_drive_spelling("/tmpfoo/x"), None);
+}
