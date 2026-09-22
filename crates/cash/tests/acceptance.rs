@@ -583,3 +583,40 @@ fn write_process_substitution_fails_loudly() {
         out.stderr
     );
 }
+
+// ---------------------------------------------------------------------------
+// exec — Windows has no execve.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn exec_with_only_redirections_rebinds_the_shells_files() {
+    // The common form, and entirely platform-neutral: it swaps the shell's own open
+    // files rather than replacing the process.
+    assert_eq!(
+        cash(r#"exec > /dev/null; echo discarded; exec 1>&2; echo visible"#).stderr,
+        "visible"
+    );
+}
+
+#[test]
+fn exec_replaces_the_shell() {
+    // Windows cannot replace a process image, so cash runs the command and exits with
+    // its status. Observably the same for a script: nothing after the exec runs.
+    let out = cash("exec echo replaced; echo SHOULD-NOT-PRINT");
+    assert_eq!(out.stdout, "replaced");
+}
+
+#[test]
+fn exec_propagates_the_commands_exit_status() {
+    assert_eq!(cash("exec cmd.exe /d /s /c exit 7").code, 7);
+}
+
+#[test]
+fn a_failed_exec_exits_a_non_interactive_shell() {
+    // POSIX. Without it a script carries on past a line that was meant to replace it.
+    // bash gives 127 here too.
+    let out = cash("exec definitely-not-a-command; echo CONTINUED");
+    assert_eq!(out.code, 127);
+    assert!(!out.stdout.contains("CONTINUED"), "shell continued past a failed exec");
+    assert!(out.stderr.contains("not found"), "no diagnostic: {}", out.stderr);
+}

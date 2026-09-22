@@ -51,7 +51,7 @@ mod echo;
 mod enable;
 #[cfg(feature = "builtin.eval")]
 mod eval;
-#[cfg(all(feature = "builtin.exec", unix))]
+#[cfg(feature = "builtin.exec")]
 mod exec;
 #[cfg(feature = "builtin.exit")]
 mod exit;

@@ -1,5 +1,9 @@
 use clap::Parser;
-use std::{borrow::Cow, os::unix::process::CommandExt};
+use std::borrow::Cow;
+#[cfg(windows)]
+use std::io::Write as _;
+#[cfg(unix)]
+use std::os::unix::process::CommandExt;
 
 use cash_core::{ErrorKind, ExecutionExitCode, ExecutionResult, builtins, commands};
 
@@ -72,12 +76,57 @@ impl builtins::Command for ExecCommand {
             self.empty_environment,
         )?;
 
-        let exec_error = cmd.exec();
+        // cash: Windows has no `execve`, so the process image cannot be replaced.
+        //
+        // The standard emulation — run the command, then exit the shell with its
+        // status — is observably the same for a script: nothing runs after the `exec`,
+        // and `$?` propagates to whoever invoked cash. What differs is that the pid
+        // changes and the shell lingers as a parent while the command runs, so anything
+        // watching the pid sees two processes rather than one.
+        //
+        // Note the no-argument form above (`exec 3>&1`, `exec > log`) needs none of
+        // this: it only replaces the shell's own open files, and works identically on
+        // both platforms.
+        #[cfg(windows)]
+        {
+            let status = match cmd.status() {
+                Ok(status) => status,
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                    writeln!(
+                        context.stderr(),
+                        "{}: {}: not found",
+                        context.command_name,
+                        self.args[0]
+                    )?;
 
-        if exec_error.kind() == std::io::ErrorKind::NotFound {
-            Ok(ExecutionExitCode::NotFound.into())
-        } else {
-            Err(ErrorKind::from(exec_error).into())
+                    // POSIX: when `exec` cannot run the command, a non-interactive shell
+                    // exits. Without this, `exec missing; echo x` would print `x` — the
+                    // script carrying on past a line that was meant to replace it.
+                    let mut result: ExecutionResult = ExecutionExitCode::NotFound.into();
+                    if !context.shell.options().interactive {
+                        result.next_control_flow = cash_core::ExecutionControlFlow::ExitShell;
+                    }
+                    return Ok(result);
+                }
+                Err(e) => return Err(ErrorKind::from(e).into()),
+            };
+
+            let code = status.code().unwrap_or(1);
+            #[expect(clippy::cast_sign_loss)]
+            let mut result = ExecutionResult::new(cash_win32::exit::from_windows(code as u32));
+            result.next_control_flow = cash_core::ExecutionControlFlow::ExitShell;
+            Ok(result)
+        }
+
+        #[cfg(unix)]
+        {
+            let exec_error = cmd.exec();
+
+            if exec_error.kind() == std::io::ErrorKind::NotFound {
+                Ok(ExecutionExitCode::NotFound.into())
+            } else {
+                Err(ErrorKind::from(exec_error).into())
+            }
         }
     }
 }
