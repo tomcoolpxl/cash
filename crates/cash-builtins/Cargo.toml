@@ -30,6 +30,7 @@ default = [
     'builtin.continue',
     'builtin.declare',
     'builtin.dirs',
+    'builtin.disown',
     'builtin.dot',
     'builtin.echo',
     'builtin.enable',
@@ -85,6 +86,7 @@ default = [
 'builtin.continue' = []
 'builtin.declare' = []
 'builtin.dirs' = []
+'builtin.disown' = []
 'builtin.dot' = []
 'builtin.echo' = []
 'builtin.enable' = []

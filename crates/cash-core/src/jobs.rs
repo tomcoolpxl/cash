@@ -161,20 +161,59 @@ impl JobManager {
         reason = "push() guarantees the vector length is >= 1"
     )]
     pub fn add_as_current(&mut self, mut job: Job) -> &Job {
-        for j in &mut self.jobs {
-            if matches!(j.annotation, JobAnnotation::Current) {
-                j.annotation = JobAnnotation::Previous;
-                break;
-            }
-        }
-
-        let id = self.jobs.len() + 1;
+        // cash: the id used to be `len() + 1`, which collides the moment a job leaves the
+        // table — `disown %1` on jobs 1 and 2 would hand the next job the id 2, a
+        // duplicate that `%2` then resolves to whichever came first. bash numbers past the
+        // highest id in use, so a disowned or reaped slot is not handed out again.
+        let id = self.jobs.iter().map(|j| j.id).max().unwrap_or(0) + 1;
         job.id = id;
-        job.annotation = JobAnnotation::Current;
+        job.annotation = JobAnnotation::None;
         self.jobs.push(job);
+        self.reannotate();
 
         #[allow(clippy::unwrap_used, reason = "we just pushed an element")]
         self.jobs.last().unwrap()
+    }
+
+    /// Removes a job from the table and hands it back, leaving its processes alone.
+    ///
+    /// cash: this is what `disown` does, and it is deliberately *not* a kill. Dropping the
+    /// job drops its tasks, which detaches the background task and releases the child
+    /// handle; external children are not spawned with `kill_on_drop`, so nothing dies.
+    /// What ends is the shell's bookkeeping: `jobs` stops listing it and `wait` stops
+    /// waiting for it.
+    pub fn remove_job(&mut self, id: usize) -> Option<Job> {
+        let index = self.jobs.iter().position(|j| j.id == id)?;
+        let job = self.jobs.remove(index);
+        self.reannotate();
+        Some(job)
+    }
+
+    /// Drops one of the parent's jobs from a subshell's read-only view of them.
+    ///
+    /// cash: a subshell cannot disown the parent's job — bash's subshell is a fork, so it
+    /// only ever edits its own copy of the table. This is that copy.
+    pub fn forget_inherited(&mut self, id: usize) -> bool {
+        let before = self.inherited.len();
+        self.inherited.retain(|snapshot| snapshot.id != id);
+        self.inherited.len() != before
+    }
+
+    /// Recomputes the `%+` and `%-` marks: newest job current, the one before it previous.
+    ///
+    /// cash: demoting the current job used to leave the old previous job marked as well,
+    /// so three background jobs rendered `[1]- [2]- [3]+` where bash renders
+    /// `[1] [2]- [3]+` — two jobs claiming to be `%-`, of which `%-` resolved to the
+    /// older. Recomputing from the table keeps exactly one of each, and is also how the
+    /// marks find their way back to the right jobs when `disown` removes one.
+    fn reannotate(&mut self) {
+        for (rank, job) in self.jobs.iter_mut().rev().enumerate() {
+            job.annotation = match rank {
+                0 => JobAnnotation::Current,
+                1 => JobAnnotation::Previous,
+                _ => JobAnnotation::None,
+            };
+        }
     }
 
     /// Returns the current job, if there is one.
@@ -266,6 +305,14 @@ impl JobManager {
             }
         }
 
+        // cash: a reaped job took its `%+` with it, so once the newest job finished the
+        // shell had no current job at all and `fg`, `bg` and a bare `disown` reported
+        // there was none while jobs were still listed. bash hands the mark to the newest
+        // survivor.
+        if !results.is_empty() {
+            self.reannotate();
+        }
+
         Ok(results)
     }
 
@@ -279,6 +326,10 @@ impl JobManager {
             } else {
                 i += 1;
             }
+        }
+
+        if !completed_jobs.is_empty() {
+            self.reannotate();
         }
 
         completed_jobs
