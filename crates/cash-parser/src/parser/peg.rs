@@ -100,6 +100,7 @@ peg::parser! {
             b:brace_group() { ast::CompoundCommand::BraceGroup(b) } /
             s:subshell() { ast::CompoundCommand::Subshell(s) } /
             f:for_clause() { ast::CompoundCommand::ForClause(f) } /
+            non_posix_extensions_enabled() s:select_clause() { ast::CompoundCommand::SelectClause(s) } /
             c:case_clause() { ast::CompoundCommand::CaseClause(c) } /
             i:if_clause() { ast::CompoundCommand::IfClause(i) } /
             w:while_clause() { ast::CompoundCommand::WhileClause(w) } /
@@ -157,6 +158,21 @@ peg::parser! {
                 let items = and_ors.into_iter().enumerate().map(|(i, ao)| ast::CompoundListItem(ao, seps[i].clone())).collect();
 
                 ast::CompoundList(items)
+            }
+
+        // N.B. `select` is a non-sh extension, and takes the same shape as `for`.
+        rule select_clause() -> ast::SelectClauseCommand =
+            s:specific_word("select") n:name() linebreak() _in() w:wordlist()? sequential_sep() d:do_group() {
+                let start = s.location();
+                let end = &d.loc;
+                let loc = SourceSpan::within(start, end);
+                ast::SelectClauseCommand { variable_name: n.to_owned(), values: w, body: d, loc }
+            } /
+            s:specific_word("select") n:name() sequential_sep()? d:do_group() {
+                let start = s.location();
+                let end = &d.loc;
+                let loc = SourceSpan::within(start, end);
+                ast::SelectClauseCommand { variable_name: n.to_owned(), values: None, body: d, loc }
             }
 
         rule for_clause() -> ast::ForClauseCommand =

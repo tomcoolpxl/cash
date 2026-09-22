@@ -1175,6 +1175,12 @@ someone who expected bash, so additions need to earn their place.
 | 21 | `$SHELL` names cash, replacing whatever launched it | `make`, `npm run` and editors read it to decide what to launch | D5 |
 | 22 | A bundled producer prints `write error: Broken pipe` when its consumer leaves | Windows has no `SIGPIPE`, so uutils reports the failed write instead of dying silently | D48 |
 
+`select` was missing outright until recently: it was a reserved word with no grammar
+rule, so `select x in a b; do …; done` was a syntax error that took the whole file with
+it. It is implemented now — menu and `PS3` on standard error, `REPLY` holding the raw
+answer, an out-of-range or non-numeric choice leaving the variable empty — and matches
+bash byte for byte.
+
 **One near-miss, recorded because it was nearly an entry of its own.** The bundled
 utilities are portable Rust, so the few that *construct* an absolute path spelled it
 natively: `mktemp -d` printed `C:\Users\me\AppData\Local\Temp\tmp.AbCdEf`. A script then

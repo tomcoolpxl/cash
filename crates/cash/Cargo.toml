@@ -85,6 +85,11 @@ path = "tests/completion_tests.rs"
 name = "completion-windows"
 path = "tests/completion_windows.rs"
 
+# `select`, a bash construct cash could not parse at all.
+[[test]]
+name = "select-clause"
+path = "tests/select_clause.rs"
+
 # D11/D26: pipelines that actually overlap, and `read -t`.
 [[test]]
 name = "pipeline-concurrency"

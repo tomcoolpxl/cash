@@ -427,6 +427,8 @@ pub enum CompoundCommand {
     Subshell(SubshellCommand),
     /// A for clause, which loops over a set of values.
     ForClause(ForClauseCommand),
+    /// A select clause, which presents a numbered menu and loops over the choice.
+    SelectClause(SelectClauseCommand),
     /// A case clause, which selects a command based on a value and a set of
     /// pattern-based filters.
     CaseClause(CaseClauseCommand),
@@ -452,6 +454,7 @@ impl SourceLocation for CompoundCommand {
             Self::BraceGroup(b) => b.location(),
             Self::Subshell(s) => s.location(),
             Self::ForClause(f) => f.location(),
+            Self::SelectClause(s) => s.location(),
             Self::CaseClause(c) => c.location(),
             Self::IfClause(i) => i.location(),
             Self::WhileClause(w) => w.location(),
@@ -474,6 +477,7 @@ impl Display for CompoundCommand {
             }
             Self::Subshell(subshell_command) => write!(f, "{subshell_command}"),
             Self::ForClause(for_clause_command) => write!(f, "{for_clause_command}"),
+            Self::SelectClause(select_clause_command) => write!(f, "{select_clause_command}"),
             Self::CaseClause(case_clause_command) => {
                 write!(f, "{case_clause_command}")
             }
@@ -581,6 +585,56 @@ impl SourceLocation for ForClauseCommand {
 impl Display for ForClauseCommand {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "for {} in ", self.variable_name)?;
+
+        if let Some(values) = &self.values {
+            for (i, value) in values.iter().enumerate() {
+                if i > 0 {
+                    write!(f, " ")?;
+                }
+
+                write!(f, "{value}")?;
+            }
+        }
+
+        writeln!(f, ";")?;
+
+        write!(f, "{}", self.body)
+    }
+}
+
+/// A select clause: a numbered menu, read from, in a loop.
+///
+/// Syntactically identical to a for clause; the difference is entirely in execution.
+/// `select` prints the words as a menu, reads a choice, and loops until `break` or end
+/// of input, rather than walking the list once.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[cfg_attr(
+    any(test, feature = "serde"),
+    derive(PartialEq, Eq, serde::Serialize, serde::Deserialize)
+)]
+pub struct SelectClauseCommand {
+    /// The name of the variable receiving the chosen word.
+    pub variable_name: String,
+    /// The values offered in the menu.
+    pub values: Option<Vec<Word>>,
+    /// The command to run for each choice.
+    pub body: DoGroupCommand,
+    /// Location of the select command.
+    pub loc: SourceSpan,
+}
+
+impl Node for SelectClauseCommand {}
+
+impl SourceLocation for SelectClauseCommand {
+    fn location(&self) -> Option<SourceSpan> {
+        Some(self.loc.clone())
+    }
+}
+
+impl Display for SelectClauseCommand {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "select {} in ", self.variable_name)?;
 
         if let Some(values) = &self.values {
             for (i, value) in values.iter().enumerate() {

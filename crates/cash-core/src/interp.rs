@@ -762,6 +762,7 @@ impl Execute for ast::CompoundCommand {
                 Ok(ExecutionResult::from(subshell_result.exit_code))
             }
             Self::ForClause(f) => f.execute(shell, params).await,
+            Self::SelectClause(sel) => sel.execute(shell, params).await,
             Self::CaseClause(c) => c.execute(shell, params).await,
             Self::IfClause(i) => i.execute(shell, params).await,
             Self::WhileClause(w) => (WhileOrUntil::While, w).execute(shell, params).await,
@@ -864,6 +865,114 @@ impl Execute for ast::CoprocessCommand {
             .set_global(pid_name, ShellVariable::new(job_id.to_string()))?;
 
         Ok(ExecutionResult::success())
+    }
+}
+
+#[async_trait::async_trait]
+#[async_trait::async_trait]
+impl Execute for ast::SelectClauseCommand {
+    async fn execute(
+        &self,
+        shell: &mut Shell<impl extensions::ShellExtensions>,
+        params: &ExecutionParameters,
+    ) -> Result<ExecutionResult, error::Error> {
+        use std::io::{BufRead, Write};
+
+        let mut result = ExecutionResult::success();
+
+        // Same word source as a for clause: the given list, or the positional parameters.
+        let choices = if let Some(unexpanded_values) = &self.values {
+            expand_words(shell, params, unexpanded_values).await?
+        } else {
+            shell.current_shell_args().to_vec()
+        };
+
+        // bash exits immediately on an empty list rather than prompting forever.
+        if choices.is_empty() {
+            shell.set_last_exit_status(result.exit_code.into());
+            return Ok(result);
+        }
+
+        let mut input = std::io::BufReader::new(params.stdin(shell));
+        let mut show_menu = true;
+
+        loop {
+            if show_menu {
+                let mut stderr = params.stderr(shell);
+                for (index, choice) in choices.iter().enumerate() {
+                    writeln!(stderr, "{}) {choice}", index + 1)?;
+                }
+                let _ = stderr.flush();
+                show_menu = false;
+            }
+
+            // PS3 is the select prompt, and it goes to standard error alongside the menu.
+            let prompt = shell
+                .env()
+                .get_str("PS3", shell)
+                .map_or_else(|| String::from("#? "), |value| value.to_string());
+            {
+                let mut stderr = params.stderr(shell);
+                write!(stderr, "{prompt}")?;
+                let _ = stderr.flush();
+            }
+
+            let mut line = String::new();
+            if input.read_line(&mut line)? == 0 {
+                // End of input ends the loop, as bash's does.
+                break;
+            }
+
+            let answer = line.trim_end_matches(['\r', '\n']).to_string();
+
+            // REPLY holds the raw line whatever it was, which is how a select body tells
+            // "3" from "quit".
+            shell.env_mut().update_or_add(
+                "REPLY",
+                ShellValueLiteral::Scalar(answer.clone()),
+                |_| Ok(()),
+                EnvironmentLookup::Anywhere,
+                EnvironmentScope::Global,
+            )?;
+
+            // A blank line reprints the menu and asks again, without running the body.
+            if answer.trim().is_empty() {
+                show_menu = true;
+                continue;
+            }
+
+            // A number in range selects; anything else sets the variable empty, which is
+            // what a body testing `[ -z "$var" ]` relies on.
+            let chosen = answer
+                .trim()
+                .parse::<usize>()
+                .ok()
+                .filter(|n| *n >= 1 && *n <= choices.len())
+                .map_or_else(String::new, |n| choices[n - 1].clone());
+
+            shell.env_mut().update_or_add(
+                &self.variable_name,
+                ShellValueLiteral::Scalar(chosen),
+                |_| Ok(()),
+                EnvironmentLookup::Anywhere,
+                EnvironmentScope::Global,
+            )?;
+
+            result = self.body.list.execute(shell, params).await?;
+            if result.is_return_or_exit() {
+                break;
+            }
+
+            let is_break = result.is_break();
+            result.next_control_flow = result.next_control_flow.try_decrement_loop_levels();
+
+            if is_break {
+                break;
+            }
+        }
+
+        shell.set_last_exit_status(result.exit_code.into());
+        Ok(result)
     }
 }
 
