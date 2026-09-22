@@ -892,8 +892,33 @@ Serves §1's "pleasant enough to replace your shell" bar for very little impleme
   `C:/Program Files` is the most common path on Windows and breaks unquoted every time.
 - Completes both spellings: `C:/Prog<TAB>` and `/c/Prog<TAB>` both work, per D3.
 
-- OPEN: auto-quoting must compose correctly with quoting already typed — completing
-  inside an existing `"` should not add another.
+**Resolved: quoting already typed is honoured, not doubled.** The span a completion
+replaces *includes* the opening quote, so `ls "Prog<TAB>` must come back as
+`"Program Files"` — a bare name would delete the quote the user typed, and prepending a
+second would give `""Program Files"`. A quote already typed is kept even where the
+candidate would not otherwise need one: someone who typed `"` meant it. Single quotes
+are honoured the same way.
+
+Quoting applies only to filename candidates, and `complete -o noquote` turns it off, as
+in bash. Windows-only, so D43's differential suite is untouched.
+
+**Generated completion scripts work, which needs two shims.** `docker completion bash`,
+`kubectl completion bash`, `gh completion -s bash` and every other Cobra-generated
+script — most of the Go ecosystem — call `_get_comp_words_by_ref` and `_filedir`. Those
+live in the `bash-completion` *package*, not in bash. Linux distributions install it;
+Windows has nothing to install, and Git for Windows does not ship it either, so on that
+platform sourcing `docker completion bash` succeeds and then silently completes
+nothing at all.
+
+cash therefore defines both helpers itself, before rc files so a user who does install
+bash-completion overrides them. Measured after: `docker ru` → `run`,
+`kubectl get po` → `pods`, `gh pr cr` → `create`, and `docker run --rm <TAB>` lists the
+local image tags. clap-generated scripts (rustup, cargo, ripgrep) never needed the
+shims and keep working.
+
+Stated limitation: the shim splits the command line on whitespace only. A quoted
+argument containing a space is seen as two words — completion still works, the request
+forwarded to the tool is merely split where the quote would have held it together.
 
 ### D41 — BOM stripped on read; console code page set to UTF-8
 

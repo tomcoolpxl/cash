@@ -76,6 +76,17 @@ path = "tests/interactive_tests.rs"
 name = "cash-completion-tests"
 path = "tests/completion_tests.rs"
 
+# D40: completion is the one part of the shell with no command-line surface, so
+# these drive a `Shell` directly.
+[[test]]
+name = "completion-windows"
+path = "tests/completion_windows.rs"
+
+# D40: `docker completion bash` and friends, which need bash-completion's helpers.
+[[test]]
+name = "completion-scripts"
+path = "tests/completion_scripts.rs"
+
 [dev-dependencies]
 anyhow = "1.0.102"
 # The absorbed differential suite parses its own CLI options and drives an async
@@ -84,6 +95,10 @@ clap = { version = "4.6.0", features = ["derive", "env"] }
 tokio = { version = "1.52.3", features = ["rt", "rt-multi-thread", "sync", "macros"] }
 tempfile = "3.27.0"
 cash-parser = { version = "^0.4.0", path = "../cash-parser" }
+# The completion tests drive a `Shell` directly rather than through the binary,
+# because completion has no command-line surface to assert against.
+cash-core = { version = "^0.5.0", path = "../cash-core" }
+cash-builtins = { version = "^0.2.0", path = "../cash-builtins" }
 cash-test-harness = { path = "../cash-test-harness", features = ["insta"] }
 assert_cmd = "2.2.0"
 assert_fs = "1.1.3"

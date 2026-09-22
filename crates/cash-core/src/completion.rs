@@ -1163,12 +1163,18 @@ impl Config {
         }
 
         match result {
-            Answer::Candidates(candidates, options) => Ok(Completions {
-                insertion_index,
-                delete_count: completion_prefix.len(),
-                candidates,
-                options,
-            }),
+            Answer::Candidates(candidates, options) => {
+                // cash (D40): auto-quote, using the quoting the user has already typed.
+                #[cfg(windows)]
+                let candidates = autoquote_candidates(candidates, completion_prefix, &options);
+
+                Ok(Completions {
+                    insertion_index,
+                    delete_count: completion_prefix.len(),
+                    candidates,
+                    options,
+                })
+            }
             Answer::RestartCompletionProcess => Ok(Completions {
                 insertion_index,
                 delete_count: 0,
@@ -1244,6 +1250,113 @@ impl Config {
     }
 }
 
+/// Quote completion candidates the way the user has already started quoting — **D40**.
+///
+/// `C:/Program Files` is the most common path on Windows and it breaks unquoted every
+/// time, silently: the command runs, against two wrong arguments. So a candidate that
+/// contains a space or a shell metacharacter comes back quoted.
+///
+/// The prefix matters as much as the candidate. The replaced span includes any opening
+/// quote the user typed, so completing `ls "Prog` must emit `"Program Files"` — emitting
+/// the bare name would delete the quote the user asked for, and emitting `""Program
+/// Files"` would be worse still. D40 left exactly this composition open.
+///
+/// A quote already typed is always honoured, even when the candidate would not otherwise
+/// need one: someone who typed `"` meant it.
+#[cfg(windows)]
+fn autoquote_candidates(
+    candidates: Vec<String>,
+    replaced_prefix: &str,
+    options: &ProcessingOptions,
+) -> Vec<String> {
+    // `compgen -o noquote` is the caller's explicit opt-out, and non-filename candidates
+    // (branch names from a completion function, say) are not ours to rewrite.
+    if !options.treat_as_filenames || options.no_autoquote_filenames {
+        return candidates;
+    }
+
+    let typed_quote = replaced_prefix
+        .chars()
+        .next()
+        .filter(|c| matches!(c, '"' | '\''));
+
+    candidates
+        .into_iter()
+        .map(|candidate| {
+            // A trailing space is the "this completion is finished" marker further down
+            // the pipeline; it must stay outside the quotes.
+            let (body, trailing) = match candidate.strip_suffix(' ') {
+                Some(body) => (body.to_string(), " "),
+                None => (candidate, ""),
+            };
+
+            let quoted = match typed_quote {
+                Some('\'') => Some(format!("'{}'", body.replace('\'', r"'\''"))),
+                Some(_) => Some(format!("\"{}\"", escape_for_double_quotes(&body))),
+                None if needs_quoting(&body) => {
+                    Some(format!("\"{}\"", escape_for_double_quotes(&body)))
+                }
+                None => None,
+            };
+
+            match quoted {
+                Some(quoted) => quoted + trailing,
+                None => body + trailing,
+            }
+        })
+        .collect()
+}
+
+/// Whether a completion candidate would be mangled if inserted bare.
+///
+/// Spaces are the headline, but `Program Files (x86)` is on every Windows machine and
+/// parentheses are shell syntax too. Tilde and `#` only matter at the start of a word,
+/// but quoting them there costs nothing and reasoning about position costs more.
+#[cfg(windows)]
+fn needs_quoting(candidate: &str) -> bool {
+    candidate.is_empty()
+        || candidate.chars().any(|c| {
+            c.is_whitespace()
+                || matches!(
+                    c,
+                    '|' | '&'
+                        | ';'
+                        | '<'
+                        | '>'
+                        | '('
+                        | ')'
+                        | '$'
+                        | '`'
+                        | '\\'
+                        | '"'
+                        | '\''
+                        | '*'
+                        | '?'
+                        | '['
+                        | ']'
+                        | '{'
+                        | '}'
+                        | '~'
+                        | '#'
+                        | '!'
+                        | '='
+                )
+        })
+}
+
+/// Escape the four characters that keep their meaning inside double quotes.
+#[cfg(windows)]
+fn escape_for_double_quotes(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for c in text.chars() {
+        if matches!(c, '"' | '\\' | '$' | '`') {
+            out.push('\\');
+        }
+        out.push(c);
+    }
+    out
+}
+
 async fn get_file_completions(
     shell: &Shell<impl extensions::ShellExtensions>,
     token_to_complete: &str,
@@ -1270,7 +1383,19 @@ async fn get_file_completions(
     // path separator.
     let expanded_token = sys::fs::normalize_path_separators(&expanded_token).into_owned();
 
-    let glob = std::format!("{expanded_token}*");
+    // cash (D3, D40): `/c/Users/...` and `/tmp/...` are accepted spellings everywhere
+    // else, so they have to complete too — a spelling you can only use by typing every
+    // character of it is not really accepted. Glob in the Windows spelling and render
+    // each result back into the spelling the user actually typed.
+    #[cfg(windows)]
+    let unix_spelled = cash_win32::path::unix_drive_spelling(&expanded_token)
+        .map(|translated| cash_win32::path::render(&translated));
+    #[cfg(windows)]
+    let glob_token = unix_spelled.as_deref().unwrap_or(expanded_token.as_str());
+    #[cfg(not(windows))]
+    let glob_token = expanded_token.as_str();
+
+    let glob = std::format!("{glob_token}*");
 
     let path_filter = |path: &Path| !must_be_dir || shell.absolute_path(path).is_dir();
 
@@ -1292,6 +1417,18 @@ async fn get_file_completions(
             std::borrow::Cow::Owned(normalized) => normalized,
         })
         .collect();
+
+    // Put the user's spelling back on the front. Sliced by length rather than by
+    // `strip_prefix`, because a case-insensitive glob may have matched a prefix whose
+    // case differs from what was typed — and what was typed is what should stay.
+    #[cfg(windows)]
+    if let Some(windows_form) = unix_spelled.as_deref() {
+        for completion in &mut completions {
+            if let Some(rest) = completion.get(windows_form.len()..) {
+                *completion = std::format!("{expanded_token}{rest}");
+            }
+        }
+    }
 
     match expanded_token.as_str() {
         "." => {

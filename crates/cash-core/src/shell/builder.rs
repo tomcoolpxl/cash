@@ -23,6 +23,12 @@ impl<SE: extensions::ShellExtensions, S: shell_builder::IsComplete> ShellBuilder
         // Construct the shell.
         let mut shell = Shell::new(options)?;
 
+        // cash (D40): define the two bash-completion helpers that Cobra-generated
+        // completion scripts call. Before the rc files, so a user who installs the real
+        // bash-completion package simply overrides these.
+        #[cfg(windows)]
+        shell.load_completion_shims().await?;
+
         // Load profiles/configuration (and then history), unless skipped. Callers that skip
         // both are expected to call `load_config` themselves before needing history.
         if !profile.skip() || !rc.skip() {

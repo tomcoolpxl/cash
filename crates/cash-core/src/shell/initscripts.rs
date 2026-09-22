@@ -72,6 +72,33 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
         Ok(())
     }
 
+    /// Define the `bash-completion` helper functions that generated completion scripts
+    /// expect to find — **D40**.
+    ///
+    /// `docker completion bash`, `kubectl completion bash`, `gh completion -s bash` and
+    /// every other Cobra-generated script call `_get_comp_words_by_ref` and `_filedir`.
+    /// Those live in the `bash-completion` package rather than in bash, and on Windows
+    /// there is nothing to install — Git for Windows does not ship it either, which is
+    /// why sourcing `docker completion bash` there succeeds and then completes nothing
+    /// at all. Defining the helpers is the whole fix.
+    ///
+    /// Failure is not fatal. A shell that starts without tab completion for `docker` is
+    /// a worse shell; a shell that refuses to start is not a shell.
+    #[cfg(windows)]
+    pub(crate) async fn load_completion_shims(&mut self) -> Result<(), error::Error> {
+        const SHIMS: &str = include_str!("../completion_shims.sh");
+
+        let mut params = self.default_exec_params();
+        params.process_group_policy = interp::ProcessGroupPolicy::SameProcessGroup;
+
+        let source_info = crate::SourceInfo::from("cash: completion shims");
+        if let Err(e) = self.run_string(SHIMS, &source_info, &params).await {
+            tracing::warn!("failed to define completion compatibility shims: {e}");
+        }
+
+        Ok(())
+    }
+
     async fn load_config_files(
         &mut self,
         profile_behavior: &ProfileLoadBehavior,
