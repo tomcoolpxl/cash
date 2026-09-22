@@ -453,3 +453,52 @@ mod tests {
         assert!(resolve_executable(path).is_none());
     }
 }
+
+/// A unique temp path for a process substitution (D17).
+///
+/// Lives in a per-session directory so that a sweep at startup can clear anything left
+/// by a session that was terminated without unwinding — which D6 does routinely.
+pub(crate) fn process_substitution_temp_path() -> PathBuf {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+
+    let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+    if n == 0 {
+        sweep_stale_process_substitution_dirs();
+    }
+
+    std::env::temp_dir()
+        .join(std::format!("cash-psub-{}", std::process::id()))
+        .join(std::format!("{n}"))
+}
+
+/// Remove process-substitution temp directories left by sessions that are gone.
+///
+/// D17 preferred `FILE_FLAG_DELETE_ON_CLOSE`, whose appeal is that the kernel reclaims
+/// the file even when a process is terminated without unwinding — which D6 does
+/// routinely. That does not work here: the child opens the file by *path*, and a
+/// delete-pending file cannot be opened afresh. So this is D17's named fallback, a
+/// per-session directory swept at startup, keyed on whether the owning pid still exists.
+fn sweep_stale_process_substitution_dirs() {
+    let Ok(entries) = std::fs::read_dir(std::env::temp_dir()) else {
+        return;
+    };
+
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        let Some(pid) = name.strip_prefix("cash-psub-") else {
+            continue;
+        };
+        let Ok(pid) = pid.parse::<u32>() else {
+            continue;
+        };
+
+        // Leave our own directory, and any belonging to a session still running.
+        if pid == std::process::id() || cash_win32::process::is_pid_alive(pid) {
+            continue;
+        }
+
+        let _ = std::fs::remove_dir_all(entry.path());
+    }
+}

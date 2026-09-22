@@ -1187,20 +1187,20 @@ impl<SE: extensions::ShellExtensions> ExecuteInPipeline<SE> for ast::SimpleComma
                     }
                 }
                 CommandPrefixOrSuffixItem::ProcessSubstitution(kind, subshell_command) => {
-                    let (installed_fd_num, substitution_file) = setup_process_substitution(
-                        &context.shell,
-                        &params,
-                        kind,
-                        subshell_command,
-                    )?;
+                    let (arg_path, installed_fd_num, substitution_file) =
+                        setup_process_substitution(
+                            &context.shell,
+                            &params,
+                            kind,
+                            subshell_command,
+                        )
+                        .await?;
 
-                    params
-                        .open_files
-                        .set_fd(installed_fd_num, substitution_file);
+                    if let Some(fd) = installed_fd_num {
+                        params.open_files.set_fd(fd, substitution_file);
+                    }
 
-                    args.push(CommandArg::String(std::format!(
-                        "/dev/fd/{installed_fd_num}"
-                    )));
+                    args.push(CommandArg::String(arg_path));
                 }
                 CommandPrefixOrSuffixItem::AssignmentWord(assignment, word) => {
                     if args.is_empty() {
@@ -1853,15 +1853,19 @@ pub(crate) async fn setup_redirect(
                         | ast::IoFileRedirectKind::Append
                         | ast::IoFileRedirectKind::ReadAndWrite
                         | ast::IoFileRedirectKind::Clobber => {
-                            let (substitution_fd, substitution_file) = setup_process_substitution(
-                                shell,
-                                params,
-                                substitution_kind,
-                                subshell_cmd,
-                            )?;
+                            let (_arg_path, substitution_fd, substitution_file) =
+                                setup_process_substitution(
+                                    shell,
+                                    params,
+                                    substitution_kind,
+                                    subshell_cmd,
+                                )
+                                .await?;
 
                             let target_file = substitution_file.clone();
-                            params.open_files.set_fd(substitution_fd, substitution_file);
+                            if let Some(fd) = substitution_fd {
+                                params.open_files.set_fd(fd, substitution_file);
+                            }
 
                             let fd_num = specified_fd_num
                                 .unwrap_or_else(|| get_default_fd_for_redirect_kind(kind));
@@ -1958,12 +1962,33 @@ const fn get_default_fd_for_redirect_kind(kind: &ast::IoFileRedirectKind) -> She
     }
 }
 
-fn setup_process_substitution(
+/// Set up a process substitution, returning the argument the command should receive,
+/// the fd the file is installed on, and the file itself.
+///
+/// cash (D17): the argument is `/dev/fd/N` on Unix, where the child inherits the fd, and
+/// a temp file path on Windows, where it cannot. See [`setup_process_substitution_win`].
+async fn setup_process_substitution(
     shell: &Shell<impl extensions::ShellExtensions>,
     params: &ExecutionParameters,
     kind: &ast::ProcessSubstitutionKind,
     subshell_cmd: &ast::SubshellCommand,
-) -> Result<(ShellFd, OpenFile), error::Error> {
+) -> Result<(String, Option<ShellFd>, OpenFile), error::Error> {
+    #[cfg(windows)]
+    {
+        return setup_process_substitution_win(shell, params, kind, subshell_cmd).await;
+    }
+
+    #[cfg(not(windows))]
+    setup_process_substitution_posix(shell, params, kind, subshell_cmd)
+}
+
+#[cfg(not(windows))]
+fn setup_process_substitution_posix(
+    shell: &Shell<impl extensions::ShellExtensions>,
+    params: &ExecutionParameters,
+    kind: &ast::ProcessSubstitutionKind,
+    subshell_cmd: &ast::SubshellCommand,
+) -> Result<(String, Option<ShellFd>, OpenFile), error::Error> {
     // TODO(execute): Don't execute synchronously!
     // Execute in a subshell.
     let mut subshell = shell.clone();
@@ -2008,7 +2033,65 @@ fn setup_process_substitution(
         }
     }
 
-    Ok((candidate_fd_num, target_file))
+    Ok((
+        std::format!("/dev/fd/{candidate_fd_num}"),
+        Some(candidate_fd_num),
+        target_file,
+    ))
+}
+
+/// cash (D17): process substitution via a temp file.
+///
+/// Windows has no `/dev/fd`, and a child cannot inherit an arbitrary descriptor (D26),
+/// so the pipe-and-`/dev/fd/63` approach cannot work. The subshell's output is
+/// materialised into a temp file and its *path* passed as the argument — which any
+/// program can open, including ones that seek or stat for a regular file.
+///
+/// The accepted cost, recorded in D17: **no streaming**. The subshell runs to completion
+/// before the consuming command starts, so `while read l; do ...; done < <(tail -f log)`
+/// collects forever rather than streaming.
+#[cfg(windows)]
+async fn setup_process_substitution_win(
+    shell: &Shell<impl extensions::ShellExtensions>,
+    params: &ExecutionParameters,
+    kind: &ast::ProcessSubstitutionKind,
+    subshell_cmd: &ast::SubshellCommand,
+) -> Result<(String, Option<ShellFd>, OpenFile), error::Error> {
+    if matches!(kind, ast::ProcessSubstitutionKind::Write) {
+        // `>(...)` would need the subshell to run *after* the consuming command, which
+        // the temp-file model has no hook for. Failing loudly beats a silent no-op.
+        return error::unimp("write process substitution (>(...)) on Windows");
+    }
+
+    let path = crate::sys::fs::process_substitution_temp_path();
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    // Run the subshell with its stdout captured into the file, and wait for it: the
+    // consumer needs a complete file, not a growing one.
+    {
+        let mut subshell = shell.clone();
+        let mut child_params = params.clone();
+        child_params.process_group_policy = ProcessGroupPolicy::SameProcessGroup;
+        child_params
+            .open_files
+            .set_fd(OpenFiles::STDOUT_FD, OpenFile::from(std::fs::File::create(&path)?));
+
+        let subshell_cmd = subshell_cmd.to_owned();
+        let _ = subshell_cmd
+            .list
+            .execute(&mut subshell, &child_params)
+            .await;
+    }
+
+    let target_file = OpenFile::from(std::fs::File::open(&path)?);
+
+    // No fd is installed. The child reads the temp file by path, and putting the file on
+    // a high descriptor would make `inject_fds` reject the whole command — D26 makes a
+    // descriptor above 2 a hard error for native executables, and that is cash's own
+    // bookkeeping rather than something the script asked for.
+    Ok((cash_win32::path::render(&path), None, target_file))
 }
 
 fn setup_open_file_with_contents(contents: &str) -> Result<OpenFile, error::Error> {

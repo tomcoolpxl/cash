@@ -535,3 +535,51 @@ fn timeout_works_without_an_external_one() {
     let out = cash(r#"PATH=""; timeout 1 ping -n 30 127.0.0.1 >/dev/null; echo $?"#);
     assert_eq!(out.stdout, "124", "timeout did not time out (stderr: {})", out.stderr);
 }
+
+// ---------------------------------------------------------------------------
+// D17 — process substitution.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn process_substitution_works_via_temp_files() {
+    // Windows has no /dev/fd and a child cannot inherit an arbitrary descriptor (D26),
+    // so the pipe-and-/dev/fd/63 approach upstream uses cannot work. D17 materialises
+    // the subshell's output into a temp file and passes its path.
+    assert_eq!(cash("cat <(echo hello)").stdout, "hello");
+    assert_eq!(cash(r#"cat <(printf 'a\nb\n')"#).stdout, "a\nb");
+}
+
+#[test]
+fn process_substitution_supports_the_classic_use() {
+    // `diff <(a) <(b)` is why the feature exists. Both operands must be real paths a
+    // native program can open.
+    assert_eq!(
+        cash(r#"diff <(printf '1\n2\n') <(printf '1\n3\n') >/dev/null 2>&1; echo $?"#).stdout,
+        "1"
+    );
+    assert_eq!(
+        cash(r#"diff <(printf '1\n2\n') <(printf '1\n2\n') >/dev/null 2>&1; echo $?"#).stdout,
+        "0"
+    );
+}
+
+#[test]
+fn process_substitution_works_as_a_redirect() {
+    assert_eq!(
+        cash(r#"while read -r l; do echo "got:$l"; done < <(printf 'x\ny\n')"#).stdout,
+        "got:x\ngot:y"
+    );
+}
+
+#[test]
+fn write_process_substitution_fails_loudly() {
+    // `>(...)` needs the subshell to run after the consuming command, which the
+    // temp-file model has no hook for. D26's posture: fail loudly rather than no-op.
+    let out = cash("echo x > >(cat)");
+    assert!(
+        out.stderr.contains("not yet implemented"),
+        "should have failed clearly, got: {}{}",
+        out.stdout,
+        out.stderr
+    );
+}

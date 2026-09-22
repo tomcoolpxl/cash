@@ -456,10 +456,25 @@ matters because D6 tears down without unwinding.
 Pleasing symmetry: the same kernel-enforced, cannot-be-escaped property that makes D6's
 job objects better than Linux process groups also solves temp file cleanup.
 
-- OPEN: cash creates the file with `FILE_SHARE_DELETE` per D33, but the *child* chooses
-  its own sharing mode when opening the path, and an incompatible choice will fail the
-  open. Needs a test against real tools. Named fallback if it proves fragile: a
-  per-session temp directory swept at startup.
+**Implemented**, and the cleanup question resolved the other way. `FILE_FLAG_DELETE_ON_CLOSE`
+turned out not to work here: the child opens the file by *path*, and a delete-pending
+file cannot be opened afresh. So this uses D17's named fallback — a per-session temp
+directory, swept on first use by checking whether the owning pid still exists.
+
+Also: **no fd is installed on Windows**. Upstream puts the pipe on descriptor 63 and
+passes `/dev/fd/63`; doing the same here would make `inject_fds` reject the whole
+command, because D26 makes a descriptor above 2 a hard error for native executables — and
+that would be cash's own bookkeeping failing, not something the script asked for.
+
+`>(...)` is refused with a clear message rather than silently doing nothing: it needs the
+subshell to run *after* the consuming command, which the temp-file model has no hook for.
+
+```
+cat <(echo hello)                      works
+diff <(a) <(b)                         works, correct exit status
+while read l; do ...; done < <(...)    works
+echo x > >(cat)                        clear error
+```
 
 ### D18 — Reuse `brush-interactive` now, replace when it blocks
 
