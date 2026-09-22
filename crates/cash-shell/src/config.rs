@@ -375,7 +375,9 @@ mod tests {
         assert!(!ui.disable_color);
         // Note: whether highlighting is enabled by default depends on the compile-time
         // DEFAULT_ENABLE_HIGHLIGHTING constant (true with reedline, false without)
-        assert!(!ui.terminal_shell_integration);
+        // cash (D39): terminal shell integration is on by default, where upstream had it
+        // behind an off-by-default experimental flag.
+        assert!(ui.terminal_shell_integration);
         assert!(!ui.zsh_style_hooks);
     }
 
