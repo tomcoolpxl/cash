@@ -80,11 +80,20 @@ impl builtins::Command for KillCommand {
         }
 
         // Look through the remaining args for a pid/job spec or a -sigspec style option.
+        //
+        // Only the *first* argument may be a `-sigspec`, and only if no signal was given
+        // with `-s`/`-n`. After that a leading `-` introduces a negative pid, which POSIX
+        // reads as "the process group led by that pid" — `kill -KILL -1234` is a target,
+        // not a second signal. Treating every hyphenated argument as a sigspec rejected
+        // that spelling outright.
+        let signal_already_given = self.signal_name.is_some() || self.signal_number.is_some();
         let mut pid_or_job_spec = None;
-        for arg in &self.args {
+        for (index, arg) in self.args.iter().enumerate() {
+            let may_be_sigspec = index == 0 && !signal_already_given;
+
             // See if this is -sigspec syntax. The sigspec may be a signal name
             // (e.g., -TERM) or a signal number (e.g., -9, including -0).
-            if let Some(possible_sigspec) = arg.strip_prefix("-") {
+            if let Some(possible_sigspec) = arg.strip_prefix("-").filter(|_| may_be_sigspec) {
                 if Ok(0) == possible_sigspec.parse::<i32>() {
                     signal_zero = true;
                 } else if let Ok(parsed_trap_signal) = possible_sigspec.parse::<TrapSignal>() {
@@ -138,17 +147,44 @@ impl builtins::Command for KillCommand {
                 }
             } else {
                 let pid = cash_core::int_utils::parse(pid_or_job_spec.as_str(), 10)?;
-
-                // It's a pid.
-                if signal_zero {
-                    sys::signal::check_signalable(pid)?;
-                } else {
-                    sys::signal::kill_process(pid, trap_signal)?;
-                }
+                return signal_pid(&context, pid, signal_zero, trap_signal);
             }
         }
         Ok(ExecutionResult::success())
     }
+}
+
+/// Signal one process id, reporting failure the way bash reports it.
+fn signal_pid<SE: cash_core::ShellExtensions>(
+    context: &cash_core::ExecutionContext<'_, SE>,
+    pid: i32,
+    signal_zero: bool,
+    trap_signal: TrapSignal,
+) -> Result<ExecutionResult, cash_core::Error> {
+    let result = if signal_zero {
+        sys::signal::check_signalable(pid)
+    } else {
+        sys::signal::kill_process(pid, trap_signal)
+    };
+
+    if let Err(e) = result {
+        // bash's wording, because scripts and users both read it: a target that is not
+        // there is "No such process", not an OS error number.
+        if e.as_io_error()
+            .is_some_and(|io| io.kind() == std::io::ErrorKind::NotFound)
+        {
+            writeln!(
+                context.stderr(),
+                "{}: ({pid}) - No such process",
+                context.command_name
+            )?;
+        } else {
+            writeln!(context.stderr(), "{}: {e}", context.command_name)?;
+        }
+        return Ok(ExecutionResult::general_error());
+    }
+
+    Ok(ExecutionResult::success())
 }
 
 fn print_signals(

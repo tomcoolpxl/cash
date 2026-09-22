@@ -135,17 +135,57 @@ impl TryFrom<i32> for Signal {
 
 /// Resume a suspended process (D19).
 pub(crate) fn continue_process(pid: sys::process::ProcessId) -> Result<(), error::Error> {
-    cash_win32::console::resume_process(pid_as_u32(pid))
-        .map(|_| ())
-        .map_err(|e| error::ErrorKind::from(e).into())
+    for target in resolve_targets(pid)? {
+        cash_win32::console::resume_process(target)
+            .map(|_| ())
+            .map_err(|e| error::Error::from(error::ErrorKind::from(e)))?;
+    }
+    Ok(())
 }
 
 /// Whether a process exists and cash could signal it.
 pub fn check_signalable(pid: sys::process::ProcessId) -> Result<(), error::Error> {
-    if cash_win32::process::is_pid_alive(pid_as_u32(pid)) {
+    let targets = resolve_targets(pid)?;
+    if targets
+        .iter()
+        .any(|&t| cash_win32::process::is_pid_alive(t))
+    {
         Ok(())
     } else {
         Err(error::ErrorKind::from(std::io::Error::from(std::io::ErrorKind::NotFound)).into())
+    }
+}
+
+/// Turn a POSIX kill target into the concrete Windows process ids to act on.
+///
+/// POSIX gives the sign of the argument a meaning, and getting this wrong on Windows is
+/// not a cosmetic error — it is how `kill 0` came to send a console control event to
+/// *every process attached to the console*, terminal included.
+///
+/// | Target | POSIX meaning | What cash does |
+/// |---|---|---|
+/// | `pid > 0` | that one process | that one process |
+/// | `0` | every process in my process group | every process tree cash spawned |
+/// | `-pid` | every process in that group | the tree rooted at `pid` |
+/// | `-1` | every process I may signal | refused |
+///
+/// `0` is the interesting one. Windows has no notion of "the shell's process group" that
+/// excludes the terminal, so the console is the wrong answer by a wide margin; the set of
+/// trees cash created is what a script writing `trap 'kill 0' EXIT` actually wants.
+///
+/// `-1` is refused rather than approximated. "Everything I am permitted to signal" on
+/// Windows reaches well past anything a script could have intended, and guessing at a
+/// destructive operation is worse than declining it.
+fn resolve_targets(pid: sys::process::ProcessId) -> Result<Vec<u32>, error::Error> {
+    match pid {
+        p if p > 0 => Ok(u32::try_from(p).map_or_else(|_| Vec::new(), |raw| vec![raw])),
+        0 => Ok(cash_win32::jobreg::roots()),
+        -1 => Err(error::ErrorKind::from(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "kill -1 (every process) is not supported on Windows",
+        ))
+        .into()),
+        negative => Ok(vec![negative.unsigned_abs()]),
     }
 }
 
@@ -158,12 +198,48 @@ pub fn kill_process(
     pid: sys::process::ProcessId,
     signal: traps::TrapSignal,
 ) -> Result<(), error::Error> {
-    let raw = pid_as_u32(pid);
-
     let traps::TrapSignal::Signal(signal) = signal else {
         // DEBUG/ERR/EXIT/RETURN are shell-internal traps, not deliverable to a process.
         return Err(error::ErrorKind::InvalidSignal(signal.to_string()).into());
     };
+
+    let targets = resolve_targets(pid)?;
+    if targets.is_empty() {
+        // Nothing to signal. `kill 0` in a shell that has spawned nothing is a no-op in
+        // bash too, so this is not an error.
+        return Ok(());
+    }
+
+    // A target named explicitly must report if it is gone. A target that came from a
+    // *set* — `kill 0` — may have exited between resolving the set and signalling it,
+    // and that is a race, not a failure of the command.
+    let named = pid != 0;
+    let mut first_error = None;
+
+    for target in targets {
+        if let Err(e) = deliver(target, signal) {
+            let vanished = e
+                .as_io_error()
+                .is_some_and(|io| io.kind() == std::io::ErrorKind::NotFound);
+            if named || !vanished {
+                first_error.get_or_insert(e);
+            }
+        }
+    }
+
+    first_error.map_or(Ok(()), Err)
+}
+
+/// Deliver one signal to one process.
+fn deliver(raw: u32, signal: Signal) -> Result<(), error::Error> {
+    // Check first, so that a target that does not exist reports as such. Windows answers
+    // a signal aimed at nothing with `ERROR_INVALID_PARAMETER`, and "The parameter is
+    // incorrect. (os error 87)" tells the user nothing about what went wrong.
+    if !cash_win32::process::is_pid_alive(raw) {
+        return Err(
+            error::ErrorKind::from(std::io::Error::from(std::io::ErrorKind::NotFound)).into(),
+        );
+    }
 
     let result = match signal {
         // D19: Windows has no SIGSTOP, so suspend every thread of the target. §4
@@ -230,9 +306,4 @@ pub(crate) fn mask_sigttou() -> Result<(), error::Error> {
 
 pub(crate) fn poll_for_stopped_children() -> Result<bool, error::Error> {
     Ok(false)
-}
-
-/// Narrow a platform process id to the `DWORD` Win32 expects.
-fn pid_as_u32(pid: sys::process::ProcessId) -> u32 {
-    u32::try_from(pid).unwrap_or(0)
 }

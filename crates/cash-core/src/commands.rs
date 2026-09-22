@@ -717,6 +717,11 @@ pub(crate) fn execute_external_command(
                 pids.push(pid);
             }
 
+            // The pid is now readable, so `&` may return and `$!` will answer.
+            if let Some(ready) = &context.params.spawned_pid_ready {
+                ready.notify_one();
+            }
+
             Ok(ExecutionSpawnResult::StartedProcess(
                 processes::ChildProcess::new(child, pid, actual_pgid),
             ))
@@ -753,7 +758,21 @@ async fn execute_builtin_command<SE: extensions::ShellExtensions>(
     // In POSIX mode, special builtins that return errors are to be treated as fatal.
     let mark_errors_fatal = builtin.special_builtin && context.shell.options().posix_mode;
 
-    match (builtin.execute_func)(context, args).await {
+    // Release a background job's `$!` waiter once this builtin is done. A builtin is the
+    // shell's own code, so if it did not publish a pid along the way there will never be
+    // one — and waiting for it to finish is what keeps `while true; do :; done &` from
+    // hanging the shell.
+    //
+    // *After* the call, not before: a bundled utility (D48) is dispatched as a builtin
+    // that re-enters the binary as a child process, so its pid appears partway through.
+    // Releasing on entry would make `sleep 10 & echo $!` empty again.
+    let pid_ready = context.params.spawned_pid_ready.clone();
+    let outcome = (builtin.execute_func)(context, args).await;
+    if let Some(ready) = pid_ready {
+        ready.notify_one();
+    }
+
+    match outcome {
         Ok(result) => Ok(result),
         Err(e) => {
             // Broken pipe errors should silently return the appropriate exit code

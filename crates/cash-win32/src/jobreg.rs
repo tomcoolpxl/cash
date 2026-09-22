@@ -101,6 +101,30 @@ pub fn tree_pids(pid: u32) -> Vec<u32> {
         .unwrap_or_default()
 }
 
+/// The root pid of every process tree cash has spawned and still holds.
+///
+/// This is what POSIX's "my process group" means here. `kill 0` on Linux signals every
+/// process in the shell's own group — its children — and on Windows the nearest true
+/// equivalent is the set of trees cash created, *not* the console, which also contains
+/// the terminal and whatever else happens to be attached to it.
+///
+/// Only live roots are returned. The registry keeps a job until it is swept, so a
+/// command that has already exited would otherwise be handed to `kill` as a target and
+/// come back as "No such process" — for a process the user never named.
+#[must_use]
+pub fn roots() -> Vec<u32> {
+    registry()
+        .lock()
+        .map(|registry| {
+            registry
+                .keys()
+                .copied()
+                .filter(|&pid| crate::process::is_pid_alive(pid))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// Drop the job for a process that has exited, releasing its handle.
 pub fn forget(pid: u32) {
     if let Ok(mut registry) = registry().lock() {

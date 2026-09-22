@@ -82,6 +82,17 @@ path = "tests/completion_tests.rs"
 name = "completion-windows"
 path = "tests/completion_windows.rs"
 
+# D11/D22: `$!` and background job identity.
+[[test]]
+name = "background-pid"
+path = "tests/background_pid.rs"
+
+# D21/D22: what a kill target means, including the `kill 0` that used to signal the
+# whole console.
+[[test]]
+name = "kill-targets"
+path = "tests/kill_targets.rs"
+
 # D40: `docker completion bash` and friends, which need bash-completion's helpers.
 [[test]]
 name = "completion-scripts"

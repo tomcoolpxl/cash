@@ -1137,8 +1137,11 @@ someone who expected bash, so additions need to earn their place.
 | 11 | `[ -s file ]` is false for App Execution Aliases | They are genuinely 0 bytes | D46 |
 | 12 | Elevated and `detach`ed processes survive cash | Integrity boundary; breakaway flag | D42, D45 |
 | 13 | A bundled builtin cannot delete the shell's current directory | It re-enters the binary as a child inheriting that cwd, and Windows refuses to delete a process's own cwd | D48 |
+| 14 | `$!` is empty for a background job made only of shell builtins | bash forks and reports the subshell's pid; cash runs the job as a task, so there is no process to name | D11 |
+| 15 | `kill 0` signals the trees cash spawned, not a process group | Windows has no process group that excludes the terminal; the console-wide alternative would kill it | D22 |
+| 16 | `kill -1` is refused | "every process I may signal" on Windows reaches far past anything a script could mean | D22 |
 
-**One near-miss, recorded because it was nearly the fourteenth entry.** The bundled
+**One near-miss, recorded because it was nearly an entry of its own.** The bundled
 utilities are portable Rust, so the few that *construct* an absolute path spelled it
 natively: `mktemp -d` printed `C:\Users\me\AppData\Local\Temp\tmp.AbCdEf`. A script then
 did `d=$(mktemp -d)` and a plain `find "$d" | xargs grep` silently produced

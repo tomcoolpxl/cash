@@ -98,6 +98,18 @@ impl InterruptState {
 /// this module's documentation. The target must have been created with
 /// `CREATE_NEW_PROCESS_GROUP` for the group id to exist.
 pub fn interrupt_process_group(group_id: u32) -> io::Result<()> {
+    // Group 0 is not "no group" — it is *every process attached to this console*,
+    // including cash itself, the terminal, and any unrelated program sharing it. A shell
+    // never means that: `kill 0` means "my own process group", which on Windows is the
+    // tree cash spawned, not the console. Refusing here makes the broadcast unreachable
+    // from any caller rather than trusting each one to remember.
+    if group_id == 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "refusing to send a console control event to every process in the console",
+        ));
+    }
+
     // SAFETY: a plain Win32 call with a scalar argument.
     let ok = unsafe { GenerateConsoleCtrlEvent(CTRL_BREAK_EVENT, group_id) };
     if ok == 0 {

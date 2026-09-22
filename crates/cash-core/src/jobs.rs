@@ -227,6 +227,18 @@ impl JobManager {
         }
     }
 
+    /// Tries to find the job that owns the given process ID.
+    ///
+    /// cash: `pid=$!; wait "$pid"` is the companion to `$!`, and `wait` had no way to
+    /// turn a pid back into the job that owns it. Matching on every pid the job has
+    /// spawned rather than only its representative means `wait` finds a job by any
+    /// process in its tree, which is what `kill` already does for job specs (D22).
+    pub fn resolve_pid(&mut self, pid: sys::process::ProcessId) -> Option<&mut Job> {
+        self.jobs
+            .iter_mut()
+            .find(|job| job.spawned_pids().contains(&pid) || job.representative_pid() == Some(pid))
+    }
+
     /// Waits for all managed jobs to complete.
     pub async fn wait_all(&mut self) -> Result<Vec<Job>, error::Error> {
         for job in &mut self.jobs {

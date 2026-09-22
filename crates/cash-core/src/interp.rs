@@ -48,6 +48,17 @@ pub struct ExecutionParameters {
     ///
     /// `None` outside a background job, where the caller already holds the child.
     pub(crate) spawned_pid_sink: Option<std::sync::Arc<std::sync::Mutex<Vec<i32>>>>,
+
+    /// Signalled once the background task knows whether it has a pid to report.
+    ///
+    /// cash: `cmd & pid=$!` is the standard idiom, and it was a race. The task spawns
+    /// asynchronously, so `&` returned before the child existed and `$!` expanded to the
+    /// empty string — reliably, not occasionally. `&` now waits for this.
+    ///
+    /// Fired at two points, so that waiting can never hang: when a pid is published, and
+    /// when a builtin runs — a builtin is the shell's own code and will never produce a
+    /// pid, so there is nothing further to wait for.
+    pub(crate) spawned_pid_ready: Option<std::sync::Arc<tokio::sync::Notify>>,
 }
 
 impl ExecutionParameters {
@@ -259,7 +270,7 @@ impl Execute for ast::CompoundList {
             let run_async = matches!(sep, ast::SeparatorOperator::Async);
 
             if run_async {
-                let job = spawn_async_ao_list_in_task(ao_list, shell, params);
+                let job = spawn_async_ao_list_in_task(ao_list, shell, params).await;
                 let job_formatted = job.to_pid_style_string();
 
                 if shell.options().interactive && !shell.is_subshell() {
@@ -283,7 +294,7 @@ impl Execute for ast::CompoundList {
     }
 }
 
-fn spawn_async_ao_list_in_task<'a, SE: extensions::ShellExtensions>(
+async fn spawn_async_ao_list_in_task<'a, SE: extensions::ShellExtensions>(
     ao_list: &ast::AndOrList,
     shell: &'a mut Shell<SE>,
     params: &ExecutionParameters,
@@ -306,11 +317,24 @@ fn spawn_async_ao_list_in_task<'a, SE: extensions::ShellExtensions>(
     let pid_sink = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     cloned_params.spawned_pid_sink = Some(std::sync::Arc::clone(&pid_sink));
 
-    let join_handle = tokio::spawn(async move {
+    // cash: `cmd & pid=$!` must not be a race. The task publishes its pid — or reports
+    // that it will never have one — through this, and `&` does not return until then.
+    let pid_ready = std::sync::Arc::new(tokio::sync::Notify::new());
+    cloned_params.spawned_pid_ready = Some(std::sync::Arc::clone(&pid_ready));
+
+    let mut join_handle = tokio::spawn(async move {
         cloned_ao_list
             .execute(&mut cloned_shell, &cloned_params)
             .await
     });
+
+    // Either the task reached a point where `$!` is as accurate as it will ever be, or
+    // it finished outright. Both arms resolve promptly: a task that runs forever either
+    // spawned a process (first arm) or ran a builtin on the way (also first arm).
+    tokio::select! {
+        () = pid_ready.notified() => {}
+        _ = &mut join_handle => {}
+    }
 
     shell.jobs_mut().add_as_current(
         jobs::Job::new(
