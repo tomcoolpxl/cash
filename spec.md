@@ -1076,6 +1076,7 @@ someone who expected bash, so additions need to earn their place.
 | 10 | Process substitution does not stream | Temp files, not pipes | D17 |
 | 11 | `[ -s file ]` is false for App Execution Aliases | They are genuinely 0 bytes | D46 |
 | 12 | Elevated and `detach`ed processes survive cash | Integrity boundary; breakaway flag | D42, D45 |
+| 13 | A bundled builtin cannot delete the shell's current directory | It re-enters the binary as a child inheriting that cwd, and Windows refuses to delete a process's own cwd | D48 |
 
 ---
 
@@ -1283,9 +1284,32 @@ Still outstanding for M1:
 - D45's builtins: `winpath`, `detach`, `elevate`, `start` — the path conversions behind
   `winpath` already exist in `cash_win32::path`
 
-**M2 — a real script runs.** One actual Terraform wrapper from daily use, unmodified,
-against MS Coreutils plus `sed` and `gawk`. Forces D3, D5, D8, D15, D20 and D31 to all be
-real simultaneously.
+**M2 — a real script runs. ✅ Complete.** A Terraform-wrapper-shaped script, written the
+way such scripts are actually written on Linux — no Windows accommodations, no
+cash-specific spellings — runs unmodified and **its output matches real bash exactly**.
+
+It exercises `set -euo pipefail`, an EXIT trap doing cleanup, `mktemp`, command
+substitution over a CRLF file, `$(pwd)` composed into an argument, `case`, functions with
+locals, arrays, parameter expansion with defaults, arithmetic, a here-document, a `read`
+loop, process substitution, and a status checked against a conditional. It lives in
+`tests/corpus/` and is run by `crates/cash/tests/corpus.rs`, which also diffs it against
+the reference bash — a genuine cross-check, because the script deliberately avoids every
+§4 divergence.
+
+**One divergence it surfaced**, now §4 #13: the near-universal cleanup idiom
+
+```bash
+d=$(mktemp -d); trap 'rm -rf "$d"' EXIT; cd "$d"
+```
+
+fails at the `rm`. A bundled builtin (D48) re-enters the binary as a child process and
+inherits the shell's working directory, so this is a process deleting its own current
+directory, which Windows refuses. bash-on-Windows succeeds because Cygwin emulates POSIX
+unlink semantics.
+
+It cannot be fixed by running the builtin in-process: re-entry is exactly what makes
+redirections and pipes work for uutils. The workaround — `trap 'cd /; rm -rf "$d"' EXIT`
+— is good practice anyway, and is asserted by a test so it stays working.
 
 **Acceptance corpus.** M2 generalises into the spec's executable form: a collection of
 real scripts that must pass, plus a test per row of §4. Worth starting early — it converts
