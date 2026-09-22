@@ -5,7 +5,9 @@ pub use crate::sys::stubs::fd;
 pub(crate) mod fs;
 pub use crate::sys::stubs::input;
 pub(crate) mod network;
-pub use crate::sys::stubs::poll;
+// cash: Windows has no poll(2), but it does have PeekNamedPipe and WaitForSingleObject,
+// which between them cover every handle kind `read -t` cares about.
+pub mod poll;
 pub use crate::sys::stubs::resource;
 
 /// Signal processing utilities — cash's own (D13, D19, D21, D22), replacing the stub

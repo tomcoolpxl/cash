@@ -20,6 +20,7 @@ pub mod exit;
 pub mod job;
 pub mod jobreg;
 pub mod path;
+pub mod poll;
 pub mod process;
 pub mod resolve;
 pub mod session;

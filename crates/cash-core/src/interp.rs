@@ -672,15 +672,52 @@ impl<SE: extensions::ShellExtensions> ExecuteInPipeline<SE> for ast::Command {
                     }
                 }
 
-                Ok(compound
-                    .execute(&mut pipeline_context.shell, &params)
-                    .await?
-                    .into())
+                spawn_or_run_in_pipeline(pipeline_context, params, compound.clone()).await
             }
             Self::Function(func) => Ok(func
                 .execute(&mut pipeline_context.shell, &params)
                 .await?
                 .into()),
+        }
+    }
+}
+
+/// Run a compound command as a pipeline member.
+///
+/// cash: this used to `await` the command inline, which meant a pipeline member ran to
+/// *completion* before the next member was even created. Nothing was draining the pipe,
+/// so a compound command producing more than the pipe buffer — 4096 bytes on Windows —
+/// silently lost everything:
+///
+/// ```text
+/// { seq 1 5000; } | wc -l     ->  0      (bash: 5000)
+/// for f in *; do echo "$f"; done | tee log
+/// ```
+///
+/// Total, silent data loss in an everyday construct, which is the failure class this
+/// project rejects everywhere else. Below 4 KiB it happened to work, so it looked fine.
+///
+/// A member with its own shell is now spawned as a task, exactly as a builtin pipeline
+/// member already was, so the reader runs while the writer writes. The last member of a
+/// pipeline under `lastpipe` keeps running inline: it owns the parent shell, its output
+/// is not going into a pipe anyone has to drain, and running it elsewhere would lose the
+/// variable assignments `lastpipe` exists to keep.
+async fn spawn_or_run_in_pipeline<SE: extensions::ShellExtensions>(
+    pipeline_context: PipelineExecutionContext<'_, SE>,
+    params: ExecutionParameters,
+    compound: ast::CompoundCommand,
+) -> Result<ExecutionSpawnResult, error::Error> {
+    match pipeline_context.shell {
+        commands::ShellForCommand::OwnedShell { target, .. } => {
+            let mut shell = *target;
+            let join_handle = tokio::task::spawn_blocking(move || {
+                let rt = tokio::runtime::Handle::current();
+                rt.block_on(compound.execute(&mut shell, &params))
+            });
+            Ok(ExecutionSpawnResult::StartedTask(join_handle))
+        }
+        commands::ShellForCommand::ParentShell(shell) => {
+            Ok(compound.execute(shell, &params).await?.into())
         }
     }
 }

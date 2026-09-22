@@ -85,6 +85,11 @@ path = "tests/completion_tests.rs"
 name = "completion-windows"
 path = "tests/completion_windows.rs"
 
+# D11/D26: pipelines that actually overlap, and `read -t`.
+[[test]]
+name = "pipeline-concurrency"
+path = "tests/pipeline_concurrency.rs"
+
 # D3/D5: what a script sees of its environment, and the here-document deadlock.
 [[test]]
 name = "environment-contract"

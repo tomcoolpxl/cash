@@ -532,6 +532,26 @@ impl<'a, SE: extensions::ShellExtensions> SimpleCommand<'a, SE> {
         self,
         func_registration: functions::Registration,
     ) -> Result<ExecutionSpawnResult, error::Error> {
+        // cash: a function with its own shell is a pipeline member, and running it
+        // inline meant it finished before the next member was created — so nothing
+        // drained the pipe and everything it wrote above the buffer was lost:
+        //
+        //     f() { seq 1 5000; }; f | wc -l   ->  0      (bash: 5000)
+        //
+        // Spawned as a task, exactly as a builtin pipeline member already was. The
+        // parent-shell case still runs inline: its output is not going into a pipe
+        // anybody has to drain, and moving it would lose the caller's variables.
+        if let ShellForCommand::OwnedShell { target, .. } = self.shell {
+            return Ok(Self::execute_via_function_in_owned_shell(
+                *target,
+                func_registration,
+                self.command_name,
+                self.params,
+                self.args,
+                self.post_execute,
+            ));
+        }
+
         let mut shell = self.shell;
         let last_arg = Self::take_last_arg(&self.args);
 
@@ -555,6 +575,61 @@ impl<'a, SE: extensions::ShellExtensions> SimpleCommand<'a, SE> {
         }
 
         result
+    }
+
+    /// Run a function pipeline member on its own shell, concurrently with the rest.
+    #[allow(
+        clippy::type_complexity,
+        reason = "the hook's type is the field's; naming it separately would not clarify it"
+    )]
+    fn execute_via_function_in_owned_shell(
+        mut shell: Shell<SE>,
+        func_registration: functions::Registration,
+        command_name: String,
+        params: ExecutionParameters,
+        args: Vec<CommandArg>,
+        post_execute: Option<fn(&mut Shell<SE>) -> Result<(), error::Error>>,
+    ) -> ExecutionSpawnResult {
+        let last_arg = Self::take_last_arg(&args);
+
+        let join_handle = tokio::task::spawn_blocking(move || {
+            let rt = tokio::runtime::Handle::current();
+
+            let spawned = {
+                let cmd_context = ExecutionContext {
+                    shell: &mut shell,
+                    command_name,
+                    params,
+                };
+                rt.block_on(invoke_shell_function(
+                    func_registration,
+                    cmd_context,
+                    &args[1..],
+                ))
+            };
+
+            // A function body can itself start a process or a task; wait for whatever it
+            // produced so the pipeline sees one finished result.
+            let result = match spawned {
+                Ok(spawned) => match rt.block_on(spawned.wait()) {
+                    Ok(crate::results::ExecutionWaitResult::Completed(result)) => Ok(result),
+                    Ok(crate::results::ExecutionWaitResult::Stopped(_)) => {
+                        Ok(ExecutionResult::success())
+                    }
+                    Err(e) => Err(e),
+                },
+                Err(e) => Err(e),
+            };
+
+            shell.update_last_arg_variable(last_arg);
+            if let Some(post_execute) = post_execute {
+                let _ = post_execute(&mut shell);
+            }
+
+            result
+        });
+
+        ExecutionSpawnResult::StartedTask(join_handle)
     }
 
     fn execute_via_external(self, path: &Path) -> Result<ExecutionSpawnResult, error::Error> {
