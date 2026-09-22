@@ -82,6 +82,11 @@ path = "tests/completion_tests.rs"
 name = "completion-windows"
 path = "tests/completion_windows.rs"
 
+# D48: `ps`, which uutils does not carry.
+[[test]]
+name = "ps-builtin"
+path = "tests/ps_builtin.rs"
+
 # D11/D22: `$!` and background job identity.
 [[test]]
 name = "background-pid"

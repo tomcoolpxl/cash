@@ -1084,6 +1084,19 @@ copy are the same implementation, so preferring the builtin substitutes nothing 
 merely skips the spawn. The divergence is real only for someone running GNU coreutils,
 and `enable -n` covers them.
 
+**`ps` is cash's own, because uutils has none.** `ps` belongs to procps, not
+coreutils, so the bundle does not carry it — and what a Windows machine supplies instead
+is the MSYS `ps` from Git for Windows, which is worse than nothing here: it lists only
+MSYS processes, omitting every native program, and the numbers it prints are MSYS pids
+that `kill` cannot use. It looks like it worked. That is the exact failure D35 exists to
+name, and the answer D48 prefers is to carry the tool.
+
+The builtin implements what people type — `ps`, `ps -e`, `ps -ef`, `ps aux` — and
+nothing more. A bare `ps` lists the shell's own descendants, because Linux's `ps` shows
+the processes attached to your terminal and Windows has no controlling terminal to
+filter by. Deliberately absent: `-o` format strings, CPU and memory columns, and the
+full command line of another process, which means reading that process's PEB.
+
 **The gap stays open: still no `sed`, no `awk`.** uutils does not implement them — they
 are separate GNU projects. So cash is *not* a complete userland in one executable, and
 D35's diagnostic keeps its job. Confirmed: `type sed` reports not found even with the
@@ -1324,7 +1337,7 @@ concerns was worth keeping.)
 | `exit` | D15 | truncation plus NTSTATUS → `128 + n` |
 | `resolve` | D8, D46 | PATHEXT dispatch, extension before read, real on-disk casing |
 | `cmd` | D32 | CRT quoting, caret escaping, `is_safe_for_cmd` |
-| `process` | D42 | `is_pid_alive`, `cpu_time` |
+| `process` | D42, D48 | `is_pid_alive`, `cpu_time`, process listing for `ps` |
 | `jobreg` | D6 | per-spawn nested job registry, tree kill, sweep |
 
 Plus `crates/cash`: the binary, and `cash doctor` (D35).

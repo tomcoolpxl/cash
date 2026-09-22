@@ -94,6 +94,108 @@ const fn as_u64(time: FILETIME) -> u64 {
     ((time.dwHighDateTime as u64) << 32) | (time.dwLowDateTime as u64)
 }
 
+/// One row of a process listing.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProcessInfo {
+    /// The Windows process id — the one `kill` takes.
+    pub pid: u32,
+    /// The parent's process id. Reused by Windows, so it may name a process that has
+    /// since exited and been replaced; a listing cannot tell the difference.
+    pub parent_pid: u32,
+    /// The executable's file name, without a directory.
+    pub name: String,
+}
+
+/// Every process on the machine that this user can see.
+///
+/// The basis for a `ps` that reports Windows process ids. The `ps` on `PATH` here is
+/// almost always the MSYS one from Git for Windows, which reports *MSYS* pids for *MSYS*
+/// processes only — so it omits every native program, and the numbers it does print
+/// cannot be handed to `kill`. Under cash that is worse than having no `ps` at all,
+/// because it looks like it worked.
+///
+/// Ordered by pid, so successive runs are comparable and `ps | head` is meaningful.
+#[must_use]
+pub fn list() -> Vec<ProcessInfo> {
+    use windows_sys::Win32::System::Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW,
+        TH32CS_SNAPPROCESS,
+    };
+
+    // SAFETY: TH32CS_SNAPPROCESS ignores the pid argument and snapshots every process.
+    let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) };
+    if snapshot.is_null() {
+        return Vec::new();
+    }
+
+    // SAFETY: `PROCESSENTRY32W` is plain old data — integers and a fixed-size UTF-16
+    // buffer — for which an all-zero bit pattern is valid. `dwSize` is set immediately
+    // below, which is the only field the API requires before the first call.
+    let mut entry: PROCESSENTRY32W = unsafe { std::mem::zeroed() };
+    // The structure is a fixed ~556 bytes and `dwSize` is a `u32` by ABI, so the
+    // saturating fallback is unreachable.
+    entry.dwSize = u32::try_from(size_of::<PROCESSENTRY32W>()).unwrap_or(u32::MAX);
+
+    let mut processes = Vec::new();
+
+    // SAFETY: `entry` is correctly sized and the snapshot handle is valid.
+    let mut ok = unsafe { Process32FirstW(snapshot, &raw mut entry) };
+    while ok != 0 {
+        processes.push(ProcessInfo {
+            pid: entry.th32ProcessID,
+            parent_pid: entry.th32ParentProcessID,
+            name: exe_name(&entry.szExeFile),
+        });
+        // SAFETY: as above.
+        ok = unsafe { Process32NextW(snapshot, &raw mut entry) };
+    }
+
+    // SAFETY: closing the snapshot handle, exactly once.
+    unsafe { CloseHandle(snapshot) };
+
+    processes.sort_by_key(|p| p.pid);
+    processes
+}
+
+/// Decode the fixed-size, NUL-terminated UTF-16 name `PROCESSENTRY32W` carries.
+fn exe_name(raw: &[u16]) -> String {
+    let end = raw.iter().position(|&c| c == 0).unwrap_or(raw.len());
+    String::from_utf16_lossy(&raw[..end])
+}
+
+/// The descendants of `root`, including `root` itself.
+///
+/// Built from the parent links in [`list`], so it reflects the process tree as Windows
+/// currently reports it. A `ps` limited to the shell's own descendants is the closest
+/// honest answer to what `ps` with no arguments means on Linux — "the processes attached
+/// to my terminal" — since Windows has no controlling terminal to filter by.
+#[must_use]
+pub fn descendants(root: u32) -> Vec<ProcessInfo> {
+    let all = list();
+
+    let mut wanted: std::collections::HashSet<u32> = std::collections::HashSet::new();
+    wanted.insert(root);
+
+    // Parents always have a lower pid than their children often enough that one pass is
+    // not sufficient; iterate until the set stops growing. Bounded by the process count,
+    // so it terminates even if the parent links contain a cycle from pid reuse.
+    for _ in 0..all.len() {
+        let before = wanted.len();
+        for process in &all {
+            if wanted.contains(&process.parent_pid) {
+                wanted.insert(process.pid);
+            }
+        }
+        if wanted.len() == before {
+            break;
+        }
+    }
+
+    all.into_iter()
+        .filter(|p| wanted.contains(&p.pid))
+        .collect()
+}
+
 /// Terminate a process immediately (`kill -9`, D21).
 ///
 /// Uncatchable, as `SIGKILL` is on POSIX. `TerminateProcess` runs no cleanup in the

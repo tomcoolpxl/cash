@@ -13,6 +13,11 @@
 #[cfg(windows)]
 mod win;
 
+// cash (D48): `ps`, which uutils does not carry and whose PATH stand-in reports MSYS
+// pids that `kill` cannot use.
+#[cfg(windows)]
+mod ps;
+
 #[cfg(feature = "builtin.alias")]
 mod alias;
 #[cfg(feature = "builtin.bg")]
