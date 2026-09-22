@@ -731,3 +731,36 @@ kill -0 "$grandchild" 2>/dev/null && echo alive || echo dead"#
         out.stdout, out.stderr
     );
 }
+
+// ---------------------------------------------------------------------------
+// D39 — terminal shell integration.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn terminal_integration_is_on_by_default() {
+    // D39: Windows Terminal and VS Code use OSC 133 and OSC 9;9 for clickable command
+    // blocks, jump-to-previous-command, exit-code decorations and cwd-aware new tabs.
+    // It shipped behind an off-by-default experimental flag; §1 holds cash to being
+    // pleasant enough to replace the user's shell, so it is on.
+    let help = run(&["--help".to_string()]);
+    assert!(
+        help.stdout.contains("enable-terminal-integration"),
+        "the option is missing entirely"
+    );
+
+    // Explicitly disabling it must still work — the point is the default, not removing
+    // the choice.
+    let disabled = run(&[
+        "--enable-terminal-integration=false".to_string(),
+        "-c".to_string(),
+        "echo ok".to_string(),
+    ]);
+    assert_eq!(disabled.stdout, "ok", "could not opt out: {}", disabled.stderr);
+
+    let enabled = run(&[
+        "--enable-terminal-integration=true".to_string(),
+        "-c".to_string(),
+        "echo ok".to_string(),
+    ]);
+    assert_eq!(enabled.stdout, "ok", "could not opt in: {}", enabled.stderr);
+}

@@ -191,8 +191,21 @@ pub struct CommandLineArgs {
     #[clap(long = "experimental-parser", help_heading = HEADING_EXPERIMENTAL_OPTIONS)]
     pub experimental_parser: bool,
 
-    /// Enable terminal integration (**experimental**).
-    #[clap(long = "enable-terminal-integration", help_heading = HEADING_EXPERIMENTAL_OPTIONS)]
+    /// Terminal shell integration: OSC 133 prompt/command marks and OSC 9;9 working
+    /// directory reporting.
+    ///
+    /// cash (D39): on by default. Windows Terminal and VS Code use these for clickable
+    /// command blocks, jump-to-previous-command, exit-code decorations and cwd-aware new
+    /// tabs — a disproportionate improvement in daily feel for a few escape sequences,
+    /// and §1 holds cash to being pleasant enough to replace the user's shell.
+    #[clap(
+        long = "enable-terminal-integration",
+        default_value_t = true,
+        num_args = 0..=1,
+        require_equals = true,
+        default_missing_value = "true",
+        action = clap::ArgAction::Set
+    )]
     pub terminal_shell_integration: bool,
 
     /// Enable zsh-style preexec/precmd hooks (**experimental**).
