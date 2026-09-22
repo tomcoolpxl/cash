@@ -693,3 +693,41 @@ fn starship_initialises_and_renders_a_prompt() {
         rendered.stderr
     );
 }
+
+// ---------------------------------------------------------------------------
+// D6 / D22 — killing a job reaps its tree, not just its root.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn killing_a_job_reaps_its_whole_tree() {
+    // Before per-job containment, `kill %1` reaped only the process cash spawned
+    // directly and orphaned everything below it:
+    //
+    //     before kill : ping=1 cmd=1
+    //     after kill  : ping=1 cmd=0
+    //
+    // The session job eventually caught the orphan, but only when cash itself exited.
+    //
+    // A nested cash is used as the middle of the tree so the grandchild's pid can be
+    // captured exactly — counting processes by name would race with other tests.
+    let scratch = Scratch::new("tree-kill");
+    let pidfile = format!("{}/grandchild.pid", scratch.as_script_path());
+    let cash_path = CASH.replace('\\', "/");
+
+    let script = format!(
+        r#""{cash_path}" -c 'ping -n 40 127.0.0.1 >/dev/null & echo $! > "{pidfile}"; sleep 30' &
+sleep 3
+grandchild=$(cat "{pidfile}")
+kill %1
+sleep 3
+kill -0 "$grandchild" 2>/dev/null && echo alive || echo dead"#
+    );
+
+    let out = cash(&script);
+    let verdict = out.stdout.lines().last().unwrap_or_default();
+    assert_eq!(
+        verdict, "dead",
+        "the grandchild survived `kill %1` (stdout: {:?}, stderr: {})",
+        out.stdout, out.stderr
+    );
+}

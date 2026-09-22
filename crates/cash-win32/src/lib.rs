@@ -18,6 +18,7 @@ pub mod console;
 pub mod env;
 pub mod exit;
 pub mod job;
+pub mod jobreg;
 pub mod path;
 pub mod process;
 pub mod resolve;

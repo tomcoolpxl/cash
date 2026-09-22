@@ -297,11 +297,14 @@ pub fn unix_drive_spelling(arg: &str) -> Option<PathBuf> {
         return None;
     }
 
-    // The letter must be the whole first segment: `/cash/foo` is not drive C.
-    match chars.next() {
-        None => {}
-        Some('/') => {}
-        Some(_) => return None,
+    // The letter must be the whole first segment, and be *followed* by a path.
+    //
+    // A bare `/d` is excluded deliberately: it is far more often a command flag —
+    // `cmd.exe /d /s /c` — than a reference to drive D, and warning about it produced a
+    // false positive on one of the most common invocations there is. The diagnostic is
+    // only worth having if it is quiet when it is wrong.
+    if chars.next() != Some('/') {
+        return None;
     }
 
     Some(accept_path(arg))

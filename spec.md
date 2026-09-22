@@ -202,6 +202,25 @@ Every pipeline / background job gets its own nested job object. Killing a job re
 whole tree. A session-level job with `KILL_ON_JOB_CLOSE` means nothing survives cash —
 including cash being killed from Task Manager.
 
+**Both halves implemented.** The session guarantee was wired first and proved by killing
+cash with `TerminateProcess` while descendants ran. Per-job nesting came later, and the
+gap it closed was measurable:
+
+```
+before kill %1 : ping=1 cmd=1
+after  (before): ping=1 cmd=0    <- grandchild orphaned
+after  (now)   : ping=0 cmd=0
+```
+
+**The race is real and is accepted here.** §6 records that assigning a child to a job
+*after* `spawn()` leaves a window in which it can fork a grandchild that never joins, and
+that `CREATE_SUSPENDED` → assign → resume closes it. `cash_win32::spawn` implements that
+path, but the shell spawns through tokio, which owns process creation and cannot start
+one suspended. So the wiring uses post-spawn assignment with that window open.
+
+It is narrow, and the session job still catches anything through it: such a process
+cannot outlive cash, only a `kill` of its own job.
+
 **Three documented exceptions to that guarantee.** They must be stated wherever the
 guarantee is claimed:
 

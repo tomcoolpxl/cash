@@ -166,3 +166,20 @@ fn a_path_that_merely_starts_with_a_letter_is_not_a_drive() {
     };
     assert_eq!(render(&got), "/cash/foo");
 }
+
+#[test]
+fn a_bare_drive_letter_flag_is_not_mistaken_for_a_path() {
+    // Regression: `cmd.exe /d /s /c ...` is one of the most common invocations on
+    // Windows, and `/d` was being read as drive D — producing a spurious hint on a
+    // command that was perfectly correct.
+    assert_eq!(cash_win32::path::unix_drive_spelling("/d"), None);
+    assert_eq!(cash_win32::path::unix_drive_spelling("/s"), None);
+    assert_eq!(cash_win32::path::unix_drive_spelling("/c"), None);
+
+    // A real drive-spelled path still resolves.
+    assert!(cash_win32::path::unix_drive_spelling("/c/Windows").is_some());
+    assert!(cash_win32::path::unix_drive_spelling("/d/data/x").is_some());
+
+    // And a directory that merely begins with a letter is not a drive.
+    assert_eq!(cash_win32::path::unix_drive_spelling("/cash/foo"), None);
+}

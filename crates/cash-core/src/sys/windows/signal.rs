@@ -174,7 +174,14 @@ pub fn kill_process(
         Signal::Term | Signal::Hup | Signal::Quit => {
             cash_win32::console::interrupt_process_group(raw)
         }
-        Signal::Kill => cash_win32::process::terminate(raw),
+        // D22: reap the whole tree when this pid roots one, falling back to the single
+        // process otherwise. That is what makes `kill %1` reap a pipeline's descendants
+        // rather than orphaning them.
+        Signal::Kill => match cash_win32::jobreg::terminate_tree(raw) {
+            Ok(true) => Ok(()),
+            Ok(false) => cash_win32::process::terminate(raw),
+            Err(e) => Err(e),
+        },
     };
 
     result.map_err(|e| error::ErrorKind::from(e).into())
