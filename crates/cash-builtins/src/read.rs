@@ -399,8 +399,7 @@ impl Read for PolledInput {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         if let Some(deadline) = self.deadline {
             let remaining = deadline.saturating_duration_since(Instant::now());
-            if remaining.is_zero()
-                || !cash_core::sys::poll::poll_for_input(&self.input, remaining)?
+            if remaining.is_zero() || !cash_core::sys::poll::poll_for_input(&self.input, remaining)?
             {
                 return Err(std::io::ErrorKind::TimedOut.into());
             }

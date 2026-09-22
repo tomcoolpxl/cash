@@ -121,7 +121,7 @@ impl JobManager {
 
     /// A manager for a subshell: no jobs of its own, but able to see the parent's.
     #[must_use]
-    pub fn with_inherited(inherited: Vec<JobSnapshot>) -> Self {
+    pub const fn with_inherited(inherited: Vec<JobSnapshot>) -> Self {
         Self {
             jobs: Vec::new(),
             inherited,

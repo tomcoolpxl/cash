@@ -89,7 +89,7 @@ pub fn escape_for_cmd(arg: &str) -> String {
 
 /// Build the command line for `cmd.exe /d /s /c` (D8's `.bat` / `.cmd` dispatch).
 ///
-/// `/d` skips AutoRun commands from the registry, `/s` makes the outer quoting rules
+/// `/d` skips `AutoRun` commands from the registry, `/s` makes the outer quoting rules
 /// predictable, and `/c` runs and exits.
 #[must_use]
 pub fn build_cmd_command_line(script: &str, args: &[String]) -> String {
@@ -123,7 +123,6 @@ pub enum CmdHazard {
 /// A caller that wants D26's fail-loudly posture can refuse these; D32 as decided lets
 /// them through and documents the risk. `cash doctor` (D35) can use this to explain a
 /// `.bat` invocation that behaved strangely.
-#[must_use]
 pub fn is_safe_for_cmd(arg: &str) -> Result<(), CmdHazard> {
     if arg.contains('\0') {
         return Err(CmdHazard::Nul);

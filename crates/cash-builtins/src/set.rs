@@ -325,11 +325,10 @@ impl builtins::Command for SetCommand {
         if let Some(option_names) = &self.set_option.disable {
             saw_option = true;
             if option_names.is_empty() {
-                for option in cash_core::namedoptions::options(
-                    cash_core::namedoptions::ShellOptionKind::SetO,
-                )
-                .iter()
-                .sorted_by_key(|option| option.name)
+                for option in
+                    cash_core::namedoptions::options(cash_core::namedoptions::ShellOptionKind::SetO)
+                        .iter()
+                        .sorted_by_key(|option| option.name)
                 {
                     let option_value = option.definition.get(context.shell.options());
                     let option_value_str = if option_value { "-o" } else { "+o" };
@@ -344,11 +343,10 @@ impl builtins::Command for SetCommand {
         if let Some(option_names) = &self.set_option.enable {
             saw_option = true;
             if option_names.is_empty() {
-                for option in cash_core::namedoptions::options(
-                    cash_core::namedoptions::ShellOptionKind::SetO,
-                )
-                .iter()
-                .sorted_by_key(|option| option.name)
+                for option in
+                    cash_core::namedoptions::options(cash_core::namedoptions::ShellOptionKind::SetO)
+                        .iter()
+                        .sorted_by_key(|option| option.name)
                 {
                     let option_value = option.definition.get(context.shell.options());
                     let option_value_str = if option_value { "on" } else { "off" };

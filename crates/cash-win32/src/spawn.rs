@@ -39,8 +39,12 @@ pub struct Child {
     group_id: Option<u32>,
 }
 
-// Kernel handles carry no thread affinity.
+// SAFETY: the fields are kernel handles and plain integers. A handle is an index into a
+// process-wide table with no thread affinity, the Win32 calls made through these
+// (`WaitForSingleObject`, `GetExitCodeProcess`, `CloseHandle`) are all thread-safe, and
+// `Drop` closes each handle exactly once because `Child` is not `Clone`.
 unsafe impl Send for Child {}
+// SAFETY: as above — shared references reach only thread-safe Win32 calls.
 unsafe impl Sync for Child {}
 
 impl Child {
@@ -73,9 +77,8 @@ impl Child {
     pub fn wait(&self) -> io::Result<u32> {
         // SAFETY: process handle is valid for the lifetime of self.
         unsafe { WaitForSingleObject(self.process, INFINITE) };
-        self.exit_code()?.ok_or_else(|| {
-            io::Error::new(io::ErrorKind::Other, "process exited without an exit code")
-        })
+        self.exit_code()?
+            .ok_or_else(|| io::Error::other("process exited without an exit code"))
     }
 
     /// Check whether the process has exited, without blocking.
@@ -105,11 +108,11 @@ impl Child {
 
 impl Drop for Child {
     fn drop(&mut self) {
-        // SAFETY: both handles came from CreateProcessW and are closed exactly once.
-        unsafe {
-            CloseHandle(self.thread);
-            CloseHandle(self.process);
-        }
+        // SAFETY: the thread handle came from CreateProcessW and is closed exactly once,
+        // since `Child` is not `Clone` and `Drop` runs at most once.
+        unsafe { CloseHandle(self.thread) };
+        // SAFETY: likewise for the process handle.
+        unsafe { CloseHandle(self.process) };
     }
 }
 
@@ -147,7 +150,7 @@ fn to_wide(text: &str) -> Vec<u16> {
 /// Windows conventionally sorts these case-insensitively; some programs rely on it.
 fn build_environment_block(vars: &[(String, String)]) -> Vec<u16> {
     let mut sorted: Vec<&(String, String)> = vars.iter().collect();
-    sorted.sort_by(|a, b| a.0.to_ascii_uppercase().cmp(&b.0.to_ascii_uppercase()));
+    sorted.sort_by_key(|entry| entry.0.to_ascii_uppercase());
 
     let mut block = Vec::new();
     for (name, value) in sorted {
@@ -178,9 +181,16 @@ pub fn spawn(command_line: &str, options: &SpawnOptions<'_>) -> io::Result<Child
         flags |= CREATE_NEW_PROCESS_GROUP;
     }
 
+    // SAFETY: `STARTUPINFOW` is plain old data — integers, pointers and a handle triple —
+    // for which all-zero is the documented "use the defaults" value. `cb` is set below,
+    // which is the only field the API requires.
     let mut startup: STARTUPINFOW = unsafe { std::mem::zeroed() };
-    startup.cb = u32::try_from(size_of::<STARTUPINFOW>()).expect("struct size fits in u32");
+    // The structure is a fixed ~104 bytes and `cb` is a `u32` by ABI, so the saturating
+    // fallback is unreachable; it keeps this a function that returns rather than panics.
+    startup.cb = u32::try_from(size_of::<STARTUPINFOW>()).unwrap_or(u32::MAX);
 
+    // SAFETY: `PROCESS_INFORMATION` is four integers-or-handles that CreateProcessW fills
+    // in; all-zero is a valid starting state.
     let mut info: PROCESS_INFORMATION = unsafe { std::mem::zeroed() };
 
     // SAFETY: every pointer is either null or points at a correctly-sized, live buffer
@@ -239,8 +249,11 @@ pub fn in_any_job() -> bool {
     use windows_sys::Win32::System::Threading::GetCurrentProcess;
 
     let mut result: i32 = FALSE;
-    // SAFETY: a null job handle asks "is this process in *any* job".
-    let ok = unsafe { IsProcessInJob(GetCurrentProcess(), std::ptr::null_mut(), &raw mut result) };
+    // SAFETY: returns a pseudo-handle for the current process; it reads no memory.
+    let this = unsafe { GetCurrentProcess() };
+    // SAFETY: a null job handle asks "is this process in *any* job", and `result` is a
+    // live, correctly-typed BOOL out-parameter.
+    let ok = unsafe { IsProcessInJob(this, std::ptr::null_mut(), &raw mut result) };
     ok != 0 && result != 0
 }
 
@@ -259,9 +272,16 @@ pub fn spawn_detached(command_line: &str) -> io::Result<Child> {
 
     let mut command = to_wide(command_line);
 
+    // SAFETY: `STARTUPINFOW` is plain old data — integers, pointers and a handle triple —
+    // for which all-zero is the documented "use the defaults" value. `cb` is set below,
+    // which is the only field the API requires.
     let mut startup: STARTUPINFOW = unsafe { std::mem::zeroed() };
-    startup.cb = u32::try_from(size_of::<STARTUPINFOW>()).expect("struct size fits in u32");
+    // The structure is a fixed ~104 bytes and `cb` is a `u32` by ABI, so the saturating
+    // fallback is unreachable; it keeps this a function that returns rather than panics.
+    startup.cb = u32::try_from(size_of::<STARTUPINFOW>()).unwrap_or(u32::MAX);
 
+    // SAFETY: `PROCESS_INFORMATION` is four integers-or-handles that CreateProcessW fills
+    // in; all-zero is a valid starting state.
     let mut info: PROCESS_INFORMATION = unsafe { std::mem::zeroed() };
 
     // SAFETY: command is a live, writable UTF-16 buffer; every other pointer is null or

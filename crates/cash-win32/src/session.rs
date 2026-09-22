@@ -59,7 +59,14 @@ pub fn install() -> (Option<JobObject>, SessionState) {
 
     let utf8_console = console::set_utf8_code_page().is_ok();
 
-    (job, SessionState { job_installed, utf8_console, nested })
+    (
+        job,
+        SessionState {
+            job_installed,
+            utf8_console,
+            nested,
+        },
+    )
 }
 
 /// Install the session and leak the job handle for the process lifetime.

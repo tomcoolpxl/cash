@@ -154,6 +154,13 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
             }
         }
 
+        // cash (D7): CRLF script source parses as if it had LF endings. `core.autocrlf`
+        // is on by default in Git for Windows, so every script in a checked-out
+        // repository looks like this; without it `fi\r` is not `fi` and the whole file
+        // fails to parse, at a line number nowhere near the real problem.
+        #[cfg(windows)]
+        let mut reader = std::io::BufReader::new(cash_win32::text::NormalizeCrlf::new(reader));
+
         let mut parser = cash_parser::Parser::new(&mut reader, &self.parser_options());
 
         tracing::debug!(target: trace_categories::PARSE, "Parsing sourced file: {}", source_info.source);

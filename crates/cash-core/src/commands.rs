@@ -574,6 +574,49 @@ impl<'a, SE: extensions::ShellExtensions> SimpleCommand<'a, SE> {
     }
 }
 
+/// cash (D3/D4): explain the `/x/...` cliff rather than letting it fail silently.
+///
+/// D3 accepts Unix drive spellings for paths cash resolves itself — `cd /c/src`,
+/// `[ -f /d/data/x ]`, `> /e/out` all work. But D4 forbids rewriting arguments, so a
+/// command receives `/c/src/main.tf` verbatim, and any tool without its own MSYS-style
+/// translation cannot open it. That includes MS Coreutils and the bundled builtins.
+///
+/// The tool's own error — "The system cannot find the path specified" — explains
+/// nothing, and this is the single easiest mistake to make in cash. So: warn only when
+/// the literal spelling does not exist *and* the translated one does. That makes false
+/// positives essentially impossible, and says the useful thing.
+#[cfg(windows)]
+fn warn_about_unix_drive_spellings(
+    context: &ExecutionContext<'_, impl extensions::ShellExtensions>,
+    cmd_args: &[&String],
+) {
+    use std::io::Write as _;
+
+    for arg in cmd_args {
+        let Some(translated) = cash_win32::path::unix_drive_spelling(arg) else {
+            continue;
+        };
+        if std::path::Path::new(arg.as_str()).exists() || !translated.exists() {
+            continue;
+        }
+
+        let mut stderr = context.stderr();
+        let _ = writeln!(
+            stderr,
+            // The command is deliberately not named. A bundled builtin (D48) re-enters
+            // this binary to dispatch, so `command_name` there is cash's own path rather
+            // than the `cat` the user typed, which would mislead.
+            "cash: {}: a command receives this path as written; cash does not \
+             translate Unix path spellings in arguments (D4). Try {} or \
+             \"$(winpath {})\"",
+            arg,
+            cash_win32::path::render(&translated),
+            arg,
+        );
+        break;
+    }
+}
+
 pub(crate) fn execute_external_command(
     context: ExecutionContext<'_, impl extensions::ShellExtensions>,
     executable_path: &str,
@@ -593,45 +636,8 @@ pub(crate) fn execute_external_command(
         })
         .collect::<Vec<_>>();
 
-    // cash (D3/D4): explain the `/x/...` cliff rather than letting it fail silently.
-    //
-    // D3 accepts Unix drive spellings for paths cash resolves itself — `cd /c/src`,
-    // `[ -f /d/data/x ]`, `> /e/out` all work. But D4 forbids rewriting arguments, so a
-    // command receives `/c/src/main.tf` verbatim and any tool without its own MSYS-style
-    // translation cannot open it. That includes MS Coreutils and the bundled builtins.
-    //
-    // The tool's own error — "The system cannot find the path specified" — explains
-    // nothing, and this is the single easiest mistake to make in cash. So: warn only
-    // when the literal spelling does not exist *and* the translated one does. That makes
-    // false positives essentially impossible, and says the useful thing.
     #[cfg(windows)]
-    {
-        use std::io::Write as _;
-
-        for arg in &cmd_args {
-            let Some(translated) = cash_win32::path::unix_drive_spelling(arg) else {
-                continue;
-            };
-            if std::path::Path::new(arg.as_str()).exists() || !translated.exists() {
-                continue;
-            }
-
-            let mut stderr = context.stderr();
-            let _ = writeln!(
-                stderr,
-                // The command is deliberately not named. A bundled builtin (D48)
-                // re-enters this binary to dispatch, so `command_name` there is cash's
-                // own path rather than the `cat` the user typed, which would mislead.
-                "cash: {}: a command receives this path as written; cash does not \
-                 translate Unix path spellings in arguments (D4). Try {} or \
-                 \"$(winpath {})\"",
-                arg,
-                cash_win32::path::render(&translated),
-                arg,
-            );
-            break;
-        }
-    }
+    warn_about_unix_drive_spellings(&context, cmd_args.as_slice());
 
     // Before we lose ownership of the open files, figure out if stdin will be a terminal.
     let child_stdin_is_terminal = context

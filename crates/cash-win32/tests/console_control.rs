@@ -1,6 +1,18 @@
 //! D13's escalation state machine and D19's suspend/resume.
 
 #![cfg(windows)]
+#![allow(
+    clippy::tests_outside_test_module,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::needless_raw_string_hashes,
+    reason = "an integration test is outside a test module by construction, and a \
+              failed assumption in a test should abort it loudly rather than be \
+              threaded back through a Result. Shell snippets are spelled with hashes \
+              throughout, including where they are not strictly needed, because \
+              alternating the two forms by accident of content reads worse."
+)]
 
 use std::process::{Command, Stdio};
 use std::time::Duration;
@@ -39,7 +51,11 @@ fn escalation_resets_per_foreground_job() {
 fn a_fresh_job_starts_gracefully() {
     let state = InterruptState::new();
     assert_eq!(state.count(), 0);
-    assert_eq!(state.record(), Escalation::Interrupt, "first interrupt must be graceful");
+    assert_eq!(
+        state.record(),
+        Escalation::Interrupt,
+        "first interrupt must be graceful"
+    );
 }
 
 #[test]
@@ -114,7 +130,10 @@ fn suspension_actually_stops_the_cpu() {
             break;
         }
     }
-    assert!(running, "child never consumed CPU, so this test proves nothing");
+    assert!(
+        running,
+        "child never consumed CPU, so this test proves nothing"
+    );
 
     suspend_process(pid).expect("suspend");
 

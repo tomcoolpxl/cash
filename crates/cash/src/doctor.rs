@@ -49,8 +49,14 @@ struct Finding {
 /// they are separate GNU projects, so Microsoft's Coreutils bundle does not include
 /// them and no single install is a complete answer.
 const EXPECTED: &[(&str, &str)] = &[
-    ("sed", "not in Microsoft's Coreutils bundle — separate GNU project"),
-    ("awk", "not in Microsoft's Coreutils bundle — separate GNU project"),
+    (
+        "sed",
+        "not in Microsoft's Coreutils bundle — separate GNU project",
+    ),
+    (
+        "awk",
+        "not in Microsoft's Coreutils bundle — separate GNU project",
+    ),
     ("grep", "in the MS bundle"),
     ("find", "findutils; in the MS bundle"),
     ("xargs", "findutils; in the MS bundle"),
@@ -69,9 +75,10 @@ pub fn run() -> u8 {
     let env = Environment::from_process();
     let path_value = env.get("PATH").unwrap_or_default();
     let entries: Vec<PathBuf> = split_path(path_value).map(PathBuf::from).collect();
-    let pathext = env
-        .get("PATHEXT")
-        .map_or_else(|| DEFAULT_PATHEXT.iter().map(|s| (*s).to_string()).collect(), parse_pathext);
+    let pathext = env.get("PATHEXT").map_or_else(
+        || DEFAULT_PATHEXT.iter().map(|s| (*s).to_string()).collect(),
+        parse_pathext,
+    );
     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
 
     let mut findings = Vec::new();
@@ -119,7 +126,12 @@ fn check_commands(
 
         let target = dispatch.target().to_path_buf();
         let (level, detail, fix) = describe(command, &target);
-        findings.push(Finding { level, subject: (*command).to_string(), detail, fix });
+        findings.push(Finding {
+            level,
+            subject: (*command).to_string(),
+            detail,
+            fix,
+        });
     }
 }
 
@@ -182,13 +194,17 @@ fn describe(command: &str, target: &Path) -> (Level, String, Option<String>) {
 /// matter, whereas BusyBox `awk` genuinely breaks real scripts. Say which is which.
 fn busybox_advice(command: &str) -> String {
     let why = match command {
-        "awk" => "BusyBox awk is a POSIX subset with none of gawk's extensions — no gensub, \
-                  no length(array), limited regex",
+        "awk" => {
+            "BusyBox awk is a POSIX subset with none of gawk's extensions — no gensub, \
+                  no length(array), limited regex"
+        }
         "sed" => "BusyBox sed lacks GNU extensions that scripts commonly rely on",
         "grep" => "BusyBox grep lacks GNU options such as -P and some -o behaviour",
         "find" | "xargs" => "BusyBox findutils are reduced and miss common GNU options",
-        _ => "BusyBox provides a reduced implementation; the full version behaves more \
-              predictably for scripts written on Linux",
+        _ => {
+            "BusyBox provides a reduced implementation; the full version behaves more \
+              predictably for scripts written on Linux"
+        }
     };
     format!("{why}. Install with: {}", suggest_install(command))
 }
@@ -247,7 +263,11 @@ fn is_store_alias(path: &Path) -> bool {
     // 0 bytes plus a reparse point is the AppExecLink signature. Checking the size alone
     // would be too eager; checking the reparse attribute alone would catch symlinks.
     metadata.len() == 0 && metadata.file_type().is_symlink()
-        || (metadata.len() == 0 && path.to_string_lossy().to_lowercase().contains("windowsapps"))
+        || (metadata.len() == 0
+            && path
+                .to_string_lossy()
+                .to_lowercase()
+                .contains("windowsapps"))
 }
 
 /// If a path is a Scoop shim, the executable it really points at.
@@ -282,7 +302,12 @@ fn report(findings: &[Finding]) -> u8 {
     println!();
 
     for finding in findings {
-        println!("  {}  {:<18} {}", finding.level.marker(), finding.subject, finding.detail);
+        println!(
+            "  {}  {:<18} {}",
+            finding.level.marker(),
+            finding.subject,
+            finding.detail
+        );
         if let Some(fix) = &finding.fix {
             println!("        {:<18} -> {fix}", "");
         }

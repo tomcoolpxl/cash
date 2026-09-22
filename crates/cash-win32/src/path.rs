@@ -82,10 +82,13 @@ pub fn accept_path(input: &str) -> PathBuf {
         && let Some(drive) = rest.as_bytes().first().copied()
         && drive.is_ascii_alphabetic()
     {
-        let after = &rest[1..];
+        let after = rest.get(1..).unwrap_or_default();
         if after.is_empty() || after.starts_with('/') {
             let letter = (drive as char).to_ascii_uppercase();
-            return PathBuf::from(format!("{letter}:{}", if after.is_empty() { "/" } else { after }));
+            return PathBuf::from(format!(
+                "{letter}:{}",
+                if after.is_empty() { "/" } else { after }
+            ));
         }
     }
 
@@ -112,10 +115,13 @@ pub fn render(path: &Path) -> String {
 
     // Strip the extended-length prefix if one survived this far; it is an internal
     // detail and must never be rendered to a script.
-    let text = text
-        .strip_prefix("//?/UNC/")
-        .map(|rest| format!("//{rest}"))
-        .unwrap_or_else(|| text.strip_prefix("//?/").unwrap_or(&text).to_string());
+    let text = if let Some(rest) = text.strip_prefix("//?/UNC/") {
+        format!("//{rest}")
+    } else if let Some(rest) = text.strip_prefix("//?/") {
+        rest.to_string()
+    } else {
+        text
+    };
 
     // Uppercase the drive letter so `c:/foo` and `C:/foo` render identically — D3 says
     // one canonical form, and path comparison depends on it.
@@ -123,7 +129,7 @@ pub fn render(path: &Path) -> String {
     if bytes.len() >= 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' {
         let mut out = String::with_capacity(text.len());
         out.push(bytes[0].to_ascii_uppercase() as char);
-        out.push_str(&text[1..]);
+        out.push_str(text.get(1..).unwrap_or_default());
         return out;
     }
 
@@ -227,7 +233,7 @@ pub fn to_unix(path: &Path) -> String {
 
     if bytes.len() >= 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' {
         let letter = (bytes[0] as char).to_ascii_lowercase();
-        let rest = &text[2..];
+        let rest = text.get(2..).unwrap_or_default();
         let rest = rest.strip_prefix('/').unwrap_or(rest);
         return if rest.is_empty() {
             format!("/{letter}")

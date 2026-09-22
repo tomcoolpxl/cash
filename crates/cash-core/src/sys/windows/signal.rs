@@ -24,6 +24,16 @@
 //! §4 divergence #9 records the consequence: `kill -STOP` suspends threads rather than
 //! being a real `SIGSTOP`.
 
+#![allow(
+    clippy::should_implement_trait,
+    clippy::unnecessary_wraps,
+    clippy::missing_const_for_fn,
+    reason = "these signatures mirror the Unix module's, because shared code calls both \
+              through the same names. Narrowing a stub to `const`, or to a bare return \
+              value, would break that symmetry — and several of these stubs are where a \
+              real Win32 implementation may yet land."
+)]
+
 use crate::{error, sys, traps};
 
 /// Ctrl-C arrives through tokio's console-control handler.
@@ -135,10 +145,7 @@ pub fn check_signalable(pid: sys::process::ProcessId) -> Result<(), error::Error
     if cash_win32::process::is_pid_alive(pid_as_u32(pid)) {
         Ok(())
     } else {
-        Err(error::ErrorKind::from(std::io::Error::from(
-            std::io::ErrorKind::NotFound,
-        ))
-        .into())
+        Err(error::ErrorKind::from(std::io::Error::from(std::io::ErrorKind::NotFound)).into())
     }
 }
 

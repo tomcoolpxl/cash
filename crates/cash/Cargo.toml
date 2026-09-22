@@ -2,8 +2,11 @@
 name = "cash"
 description = "Cool Again Shell — a bash-language shell whose execution model is Win32"
 version = "0.1.0"
+categories.workspace = true
 edition.workspace = true
+keywords.workspace = true
 license.workspace = true
+readme.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 

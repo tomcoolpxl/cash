@@ -4,6 +4,18 @@
 //! brush printing `C:\Users\thraa\...` today. These tests pin the target behaviour.
 
 #![cfg(windows)]
+#![allow(
+    clippy::tests_outside_test_module,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::needless_raw_string_hashes,
+    reason = "an integration test is outside a test module by construction, and a \
+              failed assumption in a test should abort it loudly rather than be \
+              threaded back through a Result. Shell snippets are spelled with hashes \
+              throughout, including where they are not strictly needed, because \
+              alternating the two forms by accident of content reads worse."
+)]
 
 use std::path::{Path, PathBuf};
 
@@ -16,7 +28,12 @@ use cash_win32::path::{
 fn every_accepted_spelling_reaches_the_same_place() {
     let expected = PathBuf::from("C:/Users/thraa");
 
-    for spelling in ["C:/Users/thraa", "C:\\Users\\thraa", "/c/Users/thraa", "c:/Users/thraa"] {
+    for spelling in [
+        "C:/Users/thraa",
+        "C:\\Users\\thraa",
+        "/c/Users/thraa",
+        "c:/Users/thraa",
+    ] {
         let Target::Path(got) = accept(spelling) else {
             panic!("{spelling} should be an ordinary path");
         };
@@ -97,9 +114,18 @@ fn extended_form_uses_the_unc_spelling() {
 fn dot_segments_are_resolved_because_the_os_no_longer_will() {
     // D29's second consequence: \\?\ disables OS path normalisation, so cash must do it.
     // If this regresses, paths containing .. silently fail to open.
-    assert_eq!(render(&lexically_normalize(Path::new("C:/a/b/../c"))), "C:/a/c");
-    assert_eq!(render(&lexically_normalize(Path::new("C:/a/./b"))), "C:/a/b");
-    assert_eq!(render(&lexically_normalize(Path::new("C:/a/b/../../c"))), "C:/c");
+    assert_eq!(
+        render(&lexically_normalize(Path::new("C:/a/b/../c"))),
+        "C:/a/c"
+    );
+    assert_eq!(
+        render(&lexically_normalize(Path::new("C:/a/./b"))),
+        "C:/a/b"
+    );
+    assert_eq!(
+        render(&lexically_normalize(Path::new("C:/a/b/../../c"))),
+        "C:/c"
+    );
 
     let got = to_extended(Path::new("C:/a/b/../c"), Path::new("C:/")).expect("absolute");
     assert_eq!(got.to_string_lossy(), r"\\?\C:\a\c");
@@ -149,12 +175,19 @@ fn tmp_maps_to_the_real_temp_directory() {
     let Target::Path(got) = accept("/tmp") else {
         panic!("/tmp should be a path");
     };
-    assert!(is_absolute(&got), "/tmp resolved to {got:?}, which is not absolute");
+    assert!(
+        is_absolute(&got),
+        "/tmp resolved to {got:?}, which is not absolute"
+    );
 
     let Target::Path(nested) = accept("/tmp/cash-test.txt") else {
         panic!("/tmp/... should be a path");
     };
-    assert!(render(&nested).ends_with("/cash-test.txt"), "got {}", render(&nested));
+    assert!(
+        render(&nested).ends_with("/cash-test.txt"),
+        "got {}",
+        render(&nested)
+    );
 }
 
 #[test]

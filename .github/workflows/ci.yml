@@ -59,14 +59,38 @@ jobs:
       # D43: Windows behaviour is asserted against cash's own corpus, not against
       # a bash reference — §4's divergences are deliberate and a reference would
       # report every one as a failure.
-      - name: Acceptance corpus
-        run: cargo test -p cash --test acceptance
-
-      - name: Win32 layer
-        run: cargo test -p cash-win32
+      #
+      # The whole suite, not a chosen few targets: the acceptance corpus, the
+      # Win32 layer, the CRLF and bundled-path suites and the script corpus are
+      # all Windows-only, so anything left out here is checked nowhere.
+      - name: Test suite
+        run: cargo test --workspace
 
       - name: Smoke
         run: ./target/release/cash.exe -c 'echo smoke-ok'
+
+  # Clippy on Windows, because the Linux lint job cannot see this code at all:
+  # `cash-win32` is `#![cfg(windows)]` in its entirety, as is every acceptance
+  # test, so on Linux they compile to nothing and lint clean by vacuity. Without
+  # this job the platform layer — the part that is actually cash's own — is the
+  # one part nothing lints.
+  lint-windows:
+    name: Lint (Windows)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Lint
+        run: cargo xtask check lint
 
   lint:
     name: Format and lint

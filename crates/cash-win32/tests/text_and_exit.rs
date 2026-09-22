@@ -3,6 +3,18 @@
 //! §9 measured all three failing in brush today, so these tests encode the target.
 
 #![cfg(windows)]
+#![allow(
+    clippy::tests_outside_test_module,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::needless_raw_string_hashes,
+    reason = "an integration test is outside a test module by construction, and a \
+              failed assumption in a test should abort it loudly rather than be \
+              threaded back through a Result. Shell snippets are spelled with hashes \
+              throughout, including where they are not strictly needed, because \
+              alternating the two forms by accident of content reads worse."
+)]
 
 use cash_win32::exit::{from_windows, is_ntstatus_error};
 use cash_win32::text::{
@@ -65,7 +77,10 @@ fn splitting_matches_bash_on_edges() {
     // A trailing terminator does not invent a final empty line.
     assert_eq!(split_lines("a\n").collect::<Vec<_>>(), vec!["a"]);
     // An interior blank line is preserved.
-    assert_eq!(split_lines("a\n\nb\n").collect::<Vec<_>>(), vec!["a", "", "b"]);
+    assert_eq!(
+        split_lines("a\n\nb\n").collect::<Vec<_>>(),
+        vec!["a", "", "b"]
+    );
 }
 
 #[test]
@@ -111,7 +126,11 @@ fn a_crash_is_never_reported_as_success() {
 
     // Every NTSTATUS error must be non-zero, not just the ones in the table.
     for code in [0xC000_0100u32, 0xC000_0200, 0xC000_0300, 0xC000_0400] {
-        assert_ne!(from_windows(code), 0, "NTSTATUS {code:#X} reported as success");
+        assert_ne!(
+            from_windows(code),
+            0,
+            "NTSTATUS {code:#X} reported as success"
+        );
     }
 }
 

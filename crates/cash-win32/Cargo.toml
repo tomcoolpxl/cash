@@ -2,8 +2,11 @@
 name = "cash-win32"
 description = "Win32 semantics layer for cash: job objects, signals, paths, console"
 version = "0.1.0"
+categories.workspace = true
 edition.workspace = true
+keywords.workspace = true
 license.workspace = true
+readme.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 

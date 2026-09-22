@@ -208,10 +208,7 @@ impl FcCommand {
     ///
     /// * `history` - The history to resolve against.
     /// * `spec` - The position specifier (number or string prefix).
-    fn resolve_position(
-        history: &history::History,
-        spec: &str,
-    ) -> Result<usize, cash_core::Error> {
+    fn resolve_position(history: &history::History, spec: &str) -> Result<usize, cash_core::Error> {
         // Try to parse it as a number. If it's not parseable, then we need to assume
         // it's a string prefix we need to search for.
         let Ok(num) = spec.parse::<i64>() else {

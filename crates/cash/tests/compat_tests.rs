@@ -1,7 +1,16 @@
 // cash (D43): on Windows this file compiles to a stub that skips, so everything the
 // Linux path needs is unused there. Denying warnings workspace-wide would otherwise
 // make the stub impossible.
-#![cfg_attr(windows, allow(unused, dead_code))]
+#![cfg_attr(
+    windows,
+    allow(
+        unused,
+        dead_code,
+        clippy::unnecessary_wraps,
+        clippy::needless_return,
+        reason = "the Windows path is an early return, so the rest of `main`                   is compiled out and its signature looks over-general"
+    )
+)]
 
 //! Compatibility test harness for brush shell.
 //!
@@ -150,27 +159,27 @@ fn main() -> Result<()> {
     #[cfg(windows)]
     {
         eprintln!(
-            "skipped: the differential suite runs on Linux (D43).              Windows is covered by `cargo test -p cash --test acceptance`."
+            "skipped: the differential suite runs on Linux (D43); Windows is \
+             covered by `cargo test -p cash --test acceptance`."
         );
         return Ok(());
     }
 
     #[cfg(not(windows))]
     {
+        let unparsed_args: Vec<_> = std::env::args().collect();
+        let options = TestOptions::parse_from(unparsed_args);
 
-    let unparsed_args: Vec<_> = std::env::args().collect();
-    let options = TestOptions::parse_from(unparsed_args);
+        let success = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .worker_threads(32)
+            .build()?
+            .block_on(run_compat_tests(options))?;
 
-    let success = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .worker_threads(32)
-        .build()?
-        .block_on(run_compat_tests(options))?;
+        if !success {
+            std::process::exit(1);
+        }
 
-    if !success {
-        std::process::exit(1);
-    }
-
-    Ok(())
+        Ok(())
     }
 }

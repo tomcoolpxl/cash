@@ -5,6 +5,18 @@
 //! rather than a docs assertion.
 
 #![cfg(windows)]
+#![allow(
+    clippy::tests_outside_test_module,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::needless_raw_string_hashes,
+    reason = "an integration test is outside a test module by construction, and a \
+              failed assumption in a test should abort it loudly rather than be \
+              threaded back through a Result. Shell snippets are spelled with hashes \
+              throughout, including where they are not strictly needed, because \
+              alternating the two forms by accident of content reads worse."
+)]
 
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
@@ -45,11 +57,14 @@ fn children_join_the_job_automatically() {
     // The grandchild (ping) is spawned by cmd *after* assignment, so its membership can
     // only come from the kernel propagating the job. That is the property D6 relies on.
     let joined = wait_until(Duration::from_secs(10), || {
-        job.process_ids().map(|ids| ids.len() >= 2).unwrap_or(false)
+        job.process_ids().is_ok_and(|ids| ids.len() >= 2)
     });
 
     let ids = job.process_ids().expect("query job pids");
-    assert!(joined, "expected the grandchild to join the job; job held {ids:?}");
+    assert!(
+        joined,
+        "expected the grandchild to join the job; job held {ids:?}"
+    );
 
     let _ = child.kill();
     let _ = child.wait();
@@ -65,7 +80,7 @@ fn dropping_the_job_reaps_the_whole_tree() {
 
     assert!(
         wait_until(Duration::from_secs(10), || {
-            job.process_ids().map(|ids| ids.len() >= 2).unwrap_or(false)
+            job.process_ids().is_ok_and(|ids| ids.len() >= 2)
         }),
         "grandchild never joined the job, so this test would not prove anything"
     );

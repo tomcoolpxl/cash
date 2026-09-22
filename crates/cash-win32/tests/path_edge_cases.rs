@@ -6,6 +6,18 @@
 //! boundaries of the drive-letter rule.
 
 #![cfg(windows)]
+#![allow(
+    clippy::tests_outside_test_module,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::needless_raw_string_hashes,
+    reason = "an integration test is outside a test module by construction, and a \
+              failed assumption in a test should abort it loudly rather than be \
+              threaded back through a Result. Shell snippets are spelled with hashes \
+              throughout, including where they are not strictly needed, because \
+              alternating the two forms by accident of content reads worse."
+)]
 
 use std::path::{Path, PathBuf};
 
@@ -33,7 +45,11 @@ fn empty_and_trivial_inputs_do_not_panic() {
 fn a_lone_separator_is_not_a_drive() {
     assert_eq!(unix_drive_spelling("/"), None);
     assert_eq!(unix_drive_spelling("//"), None);
-    assert_eq!(unix_drive_spelling("/1/x"), None, "digits are not drive letters");
+    assert_eq!(
+        unix_drive_spelling("/1/x"),
+        None,
+        "digits are not drive letters"
+    );
     assert_eq!(unix_drive_spelling("/./x"), None);
 }
 
@@ -41,10 +57,17 @@ fn a_lone_separator_is_not_a_drive() {
 fn a_drive_letter_needs_a_following_slash() {
     // The regression that produced a spurious hint on `cmd.exe /d /s /c`.
     for flag in ["/c", "/d", "/s", "/q", "/Z"] {
-        assert_eq!(unix_drive_spelling(flag), None, "{flag} should not look like a drive");
+        assert_eq!(
+            unix_drive_spelling(flag),
+            None,
+            "{flag} should not look like a drive"
+        );
     }
     for path in ["/c/", "/c/x", "/d/data"] {
-        assert!(unix_drive_spelling(path).is_some(), "{path} should look like a drive");
+        assert!(
+            unix_drive_spelling(path).is_some(),
+            "{path} should look like a drive"
+        );
     }
 }
 
@@ -54,7 +77,10 @@ fn a_drive_letter_needs_a_following_slash() {
 
 #[test]
 fn mixed_separators_normalise() {
-    assert_eq!(render(&accept_path(r"C:\Users/thraa\docs")), "C:/Users/thraa/docs");
+    assert_eq!(
+        render(&accept_path(r"C:\Users/thraa\docs")),
+        "C:/Users/thraa/docs"
+    );
     assert_eq!(render(&accept_path("C:/Users\\thraa")), "C:/Users/thraa");
 }
 
@@ -95,7 +121,10 @@ fn the_unix_spelling_is_lowercase() {
 #[test]
 fn the_rest_of_the_path_keeps_its_case() {
     // The filesystem is case-insensitive but case-*preserving*, and so is cash.
-    assert_eq!(render(&accept_path("c:/Users/ThRaa/MyFile.TXT")), "C:/Users/ThRaa/MyFile.TXT");
+    assert_eq!(
+        render(&accept_path("c:/Users/ThRaa/MyFile.TXT")),
+        "C:/Users/ThRaa/MyFile.TXT"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -104,18 +133,33 @@ fn the_rest_of_the_path_keeps_its_case() {
 
 #[test]
 fn dot_segments_resolve_in_awkward_positions() {
-    assert_eq!(render(&lexically_normalize(Path::new("C:/a/./././b"))), "C:/a/b");
-    assert_eq!(render(&lexically_normalize(Path::new("C:/a/b/c/../../d"))), "C:/a/d");
-    assert_eq!(render(&lexically_normalize(Path::new("C:/a/../b/../c"))), "C:/c");
+    assert_eq!(
+        render(&lexically_normalize(Path::new("C:/a/./././b"))),
+        "C:/a/b"
+    );
+    assert_eq!(
+        render(&lexically_normalize(Path::new("C:/a/b/c/../../d"))),
+        "C:/a/d"
+    );
+    assert_eq!(
+        render(&lexically_normalize(Path::new("C:/a/../b/../c"))),
+        "C:/c"
+    );
 }
 
 #[test]
 fn a_filename_of_dots_is_not_a_dot_segment() {
     // `...` and `..foo` are ordinary names, not parent references.
     let got = render(&lexically_normalize(Path::new("C:/a/.../b")));
-    assert!(got.contains("..."), "`...` was treated as a dot segment: {got}");
+    assert!(
+        got.contains("..."),
+        "`...` was treated as a dot segment: {got}"
+    );
     let got = render(&lexically_normalize(Path::new("C:/a/..b")));
-    assert!(got.contains("..b"), "`..b` was treated as a dot segment: {got}");
+    assert!(
+        got.contains("..b"),
+        "`..b` was treated as a dot segment: {got}"
+    );
 }
 
 #[test]
@@ -148,7 +192,10 @@ fn extended_form_resolves_dots_because_the_os_will_not() {
     // The whole hazard of D29: `\\?\` is passed verbatim to the object manager.
     let got = to_extended(Path::new("C:/a/b/../../c"), Path::new("C:/")).expect("absolute");
     assert_eq!(got.to_string_lossy(), r"\\?\C:\c");
-    assert!(!got.to_string_lossy().contains(".."), "a .. survived into the \\\\?\\ form");
+    assert!(
+        !got.to_string_lossy().contains(".."),
+        "a .. survived into the \\\\?\\ form"
+    );
 }
 
 #[test]
@@ -156,7 +203,10 @@ fn extended_form_of_a_long_path_is_not_truncated() {
     // Past MAX_PATH, which is the reason D29 exists.
     let deep = format!("C:/{}", vec!["segment"; 60].join("/"));
     let got = to_extended(Path::new(&deep), Path::new("C:/")).expect("absolute");
-    assert!(got.to_string_lossy().len() > 260, "path was not long enough to test");
+    assert!(
+        got.to_string_lossy().len() > 260,
+        "path was not long enough to test"
+    );
     assert!(got.to_string_lossy().starts_with(r"\\?\C:\"));
 }
 
@@ -167,9 +217,16 @@ fn extended_form_of_a_long_path_is_not_truncated() {
 #[test]
 fn unc_survives_render_and_round_trip() {
     for input in ["//server/share", r"\\server\share"] {
-        assert_eq!(render(&accept_path(input)), "//server/share", "failed for {input}");
+        assert_eq!(
+            render(&accept_path(input)),
+            "//server/share",
+            "failed for {input}"
+        );
     }
-    assert_eq!(to_backslash(&accept_path("//server/share/a/b")), r"\\server\share\a\b");
+    assert_eq!(
+        to_backslash(&accept_path("//server/share/a/b")),
+        r"\\server\share\a\b"
+    );
 }
 
 #[test]
@@ -200,7 +257,10 @@ fn dev_fd_parses_only_real_numbers() {
     assert_eq!(accept("/dev/fd/0"), Target::Fd(0));
     assert_eq!(accept("/dev/fd/255"), Target::Fd(255));
     for bad in ["/dev/fd/", "/dev/fd/x", "/dev/fd/-1", "/dev/fd/1x"] {
-        assert!(matches!(accept(bad), Target::Path(_)), "{bad} parsed as an fd");
+        assert!(
+            matches!(accept(bad), Target::Path(_)),
+            "{bad} parsed as an fd"
+        );
     }
 }
 
@@ -221,8 +281,19 @@ fn reserved_names_are_detected_with_and_without_extensions() {
 
 #[test]
 fn names_that_merely_start_like_a_device_are_not_reserved() {
-    for name in ["nulls", "console", "com", "com10", "lpt", "prnt", "auxiliary"] {
-        assert!(!is_reserved_name(Path::new(name)), "{name} wrongly detected");
+    for name in [
+        "nulls",
+        "console",
+        "com",
+        "com10",
+        "lpt",
+        "prnt",
+        "auxiliary",
+    ] {
+        assert!(
+            !is_reserved_name(Path::new(name)),
+            "{name} wrongly detected"
+        );
     }
 }
 
@@ -235,9 +306,19 @@ fn spaces_and_unicode_survive_every_conversion() {
     let path = "C:/Program Files/Ünïcodé Ordner/файл.txt";
     let accepted = accept_path(path);
     assert_eq!(render(&accepted), path);
-    assert_eq!(to_backslash(&accepted), r"C:\Program Files\Ünïcodé Ordner\файл.txt");
-    assert_eq!(to_unix(&accepted), "/c/Program Files/Ünïcodé Ordner/файл.txt");
-    assert_eq!(render(&accept_path(&to_unix(&accepted))), path, "round trip lost data");
+    assert_eq!(
+        to_backslash(&accepted),
+        r"C:\Program Files\Ünïcodé Ordner\файл.txt"
+    );
+    assert_eq!(
+        to_unix(&accepted),
+        "/c/Program Files/Ünïcodé Ordner/файл.txt"
+    );
+    assert_eq!(
+        render(&accept_path(&to_unix(&accepted))),
+        path,
+        "round trip lost data"
+    );
 }
 
 #[test]
@@ -246,12 +327,20 @@ fn tmp_mapping_handles_a_bare_prefix_correctly() {
     let Target::Path(bare) = accept("/tmpfoo") else {
         panic!("should be a path");
     };
-    assert_eq!(render(&bare), "/tmpfoo", "/tmpfoo was rewritten as if under /tmp");
+    assert_eq!(
+        render(&bare),
+        "/tmpfoo",
+        "/tmpfoo was rewritten as if under /tmp"
+    );
 
     let Target::Path(real) = accept("/tmp/x") else {
         panic!("should be a path");
     };
-    assert!(is_absolute(&real), "/tmp/x did not resolve: {}", render(&real));
+    assert!(
+        is_absolute(&real),
+        "/tmp/x did not resolve: {}",
+        render(&real)
+    );
 }
 
 #[test]

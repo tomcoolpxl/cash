@@ -63,7 +63,11 @@ pub fn parse_pathext(value: &str) -> Vec<String> {
         .filter(|s| !s.is_empty())
         .map(|s| {
             let s = s.to_ascii_uppercase();
-            if s.starts_with('.') { s } else { format!(".{s}") }
+            if s.starts_with('.') {
+                s
+            } else {
+                format!(".{s}")
+            }
         })
         .collect()
 }
@@ -189,7 +193,10 @@ pub fn read_shebang(path: &Path) -> Option<(String, Vec<String>)> {
     let bytes = std::fs::read(path).ok()?;
     let bytes = text::strip_bom(&bytes);
 
-    let line_end = bytes.iter().position(|&b| b == b'\n').unwrap_or(bytes.len());
+    let line_end = bytes
+        .iter()
+        .position(|&b| b == b'\n')
+        .unwrap_or(bytes.len());
     let line = std::str::from_utf8(&bytes[..line_end]).ok()?;
     let line = text::trim_line_terminator(line);
 

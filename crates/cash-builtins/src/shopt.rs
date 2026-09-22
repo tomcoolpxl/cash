@@ -93,10 +93,8 @@ impl builtins::Command for ShoptCommand {
             // Enumerate only the specified options.
             for option_name in &self.options {
                 let option_definition = if self.set_o_names_only {
-                    cash_core::namedoptions::options(
-                        cash_core::namedoptions::ShellOptionKind::SetO,
-                    )
-                    .get(option_name.as_str())
+                    cash_core::namedoptions::options(cash_core::namedoptions::ShellOptionKind::SetO)
+                        .get(option_name.as_str())
                 } else {
                     cash_core::namedoptions::options(
                         cash_core::namedoptions::ShellOptionKind::Shopt,

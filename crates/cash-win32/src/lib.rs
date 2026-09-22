@@ -24,6 +24,7 @@ pub mod process;
 pub mod resolve;
 pub mod session;
 pub mod spawn;
+pub mod stdio;
 pub mod text;
 
 pub use job::{JobConfig, JobObject};

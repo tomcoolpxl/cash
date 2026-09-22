@@ -694,6 +694,7 @@ dependencies = [
  "cash-interactive",
  "cash-parser",
  "cash-test-harness",
+ "cash-win32",
  "clap",
  "clap-markdown",
  "clap_complete",

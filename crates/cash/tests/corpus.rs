@@ -6,11 +6,38 @@
 //! accommodations, no cash-specific spellings.
 
 #![cfg(windows)]
+#![allow(
+    clippy::tests_outside_test_module,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::needless_raw_string_hashes,
+    reason = "an integration test is outside a test module by construction, and a \
+              failed assumption in a test should abort it loudly rather than be \
+              threaded back through a Result. Shell snippets are spelled with hashes \
+              throughout, including where they are not strictly needed, because \
+              alternating the two forms by accident of content reads worse."
+)]
 
 use std::path::PathBuf;
 use std::process::Command;
 
 const CASH: &str = env!("CARGO_BIN_EXE_cash");
+
+/// Every script in the corpus. Tests that apply to all of them iterate this, so adding a
+/// script gets the cross-cutting coverage — CRLF endings, for one — without being asked.
+const CORPUS_SCRIPTS: &[&str] = &["terraform-wrapper.sh", "ci-glue.sh"];
+
+/// The reference bash, if this machine has one.
+///
+/// D43 keeps the differential suite on Linux because §4's divergences would make a bash
+/// reference report false failures. The corpus scripts are deliberately written to avoid
+/// every one of them, so comparing against bash here is a genuine cross-check rather
+/// than a restatement of cash's own behaviour.
+fn reference_bash() -> Option<PathBuf> {
+    let path = PathBuf::from(r"C:\Program Files\Git\bin\bash.exe");
+    path.is_file().then_some(path)
+}
 
 fn corpus_dir() -> PathBuf {
     // CARGO_MANIFEST_DIR is crates/cash; the corpus lives at the repository root.
@@ -29,7 +56,11 @@ struct Run {
 
 fn run_script(name: &str) -> Run {
     let script = corpus_dir().join(name);
-    assert!(script.is_file(), "corpus script missing: {}", script.display());
+    assert!(
+        script.is_file(),
+        "corpus script missing: {}",
+        script.display()
+    );
 
     let out = Command::new(CASH)
         .arg(script.to_string_lossy().replace('\\', "/"))
@@ -77,17 +108,11 @@ fn the_terraform_wrapper_runs_unmodified() {
 
 #[test]
 fn the_terraform_wrapper_matches_real_bash() {
-    // D43 keeps the differential suite on Linux because §4's divergences would make a
-    // bash reference report false failures. This script is deliberately written to avoid
-    // every one of them, so its output *should* match bash exactly — which makes it a
-    // genuine cross-check rather than a restatement of cash's own behaviour.
-    //
     // Skipped where no reference bash exists.
-    let bash = PathBuf::from(r"C:\Program Files\Git\bin\bash.exe");
-    if !bash.is_file() {
+    let Some(bash) = reference_bash() else {
         eprintln!("skipped: no reference bash available");
         return;
-    }
+    };
 
     let script = corpus_dir().join("terraform-wrapper.sh");
     let reference = Command::new(&bash)
@@ -95,14 +120,112 @@ fn the_terraform_wrapper_matches_real_bash() {
         .output()
         .expect("failed to run reference bash");
 
-    let bash_stdout = String::from_utf8_lossy(&reference.stdout).trim_end().to_string();
+    let bash_stdout = String::from_utf8_lossy(&reference.stdout)
+        .trim_end()
+        .to_string();
     let cash_stdout = run_script("terraform-wrapper.sh").stdout;
 
     assert_eq!(
         cash_stdout, bash_stdout,
         "cash and bash disagree on a script written to avoid every §4 divergence"
     );
-    assert_eq!(reference.status.code().unwrap_or(-1), 0, "the reference run itself failed");
+    assert_eq!(
+        reference.status.code().unwrap_or(-1),
+        0,
+        "the reference run itself failed"
+    );
+}
+
+#[test]
+fn the_ci_glue_script_runs_unmodified() {
+    // The other workload §1 names. Where terraform-wrapper.sh exercises shell *language*,
+    // this exercises the shell as a process coordinator: find, xargs, grep, sort, uniq,
+    // wc, cut, tr, pipefail, subshells, and redirection of both streams — the pieces D48
+    // bundles and D8 resolves. A failure here means the userland story is broken rather
+    // than the parser.
+    let run = run_script("ci-glue.sh");
+
+    assert_eq!(
+        run.code, 0,
+        "the ci glue failed.\nstdout:\n{}\nstderr:\n{}",
+        run.stdout, run.stderr
+    );
+
+    for expected in ["rust=3 todos=2 unique=3 envs=prod staging", "ok"] {
+        assert!(
+            run.stdout.contains(expected),
+            "missing {expected:?} in:\n{}",
+            run.stdout
+        );
+    }
+}
+
+#[test]
+fn the_ci_glue_script_matches_real_bash() {
+    let Some(bash) = reference_bash() else {
+        eprintln!("skipped: no reference bash available");
+        return;
+    };
+
+    let script = corpus_dir().join("ci-glue.sh");
+    let reference = Command::new(&bash)
+        .arg(script.to_string_lossy().replace('\\', "/"))
+        .output()
+        .expect("failed to run reference bash");
+
+    let bash_stdout = String::from_utf8_lossy(&reference.stdout)
+        .trim_end()
+        .to_string();
+    assert_eq!(
+        reference.status.code().unwrap_or(-1),
+        0,
+        "the reference run itself failed"
+    );
+    assert_eq!(
+        run_script("ci-glue.sh").stdout,
+        bash_stdout,
+        "cash and bash disagree on the ci glue script"
+    );
+}
+
+#[test]
+fn every_corpus_script_runs_with_crlf_endings() {
+    // D7: `core.autocrlf` is `true` by default in Git for Windows, so a repository
+    // checked out on this machine has CRLF scripts. `.gitattributes` keeps cash's own
+    // corpus at LF, which means the CRLF case has to be manufactured here rather than
+    // assumed — and it is the case most users will actually hit.
+    let staging = std::env::temp_dir().join("cash-corpus-crlf");
+    let _ = std::fs::remove_dir_all(&staging);
+    std::fs::create_dir_all(&staging).expect("create staging dir");
+
+    for name in CORPUS_SCRIPTS {
+        let lf = std::fs::read_to_string(corpus_dir().join(name)).expect("read corpus script");
+        assert!(!lf.contains('\r'), "{name} is not stored with LF endings");
+
+        let crlf_path = staging.join(name);
+        std::fs::write(&crlf_path, lf.replace('\n', "\r\n").as_bytes()).expect("write crlf copy");
+
+        let out = Command::new(CASH)
+            .arg(crlf_path.to_string_lossy().replace('\\', "/"))
+            .output()
+            .expect("failed to run cash");
+
+        let crlf_stdout = String::from_utf8_lossy(&out.stdout).trim_end().to_string();
+        let lf_run = run_script(name);
+
+        assert_eq!(
+            out.status.code().unwrap_or(-1),
+            lf_run.code,
+            "{name} exited differently with CRLF endings.\nstderr:\n{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert_eq!(
+            crlf_stdout, lf_run.stdout,
+            "{name} produced different output with CRLF endings"
+        );
+    }
+
+    let _ = std::fs::remove_dir_all(&staging);
 }
 
 #[test]
@@ -123,7 +246,10 @@ fn a_trap_can_remove_a_directory_it_moved_out_of() {
 
     let stdout = String::from_utf8_lossy(&out.stdout);
     let stderr = String::from_utf8_lossy(&out.stderr);
-    assert!(stdout.contains("worked"), "script failed: {stdout} {stderr}");
+    assert!(
+        stdout.contains("worked"),
+        "script failed: {stdout} {stderr}"
+    );
     assert!(
         !stderr.contains("cannot remove"),
         "cleanup failed even after leaving the directory: {stderr}"

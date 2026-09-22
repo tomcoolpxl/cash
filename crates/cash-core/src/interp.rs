@@ -1188,13 +1188,8 @@ impl<SE: extensions::ShellExtensions> ExecuteInPipeline<SE> for ast::SimpleComma
                 }
                 CommandPrefixOrSuffixItem::ProcessSubstitution(kind, subshell_command) => {
                     let (arg_path, installed_fd_num, substitution_file) =
-                        setup_process_substitution(
-                            &context.shell,
-                            &params,
-                            kind,
-                            subshell_command,
-                        )
-                        .await?;
+                        setup_process_substitution(&context.shell, &params, kind, subshell_command)
+                            .await?;
 
                     if let Some(fd) = installed_fd_num {
                         params.open_files.set_fd(fd, substitution_file);
@@ -2074,9 +2069,10 @@ async fn setup_process_substitution_win(
         let mut subshell = shell.clone();
         let mut child_params = params.clone();
         child_params.process_group_policy = ProcessGroupPolicy::SameProcessGroup;
-        child_params
-            .open_files
-            .set_fd(OpenFiles::STDOUT_FD, OpenFile::from(std::fs::File::create(&path)?));
+        child_params.open_files.set_fd(
+            OpenFiles::STDOUT_FD,
+            OpenFile::from(std::fs::File::create(&path)?),
+        );
 
         let subshell_cmd = subshell_cmd.to_owned();
         let _ = subshell_cmd

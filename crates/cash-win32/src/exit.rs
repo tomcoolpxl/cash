@@ -26,6 +26,10 @@ const SIGPIPE: u32 = 13;
 /// Deliberately a small hand-maintained table rather than a range heuristic: D15 accepts
 /// that cost, because the whole point is producing the *specific* values scripts compare
 /// against.
+#[allow(
+    clippy::unreadable_literal,
+    reason = "NTSTATUS values are quoted everywhere as eight unbroken hex digits; \n              `0xC000_0005` is harder to match against Microsoft's documentation"
+)]
 const NTSTATUS_SIGNALS: &[(u32, u32)] = &[
     (0xC0000005, SIGSEGV), // STATUS_ACCESS_VIOLATION          -> 139
     (0xC00000FD, SIGSEGV), // STATUS_STACK_OVERFLOW            -> 139
@@ -83,6 +87,6 @@ pub const fn is_ntstatus_error(code: u32) -> bool {
 
 /// Whether the mapped status indicates the process was killed rather than exiting.
 #[must_use]
-pub fn was_killed(code: u32) -> bool {
+pub const fn was_killed(code: u32) -> bool {
     is_ntstatus_error(code)
 }

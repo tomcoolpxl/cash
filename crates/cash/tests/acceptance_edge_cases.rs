@@ -6,6 +6,18 @@
 //! meet.
 
 #![cfg(windows)]
+#![allow(
+    clippy::tests_outside_test_module,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::needless_raw_string_hashes,
+    reason = "an integration test is outside a test module by construction, and a \
+              failed assumption in a test should abort it loudly rather than be \
+              threaded back through a Result. Shell snippets are spelled with hashes \
+              throughout, including where they are not strictly needed, because \
+              alternating the two forms by accident of content reads worse."
+)]
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -75,14 +87,21 @@ fn directories_with_spaces_work_in_every_spelling() {
             out.stdout,
             out.stderr
         );
-        assert!(!out.stdout.contains('\\'), "rendered with backslashes: {}", out.stdout);
+        assert!(
+            !out.stdout.contains('\\'),
+            "rendered with backslashes: {}",
+            out.stdout
+        );
     }
 }
 
 #[test]
 fn a_file_with_spaces_round_trips_through_winpath() {
     let with_spaces = "C:/Program Files/Some App/file name.txt";
-    assert_eq!(cash(&format!(r#"winpath "{with_spaces}""#)).stdout, with_spaces);
+    assert_eq!(
+        cash(&format!(r#"winpath "{with_spaces}""#)).stdout,
+        with_spaces
+    );
     assert_eq!(
         cash(&format!(r#"winpath -w "{with_spaces}""#)).stdout,
         r"C:\Program Files\Some App\file name.txt"
@@ -130,7 +149,11 @@ fn a_crlf_file_with_no_final_terminator_still_loses_interior_carriage_returns() 
     ));
     // Two lines: bash counts a final unterminated line only if `read` returns it, which
     // it does not — so this matches bash's one.
-    assert!(out.stdout == "1" || out.stdout == "2", "unexpected count: {}", out.stdout);
+    assert!(
+        out.stdout == "1" || out.stdout == "2",
+        "unexpected count: {}",
+        out.stdout
+    );
 }
 
 #[test]
@@ -167,7 +190,8 @@ fn exit_status_propagates_through_pipelines_and_lists() {
 #[test]
 fn a_crash_status_survives_a_conditional() {
     // The point of D15: a crashed process must not pass an && chain.
-    let out = cash("cmd.exe /d /s /c exit 3221225728 >/dev/null 2>&1 && echo PASSED || echo caught");
+    let out =
+        cash("cmd.exe /d /s /c exit 3221225728 >/dev/null 2>&1 && echo PASSED || echo caught");
     assert_eq!(out.stdout, "caught", "a crash satisfied &&");
 }
 
@@ -188,15 +212,24 @@ fn the_shells_own_exit_code_reflects_the_last_command() {
 
 #[test]
 fn an_unset_variable_is_empty_in_any_case() {
-    assert_eq!(cash(r#"printf '[%s]' "$DEFINITELY_NOT_SET_XYZ""#).stdout, "[]");
-    assert_eq!(cash(r#"printf '[%s]' "$definitely_not_set_xyz""#).stdout, "[]");
+    assert_eq!(
+        cash(r#"printf '[%s]' "$DEFINITELY_NOT_SET_XYZ""#).stdout,
+        "[]"
+    );
+    assert_eq!(
+        cash(r#"printf '[%s]' "$definitely_not_set_xyz""#).stdout,
+        "[]"
+    );
 }
 
 #[test]
 fn a_locally_defined_variable_beats_a_case_insensitive_environment_match() {
     // The fallback must never shadow an exact match.
     let out = cash(r#"Path=mine; printf '%s' "$Path""#);
-    assert_eq!(out.stdout, "mine", "the environment shadowed a local assignment");
+    assert_eq!(
+        out.stdout, "mine",
+        "the environment shadowed a local assignment"
+    );
 }
 
 #[test]
@@ -252,8 +285,14 @@ fn globbing_matches_regardless_of_case_in_either_direction() {
 
     let lower = cash(&format!("cd {dir}; echo *.txt")).stdout;
     let upper = cash(&format!("cd {dir}; echo *.TXT")).stdout;
-    assert!(lower.contains("UPPER.TXT") && lower.contains("lower.txt"), "got {lower}");
-    assert!(upper.contains("UPPER.TXT") && upper.contains("lower.txt"), "got {upper}");
+    assert!(
+        lower.contains("UPPER.TXT") && lower.contains("lower.txt"),
+        "got {lower}"
+    );
+    assert!(
+        upper.contains("UPPER.TXT") && upper.contains("lower.txt"),
+        "got {upper}"
+    );
 }
 
 #[test]
@@ -349,7 +388,9 @@ fn the_tmp_spelling_is_explained_too() {
     // `/tmp/x` resolves for operations cash performs but not for a command handed it,
     // including a bundled builtin (D48), which opens paths directly. Same cliff as
     // `/c/x`, so it gets the same explanation.
-    let out = cash(r#"echo hi > /tmp/cash-edge-tmp.txt; cat /tmp/cash-edge-tmp.txt; rm -f /tmp/cash-edge-tmp.txt"#);
+    let out = cash(
+        r#"echo hi > /tmp/cash-edge-tmp.txt; cat /tmp/cash-edge-tmp.txt; rm -f /tmp/cash-edge-tmp.txt"#,
+    );
     assert!(
         out.stderr.contains("winpath"),
         "no hint for a /tmp argument: {}",
@@ -361,11 +402,17 @@ fn the_tmp_spelling_is_explained_too() {
 fn the_diagnostic_does_not_name_a_misleading_command() {
     // A bundled builtin re-enters the cash binary to dispatch, so naming the resolved
     // command would report cash.exe rather than the `cat` the user typed.
-    let out = cash(r#"echo hi > /tmp/cash-edge-name.txt; cat /tmp/cash-edge-name.txt; rm -f /tmp/cash-edge-name.txt"#);
+    let out = cash(
+        r#"echo hi > /tmp/cash-edge-name.txt; cat /tmp/cash-edge-name.txt; rm -f /tmp/cash-edge-name.txt"#,
+    );
     assert!(
         !out.stderr.contains("cash.exe as written"),
         "named the re-entrant binary: {}",
         out.stderr
     );
-    assert!(out.stderr.contains("a command receives this path"), "got {}", out.stderr);
+    assert!(
+        out.stderr.contains("a command receives this path"),
+        "got {}",
+        out.stderr
+    );
 }

@@ -246,6 +246,20 @@ Always on:
 - Virtual `/usr/bin/env`, so `#!/usr/bin/env bash` resolves with no fake filesystem
 - Unix path spellings accepted as input (D3)
 
+**CRLF in script source is the one that earns its keep.** `core.autocrlf` is `true` by
+default in Git for Windows, so *every* `.sh` in a repository checked out on this machine
+has `\r\n` endings unless someone wrote a `.gitattributes`. Without this, `fi\r` is not
+`fi` and `EOF\r` does not close a here-document, so the whole file fails to parse — and
+because the parser only notices when it runs out of input, the reported position is the
+end of the file rather than anywhere near the cause. Measured: cash's own second corpus
+script failed at "line 78" for a `\r` on line 45.
+
+Mechanism: `\r\n` is rewritten to `\n` as script source is read, streaming, for files,
+`-c` strings and `eval` alike. A *lone* `\r` is left alone — that is data inside a string
+literal, and `printf 'progress\r'` means it. This is a different rule from D20 with a
+different mechanism, even though both come down to the same two bytes: D20 is about CRLF
+in what a script reads, this is about CRLF in the script.
+
 **`/dev/null` needs a carve-out from D29.** D28 makes reserved names ordinary files, and
 D29's blanket `\\?\` prefix is the mechanism that achieves it — so `\\?\C:\...\NUL` would
 open a *file* named `NUL`, not the null device. `/dev/null` must therefore resolve to the
@@ -1050,6 +1064,27 @@ are separate GNU projects. So cash is *not* a complete userland in one executabl
 D35's diagnostic keeps its job. Confirmed: `type sed` reports not found even with the
 bundle enabled.
 
+**Bundled output is rendered through D3.** The utilities are portable Rust, so the few
+that *construct* an absolute path — `mktemp`, `realpath`, `readlink` — spell it the way
+Windows does. `mktemp -d` printing `C:\Users\me\AppData\Local\Temp\tmp.AbCdEf` is how
+that spelling reaches a script at all, since nearly every use is `d=$(mktemp -d)`; and
+the first command downstream that reads `\` as an escape rather than a separator
+destroys it. `find "$d" | xargs grep` yields `C:Usersme...` and reports no matches —
+wrong answer, no error, exactly what D20 and D26 exist to prevent.
+
+So the dispatcher redirects its own standard output for those three, and renders each
+line through D3 before writing it on. The allowlist stays minimal and is justified by a
+single test: does the utility *build* the path, or merely echo back one it was given?
+`find`, `grep -l`, `wc`, `du`, `dirname` and `basename` all echo, so they are correct as
+soon as their inputs are, and rewriting their output would silently alter data the user
+chose. Standard error is never captured — diagnostics keep their ordering, and they are
+not paths. `--help` and `--version` skip the capture: that output is prose, and an
+argument parser that exits the process while printing it would otherwise strand the text
+in the capture file.
+
+A temp file rather than a pipe, because nothing drains a pipe while the utility runs and
+64 KiB of `realpath` output would deadlock.
+
 - OPEN: whether to also bundle a `sed` and `awk` implementation. Rust ones exist but
   none is a drop-in for GNU, and shipping a subtly different `awk` is precisely the
   silent-substitution problem this decision otherwise avoids.
@@ -1077,6 +1112,14 @@ someone who expected bash, so additions need to earn their place.
 | 11 | `[ -s file ]` is false for App Execution Aliases | They are genuinely 0 bytes | D46 |
 | 12 | Elevated and `detach`ed processes survive cash | Integrity boundary; breakaway flag | D42, D45 |
 | 13 | A bundled builtin cannot delete the shell's current directory | It re-enters the binary as a child inheriting that cwd, and Windows refuses to delete a process's own cwd | D48 |
+
+**One near-miss, recorded because it was nearly the fourteenth entry.** The bundled
+utilities are portable Rust, so the few that *construct* an absolute path spelled it
+natively: `mktemp -d` printed `C:\Users\me\AppData\Local\Temp\tmp.AbCdEf`. A script then
+did `d=$(mktemp -d)` and a plain `find "$d" | xargs grep` silently produced
+`C:Usersme...`, because `xargs` reads `\` as an escape — a wrong answer rather than an
+error, which is the failure mode this spec rejects everywhere else. Rather than document
+it, D48 renders those utilities' output through D3 on the way out. See D48.
 
 ---
 
@@ -1248,11 +1291,13 @@ concerns was worth keeping.)
 | `console` | D13, D19, D41 | escalation state machine, `CTRL_BREAK_EVENT`, suspend/resume |
 | `path` | D3, D7, D29 | accept every spelling, render `C:/`, `\\?\` + lexical `..` |
 | `env` | D5, D31 | PATH translated at the boundary; case-insensitive lookup |
-| `text` | D20, D41 | CRLF as terminator, BOM stripping |
+| `text` | D7, D20, D41 | CRLF as terminator, CRLF script source, BOM stripping |
+| `stdio` | D3, D48 | capture a bundled utility's stdout and render its paths |
 | `exit` | D15 | truncation plus NTSTATUS → `128 + n` |
 | `resolve` | D8, D46 | PATHEXT dispatch, extension before read, real on-disk casing |
 | `cmd` | D32 | CRT quoting, caret escaping, `is_safe_for_cmd` |
 | `process` | D42 | `is_pid_alive`, `cpu_time` |
+| `jobreg` | D6 | per-spawn nested job registry, tree kill, sweep |
 
 Plus `crates/cash`: the binary, and `cash doctor` (D35).
 

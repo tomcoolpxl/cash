@@ -87,6 +87,11 @@ cash-interactive = { version = "^0.4.0", path = "../cash-interactive", features 
 ] }
 tokio = { version = "1.52.3", features = ["rt", "sync"] }
 
+[target.'cfg(windows)'.dependencies]
+# cash: the Win32 semantics layer. The bundled dispatcher (D48) needs D3's path
+# rendering, because a few uutils construct absolute paths and spell them natively.
+cash-win32 = { path = "../cash-win32" }
+
 [target.'cfg(any(unix, windows))'.dependencies]
 cash-interactive = { version = "^0.4.0", path = "../cash-interactive", features = [
     "basic",

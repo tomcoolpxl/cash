@@ -48,13 +48,19 @@ impl JobConfig {
     /// Configuration for the per-session job: kills on close, permits breakaway.
     #[must_use]
     pub const fn session() -> Self {
-        Self { kill_on_close: true, allow_breakaway: true }
+        Self {
+            kill_on_close: true,
+            allow_breakaway: true,
+        }
     }
 
     /// Configuration for a per-pipeline job: kills on close, no breakaway.
     #[must_use]
     pub const fn job() -> Self {
-        Self { kill_on_close: true, allow_breakaway: false }
+        Self {
+            kill_on_close: true,
+            allow_breakaway: false,
+        }
     }
 }
 
@@ -68,9 +74,13 @@ pub struct JobObject {
     handle: HANDLE,
 }
 
-// A job handle is just a kernel handle; it carries no thread affinity, and the Win32
-// calls made through it are all thread-safe.
+// SAFETY: the only field is a kernel handle, which carries no thread affinity — it is an
+// index into a process-wide table, valid from any thread until it is closed. Every Win32
+// call made through it (`AssignProcessToJobObject`, `QueryInformationJobObject`,
+// `TerminateJobObject`, `CloseHandle`) is documented as thread-safe, and `Drop` closes it
+// exactly once because `JobObject` is not `Clone`.
 unsafe impl Send for JobObject {}
+// SAFETY: as above — shared references only ever reach thread-safe Win32 calls.
 unsafe impl Sync for JobObject {}
 
 impl JobObject {
@@ -102,6 +112,9 @@ impl JobObject {
     }
 
     fn apply(&self, config: JobConfig) -> io::Result<()> {
+        // SAFETY: the structure is plain old data — integers and nested integer structs —
+        // for which an all-zero bit pattern is valid and is in fact what "no limits"
+        // means to the API.
         let mut limits: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = unsafe { std::mem::zeroed() };
 
         if config.kill_on_close {
@@ -118,8 +131,11 @@ impl JobObject {
                 self.handle,
                 JobObjectExtendedLimitInformation,
                 std::ptr::from_ref(&limits).cast(),
+                // The structure is a fixed ~112 bytes and the parameter is a `u32` by
+                // ABI, so the saturating fallback is unreachable — and saturating is the
+                // right shape for a function that returns a `Result` rather than panics.
                 u32::try_from(size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>())
-                    .expect("struct size fits in u32"),
+                    .unwrap_or(u32::MAX),
             )
         };
         if ok == 0 {
@@ -177,22 +193,28 @@ impl JobObject {
         loop {
             let header = size_of::<JOBOBJECT_BASIC_PROCESS_ID_LIST>();
             let bytes = header + capacity * size_of::<usize>();
-            let mut buffer = vec![0u8; bytes];
 
-            // SAFETY: buffer is at least as large as the header, and we tell the API its
-            // true length.
+            // A `Vec<u8>` is only byte-aligned, and this buffer is handed to the API as a
+            // structure whose fields are pointer-sized. Allocating `u64`s gives it the
+            // alignment the reinterpretation needs, rather than relying on the
+            // allocator's habit of returning aligned blocks anyway.
+            let words = bytes.div_ceil(size_of::<u64>());
+            let mut buffer = vec![0u64; words];
+            let capacity_bytes = words * size_of::<u64>();
+
+            // SAFETY: `buffer` is at least as large as the header, correctly aligned for
+            // the structure, and the API is told its true length in bytes.
             let ok = unsafe {
                 QueryInformationJobObject(
                     self.handle,
                     JobObjectBasicProcessIdList,
                     buffer.as_mut_ptr().cast(),
-                    u32::try_from(bytes).expect("buffer size fits in u32"),
+                    // The buffer never exceeds a few hundred kilobytes (capacity is
+                    // capped below), so the saturating fallback is unreachable.
+                    u32::try_from(capacity_bytes).unwrap_or(u32::MAX),
                     std::ptr::null_mut(),
                 )
             };
-
-            // SAFETY: on success the buffer starts with a valid header.
-            let list = unsafe { &*buffer.as_ptr().cast::<JOBOBJECT_BASIC_PROCESS_ID_LIST>() };
 
             if ok == 0 {
                 // ERROR_MORE_DATA means the list did not fit; everything else is real.
@@ -205,15 +227,22 @@ impl JobObject {
                 return Err(err);
             }
 
+            // SAFETY: on success the buffer starts with a fully written header, and the
+            // allocation is aligned for it.
+            let list = unsafe { &*buffer.as_ptr().cast::<JOBOBJECT_BASIC_PROCESS_ID_LIST>() };
             let count = list.NumberOfProcessIdsInList as usize;
-            // SAFETY: the API reports how many entries it wrote into the trailing array.
-            let ids = unsafe {
-                std::slice::from_raw_parts(list.ProcessIdList.as_ptr(), count)
-                    .iter()
-                    .map(|&id| id as u32)
-                    .collect()
-            };
-            return Ok(ids);
+
+            // SAFETY: the API reports in `NumberOfProcessIdsInList` how many entries it
+            // wrote into the trailing array, and that array lies inside `buffer`.
+            let ids = unsafe { std::slice::from_raw_parts(list.ProcessIdList.as_ptr(), count) };
+
+            // Windows process ids are 32-bit; the field is pointer-sized only because the
+            // structure predates that being obvious. A value that does not fit cannot name
+            // a real process, so dropping it is more honest than truncating it.
+            return Ok(ids
+                .iter()
+                .filter_map(|&id| u32::try_from(id).ok())
+                .collect());
         }
     }
 
@@ -232,7 +261,7 @@ impl JobObject {
 
     /// The raw job handle, for callers that need it during process creation.
     #[must_use]
-    pub fn as_raw(&self) -> HANDLE {
+    pub const fn as_raw(&self) -> HANDLE {
         self.handle
     }
 }

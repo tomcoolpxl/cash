@@ -330,8 +330,7 @@ fn parse_key_sequence_and_readline_target(
             Ok((abstract_seq, BindableReadlineTarget::Function(func)))
         }
         cash_parser::readline_binding::ReadlineTarget::Macro(target_seq_str) => {
-            let parsed_target =
-                cash_parser::readline_binding::parse_key_sequence(&target_seq_str)?;
+            let parsed_target = cash_parser::readline_binding::parse_key_sequence(&target_seq_str)?;
             let abstract_target = key_sequence_to_abstract_strokes(&parsed_target)?;
             Ok((abstract_seq, BindableReadlineTarget::Macro(abstract_target)))
         }

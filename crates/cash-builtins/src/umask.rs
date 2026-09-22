@@ -1,6 +1,6 @@
-use cash_core::{ExecutionResult, builtins};
 #[cfg(unix)]
 use cash_core::ErrorKind;
+use cash_core::{ExecutionResult, builtins};
 #[cfg(unix)]
 use cfg_if::cfg_if;
 use clap::Parser;

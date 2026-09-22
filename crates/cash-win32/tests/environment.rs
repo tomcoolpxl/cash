@@ -1,6 +1,18 @@
 //! D5 (PATH is the one translated variable) and D31 (case-insensitive lookup).
 
 #![cfg(windows)]
+#![allow(
+    clippy::tests_outside_test_module,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::needless_raw_string_hashes,
+    reason = "an integration test is outside a test module by construction, and a \
+              failed assumption in a test should abort it loudly rather than be \
+              threaded back through a Result. Shell snippets are spelled with hashes \
+              throughout, including where they are not strictly needed, because \
+              alternating the two forms by accident of content reads worse."
+)]
 
 use cash_win32::env::{Environment, canonical_name, path_to_unix, path_to_windows, split_path};
 
@@ -36,7 +48,12 @@ fn setting_one_spelling_overwrites_the_other() {
     env.set("PATH", "second");
 
     assert_eq!(env.get("path"), Some("second"));
-    assert_eq!(env.iter().filter(|(k, _)| k.eq_ignore_ascii_case("PATH")).count(), 1);
+    assert_eq!(
+        env.iter()
+            .filter(|(k, _)| k.eq_ignore_ascii_case("PATH"))
+            .count(),
+        1
+    );
 }
 
 #[test]
@@ -47,7 +64,10 @@ fn scripts_see_path_in_unix_form() {
 
     let seen = env.get_for_script("PATH").expect("PATH is set");
     assert_eq!(seen, "/c/tools:/c/Windows/System32");
-    assert!(!seen.contains(';'), "a script must never see semicolons in PATH");
+    assert!(
+        !seen.contains(';'),
+        "a script must never see semicolons in PATH"
+    );
 }
 
 #[test]
@@ -57,7 +77,10 @@ fn children_get_path_in_windows_form() {
     env.set("PATH", "/c/tools:/c/Windows");
 
     let block = env.to_child_block();
-    let (_, path) = block.iter().find(|(k, _)| k == "PATH").expect("PATH present");
+    let (_, path) = block
+        .iter()
+        .find(|(k, _)| k == "PATH")
+        .expect("PATH present");
     assert_eq!(path, r"C:\tools;C:\Windows");
 }
 
@@ -76,7 +99,11 @@ fn no_other_variable_is_translated() {
     let block = env.to_child_block();
     for name in ["GOPATH", "PYTHONPATH", "CLASSPATH"] {
         let (_, value) = block.iter().find(|(k, _)| k == name).unwrap();
-        assert_eq!(value, env.get(name).unwrap(), "{name} must pass through verbatim");
+        assert_eq!(
+            value,
+            env.get(name).unwrap(),
+            "{name} must pass through verbatim"
+        );
     }
 }
 
@@ -99,16 +126,28 @@ fn splitting_a_unix_path_does_not_break_on_drive_letters() {
 
 #[test]
 fn splitting_handles_both_separators() {
-    assert_eq!(split_path("C:/a;C:/b").collect::<Vec<_>>(), vec!["C:/a", "C:/b"]);
-    assert_eq!(split_path("/c/a:/c/b").collect::<Vec<_>>(), vec!["/c/a", "/c/b"]);
+    assert_eq!(
+        split_path("C:/a;C:/b").collect::<Vec<_>>(),
+        vec!["C:/a", "C:/b"]
+    );
+    assert_eq!(
+        split_path("/c/a:/c/b").collect::<Vec<_>>(),
+        vec!["/c/a", "/c/b"]
+    );
 }
 
 #[test]
 fn empty_path_entries_are_dropped() {
     // Trailing separators are common in real PATHs and must not produce empty entries,
     // which would otherwise mean "search the current directory" — a security problem.
-    assert_eq!(split_path("C:/a;;C:/b;").collect::<Vec<_>>(), vec!["C:/a", "C:/b"]);
-    assert_eq!(split_path("/c/a::/c/b").collect::<Vec<_>>(), vec!["/c/a", "/c/b"]);
+    assert_eq!(
+        split_path("C:/a;;C:/b;").collect::<Vec<_>>(),
+        vec!["C:/a", "C:/b"]
+    );
+    assert_eq!(
+        split_path("/c/a::/c/b").collect::<Vec<_>>(),
+        vec!["/c/a", "/c/b"]
+    );
 }
 
 #[test]
@@ -116,9 +155,14 @@ fn the_real_process_environment_has_a_usable_path() {
     // Guards the actual D31 failure mode: on a Windows-supplied block spelled `Path`,
     // a case-sensitive shell finds nothing.
     let env = Environment::from_process();
-    let path = env.get("PATH").expect("PATH must resolve regardless of Windows' spelling");
+    let path = env
+        .get("PATH")
+        .expect("PATH must resolve regardless of Windows' spelling");
     assert!(!path.is_empty());
 
     let for_script = env.get_for_script("PATH").unwrap();
-    assert!(for_script.starts_with('/'), "script form should be Unix-style, got {for_script}");
+    assert!(
+        for_script.starts_with('/'),
+        "script form should be Unix-style, got {for_script}"
+    );
 }

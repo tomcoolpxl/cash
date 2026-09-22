@@ -193,7 +193,10 @@ impl builtins::Command for ElevateCommand {
         }
 
         let script = if argument_list.is_empty() {
-            format!("Start-Process -Verb RunAs -FilePath '{}'", program.replace('\'', "''"))
+            format!(
+                "Start-Process -Verb RunAs -FilePath '{}'",
+                program.replace('\'', "''")
+            )
         } else {
             format!(
                 "Start-Process -Verb RunAs -FilePath '{}' -ArgumentList {argument_list}",

@@ -24,9 +24,30 @@ use crate::path;
 /// POSIX names that normalise to uppercase on import (D31), so scripts see the spelling
 /// they expect regardless of how Windows spelled it.
 const POSIX_NAMES: &[&str] = &[
-    "PATH", "HOME", "TMPDIR", "TMP", "TEMP", "USER", "USERNAME", "SHELL", "PWD", "OLDPWD",
-    "LANG", "LC_ALL", "TERM", "EDITOR", "VISUAL", "HOSTNAME", "PATHEXT", "COMSPEC",
-    "USERPROFILE", "APPDATA", "LOCALAPPDATA", "PROGRAMFILES", "SYSTEMROOT", "WINDIR",
+    "PATH",
+    "HOME",
+    "TMPDIR",
+    "TMP",
+    "TEMP",
+    "USER",
+    "USERNAME",
+    "SHELL",
+    "PWD",
+    "OLDPWD",
+    "LANG",
+    "LC_ALL",
+    "TERM",
+    "EDITOR",
+    "VISUAL",
+    "HOSTNAME",
+    "PATHEXT",
+    "COMSPEC",
+    "USERPROFILE",
+    "APPDATA",
+    "LOCALAPPDATA",
+    "PROGRAMFILES",
+    "SYSTEMROOT",
+    "WINDIR",
 ];
 
 /// Canonicalise a variable name for storage (D31).
@@ -80,7 +101,9 @@ impl Environment {
     /// Windows they *are* the same variable.
     #[must_use]
     pub fn get(&self, name: &str) -> Option<&str> {
-        self.vars.get(&name.to_ascii_uppercase()).map(|(_, v)| v.as_str())
+        self.vars
+            .get(&name.to_ascii_uppercase())
+            .map(|(_, v)| v.as_str())
     }
 
     /// Remove a variable, ignoring case.
@@ -161,22 +184,31 @@ pub fn split_path(value: &str) -> impl Iterator<Item = &str> {
         value.split(';').filter(|s| !s.is_empty()).collect()
     } else {
         let raw: Vec<&str> = value.split(':').collect();
+
+        // Where each segment starts in `value`. `split` consumed exactly one byte
+        // between segments, so this is just a running sum — and it is what makes
+        // rejoining a drive letter a borrow rather than an allocation.
+        let mut starts: Vec<usize> = Vec::with_capacity(raw.len());
+        let mut offset = 0usize;
+        for segment in &raw {
+            starts.push(offset);
+            offset += segment.len() + 1;
+        }
+
         let mut merged: Vec<&str> = Vec::with_capacity(raw.len());
         let mut index = 0;
         while index < raw.len() {
             let segment = raw[index];
+            let next = raw.get(index + 1).copied();
             let is_drive_letter = segment.len() == 1
                 && segment.as_bytes()[0].is_ascii_alphabetic()
-                && raw
-                    .get(index + 1)
-                    .is_some_and(|next| next.starts_with('/') || next.starts_with('\\'));
+                && next.is_some_and(|n| n.starts_with('/') || n.starts_with('\\'));
 
-            if is_drive_letter {
-                // Rejoin `C` + `/tools` into the original `C:/tools` slice.
-                let start = segment.as_ptr() as usize - value.as_ptr() as usize;
-                let next = raw[index + 1];
-                let end = next.as_ptr() as usize - value.as_ptr() as usize + next.len();
-                merged.push(&value[start..end]);
+            if let Some(next) = next.filter(|_| is_drive_letter) {
+                // Rejoin `C` + `/tools` into the original `C:/tools`, colon included.
+                let start = starts[index];
+                let end = starts[index + 1] + next.len();
+                merged.push(value.get(start..end).unwrap_or(segment));
                 index += 2;
             } else {
                 merged.push(segment);

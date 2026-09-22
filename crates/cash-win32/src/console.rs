@@ -67,7 +67,9 @@ impl InterruptState {
     /// A fresh state, as for a newly started foreground job.
     #[must_use]
     pub const fn new() -> Self {
-        Self { count: AtomicU32::new(0) }
+        Self {
+            count: AtomicU32::new(0),
+        }
     }
 
     /// Record an interrupt and report what should happen (D13).
@@ -110,8 +112,9 @@ pub fn interrupt_process_group(group_id: u32) -> io::Result<()> {
 /// to fix pipeline bytes: when cash pipes a child's output it reads raw bytes and the
 /// console code page is never consulted.
 pub fn set_utf8_code_page() -> io::Result<()> {
-    // SAFETY: plain Win32 calls with scalar arguments.
+    // SAFETY: a plain Win32 call taking a scalar code page; it touches no memory of ours.
     let out = unsafe { SetConsoleOutputCP(CODE_PAGE_UTF8) };
+    // SAFETY: as above, for the input code page.
     let inp = unsafe { SetConsoleCP(CODE_PAGE_UTF8) };
     if out == 0 || inp == 0 {
         return Err(io::Error::last_os_error());
@@ -153,8 +156,13 @@ where
         return Err(io::Error::last_os_error());
     }
 
+    // SAFETY: `THREADENTRY32` is a plain-old-data Win32 struct of integers, for which an
+    // all-zero bit pattern is valid; `dwSize` is filled in immediately below, which is the
+    // only field the API requires before the first call.
     let mut entry: THREADENTRY32 = unsafe { std::mem::zeroed() };
-    entry.dwSize = u32::try_from(size_of::<THREADENTRY32>()).expect("struct size fits in u32");
+    // The struct is 28 bytes and `dwSize` is a `u32` by ABI, so the fallback is
+    // unreachable — but saturating beats panicking in a function that returns a Result.
+    entry.dwSize = u32::try_from(size_of::<THREADENTRY32>()).unwrap_or(u32::MAX);
 
     let mut affected = 0usize;
 

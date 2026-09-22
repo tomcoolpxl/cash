@@ -347,10 +347,7 @@ async fn run_in_shell(
     // shell that goes on to read commands interactively below, since only such a shell
     // dispatches hooks.
     if read_commands_from_stdin {
-        cash_interactive::init_zsh_style_hooks(
-            &mut *shell_ref.lock().await,
-            &interactive_options,
-        )?;
+        cash_interactive::init_zsh_style_hooks(&mut *shell_ref.lock().await, &interactive_options)?;
     }
 
     // Load profile and rc files as appropriate.
@@ -678,13 +675,8 @@ mod tests {
 
     #[test]
     fn parse_script_and_args() -> Result<()> {
-        let parsed_args = CommandLineArgs::try_parse_from(args(&[
-            "cash",
-            "some-script",
-            "-x",
-            "1",
-            "--option",
-        ]))?;
+        let parsed_args =
+            CommandLineArgs::try_parse_from(args(&["cash", "some-script", "-x", "1", "--option"]))?;
         assert_eq!(
             parsed_args.script_args,
             ["some-script", "-x", "1", "--option"]

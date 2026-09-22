@@ -1017,6 +1017,10 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
         }
     }
 
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one match arm per word-piece kind; splitting it would scatter the                   grammar across helpers without making any arm easier to read"
+    )]
     #[async_recursion::async_recursion]
     async fn expand_word_piece(
         &mut self,
@@ -1104,8 +1108,7 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
                 // cmd.exe all emit CRLF and cannot be fixed at their source.
                 #[cfg(windows)]
                 {
-                    let trimmed_len =
-                        cash_win32::text::trim_substitution_output(&cmd_output).len();
+                    let trimmed_len = cash_win32::text::trim_substitution_output(&cmd_output).len();
                     cmd_output.truncate(trimmed_len);
                 }
                 #[cfg(not(windows))]

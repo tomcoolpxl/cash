@@ -50,10 +50,22 @@ pub fn cpu_time(pid: u32) -> Option<u64> {
         return None;
     }
 
-    let mut creation = FILETIME { dwLowDateTime: 0, dwHighDateTime: 0 };
-    let mut exit = FILETIME { dwLowDateTime: 0, dwHighDateTime: 0 };
-    let mut kernel = FILETIME { dwLowDateTime: 0, dwHighDateTime: 0 };
-    let mut user = FILETIME { dwLowDateTime: 0, dwHighDateTime: 0 };
+    let mut creation = FILETIME {
+        dwLowDateTime: 0,
+        dwHighDateTime: 0,
+    };
+    let mut exit = FILETIME {
+        dwLowDateTime: 0,
+        dwHighDateTime: 0,
+    };
+    let mut kernel = FILETIME {
+        dwLowDateTime: 0,
+        dwHighDateTime: 0,
+    };
+    let mut user = FILETIME {
+        dwLowDateTime: 0,
+        dwHighDateTime: 0,
+    };
 
     // SAFETY: handle is valid and all four out-params are valid FILETIMEs.
     let ok = unsafe {

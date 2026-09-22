@@ -22,8 +22,16 @@ fn main() {
         // or is not in force, and cash should be able to say which.
         eprintln!(
             "cash: session job {}, utf8 console {}, nested in another job {}",
-            if state.job_installed { "installed" } else { "UNAVAILABLE" },
-            if state.utf8_console { "on" } else { "unavailable" },
+            if state.job_installed {
+                "installed"
+            } else {
+                "UNAVAILABLE"
+            },
+            if state.utf8_console {
+                "on"
+            } else {
+                "unavailable"
+            },
             if state.nested { "yes" } else { "no" },
         );
     }

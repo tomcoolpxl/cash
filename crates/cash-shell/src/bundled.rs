@@ -137,7 +137,59 @@ pub fn maybe_dispatch() -> Option<i32> {
     argv.push(name.clone());
     argv.extend(args.iter().cloned());
 
+    #[cfg(windows)]
+    if path_emitting(name_str) && !asks_for_help(args) {
+        return Some(run_rendering_paths(*func, argv));
+    }
+
     Some(func(argv))
+}
+
+/// Bundled utilities whose standard output is a list of paths they *construct*, rather
+/// than paths they were handed (D3, §4 #14).
+///
+/// Keep this list minimal and justified. A utility belongs here only if every line it
+/// writes to standard output is a filesystem path that it built itself:
+///
+/// - `mktemp` joins a template onto `TMPDIR`, and its output is nearly always captured
+///   straight into a variable — the single largest source of backslash paths in scripts.
+/// - `realpath` and `readlink -f` canonicalise, which on Windows means asking the OS,
+///   which answers in backslashes.
+///
+/// Not here, deliberately: `find`, `grep -l`, `wc`, `du`, `dirname` and `basename` all
+/// echo back a spelling that reached them from the script, so they are already correct
+/// once their inputs are. `pwd` is a shell builtin and never reaches this dispatcher.
+#[cfg(windows)]
+fn path_emitting(name: &str) -> bool {
+    matches!(name, "mktemp" | "realpath" | "readlink")
+}
+
+/// Whether the invocation is asking for help or a version rather than doing work.
+///
+/// Those outputs are prose, not paths, and some argument parsers exit the process while
+/// printing them — which would strand the text in the capture file. Cheaper to skip.
+#[cfg(windows)]
+fn asks_for_help(args: &[OsString]) -> bool {
+    args.iter()
+        .any(|a| a == "--help" || a == "--version" || a == "-h")
+}
+
+/// Run a bundled utility with its standard output re-rendered in cash's canonical path
+/// spelling (D3).
+///
+/// If the capture itself fails — no writable temp directory, say — the utility still
+/// runs, just without the rendering. A wrong separator is a nuisance; refusing to run
+/// `mktemp` is a broken shell.
+#[cfg(windows)]
+fn run_rendering_paths(func: BundledFn, argv: Vec<OsString>) -> i32 {
+    match cash_win32::stdio::with_captured_stdout(|| func(argv.clone())) {
+        Ok((code, captured)) => {
+            let rendered = cash_win32::stdio::render_paths(&captured);
+            let _ = cash_win32::stdio::write_stdout(&rendered);
+            code
+        }
+        Err(_) => func(argv),
+    }
 }
 
 fn exit_code(code: ExecutionExitCode) -> i32 {

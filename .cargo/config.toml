@@ -1,0 +1,8 @@
+# `cargo xtask ...` runs the workspace's own task runner.
+#
+# CI invokes `cargo xtask check fmt`, `cargo xtask check lint` and
+# `cargo xtask test integration`, and a contributor is told to run the same
+# commands, so this alias is load-bearing rather than a convenience: without it
+# every one of those is "no such command: `xtask`".
+[alias]
+xtask = "run --package xtask --quiet --"

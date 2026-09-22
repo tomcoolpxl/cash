@@ -1726,10 +1726,18 @@ HERE2
 
         // Nested cases, and `esac` appearing inside a quoted string.
         let tokens = tokenize_str("$(case a in a) case b in b) echo n;; esac;; esac)")?;
-        assert_eq!(tokens.len(), 1, "nested case not consumed whole: {tokens:?}");
+        assert_eq!(
+            tokens.len(),
+            1,
+            "nested case not consumed whole: {tokens:?}"
+        );
 
         let tokens = tokenize_str("$(case a in a) echo \"an esac here\";; esac)")?;
-        assert_eq!(tokens.len(), 1, "quoted esac ended the construct: {tokens:?}");
+        assert_eq!(
+            tokens.len(),
+            1,
+            "quoted esac ended the construct: {tokens:?}"
+        );
 
         // A word merely containing `esac` must not terminate anything.
         let tokens = tokenize_str("$(echo esacular)")?;

@@ -1,6 +1,18 @@
 //! D8 command resolution, D46's ordering constraint, D32 argument encoding.
 
 #![cfg(windows)]
+#![allow(
+    clippy::tests_outside_test_module,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::needless_raw_string_hashes,
+    reason = "an integration test is outside a test module by construction, and a \
+              failed assumption in a test should abort it loudly rather than be \
+              threaded back through a Result. Shell snippets are spelled with hashes \
+              throughout, including where they are not strictly needed, because \
+              alternating the two forms by accident of content reads worse."
+)]
 
 use std::fs;
 use std::path::PathBuf;
@@ -39,21 +51,34 @@ fn a_bare_name_is_found_via_pathext() {
     let dir = scratch("pathext");
     fs::write(dir.join("tool.exe"), b"MZ").unwrap();
 
-    let found = resolve("tool", &[dir.clone()], &pathext(), &dir).expect("tool resolves");
+    let found =
+        resolve("tool", std::slice::from_ref(&dir), &pathext(), &dir).expect("tool resolves");
     assert_eq!(found, Dispatch::Native(dir.join("tool.exe")));
 }
 
 #[test]
 fn dispatch_follows_extension() {
     let dir = scratch("dispatch");
-    for (name, _) in [("a.exe", ()), ("b.cmd", ()), ("c.bat", ()), ("d.ps1", ())] {
+    for name in ["a.exe", "b.cmd", "c.bat", "d.ps1"] {
         fs::write(dir.join(name), b"x").unwrap();
     }
 
-    assert_eq!(classify(&dir.join("a.exe")), Dispatch::Native(dir.join("a.exe")));
-    assert_eq!(classify(&dir.join("b.cmd")), Dispatch::Batch(dir.join("b.cmd")));
-    assert_eq!(classify(&dir.join("c.bat")), Dispatch::Batch(dir.join("c.bat")));
-    assert_eq!(classify(&dir.join("d.ps1")), Dispatch::PowerShell(dir.join("d.ps1")));
+    assert_eq!(
+        classify(&dir.join("a.exe")),
+        Dispatch::Native(dir.join("a.exe"))
+    );
+    assert_eq!(
+        classify(&dir.join("b.cmd")),
+        Dispatch::Batch(dir.join("b.cmd"))
+    );
+    assert_eq!(
+        classify(&dir.join("c.bat")),
+        Dispatch::Batch(dir.join("c.bat"))
+    );
+    assert_eq!(
+        classify(&dir.join("d.ps1")),
+        Dispatch::PowerShell(dir.join("d.ps1"))
+    );
 }
 
 #[test]
@@ -65,7 +90,8 @@ fn a_zero_byte_exe_still_dispatches_natively() {
     let dir = scratch("appexeclink");
     fs::write(dir.join("python.exe"), b"").unwrap();
 
-    let found = resolve("python", &[dir.clone()], &pathext(), &dir).expect("python resolves");
+    let found =
+        resolve("python", std::slice::from_ref(&dir), &pathext(), &dir).expect("python resolves");
     assert_eq!(found, Dispatch::Native(dir.join("python.exe")));
 }
 
@@ -74,7 +100,12 @@ fn shebang_scripts_name_their_interpreter() {
     let dir = scratch("shebang");
     fs::write(dir.join("deploy"), b"#!/bin/bash\necho hi\n").unwrap();
 
-    let Dispatch::Shebang { interpreter, args, script } = classify(&dir.join("deploy")) else {
+    let Dispatch::Shebang {
+        interpreter,
+        args,
+        script,
+    } = classify(&dir.join("deploy"))
+    else {
         panic!("expected a shebang dispatch");
     };
     assert_eq!(interpreter, "/bin/bash");
@@ -87,7 +118,11 @@ fn shebang_survives_a_bom_and_crlf() {
     // D41 and D20 together: a script saved by a Windows editor has both, and the
     // shebang is invisible without handling them.
     let dir = scratch("shebang-bom");
-    fs::write(dir.join("s.sh"), b"\xEF\xBB\xBF#!/usr/bin/env bash\r\necho hi\r\n").unwrap();
+    fs::write(
+        dir.join("s.sh"),
+        b"\xEF\xBB\xBF#!/usr/bin/env bash\r\necho hi\r\n",
+    )
+    .unwrap();
 
     let (interpreter, args) = read_shebang(&dir.join("s.sh")).expect("shebang found");
     assert_eq!(interpreter, "/usr/bin/env");
@@ -120,7 +155,15 @@ fn path_entries_are_searched_in_order() {
 #[test]
 fn a_missing_command_resolves_to_nothing() {
     let dir = scratch("missing");
-    assert!(resolve("definitely-not-here", &[dir.clone()], &pathext(), &dir).is_none());
+    assert!(
+        resolve(
+            "definitely-not-here",
+            std::slice::from_ref(&dir),
+            &pathext(),
+            &dir
+        )
+        .is_none()
+    );
 }
 
 // --- D32: argument encoding ---
@@ -143,11 +186,14 @@ fn backslashes_before_a_quote_are_doubled() {
     // The rule that catches everyone: backslashes are literal EXCEPT before a quote.
     // A trailing backslash therefore only needs doubling when a closing quote follows
     // it — which is to say, only when the argument needed quoting in the first place.
-    assert_eq!(quote_argument(r#"C:\Program Files\"#), r#""C:\Program Files\\""#);
+    assert_eq!(
+        quote_argument(r"C:\Program Files\"),
+        r#""C:\Program Files\\""#
+    );
     assert_eq!(quote_argument(r#"a\"b"#), r#""a\\\"b""#);
 
     // No spaces, no quotes: nothing to escape, because nothing is being quoted.
-    assert_eq!(quote_argument(r#"C:\dir\"#), r#"C:\dir\"#);
+    assert_eq!(quote_argument(r"C:\dir\"), r"C:\dir\");
 }
 
 #[test]

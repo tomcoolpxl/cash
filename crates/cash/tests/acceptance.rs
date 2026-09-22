@@ -10,6 +10,18 @@
 //! instead.
 
 #![cfg(windows)]
+#![allow(
+    clippy::tests_outside_test_module,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::needless_raw_string_hashes,
+    reason = "an integration test is outside a test module by construction, and a \
+              failed assumption in a test should abort it loudly rather than be \
+              threaded back through a Result. Shell snippets are spelled with hashes \
+              throughout, including where they are not strictly needed, because \
+              alternating the two forms by accident of content reads worse."
+)]
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -94,19 +106,34 @@ fn every_spelling_of_a_directory_is_accepted() {
 
 #[test]
 fn relative_and_parent_navigation_stay_canonical() {
-    assert_eq!(cash("cd C:/Windows; cd System32; pwd").stdout, "C:/Windows/System32");
-    assert_eq!(cash("cd C:/Windows/System32; cd ..; pwd").stdout, "C:/Windows");
+    assert_eq!(
+        cash("cd C:/Windows; cd System32; pwd").stdout,
+        "C:/Windows/System32"
+    );
+    assert_eq!(
+        cash("cd C:/Windows/System32; cd ..; pwd").stdout,
+        "C:/Windows"
+    );
     // `cd -` echoes the directory it moved to, as bash does, so silence it to assert on
     // `pwd` alone. That echo is itself worth checking: it comes from $OLDPWD, which is a
     // separate rendering site from $PWD.
-    assert_eq!(cash("cd C:/Windows; cd C:/Users; cd - >/dev/null; pwd").stdout, "C:/Windows");
-    assert_eq!(cash("cd C:/Windows; cd C:/Users; cd -").stdout, "C:/Windows");
+    assert_eq!(
+        cash("cd C:/Windows; cd C:/Users; cd - >/dev/null; pwd").stdout,
+        "C:/Windows"
+    );
+    assert_eq!(
+        cash("cd C:/Windows; cd C:/Users; cd -").stdout,
+        "C:/Windows"
+    );
 }
 
 #[test]
 fn tmp_maps_to_the_real_temp_directory() {
     let out = cash("cd /tmp; pwd").stdout;
-    assert!(out.contains(':'), "/tmp did not resolve to a real path: {out}");
+    assert!(
+        out.contains(':'),
+        "/tmp did not resolve to a real path: {out}"
+    );
     assert!(!out.contains('\\'), "/tmp rendered with backslashes: {out}");
 }
 
@@ -116,7 +143,10 @@ fn home_agrees_with_pwd() {
     // fails when one is C:/Users/me and the other C:\Users\me.
     let out = cash(r#"cd ~; [ "$PWD" = "$HOME" ] && echo agree || echo "$PWD vs $HOME""#);
     assert_eq!(out.stdout, "agree");
-    assert!(!cash("echo $HOME").stdout.contains('\\'), "$HOME has backslashes");
+    assert!(
+        !cash("echo $HOME").stdout.contains('\\'),
+        "$HOME has backslashes"
+    );
 }
 
 #[test]
@@ -125,8 +155,14 @@ fn paths_derived_from_home_are_canonical_too() {
     // backslash separator.
     let histfile = cash("echo $HISTFILE").stdout;
     assert!(!histfile.is_empty(), "HISTFILE unset");
-    assert!(!histfile.contains('\\'), "HISTFILE has backslashes: {histfile}");
-    assert!(histfile.ends_with(".cash_history"), "unexpected HISTFILE: {histfile}");
+    assert!(
+        !histfile.contains('\\'),
+        "HISTFILE has backslashes: {histfile}"
+    );
+    assert!(
+        histfile.ends_with(".cash_history"),
+        "unexpected HISTFILE: {histfile}"
+    );
 }
 
 #[test]
@@ -134,7 +170,10 @@ fn unix_spellings_work_for_file_operations() {
     // D10's second chokepoint: every path cash resolves itself funnels through
     // absolute_path, so these work without each call site knowing about it.
     assert_eq!(cash("[ -f /c/Windows/win.ini ] && echo yes").stdout, "yes");
-    assert_eq!(cash("read -r l < /c/Windows/win.ini; [ -n \"$l\" ] && echo read").stdout, "read");
+    assert_eq!(
+        cash("read -r l < /c/Windows/win.ini; [ -n \"$l\" ] && echo read").stdout,
+        "read"
+    );
 }
 
 #[test]
@@ -182,7 +221,10 @@ fn read_drops_the_carriage_return() {
 fn an_explicit_delimiter_is_left_alone() {
     // D20 applies only where cash decides a line ends. `-d` means the caller has its own
     // framing, and a lone \r with no \n is data rather than a terminator.
-    assert_eq!(cash(r#"printf 'x:y' | { read -r -d ':' a; printf '%s' "$a"; }"#).stdout, "x");
+    assert_eq!(
+        cash(r#"printf 'x:y' | { read -r -d ':' a; printf '%s' "$a"; }"#).stdout,
+        "x"
+    );
 }
 
 #[test]
@@ -196,7 +238,10 @@ fn a_script_with_a_bom_runs() {
     bytes.extend_from_slice(b"#!/usr/bin/env bash\r\necho bom-ok\r\n");
     std::fs::write(&script, bytes).unwrap();
 
-    assert_eq!(run(&[script.to_string_lossy().into_owned()]).stdout, "bom-ok");
+    assert_eq!(
+        run(&[script.to_string_lossy().into_owned()]).stdout,
+        "bom-ok"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -205,8 +250,14 @@ fn a_script_with_a_bom_runs() {
 
 #[test]
 fn exit_codes_truncate_like_bash() {
-    assert_eq!(cash("cmd.exe /d /s /c exit 3 >/dev/null 2>&1; echo $?").stdout, "3");
-    assert_eq!(cash("cmd.exe /d /s /c exit 300 >/dev/null 2>&1; echo $?").stdout, "44");
+    assert_eq!(
+        cash("cmd.exe /d /s /c exit 3 >/dev/null 2>&1; echo $?").stdout,
+        "3"
+    );
+    assert_eq!(
+        cash("cmd.exe /d /s /c exit 300 >/dev/null 2>&1; echo $?").stdout,
+        "44"
+    );
 }
 
 #[test]
@@ -228,7 +279,10 @@ fn a_crash_can_never_be_reported_as_success() {
     // The reason D15 exists. 0xC0000100 & 0xFF is zero, so naive truncation reports a
     // crashed process as success and it passes an && chain.
     let access_violation = cash("cmd.exe /d /s /c exit 3221225477 >/dev/null 2>&1; echo $?");
-    assert_eq!(access_violation.stdout, "139", "should match a Linux segfault");
+    assert_eq!(
+        access_violation.stdout, "139",
+        "should match a Linux segfault"
+    );
 
     let truncates_to_zero = cash("cmd.exe /d /s /c exit 3221225728 >/dev/null 2>&1; echo $?");
     assert_ne!(truncates_to_zero.stdout, "0", "a crash reported as success");
@@ -240,14 +294,20 @@ fn a_crash_can_never_be_reported_as_success() {
 
 #[test]
 fn environment_lookup_ignores_case() {
-    assert_eq!(cash(r#"[ -n "$PATH" ] && [ -n "$Path" ] && [ -n "$path" ] && echo all"#).stdout, "all");
+    assert_eq!(
+        cash(r#"[ -n "$PATH" ] && [ -n "$Path" ] && [ -n "$path" ] && echo all"#).stdout,
+        "all"
+    );
 }
 
 #[test]
 fn an_exact_match_still_wins() {
     // The fallback must not collapse the namespace: a script defining its own $x and $X
     // keeps bash semantics.
-    assert_eq!(cash("x=lower; X=UPPER; printf '%s|%s' \"$x\" \"$X\"").stdout, "lower|UPPER");
+    assert_eq!(
+        cash("x=lower; X=UPPER; printf '%s|%s' \"$x\" \"$X\"").stdout,
+        "lower|UPPER"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -258,9 +318,18 @@ fn an_exact_match_still_wins() {
 fn case_inside_command_substitution_parses() {
     // A case pattern's `)` has no opener, so a plain paren count ends the substitution
     // at `a*)`. Needed fixing in both the tokenizer and the word parser.
-    assert_eq!(cash("x=$(case abc in a*) echo m;; esac); echo $x").stdout, "m");
-    assert_eq!(cash("x=$(case xyz in a*) echo m;; *) echo other;; esac); echo $x").stdout, "other");
-    assert_eq!(cash("x=$(case abc in (a*) echo paren;; esac); echo $x").stdout, "paren");
+    assert_eq!(
+        cash("x=$(case abc in a*) echo m;; esac); echo $x").stdout,
+        "m"
+    );
+    assert_eq!(
+        cash("x=$(case xyz in a*) echo m;; *) echo other;; esac); echo $x").stdout,
+        "other"
+    );
+    assert_eq!(
+        cash("x=$(case abc in (a*) echo paren;; esac); echo $x").stdout,
+        "paren"
+    );
     assert_eq!(
         cash("x=$(case a in a) case b in b) echo nest;; esac;; esac); echo $x").stdout,
         "nest"
@@ -303,7 +372,10 @@ fn winpath_handles_every_drive_letter() {
 
 #[test]
 fn winpath_reads_stdin_so_it_composes() {
-    assert_eq!(cash(r#"printf 'C:/a\n/c/b\n' | winpath -w"#).stdout, "C:\\a\nC:\\b");
+    assert_eq!(
+        cash(r#"printf 'C:/a\n/c/b\n' | winpath -w"#).stdout,
+        "C:\\a\nC:\\b"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -327,15 +399,25 @@ fn the_diagnostic_stays_quiet_when_it_would_not_help() {
     // Only fires when the literal spelling fails AND translating fixes it, which makes
     // false positives essentially impossible.
     let valid = cash(r#"enable -n cat 2>/dev/null; cat C:/Windows/win.ini >/dev/null"#);
-    assert!(!valid.stderr.contains("winpath"), "warned on a valid path: {}", valid.stderr);
+    assert!(
+        !valid.stderr.contains("winpath"),
+        "warned on a valid path: {}",
+        valid.stderr
+    );
 
     // /cash is a directory name, not a drive.
     let not_a_drive = cash(r#"enable -n cat 2>/dev/null; cat /cash/nope 2>/dev/null"#);
-    assert!(!not_a_drive.stderr.contains("winpath"), "warned on a non-drive path");
+    assert!(
+        !not_a_drive.stderr.contains("winpath"),
+        "warned on a non-drive path"
+    );
 
     // Translating would not help: it does not exist either way.
     let missing = cash(r#"enable -n cat 2>/dev/null; cat /d/definitely/not/here 2>/dev/null"#);
-    assert!(!missing.stderr.contains("winpath"), "warned when translation would not help");
+    assert!(
+        !missing.stderr.contains("winpath"),
+        "warned when translation would not help"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -417,7 +499,10 @@ fn traps_are_accepted_for_signals_cash_can_deliver() {
 
 #[test]
 fn the_exit_trap_actually_fires() {
-    assert_eq!(cash(r#"trap "echo cleanup" EXIT; echo body"#).stdout, "body\ncleanup");
+    assert_eq!(
+        cash(r#"trap "echo cleanup" EXIT; echo body"#).stdout,
+        "body\ncleanup"
+    );
 }
 
 #[test]
@@ -443,10 +528,16 @@ fn kill_is_a_builtin_and_lists_real_signal_numbers() {
 
     let listed = cash("kill -l").stdout;
     for expected in ["1) HUP", "2) INT", "9) KILL", "15) TERM"] {
-        assert!(listed.contains(expected), "kill -l missing {expected}:\n{listed}");
+        assert!(
+            listed.contains(expected),
+            "kill -l missing {expected}:\n{listed}"
+        );
     }
     // Only what cash can actually deliver: no ILL, PIPE, USR1 that would never fire.
-    assert!(!listed.contains("USR1"), "kill -l lists a signal cash cannot deliver");
+    assert!(
+        !listed.contains("USR1"),
+        "kill -l lists a signal cash cannot deliver"
+    );
 }
 
 #[test]
@@ -465,7 +556,8 @@ fn a_background_job_reports_the_pid_it_spawned() {
     // D11/D22. A background job runs as a tokio task executing the whole and-or list,
     // so the external it spawns is not one of the job's tasks — which left `$!` empty
     // and `kill %1` with nothing to signal. The task now reports the pid to the job.
-    let out = cash(r#"ping -n 20 127.0.0.1 >/dev/null & sleep 1; echo "$!"; kill -9 $! 2>/dev/null"#);
+    let out =
+        cash(r#"ping -n 20 127.0.0.1 >/dev/null & sleep 1; echo "$!"; kill -9 $! 2>/dev/null"#);
     let pid = out.stdout.lines().next().unwrap_or_default();
     assert!(
         pid.parse::<u32>().is_ok(),
@@ -473,9 +565,16 @@ fn a_background_job_reports_the_pid_it_spawned() {
         out.stderr
     );
 
-    let listed = cash(r#"ping -n 20 127.0.0.1 >/dev/null & sleep 1; jobs -p; kill -9 $! 2>/dev/null"#);
+    let listed =
+        cash(r#"ping -n 20 127.0.0.1 >/dev/null & sleep 1; jobs -p; kill -9 $! 2>/dev/null"#);
     assert!(
-        listed.stdout.lines().next().unwrap_or_default().parse::<u32>().is_ok(),
+        listed
+            .stdout
+            .lines()
+            .next()
+            .unwrap_or_default()
+            .parse::<u32>()
+            .is_ok(),
         "jobs -p should list a pid, got {:?}",
         listed.stdout
     );
@@ -487,12 +586,20 @@ fn killing_a_background_job_actually_kills_it() {
     let by_spec = cash(
         r#"ping -n 30 127.0.0.1 >/dev/null & sleep 1; p=$!; kill %1; sleep 1; kill -0 $p 2>/dev/null && echo alive || echo dead"#,
     );
-    assert_eq!(by_spec.stdout.lines().last().unwrap_or_default(), "dead", "kill %1 did not kill");
+    assert_eq!(
+        by_spec.stdout.lines().last().unwrap_or_default(),
+        "dead",
+        "kill %1 did not kill"
+    );
 
     let by_pid = cash(
         r#"ping -n 30 127.0.0.1 >/dev/null & sleep 1; p=$!; kill -9 $p; sleep 1; kill -0 $p 2>/dev/null && echo alive || echo dead"#,
     );
-    assert_eq!(by_pid.stdout.lines().last().unwrap_or_default(), "dead", "kill -9 $! did not kill");
+    assert_eq!(
+        by_pid.stdout.lines().last().unwrap_or_default(),
+        "dead",
+        "kill -9 $! did not kill"
+    );
 }
 
 #[test]
@@ -516,8 +623,8 @@ fn the_commands_ms_coreutils_warns_about_are_all_available() {
     // The other half of §2's table: names Microsoft ships but flags because PowerShell
     // aliases or cmd builtins shadow them. Under cash they are unambiguous.
     for name in [
-        "date", "echo", "mkdir", "rmdir", "cat", "cp", "ls", "mv", "pwd", "rm", "sleep",
-        "sort", "tee", "uptime",
+        "date", "echo", "mkdir", "rmdir", "cat", "cp", "ls", "mv", "pwd", "rm", "sleep", "sort",
+        "tee", "uptime",
     ] {
         let out = cash(&format!("type {name}"));
         assert!(
@@ -533,7 +640,11 @@ fn the_commands_ms_coreutils_warns_about_are_all_available() {
 fn timeout_works_without_an_external_one() {
     // 124 is the POSIX exit status for "the command timed out".
     let out = cash(r#"PATH=""; timeout 1 ping -n 30 127.0.0.1 >/dev/null; echo $?"#);
-    assert_eq!(out.stdout, "124", "timeout did not time out (stderr: {})", out.stderr);
+    assert_eq!(
+        out.stdout, "124",
+        "timeout did not time out (stderr: {})",
+        out.stderr
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -617,8 +728,15 @@ fn a_failed_exec_exits_a_non_interactive_shell() {
     // bash gives 127 here too.
     let out = cash("exec definitely-not-a-command; echo CONTINUED");
     assert_eq!(out.code, 127);
-    assert!(!out.stdout.contains("CONTINUED"), "shell continued past a failed exec");
-    assert!(out.stderr.contains("not found"), "no diagnostic: {}", out.stderr);
+    assert!(
+        !out.stdout.contains("CONTINUED"),
+        "shell continued past a failed exec"
+    );
+    assert!(
+        out.stderr.contains("not found"),
+        "no diagnostic: {}",
+        out.stderr
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -635,7 +753,10 @@ fn umask_exists_and_round_trips() {
     assert_eq!(cash("umask 077; umask").stdout, "0077");
     assert_eq!(cash("umask -p").stdout, "umask 0022");
     assert!(cash("umask -S").stdout.starts_with("u="));
-    assert_eq!(cash(r#"set -e; umask 022; echo survived"#).stdout, "survived");
+    assert_eq!(
+        cash(r#"set -e; umask 022; echo survived"#).stdout,
+        "survived"
+    );
 }
 
 #[test]
@@ -644,7 +765,10 @@ fn ulimit_exists_and_reports_unlimited() {
     // is no per-process descriptor cap on Windows to report.
     assert_eq!(cash("ulimit").stdout, "unlimited");
     assert_eq!(cash("ulimit -n").stdout, "unlimited");
-    assert_eq!(cash(r#"set -e; ulimit -n 4096; echo survived"#).stdout, "survived");
+    assert_eq!(
+        cash(r#"set -e; ulimit -n 4096; echo survived"#).stdout,
+        "survived"
+    );
     assert!(cash("ulimit -a").stdout.contains("open files"));
 }
 
@@ -679,7 +803,11 @@ fn starship_initialises_and_renders_a_prompt() {
     // accepted that spelling it failed with `command not found` on a path that plainly
     // existed.
     let init = cash(r#"eval "$(starship init bash)" && echo init-ok"#);
-    assert_eq!(init.stdout, "init-ok", "starship init failed: {}", init.stderr);
+    assert_eq!(
+        init.stdout, "init-ok",
+        "starship init failed: {}",
+        init.stderr
+    );
 
     // Drive one prompt cycle the way the interactive loop does. Starship installs its
     // prompt through PROMPT_COMMAND, which needs the DEBUG trap for command timing —
@@ -755,7 +883,11 @@ fn terminal_integration_is_on_by_default() {
         "-c".to_string(),
         "echo ok".to_string(),
     ]);
-    assert_eq!(disabled.stdout, "ok", "could not opt out: {}", disabled.stderr);
+    assert_eq!(
+        disabled.stdout, "ok",
+        "could not opt out: {}",
+        disabled.stderr
+    );
 
     let enabled = run(&[
         "--enable-terminal-integration=true".to_string(),

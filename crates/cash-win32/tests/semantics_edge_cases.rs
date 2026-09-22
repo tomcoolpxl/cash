@@ -6,6 +6,18 @@
 //! separators, and arguments built to defeat quoting.
 
 #![cfg(windows)]
+#![allow(
+    clippy::tests_outside_test_module,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::needless_raw_string_hashes,
+    reason = "an integration test is outside a test module by construction, and a \
+              failed assumption in a test should abort it loudly rather than be \
+              threaded back through a Result. Shell snippets are spelled with hashes \
+              throughout, including where they are not strictly needed, because \
+              alternating the two forms by accident of content reads worse."
+)]
 
 use cash_win32::cmd::{
     CmdHazard, build_cmd_command_line, build_command_line, escape_for_cmd, is_safe_for_cmd,
@@ -63,7 +75,10 @@ fn splitting_handles_every_terminator_arrangement() {
     assert_eq!(split_lines("a\n\n").collect::<Vec<_>>(), vec!["a", ""]);
     assert_eq!(split_lines("\n\na").collect::<Vec<_>>(), vec!["", "", "a"]);
     // Mixed endings, as a file touched on two platforms has.
-    assert_eq!(split_lines("a\r\nb\nc\r\n").collect::<Vec<_>>(), vec!["a", "b", "c"]);
+    assert_eq!(
+        split_lines("a\r\nb\nc\r\n").collect::<Vec<_>>(),
+        vec!["a", "b", "c"]
+    );
 }
 
 #[test]
@@ -79,7 +94,11 @@ fn bom_handling_is_exact() {
     assert_eq!(strip_bom(b"\xEF\xBB\xBF\xEF\xBB\xBFx"), b"\xEF\xBB\xBFx");
     // Partial or mismatched prefixes are untouched.
     assert_eq!(strip_bom(b"\xEF\xBB"), b"\xEF\xBB");
-    assert_eq!(strip_bom(b"\xFE\xFFx"), b"\xFE\xFFx", "UTF-16 BOM is not ours to strip");
+    assert_eq!(
+        strip_bom(b"\xFE\xFFx"),
+        b"\xFE\xFFx",
+        "UTF-16 BOM is not ours to strip"
+    );
     assert_eq!(strip_bom_str(""), "");
     assert_eq!(strip_bom_str("\u{FEFF}"), "");
 }
@@ -126,7 +145,10 @@ fn ntstatus_detection_covers_only_the_error_severity() {
     assert!(is_ntstatus_error(0xC000_0005));
     assert!(is_ntstatus_error(0xFFFF_FFFF));
     // Severity 0b10 is "warning", 0b01 "informational", 0b00 "success".
-    assert!(!is_ntstatus_error(0x8000_0005), "warning severity is not an error");
+    assert!(
+        !is_ntstatus_error(0x8000_0005),
+        "warning severity is not an error"
+    );
     assert!(!is_ntstatus_error(0x4000_0005));
     assert!(!is_ntstatus_error(0x0000_0005));
 }
@@ -134,7 +156,11 @@ fn ntstatus_detection_covers_only_the_error_severity() {
 #[test]
 fn known_crashes_keep_their_linux_equivalent_numbers() {
     // A script written on Linux compares against these exact values.
-    assert_eq!(from_windows(0xC000_0005), 139, "access violation != segfault");
+    assert_eq!(
+        from_windows(0xC000_0005),
+        139,
+        "access violation != segfault"
+    );
     assert_eq!(from_windows(0xC000_00FD), 139, "stack overflow != segfault");
     assert_eq!(from_windows(0xC000_0094), 136, "divide by zero != SIGFPE");
     assert_eq!(from_windows(0xC000_0409), 134, "buffer overrun != SIGABRT");
@@ -186,7 +212,11 @@ fn environment_lookup_is_case_insensitive_in_every_direction() {
         assert_eq!(env.get(spelling), Some("value"), "failed for {spelling}");
     }
     assert!(env.remove("mixed").is_some());
-    assert_eq!(env.get("MIXED"), None, "remove should be case-insensitive too");
+    assert_eq!(
+        env.get("MIXED"),
+        None,
+        "remove should be case-insensitive too"
+    );
 }
 
 #[test]
@@ -210,7 +240,10 @@ fn only_path_is_translated_for_children() {
     let pythonpath = &block.iter().find(|(k, _)| k == "PYTHONPATH").unwrap().1;
 
     assert_eq!(path, r"C:\a;C:\b");
-    assert_eq!(pythonpath, r"C:\a;C:\b", "PYTHONPATH must pass through verbatim");
+    assert_eq!(
+        pythonpath, r"C:\a;C:\b",
+        "PYTHONPATH must pass through verbatim"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -264,7 +297,11 @@ fn cmd_escaping_covers_every_metacharacter() {
 fn cmd_hazards_are_classified_precisely() {
     assert_eq!(is_safe_for_cmd(""), Ok(()));
     assert_eq!(is_safe_for_cmd("plain"), Ok(()));
-    assert_eq!(is_safe_for_cmd(r"C:\a b\c"), Ok(()), "spaces alone are fine");
+    assert_eq!(
+        is_safe_for_cmd(r"C:\a b\c"),
+        Ok(()),
+        "spaces alone are fine"
+    );
 
     assert_eq!(is_safe_for_cmd("a%b"), Err(CmdHazard::PercentExpansion));
     assert_eq!(is_safe_for_cmd("a\rb"), Err(CmdHazard::Newline));
