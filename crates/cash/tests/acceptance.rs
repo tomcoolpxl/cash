@@ -647,3 +647,49 @@ fn ulimit_exists_and_reports_unlimited() {
     assert_eq!(cash(r#"set -e; ulimit -n 4096; echo survived"#).stdout, "survived");
     assert!(cash("ulimit -a").stdout.contains("open files"));
 }
+
+// ---------------------------------------------------------------------------
+// D37 — Starship. §1 states this as a requirement, not a nice-to-have.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn a_unix_spelled_command_path_resolves() {
+    // D3/D8: a command spelled as a path is a path *cash* resolves, so every accepted
+    // spelling works. D4 only forbids rewriting arguments, where cash cannot know which
+    // are paths; a command name is unambiguous.
+    //
+    // This is what makes D37 possible — see below.
+    assert_eq!(
+        cash(r#""/c/Windows/System32/ping.exe" -n 1 127.0.0.1 >/dev/null && echo ok"#).stdout,
+        "ok"
+    );
+}
+
+#[test]
+fn starship_initialises_and_renders_a_prompt() {
+    // Skipped rather than failed where starship is absent: CI runners do not have it,
+    // and the requirement is about cash not breaking it, not about installing it.
+    if cash("command -v starship >/dev/null && echo yes").stdout != "yes" {
+        eprintln!("skipped: starship is not installed");
+        return;
+    }
+
+    // `starship init bash` emits an eval of an absolute path that, on this platform, is
+    // Unix-spelled: '/c/Program Files/starship/bin/starship.exe'. Before commands
+    // accepted that spelling it failed with `command not found` on a path that plainly
+    // existed.
+    let init = cash(r#"eval "$(starship init bash)" && echo init-ok"#);
+    assert_eq!(init.stdout, "init-ok", "starship init failed: {}", init.stderr);
+
+    // Drive one prompt cycle the way the interactive loop does. Starship installs its
+    // prompt through PROMPT_COMMAND, which needs the DEBUG trap for command timing —
+    // hence D37's dependence on the signal work.
+    let rendered = cash(
+        r#"eval "$(starship init bash)"; eval "$PROMPT_COMMAND" 2>/dev/null; eval "echo \"$PS1\"""#,
+    );
+    assert!(
+        !rendered.stdout.trim().is_empty(),
+        "starship rendered nothing (stderr: {})",
+        rendered.stderr
+    );
+}

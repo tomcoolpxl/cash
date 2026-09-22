@@ -415,7 +415,22 @@ impl<'a, SE: extensions::ShellExtensions> SimpleCommand<'a, SE> {
                 Err(ErrorKind::CommandNotFound(self.command_name).into())
             }
         } else {
+            // cash (D3/D8): a command spelled with a path is a path *cash* resolves, so
+            // every accepted spelling works here — `/c/tools/x.exe`, `C:/tools/x.exe`,
+            // a quoted backslash form.
+            //
+            // D4 is not in tension with this: it forbids rewriting *arguments*, where
+            // cash cannot know which are paths. The command name is unambiguous.
+            //
+            // This is what makes D37 possible. `starship init bash` emits
+            // `eval -- "$('/c/Program Files/starship/bin/starship.exe' init bash ...)"`,
+            // and without this the prompt fails with `command not found` on a path that
+            // plainly exists.
+            #[cfg(windows)]
+            let command_name = cash_win32::path::accept_path(&self.command_name);
+            #[cfg(not(windows))]
             let command_name = PathBuf::from(self.command_name.clone());
+
             self.execute_via_external(command_name.as_path())
         }
     }

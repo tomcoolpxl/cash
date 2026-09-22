@@ -807,6 +807,23 @@ is inherited via D9 rather than built.
 When D18's replacement trigger fires, Starship becomes a **regression risk**. The M1 test
 exists precisely to have a baseline at that moment.
 
+**Status: working, and tested.** It needed one fix that was not obvious from the spec.
+`starship init bash` emits
+
+```
+eval -- "$('/c/Program Files/starship/bin/starship.exe' init bash --print-full-init)"
+```
+
+— a *Unix-spelled command path*. cash rejected it with `command not found` on a path that
+plainly existed, because D3's acceptance had been wired into file operations but not into
+command resolution.
+
+That was an oversight rather than a tension with D4: D4 forbids rewriting *arguments*,
+where cash cannot know which are paths. A command name is unambiguous, and resolving it
+is exactly what D3 means by "paths cash resolves itself". Commands now accept every
+spelling, and the prompt renders in full — directory, git branch, git status, language
+versions.
+
 Starship is Rust and emits `\n`, so D20 never touches its output.
 
 ### D38 — Ships via winget and Scoop, with a Windows Terminal profile fragment
