@@ -620,3 +620,30 @@ fn a_failed_exec_exits_a_non_interactive_shell() {
     assert!(!out.stdout.contains("CONTINUED"), "shell continued past a failed exec");
     assert!(out.stderr.contains("not found"), "no diagnostic: {}", out.stderr);
 }
+
+// ---------------------------------------------------------------------------
+// Builtins that exist because their absence would break scripts (D2).
+// ---------------------------------------------------------------------------
+
+#[test]
+fn umask_exists_and_round_trips() {
+    // Windows has no umask — permissions come from inherited ACLs (D23). But `umask 022`
+    // is a commonplace line, and answering `command not found` kills any script under
+    // `set -e`. The value is remembered so a script that sets and re-reads it agrees
+    // with itself.
+    assert_eq!(cash("umask").stdout, "0022");
+    assert_eq!(cash("umask 077; umask").stdout, "0077");
+    assert_eq!(cash("umask -p").stdout, "umask 0022");
+    assert!(cash("umask -S").stdout.starts_with("u="));
+    assert_eq!(cash(r#"set -e; umask 022; echo survived"#).stdout, "survived");
+}
+
+#[test]
+fn ulimit_exists_and_reports_unlimited() {
+    // Also no Win32 equivalent — and `unlimited` is accurate rather than evasive: there
+    // is no per-process descriptor cap on Windows to report.
+    assert_eq!(cash("ulimit").stdout, "unlimited");
+    assert_eq!(cash("ulimit -n").stdout, "unlimited");
+    assert_eq!(cash(r#"set -e; ulimit -n 4096; echo survived"#).stdout, "survived");
+    assert!(cash("ulimit -a").stdout.contains("open files"));
+}

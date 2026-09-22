@@ -111,7 +111,10 @@ mod true_;
 mod type_;
 #[cfg(all(feature = "builtin.ulimit", unix))]
 mod ulimit;
-#[cfg(all(feature = "builtin.umask", unix))]
+// cash: Windows has no rlimits; a separate, deliberately small builtin.
+#[cfg(all(feature = "builtin.ulimit", windows))]
+mod ulimit_win;
+#[cfg(feature = "builtin.umask")]
 mod umask;
 #[cfg(feature = "builtin.unalias")]
 mod unalias;

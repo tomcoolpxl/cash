@@ -133,7 +133,9 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
     m.insert("type".into(), builtin::<type_::TypeCommand, SE>());
     #[cfg(all(feature = "builtin.ulimit", unix))]
     m.insert("ulimit".into(), builtin::<ulimit::ULimitCommand, SE>());
-    #[cfg(all(feature = "builtin.umask", unix))]
+    #[cfg(all(feature = "builtin.ulimit", windows))]
+    m.insert("ulimit".into(), builtin::<ulimit_win::UlimitCommand, SE>());
+    #[cfg(feature = "builtin.umask")]
     m.insert("umask".into(), builtin::<umask::UmaskCommand, SE>());
     #[cfg(feature = "builtin.unalias")]
     m.insert("unalias".into(), builtin::<unalias::UnaliasCommand, SE>());

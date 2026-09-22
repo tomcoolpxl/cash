@@ -2,15 +2,15 @@
 
 A bash-language shell whose execution model is **Win32**, hosted in Windows Terminal.
 
-Not a POSIX emulation layer, not a VM, no `msys-2.0.dll` underneath. The target is
-running ordinary bash scripts on Windows — Terraform wrappers, CI glue, pipelines with
-`xargs`, `sed`, `grep`, `jq` — where the processes, paths and handles are all genuinely
-native.
+Avoided:
 
-> **Status: early.** The Win32 semantics layer works and is tested. It is not yet wired
-> into the shell's own execution path, so `cash.exe` today is brush plus cash's process
-> containment and console setup. See [spec.md](spec.md) §8 for exactly what is and is not
-> done.
+- not a POSIX emulation layer
+- not a VM
+- no `msys-2.0.dll` underneath
+
+The target is running ordinary bash scripts on Windows - Terraform wrappers, CI glue, pipelines with
+`xargs`, `sed`, `grep`, `jq` - where the processes, paths and handles are all genuinely
+native.
 
 ## Why bother
 
@@ -44,7 +44,7 @@ outer alone — no cleanup, no signal, nothing able to cooperate. Both descendan
 Full rationale in [spec.md](spec.md); the short version:
 
 | | |
-|---|---|
+| --- | --- |
 | **Paths** | `C:/foo` is canonical. `C:\foo`, `/c/foo`, `/tmp`, `/dev/null` are all accepted; `pwd` always prints `C:/foo`. |
 | **Arguments** | Never rewritten. No guessing which argv entries are paths — that is where MSYS2 needed `MSYS2_ARG_CONV_EXCL`. |
 | **`PATH`** | The one translated variable: `:`-separated for scripts, `;`-separated for children. |

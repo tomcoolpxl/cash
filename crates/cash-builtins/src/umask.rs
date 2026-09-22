@@ -1,7 +1,10 @@
-use cash_core::{ErrorKind, ExecutionResult, builtins};
+use cash_core::{ExecutionResult, builtins};
+#[cfg(unix)]
+use cash_core::ErrorKind;
+#[cfg(unix)]
 use cfg_if::cfg_if;
 use clap::Parser;
-#[cfg(not(any(target_os = "linux", target_os = "android")))]
+#[cfg(all(unix, not(any(target_os = "linux", target_os = "android"))))]
 use nix::sys::stat::Mode;
 use std::io::Write;
 
@@ -57,6 +60,33 @@ impl builtins::Command for UmaskCommand {
     }
 }
 
+/// cash: Windows has no umask.
+///
+/// File permissions come from ACLs inherited from the parent directory (D23), and there
+/// is no process-wide mask to consult or set. The value is nonetheless *remembered*, so
+/// that `umask 022` and a later `umask` round-trip as a script expects.
+///
+/// Absent entirely would be worse. `umask 022` is a commonplace line, and a shell that
+/// answers `command not found` kills any script running under `set -e` — a direct hit on
+/// D2. Reporting the stored value is the least-surprising behaviour available on a
+/// platform with no such concept.
+#[cfg(windows)]
+static REMEMBERED_UMASK: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0o022);
+
+#[cfg(windows)]
+#[expect(clippy::unnecessary_wraps)]
+fn get_umask() -> Result<u32, cash_core::Error> {
+    Ok(REMEMBERED_UMASK.load(std::sync::atomic::Ordering::Relaxed))
+}
+
+#[cfg(windows)]
+#[expect(clippy::unnecessary_wraps)]
+fn set_umask(value: u32) -> Result<(), cash_core::Error> {
+    REMEMBERED_UMASK.store(value, std::sync::atomic::Ordering::Relaxed);
+    Ok(())
+}
+
+#[cfg(unix)]
 cfg_if! {
     if #[cfg(any(target_os = "linux", target_os = "android"))] {
         fn get_umask() -> Result<u32, cash_core::Error> {
@@ -73,6 +103,7 @@ cfg_if! {
     }
 }
 
+#[cfg(unix)]
 fn set_umask(value: nix::sys::stat::mode_t) -> Result<(), cash_core::Error> {
     // value of mode_t can be platform dependent
     let mode = nix::sys::stat::Mode::from_bits(value).ok_or_else(|| ErrorKind::InvalidUmask)?;
