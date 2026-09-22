@@ -37,6 +37,12 @@ cash-win32 = { path = "../cash-win32" }
 name = "acceptance"
 path = "tests/acceptance.rs"
 
+# The awkward corners: spaces in paths, empty files, nesting, and the boundaries
+# where two decisions meet.
+[[test]]
+name = "acceptance-edge-cases"
+path = "tests/acceptance_edge_cases.rs"
+
 # The differential suite absorbed from brush: the same script under cash and real
 # bash, diffing stdout, stderr, exit status and filesystem effects. D43 runs these
 # on Linux, where a reference bash exists.

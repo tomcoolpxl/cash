@@ -370,6 +370,21 @@ impl<'a, IB: InputBackend, SE: cash_core::ShellExtensions> InteractiveShell<'a, 
         // Update history (if applicable).
         shell.add_to_history(command_line.trim_end_matches('\n'))?;
 
+        // cash (D44): append to the history file now, not at session end.
+        //
+        // D6 tears the session down without unwinding — a crash, Task Manager, or the
+        // job object closing — so a write-on-exit history loses everything typed in the
+        // session. `flush` appends only unsaved entries, so this writes the line just
+        // added rather than rewriting the file, which also makes concurrent Windows
+        // Terminal tabs safe: each appends its own lines.
+        //
+        // Failure is not fatal and is not announced: bash is quiet here too, and a
+        // read-only or contended history file should not stop the shell accepting
+        // commands.
+        if let Err(e) = shell.save_history() {
+            tracing::debug!("couldn't append to history: {e}");
+        }
+
         // preexec hooks get the line as entered; they are the last thing before it runs, so
         // their break is this function's.
         crate::zsh_hooks::run_preexec(shell, options, command_line).await
