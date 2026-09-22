@@ -683,6 +683,16 @@ pub(crate) fn execute_external_command(
                 tracing::warn!("could not retrieve pid for child process");
             }
 
+            // cash (D11/D22): report upward so a background job can answer `$!` and
+            // `kill %1`. Only set when running under a background job; otherwise the
+            // caller already holds the child.
+            if let Some(pid) = pid
+                && let Some(sink) = &context.params.spawned_pid_sink
+                && let Ok(mut pids) = sink.lock()
+            {
+                pids.push(pid);
+            }
+
             Ok(ExecutionSpawnResult::StartedProcess(
                 processes::ChildProcess::new(child, pid, actual_pgid),
             ))

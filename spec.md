@@ -329,16 +329,28 @@ failure D20 and D26 both reject.
 reference for its default signal, which meant `kill` fell through to whatever external
 `kill.exe` happened to be on `PATH`.
 
-**Known limitation — background job process tracking.** `$!` is empty and `kill %1`
-fails, because a background job is created as `JobTask::Internal(join_handle)`: a tokio
-task running the whole and-or list, not a tracked process. The child's pid lives inside
-that task and never reaches the job.
+**Background job process tracking — fixed.** `$!` was empty and `kill %1` had nothing to
+signal, because a background job is created as `JobTask::Internal(join_handle)`: a tokio
+task running the whole and-or list, not a tracked process. The child's pid lived inside
+that task and never reached the job.
 
-This is inherited rather than Windows-specific — it behaves the same on Linux — but D11
-claims cash owns job control, so it is cash's to fix. Doing so means representing a
-background job by the process it actually spawned, which is a change to how jobs are
-built rather than a signal-layer fix. Until then `jobs`, `fg` and `bg` work while
-anything needing a pid does not.
+Rather than restructure how jobs are built, the job now installs a sink in
+`ExecutionParameters` before spawning the task, and the spawn site reports into it. The
+job consults the sink when its own tasks yield no pid. Small, and it leaves the existing
+`External` path untouched:
+
+```
+$!            a real pid
+jobs -p       lists it
+kill %1       reaps the job
+kill -9 $!    kills the process
+```
+
+This was inherited rather than Windows-specific — it behaved the same on Linux — but D11
+claims cash owns job control, so it was cash's to fix.
+
+- OPEN: `$(jobs -p)` is empty where bash lists the job, because a subshell does not
+  inherit the job table. A separate divergence from this one, and not yet in §4.
 
 ### D12 — The name is cash
 

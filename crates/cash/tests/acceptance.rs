@@ -459,3 +459,38 @@ fn signal_names_and_numbers_round_trip() {
     assert_eq!(cash("kill -l TERM").stdout, "15");
     assert_eq!(cash("kill -l 2").stdout, "INT");
 }
+
+#[test]
+fn a_background_job_reports_the_pid_it_spawned() {
+    // D11/D22. A background job runs as a tokio task executing the whole and-or list,
+    // so the external it spawns is not one of the job's tasks — which left `$!` empty
+    // and `kill %1` with nothing to signal. The task now reports the pid to the job.
+    let out = cash(r#"ping -n 20 127.0.0.1 >/dev/null & sleep 1; echo "$!"; kill -9 $! 2>/dev/null"#);
+    let pid = out.stdout.lines().next().unwrap_or_default();
+    assert!(
+        pid.parse::<u32>().is_ok(),
+        "$! should be a pid, got {pid:?} (stderr: {})",
+        out.stderr
+    );
+
+    let listed = cash(r#"ping -n 20 127.0.0.1 >/dev/null & sleep 1; jobs -p; kill -9 $! 2>/dev/null"#);
+    assert!(
+        listed.stdout.lines().next().unwrap_or_default().parse::<u32>().is_ok(),
+        "jobs -p should list a pid, got {:?}",
+        listed.stdout
+    );
+}
+
+#[test]
+fn killing_a_background_job_actually_kills_it() {
+    // Both spellings D22 distinguishes: a job spec reaps the job, a bare pid the process.
+    let by_spec = cash(
+        r#"ping -n 30 127.0.0.1 >/dev/null & sleep 1; p=$!; kill %1; sleep 1; kill -0 $p 2>/dev/null && echo alive || echo dead"#,
+    );
+    assert_eq!(by_spec.stdout.lines().last().unwrap_or_default(), "dead", "kill %1 did not kill");
+
+    let by_pid = cash(
+        r#"ping -n 30 127.0.0.1 >/dev/null & sleep 1; p=$!; kill -9 $p; sleep 1; kill -0 $p 2>/dev/null && echo alive || echo dead"#,
+    );
+    assert_eq!(by_pid.stdout.lines().last().unwrap_or_default(), "dead", "kill -9 $! did not kill");
+}

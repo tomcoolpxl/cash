@@ -38,6 +38,16 @@ pub struct ExecutionParameters {
     /// Whether `errexit` (exit on error) behavior should be
     /// suppressed in this execution context. Defaults to `false`.
     pub suppress_errexit: bool,
+
+    /// Where to report the process IDs of externals spawned under these parameters.
+    ///
+    /// cash (D11/D22): a background job runs as a tokio task executing a whole and-or
+    /// list, so the child it spawns is invisible to the job that owns it — which left
+    /// `$!` empty and `kill %1` unable to find anything to signal. The job installs a
+    /// sink here before spawning the task, and the spawn site fills it in.
+    ///
+    /// `None` outside a background job, where the caller already holds the child.
+    pub(crate) spawned_pid_sink: Option<std::sync::Arc<std::sync::Mutex<Vec<i32>>>>,
 }
 
 impl ExecutionParameters {
@@ -291,17 +301,25 @@ fn spawn_async_ao_list_in_task<'a, SE: extensions::ShellExtensions>(
         cloned_params.set_fd(openfiles::OpenFiles::STDIN_FD, null);
     }
 
+    // cash (D11/D22): give the task somewhere to report the pid it spawns, so the job
+    // can answer `$!` and `kill %1`.
+    let pid_sink = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    cloned_params.spawned_pid_sink = Some(std::sync::Arc::clone(&pid_sink));
+
     let join_handle = tokio::spawn(async move {
         cloned_ao_list
             .execute(&mut cloned_shell, &cloned_params)
             .await
     });
 
-    shell.jobs_mut().add_as_current(jobs::Job::new(
-        [jobs::JobTask::Internal(join_handle)],
-        ao_list.to_string(),
-        jobs::JobState::Running,
-    ))
+    shell.jobs_mut().add_as_current(
+        jobs::Job::new(
+            [jobs::JobTask::Internal(join_handle)],
+            ao_list.to_string(),
+            jobs::JobState::Running,
+        )
+        .with_spawned_pids(pid_sink),
+    )
 }
 
 #[async_trait::async_trait]

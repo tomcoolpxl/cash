@@ -272,6 +272,13 @@ pub struct Job {
 
     /// The current operational state of the job.
     pub state: JobState,
+
+    /// Process IDs reported by a background task running under this job.
+    ///
+    /// cash (D11/D22): a background job's tasks are `Internal` — a tokio task executing
+    /// the whole and-or list — so the externals it spawns are not job tasks and cannot
+    /// be found by walking them. The task reports them here instead.
+    spawned_pids: Option<std::sync::Arc<std::sync::Mutex<Vec<sys::process::ProcessId>>>>,
 }
 
 impl Display for Job {
@@ -303,7 +310,18 @@ impl Job {
             annotation: JobAnnotation::None,
             command_line,
             state,
+            spawned_pids: None,
         }
+    }
+
+    /// Attach the sink that a background task reports spawned process IDs into.
+    #[must_use]
+    pub(crate) fn with_spawned_pids(
+        mut self,
+        pids: std::sync::Arc<std::sync::Mutex<Vec<sys::process::ProcessId>>>,
+    ) -> Self {
+        self.spawned_pids = Some(pids);
+        self
     }
 
     /// Returns a pid-style string for the job.
@@ -456,7 +474,21 @@ impl Job {
                 JobTask::Internal(_) => (),
             }
         }
-        None
+
+        // cash (D11/D22): an `Internal` task is a tokio task running the and-or list, so
+        // the process it spawned is not among `tasks`. It reports the pid here instead,
+        // which is what makes `$!` and `kill %1` work for a background job.
+        self.spawned_pids
+            .as_ref()
+            .and_then(|pids| pids.lock().ok()?.first().copied())
+    }
+
+    /// Every process ID this job has spawned, for tree-scoped operations (D22).
+    pub fn spawned_pids(&self) -> Vec<sys::process::ProcessId> {
+        self.spawned_pids
+            .as_ref()
+            .and_then(|pids| pids.lock().ok().map(|p| p.clone()))
+            .unwrap_or_default()
     }
 
     /// Tries to retrieve the process group ID (PGID) of the job.
