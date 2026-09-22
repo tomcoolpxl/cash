@@ -1171,7 +1171,7 @@ someone who expected bash, so additions need to earn their place.
 | 17 | `sh` and `bash` are cash, ahead of `PATH` | Otherwise `bash` is the WSL launcher and a script continues under Linux | D7 |
 | 18 | `chmod` changes only the read-only attribute | Windows has no execute or read bit outside ACLs; the rest warns and returns 0 | D23, D34 |
 | 19 | `which` reports builtins; `stat` is not carried | `which` must agree with the shell; uutils' `stat` is Unix-only | D8, D48 |
-| 20 | `id` reports a SID and a RID, not a uid | Windows identifies a user by SID; the MSYS stand-in invented a uid nothing else recognises | D48 |
+| 20 | `id`, `$UID` and `$EUID` report the account's RID, not a uid | Windows identifies a user by SID; the RID is its last component and the nearest true equivalent | D48 |
 | 21 | `$SHELL` names cash, replacing whatever launched it | `make`, `npm run` and editors read it to decide what to launch | D5 |
 | 22 | A bundled producer prints `write error: Broken pipe` when its consumer leaves | Windows has no `SIGPIPE`, so uutils reports the failed write instead of dying silently | D48 |
 

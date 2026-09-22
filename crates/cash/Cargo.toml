@@ -85,6 +85,11 @@ path = "tests/completion_tests.rs"
 name = "completion-windows"
 path = "tests/completion_windows.rs"
 
+# D22/§4 #20: $UID agreeing with `id`, and `jobs -l`.
+[[test]]
+name = "identity-and-jobs"
+path = "tests/identity_and_jobs.rs"
+
 # `select`, a bash construct cash could not parse at all.
 [[test]]
 name = "select-clause"

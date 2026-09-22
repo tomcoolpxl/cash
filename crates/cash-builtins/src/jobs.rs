@@ -38,9 +38,6 @@ impl builtins::Command for JobsCommand {
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<cash_core::ExecutionResult, Self::Error> {
-        if self.also_show_pids {
-            return error::unimp("jobs -l");
-        }
         if self.list_changed_only {
             return error::unimp("jobs -n");
         }
@@ -51,6 +48,20 @@ impl builtins::Command for JobsCommand {
                 if self.show_pids_only {
                     if let Some(pid) = snapshot.pid {
                         writeln!(context.stdout(), "{pid}")?;
+                    }
+                } else if self.also_show_pids
+                    && let Some(pid) = snapshot.pid
+                {
+                    // A subshell sees the parent's jobs as snapshots, and a snapshot does
+                    // carry its pid — `jobs -l` inside `$( )` would otherwise differ from
+                    // the same command outside it.
+                    let rendered = snapshot.to_string();
+                    match insertion_point(&rendered) {
+                        Some(at) => {
+                            let (marker, rest) = rendered.split_at(at);
+                            writeln!(context.stdout(), "{marker} {pid} {rest}")?;
+                        }
+                        None => writeln!(context.stdout(), "{rendered} {pid}")?,
                     }
                 } else {
                     writeln!(context.stdout(), "{snapshot}")?;
@@ -85,10 +96,46 @@ impl JobsCommand {
             if let Some(pid) = job.representative_pid() {
                 writeln!(context.stdout(), "{pid}")?;
             }
-        } else {
-            writeln!(context.stdout(), "{job}")?;
+            return Ok(());
         }
+
+        // cash: `jobs -l` used to refuse outright. It is how a person finds the pid of a
+        // background job to hand to something else, and the pid is already known — the
+        // job tracks it for `$!` and `kill %1` (D22).
+        if self.also_show_pids {
+            let rendered = job.to_string();
+            match job.representative_pid() {
+                // bash puts the pid between the job marker and the status:
+                //     [1]+ 12345 Running   sleep 30 &
+                //
+                // The marker ends after `]` and its optional `+`/`-`; splitting on the
+                // first space instead would land inside the command, because the job's
+                // own rendering separates status from command with a tab.
+                Some(pid) => match insertion_point(&rendered) {
+                    Some(at) => {
+                        let (marker, rest) = rendered.split_at(at);
+                        writeln!(context.stdout(), "{marker} {pid} {rest}")?;
+                    }
+                    None => writeln!(context.stdout(), "{rendered} {pid}")?,
+                },
+                None => writeln!(context.stdout(), "{rendered}")?,
+            }
+            return Ok(());
+        }
+
+        writeln!(context.stdout(), "{job}")?;
 
         Ok(())
     }
+}
+
+/// Where the pid goes in a `jobs -l` line: just past the `[N]` marker and any `+`/`-`.
+fn insertion_point(rendered: &str) -> Option<usize> {
+    let close = rendered.find(']')? + 1;
+    let after = rendered
+        .get(close..)
+        .and_then(|rest| rest.chars().next())
+        .filter(|c| matches!(c, '+' | '-'))
+        .map_or(close, |c| close + c.len_utf8());
+    Some(after)
 }
