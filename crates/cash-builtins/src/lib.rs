@@ -18,6 +18,16 @@ mod win;
 #[cfg(windows)]
 mod ps;
 
+// cash (D48, §4 #20): `hostname`, so the machine has one name inside the shell rather
+// than the DNS API's and Windows' own.
+#[cfg(windows)]
+mod hostname;
+
+// cash (D48): `top`, which Windows has no equivalent of at all — procps was never
+// ported, and the Cygwin build reports pids `kill` cannot use.
+#[cfg(windows)]
+mod top;
+
 // cash (D48): one pager behind both `less` and `more`. `less` is not coreutils, and the
 // bundled `more` corrupted a pipe.
 #[cfg(windows)]

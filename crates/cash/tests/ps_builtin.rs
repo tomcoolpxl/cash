@@ -70,10 +70,13 @@ fn the_shell_lists_itself() {
 
 #[test]
 fn a_header_names_the_columns() {
+    // The default layout is real `ps`'s: pid, terminal, cpu time, command.
     let out = cash("ps");
     let header = out.stdout.lines().next().unwrap_or_default();
     assert!(header.contains("PID"), "no PID column: {header:?}");
-    assert!(header.contains("COMMAND"), "no COMMAND column: {header:?}");
+    assert!(header.contains("TTY"), "no TTY column: {header:?}");
+    assert!(header.contains("TIME"), "no TIME column: {header:?}");
+    assert!(header.contains("CMD"), "no CMD column: {header:?}");
     assert!(
         !header.contains("PPID"),
         "PPID appears without -f: {header:?}"
@@ -169,21 +172,119 @@ fn the_bsd_spellings_are_accepted() {
 }
 
 #[test]
-fn dash_f_adds_the_parent_column() {
+fn dash_f_is_the_system_v_layout() {
+    // `UID PID PPID C STIME TTY TIME CMD`, in that order — a script reading `$2` for the
+    // pid is reading real `ps`'s second column, not a homegrown one.
     let out = cash("ps -f");
     let header = out.stdout.lines().next().unwrap_or_default();
-    assert!(header.contains("PPID"), "-f did not add PPID: {header:?}");
+    for column in ["UID", "PID", "PPID", "C", "STIME", "TTY", "TIME", "CMD"] {
+        assert!(
+            header.contains(column),
+            "-f is missing {column}: {header:?}"
+        );
+    }
 
     let row = out.stdout.lines().nth(1).unwrap_or_default();
     let fields: Vec<&str> = row.split_whitespace().collect();
-    assert!(fields.len() >= 3, "a -f row is missing fields: {row:?}");
+    assert!(fields.len() >= 8, "a -f row is missing fields: {row:?}");
     assert!(
-        fields[0].parse::<u32>().is_ok(),
-        "PID is not a number: {row:?}"
+        fields[0].parse::<u32>().is_err(),
+        "the first column should be the account, not a number: {row:?}"
     );
     assert!(
         fields[1].parse::<u32>().is_ok(),
-        "PPID is not a number: {row:?}"
+        "PID is not the second column: {row:?}"
+    );
+    assert!(
+        fields[2].parse::<u32>().is_ok(),
+        "PPID is not the third column: {row:?}"
+    );
+}
+
+#[test]
+fn aux_is_the_bsd_layout() {
+    // `USER PID %CPU %MEM VSZ RSS TTY STAT START TIME COMMAND`.
+    let out = cash("ps aux");
+    let header = out.stdout.lines().next().unwrap_or_default();
+    for column in [
+        "USER", "PID", "%CPU", "%MEM", "VSZ", "RSS", "TTY", "STAT", "START", "TIME", "COMMAND",
+    ] {
+        assert!(
+            header.contains(column),
+            "aux is missing {column}: {header:?}"
+        );
+    }
+
+    let row = out.stdout.lines().nth(1).unwrap_or_default();
+    let fields: Vec<&str> = row.split_whitespace().collect();
+    assert!(fields.len() >= 11, "an aux row is missing fields: {row:?}");
+    assert!(
+        fields[1].parse::<u32>().is_ok(),
+        "PID is not the second column: {row:?}"
+    );
+    assert!(
+        fields[2].parse::<f64>().is_ok(),
+        "%CPU is not a number: {row:?}"
+    );
+    assert!(
+        fields[3].parse::<f64>().is_ok(),
+        "%MEM is not a number: {row:?}"
+    );
+    assert!(
+        fields[4].parse::<u64>().is_ok() && fields[5].parse::<u64>().is_ok(),
+        "VSZ and RSS are not numbers: {row:?}"
+    );
+}
+
+#[test]
+fn ef_and_aux_are_not_the_same_listing() {
+    // They were: every spelling printed the same two homegrown columns, so `ps -ef` and
+    // `ps aux` were indistinguishable and neither matched what a script expected.
+    let ef = cash("ps -ef")
+        .stdout
+        .lines()
+        .next()
+        .unwrap_or_default()
+        .to_string();
+    let aux = cash("ps aux")
+        .stdout
+        .lines()
+        .next()
+        .unwrap_or_default()
+        .to_string();
+    assert_ne!(ef, aux, "-ef and aux print the same header");
+    assert!(ef.contains("PPID"), "-ef lost its PPID column: {ef:?}");
+    assert!(aux.contains("%CPU"), "aux lost its %CPU column: {aux:?}");
+}
+
+#[test]
+fn the_user_column_names_the_account_running_the_shell() {
+    // `id -un` answers with the full Windows identity, `DOMAIN\user`; `whoami` and this
+    // column give the account name alone, which is what `ps`'s `USER` is on Linux and
+    // what fits a column. The two must still be naming the same account, which is the
+    // comparison the identity tests already make.
+    let out = cash(
+        r#"me=$(id -un); mine=$(ps -f | tr -s ' ' | grep -i "cash.exe" | head -1 | cut -d' ' -f1); case "$me" in *"$mine") echo agree ;; *) echo "differ: [$me] [$mine]" ;; esac"#,
+    );
+    assert_eq!(out.stdout, "agree", "stderr: {}", out.stderr);
+}
+
+#[test]
+fn the_shell_reports_a_working_set() {
+    // An all-zero memory row means the per-process query failed rather than the process
+    // being small.
+    //
+    // Selected by `$$` rather than by name: the tests run in parallel, so several
+    // `cash.exe` rows are in the listing and the first one is somebody else's.
+    let out = cash(
+        r#"ps aux | while read -r user pid cpu mem vsz rss rest; do [ "$pid" = "$$" ] && echo "$rss"; done"#,
+    );
+    let rss: u64 = out.stdout.trim().parse().unwrap_or(0);
+    assert!(
+        rss > 0,
+        "no resident memory for the shell's own row: [{}] {}",
+        out.stdout,
+        out.stderr
     );
 }
 

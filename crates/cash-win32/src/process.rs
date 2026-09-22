@@ -196,6 +196,268 @@ pub fn descendants(root: u32) -> Vec<ProcessInfo> {
         .collect()
 }
 
+/// What a `ps`-style listing wants beyond a pid, a parent and a name.
+///
+/// Every field is optional because a process may refuse to open: anything running as
+/// another user, and most of what the system itself runs, cannot be queried by an
+/// unelevated shell. A listing that dropped those rows would be lying about what is on
+/// the machine, so they are listed with the fields left empty instead.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct ProcessDetails {
+    /// The account the process runs as, without its domain — `ps`'s `USER`.
+    pub user: Option<String>,
+    /// When it started, in 100ns units since 1601 — a `FILETIME`, for `START`/`STIME`.
+    pub started: Option<u64>,
+    /// Kernel plus user CPU time, in the same units — `TIME`.
+    pub cpu: Option<u64>,
+    /// Working set in bytes: the closest thing Windows has to `RSS`.
+    pub resident: Option<u64>,
+    /// Commit charge in bytes: the closest thing Windows has to `VSZ`.
+    pub committed: Option<u64>,
+}
+
+/// Looks up the per-process detail a `ps aux` or `ps -ef` row needs.
+///
+/// One `OpenProcess` for the lot, because opening a process is the expensive part and a
+/// listing does this for every row.
+#[must_use]
+pub fn details(pid: u32) -> ProcessDetails {
+    use windows_sys::Win32::System::ProcessStatus::{
+        K32GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS,
+    };
+
+    let mut details = ProcessDetails::default();
+
+    // SAFETY: OpenProcess returns null rather than a bad handle on failure.
+    let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid) };
+    if handle.is_null() {
+        return details;
+    }
+
+    let zero = FILETIME {
+        dwLowDateTime: 0,
+        dwHighDateTime: 0,
+    };
+    let (mut creation, mut exit, mut kernel, mut user) = (zero, zero, zero, zero);
+
+    // SAFETY: handle is valid and all four out-params are valid FILETIMEs.
+    let ok = unsafe {
+        GetProcessTimes(
+            handle,
+            &raw mut creation,
+            &raw mut exit,
+            &raw mut kernel,
+            &raw mut user,
+        )
+    };
+    if ok != 0 {
+        details.started = Some(as_u64(creation));
+        details.cpu = Some(as_u64(kernel) + as_u64(user));
+    }
+
+    // SAFETY: `PROCESS_MEMORY_COUNTERS` is plain old data, and `cb` is set before the
+    // call as the API requires.
+    let mut counters: PROCESS_MEMORY_COUNTERS = unsafe { std::mem::zeroed() };
+    counters.cb = u32::try_from(size_of::<PROCESS_MEMORY_COUNTERS>()).unwrap_or(u32::MAX);
+    // SAFETY: handle is valid, and `counters` is correctly sized.
+    let ok = unsafe { K32GetProcessMemoryInfo(handle, &raw mut counters, counters.cb) };
+    if ok != 0 {
+        details.resident = Some(counters.WorkingSetSize as u64);
+        details.committed = Some(counters.PagefileUsage as u64);
+    }
+
+    details.user = token_user(handle);
+
+    // SAFETY: closing a handle we just opened, exactly once.
+    unsafe {
+        CloseHandle(handle);
+    }
+
+    details
+}
+
+/// The account a process's token names, without its domain.
+fn token_user(process: windows_sys::Win32::Foundation::HANDLE) -> Option<String> {
+    use windows_sys::Win32::Security::{
+        GetTokenInformation, LookupAccountSidW, SID_NAME_USE, TOKEN_QUERY, TOKEN_USER, TokenUser,
+    };
+    use windows_sys::Win32::System::Threading::OpenProcessToken;
+
+    let mut token = std::ptr::null_mut();
+    // SAFETY: `process` is a live handle and `token` is a valid out-param.
+    if unsafe { OpenProcessToken(process, TOKEN_QUERY, &raw mut token) } == 0 {
+        return None;
+    }
+
+    // Ask for the size first: a TOKEN_USER carries a variable-length SID after it.
+    let mut needed: u32 = 0;
+    // SAFETY: a null buffer with a zero length is the documented way to ask for the size.
+    unsafe {
+        GetTokenInformation(token, TokenUser, std::ptr::null_mut(), 0, &raw mut needed);
+    }
+
+    // A `TOKEN_USER` starts with a pointer, so the buffer it is read into has to be
+    // pointer-aligned — which a `Vec<u8>` is not required to be. Asking for `u64`s gets
+    // the alignment from the allocator rather than from luck.
+    let words = (needed as usize).div_ceil(size_of::<u64>()).max(1);
+    let mut buffer = vec![0u64; words];
+    // SAFETY: the buffer is at least the size the call above asked for.
+    let ok = unsafe {
+        GetTokenInformation(
+            token,
+            TokenUser,
+            buffer.as_mut_ptr().cast(),
+            needed,
+            &raw mut needed,
+        )
+    };
+    // SAFETY: closing a handle we just opened, exactly once.
+    unsafe {
+        CloseHandle(token);
+    }
+
+    if ok == 0 || words * size_of::<u64>() < size_of::<TOKEN_USER>() {
+        return None;
+    }
+
+    // SAFETY: on success the buffer holds a TOKEN_USER followed by the SID it points at,
+    // it is aligned for one by construction, and it outlives this borrow.
+    let user: &TOKEN_USER = unsafe { &*buffer.as_ptr().cast::<TOKEN_USER>() };
+
+    let mut name = [0u16; 256];
+    let mut name_len = u32::try_from(name.len()).unwrap_or(u32::MAX);
+    let mut domain = [0u16; 256];
+    let mut domain_len = u32::try_from(domain.len()).unwrap_or(u32::MAX);
+    let mut kind: SID_NAME_USE = 0;
+
+    // SAFETY: the SID comes from the token, and both buffers are sized by their lengths.
+    let ok = unsafe {
+        LookupAccountSidW(
+            std::ptr::null(),
+            user.User.Sid,
+            name.as_mut_ptr(),
+            &raw mut name_len,
+            domain.as_mut_ptr(),
+            &raw mut domain_len,
+            &raw mut kind,
+        )
+    };
+
+    if ok == 0 {
+        return None;
+    }
+
+    Some(String::from_utf16_lossy(&name[..name_len as usize]))
+}
+
+/// The machine's name, spelled the way Windows spells it.
+///
+/// cash: there are two names for one machine here. The DNS hostname API — which the
+/// `hostname` crate, .NET's `Dns.GetHostName` and uutils all use — answers
+/// `desktop-tomc`, while `%COMPUTERNAME%`, the domain half of `id -un` and every Windows
+/// tool answer `DESKTOP-TOMC`. A shell that uses both has its own machine under two
+/// names, so `[ "$(hostname)" = "$COMPUTERNAME" ]` is false. This is the spelling the
+/// rest of Windows agrees on, and cash reports it everywhere.
+#[must_use]
+pub fn computer_name() -> Option<String> {
+    use windows_sys::Win32::System::SystemInformation::{ComputerNameNetBIOS, GetComputerNameExW};
+
+    // A NetBIOS name is at most 15 characters, but ask for room and let the API say.
+    let mut buffer = [0u16; 256];
+    let mut size = u32::try_from(buffer.len()).unwrap_or(u32::MAX);
+
+    // SAFETY: the buffer and its length are handed over together, and the call writes at
+    // most `size` UTF-16 units into it.
+    let ok = unsafe { GetComputerNameExW(ComputerNameNetBIOS, buffer.as_mut_ptr(), &raw mut size) };
+    if ok == 0 {
+        return None;
+    }
+
+    let name = String::from_utf16_lossy(&buffer[..size as usize]);
+    if name.is_empty() { None } else { Some(name) }
+}
+
+/// The machine's DNS domain, if it is in one.
+///
+/// Empty on a workgroup machine, which is most of them; `hostname -f` then has nothing to
+/// append and reports the bare name, as it does on a Linux box with no domain.
+#[must_use]
+pub fn dns_domain() -> Option<String> {
+    use windows_sys::Win32::System::SystemInformation::{
+        ComputerNameDnsDomain, GetComputerNameExW,
+    };
+
+    let mut buffer = [0u16; 256];
+    let mut size = u32::try_from(buffer.len()).unwrap_or(u32::MAX);
+
+    // SAFETY: the buffer and its length are handed over together, and the call writes at
+    // most `size` UTF-16 units into it.
+    let ok =
+        unsafe { GetComputerNameExW(ComputerNameDnsDomain, buffer.as_mut_ptr(), &raw mut size) };
+    if ok == 0 {
+        return None;
+    }
+
+    let domain = String::from_utf16_lossy(&buffer[..size as usize]);
+    if domain.is_empty() {
+        None
+    } else {
+        Some(domain)
+    }
+}
+
+/// Total physical memory in bytes, for the `%MEM` column and `free`.
+#[must_use]
+pub fn total_physical_memory() -> Option<u64> {
+    use windows_sys::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
+
+    // SAFETY: `MEMORYSTATUSEX` is plain old data; `dwLength` is set as the API requires.
+    let mut status: MEMORYSTATUSEX = unsafe { std::mem::zeroed() };
+    status.dwLength = u32::try_from(size_of::<MEMORYSTATUSEX>()).unwrap_or(u32::MAX);
+
+    // SAFETY: `status` is correctly sized.
+    if unsafe { GlobalMemoryStatusEx(&raw mut status) } == 0 {
+        return None;
+    }
+
+    Some(status.ullTotalPhys)
+}
+
+/// Physical memory currently available, in bytes.
+#[must_use]
+pub fn available_physical_memory() -> Option<u64> {
+    use windows_sys::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
+
+    // SAFETY: as above.
+    let mut status: MEMORYSTATUSEX = unsafe { std::mem::zeroed() };
+    status.dwLength = u32::try_from(size_of::<MEMORYSTATUSEX>()).unwrap_or(u32::MAX);
+
+    // SAFETY: as above.
+    if unsafe { GlobalMemoryStatusEx(&raw mut status) } == 0 {
+        return None;
+    }
+
+    Some(status.ullAvailPhys)
+}
+
+/// The current time as a `FILETIME` count, so elapsed time can be measured against
+/// [`ProcessDetails::started`] without leaving these units.
+#[must_use]
+pub fn now_filetime() -> u64 {
+    use windows_sys::Win32::System::SystemInformation::GetSystemTimeAsFileTime;
+
+    let mut now = FILETIME {
+        dwLowDateTime: 0,
+        dwHighDateTime: 0,
+    };
+    // SAFETY: `now` is a valid out-param.
+    unsafe {
+        GetSystemTimeAsFileTime(&raw mut now);
+    }
+
+    as_u64(now)
+}
+
 /// Terminate a process immediately (`kill -9`, D21).
 ///
 /// Uncatchable, as `SIGKILL` is on POSIX. `TerminateProcess` runs no cleanup in the
