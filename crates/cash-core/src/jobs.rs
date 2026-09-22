@@ -21,6 +21,40 @@ pub(crate) type JobResult = (Job, Result<ExecutionResult, error::Error>);
 pub struct JobManager {
     /// The jobs that are currently managed by the shell.
     pub jobs: Vec<Job>,
+
+    /// Read-only views of the parent's jobs, for a subshell.
+    ///
+    /// cash: a subshell must not *manage* the parent's jobs — it cannot wait on or reap
+    /// a process it does not own — but bash lets it *see* them, and `$(jobs -p)` is a
+    /// documented way to collect background pids. `JobTask` holds join handles and child
+    /// processes, so the jobs themselves cannot be cloned; this carries the metadata
+    /// `jobs` needs to render, and nothing that would let a subshell act on them.
+    inherited: Vec<JobSnapshot>,
+}
+
+/// A read-only view of a job, as a subshell sees it.
+#[derive(Clone)]
+pub struct JobSnapshot {
+    /// The shell-internal job id.
+    pub id: usize,
+    /// The job's representative process id, if it has one.
+    pub pid: Option<sys::process::ProcessId>,
+    /// The command line that started the job.
+    pub command_line: String,
+    /// The job's state when the snapshot was taken.
+    pub state: JobState,
+    /// Whether the job was current, previous, or neither.
+    pub annotation: JobAnnotation,
+}
+
+impl Display for JobSnapshot {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "[{}]{}	{}	{}",
+            self.id, self.annotation, self.state, self.command_line
+        )
+    }
 }
 
 /// Represents a task that is part of a job.
@@ -83,6 +117,37 @@ impl JobManager {
     /// Returns a new job manager.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// A manager for a subshell: no jobs of its own, but able to see the parent's.
+    #[must_use]
+    pub fn with_inherited(inherited: Vec<JobSnapshot>) -> Self {
+        Self {
+            jobs: Vec::new(),
+            inherited,
+        }
+    }
+
+    /// Snapshot the jobs this manager owns, for handing to a subshell.
+    #[must_use]
+    pub fn snapshot(&self) -> Vec<JobSnapshot> {
+        self.jobs
+            .iter()
+            .map(|job| JobSnapshot {
+                id: job.id,
+                pid: job.representative_pid(),
+                command_line: job.command_line.clone(),
+                state: job.state.clone(),
+                annotation: job.annotation.clone(),
+            })
+            .chain(self.inherited.iter().cloned())
+            .collect()
+    }
+
+    /// The parent's jobs, as seen from a subshell.
+    #[must_use]
+    pub fn inherited(&self) -> &[JobSnapshot] {
+        &self.inherited
     }
 
     /// Adds a job to the job manager and marks it as the current job;

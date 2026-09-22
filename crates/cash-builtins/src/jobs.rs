@@ -46,6 +46,17 @@ impl builtins::Command for JobsCommand {
         }
 
         if self.job_specs.is_empty() {
+            // cash: a subshell owns no jobs but can see the parent's (read-only).
+            for snapshot in context.shell.jobs().inherited() {
+                if self.show_pids_only {
+                    if let Some(pid) = snapshot.pid {
+                        writeln!(context.stdout(), "{pid}")?;
+                    }
+                } else {
+                    writeln!(context.stdout(), "{snapshot}")?;
+                }
+            }
+
             for job in &context.shell.jobs().jobs {
                 self.display_job(&context, job)?;
             }

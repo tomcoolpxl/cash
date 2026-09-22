@@ -310,3 +310,36 @@ fn winpath_from_stdin_handles_blank_lines_and_crlf() {
     assert!(lines.contains(&r"C:\a"), "got {:?}", out.stdout);
     assert!(lines.contains(&r"C:\b"), "got {:?}", out.stdout);
 }
+
+// ---------------------------------------------------------------------------
+// Subshells see the parent's jobs (read-only)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn a_subshell_can_list_the_parents_jobs() {
+    // `$(jobs -p)` is a documented way to collect background pids, and was returning
+    // nothing because a cloned shell got an empty job table. A subshell must not be able
+    // to *manage* the parent's jobs — it does not own those processes — but bash lets it
+    // see them, so cash hands it read-only snapshots.
+    let out = cash(
+        r#"ping -n 20 127.0.0.1 >/dev/null & sleep 1; inner=$(jobs -p); kill -9 $! 2>/dev/null; printf '%s' "$inner""#,
+    );
+    assert!(
+        out.stdout.trim().parse::<u32>().is_ok(),
+        "$(jobs -p) gave {:?}, expected a pid",
+        out.stdout
+    );
+}
+
+#[test]
+fn a_subshell_and_its_parent_agree_on_the_job_list() {
+    let out = cash(
+        r#"ping -n 20 127.0.0.1 >/dev/null & sleep 1; outer=$!; inner=$(jobs -p); kill -9 $! 2>/dev/null; [ "$outer" = "$inner" ] && echo agree || echo "$outer vs $inner""#,
+    );
+    assert_eq!(out.stdout, "agree");
+}
+
+#[test]
+fn a_subshell_with_no_parent_jobs_lists_nothing() {
+    assert_eq!(cash(r#"printf '[%s]' "$(jobs -p)""#).stdout, "[]");
+}

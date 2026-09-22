@@ -157,7 +157,10 @@ impl<SE: extensions::ShellExtensions> Clone for Shell<SE> {
             env: self.env.clone(),
             funcs: self.funcs.clone(),
             options: self.options.clone(),
-            jobs: jobs::JobManager::new(),
+            // cash: a subshell sees the parent's jobs but cannot manage them, so it gets
+            // read-only snapshots rather than an empty table. `$(jobs -p)` is a
+            // documented way to collect background pids and was returning nothing.
+            jobs: jobs::JobManager::with_inherited(self.jobs.snapshot()),
             aliases: self.aliases.clone(),
             last_exit_status: self.last_exit_status,
             last_exit_status_change_count: self.last_exit_status_change_count,

@@ -1,4 +1,4 @@
-# cash — Cool Again Shell
+# cash - Cool Again Shell
 
 A bash-language shell whose execution model is **Win32**, hosted in Windows Terminal.
 
