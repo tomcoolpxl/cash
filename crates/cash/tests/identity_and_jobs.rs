@@ -153,6 +153,67 @@ fn jobs_p_still_prints_only_pids() {
 }
 
 #[test]
+fn a_job_spec_selects_one_job() {
+    // `jobs %1` used to refuse with "not yet implemented", although the resolver already
+    // existed for `kill %1` and `wait %1`.
+    let out = cash(r#"ping -n 10 127.0.0.1 > /dev/null & jobs %1; kill -KILL $! 2>/dev/null"#);
+    assert!(
+        out.stdout.starts_with("[1]"),
+        "jobs %1 did not list the job: {} {}",
+        out.stdout,
+        out.stderr
+    );
+}
+
+#[test]
+fn a_job_spec_works_with_the_other_options() {
+    let listed =
+        cash(r#"ping -n 10 127.0.0.1 > /dev/null & jobs -l %1; kill -KILL $! 2>/dev/null"#);
+    let second = listed
+        .stdout
+        .lines()
+        .next()
+        .unwrap_or_default()
+        .split_whitespace()
+        .nth(1)
+        .unwrap_or_default()
+        .to_string();
+    assert!(
+        second.parse::<u32>().is_ok(),
+        "jobs -l %1 lost the pid: {}",
+        listed.stdout
+    );
+
+    let pids = cash(r#"ping -n 10 127.0.0.1 > /dev/null & jobs -p %1; kill -KILL $! 2>/dev/null"#);
+    assert!(
+        pids.stdout.trim().parse::<u32>().is_ok(),
+        "jobs -p %1 printed more than a pid: {}",
+        pids.stdout
+    );
+}
+
+#[test]
+fn the_current_job_spec_resolves() {
+    let out = cash(r#"ping -n 10 127.0.0.1 > /dev/null & jobs %+; kill -KILL $! 2>/dev/null"#);
+    assert!(
+        out.stdout.starts_with("[1]"),
+        "%+ did not resolve: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn an_unknown_job_spec_is_reported() {
+    let out = cash(r#"jobs %9; echo "rc=$?""#);
+    assert!(out.stdout.contains("rc=1"), "no failure: {}", out.stdout);
+    assert!(
+        out.stderr.contains("no such job"),
+        "no diagnostic: {}",
+        out.stderr
+    );
+}
+
+#[test]
 fn jobs_l_with_no_jobs_prints_nothing() {
     let out = cash("jobs -l; echo done");
     assert_eq!(out.stdout, "done", "jobs -l invented a job: {}", out.stdout);
