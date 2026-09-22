@@ -188,6 +188,10 @@ pub fn bundled_commands() -> HashMap<String, fn(Vec<OsString>) -> i32> {
     register!(m, "coreutils.tac", "tac", uu_tac);
     register!(m, "coreutils.tail", "tail", uu_tail);
     register!(m, "coreutils.tee", "tee", uu_tee);
+    // cash: §2 notes MS Coreutils withholds `timeout` over a shell-name conflict.
+    // cash owns name resolution, so that conflict does not apply here.
+    register!(m, "coreutils.timeout", "timeout", uu_timeout);
+    register!(m, "coreutils.uptime", "uptime", uu_uptime);
     register!(m, "coreutils.test", "test", uu_test);
     register!(m, "coreutils.touch", "touch", uu_touch);
     register!(m, "coreutils.tr", "tr", uu_tr);

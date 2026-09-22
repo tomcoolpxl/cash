@@ -59,8 +59,16 @@ Two premises from `musings.md` are revised:
 
 Coreutils for Windows deliberately withholds `kill`, `timeout`, `whoami`, `dir`,
 `expand`, `more`, and warns about `date`, `echo`, `mkdir`, `cat`, `ls`, `rm`, `sort`,
-`tee` — purely because those names collide with PowerShell aliases and cmd builtins.
-**Under cash that conflict table is void**; cash owns name resolution. Their other
+`tee`, `uptime` — purely because those names collide with PowerShell aliases and cmd
+builtins. **Under cash that conflict table is void**; cash owns name resolution.
+
+**Delivered.** Every name on both halves of that table is a cash builtin, verified with
+an empty `PATH`. `kill` is cash's own (D11, D21, D22); the rest come from D48's bundle,
+with `timeout` and `uptime` wired in because upstream's bundle had never included them —
+`timeout` returning POSIX's 124 on expiry, `uptime` reporting real Windows uptime.
+
+This was the concrete claim in "the gap cash fills", so it is worth stating that it now
+holds rather than leaving it as an argument. Their other
 documented limitations — no `/dev/null`, CRLF breaking byte-oriented tools, utilities
 emitting backslash-separated paths that poison downstream pipes — are all fixable at
 the shell layer, which is precisely where cash sits.

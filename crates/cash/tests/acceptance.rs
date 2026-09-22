@@ -494,3 +494,44 @@ fn killing_a_background_job_actually_kills_it() {
     );
     assert_eq!(by_pid.stdout.lines().last().unwrap_or_default(), "dead", "kill -9 $! did not kill");
 }
+
+#[test]
+fn the_commands_ms_coreutils_withholds_are_all_available() {
+    // §2: Microsoft withholds these because the names collide with PowerShell aliases
+    // and cmd builtins. cash owns name resolution, so that conflict table does not
+    // apply — and it claimed the gap as the reason cash exists.
+    for name in ["kill", "timeout", "whoami", "dir", "expand", "more"] {
+        let out = cash(&format!("type {name}"));
+        assert!(
+            out.stdout.contains("builtin"),
+            "{name} should be a builtin: {}{}",
+            out.stdout,
+            out.stderr
+        );
+    }
+}
+
+#[test]
+fn the_commands_ms_coreutils_warns_about_are_all_available() {
+    // The other half of §2's table: names Microsoft ships but flags because PowerShell
+    // aliases or cmd builtins shadow them. Under cash they are unambiguous.
+    for name in [
+        "date", "echo", "mkdir", "rmdir", "cat", "cp", "ls", "mv", "pwd", "rm", "sleep",
+        "sort", "tee", "uptime",
+    ] {
+        let out = cash(&format!("type {name}"));
+        assert!(
+            out.stdout.contains("builtin"),
+            "{name} should be a builtin: {}{}",
+            out.stdout,
+            out.stderr
+        );
+    }
+}
+
+#[test]
+fn timeout_works_without_an_external_one() {
+    // 124 is the POSIX exit status for "the command timed out".
+    let out = cash(r#"PATH=""; timeout 1 ping -n 30 127.0.0.1 >/dev/null; echo $?"#);
+    assert_eq!(out.stdout, "124", "timeout did not time out (stderr: {})", out.stderr);
+}

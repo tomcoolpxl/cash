@@ -88,6 +88,8 @@ default = []
     'coreutils.tac',
     'coreutils.tail',
     'coreutils.tee',
+    'coreutils.uptime',
+    'coreutils.timeout',
     'coreutils.test',
     'coreutils.touch',
     'coreutils.tr',
@@ -172,6 +174,8 @@ default = []
 'coreutils.tac' = ["dep:uu_tac"]
 'coreutils.tail' = ["dep:uu_tail"]
 'coreutils.tee' = ["dep:uu_tee"]
+'coreutils.uptime' = ["dep:uu_uptime"]
+'coreutils.timeout' = ["dep:uu_timeout"]
 'coreutils.test' = ["dep:uu_test"]
 'coreutils.touch' = ["dep:uu_touch"]
 'coreutils.tr' = ["dep:uu_tr"]
@@ -263,6 +267,8 @@ uu_sync = { version = "0.12.0", optional = true }
 uu_tac = { version = "0.12.0", optional = true }
 uu_tail = { version = "0.12.0", optional = true }
 uu_tee = { version = "0.12.0", optional = true }
+uu_uptime = { version = "0.12.0", optional = true }
+uu_timeout = { version = "0.12.0", optional = true }
 uu_test = { version = "0.12.0", optional = true }
 uu_touch = { version = "0.12.0", optional = true }
 uu_tr = { version = "0.12.0", optional = true }
