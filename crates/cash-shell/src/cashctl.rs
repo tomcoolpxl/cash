@@ -4,33 +4,34 @@ use std::io::Write;
 
 use crate::events;
 
-/// Extension trait for adding brush-specific built-in commands to a shell builder.
-pub(crate) trait ShellBuilderBrushBuiltinExt {
-    /// Add brush-specific builtins to a shell being built.
+/// Extension trait for adding cash-specific built-in commands to a shell builder.
+pub(crate) trait ShellBuilderCashBuiltinExt {
+    /// Add cash-specific builtins to a shell being built.
     #[must_use]
     fn cash_builtins(self) -> Self;
 }
 
 impl<SE: cash_core::extensions::ShellExtensions, S: cash_core::ShellBuilderState>
-    ShellBuilderBrushBuiltinExt for cash_core::ShellBuilder<SE, S>
+    ShellBuilderCashBuiltinExt for cash_core::ShellBuilder<SE, S>
 {
     fn cash_builtins(self) -> Self {
-        // For compatibility with previous releases, we register the command under both
-        // `brushctl` and `brushinfo` names. It will behave identically across the two.
+        // cash (D9): registered under both names, as upstream did. The old `brushctl`
+        // and `brushinfo` spellings are gone — D9 absorbed brush as a hard fork, and
+        // these were the last two places the old name reached a user.
         self.builtin(
-            "brushctl",
-            cash_core::builtins::builtin::<BrushCtlCommand, SE>(),
+            "cashctl",
+            cash_core::builtins::builtin::<CashCtlCommand, SE>(),
         )
         .builtin(
-            "brushinfo",
-            cash_core::builtins::builtin::<BrushCtlCommand, SE>(),
+            "cashinfo",
+            cash_core::builtins::builtin::<CashCtlCommand, SE>(),
         )
     }
 }
 
-/// Configure the running brush shell.
+/// Configure the running cash shell.
 #[derive(Parser)]
-pub(crate) struct BrushCtlCommand {
+pub(crate) struct CashCtlCommand {
     #[clap(subcommand)]
     command_group: CommandGroup,
 }
@@ -111,7 +112,7 @@ enum ProcessCommand {
     ShowParentProcessId,
 }
 
-impl cash_core::builtins::Command for BrushCtlCommand {
+impl cash_core::builtins::Command for CashCtlCommand {
     type Error = cash_core::Error;
 
     async fn execute<SE: cash_core::ShellExtensions>(

@@ -20,6 +20,9 @@ workspace = true
 [dependencies]
 # The language layer (D1/D9): parser, expansion, control flow, traps, builtins.
 cash-shell = { path = "../cash-shell" }
+# D35: `cash doctor` reports what cash would run, so it needs the builtin set.
+cash-builtins = { version = "^0.2.0", path = "../cash-builtins" }
+cash-core = { version = "^0.5.0", path = "../cash-core" }
 
 [features]
 # D48: uutils coreutils as in-process builtins. On by default — measured at
@@ -82,6 +85,11 @@ path = "tests/completion_tests.rs"
 name = "completion-windows"
 path = "tests/completion_windows.rs"
 
+# D3/D7/D8/D34/D35: what cash says it will run vs what it runs.
+[[test]]
+name = "resolution-honesty"
+path = "tests/resolution_honesty.rs"
+
 # D48: one pager behind `less` and `more`.
 [[test]]
 name = "pager"
@@ -118,8 +126,6 @@ tempfile = "3.27.0"
 cash-parser = { version = "^0.4.0", path = "../cash-parser" }
 # The completion tests drive a `Shell` directly rather than through the binary,
 # because completion has no command-line surface to assert against.
-cash-core = { version = "^0.5.0", path = "../cash-core" }
-cash-builtins = { version = "^0.2.0", path = "../cash-builtins" }
 cash-test-harness = { path = "../cash-test-harness", features = ["insta"] }
 assert_cmd = "2.2.0"
 assert_fs = "1.1.3"

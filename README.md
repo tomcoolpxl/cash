@@ -69,22 +69,38 @@ cargo test -p cash-win32
 
 Windows 11 (or Windows 10 1809+, for ConPTY). Rust 1.88+.
 
-## Recommended userland
+## Userland
 
-cash requires no particular userland and never will. It works with whatever is on
-`PATH`. That said, the combination it is designed against:
+cash carries 146 builtins, including the whole of uutils coreutils, plus `ps`,
+`less`/`more`, `which` and `chmod` written for Windows. With nothing else installed,
+65 of 103 commands a bash script expects already resolve.
+
+**It does not carry `find`, `xargs`, `grep`, `sed`, `awk`, `diff` or `stat`**, and the
+first three are not optional for the workload cash is built for. `find | xargs grep` is
+in cash's own acceptance corpus. Install one of:
 
 ```bash
+winget install Microsoft.Coreutils   # coreutils + findutils + grep
 scoop install sed gawk               # NOT in the MS bundle — separate GNU projects
 ```
 
-`cash doctor` reports what it found — missing `sed`/`awk`, BusyBox applets
-shadowing fuller implementations, DOS `find`/`sort` winning over the Unix ones, Store
-aliases whose target app is not installed. None of those announce themselves.
+Git for Windows supplies all of them too, and most people running bash scripts on Windows
+already have it.
 
-Worth knowing: the answer depends on which shell launched cash. On the machine this was
-designed against, `cash doctor` reports fourteen warnings under PowerShell's `PATH` and
-one under Git Bash's.
+Run `cash doctor` to see what this machine has. It reports what **cash** would run, not
+what is on `PATH` — a builtin is never reported as missing, and a DOS tool in System32 is
+never reported as shadowing something cash carries. It names missing `sed`/`awk`, BusyBox
+applets masquerading as fuller implementations, DOS `find`/`sort` winning over the Unix
+ones, and Store aliases whose target app is not installed. None of those announce
+themselves.
+
+`sh` and `bash` resolve to cash itself, ahead of `PATH`. On Windows the alternative is
+`C:\WINDOWS\system32\bash.exe`, which is the WSL launcher: without this, a script
+running `bash helper.sh` would silently continue under Linux. A real bash is still
+reachable by full path.
+
+Worth knowing: the answer depends on which shell launched cash, because it inherits that
+shell's `PATH`.
 
 ## Licence
 

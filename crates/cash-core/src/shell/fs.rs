@@ -255,10 +255,18 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         let path = accepted.as_path();
 
         if path.as_os_str().is_empty() || path.is_absolute() {
-            path.to_owned()
-        } else {
-            self.working_dir().join(path)
+            return path.to_owned();
         }
+
+        let joined = self.working_dir().join(path);
+
+        // cash (D3): `PathBuf::join` inserts a backslash, so `cd /c/tmp; chmod +w f`
+        // produced `C:/tmp\f` — a spelling Win32 accepts and D3 says cash never renders.
+        // It reached the user through every diagnostic that names a resolved path.
+        #[cfg(windows)]
+        return PathBuf::from(cash_win32::path::render(&joined));
+        #[cfg(not(windows))]
+        joined
     }
 
     /// Opens the given file, using the context of this shell and the provided execution parameters.

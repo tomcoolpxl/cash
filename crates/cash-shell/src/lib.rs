@@ -3,8 +3,8 @@
 #![allow(dead_code)]
 
 pub mod args;
-mod brushctl;
 pub mod bundled;
+mod cashctl;
 pub mod config;
 pub mod entry;
 mod error_formatter;

@@ -203,6 +203,22 @@ impl<SE: extensions::ShellExtensions> AsMut<Self> for Shell<SE> {
     }
 }
 
+/// Render a starting directory in cash's canonical spelling (D3).
+///
+/// `cd` already stores the canonical form, so only the *inherited* directory was ever
+/// spelled with backslashes — which is exactly the one a session starts in, and the one
+/// `pwd` reports before the user has changed directory at all.
+fn canonical_working_dir(dir: &Path) -> PathBuf {
+    #[cfg(windows)]
+    {
+        PathBuf::from(cash_win32::path::render(dir))
+    }
+    #[cfg(not(windows))]
+    {
+        dir.to_path_buf()
+    }
+}
+
 impl<SE: extensions::ShellExtensions> Shell<SE> {
     /// Returns a new shell instance created with the given options.
     /// Does *not* load any configuration files (e.g., bashrc).
@@ -223,7 +239,16 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
             args: options.shell_args.unwrap_or_default(),
             version: options.shell_version,
             product_display_str: options.shell_product_display_str,
-            working_dir: options.working_dir.map_or_else(std::env::current_dir, Ok)?,
+            // cash (D3): canonicalise the starting directory, not just the ones `cd`
+            // reaches. The OS reports `C:\Users\me\src`, and without this the very first
+            // `pwd` of a session printed backslashes — the one spelling D3 says cash
+            // never renders, and §4's first divergence row promises it does not.
+            working_dir: canonical_working_dir(
+                options
+                    .working_dir
+                    .map_or_else(std::env::current_dir, Ok)?
+                    .as_path(),
+            ),
             builtins: options.builtins,
             parser_impl: options.parser,
             key_bindings: options.key_bindings,

@@ -118,6 +118,20 @@ where
     }
 }
 
+/// cash's own executable, when `name` asks for a POSIX shell.
+///
+/// Matches `sh` and `bash` by basename, with or without an extension, so `bash`,
+/// `/bin/sh` and `bash.exe` all land here. Nothing else: `zsh`, `dash` and `pwsh` are
+/// other shells and cash does not pretend to be them.
+#[cfg(windows)]
+fn cash_as_shell(name: &Path) -> Option<PathBuf> {
+    let stem = name.file_stem()?.to_str()?.to_ascii_lowercase();
+    if matches!(stem.as_str(), "sh" | "bash") {
+        return std::env::current_exe().ok();
+    }
+    None
+}
+
 /// Resolves a command name the way the shell does when it is about to run it.
 ///
 /// Returns the first executable in search order, or -- if there is none -- the first entry
@@ -134,6 +148,22 @@ where
     PI: AsRef<Path>,
     N: AsRef<Path>,
 {
+    // cash (D7): `sh` and `bash` resolve to cash itself, before `PATH` is consulted.
+    //
+    // D7 already gives `/usr/bin/env` a virtual resolution so `#!/usr/bin/env bash`
+    // works without a fake filesystem. The same argument applies here and the stakes are
+    // higher: on Windows `bash` resolves to `C:\WINDOWS\system32\bash.exe`, which is the
+    // **WSL launcher**. A script running `bash helper.sh` would silently continue under
+    // Linux, with a different filesystem view and none of cash's path guarantees — and
+    // `sh` resolves to nothing at all, so `#!/bin/sh` had no interpreter.
+    //
+    // A real bash is still reachable by full path, which is what a script that genuinely
+    // wants one should be using anyway.
+    #[cfg(windows)]
+    if let Some(own) = cash_as_shell(filename.as_ref()) {
+        return Some(own);
+    }
+
     let mut first_non_executable = None;
 
     for dir in paths {

@@ -23,6 +23,15 @@ mod ps;
 #[cfg(windows)]
 mod pager;
 
+// cash (D8): `which` must answer about cash's resolution, not about PATH.
+#[cfg(windows)]
+mod which;
+
+// cash (D23, D34): uutils' chmod is Unix-only, so the gap was filled by MSYS's, which
+// writes mode bits nothing outside MSYS reads.
+#[cfg(windows)]
+mod chmod;
+
 #[cfg(feature = "builtin.alias")]
 mod alias;
 #[cfg(feature = "builtin.bg")]

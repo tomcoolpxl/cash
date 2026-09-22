@@ -41,6 +41,21 @@ Two things shipped that change the design:
 Note the second row carefully: it is **not** a complete userland. MS Coreutils ships no
 `sed` and no `awk`, because those are separate GNU projects. D35 covers the consequences.
 
+**And note what cash bundles, which is a narrower thing.** That row describes a package a
+user may install, not something cash carries. D48 bundles **uutils coreutils only** —
+there is no `uu_find`, `uu_xargs` or `uu_grep` on crates.io, so `find`, `xargs`, `grep`,
+`sed`, `awk`, `diff` and `stat` are *not* in the binary. Measured with `PATH` reduced to
+`C:\WINDOWS\system32;C:\WINDOWS`: 65 of 103 expected commands resolve, 34 are absent,
+and 4 are shadowed by unrelated Windows tools of the same name. cash's own M2 corpus
+script fails on such a machine — loudly, with exit 2, because `set -euo pipefail` catches
+it, but only after DOS `find` has produced `File not found - *.rs`.
+
+So **Git for Windows, or Microsoft's Coreutils, is a prerequisite for the §1 workload**,
+and `cash doctor` says so. The three utilities cash does own that would otherwise come
+from there — `ps`, `less`/`more`, `chmod` — are carried because their stand-ins were
+worse than absent: two reported numbers and permissions that nothing else on the system
+agreed with, and the third corrupted a pipe.
+
 Two premises from `musings.md` are revised:
 
 - **`fork()` is not the central problem.** A Rust shell cannot safely `fork()` on any
@@ -1153,6 +1168,9 @@ someone who expected bash, so additions need to earn their place.
 | 14 | `$!` is empty for a background job made only of shell builtins | bash forks and reports the subshell's pid; cash runs the job as a task, so there is no process to name | D11 |
 | 15 | `kill 0` signals the trees cash spawned, not a process group | Windows has no process group that excludes the terminal; the console-wide alternative would kill it | D22 |
 | 16 | `kill -1` is refused | "every process I may signal" on Windows reaches far past anything a script could mean | D22 |
+| 17 | `sh` and `bash` are cash, ahead of `PATH` | Otherwise `bash` is the WSL launcher and a script continues under Linux | D7 |
+| 18 | `chmod` changes only the read-only attribute | Windows has no execute or read bit outside ACLs; the rest warns and returns 0 | D23, D34 |
+| 19 | `which` reports builtins, and `stat`/`id`/`groups` are not carried | `which` must agree with the shell; the uutils versions of the other three are Unix-only | D8, D48 |
 
 **One near-miss, recorded because it was nearly an entry of its own.** The bundled
 utilities are portable Rust, so the few that *construct* an absolute path spelled it
@@ -1338,6 +1356,7 @@ concerns was worth keeping.)
 | `resolve` | D8, D46 | PATHEXT dispatch, extension before read, real on-disk casing |
 | `cmd` | D32 | CRT quoting, caret escaping, `is_safe_for_cmd` |
 | `process` | D42, D48 | `is_pid_alive`, `cpu_time`, process listing for `ps` |
+| `pathsearch` (core) | D7 | `sh` and `bash` resolve to cash, ahead of `PATH` |
 | `jobreg` | D6 | per-spawn nested job registry, tree kill, sweep |
 
 Plus `crates/cash`: the binary, and `cash doctor` (D35).

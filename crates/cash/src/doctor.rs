@@ -45,9 +45,11 @@ struct Finding {
 
 /// Commands a bash script is entitled to assume exist.
 ///
-/// `sed` and `awk` are called out because they are the ones people are surprised by:
-/// they are separate GNU projects, so Microsoft's Coreutils bundle does not include
-/// them and no single install is a complete answer.
+/// Only the ones cash does **not** carry are listed. A builtin needs no diagnosis: it is
+/// present by construction, and an earlier version of this list asked about `cat`, `cut`,
+/// `tr`, `sort`, `head`, `tail`, `wc` and `mktemp` — all builtins — then told the user to
+/// `winget install` something they already had. Checking cash's own resolution rather
+/// than `PATH` is what stops that class of advice.
 const EXPECTED: &[(&str, &str)] = &[
     (
         "sed",
@@ -57,18 +59,25 @@ const EXPECTED: &[(&str, &str)] = &[
         "awk",
         "not in Microsoft's Coreutils bundle — separate GNU project",
     ),
-    ("grep", "in the MS bundle"),
-    ("find", "findutils; in the MS bundle"),
-    ("xargs", "findutils; in the MS bundle"),
-    ("cat", "coreutils"),
-    ("cut", "coreutils"),
-    ("tr", "coreutils"),
-    ("sort", "coreutils"),
-    ("head", "coreutils"),
-    ("tail", "coreutils"),
-    ("wc", "coreutils"),
-    ("mktemp", "coreutils"),
+    ("grep", "not bundled with cash; in the MS Coreutils bundle"),
+    ("find", "not bundled with cash; findutils, in the MS bundle"),
+    (
+        "xargs",
+        "not bundled with cash; findutils, in the MS bundle",
+    ),
+    ("diff", "not bundled with cash; diffutils"),
+    ("chmod", "not bundled with cash; coreutils"),
+    ("stat", "not bundled with cash; coreutils"),
 ];
+
+/// Commands cash answers for itself, checked to confirm it still does.
+///
+/// A regression here means a builtin was dropped or shadowed, which is worth knowing —
+/// but it is the opposite question from EXPECTED, and gets the opposite advice.
+const CARRIED: &[&str] = &["ps", "less", "more", "which", "kill", "cat", "mktemp"];
+
+/// Shells whose name must resolve to cash itself (D7).
+const OWN_SHELLS: &[&str] = &["sh", "bash"];
 
 /// Run the diagnostic. Returns a process exit code.
 pub fn run() -> u8 {
@@ -83,9 +92,13 @@ pub fn run() -> u8 {
 
     let mut findings = Vec::new();
 
+    let builtins = builtin_names();
+
     check_session(&mut findings);
-    check_commands(&mut findings, &entries, &pathext, &cwd);
-    check_dos_shadowing(&mut findings, &entries, &pathext, &cwd);
+    check_carried(&mut findings, &builtins);
+    check_shells(&mut findings, &entries, &pathext, &cwd);
+    check_commands(&mut findings, &builtins, &entries, &pathext, &cwd);
+    check_dos_shadowing(&mut findings, &builtins, &entries, &pathext, &cwd);
 
     report(&findings)
 }
@@ -107,13 +120,99 @@ fn check_session(findings: &mut Vec<Finding>) {
     }
 }
 
+/// Every name cash answers for itself, without building a shell.
+fn builtin_names() -> std::collections::HashSet<String> {
+    let mut names: std::collections::HashSet<String> = cash_builtins::default_builtins::<
+        cash_core::extensions::DefaultShellExtensions,
+    >(cash_builtins::BuiltinSet::BashMode)
+    .into_keys()
+    .collect();
+
+    // The bundled utilities (D48) register as builtins too, but only once their registry
+    // is installed. Installing is idempotent, so doing it here makes the diagnostic
+    // independent of whether `main` reached that step before dispatching.
+    cash_shell::bundled::install_default_providers();
+    if let Some(bundled) = cash_shell::bundled::registry() {
+        names.extend(bundled.keys().cloned());
+    }
+
+    names
+}
+
+/// Confirm the commands cash carries are still cash's.
+fn check_carried(findings: &mut Vec<Finding>, builtins: &std::collections::HashSet<String>) {
+    let missing: Vec<&str> = CARRIED
+        .iter()
+        .copied()
+        .filter(|name| !builtins.contains(*name))
+        .collect();
+
+    if missing.is_empty() {
+        findings.push(Finding {
+            level: Level::Ok,
+            subject: "bundled userland".into(),
+            detail: format!("{} commands answered by cash itself", builtins.len()),
+            fix: None,
+        });
+    } else {
+        findings.push(Finding {
+            level: Level::Warn,
+            subject: "bundled userland".into(),
+            detail: format!("expected builtins are missing: {}", missing.join(", ")),
+            fix: Some("this is a build problem, not a machine problem".into()),
+        });
+    }
+}
+
+/// `sh` and `bash` must be cash (D7); on Windows the alternative is WSL.
+fn check_shells(findings: &mut Vec<Finding>, entries: &[PathBuf], pathext: &[String], cwd: &Path) {
+    for shell in OWN_SHELLS {
+        // The rule is unconditional and lives in command resolution, so the only useful
+        // thing to report is what it takes precedence *over* — which on a bare Windows
+        // PATH is `C:\WINDOWS\system32\bash.exe`, the WSL launcher. A script that
+        // reached that would silently continue under Linux.
+        let shadowed = resolve(shell, entries, pathext, cwd).map(|d| d.target().to_path_buf());
+
+        let detail = match &shadowed {
+            Some(found) if is_system32(found) => format!(
+                "resolves to cash, ahead of {} — the WSL launcher",
+                cash_win32::path::render(found)
+            ),
+            Some(found) => format!(
+                "resolves to cash, ahead of {}",
+                cash_win32::path::render(found)
+            ),
+            None => "resolves to cash".to_string(),
+        };
+
+        findings.push(Finding {
+            level: Level::Ok,
+            subject: (*shell).to_string(),
+            detail,
+            fix: None,
+        });
+    }
+}
+
 fn check_commands(
     findings: &mut Vec<Finding>,
+    builtins: &std::collections::HashSet<String>,
     entries: &[PathBuf],
     pathext: &[String],
     cwd: &Path,
 ) {
     for (command, note) in EXPECTED {
+        // cash's own answer wins, and needs no advice about installing anything.
+        if builtins.contains(*command) {
+            findings.push(Finding {
+                level: Level::Ok,
+                subject: (*command).to_string(),
+                detail: "shell builtin".into(),
+                fix: None,
+            });
+            continue;
+        }
+
         let Some(dispatch) = resolve(command, entries, pathext, cwd) else {
             findings.push(Finding {
                 level: Level::Warn,
@@ -221,11 +320,19 @@ const DOS_SHADOWED: &[&str] = &["find", "sort", "more"];
 
 fn check_dos_shadowing(
     findings: &mut Vec<Finding>,
+    builtins: &std::collections::HashSet<String>,
     entries: &[PathBuf],
     pathext: &[String],
     cwd: &Path,
 ) {
     for command in DOS_SHADOWED {
+        // A builtin cannot be shadowed: PATH is never consulted for it. Warning that
+        // System32's `more.com` shadows `more` was exactly wrong once cash carried its
+        // own pager — the DOS tool is the one being shadowed.
+        if builtins.contains(*command) {
+            continue;
+        }
+
         // Anything in EXPECTED already received a single merged verdict from
         // describe(). Reporting it again here produced two contradictory lines for
         // `find` and `sort` — one "ok", one "WARN" — which is worse than either alone.

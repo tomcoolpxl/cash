@@ -2,8 +2,8 @@
 
 use crate::args::CommandLineArgs;
 use crate::args::InputBackendType;
-use crate::brushctl::ShellBuilderBrushBuiltinExt as _;
 use crate::bundled;
+use crate::cashctl::ShellBuilderCashBuiltinExt as _;
 use crate::config;
 use crate::error_formatter;
 use crate::events;

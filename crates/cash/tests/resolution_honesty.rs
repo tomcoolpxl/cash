@@ -1,0 +1,490 @@
+//! What cash says it will run, and what it actually runs — **D3**, **D7**, **D8**, **D34**.
+//!
+//! An audit of command resolution found three tools reporting someone else's answer.
+//! None of them was missing; each was confidently wrong, which is the harder failure to
+//! notice:
+//!
+//! - `which cat` said `/usr/bin/cat` while cash ran its own builtin.
+//! - `cash doctor` reported `PATH` findings for commands cash never resolves through
+//!   `PATH`, and on a machine without Git for Windows told the user to install coreutils
+//!   they already had.
+//! - `bash` resolved to `C:\WINDOWS\system32\bash.exe` — the WSL launcher — so
+//!   `bash helper.sh` could silently continue under Linux.
+//!
+//! The same audit found `pwd` printing backslashes before the first `cd`, which is §4's
+//! very first divergence row promising the opposite.
+
+#![cfg(windows)]
+#![allow(
+    clippy::tests_outside_test_module,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::needless_raw_string_hashes,
+    reason = "an integration test is outside a test module by construction, and a \
+              failed assumption in a test should abort it loudly rather than be \
+              threaded back through a Result. Shell snippets are spelled with hashes \
+              throughout, including where they are not strictly needed, because \
+              alternating the two forms by accident of content reads worse."
+)]
+
+use std::process::Command;
+
+const CASH: &str = env!("CARGO_BIN_EXE_cash");
+
+/// A `PATH` with nothing but Windows on it, which is what a machine without Git for
+/// Windows looks like.
+const BARE_PATH: &str = r"C:\WINDOWS\system32;C:\WINDOWS";
+
+struct Output {
+    stdout: String,
+    stderr: String,
+    code: i32,
+}
+
+fn cash(script: &str) -> Output {
+    run(Command::new(CASH).args(["-c", script]))
+}
+
+/// The same, on a machine that has only Windows installed.
+fn cash_bare(script: &str) -> Output {
+    run(Command::new(CASH)
+        .args(["-c", script])
+        .env("PATH", BARE_PATH))
+}
+
+fn run(command: &mut Command) -> Output {
+    let out = command.output().expect("failed to run cash");
+    Output {
+        stdout: String::from_utf8_lossy(&out.stdout).trim_end().to_string(),
+        stderr: String::from_utf8_lossy(&out.stderr).trim_end().to_string(),
+        code: out.status.code().unwrap_or(-1),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// `which` answers about cash (D8)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn which_reports_the_builtin_the_shell_would_run() {
+    // Not `/usr/bin/cat`. The question is what *this shell* runs.
+    for name in ["cat", "ps", "less", "kill", "which"] {
+        let out = cash(&format!("which {name}"));
+        assert_eq!(
+            out.stdout,
+            format!("{name}: shell builtin"),
+            "which {name} did not report the builtin"
+        );
+        assert_eq!(out.code, 0);
+    }
+}
+
+#[test]
+fn which_agrees_with_type() {
+    // Two tools answering the same question must not disagree. This is the invariant the
+    // MSYS `which` broke.
+    for name in ["cat", "ps", "git", "cmd"] {
+        let which = cash(&format!("which {name} > /dev/null 2>&1; echo $?"));
+        let typed = cash(&format!("type {name} > /dev/null 2>&1; echo $?"));
+        assert_eq!(
+            which.stdout, typed.stdout,
+            "which and type disagree on whether {name} exists"
+        );
+    }
+}
+
+#[test]
+fn which_prints_a_bare_path_for_an_external() {
+    // `p=$(which git)` has to keep working, so an external gets a path and nothing else.
+    let out = cash("which cmd");
+    assert!(
+        out.stdout.to_lowercase().ends_with(".exe"),
+        "not a bare path: {}",
+        out.stdout
+    );
+    assert!(
+        !out.stdout.contains(' ') || out.stdout.contains(":/"),
+        "not a path: {}",
+        out.stdout
+    );
+    assert!(
+        !out.stdout.contains('\\'),
+        "D3: backslashes in a rendered path: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn which_p_restricts_the_search_to_path() {
+    // The escape hatch for a script that genuinely wants a file, not an answer.
+    let out = cash("which -p cat");
+    assert!(
+        out.stdout.is_empty() || out.stdout.contains('/'),
+        "-p returned something that is not a path: {}",
+        out.stdout
+    );
+    assert!(
+        !out.stdout.contains("builtin"),
+        "-p reported a builtin: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn which_reports_functions_and_missing_names() {
+    let function = cash("f() { :; }; which f");
+    assert_eq!(function.stdout, "f: shell function");
+
+    let missing = cash("which definitely-not-a-command; echo rc=$?");
+    assert!(
+        missing.stdout.contains("rc=1"),
+        "missing name did not fail: {}",
+        missing.stdout
+    );
+    assert!(
+        missing.stderr.contains("not found"),
+        "no diagnostic: {}",
+        missing.stderr
+    );
+}
+
+#[test]
+fn which_s_is_silent() {
+    let out = cash("which -s cat; echo rc=$?");
+    assert_eq!(out.stdout, "rc=0");
+}
+
+// ---------------------------------------------------------------------------
+// `sh` and `bash` are cash (D7)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn sh_and_bash_resolve_to_cash() {
+    // On a bare Windows PATH the alternative for `bash` is the WSL launcher, and for
+    // `sh` there is no alternative at all.
+    for name in ["sh", "bash"] {
+        let out = cash_bare(&format!("which {name}"));
+        assert!(
+            out.stdout.to_lowercase().contains("cash.exe"),
+            "{name} did not resolve to cash: {}",
+            out.stdout
+        );
+        assert!(
+            !out.stdout.to_lowercase().contains("system32"),
+            "{name} resolved into System32 — that is the WSL launcher: {}",
+            out.stdout
+        );
+    }
+}
+
+#[test]
+fn a_nested_shell_is_cash_and_keeps_cash_semantics() {
+    // The point of the rule: the path guarantees do not stop at the `sh -c` boundary.
+    let out = cash_bare(r#"sh -c 'pwd; echo $BASH_VERSION'"#);
+    let lines: Vec<&str> = out.stdout.lines().collect();
+    assert!(
+        !lines.is_empty(),
+        "nested shell produced nothing: {}",
+        out.stderr
+    );
+    assert!(
+        !lines[0].contains('\\'),
+        "D3: a nested shell printed backslashes: {}",
+        lines[0]
+    );
+    assert!(
+        lines.get(1).is_some_and(|v| v.starts_with('5')),
+        "nested shell was not cash: {lines:?}"
+    );
+}
+
+#[test]
+fn a_bin_sh_shebang_has_an_interpreter() {
+    let dir = std::env::temp_dir().join("cash-shebang-sh");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("create dir");
+    let script = dir.join("s.sh");
+    std::fs::write(&script, b"#!/bin/sh\necho shebang-ran\n").expect("write");
+
+    let out = run(Command::new(CASH)
+        .arg(script.to_string_lossy().replace('\\', "/"))
+        .env("PATH", BARE_PATH));
+
+    assert_eq!(out.stdout, "shebang-ran", "stderr: {}", out.stderr);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn another_shell_is_not_impersonated() {
+    // `sh` and `bash` only. cash does not pretend to be zsh, dash or pwsh.
+    let out = cash_bare("which zsh; echo rc=$?");
+    assert!(
+        out.stdout.contains("rc=1"),
+        "cash claimed to be zsh: {}",
+        out.stdout
+    );
+}
+
+// ---------------------------------------------------------------------------
+// `pwd` is canonical from the first line (D3)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn pwd_is_canonical_before_any_cd() {
+    // The starting directory is inherited from the OS, which reports backslashes; `cd`
+    // canonicalised, so the bug only showed on the very first `pwd` of a session.
+    let out = cash("pwd");
+    assert!(
+        !out.stdout.contains('\\'),
+        "pwd printed backslashes: {}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains(":/"),
+        "not a rendered drive path: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn the_pwd_variable_agrees_with_the_builtin() {
+    let out = cash(r#"[ "$PWD" = "$(pwd)" ] && echo agree || echo "differ: [$PWD] [$(pwd)]""#);
+    assert_eq!(out.stdout, "agree");
+}
+
+#[test]
+fn a_path_composed_from_pwd_is_usable() {
+    // D3's own worked example: `terraform -chdir="$(pwd)/modules"`.
+    let out = cash(r#"echo "-chdir=$(pwd)/modules""#);
+    assert!(
+        !out.stdout.contains('\\'),
+        "composed argument has backslashes: {}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.starts_with("-chdir="),
+        "unexpected: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn a_resolved_relative_path_has_one_kind_of_separator() {
+    // `working_dir().join(name)` inserts a backslash, which leaked into every diagnostic
+    // naming a resolved path.
+    let out =
+        cash(r#"d=$(mktemp -d); cd "$d"; cat no-such-file 2>&1 | head -1; cd /; rm -rf "$d""#);
+    assert!(
+        !out.stdout.contains('\\'),
+        "a diagnostic mixed separators: {}",
+        out.stdout
+    );
+}
+
+// ---------------------------------------------------------------------------
+// `chmod` does what Windows can, and says what it cannot (D23, D34)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn chmod_is_a_builtin() {
+    let out = cash("type chmod");
+    assert!(
+        out.stdout.contains("shell builtin"),
+        "chmod is not the builtin: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn chmod_minus_w_really_makes_a_file_read_only() {
+    // The half Windows genuinely has. MSYS's chmod wrote a mode bit nothing outside MSYS
+    // could see; this one sets the attribute every Windows program honours.
+    let out = cash(
+        r#"d=$(mktemp -d); cd "$d"; : > f; chmod -w f; (echo x > f) 2>/dev/null && echo wrote || echo refused; chmod +w f; cd /; rm -rf "$d""#,
+    );
+    assert_eq!(
+        out.stdout, "refused",
+        "read-only was not enforced: {}",
+        out.stderr
+    );
+}
+
+#[test]
+fn chmod_plus_w_restores_writability() {
+    let out = cash(
+        r#"d=$(mktemp -d); cd "$d"; : > f; chmod -w f; chmod +w f; echo x > f && echo wrote; cd /; rm -rf "$d""#,
+    );
+    assert_eq!(out.stdout, "wrote", "stderr: {}", out.stderr);
+}
+
+#[test]
+fn chmod_plus_x_warns_rather_than_lying() {
+    // D34: executability comes from the extension or a shebang (D23), so there is no
+    // mode bit to set. Saying nothing would repeat MSYS's mistake.
+    let out =
+        cash(r#"d=$(mktemp -d); cd "$d"; : > f; chmod +x f; echo "rc=$?"; cd /; rm -rf "$d""#);
+    assert_eq!(out.stdout, "rc=0", "D34 says return 0");
+    assert!(
+        out.stderr.contains("execute") && out.stderr.contains("Windows"),
+        "no honest diagnostic: {}",
+        out.stderr
+    );
+}
+
+#[test]
+fn chmod_is_quiet_under_dash_f() {
+    let out =
+        cash(r#"d=$(mktemp -d); cd "$d"; : > f; chmod -f +x f; echo "rc=$?"; cd /; rm -rf "$d""#);
+    assert_eq!(out.stdout, "rc=0");
+    assert!(out.stderr.is_empty(), "-f was not silent: {}", out.stderr);
+}
+
+#[test]
+fn a_numeric_mode_applies_its_write_bit() {
+    let out = cash(
+        r#"d=$(mktemp -d); cd "$d"; : > f; chmod 444 f; (echo x > f) 2>/dev/null && echo wrote || echo refused; chmod 644 f; echo x > f && echo wrote-after; cd /; rm -rf "$d""#,
+    );
+    assert_eq!(out.stdout, "refused\nwrote-after", "stderr: {}", out.stderr);
+}
+
+#[test]
+fn chmod_reports_a_missing_file_and_an_invalid_mode() {
+    let missing = cash("chmod +w /definitely/not/here; echo rc=$?");
+    assert!(
+        missing.stdout.contains("rc=1"),
+        "missing file did not fail: {}",
+        missing.stdout
+    );
+
+    let invalid = cash("chmod zzz /tmp; echo rc=$?");
+    assert!(
+        invalid.stdout.contains("rc=1"),
+        "invalid mode did not fail: {}",
+        invalid.stdout
+    );
+    assert!(
+        invalid.stderr.contains("invalid mode"),
+        "no diagnostic: {}",
+        invalid.stderr
+    );
+
+    let none = cash("chmod; echo rc=$?");
+    assert!(
+        !none.stdout.contains("rc=0"),
+        "no operands was accepted: {}",
+        none.stdout
+    );
+}
+
+#[test]
+fn chmod_r_reaches_into_a_directory() {
+    let out = cash(
+        r#"d=$(mktemp -d); mkdir -p "$d/sub"; : > "$d/sub/f"; chmod -R -w "$d"; (echo x > "$d/sub/f") 2>/dev/null && echo wrote || echo refused; chmod -R +w "$d"; cd /; rm -rf "$d""#,
+    );
+    assert_eq!(out.stdout, "refused", "stderr: {}", out.stderr);
+}
+
+// ---------------------------------------------------------------------------
+// `cash doctor` reports cash's answer (D35)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn doctor_does_not_advise_installing_a_builtin() {
+    // The bug: on a bare PATH it said `WARN cat not found -> winget install ...` for a
+    // working builtin.
+    let out = run(Command::new(CASH).arg("doctor").env("PATH", BARE_PATH));
+    for builtin in ["cat", "mktemp", "cut", "tr", "head", "tail", "wc"] {
+        assert!(
+            !out.stdout.contains(&format!("WARN  {builtin}")),
+            "doctor warned about the builtin {builtin}:\n{}",
+            out.stdout
+        );
+    }
+}
+
+#[test]
+fn doctor_confirms_the_shells_resolve_to_cash() {
+    let out = run(Command::new(CASH).arg("doctor").env("PATH", BARE_PATH));
+    assert!(
+        out.stdout.contains("resolves to cash"),
+        "doctor did not report the shell rule:\n{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("WSL launcher"),
+        "doctor did not name what the rule takes precedence over:\n{}",
+        out.stdout
+    );
+}
+
+#[test]
+fn doctor_still_names_what_is_genuinely_missing() {
+    // The fix must not turn the diagnostic into a rubber stamp.
+    let out = run(Command::new(CASH).arg("doctor").env("PATH", BARE_PATH));
+    for absent in ["sed", "awk", "grep", "xargs"] {
+        assert!(
+            out.stdout.contains(&format!("WARN  {absent}")),
+            "doctor did not report {absent} as missing:\n{}",
+            out.stdout
+        );
+    }
+    assert_ne!(
+        out.code, 0,
+        "doctor reported success on a machine with no userland"
+    );
+}
+
+#[test]
+fn doctor_does_not_warn_about_a_dos_tool_a_builtin_shadows() {
+    // System32's `more.com` cannot shadow cash's `more`: PATH is never consulted for a
+    // builtin. Warning about it was exactly backwards.
+    let out = run(Command::new(CASH).arg("doctor"));
+    assert!(
+        !out.stdout.contains("more (shadowing)"),
+        "doctor warned that a builtin was shadowed:\n{}",
+        out.stdout
+    );
+}
+
+#[test]
+fn doctor_is_clean_on_a_fully_equipped_machine() {
+    let out = run(Command::new(CASH).arg("doctor"));
+    if out.stdout.contains("WARN") {
+        // Not a failure: this machine may genuinely be missing something. But the
+        // warnings must be about real externals, never about builtins.
+        for line in out.stdout.lines().filter(|l| l.contains("WARN")) {
+            assert!(
+                ![
+                    "cat", "cut", "tr", "head", "tail", "wc", "mktemp", "ps", "less"
+                ]
+                .iter()
+                .any(|b| line.contains(&format!("WARN  {b} "))),
+                "a builtin was reported as a problem: {line}"
+            );
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The old name is gone (D9)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn the_control_builtin_carries_cashs_name() {
+    let out = cash("type cashctl; type cashinfo");
+    assert_eq!(
+        out.stdout.lines().count(),
+        2,
+        "cashctl/cashinfo missing: {} {}",
+        out.stdout,
+        out.stderr
+    );
+
+    let old = cash("type brushctl 2>/dev/null; echo rc=$?");
+    assert!(
+        old.stdout.contains("rc=1"),
+        "the brush name is still registered: {}",
+        old.stdout
+    );
+}
