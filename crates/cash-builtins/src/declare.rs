@@ -259,6 +259,69 @@ impl DeclareCommand {
         true
     }
 
+    /// Whether `declare -n name=name` may stand.
+    ///
+    /// cash: a reference that stands for itself can never resolve, so bash refuses it —
+    /// except for a local, where `local -n out=$1` called as `fill out` is an ordinary
+    /// mistake rather than nonsense. There it warns, leaves the reference circular and
+    /// carries on, so the function fails to write rather than dying.
+    fn allow_self_reference(
+        &self,
+        context: &cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
+        name: &str,
+        initial_value: Option<&ShellValueLiteral>,
+        create_var_local: bool,
+    ) -> Result<bool, cash_core::Error> {
+        if self.make_nameref.to_bool() != Some(true) {
+            return Ok(true);
+        }
+
+        let Some(ShellValueLiteral::Scalar(target)) = initial_value else {
+            return Ok(true);
+        };
+
+        if target != name {
+            return Ok(true);
+        }
+
+        if create_var_local {
+            writeln!(
+                context.stderr(),
+                "{}: warning: {name}: circular name reference",
+                context.command_name
+            )?;
+            return Ok(true);
+        }
+
+        writeln!(
+            context.stderr(),
+            "{}: {name}: nameref variable self references not allowed",
+            context.command_name
+        )?;
+        Ok(false)
+    }
+
+    /// Finds the variable a declaration is about.
+    ///
+    /// cash: with `-n` this is the reference itself rather than what it stands for.
+    /// `declare -n ref=other` re-points an existing reference, where following it would
+    /// assign `other` to the old target and quietly turn *that* into a reference too.
+    fn look_up<'a, SE: cash_core::ShellExtensions>(
+        &self,
+        context: &'a mut cash_core::ExecutionContext<'_, SE>,
+        name: &str,
+        lookup: EnvironmentLookup,
+    ) -> Option<&'a mut ShellVariable> {
+        if self.make_nameref.to_bool() == Some(true) {
+            context
+                .shell
+                .env_mut()
+                .get_mut_using_policy_raw(name, lookup)
+        } else {
+            context.shell.env_mut().get_mut_using_policy(name, lookup)
+        }
+    }
+
     fn process_declaration(
         &self,
         context: &mut cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
@@ -299,6 +362,10 @@ impl DeclareCommand {
                 "{}: {name}: not a valid variable name",
                 context.command_name
             )?;
+            return Ok(false);
+        }
+
+        if !self.allow_self_reference(context, &name, initial_value.as_ref(), create_var_local)? {
             return Ok(false);
         }
 
@@ -344,12 +411,7 @@ impl DeclareCommand {
             }
         }
 
-        // Look up the variable.
-        if let Some(var) = context
-            .shell
-            .env_mut()
-            .get_mut_using_policy(name.as_str(), lookup)
-        {
+        if let Some(var) = self.look_up(context, name.as_str(), lookup) {
             if self.make_associative_array.is_some() {
                 var.convert_to_associative_array()?;
             }

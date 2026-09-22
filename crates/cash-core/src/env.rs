@@ -9,6 +9,13 @@ use crate::error;
 use crate::extensions;
 use crate::variables::{self, ShellValue, ShellValueUnsetType, ShellVariable};
 
+/// How far a chain of name references is followed before it is called circular.
+///
+/// cash: bash stops after a fixed number of hops rather than remembering the names it has
+/// already seen, and reports a circular reference. A chain this long is a mistake either
+/// way, so the ceiling costs nothing real.
+const NAMEREF_DEPTH_LIMIT: usize = 32;
+
 /// Represents the policy for looking up variables in a shell environment.
 #[derive(Clone, Copy)]
 pub enum EnvironmentLookup {
@@ -233,6 +240,17 @@ impl ShellEnvironment {
     ///
     /// * `name` - The name of the variable to retrieve.
     pub fn get<S: AsRef<str>>(&self, name: S) -> Option<(EnvironmentScope, &ShellVariable)> {
+        let name = self.follow_namerefs(name.as_ref())?;
+        self.get_raw(name.as_ref())
+    }
+
+    /// Tries to retrieve the variable with the given name, without following a name
+    /// reference.
+    ///
+    /// cash: this is what `declare -n`, `unset -n`, `${!ref}` and `[[ -R ref ]]` want —
+    /// the reference itself rather than what it stands for. Everything else goes through
+    /// `get`, which follows it.
+    pub fn get_raw<S: AsRef<str>>(&self, name: S) -> Option<(EnvironmentScope, &ShellVariable)> {
         // Look through scopes, from the top of the stack on down.
         for (scope_type, map) in self.scopes.iter().rev() {
             if let Some(var) = map.get(name.as_ref()) {
@@ -271,6 +289,16 @@ impl ShellEnvironment {
     ///
     /// * `name` - The name of the variable to retrieve.
     pub fn get_mut<S: AsRef<str>>(
+        &mut self,
+        name: S,
+    ) -> Option<(EnvironmentScope, &mut ShellVariable)> {
+        let name = self.follow_namerefs(name.as_ref())?.into_owned();
+        self.get_mut_raw(name)
+    }
+
+    /// Tries to retrieve a mutable reference to the variable with the given name, without
+    /// following a name reference.
+    pub fn get_mut_raw<S: AsRef<str>>(
         &mut self,
         name: S,
     ) -> Option<(EnvironmentScope, &mut ShellVariable)> {
@@ -324,6 +352,17 @@ impl ShellEnvironment {
     ///
     /// * `name` - The name of the variable to unset.
     pub fn unset(&mut self, name: &str) -> Result<Option<ShellVariable>, error::Error> {
+        // `unset ref` unsets what the reference stands for; `unset -n ref` — which calls
+        // `unset_raw` — removes the reference itself.
+        let Some(name) = self.follow_namerefs(name) else {
+            return Ok(None);
+        };
+        let name = name.into_owned();
+        self.unset_raw(name.as_str())
+    }
+
+    /// Unsets the variable with the given name, without following a name reference.
+    pub fn unset_raw(&mut self, name: &str) -> Result<Option<ShellVariable>, error::Error> {
         let mut local_count = 0;
         for (scope_type, map) in self.scopes.iter_mut().rev() {
             if matches!(scope_type, EnvironmentScope::Local) {
@@ -350,6 +389,51 @@ impl ShellEnvironment {
         }
 
         Ok(None)
+    }
+
+    /// The name a lookup of `name` would actually land on, following name references.
+    ///
+    /// cash: for the callers that do their own scope handling — an assignment that has to
+    /// *create* what a reference points at, for one — rather than going through `get` or
+    /// `update_or_add`.
+    pub fn resolved_name<'a>(&self, name: &'a str) -> Option<Cow<'a, str>> {
+        self.follow_namerefs(name)
+    }
+
+    /// Follows a chain of name references to the name that is actually being talked
+    /// about.
+    ///
+    /// cash: `declare -n ref=target` redirects the *name*, so every read, write and unset
+    /// has to be re-pointed before the scopes are searched. Doing it here — the one place
+    /// every lookup already passes through — means the rest of the shell goes on working
+    /// in plain names and never has to know. cash tracked the attribute and then ignored
+    /// it: `$ref` handed back the name it was pointed at, `ref=x` wrote to the reference,
+    /// and `local -n out=$1; out=result` — the way a bash function returns a value
+    /// through its caller's variable — silently did nothing.
+    ///
+    /// Returns `None` for a circular chain, which reads as unset, the way bash treats one.
+    fn follow_namerefs<'a>(&self, name: &'a str) -> Option<Cow<'a, str>> {
+        let mut current = Cow::Borrowed(name);
+
+        // bash stops after a fixed number of hops rather than remembering where it has
+        // been; a chain this long is a mistake either way.
+        for _ in 0..NAMEREF_DEPTH_LIMIT {
+            let Some((_, var)) = self.get_raw(current.as_ref()) else {
+                return Some(current);
+            };
+
+            let Some(target) = var.nameref_target() else {
+                return Some(current);
+            };
+
+            if target == current {
+                return None;
+            }
+
+            current = Cow::Owned(target.into_owned());
+        }
+
+        None
     }
 
     /// Tries to unset an array element from the environment, using the given name and
@@ -441,6 +525,17 @@ impl ShellEnvironment {
         name: N,
         lookup_policy: EnvironmentLookup,
     ) -> Option<&mut ShellVariable> {
+        let name = self.follow_namerefs(name.as_ref())?.into_owned();
+        self.get_mut_using_policy_raw(name, lookup_policy)
+    }
+
+    /// The same lookup, without following a name reference — what `declare -n` needs,
+    /// because it is assigning to the reference rather than through it.
+    pub fn get_mut_using_policy_raw<N: AsRef<str>>(
+        &mut self,
+        name: N,
+        lookup_policy: EnvironmentLookup,
+    ) -> Option<&mut ShellVariable> {
         let mut local_count = 0;
         for (scope_type, var_map) in self.scopes.iter_mut().rev() {
             if matches!(scope_type, EnvironmentScope::Local) {
@@ -499,8 +594,16 @@ impl ShellEnvironment {
     ) -> Result<(), error::Error> {
         let name = name.into();
 
+        // An assignment through a name reference lands on what it names — and creates it
+        // if it is not there yet, which is how `local -n out=$1; out=result` hands a value
+        // back to a caller that never declared `out` at all.
+        let Some(name) = self.follow_namerefs(name.as_str()) else {
+            return Ok(());
+        };
+        let name = name.into_owned();
+
         let auto_export = self.export_variables_on_modification;
-        if let Some(var) = self.get_mut_using_policy(&name, lookup_policy) {
+        if let Some(var) = self.get_mut_using_policy_raw(&name, lookup_policy) {
             var.assign(value, false)?;
             if auto_export {
                 var.export();
@@ -539,7 +642,13 @@ impl ShellEnvironment {
     ) -> Result<(), error::Error> {
         let name = name.into();
 
-        if let Some(var) = self.get_mut_using_policy(&name, lookup_policy) {
+        // `aref[1]=B` writes into the array the reference names.
+        let Some(name) = self.follow_namerefs(name.as_str()) else {
+            return Ok(());
+        };
+        let name = name.into_owned();
+
+        if let Some(var) = self.get_mut_using_policy_raw(&name, lookup_policy) {
             var.assign_at_index(index, value, false)?;
             updater(var)
         } else {

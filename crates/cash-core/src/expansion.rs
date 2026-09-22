@@ -1921,6 +1921,18 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
         indirect: bool,
         allow_unset_vars: bool,
     ) -> Result<Expansion, error::Error> {
+        // cash: `${!ref}` on a name reference gives the name it stands for, not a second
+        // round of indirection — bash's one exception to what `!` means. Every other
+        // lookup now follows the reference, so without this the `!` would be applied to
+        // the target's *value* and find nothing.
+        if indirect
+            && let cash_parser::word::Parameter::Named(name) = parameter
+            && let Some((_, var)) = self.shell.env().get_raw(name)
+            && let Some(target) = var.nameref_target()
+        {
+            return Ok(Expansion::from(target.to_string()));
+        }
+
         let expansion = self
             .expand_parameter_without_indirect(parameter, allow_unset_vars)
             .await?;

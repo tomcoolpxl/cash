@@ -187,6 +187,26 @@ impl ShellVariable {
         self
     }
 
+    /// The name this variable stands for, if it is a name reference.
+    ///
+    /// cash: a nameref redirects the *name*, not the value — `declare -n ref=target`
+    /// stores the string `target` and every read, write and unset of `ref` is meant to
+    /// land on `target`. cash tracked the attribute and then ignored it, so `$ref` gave
+    /// back the name it was pointed at and `ref=x` wrote to the reference itself. Reading
+    /// the target needs no shell, because a nameref is always a plain string.
+    pub fn nameref_target(&self) -> Option<Cow<'_, str>> {
+        if !self.is_treated_as_nameref() {
+            return None;
+        }
+
+        let target = self.value().to_cow_str_without_dynamic_support();
+        if target.is_empty() {
+            None
+        } else {
+            Some(target)
+        }
+    }
+
     /// Converts the variable to an indexed array.
     pub fn convert_to_indexed_array(&mut self) -> Result<(), error::Error> {
         match self.value() {

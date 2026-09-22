@@ -185,7 +185,10 @@ pub(crate) fn apply_unary_predicate_to_str(
             }
         }
         ast::UnaryPredicate::ShellVariableIsSetAndAssigned => Ok(shell.env().is_set(operand)),
-        ast::UnaryPredicate::ShellVariableIsSetAndNameRef => match shell.env().get(operand) {
+        // cash: `-R` asks whether the *name* is a reference, so it has to see the variable
+        // itself rather than what it points at — every other lookup now follows the
+        // reference through.
+        ast::UnaryPredicate::ShellVariableIsSetAndNameRef => match shell.env().get_raw(operand) {
             Some((_, reffed)) => Ok(reffed.value().is_set() && reffed.is_treated_as_nameref()),
             None => Ok(false),
         },

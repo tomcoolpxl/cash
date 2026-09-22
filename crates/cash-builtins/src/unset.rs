@@ -43,11 +43,15 @@ impl builtins::Command for UnsetCommand {
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<cash_core::ExecutionResult, Self::Error> {
-        //
-        // TODO(nameref): implement nameref
-        //
+        // cash: `unset -n ref` removes the reference itself, where a plain `unset ref`
+        // now removes what it stands for. This refused outright, so the only way to get
+        // rid of a reference was to leave it lying around.
         if self.name_interpretation.name_references {
-            return cash_core::error::unimp("unset: name references are not yet implemented");
+            for name in &self.names {
+                context.shell.env_mut().unset_raw(name)?;
+            }
+
+            return Ok(ExecutionResult::success());
         }
 
         let unspecified = self.name_interpretation.unspecified();

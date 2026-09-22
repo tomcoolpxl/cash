@@ -1707,6 +1707,20 @@ async fn apply_assignment(
         }
     };
 
+    // cash: an assignment through a name reference lands on the name it stands for, and
+    // has to create that name if it is not there yet — `local -n out=$1; out=result` is
+    // how a bash function writes back into a variable its caller owns, and the caller
+    // need never have declared it. Resolving here rather than only in the lookup below is
+    // what makes the creation path land in the right place.
+    let Some(resolved_name) = shell.env().resolved_name(variable_name.as_str()) else {
+        // A circular chain of references names nothing, so there is nowhere for the value
+        // to go. bash warns and drops the assignment rather than writing to the reference
+        // itself, which would quietly break the chain.
+        return Ok(());
+    };
+    let resolved_name = resolved_name.into_owned();
+    let variable_name = &resolved_name;
+
     // Expand the values.
     let new_value = match &assignment.value {
         ast::AssignmentValue::Scalar(unexpanded_value) => {
