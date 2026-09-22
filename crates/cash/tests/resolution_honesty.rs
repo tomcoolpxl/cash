@@ -116,6 +116,39 @@ fn which_prints_a_bare_path_for_an_external() {
 }
 
 #[test]
+fn type_renders_a_path_the_same_way_which_does() {
+    // `type` printed the path as the resolver had assembled it, so an already-rendered
+    // PATH directory was joined to the file name with a backslash:
+    //
+    //     ls is C:/Program Files/Git/usr/bin\ls.exe
+    //
+    // Two commands answering about the same file must not spell it two ways (D3).
+    let typed = cash("type cmd").stdout;
+    assert!(
+        !typed.contains('\\'),
+        "D3: backslashes in a rendered path: {typed}"
+    );
+
+    let from_which = cash("which cmd").stdout;
+    assert!(
+        typed.ends_with(&from_which),
+        "type and which disagree: [{typed}] [{from_which}]"
+    );
+}
+
+#[test]
+fn type_a_renders_every_candidate() {
+    // `-a` is where the mixed separator showed up, because it is the spelling that prints
+    // the PATH hits rather than stopping at the builtin.
+    let out = cash("type -a cmd");
+    assert!(
+        !out.stdout.contains('\\'),
+        "D3: backslashes in a rendered path: {}",
+        out.stdout
+    );
+}
+
+#[test]
 fn which_p_restricts_the_search_to_path() {
     // The escape hatch for a script that genuinely wants a file, not an answer.
     let out = cash("which -p cat");

@@ -130,10 +130,23 @@ fn format_prompt_piece(
         }
         cash_parser::prompt::PromptPiece::ShellBaseName => {
             if let Some(shell_name) = shell.current_shell_name() {
-                Path::new(shell_name.as_ref())
+                let base = Path::new(shell_name.as_ref())
                     .file_name()
                     .map(|name| name.to_string_lossy().to_string())
-                    .unwrap_or_default()
+                    .unwrap_or_default();
+
+                // cash: `\s` is the shell's name, and the default prompt is `\s-\v\$` —
+                // so with no rc file the first thing anyone sees is this. On Windows the
+                // basename carries the extension, which made that prompt read
+                // `cash.exe-0.5$`. bash shows `bash`, never `bash.exe`, and `sh.exe`
+                // still reads `sh` after this, so the two spellings stay apart.
+                #[cfg(windows)]
+                let base = base
+                    .strip_suffix(".exe")
+                    .or_else(|| base.strip_suffix(".EXE"))
+                    .map_or_else(|| base.clone(), std::borrow::ToOwned::to_owned);
+
+                base
             } else {
                 String::new()
             }

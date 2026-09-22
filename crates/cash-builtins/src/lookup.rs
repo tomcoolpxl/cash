@@ -145,6 +145,16 @@ pub(crate) fn describe(
         Resolved::Function(def) => writeln!(writer, "{name} is a function\n{def}"),
         Resolved::Builtin => writeln!(writer, "{name} is a shell builtin"),
         Resolved::File { path, hashed } => {
+            // cash (D3): one canonical spelling on the way out. This printed the path as
+            // the resolver had assembled it, so a `PATH` directory that was already
+            // rendered got joined to the file name with a backslash:
+            //
+            //     ls is C:/Program Files/Git/usr/bin\ls.exe
+            //
+            // `which` renders here too, and the two must not disagree about the same file.
+            #[cfg(windows)]
+            let path = cash_win32::path::render(path);
+            #[cfg(not(windows))]
             let path = path.to_string_lossy();
             if *hashed {
                 writeln!(writer, "{name} is hashed ({path})")
