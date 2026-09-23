@@ -367,7 +367,9 @@ fn xargs_null_separated_preserves_spaces_and_newlines() {
     let out = cash(r#"printf 'hello world\0line\nwith\nnewlines\0' | xargs -0 -n 1 echo ENTRY:"#);
     assert_eq!(out.stdout.matches("ENTRY:").count(), 2);
     assert!(out.stdout.contains("hello world"));
-    assert!(out.stdout.contains("line\nwith\nnewlines"));
+    // xargs passes the embedded newlines through; echo may add \r\n on Windows.
+    let normalised = out.stdout.replace("\r\n", "\n");
+    assert!(normalised.contains("line\nwith\nnewlines"));
 }
 
 #[test]
