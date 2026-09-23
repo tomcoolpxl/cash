@@ -395,6 +395,28 @@ pub enum ParameterExpr {
         /// Optionally provides a pattern to match.
         pattern: Option<String>,
     },
+    /// Toggle the case of the first character of the given parameter.
+    ToggleCaseFirstChar {
+        /// The parameter.
+        parameter: Parameter,
+        /// Whether to treat the expanded parameter as an indirect
+        /// reference, which should be subsequently dereferenced
+        /// for the expansion.
+        indirect: bool,
+        /// Optionally provides a pattern to match.
+        pattern: Option<String>,
+    },
+    /// Toggle the case of the portion of the given parameter matching the given pattern.
+    ToggleCasePattern {
+        /// The parameter.
+        parameter: Parameter,
+        /// Whether to treat the expanded parameter as an indirect
+        /// reference, which should be subsequently dereferenced
+        /// for the expansion.
+        indirect: bool,
+        /// Optionally provides a pattern to match.
+        pattern: Option<String>,
+    },
     /// Replace occurrences of the given pattern in the given parameter.
     ReplaceSubstring {
         /// The parameter.
@@ -1159,6 +1181,12 @@ peg::parser! {
             } /
             indirect:parameter_indirection() parameter:parameter() "," pattern:parameter_expression_word()? {
                 ParameterExpr::LowercaseFirstChar { parameter, indirect, pattern }
+            } /
+            indirect:parameter_indirection() parameter:parameter() "~~" pattern:parameter_expression_word()? {
+                ParameterExpr::ToggleCasePattern { parameter, indirect, pattern }
+            } /
+            indirect:parameter_indirection() parameter:parameter() "~" pattern:parameter_expression_word()? {
+                ParameterExpr::ToggleCaseFirstChar { parameter, indirect, pattern }
             }
 
         rule parameter_indirection() -> bool =

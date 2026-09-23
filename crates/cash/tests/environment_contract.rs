@@ -323,3 +323,53 @@ fn groups_names_an_account_rather_than_failing() {
         out.stdout
     );
 }
+
+#[test]
+fn hostname_uname_and_computername_all_agree() {
+    let out = cash(r#"
+        echo "hn=$(hostname)"
+        echo "un=$(uname -n)"
+        echo "cn=$COMPUTERNAME"
+        echo "env_hn=$HOSTNAME"
+    "#);
+    let hn = out.stdout.lines().find_map(|l| l.strip_prefix("hn=")).unwrap_or_default();
+    let un = out.stdout.lines().find_map(|l| l.strip_prefix("un=")).unwrap_or_default();
+    let cn = out.stdout.lines().find_map(|l| l.strip_prefix("cn=")).unwrap_or_default();
+    let env_hn = out.stdout.lines().find_map(|l| l.strip_prefix("env_hn=")).unwrap_or_default();
+
+    assert!(!cn.is_empty(), "COMPUTERNAME is empty");
+    assert_eq!(hn, cn, "hostname [{hn}] != COMPUTERNAME [{cn}]");
+    assert_eq!(un, cn, "uname -n [{un}] != COMPUTERNAME [{cn}]");
+    assert_eq!(env_hn, cn, "$HOSTNAME [{env_hn}] != COMPUTERNAME [{cn}]");
+}
+
+#[test]
+fn logout_builtin_requires_login_shell() {
+    let non_login = cash("logout");
+    assert_eq!(non_login.code, 1);
+    assert!(
+        non_login.stderr.contains("not login shell"),
+        "unexpected stderr: {}",
+        non_login.stderr
+    );
+
+    let login_out = Command::new(CASH)
+        .args(["--login", "-c", "logout"])
+        .output()
+        .expect("run cash");
+    assert_eq!(login_out.status.code(), Some(0));
+}
+
+#[test]
+fn type_and_which_do_not_produce_mixed_slashes() {
+    let out = cash("type -a which; type -p which");
+    for line in out.stdout.lines() {
+        if line.contains(':') && line.contains('/') {
+            assert!(
+                !line.contains('\\'),
+                "found mixed slash in type output: [{line}]"
+            );
+        }
+    }
+}
+

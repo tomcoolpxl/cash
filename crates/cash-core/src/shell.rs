@@ -569,6 +569,9 @@ impl<SE: extensions::ShellExtensions> ShellState for Shell<SE> {
 
     /// Returns a mutable reference to the shell's history, if it exists.
     pub fn history_mut(&mut self) -> Option<&mut crate::history::History> {
+        if self.options.enable_command_history && self.history.is_none() {
+            self.history = Some(crate::history::History::default());
+        }
         self.history.as_mut()
     }
 

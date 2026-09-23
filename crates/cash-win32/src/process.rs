@@ -276,6 +276,14 @@ pub fn details(pid: u32) -> ProcessDetails {
     details
 }
 
+/// The account running the current process.
+#[must_use]
+pub fn current_process_user() -> Option<String> {
+    // SAFETY: GetCurrentProcess returns a pseudo-handle for the current process.
+    let current = unsafe { windows_sys::Win32::System::Threading::GetCurrentProcess() };
+    token_user(current)
+}
+
 /// The account a process's token names, without its domain.
 fn token_user(process: windows_sys::Win32::Foundation::HANDLE) -> Option<String> {
     use windows_sys::Win32::Security::{
@@ -369,6 +377,27 @@ pub fn computer_name() -> Option<String> {
     // SAFETY: the buffer and its length are handed over together, and the call writes at
     // most `size` UTF-16 units into it.
     let ok = unsafe { GetComputerNameExW(ComputerNameNetBIOS, buffer.as_mut_ptr(), &raw mut size) };
+    if ok == 0 {
+        return None;
+    }
+
+    let name = String::from_utf16_lossy(&buffer[..size as usize]);
+    if name.is_empty() { None } else { Some(name) }
+}
+
+/// The machine's DNS hostname, as returned by the DNS subsystem (often lowercased).
+#[must_use]
+pub fn dns_hostname() -> Option<String> {
+    use windows_sys::Win32::System::SystemInformation::{
+        ComputerNameDnsHostname, GetComputerNameExW,
+    };
+
+    let mut buffer = [0u16; 256];
+    let mut size = u32::try_from(buffer.len()).unwrap_or(u32::MAX);
+
+    // SAFETY: the buffer and its length are handed over together, and the call writes at
+    // most `size` UTF-16 units into it.
+    let ok = unsafe { GetComputerNameExW(ComputerNameDnsHostname, buffer.as_mut_ptr(), &raw mut size) };
     if ok == 0 {
         return None;
     }
@@ -484,3 +513,48 @@ pub fn terminate(pid: u32) -> std::io::Result<()> {
     }
     Ok(())
 }
+
+/// Resume a process created suspended, resuming all its threads.
+///
+/// Uses NT native API `NtResumeProcess` from `ntdll.dll`.
+#[allow(
+    clippy::not_unsafe_ptr_arg_deref,
+    reason = "process is an opaque Win32 kernel handle, not a dereferenceable memory pointer"
+)]
+pub fn resume_process(process: windows_sys::Win32::Foundation::HANDLE) -> std::io::Result<()> {
+    use std::sync::LazyLock;
+    use windows_sys::Win32::Foundation::HANDLE;
+    use windows_sys::Win32::System::LibraryLoader::{GetModuleHandleA, GetProcAddress};
+
+    type NtResumeProcessFn = unsafe extern "system" fn(process_handle: HANDLE) -> i32;
+
+    static NT_RESUME: LazyLock<Option<NtResumeProcessFn>> = LazyLock::new(|| {
+        // SAFETY: ntdll is guaranteed to be loaded into every Windows process.
+        let ntdll = unsafe { GetModuleHandleA(c"ntdll.dll".as_ptr().cast()) };
+        if ntdll.is_null() {
+            return None;
+        }
+        // SAFETY: ntdll handle is valid.
+        let proc = unsafe { GetProcAddress(ntdll, c"NtResumeProcess".as_ptr().cast()) };
+        proc.map(|p| {
+            // SAFETY: NtResumeProcess signature matches NtResumeProcessFn.
+            unsafe { std::mem::transmute::<_, NtResumeProcessFn>(p) }
+        })
+    });
+
+    if let Some(nt_resume) = *NT_RESUME {
+        // SAFETY: handle is valid.
+        let status = unsafe { nt_resume(process) };
+        if status >= 0 {
+            Ok(())
+        } else {
+            Err(std::io::Error::from_raw_os_error(status))
+        }
+    } else {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "NtResumeProcess not found in ntdll.dll",
+        ))
+    }
+}
+

@@ -71,16 +71,21 @@ Windows 11 (or Windows 10 1809+, for ConPTY). Rust 1.88+.
 
 ## Userland
 
-cash carries 146 builtins, including the whole of uutils coreutils, plus `ps`,
-`less`/`more`, `which` and `chmod` written for Windows. With nothing else installed,
-65 of 103 commands a bash script expects already resolve.
+cash carries the whole of uutils coreutils, plus a set written for Windows because the
+name resolves to something worse there: `find` and `xargs`, `ps` and `top`, `less`/`more`,
+`which`, `chmod`, `hostname`, and `coolfetch`.
 
-**It does not carry `find`, `xargs`, `grep`, `sed`, `awk`, `diff` or `stat`**, and the
-first three are not optional for the workload cash is built for. `find | xargs grep` is
-in cash's own acceptance corpus. Install one of:
+The rule for what cash carries is not "is it missing" — Scoop can supply anything. It is
+**does the tool have to agree with cash about something cash owns?** `find` prints paths,
+so it owes D3 one spelling; `xargs` builds command lines, which on Windows are strings the
+callee re-splits (D32); `ps` and `top` print pids that `kill` must accept (D22). Where the
+answer is no, cash stays out of the way.
+
+**It does not carry `grep`, `sed`, `awk`, `diff` or `stat`** — none of them has to agree
+with the shell about anything, and all of them have good Windows builds:
 
 ```bash
-winget install Microsoft.Coreutils   # coreutils + findutils + grep
+winget install Microsoft.Coreutils   # coreutils + grep
 scoop install sed gawk               # NOT in the MS bundle — separate GNU projects
 ```
 

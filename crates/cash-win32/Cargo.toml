@@ -1,7 +1,8 @@
 [package]
 name = "cash-win32"
 description = "Win32 semantics layer for cash: job objects, signals, paths, console"
-version = "0.1.0"
+version.workspace = true
+authors.workspace = true
 categories.workspace = true
 edition.workspace = true
 keywords.workspace = true
@@ -22,7 +23,10 @@ windows-sys = { version = "0.61", features = [
     "Win32_System_Pipes",
     "Win32_System_Diagnostics_ToolHelp",
     "Win32_System_JobObjects",
+    "Win32_System_LibraryLoader",
     "Win32_System_ProcessStatus",
+    "Win32_System_Registry",
     "Win32_System_SystemInformation",
+    "Win32_System_IO",
     "Win32_System_Threading",
 ] }

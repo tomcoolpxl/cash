@@ -161,6 +161,17 @@ impl TestCase {
         // Clear all environment vars for consistency.
         test_cmd.args(&self.args).env_clear();
 
+        #[cfg(windows)]
+        {
+            if let Ok(sysroot) = std::env::var("SystemRoot") {
+                test_cmd.env("SystemRoot", sysroot);
+            }
+            if let Ok(temp) = std::env::var("TEMP") {
+                test_cmd.env("TEMP", &temp);
+                test_cmd.env("TMP", temp);
+            }
+        }
+
         // Set locale to C for consistent behavior across systems.
         test_cmd.env("LC_ALL", "C");
         // Hard-code a well known prompt for PS1.

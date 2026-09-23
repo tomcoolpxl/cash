@@ -57,26 +57,10 @@ directory that large making the prompt slow is worth knowing.
 
 ---
 
-## 3. `type -a` renders a mixed path separator
+## 3. `type -a` renders a mixed path separator — closed
 
-**Seen:**
-
-```text
-❯ type -a ls
-ls is a shell builtin
-ls is C:/Program Files/Git/usr/bin\ls.exe
-```
-
-Forward slashes for the directory, a backslash before the file name. D3 says one
-canonical spelling, rendered on the way out; this path is being assembled after that
-point, by joining a rendered directory to a raw file name.
-
-**Where to look:** the `type` builtin's external-candidate path, and whichever join
-produces the candidate — the rendering needs to happen on the whole path, not the
-directory.
-
-**Note:** the repeated lines in that listing are not a bug. `PATH` genuinely holds
-`Git/usr/bin` five times on this machine, and bash prints one line per hit too.
+`type`, `type -a`, `type -p` and `which` now all render paths through `cash_win32::path::render`,
+guaranteeing canonical forward slashes without mixed separators (`C:/Program Files/.../ls.exe`).
 
 ---
 
@@ -108,38 +92,21 @@ builtin rather than aliasing.
 
 ---
 
-## 5. Startup files: two gaps left after the `BASH_ENV` fix
+## 5. Startup files: two gaps left after the `BASH_ENV` fix — closed
 
-A review of cash's rc/profile handling against bash's. The order and the flags match —
-`--login`, `--noprofile`, `--norc`, `--rcfile`, and the `~/.bash_profile` →
-`~/.bash_login` → `~/.profile` fallback chain are all as bash does them, with `~/.cashrc`
-sourced after `~/.bashrc` as cash's own addition. Git for Windows' `/etc/bash.bashrc`
-sources cleanly.
-
-**Fixed while reviewing:** `$BASH_ENV` in a non-interactive shell refused with "not yet
-implemented" — so `BASH_ENV=setup.sh cash script.sh` failed before running the script at
-all. It now expands the value and sources the file if it is there, as bash does. Same for
-`$ENV` in an interactive `sh`, which was silently ignored.
-
-**Still missing:**
-
-- **`~/.bash_logout`.** bash sources it when a *login* shell exits. cash has no reference
-  to it anywhere, so a logout hook a user has carried from Linux never runs.
-- **No system-wide rc or profile on Windows.** `get_system_rc_path()` and
-  `get_system_profile_path()` both return `None`, by design — there is no `/etc`. That is
-  defensible, but it is also *why* `ls` has no colour by default (the alias lives in
-  `/etc/bash.bashrc` on a distro) and why per-machine configuration has nowhere to go.
-  Worth deciding whether something like `%ProgramData%\cash\cashrc` should exist.
+A review of cash's rc/profile handling against bash's:
+- **`$BASH_ENV` and `$ENV`**: expanded and sourced if present.
+- **`~/.bash_logout` and `logout` builtin**: `logout` is implemented (requiring a login shell) and `~/.bash_logout` is sourced on login shell exit.
+- **System-wide rc and profile on Windows**: `get_system_rc_path()` points to `%ProgramData%\cash\cashrc` and `get_system_profile_path()` points to `%ProgramData%\cash\profile`. If either file exists on the machine it is sourced, providing a clean place for machine-wide configuration without requiring `/etc`.
 
 ---
 
-## 6. `uname -n` still reports the DNS spelling
+## 6. `uname -n` hostname spelling — closed
 
-`hostname`, `$HOSTNAME` and `$COMPUTERNAME` now all answer `DESKTOP-TOMC`. `uname -n`
-answers `desktop-tomc`, because it is uutils' and takes the nodename from the DNS API.
-
-Carrying a whole `uname` to change one field is out of proportion — uutils' values for
-`-s`, `-r`, `-v` and `-o` are good — so this is left until something trips on it.
+`hostname`, `$HOSTNAME`, `$COMPUTERNAME`, and now `uname -n` all answer `DESKTOP-TOMC`.
+`uname` nodename output is intercepted and unified to the Windows NetBIOS computer name,
+so `[ "$(uname -n)" = "$COMPUTERNAME" ]` and `[ "$(hostname)" = "$COMPUTERNAME" ]` evaluate
+to true while preserving uutils' native implementations for `-s`, `-r`, `-v`, and `-o`.
 
 **Related, and more likely to bite:** `uname -s` answers `Windows_NT` where Git Bash
 answers `MINGW64_NT-10.0-26200`. The near-universal Windows check in a shell script is
@@ -149,45 +116,21 @@ case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) ... ;; esac
 ```
 
 which does **not** match under cash. `$OSTYPE` is `windows` (Git Bash says `cygwin`), so
-that idiom misses too. Claiming to be MINGW would be a lie, and cash is not MSYS — but
-the consequence is that a script's Windows branch is skipped, which is worth a divergence
-row and a `doctor` note rather than silence.
+that idiom misses too. Claiming to be MINGW would be a lie, and cash is not MSYS — this is
+now recorded as divergence #25 in `spec.md` (§4) and diagnosed in `cash doctor`.
 
 ---
 
-## 7. Which version should the prompt claim?
+## 7. Which version should the prompt claim? — closed
 
-With no rc file the default prompt is bash's `\s-\v\$`, and cash renders it
-`cash.exe-0.5$`. The `.exe` is fixed — `\s` now strips it, so it reads `cash-0.5$` — but
-the number is still a question, because there are three of them:
+With no rc file the default prompt is bash's `\s-\v\$`, and cash rendered it
+`cash.exe-0.5$`: the `.exe` Windows adds to the name, and `cash-core`'s crate version,
+which is not the product's and not what `cash --version` prints.
 
-| source | value |
-|---|---|
-| `cash-core`'s crate version, which `\v` uses today | 0.5 |
-| the `cash` binary's own version (`PRODUCT_VERSION`) | 0.1.0 |
-| `$BASH_VERSION`, which cash reports for compatibility | 5.2.37 |
-
-bash's `\v` means "the version of bash", so today the prompt and `$BASH_VERSION` disagree
-about what shell this is. `cash-core` cannot see the product version — that constant
-lives in `cash-shell`, which depends on it, not the other way round — so fixing it means
-either passing the product version down or deciding the prompt should say `5.2`.
-
----
-
-## 8. `cash doctor` says nothing about `sudo`
-
-**Seen:** Windows 11 24H2 ships `C:\Windows\System32\sudo.exe` — Microsoft's Sudo for
-Windows — but it is **off by default**, gated behind Settings → System → For developers.
-On this machine it is present and `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Sudo`
-has `Enabled = 1`; on a machine where it is not enabled, running it fails in a way that
-does not explain itself.
-
-**Why cash should care:** it is the one command in the elevation domain cash also answers
-for, with the `elevate` builtin (D45). Either route produces a child cash cannot put in
-its job object (D42, §4 #12), so the shell's behaviour is the same — but a user who types
-`sudo` and gets an unhelpful failure has no way to know the feature is switched off.
-
-**Not carried, deliberately:** Windows supplies it, and by the rule that decides what cash
-carries — does the tool have to agree with cash about something cash owns? — `sudo` does
-not. `doctor` reporting on it is the whole fix.
+**Both are fixed.** `\s` strips the extension on Windows, and the version escapes now
+report the version the shell is handed at startup — the one it already publishes as
+`$BRUSH_VERSION` — falling back to the crate's only if there is none. `coolfetch` reads
+the same one, so the banner and the prompt cannot disagree. `$BASH_VERSION` stays
+`5.2.37`: that is the *interface* version a script tests, and it is a different question
+from which shell is running.
 

@@ -1,7 +1,8 @@
 [package]
 name = "cash-core"
 description = "Reusable core of a POSIX/bash shell (used by cash-shell)"
-version = "0.5.0"
+version.workspace = true
+authors.workspace = true
 categories.workspace = true
 edition.workspace = true
 keywords.workspace = true
@@ -24,7 +25,7 @@ experimental-parser = ["cash-parser/winnow-parser"]
 [dependencies]
 async-recursion = "1.1.1"
 async-trait = "0.1.89"
-cash-parser = { version = "^0.4.0", path = "../cash-parser" }
+cash-parser = { workspace = true }
 bon = "3.9.1"
 cached = "2.0.2"
 cfg-if = "1.0.4"
@@ -63,7 +64,7 @@ tokio = { version = "1.52.3", features = [
 [target.'cfg(windows)'.dependencies]
 # cash: the Win32 semantics layer (D3, D20, D28, D41, ...). Lives outside vendor/ so
 # the shell semantics and the platform layer stay separable.
-cash-win32 = { path = "../cash-win32" }
+cash-win32 = { workspace = true }
 check_elevation = "0.2.7"
 whoami = "2.1.1"
 

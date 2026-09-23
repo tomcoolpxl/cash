@@ -383,7 +383,7 @@ async fn docker_completion_works() {
 
 #[tokio::test]
 async fn kubectl_completion_works() {
-    assert_real_tool_completes("kubectl", &["completion", "bash"], "kubectl get po", "pods").await;
+    assert_real_tool_completes("kubectl", &["completion", "bash"], "kubectl api-r", "api-resources").await;
 }
 
 #[tokio::test]

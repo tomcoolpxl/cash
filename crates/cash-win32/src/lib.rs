@@ -15,17 +15,22 @@
 
 pub mod cmd;
 pub mod console;
+pub mod conpty;
 pub mod env;
 pub mod exit;
+pub mod fs;
 pub mod job;
 pub mod jobreg;
 pub mod path;
+pub mod pipe;
 pub mod poll;
 pub mod process;
 pub mod resolve;
 pub mod session;
 pub mod spawn;
 pub mod stdio;
+/// What the machine is, asked directly — the numbers `coolfetch` prints.
+pub mod sysinfo;
 pub mod text;
 
 pub use job::{JobConfig, JobObject};

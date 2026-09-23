@@ -1,0 +1,128 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g. v0.8.0). Leave empty to use HEAD.'
+        required: false
+        default: ''
+      prerelease:
+        description: 'Mark as pre-release'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # ── Gate: run the full CI suite before releasing ──────────────────────
+  ci:
+    name: CI Gate (Windows)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        run: |
+          rustup toolchain install 1.98.1 --profile minimal --component rustfmt,clippy
+          rustup default 1.98.1
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check workspace
+        run: cargo check --workspace --all-targets
+
+      - name: Run tests
+        run: cargo test --workspace
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+  # ── Build release binary and publish GitHub Release ───────────────────
+  release:
+    name: Build & Publish Release
+    needs: ci
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Determine release tag
+        id: tag
+        shell: pwsh
+        run: |
+          if ("${{ github.event_name }}" -eq "workflow_dispatch" -and "${{ inputs.tag }}" -ne "") {
+            $tag = "${{ inputs.tag }}"
+          } else {
+            $tag = "${{ github.ref_name }}"
+          }
+          Write-Host "Release tag: $tag"
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Verify tag matches Cargo.toml version
+        shell: pwsh
+        run: |
+          $tag = "${{ steps.tag.outputs.tag }}"
+          $cargoVersion = (Select-String -Path Cargo.toml -Pattern '^\s*version\s*=\s*"([^"]+)"' | Select-Object -First 1).Matches.Groups[1].Value
+          $tagVersion = $tag -replace '^v', ''
+          # Strip any pre-release suffix for comparison (e.g. v0.8.0-rc.1 → 0.8.0)
+          $tagBase = ($tagVersion -split '-')[0]
+          if ($tagBase -ne $cargoVersion) {
+            Write-Error "Tag version ($tagBase) does not match Cargo.toml version ($cargoVersion)"
+            exit 1
+          }
+          Write-Host "✓ Tag $tag matches Cargo.toml version $cargoVersion"
+
+      - name: Install Rust toolchain
+        run: |
+          rustup toolchain install 1.98.1 --profile minimal
+          rustup default 1.98.1
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build release binary
+        run: cargo build --release --bin cash
+
+      - name: Print version
+        run: target\release\cash.exe --version
+
+      - name: Package release assets
+        shell: pwsh
+        run: |
+          $tag = "${{ steps.tag.outputs.tag }}"
+          $archiveName = "cash-$tag-x86_64-pc-windows-msvc.zip"
+          $distDir = "dist"
+          New-Item -ItemType Directory -Path $distDir -Force | Out-Null
+
+          Copy-Item target/release/cash.exe $distDir/
+          Copy-Item README.md $distDir/
+          Copy-Item LICENSE $distDir/
+
+          Compress-Archive -Path "$distDir/*" -DestinationPath $archiveName
+
+          $hash = (Get-FileHash -Path $archiveName -Algorithm SHA256).Hash.ToLower()
+          "$hash  $archiveName" | Out-File -FilePath "$archiveName.sha256" -Encoding ascii
+
+          Write-Host "Archive: $archiveName"
+          Write-Host "SHA256:  $hash"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          draft: false
+          prerelease: ${{ inputs.prerelease || false }}
+          generate_release_notes: true
+          files: |
+            cash-*-x86_64-pc-windows-msvc.zip
+            cash-*-x86_64-pc-windows-msvc.zip.sha256

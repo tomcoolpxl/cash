@@ -72,7 +72,9 @@ impl builtins::Command for HistoryCommand {
         if let Some(history) = context.shell.history_mut() {
             self.execute_with_history(history, &config, stdout, stderr)
         } else {
-            Err(cash_core::ErrorKind::HistoryNotEnabled.into())
+            // Bash compatibility: running history in a non-interactive shell where history
+            // is not enabled silently succeeds with status 0.
+            Ok(ExecutionExitCode::Success.into())
         }
     }
 }

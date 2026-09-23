@@ -322,6 +322,7 @@ impl DeclareCommand {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     fn process_declaration(
         &self,
         context: &mut cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
@@ -344,8 +345,24 @@ impl DeclareCommand {
         }
 
         // Extract the variable name and the initial value being assigned (if any).
-        let (name, assigned_index, initial_value, name_is_array, append) =
+        let (name, assigned_index, mut initial_value, name_is_array, append) =
             Self::declaration_to_name_and_value(declaration)?;
+
+        let is_int_decl = self.make_integer.to_bool() == Some(true)
+            || context
+                .shell
+                .env()
+                .get(name.as_str())
+                .is_some_and(|(_, v)| v.is_treated_as_integer());
+        if is_int_decl {
+            if let Some(ShellValueLiteral::Scalar(ref mut s)) = initial_value {
+                if let Ok(eval_val) =
+                    cash_core::arithmetic::evaluate_str(context.shell, s.as_str())
+                {
+                    *s = eval_val.to_string();
+                }
+            }
+        }
 
         // Special-case: `local -`
         if name == "-" && matches!(verb, DeclareVerb::Local) {
@@ -619,7 +636,7 @@ impl DeclareCommand {
         if let Some(value) = self.make_readonly.to_bool() {
             filters.push(Box::new(move |(_, v)| v.is_readonly() == value));
         }
-        if let Some(value) = self.make_readonly.to_bool() {
+        if let Some(value) = self.make_traced.to_bool() {
             filters.push(Box::new(move |(_, v)| v.is_trace_enabled() == value));
         }
         if let Some(value) = self.uppercase_value_on_assignment.to_bool() {

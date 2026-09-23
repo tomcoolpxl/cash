@@ -142,6 +142,11 @@ pub fn maybe_dispatch() -> Option<i32> {
         return Some(run_rendering_paths(*func, argv));
     }
 
+    #[cfg(windows)]
+    if name_str == "uname" && !asks_for_help(args) {
+        return Some(run_unified_uname(*func, argv));
+    }
+
     Some(func(argv))
 }
 
@@ -186,6 +191,28 @@ fn run_rendering_paths(func: BundledFn, argv: Vec<OsString>) -> i32 {
         Ok((code, captured)) => {
             let rendered = cash_win32::stdio::render_paths(&captured);
             let _ = cash_win32::stdio::write_stdout(&rendered);
+            code
+        }
+        Err(_) => func(argv),
+    }
+}
+
+/// Run a bundled `uname` with its nodename unified to cash's canonical hostname spelling.
+#[cfg(windows)]
+fn run_unified_uname(func: BundledFn, argv: Vec<OsString>) -> i32 {
+    match cash_win32::stdio::with_captured_stdout(|| func(argv.clone())) {
+        Ok((code, captured)) => {
+            if let Some(target) = cash_win32::process::computer_name() {
+                let text = String::from_utf8_lossy(&captured);
+                let unified = if let Some(dns) = cash_win32::process::dns_hostname() {
+                    text.replace(&dns, &target)
+                } else {
+                    text.into_owned()
+                };
+                let _ = cash_win32::stdio::write_stdout(unified.as_bytes());
+            } else {
+                let _ = cash_win32::stdio::write_stdout(&captured);
+            }
             code
         }
         Err(_) => func(argv),
@@ -264,22 +291,25 @@ fn shim_content(
 // `ExecutionSpawnResult::StartedProcess` directly (same shape as external
 // dispatch), or generalize the builtin API so a builtin can return a
 // spawn handle instead of a finished result.
-fn shim_execute<SE: ShellExtensions>(
+fn shim_spawn<SE: ShellExtensions>(
     context: ExecutionContext<'_, SE>,
     args: Vec<CommandArg>,
-) -> BoxFuture<'_, Result<cash_core::ExecutionResult, cash_core::Error>> {
+    process_group_id: Option<i32>,
+) -> BoxFuture<'_, Result<cash_core::ExecutionSpawnResult, cash_core::Error>> {
     Box::pin(async move {
         let exe_path = if let Some(p) = self_exe() {
             p.to_string_lossy().into_owned()
         } else {
             let _ = writeln!(
                 context.stderr(),
-                "brush: cannot determine path to running executable"
+                "cash: cannot determine path to running executable"
             );
-            return Ok(ExecutionExitCode::CannotExecute.into());
+            return Ok(cash_core::ExecutionSpawnResult::Completed(
+                ExecutionExitCode::CannotExecute.into(),
+            ));
         };
 
-        // Build the argv for the spawned brush. `SimpleCommand::args[0]` is
+        // Build the argv for the spawned cash process. `SimpleCommand::args[0]` is
         // dropped by the external-execution path (argv[0] of the spawned
         // process comes from `cmd.argv0` below), so a placeholder suffices;
         // args[1..] become the spawned process's argv[1..]. The caller's
@@ -303,11 +333,21 @@ fn shim_execute<SE: ShellExtensions>(
         // Override the spawned process's argv[0] so tools that report errors
         // via their own argv[0] (uutils' `uucore::util_name()` reads
         // `std::env::args_os()[0]` into a LazyLock at first use) render as
-        // `<name>:` rather than `brush:`. Without this the child sees the
-        // brush exe path as argv[0] and misattributes errors.
+        // `<name>:` rather than `cash:`. Without this the child sees the
+        // cash exe path as argv[0] and misattributes errors.
         cmd.argv0 = Some(bundled_name);
+        cmd.process_group_id = process_group_id;
 
-        let spawn_result = cmd.execute().await?;
+        cmd.execute().await
+    })
+}
+
+fn shim_execute<SE: ShellExtensions>(
+    context: ExecutionContext<'_, SE>,
+    args: Vec<CommandArg>,
+) -> BoxFuture<'_, Result<cash_core::ExecutionResult, cash_core::Error>> {
+    Box::pin(async move {
+        let spawn_result = shim_spawn(context, args, None).await?;
         let wait_result = spawn_result.wait().await?;
         Ok(wait_result.into())
     })
@@ -319,6 +359,7 @@ fn shim_execute<SE: ShellExtensions>(
 fn shim_registration<SE: ShellExtensions>() -> Registration<SE> {
     Registration {
         execute_func: shim_execute::<SE>,
+        spawn_func: Some(shim_spawn::<SE>),
         content_func: shim_content,
         disabled: false,
         special_builtin: false,

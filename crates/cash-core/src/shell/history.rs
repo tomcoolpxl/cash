@@ -108,4 +108,12 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
 
         Ok(())
     }
+
+    /// Performs history expansion on the given command line string using the shell's current history.
+    pub fn expand_history(
+        &self,
+        line: &str,
+    ) -> Result<crate::history::HistoryExpansionResult, crate::history::HistoryExpansionError> {
+        crate::history::expand_history(line, self.history.as_ref())
+    }
 }

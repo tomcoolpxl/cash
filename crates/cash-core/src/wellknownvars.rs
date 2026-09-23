@@ -59,6 +59,10 @@ pub(crate) fn init_well_known_vars(
     let shell_version = shell.version().map(ToString::to_string);
     shell.env_mut().set_global(
         "BRUSH_VERSION",
+        ShellVariable::new(shell_version.clone().unwrap_or_default()),
+    )?;
+    shell.env_mut().set_global(
+        "CASH_VERSION",
         ShellVariable::new(shell_version.unwrap_or_default()),
     )?;
 

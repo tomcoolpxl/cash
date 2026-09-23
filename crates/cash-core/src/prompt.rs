@@ -65,6 +65,31 @@ fn parse_prompt(
     cash_parser::prompt::parse(spec)
 }
 
+/// The shell's own name, as `\s` reports it.
+///
+/// cash: the default prompt is `\s-\v\$`, so with no rc file this is the first thing
+/// anyone sees. On Windows the basename carries the extension, which made that prompt
+/// read `cash.exe-0.5$`; bash shows `bash`, never `bash.exe`. Only an exact `.exe` is
+/// stripped, so `sh` and `bash` still read as themselves.
+fn shell_base_name(shell: &Shell<impl extensions::ShellExtensions>) -> String {
+    let Some(shell_name) = shell.current_shell_name() else {
+        return String::new();
+    };
+
+    let base = Path::new(shell_name.as_ref())
+        .file_name()
+        .map(|name| name.to_string_lossy().to_string())
+        .unwrap_or_default();
+
+    #[cfg(windows)]
+    let base = base
+        .strip_suffix(".exe")
+        .or_else(|| base.strip_suffix(".EXE"))
+        .map_or_else(|| base.clone(), std::borrow::ToOwned::to_owned);
+
+    base
+}
+
 fn format_prompt_piece(
     shell: &Shell<impl extensions::ShellExtensions>,
     piece: cash_parser::prompt::PromptPiece,
@@ -128,35 +153,28 @@ fn format_prompt_piece(
         cash_parser::prompt::PromptPiece::NumberOfManagedJobs => {
             shell.jobs().jobs.len().to_string()
         }
-        cash_parser::prompt::PromptPiece::ShellBaseName => {
-            if let Some(shell_name) = shell.current_shell_name() {
-                let base = Path::new(shell_name.as_ref())
-                    .file_name()
-                    .map(|name| name.to_string_lossy().to_string())
-                    .unwrap_or_default();
-
-                // cash: `\s` is the shell's name, and the default prompt is `\s-\v\$` —
-                // so with no rc file the first thing anyone sees is this. On Windows the
-                // basename carries the extension, which made that prompt read
-                // `cash.exe-0.5$`. bash shows `bash`, never `bash.exe`, and `sh.exe`
-                // still reads `sh` after this, so the two spellings stay apart.
-                #[cfg(windows)]
-                let base = base
-                    .strip_suffix(".exe")
-                    .or_else(|| base.strip_suffix(".EXE"))
-                    .map_or_else(|| base.clone(), std::borrow::ToOwned::to_owned);
-
-                base
-            } else {
-                String::new()
-            }
-        }
-        cash_parser::prompt::PromptPiece::ShellRelease => {
-            std::format!("{VERSION_MAJOR}.{VERSION_MINOR}.{VERSION_PATCH}")
-        }
-        cash_parser::prompt::PromptPiece::ShellVersion => {
-            std::format!("{VERSION_MAJOR}.{VERSION_MINOR}")
-        }
+        cash_parser::prompt::PromptPiece::ShellBaseName => shell_base_name(shell),
+        // cash: the version escapes report the *product's* version -- the one the shell
+        // was handed at startup and publishes as $BRUSH_VERSION -- rather than the
+        // version of whichever crate happens to hold this code. The default prompt
+        // carries one, so this is the number on screen before anyone configures
+        // anything, and it claimed 0.5 (cash-core's) while cash --version said something
+        // else.
+        cash_parser::prompt::PromptPiece::ShellRelease => shell.version().map_or_else(
+            || std::format!("{VERSION_MAJOR}.{VERSION_MINOR}.{VERSION_PATCH}"),
+            ToString::to_string,
+        ),
+        cash_parser::prompt::PromptPiece::ShellVersion => shell.version().map_or_else(
+            || std::format!("{VERSION_MAJOR}.{VERSION_MINOR}"),
+            |version| {
+                // The short form: the first two components of whatever it is.
+                let mut parts = version.split('.');
+                match (parts.next(), parts.next()) {
+                    (Some(major), Some(minor)) => std::format!("{major}.{minor}"),
+                    _ => version.to_string(),
+                }
+            },
+        ),
         // NOTE: See above note for EndNonPrintingSequence
         cash_parser::prompt::PromptPiece::StartNonPrintingSequence => {
             if shell.options().interactive {

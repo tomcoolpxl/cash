@@ -80,7 +80,11 @@ impl builtins::Command for TypeCommand {
                         }
                         Resolved::File { path, .. } => {
                             if self.show_path_only || self.force_path_search {
-                                writeln!(context.stdout(), "{}", path.to_string_lossy())?;
+                                #[cfg(windows)]
+                                let rendered = cash_win32::path::render(path);
+                                #[cfg(not(windows))]
+                                let rendered = path.to_string_lossy();
+                                writeln!(context.stdout(), "{rendered}")?;
                             } else {
                                 writeln!(context.stdout(), "file")?;
                             }
@@ -94,7 +98,11 @@ impl builtins::Command for TypeCommand {
                         Resolved::File { path, .. }
                             if self.show_path_only || self.force_path_search =>
                         {
-                            writeln!(context.stdout(), "{}", path.to_string_lossy())?;
+                            #[cfg(windows)]
+                            let rendered = cash_win32::path::render(path);
+                            #[cfg(not(windows))]
+                            let rendered = path.to_string_lossy();
+                            writeln!(context.stdout(), "{rendered}")?;
                         }
                         _ => lookup::describe(context.stdout(), name, &resolved_type)?,
                     }

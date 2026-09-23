@@ -23,6 +23,18 @@ mod ps;
 #[cfg(windows)]
 mod hostname;
 
+// cash (D48, D3, D32): `find` and `xargs`. What answers `find` on a clean Windows
+// machine is a DOS tool that searches inside files, and there is no `xargs` at all.
+#[cfg(windows)]
+mod find;
+#[cfg(windows)]
+mod xargs;
+
+// cash: `coolfetch`, the banner. Every number is one cash already holds, so it spawns
+// nothing — which is the whole difference from the tools that print this elsewhere.
+#[cfg(windows)]
+mod coolfetch;
+
 // cash (D48): `top`, which Windows has no equivalent of at all — procps was never
 // ported, and the Cygwin build reports pids `kill` cannot use.
 #[cfg(windows)]
@@ -46,6 +58,10 @@ mod chmod;
 // does not have.
 #[cfg(windows)]
 mod identity;
+
+// Native Windows-optimized pure-Rust `ls` builtin.
+#[cfg(windows)]
+mod ls;
 
 #[cfg(feature = "builtin.alias")]
 mod alias;
@@ -91,6 +107,8 @@ mod eval;
 mod exec;
 #[cfg(feature = "builtin.exit")]
 mod exit;
+#[cfg(feature = "builtin.exit")]
+mod logout;
 #[cfg(feature = "builtin.export")]
 mod export;
 #[cfg(feature = "builtin.false")]

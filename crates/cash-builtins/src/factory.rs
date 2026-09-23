@@ -217,10 +217,9 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
         #[cfg(feature = "builtin.disown")]
         m.insert("disown".into(), builtin::<disown::DisownCommand, SE>());
 
-        // TODO(logout): implement logout builtin
         m.insert(
             "logout".into(),
-            builtin::<unimp::UnimplementedCommand, SE>(),
+            builtin::<logout::LogoutCommand, SE>(),
         );
     }
 
@@ -235,6 +234,12 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
         m.insert("detach".into(), builtin::<win::DetachCommand, SE>());
         m.insert("ps".into(), builtin::<ps::PsCommand, SE>());
         m.insert("top".into(), builtin::<top::TopCommand, SE>());
+        m.insert("find".into(), builtin::<find::FindCommand, SE>());
+        m.insert("xargs".into(), builtin::<xargs::XargsCommand, SE>());
+        m.insert(
+            "coolfetch".into(),
+            builtin::<coolfetch::CoolfetchCommand, SE>(),
+        );
         m.insert(
             "hostname".into(),
             builtin::<hostname::HostnameCommand, SE>(),
@@ -245,6 +250,7 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
         m.insert("chmod".into(), builtin::<chmod::ChmodCommand, SE>());
         m.insert("id".into(), builtin::<identity::IdCommand, SE>());
         m.insert("groups".into(), builtin::<identity::GroupsCommand, SE>());
+        m.insert("ls".into(), builtin::<ls::LsCommand, SE>());
     }
 
     m

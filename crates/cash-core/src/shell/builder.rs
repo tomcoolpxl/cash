@@ -27,7 +27,9 @@ impl<SE: extensions::ShellExtensions, S: shell_builder::IsComplete> ShellBuilder
         // completion scripts call. Before the rc files, so a user who installs the real
         // bash-completion package simply overrides these.
         #[cfg(windows)]
-        shell.load_completion_shims().await?;
+        if !shell.options().sh_mode && !shell.options().posix_mode {
+            shell.load_completion_shims().await?;
+        }
 
         // Load profiles/configuration (and then history), unless skipped. Callers that skip
         // both are expected to call `load_config` themselves before needing history.

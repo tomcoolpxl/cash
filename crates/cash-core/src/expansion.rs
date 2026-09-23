@@ -1701,6 +1701,32 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
                 })
                 .await
             }
+            cash_parser::word::ParameterExpr::ToggleCaseFirstChar {
+                parameter,
+                indirect,
+                pattern,
+            } => {
+                let expanded_parameter = self.expand_parameter(&parameter, indirect).await?;
+                let expanded_pattern = self.basic_expand_opt_pattern(pattern.as_deref()).await?;
+
+                transform_expansion(expanded_parameter, async |s| {
+                    Self::pattern_to_first_char(s, expanded_pattern.as_ref(), Self::toggle_char_case)
+                })
+                .await
+            }
+            cash_parser::word::ParameterExpr::ToggleCasePattern {
+                parameter,
+                indirect,
+                pattern,
+            } => {
+                let expanded_parameter = self.expand_parameter(&parameter, indirect).await?;
+                let expanded_pattern = self.basic_expand_opt_pattern(pattern.as_deref()).await?;
+
+                transform_expansion(expanded_parameter, async |s| {
+                    Self::pattern_to_string(s.as_str(), expanded_pattern.as_ref(), Self::toggle_str_case)
+                })
+                .await
+            }
             cash_parser::word::ParameterExpr::ReplaceSubstring {
                 parameter,
                 indirect,
@@ -2139,15 +2165,40 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
             };
 
             if applicable {
-                if let Some(upper_char) = transform(first_char).next() {
-                    let mut result = upper_char.to_string();
-                    result.extend(s.chars().skip(1));
-                    return Ok(result);
-                }
+                let transformed: String = transform(first_char).collect();
+                let mut result = transformed;
+                result.extend(s.chars().skip(1));
+                return Ok(result);
             }
         }
 
         Ok(s)
+    }
+
+    fn toggle_char_case(c: char) -> impl Iterator<Item = char> {
+        let mut res = String::new();
+        if c.is_uppercase() {
+            res.extend(c.to_lowercase());
+        } else if c.is_lowercase() {
+            res.extend(c.to_uppercase());
+        } else {
+            res.push(c);
+        }
+        res.chars().collect::<Vec<_>>().into_iter()
+    }
+
+    fn toggle_str_case(s: &str) -> String {
+        let mut res = String::with_capacity(s.len());
+        for c in s.chars() {
+            if c.is_uppercase() {
+                res.extend(c.to_lowercase());
+            } else if c.is_lowercase() {
+                res.extend(c.to_uppercase());
+            } else {
+                res.push(c);
+            }
+        }
+        res
     }
 
     fn pattern_to_string<F>(

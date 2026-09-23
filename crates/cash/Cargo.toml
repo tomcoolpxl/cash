@@ -1,7 +1,8 @@
 [package]
 name = "cash"
 description = "Cool Again Shell — a bash-language shell whose execution model is Win32"
-version = "0.1.0"
+version.workspace = true
+authors.workspace = true
 categories.workspace = true
 edition.workspace = true
 keywords.workspace = true
@@ -19,10 +20,10 @@ workspace = true
 
 [dependencies]
 # The language layer (D1/D9): parser, expansion, control flow, traps, builtins.
-cash-shell = { path = "../cash-shell" }
+cash-shell = { workspace = true }
 # D35: `cash doctor` reports what cash would run, so it needs the builtin set.
-cash-builtins = { version = "^0.2.0", path = "../cash-builtins" }
-cash-core = { version = "^0.5.0", path = "../cash-core" }
+cash-builtins = { workspace = true }
+cash-core = { workspace = true }
 
 [features]
 # D48: uutils coreutils as in-process builtins. On by default — measured at
@@ -32,7 +33,7 @@ default = ["bundled-coreutils"]
 bundled-coreutils = ["cash-shell/experimental-bundled-coreutils"]
 
 [target.'cfg(windows)'.dependencies]
-cash-win32 = { path = "../cash-win32" }
+cash-win32 = { workspace = true }
 
 # Tests that drive the shell binary live with the binary: CARGO_BIN_EXE_cash is
 # only defined for the crate that declares it.
@@ -74,6 +75,10 @@ path = "tests/version_tests.rs"
 [[test]]
 name = "cash-interactive-tests"
 path = "tests/interactive_tests.rs"
+
+[[test]]
+name = "conpty-interactive-tests"
+path = "tests/conpty_interactive_tests.rs"
 
 [[test]]
 name = "cash-completion-tests"
@@ -136,6 +141,26 @@ path = "tests/kill_targets.rs"
 name = "completion-scripts"
 path = "tests/completion_scripts.rs"
 
+# Comprehensive parameter matrix across builtins
+[[test]]
+name = "builtin-parameters"
+path = "tests/builtin_parameters.rs"
+
+# find and xargs parity
+[[test]]
+name = "find-xargs"
+path = "tests/find_xargs.rs"
+
+# top builtin batch mode and monitoring
+[[test]]
+name = "top-builtin"
+path = "tests/top_builtin.rs"
+
+# coolfetch system banner
+[[test]]
+name = "coolfetch"
+path = "tests/coolfetch.rs"
+
 [dev-dependencies]
 anyhow = "1.0.102"
 # The absorbed differential suite parses its own CLI options and drives an async
@@ -143,10 +168,10 @@ anyhow = "1.0.102"
 clap = { version = "4.6.0", features = ["derive", "env"] }
 tokio = { version = "1.52.3", features = ["rt", "rt-multi-thread", "sync", "macros"] }
 tempfile = "3.27.0"
-cash-parser = { version = "^0.4.0", path = "../cash-parser" }
+cash-parser = { workspace = true }
 # The completion tests drive a `Shell` directly rather than through the binary,
 # because completion has no command-line surface to assert against.
-cash-test-harness = { path = "../cash-test-harness", features = ["insta"] }
+cash-test-harness = { workspace = true, features = ["insta"] }
 assert_cmd = "2.2.0"
 assert_fs = "1.1.3"
 colored = "3.1.1"

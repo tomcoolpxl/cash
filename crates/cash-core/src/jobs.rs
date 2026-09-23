@@ -63,6 +63,8 @@ pub enum JobTask {
     External(processes::ChildProcess),
     /// An internal asynchronous task.
     Internal(JobJoinHandle),
+    /// An internal task that has already completed.
+    Completed(Option<Result<ExecutionResult, error::Error>>),
 }
 
 /// Represents the result of waiting on a job task.
@@ -92,6 +94,10 @@ impl JobTask {
                 }
             }
             Self::Internal(handle) => Ok(JobTaskWaitResult::Completed(handle.await??)),
+            Self::Completed(opt) => match opt.take() {
+                Some(res) => Ok(JobTaskWaitResult::Completed(res?)),
+                None => Ok(JobTaskWaitResult::Completed(ExecutionResult::success())),
+            },
         }
     }
 
@@ -109,6 +115,7 @@ impl JobTask {
                 let checkable_handle = handle;
                 checkable_handle.now_or_never().and_then(|r| r.ok())
             }
+            Self::Completed(opt) => opt.take(),
         }
     }
 }
@@ -599,7 +606,7 @@ impl Job {
                         return Some(pid);
                     }
                 }
-                JobTask::Internal(_) => (),
+                JobTask::Internal(_) | JobTask::Completed(_) => (),
             }
         }
 
@@ -623,5 +630,43 @@ impl Job {
     pub fn process_group_id(&self) -> Option<sys::process::ProcessId> {
         // TODO(jobs): Don't assume that the first PID is the PGID.
         self.pgid.or_else(|| self.representative_pid())
+    }
+}
+
+/// Global counter of active subshells and background tasks across the process.
+static ACTIVE_SUBSHELL_COUNT: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
+
+/// Default limit on concurrent background tasks / subshell branches (matching `ulimit -u`).
+pub const DEFAULT_MAX_CONCURRENT_SUBSHELLS: usize = 128;
+
+/// RAII slot guard for concurrent subshell/async task execution.
+#[derive(Debug)]
+pub struct SubshellSlotGuard;
+
+impl SubshellSlotGuard {
+    /// Attempts to acquire a slot for a concurrent subshell or async background task.
+    /// Returns `Err(ErrorKind::ForkResourceUnavailable)` if the concurrency limit is reached.
+    pub fn try_acquire() -> Result<Self, error::Error> {
+        let max = match std::env::var("CASH_MAX_SUBSHELLS")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok())
+        {
+            Some(n) if n > 0 => n,
+            _ => DEFAULT_MAX_CONCURRENT_SUBSHELLS,
+        };
+
+        let current = ACTIVE_SUBSHELL_COUNT.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        if current >= max {
+            ACTIVE_SUBSHELL_COUNT.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+            return Err(error::ErrorKind::ForkResourceUnavailable.into());
+        }
+        Ok(Self)
+    }
+}
+
+impl Drop for SubshellSlotGuard {
+    fn drop(&mut self) {
+        ACTIVE_SUBSHELL_COUNT.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
     }
 }

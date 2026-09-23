@@ -6,6 +6,9 @@ use std::{
     path::Path,
 };
 
+pub mod expansion;
+pub use expansion::{HistoryExpansionError, HistoryExpansionResult, expand_history};
+
 use crate::error;
 
 /// Represents a unique identifier for a history item.

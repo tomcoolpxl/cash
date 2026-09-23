@@ -683,16 +683,10 @@ fn process_substitution_works_as_a_redirect() {
 }
 
 #[test]
-fn write_process_substitution_fails_loudly() {
-    // `>(...)` needs the subshell to run after the consuming command, which the
-    // temp-file model has no hook for. D26's posture: fail loudly rather than no-op.
-    let out = cash("echo x > >(cat)");
-    assert!(
-        out.stderr.contains("not yet implemented"),
-        "should have failed clearly, got: {}{}",
-        out.stdout,
-        out.stderr
-    );
+fn write_process_substitution_works() {
+    // Process substitution supports real-time streaming: `>(...)` connects the
+    // consuming subshell via in-memory pipe and receives the stream cleanly.
+    assert_eq!(cash("echo x > >(cat); sleep 0.05").stdout, "x");
 }
 
 // ---------------------------------------------------------------------------

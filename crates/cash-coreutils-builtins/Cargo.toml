@@ -1,7 +1,8 @@
 [package]
 name = "cash-coreutils-builtins"
 description = "Optional coreutils builtins for cash-shell (powered by uutils/coreutils)"
-version = "0.1.0"
+version.workspace = true
+authors.workspace = true
 categories.workspace = true
 edition.workspace = true
 keywords.workspace = true

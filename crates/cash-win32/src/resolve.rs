@@ -38,6 +38,8 @@ pub enum Dispatch {
         /// The script itself.
         script: PathBuf,
     },
+    /// An exit action (e.g. `/bin/false` -> 1, `/bin/true` -> 0).
+    Exit(u8),
 }
 
 impl Dispatch {
@@ -47,6 +49,7 @@ impl Dispatch {
         match self {
             Self::Native(p) | Self::Batch(p) | Self::PowerShell(p) => p,
             Self::Shebang { script, .. } => script,
+            Self::Exit(_) => Path::new(""),
         }
     }
 }
@@ -104,11 +107,14 @@ pub fn resolve(
 
 /// Try a candidate path, with and without `PATHEXT` extensions.
 fn classify_if_exists(candidate: &Path, pathext: &[String]) -> Option<Dispatch> {
-    // Bare name first: an explicitly-spelled `foo.exe` or an extensionless script.
-    if candidate.is_file() {
+    // If the candidate already has an extension, try the exact file first.
+    if candidate.extension().is_some() && candidate.is_file() {
         return Some(classify(candidate));
     }
 
+    // When the name has no extension, Windows command resolution prioritizes PATHEXT
+    // (.COM, .EXE, .BAT, .CMD) so native binaries (like `docker.exe`) are chosen over
+    // extensionless files/wrapper scripts in the same directory.
     for extension in pathext {
         let mut with_extension = candidate.as_os_str().to_os_string();
         with_extension.push(extension);
@@ -121,6 +127,11 @@ fn classify_if_exists(candidate: &Path, pathext: &[String]) -> Option<Dispatch> 
             // one canonical form. Recover the real on-disk name instead.
             return Some(classify(&real_case(&path)));
         }
+    }
+
+    // If no PATHEXT extension matches, fall back to the extensionless file if it exists.
+    if candidate.is_file() {
+        return Some(classify(candidate));
     }
 
     None
@@ -156,6 +167,19 @@ pub fn real_case(path: &Path) -> PathBuf {
     path.to_path_buf()
 }
 
+fn is_pe_file(path: &Path) -> bool {
+    use std::io::Read as _;
+    let Ok(mut file) = std::fs::File::open(path) else {
+        return false;
+    };
+    let mut magic = [0u8; 2];
+    if file.read_exact(&mut magic).is_ok() {
+        magic == *b"MZ"
+    } else {
+        false
+    }
+}
+
 /// Decide how to execute a file that is known to exist (D8 step 4).
 ///
 /// Extension is consulted first, per D46. Only a file whose extension says nothing is
@@ -177,9 +201,18 @@ pub fn classify(path: &Path) -> Dispatch {
                 args,
                 script: path.to_path_buf(),
             },
-            // No extension cash knows and no shebang: hand it to CreateProcessW and let
-            // Windows decide. It may still be executable.
-            None => Dispatch::Native(path.to_path_buf()),
+            None => {
+                if is_pe_file(path) {
+                    Dispatch::Native(path.to_path_buf())
+                } else {
+                    // POSIX fallback: a script with no shebang is executed with `sh`.
+                    Dispatch::Shebang {
+                        interpreter: "sh".to_string(),
+                        args: Vec::new(),
+                        script: path.to_path_buf(),
+                    }
+                }
+            }
         },
     }
 }
@@ -190,14 +223,18 @@ pub fn classify(path: &Path) -> Dispatch {
 /// by one is otherwise invisible — which is exactly how a Notepad-saved script fails.
 #[must_use]
 pub fn read_shebang(path: &Path) -> Option<(String, Vec<String>)> {
-    let bytes = std::fs::read(path).ok()?;
-    let bytes = text::strip_bom(&bytes);
+    use std::io::Read as _;
+    let mut file = std::fs::File::open(path).ok()?;
+    let mut buf = [0u8; 1024];
+    let n = file.read(&mut buf).ok()?;
+    let bytes = buf.get(..n)?;
+    let bytes = text::strip_bom(bytes);
 
     let line_end = bytes
         .iter()
         .position(|&b| b == b'\n')
         .unwrap_or(bytes.len());
-    let line = std::str::from_utf8(&bytes[..line_end]).ok()?;
+    let line = std::str::from_utf8(bytes.get(..line_end)?).ok()?;
     let line = text::trim_line_terminator(line);
 
     let rest = line.strip_prefix("#!")?.trim();
@@ -210,6 +247,74 @@ pub fn read_shebang(path: &Path) -> Option<(String, Vec<String>)> {
     let args: Vec<String> = parts.map(str::to_string).collect();
 
     Some((interpreter, args))
+}
+
+fn resolve_named_interpreter(
+    name: &str,
+    path_entries: &[PathBuf],
+    pathext: &[String],
+    cwd: &Path,
+) -> Option<Dispatch> {
+    if name.eq_ignore_ascii_case("false") {
+        return Some(Dispatch::Exit(1));
+    }
+    if name.eq_ignore_ascii_case("true") {
+        return Some(Dispatch::Exit(0));
+    }
+    if name.eq_ignore_ascii_case("sh") || name.eq_ignore_ascii_case("bash") {
+        if let Ok(cash_exe) = std::env::var("CARGO_BIN_EXE_cash") {
+            return Some(Dispatch::Native(PathBuf::from(cash_exe)));
+        }
+        if let Ok(cash_exe) = std::env::var("CASH_EXE") {
+            return Some(Dispatch::Native(PathBuf::from(cash_exe)));
+        }
+        if let Ok(own) = std::env::current_exe() {
+            if own
+                .file_stem()
+                .is_some_and(|s| s.eq_ignore_ascii_case("cash"))
+            {
+                return Some(Dispatch::Native(own));
+            }
+        }
+        if let Some(d) = resolve("cash", path_entries, pathext, cwd) {
+            return Some(Dispatch::Native(d.target().to_path_buf()));
+        }
+        if let Ok(own) = std::env::current_exe() {
+            return Some(Dispatch::Native(own));
+        }
+    }
+    if name.eq_ignore_ascii_case("pwsh") {
+        if let Some(d) = resolve("pwsh", path_entries, pathext, cwd) {
+            return Some(Dispatch::PowerShell(d.target().to_path_buf()));
+        }
+        if let Some(d) = resolve("powershell", path_entries, pathext, cwd) {
+            return Some(Dispatch::PowerShell(d.target().to_path_buf()));
+        }
+        return None;
+    }
+    if name.eq_ignore_ascii_case("powershell") {
+        if let Some(d) = resolve("powershell", path_entries, pathext, cwd) {
+            return Some(Dispatch::PowerShell(d.target().to_path_buf()));
+        }
+        if let Some(d) = resolve("pwsh", path_entries, pathext, cwd) {
+            return Some(Dispatch::PowerShell(d.target().to_path_buf()));
+        }
+        return None;
+    }
+    if name.eq_ignore_ascii_case("python3") {
+        if let Some(d) = resolve("python3", path_entries, pathext, cwd) {
+            return Some(d);
+        }
+        return resolve("python", path_entries, pathext, cwd);
+    }
+    if name.eq_ignore_ascii_case("python") {
+        if let Some(d) = resolve("python", path_entries, pathext, cwd) {
+            return Some(d);
+        }
+        return resolve("python3", path_entries, pathext, cwd);
+    }
+
+    resolve(name, path_entries, pathext, cwd)
 }
 
 /// Resolve the interpreter named by a shebang line.
@@ -229,13 +334,24 @@ pub fn resolve_interpreter(
     // Virtual /usr/bin/env: the real command is the first argument.
     if interpreter == "/usr/bin/env" || interpreter.ends_with("/env") {
         let (name, rest) = args.split_first()?;
-        let dispatch = resolve(name, path_entries, pathext, cwd)?;
+        let dispatch = resolve_named_interpreter(name, path_entries, pathext, cwd)?;
         return Some((dispatch, rest.to_vec()));
+    }
+
+    if (interpreter.contains('/') || interpreter.contains('\\'))
+        && Path::new(interpreter).is_file()
+    {
+        let dispatch = classify(Path::new(interpreter));
+        return Some((dispatch, args.to_vec()));
     }
 
     // Any other absolute Unix path — /bin/sh, /usr/bin/python3 — cannot exist on
     // Windows, so fall back to searching PATH for its basename.
-    let name = interpreter.rsplit('/').next().unwrap_or(interpreter);
-    let dispatch = resolve(name, path_entries, pathext, cwd)?;
+    let name = interpreter
+        .rsplit('/')
+        .next()
+        .and_then(|s| s.rsplit('\\').next())
+        .unwrap_or(interpreter);
+    let dispatch = resolve_named_interpreter(name, path_entries, pathext, cwd)?;
     Some((dispatch, args.to_vec()))
 }

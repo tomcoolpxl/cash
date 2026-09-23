@@ -270,6 +270,52 @@ impl<'a, IB: InputBackend, SE: cash_core::ShellExtensions> InteractiveShell<'a, 
             false
         };
 
+        let mut read_result = read_result;
+
+        // If direct user input and bang-style history substitution is enabled, expand history.
+        if user_input && shell.options().enable_bang_style_history_substitution {
+            match shell.expand_history(&read_result) {
+                Ok(expanded) => {
+                    if expanded.changed {
+                        // histverify: if enabled, reflect expanded line to read buffer for editing.
+                        if shell.options().allow_modifying_history_substitution {
+                            let len = expanded.line.len();
+                            self.input.set_read_buffer(expanded.line, len);
+                            return Ok(InteractiveExecutionResult::Executed(
+                                cash_core::ExecutionResult::default(),
+                            ));
+                        }
+
+                        // Print expanded line to stderr (matching interactive bash behavior).
+                        let mut stderr = shell.stderr();
+                        let _ = writeln!(stderr, "{}", expanded.line);
+
+                        // :p modifier: record to history, but do not execute.
+                        if expanded.print_only {
+                            shell.add_to_history(expanded.line.trim_end_matches('\n'))?;
+                            let _ = shell.save_history();
+                            return Ok(InteractiveExecutionResult::Executed(
+                                cash_core::ExecutionResult::default(),
+                            ));
+                        }
+
+                        read_result = expanded.line;
+                    }
+                }
+                Err(err) => {
+                    let mut stderr = shell.stderr();
+                    let _ = writeln!(stderr, "cash: {err}");
+                    if shell.options().allow_reedit_failed_history_subst {
+                        let len = read_result.len();
+                        self.input.set_read_buffer(read_result, len);
+                    }
+                    return Ok(InteractiveExecutionResult::Executed(
+                        cash_core::ExecutionResult::default(),
+                    ));
+                }
+            }
+        }
+
         // If the line came from direct user input (as opposed to a key binding, say), then we
         // need to do a few more things before executing it. A hook that exited the shell
         // stands in for the command: the line never runs, and neither does the bookkeeping

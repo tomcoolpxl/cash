@@ -981,10 +981,10 @@ design choice:
 cash therefore records elevated children by PID and attempts to terminate them at exit,
 while documenting plainly that the kernel-enforced guarantee stops at the boundary.
 `elevate` (D45) is the first-class verb so cash sees the elevation rather than having it
-happen behind its back via `sudo.exe`.
+happen behind its back via an external unmonitored runner.
 
 Acknowledged tension: "best-effort tracking" is precisely the cooperative cleanup D6 was
-built to replace. It is retained because `sudo`-style elevation is in real daily use and
+built to replace. It is retained because UAC elevation is in real daily use and
 refusing it outright is worse. The documentation must not overstate D6 because of this.
 
 ### D43 — Language conformance on Linux CI; Windows has its own acceptance corpus
@@ -1154,7 +1154,7 @@ someone who expected bash, so additions need to earn their place.
 |---|---|---|---|
 | 1 | `pwd` prints `C:/src`, not `/c/src` | Rendered paths become native exe arguments | D3 |
 | 2 | `$PATH` renders Unix-style while other paths render Windows-style | Colon separation is incompatible with `C:` | D5 |
-| 3 | Globbing is case-insensitive by default | Case-sensitive matching can only produce false negatives on a case-insensitive volume | D16 |
+| 3 | Globbing and `find -name` are case-insensitive by default | Case-sensitive matching can only produce false negatives on a case-insensitive volume | D16 |
 | 4 | `\r\n` terminates a line in `$(...)`, `read`, `mapfile`, here-docs | Python/.NET/cmd emit CRLF and cannot be fixed at source | D20 |
 | 5 | Redirections above fd 2 error for native exes | Windows exes have no POSIX fd ABI | D26 |
 | 6 | Environment lookup is case-insensitive | Windows supplies `Path`, not `PATH` | D31 |
@@ -1176,6 +1176,7 @@ someone who expected bash, so additions need to earn their place.
 | 22 | A bundled producer prints `write error: Broken pipe` when its consumer leaves | Windows has no `SIGPIPE`, so uutils reports the failed write instead of dying silently | D48 |
 | 23 | `disown` forgets a job but does not make it outlive cash | A process cannot leave a Windows job object once assigned; `detach` starts one outside it | D6, D45 |
 | 24 | `ls` colours when stdout is a terminal | Linux gets this from an alias in a system rc file; Windows has none, and an alias is the one spelling a builtin has no path behind | D48 |
+| 25 | `uname -s` is `Windows_NT`, `$OSTYPE` is `windows` | cash is native Win32, not MSYS or Cygwin; scripts testing only `MINGW*|MSYS*` will miss their Windows branch | D48 |
 
 `select` was missing outright until recently: it was a reserved word with no grammar
 rule, so `select x in a b; do …; done` was a syntax error that took the whole file with

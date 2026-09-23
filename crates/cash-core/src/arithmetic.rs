@@ -7,7 +7,7 @@ use cash_parser::ast;
 
 /// Maximum recursion depth for arithmetic variable dereference chains
 /// (e.g., a=b, b=c, c=a would cycle through variable dereferences).
-const MAX_VARIABLE_DEREF_DEPTH: u32 = 1024;
+const MAX_VARIABLE_DEREF_DEPTH: u32 = 64;
 
 /// Represents an error that occurs during evaluation of an arithmetic expression.
 #[derive(Debug, thiserror::Error)]
@@ -421,3 +421,104 @@ const fn wrapping_pow_u64(mut base: i64, mut exponent: u64) -> i64 {
 
     result
 }
+
+/// Evaluate an arithmetic expression string with access to the shell's environment.
+pub fn evaluate_str<SE: extensions::ShellExtensions>(
+    shell: &mut Shell<SE>,
+    expr_str: &str,
+) -> Result<i64, EvalError> {
+    let expr = cash_parser::arithmetic::parse(expr_str)
+        .map_err(|_e| EvalError::ParseError(expr_str.to_owned()))?;
+    expr.eval(shell)
+}
+
+/// Evaluates a purely arithmetic expression string without requiring access to a shell.
+///
+/// Supports literals, binary operators (+, -, *, /, %, <<, >>, &, |, ^, &&, ||, ==, !=, <, >, <=, >=),
+/// unary operators (+, -, ~, !), and ternary conditionals (? :).
+/// Variable references evaluate to 0 if not present.
+#[must_use]
+pub fn eval_pure_str(expr_str: &str) -> Option<i64> {
+    let expr = cash_parser::arithmetic::parse(expr_str).ok()?;
+    eval_pure_expr(&expr)
+}
+
+fn eval_pure_expr(expr: &ast::ArithmeticExpr) -> Option<i64> {
+    match expr {
+        ast::ArithmeticExpr::Literal(l) => Some(*l),
+        ast::ArithmeticExpr::Reference(_) => Some(0),
+        ast::ArithmeticExpr::UnaryOp(op, operand) => {
+            let val = eval_pure_expr(operand)?;
+            match op {
+                ast::UnaryOperator::UnaryPlus => Some(val),
+                ast::UnaryOperator::UnaryMinus => Some(val.wrapping_neg()),
+                ast::UnaryOperator::BitwiseNot => Some(!val),
+                ast::UnaryOperator::LogicalNot => Some(bool_to_i64(val == 0)),
+            }
+        }
+        ast::ArithmeticExpr::BinaryOp(op, left, right) => {
+            let l = eval_pure_expr(left)?;
+            let r = eval_pure_expr(right)?;
+            match op {
+                ast::BinaryOperator::Add => Some(l.wrapping_add(r)),
+                ast::BinaryOperator::Subtract => Some(l.wrapping_sub(r)),
+                ast::BinaryOperator::Multiply => Some(l.wrapping_mul(r)),
+                ast::BinaryOperator::Divide => {
+                    if r == 0 {
+                        None
+                    } else {
+                        Some(l.wrapping_div(r))
+                    }
+                }
+                ast::BinaryOperator::Modulo => {
+                    if r == 0 {
+                        None
+                    } else {
+                        Some(l.wrapping_rem(r))
+                    }
+                }
+                ast::BinaryOperator::Power => {
+                    let exp = u64::try_from(r).ok()?;
+                    Some(wrapping_pow_u64(l, exp))
+                }
+                ast::BinaryOperator::ShiftLeft => {
+                    let shift = u32::try_from(r).ok()?;
+                    Some(l.wrapping_shl(shift))
+                }
+                ast::BinaryOperator::ShiftRight => {
+                    let shift = u32::try_from(r).ok()?;
+                    Some(l.wrapping_shr(shift))
+                }
+                ast::BinaryOperator::BitwiseAnd => Some(l & r),
+                ast::BinaryOperator::BitwiseOr => Some(l | r),
+                ast::BinaryOperator::BitwiseXor => Some(l ^ r),
+                ast::BinaryOperator::LogicalAnd => Some(bool_to_i64(l != 0 && r != 0)),
+                ast::BinaryOperator::LogicalOr => Some(bool_to_i64(l != 0 || r != 0)),
+                ast::BinaryOperator::Equals => Some(bool_to_i64(l == r)),
+                ast::BinaryOperator::NotEquals => Some(bool_to_i64(l != r)),
+                ast::BinaryOperator::LessThan => Some(bool_to_i64(l < r)),
+                ast::BinaryOperator::LessThanOrEqualTo => Some(bool_to_i64(l <= r)),
+                ast::BinaryOperator::GreaterThan => Some(bool_to_i64(l > r)),
+                ast::BinaryOperator::GreaterThanOrEqualTo => Some(bool_to_i64(l >= r)),
+                ast::BinaryOperator::Comma => Some(r),
+            }
+        }
+        ast::ArithmeticExpr::Conditional(condition, then_expr, else_expr) => {
+            let c = eval_pure_expr(condition)?;
+            if c != 0 {
+                eval_pure_expr(then_expr)
+            } else {
+                eval_pure_expr(else_expr)
+            }
+        }
+        ast::ArithmeticExpr::Assignment(_, rhs) => eval_pure_expr(rhs),
+        ast::ArithmeticExpr::UnaryAssignment(op, _) => match op {
+            ast::UnaryAssignmentOperator::PrefixIncrement
+            | ast::UnaryAssignmentOperator::PrefixDecrement
+            | ast::UnaryAssignmentOperator::PostfixIncrement
+            | ast::UnaryAssignmentOperator::PostfixDecrement => Some(0),
+        },
+        ast::ArithmeticExpr::BinaryAssignment(_, _, operand) => eval_pure_expr(operand),
+    }
+}
+

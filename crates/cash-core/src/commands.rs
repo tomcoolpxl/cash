@@ -170,6 +170,291 @@ impl<SE: extensions::ShellExtensions> std::ops::DerefMut for ShellForCommand<'_,
 /// * `empty_env` - If true, the command will be executed with an empty environment; if false, the
 ///   command will inherit environment variables marked as exported in the provided `Shell`.
 #[allow(unused_variables, reason = "argv0 is only used on unix platforms")]
+#[cfg(windows)]
+fn ensure_ps_runner() -> Result<PathBuf, error::Error> {
+    let runner_path = std::env::temp_dir().join("cash_ps_runner.ps1");
+    if !runner_path.exists() {
+        const RUNNER_CONTENT: &str = "\
+& ([scriptblock]::Create([System.IO.File]::ReadAllText($env:CASH_PS_SCRIPT))) @args\r\n\
+if ($LASTEXITCODE -ne $null) {\r\n\
+    exit $LASTEXITCODE\r\n\
+} elseif (!$?) {\r\n\
+    exit 1\r\n\
+} else {\r\n\
+    exit 0\r\n\
+}\r\n";
+        std::fs::write(&runner_path, RUNNER_CONTENT).map_err(|e| {
+            error::ErrorKind::FailedToExecuteCommand(
+                runner_path.to_string_lossy().into_owned(),
+                e,
+            )
+        })?;
+    }
+    Ok(runner_path)
+}
+
+#[cfg(windows)]
+fn find_powershell_binary<SE: extensions::ShellExtensions>(
+    context: &ExecutionContext<'_, SE>,
+) -> PathBuf {
+    let path_var = context
+        .shell
+        .env()
+        .get_str("PATH", context.shell)
+        .unwrap_or_default();
+    let path_entries: Vec<PathBuf> = crate::sys::fs::split_paths(path_var.as_ref()).collect();
+    let pathext: Vec<String> = cash_win32::resolve::DEFAULT_PATHEXT
+        .iter()
+        .map(|s| (*s).to_string())
+        .collect();
+    if let Some(d) = cash_win32::resolve::resolve(
+        "pwsh",
+        &path_entries,
+        &pathext,
+        context.shell.working_dir(),
+    ) {
+        return d.target().to_path_buf();
+    }
+    if let Some(d) = cash_win32::resolve::resolve(
+        "powershell",
+        &path_entries,
+        &pathext,
+        context.shell.working_dir(),
+    ) {
+        return d.target().to_path_buf();
+    }
+    PathBuf::from("powershell.exe")
+}
+
+#[cfg(windows)]
+fn build_powershell_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
+    context: &ExecutionContext<'_, SE>,
+    script: &Path,
+    extra_args: &[String],
+    args: &[S],
+) -> Result<(std::process::Command, Option<String>), error::Error> {
+    let pwsh_bin = find_powershell_binary(context);
+    let mut c = std::process::Command::new(pwsh_bin);
+    c.arg("-NoProfile")
+        .arg("-NonInteractive")
+        .arg("-ExecutionPolicy")
+        .arg("Bypass");
+
+    if script
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("ps1"))
+    {
+        c.arg("-File");
+        c.arg(script);
+        c.args(extra_args);
+        c.args(args);
+        Ok((c, None))
+    } else {
+        let runner_path = ensure_ps_runner()?;
+        c.arg("-File");
+        c.arg(runner_path);
+        c.args(extra_args);
+        c.args(args);
+        Ok((c, Some(script.to_string_lossy().into_owned())))
+    }
+}
+
+#[cfg(windows)]
+fn build_batch_command<S: AsRef<OsStr>>(
+    command_name: &str,
+    argv0: &str,
+    args: &[S],
+) -> std::process::Command {
+    use std::os::windows::process::CommandExt as _;
+
+    let comspec = std::env::var_os("COMSPEC").map_or_else(
+        || PathBuf::from("cmd.exe"),
+        PathBuf::from,
+    );
+    let mut c = std::process::Command::new(comspec);
+    c.arg0(argv0);
+    c.arg("/d").arg("/s").arg("/c");
+
+    let string_args: Vec<String> = args
+        .iter()
+        .map(|a| a.as_ref().to_string_lossy().into_owned())
+        .collect();
+    let mut inner = cash_win32::cmd::escape_for_cmd(command_name);
+    for arg in &string_args {
+        inner.push(' ');
+        inner.push_str(&cash_win32::cmd::escape_for_cmd(arg));
+    }
+    c.raw_arg(format!("\"{inner}\""));
+    c
+}
+
+#[cfg(windows)]
+fn build_shebang_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
+    context: &ExecutionContext<'_, SE>,
+    interpreter: &str,
+    shebang_args: &[String],
+    script: &Path,
+    argv0: &str,
+    args: &[S],
+) -> Result<(std::process::Command, Option<String>), error::Error> {
+    let path_var = context
+        .shell
+        .env()
+        .get_str("PATH", context.shell)
+        .unwrap_or_default();
+    let path_entries: Vec<PathBuf> = crate::sys::fs::split_paths(path_var.as_ref()).collect();
+    let pathext_var = context
+        .shell
+        .env()
+        .get_str("PATHEXT", context.shell)
+        .unwrap_or_default();
+    let pathext = if pathext_var.is_empty() {
+        cash_win32::resolve::DEFAULT_PATHEXT
+            .iter()
+            .map(|s| (*s).to_string())
+            .collect()
+    } else {
+        cash_win32::resolve::parse_pathext(pathext_var.as_ref())
+    };
+
+    let resolved = cash_win32::resolve::resolve_interpreter(
+        interpreter,
+        shebang_args,
+        &path_entries,
+        &pathext,
+        context.shell.working_dir(),
+    );
+
+    let Some((dispatch, extra_args)) = resolved else {
+        return Err(error::ErrorKind::CommandNotFound(interpreter.to_string()).into());
+    };
+
+    match dispatch {
+        cash_win32::resolve::Dispatch::Exit(code) => {
+            let own = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("cash.exe"));
+            let mut c = std::process::Command::new(own);
+            c.arg("-c").arg(format!("exit {code}"));
+            Ok((c, None))
+        }
+        cash_win32::resolve::Dispatch::PowerShell(_) => {
+            build_powershell_command(context, script, &extra_args, args)
+        }
+        cash_win32::resolve::Dispatch::Batch(ref batch_target) => {
+            use std::os::windows::process::CommandExt as _;
+
+            let comspec = std::env::var_os("COMSPEC").map_or_else(
+                || PathBuf::from("cmd.exe"),
+                PathBuf::from,
+            );
+            let mut c = std::process::Command::new(comspec);
+            c.arg0(argv0);
+            c.arg("/d").arg("/s").arg("/c");
+
+            let mut inner = cash_win32::cmd::escape_for_cmd(&batch_target.to_string_lossy());
+            for arg in &extra_args {
+                inner.push(' ');
+                inner.push_str(&cash_win32::cmd::escape_for_cmd(arg));
+            }
+            inner.push(' ');
+            inner.push_str(&cash_win32::cmd::escape_for_cmd(&script.to_string_lossy()));
+            for arg in args {
+                inner.push(' ');
+                let a = arg.as_ref().to_string_lossy();
+                inner.push_str(&cash_win32::cmd::escape_for_cmd(&a));
+            }
+            c.raw_arg(format!("\"{inner}\""));
+            Ok((c, None))
+        }
+        cash_win32::resolve::Dispatch::Native(ref target) => {
+            let mut c = std::process::Command::new(target);
+            c.arg0(argv0);
+            c.args(&extra_args);
+            c.arg(script);
+            c.args(args);
+            Ok((c, None))
+        }
+        cash_win32::resolve::Dispatch::Shebang { .. } => {
+            let mut c = std::process::Command::new(script);
+            c.arg0(argv0);
+            c.args(args);
+            Ok((c, None))
+        }
+    }
+}
+
+#[cfg(windows)]
+fn build_windows_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
+    context: &ExecutionContext<'_, SE>,
+    command_name: &str,
+    argv0: &str,
+    args: &[S],
+) -> Result<(std::process::Command, Option<String>), error::Error> {
+    let path = Path::new(command_name);
+    let candidate = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        let joined = context.shell.working_dir().join(path);
+        if joined.is_file() {
+            joined
+        } else {
+            path.to_path_buf()
+        }
+    };
+
+    if !candidate.is_file() {
+        let mut c = std::process::Command::new(command_name);
+        c.arg0(argv0);
+        c.args(args);
+        return Ok((c, None));
+    }
+
+    match cash_win32::resolve::classify(&candidate) {
+        cash_win32::resolve::Dispatch::Native(_) => {
+            let mut c = std::process::Command::new(command_name);
+            c.arg0(argv0);
+            c.args(args);
+            Ok((c, None))
+        }
+        cash_win32::resolve::Dispatch::Batch(_) => {
+            Ok((build_batch_command(command_name, argv0, args), None))
+        }
+        cash_win32::resolve::Dispatch::PowerShell(_) => {
+            build_powershell_command(context, &candidate, &[], args)
+        }
+        cash_win32::resolve::Dispatch::Shebang {
+            interpreter,
+            args: shebang_args,
+            script,
+        } => build_shebang_command(
+            context,
+            &interpreter,
+            &shebang_args,
+            &script,
+            argv0,
+            args,
+        ),
+        cash_win32::resolve::Dispatch::Exit(code) => {
+            let own = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("cash.exe"));
+            let mut c = std::process::Command::new(own);
+            c.arg("-c").arg(format!("exit {code}"));
+            Ok((c, None))
+        }
+    }
+}
+
+/// Composes a `std::process::Command` to execute the given command. Appropriately
+/// configures the command name and arguments, redirections, injected file
+/// descriptors, environment variables, etc.
+///
+/// # Arguments
+///
+/// * `context` - The execution context in which the command is being composed.
+/// * `command_name` - The name of the command to execute.
+/// * `argv0` - The value to use for `argv[0]` (may be different from the command).
+/// * `args` - The arguments to pass to the command.
+/// * `empty_env` - If true, the command will be executed with an empty environment; if false, the
+///   command will inherit environment variables marked as exported in the provided `Shell`.
+#[allow(unused_variables, reason = "argv0 is only used on unix platforms")]
 pub fn compose_std_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
     context: &ExecutionContext<'_, SE>,
     command_name: &str,
@@ -177,14 +462,16 @@ pub fn compose_std_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
     args: &[S],
     empty_env: bool,
 ) -> Result<std::process::Command, error::Error> {
-    let mut cmd = std::process::Command::new(command_name);
-
-    // Override argv[0].
-    // NOTE: Not supported on all platforms.
-    cmd.arg0(argv0);
-
-    // Pass through args.
-    cmd.args(args);
+    #[cfg(windows)]
+    let (mut cmd, target_ps_script) =
+        build_windows_command(context, command_name, argv0, args)?;
+    #[cfg(not(windows))]
+    let mut cmd = {
+        let mut c = std::process::Command::new(command_name);
+        c.arg0(argv0);
+        c.args(args);
+        c
+    };
 
     // Use the shell's current working dir.
     cmd.current_dir(context.shell.working_dir());
@@ -217,6 +504,11 @@ pub fn compose_std_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
         }
         // Set _ to the resolved command path for external commands.
         cmd.env("_", command_name);
+    }
+
+    #[cfg(windows)]
+    if let Some(ps_script) = target_ps_script {
+        cmd.env("CASH_PS_SCRIPT", ps_script);
     }
 
     // Add in exported functions.
@@ -458,6 +750,10 @@ impl<'a, SE: extensions::ShellExtensions> SimpleCommand<'a, SE> {
         self,
         builtin: builtins::Registration<SE>,
     ) -> Result<ExecutionSpawnResult, error::Error> {
+        if let Some(spawn_func) = builtin.spawn_func {
+            return self.execute_via_builtin_spawn(spawn_func).await;
+        }
+
         match self.shell {
             ShellForCommand::OwnedShell { target, .. } => {
                 Ok(Self::execute_via_builtin_in_owned_shell(
@@ -472,6 +768,32 @@ impl<'a, SE: extensions::ShellExtensions> SimpleCommand<'a, SE> {
                 self.execute_via_builtin_in_parent_shell(builtin).await
             }
         }
+    }
+
+    async fn execute_via_builtin_spawn(
+        mut self,
+        spawn_func: builtins::CommandSpawnFunc<SE>,
+    ) -> Result<ExecutionSpawnResult, error::Error> {
+        let last_arg = Self::take_last_arg(&self.args);
+
+        let result = {
+            let cmd_context = ExecutionContext {
+                shell: &mut self.shell,
+                command_name: self.command_name,
+                params: self.params,
+            };
+
+            spawn_func(cmd_context, self.args, self.process_group_id).await
+        };
+
+        // Update $_ after command execution.
+        self.shell.update_last_arg_variable(last_arg);
+
+        if let Some(post_execute) = self.post_execute {
+            let _ = post_execute(&mut self.shell);
+        }
+
+        result
     }
 
     fn execute_via_builtin_in_owned_shell(
@@ -592,7 +914,17 @@ impl<'a, SE: extensions::ShellExtensions> SimpleCommand<'a, SE> {
     ) -> ExecutionSpawnResult {
         let last_arg = Self::take_last_arg(&args);
 
+        let Ok(slot_guard) = crate::jobs::SubshellSlotGuard::try_acquire() else {
+            use std::io::Write as _;
+            let _ = writeln!(
+                params.stderr(&shell),
+                "cash: fork: retry: Resource temporarily unavailable"
+            );
+            return ExecutionSpawnResult::Completed(ExecutionResult::general_error());
+        };
+
         let join_handle = tokio::task::spawn_blocking(move || {
+            let _guard = slot_guard;
             let rt = tokio::runtime::Handle::current();
 
             let spawned = {
@@ -635,6 +967,53 @@ impl<'a, SE: extensions::ShellExtensions> SimpleCommand<'a, SE> {
     fn execute_via_external(self, path: &Path) -> Result<ExecutionSpawnResult, error::Error> {
         let mut shell = self.shell;
         let last_arg = Self::take_last_arg(&self.args);
+
+        #[cfg(windows)]
+        if path.is_file() {
+            let dispatch = cash_win32::resolve::classify(path);
+            let exit_code = match dispatch {
+                cash_win32::resolve::Dispatch::Exit(code) => Some(code),
+                cash_win32::resolve::Dispatch::Shebang {
+                    ref interpreter,
+                    ref args,
+                    ..
+                } => {
+                    let path_var = shell.env().get_str("PATH", &shell).unwrap_or_default();
+                    let path_entries: Vec<PathBuf> =
+                        crate::sys::fs::split_paths(path_var.as_ref()).collect();
+                    let pathext_var =
+                        shell.env().get_str("PATHEXT", &shell).unwrap_or_default();
+                    let pathext = if pathext_var.is_empty() {
+                        cash_win32::resolve::DEFAULT_PATHEXT
+                            .iter()
+                            .map(|s| (*s).to_string())
+                            .collect()
+                    } else {
+                        cash_win32::resolve::parse_pathext(pathext_var.as_ref())
+                    };
+                    cash_win32::resolve::resolve_interpreter(
+                        interpreter,
+                        args,
+                        &path_entries,
+                        &pathext,
+                        shell.working_dir(),
+                    )
+                    .and_then(|(d, _)| match d {
+                        cash_win32::resolve::Dispatch::Exit(c) => Some(c),
+                        _ => None,
+                    })
+                }
+                _ => None,
+            };
+
+            if let Some(code) = exit_code {
+                shell.update_last_arg_variable(last_arg);
+                if let Some(post_execute) = self.post_execute {
+                    let _ = post_execute(&mut shell);
+                }
+                return Ok(ExecutionResult::new(code).into());
+            }
+        }
 
         let cmd_context = ExecutionContext {
             shell: &mut shell,

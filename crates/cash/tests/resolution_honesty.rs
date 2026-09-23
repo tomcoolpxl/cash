@@ -455,7 +455,7 @@ fn doctor_confirms_the_shells_resolve_to_cash() {
 fn doctor_still_names_what_is_genuinely_missing() {
     // The fix must not turn the diagnostic into a rubber stamp.
     let out = run(Command::new(CASH).arg("doctor").env("PATH", BARE_PATH));
-    for absent in ["sed", "awk", "grep", "xargs"] {
+    for absent in ["sed", "awk", "grep", "diff", "stat"] {
         assert!(
             out.stdout.contains(&format!("WARN  {absent}")),
             "doctor did not report {absent} as missing:\n{}",

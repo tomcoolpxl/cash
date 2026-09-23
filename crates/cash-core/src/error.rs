@@ -91,7 +91,7 @@ pub enum ErrorKind {
 
     /// The requested functionality has not yet been implemented in this shell; it is tracked in a
     /// GitHub issue.
-    #[error("not yet implemented: {0}; see https://github.com/reubeno/brush/issues/{1}")]
+    #[error("not yet implemented: {0}; see https://github.com/thraa/cash/issues/{1}")]
     UnimplementedAndTracked(&'static str, u32),
 
     /// An expected environment scope could not be found.
@@ -259,6 +259,10 @@ pub enum ErrorKind {
     /// Maximum function call depth was exceeded.
     #[error("maximum function call depth exceeded")]
     MaxFunctionCallDepthExceeded,
+
+    /// Fork resource temporarily unavailable (process / subshell limit reached).
+    #[error("fork: retry: Resource temporarily unavailable")]
+    ForkResourceUnavailable,
 
     /// System time error.
     #[error("system time error: {0}")]

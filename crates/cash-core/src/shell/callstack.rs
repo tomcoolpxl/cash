@@ -99,7 +99,17 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         args: impl IntoIterator<Item = String>,
         _params: &ExecutionParameters,
     ) -> Result<(), error::Error> {
-        if let Some(max_call_depth) = self.options.max_function_call_depth
+        let funcnest = self
+            .env_str("FUNCNEST")
+            .and_then(|v| v.parse::<i64>().ok());
+
+        let max_call_depth = match funcnest {
+            Some(n) if n > 0 => usize::try_from(n).ok(),
+            Some(_) => None,
+            None => self.options.max_function_call_depth.or(Some(500)),
+        };
+
+        if let Some(max_call_depth) = max_call_depth
             && self.call_stack.function_call_depth() >= max_call_depth
         {
             return Err(error::ErrorKind::MaxFunctionCallDepthExceeded.into());

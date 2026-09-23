@@ -218,4 +218,16 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
 
         Ok(())
     }
+
+    /// Loads logout scripts (`~/.bash_logout`) when a login shell exits.
+    pub async fn load_logout_scripts(&mut self) -> Result<(), crate::Error> {
+        if self.options.login_shell && !self.options.sh_mode {
+            let params = self.default_exec_params();
+            if let Some(home_path) = self.home_dir() {
+                self.source_if_exists(home_path.join(".bash_logout").as_path(), &params)
+                    .await?;
+            }
+        }
+        Ok(())
+    }
 }

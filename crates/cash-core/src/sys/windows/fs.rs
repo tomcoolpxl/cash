@@ -2,28 +2,33 @@
 
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
-use std::sync::LazyLock;
 
 use crate::error;
 
 // Selectively re-export items from stubs that we don't override.
 pub(crate) use crate::sys::stubs::fs::MetadataExt;
 
-/// Cached list of executable extensions from the `PATHEXT` environment
-/// variable. Each entry retains its leading dot (e.g. `".exe"`) and is stored
-/// lowercased so case-insensitive comparisons can be done without allocating.
+/// Returns the current list of executable extensions from `PATHEXT`.
 ///
-/// NOTE: This is cached for the process lifetime. Changes to `PATHEXT` made
-/// inside the running shell are not reflected here. Bash itself has no
-/// `PATHEXT` semantics, so this is generally acceptable for now.
-static PATHEXT_EXTENSIONS: LazyLock<Vec<String>> = LazyLock::new(|| {
+/// Each entry retains its leading dot (e.g. `".exe"`) and is stored
+/// lowercased so case-insensitive comparisons can be done efficiently.
+/// Changes to `PATHEXT` made inside the running shell or test environments
+/// are dynamically reflected here.
+pub fn pathext_extensions() -> Vec<String> {
     std::env::var("PATHEXT")
         .unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".to_string())
         .split(';')
         .filter(|s| !s.is_empty())
-        .map(|s| s.to_ascii_lowercase())
+        .map(|s| {
+            let lower = s.to_ascii_lowercase();
+            if lower.starts_with('.') {
+                lower
+            } else {
+                format!(".{lower}")
+            }
+        })
         .collect()
-});
+}
 
 /// Returns the stem of a PATHEXT entry (with any leading `.` removed).
 ///
@@ -34,23 +39,23 @@ fn pathext_entry_stem(entry: &str) -> &str {
 }
 
 /// Returns true if the path's extension is in the PATHEXT list.
-///
-/// Performs case-insensitive comparison against the cached PATHEXT entries
-/// without allocating.
-fn has_executable_extension(path: &Path) -> bool {
+fn has_executable_extension_with(path: &Path, extensions: &[String]) -> bool {
     path.extension().is_some_and(|ext| {
-        PATHEXT_EXTENSIONS
+        extensions
             .iter()
             .any(|e| ext.eq_ignore_ascii_case(pathext_entry_stem(e)))
     })
 }
 
+#[cfg(test)]
+fn has_executable_extension(path: &Path) -> bool {
+    let exts = pathext_extensions();
+    has_executable_extension_with(path, &exts)
+}
+
 /// Returns true if `path` is, by itself, an existing executable file.
-///
-/// Used both for the initial check in [`resolve_executable`] and for
-/// [`PathExt::executable`].
-fn is_executable_file(path: &Path) -> bool {
-    has_executable_extension(path) && path.is_file()
+fn is_executable_file(path: &Path, extensions: &[String]) -> bool {
+    has_executable_extension_with(path, extensions) && path.is_file()
 }
 
 /// Resolves an owned path to the actual on-disk executable file, if any.
@@ -59,11 +64,12 @@ fn is_executable_file(path: &Path) -> bool {
 /// unchanged (no allocation). Otherwise, each `PATHEXT` extension is appended
 /// in turn and the first existing file is returned.
 pub fn resolve_executable(path: PathBuf) -> Option<PathBuf> {
-    if is_executable_file(&path) {
+    let extensions = pathext_extensions();
+    if is_executable_file(&path, &extensions) {
         return Some(path);
     }
     // Try appending each PATHEXT extension.
-    for ext in PATHEXT_EXTENSIONS.iter() {
+    for ext in &extensions {
         let mut name = path.as_os_str().to_owned();
         name.push(ext);
         let candidate = PathBuf::from(name);
@@ -84,12 +90,13 @@ impl crate::sys::fs::PathExt for Path {
     }
 
     fn executable(&self) -> bool {
-        if is_executable_file(self) {
+        let extensions = pathext_extensions();
+        if is_executable_file(self, &extensions) {
             return true;
         }
         // Try each PATHEXT extension without allocating a separate PathBuf
         // per candidate until one exists.
-        PATHEXT_EXTENSIONS.iter().any(|ext| {
+        extensions.iter().any(|ext| {
             let mut name = self.as_os_str().to_owned();
             name.push(ext);
             Self::new(&name).is_file()
@@ -203,16 +210,18 @@ fn default_system_paths() -> Vec<PathBuf> {
 
 /// Returns the path to the system-wide shell profile script.
 ///
-/// On Windows, no system profile is loaded by default.
-pub const fn get_system_profile_path() -> Option<&'static Path> {
-    None
+/// On Windows, points to `%ProgramData%\cash\profile`. If the file exists, it is sourced
+/// for login shells; if not, it is ignored without error.
+pub fn get_system_profile_path() -> Option<&'static Path> {
+    Some(Path::new(r"C:\ProgramData\cash\profile"))
 }
 
 /// Returns the path to the system-wide shell rc script.
 ///
-/// On Windows, no system rc file is loaded by default.
-pub const fn get_system_rc_path() -> Option<&'static Path> {
-    None
+/// On Windows, points to `%ProgramData%\cash\cashrc`. If the file exists, it is sourced
+/// for interactive non-login shells ahead of `~/.bashrc`; if not, it is ignored without error.
+pub fn get_system_rc_path() -> Option<&'static Path> {
+    Some(Path::new(r"C:\ProgramData\cash\cashrc"))
 }
 
 /// Returns the platform default for case-insensitive pathname expansion.
@@ -350,6 +359,12 @@ pub(crate) fn open_temp_with_contents(contents: &[u8]) -> std::io::Result<std::f
     const FILE_FLAG_DELETE_ON_CLOSE: u32 = 0x0400_0000;
     /// Let the child inherit and read it, and let the delete proceed while open.
     const SHARE_ALL: u32 = 0x0000_0001 | 0x0000_0002 | 0x0000_0004;
+    /// cash: the part that keeps this off the disk. It tells the cache manager the file
+    /// is transient, so the data is held in the system cache and written out only under
+    /// memory pressure — and with the delete above, a here-document written and read in
+    /// the same breath never reaches the platter at all. It is also why a RAM disk would
+    /// buy nothing here: Windows already has one, and this is how a program asks for it.
+    const FILE_ATTRIBUTE_TEMPORARY: u32 = 0x0000_0100;
 
     static COUNTER: AtomicU64 = AtomicU64::new(0);
     let n = COUNTER.fetch_add(1, Ordering::Relaxed);
@@ -360,12 +375,33 @@ pub(crate) fn open_temp_with_contents(contents: &[u8]) -> std::io::Result<std::f
         .read(true)
         .write(true)
         .share_mode(SHARE_ALL)
+        .attributes(FILE_ATTRIBUTE_TEMPORARY)
         .custom_flags(FILE_FLAG_DELETE_ON_CLOSE)
         .open(&path)?;
 
     file.write_all(contents)?;
     file.seek(SeekFrom::Start(0))?;
     Ok(file)
+}
+
+/// Creates a file whose contents Windows should keep in memory.
+///
+/// cash: the same `FILE_ATTRIBUTE_TEMPORARY` hint as a here-document's, for the file a
+/// process substitution writes. This one cannot also be delete-on-close — the child opens
+/// it by path, and a delete-pending file cannot be opened afresh (D17) — so it is swept
+/// instead, but the contents still need not travel to the disk and back.
+pub(crate) fn create_temporary_file(path: &std::path::Path) -> std::io::Result<std::fs::File> {
+    use std::os::windows::fs::OpenOptionsExt;
+
+    /// Transient: hold it in the cache, write it out only under memory pressure.
+    const FILE_ATTRIBUTE_TEMPORARY: u32 = 0x0000_0100;
+
+    std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(true)
+        .write(true)
+        .attributes(FILE_ATTRIBUTE_TEMPORARY)
+        .open(path)
 }
 
 pub(crate) fn process_substitution_temp_path() -> PathBuf {
@@ -560,4 +596,18 @@ mod tests {
         let path = PathBuf::from(r"C:\__brush_test_definitely_missing__");
         assert!(resolve_executable(path).is_none());
     }
+
+    #[test]
+    fn test_dynamic_pathext() {
+        let exts = pathext_extensions();
+        assert!(exts.contains(&".exe".to_string()));
+        assert!(exts.contains(&".bat".to_string()) || exts.contains(&".cmd".to_string()));
+
+        // Test with custom extensions slice
+        let custom = vec![".custom".to_string(), ".xyz".to_string()];
+        assert!(has_executable_extension_with(Path::new("run.xyz"), &custom));
+        assert!(has_executable_extension_with(Path::new("run.CUSTOM"), &custom));
+        assert!(!has_executable_extension_with(Path::new("run.exe"), &custom));
+    }
 }
+

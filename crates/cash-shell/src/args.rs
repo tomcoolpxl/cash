@@ -1,4 +1,4 @@
-//! Types for brush command-line parsing.
+//! Types for cash command-line parsing.
 
 use clap::{Parser, builder::styling};
 use std::io::IsTerminal;
@@ -6,16 +6,16 @@ use std::path::PathBuf;
 
 use crate::{events, productinfo};
 
-const SHORT_DESCRIPTION: &str = "Bo[u]rn[e] RUsty SHell 🦀 (https://brush.sh)";
+const SHORT_DESCRIPTION: &str = "cash 🦀 (https://github.com/thraa/cash)";
 
-const LONG_DESCRIPTION: &str = r"brush is a bash-compatible, Rust-implemented, POSIX-style shell.
+const LONG_DESCRIPTION: &str = r"cash is a bash-compatible, Rust-implemented, POSIX-style Windows shell.
 
-brush is distributed under the terms of the MIT license. If you encounter any issues or discrepancies in behavior from bash, please report them at https://github.com/reubeno/brush.
+cash is distributed under the terms of the MIT license. If you encounter any issues or discrepancies in behavior from bash, please report them at https://github.com/thraa/cash.
 
-For more information, visit https://brush.sh.";
+For more information, visit https://github.com/thraa/cash.";
 
 const USAGE: &str = color_print::cstr!(
-    "<bold>brush</bold> <italics>[OPTIONS]</italics>... <italics>[SCRIPT_PATH [SCRIPT_ARGS]...]</italics>"
+    "<bold>cash</bold> <italics>[OPTIONS]</italics>... <italics>[SCRIPT_PATH [SCRIPT_ARGS]...]</italics>"
 );
 
 const VERSION: &str = const_format::concatcp!(
@@ -44,7 +44,7 @@ pub enum InputBackendType {
     Minimal,
 }
 
-/// Parsed command-line arguments for the brush shell.
+/// Parsed command-line arguments for the cash shell.
 #[derive(Clone, Parser)]
 #[clap(name = productinfo::PRODUCT_NAME,
        version = VERSION,
@@ -54,7 +54,7 @@ pub enum InputBackendType {
        override_usage = USAGE,
        disable_help_flag = true,
        disable_version_flag = true,
-       styles = brush_help_styles())]
+       styles = cash_help_styles())]
 pub struct CommandLineArgs {
     /// Display usage information.
     #[clap(long = "help", action = clap::ArgAction::HelpShort)]
@@ -64,11 +64,11 @@ pub struct CommandLineArgs {
     #[clap(long = "version", action = clap::ArgAction::Version)]
     pub version: Option<bool>,
 
-    /// Path to TOML-based `brush` config file (overrides default location).
+    /// Path to TOML-based `cash` config file (overrides default location).
     #[clap(long = "config", value_name = "FILE", help_heading = HEADING_CONFIG_OPTIONS)]
     pub config_file: Option<PathBuf>,
 
-    /// Disable loading of TOML-based `brush` config file.
+    /// Disable loading of TOML-based `cash` config file.
     #[clap(long = "no-config", help_heading = HEADING_CONFIG_OPTIONS)]
     pub no_config: bool,
 
@@ -306,7 +306,7 @@ impl CommandLineArgs {
 
 /// Returns clap styling to be used for command-line help.
 #[doc(hidden)]
-fn brush_help_styles() -> clap::builder::Styles {
+fn cash_help_styles() -> clap::builder::Styles {
     styling::Styles::styled()
         .header(
             styling::AnsiColor::Yellow.on_default()

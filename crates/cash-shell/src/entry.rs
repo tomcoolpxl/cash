@@ -214,7 +214,7 @@ fn install_panic_handlers() {
     human_panic::setup_panic!(
         human_panic::Metadata::new(productinfo::PRODUCT_NAME, productinfo::PRODUCT_VERSION)
             .homepage(env!("CARGO_PKG_HOMEPAGE"))
-            .support("please post a GitHub issue at https://github.com/reubeno/brush/issues/new")
+            .support("please post a GitHub issue at https://github.com/thraa/cash/issues/new")
     );
 
     //
@@ -374,6 +374,11 @@ async fn run_in_shell(
                 args.script_args.iter().skip(1),
             )
             .await?;
+    }
+
+    // When a login shell exits, bash sources ~/.bash_logout if present.
+    if shell_ref.lock().await.options().login_shell {
+        let _ = shell_ref.lock().await.load_logout_scripts().await;
     }
 
     // Make sure to return the last result observed in the shell.

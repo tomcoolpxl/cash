@@ -1,7 +1,8 @@
 [package]
 name = "cash-builtins"
 description = "Builtins for a POSIX/bash shell (used by cash-shell)"
-version = "0.2.0"
+version.workspace = true
+authors.workspace = true
 categories.workspace = true
 edition.workspace = true
 keywords.workspace = true
@@ -130,8 +131,8 @@ default = [
 workspace = true
 
 [dependencies]
-cash-core = { version = "^0.5.0", path = "../cash-core" }
-cash-parser = { version = "^0.4.0", path = "../cash-parser" }
+cash-core = { workspace = true }
+cash-parser = { workspace = true }
 cfg-if = "1.0.4"
 chrono = "0.4.44"
 clap = { version = "4.6.0", features = ["derive", "wrap_help"] }
@@ -180,7 +181,7 @@ anyhow = "1.0.102"
 pretty_assertions = { version = "1.4.1", features = ["unstable"] }
 
 [target.'cfg(windows)'.dependencies]
-cash-win32 = { path = "../cash-win32" }
+cash-win32 = { workspace = true }
 # D48: the `less`/`more` pager needs the terminal size and raw-mode keys. Same
 # version cash-interactive already pulls in, so this adds no new tree.
 crossterm = "0.29.0"

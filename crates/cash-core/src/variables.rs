@@ -293,8 +293,13 @@ impl ShellVariable {
                 ShellValue::String(base) => match value {
                     ShellValueLiteral::Scalar(suffix) => {
                         if treat_as_int {
-                            let int_value = base.parse::<i64>().unwrap_or(0)
-                                + suffix.parse::<i64>().unwrap_or(0);
+                            let base_val = crate::arithmetic::eval_pure_str(base)
+                                .or_else(|| base.parse::<i64>().ok())
+                                .unwrap_or(0);
+                            let suffix_val = crate::arithmetic::eval_pure_str(suffix.as_str())
+                                .or_else(|| suffix.parse::<i64>().ok())
+                                .unwrap_or(0);
+                            let int_value = base_val.wrapping_add(suffix_val);
                             base.clear();
                             base.push_str(int_value.to_string().as_str());
                         } else {
@@ -422,9 +427,13 @@ impl ShellVariable {
 
                     let mut new_value;
                     if treat_as_int {
-                        new_value = (existing_value.parse::<i64>().unwrap_or(0)
-                            + value.parse::<i64>().unwrap_or(0))
-                        .to_string();
+                        let existing_val = crate::arithmetic::eval_pure_str(existing_value)
+                            .or_else(|| existing_value.parse::<i64>().ok())
+                            .unwrap_or(0);
+                        let val = crate::arithmetic::eval_pure_str(value.as_str())
+                            .or_else(|| value.parse::<i64>().ok())
+                            .unwrap_or(0);
+                        new_value = existing_val.wrapping_add(val).to_string();
                     } else {
                         new_value = existing_value.to_owned();
                         new_value.push_str(value.as_str());
@@ -443,9 +452,13 @@ impl ShellVariable {
 
                     let mut new_value;
                     if treat_as_int {
-                        new_value = (existing_value.parse::<i64>().unwrap_or(0)
-                            + value.parse::<i64>().unwrap_or(0))
-                        .to_string();
+                        let existing_val = crate::arithmetic::eval_pure_str(existing_value)
+                            .or_else(|| existing_value.parse::<i64>().ok())
+                            .unwrap_or(0);
+                        let val = crate::arithmetic::eval_pure_str(value.as_str())
+                            .or_else(|| value.parse::<i64>().ok())
+                            .unwrap_or(0);
+                        new_value = existing_val.wrapping_add(val).to_string();
                     } else {
                         new_value = existing_value.to_owned();
                         new_value.push_str(value.as_str());
@@ -495,7 +508,10 @@ impl ShellVariable {
         update_transform: ShellVariableUpdateTransform,
     ) {
         if treat_as_int {
-            *s = (*s).parse::<i64>().unwrap_or(0).to_string();
+            let int_val = crate::arithmetic::eval_pure_str(s)
+                .or_else(|| s.parse::<i64>().ok())
+                .unwrap_or(0);
+            *s = int_val.to_string();
         } else {
             match update_transform {
                 ShellVariableUpdateTransform::None => (),

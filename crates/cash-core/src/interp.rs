@@ -270,14 +270,21 @@ impl Execute for ast::CompoundList {
             let run_async = matches!(sep, ast::SeparatorOperator::Async);
 
             if run_async {
-                let job = spawn_async_ao_list_in_task(ao_list, shell, params).await;
-                let job_formatted = job.to_pid_style_string();
+                if let Some(job) = spawn_async_ao_list_in_task(ao_list, shell, params).await {
+                    let job_formatted = job.to_pid_style_string();
 
-                if shell.options().interactive && !shell.is_subshell() {
-                    writeln!(params.stderr(shell), "{job_formatted}")?;
+                    if shell.options().interactive && !shell.is_subshell() {
+                        writeln!(params.stderr(shell), "{job_formatted}")?;
+                    }
+
+                    result = ExecutionResult::success();
+                } else {
+                    let _ = writeln!(
+                        params.stderr(shell),
+                        "cash: fork: retry: Resource temporarily unavailable"
+                    );
+                    result = ExecutionResult::general_error();
                 }
-
-                result = ExecutionResult::success();
             } else {
                 result = ao_list.execute(shell, params).await?;
 
@@ -298,7 +305,13 @@ async fn spawn_async_ao_list_in_task<'a, SE: extensions::ShellExtensions>(
     ao_list: &ast::AndOrList,
     shell: &'a mut Shell<SE>,
     params: &ExecutionParameters,
-) -> &'a jobs::Job {
+) -> Option<&'a jobs::Job> {
+    // Poll to reap finished background jobs.
+    let _ = shell.jobs_mut().poll();
+
+    // Guard against runaway background jobs / fork bombs (matching ulimit -u).
+    let slot_guard = jobs::SubshellSlotGuard::try_acquire().ok()?;
+
     // Clone the inputs.
     let mut cloned_shell = shell.clone();
     let mut cloned_params = params.clone();
@@ -323,6 +336,7 @@ async fn spawn_async_ao_list_in_task<'a, SE: extensions::ShellExtensions>(
     cloned_params.spawned_pid_ready = Some(std::sync::Arc::clone(&pid_ready));
 
     let mut join_handle = tokio::spawn(async move {
+        let _guard = slot_guard;
         cloned_ao_list
             .execute(&mut cloned_shell, &cloned_params)
             .await
@@ -331,19 +345,33 @@ async fn spawn_async_ao_list_in_task<'a, SE: extensions::ShellExtensions>(
     // Either the task reached a point where `$!` is as accurate as it will ever be, or
     // it finished outright. Both arms resolve promptly: a task that runs forever either
     // spawned a process (first arm) or ran a builtin on the way (also first arm).
-    tokio::select! {
-        () = pid_ready.notified() => {}
-        _ = &mut join_handle => {}
-    }
+    let (completed_result, join_handle_opt) = tokio::select! {
+        () = pid_ready.notified() => (None, Some(join_handle)),
+        res = &mut join_handle => (Some(res), None),
+    };
 
-    shell.jobs_mut().add_as_current(
+    let task = match completed_result {
+        Some(Ok(res)) => jobs::JobTask::Completed(Some(res)),
+        Some(Err(_join_err)) => {
+            jobs::JobTask::Completed(Some(Ok(ExecutionResult::general_error())))
+        }
+        None => {
+            if let Some(h) = join_handle_opt {
+                jobs::JobTask::Internal(h)
+            } else {
+                jobs::JobTask::Completed(Some(Ok(ExecutionResult::general_error())))
+            }
+        }
+    };
+
+    Some(shell.jobs_mut().add_as_current(
         jobs::Job::new(
-            [jobs::JobTask::Internal(join_handle)],
+            [task],
             ao_list.to_string(),
             jobs::JobState::Running,
         )
         .with_spawned_pids(pid_sink),
-    )
+    ))
 }
 
 #[async_trait::async_trait]
@@ -709,8 +737,17 @@ async fn spawn_or_run_in_pipeline<SE: extensions::ShellExtensions>(
 ) -> Result<ExecutionSpawnResult, error::Error> {
     match pipeline_context.shell {
         commands::ShellForCommand::OwnedShell { target, .. } => {
+            let Ok(slot_guard) = jobs::SubshellSlotGuard::try_acquire() else {
+                use std::io::Write as _;
+                let _ = writeln!(
+                    params.stderr(&target),
+                    "cash: fork: retry: Resource temporarily unavailable"
+                );
+                return Ok(ExecutionSpawnResult::Completed(ExecutionResult::general_error()));
+            };
             let mut shell = *target;
             let join_handle = tokio::task::spawn_blocking(move || {
+                let _guard = slot_guard;
                 let rt = tokio::runtime::Handle::current();
                 rt.block_on(compound.execute(&mut shell, &params))
             });
@@ -1347,6 +1384,15 @@ impl<SE: extensions::ShellExtensions> ExecuteInPipeline<SE> for ast::SimpleComma
         // if expansion (e.g., command substitution) set an exit status.
         let status_change_count_before_expansion = context.shell.last_exit_status_change_count();
 
+        let requires_seekable_file = self.word_or_name.as_ref().map_or(false, |won| {
+            let s = won.flatten();
+            let base = std::path::Path::new(&s)
+                .file_stem()
+                .and_then(|stem| stem.to_str())
+                .unwrap_or(&s);
+            base.eq_ignore_ascii_case("diff") || base.eq_ignore_ascii_case("cmp")
+        });
+
         for item in prefix_iter.chain(cmd_name_items.iter()).chain(suffix_iter) {
             match item {
                 CommandPrefixOrSuffixItem::IoRedirect(redirect) => {
@@ -1358,8 +1404,15 @@ impl<SE: extensions::ShellExtensions> ExecuteInPipeline<SE> for ast::SimpleComma
                 }
                 CommandPrefixOrSuffixItem::ProcessSubstitution(kind, subshell_command) => {
                     let (arg_path, installed_fd_num, substitution_file) =
-                        setup_process_substitution(&context.shell, &params, kind, subshell_command)
-                            .await?;
+                        setup_process_substitution(
+                            &context.shell,
+                            &params,
+                            kind,
+                            subshell_command,
+                            false,
+                            requires_seekable_file,
+                        )
+                        .await?;
 
                     if let Some(fd) = installed_fd_num {
                         params.open_files.set_fd(fd, substitution_file);
@@ -1722,7 +1775,7 @@ async fn apply_assignment(
     let variable_name = &resolved_name;
 
     // Expand the values.
-    let new_value = match &assignment.value {
+    let mut new_value = match &assignment.value {
         ast::AssignmentValue::Scalar(unexpanded_value) => {
             let value =
                 expansion::basic_expand_assignment_word(shell, params, unexpanded_value).await?;
@@ -1793,6 +1846,17 @@ async fn apply_assignment(
 
     // Read option before taking mutable borrow on env.
     let export_variables_on_modification = shell.options().export_variables_on_modification;
+
+    // If the target variable is marked as an integer, evaluate its scalar value arithmetically.
+    if let Some((_, var)) = shell.env().get(variable_name) {
+        if var.is_treated_as_integer() {
+            if let ShellValueLiteral::Scalar(s) = &mut new_value {
+                if let Ok(eval_val) = arithmetic::evaluate_str(shell, s.as_str()) {
+                    *s = eval_val.to_string();
+                }
+            }
+        }
+    }
 
     // See if we can find an existing value associated with the variable.
     if let Some((existing_value_scope, existing_value)) =
@@ -2038,6 +2102,8 @@ pub(crate) async fn setup_redirect(
                                     params,
                                     substitution_kind,
                                     subshell_cmd,
+                                    true,
+                                    false,
                                 )
                                 .await?;
 
@@ -2145,20 +2211,30 @@ const fn get_default_fd_for_redirect_kind(kind: &ast::IoFileRedirectKind) -> She
 /// the fd the file is installed on, and the file itself.
 ///
 /// cash (D17): the argument is `/dev/fd/N` on Unix, where the child inherits the fd, and
-/// a temp file path on Windows, where it cannot. See [`setup_process_substitution_win`].
+/// a Win32 Named Pipe (`\\.\pipe\cash-procsub-...`) or direct pipe on Windows.
 async fn setup_process_substitution(
     shell: &Shell<impl extensions::ShellExtensions>,
     params: &ExecutionParameters,
     kind: &ast::ProcessSubstitutionKind,
     subshell_cmd: &ast::SubshellCommand,
+    for_redirect: bool,
+    requires_seekable_file: bool,
 ) -> Result<(String, Option<ShellFd>, OpenFile), error::Error> {
     #[cfg(windows)]
     {
-        return setup_process_substitution_win(shell, params, kind, subshell_cmd).await;
+        return setup_process_substitution_win(
+            shell,
+            params,
+            kind,
+            subshell_cmd,
+            for_redirect,
+            requires_seekable_file,
+        )
+        .await;
     }
 
     #[cfg(not(windows))]
-    setup_process_substitution_posix(shell, params, kind, subshell_cmd)
+    setup_process_substitution_posix(shell, params, kind, subshell_cmd, requires_seekable_file)
 }
 
 #[cfg(not(windows))]
@@ -2167,6 +2243,7 @@ fn setup_process_substitution_posix(
     params: &ExecutionParameters,
     kind: &ast::ProcessSubstitutionKind,
     subshell_cmd: &ast::SubshellCommand,
+    _requires_seekable_file: bool,
 ) -> Result<(String, Option<ShellFd>, OpenFile), error::Error> {
     // TODO(execute): Don't execute synchronously!
     // Execute in a subshell.
@@ -2219,40 +2296,71 @@ fn setup_process_substitution_posix(
     ))
 }
 
-/// cash (D17): process substitution via a temp file.
+/// cash (D17): process substitution via Win32 Named Pipes and live streaming.
 ///
 /// Windows has no `/dev/fd`, and a child cannot inherit an arbitrary descriptor (D26),
-/// so the pipe-and-`/dev/fd/63` approach cannot work. The subshell's output is
-/// materialised into a temp file and its *path* passed as the argument — which any
-/// program can open, including ones that seek or stat for a regular file.
+/// so the pipe-and-`/dev/fd/63` approach cannot work for native executables.
 ///
-/// The accepted cost, recorded in D17: **no streaming**. The subshell runs to completion
-/// before the consuming command starts, so `while read l; do ...; done < <(tail -f log)`
-/// collects forever rather than streaming.
+/// If `for_redirect` is true (e.g. `< <(cmd)` or `> >(cmd)`), the redirection is
+/// handled entirely in-process: an anonymous pipe connects the subshell directly to the
+/// outer command's standard input or output with zero disk usage and live streaming.
+///
+/// If `for_redirect` is false (e.g. `cat <(cmd)` or `cmd >(subshell)`), a Win32 Named
+/// Pipe (`\\.\pipe\cash-procsub-...`) is created. Native executables open it via standard
+/// Win32 file APIs, and data streams in real time via kernel memory pipes.
 #[cfg(windows)]
 async fn setup_process_substitution_win(
     shell: &Shell<impl extensions::ShellExtensions>,
     params: &ExecutionParameters,
     kind: &ast::ProcessSubstitutionKind,
     subshell_cmd: &ast::SubshellCommand,
+    for_redirect: bool,
+    requires_seekable_file: bool,
 ) -> Result<(String, Option<ShellFd>, OpenFile), error::Error> {
-    if matches!(kind, ast::ProcessSubstitutionKind::Write) {
-        // `>(...)` would need the subshell to run *after* the consuming command, which
-        // the temp-file model has no hook for. Failing loudly beats a silent no-op.
-        return error::unimp("write process substitution (>(...)) on Windows");
+    let mut subshell = shell.clone();
+    let mut child_params = params.clone();
+    child_params.process_group_policy = ProcessGroupPolicy::SameProcessGroup;
+
+    if for_redirect {
+        let (reader, writer) = std::io::pipe()?;
+        let target_file = match kind {
+            ast::ProcessSubstitutionKind::Read => {
+                child_params
+                    .open_files
+                    .set_fd(OpenFiles::STDOUT_FD, writer.into());
+                OpenFile::from(reader)
+            }
+            ast::ProcessSubstitutionKind::Write => {
+                child_params
+                    .open_files
+                    .set_fd(OpenFiles::STDIN_FD, reader.into());
+                OpenFile::from(writer)
+            }
+        };
+
+        let subshell_cmd = subshell_cmd.to_owned();
+        std::thread::Builder::new()
+            .name("cash-procsub".into())
+            .spawn(move || {
+                let rt = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build();
+                if let Ok(rt) = rt {
+                    let _ = rt.block_on(subshell_cmd.list.execute(&mut subshell, &child_params));
+                }
+            })?;
+
+        return Ok((String::new(), None, target_file));
     }
 
-    let path = crate::sys::fs::process_substitution_temp_path();
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
+    // Windows CRT `_stat()` cannot stat Win32 Named Pipes (returning ERROR_INVALID_NAME / ENOENT).
+    // Commands that require seeking or regular file stat (such as `diff` or `cmp`) fall back to
+    // an awaited temp file so `diff <(a) <(b)` succeeds transparently.
+    if requires_seekable_file && matches!(kind, ast::ProcessSubstitutionKind::Read) {
+        static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let n = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!("cash-procsub-seek-{}-{n}", std::process::id()));
 
-    // Run the subshell with its stdout captured into the file, and wait for it: the
-    // consumer needs a complete file, not a growing one.
-    {
-        let mut subshell = shell.clone();
-        let mut child_params = params.clone();
-        child_params.process_group_policy = ProcessGroupPolicy::SameProcessGroup;
         child_params.open_files.set_fd(
             OpenFiles::STDOUT_FD,
             OpenFile::from(std::fs::File::create(&path)?),
@@ -2263,15 +2371,41 @@ async fn setup_process_substitution_win(
             .list
             .execute(&mut subshell, &child_params)
             .await;
+
+        let target_file = OpenFile::from(std::fs::File::open(&path)?);
+        return Ok((cash_win32::path::render(&path), None, target_file));
     }
 
-    let target_file = OpenFile::from(std::fs::File::open(&path)?);
+    let (path, target_file) = match kind {
+        ast::ProcessSubstitutionKind::Read => {
+            let sub = cash_win32::pipe::create_read_substitution()?;
+            child_params
+                .open_files
+                .set_fd(OpenFiles::STDOUT_FD, sub.writer.into());
+            (sub.path, openfiles::null()?)
+        }
+        ast::ProcessSubstitutionKind::Write => {
+            let sub = cash_win32::pipe::create_write_substitution()?;
+            child_params
+                .open_files
+                .set_fd(OpenFiles::STDIN_FD, sub.reader.into());
+            (sub.path, openfiles::null()?)
+        }
+    };
 
-    // No fd is installed. The child reads the temp file by path, and putting the file on
-    // a high descriptor would make `inject_fds` reject the whole command — D26 makes a
-    // descriptor above 2 a hard error for native executables, and that is cash's own
-    // bookkeeping rather than something the script asked for.
-    Ok((cash_win32::path::render(&path), None, target_file))
+    let subshell_cmd = subshell_cmd.to_owned();
+    std::thread::Builder::new()
+        .name("cash-procsub".into())
+        .spawn(move || {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build();
+            if let Ok(rt) = rt {
+                let _ = rt.block_on(subshell_cmd.list.execute(&mut subshell, &child_params));
+            }
+        })?;
+
+    Ok((path, None, target_file))
 }
 
 fn setup_open_file_with_contents(contents: &str) -> Result<OpenFile, error::Error> {

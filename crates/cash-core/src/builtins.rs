@@ -19,6 +19,21 @@ pub type CommandExecuteFunc<SE: extensions::ShellExtensions> =
         Vec<commands::CommandArg>,
     ) -> BoxFuture<'_, Result<results::ExecutionResult, error::Error>>;
 
+/// Type of a function implementing an asynchronous spawn of a built-in command (e.g. bundled utilities).
+///
+/// # Arguments
+///
+/// * The context in which the command is being executed.
+/// * The arguments to the command.
+/// * The process group id, if running in a pipeline.
+#[allow(type_alias_bounds)]
+pub type CommandSpawnFunc<SE: extensions::ShellExtensions> =
+    fn(
+        commands::ExecutionContext<'_, SE>,
+        Vec<commands::CommandArg>,
+        Option<i32>,
+    ) -> BoxFuture<'_, Result<results::ExecutionSpawnResult, error::Error>>;
+
 /// Type of a function to retrieve help content for a built-in command.
 ///
 /// # Arguments
@@ -152,6 +167,9 @@ pub struct ContentOptions {
 pub struct Registration<SE: extensions::ShellExtensions> {
     /// Function to execute the builtin.
     pub execute_func: CommandExecuteFunc<SE>,
+
+    /// Optional function to spawn the builtin as an asynchronous process or pipeline stage.
+    pub spawn_func: Option<CommandSpawnFunc<SE>>,
 
     /// Function to retrieve the builtin's content/help text.
     pub content_func: CommandContentFunc,
@@ -378,6 +396,7 @@ pub fn simple_builtin<B: SimpleCommand + Send + Sync, SE: extensions::ShellExten
 -> Registration<SE> {
     Registration {
         execute_func: exec_simple_builtin::<B, SE>,
+        spawn_func: None,
         content_func: B::get_content,
         disabled: false,
         special_builtin: false,
@@ -390,6 +409,7 @@ pub fn simple_builtin<B: SimpleCommand + Send + Sync, SE: extensions::ShellExten
 pub fn builtin<B: Command + Send + Sync, SE: extensions::ShellExtensions>() -> Registration<SE> {
     Registration {
         execute_func: exec_builtin::<B, SE>,
+        spawn_func: None,
         content_func: get_builtin_content::<B>,
         disabled: false,
         special_builtin: false,
@@ -404,6 +424,7 @@ pub fn decl_builtin<B: DeclarationCommand + Send + Sync, SE: extensions::ShellEx
 -> Registration<SE> {
     Registration {
         execute_func: exec_declaration_builtin::<B, SE>,
+        spawn_func: None,
         content_func: get_builtin_content::<B>,
         disabled: false,
         special_builtin: false,
@@ -424,6 +445,7 @@ pub fn raw_arg_builtin<
 >() -> Registration<SE> {
     Registration {
         execute_func: exec_raw_arg_builtin::<B, SE>,
+        spawn_func: None,
         content_func: get_builtin_content::<B>,
         disabled: false,
         special_builtin: false,

@@ -144,7 +144,7 @@ impl builtins::Command for StartCommand {
 
 /// Run a command elevated, via UAC.
 ///
-/// A first-class verb rather than shelling out to `sudo.exe`, so cash knows the
+/// A first-class verb rather than shelling out to an external helper, so cash knows the
 /// elevation happened. D42 records why that matters: an elevated child cannot be
 /// assigned to cash's job object — a medium-integrity process cannot acquire
 /// `PROCESS_SET_QUOTA` on a high-integrity one — so D6's containment guarantee stops at

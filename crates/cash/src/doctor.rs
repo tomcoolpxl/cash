@@ -60,13 +60,7 @@ const EXPECTED: &[(&str, &str)] = &[
         "not in Microsoft's Coreutils bundle — separate GNU project",
     ),
     ("grep", "not bundled with cash; in the MS Coreutils bundle"),
-    ("find", "not bundled with cash; findutils, in the MS bundle"),
-    (
-        "xargs",
-        "not bundled with cash; findutils, in the MS bundle",
-    ),
     ("diff", "not bundled with cash; diffutils"),
-    ("chmod", "not bundled with cash; coreutils"),
     ("stat", "not bundled with cash; coreutils"),
 ];
 
@@ -74,7 +68,10 @@ const EXPECTED: &[(&str, &str)] = &[
 ///
 /// A regression here means a builtin was dropped or shadowed, which is worth knowing —
 /// but it is the opposite question from EXPECTED, and gets the opposite advice.
-const CARRIED: &[&str] = &["ps", "less", "more", "which", "kill", "cat", "mktemp"];
+const CARRIED: &[&str] = &[
+    "ps", "top", "find", "xargs", "less", "more", "which", "kill", "cat", "mktemp", "hostname",
+    "chmod", "id", "groups",
+];
 
 /// Shells whose name must resolve to cash itself (D7).
 const OWN_SHELLS: &[&str] = &["sh", "bash"];
@@ -95,6 +92,7 @@ pub fn run() -> u8 {
     let builtins = builtin_names();
 
     check_session(&mut findings);
+    check_platform(&mut findings);
     check_carried(&mut findings, &builtins);
     check_shells(&mut findings, &entries, &pathext, &cwd);
     check_commands(&mut findings, &builtins, &entries, &pathext, &cwd);
@@ -116,6 +114,20 @@ fn check_session(findings: &mut Vec<Finding>) {
                 "no enclosing job object".into()
             },
             fix: None,
+        });
+    }
+}
+
+fn check_platform(findings: &mut Vec<Finding>) {
+    #[cfg(windows)]
+    {
+        findings.push(Finding {
+            level: Level::Note,
+            subject: "platform identity".into(),
+            detail: "`uname -s` is `Windows_NT`, `$OSTYPE` is `windows` (§4 #25)".into(),
+            fix: Some(
+                "scripts matching only `MINGW*|MSYS*` should also match `Windows_NT*` for their Windows branch".into(),
+            ),
         });
     }
 }

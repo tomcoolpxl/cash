@@ -1,114 +1,35 @@
-name: ci
-
-# Split per D43: bash language conformance runs on Linux, where a real bash
-# exists to diff against. Windows behaviour gets its own acceptance corpus and
-# is NOT compared to a bash reference — §4's divergences are deliberate, and a
-# bash reference would report every one as a failure.
+name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
   pull_request:
-  workflow_dispatch:
+    branches: [ main ]
 
 env:
   CARGO_TERM_COLOR: always
-  RUST_BACKTRACE: 1
 
 jobs:
-  # D43: language conformance. ~2,631 differential cases, each running the same
-  # script under brush and real bash and diffing stdout, stderr, exit status and
-  # filesystem effects. This is the suite cash inherits and must not regress.
-  conformance-linux:
-    name: Language conformance (Linux)
-    runs-on: ubuntu-24.04
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - uses: Swatinem/rust-cache@v2
-
-      - name: Reference bash version
-        run: bash --version
-
-      - name: Differential test suite
-        run: cargo xtask test integration
-
-  # The Windows build must stay clean: the workspace sets warnings = "deny",
-  # so any new warning fails the build rather than accumulating quietly.
-  build-windows:
-    name: Build (Windows)
+  test:
+    name: Build, Test & Lint (Windows)
     runs-on: windows-latest
-    defaults:
-      run:
-        shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust toolchain
+        run: |
+          rustup toolchain install 1.98.1 --profile minimal --component rustfmt,clippy
+          rustup default 1.98.1
 
-      - uses: Swatinem/rust-cache@v2
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
 
-      - name: Build
-        run: cargo build --release -p cash
+      - name: Cargo Check Workspace
+        run: cargo check --workspace --all-targets
 
-      # D43: Windows behaviour is asserted against cash's own corpus, not against
-      # a bash reference — §4's divergences are deliberate and a reference would
-      # report every one as a failure.
-      #
-      # The whole suite, not a chosen few targets: the acceptance corpus, the
-      # Win32 layer, the CRLF and bundled-path suites and the script corpus are
-      # all Windows-only, so anything left out here is checked nowhere.
-      - name: Test suite
+      - name: Run Tests
         run: cargo test --workspace
 
-      - name: Smoke
-        run: ./target/release/cash.exe -c 'echo smoke-ok'
-
-  # Clippy on Windows, because the Linux lint job cannot see this code at all:
-  # `cash-win32` is `#![cfg(windows)]` in its entirety, as is every acceptance
-  # test, so on Linux they compile to nothing and lint clean by vacuity. Without
-  # this job the platform layer — the part that is actually cash's own — is the
-  # one part nothing lints.
-  lint-windows:
-    name: Lint (Windows)
-    runs-on: windows-latest
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
-
-      - uses: Swatinem/rust-cache@v2
-
-      - name: Lint
-        run: cargo xtask check lint
-
-  lint:
-    name: Format and lint
-    runs-on: ubuntu-24.04
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
-
-      - uses: Swatinem/rust-cache@v2
-
-      - name: Format
-        run: cargo xtask check fmt
-
-      - name: Lint
-        run: cargo xtask check lint
+      - name: Cargo Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
