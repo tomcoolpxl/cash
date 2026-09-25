@@ -19,7 +19,7 @@ Feature work follows the sequence below.
 | 6 | Differential corpus fixes | **Active** | [`tests/corpus`](tests/corpus): sourced sed/awk/Bash one-liners run against Git Bash 5.3 with GNU sed and gawk |
 | 7 | Line-ending controls: sed `-b`, `CASH_EOL`, `dos2unix`/`unix2dos` | **Complete** | Section 7 below; spec D49 |
 | 8 | `fuser` and an `lsof` subset | **Complete** | Section 8 below; spec D50 |
-| 9 | `ss` subset | Planned | [`ss` evaluation and decisions](research/ss-evaluation.md) |
+| 9 | `ss` subset | **Complete** | [`ss` evaluation and decisions](research/ss-evaluation.md); spec D51 |
 | 10 | BusyBox-gap tools | Planned | [BusyBox gap analysis and decisions](research/busybox-gap-analysis.md) |
 
 The authoritative feature order is therefore:
@@ -27,7 +27,7 @@ The authoritative feature order is therefore:
 ```text
 Bash 5.2 completion (done)  ->  native awk (done)  ->  native sed (done)  ->  bundled userland (done)
   ->  Bash 5.3 (active)  +  corpus fixes (active)  ->  line-ending controls (done)
-  ->  fuser / lsof subset (done)  ->  ss subset  ->  BusyBox-gap tools
+  ->  fuser / lsof subset (done)  ->  ss subset (done)  ->  BusyBox-gap tools
 ```
 
 ## 1. Finish Bash 5.2
@@ -217,6 +217,12 @@ subset of the address/port expressions. `Recv-Q`/`Send-Q` print `0`; `-p` adds
 and netstat-style flags (`-ano`) get a hint with the `ss` spelling. Windows' own
 `netstat.exe` is not shadowed. Decisions and the full option matrix:
 [research/ss-evaluation.md](research/ss-evaluation.md).
+
+**Status: complete.** Checked against iproute2 7.2 in WSL for `-tulpn`, `-tlnp`, `-tan`,
+`-uan`, `-tunap`, `-H`, `-Q`, `-4`/`-6`, state filters and `-s`. `service=` comes from
+the socket's owning module (`GetOwnerModuleFrom*Entry`), which names the exact service
+even when one `svchost.exe` hosts several. Tests: `crates/cash/tests/ss.rs` and the filter
+unit tests in `cash-builtins`.
 
 ## 10. BusyBox-gap tools
 

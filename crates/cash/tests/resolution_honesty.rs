@@ -430,7 +430,7 @@ fn doctor_does_not_advise_installing_a_builtin() {
     for builtin in [
         "cat", "mktemp", "cut", "tr", "head", "tail", "wc", "awk", "sed", "stat", "tty", "nohup",
         "who", "users", "pinky", "logname", "hostid", "pathchk", "install", "dos2unix", "unix2dos",
-        "fuser", "lsof",
+        "fuser", "lsof", "ss",
     ] {
         assert!(
             !out.stdout.contains(&format!("WARN  {builtin}")),

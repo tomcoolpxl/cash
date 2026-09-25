@@ -1244,6 +1244,25 @@ Restart Manager. Refused, with a message: `fuser -m`/`-c`/`-M` (mount points), `
 no selection, and lsof's field output and repeat modes. `lsof -p PID` notes that the
 process's open data files are not listed.
 
+### D51 — `ss` is iproute2's layout over the Windows socket tables
+
+Linux scripts use `ss` for "is anything listening" (`ss -ltn | grep -q ':5432 '`) and for
+`ss -tulpn`. Windows' `netstat.exe` answers the same questions with other flags and
+another layout, so those scripts fail. cash's `ss` reads the same owner-PID socket tables
+as `fuser` and `lsof` (D50) and prints them in iproute2 7.2's layout: its columns and
+widths, `Netid` only when several protocols are shown, `State` only when more than one
+state is, service names for ports unless `-n`, and status 0 when nothing matches. State
+filters and the `sport`/`dport`/`src`/`dst` expression language (with `and`, `or`,
+`not`, parentheses, prefixes and `-F FILE`) are supported.
+
+Where Windows differs (decided in research/ss-evaluation.md): Recv-Q and Send-Q are not
+exposed and print `0`, so column positions stay the same; `-p` prints `fd=-`, and for a
+service hosted in `svchost.exe` adds `service=NAME` from the socket's owning module; UDP
+sockets have no peer and are always `UNCONN`. Options with nothing behind them (`-x`,
+`-e`, `-m`, `-o`, `-i`, `-K`, `-r`, other socket families) are refused by name, and a
+netstat habit such as `ss -ano` gets a hint with the `ss` spelling. `netstat.exe` is not
+shadowed.
+
 ---
 
 ## 4. Deliberate divergences from bash
@@ -1282,6 +1301,7 @@ someone who expected bash, so additions need to earn their place.
 | 26 | Bundled `sed` and `awk` keep CRLF lines CRLF and match them without the CR | Windows files stay intact and `$` works on them; a program naming `\r`, or `CASH_EOL=lf`, gets Linux behaviour | D49 |
 | 27 | Arithmetic never executes `$(...)` found in an array subscript inside a variable's value | Bash runs it (`read n; echo $((n+1))` with input `a[$(cmd)]`), a well-known code-injection hole; Cash reports an error for indexed arrays and uses the text as a literal key for associative ones | — |
 | 28 | `fuser DIR` and `lsof DIR` report holders of the files below the directory, not processes using it as their working directory; lsof's FD, DEVICE and NODE are `-` | Windows exposes no per-process descriptor or working-directory information through a documented API | D50 |
+| 29 | `ss` prints Recv-Q/Send-Q as `0`, `fd=-` for processes, and every UDP socket as `UNCONN` | Windows' socket tables carry no queue sizes, descriptor numbers or UDP peers | D51 |
 
 `select` was missing outright until recently: it was a reserved word with no grammar
 rule, so `select x in a b; do …; done` was a syntax error that took the whole file with

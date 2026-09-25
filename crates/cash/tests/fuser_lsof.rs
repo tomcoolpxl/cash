@@ -345,8 +345,15 @@ fn lsof_selects_sockets_by_address_state_and_process() {
         format!("@127.0.0.1:{port}"),
         format!("4tcp:{}-{}", port.saturating_sub(1), port.saturating_add(1)),
     ] {
+        // A range can also catch a neighbouring port another process holds, so only
+        // require this process to be among the results.
         let out = cash_in(&dir, &format!("lsof -t -i {spec}"));
-        assert_eq!(out.stdout.trim(), me(), "{spec}: {}", out.stderr);
+        assert!(
+            out.stdout.lines().any(|pid| pid == me()),
+            "{spec}: {} {}",
+            out.stdout,
+            out.stderr
+        );
     }
     let v6 = std::net::TcpListener::bind("[::1]:0").unwrap();
     let v6_port = v6.local_addr().unwrap().port();

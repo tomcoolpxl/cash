@@ -28,6 +28,8 @@ mod ps;
 #[cfg(windows)]
 mod pstree;
 #[cfg(windows)]
+mod ss;
+#[cfg(windows)]
 mod tree;
 
 // cash (D48, §4 #20): `hostname`, so the machine has one name inside the shell rather

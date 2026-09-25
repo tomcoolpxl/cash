@@ -116,6 +116,10 @@ pub struct Socket {
     /// The owning process. Windows reports 0 for `TIME_WAIT` leftovers, which no process
     /// owns, and 4 (System) for kernel-owned sockets.
     pub pid: u32,
+    /// The module that owns the socket, from [`sockets_with_owners`]: the executable's
+    /// name for an ordinary program, the service's short name for a service hosted in
+    /// `svchost.exe`. `None` from [`sockets`], and when Windows cannot say.
+    pub owner: Option<String>,
 }
 
 /// Ports are in network byte order in the low 16 bits.
@@ -213,6 +217,7 @@ fn tcp(family: u16) -> io::Result<Vec<Socket>> {
                     }),
                     state: Some(state),
                     pid: row.dwOwningPid,
+                    owner: None,
                 }
             })
             .collect()
@@ -228,6 +233,7 @@ fn tcp(family: u16) -> io::Result<Vec<Socket>> {
                         .then(|| v6_addr(row.ucRemoteAddr, row.dwRemotePort, row.dwRemoteScopeId)),
                     state: Some(state),
                     pid: row.dwOwningPid,
+                    owner: None,
                 }
             })
             .collect()
@@ -248,6 +254,7 @@ fn udp(family: u16) -> io::Result<Vec<Socket>> {
                 remote: None,
                 state: None,
                 pid: row.dwOwningPid,
+                owner: None,
             })
             .collect()
     } else {
@@ -259,6 +266,7 @@ fn udp(family: u16) -> io::Result<Vec<Socket>> {
                 remote: None,
                 state: None,
                 pid: row.dwOwningPid,
+                owner: None,
             })
             .collect()
     })
@@ -280,6 +288,196 @@ pub fn sockets(protos: &[Proto], v4: bool, v6: bool) -> io::Result<Vec<Socket>> 
                 Proto::Tcp => tcp(family)?,
                 Proto::Udp => udp(family)?,
             });
+        }
+    }
+    Ok(all)
+}
+
+/// Reads the owning module's name out of a `GetOwnerModuleFrom*Entry` call.
+fn owner_name(call: impl Fn(*mut core::ffi::c_void, *mut u32) -> u32) -> Option<String> {
+    use windows_sys::Win32::NetworkManagement::IpHelper::TCPIP_OWNER_MODULE_BASIC_INFO;
+
+    let mut size = 0u32;
+    if call(std::ptr::null_mut(), &raw mut size) != ERROR_INSUFFICIENT_BUFFER || size == 0 {
+        return None;
+    }
+    // `u64` elements keep the leading pointer pair aligned.
+    let mut buffer = vec![0u64; (size as usize).div_ceil(8)];
+    if call(buffer.as_mut_ptr().cast(), &raw mut size) != NO_ERROR {
+        return None;
+    }
+    // SAFETY: on success the buffer starts with a TCPIP_OWNER_MODULE_BASIC_INFO.
+    let info = unsafe {
+        buffer
+            .as_ptr()
+            .cast::<TCPIP_OWNER_MODULE_BASIC_INFO>()
+            .read()
+    };
+    if info.pModuleName.is_null() {
+        return None;
+    }
+    // SAFETY: pModuleName points at a NUL-terminated string inside `buffer`, which is
+    // still alive.
+    let name = unsafe { widestring_at(info.pModuleName) };
+    (!name.is_empty()).then_some(name)
+}
+
+/// Decodes a NUL-terminated UTF-16 string.
+///
+/// # Safety
+///
+/// `pointer` must point at a readable, NUL-terminated UTF-16 string.
+unsafe fn widestring_at(pointer: *const u16) -> String {
+    let mut length = 0;
+    loop {
+        // SAFETY: the caller guarantees a terminator is reachable, so every unit up to
+        // it is in bounds.
+        let unit = unsafe { pointer.add(length) };
+        // SAFETY: as above; `unit` is in bounds and readable.
+        if unsafe { unit.read() } == 0 {
+            break;
+        }
+        length += 1;
+    }
+    // SAFETY: the `length` units before the terminator are readable.
+    String::from_utf16_lossy(unsafe { std::slice::from_raw_parts(pointer, length) })
+}
+
+/// Like [`sockets`], with each socket's owning module name filled in; one extra call
+/// per socket, so only for callers that print it (`ss -p`).
+///
+/// # Errors
+///
+/// Fails if IP Helper cannot produce a table.
+#[allow(
+    clippy::too_many_lines,
+    reason = "the four owner-module row layouts differ only in field names"
+)]
+pub fn sockets_with_owners(protos: &[Proto], v4: bool, v6: bool) -> io::Result<Vec<Socket>> {
+    use windows_sys::Win32::NetworkManagement::IpHelper::{
+        GetOwnerModuleFromTcp6Entry, GetOwnerModuleFromTcpEntry, GetOwnerModuleFromUdp6Entry,
+        GetOwnerModuleFromUdpEntry, MIB_TCP6ROW_OWNER_MODULE, MIB_TCPROW_OWNER_MODULE,
+        MIB_UDP6ROW_OWNER_MODULE, MIB_UDPROW_OWNER_MODULE, TCP_TABLE_OWNER_MODULE_ALL,
+        TCPIP_OWNER_MODULE_INFO_BASIC, UDP_TABLE_OWNER_MODULE,
+    };
+
+    let mut all = Vec::new();
+    for &proto in protos {
+        for (wanted, family) in [(v4, AF_INET), (v6, AF_INET6)] {
+            if !wanted {
+                continue;
+            }
+            let buffer = fetch_table(|table, size| match proto {
+                // SAFETY: `table` is null or a buffer of `*size` bytes; `size` is writable.
+                Proto::Tcp => unsafe {
+                    GetExtendedTcpTable(
+                        table,
+                        size,
+                        0,
+                        u32::from(family),
+                        TCP_TABLE_OWNER_MODULE_ALL,
+                        0,
+                    )
+                },
+                // SAFETY: as above.
+                Proto::Udp => unsafe {
+                    GetExtendedUdpTable(
+                        table,
+                        size,
+                        0,
+                        u32::from(family),
+                        UDP_TABLE_OWNER_MODULE,
+                        0,
+                    )
+                },
+            })?;
+            match (proto, family == AF_INET) {
+                (Proto::Tcp, true) => {
+                    all.extend(rows::<MIB_TCPROW_OWNER_MODULE>(&buffer).iter().map(|row| {
+                        let state = TcpState::from_mib(row.dwState);
+                        Socket {
+                            proto,
+                            local: SocketAddr::new(
+                                IpAddr::V4(ipv4(row.dwLocalAddr)),
+                                port(row.dwLocalPort),
+                            ),
+                            remote: (state != TcpState::Listen).then(|| {
+                                SocketAddr::new(
+                                    IpAddr::V4(ipv4(row.dwRemoteAddr)),
+                                    port(row.dwRemotePort),
+                                )
+                            }),
+                            state: Some(state),
+                            pid: row.dwOwningPid,
+                            // SAFETY: `row` is a valid entry from the owner-module table.
+                            owner: owner_name(|b, n| unsafe {
+                                GetOwnerModuleFromTcpEntry(row, TCPIP_OWNER_MODULE_INFO_BASIC, b, n)
+                            }),
+                        }
+                    }));
+                }
+                (Proto::Tcp, false) => {
+                    all.extend(rows::<MIB_TCP6ROW_OWNER_MODULE>(&buffer).iter().map(|row| {
+                        let state = TcpState::from_mib(row.dwState);
+                        Socket {
+                            proto,
+                            local: v6_addr(row.ucLocalAddr, row.dwLocalPort, row.dwLocalScopeId),
+                            remote: (state != TcpState::Listen).then(|| {
+                                v6_addr(row.ucRemoteAddr, row.dwRemotePort, row.dwRemoteScopeId)
+                            }),
+                            state: Some(state),
+                            pid: row.dwOwningPid,
+                            // SAFETY: as above.
+                            owner: owner_name(|b, n| unsafe {
+                                GetOwnerModuleFromTcp6Entry(
+                                    row,
+                                    TCPIP_OWNER_MODULE_INFO_BASIC,
+                                    b,
+                                    n,
+                                )
+                            }),
+                        }
+                    }));
+                }
+                (Proto::Udp, true) => all.extend(
+                    rows::<MIB_UDPROW_OWNER_MODULE>(&buffer)
+                        .iter()
+                        .map(|row| Socket {
+                            proto,
+                            local: SocketAddr::new(
+                                IpAddr::V4(ipv4(row.dwLocalAddr)),
+                                port(row.dwLocalPort),
+                            ),
+                            remote: None,
+                            state: None,
+                            pid: row.dwOwningPid,
+                            // SAFETY: as above.
+                            owner: owner_name(|b, n| unsafe {
+                                GetOwnerModuleFromUdpEntry(row, TCPIP_OWNER_MODULE_INFO_BASIC, b, n)
+                            }),
+                        }),
+                ),
+                (Proto::Udp, false) => all.extend(
+                    rows::<MIB_UDP6ROW_OWNER_MODULE>(&buffer)
+                        .iter()
+                        .map(|row| Socket {
+                            proto,
+                            local: v6_addr(row.ucLocalAddr, row.dwLocalPort, row.dwLocalScopeId),
+                            remote: None,
+                            state: None,
+                            pid: row.dwOwningPid,
+                            // SAFETY: as above.
+                            owner: owner_name(|b, n| unsafe {
+                                GetOwnerModuleFromUdp6Entry(
+                                    row,
+                                    TCPIP_OWNER_MODULE_INFO_BASIC,
+                                    b,
+                                    n,
+                                )
+                            }),
+                        }),
+                ),
+            }
         }
     }
     Ok(all)
@@ -315,6 +513,25 @@ mod tests {
         assert!(found.iter().any(|s| s.proto == Proto::Tcp
             && s.local.port() == v6_addr.port()
             && s.local.is_ipv6()));
+    }
+
+    #[test]
+    fn owners_name_this_process_executable() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let bound = listener.local_addr().unwrap();
+        let found = sockets_with_owners(&[Proto::Tcp], true, false).unwrap();
+        let row = found.iter().find(|s| s.local == bound).unwrap();
+        let exe = std::env::current_exe().unwrap();
+        let name = exe
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .to_ascii_lowercase();
+        assert_eq!(
+            row.owner.as_deref().map(str::to_ascii_lowercase),
+            Some(name)
+        );
+        assert_eq!(row.pid, std::process::id());
     }
 
     #[test]

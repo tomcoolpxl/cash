@@ -2,7 +2,7 @@
 
 ## Status
 
-**Decided 2026-09-25.** The evaluation below was written as a discussion document; the
+**Decided and implemented 2026-09-25** (ROADMAP item 9, spec D51). The evaluation below was written as a discussion document; the
 decisions taken on it are:
 
 | Question | Decision |
