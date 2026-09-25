@@ -10,8 +10,9 @@ use std::path::Path;
 use std::sync::Mutex;
 
 use windows_sys::Win32::Security::{
-    GetFileSecurityW, GetLengthSid, GetSecurityDescriptorOwner, LookupAccountSidW,
-    OWNER_SECURITY_INFORMATION, SID_NAME_USE,
+    GetFileSecurityW, GetLengthSid, GetSecurityDescriptorOwner, GetSidSubAuthority,
+    GetSidSubAuthorityCount, IsValidSid, LookupAccountSidW, OWNER_SECURITY_INFORMATION, PSID,
+    SID_NAME_USE,
 };
 use windows_sys::Win32::Storage::FileSystem::{
     BY_HANDLE_FILE_INFORMATION, GetFileInformationByHandle,
@@ -19,12 +20,48 @@ use windows_sys::Win32::Storage::FileSystem::{
 
 static SID_CACHE: Mutex<Option<HashMap<Vec<u8>, String>>> = Mutex::new(None);
 
+/// A file's owner: the account name and the RID (last sub-authority) of its SID.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FileOwner {
+    /// The account name, without its domain.
+    pub name: String,
+    /// The owner SID's RID — the same number `id -u` reports for that account.
+    pub rid: u32,
+}
+
 /// Query the account name of the file's owner via its security descriptor.
 ///
 /// Returns the username if resolved, or None if the filesystem or permissions
 /// do not support querying security info.
 #[must_use]
 pub fn get_file_owner(path: &Path) -> Option<String> {
+    get_file_owner_info(path).map(|owner| owner.name)
+}
+
+/// The RID of a SID: its last sub-authority.
+pub(crate) fn sid_rid(sid: PSID) -> Option<u32> {
+    // SAFETY: `IsValidSid` accepts any pointer the caller obtained as a PSID.
+    if sid.is_null() || unsafe { IsValidSid(sid) } == 0 {
+        return None;
+    }
+    // SAFETY: `sid` is a valid SID, checked above.
+    let count_ptr = unsafe { GetSidSubAuthorityCount(sid) };
+    // SAFETY: for a valid SID the call returns a pointer into it.
+    let count = unsafe { *count_ptr };
+    if count == 0 {
+        return None;
+    }
+    // SAFETY: `count - 1` is in range for this valid SID.
+    let rid_ptr = unsafe { GetSidSubAuthority(sid, u32::from(count) - 1) };
+    // SAFETY: for an in-range index the call returns a pointer into the SID.
+    Some(unsafe { *rid_ptr })
+}
+
+/// Query the file's owner — account name and RID — via its security descriptor.
+///
+/// Returns None if the filesystem or permissions do not support querying security info.
+#[must_use]
+pub fn get_file_owner_info(path: &Path) -> Option<FileOwner> {
     let wide: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
 
     let mut needed: u32 = 0;
@@ -78,9 +115,10 @@ pub fn get_file_owner(path: &Path) -> Option<String> {
     let sid_len = unsafe { GetLengthSid(p_sid) } as usize;
     // SAFETY: `p_sid` points to a valid SID buffer of length `sid_len`.
     let sid_bytes = unsafe { std::slice::from_raw_parts(p_sid.cast::<u8>(), sid_len) };
+    let rid = sid_rid(p_sid)?;
 
-    if let Some(cached) = cached_lookup(sid_bytes) {
-        return Some(cached);
+    if let Some(name) = cached_lookup(sid_bytes) {
+        return Some(FileOwner { name, rid });
     }
 
     let mut name = [0u16; 256];
@@ -108,7 +146,10 @@ pub fn get_file_owner(path: &Path) -> Option<String> {
 
     let resolved = String::from_utf16_lossy(&name[..name_len as usize]);
     cache_insert(sid_bytes.to_vec(), resolved.clone());
-    Some(resolved)
+    Some(FileOwner {
+        name: resolved,
+        rid,
+    })
 }
 
 fn cached_lookup(sid_bytes: &[u8]) -> Option<String> {
@@ -131,6 +172,13 @@ pub fn current_user() -> String {
         .or_else(|| std::env::var("USERNAME").ok())
         .or_else(|| std::env::var("USER").ok())
         .unwrap_or_else(|| String::from("user"))
+}
+
+/// The current process's account as a [`FileOwner`]: what a file created now would name
+/// as its owner, and the fallback when a file's own owner cannot be read.
+#[must_use]
+pub fn current_owner() -> Option<FileOwner> {
+    crate::process::current_process_account().map(|(name, rid)| FileOwner { name, rid })
 }
 
 /// Count the number of subdirectories directly under `path`.

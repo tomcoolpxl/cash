@@ -197,10 +197,11 @@ impl FileStatInfo {
         #[cfg(not(windows))]
         let (inode, links, device) = (0u64, 1u32, 0u32);
 
-        let user = std::env::var("USERNAME").unwrap_or_else(|_| "user".to_string());
+        let (user, uid) = file_owner(path);
+        // Windows files have no POSIX group, so the group is the owner, as in `ls -l`
+        // and `id -g`.
         let group = user.clone();
-        let uid = 1000;
-        let gid = 1000;
+        let gid = uid;
 
         #[cfg(windows)]
         let (atime, mtime, btime) = {
@@ -239,6 +240,23 @@ impl FileStatInfo {
             birth_time_str: format_unix_time(btime),
         }
     }
+}
+
+/// The file's owner name and uid.
+///
+/// cash: the owner came from `%USERNAME%` with a fixed uid of 1000, so a file owned by
+/// another account — or by BUILTIN\Administrators, as an elevated admin's files are on
+/// Windows Server — was reported as the current user's. The owner SID is read from the
+/// file's security descriptor instead, as `ls -l` does; the uid is its RID, which is
+/// what `id -u` reports for that account.
+fn file_owner(path: &Path) -> (String, u32) {
+    let owner = cash_win32::fs::get_file_owner_info(path).or_else(cash_win32::fs::current_owner);
+    // Only when neither the file's nor the process's SID can be read: 65534 is `nobody`,
+    // rather than a number that would claim some real account (0 is root).
+    owner.map_or_else(
+        || (cash_win32::fs::current_user(), 65534),
+        |owner| (owner.name, owner.rid),
+    )
 }
 
 #[cfg(windows)]

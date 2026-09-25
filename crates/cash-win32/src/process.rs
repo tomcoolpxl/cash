@@ -315,8 +315,21 @@ pub fn current_process_user() -> Option<String> {
     token_user(current)
 }
 
+/// The account running the current process, with its SID's RID.
+#[must_use]
+pub fn current_process_account() -> Option<(String, u32)> {
+    // SAFETY: GetCurrentProcess returns a pseudo-handle for the current process.
+    let current = unsafe { windows_sys::Win32::System::Threading::GetCurrentProcess() };
+    token_account(current)
+}
+
 /// The account a process's token names, without its domain.
 fn token_user(process: windows_sys::Win32::Foundation::HANDLE) -> Option<String> {
+    token_account(process).map(|(name, _)| name)
+}
+
+/// The account a process's token names, without its domain, and its SID's RID.
+fn token_account(process: windows_sys::Win32::Foundation::HANDLE) -> Option<(String, u32)> {
     use windows_sys::Win32::Security::{
         GetTokenInformation, LookupAccountSidW, SID_NAME_USE, TOKEN_QUERY, TOKEN_USER, TokenUser,
     };
@@ -386,7 +399,8 @@ fn token_user(process: windows_sys::Win32::Foundation::HANDLE) -> Option<String>
         return None;
     }
 
-    Some(String::from_utf16_lossy(&name[..name_len as usize]))
+    let rid = crate::fs::sid_rid(user.User.Sid)?;
+    Some((String::from_utf16_lossy(&name[..name_len as usize]), rid))
 }
 
 /// The machine's name, spelled the way Windows spells it.
