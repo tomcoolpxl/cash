@@ -38,6 +38,25 @@ pub mod sys;
 pub mod terminal;
 pub mod tests;
 pub mod timing;
+
+/// The numeric identity `$UID`, `$EUID` and the `id` builtin share.
+///
+/// On Windows this is 0 in an elevated shell (the root convention that
+/// `[ "$EUID" -eq 0 ]` and `[ "$(id -u)" -eq 0 ]` test for) and the account's RID
+/// otherwise; spec §4 row 20.
+pub mod identity {
+    /// The effective user id.
+    #[must_use]
+    pub fn effective_uid() -> Option<u32> {
+        crate::sys::users::get_effective_uid().ok()
+    }
+
+    /// The effective group id.
+    #[must_use]
+    pub fn effective_gid() -> Option<u32> {
+        crate::sys::users::get_effective_gid().ok()
+    }
+}
 pub mod trace_categories;
 pub mod traps;
 pub mod variables;

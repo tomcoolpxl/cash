@@ -68,7 +68,29 @@ fn uid_is_the_accounts_rid_not_a_placeholder() {
         .stdout
         .parse()
         .unwrap_or_else(|_| panic!("not numeric: {}", out.stdout));
-    assert!(uid > 0, "uid should be non-zero for a non-elevated shell");
+    // Elevated shells report 0, the root convention (spec §4 row 20); GitHub's runners
+    // are elevated. `net session` succeeds only in an elevated process, so it tells the
+    // two cases apart without asking cash.
+    let elevated = Command::new("net")
+        .arg("session")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .is_ok_and(|status| status.success());
+    if elevated {
+        assert_eq!(uid, 0, "an elevated shell reports uid 0");
+        let id = cash(r#"id -u; id -g; echo "$UID $EUID""#);
+        assert_eq!(
+            id.stdout, "0\n0\n0 0",
+            "id and $UID/$EUID agree: {}",
+            id.stderr
+        );
+    } else {
+        assert!(
+            uid > 0,
+            "uid should be the account RID in a non-elevated shell"
+        );
+    }
 }
 
 #[test]

@@ -2,7 +2,8 @@
 //!
 //! Windows identifies a user by **SID**, not by an integer, so cash reports the SID and
 //! the account name. `id -u` prints the RID (last component of the SID), which is the
-//! closest thing Windows has to a uid and is stable per account.
+//! closest thing Windows has to a uid and is stable per account, or 0 in an elevated
+//! shell, the same value as `$EUID` (spec §4 row 20).
 //!
 //! `who`, `users`, `pinky`, `logname`, and `hostid` query active Windows sessions,
 //! local user profiles, and host identifiers.
@@ -49,12 +50,17 @@ impl builtins::Command for IdCommand {
         };
 
         let mut stdout = context.stdout();
+        // The same numbers `$EUID` and `$GROUPS` hold: 0 when elevated, the RID otherwise.
+        let uid = cash_core::identity::effective_uid()
+            .map_or_else(|| identity.rid.clone(), |uid| uid.to_string());
+        let gid = cash_core::identity::effective_gid()
+            .map_or_else(|| identity.rid.clone(), |gid| gid.to_string());
 
         if self.user {
             if self.name {
                 writeln!(stdout, "{}", identity.user)?;
             } else {
-                writeln!(stdout, "{}", identity.rid)?;
+                writeln!(stdout, "{uid}")?;
             }
         } else if self.group || self.groups {
             // Windows has no single "primary group" the way POSIX does; the account's
@@ -63,14 +69,10 @@ impl builtins::Command for IdCommand {
             if self.name {
                 writeln!(stdout, "{}", identity.user)?;
             } else {
-                writeln!(stdout, "{}", identity.rid)?;
+                writeln!(stdout, "{gid}")?;
             }
         } else {
-            writeln!(
-                stdout,
-                "uid={}({}) sid={}",
-                identity.rid, identity.user, identity.sid
-            )?;
+            writeln!(stdout, "uid={uid}({}) sid={}", identity.user, identity.sid)?;
         }
 
         Ok(ExecutionResult::success())
