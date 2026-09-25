@@ -1590,6 +1590,26 @@ async fn get_completions_using_basic_lookup(
 /// are emitted as tokens. Consecutive non-whitespace delimiters are grouped into a single
 /// token. Whitespace delimiters separate tokens but are not emitted themselves.
 #[allow(clippy::string_slice, reason = "used indices come from char_indices")]
+/// Whether the `:` at `index` is a drive letter's (`C:/...`, `C:\...`, or a bare `C:`)
+/// rather than a `COMP_WORDBREAKS` break.
+///
+/// Splitting there leaves `/Users/...`, a drive-relative path that Windows resolves
+/// against the process's current drive: it happened to work from `C:`, and completed
+/// nothing from a checkout on `D:` (GitHub's runners).
+fn is_drive_colon(input: &str, word_start: Option<usize>, index: usize) -> bool {
+    if !cfg!(windows) {
+        return false;
+    }
+    let Some(start) = word_start else {
+        return false;
+    };
+    let word = input.get(start..index).unwrap_or("");
+    let after = input.get(index + 1..).unwrap_or("");
+    word.len() == 1
+        && word.bytes().all(|b| b.is_ascii_alphabetic())
+        && (after.is_empty() || after.starts_with(['/', '\\']))
+}
+
 fn simple_tokenize_by_delimiters<'a>(
     input: &'a str,
     delimiters: &[char],
@@ -1619,7 +1639,8 @@ fn simple_tokenize_by_delimiters<'a>(
                 // start a new quote.
                 quote_char = Some(c);
             } else {
-                is_active_delimiter = delimiters.contains(&c);
+                is_active_delimiter =
+                    delimiters.contains(&c) && !is_drive_colon(input, word_start, i);
             }
         }
 
@@ -1727,6 +1748,24 @@ fn replace_unescaped_ampersands<'a>(pattern: &'a str, replacement: &str) -> Cow<
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(windows)]
+    #[test]
+    fn a_drive_letter_colon_is_not_a_word_break() {
+        let breaks = [' ', ':', '='];
+        let texts = |input: &str| -> Vec<String> {
+            simple_tokenize_by_delimiters(input, &breaks)
+                .iter()
+                .map(|t| t.text.to_owned())
+                .collect()
+        };
+        assert_eq!(texts("ls C:/Users/su"), ["ls", "C:/Users/su"]);
+        assert_eq!(texts(r"ls d:\dir"), ["ls", r"d:\dir"]);
+        assert_eq!(texts("cd E:"), ["cd", "E:"]);
+        // Everywhere else the colon still breaks.
+        assert_eq!(texts("ssh host:path"), ["ssh", "host", ":", "path"]);
+        assert_eq!(texts("x ab:/p"), ["x", "ab", ":", "/p"]);
+    }
 
     #[cfg(windows)]
     #[test]
