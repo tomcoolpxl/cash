@@ -55,6 +55,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          # Full history and tags, for the release notes below.
+          fetch-depth: 0
 
       - name: Determine release tag
         id: tag
@@ -116,12 +119,35 @@ jobs:
           Write-Host "Archive: $archiveName"
           Write-Host "SHA256:  $hash"
 
+      # GitHub's generated notes list merged pull requests, and most work here is
+      # committed straight to main, so they would be empty. Write the commit subjects
+      # since the previous tag instead; the generated section (pull requests and the
+      # full-changelog link) is still appended below them.
+      - name: Write release notes
+        shell: pwsh
+        run: |
+          $tag = "${{ steps.tag.outputs.tag }}"
+          $head = if (git rev-parse -q --verify "refs/tags/$tag") { $tag } else { 'HEAD' }
+          $previous = git describe --tags --abbrev=0 "$head^" 2>$null
+          if ($LASTEXITCODE -ne 0 -or -not $previous) {
+            $range = $head
+            $title = "## Changes"
+          } else {
+            $range = "$previous..$head"
+            $title = "## Changes since $previous"
+          }
+          $lines = git log --no-merges --reverse --format='- %s (%h)' $range
+          if (-not $lines) { $lines = @('- No changes recorded.') }
+          @($title, '') + $lines + @('') | Set-Content -Path release-notes.md -Encoding utf8
+          Get-Content release-notes.md
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.tag.outputs.tag }}
           draft: false
           prerelease: ${{ inputs.prerelease || false }}
+          body_path: release-notes.md
           generate_release_notes: true
           files: |
             cash-*-x86_64-pc-windows-msvc.zip
