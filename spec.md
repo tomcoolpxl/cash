@@ -657,6 +657,28 @@ the underlying command. Revisit only if job-tree noise becomes a real problem in
 
 Consistent with D20's principle that invisible failure is the enemy.
 
+**Which case errors.** Only a redirection above 2 written on the simple command that
+spawns the process: `tool.exe 3>x`, `tool.exe 4>&3`, `tool.exe {fd}>x`. That is the script
+explicitly targeting a descriptor the child cannot see, so it is refused. Closing one
+(`tool.exe 3>&-`) asks for nothing the child lacks and is not refused.
+
+Descriptors the shell merely *holds* are not passed and do not stop the command:
+
+```
+exec 3>&1 1>log; tool.exe; echo done >&3         tool.exe runs; fd 3 stays with the shell
+{ tool.exe; echo x >&3; } 3>x                    tool.exe runs; the builtin echo writes x
+while read -u 3 l; do tool.exe; done 3<file      tool.exe runs each iteration
+f 3>x                                            externals inside f run
+```
+
+Bash hands fd 3 to an external inside `{ cmd; } 3>x`, so there the enclosing redirection
+is "on" `cmd`. cash deliberately does not count it: the redirection belongs to the group,
+whose builtins do use it, and `while read -u 3 ...; done 3<file` would otherwise make
+every native exe in the loop body fail. The child could not have seen fd 3 either way.
+
+The bundled coreutils (`cat`, `wc`, ...) re-enter `cash.exe` as a process and follow the
+native-exe rule: `cat f` after `exec 3>log` works, `cat f 3>x` is refused.
+
 Rejected: passing fds through the MSVC CRT's `STARTUPINFO` reserved-field table. It
 genuinely works for MSVC-built targets including CPython, but behaviour would then vary
 by how the callee was compiled — Go and Rust binaries would still not see fd 3 — which

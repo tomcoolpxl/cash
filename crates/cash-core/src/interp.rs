@@ -59,6 +59,15 @@ pub struct ExecutionParameters {
     /// when a builtin runs — a builtin is the shell's own code and will never produce a
     /// pid, so there is nothing further to wait for.
     pub(crate) spawned_pid_ready: Option<std::sync::Arc<tokio::sync::Notify>>,
+
+    /// Descriptors above 2 that the current simple command's own redirections set.
+    ///
+    /// cash (D26): a native exe cannot see fd 3 and up, so only these make its spawn
+    /// fail. Descriptors the shell merely holds — from `exec 3>log`, or from a
+    /// redirection on an enclosing compound command or function call — are not
+    /// passed and do not stop the command. Each simple command starts with this
+    /// cleared, so a compound command's entries never reach the commands inside it.
+    pub(crate) command_redirected_fds: Vec<ShellFd>,
 }
 
 impl ExecutionParameters {
@@ -167,6 +176,14 @@ impl ExecutionParameters {
     /// * `file` - The open file to set.
     pub fn set_fd(&mut self, fd: ShellFd, file: openfiles::OpenFile) {
         self.open_files.set_fd(fd, file);
+    }
+
+    /// Sets a descriptor on behalf of a redirection, noting it when it is above 2.
+    fn set_redirected_fd(&mut self, fd: ShellFd, file: openfiles::OpenFile) {
+        self.open_files.set_fd(fd, file);
+        if fd > OpenFiles::STDERR_FD && !self.command_redirected_fds.contains(&fd) {
+            self.command_redirected_fds.push(fd);
+        }
     }
 
     /// Iterates over all open file descriptors in this context.
@@ -1438,6 +1455,10 @@ impl<SE: extensions::ShellExtensions> ExecuteInPipeline<SE> for ast::SimpleComma
             base.eq_ignore_ascii_case("diff") || base.eq_ignore_ascii_case("cmp")
         });
 
+        // Only this command's own redirections count here (D26); anything an enclosing
+        // compound command noted is not "on the command".
+        params.command_redirected_fds.clear();
+
         for item in prefix_iter.chain(cmd_name_items.iter()).chain(suffix_iter) {
             match item {
                 CommandPrefixOrSuffixItem::IoRedirect(redirect) => {
@@ -2100,7 +2121,7 @@ pub(crate) async fn setup_redirect(
                             )
                         })?;
 
-                    params.open_files.set_fd(fd_num, opened_file);
+                    params.set_redirected_fd(fd_num, opened_file);
                 }
 
                 ast::IoFileRedirectTarget::Fd(fd) => {
@@ -2115,7 +2136,7 @@ pub(crate) async fn setup_redirect(
                     let fd_num = specified_fd_num.unwrap_or(default_fd_if_unspecified);
 
                     if let Some(target_file) = params.try_fd(shell, *fd) {
-                        params.open_files.set_fd(fd_num, target_file);
+                        params.set_redirected_fd(fd_num, target_file);
                     } else {
                         return Err(error::ErrorKind::BadFileDescriptor(*fd).into());
                     }
@@ -2163,7 +2184,7 @@ pub(crate) async fn setup_redirect(
                             let fd_num = specified_fd_num
                                 .unwrap_or_else(|| get_default_fd_for_redirect_kind(kind));
 
-                            params.open_files.set_fd(fd_num, target_file);
+                            params.set_redirected_fd(fd_num, target_file);
                         }
                         _ => return error::unimp("invalid process substitution"),
                     }
@@ -2234,7 +2255,7 @@ pub(crate) async fn setup_redirect(
 
             let f = setup_open_file_with_contents(io_here_doc.as_str())?;
 
-            params.open_files.set_fd(fd_num, f);
+            params.set_redirected_fd(fd_num, f);
         }
 
         ast::IoRedirect::HereString(fd_num, word) => {
@@ -2246,7 +2267,7 @@ pub(crate) async fn setup_redirect(
 
             let f = setup_open_file_with_contents(expanded_word.as_str())?;
 
-            params.open_files.set_fd(fd_num, f);
+            params.set_redirected_fd(fd_num, f);
         }
     }
 
@@ -2294,7 +2315,7 @@ fn setup_duplicate_redirect(
         let Some(target_file) = params.try_fd(shell, source_fd_num) else {
             return Err(error::ErrorKind::BadFileDescriptor(source_fd_num).into());
         };
-        params.open_files.set_fd(fd_num, target_file);
+        params.set_redirected_fd(fd_num, target_file);
     } else if fd_num == 1 && !dash {
         setup_redirect_output_and_error_to(shell, params, &expanded, false)?;
     } else {

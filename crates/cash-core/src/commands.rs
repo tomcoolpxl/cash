@@ -536,6 +536,15 @@ pub fn compose_std_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
     let other_files = context.iter_fds().filter(|(fd, _)| {
         *fd != OpenFiles::STDIN_FD && *fd != OpenFiles::STDOUT_FD && *fd != OpenFiles::STDERR_FD
     });
+
+    // cash (D26): a native exe cannot be handed fd 3 and up, so only a descriptor
+    // this command redirects itself (`tool.exe 3>x`) reaches `inject_fds` and fails
+    // loudly. Descriptors the shell merely holds — `exec 3>&1 1>log`, or `{ ...; } 3>x`
+    // around the command — are left behind, as the child could not use them anyway.
+    #[cfg(not(unix))]
+    let other_files =
+        other_files.filter(|(fd, _)| context.params.command_redirected_fds.contains(fd));
+
     cmd.inject_fds(other_files)?;
 
     Ok(cmd)
