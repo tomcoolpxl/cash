@@ -1178,3 +1178,78 @@ fn v_test_expands_an_associative_subscript() {
         (0, "dbl\ntest\ndbl-once\ntest-once-literal".into())
     );
 }
+
+#[test]
+fn printf_zero_flag_pads_strings_with_zeros() {
+    // pure-bash-bible's progress bar uses `printf -v total "%0s"`; uucore rejected the `0`
+    // flag on `%s`. Expected values from Bash 5.3.
+    assert_eq!(
+        output(
+            "printf '[%0s][%05s][%-05s][%00s][%0.0s][%07.2s]' a b c d e fgh; printf -v t '%0s'; echo \" t=[$t]\""
+        ),
+        (0, "[a][0000b][c    ][d][][00000fg] t=[]".into())
+    );
+}
+
+#[test]
+fn for_and_select_accept_a_brace_group_body() {
+    // pure-bash-bible's code-golf loops; Bash accepts these even in POSIX mode.
+    assert_eq!(
+        output(
+            "for i in {1..2};{ echo $i;}; for i in a; { echo $i; }; set -- p q; for x; { echo $x; }"
+        ),
+        (0, "1\n2\na\np\nq".into())
+    );
+}
+
+#[test]
+fn for_with_an_empty_in_list_runs_zero_times() {
+    // `in` with no words is an empty list; only a missing `in` means "$@".
+    assert_eq!(
+        output("set -- p q; for x in; do echo for:$x; done; for x; do echo bare:$x; done"),
+        (0, "bare:p\nbare:q".into())
+    );
+}
+
+#[test]
+fn at_a_transformation_keeps_scalar_attributes() {
+    // BashFAQ/073: `${var@A}` of a scalar with attributes is a `declare` command.
+    assert_eq!(
+        output(
+            "declare -ri i=3; declare -rx rx=2; f=plain; printf '%s\n' \"${i@A}\" \"${rx@A}\" \"${f@A}\""
+        ),
+        (0, "declare -ir i='3'\ndeclare -rx rx='2'\nf='plain'".into())
+    );
+}
+
+#[test]
+fn arithmetic_uses_associative_subscripts_as_keys() {
+    // The word-count idiom: `(( count[$word]++ ))` put every word under key 0, because
+    // the subscript was evaluated as arithmetic. BashPitfalls pf62 covers the `let` form.
+    assert_eq!(
+        output(concat!(
+            "declare -A c; for w in apple pear apple; do (( c[$w]++ )); done; ",
+            "key='a b'; let 'c[$key]++'; let 'c[${key}]+=2'; ",
+            "echo \"${c[apple]} ${c[pear]} ${c[a b]} ${#c[@]}\"; ",
+            "declare -a n=(5 6 7); i=1; echo $(( n[i+1] )) $(( n[$i] ))"
+        )),
+        (0, "2 1 3 3\n7 6".into())
+    );
+}
+
+#[test]
+fn arithmetic_never_runs_command_substitutions_from_variable_values() {
+    // BashPitfalls: `read num; echo $((num+1))` with `a[$(cmd)]` as input runs `cmd` in
+    // Bash. Cash refuses deliberately (spec §4): an indexed subscript is an arithmetic
+    // error, an associative one is a literal key; neither executes anything.
+    let (code, _, stderr) = output_with_stderr("num='a[$(echo INJECTED >&2)]'; echo $((num+1))");
+    assert_ne!(code, 0);
+    // The error message may quote the expression; only a line of its own is output.
+    assert!(!stderr.lines().any(|l| l == "INJECTED"), "{stderr}");
+
+    let (code, stdout, stderr) =
+        output_with_stderr("declare -A a; num='a[$(echo INJECTED >&2)]'; echo $((num+1))");
+    assert_eq!((code, stdout.as_str()), (0, "1"));
+    // The error message may quote the expression; only a line of its own is output.
+    assert!(!stderr.lines().any(|l| l == "INJECTED"), "{stderr}");
+}

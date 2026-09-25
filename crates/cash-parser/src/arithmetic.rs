@@ -91,12 +91,19 @@ peg::parser! {
         }
 
         rule lvalue() -> ast::ArithmeticTarget =
-            name:variable_name() "[" index:expression() "]" {
-                ast::ArithmeticTarget::ArrayElement(name.to_owned(), Box::new(index))
+            name:variable_name() "[" text:$(subscript_text()) "]" {
+                let expr = full_expression(text).ok().map(Box::new);
+                ast::ArithmeticTarget::ArrayElement(
+                    name.to_owned(),
+                    ast::ArraySubscript { text: text.to_owned(), expr },
+                )
             } /
             name:variable_name() {
                 ast::ArithmeticTarget::Variable(name.to_owned())
             }
+
+        // Everything up to the matching `]`, with nested brackets balanced.
+        rule subscript_text() = ([^ '[' | ']'] / "[" subscript_text() "]")+
 
         rule variable_name() -> &'input str =
             $(['a'..='z' | 'A'..='Z' | '_'](['a'..='z' | 'A'..='Z' | '_' | '0'..='9']*))

@@ -344,7 +344,8 @@ echo "a: ${count@a}"
     assert_eq!(lines[0], "Q: 'it'\\''s a string'");
     assert_eq!(lines[1], "E: line1");
     assert_eq!(lines[2], "line2");
-    assert_eq!(lines[3], "A: count='123'");
+    // Bash 5.3 keeps the integer attribute in `@A` output.
+    assert_eq!(lines[3], "A: declare -i count='123'");
     assert_eq!(lines[4], "a: i");
 }
 

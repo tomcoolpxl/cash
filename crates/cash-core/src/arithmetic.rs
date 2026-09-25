@@ -192,6 +192,75 @@ fn get_var_value<'a>(
     Ok("".into())
 }
 
+/// Turns an arithmetic array subscript into the element's key. For an associative
+/// array that is the subscript's text, with `$name` and `${name}` expanded (`let
+/// 'count[$word]++'`); for anything else it is the subscript evaluated as arithmetic.
+fn resolve_subscript(
+    shell: &mut Shell<impl extensions::ShellExtensions>,
+    name: &str,
+    subscript: &ast::ArraySubscript,
+    depth: u32,
+) -> Result<String, EvalError> {
+    let is_associative = shell
+        .env()
+        .get(name)
+        .is_some_and(|(_, v)| v.value().is_associative_array());
+    if is_associative {
+        return expand_simple_references(shell, &subscript.text);
+    }
+    match &subscript.expr {
+        Some(expr) => Ok(eval_expr_impl(expr, shell, depth)?.to_string()),
+        None => Err(EvalError::ParseError(subscript.text.clone())),
+    }
+}
+
+/// Expands `$name` and `${name}` in an associative subscript; other text is kept.
+fn expand_simple_references(
+    shell: &Shell<impl extensions::ShellExtensions>,
+    text: &str,
+) -> Result<String, EvalError> {
+    let is_name_char = |c: char| c.is_ascii_alphanumeric() || c == '_';
+    let mut out = String::new();
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c != '$' {
+            out.push(c);
+            continue;
+        }
+        let mut name = String::new();
+        if chars.next_if_eq(&'{').is_some() {
+            // `${name}`; anything else inside braces is kept literally.
+            let mut literal = String::from("${");
+            let mut closed = false;
+            for c in chars.by_ref() {
+                if c == '}' {
+                    closed = true;
+                    break;
+                }
+                literal.push(c);
+                name.push(c);
+            }
+            if !closed || name.is_empty() || !name.chars().all(is_name_char) {
+                out.push_str(&literal);
+                if closed {
+                    out.push('}');
+                }
+                continue;
+            }
+        } else {
+            while let Some(c) = chars.next_if(|&c| is_name_char(c)) {
+                name.push(c);
+            }
+            if name.is_empty() {
+                out.push('$');
+                continue;
+            }
+        }
+        out.push_str(&get_var_value(shell, &name)?);
+    }
+    Ok(out)
+}
+
 fn deref_lvalue(
     shell: &mut Shell<impl extensions::ShellExtensions>,
     lvalue: &ast::ArithmeticTarget,
@@ -199,8 +268,8 @@ fn deref_lvalue(
 ) -> Result<i64, EvalError> {
     let value_str: Cow<'_, str> = match lvalue {
         ast::ArithmeticTarget::Variable(name) => get_var_value(shell, name.as_str())?,
-        ast::ArithmeticTarget::ArrayElement(name, index_expr) => {
-            let index_str = eval_expr_impl(index_expr, shell, depth)?.to_string();
+        ast::ArithmeticTarget::ArrayElement(name, subscript) => {
+            let index_str = resolve_subscript(shell, name, subscript, depth)?;
 
             shell
                 .env()
@@ -380,8 +449,8 @@ fn assign(
                 )
                 .map_err(|_err| EvalError::FailedToUpdateEnvironment)?;
         }
-        ast::ArithmeticTarget::ArrayElement(name, index_expr) => {
-            let index_str = eval_expr_impl(index_expr, shell, depth)?.to_string();
+        ast::ArithmeticTarget::ArrayElement(name, subscript) => {
+            let index_str = resolve_subscript(shell, name, subscript, depth)?;
 
             shell
                 .env_mut()

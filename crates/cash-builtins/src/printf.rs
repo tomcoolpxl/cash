@@ -274,10 +274,14 @@ type ParsedFormatItem = (
     Option<QuotedFormat>,
 );
 
+/// A `%q`/`%Q` spec with fixed modifiers, or a `%s` with the `0` flag, which uucore
+/// rejects but Bash accepts: `%05s` pads the string with zeros, and `-` overrides `0`.
 #[derive(Clone, Copy)]
 struct QuotedFormat {
     uppercase: bool,
     alternate: bool,
+    /// A zero-flagged `%s`: printed as is, padded with `0` on the left.
+    zero_padded_string: bool,
     left_align: bool,
     width: Option<usize>,
     precision: Option<usize>,
@@ -286,7 +290,8 @@ struct QuotedFormat {
 impl QuotedFormat {
     fn parse(spec: &[u8]) -> Option<Self> {
         let (&conversion, body) = spec.split_last()?;
-        if !matches!(conversion, b'q' | b'Q') || body.contains(&b'*') || body.contains(&b'$') {
+        if !matches!(conversion, b'q' | b'Q' | b's') || body.contains(&b'*') || body.contains(&b'$')
+        {
             return None;
         }
 
@@ -333,6 +338,7 @@ impl QuotedFormat {
         (index == body.len()).then_some(Self {
             uppercase: conversion == b'Q',
             alternate,
+            zero_padded_string: conversion == b's',
             left_align,
             width,
             precision,
@@ -340,6 +346,17 @@ impl QuotedFormat {
     }
 
     fn render(self, argument: &str) -> String {
+        if self.zero_padded_string {
+            let mut text = truncate_chars(argument, self.precision);
+            let padding = self.width.unwrap_or(0).saturating_sub(text.chars().count());
+            if self.left_align {
+                text.push_str(&" ".repeat(padding));
+            } else {
+                text.insert_str(0, &"0".repeat(padding));
+            }
+            return text;
+        }
+
         let source = if self.uppercase {
             truncate_chars(argument, self.precision)
         } else {
@@ -409,7 +426,8 @@ fn parse_format_string(format_string: &str) -> Result<Vec<ParsedFormatItem>, cas
             // Fixed q/Q modifiers are deliberately ignored; dynamic modifiers remain unsupported
             // until uucore exposes quoted-string metadata.
             Err(format::FormatError::SpecError(spec, span))
-                if matches!(spec.last(), Some(b'q' | b'Q'))
+                if (matches!(spec.last(), Some(b'q' | b'Q'))
+                    || (spec.last() == Some(&b's') && spec.contains(&b'0')))
                     && !spec.contains(&b'*')
                     && !spec.contains(&b'$') =>
             {

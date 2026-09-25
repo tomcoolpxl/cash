@@ -88,6 +88,7 @@ impl Fixture {
         std::fs::create_dir_all(&dir).expect("create fixture dir");
 
         let mut shell = Shell::builder()
+            .interactive(true)
             .profile(cash_core::ProfileLoadBehavior::Skip)
             .rc(cash_core::RcLoadBehavior::Skip)
             .default_builtins(cash_builtins::BuiltinSet::BashMode)
@@ -131,10 +132,12 @@ impl Drop for Fixture {
     }
 }
 
-/// Run a snippet in a real cash process and return trimmed stdout.
+/// Run a snippet in a real interactive cash process (where the shims are defined) and
+/// return trimmed stdout.
 fn cash(script: &str) -> String {
     let out = Command::new(CASH)
-        .args(["-c", script])
+        .args(["--norc", "-i", "-c", script])
+        .env("HISTFILE", "")
         .output()
         .expect("failed to run cash");
     String::from_utf8_lossy(&out.stdout).trim_end().to_string()
@@ -143,6 +146,21 @@ fn cash(script: &str) -> String {
 // ---------------------------------------------------------------------------
 // The shims exist and behave
 // ---------------------------------------------------------------------------
+
+#[test]
+fn a_script_does_not_see_the_helpers() {
+    // Non-interactive shells get Bash's function table: no completion shims.
+    let out = Command::new(CASH)
+        .args([
+            "--norc",
+            "-c",
+            "declare -F _get_comp_words_by_ref _filedir _init_completion; echo rc=$?",
+        ])
+        .output()
+        .expect("failed to run cash");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(stdout.trim_end(), "rc=1", "{stdout}");
+}
 
 #[test]
 fn the_helpers_are_defined_without_any_rc_file() {

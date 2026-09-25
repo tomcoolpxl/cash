@@ -162,13 +162,14 @@ peg::parser! {
 
         // N.B. `select` is a non-sh extension, and takes the same shape as `for`.
         rule select_clause() -> ast::SelectClauseCommand =
-            s:specific_word("select") n:name() linebreak() _in() w:wordlist()? sequential_sep() d:do_group() {
+            s:specific_word("select") n:name() linebreak() _in() w:wordlist()? sequential_sep() d:loop_body() {
                 let start = s.location();
                 let end = &d.loc;
                 let loc = SourceSpan::within(start, end);
-                ast::SelectClauseCommand { variable_name: n.to_owned(), values: w, body: d, loc }
+                // With `in`, a missing word list is an empty one, not "$@".
+                ast::SelectClauseCommand { variable_name: n.to_owned(), values: Some(w.unwrap_or_default()), body: d, loc }
             } /
-            s:specific_word("select") n:name() sequential_sep()? d:do_group() {
+            s:specific_word("select") n:name() sequential_sep()? d:loop_body() {
                 let start = s.location();
                 let end = &d.loc;
                 let loc = SourceSpan::within(start, end);
@@ -176,13 +177,14 @@ peg::parser! {
             }
 
         rule for_clause() -> ast::ForClauseCommand =
-            s:specific_word("for") n:name() linebreak() _in() w:wordlist()? sequential_sep() d:do_group() {
+            s:specific_word("for") n:name() linebreak() _in() w:wordlist()? sequential_sep() d:loop_body() {
                 let start = s.location();
                 let end = &d.loc;
                 let loc = SourceSpan::within(start, end);
-                ast::ForClauseCommand { variable_name: n.to_owned(), values: w, body: d, loc }
+                // With `in`, a missing word list is an empty one, not "$@".
+                ast::ForClauseCommand { variable_name: n.to_owned(), values: Some(w.unwrap_or_default()), body: d, loc }
             } /
-            s:specific_word("for") n:name() sequential_sep()? d:do_group() {
+            s:specific_word("for") n:name() sequential_sep()? d:loop_body() {
                 let start = s.location();
                 let end = &d.loc;
                 let loc = SourceSpan::within(start, end);
@@ -203,6 +205,12 @@ peg::parser! {
                 let loc = SourceSpan::within(start, end);
                 ast::ArithmeticForClauseCommand { initializer, condition, updater, body, loc }
             }
+
+        // Bash also accepts a brace group as the body of `for` and `select`, even in POSIX
+        // mode: `for i in 1 2; { echo "$i"; }` (pure-bash-bible's code-golf loops).
+        rule loop_body() -> ast::DoGroupCommand =
+            body:do_group() { body } /
+            body:brace_group() { ast::DoGroupCommand { list: body.list, loc: body.loc } }
 
         rule arithmetic_for_body() -> ast::DoGroupCommand =
             sequential_sep()? body:do_group() { body } /

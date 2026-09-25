@@ -1692,6 +1692,12 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
                         )
                             .into())
                         }
+                        // A scalar with attributes (`declare -ir i=3`) keeps them, as in
+                        // Bash; a plain one is a bare assignment.
+                        ShellValue::String(_) if attr_str != "-" => Ok(std::format!(
+                            "declare -{attr_str} {name}={assignable_value_str}"
+                        )
+                        .into()),
                         ShellValue::String(_) => {
                             Ok(std::format!("{name}={assignable_value_str}").into())
                         }

@@ -25,9 +25,10 @@ impl<SE: extensions::ShellExtensions, S: shell_builder::IsComplete> ShellBuilder
 
         // cash (D40): define the two bash-completion helpers that Cobra-generated
         // completion scripts call. Before the rc files, so a user who installs the real
-        // bash-completion package simply overrides these.
+        // bash-completion package simply overrides these. Interactive shells only: that
+        // is where completion happens, and a script's function table then matches Bash's.
         #[cfg(windows)]
-        if !shell.options().sh_mode && !shell.options().posix_mode {
+        if shell.options().interactive && !shell.options().sh_mode && !shell.options().posix_mode {
             shell.load_completion_shims().await?;
         }
 

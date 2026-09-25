@@ -2415,7 +2415,25 @@ pub enum ArithmeticTarget {
     /// A named variable.
     Variable(String),
     /// An element in an array.
-    ArrayElement(String, Box<ArithmeticExpr>),
+    ArrayElement(String, ArraySubscript),
+}
+
+/// The subscript of an array element in an arithmetic expression.
+///
+/// Which one applies depends on the variable at evaluation time: an indexed array
+/// evaluates `expr`, while an associative array uses `text` as the key (after expanding
+/// `$name` references), so `count[$word]` and `count[a b]` work.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[cfg_attr(
+    any(test, feature = "serde"),
+    derive(PartialEq, Eq, serde::Serialize, serde::Deserialize)
+)]
+pub struct ArraySubscript {
+    /// The subscript exactly as written between the brackets.
+    pub text: String,
+    /// The subscript parsed as an arithmetic expression, if it is one.
+    pub expr: Option<Box<ArithmeticExpr>>,
 }
 
 impl Node for ArithmeticTarget {}
@@ -2431,7 +2449,7 @@ impl Display for ArithmeticTarget {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Variable(name) => write!(f, "{name}"),
-            Self::ArrayElement(name, index) => write!(f, "{name}[{index}]"),
+            Self::ArrayElement(name, index) => write!(f, "{name}[{}]", index.text),
         }
     }
 }
