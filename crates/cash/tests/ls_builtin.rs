@@ -109,11 +109,26 @@ fn ls_long_format_shows_real_user_not_somebody() {
         out.stdout
     );
 
-    // Should contain current user name.
-    let current_user = cash_win32::fs::current_user();
+    // Should name the file's real owner. That is usually the current user, but on
+    // Windows Server an elevated administrator's files are owned by the Administrators
+    // group (GitHub's runners), so ask Windows independently rather than assume.
+    let literal = file.to_string_lossy().replace('\'', "''");
+    let owner = std::process::Command::new("powershell")
+        .args([
+            "-NoProfile",
+            "-Command",
+            &format!("(Get-Acl -LiteralPath '{literal}').Owner"),
+        ])
+        .output()
+        .expect("run Get-Acl");
+    let owner = String::from_utf8_lossy(&owner.stdout).trim().to_string();
+    let owner = owner.rsplit('\\').next().unwrap_or(&owner).to_string();
+    assert!(!owner.is_empty(), "Get-Acl reported no owner");
     assert!(
-        out.stdout.contains(&current_user),
-        "stdout should contain username '{current_user}':\n{}",
+        out.stdout
+            .lines()
+            .any(|line| line.ends_with("alpha.txt") && line.contains(&owner)),
+        "the alpha.txt row should name its owner '{owner}':\n{}",
         out.stdout
     );
 
