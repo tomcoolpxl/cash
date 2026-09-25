@@ -74,10 +74,12 @@ impl Sockets {
         self.v6.local_addr().unwrap().port()
     }
 
-    /// A filter selecting just these sockets.
+    /// A filter selecting just these sockets: by loopback address as well as port,
+    /// since another program can hold the same port number over the other protocol or
+    /// on the wildcard address.
     fn filter(&self) -> String {
         format!(
-            "'( sport = :{t} or sport = :{u} or sport = :{v} or dport = :{t} )'",
+            "'( src 127.0.0.1:{t} or src 127.0.0.1:{u} or src [::1]:{v} or dst 127.0.0.1:{t} )'",
             t = self.tcp_port(),
             u = self.udp_port(),
             v = self.v6_port()

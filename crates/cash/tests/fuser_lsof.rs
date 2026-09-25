@@ -313,7 +313,9 @@ fn lsof_selects_sockets_by_address_state_and_process() {
         "{}",
         out.stdout
     );
-    let terse = cash_in(&dir, &format!("lsof -t -i:{port}"));
+    // By address and protocol: another program may hold the same port number over UDP
+    // or on another address.
+    let terse = cash_in(&dir, &format!("lsof -t -iTCP@127.0.0.1:{port}"));
     assert_eq!(terse.stdout.trim(), me());
     let named = cash_in(&dir, &format!("lsof -i :{port}"));
     assert!(

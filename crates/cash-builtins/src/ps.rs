@@ -192,7 +192,7 @@ fn write_row(
             writeln!(
                 out,
                 "{:<12} {:>7} {:>7} {:>2} {:>5} ?        {:>8} {}",
-                details.user.as_deref().unwrap_or("?"),
+                user_column(details.user.as_deref()),
                 process.pid,
                 process.parent_pid,
                 whole_percent(cpu_share(&details, now)),
@@ -206,7 +206,7 @@ fn write_row(
             writeln!(
                 out,
                 "{:<12} {:>7} {:>7} {:>3} {:>2} {:>5} ?        {:>8} {}",
-                details.user.as_deref().unwrap_or("?"),
+                user_column(details.user.as_deref()),
                 process.pid,
                 process.parent_pid,
                 process.base_priority,
@@ -221,7 +221,7 @@ fn write_row(
             writeln!(
                 out,
                 "{:<12} {:>7} {:>4.1} {:>4.1} {:>8} {:>7} ?        R    {:>5} {:>6} {}",
-                details.user.as_deref().unwrap_or("?"),
+                user_column(details.user.as_deref()),
                 process.pid,
                 cpu_share(&details, now),
                 memory_share(&details, total_memory),
@@ -335,4 +335,27 @@ fn hours_minutes_seconds(ticks: u64) -> String {
 fn minutes_seconds(ticks: u64) -> String {
     let seconds = ticks / TICKS_PER_SECOND;
     std::format!("{}:{:02}", seconds / 60, seconds % 60)
+}
+
+/// An account name for a whitespace-separated column: `?` when unknown, and without
+/// spaces, which Windows service accounts have (`NETWORK SERVICE`, `LOCAL SERVICE`).
+/// A space there would shift every later column for `awk '{print $2}'`, so the words are
+/// joined with `_`, as `top` and `ps` never print a blank inside a field on Linux.
+pub(crate) fn user_column(user: Option<&str>) -> String {
+    user.map_or_else(
+        || "?".to_owned(),
+        |name| name.replace(char::is_whitespace, "_"),
+    )
+}
+
+#[cfg(test)]
+mod user_column_tests {
+    use super::user_column;
+
+    #[test]
+    fn service_accounts_stay_one_field() {
+        assert_eq!(user_column(Some("NETWORK SERVICE")), "NETWORK_SERVICE");
+        assert_eq!(user_column(Some("thraa")), "thraa");
+        assert_eq!(user_column(None), "?");
+    }
 }

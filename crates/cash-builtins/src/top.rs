@@ -582,7 +582,7 @@ fn format_row(row: &Row, show_shared: bool) -> String {
         format!(
             "{:>7} {:<10} {:>3} {:>7} {:>7} {:>7} {} {:>5.1} {:>5.1} {:>9} {}",
             row.pid,
-            truncate(&row.user, 10),
+            truncate(&crate::ps::user_column(Some(&row.user)), 10),
             row.priority,
             mebibytes(row.committed),
             mebibytes(row.resident),
@@ -597,7 +597,7 @@ fn format_row(row: &Row, show_shared: bool) -> String {
         format!(
             "{:>7} {:<10} {:>3} {:>7} {:>7} {} {:>5.1} {:>5.1} {:>9} {}",
             row.pid,
-            truncate(&row.user, 10),
+            truncate(&crate::ps::user_column(Some(&row.user)), 10),
             row.priority,
             mebibytes(row.committed),
             mebibytes(row.resident),
