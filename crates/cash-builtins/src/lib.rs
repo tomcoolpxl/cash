@@ -16,6 +16,12 @@ mod win;
 // cash (D48): `ps`, which uutils does not carry and whose PATH stand-in reports MSYS
 // pids that `kill` cannot use.
 #[cfg(windows)]
+mod fileuse;
+#[cfg(windows)]
+mod fuser;
+#[cfg(windows)]
+mod lsof;
+#[cfg(windows)]
 mod pgrep;
 #[cfg(windows)]
 mod ps;

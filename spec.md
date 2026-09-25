@@ -1199,6 +1199,29 @@ Two exceptions give the CR back to the script, because there the script asked fo
 Converting files between the two conventions is the job of the bundled `dos2unix` and
 `unix2dos`, not a side effect of editing.
 
+### D50 — `fuser` and `lsof` answer from documented sources only
+
+Windows has no per-process descriptor table a user can read, and the only system-wide
+handle listing is the undocumented `NtQuerySystemInformation` walk, which needs a
+watchdog because some queries hang. cash does not use it. `fuser` and a subset of `lsof`
+answer from three documented sources instead:
+
+| Question | Source |
+|---|---|
+| Who holds this file | the Restart Manager (`RmGetList`), the API behind Explorer's "file in use"; for files it cannot answer (system DLLs, where it fails with an invalid handle), each process's image and module list |
+| Who owns this port | IP Helper's owner-PID TCP and UDP tables, IPv4 and IPv6 |
+| What does this process have | its executable (`txt`), loaded modules (`mem`) and sockets |
+
+Output follows psmisc `fuser` 23.7 and lsof 4.99.7 (process ids alone on standard output
+for `fuser` and `lsof -t`; lsof's nine columns). What Windows cannot say is shown as
+unknown rather than invented: lsof's FD is `txt`, `mem` or `-`, and DEVICE and NODE are
+`-` (NODE is `TCP`/`UDP` for sockets). A directory argument means the files below it,
+since a process that only has a directory as its working directory is invisible to the
+Restart Manager. Refused, with a message: `fuser -m`/`-c`/`-M` (mount points), `-w`
+(write access is not reported), `lsof -U` (Unix sockets cannot be listed), `lsof` with
+no selection, and lsof's field output and repeat modes. `lsof -p PID` notes that the
+process's open data files are not listed.
+
 ---
 
 ## 4. Deliberate divergences from bash
@@ -1236,6 +1259,7 @@ someone who expected bash, so additions need to earn their place.
 | 25 | `uname -s` is `Windows_NT`, `$OSTYPE` is `windows` | cash is native Win32, not MSYS or Cygwin; scripts testing only `MINGW*|MSYS*` will miss their Windows branch | D48 |
 | 26 | Bundled `sed` and `awk` keep CRLF lines CRLF and match them without the CR | Windows files stay intact and `$` works on them; a program naming `\r`, or `CASH_EOL=lf`, gets Linux behaviour | D49 |
 | 27 | Arithmetic never executes `$(...)` found in an array subscript inside a variable's value | Bash runs it (`read n; echo $((n+1))` with input `a[$(cmd)]`), a well-known code-injection hole; Cash reports an error for indexed arrays and uses the text as a literal key for associative ones | — |
+| 28 | `fuser DIR` and `lsof DIR` report holders of the files below the directory, not processes using it as their working directory; lsof's FD, DEVICE and NODE are `-` | Windows exposes no per-process descriptor or working-directory information through a documented API | D50 |
 
 `select` was missing outright until recently: it was a reserved word with no grammar
 rule, so `select x in a b; do …; done` was a syntax error that took the whole file with

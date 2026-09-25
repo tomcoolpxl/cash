@@ -18,7 +18,7 @@ Feature work follows the sequence below.
 | 5 | Bash 5.3 compatibility work | **Active** | [Bash 5.3 audit](research/bash-reference/bash-5.3-audit.md): portable and POSIX-mode items probed against Bash 5.3.15 |
 | 6 | Differential corpus fixes | **Active** | [`tests/corpus`](tests/corpus): sourced sed/awk/Bash one-liners run against Git Bash 5.3 with GNU sed and gawk |
 | 7 | Line-ending controls: sed `-b`, `CASH_EOL`, `dos2unix`/`unix2dos` | **Complete** | Section 7 below; spec D49 |
-| 8 | `fuser` and an `lsof` subset | Planned | Section 8 below |
+| 8 | `fuser` and an `lsof` subset | **Complete** | Section 8 below; spec D50 |
 | 9 | `ss` subset | Planned | [`ss` evaluation and decisions](research/ss-evaluation.md) |
 | 10 | BusyBox-gap tools | Planned | [BusyBox gap analysis and decisions](research/busybox-gap-analysis.md) |
 
@@ -27,7 +27,7 @@ The authoritative feature order is therefore:
 ```text
 Bash 5.2 completion (done)  ->  native awk (done)  ->  native sed (done)  ->  bundled userland (done)
   ->  Bash 5.3 (active)  +  corpus fixes (active)  ->  line-ending controls (done)
-  ->  fuser / lsof subset  ->  ss subset  ->  BusyBox-gap tools
+  ->  fuser / lsof subset (done)  ->  ss subset  ->  BusyBox-gap tools
 ```
 
 ## 1. Finish Bash 5.2
@@ -199,6 +199,14 @@ Agreed scope: `fuser` in full, `lsof` as a documented subset.
    support, and `-v` listings;
 4. anything needing a system-wide handle walk (undocumented `NtQuerySystemInformation`
    handle enumeration) is refused with a clear message rather than approximated.
+
+**Status: complete.** Decisions taken while building it: a directory argument means the
+files below it (the Restart Manager cannot see working directories); lsof keeps all nine
+columns with `-` where Windows has no value; `lsof -p` shows the executable, modules and
+sockets with a note on standard error. The socket layer is `cash_win32::net`, ready for
+item 9. Tests: `crates/cash/tests/fuser_lsof.rs`, plus unit tests in `cash-win32` (`net`,
+`restart`, `process`) and `cash-builtins` (`fileuse`). Found on the way and filed
+separately: after `exec 3>file`, external commands fail (D26 over-applies).
 
 ## 9. `ss` subset
 

@@ -162,6 +162,10 @@ is the native parent process ID. `ps -efj` adds parent and Windows base-priority
 `pgrep --parent PID` selects native children. Their output can be passed directly to
 cash's `kill`.
 
+`fuser` and `lsof` answer "who holds this file" and "who owns this port" from the
+Restart Manager and the socket tables: `fuser -k file.txt`, `kill $(lsof -t -i:8080)` and
+`lsof +D build/` work, with the Windows limits listed in spec D50.
+
 `tree [DIRECTORY]` renders a sorted filesystem hierarchy without following directory
 links or junctions. Its useful common options are built in: `-a`, `-d`, `-L LEVEL`,
 `-f`, `--dirsfirst`, and `--noreport`.

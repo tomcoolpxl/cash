@@ -62,7 +62,7 @@ const EXPECTED: &[(&str, &str)] = &[
 const CARRIED: &[&str] = &[
     "ps", "top", "find", "xargs", "less", "more", "which", "kill", "cat", "mktemp", "hostname",
     "chmod", "id", "groups", "awk", "sed", "stat", "tty", "nohup", "who", "users", "pinky",
-    "logname", "hostid", "pathchk", "install", "dos2unix", "unix2dos",
+    "logname", "hostid", "pathchk", "install", "dos2unix", "unix2dos", "fuser", "lsof",
 ];
 
 /// Shells whose name must resolve to cash itself (D7).

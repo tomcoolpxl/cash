@@ -589,3 +589,131 @@ pub fn resume_process(process: windows_sys::Win32::Foundation::HANDLE) -> std::i
         ))
     }
 }
+
+/// Opens a process with `access`, closing the handle when dropped.
+struct ProcessHandle(windows_sys::Win32::Foundation::HANDLE);
+
+impl ProcessHandle {
+    fn open(pid: u32, access: u32) -> Option<Self> {
+        // SAFETY: OpenProcess returns null rather than a bad handle on failure.
+        let handle = unsafe { OpenProcess(access, FALSE, pid) };
+        (!handle.is_null()).then_some(Self(handle))
+    }
+}
+
+impl Drop for ProcessHandle {
+    fn drop(&mut self) {
+        // SAFETY: the handle is valid and closed exactly once.
+        unsafe { CloseHandle(self.0) };
+    }
+}
+
+/// The full path of a process's executable, if this user may query it.
+///
+/// Uses `QueryFullProcessImageNameW`, which needs only limited query rights, so it works
+/// for most processes of other users too.
+#[must_use]
+pub fn image_path(pid: u32) -> Option<std::path::PathBuf> {
+    use std::os::windows::ffi::OsStringExt;
+    use windows_sys::Win32::System::Threading::{PROCESS_NAME_WIN32, QueryFullProcessImageNameW};
+
+    let process = ProcessHandle::open(pid, PROCESS_QUERY_LIMITED_INFORMATION)?;
+    let mut buffer = vec![0u16; 32_768];
+    let mut size = u32::try_from(buffer.len()).unwrap_or(u32::MAX);
+    // SAFETY: the handle is valid, and `buffer` has `size` writable UTF-16 units.
+    let ok = unsafe {
+        QueryFullProcessImageNameW(
+            process.0,
+            PROCESS_NAME_WIN32,
+            buffer.as_mut_ptr(),
+            &raw mut size,
+        )
+    };
+    (ok != 0).then(|| {
+        buffer.truncate(size as usize);
+        std::ffi::OsString::from_wide(&buffer).into()
+    })
+}
+
+/// The files mapped into a process as modules: its executable and every loaded DLL.
+///
+/// `None` when the process cannot be opened for reading (other users' processes and
+/// protected ones, without elevation); the caller then leaves those rows out.
+#[must_use]
+pub fn modules(pid: u32) -> Option<Vec<std::path::PathBuf>> {
+    use std::os::windows::ffi::OsStringExt;
+    use windows_sys::Win32::Foundation::HMODULE;
+    use windows_sys::Win32::System::ProcessStatus::{
+        K32EnumProcessModulesEx, K32GetModuleFileNameExW, LIST_MODULES_ALL,
+    };
+    use windows_sys::Win32::System::Threading::{PROCESS_QUERY_INFORMATION, PROCESS_VM_READ};
+
+    let process = ProcessHandle::open(pid, PROCESS_QUERY_INFORMATION | PROCESS_VM_READ)?;
+    let mut handles: Vec<HMODULE> = vec![std::ptr::null_mut(); 256];
+    // Modules can load between the calls, so grow and retry a few times.
+    for _ in 0..4 {
+        let bytes = u32::try_from(handles.len() * size_of::<HMODULE>()).unwrap_or(u32::MAX);
+        let mut needed = 0u32;
+        // SAFETY: `handles` has `bytes` writable bytes; `needed` is writable.
+        let ok = unsafe {
+            K32EnumProcessModulesEx(
+                process.0,
+                handles.as_mut_ptr(),
+                bytes,
+                &raw mut needed,
+                LIST_MODULES_ALL,
+            )
+        };
+        if ok == 0 {
+            return None;
+        }
+        let count = needed as usize / size_of::<HMODULE>();
+        if count <= handles.len() {
+            handles.truncate(count);
+            break;
+        }
+        handles = vec![std::ptr::null_mut(); count + 32];
+    }
+
+    let mut name = vec![0u16; 32_768];
+    let size = u32::try_from(name.len()).unwrap_or(u32::MAX);
+    Some(
+        handles
+            .iter()
+            .filter_map(|&module| {
+                // SAFETY: the handle is valid, `module` came from the enumeration, and
+                // `name` has `size` writable units.
+                let length =
+                    unsafe { K32GetModuleFileNameExW(process.0, module, name.as_mut_ptr(), size) };
+                (length > 0).then(|| std::ffi::OsString::from_wide(&name[..length as usize]).into())
+            })
+            .collect(),
+    )
+}
+
+#[cfg(test)]
+mod module_tests {
+    use super::*;
+
+    #[test]
+    fn this_process_has_an_image_and_modules() {
+        let image = image_path(std::process::id()).unwrap();
+        assert_eq!(image, std::env::current_exe().unwrap());
+        let modules = modules(std::process::id()).unwrap();
+        assert!(modules.iter().any(|m| m == &image), "{modules:?}");
+        assert!(
+            modules.iter().any(|m| m
+                .to_string_lossy()
+                .to_ascii_lowercase()
+                .ends_with("kernel32.dll")),
+            "{modules:?}"
+        );
+    }
+
+    #[test]
+    fn a_missing_process_has_neither() {
+        // Process ids are multiples of four, so this one never exists.
+        assert_eq!(image_path(3), None);
+        assert_eq!(modules(3), None);
+    }
+}

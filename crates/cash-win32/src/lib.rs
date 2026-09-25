@@ -21,11 +21,15 @@ pub mod exit;
 pub mod fs;
 pub mod job;
 pub mod jobreg;
+/// The machine's TCP/UDP sockets and their owning processes.
+pub mod net;
 pub mod path;
 pub mod pipe;
 pub mod poll;
 pub mod process;
 pub mod resolve;
+/// Which processes hold a file open, through the Restart Manager.
+pub mod restart;
 pub mod session;
 pub mod spawn;
 pub mod stdio;

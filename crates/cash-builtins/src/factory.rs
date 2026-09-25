@@ -231,6 +231,8 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
         m.insert("detach".into(), builtin::<win::DetachCommand, SE>());
         m.insert("ps".into(), builtin::<ps::PsCommand, SE>());
         m.insert("pgrep".into(), builtin::<pgrep::PgrepCommand, SE>());
+        m.insert("fuser".into(), builtin::<fuser::FuserCommand, SE>());
+        m.insert("lsof".into(), builtin::<lsof::LsofCommand, SE>());
         m.insert("pstree".into(), builtin::<pstree::PsTreeCommand, SE>());
         m.insert("tree".into(), builtin::<tree::TreeCommand, SE>());
         m.insert("top".into(), builtin::<top::TopCommand, SE>());
