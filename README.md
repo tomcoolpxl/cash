@@ -1,6 +1,6 @@
-# cash - Cool Again Shell
+# cash - Cool Again SHell
 
-![cash logo](assets/cash_logo_medium.png)
+![cash logo](assets/cash_logo_small.png)
 
 A bash-language shell whose execution model is **Win32**, hosted in Windows Terminal.
 
