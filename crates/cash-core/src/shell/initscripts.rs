@@ -190,10 +190,13 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
                     }
                 }
             } else {
-                let env_var_name = if self.options.sh_mode {
-                    "ENV"
+                let env_var_name = if self.options.sh_mode
+                    || self.options.posix_mode
+                    || self.options.real_effective_uid_mismatch
+                {
+                    None
                 } else {
-                    "BASH_ENV"
+                    Some("BASH_ENV")
                 };
 
                 // cash: this refused outright, and refusing is a failure of the *shell*,
@@ -201,7 +204,7 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
                 // running the script at all. bash expands the value, sources the file if
                 // it is there, and says nothing if it is not. `make`, CI harnesses and
                 // anything that sets `SHELL=bash` may hand this down.
-                if let Some(value) = self.env.get_str(env_var_name, self) {
+                if let Some(value) = env_var_name.and_then(|name| self.env.get_str(name, self)) {
                     let value = value.to_string();
                     let expanded =
                         crate::expansion::basic_expand_word(self, &params, value.as_str()).await?;

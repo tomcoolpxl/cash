@@ -55,6 +55,13 @@ pub enum WordPiece {
     ParameterExpansion(ParameterExpr),
     /// A command substitution.
     CommandSubstitution(String),
+    /// Bash 5.3 command substitution that runs in the current shell.
+    CurrentShellCommandSubstitution {
+        /// The shell program to execute.
+        command: String,
+        /// Whether to expand temporary `REPLY` instead of capturing stdout.
+        reply: bool,
+    },
     /// A backquoted command substitution.
     BackquotedCommandSubstitution(String),
     /// An escape sequence.
@@ -900,12 +907,14 @@ peg::parser! {
         rule dollar_sign_word_piece() -> WordPiece =
             arithmetic_expansion() /
             legacy_arithmetic_expansion() /
+            current_shell_command_substitution() /
             command_substitution() /
             parameter_expansion()
 
         rule double_quoted_word_piece() -> WordPiece =
             arithmetic_expansion() /
             legacy_arithmetic_expansion() /
+            current_shell_command_substitution() /
             command_substitution() /
             parameter_expansion() /
             double_quoted_escape_sequence() /
@@ -1031,6 +1040,7 @@ peg::parser! {
         rule heredoc_word_piece() -> WordPiece =
             arithmetic_expansion() /
             legacy_arithmetic_expansion() /
+            current_shell_command_substitution() /
             command_substitution() /
             parameter_expansion() /
             heredoc_escape_sequence() /
@@ -1243,6 +1253,19 @@ peg::parser! {
         pub(crate) rule command_substitution() -> WordPiece =
             "$(" c:command() ")" { WordPiece::CommandSubstitution(c.to_owned()) } /
             "`" c:backquoted_command() "`" { WordPiece::BackquotedCommandSubstitution(c) }
+
+        rule current_shell_command_substitution() -> WordPiece =
+            "${|" c:$(current_shell_command_piece()*) current_shell_end() {
+                WordPiece::CurrentShellCommandSubstitution { command: c.to_owned(), reply: true }
+            } /
+            "${" [' ' | '\t' | '\n'] c:$(current_shell_command_piece()*) current_shell_end() {
+                WordPiece::CurrentShellCommandSubstitution { command: c.to_owned(), reply: false }
+            }
+
+        rule current_shell_command_piece() =
+            word_piece(<current_shell_end()>, true) {}
+
+        rule current_shell_end() -> () = ";" [' ' | '\t' | '\n']* "}" { () }
 
         pub(crate) rule command() -> &'input str =
             $(command_piece()*)

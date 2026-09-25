@@ -45,8 +45,14 @@ fn cash_eval(script: &str) -> Output {
         .output()
         .expect("failed to execute cash");
     Output {
-        stdout: String::from_utf8_lossy(&out.stdout).replace("\r\n", "\n").trim_end().to_string(),
-        stderr: String::from_utf8_lossy(&out.stderr).replace("\r\n", "\n").trim_end().to_string(),
+        stdout: String::from_utf8_lossy(&out.stdout)
+            .replace("\r\n", "\n")
+            .trim_end()
+            .to_string(),
+        stderr: String::from_utf8_lossy(&out.stderr)
+            .replace("\r\n", "\n")
+            .trim_end()
+            .to_string(),
         code: out.status.code().unwrap_or(-1),
     }
 }
@@ -66,8 +72,14 @@ fn cash_stdin(script_path: &Path, input: &str) -> Output {
 
     let out = child.wait_with_output().expect("failed to wait on cash");
     Output {
-        stdout: String::from_utf8_lossy(&out.stdout).replace("\r\n", "\n").trim_end().to_string(),
-        stderr: String::from_utf8_lossy(&out.stderr).replace("\r\n", "\n").trim_end().to_string(),
+        stdout: String::from_utf8_lossy(&out.stdout)
+            .replace("\r\n", "\n")
+            .trim_end()
+            .to_string(),
+        stderr: String::from_utf8_lossy(&out.stderr)
+            .replace("\r\n", "\n")
+            .trim_end()
+            .to_string(),
         code: out.status.code().unwrap_or(-1),
     }
 }
@@ -100,8 +112,14 @@ fn wsl_kali_stdin(script_path: &Path, input: &str) -> Option<Output> {
         return None;
     }
     Some(Output {
-        stdout: String::from_utf8_lossy(&out.stdout).replace("\r\n", "\n").trim_end().to_string(),
-        stderr: String::from_utf8_lossy(&out.stderr).replace("\r\n", "\n").trim_end().to_string(),
+        stdout: String::from_utf8_lossy(&out.stdout)
+            .replace("\r\n", "\n")
+            .trim_end()
+            .to_string(),
+        stderr: String::from_utf8_lossy(&out.stderr)
+            .replace("\r\n", "\n")
+            .trim_end()
+            .to_string(),
         code: out.status.code().unwrap_or(-1),
     })
 }
@@ -113,7 +131,11 @@ fn wsl_kali_stdin(script_path: &Path, input: &str) -> Option<Output> {
 #[test]
 fn test_real_world_dominictarr_json_sh() {
     let script_path = repo_root().join("crates/cash/tests/real_world/JSON.sh");
-    assert!(script_path.exists(), "JSON.sh not found at {:?}", script_path);
+    assert!(
+        script_path.exists(),
+        "JSON.sh not found at {:?}",
+        script_path
+    );
 
     let complex_json = r#"{
   "name": "cash",
@@ -151,7 +173,11 @@ fn test_real_world_dominictarr_json_sh() {
 #[test]
 fn test_real_world_pure_bash_bible_suite() {
     let run_script = repo_root().join("crates/cash/tests/real_world/pbb/run_tests.sh");
-    assert!(run_script.exists(), "run_tests.sh not found at {:?}", run_script);
+    assert!(
+        run_script.exists(),
+        "run_tests.sh not found at {:?}",
+        run_script
+    );
 
     let out = Command::new(CASH)
         .arg(&run_script)
@@ -168,8 +194,14 @@ fn test_real_world_pure_bash_bible_suite() {
         stdout,
         stderr
     );
-    assert!(stdout.contains("reverse_case"), "reverse_case (${{var~~}}) must run");
-    assert!(!stdout.contains("✖"), "no tests in pure-bash-bible should fail");
+    assert!(
+        stdout.contains("reverse_case"),
+        "reverse_case (${{var~~}}) must run"
+    );
+    assert!(
+        !stdout.contains("✖"),
+        "no tests in pure-bash-bible should fail"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -189,7 +221,10 @@ fn test_gnu_bash_strip_tests() {
         .output()
         .expect("failed to run strip.tests");
 
-    let stdout = String::from_utf8_lossy(&out.stdout).replace("\r\n", "\n").trim_end().to_string();
+    let stdout = String::from_utf8_lossy(&out.stdout)
+        .replace("\r\n", "\n")
+        .trim_end()
+        .to_string();
     let expected = fs::read_to_string(&right_file)
         .expect("read strip.right")
         .replace("\r\n", "\n")
@@ -197,7 +232,10 @@ fn test_gnu_bash_strip_tests() {
         .to_string();
 
     assert_eq!(out.status.code().unwrap_or(-1), 0);
-    assert_eq!(stdout, expected, "strip.tests must match strip.right exactly");
+    assert_eq!(
+        stdout, expected,
+        "strip.tests must match strip.right exactly"
+    );
 }
 
 #[test]
@@ -213,7 +251,10 @@ fn test_gnu_bash_herestr_tests() {
         .output()
         .expect("failed to run herestr.tests");
 
-    let stdout = String::from_utf8_lossy(&out.stdout).replace("\r\n", "\n").trim_end().to_string();
+    let stdout = String::from_utf8_lossy(&out.stdout)
+        .replace("\r\n", "\n")
+        .trim_end()
+        .to_string();
     let expected = fs::read_to_string(&right_file)
         .expect("read herestr.right")
         .replace("\r\n", "\n")
@@ -221,7 +262,10 @@ fn test_gnu_bash_herestr_tests() {
         .to_string();
 
     assert_eq!(out.status.code().unwrap_or(-1), 0);
-    assert_eq!(stdout, expected, "herestr.tests must match herestr.right exactly");
+    assert_eq!(
+        stdout, expected,
+        "herestr.tests must match herestr.right exactly"
+    );
 }
 
 #[test]
@@ -235,7 +279,10 @@ fn test_gnu_bash_casemod_tests() {
         .output()
         .expect("failed to run casemod.tests");
 
-    let stdout = String::from_utf8_lossy(&out.stdout).replace("\r\n", "\n").trim_end().to_string();
+    let stdout = String::from_utf8_lossy(&out.stdout)
+        .replace("\r\n", "\n")
+        .trim_end()
+        .to_string();
     assert_eq!(out.status.code().unwrap_or(-1), 0);
 
     // Verify key case transformation outputs
@@ -290,13 +337,15 @@ fn test_crash_prevention_funcnest_limit() {
 #[test]
 fn test_crash_prevention_deep_arithmetic_loop() {
     // Large arithmetic loop should execute without memory exhaustion or stack overflow
-    let out = cash_eval(r#"
+    let out = cash_eval(
+        r#"
 sum=0
 for (( i = 0; i < 5000; i++ )); do
     (( sum += 1 ))
 done
 echo "sum=$sum"
-"#);
+"#,
+    );
     assert_eq!(out.code, 0, "stderr: {}", out.stderr);
     assert_eq!(out.stdout, "sum=5000");
 }
@@ -368,7 +417,8 @@ fn test_fork_bomb_resource_limit() {
     // and prevent host OS thread or process starvation, outputting the exact same message.
     let out = cash_eval(":(){ :|:& }; :");
     assert!(
-        out.stderr.contains("fork: retry: Resource temporarily unavailable"),
+        out.stderr
+            .contains("fork: retry: Resource temporarily unavailable"),
         "expected fork retry error in stderr, got: {}",
         out.stderr
     );

@@ -86,10 +86,20 @@ pub(crate) fn init_well_known_vars(
     // BASHPID
     #[cfg(not(target_family = "wasm"))]
     {
-        let mut bashpid_var =
-            ShellVariable::new(ShellValue::String(std::process::id().to_string()));
+        let pid = std::process::id().to_string();
+        let mut bashpid_var = ShellVariable::new(ShellValue::String(pid.clone()));
         bashpid_var.treat_as_integer();
         shell.env_mut().set_global("BASHPID", bashpid_var)?;
+
+        #[cfg(windows)]
+        {
+            // cash: PowerShell and Windows documentation call this value PID. Bash spells
+            // it BASHPID or `$$`; exposing the direct spelling makes native-process
+            // examples work without changing either Bash spelling.
+            let mut pid_var = ShellVariable::new(ShellValue::String(pid));
+            pid_var.treat_as_integer().set_readonly();
+            shell.env_mut().set_global("PID", pid_var)?;
+        }
     }
 
     // BASH_ALIASES
@@ -457,21 +467,21 @@ pub(crate) fn init_well_known_vars(
     shell.env_mut().set_global("RANDOM", random_var)?;
 
     // SECONDS
-    shell.env_mut().set_global(
-        "SECONDS",
-        ShellVariable::new(ShellValue::Dynamic {
-            getter: |shell| {
-                let now = std::time::SystemTime::now();
-                let since_last = now
-                    .duration_since(shell.last_stopwatch_time())
-                    .unwrap_or_default();
-                let total_seconds = since_last.as_secs() + u64::from(shell.last_stopwatch_offset());
-                total_seconds.to_string().into()
-            },
-            // TODO(vars): implement updating SECONDS
-            setter: |_| (),
-        }),
-    )?;
+    let mut seconds_var = ShellVariable::new(ShellValue::Dynamic {
+        getter: |shell| {
+            let now = std::time::SystemTime::now();
+            let since_last = now
+                .duration_since(shell.last_stopwatch_time())
+                .unwrap_or_default();
+            #[expect(clippy::cast_possible_wrap)]
+            let total_seconds =
+                (since_last.as_secs() as i64).saturating_add(shell.last_stopwatch_offset());
+            total_seconds.to_string().into()
+        },
+        setter: |_| (),
+    });
+    seconds_var.treat_as_integer();
+    shell.env_mut().set_global("SECONDS", seconds_var)?;
 
     // SHELL (if not already set)
     if !shell.env().is_set("SHELL") {
@@ -702,7 +712,7 @@ fn frame_bash_args(
     match &frame.frame_type {
         crate::callstack::FrameType::Script(call) => {
             if matches!(call.call_type, crate::callstack::ScriptCallType::Source)
-                && frame.args.is_empty()
+                && !frame.shadows_positional_args
             {
                 Some(Cow::Owned(vec![call.name().into_owned()]))
             } else {

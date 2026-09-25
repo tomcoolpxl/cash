@@ -181,6 +181,11 @@ impl TestCase {
         // Compute a PATH that contains what we need.
         test_cmd.env("PATH", shell_config.compute_test_path_var());
 
+        // Keep interactive cases from discovering the developer's real profile through
+        // platform home-directory APIs and appending their input to ~/.cash_history.
+        // Individual history/home tests override this below through `home_dir` or `env`.
+        test_cmd.env("HOME", working_dir.to_string_lossy().to_string());
+
         // Set up any env vars needed for collecting coverage data.
         if let Some(coverage_target_dir) = &coverage_target_dir {
             test_cmd.env("CARGO_LLVM_COV_TARGET_DIR", coverage_target_dir);

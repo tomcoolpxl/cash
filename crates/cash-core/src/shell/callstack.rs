@@ -99,9 +99,7 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         args: impl IntoIterator<Item = String>,
         _params: &ExecutionParameters,
     ) -> Result<(), error::Error> {
-        let funcnest = self
-            .env_str("FUNCNEST")
-            .and_then(|v| v.parse::<i64>().ok());
+        let funcnest = self.env_str("FUNCNEST").and_then(|v| v.parse::<i64>().ok());
 
         let max_call_depth = match funcnest {
             Some(n) if n > 0 => usize::try_from(n).ok(),
@@ -123,6 +121,7 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
 
         self.call_stack.push_function(name, function, args);
         self.env.push_scope(env::EnvironmentScope::Local);
+        self.local_option_snapshots.push(None);
 
         Ok(())
     }
@@ -131,6 +130,18 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
     /// has exited the top-most function on its call stack.
     pub(crate) fn leave_function(&mut self) -> Result<(), error::Error> {
         self.env.pop_scope(env::EnvironmentScope::Local)?;
+        if let Some(Some(saved)) = self.local_option_snapshots.pop() {
+            for kind in [
+                crate::namedoptions::ShellOptionKind::Set,
+                crate::namedoptions::ShellOptionKind::SetO,
+            ] {
+                for option in crate::namedoptions::options(kind).iter() {
+                    option
+                        .definition
+                        .set(&mut self.options, option.definition.get(&saved));
+                }
+            }
+        }
 
         if let Some(exited_call) = self.call_stack.pop() {
             if let callstack::FrameType::Function(func_call) = exited_call.frame_type {
@@ -150,20 +161,26 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         Ok(())
     }
 
+    /// Save the current `set` options for restoration when this function returns.
+    pub fn save_local_options(&mut self) {
+        if let Some(slot) = self.local_option_snapshots.last_mut() {
+            *slot = Some(self.options.clone());
+        }
+    }
+
+    /// Whether `local -` has saved an option snapshot in the current function.
+    pub fn has_saved_local_options(&self) -> bool {
+        self.local_option_snapshots
+            .last()
+            .is_some_and(Option::is_some)
+    }
+
     /// Returns the *current* positional arguments for the shell ($1 and beyond).
     /// Influenced by the current call stack.
     pub fn current_shell_args(&self) -> &[String] {
         for frame in self.call_stack.iter() {
-            match frame.frame_type {
-                // Function calls always shadow positional parameters.
-                crate::callstack::FrameType::Function(..) => return &frame.args,
-                // Executed scripts always shadow positional parameters.
-                _ if frame.frame_type.is_run_script() => return &frame.args,
-                // Sourced scripts shadow positional parameters if they have arguments.
-                _ if frame.frame_type.is_sourced_script() && !frame.args.is_empty() => {
-                    return &frame.args;
-                }
-                _ => (),
+            if frame.shadows_positional_args {
+                return &frame.args;
             }
         }
 
@@ -174,20 +191,26 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
     /// ($1 and beyond).
     pub fn current_shell_args_mut(&mut self) -> &mut Vec<String> {
         for frame in self.call_stack.iter_mut() {
-            match frame.frame_type {
-                // Function calls always shadow positional parameters.
-                crate::callstack::FrameType::Function(..) => return &mut frame.args,
-                // Executed scripts always shadow positional parameters.
-                _ if frame.frame_type.is_run_script() => return &mut frame.args,
-                // Sourced scripts shadow positional parameters if they have arguments.
-                _ if frame.frame_type.is_sourced_script() && !frame.args.is_empty() => {
-                    return &mut frame.args;
-                }
-                _ => (),
+            if frame.shadows_positional_args {
+                return &mut frame.args;
             }
         }
 
         &mut self.args
+    }
+
+    /// Record a `set --` mutation in the active positional-parameter scope.
+    ///
+    /// Bash deliberately does not mark `shift` this way. The distinction controls
+    /// whether arguments temporarily supplied to a sourced script persist afterward.
+    pub fn mark_current_shell_args_set(&mut self) {
+        if let Some(frame) = self
+            .call_stack
+            .iter_mut()
+            .find(|frame| frame.shadows_positional_args)
+        {
+            frame.positional_args_changed = true;
+        }
     }
 }
 

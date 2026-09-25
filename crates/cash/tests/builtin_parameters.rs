@@ -37,6 +37,7 @@ fn cash_login(script: &str) -> Output {
 fn run(args: &[&str]) -> Output {
     let out = Command::new(CASH)
         .args(args)
+        .env("HISTFILE", "")
         .output()
         .expect("failed to run cash");
     Output {
@@ -63,6 +64,7 @@ impl Sandbox {
         let out = Command::new(CASH)
             .current_dir(&self.root)
             .args(["-c", script])
+            .env("HISTFILE", "")
             .output()
             .expect("failed to run cash in sandbox");
         Output {
@@ -350,7 +352,11 @@ fn find_exec_single_and_batched() {
 fn xargs_max_args_limits_batch_size() {
     let out = cash("printf '1 2 3 4 5' | xargs -n 2 echo GROUP:");
     let count = out.stdout.matches("GROUP:").count();
-    assert_eq!(count, 3, "expected 3 batches of at most 2 args: {}", out.stdout);
+    assert_eq!(
+        count, 3,
+        "expected 3 batches of at most 2 args: {}",
+        out.stdout
+    );
 }
 
 #[test]
@@ -365,16 +371,65 @@ fn xargs_no_run_if_empty_flag() {
 #[test]
 fn xargs_null_separated_preserves_spaces_and_newlines() {
     let out = cash(r#"printf 'hello world\0line\nwith\nnewlines\0' | xargs -0 -n 1 echo ENTRY:"#);
-    assert_eq!(out.stdout.matches("ENTRY:").count(), 2);
-    assert!(out.stdout.contains("hello world"));
-    // xargs passes the embedded newlines through; echo may add \r\n on Windows.
-    let normalised = out.stdout.replace("\r\n", "\n");
-    assert!(normalised.contains("line\nwith\nnewlines"));
+    assert_eq!(out.code, 0, "stderr: {}", out.stderr);
+    assert_eq!(
+        out.stdout,
+        "ENTRY: hello world\nENTRY: line\nwith\nnewlines"
+    );
+}
+
+#[test]
+fn xargs_builtin_failure_and_control_flow_are_isolated() {
+    assert_eq!(cash("printf 'item' | xargs false").code, 123);
+    let out = cash("printf '' | xargs exit 7; echo survived");
+    assert_eq!(out.stdout, "survived");
+    assert_eq!(out.code, 0);
+}
+
+#[test]
+fn xargs_prefers_builtins_over_path_for_default_and_explicit_echo() {
+    let sandbox = Sandbox::new("xargs-shadow-echo");
+    // cash renamed to echo.exe is deliberately not an echo implementation. This
+    // catches accidental PATH lookup on CI without requiring Git or Scoop tools.
+    let external = sandbox.root.join("echo.exe");
+    std::fs::copy(CASH, &external).unwrap();
+    for script in ["printf 'hello' | xargs", "printf 'hello' | xargs echo"] {
+        let out = Command::new(CASH)
+            .env("PATH", &sandbox.root)
+            .args(["-c", script])
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{out:?}");
+        assert_eq!(out.stdout, b"hello\n");
+    }
+
+    // Disabling the builtin must restore external lookup, without falling back
+    // to the bundled utility. The renamed cash understands this explicit mode.
+    let out = Command::new(CASH)
+        .env("PATH", &sandbox.root)
+        .args([
+            "-c",
+            "enable -n echo; printf 'hello' | xargs echo --invoke-bundled echo EXTERNAL",
+        ])
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{out:?}");
+    assert_eq!(out.stdout, b"EXTERNAL hello\n");
+
+    let executable = external
+        .to_string_lossy()
+        .replace('\\', "/")
+        .replace('\'', "'\\''");
+    let out = cash(&format!(
+        "printf 'hello' | xargs '{executable}' --invoke-bundled echo EXPLICIT"
+    ));
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert_eq!(out.stdout, "EXPLICIT hello");
 }
 
 #[test]
 fn xargs_replace_token() {
-    let out = cash("printf 'apple banana' | xargs -I {} echo 'fruit: {}'");
+    let out = cash("printf 'apple\nbanana\n' | xargs -I {} echo 'fruit: {}'");
     assert!(out.stdout.contains("fruit: apple"));
     assert!(out.stdout.contains("fruit: banana"));
 }
@@ -776,10 +831,20 @@ fn test_and_bracket_string_and_file_tests() {
     let file = sb.root.join("sample.txt");
     std::fs::write(&file, "contents").unwrap();
 
-    assert_eq!(sb.run("[ -f sample.txt ] && echo IS_FILE").stdout, "IS_FILE");
+    assert_eq!(
+        sb.run("[ -f sample.txt ] && echo IS_FILE").stdout,
+        "IS_FILE"
+    );
     assert_eq!(sb.run("[ -d . ] && echo IS_DIR").stdout, "IS_DIR");
-    assert_eq!(sb.run("[ -s sample.txt ] && echo HAS_SIZE").stdout, "HAS_SIZE");
-    assert_eq!(sb.run("[ ! -e non_existent_file ] && echo NOT_FOUND").stdout, "NOT_FOUND");
+    assert_eq!(
+        sb.run("[ -s sample.txt ] && echo HAS_SIZE").stdout,
+        "HAS_SIZE"
+    );
+    assert_eq!(
+        sb.run("[ ! -e non_existent_file ] && echo NOT_FOUND")
+            .stdout,
+        "NOT_FOUND"
+    );
 }
 
 // ===========================================================================
@@ -892,7 +957,11 @@ fn times_reports_execution_time() {
     let out = cash("times");
     assert_eq!(out.code, 0);
     let lines: Vec<&str> = out.stdout.lines().collect();
-    assert_eq!(lines.len(), 2, "times should report 2 lines (shell and children)");
+    assert_eq!(
+        lines.len(),
+        2,
+        "times should report 2 lines (shell and children)"
+    );
     assert!(lines[0].contains('m') && lines[0].contains('s'));
     assert!(lines[1].contains('m') && lines[1].contains('s'));
 }
@@ -966,7 +1035,8 @@ fn dot_and_source_execute_in_current_environment() {
     let out_dot = sb.run(". ./env_setup.sh arg1; echo \"val=$SOURCED_VAL param=$PARAM_ONE\"");
     assert_eq!(out_dot.stdout, "val=active param=arg1");
 
-    let out_source = sb.run("source ./env_setup.sh arg2; echo \"val=$SOURCED_VAL param=$PARAM_ONE\"");
+    let out_source =
+        sb.run("source ./env_setup.sh arg2; echo \"val=$SOURCED_VAL param=$PARAM_ONE\"");
     assert_eq!(out_source.stdout, "val=active param=arg2");
 }
 
@@ -1149,11 +1219,7 @@ fn bind_lists_readline_functions_and_variables() {
 #[test]
 fn history_inspection_and_clear() {
     // History is enabled in interactive shells (-i)
-    let out = run(&[
-        "-i",
-        "-c",
-        "history -c; history",
-    ]);
+    let out = run(&["-i", "-c", "history -c; history"]);
     assert_eq!(out.code, 0);
 }
 
@@ -1196,5 +1262,3 @@ fn detach_starts_background_process() {
     assert_eq!(out.code, 0);
     assert!(out.stdout.contains("[detached] pid"));
 }
-
-

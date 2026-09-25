@@ -4,7 +4,7 @@ use std::fmt::Write as _;
 use std::io::Write;
 
 use cash_core::completion::{self, CompleteAction, CompleteOption, Spec};
-use cash_core::{ExecutionExitCode, ExecutionResult, builtins, error, escape};
+use cash_core::{ExecutionExitCode, ExecutionResult, builtins, env, error, escape, variables};
 
 #[derive(Parser)]
 struct CommonCompleteCommandArgs {
@@ -465,6 +465,10 @@ pub(crate) struct CompGenCommand {
     #[clap(flatten)]
     common_args: CommonCompleteCommandArgs,
 
+    /// Store completions in the named indexed array instead of printing them.
+    #[arg(short = 'V', value_name = "VARNAME")]
+    variable_name: Option<String>,
+
     // N.B. The word can only start with a hyphen if it's after a --.
     word: Option<String>,
 }
@@ -506,14 +510,35 @@ impl builtins::Command for CompGenCommand {
 
         match result {
             completion::Answer::Candidates(candidates, _options) => {
+                if let Some(name) = &self.variable_name {
+                    if let Some((_, var)) = context.shell.env().get(name) {
+                        if var.value().is_associative_array() {
+                            writeln!(context.stderr(), "compgen: {name}: not an indexed array")?;
+                            return Ok(ExecutionResult::general_error());
+                        }
+                    }
+                    let values = candidates
+                        .iter()
+                        .map(|candidate| (None, candidate.clone()))
+                        .collect();
+                    context.shell.env_mut().update_or_add(
+                        name,
+                        variables::ShellValueLiteral::Array(variables::ArrayLiteral(values)),
+                        |_| Ok(()),
+                        env::EnvironmentLookup::Anywhere,
+                        env::EnvironmentScope::Global,
+                    )?;
+                }
                 // We are expected to return 1 if there are no candidates, even if no errors
                 // occurred along the way.
                 if candidates.is_empty() {
                     return Ok(ExecutionResult::general_error());
                 }
 
-                for candidate in candidates {
-                    writeln!(context.stdout(), "{candidate}")?;
+                if self.variable_name.is_none() {
+                    for candidate in candidates {
+                        writeln!(context.stdout(), "{candidate}")?;
+                    }
                 }
             }
             completion::Answer::RestartCompletionProcess => {

@@ -1,0 +1,13 @@
+{
+  "reviewedAt": "2026-09-23T22:51:48.3822108+02:00",
+  "bashSource": "https://git.savannah.gnu.org/git/bash.git",
+  "bashSourcePath": "C:/Users/thraa/github/bash-reference",
+  "bashSourceCommit": "9c465866b7d849378369ef700cbe2965aa9691e3",
+  "cashCommit": "50f596fd3ec486c23239283e8a4233a42da5a322",
+  "cashHasLocalChanges": true,
+  "bashExecutable": "C:/Program Files/Git/bin/bash.exe",
+  "bashVersion": "GNU bash, version 5.3.15(1)-release (x86_64-pc-cygwin)",
+  "bashSha256": "A80D0CC4ED45F99C6073E8504BCDD9935C553AFD9460627CBBB4BEC103E7EF60",
+  "cashExecutable": "C:\\Users\\thraa\\github\\cash\\target\\debug\\cash.exe",
+  "cashSha256": "164936F261293CF8F824668AE4E92CDE3931B10A5F166BF4830F2BA4F37B62CD"
+}

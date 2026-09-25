@@ -113,6 +113,23 @@ fn a_file_with_spaces_round_trips_through_winpath() {
     );
 }
 
+#[test]
+fn a_batch_command_found_on_path_may_live_in_a_directory_with_spaces() {
+    let scratch = Scratch::new("batch-path-spaces");
+    let bin = scratch.path().join("Program Files Like").join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    std::fs::write(
+        bin.join("space-tool.cmd"),
+        b"@echo off\r\necho ARG=[%~1]\r\n",
+    )
+    .unwrap();
+
+    let path = bin.to_string_lossy().replace('\\', "/");
+    let out = cash(&format!(r#"PATH="{path}:$PATH"; space-tool "two words""#));
+    assert_eq!(out.code, 0, "stderr: {}", out.stderr);
+    assert_eq!(out.stdout, "ARG=[two words]");
+}
+
 // ---------------------------------------------------------------------------
 // D20 — CRLF corner cases
 // ---------------------------------------------------------------------------

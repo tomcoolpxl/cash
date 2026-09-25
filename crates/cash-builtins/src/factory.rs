@@ -217,10 +217,7 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
         #[cfg(feature = "builtin.disown")]
         m.insert("disown".into(), builtin::<disown::DisownCommand, SE>());
 
-        m.insert(
-            "logout".into(),
-            builtin::<logout::LogoutCommand, SE>(),
-        );
+        m.insert("logout".into(), builtin::<logout::LogoutCommand, SE>());
     }
 
     // cash (D45): Windows-specific builtins. Not feature-gated per builtin — they only
@@ -233,6 +230,9 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
         m.insert("elevate".into(), builtin::<win::ElevateCommand, SE>());
         m.insert("detach".into(), builtin::<win::DetachCommand, SE>());
         m.insert("ps".into(), builtin::<ps::PsCommand, SE>());
+        m.insert("pgrep".into(), builtin::<pgrep::PgrepCommand, SE>());
+        m.insert("pstree".into(), builtin::<pstree::PsTreeCommand, SE>());
+        m.insert("tree".into(), builtin::<tree::TreeCommand, SE>());
         m.insert("top".into(), builtin::<top::TopCommand, SE>());
         m.insert("find".into(), builtin::<find::FindCommand, SE>());
         m.insert("xargs".into(), builtin::<xargs::XargsCommand, SE>());

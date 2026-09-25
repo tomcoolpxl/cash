@@ -45,6 +45,8 @@ pub struct JobSnapshot {
     pub state: JobState,
     /// Whether the job was current, previous, or neither.
     pub annotation: JobAnnotation,
+    /// Whether this state has not yet been reported by `jobs` or prompt notification.
+    notification_pending: bool,
 }
 
 impl Display for JobSnapshot {
@@ -121,6 +123,12 @@ impl JobTask {
 }
 
 impl JobManager {
+    /// Remove a job consumed by `wait -n` and update current/previous marks.
+    pub fn remove_waited_job(&mut self, id: usize) {
+        self.jobs.retain(|job| job.id != id);
+        self.reannotate();
+    }
+
     /// Returns a new job manager.
     pub fn new() -> Self {
         Self::default()
@@ -146,6 +154,7 @@ impl JobManager {
                 command_line: job.command_line.clone(),
                 state: job.state.clone(),
                 annotation: job.annotation.clone(),
+                notification_pending: job.notification_pending,
             })
             .chain(self.inherited.iter().cloned())
             .collect()
@@ -155,6 +164,72 @@ impl JobManager {
     #[must_use]
     pub fn inherited(&self) -> &[JobSnapshot] {
         &self.inherited
+    }
+
+    /// Poll jobs without removing completed entries. This lets `jobs -n` report a
+    /// transition to Done before the entry is cleaned from the table.
+    pub fn refresh_statuses(&mut self) -> Result<(), error::Error> {
+        for job in &mut self.jobs {
+            if !matches!(job.state, JobState::Done) {
+                let _ = job.poll_done()?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Consume pending status notifications, optionally restricted to job IDs.
+    pub fn take_status_notifications(&mut self, ids: Option<&[usize]>) -> Vec<JobSnapshot> {
+        let wanted = |id| ids.is_none_or(|ids| ids.contains(&id));
+        let mut notifications = Vec::new();
+
+        for snapshot in &mut self.inherited {
+            if snapshot.notification_pending && wanted(snapshot.id) {
+                notifications.push(snapshot.clone());
+                snapshot.notification_pending = false;
+            }
+        }
+        for job in &mut self.jobs {
+            if job.notification_pending && wanted(job.id) {
+                notifications.push(JobSnapshot {
+                    id: job.id,
+                    pid: job.representative_pid(),
+                    command_line: job.command_line.clone(),
+                    state: job.state.clone(),
+                    annotation: job.annotation.clone(),
+                    notification_pending: true,
+                });
+                job.notification_pending = false;
+            }
+        }
+
+        self.remove_notified_done_jobs();
+        notifications
+    }
+
+    /// Mark the listed jobs as reported and remove completed entries whose final state
+    /// has now been displayed. `None` selects every job.
+    pub fn mark_notifications(&mut self, ids: Option<&[usize]>) {
+        let wanted = |id| ids.is_none_or(|ids| ids.contains(&id));
+        for snapshot in &mut self.inherited {
+            if wanted(snapshot.id) {
+                snapshot.notification_pending = false;
+            }
+        }
+        for job in &mut self.jobs {
+            if wanted(job.id) {
+                job.notification_pending = false;
+            }
+        }
+        self.remove_notified_done_jobs();
+    }
+
+    fn remove_notified_done_jobs(&mut self) {
+        self.inherited.retain(|snapshot| {
+            snapshot.notification_pending || !matches!(snapshot.state, JobState::Done)
+        });
+        self.jobs
+            .retain(|job| job.notification_pending || !matches!(job.state, JobState::Done));
+        self.reannotate();
     }
 
     /// Adds a job to the job manager and marks it as the current job;
@@ -408,6 +483,9 @@ pub struct Job {
     /// The current operational state of the job.
     pub state: JobState,
 
+    /// Whether the current state still needs to be shown by `jobs -n`.
+    notification_pending: bool,
+
     /// Process IDs reported by a background task running under this job.
     ///
     /// cash (D11/D22): a background job's tasks are `Internal` — a tokio task executing
@@ -427,6 +505,11 @@ impl Display for Job {
 }
 
 impl Job {
+    /// Whether a wait can still consume a task result for this job.
+    pub fn has_unwaited_tasks(&self) -> bool {
+        !self.tasks.is_empty()
+    }
+
     /// Returns a new job object.
     ///
     /// # Arguments
@@ -445,6 +528,7 @@ impl Job {
             annotation: JobAnnotation::None,
             command_line,
             state,
+            notification_pending: true,
             spawned_pids: None,
         }
     }
@@ -516,6 +600,7 @@ impl Job {
         tracing::debug!(target: trace_categories::JOBS, "Job {} has completed.", self.id);
 
         self.state = JobState::Done;
+        self.notification_pending = true;
 
         Ok(result)
     }
@@ -532,14 +617,29 @@ impl Job {
                 }
                 JobTaskWaitResult::Stopped => {
                     self.state = JobState::Stopped;
+                    self.notification_pending = true;
                     return Ok(ExecutionResult::stopped());
                 }
             }
         }
 
         self.state = JobState::Done;
+        self.notification_pending = true;
 
         Ok(result)
+    }
+
+    /// Wait past stop notifications until the job has actually terminated.
+    pub async fn wait_for_termination(&mut self) -> Result<ExecutionResult, error::Error> {
+        loop {
+            let result = self.wait().await?;
+            if !matches!(self.state, JobState::Stopped) {
+                return Ok(result);
+            }
+            // A stopped native process cannot make progress until resumed. Avoid a
+            // tight poll while retaining Bash's `wait -f` behavior.
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
     }
 
     /// Moves the job to execute in the background.
@@ -548,6 +648,7 @@ impl Job {
             if let Some(pgid) = self.process_group_id() {
                 sys::signal::continue_process(pgid)?;
                 self.state = JobState::Running;
+                self.notification_pending = true;
                 Ok(())
             } else {
                 Err(error::ErrorKind::FailedToSendSignal.into())
@@ -563,6 +664,7 @@ impl Job {
             if let Some(pgid) = self.process_group_id() {
                 sys::signal::continue_process(pgid)?;
                 self.state = JobState::Running;
+                self.notification_pending = true;
             } else {
                 return Err(error::ErrorKind::FailedToSendSignal.into());
             }

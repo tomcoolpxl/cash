@@ -27,6 +27,29 @@ use crate::variables::{self, ShellValue};
 
 mod fieldsplit;
 
+const QUOTED_REPLACEMENT_AMPERSAND: char = '\u{F0000}';
+
+fn quote_replacement_ampersands(word: &str) -> String {
+    let mut result = String::with_capacity(word.len());
+    let mut chars = word.chars().peekable();
+    let mut single_quoted = false;
+    while let Some(ch) = chars.next() {
+        match ch {
+            '\'' => {
+                single_quoted = !single_quoted;
+                result.push(ch);
+            }
+            '\\' if !single_quoted && chars.peek() == Some(&'&') => {
+                chars.next();
+                result.push(QUOTED_REPLACEMENT_AMPERSAND);
+            }
+            '&' if single_quoted => result.push(QUOTED_REPLACEMENT_AMPERSAND),
+            _ => result.push(ch),
+        }
+    }
+    result
+}
+
 /// Controls how the expander handles a backslash-escape sequence (`\X`)
 /// when it appears outside any explicit quoting (single, double, ANSI-C).
 /// Inside actual double-quoted text, the parser's own escape rules apply
@@ -986,6 +1009,7 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
 
         let options = patterns::FilenameExpansionOptions {
             require_dot_in_pattern_to_match_dot_files: !self.shell.options().glob_matches_dotfiles,
+            include_dot_and_dotdot: !self.shell.options().glob_skip_dots,
         };
 
         // On error (e.g. malformed pattern), default to NoGlob so the field
@@ -1118,6 +1142,61 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
                 }
 
                 Expansion::from(ExpansionPiece::Splittable(cmd_output))
+            }
+            cash_parser::word::WordPiece::CurrentShellCommandSubstitution { command, reply } => {
+                let mut params = self.params.clone();
+                params.process_group_policy = crate::ProcessGroupPolicy::SameProcessGroup;
+                let output = if reply {
+                    // The REPLY form has a temporary local REPLY and leaves stdout alone.
+                    let mut scope = env::ScopeGuard::new(self.shell, env::EnvironmentScope::Local);
+                    scope.shell().env_mut().add(
+                        "REPLY",
+                        crate::variables::ShellVariable::new(String::new()),
+                        env::EnvironmentScope::Local,
+                    )?;
+                    let result = scope
+                        .shell()
+                        .run_string(
+                            command,
+                            &crate::SourceInfo::from("current-shell substitution"),
+                            &params,
+                        )
+                        .await?;
+                    scope.shell().set_last_exit_status(result.exit_code.into());
+                    let shell = scope.shell();
+                    shell
+                        .env()
+                        .get("REPLY")
+                        .and_then(|(_, var)| var.value().try_get_cow_str(shell))
+                        .unwrap_or_default()
+                        .into_owned()
+                } else {
+                    let (mut reader, writer) = std::io::pipe()?;
+                    params.set_fd(crate::openfiles::OpenFiles::STDOUT_FD, writer.into());
+                    let read_task = tokio::task::spawn_blocking(move || {
+                        let mut output = String::new();
+                        std::io::Read::read_to_string(&mut reader, &mut output)?;
+                        Ok::<_, std::io::Error>(output)
+                    });
+                    let run_result = self
+                        .shell
+                        .run_string(
+                            command,
+                            &crate::SourceInfo::from("current-shell substitution"),
+                            &params,
+                        )
+                        .await;
+                    drop(params);
+                    let mut output = read_task.await??;
+                    let result = run_result?;
+                    self.shell.set_last_exit_status(result.exit_code.into());
+                    #[cfg(windows)]
+                    output.truncate(cash_win32::text::trim_substitution_output(&output).len());
+                    #[cfg(not(windows))]
+                    output.truncate(output.trim_end_matches('\n').len());
+                    output
+                };
+                Expansion::from(ExpansionPiece::Splittable(output))
             }
             cash_parser::word::WordPiece::EscapeSequence(s) => {
                 let Some(escaped) = s.strip_prefix('\\') else {
@@ -1621,6 +1700,42 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
                 indirect,
                 op,
             } => {
+                if matches!(
+                    op,
+                    ParameterTransformOp::PossiblyQuoteWithArraysExpanded {
+                        separate_words: true
+                    }
+                ) && matches!(
+                    parameter,
+                    cash_parser::word::Parameter::NamedWithAllIndices { .. }
+                ) && let (_, _, Some(variable)) = self
+                    .try_resolve_parameter_to_variable(&parameter, indirect)
+                    .await?
+                {
+                    let mut words = Vec::new();
+                    match variable.value() {
+                        ShellValue::AssociativeArray(elements) => {
+                            for (key, value) in elements {
+                                words.push(key.clone());
+                                words.push(value.clone());
+                            }
+                        }
+                        ShellValue::IndexedArray(elements) => {
+                            for (key, value) in elements {
+                                words.push(key.to_string());
+                                words.push(value.clone());
+                            }
+                        }
+                        _ => (),
+                    }
+                    return Ok(Expansion {
+                        fields: list_element_fields(words, true),
+                        concatenate: false,
+                        kind: ExpansionKind::ElementList,
+                        undefined: false,
+                    });
+                }
+
                 let expanded_parameter = self.expand_parameter(&parameter, indirect).await?;
                 let came_from_undefined = expanded_parameter.undefined;
 
@@ -1710,7 +1825,11 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
                 let expanded_pattern = self.basic_expand_opt_pattern(pattern.as_deref()).await?;
 
                 transform_expansion(expanded_parameter, async |s| {
-                    Self::pattern_to_first_char(s, expanded_pattern.as_ref(), Self::toggle_char_case)
+                    Self::pattern_to_first_char(
+                        s,
+                        expanded_pattern.as_ref(),
+                        Self::toggle_char_case,
+                    )
                 })
                 .await
             }
@@ -1723,7 +1842,11 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
                 let expanded_pattern = self.basic_expand_opt_pattern(pattern.as_deref()).await?;
 
                 transform_expansion(expanded_parameter, async |s| {
-                    Self::pattern_to_string(s.as_str(), expanded_pattern.as_ref(), Self::toggle_str_case)
+                    Self::pattern_to_string(
+                        s.as_str(),
+                        expanded_pattern.as_ref(),
+                        Self::toggle_str_case,
+                    )
                 })
                 .await
             }
@@ -1743,7 +1866,12 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
 
                 // If no replacement was provided, then we replace with an empty string.
                 let replacement = replacement.unwrap_or(String::new());
-                let expanded_replacement = self.basic_expand_to_str(&replacement).await?;
+                // Preserve ampersands quoted in the replacement word through word
+                // expansion. The expansion API returns plain text and loses that
+                // quoting information otherwise.
+                let quoted_replacement = quote_replacement_ampersands(&replacement);
+                let expanded_replacement = self.basic_expand_to_str(&quoted_replacement).await?;
+                let expand_match = self.shell.options().patsub_replacement;
 
                 let regex = expanded_pattern.to_regex(
                     matches!(match_kind, cash_parser::word::SubstringMatchKind::Prefix),
@@ -1756,6 +1884,7 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
                         &regex,
                         expanded_replacement.as_str(),
                         &match_kind,
+                        expand_match,
                     ))
                 })
                 .await
@@ -2230,16 +2359,38 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
         regex: &fancy_regex::Regex,
         replacement: &str,
         match_kind: &SubstringMatchKind,
+        expand_match: bool,
     ) -> String {
+        // The replacement is shell data, not fancy-regex replacement syntax: `$1`
+        // must remain literal. Bash's patsub_replacement option substitutes only
+        // unescaped ampersands with the entire match.
+        let render = |caps: &fancy_regex::Captures<'_, str>| {
+            let matched = caps.get(0).map_or("", |m| m.as_str());
+            let mut output = String::new();
+            let mut chars = replacement.chars();
+            while let Some(ch) = chars.next() {
+                if ch == QUOTED_REPLACEMENT_AMPERSAND {
+                    output.push('&');
+                } else if ch == '\\' && matches!(chars.clone().next(), Some('&')) {
+                    chars.next();
+                    output.push('&');
+                } else if ch == '&' && expand_match {
+                    output.push_str(matched);
+                } else {
+                    output.push(ch);
+                }
+            }
+            output
+        };
         match match_kind {
             cash_parser::word::SubstringMatchKind::Prefix
             | cash_parser::word::SubstringMatchKind::Suffix
             | cash_parser::word::SubstringMatchKind::FirstOccurrence => {
-                regex.replace(s, replacement).into_owned()
+                regex.replace(s, render).into_owned()
             }
 
             cash_parser::word::SubstringMatchKind::Anywhere => {
-                regex.replace_all(s, replacement).into_owned()
+                regex.replace_all(s, render).into_owned()
             }
         }
     }

@@ -25,12 +25,15 @@ impl builtins::Command for ShiftCommand {
         #[expect(clippy::cast_sign_loss)]
         let n = n as usize;
 
-        let args = context.shell.current_shell_args_mut();
-
-        if n > args.len() {
+        if n > context.shell.current_shell_args().len() {
             return Ok(ExecutionExitCode::InvalidUsage.into());
         }
 
+        if n == 0 {
+            return Ok(ExecutionResult::success());
+        }
+
+        let args = context.shell.current_shell_args_mut();
         args.drain(0..n);
 
         Ok(ExecutionResult::success())

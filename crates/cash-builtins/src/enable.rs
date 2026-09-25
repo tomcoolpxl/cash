@@ -1,10 +1,9 @@
-use cash_core::ExecutionResult;
+use cash_core::{ExecutionExitCode, ExecutionResult};
 use clap::Parser;
 use itertools::Itertools;
 use std::io::Write;
 
 use cash_core::builtins;
-use cash_core::error;
 
 /// Enable, disable, or display built-in commands.
 #[derive(Parser)]
@@ -46,11 +45,16 @@ impl builtins::Command for EnableCommand {
     ) -> Result<ExecutionResult, Self::Error> {
         let mut result = ExecutionResult::success();
 
-        if self.shared_object_path.is_some() {
-            return error::unimp("enable -f");
-        }
-        if self.remove_loaded_builtin {
-            return error::unimp("enable -d");
+        if self.shared_object_path.is_some() || self.remove_loaded_builtin {
+            // Bash loadable builtins use Bash's private C ABI. A Bash-built DLL cannot
+            // be safely loaded into cash's Rust builtin registry, and Git for Windows'
+            // own Bash build reports the same platform capability as unavailable.
+            writeln!(
+                context.stderr(),
+                "{}: dynamic loading not available",
+                context.command_name
+            )?;
+            return Ok(ExecutionExitCode::InvalidUsage.into());
         }
 
         if !self.names.is_empty() {

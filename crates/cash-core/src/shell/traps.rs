@@ -52,11 +52,13 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
             return Ok(ExecutionResult::success());
         }
 
-        // In functions and subshells, some traps are only inherited when the
-        // corresponding option is enabled.
-        if (self.in_function() || self.is_subshell())
-            && !self.is_trap_inherited_in_current_scope(signal)
-        {
+        // A sourced file is also a nested DEBUG scope in Bash: the caller's DEBUG
+        // trap is temporarily hidden unless functrace (`set -T`) is enabled. ERR
+        // and RETURN keep their existing function/subshell rules.
+        let inheritance_required = self.in_function()
+            || self.is_subshell()
+            || (self.in_sourced_script() && matches!(signal, TrapSignal::Debug));
+        if inheritance_required && !self.is_trap_inherited_in_current_scope(signal) {
             return Ok(ExecutionResult::success());
         }
 

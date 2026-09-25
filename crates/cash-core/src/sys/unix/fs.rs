@@ -80,6 +80,19 @@ pub fn split_paths<T: AsRef<std::ffi::OsStr> + ?Sized>(s: &T) -> std::env::Split
     std::env::split_paths(s)
 }
 
+/// Splits a Bash search path, retaining empty entries as the current directory.
+pub fn split_paths_preserving_empty<T: AsRef<std::ffi::OsStr> + ?Sized>(
+    s: &T,
+) -> impl Iterator<Item = PathBuf> {
+    std::env::split_paths(s).map(|entry| {
+        if entry.as_os_str().is_empty() {
+            PathBuf::from(".")
+        } else {
+            entry
+        }
+    })
+}
+
 pub(crate) fn get_default_executable_search_paths() -> Vec<PathBuf> {
     #[cfg(target_os = "android")]
     {

@@ -105,22 +105,25 @@ fn the_shell_line_carries_the_shells_own_version() {
 }
 
 #[test]
-fn the_memory_line_agrees_with_top() {
-    // Both read the same counter, so the totals must match exactly.
+fn the_memory_line_reports_the_system_total_and_percentage() {
     let banner = cash("coolfetch --no-color --no-logo");
     let memory = field(&banner.stdout, "Memory");
-    let total = memory
-        .split('/')
-        .nth(1)
-        .map(|part| part.trim().trim_end_matches("MiB").trim().to_string())
-        .unwrap_or_default();
-
-    let from_top = cash(r#"top -b -n 1 -d 0.1 | sed -n '2p'"#);
+    let total = memory.split('/').nth(1).expect("used / total");
+    let mut parts = total.split_whitespace();
+    let value: f64 = parts.next().unwrap().parse().unwrap();
+    let scale = match parts.next().unwrap() {
+        "TiB" => 1024f64.powi(4),
+        "GiB" => 1024f64.powi(3),
+        "MiB" => 1024f64.powi(2),
+        unit => panic!("unexpected memory unit: {unit}"),
+    };
+    #[allow(clippy::cast_precision_loss)]
+    let expected = cash_win32::process::total_physical_memory().unwrap() as f64;
     assert!(
-        from_top.stdout.contains(&total),
-        "coolfetch says {total} MiB total, top says [{}]",
-        from_top.stdout
+        value.mul_add(scale, -expected).abs() <= scale * 0.005,
+        "{memory}"
     );
+    assert!(memory.ends_with("%)"), "{memory}");
 }
 
 #[test]
@@ -157,6 +160,37 @@ fn no_logo_prints_only_the_facts() {
         "the facts are missing: {}",
         out.stdout
     );
+}
+
+#[test]
+fn lists_all_accessible_drives_regardless_of_working_directory() {
+    let drives: Vec<_> = cash_win32::sysinfo::logical_drives()
+        .into_iter()
+        .filter(|drive| {
+            let root = std::path::PathBuf::from(format!("{drive}/"));
+            !cash_win32::sysinfo::is_network_drive(&root)
+                && cash_win32::sysinfo::disk_usage(&root).is_some()
+        })
+        .collect();
+    assert!(!drives.is_empty(), "expected at least the system drive");
+
+    for cwd in &drives {
+        let out = Command::new(CASH)
+            .current_dir(format!("{cwd}/"))
+            .args(["-c", "coolfetch --no-color --no-logo"])
+            .output()
+            .expect("failed to run coolfetch from a drive root");
+        assert!(out.status.success(), "{out:?}");
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        for drive in &drives {
+            let label = format!("Disk ({drive})");
+            assert!(
+                !field(&stdout, &label).is_empty(),
+                "missing {drive} from {cwd}: {stdout}"
+            );
+            assert_eq!(stdout.matches(&format!("{label}: ")).count(), 1);
+        }
+    }
 }
 
 #[test]

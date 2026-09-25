@@ -35,16 +35,18 @@ impl builtins::Command for UmaskCommand {
                 let parsed = cash_core::int_utils::parse(mode.as_str(), 8)?;
                 set_umask(parsed)?;
             } else {
-                return cash_core::error::unimp("umask setting mode from symbolic value");
+                let parsed = parse_symbolic_umask(mode, get_umask()?)?;
+                set_umask(parsed)?;
+            }
+
+            if self.symbolic_output {
+                writeln!(context.stdout(), "{}", format_symbolic_umask(get_umask()?))?;
             }
         } else {
             let umask = get_umask()?;
 
             let formatted = if self.symbolic_output {
-                let u = symbolic_mask_from_bits((!umask & 0o700) >> 6);
-                let g = symbolic_mask_from_bits((!umask & 0o070) >> 3);
-                let o = symbolic_mask_from_bits(!umask & 0o007);
-                std::format!("u={u},g={g},o={o}")
+                format_symbolic_umask(umask)
             } else {
                 std::format!("{umask:04o}")
             };
@@ -58,6 +60,107 @@ impl builtins::Command for UmaskCommand {
 
         Ok(ExecutionResult::success())
     }
+}
+
+fn format_symbolic_umask(umask: u32) -> String {
+    let u = symbolic_mask_from_bits((!umask & 0o700) >> 6);
+    let g = symbolic_mask_from_bits((!umask & 0o070) >> 3);
+    let o = symbolic_mask_from_bits(!umask & 0o007);
+    std::format!("u={u},g={g},o={o}")
+}
+
+/// Parses the chmod-style symbolic language Bash accepts for `umask`. Work with the
+/// complement of the mask (the permissions that are allowed), exactly as Bash does.
+fn parse_symbolic_umask(mode: &str, current_mask: u32) -> Result<u32, cash_core::Error> {
+    let bytes = mode.as_bytes();
+    let initial = !current_mask & 0o777;
+    let mut allowed = initial;
+    let mut index = 0;
+
+    while index < bytes.len() {
+        let mut who = 0;
+        while let Some(byte) = bytes.get(index) {
+            let bits = match byte {
+                b'u' => 0o700,
+                b'g' => 0o070,
+                b'o' => 0o007,
+                b'a' => 0o777,
+                _ => break,
+            };
+            who |= bits;
+            index += 1;
+        }
+        if who == 0 {
+            who = 0o777;
+        }
+
+        loop {
+            let operation = *bytes.get(index).ok_or(cash_core::ErrorKind::InvalidUmask)?;
+            if !matches!(operation, b'+' | b'-' | b'=') {
+                return Err(cash_core::ErrorKind::InvalidUmask.into());
+            }
+            index += 1;
+
+            let mut permissions = 0;
+            while let Some(byte) = bytes.get(index) {
+                let (bits, copy) = match byte {
+                    b'r' => (0o444, false),
+                    b'w' => (0o222, false),
+                    b'x' => (0o111, false),
+                    b'X' => {
+                        if initial & 0o111 == 0 {
+                            (0, false)
+                        } else {
+                            (0o111, false)
+                        }
+                    }
+                    b'u' => (copy_permission_class(initial, 6), true),
+                    b'g' => (copy_permission_class(initial, 3), true),
+                    b'o' => (copy_permission_class(initial, 0), true),
+                    // Bash accepts these in the shared chmod grammar. They do not
+                    // contribute to the nine file-creation permission bits.
+                    b's' | b't' => (0, false),
+                    _ => break,
+                };
+                // GNU Bash's parser assigns for a copy specification. Thus `g=ru`
+                // differs from `g=ur`: the `u` in the former replaces the earlier `r`.
+                if copy {
+                    permissions = bits;
+                } else {
+                    permissions |= bits;
+                }
+                index += 1;
+            }
+
+            let permissions = permissions & who;
+            match operation {
+                b'+' => allowed |= permissions,
+                b'-' => allowed &= !permissions,
+                b'=' => allowed = (allowed & !who) | permissions,
+                _ => unreachable!(),
+            }
+
+            match bytes.get(index) {
+                None => return Ok(!allowed & 0o777),
+                Some(b',') => {
+                    index += 1;
+                    break;
+                }
+                Some(b'+' | b'-' | b'=') => {}
+                Some(_) => return Err(cash_core::ErrorKind::InvalidUmask.into()),
+            }
+        }
+    }
+
+    Err(cash_core::ErrorKind::InvalidUmask.into())
+}
+
+const fn copy_permission_class(bits: u32, shift: u32) -> u32 {
+    let class = (bits >> shift) & 0o7;
+    let read = if class & 0o4 != 0 { 0o444 } else { 0 };
+    let write = if class & 0o2 != 0 { 0o222 } else { 0 };
+    let execute = if class & 0o1 != 0 { 0o111 } else { 0 };
+    read | write | execute
 }
 
 /// cash: Windows has no umask.

@@ -16,7 +16,13 @@ mod win;
 // cash (D48): `ps`, which uutils does not carry and whose PATH stand-in reports MSYS
 // pids that `kill` cannot use.
 #[cfg(windows)]
+mod pgrep;
+#[cfg(windows)]
 mod ps;
+#[cfg(windows)]
+mod pstree;
+#[cfg(windows)]
+mod tree;
 
 // cash (D48, §4 #20): `hostname`, so the machine has one name inside the shell rather
 // than the DNS API's and Windows' own.
@@ -107,8 +113,6 @@ mod eval;
 mod exec;
 #[cfg(feature = "builtin.exit")]
 mod exit;
-#[cfg(feature = "builtin.exit")]
-mod logout;
 #[cfg(feature = "builtin.export")]
 mod export;
 #[cfg(feature = "builtin.false")]
@@ -131,6 +135,8 @@ mod jobs;
 mod kill;
 #[cfg(feature = "builtin.let")]
 mod let_;
+#[cfg(feature = "builtin.exit")]
+mod logout;
 #[cfg(feature = "builtin.mapfile")]
 mod mapfile;
 #[cfg(feature = "builtin.popd")]

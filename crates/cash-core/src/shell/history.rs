@@ -16,12 +16,15 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         options.read(true);
 
         let mut history_file =
-            self.open_file(&options, history_path, &self.default_exec_params())?;
+            self.open_file(&options, &history_path, &self.default_exec_params())?;
 
-        // Check on the file's size.
+        // Check on the file's size and remember how much startup consumed so
+        // `history -n` can begin at the first subsequently appended byte.
+        let mut history_file_len = None;
         if let openfiles::OpenFile::File(file) = &mut history_file {
             let file_metadata = file.metadata()?;
             let file_size = file_metadata.len();
+            history_file_len = Some(file_size);
 
             // If the file is empty, no reason to try reading it. Note that this will also
             // end up excluding non-regular files that report a 0 file size but appear
@@ -37,6 +40,9 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         }
 
         let mut history = crate::history::History::import(history_file)?;
+        if let Some(file_size) = history_file_len {
+            history.mark_file_read_to(&history_path, file_size);
+        }
 
         // As bash does, stamp entries that carry no timestamp in the file with the load time.
         let load_time = chrono::Utc::now();

@@ -11,18 +11,13 @@ use std::os::windows::io::FromRawHandle;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use windows_sys::Win32::Foundation::{
-    CloseHandle, FALSE, HANDLE, INVALID_HANDLE_VALUE, S_OK,
-};
-use windows_sys::Win32::System::Console::{
-    ClosePseudoConsole, COORD, CreatePseudoConsole, HPCON,
-};
+use windows_sys::Win32::Foundation::{CloseHandle, FALSE, HANDLE, INVALID_HANDLE_VALUE, S_OK};
+use windows_sys::Win32::System::Console::{COORD, ClosePseudoConsole, CreatePseudoConsole, HPCON};
 use windows_sys::Win32::System::Pipes::{CreatePipe, PeekNamedPipe};
 use windows_sys::Win32::System::Threading::{
-    CreateProcessW, DeleteProcThreadAttributeList, GetExitCodeProcess,
-    InitializeProcThreadAttributeList, UpdateProcThreadAttribute,
-    CREATE_UNICODE_ENVIRONMENT, EXTENDED_STARTUPINFO_PRESENT, INFINITE,
-    PROCESS_INFORMATION, STARTUPINFOEXW, WaitForSingleObject,
+    CREATE_UNICODE_ENVIRONMENT, CreateProcessW, DeleteProcThreadAttributeList,
+    EXTENDED_STARTUPINFO_PRESENT, GetExitCodeProcess, INFINITE, InitializeProcThreadAttributeList,
+    PROCESS_INFORMATION, STARTUPINFOEXW, UpdateProcThreadAttribute, WaitForSingleObject,
 };
 
 /// Win32 thread attribute ID for pseudo console.
@@ -123,7 +118,8 @@ impl ConPty {
 
         // Create pipe for receiving output from ConPTY.
         // SAFETY: standard CreatePipe call with valid out params.
-        let ok_out = unsafe { CreatePipe(&raw mut out_read, &raw mut out_write, std::ptr::null(), 0) };
+        let ok_out =
+            unsafe { CreatePipe(&raw mut out_read, &raw mut out_write, std::ptr::null(), 0) };
         if ok_out == 0 {
             // SAFETY: Clean up handle on error.
             unsafe { CloseHandle(in_read) };
@@ -183,7 +179,8 @@ impl ConPty {
         let attr_list = attr_storage.as_mut_ptr().cast();
 
         // SAFETY: attr_list points to allocated buffer of size attr_size.
-        let init_ok = unsafe { InitializeProcThreadAttributeList(attr_list, 1, 0, &raw mut attr_size) };
+        let init_ok =
+            unsafe { InitializeProcThreadAttributeList(attr_list, 1, 0, &raw mut attr_size) };
         if init_ok == 0 {
             return Err(io::Error::last_os_error());
         }
@@ -227,7 +224,8 @@ impl ConPty {
             }
         }
 
-        let mut cmd_line_wide: Vec<u16> = cmd_line.encode_utf16().chain(std::iter::once(0)).collect();
+        let mut cmd_line_wide: Vec<u16> =
+            cmd_line.encode_utf16().chain(std::iter::once(0)).collect();
 
         // Prepare environment block if given
         let env_block: Option<Vec<u16>> = env.map(|vars| {
@@ -240,7 +238,9 @@ impl ConPty {
             block
         });
 
-        let env_ptr = env_block.as_ref().map_or(std::ptr::null(), |b| b.as_ptr().cast());
+        let env_ptr = env_block
+            .as_ref()
+            .map_or(std::ptr::null(), |b| b.as_ptr().cast());
 
         let mut creation_flags = EXTENDED_STARTUPINFO_PRESENT;
         if env.is_some() {

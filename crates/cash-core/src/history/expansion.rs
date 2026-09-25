@@ -142,7 +142,8 @@ fn apply_path_modifier(word: &str, modifier: char) -> String {
                 if pos == 0 {
                     word.chars().take(1).collect()
                 } else {
-                    word.get(..pos).map_or_else(|| word.to_owned(), ToOwned::to_owned)
+                    word.get(..pos)
+                        .map_or_else(|| word.to_owned(), ToOwned::to_owned)
                 }
             } else {
                 word.to_owned()
@@ -151,7 +152,8 @@ fn apply_path_modifier(word: &str, modifier: char) -> String {
         't' => {
             // Tail: strip all leading pathname components (basename)
             if let Some(pos) = word.rfind(['/', '\\']) {
-                word.get(pos + 1..).map_or_else(|| word.to_owned(), ToOwned::to_owned)
+                word.get(pos + 1..)
+                    .map_or_else(|| word.to_owned(), ToOwned::to_owned)
             } else {
                 word.to_owned()
             }
@@ -159,7 +161,8 @@ fn apply_path_modifier(word: &str, modifier: char) -> String {
         'r' => {
             // Root: strip trailing .xxx extension
             if let Some(pos) = word.rfind('.') {
-                word.get(..pos).map_or_else(|| word.to_owned(), ToOwned::to_owned)
+                word.get(..pos)
+                    .map_or_else(|| word.to_owned(), ToOwned::to_owned)
             } else {
                 word.to_owned()
             }
@@ -269,9 +272,8 @@ fn resolve_event_text(
             Ok(item.command_line.clone())
         }
         EventSpec::Offset(n) => {
-            let hist = history.ok_or_else(|| {
-                HistoryExpansionError::EventNotFound(format!("!-{n}"))
-            })?;
+            let hist =
+                history.ok_or_else(|| HistoryExpansionError::EventNotFound(format!("!-{n}")))?;
             if *n == 0 || *n > hist.count() {
                 return Err(HistoryExpansionError::EventNotFound(format!("!-{n}")));
             }
@@ -281,9 +283,8 @@ fn resolve_event_text(
             Ok(item.command_line.clone())
         }
         EventSpec::Absolute(n) => {
-            let hist = history.ok_or_else(|| {
-                HistoryExpansionError::EventNotFound(format!("!{n}"))
-            })?;
+            let hist =
+                history.ok_or_else(|| HistoryExpansionError::EventNotFound(format!("!{n}")))?;
             if *n == 0 || *n > hist.count() {
                 return Err(HistoryExpansionError::EventNotFound(format!("!{n}")));
             }
@@ -293,9 +294,8 @@ fn resolve_event_text(
             Ok(item.command_line.clone())
         }
         EventSpec::Contains(s) => {
-            let hist = history.ok_or_else(|| {
-                HistoryExpansionError::EventNotFound(format!("!?{s}?"))
-            })?;
+            let hist =
+                history.ok_or_else(|| HistoryExpansionError::EventNotFound(format!("!?{s}?")))?;
             for item in hist.iter().collect::<Vec<_>>().into_iter().rev() {
                 if item.command_line.contains(s) {
                     return Ok(item.command_line.clone());
@@ -304,9 +304,8 @@ fn resolve_event_text(
             Err(HistoryExpansionError::EventNotFound(format!("!?{s}?")))
         }
         EventSpec::Prefix(p) => {
-            let hist = history.ok_or_else(|| {
-                HistoryExpansionError::EventNotFound(format!("!{p}"))
-            })?;
+            let hist =
+                history.ok_or_else(|| HistoryExpansionError::EventNotFound(format!("!{p}")))?;
             for item in hist.iter().collect::<Vec<_>>().into_iter().rev() {
                 if item.command_line.starts_with(p) {
                     return Ok(item.command_line.clone());
@@ -444,7 +443,13 @@ pub fn expand_history(
             } else if next_ch == '?' {
                 i += 1;
                 let mut search_str = String::new();
-                while i < len && chars[i] != '?' && chars[i] != ':' && chars[i] != ' ' && chars[i] != '\t' && chars[i] != '\n' {
+                while i < len
+                    && chars[i] != '?'
+                    && chars[i] != ':'
+                    && chars[i] != ' '
+                    && chars[i] != '\t'
+                    && chars[i] != '\n'
+                {
                     search_str.push(chars[i]);
                     i += 1;
                 }
@@ -456,7 +461,13 @@ pub fn expand_history(
                 event_spec = EventSpec::Previous(None);
             } else {
                 let mut prefix = String::new();
-                while i < len && chars[i] != ':' && chars[i] != ' ' && chars[i] != '\t' && chars[i] != '\n' && chars[i] != '"' {
+                while i < len
+                    && chars[i] != ':'
+                    && chars[i] != ' '
+                    && chars[i] != '\t'
+                    && chars[i] != '\n'
+                    && chars[i] != '"'
+                {
                     prefix.push(chars[i]);
                     i += 1;
                 }
@@ -516,14 +527,18 @@ pub fn expand_history(
                             spec_str.push('^');
                             i += 1;
                             if num_words < 2 {
-                                return Err(HistoryExpansionError::BadWordSpecifier(":^".to_owned()));
+                                return Err(HistoryExpansionError::BadWordSpecifier(
+                                    ":^".to_owned(),
+                                ));
                             }
                             selected_text = Some(words[1].clone());
                         } else if chars[i] == '$' {
                             spec_str.push('$');
                             i += 1;
                             if num_words == 0 {
-                                return Err(HistoryExpansionError::BadWordSpecifier(":$".to_owned()));
+                                return Err(HistoryExpansionError::BadWordSpecifier(
+                                    ":$".to_owned(),
+                                ));
                             }
                             selected_text = Some(words[num_words - 1].clone());
                         } else if chars[i] == '*' {
@@ -546,7 +561,9 @@ pub fn expand_history(
                                     i += 1;
                                 }
                                 if y >= num_words {
-                                    return Err(HistoryExpansionError::BadWordSpecifier(format!(":{spec_str}")));
+                                    return Err(HistoryExpansionError::BadWordSpecifier(format!(
+                                        ":{spec_str}"
+                                    )));
                                 }
                                 selected_text = Some(words[0..=y].join(" "));
                             } else if num_words <= 1 {
@@ -574,20 +591,29 @@ pub fn expand_history(
                                         end_idx = end_idx.saturating_mul(10).saturating_add(digit);
                                         i += 1;
                                     }
-                                    if start_idx >= num_words || end_idx >= num_words || start_idx > end_idx {
-                                        return Err(HistoryExpansionError::BadWordSpecifier(format!(":{spec_str}")));
+                                    if start_idx >= num_words
+                                        || end_idx >= num_words
+                                        || start_idx > end_idx
+                                    {
+                                        return Err(HistoryExpansionError::BadWordSpecifier(
+                                            format!(":{spec_str}"),
+                                        ));
                                     }
                                     selected_text = Some(words[start_idx..=end_idx].join(" "));
                                 } else if i < len && chars[i] == '$' {
                                     spec_str.push('$');
                                     i += 1;
                                     if start_idx >= num_words {
-                                        return Err(HistoryExpansionError::BadWordSpecifier(format!(":{spec_str}")));
+                                        return Err(HistoryExpansionError::BadWordSpecifier(
+                                            format!(":{spec_str}"),
+                                        ));
                                     }
                                     selected_text = Some(words[start_idx..].join(" "));
                                 } else {
                                     if num_words <= 1 || start_idx >= num_words - 1 {
-                                        return Err(HistoryExpansionError::BadWordSpecifier(format!(":{spec_str}")));
+                                        return Err(HistoryExpansionError::BadWordSpecifier(
+                                            format!(":{spec_str}"),
+                                        ));
                                     }
                                     selected_text = Some(words[start_idx..num_words - 1].join(" "));
                                 }
@@ -595,12 +621,16 @@ pub fn expand_history(
                                 spec_str.push('*');
                                 i += 1;
                                 if start_idx >= num_words {
-                                    return Err(HistoryExpansionError::BadWordSpecifier(format!(":{spec_str}")));
+                                    return Err(HistoryExpansionError::BadWordSpecifier(format!(
+                                        ":{spec_str}"
+                                    )));
                                 }
                                 selected_text = Some(words[start_idx..].join(" "));
                             } else {
                                 if start_idx >= num_words {
-                                    return Err(HistoryExpansionError::BadWordSpecifier(format!(":{spec_str}")));
+                                    return Err(HistoryExpansionError::BadWordSpecifier(format!(
+                                        ":{spec_str}"
+                                    )));
                                 }
                                 selected_text = Some(words[start_idx].clone());
                             }
@@ -721,7 +751,9 @@ pub fn expand_history(
                     '&' => {
                         if let Some((old_pat, resolved_new)) = &last_subst {
                             if !current_text.contains(old_pat) {
-                                return Err(HistoryExpansionError::SubstitutionFailed(":&".to_owned()));
+                                return Err(HistoryExpansionError::SubstitutionFailed(
+                                    ":&".to_owned(),
+                                ));
                             }
                             if global {
                                 current_text = current_text.replace(old_pat, resolved_new);
@@ -923,6 +955,9 @@ mod tests {
         assert_eq!(err, HistoryExpansionError::BadWordSpecifier("^".to_owned()));
 
         let err2 = expand_history("echo !:5", Some(&hist)).unwrap_err();
-        assert_eq!(err2, HistoryExpansionError::BadWordSpecifier(":5".to_owned()));
+        assert_eq!(
+            err2,
+            HistoryExpansionError::BadWordSpecifier(":5".to_owned())
+        );
     }
 }

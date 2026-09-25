@@ -1,0 +1,14 @@
+root = true
+
+[*]
+end_of_line = lf
+
+[*.{bat,cmd,ps1}]
+end_of_line = crlf
+
+# Preserve fixtures whose literal bytes are under test.
+[tests/fixtures/{crlf,bom}/**]
+end_of_line = unset
+
+[*.{crlf,bom}]
+end_of_line = unset

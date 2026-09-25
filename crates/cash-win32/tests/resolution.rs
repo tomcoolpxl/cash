@@ -135,37 +135,73 @@ fn shebang_resolves_all_common_interpreters() {
     let pe = pathext();
 
     // 1. /bin/sh -> current_exe
-    let (d, args) = cash_win32::resolve::resolve_interpreter("/bin/sh", &[], std::slice::from_ref(&dir), &pe, &dir)
-        .expect("/bin/sh resolves");
+    let (d, args) = cash_win32::resolve::resolve_interpreter(
+        "/bin/sh",
+        &[],
+        std::slice::from_ref(&dir),
+        &pe,
+        &dir,
+    )
+    .expect("/bin/sh resolves");
     assert!(matches!(d, Dispatch::Native(_)));
     assert!(args.is_empty());
 
     // 2. /bin/bash -> current_exe
-    let (d, args) = cash_win32::resolve::resolve_interpreter("/bin/bash", &["-e".to_string()], std::slice::from_ref(&dir), &pe, &dir)
-        .expect("/bin/bash resolves");
+    let (d, args) = cash_win32::resolve::resolve_interpreter(
+        "/bin/bash",
+        &["-e".to_string()],
+        std::slice::from_ref(&dir),
+        &pe,
+        &dir,
+    )
+    .expect("/bin/bash resolves");
     assert!(matches!(d, Dispatch::Native(_)));
     assert_eq!(args, vec!["-e"]);
 
     // 3. /bin/false -> Dispatch::Exit(1)
-    let (d, _) = cash_win32::resolve::resolve_interpreter("/bin/false", &[], std::slice::from_ref(&dir), &pe, &dir)
-        .expect("/bin/false resolves");
+    let (d, _) = cash_win32::resolve::resolve_interpreter(
+        "/bin/false",
+        &[],
+        std::slice::from_ref(&dir),
+        &pe,
+        &dir,
+    )
+    .expect("/bin/false resolves");
     assert_eq!(d, Dispatch::Exit(1));
 
     // 4. /bin/true -> Dispatch::Exit(0)
-    let (d, _) = cash_win32::resolve::resolve_interpreter("/bin/true", &[], std::slice::from_ref(&dir), &pe, &dir)
-        .expect("/bin/true resolves");
+    let (d, _) = cash_win32::resolve::resolve_interpreter(
+        "/bin/true",
+        &[],
+        std::slice::from_ref(&dir),
+        &pe,
+        &dir,
+    )
+    .expect("/bin/true resolves");
     assert_eq!(d, Dispatch::Exit(0));
 
     // 5. /usr/bin/pwsh -> Dispatch::PowerShell
     fs::write(dir.join("pwsh.exe"), b"MZ").unwrap();
-    let (d, _) = cash_win32::resolve::resolve_interpreter("/usr/bin/pwsh", &[], std::slice::from_ref(&dir), &pe, &dir)
-        .expect("/usr/bin/pwsh resolves");
+    let (d, _) = cash_win32::resolve::resolve_interpreter(
+        "/usr/bin/pwsh",
+        &[],
+        std::slice::from_ref(&dir),
+        &pe,
+        &dir,
+    )
+    .expect("/usr/bin/pwsh resolves");
     assert!(matches!(d, Dispatch::PowerShell(_)));
 
     // 6. /usr/bin/env python3 -> resolves to python/python3
     fs::write(dir.join("python.exe"), b"MZ").unwrap();
-    let (d, args) = cash_win32::resolve::resolve_interpreter("/usr/bin/env", &["python3".to_string(), "-u".to_string()], std::slice::from_ref(&dir), &pe, &dir)
-        .expect("/usr/bin/env python3 resolves");
+    let (d, args) = cash_win32::resolve::resolve_interpreter(
+        "/usr/bin/env",
+        &["python3".to_string(), "-u".to_string()],
+        std::slice::from_ref(&dir),
+        &pe,
+        &dir,
+    )
+    .expect("/usr/bin/env python3 resolves");
     assert!(matches!(d, Dispatch::Native(_)));
     assert_eq!(args, vec!["-u"]);
 }
@@ -250,6 +286,14 @@ fn cmd_metacharacters_are_caret_escaped() {
         let escaped = escape_for_cmd(&format!("a{ch}b"));
         assert!(escaped.contains('^'), "{ch} was not escaped: {escaped}");
     }
+}
+
+#[test]
+fn cmd_escaping_keeps_argument_quotes_structural() {
+    assert_eq!(
+        escape_for_cmd(r"C:\Program Files\tool.cmd"),
+        r#""C:\Program Files\tool.cmd""#
+    );
 }
 
 #[test]

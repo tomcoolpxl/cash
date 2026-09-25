@@ -79,6 +79,9 @@ pub struct Shell<SE: extensions::ShellExtensions = extensions::DefaultShellExten
     /// Runtime shell options.
     options: RuntimeOptions,
 
+    /// Set options saved by `local -` for each active function call.
+    local_option_snapshots: Vec<Option<RuntimeOptions>>,
+
     /// State of managed jobs.
     /// TODO(serde): Need to warn somehow that jobs cannot be serialized.
     #[cfg_attr(feature = "serde", serde(skip))]
@@ -133,7 +136,7 @@ pub struct Shell<SE: extensions::ShellExtensions = extensions::DefaultShellExten
     last_stopwatch_time: std::time::SystemTime,
 
     /// Last "SECONDS" offset requested.
-    last_stopwatch_offset: u32,
+    last_stopwatch_offset: i64,
 
     /// Parser implementation to use.
     #[cfg_attr(feature = "serde", serde(skip))]
@@ -157,6 +160,7 @@ impl<SE: extensions::ShellExtensions> Clone for Shell<SE> {
             env: self.env.clone(),
             funcs: self.funcs.clone(),
             options: self.options.clone(),
+            local_option_snapshots: self.local_option_snapshots.clone(),
             // cash: a subshell sees the parent's jobs but cannot manage them, so it gets
             // read-only snapshots rather than an empty table. `$(jobs -p)` is a
             // documented way to collect background pids and was returning nothing.
@@ -435,8 +439,14 @@ impl<SE: extensions::ShellExtensions> ShellState for Shell<SE> {
     }
 
     /// Returns the last "SECONDS" offset requested.
-    pub fn last_stopwatch_offset(&self) -> u32 {
+    pub fn last_stopwatch_offset(&self) -> i64 {
         self.last_stopwatch_offset
+    }
+
+    /// Resets Bash's `SECONDS` stopwatch to the assigned signed value.
+    pub fn set_stopwatch_seconds(&mut self, seconds: i64) {
+        self.last_stopwatch_time = std::time::SystemTime::now();
+        self.last_stopwatch_offset = seconds;
     }
 
     /// Returns the shell environment containing variables.

@@ -180,6 +180,24 @@ fn path_splitting_handles_degenerate_values() {
 }
 
 #[test]
+fn bash_path_splitting_preserves_current_directory_entries() {
+    use cash_win32::env::split_path_preserving_empty;
+
+    assert_eq!(
+        split_path_preserving_empty("").collect::<Vec<_>>(),
+        vec![""]
+    );
+    assert_eq!(
+        split_path_preserving_empty("C:/a;;C:/b;").collect::<Vec<_>>(),
+        vec!["C:/a", "", "C:/b", ""]
+    );
+    assert_eq!(
+        split_path_preserving_empty("/c/a::D:/b").collect::<Vec<_>>(),
+        vec!["/c/a", "", "D:/b"]
+    );
+}
+
+#[test]
 fn path_splitting_keeps_entries_containing_spaces() {
     let value = r"C:\Program Files\Git\bin;C:\tools";
     assert_eq!(

@@ -1,7 +1,7 @@
 use clap::Parser;
 use std::io::Write;
 
-use cash_core::{ExecutionResult, builtins, error, jobs};
+use cash_core::{ExecutionResult, builtins, jobs};
 
 /// Manage jobs.
 #[derive(Parser)]
@@ -34,17 +34,79 @@ pub(crate) struct JobsCommand {
 impl builtins::Command for JobsCommand {
     type Error = cash_core::Error;
 
+    #[expect(clippy::too_many_lines)]
     async fn execute<SE: cash_core::ShellExtensions>(
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<cash_core::ExecutionResult, Self::Error> {
+        context.shell.jobs_mut().refresh_statuses()?;
+
         if self.list_changed_only {
-            return error::unimp("jobs -n");
+            let mut missing = false;
+            let requested_ids = if self.job_specs.is_empty() {
+                None
+            } else {
+                let mut ids = Vec::new();
+                for spec in &self.job_specs {
+                    if let Some(job) = context.shell.jobs_mut().resolve_job_spec(spec) {
+                        ids.push(job.id);
+                    } else {
+                        writeln!(
+                            context.stderr(),
+                            "{}: {spec}: no such job",
+                            context.command_name
+                        )?;
+                        missing = true;
+                    }
+                }
+                Some(ids)
+            };
+
+            let state_filtered_ids = context
+                .shell
+                .jobs()
+                .snapshot()
+                .into_iter()
+                .filter(|snapshot| self.matches_state_filter(&snapshot.state))
+                .filter(|snapshot| {
+                    requested_ids
+                        .as_ref()
+                        .is_none_or(|ids| ids.contains(&snapshot.id))
+                })
+                .map(|snapshot| snapshot.id)
+                .collect::<Vec<_>>();
+            let notification_filter =
+                if self.running_jobs_only || self.stopped_jobs_only || requested_ids.is_some() {
+                    Some(state_filtered_ids.as_slice())
+                } else {
+                    None
+                };
+            let notifications = context
+                .shell
+                .jobs_mut()
+                .take_status_notifications(notification_filter);
+            for snapshot in notifications {
+                self.display_rendered(
+                    &context,
+                    &snapshot.to_string(),
+                    &snapshot.state,
+                    snapshot.pid,
+                )?;
+            }
+            return Ok(if missing {
+                ExecutionResult::general_error()
+            } else {
+                ExecutionResult::success()
+            });
         }
 
+        let mut displayed_ids = Vec::new();
         if self.job_specs.is_empty() {
             // cash: a subshell owns no jobs but can see the parent's (read-only).
             for snapshot in context.shell.jobs().inherited() {
+                if self.matches_state_filter(&snapshot.state) {
+                    displayed_ids.push(snapshot.id);
+                }
                 if self.show_pids_only {
                     if let Some(pid) = snapshot.pid {
                         writeln!(context.stdout(), "{pid}")?;
@@ -69,6 +131,9 @@ impl builtins::Command for JobsCommand {
             }
 
             for job in &context.shell.jobs().jobs {
+                if self.matches_state_filter(&job.state) {
+                    displayed_ids.push(job.id);
+                }
                 self.display_job(&context, job)?;
             }
         } else {
@@ -91,6 +156,9 @@ impl builtins::Command for JobsCommand {
                 let rendered = job.to_string();
                 let state = job.state.clone();
                 let pid = job.representative_pid();
+                if self.matches_state_filter(&state) {
+                    displayed_ids.push(job.id);
+                }
                 self.display_rendered(&context, &rendered, &state, pid)?;
             }
 
@@ -99,11 +167,20 @@ impl builtins::Command for JobsCommand {
             }
         }
 
+        context
+            .shell
+            .jobs_mut()
+            .mark_notifications(Some(&displayed_ids));
         Ok(ExecutionResult::success())
     }
 }
 
 impl JobsCommand {
+    const fn matches_state_filter(&self, state: &jobs::JobState) -> bool {
+        (!self.running_jobs_only || matches!(state, jobs::JobState::Running))
+            && (!self.stopped_jobs_only || matches!(state, jobs::JobState::Stopped))
+    }
+
     fn display_job(
         &self,
         context: &cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,

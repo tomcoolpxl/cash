@@ -67,7 +67,11 @@ pub fn build_command_line(program: &str, args: &[String]) -> String {
 }
 
 /// Characters `cmd.exe` treats specially outside of quotes.
-const CMD_METACHARACTERS: &[char] = &['(', ')', '%', '!', '^', '"', '<', '>', '&', '|'];
+// Quotes are syntax we deliberately add around arguments. Escaping those quotes with a
+// caret makes them literal while `/s /c` is parsing the command, so a batch path such as
+// `C:\Program Files\tool.cmd` is split at its first space. Keep the delimiters intact and
+// escape the actual command metacharacters inside them.
+const CMD_METACHARACTERS: &[char] = &['(', ')', '%', '!', '^', '<', '>', '&', '|'];
 
 /// Encode one argument to survive `cmd.exe`'s parse *and* the callee's (D32).
 ///

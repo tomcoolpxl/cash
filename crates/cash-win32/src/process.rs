@@ -102,6 +102,8 @@ pub struct ProcessInfo {
     /// The parent's process id. Reused by Windows, so it may name a process that has
     /// since exited and been replaced; a listing cannot tell the difference.
     pub parent_pid: u32,
+    /// Windows base scheduling priority for threads created by this process.
+    pub base_priority: i32,
     /// The executable's file name, without a directory.
     pub name: String,
 }
@@ -144,6 +146,7 @@ pub fn list() -> Vec<ProcessInfo> {
         processes.push(ProcessInfo {
             pid: entry.th32ProcessID,
             parent_pid: entry.th32ParentProcessID,
+            base_priority: entry.pcPriClassBase,
             name: exe_name(&entry.szExeFile),
         });
         // SAFETY: as above.
@@ -212,6 +215,9 @@ pub struct ProcessDetails {
     pub cpu: Option<u64>,
     /// Working set in bytes: the closest thing Windows has to `RSS`.
     pub resident: Option<u64>,
+    /// Resident bytes not private to the process, when the host supports the extended
+    /// working-set counter.
+    pub shared_resident: Option<u64>,
     /// Commit charge in bytes: the closest thing Windows has to `VSZ`.
     pub committed: Option<u64>,
 }
@@ -223,7 +229,7 @@ pub struct ProcessDetails {
 #[must_use]
 pub fn details(pid: u32) -> ProcessDetails {
     use windows_sys::Win32::System::ProcessStatus::{
-        K32GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS,
+        K32GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS, PROCESS_MEMORY_COUNTERS_EX2,
     };
 
     let mut details = ProcessDetails::default();
@@ -255,15 +261,40 @@ pub fn details(pid: u32) -> ProcessDetails {
         details.cpu = Some(as_u64(kernel) + as_u64(user));
     }
 
-    // SAFETY: `PROCESS_MEMORY_COUNTERS` is plain old data, and `cb` is set before the
-    // call as the API requires.
-    let mut counters: PROCESS_MEMORY_COUNTERS = unsafe { std::mem::zeroed() };
-    counters.cb = u32::try_from(size_of::<PROCESS_MEMORY_COUNTERS>()).unwrap_or(u32::MAX);
-    // SAFETY: handle is valid, and `counters` is correctly sized.
-    let ok = unsafe { K32GetProcessMemoryInfo(handle, &raw mut counters, counters.cb) };
-    if ok != 0 {
-        details.resident = Some(counters.WorkingSetSize as u64);
-        details.committed = Some(counters.PagefileUsage as u64);
+    // Windows 10 22H2 and newer can give private working-set bytes in the extended
+    // structure. Ask for that first; older supported Windows releases reject its size,
+    // in which case the established base query still supplies RES and VIRT.
+    let mut extended = PROCESS_MEMORY_COUNTERS_EX2 {
+        cb: u32::try_from(size_of::<PROCESS_MEMORY_COUNTERS_EX2>()).unwrap_or(u32::MAX),
+        ..Default::default()
+    };
+    // SAFETY: EX2 begins with the complete base structure and `cb` advertises its size.
+    let extended_ok = unsafe {
+        K32GetProcessMemoryInfo(
+            handle,
+            (&raw mut extended).cast::<PROCESS_MEMORY_COUNTERS>(),
+            extended.cb,
+        )
+    };
+    if extended_ok != 0 {
+        details.resident = Some(extended.WorkingSetSize as u64);
+        details.committed = Some(extended.PrivateUsage as u64);
+        if extended.PrivateWorkingSetSize != 0 {
+            details.shared_resident = Some(
+                (extended.WorkingSetSize as u64)
+                    .saturating_sub(extended.PrivateWorkingSetSize as u64),
+            );
+        }
+    } else {
+        let mut counters = PROCESS_MEMORY_COUNTERS {
+            cb: u32::try_from(size_of::<PROCESS_MEMORY_COUNTERS>()).unwrap_or(u32::MAX),
+            ..Default::default()
+        };
+        // SAFETY: handle is valid, and `counters` is correctly sized.
+        if unsafe { K32GetProcessMemoryInfo(handle, &raw mut counters, counters.cb) } != 0 {
+            details.resident = Some(counters.WorkingSetSize as u64);
+            details.committed = Some(counters.PagefileUsage as u64);
+        }
     }
 
     details.user = token_user(handle);
@@ -397,7 +428,8 @@ pub fn dns_hostname() -> Option<String> {
 
     // SAFETY: the buffer and its length are handed over together, and the call writes at
     // most `size` UTF-16 units into it.
-    let ok = unsafe { GetComputerNameExW(ComputerNameDnsHostname, buffer.as_mut_ptr(), &raw mut size) };
+    let ok =
+        unsafe { GetComputerNameExW(ComputerNameDnsHostname, buffer.as_mut_ptr(), &raw mut size) };
     if ok == 0 {
         return None;
     }
@@ -557,4 +589,3 @@ pub fn resume_process(process: windows_sys::Win32::Foundation::HANDLE) -> std::i
         ))
     }
 }
-

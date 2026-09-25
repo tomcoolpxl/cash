@@ -63,3 +63,16 @@ pub fn split_paths<T: AsRef<std::ffi::OsStr> + ?Sized>(
         .collect::<Vec<_>>()
         .into_iter()
 }
+
+/// Splits a Bash search path, retaining empty entries as the current directory.
+pub fn split_paths_preserving_empty<T: AsRef<std::ffi::OsStr> + ?Sized>(
+    s: &T,
+) -> impl Iterator<Item = std::path::PathBuf> {
+    split_paths(s).map(|entry| {
+        if entry.as_os_str().is_empty() {
+            std::path::PathBuf::from(".")
+        } else {
+            entry
+        }
+    })
+}

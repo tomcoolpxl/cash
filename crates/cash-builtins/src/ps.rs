@@ -13,7 +13,7 @@
 //! is the one D48 prefers: carry the tool.
 //!
 //! What this implements is the subset people actually type — `ps`, `ps -e`, `ps -ef`,
-//! `ps aux` — in the **layouts those spellings mean**. An earlier version accepted all of
+//! `ps -efj`, `ps aux` — in the **layouts those spellings mean**. An earlier version accepted all of
 //! them and then printed the same two homegrown columns for each, so `ps -ef` and
 //! `ps aux` were indistinguishable and neither was what a script parsing `$2` expected.
 //! The column order is the interface here, which is why it is matched rather than
@@ -44,7 +44,11 @@ pub(crate) struct PsCommand {
     #[arg(short = 'f')]
     full: bool,
 
-    /// BSD-style options, accepted as a group: `aux`, `ax`, `ef`.
+    /// Jobs format: add the native parent PID and Windows base priority.
+    #[arg(short = 'j')]
+    jobs: bool,
+
+    /// BSD-style option groups such as `aux`, `ax`, and `j`.
     #[arg(allow_hyphen_values = true)]
     bsd_options: Vec<String>,
 }
@@ -56,6 +60,8 @@ enum Layout {
     Short,
     /// `ps -f`: the System V long format.
     Full,
+    /// `ps -j`: a Windows job-oriented view with native base priority.
+    Jobs,
     /// `ps u`: the BSD user-oriented format, with cpu and memory shares.
     User,
 }
@@ -73,10 +79,11 @@ impl builtins::Command for PsCommand {
         let mut every = self.every;
         let mut full = self.full;
         let mut user = false;
+        let mut jobs = self.jobs;
 
         for option in &self.bsd_options {
             let letters = option.strip_prefix('-').unwrap_or(option);
-            if letters.is_empty() || !letters.chars().all(|c| "aefuxA".contains(c)) {
+            if letters.is_empty() || !letters.chars().all(|c| "aefjuxA".contains(c)) {
                 writeln!(
                     context.stderr(),
                     "{}: unsupported option: {option}",
@@ -88,6 +95,7 @@ impl builtins::Command for PsCommand {
                 match letter {
                     'a' | 'x' | 'e' | 'A' => every = true,
                     'f' => full = true,
+                    'j' => jobs = true,
                     'u' => user = true,
                     _ => (),
                 }
@@ -98,6 +106,8 @@ impl builtins::Command for PsCommand {
         // other; if both arrive, the BSD one wins, as it does in procps.
         let layout = if user {
             Layout::User
+        } else if jobs {
+            Layout::Jobs
         } else if full {
             Layout::Full
         } else {
@@ -141,6 +151,11 @@ fn write_header(out: &mut impl Write, layout: Layout) -> Result<(), cash_core::E
             "{:<12} {:>7} {:>7} {:>2} {:>5} TTY          TIME CMD",
             "UID", "PID", "PPID", "C", "STIME"
         )?,
+        Layout::Jobs => writeln!(
+            out,
+            "{:<12} {:>7} {:>7} {:>3} {:>2} {:>5} TTY          TIME CMD",
+            "UID", "PID", "PPID", "PRI", "C", "STIME"
+        )?,
         Layout::User => writeln!(
             out,
             "{:<12} {:>7} {:>4} {:>4} {:>8} {:>7} TTY      STAT {:>5} {:>6} COMMAND",
@@ -180,6 +195,21 @@ fn write_row(
                 details.user.as_deref().unwrap_or("?"),
                 process.pid,
                 process.parent_pid,
+                whole_percent(cpu_share(&details, now)),
+                start_column(details.started),
+                hours_minutes_seconds(details.cpu.unwrap_or_default()),
+                process.name
+            )?;
+        }
+        Layout::Jobs => {
+            let details = cash_win32::process::details(process.pid);
+            writeln!(
+                out,
+                "{:<12} {:>7} {:>7} {:>3} {:>2} {:>5} ?        {:>8} {}",
+                details.user.as_deref().unwrap_or("?"),
+                process.pid,
+                process.parent_pid,
+                process.base_priority,
                 whole_percent(cpu_share(&details, now)),
                 start_column(details.started),
                 hours_minutes_seconds(details.cpu.unwrap_or_default()),

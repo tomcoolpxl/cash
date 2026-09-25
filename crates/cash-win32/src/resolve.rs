@@ -338,8 +338,7 @@ pub fn resolve_interpreter(
         return Some((dispatch, rest.to_vec()));
     }
 
-    if (interpreter.contains('/') || interpreter.contains('\\'))
-        && Path::new(interpreter).is_file()
+    if (interpreter.contains('/') || interpreter.contains('\\')) && Path::new(interpreter).is_file()
     {
         let dispatch = classify(Path::new(interpreter));
         return Some((dispatch, args.to_vec()));

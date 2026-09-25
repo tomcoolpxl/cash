@@ -2,7 +2,7 @@ use std::io::{Read, Write};
 
 use clap::Parser;
 
-use cash_core::{ErrorKind, ExecutionExitCode, ExecutionResult, builtins, env, error, variables};
+use cash_core::{ErrorKind, ExecutionExitCode, ExecutionResult, builtins, env, escape, variables};
 
 /// Read lines from standard input into an indexed array variable.
 #[derive(Parser)]
@@ -51,10 +51,6 @@ impl builtins::Command for MapFileCommand {
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<cash_core::ExecutionResult, Self::Error> {
-        if self.callback_group_size != 5000 || self.callback.is_some() {
-            return error::unimp("mapfile -C/-c is not yet implemented");
-        }
-
         if let Some(origin) = self.origin {
             if origin < 0 {
                 writeln!(
@@ -82,47 +78,31 @@ impl builtins::Command for MapFileCommand {
             .try_fd(self.fd)
             .ok_or_else(|| ErrorKind::BadFileDescriptor(self.fd))?;
 
-        // Read!
-        let results = self.read_entries(input_file)?;
-
-        if let Some(origin) = self.origin {
-            // -O: preserve existing array, assign at offset.
-            for (elem_idx, (_key, value)) in results.0.into_iter().enumerate() {
-                // If the user is getting to wraparounds in *bash*, they got bigger problems.
-                #[allow(clippy::cast_possible_wrap)]
-                let elem_idx = elem_idx as i64;
-                context.shell.env_mut().update_or_add_array_element(
-                    &self.array_var_name,
-                    (elem_idx + origin).to_string(),
-                    value,
-                    |_| Ok(()),
-                    env::EnvironmentLookup::Anywhere,
-                    env::EnvironmentScope::Global,
-                )?;
-            }
-        } else {
-            // No -O: replace the entire variable (clears existing).
+        if self.origin.is_none() {
             context.shell.env_mut().update_or_add(
                 &self.array_var_name,
-                variables::ShellValueLiteral::Array(results),
+                variables::ShellValueLiteral::Array(variables::ArrayLiteral(Vec::new())),
                 |_| Ok(()),
                 env::EnvironmentLookup::Anywhere,
                 env::EnvironmentScope::Global,
             )?;
         }
 
+        self.read_entries(input_file, context).await?;
+
         Ok(ExecutionResult::success())
     }
 }
 
 impl MapFileCommand {
-    fn read_entries(
+    async fn read_entries<SE: cash_core::ShellExtensions>(
         &self,
         mut input_file: cash_core::openfiles::OpenFile,
-    ) -> Result<variables::ArrayLiteral, cash_core::Error> {
+        context: cash_core::ExecutionContext<'_, SE>,
+    ) -> Result<(), cash_core::Error> {
         let _term_mode = setup_terminal_settings(&input_file)?;
 
-        let mut entries = vec![];
+        let mut stored = 0usize;
         let mut read_count = 0;
         let max_count = self.max_count.try_into()?;
         let delimiter = match &self.delimiter {
@@ -133,7 +113,7 @@ impl MapFileCommand {
 
         let mut buf = [0u8; 1];
 
-        while max_count == 0 || entries.len() < max_count {
+        while max_count == 0 || stored < max_count {
             let mut line = vec![];
             let mut saw_delimiter = false;
 
@@ -170,10 +150,29 @@ impl MapFileCommand {
 
             let line_str = String::from_utf8_lossy(&line).to_string();
 
-            entries.push((None, line_str));
+            let index = i64::try_from(stored)?.saturating_add(self.origin.unwrap_or(0));
+            if let Some(callback) = &self.callback
+                && (stored + 1).is_multiple_of(usize::try_from(self.callback_group_size)?)
+            {
+                let script = std::format!("{callback} {index} {}", escape::single_quote(&line_str));
+                let source = cash_core::SourceInfo::from("mapfile callback");
+                context
+                    .shell
+                    .run_string(script, &source, &context.params)
+                    .await?;
+            }
+            context.shell.env_mut().update_or_add_array_element(
+                &self.array_var_name,
+                index.to_string(),
+                line_str,
+                |_| Ok(()),
+                env::EnvironmentLookup::Anywhere,
+                env::EnvironmentScope::Global,
+            )?;
+            stored += 1;
         }
 
-        Ok(variables::ArrayLiteral(entries))
+        Ok(())
     }
 }
 

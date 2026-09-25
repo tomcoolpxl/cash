@@ -364,14 +364,12 @@ async fn spawn_async_ao_list_in_task<'a, SE: extensions::ShellExtensions>(
         }
     };
 
-    Some(shell.jobs_mut().add_as_current(
-        jobs::Job::new(
-            [task],
-            ao_list.to_string(),
-            jobs::JobState::Running,
-        )
-        .with_spawned_pids(pid_sink),
-    ))
+    Some(
+        shell.jobs_mut().add_as_current(
+            jobs::Job::new([task], ao_list.to_string(), jobs::JobState::Running)
+                .with_spawned_pids(pid_sink),
+        ),
+    )
 }
 
 #[async_trait::async_trait]
@@ -743,7 +741,9 @@ async fn spawn_or_run_in_pipeline<SE: extensions::ShellExtensions>(
                     params.stderr(&target),
                     "cash: fork: retry: Resource temporarily unavailable"
                 );
-                return Ok(ExecutionSpawnResult::Completed(ExecutionResult::general_error()));
+                return Ok(ExecutionSpawnResult::Completed(
+                    ExecutionResult::general_error(),
+                ));
             };
             let mut shell = *target;
             let join_handle = tokio::task::spawn_blocking(move || {
@@ -1369,6 +1369,17 @@ impl<SE: extensions::ShellExtensions> ExecuteInPipeline<SE> for ast::SimpleComma
         mut context: PipelineExecutionContext<'_, SE>,
         mut params: ExecutionParameters,
     ) -> Result<ExecutionSpawnResult, error::Error> {
+        // Bash exposes the command currently being expanded, including its original
+        // quoting, through BASH_COMMAND. This must happen before argument expansion so
+        // the command itself and a DEBUG trap both observe the current command.
+        context.shell.env_mut().update_or_add(
+            "BASH_COMMAND",
+            ShellValueLiteral::Scalar(self.to_string()),
+            |_| Ok(()),
+            EnvironmentLookup::Anywhere,
+            EnvironmentScope::Global,
+        )?;
+
         let prefix_iter = self.prefix.as_ref().map(|s| s.0.iter()).unwrap_or_default();
         let suffix_iter = self.suffix.as_ref().map(|s| s.0.iter()).unwrap_or_default();
         let cmd_name_items = self
@@ -1856,6 +1867,30 @@ async fn apply_assignment(
                 }
             }
         }
+    }
+
+    // SECONDS is a live stopwatch rather than a stored scalar. Assignment resets its
+    // baseline, including Bash's supported negative values; `+=` starts from the value
+    // observed at the instant of assignment.
+    if variable_name == "SECONDS"
+        && array_index.is_none()
+        && let ShellValueLiteral::Scalar(value) = &new_value
+    {
+        let assigned = value.parse::<i64>().unwrap_or(0);
+        let assigned = if assignment.append {
+            shell
+                .env_str("SECONDS")
+                .and_then(|current| current.parse::<i64>().ok())
+                .unwrap_or(0)
+                .saturating_add(assigned)
+        } else {
+            assigned
+        };
+        shell.set_stopwatch_seconds(assigned);
+        if export && let Some((_, seconds)) = shell.env_mut().get_mut("SECONDS") {
+            seconds.export();
+        }
+        return Ok(());
     }
 
     // See if we can find an existing value associated with the variable.
@@ -2359,7 +2394,8 @@ async fn setup_process_substitution_win(
     if requires_seekable_file && matches!(kind, ast::ProcessSubstitutionKind::Read) {
         static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let n = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let path = std::env::temp_dir().join(format!("cash-procsub-seek-{}-{n}", std::process::id()));
+        let path =
+            std::env::temp_dir().join(format!("cash-procsub-seek-{}-{n}", std::process::id()));
 
         child_params.open_files.set_fd(
             OpenFiles::STDOUT_FD,

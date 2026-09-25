@@ -23,9 +23,6 @@ use std::io::{IsTerminal, Write};
 use cash_core::{ExecutionResult, builtins};
 use clap::Parser;
 
-/// One mebibyte, for reporting memory the way every one of these tools reports it.
-const MIB: u64 = 1024 * 1024;
-
 /// Show what this machine is.
 #[derive(Parser)]
 pub(crate) struct CoolfetchCommand {
@@ -156,35 +153,36 @@ fn collect<SE: cash_core::ShellExtensions>(
     let cpu = cash_win32::sysinfo::cpu_name().unwrap_or_else(|| String::from("?"));
     let cores = std::thread::available_parallelism().map_or(0, std::num::NonZero::get);
     facts.push((String::from("CPU"), std::format!("{cpu} ({cores})")));
+    for gpu in cash_win32::sysinfo::gpu_names() {
+        facts.push((String::from("GPU"), gpu));
+    }
 
     if let (Some(total), Some(available)) = (
         cash_win32::process::total_physical_memory(),
         cash_win32::process::available_physical_memory(),
     ) {
-        facts.push((
-            String::from("Memory"),
-            std::format!(
-                "{}MiB / {}MiB",
-                total.saturating_sub(available) / MIB,
-                total / MIB
-            ),
-        ));
+        facts.push((String::from("Memory"), format_usage(total, available)));
     }
 
-    let here = context.shell.working_dir();
-    if let Some((total, free)) = cash_win32::sysinfo::disk_usage(here) {
-        let root = here.components().next().map_or_else(
-            || String::from("disk"),
-            |c| c.as_os_str().to_string_lossy().to_string(),
-        );
-        facts.push((
-            std::format!("Disk ({root})"),
-            std::format!(
-                "{}G / {}G",
-                total.saturating_sub(free) / (1024 * MIB),
-                total / (1024 * MIB)
-            ),
-        ));
+    for drive in cash_win32::sysinfo::logical_drives() {
+        // Query the root, not `D:`, which means that drive's current directory.
+        let root = std::path::PathBuf::from(std::format!("{drive}/"));
+        if cash_win32::sysinfo::is_network_drive(&root) {
+            facts.push((
+                std::format!("Disk ({drive})"),
+                String::from("Network drive"),
+            ));
+            continue;
+        }
+        let Some((total, free)) = cash_win32::sysinfo::disk_usage(&root) else {
+            continue;
+        };
+        facts.push((std::format!("Disk ({drive})"), format_usage(total, free)));
+    }
+
+    let addresses = cash_win32::sysinfo::local_ipv4_addresses();
+    if !addresses.is_empty() {
+        facts.push((String::from("Local IP"), addresses.join(", ")));
     }
 
     facts.push((
@@ -193,6 +191,37 @@ fn collect<SE: cash_core::ShellExtensions>(
     ));
 
     facts
+}
+
+/// Format existing counters without sampling or additional system queries.
+fn format_usage(total: u64, free: u64) -> String {
+    let used = total.saturating_sub(free);
+    let percent = if total == 0 {
+        0
+    } else {
+        (u128::from(used) * 100 + u128::from(total) / 2) / u128::from(total)
+    };
+    std::format!(
+        "{} / {} ({percent}%)",
+        format_bytes(used),
+        format_bytes(total)
+    )
+}
+
+fn format_bytes(bytes: u64) -> String {
+    let (scale, unit) = if bytes >= 1 << 40 {
+        (1u64 << 40, "TiB")
+    } else if bytes >= 1 << 30 {
+        (1 << 30, "GiB")
+    } else if bytes >= 1 << 20 {
+        (1 << 20, "MiB")
+    } else if bytes >= 1 << 10 {
+        (1 << 10, "KiB")
+    } else {
+        return std::format!("{bytes} B");
+    };
+    let hundredths = (u128::from(bytes) * 100 + u128::from(scale) / 2) / u128::from(scale);
+    std::format!("{}.{:02} {unit}", hundredths / 100, hundredths % 100)
 }
 
 /// Windows Terminal, the classic console, or whatever said so.
@@ -219,9 +248,10 @@ fn terminal_name<SE: cash_core::ShellExtensions>(
 
 /// The shell's name without the extension Windows adds, as `\s` reports it.
 fn trim_exe(name: &str) -> String {
-    let base = std::path::Path::new(name)
-        .file_name()
-        .map_or_else(|| name.to_string(), |part| part.to_string_lossy().to_string());
+    let base = std::path::Path::new(name).file_name().map_or_else(
+        || name.to_string(),
+        |part| part.to_string_lossy().to_string(),
+    );
 
     base.strip_suffix(".exe")
         .or_else(|| base.strip_suffix(".EXE"))

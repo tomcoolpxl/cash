@@ -1,9 +1,10 @@
-use clap::Parser;
+use clap::{CommandFactory as _, FromArgMatches as _, Parser};
 use itertools::Itertools;
+use std::borrow::Cow;
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
-use cash_core::{ErrorKind, builtins, env, error, variables};
+use cash_core::{ErrorKind, builtins, env, variables};
 
 use std::io::{Read, Write};
 use utf8_chars::BufReadCharsExt;
@@ -39,6 +40,13 @@ pub(crate) struct ReadCommand {
     #[clap(short = 'e')]
     use_readline: bool,
 
+    /// Use readline-like input with Bash completion.
+    ///
+    /// Cash's compact editor does not yet provide completion, so `-E` currently
+    /// differs from `-e` only in accepting Bash's documented spelling.
+    #[clap(short = 'E')]
+    use_readline_with_bash_completion: bool,
+
     /// Provide text to use as initial input for readline.
     #[clap(short = 'i', value_name = "STR")]
     initial_text: Option<String>,
@@ -46,11 +54,20 @@ pub(crate) struct ReadCommand {
     /// Read only the first N characters or until a specified
     /// delimiter is reached, whichever happens first.
     #[clap(short = 'n', value_name = "COUNT")]
-    return_after_n_chars: Option<usize>,
+    return_after_n_chars: Vec<usize>,
 
     /// Read exactly N characters, ignoring any specified delimiter.
     #[clap(short = 'N', value_name = "COUNT")]
-    return_after_n_chars_no_delimiter: Option<usize>,
+    return_after_n_chars_no_delimiter: Vec<usize>,
+
+    /// Last `-n`/`-N` value in command-line order, populated by `Command::new`.
+    #[clap(skip)]
+    ordered_char_limit: Option<usize>,
+
+    /// Whether any `-N` occurred. Bash keeps delimiter suppression enabled even
+    /// when a later `-n` replaces the count.
+    #[clap(skip)]
+    saw_capital_n: bool,
 
     /// Prompt to display before reading.
     #[clap(short = 'p')]
@@ -80,17 +97,34 @@ pub(crate) struct ReadCommand {
 impl builtins::Command for ReadCommand {
     type Error = cash_core::Error;
 
+    fn new<I>(args: I) -> Result<Self, clap::Error>
+    where
+        I: IntoIterator<Item = String>,
+    {
+        let matches = Self::command().try_get_matches_from(args)?;
+        let lower_n = last_indexed_value(&matches, "return_after_n_chars");
+        let capital_n = last_indexed_value(&matches, "return_after_n_chars_no_delimiter");
+        let ordered_char_limit = match (lower_n, capital_n) {
+            (Some(lower), Some(capital)) => Some(if lower.0 > capital.0 {
+                lower.1
+            } else {
+                capital.1
+            }),
+            (Some(lower), None) => Some(lower.1),
+            (None, Some(capital)) => Some(capital.1),
+            (None, None) => None,
+        };
+        let saw_capital_n = capital_n.is_some();
+        let mut command = Self::from_arg_matches(&matches)?;
+        command.ordered_char_limit = ordered_char_limit;
+        command.saw_capital_n = saw_capital_n;
+        Ok(command)
+    }
+
     async fn execute<SE: cash_core::ShellExtensions>(
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<cash_core::ExecutionResult, Self::Error> {
-        if self.use_readline {
-            return error::unimp("read -e");
-        }
-        if self.initial_text.is_some() {
-            return error::unimp("read -i");
-        }
-
         // Validate timeout value if provided.
         if let Some(result) = self.validate_timeout(&context)? {
             return Ok(result);
@@ -112,14 +146,23 @@ impl builtins::Command for ReadCommand {
         // needed for variable assignment.
         let ifs = context.shell.ifs().into_owned();
 
-        // Convert timeout to Duration.
-        let timeout = self.timeout_in_seconds.map(Duration::from_secs_f64);
+        // An explicit -t wins. Otherwise Bash uses a positive, valid TMOUT value;
+        // invalid or zero TMOUT values simply mean no default timeout.
+        let timeout_seconds = self.timeout_in_seconds.or_else(|| {
+            context
+                .shell
+                .env()
+                .get_str("TMOUT", context.shell)
+                .and_then(|value| value.parse::<f64>().ok())
+                .filter(|value| value.is_finite() && *value > 0.0)
+        });
+        let timeout = timeout_seconds.map(Duration::from_secs_f64);
 
         // Perform the read operation (potentially with timeout).
         let read_result = self.read_line(input_stream, context.stderr(), timeout)?;
 
         // Determine whether to skip IFS splitting (for -N option).
-        let skip_ifs_splitting = self.return_after_n_chars_no_delimiter.is_some();
+        let skip_ifs_splitting = self.ignores_delimiter();
 
         // Extract the input line and determine exit code based on result.
         let (input_line, result) = match &read_result {
@@ -128,7 +171,11 @@ impl builtins::Command for ReadCommand {
                 Some(line.clone()),
                 cash_core::ExecutionResult::general_error(),
             ),
-            ReadResult::Eof(None) | ReadResult::Interrupted | ReadResult::InputNotReady => {
+            ReadResult::Interrupted => (
+                None,
+                cash_core::ExecutionResult::from(cash_core::ExecutionExitCode::Interrupted),
+            ),
+            ReadResult::Eof(None) | ReadResult::InputNotReady => {
                 (None, cash_core::ExecutionResult::general_error())
             }
             ReadResult::TimedOut(partial) => (
@@ -137,6 +184,23 @@ impl builtins::Command for ReadCommand {
             ),
             ReadResult::InputReady => (None, cash_core::ExecutionResult::success()),
         };
+
+        // Bash consumes the record before diagnosing that `read -a` cannot replace an
+        // associative array. Preserve the old array and return failure after the read.
+        if let Some(array_variable) = &self.array_variable
+            && context
+                .shell
+                .env()
+                .get(array_variable)
+                .is_some_and(|(_, var)| var.value().is_associative_array())
+        {
+            writeln!(
+                context.stderr(),
+                "{}: {array_variable}: not an indexed array",
+                context.command_name
+            )?;
+            return Ok(cash_core::ExecutionResult::general_error());
+        }
 
         // Assign input to variables based on options.
         assign_input_to_variables(
@@ -216,19 +280,55 @@ fn assign_to_named_variables(
             fields.pop_front().unwrap_or_default()
         };
 
-        shell.env_mut().update_or_add(
-            name,
-            variables::ShellValueLiteral::Scalar(value),
-            |_| Ok(()),
-            env::EnvironmentLookup::Anywhere,
-            env::EnvironmentScope::Global,
-        )?;
+        assign_read_value(shell, name, value)?;
 
         if is_last {
             break;
         }
     }
     Ok(())
+}
+
+/// Assign one `read` result, including Bash's `read 'array[subscript]'` form.
+fn assign_read_value(
+    shell: &mut cash_core::Shell<impl cash_core::ShellExtensions>,
+    target: &str,
+    value: String,
+) -> Result<(), cash_core::Error> {
+    match cash_parser::word::parse_parameter(target, &shell.parser_options())? {
+        cash_parser::word::Parameter::Named(name) => shell.env_mut().update_or_add(
+            name,
+            variables::ShellValueLiteral::Scalar(value),
+            |_| Ok(()),
+            env::EnvironmentLookup::Anywhere,
+            env::EnvironmentScope::Global,
+        ),
+        cash_parser::word::Parameter::NamedWithIndex { name, index } => {
+            let is_associative = shell
+                .env()
+                .get(&name)
+                .is_some_and(|(_, var)| var.value().is_associative_array());
+            let index: Cow<'_, str> = if is_associative {
+                index.as_str().into()
+            } else {
+                let expression = cash_parser::arithmetic::parse(&index)?;
+                shell.eval_arithmetic(&expression)?.to_string().into()
+            };
+            shell.env_mut().update_or_add_array_element(
+                name,
+                index.into_owned(),
+                value,
+                |_| Ok(()),
+                env::EnvironmentLookup::Anywhere,
+                env::EnvironmentScope::Global,
+            )
+        }
+        cash_parser::word::Parameter::Positional(_)
+        | cash_parser::word::Parameter::Special(_)
+        | cash_parser::word::Parameter::NamedWithAllIndices { .. } => {
+            Err(ErrorKind::CannotAssignToSpecialParameter.into())
+        }
+    }
 }
 
 /// Builds array field values from input, optionally splitting by IFS.
@@ -295,6 +395,8 @@ struct InputReader {
     input: std::io::BufReader<PolledInput>,
     /// Bytes from a malformed UTF-8 sequence, still owed to the caller one at a time.
     pending: VecDeque<char>,
+    /// Whether control bytes should have terminal meanings instead of being data.
+    input_is_terminal: bool,
     /// Terminal mode guard - kept alive for RAII cleanup on drop.
     /// The guard restores original terminal settings when dropped, even though
     /// we don't access the field directly after construction.
@@ -318,6 +420,27 @@ enum InputEvent {
     CtrlD,
 }
 
+/// A key understood by the small Readline-compatible editor used by `read -e`.
+enum EditingKey {
+    Char(char),
+    Enter,
+    Backspace,
+    Delete,
+    Left,
+    Right,
+    Home,
+    End,
+    KillBefore,
+    KillAfter,
+    KillWordBefore,
+    #[cfg(not(windows))]
+    Eof,
+    CtrlD,
+    Timeout,
+    Interrupt,
+    Ignore,
+}
+
 impl InputReader {
     /// Creates a new input reader with optional timeout.
     fn new(
@@ -325,6 +448,7 @@ impl InputReader {
         timeout: Option<Duration>,
         term_mode: Option<cash_core::terminal::AutoModeGuard>,
     ) -> Self {
+        let input_is_terminal = input.is_terminal();
         Self {
             input: std::io::BufReader::with_capacity(
                 1,
@@ -334,6 +458,7 @@ impl InputReader {
                 },
             ),
             pending: VecDeque::new(),
+            input_is_terminal,
             _term_mode: term_mode,
         }
     }
@@ -375,9 +500,134 @@ impl InputReader {
 
         // Map control characters to events.
         Ok(match ch {
-            CTRL_C => InputEvent::CtrlC,
-            CTRL_D => InputEvent::CtrlD,
+            CTRL_C if self.input_is_terminal => InputEvent::CtrlC,
+            CTRL_D if self.input_is_terminal => InputEvent::CtrlD,
             _ => InputEvent::Char(ch),
+        })
+    }
+
+    /// Decode native Windows console key events. Crossterm enables this code to see
+    /// navigation keys before the console's cooked input layer consumes them.
+    #[cfg(windows)]
+    #[expect(
+        clippy::needless_pass_by_ref_mut,
+        reason = "the Unix implementation consumes buffered bytes through the same API"
+    )]
+    fn read_editing_key(&mut self) -> Result<EditingKey, cash_core::Error> {
+        use crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers};
+
+        loop {
+            let event_available = if let Some(deadline) = self.input.get_ref().deadline {
+                let remaining = deadline.saturating_duration_since(Instant::now());
+                !remaining.is_zero() && crossterm::event::poll(remaining)?
+            } else {
+                true
+            };
+            if !event_available {
+                return Ok(EditingKey::Timeout);
+            }
+
+            let event = crossterm::event::read()?;
+            let Event::Key(event) = event else {
+                continue;
+            };
+            if !matches!(event.kind, KeyEventKind::Press | KeyEventKind::Repeat) {
+                continue;
+            }
+
+            return Ok(match (event.modifiers, event.code) {
+                (modifiers, KeyCode::Char('c')) if modifiers.contains(KeyModifiers::CONTROL) => {
+                    EditingKey::Interrupt
+                }
+                (modifiers, KeyCode::Char('d')) if modifiers.contains(KeyModifiers::CONTROL) => {
+                    EditingKey::CtrlD
+                }
+                (modifiers, KeyCode::Char('a')) if modifiers.contains(KeyModifiers::CONTROL) => {
+                    EditingKey::Home
+                }
+                (modifiers, KeyCode::Char('e')) if modifiers.contains(KeyModifiers::CONTROL) => {
+                    EditingKey::End
+                }
+                (modifiers, KeyCode::Char('k')) if modifiers.contains(KeyModifiers::CONTROL) => {
+                    EditingKey::KillAfter
+                }
+                (modifiers, KeyCode::Char('u')) if modifiers.contains(KeyModifiers::CONTROL) => {
+                    EditingKey::KillBefore
+                }
+                (modifiers, KeyCode::Char('w')) if modifiers.contains(KeyModifiers::CONTROL) => {
+                    EditingKey::KillWordBefore
+                }
+                (_, KeyCode::Enter) => EditingKey::Enter,
+                (_, KeyCode::Backspace) => EditingKey::Backspace,
+                (_, KeyCode::Delete) => EditingKey::Delete,
+                (_, KeyCode::Left) => EditingKey::Left,
+                (_, KeyCode::Right) => EditingKey::Right,
+                (_, KeyCode::Home) => EditingKey::Home,
+                (_, KeyCode::End) => EditingKey::End,
+                (KeyModifiers::NONE | KeyModifiers::SHIFT, KeyCode::Char(ch)) => {
+                    EditingKey::Char(ch)
+                }
+                _ => EditingKey::Ignore,
+            });
+        }
+    }
+
+    /// Decode the common ANSI and control-key sequences emitted by Unix terminals.
+    #[cfg(not(windows))]
+    fn read_editing_key(&mut self) -> Result<EditingKey, cash_core::Error> {
+        let event = self.read_event()?;
+        Ok(match event {
+            InputEvent::Eof => EditingKey::Eof,
+            InputEvent::Timeout => EditingKey::Timeout,
+            InputEvent::CtrlC => EditingKey::Interrupt,
+            InputEvent::CtrlD => EditingKey::CtrlD,
+            InputEvent::Char('\r' | '\n') => EditingKey::Enter,
+            InputEvent::Char('\x08' | '\x7f') => EditingKey::Backspace,
+            InputEvent::Char('\x01') => EditingKey::Home,
+            InputEvent::Char('\x05') => EditingKey::End,
+            InputEvent::Char('\x0b') => EditingKey::KillAfter,
+            InputEvent::Char('\x15') => EditingKey::KillBefore,
+            InputEvent::Char('\x17') => EditingKey::KillWordBefore,
+            InputEvent::Char('\x1b') => self.read_escape_sequence()?,
+            InputEvent::Char(ch) if ch.is_ascii_control() => EditingKey::Ignore,
+            InputEvent::Char(ch) => EditingKey::Char(ch),
+        })
+    }
+
+    #[cfg(not(windows))]
+    fn read_escape_sequence(&mut self) -> Result<EditingKey, cash_core::Error> {
+        let InputEvent::Char(prefix) = self.read_event()? else {
+            return Ok(EditingKey::Ignore);
+        };
+        if prefix != '[' && prefix != 'O' {
+            return Ok(EditingKey::Ignore);
+        }
+
+        let InputEvent::Char(code) = self.read_event()? else {
+            return Ok(EditingKey::Ignore);
+        };
+        Ok(match code {
+            'A' | 'B' => EditingKey::Ignore,
+            'C' => EditingKey::Right,
+            'D' => EditingKey::Left,
+            'H' => EditingKey::Home,
+            'F' => EditingKey::End,
+            '1' | '3' | '4' | '7' | '8' => {
+                let InputEvent::Char(terminator) = self.read_event()? else {
+                    return Ok(EditingKey::Ignore);
+                };
+                if terminator != '~' {
+                    EditingKey::Ignore
+                } else {
+                    match code {
+                        '1' | '7' => EditingKey::Home,
+                        '3' => EditingKey::Delete,
+                        '4' | '8' => EditingKey::End,
+                        _ => EditingKey::Ignore,
+                    }
+                }
+            }
+            _ => EditingKey::Ignore,
         })
     }
 }
@@ -482,11 +732,10 @@ fn read_line_with_reader(
                     if pending_backslash {
                         pending_backslash = false;
 
-                        // Backslash-delimiter is line continuation.
-                        if let Some(delim) = config.delimiter
-                            && ch == delim
-                        {
-                            continue; // Line continuation.
+                        // Bash removes backslash-newline and backslash-NUL pairs.
+                        // Other escaped delimiters are retained as literal data.
+                        if ch == DEFAULT_DELIMITER || ch == NUL_DELIMITER {
+                            continue;
                         }
 
                         // For other chars, add char literally (backslash consumed).
@@ -528,8 +777,9 @@ fn read_line_with_reader(
                     return Ok(ReadResult::Line(line));
                 }
 
-                // Ignore non-whitespace control characters.
-                if ch.is_ascii_control() && !ch.is_ascii_whitespace() {
+                // Bash discards NUL unless it is the requested delimiter. Other
+                // control bytes from redirected input are ordinary data.
+                if ch == NUL_DELIMITER && config.delimiter != Some(NUL_DELIMITER) {
                     continue;
                 }
 
@@ -547,6 +797,295 @@ fn read_line_with_reader(
     }
 }
 
+/// Read a line with the editing behavior users expect from `read -e`.
+///
+/// This intentionally implements the portable, high-value part of Readline rather
+/// than importing the interactive shell editor into the builtin layer. Unix uses ANSI
+/// key sequences; Windows uses native console events through crossterm.
+#[expect(
+    clippy::too_many_lines,
+    reason = "the exhaustive key dispatch is clearer when kept in one editor loop"
+)]
+fn read_line_with_editor(
+    reader: &mut InputReader,
+    config: &LineReaderConfig,
+    prompt: &str,
+    initial_text: &str,
+    silent: bool,
+    output: &mut impl Write,
+) -> Result<ReadResult, cash_core::Error> {
+    let _editor_mode = EditorModeGuard::new()?;
+    let mut committed = String::new();
+    let mut line: Vec<char> = initial_text.chars().collect();
+    let mut cursor = line.len();
+
+    if !silent && !line.is_empty() {
+        write!(output, "{}", line.iter().collect::<String>())?;
+        output.flush()?;
+    }
+
+    loop {
+        match reader.read_editing_key()? {
+            #[cfg(not(windows))]
+            EditingKey::Eof => {
+                finish_editor_output(output)?;
+                committed.push_str(&edited_line(&line, config));
+                return Ok(ReadResult::Eof(
+                    (!committed.is_empty()).then_some(committed),
+                ));
+            }
+            EditingKey::Timeout => {
+                finish_editor_output(output)?;
+                committed.push_str(&edited_line(&line, config));
+                return Ok(ReadResult::TimedOut(
+                    (!committed.is_empty()).then_some(committed),
+                ));
+            }
+            EditingKey::Interrupt => {
+                if !silent {
+                    write!(output, "^C")?;
+                }
+                finish_editor_output(output)?;
+                return Ok(ReadResult::Interrupted);
+            }
+            EditingKey::Enter => {
+                if config.delimiter != Some(DEFAULT_DELIMITER) {
+                    line.insert(cursor, DEFAULT_DELIMITER);
+                    cursor += 1;
+                    repaint_editor(output, prompt, &line, cursor, silent)?;
+                    if editor_limit_reached(&committed, &line, config) {
+                        committed.push_str(&edited_line(&line, config));
+                        finish_editor_output(output)?;
+                        return Ok(ReadResult::Line(committed));
+                    }
+                } else if accept_editor_segment(
+                    &mut committed,
+                    &mut line,
+                    &mut cursor,
+                    DEFAULT_DELIMITER,
+                    config,
+                    prompt,
+                    silent,
+                    output,
+                )? {
+                    return Ok(ReadResult::Line(committed));
+                }
+            }
+            EditingKey::CtrlD => {
+                if line.is_empty() {
+                    finish_editor_output(output)?;
+                    return Ok(ReadResult::Eof(
+                        (!committed.is_empty()).then_some(committed),
+                    ));
+                }
+                if cursor < line.len() {
+                    line.remove(cursor);
+                    repaint_editor(output, prompt, &line, cursor, silent)?;
+                }
+            }
+            EditingKey::Char(ch) => {
+                if config.delimiter == Some(ch) {
+                    if accept_editor_segment(
+                        &mut committed,
+                        &mut line,
+                        &mut cursor,
+                        ch,
+                        config,
+                        prompt,
+                        silent,
+                        output,
+                    )? {
+                        return Ok(ReadResult::Line(committed));
+                    }
+                    continue;
+                }
+                line.insert(cursor, ch);
+                cursor += 1;
+                repaint_editor(output, prompt, &line, cursor, silent)?;
+
+                if editor_limit_reached(&committed, &line, config) {
+                    committed.push_str(&edited_line(&line, config));
+                    finish_editor_output(output)?;
+                    return Ok(ReadResult::Line(committed));
+                }
+            }
+            EditingKey::Backspace if cursor > 0 => {
+                cursor -= 1;
+                line.remove(cursor);
+                repaint_editor(output, prompt, &line, cursor, silent)?;
+            }
+            EditingKey::Delete if cursor < line.len() => {
+                line.remove(cursor);
+                repaint_editor(output, prompt, &line, cursor, silent)?;
+            }
+            EditingKey::Left if cursor > 0 => {
+                cursor -= 1;
+                repaint_editor(output, prompt, &line, cursor, silent)?;
+            }
+            EditingKey::Right if cursor < line.len() => {
+                cursor += 1;
+                repaint_editor(output, prompt, &line, cursor, silent)?;
+            }
+            EditingKey::Home => {
+                cursor = 0;
+                repaint_editor(output, prompt, &line, cursor, silent)?;
+            }
+            EditingKey::End => {
+                cursor = line.len();
+                repaint_editor(output, prompt, &line, cursor, silent)?;
+            }
+            EditingKey::KillBefore if cursor > 0 => {
+                line.drain(..cursor);
+                cursor = 0;
+                repaint_editor(output, prompt, &line, cursor, silent)?;
+            }
+            EditingKey::KillAfter if cursor < line.len() => {
+                line.truncate(cursor);
+                repaint_editor(output, prompt, &line, cursor, silent)?;
+            }
+            EditingKey::KillWordBefore if cursor > 0 => {
+                let mut start = cursor;
+                while start > 0 && line[start - 1].is_whitespace() {
+                    start -= 1;
+                }
+                while start > 0 && !line[start - 1].is_whitespace() {
+                    start -= 1;
+                }
+                line.drain(start..cursor);
+                cursor = start;
+                repaint_editor(output, prompt, &line, cursor, silent)?;
+            }
+            EditingKey::Backspace
+            | EditingKey::Delete
+            | EditingKey::Left
+            | EditingKey::Right
+            | EditingKey::KillBefore
+            | EditingKey::KillAfter
+            | EditingKey::KillWordBefore
+            | EditingKey::Ignore => {}
+        }
+    }
+}
+
+/// Process an editor buffer when Readline accepts it. Returns `true` when the
+/// delimiter completed the read, or `false` when a trailing backslash escaped
+/// that delimiter and another edited line is required.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "keeps editor state and display continuation in one operation"
+)]
+fn accept_editor_segment(
+    committed: &mut String,
+    line: &mut Vec<char>,
+    cursor: &mut usize,
+    delimiter: char,
+    config: &LineReaderConfig,
+    prompt: &str,
+    silent: bool,
+    output: &mut impl Write,
+) -> Result<bool, cash_core::Error> {
+    let trailing_backslashes = line.iter().rev().take_while(|ch| **ch == BACKSLASH).count();
+    let delimiter_was_escaped = config.process_escapes && trailing_backslashes % 2 == 1;
+
+    committed.push_str(&edited_line(line, config));
+    if delimiter_was_escaped && delimiter != DEFAULT_DELIMITER && delimiter != NUL_DELIMITER {
+        committed.push(delimiter);
+    }
+
+    finish_editor_output(output)?;
+    if !delimiter_was_escaped {
+        return Ok(true);
+    }
+
+    line.clear();
+    *cursor = 0;
+    if !silent {
+        write!(output, "{prompt}")?;
+        output.flush()?;
+    }
+    Ok(false)
+}
+
+fn editor_limit_reached(committed: &str, line: &[char], config: &LineReaderConfig) -> bool {
+    config.char_limit.is_some_and(|limit| {
+        committed.chars().count() + edited_line(line, config).chars().count() >= limit
+    })
+}
+
+/// Windows needs an explicit raw-console guard because its cash-core terminal
+/// configuration is currently a stub. Unix was already placed in raw mode by
+/// `setup_terminal_settings`.
+struct EditorModeGuard;
+
+impl EditorModeGuard {
+    fn new() -> Result<Self, cash_core::Error> {
+        #[cfg(windows)]
+        crossterm::terminal::enable_raw_mode()?;
+        Ok(Self)
+    }
+}
+
+impl Drop for EditorModeGuard {
+    fn drop(&mut self) {
+        #[cfg(windows)]
+        let _ = crossterm::terminal::disable_raw_mode();
+    }
+}
+
+// Kept as a tiny helper so the editor's conversion rules can be unit tested without
+// a terminal. Backslashes quote the following character unless `read -r` was used.
+fn edited_line(chars: &[char], config: &LineReaderConfig) -> String {
+    if !config.process_escapes {
+        return chars.iter().collect();
+    }
+
+    let mut result = String::new();
+    let mut quoted = false;
+    for &ch in chars {
+        if quoted {
+            if ch != DEFAULT_DELIMITER && ch != NUL_DELIMITER {
+                result.push(ch);
+            }
+            quoted = false;
+        } else if ch == BACKSLASH {
+            quoted = true;
+        } else {
+            result.push(ch);
+        }
+    }
+    result
+}
+
+fn repaint_editor(
+    output: &mut impl Write,
+    prompt: &str,
+    line: &[char],
+    cursor: usize,
+    silent: bool,
+) -> Result<(), cash_core::Error> {
+    if silent {
+        return Ok(());
+    }
+
+    write!(
+        output,
+        "\r\x1b[2K{prompt}{}",
+        line.iter().collect::<String>()
+    )?;
+    let chars_after_cursor = line.len().saturating_sub(cursor);
+    if chars_after_cursor > 0 {
+        write!(output, "\x1b[{chars_after_cursor}D")?;
+    }
+    output.flush()?;
+    Ok(())
+}
+
+fn finish_editor_output(output: &mut impl Write) -> Result<(), cash_core::Error> {
+    write!(output, "\r\n")?;
+    output.flush()?;
+    Ok(())
+}
+
 impl ReadCommand {
     /// Reads a line of input, optionally with a timeout.
     ///
@@ -558,20 +1097,21 @@ impl ReadCommand {
         &self,
         input_file: cash_core::openfiles::OpenFile,
         mut stderr_file: impl std::io::Write,
-        timeout: Option<Duration>,
+        mut timeout: Option<Duration>,
     ) -> Result<ReadResult, cash_core::Error> {
+        let input_file_is_terminal = input_file.is_terminal();
         let term_mode = self.setup_terminal_settings(&input_file)?;
 
-        // Display prompt on stderr, but only if input is from a terminal (per bash behavior).
-        if let Some(prompt) = &self.prompt {
-            if input_file.is_terminal() {
-                write!(stderr_file, "{prompt}")?;
-                stderr_file.flush()?;
-            }
+        // Like Bash, a positive timeout has no effect on regular files. Keep
+        // explicit `-t 0`, which is a readiness query even for a file.
+        if matches!(&input_file, cash_core::openfiles::OpenFile::File(_))
+            && timeout != Some(Duration::ZERO)
+        {
+            timeout = None;
         }
 
         // Determine delimiter based on options.
-        let delimiter = if self.return_after_n_chars_no_delimiter.is_some() {
+        let delimiter = if self.ignores_delimiter() {
             None
         } else if let Some(delimiter_str) = &self.delimiter {
             if delimiter_str.is_empty() {
@@ -583,9 +1123,7 @@ impl ReadCommand {
             Some(DEFAULT_DELIMITER)
         };
 
-        let char_limit = self
-            .return_after_n_chars_no_delimiter
-            .or(self.return_after_n_chars);
+        let char_limit = self.character_limit();
 
         // Create the input reader.
         let mut reader = InputReader::new(input_file, timeout, term_mode);
@@ -599,6 +1137,20 @@ impl ReadCommand {
             });
         }
 
+        // Bash treats both `read -n 0` and `read -N 0` as successful empty
+        // reads and does not consume input or display a prompt.
+        if char_limit == Some(0) {
+            return Ok(ReadResult::Line(String::new()));
+        }
+
+        // Display prompt on stderr, but only if input is from a terminal (per bash behavior).
+        if let Some(prompt) = &self.prompt
+            && input_file_is_terminal
+        {
+            write!(stderr_file, "{prompt}")?;
+            stderr_file.flush()?;
+        }
+
         // Configure and perform the read.
         let config = LineReaderConfig {
             delimiter,
@@ -606,7 +1158,18 @@ impl ReadCommand {
             process_escapes: !self.raw_mode,
         };
 
-        read_line_with_reader(&mut reader, &config)
+        if input_file_is_terminal && self.editing_requested() {
+            read_line_with_editor(
+                &mut reader,
+                &config,
+                self.prompt.as_deref().unwrap_or_default(),
+                self.initial_text.as_deref().unwrap_or_default(),
+                self.silent,
+                &mut stderr_file,
+            )
+        } else {
+            read_line_with_reader(&mut reader, &config)
+        }
     }
 
     fn setup_terminal_settings(
@@ -615,10 +1178,11 @@ impl ReadCommand {
     ) -> Result<Option<cash_core::terminal::AutoModeGuard>, cash_core::Error> {
         let mode = cash_core::terminal::AutoModeGuard::new(file.to_owned()).ok();
         if let Some(mode) = &mode {
+            let editing = self.editing_requested();
             let config = cash_core::terminal::Settings::builder()
                 .line_input(false)
                 .interrupt_signals(false)
-                .echo_input(!self.silent)
+                .echo_input(!self.silent && !editing)
                 .build();
 
             mode.apply_settings(&config)?;
@@ -638,7 +1202,7 @@ impl ReadCommand {
         context: &cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
     ) -> Result<Option<cash_core::ExecutionResult>, cash_core::Error> {
         if let Some(timeout) = self.timeout_in_seconds {
-            if timeout < 0.0 {
+            if !timeout.is_finite() || timeout < 0.0 {
                 writeln!(
                     context.stderr(),
                     "{}: -t: invalid timeout specification",
@@ -649,6 +1213,35 @@ impl ReadCommand {
         }
         Ok(None)
     }
+
+    const fn editing_requested(&self) -> bool {
+        self.use_readline || self.use_readline_with_bash_completion
+    }
+
+    fn character_limit(&self) -> Option<usize> {
+        if self.ordered_char_limit.is_some() {
+            self.ordered_char_limit
+        } else {
+            self.return_after_n_chars_no_delimiter
+                .last()
+                .copied()
+                .or_else(|| self.return_after_n_chars.last().copied())
+        }
+    }
+
+    const fn ignores_delimiter(&self) -> bool {
+        self.saw_capital_n || !self.return_after_n_chars_no_delimiter.is_empty()
+    }
+}
+
+/// Return the final value for an option together with Clap's command-line index.
+/// Comparing these indices preserves Bash's sequential `-n`/`-N` semantics.
+fn last_indexed_value(matches: &clap::ArgMatches, id: &str) -> Option<(usize, usize)> {
+    matches
+        .indices_of(id)?
+        .zip(matches.get_many::<usize>(id)?)
+        .map(|(index, value)| (index, *value))
+        .max_by_key(|(index, _)| *index)
 }
 
 /// Splits a line by IFS (Internal Field Separator) according to shell rules.
@@ -765,6 +1358,24 @@ mod tests {
         drop(tx);
 
         assert!(matches!(result, ReadResult::TimedOut(Some(line)) if line == "\u{c3}"));
+    }
+
+    #[test]
+    fn test_edited_line_applies_read_backslash_rules() {
+        let escaped: Vec<char> = r"one\ two\\three".chars().collect();
+        let cooked = LineReaderConfig {
+            delimiter: Some(DEFAULT_DELIMITER),
+            char_limit: None,
+            process_escapes: true,
+        };
+        let raw = LineReaderConfig {
+            delimiter: Some(DEFAULT_DELIMITER),
+            char_limit: None,
+            process_escapes: false,
+        };
+
+        assert_eq!(edited_line(&escaped, &cooked), r"one two\three");
+        assert_eq!(edited_line(&escaped, &raw), r"one\ two\\three");
     }
 
     // ==================== split_line_by_ifs tests ====================

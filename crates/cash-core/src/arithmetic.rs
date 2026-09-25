@@ -521,4 +521,3 @@ fn eval_pure_expr(expr: &ast::ArithmeticExpr) -> Option<i64> {
         ast::ArithmeticExpr::BinaryAssignment(_, _, operand) => eval_pure_expr(operand),
     }
 }
-

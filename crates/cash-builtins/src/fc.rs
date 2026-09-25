@@ -1,6 +1,9 @@
-use cash_core::{ExecutionResult, builtins, error, history};
+use cash_core::{ExecutionResult, builtins, error, escape, history};
 use clap::Parser;
 use std::io::Write;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static EDIT_FILE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 /// Process command history list.
 #[derive(Parser)]
@@ -49,11 +52,95 @@ impl builtins::Command for FcCommand {
             return self.do_list(&context);
         }
 
-        error::unimp("fc editor mode is not yet implemented")
+        self.do_edit(context).await
     }
 }
 
 impl FcCommand {
+    async fn do_edit(
+        &self,
+        context: cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
+    ) -> Result<ExecutionResult, cash_core::Error> {
+        let commands = {
+            let history = context
+                .shell
+                .history()
+                .ok_or_else(|| cash_core::Error::from(cash_core::ErrorKind::HistoryNotEnabled))?;
+            let (first_idx, last_idx, reverse) = self.resolve_range(history)?;
+            let indices: Vec<usize> = if reverse {
+                (first_idx..=last_idx).rev().collect()
+            } else {
+                (first_idx..=last_idx).collect()
+            };
+            indices
+                .into_iter()
+                .filter_map(|idx| history.get(idx).map(|item| item.command_line.clone()))
+                .collect::<Vec<_>>()
+        };
+
+        if commands.is_empty() {
+            return Err(cash_core::ErrorKind::HistoryItemNotFound.into());
+        }
+
+        let edit_path = std::env::temp_dir().join(format!(
+            "cash-fc-{}-{}.sh",
+            std::process::id(),
+            EDIT_FILE_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+        ));
+        let cleanup = EditFileCleanup(edit_path.clone());
+        std::fs::write(&edit_path, format!("{}\n", commands.join("\n")))?;
+
+        let editor = self
+            .editor
+            .clone()
+            .or_else(|| context.shell.env_str("FCEDIT").map(|s| s.into_owned()))
+            .or_else(|| context.shell.env_str("EDITOR").map(|s| s.into_owned()))
+            .unwrap_or_else(|| String::from("vi"));
+
+        if editor != "-" {
+            let edit_command = format!(
+                "{editor} {}",
+                escape::single_quote(&edit_path.to_string_lossy().replace('\\', "/"))
+            );
+            let editor_result = context
+                .shell
+                .run_string(
+                    edit_command,
+                    &cash_core::SourceInfo::from("(fc editor)"),
+                    &context.params,
+                )
+                .await?;
+            if !editor_result.is_success() {
+                return Ok(editor_result);
+            }
+        }
+
+        let edited = std::fs::read_to_string(&edit_path)?;
+        drop(cleanup);
+
+        remove_current_fc_entry(context.shell);
+        if edited.trim().is_empty() {
+            return Ok(ExecutionResult::success());
+        }
+
+        // Bash temporarily enables verbose input while it executes the edited file.
+        write!(context.stderr(), "{edited}")?;
+        if !edited.ends_with('\n') {
+            writeln!(context.stderr())?;
+        }
+
+        let result = context
+            .shell
+            .run_string(
+                edited.clone(),
+                &cash_core::SourceInfo::from("(history)"),
+                &context.params,
+            )
+            .await?;
+        context.shell.add_to_history(edited.trim_end())?;
+        Ok(result)
+    }
+
     fn do_list(
         &self,
         context: &cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
@@ -292,7 +379,40 @@ impl FcCommand {
     }
 }
 
+struct EditFileCleanup(std::path::PathBuf);
+
+impl Drop for EditFileCleanup {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
+
+fn remove_current_fc_entry(shell: &mut cash_core::Shell<impl cash_core::ShellExtensions>) {
+    let Some(history) = shell.history_mut() else {
+        return;
+    };
+    let should_remove = history
+        .get(history.count().saturating_sub(1))
+        .is_some_and(|item| {
+            item.command_line
+                .split_ascii_whitespace()
+                .next()
+                .is_some_and(|command| command == "fc")
+        });
+    if should_remove {
+        history.remove_nth_item(history.count().saturating_sub(1));
+    }
+}
+
 /// Returns the effective history count (excluding the fc command itself).
 fn effective_history_count(history: &history::History) -> usize {
-    history.count().saturating_sub(1)
+    let includes_current_fc = history
+        .get(history.count().saturating_sub(1))
+        .is_some_and(|item| {
+            item.command_line
+                .split_ascii_whitespace()
+                .next()
+                .is_some_and(|command| command == "fc")
+        });
+    history.count() - usize::from(includes_current_fc)
 }

@@ -131,6 +131,7 @@ default = [
 workspace = true
 
 [dependencies]
+futures = "0.3.32"
 cash-core = { workspace = true }
 cash-parser = { workspace = true }
 cfg-if = "1.0.4"

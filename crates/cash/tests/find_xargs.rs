@@ -418,6 +418,19 @@ fn replace_substitutes_each_item() {
 }
 
 #[test]
+fn replace_mode_treats_each_line_as_one_item() {
+    let sandbox = Sandbox::new("xargs-i-lines");
+    let out = sandbox
+        .run(r#"printf '  one two  \r\n\r\nthree four\r\n' | xargs -I @ printf '<%s>\n' '@'"#);
+    assert_eq!(
+        lines(&out.stdout),
+        vec!["<one two  >", "<three four>"],
+        "stderr: {}",
+        out.stderr
+    );
+}
+
+#[test]
 fn r_declines_to_run_on_empty_input() {
     let sandbox = Sandbox::new("xargs-r");
     let with_r = sandbox.run(r#"printf '' | xargs -r echo EMPTY; echo "code: $?""#);

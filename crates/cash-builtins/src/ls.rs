@@ -107,8 +107,15 @@ impl builtins::Command for LsCommand {
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, Self::Error> {
         if self.help {
-            writeln!(context.stdout(), "Usage: {} [OPTION]... [FILE]...", context.command_name)?;
-            writeln!(context.stdout(), "List information about the FILEs (the current directory by default).")?;
+            writeln!(
+                context.stdout(),
+                "Usage: {} [OPTION]... [FILE]...",
+                context.command_name
+            )?;
+            writeln!(
+                context.stdout(),
+                "List information about the FILEs (the current directory by default)."
+            )?;
             return Ok(ExecutionResult::success());
         }
 
@@ -132,7 +139,11 @@ impl builtins::Command for LsCommand {
         let mut dir_paths = Vec::new();
 
         for path_str in &paths {
-            let path = PathBuf::from(path_str);
+            // Builtins do not change the host process cwd when `cd` changes the shell's
+            // cwd. Resolve every operand through the shell state; otherwise the default
+            // `.` (and every relative name) silently lists the directory cash was
+            // launched from.
+            let path = context.shell.absolute_path(Path::new(path_str));
             if !path.exists() && !path.is_symlink() {
                 writeln!(
                     context.stderr(),
@@ -254,10 +265,7 @@ impl LsCommand {
 
         // In long format, print total blocks at top of directory listing.
         if self.long {
-            let total_kb: u64 = items
-                .iter()
-                .map(|item| item.size.div_ceil(1024))
-                .sum();
+            let total_kb: u64 = items.iter().map(|item| item.size.div_ceil(1024)).sum();
             writeln!(context.stdout(), "total {total_kb}")?;
         }
 
@@ -471,8 +479,8 @@ impl LsCommand {
 
 fn inspect_dot(dir_path: &Path, name: &str) -> Option<ItemInfo> {
     let metadata = std::fs::metadata(dir_path).ok()?;
-    let owner = cash_win32::fs::get_file_owner(dir_path)
-        .unwrap_or_else(cash_win32::fs::current_user);
+    let owner =
+        cash_win32::fs::get_file_owner(dir_path).unwrap_or_else(cash_win32::fs::current_user);
     let group = owner.clone();
     let subdirs = cash_win32::fs::count_subdirectories(dir_path);
     let links = 2 + u32::try_from(subdirs).unwrap_or(0);
@@ -512,8 +520,7 @@ fn inspect_path(path: &Path, display_name: &str) -> Option<ItemInfo> {
 
     let permissions = format_permissions(path, &metadata, is_symlink);
     let links = cash_win32::fs::file_link_count(path, &metadata);
-    let owner =
-        cash_win32::fs::get_file_owner(path).unwrap_or_else(cash_win32::fs::current_user);
+    let owner = cash_win32::fs::get_file_owner(path).unwrap_or_else(cash_win32::fs::current_user);
     let group = owner.clone();
     let size = metadata.len();
     let mtime = metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH);

@@ -356,8 +356,7 @@ impl DeclareCommand {
                 .is_some_and(|(_, v)| v.is_treated_as_integer());
         if is_int_decl {
             if let Some(ShellValueLiteral::Scalar(ref mut s)) = initial_value {
-                if let Ok(eval_val) =
-                    cash_core::arithmetic::evaluate_str(context.shell, s.as_str())
+                if let Ok(eval_val) = cash_core::arithmetic::evaluate_str(context.shell, s.as_str())
                 {
                     *s = eval_val.to_string();
                 }
@@ -366,9 +365,7 @@ impl DeclareCommand {
 
         // Special-case: `local -`
         if name == "-" && matches!(verb, DeclareVerb::Local) {
-            // TODO(local): `local -` allows shadowing the current `set` options (i.e., $-), with
-            // subsequent updates getting discarded when the current local scope is popped.
-            tracing::warn!("not yet implemented: local -");
+            context.shell.save_local_options();
             return Ok(true);
         }
 
@@ -586,6 +583,10 @@ impl DeclareCommand {
         context: &cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
         verb: DeclareVerb,
     ) -> Result<(), cash_core::Error> {
+        if matches!(verb, DeclareVerb::Local) && context.shell.has_saved_local_options() {
+            writeln!(context.stdout(), "local -")?;
+        }
+
         //
         // Dump all declarations. Use attribute flags to filter which variables are dumped.
         //

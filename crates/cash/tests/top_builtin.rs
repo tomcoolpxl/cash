@@ -22,7 +22,11 @@
               alternating the two forms by accident of content reads worse."
 )]
 
+use std::path::PathBuf;
 use std::process::Command;
+use std::time::Duration;
+
+use cash_win32::conpty::ConPtySession;
 
 const CASH: &str = env!("CARGO_BIN_EXE_cash");
 
@@ -62,6 +66,16 @@ fn rows(stdout: &str) -> Vec<Vec<String>> {
         .collect()
 }
 
+fn column_index(stdout: &str, name: &str) -> usize {
+    stdout
+        .lines()
+        .find(|line| line.trim_start().starts_with("PID"))
+        .expect("process header")
+        .split_whitespace()
+        .position(|field| field == name)
+        .unwrap_or_else(|| panic!("missing {name} column"))
+}
+
 // ---------------------------------------------------------------------------
 // It exists, and it is ours
 // ---------------------------------------------------------------------------
@@ -86,12 +100,37 @@ fn a_refresh_has_a_header_and_a_table() {
         "no summary line: {lines:?}"
     );
     assert!(
-        lines.get(1).unwrap_or(&"").starts_with("Mem:"),
-        "no memory line: {lines:?}"
+        lines.get(1).unwrap_or(&"").starts_with("Tasks:"),
+        "no task summary: {lines:?}"
     );
     assert!(
-        out.stdout.contains("PID") && out.stdout.contains("%CPU") && out.stdout.contains("%MEM"),
+        lines.get(2).unwrap_or(&"").starts_with("%Cpu(s):"),
+        "no CPU summary: {lines:?}"
+    );
+    assert!(
+        lines.get(3).unwrap_or(&"").starts_with("MiB Mem :"),
+        "no memory summary: {lines:?}"
+    );
+    assert!(
+        lines.get(4).unwrap_or(&"").starts_with("MiB Commit:"),
+        "no commit summary: {lines:?}"
+    );
+    assert!(
+        out.stdout.contains("PID")
+            && out.stdout.contains(" PRI")
+            && out.stdout.contains(" VIRT")
+            && out.stdout.contains(" RES")
+            && out.stdout.contains(" S ")
+            && out.stdout.contains("%CPU")
+            && out.stdout.contains("%MEM")
+            && out.stdout.contains("TIME+")
+            && out.stdout.contains("COMMAND"),
         "no column header: {}",
+        out.stdout
+    );
+    assert!(
+        !out.stdout.contains("n/a"),
+        "placeholder leaked: {}",
         out.stdout
     );
 }
@@ -187,9 +226,10 @@ fn batch_mode_writes_plain_lines() {
 #[test]
 fn the_listing_is_ordered_by_processor_share() {
     let out = cash(ONCE);
+    let cpu = column_index(&out.stdout, "%CPU");
     let shares: Vec<f64> = rows(&out.stdout)
         .iter()
-        .filter_map(|row| row.get(2).and_then(|field| field.parse::<f64>().ok()))
+        .filter_map(|row| row.get(cpu).and_then(|field| field.parse::<f64>().ok()))
         .collect();
     assert!(shares.len() > 1, "too few rows to check ordering");
     assert!(
@@ -201,9 +241,10 @@ fn the_listing_is_ordered_by_processor_share() {
 #[test]
 fn o_mem_orders_by_memory_instead() {
     let out = cash("top -b -n 1 -d 0.1 -o mem");
+    let memory = column_index(&out.stdout, "%MEM");
     let shares: Vec<f64> = rows(&out.stdout)
         .iter()
-        .filter_map(|row| row.get(3).and_then(|field| field.parse::<f64>().ok()))
+        .filter_map(|row| row.get(memory).and_then(|field| field.parse::<f64>().ok()))
         .collect();
     assert!(shares.len() > 1, "too few rows to check ordering");
     assert!(
@@ -254,20 +295,36 @@ fn the_memory_line_adds_up() {
     let line = out
         .stdout
         .lines()
-        .nth(1)
+        .nth(3)
         .expect("a memory line")
         .to_string();
 
-    let numbers: Vec<u64> = line
+    let numbers: Vec<f64> = line
         .split_whitespace()
-        .filter_map(|field| field.parse::<u64>().ok())
+        .filter_map(|field| field.parse::<f64>().ok())
         .collect();
     assert_eq!(numbers.len(), 3, "expected total, free and used: {line:?}");
-    assert!(numbers[0] > 0, "no total memory: {line:?}");
-    assert_eq!(
-        numbers[0] - numbers[1],
-        numbers[2],
-        "used is not total minus free: {line:?}"
+    assert!(numbers[0] > 0.0, "no total memory: {line:?}");
+    assert!(
+        (numbers[0] - numbers[1] - numbers[2]).abs() <= 0.1,
+        "free and used do not add to total: {line:?}"
+    );
+}
+
+#[test]
+fn the_commit_line_reports_windows_commit_accounting() {
+    let out = cash(ONCE);
+    let line = out.stdout.lines().nth(4).expect("a commit line");
+    let numbers: Vec<f64> = line
+        .split_whitespace()
+        .filter_map(|field| field.parse::<f64>().ok())
+        .collect();
+    assert_eq!(numbers.len(), 3, "expected used, limit and peak: {line:?}");
+    assert!(numbers[0] > 0.0, "no committed memory: {line:?}");
+    assert!(numbers[0] <= numbers[1], "commit exceeds limit: {line:?}");
+    assert!(
+        numbers[0] <= numbers[2],
+        "commit exceeds boot peak: {line:?}"
     );
 }
 
@@ -288,9 +345,37 @@ fn the_shell_has_a_working_set() {
         .find(|row| row[0] == me)
         .expect("the shell's own row");
 
-    let resident = row[4].trim_end_matches('M').parse::<u64>().unwrap_or(0);
+    let resident = row[column_index(&out.stdout, "RES")]
+        .trim_end_matches('M')
+        .parse::<u64>()
+        .unwrap_or(0);
     assert!(
         resident > 0,
         "the shell reports no resident memory: {row:?}"
     );
+}
+
+// ---------------------------------------------------------------------------
+// Interactive controls
+// ---------------------------------------------------------------------------
+
+#[test]
+fn question_mark_opens_help_and_q_exits() {
+    let mut session = ConPtySession::start(&PathBuf::from(CASH), &["-c", "top -d 5"], None)
+        .expect("start cash in a pseudo terminal");
+
+    session.send("?").expect("send help key");
+    session
+        .expect("cash top - interactive help", Duration::from_secs(5))
+        .expect("help screen");
+    session.send("x").expect("leave help");
+    session.send("r").expect("request a refresh");
+    session
+        .expect("Tasks:", Duration::from_secs(5))
+        .expect("dashboard after help");
+    session
+        .expect("\x1b[7m", Duration::from_secs(2))
+        .expect("highlighted process header");
+    session.send("q").expect("quit top");
+    assert_eq!(session.wait().expect("top exits"), 0);
 }

@@ -2,8 +2,9 @@
 
 use chrono::Utc;
 use std::{
+    collections::HashMap,
     io::{BufRead, Read, Write},
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 pub mod expansion;
@@ -22,6 +23,10 @@ pub struct History {
     items: rpds::VectorSync<ItemId>,
     id_map: rpds::HashTrieMapSync<ItemId, Item>,
     next_id: ItemId,
+    /// Last byte read from each history file. Bash uses this bookkeeping for
+    /// `history -n`, which imports only lines appended since the file was last read.
+    #[cfg_attr(feature = "serde", serde(default))]
+    file_offsets: HashMap<PathBuf, u64>,
 }
 
 impl History {
@@ -216,6 +221,47 @@ impl History {
         file.flush()?;
 
         Ok(())
+    }
+
+    /// Imports a history file, either in full (`history -r`) or only from the byte after
+    /// the last successful import (`history -n`). Imported entries are clean, so a later
+    /// `history -a` does not append them back to the same file.
+    pub fn read_file(
+        &mut self,
+        history_file_path: impl AsRef<Path>,
+        new_lines_only: bool,
+    ) -> Result<(), error::Error> {
+        use std::io::{Seek as _, SeekFrom};
+
+        let path = history_file_path.as_ref();
+        let key = path.to_path_buf();
+        let mut file = std::fs::File::open(path)?;
+        let file_len = file.metadata()?.len();
+        let previous_end = if new_lines_only {
+            self.file_offsets.get(&key).copied().unwrap_or(0)
+        } else {
+            0
+        };
+        // A replaced or truncated history file is a new file for `-n` purposes.
+        let start = if previous_end > file_len {
+            0
+        } else {
+            previous_end
+        };
+        file.seek(SeekFrom::Start(start))?;
+
+        let imported = Self::import(file)?;
+        for item in imported.iter() {
+            self.add(item.clone())?;
+        }
+        self.file_offsets.insert(key, file_len);
+        Ok(())
+    }
+
+    /// Records that an initial shell startup import consumed the complete file.
+    pub fn mark_file_read_to(&mut self, history_file_path: impl AsRef<Path>, offset: u64) {
+        self.file_offsets
+            .insert(history_file_path.as_ref().to_path_buf(), offset);
     }
 
     /// Searches through history using the given query.

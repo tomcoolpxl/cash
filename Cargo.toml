@@ -96,7 +96,9 @@ struct_excessive_bools = "allow"
 strip = true
 lto = "fat"
 codegen-units = 1
-panic = "abort"
+# Interactive cash catches an unexpected panic at the command boundary and returns to
+# the prompt. `abort` bypasses that recovery path and terminates the entire shell.
+panic = "unwind"
 
 [profile.bench]
 inherits = "release"

@@ -20,7 +20,10 @@ pub trait ShellState {
     fn last_stopwatch_time(&self) -> std::time::SystemTime;
 
     /// Returns the last "SECONDS" offset requested.
-    fn last_stopwatch_offset(&self) -> u32;
+    fn last_stopwatch_offset(&self) -> i64;
+
+    /// Resets Bash's `SECONDS` stopwatch to the assigned signed value.
+    fn set_stopwatch_seconds(&mut self, seconds: i64);
 
     /// Returns the shell environment containing variables.
     fn env(&self) -> &ShellEnvironment;

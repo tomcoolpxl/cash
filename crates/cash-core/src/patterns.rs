@@ -27,6 +27,7 @@ type PatternWord = Vec<PatternPiece>;
 #[derive(Clone, Debug, Default)]
 pub(crate) struct FilenameExpansionOptions {
     pub require_dot_in_pattern_to_match_dot_files: bool,
+    pub include_dot_and_dotdot: bool,
 }
 
 /// Result of a pattern expansion, distinguishing "no glob metacharacters" from
@@ -314,6 +315,14 @@ impl Pattern {
                     .filter(matches_dotfile_policy)
                     .map(|entry| entry.path())
                     .collect();
+
+                if options.include_dot_and_dotdot && allow_dot_files {
+                    for name in [".", ".."] {
+                        if regex.is_match(name).unwrap_or(false) {
+                            matching_paths_in_dir.push(current_path.join(name));
+                        }
+                    }
+                }
 
                 matching_paths_in_dir.sort();
 

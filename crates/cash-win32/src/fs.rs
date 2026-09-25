@@ -63,7 +63,11 @@ pub fn get_file_owner(path: &Path) -> Option<String> {
     let mut defaulted = 0;
     // SAFETY: `buffer` contains a valid SECURITY_DESCRIPTOR retrieved by `GetFileSecurityW`.
     let ok = unsafe {
-        GetSecurityDescriptorOwner(buffer.as_mut_ptr().cast(), &raw mut p_sid, &raw mut defaulted)
+        GetSecurityDescriptorOwner(
+            buffer.as_mut_ptr().cast(),
+            &raw mut p_sid,
+            &raw mut defaulted,
+        )
     };
 
     if ok == 0 || p_sid.is_null() {

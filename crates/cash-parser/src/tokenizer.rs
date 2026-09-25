@@ -1048,7 +1048,7 @@ impl<'a, R: ?Sized + std::io::BufRead> Tokenizer<'a, R> {
                                 } else {
                                     let cur_token = self.next_token_until(
                                         Some('}'),
-                                        false, /* include space? */
+                                        true, /* preserve whitespace in substitution */
                                     )?;
 
                                     // See if this is a here-document-related token we need to hold

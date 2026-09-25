@@ -192,7 +192,23 @@ pub fn run() {
         std::process::exit(1);
     };
 
-    let result = runtime.block_on(run_async(&args, parsed_args));
+    // Keep startup, script, and `-c` panics from becoming Windows crash dialogs or
+    // abnormal process termination. Interactive command panics are recovered inside the
+    // prompt loop so that session can continue; this outer boundary covers everything else.
+    let result = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        runtime.block_on(run_async(&args, parsed_args))
+    })) {
+        Ok(result) => result,
+        Err(payload) => {
+            let message = payload
+                .downcast_ref::<&str>()
+                .copied()
+                .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
+                .unwrap_or("unknown panic");
+            eprintln!("cash: stopped safely after an internal error: {message}");
+            std::process::exit(1);
+        }
+    };
 
     let exit_code = match result {
         Ok(code) => code,

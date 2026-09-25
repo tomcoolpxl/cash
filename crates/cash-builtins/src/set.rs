@@ -370,28 +370,31 @@ impl builtins::Command for SetCommand {
             }
         }
 
-        let args = context.shell.current_shell_args_mut();
+        if !self.positional_args.is_empty() {
+            context.shell.mark_current_shell_args_set();
+            let args = context.shell.current_shell_args_mut();
 
-        let skip = match self.positional_args.first() {
-            Some(x) if x == "-" => {
-                if self.positional_args.len() > 1 {
-                    args.clear();
+            let skip = match self.positional_args.first() {
+                Some(x) if x == "-" => {
+                    if self.positional_args.len() > 1 {
+                        args.clear();
+                    }
+                    1
                 }
-                1
-            }
-            Some(x) if x == "--" => {
-                args.clear();
-                1
-            }
-            Some(_) => {
-                args.clear();
-                0
-            }
-            None => 0,
-        };
+                Some(x) if x == "--" => {
+                    args.clear();
+                    1
+                }
+                Some(_) => {
+                    args.clear();
+                    0
+                }
+                None => 0,
+            };
 
-        for arg in self.positional_args.iter().skip(skip) {
-            args.push(arg.to_owned());
+            for arg in self.positional_args.iter().skip(skip) {
+                args.push(arg.to_owned());
+            }
         }
 
         saw_option = saw_option || !self.positional_args.is_empty();

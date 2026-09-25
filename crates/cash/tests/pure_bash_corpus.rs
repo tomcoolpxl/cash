@@ -197,10 +197,7 @@ hanoi 3 A C B
 "###;
     let out = cash(script);
     assert_eq!(out.code, 0, "stderr: {}", out.stderr);
-    assert_eq!(
-        out.stdout,
-        "A->C\nA->B\nC->B\nA->C\nB->A\nB->C\nA->C"
-    );
+    assert_eq!(out.stdout, "A->C\nA->B\nC->B\nA->C\nB->A\nB->C\nA->C");
 }
 
 #[test]

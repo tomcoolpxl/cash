@@ -1,0 +1,527 @@
+[
+  {
+    "name": "local-options",
+    "script": "set +u; f() { local -; set -u; }; f; case $- in *u*) echo leaked;; *) echo restored;; esac",
+    "match": true,
+    "bash": {
+      "code": 0,
+      "stdout": "restored\n",
+      "stderr": ""
+    },
+    "cash": {
+      "code": 0,
+      "stdout": "restored\n",
+      "stderr": ""
+    }
+  },
+  {
+    "name": "wait-job-status",
+    "script": "bash -c \"exit 7\" & wait %1; echo status:$?",
+    "match": true,
+    "bash": {
+      "code": 0,
+      "stdout": "status:7\n",
+      "stderr": ""
+    },
+    "cash": {
+      "code": 0,
+      "stdout": "status:7\n",
+      "stderr": ""
+    }
+  },
+  {
+    "name": "wait-pid-status",
+    "script": "bash -c \"exit 7\" & wait $!; echo status:$?",
+    "match": true,
+    "bash": {
+      "code": 0,
+      "stdout": "status:7\n",
+      "stderr": ""
+    },
+    "cash": {
+      "code": 0,
+      "stdout": "status:7\n",
+      "stderr": ""
+    }
+  },
+  {
+    "name": "wait-n",
+    "script": "bash -c \"sleep 0.1; exit 7\" & wait -n; echo status:$?",
+    "match": true,
+    "bash": {
+      "code": 0,
+      "stdout": "status:7\n",
+      "stderr": ""
+    },
+    "cash": {
+      "code": 0,
+      "stdout": "status:7\n",
+      "stderr": ""
+    }
+  },
+  {
+    "name": "wait-f",
+    "script": "bash -c \"exit 7\" & wait -f $!; echo status:$?",
+    "match": true,
+    "bash": {
+      "code": 0,
+      "stdout": "status:7\n",
+      "stderr": ""
+    },
+    "cash": {
+      "code": 0,
+      "stdout": "status:7\n",
+      "stderr": ""
+    }
+  },
+  {
+    "name": "wait-p",
+    "script": "bash -c \"sleep 0.1; exit 7\" & wait -n -p done; s=$?; echo status:$s assigned:${done:+yes}",
+    "match": true,
+    "bash": {
+      "code": 0,
+      "stdout": "status:7 assigned:yes\n",
+      "stderr": ""
+    },
+    "cash": {
+      "code": 0,
+      "stdout": "status:7 assigned:yes\n",
+      "stderr": ""
+    }
+  },
+  {
+    "name": "mapfile-callback",
+    "script": "cb() { printf \"callback:%s:%s\\n\" \"$1\" \"$2\"; }; mapfile -t -C cb -c 1 a <<< hello; printf \"value:%s\\n\" \"${a[0]}\"",
+    "match": true,
+    "bash": {
+      "code": 0,
+      "stdout": "callback:0:hello\nvalue:hello\n",
+      "stderr": ""
+    },
+    "cash": {
+      "code": 0,
+      "stdout": "callback:0:hello\nvalue:hello\n",
+      "stderr": ""
+    }
+  },
+  {
+    "name": "lastpipe-default",
+    "script": "v=before; echo after | read v; echo \"$v\"",
+    "match": true,
+    "bash": {
+      "code": 0,
+      "stdout": "before\n",
+      "stderr": ""
+    },
+    "cash": {
+      "code": 0,
+      "stdout": "before\n",
+      "stderr": ""
+    }
+  },
+  {
+    "name": "lastpipe-enabled",
+    "script": "shopt -s lastpipe; v=before; echo after | read v; echo \"$v\"",
+    "match": true,
+    "bash": {
+      "code": 0,
+      "stdout": "after\n",
+      "stderr": ""
+    },
+    "cash": {
+      "code": 0,
+      "stdout": "after\n",
+      "stderr": ""
+    }
+  },
+  {
+    "name": "errexit-condition",
+    "script": "set -e; f() { false; echo survived; }; if f; then echo yes; fi",
+    "match": true,
+    "bash": {
+      "code": 0,
+      "stdout": "survived\nyes\n",
+      "stderr": ""
+    },
+    "cash": {
+      "code": 0,
+      "stdout": "survived\nyes\n",
+      "stderr": ""
+    }
+  },
+  {
+    "name": "errexit-substitution",
+    "script": "set -e; x=$(false; echo survived); echo \"$x\"",
+    "match": true,
+    "bash": {
+      "code": 0,
+      "stdout": "survived\n",
+      "stderr": ""
+    },
+    "cash": {
+      "code": 0,
+      "stdout": "survived\n",
+      "stderr": ""
+    }
+  },
+  {
+    "name": "inherit-errexit",
+    "script": "set -e; shopt -s inherit_errexit; x=$(false; echo survived); echo unexpected",
+    "match": true,
+    "bash": {
+      "code": 1,
+      "stdout": "",
+      "stderr": ""
+    },
+    "cash": {
+      "code": 1,
+      "stdout": "",
+      "stderr": ""
+    }
+  },
+  {
+    "name": "pipefail",
+    "script": "set -o pipefail; false | true; echo status:$?",
+    "match": true,
+    "bash": {
+      "code": 0,
+      "stdout": "status:1\n",
+      "stderr": ""
+    },
+    "cash": {
+      "code": 0,
+      "stdout": "status:1\n",
+      "stderr": ""
+    }
+  },
+  {
+    "name": "pipestatus",
+    "script": "false | true; printf \"%s\\n\" \"${PIPESTATUS[*]}\"",
+    "match": true,
+    "bash": {
+      "code": 0,
+      "stdout": "1 0\n",
+      "stderr": ""
+    },
+    "cash": {
+      "code": 0,
+      "stdout": "1 0\n",
+      "stderr": ""
+    }
+  },
+  {
+    "name": "assignment-status",
+    "script": "a=$(false); echo assignment:$?; f() { local b=$(false); echo local:$?; }; f",
+    "match": true,
+    "bash": {
+      "code": 0,
+      "stdout": "assignment:1\nlocal:0\n",
+      "stderr": ""
+    },
+    "cash": {
+      "code": 0,
+      "stdout": "assignment:1\nlocal:0\n",
+      "stderr": ""
+    }
+  },
+  {
+    "name": "dynamic-scope",
+    "script": "x=outer; g() { echo \"$x\"; }; f() { local x=inner; g; }; f; g",
+    "match": true,
+    "bash": {
+      "code": 0,
+      "stdout": "inner\nouter\n",
+      "stderr": ""
+    },
+    "cash": {
+      "code": 0,
+      "stdout": "inner\nouter\n",
+      "stderr": ""
+    }
+  },
+  {
+    "name": "nameref",
+    "script": "x=old; declare -n r=x; r=new; echo \"$x\"; unset -n r; echo \"$x\"",
+    "match": true,
+    "bash": {
+      "code": 0,
+      "stdout": "new\nnew\n",
+      "stderr": ""
+    },
+    "cash": {
+      "code": 0,
+      "stdout": "new\nnew\n",
+      "stderr": ""
+    }
+  },
+  {
+    "name": "integer-expression",
+    "script": "declare -i x; x=\"2+3*4\"; echo \"$x\"",
+    "match": true,
+    "bash": {
+      "code": 0,
+      "stdout": "14\n",
+      "stderr": ""
+    },
+    "cash": {
+      "code": 0,
+      "stdout": "14\n",
+      "stderr": ""
+    }
+  },
+  {
+    "name": "ifs-empty-fields",
+    "script": "IFS=:; x=\":a::b:\"; set -- $x; printf \"<%s>\\n\" \"$@\"",
+    "match": true,
+    "bash": {
+      "code": 0,
+      "stdout": "<>\n<a>\n<>\n<b>\n",
+      "stderr": ""
+    },
+    "cash": {
+      "code": 0,
+      "stdout": "<>\n<a>\n<>\n<b>\n",
+      "stderr": ""
+    }
+  },
+  {
+    "name": "quoted-empty-array",
+    "script": "a=(); set -- \"${a[@]}\"; echo \"$#\"",
+    "match": true,
+    "bash": {
+      "code": 0,
+      "stdout": "0\n",
+      "stderr": ""
+    },
+    "cash": {
+      "code": 0,
+      "stdout": "0\n",
+      "stderr": ""
+    }
+  },
+  {
+    "name": "array-negative-index",
+    "script": "a=(one two three); echo \"${a[-1]}\"; a[-1]=last; echo \"${a[@]}\"",
+    "match": true,
+    "bash": {
+      "code": 0,
+      "stdout": "three\none two last\n",
+      "stderr": ""
+    },
+    "cash": {
+      "code": 0,
+      "stdout": "three\none two last\n",
+      "stderr": ""
+    }
+  },
+  {
+    "name": "patsub-replacement",
+    "script": "x=abc; echo \"${x/b/[&]}\"",
+    "match": true,
+    "bash": {
+      "code": 0,
+      "stdout": "a[b]c\n",
+      "stderr": ""
+    },
+    "cash": {
+      "code": 0,
+      "stdout": "a[b]c\n",
+      "stderr": ""
+    }
+  },
+  {
+    "name": "patsub-disabled",
+    "script": "shopt -u patsub_replacement; x=abc; echo \"${x/b/[&]}\"",
+    "match": true,
+    "bash": {
+      "code": 0,
+      "stdout": "a[&]c\n",
+      "stderr": ""
+    },
+    "cash": {
+      "code": 0,
+      "stdout": "a[&]c\n",
+      "stderr": ""
+    }
+  },
+  {
+    "name": "patsub-dollar-literal",
+    "script": "x=abc; r='$1'; echo \"${x/b/$r}\"",
+    "match": true,
+    "bash": {
+      "code": 0,
+      "stdout": "a$1c\n",
+      "stderr": ""
+    },
+    "cash": {
+      "code": 0,
+      "stdout": "a$1c\n",
+      "stderr": ""
+    }
+  },
+  {
+    "name": "read-delimiter",
+    "script": "IFS= read -r -d : v <<< \"a:b\"; printf \"status:%s value:%s\\n\" \"$?\" \"$v\"",
+    "match": true,
+    "bash": {
+      "code": 0,
+      "stdout": "status:0 value:a\n",
+      "stderr": ""
+    },
+    "cash": {
+      "code": 0,
+      "stdout": "status:0 value:a\n",
+      "stderr": ""
+    }
+  },
+  {
+    "name": "read-reply",
+    "script": "read <<< \"  hello  \"; printf \"<%s>\\n\" \"$REPLY\"",
+    "match": true,
+    "bash": {
+      "code": 0,
+      "stdout": "<  hello  >\n",
+      "stderr": ""
+    },
+    "cash": {
+      "code": 0,
+      "stdout": "<  hello  >\n",
+      "stderr": ""
+    }
+  },
+  {
+    "name": "printf-count",
+    "script": "printf \"abc%n\\n\" n; echo \"$n\"",
+    "match": true,
+    "bash": {
+      "code": 0,
+      "stdout": "abc\n3\n",
+      "stderr": ""
+    },
+    "cash": {
+      "code": 0,
+      "stdout": "abc\n3\n",
+      "stderr": ""
+    }
+  },
+  {
+    "name": "command-lookup",
+    "script": "echo() { builtin echo function; }; echo; command echo builtin; builtin echo builtin",
+    "match": true,
+    "bash": {
+      "code": 0,
+      "stdout": "function\nbuiltin\nbuiltin\n",
+      "stderr": ""
+    },
+    "cash": {
+      "code": 0,
+      "stdout": "function\nbuiltin\nbuiltin\n",
+      "stderr": ""
+    }
+  },
+  {
+    "name": "err-trap",
+    "script": "trap 'echo trapped:$?' ERR; false; echo done",
+    "match": true,
+    "bash": {
+      "code": 0,
+      "stdout": "trapped:1\ndone\n",
+      "stderr": ""
+    },
+    "cash": {
+      "code": 0,
+      "stdout": "trapped:1\ndone\n",
+      "stderr": ""
+    }
+  },
+  {
+    "name": "return-trap",
+    "script": "trap 'echo returned' RETURN; f() { echo function; }; f",
+    "match": true,
+    "bash": {
+      "code": 0,
+      "stdout": "function\n",
+      "stderr": ""
+    },
+    "cash": {
+      "code": 0,
+      "stdout": "function\n",
+      "stderr": ""
+    }
+  },
+  {
+    "name": "startup-bash-env",
+    "script": "printf \"echo startup\\n\" > startup.sh; BASH_ENV=./startup.sh bash -c 'echo body'",
+    "match": true,
+    "bash": {
+      "code": 0,
+      "stdout": "startup\nbody\n",
+      "stderr": ""
+    },
+    "cash": {
+      "code": 0,
+      "stdout": "startup\nbody\n",
+      "stderr": ""
+    }
+  },
+  {
+    "name": "startup-posix",
+    "script": "printf \"echo startup\\n\" > startup.sh; BASH_ENV=./startup.sh bash --posix -c 'echo body'",
+    "match": true,
+    "bash": {
+      "code": 0,
+      "stdout": "body\n",
+      "stderr": ""
+    },
+    "cash": {
+      "code": 0,
+      "stdout": "body\n",
+      "stderr": ""
+    }
+  },
+  {
+    "name": "startup-sh-env",
+    "script": "printf \"echo startup\\n\" > startup.sh; ENV=./startup.sh sh -c 'echo body'",
+    "match": true,
+    "bash": {
+      "code": 0,
+      "stdout": "body\n",
+      "stderr": ""
+    },
+    "cash": {
+      "code": 0,
+      "stdout": "body\n",
+      "stderr": ""
+    }
+  },
+  {
+    "name": "bash53-current-substitution",
+    "script": "x=old; y=${ x=new; printf value; }; echo \"$x:$y\"",
+    "match": true,
+    "bash": {
+      "code": 0,
+      "stdout": "new:value\n",
+      "stderr": ""
+    },
+    "cash": {
+      "code": 0,
+      "stdout": "new:value\n",
+      "stderr": ""
+    }
+  },
+  {
+    "name": "bash53-compgen-V",
+    "script": "compgen -V a -W \"one two\"; printf \"<%s>\\n\" \"${a[@]}\"",
+    "match": true,
+    "bash": {
+      "code": 0,
+      "stdout": "<one>\n<two>\n",
+      "stderr": ""
+    },
+    "cash": {
+      "code": 0,
+      "stdout": "<one>\n<two>\n",
+      "stderr": ""
+    }
+  }
+]

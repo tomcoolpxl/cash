@@ -170,6 +170,16 @@ pub struct Frame {
     pub current: Option<Arc<crate::SourcePosition>>,
     /// Positional arguments (not including $0). May not be present for all frames.
     pub args: Vec<String>,
+    /// Whether this frame supplies the active positional-parameter scope.
+    ///
+    /// A sourced script only does so when it was invoked with arguments. Keep this
+    /// separate from `args.is_empty()`: `set --` can empty an active source scope.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub shadows_positional_args: bool,
+    /// Whether `set --` or `shift` changed this frame's positional parameters.
+    /// Bash uses this to decide whether arguments supplied to `source` are restored.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub positional_args_changed: bool,
     /// Optionally, indicates an additional line offset within the current source context.
     pub current_line_offset: usize,
 }
@@ -456,12 +466,16 @@ impl CallStack {
         source_info: &crate::SourceInfo,
         args: impl IntoIterator<Item = String>,
     ) {
+        let args: Vec<String> = args.into_iter().collect();
+        let shadows_positional_args = matches!(call_type, ScriptCallType::Run) || !args.is_empty();
         self.frames.push_front(Frame {
             frame_type: FrameType::Script(ScriptCall {
                 call_type,
                 source_info: source_info.to_owned(),
             }),
-            args: args.into_iter().collect(),
+            args,
+            shadows_positional_args,
+            positional_args_changed: false,
             source_info: source_info.to_owned(),
             current_line_offset: 0,
             current: None, // TODO(source-info): fill this out
@@ -490,6 +504,8 @@ impl CallStack {
         self.frames.push_front(Frame {
             frame_type: FrameType::TrapHandler(signal),
             args: vec![],
+            shadows_positional_args: false,
+            positional_args_changed: false,
             source_info,
             current_line_offset: 0,
             current: None, // TODO(source-info): fill this out
@@ -504,6 +520,8 @@ impl CallStack {
         self.frames.push_front(Frame {
             frame_type: FrameType::Eval,
             args: vec![],
+            shadows_positional_args: false,
+            positional_args_changed: false,
             source_info: crate::SourceInfo::from("eval"), // TODO(source-info): fill this out
             current_line_offset: 0,
             current: None, // TODO(source-info): fill this out
@@ -516,6 +534,8 @@ impl CallStack {
         self.frames.push_front(Frame {
             frame_type: FrameType::CommandString,
             args: vec![],
+            shadows_positional_args: false,
+            positional_args_changed: false,
             source_info: crate::SourceInfo::from("environment"),
             current_line_offset: 0,
             current: None, // TODO(source-info): fill this out
@@ -528,6 +548,8 @@ impl CallStack {
         self.frames.push_front(Frame {
             frame_type: FrameType::InteractiveSession,
             args: vec![],
+            shadows_positional_args: false,
+            positional_args_changed: false,
             current_line_offset: 0,
             source_info: crate::SourceInfo::from("main"),
             current: None, // TODO(source-info): fill this out
@@ -554,6 +576,8 @@ impl CallStack {
                 function: function.to_owned(),
             }),
             args: args.into_iter().collect(),
+            shadows_positional_args: true,
+            positional_args_changed: false,
             source_info: function.source().clone(),
             entry: function.definition().location().map(|span| span.start),
             current: None, // TODO(source-info): fill this out

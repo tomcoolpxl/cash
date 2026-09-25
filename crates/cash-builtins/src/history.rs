@@ -1,4 +1,4 @@
-use cash_core::{ExecutionExitCode, ExecutionResult, builtins, error, history};
+use cash_core::{ExecutionExitCode, ExecutionResult, builtins, history};
 use clap::Parser;
 use std::{
     io::Write,
@@ -137,12 +137,24 @@ impl HistoryCommand {
             return Ok(ExecutionResult::success());
         }
 
-        if self.append_rest_of_file_to_session.is_some() {
-            return error::unimp("history -n is not yet implemented");
+        if let Some(file_option) = &self.append_rest_of_file_to_session {
+            if let Some(file_path) = get_effective_history_file_path(
+                config.default_history_file_path.as_deref(),
+                file_option.as_deref(),
+            ) {
+                history.read_file(file_path, true)?;
+            }
+            return Ok(ExecutionResult::success());
         }
 
-        if self.append_file_to_session.is_some() {
-            return error::unimp("history -r is not yet implemented");
+        if let Some(file_option) = &self.append_file_to_session {
+            if let Some(file_path) = get_effective_history_file_path(
+                config.default_history_file_path.as_deref(),
+                file_option.as_deref(),
+            ) {
+                history.read_file(file_path, false)?;
+            }
+            return Ok(ExecutionResult::success());
         }
 
         if let Some(write_option) = &self.write_session_to_file {
@@ -161,8 +173,18 @@ impl HistoryCommand {
             return Ok(ExecutionResult::success());
         }
 
-        if self.expand_args.is_some() {
-            return error::unimp("history -p is not yet implemented");
+        if let Some(args) = &self.expand_args {
+            let mut stdout = stdout;
+            for arg in args {
+                match history::expand_history(arg, Some(history)) {
+                    Ok(expanded) => writeln!(stdout, "{}", expanded.line)?,
+                    Err(err) => {
+                        writeln!(stderr, "{err}")?;
+                        return Ok(ExecutionResult::general_error());
+                    }
+                }
+            }
+            return Ok(ExecutionResult::success());
         }
 
         if let Some(args) = &self.append_args_to_session {

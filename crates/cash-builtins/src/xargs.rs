@@ -79,6 +79,18 @@ impl builtins::Command for XargsCommand {
                 .filter(|item| !item.is_empty())
                 .map(ToString::to_string)
                 .collect()
+        } else if self.replace.is_some() {
+            // GNU/POSIX `-I` implies line-oriented input: unquoted blanks belong to the
+            // replacement item instead of separating arguments. Leading blanks are
+            // ignored, blank lines are skipped, and CRLF from a Windows producer is one
+            // line ending rather than a literal carriage return in the item.
+            input
+                .split('\n')
+                .map(|line| line.strip_suffix('\r').unwrap_or(line))
+                .map(|line| line.trim_start_matches([' ', '\t']))
+                .filter(|line| !line.is_empty())
+                .map(ToString::to_string)
+                .collect()
         } else {
             split_on_whitespace(input.as_str())
         };
@@ -105,7 +117,7 @@ impl builtins::Command for XargsCommand {
                     .iter()
                     .map(|part| part.replace(token.as_str(), item.as_str()))
                     .collect();
-                let result = self.run(&context, &argv)?;
+                let result = self.run(&context, &argv).await?;
                 if !result.is_success() {
                     worst = result;
                 }
@@ -137,7 +149,7 @@ impl builtins::Command for XargsCommand {
                 index += 1;
             }
 
-            let result = self.run(&context, &argv)?;
+            let result = self.run(&context, &argv).await?;
             if !result.is_success() {
                 worst = result;
             }
@@ -153,7 +165,7 @@ impl builtins::Command for XargsCommand {
 
 impl XargsCommand {
     /// Runs one command line, reporting it first under `-t`.
-    fn run<SE: cash_core::ShellExtensions>(
+    async fn run<SE: cash_core::ShellExtensions>(
         &self,
         context: &cash_core::ExecutionContext<'_, SE>,
         argv: &[String],
@@ -164,6 +176,27 @@ impl XargsCommand {
 
         if self.trace {
             writeln!(context.stderr(), "{}", argv.join(" "))?;
+        }
+
+        // Match cash's builtin precedence, including `enable -n`. A separate shell
+        // keeps stateful builtins and control flow from changing xargs's caller.
+        // Arguments are already parsed data; never turn them back into shell source.
+        if let Some(builtin) = context.shell.builtins().get(program)
+            && !builtin.disabled
+        {
+            let mut shell = context.shell.clone();
+            let child_context = cash_core::ExecutionContext {
+                shell: &mut shell,
+                command_name: program.clone(),
+                params: context.params.clone(),
+            };
+            let args = argv.iter().map(cash_core::CommandArg::from).collect();
+            let result = (builtin.execute_func)(child_context, args).await?;
+            return Ok(if result.is_success() {
+                ExecutionResult::success()
+            } else {
+                ExecutionResult::new(123)
+            });
         }
 
         // cash: run where the shell believes it is. `cd` moves the shell's own working
@@ -183,35 +216,7 @@ impl XargsCommand {
             }
         }
 
-        let status = match cmd.status() {
-            Ok(s) => Ok(s),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                if let Ok(current_exe) = std::env::current_exe() {
-                    let mut fallback = std::process::Command::new(current_exe);
-                    fallback
-                        .arg("--invoke-bundled")
-                        .arg(program)
-                        .args(rest)
-                        .current_dir(context.shell.working_dir());
-                    if let Some(stdout_file) = context.try_fd(cash_core::openfiles::OpenFiles::STDOUT_FD) {
-                        if let Ok(as_stdio) = std::process::Stdio::try_from(stdout_file) {
-                            fallback.stdout(as_stdio);
-                        }
-                    }
-                    if let Some(stderr_file) = context.try_fd(cash_core::openfiles::OpenFiles::STDERR_FD) {
-                        if let Ok(as_stdio) = std::process::Stdio::try_from(stderr_file) {
-                            fallback.stderr(as_stdio);
-                        }
-                    }
-                    fallback.status()
-                } else {
-                    Err(e)
-                }
-            }
-            Err(e) => Err(e),
-        };
-
-        match status {
+        match cmd.status() {
             Ok(status) => {
                 if status.success() {
                     Ok(ExecutionResult::success())

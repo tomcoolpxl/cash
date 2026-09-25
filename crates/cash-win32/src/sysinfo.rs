@@ -8,6 +8,123 @@
 
 use windows_sys::Win32::Foundation::{ERROR_SUCCESS, MAX_PATH};
 
+/// Cumulative processor counters returned by Windows, in 100-nanosecond units.
+///
+/// `kernel` includes `idle`, matching the contract of `GetSystemTimes`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CpuTimes {
+    /// Time spent idle; also included in `kernel` as required by the Win32 API.
+    pub idle: u64,
+    /// Time spent in kernel mode, including idle time.
+    pub kernel: u64,
+    /// Time spent in user mode.
+    pub user: u64,
+}
+
+/// A cheap, machine-wide physical-memory snapshot.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct MemoryStatus {
+    /// Installed usable physical memory.
+    pub physical_total: u64,
+    /// Physical memory Windows can make available immediately.
+    pub physical_available: u64,
+    /// Bytes currently committed by the system.
+    pub commit_total: u64,
+    /// Current soft ceiling for committed memory.
+    pub commit_limit: u64,
+    /// Highest committed byte count since boot.
+    pub commit_peak: u64,
+}
+
+/// A reusable local query for Windows' ready-to-run processor queue.
+///
+/// This is the inexpensive `\\System\\Processor Queue Length` performance counter.
+/// It contains threads that are ready but waiting for a processor; it does not inspect
+/// processes or contact another machine.
+pub struct ProcessorQueue {
+    query: windows_sys::Win32::System::Performance::PDH_HQUERY,
+    counter: windows_sys::Win32::System::Performance::PDH_HCOUNTER,
+}
+
+// SAFETY: PDH real-time query handles are not thread-affine. `sample` requires mutable
+// access, so a moved query is still collected serially, and `Drop` owns the only close.
+unsafe impl Send for ProcessorQueue {}
+
+impl ProcessorQueue {
+    /// Open the local, language-neutral processor-queue counter.
+    #[must_use]
+    pub fn open() -> Option<Self> {
+        use windows_sys::Win32::System::Performance::{
+            PdhAddEnglishCounterW, PdhCloseQuery, PdhOpenQueryW,
+        };
+
+        let mut query = std::ptr::null_mut();
+        // SAFETY: the data-source pointer is null for the local real-time source and
+        // `query` is a valid out-parameter.
+        if unsafe { PdhOpenQueryW(std::ptr::null(), 0, &raw mut query) } != ERROR_SUCCESS {
+            return None;
+        }
+
+        let path: Vec<u16> = "\\System\\Processor Queue Length\0"
+            .encode_utf16()
+            .collect();
+        let mut counter = std::ptr::null_mut();
+        // SAFETY: `query` is open, `path` is NUL terminated, and `counter` is a valid
+        // out-parameter. English counter names avoid locale-dependent registry names.
+        if unsafe { PdhAddEnglishCounterW(query, path.as_ptr(), 0, &raw mut counter) }
+            != ERROR_SUCCESS
+        {
+            // SAFETY: `query` was opened successfully above and has not been closed.
+            let _ = unsafe { PdhCloseQuery(query) };
+            return None;
+        }
+
+        Some(Self { query, counter })
+    }
+
+    /// Collect the current number of ready threads waiting for processor time.
+    #[must_use]
+    pub fn sample(&mut self) -> Option<f64> {
+        use windows_sys::Win32::System::Performance::{
+            PDH_CSTATUS_NEW_DATA, PDH_CSTATUS_VALID_DATA, PDH_FMT_COUNTERVALUE, PDH_FMT_DOUBLE,
+            PdhCollectQueryData, PdhGetFormattedCounterValue,
+        };
+
+        // SAFETY: the query remains open for `self`'s lifetime.
+        if unsafe { PdhCollectQueryData(self.query) } != ERROR_SUCCESS {
+            return None;
+        }
+
+        let mut value = PDH_FMT_COUNTERVALUE::default();
+        // SAFETY: `counter` belongs to the open query and `value` is a valid out-parameter.
+        if unsafe {
+            PdhGetFormattedCounterValue(
+                self.counter,
+                PDH_FMT_DOUBLE,
+                std::ptr::null_mut(),
+                &raw mut value,
+            )
+        } != ERROR_SUCCESS
+            || !matches!(value.CStatus, PDH_CSTATUS_VALID_DATA | PDH_CSTATUS_NEW_DATA)
+        {
+            return None;
+        }
+
+        // SAFETY: `PDH_FMT_DOUBLE` selects the union's `doubleValue` member.
+        let queue = unsafe { value.Anonymous.doubleValue };
+        queue.is_finite().then_some(queue.max(0.0))
+    }
+}
+
+impl Drop for ProcessorQueue {
+    fn drop(&mut self) {
+        use windows_sys::Win32::System::Performance::PdhCloseQuery;
+
+        // SAFETY: the query is owned by `self` and is closed exactly once here.
+        let _ = unsafe { PdhCloseQuery(self.query) };
+    }
+}
+
 /// How long the machine has been up.
 #[must_use]
 pub fn uptime() -> std::time::Duration {
@@ -16,6 +133,67 @@ pub fn uptime() -> std::time::Duration {
     // SAFETY: no arguments, no out-params; the count wraps after 584 million years.
     let millis = unsafe { GetTickCount64() };
     std::time::Duration::from_millis(millis)
+}
+
+/// Cumulative idle, kernel and user processor time for the whole machine.
+///
+/// Two snapshots are enough to build the familiar `top` CPU summary. This is one
+/// kernel call and does not start performance counters or enumerate processors.
+#[must_use]
+pub fn cpu_times() -> Option<CpuTimes> {
+    use windows_sys::Win32::{Foundation::FILETIME, System::Threading::GetSystemTimes};
+
+    let zero = FILETIME {
+        dwLowDateTime: 0,
+        dwHighDateTime: 0,
+    };
+    let (mut idle, mut kernel, mut user) = (zero, zero, zero);
+    // SAFETY: all three arguments are valid FILETIME out-parameters.
+    if unsafe { GetSystemTimes(&raw mut idle, &raw mut kernel, &raw mut user) } == 0 {
+        return None;
+    }
+
+    Some(CpuTimes {
+        idle: filetime_u64(idle),
+        kernel: filetime_u64(kernel),
+        user: filetime_u64(user),
+    })
+}
+
+/// Physical memory accounting in one call.
+#[must_use]
+pub fn memory_status() -> Option<MemoryStatus> {
+    use windows_sys::Win32::System::ProcessStatus::{
+        K32GetPerformanceInfo, PERFORMANCE_INFORMATION,
+    };
+
+    let mut info = PERFORMANCE_INFORMATION {
+        cb: u32::try_from(std::mem::size_of::<PERFORMANCE_INFORMATION>()).unwrap_or(u32::MAX),
+        ..Default::default()
+    };
+    // SAFETY: `info` is correctly sized and its size is passed alongside the pointer.
+    if unsafe { K32GetPerformanceInfo(&raw mut info, info.cb) } == 0 {
+        return None;
+    }
+
+    let page_size = u64::try_from(info.PageSize).unwrap_or(u64::MAX);
+    let bytes = |pages: usize| {
+        u64::try_from(pages)
+            .unwrap_or(u64::MAX)
+            .saturating_mul(page_size)
+    };
+
+    Some(MemoryStatus {
+        physical_total: bytes(info.PhysicalTotal),
+        physical_available: bytes(info.PhysicalAvailable),
+        commit_total: bytes(info.CommitTotal),
+        commit_limit: bytes(info.CommitLimit),
+        commit_peak: bytes(info.CommitPeak),
+    })
+}
+
+const fn filetime_u64(time: windows_sys::Win32::Foundation::FILETIME) -> u64 {
+    ((time.dwHighDateTime as u64) << 32) | (time.dwLowDateTime as u64)
 }
 
 /// The edition Windows calls itself, e.g. `Windows 11 Pro`.
@@ -69,6 +247,139 @@ pub fn cpu_name() -> Option<String> {
     .map(|name| name.trim().to_string())
 }
 
+/// Display adapter names from local Windows configuration, without sampling the GPU.
+#[must_use]
+pub fn gpu_names() -> Vec<String> {
+    use windows_sys::Win32::Graphics::Gdi::{
+        DISPLAY_DEVICE_MIRRORING_DRIVER, DISPLAY_DEVICEW, EnumDisplayDevicesW,
+    };
+
+    let mut names = Vec::new();
+    for index in 0..64 {
+        let mut device = DISPLAY_DEVICEW {
+            cb: u32::try_from(std::mem::size_of::<DISPLAY_DEVICEW>()).unwrap_or(0),
+            ..Default::default()
+        };
+        // SAFETY: device is initialized, its size is set, and the output pointer is valid.
+        if unsafe { EnumDisplayDevicesW(std::ptr::null(), index, &raw mut device, 0) } == 0 {
+            break;
+        }
+        if device.StateFlags & DISPLAY_DEVICE_MIRRORING_DRIVER != 0 {
+            continue;
+        }
+        let end = device
+            .DeviceString
+            .iter()
+            .position(|c| *c == 0)
+            .unwrap_or(device.DeviceString.len());
+        let name = String::from_utf16_lossy(&device.DeviceString[..end]);
+        if !name.is_empty() && !names.contains(&name) {
+            names.push(name);
+        }
+    }
+    names
+}
+
+/// Local IPv4 addresses on active non-loopback adapters; never contacts the network.
+#[must_use]
+pub fn local_ipv4_addresses() -> Vec<String> {
+    use windows_sys::Win32::{
+        Foundation::ERROR_BUFFER_OVERFLOW,
+        NetworkManagement::{
+            IpHelper::{
+                GAA_FLAG_SKIP_ANYCAST, GAA_FLAG_SKIP_DNS_SERVER, GAA_FLAG_SKIP_MULTICAST,
+                GetAdaptersAddresses, IF_TYPE_SOFTWARE_LOOPBACK, IP_ADAPTER_ADDRESSES_LH,
+            },
+            Ndis::IfOperStatusUp,
+        },
+        Networking::WinSock::{AF_INET, SOCKADDR_IN},
+    };
+
+    let mut size = 15_000u32;
+    // Adapter changes can invalidate a size query; bound retries rather than waiting.
+    for _ in 0..3 {
+        let count = (size as usize).div_ceil(std::mem::size_of::<IP_ADAPTER_ADDRESSES_LH>());
+        let mut buffer = vec![IP_ADAPTER_ADDRESSES_LH::default(); count];
+        // SAFETY: buffer has the required alignment and at least size writable bytes.
+        // All pointers returned by this call remain within this allocation's lifetime.
+        let status = unsafe {
+            GetAdaptersAddresses(
+                u32::from(AF_INET),
+                GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_DNS_SERVER,
+                std::ptr::null(),
+                buffer.as_mut_ptr(),
+                &raw mut size,
+            )
+        };
+        if status == ERROR_BUFFER_OVERFLOW {
+            continue;
+        }
+        if status != ERROR_SUCCESS {
+            return Vec::new();
+        }
+        let mut addresses = Vec::new();
+        let mut next = buffer.as_ptr();
+        while !next.is_null() {
+            // SAFETY: successful GetAdaptersAddresses returns a linked list in buffer.
+            let adapter = unsafe { &*next };
+            next = adapter.Next;
+            if adapter.OperStatus != IfOperStatusUp || adapter.IfType == IF_TYPE_SOFTWARE_LOOPBACK {
+                continue;
+            }
+            let mut unicast = adapter.FirstUnicastAddress;
+            while !unicast.is_null() {
+                // SAFETY: unicast is a node returned by the same successful call.
+                let entry = unsafe { &*unicast };
+                unicast = entry.Next;
+                if entry.Address.lpSockaddr.is_null()
+                    || entry.Address.iSockaddrLength
+                        < i32::try_from(std::mem::size_of::<SOCKADDR_IN>()).unwrap_or(i32::MAX)
+                {
+                    continue;
+                }
+                // SAFETY: AF_INET was requested and the address length was checked.
+                // Copy without requiring stronger alignment than SOCKADDR promises.
+                let socket = unsafe {
+                    entry
+                        .Address
+                        .lpSockaddr
+                        .cast::<SOCKADDR_IN>()
+                        .read_unaligned()
+                };
+                if socket.sin_family != AF_INET {
+                    continue;
+                }
+                // SAFETY: S_addr is the IPv4 address member populated by Windows.
+                let bytes = unsafe { socket.sin_addr.S_un.S_addr }.to_ne_bytes();
+                let ip = std::net::Ipv4Addr::from(bytes);
+                if !ip.is_unspecified() && !ip.is_loopback() {
+                    addresses.push(std::format!("{ip}/{}", entry.OnLinkPrefixLength));
+                }
+            }
+        }
+        addresses.sort();
+        addresses.dedup();
+        return addresses;
+    }
+    Vec::new()
+}
+
+/// Every logical drive visible to this process, as `C:`, `D:` and so on.
+///
+/// Includes removable and mapped drives. Presence does not guarantee that a drive
+/// is ready or reachable; callers should handle a failed usage query.
+#[must_use]
+pub fn logical_drives() -> Vec<String> {
+    use windows_sys::Win32::Storage::FileSystem::GetLogicalDrives;
+
+    // SAFETY: no arguments; returns a bitmask with one bit per drive letter.
+    let mask = unsafe { GetLogicalDrives() };
+    (b'A'..=b'Z')
+        .filter(|letter| mask & (1 << (letter - b'A')) != 0)
+        .map(|letter| std::format!("{}:", char::from(letter)))
+        .collect()
+}
+
 /// Every fixed drive on the machine, as `C:`, `D:` and so on.
 ///
 /// cash: Windows has drive letters rather than one tree, so reporting only the volume the
@@ -78,33 +389,33 @@ pub fn cpu_name() -> Option<String> {
 /// runs twice.
 #[must_use]
 pub fn fixed_drives() -> Vec<String> {
-    use windows_sys::Win32::Storage::FileSystem::{GetDriveTypeW, GetLogicalDrives};
+    use windows_sys::Win32::Storage::FileSystem::GetDriveTypeW;
 
     const DRIVE_FIXED: u32 = 3;
 
-    // SAFETY: no arguments; returns a bitmask with one bit per drive letter.
-    let mask = unsafe { GetLogicalDrives() };
-    if mask == 0 {
-        return Vec::new();
-    }
-
     let mut drives = Vec::new();
-    for bit in 0..26u32 {
-        if mask & (1 << bit) == 0 {
-            continue;
-        }
-
-        let letter = char::from(b'A' + u8::try_from(bit).unwrap_or(0));
-        let root = std::format!("{letter}:\\");
+    for drive in logical_drives() {
+        let root = std::format!("{drive}\\");
         let wide = wide(root.as_str());
 
         // SAFETY: the root path is NUL-terminated.
         if unsafe { GetDriveTypeW(wide.as_ptr()) } == DRIVE_FIXED {
-            drives.push(std::format!("{letter}:"));
+            drives.push(drive);
         }
     }
 
     drives
+}
+
+/// Whether a drive root identifies a mapped network drive.
+#[must_use]
+pub fn is_network_drive(root: &std::path::Path) -> bool {
+    use windows_sys::Win32::Storage::FileSystem::GetDriveTypeW;
+
+    const DRIVE_REMOTE: u32 = 4;
+    let root = wide(root.to_string_lossy().as_ref());
+    // SAFETY: the drive root is NUL-terminated and valid for the call.
+    unsafe { GetDriveTypeW(root.as_ptr()) == DRIVE_REMOTE }
 }
 
 /// Total and free bytes on the volume holding `path`.

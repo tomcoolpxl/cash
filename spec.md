@@ -98,6 +98,12 @@ cash is its own binary providing a Win32 semantics layer, built on `cash-core` a
 `cash-parser` rather than starting from scratch. It inherits the bash compatibility test
 suite.
 
+The advertised Bash interface remains 5.2.37. The shell also implements the
+Bash 5.3 `${ command; }` and `${| command; }` current-shell substitutions and
+`compgen -V name` array output. These are individual supported features, not
+a claim of complete Bash 5.3 compatibility. The focused source comparison and
+regressions are recorded in `research/bash-reference/README.md`.
+
 *How* it builds on them — library dependency versus fork — is D9, decided after the seam
 analysis in §6. D1 asserts only that the language layer is not rewritten.
 
@@ -768,6 +774,10 @@ survive intact. cmd's parser has genuinely ambiguous corners, so "correct for al
 is not achievable — the documentation must state where it stops rather than implying
 total fidelity.
 
+The quotes around each argument remain structural; they are not caret-escaped. This is
+required for PATH-resolved scripts under directories such as `Microsoft VS Code`, where
+turning the quotes into literals makes `cmd.exe` split the script path at the first space.
+
 Not a conflict with D4: D4 forbids rewriting arguments *semantically* (guessing at
 paths). This is quoting for a specific, known interpreter that cash is deliberately
 invoking.
@@ -1013,6 +1023,11 @@ Two Windows-shaped reasons, both consequences of other decisions:
 
 Cost accepted: one file append per command, on the command path.
 
+The default file is `~/.cash_history`. Deleting it cannot clear a running shell's
+in-memory list, and a later command may recreate it; `history -c; history -w` clears both.
+All interactive test harnesses disable persistence or use a temporary home so test input
+cannot contaminate a developer's history.
+
 - OPEN: Atuin-compatible backend as an option. brush already supports Atuin, so this is
   likely cheap, but it is a second history path to keep consistent.
 
@@ -1092,6 +1107,13 @@ commands cash carries itself.
 **Builtins take precedence, as in bash**, with bash's own escape hatch: `enable -n cat`
 disables the builtin and the `PATH` executable is used instead. Verified working.
 
+cash's `xargs` follows this precedence too, including its default `echo` command.
+Each builtin invocation uses an isolated shell copy, so state changes and `exit`
+do not affect the caller. Arguments remain data, without another shell parse.
+An explicit executable path bypasses builtin lookup; `enable -n` restores external
+lookup for a bare name. This extends GNU xargs's external-command model to cash's
+bundled userland.
+
 Normally "builtin shadows the real tool" is a silent-substitution hazard of exactly the
 kind D20 and D26 reject. Here it mostly is not: **Microsoft's Coreutils *is* uutils**,
 and so are these builtins. On the recommended setup (D35) the builtin and the `PATH`
@@ -1106,11 +1128,19 @@ MSYS processes, omitting every native program, and the numbers it prints are MSY
 that `kill` cannot use. It looks like it worked. That is the exact failure D35 exists to
 name, and the answer D48 prefers is to carry the tool.
 
-The builtin implements what people type — `ps`, `ps -e`, `ps -ef`, `ps aux` — and
-nothing more. A bare `ps` lists the shell's own descendants, because Linux's `ps` shows
-the processes attached to your terminal and Windows has no controlling terminal to
-filter by. Deliberately absent: `-o` format strings, CPU and memory columns, and the
+The native process builtins implement the useful common surface: `ps`, `ps -e`,
+`ps -ef`, `ps -efj`, `ps aux`, `pgrep -P`/`--parent`, `pstree`, and `top`. A bare `ps`
+lists the shell's own descendants, because Linux's `ps` shows the processes attached to
+your terminal and Windows has no controlling terminal to filter by. `$PID`, `$BASHPID`,
+`$$`, and `$PPID` use the same native Windows IDs these tools print and `kill` accepts.
+The `-efj` view substitutes Windows base priority for Linux job-control fields that have
+no machine-wide Windows equivalent. Deliberately absent: `ps -o` format strings and the
 full command line of another process, which means reading that process's PEB.
+
+The native `tree` covers the common, cheap filesystem view: `tree [DIRECTORY]`, `-a`,
+`-d`, `-L LEVEL`, `-f`, `--dirsfirst`, and `--noreport`. It prints directory links and
+junctions as leaves instead of following them, preventing cycles and walks outside the
+requested root.
 
 **The gap stays open: still no `sed`, no `awk`.** uutils does not implement them — they
 are separate GNU projects. So cash is *not* a complete userland in one executable, and

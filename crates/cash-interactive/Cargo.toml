@@ -38,6 +38,7 @@ reedline = { version = "0.51.0", optional = true }
 thiserror = "2.0.18"
 tokio = { version = "1.52.3", features = ["rt", "sync"] }
 tracing = "0.1.44"
+futures-util = "0.3.34"
 
 [dev-dependencies]
 pretty_assertions = { version = "1.4.1", features = ["unstable"] }

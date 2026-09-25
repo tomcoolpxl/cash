@@ -69,6 +69,25 @@ fn ls_is_a_builtin() {
 }
 
 #[test]
+fn ls_resolves_dot_and_relative_paths_from_the_shell_working_directory() {
+    let scratch = Scratch::new("shell-cwd");
+    let child = scratch.path().join("child");
+    std::fs::create_dir(&child).unwrap();
+    std::fs::write(child.join("only-here.txt"), b"marker").unwrap();
+
+    let root = scratch.path().to_string_lossy().replace('\\', "/");
+    let out = cash(&format!(
+        "HOME='{root}'; cd '{root}'; cd child; ls -1; ls -1 ..; ls -1 ../child/only-here.txt; ls -1 ~"
+    ));
+
+    assert_eq!(out.code, 0, "stderr: {}", out.stderr);
+    assert_eq!(
+        out.stdout,
+        "only-here.txt\nchild\n../child/only-here.txt\nchild"
+    );
+}
+
+#[test]
 fn ls_long_format_shows_real_user_not_somebody() {
     let scratch = Scratch::new("real-user");
     let file = scratch.path().join("alpha.txt");

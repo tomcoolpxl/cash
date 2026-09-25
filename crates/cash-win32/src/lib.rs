@@ -14,8 +14,8 @@
 #![cfg(windows)]
 
 pub mod cmd;
-pub mod console;
 pub mod conpty;
+pub mod console;
 pub mod env;
 pub mod exit;
 pub mod fs;

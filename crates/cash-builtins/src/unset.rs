@@ -73,10 +73,13 @@ impl builtins::Command for UnsetCommand {
                         cash_parser::word::Parameter::NamedWithIndex { name, index } => {
                             unset_array_index(context.shell, name.as_str(), index.as_str())?
                         }
-                        cash_parser::word::Parameter::NamedWithAllIndices {
-                            name: _,
-                            concatenate: _,
-                        } => continue,
+                        cash_parser::word::Parameter::NamedWithAllIndices { name, concatenate } => {
+                            unset_all_indices(
+                                context.shell,
+                                name.as_str(),
+                                if concatenate { "*" } else { "@" },
+                            )?
+                        }
                     };
 
                     if result {
@@ -95,6 +98,36 @@ impl builtins::Command for UnsetCommand {
 
         Ok(ExecutionResult::success())
     }
+}
+
+fn unset_all_indices(
+    shell: &mut Shell<impl cash_core::ShellExtensions>,
+    name: &str,
+    spelling: &str,
+) -> Result<bool, cash_core::Error> {
+    let Some((_, variable)) = shell.env_mut().get_mut(name) else {
+        return Ok(false);
+    };
+
+    if variable.value().is_associative_array() {
+        return variable.unset_index(spelling);
+    }
+
+    if variable.value().is_indexed_array() {
+        let had_elements = matches!(
+            variable.value(),
+            cash_core::variables::ShellValue::IndexedArray(elements) if !elements.is_empty()
+        );
+        variable.assign(
+            cash_core::variables::ShellValueLiteral::Array(cash_core::variables::ArrayLiteral(
+                Vec::new(),
+            )),
+            false,
+        )?;
+        return Ok(had_elements);
+    }
+
+    Ok(false)
 }
 
 fn unset_array_index(

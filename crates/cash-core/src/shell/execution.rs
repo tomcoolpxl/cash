@@ -166,7 +166,9 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         tracing::debug!(target: trace_categories::PARSE, "Parsing sourced file: {}", source_info.source);
         let parse_result = parser.parse_program();
 
-        let script_positional_args = args.map(Into::into);
+        let script_positional_args: Vec<String> = args.map(Into::into).collect();
+        let source_was_given_args = matches!(call_type, callstack::ScriptCallType::Source)
+            && !script_positional_args.is_empty();
 
         self.call_stack
             .push_script(call_type, source_info, script_positional_args);
@@ -175,7 +177,20 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
             .run_parsed_result(parse_result, source_info, params)
             .await;
 
-        self.call_stack.pop();
+        let exited_frame = self.call_stack.pop();
+
+        // Bash restores arguments temporarily supplied to `source` unless the sourced
+        // file itself changes them with `set --`/`shift` at top level. In that case the
+        // changed values become the caller's positional parameters. A function remains
+        // its own argument scope, so sourced changes made inside one are restored.
+        if source_was_given_args
+            && !self.call_stack.in_function()
+            && let Some(frame) = exited_frame
+            && frame.positional_args_changed
+        {
+            self.mark_current_shell_args_set();
+            *self.current_shell_args_mut() = frame.args;
+        }
 
         result
     }

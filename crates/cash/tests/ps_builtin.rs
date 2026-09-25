@@ -59,6 +59,71 @@ fn ps_is_a_builtin() {
 }
 
 #[test]
+fn pstree_is_a_builtin() {
+    let out = cash("type pstree");
+    assert!(
+        out.stdout.contains("shell builtin"),
+        "pstree is not the builtin: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn pgrep_is_a_builtin() {
+    let out = cash("type pgrep");
+    assert!(
+        out.stdout.contains("shell builtin"),
+        "pgrep is not the builtin: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn pgrep_parent_accepts_the_long_option_and_native_pid() {
+    let out = cash(
+        r#"
+        ping -n 30 127.0.0.1 > /dev/null &
+        child=$!
+        found=$(pgrep --parent $$)
+        case " $found " in *" $child "*) echo found;; *) echo "missing:$child:$found";; esac
+        kill -KILL "$child" 2>/dev/null
+        "#,
+    );
+    assert_eq!(out.stdout, "found", "stderr: {}", out.stderr);
+}
+
+#[test]
+fn pstree_can_show_the_shells_native_subtree() {
+    let out = cash(
+        r#"
+        ping -n 30 127.0.0.1 > /dev/null &
+        child=$!
+        pstree -p $$
+        echo "expected-child=$child"
+        kill -KILL "$child" 2>/dev/null
+        "#,
+    );
+    assert!(
+        out.stdout.to_ascii_lowercase().contains("cash.exe("),
+        "shell is missing from its process tree: {} {}",
+        out.stdout,
+        out.stderr
+    );
+    let child = out
+        .stdout
+        .lines()
+        .find_map(|line| line.strip_prefix("expected-child="))
+        .expect("expected child pid");
+    assert!(
+        out.stdout
+            .to_ascii_lowercase()
+            .contains(&std::format!("ping.exe({child})")),
+        "child is missing from the process tree: {}",
+        out.stdout
+    );
+}
+
+#[test]
 fn the_shell_lists_itself() {
     let out = cash("ps");
     assert!(
@@ -122,6 +187,24 @@ fn the_pid_matches_the_one_the_shell_reports() {
     assert_eq!(out.stdout, "agree", "stderr: {}", out.stderr);
 }
 
+#[test]
+fn pid_and_ppid_name_native_windows_processes() {
+    let out = cash("printf '%s %s %s %s' \"$PID\" \"$BASHPID\" \"$$\" \"$PPID\"");
+    let values: Vec<u32> = out
+        .stdout
+        .split_whitespace()
+        .map(|value| value.parse().expect("a numeric process id"))
+        .collect();
+    assert_eq!(values.len(), 4, "missing process variable: {}", out.stdout);
+    assert_eq!(values[0], values[1], "PID and BASHPID disagree");
+    assert_eq!(values[0], values[2], "PID and $$ disagree");
+    assert_eq!(
+        values[3],
+        std::process::id(),
+        "PPID does not name the process that launched cash"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Selection
 // ---------------------------------------------------------------------------
@@ -160,7 +243,7 @@ fn dash_e_lists_every_process() {
 #[test]
 fn the_bsd_spellings_are_accepted() {
     // `ps aux` and `ps ax` are in everyone's fingers, and their options carry no dash.
-    for spelling in ["ps aux", "ps ax", "ps -ef", "ps -e -f"] {
+    for spelling in ["ps aux", "ps ax", "ps -ef", "ps -e -f", "ps -efj"] {
         let out = cash(&format!("{spelling} | wc -l"));
         let lines: usize = out
             .stdout
@@ -169,6 +252,49 @@ fn the_bsd_spellings_are_accepted() {
             .unwrap_or_else(|_| panic!("{spelling} did not produce a count: {}", out.stderr));
         assert!(lines > 20, "{spelling} listed only {lines} processes");
     }
+}
+
+#[test]
+fn efj_adds_native_priority_to_the_parent_view() {
+    let out = cash("ps -efj");
+    let header = out.stdout.lines().next().unwrap_or_default();
+    for column in ["UID", "PID", "PPID", "PRI", "STIME", "TIME", "CMD"] {
+        assert!(
+            header.contains(column),
+            "-efj is missing {column}: {header:?}"
+        );
+    }
+
+    let own = out
+        .stdout
+        .lines()
+        .skip(1)
+        .find(|line| line.to_ascii_lowercase().ends_with("cash.exe"))
+        .expect("cash row in ps -efj");
+    let fields: Vec<&str> = own.split_whitespace().collect();
+    assert!(
+        fields[1].parse::<u32>().is_ok(),
+        "PID is not numeric: {own}"
+    );
+    assert!(
+        fields[2].parse::<u32>().is_ok(),
+        "PPID is not numeric: {own}"
+    );
+    assert!(
+        fields[3].parse::<i32>().is_ok(),
+        "PRI is not numeric: {own}"
+    );
+}
+
+#[test]
+fn help_advertises_the_jobs_view() {
+    let out = cash("ps --help");
+    let help = format!("{}\n{}", out.stdout, out.stderr);
+    assert!(help.contains("-j"), "ps -j is hidden from help: {help}");
+    assert!(
+        help.contains("base priority"),
+        "ps -j is unexplained: {help}"
+    );
 }
 
 #[test]

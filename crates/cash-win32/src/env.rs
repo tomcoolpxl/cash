@@ -179,9 +179,24 @@ pub fn path_to_windows(value: &str) -> String {
 /// alphabetic segment followed by one starting with a slash is a drive letter, not a
 /// separator, so the two are rejoined.
 pub fn split_path(value: &str) -> impl Iterator<Item = &str> {
-    let entries: Vec<&str> = if value.contains(';') {
+    split_path_entries(value)
+        .into_iter()
+        .filter(|entry| !entry.is_empty())
+}
+
+/// Split a shell search path while preserving empty entries.
+///
+/// Bash assigns a specific meaning to an empty entry: search the current directory at
+/// that exact point. The ordinary Windows PATH bridge intentionally drops them, so
+/// source-like operations use this stricter variant.
+pub fn split_path_preserving_empty(value: &str) -> impl Iterator<Item = &str> {
+    split_path_entries(value).into_iter()
+}
+
+fn split_path_entries(value: &str) -> Vec<&str> {
+    if value.contains(';') {
         // Semicolons are unambiguous: this is the Windows form.
-        value.split(';').filter(|s| !s.is_empty()).collect()
+        value.split(';').collect()
     } else {
         let raw: Vec<&str> = value.split(':').collect();
 
@@ -215,8 +230,6 @@ pub fn split_path(value: &str) -> impl Iterator<Item = &str> {
                 index += 1;
             }
         }
-        merged.into_iter().filter(|s| !s.is_empty()).collect()
-    };
-
-    entries.into_iter()
+        merged
+    }
 }

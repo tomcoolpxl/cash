@@ -1,6 +1,10 @@
+use futures_util::FutureExt as _;
+use std::any::Any;
+use std::future::Future;
 use std::io::IsTerminal as _;
 use std::io::Write as _;
 use std::ops::ControlFlow;
+use std::panic::AssertUnwindSafe;
 
 use crate::InputBackend;
 use crate::InteractivePrompt;
@@ -120,7 +124,25 @@ impl<'a, IB: InputBackend, SE: cash_core::ShellExtensions> InteractiveShell<'a, 
         drop(shell);
 
         loop {
-            let result = self.run_interactively_once().await?;
+            let result = match catch_future_panic(self.run_interactively_once()).await {
+                Ok(result) => result?,
+                Err(payload) => {
+                    // A panic in a parser, hook, builtin, prompt renderer, input backend, or
+                    // command must not take down the user's long-lived shell. Tokio's mutex is
+                    // not poisoned, so dropping the failed future releases any shell guard and
+                    // the next loop iteration can safely present a fresh prompt.
+                    let _ = self.terminal_integration.on_post_exec_command(1);
+                    let mut shell = self.shell.lock().await;
+                    shell.set_last_exit_status(1);
+                    let _ = writeln!(
+                        shell.stderr(),
+                        "cash: recovered from internal error: {}",
+                        panic_payload_message(payload.as_ref())
+                    );
+                    drop(shell);
+                    continue;
+                }
+            };
             match result {
                 InteractiveExecutionResult::Executed(result) if result.is_exit() => {
                     break;
@@ -457,6 +479,18 @@ impl<'a, IB: InputBackend, SE: cash_core::ShellExtensions> InteractiveShell<'a, 
     }
 }
 
+async fn catch_future_panic<F: Future>(future: F) -> Result<F::Output, Box<dyn Any + Send>> {
+    AssertUnwindSafe(future).catch_unwind().await
+}
+
+fn panic_payload_message(payload: &(dyn Any + Send)) -> &str {
+    payload
+        .downcast_ref::<&str>()
+        .copied()
+        .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
+        .unwrap_or("unknown panic")
+}
+
 /// Represents the host environment; used for terminal detection in conjunction
 /// with the `TerminalEnvironment` trait.
 struct HostEnvironment;
@@ -470,5 +504,79 @@ impl crate::term_detection::TerminalEnvironment for HostEnvironment {
     /// * `name` - The name of the environment variable to get.
     fn get_env_var(&self, name: &str) -> Option<String> {
         std::env::var(name).ok()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use super::{InteractiveOptions, InteractiveShell, catch_future_panic};
+    use crate::{InputBackend, InteractivePrompt, ReadResult, ShellError, ShellRef};
+
+    struct PanicThenEof {
+        reads: usize,
+    }
+
+    impl InputBackend for PanicThenEof {
+        #[allow(
+            clippy::manual_assert,
+            clippy::panic,
+            clippy::panic_in_result_fn,
+            reason = "this fake backend deliberately panics to exercise recovery"
+        )]
+        fn read_line(
+            &mut self,
+            _shell: &ShellRef<impl cash_core::ShellExtensions>,
+            _prompt: InteractivePrompt,
+        ) -> Result<ReadResult, ShellError> {
+            self.reads += 1;
+            if self.reads == 1 {
+                panic!("injected input panic");
+            }
+            Ok(ReadResult::Eof)
+        }
+    }
+
+    #[test]
+    #[allow(
+        clippy::panic,
+        clippy::panic_in_result_fn,
+        reason = "the recovery boundary needs an actual unwinding panic"
+    )]
+    fn command_boundary_catches_a_panicking_future() -> Result<(), Box<dyn std::error::Error>> {
+        let runtime = tokio::runtime::Builder::new_current_thread().build()?;
+        let result = runtime.block_on(catch_future_panic(async {
+            panic!("injected command panic");
+        }));
+        assert!(result.is_err());
+        Ok(())
+    }
+
+    #[test]
+    #[allow(
+        clippy::panic,
+        clippy::panic_in_result_fn,
+        reason = "the interactive loop recovery test needs an actual unwinding panic"
+    )]
+    fn interactive_loop_continues_after_a_panicking_input_backend()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let runtime = tokio::runtime::Builder::new_current_thread().build()?;
+        runtime.block_on(async {
+            let shell = Arc::new(tokio::sync::Mutex::new(
+                cash_core::Shell::builder().build().await?,
+            ));
+            let mut input = PanicThenEof { reads: 0 };
+
+            {
+                let mut interactive =
+                    InteractiveShell::new(&shell, &mut input, &InteractiveOptions::default())?;
+                interactive.run_interactively().await?;
+            }
+
+            assert_eq!(input.reads, 2, "the loop should request another command");
+            assert_eq!(shell.lock().await.last_exit_status(), 1);
+            Ok::<(), Box<dyn std::error::Error>>(())
+        })
     }
 }

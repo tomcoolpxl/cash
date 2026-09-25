@@ -326,16 +326,34 @@ fn groups_names_an_account_rather_than_failing() {
 
 #[test]
 fn hostname_uname_and_computername_all_agree() {
-    let out = cash(r#"
+    let out = cash(
+        r#"
         echo "hn=$(hostname)"
         echo "un=$(uname -n)"
         echo "cn=$COMPUTERNAME"
         echo "env_hn=$HOSTNAME"
-    "#);
-    let hn = out.stdout.lines().find_map(|l| l.strip_prefix("hn=")).unwrap_or_default();
-    let un = out.stdout.lines().find_map(|l| l.strip_prefix("un=")).unwrap_or_default();
-    let cn = out.stdout.lines().find_map(|l| l.strip_prefix("cn=")).unwrap_or_default();
-    let env_hn = out.stdout.lines().find_map(|l| l.strip_prefix("env_hn=")).unwrap_or_default();
+    "#,
+    );
+    let hn = out
+        .stdout
+        .lines()
+        .find_map(|l| l.strip_prefix("hn="))
+        .unwrap_or_default();
+    let un = out
+        .stdout
+        .lines()
+        .find_map(|l| l.strip_prefix("un="))
+        .unwrap_or_default();
+    let cn = out
+        .stdout
+        .lines()
+        .find_map(|l| l.strip_prefix("cn="))
+        .unwrap_or_default();
+    let env_hn = out
+        .stdout
+        .lines()
+        .find_map(|l| l.strip_prefix("env_hn="))
+        .unwrap_or_default();
 
     assert!(!cn.is_empty(), "COMPUTERNAME is empty");
     assert_eq!(hn, cn, "hostname [{hn}] != COMPUTERNAME [{cn}]");
@@ -372,4 +390,3 @@ fn type_and_which_do_not_produce_mixed_slashes() {
         }
     }
 }
-

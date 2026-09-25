@@ -286,6 +286,7 @@ fn an_rc_file_can_override_a_shim() {
             "-c",
             "_filedir",
         ])
+        .env("HISTFILE", "")
         .output()
         .expect("failed to run cash");
 
@@ -383,7 +384,13 @@ async fn docker_completion_works() {
 
 #[tokio::test]
 async fn kubectl_completion_works() {
-    assert_real_tool_completes("kubectl", &["completion", "bash"], "kubectl api-r", "api-resources").await;
+    assert_real_tool_completes(
+        "kubectl",
+        &["completion", "bash"],
+        "kubectl api-r",
+        "api-resources",
+    )
+    .await;
 }
 
 #[tokio::test]

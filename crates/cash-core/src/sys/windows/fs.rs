@@ -155,6 +155,23 @@ pub fn split_paths<T: AsRef<OsStr> + ?Sized>(s: &T) -> std::vec::IntoIter<PathBu
         .into_iter()
 }
 
+/// Splits a Bash search path, retaining empty entries as the current directory.
+pub fn split_paths_preserving_empty<T: AsRef<OsStr> + ?Sized>(
+    s: &T,
+) -> std::vec::IntoIter<PathBuf> {
+    let value = s.as_ref().to_string_lossy().into_owned();
+    cash_win32::env::split_path_preserving_empty(&value)
+        .map(|entry| {
+            if entry.is_empty() {
+                PathBuf::from(".")
+            } else {
+                cash_win32::path::accept_path(entry)
+            }
+        })
+        .collect::<Vec<_>>()
+        .into_iter()
+}
+
 /// Opens a null file that will discard all I/O.
 pub fn open_null_file() -> Result<std::fs::File, error::Error> {
     let f = std::fs::File::options()
@@ -606,8 +623,13 @@ mod tests {
         // Test with custom extensions slice
         let custom = vec![".custom".to_string(), ".xyz".to_string()];
         assert!(has_executable_extension_with(Path::new("run.xyz"), &custom));
-        assert!(has_executable_extension_with(Path::new("run.CUSTOM"), &custom));
-        assert!(!has_executable_extension_with(Path::new("run.exe"), &custom));
+        assert!(has_executable_extension_with(
+            Path::new("run.CUSTOM"),
+            &custom
+        ));
+        assert!(!has_executable_extension_with(
+            Path::new("run.exe"),
+            &custom
+        ));
     }
 }
-

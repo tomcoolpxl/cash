@@ -254,6 +254,7 @@ impl<SE: extensions::ShellExtensions> Default for Shell<SE> {
             env: env::ShellEnvironment::default(),
             funcs: functions::FunctionEnv::default(),
             options: options::RuntimeOptions::default(),
+            local_option_snapshots: Vec::new(),
             jobs: jobs::JobManager::default(),
             aliases: HashMap::default(),
             last_exit_status: 0,

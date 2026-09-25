@@ -315,6 +315,9 @@ fn start_shell_session_with(
     ]);
     cmd.env("PS1", DEFAULT_PROMPT);
     cmd.env("TERM", "linux");
+    // PTY commands are test input, not user history. Never load or update the
+    // developer's real ~/.cash_history while running this suite.
+    cmd.env("HISTFILE", "");
     configure(&mut cmd);
 
     let session = expectrl::session::Session::spawn(cmd)?;

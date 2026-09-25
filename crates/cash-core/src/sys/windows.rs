@@ -15,7 +15,8 @@ pub use crate::sys::stubs::resource;
 #[path = "windows/signal.rs"]
 pub mod signal;
 
-pub use crate::sys::stubs::terminal;
+#[path = "windows/terminal.rs"]
+pub mod terminal;
 pub use crate::sys::tokio_process as process;
 pub(crate) mod users;
 

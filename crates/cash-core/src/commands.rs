@@ -14,14 +14,14 @@ use sys::commands::{CommandExt, CommandFdInjectionExt, CommandFgControlExt};
 
 use crate::{
     ErrorKind, ExecutionControlFlow, ExecutionExitCode, ExecutionParameters, ExecutionResult,
-    Shell, ShellFd, builtins, commands, env, error, escape,
+    Shell, ShellFd, builtins, commands, error, escape,
     extensions::{self, ShellExtensions},
     functions,
     interp::{self, Execute, ProcessGroupPolicy},
     openfiles::{self, OpenFile, OpenFiles},
     pathsearch, processes,
     results::ExecutionSpawnResult,
-    sys, trace_categories, traps, variables,
+    sys, trace_categories, traps,
 };
 
 /// Encapsulates the result of waiting for a command to complete.
@@ -184,10 +184,7 @@ if ($LASTEXITCODE -ne $null) {\r\n\
     exit 0\r\n\
 }\r\n";
         std::fs::write(&runner_path, RUNNER_CONTENT).map_err(|e| {
-            error::ErrorKind::FailedToExecuteCommand(
-                runner_path.to_string_lossy().into_owned(),
-                e,
-            )
+            error::ErrorKind::FailedToExecuteCommand(runner_path.to_string_lossy().into_owned(), e)
         })?;
     }
     Ok(runner_path)
@@ -207,12 +204,9 @@ fn find_powershell_binary<SE: extensions::ShellExtensions>(
         .iter()
         .map(|s| (*s).to_string())
         .collect();
-    if let Some(d) = cash_win32::resolve::resolve(
-        "pwsh",
-        &path_entries,
-        &pathext,
-        context.shell.working_dir(),
-    ) {
+    if let Some(d) =
+        cash_win32::resolve::resolve("pwsh", &path_entries, &pathext, context.shell.working_dir())
+    {
         return d.target().to_path_buf();
     }
     if let Some(d) = cash_win32::resolve::resolve(
@@ -267,10 +261,8 @@ fn build_batch_command<S: AsRef<OsStr>>(
 ) -> std::process::Command {
     use std::os::windows::process::CommandExt as _;
 
-    let comspec = std::env::var_os("COMSPEC").map_or_else(
-        || PathBuf::from("cmd.exe"),
-        PathBuf::from,
-    );
+    let comspec =
+        std::env::var_os("COMSPEC").map_or_else(|| PathBuf::from("cmd.exe"), PathBuf::from);
     let mut c = std::process::Command::new(comspec);
     c.arg0(argv0);
     c.arg("/d").arg("/s").arg("/c");
@@ -342,10 +334,8 @@ fn build_shebang_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
         cash_win32::resolve::Dispatch::Batch(ref batch_target) => {
             use std::os::windows::process::CommandExt as _;
 
-            let comspec = std::env::var_os("COMSPEC").map_or_else(
-                || PathBuf::from("cmd.exe"),
-                PathBuf::from,
-            );
+            let comspec =
+                std::env::var_os("COMSPEC").map_or_else(|| PathBuf::from("cmd.exe"), PathBuf::from);
             let mut c = std::process::Command::new(comspec);
             c.arg0(argv0);
             c.arg("/d").arg("/s").arg("/c");
@@ -425,14 +415,7 @@ fn build_windows_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
             interpreter,
             args: shebang_args,
             script,
-        } => build_shebang_command(
-            context,
-            &interpreter,
-            &shebang_args,
-            &script,
-            argv0,
-            args,
-        ),
+        } => build_shebang_command(context, &interpreter, &shebang_args, &script, argv0, args),
         cash_win32::resolve::Dispatch::Exit(code) => {
             let own = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("cash.exe"));
             let mut c = std::process::Command::new(own);
@@ -463,8 +446,7 @@ pub fn compose_std_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
     empty_env: bool,
 ) -> Result<std::process::Command, error::Error> {
     #[cfg(windows)]
-    let (mut cmd, target_ps_script) =
-        build_windows_command(context, command_name, argv0, args)?;
+    let (mut cmd, target_ps_script) = build_windows_command(context, command_name, argv0, args)?;
     #[cfg(not(windows))]
     let mut cmd = {
         let mut c = std::process::Command::new(command_name);
@@ -561,17 +543,6 @@ pub fn compose_std_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
 pub(crate) async fn on_preexecute(
     cmd: &mut commands::SimpleCommand<'_, impl extensions::ShellExtensions>,
 ) -> Result<(), error::Error> {
-    // Set BASH_COMMAND before invoking the DEBUG trap (and generally before
-    // executing commands).
-    let full_cmd = cmd.args.iter().map(|arg| arg.to_string()).join(" ");
-    cmd.shell.env_mut().update_or_add(
-        "BASH_COMMAND",
-        variables::ShellValueLiteral::Scalar(full_cmd),
-        |_| Ok(()),
-        env::EnvironmentLookup::Anywhere,
-        env::EnvironmentScope::Global,
-    )?;
-
     // Fire the DEBUG trap if one is registered.
     if cmd.shell.traps().handles(traps::TrapSignal::Debug) {
         let _ = cmd
@@ -981,8 +952,7 @@ impl<'a, SE: extensions::ShellExtensions> SimpleCommand<'a, SE> {
                     let path_var = shell.env().get_str("PATH", &shell).unwrap_or_default();
                     let path_entries: Vec<PathBuf> =
                         crate::sys::fs::split_paths(path_var.as_ref()).collect();
-                    let pathext_var =
-                        shell.env().get_str("PATHEXT", &shell).unwrap_or_default();
+                    let pathext_var = shell.env().get_str("PATHEXT", &shell).unwrap_or_default();
                     let pathext = if pathext_var.is_empty() {
                         cash_win32::resolve::DEFAULT_PATHEXT
                             .iter()
