@@ -4,14 +4,14 @@
     "script": "printf '#!/bin/sh\\necho ran\\n\\0\\n' > nul.sh; \"$BASH\" ./nul.sh; echo rc=$?",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "ran\nrc=0\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     },
     "cash": {
-      "code": 0,
       "stdout": "ran\nrc=0\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     }
   },
   {
@@ -19,14 +19,14 @@
     "script": "printf 'echo a\\n\\nif true; then\\n echo b\\n' > unterm.sh; \"$BASH\" ./unterm.sh 2>&1 | grep -o 'line [0-9]*' | tail -n 1",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "line 3\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     },
     "cash": {
-      "code": 0,
       "stdout": "line 3\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     }
   },
   {
@@ -34,14 +34,14 @@
     "script": "set -o posix; true & sleep 0.5; jobs >/dev/null; jobs | wc -l",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "0\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     },
     "cash": {
-      "code": 0,
       "stdout": "0\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     }
   },
   {
@@ -49,14 +49,14 @@
     "script": "re='('; err=$( { [[ a =~ $re ]]; } 2>&1 ); echo rc=$? ${err:+diagnostic}",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "rc=2 diagnostic\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     },
     "cash": {
-      "code": 0,
       "stdout": "rc=2 diagnostic\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     }
   },
   {
@@ -64,14 +64,14 @@
     "script": "umask 022; umask -S; umask u=rwx,g=rx,o=; umask; umask a+w; umask; umask g-w,o-rwx; umask -S; umask -p",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "u=rwx,g=rx,o=rx\n0027\n0005\nu=rwx,g=rx,o=\numask 0027\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     },
     "cash": {
-      "code": 0,
       "stdout": "u=rwx,g=rx,o=rx\n0027\n0005\nu=rwx,g=rx,o=\numask 0027\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     }
   },
   {
@@ -79,14 +79,14 @@
     "script": "hash -p /no/such/ls ls; type -a -P ls | head -n 1; type -P ls",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "/no/such/ls\n/no/such/ls\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     },
     "cash": {
-      "code": 0,
       "stdout": "/no/such/ls\n/no/such/ls\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     }
   },
   {
@@ -94,14 +94,14 @@
     "script": "trap 'echo hi' INT; trap -P INT; trap 'echo bye' EXIT; trap -P EXIT INT; trap - EXIT; trap -P TERM; echo rc=$?",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "echo hi\necho bye\necho hi\nrc=0\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     },
     "cash": {
-      "code": 0,
       "stdout": "echo hi\necho bye\necho hi\nrc=0\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     }
   },
   {
@@ -109,14 +109,14 @@
     "script": "trap -P 2>/dev/null; echo none=$?; trap -p -P INT 2>/dev/null; echo both=$?",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "none=2\nboth=2\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     },
     "cash": {
-      "code": 0,
       "stdout": "none=2\nboth=2\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     }
   },
   {
@@ -124,14 +124,14 @@
     "script": "command declare a=$(echo x y); echo \"$a\"; command export b=$(echo p q); echo \"$b\"; command command readonly c=$(echo m n); echo \"$c\"",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "x\np\nm\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     },
     "cash": {
-      "code": 0,
       "stdout": "x\np\nm\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     }
   },
   {
@@ -139,14 +139,14 @@
     "script": "f() { command local c=$(echo m n); echo \"$c\"; }; f",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "m\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     },
     "cash": {
-      "code": 0,
       "stdout": "m\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     }
   },
   {
@@ -154,14 +154,14 @@
     "script": "printf '<%#q>\\n' abc 'a b' \"it's\" ''; printf '<%q>\\n' 'a b'",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "<'abc'>\n<'a b'>\n<'it'\\''s'>\n<''>\n<a\\ b>\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     },
     "cash": {
-      "code": 0,
       "stdout": "<'abc'>\n<'a b'>\n<'it'\\''s'>\n<''>\n<a\\ b>\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     }
   },
   {
@@ -169,14 +169,14 @@
     "script": "printf '<%#Q>\\n' 'a b'; printf '<%.2Q>\\n' 'a b c'",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "<'a b'>\n<a\\ >\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     },
     "cash": {
-      "code": 0,
       "stdout": "<'a b'>\n<a\\ >\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     }
   },
   {
@@ -184,14 +184,14 @@
     "script": "rm -rf gs; mkdir gs; cd gs; printf aaa > b; printf a > c; printf aa > a; echo *; GLOBSORT=-name; echo *; GLOBSORT=+name; echo *",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "a b c\nc b a\na b c\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     },
     "cash": {
-      "code": 0,
       "stdout": "a b c\nc b a\na b c\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     }
   },
   {
@@ -199,14 +199,14 @@
     "script": "rm -rf gs; mkdir gs; cd gs; printf aaa > b; printf a > c; printf aa > a; GLOBSORT=size; echo *; GLOBSORT=-size; echo *",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "c a b\nb a c\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     },
     "cash": {
-      "code": 0,
       "stdout": "c a b\nb a c\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     }
   },
   {
@@ -214,14 +214,14 @@
     "script": "rm -rf gs; mkdir gs; cd gs; touch -t 202001010000 a; touch -t 202101010000 b; touch -t 201901010000 c; GLOBSORT=mtime; echo *; GLOBSORT=-mtime; echo *",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "c a b\nb a c\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     },
     "cash": {
-      "code": 0,
       "stdout": "c a b\nb a c\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     }
   },
   {
@@ -229,14 +229,14 @@
     "script": "rm -rf gs; mkdir gs; cd gs; touch 10 9 100 1; echo *; GLOBSORT=numeric; echo *; GLOBSORT=-numeric; echo *",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "1 10 100 9\n1 9 10 100\n100 10 9 1\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     },
     "cash": {
-      "code": 0,
       "stdout": "1 10 100 9\n1 9 10 100\n100 10 9 1\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     }
   },
   {
@@ -244,14 +244,14 @@
     "script": "rm -rf gs; mkdir gs; cd gs; touch b a c; GLOBSORT=bogus; echo *; GLOBSORT=; echo *; unset GLOBSORT; echo *",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "a b c\na b c\na b c\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     },
     "cash": {
-      "code": 0,
       "stdout": "a b c\na b c\na b c\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     }
   },
   {
@@ -259,14 +259,14 @@
     "script": "shopt array_expand_once; shopt -s assoc_expand_once; shopt array_expand_once; shopt -u array_expand_once; shopt assoc_expand_once",
     "match": true,
     "bash": {
-      "code": 1,
       "stdout": "array_expand_once   \toff\narray_expand_once   \ton\nassoc_expand_once   \toff\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 1
     },
     "cash": {
-      "code": 1,
       "stdout": "array_expand_once   \toff\narray_expand_once   \ton\nassoc_expand_once   \toff\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 1
     }
   },
   {
@@ -274,14 +274,14 @@
     "script": "shopt -s array_expand_once; declare -A a; k='$(echo ran >&2)x'; a[$k]=v; unset 'a[$k]'; echo count=${#a[@]}",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "count=1\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     },
     "cash": {
-      "code": 0,
       "stdout": "count=1\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     }
   },
   {
@@ -289,14 +289,14 @@
     "script": "TIMEFORMAT='%6R|%3R|%0R|%9R'; x=$( { time sleep 0; } 2>&1 ); [[ $x =~ ^[0-9]+\\.[0-9]{6}\\|[0-9]+\\.[0-9]{3}\\|[0-9]+\\|[0-9]+\\.[0-9]{6}$ ]] && echo ok || echo \"bad:$x\"",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "ok\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     },
     "cash": {
-      "code": 0,
       "stdout": "ok\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     }
   },
   {
@@ -304,14 +304,14 @@
     "script": "a=$BASH_MONOSECONDS; b=$BASH_MONOSECONDS; [[ $a =~ ^[0-9]+$ ]] && echo numeric; (( b >= a )) && echo monotonic; BASH_MONOSECONDS=5; [[ $BASH_MONOSECONDS != 5 ]] && echo dynamic",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "numeric\nmonotonic\ndynamic\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     },
     "cash": {
-      "code": 0,
       "stdout": "numeric\nmonotonic\ndynamic\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     }
   },
   {
@@ -319,14 +319,14 @@
     "script": "trap 'echo sig=$BASH_TRAPSIG' EXIT; echo out=${BASH_TRAPSIG-unset}",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "out=unset\nsig=0\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     },
     "cash": {
-      "code": 0,
       "stdout": "out=unset\nsig=0\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     }
   },
   {
@@ -334,14 +334,14 @@
     "script": "trap 'echo sig=$BASH_TRAPSIG' ERR; false; true",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "sig=66\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     },
     "cash": {
-      "code": 0,
       "stdout": "sig=66\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     }
   },
   {
@@ -349,14 +349,14 @@
     "script": "trap 'echo ret=$BASH_TRAPSIG' RETURN; f() { :; }; f; trap - RETURN; trap 'echo dbg=$BASH_TRAPSIG; trap - DEBUG' DEBUG; :",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "dbg=65\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     },
     "cash": {
-      "code": 0,
       "stdout": "dbg=65\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     }
   },
   {
@@ -364,14 +364,14 @@
     "script": "set -o posix; [ a \\< B ]; echo posix=$?; set +o posix; [ a \\< B ]; echo default=$?",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "posix=1\ndefault=1\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     },
     "cash": {
-      "code": 0,
       "stdout": "posix=1\ndefault=1\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     }
   },
   {
@@ -379,14 +379,14 @@
     "script": "test \\( a = a -a b = b \\) -a \\( x \\); echo $?; test \\( ! -n \"\" \\) -o x = y; echo $?; test \\( -n x \\) -a \\( -z \"\" \\) -a y; echo $?",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "0\n0\n0\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     },
     "cash": {
-      "code": 0,
       "stdout": "0\n0\n0\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     }
   },
   {
@@ -394,14 +394,14 @@
     "script": "coproc A { read l; echo A:$l; }; coproc B { read l; echo B:$l; }; echo 1 >&${A[1]}; echo 2 >&${B[1]}; read x <&${A[0]}; read y <&${B[0]}; echo $x $y",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "A:1 B:2\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     },
     "cash": {
-      "code": 0,
       "stdout": "A:1 B:2\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     }
   },
   {
@@ -409,14 +409,14 @@
     "script": "rm -rf ep; mkdir ep; cd ep; printf '#!/bin/sh\\necho ran\\n' > tool; chmod +x tool; PATH= tool; PATH=: tool; echo rc=$?",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "ran\nran\nrc=0\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     },
     "cash": {
-      "code": 0,
       "stdout": "ran\nran\nrc=0\n",
-      "stderr": "chmod: execute: not represented on Windows; ignored\n"
+      "stderr": "chmod: execute: not represented on Windows; ignored\n",
+      "code": 0
     }
   },
   {
@@ -424,14 +424,14 @@
     "script": "printf 'echo \"${BASH_SOURCE[0]}\"\\n' > src.sh; . ./src.sh; shopt -s bash_source_fullpath; s=$(. ./src.sh); [[ $s == */src.sh && $s != ./* ]] && echo full || echo \"not-full:$s\"",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "./src.sh\nfull\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     },
     "cash": {
-      "code": 0,
       "stdout": "./src.sh\nfull\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     }
   },
   {
@@ -439,14 +439,14 @@
     "script": "set -o posix; f-1() { echo dash; }; f-1; a.b() { echo dot; }; a.b",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "dash\ndot\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     },
     "cash": {
-      "code": 0,
       "stdout": "dash\ndot\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     }
   },
   {
@@ -454,14 +454,14 @@
     "script": "trap 'false; exit' EXIT; true",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     },
     "cash": {
-      "code": 0,
       "stdout": "",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     }
   },
   {
@@ -469,14 +469,14 @@
     "script": "trap '(exit 4); exit' EXIT; exit 3",
     "match": true,
     "bash": {
-      "code": 3,
       "stdout": "",
-      "stderr": ""
+      "stderr": "",
+      "code": 3
     },
     "cash": {
-      "code": 3,
       "stdout": "",
-      "stderr": ""
+      "stderr": "",
+      "code": 3
     }
   },
   {
@@ -484,14 +484,14 @@
     "script": "trap '(false; exit); echo sub=$?' EXIT; true",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "sub=1\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     },
     "cash": {
-      "code": 0,
       "stdout": "sub=1\n",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     }
   },
   {
@@ -499,14 +499,14 @@
     "script": "f() { false; exit; }; trap f EXIT; true",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     },
     "cash": {
-      "code": 0,
       "stdout": "",
-      "stderr": ""
+      "stderr": "",
+      "code": 0
     }
   },
   {
@@ -514,14 +514,14 @@
     "script": "trap 'exit' ERR; (exit 6); echo unreachable",
     "match": true,
     "bash": {
-      "code": 6,
       "stdout": "",
-      "stderr": ""
+      "stderr": "",
+      "code": 6
     },
     "cash": {
-      "code": 6,
       "stdout": "",
-      "stderr": ""
+      "stderr": "",
+      "code": 6
     }
   }
 ]

@@ -1,5 +1,6 @@
 # source: https://github.com/dylanaraps/pure-bash-bible#reverse-an-array
 # desc: BASH_ARGV under extdebug (bible notes compat44 is needed in 5.0+)
+# tags: known-gap (BASH_ARGV under extdebug; the bible says it needs compat44)
 reverse_array() {
     # Usage: reverse_array "array"
     shopt -s extdebug

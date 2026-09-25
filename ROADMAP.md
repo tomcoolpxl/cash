@@ -17,16 +17,17 @@ Feature work follows the sequence below.
 | 4 | Expand bundled userland | **Complete** | `stat`, `tty`, `install`, `pathchk`, `nohup`, `who`, `users`, `pinky`, `logname`, `hostid` |
 | 5 | Bash 5.3 compatibility work | **Active** | [Bash 5.3 audit](research/bash-reference/bash-5.3-audit.md): portable and POSIX-mode items probed against Bash 5.3.15 |
 | 6 | Differential corpus fixes | **Active** | [`tests/corpus`](tests/corpus): sourced sed/awk/Bash one-liners run against Git Bash 5.3 with GNU sed and gawk |
-| 7 | Line-ending controls: sed `-b` and `dos2unix`/`unix2dos` | **Next** | Section 7 below |
+| 7 | Line-ending controls: sed `-b`, `CASH_EOL`, `dos2unix`/`unix2dos` | **Complete** | Section 7 below; spec D49 |
 | 8 | `fuser` and an `lsof` subset | Planned | Section 8 below |
 | 9 | `ss` subset | Planned | [`ss` evaluation and decisions](research/ss-evaluation.md) |
+| 10 | BusyBox-gap tools | Planned | [BusyBox gap analysis and decisions](research/busybox-gap-analysis.md) |
 
 The authoritative feature order is therefore:
 
 ```text
 Bash 5.2 completion (done)  ->  native awk (done)  ->  native sed (done)  ->  bundled userland (done)
-  ->  Bash 5.3 (active)  +  corpus fixes (active)  ->  line-ending controls
-  ->  fuser / lsof subset  ->  ss subset
+  ->  Bash 5.3 (active)  +  corpus fixes (active)  ->  line-ending controls (done)
+  ->  fuser / lsof subset  ->  ss subset  ->  BusyBox-gap tools
 ```
 
 ## 1. Finish Bash 5.2
@@ -143,9 +144,20 @@ manual's sample scripts, Wooledge BashPitfalls and BashFAQ, pure-bash-bible), ru
 `tests/corpus/run.ps1` under Cash and under Git Bash 5.3 with GNU sed and gawk. Cash's sed and
 awk target POSIX, so each mismatch is classified as a Cash bug, a GNU/gawk-only extension, or
 a Windows divergence. The first run (209 cases) found 19 mismatches, among them an awk
-compiler panic on `for` loops with an empty clause; the "Complete" status of the awk and sed
-workstreams above is subject to these fixes. Fix bugs with focused regressions and keep the
-corpus growing.
+compiler panic on `for` loops with an empty clause.
+
+**Status:** 204 of 209 cases match. Each fix has a focused regression; besides those named in
+the commit history, the corpus exposed `(( count[$word]++ ))` storing every word under key
+`0` (associative subscripts were evaluated as arithmetic), `for x in; do` iterating over
+`$@`, and `sed`'s `l` ignoring `-l`. The five remaining cases are classified in their files'
+`# tags:` lines:
+
+- deliberate divergences: arithmetic never runs `$(...)` from a variable's value (spec §4,
+  row 27), and `s/.$//` does not see a hidden CR (D49);
+- GNU-only sed extensions: `\b` word boundaries, a label ended by a space;
+- a known gap: `BASH_ARGV` under `extdebug` (the source itself says it needs `compat44`).
+
+Keep the corpus growing and fix new mismatches with focused regressions.
 
 ## 7. Line-ending controls
 
@@ -166,6 +178,13 @@ Agreed design:
    builtin shadows Git for Windows' `usr/bin/dos2unix.exe` when that is on `PATH`, so
    `type`, `cash doctor` and `enable -n` must report and allow the fallback honestly.
    `mac2unix`/`unix2mac` (CR-only files) are not planned.
+
+**Status: complete.** sed and awk implement the policy with the shared `CASH_EOL=lf`
+switch (spec D49); an explicit CR in the program is detected per run rather than per
+command. awk also now splits default fields on space, tab and newline only, as POSIX
+requires. `dos2unix`/`unix2dos` were checked against dos2unix 7.5.6 from Git for Windows;
+code-page and UTF-16 conversion are refused with a pointer to `enable -n`. Tests:
+`cash-sed` `test_crlf_*`, `cash-awk` `test_eol_*`, `crates/cash/tests/line_ending_tools.rs`.
 
 ## 8. `fuser` and an `lsof` subset
 
@@ -190,6 +209,22 @@ subset of the address/port expressions. `Recv-Q`/`Send-Q` print `0`; `-p` adds
 and netstat-style flags (`-ano`) get a hint with the `ss` spelling. Windows' own
 `netstat.exe` is not shadowed. Decisions and the full option matrix:
 [research/ss-evaluation.md](research/ss-evaluation.md).
+
+## 10. BusyBox-gap tools
+
+From the [BusyBox gap analysis](research/busybox-gap-analysis.md), the agreed set:
+
+1. `pkill`, `pidof`, `killall` on the existing `pgrep` matcher and `kill` signal path:
+   case-insensitive names, `.exe` optional, access-denied and system processes skipped;
+2. `getopt` (util-linux interface; its output quoted for Cash's parser), `rev` (keeps a
+   trailing CR), `clear` and `reset`;
+3. POSIX `bc`, imported from posixutils-rs and hardened like `awk`;
+4. a Linux-flag `ping` over the ICMP helper APIs, with pure iputils flags; it shadows
+   `ping.exe` deliberately, so `type`, `cash doctor` and `enable -n` must report it;
+5. `cash doctor` flags BusyBox shims on `PATH` for the tools whose BusyBox versions are
+   known to break scripts.
+
+Not adopted: `grep`, `cmp`/`diff` and the gzip family; Cash still does not carry grep or diff.
 
 ## Keeping the roadmap current
 
