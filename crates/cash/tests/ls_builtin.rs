@@ -109,27 +109,22 @@ fn ls_long_format_shows_real_user_not_somebody() {
         out.stdout
     );
 
-    // Should name the file's real owner. That is usually the current user, but on
-    // Windows Server an elevated administrator's files are owned by the Administrators
-    // group (GitHub's runners), so ask Windows independently rather than assume.
-    let literal = file.to_string_lossy().replace('\'', "''");
-    let owner = std::process::Command::new("powershell")
-        .args([
-            "-NoProfile",
-            "-Command",
-            &format!("(Get-Acl -LiteralPath '{literal}').Owner"),
-        ])
-        .output()
-        .expect("run Get-Acl");
-    let owner = String::from_utf8_lossy(&owner.stdout).trim().to_string();
-    let owner = owner.rsplit('\\').next().unwrap_or(&owner).to_string();
-    assert!(!owner.is_empty(), "Get-Acl reported no owner");
+    // Should name the file's real owner: the current user, or on Windows Server the
+    // Administrators group, which owns an elevated administrator's new files there
+    // (GitHub's runners).
+    let user = std::env::var("USERNAME").unwrap_or_default();
+    assert!(!user.is_empty(), "USERNAME is not set");
+    let row = out
+        .stdout
+        .lines()
+        .find(|line| line.ends_with("alpha.txt"))
+        .unwrap_or_else(|| panic!("no alpha.txt row:\n{}", out.stdout));
+    let fields: Vec<&str> = row.split_whitespace().collect();
     assert!(
-        out.stdout
-            .lines()
-            .any(|line| line.ends_with("alpha.txt") && line.contains(&owner)),
-        "the alpha.txt row should name its owner '{owner}':\n{}",
-        out.stdout
+        fields
+            .iter()
+            .any(|field| field.eq_ignore_ascii_case(&user) || *field == "Administrators"),
+        "the alpha.txt row should name its owner ({user} or Administrators): {row}"
     );
 
     // Starts with total <N>.

@@ -264,10 +264,13 @@ fn u_keeps_only_one_users_processes() {
 
     let full = cash("id -un").stdout;
     let account = full.rsplit(['\\', '/']).next().unwrap_or(&full).to_string();
+    // The USER column is ten characters wide, so a longer name (GitHub's `runneradmin`)
+    // is listed cut short.
+    let column: String = account.chars().take(10).collect();
     assert!(
         listed
             .iter()
-            .all(|row| row[1].eq_ignore_ascii_case(&account)),
+            .all(|row| row[1].eq_ignore_ascii_case(&column)),
         "another account's process survived the filter: {listed:?}"
     );
 }
