@@ -218,3 +218,114 @@ fn jobs_l_with_no_jobs_prints_nothing() {
     let out = cash("jobs -l; echo done");
     assert_eq!(out.stdout, "done", "jobs -l invented a job: {}", out.stdout);
 }
+
+// ---------------------------------------------------------------------------
+// Bundled userland: tty, logname, hostid, users, who, pinky, stat, pathchk
+// ---------------------------------------------------------------------------
+
+#[test]
+fn tty_detects_pipe_as_not_a_tty() {
+    let out = cash("echo hello | tty");
+    assert_eq!(out.stdout, "not a tty");
+
+    let silent = cash("echo hello | tty -s; echo rc=$?");
+    assert_eq!(silent.stdout, "rc=1");
+}
+
+#[test]
+fn logname_matches_current_user() {
+    let out = cash("logname");
+    assert!(!out.stdout.is_empty(), "logname produced no output");
+    let user = std::env::var("USERNAME").unwrap_or_default();
+    if !user.is_empty() {
+        assert_eq!(out.stdout, user);
+    }
+}
+
+#[test]
+fn hostid_prints_eight_hex_digits() {
+    let out = cash("hostid");
+    assert_eq!(
+        out.stdout.len(),
+        8,
+        "hostid should be 8 hex characters: {}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.chars().all(|c| c.is_ascii_hexdigit()),
+        "hostid not hex: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn users_lists_logged_in_users() {
+    let out = cash("users");
+    assert!(!out.stdout.is_empty(), "users produced no output");
+    let user = std::env::var("USERNAME").unwrap_or_default();
+    if !user.is_empty() {
+        assert!(
+            out.stdout.contains(&user),
+            "users missing current user: {}",
+            out.stdout
+        );
+    }
+}
+
+#[test]
+fn who_displays_session_info() {
+    let out = cash("who");
+    assert!(!out.stdout.is_empty(), "who produced no output");
+
+    let count = cash("who -q");
+    assert!(
+        count.stdout.contains("# users="),
+        "who -q missing count: {}",
+        count.stdout
+    );
+
+    let whoami = cash("who am i");
+    assert!(!whoami.stdout.is_empty(), "who am i produced no output");
+}
+
+#[test]
+fn pinky_displays_user_info() {
+    let out = cash("pinky");
+    assert!(
+        out.stdout.contains("Login"),
+        "pinky header missing: {}",
+        out.stdout
+    );
+}
+
+#[test]
+fn stat_reports_file_attributes() {
+    let size = cash("stat -c %s Cargo.toml");
+    let size_num: u64 = size.stdout.parse().expect("stat %s should be numeric");
+    assert!(size_num > 0, "stat reported size 0 for Cargo.toml");
+
+    let ftype = cash("stat -c %F Cargo.toml");
+    assert_eq!(ftype.stdout, "regular file");
+
+    let octal = cash("stat -c %a Cargo.toml");
+    assert_eq!(octal.stdout, "644");
+}
+
+#[test]
+fn pathchk_validates_path_portability() {
+    let out = cash("pathchk Cargo.toml; echo rc=$?");
+    assert_eq!(out.stdout, "rc=0");
+}
+
+#[test]
+fn install_creates_directories_and_copies_files() {
+    let out = cash(
+        "tmp_dir=$(mktemp -d); \
+         install -d \"$tmp_dir/sub/dir\"; \
+         echo 'sample content' > \"$tmp_dir/sample.txt\"; \
+         install -m 644 \"$tmp_dir/sample.txt\" \"$tmp_dir/sub/dir/copied.txt\"; \
+         cat \"$tmp_dir/sub/dir/copied.txt\"; \
+         rm -rf \"$tmp_dir\"",
+    );
+    assert_eq!(out.stdout, "sample content");
+}

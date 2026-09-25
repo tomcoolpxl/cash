@@ -250,7 +250,16 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
         m.insert("chmod".into(), builtin::<chmod::ChmodCommand, SE>());
         m.insert("id".into(), builtin::<identity::IdCommand, SE>());
         m.insert("groups".into(), builtin::<identity::GroupsCommand, SE>());
+        m.insert("logname".into(), builtin::<identity::LognameCommand, SE>());
+        m.insert("hostid".into(), builtin::<identity::HostidCommand, SE>());
+        m.insert("users".into(), builtin::<identity::UsersCommand, SE>());
+        m.insert("who".into(), builtin::<identity::WhoCommand, SE>());
+        m.insert("pinky".into(), builtin::<identity::PinkyCommand, SE>());
         m.insert("ls".into(), builtin::<ls::LsCommand, SE>());
+        m.insert("tty".into(), builtin::<tty::TtyCommand, SE>());
+        m.insert("stat".into(), builtin::<stat::StatCommand, SE>());
+        m.insert("nohup".into(), builtin::<nohup::NohupCommand, SE>());
+        m.insert("install".into(), builtin::<install::InstallCommand, SE>());
     }
 
     m

@@ -69,6 +69,18 @@ mod identity;
 #[cfg(windows)]
 mod ls;
 
+#[cfg(windows)]
+mod tty;
+
+#[cfg(windows)]
+mod stat;
+
+#[cfg(windows)]
+mod nohup;
+
+#[cfg(windows)]
+mod install;
+
 #[cfg(feature = "builtin.alias")]
 mod alias;
 #[cfg(feature = "builtin.bg")]

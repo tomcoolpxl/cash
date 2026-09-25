@@ -51,17 +51,8 @@ struct Finding {
 /// `winget install` something they already had. Checking cash's own resolution rather
 /// than `PATH` is what stops that class of advice.
 const EXPECTED: &[(&str, &str)] = &[
-    (
-        "sed",
-        "not in Microsoft's Coreutils bundle — separate GNU project",
-    ),
-    (
-        "awk",
-        "not in Microsoft's Coreutils bundle — separate GNU project",
-    ),
     ("grep", "not bundled with cash; in the MS Coreutils bundle"),
     ("diff", "not bundled with cash; diffutils"),
-    ("stat", "not bundled with cash; coreutils"),
 ];
 
 /// Commands cash answers for itself, checked to confirm it still does.
@@ -70,7 +61,8 @@ const EXPECTED: &[(&str, &str)] = &[
 /// but it is the opposite question from EXPECTED, and gets the opposite advice.
 const CARRIED: &[&str] = &[
     "ps", "top", "find", "xargs", "less", "more", "which", "kill", "cat", "mktemp", "hostname",
-    "chmod", "id", "groups",
+    "chmod", "id", "groups", "awk", "sed", "stat", "tty", "nohup", "who", "users", "pinky",
+    "logname", "hostid", "pathchk", "install",
 ];
 
 /// Shells whose name must resolve to cash itself (D7).

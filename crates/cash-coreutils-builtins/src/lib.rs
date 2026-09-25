@@ -168,6 +168,7 @@ pub fn bundled_commands() -> HashMap<String, fn(Vec<OsString>) -> i32> {
     register!(m, "coreutils.numfmt", "numfmt", uu_numfmt);
     register!(m, "coreutils.od", "od", uu_od);
     register!(m, "coreutils.paste", "paste", uu_paste);
+    register!(m, "coreutils.pathchk", "pathchk", uu_pathchk);
     register!(m, "coreutils.pr", "pr", uu_pr);
     register!(m, "coreutils.printenv", "printenv", uu_printenv);
     register!(m, "coreutils.printf", "printf", uu_printf);

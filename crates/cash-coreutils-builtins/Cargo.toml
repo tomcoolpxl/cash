@@ -69,6 +69,7 @@ default = []
     'coreutils.numfmt',
     'coreutils.od',
     'coreutils.paste',
+    'coreutils.pathchk',
     'coreutils.pr',
     'coreutils.printenv',
     'coreutils.printf',
@@ -155,6 +156,7 @@ default = []
 'coreutils.numfmt' = ["dep:uu_numfmt"]
 'coreutils.od' = ["dep:uu_od"]
 'coreutils.paste' = ["dep:uu_paste"]
+'coreutils.pathchk' = ["dep:uu_pathchk"]
 'coreutils.pr' = ["dep:uu_pr"]
 'coreutils.printenv' = ["dep:uu_printenv"]
 'coreutils.printf' = ["dep:uu_printf"]
@@ -248,6 +250,7 @@ uu_nproc = { version = "0.12.0", optional = true }
 uu_numfmt = { version = "0.12.0", optional = true }
 uu_od = { version = "0.12.0", optional = true }
 uu_paste = { version = "0.12.0", optional = true }
+uu_pathchk = { version = "0.12.0", optional = true }
 uu_pr = { version = "0.12.0", optional = true }
 uu_printenv = { version = "0.12.0", optional = true }
 uu_printf = { version = "0.12.0", optional = true }
