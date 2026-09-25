@@ -1586,10 +1586,6 @@ async fn get_completions_using_basic_lookup(
     Answer::Candidates(candidates, ProcessingOptions::default())
 }
 
-/// Tokenizes input by splitting on delimiter characters. Words (non-delimiter sequences)
-/// are emitted as tokens. Consecutive non-whitespace delimiters are grouped into a single
-/// token. Whitespace delimiters separate tokens but are not emitted themselves.
-#[allow(clippy::string_slice, reason = "used indices come from char_indices")]
 /// Whether the `:` at `index` is a drive letter's (`C:/...`, `C:\...`, or a bare `C:`)
 /// rather than a `COMP_WORDBREAKS` break.
 ///
@@ -1610,6 +1606,10 @@ fn is_drive_colon(input: &str, word_start: Option<usize>, index: usize) -> bool 
         && (after.is_empty() || after.starts_with(['/', '\\']))
 }
 
+/// Tokenizes input by splitting on delimiter characters. Words (non-delimiter sequences)
+/// are emitted as tokens. Consecutive non-whitespace delimiters are grouped into a single
+/// token. Whitespace delimiters separate tokens but are not emitted themselves.
+#[allow(clippy::string_slice, reason = "used indices come from char_indices")]
 fn simple_tokenize_by_delimiters<'a>(
     input: &'a str,
     delimiters: &[char],
