@@ -232,58 +232,65 @@ impl Record {
         last_field: usize,
         truncate_fields: bool,
     ) -> Result<(), String> {
-        if last_field > Self::MAX_FIELDS {
-            return Err("too many fields".to_string());
-        }
-        let previous_last_field = *self.last_field.borrow();
-        let last_field = if truncate_fields {
-            // NF was assigned: the record now has exactly `last_field` fields.
-            last_field
-        } else {
-            previous_last_field.max(last_field)
-        };
-        // Ensure the backing storage spans the (possibly grown) field range, and
-        // clear any surplus fields when NF shrank the record.
-        {
-            let mut fields = self.fields.borrow_mut();
-            while fields.len() <= last_field {
-                let next = fields.len();
-                fields.push(Self::new_field_cell(next));
+        // SAFETY: the caller upholds this function's `# Safety` contract.
+        unsafe {
+            if last_field > Self::MAX_FIELDS {
+                return Err("too many fields".to_string());
             }
-            if truncate_fields {
-                Self::clear_fields_above(fields.as_mut_slice(), last_field, previous_last_field);
+            let previous_last_field = *self.last_field.borrow();
+            let last_field = if truncate_fields {
+                // NF was assigned: the record now has exactly `last_field` fields.
+                last_field
+            } else {
+                previous_last_field.max(last_field)
+            };
+            // Ensure the backing storage spans the (possibly grown) field range, and
+            // clear any surplus fields when NF shrank the record.
+            {
+                let mut fields = self.fields.borrow_mut();
+                while fields.len() <= last_field {
+                    let next = fields.len();
+                    fields.push(Self::new_field_cell(next));
+                }
+                if truncate_fields {
+                    Self::clear_fields_above(
+                        fields.as_mut_slice(),
+                        last_field,
+                        previous_last_field,
+                    );
+                }
             }
-        }
-        if last_field == 0 {
-            let record_str = maybe_numeric_string(String::new());
-            *self.fields.borrow()[0].get() = AwkValue::field_ref(record_str.clone(), 0);
-            *self.record.borrow_mut() = record_str.try_into()?;
-            *self.last_field.borrow_mut() = 0;
-            return Ok(());
-        }
-        let mut new_record = String::new();
-        {
-            let fields = self.fields.borrow();
-            for cell in fields.iter().skip(1).take(last_field - 1) {
-                let field_str = (*cell.get())
+            if last_field == 0 {
+                let record_str = maybe_numeric_string(String::new());
+                *self.fields.borrow()[0].get() = AwkValue::field_ref(record_str.clone(), 0);
+                *self.record.borrow_mut() = record_str.try_into()?;
+                *self.last_field.borrow_mut() = 0;
+                return Ok(());
+            }
+            let mut new_record = String::new();
+            {
+                let fields = self.fields.borrow();
+                for cell in fields.iter().skip(1).take(last_field - 1) {
+                    let field_str = (*cell.get())
+                        .clone()
+                        .scalar_to_string(&global_env.convfmt)?;
+                    write!(new_record, "{}{}", field_str, global_env.ofs)
+                        .expect("error writing to string");
+                }
+                let last_field_str = (*fields[last_field].get())
                     .clone()
                     .scalar_to_string(&global_env.convfmt)?;
-                write!(new_record, "{}{}", field_str, global_env.ofs)
-                    .expect("error writing to string");
+                write!(new_record, "{}", last_field_str).expect("error writing to string");
             }
-            let last_field_str = (*fields[last_field].get())
-                .clone()
-                .scalar_to_string(&global_env.convfmt)?;
-            write!(new_record, "{}", last_field_str).expect("error writing to string");
+            // the spec doesn't specify if a recomputed record should be a numeric string.
+            // Most other implementations don't really handle this case. Here we just
+            // mark it as a numeric string if appropriate
+            let record_str = maybe_numeric_string(new_record);
+            *self.fields.borrow()[0].get() = AwkValue::field_ref(record_str.clone(), 0);
+            *self.record.borrow_mut() = record_str.try_into()?;
+            *self.last_field.borrow_mut() = last_field;
+            Ok(())
         }
-        // the spec doesn't specify if a recomputed record should be a numeric string.
-        // Most other implementations don't really handle this case. Here we just
-        // mark it as a numeric string if appropriate
-        let record_str = maybe_numeric_string(new_record);
-        *self.fields.borrow()[0].get() = AwkValue::field_ref(record_str.clone(), 0);
-        *self.record.borrow_mut() = record_str.try_into()?;
-        *self.last_field.borrow_mut() = last_field;
-        Ok(())
     }
 
     /// # Safety

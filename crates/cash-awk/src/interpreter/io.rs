@@ -8,7 +8,6 @@
 //
 use std::{
     collections::{HashMap, hash_map::Entry},
-    ffi::CString,
     fs::File,
     io::{BufReader, Bytes, Read, Write},
     rc::Rc,

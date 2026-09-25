@@ -1311,10 +1311,13 @@ fn autoquote_candidates(
 ///
 /// Spaces are the headline, but `Program Files (x86)` is on every Windows machine and
 /// parentheses are shell syntax too. Tilde and `#` only matter at the start of a word,
-/// but quoting them there costs nothing and reasoning about position costs more.
+/// and only there are they quoted: 8.3 short names put a `~` mid-path
+/// (`C:/Users/RUNNER~1/...`), and quoting such a candidate broke completion after the
+/// `C:` word break.
 #[cfg(windows)]
 fn needs_quoting(candidate: &str) -> bool {
     candidate.is_empty()
+        || candidate.starts_with(['~', '#'])
         || candidate.chars().any(|c| {
             c.is_whitespace()
                 || matches!(
@@ -1336,8 +1339,6 @@ fn needs_quoting(candidate: &str) -> bool {
                         | ']'
                         | '{'
                         | '}'
-                        | '~'
-                        | '#'
                         | '!'
                         | '='
                 )
@@ -1726,6 +1727,18 @@ fn replace_unescaped_ampersands<'a>(pattern: &'a str, replacement: &str) -> Cow<
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(windows)]
+    #[test]
+    fn only_a_leading_tilde_or_hash_needs_quoting() {
+        // 8.3 short names put a `~` mid-path; GitHub's runner temp is RUNNER~1.
+        assert!(!needs_quoting("C:/Users/RUNNER~1/AppData/sub"));
+        assert!(!needs_quoting("notes.txt~"));
+        assert!(!needs_quoting("issue#12"));
+        assert!(needs_quoting("~draft"));
+        assert!(needs_quoting("#notes"));
+        assert!(needs_quoting("Program Files"));
+    }
     use pretty_assertions::assert_matches;
 
     #[test]

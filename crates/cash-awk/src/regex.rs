@@ -8,8 +8,8 @@
 // SPDX-License-Identifier: MIT
 //
 
+use regex_automata::Input;
 use regex_automata::meta::Regex as MetaRegex;
-use regex_automata::{Input, MatchKind};
 use std::ffi::CString;
 
 /// A regex wrapper that provides CString-compatible API for AWK.

@@ -43,16 +43,19 @@ impl StackValue {
     /// # Safety
     /// the caller has to ensure that the value is valid and dereferencable
     pub(crate) unsafe fn value_ref(&mut self) -> &mut AwkValue {
-        match self {
-            StackValue::Value(val) => val.get_mut(),
-            StackValue::ValueRef(val_ref) => &mut **val_ref,
-            StackValue::UninitializedRef(val_ref) => &mut **val_ref,
-            StackValue::ArrayElementRef(array_element_ref) => (*array_element_ref.array)
-                .as_array()
-                .expect("expected array")
-                .index_to_value(array_element_ref.value_index)
-                .expect("invalid array value index"),
-            _ => unreachable!("invalid stack value"),
+        // SAFETY: the caller upholds this function's `# Safety` contract.
+        unsafe {
+            match self {
+                StackValue::Value(val) => val.get_mut(),
+                StackValue::ValueRef(val_ref) => &mut **val_ref,
+                StackValue::UninitializedRef(val_ref) => &mut **val_ref,
+                StackValue::ArrayElementRef(array_element_ref) => (*array_element_ref.array)
+                    .as_array()
+                    .expect("expected array")
+                    .index_to_value(array_element_ref.value_index)
+                    .expect("invalid array value index"),
+                _ => unreachable!("invalid stack value"),
+            }
         }
     }
 
@@ -60,18 +63,21 @@ impl StackValue {
     /// if the `StackValue` is an `ArrayElementRef`, the caller has to ensure that the
     /// array is dereferencable
     pub(crate) unsafe fn unwrap_ptr(self) -> Result<*mut AwkValue, String> {
-        match self {
-            StackValue::ValueRef(ptr) => Ok(ptr),
-            StackValue::UninitializedRef(ptr) => Ok(ptr),
-            StackValue::ArrayElementRef(array_element_ref) => {
-                let arr = (*array_element_ref.array).as_array()?;
-                let val_ptr = arr
-                    .index_to_value(array_element_ref.value_index)
-                    .ok_or_else(|| "invalid array value index".to_string())?;
-                Ok(val_ptr)
+        // SAFETY: the caller upholds this function's `# Safety` contract.
+        unsafe {
+            match self {
+                StackValue::ValueRef(ptr) => Ok(ptr),
+                StackValue::UninitializedRef(ptr) => Ok(ptr),
+                StackValue::ArrayElementRef(array_element_ref) => {
+                    let arr = (*array_element_ref.array).as_array()?;
+                    let val_ptr = arr
+                        .index_to_value(array_element_ref.value_index)
+                        .ok_or_else(|| "invalid array value index".to_string())?;
+                    Ok(val_ptr)
+                }
+                StackValue::Value(_) => Err("scalar used in array context".to_string()),
+                _ => Err("expected lvalue".to_string()),
             }
-            StackValue::Value(_) => Err("scalar used in array context".to_string()),
-            _ => Err("expected lvalue".to_string()),
         }
     }
 
@@ -85,37 +91,44 @@ impl StackValue {
     /// # Safety
     /// pointers inside the `StackValue` have to be valid and dereferencable
     pub(crate) unsafe fn into_owned(self) -> AwkValue {
-        match self {
-            StackValue::Value(val) => val.into_inner(),
-            StackValue::ValueRef(ref_val) => (*ref_val).clone().into_ref(AwkRefType::None),
-            StackValue::UninitializedRef(_) => AwkValue::uninitialized_scalar(),
-            StackValue::ArrayElementRef(array_element_ref) => {
-                let val = (*array_element_ref.array)
-                    .as_array()
-                    .expect("expected array")
-                    .index_to_value(array_element_ref.value_index)
-                    .expect("invalid array value index");
-                (*val).clone().into_ref(AwkRefType::None)
+        // SAFETY: the caller upholds this function's `# Safety` contract.
+        unsafe {
+            match self {
+                StackValue::Value(val) => val.into_inner(),
+                StackValue::ValueRef(ref_val) => (*ref_val).clone().into_ref(AwkRefType::None),
+                StackValue::UninitializedRef(_) => AwkValue::uninitialized_scalar(),
+                StackValue::ArrayElementRef(array_element_ref) => {
+                    let val = (*array_element_ref.array)
+                        .as_array()
+                        .expect("expected array")
+                        .index_to_value(array_element_ref.value_index)
+                        .expect("invalid array value index");
+                    (*val).clone().into_ref(AwkRefType::None)
+                }
+                _ => unreachable!("invalid stack value"),
             }
-            _ => unreachable!("invalid stack value"),
         }
     }
 
     /// # Safety
     /// pointers inside the `StackValue` have to be valid and dereferencable
     pub(crate) unsafe fn ensure_value_is_scalar(&mut self) -> Result<(), String> {
-        self.value_ref().ensure_value_is_scalar()
+        // SAFETY: the caller upholds this function's `# Safety` contract.
+        unsafe { self.value_ref().ensure_value_is_scalar() }
     }
 
     /// # Safety
     /// `value` has to be a valid pointer at least until the value preceding it
     /// on the stack is popped
     pub(crate) unsafe fn from_var(value: *mut AwkValue) -> Self {
-        let value_ref = &mut *value;
-        match value_ref.value {
-            AwkValueVariant::Array(_) => StackValue::ValueRef(value),
-            AwkValueVariant::Uninitialized => StackValue::UninitializedRef(value),
-            _ => StackValue::Value(UnsafeCell::new(value_ref.clone())),
+        // SAFETY: the caller upholds this function's `# Safety` contract.
+        unsafe {
+            let value_ref = &mut *value;
+            match value_ref.value {
+                AwkValueVariant::Array(_) => StackValue::ValueRef(value),
+                AwkValueVariant::Uninitialized => StackValue::UninitializedRef(value),
+                _ => StackValue::Value(UnsafeCell::new(value_ref.clone())),
+            }
         }
     }
 
@@ -192,12 +205,15 @@ impl<'i, 's> Stack<'i, 's> {
     /// # Safety
     /// `value` has to be valid at least until the value preceding it is popped
     pub(crate) unsafe fn push(&mut self, value: StackValue) -> Result<(), String> {
-        if self.sp == self.stack_end {
-            Err("stack overflow".to_string())
-        } else {
-            *self.sp = value;
-            self.sp = self.sp.add(1);
-            Ok(())
+        // SAFETY: the caller upholds this function's `# Safety` contract.
+        unsafe {
+            if self.sp == self.stack_end {
+                Err("stack overflow".to_string())
+            } else {
+                *self.sp = value;
+                self.sp = self.sp.add(1);
+                Ok(())
+            }
         }
     }
 
@@ -250,7 +266,8 @@ impl<'i, 's> Stack<'i, 's> {
     /// `value_ptr` has to be safe to access at least until the value preceding it
     /// on the stack is popped.
     pub(crate) unsafe fn push_ref(&mut self, value_ptr: *mut AwkValue) -> Result<(), String> {
-        self.push(StackValue::ValueRef(value_ptr))
+        // SAFETY: the caller upholds this function's `# Safety` contract.
+        unsafe { self.push(StackValue::ValueRef(value_ptr)) }
     }
 
     pub(crate) fn next_instruction(&mut self) -> Option<OpCode> {
