@@ -71,7 +71,13 @@ impl builtins::Command for UnsetCommand {
                             context.shell.env_mut().unset(name.as_str())?.is_some()
                         }
                         cash_parser::word::Parameter::NamedWithIndex { name, index } => {
-                            unset_array_index(context.shell, name.as_str(), index.as_str())?
+                            unset_array_index(
+                                context.shell,
+                                &context.params,
+                                name.as_str(),
+                                index.as_str(),
+                            )
+                            .await?
                         }
                         cash_parser::word::Parameter::NamedWithAllIndices { name, concatenate } => {
                             unset_all_indices(
@@ -130,8 +136,9 @@ fn unset_all_indices(
     Ok(false)
 }
 
-fn unset_array_index(
+async fn unset_array_index(
     shell: &mut Shell<impl cash_core::ShellExtensions>,
+    params: &cash_core::ExecutionParameters,
     name: &str,
     index: &str,
 ) -> Result<bool, cash_core::Error> {
@@ -143,8 +150,14 @@ fn unset_array_index(
 
     // Compute which index we should actually use. For indexed arrays, we need to evaluate
     // the index string as an arithmetic expression first.
+    // The word was already expanded once as an argument. `assoc_expand_once` (Bash 5.3:
+    // `array_expand_once`) keeps it from being expanded a second time here.
     let index_to_use: Cow<'_, str> = if is_assoc_array {
-        index.into()
+        if shell.options().assoc_expand_once {
+            index.into()
+        } else {
+            shell.basic_expand_string(params, index).await?.into()
+        }
     } else {
         // First evaluate the index expression.
         let index_as_expr = cash_parser::arithmetic::parse(index)?;

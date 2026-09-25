@@ -147,6 +147,24 @@ impl TryFrom<&str> for TrapSignal {
     }
 }
 
+impl TrapSignal {
+    /// The number Bash reports in `$BASH_TRAPSIG` while this trap runs.
+    ///
+    /// Signals use their own numbers and `EXIT` is 0. Bash numbers its pseudo-signals
+    /// from `NSIG`, which is 65 on Linux and Cygwin, so `DEBUG`, `ERR` and `RETURN`
+    /// are 65, 66 and 67 — the values scripts written against Bash observe.
+    pub const fn trap_number(self) -> i32 {
+        const NSIG: i32 = 65;
+        match self {
+            Self::Signal(s) => s as i32,
+            Self::Exit => 0,
+            Self::Debug => NSIG,
+            Self::Err => NSIG + 1,
+            Self::Return => NSIG + 2,
+        }
+    }
+}
+
 /// Error type used when failing to convert a `TrapSignal` to a number.
 #[derive(Debug, Clone, Copy)]
 pub struct TrapSignalNumberError;

@@ -41,6 +41,10 @@ pub enum ErrorKind {
     #[error("failed to source file: {0}")]
     FailedSourcingFile(PathBuf, #[source] std::io::Error),
 
+    /// A script file given to the shell looks like a binary file.
+    #[error("{}: cannot execute binary file", .0.display())]
+    CannotExecuteBinaryFile(PathBuf),
+
     /// The process or process group does not exist.
     #[error("no such process")]
     NoSuchProcess,
@@ -187,6 +191,12 @@ pub enum ErrorKind {
     /// Invalid substitution syntax.
     #[error("bad substitution: {0}")]
     BadSubstitution(String),
+
+    /// A parameter transformation used an unknown or missing transformation operator.
+    /// Bash uses status 127 when this fatal expansion aborts a non-interactive shell,
+    /// while an interactive shell recovers with status 1.
+    #[error("bad substitution: {0}")]
+    InvalidParameterTransformation(String),
 
     /// An error occurred while creating a child process.
     #[error("failed to create child process")]
@@ -374,7 +384,9 @@ impl From<&ErrorKind> for results::ExecutionExitCode {
             ErrorKind::ParseError(..) => Self::InvalidUsage,
             ErrorKind::FunctionParseError(..) => Self::InvalidUsage,
             ErrorKind::TestCommandParseError(..) => Self::InvalidUsage,
-            ErrorKind::FailedToExecuteCommand(..) => Self::CannotExecute,
+            ErrorKind::FailedToExecuteCommand(..) | ErrorKind::CannotExecuteBinaryFile(..) => {
+                Self::CannotExecute
+            }
             ErrorKind::FunctionNameShadowsSpecialBuiltin { .. } => Self::InvalidUsage,
             ErrorKind::IoError(io_err) => io_err.into(),
             ErrorKind::BuiltinError(inner, ..) => inner.as_exit_code(),
@@ -465,7 +477,16 @@ impl Error {
         shell: &Shell<impl extensions::ShellExtensions>,
     ) -> results::ExecutionResult {
         let next_control_flow = self.to_control_flow(shell);
-        let exit_code = results::ExecutionExitCode::from(&self);
+        let exit_code = if matches!(self.kind, ErrorKind::InvalidParameterTransformation(..))
+            && !shell.options().interactive
+        {
+            // This is the status used by Bash 5.2 when an invalid `${v@...}`
+            // transformation aborts a non-interactive shell. Interactive Bash
+            // recovers at the prompt with the ordinary failure status instead.
+            results::ExecutionExitCode::NotFound
+        } else {
+            results::ExecutionExitCode::from(&self)
+        };
 
         results::ExecutionResult {
             next_control_flow,

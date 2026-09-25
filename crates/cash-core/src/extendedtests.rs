@@ -64,15 +64,18 @@ async fn apply_unary_predicate(
             .await;
     }
 
-    apply_unary_predicate_to_str(op, expanded_operand.as_str(), shell, params)
+    apply_unary_predicate_to_str(op, expanded_operand.as_str(), shell, params, false).await
 }
 
+/// Applies a unary test to an already-expanded operand. `in_test_builtin` is true for
+/// `test`/`[`, where `assoc_expand_once` applies to `-v`; it does not apply to `[[`.
 #[expect(clippy::too_many_lines)]
-pub(crate) fn apply_unary_predicate_to_str(
+pub(crate) async fn apply_unary_predicate_to_str(
     op: &ast::UnaryPredicate,
     operand: &str,
-    shell: &Shell<impl extensions::ShellExtensions>,
+    shell: &mut Shell<impl extensions::ShellExtensions>,
     params: &ExecutionParameters,
+    in_test_builtin: bool,
 ) -> Result<bool, error::Error> {
     match op {
         ast::UnaryPredicate::StringHasNonZeroLength => Ok(!operand.is_empty()),
@@ -184,7 +187,10 @@ pub(crate) fn apply_unary_predicate_to_str(
                 Ok(false)
             }
         }
-        ast::UnaryPredicate::ShellVariableIsSetAndAssigned => Ok(shell.env().is_set(operand)),
+        ast::UnaryPredicate::ShellVariableIsSetAndAssigned => {
+            let expand_once = in_test_builtin && shell.options().assoc_expand_once;
+            shell_parameter_is_set(shell, params, operand, expand_once).await
+        }
         // cash: `-R` asks whether the *name* is a reference, so it has to see the variable
         // itself rather than what it points at — every other lookup now follows the
         // reference through.
@@ -192,6 +198,68 @@ pub(crate) fn apply_unary_predicate_to_str(
             Some((_, reffed)) => Ok(reffed.value().is_set() && reffed.is_treated_as_nameref()),
             None => Ok(false),
         },
+    }
+}
+
+/// Implements Bash's `test -v name[subscript]` handling. Indexed subscripts are arithmetic
+/// expressions and can have visible side effects, so evaluate them exactly once before looking
+/// up the element. Associative `@` and `*` remain ordinary keys; other associative
+/// subscripts are expanded (`[[ -v 'h[$key]' ]]`) unless `expand_once` is set.
+async fn shell_parameter_is_set(
+    shell: &mut Shell<impl extensions::ShellExtensions>,
+    params: &ExecutionParameters,
+    operand: &str,
+    expand_once: bool,
+) -> Result<bool, error::Error> {
+    let Ok(parameter) = cash_parser::word::parse_parameter(operand, &shell.parser_options()) else {
+        return Ok(false);
+    };
+
+    match parameter {
+        cash_parser::word::Parameter::Named(name) => Ok(shell.env().is_set(name)),
+        cash_parser::word::Parameter::NamedWithIndex { name, index } => {
+            let is_associative = shell
+                .env()
+                .get(&name)
+                .is_some_and(|(_, variable)| variable.value().is_associative_array());
+            let index = if is_associative {
+                if expand_once {
+                    index
+                } else {
+                    shell.basic_expand_string(params, &index).await?
+                }
+            } else {
+                let expression = cash_parser::arithmetic::parse(&index)?;
+                shell.eval_arithmetic(&expression)?.to_string()
+            };
+
+            let Some((_, variable)) = shell.env().get(&name) else {
+                return Ok(false);
+            };
+            Ok(variable.value().get_at(&index, shell)?.is_some())
+        }
+        cash_parser::word::Parameter::NamedWithAllIndices { name, concatenate } => {
+            let Some((_, variable)) = shell.env().get(&name) else {
+                return Ok(false);
+            };
+            if variable.value().is_associative_array() {
+                let key = if concatenate { "*" } else { "@" };
+                Ok(variable.value().get_at(key, shell)?.is_some())
+            } else {
+                Ok(!variable.value().element_values(shell).is_empty())
+            }
+        }
+        cash_parser::word::Parameter::Positional(position) => {
+            if position == 0 {
+                Ok(shell.current_shell_name().is_some())
+            } else {
+                Ok(shell
+                    .current_shell_args()
+                    .get((position - 1) as usize)
+                    .is_some())
+            }
+        }
+        cash_parser::word::Parameter::Special(_) => Ok(false),
     }
 }
 
@@ -219,13 +287,9 @@ async fn apply_binary_predicate(
             let (matches, captures) = match regex.matches(s.as_str()) {
                 Ok(Some(captures)) => (true, captures),
                 Ok(None) => (false, vec![]),
-                // If we can't compile the regex, don't abort the whole operation but make sure to
-                // report it.
-                // TODO(test): Docs indicate we should yield 2 on an invalid regex (not 1).
-                Err(e) => {
-                    tracing::warn!("error using regex: {}", e);
-                    (false, vec![])
-                }
+                // Bash 5.3 reports a regex that fails to compile, and `[[` yields 2; the
+                // caller turns this error into that status.
+                Err(e) => return Err(e),
             };
 
             let captures_value = variables::ShellValueLiteral::Array(ArrayLiteral(

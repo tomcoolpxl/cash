@@ -427,7 +427,10 @@ fn doctor_does_not_advise_installing_a_builtin() {
     // The bug: on a bare PATH it said `WARN cat not found -> winget install ...` for a
     // working builtin.
     let out = run(Command::new(CASH).arg("doctor").env("PATH", BARE_PATH));
-    for builtin in ["cat", "mktemp", "cut", "tr", "head", "tail", "wc"] {
+    for builtin in [
+        "cat", "mktemp", "cut", "tr", "head", "tail", "wc", "awk", "sed", "stat", "tty", "nohup",
+        "who", "users", "pinky", "logname", "hostid", "pathchk", "install",
+    ] {
         assert!(
             !out.stdout.contains(&format!("WARN  {builtin}")),
             "doctor warned about the builtin {builtin}:\n{}",
@@ -455,7 +458,7 @@ fn doctor_confirms_the_shells_resolve_to_cash() {
 fn doctor_still_names_what_is_genuinely_missing() {
     // The fix must not turn the diagnostic into a rubber stamp.
     let out = run(Command::new(CASH).arg("doctor").env("PATH", BARE_PATH));
-    for absent in ["sed", "awk", "grep", "diff", "stat"] {
+    for absent in ["grep", "diff"] {
         assert!(
             out.stdout.contains(&format!("WARN  {absent}")),
             "doctor did not report {absent} as missing:\n{}",
@@ -520,4 +523,19 @@ fn the_control_builtin_carries_cashs_name() {
         "the brush name is still registered: {}",
         old.stdout
     );
+}
+
+#[test]
+fn command_v_renders_a_path_found_on_path_with_forward_slashes() {
+    // `type` already rendered; `command -v` printed `C:/WINDOWS/system32\netstat.exe`.
+    let out = cash("command -v netstat; type -P netstat");
+    let lines: Vec<&str> = out.stdout.lines().collect();
+    assert_eq!(lines.len(), 2, "{} {}", out.stdout, out.stderr);
+    assert!(!lines[0].contains('\\'), "{}", lines[0]);
+    assert!(
+        lines[0].to_ascii_lowercase().ends_with("/netstat.exe"),
+        "{}",
+        lines[0]
+    );
+    assert_eq!(lines[0], lines[1]);
 }

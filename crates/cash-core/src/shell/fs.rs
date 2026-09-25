@@ -121,6 +121,28 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         home
     }
 
+    /// Returns the directories named by `$PATH`, in search order, and whether any of
+    /// them was relative.
+    ///
+    /// Empty entries mean `.` (Bash 5.3 also treats an empty `$PATH` this way). Relative
+    /// entries are resolved against the shell's working directory rather than the
+    /// process's, which `cd` does not change.
+    fn executable_search_dirs(&self) -> (Vec<PathBuf>, bool) {
+        let path_var = self.env.get_str("PATH", self).unwrap_or_default();
+        let mut has_relative = false;
+        let dirs = crate::sys::fs::split_paths_preserving_empty(path_var.as_ref())
+            .map(|dir| {
+                if dir.is_absolute() {
+                    dir
+                } else {
+                    has_relative = true;
+                    self.absolute_path(dir)
+                }
+            })
+            .collect();
+        (dirs, has_relative)
+    }
+
     /// Finds executables with the given name in the shell's current PATH, yielding each match
     /// in search order.
     ///
@@ -131,10 +153,9 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         &'a self,
         filename: &'a str,
     ) -> impl Iterator<Item = PathBuf> + 'a {
-        let path_var = self.env.get_str("PATH", self).unwrap_or_default();
-        let paths = crate::sys::fs::split_paths(path_var.as_ref());
+        let (paths, _) = self.executable_search_dirs();
 
-        pathsearch::search_for_executable(paths, filename)
+        pathsearch::search_for_executable(paths.into_iter(), filename)
     }
 
     /// Finds executables in the shell's current default PATH, with filenames matching the
@@ -148,10 +169,13 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         filename_prefix: &str,
         case_insensitive: bool,
     ) -> impl Iterator<Item = PathBuf> {
-        let path_var = self.env.get_str("PATH", self).unwrap_or_default();
-        let paths = crate::sys::fs::split_paths(path_var.as_ref());
+        let (paths, _) = self.executable_search_dirs();
 
-        pathsearch::search_for_executable_with_prefix(paths, filename_prefix, case_insensitive)
+        pathsearch::search_for_executable_with_prefix(
+            paths.into_iter(),
+            filename_prefix,
+            case_insensitive,
+        )
     }
 
     /// Determines whether the given filename is the name of an executable in one of the
@@ -185,8 +209,12 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         if let Some(cached_path) = self.program_location_cache.get(&candidate_name) {
             Some(cached_path)
         } else if let Some(found_path) = self.find_first_executable_in_path(&candidate_name) {
-            self.program_location_cache
-                .set(candidate_name, found_path.clone());
+            // A hit through a relative `$PATH` entry depends on the working directory, so
+            // caching it would keep resolving to the old directory after a `cd`.
+            if !self.executable_search_dirs().1 {
+                self.program_location_cache
+                    .set(candidate_name, found_path.clone());
+            }
             Some(found_path)
         } else {
             None
@@ -203,8 +231,7 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
     ///
     /// * `candidate_name` - The name of the command to resolve.
     pub fn resolve_command_in_path<S: AsRef<str>>(&self, candidate_name: S) -> Option<PathBuf> {
-        let path_var = self.env.get_str("PATH", self).unwrap_or_default();
-        let paths = crate::sys::fs::split_paths(path_var.as_ref());
+        let (paths, _) = self.executable_search_dirs();
         pathsearch::resolve_command(paths, candidate_name.as_ref())
     }
 
@@ -226,8 +253,11 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         }
 
         let found_path = self.resolve_command_in_path(candidate_name.as_ref())?;
-        self.program_location_cache
-            .set(candidate_name, found_path.clone());
+        // See `find_first_executable_in_path_using_cache`.
+        if !self.executable_search_dirs().1 {
+            self.program_location_cache
+                .set(candidate_name, found_path.clone());
+        }
 
         Some(found_path)
     }

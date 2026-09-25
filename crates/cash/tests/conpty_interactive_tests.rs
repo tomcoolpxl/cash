@@ -290,3 +290,64 @@ fn conpty_read_e_edits_initial_text() {
     let code = session.wait().expect("process did not exit");
     assert_eq!(code, 0);
 }
+
+#[test]
+fn conpty_read_e_navigates_in_memory_history() {
+    let mut session = start_interactive_cash();
+
+    session
+        .expect("cash", Duration::from_secs(5))
+        .or_else(|_| session.expect("$", Duration::from_secs(2)))
+        .expect("prompt displayed");
+
+    session.send_line("history -s first-entry").unwrap();
+    session.send_line("history -s second-entry").unwrap();
+    session
+        .send(concat!(
+            r#"read -e -p "HIST> " value; echo "HISTORY=[$value]""#,
+            "\r"
+        ))
+        .unwrap();
+    session
+        .expect("HIST> ", Duration::from_secs(5))
+        .expect("read history prompt did not appear");
+
+    // The command containing `read` is itself the newest history entry. Walk past it
+    // to the two entries injected above, then forward once with Ctrl-N.
+    session.send("\x10\x10\x10\x0e\r").unwrap();
+    session
+        .expect("HISTORY=[second-entry]", Duration::from_secs(5))
+        .expect("read -e did not navigate the shell's in-memory history");
+
+    session.send_line("exit 0").unwrap();
+    let code = session.wait().expect("process did not exit");
+    assert_eq!(code, 0);
+}
+
+#[test]
+fn conpty_read_capital_e_uses_shell_completion() {
+    let mut session = start_interactive_cash();
+
+    session
+        .expect("cash", Duration::from_secs(5))
+        .or_else(|_| session.expect("$", Duration::from_secs(2)))
+        .expect("prompt displayed");
+
+    session
+        .send(concat!(
+            r#"read -E -p "COMPLETE> " -i ech value; printf 'COMPLETED=[%s]\n' "$value""#,
+            "\r"
+        ))
+        .unwrap();
+    session
+        .expect("COMPLETE> ech", Duration::from_secs(5))
+        .expect("read completion prompt did not appear");
+    session.send("\t\r").unwrap();
+    session
+        .expect("COMPLETED=[echo]", Duration::from_secs(5))
+        .expect("read -E did not use the shell completion engine");
+
+    session.send_line("exit 0").unwrap();
+    let code = session.wait().expect("process did not exit");
+    assert_eq!(code, 0);
+}

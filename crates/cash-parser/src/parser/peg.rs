@@ -541,6 +541,10 @@ peg::parser! {
 
         // N.B. here strings are extensions to the POSIX standard.
         rule io_redirect() -> ast::IoRedirect =
+            non_posix_extensions_enabled() name:io_variable() f:io_file() {
+                    let (kind, target) = f;
+                    ast::IoRedirect::VariableFile(name, kind, target)
+                } /
             n:io_number()? f:io_file() {
                     let (kind, target) = f;
                     ast::IoRedirect::File(n, kind, target)
@@ -566,6 +570,18 @@ peg::parser! {
 
         rule io_fd() -> u32 =
             w:[Token::Word(_, _)] {? w.to_str().parse().or(Err("io_fd u32")) }
+
+        rule io_variable() -> String =
+            [Token::Word(w, _)] {?
+                let Some(name) = w.strip_prefix('{').and_then(|s| s.strip_suffix('}')) else {
+                    return Err("I/O variable");
+                };
+                if name.is_empty() || name.contains('}') {
+                    Err("I/O variable")
+                } else {
+                    Ok(name.to_owned())
+                }
+            }
 
         rule io_filename() -> ast::IoFileRedirectTarget =
             non_posix_extensions_enabled() sub:process_substitution() {

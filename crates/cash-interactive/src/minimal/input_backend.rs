@@ -115,7 +115,10 @@ mod tests {
     async fn assert_reads(input: &str, expected: &str) {
         let actual = match read_program(input).await {
             ReadResult::Input(s) => format!("Input({s:?})"),
-            ReadResult::BoundCommand(s) => format!("BoundCommand({s:?})"),
+            ReadResult::BoundCommand {
+                command,
+                numeric_argument,
+            } => format!("BoundCommand({command:?}, {numeric_argument:?})"),
             ReadResult::Eof => String::from("Eof"),
             ReadResult::Interrupted => String::from("Interrupted"),
         };

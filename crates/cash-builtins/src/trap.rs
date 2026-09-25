@@ -15,6 +15,10 @@ pub(crate) struct TrapCommand {
     #[arg(short = 'p')]
     print_trap_commands: bool,
 
+    /// Print registered trap actions.
+    #[arg(short = 'P')]
+    print_trap_actions: bool,
+
     args: Vec<String>,
 }
 
@@ -25,6 +29,24 @@ impl builtins::Command for TrapCommand {
         &self,
         mut context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, Self::Error> {
+        if self.print_trap_actions {
+            if self.print_trap_commands {
+                writeln!(context.stderr(), "trap: cannot specify both -p and -P")?;
+                return Ok(ExecutionResult::new(2));
+            }
+            if self.args.is_empty() {
+                writeln!(context.stderr(), "trap: -P: signal argument required")?;
+                return Ok(ExecutionResult::new(2));
+            }
+            for signal_type in &self.args {
+                let sig: TrapSignal = signal_type.parse()?;
+                if let Some(handler) = context.shell.traps().get_handler(sig) {
+                    writeln!(context.stdout(), "{}", handler.command)?;
+                }
+            }
+            return Ok(ExecutionResult::success());
+        }
+
         if self.list_signals {
             cash_core::traps::format_signals(context.stdout(), TrapSignal::iterator())
                 .map(|()| ExecutionResult::success())

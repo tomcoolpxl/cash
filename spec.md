@@ -1142,10 +1142,13 @@ The native `tree` covers the common, cheap filesystem view: `tree [DIRECTORY]`, 
 junctions as leaves instead of following them, preventing cycles and walks outside the
 requested root.
 
-**The gap stays open: still no `sed`, no `awk`.** uutils does not implement them — they
-are separate GNU projects. So cash is *not* a complete userland in one executable, and
-D35's diagnostic keeps its job. Confirmed: `type sed` reports not found even with the
-bundle enabled.
+**The gap stays open: still no `sed`, no `awk`.** Microsoft Coreutils packages
+uutils coreutils, findutils, and grep, but not the separate `uutils/sed` project or an
+AWK. Cash is therefore not yet a complete userland in one executable, and D35's
+diagnostic keeps its job. Confirmed: `type sed` reports not found even with the bundle
+enabled. The selected candidates and required compatibility work are documented in
+[`research/uutils-sed-evaluation.md`](research/uutils-sed-evaluation.md) and
+[`research/posixutils-rs-evaluation.md`](research/posixutils-rs-evaluation.md).
 
 **Bundled output is rendered through D3.** The utilities are portable Rust, so the few
 that *construct* an absolute path — `mktemp`, `realpath`, `readlink` — spell it the way

@@ -479,6 +479,10 @@ pub enum SubstringMatchKind {
     derive(PartialEq, Eq, serde::Serialize, serde::Deserialize)
 )]
 pub enum ParameterTransformOp {
+    /// An invalid transformation spelling. It is represented in the AST so expansion can
+    /// apply Bash's interactive/non-interactive error boundary instead of silently treating
+    /// the source as literal text or turning it into a parse-time error.
+    Invalid(String),
     /// Capitalizate initials.
     CapitalizeInitial,
     /// Expand escape sequences.
@@ -1156,17 +1160,27 @@ peg::parser! {
             "!" variable_name:variable_name() "[@]" {
                 ParameterExpr::MemberKeys { variable_name: variable_name.to_owned(), concatenate: false }
             } /
+            // `${!prefix*}` and `${!prefix@}` come before the `@` transforms, which would
+            // otherwise read `${!v@}` as an (invalid) transform of `v`. The lookahead keeps
+            // `${!v@Q}` a transform.
+            "!" prefix:variable_name() "*" &"}" {
+                ParameterExpr::VariableNames { prefix: prefix.to_owned(), concatenate: true }
+            } /
+            "!" prefix:variable_name() "@" &"}" {
+                ParameterExpr::VariableNames { prefix: prefix.to_owned(), concatenate: false }
+            } /
             indirect:parameter_indirection() parameter:parameter() ":" offset:substring_offset() length:(":" l:substring_length() { l })? {
                 ParameterExpr::Substring { parameter, indirect, offset, length }
             } /
             indirect:parameter_indirection() parameter:parameter() "@" op:non_posix_parameter_transformation_op() {
                 ParameterExpr::Transform { parameter, indirect, op }
             } /
-            "!" prefix:variable_name() "*" {
-                ParameterExpr::VariableNames { prefix: prefix.to_owned(), concatenate: true }
-            } /
-            "!" prefix:variable_name() "@" {
-                ParameterExpr::VariableNames { prefix: prefix.to_owned(), concatenate: false }
+            indirect:parameter_indirection() parameter:parameter() "@" op:$([^'}']*) {
+                ParameterExpr::Transform {
+                    parameter,
+                    indirect,
+                    op: ParameterTransformOp::Invalid(op.to_owned()),
+                }
             } /
             indirect:parameter_indirection() parameter:parameter() "/#" pattern:parameter_search_pattern() replacement:parameter_replacement_str()? {
                 ParameterExpr::ReplaceSubstring { parameter, indirect, pattern, replacement, match_kind: SubstringMatchKind::Prefix }

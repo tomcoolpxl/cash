@@ -81,6 +81,9 @@ pub struct Shell<SE: extensions::ShellExtensions = extensions::DefaultShellExten
 
     /// Set options saved by `local -` for each active function call.
     local_option_snapshots: Vec<Option<RuntimeOptions>>,
+    /// Per active function, the traps set aside on entry because the function does not
+    /// inherit them; restored when it returns.
+    function_trap_stash: Vec<Vec<(crate::traps::TrapSignal, crate::traps::TrapHandler)>>,
 
     /// State of managed jobs.
     /// TODO(serde): Need to warn somehow that jobs cannot be serialized.
@@ -161,6 +164,7 @@ impl<SE: extensions::ShellExtensions> Clone for Shell<SE> {
             funcs: self.funcs.clone(),
             options: self.options.clone(),
             local_option_snapshots: self.local_option_snapshots.clone(),
+            function_trap_stash: self.function_trap_stash.clone(),
             // cash: a subshell sees the parent's jobs but cannot manage them, so it gets
             // read-only snapshots rather than an empty table. `$(jobs -p)` is a
             // documented way to collect background pids and was returning nothing.

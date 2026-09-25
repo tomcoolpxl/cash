@@ -348,6 +348,27 @@ async fn a_directory_completes_by_name() {
 }
 
 #[tokio::test]
+async fn globstar_completion_obeys_shopt_and_skips_hidden_directories() {
+    let mut fixture = Fixture::new("globstar").await;
+    fixture.touch("one/needle.txt");
+    fixture.touch("one/two/needle.txt");
+    fixture.touch(".hidden/deep/needle.txt");
+
+    let disabled = fixture.complete("cat **/nee").await;
+    assert_eq!(disabled, vec!["one/needle.txt".to_string()]);
+
+    fixture.shell.options_mut().enable_star_star_glob = true;
+    let enabled = fixture.complete("cat **/nee").await;
+    assert_eq!(
+        enabled,
+        vec![
+            "one/needle.txt".to_string(),
+            "one/two/needle.txt".to_string()
+        ]
+    );
+}
+
+#[tokio::test]
 async fn a_command_in_first_position_completes_from_builtins() {
     let mut fixture = Fixture::new("command").await;
 

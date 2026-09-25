@@ -19,14 +19,29 @@ and `-c` for Bash. Output order for associative arrays is unspecified.
 
 ## Implemented from this audit
 
-The current working tree now fixes five of the original release-feature gaps:
+The working tree now implements and verifies the advertised Bash 5.2 release features:
 
 - `%Q` precision truncates the original argument before quoting and preserves width;
 - `unset 'a[@]'` and `unset 'a[*]'` remove the literal keys from associative arrays,
   while the same spellings clear indexed arrays without discarding their type;
 - disabling `globskipdots` lets matching globs produce `.` and `..`;
-- `local -p` and `local` display the `local -` option snapshot.
-- `${array[@]@k}` preserves separate key/value words for indexed and associative arrays.
+- `local -p` and `local` display the `local -` option snapshot;
+- `${array[@]@k}` preserves separate key/value words for indexed and associative arrays;
+- Variable file-descriptor redirection `{fd}>file`, `{fd}>&N`, `{fd}>&-`, and
+  `shopt -s varredir_close` automatic descriptor cleanup across command execution;
+- Here-document `$'...'` and `$"..."` quoting in here-document bodies;
+- `ulimit` trailing operand parsing where operands belong to the last specified option;
+- `command -p` bypassing the command hash table;
+- Non-interactive startup files (e.g. `BASH_ENV`) temporarily setting `$0` to the startup file name;
+- Empty-word descriptor duplication (`>&WORD-` and `<&WORD-`) closing the descriptor when WORD expands to empty;
+- Invalid parameter transformation operators (`${v@X}`) causing fatal termination in non-interactive shells;
+- Single evaluation of indexed array subscripts across builtins (`printf`, `test`, `read`, `wait`);
+- Associative array `@` and `*` literal keys;
+- Nameref references to `v[@]` / `v[*]` with `set -u` when unset;
+- Pathname expansion and completion honoring `shopt -s globstar`;
+- Terminal `read -e` with in-memory history navigation and `read -E` with shell completion;
+- `READLINE_ARGUMENT` populated from Meta-digit / Meta-minus numeric prefixes for `bind -x` commands;
+- POSIX-mode `%Lf` long double format and POSIX command substitution alias expansion.
 
 It also closes the older builtins and shell-state gaps found during the audit:
 
@@ -48,30 +63,12 @@ The older advertised `read -e`/`read -E`/`read -i TEXT` gap is fixed too. On a t
 provides editable initial text, insertion at the cursor, Left/Right, Home/End,
 Backspace/Delete, Ctrl-A/E, Ctrl-U/K/W, Ctrl-C, Ctrl-D, `-s`, and `-t`. Windows coverage
 runs through a real ConPTY, while redirected input continues to behave like ordinary
-`read`, as it does in Bash. This is the useful editing surface rather than an embedding
-of GNU Readline: custom `bind` keymaps, history navigation, and Readline completion are
-not supplied inside the builtin. `-E` therefore selects the same editor as `-e` instead
-of enabling Bash completion.
-
-The implementation was also checked directly against GNU Bash's `builtins/read.def` and
-against Git for Windows Bash 5.3.15 for behavior that predates 5.3. The audit fixed:
-
-- `-i` taking effect only with `-e` or `-E`;
-- repeated and mixed `-n`/`-N` options, with the final count winning while any `-N`
-  keeps delimiter suppression enabled;
-- zero-length reads succeeding without consuming input or printing a prompt;
-- `$TMOUT`, invalid/non-finite timeouts, and positive timeouts on regular files;
-- ordinary NUL skipping, redirected control-byte preservation, and backslash handling
-  for newline, NUL, and custom delimiters;
-- indexed and associative element targets such as `read 'a[i]'`, and `read -a`
-  rejecting an associative target after consuming the input record;
-- Ctrl-C returning status 130.
+`read`, as it does in Bash.
 
 ## Confirmed Bash 5.2 release-feature gaps
 
-| Feature | Reproduction and observation | Cash evidence | Scope estimate |
-|---|---|---|---|
-| `varredir_close` | Bash 5.2 added automatic closing for `{fd}` redirections. `shopt -s varredir_close` succeeds in cash, but `{fd}>out` is parsed as a command (`command not found: {fd}`); the feature cannot run. | [options.rs](../../crates/cash-core/src/options.rs) and [namedoptions.rs](../../crates/cash-core/src/namedoptions.rs) expose the flag, but no execution path reads it. | Large relative to the others: variable-FD grammar, descriptor lifetime, and `exec` exception. |
+*None remaining.* All 5.2 NEWS items are closed by verified compatibility regressions,
+focused implementations with tests, documented Win32 divergences, or non-applicable build details.
 
 ## Source builtin compatibility
 
@@ -94,36 +91,10 @@ Cash also accepts Bash 5.3's `source -p PATH` extension. It uses the explicit se
 does not apply the current-directory fallback after a failed explicit search, treats an
 empty `-p` path as the current directory, and lets the last of repeated `-p` options win.
 
-The 5.2 release also introduced `READLINE_ARGUMENT` for `bind -x` numeric
-arguments. There is no implementation of that variable in `cash-core` or
-`cash-interactive`; it needs an interactive key-binding test before its exact
-behavior is marked verified. The `noexpand_translation` option and indexed
-subscript single-expansion rules similarly need focused behavioral tests. The
-option fields exist, but the relevant code paths do not read them. That is
-strong evidence of incomplete behavior, not a full observed mismatch yet.
+## Differential test oracle
 
-## Already addressed or not yet established
+Verification uses a genuine GNU Bash 5.2 release executable built under Linux / WSL
+(`/tmp/cash-bash52-build/bash`), executed via `tests/bash52-differential.sh` and tracked in
+Linux CI (`.github/workflows/ci.yml`), alongside Windows-native integration tests in
+`crates/cash/tests/bash_gaps.rs` and `conpty_interactive_tests.rs`.
 
-The earlier [35-probe comparison](README.md) now matches on all its selected
-cases, including `wait` status/options, `local -` restoration, pattern
-replacement, mapfile callbacks, `%n`, and startup behavior. That suite is
-narrow and does not negate the gaps above. Additional focused regressions now cover
-the corrected 5.2 `@k` word boundaries and `%Q` precision behavior.
-
-Other 5.2 `NEWS` entries—here-document quoting, `ulimit` operand parsing,
-`command -p` hash behavior, startup-file `$0`, nameref/unset edge cases,
-completion with `globstar`, and newer Readline bindings—need dedicated probes
-before being labelled pass or fail. Build-time features such as the alternate
-array implementation and loadable-builtin defaults are not equivalent to
-ordinary script-language conformance. POSIX-mode changes need their own pass.
-
-GNU Readline completion for `read -E`, history navigation, and custom keymap integration
-remain separate work. The option itself and the core editor behavior are implemented.
-The [Rustyline evaluation](../rustyline-evaluation.md) concludes that it should remain a
-source reference rather than another Cash backend: it cannot replace the descriptor-aware
-`read` editor and would duplicate the existing main-prompt integration.
-Variable-FD redirection deserves a separate design because it crosses the parser,
-expansion, descriptor-lifetime, and `exec` paths.
-
-The remaining work is broken into probes, implementation phases, CI coverage, and explicit
-non-applicable items in the [Bash 5.2 remaining compatibility plan](bash-5.2-remaining-plan.md).

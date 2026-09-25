@@ -33,8 +33,8 @@ pub(crate) struct Options {
     pub suppress_func_lookup: bool,
     /// Report every location the name resolves to, not just the first.
     pub all_locations: bool,
-    /// Directories to search for executables, in lieu of the shell's `PATH`. The shell's
-    /// hash-based path cache is still consulted first.
+    /// Directories to search for executables, in lieu of the shell's `PATH`. Supplying an
+    /// explicit search path also bypasses the shell's hash table, as `command -p` requires.
     pub path_dirs: Option<Vec<PathBuf>>,
 }
 
@@ -114,7 +114,9 @@ fn resolve_in_filesystem<SE: ShellExtensions>(
     // Reporting every location is a strict search for executables; reporting just the one the
     // name resolves to matches what the shell would actually try to run, which can be a
     // non-executable file if the search turns up nothing better.
-    if let Some(path) = shell.program_location_cache().get(name) {
+    if options.path_dirs.is_none()
+        && let Some(path) = shell.program_location_cache().get(name)
+    {
         resolved.push(Resolved::File { path, hashed: true });
         if !options.all_locations {
             return;

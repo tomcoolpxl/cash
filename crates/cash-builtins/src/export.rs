@@ -85,6 +85,16 @@ impl ExportCommand {
                         return Ok(ExecutionExitCode::InvalidUsage.into());
                     }
                 }
+                // A word such as `export "X=1 2"` or `export $spec` is still an
+                // assignment; its value was already expanded.
+                else if let Some((name, append, value)) = split_string_assignment(s) {
+                    return self.assign(
+                        context,
+                        name,
+                        variables::ShellValueLiteral::Scalar(value.to_owned()),
+                        append,
+                    );
+                }
                 // Try to find the variable already present; if we find it, then mark it
                 // exported.
                 else if let Some((_, variable)) = context.shell.env_mut().get_mut(s) {
@@ -117,42 +127,67 @@ impl ExportCommand {
                     }
                 };
 
-                // `export name+=value` appends to the existing value, exactly like a
-                // bare `name+=value`. update_or_add always replaces, so when the
-                // variable already exists honor the append here. A missing variable
-                // falls through: appending to nothing is a plain assignment.
-                if assignment.append
-                    && let Some((_, variable)) = context.shell.env_mut().get_mut(name)
-                {
-                    variable.assign(value, true)?;
-                    if self.unexport {
-                        variable.unexport();
-                    } else {
-                        variable.export();
-                    }
-                    return Ok(ExecutionResult::success());
-                }
-
-                // Update the variable with the provided value and then mark it exported.
-                context.shell.env_mut().update_or_add(
-                    name,
-                    value,
-                    |var| {
-                        if self.unexport {
-                            var.unexport();
-                        } else {
-                            var.export();
-                        }
-                        Ok(())
-                    },
-                    EnvironmentLookup::Anywhere,
-                    EnvironmentScope::Global,
-                )?;
+                return self.assign(context, name, value, assignment.append);
             }
         }
 
         Ok(ExecutionResult::success())
     }
+
+    /// Assigns `value` to `name` (appending for `+=`) and applies the export flag.
+    fn assign(
+        &self,
+        context: &mut cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
+        name: &str,
+        value: variables::ShellValueLiteral,
+        append: bool,
+    ) -> Result<ExecutionResult, cash_core::Error> {
+        // `export name+=value` appends to the existing value, exactly like a
+        // bare `name+=value`. update_or_add always replaces, so when the
+        // variable already exists honor the append here. A missing variable
+        // falls through: appending to nothing is a plain assignment.
+        if append && let Some((_, variable)) = context.shell.env_mut().get_mut(name) {
+            variable.assign(value, true)?;
+            if self.unexport {
+                variable.unexport();
+            } else {
+                variable.export();
+            }
+            return Ok(ExecutionResult::success());
+        }
+
+        // Update the variable with the provided value and then mark it exported.
+        context.shell.env_mut().update_or_add(
+            name,
+            value,
+            |var| {
+                if self.unexport {
+                    var.unexport();
+                } else {
+                    var.export();
+                }
+                Ok(())
+            },
+            EnvironmentLookup::Anywhere,
+            EnvironmentScope::Global,
+        )?;
+
+        Ok(ExecutionResult::success())
+    }
+}
+
+/// Splits `name=value` or `name+=value` into its parts, if `name` is a valid identifier.
+fn split_string_assignment(s: &str) -> Option<(&str, bool, &str)> {
+    let (lhs, value) = s.split_once('=')?;
+    let (name, append) = lhs
+        .strip_suffix('+')
+        .map_or((lhs, false), |name| (name, true));
+    let mut chars = name.chars();
+    let valid = chars
+        .next()
+        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_');
+    valid.then_some((name, append, value))
 }
 
 fn display_all_exported_vars(

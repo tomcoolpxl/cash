@@ -29,8 +29,16 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
     ) -> Result<bool, error::Error> {
         let path = path.as_ref();
         if path.exists() {
-            self.source_script(path, std::iter::empty::<String>(), params)
-                .await?;
+            // Bash 5.2 makes $0 name the startup file while it is executing, then restores
+            // the caller's value. These internal calls are only used for startup/logout
+            // files; an ordinary `source` keeps the caller's $0 as before.
+            let saved_name = self.name.take();
+            self.name = Some(path.to_string_lossy().into_owned());
+            let result = self
+                .source_script(path, std::iter::empty::<String>(), params)
+                .await;
+            self.name = saved_name;
+            result?;
             Ok(true)
         } else {
             tracing::debug!("skipping non-existent file: {}", path.display());
@@ -97,10 +105,46 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
             .into());
         }
 
-        let source_info = crate::SourceInfo::from(path.to_owned());
+        // Bash 5.3 `bash_source_fullpath`: `BASH_SOURCE` records the file's real path
+        // rather than the name it was invoked by, when that path can be resolved.
+        let source_path = if self.options().bash_source_full_path {
+            std::fs::canonicalize(self.absolute_path(path)).map_or_else(
+                |_| path.to_owned(),
+                |real| {
+                    #[cfg(windows)]
+                    let real = std::path::PathBuf::from(cash_win32::path::render(&real));
+                    real
+                },
+            )
+        } else {
+            path.to_owned()
+        };
+        let source_info = crate::SourceInfo::from(source_path);
+
+        let mut contents = Vec::new();
+        let mut opened_file = opened_file;
+        opened_file
+            .read_to_end(&mut contents)
+            .map_err(|e| error::ErrorKind::FailedSourcingFile(path.to_owned(), e))?;
+
+        // Bash refuses to run a script that looks binary (Bash 5.3 NEWS 1a): an ELF
+        // header, or a NUL in the first line of the first 80 bytes — the first two
+        // lines when it starts with `#!`. `source` does not check.
+        if matches!(call_type, callstack::ScriptCallType::Run) && looks_binary(&contents) {
+            return Err(error::ErrorKind::CannotExecuteBinaryFile(path.to_owned()).into());
+        }
+
+        // Like Bash, the shell's input reader discards NUL bytes.
+        contents.retain(|&byte| byte != 0);
 
         let mut result = self
-            .source_file(opened_file, &source_info, args, params, call_type)
+            .source_file(
+                std::io::Cursor::new(contents),
+                &source_info,
+                args,
+                params,
+                call_type,
+            )
             .await?;
 
         // Handle control flow at script execution boundary. If execution completed
@@ -176,6 +220,10 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         let result = self
             .run_parsed_result(parse_result, source_info, params)
             .await;
+
+        if matches!(call_type, callstack::ScriptCallType::Source) && result.is_ok() {
+            crate::commands::run_return_trap(self, params).await;
+        }
 
         let exited_frame = self.call_stack.pop();
 
@@ -324,4 +372,18 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
     ) -> Result<i64, error::Error> {
         Ok(expr.eval(self)?)
     }
+}
+
+/// Bash's `check_binary_file`: an ELF header, or a NUL before the end of the first
+/// line (the second when the file starts with `#!`) within the first 80 bytes.
+fn looks_binary(contents: &[u8]) -> bool {
+    let sample = &contents[..contents.len().min(80)];
+    if sample.starts_with(b"\x7fELF") {
+        return true;
+    }
+    let lines = if sample.starts_with(b"#!") { 2 } else { 1 };
+    sample
+        .split_inclusive(|&byte| byte == b'\n')
+        .take(lines)
+        .any(|line| line.contains(&0))
 }

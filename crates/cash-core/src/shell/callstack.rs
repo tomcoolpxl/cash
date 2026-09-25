@@ -1,5 +1,6 @@
 //! Call stack management for the shell.
 
+use crate::traps::TrapSignal;
 use crate::{ExecutionParameters, callstack, env, error, functions, trace_categories};
 
 impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
@@ -122,13 +123,53 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         self.call_stack.push_function(name, function, args);
         self.env.push_scope(env::EnvironmentScope::Local);
         self.local_option_snapshots.push(None);
+        let set_aside = self.set_aside_uninherited_traps(function.is_traced());
+        self.function_trap_stash.push(set_aside);
 
         Ok(())
+    }
+
+    /// Removes the traps a function does not inherit, returning them for
+    /// `leave_function` to restore.
+    ///
+    /// This is Bash's model: `ERR` is set aside unless `errtrace` is on, and `DEBUG` and
+    /// `RETURN` unless `functrace` is on or the function has the trace attribute
+    /// (`RETURN` always while a `DEBUG` trap is running). A trap the function sets
+    /// itself therefore fires inside it, and outlives it.
+    fn set_aside_uninherited_traps(
+        &mut self,
+        traced: bool,
+    ) -> Vec<(TrapSignal, crate::traps::TrapHandler)> {
+        let trace = traced || self.options.shell_functions_inherit_debug_and_return_traps;
+        let in_debug_trap = self.call_stack.is_trap_signal_active(TrapSignal::Debug);
+        let mut set_aside = Vec::new();
+        for (signal, keep) in [
+            (TrapSignal::Debug, trace),
+            (
+                TrapSignal::Err,
+                self.options.shell_functions_inherit_err_trap,
+            ),
+            (TrapSignal::Return, trace && !in_debug_trap),
+        ] {
+            if !keep && let Some(handler) = self.traps.get_handler(signal).cloned() {
+                self.traps.remove_handlers(signal);
+                set_aside.push((signal, handler));
+            }
+        }
+        set_aside
     }
 
     /// Updates the shell's internal tracking state to reflect that the shell
     /// has exited the top-most function on its call stack.
     pub(crate) fn leave_function(&mut self) -> Result<(), error::Error> {
+        // Restore the traps set aside on entry, unless the function set its own.
+        for (signal, handler) in self.function_trap_stash.pop().unwrap_or_default() {
+            if !self.traps.handles(signal) {
+                self.traps
+                    .register_handler(signal, handler.command, handler.source_info);
+            }
+        }
+
         self.env.pop_scope(env::EnvironmentScope::Local)?;
         if let Some(Some(saved)) = self.local_option_snapshots.pop() {
             for kind in [

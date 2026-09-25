@@ -1129,6 +1129,15 @@ fn ulimit_reports_unlimited_and_accepts_values() {
     // Setting a limit is silently accepted without breaking set -e scripts
     let out_set = cash("set -e; ulimit -n 2048; echo SUCCESS");
     assert_eq!(out_set.stdout, "SUCCESS");
+
+    // Bash 5.2 assigns an operand left after option parsing to the final resource
+    // option, and ignores later operands. Windows validates the same command shapes
+    // even though there is no Win32 rlimit to apply.
+    let out_trailing = cash("ulimit -n -S 2048 extra; echo status=$?");
+    assert_eq!(out_trailing.stdout, "status=0");
+
+    let out_invalid = cash("ulimit -n not-a-limit; echo status=$?");
+    assert_eq!(out_invalid.stdout, "status=2");
 }
 
 // ===========================================================================

@@ -1,7 +1,10 @@
 //! Shell patterns
 
 use crate::{error, regex, sys, trace_categories};
-use std::{collections::VecDeque, path::Path};
+use std::{
+    collections::{HashSet, VecDeque},
+    path::{Path, PathBuf},
+};
 
 /// Represents a piece of a shell pattern.
 #[derive(Clone, Debug)]
@@ -22,6 +25,61 @@ impl PatternPiece {
 }
 
 type PatternWord = Vec<PatternPiece>;
+
+fn is_globstar_component(component: &PatternWord) -> bool {
+    matches!(component.as_slice(), [PatternPiece::Pattern(pattern)] if pattern == "**")
+}
+
+/// Expand a globstar without following directory symlinks or junctions. Besides matching
+/// Bash's useful behavior, refusing reparse-point recursion keeps completion bounded when
+/// a Windows directory tree contains a junction cycle.
+fn expand_globstar_paths(
+    roots: Vec<PathBuf>,
+    include_files: bool,
+    skip_hidden: bool,
+) -> Vec<PathBuf> {
+    let mut matches = Vec::new();
+    let mut pending: VecDeque<PathBuf> = roots.into_iter().collect();
+    let mut visited = HashSet::new();
+
+    while let Some(directory) = pending.pop_front() {
+        let identity = directory
+            .canonicalize()
+            .unwrap_or_else(|_| directory.clone());
+        if !visited.insert(identity) {
+            continue;
+        }
+
+        // `**/name` also searches the directory in which the globstar starts.
+        if !include_files {
+            matches.push(directory.clone());
+        }
+
+        let Ok(entries) = directory.read_dir() else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            if skip_hidden && name.to_string_lossy().starts_with('.') {
+                continue;
+            }
+
+            let path = entry.path();
+            let Ok(file_type) = entry.file_type() else {
+                continue;
+            };
+            if include_files {
+                matches.push(path.clone());
+            }
+            if file_type.is_dir() && !file_type.is_symlink() {
+                pending.push_back(path);
+            }
+        }
+    }
+
+    matches.sort();
+    matches
+}
 
 /// Options for filename expansion.
 #[derive(Clone, Debug, Default)]
@@ -61,6 +119,7 @@ impl PatternExpansionResult {
 pub struct Pattern {
     pieces: PatternWord,
     enable_extended_globbing: bool,
+    enable_globstar: bool,
     multiline: bool,
     case_insensitive: bool,
 }
@@ -70,6 +129,7 @@ impl Default for Pattern {
         Self {
             pieces: vec![],
             enable_extended_globbing: false,
+            enable_globstar: false,
             multiline: true,
             case_insensitive: false,
         }
@@ -121,6 +181,13 @@ impl Pattern {
     #[must_use]
     pub const fn set_extended_globbing(mut self, value: bool) -> Self {
         self.enable_extended_globbing = value;
+        self
+    }
+
+    /// Enables (or disables) Bash's recursive `**` pathname component.
+    #[must_use]
+    pub const fn set_globstar(mut self, value: bool) -> Self {
+        self.enable_globstar = value;
         self
     }
 
@@ -257,7 +324,18 @@ impl Pattern {
             vec![working_dir.to_path_buf()]
         };
 
-        for component in components {
+        let component_count = components.len();
+        for (component_index, component) in components.into_iter().enumerate() {
+            if self.enable_globstar && is_globstar_component(&component) {
+                let include_files = component_index + 1 == component_count;
+                paths_so_far = expand_globstar_paths(
+                    paths_so_far,
+                    include_files,
+                    options.require_dot_in_pattern_to_match_dot_files,
+                );
+                continue;
+            }
+
             if !component.iter().any(|piece| {
                 matches!(piece, PatternPiece::Pattern(_))
                     && requires_expansion(piece.as_str(), self.enable_extended_globbing)
@@ -285,6 +363,7 @@ impl Pattern {
             for current_path in current_paths {
                 let subpattern = Self::from(&component)
                     .set_extended_globbing(self.enable_extended_globbing)
+                    .set_globstar(self.enable_globstar)
                     .set_case_insensitive(self.case_insensitive);
 
                 let subpattern_starts_with_dot = subpattern
@@ -330,7 +409,7 @@ impl Pattern {
             }
         }
 
-        let results: Vec<_> = paths_so_far
+        let mut results: Vec<_> = paths_so_far
             .into_iter()
             .filter_map(|path| {
                 if let Some(filter) = path_filter
@@ -356,6 +435,12 @@ impl Pattern {
                 Some(path_ref.to_string())
             })
             .collect();
+
+        // Bash sorts the complete expansion, including matches reached through
+        // different depths of a `**` component. Sorting each directory while
+        // walking is not enough: `a/b/needle` sorts before `a/needle` even
+        // though the latter is discovered at the shallower level first.
+        results.sort();
 
         tracing::debug!(target: trace_categories::PATTERN, "  => results: {results:?}");
 
@@ -1004,6 +1089,41 @@ mod tests {
                 "result {p:?} still contains absolute working-dir prefix {scratch_str:?}"
             );
         }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_globstar_recurses_only_when_enabled_and_skips_hidden_directories() -> Result<()> {
+        let scratch = tempfile::tempdir()?;
+        std::fs::create_dir_all(scratch.path().join("one/two"))?;
+        std::fs::create_dir_all(scratch.path().join(".hidden/deep"))?;
+        std::fs::write(scratch.path().join("one/needle.txt"), "")?;
+        std::fs::write(scratch.path().join("one/two/needle.txt"), "")?;
+        std::fs::write(scratch.path().join(".hidden/deep/needle.txt"), "")?;
+
+        let options = FilenameExpansionOptions {
+            require_dot_in_pattern_to_match_dot_files: true,
+            include_dot_and_dotdot: false,
+        };
+        let enabled = Pattern::from("**/needle.txt")
+            .set_globstar(true)
+            .expand::<fn(&Path) -> bool>(scratch.path(), None, &options)?;
+        assert_eq!(
+            expect_expanded(enabled)?,
+            vec![
+                "one/needle.txt".to_string(),
+                "one/two/needle.txt".to_string()
+            ]
+        );
+
+        let disabled = Pattern::from("**/needle.txt")
+            .set_globstar(false)
+            .expand::<fn(&Path) -> bool>(scratch.path(), None, &options)?;
+        assert_eq!(
+            expect_expanded(disabled)?,
+            vec!["one/needle.txt".to_string()]
+        );
 
         Ok(())
     }

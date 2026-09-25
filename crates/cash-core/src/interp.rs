@@ -449,6 +449,11 @@ impl Execute for ast::Pipeline {
             params.suppress_errexit = true;
         }
 
+        // Like Bash (`was_error_trap` in execute_cmd.c), whether an ERR trap applies is
+        // decided before the pipeline runs: a trap it installs itself, for instance inside
+        // a function it calls, does not fire for its own status.
+        let had_err_trap = shell.traps().handles(crate::traps::TrapSignal::Err);
+
         // Spawn all the processes required for the pipeline, connecting outputs/inputs with pipes
         // as needed.
         let spawn_results = spawn_pipeline_processes(self, shell, &params).await?;
@@ -470,11 +475,28 @@ impl Execute for ast::Pipeline {
         // We reuse `suppress_errexit` here because bash suppresses the ERR trap in
         // exactly the same contexts it suppresses errexit (conditionals, `!`-prefixed
         // pipelines, etc.).
-        if !result.is_success() && !params.suppress_errexit && !self.bang {
+        // A `return` leaves before Bash reaches its ERR check, so it never fires ERR.
+        if !result.is_success()
+            && !params.suppress_errexit
+            && !self.bang
+            && had_err_trap
+            && !matches!(
+                result.next_control_flow,
+                crate::ExecutionControlFlow::ReturnFromFunctionOrScript
+            )
+        {
             if shell.traps().handles(crate::traps::TrapSignal::Err) {
-                shell
+                let trap_result = shell
                     .invoke_trap_handler(crate::traps::TrapSignal::Err, &params)
                     .await?;
+                // `exit` or `return` in the handler ends the script or function, as in Bash.
+                if matches!(
+                    trap_result.next_control_flow,
+                    crate::ExecutionControlFlow::ExitShell
+                        | crate::ExecutionControlFlow::ReturnFromFunctionOrScript
+                ) {
+                    result = trap_result;
+                }
             }
         }
 
@@ -488,22 +510,23 @@ impl Execute for ast::Pipeline {
             && let Some(mut stderr) = params.try_fd(shell, openfiles::OpenFiles::STDERR_FD)
         {
             let timing = stopwatch.stop()?;
-            if timed.is_posix_output() {
-                std::write!(
-                    stderr,
-                    "real {}\nuser {}\nsys {}\n",
-                    timing::format_duration_posixly(&timing.wall),
-                    timing::format_duration_posixly(&timing.user),
-                    timing::format_duration_posixly(&timing.system),
-                )?;
+            // `time -p` has a fixed format; otherwise $TIMEFORMAT applies, and a set but
+            // empty value suppresses the report.
+            let format = if timed.is_posix_output() {
+                Some(timing::POSIX_TIMEFORMAT.to_owned())
             } else {
-                std::write!(
-                    stderr,
-                    "\nreal\t{}\nuser\t{}\nsys\t{}\n",
-                    timing::format_duration_non_posixly(&timing.wall),
-                    timing::format_duration_non_posixly(&timing.user),
-                    timing::format_duration_non_posixly(&timing.system),
-                )?;
+                match shell.env_str("TIMEFORMAT") {
+                    Some(format) => Some(format.into_owned()),
+                    None => Some(timing::DEFAULT_TIMEFORMAT.to_owned()),
+                }
+            };
+            if let Some(format) = format.filter(|f| !f.is_empty()) {
+                match timing::format_timing(&format, &timing) {
+                    Ok(report) => std::write!(stderr, "{report}")?,
+                    Err(bad) => {
+                        std::writeln!(stderr, "TIMEFORMAT: `{bad}': invalid format character")?;
+                    }
+                }
             }
         }
 
@@ -809,10 +832,21 @@ impl Execute for ast::CompoundCommand {
             Self::Coprocess(c) => c.execute(shell, params).await,
             Self::ExtendedTest(e) => {
                 let result =
-                    if extendedtests::eval_extended_test_expr(&e.expr, shell, params).await? {
-                        0
-                    } else {
-                        1
+                    match extendedtests::eval_extended_test_expr(&e.expr, shell, params).await {
+                        Ok(true) => 0,
+                        Ok(false) => 1,
+                        // An `=~` pattern that does not compile is reported, and the test
+                        // yields 2 without ending the script.
+                        Err(err) => match err.kind() {
+                            error::ErrorKind::InvalidRegexError(regex_error, _) => {
+                                let _ = writeln!(
+                                    params.stderr(shell),
+                                    "[[: invalid regular expression: {regex_error}"
+                                );
+                                2
+                            }
+                            _ => return Err(err),
+                        },
                     };
                 Ok(ExecutionResult::new(result))
             }
@@ -1503,6 +1537,22 @@ impl<SE: extensions::ShellExtensions> ExecuteInPipeline<SE> for ast::SimpleComma
                                 command_takes_assignments = true;
                             }
                         }
+                    } else if !command_takes_assignments
+                        && context.shell.options().posix_mode
+                        && args
+                            .iter()
+                            .all(|a| matches!(a, CommandArg::String(s) if s == "command"))
+                        && let Some(first_arg) = next_args.first()
+                        && context
+                            .shell
+                            .builtins()
+                            .get(first_arg.as_str())
+                            .is_some_and(|r| !r.disabled && r.declaration_builtin)
+                    {
+                        // Bash 5.3 POSIX mode: `command declare a=$x` keeps the declaration
+                        // builtin's assignment parsing, so `$x` is not field-split. Bash
+                        // does not do this outside POSIX mode.
+                        command_takes_assignments = true;
                     }
 
                     let mut next_args = next_args.into_iter().map(CommandArg::String).collect();
@@ -1626,8 +1676,11 @@ async fn execute_command<T: Into<String>>(
     // Arrange to pop off that ephemeral environment scope.
     cmd.post_execute = Some(|shell| shell.env_mut().pop_scope(EnvironmentScope::Command));
 
-    // Run through any pre-execution hooks as best effort.
-    let _ = commands::on_preexecute(&mut cmd).await;
+    // Run through any pre-execution hooks as best effort; a DEBUG trap that exits or
+    // returns replaces the command.
+    if let Ok(Some(result)) = commands::on_preexecute(&mut cmd).await {
+        return Ok(result.into());
+    }
 
     // Execute
     // TODO(jobs): do we need to move self back to foreground on error here?
@@ -2069,59 +2122,19 @@ pub(crate) async fn setup_redirect(
                 }
 
                 ast::IoFileRedirectTarget::Duplicate(word) => {
-                    let default_fd_if_unspecified = match kind {
-                        ast::IoFileRedirectKind::DuplicateInput => 0,
-                        ast::IoFileRedirectKind::DuplicateOutput => 1,
-                        _ => {
-                            return error::unimp("unexpected redirect kind");
-                        }
-                    };
-
-                    let fd_num = specified_fd_num.unwrap_or(default_fd_if_unspecified);
-
                     let mut expanded_fields =
                         expansion::full_expand_and_split_word(shell, params, word).await?;
 
                     if expanded_fields.len() != 1 {
                         return Err(error::ErrorKind::InvalidRedirection.into());
                     }
-
-                    let mut expanded = expanded_fields.remove(0);
-
-                    let dash = if expanded.ends_with('-') {
-                        expanded.pop();
-                        true
-                    } else {
-                        false
-                    };
-
-                    if expanded.is_empty() {
-                        // Nothing to do
-                    } else if expanded.chars().all(|c: char| c.is_ascii_digit()) {
-                        let source_fd_num = expanded
-                            .parse::<ShellFd>()
-                            .map_err(|_| error::ErrorKind::InvalidRedirection)?;
-
-                        // Reference the same open file as the source fd (shared handle; no OS-level duplication).
-                        let Some(target_file) = params.try_fd(shell, source_fd_num) else {
-                            return Err(error::ErrorKind::BadFileDescriptor(source_fd_num).into());
-                        };
-
-                        params.open_files.set_fd(fd_num, target_file);
-                    } else if fd_num == 1 && !dash {
-                        // Special case for compatibility: redirect stdout and stderr to the file
-                        // given by `expanded`.
-                        setup_redirect_output_and_error_to(
-                            shell, params, &expanded, false, /* append? */
-                        )?;
-                    } else {
-                        return Err(error::ErrorKind::InvalidRedirection.into());
-                    }
-
-                    if dash {
-                        // Close the specified fd. Ignore it if it's not valid.
-                        params.open_files.remove_fd(fd_num);
-                    }
+                    setup_duplicate_redirect(
+                        shell,
+                        params,
+                        *specified_fd_num,
+                        kind,
+                        expanded_fields.remove(0),
+                    )?;
                 }
 
                 ast::IoFileRedirectTarget::ProcessSubstitution(substitution_kind, subshell_cmd) => {
@@ -2158,6 +2171,56 @@ pub(crate) async fn setup_redirect(
             }
         }
 
+        ast::IoRedirect::VariableFile(name, kind, target) => {
+            // Expand descriptor-duplication words here so an indirect close (`x=-;
+            // {fd}>&$x`) can select the descriptor already stored in the variable. The
+            // shared helper then consumes the expansion without evaluating it twice.
+            let expanded_duplicate = if let ast::IoFileRedirectTarget::Duplicate(word) = target {
+                let mut fields = expansion::full_expand_and_split_word(shell, params, word).await?;
+                if fields.len() != 1 {
+                    return Err(error::ErrorKind::InvalidRedirection.into());
+                }
+                Some(fields.remove(0))
+            } else {
+                None
+            };
+            let closes_existing = expanded_duplicate.as_deref() == Some("-");
+            let fd_num = if closes_existing {
+                expansion::basic_expand_word(shell, params, format!("${{{name}}}"))
+                    .await?
+                    .parse::<ShellFd>()
+                    .ok()
+                    .filter(|fd| *fd >= 0)
+                    .ok_or(error::ErrorKind::InvalidRedirection)?
+            } else {
+                next_variable_redirection_fd(shell, params)?
+            };
+
+            if let Some(expanded) = expanded_duplicate {
+                setup_duplicate_redirect(shell, params, Some(fd_num), kind, expanded)?;
+            } else {
+                let numbered = ast::IoRedirect::File(Some(fd_num), kind.clone(), target.clone());
+                Box::pin(setup_redirect(shell, params, &numbered)).await?;
+            }
+
+            if closes_existing {
+                shell.open_files_mut().remove_fd(fd_num);
+            } else {
+                expansion::assign_to_named_parameter(shell, params, name, fd_num.to_string())
+                    .await?;
+
+                // Without varredir_close, Bash keeps the allocated descriptor beyond
+                // this command. With it, the command-local entry dies with `params`.
+                // A redirection-only `exec` copies `params` into the shell, preserving
+                // Bash's exec exception automatically.
+                if !shell.options().var_redir_close
+                    && let Some(file) = params.try_fd(shell, fd_num)
+                {
+                    shell.open_files_mut().set_fd(fd_num, file);
+                }
+            }
+        }
+
         ast::IoRedirect::HereDocument(fd_num, io_here) => {
             // If not specified, default to stdin (fd 0).
             let fd_num = fd_num.unwrap_or(0);
@@ -2187,6 +2250,67 @@ pub(crate) async fn setup_redirect(
         }
     }
 
+    Ok(())
+}
+
+fn next_variable_redirection_fd(
+    shell: &Shell<impl extensions::ShellExtensions>,
+    params: &ExecutionParameters,
+) -> Result<ShellFd, error::Error> {
+    for fd in 10..=1024 {
+        if params.try_fd(shell, fd).is_none() {
+            return Ok(fd);
+        }
+    }
+    Err(error::ErrorKind::TooManyOpenFiles.into())
+}
+
+fn setup_duplicate_redirect(
+    shell: &Shell<impl extensions::ShellExtensions>,
+    params: &mut ExecutionParameters,
+    specified_fd_num: Option<ShellFd>,
+    kind: &ast::IoFileRedirectKind,
+    mut expanded: String,
+) -> Result<(), error::Error> {
+    let default_fd_if_unspecified = match kind {
+        ast::IoFileRedirectKind::DuplicateInput => 0,
+        ast::IoFileRedirectKind::DuplicateOutput => 1,
+        _ => return error::unimp("unexpected redirect kind"),
+    };
+    let fd_num = specified_fd_num.unwrap_or(default_fd_if_unspecified);
+    let dash = if expanded.ends_with('-') {
+        expanded.pop();
+        true
+    } else {
+        false
+    };
+
+    if expanded.is_empty() {
+        // A bare '-' is handled by the close below.
+    } else if expanded.chars().all(|c| c.is_ascii_digit()) {
+        let source_fd_num = expanded
+            .parse::<ShellFd>()
+            .map_err(|_| error::ErrorKind::InvalidRedirection)?;
+        let Some(target_file) = params.try_fd(shell, source_fd_num) else {
+            return Err(error::ErrorKind::BadFileDescriptor(source_fd_num).into());
+        };
+        params.open_files.set_fd(fd_num, target_file);
+    } else if fd_num == 1 && !dash {
+        setup_redirect_output_and_error_to(shell, params, &expanded, false)?;
+    } else {
+        return Err(error::ErrorKind::InvalidRedirection.into());
+    }
+
+    if dash {
+        let fd_to_close = if expanded.is_empty() {
+            fd_num
+        } else {
+            expanded
+                .parse::<ShellFd>()
+                .map_err(|_| error::ErrorKind::InvalidRedirection)?
+        };
+        params.open_files.remove_fd(fd_to_close);
+    }
     Ok(())
 }
 
@@ -2252,7 +2376,7 @@ async fn setup_process_substitution(
     params: &ExecutionParameters,
     kind: &ast::ProcessSubstitutionKind,
     subshell_cmd: &ast::SubshellCommand,
-    for_redirect: bool,
+    #[cfg_attr(not(windows), allow(unused_variables))] for_redirect: bool,
     requires_seekable_file: bool,
 ) -> Result<(String, Option<ShellFd>, OpenFile), error::Error> {
     #[cfg(windows)]

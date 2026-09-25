@@ -67,9 +67,7 @@ pub struct RuntimeOptions {
 
     //
     // Options set through shopt.
-    /// `array_expand_once`
-    pub array_expand_once: bool,
-    /// `assoc_expand_once`
+    /// `assoc_expand_once`, which Bash 5.3 also spells `array_expand_once`
     pub assoc_expand_once: bool,
     /// 'autocd'
     pub auto_cd: bool,
@@ -202,6 +200,8 @@ pub struct RuntimeOptions {
     pub kill_external_commands_on_drop: bool,
     /// Maximum function call depth.
     pub max_function_call_depth: Option<usize>,
+    /// Saved `expand_aliases` state while POSIX mode forces it on.
+    expand_aliases_before_posix: Option<bool>,
 }
 
 impl RuntimeOptions {
@@ -262,6 +262,11 @@ impl RuntimeOptions {
             options.expand_aliases = true;
         }
 
+        if create_options.posix {
+            options.expand_aliases_before_posix = Some(options.expand_aliases);
+            options.expand_aliases = true;
+        }
+
         // Update any options.
         for enabled_option in &create_options.enabled_options {
             if let Some(option) = namedoptions::options(namedoptions::ShellOptionKind::SetO)
@@ -295,6 +300,19 @@ impl RuntimeOptions {
         }
 
         options
+    }
+
+    /// Enables or disables POSIX mode and applies the option implications Bash
+    /// exposes to scripts. POSIX mode forces alias expansion even in a
+    /// non-interactive shell, restoring the previous setting when disabled.
+    pub fn set_posix_mode(&mut self, value: bool) {
+        if value && !self.posix_mode {
+            self.expand_aliases_before_posix = Some(self.expand_aliases);
+            self.expand_aliases = true;
+        } else if !value && self.posix_mode {
+            self.expand_aliases = self.expand_aliases_before_posix.take().unwrap_or(false);
+        }
+        self.posix_mode = value;
     }
 
     /// Returns a string representing the current `set`-style option flags set in the shell.

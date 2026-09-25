@@ -1005,6 +1005,7 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
     fn expand_pathnames_in_field(&self, field: WordField) -> Result<Vec<String>, error::Error> {
         let pattern = patterns::Pattern::from(field.clone())
             .set_extended_globbing(self.parser_options.enable_extended_globbing)
+            .set_globstar(self.shell.options().enable_star_star_glob)
             .set_case_insensitive(self.shell.options().case_insensitive_pathname_expansion);
 
         let options = patterns::FilenameExpansionOptions {
@@ -1029,7 +1030,14 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
             return Err(error::ErrorKind::NoMatch(field_str).into());
         }
 
-        let paths = expansion.into_paths();
+        let globbed = matches!(expansion, patterns::PatternExpansionResult::Expanded(_));
+        let mut paths = expansion.into_paths();
+        if globbed && paths.len() > 1 {
+            let globsort = self.shell.env_str("GLOBSORT");
+            crate::globsort::sort_results(&mut paths, globsort.as_deref(), |path| {
+                self.shell.absolute_path(path)
+            });
+        }
         if paths.is_empty() {
             if self.shell.options().expand_non_matching_patterns_to_null {
                 Ok(vec![])
@@ -1739,6 +1747,14 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
                 let expanded_parameter = self.expand_parameter(&parameter, indirect).await?;
                 let came_from_undefined = expanded_parameter.undefined;
 
+                // Bash does not diagnose an invalid transformation operator when the
+                // parameter is unset: `${unset@}` and `${unset@bogus}` simply expand to
+                // the unset value. Once the parameter has a value the same spelling is
+                // a fatal bad substitution in a non-interactive shell.
+                if came_from_undefined && matches!(op, ParameterTransformOp::Invalid(_)) {
+                    return Ok(expanded_parameter);
+                }
+
                 //
                 // For typing reasons (issues with FnMut and our mut use of self), we can't use
                 // transform_expansion. Instead, we inline its logic here.
@@ -2004,7 +2020,8 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
         indirect: bool,
     ) -> Result<(Option<String>, Option<String>, Option<ShellVariable>), error::Error> {
         if !indirect {
-            Ok(self.try_resolve_parameter_to_variable_without_indirect(parameter))
+            let resolved = self.resolve_nameref_parameter(parameter)?;
+            Ok(self.try_resolve_parameter_to_variable_without_indirect(&resolved))
         } else {
             let expansion = self.expand_parameter(parameter, false).await?;
             let parameter_str: String = self.fields_to_string(expansion);
@@ -2088,8 +2105,9 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
             return Ok(Expansion::from(target.to_string()));
         }
 
+        let resolved_parameter = self.resolve_nameref_parameter(parameter)?;
         let expansion = self
-            .expand_parameter_without_indirect(parameter, allow_unset_vars)
+            .expand_parameter_without_indirect(&resolved_parameter, allow_unset_vars)
             .await?;
         if !indirect {
             Ok(expansion)
@@ -2101,6 +2119,35 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
             self.expand_parameter_without_indirect(&inner_parameter, allow_unset_vars)
                 .await
         }
+    }
+
+    /// Resolves namerefs whose target includes an array subscript. The environment's ordinary
+    /// nameref path deliberately resolves plain variable names, but `declare -n r='v[@]'`
+    /// names a parameter expression and must preserve its list semantics.
+    fn resolve_nameref_parameter(
+        &self,
+        parameter: &cash_parser::word::Parameter,
+    ) -> Result<cash_parser::word::Parameter, error::Error> {
+        let mut current = parameter.clone();
+
+        for _ in 0..64 {
+            let cash_parser::word::Parameter::Named(name) = &current else {
+                return Ok(current);
+            };
+            let Some((_, variable)) = self.shell.env().get_raw(name) else {
+                return Ok(current);
+            };
+            let Some(target) = variable.nameref_target() else {
+                return Ok(current);
+            };
+            if target == name.as_str() {
+                return Ok(current);
+            }
+
+            current = cash_parser::word::parse_parameter(target.as_ref(), &self.parser_options)?;
+        }
+
+        Ok(current)
     }
 
     async fn expand_parameter_without_indirect(
@@ -2402,6 +2449,10 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
         came_from_undefined: bool,
     ) -> Result<String, error::Error> {
         match op {
+            cash_parser::word::ParameterTransformOp::Invalid(spelling) => Err(error::Error::from(
+                error::ErrorKind::InvalidParameterTransformation(format!("@{spelling}")),
+            )
+            .into_fatal()),
             cash_parser::word::ParameterTransformOp::PromptExpand => {
                 prompt::expand_prompt(self.shell, self.params, s).await
             }

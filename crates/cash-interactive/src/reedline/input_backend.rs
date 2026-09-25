@@ -1,6 +1,8 @@
 use cash_core::trace_categories;
 use nu_ansi_term::Style;
 use reedline::MenuBuilder;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 use super::{completer, edit_mode, highlighter, history, validator};
 use crate::{InputBackend, ReadResult, ShellError, input_backend::InteractivePrompt, refs};
@@ -9,6 +11,7 @@ use crate::{InputBackend, ReadResult, ShellError, input_backend::InteractiveProm
 /// and reporting results to standard output and standard error streams.
 pub struct ReedlineInputBackend {
     reedline: Option<reedline::Reedline>,
+    bindings: Arc<Mutex<edit_mode::UpdatableBindings>>,
 }
 
 const COMPLETION_MENU_NAME: &str = "completion_menu";
@@ -123,11 +126,12 @@ impl ReedlineInputBackend {
             tokio::runtime::Handle::current().block_on(shell_ref.lock())
         });
 
-        shell.set_key_bindings(Some(updatable_bindings));
+        shell.set_key_bindings(Some(updatable_bindings.clone()));
         drop(shell);
 
         Ok(Self {
             reedline: Some(reedline),
+            bindings: updatable_bindings,
         })
     }
 }
@@ -173,7 +177,16 @@ impl InputBackend for ReedlineInputBackend {
                 Ok(reedline::Signal::ExternalBreak(_)) => {
                     return Err(ShellError::UnexpectedInputFailure);
                 }
-                Ok(reedline::Signal::HostCommand(cmd)) => return Ok(ReadResult::BoundCommand(cmd)),
+                Ok(reedline::Signal::HostCommand(command)) => {
+                    let numeric_argument = tokio::task::block_in_place(|| {
+                        tokio::runtime::Handle::current()
+                            .block_on(async { self.bindings.lock().await.take_numeric_argument() })
+                    });
+                    return Ok(ReadResult::BoundCommand {
+                        command,
+                        numeric_argument,
+                    });
+                }
                 Ok(_) => return Err(ShellError::UnexpectedInputFailure),
                 // An error here is almost always transient. The prevalent case:
                 // reedline asks the terminal for the cursor position (DSR,

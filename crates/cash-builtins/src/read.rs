@@ -159,7 +159,18 @@ impl builtins::Command for ReadCommand {
         let timeout = timeout_seconds.map(Duration::from_secs_f64);
 
         // Perform the read operation (potentially with timeout).
-        let read_result = self.read_line(input_stream, context.stderr(), timeout)?;
+        let history: Vec<String> = context
+            .shell
+            .history()
+            .map(|history| {
+                history
+                    .iter()
+                    .map(|item| item.command_line.clone())
+                    .collect()
+            })
+            .unwrap_or_default();
+        let stderr = context.stderr();
+        let read_result = self.read_line(input_stream, stderr, timeout, &history, context.shell)?;
 
         // Determine whether to skip IFS splitting (for -N option).
         let skip_ifs_splitting = self.ignores_delimiter();
@@ -430,6 +441,9 @@ enum EditingKey {
     Right,
     Home,
     End,
+    Tab,
+    PreviousHistory,
+    NextHistory,
     KillBefore,
     KillAfter,
     KillWordBefore,
@@ -557,6 +571,12 @@ impl InputReader {
                 (modifiers, KeyCode::Char('w')) if modifiers.contains(KeyModifiers::CONTROL) => {
                     EditingKey::KillWordBefore
                 }
+                (modifiers, KeyCode::Char('p')) if modifiers.contains(KeyModifiers::CONTROL) => {
+                    EditingKey::PreviousHistory
+                }
+                (modifiers, KeyCode::Char('n')) if modifiers.contains(KeyModifiers::CONTROL) => {
+                    EditingKey::NextHistory
+                }
                 (_, KeyCode::Enter) => EditingKey::Enter,
                 (_, KeyCode::Backspace) => EditingKey::Backspace,
                 (_, KeyCode::Delete) => EditingKey::Delete,
@@ -564,6 +584,9 @@ impl InputReader {
                 (_, KeyCode::Right) => EditingKey::Right,
                 (_, KeyCode::Home) => EditingKey::Home,
                 (_, KeyCode::End) => EditingKey::End,
+                (_, KeyCode::Tab) => EditingKey::Tab,
+                (_, KeyCode::Up) => EditingKey::PreviousHistory,
+                (_, KeyCode::Down) => EditingKey::NextHistory,
                 (KeyModifiers::NONE | KeyModifiers::SHIFT, KeyCode::Char(ch)) => {
                     EditingKey::Char(ch)
                 }
@@ -588,6 +611,9 @@ impl InputReader {
             InputEvent::Char('\x0b') => EditingKey::KillAfter,
             InputEvent::Char('\x15') => EditingKey::KillBefore,
             InputEvent::Char('\x17') => EditingKey::KillWordBefore,
+            InputEvent::Char('\x10') => EditingKey::PreviousHistory,
+            InputEvent::Char('\x0e') => EditingKey::NextHistory,
+            InputEvent::Char('\t') => EditingKey::Tab,
             InputEvent::Char('\x1b') => self.read_escape_sequence()?,
             InputEvent::Char(ch) if ch.is_ascii_control() => EditingKey::Ignore,
             InputEvent::Char(ch) => EditingKey::Char(ch),
@@ -607,7 +633,8 @@ impl InputReader {
             return Ok(EditingKey::Ignore);
         };
         Ok(match code {
-            'A' | 'B' => EditingKey::Ignore,
+            'A' => EditingKey::PreviousHistory,
+            'B' => EditingKey::NextHistory,
             'C' => EditingKey::Right,
             'D' => EditingKey::Left,
             'H' => EditingKey::Home,
@@ -804,20 +831,27 @@ fn read_line_with_reader(
 /// key sequences; Windows uses native console events through crossterm.
 #[expect(
     clippy::too_many_lines,
-    reason = "the exhaustive key dispatch is clearer when kept in one editor loop"
+    clippy::too_many_arguments,
+    reason = "the exhaustive key dispatch is clearer when kept in one editor loop, which \
+              needs the reader, its configuration and the completion shell together"
 )]
-fn read_line_with_editor(
+fn read_line_with_editor<SE: cash_core::ShellExtensions>(
     reader: &mut InputReader,
     config: &LineReaderConfig,
     prompt: &str,
     initial_text: &str,
     silent: bool,
     output: &mut impl Write,
+    history: &[String],
+    completion_shell: Option<&mut cash_core::Shell<SE>>,
 ) -> Result<ReadResult, cash_core::Error> {
     let _editor_mode = EditorModeGuard::new()?;
     let mut committed = String::new();
     let mut line: Vec<char> = initial_text.chars().collect();
     let mut cursor = line.len();
+    let scratch = line.clone();
+    let mut history_index = history.len();
+    let mut completion_shell = completion_shell;
 
     if !silent && !line.is_empty() {
         write!(output, "{}", line.iter().collect::<String>())?;
@@ -934,6 +968,28 @@ fn read_line_with_editor(
                 cursor = line.len();
                 repaint_editor(output, prompt, &line, cursor, silent)?;
             }
+            EditingKey::PreviousHistory if !history.is_empty() && history_index > 0 => {
+                history_index -= 1;
+                line = history[history_index].chars().collect();
+                cursor = line.len();
+                repaint_editor(output, prompt, &line, cursor, silent)?;
+            }
+            EditingKey::NextHistory if history_index < history.len() => {
+                history_index += 1;
+                line = if history_index == history.len() {
+                    scratch.clone()
+                } else {
+                    history[history_index].chars().collect()
+                };
+                cursor = line.len();
+                repaint_editor(output, prompt, &line, cursor, silent)?;
+            }
+            EditingKey::Tab => {
+                if let Some(shell) = completion_shell.as_deref_mut() {
+                    apply_editor_completion(shell, &mut line, &mut cursor)?;
+                    repaint_editor(output, prompt, &line, cursor, silent)?;
+                }
+            }
             EditingKey::KillBefore if cursor > 0 => {
                 line.drain(..cursor);
                 cursor = 0;
@@ -962,9 +1018,76 @@ fn read_line_with_editor(
             | EditingKey::KillBefore
             | EditingKey::KillAfter
             | EditingKey::KillWordBefore
+            | EditingKey::PreviousHistory
+            | EditingKey::NextHistory
             | EditingKey::Ignore => {}
         }
     }
+}
+
+fn apply_editor_completion(
+    shell: &mut cash_core::Shell<impl cash_core::ShellExtensions>,
+    line: &mut Vec<char>,
+    cursor: &mut usize,
+) -> Result<(), cash_core::Error> {
+    let input: String = line.iter().collect();
+    let cursor_byte = input
+        .char_indices()
+        .nth(*cursor)
+        .map_or(input.len(), |(index, _)| index);
+    let completions = tokio::task::block_in_place(|| {
+        tokio::runtime::Handle::current().block_on(shell.complete(&input, cursor_byte))
+    })?;
+    if completions.candidates.is_empty() {
+        return Ok(());
+    }
+
+    let replacement = if completions.candidates.len() == 1 {
+        let mut candidate = completions.candidates[0].clone();
+        if cursor_byte == input.len()
+            && !completions.options.no_trailing_space_at_end_of_line
+            && !candidate.ends_with(['/', '\\'])
+        {
+            candidate.push(' ');
+        }
+        candidate
+    } else {
+        common_completion_prefix(&completions.candidates)
+    };
+    if replacement.is_empty() {
+        return Ok(());
+    }
+
+    let start_byte = completions.insertion_index;
+    let end_byte = start_byte.saturating_add(completions.delete_count);
+    if !input.is_char_boundary(start_byte) || !input.is_char_boundary(end_byte) {
+        return Ok(());
+    }
+    let (Some(before_start), Some(before_end)) = (input.get(..start_byte), input.get(..end_byte))
+    else {
+        return Ok(());
+    };
+    let start_char = before_start.chars().count();
+    let end_char = before_end.chars().count();
+    line.splice(start_char..end_char, replacement.chars());
+    *cursor = start_char + replacement.chars().count();
+    Ok(())
+}
+
+fn common_completion_prefix(candidates: &[String]) -> String {
+    let Some(first) = candidates.first() else {
+        return String::new();
+    };
+    let mut prefix: Vec<char> = first.chars().collect();
+    for candidate in &candidates[1..] {
+        let common = prefix
+            .iter()
+            .zip(candidate.chars())
+            .take_while(|(left, right)| **left == *right)
+            .count();
+        prefix.truncate(common);
+    }
+    prefix.into_iter().collect()
 }
 
 /// Process an editor buffer when Readline accepts it. Returns `true` when the
@@ -1093,11 +1216,13 @@ impl ReadCommand {
     /// - Without `-r`: backslash-newline is line continuation, other backslashes escape the next
     ///   char
     /// - With `-r`: backslash is treated as a literal character
-    fn read_line(
+    fn read_line<SE: cash_core::ShellExtensions>(
         &self,
         input_file: cash_core::openfiles::OpenFile,
         mut stderr_file: impl std::io::Write,
         mut timeout: Option<Duration>,
+        history: &[String],
+        shell: &mut cash_core::Shell<SE>,
     ) -> Result<ReadResult, cash_core::Error> {
         let input_file_is_terminal = input_file.is_terminal();
         let term_mode = self.setup_terminal_settings(&input_file)?;
@@ -1166,6 +1291,8 @@ impl ReadCommand {
                 self.initial_text.as_deref().unwrap_or_default(),
                 self.silent,
                 &mut stderr_file,
+                history,
+                self.use_readline_with_bash_completion.then_some(shell),
             )
         } else {
             read_line_with_reader(&mut reader, &config)
@@ -1322,7 +1449,33 @@ fn split_line_by_ifs(ifs: &str, line: &str, max_fields: Option<usize>) -> VecDeq
         fields.push_back(current_field);
     }
 
+    // The last variable takes the rest of the line. As in Bash's `read`, when that rest is
+    // a single word, it gets the word alone, without the delimiter that ended it: with
+    // IFS=: `foo:bar:` gives `bar`, while `x:y:z:` keeps `y:z:`.
+    if fields.len() == max_fields
+        && let Some(last) = fields.back_mut()
+        && let Some(word) = sole_word(last, &ifs_chars, &is_ifs_whitespace)
+    {
+        *last = word;
+    }
+
     fields
+}
+
+/// Returns the word `rest` consists of, if it is one word followed by at most one
+/// delimiter (and IFS whitespace).
+fn sole_word(
+    rest: &str,
+    ifs_chars: &[char],
+    is_ifs_whitespace: &impl Fn(char) -> bool,
+) -> Option<String> {
+    let word_end = rest.find(|c| ifs_chars.contains(&c)).unwrap_or(rest.len());
+    let (word, tail) = rest.split_at(word_end);
+    let mut after = tail.chars().peekable();
+    while after.next_if(|&c| is_ifs_whitespace(c)).is_some() {}
+    after.next_if(|&c| ifs_chars.contains(&c) && !is_ifs_whitespace(c));
+    while after.next_if(|&c| is_ifs_whitespace(c)).is_some() {}
+    after.peek().is_none().then(|| word.to_owned())
 }
 
 #[cfg(test)]
@@ -1376,6 +1529,19 @@ mod tests {
 
         assert_eq!(edited_line(&escaped, &cooked), r"one two\three");
         assert_eq!(edited_line(&escaped, &raw), r"one\ two\\three");
+    }
+
+    #[test]
+    fn test_common_completion_prefix_handles_unicode_and_empty_inputs() {
+        assert_eq!(
+            common_completion_prefix(&["alpha".into(), "alpine".into(), "alps".into()]),
+            "alp"
+        );
+        assert_eq!(
+            common_completion_prefix(&["café".into(), "caféine".into()]),
+            "café"
+        );
+        assert_eq!(common_completion_prefix(&[]), "");
     }
 
     // ==================== split_line_by_ifs tests ====================
@@ -1439,6 +1605,25 @@ mod tests {
         // Delimiter in middle of remainder is also preserved.
         let result = split_line_by_ifs(":", "x:y:z:w", Some(2));
         assert_equal(result, VecDeque::from(vec!["x", "y:z:w"]));
+    }
+
+    #[test]
+    fn test_split_line_by_ifs_last_variable_drops_a_lone_trailing_delimiter() {
+        // Observed with Bash 5.3: one word left over loses the delimiter that ended it;
+        // more than one keeps the rest verbatim.
+        for (line, max, expected) in [
+            ("foo:bar:", 2, vec!["foo", "bar"]),
+            ("x:y:z:", 2, vec!["x", "y:z:"]),
+            ("x:y::", 2, vec!["x", "y::"]),
+            ("x::", 2, vec!["x", ""]),
+            ("x:", 1, vec!["x"]),
+            ("x::", 1, vec!["x::"]),
+        ] {
+            let result = split_line_by_ifs(":", line, Some(max));
+            assert_equal(result, VecDeque::from(expected));
+        }
+        let result = split_line_by_ifs(": ", "x:y: ", Some(2));
+        assert_equal(result, VecDeque::from(vec!["x", "y"]));
     }
 
     #[test]

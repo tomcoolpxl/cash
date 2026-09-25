@@ -47,6 +47,10 @@ crate::minus_or_plus_flag_arg!(
 );
 crate::minus_or_plus_flag_arg!(MakeExportedFlag, 'x', "Mark the variable for export.");
 
+/// An assignment spelled as an ordinary word: name, optional index, whether it
+/// appends (`+=`), and value.
+type StringAssignment = (String, Option<String>, bool, String);
+
 /// Display or update variables and their attributes.
 #[derive(Parser)]
 #[clap(override_usage = "declare [OPTIONS] [DECLARATIONS]...")]
@@ -58,6 +62,13 @@ pub(crate) struct DeclareCommand {
     /// Constrain to function names only.
     #[arg(short = 'F')]
     function_names_only: bool,
+
+    /// `+f` and `+F` are accepted and, as in Bash, ignored: turning the function
+    /// attribute "off" means nothing, so `declare +ft f` acts on a variable `f`.
+    #[arg(long = "+f", hide = true)]
+    _plus_f: bool,
+    #[arg(long = "+F", hide = true)]
+    _plus_capital_f: bool,
 
     /// Create global variable, if applicable.
     #[arg(short = 'g')]
@@ -255,7 +266,10 @@ impl DeclareCommand {
             None => (),
         }
 
-        // TODO(declare): function tracing (-t) isn't tracked; it's accepted silently.
+        if let Some(traced) = self.make_traced.to_bool() {
+            func.set_traced(traced);
+        }
+
         true
     }
 
@@ -479,6 +493,24 @@ impl DeclareCommand {
         Ok(true)
     }
 
+    /// Splits a word of the form `name=value`, `name+=value` or `name[index]=value` into
+    /// its name, index, append flag and value. Returns `None` for anything else.
+    fn string_assignment(s: &str) -> Option<StringAssignment> {
+        #[allow(clippy::unwrap_used, reason = "regex is valid and should not fail")]
+        static ASSIGNMENT_RE: LazyLock<fancy_regex::Regex> = LazyLock::new(|| {
+            fancy_regex::Regex::new(r"(?s)^([A-Za-z_][A-Za-z0-9_]*)(?:\[(.*?)\])?(\+?)=(.*)$")
+                .unwrap()
+        });
+
+        let captures = ASSIGNMENT_RE.captures(s).ok()??;
+        Some((
+            captures.get(1)?.as_str().to_owned(),
+            captures.get(2).map(|m| m.as_str().to_owned()),
+            captures.get(3).is_some_and(|m| !m.as_str().is_empty()),
+            captures.get(4)?.as_str().to_owned(),
+        ))
+    }
+
     #[expect(clippy::type_complexity)]
     fn declaration_to_name_and_value(
         declaration: &cash_core::CommandArg,
@@ -497,6 +529,33 @@ impl DeclareCommand {
         let initial_value;
         let name_is_array;
         let append;
+
+        // An assignment that reached us as an ordinary word — `declare "a=x y"` or
+        // `declare $spec` — whose value was already expanded. It is used as is, without
+        // field splitting or another round of expansion.
+        if let cash_core::CommandArg::String(s) = declaration
+            && let Some((name, index, append, value)) = Self::string_assignment(s)
+        {
+            return Ok(match index {
+                Some(index) => (
+                    name,
+                    Some(index.clone()),
+                    Some(ShellValueLiteral::Array(ArrayLiteral(vec![(
+                        Some(index),
+                        value,
+                    )]))),
+                    true,
+                    append,
+                ),
+                None => (
+                    name,
+                    None,
+                    Some(ShellValueLiteral::Scalar(value)),
+                    false,
+                    append,
+                ),
+            });
+        }
 
         match declaration {
             cash_core::CommandArg::String(s) => {

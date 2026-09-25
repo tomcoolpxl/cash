@@ -14,6 +14,7 @@ pub mod expansion;
 mod extendedtests;
 pub mod extensions;
 pub mod functions;
+mod globsort;
 pub mod history;
 pub mod int_utils;
 pub mod interfaces;

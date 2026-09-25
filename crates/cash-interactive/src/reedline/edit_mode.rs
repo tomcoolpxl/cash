@@ -59,6 +59,32 @@ pub(crate) struct UpdatableBindings {
     raw_mappings: Trie<Vec<u8>, interfaces::KeyAction>,
     /// Tracks defined macros.
     macros: HashMap<interfaces::KeySequence, interfaces::KeySequence>,
+    /// Readline-style Meta-digit prefix currently being assembled.
+    numeric_argument: Option<NumericArgument>,
+    /// Completed argument for the `bind -x` command that just left the editor.
+    completed_numeric_argument: Option<i64>,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct NumericArgument {
+    magnitude: i64,
+    negative: bool,
+    has_digits: bool,
+}
+
+impl NumericArgument {
+    fn push_digit(&mut self, digit: u32) {
+        self.has_digits = true;
+        self.magnitude = self
+            .magnitude
+            .saturating_mul(10)
+            .saturating_add(i64::from(digit));
+    }
+
+    const fn value(self) -> i64 {
+        let magnitude = if self.has_digits { self.magnitude } else { 1 };
+        if self.negative { -magnitude } else { magnitude }
+    }
 }
 
 impl UpdatableBindings {
@@ -71,6 +97,8 @@ impl UpdatableBindings {
             edit_mode,
             raw_mappings: Trie::new(),
             macros: HashMap::new(),
+            numeric_argument: None,
+            completed_numeric_argument: None,
         }
     }
 
@@ -87,7 +115,50 @@ impl UpdatableBindings {
 
 impl reedline::EditMode for UpdatableBindings {
     fn parse_event(&mut self, event: reedline::ReedlineRawEvent) -> reedline::ReedlineEvent {
-        self.edit_mode.parse_event(event)
+        let event: crossterm::event::Event = event.into();
+        let numeric_piece = match &event {
+            crossterm::event::Event::Key(crossterm::event::KeyEvent {
+                code: crossterm::event::KeyCode::Char(ch),
+                modifiers,
+                ..
+            }) if *modifiers == crossterm::event::KeyModifiers::ALT && ch.is_ascii_digit() => {
+                ch.to_digit(10).map(Some)
+            }
+            crossterm::event::Event::Key(crossterm::event::KeyEvent {
+                code: crossterm::event::KeyCode::Char('-'),
+                modifiers,
+                ..
+            }) if *modifiers == crossterm::event::KeyModifiers::ALT => Some(None),
+            _ => None,
+        };
+
+        // The event originated as a `ReedlineRawEvent`, so converting it back
+        // always succeeds; if it somehow did not, ignore the event rather than
+        // panicking.
+        let Ok(raw_event) = reedline::ReedlineRawEvent::try_from(event) else {
+            return reedline::ReedlineEvent::None;
+        };
+        let parsed = self.edit_mode.parse_event(raw_event);
+
+        // An explicit binding wins. Otherwise Meta-digit and Meta-minus build
+        // the argument passed to the next bind -x command.
+        if numeric_piece.is_some() && matches!(parsed, reedline::ReedlineEvent::None) {
+            let argument = self.numeric_argument.get_or_insert_default();
+            if let Some(digit) = numeric_piece.flatten() {
+                argument.push_digit(digit);
+            } else {
+                argument.negative = true;
+            }
+            return reedline::ReedlineEvent::None;
+        }
+
+        if matches!(parsed, reedline::ReedlineEvent::ExecuteHostCommand(_)) {
+            self.completed_numeric_argument =
+                self.numeric_argument.take().map(NumericArgument::value);
+        } else if !matches!(parsed, reedline::ReedlineEvent::None) {
+            self.numeric_argument = None;
+        }
+        parsed
     }
 
     fn edit_mode(&self) -> reedline::PromptEditMode {
@@ -162,6 +233,10 @@ impl interfaces::KeyBindings for UpdatableBindings {
 }
 
 impl UpdatableBindings {
+    pub const fn take_numeric_argument(&mut self) -> Option<i64> {
+        self.completed_numeric_argument.take()
+    }
+
     /// Internal implementation that optionally removes from the macros map.
     /// When updating bindings for macros, we don't want to remove the macro definition itself.
     fn try_unbind_impl(&mut self, seq: &KeySequence, remove_from_macros: bool) -> bool {
@@ -444,6 +519,10 @@ fn translate_input_function_to_reedline_event(
         }])),
         InputFunction::Yank => Some(ReedlineEvent::Edit(vec![EditCommand::PasteCutBufferAfter])),
         InputFunction::ViRedo => Some(ReedlineEvent::Edit(vec![EditCommand::Redo])),
+        InputFunction::ViUndo => Some(ReedlineEvent::Edit(vec![EditCommand::Undo])),
+        InputFunction::EditAndExecuteCommand | InputFunction::ViEditAndExecuteCommand => {
+            Some(ReedlineEvent::OpenEditor)
+        }
         InputFunction::TransposeChars => {
             Some(ReedlineEvent::Edit(vec![EditCommand::SwapGraphemes]))
         }
@@ -603,7 +682,9 @@ fn translate_reedline_event_to_action(event: &reedline::ReedlineEvent) -> Option
         }
         reedline::ReedlineEvent::Esc => None,
         reedline::ReedlineEvent::MenuPrevious => None,
-        reedline::ReedlineEvent::OpenEditor => None,
+        reedline::ReedlineEvent::OpenEditor => Some(KeyAction::DoInputFunction(
+            InputFunction::EditAndExecuteCommand,
+        )),
         reedline::ReedlineEvent::Left => {
             Some(KeyAction::DoInputFunction(InputFunction::BackwardChar))
         }
@@ -691,5 +772,70 @@ fn translate_reedline_event_to_action(event: &reedline::ReedlineEvent) -> Option
             tracing::debug!(target: trace_categories::INPUT, "unhandled event: {evt:?}");
             None
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+    use reedline::EditMode as _;
+
+    fn key(code: KeyCode, modifiers: KeyModifiers) -> reedline::ReedlineRawEvent {
+        reedline::ReedlineRawEvent::try_from(Event::Key(KeyEvent::new(code, modifiers))).unwrap()
+    }
+
+    #[test]
+    fn meta_digits_become_the_next_host_commands_numeric_argument() {
+        let mut bindings = UpdatableBindings::new(reedline::default_emacs_keybindings());
+        bindings
+            .bind(
+                KeyStroke {
+                    control: true,
+                    alt: false,
+                    shift: false,
+                    key: Key::Character('x'),
+                }
+                .into(),
+                KeyAction::ShellCommand("echo bound".into()),
+            )
+            .unwrap();
+
+        assert!(matches!(
+            bindings.parse_event(key(KeyCode::Char('2'), KeyModifiers::ALT)),
+            reedline::ReedlineEvent::None
+        ));
+        assert!(matches!(
+            bindings.parse_event(key(KeyCode::Char('3'), KeyModifiers::ALT)),
+            reedline::ReedlineEvent::None
+        ));
+        assert!(matches!(
+            bindings.parse_event(key(KeyCode::Char('x'), KeyModifiers::CONTROL)),
+            reedline::ReedlineEvent::ExecuteHostCommand(command) if command == "echo bound"
+        ));
+        assert_eq!(bindings.take_numeric_argument(), Some(23));
+        assert_eq!(bindings.take_numeric_argument(), None);
+    }
+
+    #[test]
+    fn meta_minus_makes_a_negative_argument() {
+        let mut bindings = UpdatableBindings::new(reedline::default_emacs_keybindings());
+        bindings
+            .bind(
+                KeyStroke {
+                    control: true,
+                    alt: false,
+                    shift: false,
+                    key: Key::Character('x'),
+                }
+                .into(),
+                KeyAction::ShellCommand("echo bound".into()),
+            )
+            .unwrap();
+
+        let _ = bindings.parse_event(key(KeyCode::Char('-'), KeyModifiers::ALT));
+        let _ = bindings.parse_event(key(KeyCode::Char('4'), KeyModifiers::ALT));
+        let _ = bindings.parse_event(key(KeyCode::Char('x'), KeyModifiers::CONTROL));
+        assert_eq!(bindings.take_numeric_argument(), Some(-4));
     }
 }

@@ -423,10 +423,7 @@ static SET_O_OPTIONS: LazyLock<HashMap<&'static str, ShellOptionDef>> = LazyLock
         ),
         (
             "posix",
-            ShellOptionDef::new(
-                |options| options.posix_mode,
-                |options, value| options.posix_mode = value,
-            ),
+            ShellOptionDef::new(|options| options.posix_mode, RuntimeOptions::set_posix_mode),
         ),
         (
             "privileged",
@@ -471,8 +468,8 @@ static SHOPT_OPTIONS: LazyLock<HashMap<&'static str, ShellOptionDef>> = LazyLock
         (
             "array_expand_once",
             ShellOptionDef::new(
-                |options| options.array_expand_once,
-                |options, value| options.array_expand_once = value,
+                |options| options.assoc_expand_once,
+                |options, value| options.assoc_expand_once = value,
             ),
         ),
         (

@@ -1401,14 +1401,16 @@ async fn get_file_completions(
 
     let pattern = patterns::Pattern::from(glob)
         .set_extended_globbing(shell.options().extended_globbing)
+        .set_globstar(shell.options().enable_star_star_glob)
         .set_case_insensitive(shell.options().case_insensitive_pathname_expansion);
 
+    let expansion_options = patterns::FilenameExpansionOptions {
+        require_dot_in_pattern_to_match_dot_files: !shell.options().glob_matches_dotfiles,
+        include_dot_and_dotdot: false,
+    };
+
     let mut completions: Vec<String> = pattern
-        .expand(
-            shell.working_dir(),
-            Some(&path_filter),
-            &patterns::FilenameExpansionOptions::default(),
-        )
+        .expand(shell.working_dir(), Some(&path_filter), &expansion_options)
         .unwrap_or_default()
         .into_paths()
         .into_iter()

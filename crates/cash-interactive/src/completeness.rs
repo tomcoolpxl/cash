@@ -40,7 +40,10 @@ fn needs_more_input_locked(shell: &Shell<impl cash_core::ShellExtensions>, input
             true
         }
         // Ran out of tokens partway through a construct; more input may complete it.
-        Err(cash_parser::ParseError::ParsingAtEndOfInput) => true,
+        Err(
+            cash_parser::ParseError::ParsingAtEndOfInput
+            | cash_parser::ParseError::UnterminatedCompound { .. },
+        ) => true,
         // A bad token at a specific position stays bad no matter what follows it.
         Err(_) => false,
         // Parsed cleanly. One catch: a trailing backslash-newline is a line

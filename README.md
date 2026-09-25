@@ -49,7 +49,12 @@ behavioral probes and how to rerun them.
 Known gaps in the advertised Bash 5.2 interface are tracked in the
 [Bash 5.2 gap audit](research/bash-reference/bash-5.2-gaps.md).
 The central [project roadmap](ROADMAP.md) keeps the feature order explicit: finish
-Bash 5.2, integrate the native `awk`, and only then begin broader Bash 5.3 work.
+Bash 5.2, integrate native `awk` and `sed` (both complete), expand the bundled userland
+(`stat`, `tty`, `install`, `pathchk`, `nohup`, `who`, `users`, `pinky`, `logname`, `hostid`),
+and only then begin broader Bash 5.3 work.
+The selected source candidates and release gates are recorded in the
+[`posixutils-rs` AWK evaluation](research/posixutils-rs-evaluation.md) and
+[`uutils/sed` evaluation](research/uutils-sed-evaluation.md).
 
 History and job-control scripts can use `history -n`/`-r`/`-p`, `fc` editor mode,
 and `jobs -n`. `BASH_COMMAND` preserves the command text before expansion, assigning
@@ -160,12 +165,14 @@ cash's `kill`.
 links or junctions. Its useful common options are built in: `-a`, `-d`, `-L LEVEL`,
 `-f`, `--dirsfirst`, and `--noreport`.
 
-**It does not carry `grep`, `sed`, `awk`, `diff` or `stat`** — none of them has to agree
-with the shell about anything, and all of them have good Windows builds:
+**It now bundles native `awk` and `sed` implementations** (providing complete POSIX
+pattern scanning, text stream transformation, in-place file editing, and script processing
+without external dependencies).
+**It does not carry `grep` or `diff`** — they have good Windows builds and do not have
+to agree with the shell:
 
 ```bash
 winget install Microsoft.Coreutils   # coreutils + grep
-scoop install sed gawk               # NOT in the MS bundle — separate GNU projects
 ```
 
 Git for Windows supplies all of them too, and most people running bash scripts on Windows
@@ -173,7 +180,7 @@ already have it.
 
 Run `cash doctor` to see what this machine has. It reports what **cash** would run, not
 what is on `PATH` — a builtin is never reported as missing, and a DOS tool in System32 is
-never reported as shadowing something cash carries. It names missing `sed`/`awk`, BusyBox
+never reported as shadowing something cash carries. It names missing `sed`, BusyBox
 applets masquerading as fuller implementations, DOS `find`/`sort` winning over the Unix
 ones, and Store aliases whose target app is not installed. None of those announce
 themselves.

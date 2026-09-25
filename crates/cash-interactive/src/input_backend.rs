@@ -32,8 +32,14 @@ pub trait InputBackend: Send {
 pub enum ReadResult {
     /// The user entered a line of input.
     Input(String),
-    /// A bound key sequence yielded a registered command.
-    BoundCommand(String),
+    /// A bound key sequence yielded a registered command and, optionally, an
+    /// explicit Readline numeric argument.
+    BoundCommand {
+        /// Shell source registered by `bind -x`.
+        command: String,
+        /// Explicit Meta-digit argument, absent when no prefix was entered.
+        numeric_argument: Option<i64>,
+    },
     /// End of input was reached.
     Eof,
     /// The user interrupted the input operation.

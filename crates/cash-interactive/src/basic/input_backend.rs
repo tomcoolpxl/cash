@@ -55,8 +55,12 @@ impl BasicInputBackend {
 
                     prompt_to_use = None;
                 }
-                ReadResult::BoundCommand(s) => {
-                    result.push_str(s.as_str());
+                ReadResult::BoundCommand {
+                    command,
+                    numeric_argument,
+                } => {
+                    result.push_str(command.as_str());
+                    let _ = numeric_argument;
                     break;
                 }
                 ReadResult::Eof => {

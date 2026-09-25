@@ -11,6 +11,16 @@ pub enum ParseError {
     #[error("syntax error at end of input")]
     ParsingAtEndOfInput,
 
+    /// The input ended inside a compound command, as Bash 5.3 reports it: naming the
+    /// command and the line it started on.
+    #[error("syntax error: unexpected end of file from `{keyword}' command on line {line}")]
+    UnterminatedCompound {
+        /// The reserved word that opened the command (`if`, `while`, `{`, ...).
+        keyword: String,
+        /// The 1-based line of that word.
+        line: usize,
+    },
+
     /// An error occurred while tokenizing the input stream.
     #[error("{} (detected near {})", .inner, .position.as_ref().map_or_else(|| String::from("<unknown position>"), |p| std::format!("line {} col {}", p.line, p.column)))]
     Tokenizing {
@@ -39,7 +49,7 @@ pub mod miette {
                 Self::Tokenizing { ref position, .. } => position
                     .as_ref()
                     .map(|p| SourceOffset::from_location(&input, p.line, p.column)),
-                Self::ParsingAtEndOfInput => {
+                Self::ParsingAtEndOfInput | Self::UnterminatedCompound { .. } => {
                     Some(SourceOffset::from_location(&input, usize::MAX, usize::MAX))
                 }
             };
@@ -126,7 +136,62 @@ pub(crate) fn convert_peg_parse_error(
     if approx_token_index < tokens.len() {
         let token = &tokens[approx_token_index];
         ParseError::ParsingNear((*token.location().start).clone())
+    } else if let Some((keyword, line)) = innermost_unclosed_compound(tokens) {
+        ParseError::UnterminatedCompound { keyword, line }
     } else {
         ParseError::ParsingAtEndOfInput
     }
+}
+
+/// Finds the innermost compound command still open at the end of `tokens`, returning
+/// its opening reserved word and line.
+///
+/// This is a token-level approximation of the parser's own nesting: a word counts as a
+/// reserved word only in command position, after an operator or another reserved word
+/// that starts a command list.
+fn innermost_unclosed_compound(tokens: &[crate::Token]) -> Option<(String, usize)> {
+    let mut open: Vec<(&str, usize)> = Vec::new();
+    let mut command_position = true;
+    for token in tokens {
+        match token {
+            crate::Token::Operator(op, _) => {
+                command_position = matches!(
+                    op.as_str(),
+                    "\n" | ";" | ";;" | ";&" | ";;&" | "&" | "&&" | "||" | "|" | "|&" | "(" | ")"
+                );
+            }
+            crate::Token::Word(word, span) => {
+                if !command_position {
+                    continue;
+                }
+                let word = word.as_str();
+                match word {
+                    "if" | "case" | "while" | "until" | "for" | "select" | "{" => {
+                        open.push((word, span.start.line));
+                    }
+                    "fi" | "esac" | "done" | "}" => {
+                        let opener_matches = |opener: &str| match word {
+                            "fi" => opener == "if",
+                            "esac" => opener == "case",
+                            "}" => opener == "{",
+                            _ => matches!(opener, "while" | "until" | "for" | "select"),
+                        };
+                        if let Some(index) = open.iter().rposition(|(o, _)| opener_matches(o)) {
+                            open.truncate(index);
+                        }
+                    }
+                    _ => {}
+                }
+                // After these, the next word starts a command; after `for`, `case`
+                // and `select` it is a name or subject, and anything else is an
+                // ordinary command whose arguments follow.
+                command_position = matches!(
+                    word,
+                    "if" | "then" | "else" | "elif" | "while" | "until" | "do" | "{" | "!"
+                );
+            }
+        }
+    }
+    open.last()
+        .map(|(keyword, line)| ((*keyword).to_owned(), *line))
 }

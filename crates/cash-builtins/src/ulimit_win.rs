@@ -18,6 +18,7 @@
 //! small builtin selected only on Windows.
 
 use std::io::Write;
+use std::str::FromStr;
 
 use cash_core::{ExecutionResult, builtins};
 use clap::Parser;
@@ -53,6 +54,22 @@ pub(crate) struct UlimitCommand {
     #[arg(short = 'v')]
     virtual_memory: bool,
 
+    /// Maximum socket buffer size.
+    #[arg(short = 'b')]
+    socket_buffer: bool,
+
+    /// Maximum size of core files.
+    #[arg(short = 'c')]
+    core_size: bool,
+
+    /// Maximum data segment size.
+    #[arg(short = 'd')]
+    data_size: bool,
+
+    /// Maximum scheduling priority.
+    #[arg(short = 'e')]
+    scheduling_priority: bool,
+
     /// Maximum file size.
     #[arg(short = 'f')]
     file_size: bool,
@@ -61,8 +78,75 @@ pub(crate) struct UlimitCommand {
     #[arg(short = 't')]
     cpu_time: bool,
 
-    /// The new limit, if one is being set.
-    limit: Option<String>,
+    /// Maximum pending signals.
+    #[arg(short = 'i')]
+    pending_signals: bool,
+
+    /// Maximum kqueues.
+    #[arg(short = 'k')]
+    kqueues: bool,
+
+    /// Maximum locked memory.
+    #[arg(short = 'l')]
+    locked_memory: bool,
+
+    /// Maximum resident set size.
+    #[arg(short = 'm')]
+    resident_memory: bool,
+
+    /// Pipe buffer size.
+    #[arg(short = 'p')]
+    pipe_size: bool,
+
+    /// Maximum bytes in POSIX message queues.
+    #[arg(short = 'q')]
+    message_queues: bool,
+
+    /// Maximum realtime priority.
+    #[arg(short = 'r')]
+    realtime_priority: bool,
+
+    /// Maximum file locks.
+    #[arg(short = 'x')]
+    file_locks: bool,
+
+    /// Maximum pseudoterminals.
+    #[arg(short = 'P')]
+    pseudoterminals: bool,
+
+    /// Maximum realtime nonblocking time.
+    #[arg(short = 'R')]
+    realtime_time: bool,
+
+    /// Maximum threads.
+    #[arg(short = 'T')]
+    threads: bool,
+
+    /// Limit operands. Bash consumes the first and ignores additional operands.
+    #[arg(value_name = "limit", num_args = 0..)]
+    limit_operands: Vec<String>,
+}
+
+#[derive(Clone, Copy)]
+enum LimitValue {
+    Unlimited,
+    Soft,
+    Hard,
+    Number,
+}
+
+impl FromStr for LimitValue {
+    type Err = ();
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "unlimited" => Ok(Self::Unlimited),
+            "soft" => Ok(Self::Soft),
+            "hard" => Ok(Self::Hard),
+            _ if value.parse::<u64>().is_ok() => Ok(Self::Number),
+            _ => Err(()),
+        }
+    }
 }
 
 /// Every limit reported by `-a`, in bash's order.
@@ -79,6 +163,25 @@ const ALL_LIMITS: &[(&str, &str)] = &[
 impl builtins::Command for UlimitCommand {
     type Error = cash_core::Error;
 
+    fn new<I>(args: I) -> Result<Self, clap::Error>
+    where
+        I: IntoIterator<Item = String>,
+    {
+        let parsed = Self::try_parse_from(args)?;
+        // `-a` reports and ignores operands in Bash. Otherwise the first operand is
+        // validated even though Win32 has no corresponding limit to apply.
+        if !parsed.all
+            && let Some(operand) = parsed.limit_operands.first()
+            && LimitValue::from_str(operand).is_err()
+        {
+            return Err(clap::Error::raw(
+                clap::error::ErrorKind::ValueValidation,
+                format!("{operand}: invalid number"),
+            ));
+        }
+        Ok(parsed)
+    }
+
     async fn execute<SE: cash_core::ShellExtensions>(
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
@@ -94,7 +197,7 @@ impl builtins::Command for UlimitCommand {
 
         // Setting a limit: accepted, and deliberately not applied. Reporting failure
         // would break scripts for a platform difference they cannot do anything about.
-        if self.limit.is_some() {
+        if !self.limit_operands.is_empty() {
             return Ok(ExecutionResult::success());
         }
 

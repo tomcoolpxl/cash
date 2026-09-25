@@ -294,7 +294,8 @@ fn build_shebang_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
         .env()
         .get_str("PATH", context.shell)
         .unwrap_or_default();
-    let path_entries: Vec<PathBuf> = crate::sys::fs::split_paths(path_var.as_ref()).collect();
+    let path_entries: Vec<PathBuf> =
+        crate::sys::fs::split_paths_preserving_empty(path_var.as_ref()).collect();
     let pathext_var = context
         .shell
         .env()
@@ -540,18 +541,29 @@ pub fn compose_std_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
     Ok(cmd)
 }
 
+/// Runs pre-execution hooks. Returns a result when the DEBUG trap ran `exit` or
+/// `return`; the command must then not run, and that result replaces it.
 pub(crate) async fn on_preexecute(
     cmd: &mut commands::SimpleCommand<'_, impl extensions::ShellExtensions>,
-) -> Result<(), error::Error> {
+) -> Result<Option<ExecutionResult>, error::Error> {
     // Fire the DEBUG trap if one is registered.
     if cmd.shell.traps().handles(traps::TrapSignal::Debug) {
-        let _ = cmd
+        let result = cmd
             .shell
             .invoke_trap_handler(traps::TrapSignal::Debug, &cmd.params)
             .await?;
+        if matches!(
+            result.next_control_flow,
+            ExecutionControlFlow::ExitShell | ExecutionControlFlow::ReturnFromFunctionOrScript
+        ) {
+            if let Some(post_execute) = cmd.post_execute.take() {
+                let _ = post_execute(&mut cmd.shell);
+            }
+            return Ok(Some(result));
+        }
     }
 
-    Ok(())
+    Ok(None)
 }
 
 /// Represents a simple command to be executed.
@@ -951,7 +963,7 @@ impl<'a, SE: extensions::ShellExtensions> SimpleCommand<'a, SE> {
                 } => {
                     let path_var = shell.env().get_str("PATH", &shell).unwrap_or_default();
                     let path_entries: Vec<PathBuf> =
-                        crate::sys::fs::split_paths(path_var.as_ref()).collect();
+                        crate::sys::fs::split_paths_preserving_empty(path_var.as_ref()).collect();
                     let pathext_var = shell.env().get_str("PATHEXT", &shell).unwrap_or_default();
                     let pathext = if pathext_var.is_empty() {
                         cash_win32::resolve::DEFAULT_PATHEXT
@@ -1255,6 +1267,12 @@ pub(crate) async fn invoke_shell_function(
     // may still change the shell's persistent open files via builtins (e.g. `exec`).
     let result = body.execute(context.shell, &context.params).await;
 
+    // The RETURN trap runs in the function's own context, before its frame is popped, and
+    // sees the caller-visible `$?`.
+    if result.is_ok() {
+        run_return_trap(context.shell, &context.params).await;
+    }
+
     // We've come back out, reflect it.
     context.shell.leave_function()?;
 
@@ -1274,6 +1292,21 @@ pub(crate) async fn invoke_shell_function(
     }
 
     Ok(result.into())
+}
+
+/// Fires the `RETURN` trap at the end of a function or sourced script, if one is set and
+/// visible in the current scope. As in Bash, the handler sees the `$?` from before
+/// any `return` that ended the body, not the returned status.
+pub(crate) async fn run_return_trap(
+    shell: &mut Shell<impl extensions::ShellExtensions>,
+    params: &ExecutionParameters,
+) {
+    if !shell.traps().handles(traps::TrapSignal::Return) {
+        return;
+    }
+    let _ = shell
+        .invoke_trap_handler(traps::TrapSignal::Return, params)
+        .await;
 }
 
 pub(crate) async fn invoke_command_in_subshell_and_get_output(

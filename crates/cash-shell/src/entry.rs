@@ -382,14 +382,32 @@ async fn run_in_shell(
 
     // Otherwise a script path was given; run it.
     } else {
-        shell_ref
-            .lock()
-            .await
+        let mut shell = shell_ref.lock().await;
+        let run = shell
             .run_script(
                 Path::new(&args.script_args[0]),
                 args.script_args.iter().skip(1),
             )
-            .await?;
+            .await;
+        // A script that cannot be run exits with Bash's statuses: 127 when it does not
+        // exist, 126 when it cannot be read or looks binary.
+        if let Err(err) = run {
+            let _ = shell.display_error(&mut shell.stderr(), &err);
+            drop(shell);
+            let status = match err.kind() {
+                cash_core::ErrorKind::FailedSourcingFile(_, io)
+                    if io.kind() == std::io::ErrorKind::NotFound =>
+                {
+                    cash_core::ExecutionExitCode::NotFound
+                }
+                cash_core::ErrorKind::FailedSourcingFile(..) => {
+                    cash_core::ExecutionExitCode::CannotExecute
+                }
+                _ => cash_core::ExecutionExitCode::from(&err),
+            };
+            return Ok(status.into());
+        }
+        drop(shell);
     }
 
     // When a login shell exits, bash sources ~/.bash_logout if present.

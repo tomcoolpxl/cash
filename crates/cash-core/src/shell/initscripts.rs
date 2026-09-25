@@ -206,6 +206,11 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
                 // anything that sets `SHELL=bash` may hand this down.
                 if let Some(value) = env_var_name.and_then(|name| self.env.get_str(name, self)) {
                     let value = value.to_string();
+                    // A native Windows environment naturally spells paths with backslashes.
+                    // They are path separators here, not shell quote characters embedded by
+                    // the user, so canonicalize before applying Bash's startup-name expansion.
+                    #[cfg(windows)]
+                    let value = value.replace('\\', "/");
                     let expanded =
                         crate::expansion::basic_expand_word(self, &params, value.as_str()).await?;
 

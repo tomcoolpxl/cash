@@ -223,6 +223,31 @@ pub(crate) fn init_well_known_vars(
         )),
     )?;
 
+    // BASH_MONOSECONDS (Bash 5.3)
+    shell.env_mut().set_global(
+        "BASH_MONOSECONDS",
+        ShellVariable::new(ShellValue::Dynamic {
+            getter: |_shell| {
+                #[cfg(windows)]
+                let secs = {
+                    unsafe extern "system" {
+                        fn GetTickCount64() -> u64;
+                    }
+                    // SAFETY: GetTickCount64 takes no arguments, cannot fail, and only
+                    // reads the system tick counter.
+                    unsafe { GetTickCount64() / 1000 }
+                };
+                #[cfg(not(windows))]
+                let secs = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs();
+                secs.to_string().into()
+            },
+            setter: |_| (),
+        }),
+    )?;
+
     // COMP_WORDBREAKS
     let mut default_comp_wordbreaks = String::from(" \t\n\"\'><=;|&(:");
     if shell.options().enable_hostname_completion {

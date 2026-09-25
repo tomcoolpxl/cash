@@ -69,6 +69,10 @@ pub struct Registration {
     source_info: crate::SourceInfo,
     /// Whether or not this function definition should be exported to children.
     exported: bool,
+    /// Whether the function has the trace attribute (`declare -ft`), so it inherits the
+    /// `DEBUG` and `RETURN` traps as if `functrace` were set.
+    #[cfg_attr(feature = "serde", serde(default))]
+    traced: bool,
 }
 
 impl From<cash_parser::ast::FunctionDefinition> for Registration {
@@ -77,6 +81,7 @@ impl From<cash_parser::ast::FunctionDefinition> for Registration {
             definition: Arc::new(definition),
             source_info: crate::SourceInfo::default(),
             exported: false,
+            traced: false,
         }
     }
 }
@@ -96,6 +101,7 @@ impl Registration {
             definition: Arc::new(definition),
             source_info: source_info.clone(),
             exported: false,
+            traced: false,
         }
     }
 
@@ -122,5 +128,15 @@ impl Registration {
     /// Returns whether this function is exported.
     pub const fn is_exported(&self) -> bool {
         self.exported
+    }
+
+    /// Sets or clears the function's trace attribute (`declare -ft` / `declare +ft`).
+    pub const fn set_traced(&mut self, traced: bool) {
+        self.traced = traced;
+    }
+
+    /// Returns whether the function has the trace attribute.
+    pub const fn is_traced(&self) -> bool {
+        self.traced
     }
 }

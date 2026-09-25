@@ -53,11 +53,11 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         }
 
         // A sourced file is also a nested DEBUG scope in Bash: the caller's DEBUG
-        // trap is temporarily hidden unless functrace (`set -T`) is enabled. ERR
-        // and RETURN keep their existing function/subshell rules.
-        let inheritance_required = self.in_function()
-            || self.is_subshell()
-            || (self.in_sourced_script() && matches!(signal, TrapSignal::Debug));
+        // trap is temporarily hidden unless functrace (`set -T`) is enabled.
+        // Functions need no check here: `enter_function` sets aside the traps they
+        // do not inherit, so a trap the function sets itself still fires.
+        let inheritance_required =
+            self.is_subshell() || (self.in_sourced_script() && matches!(signal, TrapSignal::Debug));
         if inheritance_required && !self.is_trap_inherited_in_current_scope(signal) {
             return Ok(ExecutionResult::success());
         }
@@ -79,9 +79,27 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         // (never early-returned with `?`), so `leave_trap_handler()` always runs.
         self.enter_trap_handler(signal, Some(&handler));
 
+        // Bash 5.3: `$BASH_TRAPSIG` holds the running trap's number, and its previous
+        // value (normally none) comes back afterwards.
+        let previous_trapsig = self
+            .env
+            .get_str("BASH_TRAPSIG", self)
+            .map(|value| value.into_owned());
+        let _ = self.env.set_global(
+            "BASH_TRAPSIG",
+            crate::variables::ShellVariable::new(signal.trap_number().to_string()),
+        );
+
         let result = self
             .run_string(&handler.command, &handler.source_info, &params)
             .await;
+
+        let _ = match previous_trapsig {
+            Some(value) => self
+                .env
+                .set_global("BASH_TRAPSIG", crate::variables::ShellVariable::new(value)),
+            None => self.env.unset("BASH_TRAPSIG").map(|_| ()),
+        };
 
         self.leave_trap_handler();
         self.last_exit_status = orig_last_exit_status;

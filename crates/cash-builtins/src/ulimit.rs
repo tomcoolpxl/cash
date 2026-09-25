@@ -21,10 +21,11 @@ enum Unit {
 }
 
 impl Unit {
-    const fn scale(self) -> u64 {
+    const fn scale(self, posix_mode: bool) -> u64 {
         match self {
-            Self::Block | Self::HalfKBytes => 512,
-            Self::KBytes => 1024,
+            Self::Block if posix_mode => 512,
+            Self::Block | Self::KBytes => 1024,
+            Self::HalfKBytes => 512,
             _ => 1,
         }
     }
@@ -251,24 +252,24 @@ impl ResourceDescription {
         unit: Unit::Number,
     };
 
-    fn get(&self, hard: bool) -> std::io::Result<String> {
+    fn get(&self, hard: bool, posix_mode: bool) -> std::io::Result<String> {
         let (soft_limit, hard_limit) = self.resource.get()?;
         let val = if hard { hard_limit } else { soft_limit };
 
         if val == rlimit::INFINITY {
             Ok("unlimited".into())
         } else {
-            Ok(format!("{}", val / self.unit.scale()))
+            Ok(format!("{}", val / self.unit.scale(posix_mode)))
         }
     }
 
-    fn set(&self, set_hard: bool, value: LimitValue) -> std::io::Result<()> {
+    fn set(&self, set_hard: bool, value: LimitValue, posix_mode: bool) -> std::io::Result<()> {
         let (soft, hard) = self.resource.get()?;
         let value = match value {
             LimitValue::Soft => soft,
             LimitValue::Hard => hard,
             LimitValue::Unlimited => rlimit::INFINITY,
-            LimitValue::Value(v) => v * self.unit.scale(),
+            LimitValue::Value(v) => v * self.unit.scale(posix_mode),
             LimitValue::Unset => return Ok(()),
         };
 
@@ -297,7 +298,9 @@ impl ResourceDescription {
             Unit::Number => format!("(-{})", self.short),
             Unit::Seconds => format!("(seconds, -{})", self.short),
         };
-        let resource = self.get(hard).unwrap_or_else(|e| format!("{e}"));
+        let resource = self
+            .get(hard, context.shell.options().posix_mode)
+            .unwrap_or_else(|e| format!("{e}"));
         writeln!(
             context.stdout(),
             "{:<26}{:>16} {}",
@@ -429,12 +432,45 @@ pub(crate) struct ULimitCommand {
     #[arg(short = 'T', default_missing_value = "", num_args(0..=1), help = ResourceDescription::THREADS)]
     threads: Option<LimitValue>,
 
-    /// argument for the implicit limit (`-f`)
-    limit: Option<LimitValue>,
+    /// operands left after option parsing; Bash consumes at most the first one
+    #[arg(value_name = "limit", num_args = 0..)]
+    limit_operands: Vec<String>,
+
+    #[arg(skip)]
+    implicit_limit: Option<LimitValue>,
 }
 
 impl builtins::Command for ULimitCommand {
     type Error = cash_core::Error;
+
+    fn new<I>(args: I) -> Result<Self, clap::Error>
+    where
+        I: IntoIterator<Item = String>,
+    {
+        let args: Vec<String> = args.into_iter().collect();
+        let mut parsed = Self::try_parse_from(args.iter().cloned())?;
+
+        // Bash 5.2 assigns an operand left after option parsing to the final resource
+        // option. Modifiers such as -S and -H do not change which resource is final.
+        // Additional operands have historically been ignored by the builtin.
+        if !parsed.all
+            && let Some(operand) = parsed.limit_operands.first()
+        {
+            let value = operand.parse::<LimitValue>().map_err(|_| {
+                clap::Error::raw(
+                    clap::error::ErrorKind::ValueValidation,
+                    format!("{operand}: invalid number"),
+                )
+            })?;
+            if let Some(resource) = last_ulimit_resource_option(&args) {
+                parsed.apply_trailing_limit(resource, value);
+            } else {
+                parsed.implicit_limit = Some(value);
+            }
+        }
+
+        Ok(parsed)
+    }
 
     async fn execute<SE: cash_core::ShellExtensions>(
         &self,
@@ -479,7 +515,7 @@ impl builtins::Command for ULimitCommand {
 
         if resources_to_set.is_empty() {
             if resources_to_get.is_empty() {
-                if let Some(fsize) = self.limit {
+                if let Some(fsize) = self.implicit_limit {
                     resources_to_set.push((ResourceDescription::FSIZE, fsize));
                 } else {
                     resources_to_get.push(ResourceDescription::FSIZE);
@@ -488,11 +524,15 @@ impl builtins::Command for ULimitCommand {
         }
 
         for (resource, value) in resources_to_set {
-            resource.set(self.hard, value)?;
+            resource.set(self.hard, value, context.shell.options().posix_mode)?;
         }
 
         if resources_to_get.len() == 1 {
-            writeln!(context.stdout(), "{}", resources_to_get[0].get(self.hard)?)?;
+            writeln!(
+                context.stdout(),
+                "{}",
+                resources_to_get[0].get(self.hard, context.shell.options().posix_mode)?
+            )?;
         } else {
             for resource in resources_to_get {
                 resource.print(&context, self.hard)?;
@@ -501,4 +541,60 @@ impl builtins::Command for ULimitCommand {
 
         Ok(exit_code)
     }
+}
+
+impl ULimitCommand {
+    fn apply_trailing_limit(&mut self, resource: char, value: LimitValue) {
+        macro_rules! apply {
+            ($field:ident) => {
+                if matches!(self.$field, Some(LimitValue::Unset)) {
+                    self.$field = Some(value);
+                }
+            };
+        }
+
+        match resource {
+            'b' => apply!(sbsize),
+            'c' => apply!(core),
+            'd' => apply!(data),
+            'e' => apply!(nice),
+            'f' => apply!(file_size),
+            'i' => apply!(sigpending),
+            'k' => apply!(kqueues),
+            'l' => apply!(memlock),
+            'm' => apply!(rss),
+            'n' => apply!(file_open),
+            'p' => apply!(pipe),
+            'q' => apply!(msgqueue),
+            'r' => apply!(rtprio),
+            's' => apply!(stack),
+            't' => apply!(cpu),
+            'u' => apply!(nproc),
+            'v' => apply!(vmem),
+            'x' => apply!(file_lock),
+            'P' => apply!(npts),
+            'R' => apply!(rttime),
+            'T' => apply!(threads),
+            _ => {}
+        }
+    }
+}
+
+fn last_ulimit_resource_option(args: &[String]) -> Option<char> {
+    const RESOURCES: &str = "bcdefiklmnpqrstuvxPRT";
+    let mut last = None;
+    for arg in args.iter().skip(1) {
+        if arg == "--" {
+            break;
+        }
+        let Some(options) = arg.strip_prefix('-') else {
+            continue;
+        };
+        for option in options.chars() {
+            if RESOURCES.contains(option) {
+                last = Some(option);
+            }
+        }
+    }
+    last
 }

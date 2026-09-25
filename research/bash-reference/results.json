@@ -4,13 +4,13 @@
     "script": "set +u; f() { local -; set -u; }; f; case $- in *u*) echo leaked;; *) echo restored;; esac",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "restored\n",
+      "code": 0,
       "stderr": ""
     },
     "cash": {
-      "code": 0,
       "stdout": "restored\n",
+      "code": 0,
       "stderr": ""
     }
   },
@@ -19,13 +19,13 @@
     "script": "bash -c \"exit 7\" & wait %1; echo status:$?",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "status:7\n",
+      "code": 0,
       "stderr": ""
     },
     "cash": {
-      "code": 0,
       "stdout": "status:7\n",
+      "code": 0,
       "stderr": ""
     }
   },
@@ -34,13 +34,13 @@
     "script": "bash -c \"exit 7\" & wait $!; echo status:$?",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "status:7\n",
+      "code": 0,
       "stderr": ""
     },
     "cash": {
-      "code": 0,
       "stdout": "status:7\n",
+      "code": 0,
       "stderr": ""
     }
   },
@@ -49,13 +49,13 @@
     "script": "bash -c \"sleep 0.1; exit 7\" & wait -n; echo status:$?",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "status:7\n",
+      "code": 0,
       "stderr": ""
     },
     "cash": {
-      "code": 0,
       "stdout": "status:7\n",
+      "code": 0,
       "stderr": ""
     }
   },
@@ -64,13 +64,13 @@
     "script": "bash -c \"exit 7\" & wait -f $!; echo status:$?",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "status:7\n",
+      "code": 0,
       "stderr": ""
     },
     "cash": {
-      "code": 0,
       "stdout": "status:7\n",
+      "code": 0,
       "stderr": ""
     }
   },
@@ -79,13 +79,13 @@
     "script": "bash -c \"sleep 0.1; exit 7\" & wait -n -p done; s=$?; echo status:$s assigned:${done:+yes}",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "status:7 assigned:yes\n",
+      "code": 0,
       "stderr": ""
     },
     "cash": {
-      "code": 0,
       "stdout": "status:7 assigned:yes\n",
+      "code": 0,
       "stderr": ""
     }
   },
@@ -94,13 +94,13 @@
     "script": "cb() { printf \"callback:%s:%s\\n\" \"$1\" \"$2\"; }; mapfile -t -C cb -c 1 a <<< hello; printf \"value:%s\\n\" \"${a[0]}\"",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "callback:0:hello\nvalue:hello\n",
+      "code": 0,
       "stderr": ""
     },
     "cash": {
-      "code": 0,
       "stdout": "callback:0:hello\nvalue:hello\n",
+      "code": 0,
       "stderr": ""
     }
   },
@@ -109,13 +109,13 @@
     "script": "v=before; echo after | read v; echo \"$v\"",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "before\n",
+      "code": 0,
       "stderr": ""
     },
     "cash": {
-      "code": 0,
       "stdout": "before\n",
+      "code": 0,
       "stderr": ""
     }
   },
@@ -124,13 +124,13 @@
     "script": "shopt -s lastpipe; v=before; echo after | read v; echo \"$v\"",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "after\n",
+      "code": 0,
       "stderr": ""
     },
     "cash": {
-      "code": 0,
       "stdout": "after\n",
+      "code": 0,
       "stderr": ""
     }
   },
@@ -139,13 +139,13 @@
     "script": "set -e; f() { false; echo survived; }; if f; then echo yes; fi",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "survived\nyes\n",
+      "code": 0,
       "stderr": ""
     },
     "cash": {
-      "code": 0,
       "stdout": "survived\nyes\n",
+      "code": 0,
       "stderr": ""
     }
   },
@@ -154,13 +154,13 @@
     "script": "set -e; x=$(false; echo survived); echo \"$x\"",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "survived\n",
+      "code": 0,
       "stderr": ""
     },
     "cash": {
-      "code": 0,
       "stdout": "survived\n",
+      "code": 0,
       "stderr": ""
     }
   },
@@ -169,13 +169,13 @@
     "script": "set -e; shopt -s inherit_errexit; x=$(false; echo survived); echo unexpected",
     "match": true,
     "bash": {
-      "code": 1,
       "stdout": "",
+      "code": 1,
       "stderr": ""
     },
     "cash": {
-      "code": 1,
       "stdout": "",
+      "code": 1,
       "stderr": ""
     }
   },
@@ -184,13 +184,13 @@
     "script": "set -o pipefail; false | true; echo status:$?",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "status:1\n",
+      "code": 0,
       "stderr": ""
     },
     "cash": {
-      "code": 0,
       "stdout": "status:1\n",
+      "code": 0,
       "stderr": ""
     }
   },
@@ -199,13 +199,13 @@
     "script": "false | true; printf \"%s\\n\" \"${PIPESTATUS[*]}\"",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "1 0\n",
+      "code": 0,
       "stderr": ""
     },
     "cash": {
-      "code": 0,
       "stdout": "1 0\n",
+      "code": 0,
       "stderr": ""
     }
   },
@@ -214,13 +214,13 @@
     "script": "a=$(false); echo assignment:$?; f() { local b=$(false); echo local:$?; }; f",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "assignment:1\nlocal:0\n",
+      "code": 0,
       "stderr": ""
     },
     "cash": {
-      "code": 0,
       "stdout": "assignment:1\nlocal:0\n",
+      "code": 0,
       "stderr": ""
     }
   },
@@ -229,13 +229,13 @@
     "script": "x=outer; g() { echo \"$x\"; }; f() { local x=inner; g; }; f; g",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "inner\nouter\n",
+      "code": 0,
       "stderr": ""
     },
     "cash": {
-      "code": 0,
       "stdout": "inner\nouter\n",
+      "code": 0,
       "stderr": ""
     }
   },
@@ -244,13 +244,13 @@
     "script": "x=old; declare -n r=x; r=new; echo \"$x\"; unset -n r; echo \"$x\"",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "new\nnew\n",
+      "code": 0,
       "stderr": ""
     },
     "cash": {
-      "code": 0,
       "stdout": "new\nnew\n",
+      "code": 0,
       "stderr": ""
     }
   },
@@ -259,13 +259,13 @@
     "script": "declare -i x; x=\"2+3*4\"; echo \"$x\"",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "14\n",
+      "code": 0,
       "stderr": ""
     },
     "cash": {
-      "code": 0,
       "stdout": "14\n",
+      "code": 0,
       "stderr": ""
     }
   },
@@ -274,13 +274,13 @@
     "script": "IFS=:; x=\":a::b:\"; set -- $x; printf \"<%s>\\n\" \"$@\"",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "<>\n<a>\n<>\n<b>\n",
+      "code": 0,
       "stderr": ""
     },
     "cash": {
-      "code": 0,
       "stdout": "<>\n<a>\n<>\n<b>\n",
+      "code": 0,
       "stderr": ""
     }
   },
@@ -289,13 +289,13 @@
     "script": "a=(); set -- \"${a[@]}\"; echo \"$#\"",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "0\n",
+      "code": 0,
       "stderr": ""
     },
     "cash": {
-      "code": 0,
       "stdout": "0\n",
+      "code": 0,
       "stderr": ""
     }
   },
@@ -304,13 +304,13 @@
     "script": "a=(one two three); echo \"${a[-1]}\"; a[-1]=last; echo \"${a[@]}\"",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "three\none two last\n",
+      "code": 0,
       "stderr": ""
     },
     "cash": {
-      "code": 0,
       "stdout": "three\none two last\n",
+      "code": 0,
       "stderr": ""
     }
   },
@@ -319,13 +319,13 @@
     "script": "x=abc; echo \"${x/b/[&]}\"",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "a[b]c\n",
+      "code": 0,
       "stderr": ""
     },
     "cash": {
-      "code": 0,
       "stdout": "a[b]c\n",
+      "code": 0,
       "stderr": ""
     }
   },
@@ -334,13 +334,13 @@
     "script": "shopt -u patsub_replacement; x=abc; echo \"${x/b/[&]}\"",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "a[&]c\n",
+      "code": 0,
       "stderr": ""
     },
     "cash": {
-      "code": 0,
       "stdout": "a[&]c\n",
+      "code": 0,
       "stderr": ""
     }
   },
@@ -349,13 +349,13 @@
     "script": "x=abc; r='$1'; echo \"${x/b/$r}\"",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "a$1c\n",
+      "code": 0,
       "stderr": ""
     },
     "cash": {
-      "code": 0,
       "stdout": "a$1c\n",
+      "code": 0,
       "stderr": ""
     }
   },
@@ -364,13 +364,13 @@
     "script": "IFS= read -r -d : v <<< \"a:b\"; printf \"status:%s value:%s\\n\" \"$?\" \"$v\"",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "status:0 value:a\n",
+      "code": 0,
       "stderr": ""
     },
     "cash": {
-      "code": 0,
       "stdout": "status:0 value:a\n",
+      "code": 0,
       "stderr": ""
     }
   },
@@ -379,13 +379,13 @@
     "script": "read <<< \"  hello  \"; printf \"<%s>\\n\" \"$REPLY\"",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "<  hello  >\n",
+      "code": 0,
       "stderr": ""
     },
     "cash": {
-      "code": 0,
       "stdout": "<  hello  >\n",
+      "code": 0,
       "stderr": ""
     }
   },
@@ -394,13 +394,13 @@
     "script": "printf \"abc%n\\n\" n; echo \"$n\"",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "abc\n3\n",
+      "code": 0,
       "stderr": ""
     },
     "cash": {
-      "code": 0,
       "stdout": "abc\n3\n",
+      "code": 0,
       "stderr": ""
     }
   },
@@ -409,13 +409,13 @@
     "script": "echo() { builtin echo function; }; echo; command echo builtin; builtin echo builtin",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "function\nbuiltin\nbuiltin\n",
+      "code": 0,
       "stderr": ""
     },
     "cash": {
-      "code": 0,
       "stdout": "function\nbuiltin\nbuiltin\n",
+      "code": 0,
       "stderr": ""
     }
   },
@@ -424,13 +424,13 @@
     "script": "trap 'echo trapped:$?' ERR; false; echo done",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "trapped:1\ndone\n",
+      "code": 0,
       "stderr": ""
     },
     "cash": {
-      "code": 0,
       "stdout": "trapped:1\ndone\n",
+      "code": 0,
       "stderr": ""
     }
   },
@@ -439,13 +439,13 @@
     "script": "trap 'echo returned' RETURN; f() { echo function; }; f",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "function\n",
+      "code": 0,
       "stderr": ""
     },
     "cash": {
-      "code": 0,
       "stdout": "function\n",
+      "code": 0,
       "stderr": ""
     }
   },
@@ -454,13 +454,13 @@
     "script": "printf \"echo startup\\n\" > startup.sh; BASH_ENV=./startup.sh bash -c 'echo body'",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "startup\nbody\n",
+      "code": 0,
       "stderr": ""
     },
     "cash": {
-      "code": 0,
       "stdout": "startup\nbody\n",
+      "code": 0,
       "stderr": ""
     }
   },
@@ -469,13 +469,13 @@
     "script": "printf \"echo startup\\n\" > startup.sh; BASH_ENV=./startup.sh bash --posix -c 'echo body'",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "body\n",
+      "code": 0,
       "stderr": ""
     },
     "cash": {
-      "code": 0,
       "stdout": "body\n",
+      "code": 0,
       "stderr": ""
     }
   },
@@ -484,13 +484,13 @@
     "script": "printf \"echo startup\\n\" > startup.sh; ENV=./startup.sh sh -c 'echo body'",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "body\n",
+      "code": 0,
       "stderr": ""
     },
     "cash": {
-      "code": 0,
       "stdout": "body\n",
+      "code": 0,
       "stderr": ""
     }
   },
@@ -499,13 +499,13 @@
     "script": "x=old; y=${ x=new; printf value; }; echo \"$x:$y\"",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "new:value\n",
+      "code": 0,
       "stderr": ""
     },
     "cash": {
-      "code": 0,
       "stdout": "new:value\n",
+      "code": 0,
       "stderr": ""
     }
   },
@@ -514,13 +514,13 @@
     "script": "compgen -V a -W \"one two\"; printf \"<%s>\\n\" \"${a[@]}\"",
     "match": true,
     "bash": {
-      "code": 0,
       "stdout": "<one>\n<two>\n",
+      "code": 0,
       "stderr": ""
     },
     "cash": {
-      "code": 0,
       "stdout": "<one>\n<two>\n",
+      "code": 0,
       "stderr": ""
     }
   }

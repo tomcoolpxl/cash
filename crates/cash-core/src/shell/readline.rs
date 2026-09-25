@@ -10,12 +10,26 @@ impl<SE: extensions::ShellExtensions> crate::Shell<SE> {
     /// * `contents` - The contents of the edit buffer.
     /// * `cursor` - The cursor position in the edit buffer.
     pub fn set_edit_buffer(&mut self, contents: String, cursor: usize) -> Result<(), error::Error> {
-        self.env
-            .set_global("READLINE_LINE", ShellVariable::new(contents))?;
+        let mut line = ShellVariable::new(contents);
+        line.export();
+        self.env.set_global("READLINE_LINE", line)?;
 
-        self.env
-            .set_global("READLINE_POINT", ShellVariable::new(cursor.to_string()))?;
+        let mut point = ShellVariable::new(cursor.to_string());
+        point.export();
+        self.env.set_global("READLINE_POINT", point)?;
 
+        Ok(())
+    }
+
+    /// Sets the explicit numeric argument for a `bind -x` command. Bash only
+    /// creates this variable when the user supplied an argument prefix.
+    pub fn set_readline_argument(&mut self, argument: Option<i64>) -> Result<(), error::Error> {
+        let _ = self.env.unset("READLINE_ARGUMENT")?;
+        if let Some(argument) = argument {
+            let mut variable = ShellVariable::new(argument.to_string());
+            variable.export();
+            self.env.set_global("READLINE_ARGUMENT", variable)?;
+        }
         Ok(())
     }
 

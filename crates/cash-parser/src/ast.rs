@@ -1593,6 +1593,8 @@ pub type IoFd = i32;
 pub enum IoRedirect {
     /// Redirection to a file.
     File(Option<IoFd>, IoFileRedirectKind, IoFileRedirectTarget),
+    /// Redirection using a variable that receives an allocated descriptor number.
+    VariableFile(String, IoFileRedirectKind, IoFileRedirectTarget),
     /// Redirection from a here-document.
     HereDocument(Option<IoFd>, IoHereDocument),
     /// Redirection from a here-string.
@@ -1619,6 +1621,9 @@ impl Display for IoRedirect {
                 }
 
                 write!(f, "{kind} {target}")?;
+            }
+            Self::VariableFile(name, kind, target) => {
+                write!(f, "{{{name}}}{kind} {target}")?;
             }
             Self::OutputAndError(target, append) => {
                 write!(f, "&>")?;

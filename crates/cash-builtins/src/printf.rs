@@ -245,6 +245,16 @@ fn format_via_uucore_with_counts(
     Ok(())
 }
 
+/// The alternate form of `%q` (Bash 5.3 `%#q`): always single-quoted, even when no
+/// quoting is needed. Strings with control characters still need `$'...'`.
+fn force_single_quote(s: &str) -> String {
+    let dollar_quoted = quote_printf_q(s);
+    if dollar_quoted.starts_with("$'") {
+        return dollar_quoted;
+    }
+    format!("'{}'", s.replace('\'', "'\\''"))
+}
+
 fn quote_printf_q(s: &str) -> String {
     let quoted = escape::quote_if_needed(s, escape::QuoteMode::BackslashEscape);
     if quoted.starts_with("$'") {
@@ -336,7 +346,7 @@ impl QuotedFormat {
             argument.to_owned()
         };
         let mut quoted = if self.alternate {
-            escape::quote_if_needed(&source, escape::QuoteMode::SingleQuote).into_owned()
+            force_single_quote(&source)
         } else {
             quote_printf_q(&source)
         };
