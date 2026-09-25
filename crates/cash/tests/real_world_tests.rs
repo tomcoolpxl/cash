@@ -152,18 +152,23 @@ fn test_real_world_dominictarr_json_sh() {
     // JSON.sh tokenizes with the host's `egrep`, which cash does not provide. GitHub's
     // Windows runner has one that rejects the script's POSIX classes, so check the tool
     // first and say what it is, rather than blame cash for the host's grep.
-    let probe = cash_eval(r#"printf 'a b\n' | egrep -o '[[:space:]]+' | wc -c"#);
-    if probe.stdout.trim() != "2" {
-        let found = cash_eval("type -a egrep grep; egrep --version 2>&1 | head -1");
+    // The probe is JSON.sh's own filter call, anchors and all.
+    let probe = cash_eval(r#"SPACE='[[:space:]]+'; printf 'a\n  \nb\n' | egrep -v "^$SPACE$""#);
+    let host = cash_eval("type -a egrep grep; egrep --version 2>&1 | head -1").stdout;
+    if probe.stdout != "a\nb" {
         eprintln!(
-            "skipping: the host egrep cannot match [[:space:]] ({:?}, {:?})\n{}",
-            probe.stdout, probe.stderr, found.stdout
+            "skipping: the host egrep cannot filter with [[:space:]] ({:?}, {:?})\n{host}",
+            probe.stdout, probe.stderr
         );
         return;
     }
 
     let cash_out = cash_stdin(&script_path, complex_json);
-    assert_eq!(cash_out.code, 0, "cash stderr: {}", cash_out.stderr);
+    assert_eq!(
+        cash_out.code, 0,
+        "cash stderr: {}\nhost tools:\n{host}",
+        cash_out.stderr
+    );
     assert!(cash_out.stdout.contains("[\"name\"]\t\"cash\""));
     assert!(cash_out.stdout.contains("[\"nested\",\"num\"]\t42"));
     assert!(cash_out.stdout.contains("[\"nested\",\"arr\",0]\t\"one\""));
