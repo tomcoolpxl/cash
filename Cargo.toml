@@ -10,6 +10,8 @@ members = [
     "crates/cash-interactive",
     "crates/cash-shell",
     "crates/cash-test-harness",
+    "crates/cash-awk",
+    "crates/cash-sed",
     "xtask",
 ]
 default-members = ["crates/cash"]
@@ -26,11 +28,13 @@ keywords = ["cli", "shell", "sh", "bash", "windows"]
 readme = "README.md"
 
 [workspace.dependencies]
+cash-awk = { version = "0.8.0", path = "crates/cash-awk" }
 cash-builtins = { version = "0.8.0", path = "crates/cash-builtins" }
 cash-core = { version = "0.8.0", path = "crates/cash-core" }
 cash-coreutils-builtins = { version = "0.8.0", path = "crates/cash-coreutils-builtins" }
 cash-interactive = { version = "0.8.0", path = "crates/cash-interactive" }
 cash-parser = { version = "0.8.0", path = "crates/cash-parser" }
+cash-sed = { version = "0.8.0", path = "crates/cash-sed" }
 cash-shell = { version = "0.8.0", path = "crates/cash-shell" }
 cash-test-harness = { version = "0.8.0", path = "crates/cash-test-harness" }
 cash-win32 = { version = "0.8.0", path = "crates/cash-win32" }

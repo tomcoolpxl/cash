@@ -64,6 +64,8 @@ schema = ["dep:schemars"]
 workspace = true
 
 [dependencies]
+cash-awk = { workspace = true }
+cash-sed = { workspace = true }
 cash-core = { workspace = true }
 cash-builtins = { workspace = true }
 cash-coreutils-builtins = { workspace = true, optional = true }

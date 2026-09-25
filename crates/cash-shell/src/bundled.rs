@@ -65,6 +65,14 @@ pub fn install(commands: HashMap<String, BundledFn>) {
     let _ = REGISTRY.set(commands);
 }
 
+fn run_awk_bundled(args: Vec<OsString>) -> i32 {
+    cash_awk::run_awk(args)
+}
+
+fn run_sed_bundled(args: Vec<OsString>) -> i32 {
+    cash_sed::uumain(args.into_iter())
+}
+
 /// Installs the registry from all compiled-in providers.
 ///
 /// Providers are controlled by Cargo features. Binaries should call this
@@ -76,6 +84,9 @@ pub fn install_default_providers() {
 
     #[cfg(feature = "experimental-bundled-coreutils")]
     commands.extend(cash_coreutils_builtins::bundled_commands());
+
+    commands.insert("awk".to_string(), run_awk_bundled);
+    commands.insert("sed".to_string(), run_sed_bundled);
 
     install(commands);
 }

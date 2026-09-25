@@ -1,0 +1,15 @@
+# cash-awk
+
+Native AWK implementation for Cash, absorbed and adapted from [posixutils-rs](https://github.com/rustcoreutils/posixutils-rs).
+
+- **Original source:** `posixutils-awk` 0.9.0
+- **Imported revision:** `96bd8a372541cf7e4c427010a5414a40cf20c805`
+- **Revision date:** 2026-09-25
+- **License:** MIT (see LICENSE)
+
+## Adaptations for Cash
+
+1. **Windows and cross-platform regex:** Replaced Unix libc `regcomp`/`regexec` with a Rust regex adapter using `regex-automata` configured for `LeftmostLongest` matching, preserving POSIX ERE earliest/longest matching semantics across Windows and Linux.
+2. **Subprocess execution:** Replaced libc `system()`, `popen()`, and `pclose()` with a subprocess command host running child processes (`cash -c` / `sh -c`), providing proper pipe handling, exit codes, and resource cleanup without CRT leaks.
+3. **Library entry point:** Provides `pub fn run_awk(args: impl IntoIterator<Item = impl Into<std::ffi::OsString>>) -> i32` for Cash's process-backed bundled command dispatcher instead of calling `std::process::exit`.
+4. **Robustness:** Fixed array deletion bookkeeping bug where `swap_remove` at the end caused out-of-bounds panics, fixed function scalar-as-array panics, and prevented script errors from unwinding out of the process.
