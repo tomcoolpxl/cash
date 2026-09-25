@@ -499,6 +499,12 @@ pub(crate) fn print_to_string(
     });
     // there has to be at least an element
     output.push_str(values.first().expect("called print without arguments"));
-    output.push_str(&global_env.ors);
+    // Restore the CRLF of the most recent main-input record, but only for the
+    // default ORS; an explicit ORS (and all printf output) is written verbatim.
+    if global_env.last_record_crlf && global_env.ors.as_str() == "\n" {
+        output.push_str("\r\n");
+    } else {
+        output.push_str(&global_env.ors);
+    }
     Ok(output.into())
 }

@@ -260,6 +260,14 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
         m.insert("stat".into(), builtin::<stat::StatCommand, SE>());
         m.insert("nohup".into(), builtin::<nohup::NohupCommand, SE>());
         m.insert("install".into(), builtin::<install::InstallCommand, SE>());
+        m.insert(
+            "dos2unix".into(),
+            builtin::<dos2unix::Dos2UnixCommand, SE>(),
+        );
+        m.insert(
+            "unix2dos".into(),
+            builtin::<dos2unix::Unix2DosCommand, SE>(),
+        );
     }
 
     m

@@ -27,10 +27,7 @@ use std::mem;
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use terminal_size::{Width, terminal_size};
 use uucore::error::{UResult, USimpleError};
-
-const DEFAULT_OUTPUT_WIDTH: usize = 60;
 
 const ERR_ADDRESS_0_USAGE: &str =
     "address 0 can only be used with ~step, a second regular expression, or a read command";
@@ -655,6 +652,37 @@ fn bre_to_ere(pattern: &[u8]) -> Vec<u8> {
     result
 }
 
+/// Whether a regular expression names a carriage return: a literal CR byte, or the
+/// escapes `\r` and `\x0D` (an escaped backslash does not count).
+fn mentions_carriage_return(pattern: &[u8]) -> bool {
+    let mut i = 0;
+    while i < pattern.len() {
+        match pattern[i] {
+            b'\r' => return true,
+            b'\\' => {
+                let rest = &pattern[i + 1..];
+                let hex_cr = |digits: &[u8]| {
+                    std::str::from_utf8(digits)
+                        .ok()
+                        .and_then(|d| u32::from_str_radix(d, 16).ok())
+                        == Some(0x0D)
+                };
+                if rest.first() == Some(&b'r')
+                    || (rest.first() == Some(&b'x') && rest.len() >= 3 && hex_cr(&rest[1..3]))
+                {
+                    return true;
+                }
+                // Skip the escaped character, so `\\r` is a backslash and an `r`.
+                i += 2;
+                continue;
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    false
+}
+
 /// Compile the provided regular expression string into a corresponding engine.
 /// An empty pattern results in None, which means that the last RE employed
 /// at runtime will be used.
@@ -669,6 +697,10 @@ fn compile_regex(
     let pattern = pattern.as_ref();
     if pattern.is_empty() {
         return Ok(None);
+    }
+
+    if mentions_carriage_return(pattern) {
+        context.cr_in_script.set(true);
     }
 
     // Convert basic to extended regular expression if needed.
@@ -910,6 +942,13 @@ fn compile_trans_command(
 
     let source = parse_transliteration_for_mode(lines, line, context.character_mode)?;
     let target = parse_transliteration_for_mode(lines, line, context.character_mode)?;
+    let source_has_cr = match &source {
+        ParsedTransliteration::Bytes(bytes) => bytes.contains(&b'\r'),
+        ParsedTransliteration::Text(text) => text.contains('\r'),
+    };
+    if source_has_cr {
+        context.cr_in_script.set(true);
+    }
     let transliteration = match (source, target) {
         (ParsedTransliteration::Bytes(source), ParsedTransliteration::Bytes(target)) => {
             if source.len() != target.len() {
@@ -1190,22 +1229,13 @@ fn compile_label_command(
     Ok(CommandHandling::Continue)
 }
 
-/// Return the width of the command's terminal or a default.
-fn output_width() -> usize {
-    if let Some((Width(w), _)) = terminal_size() {
-        w as usize
-    } else {
-        DEFAULT_OUTPUT_WIDTH
-    }
-}
-
 /// Compile commands that take a number as an argument.
 // Handles l q Q
 fn compile_number_command(
     lines: &mut ScriptLineProvider,
     line: &mut ScriptCharProvider,
     cmd: &mut Command,
-    _context: &mut ProcessingContext,
+    context: &mut ProcessingContext,
 ) -> UResult<CommandHandling> {
     line.advance(); // Skip the command character
     line.eat_spaces(); // Skip any leading whitespace
@@ -1218,8 +1248,10 @@ fn compile_number_command(
             'q' | 'Q' => {
                 cmd.data = CommandData::Number(0);
             }
+            // As in GNU sed, a bare `l` wraps at `-l N` (default 70), not at the
+            // terminal's width.
             'l' => {
-                cmd.data = CommandData::Number(output_width());
+                cmd.data = CommandData::Number(context.length);
             }
             _ => panic!("invalid number-expecting command"),
         },

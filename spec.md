@@ -935,8 +935,9 @@ Windows has nothing to install, and Git for Windows does not ship it either, so 
 platform sourcing `docker completion bash` succeeds and then silently completes
 nothing at all.
 
-cash therefore defines both helpers itself, before rc files so a user who does install
-bash-completion overrides them. Measured after: `docker ru` → `run`,
+cash therefore defines both helpers itself in interactive shells, before rc files so a
+user who does install bash-completion overrides them. Scripts and `-c` commands do not
+get them, so their function table matches Bash's. Measured after: `docker ru` → `run`,
 `kubectl get po` → `pods`, `gh pr cr` → `create`, and `docker run --rm <TAB>` lists the
 local image tags. clap-generated scripts (rustup, cargo, ripgrep) never needed the
 shims and keep working.
@@ -1171,9 +1172,32 @@ in the capture file.
 A temp file rather than a pipe, because nothing drains a pipe while the utility runs and
 64 KiB of `realpath` output would deadlock.
 
-- OPEN: whether to also bundle a `sed` and `awk` implementation. Rust ones exist but
-  none is a drop-in for GNU, and shipping a subtly different `awk` is precisely the
-  silent-substitution problem this decision otherwise avoids.
+- Resolved: `sed` and `awk` are bundled (imports of uutils/sed and posixutils-rs AWK,
+  maintained in-tree). They target POSIX rather than GNU, and their line-ending policy is
+  D49.
+
+### D49 — Bundled `sed` and `awk` keep CRLF files CRLF; `CASH_EOL=lf` is Linux
+
+Windows text files end their lines with CRLF, and a text tool that treats the CR as data
+makes `s/foo$/bar/` or `$NF == "x"` fail on them while printing identically, the D20
+problem again. So by default the bundled `sed` and `awk`, reading a line that ends in
+CRLF, match and split it without the CR and write it back with the CR: an edited Windows
+file stays a CRLF file, and an LF file stays LF.
+
+Two exceptions give the CR back to the script, because there the script asked for it:
+
+1. **The program names a carriage return.** A regular expression (or `y` source in sed)
+   containing `\r`, `\x0D`, octal `\015` in awk, or a literal CR makes CR ordinary data
+   for that whole run. The classic dos2unix one-liners (`sed 's/\r$//'`,
+   `awk '{sub(/\r$/, "")} 1'`) therefore do what they say. `s/.$//` names no CR and still
+   removes the last visible character.
+2. **Linux mode.** `CASH_EOL=lf` in the environment (case-insensitive; any other value is
+   the default) makes CR ordinary data for every run, exactly as on Linux, so `$` no longer
+   matches before it. For a single sed run, `-b`/`--binary` does the same; it is the
+   option GNU sed's Windows builds use for this. `printf` in awk is always written verbatim.
+
+Converting files between the two conventions is the job of the bundled `dos2unix` and
+`unix2dos`, not a side effect of editing.
 
 ---
 
@@ -1210,6 +1234,8 @@ someone who expected bash, so additions need to earn their place.
 | 23 | `disown` forgets a job but does not make it outlive cash | A process cannot leave a Windows job object once assigned; `detach` starts one outside it | D6, D45 |
 | 24 | `ls` colours when stdout is a terminal | Linux gets this from an alias in a system rc file; Windows has none, and an alias is the one spelling a builtin has no path behind | D48 |
 | 25 | `uname -s` is `Windows_NT`, `$OSTYPE` is `windows` | cash is native Win32, not MSYS or Cygwin; scripts testing only `MINGW*|MSYS*` will miss their Windows branch | D48 |
+| 26 | Bundled `sed` and `awk` keep CRLF lines CRLF and match them without the CR | Windows files stay intact and `$` works on them; a program naming `\r`, or `CASH_EOL=lf`, gets Linux behaviour | D49 |
+| 27 | Arithmetic never executes `$(...)` found in an array subscript inside a variable's value | Bash runs it (`read n; echo $((n+1))` with input `a[$(cmd)]`), a well-known code-injection hole; Cash reports an error for indexed arrays and uses the text as a literal key for associative ones | — |
 
 `select` was missing outright until recently: it was a reserved word with no grammar
 rule, so `select x in a b; do …; done` was a syntax error that took the whole file with

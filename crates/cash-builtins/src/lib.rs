@@ -81,6 +81,11 @@ mod nohup;
 #[cfg(windows)]
 mod install;
 
+// cash (D20, D48): `dos2unix`/`unix2dos`, which a clean Windows machine does not have and
+// Git for Windows only supplies when its `usr/bin` is on PATH.
+#[cfg(windows)]
+mod dos2unix;
+
 #[cfg(feature = "builtin.alias")]
 mod alias;
 #[cfg(feature = "builtin.bg")]

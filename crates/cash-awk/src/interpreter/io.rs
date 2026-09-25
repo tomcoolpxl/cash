@@ -83,27 +83,43 @@ pub trait RecordReader: Iterator<Item = ReadResult> {
 
     fn ere_byte_buffer(&mut self) -> &mut Vec<u8>;
 
-    fn read_next_record(&mut self, separator: &RecordSeparator) -> Result<Option<String>, String> {
+    /// Read the next record. Returns the record text and whether a CRLF line
+    /// ending was hidden from it.
+    ///
+    /// Line-ending policy (shared with cash's sed): when `strip_cr` is set and
+    /// RS is a single newline (the default), a CR immediately before the
+    /// terminating LF -- or a trailing CR on an unterminated last record -- is
+    /// removed from the record and reported as `true`, so that `print` can
+    /// restore the CRLF on output. With any other RS (another single
+    /// character, an ERE, or paragraph mode `RS=""`) records are returned
+    /// byte-for-byte as read, CRs included, and never reported as CRLF --
+    /// exactly like awk on Linux. When `strip_cr` is false (the program
+    /// mentions a CR, or `CASH_EOL=lf`), CR is always ordinary data.
+    fn read_next_record(
+        &mut self,
+        separator: &RecordSeparator,
+        strip_cr: bool,
+    ) -> Result<Option<(String, bool)>, String> {
         if self.is_done() {
             return Ok(None);
         }
         match separator {
             RecordSeparator::Char(sep) => {
+                let strip = strip_cr && *sep == b'\n';
+                let finish = |mut buf: Vec<u8>| -> Result<Option<(String, bool)>, String> {
+                    let crlf = strip && buf.last() == Some(&b'\r');
+                    if crlf {
+                        buf.pop();
+                    }
+                    Ok(Some((bytes_to_string(buf), crlf)))
+                };
                 let mut buf = Vec::new();
                 let mut next = read_iter_next!(self);
                 while next != *sep {
                     buf.push(next);
-                    next = read_iter_next!(self, {
-                        if *sep == b'\n' && buf.last() == Some(&b'\r') {
-                            buf.pop();
-                        }
-                        Ok(Some(bytes_to_string(buf)))
-                    });
+                    next = read_iter_next!(self, finish(buf));
                 }
-                if *sep == b'\n' && buf.last() == Some(&b'\r') {
-                    buf.pop();
-                }
-                Ok(Some(bytes_to_string(buf)))
+                finish(buf)
             }
             RecordSeparator::Ere(re) => {
                 // Incremental matching: read bytes into a buffer and check
@@ -114,7 +130,7 @@ pub trait RecordReader: Iterator<Item = ReadResult> {
                 // Check existing buffer first (remainder from previous call)
                 if let Some((record, remainder)) = ere_try_match(&byte_buf, re)? {
                     *self.ere_byte_buffer() = remainder;
-                    return Ok(Some(record));
+                    return Ok(Some((record, false)));
                 }
 
                 // After a failed match at length L, skip newline-triggered checks
@@ -139,7 +155,7 @@ pub trait RecordReader: Iterator<Item = ReadResult> {
                                 bytes_since_check = 0;
                                 if let Some((record, remainder)) = ere_try_match(&byte_buf, re)? {
                                     *self.ere_byte_buffer() = remainder;
-                                    return Ok(Some(record));
+                                    return Ok(Some((record, false)));
                                 }
                                 let len = byte_buf.len();
                                 next_newline_check_len = len + len.min(8192);
@@ -154,10 +170,10 @@ pub trait RecordReader: Iterator<Item = ReadResult> {
                                 if !remainder.is_empty() {
                                     *self.ere_byte_buffer() = remainder;
                                 }
-                                return Ok(Some(record));
+                                return Ok(Some((record, false)));
                             }
                             let input = bytes_to_string(byte_buf);
-                            return Ok(Some(input));
+                            return Ok(Some((input, false)));
                         }
                     }
                 }
@@ -199,7 +215,7 @@ pub trait RecordReader: Iterator<Item = ReadResult> {
                                     record_buf.push(b'\n');
                                     record_buf.extend_from_slice(&line_buf);
                                 }
-                                return Ok(Some(bytes_to_string(record_buf)));
+                                return Ok(Some((bytes_to_string(record_buf), false)));
                             }
                         }
                     }
@@ -211,7 +227,7 @@ pub trait RecordReader: Iterator<Item = ReadResult> {
                     record_buf.extend_from_slice(&line_buf);
                 }
 
-                Ok(Some(bytes_to_string(record_buf)))
+                Ok(Some((bytes_to_string(record_buf), false)))
             }
         }
     }
@@ -395,13 +411,14 @@ impl ReadFiles {
         &mut self,
         filename: AwkString,
         separator: &RecordSeparator,
-    ) -> Result<Option<String>, String> {
+        strip_cr: bool,
+    ) -> Result<Option<(String, bool)>, String> {
         let filename = Rc::<str>::from(filename);
         match self.files.entry(filename.clone()) {
-            Entry::Occupied(mut e) => e.get_mut().read_next_record(separator),
+            Entry::Occupied(mut e) => e.get_mut().read_next_record(separator, strip_cr),
             Entry::Vacant(e) => {
                 let mut file = FileStream::open(&filename)?;
-                let result = file.read_next_record(separator);
+                let result = file.read_next_record(separator, strip_cr);
                 e.insert(file);
                 result
             }
@@ -621,13 +638,14 @@ impl ReadPipes {
         &mut self,
         command: AwkString,
         separator: &RecordSeparator,
-    ) -> Result<Option<String>, String> {
+        strip_cr: bool,
+    ) -> Result<Option<(String, bool)>, String> {
         let command = Rc::<str>::from(command);
         match self.pipes.entry(command.clone()) {
-            Entry::Occupied(mut e) => e.get_mut().read_next_record(separator),
+            Entry::Occupied(mut e) => e.get_mut().read_next_record(separator, strip_cr),
             Entry::Vacant(e) => {
                 let mut reader = PipeRecordReader::open(&command)?;
-                let result = reader.read_next_record(separator);
+                let result = reader.read_next_record(separator, strip_cr);
                 e.insert(reader);
                 result
             }
@@ -681,7 +699,7 @@ mod tests {
     fn split_records(file_contents: &str, separator: RecordSeparator) -> Vec<String> {
         let mut reader = StringRecordReader::from(file_contents);
         let mut result = Vec::new();
-        while let Some(record) = reader.read_next_record(&separator).unwrap() {
+        while let Some((record, _)) = reader.read_next_record(&separator, true).unwrap() {
             result.push(record);
         }
         result

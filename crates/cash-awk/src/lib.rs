@@ -18,7 +18,62 @@ use std::io::Read;
 
 use clap::Parser;
 use compiler::{SourceFile, compile_program};
-use interpreter::interpret;
+use interpreter::interpret_with_eol;
+
+/// Returns true when the awk program text mentions a carriage return: an
+/// escape `\r`, an octal escape whose value is 13 (`\15`, `\015`), or a
+/// literal CR byte that is not the CR of a CRLF line ending of the program
+/// file itself. Backslash parity is respected: `\\r` is an escaped backslash
+/// followed by a plain `r`. The scan is lexical (a `\r` in a comment counts
+/// too), which errs on the side of treating CR as data.
+fn program_mentions_cr(text: &str) -> bool {
+    let bytes = text.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'\\' => {
+                let Some(&next) = bytes.get(i + 1) else {
+                    return false;
+                };
+                if next == b'r' {
+                    return true;
+                }
+                if (b'0'..=b'7').contains(&next) {
+                    let mut value = 0u32;
+                    let mut j = i + 1;
+                    while j < bytes.len() && j < i + 4 && (b'0'..=b'7').contains(&bytes[j]) {
+                        value = value * 8 + u32::from(bytes[j] - b'0');
+                        j += 1;
+                    }
+                    if value == 13 {
+                        return true;
+                    }
+                    i = j;
+                } else {
+                    // Any other escaped character (including `\\` and a
+                    // line-continuation newline or CRLF) is skipped whole.
+                    i += 2;
+                }
+            }
+            b'\r' => {
+                if bytes.get(i + 1) != Some(&b'\n') {
+                    return true;
+                }
+                i += 1;
+            }
+            _ => i += 1,
+        }
+    }
+    false
+}
+
+/// Line-ending mode for this run: CR is ordinary data when `CASH_EOL=lf`
+/// (case-insensitive) is set or when the program mentions a carriage return;
+/// otherwise the CR of CRLF input records is hidden and restored by `print`.
+fn cr_is_data(sources: &[SourceFile]) -> bool {
+    let eol_lf = std::env::var("CASH_EOL").is_ok_and(|v| v.eq_ignore_ascii_case("lf"));
+    eol_lf || sources.iter().any(|s| program_mentions_cr(&s.contents))
+}
 
 #[derive(Parser, Debug)]
 #[command(name = "awk", about = "awk - pattern scanning and processing language")]
@@ -116,6 +171,7 @@ where
                 filename: source_file.clone(),
             });
         }
+        let cr_is_data = cr_is_data(&sources);
         let program = match compile_program(&sources) {
             Ok(p) => p,
             Err(e) => {
@@ -123,11 +179,12 @@ where
                 return 1;
             }
         };
-        match interpret(
+        match interpret_with_eol(
             program,
             &parsed_args.arguments,
             &parsed_args.assignments,
             parsed_args.separator_string,
+            cr_is_data,
         ) {
             Ok(code) => code as i32,
             Err(e) => {
@@ -136,19 +193,21 @@ where
             }
         }
     } else if !parsed_args.arguments.is_empty() {
-        let program = match compile_program(&[SourceFile::stdin(parsed_args.arguments[0].clone())])
-        {
+        let sources = [SourceFile::stdin(parsed_args.arguments[0].clone())];
+        let cr_is_data = cr_is_data(&sources);
+        let program = match compile_program(&sources) {
             Ok(p) => p,
             Err(e) => {
                 eprintln!("{e}");
                 return 1;
             }
         };
-        match interpret(
+        match interpret_with_eol(
             program,
             &parsed_args.arguments[1..],
             &parsed_args.assignments,
             parsed_args.separator_string,
+            cr_is_data,
         ) {
             Ok(code) => code as i32,
             Err(e) => {
@@ -159,5 +218,30 @@ where
     } else {
         eprintln!("awk: missing program argument");
         1
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::program_mentions_cr;
+
+    #[test]
+    fn detects_carriage_return_mentions() {
+        assert!(program_mentions_cr(r#"{ sub(/\r$/, "") } 1"#));
+        assert!(program_mentions_cr(r#"{ printf "a\015" }"#));
+        assert!(program_mentions_cr(r#"{ printf "a\15" }"#));
+        // At most three octal digits: `\0151` is `\015` followed by `1`.
+        assert!(program_mentions_cr(r#"{ printf "\0151" }"#));
+        assert!(program_mentions_cr("{ x = \"a\rb\" }"));
+        assert!(program_mentions_cr(r#"{ print "\\\r" }"#));
+    }
+
+    #[test]
+    fn ignores_non_carriage_return_text() {
+        assert!(!program_mentions_cr("{ print }"));
+        assert!(!program_mentions_cr(r#"{ print "\\r" }"#));
+        assert!(!program_mentions_cr(r#"{ printf "\151" }"#));
+        assert!(!program_mentions_cr("BEGIN {\r\n  print 1\r\n}\r\n"));
+        assert!(!program_mentions_cr("{ print \\\r\n $1 }"));
     }
 }

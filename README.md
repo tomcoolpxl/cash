@@ -48,10 +48,11 @@ The [Bash source comparison](research/bash-reference/README.md) records the
 behavioral probes and how to rerun them.
 Known gaps in the advertised Bash 5.2 interface are tracked in the
 [Bash 5.2 gap audit](research/bash-reference/bash-5.2-gaps.md).
-The central [project roadmap](ROADMAP.md) keeps the feature order explicit: finish
-Bash 5.2, integrate native `awk` and `sed` (both complete), expand the bundled userland
-(`stat`, `tty`, `install`, `pathchk`, `nohup`, `who`, `users`, `pinky`, `logname`, `hostid`),
-and only then begin broader Bash 5.3 work.
+The central [project roadmap](ROADMAP.md) keeps the feature order explicit: Bash 5.2,
+native `awk` and `sed`, and the bundled userland (`stat`, `tty`, `install`, `pathchk`,
+`nohup`, `who`, `users`, `pinky`, `logname`, `hostid`) are done; Bash 5.3 is in progress,
+with every script-observable item probed against a real Bash 5.3 in the
+[Bash 5.3 audit](research/bash-reference/bash-5.3-audit.md).
 The selected source candidates and release gates are recorded in the
 [`posixutils-rs` AWK evaluation](research/posixutils-rs-evaluation.md) and
 [`uutils/sed` evaluation](research/uutils-sed-evaluation.md).
@@ -167,7 +168,10 @@ links or junctions. Its useful common options are built in: `-a`, `-d`, `-L LEVE
 
 **It now bundles native `awk` and `sed` implementations** (providing complete POSIX
 pattern scanning, text stream transformation, in-place file editing, and script processing
-without external dependencies).
+without external dependencies). They keep Windows files intact: a CRLF line is matched
+without its CR, so `$` works, and is written back as CRLF. A program that names `\r`
+(`sed 's/\r$//'`) sees the real line, and `CASH_EOL=lf` (or `sed -b`) gives Linux behaviour
+everywhere. `dos2unix` and `unix2dos` convert files between the two.
 **It does not carry `grep` or `diff`** — they have good Windows builds and do not have
 to agree with the shell:
 

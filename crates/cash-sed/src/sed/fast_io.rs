@@ -117,6 +117,9 @@ impl<'a> MmapLineCursor<'a> {
 pub struct ReadLineCursor {
     reader: Box<dyn BufRead>,
     buffer: Vec<u8>,
+    /// Whether a CR before the LF is split off and remembered (the default), rather than
+    /// kept as part of the line.
+    strip_cr: bool,
 }
 
 impl ReadLineCursor {
@@ -126,6 +129,7 @@ impl ReadLineCursor {
         Self {
             reader: Box::new(buf),
             buffer: Vec::new(),
+            strip_cr: true,
         }
     }
 
@@ -143,7 +147,7 @@ impl ReadLineCursor {
         if has_newline {
             self.buffer.pop();
         }
-        let has_crlf = self.buffer.ends_with(b"\r");
+        let has_crlf = self.strip_cr && has_newline && self.buffer.ends_with(b"\r");
         if has_crlf {
             self.buffer.pop();
         }
@@ -471,6 +475,16 @@ fn line_reader_read_input(file: File) -> io::Result<LineReader<'static>> {
 }
 
 impl<'a> LineReader<'a> {
+    /// Open the specified file for line input, keeping carriage returns as data when
+    /// `cr_is_data` is set (see `ProcessingContext::treats_cr_as_data`).
+    pub fn open_with(path: &PathBuf, cr_is_data: bool) -> io::Result<Self> {
+        let mut reader = Self::open(path)?;
+        if let LineReader::ReadInput(cursor) = &mut reader {
+            cursor.strip_cr = !cr_is_data;
+        }
+        Ok(reader)
+    }
+
     /// Open the specified file for line input.
     // Use "-" to read from the standard input.
     pub fn open(path: &PathBuf) -> io::Result<Self> {

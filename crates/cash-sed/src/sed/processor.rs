@@ -546,7 +546,8 @@ impl ListLine {
     /// Write a rendered list item, folding before the item if needed.
     fn write_item(&mut self, output: &mut OutputBuffer, out_str: &str) -> UResult<()> {
         let out_len = out_str.len();
-        if self.width + out_len + 1 > self.max_width {
+        // A width of 0 (`l 0`, `-l 0`) never wraps, as in GNU sed.
+        if self.max_width > 0 && self.width + out_len + 1 > self.max_width {
             self.buffer.push_str("\\\n");
             output.write_str(std::mem::take(&mut self.buffer))?;
             self.width = 0;
@@ -1019,7 +1020,7 @@ pub fn process_all_files(
     for (index, path) in files.iter().enumerate() {
         context.last_file =
             index == last_file_index || remaining_files_are_empty(&files[index + 1..]);
-        let mut reader = LineReader::open(path)
+        let mut reader = LineReader::open_with(path, context.treats_cr_as_data())
             .map_err_context(|| format!("error opening input file {}", path.quote()))?;
         let output = in_place.begin(path)?;
 

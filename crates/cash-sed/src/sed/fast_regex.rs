@@ -268,10 +268,21 @@ fn sort_alternations(hir: regex_syntax::hir::Hir) -> regex_syntax::hir::Hir {
 }
 
 pub fn sort_alternations_in_pattern(pat: &str) -> String {
+    sort_alternations_in_pattern_for(pat, true)
+}
+
+/// Like [`sort_alternations_in_pattern`], for a pattern that will be compiled with
+/// Unicode on or off. In byte mode the pattern must be re-parsed without Unicode too:
+/// otherwise a negated class such as `[^b]` prints back as a range up to U+10FFFF, which
+/// a byte regex rejects ("Unicode not allowed here").
+fn sort_alternations_in_pattern_for(pat: &str, unicode: bool) -> String {
     if !pat.contains('|') {
         return pat.to_string();
     }
-    let mut parser = regex_syntax::ParserBuilder::new().build();
+    let mut parser = regex_syntax::ParserBuilder::new()
+        .unicode(unicode)
+        .utf8(unicode)
+        .build();
     if let Ok(hir) = parser.parse(pat) {
         let sorted = sort_alternations(hir);
         let mut s = String::new();
@@ -323,7 +334,7 @@ impl Regex {
         } else if NEEDS_RE.is_match(pattern) {
             if character_mode == CharacterMode::Byte {
                 let pattern = byte_regex_pattern(pattern);
-                let pattern = sort_alternations_in_pattern(&pattern);
+                let pattern = sort_alternations_in_pattern_for(&pattern, false);
                 let pattern = ensure_dotall(&pattern);
                 Ok(Self::Byte(
                     regex::bytes::RegexBuilder::new(&pattern)
@@ -668,6 +679,21 @@ mod tests {
     fn assert_byte_selection() {
         let re = Regex::new(r"x*", CharacterMode::Utf8).unwrap();
         assert!(matches!(re, Regex::Byte(_)));
+    }
+
+    #[test]
+    fn test_sort_alternations_keeps_negated_classes_in_byte_mode() {
+        // Found by the corpus (Pement's comma-inserting one-liner): a negated bracket
+        // inside an alternation failed to compile in the default (byte) locale.
+        for (pattern, text) in [
+            ("(a|[^0-9.])x", "zx"),
+            ("a|[^b]x", "zx"),
+            ("(^|[^0-9.])([0-9]+)", "-1234"),
+        ] {
+            let regex = Regex::new(pattern, CharacterMode::Byte).unwrap();
+            let mut chunk = IOChunk::new_from_str(text);
+            assert!(regex.is_match(&mut chunk).unwrap(), "{pattern}");
+        }
     }
 
     #[test]

@@ -1004,3 +1004,166 @@ fn test_awk_bugfix_for_with_empty_clauses() {
         });
     }
 }
+
+// Line-ending policy. `run_test` normalizes CRLF, which would hide exactly
+// what these tests check, so they compare stdout byte-for-byte.
+
+fn run_awk_bytes(args: &[&str], stdin_data: &[u8], eol_lf: bool) -> Vec<u8> {
+    let awk_bin = env!("CARGO_BIN_EXE_awk");
+    let mut cmd = Command::new(awk_bin);
+    cmd.args(args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .env("LC_ALL", "C");
+    if eol_lf {
+        cmd.env("CASH_EOL", "LF");
+    } else {
+        cmd.env_remove("CASH_EOL");
+    }
+    let mut child = cmd.spawn().expect("failed to spawn awk");
+    if let Some(mut stdin) = child.stdin.take() {
+        let _ = stdin.write_all(stdin_data);
+    }
+    let output = child.wait_with_output().expect("failed to wait on awk");
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    output.stdout
+}
+
+fn assert_awk_bytes(args: &[&str], stdin_data: &[u8], expected: &[u8]) {
+    let stdout = run_awk_bytes(args, stdin_data, false);
+    assert_eq!(
+        String::from_utf8_lossy(&stdout),
+        String::from_utf8_lossy(expected)
+    );
+}
+
+#[test]
+fn test_eol_crlf_input_round_trips_through_print() {
+    assert_awk_bytes(&["{print}"], b"one\r\ntwo\r\n", b"one\r\ntwo\r\n");
+    assert_awk_bytes(&["1"], b"one\r\ntwo\r\n", b"one\r\ntwo\r\n");
+}
+
+#[test]
+fn test_eol_lf_input_stays_lf() {
+    assert_awk_bytes(&["{print}"], b"one\ntwo\n", b"one\ntwo\n");
+}
+
+#[test]
+fn test_eol_mixed_input_follows_each_record() {
+    assert_awk_bytes(&["{print}"], b"a\r\nb\nc\r\n", b"a\r\nb\nc\r\n");
+}
+
+#[test]
+fn test_eol_fields_and_length_ignore_cr() {
+    assert_awk_bytes(
+        &["{print length($0), length($2), NF}"],
+        b"a b\r\n",
+        b"3 1 2\r\n",
+    );
+    assert_awk_bytes(
+        &["{printf \"[%s][%s]\\n\", $1, $2}"],
+        b"a b\r\n",
+        b"[a][b]\n",
+    );
+    assert_awk_bytes(&["$2 == \"b\" {print \"yes\"}"], b"a b\r\n", b"yes\r\n");
+}
+
+#[test]
+fn test_eol_printf_is_verbatim() {
+    assert_awk_bytes(&["{printf \"%s\\n\", $0}"], b"one\r\n", b"one\n");
+}
+
+#[test]
+fn test_eol_explicit_ors_is_verbatim() {
+    assert_awk_bytes(&["BEGIN{ORS=\";\"} {print}"], b"a\r\nb\r\n", b"a;b;");
+}
+
+#[test]
+fn test_eol_end_uses_last_record() {
+    assert_awk_bytes(&["END{print NR}"], b"a\r\nb\r\n", b"2\r\n");
+    assert_awk_bytes(&["END{print NR}"], b"a\r\nb\n", b"2\n");
+    assert_awk_bytes(&["BEGIN{print \"x\"}"], b"", b"x\n");
+}
+
+#[test]
+fn test_eol_redirected_print_restores_crlf() {
+    let dir = std::env::temp_dir().join(format!("cash-awk-eol-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let out = dir.join("out.txt");
+    let program = format!(
+        "{{print > \"{}\"}}",
+        out.display().to_string().replace('\\', "/")
+    );
+    assert_awk_bytes(&[&program], b"a\r\nb\r\n", b"");
+    assert_eq!(std::fs::read(&out).unwrap(), b"a\r\nb\r\n");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn test_eol_dos2unix_one_liner() {
+    assert_awk_bytes(&["{sub(/\\r$/,\"\")};1"], b"a\r\nb\r\n", b"a\nb\n");
+}
+
+#[test]
+fn test_eol_unix2dos_one_liner() {
+    assert_awk_bytes(&["{sub(/$/,\"\\r\")};1"], b"a\nb\n", b"a\r\nb\r\n");
+}
+
+#[test]
+fn test_eol_octal_cr_makes_cr_data() {
+    assert_awk_bytes(&["{x = \"\\015\"; print length($0)}"], b"ab\r\n", b"3\n");
+    assert_awk_bytes(&["{gsub(\"\\015\",\"\")};1"], b"ab\r\n", b"ab\n");
+}
+
+#[test]
+fn test_eol_escaped_backslash_r_is_not_cr() {
+    // `\\r` is a backslash followed by `r`, so the default mode stays on.
+    assert_awk_bytes(&["{print $0 \"\\\\r\"}"], b"ab\r\n", b"ab\\r\r\n");
+}
+
+#[test]
+fn test_eol_cash_eol_lf_makes_cr_data() {
+    assert_eq!(
+        run_awk_bytes(&["{print length}"], b"ab\r\ncd\n", true),
+        b"3\n2\n"
+    );
+    assert_eq!(
+        run_awk_bytes(&["{print}"], b"ab\r\ncd\n", true),
+        b"ab\r\ncd\n"
+    );
+    assert_eq!(run_awk_bytes(&["{print $2}"], b"a b\r\n", true), b"b\r\n");
+}
+
+// Regression: regex literals accept POSIX awk's escapes. Octal `\ddd` failed to compile,
+// and `\b` meant a word boundary (the Rust regex meaning) instead of a backspace.
+#[test]
+fn test_awk_bugfix_regex_literal_escapes() {
+    for (program, stdin, expected) in [
+        (r#"/\101/ { print "octal" }"#, "A\n", "octal\n"),
+        (r#"{ gsub(/\102/, "x"); print }"#, "ABC\n", "AxC\n"),
+        (
+            r#"/a\bb/ { print "backspace" }"#,
+            "a\u{8}b\n",
+            "backspace\n",
+        ),
+        (r#"/a\bb/ { print "boundary" }"#, "a b\n", ""),
+        (r#"/a\/b/ { print "slash" }"#, "a/b\n", "slash\n"),
+        (r#"/a\\b/ { print "backslash" }"#, "a\\b\n", "backslash\n"),
+        (r#"/\"hi\"/ { print "quote" }"#, "say \"hi\"\n", "quote\n"),
+    ] {
+        run_test(TestPlan {
+            cmd: String::from("awk"),
+            args: vec![program.to_string()],
+            stdin_data: String::from(stdin),
+            expected_out: String::from(expected),
+            expected_err: String::new(),
+            expected_exit_code: 0,
+        });
+    }
+}

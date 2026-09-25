@@ -614,7 +614,8 @@ impl Compiler {
                 Ok(Expr::new(ExprKind::Number, instructions))
             }
             Rule::ere => {
-                let ere_c_str = CString::new(primary.as_str().trim_matches('/')).unwrap();
+                let ere = translate_ere_escapes(primary.as_str().trim_matches('/'));
+                let ere_c_str = CString::new(ere).unwrap();
                 let regex = Regex::new(ere_c_str)
                     .map_err(|e| pest_error_from_span(primary.as_span(), e))?;
                 let index = self.push_constant(Constant::Regex(Rc::new(regex)));
@@ -1970,6 +1971,52 @@ pub fn compile_program(sources: &[SourceFile]) -> Result<Program, CompilerErrors
 /// Returns true if the given string is a valid number token.
 pub fn is_valid_number(s: &str) -> bool {
     AwkParser::parse(Rule::number, s).is_ok()
+}
+
+/// Rewrites the escapes POSIX awk defines in a regex literal into the syntax of the Rust
+/// regex engine: `\ddd` (one to three octal digits) and `\b`, which is a backspace in
+/// awk but a word boundary in Rust, become `\x{..}`; `\"` becomes `"`. Everything else,
+/// including `\\` and `\/`, is passed through.
+fn translate_ere_escapes(ere: &str) -> String {
+    let mut out = String::with_capacity(ere.len());
+    let mut chars = ere.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+        match chars.peek().copied() {
+            Some(d @ '0'..='7') => {
+                let mut value = d.to_digit(8).unwrap_or(0);
+                chars.next();
+                for _ in 0..2 {
+                    match chars.peek().and_then(|c| c.to_digit(8)) {
+                        Some(digit) => {
+                            value = value * 8 + digit;
+                            chars.next();
+                        }
+                        None => break,
+                    }
+                }
+                out.push_str(&format!("\\x{{{value:x}}}"));
+            }
+            Some('b') => {
+                chars.next();
+                out.push_str("\\x{8}");
+            }
+            Some('"') => {
+                chars.next();
+                out.push('"');
+            }
+            Some(other) => {
+                chars.next();
+                out.push('\\');
+                out.push(other);
+            }
+            None => out.push('\\'),
+        }
+    }
+    out
 }
 
 #[cfg(test)]

@@ -429,7 +429,7 @@ fn doctor_does_not_advise_installing_a_builtin() {
     let out = run(Command::new(CASH).arg("doctor").env("PATH", BARE_PATH));
     for builtin in [
         "cat", "mktemp", "cut", "tr", "head", "tail", "wc", "awk", "sed", "stat", "tty", "nohup",
-        "who", "users", "pinky", "logname", "hostid", "pathchk", "install",
+        "who", "users", "pinky", "logname", "hostid", "pathchk", "install", "dos2unix", "unix2dos",
     ] {
         assert!(
             !out.stdout.contains(&format!("WARN  {builtin}")),

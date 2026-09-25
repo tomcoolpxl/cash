@@ -54,9 +54,13 @@ pub(crate) fn split_record<S: FnMut(usize, AwkString) -> Result<(), String>>(
 ) -> Result<(), String> {
     let string = |s: &str| -> AwkString { maybe_numeric_string(s) };
     match field_separator {
+        // POSIX: default fields are separated by runs of <blank> (space, tab)
+        // and <newline>. A CR is data, not a separator, so when CR is ordinary
+        // data (CASH_EOL=lf, or a program that mentions CR) the last field of
+        // a CRLF record keeps its CR, exactly like awk on Linux.
         FieldSeparator::Default => record
-            .trim_start()
-            .split_ascii_whitespace()
+            .split([' ', '\t', '\n'])
+            .filter(|s| !s.is_empty())
             .enumerate()
             .try_for_each(|(i, s)| store_result(i, string(s))),
         FieldSeparator::Char(c) => record

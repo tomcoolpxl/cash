@@ -2041,6 +2041,69 @@ fn test_crlf_in_place_preservation() -> std::io::Result<()> {
     Ok(())
 }
 
+// A script that names a carriage return sees the real line, so the classic dos2unix
+// one-liners work; other scripts keep matching without the CR and writing it back.
+#[test]
+fn test_crlf_explicit_cr_in_script_is_matched_as_data() {
+    for script in ["s/\\r$//", "s/\\x0D$//", "s/\\x0d$//"] {
+        new_ucmd!()
+            .args(&["-e", script])
+            .pipe_in(b"one\r\ntwo\r\n".to_vec())
+            .succeeds()
+            .stdout_is_bytes(b"one\ntwo\n");
+    }
+    new_ucmd!()
+        .args(&["-e", "y/\\r/Z/"])
+        .pipe_in(b"a\r\n".to_vec())
+        .succeeds()
+        .stdout_is_bytes(b"aZ\n");
+    // `s/.$//` names no CR: it still removes the last visible character.
+    new_ucmd!()
+        .args(&["-e", "s/.$//"])
+        .pipe_in(b"one\r\n".to_vec())
+        .succeeds()
+        .stdout_is_bytes(b"on\r\n");
+    // An escaped backslash followed by `r` is not a carriage return.
+    new_ucmd!()
+        .args(&["-e", "s/\\\\r/X/", "-e", "s/o$/0/"])
+        .pipe_in(b"two\r\n".to_vec())
+        .succeeds()
+        .stdout_is_bytes(b"tw0\r\n");
+}
+
+// `-b`/`--binary` and `CASH_EOL=lf` make CR ordinary data for the whole run, as with sed
+// on Linux: `$` no longer matches before it, and `.$` removes it.
+#[test]
+fn test_crlf_binary_mode_treats_cr_as_data() {
+    for flag in ["-b", "--binary"] {
+        new_ucmd!()
+            .args(&[flag, "-e", "s/.$//"])
+            .pipe_in(b"one\r\n".to_vec())
+            .succeeds()
+            .stdout_is_bytes(b"one\n");
+        new_ucmd!()
+            .args(&[flag, "-e", "s/e$/E/"])
+            .pipe_in(b"one\r\n".to_vec())
+            .succeeds()
+            .stdout_is_bytes(b"one\r\n");
+    }
+    for value in ["lf", "LF"] {
+        new_ucmd!()
+            .env("CASH_EOL", value)
+            .args(&["-e", "s/e$/E/"])
+            .pipe_in(b"one\r\n".to_vec())
+            .succeeds()
+            .stdout_is_bytes(b"one\r\n");
+    }
+    // Any other value keeps the default.
+    new_ucmd!()
+        .env("CASH_EOL", "crlf")
+        .args(&["-e", "s/e$/E/"])
+        .pipe_in(b"one\r\n".to_vec())
+        .succeeds()
+        .stdout_is_bytes(b"onE\r\n");
+}
+
 #[cfg(unix)]
 #[test]
 fn in_place_edit_follow_symlink_edits_target() -> Result<(), Box<dyn std::error::Error>> {
@@ -2531,4 +2594,39 @@ fn test_posix_reject_flags() {
         .fails()
         .code_is(1)
         .stderr_is("sed: <script argument 1>:1:7: error: unknown option to 's'\n");
+}
+
+// `l` wraps at `-l N` (default 70) rather than the terminal width, and 0 never wraps, as
+// in GNU sed. Found by the corpus (Pement's centring one-liner piped into `sed -n l`).
+#[test]
+fn test_l_wraps_at_the_length_option() {
+    let long = "x".repeat(100) + "\n";
+    // Each output line holds width - 1 characters and a trailing backslash.
+    let wrapped = |width: usize| {
+        let mut out = String::new();
+        let mut rest = "x".repeat(100);
+        while rest.len() > width - 1 {
+            out.push_str(&rest[..width - 1]);
+            out.push_str("\\\n");
+            rest = rest[width - 1..].to_string();
+        }
+        out + &rest + "$\n"
+    };
+    new_ucmd!()
+        .args(&["-n", "l"])
+        .pipe_in(long.clone())
+        .succeeds()
+        .stdout_is(wrapped(70));
+    new_ucmd!()
+        .args(&["-l", "30", "-n", "l"])
+        .pipe_in(long.clone())
+        .succeeds()
+        .stdout_is(wrapped(30));
+    for args in [&["-n", "l 0"][..], &["-l", "0", "-n", "l"][..]] {
+        new_ucmd!()
+            .args(args)
+            .pipe_in(long.clone())
+            .succeeds()
+            .stdout_is("x".repeat(100) + "$\n");
+    }
 }

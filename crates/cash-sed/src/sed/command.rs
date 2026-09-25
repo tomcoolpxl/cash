@@ -39,6 +39,12 @@ pub struct ProcessingContext {
     pub unbuffered: bool,
     pub null_data: bool,
     pub uutil_extensions: bool,
+    /// `-b`/`--binary` or `CASH_EOL=lf`: a carriage return is ordinary data and only LF
+    /// ends a line, as with sed on Linux.
+    pub cr_is_data: bool,
+    /// Set while compiling when a regular expression or `y` source names a carriage
+    /// return; the run then treats CR as data too (see [`Self::treats_cr_as_data`]).
+    pub cr_in_script: std::cell::Cell<bool>,
 
     // Other context
     /// Currently processed input file name (not script)
@@ -73,6 +79,18 @@ pub struct ProcessingContext {
     pub substitution_made: bool,
     /// Elements to append at the end of each command processing cycle
     pub append_elements: Vec<AppendElement>,
+}
+
+impl ProcessingContext {
+    /// Whether input lines keep their carriage return as ordinary data.
+    ///
+    /// By default a CRLF line is matched without its CR and written back with it, so
+    /// Windows files stay CRLF and `$` anchors before the CR. A script that names a
+    /// carriage return (`s/\r$//`) sees the real line instead, and so does every run with
+    /// `-b` or `CASH_EOL=lf`.
+    pub fn treats_cr_as_data(&self) -> bool {
+        self.cr_is_data || self.cr_in_script.get()
+    }
 }
 
 #[derive(Clone, Debug)]

@@ -154,6 +154,11 @@ pub fn uu_app() -> Command {
                 .long("uutil-extensions")
                 .help("Enable incompatible extensions.")
                 .action(clap::ArgAction::SetTrue),
+            Arg::new("binary")
+                .short('b')
+                .long("binary")
+                .help("Treat carriage returns as ordinary data; only LF ends a line.")
+                .action(clap::ArgAction::SetTrue),
             Arg::new("null-data")
                 .short('z')
                 .long("null-data")
@@ -255,6 +260,12 @@ pub fn character_mode_for_locale(locale: &str) -> UResult<CharacterMode> {
     }
 }
 
+/// Whether `CASH_EOL` selects Linux line endings, where CR is ordinary data. Any other
+/// value, or none, keeps the default CRLF-preserving behaviour.
+fn eol_is_lf(value: Option<String>) -> bool {
+    value.is_some_and(|v| v.eq_ignore_ascii_case("lf"))
+}
+
 /// Return a ProcessingContext based on parsed CLI flags and environment.
 fn build_context(matches: &ArgMatches) -> UResult<ProcessingContext> {
     let locale = ["LC_ALL", "LC_CTYPE", "LANG"]
@@ -284,6 +295,8 @@ fn build_context(matches: &ArgMatches) -> UResult<ProcessingContext> {
         unbuffered: matches.get_flag("unbuffered"),
         null_data: matches.get_flag("null-data"),
         uutil_extensions: matches.get_flag("uutil-extensions"),
+        cr_is_data: matches.get_flag("binary") || eol_is_lf(env::var("CASH_EOL").ok()),
+        cr_in_script: std::cell::Cell::new(false),
 
         // Environment
         character_mode: character_mode_for_locale(&locale)?,

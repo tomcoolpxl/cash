@@ -91,6 +91,14 @@ struct GlobalEnv {
     /// Cached FS combined with newline for paragraph mode (RS="").
     /// Invalidated when FS or RS changes.
     paragraph_fs_cache: Option<FieldSeparator>,
+    /// Hide the CR of CRLF-terminated input records (default line-ending
+    /// mode). False when CR is ordinary data for the whole run: the program
+    /// mentions a carriage return, or `CASH_EOL=lf` is set.
+    strip_cr: bool,
+    /// Whether the most recent main-input record (the current one; in END,
+    /// the last one read) ended in CRLF. `print` then writes a default ORS
+    /// ("\n") as "\r\n" so CRLF files round-trip unchanged.
+    last_record_crlf: bool,
 }
 
 impl GlobalEnv {
@@ -134,6 +142,8 @@ impl Default for GlobalEnv {
             fnr: 1,
             nf: 0,
             paragraph_fs_cache: None,
+            strip_cr: true,
+            last_record_crlf: false,
         }
     }
 }
@@ -333,7 +343,11 @@ impl Interpreter {
             }
             BuiltinFunction::GetLine => {
                 let var = stack.pop_ref()?;
-                if let Some(next_record) = current_file.read_next_record(&global_env.rs)? {
+                if let Some((next_record, crlf)) =
+                    current_file.read_next_record(&global_env.rs, global_env.strip_cr)?
+                {
+                    // Main input: this record now decides how `print` ends lines.
+                    global_env.last_record_crlf = crlf;
                     fields_state = var.assign(maybe_numeric_string(next_record), global_env)?;
                     // `getline` (from the main input) advances both NR and FNR.
                     self.bump_counter(SpecialVar::Nr, global_env)?;
@@ -349,12 +363,17 @@ impl Interpreter {
                     .scalar_to_string(&global_env.convfmt)?;
                 let var = stack.pop_ref()?;
                 let maybe_next_record = if function == BuiltinFunction::GetLineFromFile {
-                    self.read_files.read_next_record(filename, &global_env.rs)
+                    self.read_files
+                        .read_next_record(filename, &global_env.rs, global_env.strip_cr)
                 } else {
-                    self.read_pipes.read_next_record(filename, &global_env.rs)
+                    self.read_pipes
+                        .read_next_record(filename, &global_env.rs, global_env.strip_cr)
                 };
+                // `getline <file` and `cmd | getline` hide a CRLF's CR like
+                // main input does, but they are not main input, so they do not
+                // change how `print` ends lines.
                 match maybe_next_record {
-                    Ok(Some(next_record)) => {
+                    Ok(Some((next_record, _))) => {
                         fields_state = var.assign(maybe_numeric_string(next_record), global_env)?;
                         // `cmd | getline` advances NR (but not FNR), like
                         // historical awk; `getline < file` touches neither.
@@ -863,6 +882,20 @@ pub fn interpret(
     assignments: &[String],
     separator: Option<String>,
 ) -> Result<i32, String> {
+    interpret_with_eol(program, args, assignments, separator, false)
+}
+
+/// Like [`interpret`], but with an explicit line-ending mode: when
+/// `cr_is_data` is true, CR bytes are ordinary data (never hidden on input,
+/// never restored on output), exactly like awk on Linux. Otherwise the CR of
+/// a CRLF-terminated record is hidden from `$0` and restored by `print`.
+pub fn interpret_with_eol(
+    program: Program,
+    args: &[String],
+    assignments: &[String],
+    separator: Option<String>,
+    cr_is_data: bool,
+) -> Result<i32, String> {
     let args = iter::once(("0".to_string(), AwkValue::from("awk")))
         .chain(args.iter().enumerate().map(|(index, s)| {
             (
@@ -881,7 +914,10 @@ pub fn interpret(
         .collect::<Vec<StackValue>>();
     let mut current_record = Record::default();
     let mut interpreter = Interpreter::new(args, env, program.constants, program.globals_count);
-    let mut global_env = GlobalEnv::default();
+    let mut global_env = GlobalEnv {
+        strip_cr: !cr_is_data,
+        ..GlobalEnv::default()
+    };
     let mut range_pattern_started = vec![false; program.rules.len()];
     let mut return_value = 0;
 
@@ -978,7 +1014,10 @@ pub fn interpret(
         input_read = true;
 
         global_env.fnr = 1;
-        'record_loop: while let Some(record) = reader.read_next_record(&global_env.rs)? {
+        'record_loop: while let Some((record, crlf)) =
+            reader.read_next_record(&global_env.rs, global_env.strip_cr)?
+        {
+            global_env.last_record_crlf = crlf;
             let fs = global_env.effective_fs()?;
             current_record.reset(record, fs)?;
             interpreter.globals[SpecialVar::Nf as usize].get_mut().value =
