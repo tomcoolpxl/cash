@@ -20,7 +20,7 @@ Feature work follows the sequence below.
 | 7 | Line-ending controls: sed `-b`, `CASH_EOL`, `dos2unix`/`unix2dos` | **Complete** | Section 7 below; spec D49 |
 | 8 | `fuser` and an `lsof` subset | **Complete** | Section 8 below; spec D50 |
 | 9 | `ss` subset | **Complete** | [`ss` evaluation and decisions](research/ss-evaluation.md); spec D51 |
-| 10 | BusyBox-gap tools | **Active**: `pkill`/`pidof`/`killall` done | [BusyBox gap analysis and decisions](research/busybox-gap-analysis.md); spec D54 |
+| 10 | BusyBox-gap tools | **Active**: parts 1–2 done (`pkill`/`pidof`/`killall`; `getopt`, `rev`, `clear`, `reset`) | [BusyBox gap analysis and decisions](research/busybox-gap-analysis.md); spec D54 |
 | — | Found on the way (not planned items) | **Complete** | MSYS2 argument encoding (spec D52); `shopt winpaths` and bash-worded `cd` errors (D53); a `TERM` that no longer reaches the whole console (D21) |
 
 The authoritative feature order is therefore:
@@ -247,8 +247,12 @@ Not adopted: `grep`, `cmp`/`diff` and the gzip family; Cash still does not carry
 console, the shell included, since cash starts no child as a process-group leader. `TERM`
 now asks through the target's windows and escalates (D21). Starting cash's own children
 in groups of their own, for a graceful console event, is left for a design of its own
-because it changes Ctrl-C for every foreground program (D13). Next: 2 (`getopt`, `rev`,
-`clear`, `reset`).
+because it changes Ctrl-C for every foreground program (D13).
+
+**2 done** (spec D55): `getopt` and `rev` match util-linux 2.42.3 case by case
+(`crates/cash/tests/oracle`), apart from `-s csh`/`tcsh` refused and a CRLF line's `\r`
+kept at the end; `clear` and `reset` write ncurses 6.6's bytes, and `reset` also restores
+the console modes. Next: 3 (POSIX `bc` from posixutils-rs).
 
 ## Keeping the roadmap current
 

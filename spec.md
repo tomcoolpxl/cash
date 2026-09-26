@@ -1367,6 +1367,30 @@ The rules were decided for the family together with `pgrep`, which now shares th
   memory, refused as `ps -o args` is), the user, group, session and terminal selectors,
   and `killall -i`.
 
+### D55 — `getopt`, `rev`, `clear` and `reset`
+
+Native builtins from the BusyBox gap analysis, each checked against the real tool:
+
+- **`getopt`** is util-linux's (2.42.3): GNU `getopt_long` parsing with clusters,
+  `--name=value`, unique prefixes, `-a`, the `+`/`-` option-string prefixes and
+  `POSIXLY_CORRECT`; every error reported and parsing continued; `-T` exits 4. It
+  shadows Git's MSYS `getopt.exe`, whose output is the same but which receives its
+  arguments through D52's encoding. The output is single-quoted, which cash's parser
+  reads as bash does. `-s csh` and `-s tcsh` are refused.
+- **`rev`** is util-linux's: code points reversed, invalid UTF-8 kept byte by byte,
+  `-0`/`--zero`, and `-` as a file name. A CRLF line keeps its `\r` at the end (D20);
+  util-linux moves it to the front.
+- **`clear`** and **`reset`** write the VT sequences ncurses 6.6 writes for
+  `xterm-256color` instead of consulting terminfo, since ConPTY and Windows Terminal
+  interpret VT; `-T` or a terminal type that is not xterm- or vt-like is refused. `reset`
+  also puts back cooked input, VT output and the UTF-8 code page (D41), which a program
+  that died in raw mode leaves wrong and no escape sequence can fix. It shadows
+  `C:\Windows\System32\reset.exe`, the Remote Desktop `reset session` command, which
+  `command -p` or its full path still reaches.
+
+`crates/cash/tests/oracle` holds the case scripts and util-linux's output; the tests run
+the same scripts under cash and name each deliberate difference in place.
+
 ---
 
 ## 4. Deliberate divergences from bash
@@ -1409,6 +1433,7 @@ someone who expected bash, so additions need to earn their place.
 | 30 | At the interactive prompt, an unquoted word starting `C:\` keeps its backslashes (`shopt winpaths`, off in scripts) | Pasted Windows paths are otherwise mangled to `C:Usersme` | D53 |
 | 31 | `TERM` terminates a console program at once, and gives a program with a window five seconds after `WM_CLOSE` | A console control event cannot be aimed at one process that leads no group | D21 |
 | 32 | `pgrep`, `pkill`, `pidof` and `killall` match names without case and with `.exe` optional; the kill family never signals the shell, system images or service accounts' processes | Windows image names are case-insensitive, and killing `csrss.exe` is a blue screen | D54 |
+| 33 | `rev` keeps a CRLF line's `\r` at the end; `getopt -s csh/tcsh` is refused; `clear`/`reset` ignore terminfo and refuse non-VT terminal types | D20's line endings; cash is not a C shell; ConPTY speaks VT | D55 |
 
 `select` was missing outright until recently: it was a reserved word with no grammar
 rule, so `select x in a b; do …; done` was a syntax error that took the whole file with
