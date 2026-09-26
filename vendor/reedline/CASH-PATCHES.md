@@ -27,3 +27,14 @@ It sits outside the workspace, so cash's lints do not apply to it. Its own tests
    Cash's side (`crates/cash-interactive/src/reedline/input_backend.rs`) clears the
    line before running the command, as Bash does, so the output starts where the
    prompt was and the prompt returns below it, byte for byte as in Bash 5.3.
+
+2. **A keystroke no longer redraws the prompt** (`src/painting/painter.rs`,
+   `src/painting/utils.rs`). Reedline cleared from the prompt's first row and printed
+   the prompt and the line again on every key. With Starship that is a colored status
+   line, glyphs included, for each character typed or deleted: 178 bytes per Backspace
+   through ConPTY where PowerShell sends 68, all of it for the terminal to parse and draw
+   again. The painter now records the prompt it drew (text, colors, row, screen size);
+   a paint that would draw the same one, with nothing written, scrolled or re-anchored
+   in between, moves to where the input starts and redraws from there. A right prompt,
+   a large buffer, a prompt ending on the margin, a resize, a scroll, a new line or
+   anything that invalidates the anchor still gets the full paint.

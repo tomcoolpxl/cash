@@ -122,9 +122,29 @@ pub(crate) fn deferred_wrap_row<'a>(
     if columns == 0 {
         return None;
     }
+    let (row, col) = walk(pieces, columns);
+    (col >= columns).then(|| row.saturating_add(1))
+}
 
-    // `col == columns` *is* the deferred wrap: the run has filled the row but
-    // nothing has arrived to push it over yet.
+/// cash: where printing `pieces` from the start of a row leaves the cursor, as rows
+/// down and column, or `None` when that is ambiguous: on the right margin with the wrap
+/// deferred (see [`deferred_wrap_row`]), or on a zero-width terminal.
+pub(crate) fn cursor_after<'a>(
+    pieces: impl IntoIterator<Item = &'a str>,
+    terminal_columns: u16,
+) -> Option<(u16, u16)> {
+    let columns: usize = terminal_columns.into();
+    if columns == 0 {
+        return None;
+    }
+    let (row, col) = walk(pieces, columns);
+    (col < columns).then(|| (row, col as u16))
+}
+
+/// Lays `pieces` out end to end on `columns` columns, a grapheme at a time, and returns
+/// the row and column the cursor ends on. `col == columns` *is* the deferred wrap: the
+/// run has filled the row but nothing has arrived to push it over yet.
+fn walk<'a>(pieces: impl IntoIterator<Item = &'a str>, columns: usize) -> (u16, usize) {
     let (mut row, mut col) = (0u16, 0usize);
     for piece in pieces {
         for grapheme in strip_ansi(piece).graphemes(true) {
@@ -148,7 +168,7 @@ pub(crate) fn deferred_wrap_row<'a>(
         }
     }
 
-    (col >= columns).then(|| row.saturating_add(1))
+    (row, col)
 }
 
 #[cfg(test)]

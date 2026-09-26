@@ -112,8 +112,9 @@ panic = "unwind"
 inherits = "release"
 strip = "debuginfo"
 
-# Reedline 0.51.0 with the patch listed in vendor/reedline/CASH-PATCHES.md: a `bind -x`
-# command's output was painted over by the next prompt (ROADMAP item 15).
+# Reedline 0.51.0 with the patches listed in vendor/reedline/CASH-PATCHES.md: a `bind -x`
+# command's output was painted over by the next prompt (ROADMAP item 15); each keystroke
+# redrew the whole prompt.
 #
 # Crossterm 0.29.0 with the patch in vendor/crossterm/CASH-PATCHES.md: console input is
 # read in batches rather than one record per round trip to the console host.
