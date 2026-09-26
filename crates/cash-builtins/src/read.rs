@@ -1,6 +1,5 @@
 use clap::{CommandFactory as _, FromArgMatches as _, Parser};
 use itertools::Itertools;
-use std::borrow::Cow;
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
@@ -216,12 +215,14 @@ impl builtins::Command for ReadCommand {
         // Assign input to variables based on options.
         assign_input_to_variables(
             context.shell,
+            &context.params,
             input_line.as_deref(),
             &ifs,
             skip_ifs_splitting,
             self.array_variable.as_deref(),
             &self.variable_names,
-        )?;
+        )
+        .await?;
 
         Ok(result)
     }
@@ -233,8 +234,9 @@ impl builtins::Command for ReadCommand {
 /// - Array mode (`-a`): Split input by IFS and assign to array elements
 /// - Named variables: Split input by IFS and assign to each variable, with remainder to last
 /// - Default (`REPLY`): Assign entire input line to the `REPLY` variable
-fn assign_input_to_variables(
+async fn assign_input_to_variables(
     shell: &mut cash_core::Shell<impl cash_core::ShellExtensions>,
+    params: &cash_core::ExecutionParameters,
     input_line: Option<&str>,
     ifs: &str,
     skip_ifs_splitting: bool,
@@ -251,7 +253,15 @@ fn assign_input_to_variables(
             env::EnvironmentScope::Global,
         )?;
     } else if !variable_names.is_empty() {
-        assign_to_named_variables(shell, input_line, ifs, skip_ifs_splitting, variable_names)?;
+        assign_to_named_variables(
+            shell,
+            params,
+            input_line,
+            ifs,
+            skip_ifs_splitting,
+            variable_names,
+        )
+        .await?;
     } else {
         shell.env_mut().update_or_add(
             "REPLY",
@@ -269,8 +279,9 @@ fn assign_input_to_variables(
 /// Fields are assigned one per variable, with any remaining fields joined by space
 /// and assigned to the last variable. If there are more variables than fields,
 /// the extra variables are set to empty strings.
-fn assign_to_named_variables(
+async fn assign_to_named_variables(
     shell: &mut cash_core::Shell<impl cash_core::ShellExtensions>,
+    params: &cash_core::ExecutionParameters,
     input_line: Option<&str>,
     ifs: &str,
     skip_ifs_splitting: bool,
@@ -291,7 +302,7 @@ fn assign_to_named_variables(
             fields.pop_front().unwrap_or_default()
         };
 
-        assign_read_value(shell, name, value)?;
+        assign_read_value(shell, params, name, value).await?;
 
         if is_last {
             break;
@@ -301,8 +312,9 @@ fn assign_to_named_variables(
 }
 
 /// Assign one `read` result, including Bash's `read 'array[subscript]'` form.
-fn assign_read_value(
+async fn assign_read_value(
     shell: &mut cash_core::Shell<impl cash_core::ShellExtensions>,
+    params: &cash_core::ExecutionParameters,
     target: &str,
     value: String,
 ) -> Result<(), cash_core::Error> {
@@ -315,19 +327,19 @@ fn assign_read_value(
             env::EnvironmentScope::Global,
         ),
         cash_parser::word::Parameter::NamedWithIndex { name, index } => {
-            let is_associative = shell
-                .env()
-                .get(&name)
-                .is_some_and(|(_, var)| var.value().is_associative_array());
-            let index: Cow<'_, str> = if is_associative {
-                index.as_str().into()
-            } else {
-                let expression = cash_parser::arithmetic::parse(&index)?;
-                shell.eval_arithmetic(&expression)?.to_string().into()
-            };
+            let expand_once = shell.options().assoc_expand_once;
+            let index = cash_core::expansion::resolve_subscript(
+                shell,
+                params,
+                &name,
+                &index,
+                false,
+                expand_once,
+            )
+            .await?;
             shell.env_mut().update_or_add_array_element(
                 name,
-                index.into_owned(),
+                index,
                 value,
                 |_| Ok(()),
                 env::EnvironmentLookup::Anywhere,

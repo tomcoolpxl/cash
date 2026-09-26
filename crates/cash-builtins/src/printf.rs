@@ -43,7 +43,7 @@ impl builtins::Command for PrintfCommand {
                 if name.is_empty() {
                     continue;
                 }
-                expansion::assign_to_named_parameter(
+                expansion::assign_to_named_parameter_in_builtin(
                     context.shell,
                     &context.params,
                     &name,
@@ -55,7 +55,7 @@ impl builtins::Command for PrintfCommand {
                 let result = String::from_utf8(output).map_err(|_| {
                     cash_core::ErrorKind::PrintfInvalidUsage("invalid UTF-8 output".into())
                 })?;
-                expansion::assign_to_named_parameter(
+                expansion::assign_to_named_parameter_in_builtin(
                     context.shell,
                     &context.params,
                     variable_name,
@@ -79,7 +79,7 @@ impl builtins::Command for PrintfCommand {
             })?;
 
             // Assign to the selected variable.
-            expansion::assign_to_named_parameter(
+            expansion::assign_to_named_parameter_in_builtin(
                 context.shell,
                 &context.params,
                 variable_name,

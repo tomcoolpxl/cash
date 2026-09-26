@@ -1,5 +1,3 @@
-use std::borrow::Cow;
-
 use clap::Parser;
 
 use cash_core::{ExecutionResult, Shell, builtins};
@@ -142,29 +140,11 @@ async fn unset_array_index(
     name: &str,
     index: &str,
 ) -> Result<bool, cash_core::Error> {
-    // First check to see if it's an associative array.
-    let is_assoc_array = shell
-        .env()
-        .get(name)
-        .is_some_and(|(_, var)| var.value().is_associative_array());
-
-    // Compute which index we should actually use. For indexed arrays, we need to evaluate
-    // the index string as an arithmetic expression first.
     // The word was already expanded once as an argument. `assoc_expand_once` (Bash 5.3:
     // `array_expand_once`) keeps it from being expanded a second time here.
-    let index_to_use: Cow<'_, str> = if is_assoc_array {
-        if shell.options().assoc_expand_once {
-            index.into()
-        } else {
-            shell.basic_expand_string(params, index).await?.into()
-        }
-    } else {
-        // First evaluate the index expression.
-        let index_as_expr = cash_parser::arithmetic::parse(index)?;
-        let evaluated_index = shell.eval_arithmetic(&index_as_expr)?;
-        evaluated_index.to_string().into()
-    };
-
-    // Now we can try to unset, and return the result.
-    shell.env_mut().unset_index(name, index_to_use.as_ref())
+    let expand_once = shell.options().assoc_expand_once;
+    let index =
+        cash_core::expansion::resolve_subscript(shell, params, name, index, false, expand_once)
+            .await?;
+    shell.env_mut().unset_index(name, &index)
 }

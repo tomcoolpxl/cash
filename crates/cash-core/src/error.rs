@@ -282,6 +282,10 @@ pub enum ErrorKind {
     #[error("array index out of range: {0}")]
     ArrayIndexOutOfRange(String),
 
+    /// A command substitution in a subscript that a builtin would expand a second time.
+    #[error("{0}: command substitution in a subscript is not run (cash)")]
+    CommandSubstitutionInSubscript(String),
+
     /// Unhandled key code.
     #[error("unhandled key code: {0:?}")]
     UnhandledKeyCode(Vec<u8>),
@@ -351,11 +355,25 @@ pub trait BuiltinError: std::error::Error + ConvertibleToExitCode + Send + Sync 
     fn as_io_error(&self) -> Option<&std::io::Error> {
         None
     }
+
+    /// Whether this is an arithmetic evaluation error, which abandons the command line
+    /// it happened on (see [`Error::discards_line`]).
+    fn is_arithmetic_error(&self) -> bool {
+        false
+    }
 }
 
 impl BuiltinError for Error {
     fn as_io_error(&self) -> Option<&std::io::Error> {
         self.as_io_error()
+    }
+
+    fn is_arithmetic_error(&self) -> bool {
+        match &self.kind {
+            ErrorKind::EvalError(_) => true,
+            ErrorKind::BuiltinError(inner, _) => inner.is_arithmetic_error(),
+            _ => false,
+        }
     }
 }
 
@@ -434,6 +452,15 @@ impl Error {
     /// Returns whether or not this error is fatal.
     pub const fn is_fatal(&self) -> bool {
         self.fatal
+    }
+
+    /// Whether this error abandons the rest of the command line rather than only failing
+    /// its command: an arithmetic error in a builtin other than `let` (`unset 'a[1+]'`,
+    /// `printf -v 'a[$i]'` with `array_expand_once`), as Bash's `evalerror` jumps back to
+    /// the top level. An arithmetic error in an expansion does so already, by propagating.
+    pub fn discards_line(&self) -> bool {
+        matches!(&self.kind, ErrorKind::BuiltinError(inner, name)
+            if name != "let" && inner.is_arithmetic_error())
     }
 
     /// Returns a reference to the error kind.

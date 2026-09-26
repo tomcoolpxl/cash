@@ -264,7 +264,19 @@ impl Execute for ast::Program {
                 Err(err) => {
                     // Display the error and convert to an execution result.
                     let _ = shell.display_error(&mut params.stderr(shell), &err);
+                    let discards_line = err.discards_line();
                     result = err.into_result(shell);
+                    // An error that abandons its line abandons the rest of a `-c` string,
+                    // which Bash runs as one unit; a script goes on at its next line.
+                    if discards_line
+                        && shell
+                            .call_stack()
+                            .current_frame()
+                            .is_some_and(|frame| frame.frame_type.is_command_string())
+                    {
+                        shell.set_last_exit_status(result.exit_code.into());
+                        break;
+                    }
                 }
             }
 
@@ -1326,7 +1338,21 @@ impl Execute for ast::ArithmeticCommand {
         shell: &mut Shell<impl extensions::ShellExtensions>,
         params: &ExecutionParameters,
     ) -> Result<ExecutionResult, error::Error> {
-        let value = self.expr.eval(shell, params, true).await?;
+        // An arithmetic error fails `(( ))` with status 1 and the line goes on, as `let`
+        // does; in an expansion (`$((1+))`) the same error abandons the line.
+        let value = match self.expr.eval(shell, params, true).await {
+            Ok(value) => value,
+            Err(
+                err @ (arithmetic::EvalError::FailedToExpandExpression(_)
+                | arithmetic::EvalError::ExpandingUnsetVariable(_)),
+            ) => return Err(err.into()),
+            Err(err) => {
+                let _ = shell.display_error(&mut params.stderr(shell), &err.into());
+                let result = ExecutionResult::general_error();
+                shell.set_last_exit_status(result.exit_code.into());
+                return Ok(result);
+            }
+        };
         let result = if value != 0 {
             ExecutionResult::success()
         } else {
@@ -1618,6 +1644,7 @@ impl<SE: extensions::ShellExtensions> ExecuteInPipeline<SE> for ast::SimpleComma
 
             match execute_command(context, params, cmd_name, &assignments, &args).await {
                 Ok(result) => Ok(result),
+                Err(err) if err.discards_line() => Err(err),
                 Err(err) => {
                     let _ = parent_shell.display_error(&mut stderr, &err);
 

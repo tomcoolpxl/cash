@@ -670,6 +670,97 @@ pub async fn assign_to_named_parameter(
     expander.assign_to_parameter(&parameter, value).await
 }
 
+/// Like [`assign_to_named_parameter`], for a builtin (`printf -v`, `wait -p`).
+///
+/// A subscript in the name the caller spelled is resolved by [`resolve_subscript`],
+/// so `array_expand_once` applies and no command runs.
+pub async fn assign_to_named_parameter_in_builtin(
+    shell: &mut Shell<impl extensions::ShellExtensions>,
+    params: &ExecutionParameters,
+    name: &str,
+    value: String,
+) -> Result<(), error::Error> {
+    let parameter = cash_parser::word::parse_parameter(name, &shell.parser_options())?;
+    if let cash_parser::word::Parameter::NamedWithIndex { name, index } = &parameter {
+        let expand_once = shell.options().assoc_expand_once;
+        let index = resolve_subscript(shell, params, name, index, false, expand_once).await?;
+        return shell.env_mut().update_or_add_array_element(
+            name,
+            index,
+            value,
+            |_| Ok(()),
+            env::EnvironmentLookup::Anywhere,
+            env::EnvironmentScope::Global,
+        );
+    }
+    WordExpander::new(shell, params)
+        .assign_to_parameter(&parameter, value)
+        .await
+}
+
+/// Resolves the subscript of a `name[subscript]` that reached a builtin as an argument.
+///
+/// `unset 'a[$i]'`, `read 'a[$i]'`, `declare 'a[$i]=v'`, `[[ -v 'a[$i]' ]]`: the text was
+/// already expanded once as a word, and Bash expands it again here.
+///
+/// An indexed subscript is expanded, then evaluated as arithmetic; an associative one is
+/// expanded and used as the key. With `expand_once` (`array_expand_once` in the builtins
+/// that honour it) neither is expanded again, so an indexed `$i` is an arithmetic error,
+/// as in Bash 5.3. `associative` treats `name` as associative even before it exists
+/// (`declare -A`).
+///
+/// cash: a command substitution met in this second expansion is refused, not run. The
+/// text has usually been expanded once already, so it can hold a variable's value:
+/// `unset "a[$key]"` with `key='$(cmd)'` runs `cmd` in Bash, its best-known array
+/// injection. Parameters and `$((…))` are expanded as Bash expands them (spec §4, as
+/// divergence 27 does for arithmetic).
+pub async fn resolve_subscript(
+    shell: &mut Shell<impl extensions::ShellExtensions>,
+    params: &ExecutionParameters,
+    name: &str,
+    index: &str,
+    associative: bool,
+    expand_once: bool,
+) -> Result<String, error::Error> {
+    if !expand_once && runs_a_command(index) {
+        return Err(
+            error::ErrorKind::CommandSubstitutionInSubscript(format!("{name}[{index}]")).into(),
+        );
+    }
+    let associative = associative
+        || shell.env().get(name).is_some_and(|(_, var)| {
+            matches!(
+                var.value(),
+                ShellValue::AssociativeArray(_)
+                    | ShellValue::Unset(ShellValueUnsetType::AssociativeArray)
+            )
+        });
+    if associative {
+        return if expand_once {
+            Ok(index.to_owned())
+        } else {
+            basic_expand_word(shell, params, index).await
+        };
+    }
+    let value = if expand_once {
+        let expression = cash_parser::arithmetic::parse(index)
+            .map_err(|_e| arithmetic::EvalError::ParseError(index.to_owned()))?;
+        shell.eval_arithmetic(&expression)?
+    } else {
+        arithmetic::expand_and_eval(shell, params, index, false).await?
+    };
+    Ok(value.to_string())
+}
+
+/// Whether expanding `text` would run a command: a backquote, or a `$(` that does not
+/// open `$((` arithmetic, anywhere in it, nested ones included.
+fn runs_a_command(text: &str) -> bool {
+    text.contains('`')
+        || text
+            .match_indices("$(")
+            .any(|(at, _)| !text.get(at + 2..).is_some_and(|rest| rest.starts_with('(')))
+}
+
 struct WordExpander<'a, SE: extensions::ShellExtensions> {
     /// The shell in which to perform expansion.
     shell: &'a mut Shell<SE>,

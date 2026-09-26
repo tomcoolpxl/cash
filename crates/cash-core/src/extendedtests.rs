@@ -208,10 +208,10 @@ pub(crate) async fn apply_unary_predicate_to_str(
     }
 }
 
-/// Implements Bash's `test -v name[subscript]` handling. Indexed subscripts are arithmetic
-/// expressions and can have visible side effects, so evaluate them exactly once before looking
-/// up the element. Associative `@` and `*` remain ordinary keys; other associative
-/// subscripts are expanded (`[[ -v 'h[$key]' ]]`) unless `expand_once` is set.
+/// Implements Bash's `test -v name[subscript]` handling. The subscript is expanded, then
+/// used as an associative key or evaluated once as arithmetic (`[[ -v 'a[$i]' ]]`), unless
+/// `expand_once` is set; see [`expansion::resolve_subscript`]. Associative `@` and `*`
+/// remain ordinary keys.
 async fn shell_parameter_is_set(
     shell: &mut Shell<impl extensions::ShellExtensions>,
     params: &ExecutionParameters,
@@ -225,19 +225,29 @@ async fn shell_parameter_is_set(
     match parameter {
         cash_parser::word::Parameter::Named(name) => Ok(shell.env().is_set(name)),
         cash_parser::word::Parameter::NamedWithIndex { name, index } => {
-            let is_associative = shell
-                .env()
-                .get(&name)
-                .is_some_and(|(_, variable)| variable.value().is_associative_array());
-            let index = if is_associative {
-                if expand_once {
-                    index
-                } else {
-                    shell.basic_expand_string(params, &index).await?
+            let index = match expansion::resolve_subscript(
+                shell,
+                params,
+                &name,
+                &index,
+                false,
+                expand_once,
+            )
+            .await
+            {
+                Ok(index) => index,
+                // Refused, not run: the test is false and the line goes on, as it does
+                // in the builtins that refuse it.
+                Err(err)
+                    if matches!(
+                        err.kind(),
+                        error::ErrorKind::CommandSubstitutionInSubscript(_)
+                    ) =>
+                {
+                    let _ = shell.display_error(&mut params.stderr(shell), &err);
+                    return Ok(false);
                 }
-            } else {
-                let expression = cash_parser::arithmetic::parse(&index)?;
-                shell.eval_arithmetic(&expression)?.to_string()
+                Err(err) => return Err(err),
             };
 
             let Some((_, variable)) = shell.env().get(&name) else {

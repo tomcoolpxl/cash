@@ -157,7 +157,10 @@ impl builtins::Command for DeclareCommand {
                         result = ExecutionResult::general_error();
                     }
                 } else {
-                    if !self.process_declaration(&mut context, declaration, verb)? {
+                    let subscript = self
+                        .resolve_word_subscript(&mut context, declaration)
+                        .await?;
+                    if !self.process_declaration(&mut context, declaration, verb, subscript)? {
                         result = ExecutionResult::general_error();
                     }
                 }
@@ -336,12 +339,40 @@ impl DeclareCommand {
         }
     }
 
+    /// The subscript of an assignment that reached `declare` as an ordinary word
+    /// (`declare 'a[$i]=v'`), expanded and evaluated as Bash does, even with
+    /// `array_expand_once` set. An assignment word's subscript was expanded already.
+    async fn resolve_word_subscript(
+        &self,
+        context: &mut cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
+        declaration: &cash_core::CommandArg,
+    ) -> Result<Option<String>, cash_core::Error> {
+        let cash_core::CommandArg::String(s) = declaration else {
+            return Ok(None);
+        };
+        let Some((name, Some(index), _, _)) = Self::string_assignment(s) else {
+            return Ok(None);
+        };
+        let associative = self.make_associative_array.to_bool() == Some(true);
+        let index = cash_core::expansion::resolve_subscript(
+            context.shell,
+            &context.params,
+            &name,
+            &index,
+            associative,
+            false,
+        )
+        .await?;
+        Ok(Some(index))
+    }
+
     #[allow(clippy::too_many_lines)]
     fn process_declaration(
         &self,
         context: &mut cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
         declaration: &cash_core::CommandArg,
         verb: DeclareVerb,
+        resolved_subscript: Option<String>,
     ) -> Result<bool, cash_core::Error> {
         let create_var_local = matches!(verb, DeclareVerb::Local)
             || (matches!(verb, DeclareVerb::Declare)
@@ -361,6 +392,12 @@ impl DeclareCommand {
         // Extract the variable name and the initial value being assigned (if any).
         let (name, assigned_index, mut initial_value, name_is_array, append) =
             Self::declaration_to_name_and_value(declaration)?;
+        if let Some(subscript) = resolved_subscript
+            && let Some(ShellValueLiteral::Array(ArrayLiteral(elements))) = &mut initial_value
+            && let Some((key, _)) = elements.first_mut()
+        {
+            *key = Some(subscript);
+        }
 
         let is_int_decl = self.make_integer.to_bool() == Some(true)
             || context
