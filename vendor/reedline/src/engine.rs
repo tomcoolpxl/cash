@@ -66,7 +66,12 @@ use {
 // a POLL_WAIT of zero means that every single event is treated as soon as it
 // arrives. This doesn't allow for the possibility of more than 1 event
 // happening at the same time.
-const POLL_WAIT: Duration = Duration::from_millis(100);
+//
+// cash: 10 ms, down from 100. Every paste ends by waiting this long for input that
+// is not coming, so it was a tenth of a second on each one. A paste reaches the
+// console in one piece, well inside 10 ms from one key to the next; one that stalls
+// longer is painted in two batches, which costs a repaint and nothing else.
+const POLL_WAIT: Duration = Duration::from_millis(10);
 // Since a paste event is multiple `Event::Key` events happening at the same
 // time, we specify how many events should be in the `crossterm_events` vector
 // before it is considered a paste. 10 events is conservative enough.

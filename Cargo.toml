@@ -114,7 +114,7 @@ strip = "debuginfo"
 
 # Reedline 0.51.0 with the patches listed in vendor/reedline/CASH-PATCHES.md: a `bind -x`
 # command's output was painted over by the next prompt (ROADMAP item 15); each keystroke
-# redrew the whole prompt.
+# redrew the whole prompt; each paste waited 100 ms before it was drawn.
 #
 # Crossterm 0.29.0 with the patch in vendor/crossterm/CASH-PATCHES.md: console input is
 # read in batches rather than one record per round trip to the console host.

@@ -38,3 +38,8 @@ It sits outside the workspace, so cash's lints do not apply to it. Its own tests
    in between, moves to where the input starts and redraws from there. A right prompt,
    a large buffer, a prompt ending on the margin, a resize, a scroll, a new line or
    anything that invalidates the anchor still gets the full paint.
+
+3. **A paste is not held back for 100 ms** (`src/engine.rs`). After a burst of more than
+   ten events Reedline waits `POLL_WAIT` for more before painting, and every paste ended
+   with that wait running out. It is 10 ms now: a paste reaches the console in one piece,
+   and one that stalls longer is painted in two batches, which costs a repaint.
