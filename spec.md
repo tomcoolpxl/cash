@@ -993,16 +993,49 @@ Serves §1's "pleasant enough to replace your shell" bar for very little impleme
 ### D40 — Completion is case-insensitive and auto-quotes
 
 - Case-insensitive, consistent with D16.
-- Auto-quotes results containing spaces: `C:/Prog<TAB>` → `"C:/Program Files/"`.
+- Auto-quotes results containing spaces or shell metacharacters.
   `C:/Program Files` is the most common path on Windows and breaks unquoted every time.
 - Completes both spellings: `C:/Prog<TAB>` and `/c/Prog<TAB>` both work, per D3.
 
-**Resolved: quoting already typed is honoured, not doubled.** The span a completion
-replaces *includes* the opening quote, so `ls "Prog<TAB>` must come back as
-`"Program Files"` — a bare name would delete the quote the user typed, and prepending a
-second would give `""Program Files"`. A quote already typed is kept even where the
-candidate would not otherwise need one: someone who typed `"` meant it. Single quotes
-are honoured the same way.
+**Quoting continues in the style the word was started in** (decided 2026-09-26, with
+ROADMAP item 15's ConPTY harness):
+
+| Typed | Tab gives |
+| --- | --- |
+| `cd my` | `cd 'my dir/'`, the cursor before the closing quote |
+| `cd 'my` | `cd 'my dir/'` |
+| `cd "my` | `cd "my dir/"` |
+| `cd my\ ` | `cd my\ dir/`, as Bash completes |
+| `ls it` | `ls "it's here.txt"` |
+
+- With no style started, single quotes, as PowerShell completes: inside them `\`, `$`,
+  `` ` `` and `!` are literal, which Windows names need (`$Recycle.Bin`,
+  `'C:\Program Files\'`). A name holding a `'` gets double quotes, with `$`, `` ` ``,
+  `\` and `"` escaped inside.
+- A quote already typed is kept, even where the candidate would not otherwise need
+  one: someone who typed `"` meant it. The span a completion replaces includes that
+  quote, so the candidate carries it (`ls "Prog<TAB>` → `"Program Files/"`, never
+  `""Program Files"`).
+- A backslash counts as a started style only before a character that needs escaping,
+  so `C:\Prog` is a path, not an escape.
+- A quoted directory keeps its `/` inside the quotes and gets no trailing space. The
+  cursor is left before the closing quote, so Enter runs the line as it is and typing or
+  Tab carries on inside it: `cd 'my dir/in<TAB>` gives `cd 'my dir/inner/'`, the old
+  closing quote replaced. Reedline has no cursor offset for a suggestion; cash wraps its
+  columnar menu to move the cursor, and gives the completer the whole line so it sees
+  the quote after the cursor.
+- A file gets its closing quote and a space, finished like any other word.
+- Inside single quotes a `\` is a path separator, not an escape, so `'my\ dir` means a
+  name with a backslash in it, as it does in Bash.
+
+The ConPTY harness (`crates/cash/tests/pty_oracle.rs`) records each of these beside Git
+Bash 5.3's screen. It also found that the interactive layer had been quoting D40's
+already-quoted candidates a second time, `\"alpha\ beta.txt\"`: D40 had been tested only
+by calling the completer directly.
+
+**Several candidates: the shared part first.** A Tab inserts what all candidates share
+(`ga<TAB>` → `gam`), and the next Tab shows them in the grid, where further Tabs move
+through them. Bash beeps on the second Tab and lists on the third.
 
 Quoting applies only to filename candidates, and `complete -o noquote` turns it off, as
 in bash. Windows-only, so D43's differential suite is untouched.
