@@ -625,6 +625,26 @@ fn type_a_does_not_find_a_name_that_is_only_hashed() {
 }
 
 #[test]
+fn type_takes_the_last_of_t_and_p_but_keeps_the_forced_search() {
+    // As in bash: `-Pt` prints the type and `-tP` the path, but `-Pt` still searches PATH
+    // only, so a function is not found under it.
+    let out = cash(
+        r#"f() { :; }; type -Pt cmd; type -tP cmd; type -pt cmd; type -tp f; echo "rc=$?"; type -Pt f; echo "rc=$?"; type -Pp f; echo "rc=$?"; type -t -p -t cmd; type -p -t -p f; echo "rc=$?""#,
+    );
+    let lines: Vec<&str> = out.stdout.lines().collect();
+    assert_eq!(lines.len(), 8, "{} {}", out.stdout, out.stderr);
+    assert_eq!(lines[6..], ["file", "rc=0"], "a repeated flag was refused");
+    assert_eq!(lines[0], "file");
+    assert!(
+        lines[1].to_ascii_lowercase().ends_with("/cmd.exe") && !lines[1].contains('\\'),
+        "{}",
+        lines[1]
+    );
+    assert_eq!(lines[2..6], ["file", "rc=0", "rc=1", "rc=1"]);
+    assert!(out.stderr.is_empty(), "{}", out.stderr);
+}
+
+#[test]
 fn hash_lists_hits_with_rendered_paths() {
     // Hashing counts nothing; each run and each `hash -t` lookup counts one, as in bash.
     let out = cash("hash; hash netstat; hash; netstat -? > /dev/null 2>&1; hash -t netstat > /dev/null; hash");

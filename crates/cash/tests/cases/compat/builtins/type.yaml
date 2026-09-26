@@ -85,6 +85,24 @@ cases:
       hash -p /some/ls ls
       type -p -a ls
 
+  - name: Test type with -t, -p and -P in either order
+    stdin: |
+      # The last of -t, -p and -P picks the output form; -P's path search sticks.
+      hash -p /some/where y
+      f() { :; }
+      for name in y f if; do
+        for flags in -t -p -P -tp -pt -tP -Pt -pP -Pp; do
+          printf '%s %s: ' "$name" "$flags"
+          type $flags "$name" 2>&1 | tr '\n' '|'
+          echo " rc=${PIPESTATUS[0]}"
+        done
+      done
+
+      # Repeating a flag is allowed, and its last occurrence is the one that counts.
+      type -t -p -t y; echo "rc=$?"
+      type -p -t -p y; echo "rc=$?"
+      type -a -t -P y; echo "rc=$?"
+
   - name: Test type -a with a name that is only hashed
     min_oracle_version: 5.3 # -P -a printed the hashed path differently before 5.3
     stdin: |
