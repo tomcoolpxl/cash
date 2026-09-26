@@ -247,15 +247,14 @@ fn deliver(raw: u32, signal: Signal) -> Result<(), error::Error> {
         Signal::Stop | Signal::Tstp => cash_win32::console::suspend_process(raw).map(|_| ()),
         Signal::Cont => cash_win32::console::resume_process(raw).map(|_| ()),
 
-        // D13: CTRL_C_EVENT cannot be delivered to a specific process group —
-        // GenerateConsoleCtrlEvent succeeds and the signal is never received — so
-        // targeted delivery must use CTRL_BREAK_EVENT.
-        Signal::Int => cash_win32::console::interrupt_process_group(raw),
-
-        // D21: TERM and friends ask first. The caller escalates if the target ignores
-        // it; KILL does not ask at all, matching POSIX where it cannot be caught.
-        Signal::Term | Signal::Hup | Signal::Quit => {
-            cash_win32::console::interrupt_process_group(raw)
+        // D21: TERM and friends ask first, through the target's windows, and terminate
+        // it if it has none to ask or has not exited when the grace period ends. Not a
+        // console control event: aimed at a pid that leads no process group — and cash
+        // starts none as leaders — that reaches every process on the console, so
+        // `kill -TERM $pid` used to kill the shell. KILL does not ask at all, matching
+        // POSIX where it cannot be caught.
+        Signal::Int | Signal::Term | Signal::Hup | Signal::Quit => {
+            cash_win32::stop::request_stop(raw, cash_win32::stop::GRACE)
         }
         // D22: reap the whole tree when this pid roots one, falling back to the single
         // process otherwise. That is what makes `kill %1` reap a pipeline's descendants

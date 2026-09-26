@@ -587,17 +587,32 @@ cash's own builtins emit LF unconditionally.
 
 ### D21 — `kill -TERM` escalates asynchronously; `kill -9` terminates immediately
 
-`kill -TERM` sends the console control event and **returns at once**, so the POSIX
+`kill -TERM` asks the one target process to stop and **returns at once**, so the POSIX
 idiom — `kill -TERM $pid` followed by the script's own `wait` or timeout loop — keeps
-working. A background timer then terminates the target if it is still alive.
+working. `HUP`, `QUIT` and `INT` sent with `kill` do the same.
+
+The asking goes through the target's windows: `WM_CLOSE` to each of its visible,
+unowned top-level windows, which is what its close button sends and what `taskkill`
+without `/F` does, so an editor gets to offer to save. If it is still running after five
+seconds, a background thread terminates it, through a handle opened when it was asked, so
+a pid Windows has reused in the meantime cannot be hit. A program with no window — a
+console program — has no per-process way to be asked, and is terminated at once.
+
+It is not a console control event. `GenerateConsoleCtrlEvent` addresses a process
+*group*, cash starts no child as a group leader, and aimed at a pid that leads no group
+the event reaches every process on the console: this is how `kill -TERM $pid` came to
+kill the shell that ran it, and the terminal's other programs with it (fixed after
+0.9.0). Starting children in groups of their own would make a graceful console event
+possible for cash's own jobs, but it changes how Ctrl-C reaches every foreground program
+(D13), and is left for its own design.
 
 `kill -9` is an immediate `TerminateJobObject` / `TerminateProcess`, no grace.
 
 Consistent with D13's graceful-first stance, but without D13's ability to use the user as
 the timer: the shell is not waiting on a foreground job here, so a real timer is required.
 
-Cost accepted: pending escalation timers are live state cash must track, cancel when the
-target exits on its own, and tear down at exit.
+Cost accepted: the escalation lives in the shell. A script that sends `TERM` and exits
+before the grace period ends leaves a program that ignored its `WM_CLOSE` running.
 
 ### D22 — Job specs kill trees; bare PIDs kill one process
 
@@ -1324,6 +1339,34 @@ therefore **on by default in interactive shells and off otherwise**; `shopt -u w
 in `.cashrc` turns it off at the prompt too. A failed `cd` whose target has lost its
 backslashes (`cd: C:Usersme: No such file or directory`) prints a hint naming the option.
 
+### D54 — `pkill`, `pidof` and `killall`: one set of name rules, `kill`'s signals
+
+Native builtins, with procps-ng 4.0.7's (`pkill`, `pidof`) and psmisc 23.7's (`killall`)
+output and exit statuses, checked against the real tools. Stock Windows has none of them
+(`taskkill` is another interface), and on a machine with BusyBox on `PATH` all three are
+BusyBox shims reporting pids `kill` cannot use.
+
+The rules were decided for the family together with `pgrep`, which now shares them
+(research/busybox-gap-analysis.md, Q2):
+
+- Names match **case-insensitively**, as Windows image names do, and **`.exe` is
+  optional** on both sides: `pidof notepad`, `pidof NOTEPAD.EXE` and `pgrep -x notepad`
+  all find `notepad.exe`. A pattern's own `.exe` is set aside too, so `pkill exe` does
+  not mean every process.
+- Signals go through `kill`'s path: `TERM`, the default, asks and escalates (D21);
+  `KILL` terminates; `STOP`/`CONT` suspend and resume (D19); each pid alone (D22).
+- The kill family never signals the shell running it, pid 0 and 4, images Windows cannot
+  survive losing (`csrss`, `wininit`, `winlogon`, `smss`, `services`, `lsass`, …), or a
+  process running as `SYSTEM`, `LOCAL SERVICE` or `NETWORK SERVICE`. A process the user
+  may not open is skipped rather than reported as a failure. `killall -v` lists both
+  kinds of skip, and a name whose every match was skipped says so instead of "no process
+  found".
+- `pidof` prints the highest pid first, procps' order; on Windows, which reuses pids,
+  that is not newest first. `pkill -n`/`-o` use real start times.
+- Refused with a reason: `-f`/`--full` (a command line lives in another process's
+  memory, refused as `ps -o args` is), the user, group, session and terminal selectors,
+  and `killall -i`.
+
 ---
 
 ## 4. Deliberate divergences from bash
@@ -1364,6 +1407,8 @@ someone who expected bash, so additions need to earn their place.
 | 28 | `fuser DIR` and `lsof DIR` report holders of the files below the directory, not processes using it as their working directory; lsof's FD, DEVICE and NODE are `-` | Windows exposes no per-process descriptor or working-directory information through a documented API | D50 |
 | 29 | `ss` prints Recv-Q/Send-Q as `0`, `fd=-` for processes, and every UDP socket as `UNCONN` | Windows' socket tables carry no queue sizes, descriptor numbers or UDP peers | D51 |
 | 30 | At the interactive prompt, an unquoted word starting `C:\` keeps its backslashes (`shopt winpaths`, off in scripts) | Pasted Windows paths are otherwise mangled to `C:Usersme` | D53 |
+| 31 | `TERM` terminates a console program at once, and gives a program with a window five seconds after `WM_CLOSE` | A console control event cannot be aimed at one process that leads no group | D21 |
+| 32 | `pgrep`, `pkill`, `pidof` and `killall` match names without case and with `.exe` optional; the kill family never signals the shell, system images or service accounts' processes | Windows image names are case-insensitive, and killing `csrss.exe` is a blue screen | D54 |
 
 `select` was missing outright until recently: it was a reserved word with no grammar
 rule, so `select x in a b; do …; done` was a syntax error that took the whole file with

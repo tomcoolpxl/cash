@@ -34,6 +34,8 @@ pub mod restart;
 pub mod session;
 pub mod spawn;
 pub mod stdio;
+/// Asking one process to stop, then making it: D21's `TERM`.
+pub mod stop;
 /// What the machine is, asked directly — the numbers `coolfetch` prints.
 pub mod sysinfo;
 pub mod text;

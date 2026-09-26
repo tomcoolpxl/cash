@@ -20,14 +20,15 @@ Feature work follows the sequence below.
 | 7 | Line-ending controls: sed `-b`, `CASH_EOL`, `dos2unix`/`unix2dos` | **Complete** | Section 7 below; spec D49 |
 | 8 | `fuser` and an `lsof` subset | **Complete** | Section 8 below; spec D50 |
 | 9 | `ss` subset | **Complete** | [`ss` evaluation and decisions](research/ss-evaluation.md); spec D51 |
-| 10 | BusyBox-gap tools | Planned | [BusyBox gap analysis and decisions](research/busybox-gap-analysis.md) |
+| 10 | BusyBox-gap tools | **Active**: `pkill`/`pidof`/`killall` done | [BusyBox gap analysis and decisions](research/busybox-gap-analysis.md); spec D54 |
+| — | Found on the way (not planned items) | **Complete** | MSYS2 argument encoding (spec D52); `shopt winpaths` and bash-worded `cd` errors (D53); a `TERM` that no longer reaches the whole console (D21) |
 
 The authoritative feature order is therefore:
 
 ```text
 Bash 5.2 completion (done)  ->  native awk (done)  ->  native sed (done)  ->  bundled userland (done)
   ->  Bash 5.3 (active)  +  corpus fixes (active)  ->  line-ending controls (done)
-  ->  fuser / lsof subset (done)  ->  ss subset (done)  ->  BusyBox-gap tools
+  ->  fuser / lsof subset (done)  ->  ss subset (done)  ->  BusyBox-gap tools (active)
 ```
 
 ## 1. Finish Bash 5.2
@@ -239,6 +240,15 @@ From the [BusyBox gap analysis](research/busybox-gap-analysis.md), the agreed se
    known to break scripts.
 
 Not adopted: `grep`, `cmp`/`diff` and the gzip family; Cash still does not carry grep or diff.
+
+**Status: 1 done** (spec D54), checked against procps-ng 4.0.7 and psmisc 23.7 in WSL;
+`pgrep` now shares the family's name rules. Building it exposed that `kill -TERM` (and
+`HUP`, `QUIT`, `INT`) sent a console control event that reached every process on the
+console, the shell included, since cash starts no child as a process-group leader. `TERM`
+now asks through the target's windows and escalates (D21). Starting cash's own children
+in groups of their own, for a graceful console event, is left for a design of its own
+because it changes Ctrl-C for every foreground program (D13). Next: 2 (`getopt`, `rev`,
+`clear`, `reset`).
 
 ## Keeping the roadmap current
 
