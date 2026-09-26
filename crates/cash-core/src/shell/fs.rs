@@ -238,6 +238,9 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
     /// Like [`Self::resolve_command_in_path`], but consults the shell's hash-based path cache
     /// first and caches whatever a search turns up.
     ///
+    /// This is the lookup made to *run* a command, so it counts a hit against the cached
+    /// entry, which `hash` reports in its listing.
+    ///
     /// # Arguments
     ///
     /// * `candidate_name` - The name of the command to resolve.
@@ -249,14 +252,16 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         String: From<S>,
     {
         if let Some(cached_path) = self.program_location_cache.get(&candidate_name) {
+            self.program_location_cache.record_hit(&candidate_name);
             return Some(cached_path);
         }
 
         let found_path = self.resolve_command_in_path(candidate_name.as_ref())?;
         // See `find_first_executable_in_path_using_cache`.
         if !self.executable_search_dirs().1 {
-            self.program_location_cache
-                .set(candidate_name, found_path.clone());
+            let name = String::from(candidate_name);
+            self.program_location_cache.set(name.clone(), found_path.clone());
+            self.program_location_cache.record_hit(name);
         }
 
         Some(found_path)

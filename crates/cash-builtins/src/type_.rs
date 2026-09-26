@@ -61,6 +61,14 @@ impl builtins::Command for TypeCommand {
                 continue;
             }
 
+            // Bash consults its hash table through the same lookup that counts a hit when
+            // running the command, but `-a` alone skips the table.
+            let counts_a_hit = (!self.all_locations || self.force_path_search)
+                && matches!(
+                    resolved_types.first(),
+                    Some(Resolved::File { hashed: true, .. })
+                );
+
             for resolved_type in resolved_types {
                 if self.show_path_only && !matches!(resolved_type, Resolved::File { .. }) {
                     // Do nothing.
@@ -112,6 +120,10 @@ impl builtins::Command for TypeCommand {
                 if !self.all_locations {
                     break;
                 }
+            }
+
+            if counts_a_hit {
+                context.shell.program_location_cache_mut().record_hit(name);
             }
         }
 

@@ -570,19 +570,53 @@ fn hash_t_renders_every_name_it_lists() {
 }
 
 #[test]
-fn hash_l_prints_input_that_round_trips() {
-    // "Usable for input" means feeding it back reproduces the entry, space in the path and
+fn hash_lt_renders_but_does_not_quote() {
+    // Bash prints `-lt` verbatim; only the whole-table `-l` listing is quoted.
+    let out = cash("hash netstat; hash -lt netstat");
+    assert!(
+        out.stdout.starts_with("builtin hash -p ") && out.stdout.ends_with(" netstat"),
+        "{} {}",
+        out.stdout,
+        out.stderr
+    );
+    assert!(!out.stdout.contains('\\'), "D3: backslashes: {}", out.stdout);
+    assert!(!out.stdout.contains('\''), "quoted: {}", out.stdout);
+}
+
+#[test]
+fn hash_l_lists_the_table_as_input_that_round_trips() {
+    // "Usable for input" means feeding it back reproduces the table, space in the path and
     // all.
     let out = cash(
-        r#"d=$(mktemp -d); mkdir "$d/with space"; : > "$d/with space/t.exe"; hash -p "$d/with space/t.exe" t; hash -lt t; eval "$(hash -lt t)"; hash -t t; rm -rf "$d""#,
+        r#"hash -p "C:\Program Files\x.exe" x; hash netstat; l=$(hash -l); echo "$l"; hash -r; eval "$l"; hash -t x"#,
     );
     let lines: Vec<&str> = out.stdout.lines().collect();
-    assert_eq!(lines.len(), 2, "{} {}", out.stdout, out.stderr);
-    assert!(lines[0].starts_with("builtin hash -p '"), "{}", lines[0]);
-    assert!(!lines[0].contains('\\'), "D3: backslashes: {}", lines[0]);
+    assert_eq!(lines.len(), 3, "{} {}", out.stdout, out.stderr);
     assert!(
-        lines[1].ends_with("/with space/t.exe"),
-        "did not round-trip: {}",
-        lines[1]
+        lines[..2].contains(&"builtin hash -p 'C:/Program Files/x.exe' x"),
+        "{lines:?}"
+    );
+    assert!(
+        lines[..2].iter().all(|l| !l.contains('\\')),
+        "D3: backslashes: {lines:?}"
+    );
+    assert_eq!(lines[2], "C:/Program Files/x.exe", "did not round-trip");
+}
+
+#[test]
+fn hash_lists_hits_with_rendered_paths() {
+    // Hashing counts nothing; each run and each `hash -t` lookup counts one, as in bash.
+    let out = cash("hash; hash netstat; hash; netstat -? > /dev/null 2>&1; hash -t netstat > /dev/null; hash");
+    let lines: Vec<&str> = out.stdout.lines().collect();
+    assert_eq!(lines.len(), 5, "{} {}", out.stdout, out.stderr);
+    assert_eq!(lines[0], "hash: hash table empty");
+    assert_eq!(lines[1], "hits\tcommand");
+    assert!(lines[2].starts_with("   0\t"), "{}", lines[2]);
+    assert_eq!(lines[3], "hits\tcommand");
+    assert!(lines[4].starts_with("   2\t"), "{}", lines[4]);
+    assert!(
+        lines[4].to_ascii_lowercase().ends_with("/netstat.exe") && !lines[4].contains('\\'),
+        "D3: {}",
+        lines[4]
     );
 }

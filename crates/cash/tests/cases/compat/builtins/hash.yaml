@@ -106,20 +106,23 @@ cases:
       hash only 2>&1 | strip; echo "rc=${PIPESTATUS[0]}"
 
   #
-  # `hash` with no names lists the table. brush prints nothing for any such listing,
-  # whether the table is empty or populated, so these are marked `known_failure`. Hit
-  # counts get their own case: they can only be observed through the listing, but they
-  # are a separate gap and a fix for one need not be a fix for the other.
+  # `hash` with no names lists the table. The order is bash's bucket order, not insertion
+  # order, so a listing of more than one entry checks that the table is laid out the same.
   #
   - name: "Display the whole table"
-    known_failure: true # TODO(hash): `hash` with no names should list the table
     stdin: |
       echo "[empty]"
       hash; echo "rc=$?"
 
-      echo "[populated, in insertion order]"
+      echo "[populated]"
       hash -p /some/path sc1
       hash -p /other/path sc2
+      for n in a b c d e f g h zz foo bar; do hash -p "/p/$n" "$n"; done
+      hash; echo "rc=$?"
+
+      echo "[re-set in place]"
+      hash -p /new/path a
+      hash -d foo
       hash; echo "rc=$?"
 
       echo "[emptied again]"
@@ -127,15 +130,21 @@ cases:
       hash; echo "rc=$?"
 
   - name: "Display the whole table in reusable form"
-    known_failure: true # TODO(hash): `hash -l` with no names should list the table
     stdin: |
-      hash -p /some/path sc1
-      hash -p "/some/spaces path" sc2
-
+      echo "[empty is silent]"
       hash -l; echo "rc=$?"
 
+      hash -p /some/path sc1
+      hash -p /some/path2 sc2
+      hash -l; echo "rc=$?"
+
+  - name: "-t and -d need a name"
+    stdin: |
+      strip() { sed 's/^.*hash:/hash:/'; }
+      hash -t 2>&1 | strip; echo "rc=${PIPESTATUS[0]}"
+      hash -d 2>&1 | strip; echo "rc=${PIPESTATUS[0]}"
+
   - name: "Count hits per hashed command"
-    known_failure: true # TODO(hash): hit counts are not tracked
     stdin: |
       # Normalize away the temporary directory the test runs in.
       scrub() { sed -E "s|$PWD|<TMPDIR>|g"; }
