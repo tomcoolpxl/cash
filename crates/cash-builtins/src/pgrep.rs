@@ -7,7 +7,8 @@ use std::io::Write;
 
 use cash_core::{ExecutionResult, builtins};
 use clap::Parser;
-use fancy_regex::Regex;
+
+use crate::procmatch::NameMatcher;
 
 /// Find native Windows processes by parent and/or executable name.
 #[derive(Parser)]
@@ -28,7 +29,8 @@ pub(crate) struct PgrepCommand {
     #[arg(short = 'x', long = "exact")]
     exact: bool,
 
-    /// Regular expression matched against the executable file name.
+    /// Regular expression matched against the executable file name, ignoring case and a
+    /// trailing `.exe`.
     #[arg(value_name = "PATTERN")]
     pattern: Option<String>,
 }
@@ -45,21 +47,15 @@ impl builtins::Command for PgrepCommand {
             return Ok(ExecutionResult::general_error());
         }
 
-        let regex = match self.pattern.as_deref() {
-            Some(pattern) => {
-                let expression = if self.exact {
-                    std::format!("^(?:{pattern})$")
-                } else {
-                    pattern.to_owned()
-                };
-                match Regex::new(&expression) {
-                    Ok(regex) => Some(regex),
-                    Err(error) => {
-                        writeln!(context.stderr(), "pgrep: invalid pattern: {error}")?;
-                        return Ok(ExecutionResult::general_error());
-                    }
+        // The family's rules (see procmatch): case-insensitive, `.exe` optional.
+        let matcher = match self.pattern.as_deref() {
+            Some(pattern) => match NameMatcher::pattern(pattern, self.exact) {
+                Ok(matcher) => Some(matcher),
+                Err(error) => {
+                    writeln!(context.stderr(), "pgrep: invalid pattern: {error}")?;
+                    return Ok(ExecutionResult::general_error());
                 }
-            }
+            },
             None => None,
         };
 
@@ -69,9 +65,9 @@ impl builtins::Command for PgrepCommand {
             if !self.parents.is_empty() && !self.parents.contains(&process.parent_pid) {
                 continue;
             }
-            let name_matches = regex
+            let name_matches = matcher
                 .as_ref()
-                .is_none_or(|regex| regex.is_match(&process.name).unwrap_or(false));
+                .is_none_or(|matcher| matcher.matches(&process.name));
             if name_matches == self.inverse {
                 continue;
             }

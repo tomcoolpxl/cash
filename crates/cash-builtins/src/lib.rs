@@ -20,9 +20,13 @@ mod fileuse;
 #[cfg(windows)]
 mod fuser;
 #[cfg(windows)]
+mod killfam;
+#[cfg(windows)]
 mod lsof;
 #[cfg(windows)]
 mod pgrep;
+#[cfg(windows)]
+mod procmatch;
 #[cfg(windows)]
 mod ps;
 #[cfg(windows)]
