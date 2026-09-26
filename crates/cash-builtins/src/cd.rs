@@ -78,10 +78,15 @@ impl builtins::Command for CdCommand {
                 return error::unimp("cd -e");
             }
 
-            target_dir = context.shell.absolute_path(target_dir).canonicalize()?;
+            match context.shell.absolute_path(&target_dir).canonicalize() {
+                Ok(resolved) => target_dir = resolved,
+                Err(error) => return report_failure(&context, &target_dir, &error.into()),
+            }
         }
 
-        context.shell.set_working_dir(&target_dir)?;
+        if let Err(error) = context.shell.set_working_dir(&target_dir) {
+            return report_failure(&context, &target_dir, &error);
+        }
 
         // Bash compatibility
         // https://www.gnu.org/software/bash/manual/bash.html#index-cd
@@ -94,4 +99,44 @@ impl builtins::Command for CdCommand {
 
         Ok(ExecutionResult::success())
     }
+}
+
+/// Reports a failed change of directory as bash does, `cd: DIR: No such file or
+/// directory`, naming the directory as the script spelled it. The generic error it
+/// replaces, "i/o error: The system cannot find the file specified. (os error 2)",
+/// named neither the path nor the reason.
+fn report_failure(
+    context: &cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
+    target: &std::path::Path,
+    error: &error::Error,
+) -> Result<ExecutionResult, error::Error> {
+    let reason = match (error.kind(), error.as_io_error().map(std::io::Error::kind)) {
+        (error::ErrorKind::NotADirectory(_), _) | (_, Some(std::io::ErrorKind::NotADirectory)) => {
+            "Not a directory".to_owned()
+        }
+        (_, Some(std::io::ErrorKind::NotFound)) => "No such file or directory".to_owned(),
+        (_, Some(std::io::ErrorKind::PermissionDenied)) => "Permission denied".to_owned(),
+        _ => error.to_string(),
+    };
+    let spelled = target.to_string_lossy();
+    writeln!(context.stderr(), "cd: {spelled}: {reason}")?;
+    if lost_its_backslashes(&spelled) {
+        writeln!(
+            context.stderr(),
+            "cd: hint: a backslash is an escape character, so an unquoted C:\\dir\\sub \
+             arrives as C:dirsub; quote it ('C:\\dir\\sub') or use forward slashes (C:/dir/sub)"
+        )?;
+    }
+    Ok(ExecutionResult::general_error())
+}
+
+/// Whether `path` looks like a pasted Windows path whose backslashes the lexer removed:
+/// a drive letter and colon followed directly by a name, with no separator anywhere.
+/// A drive-relative path is legal but rare, so it is only a hint, and only on failure.
+fn lost_its_backslashes(path: &str) -> bool {
+    let mut chars = path.chars();
+    matches!(
+        (chars.next(), chars.next(), chars.next()),
+        (Some(drive), Some(':'), Some(first)) if drive.is_ascii_alphabetic() && first != '/' && first != '\\'
+    ) && !path.contains(['/', '\\'])
 }
