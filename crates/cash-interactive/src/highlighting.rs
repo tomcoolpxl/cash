@@ -131,6 +131,15 @@ pub fn highlight_command<'a>(
     }
 }
 
+/// Operators after which the next word is a command: the list and pipeline separators, and
+/// the opening of a subshell.
+const STARTS_A_COMMAND: &[&str] = &[";", "&", "&&", "||", "|", "|&", "(", "\n"];
+
+/// Reserved words that are followed by a command rather than by a name or a word list.
+const KEYWORDS_BEFORE_A_COMMAND: &[&str] = &[
+    "if", "then", "elif", "else", "while", "until", "do", "!", "{", "time",
+];
+
 enum CommandType {
     Function,
     Keyword,
@@ -187,10 +196,16 @@ impl<'a, SE: cash_core::ShellExtensions> Highlighter<'a, SE> {
 
             for token in tokens {
                 match token {
-                    cash_parser::Token::Operator(_op, token_location) => {
+                    cash_parser::Token::Operator(op, token_location) => {
                         let start = global_offset + byte_offset(token_location.start.index);
                         let end = global_offset + byte_offset(token_location.end.index);
                         self.append_span(HighlightKind::Operator, start..end);
+                        // A control operator ends one command, so the next word starts
+                        // another: `ls | nosuch` marks `nosuch`, as fish does. Redirections
+                        // are operators too, and leave the command as it was.
+                        if STARTS_A_COMMAND.contains(&op.as_str()) {
+                            saw_command_token = false;
+                        }
                     }
                     cash_parser::Token::Word(w, token_location) => {
                         let start_byte = byte_offset(token_location.start.index);
@@ -346,7 +361,8 @@ impl<'a, SE: cash_core::ShellExtensions> Highlighter<'a, SE> {
             if w.contains('=') {
                 HighlightKind::Assignment
             } else {
-                *saw_command_token = true;
+                // After `if`, `then`, `do`, `!` and the like, the next word is a command too.
+                *saw_command_token = !KEYWORDS_BEFORE_A_COMMAND.contains(&w);
                 match self.classify_possible_command(w, token_range) {
                     CommandType::Function => HighlightKind::Function,
                     CommandType::Keyword => HighlightKind::Keyword,
@@ -436,17 +452,25 @@ mod tests {
         assert!(cmd_span.is_some(), "Should have a span for the command");
     }
 
-    fn command_kind(
+    /// The kind of the span that is exactly `word` in `line`.
+    fn word_kind(
         shell: &cash_core::Shell<impl cash_core::ShellExtensions>,
         line: &str,
+        word: &str,
     ) -> HighlightKind {
-        let command = line.split_whitespace().next().unwrap();
         let highlighted = highlight_command(shell, line, line.len());
         let span = highlighted
             .spans()
             .iter()
-            .find(|s| highlighted.text(s) == command);
+            .find(|s| highlighted.text(s) == word);
         span.unwrap().kind
+    }
+
+    fn command_kind(
+        shell: &cash_core::Shell<impl cash_core::ShellExtensions>,
+        line: &str,
+    ) -> HighlightKind {
+        word_kind(shell, line, line.split_whitespace().next().unwrap())
     }
 
     /// The command word's kind once the background PATH listing has answered.
@@ -454,9 +478,18 @@ mod tests {
         shell: &cash_core::Shell<impl cash_core::ShellExtensions>,
         line: &str,
     ) -> HighlightKind {
+        settled_word_kind(shell, line, line.split_whitespace().next().unwrap()).await
+    }
+
+    /// `word`'s kind once the background PATH listing has answered.
+    async fn settled_word_kind(
+        shell: &cash_core::Shell<impl cash_core::ShellExtensions>,
+        line: &str,
+        word: &str,
+    ) -> HighlightKind {
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         loop {
-            let kind = command_kind(shell, line);
+            let kind = word_kind(shell, line, word);
             if kind != HighlightKind::UnknownCommand {
                 return kind;
             }
@@ -500,6 +533,42 @@ mod tests {
         assert_eq!(
             settled_command_kind(&shell, "no-such-tool x").await,
             HighlightKind::NotFoundCommand
+        );
+    }
+
+    #[tokio::test]
+    async fn every_command_of_a_pipeline_or_list_is_a_command() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut shell = cash_core::Shell::builder().build().await.unwrap();
+        let path = dir.path().to_string_lossy().into_owned();
+        shell
+            .set_env_global("PATH", cash_core::ShellVariable::new(path))
+            .unwrap();
+
+        // Each word is followed by more text: a word the cursor is still in stays neutral.
+        for (line, word) in [
+            ("echo a | missing-one b", "missing-one"),
+            ("echo a; missing-two b", "missing-two"),
+            ("echo a && missing-three b", "missing-three"),
+            ("if missing-four; then missing-five; fi", "missing-four"),
+            ("if missing-four; then missing-five; fi", "missing-five"),
+            ("! missing-six b", "missing-six"),
+        ] {
+            assert_eq!(
+                settled_word_kind(&shell, line, word).await,
+                HighlightKind::NotFoundCommand,
+                "{word} in {line:?}"
+            );
+        }
+
+        // Arguments and redirection targets are not commands.
+        assert_eq!(
+            word_kind(&shell, "echo a | cat plain-arg", "plain-arg"),
+            HighlightKind::Default
+        );
+        assert_eq!(
+            word_kind(&shell, "echo a > out-file", "out-file"),
+            HighlightKind::Default
         );
     }
 
