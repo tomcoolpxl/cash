@@ -20,7 +20,7 @@ Feature work follows the sequence below.
 | 7 | Line-ending controls: sed `-b`, `CASH_EOL`, `dos2unix`/`unix2dos` | **Complete** | Section 7 below; spec D49 |
 | 8 | `fuser` and an `lsof` subset | **Complete** | Section 8 below; spec D50 |
 | 9 | `ss` subset | **Complete** | [`ss` evaluation and decisions](research/ss-evaluation.md); spec D51 |
-| 10 | BusyBox-gap tools | **Active**: parts 1–4 done (`pkill`/`pidof`/`killall`; `getopt`, `rev`, `clear`, `reset`; `bc`; `ping`) | [BusyBox gap analysis and decisions](research/busybox-gap-analysis.md); spec D54 |
+| 10 | BusyBox-gap tools | **Complete** (`pkill`/`pidof`/`killall`; `getopt`, `rev`, `clear`, `reset`; `bc`; `ping`; doctor's BusyBox check) | [BusyBox gap analysis and decisions](research/busybox-gap-analysis.md); spec D54 |
 | — | Found on the way (not planned items) | **Complete** | MSYS2 argument encoding (spec D52); `shopt winpaths` and bash-worded `cd` errors (D53); a `TERM` that no longer reaches the whole console (D21) |
 
 The authoritative feature order is therefore:
@@ -28,7 +28,7 @@ The authoritative feature order is therefore:
 ```text
 Bash 5.2 completion (done)  ->  native awk (done)  ->  native sed (done)  ->  bundled userland (done)
   ->  Bash 5.3 (active)  +  corpus fixes (active)  ->  line-ending controls (done)
-  ->  fuser / lsof subset (done)  ->  ss subset (done)  ->  BusyBox-gap tools (active)
+  ->  fuser / lsof subset (done)  ->  ss subset (done)  ->  BusyBox-gap tools (done)
 ```
 
 ## 1. Finish Bash 5.2
@@ -261,8 +261,11 @@ extension a failed program used.
 
 **4 done** (spec D57): `ping` with iputils' flags and output over `IcmpSendEcho2`, bundled
 so Ctrl-C prints its statistics; `ping.exe` by path or `enable -n ping`; doctor reports
-the shadow, and `ping -n 3 host` gets a hint instead of an endless ping. Next: 5 (doctor
-flags BusyBox shims that break scripts).
+the shadow, and `ping -n 3 host` gets a hint instead of an endless ping.
+
+**5 done** (spec D35): doctor flags the BusyBox applets that break scripts — `grep`,
+`diff`, `make`, `tar`, `xz`, `nc`, `wget`, each reason checked against BusyBox 1.38 — and
+points at a full copy later on `PATH` when there is one. Item 10 is complete.
 
 ## Keeping the roadmap current
 

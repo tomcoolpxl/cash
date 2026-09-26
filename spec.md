@@ -874,6 +874,18 @@ None of that announces itself. `cash doctor` should detect:
 Recommended (documented, never enforced): MS Coreutils via winget, plus GNU `sed` and
 `gawk` from any source.
 
+**BusyBox, since cash carries most of the userland.** `sed`, `awk`, `find`, `xargs` and
+the rest are cash's own now, so a BusyBox shim for them is never reached. For the tools
+cash does not carry, doctor flags a BusyBox applet only where it breaks real scripts, a
+curated list (BusyBox gap analysis, Q10) with each reason checked against BusyBox 1.38:
+`grep`/`egrep`/`fgrep` (no `-P`, no `--include`), `diff` (no `-y`, no `--color`), `make`
+(`$(shell …)` expands to nothing), `tar` (no `--transform`), `xz` (decompresses only),
+`nc` (no `-z`), `wget` (`-T` crashes it). When a full copy of the tool is further down
+`PATH` — often Git for Windows' — doctor says to move its directory ahead of the shims;
+otherwise it names what to install. Applets whose reduction nothing notices (`cal`,
+`cat`) are not reported. Doctor also notes the System32 tools cash shadows on purpose
+(`ping`, D57; `reset`, D55) and how to reach them.
+
 ### D36 — Short-lived prompt commands use a pooled job object
 
 `PROMPT_COMMAND` and `PS1` command substitutions run in a long-lived, reused job object
