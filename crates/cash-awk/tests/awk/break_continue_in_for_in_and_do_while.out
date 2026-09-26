@@ -1,0 +1,11 @@
+for-in body 1
+after for-in 1
+for-in body 2
+after for-in 2
+for-in body 3
+after for-in 3
+continue skipped to 1
+many breaks ok only
+do-while 1
+do-while 3
+do-while stopped at 4

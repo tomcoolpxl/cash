@@ -427,6 +427,11 @@ fn test_awk_continue_stmt() {
 }
 
 #[test]
+fn test_awk_break_continue_in_for_in_and_do_while() {
+    test_awk!(break_continue_in_for_in_and_do_while);
+}
+
+#[test]
 fn test_awk_for_each() {
     test_awk!(for_each);
 }

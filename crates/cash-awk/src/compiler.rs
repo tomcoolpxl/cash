@@ -1350,9 +1350,12 @@ impl Compiler {
         let mut inner = do_while.into_inner();
         let start_index = instructions.len();
 
+        self.loop_stack.push(LoopStubs::default());
+
         let body = inner.next().unwrap();
         self.compile_stmt(body, instructions, locals)?;
 
+        let condition_start = instructions.len();
         let condition = inner.next().unwrap();
         let condition_line_col = condition.line_col();
         self.compile_expr(condition, instructions, locals)?;
@@ -1360,6 +1363,15 @@ impl Compiler {
             OpCode::JumpIfTrue(distance(instructions.len(), start_index)),
             condition_line_col,
         );
+
+        // `continue` re-tests the condition, as in C.
+        let loop_stubs = self.loop_stack.pop().unwrap();
+        for stub in loop_stubs.break_stubs {
+            instructions.opcodes[stub] = OpCode::Jump(distance(stub, instructions.len()));
+        }
+        for stub in loop_stubs.continue_stubs {
+            instructions.opcodes[stub] = OpCode::Jump(distance(stub, condition_start));
+        }
 
         Ok(())
     }
@@ -1405,6 +1417,8 @@ impl Compiler {
         let iter_deref_location = instructions.len();
         instructions.push(OpCode::Invalid, array_var_line_col);
 
+        self.loop_stack.push(LoopStubs::default());
+
         if let Some(body) = inner.next() {
             self.compile_stmt(body, instructions, locals)?;
         }
@@ -1413,6 +1427,21 @@ impl Compiler {
             OpCode::Jump(distance(instructions.len(), iter_deref_location)),
             array_var_line_col,
         );
+
+        // The iterator stays on the stack while the body runs; `AdvanceIterOrJump` pops
+        // it when the keys run out. A `break` leaves early, so it lands on a `Pop` of
+        // its own, which the exhausted iterator jumps over.
+        let loop_stubs = self.loop_stack.pop().unwrap();
+        if !loop_stubs.break_stubs.is_empty() {
+            let break_landing = instructions.len();
+            instructions.push(OpCode::Pop, array_var_line_col);
+            for stub in loop_stubs.break_stubs {
+                instructions.opcodes[stub] = OpCode::Jump(distance(stub, break_landing));
+            }
+        }
+        for stub in loop_stubs.continue_stubs {
+            instructions.opcodes[stub] = OpCode::Jump(distance(stub, iter_deref_location));
+        }
 
         instructions.opcodes[iter_deref_location] =
             OpCode::AdvanceIterOrJump(distance(iter_deref_location, instructions.len()));
