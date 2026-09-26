@@ -184,6 +184,16 @@ impl InputBackend for ReedlineInputBackend {
                     return Err(ShellError::UnexpectedInputFailure);
                 }
                 Ok(reedline::Signal::HostCommand(command)) => {
+                    // As Bash does for `bind -x`, clear the line before the command runs:
+                    // its output starts where the prompt was, and the prompt is redrawn
+                    // after it. The patched Reedline (vendor/reedline) redraws in place
+                    // only when the cursor is back on the cell it left, which a cleared
+                    // line no longer is, so the prompt goes below any output.
+                    let _ = crossterm::execute!(
+                        std::io::stdout(),
+                        crossterm::cursor::MoveToColumn(0),
+                        crossterm::terminal::Clear(crossterm::terminal::ClearType::FromCursorDown)
+                    );
                     let numeric_argument = tokio::task::block_in_place(|| {
                         tokio::runtime::Handle::current()
                             .block_on(async { self.bindings.lock().await.take_numeric_argument() })

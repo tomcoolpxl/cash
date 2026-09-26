@@ -16,7 +16,7 @@ members = [
     "xtask",
 ]
 default-members = ["crates/cash"]
-# Upstream code carried with a patch (see its README), built but not linted as cash's own.
+# Upstream code carried with a patch (see its CASH-PATCHES.md), not linted as cash's own.
 exclude = ["vendor/reedline"]
 
 [workspace.package]
@@ -112,7 +112,7 @@ panic = "unwind"
 inherits = "release"
 strip = "debuginfo"
 
-# Reedline 0.51.0 with the patch listed in vendor/reedline/README.md: a `bind -x`
+# Reedline 0.51.0 with the patch listed in vendor/reedline/CASH-PATCHES.md: a `bind -x`
 # command's output was painted over by the next prompt (ROADMAP item 15).
 [patch.crates-io]
 reedline = { path = "vendor/reedline" }

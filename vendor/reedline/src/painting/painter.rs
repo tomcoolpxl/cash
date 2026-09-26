@@ -159,6 +159,10 @@ pub struct PainterSuspendedState {
     /// Recorded here rather than tested at re-use, since by then the screen may have
     /// been resized by whatever ran in between.
     was_flush_at_bottom: bool,
+    /// cash: the cell the cursor sat on when the painter was suspended, `None` when the
+    /// terminal could not be queried. Only a return to exactly this cell re-uses the
+    /// prompt; see `select_prompt_row`.
+    cursor: Option<(u16, u16)>,
 }
 
 /// Screen bounds of the right prompt when it is visible.
@@ -201,13 +205,15 @@ fn select_prompt_row(
     (column, row): (u16, u16), // NOTE: Positions are 0 based here
 ) -> PromptRowSelector {
     if let Some(painter_state) = suspended_state {
-        // Re-use the previous prompt position when the cursor came back inside it,
-        // unless that prompt sat flush against the bottom of the screen. A suspended
-        // program that scrolled the terminal returns with the cursor pinned on the
-        // bottom row, still inside the stored range and indistinguishable from an
-        // in-place return, so re-using there would redraw over the scrolled-up output.
-        // See nushell/reedline#1130.
-        if !painter_state.was_flush_at_bottom
+        // cash: re-use the previous prompt position only when the cursor came back to
+        // the very cell it left. Upstream re-used it whenever the cursor came back
+        // anywhere inside the prompt's rows, a range that runs one row past a
+        // single-line prompt: a `bind -x` command printing one line ends there, and the
+        // prompt was redrawn over its output. A cursor that moved means something was
+        // written, so the prompt goes where the cursor is. This also covers the
+        // flush-at-bottom case of nushell/reedline#1130, where a program that scrolled
+        // the terminal returns inside the range but not to the same cell.
+        if painter_state.cursor == Some((column, row))
             && painter_state.previous_prompt_rows_range.contains(&row)
         {
             let start_row = *painter_state.previous_prompt_rows_range.start();
@@ -459,6 +465,7 @@ impl Painter {
             // `final_row` can overshoot the last visible row for a prompt at the very
             // bottom, so this is `>=` rather than an equality.
             was_flush_at_bottom: final_row >= self.screen_height().saturating_sub(1),
+            cursor: cursor::position().ok(),
         }
     }
 
@@ -1457,14 +1464,34 @@ mod tests {
         let state = PainterSuspendedState {
             previous_prompt_rows_range: 11..=13,
             was_flush_at_bottom: false,
+            cursor: Some((3, 12)),
         };
-        assert_eq!(
-            select_prompt_row(Some(&state), (0, 12)),
-            PromptRowSelector::UseExistingPrompt { start_row: 11 }
-        );
         assert_eq!(
             select_prompt_row(Some(&state), (3, 12)),
             PromptRowSelector::UseExistingPrompt { start_row: 11 }
+        );
+    }
+
+    // cash: a host command that printed a line leaves the cursor inside the stored
+    // range but not where it was; the prompt must go below the output, not over it.
+    #[test]
+    fn test_select_prompt_row_does_not_reuse_when_the_cursor_moved() {
+        let state = PainterSuspendedState {
+            previous_prompt_rows_range: 11..=12,
+            was_flush_at_bottom: false,
+            cursor: Some((2, 11)),
+        };
+        assert_eq!(
+            select_prompt_row(Some(&state), (0, 12)),
+            PromptRowSelector::MakeNewPrompt { new_row: 12 }
+        );
+        let unknown = PainterSuspendedState {
+            cursor: None,
+            ..state
+        };
+        assert_eq!(
+            select_prompt_row(Some(&unknown), (2, 11)),
+            PromptRowSelector::MakeNewPrompt { new_row: 12 }
         );
     }
 
@@ -1480,6 +1507,7 @@ mod tests {
         let state = PainterSuspendedState {
             previous_prompt_rows_range: 5..=7,
             was_flush_at_bottom: true,
+            cursor: Some((4, 6)),
         };
         assert_eq!(
             select_prompt_row(Some(&state), (0, 7)),
