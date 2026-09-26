@@ -21,6 +21,29 @@ using cash will see it and reach for this file. The remaining question worth ans
 only whether cash makes it *worse* than PowerShell does — same terminal, same Starship
 config, same held key, compare. If it is identical, this belongs upstream.
 
+**Answered (2026-09-27): the lag is Windows Terminal's; cash made it more work.** Both
+shells were driven through a ConPTY, the layer Windows Terminal reads from, with the same
+Starship config in this repository: Backspace held at the machine's repeat rate (33 ms), and
+pastes written in one piece, as the terminal delivers them. The stream was replayed onto a
+screen after each chunk to see when each key's effect appeared.
+
+| | cash before | cash after | PowerShell |
+|---|---|---|---|
+| Time until a Backspace shows, median | ~1 ms | ~1 ms | ~13 ms |
+| Stale characters on screen | none | none | one, briefly |
+| Bytes per Backspace, prompt at the bottom | 182 | 61 | 68 |
+| Bytes per Backspace, prompt on an empty screen | 319 | 60 | 68 |
+| 2000-character paste, until drawn | 650–680 ms | 30–40 ms | 220–260 ms |
+
+cash was never the one falling behind: every update left the ConPTY within a few
+milliseconds and none showed a character already deleted. So the characters that linger in
+the window are the terminal drawing late — which fits it reproducing in PowerShell. What
+cash did was give the terminal more to draw: Reedline repainted the whole Starship prompt on
+every key, and every paste crawled in through one console round trip per key record, then
+waited 100 ms more. Four patches to the vendored Reedline and Crossterm (their
+`CASH-PATCHES.md`) fixed those. What remains of the lag, if anything, is Windows Terminal's
+to fix.
+
 ---
 
 ## 2. A session looked like cash but was PowerShell — cash had exited unnoticed
