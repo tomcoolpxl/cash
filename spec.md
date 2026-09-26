@@ -1416,6 +1416,35 @@ cash's changes have their own tests (`bc_cash.rs`). GNU bc was not available to 
 against when this was built; the upstream suite's math-library values were checked
 against it upstream.
 
+### D57 — `ping` takes Linux's flags, and shadows `ping.exe`
+
+`ping -c 1 host && …` is how scripts test a host, and Windows' `ping.exe` reads `-c` as a
+routing compartment: unelevated it refuses with "Access denied", so every host looks
+down. Cash carries its own `ping` with iputils' flags as they are (Q9) — `-c` count,
+`-i` interval, `-W` reply timeout, `-w` deadline, `-s` size, `-t` TTL, `-n` numeric,
+`-q`, `-4`/`-6`, `-D`, `-O`, `-a`, `-H` — and iputils 20250605's output, messages and
+exit statuses (0 with a reply, 1 with none, 2 on error).
+
+It runs as a bundled command, a process in the foreground job, so Ctrl-C (or Ctrl-Break)
+reaches it and it prints its statistics before exiting. Echoes go through
+`IcmpSendEcho2`/`Icmp6SendEcho2`, as Windows gives unprivileged programs no raw socket;
+the options that need one (`-f`, `-l`, `-p`, `-R`, `-T`, `-I`, socket options) are
+refused by name. Where Windows differs:
+
+- one echo is in flight at a time, so an earlier echo waits at most the interval and a
+  reply slower than that counts as lost; the last echo waits the full `-W` (or iputils'
+  ten-second linger);
+- an IPv6 reply carries no hop limit through this API, so its line has no `ttl=`;
+- `-s` stops at 65500 data bytes, Windows' limit, not iputils' 65507.
+
+`ping.exe` stays reachable by its path, as `ping.exe` (a name the builtin does not
+match), or after `enable -n ping`. A Windows habit is caught where it would otherwise
+misfire: `ping -n 3 host` is iputils' "numeric output, through hop 3" and would ping
+forever, so a second operand is refused, with a hint that `ping.exe`'s `-n 3` is `-c 3`
+here. `cash doctor` reports the shadow. Cash's own tests used `ping -n 20 127.0.0.1` as a
+long-running Windows process; they now name `ping.exe`, as scripts relying on Windows'
+flags must.
+
 ---
 
 ## 4. Deliberate divergences from bash
@@ -1460,6 +1489,7 @@ someone who expected bash, so additions need to earn their place.
 | 32 | `pgrep`, `pkill`, `pidof` and `killall` match names without case and with `.exe` optional; the kill family never signals the shell, system images or service accounts' processes | Windows image names are case-insensitive, and killing `csrss.exe` is a blue screen | D54 |
 | 33 | `rev` keeps a CRLF line's `\r` at the end; `getopt -s csh/tcsh` is refused; `clear`/`reset` ignore terminfo and refuse non-VT terminal types | D20's line endings; cash is not a C shell; ConPTY speaks VT | D55 |
 | 34 | `bc` is POSIX bc: GNU bc's language extensions are errors, each named | Decided scope (Q4); a named error beats a guessed extension | D56 |
+| 35 | `ping` is iputils' `ping`, not `ping.exe`; a reply slower than the interval counts as lost, and IPv6 replies show no `ttl=` | Scripts use Linux's `-c`; the Windows ICMP API has one echo in flight and no IPv6 hop limit | D57 |
 
 `select` was missing outright until recently: it was a reserved word with no grammar
 rule, so `select x in a b; do …; done` was a syntax error that took the whole file with

@@ -20,7 +20,7 @@ Feature work follows the sequence below.
 | 7 | Line-ending controls: sed `-b`, `CASH_EOL`, `dos2unix`/`unix2dos` | **Complete** | Section 7 below; spec D49 |
 | 8 | `fuser` and an `lsof` subset | **Complete** | Section 8 below; spec D50 |
 | 9 | `ss` subset | **Complete** | [`ss` evaluation and decisions](research/ss-evaluation.md); spec D51 |
-| 10 | BusyBox-gap tools | **Active**: parts 1–3 done (`pkill`/`pidof`/`killall`; `getopt`, `rev`, `clear`, `reset`; `bc`) | [BusyBox gap analysis and decisions](research/busybox-gap-analysis.md); spec D54 |
+| 10 | BusyBox-gap tools | **Active**: parts 1–4 done (`pkill`/`pidof`/`killall`; `getopt`, `rev`, `clear`, `reset`; `bc`; `ping`) | [BusyBox gap analysis and decisions](research/busybox-gap-analysis.md); spec D54 |
 | — | Found on the way (not planned items) | **Complete** | MSYS2 argument encoding (spec D52); `shopt winpaths` and bash-worded `cd` errors (D53); a `TERM` that no longer reaches the whole console (D21) |
 
 The authoritative feature order is therefore:
@@ -257,7 +257,12 @@ the console modes.
 **3 done** (spec D56): POSIX `bc` from posixutils-rs as `crates/cash-bc`, bundled like
 `awk`. Upstream's 72 tests run through cash; cash adds CRLF input, no leading zero
 (`.33`, as GNU/BSD/BusyBox print), GNU's harmless options, and a note naming any GNU
-extension a failed program used. Next: 4 (a Linux-flag `ping`).
+extension a failed program used.
+
+**4 done** (spec D57): `ping` with iputils' flags and output over `IcmpSendEcho2`, bundled
+so Ctrl-C prints its statistics; `ping.exe` by path or `enable -n ping`; doctor reports
+the shadow, and `ping -n 3 host` gets a hint instead of an endless ping. Next: 5 (doctor
+flags BusyBox shims that break scripts).
 
 ## Keeping the roadmap current
 
