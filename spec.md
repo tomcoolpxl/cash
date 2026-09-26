@@ -1451,12 +1451,23 @@ What changed from upstream (listed in `crates/cash-bc/README.md`):
 - a CRLF line is read as an LF line (D20);
 - a value below one prints without a leading zero, `.33` and `-.5`, as GNU, BSD and
   BusyBox bc print it and scripts compare it; upstream printed `0.33`, and its tests
-  were updated with the change.
+  were updated with the change;
+- a function body may start on the line of its `{`, so `define f(x) { return (x); }`
+  is one line. POSIX requires a newline there, but GNU (outside `-s`), BSD and
+  BusyBox bc do not, and short functions are written this way. It is the one GNU
+  extension accepted.
 
 Upstream's suite runs unchanged apart from its helpers (`crates/cash/tests/bc.rs`), and
-cash's changes have their own tests (`bc_cash.rs`). GNU bc was not available to compare
-against when this was built; the upstream suite's math-library values were checked
-against it upstream.
+cash's changes have their own tests (`bc_cash.rs`).
+
+**Against GNU bc** (ROADMAP item 13): `crates/cash/tests/oracle/bc_cases.sh` ran under
+GNU bc 1.07.1 to make `bc_cases.out`, and `bc_matches_gnu_bc` runs it under cash. Its 52
+cases cover the 70-column wrap of long numbers, `obase` from 2 to 1000, `ibase`,
+scale, modulus and powers, the math library at scale 25 to 50, functions, arrays and
+control flow. Output matches GNU's byte for byte. One difference is deliberate: after
+a runtime or syntax error, GNU bc carries on and exits 0, and cash carries on and exits
+1, so `set -e` and `|| die` catch a failed calculation; POSIX leaves the status
+unspecified.
 
 ### D57 — `ping` takes Linux's flags, and shadows `ping.exe`
 
@@ -1554,7 +1565,7 @@ someone who expected bash, so additions need to earn their place.
 | 31 | `TERM` terminates a console program at once, and gives a program with a window five seconds after `WM_CLOSE` | A console control event cannot be aimed at one process that leads no group | D21 |
 | 32 | `pgrep`, `pkill`, `pidof` and `killall` match names without case and with `.exe` optional; the kill family never signals the shell, system images or service accounts' processes | Windows image names are case-insensitive, and killing `csrss.exe` is a blue screen | D54 |
 | 33 | `rev` keeps a CRLF line's `\r` at the end; `getopt -s csh/tcsh` is refused; `clear`/`reset` ignore terminfo and refuse non-VT terminal types | D20's line endings; cash is not a C shell; ConPTY speaks VT | D55 |
-| 34 | `bc` is POSIX bc: GNU bc's language extensions are errors, each named | Decided scope (Q4); a named error beats a guessed extension | D56 |
+| 34 | `bc` is POSIX bc: GNU bc's language extensions are errors, each named, except a one-line `define`; after an error, `bc` exits 1 where GNU bc exits 0 | Decided scope (Q4); a named error beats a guessed extension, and a failed calculation should fail | D56 |
 | 35 | `ping` is iputils' `ping`, not `ping.exe`; a reply slower than the interval counts as lost, and IPv6 replies show no `ttl=` | Scripts use Linux's `-c`; the Windows ICMP API has one echo in flight and no IPv6 hop limit | D57 |
 | 36 | `which ls` prints `C:/…/cash.exe/ls`, a path no file is at, which cash runs as `ls` | A builtin has no file, and scripts run what `which` prints | D58 |
 

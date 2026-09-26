@@ -23,7 +23,7 @@ Feature work follows the sequence below.
 | 10 | BusyBox-gap tools | **Complete** (`pkill`/`pidof`/`killall`; `getopt`, `rev`, `clear`, `reset`; `bc`; `ping`; doctor's BusyBox check) | [BusyBox gap analysis and decisions](research/busybox-gap-analysis.md); spec D54 |
 | 11 | Graceful Ctrl-C and `TERM` for cash's own jobs (process groups) | **Complete** | Section 11 below; spec D13, D21 |
 | 12 | A path a script can exec for a bundled tool | **Complete** | Section 12 below; [open issue 4](open-issues.md) |
-| 13 | `bc` against GNU bc | Planned (needs GNU bc in WSL) | Section 13 below; spec D56 |
+| 13 | `bc` against GNU bc | **Complete** | Section 13 below; spec D56 |
 | 14 | Bash 5.3 remainder without a terminal: `wait -n` in POSIX mode, `array_expand_once`, the `RETURN` trap's status | Planned | Section 14 below; [Bash 5.3 audit](research/bash-reference/bash-5.3-audit.md) |
 | 15 | ConPTY probe harness, then the interactive and Readline 5.3 items | Planned | Section 15 below |
 | — | Found on the way (not planned items) | **Complete** | MSYS2 argument encoding (spec D52); `shopt winpaths` and bash-worded `cd` errors (D53); a `TERM` that no longer reaches the whole console (D21) |
@@ -35,7 +35,7 @@ Bash 5.2 completion (done)  ->  native awk (done)  ->  native sed (done)  ->  bu
   ->  Bash 5.3 (active)  +  corpus fixes (active)  ->  line-ending controls (done)
   ->  fuser / lsof subset (done)  ->  ss subset (done)  ->  BusyBox-gap tools (done)
   ->  graceful signals for own jobs (done)  ->  exec path for bundled tools (done)
-  ->  bc against GNU bc  ->  Bash 5.3 remainder (no terminal)  ->  ConPTY harness + 5.3 interactive
+  ->  bc against GNU bc (done)  ->  Bash 5.3 remainder (no terminal)  ->  ConPTY harness + 5.3 interactive
 ```
 
 ## 1. Finish Bash 5.2
@@ -311,6 +311,13 @@ no GNU bc, and installing one needs the user's password (`wsl -d kali-linux sudo
 install -y bc`). Once it is there, run a differential corpus as for `awk` and `sed`,
 starting with what could not be checked: the line-wrap column of long numbers, `obase`
 above 16, and the math library at high scale.
+
+**Done** (spec D56): GNU bc 1.07.1, unpacked without a password (`apt-get download bc`,
+`dpkg -x`), ran the 52 cases in `crates/cash/tests/oracle/bc_cases.sh`. Every number
+matched: the 70-column wrap, `obase` 17 to 1000, and `e`, `a`, `l`, `s`, `c`, `j` at
+scale 25 to 50. Two differences came up: a one-line `define f(x) { ... }`, now accepted
+as GNU, BSD and BusyBox accept it; and the exit status after an error, 1 in cash and 0
+in GNU, kept on purpose. Tests: `bc_matches_gnu_bc` in `crates/cash/tests/bc_cash.rs`.
 
 ## 14. Bash 5.3 remainder without a terminal
 

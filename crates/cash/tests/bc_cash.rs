@@ -1,5 +1,7 @@
 //! What cash changed in `bc` on the way in from posixutils-rs (spec D56); the upstream
-//! suite itself runs in `bc.rs`.
+//! suite itself runs in `bc.rs`. `tests/oracle/bc_cases.sh` ran under GNU bc 1.07.1 to
+//! make `bc_cases.out`, and runs here under cash; where cash differs on purpose, the
+//! expected text is replaced in the test, with the reason beside it.
 
 #![cfg(windows)]
 #![allow(
@@ -118,4 +120,26 @@ fn an_ordinary_error_gets_no_extension_note() {
     let out = cash("bc", "1 +\n");
     assert!(!out.stderr.contains("GNU"), "{}", out.stderr);
     assert_eq!(out.code, 1);
+}
+
+#[test]
+fn bc_matches_gnu_bc() {
+    let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("oracle");
+    let golden = std::fs::read_to_string(dir.join("bc_cases.out"))
+        .expect("read golden output")
+        .replace("\r\n", "\n");
+    // Cases 49 to 52 are errors (division and modulus by zero, sqrt of a negative, a
+    // syntax error). GNU bc reports them on standard error and exits 0; cash exits 1,
+    // so `set -e` and `|| die` catch a failed calculation (D56).
+    let (head, errors) = golden.split_at(golden.find("## 49:\n").expect("error cases"));
+    let expected = format!("{head}{}", errors.replace("rc=0\n", "rc=1\n"));
+    let out = Command::new(CASH)
+        .arg("bc_cases.sh")
+        .current_dir(dir)
+        .stdin(Stdio::null())
+        .output()
+        .expect("run cash");
+    assert_eq!(String::from_utf8_lossy(&out.stdout), expected);
 }
