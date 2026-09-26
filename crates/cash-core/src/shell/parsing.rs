@@ -46,6 +46,7 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
             sh_mode: self.options.sh_mode,
             tilde_expansion_at_word_start: true,
             tilde_expansion_after_colon: false,
+            windows_drive_paths: self.options.windows_drive_paths,
             parser_impl: self.parser_impl,
         }
     }

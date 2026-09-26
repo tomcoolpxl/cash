@@ -124,7 +124,8 @@ fn report_failure(
         writeln!(
             context.stderr(),
             "cd: hint: a backslash is an escape character, so an unquoted C:\\dir\\sub \
-             arrives as C:dirsub; quote it ('C:\\dir\\sub') or use forward slashes (C:/dir/sub)"
+             arrives as C:dirsub; quote it ('C:\\dir\\sub'), use forward slashes \
+             (C:/dir/sub), or turn on shopt -s winpaths"
         )?;
     }
     Ok(ExecutionResult::general_error())

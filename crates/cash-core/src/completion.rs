@@ -1358,6 +1358,17 @@ fn escape_for_double_quotes(text: &str) -> String {
     out
 }
 
+/// Whether `token` starts with a drive and a backslash (`C:\`) and holds no quote that
+/// the expansion would have to see closed.
+fn is_unquoted_drive_path(token: &str) -> bool {
+    let bytes = token.as_bytes();
+    bytes.len() >= 3
+        && bytes[0].is_ascii_alphabetic()
+        && bytes[1] == b':'
+        && bytes[2] == b'\\'
+        && !token.contains(['\'', '"', '`'])
+}
+
 async fn get_file_completions(
     shell: &Shell<impl extensions::ShellExtensions>,
     token_to_complete: &str,
@@ -1370,10 +1381,21 @@ async fn get_file_completions(
         execute_command_substitutions: false,
         ..Default::default()
     };
+    // cash (D53): with `winpaths`, `C:\Users\me\sr` keeps its backslashes, and the
+    // expansion applies that rule itself; unquoting first would strip them and complete
+    // `C:Usersmesr` instead. A word with quotes in it still goes through `unquote_str`,
+    // which copes with a quote left open mid-completion.
+    let keeps_backslashes =
+        shell.options().windows_drive_paths && is_unquoted_drive_path(token_to_complete);
+    let to_expand = if keeps_backslashes {
+        token_to_complete.to_owned()
+    } else {
+        unquote_str(token_to_complete)
+    };
     let expanded_token = expansion::basic_expand_word_with_options(
         &mut throwaway_shell,
         &params,
-        &unquote_str(token_to_complete),
+        &to_expand,
         &options,
     )
     .await

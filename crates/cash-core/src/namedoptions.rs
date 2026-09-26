@@ -865,6 +865,13 @@ static SHOPT_OPTIONS: LazyLock<HashMap<&'static str, ShellOptionDef>> = LazyLock
             ),
         ),
         (
+            "winpaths",
+            ShellOptionDef::new(
+                |options| options.windows_drive_paths,
+                |options, value| options.windows_drive_paths = value,
+            ),
+        ),
+        (
             "xpg_echo",
             ShellOptionDef::new(
                 |options| options.echo_builtin_expands_escape_sequences,

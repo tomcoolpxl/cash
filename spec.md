@@ -171,7 +171,8 @@ is the only one.
 `C:\test\dir` **cannot** work unquoted, and this is not a choice cash gets to make.
 Backslash is bash's escape character, so `cd C:\test\dir` lexes to `C:testdir` before the
 path layer ever sees it. Supporting it would mean breaking bash's quoting rules, which is
-a direct hit on D2.
+a direct hit on D2. (At the interactive prompt, D53's `winpaths` does support it, in a
+narrow form; scripts keep this rule.)
 
 Quoted, it works — and must, because you will paste paths from Explorer and from Windows
 error messages, and native tools emit backslash paths in their output:
@@ -1295,6 +1296,34 @@ command-running tools need nothing: `nohup` is a cash builtin that runs its comm
 through `cash -c`, and `nice`, `stdbuf` and `chroot` are not bundled.
 `crates/cash/tests/msys_args.rs` round-trips hostile arguments through Git's `printf.exe`.
 
+### D53 — `winpaths`: at the prompt, an unquoted `C:\…` means the path
+
+D3 keeps bash's lexing, so an unquoted `cd C:\Users\me` reaches `cd` as `C:Usersme`, and
+every path pasted from Explorer, a PowerShell prompt or a Windows error message fails
+unless it is quoted. Quoting on paste was the first idea, and it cannot work on Windows:
+crossterm has no bracketed paste there, so a paste arrives as ordinary keystrokes with
+nothing marking where it starts or ends.
+
+`shopt winpaths` changes the word parser instead. In a word that starts with a drive and
+a backslash, and only in its leading unquoted run, a backslash is kept wherever bash's
+escape would only have removed it:
+
+- before a letter, a digit or one of `. _ - $ @ + % , = ^ ~ # [ ] { }`, both the
+  backslash and the character are literal (`C:\$Recycle.Bin`, `C:\ProgramData\{GUID}`);
+- before `*` or `?`, which no Windows file name contains, the backslash is kept and the
+  wildcard still globs (`C:\logs\*.txt`);
+- before anything else (a space, a quote, `!`, `(`, an operator) it is bash's escape:
+  `C:\Program\ Files` is one word.
+
+The run ends at the first quote, expansion or substitution, and only a word's first
+characters can trigger the rule, so `x=C:\y` and `--dir=C:\y` keep bash's meaning.
+Completion follows the same rule. A word like `C:\Users` lexes under bash to something
+no script means, so the rule takes nothing a script relies on, but it is still a
+divergence and the same line can mean different things typed and in a script. It is
+therefore **on by default in interactive shells and off otherwise**; `shopt -u winpaths`
+in `.cashrc` turns it off at the prompt too. A failed `cd` whose target has lost its
+backslashes (`cd: C:Usersme: No such file or directory`) prints a hint naming the option.
+
 ---
 
 ## 4. Deliberate divergences from bash
@@ -1334,6 +1363,7 @@ someone who expected bash, so additions need to earn their place.
 | 27 | Arithmetic never executes `$(...)` found in an array subscript inside a variable's value | Bash runs it (`read n; echo $((n+1))` with input `a[$(cmd)]`), a well-known code-injection hole; Cash reports an error for indexed arrays and uses the text as a literal key for associative ones | — |
 | 28 | `fuser DIR` and `lsof DIR` report holders of the files below the directory, not processes using it as their working directory; lsof's FD, DEVICE and NODE are `-` | Windows exposes no per-process descriptor or working-directory information through a documented API | D50 |
 | 29 | `ss` prints Recv-Q/Send-Q as `0`, `fd=-` for processes, and every UDP socket as `UNCONN` | Windows' socket tables carry no queue sizes, descriptor numbers or UDP peers | D51 |
+| 30 | At the interactive prompt, an unquoted word starting `C:\` keeps its backslashes (`shopt winpaths`, off in scripts) | Pasted Windows paths are otherwise mangled to `C:Usersme` | D53 |
 
 `select` was missing outright until recently: it was a reserved word with no grammar
 rule, so `select x in a b; do …; done` was a syntax error that took the whole file with

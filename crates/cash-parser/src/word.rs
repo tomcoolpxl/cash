@@ -578,12 +578,110 @@ fn cacheable_parse(
 ) -> Result<Vec<WordPieceWithSource>, error::WordParseError> {
     tracing::debug!(target: "expansion", "Parsing word '{}'", word);
 
-    let pieces = expansion_parser::unexpanded_word(word, options)
+    let mut pieces = expansion_parser::unexpanded_word(word, options)
         .map_err(|err| error::WordParseError::Word(word.to_owned(), err.into()))?;
+
+    if options.windows_drive_paths && starts_with_drive_backslash(word) {
+        keep_path_backslashes(&mut pieces);
+    }
 
     tracing::debug!(target: "expansion", "Parsed word '{}' => {{{:?}}}", word, pieces);
 
     Ok(pieces)
+}
+
+/// Whether `word` begins `X:\`: a drive letter, a colon and a backslash, unquoted.
+const fn starts_with_drive_backslash(word: &str) -> bool {
+    let bytes = word.as_bytes();
+    bytes.len() >= 3 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' && bytes[2] == b'\\'
+}
+
+/// cash's `winpaths` (D53): in the leading unquoted run of a word that starts `C:\`,
+/// a backslash is a path separator where bash's escape would only have eaten it:
+///
+/// * before a character that can begin a file name and means nothing special there
+///   (see [`starts_a_path_component`]), the backslash and the character are both kept
+///   literally, so `C:\Users\me`, `C:\$Recycle.Bin` and `C:\ProgramData\{GUID}` mean
+///   the paths they spell;
+/// * before `*` or `?`, which no Windows file name contains, the backslash is kept and
+///   the wildcard stays a wildcard, so `C:\logs\*.txt` globs;
+/// * before anything else — a space, a quote, `!`, `(`, an operator — it is bash's
+///   escape as ever: `C:\Program\ Files` is one word.
+///
+/// The run ends at the first quote, expansion or substitution; nothing after it is
+/// reinterpreted. Under bash rules such a word lexes to `C:Usersme`, which no script
+/// means, so the rule takes nothing a script could rely on. It is still a divergence,
+/// and is on by default only at the interactive prompt.
+///
+/// Kept characters become single-quoted text so they are literal in a glob pattern
+/// too, just as they would be had the user quoted the path.
+/// Characters a Windows file name can start with that a backslash before them in bash
+/// only removes, never gives meaning: letters, digits and `. _ - $ @ + % , = ^ ~ # [ ] { }`.
+/// (`{` and `}` so that a `{GUID}` folder stays one literal name.)
+fn starts_a_path_component(c: char) -> bool {
+    c.is_alphanumeric()
+        || matches!(
+            c,
+            '.' | '_'
+                | '-'
+                | '$'
+                | '@'
+                | '+'
+                | '%'
+                | ','
+                | '='
+                | '^'
+                | '~'
+                | '#'
+                | '['
+                | ']'
+                | '{'
+                | '}'
+        )
+}
+
+fn keep_path_backslashes(pieces: &mut Vec<WordPieceWithSource>) {
+    let mut out = Vec::with_capacity(pieces.len() + 2);
+    let mut in_run = true;
+    for piece in pieces.drain(..) {
+        if !in_run {
+            out.push(piece);
+            continue;
+        }
+        let escaped = match &piece.piece {
+            WordPiece::Text(_) => None,
+            WordPiece::EscapeSequence(escape) => escape
+                .strip_prefix('\\')
+                .and_then(|rest| rest.chars().next()),
+            _ => {
+                in_run = false;
+                None
+            }
+        };
+        match escaped {
+            Some(c) if starts_a_path_component(c) => {
+                out.push(WordPieceWithSource {
+                    piece: WordPiece::SingleQuotedText(std::format!("\\{c}")),
+                    ..piece
+                });
+            }
+            Some(c @ ('*' | '?')) => {
+                let split = piece.start_index + 1;
+                out.push(WordPieceWithSource {
+                    piece: WordPiece::SingleQuotedText("\\".to_owned()),
+                    start_index: piece.start_index,
+                    end_index: split,
+                });
+                out.push(WordPieceWithSource {
+                    piece: WordPiece::Text(c.to_string()),
+                    start_index: split,
+                    end_index: piece.end_index,
+                });
+            }
+            _ => out.push(piece),
+        }
+    }
+    *pieces = out;
 }
 
 /// Parse a heredoc body, treating `"` and `'` as literal characters.

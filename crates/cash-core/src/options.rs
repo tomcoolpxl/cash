@@ -181,6 +181,8 @@ pub struct RuntimeOptions {
     pub source_builtin_searches_path: bool,
     /// `varredir_close`
     pub var_redir_close: bool,
+    /// `winpaths` (cash, D53): an unquoted word starting `C:\` keeps its backslashes.
+    pub windows_drive_paths: bool,
     /// `xpg_echo`
     pub echo_builtin_expands_escape_sequences: bool,
 
@@ -260,6 +262,9 @@ impl RuntimeOptions {
             options.enable_bang_style_history_substitution = true;
             options.emacs_mode = !create_options.no_editing;
             options.expand_aliases = true;
+            // D53: at the prompt, a pasted or typed `C:\Users\me` means the path. Scripts
+            // keep bash's lexing exactly.
+            options.windows_drive_paths = true;
         }
 
         if create_options.posix {

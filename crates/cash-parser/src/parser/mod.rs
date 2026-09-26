@@ -33,6 +33,9 @@ pub struct ParserOptions {
     pub tilde_expansion_at_word_start: bool,
     /// Whether or not to perform tilde expansion for tildes after colons.
     pub tilde_expansion_after_colon: bool,
+    /// Whether an unquoted word that starts with a drive and a backslash (`C:\`) keeps
+    /// the backslashes in its leading unquoted run (cash's `winpaths`, D53).
+    pub windows_drive_paths: bool,
     /// Select the parser internal implementation
     pub parser_impl: ParserImpl,
 }
@@ -45,6 +48,7 @@ impl Default for ParserOptions {
             sh_mode: false,
             tilde_expansion_at_word_start: true,
             tilde_expansion_after_colon: false,
+            windows_drive_paths: false,
             parser_impl: ParserImpl::default(),
         }
     }
@@ -125,6 +129,9 @@ impl<R: std::io::BufRead> Parser<R> {
         #[builder(default = false)]
         /// Whether or not to perform tilde expansion for tildes after colons.
         tilde_expansion_after_colon: bool,
+        #[builder(default = false)]
+        /// Whether a word starting `C:\` keeps its backslashes (cash's `winpaths`).
+        windows_drive_paths: bool,
         #[builder(default)]
         /// Select the parser internal implementation
         parser_impl: ParserImpl,
@@ -135,6 +142,7 @@ impl<R: std::io::BufRead> Parser<R> {
             sh_mode,
             tilde_expansion_at_word_start,
             tilde_expansion_after_colon,
+            windows_drive_paths,
             parser_impl,
         };
         Self { reader, options }
