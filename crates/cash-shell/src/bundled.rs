@@ -73,6 +73,11 @@ fn run_bc_bundled(args: Vec<OsString>) -> i32 {
     cash_bc::run_bc(args)
 }
 
+#[cfg(windows)]
+fn run_ping_bundled(args: Vec<OsString>) -> i32 {
+    cash_builtins::ping::run_ping(args)
+}
+
 fn run_sed_bundled(args: Vec<OsString>) -> i32 {
     cash_sed::uumain(args.into_iter())
 }
@@ -92,6 +97,8 @@ pub fn install_default_providers() {
     commands.insert("awk".to_string(), run_awk_bundled);
     commands.insert("sed".to_string(), run_sed_bundled);
     commands.insert("bc".to_string(), run_bc_bundled);
+    #[cfg(windows)]
+    commands.insert("ping".to_string(), run_ping_bundled);
 
     install(commands);
 }

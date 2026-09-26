@@ -19,6 +19,8 @@ pub mod console;
 pub mod env;
 pub mod exit;
 pub mod fs;
+/// ICMP echo through the IP Helper API, for `ping`.
+pub mod icmp;
 pub mod job;
 pub mod jobreg;
 pub mod msys;

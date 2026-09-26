@@ -28,6 +28,8 @@ mod lsof;
 #[cfg(windows)]
 mod pgrep;
 #[cfg(windows)]
+pub mod ping;
+#[cfg(windows)]
 mod procmatch;
 #[cfg(windows)]
 mod ps;

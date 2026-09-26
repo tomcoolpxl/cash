@@ -63,6 +63,7 @@ const CARRIED: &[&str] = &[
     "ps", "top", "find", "xargs", "less", "more", "which", "kill", "cat", "mktemp", "hostname",
     "chmod", "id", "groups", "awk", "sed", "stat", "tty", "nohup", "who", "users", "pinky",
     "logname", "hostid", "pathchk", "install", "dos2unix", "unix2dos", "fuser", "lsof", "ss",
+    "ping",
 ];
 
 /// Shells whose name must resolve to cash itself (D7).
@@ -89,6 +90,7 @@ pub fn run() -> u8 {
     check_shells(&mut findings, &entries, &pathext, &cwd);
     check_commands(&mut findings, &builtins, &entries, &pathext, &cwd);
     check_dos_shadowing(&mut findings, &builtins, &entries, &pathext, &cwd);
+    check_deliberate_shadows(&mut findings, &builtins, &entries, &pathext, &cwd);
 
     report(&findings)
 }
@@ -363,6 +365,51 @@ fn check_dos_shadowing(
                 )),
             });
         }
+    }
+}
+
+/// System32 tools cash shadows on purpose, and how its own one differs.
+const DELIBERATE_SHADOWS: &[(&str, &str)] = &[
+    (
+        "ping",
+        "Linux flags: -c is the count, -n is numeric output (D57)",
+    ),
+    (
+        "reset",
+        "the terminal reset; System32's is the Remote Desktop `reset session` (D55)",
+    ),
+];
+
+/// Names cash answers although System32 has a program of the same name with other
+/// flags. Reported so that nobody is surprised, and so that a `ping -n 3` habit has
+/// somewhere to learn where `ping.exe` went.
+fn check_deliberate_shadows(
+    findings: &mut Vec<Finding>,
+    builtins: &std::collections::HashSet<String>,
+    entries: &[PathBuf],
+    pathext: &[String],
+    cwd: &Path,
+) {
+    for (command, how) in DELIBERATE_SHADOWS {
+        if !builtins.contains(*command) {
+            continue;
+        }
+        let Some(dispatch) = resolve(command, entries, pathext, cwd) else {
+            continue;
+        };
+        let target = dispatch.target();
+        if !is_system32(target) {
+            continue;
+        }
+        let shadowed = cash_win32::path::render(target);
+        findings.push(Finding {
+            level: Level::Note,
+            subject: (*command).to_owned(),
+            detail: format!("cash's own, ahead of {shadowed}: {how}"),
+            fix: Some(format!(
+                "for Windows' {command}, run {shadowed} by its path, or `enable -n {command}`"
+            )),
+        });
     }
 }
 
