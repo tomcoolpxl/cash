@@ -69,8 +69,12 @@ mod styles {
     }
 }
 
+/// The line editor's highlighter, installed whether or not colours are wanted: it also
+/// decides where abbreviations expand (D60).
 pub(crate) struct ReedlineHighlighter<SE: cash_core::ShellExtensions> {
     pub shell: refs::ShellRef<SE>,
+    /// Colour the line by syntax; otherwise it is shown in the terminal's default colour.
+    pub syntax: bool,
 }
 
 pub(crate) struct PlainTextHighlighter;
@@ -86,6 +90,10 @@ impl reedline::Highlighter for PlainTextHighlighter {
 impl<SE: cash_core::ShellExtensions> reedline::Highlighter for ReedlineHighlighter<SE> {
     #[expect(clippy::significant_drop_tightening)]
     fn highlight(&self, line: &str, cursor: usize) -> reedline::StyledText {
+        if !self.syntax {
+            return PlainTextHighlighter.highlight(line, cursor);
+        }
+
         let shell = tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(self.shell.lock())
         });
@@ -98,6 +106,24 @@ impl<SE: cash_core::ShellExtensions> reedline::Highlighter for ReedlineHighlight
         }
 
         styled
+    }
+
+    /// Reedline expands a word it has an abbreviation for on Space and Enter, and asks
+    /// here first. Its table is only ever added to (see `input_backend`), so this also
+    /// refuses a name `abbr -e` removed since.
+    fn should_expand_abbr(
+        &self,
+        line: &str,
+        word_start: usize,
+        context: reedline::AbbrExpandContext,
+    ) -> bool {
+        if context != reedline::AbbrExpandContext::WordAbbreviation {
+            return false;
+        }
+        let shell = tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(self.shell.lock())
+        });
+        highlighting::abbreviation_applies(shell.as_ref(), line, word_start)
     }
 }
 

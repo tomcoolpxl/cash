@@ -48,3 +48,11 @@ It sits outside the workspace, so cash's lints do not apply to it. Its own tests
    ten events Reedline waits `POLL_WAIT` for more before painting, and every paste ended
    with that wait running out. It is 10 ms now: a paste reaches the console in one piece,
    and one that stalls longer is painted in two batches, which costs a repaint.
+
+4. **An abbreviation expands however the keys were read** (`src/engine.rs`, spec D60).
+   Reedline merges the keys of one read into one edit and tried abbreviation expansion
+   only when that edit began with a space. Keys that arrive faster than the prompt
+   repaints are read together, so `gco` then Space became one edit starting with `o`, and
+   `gco` stayed as typed. The edit now runs up to each space it inserts, tries expansion
+   there, and goes on. A bracketed paste arrives as one inserted string rather than as
+   spaces, so pasted text still never expands, as in fish.

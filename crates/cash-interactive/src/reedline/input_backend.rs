@@ -78,8 +78,9 @@ impl ReedlineInputBackend {
         let validator = validator::ReedlineValidator {
             shell: shell_ref.clone(),
         };
-        let syntax_highlighter = highlighter::ReedlineHighlighter {
+        let highlighter = highlighter::ReedlineHighlighter {
             shell: shell_ref.clone(),
+            syntax: !options.disable_color && !options.disable_highlighting,
         };
         let history = history::ReedlineHistory {
             shell: shell_ref.clone(),
@@ -114,7 +115,10 @@ impl ReedlineInputBackend {
 
         // Instantiate reedline with some defaults and hand it ownership of
         // the helpers.
-        let mut reedline = reedline::Reedline::create()
+        // Cash's highlighter replaces Reedline's example one, which hard-codes white as the
+        // neutral input color. It is installed even without syntax colours, when it paints
+        // the terminal's default color, because it also decides where abbreviations expand.
+        let reedline = reedline::Reedline::create()
             .with_ansi_colors(!options.disable_color)
             .use_bracketed_paste(!options.disable_bracketed_paste)
             .with_completer(Box::new(completer))
@@ -124,20 +128,10 @@ impl ReedlineInputBackend {
             .with_partial_completions(true)
             .with_validator(Box::new(validator))
             .with_hinter(Box::new(hinter))
+            .with_highlighter(Box::new(highlighter))
             .with_menu(reedline::ReedlineMenu::EngineCompleter(completion_menu))
             .with_edit_mode(Box::new(mutable_edit_mode))
             .with_history(Box::new(history));
-
-        // Override Reedline's default example highlighter, which hard-codes white as the
-        // neutral input color. When syntax highlighting is disabled we still install a plain
-        // highlighter so typed text follows the terminal's default foreground color.
-        if !options.disable_color {
-            reedline = if options.disable_highlighting {
-                reedline.with_highlighter(Box::new(highlighter::PlainTextHighlighter))
-            } else {
-                reedline.with_highlighter(Box::new(syntax_highlighter))
-            };
-        }
 
         let mut shell = tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(shell_ref.lock())
@@ -178,9 +172,29 @@ impl InputBackend for ReedlineInputBackend {
     /// * `prompt` - The prompt to display to the user.
     fn read_line(
         &mut self,
-        _shell: &crate::ShellRef<impl cash_core::ShellExtensions>,
+        shell: &crate::ShellRef<impl cash_core::ShellExtensions>,
         prompt: InteractivePrompt,
     ) -> Result<ReadResult, ShellError> {
+        // Hand Reedline the abbreviations as they stand (D60). Its table can only be added
+        // to, and an entry overwritten by name; one `abbr -e` removed stays in it, and the
+        // highlighter's `should_expand_abbr` refuses it.
+        let abbreviations: std::collections::HashMap<String, String> = {
+            let shell = tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current().block_on(shell.lock())
+            });
+            shell
+                .abbreviations()
+                .iter()
+                .map(|a| (a.name.clone(), a.expansion.clone()))
+                .collect()
+        };
+        if !abbreviations.is_empty() {
+            self.reedline = self
+                .reedline
+                .take()
+                .map(|reedline| reedline.with_abbreviations(abbreviations));
+        }
+
         let Some(reedline) = &mut self.reedline else {
             return Ok(ReadResult::Eof);
         };

@@ -456,3 +456,56 @@ fn conpty_ctrl_x_ctrl_e_runs_the_edited_line() {
     session.send("exit 0\r").unwrap();
     assert_eq!(session.wait().expect("process did not exit"), 0);
 }
+
+/// fish's abbreviations (D60): the command word expands on Space and on Enter, history
+/// keeps the expansion, and an erased abbreviation expands no more.
+#[test]
+fn conpty_abbr_expands_as_the_command_word() {
+    let mut session = start_reedline_cash();
+    session
+        .expect("PROMPT$", Duration::from_secs(10))
+        .expect("prompt displayed");
+
+    // Quoted whole, so the expansion keeps its own quotes.
+    session.send("abbr -a pj \"printf '%s-%s\\n'\"\r").unwrap();
+
+    // On Space: the typed line becomes `printf '%s-%s\n' A B`, whose output the typed
+    // line never contains. The keys go in one write, so they are read together.
+    session.send("pj A B\r").unwrap();
+    session
+        .expect("\r\nA-B\x1b[K", Duration::from_secs(10))
+        .expect("the abbreviation did not expand on Space");
+
+    // Not as an argument: the output line is `pj C` itself.
+    session.send("echo pj C\r").unwrap();
+    session
+        .expect("\r\npj C\x1b[K", Duration::from_secs(10))
+        .expect("an argument expanded");
+
+    // On Enter, with nothing after it.
+    session
+        .send("abbr -a pk \"printf 'K%s%s\\n' x y\"\r")
+        .unwrap();
+    session.send("pk\r").unwrap();
+    session
+        .expect("\r\nKxy\x1b[K", Duration::from_secs(10))
+        .expect("the abbreviation did not expand on Enter");
+
+    // The session has no PATH, so cash's own awk: history lines whose command is the
+    // expanded `printf 'K…`.
+    session
+        .send("history 5 | awk '$2 == \"printf\" && /K%s/ {n++} END {print \"HIST=\" n}'\r")
+        .unwrap();
+    session
+        .expect("HIST=1", Duration::from_secs(10))
+        .expect("history did not keep the expansion");
+
+    session.send("abbr -e pj\r").unwrap();
+    session.send("pj D E\r").unwrap();
+    session
+        .expect("command not found: pj", Duration::from_secs(10))
+        .expect("an erased abbreviation still expanded");
+
+    session.send("exit 0\r").unwrap();
+    assert_eq!(session.wait().expect("process did not exit"), 0);
+}

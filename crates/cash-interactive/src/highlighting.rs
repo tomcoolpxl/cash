@@ -41,6 +41,59 @@ pub enum HighlightKind {
     UnknownCommand,
 }
 
+impl HighlightKind {
+    /// Whether a word of this kind stands where a command does.
+    #[must_use]
+    pub const fn is_command(self) -> bool {
+        matches!(
+            self,
+            Self::Function
+                | Self::Keyword
+                | Self::Builtin
+                | Self::Alias
+                | Self::ExternalCommand
+                | Self::NotFoundCommand
+                | Self::UnknownCommand
+        )
+    }
+}
+
+/// Whether the word at byte `word_start` of `line` is an abbreviation that expands there.
+///
+/// It must be one `abbr` defines now (D60), standing as a command unless it was defined
+/// with `--position anywhere`, and never inside quotes or a comment.
+#[must_use]
+pub fn abbreviation_applies(
+    shell: &cash_core::Shell<impl cash_core::ShellExtensions>,
+    line: &str,
+    word_start: usize,
+) -> bool {
+    let word = line
+        .get(word_start..)
+        .and_then(|rest| rest.split(char::is_whitespace).next())
+        .unwrap_or_default();
+    let Some(abbreviation) = shell.abbreviations().get(word) else {
+        return false;
+    };
+
+    // With the cursor on the word, its command lookup is skipped: only its place matters.
+    let highlighted = highlight_command(shell, line, word_start);
+    let Some(span) = highlighted
+        .spans()
+        .iter()
+        .find(|span| span.range.start == word_start)
+    else {
+        return false;
+    };
+
+    match abbreviation.position {
+        cash_core::abbreviations::Position::Command => span.kind.is_command(),
+        cash_core::abbreviations::Position::Anywhere => {
+            !matches!(span.kind, HighlightKind::Quoted | HighlightKind::Comment)
+        }
+    }
+}
+
 /// A highlighted span of text with semantic meaning.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HighlightSpan {
@@ -534,6 +587,45 @@ mod tests {
             settled_command_kind(&shell, "no-such-tool x").await,
             HighlightKind::NotFoundCommand
         );
+    }
+
+    #[tokio::test]
+    async fn an_abbreviation_applies_where_it_is_defined_to() {
+        use cash_core::abbreviations::{Abbreviation, Position};
+
+        let mut shell = cash_core::Shell::builder().build().await.unwrap();
+        for (name, position) in [("gco", Position::Command), ("L", Position::Anywhere)] {
+            shell.abbreviations_mut().set(Abbreviation {
+                name: name.into(),
+                expansion: "x".into(),
+                position,
+            });
+        }
+
+        // (line as the editor holds it, byte where the word starts, expands)
+        for (line, start, expands) in [
+            ("gco ", 0, true),
+            ("gco", 0, true),
+            ("  gco ", 2, true),
+            ("echo a | gco ", 9, true),
+            ("FOO=1 gco ", 6, true),
+            ("echo gco ", 5, false),
+            ("echo 'gco ", 5, false),
+            ("gcox ", 0, false),
+            ("ls L ", 3, true),
+            ("L ", 0, true),
+            ("echo 'a L ", 8, false),
+            ("# L ", 2, false),
+        ] {
+            assert_eq!(
+                abbreviation_applies(&shell, line, start),
+                expands,
+                "{line:?} at {start}"
+            );
+        }
+
+        shell.abbreviations_mut().remove("gco");
+        assert!(!abbreviation_applies(&shell, "gco ", 0));
     }
 
     #[tokio::test]

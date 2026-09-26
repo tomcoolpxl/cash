@@ -1652,13 +1652,25 @@ impl Reedline {
                 Ok(EventStatus::Exits(Signal::HostCommand(host_command)))
             }
             ReedlineEvent::Edit(commands) => {
-                self.run_edit_commands(&commands);
-                // Check if a space was just inserted and try to expand abbreviations
-                if let Some(EditCommand::InsertChar(' ')) = commands.first() {
-                    if let Some(event) = self.try_expand_abbreviation_at_cursor(false) {
-                        return self.handle_editor_event(prompt, event);
+                // cash (CASH-PATCHES.md, patch 4): the keys of one read arrive merged
+                // into one edit, so a space typed right after the word (`gco ` read
+                // together) was never the first command, and nothing expanded. Try
+                // after every inserted space instead.
+                let mut rest = commands.as_slice();
+                while let Some(space) = rest
+                    .iter()
+                    .position(|command| matches!(command, EditCommand::InsertChar(' ')))
+                {
+                    let (through_space, after) = rest.split_at(space + 1);
+                    self.run_edit_commands(through_space);
+                    if let Some(ReedlineEvent::Edit(expansion)) =
+                        self.try_expand_abbreviation_at_cursor(false)
+                    {
+                        self.run_edit_commands(&expansion);
                     }
+                    rest = after;
                 }
+                self.run_edit_commands(rest);
                 if let Some(menu) = self.menus.iter_mut().find(|men| men.is_active()) {
                     if self.quick_completions && menu.can_quick_complete() {
                         match commands.first() {
@@ -3618,6 +3630,24 @@ mod tests {
             _ => panic!("expected Edit event"),
         });
         assert_eq!(reedline.current_buffer_contents(), "git commit");
+    }
+
+    /// cash patch 4: keys read together arrive as one merged edit, whose first command is
+    /// not the space; the word before each space still expands.
+    #[test]
+    fn abbreviation_expands_when_its_space_is_read_together_with_the_word() {
+        let mut reedline =
+            reedline_with_abbrevs_and_default_string_lit_check(&[("gc", "git commit")]);
+        reedline.painter.force_prompt_anchored_for_test(0);
+        let keys = "gc -m x gc ".chars().map(|c| Event::Key(ch(c))).collect();
+        let _ = reedline
+            .process_input_batch(&DefaultPrompt::default(), keys)
+            .expect("batch ok");
+        // The second `gc` is an argument by position, but this highlighter allows it.
+        assert_eq!(
+            reedline.current_buffer_contents(),
+            "git commit -m x git commit "
+        );
     }
 
     #[test]

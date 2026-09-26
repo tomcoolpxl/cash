@@ -1155,6 +1155,7 @@ Four, all justified by decisions made above rather than invented:
 | `detach` | Deliberate job-object breakaway — start something meant to outlive the shell. |
 | `elevate` | UAC elevation as a first-class verb, so cash can warn that the child escapes D6 and register it for D42's tracking. |
 | `start` | Open a file or URL with its default handler — the Windows `xdg-open`. |
+| `abbr` | fish's abbreviations, which the prompt expands in place (D60). Added later, and not Windows-specific. |
 
 **`detach` has a cost, listed as an exception in D6.** For a child to leave the session
 job, that job must be created with `JOB_OBJECT_LIMIT_BREAKAWAY_OK`, which means *any*
@@ -1581,6 +1582,41 @@ keeps the neutral colour rather than waiting. A name matched without an extensio
 The listing can lag a program installed a moment ago. That is acceptable for a colour and
 would not be for running a command, so nothing that executes consults it; command
 resolution still probes the disk as before.
+
+Every command of a line is checked, not only the first: a control operator (`;`, `&`,
+`&&`, `||`, `|`, `|&`, `(`, newline) or a reserved word that precedes a command (`if`,
+`then`, `do`, `!`, …) starts another, so `ls | nosuch` marks `nosuch`.
+
+### D60 — `abbr`: fish's abbreviations
+
+An alias is replaced when the command runs, so history keeps `gco` and the screen never
+shows what ran. fish's abbreviations are replaced on the line itself: `abbr -a gco git
+checkout`, then `gco` followed by Space or Enter becomes `git checkout`, visibly, and that
+is what runs and what history keeps. Aliases stay as they are; nothing turns them into
+abbreviations.
+
+`abbr` takes fish's options so a line from `config.fish` works: `-a`/`--add` (the default
+when names are given), `-e`, `-s`/`--show` (the default without arguments; it prints
+`abbr -a -- gco 'git checkout'` lines that define them again), `-l`, `-q`, `-r`, and
+`--position command|anywhere`. `-g` and `-U`, fish's old scope flags, are accepted and
+ignored, as current fish ignores them. fish's `--regex`, `--function` and `--set-cursor`
+are refused by name. Like fish, the expansion is the remaining arguments joined by spaces,
+after the shell has removed their quoting: an expansion that needs quotes of its own is
+quoted whole.
+
+An abbreviation expands only as the command word — first on the line, or after a control
+operator or a reserved word that precedes a command (D59's rule) — unless it was defined
+with `--position anywhere`, and never inside quotes or a comment. Reedline, the line
+editor, already expands abbreviations on Space and Enter and asks the highlighter whether a
+position allows it; cash hands it the table before each prompt and answers from the shell's
+own table, which also refuses a name `abbr -e` removed since. Reedline tried expansion only
+when a read began with the space, so keys read together (`o` and Space, when typing
+outpaces the repaint) never expanded; cash's copy tries after every space (reedline patch
+4). A bracketed paste is not typed spaces, so pasted text never expands, as in fish.
+
+`abbr` is a cash-only builtin (D45). In real Bash a `.bashrc` line calling it fails, so a
+file shared between shells guards it: `command -v abbr >/dev/null && abbr -a gco git
+checkout`.
 
 ---
 

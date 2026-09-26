@@ -13,6 +13,9 @@
 #[cfg(windows)]
 mod win;
 
+// cash (D60): fish's abbreviations.
+mod abbr;
+
 // cash (D48): `ps`, which uutils does not carry and whose PATH stand-in reports MSYS
 // pids that `kill` cannot use.
 #[cfg(windows)]

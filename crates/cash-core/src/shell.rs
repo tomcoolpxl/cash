@@ -143,6 +143,9 @@ pub struct Shell<SE: extensions::ShellExtensions = extensions::DefaultShellExten
     #[cfg_attr(feature = "serde", serde(skip))]
     path_index: crate::pathindex::PathIndex,
 
+    /// Abbreviations defined with `abbr`, expanded by the line editor.
+    abbreviations: crate::abbreviations::Abbreviations,
+
     /// Last "SECONDS" captured time.
     last_stopwatch_time: std::time::SystemTime,
 
@@ -199,6 +202,7 @@ impl<SE: extensions::ShellExtensions> Clone for Shell<SE> {
             builtins: self.builtins.clone(),
             program_location_cache: self.program_location_cache.clone(),
             path_index: self.path_index.clone(),
+            abbreviations: self.abbreviations.clone(),
             last_stopwatch_time: self.last_stopwatch_time,
             last_stopwatch_offset: self.last_stopwatch_offset,
             parser_impl: self.parser_impl,
@@ -435,6 +439,16 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
 
     pub(crate) const fn last_exit_status_change_count(&self) -> usize {
         self.last_exit_status_change_count
+    }
+
+    /// Returns the abbreviations `abbr` defined, which the line editor expands.
+    pub const fn abbreviations(&self) -> &crate::abbreviations::Abbreviations {
+        &self.abbreviations
+    }
+
+    /// Returns a mutable reference to the shell's abbreviations.
+    pub const fn abbreviations_mut(&mut self) -> &mut crate::abbreviations::Abbreviations {
+        &mut self.abbreviations
     }
 }
 

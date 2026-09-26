@@ -218,6 +218,9 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
         m.insert("disown".into(), builtin::<disown::DisownCommand, SE>());
 
         m.insert("logout".into(), builtin::<logout::LogoutCommand, SE>());
+
+        // cash (D60): fish's abbreviations, expanded by the interactive line editor.
+        m.insert("abbr".into(), builtin::<abbr::AbbrCommand, SE>());
     }
 
     // cash (D45): Windows-specific builtins. Not feature-gated per builtin — they only
