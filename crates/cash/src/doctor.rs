@@ -89,6 +89,7 @@ pub fn run() -> u8 {
     check_carried(&mut findings, &builtins);
     check_shells(&mut findings, &entries, &pathext, &cwd);
     check_commands(&mut findings, &builtins, &entries, &pathext, &cwd);
+    check_busybox(&mut findings, &builtins, &entries, &pathext, &cwd);
     check_dos_shadowing(&mut findings, &builtins, &entries, &pathext, &cwd);
     check_deliberate_shadows(&mut findings, &builtins, &entries, &pathext, &cwd);
 
@@ -230,7 +231,7 @@ fn check_commands(
         };
 
         let target = dispatch.target().to_path_buf();
-        let (level, detail, fix) = describe(command, &target);
+        let (level, detail, fix) = describe(command, &target, entries, pathext, cwd);
         findings.push(Finding {
             level,
             subject: (*command).to_string(),
@@ -241,7 +242,13 @@ fn check_commands(
 }
 
 /// Describe where a command actually came from, and whether that is a problem.
-fn describe(command: &str, target: &Path) -> (Level, String, Option<String>) {
+fn describe(
+    command: &str,
+    target: &Path,
+    entries: &[PathBuf],
+    pathext: &[String],
+    cwd: &Path,
+) -> (Level, String, Option<String>) {
     let shown = cash_win32::path::render(target);
 
     // A Store alias whose app is not installed opens the Microsoft Store instead of
@@ -277,10 +284,12 @@ fn describe(command: &str, target: &Path) -> (Level, String, Option<String>) {
     if let Some(real) = shim_target(target) {
         let real_name = real.file_name().map(|n| n.to_string_lossy().to_lowercase());
         if real_name.as_deref() == Some("busybox.exe") {
+            let reason =
+                busybox_breakage(command).map_or_else(String::new, |(why, _)| format!(": {why}"));
             return (
                 Level::Warn,
-                format!("{shown} is a BusyBox applet"),
-                Some(busybox_advice(command)),
+                format!("{shown} is a BusyBox applet{reason}"),
+                Some(busybox_fix(command, target, entries, pathext, cwd)),
             );
         }
         return (
@@ -293,25 +302,138 @@ fn describe(command: &str, target: &Path) -> (Level, String, Option<String>) {
     (Level::Ok, shown, None)
 }
 
-/// Why a particular BusyBox applet is worth replacing.
-///
-/// Generic advice would be useless — "BusyBox cat is reduced" is true but does not
-/// matter, whereas BusyBox `awk` genuinely breaks real scripts. Say which is which.
-fn busybox_advice(command: &str) -> String {
-    let why = match command {
-        "awk" => {
-            "BusyBox awk is a POSIX subset with none of gawk's extensions — no gensub, \
-                  no length(array), limited regex"
+/// BusyBox applets that break scripts written for the GNU tools, each with what breaks
+/// and where the full tool comes from. Curated rather than every applet (research/
+/// busybox-gap-analysis.md, Q10): BusyBox `cat` is reduced too, but nothing notices.
+/// Each reason was checked against BusyBox 1.38 (the Scoop build) when this was written.
+const BUSYBOX_BREAKS: &[(&str, &str, &str)] = &[
+    (
+        "grep",
+        "no -P, no --include",
+        "winget install Microsoft.Coreutils",
+    ),
+    (
+        "egrep",
+        "no -P, no --include (it is BusyBox grep)",
+        "winget install Microsoft.Coreutils",
+    ),
+    (
+        "fgrep",
+        "no --include (it is BusyBox grep)",
+        "winget install Microsoft.Coreutils",
+    ),
+    ("diff", "no -y, no --color", "scoop install diffutils"),
+    (
+        "make",
+        "$(shell ...) expands to nothing, so GNU makefiles misbuild",
+        "scoop install make",
+    ),
+    (
+        "tar",
+        "no --transform",
+        "use Windows' own tar.exe, or scoop install tar",
+    ),
+    (
+        "xz",
+        "decompresses only; `xz FILE` cannot compress",
+        "scoop install xz",
+    ),
+    (
+        "nc",
+        "no -z, so `nc -z host port` port checks fail",
+        "scoop install nmap (for ncat)",
+    ),
+    ("wget", "-T (timeout) crashes it", "scoop install wget"),
+];
+
+/// What breaks in BusyBox's `command`, and how to get the full tool, if it is listed.
+fn busybox_breakage(command: &str) -> Option<(&'static str, &'static str)> {
+    BUSYBOX_BREAKS
+        .iter()
+        .find(|(name, _, _)| *name == command)
+        .map(|(_, why, install)| (*why, *install))
+}
+
+/// Whether `target` is a Scoop shim for BusyBox.
+fn is_busybox(target: &Path) -> bool {
+    shim_target(target).is_some_and(|real| {
+        real.file_name()
+            .is_some_and(|name| name.to_string_lossy().eq_ignore_ascii_case("busybox.exe"))
+    })
+}
+
+/// The first copy of `command` further down `PATH` that is not BusyBox, if any: often
+/// Git for Windows has the GNU tool, only later on `PATH` than Scoop's shims.
+fn later_full_copy(
+    command: &str,
+    shim: &Path,
+    entries: &[PathBuf],
+    pathext: &[String],
+    cwd: &Path,
+) -> Option<PathBuf> {
+    entries.iter().find_map(|entry| {
+        let found = resolve(command, std::slice::from_ref(entry), pathext, cwd)?;
+        let target = found.target().to_path_buf();
+        (target != shim && !is_busybox(&target)).then_some(target)
+    })
+}
+
+/// How to get the full tool: move an existing copy ahead of the shim, or install one.
+fn busybox_fix(
+    command: &str,
+    shim: &Path,
+    entries: &[PathBuf],
+    pathext: &[String],
+    cwd: &Path,
+) -> String {
+    if let Some(full) = later_full_copy(command, shim, entries, pathext, cwd) {
+        let dir = full
+            .parent()
+            .map(cash_win32::path::render)
+            .unwrap_or_default();
+        let shim_dir = shim
+            .parent()
+            .map(cash_win32::path::render)
+            .unwrap_or_default();
+        return format!(
+            "{} is the full tool, later on PATH: put {dir} before {shim_dir}",
+            cash_win32::path::render(&full)
+        );
+    }
+    let install = busybox_breakage(command).map_or("install the GNU tool", |(_, how)| how);
+    format!("install the full tool: {install}")
+}
+
+/// BusyBox applets on `PATH` for the listed tools that cash does not carry itself.
+/// Names in `EXPECTED` were already judged, with the same reason, by `describe`.
+fn check_busybox(
+    findings: &mut Vec<Finding>,
+    builtins: &std::collections::HashSet<String>,
+    entries: &[PathBuf],
+    pathext: &[String],
+    cwd: &Path,
+) {
+    for (command, why, _) in BUSYBOX_BREAKS {
+        if builtins.contains(*command) || EXPECTED.iter().any(|(name, _)| name == command) {
+            continue;
         }
-        "sed" => "BusyBox sed lacks GNU extensions that scripts commonly rely on",
-        "grep" => "BusyBox grep lacks GNU options such as -P and some -o behaviour",
-        "find" | "xargs" => "BusyBox findutils are reduced and miss common GNU options",
-        _ => {
-            "BusyBox provides a reduced implementation; the full version behaves more \
-              predictably for scripts written on Linux"
+        let Some(dispatch) = resolve(command, entries, pathext, cwd) else {
+            continue;
+        };
+        let target = dispatch.target().to_path_buf();
+        if !is_busybox(&target) {
+            continue;
         }
-    };
-    format!("{why}. Install with: {}", suggest_install(command))
+        findings.push(Finding {
+            level: Level::Warn,
+            subject: (*command).to_owned(),
+            detail: format!(
+                "{} is a BusyBox applet: {why}",
+                cash_win32::path::render(&target)
+            ),
+            fix: Some(busybox_fix(command, &target, entries, pathext, cwd)),
+        });
+    }
 }
 
 /// Whether a path lives in System32.
