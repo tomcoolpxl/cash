@@ -29,7 +29,7 @@
 use std::io;
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use windows_sys::Win32::Foundation::{CloseHandle, FALSE};
+use windows_sys::Win32::Foundation::{CloseHandle, FALSE, STILL_ACTIVE};
 use windows_sys::Win32::System::Console::{
     CTRL_BREAK_EVENT, GenerateConsoleCtrlEvent, SetConsoleCP, SetConsoleOutputCP,
 };
@@ -37,7 +37,8 @@ use windows_sys::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, TH32CS_SNAPTHREAD, THREADENTRY32, Thread32First, Thread32Next,
 };
 use windows_sys::Win32::System::Threading::{
-    OpenThread, ResumeThread, SuspendThread, THREAD_SUSPEND_RESUME,
+    GetExitCodeThread, OpenThread, ResumeThread, SuspendThread, THREAD_QUERY_LIMITED_INFORMATION,
+    THREAD_SUSPEND_RESUME,
 };
 
 /// UTF-8. Set for the console per D41.
@@ -182,11 +183,23 @@ where
     let mut ok = unsafe { Thread32First(snapshot, &raw mut entry) };
     while ok != 0 {
         if entry.th32OwnerProcessID == pid {
+            let access = THREAD_SUSPEND_RESUME | THREAD_QUERY_LIMITED_INFORMATION;
             // SAFETY: opening a thread by id; null is returned on failure.
-            let handle = unsafe { OpenThread(THREAD_SUSPEND_RESUME, FALSE, entry.th32ThreadID) };
+            let handle = unsafe { OpenThread(access, FALSE, entry.th32ThreadID) };
             if !handle.is_null() {
-                action(handle);
-                affected += 1;
+                // A thread that has finished stays in the snapshot for as long as anyone
+                // holds a handle to it (an antivirus scanner, say), and suspending it
+                // "succeeds". It is not running, so it is not counted or touched.
+                let mut code = 0u32;
+                // SAFETY: handle is a valid thread handle with query access, and `code`
+                // outlives the call.
+                let queried = unsafe { GetExitCodeThread(handle, &raw mut code) };
+                #[allow(clippy::cast_sign_loss, reason = "STILL_ACTIVE is 259")]
+                let running = queried == 0 || code == STILL_ACTIVE as u32;
+                if running {
+                    action(handle);
+                    affected += 1;
+                }
                 // SAFETY: closing a handle we just opened, exactly once.
                 unsafe { CloseHandle(handle) };
             }

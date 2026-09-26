@@ -102,6 +102,66 @@ fn suspending_a_dead_process_affects_nothing() {
 }
 
 #[test]
+fn a_finished_thread_someone_still_holds_is_not_suspended() {
+    // On GitHub's runner, suspending an exited process once reported 1 thread. The likely
+    // cause is a finished thread kept in the snapshot by a handle someone else held (an
+    // antivirus scanner, say), which SuspendThread then "succeeds" on. Windows 11 drops
+    // such threads from the snapshot, so here this passes with or without the exit-code
+    // check in `for_each_thread`; it holds the handles so that a Windows which keeps
+    // them is tested, not left to chance.
+    use windows_sys::Win32::Foundation::{CloseHandle, FALSE, HANDLE};
+    use windows_sys::Win32::System::Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, TH32CS_SNAPTHREAD, THREADENTRY32, Thread32First, Thread32Next,
+    };
+    use windows_sys::Win32::System::Threading::{OpenThread, THREAD_QUERY_LIMITED_INFORMATION};
+
+    // `findstr` waits for its input, so its threads can be found before it exits.
+    let mut child = Command::new("findstr.exe")
+        .arg("x")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("spawn child");
+    let pid = child.id();
+    std::thread::sleep(Duration::from_millis(200));
+
+    let mut held: Vec<HANDLE> = Vec::new();
+    // SAFETY: TH32CS_SNAPTHREAD snapshots every thread; the pid argument is ignored.
+    let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0) };
+    // SAFETY: a zeroed THREADENTRY32 is valid once `dwSize` is set, as below.
+    let mut entry: THREADENTRY32 = unsafe { std::mem::zeroed() };
+    entry.dwSize = u32::try_from(size_of::<THREADENTRY32>()).unwrap();
+    // SAFETY: the snapshot is valid and the entry correctly sized.
+    let mut ok = unsafe { Thread32First(snapshot, &raw mut entry) };
+    while ok != 0 {
+        if entry.th32OwnerProcessID == pid {
+            // SAFETY: opening a thread by id; null on failure.
+            let handle =
+                unsafe { OpenThread(THREAD_QUERY_LIMITED_INFORMATION, FALSE, entry.th32ThreadID) };
+            if !handle.is_null() {
+                held.push(handle);
+            }
+        }
+        // SAFETY: as above.
+        ok = unsafe { Thread32Next(snapshot, &raw mut entry) };
+    }
+    // SAFETY: closing the snapshot once.
+    unsafe { CloseHandle(snapshot) };
+    assert!(!held.is_empty(), "found none of findstr's threads");
+
+    drop(child.stdin.take());
+    let _ = child.wait();
+
+    let affected = suspend_process(pid).expect("suspend of a dead pid should not error");
+    for handle in held {
+        // SAFETY: each handle was opened above and is closed once.
+        unsafe { CloseHandle(handle) };
+    }
+    assert_eq!(affected, 0, "a finished thread was counted as suspended");
+}
+
+#[test]
 fn suspension_actually_stops_the_cpu() {
     // The behavioural check that matters: without it, thread enumeration could "succeed"
     // while the process carried on running. CPU time is the right signal — it stops the
