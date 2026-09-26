@@ -223,6 +223,8 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
 
         if matches!(call_type, callstack::ScriptCallType::Source) && result.is_ok() {
             crate::commands::run_return_trap(self, params).await;
+        } else {
+            self.take_status_before_return();
         }
 
         let exited_frame = self.call_stack.pop();

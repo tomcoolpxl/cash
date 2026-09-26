@@ -423,7 +423,6 @@ cases:
       echo "after func"
 
   - name: "RETURN trap - fires on sourced script completion"
-    known_failure: true # TODO(traps): RETURN trap not firing for sourced scripts
     test_files:
       - path: "sourced.sh"
         contents: |

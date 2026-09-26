@@ -261,6 +261,7 @@ impl<SE: extensions::ShellExtensions> Default for Shell<SE> {
             aliases: HashMap::default(),
             last_exit_status: 0,
             last_exit_status_change_count: 0,
+            status_before_return: None,
             last_pipeline_statuses: vec![0],
             depth: 0,
             name: None,

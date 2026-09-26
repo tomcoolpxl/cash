@@ -1344,6 +1344,8 @@ pub(crate) async fn invoke_shell_function(
     // sees the caller-visible `$?`.
     if result.is_ok() {
         run_return_trap(context.shell, &context.params).await;
+    } else {
+        context.shell.take_status_before_return();
     }
 
     // We've come back out, reflect it.
@@ -1374,8 +1376,12 @@ pub(crate) async fn run_return_trap(
     shell: &mut Shell<impl extensions::ShellExtensions>,
     params: &ExecutionParameters,
 ) {
+    let before_return = shell.take_status_before_return();
     if !shell.traps().handles(traps::TrapSignal::Return) {
         return;
+    }
+    if let Some(status) = before_return {
+        shell.set_last_exit_status(status);
     }
     let _ = shell
         .invoke_trap_handler(traps::TrapSignal::Return, params)

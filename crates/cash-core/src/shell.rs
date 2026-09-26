@@ -101,6 +101,10 @@ pub struct Shell<SE: extensions::ShellExtensions = extensions::DefaultShellExten
     /// rolls back `$?` must roll this back too.
     last_exit_status_change_count: usize,
 
+    /// `$?` as the last `return` found it, before it set its own status: what the
+    /// `RETURN` trap sees, as in Bash. Taken when the function or sourced file ends.
+    status_before_return: Option<u8>,
+
     /// The status of each of the commands in the last pipeline.
     last_pipeline_statuses: Vec<u8>,
 
@@ -172,6 +176,7 @@ impl<SE: extensions::ShellExtensions> Clone for Shell<SE> {
             aliases: self.aliases.clone(),
             last_exit_status: self.last_exit_status,
             last_exit_status_change_count: self.last_exit_status_change_count,
+            status_before_return: self.status_before_return,
             last_pipeline_statuses: self.last_pipeline_statuses.clone(),
             name: self.name.clone(),
             args: self.args.clone(),
@@ -410,6 +415,17 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
         } else {
             keywords::KEYWORDS.contains(s)
         }
+    }
+
+    /// Records `$?` as `return` finds it, for the `RETURN` trap to see.
+    pub const fn note_status_before_return(&mut self) {
+        self.status_before_return = Some(self.last_exit_status);
+    }
+
+    /// Takes what [`Self::note_status_before_return`] recorded, when a function or sourced
+    /// file ends.
+    pub(crate) const fn take_status_before_return(&mut self) -> Option<u8> {
+        self.status_before_return.take()
     }
 
     pub(crate) const fn last_exit_status_change_count(&self) -> usize {
