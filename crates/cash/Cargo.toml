@@ -125,6 +125,11 @@ path = "tests/pager.rs"
 name = "ps-builtin"
 path = "tests/ps_builtin.rs"
 
+# ROADMAP item 15: interactive behaviour against Git Bash 5.3 on a ConPTY.
+[[test]]
+name = "pty-oracle"
+path = "tests/pty_oracle.rs"
+
 # D11/D22: `$!` and background job identity.
 [[test]]
 name = "background-pid"

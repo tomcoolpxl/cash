@@ -1,0 +1,5 @@
+$ read -E x
+cat alpha\ beta.txt
+$ echo "[$x]"
+[cat alpha beta.txt]
+$

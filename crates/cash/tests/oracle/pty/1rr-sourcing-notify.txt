@@ -1,0 +1,6 @@
+$ printf 'sleep 0.4\n' > s.sh
+$ sleep 0.1 & . ./s.sh; echo after
+[1] PID
+[1]+  Done                       sleep 0.1
+after
+$

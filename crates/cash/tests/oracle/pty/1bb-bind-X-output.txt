@@ -1,0 +1,4 @@
+$ bind -x '"\C-t": echo BOUND'
+$ bind -X
+"\C-t" "echo BOUND"
+$

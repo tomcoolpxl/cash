@@ -1,0 +1,3 @@
+$ bind -l | grep -c vi-complete
+2
+$

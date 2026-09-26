@@ -1,0 +1,5 @@
+$ bind -p beginning-of-line
+"\C-a": beginning-of-line
+"\eOH": beginning-of-line
+"\e[H": beginning-of-line
+$

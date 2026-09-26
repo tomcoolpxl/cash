@@ -41,5 +41,6 @@ pub mod stop;
 /// What the machine is, asked directly — the numbers `coolfetch` prints.
 pub mod sysinfo;
 pub mod text;
+pub mod vtscreen;
 
 pub use job::{JobConfig, JobObject};

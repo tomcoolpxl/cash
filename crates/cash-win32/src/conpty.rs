@@ -161,12 +161,23 @@ impl ConPty {
     }
 
     /// Spawn a command attached to this ConPTY.
-    #[allow(clippy::cast_possible_truncation)]
     pub fn spawn(
         &self,
         program: &Path,
         args: &[&str],
         env: Option<&[(&str, &str)]>,
+    ) -> io::Result<ConPtyChild> {
+        self.spawn_in(program, args, env, None)
+    }
+
+    /// Spawn a command attached to this ConPTY, in `cwd` when given.
+    #[allow(clippy::cast_possible_truncation)]
+    pub fn spawn_in(
+        &self,
+        program: &Path,
+        args: &[&str],
+        env: Option<&[(&str, &str)]>,
+        cwd: Option<&Path>,
     ) -> io::Result<ConPtyChild> {
         let mut attr_size: usize = 0;
         // Query required attribute list size.
@@ -242,6 +253,15 @@ impl ConPty {
             .as_ref()
             .map_or(std::ptr::null(), |b| b.as_ptr().cast());
 
+        let cwd_wide: Option<Vec<u16>> = cwd.map(|dir| {
+            dir.as_os_str()
+                .to_string_lossy()
+                .encode_utf16()
+                .chain(std::iter::once(0))
+                .collect()
+        });
+        let cwd_ptr = cwd_wide.as_ref().map_or(std::ptr::null(), |w| w.as_ptr());
+
         let mut creation_flags = EXTENDED_STARTUPINFO_PRESENT;
         if env.is_some() {
             creation_flags |= CREATE_UNICODE_ENVIRONMENT;
@@ -260,7 +280,7 @@ impl ConPty {
                 FALSE,
                 creation_flags,
                 env_ptr,
-                std::ptr::null(),
+                cwd_ptr,
                 &raw mut si_ex.StartupInfo,
                 &raw mut pi,
             )
@@ -333,8 +353,18 @@ pub struct ConPtySession {
 impl ConPtySession {
     /// Start a new interactive session running the given command on a 80x25 terminal.
     pub fn start(program: &Path, args: &[&str], env: Option<&[(&str, &str)]>) -> io::Result<Self> {
+        Self::start_in(program, args, env, None)
+    }
+
+    /// Like [`Self::start`], in the directory `cwd` when given.
+    pub fn start_in(
+        program: &Path,
+        args: &[&str],
+        env: Option<&[(&str, &str)]>,
+        cwd: Option<&Path>,
+    ) -> io::Result<Self> {
         let pty = ConPty::new(80, 25)?;
-        let child = pty.spawn(program, args, env)?;
+        let child = pty.spawn_in(program, args, env, cwd)?;
         Ok(Self {
             pty,
             child,
@@ -418,6 +448,33 @@ impl ConPtySession {
     #[must_use]
     pub fn output(&self) -> &str {
         &self.accumulated_output
+    }
+
+    /// Reads until no output has arrived for `quiet`, or `limit` has passed: the point at
+    /// which a shell has finished reacting to what was sent.
+    pub fn settle(&mut self, quiet: Duration, limit: Duration) -> io::Result<()> {
+        let start = Instant::now();
+        let mut last = Instant::now();
+        while start.elapsed() < limit {
+            if self.read_available()?.is_empty() {
+                if last.elapsed() >= quiet {
+                    break;
+                }
+            } else {
+                last = Instant::now();
+            }
+            std::thread::sleep(Duration::from_millis(15));
+        }
+        Ok(())
+    }
+
+    /// What the 80x25 console shows now: the output so far, replayed onto a
+    /// [`crate::vtscreen::Screen`].
+    #[must_use]
+    pub fn screen(&self) -> crate::vtscreen::Screen {
+        let mut screen = crate::vtscreen::Screen::new(80, 25);
+        screen.feed(self.accumulated_output.as_bytes());
+        screen
     }
 
     /// Wait for the child process to exit and return its exit code while draining output.

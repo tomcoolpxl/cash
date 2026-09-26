@@ -1,0 +1,2 @@
+$ _d() { complete -W dynamic cmd; return 124; }; complete -D -F _d
+$ cmd dynamic
