@@ -216,6 +216,13 @@ fn for_each_thread<F>(pid: u32, mut action: F) -> io::Result<usize>
 where
     F: FnMut(windows_sys::Win32::Foundation::HANDLE),
 {
+    // A process that has exited has nothing to suspend or resume, whatever the thread
+    // snapshot still lists for it: on GitHub's runner an exited process kept reporting a
+    // thread that the per-thread exit-code check below did not rule out.
+    if !crate::process::is_pid_alive(pid) {
+        return Ok(0);
+    }
+
     // SAFETY: TH32CS_SNAPTHREAD ignores the pid argument and snapshots all threads.
     let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0) };
     if snapshot.is_null() {
