@@ -21,6 +21,7 @@ pub mod exit;
 pub mod fs;
 pub mod job;
 pub mod jobreg;
+pub mod msys;
 /// The machine's TCP/UDP sockets and their owning processes.
 pub mod net;
 pub mod path;

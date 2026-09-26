@@ -253,6 +253,22 @@ fn build_powershell_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
     }
 }
 
+/// Adds `args` for the native program at `target`, in the command-line encoding that
+/// program decodes: Cygwin's for an MSYS2 or Cygwin program, which Git's `usr/bin` tools
+/// are, and the Microsoft C runtime's, which `Command::args` writes, for the rest.
+#[cfg(windows)]
+fn push_native_args<S: AsRef<OsStr>>(c: &mut std::process::Command, target: &Path, args: &[S]) {
+    use std::os::windows::process::CommandExt as _;
+
+    if cash_win32::msys::is_msys_program(target) {
+        for arg in args {
+            c.raw_arg(cash_win32::msys::quote_arg(arg.as_ref()));
+        }
+    } else {
+        c.args(args);
+    }
+}
+
 #[cfg(windows)]
 fn build_batch_command<S: AsRef<OsStr>>(
     command_name: &str,
@@ -359,9 +375,9 @@ fn build_shebang_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
         cash_win32::resolve::Dispatch::Native(ref target) => {
             let mut c = std::process::Command::new(target);
             c.arg0(argv0);
-            c.args(&extra_args);
-            c.arg(script);
-            c.args(args);
+            push_native_args(&mut c, target, &extra_args);
+            push_native_args(&mut c, target, &[script]);
+            push_native_args(&mut c, target, args);
             Ok((c, None))
         }
         cash_win32::resolve::Dispatch::Shebang { .. } => {
@@ -403,7 +419,7 @@ fn build_windows_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
         cash_win32::resolve::Dispatch::Native(_) => {
             let mut c = std::process::Command::new(command_name);
             c.arg0(argv0);
-            c.args(args);
+            push_native_args(&mut c, &candidate, args);
             Ok((c, None))
         }
         cash_win32::resolve::Dispatch::Batch(_) => {

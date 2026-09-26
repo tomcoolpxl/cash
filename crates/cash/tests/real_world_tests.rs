@@ -57,8 +57,22 @@ fn cash_eval(script: &str) -> Output {
     }
 }
 
-fn cash_stdin(script_path: &Path, input: &str) -> Output {
-    let mut child = Command::new(CASH)
+/// Runs the script at `script_path` on `input`, with `dir` searched first for commands
+/// if it exists.
+fn cash_stdin_with_path_first(script_path: &Path, input: &str, dir: &Path) -> Output {
+    let mut command = Command::new(CASH);
+    if dir.is_dir() {
+        let mut entries = vec![dir.to_path_buf()];
+        entries.extend(std::env::split_paths(
+            &std::env::var_os("PATH").unwrap_or_default(),
+        ));
+        command.env("PATH", std::env::join_paths(entries).expect("join PATH"));
+    }
+    run_cash_stdin(command, script_path, input)
+}
+
+fn run_cash_stdin(mut command: Command, script_path: &Path, input: &str) -> Output {
+    let mut child = command
         .arg(script_path)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -149,26 +163,13 @@ fn test_real_world_dominictarr_json_sh() {
   }
 }"#;
 
-    // JSON.sh tokenizes with the host's `egrep`, which cash does not provide. GitHub's
-    // Windows runner has one that rejects the script's POSIX classes, so check the tool
-    // first and say what it is, rather than blame cash for the host's grep.
-    // The probe is JSON.sh's own filter call, anchors and all.
-    let probe = cash_eval(r#"SPACE='[[:space:]]+'; printf 'a\n  \nb\n' | egrep -v "^$SPACE$""#);
-    let host = cash_eval("type -a egrep grep; egrep --version 2>&1 | head -1").stdout;
-    if probe.stdout != "a\nb" {
-        eprintln!(
-            "skipping: the host egrep cannot filter with [[:space:]] ({:?}, {:?})\n{host}",
-            probe.stdout, probe.stderr
-        );
-        return;
-    }
-
-    let cash_out = cash_stdin(&script_path, complex_json);
-    assert_eq!(
-        cash_out.code, 0,
-        "cash stderr: {}\nhost tools:\n{host}",
-        cash_out.stderr
-    );
+    // JSON.sh tokenizes with the host's `egrep`. Git for Windows' is an MSYS2 program,
+    // which decodes its command line by Cygwin's rules; its tools go first on PATH so
+    // that path is what is tested, as on GitHub's runner, rather than whatever native
+    // grep a developer's machine happens to find first.
+    let git_usr_bin = Path::new(r"C:\Program Files\Git\usr\bin");
+    let cash_out = cash_stdin_with_path_first(&script_path, complex_json, git_usr_bin);
+    assert_eq!(cash_out.code, 0, "cash stderr: {}", cash_out.stderr);
     assert!(cash_out.stdout.contains("[\"name\"]\t\"cash\""));
     assert!(cash_out.stdout.contains("[\"nested\",\"num\"]\t42"));
     assert!(cash_out.stdout.contains("[\"nested\",\"arr\",0]\t\"one\""));

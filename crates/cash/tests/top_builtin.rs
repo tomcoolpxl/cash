@@ -308,8 +308,10 @@ fn the_memory_line_adds_up() {
         .collect();
     assert_eq!(numbers.len(), 3, "expected total, free and used: {line:?}");
     assert!(numbers[0] > 0.0, "no total memory: {line:?}");
+    // Each figure is rounded to 0.1 on its own, so the three can disagree by up to
+    // 3 × 0.05 (8186.7 total, 5658.6 free, 2528.2 used on GitHub's runner).
     assert!(
-        (numbers[0] - numbers[1] - numbers[2]).abs() <= 0.1,
+        (numbers[0] - numbers[1] - numbers[2]).abs() <= 0.151,
         "free and used do not add to total: {line:?}"
     );
 }

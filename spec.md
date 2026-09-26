@@ -1263,6 +1263,23 @@ sockets have no peer and are always `UNCONN`. Options with nothing behind them (
 netstat habit such as `ss -ano` gets a hint with the `ss` spelling. `netstat.exe` is not
 shadowed.
 
+### D52 — MSYS2 and Cygwin programs get their arguments in Cygwin's encoding
+
+A Windows program splits its one command line into words itself. Programs linked against
+`msys-2.0.dll` or `cygwin1.dll`, which is every tool in Git for Windows' `usr/bin`, split
+it by Cygwin's rules: `'` quotes as well as `"`, a backslash escapes outside quotes, a
+word with a wildcard is globbed against the working directory, and `@file` reads a
+response file. The Microsoft C runtime's encoding, which every program used to get, does
+not survive that: `JSON.sh`'s `"[^[:cntrl:]"\\]*"|[[:space:]]+` reached Git's `grep` as
+`\[^[:cntrl:]"\]*"|[[:space:]]+`, and `new<LF>line` arrived as two words.
+
+cash reads a native executable's import table (cached by path and modification time) and,
+for an MSYS2 or Cygwin program, encodes each argument the way Cygwin's `build_argv` and
+`globify` decode it. A word with nothing Cygwin acts on passes unchanged. Anything else is
+double-quoted with `"` and `\` escaped. A drive-letter path is the exception: Cygwin keeps
+its backslashes literal, so only the characters that need it are quoted, one at a time.
+`crates/cash/tests/msys_args.rs` round-trips hostile arguments through Git's `printf.exe`.
+
 ---
 
 ## 4. Deliberate divergences from bash
