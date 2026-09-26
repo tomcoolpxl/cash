@@ -47,7 +47,7 @@ fn cash(script: &str) -> Output {
 }
 
 /// A background job that outlives the script running it, without needing a `sleep`.
-const BACKGROUND: &str = "ping -n 20 127.0.0.1 > /dev/null &";
+const BACKGROUND: &str = "ping.exe -n 20 127.0.0.1 > /dev/null &";
 
 // ---------------------------------------------------------------------------
 // Forgetting a job

@@ -557,7 +557,7 @@ fn a_background_job_reports_the_pid_it_spawned() {
     // so the external it spawns is not one of the job's tasks — which left `$!` empty
     // and `kill %1` with nothing to signal. The task now reports the pid to the job.
     let out =
-        cash(r#"ping -n 20 127.0.0.1 >/dev/null & sleep 1; echo "$!"; kill -9 $! 2>/dev/null"#);
+        cash(r#"ping.exe -n 20 127.0.0.1 >/dev/null & sleep 1; echo "$!"; kill -9 $! 2>/dev/null"#);
     let pid = out.stdout.lines().next().unwrap_or_default();
     assert!(
         pid.parse::<u32>().is_ok(),
@@ -566,7 +566,7 @@ fn a_background_job_reports_the_pid_it_spawned() {
     );
 
     let listed =
-        cash(r#"ping -n 20 127.0.0.1 >/dev/null & sleep 1; jobs -p; kill -9 $! 2>/dev/null"#);
+        cash(r#"ping.exe -n 20 127.0.0.1 >/dev/null & sleep 1; jobs -p; kill -9 $! 2>/dev/null"#);
     assert!(
         listed
             .stdout
@@ -584,7 +584,7 @@ fn a_background_job_reports_the_pid_it_spawned() {
 fn killing_a_background_job_actually_kills_it() {
     // Both spellings D22 distinguishes: a job spec reaps the job, a bare pid the process.
     let by_spec = cash(
-        r#"ping -n 30 127.0.0.1 >/dev/null & sleep 1; p=$!; kill %1; sleep 1; kill -0 $p 2>/dev/null && echo alive || echo dead"#,
+        r#"ping.exe -n 30 127.0.0.1 >/dev/null & sleep 1; p=$!; kill %1; sleep 1; kill -0 $p 2>/dev/null && echo alive || echo dead"#,
     );
     assert_eq!(
         by_spec.stdout.lines().last().unwrap_or_default(),
@@ -593,7 +593,7 @@ fn killing_a_background_job_actually_kills_it() {
     );
 
     let by_pid = cash(
-        r#"ping -n 30 127.0.0.1 >/dev/null & sleep 1; p=$!; kill -9 $p; sleep 1; kill -0 $p 2>/dev/null && echo alive || echo dead"#,
+        r#"ping.exe -n 30 127.0.0.1 >/dev/null & sleep 1; p=$!; kill -9 $p; sleep 1; kill -0 $p 2>/dev/null && echo alive || echo dead"#,
     );
     assert_eq!(
         by_pid.stdout.lines().last().unwrap_or_default(),
@@ -639,7 +639,7 @@ fn the_commands_ms_coreutils_warns_about_are_all_available() {
 #[test]
 fn timeout_works_without_an_external_one() {
     // 124 is the POSIX exit status for "the command timed out".
-    let out = cash(r#"PATH=""; timeout 1 ping -n 30 127.0.0.1 >/dev/null; echo $?"#);
+    let out = cash(r#"PATH=""; timeout 1 ping.exe -n 30 127.0.0.1 >/dev/null; echo $?"#);
     assert_eq!(
         out.stdout, "124",
         "timeout did not time out (stderr: {})",
@@ -837,7 +837,7 @@ fn killing_a_job_reaps_its_whole_tree() {
     let cash_path = CASH.replace('\\', "/");
 
     let script = format!(
-        r#""{cash_path}" -c 'ping -n 40 127.0.0.1 >/dev/null & echo $! > "{pidfile}"; sleep 30' &
+        r#""{cash_path}" -c 'ping.exe -n 40 127.0.0.1 >/dev/null & echo $! > "{pidfile}"; sleep 30' &
 sleep 3
 grandchild=$(cat "{pidfile}")
 kill %1

@@ -86,7 +86,7 @@ fn kill_zero_reaps_the_shells_own_children() {
     // The useful half. `kill 0` has to *mean* something, or the fix is just a mute.
     let out = cash(
         r#"
-        ping -n 30 127.0.0.1 > /dev/null &
+        ping.exe -n 30 127.0.0.1 > /dev/null &
         child=$!
         sleep 1
         kill -KILL 0
@@ -127,7 +127,7 @@ fn an_exit_trap_may_use_kill_zero() {
     let out = cash(
         r#"
         trap 'kill 0 2>/dev/null' EXIT
-        ping -n 30 127.0.0.1 > /dev/null &
+        ping.exe -n 30 127.0.0.1 > /dev/null &
         sleep 1
         echo finished
         "#,
@@ -144,7 +144,7 @@ fn an_exit_trap_may_use_kill_zero() {
 fn a_bare_pid_still_targets_one_process() {
     let out = cash(
         r#"
-        ping -n 30 127.0.0.1 > /dev/null &
+        ping.exe -n 30 127.0.0.1 > /dev/null &
         child=$!
         sleep 1
         kill -KILL "$child"
@@ -161,7 +161,7 @@ fn a_negative_pid_reaps_that_tree() {
     // specs; this is the same scope, named by pid.
     let out = cash(
         r#"
-        cmd.exe /d /s /c "ping -n 30 127.0.0.1 > nul" &
+        cmd.exe /d /s /c "ping.exe -n 30 127.0.0.1 > nul" &
         child=$!
         sleep 1
         kill -KILL -"$child"

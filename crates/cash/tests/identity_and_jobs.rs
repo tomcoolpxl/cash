@@ -115,7 +115,7 @@ fn whoami_and_id_name_the_same_account() {
 
 #[test]
 fn jobs_l_is_implemented() {
-    let out = cash(r#"ping -n 10 127.0.0.1 > /dev/null & jobs -l; kill -KILL $! 2>/dev/null"#);
+    let out = cash(r#"ping.exe -n 10 127.0.0.1 > /dev/null & jobs -l; kill -KILL $! 2>/dev/null"#);
     assert!(
         !out.stderr.contains("not yet implemented"),
         "jobs -l still refuses: {}",
@@ -128,7 +128,7 @@ fn jobs_l_is_implemented() {
 fn jobs_l_shows_a_pid_that_matches_the_one_the_shell_reports() {
     let out = cash(
         r#"
-        ping -n 10 127.0.0.1 > /dev/null &
+        ping.exe -n 10 127.0.0.1 > /dev/null &
         pid=$!
         listed=$(jobs -l | tr -s ' ' | cut -d' ' -f2)
         [ "$pid" = "$listed" ] && echo agree || echo "differ: [$pid] [$listed]"
@@ -142,7 +142,7 @@ fn jobs_l_shows_a_pid_that_matches_the_one_the_shell_reports() {
 fn jobs_l_puts_the_pid_after_the_job_marker() {
     // bash's layout: `[1]+ 12345 Running   sleep 30 &`. Splitting on the first space
     // would land inside the command, because the status and command are tab-separated.
-    let out = cash(r#"ping -n 10 127.0.0.1 > /dev/null & jobs -l; kill -KILL $! 2>/dev/null"#);
+    let out = cash(r#"ping.exe -n 10 127.0.0.1 > /dev/null & jobs -l; kill -KILL $! 2>/dev/null"#);
     let line = out.stdout.lines().next().unwrap_or_default();
     assert!(line.starts_with("[1]"), "no job marker: {line:?}");
 
@@ -155,7 +155,7 @@ fn jobs_l_puts_the_pid_after_the_job_marker() {
 
 #[test]
 fn plain_jobs_does_not_show_a_pid() {
-    let out = cash(r#"ping -n 10 127.0.0.1 > /dev/null & jobs; kill -KILL $! 2>/dev/null"#);
+    let out = cash(r#"ping.exe -n 10 127.0.0.1 > /dev/null & jobs; kill -KILL $! 2>/dev/null"#);
     let line = out.stdout.lines().next().unwrap_or_default();
     let second = line.split_whitespace().nth(1).unwrap_or_default();
     assert!(
@@ -166,7 +166,7 @@ fn plain_jobs_does_not_show_a_pid() {
 
 #[test]
 fn jobs_p_still_prints_only_pids() {
-    let out = cash(r#"ping -n 10 127.0.0.1 > /dev/null & jobs -p; kill -KILL $! 2>/dev/null"#);
+    let out = cash(r#"ping.exe -n 10 127.0.0.1 > /dev/null & jobs -p; kill -KILL $! 2>/dev/null"#);
     let line = out.stdout.lines().next().unwrap_or_default();
     assert!(
         line.trim().parse::<u32>().is_ok(),
@@ -178,7 +178,7 @@ fn jobs_p_still_prints_only_pids() {
 fn a_job_spec_selects_one_job() {
     // `jobs %1` used to refuse with "not yet implemented", although the resolver already
     // existed for `kill %1` and `wait %1`.
-    let out = cash(r#"ping -n 10 127.0.0.1 > /dev/null & jobs %1; kill -KILL $! 2>/dev/null"#);
+    let out = cash(r#"ping.exe -n 10 127.0.0.1 > /dev/null & jobs %1; kill -KILL $! 2>/dev/null"#);
     assert!(
         out.stdout.starts_with("[1]"),
         "jobs %1 did not list the job: {} {}",
@@ -190,7 +190,7 @@ fn a_job_spec_selects_one_job() {
 #[test]
 fn a_job_spec_works_with_the_other_options() {
     let listed =
-        cash(r#"ping -n 10 127.0.0.1 > /dev/null & jobs -l %1; kill -KILL $! 2>/dev/null"#);
+        cash(r#"ping.exe -n 10 127.0.0.1 > /dev/null & jobs -l %1; kill -KILL $! 2>/dev/null"#);
     let second = listed
         .stdout
         .lines()
@@ -206,7 +206,8 @@ fn a_job_spec_works_with_the_other_options() {
         listed.stdout
     );
 
-    let pids = cash(r#"ping -n 10 127.0.0.1 > /dev/null & jobs -p %1; kill -KILL $! 2>/dev/null"#);
+    let pids =
+        cash(r#"ping.exe -n 10 127.0.0.1 > /dev/null & jobs -p %1; kill -KILL $! 2>/dev/null"#);
     assert!(
         pids.stdout.trim().parse::<u32>().is_ok(),
         "jobs -p %1 printed more than a pid: {}",
@@ -216,7 +217,7 @@ fn a_job_spec_works_with_the_other_options() {
 
 #[test]
 fn the_current_job_spec_resolves() {
-    let out = cash(r#"ping -n 10 127.0.0.1 > /dev/null & jobs %+; kill -KILL $! 2>/dev/null"#);
+    let out = cash(r#"ping.exe -n 10 127.0.0.1 > /dev/null & jobs %+; kill -KILL $! 2>/dev/null"#);
     assert!(
         out.stdout.starts_with("[1]"),
         "%+ did not resolve: {}",

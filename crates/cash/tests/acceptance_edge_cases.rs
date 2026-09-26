@@ -378,7 +378,7 @@ fn a_subshell_can_list_the_parents_jobs() {
     // to *manage* the parent's jobs — it does not own those processes — but bash lets it
     // see them, so cash hands it read-only snapshots.
     let out = cash(
-        r#"ping -n 20 127.0.0.1 >/dev/null & sleep 1; inner=$(jobs -p); kill -9 $! 2>/dev/null; printf '%s' "$inner""#,
+        r#"ping.exe -n 20 127.0.0.1 >/dev/null & sleep 1; inner=$(jobs -p); kill -9 $! 2>/dev/null; printf '%s' "$inner""#,
     );
     assert!(
         out.stdout.trim().parse::<u32>().is_ok(),
@@ -390,7 +390,7 @@ fn a_subshell_can_list_the_parents_jobs() {
 #[test]
 fn a_subshell_and_its_parent_agree_on_the_job_list() {
     let out = cash(
-        r#"ping -n 20 127.0.0.1 >/dev/null & sleep 1; outer=$!; inner=$(jobs -p); kill -9 $! 2>/dev/null; [ "$outer" = "$inner" ] && echo agree || echo "$outer vs $inner""#,
+        r#"ping.exe -n 20 127.0.0.1 >/dev/null & sleep 1; outer=$!; inner=$(jobs -p); kill -9 $! 2>/dev/null; [ "$outer" = "$inner" ] && echo agree || echo "$outer vs $inner""#,
     );
     assert_eq!(out.stdout, "agree");
 }

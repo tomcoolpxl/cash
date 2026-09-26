@@ -31,8 +31,8 @@ struct Output {
 /// (`$a` the older), and kills them afterwards.
 fn with_two_pings(script: &str) -> Output {
     let full = format!(
-        "ping -n 60 127.0.0.1 >/dev/null & a=$!; sleep 0.5; \
-         ping -n 60 127.0.0.1 >/dev/null & b=$!; sleep 0.5; \
+        "ping.exe -n 60 127.0.0.1 >/dev/null & a=$!; sleep 0.5; \
+         ping.exe -n 60 127.0.0.1 >/dev/null & b=$!; sleep 0.5; \
          {script}; kill -9 $a 2>/dev/null; kill -9 $b 2>/dev/null"
     );
     let out = Command::new(CASH)

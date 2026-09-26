@@ -82,7 +82,7 @@ fn pgrep_is_a_builtin() {
 fn pgrep_parent_accepts_the_long_option_and_native_pid() {
     let out = cash(
         r#"
-        ping -n 30 127.0.0.1 > /dev/null &
+        ping.exe -n 30 127.0.0.1 > /dev/null &
         child=$!
         found=$(pgrep --parent $$)
         case " $found " in *" $child "*) echo found;; *) echo "missing:$child:$found";; esac
@@ -96,7 +96,7 @@ fn pgrep_parent_accepts_the_long_option_and_native_pid() {
 fn pstree_can_show_the_shells_native_subtree() {
     let out = cash(
         r#"
-        ping -n 30 127.0.0.1 > /dev/null &
+        ping.exe -n 30 127.0.0.1 > /dev/null &
         child=$!
         pstree -p $$
         echo "expected-child=$child"
@@ -157,7 +157,7 @@ fn a_pid_from_ps_can_be_signalled() {
     // The whole reason for carrying this. An MSYS pid here would fail to resolve.
     let out = cash(
         r#"
-        ping -n 30 127.0.0.1 > /dev/null &
+        ping.exe -n 30 127.0.0.1 > /dev/null &
         sleep 1
         pid=$(ps | grep -i 'PING' | tr -s ' ' | cut -d' ' -f2)
         echo "found=[$pid]"
@@ -177,7 +177,7 @@ fn the_pid_matches_the_one_the_shell_reports() {
     // `$!` and `ps` must agree, or one of them is lying.
     let out = cash(
         r#"
-        ping -n 30 127.0.0.1 > /dev/null &
+        ping.exe -n 30 127.0.0.1 > /dev/null &
         pid=$!
         sleep 1
         if ps | tr -s ' ' | cut -d' ' -f2 | grep -qx "$pid"; then echo agree; else echo differ; fi

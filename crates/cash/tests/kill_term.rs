@@ -52,7 +52,7 @@ fn isolated_cash(script: &str) -> Output {
 #[test]
 fn kill_term_stops_a_background_job_and_the_shell_survives() {
     let out = isolated_cash(
-        "ping -n 60 127.0.0.1 >/dev/null & p=$!; sleep 1; kill -TERM $p; echo rc=$?; \
+        "ping.exe -n 60 127.0.0.1 >/dev/null & p=$!; sleep 1; kill -TERM $p; echo rc=$?; \
          sleep 0.5; kill -0 $p 2>/dev/null && echo alive || echo gone; echo shell-survived",
     );
     assert_eq!(out.stdout, "rc=0\ngone\nshell-survived");
@@ -62,7 +62,7 @@ fn kill_term_stops_a_background_job_and_the_shell_survives() {
 #[test]
 fn int_and_hup_reach_one_process_too() {
     let out = isolated_cash(
-        "ping -n 60 127.0.0.1 >/dev/null & a=$!; ping -n 60 127.0.0.1 >/dev/null & b=$!; \
+        "ping.exe -n 60 127.0.0.1 >/dev/null & a=$!; ping.exe -n 60 127.0.0.1 >/dev/null & b=$!; \
          sleep 1; kill -INT $a; kill -HUP $b; sleep 0.5; \
          kill -0 $a 2>/dev/null || kill -0 $b 2>/dev/null || echo both-gone; echo shell-survived",
     );
@@ -72,8 +72,8 @@ fn int_and_hup_reach_one_process_too() {
 #[test]
 fn pkill_and_killall_default_to_a_term_that_spares_the_shell() {
     let out = isolated_cash(
-        "ping -n 60 127.0.0.1 >/dev/null & a=$!; sleep 1; pkill -x ping; echo pkill=$?; \
-         ping -n 60 127.0.0.1 >/dev/null & b=$!; sleep 1; killall -w ping; echo killall=$?; \
+        "ping.exe -n 60 127.0.0.1 >/dev/null & a=$!; sleep 1; pkill -x ping; echo pkill=$?; \
+         ping.exe -n 60 127.0.0.1 >/dev/null & b=$!; sleep 1; killall -w ping; echo killall=$?; \
          kill -0 $a 2>/dev/null || kill -0 $b 2>/dev/null || echo both-gone; echo shell-survived",
     );
     assert_eq!(out.stdout, "pkill=0\nkillall=0\nboth-gone\nshell-survived");

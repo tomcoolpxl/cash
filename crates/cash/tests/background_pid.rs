@@ -60,7 +60,7 @@ fn an_external_command_sets_the_pid_immediately() {
     // No `sleep` before reading `$!`. That sleep is exactly what used to make this look
     // as though it worked.
     let out = cash(
-        r#"ping -n 5 127.0.0.1 > /dev/null & pid=$!; echo "[$pid]"; kill -KILL "$pid" 2>/dev/null; wait 2>/dev/null"#,
+        r#"ping.exe -n 5 127.0.0.1 > /dev/null & pid=$!; echo "[$pid]"; kill -KILL "$pid" 2>/dev/null; wait 2>/dev/null"#,
     );
     assert_ne!(out.stdout, "[]", "`$!` was empty: {}", out.stderr);
     assert!(
@@ -89,7 +89,7 @@ fn the_pid_is_the_one_that_can_be_signalled() {
     // A pid that cannot be used is no better than an empty one.
     let out = cash(
         r#"
-        ping -n 30 127.0.0.1 > /dev/null &
+        ping.exe -n 30 127.0.0.1 > /dev/null &
         pid=$!
         kill -0 "$pid" && echo alive
         kill -KILL "$pid"
@@ -103,7 +103,8 @@ fn the_pid_is_the_one_that_can_be_signalled() {
 #[test]
 fn wait_accepts_the_pid() {
     // `pid=$!; wait "$pid"` is the other half of the idiom.
-    let out = cash(r#"ping -n 2 127.0.0.1 > /dev/null & pid=$!; wait "$pid"; echo "waited rc=$?""#);
+    let out =
+        cash(r#"ping.exe -n 2 127.0.0.1 > /dev/null & pid=$!; wait "$pid"; echo "waited rc=$?""#);
     assert_eq!(out.stdout, "waited rc=0", "stderr: {}", out.stderr);
 }
 
@@ -111,8 +112,8 @@ fn wait_accepts_the_pid() {
 fn several_background_jobs_report_their_own_pids() {
     let out = cash(
         r#"
-        ping -n 20 127.0.0.1 > /dev/null & first=$!
-        ping -n 20 127.0.0.1 > /dev/null & second=$!
+        ping.exe -n 20 127.0.0.1 > /dev/null & first=$!
+        ping.exe -n 20 127.0.0.1 > /dev/null & second=$!
         if [ "$first" != "$second" ]; then echo distinct; else echo "same: $first"; fi
         kill -KILL "$first" "$second" 2>/dev/null
         kill -KILL "$first" 2>/dev/null; kill -KILL "$second" 2>/dev/null
@@ -139,7 +140,7 @@ fn a_background_job_keeps_running_after_the_ampersand_returns() {
     // Waiting for the *pid* must not become waiting for the *job*.
     let out = cash(
         r#"
-        ping -n 20 127.0.0.1 > /dev/null &
+        ping.exe -n 20 127.0.0.1 > /dev/null &
         pid=$!
         echo "returned"
         kill -0 "$pid" && echo "still running"
@@ -158,7 +159,7 @@ fn a_long_running_background_job_does_not_delay_the_next_command() {
     // If `&` waited for completion rather than for the pid, this would take 20 seconds.
     let started = std::time::Instant::now();
     let out =
-        cash(r#"ping -n 20 127.0.0.1 > /dev/null & echo immediate; kill -KILL $! 2>/dev/null"#);
+        cash(r#"ping.exe -n 20 127.0.0.1 > /dev/null & echo immediate; kill -KILL $! 2>/dev/null"#);
     let elapsed = started.elapsed();
 
     assert_eq!(out.stdout, "immediate", "stderr: {}", out.stderr);
@@ -174,7 +175,7 @@ fn a_long_running_background_job_does_not_delay_the_next_command() {
 
 #[test]
 fn the_job_table_lists_the_background_job() {
-    let out = cash(r#"ping -n 20 127.0.0.1 > /dev/null & jobs; kill -KILL $! 2>/dev/null"#);
+    let out = cash(r#"ping.exe -n 20 127.0.0.1 > /dev/null & jobs; kill -KILL $! 2>/dev/null"#);
     assert!(
         out.stdout.contains("[1]") && out.stdout.contains("Running"),
         "the job was not listed: {}",
@@ -187,7 +188,7 @@ fn a_job_spec_reaps_the_same_process_the_pid_names() {
     // D22: `kill %1` and `kill $!` must agree about what they are aiming at.
     let out = cash(
         r#"
-        ping -n 30 127.0.0.1 > /dev/null &
+        ping.exe -n 30 127.0.0.1 > /dev/null &
         pid=$!
         kill -KILL %1
         sleep 1
