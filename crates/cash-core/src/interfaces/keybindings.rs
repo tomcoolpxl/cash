@@ -291,17 +291,43 @@ pub struct KeyStroke {
 }
 
 impl Display for KeyStroke {
+    /// The stroke as Readline spells a key sequence, so that `bind -p` prints what
+    /// `bind` reads back: `\C-a`, `\ex`, and for a key that sends an escape sequence the
+    /// sequence xterm sends, `\e[H`, its modifiers encoded the way xterm encodes them,
+    /// `\e[1;5H` for Ctrl-Home.
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        if let Some((csi, last)) = self.key.csi_parts() {
+            let modifier =
+                1 + u8::from(self.shift) + 2 * u8::from(self.alt) + 4 * u8::from(self.control);
+            return match (modifier, csi) {
+                (1, "") => write!(f, "\\e[{last}"),
+                (1, csi) => write!(f, "\\e[{csi}{last}"),
+                (_, "") => write!(f, "\\e[1;{modifier}{last}"),
+                (_, csi) => write!(f, "\\e[{csi};{modifier}{last}"),
+            };
+        }
         if self.alt {
             write!(f, "\\e")?;
         }
         if self.control {
             write!(f, "\\C-")?;
         }
-        if self.shift {
-            // TODO(input): Figure out what to do here or if the key encodes the shift in it.
-        }
         self.key.fmt(f)
+    }
+}
+
+impl KeyStroke {
+    /// Every spelling of the stroke a terminal sends: an unmodified arrow, Home or End
+    /// also arrives as `\eO…` in application cursor mode, and Bash lists both.
+    pub fn spellings(&self) -> Vec<String> {
+        let mut spellings = vec![self.to_string()];
+        if !(self.alt || self.control || self.shift)
+            && let Some(("", last)) = self.key.csi_parts()
+            && matches!(last, 'A' | 'B' | 'C' | 'D' | 'H' | 'F')
+        {
+            spellings.push(format!("\\eO{last}"));
+        }
+        spellings
     }
 }
 
@@ -356,27 +382,52 @@ pub enum Key {
     Escape,
 }
 
+impl Key {
+    /// For a key that sends an xterm CSI sequence, its parameter (empty for none) and
+    /// final character: Home is `\e[H` (`("", 'H')`), Delete `\e[3~` (`("3", '~')`).
+    const fn csi_parts(&self) -> Option<(&'static str, char)> {
+        Some(match self {
+            Self::Up => ("", 'A'),
+            Self::Down => ("", 'B'),
+            Self::Right => ("", 'C'),
+            Self::Left => ("", 'D'),
+            Self::Home => ("", 'H'),
+            Self::End => ("", 'F'),
+            Self::BackTab => ("", 'Z'),
+            Self::Insert => ("2", '~'),
+            Self::Delete => ("3", '~'),
+            Self::PageUp => ("5", '~'),
+            Self::PageDown => ("6", '~'),
+            Self::F(5) => ("15", '~'),
+            Self::F(6) => ("17", '~'),
+            Self::F(7) => ("18", '~'),
+            Self::F(8) => ("19", '~'),
+            Self::F(9) => ("20", '~'),
+            Self::F(10) => ("21", '~'),
+            Self::F(11) => ("23", '~'),
+            Self::F(12) => ("24", '~'),
+            _ => return None,
+        })
+    }
+}
+
 impl Display for Key {
+    /// The key as Readline spells it in a key sequence: the control character a key
+    /// sends (`\C-m` for Enter, `\C-?` for Backspace), or its xterm sequence.
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        if let Some((csi, last)) = self.csi_parts() {
+            return write!(f, "\\e[{csi}{last}");
+        }
         match self {
             Self::Character(c @ ('\\' | '\"' | '\'')) => write!(f, "\\{c}")?,
             Self::Character(c) => write!(f, "{c}")?,
-            Self::Backspace => write!(f, "Backspace")?,
-            Self::Enter => write!(f, "Enter")?,
-            Self::Left => write!(f, "Left")?,
-            Self::Right => write!(f, "Right")?,
-            Self::Up => write!(f, "Up")?,
-            Self::Down => write!(f, "Down")?,
-            Self::Home => write!(f, "Home")?,
-            Self::End => write!(f, "End")?,
-            Self::PageUp => write!(f, "PageUp")?,
-            Self::PageDown => write!(f, "PageDown")?,
-            Self::Tab => write!(f, "Tab")?,
-            Self::BackTab => write!(f, "BackTab")?,
-            Self::Delete => write!(f, "Delete")?,
-            Self::Insert => write!(f, "Insert")?,
+            Self::Backspace => write!(f, "\\C-?")?,
+            Self::Enter => write!(f, "\\C-m")?,
+            Self::Tab => write!(f, "\\C-i")?,
+            Self::Escape => write!(f, "\\e")?,
+            Self::F(n @ 1..=4) => write!(f, "\\eO{}", char::from(b'O' + n))?,
             Self::F(n) => write!(f, "F{n}")?,
-            Self::Escape => write!(f, "Esc")?,
+            _ => {}
         }
 
         Ok(())
@@ -417,4 +468,50 @@ pub trait KeyBindings: Send {
 
     /// Retrieves all defined macros.
     fn get_macros(&self) -> HashMap<KeySequence, KeySequence>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn stroke(key: Key, control: bool, alt: bool) -> KeyStroke {
+        KeyStroke {
+            alt,
+            control,
+            shift: false,
+            key,
+        }
+    }
+
+    #[test]
+    fn keys_are_spelled_as_readline_reads_them() {
+        assert_eq!(
+            stroke(Key::Character('a'), true, false).to_string(),
+            r"\C-a"
+        );
+        assert_eq!(stroke(Key::Character('x'), false, true).to_string(), r"\ex");
+        assert_eq!(stroke(Key::Home, false, false).to_string(), r"\e[H");
+        assert_eq!(stroke(Key::Home, true, false).to_string(), r"\e[1;5H");
+        assert_eq!(stroke(Key::Delete, false, true).to_string(), r"\e[3;3~");
+        assert_eq!(stroke(Key::Enter, false, false).to_string(), r"\C-m");
+        assert_eq!(stroke(Key::Backspace, false, false).to_string(), r"\C-?");
+        assert_eq!(stroke(Key::F(1), false, false).to_string(), r"\eOP");
+        assert_eq!(stroke(Key::F(5), false, false).to_string(), r"\e[15~");
+    }
+
+    #[test]
+    fn arrows_home_and_end_have_both_spellings() {
+        assert_eq!(
+            stroke(Key::Up, false, false).spellings(),
+            vec![r"\e[A".to_owned(), r"\eOA".to_owned()]
+        );
+        assert_eq!(
+            stroke(Key::Up, true, false).spellings(),
+            vec![r"\e[1;5A".to_owned()]
+        );
+        assert_eq!(
+            stroke(Key::Delete, false, false).spellings(),
+            vec![r"\e[3~".to_owned()]
+        );
+    }
 }

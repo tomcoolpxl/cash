@@ -621,11 +621,13 @@ fn translate_reedline_event_to_action(event: &reedline::ReedlineEvent) -> Option
                     Some(KeyAction::DoInputFunction(InputFunction::ForwardChar))
                 }
                 [reedline::EditCommand::MoveRight { select: true }] => None,
-                [reedline::EditCommand::MoveToEnd { select: false }] => {
-                    // TODO(input): Not quite accurate, because it doesn't just go to end of line.
-                    Some(KeyAction::DoInputFunction(InputFunction::EndOfLine))
-                }
-                [reedline::EditCommand::MoveToEnd { select: true }] => None,
+                // The start and end of the whole input (Reedline's Ctrl-Home, Ctrl-End)
+                // have no Readline name: `beginning-of-line` and `end-of-line` stay on the
+                // current line of a multi-line command, so these are not listed as them.
+                [
+                    reedline::EditCommand::MoveToEnd { .. }
+                    | reedline::EditCommand::MoveToStart { .. },
+                ] => None,
                 [reedline::EditCommand::MoveToLineEnd { select: false }] => {
                     Some(KeyAction::DoInputFunction(InputFunction::EndOfLine))
                 }
@@ -634,12 +636,6 @@ fn translate_reedline_event_to_action(event: &reedline::ReedlineEvent) -> Option
                     Some(KeyAction::DoInputFunction(InputFunction::BeginningOfLine))
                 }
                 [reedline::EditCommand::MoveToLineStart { select: true }] => None,
-                [reedline::EditCommand::MoveToStart { select: false }] => {
-                    // TODO(input): Not quite accurate, because it doesn't just go to beginning of
-                    // line.
-                    Some(KeyAction::DoInputFunction(InputFunction::BeginningOfLine))
-                }
-                [reedline::EditCommand::MoveToStart { select: true }] => None,
                 [reedline::EditCommand::MoveWordLeft { select: false }] => {
                     Some(KeyAction::DoInputFunction(InputFunction::BackwardWord))
                 }

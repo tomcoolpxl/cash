@@ -155,12 +155,17 @@ impl BindCommand {
             }
         }
 
+        // `bind -p NAME` and `bind -P NAME` (Bash 5.3) list only that command's bindings:
+        // with either option the word is a command name, not a binding to make.
+        let listing = self.list_funcs_and_bindings || self.list_funcs_and_bindings_reusable;
+        let only = self.key_sequence.as_deref().filter(|_| listing);
+
         if self.list_funcs_and_bindings {
-            display_funcs_and_bindings(&*bindings, context, false /* reusable? */)?;
+            display_funcs_and_bindings(&*bindings, context, false /* reusable? */, only)?;
         }
 
         if self.list_funcs_and_bindings_reusable {
-            display_funcs_and_bindings(&*bindings, context, true /* reusable? */)?;
+            display_funcs_and_bindings(&*bindings, context, true /* reusable? */, only)?;
         }
 
         if self.list_key_seqs_that_invoke_macros {
@@ -260,7 +265,7 @@ impl BindCommand {
             }
         }
 
-        if let Some(key_sequence) = &self.key_sequence {
+        if let Some(key_sequence) = self.key_sequence.as_ref().filter(|_| !listing) {
             if self.keymap.as_ref().is_some_and(|k| k.is_vi()) {
                 // NOTE(vi): Quietly ignore since we don't support vi mode.
                 return Ok(ExecutionResult::success());
@@ -447,8 +452,10 @@ fn display_funcs_and_bindings(
     bindings: &dyn interfaces::KeyBindings,
     context: &cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
     reusable: bool,
+    only: Option<&str>,
 ) -> Result<(), BindError> {
-    let mut sequences_by_func: HashMap<InputFunction, Vec<KeySequence>> = HashMap::new();
+    // Each binding as the key sequences a terminal sends for it, as Bash lists them.
+    let mut sequences_by_func: HashMap<InputFunction, Vec<String>> = HashMap::new();
     for (seq, action) in &bindings.get_current() {
         let KeyAction::DoInputFunction(func) = action else {
             continue;
@@ -457,10 +464,30 @@ fn display_funcs_and_bindings(
         sequences_by_func
             .entry(func.clone())
             .or_default()
-            .push(seq.clone());
+            .extend(spellings(seq));
     }
 
-    let sorted_funcs = interfaces::InputFunction::iter().sorted_by_key(|f| f.to_string());
+    // One command's bindings: a name that is no command is reported as unbound, as in
+    // Bash, and neither is an error.
+    if let Some(name) = only
+        && InputFunction::from_str(name).is_err()
+    {
+        if reusable {
+            writeln!(context.stdout(), "# {name} (not bound)")?;
+        } else {
+            writeln!(context.stdout(), "{name} is not bound to any keys")?;
+        }
+        return Ok(());
+    }
+
+    let sorted_funcs = interfaces::InputFunction::iter()
+        .filter(|f| only.is_none_or(|name| f.to_string() == name))
+        .sorted_by_key(|f| f.to_string());
+
+    for seqs in sequences_by_func.values_mut() {
+        seqs.sort();
+        seqs.dedup();
+    }
 
     for func in sorted_funcs {
         match sequences_by_func.get(&func) {
@@ -502,6 +529,15 @@ fn display_macros(
     }
 
     Ok(())
+}
+
+/// The spellings of a key sequence: one, except that a single unmodified arrow, Home or
+/// End key is also sent as `\eO…` (see [`interfaces::KeyStroke::spellings`]).
+fn spellings(seq: &KeySequence) -> Vec<String> {
+    match seq {
+        KeySequence::Strokes(strokes) if strokes.len() == 1 => strokes[0].spellings(),
+        seq => vec![seq.to_string()],
+    }
 }
 
 fn find_key_seqs_bound_to_function(

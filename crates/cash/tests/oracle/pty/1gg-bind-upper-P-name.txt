@@ -1,0 +1,3 @@
+$ bind -P beginning-of-line
+beginning-of-line can be found on "\C-a", "\eOH", "\e[H".
+$

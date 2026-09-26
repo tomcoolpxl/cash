@@ -1,0 +1,4 @@
+$ bind -p no-such-thing; echo "rc=$?"
+# no-such-thing (not bound)
+rc=0
+$

@@ -84,6 +84,21 @@ const CASES: &[Case] = &[
         name: "1gg-bind-p-name",
         keys: &["bind -p beginning-of-line\r"],
     },
+    Case {
+        name: "1gg-bind-upper-P-name",
+        keys: &["bind -P beginning-of-line\r"],
+    },
+    Case {
+        name: "1gg-bind-p-unbound",
+        keys: &[
+            "bind -p vi-put; echo \"rc=$?\"\r",
+            "bind -P vi-put; echo \"rc=$?\"\r",
+        ],
+    },
+    Case {
+        name: "1gg-bind-p-unknown",
+        keys: &["bind -p no-such-thing; echo \"rc=$?\"\r"],
+    },
     // 1.dd: the vi-mode completion command has a Bash-specific name.
     Case {
         name: "1dd-bash-vi-complete",
@@ -149,8 +164,9 @@ const CASES: &[Case] = &[
     Case {
         name: "1rr-sourcing-notify",
         keys: &[
-            "printf 'sleep 0.4\\n' > s.sh\r",
-            "sleep 0.1 & . ./s.sh; echo after\r",
+            // Short sleeps: the harness moves on after 500 ms without output.
+            "printf 'sleep 0.2\\n' > s.sh\r",
+            "sleep 0.05 & . ./s.sh; echo after\r",
         ],
     },
 ];
@@ -296,10 +312,6 @@ const KNOWN_DIFFERENCES: &[(&str, &str)] = &[
     (
         "1u-compopt-fullquote",
         "not yet fixed: the completion is inserted unquoted",
-    ),
-    (
-        "1gg-bind-p-name",
-        "not yet fixed: bind -p takes no command name",
     ),
     (
         "1rr-sourcing-notify",
