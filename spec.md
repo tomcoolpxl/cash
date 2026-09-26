@@ -1487,6 +1487,30 @@ here. `cash doctor` reports the shadow. Cash's own tests used `ping -n 20 127.0.
 long-running Windows process; they now name `ping.exe`, as scripts relying on Windows'
 flags must.
 
+### D58 — `which` gives a runnable path for the commands cash carries
+
+`LS=$(which ls); "$LS" -la` is how scripts capture a tool, and under cash `ls` is a
+builtin with no file behind it: `which ls` printed `ls: shell builtin`, and `"$LS"` ran a
+command by that name. Shipping launcher executables was declined (files cash would have
+to keep in step with itself), and so was printing a command line (`cash --invoke-bundled
+ls`), which a quoted `"$LS"` cannot run.
+
+`which` prints a **virtual path** instead: cash's own executable with the name appended,
+`C:/…/cash.exe/ls`. No file can be there — `cash.exe` is a file, not a directory — so the
+path names nothing else, and it says which cash runs the command. It is one word, so it
+survives quoting. Cash recognises it wherever a command is run: typed or from a variable
+it runs the builtin by name (never a function, as a path never names one); where a process
+is needed — `exec`, `xargs`, `find -exec` — cash re-enters itself as
+`cash -c '"$0" "$@"' ls …`; and `[ -x "$LS" ]` is true. A disabled builtin's path
+(`enable -n ls`) still runs cash's own command, by re-entry, as a path to a program would.
+
+It applies to the commands cash carries that are programs elsewhere (`ls`, `sed`, `ps`,
+`rev`). Bash's own builtins (Bash 5.3's `enable -a`: `cd`, `read`, `export`, …) are no
+program anywhere, and `which cd` still says `cd: shell builtin`. `type -P ls` is
+unchanged: it searches `PATH` only, as bash's does. The limit is plain: a program outside
+cash — Python's `subprocess`, a `.bat` file — cannot run the path; nothing without a file
+on disk could offer that.
+
 ---
 
 ## 4. Deliberate divergences from bash
@@ -1532,6 +1556,7 @@ someone who expected bash, so additions need to earn their place.
 | 33 | `rev` keeps a CRLF line's `\r` at the end; `getopt -s csh/tcsh` is refused; `clear`/`reset` ignore terminfo and refuse non-VT terminal types | D20's line endings; cash is not a C shell; ConPTY speaks VT | D55 |
 | 34 | `bc` is POSIX bc: GNU bc's language extensions are errors, each named | Decided scope (Q4); a named error beats a guessed extension | D56 |
 | 35 | `ping` is iputils' `ping`, not `ping.exe`; a reply slower than the interval counts as lost, and IPv6 replies show no `ttl=` | Scripts use Linux's `-c`; the Windows ICMP API has one echo in flight and no IPv6 hop limit | D57 |
+| 36 | `which ls` prints `C:/…/cash.exe/ls`, a path no file is at, which cash runs as `ls` | A builtin has no file, and scripts run what `which` prints | D58 |
 
 `select` was missing outright until recently: it was a reserved word with no grammar
 rule, so `select x in a b; do …; done` was a syntax error that took the whole file with

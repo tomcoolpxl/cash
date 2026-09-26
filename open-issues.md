@@ -64,7 +64,11 @@ guaranteeing canonical forward slashes without mixed separators (`C:/Program Fil
 
 ---
 
-## 4. A bundled tool has no path a script can exec
+## 4. A bundled tool has no path a script can exec — closed
+
+**Closed** by spec D58: `which ls` prints `C:/…/cash.exe/ls`, a virtual path cash runs as
+`ls`, so `LS=$(which ls); "$LS" -la` works; no launcher files were shipped. What follows
+is the issue as it was recorded.
 
 **Seen:** `ls` is a builtin (D48 carries it), so `which ls` answers `ls: shell builtin`
 and `$(which ls)` yields nothing to run. A script that captures a tool's path —

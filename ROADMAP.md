@@ -22,7 +22,7 @@ Feature work follows the sequence below.
 | 9 | `ss` subset | **Complete** | [`ss` evaluation and decisions](research/ss-evaluation.md); spec D51 |
 | 10 | BusyBox-gap tools | **Complete** (`pkill`/`pidof`/`killall`; `getopt`, `rev`, `clear`, `reset`; `bc`; `ping`; doctor's BusyBox check) | [BusyBox gap analysis and decisions](research/busybox-gap-analysis.md); spec D54 |
 | 11 | Graceful Ctrl-C and `TERM` for cash's own jobs (process groups) | **Complete** | Section 11 below; spec D13, D21 |
-| 12 | A path a script can exec for a bundled tool | **Active** | Section 12 below; [open issue 4](open-issues.md) |
+| 12 | A path a script can exec for a bundled tool | **Complete** | Section 12 below; [open issue 4](open-issues.md) |
 | 13 | `bc` against GNU bc | Planned (needs GNU bc in WSL) | Section 13 below; spec D56 |
 | 14 | Bash 5.3 remainder without a terminal: `wait -n` in POSIX mode, `array_expand_once`, the `RETURN` trap's status | Planned | Section 14 below; [Bash 5.3 audit](research/bash-reference/bash-5.3-audit.md) |
 | 15 | ConPTY probe harness, then the interactive and Readline 5.3 items | Planned | Section 15 below |
@@ -34,7 +34,7 @@ The authoritative feature order is therefore:
 Bash 5.2 completion (done)  ->  native awk (done)  ->  native sed (done)  ->  bundled userland (done)
   ->  Bash 5.3 (active)  +  corpus fixes (active)  ->  line-ending controls (done)
   ->  fuser / lsof subset (done)  ->  ss subset (done)  ->  BusyBox-gap tools (done)
-  ->  graceful signals for own jobs (done)  ->  exec path for bundled tools (active)
+  ->  graceful signals for own jobs (done)  ->  exec path for bundled tools (done)
   ->  bc against GNU bc  ->  Bash 5.3 remainder (no terminal)  ->  ConPTY harness + 5.3 interactive
 ```
 
@@ -298,6 +298,11 @@ takes back Ctrl-C a parent ignored. Tests: `crates/cash/tests/job_groups.rs`.
 behind it ([open issue 4](open-issues.md)). `cash --invoke-bundled ls` is the real
 executable, and nothing says so. Decide between reporting it in `which`/`type`, shipping
 shim executables, or another answer.
+
+**Done** (spec D58): `which ls` prints `C:/…/cash.exe/ls`, a virtual path under cash's own
+executable. Cash runs it as `ls` — typed, via `exec`, `xargs` or `find -exec` — and
+`[ -x "$LS" ]` is true; no launcher files. Bash's own builtins still say `shell builtin`.
+Programs outside cash cannot run the path.
 
 ## 13. `bc` against GNU bc
 
