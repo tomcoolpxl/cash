@@ -1253,3 +1253,222 @@ fn arithmetic_never_runs_command_substitutions_from_variable_values() {
     // The error message may quote the expression; only a line of its own is output.
     assert!(!stderr.lines().any(|l| l == "INJECTED"), "{stderr}");
 }
+
+#[test]
+fn bash_53_return_trap_sees_the_status_from_before_return() {
+    // `$?` in the trap is the status `return` found, not the one it sets; the caller
+    // still gets the returned status. Checked against Git Bash 5.3.15 (and Bash 5.2).
+    assert_eq!(
+        output(concat!(
+            "f() { trap 'echo \"in:$?\"' RETURN; false; return 7; }; f; echo \"after:$?\"; ",
+            "g() { trap 'echo \"in:$?\"' RETURN; true; return 3; }; g; echo \"after:$?\"; ",
+            "h() { trap 'echo \"in:$?\"' RETURN; (exit 4); return; }; h; echo \"after:$?\"; ",
+            "k() { trap 'echo \"in:$?\"' RETURN; false; }; k; echo \"after:$?\""
+        )),
+        (
+            0,
+            "in:1\nafter:7\nin:0\nafter:3\nin:4\nafter:4\nin:1\nafter:1".into()
+        )
+    );
+
+    let root = source_fixture("return-status");
+    std::fs::write(root.join("rs.sh"), "false; return 6\n").unwrap();
+    assert_eq!(
+        output_in(
+            &root,
+            "trap 'echo \"in:$?\"' RETURN; . ./rs.sh; echo \"after:$?\""
+        ),
+        (0, "in:1\nafter:6".into())
+    );
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn a_builtin_expands_an_indexed_subscript_again() {
+    // `unset 'a[$i]'` and its kin: the quoted subscript is expanded, then evaluated as
+    // arithmetic, as in Bash.
+    assert_eq!(
+        output(concat!(
+            "i='1+1'; ",
+            "a=(x y z w); unset 'a[$i]'; echo \"unset ${!a[*]}\"; ",
+            "a=(x y z w); read 'a[$i]' <<< S; echo \"read ${a[2]}\"; ",
+            "a=(x y z w); printf -v 'a[$i]' R; echo \"printf ${a[2]}\"; ",
+            "a=(x y z w); declare 'a[$i]=T'; echo \"declare ${a[2]}\"; ",
+            "a=(x y z w); [[ -v 'a[$i]' ]] && echo \"-v set\"; ",
+            "a=(x y z w); unset 'a[$((i))]'; echo \"arith ${!a[*]}\""
+        )),
+        (
+            0,
+            "unset 0 1 3\nread S\nprintf R\ndeclare T\n-v set\narith 0 1 3".into()
+        )
+    );
+}
+
+#[test]
+fn bash_53_array_expand_once_applies_to_indexed_subscripts() {
+    // With the option, `unset`, `read` and `printf -v` do not expand the subscript again,
+    // so `$i` is an arithmetic error, which abandons the rest of the line as in Bash;
+    // `declare` and `[[ -v ]]` still expand it.
+    let (stdout, stderr) = script_output(
+        "expand-once",
+        concat!(
+            "shopt -s array_expand_once; i='1+1'\n",
+            "a=(x y z w); unset 'a[$i]'; echo same-line\n",
+            "echo \"next ${!a[*]}\"\n",
+            "printf -v 'a[$i]' R; echo same-line\n",
+            "read 'a[$i]' <<< S; echo same-line\n",
+            "declare 'a[$i]=T'; echo \"declare ${a[2]}\"\n",
+            "[[ -v 'a[$i]' ]] && echo \"-v set\"\n",
+            "unset 'a[i]'; echo \"bare name ${!a[*]}\""
+        ),
+    );
+    assert_eq!(stdout, "next 0 1 2 3\ndeclare T\n-v set\nbare name 0 1 3");
+    assert_eq!(stderr.lines().count(), 3, "{stderr}");
+}
+
+#[test]
+fn a_subscript_expanded_again_never_runs_a_command() {
+    // cash (spec §4): Bash runs `cmd` here, its best-known array injection. Cash
+    // refuses the command substitution with an error and the line goes on.
+    let (_, stdout, stderr) = output_with_stderr(concat!(
+        "declare -A h=([x]=1); a=(1 2 3); key='$(echo RAN >&2)1'\n",
+        "unset \"h[$key]\"; echo \"u=$?\"\n",
+        "unset \"a[$key]\"; echo \"i=$? ${!a[*]}\"\n",
+        "read \"a[$key]\" <<< v; echo \"r=$?\"\n",
+        "printf -v \"a[$key]\" w; echo \"p=$?\"\n",
+        "declare \"a[$key]=z\"; echo \"d=$?\"\n",
+        "[[ -v \"a[$key]\" ]]; echo \"v=$?\"\n",
+        "unset 'a[$(( $(echo RAN >&2) 1))]'; echo \"n=$? ${a[*]}\""
+    ));
+    assert_eq!(stdout, "u=1\ni=1 0 1 2\nr=1\np=1\nd=1\nv=1\nn=1 1 2 3");
+    assert!(!stderr.lines().any(|l| l == "RAN"), "{stderr}");
+    assert!(
+        stderr.contains("command substitution in a subscript is not run"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn an_arithmetic_error_in_a_builtin_abandons_the_line_but_not_in_let_or_double_parens() {
+    let (stdout, _) = script_output(
+        "arith-error",
+        concat!(
+            "a=(x y z)\n",
+            "unset 'a[1+]'; echo same-line\n",
+            "echo next\n",
+            "f() { unset 'a[1+]'; echo in-f; }; f; echo after-f\n",
+            "echo next2\n",
+            "if unset 'a[1+]'; then echo then; else echo else; fi\n",
+            "(( 1+ )); echo \"parens $?\"\n",
+            "let '1+'; echo \"let $?\""
+        ),
+    );
+    assert_eq!(stdout, "next\nnext2\nparens 1\nlet 1");
+
+    // Bash runs a `-c` string as one unit: the error abandons the rest of it, and the
+    // shell exits 1. An error in an expansion (`$((1+))`) does not.
+    assert_eq!(
+        output("a=(x y); unset 'a[1+]'\necho next"),
+        (1, String::new())
+    );
+    assert_eq!(output("echo $((1+))\necho next"), (0, "next".into()));
+}
+
+/// Runs `script` as a script file, which Bash runs a line at a time.
+fn script_output(name: &str, script: &str) -> (String, String) {
+    let root = source_fixture(name);
+    let file = root.join("script.sh");
+    std::fs::write(&file, script).unwrap();
+    let result = Command::new(CASH)
+        .args(["--noprofile", "--norc"])
+        .arg(&file)
+        .output()
+        .unwrap();
+    let _ = std::fs::remove_dir_all(root);
+    let text = |bytes: Vec<u8>| {
+        String::from_utf8(bytes)
+            .unwrap()
+            .replace("\r\n", "\n")
+            .trim_end()
+            .to_string()
+    };
+    (text(result.stdout), text(result.stderr))
+}
+
+/// `wait` cases, each in a fresh cash with `$X` naming an external program so that `$!`
+/// is a real process. Expected output is Git Bash 5.3.15's.
+fn wait_case(script: &str) -> String {
+    let cash = CASH.replace('\\', "/");
+    let (_, stdout, _) = output_with_stderr(&format!("X='{cash}'\n{script}"));
+    stdout
+}
+
+#[test]
+fn bash_53_wait_n_keeps_the_status_for_wait_pid_except_in_posix_mode() {
+    assert_eq!(
+        wait_case(
+            "\"$X\" -c 'exit 3' & p=$!; sleep 0.5; wait -n; echo \"n=$?\"; wait $p; echo \"p=$?\""
+        ),
+        "n=3\np=3"
+    );
+    assert_eq!(
+        wait_case(
+            "set -o posix; \"$X\" -c 'exit 3' & p=$!; sleep 0.5; wait -n; echo \"n=$?\"; wait $p; echo \"p=$?\""
+        ),
+        "n=3\np=127"
+    );
+    // A plain `wait` forgets what `wait -n` returned.
+    assert_eq!(
+        wait_case("\"$X\" -c 'exit 3' & p=$!; sleep 0.5; wait -n; wait; wait $p; echo \"p=$?\""),
+        "p=127"
+    );
+    // `wait -n PID`, and `-p`.
+    assert_eq!(
+        wait_case(concat!(
+            "\"$X\" -c 'exit 3' & a=$!; \"$X\" -c 'exit 5' & b=$!; sleep 0.5; ",
+            "wait -n -p v $b; echo \"n=$? $([ \"$v\" = \"$b\" ] && echo v)\"; ",
+            "wait $b; echo \"b=$?\"; wait $a; echo \"a=$?\""
+        )),
+        "n=5 v\nb=5\na=3"
+    );
+}
+
+#[test]
+fn exit_in_a_background_job_ends_the_job_not_the_shell_that_waits() {
+    // `wait` and `fg` used to exit the waiting shell with the job's status.
+    assert_eq!(
+        output(concat!(
+            "{ sleep 0.01; exit 3; } & p=$!; wait $p; echo \"wait: $?\"; ",
+            "{ exit 4; } & wait %1; echo \"spec: $?\"; ",
+            "{ exit 5; } & fg > /dev/null; echo \"fg: $?\""
+        )),
+        (0, "wait: 3\nspec: 4\nfg: 5".into())
+    );
+}
+
+#[test]
+fn wait_reports_the_status_of_a_job_that_has_already_finished() {
+    // Twice, and after the job was reaped when the next one started.
+    assert_eq!(
+        wait_case("\"$X\" -c 'exit 3' & p=$!; wait $p; echo \"1=$?\"; wait $p; echo \"2=$?\""),
+        "1=3\n2=3"
+    );
+    assert_eq!(
+        wait_case(concat!(
+            "\"$X\" -c 'exit 3' & a=$!; sleep 0.5; \"$X\" -c 'exit 4' & b=$!; sleep 0.5; ",
+            "wait -n; echo \"n=$?\"; wait -n; echo \"n2=$?\"; wait -n; echo \"n3=$?\"; ",
+            "wait $a; echo \"a=$?\""
+        )),
+        "n=3\nn2=4\nn3=127\na=3"
+    );
+    // A plain `wait` keeps the status of a job that finished before it.
+    assert_eq!(
+        wait_case("\"$X\" -c 'exit 3' & p=$!; sleep 0.5; wait; wait $p; echo \"p=$?\""),
+        "p=3"
+    );
+    // `wait PID` collects the job: `wait -n` does not return it again.
+    assert_eq!(
+        wait_case("\"$X\" -c 'exit 3' & p=$!; wait $p; wait -n; echo \"n=$?\""),
+        "n=127"
+    );
+}

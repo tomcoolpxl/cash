@@ -17,7 +17,7 @@ cargo build -p cash
 ./research/bash-reference/probe.ps1 -Suite 53
 ```
 
-**Status (2026-09-25):** 35 of 35 probes match. The first run of this suite matched 17: several
+**Status (2026-09-26):** 39 of 39 probes match. The first run of this suite matched 17: several
 items earlier recorded here as "Complete" or "Verify" did not hold up against the oracle, and
 the probes also exposed older Bash behavior Cash had wrong (listed under
 [Found while auditing](#found-while-auditing)). Each fix has a regression in
@@ -54,7 +54,7 @@ signals needs its own isolated test (see below).
 | **1.q** | `GLOBSORT` | Sort pathname expansion by name, size, blocks, mtime, atime, ctime, numeric, nosort | **Implemented** from `pathexp.c`: `+`/`-` direction, name tiebreak, invalid values keep name order. Windows has no inode change time or block count, so `ctime` uses creation time and `blocks` counts 512-byte units of the size. (NEWS says `none`; the source's keyword is `nosort`.) |
 | **1.r** | `compgen -V` | Store completions in an array | **Complete** (earlier regression). |
 | **1.s** | `${ cmd; }`, `${| cmd; }` | Current-shell command substitution | **Complete** (earlier regressions). |
-| **1.t** | `array_expand_once` | Replaces `assoc_expand_once` | **Fixed.** The two names are now one option, and it takes effect for associative subscripts in `unset`. Bash also stops re-expanding indexed subscripts (`unset 'a[$i]'` becomes an arithmetic error); Cash does not yet. The Bash 5.2 regression that asserted the opposite was corrected against the oracle. |
+| **1.t** | `array_expand_once` | Replaces `assoc_expand_once` | **Fixed.** The two names are now one option. With it set, `unset`, `read` and `printf -v` do not expand a subscript again, associative or indexed (`unset 'a[$i]'` becomes an arithmetic error); `declare` and `[[ -v ]]` still do, as in Bash. Without it, cash had not expanded indexed subscripts at all (`unset 'a[$i]'` failed); it now does. A command substitution in that second expansion is refused rather than run (spec divergence 37). |
 | **1.v** | `$TIMEFORMAT` | Up to six digits of precision | **Fixed.** Cash ignored `TIMEFORMAT` completely. It now follows `print_formatted_time`: `%[p][l]R/U/S`, `%P`, `%%`, precision capped at 6, empty value suppresses the report, invalid characters are diagnosed; `time -p` uses the fixed POSIX format. |
 | **1.w** | `BASH_MONOSECONDS` | Monotonic clock | **Verified.** Whole seconds (as in Bash, not microseconds) from `GetTickCount64`. |
 | **1.x** | `BASH_TRAPSIG` | Number of the running trap | **Fixed.** Was a dynamic variable that was empty for `ERR`/`DEBUG` and never unset. It is now bound while a handler runs and restored afterwards, with Bash's numbering: signals by number, `EXIT` 0, `DEBUG` 65, `ERR` 66, `RETURN` 67. |
@@ -83,10 +83,21 @@ with regressions:
 - **`command -v` rendered a `PATH` hit with a backslash** (`C:/WINDOWS/system32\netstat.exe`),
   disagreeing with `type` (D3).
 
+Found with the last three items (ROADMAP item 14):
+
+- **The `RETURN` trap saw the returned status.** It now sees `$?` as `return` found it,
+  for functions and sourced files; the caller still gets the returned status.
+- **`wait` lost finished jobs' statuses.** A job reaped when the next one started, or
+  waited for twice, reported 0 or 127; and a background `{ exit 3; } &` made `wait` and
+  `fg` exit the waiting shell.
+- **Arithmetic errors.** In a builtin (`unset 'a[1+]'`, `printf -v`, `read`, `test -v`)
+  one now abandons the rest of the line, or of a `-c` string, as Bash's does; in `(( ))`
+  it fails the command with status 1 and the line goes on, where cash had abandoned it.
+
 ### Known remaining differences
 
-- In a `RETURN` trap Bash's `$?` is the status from *before* a `return N`; Cash shows `N`.
-- `array_expand_once` does not yet change indexed-array subscripts.
+- A command substitution in a subscript that a builtin expands a second time
+  (`unset "a[$key]"` with `key='$(cmd)'`) is refused, not run: spec divergence 37.
 - Real-signal traps (`trap … INT` with `kill -INT $$`) need an isolated test harness before
   `BASH_TRAPSIG` can be probed for them.
 - `/dev/tcp/host/port` and `/dev/udp/...` redirections are not implemented. They are a Bash
@@ -125,7 +136,7 @@ Not yet probed: these need ConPTY-driven tests rather than `-c` probes.
 | **1.h** | `umask` options | Full POSIX symbolic modes | **Verified** by probe (`-S`, `-p`, `a+w`, `g-w,o-rwx`). |
 | **1.k** | `command declare` | See section 1 | **Fixed** (POSIX mode only). |
 | **1.z** | `test <` / `>` locale | Locale collation in POSIX mode | **Verified** by probe in the oracle's default locale; other locales are untested. |
-| **1.nn** | `wait -n` table drain | Removes jobs from the table in POSIX mode | Not yet probed (timing-dependent). |
+| **1.nn** | `wait -n` table drain | Removes jobs from the table in POSIX mode | **Fixed.** Cash now keeps Bash's list of finished jobs' statuses: `wait PID` reads one after the job has gone, and `wait -n` returns each finished job once, oldest first, and forgets it only in POSIX mode. Probed with an external job, since `$!` is empty for a builtin-only one (divergence 14). |
 | **1.qq** | POSIX notify timing | Notifications when POSIX specifies | Not yet probed (interactive). |
 | **1.tt** | Function names | Non-identifier function names in POSIX mode | **Verified** by probe. |
 
@@ -155,7 +166,5 @@ Not yet probed: these need ConPTY-driven tests rather than `-c` probes.
 
 ## Next steps
 
-1. Indexed-array `array_expand_once` and the `RETURN` trap's pre-`return` status.
-2. An isolated harness (new console process group) for real-signal traps and `BASH_TRAPSIG`.
-3. ConPTY probes for section 2.
-4. `wait -n` in POSIX mode.
+1. An isolated harness (new console process group) for real-signal traps and `BASH_TRAPSIG`.
+2. ConPTY probes for section 2.

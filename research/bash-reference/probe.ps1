@@ -63,6 +63,11 @@ $cases53 = @(
     @{ name = '1q-globsort-invalid'; script = 'rm -rf gs; mkdir gs; cd gs; touch b a c; GLOBSORT=bogus; echo *; GLOBSORT=; echo *; unset GLOBSORT; echo *' },
     @{ name = '1t-array-expand-once-alias'; script = 'shopt array_expand_once; shopt -s assoc_expand_once; shopt array_expand_once; shopt -u array_expand_once; shopt assoc_expand_once' },
     @{ name = '1t-array-expand-once-unset'; script = 'shopt -s array_expand_once; declare -A a; k=''$(echo ran >&2)x''; a[$k]=v; unset ''a[$k]''; echo count=${#a[@]}' },
+    @{ name = '1t-array-expand-once-indexed'; script = 'i=1+1; a=(x y z w); unset ''a[$i]''; echo ${!a[*]}; shopt -s array_expand_once; a=(x y z w); unset ''a[$i]''; echo same-line
+echo next ${!a[*]}; declare ''a[$i]=T''; echo ${a[2]}' },
+    @{ name = '1nn-wait-n-keeps-status'; script = '"$BASH" -c "exit 3" & p=$!; sleep 0.5; wait -n; echo n=$?; wait $p 2>/dev/null; echo p=$?' },
+    @{ name = '1nn-wait-n-posix-drains'; script = 'set -o posix; "$BASH" -c "exit 3" & p=$!; sleep 0.5; wait -n; echo n=$?; wait $p 2>/dev/null; echo p=$?' },
+    @{ name = 'return-trap-pre-return-status'; script = 'f() { trap ''echo in=$?'' RETURN; false; return 7; }; f; echo after=$?' },
     @{ name = '1v-timeformat-precision'; script = 'TIMEFORMAT=''%6R|%3R|%0R|%9R''; x=$( { time sleep 0; } 2>&1 ); [[ $x =~ ^[0-9]+\.[0-9]{6}\|[0-9]+\.[0-9]{3}\|[0-9]+\|[0-9]+\.[0-9]{6}$ ]] && echo ok || echo "bad:$x"' },
     @{ name = '1w-monoseconds'; script = 'a=$BASH_MONOSECONDS; b=$BASH_MONOSECONDS; [[ $a =~ ^[0-9]+$ ]] && echo numeric; (( b >= a )) && echo monotonic; BASH_MONOSECONDS=5; [[ $BASH_MONOSECONDS != 5 ]] && echo dynamic' },
     @{ name = '1x-trapsig-exit'; script = 'trap ''echo sig=$BASH_TRAPSIG'' EXIT; echo out=${BASH_TRAPSIG-unset}' },

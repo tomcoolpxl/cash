@@ -24,7 +24,7 @@ Feature work follows the sequence below.
 | 11 | Graceful Ctrl-C and `TERM` for cash's own jobs (process groups) | **Complete** | Section 11 below; spec D13, D21 |
 | 12 | A path a script can exec for a bundled tool | **Complete** | Section 12 below; [open issue 4](open-issues.md) |
 | 13 | `bc` against GNU bc | **Complete** | Section 13 below; spec D56 |
-| 14 | Bash 5.3 remainder without a terminal: `wait -n` in POSIX mode, `array_expand_once`, the `RETURN` trap's status | Planned | Section 14 below; [Bash 5.3 audit](research/bash-reference/bash-5.3-audit.md) |
+| 14 | Bash 5.3 remainder without a terminal: `wait -n` in POSIX mode, `array_expand_once`, the `RETURN` trap's status | **Complete** | Section 14 below; [Bash 5.3 audit](research/bash-reference/bash-5.3-audit.md) |
 | 15 | ConPTY probe harness, then the interactive and Readline 5.3 items | Planned | Section 15 below |
 | 16 | `cash --link-tools`: hard links so programs outside cash can run its tools | Planned | Section 16 below; follows D58 |
 | — | Found on the way (not planned items) | **Complete** | MSYS2 argument encoding (spec D52); `shopt winpaths` and bash-worded `cd` errors (D53); a `TERM` that no longer reaches the whole console (D21) |
@@ -36,7 +36,7 @@ Bash 5.2 completion (done)  ->  native awk (done)  ->  native sed (done)  ->  bu
   ->  Bash 5.3 (active)  +  corpus fixes (active)  ->  line-ending controls (done)
   ->  fuser / lsof subset (done)  ->  ss subset (done)  ->  BusyBox-gap tools (done)
   ->  graceful signals for own jobs (done)  ->  exec path for bundled tools (done)
-  ->  bc against GNU bc (done)  ->  Bash 5.3 remainder (no terminal)  ->  ConPTY harness + 5.3 interactive  ->  tool links
+  ->  bc against GNU bc (done)  ->  Bash 5.3 remainder (no terminal) (done)  ->  ConPTY harness + 5.3 interactive  ->  tool links
 ```
 
 ## 1. Finish Bash 5.2
@@ -325,6 +325,14 @@ in GNU, kept on purpose. Tests: `bc_matches_gnu_bc` in `crates/cash/tests/bc_cas
 The audit items a `-c` script can observe that are not yet done: `wait -n` in POSIX mode,
 indexed `array_expand_once`, and the status the `RETURN` trap sees before `return`. Each
 gets a probe against Git Bash 5.3.15, as the other 35 have.
+
+**Done:** 39 of 39 probes match. The `RETURN` trap sees `$?` from before `return`;
+builtins expand a quoted subscript again (`unset 'a[$i]'`) unless `array_expand_once` is
+set, but never run a command substitution there (spec divergence 37, decided); `wait`
+keeps finished jobs' statuses, and `wait -n` forgets them only in POSIX mode. On the
+way: arithmetic errors in builtins abandon the line as in Bash, `(( 1+ ))` no longer
+does, and `{ exit 3; } &` no longer exits the shell that waits for it. Tests:
+`crates/cash/tests/bash_gaps.rs`.
 
 ## 15. ConPTY probe harness, then the interactive 5.3 items
 
