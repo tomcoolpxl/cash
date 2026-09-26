@@ -1391,6 +1391,31 @@ Native builtins from the BusyBox gap analysis, each checked against the real too
 `crates/cash/tests/oracle` holds the case scripts and util-linux's output; the tests run
 the same scripts under cash and name each deliberate difference in place.
 
+### D56 — `bc` is POSIX bc, from posixutils-rs, and says so about GNU's
+
+`bc` is the standard way shell scripts do decimal arithmetic, and neither Windows nor Git
+for Windows ships one. Cash bundles posixutils-rs' POSIX bc (`crates/cash-bc`, MIT,
+imported at a recorded revision as `awk` was), running as `cash --invoke-bundled bc`.
+
+POSIX only, decided in the BusyBox gap analysis (Q4), and no `dc`. GNU bc's language
+extensions are not implemented; when a program fails to parse, `bc` names the first one
+it used (`print`, `read()`, `else`, `&&`, `||`, `!`, `#` comments, `last`, `halt`,
+`continue`, `limits`, or a multi-letter name), so a script written for GNU bc fails with
+a reason. GNU's options that change nothing for POSIX bc (`-q`, `-s`, `-w`) are accepted,
+`--mathlib` is `-l`, and `-i` forces interactive error recovery.
+
+What changed from upstream (listed in `crates/cash-bc/README.md`):
+
+- a CRLF line is read as an LF line (D20);
+- a value below one prints without a leading zero, `.33` and `-.5`, as GNU, BSD and
+  BusyBox bc print it and scripts compare it; upstream printed `0.33`, and its tests
+  were updated with the change.
+
+Upstream's suite runs unchanged apart from its helpers (`crates/cash/tests/bc.rs`), and
+cash's changes have their own tests (`bc_cash.rs`). GNU bc was not available to compare
+against when this was built; the upstream suite's math-library values were checked
+against it upstream.
+
 ---
 
 ## 4. Deliberate divergences from bash
@@ -1434,6 +1459,7 @@ someone who expected bash, so additions need to earn their place.
 | 31 | `TERM` terminates a console program at once, and gives a program with a window five seconds after `WM_CLOSE` | A console control event cannot be aimed at one process that leads no group | D21 |
 | 32 | `pgrep`, `pkill`, `pidof` and `killall` match names without case and with `.exe` optional; the kill family never signals the shell, system images or service accounts' processes | Windows image names are case-insensitive, and killing `csrss.exe` is a blue screen | D54 |
 | 33 | `rev` keeps a CRLF line's `\r` at the end; `getopt -s csh/tcsh` is refused; `clear`/`reset` ignore terminfo and refuse non-VT terminal types | D20's line endings; cash is not a C shell; ConPTY speaks VT | D55 |
+| 34 | `bc` is POSIX bc: GNU bc's language extensions are errors, each named | Decided scope (Q4); a named error beats a guessed extension | D56 |
 
 `select` was missing outright until recently: it was a reserved word with no grammar
 rule, so `select x in a b; do …; done` was a syntax error that took the whole file with

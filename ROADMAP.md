@@ -20,7 +20,7 @@ Feature work follows the sequence below.
 | 7 | Line-ending controls: sed `-b`, `CASH_EOL`, `dos2unix`/`unix2dos` | **Complete** | Section 7 below; spec D49 |
 | 8 | `fuser` and an `lsof` subset | **Complete** | Section 8 below; spec D50 |
 | 9 | `ss` subset | **Complete** | [`ss` evaluation and decisions](research/ss-evaluation.md); spec D51 |
-| 10 | BusyBox-gap tools | **Active**: parts 1–2 done (`pkill`/`pidof`/`killall`; `getopt`, `rev`, `clear`, `reset`) | [BusyBox gap analysis and decisions](research/busybox-gap-analysis.md); spec D54 |
+| 10 | BusyBox-gap tools | **Active**: parts 1–3 done (`pkill`/`pidof`/`killall`; `getopt`, `rev`, `clear`, `reset`; `bc`) | [BusyBox gap analysis and decisions](research/busybox-gap-analysis.md); spec D54 |
 | — | Found on the way (not planned items) | **Complete** | MSYS2 argument encoding (spec D52); `shopt winpaths` and bash-worded `cd` errors (D53); a `TERM` that no longer reaches the whole console (D21) |
 
 The authoritative feature order is therefore:
@@ -252,7 +252,12 @@ because it changes Ctrl-C for every foreground program (D13).
 **2 done** (spec D55): `getopt` and `rev` match util-linux 2.42.3 case by case
 (`crates/cash/tests/oracle`), apart from `-s csh`/`tcsh` refused and a CRLF line's `\r`
 kept at the end; `clear` and `reset` write ncurses 6.6's bytes, and `reset` also restores
-the console modes. Next: 3 (POSIX `bc` from posixutils-rs).
+the console modes.
+
+**3 done** (spec D56): POSIX `bc` from posixutils-rs as `crates/cash-bc`, bundled like
+`awk`. Upstream's 72 tests run through cash; cash adds CRLF input, no leading zero
+(`.33`, as GNU/BSD/BusyBox print), GNU's harmless options, and a note naming any GNU
+extension a failed program used. Next: 4 (a Linux-flag `ping`).
 
 ## Keeping the roadmap current
 
