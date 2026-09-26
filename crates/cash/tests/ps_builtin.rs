@@ -84,7 +84,8 @@ fn pgrep_parent_accepts_the_long_option_and_native_pid() {
         r#"
         ping.exe -n 30 127.0.0.1 > /dev/null &
         child=$!
-        found=$(pgrep --parent $$)
+        # One pid per line; the unquoted echo puts them on one line for the match.
+        found=$(echo $(pgrep --parent $$))
         case " $found " in *" $child "*) echo found;; *) echo "missing:$child:$found";; esac
         kill -KILL "$child" 2>/dev/null
         "#,

@@ -225,7 +225,7 @@ where
 
     // SAFETY: TH32CS_SNAPTHREAD ignores the pid argument and snapshots all threads.
     let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0) };
-    if snapshot.is_null() {
+    if snapshot == windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE {
         return Err(io::Error::last_os_error());
     }
 

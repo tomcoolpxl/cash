@@ -59,10 +59,22 @@ impl builtins::Command for PgrepCommand {
             None => None,
         };
 
+        // A process whose parent pid names one of these but which started before it is an
+        // orphan of an earlier process that had the same pid, not a child.
+        let parents: Vec<(u32, Option<u64>)> = self
+            .parents
+            .iter()
+            .map(|&pid| (pid, cash_win32::process::started(pid)))
+            .collect();
+
         let mut matched = false;
         let mut stdout = context.stdout();
         for process in cash_win32::process::list() {
-            if !self.parents.is_empty() && !self.parents.contains(&process.parent_pid) {
+            if !parents.is_empty()
+                && !parents
+                    .iter()
+                    .any(|&(pid, started)| cash_win32::process::is_child_of(&process, pid, started))
+            {
                 continue;
             }
             let name_matches = matcher

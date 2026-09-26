@@ -89,6 +89,46 @@ pub fn cpu_time(pid: u32) -> Option<u64> {
     Some(as_u64(kernel) + as_u64(user))
 }
 
+/// When a process started, as a `FILETIME` count, or `None` if it cannot be opened.
+#[must_use]
+pub fn started(pid: u32) -> Option<u64> {
+    let process = ProcessHandle::open(pid, PROCESS_QUERY_LIMITED_INFORMATION)?;
+    let zero = FILETIME {
+        dwLowDateTime: 0,
+        dwHighDateTime: 0,
+    };
+    let (mut creation, mut exit, mut kernel, mut user) = (zero, zero, zero, zero);
+    // SAFETY: the handle is valid and all four out-params are valid FILETIMEs.
+    let ok = unsafe {
+        GetProcessTimes(
+            process.0,
+            &raw mut creation,
+            &raw mut exit,
+            &raw mut kernel,
+            &raw mut user,
+        )
+    };
+    (ok != 0).then(|| as_u64(creation))
+}
+
+/// Whether `child` can really be a child of the process `parent_pid`, which started at
+/// `parent_started`.
+///
+/// Windows keeps an orphan's parent pid after the parent exits, and reuses pids, so a
+/// process can name as its parent a pid that now belongs to a newer, unrelated process.
+/// A child cannot predate its parent; one that does is such an orphan. When either start
+/// time is unknown there is nothing to go on, and the parent link is taken at its word.
+#[must_use]
+pub fn is_child_of(child: &ProcessInfo, parent_pid: u32, parent_started: Option<u64>) -> bool {
+    if child.parent_pid != parent_pid {
+        return false;
+    }
+    match (parent_started, started(child.pid)) {
+        (Some(parent), Some(child)) => child >= parent,
+        _ => true,
+    }
+}
+
 /// Combine a `FILETIME`'s halves into a single count of 100ns intervals.
 const fn as_u64(time: FILETIME) -> u64 {
     ((time.dwHighDateTime as u64) << 32) | (time.dwLowDateTime as u64)
@@ -126,7 +166,7 @@ pub fn list() -> Vec<ProcessInfo> {
 
     // SAFETY: TH32CS_SNAPPROCESS ignores the pid argument and snapshots every process.
     let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) };
-    if snapshot.is_null() {
+    if snapshot == windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE {
         return Vec::new();
     }
 
@@ -176,8 +216,10 @@ fn exe_name(raw: &[u16]) -> String {
 pub fn descendants(root: u32) -> Vec<ProcessInfo> {
     let all = list();
 
-    let mut wanted: std::collections::HashSet<u32> = std::collections::HashSet::new();
-    wanted.insert(root);
+    // Each member's start time, so an orphan whose parent pid was reused by a member is
+    // not mistaken for its child (see `is_child_of`).
+    let mut wanted: std::collections::HashMap<u32, Option<u64>> = std::collections::HashMap::new();
+    wanted.insert(root, started(root));
 
     // Parents always have a lower pid than their children often enough that one pass is
     // not sufficient; iterate until the set stops growing. Bounded by the process count,
@@ -185,8 +227,13 @@ pub fn descendants(root: u32) -> Vec<ProcessInfo> {
     for _ in 0..all.len() {
         let before = wanted.len();
         for process in &all {
-            if wanted.contains(&process.parent_pid) {
-                wanted.insert(process.pid);
+            if wanted.contains_key(&process.pid) {
+                continue;
+            }
+            if let Some(&parent_started) = wanted.get(&process.parent_pid)
+                && is_child_of(process, process.parent_pid, parent_started)
+            {
+                wanted.insert(process.pid, started(process.pid));
             }
         }
         if wanted.len() == before {
@@ -195,7 +242,7 @@ pub fn descendants(root: u32) -> Vec<ProcessInfo> {
     }
 
     all.into_iter()
-        .filter(|p| wanted.contains(&p.pid))
+        .filter(|p| wanted.contains_key(&p.pid))
         .collect()
 }
 
