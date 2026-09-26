@@ -12,7 +12,8 @@ pub trait PathExt {
     ///
     /// On Windows, this returns true if *either* the path itself is a file with
     /// a `PATHEXT` extension *or* appending some `PATHEXT` extension resolves
-    /// to an existing file. To recover the actual on-disk path in the
+    /// to an existing file *or* the file's contents make it runnable (a `#!` line
+    /// or a PE image). To recover the actual on-disk path in the
     /// latter case, use [`resolve_executable`] which takes ownership
     /// and avoids copies on platforms where no resolution is needed.
     fn executable(&self) -> bool;

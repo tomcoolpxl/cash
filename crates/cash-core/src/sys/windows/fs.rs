@@ -58,14 +58,27 @@ fn is_executable_file(path: &Path, extensions: &[String]) -> bool {
     has_executable_extension_with(path, extensions) && path.is_file()
 }
 
+/// Returns true if `path` is an existing file whose contents make it runnable: a `#!`
+/// script or a PE image, whatever its name. Reads the file, so it runs only after the
+/// `PATHEXT` checks (D46).
+fn is_executable_by_content(path: &Path) -> bool {
+    path.is_file() && cash_win32::resolve::has_executable_content(path)
+}
+
 /// Resolves an owned path to the actual on-disk executable file, if any.
 ///
-/// If the path is already a file with a `PATHEXT` extension, it is returned
-/// unchanged (no allocation). Otherwise, each `PATHEXT` extension is appended
-/// in turn and the first existing file is returned.
+/// Follows execution's order (D8, `cash_win32::resolve`) so a lookup reports what running
+/// the name would run: a file with a `PATHEXT` extension is returned unchanged (no
+/// allocation); a file with some other extension is returned if its contents are
+/// runnable; then each `PATHEXT` extension is appended in turn; and last, the path itself
+/// is returned if its contents are runnable. That last step is what finds Git for
+/// Windows' extensionless `#!/bin/sh` wrappers such as `/usr/bin/egrep`.
 pub fn resolve_executable(path: PathBuf) -> Option<PathBuf> {
     let extensions = pathext_extensions();
     if is_executable_file(&path, &extensions) {
+        return Some(path);
+    }
+    if path.extension().is_some() && is_executable_by_content(&path) {
         return Some(path);
     }
     // Try appending each PATHEXT extension.
@@ -77,7 +90,7 @@ pub fn resolve_executable(path: PathBuf) -> Option<PathBuf> {
             return Some(candidate);
         }
     }
-    None
+    is_executable_by_content(&path).then_some(path)
 }
 
 impl crate::sys::fs::PathExt for Path {
@@ -100,7 +113,7 @@ impl crate::sys::fs::PathExt for Path {
             let mut name = self.as_os_str().to_owned();
             name.push(ext);
             Self::new(&name).is_file()
-        })
+        }) || is_executable_by_content(self)
     }
 
     fn exists_and_is_block_device(&self) -> bool {
