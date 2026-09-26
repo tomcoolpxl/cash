@@ -26,6 +26,7 @@ Feature work follows the sequence below.
 | 13 | `bc` against GNU bc | **Complete** | Section 13 below; spec D56 |
 | 14 | Bash 5.3 remainder without a terminal: `wait -n` in POSIX mode, `array_expand_once`, the `RETURN` trap's status | Planned | Section 14 below; [Bash 5.3 audit](research/bash-reference/bash-5.3-audit.md) |
 | 15 | ConPTY probe harness, then the interactive and Readline 5.3 items | Planned | Section 15 below |
+| 16 | `cash --link-tools`: hard links so programs outside cash can run its tools | Planned | Section 16 below; follows D58 |
 | — | Found on the way (not planned items) | **Complete** | MSYS2 argument encoding (spec D52); `shopt winpaths` and bash-worded `cd` errors (D53); a `TERM` that no longer reaches the whole console (D21) |
 
 The authoritative feature order is therefore:
@@ -35,7 +36,7 @@ Bash 5.2 completion (done)  ->  native awk (done)  ->  native sed (done)  ->  bu
   ->  Bash 5.3 (active)  +  corpus fixes (active)  ->  line-ending controls (done)
   ->  fuser / lsof subset (done)  ->  ss subset (done)  ->  BusyBox-gap tools (done)
   ->  graceful signals for own jobs (done)  ->  exec path for bundled tools (done)
-  ->  bc against GNU bc (done)  ->  Bash 5.3 remainder (no terminal)  ->  ConPTY harness + 5.3 interactive
+  ->  bc against GNU bc (done)  ->  Bash 5.3 remainder (no terminal)  ->  ConPTY harness + 5.3 interactive  ->  tool links
 ```
 
 ## 1. Finish Bash 5.2
@@ -330,6 +331,34 @@ gets a probe against Git Bash 5.3.15, as the other 35 have.
 The interactive and Readline items of the 5.3 audit need a real terminal: a harness that
 drives cash through ConPTY, sends keys and reads the screen, alongside the same session in
 Bash 5.3. Then the items themselves, and with them the `BASH_VERSION=5.3` claim.
+
+## 16. `cash --link-tools`: tools that programs outside cash can run
+
+D58's `C:/…/cash.exe/ls` runs only inside cash; Python's `subprocess` or a `.bat` file
+can start only a real file. `cash --link-tools [DIR]` makes hard links to `cash.exe`,
+one per tool (`ls.exe`, `grep.exe`, …), and cash started under a tool's name runs as
+that tool, as BusyBox does. A hard link is the same file, so it costs no space and needs
+no admin on a folder the user can write. Under AppLocker or App Control, only an
+installer running as admin can put the links where they may run, next to `cash.exe` in
+`Program Files`. The links have the same hash and signature as `cash.exe`, so rules
+allowing cash by hash or signer allow its links.
+
+Decided:
+
+- **Folder:** DIR, or `bin` next to `cash.exe`, created when missing; an existing `bin`
+  is used as it is (busybox-w32 `--install` likewise defaults to its own folder).
+- **A name already taken:** a link cash made earlier is refreshed to this `cash.exe`,
+  so re-running after an upgrade updates them; any other file is left alone and listed
+  as skipped. Cash knows its own links by a list it keeps in the folder.
+- **Windows' names:** all 123 tools are linked. The eight that share a System32 name
+  (`expand find hostname ping reset sort timeout whoami`) get a note: put the folder
+  after System32 on PATH, or `.bat` files calling `find` or `sort` get cash's.
+- **PATH:** never changed; the command prints the folder and how to add it to the
+  user PATH.
+
+Also: a DIR on another drive cannot hold hard links to `cash.exe`, so that is an error
+naming the reason; `which` prints a tool's link, when one is on PATH, in place of the
+virtual path; and `cash doctor` reports links left pointing at an older `cash.exe`.
 
 ## Keeping the roadmap current
 
