@@ -1,0 +1,32 @@
+== plain lines
+ c b a \n z y x \n
+== no final newline
+ c b a \n y x
+== CRLF keeps its CR at the end
+ \r c b a \n \r y x \n
+== empty lines
+ \n \n b a \n
+== empty input
+rc=0
+== UTF-8
+ d l r 303 266 w o l l 303 251 h \n
+== the domain idiom
+co.uk
+== files
+ e n o \n o w t \n e e r h t \n
+== missing file
+ r e v : c a n n o t o p e n
+ n o s u c h : N o s u c h
+ f i l e o r d i r e c t o
+ r y \n e n o \n o w t \n e e r h t
+ \n
+rc=1
+== -0
+ b a \0 d c \0
+== --zero, no final NUL
+ b a \0 d c
+== dash is stdin
+rev: cannot open -: No such file or directory
+== bad option
+rev: invalid option -- 'Z'
+rc=1

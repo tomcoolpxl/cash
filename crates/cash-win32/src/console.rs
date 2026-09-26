@@ -119,6 +119,45 @@ pub fn interrupt_process_group(group_id: u32) -> io::Result<()> {
     Ok(())
 }
 
+/// Input modes of a console waiting for a line: processed, line-buffered and echoed
+/// input, with insert and quick-edit, as a new console window starts.
+const COOKED_INPUT: u32 = 0x0001 | 0x0002 | 0x0004 | 0x0010 | 0x0020 | 0x0040 | 0x0080 | 0x0100;
+/// Output modes cash relies on: processed output, wrapping, and VT sequences.
+const VT_OUTPUT: u32 = 0x0001 | 0x0002 | 0x0004;
+
+/// Puts back the console state cash relies on between prompts, for `reset`.
+///
+/// That is cooked input, VT-processing output and the UTF-8 code page (D41). A program
+/// that died in raw mode, with echo off, VT processing off or after `chcp` leaves the
+/// console unusable, and escape sequences cannot undo that because they are not
+/// interpreted then.
+///
+/// Returns `false` when the process has no console to restore.
+pub fn restore_modes() -> io::Result<bool> {
+    use std::os::windows::io::AsRawHandle as _;
+    use windows_sys::Win32::System::Console::SetConsoleMode;
+
+    let open = |name: &str| {
+        std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(name)
+    };
+    let (Ok(input), Ok(output)) = (open("CONIN$"), open("CONOUT$")) else {
+        return Ok(false);
+    };
+    // SAFETY: the handles are open console handles owned by `input` and `output`, alive
+    // for the call.
+    let input_ok = unsafe { SetConsoleMode(input.as_raw_handle(), COOKED_INPUT) };
+    // SAFETY: as above.
+    let output_ok = unsafe { SetConsoleMode(output.as_raw_handle(), VT_OUTPUT) };
+    if input_ok == 0 || output_ok == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    set_utf8_code_page()?;
+    Ok(true)
+}
+
 /// Set the console to UTF-8 (D41).
 ///
 /// Fixes console *display* and console-attached children. It deliberately does not claim

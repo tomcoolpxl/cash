@@ -1,0 +1,222 @@
+## 1: getopt [-o] [ab:c::] [--] [-a] [-b] [val] [file]
+out=[ -a -b 'val' -- 'file']
+err=[]
+rc=0
+## 2: getopt [-o] [ab:c::] [--] [-abval] [-cx] [-c] [file]
+out=[ -a -b 'val' -c 'x' -c '' -- 'file']
+err=[]
+rc=0
+## 3: getopt [-o] [ab:] [--] [-b]
+out=[ --]
+err=[getopt: option requires an argument -- 'b']
+rc=1
+## 4: getopt [-o] [ab:] [--] [-x] [file]
+out=[ -- 'file']
+err=[getopt: invalid option -- 'x']
+rc=1
+## 5: getopt [-o] [ab:] [--] [file1] [-a] [file2] [--] [-b] [notanoption]
+out=[ -a -- 'file1' 'file2' '-b' 'notanoption']
+err=[]
+rc=0
+## 6: getopt [-o] [ab:] [--] [-a] [--] [-b]
+out=[ -a -- '-b']
+err=[]
+rc=0
+## 7: getopt [-o] [a] [--] [it's] [two words] []
+out=[ -- 'it'\''s' 'two words' '']
+err=[]
+rc=0
+## 8: getopt [-o] [a] [--] [line1
+line2] [$HOME] [`x`] ["q"] [\back]
+out=[ -- 'line1
+line2' '$HOME' '`x`' '"q"' '\back']
+err=[]
+rc=0
+## 9: getopt [-o] [a] [-l] [alpha,beta:,gamma::] [--] [--alpha] [--beta=1] [--beta] [2] [--gamma] [--gamma=3] [x]
+out=[ --alpha --beta '1' --beta '2' --gamma '' --gamma '3' -- 'x']
+err=[]
+rc=0
+## 10: getopt [-o] [] [-l] [verbose,version] [--] [--verb]
+out=[ --verbose --]
+err=[]
+rc=0
+## 11: getopt [-o] [] [-l] [verbose,version] [--] [--vers]
+out=[ --version --]
+err=[]
+rc=0
+## 12: getopt [-o] [] [-l] [verbose,version] [--] [--ver]
+out=[ --]
+err=[getopt: option '--ver' is ambiguous; possibilities: '--verbose' '--version']
+rc=1
+## 13: getopt [-o] [] [-l] [alpha] [--] [--bogus]
+out=[ --]
+err=[getopt: unrecognized option '--bogus']
+rc=1
+## 14: getopt [-o] [] [-l] [alpha] [--] [--alpha=1]
+out=[ --]
+err=[getopt: option '--alpha' doesn't allow an argument]
+rc=1
+## 15: getopt [-o] [] [-l] [beta:] [--] [--beta]
+out=[ --]
+err=[getopt: option '--beta' requires an argument]
+rc=1
+## 16: getopt [-o] [] [--longoptions=one,two] [--] [--two] [--one]
+out=[ --two --one --]
+err=[]
+rc=0
+## 17: getopt [-o] [] [-l] [one] [-l] [two] [--] [--one] [--two]
+out=[ --one --two --]
+err=[]
+rc=0
+## 18: getopt [-a] [-o] [b] [-l] [long:] [--] [-long] [x] [-b]
+out=[ --long 'x' -b --]
+err=[]
+rc=0
+## 19: getopt [-o] [b] [-l] [long:] [--] [-long] [x]
+out=[ -- 'x']
+err=[getopt: invalid option -- 'l'
+getopt: invalid option -- 'o'
+getopt: invalid option -- 'n'
+getopt: invalid option -- 'g']
+rc=1
+## 20: getopt [-o] [+a] [--] [file] [-a]
+out=[ -- 'file' '-a']
+err=[]
+rc=0
+## 21: getopt [-o] [-a] [--] [file] [-a]
+out=[ 'file' -a --]
+err=[]
+rc=0
+## 22: getopt [-o] [a] [--] [file] [-a]
+out=[ -- 'file' '-a']
+err=[]
+rc=0
+## 23: getopt [-n] [myscript] [-o] [a] [--] [-z]
+out=[ --]
+err=[myscript: invalid option -- 'z']
+rc=1
+## 24: getopt [-q] [-o] [a] [--] [-z]
+out=[ --]
+err=[]
+rc=1
+## 25: getopt [-Q] [-o] [a] [--] [-a]
+out=[]
+err=[]
+rc=0
+## 26: getopt [-Q] [-o] [a] [--] [-z]
+out=[]
+err=[getopt: invalid option -- 'z']
+rc=1
+## 27: getopt [-u] [-o] [a:] [--] [-a] [two words] [x]
+out=[ -a two words -- x]
+err=[]
+rc=0
+## 28: getopt [-s] [sh] [-o] [a] [--] [-a] [it's]
+out=[ -a -- 'it'\''s']
+err=[]
+rc=0
+## 29: getopt [-s] [bash] [-o] [a] [--] [-a] [it's]
+out=[ -a -- 'it'\''s']
+err=[]
+rc=0
+## 30: getopt [-T]
+out=[]
+err=[]
+rc=4
+## 31: getopt [-o] [a] [--name=other] [--] [-z]
+out=[ --]
+err=[other: invalid option -- 'z']
+rc=1
+## 32: getopt [ab:] [-a] [-b] [val] [file]
+out=[ -a -b val -- file]
+err=[]
+rc=0
+## 33: getopt [ab:] [-x]
+out=[ --]
+err=[getopt: invalid option -- 'x']
+rc=1
+## 34: getopt [-o] [] [-l] [alpha] [--] [--bogus=1]
+out=[ --]
+err=[getopt: unrecognized option '--bogus=1']
+rc=1
+## 35: getopt [-a] [-o] [b] [-l] [long:] [--] [-xyz] [-long]
+out=[ --]
+err=[getopt: unrecognized option '-xyz'
+getopt: option '-long' requires an argument]
+rc=1
+## 36: getopt [-a] [-o] [b] [-l] [long:] [--] [-bx]
+out=[ -b --]
+err=[getopt: invalid option -- 'x']
+rc=1
+## 37: getopt [-o] [] [-l] [ver,verbose] [--] [--ver]
+out=[ --ver --]
+err=[]
+rc=0
+## 38: getopt [-o] [a:] [--] [-a] [--] [-b]
+out=[ -a '--' --]
+err=[getopt: invalid option -- 'b']
+rc=1
+## 39: getopt [-o] [] [-l] [beta:] [--] [--beta] [-x]
+out=[ --beta '-x' --]
+err=[]
+rc=0
+## 40: getopt [-o] [:a] [--] [-z] [-a]
+out=[ -a --]
+err=[]
+rc=1
+## 41: getopt [-o] [] [-l] [one two] [--] [--one] [--two]
+out=[ --one --two --]
+err=[]
+rc=0
+## 42: getopt [--options=ab] [--] [-ab]
+out=[ -a -b --]
+err=[]
+rc=0
+## 43: getopt [-qo] [a] [--] [-z]
+out=[ --]
+err=[]
+rc=1
+## 44: getopt [-o] [a] [--] [-a] [--]
+out=[ -a --]
+err=[]
+rc=0
+## 45: getopt [-o] [ab] [--] [-a] [-] [-b]
+out=[ -a -b -- '-']
+err=[]
+rc=0
+## 46: getopt [-o] [ab] [--] [--] [--]
+out=[ -- '--']
+err=[]
+rc=0
+## 47: getopt [-o] [a:b] [--] [-a] [-b]
+out=[ -a '-b' --]
+err=[]
+rc=0
+## 48: getopt [-o] [+a] [--] [-a] [--] [x]
+out=[ -a -- 'x']
+err=[]
+rc=0
+## 49: getopt []
+out=[]
+err=[getopt: missing optstring argument
+Try 'getopt --help' for more information.]
+rc=2
+## 50: getopt [-o]
+out=[]
+err=[getopt: option requires an argument -- 'o'
+Try 'getopt --help' for more information.]
+rc=2
+## 51: getopt [-s] [zsh] [-o] [a] [--] [-a]
+out=[]
+err=[getopt: unknown shell after -s or --shell argument
+Try 'getopt --help' for more information.]
+rc=2
+## 52: getopt [-s] [tcsh] [-o] [a] [--] [-a]
+out=[ -a --]
+err=[]
+rc=0
+## 53: getopt [--bogus-getopt-option]
+out=[]
+err=[getopt: unrecognized option '--bogus-getopt-option'
+Try 'getopt --help' for more information.]
+rc=2

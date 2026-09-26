@@ -20,6 +20,8 @@ mod fileuse;
 #[cfg(windows)]
 mod fuser;
 #[cfg(windows)]
+mod getopt;
+#[cfg(windows)]
 mod killfam;
 #[cfg(windows)]
 mod lsof;
@@ -31,6 +33,10 @@ mod procmatch;
 mod ps;
 #[cfg(windows)]
 mod pstree;
+#[cfg(windows)]
+mod rev;
+#[cfg(windows)]
+mod screen;
 #[cfg(windows)]
 mod ss;
 #[cfg(windows)]

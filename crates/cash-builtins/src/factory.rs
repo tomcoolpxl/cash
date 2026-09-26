@@ -234,6 +234,10 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
         m.insert("pkill".into(), builtin::<killfam::PkillCommand, SE>());
         m.insert("pidof".into(), builtin::<killfam::PidofCommand, SE>());
         m.insert("killall".into(), builtin::<killfam::KillallCommand, SE>());
+        m.insert("getopt".into(), builtin::<getopt::GetoptCommand, SE>());
+        m.insert("rev".into(), builtin::<rev::RevCommand, SE>());
+        m.insert("clear".into(), builtin::<screen::ClearCommand, SE>());
+        m.insert("reset".into(), builtin::<screen::ResetCommand, SE>());
         m.insert("fuser".into(), builtin::<fuser::FuserCommand, SE>());
         m.insert("lsof".into(), builtin::<lsof::LsofCommand, SE>());
         m.insert("ss".into(), builtin::<ss::SsCommand, SE>());
