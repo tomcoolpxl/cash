@@ -1281,7 +1281,18 @@ its backslashes literal, so only the characters that need it are quoted, one at 
 A program named without a path, as `exec grep` and Git's own `egrep` script name it, is
 looked up along the shell's PATH first, so the check sees what `CreateProcess` will
 run; `xargs` and `find -exec` do the same along the process's PATH. The bundled `env`
-(uutils) spawns its command itself and still uses the Microsoft encoding.
+and `timeout` (uutils) spawn their command with `std::process::Command` themselves, which
+only writes the Microsoft encoding, so when their command is an MSYS2 program the
+dispatcher names cash as the command instead: `cash --invoke-bundled --msys-relay TOOL
+PROGRAM ARGS…`. cash decodes the Microsoft way, so the relay receives the arguments
+intact, looks the program up again in the environment and directory the tool set up, and
+spawns it with them encoded for MSYS2. The tool's options are left to the tool; only
+`env -S` strings are split first, as `env` itself does, so a command inside one is found.
+The program runs in a kill-on-close job under the relay, so `timeout --foreground`, which
+kills only its own child, still kills it, and the relay ignores console events so the
+program's own response to Ctrl-C decides the exit status the relay passes back. The other
+command-running tools need nothing: `nohup` is a cash builtin that runs its command
+through `cash -c`, and `nice`, `stdbuf` and `chroot` are not bundled.
 `crates/cash/tests/msys_args.rs` round-trips hostile arguments through Git's `printf.exe`.
 
 ---

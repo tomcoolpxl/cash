@@ -101,6 +101,65 @@ pub fn locate(program: &OsStr, path: &[PathBuf], cwd: &Path) -> Option<PathBuf> 
     }
 }
 
+/// Runs `program` with `args` on behalf of `tool`, a bundled utility that spawns its
+/// command itself, and returns the program's exit status.
+///
+/// uutils' `env` and `timeout` build their child's command line with
+/// `std::process::Command`, which always writes the Microsoft encoding. When their
+/// command is an MSYS2 program, cash names itself as the command instead; this is what
+/// then runs. Its own arguments arrived intact, because cash decodes the Microsoft way,
+/// and it encodes them again for whatever `program` turns out to be in the environment
+/// and directory the tool set up.
+///
+/// The program goes in a job that dies with this process, so a tool that kills its
+/// child, as `timeout` does, still kills the program. Console events are left to the
+/// program: it shares this console group, and its exit status is what gets reported.
+pub fn relay(tool: &str, program: &OsStr, args: &[OsString]) -> i32 {
+    use windows_sys::Win32::Foundation::TRUE;
+    use windows_sys::Win32::System::Console::SetConsoleCtrlHandler;
+    use windows_sys::core::BOOL;
+
+    /// Swallows every console event. A handler, not `SetConsoleCtrlHandler(NULL, …)`,
+    /// because the null form is inherited and would make the program ignore Ctrl-C too.
+    const unsafe extern "system" fn ignore(_event: u32) -> BOOL {
+        TRUE
+    }
+
+    let path: Vec<PathBuf> = std::env::var_os("PATH")
+        .map(|value| std::env::split_paths(&value).collect())
+        .unwrap_or_default();
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let target = locate(program, &path, &cwd);
+    let mut command =
+        std::process::Command::new(target.as_deref().map_or(program, Path::as_os_str));
+    add_args(&mut command, target.as_deref(), args);
+
+    // SAFETY: `ignore` is a valid handler for the life of the process and touches nothing.
+    unsafe { SetConsoleCtrlHandler(Some(ignore), TRUE) };
+    let job = crate::job::JobObject::for_pipeline().ok();
+    let mut child = match command.spawn() {
+        Ok(child) => child,
+        Err(err) => {
+            eprintln!("{tool}: {}: {err}", program.to_string_lossy());
+            return if err.kind() == std::io::ErrorKind::NotFound {
+                127
+            } else {
+                126
+            };
+        }
+    };
+    if let Some(job) = &job {
+        let _ = job.assign_child(&child);
+    }
+    match child.wait() {
+        Ok(status) => status.code().unwrap_or(1),
+        Err(err) => {
+            eprintln!("{tool}: {}: {err}", program.to_string_lossy());
+            125
+        }
+    }
+}
+
 /// The names of the DLLs in a PE file's import table, or `None` if it is not one.
 fn imported_dlls(path: &Path) -> Option<Vec<String>> {
     let mut file = std::fs::File::open(path).ok()?;

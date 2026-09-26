@@ -139,6 +139,19 @@ pub fn maybe_dispatch() -> Option<i32> {
         return Some(exit_code(ExecutionExitCode::NotFound));
     };
 
+    #[cfg(windows)]
+    if name_str == MSYS_RELAY {
+        let [tool, program, rest @ ..] = args else {
+            eprintln!("cash: {DISPATCH_FLAG} {MSYS_RELAY} requires a tool and a program");
+            return Some(exit_code(ExecutionExitCode::InvalidUsage));
+        };
+        return Some(cash_win32::msys::relay(
+            &tool.to_string_lossy(),
+            program,
+            rest,
+        ));
+    }
+
     let Some(func) = REGISTRY.get().and_then(|r| r.get(name_str)) else {
         eprintln!("brush: unknown bundled command: {name_str}");
         return Some(exit_code(ExecutionExitCode::NotFound));
@@ -158,7 +171,60 @@ pub fn maybe_dispatch() -> Option<i32> {
         return Some(run_unified_uname(*func, argv));
     }
 
+    #[cfg(all(windows, feature = "experimental-bundled-coreutils"))]
+    let argv = relaying_msys_command(argv);
+
     Some(func(argv))
+}
+
+/// The bundled-dispatch name of [`cash_win32::msys::relay`]: `cash --invoke-bundled
+/// --msys-relay TOOL PROGRAM [ARGS...]`. Not a utility, so never a builtin; the leading
+/// dashes keep it from colliding with one.
+#[cfg(windows)]
+const MSYS_RELAY: &str = "--msys-relay";
+
+/// `argv` for a bundled `env` or `timeout`, with an MSYS2 command routed through
+/// [`MSYS_RELAY`] (D52).
+///
+/// Those tools spawn their command with `std::process::Command`, which encodes the
+/// arguments the Microsoft way, and an MSYS2 program decodes them the Cygwin way. So the
+/// tool is handed cash as its command instead, which decodes the Microsoft way, and cash
+/// passes the arguments on in the program's own encoding. The program is looked up here
+/// only to decide whether that detour is needed, along the PATH and in the directory the
+/// tool will use as far as its options say; the relay looks it up again for real.
+#[cfg(all(windows, feature = "experimental-bundled-coreutils"))]
+fn relaying_msys_command(argv: Vec<OsString>) -> Vec<OsString> {
+    let Some(operand) = cash_coreutils_builtins::command_operand(&argv) else {
+        return argv;
+    };
+    let Some(program) = operand.args.get(operand.index) else {
+        return argv;
+    };
+    let mut cwd = std::env::current_dir().unwrap_or_default();
+    if let Some(dir) = &operand.chdir {
+        cwd = cwd.join(dir);
+    }
+    let path: Vec<PathBuf> = operand
+        .path
+        .or_else(|| std::env::var_os("PATH"))
+        .map(|value| std::env::split_paths(&value).collect())
+        .unwrap_or_default();
+    let is_msys = cash_win32::msys::locate(program, &path, &cwd)
+        .is_some_and(|target| cash_win32::msys::is_msys_program(&target));
+    let (true, Some(exe), Some(tool)) = (is_msys, self_exe(), argv.first()) else {
+        return argv;
+    };
+
+    let mut args = operand.args;
+    let tail = args.split_off(operand.index);
+    args.extend([
+        exe.as_os_str().to_owned(),
+        OsString::from(DISPATCH_FLAG),
+        OsString::from(MSYS_RELAY),
+        tool.clone(),
+    ]);
+    args.extend(tail);
+    args
 }
 
 /// Bundled utilities whose standard output is a list of paths they *construct*, rather
