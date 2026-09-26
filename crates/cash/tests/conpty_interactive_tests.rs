@@ -46,6 +46,47 @@ fn start_interactive_cash() -> ConPtySession {
     .expect("failed to start cash.exe attached to Win32 ConPTY")
 }
 
+/// Like [`start_interactive_cash`], on the reedline backend a user gets by default.
+fn start_reedline_cash() -> ConPtySession {
+    ConPtySession::start(
+        &PathBuf::from(CASH),
+        &[
+            "--noprofile",
+            "--norc",
+            "--no-config",
+            "--disable-color",
+            "--input-backend=reedline",
+            "-i",
+        ],
+        Some(&[("HISTFILE", ""), ("PS1", "PROMPT$ ")]),
+    )
+    .expect("failed to start cash.exe attached to Win32 ConPTY")
+}
+
+/// Keys that arrive after Enter belong to the command Enter starts. The line editor reads
+/// the console in batches (vendor/crossterm/CASH-PATCHES.md), and a batch that ran past
+/// Enter would keep the answer below from `read`, handing it to the next prompt instead.
+#[test]
+fn conpty_keys_after_enter_reach_the_command_it_runs() {
+    let mut session = start_reedline_cash();
+    // ConPTY does not send a trailing blank, so the prompt's space never arrives.
+    session
+        .expect("PROMPT$", Duration::from_secs(10))
+        .expect("prompt displayed");
+
+    // One write, as a paste or a fast typist delivers it: the command, Enter, the answer.
+    // The line after it waits in the console for the prompt `read` returns to.
+    session.send("read -r answer\rTYPED_AHEAD\r").unwrap();
+    session.send("echo \"GOT=[$answer]\"\r").unwrap();
+    session
+        .expect("GOT=[TYPED_AHEAD]", Duration::from_secs(10))
+        .expect("read did not get the keys typed after its Enter");
+
+    session.send("exit 0\r").unwrap();
+    let code = session.wait().expect("process did not exit");
+    assert_eq!(code, 0);
+}
+
 #[test]
 fn conpty_interactive_startup_and_prompt() {
     let mut session = start_interactive_cash();
