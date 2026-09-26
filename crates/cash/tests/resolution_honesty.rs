@@ -604,6 +604,27 @@ fn hash_l_lists_the_table_as_input_that_round_trips() {
 }
 
 #[test]
+fn type_a_does_not_find_a_name_that_is_only_hashed() {
+    // `-a` skips the hash table, as in bash, so a hashed entry for a file that has gone is
+    // not found -- rather than silently succeeding with no output.
+    let out = cash(
+        r#"hash -p 'C:\no\such.exe' gone; type -a gone; echo "rc=$?"; type -a -t gone; echo "rc=$?"; type -a -P gone; echo "rc=$?""#,
+    );
+    let lines: Vec<&str> = out.stdout.lines().collect();
+    assert_eq!(
+        lines,
+        ["rc=1", "rc=1", "C:/no/such.exe", "rc=1"],
+        "{}",
+        out.stderr
+    );
+    assert!(
+        out.stderr.contains("type: gone: not found"),
+        "no diagnostic: {}",
+        out.stderr
+    );
+}
+
+#[test]
 fn hash_lists_hits_with_rendered_paths() {
     // Hashing counts nothing; each run and each `hash -t` lookup counts one, as in bash.
     let out = cash("hash; hash netstat; hash; netstat -? > /dev/null 2>&1; hash -t netstat > /dev/null; hash");

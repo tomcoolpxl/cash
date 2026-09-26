@@ -85,6 +85,29 @@ cases:
       hash -p /some/ls ls
       type -p -a ls
 
+  - name: Test type -a with a name that is only hashed
+    min_oracle_version: 5.3 # -P -a printed the hashed path differently before 5.3
+    stdin: |
+      strip() { sed 's/^.*type:/type:/'; }
+      hash -p /some/where only-hashed
+
+      # `-a` skips the hash table, so the name is not found.
+      type -a only-hashed 2>&1 | strip; echo "rc=${PIPESTATUS[0]}"
+      type -a -t only-hashed; echo "rc=$?"
+      type -a -p only-hashed; echo "rc=$?"
+
+      # `-P` consults it, but a hashed path alone still does not count as found.
+      type -a -P only-hashed; echo "rc=$?"
+
+      # One missing name fails the whole call.
+      type -a only-hashed if 2>&1 | strip; echo "rc=${PIPESTATUS[0]}"
+
+      # The lookups outside pipelines count hits exactly where bash's do.
+      type -a only-hashed 2>/dev/null
+      type -a -P only-hashed
+      type -t only-hashed
+      hash
+
   - name: Test type honors expand_aliases
     ignore_stderr: true
     stdin: |

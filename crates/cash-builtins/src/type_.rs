@@ -50,7 +50,18 @@ impl builtins::Command for TypeCommand {
         };
 
         for name in &self.names {
-            let resolved_types = lookup::resolve(context.shell, name, &options);
+            let mut resolved_types = lookup::resolve(context.shell, name, &options);
+
+            // Bash's `-a` skips the hash table unless `-P` forces a path search, and even
+            // then a hashed path is printed without counting as found. A name that is only
+            // hashed -- say to a file that has since gone -- is therefore not found.
+            if self.all_locations && !self.force_path_search {
+                resolved_types.retain(|r| !matches!(r, Resolved::File { hashed: true, .. }));
+            }
+            let found = !self.all_locations
+                || resolved_types
+                    .iter()
+                    .any(|r| !matches!(r, Resolved::File { hashed: true, .. }));
 
             if resolved_types.is_empty() {
                 if !self.type_only && !self.force_path_search && !self.show_path_only {
@@ -62,12 +73,11 @@ impl builtins::Command for TypeCommand {
             }
 
             // Bash consults its hash table through the same lookup that counts a hit when
-            // running the command, but `-a` alone skips the table.
-            let counts_a_hit = (!self.all_locations || self.force_path_search)
-                && matches!(
-                    resolved_types.first(),
-                    Some(Resolved::File { hashed: true, .. })
-                );
+            // running the command.
+            let counts_a_hit = matches!(
+                resolved_types.first(),
+                Some(Resolved::File { hashed: true, .. })
+            );
 
             for resolved_type in resolved_types {
                 if self.show_path_only && !matches!(resolved_type, Resolved::File { .. }) {
@@ -100,9 +110,6 @@ impl builtins::Command for TypeCommand {
                     }
                 } else {
                     match &resolved_type {
-                        // When we're displaying all locations, we don't show hashed paths.
-                        Resolved::File { hashed: true, .. }
-                            if self.all_locations && !self.force_path_search => {}
                         Resolved::File { path, .. }
                             if self.show_path_only || self.force_path_search =>
                         {
@@ -124,6 +131,9 @@ impl builtins::Command for TypeCommand {
 
             if counts_a_hit {
                 context.shell.program_location_cache_mut().record_hit(name);
+            }
+            if !found {
+                result = ExecutionResult::general_error();
             }
         }
 
