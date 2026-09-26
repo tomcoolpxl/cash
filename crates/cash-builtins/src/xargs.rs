@@ -202,7 +202,11 @@ impl XargsCommand {
         // cash: run where the shell believes it is. `cd` moves the shell's own working
         // directory without moving the process (D3/D10), so a builtin that spawns has to
         // ask — otherwise `cd build; ls | xargs rm` reaches into the wrong directory.
-        let mut cmd = std::process::Command::new(program);
+        // A virtual path from `which` re-enters cash to run the command it names.
+        let mut cmd = cash_win32::path::virtual_tool(program).map_or_else(
+            || std::process::Command::new(program),
+            |tool| cash_win32::path::reentry_command(&tool),
+        );
         let target = cash_win32::msys::locate(
             std::ffi::OsStr::new(program),
             &std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())

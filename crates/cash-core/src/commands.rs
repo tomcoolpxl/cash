@@ -400,6 +400,16 @@ fn build_windows_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
         }
     };
 
+    // A virtual path from `which` (`C:/…/cash.exe/ls`) run as a process — `exec
+    // "$(which ls)"` — re-enters cash to run the command it names (ROADMAP item 12).
+    if !candidate.is_file()
+        && let Some(tool) = cash_win32::path::virtual_tool(command_name)
+    {
+        let mut command = cash_win32::path::reentry_command(&tool);
+        command.args(args);
+        return Ok((command, None));
+    }
+
     if !candidate.is_file() {
         // A bare name, as `exec grep` passes: `Command::new` searches PATH for it, so
         // search the shell's PATH too, to know which encoding its arguments need.
@@ -675,6 +685,25 @@ impl<'a, SE: extensions::ShellExtensions> SimpleCommand<'a, SE> {
         reason = "these unwrap calls should not panic"
     )]
     pub async fn execute(mut self) -> Result<ExecutionSpawnResult, error::Error> {
+        // cash (ROADMAP item 12): `which ls` prints `C:/…/cash.exe/ls` for a command cash
+        // carries, so that `"$(which ls)" -la` can be run. That path is no file; it names
+        // the builtin, which runs as if typed by name — but never a function, as a path
+        // never names one.
+        #[cfg(windows)]
+        if let Some(tool) = cash_win32::path::virtual_tool(&self.command_name)
+            && self
+                .shell
+                .builtins()
+                .get(&tool)
+                .is_some_and(|r| !r.disabled)
+        {
+            if let Some(first) = self.args.first_mut() {
+                *first = CommandArg::String(tool.clone());
+            }
+            self.command_name = tool;
+            self.use_functions = false;
+        }
+
         // First see if it's the name of a builtin.
         let builtin = self.shell.builtins().get(&self.command_name).cloned();
 

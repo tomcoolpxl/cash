@@ -68,16 +68,40 @@ fn run(command: &mut Command) -> Output {
 
 #[test]
 fn which_reports_the_builtin_the_shell_would_run() {
-    // Not `/usr/bin/cat`. The question is what *this shell* runs.
-    for name in ["cat", "ps", "less", "kill", "which"] {
+    // Not `/usr/bin/cat`. The question is what *this shell* runs. A command cash carries
+    // gets the path that runs it — cash's own executable with the name appended — and
+    // bash's own builtins, which are no program anywhere, say so.
+    let own = CASH.replace('\\', "/");
+    for name in ["cat", "ps", "less", "which"] {
         let out = cash(&format!("which {name}"));
-        assert_eq!(
-            out.stdout,
-            format!("{name}: shell builtin"),
-            "which {name} did not report the builtin"
+        assert!(
+            out.stdout.eq_ignore_ascii_case(&format!("{own}/{name}")),
+            "which {name} did not report cash's own: {}",
+            out.stdout
         );
         assert_eq!(out.code, 0);
     }
+    let out = cash("which kill");
+    assert_eq!(out.stdout, "kill: shell builtin");
+}
+
+#[test]
+fn the_path_which_prints_can_be_run() {
+    // `LS=$(which ls); "$LS" -la` is how scripts capture a tool; the path is no file, so
+    // cash runs the command it names, by name and through any process-spawning route.
+    let out = cash(
+        r#"LS=$(which ls); [ -x "$LS" ] && echo executable
+           "$LS" -d /c/Windows
+           ls() { echo 'a function'; }; "$LS" -d /c/Windows
+           (exec "$(which rev)" <<< olleh)
+           echo /c/abc | xargs "$(which basename)"
+           find /c/Windows -maxdepth 0 -exec "$(which basename)" {} \;"#,
+    );
+    assert_eq!(
+        out.stdout, "executable\n/c/Windows\n/c/Windows\nhello\nabc\nWindows",
+        "{}",
+        out.stderr
+    );
 }
 
 #[test]

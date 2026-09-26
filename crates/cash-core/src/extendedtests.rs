@@ -149,6 +149,13 @@ pub(crate) async fn apply_unary_predicate_to_str(
             Ok(path.writable())
         }
         ast::UnaryPredicate::FileExistsAndIsExecutable => {
+            // cash (ROADMAP item 12): `[ -x "$(which ls)" ]` asks whether the path `which`
+            // printed can be run, and for a command cash carries it can, though no file
+            // is there.
+            #[cfg(windows)]
+            if let Some(tool) = cash_win32::path::virtual_tool(operand) {
+                return Ok(shell.builtins().get(&tool).is_some_and(|r| !r.disabled));
+            }
             let path = shell.absolute_path(Path::new(operand));
             Ok(path.executable())
         }

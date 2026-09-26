@@ -18,6 +18,12 @@
 //! because under cash the builtin *is* the answer — reporting "not found" for a command
 //! that demonstrably runs would repeat the original sin in the opposite direction.
 //!
+//! For a command cash carries that is a program elsewhere (`ls`, `sed`, `ps`), the line
+//! is a path a script can run: cash's own executable with the name appended,
+//! `C:/…/cash.exe/ls`. No file is there, and cash runs the command it names, so
+//! `LS=$(which ls); "$LS" -la` works (spec D58). bash's own builtins (`cd`, `read`) are no
+//! program anywhere and still say `shell builtin`.
+//!
 //! A script wanting only a filesystem path should ask for one: `which -p` restricts the
 //! search to `PATH`, and prints nothing for a builtin.
 
@@ -27,6 +33,83 @@ use cash_core::{ExecutionResult, builtins};
 use clap::Parser;
 
 use crate::lookup::{self, Resolved};
+
+/// Bash 5.3's own builtins (`enable -a`). They change the shell running them, or only
+/// make sense inside one, so there is no program to run by path; everything else cash
+/// carries — `ls`, `sed`, `ps`, `rev` — is a program elsewhere, and `which` gives a path.
+const BASH_BUILTINS: &[&str] = &[
+    ".",
+    ":",
+    "[",
+    "alias",
+    "bg",
+    "bind",
+    "break",
+    "builtin",
+    "caller",
+    "cd",
+    "command",
+    "compgen",
+    "complete",
+    "compopt",
+    "continue",
+    "declare",
+    "dirs",
+    "disown",
+    "echo",
+    "enable",
+    "eval",
+    "exec",
+    "exit",
+    "export",
+    "false",
+    "fc",
+    "fg",
+    "getopts",
+    "hash",
+    "help",
+    "history",
+    "jobs",
+    "kill",
+    "let",
+    "local",
+    "logout",
+    "mapfile",
+    "popd",
+    "printf",
+    "pushd",
+    "pwd",
+    "read",
+    "readarray",
+    "readonly",
+    "return",
+    "set",
+    "shift",
+    "shopt",
+    "source",
+    "suspend",
+    "test",
+    "times",
+    "trap",
+    "true",
+    "type",
+    "typeset",
+    "ulimit",
+    "umask",
+    "unalias",
+    "unset",
+    "wait",
+];
+
+/// The path `which` prints for a command cash carries that is not one of bash's own
+/// builtins: `C:/…/cash.exe/NAME`, which cash runs as that command (ROADMAP item 12), so
+/// `LS=$(which ls); "$LS" -la` works as it does where `ls` is a file.
+fn executable_path(name: &str) -> Option<String> {
+    if BASH_BUILTINS.contains(&name) {
+        return None;
+    }
+    cash_win32::path::virtual_path(name)
+}
 
 /// Report what the shell would run for a name.
 #[derive(Parser)]
@@ -100,7 +183,10 @@ impl builtins::Command for WhichCommand {
                     Resolved::File { path, .. } => {
                         writeln!(stdout, "{}", cash_win32::path::render(path))?;
                     }
-                    Resolved::Builtin => writeln!(stdout, "{name}: shell builtin")?,
+                    Resolved::Builtin => match executable_path(name) {
+                        Some(path) => writeln!(stdout, "{path}")?,
+                        None => writeln!(stdout, "{name}: shell builtin")?,
+                    },
                     Resolved::Keyword => writeln!(stdout, "{name}: shell keyword")?,
                     Resolved::Function(_) => writeln!(stdout, "{name}: shell function")?,
                     Resolved::Alias(target) => writeln!(stdout, "{name}: aliased to {target}")?,

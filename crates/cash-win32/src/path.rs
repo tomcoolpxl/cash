@@ -136,6 +136,51 @@ pub fn render(path: &Path) -> String {
     text
 }
 
+/// cash's own executable, rendered, with `/` appended: the prefix of every virtual path.
+fn own_prefix() -> Option<String> {
+    let exe = std::env::current_exe().ok()?;
+    Some(format!("{}/", render(&exe)))
+}
+
+/// The path `which` prints for a command cash carries itself: cash's own executable
+/// with the name appended, `C:/…/cash.exe/ls` (ROADMAP item 12).
+///
+/// No file can live there — `cash.exe` is a file, not a directory — so the path never
+/// names anything else, and it says which cash runs the command. It is one word, so a
+/// script's `LS=$(which ls); "$LS" -la` works: cash recognises the path when it is run
+/// ([`virtual_tool`]). Programs outside cash cannot run it; nothing without a file on
+/// disk could offer them that.
+pub fn virtual_path(name: &str) -> Option<String> {
+    own_prefix().map(|prefix| format!("{prefix}{name}"))
+}
+
+/// The command a [`virtual_path`] stands for, when `spelled` is one: cash's own
+/// executable, in any accepted spelling, followed by a single name.
+pub fn virtual_tool(spelled: &str) -> Option<String> {
+    if !spelled.contains(['/', '\\']) {
+        return None;
+    }
+    let prefix = own_prefix()?;
+    let rendered = render(&accept_path(spelled));
+    let head = rendered.get(..prefix.len())?;
+    if !head.eq_ignore_ascii_case(&prefix) {
+        return None;
+    }
+    let name = rendered.get(prefix.len()..)?;
+    (!name.is_empty() && !name.contains('/')).then(|| name.to_owned())
+}
+
+/// `cash -c '"$0" "$@"' TOOL`, to which the caller adds the arguments.
+///
+/// A process that runs the command `tool` names as cash would if it were typed, for a
+/// [`virtual_path`] run where a process is needed (`exec`, `xargs`, `find -exec`).
+pub fn reentry_command(tool: &str) -> std::process::Command {
+    let own = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("cash.exe"));
+    let mut command = std::process::Command::new(own);
+    command.args(["-c", "\"$0\" \"$@\"", tool]);
+    command
+}
+
 /// Produce the `\\?\` form used at the filesystem boundary (D29).
 ///
 /// Requires an absolute, backslash-separated path with `.` and `..` already resolved,
