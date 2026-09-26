@@ -108,7 +108,7 @@ fn after_fg_ctrl_c_is_relayed_and_a_second_one_terminates() {
     let out = run(
         dir.path(),
         true,
-        "ping.exe -n 60 127.0.0.1 > \"$T/ping.out\" &\n\
+        "ping.exe -n 120 127.0.0.1 > \"$T/ping.out\" &\n\
          ( sleep 2; ctrlc; sleep 1; ctrlc ) &\n\
          start=$SECONDS\n\
          fg %1 > /dev/null\n\
@@ -116,13 +116,15 @@ fn after_fg_ctrl_c_is_relayed_and_a_second_one_terminates() {
          grep -q '%' \"$T/ping.out\" && echo relayed || echo 'not relayed'",
     );
     // ping.exe carries on after a Ctrl-Break, printing its statistics (the `%` line), so
-    // only the second Ctrl-C can end it well before its sixty echoes — and ended early,
-    // the statistics can only have come from the relayed Ctrl-Break.
+    // only the second Ctrl-C can end it well before its 120 echoes — and ended early, the
+    // statistics can only have come from the relayed Ctrl-Break. The bound leaves room for
+    // a slow runner: each simulated Ctrl-C compiles its P/Invoke with Add-Type, which
+    // took several seconds on GitHub's runner (fg returned after 22 s there).
     let took: u64 = out
         .lines()
         .find_map(|line| line.strip_prefix("fg took "))
         .and_then(|n| n.trim().parse().ok())
         .unwrap_or(u64::MAX);
-    assert!(took < 20, "fg did not return early: {out}");
+    assert!(took < 90, "fg did not return early: {out}");
     assert!(out.contains("relayed\n"), "{out}");
 }
