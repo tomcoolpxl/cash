@@ -720,8 +720,14 @@ fn run(argv: &[String], paths: &[String], here: &Path) -> bool {
 
     // Run it where the shell believes it is, not where the process happens to be: the
     // paths handed over are relative to the former.
-    std::process::Command::new(program)
-        .args(rest)
+    let mut command = std::process::Command::new(program);
+    let target = cash_win32::msys::locate(
+        std::ffi::OsStr::new(program),
+        &std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()).collect::<Vec<_>>(),
+        here,
+    );
+    cash_win32::msys::add_args(&mut command, target.as_deref(), rest);
+    command
         .current_dir(here)
         .status()
         .is_ok_and(|status| status.success())

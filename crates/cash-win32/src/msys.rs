@@ -60,6 +60,47 @@ pub fn is_msys_program(path: &Path) -> bool {
     answer
 }
 
+/// Adds `args` to `command` in the encoding the program at `target` decodes.
+///
+/// That is Cygwin's for an MSYS2 or Cygwin program, and the Microsoft C runtime's (what
+/// `Command::args` writes) for anything else, including when `target` is unknown.
+pub fn add_args<S: AsRef<OsStr>>(
+    command: &mut std::process::Command,
+    target: Option<&Path>,
+    args: &[S],
+) {
+    use std::os::windows::process::CommandExt as _;
+
+    if target.is_some_and(is_msys_program) {
+        for arg in args {
+            command.raw_arg(quote_arg(arg.as_ref()));
+        }
+    } else {
+        command.args(args);
+    }
+}
+
+/// The native executable `program` names, or `None` if there is none.
+///
+/// It is searched for the way `Command::new` will search: as a path from `cwd` if it has
+/// a separator, otherwise along the directories in `path` with `PATHEXT`. The caller
+/// splits PATH, because the shell's is spelled with `:` and the process's with `;`.
+pub fn locate(program: &OsStr, path: &[PathBuf], cwd: &Path) -> Option<PathBuf> {
+    let pathext = std::env::var("PATHEXT").map_or_else(
+        |_| {
+            crate::resolve::DEFAULT_PATHEXT
+                .iter()
+                .map(|s| (*s).to_owned())
+                .collect()
+        },
+        |value| crate::resolve::parse_pathext(&value),
+    );
+    match crate::resolve::resolve(&program.to_string_lossy(), path, &pathext, cwd)? {
+        crate::resolve::Dispatch::Native(target) => Some(target),
+        _ => None,
+    }
+}
+
 /// The names of the DLLs in a PE file's import table, or `None` if it is not one.
 fn imported_dlls(path: &Path) -> Option<Vec<String>> {
     let mut file = std::fs::File::open(path).ok()?;

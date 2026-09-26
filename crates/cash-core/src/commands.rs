@@ -258,15 +258,7 @@ fn build_powershell_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
 /// are, and the Microsoft C runtime's, which `Command::args` writes, for the rest.
 #[cfg(windows)]
 fn push_native_args<S: AsRef<OsStr>>(c: &mut std::process::Command, target: &Path, args: &[S]) {
-    use std::os::windows::process::CommandExt as _;
-
-    if cash_win32::msys::is_msys_program(target) {
-        for arg in args {
-            c.raw_arg(cash_win32::msys::quote_arg(arg.as_ref()));
-        }
-    } else {
-        c.args(args);
-    }
+    cash_win32::msys::add_args(c, Some(target), args);
 }
 
 #[cfg(windows)]
@@ -409,9 +401,23 @@ fn build_windows_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
     };
 
     if !candidate.is_file() {
+        // A bare name, as `exec grep` passes: `Command::new` searches PATH for it, so
+        // search the shell's PATH too, to know which encoding its arguments need.
+        let path_var = context
+            .shell
+            .env()
+            .get_str("PATH", context.shell)
+            .unwrap_or_default();
+        let entries: Vec<PathBuf> =
+            crate::sys::fs::split_paths_preserving_empty(path_var.as_ref()).collect();
+        let target = cash_win32::msys::locate(
+            OsStr::new(command_name),
+            &entries,
+            context.shell.working_dir(),
+        );
         let mut c = std::process::Command::new(command_name);
         c.arg0(argv0);
-        c.args(args);
+        cash_win32::msys::add_args(&mut c, target.as_deref(), args);
         return Ok((c, None));
     }
 

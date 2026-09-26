@@ -1278,6 +1278,10 @@ for an MSYS2 or Cygwin program, encodes each argument the way Cygwin's `build_ar
 `globify` decode it. A word with nothing Cygwin acts on passes unchanged. Anything else is
 double-quoted with `"` and `\` escaped. A drive-letter path is the exception: Cygwin keeps
 its backslashes literal, so only the characters that need it are quoted, one at a time.
+A program named without a path, as `exec grep` and Git's own `egrep` script name it, is
+looked up along the shell's PATH first, so the check sees what `CreateProcess` will
+run; `xargs` and `find -exec` do the same along the process's PATH. The bundled `env`
+(uutils) spawns its command itself and still uses the Microsoft encoding.
 `crates/cash/tests/msys_args.rs` round-trips hostile arguments through Git's `printf.exe`.
 
 ---

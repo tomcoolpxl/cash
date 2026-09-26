@@ -203,7 +203,14 @@ impl XargsCommand {
         // directory without moving the process (D3/D10), so a builtin that spawns has to
         // ask — otherwise `cd build; ls | xargs rm` reaches into the wrong directory.
         let mut cmd = std::process::Command::new(program);
-        cmd.args(rest).current_dir(context.shell.working_dir());
+        let target = cash_win32::msys::locate(
+            std::ffi::OsStr::new(program),
+            &std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
+                .collect::<Vec<_>>(),
+            context.shell.working_dir(),
+        );
+        cash_win32::msys::add_args(&mut cmd, target.as_deref(), rest);
+        cmd.current_dir(context.shell.working_dir());
 
         if let Some(stdout_file) = context.try_fd(cash_core::openfiles::OpenFiles::STDOUT_FD) {
             if let Ok(as_stdio) = std::process::Stdio::try_from(stdout_file) {

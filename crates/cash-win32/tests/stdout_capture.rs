@@ -186,9 +186,29 @@ fn a_large_output_does_not_deadlock_or_truncate() {
     let ((), captured) =
         with_captured_stdout(|| write_stdout(payload.as_bytes()).unwrap()).expect("capture failed");
 
-    assert_eq!(captured.len(), line.len() * count, "output was truncated");
+    // The capture redirects the process's stdout, so the test harness reporting another
+    // test's result meanwhile can land in it too (one stray byte on GitHub's runner).
+    // The payload is one write, so it is whole and contiguous or it was truncated.
+    assert!(
+        captured.len() >= payload.len()
+            && captured
+                .windows(payload.len())
+                .any(|w| w == payload.as_bytes()),
+        "output was truncated: {} of {} bytes",
+        captured.len(),
+        payload.len()
+    );
+    assert!(
+        captured.len() - payload.len() < 256,
+        "far more than harness noise around the payload: {} extra bytes",
+        captured.len() - payload.len()
+    );
 
-    let rendered = render_paths(&captured);
+    let start = captured
+        .windows(payload.len())
+        .position(|w| w == payload.as_bytes())
+        .unwrap_or_default();
+    let rendered = render_paths(&captured[start..start + payload.len()]);
     assert!(!rendered.contains(&b'\\'), "a backslash survived rendering");
     #[allow(
         clippy::naive_bytecount,
