@@ -457,6 +457,34 @@ guarantee that nothing *survives*, not the mechanism for routine interruption.
   is a well-documented source of the "Ctrl-C does nothing" bug. Group creation flags must
   be chosen with this in mind, and covered by a test.
 
+**As built (ROADMAP item 11).** Measured before deciding: a child in the console's group
+dies of the keyboard's Ctrl-C, a child in its own group does not; a Ctrl-Break aimed at a
+group ends Python at once (no `KeyboardInterrupt`) but only makes `ping.exe` print its
+statistics, and leaves a `cmd` tree running; a Ctrl-C aimed at a group never arrives.
+Giving *foreground* programs their own group would therefore mean relaying every Ctrl-C
+as a Ctrl-Break, a regression for REPLs, so:
+
+- **Background jobs at the prompt lead a group of their own.** With job control on,
+  every external a `&` job starts is created with `CREATE_NEW_PROCESS_GROUP`. The
+  keyboard's Ctrl-C passes it by, as it does a Unix background job — before this, Ctrl-C
+  at the prompt killed every background job. Scripts keep the console's group.
+- **Foreground commands are untouched.** Ctrl-C reaches them directly, however often it
+  is pressed; a REPL keeps its session. There is no escalation for them: a program that
+  ignores Ctrl-C still needs `kill -9` from elsewhere.
+- **`fg` relays.** While `fg` waits on a job whose processes lead their own groups, cash
+  sends each a Ctrl-Break on Ctrl-C; a second Ctrl-C terminates the job's tree through
+  its job object. Only here, where cash is the one delivering the interrupt, does the
+  escalation apply.
+- **Leaders are registered with a handle held open.** A Ctrl-Break is only ever aimed at
+  a pid cash started as a group leader and still holds a handle to, so the pid cannot
+  have been reused by a process that leads no group (which the event would treat as
+  "every process on the console", D21).
+- **An interactive cash takes Ctrl-C back** from a parent that ignored it
+  (`SetConsoleCtrlHandler(NULL, FALSE)` at startup). Windows passes the ignore flag to
+  children, so a shell started by a build tool or task runner that ignores Ctrl-C would
+  otherwise run programs nothing can interrupt. Scripts keep what they inherit, as POSIX
+  has a non-interactive shell keep signals ignored on entry.
+
 ### D14 — `trap EXIT` runs to completion; a second Ctrl-C forces teardown
 
 No timeout by default — cleanup is sacred, and a guillotined cleanup is worse than a
@@ -598,13 +626,15 @@ seconds, a background thread terminates it, through a handle opened when it was 
 a pid Windows has reused in the meantime cannot be hit. A program with no window — a
 console program — has no per-process way to be asked, and is terminated at once.
 
-It is not a console control event. `GenerateConsoleCtrlEvent` addresses a process
-*group*, cash starts no child as a group leader, and aimed at a pid that leads no group
-the event reaches every process on the console: this is how `kill -TERM $pid` came to
-kill the shell that ran it, and the terminal's other programs with it (fixed after
-0.9.0). Starting children in groups of their own would make a graceful console event
-possible for cash's own jobs, but it changes how Ctrl-C reaches every foreground program
-(D13), and is left for its own design.
+A process cash started as a group leader — a background job's, at the prompt (D13) — is
+asked with a console Ctrl-Break as well, which console programs handle as an interrupt
+(Go's toolchain as `os.Interrupt`, Python as `SIGBREAK`), and gets the same five
+seconds. Any other process is never sent a console control event:
+`GenerateConsoleCtrlEvent` addresses a process *group*, and aimed at a pid that leads no
+group the event reaches every process on the console — this is how `kill -TERM $pid`
+came to kill the shell that ran it, and the terminal's other programs with it (fixed
+after 0.9.0). Programs that ignore Ctrl-Break (`ping.exe`, a `cmd` tree) are terminated
+when the grace ends.
 
 `kill -9` is an immediate `TerminateJobObject` / `TerminateProcess`, no grace.
 

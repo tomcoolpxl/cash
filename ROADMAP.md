@@ -21,8 +21,8 @@ Feature work follows the sequence below.
 | 8 | `fuser` and an `lsof` subset | **Complete** | Section 8 below; spec D50 |
 | 9 | `ss` subset | **Complete** | [`ss` evaluation and decisions](research/ss-evaluation.md); spec D51 |
 | 10 | BusyBox-gap tools | **Complete** (`pkill`/`pidof`/`killall`; `getopt`, `rev`, `clear`, `reset`; `bc`; `ping`; doctor's BusyBox check) | [BusyBox gap analysis and decisions](research/busybox-gap-analysis.md); spec D54 |
-| 11 | Graceful Ctrl-C and `TERM` for cash's own jobs (process groups) | **Active** | Section 11 below; spec D13, D21 |
-| 12 | A path a script can exec for a bundled tool | Planned | Section 12 below; [open issue 4](open-issues.md) |
+| 11 | Graceful Ctrl-C and `TERM` for cash's own jobs (process groups) | **Complete** | Section 11 below; spec D13, D21 |
+| 12 | A path a script can exec for a bundled tool | **Active** | Section 12 below; [open issue 4](open-issues.md) |
 | 13 | `bc` against GNU bc | Planned (needs GNU bc in WSL) | Section 13 below; spec D56 |
 | 14 | Bash 5.3 remainder without a terminal: `wait -n` in POSIX mode, `array_expand_once`, the `RETURN` trap's status | Planned | Section 14 below; [Bash 5.3 audit](research/bash-reference/bash-5.3-audit.md) |
 | 15 | ConPTY probe harness, then the interactive and Readline 5.3 items | Planned | Section 15 below |
@@ -34,7 +34,7 @@ The authoritative feature order is therefore:
 Bash 5.2 completion (done)  ->  native awk (done)  ->  native sed (done)  ->  bundled userland (done)
   ->  Bash 5.3 (active)  +  corpus fixes (active)  ->  line-ending controls (done)
   ->  fuser / lsof subset (done)  ->  ss subset (done)  ->  BusyBox-gap tools (done)
-  ->  graceful signals for own jobs (active)  ->  exec path for bundled tools
+  ->  graceful signals for own jobs (done)  ->  exec path for bundled tools (active)
   ->  bc against GNU bc  ->  Bash 5.3 remainder (no terminal)  ->  ConPTY harness + 5.3 interactive
 ```
 
@@ -285,6 +285,12 @@ also stops the keyboard's Ctrl-C from reaching it, so the change touches how eve
 foreground program is interrupted (D13). Design first: which jobs get their own group
 (background only, or all), how Ctrl-C reaches a job in its own group, what `fg`/`bg`
 do, and what programs that treat Ctrl-C and Ctrl-Break differently (Python) see.
+
+**Done** (spec D13 "As built", D21): background jobs at the prompt lead groups of their
+own, so Ctrl-C at the prompt no longer kills them; `kill -TERM` sends them Ctrl-Break
+then terminates after 5 s; after `fg`, Ctrl-C is relayed as Ctrl-Break and a second one
+ends the job. Foreground commands and scripts are unchanged, and an interactive cash
+takes back Ctrl-C a parent ignored. Tests: `crates/cash/tests/job_groups.rs`.
 
 ## 12. A path a script can exec for a bundled tool
 
