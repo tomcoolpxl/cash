@@ -148,8 +148,27 @@ peg::parser! {
     grammar readline_binding() for str {
         rule _() = [' ' | '\t' | '\n']*
 
+        // `"KEY-SEQUENCE": COMMAND`, the command either the rest of the line or quoted;
+        // or, as Bash 5.3 also reads it, `"KEY-SEQUENCE" "COMMAND"`, separated by
+        // whitespace, where the command must be quoted. Anything after a quoted command
+        // is ignored, as in Bash.
         pub rule key_sequence_shell_cmd_binding() -> KeySequenceShellCommandBinding =
-            _ "\"" seq:key_sequence() "\"" _ ":" _ cmd:shell_cmd() _ { KeySequenceShellCommandBinding { seq, shell_cmd: cmd } }
+            _ "\"" seq:key_sequence() "\"" _ ":" _ cmd:quoted_shell_cmd() [_]* {
+                KeySequenceShellCommandBinding { seq, shell_cmd: cmd }
+            } /
+            _ "\"" seq:key_sequence() "\"" _ ":" _ cmd:shell_cmd() _ {
+                KeySequenceShellCommandBinding { seq, shell_cmd: cmd }
+            } /
+            _ "\"" seq:key_sequence() "\"" _ cmd:quoted_shell_cmd() [_]* {
+                KeySequenceShellCommandBinding { seq, shell_cmd: cmd }
+            }
+
+        // A double-quoted command: `\"` and `\\` are escapes, any other backslash is kept.
+        rule quoted_shell_cmd() -> String =
+            "\"" chars:quoted_shell_cmd_char()* "\"" { chars.into_iter().collect() }
+
+        rule quoted_shell_cmd_char() -> char =
+            "\\" c:['"' | '\\'] { c } / c:[^'"'] { c }
 
         pub rule key_sequence_readline_binding() -> KeySequenceReadlineBinding =
             _ "\"" seq:key_sequence() "\"" _ ":" _ "\"" cmd:readline_cmd() "\"" _ {
@@ -199,6 +218,29 @@ peg::parser! {
 mod tests {
     use super::*;
     use anyhow::Result;
+
+    #[test]
+    fn test_shell_cmd_binding_forms() -> Result<()> {
+        for (input, command) in [
+            (r#""\C-k": xyz"#, "xyz"),
+            (r#""\C-k":xyz abc"#, "xyz abc"),
+            (r#""\C-k": "xyz abc""#, "xyz abc"),
+            (r#""\C-k" "xyz abc""#, "xyz abc"),
+            ("\"\\C-k\"\t\"xyz\"", "xyz"),
+            (r#""\C-k" "echo \"q\" \\ \n""#, r#"echo "q" \ \n"#),
+            (r#""\C-k" "xyz" trailing"#, "xyz"),
+        ] {
+            let binding = parse_key_sequence_shell_cmd_binding(input)?;
+            assert_eq!(
+                binding.seq.0,
+                [KeySequenceItem::Control, KeySequenceItem::Byte(b'k')]
+            );
+            assert_eq!(binding.shell_cmd, command, "{input}");
+        }
+        // Without a colon the command must be quoted, as in Bash.
+        assert!(parse_key_sequence_shell_cmd_binding(r#""\C-k" xyz"#).is_err());
+        Ok(())
+    }
 
     #[test]
     fn test_basic_shell_cmd_binding_parse() -> Result<()> {

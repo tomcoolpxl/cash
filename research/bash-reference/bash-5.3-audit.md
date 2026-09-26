@@ -107,22 +107,25 @@ Found with the last three items (ROADMAP item 14):
 
 ## 2. Interactive Completion, Readline, and Job Control
 
-Not yet probed: these need ConPTY-driven tests rather than `-c` probes.
+These need a terminal rather than `-c` probes. `crates/cash/tests/pty_oracle.rs` runs
+each case's keystrokes in a ConPTY under cash and under Git Bash 5.3.15, and compares
+the screens the two leave (ROADMAP item 15). Rows marked "by the harness" are cases
+there.
 
 | Item | Feature | Upstream Description | Cash Assessment |
 | :--- | :--- | :--- | :--- |
-| **1.b** | Completion quoting | Preserves user-supplied quotes around word completion | Interactive tier: Reedline completion bridge. |
+| **1.b** | Completion quoting | Preserves user-supplied quotes around word completion | **Verified** by the harness: `ls "al<TAB>` gives `ls "alpha beta.txt"`, as Bash does. With no quote typed cash quotes in its own style (D40). |
 | **1.f** | Signal handling | Bash signal handlers active during completion | Non-applicable: Cash uses async/thread-isolated completion. |
 | **1.o** | Window size check | Check winsize during traps, `bind -x`, completion | Handled natively by ConPTY event loops. |
 | **1.u** | `compopt -o fullquote` | Force full quoting for completions | Reedline completion formatting feature. |
 | **1.y** | `checkwinsize` | Enabled in subshells from interactive shells | Native console handles resize dynamically. |
-| **1.aa** | `bind -x` syntax | Key sequence and command separated by whitespace | Extend `bind.rs` parser for multi-token forms. |
-| **1.bb** | `bind -x` output | Print bindings using new syntax | Update `bind -p` formatting. |
+| **1.aa** | `bind -x` syntax | Key sequence and command separated by whitespace | **Fixed**, by the harness: `"\C-t" "echo hi"` is read, the command dequoted, as are `"\C-t": "cmd"` and anything after the closing quote. The harness also found that no `bind -x` binding showed its output: the prompt was redrawn over it. That was Reedline's; cash carries a patch (`vendor/reedline/CASH-PATCHES.md`). |
+| **1.bb** | `bind -x` output | Print bindings using new syntax | **Verified** by the harness; a command's `\` and `"` are now escaped, as in Bash. |
 | **1.cc** | `read -E` | Use line editor with shell completion | Cash's built-in line editor accepts `-E` with completion stub. |
-| **1.dd** | `bash-vi-complete` | Vi mode completion keybinding | Readline-specific keybinding name. |
+| **1.dd** | `bash-vi-complete` | Vi mode completion keybinding | **Verified** by the harness (`bind -l`). |
 | **1.gg** | `bind -p NAME` | Restrict output to bindings for named commands | Filter in `bind.rs`. |
 | **1.ii** | Trap job notify | Print job notifications when trap completes | Job control event drain. |
-| **1.jj** | Compfunc 124 | Reload compspec and retry completion | Programmable completion protocol. |
+| **1.jj** | Compfunc 124 | Reload compspec and retry completion | **Verified** by the harness. |
 | **1.rr** | Sourcing notify | Suppress job notifications while sourcing | Flag during `source` execution. |
 | **2.a-o** | Readline 8.3 | `search-ignore-case`, `force-meta-prefix`, etc. | Cash uses Reedline on Windows, not GNU Readline. |
 

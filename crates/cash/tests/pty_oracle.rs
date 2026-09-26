@@ -65,6 +65,15 @@ const CASES: &[Case] = &[
         name: "1aa-bind-x-whitespace",
         keys: &["bind -x '\"\\C-t\" \"echo BOUND\"'\r", "\x14"],
     },
+    // A quoted command with escaped quotes inside: what runs, and what `bind -X` shows.
+    Case {
+        name: "1aa-bind-x-quoted-escapes",
+        keys: &[
+            "bind -x '\"\\C-t\" \"echo \\\"q\\\" x\"'\r",
+            "\x14",
+            "bind -X\r",
+        ],
+    },
     // 1.bb: `bind -X` prints `bind -x` bindings in the form `bind -x` reads.
     Case {
         name: "1bb-bind-X-output",
@@ -287,14 +296,6 @@ const KNOWN_DIFFERENCES: &[(&str, &str)] = &[
     (
         "1u-compopt-fullquote",
         "not yet fixed: the completion is inserted unquoted",
-    ),
-    (
-        "bind-x-colon",
-        "not yet fixed: a bind -x binding never runs",
-    ),
-    (
-        "1aa-bind-x-whitespace",
-        "not yet fixed: the whitespace form does not parse",
     ),
     (
         "1gg-bind-p-name",

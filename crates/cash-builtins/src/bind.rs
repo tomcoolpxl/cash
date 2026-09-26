@@ -241,6 +241,9 @@ impl BindCommand {
                     continue;
                 };
 
+                // In the form `bind -x` reads back (Bash 5.3): the command quoted, with
+                // its `\` and `"` escaped.
+                let cmd = cmd.replace('\\', r"\\").replace('"', "\\\"");
                 writeln!(context.stdout(), "\"{seq}\" \"{cmd}\"")?;
             }
         }
