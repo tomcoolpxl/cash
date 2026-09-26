@@ -33,8 +33,7 @@ cases:
       wait
       echo "after wait all"
 
-  - name: "wait -n not implemented"
-    known_failure: true # TODO(builtins): wait -n not implemented
+  - name: "wait -n returns each job's status in turn"
     stdin: |
       (exit 0) &
       (exit 5) &
@@ -44,7 +43,6 @@ cases:
       echo "second done, status: $?"
 
   - name: "Background job failure with wait"
-    known_failure: true # TODO(jobs): wait should return job's exit status
     stdin: |
       { sleep 0.01; exit 3; } &
       pid=$!

@@ -30,6 +30,54 @@ pub struct JobManager {
     /// processes, so the jobs themselves cannot be cloned; this carries the metadata
     /// `jobs` needs to render, and nothing that would let a subshell act on them.
     inherited: Vec<JobSnapshot>,
+
+    /// Statuses of background jobs that have finished and left the table, oldest first:
+    /// Bash's saved-status list (`bgpids`). `wait PID` reads a status here after the job
+    /// is gone, as POSIX requires, and `wait -n` takes the ones it has not returned yet.
+    saved: VecDeque<SavedStatus>,
+}
+
+/// How many finished jobs' statuses are kept; the oldest go first. Bash keeps as many
+/// as the child-process limit.
+const MAX_SAVED_STATUSES: usize = 1024;
+
+/// A finished background job's status, kept for `wait`.
+#[derive(Clone, Debug)]
+struct SavedStatus {
+    /// The job's shell-internal id, for `wait %N`.
+    id: usize,
+    /// Every process id the job was known by, `$!` among them.
+    pids: Vec<sys::process::ProcessId>,
+    /// The job's exit status.
+    status: u8,
+    /// Not yet returned by `wait -n`, nor collected by `wait PID`.
+    unreported: bool,
+    /// Returned by `wait -n`; a plain `wait` forgets these.
+    reported_by_wait_n: bool,
+}
+
+/// Which finished job `wait -n` may return.
+pub enum WaitTarget<'a> {
+    /// Any job.
+    Any,
+    /// Only these process ids and job ids.
+    Only {
+        /// Process ids.
+        pids: &'a [sys::process::ProcessId],
+        /// Job ids.
+        ids: &'a [usize],
+    },
+}
+
+impl WaitTarget<'_> {
+    fn matches(&self, id: usize, pids: &[sys::process::ProcessId]) -> bool {
+        match self {
+            Self::Any => true,
+            Self::Only { pids: wanted, ids } => {
+                ids.contains(&id) || pids.iter().any(|pid| wanted.contains(pid))
+            }
+        }
+    }
 }
 
 /// A read-only view of a job, as a subshell sees it.
@@ -95,9 +143,9 @@ impl JobTask {
                     processes::ProcessWaitResult::Stopped => Ok(JobTaskWaitResult::Stopped),
                 }
             }
-            Self::Internal(handle) => Ok(JobTaskWaitResult::Completed(handle.await??)),
+            Self::Internal(handle) => Ok(JobTaskWaitResult::Completed(status_only(handle.await??))),
             Self::Completed(opt) => match opt.take() {
-                Some(res) => Ok(JobTaskWaitResult::Completed(res?)),
+                Some(res) => Ok(JobTaskWaitResult::Completed(status_only(res?))),
                 None => Ok(JobTaskWaitResult::Completed(ExecutionResult::success())),
             },
         }
@@ -115,18 +163,103 @@ impl JobTask {
             }
             Self::Internal(handle) => {
                 let checkable_handle = handle;
-                checkable_handle.now_or_never().and_then(|r| r.ok())
+                checkable_handle
+                    .now_or_never()
+                    .and_then(|r| r.ok())
+                    .map(|r| r.map(status_only))
             }
-            Self::Completed(opt) => opt.take(),
+            Self::Completed(opt) => opt.take().map(|r| r.map(status_only)),
         }
     }
 }
 
+/// What a finished background task hands its waiter: its status. An `exit` in the job
+/// (`{ exit 3; } &`) ended the job, not the shell that waits for it, which `wait` or
+/// `fg` used to exit with it.
+const fn status_only(mut result: ExecutionResult) -> ExecutionResult {
+    result.next_control_flow = crate::results::ExecutionControlFlow::Normal;
+    result
+}
+
 impl JobManager {
-    /// Remove a job consumed by `wait -n` and update current/previous marks.
-    pub fn remove_waited_job(&mut self, id: usize) {
-        self.jobs.retain(|job| job.id != id);
+    /// Removes a job a wait has collected, updating the current/previous marks. Its
+    /// status is saved for a later `wait PID` when `keep_status` (see [`SavedStatus`]);
+    /// `by_wait_n` marks it as `wait -n`'s, which a plain `wait` forgets.
+    pub fn remove_waited_job(&mut self, id: usize, status: u8, keep_status: bool, by_wait_n: bool) {
+        let Some(index) = self.jobs.iter().position(|job| job.id == id) else {
+            return;
+        };
+        let job = self.jobs.remove(index);
+        if keep_status {
+            self.save_status(&job, status, false, by_wait_n);
+        }
         self.reannotate();
+    }
+
+    fn save_status(&mut self, job: &Job, status: u8, unreported: bool, by_wait_n: bool) {
+        let mut pids = job.spawned_pids();
+        if let Some(pid) = job.representative_pid()
+            && !pids.contains(&pid)
+        {
+            pids.push(pid);
+        }
+        if self.saved.len() == MAX_SAVED_STATUSES {
+            self.saved.pop_front();
+        }
+        self.saved.push_back(SavedStatus {
+            id: job.id,
+            pids,
+            status,
+            unreported,
+            reported_by_wait_n: by_wait_n,
+        });
+    }
+
+    /// The saved status of a finished job with this process id, for `wait PID`. It stays
+    /// saved, and `wait -n` will not return it.
+    pub fn collect_saved_pid(&mut self, pid: sys::process::ProcessId) -> Option<u8> {
+        let entry = self
+            .saved
+            .iter_mut()
+            .rev()
+            .find(|s| s.pids.contains(&pid))?;
+        entry.unreported = false;
+        Some(entry.status)
+    }
+
+    /// Like [`Self::collect_saved_pid`], for `wait %N`.
+    pub fn collect_saved_job(&mut self, id: usize) -> Option<u8> {
+        let entry = self.saved.iter_mut().rev().find(|s| s.id == id)?;
+        entry.unreported = false;
+        Some(entry.status)
+    }
+
+    /// The oldest finished job `wait -n` has not returned, with its status and process
+    /// id. Bash 5.3 keeps its status for a later `wait PID`, except in POSIX mode, where
+    /// `wait -n` removes it (`forget`).
+    pub fn take_unreported(
+        &mut self,
+        target: &WaitTarget<'_>,
+        forget: bool,
+    ) -> Option<(u8, Option<sys::process::ProcessId>, usize)> {
+        let index = self
+            .saved
+            .iter()
+            .position(|s| s.unreported && target.matches(s.id, &s.pids))?;
+        let entry = if forget {
+            self.saved.remove(index)?
+        } else {
+            let entry = self.saved.get_mut(index)?;
+            entry.unreported = false;
+            entry.reported_by_wait_n = true;
+            entry.clone()
+        };
+        Some((entry.status, entry.pids.first().copied(), entry.id))
+    }
+
+    /// A plain `wait` forgets the statuses `wait -n` returned, as Bash does.
+    pub fn forget_reported_by_wait_n(&mut self) {
+        self.saved.retain(|s| !s.reported_by_wait_n);
     }
 
     /// Returns a new job manager.
@@ -140,6 +273,7 @@ impl JobManager {
         Self {
             jobs: Vec::new(),
             inherited,
+            saved: VecDeque::new(),
         }
     }
 
@@ -362,11 +496,16 @@ impl JobManager {
 
     /// Waits for all managed jobs to complete.
     pub async fn wait_all(&mut self) -> Result<Vec<Job>, error::Error> {
+        // A job that finished before the wait keeps its status for `wait PID`; one the wait
+        // itself collects does not, as in Bash.
+        let mut done: Vec<Job> = self.poll()?.into_iter().map(|(job, _)| job).collect();
+        self.forget_reported_by_wait_n();
         for job in &mut self.jobs {
             job.wait().await?;
         }
 
-        Ok(self.sweep_completed_jobs())
+        done.extend(self.sweep_completed_jobs());
+        Ok(done)
     }
 
     /// Polls all managed jobs for completion.
@@ -377,6 +516,8 @@ impl JobManager {
         while i != self.jobs.len() {
             if let Some(result) = self.jobs[i].poll_done()? {
                 let job = self.jobs.remove(i);
+                let status = result.as_ref().map_or(1, |r| u8::from(r.exit_code));
+                self.save_status(&job, status, true, false);
                 results.push((job, result));
             } else if matches!(self.jobs[i].state, JobState::Done) {
                 // TODO(jobs): This is a workaround to remove jobs that are done but for which we
