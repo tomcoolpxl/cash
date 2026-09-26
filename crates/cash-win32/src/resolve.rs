@@ -180,6 +180,19 @@ fn is_pe_file(path: &Path) -> bool {
     }
 }
 
+/// Whether a file's own bytes make it runnable: a `#!` line, or a PE image (`MZ`).
+///
+/// This is how an extensionless file earns the execute bit that Windows never records.
+/// Git for Windows' `/usr/bin/egrep` is a two-line `#!/bin/sh` script with no extension;
+/// execution runs it (D8 step 4), so lookups (`type -a`, `command -v`, `test -x`) have to
+/// count it as executable too, or they deny a command that plainly runs.
+///
+/// Reads the file, so callers must check the extension first (D46).
+#[must_use]
+pub fn has_executable_content(path: &Path) -> bool {
+    read_shebang(path).is_some() || is_pe_file(path)
+}
+
 /// Decide how to execute a file that is known to exist (D8 step 4).
 ///
 /// Extension is consulted first, per D46. Only a file whose extension says nothing is
