@@ -1,0 +1,4 @@
+$ cd my\ dir/
+$ echo "[${PWD##*/}]"
+[my dir]
+$

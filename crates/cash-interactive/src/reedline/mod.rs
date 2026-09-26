@@ -3,6 +3,7 @@ mod edit_mode;
 mod highlighter;
 mod history;
 mod input_backend;
+mod menu;
 mod prompt;
 mod validator;
 

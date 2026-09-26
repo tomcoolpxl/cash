@@ -1,0 +1,2 @@
+$ ls gam
+gamma.txt  gamut.log

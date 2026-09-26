@@ -81,16 +81,19 @@ impl ReedlineInputBackend {
         // horizontal space in the terminal to fit that many columns, given
         // the actual text to be displayed, it will get effectively dereased
         // anyhow.
-        let completion_menu = Box::new(
+        let completion_menu = Box::new(super::menu::QuoteAwareMenu(
             reedline::ColumnarMenu::default()
                 .with_name(COMPLETION_MENU_NAME)
+                // The whole line, so completing inside `'my dir/in|'` sees the closing quote
+                // after the cursor and replaces it (D40).
+                .with_input_mode(reedline::InputMode::FullBuffer)
                 .with_marker("")
                 .with_columns(10)
                 .with_text_style(completion_menu_text_style())
                 .with_match_text_style(completion_menu_match_text_style())
                 .with_selected_text_style(completion_menu_selected_text_style())
                 .with_selected_match_text_style(completion_menu_selected_match_text_style()),
-        );
+        ));
 
         // Set up default history-based hinter.
         let mut hinter = reedline::DefaultHinter::default();
@@ -105,6 +108,9 @@ impl ReedlineInputBackend {
             .use_bracketed_paste(!options.disable_bracketed_paste)
             .with_completer(Box::new(completer))
             .with_quick_completions(true)
+            // As Bash does, a Tab first inserts what all the candidates share; the next
+            // shows them.
+            .with_partial_completions(true)
             .with_validator(Box::new(validator))
             .with_hinter(Box::new(hinter))
             .with_menu(reedline::ReedlineMenu::EngineCompleter(completion_menu))

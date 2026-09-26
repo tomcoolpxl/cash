@@ -113,7 +113,13 @@ fn postprocess_completion_candidate(
         }
     }
     if completing_end_of_line && !options.no_trailing_space_at_end_of_line {
-        if !options.treat_as_filenames || !cash_core::sys::fs::ends_with_path_separator(&candidate)
+        // A directory gets no space, so the path can go on: `subdir/`, and quoted,
+        // `'my dir/'`, where the cursor is left before the closing quote (D40).
+        let unquoted_end = candidate
+            .strip_suffix(['\'', '"'])
+            .unwrap_or(candidate.as_str());
+        if !options.treat_as_filenames
+            || !cash_core::sys::fs::ends_with_path_separator(unquoted_end)
         {
             candidate.push(' ');
         }

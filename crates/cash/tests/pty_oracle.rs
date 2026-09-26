@@ -10,8 +10,13 @@
 //! cargo test -p cash --test pty-oracle -- --ignored record_bash_screens
 //! ```
 //!
+//! Where cash differs on purpose, `NAME.cash.txt` holds the screen cash must leave
+//! instead, and [`DELIBERATE`] says why. Differences not yet fixed are listed in
+//! [`KNOWN_DIFFERENCES`].
+//!
 //! Both shells start without profile or rc files, with `PS1='$ '`, an empty `INPUTRC`
-//! and no history file, in a scratch directory holding the files in [`FIXTURE_FILES`].
+//! and no history file, in a scratch directory holding [`FIXTURE_FILES`] and
+//! [`FIXTURE_DIRS`].
 //! Background job numbers and pids are masked.
 
 #![cfg(windows)]
@@ -32,7 +37,10 @@ const CASH: &str = env!("CARGO_BIN_EXE_cash");
 const BASH: &str = "C:/Program Files/Git/usr/bin/bash.exe";
 
 /// Files in each case's scratch directory, for completion.
-const FIXTURE_FILES: &[&str] = &["alpha beta.txt", "gamma.txt", "gamut.log"];
+const FIXTURE_FILES: &[&str] = &["alpha beta.txt", "gamma.txt", "gamut.log", "it's here.txt"];
+
+/// Directories in each case's scratch directory.
+const FIXTURE_DIRS: &[&str] = &["my dir"];
 
 /// A case: its name, the audit item it probes, and the keys, sent in chunks. After each
 /// chunk the shell is given time to settle.
@@ -81,6 +89,26 @@ const CASES: &[Case] = &[
         name: "1b-complete-file-in-quotes",
         keys: &["ls \"al", "\t"],
     },
+    // A directory: no space after it, so the path can go on.
+    Case {
+        name: "complete-dir-with-space",
+        keys: &["cd my", "\t", "in", "\t"],
+    },
+    // The completed line runs as it stands.
+    Case {
+        name: "complete-dir-then-run",
+        keys: &["cd my", "\t", "\r", "echo \"[${PWD##*/}]\"\r"],
+    },
+    // A backslash escape already typed continues as backslashes.
+    Case {
+        name: "complete-backslash-typed",
+        keys: &["ls alpha\\ ", "\t"],
+    },
+    // A name holding a single quote.
+    Case {
+        name: "complete-apostrophe",
+        keys: &["ls it", "\t"],
+    },
     Case {
         name: "complete-common-prefix",
         keys: &["ls ga", "\t", "\t"],
@@ -122,6 +150,9 @@ fn fixture(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("cash-pty-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
+    for sub in FIXTURE_DIRS {
+        std::fs::create_dir_all(dir.join(sub).join("inner")).unwrap();
+    }
     for file in FIXTURE_FILES {
         std::fs::write(dir.join(file), "").unwrap();
     }
@@ -206,6 +237,12 @@ fn golden_path(name: &str) -> PathBuf {
         .join(format!("{name}.txt"))
 }
 
+fn read_screen(path: &Path) -> Option<String> {
+    std::fs::read_to_string(path)
+        .ok()
+        .map(|text| text.replace("\r\n", "\n").trim_end().to_owned())
+}
+
 #[test]
 #[ignore = "records Git Bash 5.3's screens; run by hand when cases change"]
 fn record_bash_screens() {
@@ -220,25 +257,36 @@ fn record_bash_screens() {
     });
 }
 
-/// The cases where cash differs from Bash, each with the reason. A case that starts to
-/// match fails the test until it is taken off this list.
-const KNOWN_DIFFERENCES: &[(&str, &str)] = &[
+/// The cases where cash differs from Bash on purpose; each has a `NAME.cash.txt`.
+const DELIBERATE: &[(&str, &str)] = &[
     (
         "complete-file-unquoted",
-        "not yet fixed: a completed name with a space is wrapped in escaped quotes",
+        "D40: with no quote typed, a name that needs quoting is completed in single \
+         quotes, as PowerShell does: `'a b'`",
     ),
-    ("1b-complete-file-in-quotes", "not yet fixed: as above"),
+    ("1cc-read-E", "D40, as above"),
     (
-        "1cc-read-E",
-        "not yet fixed: completion quotes with \"\" where Bash escapes",
+        "complete-dir-with-space",
+        "D40: `'my dir/'`, the cursor before the closing quote, so the path goes on",
     ),
+    ("complete-dir-then-run", "D40, as above"),
     (
-        "1u-compopt-fullquote",
-        "not yet fixed: the completion is inserted unquoted",
+        "complete-apostrophe",
+        "D40: a name holding `'` is completed in double quotes",
     ),
     (
         "complete-common-prefix",
-        "not yet fixed: candidates are listed before the common prefix is inserted",
+        "D40: the first Tab inserts the shared part and the second shows the candidates; \
+         Bash beeps on the second and lists on the third",
+    ),
+];
+
+/// The cases where cash differs from Bash, not yet fixed, each with the difference. A
+/// case that starts to match fails the test until it is taken off this list.
+const KNOWN_DIFFERENCES: &[(&str, &str)] = &[
+    (
+        "1u-compopt-fullquote",
+        "not yet fixed: the completion is inserted unquoted",
     ),
     (
         "bind-x-colon",
@@ -269,10 +317,10 @@ fn cash_leaves_the_screen_bash_leaves() {
             .iter()
             .map(|case| {
                 scope.spawn(move || {
-                    let golden = std::fs::read_to_string(golden_path(case.name))
-                        .unwrap_or_default()
-                        .replace("\r\n", "\n");
-                    (case.name, golden.trim_end().to_owned(), cash_screen(case))
+                    let bash = read_screen(&golden_path(case.name)).unwrap_or_default();
+                    let wanted =
+                        read_screen(&golden_path(&format!("{}.cash", case.name))).unwrap_or(bash);
+                    (case.name, wanted, cash_screen(case))
                 })
             })
             .collect();
@@ -280,9 +328,14 @@ fn cash_leaves_the_screen_bash_leaves() {
     });
 
     let mut report = String::new();
-    for (name, bash, cash) in &results {
+    for (name, wanted, cash) in &results {
         let known = KNOWN_DIFFERENCES.iter().any(|(n, _)| n == name);
-        if (bash == cash) == known {
+        assert_eq!(
+            DELIBERATE.iter().any(|(n, _)| n == name),
+            golden_path(&format!("{name}.cash")).exists(),
+            "{name}: a deliberate difference and its .cash.txt go together"
+        );
+        if (wanted == cash) == known {
             let verdict = if known {
                 "now matches (remove from KNOWN_DIFFERENCES)"
             } else {
@@ -290,7 +343,7 @@ fn cash_leaves_the_screen_bash_leaves() {
             };
             let _ = write!(
                 report,
-                "\n=== {name}: {verdict}\n--- bash\n{bash}\n--- cash\n{cash}\n"
+                "\n=== {name}: {verdict}\n--- wanted\n{wanted}\n--- cash\n{cash}\n"
             );
         }
     }

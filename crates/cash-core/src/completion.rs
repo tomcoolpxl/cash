@@ -1165,12 +1165,38 @@ impl Config {
         match result {
             Answer::Candidates(candidates, options) => {
                 // cash (D40): auto-quote, using the quoting the user has already typed.
+                // The candidates leave here quoted, so the front end must not quote them
+                // again: it used to backslash-escape the result, turning `"a b"` into
+                // `\"a\ b\"`.
                 #[cfg(windows)]
-                let candidates = autoquote_candidates(candidates, completion_prefix, &options);
+                let (candidates, options) = (
+                    autoquote_candidates(candidates, completion_prefix, &options, |name| {
+                        shell.absolute_path(Path::new(name)).is_dir()
+                    }),
+                    ProcessingOptions {
+                        no_autoquote_filenames: true,
+                        ..options
+                    },
+                );
+
+                // Completing inside a quoted word, `'my dir/in|'`, replaces its closing
+                // quote too: the candidate brings its own.
+                let mut delete_count = completion_prefix.len();
+                if let Some(quote) = completion_prefix
+                    .chars()
+                    .next()
+                    .filter(|c| matches!(c, '\'' | '"'))
+                    && input
+                        .get(position..)
+                        .is_some_and(|rest| rest.starts_with(quote))
+                    && !completion_prefix[1..].contains(quote)
+                {
+                    delete_count += 1;
+                }
 
                 Ok(Completions {
                     insertion_index,
-                    delete_count: completion_prefix.len(),
+                    delete_count,
                     candidates,
                     options,
                 })
@@ -1254,20 +1280,26 @@ impl Config {
 ///
 /// `C:/Program Files` is the most common path on Windows and it breaks unquoted every
 /// time, silently: the command runs, against two wrong arguments. So a candidate that
-/// contains a space or a shell metacharacter comes back quoted.
+/// contains a space or a shell metacharacter comes back quoted, in the style the user
+/// started the word in:
 ///
-/// The prefix matters as much as the candidate. The replaced span includes any opening
-/// quote the user typed, so completing `ls "Prog` must emit `"Program Files"` — emitting
-/// the bare name would delete the quote the user asked for, and emitting `""Program
-/// Files"` would be worse still. D40 left exactly this composition open.
+/// - an opening `'` or `"` is kept, even where the candidate would not need it: someone
+///   who typed a quote meant it. The replaced span includes that quote, so the candidate
+///   carries it (`ls "Prog` → `"Program Files"`, never `""Program Files"`);
+/// - a backslash escape (`my\ d`) continues as backslash escapes (`my\ dir/`), as Bash
+///   completes;
+/// - with neither, single quotes, as PowerShell completes: `'my dir/'`. Inside them `\`,
+///   `$`, `` ` `` and `!` are literal, which Windows names need. A name holding a `'`
+///   gets double quotes instead: `"it's here.txt"`.
 ///
-/// A quote already typed is always honoured, even when the candidate would not otherwise
-/// need one: someone who typed `"` meant it.
+/// A directory keeps its `/` inside the quotes and gets no trailing space, so the path
+/// can go on; the front end leaves the cursor before the closing quote.
 #[cfg(windows)]
 fn autoquote_candidates(
     candidates: Vec<String>,
     replaced_prefix: &str,
     options: &ProcessingOptions,
+    is_dir: impl Fn(&str) -> bool,
 ) -> Vec<String> {
     // `compgen -o noquote` is the caller's explicit opt-out, and non-filename candidates
     // (branch names from a completion function, say) are not ours to rewrite.
@@ -1275,36 +1307,120 @@ fn autoquote_candidates(
         return candidates;
     }
 
-    let typed_quote = replaced_prefix
-        .chars()
-        .next()
-        .filter(|c| matches!(c, '"' | '\''));
+    let style = typed_quote_style(replaced_prefix);
 
     candidates
         .into_iter()
         .map(|candidate| {
             // A trailing space is the "this completion is finished" marker further down
             // the pipeline; it must stay outside the quotes.
-            let (body, trailing) = match candidate.strip_suffix(' ') {
+            let (mut body, trailing) = match candidate.strip_suffix(' ') {
                 Some(body) => (body.to_string(), " "),
                 None => (candidate, ""),
             };
-
-            let quoted = match typed_quote {
-                Some('\'') => Some(format!("'{}'", body.replace('\'', r"'\''"))),
-                Some(_) => Some(format!("\"{}\"", escape_for_double_quotes(&body))),
-                None if needs_quoting(&body) => {
-                    Some(format!("\"{}\"", escape_for_double_quotes(&body)))
-                }
-                None => None,
+            let quote = |body: &str| match style {
+                QuoteStyle::Single => single_quoted(body),
+                QuoteStyle::Double => double_quoted(body),
+                QuoteStyle::Backslash => backslash_escaped(body),
+                QuoteStyle::None if !needs_quoting(body) => body.to_owned(),
+                QuoteStyle::None if body.contains('\'') => double_quoted(body),
+                QuoteStyle::None => single_quoted(body),
             };
-
-            match quoted {
-                Some(quoted) => quoted + trailing,
-                None => body + trailing,
+            let mut quoted = quote(&body);
+            // The front end appends `/` to a bare directory name, which it can look up;
+            // a quoted or escaped one it cannot, so it gets its `/` here, inside.
+            if quoted != body && !body.ends_with('/') && is_dir(&body) {
+                body.push('/');
+                quoted = quote(&body);
             }
+            quoted + trailing
         })
         .collect()
+}
+
+/// How the user started quoting the word being completed.
+#[cfg(windows)]
+#[derive(Clone, Copy)]
+enum QuoteStyle {
+    Single,
+    Double,
+    Backslash,
+    None,
+}
+
+/// The quoting style of `prefix`, the part of the word typed so far. A backslash counts
+/// only before a character that needs it, so `C:\Prog` is a path, not an escape.
+#[cfg(windows)]
+fn typed_quote_style(prefix: &str) -> QuoteStyle {
+    match prefix.chars().next() {
+        Some('\'') => QuoteStyle::Single,
+        Some('"') => QuoteStyle::Double,
+        _ => {
+            let mut chars = prefix.chars().peekable();
+            while let Some(c) = chars.next() {
+                if c == '\\'
+                    && chars
+                        .peek()
+                        .is_some_and(|&next| needs_backslash(next, false))
+                {
+                    return QuoteStyle::Backslash;
+                }
+            }
+            QuoteStyle::None
+        }
+    }
+}
+
+#[cfg(windows)]
+fn single_quoted(body: &str) -> String {
+    format!("'{}'", body.replace('\'', r"'\''"))
+}
+
+#[cfg(windows)]
+fn double_quoted(body: &str) -> String {
+    format!("\"{}\"", escape_for_double_quotes(body))
+}
+
+/// `body` with a backslash before each character the shell would otherwise act on.
+#[cfg(windows)]
+fn backslash_escaped(body: &str) -> String {
+    let mut out = String::with_capacity(body.len() + 4);
+    for (i, c) in body.chars().enumerate() {
+        if needs_backslash(c, i == 0) {
+            out.push('\\');
+        }
+        out.push(c);
+    }
+    out
+}
+
+/// Whether `c` must be escaped in a bare word; `~` and `#` only at its start.
+#[cfg(windows)]
+const fn needs_backslash(c: char, at_start: bool) -> bool {
+    c.is_whitespace()
+        || (at_start && matches!(c, '~' | '#'))
+        || matches!(
+            c,
+            '|' | '&'
+                | ';'
+                | '<'
+                | '>'
+                | '('
+                | ')'
+                | '$'
+                | '`'
+                | '\\'
+                | '"'
+                | '\''
+                | '*'
+                | '?'
+                | '['
+                | ']'
+                | '{'
+                | '}'
+                | '!'
+                | '='
+        )
 }
 
 /// Whether a completion candidate would be mangled if inserted bare.
@@ -1317,32 +1433,10 @@ fn autoquote_candidates(
 #[cfg(windows)]
 fn needs_quoting(candidate: &str) -> bool {
     candidate.is_empty()
-        || candidate.starts_with(['~', '#'])
-        || candidate.chars().any(|c| {
-            c.is_whitespace()
-                || matches!(
-                    c,
-                    '|' | '&'
-                        | ';'
-                        | '<'
-                        | '>'
-                        | '('
-                        | ')'
-                        | '$'
-                        | '`'
-                        | '\\'
-                        | '"'
-                        | '\''
-                        | '*'
-                        | '?'
-                        | '['
-                        | ']'
-                        | '{'
-                        | '}'
-                        | '!'
-                        | '='
-                )
-        })
+        || candidate
+            .chars()
+            .enumerate()
+            .any(|(i, c)| needs_backslash(c, i == 0))
 }
 
 /// Escape the four characters that keep their meaning inside double quotes.

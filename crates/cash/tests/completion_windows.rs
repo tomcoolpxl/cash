@@ -84,7 +84,11 @@ impl Fixture {
 
     /// The line a line editor would be left holding after accepting the first candidate.
     async fn completed_line(&mut self, input: &str) -> String {
-        let position = input.len();
+        self.completed_line_at(input, input.len()).await
+    }
+
+    /// Like [`Self::completed_line`], with the cursor at `position`.
+    async fn completed_line_at(&mut self, input: &str, position: usize) -> String {
         let completions = self
             .shell
             .complete(input, position)
@@ -171,18 +175,59 @@ async fn an_uppercase_prefix_completes_a_lowercase_name() {
 #[tokio::test]
 async fn a_completion_containing_a_space_is_quoted() {
     // The headline case. `C:/Program Files` unquoted is two arguments, and the failure
-    // is silent: the command runs, against the wrong path.
+    // is silent: the command runs, against the wrong path. With no quote typed, it comes
+    // back in single quotes, as PowerShell completes, a directory with its `/` inside.
     let mut fixture = Fixture::new("quote-space").await;
     fixture.mkdir("Program Files");
+    fixture.touch("my file.txt");
 
-    let candidates = fixture.complete("ls Prog").await;
-    assert!(!candidates.is_empty(), "nothing completed");
-    for candidate in &candidates {
-        assert!(
-            candidate.starts_with('"') || candidate.contains('\\'),
-            "a completion with a space was neither quoted nor escaped: {candidate:?}"
-        );
-    }
+    assert_eq!(fixture.complete("ls Prog").await, vec!["'Program Files/'"]);
+    assert_eq!(fixture.complete("ls my").await, vec!["'my file.txt'"]);
+}
+
+#[tokio::test]
+async fn completing_before_a_closing_quote_replaces_it() {
+    // After `'my dir/'` the cursor sits before the closing quote; typing and Tab there
+    // must not leave the old quote behind (`'my dir/inner/''`).
+    let mut fixture = Fixture::new("quote-inside").await;
+    fixture.mkdir("my dir/inner");
+
+    let input = "cd 'my dir/in'";
+    let line = fixture.completed_line_at(input, input.len() - 1).await;
+    assert_eq!(line, "cd 'my dir/inner/'");
+}
+
+#[tokio::test]
+async fn a_name_holding_a_single_quote_gets_double_quotes() {
+    let mut fixture = Fixture::new("quote-apostrophe").await;
+    fixture.touch("it's here.txt");
+    fixture.touch("it's $5.txt");
+
+    let mut candidates = fixture.complete("ls it").await;
+    candidates.sort();
+    // Inside double quotes `$` still expands, so it is escaped.
+    assert_eq!(candidates, vec![r#""it's \$5.txt""#, r#""it's here.txt""#]);
+}
+
+#[tokio::test]
+async fn a_backslash_escape_already_typed_continues_as_backslashes() {
+    // As Bash completes: the user chose escaping, so the rest of the word is escaped.
+    let mut fixture = Fixture::new("quote-backslash").await;
+    fixture.mkdir("my dir");
+    fixture.touch("my dir/a (b).txt");
+
+    assert_eq!(fixture.complete(r"ls my\ d").await, vec![r"my\ dir/"]);
+    assert_eq!(
+        fixture.complete(r"ls my\ dir/a\ ").await,
+        vec![r"my\ dir/a\ \(b\).txt"]
+    );
+    // A drive path's backslash is a separator, not an escape: no style is started.
+    let windows = fixture.path().to_string_lossy().replace('/', "\\");
+    let candidates = fixture.complete(&format!(r"ls {windows}\my")).await;
+    assert!(
+        candidates.iter().all(|c| c.starts_with('\'')),
+        "a drive path's backslash was taken for an escape: {candidates:?}"
+    );
 }
 
 #[tokio::test]
@@ -257,8 +302,10 @@ async fn the_quoted_candidate_round_trips_through_the_shell() {
     fixture.mkdir("Program Files");
     fixture.touch("Program Files/inside.txt");
 
+    // A directory's candidate ends in `/`, the cursor left before its closing quote; the
+    // path typed after the quote still joins the word.
     let line = fixture.completed_line("ls Prog").await;
-    let output = fixture.run(&format!("{line}/inside.txt"));
+    let output = fixture.run(&format!("{line}inside.txt"));
     assert_eq!(
         output.trim(),
         "Program Files/inside.txt",
@@ -277,7 +324,7 @@ async fn a_completion_containing_other_shell_metacharacters_is_quoted() {
     assert!(!candidates.is_empty(), "nothing completed");
     for candidate in &candidates {
         assert!(
-            candidate.starts_with('"') || candidate.contains('\\'),
+            candidate.starts_with('\''),
             "parentheses were left unquoted: {candidate:?}"
         );
     }
