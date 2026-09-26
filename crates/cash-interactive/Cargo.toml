@@ -20,7 +20,14 @@ default = []
 basic = ["dep:crossterm", "completion"]
 completion = []
 minimal = []
-reedline = ["dep:reedline", "dep:nu-ansi-term", "dep:crossterm", "completion", "highlighting"]
+reedline = [
+    "dep:reedline",
+    "dep:nu-ansi-term",
+    "dep:crossterm",
+    "dep:unicode-segmentation",
+    "completion",
+    "highlighting",
+]
 highlighting = []
 
 [lints]
@@ -39,6 +46,7 @@ thiserror = "2.0.18"
 tokio = { version = "1.52.3", features = ["rt", "sync"] }
 tracing = "0.1.44"
 futures-util = "0.3.34"
+unicode-segmentation = { version = "1.13.3", optional = true }
 
 [dev-dependencies]
 pretty_assertions = { version = "1.4.1", features = ["unstable"] }

@@ -55,8 +55,19 @@ impl ReedlineInputBackend {
         // Set up key bindings.
         let key_bindings = compose_key_bindings(COMPLETION_MENU_NAME);
 
-        // Set up mutable edit mode.
-        let mutable_edit_mode = edit_mode::MutableEditMode::new(key_bindings);
+        // Set up mutable edit mode, with history as the source of `yank-last-arg`'s words.
+        let history_shell = shell_ref.clone();
+        let history_words: edit_mode::HistoryWords = Box::new(move |back, nth| {
+            let shell = tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current().block_on(history_shell.lock())
+            });
+            let history = shell.history()?;
+            let index = history.count().checked_sub(back + 1)?;
+            let line = history.get(index)?.command_line.clone();
+            drop(shell);
+            crate::history_words::pick(&line, nth)
+        });
+        let mutable_edit_mode = edit_mode::MutableEditMode::new(key_bindings, history_words);
         let updatable_bindings = mutable_edit_mode.bindings();
 
         // Create helper objects that implement reedline traits; each will
@@ -288,6 +299,24 @@ fn compose_key_bindings(completion_menu_name: &str) -> reedline::Keybindings {
         reedline::KeyCode::Char('7'),
         reedline::ReedlineEvent::Edit(vec![reedline::EditCommand::Undo]),
     );
+
+    // Readline's yank-last-arg, on both of its default keys. `edit_mode` turns the marker
+    // into an edit; see `edit_mode::YANK_LAST_ARG`. Alt-_ arrives with Shift on some
+    // keyboards and without it on others.
+    for (modifiers, key) in [
+        (reedline::KeyModifiers::ALT, '.'),
+        (reedline::KeyModifiers::ALT, '_'),
+        (
+            reedline::KeyModifiers::ALT | reedline::KeyModifiers::SHIFT,
+            '_',
+        ),
+    ] {
+        key_bindings.add_binding(
+            modifiers,
+            reedline::KeyCode::Char(key),
+            reedline::ReedlineEvent::ExecuteHostCommand(edit_mode::YANK_LAST_ARG.to_owned()),
+        );
+    }
 
     // Capitalize.
     key_bindings.add_binding(

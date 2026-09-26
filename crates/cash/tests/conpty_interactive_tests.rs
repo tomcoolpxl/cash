@@ -47,7 +47,12 @@ fn start_interactive_cash() -> ConPtySession {
 }
 
 /// Like [`start_interactive_cash`], on the reedline backend a user gets by default.
+///
+/// The session's environment is only what is listed here, so `TEMP` is passed on: without
+/// it Windows puts temporary files in the Windows directory, where `fc` may not write.
 fn start_reedline_cash() -> ConPtySession {
+    let temp = std::env::temp_dir();
+    let temp = temp.to_string_lossy();
     ConPtySession::start(
         &PathBuf::from(CASH),
         &[
@@ -58,7 +63,7 @@ fn start_reedline_cash() -> ConPtySession {
             "--input-backend=reedline",
             "-i",
         ],
-        Some(&[("HISTFILE", ""), ("PS1", "PROMPT$ ")]),
+        Some(&[("HISTFILE", ""), ("PS1", "PROMPT$ "), ("TEMP", &temp)]),
     )
     .expect("failed to start cash.exe attached to Win32 ConPTY")
 }
@@ -391,4 +396,63 @@ fn conpty_read_capital_e_uses_shell_completion() {
     session.send_line("exit 0").unwrap();
     let code = session.wait().expect("process did not exit");
     assert_eq!(code, 0);
+}
+
+/// Readline's `yank-last-arg`: Alt-. inserts the previous command's last word, and a second
+/// press replaces it with the last word of the command before that.
+#[test]
+fn conpty_alt_dot_yanks_the_last_argument() {
+    let mut session = start_reedline_cash();
+    session
+        .expect("PROMPT$", Duration::from_secs(10))
+        .expect("prompt displayed");
+
+    session.send("true first OLDER_WORD\r").unwrap();
+    session.send("true second NEWER_WORD\r").unwrap();
+
+    // The output joins the words with `-`, which the typed line never contains.
+    session.send("printf '%s-%s\\n' X \x1b.\r").unwrap();
+    session
+        .expect("X-NEWER_WORD", Duration::from_secs(10))
+        .expect("Alt-. did not insert the last word of the previous command");
+
+    // Now the printf is the previous command: the third press reaches the first `true`.
+    session
+        .send("printf '%s+%s\\n' Y \x1b.\x1b.\x1b.\r")
+        .unwrap();
+    session
+        .expect("Y+OLDER_WORD", Duration::from_secs(10))
+        .expect("repeated Alt-. did not walk back through history");
+
+    session.send("exit 0\r").unwrap();
+    assert_eq!(session.wait().expect("process did not exit"), 0);
+}
+
+/// Readline's `edit-and-execute-command`: Ctrl-X Ctrl-E opens the line in `$VISUAL` and
+/// runs what the editor saves. The "editor" here is cash's `sed -i`.
+#[test]
+fn conpty_ctrl_x_ctrl_e_runs_the_edited_line() {
+    let mut session = start_reedline_cash();
+    session
+        .expect("PROMPT$", Duration::from_secs(10))
+        .expect("prompt displayed");
+
+    session
+        .send("export VISUAL='sed -i s/ORIGINAL/EDITED/'\r")
+        .unwrap();
+    session.send("echo ORIGINAL$((20 + 3))\x18\x05").unwrap();
+    session
+        .expect("EDITED23", Duration::from_secs(10))
+        .expect("Ctrl-X Ctrl-E did not run the edited line");
+
+    // History holds the line as typed and as edited, as Bash's does, and not the `fc`.
+    session
+        .send("history 3 | sed 's/^ *[0-9]* *//; s/ /_/g'\r")
+        .unwrap();
+    session
+        .expect("echo_EDITED$((20_+_3))", Duration::from_secs(10))
+        .expect("the edited line was not recorded in history");
+
+    session.send("exit 0\r").unwrap();
+    assert_eq!(session.wait().expect("process did not exit"), 0);
 }

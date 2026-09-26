@@ -29,6 +29,9 @@ pub mod highlighting;
 #[cfg(feature = "completion")]
 mod completion;
 
+#[cfg(feature = "reedline")]
+mod history_words;
+
 // Reedline-based shell
 #[cfg(feature = "reedline")]
 mod reedline;
