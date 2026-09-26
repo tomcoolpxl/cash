@@ -540,3 +540,124 @@ fn command_v_renders_a_path_found_on_path_with_forward_slashes() {
     );
     assert_eq!(lines[0], lines[1]);
 }
+
+#[test]
+fn hash_t_renders_a_path_the_same_way_command_v_does() {
+    // `hash -t` printed the cached path as the resolver had joined it:
+    //
+    //     C:/Program Files/Git/usr/bin\ls.exe
+    let out = cash("hash netstat; hash -t netstat; command -v netstat");
+    let lines: Vec<&str> = out.stdout.lines().collect();
+    assert_eq!(lines.len(), 2, "{} {}", out.stdout, out.stderr);
+    assert!(
+        !lines[0].contains('\\'),
+        "D3: backslashes in a rendered path: {}",
+        lines[0]
+    );
+    assert_eq!(lines[0], lines[1], "hash -t and command -v disagree");
+}
+
+#[test]
+fn hash_t_renders_every_name_it_lists() {
+    // With several names each line is `name<TAB>path`.
+    let out = cash("hash netstat cmd; hash -t netstat cmd");
+    let lines: Vec<&str> = out.stdout.lines().collect();
+    assert_eq!(lines.len(), 2, "{} {}", out.stdout, out.stderr);
+    for (line, name) in lines.iter().zip(["netstat", "cmd"]) {
+        assert!(line.starts_with(&format!("{name}\t")), "{line}");
+        assert!(!line.contains('\\'), "D3: backslashes: {line}");
+    }
+}
+
+#[test]
+fn hash_lt_renders_but_does_not_quote() {
+    // Bash prints `-lt` verbatim; only the whole-table `-l` listing is quoted.
+    let out = cash("hash netstat; hash -lt netstat");
+    assert!(
+        out.stdout.starts_with("builtin hash -p ") && out.stdout.ends_with(" netstat"),
+        "{} {}",
+        out.stdout,
+        out.stderr
+    );
+    assert!(!out.stdout.contains('\\'), "D3: backslashes: {}", out.stdout);
+    assert!(!out.stdout.contains('\''), "quoted: {}", out.stdout);
+}
+
+#[test]
+fn hash_l_lists_the_table_as_input_that_round_trips() {
+    // "Usable for input" means feeding it back reproduces the table, space in the path and
+    // all.
+    let out = cash(
+        r#"hash -p "C:\Program Files\x.exe" x; hash netstat; l=$(hash -l); echo "$l"; hash -r; eval "$l"; hash -t x"#,
+    );
+    let lines: Vec<&str> = out.stdout.lines().collect();
+    assert_eq!(lines.len(), 3, "{} {}", out.stdout, out.stderr);
+    assert!(
+        lines[..2].contains(&"builtin hash -p 'C:/Program Files/x.exe' x"),
+        "{lines:?}"
+    );
+    assert!(
+        lines[..2].iter().all(|l| !l.contains('\\')),
+        "D3: backslashes: {lines:?}"
+    );
+    assert_eq!(lines[2], "C:/Program Files/x.exe", "did not round-trip");
+}
+
+#[test]
+fn type_a_does_not_find_a_name_that_is_only_hashed() {
+    // `-a` skips the hash table, as in bash, so a hashed entry for a file that has gone is
+    // not found -- rather than silently succeeding with no output.
+    let out = cash(
+        r#"hash -p 'C:\no\such.exe' gone; type -a gone; echo "rc=$?"; type -a -t gone; echo "rc=$?"; type -a -P gone; echo "rc=$?""#,
+    );
+    let lines: Vec<&str> = out.stdout.lines().collect();
+    assert_eq!(
+        lines,
+        ["rc=1", "rc=1", "C:/no/such.exe", "rc=1"],
+        "{}",
+        out.stderr
+    );
+    assert!(
+        out.stderr.contains("type: gone: not found"),
+        "no diagnostic: {}",
+        out.stderr
+    );
+}
+
+#[test]
+fn type_takes_the_last_of_t_and_p_but_keeps_the_forced_search() {
+    // As in bash: `-Pt` prints the type and `-tP` the path, but `-Pt` still searches PATH
+    // only, so a function is not found under it.
+    let out = cash(
+        r#"f() { :; }; type -Pt cmd; type -tP cmd; type -pt cmd; type -tp f; echo "rc=$?"; type -Pt f; echo "rc=$?"; type -Pp f; echo "rc=$?"; type -t -p -t cmd; type -p -t -p f; echo "rc=$?""#,
+    );
+    let lines: Vec<&str> = out.stdout.lines().collect();
+    assert_eq!(lines.len(), 8, "{} {}", out.stdout, out.stderr);
+    assert_eq!(lines[6..], ["file", "rc=0"], "a repeated flag was refused");
+    assert_eq!(lines[0], "file");
+    assert!(
+        lines[1].to_ascii_lowercase().ends_with("/cmd.exe") && !lines[1].contains('\\'),
+        "{}",
+        lines[1]
+    );
+    assert_eq!(lines[2..6], ["file", "rc=0", "rc=1", "rc=1"]);
+    assert!(out.stderr.is_empty(), "{}", out.stderr);
+}
+
+#[test]
+fn hash_lists_hits_with_rendered_paths() {
+    // Hashing counts nothing; each run and each `hash -t` lookup counts one, as in bash.
+    let out = cash("hash; hash netstat; hash; netstat -? > /dev/null 2>&1; hash -t netstat > /dev/null; hash");
+    let lines: Vec<&str> = out.stdout.lines().collect();
+    assert_eq!(lines.len(), 5, "{} {}", out.stdout, out.stderr);
+    assert_eq!(lines[0], "hash: hash table empty");
+    assert_eq!(lines[1], "hits\tcommand");
+    assert!(lines[2].starts_with("   0\t"), "{}", lines[2]);
+    assert_eq!(lines[3], "hits\tcommand");
+    assert!(lines[4].starts_with("   2\t"), "{}", lines[4]);
+    assert!(
+        lines[4].to_ascii_lowercase().ends_with("/netstat.exe") && !lines[4].contains('\\'),
+        "D3: {}",
+        lines[4]
+    );
+}

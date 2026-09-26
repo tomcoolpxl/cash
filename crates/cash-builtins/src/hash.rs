@@ -1,7 +1,10 @@
 use clap::Parser;
-use std::{io::Write, path::PathBuf};
+use std::{
+    io::Write,
+    path::{Path, PathBuf},
+};
 
-use cash_core::{ExecutionResult, builtins};
+use cash_core::{ExecutionResult, builtins, escape};
 
 #[derive(Parser)]
 pub(crate) struct HashCommand {
@@ -39,6 +42,45 @@ impl builtins::Command for HashCommand {
         let mut result = ExecutionResult::success();
         let cmd = &context.command_name;
 
+        if self.names.is_empty() && (self.remove || self.display_paths) {
+            let option = if self.remove { "-d" } else { "-t" };
+            writeln!(
+                context.stderr(),
+                "{cmd}: {option}: option requires an argument"
+            )?;
+            return Ok(ExecutionResult::general_error());
+        }
+
+        if self.names.is_empty() && !self.remove_all {
+            let entries: Vec<_> = context.shell.program_location_cache().entries().collect();
+
+            if entries.is_empty() {
+                // Bash 5.1 dropped the notice for `-l`, whose output is meant to be read back
+                // in, and POSIX mode never printed it.
+                if !self.display_as_usable_input && !context.shell.options().posix_mode {
+                    writeln!(context.stdout(), "{cmd}: hash table empty")?;
+                }
+            } else if self.display_as_usable_input {
+                // Unlike `-lt`, bash quotes here, so the listing reads back in even with the
+                // space in `Program Files`.
+                for (name, path, _) in entries {
+                    writeln!(
+                        context.stdout(),
+                        "builtin hash -p {} {}",
+                        escape::quote_if_needed(&render(path), escape::QuoteMode::SingleQuote),
+                        escape::quote_if_needed(name, escape::QuoteMode::SingleQuote)
+                    )?;
+                }
+            } else {
+                writeln!(context.stdout(), "hits\tcommand")?;
+                for (_, path, hits) in entries {
+                    writeln!(context.stdout(), "{hits:4}\t{}", render(path))?;
+                }
+            }
+
+            return Ok(result);
+        }
+
         if self.remove_all {
             context.shell.program_location_cache_mut().reset();
         } else if self.remove {
@@ -51,12 +93,13 @@ impl builtins::Command for HashCommand {
         } else if self.display_paths {
             for name in &self.names {
                 if let Some(path) = context.shell.program_location_cache().get(name) {
+                    // Bash's lookup here counts as a hit, just as running the command does.
+                    context.shell.program_location_cache_mut().record_hit(name);
+                    let path = render(&path);
+
                     if self.display_as_usable_input {
-                        writeln!(
-                            context.stdout(),
-                            "builtin hash -p {} {name}",
-                            path.to_string_lossy()
-                        )?;
+                        // Bash prints this form unquoted, unlike the whole-table listing.
+                        writeln!(context.stdout(), "builtin hash -p {path} {name}")?;
                     } else {
                         let mut prefix = String::new();
 
@@ -65,11 +108,7 @@ impl builtins::Command for HashCommand {
                             prefix.push('\t');
                         }
 
-                        writeln!(
-                            context.stdout(),
-                            "{prefix}{}",
-                            path.to_string_lossy().as_ref()
-                        )?;
+                        writeln!(context.stdout(), "{prefix}{path}")?;
                     }
                 } else {
                     writeln!(context.stderr(), "{cmd}: {name}: not found")?;
@@ -120,5 +159,18 @@ impl builtins::Command for HashCommand {
         }
 
         Ok(result)
+    }
+}
+
+/// Renders a path with one canonical spelling (D3). A cached path is a `PATH` directory
+/// joined to the file name, which otherwise shows up as `C:/Program Files/Git/usr/bin\ls.exe`.
+fn render(path: &Path) -> String {
+    #[cfg(windows)]
+    {
+        cash_win32::path::render(path)
+    }
+    #[cfg(not(windows))]
+    {
+        path.to_string_lossy().to_string()
     }
 }

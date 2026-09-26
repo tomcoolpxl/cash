@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use clap::Parser;
+use clap::{CommandFactory as _, FromArgMatches as _, Parser, parser::ValueSource};
 
 use cash_core::{ExecutionResult, builtins};
 
@@ -8,6 +8,9 @@ use crate::lookup::{self, Resolved};
 
 /// Inspect the type of a named shell item.
 #[derive(Parser)]
+// Bash accepts `type -t -p -t`; a repeat replaces the earlier occurrence, so the index
+// `new` compares is the last one.
+#[command(args_override_self = true)]
 pub(crate) struct TypeCommand {
     /// Display all locations of the specified name, not just the first.
     #[arg(short = 'a')]
@@ -37,6 +40,32 @@ pub(crate) struct TypeCommand {
 impl builtins::Command for TypeCommand {
     type Error = cash_core::Error;
 
+    fn new<I>(args: I) -> Result<Self, clap::Error>
+    where
+        I: IntoIterator<Item = String>,
+    {
+        let matches = Self::command().try_get_matches_from(args)?;
+        let mut command = Self::from_arg_matches(&matches)?;
+
+        // Bash's `-t`, `-p` and `-P` each switch off the others' output form, so whichever
+        // comes last decides between printing the type and printing the path: `-Pt` prints
+        // `file`, `-tP` the path. `-P`'s forced path search is not switched off, though, so
+        // `-Pt` still skips functions and builtins.
+        let last = |id: &str| {
+            (matches.value_source(id) == Some(ValueSource::CommandLine))
+                .then(|| matches.indices_of(id)?.max())
+                .flatten()
+        };
+        let type_at = last("type_only");
+        let path_at = last("show_path_only").max(last("force_path_search"));
+        if type_at.is_some() || path_at.is_some() {
+            command.type_only = type_at > path_at;
+            command.show_path_only = !command.type_only;
+        }
+
+        Ok(command)
+    }
+
     async fn execute<SE: cash_core::ShellExtensions>(
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
@@ -50,16 +79,34 @@ impl builtins::Command for TypeCommand {
         };
 
         for name in &self.names {
-            let resolved_types = lookup::resolve(context.shell, name, &options);
+            let mut resolved_types = lookup::resolve(context.shell, name, &options);
+
+            // Bash's `-a` skips the hash table unless `-P` forces a path search, and even
+            // then a hashed path is printed without counting as found. A name that is only
+            // hashed -- say to a file that has since gone -- is therefore not found.
+            if self.all_locations && !self.force_path_search {
+                resolved_types.retain(|r| !matches!(r, Resolved::File { hashed: true, .. }));
+            }
+            let found = !self.all_locations
+                || resolved_types
+                    .iter()
+                    .any(|r| !matches!(r, Resolved::File { hashed: true, .. }));
 
             if resolved_types.is_empty() {
-                if !self.type_only && !self.force_path_search && !self.show_path_only {
+                if !self.type_only && !self.show_path_only {
                     writeln!(context.stderr(), "type: {name}: not found")?;
                 }
 
                 result = ExecutionResult::general_error();
                 continue;
             }
+
+            // Bash consults its hash table through the same lookup that counts a hit when
+            // running the command.
+            let counts_a_hit = matches!(
+                resolved_types.first(),
+                Some(Resolved::File { hashed: true, .. })
+            );
 
             for resolved_type in resolved_types {
                 if self.show_path_only && !matches!(resolved_type, Resolved::File { .. }) {
@@ -78,26 +125,13 @@ impl builtins::Command for TypeCommand {
                         Resolved::Builtin => {
                             writeln!(context.stdout(), "builtin")?;
                         }
-                        Resolved::File { path, .. } => {
-                            if self.show_path_only || self.force_path_search {
-                                #[cfg(windows)]
-                                let rendered = cash_win32::path::render(path);
-                                #[cfg(not(windows))]
-                                let rendered = path.to_string_lossy();
-                                writeln!(context.stdout(), "{rendered}")?;
-                            } else {
-                                writeln!(context.stdout(), "file")?;
-                            }
+                        Resolved::File { .. } => {
+                            writeln!(context.stdout(), "file")?;
                         }
                     }
                 } else {
                     match &resolved_type {
-                        // When we're displaying all locations, we don't show hashed paths.
-                        Resolved::File { hashed: true, .. }
-                            if self.all_locations && !self.force_path_search => {}
-                        Resolved::File { path, .. }
-                            if self.show_path_only || self.force_path_search =>
-                        {
+                        Resolved::File { path, .. } if self.show_path_only => {
                             #[cfg(windows)]
                             let rendered = cash_win32::path::render(path);
                             #[cfg(not(windows))]
@@ -112,6 +146,13 @@ impl builtins::Command for TypeCommand {
                 if !self.all_locations {
                     break;
                 }
+            }
+
+            if counts_a_hit {
+                context.shell.program_location_cache_mut().record_hit(name);
+            }
+            if !found {
+                result = ExecutionResult::general_error();
             }
         }
 

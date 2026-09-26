@@ -40,7 +40,7 @@ impl CommandCommand {
     /// Describes every name given, as `-v`/`-V` do; succeeds if any name was found.
     fn describe_names<SE: cash_core::ShellExtensions>(
         &self,
-        context: &cash_core::ExecutionContext<'_, SE>,
+        context: &mut cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, cash_core::Error> {
         // With no names to look up there is nothing to fail to find, so this still succeeds.
         if self.command_and_args.is_empty() {
@@ -103,6 +103,12 @@ impl CommandCommand {
 
                 lookup::describe(context.stdout(), name, &found)?;
             }
+
+            // Bash finds a hashed command through the same lookup that counts a hit when
+            // running it, so describing one shows up in `hash`'s listing.
+            if matches!(found, Resolved::File { hashed: true, .. }) {
+                context.shell.program_location_cache_mut().record_hit(name);
+            }
         }
 
         if any_found {
@@ -144,10 +150,10 @@ impl builtins::Command for CommandCommand {
 
     async fn execute<SE: cash_core::ShellExtensions>(
         &self,
-        context: cash_core::ExecutionContext<'_, SE>,
+        mut context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, Self::Error> {
         if self.print_description || self.print_verbose_description {
-            return self.describe_names(&context);
+            return self.describe_names(&mut context);
         }
 
         // Silently exit if no command was provided.
