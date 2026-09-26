@@ -629,6 +629,56 @@ impl Job {
         Ok(result)
     }
 
+    /// Waits for the job with it in the foreground, as `fg` does.
+    ///
+    /// cash (D13): on Windows a job started in the background at the prompt leads a
+    /// process group of its own, so the keyboard's Ctrl-C no longer reaches it. While it
+    /// is in the foreground, cash relays a Ctrl-C to its processes as a Ctrl-Break, the
+    /// one console event a group can be sent, and a second Ctrl-C terminates its tree.
+    /// A job whose processes share the console's group receives Ctrl-C directly and is
+    /// left to handle it, however many times it is pressed.
+    pub async fn wait_in_foreground(&mut self) -> Result<ExecutionResult, error::Error> {
+        #[cfg(windows)]
+        {
+            let pids = self.spawned_pids.clone();
+            let current = move || -> Vec<u32> {
+                pids.as_ref()
+                    .and_then(|p| p.lock().ok().map(|p| p.clone()))
+                    .unwrap_or_default()
+                    .into_iter()
+                    .filter_map(|pid| u32::try_from(pid).ok())
+                    .collect()
+            };
+            let mut relayed = false;
+            let wait = self.wait();
+            tokio::pin!(wait);
+            loop {
+                tokio::select! {
+                    result = &mut wait => return result,
+                    _ = sys::signal::await_ctrl_c() => {
+                        let pids = current();
+                        if relayed {
+                            for pid in pids {
+                                let reaped = cash_win32::jobreg::terminate_tree(pid)
+                                    .unwrap_or(false);
+                                if !reaped {
+                                    let _ = cash_win32::process::terminate(pid);
+                                }
+                            }
+                        } else {
+                            // `|` rather than `||`: every leader gets the Ctrl-Break.
+                            relayed = pids
+                                .into_iter()
+                                .fold(false, |any, pid| any | cash_win32::stop::interrupt_group(pid));
+                        }
+                    }
+                }
+            }
+        }
+        #[cfg(not(windows))]
+        self.wait().await
+    }
+
     /// Wait past stop notifications until the job has actually terminated.
     pub async fn wait_for_termination(&mut self) -> Result<ExecutionResult, error::Error> {
         loop {

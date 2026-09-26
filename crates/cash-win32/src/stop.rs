@@ -14,7 +14,9 @@
 //! is terminated then, from a background thread holding a handle to it, so a pid Windows
 //! has since reused cannot be hit.
 
+use std::collections::HashMap;
 use std::io;
+use std::sync::{Mutex, PoisonError};
 use std::time::Duration;
 
 use windows_sys::Win32::Foundation::{
@@ -88,7 +90,11 @@ pub fn request_stop(pid: u32, grace: Duration) -> io::Result<()> {
         return Err(io::Error::last_os_error());
     }
 
-    if close_windows(pid) == 0 {
+    // A process cash started in a group of its own (a background job at the prompt) can
+    // be sent a Ctrl-Break, which console programs handle as an interrupt. It is asked
+    // that way as well as through any windows, and terminated if it outlasts the grace.
+    let broke = interrupt_group(pid);
+    if close_windows(pid) == 0 && !broke {
         let result = terminate_handle(handle);
         close(handle);
         return result;
@@ -106,6 +112,61 @@ pub fn request_stop(pid: u32, grace: Duration) -> io::Result<()> {
         close(handle);
     });
     Ok(())
+}
+
+/// Processes cash started in a process group of their own, each with a handle held open.
+///
+/// The handle is what makes a Ctrl-Break aimed at one safe: Windows does not reuse a pid
+/// while a handle to its process is open, so the pid still names the group leader cash
+/// started, and not some later process that leads no group, at which a console control
+/// event would reach every process on the console (D21).
+static LEADERS: Mutex<Option<HashMap<u32, usize>>> = Mutex::new(None);
+
+/// Records that cash started `pid` with `CREATE_NEW_PROCESS_GROUP` (D13).
+pub fn register_group_leader(pid: u32) {
+    // SAFETY: OpenProcess returns null rather than a bad handle on failure.
+    let handle = unsafe { OpenProcess(PROCESS_SYNCHRONIZE, FALSE, pid) };
+    if handle.is_null() {
+        return;
+    }
+    let mut guard = LEADERS.lock().unwrap_or_else(PoisonError::into_inner);
+    let leaders = guard.get_or_insert_with(HashMap::new);
+    // Closing the handles of leaders that have exited keeps the table small.
+    leaders.retain(|_, held| {
+        let running = still_running(*held as HANDLE);
+        if !running {
+            close(*held as HANDLE);
+        }
+        running
+    });
+    let replaced = leaders.insert(pid, handle as usize);
+    drop(guard);
+    if let Some(old) = replaced {
+        close(old as HANDLE);
+    }
+}
+
+/// Whether `pid` is a running process cash started as the leader of its own group.
+pub fn leads_group(pid: u32) -> bool {
+    let leaders = LEADERS.lock().unwrap_or_else(PoisonError::into_inner);
+    leaders
+        .as_ref()
+        .and_then(|l| l.get(&pid))
+        .is_some_and(|held| still_running(*held as HANDLE))
+}
+
+/// Sends a Ctrl-Break to `pid`'s group if cash started it as a group leader.
+///
+/// Returns whether it did. Anything else is left alone: aimed at a pid that leads no
+/// group, the event would reach the whole console.
+pub fn interrupt_group(pid: u32) -> bool {
+    leads_group(pid) && crate::console::interrupt_process_group(pid).is_ok()
+}
+
+fn still_running(handle: HANDLE) -> bool {
+    // SAFETY: `handle` is a process handle held open by the registry.
+    let waited = unsafe { WaitForSingleObject(handle, 0) };
+    waited == WAIT_TIMEOUT
 }
 
 fn terminate_handle(handle: HANDLE) -> io::Result<()> {

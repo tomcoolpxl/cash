@@ -31,7 +31,8 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use windows_sys::Win32::Foundation::{CloseHandle, FALSE, STILL_ACTIVE};
 use windows_sys::Win32::System::Console::{
-    CTRL_BREAK_EVENT, GenerateConsoleCtrlEvent, SetConsoleCP, SetConsoleOutputCP,
+    CTRL_BREAK_EVENT, GenerateConsoleCtrlEvent, SetConsoleCP, SetConsoleCtrlHandler,
+    SetConsoleOutputCP,
 };
 use windows_sys::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, TH32CS_SNAPTHREAD, THREADENTRY32, Thread32First, Thread32Next,
@@ -117,6 +118,19 @@ pub fn interrupt_process_group(group_id: u32) -> io::Result<()> {
         return Err(io::Error::last_os_error());
     }
     Ok(())
+}
+
+/// Takes Ctrl-C handling back from a parent that turned it off (D13).
+///
+/// Windows passes "ignore Ctrl-C" down to children: a process started in a new process
+/// group, or by one that called `SetConsoleCtrlHandler(NULL, TRUE)` (build tools and task
+/// runners do), ignores Ctrl-C, and so does everything it starts. An interactive shell owns
+/// its terminal, so it clears the flag at startup; without that, Ctrl-C would stop
+/// nothing the user runs. Scripts keep what they inherited, as POSIX has a
+/// non-interactive shell keep signals that were ignored on entry.
+pub fn enable_ctrl_c() {
+    // SAFETY: a plain call; a null handler with FALSE restores default Ctrl-C handling.
+    unsafe { SetConsoleCtrlHandler(None, FALSE) };
 }
 
 /// Input modes of a console waiting for a line: processed, line-buffered and echoed

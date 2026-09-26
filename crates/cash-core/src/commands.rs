@@ -1097,6 +1097,15 @@ fn warn_about_unix_drive_spellings(
     }
 }
 
+/// cash (D13): a background job's process leads a group of its own, and the registry is
+/// what lets a Ctrl-Break be aimed at it safely later.
+#[cfg(windows)]
+fn register_background_leader(child: &sys::process::Child, background: bool) {
+    if background && let Some(raw) = child.id() {
+        cash_win32::stop::register_group_leader(raw);
+    }
+}
+
 pub(crate) fn execute_external_command(
     context: ExecutionContext<'_, impl extensions::ShellExtensions>,
     executable_path: &str,
@@ -1173,8 +1182,12 @@ pub(crate) fn execute_external_command(
             .join(" ")
     );
 
-    match sys::process::spawn(cmd, context.shell.options().kill_external_commands_on_drop) {
+    let kill_on_drop = context.shell.options().kill_external_commands_on_drop;
+    match sys::process::spawn(cmd, kill_on_drop, context.params.background) {
         Ok(child) => {
+            #[cfg(windows)]
+            register_background_leader(&child, context.params.background);
+
             // Retrieve the pid.
             #[expect(clippy::cast_possible_wrap)]
             let pid = child.id().map(|id| id as i32);

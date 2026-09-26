@@ -578,6 +578,13 @@ async fn instantiate_shell_from_args(
     #[cfg(not(feature = "experimental-parser"))]
     let parser_impl = cash_core::parser::ParserImpl::Peg;
 
+    // cash (D13): an interactive shell takes Ctrl-C back from a parent that ignored it, so
+    // that the programs it runs can be interrupted.
+    #[cfg(windows)]
+    if args.is_interactive() {
+        cash_win32::console::enable_ctrl_c();
+    }
+
     // Set up the shell builder with the requested options.
     // NOTE: We skip loading profile and rc files here; that will be handled later after we've
     // fully instantiated everything we want set before running any code.

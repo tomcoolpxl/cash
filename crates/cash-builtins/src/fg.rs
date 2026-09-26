@@ -27,7 +27,7 @@ impl builtins::Command for FgCommand {
                 job.move_to_foreground()?;
                 writeln!(stderr, "{}", job.command_line)?;
 
-                let result = job.wait().await?;
+                let result = job.wait_in_foreground().await?;
                 if is_interactive {
                     sys::terminal::move_self_to_foreground()?;
                 }
@@ -52,7 +52,7 @@ impl builtins::Command for FgCommand {
                 job.move_to_foreground()?;
                 writeln!(stderr, "{}", job.command_line)?;
 
-                let result = job.wait().await?;
+                let result = job.wait_in_foreground().await?;
                 if is_interactive {
                     sys::terminal::move_self_to_foreground()?;
                 }

@@ -4,16 +4,31 @@ pub(crate) type ProcessId = i32;
 pub(crate) use tokio::process::Child;
 
 // `kill_on_drop`: see `CreateOptions::kill_external_commands_on_drop` (false for ordinary shells).
-pub(crate) fn spawn(command: std::process::Command, kill_on_drop: bool) -> std::io::Result<Child> {
+// `new_group`: on Windows, start the process as the leader of a process group of its own
+// (D13): the keyboard's Ctrl-C then passes it by, and a Ctrl-Break can be aimed at it.
+pub(crate) fn spawn(
+    command: std::process::Command,
+    kill_on_drop: bool,
+    new_group: bool,
+) -> std::io::Result<Child> {
     #[cfg(windows)]
     let mut command = {
         use std::os::windows::process::CommandExt;
+        const CREATE_SUSPENDED: u32 = 0x0000_0004;
+        const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
         let mut cmd = command;
-        cmd.creation_flags(0x0000_0004); // CREATE_SUSPENDED
+        let group = if new_group {
+            CREATE_NEW_PROCESS_GROUP
+        } else {
+            0
+        };
+        cmd.creation_flags(CREATE_SUSPENDED | group);
         let mut tokio_cmd = tokio::process::Command::from(cmd);
         tokio_cmd.kill_on_drop(kill_on_drop);
         tokio_cmd
     };
+    #[cfg(not(windows))]
+    let _ = new_group;
     #[cfg(not(windows))]
     let mut command = {
         let mut tokio_cmd = tokio::process::Command::from(command);

@@ -60,6 +60,13 @@ pub struct ExecutionParameters {
     /// pid, so there is nothing further to wait for.
     pub(crate) spawned_pid_ready: Option<std::sync::Arc<tokio::sync::Notify>>,
 
+    /// Whether this runs in a background job of a shell with job control.
+    ///
+    /// cash (D13): on Windows, the externals such a job spawns start in a process group
+    /// of their own. The keyboard's Ctrl-C then no longer reaches them, as a background
+    /// job's never does on Unix, and `kill -TERM %1` can send them a Ctrl-Break.
+    pub(crate) background: bool,
+
     /// Descriptors above 2 that the current simple command's own redirections set.
     ///
     /// cash (D26): a native exe cannot see fd 3 and up, so only these make its spawn
@@ -333,6 +340,10 @@ async fn spawn_async_ao_list_in_task<'a, SE: extensions::ShellExtensions>(
     let mut cloned_shell = shell.clone();
     let mut cloned_params = params.clone();
     let cloned_ao_list = ao_list.clone();
+
+    // cash (D13): at the prompt, a background job is out of the keyboard's reach. Scripts
+    // keep sharing the console's group, as they always have.
+    cloned_params.background = shell.options().enable_job_control;
 
     // Mark the child shell as not interactive; we don't want it messing with the terminal too much.
     cloned_shell.options_mut().interactive = false;
