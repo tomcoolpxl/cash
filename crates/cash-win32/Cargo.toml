@@ -36,3 +36,9 @@ windows-sys = { version = "0.61", features = [
     "Win32_System_IO",
     "Win32_System_Threading",
 ] }
+
+# Captures redirect the process's stdout, which libtest also writes its results to from
+# another thread; this suite runs its cases itself (see its `main`).
+[[test]]
+name = "stdout_capture"
+harness = false

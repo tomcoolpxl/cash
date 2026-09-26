@@ -21,11 +21,12 @@
 use cash_win32::stdio::{render_paths, with_captured_stdout, write_stdout};
 use std::sync::{Mutex, MutexGuard};
 
-/// Serialises the capture tests.
+/// Serialises the capture cases.
 ///
 /// The standard-output handle is process-wide, so two captures in flight at once would
 /// collect each other's bytes — which is what `with_captured_stdout`'s documentation
-/// warns callers about, made true here rather than hoped for.
+/// warns callers about, made true here rather than hoped for. `main` already runs the
+/// cases one at a time; the lock keeps that true if one ever starts a thread.
 static CAPTURE_LOCK: Mutex<()> = Mutex::new(());
 
 fn exclusive() -> MutexGuard<'static, ()> {
@@ -51,7 +52,6 @@ fn capture_files_outstanding() -> usize {
 // Rendering
 // ---------------------------------------------------------------------------
 
-#[test]
 fn a_windows_path_becomes_the_canonical_spelling() {
     assert_eq!(
         render_paths(br"C:\Users\me\tmp.AbC" as &[u8]),
@@ -64,7 +64,6 @@ fn a_windows_path_becomes_the_canonical_spelling() {
     );
 }
 
-#[test]
 fn a_path_that_is_already_canonical_is_unchanged() {
     for already in [
         &b"C:/Users/me/tmp"[..],
@@ -81,7 +80,6 @@ fn a_path_that_is_already_canonical_is_unchanged() {
     }
 }
 
-#[test]
 fn line_structure_is_preserved_exactly() {
     // A trailing newline stays; a missing one stays missing. `d=$(mktemp -d)` depends on
     // neither, but `mktemp a b | wc -l` depends on both.
@@ -93,7 +91,6 @@ fn line_structure_is_preserved_exactly() {
     assert_eq!(render_paths(b"\n\n\n" as &[u8]), b"\n\n\n");
 }
 
-#[test]
 fn nul_delimited_output_is_handled_field_by_field() {
     // `realpath -z` and `readlink -z` exist precisely so paths survive a pipe; splitting
     // only on newlines would leave those untouched.
@@ -102,7 +99,6 @@ fn nul_delimited_output_is_handled_field_by_field() {
     assert_eq!(render_paths(b"C:\\a\0C:\\b\n" as &[u8]), b"C:/a\0C:/b\n");
 }
 
-#[test]
 fn a_path_with_spaces_and_unicode_survives() {
     let input = "C:\\Program Files\\Ünïcodé Ordner\\файл.txt\n";
     assert_eq!(
@@ -111,7 +107,6 @@ fn a_path_with_spaces_and_unicode_survives() {
     );
 }
 
-#[test]
 fn the_extended_length_prefix_never_reaches_a_script() {
     // `std::fs::canonicalize` returns `\\?\C:\...`, and some utilities forward it
     // verbatim. D29 says that form is internal.
@@ -122,7 +117,6 @@ fn the_extended_length_prefix_never_reaches_a_script() {
     );
 }
 
-#[test]
 fn invalid_utf8_is_passed_through_rather_than_guessed_at() {
     // A path that is not valid UTF-16-to-UTF-8 round-trippable is rare but possible, and
     // mangling it is worse than leaving it native.
@@ -138,7 +132,6 @@ fn invalid_utf8_is_passed_through_rather_than_guessed_at() {
     );
 }
 
-#[test]
 fn an_empty_field_between_separators_stays_empty() {
     assert_eq!(
         render_paths(b"C:\\a\n\nC:\\b\n" as &[u8]),
@@ -150,7 +143,6 @@ fn an_empty_field_between_separators_stays_empty() {
 // Capturing
 // ---------------------------------------------------------------------------
 
-#[test]
 fn stdout_written_inside_the_capture_is_returned_not_printed() {
     let _guard = exclusive();
     let (value, captured) = with_captured_stdout(|| {
@@ -163,7 +155,6 @@ fn stdout_written_inside_the_capture_is_returned_not_printed() {
     assert_eq!(String::from_utf8(captured).unwrap(), "captured line\n");
 }
 
-#[test]
 fn output_without_a_trailing_newline_is_captured() {
     // `d=$(mktemp -u xxxxXXXX)` with `printf`-style output and no newline is a real
     // shape; an unterminated write must not be stranded in a buffer and then land on the
@@ -174,7 +165,6 @@ fn output_without_a_trailing_newline_is_captured() {
     assert_eq!(String::from_utf8(captured).unwrap(), "no newline here");
 }
 
-#[test]
 fn a_large_output_does_not_deadlock_or_truncate() {
     // The reason this uses a temp file rather than a pipe: a pipe's buffer is 64 KiB and
     // nothing drains it while the utility runs.
@@ -186,29 +176,9 @@ fn a_large_output_does_not_deadlock_or_truncate() {
     let ((), captured) =
         with_captured_stdout(|| write_stdout(payload.as_bytes()).unwrap()).expect("capture failed");
 
-    // The capture redirects the process's stdout, so the test harness reporting another
-    // test's result meanwhile can land in it too (one stray byte on GitHub's runner).
-    // The payload is one write, so it is whole and contiguous or it was truncated.
-    assert!(
-        captured.len() >= payload.len()
-            && captured
-                .windows(payload.len())
-                .any(|w| w == payload.as_bytes()),
-        "output was truncated: {} of {} bytes",
-        captured.len(),
-        payload.len()
-    );
-    assert!(
-        captured.len() - payload.len() < 256,
-        "far more than harness noise around the payload: {} extra bytes",
-        captured.len() - payload.len()
-    );
+    assert_eq!(captured.len(), line.len() * count, "output was truncated");
 
-    let start = captured
-        .windows(payload.len())
-        .position(|w| w == payload.as_bytes())
-        .unwrap_or_default();
-    let rendered = render_paths(&captured[start..start + payload.len()]);
+    let rendered = render_paths(&captured);
     assert!(!rendered.contains(&b'\\'), "a backslash survived rendering");
     #[allow(
         clippy::naive_bytecount,
@@ -218,7 +188,6 @@ fn a_large_output_does_not_deadlock_or_truncate() {
     assert_eq!(newlines, count);
 }
 
-#[test]
 fn nothing_is_captured_when_nothing_is_written() {
     let _guard = exclusive();
     let (value, captured) = with_captured_stdout(|| "done").expect("capture failed");
@@ -229,7 +198,6 @@ fn nothing_is_captured_when_nothing_is_written() {
     );
 }
 
-#[test]
 fn binary_output_survives_the_round_trip() {
     // Nothing in the allowlist emits binary, but the capture must not be the thing that
     // corrupts it if one ever does.
@@ -240,7 +208,6 @@ fn binary_output_survives_the_round_trip() {
     assert_eq!(captured, payload);
 }
 
-#[test]
 fn stdout_still_works_after_a_capture() {
     // The handle must be put back, or every later write in the process goes nowhere.
     let _guard = exclusive();
@@ -255,12 +222,15 @@ fn stdout_still_works_after_a_capture() {
     );
 }
 
-#[test]
 fn the_handle_is_restored_even_if_the_body_panics() {
     let _guard = exclusive();
+    // The panic is the point; keep its message out of the output.
+    let hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(|_| {}));
     let panicked = std::panic::catch_unwind(|| {
         let _ = with_captured_stdout(|| panic!("boom"));
     });
+    std::panic::set_hook(hook);
     assert!(panicked.is_err(), "the panic was swallowed");
 
     // If the guard had not run, this would be writing into a deleted temp file.
@@ -269,7 +239,6 @@ fn the_handle_is_restored_even_if_the_body_panics() {
     assert_eq!(String::from_utf8(captured).unwrap(), "after panic");
 }
 
-#[test]
 fn captures_do_not_leave_temp_files_behind() {
     // A leak here would fill the user's temp directory one `mktemp` at a time.
     let _guard = exclusive();
@@ -283,4 +252,86 @@ fn captures_do_not_leave_temp_files_behind() {
         before,
         "a capture file was left in the temp directory"
     );
+}
+
+/// Runs every case in turn, without libtest.
+///
+/// A capture redirects the whole process's standard output, and libtest prints each
+/// finished test's result from its own thread, so under the harness another test's
+/// `ok` landed inside a capture (`"captured line\nok\n"` on GitHub's runner). This
+/// binary is built with `harness = false` so that nothing else writes to standard output
+/// while a capture is open; progress goes to standard error.
+fn main() {
+    let cases: &[(&str, fn())] = &[
+        (
+            "a_windows_path_becomes_the_canonical_spelling",
+            a_windows_path_becomes_the_canonical_spelling,
+        ),
+        (
+            "a_path_that_is_already_canonical_is_unchanged",
+            a_path_that_is_already_canonical_is_unchanged,
+        ),
+        (
+            "line_structure_is_preserved_exactly",
+            line_structure_is_preserved_exactly,
+        ),
+        (
+            "nul_delimited_output_is_handled_field_by_field",
+            nul_delimited_output_is_handled_field_by_field,
+        ),
+        (
+            "a_path_with_spaces_and_unicode_survives",
+            a_path_with_spaces_and_unicode_survives,
+        ),
+        (
+            "the_extended_length_prefix_never_reaches_a_script",
+            the_extended_length_prefix_never_reaches_a_script,
+        ),
+        (
+            "invalid_utf8_is_passed_through_rather_than_guessed_at",
+            invalid_utf8_is_passed_through_rather_than_guessed_at,
+        ),
+        (
+            "an_empty_field_between_separators_stays_empty",
+            an_empty_field_between_separators_stays_empty,
+        ),
+        (
+            "stdout_written_inside_the_capture_is_returned_not_printed",
+            stdout_written_inside_the_capture_is_returned_not_printed,
+        ),
+        (
+            "output_without_a_trailing_newline_is_captured",
+            output_without_a_trailing_newline_is_captured,
+        ),
+        (
+            "a_large_output_does_not_deadlock_or_truncate",
+            a_large_output_does_not_deadlock_or_truncate,
+        ),
+        (
+            "nothing_is_captured_when_nothing_is_written",
+            nothing_is_captured_when_nothing_is_written,
+        ),
+        (
+            "binary_output_survives_the_round_trip",
+            binary_output_survives_the_round_trip,
+        ),
+        (
+            "stdout_still_works_after_a_capture",
+            stdout_still_works_after_a_capture,
+        ),
+        (
+            "the_handle_is_restored_even_if_the_body_panics",
+            the_handle_is_restored_even_if_the_body_panics,
+        ),
+        (
+            "captures_do_not_leave_temp_files_behind",
+            captures_do_not_leave_temp_files_behind,
+        ),
+    ];
+    for (name, case) in cases {
+        eprint!("test {name} ... ");
+        case();
+        eprintln!("ok");
+    }
+    eprintln!("{} capture cases passed", cases.len());
 }
