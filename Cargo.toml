@@ -16,6 +16,8 @@ members = [
     "xtask",
 ]
 default-members = ["crates/cash"]
+# Upstream code carried with a patch (see its README), built but not linted as cash's own.
+exclude = ["vendor/reedline"]
 
 [workspace.package]
 version = "0.11.0"
@@ -109,3 +111,8 @@ panic = "unwind"
 [profile.bench]
 inherits = "release"
 strip = "debuginfo"
+
+# Reedline 0.51.0 with the patch listed in vendor/reedline/README.md: a `bind -x`
+# command's output was painted over by the next prompt (ROADMAP item 15).
+[patch.crates-io]
+reedline = { path = "vendor/reedline" }
