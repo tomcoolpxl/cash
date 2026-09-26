@@ -734,8 +734,12 @@ impl<'a> Parser<'a> {
         };
         self.expect(Token::RParen, "')'")?;
         self.expect(Token::LBrace, "'{'")?;
-        // POSIX: `'{' NEWLINE opt_auto_define_list statement_list '}'`.
-        self.expect(Token::Newline, "a newline after '{'")?;
+        // POSIX: `'{' NEWLINE opt_auto_define_list statement_list '}'`. Cash (D56), as
+        // GNU, BSD and BusyBox bc do, lets the body start on the line of the '{', so
+        // `define f(x) { return (x * 2); }` is one line.
+        if self.at(&Token::Newline) {
+            self.advance();
+        }
 
         let mut locals = Vec::new();
         // POSIX: `'{' NEWLINE opt_auto_define_list statement_list '}'`. The
@@ -745,10 +749,11 @@ impl<'a> Parser<'a> {
         if self.at(&Token::Auto) {
             self.advance();
             locals = self.parse_variable_list()?;
-            if !self.at_statement_separator() {
+            if self.at_statement_separator() {
+                self.advance();
+            } else if !self.at(&Token::RBrace) {
                 return Err(self.expected("a newline or ';' after an auto list"));
             }
-            self.advance();
         }
 
         let was_in_function = self.in_function;
@@ -1519,10 +1524,13 @@ mod test {
         assert!(parse_program("if (1 < 2 < 3) 1\n", None).is_err());
     }
 
-    /// A one-line definition is rejected: POSIX requires a newline after '{'.
+    /// A one-line definition is accepted (Cash D56): POSIX requires a newline after '{',
+    /// but GNU, BSD and BusyBox bc do not.
     #[test]
-    fn test_function_requires_newline_after_brace() {
-        assert!(parse_program("define f(a) { return(a) }\n", None).is_err());
+    fn test_function_body_may_start_on_the_brace_line() {
+        assert!(parse_program("define f(a) { return(a) }\n", None).is_ok());
+        assert!(parse_program("define f(a) { auto b; b = a; return(b); }\n", None).is_ok());
+        assert!(parse_program("define f(a) { auto b }\n", None).is_ok());
     }
 
     #[test]

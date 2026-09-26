@@ -7,9 +7,9 @@ POSIX `bc` for Cash, absorbed and adapted from [posixutils-rs](https://github.co
 - **Revision date:** 2026-09-25
 - **License:** MIT (see LICENSE)
 
-`src/bc_util` is upstream's, with the one change listed below; `src/lib.rs` replaces
-upstream's `bc.rs` binary, and `tests/cases` is upstream's suite, which cash runs from
-`crates/cash/tests/bc.rs`.
+`src/bc_util` is upstream's, with the two changes listed below (4 and 7); `src/lib.rs`
+replaces upstream's `bc.rs` binary, and `tests/cases` is upstream's suite, which cash
+runs from `crates/cash/tests/bc.rs`.
 
 ## Adaptations for Cash
 
@@ -33,5 +33,10 @@ upstream's `bc.rs` binary, and `tests/cases` is upstream's suite, which cash run
    `src/gnu.rs` names the first GNU-only construct in it — `print`, `read()`, `else`,
    `&&`, `||`, `!`, `#` comments, `last`, `halt`, `continue`, `limits`, multi-letter
    names — so a GNU script fails with a reason rather than only "expected a newline".
-7. **Tests:** `tests/cases/mod.rs` reaches its helpers through `crate::plib`, which
+7. **One-line functions:** a function body may start on the line of its `{`
+   (`define f(x) { return (x); }`), as in GNU, BSD and BusyBox bc; POSIX requires a
+   newline there. `bc_util/parser.rs` makes that newline optional, and an `auto` list
+   may end at the `}`; upstream's parser test for the rejection became one for the
+   acceptance.
+8. **Tests:** `tests/cases/mod.rs` reaches its helpers through `crate::plib`, which
    `crates/cash/tests/bc.rs` provides by running `bc` inside cash.
