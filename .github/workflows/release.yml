@@ -121,25 +121,13 @@ jobs:
 
       # GitHub's generated notes list merged pull requests, and most work here is
       # committed straight to main, so they would be empty. Write the commit subjects
-      # since the previous tag instead; the generated section (pull requests and the
-      # full-changelog link) is still appended below them.
+      # since the previous tag instead, grouped by Conventional Commits type; the
+      # generated section (pull requests and the full-changelog link) is still appended
+      # below them.
       - name: Write release notes
         shell: pwsh
-        run: |
-          $tag = "${{ steps.tag.outputs.tag }}"
-          $head = if (git rev-parse -q --verify "refs/tags/$tag") { $tag } else { 'HEAD' }
-          $previous = git describe --tags --abbrev=0 "$head^" 2>$null
-          if ($LASTEXITCODE -ne 0 -or -not $previous) {
-            $range = $head
-            $title = "## Changes"
-          } else {
-            $range = "$previous..$head"
-            $title = "## Changes since $previous"
-          }
-          $lines = git log --no-merges --reverse --format='- %s (%h)' $range
-          if (-not $lines) { $lines = @('- No changes recorded.') }
-          @($title, '') + $lines + @('') | Set-Content -Path release-notes.md -Encoding utf8
-          Get-Content release-notes.md
+        # Grouped by Conventional Commits type; see RELEASING.md, "Commit messages".
+        run: ./.github/scripts/release-notes.ps1 -Tag "${{ steps.tag.outputs.tag }}" -Out release-notes.md
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
