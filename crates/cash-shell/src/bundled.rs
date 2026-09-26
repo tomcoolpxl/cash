@@ -69,6 +69,10 @@ fn run_awk_bundled(args: Vec<OsString>) -> i32 {
     cash_awk::run_awk(args)
 }
 
+fn run_bc_bundled(args: Vec<OsString>) -> i32 {
+    cash_bc::run_bc(args)
+}
+
 fn run_sed_bundled(args: Vec<OsString>) -> i32 {
     cash_sed::uumain(args.into_iter())
 }
@@ -87,6 +91,7 @@ pub fn install_default_providers() {
 
     commands.insert("awk".to_string(), run_awk_bundled);
     commands.insert("sed".to_string(), run_sed_bundled);
+    commands.insert("bc".to_string(), run_bc_bundled);
 
     install(commands);
 }

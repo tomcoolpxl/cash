@@ -11,6 +11,7 @@ members = [
     "crates/cash-shell",
     "crates/cash-test-harness",
     "crates/cash-awk",
+    "crates/cash-bc",
     "crates/cash-sed",
     "xtask",
 ]
@@ -29,6 +30,7 @@ readme = "README.md"
 
 [workspace.dependencies]
 cash-awk = { version = "0.9.1", path = "crates/cash-awk" }
+cash-bc = { version = "0.9.1", path = "crates/cash-bc" }
 cash-builtins = { version = "0.9.1", path = "crates/cash-builtins" }
 cash-core = { version = "0.9.1", path = "crates/cash-core" }
 cash-coreutils-builtins = { version = "0.9.1", path = "crates/cash-coreutils-builtins" }

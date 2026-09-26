@@ -1,0 +1,22 @@
+[package]
+name = "cash-bc"
+description = "POSIX bc for cash-shell (absorbed from posixutils-rs)"
+version.workspace = true
+authors.workspace = true
+categories.workspace = true
+edition.workspace = true
+keywords.workspace = true
+license = "MIT"
+readme = "README.md"
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+bigdecimal = "0.4"
+clap = { version = "4.6.0", features = ["derive"] }
+
+[lints.rust]
+warnings = "allow"
+
+[lints.clippy]
+all = { level = "allow", priority = -1 }

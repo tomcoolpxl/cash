@@ -498,6 +498,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "cash-bc"
+version = "0.9.1"
+dependencies = [
+ "bigdecimal",
+ "clap",
+]
+
+[[package]]
 name = "cash-builtins"
 version = "0.9.1"
 dependencies = [
@@ -736,6 +744,7 @@ dependencies = [
  "assert_cmd",
  "assert_fs",
  "cash-awk",
+ "cash-bc",
  "cash-builtins",
  "cash-core",
  "cash-coreutils-builtins",

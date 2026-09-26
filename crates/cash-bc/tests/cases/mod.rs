@@ -1,0 +1,678 @@
+//
+// Copyright (c) 2024-2026 Jeff Garzik
+//
+// This file is part of the posixutils-rs project covered under
+// the MIT License.  For the full license text, please see the LICENSE
+// file in the root directory of this project.
+// SPDX-License-Identifier: MIT
+//
+
+use crate::plib::testing::{TestPlan, run_test};
+
+fn test_bc(program: &str, expected_output: &str) {
+    run_test(TestPlan {
+        cmd: String::from("bc"),
+        args: vec![],
+        stdin_data: program.to_string(),
+        expected_out: String::from(expected_output),
+        expected_err: String::from(""),
+        expected_exit_code: 0,
+    });
+}
+
+fn test_bc_with_math_library(program: &str, expected_output: &str) {
+    run_test(TestPlan {
+        cmd: String::from("bc"),
+        args: vec!["-l".to_string()],
+        stdin_data: program.to_string(),
+        expected_out: String::from(expected_output),
+        expected_err: String::from(""),
+        expected_exit_code: 0,
+    });
+}
+
+macro_rules! test_bc {
+    ($test_name:ident) => {
+        test_bc(
+            include_str!(concat!("./", stringify!($test_name), ".bc")),
+            include_str!(concat!("./", stringify!($test_name), ".out")),
+        )
+    };
+}
+
+macro_rules! test_bc_l {
+    ($test_name:ident) => {
+        test_bc_with_math_library(
+            include_str!(concat!("./", stringify!($test_name), ".bc")),
+            include_str!(concat!("./", stringify!($test_name), ".out")),
+        )
+    };
+}
+
+#[test]
+fn test_bc_add() {
+    test_bc!(add)
+}
+
+// Diagnostics go to stderr, not stdout (audit #B2), prefixed with the utility
+// name. Standard input here is a pipe, not a terminal, so the run is not
+// interactive and the failure is reported in the exit status -- the same way a
+// file operand reports it.
+#[test]
+fn test_bc_error_to_stderr() {
+    run_test(TestPlan {
+        cmd: String::from("bc"),
+        args: vec![],
+        stdin_data: String::from("1/0\nquit\n"),
+        expected_out: String::new(),
+        expected_err: String::from("bc: runtime error (line 1): division by zero\n"),
+        expected_exit_code: 1,
+    });
+}
+
+// A file operand that cannot be read: diagnostic to stderr, terminate with a
+// non-zero exit status (audit #B11).
+#[test]
+fn test_bc_missing_file() {
+    run_test(TestPlan {
+        cmd: String::from("bc"),
+        args: vec!["/nonexistent-bc-file.bc".to_string()],
+        stdin_data: String::new(),
+        expected_out: String::new(),
+        expected_err: String::from("bc: /nonexistent-bc-file.bc: No such file or directory\n"),
+        expected_exit_code: 1,
+    });
+}
+
+// POSIX limit maxima are enforced so pathological inputs cannot drive
+// unbounded allocation (audit #B3 scale, #B4 obase, #B5 array index).
+/// Assert that the program fails with a diagnostic containing `needle`.
+fn bc_runtime_error_contains(program: &str, needle: &str) {
+    let output =
+        crate::plib::testing::run_test_base("bc", &[], format!("{}\nquit\n", program).as_bytes());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains(needle),
+        "expected stderr to contain {:?}, got {:?}",
+        needle,
+        stderr
+    );
+}
+
+fn bc_runtime_error(program: &str, expected_err: &str) {
+    run_test(TestPlan {
+        cmd: String::from("bc"),
+        args: vec![],
+        stdin_data: format!("{program}\nquit\n"),
+        expected_out: String::new(),
+        expected_err: format!("bc: {expected_err}\n"),
+        expected_exit_code: 1,
+    });
+}
+
+#[test]
+fn test_bc_scale_too_large() {
+    bc_runtime_error(
+        "scale=2147483648",
+        "runtime error (line 1): scale is too large",
+    );
+}
+
+#[test]
+fn test_bc_obase_too_large() {
+    bc_runtime_error(
+        "obase=2147483648",
+        "runtime error (line 1): obase is too large",
+    );
+}
+
+#[test]
+fn test_bc_array_index_out_of_bounds() {
+    // POSIX: an array holds up to {BC_DIM_MAX} elements and is indexed from 0
+    // to {BC_DIM_MAX}-1, so the last valid subscript is one below the limit.
+    test_bc("a[16777215]=1\nquit\n", "");
+    bc_runtime_error(
+        "a[16777216]=1",
+        "runtime error (line 1): array index out of bounds",
+    );
+    bc_runtime_error(
+        "a[-1]=1",
+        "runtime error (line 1): array index cannot be negative",
+    );
+}
+
+/// POSIX 87080: bc "shall implement an arbitrary precision calculator". Nothing
+/// asserted that at a size a machine word cannot hold, which let `NONPOSIX.md`
+/// spend two years claiming bc used 128-bit fixed-width integers.
+#[test]
+fn test_bc_arbitrary_precision_past_any_machine_word() {
+    test_bc(
+        "2^200\nquit\n",
+        "1606938044258990275541962092341162602522202993782792835301376\n",
+    );
+    test_bc("2^64+1\nquit\n", "18446744073709551617\n");
+}
+
+/// The one real bound on precision, and the only reason bc appears in
+/// `NONPOSIX.md` at all: a single operation may not build more than
+/// `MAX_WORKING_DIGITS` (1e6) decimal digits. POSIX names `{BC_SCALE_MAX}`,
+/// `{BC_BASE_MAX}`, `{BC_DIM_MAX}` and `{BC_STRING_MAX}` as the limits an
+/// implementation may impose; a ceiling on a value's digit count is not one of
+/// them, so this is a deviation rather than a permitted limit.
+#[test]
+fn test_bc_working_digit_cap() {
+    // The guard is `exponent * digits(base) > 1e6`, so base 10 (two digits)
+    // bites at 500000 and base 2 (one digit) at 1000000. Assert both sides of
+    // each boundary, or the test would pass against any cap at all.
+    test_bc("length(10^500000)\nquit\n", "500001\n");
+    bc_runtime_error("10^500001", "runtime error (line 1): exponent is too large");
+    test_bc("length(2^999999)\nquit\n", "301030\n");
+    bc_runtime_error("2^1000001", "runtime error (line 1): exponent is too large");
+
+    // The same cap reached through scale rather than an exponent reports the
+    // other of the two messages `NONPOSIX.md` now quotes.
+    bc_runtime_error(
+        "scale=1000001; 1/3",
+        "runtime error (line 1): number too large",
+    );
+}
+
+/// POSIX: "references to any of these names from other functions that are
+/// called from this function also refer to the new value". A callee saw the
+/// global instead of the caller's parameter or auto.
+#[test]
+fn test_bc_dynamic_scoping() {
+    test_bc(
+        "define g(){\nreturn(a)\n}\ndefine f(a){\nreturn(g())\n}\na=1\nf(9)\nquit\n",
+        "9\n",
+    );
+    test_bc(
+        "define g(){\nreturn(x)\n}\ndefine f(){\nauto x\nx=5\nreturn(g())\n}\nx=1\nf()\nquit\n",
+        "5\n",
+    );
+    // The caller's value must come back afterwards.
+    test_bc("define f(a){\nreturn(a)\n}\na=1\nf(9)\na\nquit\n", "9\n1\n");
+}
+
+/// An array argument was always read from the global of that name, so passing
+/// a local array on to another function passed the wrong array.
+#[test]
+fn test_bc_array_argument_uses_the_active_binding() {
+    test_bc(
+        "define g(x[]){\nreturn(x[0])\n}\ndefine f(x[]){\nreturn(g(x[]))\n}\nx[0]=99\nq[0]=7\nf(q[])\nquit\n",
+        "7\n",
+    );
+    test_bc(
+        "define g(x[]){\nreturn(x[0])\n}\ndefine f(){\nauto y[]\ny[0]=42\nreturn(g(y[]))\n}\nf()\nquit\n",
+        "42\n",
+    );
+}
+
+/// A mismatch used to bind the missing parameter to the global of the same
+/// name, and silently drop extra arguments without evaluating them.
+#[test]
+fn test_bc_argument_count_mismatch_is_an_error() {
+    bc_runtime_error(
+        "define f(a,b){\nreturn(b)\n}\nb=5\nf(1)",
+        "runtime error (line 1): wrong number of arguments",
+    );
+    bc_runtime_error(
+        "define f(a){\nreturn(a)\n}\nf(1,2)",
+        "runtime error (line 1): wrong number of arguments",
+    );
+}
+
+/// POSIX makes scale, ibase and obase named expressions, so they increment.
+#[test]
+fn test_bc_register_increment() {
+    // Postfix yields the old value, prefix the new one.
+    test_bc("scale=1\nscale++\nscale\nquit\n", "1\n2\n");
+    test_bc("scale=1\n++scale\nscale\nquit\n", "2\n2\n");
+    test_bc("ibase=9\nibase--\nibase\nquit\n", "9\n8\n");
+    // Stepping obase changes the base the result is then printed in: the old
+    // value 16 and the new value 15 are both rendered in base 15. Verified
+    // against GNU bc.
+    test_bc("obase=16\nobase--\nobase\nquit\n", "11\n10\n");
+    // The bounds still apply. The REPL executes one line at a time, so the
+    // failing line is line 1 of its own program.
+    bc_runtime_error(
+        "ibase=16\nibase++",
+        "runtime error (line 1): ibase must be between 2 and 16",
+    );
+    bc_runtime_error(
+        "obase=2\nobase--",
+        "runtime error (line 1): obase must be greater than 1",
+    );
+}
+
+/// A negative value is out of range in the other direction; reporting it as
+/// "too large" was simply wrong.
+#[test]
+fn test_bc_negative_register_diagnostics() {
+    bc_runtime_error(
+        "scale=-1",
+        "runtime error (line 1): scale cannot be negative",
+    );
+    bc_runtime_error(
+        "obase=-5",
+        "runtime error (line 1): obase must be greater than 1",
+    );
+}
+
+/// Recursion must report a limit rather than abort on a guard page.
+#[test]
+fn test_bc_runaway_recursion_is_diagnosed() {
+    bc_runtime_error_contains(
+        "define f(x){\nreturn(f(x))\n}\nf(1)",
+        "evaluation nested too deeply",
+    );
+}
+
+/// A sparse write must not allocate every element below it.
+#[test]
+fn test_bc_sparse_array() {
+    test_bc("a[16777215]=7\na[16777215]\na[5]\nquit\n", "7\n0\n");
+}
+
+/// A file that exists but is not text is not an access failure.
+#[test]
+fn test_bc_non_text_file() {
+    let dir = crate::plib::tmp::Builder::new()
+        .prefix("bc-nontext")
+        .tempdir()
+        .unwrap();
+    let path = dir.path().join("binary.bc");
+    std::fs::write(&path, b"1+1\n\xff\xfe\n").unwrap();
+    let output =
+        crate::plib::testing::run_test_base("bc", &[path.to_string_lossy().to_string()], b"");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("not a text file"),
+        "expected a text-file diagnostic, got {stderr:?}"
+    );
+    assert_eq!(output.status.code(), Some(1));
+}
+
+/// Input that stops in the middle of a construct must say so rather than exit
+/// as though it had run.
+#[test]
+fn test_bc_incomplete_input_at_eof() {
+    for program in ["define f(x) {\n", "\"abc\n", "/* abc\n", "{\n"] {
+        let output = crate::plib::testing::run_test_base("bc", &[], program.as_bytes());
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            !stderr.is_empty(),
+            "truncated input {program:?} produced no diagnostic"
+        );
+        assert_eq!(
+            output.status.code(),
+            Some(1),
+            "truncated input {program:?} exited 0"
+        );
+    }
+    // Complete input is still fine.
+    let output = crate::plib::testing::run_test_base("bc", &[], b"1+1\n");
+    assert_eq!(output.status.code(), Some(0));
+}
+
+/// The same error reported the same way whether the program arrives as a file
+/// operand or on standard input.
+#[test]
+fn test_bc_exit_status_is_consistent() {
+    let dir = crate::plib::tmp::Builder::new()
+        .prefix("bc-status")
+        .tempdir()
+        .unwrap();
+    for program in ["1/0\n", "1+\n"] {
+        let path = dir.path().join("program.bc");
+        std::fs::write(&path, program).unwrap();
+        let as_file =
+            crate::plib::testing::run_test_base("bc", &[path.to_string_lossy().to_string()], b"");
+        let as_stdin = crate::plib::testing::run_test_base("bc", &[], program.as_bytes());
+        assert_eq!(
+            as_file.status.code(),
+            as_stdin.status.code(),
+            "{program:?} gave different statuses as a file and on stdin"
+        );
+        assert_eq!(as_file.status.code(), Some(1));
+    }
+}
+
+/// A failed write is reported, not ignored and not a panic. Writing to
+/// /dev/full always fails with ENOSPC.
+#[test]
+fn test_bc_write_error_is_reported() {
+    let full = match std::fs::OpenOptions::new().write(true).open("/dev/full") {
+        Ok(file) => file,
+        Err(_) => return, // no /dev/full on this host
+    };
+    let dir = crate::plib::tmp::Builder::new()
+        .prefix("bc-write")
+        .tempdir()
+        .unwrap();
+    let path = dir.path().join("program.bc");
+    // Enough output to leave the buffer and reach the device.
+    std::fs::write(&path, "for(i=0;i<5000;++i) i\n").unwrap();
+
+    let output = std::process::Command::new(crate::plib::testing::get_binary_path("bc"))
+        .arg(&path)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::from(full))
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .and_then(|child| child.wait_with_output())
+        .expect("failed to run bc");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_ne!(
+        output.status.code(),
+        Some(101),
+        "bc panicked on a write failure: {stderr}"
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "expected a failure status, got {:?} ({stderr})",
+        output.status.code()
+    );
+    assert!(
+        stderr.contains("No space left on device"),
+        "expected the write failure to be named, got {stderr:?}"
+    );
+}
+
+/// The math library carries guard digits through its argument reductions, so
+/// results are correct to the scale asked for. Without them e() and l() were
+/// wrong in their leading digits for a large argument: e(10) at scale 2 gave
+/// 19656.33 against a true 22026.46. Every value here matches GNU bc.
+#[test]
+fn test_bc_math_library_accuracy() {
+    let cases = [
+        ("scale=20\ne(1)\n", "2.71828182845904523536\n"),
+        ("scale=20\nl(2)\n", ".69314718055994530941\n"),
+        ("scale=20\ns(1)\n", ".84147098480789650665\n"),
+        ("scale=20\ne(-2)\n", ".13533528323661269189\n"),
+        // 4*a(1) multiplies the truncated a(1), as bc arithmetic requires.
+        ("scale=20\n4*a(1)\n", "3.14159265358979323844\n"),
+        // The cases that used to be wrong in their leading digits.
+        ("scale=2\ne(10)\n", "22026.46\n"),
+        ("scale=5\ne(10)\n", "22026.46579\n"),
+        ("scale=5\nl(100)\n", "4.60517\n"),
+    ];
+    for (program, expected) in cases {
+        test_bc_with_math_library(&format!("{program}quit\n"), expected);
+    }
+}
+
+// x^0 is 1 with scale 0, regardless of the scale register (audit #B8).
+#[test]
+fn test_bc_pow_zero_scale() {
+    test_bc("scale=5\n2.5^0\nquit\n", "1\n");
+}
+
+// Regression: `quit` inside a `for` body within a function definition must not
+// panic. Per bc semantics quit takes effect when the definition is read, so
+// the statements after the definition are never executed (matches GNU bc).
+#[test]
+fn test_bc_quit_in_for_in_function() {
+    test_bc(
+        "1\ndefine f(x){\nfor(i=0;i<5;i++){\nif(i==3)quit\n}\n}\n2\nf(0)\n3\n",
+        "1\n",
+    );
+}
+
+#[test]
+fn test_bc_arrays_are_passed_to_function_by_value() {
+    test_bc!(arrays_are_passed_to_function_by_value)
+}
+
+#[test]
+fn test_bc_assignment_of_a_single_value_to_base_register_is_hexadecimal() {
+    test_bc!(assignment_of_a_single_value_to_base_register_is_hexadecimal)
+}
+
+#[test]
+fn test_bc_assign_to_array_item() {
+    test_bc!(assign_to_array_item)
+}
+
+#[test]
+fn test_bc_assign_to_function_local_does_not_change_global() {
+    test_bc!(assign_to_function_local_does_not_change_global)
+}
+
+#[test]
+fn test_bc_assign_to_variable() {
+    test_bc!(assign_to_variable)
+}
+
+#[test]
+fn test_bc_break_out_of_loop() {
+    test_bc!(break_out_of_loop)
+}
+
+#[test]
+fn test_bc_comments() {
+    test_bc!(comments)
+}
+
+#[test]
+fn test_bc_compound_assignment() {
+    test_bc!(compound_assignment)
+}
+
+#[test]
+fn test_bc_define_empty_function() {
+    test_bc!(define_empty_function)
+}
+
+#[test]
+fn test_bc_define_function_with_locals() {
+    test_bc!(define_function_with_locals)
+}
+
+#[test]
+fn test_bc_define_function_with_parameters() {
+    test_bc!(define_function_with_parameters)
+}
+
+#[test]
+fn test_bc_div() {
+    test_bc!(div)
+}
+
+#[test]
+fn test_bc_empty_return_returns_zero() {
+    test_bc!(empty_return_returns_zero)
+}
+
+#[test]
+fn test_bc_for_loop() {
+    test_bc!(for_loop)
+}
+
+#[test]
+fn test_bc_function_returns_correct_value() {
+    test_bc!(function_returns_correct_value)
+}
+
+#[test]
+fn test_bc_function_with_no_return_returns_zero() {
+    test_bc!(function_with_no_return_returns_zero)
+}
+
+#[test]
+fn test_bc_if() {
+    test_bc!(if)
+}
+
+#[test]
+fn test_bc_length() {
+    test_bc!(length)
+}
+
+#[test]
+fn test_bc_mod() {
+    test_bc!(mod)
+}
+
+#[test]
+fn test_bc_mul() {
+    test_bc!(mul)
+}
+
+#[test]
+fn test_bc_multiline_numbers() {
+    test_bc!(multiline_numbers)
+}
+
+#[test]
+fn test_bc_operator_precedence() {
+    test_bc!(operator_precedence)
+}
+
+#[test]
+fn test_bc_output_base_1097() {
+    test_bc!(output_base_1097)
+}
+
+#[test]
+fn test_bc_output_base_14() {
+    test_bc!(output_base_14)
+}
+
+#[test]
+fn test_bc_output_base_67() {
+    test_bc!(output_base_67)
+}
+
+#[test]
+fn test_bc_output_base_6() {
+    test_bc!(output_base_6)
+}
+
+// POSIX 87479: a statement that is an expression writes its value "unless the
+// main operator is an assignment". The formal grammar (87208-87223) makes
+// `'(' expression ')'` a production distinct from
+// `named_expression ASSIGN_OP expression`, so a parenthesized assignment's
+// main operator is *not* an assignment and its value is written. Both .out
+// files are GNU bc's own output.
+#[test]
+fn test_bc_parenthesized_assignment_prints() {
+    test_bc!(parenthesized_assignment_prints)
+}
+
+#[test]
+fn test_bc_parenthesized_base_register_assignment() {
+    test_bc!(parenthesized_base_register_assignment)
+}
+
+#[test]
+fn test_bc_postfix_decrement() {
+    test_bc!(postfix_decrement)
+}
+
+#[test]
+fn test_bc_postfix_increment() {
+    test_bc!(postfix_increment)
+}
+
+#[test]
+fn test_bc_pow() {
+    test_bc!(pow)
+}
+
+#[test]
+fn test_bc_prefix_decrement() {
+    test_bc!(prefix_decrement)
+}
+
+#[test]
+fn test_bc_prefix_increment() {
+    test_bc!(prefix_increment)
+}
+
+#[test]
+fn test_bc_quit() {
+    test_bc!(quit)
+}
+
+#[test]
+fn test_bc_quit_in_unexecuted_code() {
+    test_bc!(quit_in_unexecuted_code)
+}
+
+#[test]
+fn test_bc_read_base_10() {
+    test_bc!(read_base_10)
+}
+
+#[test]
+fn test_bc_read_base_15() {
+    test_bc!(read_base_15)
+}
+
+#[test]
+fn test_bc_read_base_2() {
+    test_bc!(read_base_2)
+}
+
+#[test]
+fn test_bc_scale() {
+    test_bc!(scale)
+}
+
+#[test]
+fn test_bc_sqrt() {
+    test_bc!(sqrt)
+}
+
+#[test]
+fn test_bc_strings() {
+    test_bc!(strings)
+}
+
+#[test]
+fn test_bc_sub() {
+    test_bc!(sub)
+}
+
+#[test]
+fn test_bc_unary_minus() {
+    test_bc!(unary_minus)
+}
+
+#[test]
+fn test_bc_uninitialized_variables_are_zero() {
+    test_bc!(uninitialized_variables_are_zero)
+}
+
+#[test]
+fn test_bc_while_loop() {
+    test_bc!(while_loop)
+}
+
+#[test]
+fn test_bc_compile_math_library() {
+    test_bc_with_math_library("quit\n", "");
+}
+
+#[test]
+fn test_bc_ln_to_scale_17() {
+    test_bc_l!(ln_to_scale_17)
+}
+
+#[test]
+fn test_bc_atan_to_scale_17() {
+    test_bc_l!(atan_to_scale_17)
+}
+
+#[test]
+fn test_bc_sin_to_scale_18() {
+    test_bc_l!(sin_to_scale_18)
+}
+
+#[test]
+fn test_bc_cos_to_scale_18() {
+    test_bc_l!(cos_to_scale_18)
+}

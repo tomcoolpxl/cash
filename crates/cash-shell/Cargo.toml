@@ -65,6 +65,7 @@ workspace = true
 
 [dependencies]
 cash-awk = { workspace = true }
+cash-bc = { workspace = true }
 cash-sed = { workspace = true }
 cash-core = { workspace = true }
 cash-builtins = { workspace = true }
