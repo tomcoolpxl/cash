@@ -21,6 +21,11 @@ Feature work follows the sequence below.
 | 8 | `fuser` and an `lsof` subset | **Complete** | Section 8 below; spec D50 |
 | 9 | `ss` subset | **Complete** | [`ss` evaluation and decisions](research/ss-evaluation.md); spec D51 |
 | 10 | BusyBox-gap tools | **Complete** (`pkill`/`pidof`/`killall`; `getopt`, `rev`, `clear`, `reset`; `bc`; `ping`; doctor's BusyBox check) | [BusyBox gap analysis and decisions](research/busybox-gap-analysis.md); spec D54 |
+| 11 | Graceful Ctrl-C and `TERM` for cash's own jobs (process groups) | **Active** | Section 11 below; spec D13, D21 |
+| 12 | A path a script can exec for a bundled tool | Planned | Section 12 below; [open issue 4](open-issues.md) |
+| 13 | `bc` against GNU bc | Planned (needs GNU bc in WSL) | Section 13 below; spec D56 |
+| 14 | Bash 5.3 remainder without a terminal: `wait -n` in POSIX mode, `array_expand_once`, the `RETURN` trap's status | Planned | Section 14 below; [Bash 5.3 audit](research/bash-reference/bash-5.3-audit.md) |
+| 15 | ConPTY probe harness, then the interactive and Readline 5.3 items | Planned | Section 15 below |
 | — | Found on the way (not planned items) | **Complete** | MSYS2 argument encoding (spec D52); `shopt winpaths` and bash-worded `cd` errors (D53); a `TERM` that no longer reaches the whole console (D21) |
 
 The authoritative feature order is therefore:
@@ -29,6 +34,8 @@ The authoritative feature order is therefore:
 Bash 5.2 completion (done)  ->  native awk (done)  ->  native sed (done)  ->  bundled userland (done)
   ->  Bash 5.3 (active)  +  corpus fixes (active)  ->  line-ending controls (done)
   ->  fuser / lsof subset (done)  ->  ss subset (done)  ->  BusyBox-gap tools (done)
+  ->  graceful signals for own jobs (active)  ->  exec path for bundled tools
+  ->  bc against GNU bc  ->  Bash 5.3 remainder (no terminal)  ->  ConPTY harness + 5.3 interactive
 ```
 
 ## 1. Finish Bash 5.2
@@ -266,6 +273,45 @@ the shadow, and `ping -n 3 host` gets a hint instead of an endless ping.
 **5 done** (spec D35): doctor flags the BusyBox applets that break scripts — `grep`,
 `diff`, `make`, `tar`, `xz`, `nc`, `wget`, each reason checked against BusyBox 1.38 — and
 points at a full copy later on `PATH` when there is one. Item 10 is complete.
+
+## 11. Graceful Ctrl-C and `TERM` for cash's own jobs
+
+Cash starts no child as a process-group leader, so a console control event cannot be
+aimed at one of its jobs: aimed at a non-leader it reaches the whole console. `TERM`
+therefore asks through a program's windows and terminates a console program at once
+(D21). Giving cash's jobs process groups of their own would let `kill -TERM %1` and
+`kill -INT $!` deliver a real CTRL_BREAK a console program can handle — but a new group
+also stops the keyboard's Ctrl-C from reaching it, so the change touches how every
+foreground program is interrupted (D13). Design first: which jobs get their own group
+(background only, or all), how Ctrl-C reaches a job in its own group, what `fg`/`bg`
+do, and what programs that treat Ctrl-C and Ctrl-Break differently (Python) see.
+
+## 12. A path a script can exec for a bundled tool
+
+`LS=$(which ls); "$LS" -la` gets an empty command, because `ls` is a builtin with no file
+behind it ([open issue 4](open-issues.md)). `cash --invoke-bundled ls` is the real
+executable, and nothing says so. Decide between reporting it in `which`/`type`, shipping
+shim executables, or another answer.
+
+## 13. `bc` against GNU bc
+
+The imported suite was checked against GNU bc upstream, but not here: the WSL distros have
+no GNU bc, and installing one needs the user's password (`wsl -d kali-linux sudo apt
+install -y bc`). Once it is there, run a differential corpus as for `awk` and `sed`,
+starting with what could not be checked: the line-wrap column of long numbers, `obase`
+above 16, and the math library at high scale.
+
+## 14. Bash 5.3 remainder without a terminal
+
+The audit items a `-c` script can observe that are not yet done: `wait -n` in POSIX mode,
+indexed `array_expand_once`, and the status the `RETURN` trap sees before `return`. Each
+gets a probe against Git Bash 5.3.15, as the other 35 have.
+
+## 15. ConPTY probe harness, then the interactive 5.3 items
+
+The interactive and Readline items of the 5.3 audit need a real terminal: a harness that
+drives cash through ConPTY, sends keys and reads the screen, alongside the same session in
+Bash 5.3. Then the items themselves, and with them the `BASH_VERSION=5.3` claim.
 
 ## Keeping the roadmap current
 
