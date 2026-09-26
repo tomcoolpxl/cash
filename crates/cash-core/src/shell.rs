@@ -139,6 +139,10 @@ pub struct Shell<SE: extensions::ShellExtensions = extensions::DefaultShellExten
     /// Shell program location cache.
     program_location_cache: pathcache::PathCache,
 
+    /// Background listing of the `PATH` directories, for lookups that must not block.
+    #[cfg_attr(feature = "serde", serde(skip))]
+    path_index: crate::pathindex::PathIndex,
+
     /// Last "SECONDS" captured time.
     last_stopwatch_time: std::time::SystemTime,
 
@@ -194,6 +198,7 @@ impl<SE: extensions::ShellExtensions> Clone for Shell<SE> {
             completion_config: self.completion_config.clone(),
             builtins: self.builtins.clone(),
             program_location_cache: self.program_location_cache.clone(),
+            path_index: self.path_index.clone(),
             last_stopwatch_time: self.last_stopwatch_time,
             last_stopwatch_offset: self.last_stopwatch_offset,
             parser_impl: self.parser_impl,

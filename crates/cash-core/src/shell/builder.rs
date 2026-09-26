@@ -273,6 +273,7 @@ impl<SE: extensions::ShellExtensions> Default for Shell<SE> {
             completion_config: completion::Config::default(),
             builtins: HashMap::default(),
             program_location_cache: pathcache::PathCache::default(),
+            path_index: crate::pathindex::PathIndex::default(),
             last_stopwatch_time: std::time::SystemTime::now(),
             last_stopwatch_offset: 0,
             parser_impl: crate::parser::ParserImpl::default(),

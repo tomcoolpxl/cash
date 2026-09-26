@@ -251,10 +251,11 @@ fn install_panic_handlers() {
     }
 }
 
-#[cfg(feature = "experimental")]
+/// cash: syntax highlighting is on by default, where upstream kept it behind the
+/// `experimental` feature. Whether the command word exists comes from a background
+/// listing of `PATH` (`cash_core::pathindex`), so highlighting costs no file-system
+/// probes per keystroke.
 pub(crate) const DEFAULT_ENABLE_HIGHLIGHTING: bool = true;
-#[cfg(not(feature = "experimental"))]
-pub(crate) const DEFAULT_ENABLE_HIGHLIGHTING: bool = false;
 
 /// Run the brush shell. Returns the exit code.
 ///

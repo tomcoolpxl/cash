@@ -398,10 +398,13 @@ impl<'a, SE: cash_core::ShellExtensions> Highlighter<'a, SE> {
                 CommandType::NotFound
             }
         } else {
-            if self.shell.find_first_executable_in_path(name).is_some() {
-                CommandType::External
-            } else {
-                CommandType::NotFound
+            // From the background PATH listing: probing every PATH directory for every
+            // PATHEXT extension here would cost a missing name over a hundred milliseconds
+            // on each keystroke. Until the listing is ready, the word stays neutral.
+            match self.shell.executable_on_path_if_known(name) {
+                Some(true) => CommandType::External,
+                Some(false) => CommandType::NotFound,
+                None => CommandType::Unknown,
             }
         }
     }
@@ -431,6 +434,73 @@ mod tests {
             .iter()
             .find(|s| highlighted.text(s) == "somecommand");
         assert!(cmd_span.is_some(), "Should have a span for the command");
+    }
+
+    fn command_kind(
+        shell: &cash_core::Shell<impl cash_core::ShellExtensions>,
+        line: &str,
+    ) -> HighlightKind {
+        let command = line.split_whitespace().next().unwrap();
+        let highlighted = highlight_command(shell, line, line.len());
+        let span = highlighted
+            .spans()
+            .iter()
+            .find(|s| highlighted.text(s) == command);
+        span.unwrap().kind
+    }
+
+    /// The command word's kind once the background PATH listing has answered.
+    async fn settled_command_kind(
+        shell: &cash_core::Shell<impl cash_core::ShellExtensions>,
+        line: &str,
+    ) -> HighlightKind {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        loop {
+            let kind = command_kind(shell, line);
+            if kind != HighlightKind::UnknownCommand {
+                return kind;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the PATH listing never answered"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        }
+    }
+
+    #[tokio::test]
+    async fn command_existence_comes_from_the_path_listing_without_waiting() {
+        let dir = tempfile::tempdir().unwrap();
+        #[cfg(windows)]
+        std::fs::write(dir.path().join("tool.exe"), b"MZ").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let tool = dir.path().join("tool");
+            std::fs::write(&tool, b"#!/bin/sh\n").unwrap();
+            std::fs::set_permissions(&tool, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        let mut shell = cash_core::Shell::builder().build().await.unwrap();
+        let path = dir.path().to_string_lossy().into_owned();
+        shell
+            .set_env_global("PATH", cash_core::ShellVariable::new(path))
+            .unwrap();
+
+        // Asked before the listing exists, the word stays neutral rather than waiting.
+        assert_eq!(
+            command_kind(&shell, "tool x"),
+            HighlightKind::UnknownCommand
+        );
+
+        assert_eq!(
+            settled_command_kind(&shell, "tool x").await,
+            HighlightKind::ExternalCommand
+        );
+        assert_eq!(
+            settled_command_kind(&shell, "no-such-tool x").await,
+            HighlightKind::NotFoundCommand
+        );
     }
 
     #[tokio::test]

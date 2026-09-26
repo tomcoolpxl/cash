@@ -182,8 +182,17 @@ pub struct CommandLineArgs {
     #[clap(long = "disable-color", help_heading = HEADING_UI_OPTIONS)]
     pub disable_color: bool,
 
-    /// Enable syntax highlighting in input.
-    #[clap(long = "enable-highlighting", help_heading = HEADING_UI_OPTIONS, default_value_t = crate::entry::DEFAULT_ENABLE_HIGHLIGHTING)]
+    /// Syntax highlighting in input; on by default, `--enable-highlighting=false` turns
+    /// it off.
+    #[clap(
+        long = "enable-highlighting",
+        help_heading = HEADING_UI_OPTIONS,
+        default_value_t = crate::entry::DEFAULT_ENABLE_HIGHLIGHTING,
+        num_args = 0..=1,
+        require_equals = true,
+        default_missing_value = "true",
+        action = clap::ArgAction::Set
+    )]
     pub enable_highlighting: bool,
 
     /// Enable experimental parser (not ready for use).

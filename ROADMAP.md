@@ -27,6 +27,7 @@ Feature work follows the sequence below.
 | 14 | Bash 5.3 remainder without a terminal: `wait -n` in POSIX mode, `array_expand_once`, the `RETURN` trap's status | **Complete** | Section 14 below; [Bash 5.3 audit](research/bash-reference/bash-5.3-audit.md) |
 | 15 | ConPTY probe harness, then the interactive and Readline 5.3 items | Planned | Section 15 below |
 | 16 | `cash --link-tools`: hard links so programs outside cash can run its tools | Planned | Section 16 below; follows D58 |
+| 17 | What fish has at the prompt: highlighting, bash's Alt-. and Ctrl-X Ctrl-E, `abbr`, a collapsing prompt, folder history, carapace completions | **Active** | Section 17 below; spec D59 |
 | — | Found on the way (not planned items) | **Complete** | MSYS2 argument encoding (spec D52); `shopt winpaths` and bash-worded `cd` errors (D53); a `TERM` that no longer reaches the whole console (D21) |
 
 The authoritative feature order is therefore:
@@ -37,6 +38,7 @@ Bash 5.2 completion (done)  ->  native awk (done)  ->  native sed (done)  ->  bu
   ->  fuser / lsof subset (done)  ->  ss subset (done)  ->  BusyBox-gap tools (done)
   ->  graceful signals for own jobs (done)  ->  exec path for bundled tools (done)
   ->  bc against GNU bc (done)  ->  Bash 5.3 remainder (no terminal) (done)  ->  ConPTY harness + 5.3 interactive  ->  tool links
+  +  fish's prompt conveniences (active)
 ```
 
 ## 1. Finish Bash 5.2
@@ -367,6 +369,32 @@ Decided:
 Also: a DIR on another drive cannot hold hard links to `cash.exe`, so that is an error
 naming the reason; `which` prints a tool's link, when one is on PATH, in place of the
 virtual path; and `cash doctor` reports links left pointing at an older `cash.exe`.
+
+## 17. What fish has at the prompt
+
+A comparison with fish (Garuda's default interactive shell) listed what it offers at the
+prompt that cash did not. Decided, in this order:
+
+1. **Syntax highlighting on by default** (D59). It existed, off; turning it on needed a
+   background `PATH` listing, since probing `PATH` for a missing name took 127 ms a
+   keystroke.
+2. **Bash's own Alt-. and Ctrl-X Ctrl-E**: `yank-last-arg` was defined but bound to
+   nothing, and `edit-and-execute-command` had no editor behind it. Bash parity, not fish.
+3. **`abbr`, fish-style**: `abbr -a gco git checkout`; the command word expands on Space
+   or Enter, so history keeps the full command. A cash-only builtin (D45).
+4. **A collapsing prompt**: off unless `CASH_TRANSIENT_PS1` is set; it takes PS1's
+   escapes, so Starship users set it to `$(starship module character)`.
+5. **Folder history**: Alt-← and Alt-→ on an empty line step through visited folders, as
+   in fish, with `prevd`, `nextd` and `cdh`. Windows Terminal takes Alt-arrows while
+   panes are split.
+6. **Completions from carapace, when it is installed**: for a command with no completion
+   of its own, with carapace's descriptions in the menu. Not bundled: carapace is Go, 90 MB
+   unpacked. Measured here, a Tab costs 85–100 ms for carapace's static completers and
+   220–450 ms where it runs the tool (git, docker), no slower than the tools' own bash
+   scripts; nothing runs per keystroke.
+
+Found on the way: cash's awk rejected `break` inside `for (k in a)`, which broke
+`git checkout <Tab>` in Git's own completion script; fixed.
 
 ## Keeping the roadmap current
 

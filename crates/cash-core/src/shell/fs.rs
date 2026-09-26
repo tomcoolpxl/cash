@@ -178,6 +178,24 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         )
     }
 
+    /// Whether `name` is an executable on the shell's current PATH, answered from a
+    /// background listing of the PATH directories; `None` while that listing is not ready.
+    ///
+    /// For callers that must not wait on the disk, such as syntax highlighting, which asks
+    /// on every keystroke. The answer can lag a program installed moments ago, so nothing
+    /// that runs a command should use it; see [`crate::pathindex`].
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The command name; it must not contain a path separator.
+    pub fn executable_on_path_if_known(&self, name: &str) -> Option<bool> {
+        if pathsearch::runs_cash_itself(name) {
+            return Some(true);
+        }
+        let (dirs, _) = self.executable_search_dirs();
+        self.path_index.contains_executable(&dirs, name)
+    }
+
     /// Determines whether the given filename is the name of an executable in one of the
     /// directories in the shell's current PATH. If found, returns the path.
     ///

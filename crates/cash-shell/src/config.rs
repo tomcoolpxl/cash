@@ -373,8 +373,9 @@ mod tests {
 
         assert!(!ui.disable_bracketed_paste);
         assert!(!ui.disable_color);
-        // Note: whether highlighting is enabled by default depends on the compile-time
-        // DEFAULT_ENABLE_HIGHLIGHTING constant (true with reedline, false without)
+        // cash: syntax highlighting is on by default, where upstream had it behind the
+        // `experimental` feature.
+        assert!(!ui.disable_highlighting);
         // cash (D39): terminal shell integration is on by default, where upstream had it
         // behind an off-by-default experimental flag.
         assert!(ui.terminal_shell_integration);
@@ -406,25 +407,37 @@ mod tests {
     fn to_ui_options_cli_overrides_config() {
         let toml = r"
             [ui]
-            syntax-highlighting = false
+            syntax-highlighting = true
 
             [experimental]
             zsh-hooks = false
         ";
         let config: Config = toml::from_str(toml).unwrap();
 
-        // Simulate CLI explicitly setting values different from defaults
-        // by parsing with the flags enabled
+        // Simulate CLI explicitly setting values different from defaults. Highlighting is
+        // on by default, so only turning it off is distinguishable from not passing it.
         let args = CommandLineArgs::try_parse_from(
-            ["cash", "--enable-highlighting", "--enable-zsh-hooks"].map(String::from),
+            ["cash", "--enable-highlighting=false", "--enable-zsh-hooks"].map(String::from),
         )
         .unwrap();
 
-        // CLI explicitly enables highlighting and zsh-hooks (differs from default)
         let ui = config.to_ui_options(&args);
 
-        assert!(!ui.disable_highlighting); // CLI enabled highlighting
+        assert!(ui.disable_highlighting); // CLI disabled highlighting
         assert!(ui.zsh_style_hooks); // CLI enabled
+    }
+
+    #[test]
+    fn highlighting_can_be_turned_off_from_the_command_line_or_the_config() {
+        let args = CommandLineArgs::try_parse_from(
+            ["cash", "--enable-highlighting=false"].map(String::from),
+        )
+        .unwrap();
+        assert!(Config::default().to_ui_options(&args).disable_highlighting);
+
+        let config: Config = toml::from_str("[ui]\nsyntax-highlighting = false\n").unwrap();
+        let args = CommandLineArgs::default_values();
+        assert!(config.to_ui_options(&args).disable_highlighting);
     }
 
     #[test]

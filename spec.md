@@ -1555,6 +1555,33 @@ unchanged: it searches `PATH` only, as bash's does. The limit is plain: a progra
 cash — Python's `subprocess`, a `.bat` file — cannot run the path; nothing without a file
 on disk could offer that.
 
+### D59 — Syntax highlighting is on, and never waits on the disk
+
+fish highlights the line as it is typed and marks a command that does not exist before
+Enter is pressed; that is most of why a mistyped command costs nothing there. The
+highlighter came with brush and was complete, but off: its default was tied to brush's
+`experimental` build feature, which cash does not enable. It is now on by default.
+`--enable-highlighting=false`, or `syntax-highlighting = false` under `[ui]` in
+`%APPDATA%\cash\config.toml`, turns it off.
+
+It could not simply be switched on. To colour the command word it asked whether the name
+is on `PATH`, on every keystroke once the cursor had left the word, and on Windows that
+question is expensive: each `PATH` directory is tried with each `PATHEXT` extension. On the
+machine this was measured on, with 86 directories and 13 extensions, a name found nowhere
+took **127 ms** a keystroke, `code` 60 ms and `starship` 28 ms.
+
+So the highlighter asks a background listing instead (`cash_core::pathindex`). Each `PATH`
+directory is listed once, on a thread of its own, and a lookup is a set membership test.
+A directory is listed again when its modification time changes, which NTFS bumps when an
+entry is added, removed or renamed; those times are checked in the background at most
+every two seconds, never on the typing thread. Until a listing is ready the command word
+keeps the neutral colour rather than waiting. A name matched without an extension
+(`egrep`) has its contents checked once, as execution checks them (D46).
+
+The listing can lag a program installed a moment ago. That is acceptable for a colour and
+would not be for running a command, so nothing that executes consults it; command
+resolution still probes the disk as before.
+
 ---
 
 ## 4. Deliberate divergences from bash

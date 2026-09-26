@@ -26,6 +26,7 @@ pub mod namedoptions;
 pub mod openfiles;
 pub mod options;
 pub mod pathcache;
+pub mod pathindex;
 pub mod pathsearch;
 pub mod patterns;
 pub mod processes;

@@ -132,6 +132,19 @@ fn cash_as_shell(name: &Path) -> Option<PathBuf> {
     None
 }
 
+/// Whether running `name` starts cash itself rather than searching `PATH` (D7).
+pub(crate) fn runs_cash_itself(name: &str) -> bool {
+    #[cfg(windows)]
+    {
+        cash_as_shell(Path::new(name)).is_some()
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = name;
+        false
+    }
+}
+
 /// Resolves a command name the way the shell does when it is about to run it.
 ///
 /// Returns the first executable in search order, or -- if there is none -- the first entry
