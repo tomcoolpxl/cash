@@ -579,7 +579,11 @@ fn hash_lt_renders_but_does_not_quote() {
         out.stdout,
         out.stderr
     );
-    assert!(!out.stdout.contains('\\'), "D3: backslashes: {}", out.stdout);
+    assert!(
+        !out.stdout.contains('\\'),
+        "D3: backslashes: {}",
+        out.stdout
+    );
     assert!(!out.stdout.contains('\''), "quoted: {}", out.stdout);
 }
 
@@ -647,7 +651,9 @@ fn type_takes_the_last_of_t_and_p_but_keeps_the_forced_search() {
 #[test]
 fn hash_lists_hits_with_rendered_paths() {
     // Hashing counts nothing; each run and each `hash -t` lookup counts one, as in bash.
-    let out = cash("hash; hash netstat; hash; netstat -? > /dev/null 2>&1; hash -t netstat > /dev/null; hash");
+    let out = cash(
+        "hash; hash netstat; hash; netstat -? > /dev/null 2>&1; hash -t netstat > /dev/null; hash",
+    );
     let lines: Vec<&str> = out.stdout.lines().collect();
     assert_eq!(lines.len(), 5, "{} {}", out.stdout, out.stderr);
     assert_eq!(lines[0], "hash: hash table empty");

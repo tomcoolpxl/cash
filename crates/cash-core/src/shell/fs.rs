@@ -260,7 +260,8 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         // See `find_first_executable_in_path_using_cache`.
         if !self.executable_search_dirs().1 {
             let name = String::from(candidate_name);
-            self.program_location_cache.set(name.clone(), found_path.clone());
+            self.program_location_cache
+                .set(name.clone(), found_path.clone());
             self.program_location_cache.record_hit(name);
         }
 

@@ -100,7 +100,14 @@ impl PathCache {
         }
 
         let bucket = self.bucket_of(&name);
-        self.buckets[bucket].insert(0, Entry { name, path, hits: 0 });
+        self.buckets[bucket].insert(
+            0,
+            Entry {
+                name,
+                path,
+                hits: 0,
+            },
+        );
         self.len += 1;
     }
 
