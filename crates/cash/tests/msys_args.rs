@@ -147,6 +147,76 @@ fn find_exec_encodes_for_msys() {
     }
 }
 
+// The bundled `env` and `timeout` (uutils) spawn their command with `Command` themselves;
+// cash hands them itself as the command, and passes the arguments on encoded for MSYS2.
+
+#[test]
+fn env_encodes_for_msys() {
+    if let Some(out) = echoed_via(r#"env "$E" "$A""#) {
+        assert_eq!(out, SENT);
+    }
+}
+
+#[test]
+fn env_with_options_and_assignments_encodes_for_msys() {
+    if let Some(out) = echoed_via(r#"env -u NOPE -C / FOO=1 echo.exe "$A""#) {
+        assert_eq!(out, SENT);
+    }
+}
+
+#[test]
+fn env_split_string_encodes_for_msys() {
+    if let Some(out) = echoed_via(r#"env -S 'FOO=1 echo.exe' "$A""#) {
+        assert_eq!(out, SENT);
+    }
+}
+
+#[test]
+fn env_passes_its_assignments_through_the_relay() {
+    let Some(out) = echoed_via(
+        r#"env CASH_MSYS_PROBE="$A" 'C:/Program Files/Git/usr/bin/printenv.exe' CASH_MSYS_PROBE"#,
+    ) else {
+        return;
+    };
+    assert_eq!(out, SENT);
+}
+
+#[test]
+fn env_reports_the_programs_exit_status() {
+    if let Some(out) = echoed_via(r#"env 'C:/Program Files/Git/usr/bin/false.exe'; echo "$?""#) {
+        assert_eq!(out, "1");
+    }
+}
+
+#[test]
+fn timeout_encodes_for_msys() {
+    if let Some(out) = echoed_via(r#"timeout -s KILL 30 "$E" "$A""#) {
+        assert_eq!(out, SENT);
+    }
+    if let Some(out) = echoed_via(r#"timeout --foreground 30 echo.exe "$A""#) {
+        assert_eq!(out, SENT);
+    }
+}
+
+#[test]
+fn timeout_still_kills_an_msys_program() {
+    // In the foreground `timeout` kills only its own child, the relay, so this also shows
+    // the program dying with it: a surviving `sleep` would hold the output pipe open.
+    for how in ["", "--foreground"] {
+        let started = std::time::Instant::now();
+        let script =
+            format!(r#"timeout {how} 1 'C:/Program Files/Git/usr/bin/sleep.exe' 30; echo "$?""#);
+        if let Some(out) = echoed_via(&script) {
+            assert_eq!(out, "124", "timeout {how}");
+            assert!(
+                started.elapsed().as_secs() < 20,
+                "took {:?}",
+                started.elapsed()
+            );
+        }
+    }
+}
+
 #[test]
 fn git_egrep_script_gets_json_sh_pattern_intact() {
     // The exact failure on GitHub's runner: Git's extensionless `egrep` script, reached

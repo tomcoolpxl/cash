@@ -222,6 +222,163 @@ pub fn bundled_commands() -> HashMap<String, fn(Vec<OsString>) -> i32> {
     m
 }
 
+/// Where the command sits in the argv of a bundled utility that runs one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CommandOperand {
+    /// The argv, rewritten only as far as needed to find the command: `env -S` strings
+    /// are split into the words `env` would have made of them.
+    pub args: Vec<OsString>,
+    /// Index into `args` of the command's name; its arguments follow it.
+    pub index: usize,
+    /// The directory the utility will run the command in (`env -C`), if not its own.
+    pub chdir: Option<OsString>,
+    /// The PATH the utility will search, if it sets one (`env PATH=…`, `env -i`).
+    pub path: Option<OsString>,
+}
+
+/// cash: finds the command a bundled `env` or `timeout` would run, so the dispatcher can
+/// run it through cash instead when it needs arguments encoded for MSYS2 (D52).
+///
+/// `args[0]` names the utility. `None` means it runs no command, or its arguments do not
+/// parse, and the utility should simply be left to report that itself.
+#[must_use]
+pub fn command_operand(args: &[OsString]) -> Option<CommandOperand> {
+    #[cfg(feature = "coreutils.env")]
+    if args.first().is_some_and(|name| name == "env") {
+        return env_operand(args);
+    }
+    #[cfg(feature = "coreutils.timeout")]
+    if args.first().is_some_and(|name| name == "timeout") {
+        prepare_uutil_runtime(stringify!(uu_timeout));
+        // `command` takes the rest of the command line, so it is the tail of `args`.
+        let matches = uu_timeout::uu_app().try_get_matches_from(args).ok()?;
+        return Some(CommandOperand {
+            args: args.to_vec(),
+            index: args
+                .len()
+                .checked_sub(matches.get_many::<String>("command")?.len())?,
+            chdir: None,
+            path: None,
+        });
+    }
+    let _ = args;
+    None
+}
+
+/// [`command_operand`] for `env`, which parses as uutils' `env` does: `-S` strings are
+/// split first, then clap reads the options, then every `NAME=VALUE` (and `-`) is an
+/// assignment up to the first word that is not.
+#[cfg(feature = "coreutils.env")]
+fn env_operand(args: &[OsString]) -> Option<CommandOperand> {
+    prepare_uutil_runtime(stringify!(uu_env));
+    let args = split_env_strings(args)?;
+    let matches = uu_env::uu_app().try_get_matches_from(&args).ok()?;
+    let mut path = matches.get_flag("ignore-environment").then(OsString::new);
+    let unsets_path = matches
+        .get_many::<OsString>("unset")
+        .is_some_and(|mut names| names.any(|name| name.eq_ignore_ascii_case("PATH")));
+    if unsets_path {
+        path = Some(OsString::new());
+    }
+    let chdir = matches.get_one::<OsString>("chdir").cloned();
+
+    // `vars` takes the rest of the command line once it starts, so its values are the
+    // tail of `args`. (clap's own indices count `-o=val` and `-abc` as several words.)
+    let values = matches.get_many::<OsString>("vars")?;
+    let first = args.len().checked_sub(values.len())?;
+    for (value, index) in values.zip(first..) {
+        if value == "-" {
+            path.get_or_insert_with(OsString::new);
+            continue;
+        }
+        let text = value.to_string_lossy();
+        let Some((name, rest)) = text.split_once('=') else {
+            return Some(CommandOperand {
+                args,
+                index,
+                chdir,
+                path,
+            });
+        };
+        if name.eq_ignore_ascii_case("PATH") {
+            path = Some(OsString::from(rest));
+        }
+    }
+    None
+}
+
+/// `args` with each `env -S STRING` (in the spellings uutils accepts) replaced by the
+/// words it splits into, which is what uutils' `env` hands clap.
+#[cfg(feature = "coreutils.env")]
+fn split_env_strings(args: &[OsString]) -> Option<Vec<OsString>> {
+    use uu_env::native_int_str::{
+        from_native_int_representation_owned, to_native_int_representation,
+    };
+
+    let split = |text: &std::ffi::OsStr| -> Option<Vec<OsString>> {
+        let words = uu_env::parse_args_from_str(&to_native_int_representation(text)).ok()?;
+        Some(
+            words
+                .into_iter()
+                .map(from_native_int_representation_owned)
+                .collect(),
+        )
+    };
+
+    let mut out = Vec::with_capacity(args.len());
+    let mut rest = args.iter().enumerate();
+    let mut expecting_value = false;
+    while let Some((n, arg)) = rest.next() {
+        let text = arg.to_string_lossy();
+        // Options end at `--` or the first word that is neither an option nor an
+        // assignment, and after that nothing is split.
+        if n > 0
+            && !expecting_value
+            && (text == "--" || !(text.starts_with('-') || text.contains('=')))
+        {
+            out.extend(args.iter().skip(n).cloned());
+            return Some(out);
+        }
+        expecting_value = false;
+        if let Some(joined) = ["--split-string", "-S", "-vS", "-vvS"]
+            .iter()
+            .find_map(|flag| {
+                text.strip_prefix(flag)
+                    .filter(|s| !s.is_empty())
+                    .map(|s| (flag, s))
+            })
+        {
+            let (flag, value) = joined;
+            if flag.starts_with("-v") {
+                out.push(OsString::from(if *flag == "-vS" { "-v" } else { "-vv" }));
+            }
+            let value = if *flag == "--split-string" {
+                value.strip_prefix('=').unwrap_or(value)
+            } else {
+                value
+            };
+            out.extend(split(std::ffi::OsStr::new(value))?);
+        } else if ["--split-string", "-S", "-vS", "-vvS"].contains(&&*text) {
+            let Some((_, value)) = rest.next() else {
+                out.push(arg.clone());
+                continue;
+            };
+            if text.starts_with("-v") {
+                out.push(OsString::from(if text == "-vS" { "-v" } else { "-vv" }));
+            }
+            out.extend(split(value)?);
+        } else {
+            if let Some(long) = text.strip_prefix("--") {
+                expecting_value = ["argv0", "chdir", "file", "unset"].contains(&long);
+            } else if let Some(short) = text.strip_prefix('-') {
+                expecting_value = short.chars().last().is_some_and(|c| "aCfu".contains(c));
+            }
+            out.push(arg.clone());
+        }
+    }
+    Some(out)
+}
+
 /// Whether the caller already said something about colour, in any of its spellings.
 ///
 /// `--color`, `--colour`, `--color=never` and `-N`-style bundles all count: if the
@@ -288,4 +445,65 @@ fn colouring_vdir(args: Vec<OsString>) -> i32 {
     let code = uu_vdir::uumain(with_colour_auto(args).into_iter());
     finalize_uutil_runtime();
     code
+}
+
+#[cfg(test)]
+#[cfg(all(feature = "coreutils.env", feature = "coreutils.timeout"))]
+mod tests {
+    use super::*;
+
+    fn operand(args: &[&str]) -> Option<CommandOperand> {
+        let args: Vec<OsString> = args.iter().map(OsString::from).collect();
+        command_operand(&args)
+    }
+
+    fn strings(args: &[OsString]) -> Vec<String> {
+        args.iter()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect()
+    }
+
+    #[test]
+    fn timeout_command_follows_its_options_however_they_are_spelled() {
+        assert_eq!(operand(&["timeout", "5", "prog", "-x"]).unwrap().index, 2);
+        assert_eq!(
+            operand(&["timeout", "-vs", "KILL", "5", "prog"])
+                .unwrap()
+                .index,
+            4
+        );
+        assert_eq!(
+            operand(&["timeout", "-sKILL", "-k=1", "5", "prog", "a"])
+                .unwrap()
+                .index,
+            4
+        );
+        assert_eq!(operand(&["timeout", "5", "--", "prog"]).unwrap().index, 3);
+        assert!(operand(&["timeout", "5"]).is_none());
+    }
+
+    #[test]
+    fn env_command_follows_options_and_assignments() {
+        let op = operand(&["env", "-iu", "X", "A=1", "prog", "-x"]).unwrap();
+        assert_eq!((op.index, op.path), (4, Some(OsString::new())));
+        let op = operand(&["env", "--chdir=/tmp", "Path=C:/bin", "prog"]).unwrap();
+        assert_eq!(op.index, 3);
+        assert_eq!(op.chdir, Some(OsString::from("/tmp")));
+        assert_eq!(op.path, Some(OsString::from("C:/bin")));
+        assert_eq!(operand(&["env", "-", "prog"]).unwrap().index, 2);
+        assert!(operand(&["env", "A=1"]).is_none());
+        assert!(operand(&["env"]).is_none());
+    }
+
+    #[test]
+    fn env_split_strings_become_words() {
+        let op = operand(&["env", "-S", "A=1 prog 'x y'", "z"]).unwrap();
+        assert_eq!(strings(&op.args), ["env", "A=1", "prog", "x y", "z"]);
+        assert_eq!(op.index, 2);
+        let op = operand(&["env", "-vSprog x", "y"]).unwrap();
+        assert_eq!(strings(&op.args), ["env", "-v", "prog", "x", "y"]);
+        assert_eq!(op.index, 2);
+        let op = operand(&["env", "prog", "-S", "x"]).unwrap();
+        assert_eq!(strings(&op.args), ["env", "prog", "-S", "x"]);
+    }
 }
