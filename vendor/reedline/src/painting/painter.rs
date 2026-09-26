@@ -325,6 +325,8 @@ pub struct Painter {
     pub(crate) last_layout: Option<PromptLayout>,
     /// cash: the prompt on screen, when a paint may start at the input instead.
     painted_prompt: Option<PaintedPrompt>,
+    /// cash: the last paint drew nothing below the row the input starts on.
+    input_on_one_row: bool,
 }
 
 impl Painter {
@@ -341,6 +343,7 @@ impl Painter {
             semantic_markers: None,
             last_layout: None,
             painted_prompt: None,
+            input_on_one_row: false,
         }
     }
 
@@ -519,6 +522,25 @@ impl Painter {
         )?;
         let row = anchor_row.checked_add(rows)?;
         (col > 0 && row < self.screen_height()).then_some((col, row))
+    }
+
+    /// cash: whether everything printed after the prompt (the input and the hint) stays on
+    /// the row the input starts on, short of the margin. Judged from the text rather than
+    /// from `required_lines`, whose row count is an estimate; a menu always reaches below.
+    fn input_stays_on_its_row(&self, lines: &PromptLines, menu: Option<&ReedlineMenu>) -> bool {
+        if menu.is_some() {
+            return false;
+        }
+        let Some((_, col)) = cursor_after(
+            [&*lines.prompt_str_left, &*lines.prompt_indicator],
+            self.screen_width(),
+        ) else {
+            return false;
+        };
+        let rest = [&*lines.before_cursor, &*lines.after_cursor, &*lines.hint];
+        !rest.iter().any(|text| text.contains('\n'))
+            && usize::from(col) + rest.iter().map(|text| line_width(text)).sum::<usize>()
+                < usize::from(self.screen_width())
     }
 
     /// Returns the state necessary before suspending the painter (to run a host command event).
@@ -709,11 +731,21 @@ impl Painter {
             _ => None,
         };
 
+        let on_one_row = self.input_stays_on_its_row(lines, menu);
         if let Some((col, row)) = input_origin {
-            // cash: the prompt stands; erase and redraw from where the input starts.
+            // cash: the prompt stands; erase and redraw from where the input starts. When
+            // neither the last paint nor this one reaches below that row, erasing the rest
+            // of it is enough, and the rows beneath are not touched: ConPTY resends every
+            // row an erase covers, blank or not, so a prompt at the top of an empty screen
+            // otherwise costs the whole screen on each key.
+            let erase = if self.input_on_one_row && on_one_row {
+                ClearType::UntilNewLine
+            } else {
+                ClearType::FromCursorDown
+            };
             self.stdout
                 .queue(cursor::MoveTo(col, row))?
-                .queue(Clear(ClearType::FromCursorDown))?;
+                .queue(Clear(erase))?;
         } else {
             // Moving the cursor to the start of the prompt
             // from this position everything will be printed
@@ -735,6 +767,7 @@ impl Painter {
             )?
         };
         self.painted_prompt = painted;
+        self.input_on_one_row = on_one_row && !self.large_buffer;
 
         self.last_layout = Some(layout);
 
@@ -1880,6 +1913,13 @@ mod tests {
                             }
                         }
                         grid.truncate(row as usize + 1);
+                    } else if j < b.len() && b[j] == 'K' && matches!(params.as_str(), "" | "0") {
+                        // cash: erase-in-line (`EL(0)`): the rest of this row only.
+                        if let Some(line) = grid.get_mut(row as usize) {
+                            for cell in line.iter_mut().skip(col as usize) {
+                                *cell = ' ';
+                            }
+                        }
                     }
                     i = j + 1;
                 }
@@ -2177,9 +2217,9 @@ mod tests {
             !second.contains("PROMPT"),
             "the prompt was drawn again: {second:?}"
         );
-        // MoveTo(8, 3), then erase-below: from the input's first cell.
+        // MoveTo(8, 3), then erase the rest of the row: from the input's first cell.
         assert!(
-            second.contains("\x1b[4;9H\x1b[J"),
+            second.contains("\x1b[4;9H\x1b[K"),
             "expected an erase from where the input starts; emitted {second:?}"
         );
         assert_eq!(replay(&(first + &second), 20, true).screen, "PROMPT> a");
@@ -2196,7 +2236,7 @@ mod tests {
             "the prompt was drawn again: {second:?}"
         );
         // The input starts on the prompt's second row, after `mid> `: MoveTo(5, 4).
-        assert!(second.contains("\x1b[5;6H\x1b[J"), "emitted {second:?}");
+        assert!(second.contains("\x1b[5;6H\x1b[K"), "emitted {second:?}");
         assert_eq!(replay(&(first + &second), 20, true).screen, "topmid> a");
     }
 
@@ -2220,6 +2260,35 @@ mod tests {
             assert_eq!(kept.screen, fresh.screen);
             assert_eq!(kept.cursor, fresh.cursor);
         }
+    }
+
+    /// Input that stays on its row erases only the rest of that row: ConPTY resends every
+    /// row an erase covers, so an erase-below at the top of an empty screen costs all of it.
+    #[test]
+    fn a_kept_line_on_one_row_erases_only_that_row() {
+        let mut p = capture_painter(3);
+        paint(&mut p, &make_lines("> ", "", "", "ab", ""));
+        let second = paint(&mut p, &make_lines("> ", "", "", "a", ""));
+        assert!(second.contains("\x1b[4;3H\x1b[K"), "emitted {second:?}");
+        assert!(!second.contains("\x1b[J"), "emitted {second:?}");
+    }
+
+    /// Whatever the last paint put below the input row has to go, and so does anything this
+    /// paint is about to put there.
+    #[rstest]
+    #[case(&"a".repeat(25), "a", "")]
+    #[case("a", &"a".repeat(25), "")]
+    #[case("a", "ab", "\nsecond row")]
+    #[case("a", &"a".repeat(18), "")]
+    fn a_kept_line_reaching_another_row_erases_below(
+        #[case] before: &str,
+        #[case] now: &str,
+        #[case] after: &str,
+    ) {
+        let mut p = capture_painter(3);
+        paint(&mut p, &make_lines("> ", "", "", before, ""));
+        let second = paint(&mut p, &make_lines("> ", "", "", now, after));
+        assert!(second.contains("\x1b[4;3H\x1b[J"), "emitted {second:?}");
     }
 
     #[test]

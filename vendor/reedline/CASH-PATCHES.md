@@ -39,6 +39,11 @@ It sits outside the workspace, so cash's lints do not apply to it. Its own tests
    a large buffer, a prompt ending on the margin, a resize, a scroll, a new line or
    anything that invalidates the anchor still gets the full paint.
 
+   Such a paint erases only the rest of the input's row when neither it nor the paint
+   before drew anything below that row (no wrap, no menu, no multi-line input or hint).
+   ConPTY resends every row an erase covers, blank or not, so erasing to the end of the
+   screen made a prompt at the top of an empty screen cost the whole screen on each key.
+
 3. **A paste is not held back for 100 ms** (`src/engine.rs`). After a burst of more than
    ten events Reedline waits `POLL_WAIT` for more before painting, and every paste ended
    with that wait running out. It is 10 ms now: a paste reaches the console in one piece,
