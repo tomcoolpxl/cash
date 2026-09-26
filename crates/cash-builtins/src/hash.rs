@@ -1,7 +1,7 @@
 use clap::Parser;
 use std::{io::Write, path::PathBuf};
 
-use cash_core::{ExecutionResult, builtins};
+use cash_core::{ExecutionResult, builtins, escape};
 
 #[derive(Parser)]
 pub(crate) struct HashCommand {
@@ -51,11 +51,17 @@ impl builtins::Command for HashCommand {
         } else if self.display_paths {
             for name in &self.names {
                 if let Some(path) = context.shell.program_location_cache().get(name) {
+                    // One canonical spelling on output (D3): a PATH directory joined to the
+                    // file name otherwise shows up as `C:/Program Files/Git/usr/bin\ls.exe`.
+                    let path = cash_win32::path::render(&path);
+
                     if self.display_as_usable_input {
+                        // "Usable for input" has to survive the space in `Program Files`.
                         writeln!(
                             context.stdout(),
-                            "builtin hash -p {} {name}",
-                            path.to_string_lossy()
+                            "builtin hash -p {} {}",
+                            escape::quote_if_needed(&path, escape::QuoteMode::SingleQuote),
+                            escape::quote_if_needed(name, escape::QuoteMode::SingleQuote)
                         )?;
                     } else {
                         let mut prefix = String::new();
@@ -65,11 +71,7 @@ impl builtins::Command for HashCommand {
                             prefix.push('\t');
                         }
 
-                        writeln!(
-                            context.stdout(),
-                            "{prefix}{}",
-                            path.to_string_lossy().as_ref()
-                        )?;
+                        writeln!(context.stdout(), "{prefix}{path}")?;
                     }
                 } else {
                     writeln!(context.stderr(), "{cmd}: {name}: not found")?;

@@ -540,3 +540,49 @@ fn command_v_renders_a_path_found_on_path_with_forward_slashes() {
     );
     assert_eq!(lines[0], lines[1]);
 }
+
+#[test]
+fn hash_t_renders_a_path_the_same_way_command_v_does() {
+    // `hash -t` printed the cached path as the resolver had joined it:
+    //
+    //     C:/Program Files/Git/usr/bin\ls.exe
+    let out = cash("hash netstat; hash -t netstat; command -v netstat");
+    let lines: Vec<&str> = out.stdout.lines().collect();
+    assert_eq!(lines.len(), 2, "{} {}", out.stdout, out.stderr);
+    assert!(
+        !lines[0].contains('\\'),
+        "D3: backslashes in a rendered path: {}",
+        lines[0]
+    );
+    assert_eq!(lines[0], lines[1], "hash -t and command -v disagree");
+}
+
+#[test]
+fn hash_t_renders_every_name_it_lists() {
+    // With several names each line is `name<TAB>path`.
+    let out = cash("hash netstat cmd; hash -t netstat cmd");
+    let lines: Vec<&str> = out.stdout.lines().collect();
+    assert_eq!(lines.len(), 2, "{} {}", out.stdout, out.stderr);
+    for (line, name) in lines.iter().zip(["netstat", "cmd"]) {
+        assert!(line.starts_with(&format!("{name}\t")), "{line}");
+        assert!(!line.contains('\\'), "D3: backslashes: {line}");
+    }
+}
+
+#[test]
+fn hash_l_prints_input_that_round_trips() {
+    // "Usable for input" means feeding it back reproduces the entry, space in the path and
+    // all.
+    let out = cash(
+        r#"d=$(mktemp -d); mkdir "$d/with space"; : > "$d/with space/t.exe"; hash -p "$d/with space/t.exe" t; hash -lt t; eval "$(hash -lt t)"; hash -t t; rm -rf "$d""#,
+    );
+    let lines: Vec<&str> = out.stdout.lines().collect();
+    assert_eq!(lines.len(), 2, "{} {}", out.stdout, out.stderr);
+    assert!(lines[0].starts_with("builtin hash -p '"), "{}", lines[0]);
+    assert!(!lines[0].contains('\\'), "D3: backslashes: {}", lines[0]);
+    assert!(
+        lines[1].ends_with("/with space/t.exe"),
+        "did not round-trip: {}",
+        lines[1]
+    );
+}
