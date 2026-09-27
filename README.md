@@ -83,6 +83,33 @@ details and source-level comparisons are in the
 source reference rather than adding another prompt backend or replacing the
 descriptor-aware `read` editor.
 
+## At the prompt
+
+The prompt borrows what fish does well, without giving up Bash's language:
+
+- **Syntax highlighting** is on: keywords, strings, variables and options are coloured,
+  and a command that does not exist turns red before Enter, in every part of a pipeline.
+  Whether it exists comes from a background listing of `PATH`, so typing never waits on
+  the disk (spec D59). `--enable-highlighting=false`, or `syntax-highlighting = false`
+  under `[ui]` in `%APPDATA%\cash\config.toml`, turns it off.
+- **Suggestions from history** appear dimmed as you type; → accepts one.
+- **Alt-.** inserts the previous command's last argument (again: the one before), and
+  **Ctrl-X Ctrl-E** opens the line in `$VISUAL`/`$EDITOR` and runs what you save, as in
+  Bash.
+- **Abbreviations**: `abbr -a gco git checkout`, and `gco` becomes `git checkout` on the
+  line when you press Space or Enter, so history keeps the full command (D60). The options
+  are fish's.
+- **A collapsing prompt**: set `CASH_TRANSIENT_PS1` (it takes PS1's escapes) and a
+  command's prompt shrinks to it once the line is entered, so scrollback shows commands,
+  not status blocks (D61). With Starship:
+  `CASH_TRANSIENT_PS1='$(starship module character --status="$STARSHIP_CMD_STATUS")'`.
+- **Folder history**: on an empty line, Alt-← and Alt-→ step back and forward through the
+  folders you have been in; `prevd`, `nextd` and `cdh` do it by name (D62).
+- **Completions with descriptions** for 700+ commands — git, winget, docker, kubectl,
+  terraform, cargo, npm — when [carapace](https://github.com/carapace-sh/carapace-bin) is
+  installed (`scoop install extras/carapace-bin`). A completion script you source for a
+  command always wins (D63).
+
 ## Layout
 
 ```
