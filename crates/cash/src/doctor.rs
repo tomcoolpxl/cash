@@ -591,17 +591,7 @@ fn is_store_alias(path: &Path) -> bool {
 
 /// If a path is a Scoop shim, the executable it really points at.
 fn shim_target(path: &Path) -> Option<PathBuf> {
-    let shim = path.with_extension("shim");
-    let contents = std::fs::read_to_string(shim).ok()?;
-
-    for line in contents.lines() {
-        if let Some((key, value)) = line.split_once('=')
-            && key.trim().eq_ignore_ascii_case("path")
-        {
-            return Some(PathBuf::from(value.trim().trim_matches('"')));
-        }
-    }
-    None
+    cash_win32::scoop::shim_target(path)
 }
 
 fn suggest_install(command: &str) -> String {

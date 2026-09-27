@@ -673,6 +673,7 @@ dependencies = [
  "bon",
  "cash-core",
  "cash-parser",
+ "cash-win32",
  "crossterm",
  "futures-util",
  "indexmap",
@@ -831,6 +832,7 @@ dependencies = [
 name = "cash-win32"
 version = "0.11.0"
 dependencies = [
+ "tempfile",
  "vte",
  "windows-sys 0.61.2",
 ]

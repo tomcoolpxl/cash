@@ -33,6 +33,7 @@ pub mod process;
 pub mod resolve;
 /// Which processes hold a file open, through the Restart Manager.
 pub mod restart;
+pub mod scoop;
 pub mod session;
 pub mod spawn;
 pub mod stdio;

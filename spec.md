@@ -709,6 +709,11 @@ than a coupling.
 Cost accepted: an extra process in every job tree, and `jobs` shows the shim rather than
 the underlying command. Revisit only if job-tree noise becomes a real problem in use.
 
+Two readers of a shim's `.shim` file, both outside command execution and both working
+without Scoop (`cash_win32::scoop`): `cash doctor` sees through a shim to a BusyBox applet
+(D35), and Tab completion starts carapace itself rather than its shim (D63). What a command
+line starts is unchanged.
+
 ### D26 — File descriptors above 2 work where cash controls both ends
 
 - **cash builtins and cash-to-cash:** full fd table, `3>&1` and friends work.
@@ -1694,7 +1699,10 @@ a description for each candidate.
 **Not bundled** (decided). carapace is Go, so it cannot be linked in, and it is 90 MB
 unpacked (17 MB zipped), three times `cash.exe`. Cash uses it when it is there: beside
 `cash.exe` first, then on `PATH`. `cash doctor` says whether it was found and how to install
-it (`scoop install extras/carapace-bin`).
+it (`scoop install extras/carapace-bin`). When the one found is a Scoop shim, cash starts the
+`carapace.exe` its `.shim` file names instead, saving a second process on every Tab (about
+70 ms measured); anything else — winget's link, a copy placed by hand, a shim whose target
+is gone — is started as found (D25).
 
 **When it is asked.** On Tab, for an argument of a command that has no completion of its
 own — no `complete` spec for it and no `complete -D` default — and that carapace lists

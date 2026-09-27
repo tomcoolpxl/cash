@@ -221,16 +221,44 @@ mod tests {
     ) {
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(dir.path().join("carapace.cmd"), script).unwrap();
+        let completer = completer_on_path(dir.path(), cache).await;
+        (completer, dir)
+    }
+
+    /// A completer whose shell's `PATH` is `dir` alone.
+    async fn completer_on_path(
+        dir: &std::path::Path,
+        cache: carapace::Cache,
+    ) -> ReedlineCompleter<cash_core::extensions::DefaultShellExtensions> {
         let mut shell = cash_core::Shell::builder().build().await.unwrap();
-        let path = dir.path().to_string_lossy().into_owned();
+        let path = dir.to_string_lossy().into_owned();
         shell
             .set_env_global("PATH", cash_core::ShellVariable::new(path))
             .unwrap();
-        let completer = ReedlineCompleter {
+        ReedlineCompleter {
             shell: std::sync::Arc::new(tokio::sync::Mutex::new(shell)),
             carapace: cache,
-        };
-        (completer, dir)
+        }
+    }
+
+    #[tokio::test]
+    async fn a_scoop_shim_is_seen_through_to_the_real_carapace() {
+        // Scoop's shim folder holds `carapace.exe` and a `carapace.shim` naming the real
+        // one. The stand-in "shim" here cannot run, so only the real one can answer.
+        let real = tempfile::tempdir().unwrap();
+        let real_carapace = real.path().join("carapace.cmd");
+        std::fs::write(&real_carapace, FAKE_CARAPACE).unwrap();
+        let shims = tempfile::tempdir().unwrap();
+        std::fs::write(shims.path().join("carapace.exe"), b"not a program").unwrap();
+        std::fs::write(
+            shims.path().join("carapace.shim"),
+            format!("path = \"{}\"\r\n", real_carapace.display()),
+        )
+        .unwrap();
+
+        let mut completer = completer_on_path(shims.path(), carapace::Cache::default()).await;
+        let suggestions = settled(&mut completer, "fakecmd a").await;
+        assert_eq!(suggestions[0].description.as_deref(), Some("asked about a"));
     }
 
     #[tokio::test]

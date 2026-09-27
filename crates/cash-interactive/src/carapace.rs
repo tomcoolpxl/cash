@@ -100,7 +100,7 @@ impl Cache {
             // by probing, which costs what one "command not found" does.
             Location::Unknown => shell.find_first_executable_in_path("carapace"),
         };
-        match exe.map(Found::load) {
+        match exe.map(program_behind).map(Found::load) {
             Some(None) => {
                 self.found = None;
                 self.failed = Some((path_value, Instant::now()));
@@ -117,6 +117,18 @@ impl Cache {
     pub const fn found(&self) -> Option<&Found> {
         self.found.as_ref()
     }
+}
+
+/// The program to start for the carapace found at `exe`: the real `carapace.exe` when `exe` is
+/// a Scoop shim whose target exists, which saves starting the shim, a second process, on every
+/// Tab (about 70 ms measured). Anything else — installed by winget or by hand, or a shim
+/// whose target is gone — is started as found.
+fn program_behind(exe: PathBuf) -> PathBuf {
+    #[cfg(windows)]
+    if let Some(target) = cash_win32::scoop::shim_target(&exe).filter(|target| target.is_file()) {
+        return target;
+    }
+    exe
 }
 
 /// Where carapace is.

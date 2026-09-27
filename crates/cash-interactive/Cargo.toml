@@ -50,6 +50,10 @@ futures-util = "0.3.34"
 unicode-segmentation = { version = "1.13.3", optional = true }
 serde_json = { version = "1.0.151", optional = true }
 
+[target.'cfg(windows)'.dependencies]
+# cash: reads a Scoop shim's target, to start carapace itself (D63).
+cash-win32 = { workspace = true }
+
 [dev-dependencies]
 pretty_assertions = { version = "1.4.1", features = ["unstable"] }
 tempfile = "3.27.0"
