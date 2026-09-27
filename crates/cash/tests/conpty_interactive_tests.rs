@@ -469,17 +469,20 @@ fn conpty_abbr_expands_as_the_command_word() {
     // Quoted whole, so the expansion keeps its own quotes.
     session.send("abbr -a pj \"printf '%s-%s\\n'\"\r").unwrap();
 
-    // On Space: the typed line becomes `printf '%s-%s\n' A B`, whose output the typed
-    // line never contains. The keys go in one write, so they are read together.
+    // Each check looks for output that no typed line contains, so it holds however the
+    // terminal happens to draw the lines around it.
+
+    // On Space: the typed line becomes `printf '%s-%s\n' A B`. The keys go in one write,
+    // so they are read together.
     session.send("pj A B\r").unwrap();
     session
-        .expect("\r\nA-B\x1b[K", Duration::from_secs(10))
+        .expect("A-B", Duration::from_secs(10))
         .expect("the abbreviation did not expand on Space");
 
-    // Not as an argument: the output line is `pj C` itself.
-    session.send("echo pj C\r").unwrap();
+    // Not as an argument: printed as it was typed, in brackets.
+    session.send("printf '<%s>\\n' pj\r").unwrap();
     session
-        .expect("\r\npj C\x1b[K", Duration::from_secs(10))
+        .expect("<pj>", Duration::from_secs(10))
         .expect("an argument expanded");
 
     // On Enter, with nothing after it.
@@ -488,7 +491,7 @@ fn conpty_abbr_expands_as_the_command_word() {
         .unwrap();
     session.send("pk\r").unwrap();
     session
-        .expect("\r\nKxy\x1b[K", Duration::from_secs(10))
+        .expect("Kxy", Duration::from_secs(10))
         .expect("the abbreviation did not expand on Enter");
 
     // The session has no PATH, so cash's own awk: history lines whose command is the
@@ -629,9 +632,10 @@ fn conpty_alt_arrows_walk_the_folder_history() {
     session
         .expect("abc Zdef", Duration::from_secs(10))
         .expect("Alt-Left on a line with text did not move a word");
-    session.send("here\r").unwrap();
+    // A marker of its own: `AT=second_dir` is on the screen already.
+    session.send("echo \"STILL=${PWD##*/}\"\r").unwrap();
     session
-        .expect("AT=second_dir\x1b[K\r\nPROMPT$", Duration::from_secs(10))
+        .expect("STILL=second_dir", Duration::from_secs(10))
         .expect("Alt-Left on a line with text changed folder");
 
     session.send("exit 0\r").unwrap();
