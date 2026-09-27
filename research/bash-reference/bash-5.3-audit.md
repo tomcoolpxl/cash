@@ -140,7 +140,7 @@ there.
 | **1.k** | `command declare` | See section 1 | **Fixed** (POSIX mode only). |
 | **1.z** | `test <` / `>` locale | Locale collation in POSIX mode | **Verified** by probe in the oracle's default locale; other locales are untested. |
 | **1.nn** | `wait -n` table drain | Removes jobs from the table in POSIX mode | **Fixed.** Cash now keeps Bash's list of finished jobs' statuses: `wait PID` reads one after the job has gone, and `wait -n` returns each finished job once, oldest first, and forgets it only in POSIX mode. Probed with an external job, since `$!` is empty for a builtin-only one (divergence 14). |
-| **1.qq** | POSIX notify timing | Notifications when POSIX specifies | Not yet probed (interactive). |
+| **1.qq** | POSIX notify timing | Notifications when POSIX specifies | **Fixed**, by the harness: in POSIX mode a finished job is reported only at the prompt, not after a foreground command, a sourced file or when the next job starts (which then takes a new id), as in Bash. |
 | **1.tt** | Function names | Non-identifier function names in POSIX mode | **Verified** by probe. |
 
 ---

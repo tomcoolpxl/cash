@@ -1,0 +1,7 @@
+$ trap 'echo trapped' CHLD
+$ sleep 0.1 &
+[1] PID
+$
+trapped
+[1]+  Done                       sleep 0.1
+$

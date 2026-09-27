@@ -1,0 +1,6 @@
+$ set -o posix
+$ sleep 0.05 & sleep 0.2; echo after
+[1] PID
+after
+[1]+  Done                       sleep 0.05
+$

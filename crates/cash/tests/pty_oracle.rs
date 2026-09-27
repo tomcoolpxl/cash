@@ -203,6 +203,28 @@ const CASES: &[Case] = &[
             "sleep 0.3\r",
         ],
     },
+    // 1.ii: a trap that runs while the shell waits at the prompt, and the job notice.
+    Case {
+        name: "1ii-trap-at-prompt",
+        keys: &["trap 'echo trapped' CHLD\r", "sleep 0.1 &\r", "\r"],
+    },
+    // 1.qq: when POSIX mode reports a finished job.
+    Case {
+        name: "1qq-posix-notify-foreground",
+        keys: &["set -o posix\r", "sleep 0.05 & sleep 0.2; echo after\r"],
+    },
+    Case {
+        name: "1qq-posix-notify-new-job",
+        keys: &["set -o posix\r", "sleep 0.05 & read -t 0.3; sleep 30 &\r"],
+    },
+    Case {
+        name: "1qq-posix-notify-source",
+        keys: &[
+            "set -o posix\r",
+            "printf 'sleep 0.2\\n' > s.sh\r",
+            "sleep 0.05 & . ./s.sh; echo after\r",
+        ],
+    },
     // `read -t` at the console times out; the Enter that ran it must not wake it early.
     Case {
         name: "read-t-console",
@@ -364,7 +386,10 @@ const DELIBERATE: &[(&str, &str)] = &[
 
 /// The cases where cash differs from Bash, not yet fixed, each with the difference. A
 /// case that starts to match fails the test until it is taken off this list.
-const KNOWN_DIFFERENCES: &[(&str, &str)] = &[];
+const KNOWN_DIFFERENCES: &[(&str, &str)] = &[(
+    "1ii-trap-at-prompt",
+    "undecided: cash refuses `trap … CHLD` (spec, signals with no Win32 mechanism)",
+)];
 
 #[test]
 fn cash_leaves_the_screen_bash_leaves() {

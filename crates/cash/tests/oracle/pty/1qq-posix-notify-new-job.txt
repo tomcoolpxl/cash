@@ -1,0 +1,6 @@
+$ set -o posix
+$ sleep 0.05 & read -t 0.3; sleep 30 &
+[1] PID
+[2] PID
+[1]   Done                       sleep 0.05
+$

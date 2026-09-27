@@ -1,0 +1,7 @@
+$ set -o posix
+$ printf 'sleep 0.2\n' > s.sh
+$ sleep 0.05 & . ./s.sh; echo after
+[1] PID
+after
+[1]+  Done                       sleep 0.05
+$
