@@ -1752,7 +1752,7 @@ someone who expected bash, so additions need to earn their place.
 | 14 | `$!` is empty for a background job made only of shell builtins | bash forks and reports the subshell's pid; cash runs the job as a task, so there is no process to name | D11 |
 | 15 | `kill 0` signals the trees cash spawned, not a process group | Windows has no process group that excludes the terminal; the console-wide alternative would kill it | D22 |
 | 16 | `kill -1` is refused | "every process I may signal" on Windows reaches far past anything a script could mean | D22 |
-| 17 | `sh` and `bash` are cash, ahead of `PATH` | Otherwise `bash` is the WSL launcher and a script continues under Linux | D7 |
+| 17 | `sh`, `bash` and `cash` are cash, ahead of `PATH` | Otherwise `bash` is the WSL launcher and a script continues under Linux; `cash` is often not on `PATH` at all, since a terminal starts it by full path | D7 |
 | 18 | `chmod` changes only the read-only attribute | Windows has no execute or read bit outside ACLs; the rest warns and returns 0 | D23, D34 |
 | 19 | `which` reports builtins; `stat` is not carried | `which` must agree with the shell; uutils' `stat` is Unix-only | D8, D48 |
 | 20 | `id`, `$UID` and `$EUID` report the account's RID, not a uid, and 0 in an elevated shell | Windows identifies a user by SID; the RID is its last component and the nearest true equivalent. Elevated, all three are 0, so `[ "$EUID" -eq 0 ]` and `[ "$(id -u)" -eq 0 ]` agree on "running as Administrator" | D48 |
@@ -1964,7 +1964,7 @@ concerns was worth keeping.)
 | `resolve` | D8, D46 | PATHEXT dispatch, extension before read, real on-disk casing |
 | `cmd` | D32 | CRT quoting, caret escaping, `is_safe_for_cmd` |
 | `process` | D42, D48 | `is_pid_alive`, `cpu_time`, process listing for `ps` |
-| `pathsearch` (core) | D7 | `sh` and `bash` resolve to cash, ahead of `PATH` |
+| `pathsearch` (core) | D7 | `sh`, `bash` and `cash` resolve to cash, ahead of `PATH` |
 | `sys::windows::fs` (core) | D5 | `PATH` split on either separator; here-docs backed by a temp file |
 | `jobreg` | D6 | per-spawn nested job registry, tree kill, sweep |
 

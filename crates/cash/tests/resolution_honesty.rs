@@ -236,6 +236,23 @@ fn sh_and_bash_resolve_to_cash() {
 }
 
 #[test]
+fn cash_resolves_to_the_running_cash() {
+    // A terminal profile starts cash by full path, so its folder is usually not on PATH;
+    // `cash doctor` must work anyway.
+    let out = cash_bare("which cash; cash -c 'echo nested-cash-ran'");
+    let lines: Vec<&str> = out.stdout.lines().collect();
+    assert!(
+        lines
+            .first()
+            .is_some_and(|line| line.to_lowercase().contains("cash.exe")),
+        "cash did not resolve to itself: {} {}",
+        out.stdout,
+        out.stderr
+    );
+    assert_eq!(lines.get(1), Some(&"nested-cash-ran"), "{}", out.stderr);
+}
+
+#[test]
 fn a_nested_shell_is_cash_and_keeps_cash_semantics() {
     // The point of the rule: the path guarantees do not stop at the `sh -c` boundary.
     let out = cash_bare(r#"sh -c 'pwd; echo $BASH_VERSION'"#);

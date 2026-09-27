@@ -67,7 +67,7 @@ const CARRIED: &[&str] = &[
 ];
 
 /// Shells whose name must resolve to cash itself (D7).
-const OWN_SHELLS: &[&str] = &["sh", "bash"];
+const OWN_SHELLS: &[&str] = &["sh", "bash", "cash"];
 
 /// Run the diagnostic. Returns a process exit code.
 pub fn run() -> u8 {

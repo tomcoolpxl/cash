@@ -118,15 +118,19 @@ where
     }
 }
 
-/// cash's own executable, when `name` asks for a POSIX shell.
+/// cash's own executable, when `name` asks for a POSIX shell or for cash.
 ///
 /// Matches `sh` and `bash` by basename, with or without an extension, so `bash`,
 /// `/bin/sh` and `bash.exe` all land here. Nothing else: `zsh`, `dash` and `pwsh` are
 /// other shells and cash does not pretend to be them.
+///
+/// `cash` matches too, so `cash doctor` and `cash -c` work inside cash whether or not its
+/// folder is on `PATH`: a terminal profile usually starts it by full path. Another cash on
+/// `PATH` is then reached by its path, as a real bash is.
 #[cfg(windows)]
 fn cash_as_shell(name: &Path) -> Option<PathBuf> {
     let stem = name.file_stem()?.to_str()?.to_ascii_lowercase();
-    if matches!(stem.as_str(), "sh" | "bash") {
+    if matches!(stem.as_str(), "sh" | "bash" | "cash") {
         return std::env::current_exe().ok();
     }
     None

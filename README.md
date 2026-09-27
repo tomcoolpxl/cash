@@ -225,7 +225,8 @@ themselves.
 `sh` and `bash` resolve to cash itself, ahead of `PATH`. On Windows the alternative is
 `C:\WINDOWS\system32\bash.exe`, which is the WSL launcher: without this, a script
 running `bash helper.sh` would silently continue under Linux. A real bash is still
-reachable by full path.
+reachable by full path. `cash` resolves to itself too, so `cash doctor` works inside cash
+even when a terminal profile starts it by full path and its folder is not on `PATH`.
 
 Worth knowing: the answer depends on which shell launched cash, because it inherits that
 shell's `PATH`.
