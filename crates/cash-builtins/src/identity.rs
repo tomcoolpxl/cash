@@ -291,7 +291,9 @@ struct SessionInfo {
 }
 
 fn query_sessions() -> Vec<SessionInfo> {
-    if let Ok(output) = std::process::Command::new("quser.exe").output() {
+    if let Ok(output) =
+        std::process::Command::new(cash_win32::fs::system_program("quser.exe")).output()
+    {
         if output.status.success() {
             let text = String::from_utf8_lossy(&output.stdout);
             let mut list = Vec::new();
@@ -359,7 +361,7 @@ fn whoami_string() -> Option<String> {
 
 /// The current user's SID, read from the process token.
 fn current_sid() -> Option<String> {
-    let output = std::process::Command::new("whoami.exe")
+    let output = std::process::Command::new(cash_win32::fs::system_program("whoami.exe"))
         .args(["/user", "/fo", "csv", "/nh"])
         .output()
         .ok()?;

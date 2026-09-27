@@ -10,6 +10,8 @@
 
 #[cfg(windows)]
 mod doctor;
+#[cfg(windows)]
+mod link_tools;
 
 fn main() {
     // D6's outermost guarantee, installed before anything can spawn.
@@ -34,6 +36,30 @@ fn main() {
             },
             if state.nested { "yes" } else { "no" },
         );
+    }
+
+    // Started as a link `cash --link-tools` made (`ls.exe`), cash runs as that tool (D65):
+    // `cash -c '"$0" "$@"' ls ARGS`, the re-entry its virtual paths use (D58).
+    #[cfg(windows)]
+    if let Some(tool) = link_tools::linked_tool() {
+        let mut args = std::env::args();
+        let exe = args.next().unwrap_or_default();
+        let mut command = vec![exe, "-c".to_owned(), "\"$0\" \"$@\"".to_owned(), tool];
+        command.extend(args);
+        cash_shell::entry::run_with_args(command);
+        return;
+    }
+
+    // `cash --link-tools [DIR]` (D65), like `cash doctor`, acts on the installation rather
+    // than running anything in a shell.
+    #[cfg(windows)]
+    {
+        let args: Vec<String> = std::env::args().collect();
+        if args.get(1).map(String::as_str) == Some("--link-tools") && args.len() <= 3 {
+            std::process::exit(i32::from(link_tools::run(
+                args.get(2).map(String::as_str),
+            )));
+        }
     }
 
     // `cash doctor` (D35) is handled before the shell sees argv, because it diagnoses

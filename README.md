@@ -162,6 +162,12 @@ name resolves to something worse there: `find` and `xargs`, `ps`, `pgrep`, `pstr
 `top`, `less`/`more`,
 `which`, `chmod`, `hostname`, and `coolfetch`.
 
+Inside cash, `which ls` prints `C:/…/cash.exe/ls`, a path only cash can run. For programs
+outside cash (Python's `subprocess`, a `.bat` file, an editor), `cash --link-tools [DIR]`
+makes a hard link to `cash.exe` for each tool, `ls.exe`, `sort.exe` and so on, in DIR or
+in `bin` next to `cash.exe`. The links take no space; add the folder to PATH (the command
+prints how) and re-run it after upgrading cash, which `cash doctor` reminds you of.
+
 The rule for what cash carries is not "is it missing" — Scoop can supply anything. It is
 **does the tool have to agree with cash about something cash owns?** `find` prints paths,
 so it owes D3 one spelling; `xargs` builds command lines, which on Windows are strings the

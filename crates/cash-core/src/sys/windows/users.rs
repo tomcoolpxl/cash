@@ -28,7 +28,7 @@ static ACCOUNT_RID: LazyLock<Option<u32>> = LazyLock::new(account_rid);
 fn account_rid() -> Option<u32> {
     // `whoami /user` is the documented way to reach the process token's SID without a
     // Win32 binding, and it ships with every Windows install.
-    let output = std::process::Command::new("whoami.exe")
+    let output = std::process::Command::new(cash_win32::fs::system_program("whoami.exe"))
         .args(["/user", "/fo", "csv", "/nh"])
         .output()
         .ok()?;

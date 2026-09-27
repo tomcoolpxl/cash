@@ -26,7 +26,7 @@ Feature work follows the sequence below.
 | 13 | `bc` against GNU bc | **Complete** | Section 13 below; spec D56 |
 | 14 | Bash 5.3 remainder without a terminal: `wait -n` in POSIX mode, `array_expand_once`, the `RETURN` trap's status | **Complete** | Section 14 below; [Bash 5.3 audit](research/bash-reference/bash-5.3-audit.md) |
 | 15 | ConPTY probe harness, then the interactive and Readline 5.3 items | **Complete** (cash reports `BASH_VERSION=5.3.15`) | Section 15 below |
-| 16 | `cash --link-tools`: hard links so programs outside cash can run its tools | Planned | Section 16 below; follows D58 |
+| 16 | `cash --link-tools`: hard links so programs outside cash can run its tools | **Complete** | Section 16 below; spec D65 |
 | 17 | What fish has at the prompt: highlighting, bash's Alt-. and Ctrl-X Ctrl-E, `abbr`, a collapsing prompt, folder history, carapace completions | **Complete** | Section 17 below; spec D59–D63 |
 | — | Found on the way (not planned items) | **Complete** | MSYS2 argument encoding (spec D52); `shopt winpaths` and bash-worded `cd` errors (D53); a `TERM` that no longer reaches the whole console (D21) |
 
@@ -371,7 +371,7 @@ Decided:
 - **A name already taken:** a link cash made earlier is refreshed to this `cash.exe`,
   so re-running after an upgrade updates them; any other file is left alone and listed
   as skipped. Cash knows its own links by a list it keeps in the folder.
-- **Windows' names:** all 123 tools are linked. The eight that share a System32 name
+- **Windows' names:** all 125 tools are linked. The eight that share a System32 name
   (`expand find hostname ping reset sort timeout whoami`) get a note: put the folder
   after System32 on PATH, or `.bat` files calling `find` or `sort` get cash's.
 - **PATH:** never changed; the command prints the folder and how to add it to the
@@ -380,6 +380,15 @@ Decided:
 Also: a DIR on another drive cannot hold hard links to `cash.exe`, so that is an error
 naming the reason; `which` prints a tool's link, when one is on PATH, in place of the
 virtual path; and `cash doctor` reports links left pointing at an older `cash.exe`.
+
+Done as decided (spec D65). Two things surfaced on the way. Windows looks for a program
+started by a bare name in the starting exe's own folder first, so cash, coming up as any
+tool in a links folder, started the `whoami.exe` beside it for the user's SID, which was
+cash again: every start started another. cash now starts the Windows programs it uses by
+their System32 path. And a linked tool that re-enters its own exe (a bundled tool, `sh`)
+would take the child for the tool again; the child knows it by an environment variable
+naming the link. Testing `xargs.exe -n1` also found `xargs` reading `-n1`, with its count
+attached, as the command to run.
 
 ## 17. What fish has at the prompt
 

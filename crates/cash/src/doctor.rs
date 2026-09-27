@@ -93,6 +93,7 @@ pub fn run() -> u8 {
     check_dos_shadowing(&mut findings, &builtins, &entries, &pathext, &cwd);
     check_deliberate_shadows(&mut findings, &builtins, &entries, &pathext, &cwd);
     check_carapace(&mut findings, &entries, &pathext, &cwd);
+    check_links(&mut findings, &entries);
 
     report(&findings)
 }
@@ -129,7 +130,7 @@ fn check_platform(findings: &mut Vec<Finding>) {
 }
 
 /// Every name cash answers for itself, without building a shell.
-fn builtin_names() -> std::collections::HashSet<String> {
+pub(crate) fn builtin_names() -> std::collections::HashSet<String> {
     let mut names: std::collections::HashSet<String> = cash_builtins::default_builtins::<
         cash_core::extensions::DefaultShellExtensions,
     >(cash_builtins::BuiltinSet::BashMode)
@@ -472,6 +473,47 @@ fn check_busybox(
             ),
             fix: Some(busybox_fix(command, &target, entries, pathext, cwd)),
         });
+    }
+}
+
+/// Folders of `cash --link-tools` links on PATH (D65), and whether each link is still
+/// this `cash.exe`. An upgrade replaces `cash.exe` with a new file, and the links keep
+/// the old one: they go on running the old cash until `cash --link-tools` refreshes them.
+fn check_links(findings: &mut Vec<Finding>, entries: &[PathBuf]) {
+    let mut seen = std::collections::HashSet::new();
+    for entry in entries {
+        let Ok(dir) = std::fs::canonicalize(entry) else {
+            continue;
+        };
+        if !seen.insert(dir.clone()) {
+            continue;
+        }
+        let Some((total, stale)) = crate::link_tools::stale_links(&dir) else {
+            continue;
+        };
+        let shown = cash_win32::path::render(&dir);
+        if stale.is_empty() {
+            findings.push(Finding {
+                level: Level::Ok,
+                subject: "tool links".into(),
+                detail: format!("{shown}: {total} links to this cash.exe"),
+                fix: None,
+            });
+        } else {
+            let mut names = stale.iter().take(8).cloned().collect::<Vec<_>>().join(", ");
+            if stale.len() > 8 {
+                names.push_str(", ...");
+            }
+            findings.push(Finding {
+                level: Level::Warn,
+                subject: "tool links".into(),
+                detail: format!(
+                    "{shown}: {} of {total} links are not this cash.exe (an older one, or replaced): {names}",
+                    stale.len()
+                ),
+                fix: Some(format!("cash --link-tools '{shown}'")),
+            });
+        }
     }
 }
 

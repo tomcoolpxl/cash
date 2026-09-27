@@ -220,3 +220,44 @@ pub fn file_link_count(path: &Path, metadata: &std::fs::Metadata) -> u32 {
         1
     }
 }
+
+/// Whether two paths name the same file: the same volume and file index, as a hard link
+/// and its original do. `false` when either cannot be opened.
+#[must_use]
+pub fn same_file(a: &Path, b: &Path) -> bool {
+    match (file_identity(a), file_identity(b)) {
+        (Some(a), Some(b)) => a == b,
+        _ => false,
+    }
+}
+
+/// A Windows program by its full path in System32 (`whoami.exe`), for cash to start.
+///
+/// By a bare name, Windows looks first in the folder of the exe that asks, and
+/// in a folder of `cash --link-tools` links `whoami.exe` is cash: started that way, cash
+/// under the name `whoami` would start `whoami.exe` again as it came up, without end (D65).
+#[must_use]
+pub fn system_program(name: &str) -> std::path::PathBuf {
+    std::env::var_os("SystemRoot")
+        .map_or_else(
+            || std::path::PathBuf::from(r"C:\Windows"),
+            std::path::PathBuf::from,
+        )
+        .join("System32")
+        .join(name)
+}
+
+/// A file's volume serial number and file index, which identify it across its names.
+fn file_identity(path: &Path) -> Option<(u32, u32, u32)> {
+    let file = std::fs::File::open(path).ok()?;
+    let handle = file.as_raw_handle() as windows_sys::Win32::Foundation::HANDLE;
+    // SAFETY: zeroed struct is valid for BY_HANDLE_FILE_INFORMATION.
+    let mut info: BY_HANDLE_FILE_INFORMATION = unsafe { std::mem::zeroed() };
+    // SAFETY: `handle` is a valid open file handle, `info` is a valid out-pointer.
+    let ok = unsafe { GetFileInformationByHandle(handle, &raw mut info) };
+    (ok != 0).then_some((
+        info.dwVolumeSerialNumber,
+        info.nFileIndexHigh,
+        info.nFileIndexLow,
+    ))
+}

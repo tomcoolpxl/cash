@@ -128,6 +128,12 @@ impl CommandLineArgs {
 
 /// Main entry point for the `brush` shell.
 pub fn run() {
+    run_with_args(std::env::args().collect());
+}
+
+/// [`run`], with the command line given rather than taken from the process: how cash
+/// started under a linked tool's name (`ls.exe`, `cash --link-tools`) runs as that tool.
+pub fn run_with_args(mut args: Vec<String>) {
     //
     // Install the bundled-command registry so it's available both for
     // bundled dispatch (handled next) and for builtin shim registration
@@ -153,8 +159,6 @@ pub fn run() {
     //
     // Parse args.
     //
-    let mut args: Vec<_> = std::env::args().collect();
-
     // Work around clap's limitations handling +O options.
     for arg in &mut args {
         if arg.starts_with("+O") {

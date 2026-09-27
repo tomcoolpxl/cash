@@ -1773,6 +1773,41 @@ What cannot match is what has no process in cash: a bundled tool (`ls`, `cat`) a
 command substitution run inside cash, so they reap no child and raise no `CHLD`; §4
 divergence 38.
 
+### D65 — `cash --link-tools`: hard links that programs outside cash can run
+
+D58's `C:/…/cash.exe/ls` runs only inside cash: Python's `subprocess`, a `.bat` file or
+an IDE can start only a real file. `cash --link-tools [DIR]` makes hard links to
+`cash.exe`, one per tool it carries that is not a Bash builtin (`ls.exe`, `sort.exe`, 125
+of them), and cash started under a linked name runs as that tool, as BusyBox does. A
+hard link is the same file under another name: no space, no admin on a folder the user
+can write, and the same hash and signature for AppLocker and App Control. Decided with
+the user, 2026-09-27:
+
+- **Folder.** DIR, or `bin` next to `cash.exe`, made when missing and used as it is when
+  it exists. A DIR on another drive cannot hold a hard link, and is an error that says so.
+- **Knowing its own.** A manifest, `.cash-links`, lists the links cash made. Started as
+  `NAME.exe`, cash runs as `NAME` only when the manifest in its folder lists it; a copy
+  under a tool's name that nobody linked is still the shell. Re-running refreshes cash's
+  links to the running `cash.exe`, which is how an upgrade reaches them; any other file of
+  that name is left alone and listed.
+- **Windows' names.** Every tool is linked; the eight that System32 also has (`expand find
+  hostname ping reset sort timeout whoami`) are named, since with the folder before
+  System32 on PATH a `.bat` calling `find` gets cash's.
+- **PATH** is never changed; the command prints the PowerShell line that adds the folder
+  to the user PATH.
+- **`which`** prints a tool's link when one is on PATH, a real file, ahead of the virtual
+  path. **`cash doctor`** checks each links folder on PATH and warns when a link is no
+  longer the running `cash.exe` (an upgrade replaced it), naming the command that
+  refreshes them.
+
+A linked tool runs as `cash -c '"$0" "$@"' NAME ARGS`, the re-entry D58's paths use. Two
+things follow from the exe being the link. cash re-enters its own exe for a bundled tool
+and for `sh`; the child would take itself for the tool again, so the tool's process sets
+`CASH_LINKED_TOOL_EXE` to its path and a child at that path is the shell. And Windows
+looks for a program started by a bare name in the folder of the exe that starts it: cash
+starts the Windows programs it uses (`whoami`, `quser`) by their System32 path, or in a
+links folder `whoami.exe` would be cash, starting `whoami.exe` again as it came up.
+
 ---
 
 ## 4. Deliberate divergences from bash
