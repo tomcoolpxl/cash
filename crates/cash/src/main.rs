@@ -50,15 +50,13 @@ fn main() {
         return;
     }
 
-    // `cash --link-tools [DIR]` (D65), like `cash doctor`, acts on the installation rather
-    // than running anything in a shell.
+    // `cash --link-tools` and `--unlink-tools` (D65), like `cash doctor`, act on the
+    // installation rather than running anything in a shell.
     #[cfg(windows)]
     {
         let args: Vec<String> = std::env::args().collect();
-        if args.get(1).map(String::as_str) == Some("--link-tools") && args.len() <= 3 {
-            std::process::exit(i32::from(link_tools::run(
-                args.get(2).map(String::as_str),
-            )));
+        if let Some(status) = link_tools::command(&args) {
+            std::process::exit(i32::from(status));
         }
     }
 

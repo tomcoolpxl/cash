@@ -1,5 +1,6 @@
-//! `cash --link-tools [DIR]`: hard links to `cash.exe`, one per tool, so that programs
-//! outside cash can run the tools it carries (ROADMAP item 16, spec D65).
+//! `cash --link-tools [--add-to-path] [DIR]`: hard links to `cash.exe`, one per tool, so
+//! that programs outside cash can run the tools it carries (ROADMAP items 16 and 18,
+//! spec D65); `cash --unlink-tools [DIR]` takes them away again.
 //!
 //! `which ls` prints `C:/…/cash.exe/ls` (D58), which only cash can run: Python's
 //! `subprocess` or a `.bat` file can start only a real file. A hard link is one: the same
@@ -11,20 +12,69 @@
 //! - the folder is DIR, or `bin` next to `cash.exe`, made when missing and used as it is
 //!   when it exists;
 //! - a link cash made before (named in the manifest) is refreshed to this `cash.exe`, so
-//!   re-running after an upgrade updates them; any other file is left alone and listed;
+//!   re-running after an upgrade updates them; any other file is left alone and listed.
+//!   A link Windows will not delete is renamed aside, and a later run deletes it;
 //! - every tool is linked; those whose names a Windows program also has in System32 are
-//!   named, since a `.bat` calling `find` gets cash's if the folder comes first on PATH;
-//! - PATH is never changed: the command prints the folder and how to add it.
+//!   named;
+//! - PATH changes only when asked: `--add-to-path` puts the folder at the front of the
+//!   user `Path` ([`cash_win32::userpath`]), which Windows puts after the machine's, so
+//!   System32's `find` and `sort` still win for `.bat` files while cash's tools win over
+//!   the user's other Unix tools. `--unlink-tools` removes the links, that entry, and the
+//!   folder when nothing else is in it.
 
 use std::collections::BTreeSet;
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
+use cash_win32::userpath::Added;
+
 /// The manifest in a links folder: the names of the links cash made there, one a line.
 pub const MANIFEST: &str = ".cash-links";
 
+/// How a link renamed aside is named: `ls.exe.cash-old-1`. With no `.exe` at the end, no
+/// command lookup finds it.
+const SET_ASIDE: &str = ".cash-old-";
+
 /// The error Windows gives for a hard link to another volume.
 const ERROR_NOT_SAME_DEVICE: i32 = 17;
+
+/// The error NTFS gives when a file already has its 1023 names.
+const ERROR_TOO_MANY_LINKS: i32 = 1142;
+
+const USAGE: &str = "usage: cash --link-tools [--add-to-path] [DIR]\n       \
+                     cash --unlink-tools [DIR]\n\
+                     DIR is `bin` next to cash.exe when not given.";
+
+/// `cash --link-tools …` or `cash --unlink-tools …`: the process exit status, or `None`
+/// when the command line is neither.
+pub fn command(args: &[String]) -> Option<u8> {
+    let linking = match args.get(1).map(String::as_str) {
+        Some("--link-tools") => true,
+        Some("--unlink-tools") => false,
+        _ => return None,
+    };
+    let mut add_to_path = false;
+    let mut dir = None;
+    for arg in args.iter().skip(2) {
+        match arg.as_str() {
+            "--add-to-path" if linking => add_to_path = true,
+            "-h" | "--help" => {
+                println!("{USAGE}");
+                return Some(0);
+            }
+            other if !other.starts_with("--") && dir.is_none() => dir = Some(other),
+            other => {
+                eprintln!("cash: unexpected argument `{other}`\n{USAGE}");
+                return Some(2);
+            }
+        }
+    }
+    Some(if linking {
+        run(dir, add_to_path)
+    } else {
+        unlink(dir)
+    })
+}
 
 /// The tools to link: every command cash answers for itself that is not one of Bash's own
 /// builtins, the same set `which` gives a path (D58), whose name can be a file's.
@@ -66,6 +116,16 @@ fn read_manifest(dir: &Path) -> BTreeSet<String> {
                 .collect()
         })
         .unwrap_or_default()
+}
+
+fn write_manifest(dir: &Path, names: &BTreeSet<String>) -> Result<(), String> {
+    let manifest = names.iter().fold(String::new(), |mut text, name| {
+        text.push_str(name);
+        text.push('\n');
+        text
+    });
+    std::fs::write(dir.join(MANIFEST), manifest)
+        .map_err(|e| format!("{}: {e}", render(&dir.join(MANIFEST))))
 }
 
 /// The variable a linked tool's process sets to its own exe's path. cash re-enters its own
@@ -127,32 +187,57 @@ struct Outcome {
     current: Vec<String>,
     removed: Vec<String>,
     skipped: Vec<String>,
+    /// Links Windows would not delete, renamed aside for a later run to delete.
+    set_aside: Vec<String>,
 }
 
-/// `cash --link-tools [DIR]`. Returns the process exit status.
-pub fn run(dir: Option<&str>) -> u8 {
-    match link_all(dir) {
-        Ok((dir, outcome)) => {
-            report(&dir, &outcome);
-            0
-        }
+/// `cash --link-tools [--add-to-path] [DIR]`. Returns the process exit status.
+fn run(dir: Option<&str>, add_to_path: bool) -> u8 {
+    let (dir, outcome) = match link_all(dir) {
+        Ok(done) => done,
         Err(message) => {
             eprintln!("cash --link-tools: {message}");
+            return 1;
+        }
+    };
+    if !add_to_path {
+        report(&dir, &outcome, None);
+        return 0;
+    }
+    match cash_win32::userpath::add_first(&dir) {
+        Ok(added) => {
+            report(&dir, &outcome, Some(added));
+            0
+        }
+        Err(e) => {
+            report(&dir, &outcome, None);
+            eprintln!("cash --link-tools: cannot change the user PATH: {e}");
             1
         }
     }
 }
 
-fn link_all(dir: Option<&str>) -> Result<(PathBuf, Outcome), String> {
-    let exe = std::env::current_exe()
+/// `cash.exe`, as a real path.
+fn own_exe() -> Result<PathBuf, String> {
+    std::env::current_exe()
         .and_then(std::fs::canonicalize)
-        .map_err(|e| format!("cannot find cash.exe: {e}"))?;
-    let dir = match dir {
+        .map_err(|e| format!("cannot find cash.exe: {e}"))
+}
+
+/// The links folder: DIR, or `bin` next to `cash.exe`.
+fn links_folder(dir: Option<&str>, exe: &Path) -> Result<PathBuf, String> {
+    Ok(match dir {
         Some(dir) => PathBuf::from(dir),
         None => exe.parent().ok_or("cash.exe has no folder")?.join("bin"),
-    };
+    })
+}
+
+fn link_all(dir: Option<&str>) -> Result<(PathBuf, Outcome), String> {
+    let exe = own_exe()?;
+    let dir = links_folder(dir, &exe)?;
     std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", render(&dir)))?;
     let dir = std::fs::canonicalize(&dir).map_err(|e| format!("{}: {e}", render(&dir)))?;
+    sweep_set_aside(&dir);
 
     let owned = read_manifest(&dir);
     let tools = tool_names();
@@ -172,7 +257,9 @@ fn link_all(dir: Option<&str>) -> Result<(PathBuf, Outcome), String> {
                 continue;
             }
             // A link cash made to an older cash.exe: replace it with one to this one.
-            std::fs::remove_file(&link).map_err(|e| format!("{}: {e}", render(&link)))?;
+            if remove_or_set_aside(&link).map_err(|e| format!("{}: {e}", render(&link)))? {
+                outcome.set_aside.push(tool.clone());
+            }
             make_link(&exe, &link, &dir)?;
             outcome.refreshed.push(tool.clone());
         } else {
@@ -185,34 +272,74 @@ fn link_all(dir: Option<&str>) -> Result<(PathBuf, Outcome), String> {
     // Links cash made for tools it no longer carries.
     for name in owned.difference(&tools.iter().cloned().collect()) {
         let link = dir.join(format!("{name}.exe"));
-        if link.exists() && std::fs::remove_file(&link).is_ok() {
-            outcome.removed.push(name.clone());
+        if !link.exists() {
+            continue;
+        }
+        match remove_or_set_aside(&link) {
+            Ok(aside) => {
+                outcome.removed.push(name.clone());
+                if aside {
+                    outcome.set_aside.push(name.clone());
+                }
+            }
+            // Still cash's, and still listed, for the next run to try again.
+            Err(_) => {
+                now_owned.insert(name.clone());
+            }
         }
     }
 
-    let manifest = now_owned.iter().fold(String::new(), |mut text, name| {
-        text.push_str(name);
-        text.push('\n');
-        text
-    });
-    std::fs::write(dir.join(MANIFEST), manifest)
-        .map_err(|e| format!("{}: {e}", render(&dir.join(MANIFEST))))?;
-
+    write_manifest(&dir, &now_owned)?;
     Ok((dir, outcome))
 }
 
-fn make_link(exe: &Path, link: &Path, dir: &Path) -> Result<(), String> {
-    std::fs::hard_link(exe, link).map_err(|e| {
-        if e.raw_os_error() == Some(ERROR_NOT_SAME_DEVICE) {
-            format!(
-                "{} is on another drive than {}; a hard link cannot cross drives. \
-                 Name a folder on the same drive.",
-                render(dir),
-                render(exe)
-            )
-        } else {
-            format!("{}: {e}", render(link))
+/// Delete a link or, when Windows refuses, rename it aside: `Ok(true)` then. Windows
+/// deletes a name of a running program while the file has others, but not its last one;
+/// that happens to links whose old `cash.exe` is gone while a program still runs one of
+/// them, and renaming still works.
+fn remove_or_set_aside(link: &Path) -> std::io::Result<bool> {
+    let Err(error) = std::fs::remove_file(link) else {
+        return Ok(false);
+    };
+    let name = link
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let free = (1..1000)
+        .map(|n| link.with_file_name(format!("{name}{SET_ASIDE}{n}")))
+        .find(|aside| !aside.exists());
+    match free {
+        Some(aside) if std::fs::rename(link, &aside).is_ok() => Ok(true),
+        _ => Err(error),
+    }
+}
+
+/// Delete the links earlier runs renamed aside, those no longer running.
+fn sweep_set_aside(dir: &Path) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        if entry.file_name().to_string_lossy().contains(SET_ASIDE) {
+            let _ = std::fs::remove_file(entry.path());
         }
+    }
+}
+
+fn make_link(exe: &Path, link: &Path, dir: &Path) -> Result<(), String> {
+    std::fs::hard_link(exe, link).map_err(|e| match e.raw_os_error() {
+        Some(ERROR_NOT_SAME_DEVICE) => format!(
+            "{} is on another drive than {}; a hard link cannot cross drives. \
+             Name a folder on the same drive.",
+            render(dir),
+            render(exe)
+        ),
+        Some(ERROR_TOO_MANY_LINKS) => format!(
+            "{} already has the 1023 names NTFS allows a file, each links folder giving it \
+             one a tool; `cash --unlink-tools DIR` removes a folder's links",
+            render(exe)
+        ),
+        _ => format!("{}: {e}", render(link)),
     })
 }
 
@@ -240,7 +367,7 @@ fn on_path(dir: &Path) -> bool {
     })
 }
 
-fn report(dir: &Path, outcome: &Outcome) {
+fn report(dir: &Path, outcome: &Outcome, added: Option<Added>) {
     // A reader that stops early (`| head`) is not an error worth a panic.
     let mut out = std::io::stdout().lock();
     macro_rules! say {
@@ -259,6 +386,12 @@ fn report(dir: &Path, outcome: &Outcome) {
             outcome.linked.len(),
             outcome.refreshed.len(),
             outcome.current.len()
+        );
+    }
+    if !outcome.set_aside.is_empty() {
+        say!(
+            "  still in use, renamed aside to be deleted next time: {}",
+            outcome.set_aside.join(" ")
         );
     }
     if !outcome.removed.is_empty() {
@@ -288,25 +421,113 @@ fn report(dir: &Path, outcome: &Outcome) {
     let windows = windows_names(&linked);
     if !windows.is_empty() {
         say!(
-            "  note: Windows has its own {} in System32. With this folder before System32 on \
-             PATH, a .bat file calling one gets cash's; put it after System32 to keep Windows'.",
+            "  note: System32 has its own {}. Windows puts the user PATH after the machine's, \
+             so from there programs outside cash still get those.",
             windows.join(", ")
         );
     }
 
-    if on_path(dir) {
-        say!("  the folder is on PATH: other programs can run these now");
-    } else {
-        let windows_path = dir.display().to_string();
-        let windows_path = windows_path.strip_prefix(r"\\?\").unwrap_or(&windows_path);
-        say!(
-            "  to let other programs find them, add the folder to your user PATH, e.g. in PowerShell:"
-        );
-        say!(
-            "    [Environment]::SetEnvironmentVariable('Path', [Environment]::GetEnvironmentVariable('Path', 'User') + ';{windows_path}', 'User')"
-        );
-        say!("  (cash does not change PATH itself; programs started after that see it)");
+    match added {
+        Some(Added::Added) => {
+            say!(
+                "  added to the front of your user PATH: programs started from now on can run these"
+            );
+            say!("  (terminals already open keep the PATH they started with)");
+        }
+        Some(Added::AlreadyThere) => {
+            say!("  already on your user PATH, left where it is");
+        }
+        None if cash_win32::userpath::contains(dir) => {
+            say!("  the folder is on your user PATH");
+        }
+        None if on_path(dir) => {
+            say!("  the folder is on PATH: other programs can run these now");
+        }
+        None => {
+            say!(
+                "  to let other programs run these, put the folder at the front of your user PATH:"
+            );
+            say!("    cash --link-tools --add-to-path \"{shown}\"");
+        }
     }
+}
+
+/// `cash --unlink-tools [DIR]`: the links cash made there, the folder's entry on the user
+/// PATH, and the folder when nothing else is in it. Returns the process exit status.
+fn unlink(dir: Option<&str>) -> u8 {
+    let dir = match own_exe().and_then(|exe| links_folder(dir, &exe)) {
+        Ok(dir) => dir,
+        Err(message) => {
+            eprintln!("cash --unlink-tools: {message}");
+            return 1;
+        }
+    };
+    // A folder already gone can still be on PATH.
+    let dir = std::fs::canonicalize(&dir).unwrap_or(dir);
+    sweep_set_aside(&dir);
+
+    let mut removed = 0;
+    let mut set_aside = Vec::new();
+    let mut failed = BTreeSet::new();
+    for name in read_manifest(&dir) {
+        let link = dir.join(format!("{name}.exe"));
+        if !link.exists() {
+            continue;
+        }
+        match remove_or_set_aside(&link) {
+            Ok(aside) => {
+                removed += 1;
+                if aside {
+                    set_aside.push(name);
+                }
+            }
+            Err(e) => {
+                eprintln!("cash --unlink-tools: {}: {e}", render(&link));
+                failed.insert(name);
+            }
+        }
+    }
+    // A link that could not be removed stays listed, for the next run.
+    if failed.is_empty() {
+        let _ = std::fs::remove_file(dir.join(MANIFEST));
+    } else {
+        let _ = write_manifest(&dir, &failed);
+    }
+
+    let off_path = cash_win32::userpath::remove(&dir);
+    let folder_gone = std::fs::remove_dir(&dir).is_ok() || !dir.exists();
+
+    let mut out = std::io::stdout().lock();
+    let _ = writeln!(out, "cash --unlink-tools: {}", render(&dir));
+    let _ = writeln!(out, "  {removed} links removed");
+    if !set_aside.is_empty() {
+        let _ = writeln!(
+            out,
+            "  still in use, renamed aside: {}; run this again once the programs using them \
+             exit",
+            set_aside.join(" ")
+        );
+    }
+    match &off_path {
+        Ok(true) => {
+            let _ = writeln!(out, "  taken off your user PATH");
+        }
+        Ok(false) => {}
+        Err(e) => {
+            let _ = writeln!(out, "  cannot change the user PATH: {e}");
+        }
+    }
+    let _ = writeln!(
+        out,
+        "  {}",
+        if folder_gone {
+            "the folder is removed"
+        } else {
+            "the folder is kept: other files are in it"
+        }
+    );
+
+    u8::from(!failed.is_empty() || off_path.is_err())
 }
 
 #[cfg(test)]
@@ -323,5 +544,18 @@ mod tests {
         assert!(!is_plain_name("COM1"));
         assert!(is_plain_name("comm"));
         assert!(!is_plain_name(""));
+    }
+
+    fn args(line: &str) -> Vec<String> {
+        line.split_whitespace().map(str::to_owned).collect()
+    }
+
+    #[test]
+    fn only_its_own_options_are_taken() {
+        assert_eq!(command(&args("cash -c ls")), None);
+        assert_eq!(command(&args("cash --link-tools --help")), Some(0));
+        assert_eq!(command(&args("cash --link-tools a b")), Some(2));
+        assert_eq!(command(&args("cash --link-tools --bogus")), Some(2));
+        assert_eq!(command(&args("cash --unlink-tools --add-to-path")), Some(2));
     }
 }

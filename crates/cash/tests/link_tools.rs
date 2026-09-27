@@ -1,5 +1,6 @@
-//! `cash --link-tools [DIR]` (ROADMAP item 16, D65): hard links to `cash.exe`, one per
-//! tool, that programs outside cash can run.
+//! `cash --link-tools [--add-to-path] [DIR]` and `cash --unlink-tools [DIR]` (ROADMAP
+//! items 16 and 18, D65): hard links to `cash.exe`, one per tool, that programs outside
+//! cash can run, and the user PATH entry that lets them.
 #![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
@@ -8,19 +9,67 @@
               assumption in a test should abort it loudly"
 )]
 
+use std::cell::RefCell;
+use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
+use std::sync::{Mutex, MutexGuard, PoisonError};
 
 const CASH: &str = env!("CARGO_BIN_EXE_cash");
 
-/// A fresh folder on the same drive as the test's `cash.exe`, which a hard link needs.
-fn folder(name: &str) -> PathBuf {
+/// NTFS gives a file at most 1023 names, and each links folder gives the test's
+/// `cash.exe` 126 more. So the tests take turns: a test holds the turn while a folder of
+/// its own exists, and a folder is deleted when its test is done with it.
+static TURN: Mutex<()> = Mutex::new(());
+
+thread_local! {
+    /// This test's folders, and its turn while it has any.
+    static HELD: RefCell<(usize, Option<MutexGuard<'static, ()>>)> =
+        const { RefCell::new((0, None)) };
+}
+
+/// A fresh folder on the same drive as the test's `cash.exe`, which a hard link needs;
+/// deleted when dropped.
+struct Folder(PathBuf);
+
+fn folder(name: &str) -> Folder {
+    HELD.with_borrow_mut(|(count, turn)| {
+        if *count == 0 {
+            *turn = Some(TURN.lock().unwrap_or_else(PoisonError::into_inner));
+        }
+        *count += 1;
+    });
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR"))
         .join("link_tools")
         .join(name);
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    dir
+    Folder(dir)
+}
+
+impl Drop for Folder {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+        HELD.with_borrow_mut(|(count, turn)| {
+            *count -= 1;
+            if *count == 0 {
+                *turn = None;
+            }
+        });
+    }
+}
+
+impl std::ops::Deref for Folder {
+    type Target = Path;
+    fn deref(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl AsRef<OsStr> for Folder {
+    fn as_ref(&self) -> &OsStr {
+        self.0.as_os_str()
+    }
 }
 
 fn link_tools(dir: &Path) -> Output {
@@ -62,7 +111,6 @@ fn links_every_tool_and_writes_the_manifest() {
     assert!(out.status.success(), "{}", text(&out.stderr));
     let stdout = text(&out.stdout);
     assert!(stdout.contains(" linked, 0 refreshed"), "{stdout}");
-    assert!(stdout.contains("SetEnvironmentVariable('Path'"), "{stdout}");
 
     let manifest = std::fs::read_to_string(dir.join(".cash-links")).unwrap();
     let names: Vec<&str> = manifest.lines().collect();
@@ -225,6 +273,228 @@ fn a_folder_on_another_drive_is_an_error() {
         "{}",
         text(&out.stderr)
     );
+}
+
+#[test]
+fn without_a_folder_the_links_go_in_bin_beside_cash() {
+    let home = folder("default");
+    let cash = home.join("cash.exe");
+    std::fs::hard_link(CASH, &cash).unwrap();
+    let out = Command::new(&cash)
+        .arg("--link-tools")
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{}", text(&out.stderr));
+    assert!(home.join("bin").join("ls.exe").is_file());
+    assert!(home.join("bin").join(".cash-links").is_file());
+}
+
+/// Kill a process and everything it started: a linked tool re-enters its own exe for a
+/// bundled tool, so `sleep.exe` is two processes.
+fn kill_tree(child: &mut std::process::Child) {
+    let _ = Command::new("taskkill")
+        .args(["/F", "/T", "/PID", &child.id().to_string()])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+    let _ = child.wait();
+}
+
+/// The files in `dir` that `--link-tools` renamed aside.
+fn set_aside(dir: &Path) -> Vec<String> {
+    std::fs::read_dir(dir)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .filter(|name| name.contains(".cash-old-"))
+        .collect()
+}
+
+#[test]
+fn a_link_windows_will_not_delete_is_renamed_aside_and_a_later_run_deletes_it() {
+    // Links to an old cash.exe that is itself gone (`scoop cleanup` removed its version
+    // folder), so the links are that file's last names, and a program outside cash still
+    // runs one. Windows deletes a name of a running program while it has others, but not
+    // its last: the refresh reaches that with the last link it replaces.
+    let old_home = folder("in-use-old");
+    let old = old_home.join("cash.exe");
+    std::fs::copy(CASH, &old).unwrap();
+    let dir = folder("in-use");
+    let made = Command::new(&old)
+        .arg("--link-tools")
+        .arg(&dir)
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    assert!(made.status.success(), "{}", text(&made.stderr));
+    std::fs::remove_file(&old).unwrap();
+    let mut sleeping = Command::new(dir.join("sleep.exe"))
+        .arg("60")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .spawn()
+        .unwrap();
+
+    let refresh = link_tools(&dir);
+    let aside = set_aside(&dir);
+    kill_tree(&mut sleeping);
+
+    let stdout = text(&refresh.stdout);
+    assert!(refresh.status.success(), "{}", text(&refresh.stderr));
+    assert!(stdout.contains(" 0 linked, "), "{stdout}");
+    assert!(stdout.contains("still in use, renamed aside"), "{stdout}");
+    assert_eq!(aside.len(), 1, "{aside:?}\n{stdout}");
+
+    // Once it has exited, the next run deletes it; Windows may take a moment to let go.
+    for _ in 0..50 {
+        assert!(link_tools(&dir).status.success());
+        if set_aside(&dir).is_empty() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    assert!(set_aside(&dir).is_empty(), "{:?}", set_aside(&dir));
+}
+
+/// A registry key of one test's own under `HKEY_CURRENT_USER`, standing in for
+/// `Environment` so that no test touches the real user `Path`; deleted when dropped.
+struct UserEnvironment {
+    root: String,
+    key: String,
+}
+
+impl UserEnvironment {
+    fn new(name: &str, path: Option<&str>) -> Self {
+        let root = format!(r"Software\cash-test-{}-{name}", std::process::id());
+        let key = format!(r"{root}\Environment");
+        if let Some(value) = path {
+            let status = Command::new("reg")
+                .args(["add", &format!(r"HKCU\{key}"), "/v", "Path"])
+                .args(["/t", "REG_EXPAND_SZ", "/d", value, "/f"])
+                .stdout(Stdio::null())
+                .status()
+                .unwrap();
+            assert!(status.success());
+        }
+        Self { root, key }
+    }
+
+    /// The stored `Path`'s type and value, as `reg query` prints them.
+    fn path(&self) -> Option<(String, String)> {
+        let out = Command::new("reg")
+            .args(["query", &format!(r"HKCU\{}", self.key), "/v", "Path"])
+            .stderr(Stdio::null())
+            .output()
+            .unwrap();
+        let stdout = text(&out.stdout);
+        let line = stdout
+            .lines()
+            .find(|line| line.trim_start().starts_with("Path"))?;
+        let rest = line.trim_start().strip_prefix("Path")?.trim_start();
+        let (kind, value) = rest.split_once(char::is_whitespace)?;
+        Some((kind.to_owned(), value.trim().to_owned()))
+    }
+
+    fn cash<I, S>(&self, args: I) -> Output
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<std::ffi::OsStr>,
+    {
+        Command::new(CASH)
+            .args(args)
+            .env("CASH_USER_ENVIRONMENT_KEY", &self.key)
+            .stdin(Stdio::null())
+            .output()
+            .unwrap()
+    }
+}
+
+impl Drop for UserEnvironment {
+    fn drop(&mut self) {
+        let _ = Command::new("reg")
+            .args(["delete", &format!(r"HKCU\{}", self.root), "/f"])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+    }
+}
+
+/// How cash spells a folder on the user `Path`: backslashes, and no `\\?\`.
+fn path_entry(dir: &Path) -> String {
+    let real = std::fs::canonicalize(dir).unwrap().display().to_string();
+    real.strip_prefix(r"\\?\").unwrap_or(&real).to_owned()
+}
+
+fn expand_sz(value: &str) -> (String, String) {
+    ("REG_EXPAND_SZ".to_owned(), value.to_owned())
+}
+
+#[test]
+fn add_to_path_puts_the_folder_first_once_and_unlink_takes_it_off() {
+    let dir = folder("path");
+    let before = r"%USERPROFILE%\go\bin;C:\x";
+    let env = UserEnvironment::new("path", Some(before));
+    let link = [
+        "--link-tools".as_ref(),
+        "--add-to-path".as_ref(),
+        dir.as_os_str(),
+    ];
+
+    let out = env.cash(link);
+    let stdout = text(&out.stdout);
+    assert!(out.status.success(), "{}", text(&out.stderr));
+    assert!(
+        stdout.contains("added to the front of your user PATH"),
+        "{stdout}"
+    );
+    // The type and the unexpanded %USERPROFILE% survive; the folder comes first.
+    let first = format!("{};{before}", path_entry(&dir));
+    assert_eq!(env.path(), Some(expand_sz(&first)));
+
+    let again = text(&env.cash(link).stdout);
+    assert!(again.contains("already on your user PATH"), "{again}");
+    assert_eq!(env.path(), Some(expand_sz(&first)));
+
+    let gone = env.cash(["--unlink-tools".as_ref(), dir.as_os_str()]);
+    let stdout = text(&gone.stdout);
+    assert!(gone.status.success(), "{stdout}{}", text(&gone.stderr));
+    assert!(stdout.contains("taken off your user PATH"), "{stdout}");
+    assert!(stdout.contains("the folder is removed"), "{stdout}");
+    assert!(!stdout.contains(" 0 links removed"), "{stdout}");
+    assert!(!dir.exists());
+    assert_eq!(env.path(), Some(expand_sz(before)));
+}
+
+#[test]
+fn a_user_with_no_path_of_their_own_is_left_with_none() {
+    let dir = folder("fresh");
+    let env = UserEnvironment::new("fresh", None);
+
+    let out = env.cash([
+        "--link-tools".as_ref(),
+        "--add-to-path".as_ref(),
+        dir.as_os_str(),
+    ]);
+    assert!(out.status.success(), "{}", text(&out.stderr));
+    assert_eq!(env.path(), Some(expand_sz(&path_entry(&dir))));
+
+    let gone = env.cash(["--unlink-tools".as_ref(), dir.as_os_str()]);
+    assert!(gone.status.success(), "{}", text(&gone.stderr));
+    assert_eq!(env.path(), None);
+}
+
+#[test]
+fn without_add_to_path_it_says_how_and_writes_nothing() {
+    let dir = folder("advice");
+    let env = UserEnvironment::new("advice", Some(r"C:\x"));
+    let out = env.cash(["--link-tools".as_ref(), dir.as_os_str()]);
+    let stdout = text(&out.stdout);
+    assert!(
+        stdout.contains("cash --link-tools --add-to-path"),
+        "{stdout}"
+    );
+    assert!(!stdout.contains("SetEnvironmentVariable"), "{stdout}");
+    assert_eq!(env.path(), Some(expand_sz(r"C:\x")));
 }
 
 #[test]
