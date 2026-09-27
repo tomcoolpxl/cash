@@ -273,6 +273,16 @@ impl JobObject {
         });
     }
 
+    /// Clear `KILL_ON_JOB_CLOSE` on the session job, keeping its breakaway permission,
+    /// so what is still in it outlives the handle — see
+    /// [`crate::session::release_at_exit`].
+    pub(crate) fn release_on_close(&self) {
+        let _ = self.apply(JobConfig {
+            kill_on_close: false,
+            allow_breakaway: true,
+        });
+    }
+
     /// The raw job handle, for callers that need it during process creation.
     #[must_use]
     pub const fn as_raw(&self) -> HANDLE {

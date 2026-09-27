@@ -243,7 +243,20 @@ one suspended. So the wiring uses post-spawn assignment with that window open.
 It is narrow, and the session job still catches anything through it: such a process
 cannot outlive cash, only a `kill` of its own job.
 
-**Three documented exceptions to that guarantee.** They must be stated wherever the
+**A finished command's job is released, not reaped.** When a command's root process
+has exited, cash clears `KILL_ON_JOB_CLOSE` on its job before closing the handle, so
+whatever it left running keeps running, as in bash. `code.cmd` starts the VS Code window
+and exits; reaping its job when the next command ran closed the window as it opened.
+`kill` of a live job still terminates its tree.
+
+**GUI applications outlive cash.** On an orderly exit — `exit`, end of input, the
+console window being closed, logoff or shutdown — cash terminates the console programs
+in the session job and clears `KILL_ON_JOB_CLOSE` on it, leaving GUI-subsystem processes
+and their descendants (VS Code's terminals and language servers) running, as PowerShell
+does. `cashctl gui-apps close` turns this off for the session; `cashctl gui-apps` prints
+the setting. A crash or a kill from Task Manager still reaps everything.
+
+**Four documented exceptions to that guarantee.** They must be stated wherever the
 guarantee is claimed:
 
 | Exception | Why | Ref |
@@ -251,6 +264,7 @@ guarantee is claimed:
 | Elevated processes | Cannot be assigned across an integrity boundary | D42 |
 | `detach`ed processes | Requires `JOB_OBJECT_LIMIT_BREAKAWAY_OK` on the session job, which any child can then exploit | D45 |
 | Prompt commands | Share a pooled job rather than getting their own | D36 |
+| GUI applications, on an orderly exit | An editor opened from the shell should not close with it; `cashctl gui-apps close` restores the full guarantee | D6 |
 
 Resolved sub-questions: `trap EXIT` ordering → D14; the `detach` builtin → D45.
 
@@ -1719,7 +1733,7 @@ someone who expected bash, so additions need to earn their place.
 | 9 | `kill -STOP` suspends threads, not a real `SIGSTOP` | Windows has no `SIGSTOP` for arbitrary exes | D19 |
 | 10 | Process substitution does not stream | Temp files, not pipes | D17 |
 | 11 | `[ -s file ]` is false for App Execution Aliases | They are genuinely 0 bytes | D46 |
-| 12 | Elevated and `detach`ed processes survive cash | Integrity boundary; breakaway flag | D42, D45 |
+| 12 | Elevated and `detach`ed processes, and GUI applications, survive cash; other processes it started do not | Integrity boundary; breakaway flag; an editor should outlive the shell (`cashctl gui-apps close` to reap them) | D6, D42, D45 |
 | 13 | A bundled builtin cannot delete the shell's current directory | It re-enters the binary as a child inheriting that cwd, and Windows refuses to delete a process's own cwd | D48 |
 | 14 | `$!` is empty for a background job made only of shell builtins | bash forks and reports the subshell's pid; cash runs the job as a task, so there is no process to name | D11 |
 | 15 | `kill 0` signals the trees cash spawned, not a process group | Windows has no process group that excludes the terminal; the console-wide alternative would kill it | D22 |

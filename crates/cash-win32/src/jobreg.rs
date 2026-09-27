@@ -135,6 +135,18 @@ pub fn forget(pid: u32) {
     }
 }
 
+/// Release every job still held, so its members outlive cash's exit — for
+/// [`crate::session::release_at_exit`], once it has ended what should not.
+pub fn release_all() {
+    let jobs: Vec<JobObject> = registry()
+        .lock()
+        .map(|mut r| r.drain().map(|(_, job)| job).collect())
+        .unwrap_or_default();
+    for job in jobs {
+        job.release();
+    }
+}
+
 /// Discard jobs whose root process is gone.
 ///
 /// Called opportunistically so a long-lived interactive session does not accumulate a

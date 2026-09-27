@@ -696,6 +696,34 @@ pub fn image_path(pid: u32) -> Option<std::path::PathBuf> {
     })
 }
 
+/// Whether the executable at `path` is built for the Windows GUI subsystem — a program
+/// that opens windows rather than one that runs in a console. `None` if it is not a PE
+/// image this can read.
+#[must_use]
+pub fn is_gui_image(path: &std::path::Path) -> Option<bool> {
+    use std::io::{Read as _, Seek as _, SeekFrom};
+
+    const IMAGE_SUBSYSTEM_WINDOWS_GUI: u16 = 2;
+
+    let mut file = std::fs::File::open(path).ok()?;
+    let mut dos = [0u8; 64];
+    file.read_exact(&mut dos).ok()?;
+    if dos.get(..2)? != b"MZ" {
+        return None;
+    }
+    let pe = u32::from_le_bytes(dos.get(0x3C..0x40)?.try_into().ok()?);
+    // The signature, the 20-byte COFF header, then the optional header, whose
+    // `Subsystem` field sits at offset 68 in both PE32 and PE32+.
+    let mut header = [0u8; 24 + 70];
+    file.seek(SeekFrom::Start(u64::from(pe))).ok()?;
+    file.read_exact(&mut header).ok()?;
+    if header.get(..4)? != b"PE\0\0" {
+        return None;
+    }
+    let subsystem = u16::from_le_bytes(header.get(24 + 68..24 + 70)?.try_into().ok()?);
+    Some(subsystem == IMAGE_SUBSYSTEM_WINDOWS_GUI)
+}
+
 /// The files mapped into a process as modules: its executable and every loaded DLL.
 ///
 /// `None` when the process cannot be opened for reading (other users' processes and

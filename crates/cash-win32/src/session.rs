@@ -6,10 +6,21 @@
 //! process that tries to daemonise. That is the property §2 claims is stronger than
 //! bash's on Linux, where descendants reparent to init and survive.
 //!
-//! The job handle is deliberately leaked for the lifetime of the process. Dropping it
+//! The job handle is deliberately kept for the lifetime of the process. Dropping it
 //! would close the last handle and terminate the job — which now contains cash itself.
+//!
+//! ## GUI applications
+//!
+//! `code .` should leave VS Code open when the shell that started it exits, as it does
+//! from PowerShell. So when cash exits in an orderly way — `exit`, end of input, or its
+//! console window being closed — [`release_at_exit`] ends the console programs it
+//! started and lets go of the rest: GUI applications and everything they started
+//! (VS Code's terminals and language servers). `cashctl gui-apps close` turns that off
+//! for the session. A crash or a kill from Task Manager still reaps everything.
 
 use std::io;
+use std::sync::OnceLock;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use windows_sys::Win32::System::Threading::GetCurrentProcess;
 
@@ -35,6 +46,13 @@ pub struct SessionState {
     /// rather than a problem.
     pub nested: bool,
 }
+
+/// The session job, held for the process lifetime. A static is never dropped, so this
+/// keeps the handle open exactly as leaking it would, and lets exit find it.
+static SESSION_JOB: OnceLock<JobObject> = OnceLock::new();
+
+/// Whether GUI applications cash started outlive it. On unless the session says not.
+static GUI_APPS_OUTLIVE: AtomicBool = AtomicBool::new(true);
 
 /// Install cash's session job and console settings.
 ///
@@ -69,17 +87,120 @@ pub fn install() -> (Option<JobObject>, SessionState) {
     )
 }
 
-/// Install the session and leak the job handle for the process lifetime.
+/// Install the session and hold the job handle for the process lifetime.
 ///
-/// Leaking is correct here, not sloppy: the handle must outlive every descendant, and
-/// the process is about to own it until exit. When the process does exit — however it
-/// exits — the kernel closes the handle and reaps the job.
+/// The handle must outlive every descendant, and the process owns it until exit. When
+/// the process does exit — however it exits — the kernel closes the handle and reaps
+/// the job, except for what [`release_at_exit`] let go of first.
 pub fn install_and_leak() -> SessionState {
     let (job, state) = install();
     if let Some(job) = job {
-        std::mem::forget(job);
+        if SESSION_JOB.set(job).is_ok() {
+            install_close_handler();
+        }
     }
     state
+}
+
+/// Whether GUI applications cash started outlive it (`cashctl gui-apps`).
+#[must_use]
+pub fn gui_apps_outlive() -> bool {
+    GUI_APPS_OUTLIVE.load(Ordering::Relaxed)
+}
+
+/// Choose whether GUI applications cash started outlive it, for this session.
+pub fn set_gui_apps_outlive(outlive: bool) {
+    GUI_APPS_OUTLIVE.store(outlive, Ordering::Relaxed);
+}
+
+/// Prepare the session job for cash's exit: end the console programs cash started, and
+/// let GUI applications and their descendants keep running.
+///
+/// Does nothing when GUI applications are set to close with cash, or when there is no
+/// session job; the kernel then reaps everything as the process ends. Safe to call more
+/// than once — the exit path and the console close handler may both reach it.
+pub fn release_at_exit() {
+    static RELEASED: AtomicBool = AtomicBool::new(false);
+
+    if !gui_apps_outlive() {
+        return;
+    }
+    let Some(job) = SESSION_JOB.get() else {
+        return;
+    };
+    if RELEASED.swap(true, Ordering::SeqCst) {
+        return;
+    }
+
+    let members = job.process_ids().unwrap_or_default();
+    let own = std::process::id();
+    let parents: std::collections::HashMap<u32, u32> = crate::process::list()
+        .into_iter()
+        .map(|p| (p.pid, p.parent_pid))
+        .collect();
+    let is_gui = |pid: u32| {
+        crate::process::image_path(pid)
+            .and_then(|path| crate::process::is_gui_image(&path))
+            .unwrap_or(false)
+    };
+    let gui: std::collections::HashSet<u32> = members
+        .iter()
+        .copied()
+        .filter(|&pid| pid != own && is_gui(pid))
+        .collect();
+
+    // A member is kept if it is a GUI application or was started by one, following
+    // parents through the job — never through cash itself, whose children are exactly
+    // what is being sorted.
+    let kept = |pid: u32| {
+        let mut current = pid;
+        for _ in 0..64 {
+            if gui.contains(&current) {
+                return true;
+            }
+            match parents.get(&current) {
+                Some(&parent) if parent != own && members.contains(&parent) => {
+                    current = parent;
+                }
+                _ => return false,
+            }
+        }
+        false
+    };
+
+    for &pid in &members {
+        if pid != own && !kept(pid) {
+            let _ = crate::process::terminate(pid);
+        }
+    }
+
+    // A command still running sits in its own job too (D6), whose handle closes as cash
+    // exits; release those as well, or a GUI application started with `&` goes with it.
+    crate::jobreg::release_all();
+    job.release_on_close();
+}
+
+/// Run [`release_at_exit`] when the console window is closed, or the user logs off or
+/// the machine shuts down — the ways an interactive cash usually ends.
+fn install_close_handler() {
+    use windows_sys::Win32::Foundation::{FALSE, TRUE};
+    use windows_sys::Win32::System::Console::{
+        CTRL_CLOSE_EVENT, CTRL_LOGOFF_EVENT, CTRL_SHUTDOWN_EVENT, SetConsoleCtrlHandler,
+    };
+
+    unsafe extern "system" fn on_close(event: u32) -> i32 {
+        if matches!(
+            event,
+            CTRL_CLOSE_EVENT | CTRL_LOGOFF_EVENT | CTRL_SHUTDOWN_EVENT
+        ) {
+            release_at_exit();
+        }
+        // Not handled: the next handler, and then the default one, still run.
+        FALSE
+    }
+
+    // SAFETY: `on_close` is a valid handler for the life of the process.
+    unsafe { SetConsoleCtrlHandler(Some(on_close), TRUE) };
 }
 
 /// Put the current process into a job object.

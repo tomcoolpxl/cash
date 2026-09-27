@@ -46,6 +46,22 @@ enum CommandGroup {
     Events(EventsCommand),
     #[clap(subcommand)]
     Process(ProcessCommand),
+    /// Whether GUI applications started from cash (`code .`) keep running after cash
+    /// exits. Prints the current setting when given no argument.
+    #[clap(name = "gui-apps")]
+    GuiApps {
+        /// `outlive` (the default) or `close`.
+        mode: Option<GuiAppsMode>,
+    },
+}
+
+/// What happens to GUI applications cash started when it exits.
+#[derive(Clone, Copy, clap::ValueEnum)]
+enum GuiAppsMode {
+    /// They keep running, as when started from PowerShell or Explorer.
+    Outlive,
+    /// They are closed with cash, like every console program it started.
+    Close,
 }
 
 /// Commands for inspecting call state.
@@ -124,7 +140,36 @@ impl cash_core::builtins::Command for CashCtlCommand {
             CommandGroup::Complete(complete) => complete.execute(&mut context).await,
             CommandGroup::Events(events) => events.execute(&context),
             CommandGroup::Process(process) => process.execute(&context),
+            CommandGroup::GuiApps { mode } => gui_apps(&context, *mode),
         }
+    }
+}
+
+fn gui_apps(
+    context: &cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
+    mode: Option<GuiAppsMode>,
+) -> Result<cash_core::ExecutionResult, cash_core::Error> {
+    #[cfg(windows)]
+    {
+        match mode {
+            Some(GuiAppsMode::Outlive) => cash_win32::session::set_gui_apps_outlive(true),
+            Some(GuiAppsMode::Close) => cash_win32::session::set_gui_apps_outlive(false),
+            None => {
+                let current = if cash_win32::session::gui_apps_outlive() {
+                    "outlive"
+                } else {
+                    "close"
+                };
+                writeln!(context.stdout(), "{current}")?;
+            }
+        }
+        Ok(ExecutionResult::success())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = mode;
+        writeln!(context.stderr(), "cashctl gui-apps: only meaningful on Windows")?;
+        Ok(ExecutionResult::general_error())
     }
 }
 

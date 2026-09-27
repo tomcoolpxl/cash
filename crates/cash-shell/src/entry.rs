@@ -218,6 +218,11 @@ pub fn run() {
         }
     };
 
+    // D6: GUI applications cash started (`code .`) keep running after it; the console
+    // programs it started do not.
+    #[cfg(windows)]
+    cash_win32::session::release_at_exit();
+
     std::process::exit(i32::from(exit_code));
 }
 
