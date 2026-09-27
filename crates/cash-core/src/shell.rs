@@ -146,6 +146,9 @@ pub struct Shell<SE: extensions::ShellExtensions = extensions::DefaultShellExten
     /// Abbreviations defined with `abbr`, expanded by the line editor.
     abbreviations: crate::abbreviations::Abbreviations,
 
+    /// The folders the shell has been in, for `prevd`, `nextd` and `cdh`.
+    directory_history: crate::dirhistory::DirectoryHistory,
+
     /// Last "SECONDS" captured time.
     last_stopwatch_time: std::time::SystemTime,
 
@@ -203,6 +206,7 @@ impl<SE: extensions::ShellExtensions> Clone for Shell<SE> {
             program_location_cache: self.program_location_cache.clone(),
             path_index: self.path_index.clone(),
             abbreviations: self.abbreviations.clone(),
+            directory_history: self.directory_history.clone(),
             last_stopwatch_time: self.last_stopwatch_time,
             last_stopwatch_offset: self.last_stopwatch_offset,
             parser_impl: self.parser_impl,

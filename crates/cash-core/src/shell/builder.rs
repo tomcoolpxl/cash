@@ -275,6 +275,7 @@ impl<SE: extensions::ShellExtensions> Default for Shell<SE> {
             program_location_cache: pathcache::PathCache::default(),
             path_index: crate::pathindex::PathIndex::default(),
             abbreviations: crate::abbreviations::Abbreviations::default(),
+            directory_history: crate::dirhistory::DirectoryHistory::default(),
             last_stopwatch_time: std::time::SystemTime::now(),
             last_stopwatch_offset: 0,
             parser_impl: crate::parser::ParserImpl::default(),

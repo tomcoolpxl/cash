@@ -8,6 +8,7 @@ pub mod builtins;
 pub mod callstack;
 pub mod commands;
 pub mod completion;
+pub mod dirhistory;
 pub mod env;
 pub mod error;
 pub mod escape;

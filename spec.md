@@ -1156,6 +1156,7 @@ Four, all justified by decisions made above rather than invented:
 | `elevate` | UAC elevation as a first-class verb, so cash can warn that the child escapes D6 and register it for D42's tracking. |
 | `start` | Open a file or URL with its default handler — the Windows `xdg-open`. |
 | `abbr` | fish's abbreviations, which the prompt expands in place (D60). Added later, and not Windows-specific. |
+| `prevd`, `nextd`, `cdh` | fish's folder history, also on Alt-← and Alt-→ (D62). Added later, and not Windows-specific. |
 
 **`detach` has a cost, listed as an exception in D6.** For a child to leave the session
 job, that job must be created with `JOB_OBJECT_LIMIT_BREAKAWAY_OK`, which means *any*
@@ -1642,6 +1643,27 @@ A `$(…)` in it runs each time: measured here, `starship module character` is a
 (Starship's full prompt in a git repository, about 200 ms, is the larger cost).
 `STARSHIP_CMD_STATUS` is where Starship's bash integration keeps the last status, so the
 character turns red after a failure as the full prompt's does.
+
+### D62 — Folder history: `prevd`, `nextd`, `cdh`, and Alt-← / Alt-→
+
+fish keeps where the shell has been and steps through it like a browser's back and forward.
+Cash keeps the same: every change of working folder (`cd`, `pushd`, `popd`, `cdh`) records
+the folder it left, keeping the last 25 as fish does, and drops the folders ahead of it.
+`prevd [-l] [N]` and `nextd [-l] [N]` walk the record without adding to it; `-l` lists it
+as fish's `dirh` does. `cdh` lists the recent folders, most recent as 1, and reads a number;
+`cdh FOLDER` is `cd FOLDER`. All three are cash-only builtins (D45).
+
+**Keys.** On an empty line, Alt-← runs `prevd` and Alt-→ runs `nextd`, and the prompt is
+drawn afresh in the new folder. On a line with text they move a word, as fish's
+`prevd-or-backward-word` does. Reedline binds keys without seeing the line, so the keys
+carry a marker the input backend resolves once it can: on an empty line it runs the
+command the way a `bind -x` key does; otherwise it moves the cursor and goes on reading,
+without recomposing the prompt. At either end of the history the key does nothing, quietly.
+Windows Terminal uses Alt-arrows to move between split panes, so they reach cash only in an
+unsplit tab. Readline has no default binding for Alt-arrows, so nothing Bash does is lost.
+
+Building this found that keys typed straight after a key bound to a command were dropped
+when read in the same batch as it (`bind -x` keys included); Reedline patch 5 keeps them.
 
 ---
 

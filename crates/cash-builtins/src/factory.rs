@@ -221,6 +221,11 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
 
         // cash (D60): fish's abbreviations, expanded by the interactive line editor.
         m.insert("abbr".into(), builtin::<abbr::AbbrCommand, SE>());
+
+        // cash (D62): fish's folder history, also on Alt-← and Alt-→ at the prompt.
+        m.insert("prevd".into(), builtin::<dirhistory::PrevdCommand, SE>());
+        m.insert("nextd".into(), builtin::<dirhistory::NextdCommand, SE>());
+        m.insert("cdh".into(), builtin::<dirhistory::CdhCommand, SE>());
     }
 
     // cash (D45): Windows-specific builtins. Not feature-gated per builtin — they only

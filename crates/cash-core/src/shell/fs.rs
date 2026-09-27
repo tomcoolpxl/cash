@@ -71,6 +71,11 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         )?;
         let oldpwd = std::mem::replace(self.working_dir_mut(), cleaned_path);
 
+        // cash (D62): fish's folder history, for `prevd`, `nextd`, `cdh` and Alt-←/→.
+        if oldpwd != *self.working_dir() {
+            self.directory_history.left(oldpwd.clone());
+        }
+
         // cash (D3): `cd -` echoes $OLDPWD, so it must carry the same spelling as $PWD.
         #[cfg(windows)]
         let oldpwd = cash_win32::path::render(&oldpwd);
@@ -86,6 +91,34 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         )?;
 
         Ok(())
+    }
+
+    /// Moves `steps` places through the folder history (D62): back when negative, forward
+    /// when positive, as `prevd` and `nextd` do. Returns the folder moved to, or `None`
+    /// when the history does not reach that far; the history itself is only walked, not
+    /// added to.
+    ///
+    /// # Arguments
+    ///
+    /// * `steps` - How far to move, and in which direction.
+    pub fn step_directory_history(
+        &mut self,
+        steps: isize,
+    ) -> Result<Option<PathBuf>, error::Error> {
+        let Some(target) = self.directory_history.target(steps).map(Path::to_path_buf) else {
+            return Ok(None);
+        };
+        let history = self.directory_history.clone();
+        let current = self.working_dir().to_path_buf();
+        self.set_working_dir(&target)?;
+        self.directory_history = history;
+        self.directory_history.moved(current, steps);
+        Ok(Some(target))
+    }
+
+    /// Returns the folders the shell has been in (D62).
+    pub const fn directory_history(&self) -> &crate::dirhistory::DirectoryHistory {
+        &self.directory_history
     }
 
     /// Tilde-shortens the given string, replacing the user's home directory with a tilde.

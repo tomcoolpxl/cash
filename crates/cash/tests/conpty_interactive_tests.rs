@@ -585,3 +585,55 @@ fn conpty_keys_after_a_bound_key_reach_the_next_prompt() {
     session.send("exit 0\r").unwrap();
     assert_eq!(session.wait().expect("process did not exit"), 0);
 }
+
+/// fish's folder history on the keys (D62): Alt-← and Alt-→ on an empty line go back and
+/// forward through the folders visited; on a line with text they move a word.
+#[test]
+fn conpty_alt_arrows_walk_the_folder_history() {
+    const ALT_LEFT: &str = "\x1b[1;3D";
+    const ALT_RIGHT: &str = "\x1b[1;3C";
+
+    let root = tempfile::tempdir().unwrap();
+    for name in ["first_dir", "second_dir"] {
+        std::fs::create_dir(root.path().join(name)).unwrap();
+    }
+    let mut session = start_reedline_cash();
+    session
+        .expect("PROMPT$", Duration::from_secs(10))
+        .expect("prompt displayed");
+
+    let root = root.path().to_string_lossy().replace('\\', "/");
+    session
+        .send(&format!("cd '{root}/first_dir'; cd ../second_dir\r"))
+        .unwrap();
+    session
+        .send("here() { echo \"AT=${PWD##*/}\"; }\r")
+        .unwrap();
+
+    session.send(ALT_LEFT).unwrap();
+    session.send("here\r").unwrap();
+    session
+        .expect("AT=first_dir", Duration::from_secs(10))
+        .expect("Alt-Left on an empty line did not go back");
+
+    session.send(ALT_RIGHT).unwrap();
+    session.send("here\r").unwrap();
+    session
+        .expect("AT=second_dir", Duration::from_secs(10))
+        .expect("Alt-Right on an empty line did not go forward");
+
+    // With text on the line, Alt-Left moves to the start of the last word.
+    session.send("echo abc def").unwrap();
+    session.send(ALT_LEFT).unwrap();
+    session.send("Z\r").unwrap();
+    session
+        .expect("abc Zdef", Duration::from_secs(10))
+        .expect("Alt-Left on a line with text did not move a word");
+    session.send("here\r").unwrap();
+    session
+        .expect("AT=second_dir\x1b[K\r\nPROMPT$", Duration::from_secs(10))
+        .expect("Alt-Left on a line with text changed folder");
+
+    session.send("exit 0\r").unwrap();
+    assert_eq!(session.wait().expect("process did not exit"), 0);
+}

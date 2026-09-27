@@ -15,6 +15,8 @@ mod win;
 
 // cash (D60): fish's abbreviations.
 mod abbr;
+// cash (D62): fish's folder history — prevd, nextd, cdh.
+mod dirhistory;
 
 // cash (D48): `ps`, which uutils does not carry and whose PATH stand-in reports MSYS
 // pids that `kill` cannot use.

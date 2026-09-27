@@ -218,6 +218,20 @@ impl InputBackend for ReedlineInputBackend {
                     return Err(ShellError::UnexpectedInputFailure);
                 }
                 Ok(reedline::Signal::HostCommand(command)) => {
+                    // Alt-← and Alt-→ (D62): on an empty line they change folder, and the
+                    // prompt is drawn afresh in the new one; on any other they move a word,
+                    // and reading simply resumes, without recomposing the prompt.
+                    let mut command = command;
+                    if let Some((folder_command, word_move)) =
+                        edit_mode::folder_history_key(&command)
+                    {
+                        if !reedline.current_buffer_contents().is_empty() {
+                            reedline.run_edit_commands(&[word_move]);
+                            continue;
+                        }
+                        folder_command.clone_into(&mut command);
+                    }
+
                     // As Bash does for `bind -x`, clear the line before the command runs:
                     // its output starts where the prompt was, and the prompt is redrawn
                     // after it. The patched Reedline (vendor/reedline) redraws in place
@@ -322,6 +336,19 @@ fn compose_key_bindings(completion_menu_name: &str) -> reedline::Keybindings {
         reedline::KeyCode::Char('7'),
         reedline::ReedlineEvent::Edit(vec![reedline::EditCommand::Undo]),
     );
+
+    // fish's prevd-or-backward-word and nextd-or-forward-word (D62); the input backend
+    // decides between the two by whether the line is empty.
+    for (key, marker) in [
+        (reedline::KeyCode::Left, edit_mode::PREVD_OR_BACKWARD_WORD),
+        (reedline::KeyCode::Right, edit_mode::NEXTD_OR_FORWARD_WORD),
+    ] {
+        key_bindings.add_binding(
+            reedline::KeyModifiers::ALT,
+            key,
+            reedline::ReedlineEvent::ExecuteHostCommand(marker.to_owned()),
+        );
+    }
 
     // Readline's yank-last-arg, on both of its default keys. `edit_mode` turns the marker
     // into an edit; see `edit_mode::YANK_LAST_ARG`. Alt-_ arrives with Shift on some

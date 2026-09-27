@@ -16,6 +16,30 @@ pub(crate) const YANK_LAST_ARG: &str = "\0cash:yank-last-arg";
 /// The editor falls back to `vi`, as `fc`'s does.
 pub(crate) const EDIT_AND_EXECUTE_COMMAND: &str = r#"history -s "$READLINE_LINE"; history -s fc; READLINE_LINE=; READLINE_POINT=0; fc -e "${VISUAL:-${EDITOR:-vi}}""#;
 
+/// What Alt-← carries: fish's `prevd-or-backward-word`. The input backend, which can see the
+/// line, runs `prevd` when it is empty and moves a word left otherwise (spec D62).
+pub(crate) const PREVD_OR_BACKWARD_WORD: &str = "\0cash:prevd-or-backward-word";
+
+/// What Alt-→ carries: fish's `nextd-or-forward-word`; see [`PREVD_OR_BACKWARD_WORD`].
+pub(crate) const NEXTD_OR_FORWARD_WORD: &str = "\0cash:nextd-or-forward-word";
+
+/// For a folder-history key's marker, the command it runs on an empty line and the edit it
+/// makes on any other.
+pub(crate) fn folder_history_key(marker: &str) -> Option<(&'static str, reedline::EditCommand)> {
+    // Quiet at either end of the history, as fish is: the key simply does nothing there.
+    match marker {
+        PREVD_OR_BACKWARD_WORD => Some((
+            "prevd 2>/dev/null",
+            reedline::EditCommand::MoveWordLeft { select: false },
+        )),
+        NEXTD_OR_FORWARD_WORD => Some((
+            "nextd 2>/dev/null",
+            reedline::EditCommand::MoveWordRight { select: false },
+        )),
+        _ => None,
+    }
+}
+
 /// Supplies a word of a history entry for `yank-last-arg`: the entry `back` places before
 /// the newest, and its word `nth` (the last when `None`); see [`crate::history_words::pick`].
 pub(crate) type HistoryWords = Box<dyn Fn(usize, Option<i64>) -> Option<String> + Send>;
@@ -891,6 +915,10 @@ fn translate_reedline_event_to_action(event: &reedline::ReedlineEvent) -> Option
                 tracing::debug!(target: trace_categories::INPUT, "unhandled until-found event: {uf_events:?}");
                 None
             }
+        }
+        // Readline has no name for these; like its other unnamed bindings, unlisted.
+        reedline::ReedlineEvent::ExecuteHostCommand(cmd) if folder_history_key(cmd).is_some() => {
+            None
         }
         reedline::ReedlineEvent::ExecuteHostCommand(cmd) if cmd == YANK_LAST_ARG => {
             Some(KeyAction::DoInputFunction(InputFunction::YankLastArg))
