@@ -225,6 +225,14 @@ const CASES: &[Case] = &[
             "sleep 0.05 & . ./s.sh; echo after\r",
         ],
     },
+    // 1.o, 1.y: the window size, in the shell and in a subshell (`checkwinsize`).
+    Case {
+        name: "1y-checkwinsize",
+        keys: &[
+            "shopt checkwinsize\r",
+            "echo \"$COLUMNS x $LINES\"; (echo \"sub $COLUMNS x $LINES\")\r",
+        ],
+    },
     // `read -t` at the console times out; the Enter that ran it must not wake it early.
     Case {
         name: "read-t-console",

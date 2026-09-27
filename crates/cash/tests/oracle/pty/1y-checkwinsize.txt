@@ -1,0 +1,6 @@
+$ shopt checkwinsize
+checkwinsize            on
+$ echo "$COLUMNS x $LINES"; (echo "sub $COLUMNS x $LINES")
+80 x 25
+sub 80 x 25
+$

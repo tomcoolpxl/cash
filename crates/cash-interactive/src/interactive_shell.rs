@@ -204,6 +204,25 @@ impl<'a, IB: InputBackend, SE: cash_core::ShellExtensions> InteractiveShell<'a, 
         let params = shell.default_exec_params();
         shell.check_for_completed_jobs(&params).await?;
 
+        // `checkwinsize`: COLUMNS and LINES follow the terminal, as Bash sets them at
+        // startup and after each command. They were never set, so a script sizing its
+        // output to the terminal saw neither.
+        #[cfg(any(feature = "basic", feature = "reedline"))]
+        if shell.options().interactive && shell.options().check_window_size_after_external_commands
+        {
+            if let Ok((columns, lines)) = crossterm::terminal::size() {
+                for (name, value) in [("COLUMNS", columns), ("LINES", lines)] {
+                    let _ = shell.env_mut().update_or_add(
+                        name,
+                        cash_core::variables::ShellValueLiteral::Scalar(value.to_string()),
+                        |_| Ok(()),
+                        cash_core::env::EnvironmentLookup::Anywhere,
+                        cash_core::env::EnvironmentScope::Global,
+                    );
+                }
+            }
+        }
+
         // Everything between here and reading input is prompt work, and a shell that displays
         // no prompt does none of it: `script | brush -s` reads commands through this loop but
         // isn't interactive in the `$-` sense, so bash runs no PROMPT_COMMAND and expands no
