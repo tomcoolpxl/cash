@@ -698,6 +698,21 @@ pub fn parse_heredoc(
         .map_err(|err| error::WordParseError::Word(word.to_owned(), err.into()))
 }
 
+/// Parse a prompt string for its second, expanding pass: as if it were inside double
+/// quotes, so `"` and `'` are literal characters, as bash's `Q_DOUBLE_QUOTES` has it.
+///
+/// # Arguments
+///
+/// * `word` - The prompt string, after its backslash escapes are decoded.
+/// * `options` - The parser options to use.
+pub fn parse_prompt_word(
+    word: &str,
+    options: &ParserOptions,
+) -> Result<Vec<WordPieceWithSource>, error::WordParseError> {
+    expansion_parser::unexpanded_prompt_word(word, options)
+        .map_err(|err| error::WordParseError::Word(word.to_owned(), err.into()))
+}
+
 /// Parse the given word into a parameter expression.
 ///
 /// # Arguments
@@ -1153,6 +1168,37 @@ peg::parser! {
 
         rule heredoc_literal_text() -> WordPiece =
             s:$((!heredoc_escape_sequence() !dollar_sign_word_piece() [^'`'])+) {
+                WordPiece::Text(s.to_owned())
+            }
+
+        // Prompt-string parsing (bash's Q_DOUBLE_QUOTES): like double-quoted content, but
+        // " and ' are literal characters. Every `\X` is an escape sequence; the expander
+        // decides which ones drop their backslash.
+        pub(crate) rule unexpanded_prompt_word() -> Vec<WordPieceWithSource> =
+            traced(<prompt_word()>)
+
+        rule prompt_word() -> Vec<WordPieceWithSource> =
+            pieces:prompt_word_piece_with_source()* { pieces }
+
+        rule prompt_word_piece_with_source() -> WordPieceWithSource =
+            start_index:position!() piece:prompt_word_piece() end_index:position!() {
+                WordPieceWithSource { piece, start_index, end_index }
+            }
+
+        rule prompt_word_piece() -> WordPiece =
+            arithmetic_expansion() /
+            legacy_arithmetic_expansion() /
+            current_shell_command_substitution() /
+            command_substitution() /
+            parameter_expansion() /
+            prompt_escape_sequence() /
+            prompt_literal_text()
+
+        rule prompt_escape_sequence() -> WordPiece =
+            s:$("\\" [_]) { WordPiece::EscapeSequence(s.to_owned()) }
+
+        rule prompt_literal_text() -> WordPiece =
+            s:$((!prompt_escape_sequence() !dollar_sign_word_piece() [^'`'])+) {
                 WordPiece::Text(s.to_owned())
             }
 

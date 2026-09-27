@@ -571,8 +571,32 @@ pub(crate) async fn basic_expand_heredoc_word(
     word_str: impl AsRef<str>,
 ) -> Result<String, error::Error> {
     let mut expander = WordExpander::new(shell, params);
-    expander.heredoc_mode = true;
+    expander.literal_quotes = Some(LiteralQuotes::Heredoc);
     expander.disable_brace_expansion = true;
+    expander.basic_expand_to_str(word_str.as_ref()).await
+}
+
+/// Expands a prompt string whose backslash escapes are already decoded.
+///
+/// Bash expands it as if it were inside double quotes (`Q_DOUBLE_QUOTES`): parameters,
+/// command substitutions and arithmetic expand, `"` and `'` stay literal, and a backslash
+/// is dropped only before `$`, `` ` ``, `"`, `\` or a newline. No tilde, brace or
+/// pathname expansion, and no field splitting.
+///
+/// # Arguments
+///
+/// * `shell` - The shell in which to perform expansion.
+/// * `params` - The execution parameters to use during expansion.
+/// * `word_str` - The decoded prompt string.
+pub(crate) async fn basic_expand_prompt_word(
+    shell: &mut Shell<impl extensions::ShellExtensions>,
+    params: &ExecutionParameters,
+    word_str: impl AsRef<str>,
+) -> Result<String, error::Error> {
+    let mut expander = WordExpander::new(shell, params);
+    expander.literal_quotes = Some(LiteralQuotes::Prompt);
+    expander.disable_brace_expansion = true;
+    expander.unquoted_backslash_handling = UnquotedBackslashHandling::DoubleQuoted;
     expander.basic_expand_to_str(word_str.as_ref()).await
 }
 
@@ -779,8 +803,19 @@ struct WordExpander<'a, SE: extensions::ShellExtensions> {
     unquoted_backslash_handling: UnquotedBackslashHandling,
     /// Whether we are currently expanding inside a double-quoted context.
     in_double_quotes: bool,
-    /// Whether to use heredoc expansion semantics (literal quotes, no brace expansion).
-    heredoc_mode: bool,
+    /// Whether the top level of the word is read with quotes as literal characters,
+    /// and by which rules. `None` for an ordinary word.
+    literal_quotes: Option<LiteralQuotes>,
+}
+
+/// The top-level syntaxes in which `"` and `'` are literal characters.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum LiteralQuotes {
+    /// A heredoc body: only `\$`, `` \` `` and `\\` are escapes.
+    Heredoc,
+    /// A prompt string's second pass (bash's `Q_DOUBLE_QUOTES`): every `\X` reaches the
+    /// expander, whose [`UnquotedBackslashHandling::DoubleQuoted`] keeps or drops it.
+    Prompt,
 }
 
 impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
@@ -795,7 +830,7 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
             disable_pathname_expansion: false,
             unquoted_backslash_handling: UnquotedBackslashHandling::Strip,
             in_double_quotes: false,
-            heredoc_mode: false,
+            literal_quotes: None,
         }
     }
 
@@ -820,7 +855,7 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
             disable_pathname_expansion: !options.pathname_expand,
             unquoted_backslash_handling: options.unquoted_backslash_handling,
             in_double_quotes: false,
-            heredoc_mode: false,
+            literal_quotes: None,
         }
     }
 
@@ -927,8 +962,9 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
         // understood to be the *only* ones indicative of *possible* expansion. There's
         // still a possibility no expansion needs to be done, but that's okay; we'll still
         // yield a correct result.
-        let expansion_chars: &[char] = if self.heredoc_mode {
-            // Heredoc bodies treat quotes as literal; only $, `, and \ trigger expansion.
+        let expansion_chars: &[char] = if self.literal_quotes.is_some() {
+            // Heredoc bodies and prompts treat quotes as literal; only $, `, and \ trigger
+            // expansion.
             &['$', '`', '\\']
         } else {
             &['$', '`', '\\', '\'', '\"', '~', '{']
@@ -969,13 +1005,16 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
     /// Apply tilde-expansion, parameter expansion, command substitution and arithmetic
     /// expansion to a word that contains no brace expression (or is one result of one).
     async fn expand_unbraced_word(&mut self, word: &str) -> Result<Expansion, error::Error> {
-        // Heredoc mode only affects top-level parsing (literal quotes); recursive
-        // expansion of parameter words (e.g., ${var:-"default"}) uses normal semantics.
-        let pieces = if self.heredoc_mode {
-            self.heredoc_mode = false;
-            cash_parser::word::parse_heredoc(word, &self.parser_options)?
-        } else {
-            cash_parser::word::parse(word, &self.parser_options)?
+        // Literal quotes only affect top-level parsing; recursive expansion of
+        // parameter words (e.g., ${var:-"default"}) uses normal semantics.
+        let pieces = match self.literal_quotes.take() {
+            Some(LiteralQuotes::Heredoc) => {
+                cash_parser::word::parse_heredoc(word, &self.parser_options)?
+            }
+            Some(LiteralQuotes::Prompt) => {
+                cash_parser::word::parse_prompt_word(word, &self.parser_options)?
+            }
+            None => cash_parser::word::parse(word, &self.parser_options)?,
         };
 
         let mut expansions = Vec::with_capacity(pieces.len());

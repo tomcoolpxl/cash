@@ -92,3 +92,32 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
         self.env_str(name).unwrap_or_else(|| default.into())
     }
 }
+
+#[cfg(test)]
+#[allow(clippy::panic_in_result_fn, reason = "assertions in a fallible test")]
+mod tests {
+    use crate::{ProfileLoadBehavior, RcLoadBehavior, Shell, ShellVariable, error};
+
+    /// Bash expands the prompt as if inside double quotes, so quote characters in PS1
+    /// stay literal: `PS1="it's \w"` must not lose its `'`.
+    #[tokio::test]
+    async fn prompt_keeps_quote_characters() -> Result<(), error::Error> {
+        let mut shell = Shell::builder()
+            .profile(ProfileLoadBehavior::Skip)
+            .rc(RcLoadBehavior::Skip)
+            .build()
+            .await?;
+
+        shell.env.set_global("v", ShellVariable::new("hi"))?;
+        shell.env.set_global(
+            "PS1",
+            ShellVariable::new(r#"a"b"c 'd' it's \[x\] $v "$v" '$v' q\"r \\ s\x ${v:-"z"} "#),
+        )?;
+        assert_eq!(
+            shell.compose_prompt().await?,
+            r#"a"b"c 'd' it's x hi "hi" 'hi' q"r \ s\x hi "#
+        );
+
+        Ok(())
+    }
+}

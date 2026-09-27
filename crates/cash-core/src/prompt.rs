@@ -40,19 +40,12 @@ pub(crate) async fn expand_prompt(
     }
 
     if shell.options().expand_prompt_strings {
-        // Now expand any remaining escape sequences, but without tilde-expansion.
-        // Use double-quote escape rules so that backslashes emitted in the
-        // previous step survive intact unless they precede a character that
-        // would also be escapable inside a double-quoted string.
-        let options = expansion::ExpanderOptions {
-            tilde_expand: false,
-            brace_expand: false,
-            unquoted_backslash_handling: expansion::UnquotedBackslashHandling::DoubleQuoted,
-            ..Default::default()
-        };
+        // Now expand the result as bash does, as if it were inside double quotes: quote
+        // characters stay literal (`PS1="it's \w"` keeps its `'`), and backslashes
+        // emitted in the previous step survive unless they precede a character that is
+        // escapable inside a double-quoted string.
         formatted_prompt =
-            expansion::basic_expand_word_with_options(shell, params, &formatted_prompt, &options)
-                .await?;
+            expansion::basic_expand_prompt_word(shell, params, &formatted_prompt).await?;
     }
 
     Ok(formatted_prompt)

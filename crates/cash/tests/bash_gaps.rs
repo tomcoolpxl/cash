@@ -1588,3 +1588,28 @@ fn bash_argv_is_bashs_stack_seeded_once() {
         "f []\ntop [Z] [1]\ng [4 3 Z] [2 1]\nh [Z]\n"
     );
 }
+
+#[test]
+fn prompt_expansion_keeps_quote_characters() {
+    // Bash expands a decoded prompt as if inside double quotes (Q_DOUBLE_QUOTES), so `"`
+    // and `'` stay literal; only `\$ \` \" \\` and `\<newline>` drop their backslash.
+    // Expected output is Git Bash 5.3.15's.
+    let script = r#"PS1='a"b"c \[x\] '\''d'\'' e'; printf '<%s>\n' "${PS1@P}"
+v=hi; p='q\"r \\ s\x "$v" '\''$v'\'' ${v:-"z"} $(echo "c") \$'; printf '<%s>\n' "${p@P}"
+p="it's"; printf '<%s>\n' "${p@P}"
+p='\\\" \\\\'; printf '<%s>\n' "${p@P}"
+p='a\
+b `echo "x y"` \`'; printf '<%s>\n' "${p@P}""#;
+    assert_eq!(
+        output(script),
+        (
+            0,
+            r#"<a"b"c x 'd' e>
+<q"r \ s\x "hi" 'hi' hi c $>
+<it's>
+<\" \>
+<ab x y `>"#
+                .into()
+        )
+    );
+}
