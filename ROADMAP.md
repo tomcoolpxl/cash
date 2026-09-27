@@ -432,8 +432,8 @@ prompt that cash did not. Decided, in this order:
   dropped keys typed straight after a `bind -x` key (patch 5), which hit atuin and fzf
   users too.
 
-Still open: the Scoop and winget manifests (D38) do not exist yet, so nothing yet offers
-carapace at install time; `cash doctor` suggests it instead. Item 18 builds them.
+Closed by item 18: the Scoop manifest offers carapace at install time through `suggest`;
+`cash doctor` still names it when it is missing. The winget manifest is still to come.
 
 ## 18. Installing cash: Scoop now, winget later
 
@@ -457,14 +457,24 @@ Decided with the user, 2026-09-28:
 
 Work, in order:
 
-1. `cash.exe` links the C runtime statically (it needed `VCRUNTIME140.dll`), and CI checks
-   it; the zip carries `NOTICE`, `licenses/` and the third-party licences.
-2. An icon and a version resource in `cash.exe`.
-3. `--link-tools` renames a running link aside instead of stopping halfway; options to put
-   the links folder on the user PATH and to undo it all.
-4. Commands that write and remove the Windows Terminal fragment.
-5. `bucket/cash.json` for the bucket, and the README's install section.
-6. Later: the Inno Setup installer and the winget submission.
+1. **Done.** `cash.exe` links the C runtime statically (it needed `VCRUNTIME140.dll`), and
+   the release checks it; the zip carries `NOTICE`, `licenses/` and
+   `THIRD-PARTY-LICENSES.html` from `cargo about` (466 crates).
+2. **Done.** An icon and a version resource in `cash.exe`.
+3. **Done.** `--link-tools --add-to-path` and `--unlink-tools` (D65). A link Windows
+   will not delete is renamed aside instead of stopping the refresh halfway.
+4. **Done.** `--terminal-profile` and `--remove-terminal-profile` (D38).
+5. **Done.** [`packaging/scoop/cash.json`](packaging/scoop/cash.json), the README's
+   install section, and RELEASING's Scoop step.
+6. **The author's:** make `tomcoolpxl/cash` public; release a version with these
+   commands; create `tomcoolpxl/scoop-bucket` from Scoop's bucket template and add the
+   manifest to it.
+7. Later: the Inno Setup installer and the winget submission.
+
+Found on the way: Windows deletes a name of a running program while the file has others,
+and refuses only the last; the tests had been leaving 126 links per folder behind, until
+`cash.exe` reached NTFS's 1023 names; and Scoop's `suggest` now offers carapace at install
+time, the gap left open in item 17.
 
 ## Keeping the roadmap current
 

@@ -1019,6 +1019,15 @@ installer type cannot change once published. Both install as a normal user; noth
 needs admin. The Terminal fragment is written on every install and removed on uninstall.
 `cash` is taken on crates.io, so `cargo install` needs another crate name.
 
+The fragment is cash's to write: `cash --terminal-profile` puts `cash.json` and the logo
+in `%LOCALAPPDATA%\Microsoft\Windows Terminal\Fragments\cash\`, one profile named `cash`
+running the `cash.exe` the command ran as, spelled as it was started (under Scoop
+`apps\cash\current\cash.exe`, which follows upgrades); `cash --remove-terminal-profile`
+deletes the folder. Scoop's manifest (`packaging/scoop/cash.json`) runs them from its
+`post_install` and, on a real uninstall only, its `pre_uninstall`; it also offers
+carapace through `suggest` (D63). `cash.exe` links the C runtime statically, so no
+installer has to bring the Visual C++ Redistributable, which needs admin.
+
 ### D39 — Terminal shell integration is on by default
 
 cash emits OSC 133 (prompt / command / exit-code marks) and OSC 9;9 (cwd reporting).
@@ -1801,8 +1810,21 @@ the user, 2026-09-27:
 - **Windows' names.** Every tool is linked; the nine that System32 also has (`expand find
   hostname ping reset sort timeout where whoami`) are named, since with the folder before
   System32 on PATH a `.bat` calling `find` gets cash's.
-- **PATH** is never changed; the command prints the PowerShell line that adds the folder
-  to the user PATH.
+- **PATH** changes only when asked (revised 2026-09-28, ROADMAP item 18). `--add-to-path`
+  puts the folder first on the user `Path` in `HKCU\Environment`, unless an entry
+  already names it. Windows puts the user `Path` after the machine's, so System32's nine
+  still win for `.bat` files, while cash's tools win over the user's other Unix tools
+  (on the author's machine, 82 BusyBox shims in Scoop). The value keeps its type,
+  `REG_EXPAND_SZ`, and its `%VAR%` entries unexpanded, and the change is announced with
+  `WM_SETTINGCHANGE`. This replaced the PowerShell line the command printed, which
+  rewrote the user `Path` as a `REG_SZ` with every `%USERPROFILE%` expanded.
+  `--unlink-tools [DIR]` removes cash's links, the entry, and the folder when nothing
+  else is in it.
+- **A link Windows will not delete.** Windows deletes a name of a running program while
+  the file has other names, but not its last one: links to an old `cash.exe` that is
+  itself gone, while a program still runs one of them. Such a link is renamed aside
+  (`ls.exe.cash-old-1`, which no command lookup finds), and a later run deletes it. NTFS
+  gives a file at most 1023 names, 126 of them per links folder; that error says so.
 - **`which`** prints a tool's link when one is on PATH, a real file, ahead of the virtual
   path. **`cash doctor`** checks each links folder on PATH and warns when a link is no
   longer the running `cash.exe` (an upgrade replaced it), naming the command that

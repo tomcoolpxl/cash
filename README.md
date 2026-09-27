@@ -137,6 +137,25 @@ someone else's, at the cost of porting future upstream improvements by hand.
 `cash-win32` stays a separate crate so the Windows semantics and the shell language
 remain separable.
 
+## Install
+
+With [Scoop](https://scoop.sh), as a normal user, without admin:
+
+```bash
+scoop bucket add tomcoolpxl https://github.com/tomcoolpxl/scoop-bucket
+scoop install cash
+```
+
+Scoop puts `cash` on PATH, and Windows Terminal lists a `cash` profile from its next
+start. `cash.exe` carries its own C runtime, so nothing else needs installing. Scoop will
+not upgrade an app while it runs: close the cash windows first, or run `scoop config
+ignore_running_processes true`. Each version gets a folder of its own, so a running
+`cash.exe` is never overwritten. A winget package is planned (ROADMAP item 18).
+
+Without Scoop, unpack a release zip anywhere and run `cash.exe`. `cash
+--terminal-profile` adds the Windows Terminal profile, and `cash
+--remove-terminal-profile` takes it away.
+
 ## Build
 
 ```bash
@@ -157,8 +176,9 @@ regardless of which `echo.exe` is on `PATH`. Explicit executable paths bypass bu
 
 ## Windows Terminal
 
-Add a profile that starts `cash.exe`, and make it the default, in Windows Terminal's
-`settings.json` (Settings → Open JSON file). The two `Marks` settings turn on shell
+`cash --terminal-profile`, which Scoop runs on install, adds a `cash` profile. To make it
+the default and turn on the command marks, write the profile yourself in Windows
+Terminal's `settings.json` (Settings → Open JSON file). The two `Marks` settings turn on shell
 integration: each command gets a mark on the scrollbar, green or red by its exit status,
 and Ctrl+↑/Ctrl+↓ jump between them. A Nerd Font shows `ls --icons`.
 
@@ -227,8 +247,12 @@ hidden and system stay out of a listing without `-a`, as in Explorer.
 Inside cash, `which ls` prints `C:/…/cash.exe/ls`, a path only cash can run. For programs
 outside cash (Python's `subprocess`, a `.bat` file, an editor), `cash --link-tools [DIR]`
 makes a hard link to `cash.exe` for each tool, `ls.exe`, `sort.exe` and so on, in DIR or
-in `bin` next to `cash.exe`. The links take no space; add the folder to PATH (the command
-prints how) and re-run it after upgrading cash, which `cash doctor` reminds you of.
+in `bin` next to `cash.exe`. The links take no space. With `--add-to-path` the folder
+goes at the front of your user PATH, which Windows puts after the machine's, so
+System32's own `find` and `sort` still win for `.bat` files; `%VAR%` entries already
+there stay as they are. Re-run it after upgrading cash, which `cash doctor` reminds you
+of (Scoop does it for you); `cash --unlink-tools` takes the links and the PATH entry
+away again.
 
 The rule for what cash carries is not "is it missing" — Scoop can supply anything. It is
 **does the tool have to agree with cash about something cash owns?** `find` prints paths,

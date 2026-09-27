@@ -1,0 +1,48 @@
+{
+    "version": "1.0.0",
+    "description": "Cool Again Shell: a Bash-language shell for Windows, with its Unix tools built in",
+    "homepage": "https://github.com/tomcoolpxl/cash",
+    "license": {
+        "identifier": "MIT",
+        "url": "https://github.com/tomcoolpxl/cash/blob/main/LICENSE"
+    },
+    "notes": [
+        "Windows Terminal lists a \"cash\" profile from its next start.",
+        "For programs outside cash to run its tools (ls.exe, sort.exe ...), run once:",
+        "    cash --link-tools --add-to-path",
+        "To upgrade while a cash window is open: scoop config ignore_running_processes true"
+    ],
+    "suggest": {
+        "carapace": "extras/carapace-bin"
+    },
+    "architecture": {
+        "64bit": {
+            "url": "https://github.com/tomcoolpxl/cash/releases/download/v1.0.0/cash-v1.0.0-x86_64-pc-windows-msvc.zip",
+            "hash": "7ff700cabc72ef73db16a26b84375ab6bec2773c81ef847884c92e5c6c7c3e28"
+        }
+    },
+    "bin": "cash.exe",
+    "persist": "bin",
+    "post_install": [
+        "$cash = \"$(Split-Path $dir)\\current\\cash.exe\"",
+        "& $cash --terminal-profile | Out-Null",
+        "if (Test-Path \"$persist_dir\\bin\\.cash-links\") { & $cash --link-tools | Out-Null }"
+    ],
+    "pre_uninstall": [
+        "if ($cmd -eq 'uninstall') {",
+        "    if (Test-Path \"$persist_dir\\bin\\.cash-links\") { & \"$dir\\cash.exe\" --unlink-tools | Out-Null }",
+        "    & \"$dir\\cash.exe\" --remove-terminal-profile | Out-Null",
+        "}"
+    ],
+    "checkver": "github",
+    "autoupdate": {
+        "architecture": {
+            "64bit": {
+                "url": "https://github.com/tomcoolpxl/cash/releases/download/v$version/cash-v$version-x86_64-pc-windows-msvc.zip",
+                "hash": {
+                    "url": "$url.sha256"
+                }
+            }
+        }
+    }
+}

@@ -20,6 +20,13 @@ the user, by pick list:
 
 Not asked, so left as it is: x64 only; an ARM64 build waits for a machine to test it on.
 
+**Implemented 2026-09-28**, items 1 to 5 of [What follows](#what-follows-from-the-decisions):
+the static C runtime and its release check, the icon and version resource, `--add-to-path`
+and `--unlink-tools`, `--terminal-profile` and its removal, the licence notices in the
+zip, and [`packaging/scoop/cash.json`](../packaging/scoop/cash.json), which is valid
+against Scoop's schema. Left to the author: making the repository public, creating the
+bucket from Scoop's template, and a release that carries these commands.
+
 ## What exists today
 
 - `release.yml` builds `cash.exe` on `windows-latest`, zips it with `README.md` and
@@ -51,10 +58,13 @@ Eight integration tests (`crates/cash/tests/link_tools.rs`) and one unit test. N
 covered: the default folder (every test names DIR), the "already on PATH" message, links
 removed for tools cash no longer carries, and the System32 note.
 
-One real gap: refreshing a link that is running (a program outside cash has `tail.exe`
-open) fails in `remove_file`, and the `?` stops the whole run halfway, before the manifest
-is written. Windows refuses to delete a running exe under any of its names but lets it be
-renamed, so a busy link can be moved aside and swept later.
+One real gap: a link that `remove_file` cannot delete stopped the whole refresh halfway,
+through the `?`, before the manifest was written. Measured on Windows 11 (26200):
+Windows deletes a name of a running program while the file has other names, but refuses
+the last one (and any write to it); renaming it works either way. So a refresh fails
+when the old `cash.exe` is itself gone (`scoop cleanup`, a deleted `cash.exe.old`) and a
+program outside cash still runs one of its links: whichever link is replaced last is
+the file's last name. Such a link can be renamed aside and deleted by a later run.
 
 The PowerShell line it prints to add the folder to PATH is harmful: .NET reads the user
 `Path` with `GetValue`, which expands `%VAR%` entries, and writes it with `SetValue`,
@@ -181,10 +191,10 @@ For cash itself:
 
 1. Link the C runtime statically; check in CI that `cash.exe` imports no `VCRUNTIME140.dll`.
 2. An icon and a version resource in `cash.exe`.
-3. `--link-tools` renames a running link aside instead of stopping; an option to put the
-   links folder at the front of the user `Path`, keeping `REG_EXPAND_SZ` and `%VAR%`
-   entries, adding it once, and announcing the change (`WM_SETTINGCHANGE`); and an undo
-   that removes the links, the entry, and nothing else.
+3. `--link-tools` renames a link Windows will not delete aside instead of stopping; an
+   option to put the links folder at the front of the user `Path`, keeping
+   `REG_EXPAND_SZ` and `%VAR%` entries, adding it once, and announcing the change
+   (`WM_SETTINGCHANGE`); and an undo that removes the links, the entry, and nothing else.
 4. A command that writes, and one that removes, the Windows Terminal fragment in
    `%LOCALAPPDATA%\Microsoft\Windows Terminal\Fragments\cash\`, pointing at the
    `cash.exe` it was run as (Scoop's `current` path, not a version folder).

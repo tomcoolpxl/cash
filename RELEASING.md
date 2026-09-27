@@ -118,9 +118,20 @@ git push origin v0.9.2
 
 ### 6. Automated GitHub Release
 When a tag matching `v*.*.*` is pushed, the [Release Workflow](.github/workflows/release.yml) automatically:
-1. Compiles the optimized release binary (`cargo build --release --bin cash`).
-2. Bundles `cash.exe`, `README.md`, and `LICENSE` into `cash-vX.Y.Z-x86_64-pc-windows-msvc.zip`.
+1. Compiles the optimized release binary (`cargo build --release --bin cash`) and checks
+   that it imports no C runtime DLL.
+2. Bundles `cash.exe`, `README.md`, `LICENSE`, `NOTICE`, `licenses/` and
+   `THIRD-PARTY-LICENSES.html` (written by `cargo about` from
+   [`.github/about`](.github/about)) into `cash-vX.Y.Z-x86_64-pc-windows-msvc.zip`.
 3. Computes the SHA-256 checksum file.
 4. Creates a new GitHub Release whose notes are the commits since the previous tag,
    grouped by type ([`.github/scripts/release-notes.ps1`](.github/scripts/release-notes.ps1)),
    and attaches the zip archive and checksum.
+
+### 7. Scoop
+Nothing to do. The bucket, [`tomcoolpxl/scoop-bucket`](https://github.com/tomcoolpxl/scoop-bucket),
+runs Scoop's Excavator action every few hours: `checkver` finds the new release, and
+`autoupdate` points `bucket/cash.json` at its zip and `.sha256`. So the zip's name must stay
+`cash-vX.Y.Z-x86_64-pc-windows-msvc.zip`. The manifest's source is
+[`packaging/scoop/cash.json`](packaging/scoop/cash.json); a change to its hooks or notes
+is copied to the bucket by hand.
