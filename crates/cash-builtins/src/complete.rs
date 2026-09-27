@@ -135,6 +135,7 @@ impl CommonCompleteCommandArgs {
                 CompleteOption::Default => spec.options.default = true,
                 CompleteOption::DirNames => spec.options.dir_names = true,
                 CompleteOption::FileNames => spec.options.file_names = true,
+                CompleteOption::FullQuote => spec.options.full_quote = true,
                 CompleteOption::NoQuote => spec.options.no_quote = true,
                 CompleteOption::NoSort => spec.options.no_sort = true,
                 CompleteOption::NoSpace => spec.options.no_space = true,
@@ -356,6 +357,9 @@ impl CompleteCommand {
         }
         if spec.options.file_names {
             s.push_str(" -o filenames");
+        }
+        if spec.options.full_quote {
+            s.push_str(" -o fullquote");
         }
         if spec.options.no_quote {
             s.push_str(" -o noquote");
@@ -662,6 +666,7 @@ impl CompOptCommand {
                 CompleteOption::Default => target_options.default = *value,
                 CompleteOption::DirNames => target_options.dir_names = *value,
                 CompleteOption::FileNames => target_options.file_names = *value,
+                CompleteOption::FullQuote => target_options.full_quote = *value,
                 CompleteOption::NoQuote => target_options.no_quote = *value,
                 CompleteOption::NoSort => target_options.no_sort = *value,
                 CompleteOption::NoSpace => target_options.no_space = *value,

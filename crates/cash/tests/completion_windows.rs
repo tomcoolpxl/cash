@@ -110,6 +110,15 @@ impl Fixture {
         line
     }
 
+    /// Run `script` in the fixture's own shell, to define functions and compspecs.
+    async fn define(&mut self, script: &str) {
+        let params = self.shell.default_exec_params();
+        self.shell
+            .run_string(script, &cash_core::SourceInfo::default(), &params)
+            .await
+            .expect("run definitions");
+    }
+
     /// Run a command line in the fixture's shell and return its standard output.
     fn run(&self, line: &str) -> String {
         let output = std::process::Command::new(env!("CARGO_BIN_EXE_cash"))
@@ -195,6 +204,26 @@ async fn completing_before_a_closing_quote_replaces_it() {
     let input = "cd 'my dir/in'";
     let line = fixture.completed_line_at(input, input.len() - 1).await;
     assert_eq!(line, "cd 'my dir/inner/'");
+}
+
+#[tokio::test]
+async fn fullquote_quotes_a_functions_completions_and_noquote_still_wins() {
+    // Bash 5.3's `compopt -o fullquote` quotes completions that are not file names as if
+    // they were; without it, or with `noquote`, they go in as they are.
+    let mut fixture = Fixture::new("fullquote").await;
+    fixture
+        .define(concat!(
+            "f() { compopt -o fullquote; COMPREPLY=('x y' plain); }; complete -F f fq\n",
+            "g() { COMPREPLY=('x y'); }; complete -F g plain\n",
+            "h() { compopt -o fullquote -o noquote; COMPREPLY=('x y'); }; complete -F h nq\n",
+        ))
+        .await;
+
+    let mut quoted = fixture.complete("fq ").await;
+    quoted.sort();
+    assert_eq!(quoted, vec!["'x y'", "plain"]);
+    assert_eq!(fixture.complete("plain ").await, vec!["x y"]);
+    assert_eq!(fixture.complete("nq ").await, vec!["x y"]);
 }
 
 #[tokio::test]

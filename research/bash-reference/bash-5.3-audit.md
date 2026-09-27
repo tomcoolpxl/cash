@@ -117,7 +117,7 @@ there.
 | **1.b** | Completion quoting | Preserves user-supplied quotes around word completion | **Verified** by the harness: `ls "al<TAB>` gives `ls "alpha beta.txt"`, as Bash does. With no quote typed cash quotes in its own style (D40). |
 | **1.f** | Signal handling | Bash signal handlers active during completion | Non-applicable: Cash uses async/thread-isolated completion. |
 | **1.o** | Window size check | Check winsize during traps, `bind -x`, completion | Handled natively by ConPTY event loops. |
-| **1.u** | `compopt -o fullquote` | Force full quoting for completions | Reedline completion formatting feature. |
+| **1.u** | `compopt -o fullquote` | Force full quoting for completions | **Implemented**, by the harness: `complete` and `compopt` take `-o fullquote`, and a function's completions are then quoted as file names are, in D40's style (`'x y'` where Bash writes `x\ y`); `noquote` still wins. |
 | **1.y** | `checkwinsize` | Enabled in subshells from interactive shells | Native console handles resize dynamically. |
 | **1.aa** | `bind -x` syntax | Key sequence and command separated by whitespace | **Fixed**, by the harness: `"\C-t" "echo hi"` is read, the command dequoted, as are `"\C-t": "cmd"` and anything after the closing quote. The harness also found that no `bind -x` binding showed its output: the prompt was redrawn over it. That was Reedline's; cash carries a patch (`vendor/reedline/CASH-PATCHES.md`). |
 | **1.bb** | `bind -x` output | Print bindings using new syntax | **Verified** by the harness; a command's `\` and `"` are now escaped, as in Bash. |

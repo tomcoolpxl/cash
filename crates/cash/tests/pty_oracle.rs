@@ -146,6 +146,19 @@ const CASES: &[Case] = &[
             "\t",
         ],
     },
+    // Without it, a function's completion is inserted as it is.
+    Case {
+        name: "1u-compopt-no-fullquote",
+        keys: &[
+            "f() { COMPREPLY=('x y'); }; complete -F f cmd\r",
+            "cmd ",
+            "\t",
+        ],
+    },
+    Case {
+        name: "1u-complete-p-fullquote",
+        keys: &["complete -o fullquote -W 'a b' cmd; complete -p cmd\r"],
+    },
     // 1.jj: a completion function returning 124 has its compspec reloaded.
     Case {
         name: "1jj-compfunc-124",
@@ -304,20 +317,18 @@ const DELIBERATE: &[(&str, &str)] = &[
         "D40: the first Tab inserts the shared part and the second shows the candidates; \
          Bash beeps on the second and lists on the third",
     ),
+    (
+        "1u-compopt-fullquote",
+        "D40: `compopt -o fullquote` quotes as file names are quoted, `'x y'`",
+    ),
 ];
 
 /// The cases where cash differs from Bash, not yet fixed, each with the difference. A
 /// case that starts to match fails the test until it is taken off this list.
-const KNOWN_DIFFERENCES: &[(&str, &str)] = &[
-    (
-        "1u-compopt-fullquote",
-        "not yet fixed: the completion is inserted unquoted",
-    ),
-    (
-        "1rr-sourcing-notify",
-        "not yet fixed: job notices are worded differently and come after the line",
-    ),
-];
+const KNOWN_DIFFERENCES: &[(&str, &str)] = &[(
+    "1rr-sourcing-notify",
+    "not yet fixed: job notices are worded differently and come after the line",
+)];
 
 #[test]
 fn cash_leaves_the_screen_bash_leaves() {

@@ -152,6 +152,9 @@ pub enum CompleteOption {
     /// Treat completions as filenames.
     #[clap(name = "filenames")]
     FileNames,
+    /// Quote completions as file names are quoted, even when they are not (Bash 5.3).
+    #[clap(name = "fullquote")]
+    FullQuote,
     /// Suppress default auto-quotation of completions.
     #[clap(name = "noquote")]
     NoQuote,
@@ -222,6 +225,8 @@ pub struct GenerationOptions {
     pub dir_names: bool,
     /// Treat completions as filenames.
     pub file_names: bool,
+    /// Quote completions as file names are quoted, even when they are not.
+    pub full_quote: bool,
     /// Do not add usual quoting for completions.
     pub no_quote: bool,
     /// Do not sort completions.
@@ -450,6 +455,7 @@ impl Spec {
 
         let mut processing_options = ProcessingOptions {
             treat_as_filenames: options.file_names,
+            quote_all: options.full_quote,
             no_autoquote_filenames: options.no_quote,
             no_trailing_space_at_end_of_line: options.no_space,
         };
@@ -894,6 +900,9 @@ pub struct Completions {
 pub struct ProcessingOptions {
     /// Treat completions as file names.
     pub treat_as_filenames: bool,
+    /// Quote completions as file names are quoted, even when they are not
+    /// (`compopt -o fullquote`).
+    pub quote_all: bool,
     /// Don't auto-quote completions that are file names.
     pub no_autoquote_filenames: bool,
     /// Don't append a trailing space to completions at the end of the input line.
@@ -925,6 +934,7 @@ impl Default for ProcessingOptions {
     fn default() -> Self {
         Self {
             treat_as_filenames: true,
+            quote_all: false,
             no_autoquote_filenames: false,
             no_trailing_space_at_end_of_line: false,
         }
@@ -1302,8 +1312,9 @@ fn autoquote_candidates(
     is_dir: impl Fn(&str) -> bool,
 ) -> Vec<String> {
     // `compgen -o noquote` is the caller's explicit opt-out, and non-filename candidates
-    // (branch names from a completion function, say) are not ours to rewrite.
-    if !options.treat_as_filenames || options.no_autoquote_filenames {
+    // (branch names from a completion function, say) are not ours to rewrite, unless
+    // the function asked for them to be quoted too (`compopt -o fullquote`).
+    if !(options.treat_as_filenames || options.quote_all) || options.no_autoquote_filenames {
         return candidates;
     }
 
@@ -1329,7 +1340,8 @@ fn autoquote_candidates(
             let mut quoted = quote(&body);
             // The front end appends `/` to a bare directory name, which it can look up;
             // a quoted or escaped one it cannot, so it gets its `/` here, inside.
-            if quoted != body && !body.ends_with('/') && is_dir(&body) {
+            if options.treat_as_filenames && quoted != body && !body.ends_with('/') && is_dir(&body)
+            {
                 body.push('/');
                 quoted = quote(&body);
             }
