@@ -79,7 +79,9 @@ cases:
       echo "BASHOPTS: $BASHOPTS"
 
   - name: "BASH_SOURCE"
-    max_oracle_version: "5.2" # Behavior changed in bash 5.3; still needs investigation
+    # Bash 5.3 reports $0 as the source of a function read from standard input; 5.2
+    # said "main". cash follows 5.3.
+    min_oracle_version: "5.3"
     stdin: |
       echo "Input entry"; declare -p BASH_SOURCE
 

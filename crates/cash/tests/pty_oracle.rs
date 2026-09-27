@@ -250,6 +250,14 @@ const CASES: &[Case] = &[
             "echo next\r",
         ],
     },
+    // BASH_SOURCE of a function defined at the prompt (Bash 5.3 changed it for -c and
+    // standard input to $0).
+    Case {
+        name: "bash-source-at-prompt",
+        keys: &[
+            "f() { echo \"src=${BASH_SOURCE[0]}\"; }; f; [[ $0 == *bash* || $0 == *cash* ]] && echo shell-name\r",
+        ],
+    },
     // `read -t` at the console times out; the Enter that ran it must not wake it early.
     Case {
         name: "read-t-console",

@@ -529,29 +529,31 @@ impl CallStack {
         });
     }
 
-    /// Pushes a new command string frame onto the stack.
-    pub fn push_command_string(&mut self) {
+    /// Pushes a new command string frame onto the stack, `name` being what
+    /// `BASH_SOURCE` reports for what it defines.
+    pub fn push_command_string(&mut self, name: &str) {
         self.frames.push_front(Frame {
             frame_type: FrameType::CommandString,
             args: vec![],
             shadows_positional_args: false,
             positional_args_changed: false,
-            source_info: crate::SourceInfo::from("environment"),
+            source_info: crate::SourceInfo::from(name),
             current_line_offset: 0,
             current: None, // TODO(source-info): fill this out
             entry: None,   // TODO(source-info): fill this out
         });
     }
 
-    /// Pushes a new interactive session frame onto the stack.
-    pub fn push_interactive_session(&mut self) {
+    /// Pushes a new interactive session frame onto the stack, `name` being what
+    /// `BASH_SOURCE` reports for what it defines.
+    pub fn push_interactive_session(&mut self, name: &str) {
         self.frames.push_front(Frame {
             frame_type: FrameType::InteractiveSession,
             args: vec![],
             shadows_positional_args: false,
             positional_args_changed: false,
             current_line_offset: 0,
-            source_info: crate::SourceInfo::from("main"),
+            source_info: crate::SourceInfo::from(name),
             current: None, // TODO(source-info): fill this out
             entry: None,   // TODO(source-info): fill this out
         });

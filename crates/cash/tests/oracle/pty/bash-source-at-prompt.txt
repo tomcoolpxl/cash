@@ -1,0 +1,5 @@
+$ f() { echo "src=${BASH_SOURCE[0]}"; }; f; [[ $0 == *bash* || $0 == *cash* ]] &
+& echo shell-name
+src=main
+shell-name
+$

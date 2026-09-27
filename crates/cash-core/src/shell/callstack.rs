@@ -17,8 +17,23 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
     /// Updates the shell's internal tracking state to reflect that a new interactive
     /// session is being started.
     pub fn start_interactive_session(&mut self) -> Result<(), error::Error> {
-        self.call_stack.push_interactive_session();
+        // What `BASH_SOURCE` reports for a function defined here: `main` at the prompt,
+        // and in Bash 5.3 the shell's `$0` for commands read from standard input (5.2
+        // said `main` for both).
+        let name = if self.options().interactive {
+            "main".to_owned()
+        } else {
+            self.source_name_for_input()
+        };
+        self.call_stack.push_interactive_session(&name);
         Ok(())
+    }
+
+    /// `$0`, which Bash 5.3 reports as the source of what a `-c` string or standard
+    /// input defines.
+    fn source_name_for_input(&self) -> String {
+        self.current_shell_name()
+            .map_or_else(|| "main".to_owned(), std::borrow::Cow::into_owned)
     }
 
     /// Updates the shell's internal tracking state to reflect that the current
@@ -40,7 +55,10 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
     /// Updates the shell's internal tracking state to reflect that command
     /// string mode is being started.
     pub fn start_command_string_mode(&mut self) {
-        self.call_stack.push_command_string();
+        // Bash 5.3 reports `$0` as the source of a function a `-c` string defines; 5.2
+        // said `environment`.
+        let name = self.source_name_for_input();
+        self.call_stack.push_command_string(&name);
     }
 
     /// Updates the shell's internal tracking state to reflect that command
