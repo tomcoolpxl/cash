@@ -1863,6 +1863,29 @@ standard output, so `ls | grep` inside an interactive cash gets one name a line 
 colour, and grid columns are measured in screen cells, so icons and non-ASCII names line
 up.
 
+Compared with lsd's `-la`, cash's `ls -l` then showed Unix bits it had made up, and more
+files. Decided next, the same day:
+
+- **`w` is the access list's answer.** `-l` asks Windows, with `AccessCheck` and the
+  process's own token, whether this user may write the file's data (for a folder,
+  create a file in it), from the same read of the security descriptor that finds the
+  owner. A file's read-only attribute still clears it; a folder's does not, since
+  Windows sets it only to mark a customised folder (`Contacts`, `Music`). The owner and
+  group positions carry the answer, others stays read-only, and `x` is as before.
+- **`--attributes`** shows lsd's letters, `d` or `.` then archive, read-only, hidden and
+  system (`.a-h-`): a column after the permissions with `-l`, before each name
+  otherwise.
+- **Hidden and system together are left out** without `-a` or `-A`, as Explorer and
+  lsd leave them out: `NTUSER.DAT`'s logs, and the `My Documents` and `Cookies`
+  junctions kept for old programs. Hidden alone is still listed, as a dotfile is not.
+  A name given on the command line is always listed.
+
+And `ls` got faster: the owner, link count and permissions, which cost a read of each
+file's security, are looked up only for `-l`, and an entry's size, times and attributes
+come from the directory listing instead of opening it twice. Plain `ls -a` of
+`C:/Windows/System32` went from 1.4 s to 12 ms, and `ls -la` from 1.45 s to 1.04 s with
+the access check included.
+
 ---
 
 ## 4. Deliberate divergences from bash

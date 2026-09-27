@@ -10,9 +10,11 @@ use std::path::Path;
 use std::sync::Mutex;
 
 use windows_sys::Win32::Security::{
-    GetFileSecurityW, GetLengthSid, GetSecurityDescriptorOwner, GetSidSubAuthority,
-    GetSidSubAuthorityCount, IsValidSid, LookupAccountSidW, OWNER_SECURITY_INFORMATION, PSID,
-    SID_NAME_USE,
+    AccessCheck, DACL_SECURITY_INFORMATION, DuplicateToken, GENERIC_MAPPING,
+    GROUP_SECURITY_INFORMATION, GetFileSecurityW, GetLengthSid, GetSecurityDescriptorOwner,
+    GetSidSubAuthority, GetSidSubAuthorityCount, IsValidSid, LookupAccountSidW,
+    OBJECT_SECURITY_INFORMATION, OWNER_SECURITY_INFORMATION, PRIVILEGE_SET, PSID, SID_NAME_USE,
+    SecurityImpersonation, TOKEN_DUPLICATE, TOKEN_QUERY,
 };
 use windows_sys::Win32::Storage::FileSystem::{
     BY_HANDLE_FILE_INFORMATION, GetFileInformationByHandle,
@@ -62,6 +64,47 @@ pub(crate) fn sid_rid(sid: PSID) -> Option<u32> {
 /// Returns None if the filesystem or permissions do not support querying security info.
 #[must_use]
 pub fn get_file_owner_info(path: &Path) -> Option<FileOwner> {
+    let mut buffer = security_descriptor(path, OWNER_SECURITY_INFORMATION)?;
+    owner_of(&mut buffer)
+}
+
+/// What `ls -l` shows of a file's security: its owner, and whether this process may
+/// write to it (for a folder, create files in it) by its access list.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct FileSecurity {
+    /// The owner's account name.
+    pub owner: Option<String>,
+    /// Whether the access list grants this process write access; `None` when it could
+    /// not be read.
+    pub writable: Option<bool>,
+}
+
+/// The owner and the write access of a file, from one read of its security descriptor.
+///
+/// The check is `AccessCheck` with this process's own token, the question Windows asks
+/// when the file is opened for writing: it counts the groups the token holds, deny
+/// entries and inheritance, which reading the access list by eye does not. The
+/// read-only attribute is not part of it; the caller combines the two.
+#[must_use]
+pub fn file_security(path: &Path) -> FileSecurity {
+    let Some(mut buffer) = security_descriptor(
+        path,
+        OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
+    ) else {
+        return FileSecurity {
+            owner: get_file_owner(path),
+            writable: None,
+        };
+    };
+    let writable = may_write(&mut buffer);
+    FileSecurity {
+        owner: owner_of(&mut buffer).map(|owner| owner.name),
+        writable,
+    }
+}
+
+/// A file's security descriptor, with the parts `info` names.
+fn security_descriptor(path: &Path, info: OBJECT_SECURITY_INFORMATION) -> Option<Vec<u8>> {
     let wide: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
 
     let mut needed: u32 = 0;
@@ -69,7 +112,7 @@ pub fn get_file_owner_info(path: &Path) -> Option<FileOwner> {
     unsafe {
         GetFileSecurityW(
             wide.as_ptr(),
-            OWNER_SECURITY_INFORMATION,
+            info,
             std::ptr::null_mut(),
             0,
             &raw mut needed,
@@ -85,17 +128,81 @@ pub fn get_file_owner_info(path: &Path) -> Option<FileOwner> {
     let ok = unsafe {
         GetFileSecurityW(
             wide.as_ptr(),
-            OWNER_SECURITY_INFORMATION,
+            info,
             buffer.as_mut_ptr().cast(),
             needed,
             &raw mut needed,
         )
     };
 
-    if ok == 0 {
-        return None;
-    }
+    (ok != 0).then_some(buffer)
+}
 
+/// This process's token as an impersonation token, which `AccessCheck` needs; opened
+/// once, and kept for the process's life.
+fn impersonation_token() -> Option<windows_sys::Win32::Foundation::HANDLE> {
+    use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+    static TOKEN: std::sync::OnceLock<Option<usize>> = std::sync::OnceLock::new();
+    let token = TOKEN.get_or_init(|| {
+        let mut primary = std::ptr::null_mut();
+        // SAFETY: returns the current process's pseudo-handle; nothing to uphold.
+        let process = unsafe { GetCurrentProcess() };
+        // SAFETY: a process handle and a valid out-pointer.
+        if unsafe { OpenProcessToken(process, TOKEN_QUERY | TOKEN_DUPLICATE, &raw mut primary) }
+            == 0
+        {
+            return None;
+        }
+        let mut duplicate = std::ptr::null_mut();
+        // SAFETY: `primary` was opened with TOKEN_DUPLICATE above.
+        let ok = unsafe { DuplicateToken(primary, SecurityImpersonation, &raw mut duplicate) };
+        // SAFETY: `primary` is a handle this function opened and no longer needs.
+        unsafe { windows_sys::Win32::Foundation::CloseHandle(primary) };
+        (ok != 0).then_some(duplicate as usize)
+    });
+    token.map(|handle| handle as windows_sys::Win32::Foundation::HANDLE)
+}
+
+/// Whether the descriptor's access list lets this process write the file's data, which
+/// for a folder is the right to create a file in it.
+fn may_write(descriptor: &mut [u8]) -> Option<bool> {
+    use windows_sys::Win32::Storage::FileSystem::{
+        FILE_ALL_ACCESS, FILE_GENERIC_EXECUTE, FILE_GENERIC_READ, FILE_GENERIC_WRITE,
+        FILE_WRITE_DATA,
+    };
+    let token = impersonation_token()?;
+    let mapping = GENERIC_MAPPING {
+        GenericRead: FILE_GENERIC_READ,
+        GenericWrite: FILE_GENERIC_WRITE,
+        GenericExecute: FILE_GENERIC_EXECUTE,
+        GenericAll: FILE_ALL_ACCESS,
+    };
+    // Room for the privileges the check may report using.
+    // u32s, aligned for PRIVILEGE_SET.
+    let mut privileges = [0u32; 64];
+    let mut privileges_len = u32::try_from(std::mem::size_of_val(&privileges)).unwrap_or(0);
+    let mut granted = 0u32;
+    let mut status = 0;
+    // SAFETY: `descriptor` holds a descriptor with owner, group and DACL; the token is an
+    // impersonation token; every out-pointer is valid, the privilege buffer sized by
+    // `privileges_len`.
+    let ok = unsafe {
+        AccessCheck(
+            descriptor.as_mut_ptr().cast(),
+            token,
+            FILE_WRITE_DATA,
+            &raw const mapping,
+            privileges.as_mut_ptr().cast::<PRIVILEGE_SET>(),
+            &raw mut privileges_len,
+            &raw mut granted,
+            &raw mut status,
+        )
+    };
+    (ok != 0).then_some(status != 0)
+}
+
+/// The owner a security descriptor names, with its account name.
+fn owner_of(buffer: &mut [u8]) -> Option<FileOwner> {
     let mut p_sid = std::ptr::null_mut();
     let mut defaulted = 0;
     // SAFETY: `buffer` contains a valid SECURITY_DESCRIPTOR retrieved by `GetFileSecurityW`.

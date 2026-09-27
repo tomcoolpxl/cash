@@ -28,8 +28,9 @@ const HELP: &str = "\
 Usage: ls [OPTION]... [FILE]...
 List information about the FILEs (the current directory by default).
 
-  -a, --all                  do not ignore entries starting with .
-  -A, --almost-all           do not list implied . and ..
+  -a, --all                  do not ignore entries starting with . or files
+                               both hidden and system, as Explorer hides them
+  -A, --almost-all           like -a, but do not list implied . and ..
   -C                         list entries by columns
   -d, --directory            list directories themselves, not their contents
   -F, --classify             append indicator (one of */@) to entries
@@ -52,6 +53,8 @@ List information about the FILEs (the current directory by default).
       --icons[=WHEN]         show an icon before each name: always, auto (when the
                                output is a terminal, the default), never
       --icons-theme=THEME    fancy (Nerd Font glyphs, the default) or unicode
+      --attributes           show Windows' attributes as lsd does: d (or .),
+                               archive, read-only, hidden, system (`.a-h-`)
       --tree                 list the directories as a tree
       --depth=NUM            descend at most NUM levels, with --tree or -R
       --help                 display this help and exit
@@ -161,6 +164,10 @@ pub(crate) struct LsCommand {
     #[arg(long = "icons-theme", value_name = "THEME")]
     icons_theme: Option<String>,
 
+    /// Show Windows' attributes: directory, archive, read-only, hidden, system.
+    #[arg(long = "attributes")]
+    attributes: bool,
+
     /// List the directories as a tree.
     #[arg(long = "tree")]
     tree: bool,
@@ -191,6 +198,8 @@ struct ItemInfo {
     group: String,
     size: u64,
     mtime: SystemTime,
+    /// Windows' attribute bits: read-only, hidden, system, archive.
+    attributes: u32,
     symlink_target: Option<String>,
     /// Whether a symlink's target exists, and whether it is a directory.
     target: Option<(bool, bool)>,
@@ -306,7 +315,7 @@ impl builtins::Command for LsCommand {
             }
 
             if self.directory || !path.is_dir() {
-                if let Some(item) = inspect_path(&path, path_str) {
+                if let Some(item) = inspect_path(&path, path_str, self.long, None) {
                     file_items.push(item);
                 }
             } else {
@@ -467,11 +476,11 @@ impl LsCommand {
 
         // Include . and .. if -a is set.
         if self.all && dots {
-            if let Some(dot) = inspect_dot(dir_path, ".") {
+            if let Some(dot) = inspect_dot(dir_path, ".", self.long) {
                 items.push(dot);
             }
             let parent = dir_path.parent().unwrap_or(dir_path);
-            if let Some(dotdot) = inspect_dot(parent, "..") {
+            if let Some(dotdot) = inspect_dot(parent, "..", self.long) {
                 items.push(dotdot);
             }
         }
@@ -485,8 +494,19 @@ impl LsCommand {
                 continue;
             }
 
+            // The directory listing brought the entry's size, times and attributes.
+            let known = entry.metadata().ok();
+            if !self.all
+                && !self.almost_all
+                && known
+                    .as_ref()
+                    .is_some_and(|metadata| is_protected(attributes_of(metadata)))
+            {
+                continue;
+            }
+
             let entry_path = entry.path();
-            if let Some(item) = inspect_path(&entry_path, &file_name) {
+            if let Some(item) = inspect_path(&entry_path, &file_name, self.long, known) {
                 items.push(item);
             }
         }
@@ -540,7 +560,7 @@ impl LsCommand {
         look: &Look,
     ) -> Result<(), std::io::Error> {
         let mut rows: Vec<(String, ItemInfo)> = Vec::new();
-        if let Some(root) = inspect_path(dir_path, dir_str) {
+        if let Some(root) = inspect_path(dir_path, dir_str, self.long, None) {
             rows.push((String::new(), root));
         }
         self.tree_rows(dir_path, "", 1, &mut rows);
@@ -645,10 +665,15 @@ impl LsCommand {
                 .and_then(|prefixes| prefixes.get(index))
                 .map_or("", String::as_str);
 
+            let permissions = if self.attributes {
+                std::format!("{} {}", item.permissions, attribute_letters(item))
+            } else {
+                item.permissions.clone()
+            };
             writeln!(
                 context.stdout(),
                 "{} {:>links_w$} {:<owner_w$} {:<group_w$} {:>size_w$} {} {}{}",
-                item.permissions,
+                permissions,
                 item.links,
                 item.owner,
                 item.group,
@@ -739,8 +764,17 @@ impl LsCommand {
     }
 
     /// The name as it shows, without colour: for measuring.
+    /// The attribute letters and a space, before a name outside the long format.
+    fn attribute_prefix(&self, item: &ItemInfo) -> String {
+        if self.attributes && !self.long {
+            std::format!("{} ", attribute_letters(item))
+        } else {
+            String::new()
+        }
+    }
+
     fn format_name_plain(&self, item: &ItemInfo, look: &Look) -> String {
-        let mut s = String::new();
+        let mut s = self.attribute_prefix(item);
         if let Some(theme) = look.icons {
             s.push_str(icon_for(theme, item));
             s.push(' ');
@@ -764,14 +798,15 @@ impl LsCommand {
         }
         shown.push_str(&item.name);
 
-        let mut s = match look
+        let mut s = self.attribute_prefix(item);
+        s.push_str(&match look
             .colors
             .as_ref()
             .and_then(|colors| style_for(colors, item))
         {
             Some(style) => style.paint(&shown).to_string(),
             None => shown,
-        };
+        });
 
         if let Some(indicator) = self.indicator(item) {
             s.push(indicator);
@@ -917,55 +952,96 @@ fn compare_versions(a: &str, b: &str) -> Ordering {
     }
 }
 
-fn inspect_dot(dir_path: &Path, name: &str) -> Option<ItemInfo> {
+/// Windows' file attribute bits `ls` reads (`GetFileAttributes`).
+const ATTRIBUTE_READONLY: u32 = 0x1;
+const ATTRIBUTE_HIDDEN: u32 = 0x2;
+const ATTRIBUTE_SYSTEM: u32 = 0x4;
+const ATTRIBUTE_ARCHIVE: u32 = 0x20;
+
+fn attributes_of(metadata: &Metadata) -> u32 {
+    use std::os::windows::fs::MetadataExt as _;
+    metadata.file_attributes()
+}
+
+/// Both hidden and system: what Explorer never shows and lsd leaves out without
+/// `--system-protected`, such as `NTUSER.DAT`'s logs and the `My Documents` junctions.
+const fn is_protected(attributes: u32) -> bool {
+    attributes & (ATTRIBUTE_HIDDEN | ATTRIBUTE_SYSTEM) == ATTRIBUTE_HIDDEN | ATTRIBUTE_SYSTEM
+}
+
+/// lsd's attribute letters: `d` or `.`, then archive, read-only, hidden and system.
+fn attribute_letters(item: &ItemInfo) -> String {
+    let flag = |bit: u32, letter: char| {
+        if item.attributes & bit == 0 {
+            '-'
+        } else {
+            letter
+        }
+    };
+    [
+        if item.kind == EntryKind::Dir {
+            'd'
+        } else {
+            '.'
+        },
+        flag(ATTRIBUTE_ARCHIVE, 'a'),
+        flag(ATTRIBUTE_READONLY, 'r'),
+        flag(ATTRIBUTE_HIDDEN, 'h'),
+        flag(ATTRIBUTE_SYSTEM, 's'),
+    ]
+    .iter()
+    .collect()
+}
+
+fn inspect_dot(dir_path: &Path, name: &str, long: bool) -> Option<ItemInfo> {
     let metadata = std::fs::metadata(dir_path).ok()?;
-    let owner =
-        cash_win32::fs::get_file_owner(dir_path).unwrap_or_else(cash_win32::fs::current_user);
-    let group = owner.clone();
-    let subdirs = cash_win32::fs::count_subdirectories(dir_path);
-    let links = 2 + u32::try_from(subdirs).unwrap_or(0);
     let mtime = metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH);
 
-    Some(ItemInfo {
+    let mut item = ItemInfo {
         name: name.to_string(),
         path: dir_path.to_path_buf(),
         kind: EntryKind::Dir,
-        permissions: String::from("drwxrwxr-x"),
-        links,
-        owner,
-        group,
+        permissions: String::new(),
+        links: 0,
+        owner: String::new(),
+        group: String::new(),
         size: metadata.len(),
         mtime,
+        attributes: attributes_of(&metadata),
         symlink_target: None,
         target: None,
         executable: OnceCell::new(),
-    })
+    };
+    if long {
+        let subdirs = cash_win32::fs::count_subdirectories(dir_path);
+        item.links = 2 + u32::try_from(subdirs).unwrap_or(0);
+        fill_long(&mut item, &metadata);
+    }
+    Some(item)
 }
 
-fn inspect_path(path: &Path, display_name: &str) -> Option<ItemInfo> {
-    let symlink_metadata = std::fs::symlink_metadata(path).ok()?;
-    let is_symlink = symlink_metadata.file_type().is_symlink();
-
-    let metadata = if is_symlink {
-        symlink_metadata
-    } else {
-        std::fs::metadata(path).unwrap_or(symlink_metadata)
+/// An entry, from `known` metadata when the directory listing supplied it (no file is
+/// opened for that), else read. The owner, link count and permissions, which cost a
+/// read of each file's security and more, are looked up only for `-l`, which shows them.
+fn inspect_path(
+    path: &Path,
+    display_name: &str,
+    long: bool,
+    known: Option<Metadata>,
+) -> Option<ItemInfo> {
+    let symlink_metadata = match known {
+        Some(metadata) => metadata,
+        None => std::fs::symlink_metadata(path).ok()?,
     };
+    let is_symlink = symlink_metadata.file_type().is_symlink();
 
     let kind = if is_symlink {
         EntryKind::Symlink
-    } else if metadata.is_dir() {
+    } else if symlink_metadata.is_dir() {
         EntryKind::Dir
     } else {
         EntryKind::File
     };
-
-    let permissions = format_permissions(path, &metadata, is_symlink);
-    let links = cash_win32::fs::file_link_count(path, &metadata);
-    let owner = cash_win32::fs::get_file_owner(path).unwrap_or_else(cash_win32::fs::current_user);
-    let group = owner.clone();
-    let size = metadata.len();
-    let mtime = metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH);
 
     let (symlink_target, target) = if is_symlink {
         let followed = std::fs::metadata(path);
@@ -979,36 +1055,53 @@ fn inspect_path(path: &Path, display_name: &str) -> Option<ItemInfo> {
         (None, None)
     };
 
-    Some(ItemInfo {
+    let mut item = ItemInfo {
         name: display_name.to_string(),
         path: path.to_path_buf(),
         kind,
-        permissions,
-        links,
-        owner,
-        group,
-        size,
-        mtime,
+        permissions: String::new(),
+        links: 0,
+        owner: String::new(),
+        group: String::new(),
+        size: symlink_metadata.len(),
+        mtime: symlink_metadata
+            .modified()
+            .unwrap_or(SystemTime::UNIX_EPOCH),
+        attributes: attributes_of(&symlink_metadata),
         symlink_target,
         target,
         executable: OnceCell::new(),
-    })
+    };
+    if long {
+        item.links = cash_win32::fs::file_link_count(path, &symlink_metadata);
+        fill_long(&mut item, &symlink_metadata);
+    }
+    Some(item)
 }
 
-fn format_permissions(path: &Path, metadata: &Metadata, is_symlink: bool) -> String {
-    if is_symlink {
+/// The owner and the permission string `-l` shows, from one read of the file's security.
+fn fill_long(item: &mut ItemInfo, metadata: &Metadata) {
+    let security = cash_win32::fs::file_security(&item.path);
+    item.owner = security.owner.unwrap_or_else(cash_win32::fs::current_user);
+    item.group = item.owner.clone();
+    item.permissions = format_permissions(item, metadata, security.writable);
+}
+
+/// Unix permission bits for a Windows file, which has an access list instead. `r` is
+/// always there. `w` is whether this process may write it: its access list allows it
+/// (`writable`, when it could be read) and, for a file, the read-only attribute is not
+/// set; a folder's read-only attribute only marks it as customised, and does not stop
+/// writing. `x` is a program by extension or a `#!` line, and every folder. The owner
+/// and group positions carry the answer; others read only.
+fn format_permissions(item: &ItemInfo, metadata: &Metadata, writable: Option<bool>) -> String {
+    if item.kind == EntryKind::Symlink {
         return String::from("lrwxrwxrwx");
     }
-    if metadata.is_dir() {
-        return String::from("drwxrwxr-x");
-    }
-    if metadata.permissions().readonly() {
-        String::from("-r--r--r--")
-    } else if is_executable(path) {
-        String::from("-rwxrwxr-x")
-    } else {
-        String::from("-rw-rw-r--")
-    }
+    let is_dir = item.kind == EntryKind::Dir;
+    let write = writable.unwrap_or(true) && (is_dir || !metadata.permissions().readonly());
+    let run = is_dir || item.is_executable();
+    let (w, x) = (if write { 'w' } else { '-' }, if run { 'x' } else { '-' });
+    std::format!("{}r{w}{x}r{w}{x}r-{x}", if is_dir { 'd' } else { '-' })
 }
 
 fn is_executable(path: &Path) -> bool {

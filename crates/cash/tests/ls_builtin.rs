@@ -411,3 +411,90 @@ fn ls_tree_draws_branches_to_the_depth_asked() {
     let out = cash(&format!("cd '{dir}'; ls -R --depth=1 src"));
     assert!(!out.stdout.contains("x.txt"), "{}", out.stdout);
 }
+
+/// Sets Windows attributes on a file, as `attrib` does.
+fn set_attributes(path: &Path, flags: &[&str]) {
+    let status = Command::new("attrib")
+        .args(flags)
+        .arg(path)
+        .status()
+        .unwrap();
+    assert!(status.success());
+}
+
+#[test]
+fn ls_skips_hidden_system_files_unless_all_and_shows_attributes() {
+    let scratch = Scratch::new("attributes");
+    let root = scratch.path();
+    for file in ["plain.txt", "hidden.txt", "protected.txt"] {
+        std::fs::write(root.join(file), b"x").unwrap();
+    }
+    set_attributes(&root.join("hidden.txt"), &["+h"]);
+    set_attributes(&root.join("protected.txt"), &["+h", "+s"]);
+    let dir = root.to_string_lossy().replace('\\', "/");
+
+    // Hidden and system together is what Explorer and lsd leave out; hidden alone shows.
+    let out = cash(&format!("ls -1 '{dir}'"));
+    assert_eq!(out.stdout, "hidden.txt\nplain.txt", "{}", out.stderr);
+    let out = cash(&format!("ls -1A '{dir}'"));
+    assert_eq!(out.stdout, "hidden.txt\nplain.txt\nprotected.txt");
+    // Named on the command line, it is listed.
+    let out = cash(&format!("ls -1 '{dir}/protected.txt'"));
+    assert!(out.stdout.ends_with("protected.txt"), "{}", out.stdout);
+
+    let out = cash(&format!("cd '{dir}'; ls -1A --attributes"));
+    assert_eq!(
+        out.stdout, ".a-h- hidden.txt\n.a--- plain.txt\n.a-hs protected.txt",
+        "{}",
+        out.stderr
+    );
+    let out = cash(&format!("cd '{dir}'; ls -lA --attributes protected.txt"));
+    assert!(
+        out.stdout.starts_with("-rw-rw-r-- .a-hs "),
+        "{}",
+        out.stdout
+    );
+
+    set_attributes(&root.join("hidden.txt"), &["-h"]);
+    set_attributes(&root.join("protected.txt"), &["-h", "-s"]);
+}
+
+#[test]
+fn ls_long_w_is_the_access_list_answer_not_just_read_only() {
+    let scratch = Scratch::new("acl-write");
+    let file = scratch.path().join("locked.txt");
+    std::fs::write(&file, b"x").unwrap();
+    let dir = scratch.path().to_string_lossy().replace('\\', "/");
+
+    let out = cash(&format!("ls -l '{dir}/locked.txt'"));
+    assert!(out.stdout.starts_with("-rw-rw-r--"), "{}", out.stdout);
+
+    // Deny this user writing the file's data, as an access list can without the
+    // read-only attribute.
+    let user = std::env::var("USERNAME").unwrap();
+    let deny = Command::new("icacls")
+        .arg(&file)
+        .args(["/deny", &format!("{user}:(WD)")])
+        .output()
+        .unwrap();
+    assert!(
+        deny.status.success(),
+        "{}",
+        String::from_utf8_lossy(&deny.stderr)
+    );
+
+    let out = cash(&format!("ls -l '{dir}/locked.txt'"));
+    let _ = Command::new("icacls")
+        .arg(&file)
+        .args(["/remove:d", &user])
+        .output();
+    assert!(out.stdout.starts_with("-r--r--r--"), "{}", out.stdout);
+
+    // A read-only folder is only a customised one: it still takes new files.
+    let folder = scratch.path().join("custom");
+    std::fs::create_dir(&folder).unwrap();
+    set_attributes(&folder, &["+r"]);
+    let out = cash(&format!("ls -ld '{dir}/custom'"));
+    assert!(out.stdout.starts_with("drwxrwxr-x"), "{}", out.stdout);
+    set_attributes(&folder, &["-r"]);
+}
