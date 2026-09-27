@@ -160,7 +160,12 @@ regardless of which `echo.exe` is on `PATH`. Explicit executable paths bypass bu
 cash carries the whole of uutils coreutils, plus a set written for Windows because the
 name resolves to something worse there: `find` and `xargs`, `ps`, `pgrep`, `pstree`, `tree` and
 `top`, `less`/`more`,
-`which`, `chmod`, `hostname`, and `coolfetch`.
+`which`, `where`, `chmod`, `hostname`, and `coolfetch`.
+
+`where` is Windows' `where.exe` with options spelled with dashes: `where git` lists every
+`git` along the current folder and PATH, `where -r . '*.log'` searches a tree, and
+`-q`, `-f`, `-t` and `where -?` work as `/q`, `/f`, `/t` and `/?` do there. Paths print
+as `C:/…`, like everything else cash prints.
 
 Inside cash, `which ls` prints `C:/…/cash.exe/ls`, a path only cash can run. For programs
 outside cash (Python's `subprocess`, a `.bat` file, an editor), `cash --link-tools [DIR]`

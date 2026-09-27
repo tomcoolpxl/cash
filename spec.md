@@ -1777,7 +1777,7 @@ divergence 38.
 
 D58's `C:/…/cash.exe/ls` runs only inside cash: Python's `subprocess`, a `.bat` file or
 an IDE can start only a real file. `cash --link-tools [DIR]` makes hard links to
-`cash.exe`, one per tool it carries that is not a Bash builtin (`ls.exe`, `sort.exe`, 125
+`cash.exe`, one per tool it carries that is not a Bash builtin (`ls.exe`, `sort.exe`, 126
 of them), and cash started under a linked name runs as that tool, as BusyBox does. A
 hard link is the same file under another name: no space, no admin on a folder the user
 can write, and the same hash and signature for AppLocker and App Control. Decided with
@@ -1790,8 +1790,8 @@ the user, 2026-09-27:
   under a tool's name that nobody linked is still the shell. Re-running refreshes cash's
   links to the running `cash.exe`, which is how an upgrade reaches them; any other file of
   that name is left alone and listed.
-- **Windows' names.** Every tool is linked; the eight that System32 also has (`expand find
-  hostname ping reset sort timeout whoami`) are named, since with the folder before
+- **Windows' names.** Every tool is linked; the nine that System32 also has (`expand find
+  hostname ping reset sort timeout where whoami`) are named, since with the folder before
   System32 on PATH a `.bat` calling `find` gets cash's.
 - **PATH** is never changed; the command prints the PowerShell line that adds the folder
   to the user PATH.
@@ -1807,6 +1807,35 @@ and for `sh`; the child would take itself for the tool again, so the tool's proc
 looks for a program started by a bare name in the folder of the exe that starts it: cash
 starts the Windows programs it uses (`whoami`, `quser`) by their System32 path, or in a
 links folder `whoami.exe` would be cash, starting `whoami.exe` again as it came up.
+
+### D66 — `where`: Windows' `where.exe`, with dashes and cash's paths
+
+`where.exe` is the Windows answer to "where is this file": it looks along the current
+folder and PATH, tries the PATHEXT extensions on a bare name, takes wildcards, searches
+a folder tree with `/r`, and reads `$VAR:PATTERN` and `DIR:PATTERN` for other folders.
+cash had no such command; `which` answers what the shell would run, not where files are.
+Asked for 2026-09-27, as a builtin with dashes for options and a help option.
+
+- **Kept from `where.exe`**, measured against it on Windows 11: the search order (a
+  folder's files in the order Windows lists them, the current folder before PATH, each
+  folder once; with `-r`, a folder's files before those of the folders in it), the
+  matching (any case, `*` and `?`, PATHEXT on a name without an extension, `NAME.*`
+  matching `NAME`, folders never), a pattern given twice searched once, the `ERROR:` and
+  `INFO:` messages on standard error, and the exit statuses: 0 when anything was found,
+  1 when nothing was, 2 for a command line it cannot run.
+- **Options** take dashes, decided with the user: `-r DIR`/`--recursive DIR`,
+  `-q`/`--quiet`, `-f`/`--quote`, `-t`/`--times`, the letters in either case and bundled
+  (`-qf`), and `-?`/`--help`. `/q` is no option, so a path is never taken for one; a
+  pattern spelled like a `where.exe` option is searched for and, when not found, the
+  message names the dash spelling.
+- **Paths** print as `pwd` prints them, `C:/Windows/notepad.exe` (D3), decided with the
+  user over `where.exe`'s backslashes. PATH and `$VAR` values may be in either form, and
+  `DIR` may be spelled `/c/Windows`.
+- **`-t`** shows the date in the user's own short-date format from Windows' region
+  settings and a 24-hour time, as `where.exe` does.
+
+It shadows `System32\where.exe`, which `cash doctor` names among the deliberate
+shadows; `enable -n where` or the full path reaches the Windows one.
 
 ---
 

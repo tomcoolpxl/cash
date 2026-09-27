@@ -23,6 +23,7 @@ pub mod fs;
 pub mod icmp;
 pub mod job;
 pub mod jobreg;
+pub mod locale;
 pub mod msys;
 /// The machine's TCP/UDP sockets and their owning processes.
 pub mod net;

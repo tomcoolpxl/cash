@@ -377,8 +377,9 @@ Decided:
 - **A name already taken:** a link cash made earlier is refreshed to this `cash.exe`,
   so re-running after an upgrade updates them; any other file is left alone and listed
   as skipped. Cash knows its own links by a list it keeps in the folder.
-- **Windows' names:** all 125 tools are linked. The eight that share a System32 name
-  (`expand find hostname ping reset sort timeout whoami`) get a note: put the folder
+- **Windows' names:** all 126 tools are linked (125 when this was decided; `where`
+  came later, D66). The nine that share a System32 name (`expand find hostname ping
+  reset sort timeout where whoami`) get a note: put the folder
   after System32 on PATH, or `.bat` files calling `find` or `sort` get cash's.
 - **PATH:** never changed; the command prints the folder and how to add it to the
   user PATH.

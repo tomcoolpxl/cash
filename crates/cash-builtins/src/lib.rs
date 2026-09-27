@@ -80,6 +80,10 @@ mod pager;
 #[cfg(windows)]
 mod which;
 
+// cash (D66): `where`, Windows' where.exe with dashes for options and cash's paths.
+#[cfg(windows)]
+mod where_files;
+
 // cash (D23, D34): uutils' chmod is Unix-only, so the gap was filled by MSYS's, which
 // writes mode bits nothing outside MSYS reads.
 #[cfg(windows)]

@@ -581,6 +581,10 @@ const DELIBERATE_SHADOWS: &[(&str, &str)] = &[
         "reset",
         "the terminal reset; System32's is the Remote Desktop `reset session` (D55)",
     ),
+    (
+        "where",
+        "where.exe's search with dashes for options (-q, not /q) and C:/ paths (D66)",
+    ),
 ];
 
 /// Names cash answers although System32 has a program of the same name with other
