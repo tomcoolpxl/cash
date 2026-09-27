@@ -57,7 +57,7 @@ signals needs its own isolated test (see below).
 | **1.t** | `array_expand_once` | Replaces `assoc_expand_once` | **Fixed.** The two names are now one option. With it set, `unset`, `read` and `printf -v` do not expand a subscript again, associative or indexed (`unset 'a[$i]'` becomes an arithmetic error); `declare` and `[[ -v ]]` still do, as in Bash. Without it, cash had not expanded indexed subscripts at all (`unset 'a[$i]'` failed); it now does. A command substitution in that second expansion is refused rather than run (spec divergence 37). |
 | **1.v** | `$TIMEFORMAT` | Up to six digits of precision | **Fixed.** Cash ignored `TIMEFORMAT` completely. It now follows `print_formatted_time`: `%[p][l]R/U/S`, `%P`, `%%`, precision capped at 6, empty value suppresses the report, invalid characters are diagnosed; `time -p` uses the fixed POSIX format. |
 | **1.w** | `BASH_MONOSECONDS` | Monotonic clock | **Verified.** Whole seconds (as in Bash, not microseconds) from `GetTickCount64`. |
-| **1.x** | `BASH_TRAPSIG` | Number of the running trap | **Fixed.** Was a dynamic variable that was empty for `ERR`/`DEBUG` and never unset. It is now bound while a handler runs and restored afterwards, with Bash's numbering: signals by number, `EXIT` 0, `DEBUG` 65, `ERR` 66, `RETURN` 67. |
+| **1.x** | `BASH_TRAPSIG` | Number of the running trap | **Fixed.** Was a dynamic variable that was empty for `ERR`/`DEBUG` and never unset. It is now bound while a handler runs and restored afterwards, with Bash's numbering: signals by number, `EXIT` 0, `DEBUG` 65, `ERR` 66, `RETURN` 67. For real signals it is checked by the ConPTY harness (`kill -INT $$` and so on), which also found that cash ended itself on such a signal, trap or no trap; it now runs the trap (spec D21). |
 | **1.ee** | `test` with >4 args | Parenthesized subexpression heuristic | **Verified** by probe. |
 | **1.ff** | `MULTIPLE_COPROCS` | Several coprocesses at once | **Verified** by probe. |
 | **1.kk** | `source -p PATH` | Search path for `.`/`source` | **Complete** (earlier regression). |
@@ -98,8 +98,6 @@ Found with the last three items (ROADMAP item 14):
 
 - A command substitution in a subscript that a builtin expands a second time
   (`unset "a[$key]"` with `key='$(cmd)'`) is refused, not run: spec divergence 37.
-- Real-signal traps (`trap … INT` with `kill -INT $$`) need an isolated test harness before
-  `BASH_TRAPSIG` can be probed for them.
 - `/dev/tcp/host/port` and `/dev/udp/...` redirections are not implemented. They are a Bash
   redirection feature rather than an OS one, so a Winsock implementation is possible.
 
@@ -115,19 +113,19 @@ there.
 | Item | Feature | Upstream Description | Cash Assessment |
 | :--- | :--- | :--- | :--- |
 | **1.b** | Completion quoting | Preserves user-supplied quotes around word completion | **Verified** by the harness: `ls "al<TAB>` gives `ls "alpha beta.txt"`, as Bash does. With no quote typed cash quotes in its own style (D40). |
-| **1.f** | Signal handling | Bash signal handlers active during completion | Non-applicable: Cash uses async/thread-isolated completion. |
-| **1.o** | Window size check | Check winsize during traps, `bind -x`, completion | Handled natively by ConPTY event loops. |
+| **1.f** | Signal handling | Bash signal handlers active during completion | **Not applicable.** Readline runs Bash's completion inside its signal handling; cash's completer runs as a task beside the line editor, and a Ctrl-C during it cancels the task (`completion.rs`). There is no handler state to keep active. |
+| **1.o** | Window size check | Check winsize during traps, `bind -x`, completion | **Fixed**, by the harness: cash never set `COLUMNS` and `LINES` at all, though `checkwinsize` was on. It now sets them from the console before each prompt, so a trap, a `bind -x` command or a completion function sees the size at that prompt. Reedline itself redraws on a resize. |
 | **1.u** | `compopt -o fullquote` | Force full quoting for completions | **Implemented**, by the harness: `complete` and `compopt` take `-o fullquote`, and a function's completions are then quoted as file names are, in D40's style (`'x y'` where Bash writes `x\ y`); `noquote` still wins. |
-| **1.y** | `checkwinsize` | Enabled in subshells from interactive shells | Native console handles resize dynamically. |
+| **1.y** | `checkwinsize` | Enabled in subshells from interactive shells | **Fixed** with 1.o, by the harness: a subshell sees the `COLUMNS` and `LINES` its interactive shell set. |
 | **1.aa** | `bind -x` syntax | Key sequence and command separated by whitespace | **Fixed**, by the harness: `"\C-t" "echo hi"` is read, the command dequoted, as are `"\C-t": "cmd"` and anything after the closing quote. The harness also found that no `bind -x` binding showed its output: the prompt was redrawn over it. That was Reedline's; cash carries a patch (`vendor/reedline/CASH-PATCHES.md`). |
 | **1.bb** | `bind -x` output | Print bindings using new syntax | **Verified** by the harness; a command's `\` and `"` are now escaped, as in Bash. |
-| **1.cc** | `read -E` | Use line editor with shell completion | Cash's built-in line editor accepts `-E` with completion stub. |
+| **1.cc** | `read -E` | Use line editor with shell completion | **Verified** by the harness: `read -E` edits with completion; a completed name is quoted in cash's style (D40), where Bash backslash-escapes. |
 | **1.dd** | `bash-vi-complete` | Vi mode completion keybinding | **Verified** by the harness (`bind -l`). |
 | **1.gg** | `bind -p NAME` | Restrict output to bindings for named commands | **Fixed**, by the harness: `bind -p NAME` and `bind -P NAME` list one command's keys; a name that is not bound, or not a command, is reported as not bound, status 0, as in Bash. Keys are now spelled as terminals send them (`"\e[H"` and `"\eOH"` for Home, `"\e[1;5H"` for Ctrl-Home) rather than `"Home"`, so `bind -p` output reads back, and on Windows a binding spelled that way binds the key, as an `.inputrc` written for Bash expects. |
 | **1.ii** | Trap job notify | Print job notifications when trap completes | **Fixed**, by the harness: at the prompt a `CHLD` trap runs, then the job notices are printed, as in Bash. cash had refused `trap … CHLD`; it now emulates it (spec D64). |
 | **1.jj** | Compfunc 124 | Reload compspec and retry completion | **Verified** by the harness. |
 | **1.rr** | Sourcing notify | Suppress job notifications while sourcing | **Fixed**, by the harness: a job that finishes while a file is sourced is reported when the file is done. The harness also found that cash reported jobs only at the prompt, where Bash reports them when a foreground command finishes; laid them out differently (`[1]+    PID`, `[1]+Done<tab>cmd`, no `Exit N`); and lost the `Done` of a job that finished before the next one started. All now as in Bash. |
-| **2.a-o** | Readline 8.3 | `search-ignore-case`, `force-meta-prefix`, etc. | Cash uses Reedline on Windows, not GNU Readline. |
+| **2.a-o** | Readline 8.3 | `search-ignore-case`, `force-meta-prefix`, etc. | **Not applicable.** These are GNU Readline's own variables and commands; cash's line editor is Reedline, which has none of Readline's variable set to extend. `bind` reads Readline's syntax and maps the commands Reedline has (D40, the harness's `bind` cases). |
 
 ---
 
@@ -169,5 +167,5 @@ there.
 
 ## Next steps
 
-1. An isolated harness (new console process group) for real-signal traps and `BASH_TRAPSIG`.
-2. ConPTY probes for section 2.
+None: every item above is probed, fixed, or recorded as not applicable or a deliberate
+divergence. `/dev/tcp` (above) is not a 5.3 item.
