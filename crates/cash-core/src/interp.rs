@@ -348,9 +348,10 @@ async fn spawn_async_ao_list_in_task<'a, SE: extensions::ShellExtensions>(
     // a prompt to report them, reaps them silently, or a loop of background jobs would
     // pile them up.
     if shell.may_report_jobs_now() {
-        let _ = shell.check_for_completed_jobs();
+        let _ = shell.check_for_completed_jobs(params).await;
     } else if !shell.options().interactive {
         let _ = shell.jobs_mut().poll();
+        shell.run_pending_chld_traps(params).await;
     }
 
     // Guard against runaway background jobs / fork bombs (matching ulimit -u).
@@ -684,13 +685,13 @@ async fn wait_for_pipeline_processes_and_update_status(
     // Clear our the pipeline status so we can start filling it out.
     shell.last_pipeline_statuses_mut().clear();
 
-    // Whether the shell waits here for a process of its own: after one, an interactive
-    // shell reports the background jobs that finished meanwhile, as Bash does.
-    let waits_for_a_process = process_spawn_results
-        .iter()
-        .any(|child| matches!(child, ExecutionSpawnResult::StartedProcess(_)));
+    // The processes of its own the shell reaps here: after them, an interactive shell
+    // reports the background jobs that finished meanwhile, and a CHLD trap runs once for
+    // each, as in Bash.
+    let mut reaped_processes = 0;
 
     while let Some(child) = process_spawn_results.pop_front() {
+        let is_process = matches!(child, ExecutionSpawnResult::StartedProcess(_));
         let wait_result = if !stopped_children.is_empty() {
             child.poll().await?
         } else {
@@ -699,6 +700,9 @@ async fn wait_for_pipeline_processes_and_update_status(
 
         match wait_result {
             ExecutionWaitResult::Completed(current_result) => {
+                if is_process {
+                    reaped_processes += 1;
+                }
                 result = current_result;
                 shell.set_last_exit_status(result.exit_code.into());
                 shell
@@ -736,8 +740,9 @@ async fn wait_for_pipeline_processes_and_update_status(
     // Bash reports a finished background job when a foreground job completes, not only
     // at the next prompt: `sleep 1 & sleep 2; echo after` shows `[1]+  Done` before
     // `after`. Not while a file is sourced (Bash 5.3): that waits until it returns.
-    if waits_for_a_process && shell.may_report_jobs_now() {
-        shell.check_for_completed_jobs()?;
+    if reaped_processes > 0 {
+        shell.jobs_mut().note_children_reaped(reaped_processes);
+        shell.after_foreground_children(params).await?;
     }
 
     // If there were stopped jobs, then encapsulate the pipeline as a managed job and hand it

@@ -398,9 +398,10 @@ D21 and D22 (`kill`).
 **Status.** `sys/windows/signal.rs` replaces the stub whose `Signal` was an empty enum,
 so `trap` and `kill` work for the signals Windows can honestly deliver — `INT`, `TERM`,
 `HUP`, `QUIT`, `KILL`, `STOP`, `TSTP`, `CONT` — each backed by a real Win32 mechanism.
-Signals with no mechanism behind them (`USR1`, `PIPE`, `ALRM`, `CHLD`) are *refused*
+Signals with no mechanism behind them (`USR1`, `PIPE`, `ALRM`) are *refused*
 rather than accepted-and-ignored, because a trap that can never fire is the silent
-failure D20 and D26 both reject.
+failure D20 and D26 both reject. `CHLD` was on that list; its event is one cash sees, and
+D64 now implements it.
 
 `kill` is also now a builtin on Windows. It had been gated to Unix by a single `nix::`
 reference for its default signal, which meant `kill` fell through to whatever external
@@ -1726,6 +1727,28 @@ carapace starts in about 50 ms, a Tab costs 85–100 ms where carapace has the l
 `docker`), the same order as the tools' own bash completion scripts, which run the tool too.
 The first Tab of a session also reads carapace's list, once.
 
+### D64 — `CHLD` is cash's own event: a trap runs once per child reaped
+
+Windows delivers no `SIGCHLD`, and cash refused `trap … CHLD` for that reason. But the
+event behind it is one cash sees: every child process it starts, it waits for. Bash 5.3's
+item 1.ii (job notices after a trap) needed it, and scripts that keep a pool of background
+jobs count them with a `CHLD` trap. Decided 2026-09-27: emulate it.
+
+- **When it runs.** At the points Bash runs a pending trap: after a foreground command,
+  inside `wait`, when a background job starts, and at the prompt, where the trap runs
+  before the job notices, as in Bash 5.3.
+- **How often.** Once for each process of a foreground command or pipeline that cash
+  started and reaped, and once for each background job, as `cmd &` is in Bash. Checked
+  against Git Bash 5.3.15 with external programs, the counts are Bash's.
+- **Where it does not.** Only the shell itself runs it: a subshell or background job runs
+  in a copy of the shell, whose trap Bash resets. Children that the handler itself starts
+  are not counted, or a handler that runs a command would set itself off without end.
+- **`kill -CHLD`** to another process does what POSIX's default does: nothing.
+
+What cannot match is what has no process in cash: a bundled tool (`ls`, `cat`) and a
+command substitution run inside cash, so they reap no child and raise no `CHLD`; §4
+divergence 38.
+
 ---
 
 ## 4. Deliberate divergences from bash
@@ -1773,6 +1796,7 @@ someone who expected bash, so additions need to earn their place.
 | 35 | `ping` is iputils' `ping`, not `ping.exe`; a reply slower than the interval counts as lost, and IPv6 replies show no `ttl=` | Scripts use Linux's `-c`; the Windows ICMP API has one echo in flight and no IPv6 hop limit | D57 |
 | 36 | `which ls` prints `C:/…/cash.exe/ls`, a path no file is at, which cash runs as `ls` | A builtin has no file, and scripts run what `which` prints | D58 |
 | 37 | A subscript that `unset`, `read`, `printf -v`, `declare` or `[[ -v ]]` expands a second time never runs a command substitution: `unset "a[$key]"` with `key='$(cmd)'` is an error | Bash runs `cmd`, its best-known array injection; `$i` and `$((…))` still expand as in Bash (as 27 does for arithmetic) | — |
+| 38 | A `CHLD` trap runs once per child process cash starts and reaps; a bundled tool (`ls`, `cat`) and a command substitution run inside cash and raise none | Windows has no `SIGCHLD`; cash emulates it from the children it waits for, and those have no process | D64 |
 
 `select` was missing outright until recently: it was a reserved word with no grammar
 rule, so `select x in a b; do …; done` was a syntax error that took the whole file with

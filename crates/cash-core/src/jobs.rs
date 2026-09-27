@@ -31,6 +31,10 @@ pub struct JobManager {
     /// `jobs` needs to render, and nothing that would let a subshell act on them.
     inherited: Vec<JobSnapshot>,
 
+    /// Children reaped since the last `CHLD` trap ran, one for each foreground process
+    /// and each background job; see `Shell::run_pending_chld_traps`.
+    reaped_children: usize,
+
     /// Statuses of background jobs that have finished and left the table, oldest first:
     /// Bash's saved-status list (`bgpids`). `wait PID` reads a status here after the job
     /// is gone, as POSIX requires, and `wait -n` takes the ones it has not returned yet.
@@ -226,10 +230,21 @@ impl JobManager {
             return;
         };
         let job = self.jobs.remove(index);
+        self.note_children_reaped(1);
         if keep_status {
             self.save_status(&job, status, false, by_wait_n);
         }
         self.reannotate();
+    }
+
+    /// Counts children reaped, for the `CHLD` trap.
+    pub const fn note_children_reaped(&mut self, count: usize) {
+        self.reaped_children = self.reaped_children.saturating_add(count);
+    }
+
+    /// The children reaped since this was last called.
+    pub fn take_children_reaped(&mut self) -> usize {
+        std::mem::take(&mut self.reaped_children)
     }
 
     fn save_status(&mut self, job: &Job, status: u8, unreported: bool, by_wait_n: bool) {
@@ -309,6 +324,7 @@ impl JobManager {
         Self {
             jobs: Vec::new(),
             inherited,
+            reaped_children: 0,
             saved: VecDeque::new(),
         }
     }
@@ -399,8 +415,10 @@ impl JobManager {
         self.inherited.retain(|snapshot| {
             snapshot.notification_pending || !matches!(snapshot.state, JobState::Done)
         });
+        let before = self.jobs.len();
         self.jobs
             .retain(|job| job.notification_pending || !matches!(job.state, JobState::Done));
+        self.note_children_reaped(before - self.jobs.len());
         self.reannotate();
     }
 
@@ -554,6 +572,7 @@ impl JobManager {
         while i != self.jobs.len() {
             if let Some(result) = self.jobs[i].poll_done()? {
                 let job = self.jobs.remove(i);
+                self.note_children_reaped(1);
                 let status = result.as_ref().map_or(1, |r| u8::from(r.exit_code));
                 self.save_status(&job, status, true, false);
                 results.push((job, result));
@@ -561,6 +580,7 @@ impl JobManager {
                 // TODO(jobs): This is a workaround to remove jobs that are done but for which we
                 // don't know what happened.
                 results.push((self.jobs.remove(i), Ok(ExecutionResult::success())));
+                self.note_children_reaped(1);
             } else {
                 i += 1;
             }
@@ -584,6 +604,7 @@ impl JobManager {
         while i != self.jobs.len() {
             if self.jobs[i].tasks.is_empty() {
                 completed_jobs.push(self.jobs.remove(i));
+                self.note_children_reaped(1);
             } else {
                 i += 1;
             }

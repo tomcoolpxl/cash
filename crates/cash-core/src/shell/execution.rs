@@ -232,7 +232,7 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         // Jobs that finished while the file was sourced are reported now that it is done
         // (Bash 5.3), when this was the outermost one.
         if matches!(call_type, callstack::ScriptCallType::Source) && self.may_report_jobs_now() {
-            let _ = self.check_for_completed_jobs();
+            let _ = self.check_for_completed_jobs(params).await;
         }
 
         // Bash restores arguments temporarily supplied to `source` unless the sourced

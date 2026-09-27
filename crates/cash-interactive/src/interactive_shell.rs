@@ -201,7 +201,8 @@ impl<'a, IB: InputBackend, SE: cash_core::ShellExtensions> InteractiveShell<'a, 
         let mut shell = self.shell.lock().await;
 
         // Check for any completed jobs.
-        shell.check_for_completed_jobs()?;
+        let params = shell.default_exec_params();
+        shell.check_for_completed_jobs(&params).await?;
 
         // Everything between here and reading input is prompt work, and a shell that displays
         // no prompt does none of it: `script | brush -s` reads commands through this loop but

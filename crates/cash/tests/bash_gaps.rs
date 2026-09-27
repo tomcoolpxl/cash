@@ -1472,3 +1472,41 @@ fn wait_reports_the_status_of_a_job_that_has_already_finished() {
         "n=127"
     );
 }
+
+#[test]
+fn a_chld_trap_runs_once_for_each_child_reaped() {
+    // cash's CHLD (spec D64): once per process the shell starts and reaps, foreground or
+    // in a pipeline, and once per background job, at the points Bash runs a pending
+    // trap. Checked against Git Bash 5.3.15 with external programs; `$X` is cash itself,
+    // started as one.
+    let cash = CASH.replace('\\', "/");
+    let script = format!(
+        "X='{cash}'\n\
+         trap 'echo chld' CHLD\n\
+         echo fg; \"$X\" -c true\n\
+         echo pipe; \"$X\" -c true | \"$X\" -c true\n\
+         echo builtin; true\n\
+         echo bg; \"$X\" -c true & \"$X\" -c true & wait\n\
+         echo bg-then-fg; \"$X\" -c true & \"$X\" -c 'sleep 0.3'; echo after\n\
+         trap - CHLD; \"$X\" -c true; echo end"
+    );
+    assert_eq!(
+        output(&script),
+        (
+            0,
+            "fg\nchld\npipe\nchld\nchld\nbuiltin\nbg\nchld\nchld\nbg-then-fg\nchld\nchld\nafter\nend"
+                .into()
+        )
+    );
+}
+
+#[test]
+fn a_chld_trap_that_runs_a_command_does_not_set_itself_off() {
+    let cash = CASH.replace('\\', "/");
+    let script = format!(
+        "X='{cash}'; n=0\n\
+         trap 'n=$((n+1)); \"$X\" -c true' CHLD\n\
+         \"$X\" -c true; true; true; echo \"runs=$n\""
+    );
+    assert_eq!(output(&script), (0, "runs=1".into()));
+}

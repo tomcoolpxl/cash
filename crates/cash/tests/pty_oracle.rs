@@ -386,10 +386,7 @@ const DELIBERATE: &[(&str, &str)] = &[
 
 /// The cases where cash differs from Bash, not yet fixed, each with the difference. A
 /// case that starts to match fails the test until it is taken off this list.
-const KNOWN_DIFFERENCES: &[(&str, &str)] = &[(
-    "1ii-trap-at-prompt",
-    "undecided: cash refuses `trap … CHLD` (spec, signals with no Win32 mechanism)",
-)];
+const KNOWN_DIFFERENCES: &[(&str, &str)] = &[];
 
 #[test]
 fn cash_leaves_the_screen_bash_leaves() {

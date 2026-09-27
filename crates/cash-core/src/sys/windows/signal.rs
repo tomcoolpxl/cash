@@ -15,8 +15,14 @@
 //! | `QUIT`, `HUP` | delivered like `TERM`; Windows has no distinct concept |
 //! | `STOP`, `TSTP` | thread-enumeration suspend (D19) |
 //! | `CONT` | resume (D19) |
+//! | `CHLD` | cash's own: a trap runs once per child process the shell reaps |
 //!
-//! Deliberately absent: `SIGPIPE`, `SIGCHLD`, `SIGUSR1/2`, `SIGALRM` and the rest. There
+//! `CHLD` is not a signal Windows delivers, but its event is one cash sees: every child
+//! it starts, it waits for. So `trap … CHLD` runs at the points Bash runs a pending trap
+//! (after a command, in `wait`, when a job starts, at the prompt), once per child reaped
+//! since. Sent to another process, it does what POSIX's default does: nothing.
+//!
+//! Deliberately absent: `SIGPIPE`, `SIGUSR1/2`, `SIGALRM` and the rest. There
 //! is no Win32 mechanism behind them, and accepting a trap that can never fire would be
 //! the silent-failure pattern D20 and D26 both reject. `trap USR1` therefore reports an
 //! invalid signal rather than pretending.
@@ -59,6 +65,8 @@ pub enum Signal {
     Kill = 9,
     /// Terminate, with the graceful-first escalation of D21.
     Term = 15,
+    /// A child exited. cash's own event, from the children it reaps.
+    Chld = 17,
     /// Continue a stopped process (D19).
     Cont = 18,
     /// Stop: suspend every thread of the target (D19).
@@ -79,6 +87,7 @@ impl Signal {
             Self::Stop,
             Self::Tstp,
             Self::Cont,
+            Self::Chld,
         ]
         .into_iter()
     }
@@ -94,6 +103,7 @@ impl Signal {
             Self::Stop => "STOP",
             Self::Tstp => "TSTP",
             Self::Cont => "CONT",
+            Self::Chld => "CHLD",
         }
     }
 
@@ -246,6 +256,8 @@ fn deliver(raw: u32, signal: Signal) -> Result<(), error::Error> {
         // divergence #9.
         Signal::Stop | Signal::Tstp => cash_win32::console::suspend_process(raw).map(|_| ()),
         Signal::Cont => cash_win32::console::resume_process(raw).map(|_| ()),
+        // POSIX's default for SIGCHLD is to ignore it; there is nothing to deliver.
+        Signal::Chld => Ok(()),
 
         // D21: TERM and friends ask first, through the target's windows, and terminate
         // it if it has none to ask or has not exited when the grace period ends. Not a

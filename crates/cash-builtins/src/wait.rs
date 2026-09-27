@@ -47,6 +47,8 @@ impl builtins::Command for WaitCommand {
         if self.ids.is_empty() {
             // Wait for all jobs.
             let jobs = context.shell.jobs_mut().wait_all().await?;
+            // A CHLD trap runs for the children reaped, inside `wait`, as in Bash.
+            context.shell.run_pending_chld_traps(&context.params).await;
 
             if context.shell.options().enable_job_control {
                 for job in jobs {
@@ -115,6 +117,7 @@ impl builtins::Command for WaitCommand {
             }
         }
 
+        context.shell.run_pending_chld_traps(&context.params).await;
         Ok(result)
     }
 }
