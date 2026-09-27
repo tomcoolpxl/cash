@@ -522,7 +522,7 @@ fn conpty_transient_prompt_replaces_an_entered_lines_prompt() {
         .expect("PROMPT$", Duration::from_secs(10))
         .expect("prompt displayed");
 
-    session.send("CASH_TRANSIENT_PS1='T\\$ '\r").unwrap();
+    session.send("CASH_TRANSIENT_PS1='\\s> '\r").unwrap();
     session.send("echo COLLAPSED_$((6 * 7))\r").unwrap();
     session
         .expect("COLLAPSED_42", Duration::from_secs(10))
@@ -545,15 +545,16 @@ fn conpty_transient_prompt_replaces_an_entered_lines_prompt() {
             .trim_end()
             .to_owned()
     };
-    // The line that set it was entered at the full prompt; the next one collapses.
+    // The line that set it was entered at the full prompt; the next one collapses. The
+    // escape is `\s`, the shell's name: `\$` is `#` for an administrator, as CI runs.
     assert_eq!(
         line_of("CASH_TRANSIENT_PS1="),
-        "PROMPT$ CASH_TRANSIENT_PS1='T\\$ '",
+        "PROMPT$ CASH_TRANSIENT_PS1='\\s> '",
         "{screen}"
     );
     assert_eq!(
         line_of("echo COLLAPSED"),
-        "T$ echo COLLAPSED_$((6 * 7))",
+        "cash> echo COLLAPSED_$((6 * 7))",
         "{screen}"
     );
     assert_eq!(
