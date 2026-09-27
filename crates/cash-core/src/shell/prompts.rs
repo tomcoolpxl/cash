@@ -4,6 +4,9 @@ use std::borrow::Cow;
 
 use crate::{Shell, error, extensions, prompt};
 
+/// The variable holding the collapsed prompt (spec D61).
+const TRANSIENT_PROMPT_VAR: &str = "CASH_TRANSIENT_PS1";
+
 impl<SE: extensions::ShellExtensions> Shell<SE> {
     /// Returns the default prompt string for the shell.
     const fn default_prompt(&self) -> &'static str {
@@ -33,6 +36,20 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
     /// Composes the shell's continuation prompt.
     pub async fn compose_continuation_prompt(&mut self) -> Result<String, error::Error> {
         self.expand_prompt_var("PS2", "> ").await
+    }
+
+    /// Composes the prompt a finished command's prompt collapses to (spec D61), from
+    /// `CASH_TRANSIENT_PS1`; `None` when that is unset, so the prompt stays as it was.
+    ///
+    /// Expanded with the prompt it will replace, so `\$`, `$?` and anything they depend on
+    /// agree with it.
+    pub async fn compose_transient_prompt(&mut self) -> Result<Option<String>, error::Error> {
+        if self.env_str(TRANSIENT_PROMPT_VAR).is_none() {
+            return Ok(None);
+        }
+        self.expand_prompt_var(TRANSIENT_PROMPT_VAR, "")
+            .await
+            .map(Some)
     }
 
     pub(super) async fn expand_prompt_var(

@@ -509,3 +509,56 @@ fn conpty_abbr_expands_as_the_command_word() {
     session.send("exit 0\r").unwrap();
     assert_eq!(session.wait().expect("process did not exit"), 0);
 }
+
+/// The collapsing prompt (D61): with `CASH_TRANSIENT_PS1` set, an entered line keeps that
+/// prompt, expanded like PS1, instead of the full one; unset, prompts stay as they were.
+#[test]
+fn conpty_transient_prompt_replaces_an_entered_lines_prompt() {
+    let mut session = start_reedline_cash();
+    session
+        .expect("PROMPT$", Duration::from_secs(10))
+        .expect("prompt displayed");
+
+    session.send("CASH_TRANSIENT_PS1='T\\$ '\r").unwrap();
+    session.send("echo COLLAPSED_$((6 * 7))\r").unwrap();
+    session
+        .expect("COLLAPSED_42", Duration::from_secs(10))
+        .expect("command did not run");
+    session.send("unset CASH_TRANSIENT_PS1\r").unwrap();
+    session.send("echo FULL_$((6 * 8))\r").unwrap();
+    session
+        .expect("FULL_48", Duration::from_secs(10))
+        .expect("command did not run");
+    session
+        .settle(Duration::from_millis(300), Duration::from_secs(5))
+        .unwrap();
+
+    let screen = session.screen().text();
+    let line_of = |needle: &str| {
+        screen
+            .lines()
+            .find(|line| line.contains(needle))
+            .unwrap_or_default()
+            .trim_end()
+            .to_owned()
+    };
+    // The line that set it was entered at the full prompt; the next one collapses.
+    assert_eq!(
+        line_of("CASH_TRANSIENT_PS1="),
+        "PROMPT$ CASH_TRANSIENT_PS1='T\\$ '",
+        "{screen}"
+    );
+    assert_eq!(
+        line_of("echo COLLAPSED"),
+        "T$ echo COLLAPSED_$((6 * 7))",
+        "{screen}"
+    );
+    assert_eq!(
+        line_of("echo FULL"),
+        "PROMPT$ echo FULL_$((6 * 8))",
+        "{screen}"
+    );
+
+    session.send("exit 0\r").unwrap();
+    assert_eq!(session.wait().expect("process did not exit"), 0);
+}

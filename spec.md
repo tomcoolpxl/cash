@@ -1618,6 +1618,31 @@ outpaces the repaint) never expanded; cash's copy tries after every space (reedl
 file shared between shells guards it: `command -v abbr >/dev/null && abbr -a gco git
 checkout`.
 
+### D61 — A collapsing prompt: `CASH_TRANSIENT_PS1`
+
+fish 4.1 and Starship's fish, PowerShell and cmd integrations can redraw a finished
+command's prompt as something short, so scrollback shows the commands rather than a
+two-line status block above each one. Cash does it when `CASH_TRANSIENT_PS1` is set, and
+not otherwise. The variable takes everything PS1 takes — backslash escapes, `$(…)`,
+`$?` — and is expanded with PS1, before the line is read, so both describe the same moment.
+When Enter is pressed, the prompt above the line is redrawn as it, without the right-side
+prompt, as fish does. It carries the same terminal-integration marks as the prompt it
+replaces (D39), so Windows Terminal's command marks still line up.
+
+A variable, not a function hook (decided): it reads like PS1, and one line in `.bashrc`
+does it. Two useful values:
+
+```bash
+CASH_TRANSIENT_PS1='\[\e[32m\]❯\[\e[0m\] '                                  # free
+CASH_TRANSIENT_PS1='$(starship module character --status="$STARSHIP_CMD_STATUS")' # Starship's own
+```
+
+The cost is one more prompt expansion per prompt, and nothing unless the variable is set.
+A `$(…)` in it runs each time: measured here, `starship module character` is about 30 ms
+(Starship's full prompt in a git repository, about 200 ms, is the larger cost).
+`STARSHIP_CMD_STATUS` is where Starship's bash integration keeps the last status, so the
+character turns red after a failure as the full prompt's does.
+
 ---
 
 ## 4. Deliberate divergences from bash

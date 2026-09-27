@@ -47,7 +47,7 @@ pub enum ReadResult {
 }
 
 /// Represents an interactive prompt.
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct InteractivePrompt {
     /// Prompt to display.
     pub prompt: String,
@@ -55,4 +55,25 @@ pub struct InteractivePrompt {
     pub alt_side_prompt: String,
     /// Prompt to display on a continuation line of input.
     pub continuation_prompt: String,
+    /// What `prompt` is redrawn as once the line is entered (`CASH_TRANSIENT_PS1`, spec
+    /// D61); `None` leaves it as it was.
+    pub transient_prompt: Option<String>,
+}
+
+impl InteractivePrompt {
+    /// The prompt a line that was entered keeps above it: the collapsed one when
+    /// `CASH_TRANSIENT_PS1` gave one, without the right-side prompt, as in fish; otherwise
+    /// the prompt itself.
+    #[must_use]
+    pub fn after_entry(&self) -> Self {
+        match &self.transient_prompt {
+            Some(transient) => Self {
+                prompt: transient.clone(),
+                alt_side_prompt: String::new(),
+                continuation_prompt: self.continuation_prompt.clone(),
+                transient_prompt: None,
+            },
+            None => self.clone(),
+        }
+    }
 }

@@ -100,6 +100,7 @@ mod tests {
             prompt: String::from("$ "),
             alt_side_prompt: String::new(),
             continuation_prompt: String::from("> "),
+            transient_prompt: None,
         }
     }
 

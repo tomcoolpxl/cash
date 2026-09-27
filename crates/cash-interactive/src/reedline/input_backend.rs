@@ -195,6 +195,15 @@ impl InputBackend for ReedlineInputBackend {
                 .map(|reedline| reedline.with_abbreviations(abbreviations));
         }
 
+        // The prompt an entered line keeps (D61). Reedline has no way to clear a transient
+        // prompt once set, so without `CASH_TRANSIENT_PS1` it gets the prompt itself, which
+        // is what it would redraw anyway.
+        let after_entry = prompt.after_entry();
+        self.reedline = self
+            .reedline
+            .take()
+            .map(|reedline| reedline.with_transient_prompt(Box::new(after_entry)));
+
         let Some(reedline) = &mut self.reedline else {
             return Ok(ReadResult::Eof);
         };

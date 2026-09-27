@@ -264,9 +264,15 @@ impl<'a, IB: InputBackend, SE: cash_core::ShellExtensions> InteractiveShell<'a, 
             prompt: shell.compose_prompt().await?,
             alt_side_prompt: shell.compose_alt_side_prompt().await?,
             continuation_prompt: shell.compose_continuation_prompt().await?,
+            transient_prompt: shell.compose_transient_prompt().await?,
         };
 
         prompt.prompt = terminal_integration.decorate_prompt(prompt.prompt, shell.working_dir());
+        // The collapsed prompt replaces the decorated one on screen, so it carries the same
+        // prompt marks for the terminal (D39).
+        prompt.transient_prompt = prompt
+            .transient_prompt
+            .map(|transient| terminal_integration.decorate_prompt(transient, shell.working_dir()));
 
         Ok(prompt)
     }
