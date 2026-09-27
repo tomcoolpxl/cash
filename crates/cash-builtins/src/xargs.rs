@@ -59,7 +59,7 @@ pub(crate) struct XargsCommand {
     max_procs: Option<usize>,
 
     /// The command to run, and its leading arguments. Defaults to `echo`.
-    #[arg(allow_hyphen_values = true, trailing_var_arg = true)]
+    #[arg(trailing_var_arg = true)]
     command: Vec<String>,
 }
 
