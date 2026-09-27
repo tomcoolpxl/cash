@@ -659,6 +659,12 @@ the timer: the shell is not waiting on a foreground job here, so a real timer is
 Cost accepted: the escalation lives in the shell. A script that sends `TERM` and exits
 before the grace period ends leaves a program that ignored its `WM_CLOSE` running.
 
+**`kill` with no signal sends `TERM`**, as Bash and POSIX do; it sent `KILL`, so a plain
+`kill $pid` skipped the grace above. **A process a signal terminates exits with 128 plus
+the signal's number** (143 for `TERM`, 137 for `KILL`, 130 for the Ctrl-C escalation of
+D13), the status `wait` reports in Bash; Windows lets the terminating side choose it, and
+cash chose 1.
+
 **A signal the shell sends itself** (`kill -TERM $$`) is not delivered through Windows,
 which ended cash at once, trap or no trap. The shell handles it, as Bash does: `KILL`
 ends it; a trapped signal runs its trap, with `BASH_TRAPSIG` set, and the shell goes

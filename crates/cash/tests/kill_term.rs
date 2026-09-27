@@ -161,7 +161,8 @@ fn a_program_that_will_not_close_is_terminated_after_the_grace_period() {
         pid = form.child.id()
     ));
     assert_eq!(out.stdout, "asked\nterminated");
-    assert_eq!(form.exit_code_within(Duration::from_secs(5)), Some(1));
+    // Terminated by TERM, it exits 128 + 15, as a process ended by the signal reports.
+    assert_eq!(form.exit_code_within(Duration::from_secs(5)), Some(143));
 }
 
 impl Drop for Form {

@@ -33,9 +33,6 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
 /// How long an asked program has to exit before it is terminated.
 pub const GRACE: Duration = Duration::from_secs(5);
 
-/// The exit status a terminated process reports, as `process::terminate` uses.
-const TERMINATED: u32 = 1;
-
 struct Search {
     pid: u32,
     asked: usize,
@@ -83,7 +80,10 @@ unsafe extern "system" fn ask(hwnd: HWND, lparam: LPARAM) -> i32 {
 /// Asks process `pid` to stop and returns at once (D21): a program with a window is
 /// asked to close and terminated if it is still running after `grace`; one without is
 /// terminated now.
-pub fn request_stop(pid: u32, grace: Duration) -> io::Result<()> {
+///
+/// A process terminated exits with `status`, which the caller sets to POSIX's 128 + the
+/// signal's number, so `wait` reports what Bash reports.
+pub fn request_stop(pid: u32, grace: Duration, status: u32) -> io::Result<()> {
     // SAFETY: OpenProcess returns null rather than a bad handle on failure.
     let handle = unsafe { OpenProcess(PROCESS_SYNCHRONIZE | PROCESS_TERMINATE, FALSE, pid) };
     if handle.is_null() {
@@ -95,7 +95,7 @@ pub fn request_stop(pid: u32, grace: Duration) -> io::Result<()> {
     // that way as well as through any windows, and terminated if it outlasts the grace.
     let broke = interrupt_group(pid);
     if close_windows(pid) == 0 && !broke {
-        let result = terminate_handle(handle);
+        let result = terminate_handle(handle, status);
         close(handle);
         return result;
     }
@@ -107,7 +107,7 @@ pub fn request_stop(pid: u32, grace: Duration) -> io::Result<()> {
         let handle = raw as HANDLE;
         // SAFETY: `handle` was opened with SYNCHRONIZE and is owned by this thread.
         if unsafe { WaitForSingleObject(handle, millis) } == WAIT_TIMEOUT {
-            let _ = terminate_handle(handle);
+            let _ = terminate_handle(handle, status);
         }
         close(handle);
     });
@@ -169,9 +169,9 @@ fn still_running(handle: HANDLE) -> bool {
     waited == WAIT_TIMEOUT
 }
 
-fn terminate_handle(handle: HANDLE) -> io::Result<()> {
+fn terminate_handle(handle: HANDLE, status: u32) -> io::Result<()> {
     // SAFETY: `handle` is valid and carries PROCESS_TERMINATE.
-    if unsafe { TerminateProcess(handle, TERMINATED) } == 0 {
+    if unsafe { TerminateProcess(handle, status) } == 0 {
         return Err(io::Error::last_os_error());
     }
     Ok(())

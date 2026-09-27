@@ -35,13 +35,14 @@ impl builtins::Command for KillCommand {
     ) -> Result<cash_core::ExecutionResult, Self::Error> {
         let mut signal_zero = false;
 
-        // Default signal is SIGKILL.
+        // The default signal is SIGTERM, as in Bash and POSIX. It was SIGKILL, so a plain
+        // `kill $pid` gave the target no chance to exit on its own (D21's grace).
         //
         // cash: named rather than reached for through `nix`, which is Unix-only. That
         // one reference was the sole reason this builtin was gated to Unix, leaving
         // Windows with no `kill` at all — so D21 and D22 were unreachable and `kill`
         // fell through to whatever external kill.exe happened to be on PATH.
-        let mut trap_signal = TrapSignal::try_from("KILL")?;
+        let mut trap_signal = TrapSignal::try_from("TERM")?;
 
         // Try parsing the signal name (if specified).
         if let Some(signal_name) = &self.signal_name {

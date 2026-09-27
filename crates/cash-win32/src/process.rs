@@ -584,8 +584,9 @@ pub fn now_filetime() -> u64 {
 ///
 /// Uncatchable, as `SIGKILL` is on POSIX. `TerminateProcess` runs no cleanup in the
 /// target, which is the point: this is what you reach for when asking politely has
-/// already failed.
-pub fn terminate(pid: u32) -> std::io::Result<()> {
+/// already failed. The process exits with `status`: POSIX's 128 + the signal's
+/// number (137 for `KILL`), so `wait` reports what Bash reports.
+pub fn terminate(pid: u32, status: u32) -> std::io::Result<()> {
     use windows_sys::Win32::System::Threading::{PROCESS_TERMINATE, TerminateProcess};
 
     // SAFETY: OpenProcess returns null rather than a bad handle on failure.
@@ -595,7 +596,7 @@ pub fn terminate(pid: u32) -> std::io::Result<()> {
     }
 
     // SAFETY: handle is valid and carries PROCESS_TERMINATE.
-    let ok = unsafe { TerminateProcess(handle, 1) };
+    let ok = unsafe { TerminateProcess(handle, status) };
     // SAFETY: closing a handle we just opened, exactly once.
     unsafe {
         CloseHandle(handle);

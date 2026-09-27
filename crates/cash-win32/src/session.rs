@@ -170,7 +170,7 @@ pub fn release_at_exit() {
 
     for &pid in &members {
         if pid != own && !kept(pid) {
-            let _ = crate::process::terminate(pid);
+            let _ = crate::process::terminate(pid, 1);
         }
     }
 

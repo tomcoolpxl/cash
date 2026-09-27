@@ -78,7 +78,7 @@ fn run_and_exit(setting: &str) -> (u32, u32) {
 }
 
 fn kill(pid: u32) {
-    let _ = cash_win32::process::terminate(pid);
+    let _ = cash_win32::process::terminate(pid, 1);
 }
 
 #[test]

@@ -75,7 +75,7 @@ pub fn contain(pid: u32) {
 ///
 /// Returns `false` when the pid has no job — the caller should then fall back to
 /// terminating the single process.
-pub fn terminate_tree(pid: u32) -> io::Result<bool> {
+pub fn terminate_tree(pid: u32, status: u32) -> io::Result<bool> {
     let Ok(mut registry) = registry().lock() else {
         return Ok(false);
     };
@@ -87,7 +87,7 @@ pub fn terminate_tree(pid: u32) -> io::Result<bool> {
     // Dropping the job would also reap it, since it is created with
     // KILL_ON_JOB_CLOSE — but terminate first so the outcome does not depend on when
     // the handle happens to be dropped.
-    job.terminate(1)?;
+    job.terminate(status)?;
     Ok(true)
 }
 

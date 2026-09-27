@@ -1535,3 +1535,20 @@ fn a_signal_the_shell_sends_itself_runs_its_trap_or_its_default() {
         (0, "survived".into())
     );
 }
+
+#[test]
+fn kill_defaults_to_term_and_a_killed_process_reports_bashs_status() {
+    // `kill $pid` sends TERM, as in Bash (it sent KILL), and a process a signal ends
+    // exits with 128 + the signal's number, which `wait` reports: 143, 137, 130.
+    let cash = CASH.replace('\\', "/");
+    let script = format!(
+        "X='{cash}'\n\
+         \"$X\" -c 'sleep 5' & p=$!; kill $p; wait $p; echo \"default=$?\"\n\
+         \"$X\" -c 'sleep 5' & p=$!; kill -KILL $p; wait $p; echo \"kill=$?\"\n\
+         \"$X\" -c 'sleep 5' & p=$!; kill -INT $p; wait $p; echo \"int=$?\""
+    );
+    assert_eq!(
+        output(&script),
+        (0, "default=143\nkill=137\nint=130".into())
+    );
+}

@@ -240,6 +240,16 @@ pub fn kill_process(
     first_error.map_or(Ok(()), Err)
 }
 
+/// The status a process a signal terminates exits with: POSIX's 128 + the signal's
+/// number, which Windows lets the terminating side choose.
+#[expect(
+    clippy::cast_sign_loss,
+    reason = "signal numbers are small and positive"
+)]
+const fn exit_status(signal: Signal) -> u32 {
+    (128 + signal.number()) as u32
+}
+
 /// Deliver one signal to one process.
 fn deliver(raw: u32, signal: Signal) -> Result<(), error::Error> {
     // Check first, so that a target that does not exist reports as such. Windows answers
@@ -266,14 +276,14 @@ fn deliver(raw: u32, signal: Signal) -> Result<(), error::Error> {
         // `kill -TERM $pid` used to kill the shell. KILL does not ask at all, matching
         // POSIX where it cannot be caught.
         Signal::Int | Signal::Term | Signal::Hup | Signal::Quit => {
-            cash_win32::stop::request_stop(raw, cash_win32::stop::GRACE)
+            cash_win32::stop::request_stop(raw, cash_win32::stop::GRACE, exit_status(signal))
         }
         // D22: reap the whole tree when this pid roots one, falling back to the single
         // process otherwise. That is what makes `kill %1` reap a pipeline's descendants
         // rather than orphaning them.
-        Signal::Kill => match cash_win32::jobreg::terminate_tree(raw) {
+        Signal::Kill => match cash_win32::jobreg::terminate_tree(raw, exit_status(signal)) {
             Ok(true) => Ok(()),
-            Ok(false) => cash_win32::process::terminate(raw),
+            Ok(false) => cash_win32::process::terminate(raw, exit_status(signal)),
             Err(e) => Err(e),
         },
     };

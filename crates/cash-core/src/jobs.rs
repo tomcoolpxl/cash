@@ -872,10 +872,11 @@ impl Job {
                         let pids = current();
                         if relayed {
                             for pid in pids {
-                                let reaped = cash_win32::jobreg::terminate_tree(pid)
+                                // The second Ctrl-C ends it as SIGINT would: 130.
+                                let reaped = cash_win32::jobreg::terminate_tree(pid, 130)
                                     .unwrap_or(false);
                                 if !reaped {
-                                    let _ = cash_win32::process::terminate(pid);
+                                    let _ = cash_win32::process::terminate(pid, 130);
                                 }
                             }
                         } else {
