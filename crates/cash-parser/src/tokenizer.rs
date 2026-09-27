@@ -12,8 +12,9 @@ pub(crate) enum TokenEndReason {
     UnescapedNewLine,
     /// Specified terminating char.
     SpecifiedTerminatingChar,
-    /// A non-newline blank char was reached.
-    NonNewLineBlank,
+    /// A non-newline blank char was reached; it is carried so that the inside of `${ }`,
+    /// reconstructed from tokens, keeps a tab a tab.
+    NonNewLineBlank(char),
     /// A here-document's body is starting.
     HereDocumentBodyStart,
     /// A here-document's body was terminated.
@@ -715,7 +716,9 @@ impl<'a, R: ?Sized + std::io::BufRead> Tokenizer<'a, R> {
                 TokenEndReason::HereDocumentBodyStart => {
                     state.append_char('\n');
                 }
-                TokenEndReason::NonNewLineBlank => state.append_char(' '),
+                // The text is re-parsed as a program, where any blank will do; bash's
+                // `declare -f` also prints a tab between these tokens as a space.
+                TokenEndReason::NonNewLineBlank(_) => state.append_char(' '),
                 TokenEndReason::SpecifiedTerminatingChar => {
                     // A case pattern's closing paren has no opener, so it must not be
                     // counted — otherwise the construct appears to end here.
@@ -1083,7 +1086,9 @@ impl<'a, R: ?Sized + std::io::BufRead> Tokenizer<'a, R> {
                                     TokenEndReason::HereDocumentBodyStart => {
                                         state.append_char('\n');
                                     }
-                                    TokenEndReason::NonNewLineBlank => state.append_char(' '),
+                                    TokenEndReason::NonNewLineBlank(blank) => {
+                                        state.append_char(blank);
+                                    }
                                     TokenEndReason::SpecifiedTerminatingChar => {
                                         // We hit the end brace we were looking for but did not
                                         // yet consume it. Do so now.
@@ -1197,7 +1202,7 @@ impl<'a, R: ?Sized + std::io::BufRead> Tokenizer<'a, R> {
             } else if state.unquoted() && is_blank(c) {
                 if state.started_token() {
                     result = state.delimit_current_token(
-                        TokenEndReason::NonNewLineBlank,
+                        TokenEndReason::NonNewLineBlank(c),
                         &mut self.cross_state,
                     )?;
                 } else if include_space {
@@ -1501,6 +1506,26 @@ bc"
                 [format!("$({reconstructed_blanks}\n)").as_str(), "\n"],
                 "tokenizing {input:?}"
             );
+        }
+    }
+
+    #[test]
+    fn tokenize_tab_in_parameter_expansion() {
+        // The inside of `${ }` is tokenized and put back together; a tab that ended one of its
+        // tokens came back as a space, so `${count#0<TAB>}` (git-prompt.sh's upstream count)
+        // looked for `0<SPACE>` and never matched.
+        for input in [
+            "${count#0\t}",
+            "${count%\t0}",
+            "${count#*\t}",
+            "${u:-a\tb}",
+            "${u:-a\t\tb}",
+            "${u:-a \tb}",
+            "\"${count#0\t}\"",
+        ] {
+            let tokens = tokenize_str(input).unwrap();
+            let token_strs: Vec<_> = tokens.iter().map(Token::to_str).collect();
+            assert_eq!(token_strs, [input], "tokenizing {input:?}");
         }
     }
 

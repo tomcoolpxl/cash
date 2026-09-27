@@ -152,6 +152,11 @@ path = "tests/kill_targets.rs"
 name = "completion-scripts"
 path = "tests/completion_scripts.rs"
 
+# Git for Windows' git-prompt.sh (`__git_ps1`), sourced from the Git install.
+[[test]]
+name = "git-prompt"
+path = "tests/git_prompt.rs"
+
 # Comprehensive parameter matrix across builtins
 [[test]]
 name = "builtin-parameters"
