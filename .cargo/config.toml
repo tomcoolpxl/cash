@@ -6,3 +6,12 @@
 # every one of those is "no such command: `xtask`".
 [alias]
 xtask = "run --package xtask --quiet --"
+
+# cash.exe carries the C runtime instead of needing `VCRUNTIME140.dll`, which a clean
+# Windows lacks and only an admin can install as the Visual C++ Redistributable
+# (ROADMAP item 18). The release workflow checks the import is gone.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.aarch64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

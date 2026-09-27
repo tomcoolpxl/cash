@@ -35,6 +35,10 @@ bundled-coreutils = ["cash-shell/experimental-bundled-coreutils"]
 [target.'cfg(windows)'.dependencies]
 cash-win32 = { workspace = true }
 
+[build-dependencies]
+# The icon and version resource in cash.exe (ROADMAP item 18).
+winresource = "0.1.31"
+
 # Tests that drive the shell binary live with the binary: CARGO_BIN_EXE_cash is
 # only defined for the crate that declares it.
 
