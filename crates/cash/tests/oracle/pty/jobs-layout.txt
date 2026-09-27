@@ -1,12 +1,12 @@
-$ sleep 10 & sleep 10 &
+$ sleep 30 & sleep 30 &
 [1] PID
 [2] PID
 $ jobs
-[1]-  Running                    sleep 10 &
-[2]+  Running                    sleep 10 &
+[1]-  Running                    sleep 30 &
+[2]+  Running                    sleep 30 &
 $ jobs -l | sed -E 's/^(.{4}) +[0-9]+ /\1 PID /'
-[1]- PID Running                    sleep 10 &
-[2]+ PID Running                    sleep 10 &
+[1]- PID Running                    sleep 30 &
+[2]+ PID Running                    sleep 30 &
 $ sleep 0.05 &
 [3] PID
 $ sleep 0.3

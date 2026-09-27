@@ -52,23 +52,35 @@ fn layout() -> (tempfile::TempDir, std::path::PathBuf) {
     (root, sub)
 }
 
-/// `%~dp0` for the script, as `cmd` prints it: the folder with a trailing backslash.
-fn expected_dp0(sub: &Path) -> String {
-    let s = sub.display().to_string();
-    let s = s.strip_prefix(r"\\?\").unwrap_or(&s).to_string();
-    format!("dp0=[{s}\\]")
+/// The folder a `dp0=[…\\]` line names, resolved. `cmd` spells `%~dp0` the way the path
+/// reached it, which under an 8.3 `TEMP` (`C:\\Users\\RUNNER~1`, as GitHub's runner has)
+/// is the short form; resolving both sides compares the folders, not their spellings.
+fn dp0_folder(line: &str) -> std::path::PathBuf {
+    let folder = line
+        .strip_prefix("dp0=[")
+        .and_then(|rest| rest.strip_suffix(']'))
+        .unwrap_or_else(|| panic!("not a dp0 line: {line}"));
+    assert!(
+        folder.ends_with('\\'),
+        "%~dp0 ends with a backslash: {line}"
+    );
+    Path::new(folder)
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("{folder}: {e}"))
 }
 
 fn check(dir: &Path, script: &str, sub: &Path) {
     let out = cash_in(dir, script);
     assert_eq!(out.code, 0, "{script}: stderr: {}", out.stderr);
     let mut lines = out.stdout.lines();
-    assert_eq!(lines.next(), Some("all=[. a b]"), "{script}: {}", out.stdout);
     assert_eq!(
-        lines.next().map(str::to_lowercase),
-        Some(expected_dp0(sub).to_lowercase()),
-        "{script}"
+        lines.next(),
+        Some("all=[. a b]"),
+        "{script}: {}",
+        out.stdout
     );
+    let dp0 = lines.next().unwrap_or_default();
+    assert_eq!(dp0_folder(dp0), sub, "{script}: {dp0}");
 }
 
 #[test]
@@ -92,7 +104,11 @@ fn subdirectory_batch_file_with_a_space_receives_its_arguments() {
 #[test]
 fn absolute_forward_slash_batch_file_receives_its_arguments() {
     let (root, sub) = layout();
-    let abs = sub.join("showargs.cmd").display().to_string().replace('\\', "/");
+    let abs = sub
+        .join("showargs.cmd")
+        .display()
+        .to_string()
+        .replace('\\', "/");
     let abs = abs.strip_prefix("//?/").unwrap_or(&abs).to_string();
     check(root.path(), &format!("'{abs}' . a b"), &sub);
 }

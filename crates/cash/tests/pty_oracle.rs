@@ -42,6 +42,15 @@ const FIXTURE_FILES: &[&str] = &["alpha beta.txt", "gamma.txt", "gamut.log", "it
 /// Directories in each case's scratch directory.
 const FIXTURE_DIRS: &[&str] = &["my dir"];
 
+/// How long without output counts as a shell having finished reacting. Generous: on a
+/// loaded machine (the whole test suite, or CI) 500 ms was not enough for a process to
+/// start and print, and the case moved on early.
+const QUIET: Duration = Duration::from_millis(1500);
+
+/// How many cases run at once. Each runs a shell on its own console; all at once, next to
+/// the rest of the test suite, starved them.
+const AT_ONCE: usize = 6;
+
 /// A case: its name, the audit item it probes, and the keys, sent in chunks. After each
 /// chunk the shell is given time to settle.
 struct Case {
@@ -183,7 +192,7 @@ const CASES: &[Case] = &[
     Case {
         name: "jobs-layout",
         keys: &[
-            "sleep 10 & sleep 10 &\r",
+            "sleep 30 & sleep 30 &\r",
             "jobs\r",
             // The pid, however wide, masked.
             "jobs -l | sed -E 's/^(.{4}) +[0-9]+ /\\1 PID /'\r",
@@ -203,13 +212,13 @@ const CASES: &[Case] = &[
     // `Done` is still reported, and the new job does not take its id.
     Case {
         name: "notice-not-lost",
-        keys: &["sleep 0.05 & read -t 0.3; sleep 10 &\r"],
+        keys: &["sleep 0.05 & read -t 0.3; sleep 30 &\r"],
     },
     // 1.rr: a job finishing while a file is sourced is reported after it.
     Case {
         name: "1rr-sourcing-notify",
         keys: &[
-            // Short sleeps: the harness moves on after 500 ms without output.
+            // Short sleeps: the harness moves on after `QUIET` without output.
             "printf 'sleep 0.2\\n' > s.sh\r",
             "sleep 0.05 & . ./s.sh; echo after\r",
         ],
@@ -258,14 +267,10 @@ fn screen(program: &str, args: &[&str], case: &Case) -> String {
 
     let mut session =
         ConPtySession::start_in(Path::new(program), args, Some(&env), Some(&dir)).unwrap();
-    session
-        .settle(Duration::from_millis(700), Duration::from_secs(10))
-        .unwrap();
+    session.settle(QUIET, Duration::from_secs(20)).unwrap();
     for chunk in case.keys {
         session.send(chunk).unwrap();
-        session
-            .settle(Duration::from_millis(500), Duration::from_secs(10))
-            .unwrap();
+        session.settle(QUIET, Duration::from_secs(20)).unwrap();
     }
     let text = session.screen().text();
     drop(session);
@@ -317,14 +322,16 @@ fn read_screen(path: &Path) -> Option<String> {
 #[ignore = "records Git Bash 5.3's screens; run by hand when cases change"]
 fn record_bash_screens() {
     std::fs::create_dir_all(golden_path("x").parent().unwrap()).unwrap();
-    std::thread::scope(|scope| {
-        for case in CASES {
-            scope.spawn(move || {
-                let text = bash_screen(case);
-                std::fs::write(golden_path(case.name), format!("{text}\n")).unwrap();
-            });
-        }
-    });
+    for batch in CASES.chunks(AT_ONCE) {
+        std::thread::scope(|scope| {
+            for case in batch {
+                scope.spawn(move || {
+                    let text = bash_screen(case);
+                    std::fs::write(golden_path(case.name), format!("{text}\n")).unwrap();
+                });
+            }
+        });
+    }
 }
 
 /// The cases where cash differs from Bash on purpose; each has a `NAME.cash.txt`.
@@ -361,24 +368,30 @@ const KNOWN_DIFFERENCES: &[(&str, &str)] = &[];
 
 #[test]
 fn cash_leaves_the_screen_bash_leaves() {
-    let results: Vec<(&str, String, String)> = std::thread::scope(|scope| {
-        #[allow(
-            clippy::needless_collect,
-            reason = "every case starts before any is joined, so they run side by side"
-        )]
-        let handles: Vec<_> = CASES
-            .iter()
-            .map(|case| {
-                scope.spawn(move || {
-                    let bash = read_screen(&golden_path(case.name)).unwrap_or_default();
-                    let wanted =
-                        read_screen(&golden_path(&format!("{}.cash", case.name))).unwrap_or(bash);
-                    (case.name, wanted, cash_screen(case))
+    let mut results: Vec<(&str, String, String)> = Vec::new();
+    for batch in CASES.chunks(AT_ONCE) {
+        results.extend(std::thread::scope(|scope| {
+            #[allow(
+                clippy::needless_collect,
+                reason = "every case of a batch starts before any is joined, so they run side by side"
+            )]
+            let handles: Vec<_> = batch
+                .iter()
+                .map(|case| {
+                    scope.spawn(move || {
+                        let bash = read_screen(&golden_path(case.name)).unwrap_or_default();
+                        let wanted = read_screen(&golden_path(&format!("{}.cash", case.name)))
+                            .unwrap_or(bash);
+                        (case.name, wanted, cash_screen(case))
+                    })
                 })
-            })
-            .collect();
-        handles.into_iter().map(|h| h.join().unwrap()).collect()
-    });
+                .collect();
+            handles
+                .into_iter()
+                .map(|h| h.join().unwrap())
+                .collect::<Vec<_>>()
+        }));
+    }
 
     let mut report = String::new();
     for (name, wanted, cash) in &results {
