@@ -1,13 +1,13 @@
 {
-  "generated": "2026-09-25T17:57:53.7962564+02:00",
+  "generated": "2026-09-27T06:06:07.1536921+02:00",
   "oracle": "C:/Program Files/Git/bin/bash.exe",
-  "cash": "C:\\Users\\thraa\\github\\cash\\target\\debug\\cash.exe",
+  "cash": "C:\\Users\\thraa\\github\\cash\\target\\claude-check\\debug\\cash.exe",
   "summary": [
     {
       "group": "sed",
       "cases": 98,
-      "pass": 92,
-      "fail": 6
+      "pass": 95,
+      "fail": 3
     },
     {
       "group": "awk",
@@ -18,131 +18,17 @@
     {
       "group": "bash",
       "cases": 50,
-      "pass": 42,
-      "fail": 8
+      "pass": 49,
+      "fail": 1
     }
   ],
   "mismatches": [
     {
-      "name": "bash/faq73-transformations.sh",
-      "source": "https://mywiki.wooledge.org/BashFAQ/073 (Bash 4 / parameter transformation)",
-      "desc": "^ ^^ , ,, and @Q @E @A @a transformations",
-      "tags": "",
-      "script": "# source: https://mywiki.wooledge.org/BashFAQ/073 (Bash 4 / parameter transformation)\n# desc: ^ ^^ , ,, and @Q @E @A @a transformations\nstring='hello, World!'\necho \"${string^}\"; echo \"${string^^}\"; echo \"${string,}\"; echo \"${string,,}\"\nstring=$'nice \"day\" isn\\'t it?' ; echo \"${string@Q}\"\nstring='hello\\tworld' ; echo \"${string@E}\"\nstring=hello ; echo \"${string@A}\"\na=(an array); echo \"${a[@]@A}\"\ndeclare -ri i=3 ; echo \"${i@A}\"\necho \"${string@a}\"\necho \"${a@a}\" \"${i@a}\"\n",
-      "stdoutMatch": false,
-      "statusMatch": true,
-      "bash": {
-        "stdout": "Hello, World!\nHELLO, WORLD!\nhello, World!\nhello, world!\n'nice \"day\" isn'\\''t it?'\nhello\tworld\nstring='hello'\ndeclare -a a=([0]=\"an\" [1]=\"array\")\ndeclare -ir i='3'\n\na ir\n",
-        "stderr": "",
-        "status": 0
-      },
-      "cash": {
-        "stdout": "Hello, World!\nHELLO, WORLD!\nhello, World!\nhello, world!\n'nice \"day\" isn'\\''t it?'\nhello\tworld\nstring='hello'\ndeclare -a a=([0]=\"an\" [1]=\"array\")\ni='3'\n\na ir\n",
-        "stderr": "",
-        "status": 0
-      }
-    },
-    {
-      "name": "bash/pbb-code-golf-loops.sh",
-      "source": "https://github.com/dylanaraps/pure-bash-bible#shorter-for-loop-syntax",
-      "desc": "for((;i++<10;)){ ...;} and undocumented for i in {1..10};{ ...;}",
-      "tags": "",
-      "script": "# source: https://github.com/dylanaraps/pure-bash-bible#shorter-for-loop-syntax\n# desc: for((;i++<10;)){ ...;} and undocumented for i in {1..10};{ ...;}\nfor((;i++<10;)){ echo \"$i\";}\nfor i in {1..3};{ echo \"$i\";}\n",
-      "stdoutMatch": false,
-      "statusMatch": false,
-      "bash": {
-        "stdout": "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n1\n2\n3\n",
-        "stderr": "",
-        "status": 0
-      },
-      "cash": {
-        "stdout": "",
-        "stderr": "\u001b[31merror:\u001b[39m -c: syntax error at line 4 col 17\n",
-        "status": 2
-      }
-    },
-    {
-      "name": "bash/pbb-get-functions.sh",
-      "source": "https://github.com/dylanaraps/pure-bash-bible#get-the-list-of-functions-in-a-script",
-      "desc": "declare -F read into an array via process substitution",
-      "tags": "",
-      "script": "# source: https://github.com/dylanaraps/pure-bash-bible#get-the-list-of-functions-in-a-script\n# desc: declare -F read into an array via process substitution\nget_functions() {\n    # Usage: get_functions\n    IFS=$'\\n' read -d \"\" -ra functions < <(declare -F)\n    printf '%s\\n' \"${functions[@]//declare -f }\"\n}\nzeta() { :; }\nalpha() { :; }\nget_functions\n",
-      "stdoutMatch": false,
-      "statusMatch": true,
-      "bash": {
-        "stdout": "alpha\nget_functions\nzeta\n",
-        "stderr": "",
-        "status": 0
-      },
-      "cash": {
-        "stdout": "_filedir\n_get_comp_words_by_ref\n_init_completion\nalpha\nget_functions\nzeta\n",
-        "stderr": "",
-        "status": 0
-      }
-    },
-    {
-      "name": "bash/pbb-progress-bar.sh",
-      "source": "https://github.com/dylanaraps/pure-bash-bible#progress-bars",
-      "desc": "printf -v with dynamic width and ${prog// /-}",
-      "tags": "",
-      "script": "# source: https://github.com/dylanaraps/pure-bash-bible#progress-bars\n# desc: printf -v with dynamic width and ${prog// /-}\nbar() {\n    # Usage: bar 1 10\n    #            ^----- Elapsed Percentage (0-100).\n    #               ^-- Total length in chars.\n    ((elapsed=$1*$2/100))\n\n    # Create the bar with spaces.\n    printf -v prog  \"%${elapsed}s\"\n    printf -v total \"%$(($2-elapsed))s\"\n\n    printf '%s\\r' \"[${prog// /-}${total}]\"\n}\nfor i in 0 10 55 100; do bar \"$i\" 10; echo; done | tr '\\r' R\n",
-      "stdoutMatch": false,
-      "statusMatch": true,
-      "bash": {
-        "stdout": "[          ]R\n[-         ]R\n[-----     ]R\n[----------]R\n",
-        "stderr": "",
-        "status": 0
-      },
-      "cash": {
-        "stdout": "[          ]R\n[-         ]R\n[-----     ]R\n[----------     ]R\n",
-        "stderr": "\u001b[31merror:\u001b[39m printf: printf: printf parsing error: format-error-invalid-spec\n\u001b[31merror:\u001b[39m printf: printf: printf parsing error: format-error-invalid-spec\n",
-        "status": 0
-      }
-    },
-    {
-      "name": "bash/pbb-reverse-array-extdebug.sh",
-      "source": "https://github.com/dylanaraps/pure-bash-bible#reverse-an-array",
-      "desc": "BASH_ARGV under extdebug (bible notes compat44 is needed in 5.0+)",
-      "tags": "",
-      "script": "# source: https://github.com/dylanaraps/pure-bash-bible#reverse-an-array\n# desc: BASH_ARGV under extdebug (bible notes compat44 is needed in 5.0+)\nreverse_array() {\n    # Usage: reverse_array \"array\"\n    shopt -s extdebug\n    f()(printf '%s\\n' \"${BASH_ARGV[@]}\"); f \"$@\"\n    shopt -u extdebug\n}\nreverse_array 1 2 3 4 5\narr=(red blue green)\nreverse_array \"${arr[@]}\"\n",
-      "stdoutMatch": false,
-      "statusMatch": true,
-      "bash": {
-        "stdout": "5\n4\n3\n2\n1\n5\n4\n3\n2\n1\ngreen\nblue\nred\n5\n4\n3\n2\n1\n",
-        "stderr": "",
-        "status": 0
-      },
-      "cash": {
-        "stdout": "5\n4\n3\n2\n1\n5\n4\n3\n2\n1\ngreen\nblue\nred\ngreen\nblue\nred\n",
-        "stderr": "",
-        "status": 0
-      }
-    },
-    {
-      "name": "bash/pitfall-assoc-let-quote.sh",
-      "source": "https://mywiki.wooledge.org/BashPitfalls#pf62 ((( hash[$key]++ )))",
-      "desc": "let 'arr[$key]++' with a key containing a quote and bracket",
-      "tags": "",
-      "script": "# source: https://mywiki.wooledge.org/BashPitfalls#pf62 ((( hash[$key]++ )))\n# desc: let 'arr[$key]++' with a key containing a quote and bracket\n( shopt -u assoc_expand_once; key=\\'\\]; typeset -A arr; arr[$key]=0; let 'arr[$key]++'; typeset -p arr )\ndeclare -A hash; key=k1\ntmp=${hash[$key]}\n((tmp++))\nhash[$key]=$tmp\nhash[${key}]=$(( ${hash[${key}]} + 1 ))\nlet 'hash[$key]++'\ndeclare -p hash\n",
-      "stdoutMatch": false,
-      "statusMatch": true,
-      "bash": {
-        "stdout": "declare -A arr=([\"']\"]=\"1\" )\ndeclare -A hash=([k1]=\"3\" )\n",
-        "stderr": "",
-        "status": 0
-      },
-      "cash": {
-        "stdout": "declare -A arr=([\"']\"]=\"0\" )\ndeclare -A hash=([k1]=\"2\" )\n",
-        "stderr": "\u001b[31merror:\u001b[39m let: failed to parse arithmetic expression\n\u001b[31merror:\u001b[39m let: failed to parse arithmetic expression\n",
-        "status": 0
-      }
-    },
-    {
       "name": "bash/pitfall-read-arith-injection.sh",
       "source": "https://mywiki.wooledge.org/BashPitfalls#read_num.3B_echo_.24.28.28num.2B1.29.29",
       "desc": "arithmetic on read input evaluates array subscripts (code injection demo)",
-      "tags": "",
-      "script": "# source: https://mywiki.wooledge.org/BashPitfalls#read_num.3B_echo_.24.28.28num.2B1.29.29\n# desc: arithmetic on read input evaluates array subscripts (code injection demo)\necho 'a[$(echo injection >&2)]' | { read num; echo $((num+1)); } 2>&1\n",
+      "tags": "cash-divergence (spec section 4 row 27: arithmetic never runs $(...) from a variable value)",
+      "script": "# source: https://mywiki.wooledge.org/BashPitfalls#read_num.3B_echo_.24.28.28num.2B1.29.29\n# desc: arithmetic on read input evaluates array subscripts (code injection demo)\n# tags: cash-divergence (spec section 4 row 27: arithmetic never runs $(...) from a variable value)\necho 'a[$(echo injection >&2)]' | { read num; echo $((num+1)); } 2>&1\n",
       "stdoutMatch": false,
       "statusMatch": false,
       "bash": {
@@ -152,27 +38,8 @@
       },
       "cash": {
         "stdout": "",
-        "stderr": "\u001b[31merror:\u001b[39m arithmetic evaluation error: failed to parse expression: a[$(echo injection >&2)]\n",
+        "stderr": "\u001b[31merror:\u001b[39m arithmetic evaluation error: failed to parse expression: $(echo injection >&2)\n",
         "status": 1
-      }
-    },
-    {
-      "name": "bash/pitfall-v-hash-key.sh",
-      "source": "https://mywiki.wooledge.org/BashPitfalls#pf61 ([[ -v hash[$key] ]])",
-      "desc": "[[ -v 'hash[$key]' ]] single-quoted form, and ${hash[$key]} membership",
-      "tags": "",
-      "script": "# source: https://mywiki.wooledge.org/BashPitfalls#pf61 ([[ -v hash[$key] ]])\n# desc: [[ -v 'hash[$key]' ]] single-quoted form, and ${hash[$key]} membership\ndeclare -A hash=([a]=1 ['x y']=2)\nfor key in a 'x y' missing; do\n  if [[ -v 'hash[$key]' ]]; then echo \"$key: set\"; else echo \"$key: unset\"; fi\n  if [[ ${hash[$key]} ]]; then echo \"$key: nonempty\"; fi\ndone\n",
-      "stdoutMatch": false,
-      "statusMatch": true,
-      "bash": {
-        "stdout": "a: set\na: nonempty\nx y: set\nx y: nonempty\nmissing: unset\n",
-        "stderr": "",
-        "status": 0
-      },
-      "cash": {
-        "stdout": "a: unset\na: nonempty\nx y: unset\nx y: nonempty\nmissing: unset\n",
-        "stderr": "",
-        "status": 0
       }
     },
     {
@@ -214,49 +81,11 @@
       }
     },
     {
-      "name": "sed/pement-center-method1.sh",
-      "source": "https://www.pement.org/sed/sed1line.txt (TEXT CONVERSION)",
-      "desc": "center all text in the middle of 79-column width, method 1",
-      "tags": "",
-      "script": "# source: https://www.pement.org/sed/sed1line.txt (TEXT CONVERSION)\n# desc: center all text in the middle of 79-column width, method 1\nprintf 'hello\\nab\\n' | sed  -e :a -e 's/^.\\{1,77\\}$/ & /;ta' | sed -n l\n",
-      "stdoutMatch": false,
-      "statusMatch": true,
-      "bash": {
-        "stdout": "                                     hello                           \\\n          $\n                                      ab                             \\\n         $\n",
-        "stderr": "",
-        "status": 0
-      },
-      "cash": {
-        "stdout": "                                     hello                 \\\n                    $\n                                      ab                   \\\n                   $\n",
-        "stderr": "",
-        "status": 0
-      }
-    },
-    {
-      "name": "sed/pement-commas-decimal-r.sh",
-      "source": "https://www.pement.org/sed/sed1line.txt (TEXT CONVERSION)",
-      "desc": "add commas to numbers with decimal points and minus signs (gsed -r)",
-      "tags": "gnu-ext (-r, one-liner label syntax)",
-      "script": "# source: https://www.pement.org/sed/sed1line.txt (TEXT CONVERSION)\n# desc: add commas to numbers with decimal points and minus signs (gsed -r)\n# tags: gnu-ext (-r, one-liner label syntax)\nprintf -- '-1234567.1234\\nx 98765 y\\n' | sed -r ':a;s/(^|[^0-9.])([0-9]+)([0-9]{3})/\\1\\2,\\3/g;ta'\n",
-      "stdoutMatch": false,
-      "statusMatch": false,
-      "bash": {
-        "stdout": "-1,234,567.1234\nx 98,765 y\n",
-        "stderr": "",
-        "status": 0
-      },
-      "cash": {
-        "stdout": "",
-        "stderr": "cash.exe: <script argument 1>:1:45: error: invalid regex '(^|[^0-9.])([0-9]+)([0-9]{3})': regex parse error:\n    (?s)(?:((?:[\u0000-\\-/:-􏿿]|\\A))([0-9]+)([0-9]{3}))\n                       ^\nerror: Unicode not allowed here\n",
-        "status": 1
-      }
-    },
-    {
       "name": "sed/pement-dos2unix-dot.sh",
       "source": "https://www.pement.org/sed/sed1line.txt (TEXT CONVERSION)",
       "desc": "convert DOS newlines (CR/LF) to Unix format, assumes all lines end with CR/LF",
-      "tags": "",
-      "script": "# source: https://www.pement.org/sed/sed1line.txt (TEXT CONVERSION)\n# desc: convert DOS newlines (CR/LF) to Unix format, assumes all lines end with CR/LF\nprintf 'one\\r\\ntwo\\r\\n' | sed 's/.$//' | tr '\\r' R\n",
+      "tags": "cash-divergence (D49: s/.$// names no CR, so it removes the last visible character)",
+      "script": "# source: https://www.pement.org/sed/sed1line.txt (TEXT CONVERSION)\n# desc: convert DOS newlines (CR/LF) to Unix format, assumes all lines end with CR/LF\n# tags: cash-divergence (D49: s/.$// names no CR, so it removes the last visible character)\nprintf 'one\\r\\ntwo\\r\\n' | sed 's/.$//' | tr '\\r' R\n",
       "stdoutMatch": false,
       "statusMatch": true,
       "bash": {
@@ -266,25 +95,6 @@
       },
       "cash": {
         "stdout": "onR\ntwR\n",
-        "stderr": "",
-        "status": 0
-      }
-    },
-    {
-      "name": "sed/pement-dos2unix-hex.sh",
-      "source": "https://www.pement.org/sed/sed1line.txt (TEXT CONVERSION)",
-      "desc": "convert CR/LF to LF using \\x0D",
-      "tags": "gnu-ext (\\xHH escape)",
-      "script": "# source: https://www.pement.org/sed/sed1line.txt (TEXT CONVERSION)\n# desc: convert CR/LF to LF using \\x0D\n# tags: gnu-ext (\\xHH escape)\nprintf 'one\\r\\ntwo\\r\\n' | sed 's/\\x0D$//' | tr '\\r' R\n",
-      "stdoutMatch": false,
-      "statusMatch": true,
-      "bash": {
-        "stdout": "one\ntwo\n",
-        "stderr": "",
-        "status": 0
-      },
-      "cash": {
-        "stdout": "oneR\ntwoR\n",
         "stderr": "",
         "status": 0
       }

@@ -724,78 +724,36 @@ fn get_bash_source_value(shell: &dyn ShellState) -> variables::ShellValue {
     }
 }
 
-/// Returns the positional arguments that the given call-stack frame contributes
-/// to `BASH_ARGC`/`BASH_ARGV`, or `None` if the frame contributes nothing.
+/// The entries of Bash's `BASH_ARGV` stack, newest first (`CallStack::bash_args`).
 ///
-/// Even without extended debugging mode, bash tracks script-level frames (the
-/// top-level invocation plus `source`/`.` calls); only *function* frames are
-/// gated behind extended debugging mode. A sourced script invoked without
-/// explicit positional arguments contributes its own name (the path passed to
-/// `.`/`source`) as a single argument, matching bash.
-fn frame_bash_args(
-    frame: &crate::callstack::Frame,
-    extdebug: bool,
-) -> Option<std::borrow::Cow<'_, [String]>> {
-    use std::borrow::Cow;
-    match &frame.frame_type {
-        crate::callstack::FrameType::Script(call) => {
-            if matches!(call.call_type, crate::callstack::ScriptCallType::Source)
-                && !frame.shadows_positional_args
-            {
-                Some(Cow::Owned(vec![call.name().into_owned()]))
-            } else {
-                Some(Cow::Borrowed(frame.args.as_slice()))
-            }
-        }
-        crate::callstack::FrameType::CommandString
-        | crate::callstack::FrameType::InteractiveSession => {
-            Some(Cow::Borrowed(frame.args.as_slice()))
-        }
-        crate::callstack::FrameType::Function(..) => {
-            extdebug.then_some(Cow::Borrowed(frame.args.as_slice()))
-        }
-        crate::callstack::FrameType::TrapHandler(_) | crate::callstack::FrameType::Eval => None,
+/// Bash keeps a real stack: a function call pushes its arguments when `extdebug` is on
+/// at the call, `source` pushes its file's name (or, under `extdebug`, its arguments),
+/// and leaving pops what entering pushed. The positional parameters go on it once, the
+/// first time either `extdebug` is turned on or a command outside any function reads
+/// the variable; read first inside a function, it is empty. So a script's own arguments
+/// are there only once something asked for them, as they were then.
+fn bash_args(shell: &dyn ShellState) -> Vec<&[String]> {
+    let stack = shell.call_stack();
+    if !stack.in_function() && !shell.options().enable_debugger {
+        stack.init_bash_args(shell.positional_args());
     }
-}
-
-/// Returns `true` if `BASH_ARGC`/`BASH_ARGV` should report an empty stack.
-///
-/// Without extended debugging mode, bash leaves these arrays empty whenever a
-/// function is active on the call stack.
-fn bash_args_suppressed(shell: &dyn ShellState) -> bool {
-    !shell.options().enable_debugger && shell.call_stack().in_function()
+    stack.bash_args()
 }
 
 fn get_bash_argc_value(shell: &dyn ShellState) -> variables::ShellValue {
-    if bash_args_suppressed(shell) {
-        return ShellValue::indexed_array_from_strs(&[]);
-    }
-
-    let extdebug = shell.options().enable_debugger;
-    shell
-        .call_stack()
-        .iter()
-        .filter_map(|frame| frame_bash_args(frame, extdebug).map(|args| args.len().to_string()))
+    bash_args(shell)
+        .into_iter()
+        .map(|args| args.len().to_string())
         .collect::<Vec<_>>()
         .into()
 }
 
 fn get_bash_argv_value(shell: &dyn ShellState) -> variables::ShellValue {
-    if bash_args_suppressed(shell) {
-        return ShellValue::indexed_array_from_strs(&[]);
-    }
-
-    let extdebug = shell.options().enable_debugger;
-    let mut argv = Vec::new();
-
-    for frame in shell.call_stack().iter() {
-        if let Some(args) = frame_bash_args(frame, extdebug) {
-            // Push args in reverse order per frame (last arg at lowest index = top of stack)
-            argv.extend(args.iter().cloned().rev());
-        }
-    }
-
-    argv.into()
+    bash_args(shell)
+        .into_iter()
+        .flat_map(|args| args.iter().rev().cloned())
+        .collect::<Vec<_>>()
+        .into()
 }
 
 fn get_lineno(shell: &dyn ShellState) -> usize {

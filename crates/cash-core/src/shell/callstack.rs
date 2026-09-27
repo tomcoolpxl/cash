@@ -138,7 +138,9 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
             tracing::debug!(target: trace_categories::FUNCTIONS, "Entering func [depth={depth}]: {prefix}{name}");
         }
 
-        self.call_stack.push_function(name, function, args);
+        let extdebug = self.options.enable_debugger;
+        self.call_stack
+            .push_function(name, function, args, extdebug);
         self.env.push_scope(env::EnvironmentScope::Local);
         self.local_option_snapshots.push(None);
         let set_aside = self.set_aside_uninherited_traps(function.is_traced());

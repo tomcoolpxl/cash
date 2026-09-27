@@ -1552,3 +1552,39 @@ fn kill_defaults_to_term_and_a_killed_process_reports_bashs_status() {
         (0, "default=143\nkill=137\nint=130".into())
     );
 }
+
+fn output_with_args(script: &str, args: &[&str]) -> String {
+    let result = Command::new(CASH)
+        .args(["--noprofile", "--norc", "-c", script])
+        .args(args)
+        .output()
+        .unwrap();
+    String::from_utf8(result.stdout)
+        .unwrap()
+        .replace("\r\n", "\n")
+}
+
+#[test]
+fn bash_argv_is_bashs_stack_seeded_once() {
+    // pure-bash-bible's reverse_array: the first `shopt -s extdebug` puts the function's
+    // own arguments on the stack, and they stay there after it returns (Git Bash 5.3.15).
+    let reverse = "reverse_array() { shopt -s extdebug; f()(printf '%s ' \"${BASH_ARGV[@]}\"); f \"$@\"; shopt -u extdebug; echo; }\n\
+                   reverse_array 1 2 3\n\
+                   reverse_array red blue";
+    assert_eq!(
+        output_with_args(reverse, &[]),
+        "3 2 1 3 2 1 \nblue red 3 2 1 \n"
+    );
+
+    // Read first inside a function, it is empty; read at the top, it takes `$@` as it is
+    // then; a function's entry is its arguments when called, whatever `set --` does.
+    let script = "f() { echo \"f [${BASH_ARGV[*]}]\"; }; f 1 2\n\
+                  set -- Z; echo \"top [${BASH_ARGV[*]}] [${BASH_ARGC[*]}]\"\n\
+                  shopt -s extdebug\n\
+                  g() { set -- w; echo \"g [${BASH_ARGV[*]}] [${BASH_ARGC[*]}]\"; }; g 3 4\n\
+                  shopt -u extdebug; h() { echo \"h [${BASH_ARGV[*]}]\"; }; h 5";
+    assert_eq!(
+        output_with_args(script, &["name", "A", "B"]),
+        "f []\ntop [Z] [1]\ng [4 3 Z] [2 1]\nh [Z]\n"
+    );
+}

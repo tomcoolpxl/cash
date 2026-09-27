@@ -214,8 +214,9 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         let source_was_given_args = matches!(call_type, callstack::ScriptCallType::Source)
             && !script_positional_args.is_empty();
 
+        let extdebug = self.options.enable_debugger;
         self.call_stack
-            .push_script(call_type, source_info, script_positional_args);
+            .push_script(call_type, source_info, script_positional_args, extdebug);
 
         let result = self
             .run_parsed_result(parse_result, source_info, params)

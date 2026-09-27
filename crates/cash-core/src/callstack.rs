@@ -180,6 +180,10 @@ pub struct Frame {
     /// Bash uses this to decide whether arguments supplied to `source` are restored.
     #[cfg_attr(feature = "serde", serde(default))]
     pub positional_args_changed: bool,
+    /// Whether entering this frame pushed an entry on `BASH_ARGV`'s stack, which
+    /// leaving it pops ([`CallStack::bash_args`]).
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub pushed_bash_args: bool,
     /// Optionally, indicates an additional line offset within the current source context.
     pub current_line_offset: usize,
 }
@@ -299,6 +303,16 @@ pub struct CallStack {
     script_source_depth: usize,
     active_trap_signals: HashSet<traps::TrapSignal>,
     trap_delivery_suppress_count: usize,
+    /// Bash's stack behind `BASH_ARGV` and `BASH_ARGC`, oldest first: each entry the
+    /// arguments of one call, as they were when it was made.
+    bash_args: Vec<Vec<String>>,
+    /// The positional parameters Bash puts on that stack once, the first time it is
+    /// needed, with the stack's height then ([`CallStack::init_bash_args`]).
+    #[cfg_attr(feature = "serde", serde(skip))]
+    bash_args_seed: std::sync::OnceLock<(usize, Vec<String>)>,
+    /// The lowest height the stack has fallen to since the seed went on it: entries
+    /// pushed after that sit above the seed.
+    bash_args_floor: Option<usize>,
 }
 
 impl CallStack {
@@ -412,7 +426,38 @@ impl CallStack {
             self.active_trap_signals.remove(signal);
         }
 
+        if frame.pushed_bash_args {
+            self.bash_args.pop();
+            if self.bash_args_seed.get().is_some() {
+                let height = self.bash_args.len();
+                self.bash_args_floor = Some(self.bash_args_floor.map_or(height, |f| f.min(height)));
+            }
+        }
+
         Some(frame)
+    }
+
+    /// Puts the positional parameters `current` on `BASH_ARGV`'s stack, the first time
+    /// only: what Bash does when `shopt -s extdebug` turns on extended debugging, or
+    /// when a command outside any function first reads `BASH_ARGV` or `BASH_ARGC`.
+    pub fn init_bash_args(&self, current: &[String]) {
+        self.bash_args_seed
+            .get_or_init(|| (self.bash_args.len(), current.to_vec()));
+    }
+
+    /// The entries of `BASH_ARGV`'s stack, newest first. `BASH_ARGV` is each entry's
+    /// arguments last first, in turn; `BASH_ARGC` their counts.
+    pub fn bash_args(&self) -> Vec<&[String]> {
+        let mut entries: Vec<&[String]> = self.bash_args.iter().map(Vec::as_slice).collect();
+        if let Some((height, seed)) = self.bash_args_seed.get() {
+            let at = self
+                .bash_args_floor
+                .map_or(*height, |floor| floor.min(*height))
+                .min(entries.len());
+            entries.insert(at, seed.as_slice());
+        }
+        entries.reverse();
+        entries
     }
 
     /// Returns a reference to the current (topmost) call frame in the stack.
@@ -460,22 +505,35 @@ impl CallStack {
     /// * `call_type` - The type of script call (sourced or executed).
     /// * `source_info` - The source of the script.
     /// * `args` - The positional arguments for the script call.
+    ///
+    /// Like Bash, `source` puts the file's name on `BASH_ARGV`'s stack when it is given
+    /// no arguments, and its arguments when it is given some under `extdebug`.
     pub fn push_script(
         &mut self,
         call_type: ScriptCallType,
         source_info: &crate::SourceInfo,
         args: impl IntoIterator<Item = String>,
+        extdebug: bool,
     ) {
         let args: Vec<String> = args.into_iter().collect();
         let shadows_positional_args = matches!(call_type, ScriptCallType::Run) || !args.is_empty();
+        let call = ScriptCall {
+            call_type,
+            source_info: source_info.to_owned(),
+        };
+        let pushed = match call_type {
+            ScriptCallType::Source if args.is_empty() => Some(vec![call.name().into_owned()]),
+            ScriptCallType::Source if extdebug => Some(args.clone()),
+            _ => None,
+        };
+        let pushed_bash_args = pushed.is_some();
+        self.bash_args.extend(pushed);
         self.frames.push_front(Frame {
-            frame_type: FrameType::Script(ScriptCall {
-                call_type,
-                source_info: source_info.to_owned(),
-            }),
+            frame_type: FrameType::Script(call),
             args,
             shadows_positional_args,
             positional_args_changed: false,
+            pushed_bash_args,
             source_info: source_info.to_owned(),
             current_line_offset: 0,
             current: None, // TODO(source-info): fill this out
@@ -506,6 +564,7 @@ impl CallStack {
             args: vec![],
             shadows_positional_args: false,
             positional_args_changed: false,
+            pushed_bash_args: false,
             source_info,
             current_line_offset: 0,
             current: None, // TODO(source-info): fill this out
@@ -522,6 +581,7 @@ impl CallStack {
             args: vec![],
             shadows_positional_args: false,
             positional_args_changed: false,
+            pushed_bash_args: false,
             source_info: crate::SourceInfo::from("eval"), // TODO(source-info): fill this out
             current_line_offset: 0,
             current: None, // TODO(source-info): fill this out
@@ -537,6 +597,7 @@ impl CallStack {
             args: vec![],
             shadows_positional_args: false,
             positional_args_changed: false,
+            pushed_bash_args: false,
             source_info: crate::SourceInfo::from(name),
             current_line_offset: 0,
             current: None, // TODO(source-info): fill this out
@@ -552,6 +613,7 @@ impl CallStack {
             args: vec![],
             shadows_positional_args: false,
             positional_args_changed: false,
+            pushed_bash_args: false,
             current_line_offset: 0,
             source_info: crate::SourceInfo::from(name),
             current: None, // TODO(source-info): fill this out
@@ -566,20 +628,28 @@ impl CallStack {
     /// * `name` - The name of the function being called.
     /// * `function` - The function being called.
     /// * `args` - The positional arguments for the function call.
+    /// * `extdebug` - Whether extended debugging is on, under which Bash puts the
+    ///   arguments on `BASH_ARGV`'s stack.
     pub fn push_function(
         &mut self,
         name: impl Into<String>,
         function: &functions::Registration,
         args: impl IntoIterator<Item = String>,
+        extdebug: bool,
     ) {
+        let args: Vec<String> = args.into_iter().collect();
+        if extdebug {
+            self.bash_args.push(args.clone());
+        }
         self.frames.push_front(Frame {
             frame_type: FrameType::Function(FunctionCall {
                 function_name: name.into(),
                 function: function.to_owned(),
             }),
-            args: args.into_iter().collect(),
+            args,
             shadows_positional_args: true,
             positional_args_changed: false,
+            pushed_bash_args: extdebug,
             source_info: function.source().clone(),
             entry: function.definition().location().map(|span| span.start),
             current: None, // TODO(source-info): fill this out
@@ -717,6 +787,7 @@ mod tests {
             ScriptCallType::Source,
             &SourceInfo::from(PathBuf::from("script1.sh")),
             vec![],
+            false,
         );
         assert!(!stack.is_empty());
         assert_eq!(stack.depth(), 1);
@@ -725,6 +796,7 @@ mod tests {
             ScriptCallType::Run,
             &SourceInfo::from(PathBuf::from("script2.sh")),
             vec![],
+            false,
         );
         assert_eq!(stack.depth(), 2);
 
@@ -771,6 +843,7 @@ mod tests {
             ScriptCallType::Run,
             &SourceInfo::from(PathBuf::from("script1.sh")),
             vec![],
+            false,
         );
         assert!(!stack.in_sourced_script());
 
@@ -778,6 +851,7 @@ mod tests {
             ScriptCallType::Source,
             &SourceInfo::from(PathBuf::from("script2.sh")),
             vec![],
+            false,
         );
         assert!(stack.in_sourced_script());
 
@@ -792,16 +866,19 @@ mod tests {
             ScriptCallType::Source,
             &SourceInfo::from(PathBuf::from("script1.sh")),
             vec![],
+            false,
         );
         stack.push_script(
             ScriptCallType::Run,
             &SourceInfo::from(PathBuf::from("script2.sh")),
             vec![],
+            false,
         );
         stack.push_script(
             ScriptCallType::Source,
             &SourceInfo::from(PathBuf::from("script3.sh")),
             vec![],
+            false,
         );
 
         let frames: Vec<_> = stack.iter().collect();

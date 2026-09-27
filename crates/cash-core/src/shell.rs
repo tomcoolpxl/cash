@@ -611,6 +611,11 @@ impl<SE: extensions::ShellExtensions> ShellState for Shell<SE> {
     }
 
     /// Returns the call stack for the shell.
+    pub fn positional_args(&self) -> &[String] {
+        self.current_shell_args()
+    }
+
+    /// Returns the call stack for the shell.
     pub fn call_stack(&self) -> &crate::callstack::CallStack {
         &self.call_stack
     }

@@ -94,6 +94,9 @@ pub trait ShellState {
     /// Returns the call stack for the shell.
     fn call_stack(&self) -> &crate::callstack::CallStack;
 
+    /// Returns the *current* positional parameters ($1 and beyond).
+    fn positional_args(&self) -> &[String];
+
     /// Returns the shell's history, if it exists.
     fn history(&self) -> Option<&crate::history::History>;
 

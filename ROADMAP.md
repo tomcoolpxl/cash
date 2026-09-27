@@ -156,16 +156,22 @@ awk target POSIX, so each mismatch is classified as a Cash bug, a GNU/gawk-only 
 a Windows divergence. The first run (209 cases) found 19 mismatches, among them an awk
 compiler panic on `for` loops with an empty clause.
 
-**Status:** 204 of 209 cases match. Each fix has a focused regression; besides those named in
+**Status:** 205 of 209 cases match. Each fix has a focused regression; besides those named in
 the commit history, the corpus exposed `(( count[$word]++ ))` storing every word under key
 `0` (associative subscripts were evaluated as arithmetic), `for x in; do` iterating over
-`$@`, and `sed`'s `l` ignoring `-l`. The five remaining cases are classified in their files'
+`$@`, and `sed`'s `l` ignoring `-l`. The four remaining cases are classified in their files'
 `# tags:` lines:
 
 - deliberate divergences: arithmetic never runs `$(...)` from a variable's value (spec §4,
   row 27), and `s/.$//` does not see a hidden CR (D49);
-- GNU-only sed extensions: `\b` word boundaries, a label ended by a space;
-- a known gap: `BASH_ARGV` under `extdebug` (the source itself says it needs `compat44`).
+- GNU-only sed extensions: `\b` word boundaries, a label ended by a space.
+
+The last gap closed was pure-bash-bible's `reverse_array`, which reads `BASH_ARGV` under
+`extdebug`. cash built `BASH_ARGV` from its call stack; Bash keeps a stack of its own. A
+function pushes its arguments there only when `extdebug` is on at the call, `source` pushes
+its file's name, and `$@` goes on once, when `extdebug` is first turned on or a command
+outside any function first reads the variable. cash now keeps that stack, and matches Git
+Bash 5.3.15 in scripts, `-c` and standard input, where it had shown nothing.
 
 Keep the corpus growing and fix new mismatches with focused regressions.
 

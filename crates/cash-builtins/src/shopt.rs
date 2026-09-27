@@ -105,6 +105,14 @@ impl builtins::Command for ShoptCommand {
                 if let Some(option_definition) = option_definition {
                     if self.set {
                         option_definition.set(context.shell.options_mut(), true);
+                        // Turning on extended debugging puts the positional parameters
+                        // on `BASH_ARGV`'s stack, the first time (Bash's init_bash_argv).
+                        if option_name == "extdebug" {
+                            let shell = &*context.shell;
+                            shell
+                                .call_stack()
+                                .init_bash_args(shell.current_shell_args());
+                        }
                     } else if self.unset {
                         option_definition.set(context.shell.options_mut(), false);
                     } else {
