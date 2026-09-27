@@ -92,6 +92,7 @@ pub fn run() -> u8 {
     check_busybox(&mut findings, &builtins, &entries, &pathext, &cwd);
     check_dos_shadowing(&mut findings, &builtins, &entries, &pathext, &cwd);
     check_deliberate_shadows(&mut findings, &builtins, &entries, &pathext, &cwd);
+    check_carapace(&mut findings, &entries, &pathext, &cwd);
 
     report(&findings)
 }
@@ -199,6 +200,44 @@ fn check_shells(findings: &mut Vec<Finding>, entries: &[PathBuf], pathext: &[Str
             fix: None,
         });
     }
+}
+
+/// carapace gives Tab completion, with descriptions, for the commands that bring none of
+/// their own (D63). Optional, so its absence is a note, never a warning.
+fn check_carapace(
+    findings: &mut Vec<Finding>,
+    entries: &[PathBuf],
+    pathext: &[String],
+    cwd: &Path,
+) {
+    let beside_cash = std::env::current_exe()
+        .ok()
+        .and_then(|exe| Some(exe.parent()?.join("carapace.exe")))
+        .filter(|path| path.is_file());
+    let found = beside_cash
+        .or_else(|| resolve("carapace", entries, pathext, cwd).map(|d| d.target().to_path_buf()));
+
+    findings.push(match found {
+        Some(path) => Finding {
+            level: Level::Ok,
+            subject: "carapace".into(),
+            detail: format!(
+                "{} — Tab completes git, winget, docker and 700 more, with descriptions",
+                cash_win32::path::render(&path)
+            ),
+            fix: None,
+        },
+        None => Finding {
+            level: Level::Note,
+            subject: "carapace".into(),
+            detail: "not installed — Tab completes files, commands and variables, and what \
+                     completion scripts you source"
+                .into(),
+            fix: Some(
+                "scoop install extras/carapace-bin, for 700 more commands with descriptions".into(),
+            ),
+        },
+    });
 }
 
 fn check_commands(

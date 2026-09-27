@@ -458,6 +458,40 @@ fn build_windows_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
     }
 }
 
+/// The variables an external command started by `shell` receives: the exported ones that
+/// are set, with `PATH` in the form a Windows program reads.
+///
+/// # Arguments
+///
+/// * `shell` - The shell whose environment to export.
+pub fn exported_environment(
+    shell: &Shell<impl extensions::ShellExtensions>,
+) -> Vec<(String, String)> {
+    shell
+        .env()
+        .iter_exported()
+        // NOTE: To match bash behavior, we only include exported variables
+        // that are set (i.e., have a value). This means a variable that
+        // shows up in `declare -p` but has no *set* value will be omitted.
+        .filter(|(_, v)| v.value().is_set())
+        .map(|(k, v)| {
+            let value = v.value().to_cow_str(shell);
+
+            // cash (D5): PATH goes back to the semicolon-separated Windows form at
+            // the process boundary. The shell holds and shows the Unix form so that
+            // `IFS=: read -ra dirs <<< "$PATH"` works, but `git.exe` and
+            // `terraform.exe` cannot read that — a child handed `/c/tools:/c/bin`
+            // finds nothing at all.
+            #[cfg(windows)]
+            if k.eq_ignore_ascii_case("PATH") {
+                return (k.clone(), cash_win32::env::path_to_windows(value.as_ref()));
+            }
+
+            (k.clone(), value.into_owned())
+        })
+        .collect()
+}
+
 /// Composes a `std::process::Command` to execute the given command. Appropriately
 /// configures the command name and arguments, redirections, injected file
 /// descriptors, environment variables, etc.
@@ -496,26 +530,8 @@ pub fn compose_std_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
 
     // Add in exported variables.
     if !empty_env {
-        for (k, v) in context.shell.env().iter_exported() {
-            // NOTE: To match bash behavior, we only include exported variables
-            // that are set (i.e., have a value). This means a variable that
-            // shows up in `declare -p` but has no *set* value will be omitted.
-            if v.value().is_set() {
-                let value = v.value().to_cow_str(context.shell);
-
-                // cash (D5): PATH goes back to the semicolon-separated Windows form at
-                // the process boundary. The shell holds and shows the Unix form so that
-                // `IFS=: read -ra dirs <<< "$PATH"` works, but `git.exe` and
-                // `terraform.exe` cannot read that — a child handed `/c/tools:/c/bin`
-                // finds nothing at all.
-                #[cfg(windows)]
-                if k.eq_ignore_ascii_case("PATH") {
-                    cmd.env(k.as_str(), cash_win32::env::path_to_windows(value.as_ref()));
-                    continue;
-                }
-
-                cmd.env(k.as_str(), value.as_ref());
-            }
+        for (name, value) in exported_environment(context.shell) {
+            cmd.env(name, value);
         }
         // Set _ to the resolved command path for external commands.
         cmd.env("_", command_name);

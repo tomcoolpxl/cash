@@ -1665,6 +1665,36 @@ unsplit tab. Readline has no default binding for Alt-arrows, so nothing Bash doe
 Building this found that keys typed straight after a key bound to a command were dropped
 when read in the same batch as it (`bind -x` keys included); Reedline patch 5 keeps them.
 
+### D63 — Completions from carapace, when it is installed
+
+fish ships completions for hundreds of commands, each candidate with a description. Cash has
+Bash's machinery (`complete`, `compgen`, the bash-completion shims of D40), and scripts a
+user sources work; but nothing loads them, and a bash script has no descriptions to give.
+[carapace-bin](https://github.com/carapace-sh/carapace-bin) (MIT) completes 729 commands on
+Windows — git, gh, winget, scoop, docker, kubectl, terraform, cargo, npm, dotnet, pwsh — with
+a description for each candidate.
+
+**Not bundled** (decided). carapace is Go, so it cannot be linked in, and it is 90 MB
+unpacked (17 MB zipped), three times `cash.exe`. Cash uses it when it is there: beside
+`cash.exe` first, then on `PATH`. `cash doctor` says whether it was found and how to install
+it (`scoop install extras/carapace-bin`).
+
+**When it is asked.** On Tab, for an argument of a command that has no completion of its
+own — no `complete` spec for it and no `complete -D` default — and that carapace lists
+(`carapace --list`, read once and remembered while `PATH` is unchanged). Cash runs
+`carapace <command> export <command> <arguments…> <word>` in the shell's folder, with the
+environment a command would get, and shows its values with their descriptions; values are
+quoted as cash quotes its own (D40), and carapace's `nospace` decides the trailing space.
+When carapace answers nothing, fails, or takes over three seconds, cash's own candidates
+stand. The command's name, a word inside quotes, and a word after a redirection are left to
+cash.
+
+**Cost.** Nothing per keystroke; only a Tab. Measured on the machine this was written on,
+carapace starts in about 50 ms, a Tab costs 85–100 ms where carapace has the list itself
+(`winget`, `terraform`, `gh pr`) and 220–450 ms where it runs the tool (`git checkout`,
+`docker`), the same order as the tools' own bash completion scripts, which run the tool too.
+The first Tab of a session also reads carapace's list, once.
+
 ---
 
 ## 4. Deliberate divergences from bash

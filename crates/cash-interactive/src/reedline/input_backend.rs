@@ -74,6 +74,7 @@ impl ReedlineInputBackend {
         // hold a reference to the shell.
         let completer = completer::ReedlineCompleter {
             shell: shell_ref.clone(),
+            carapace: crate::carapace::Cache::default(),
         };
         let validator = validator::ReedlineValidator {
             shell: shell_ref.clone(),

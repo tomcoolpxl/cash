@@ -186,10 +186,10 @@ pub fn highlight_command<'a>(
 
 /// Operators after which the next word is a command: the list and pipeline separators, and
 /// the opening of a subshell.
-const STARTS_A_COMMAND: &[&str] = &[";", "&", "&&", "||", "|", "|&", "(", "\n"];
+pub(crate) const STARTS_A_COMMAND: &[&str] = &[";", "&", "&&", "||", "|", "|&", "(", "\n"];
 
 /// Reserved words that are followed by a command rather than by a name or a word list.
-const KEYWORDS_BEFORE_A_COMMAND: &[&str] = &[
+pub(crate) const KEYWORDS_BEFORE_A_COMMAND: &[&str] = &[
     "if", "then", "elif", "else", "while", "until", "do", "!", "{", "time",
 ];
 

@@ -30,6 +30,8 @@ pub mod highlighting;
 mod completion;
 
 #[cfg(feature = "reedline")]
+mod carapace;
+#[cfg(feature = "reedline")]
 mod history_words;
 
 // Reedline-based shell

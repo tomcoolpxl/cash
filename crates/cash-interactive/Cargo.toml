@@ -25,6 +25,7 @@ reedline = [
     "dep:nu-ansi-term",
     "dep:crossterm",
     "dep:unicode-segmentation",
+    "dep:serde_json",
     "completion",
     "highlighting",
 ]
@@ -47,6 +48,7 @@ tokio = { version = "1.52.3", features = ["rt", "sync"] }
 tracing = "0.1.44"
 futures-util = "0.3.34"
 unicode-segmentation = { version = "1.13.3", optional = true }
+serde_json = { version = "1.0.151", optional = true }
 
 [dev-dependencies]
 pretty_assertions = { version = "1.4.1", features = ["unstable"] }
