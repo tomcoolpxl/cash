@@ -342,8 +342,13 @@ async fn spawn_async_ao_list_in_task<'a, SE: extensions::ShellExtensions>(
     shell: &'a mut Shell<SE>,
     params: &ExecutionParameters,
 ) -> Option<&'a jobs::Job> {
-    // Poll to reap finished background jobs.
-    let _ = shell.jobs_mut().poll();
+    // Poll to reap finished background jobs, in a script, which never reaches a prompt
+    // to report them: a loop of background jobs would otherwise pile them up. At the
+    // prompt they stay in the table until reported, as in Bash, so `[1] Done` is not
+    // lost and a new job does not take the id of one not yet reported.
+    if !shell.options().interactive {
+        let _ = shell.jobs_mut().poll();
+    }
 
     // Guard against runaway background jobs / fork bombs (matching ulimit -u).
     let slot_guard = jobs::SubshellSlotGuard::try_acquire().ok()?;
@@ -676,6 +681,12 @@ async fn wait_for_pipeline_processes_and_update_status(
     // Clear our the pipeline status so we can start filling it out.
     shell.last_pipeline_statuses_mut().clear();
 
+    // Whether the shell waits here for a process of its own: after one, an interactive
+    // shell reports the background jobs that finished meanwhile, as Bash does.
+    let waits_for_a_process = process_spawn_results
+        .iter()
+        .any(|child| matches!(child, ExecutionSpawnResult::StartedProcess(_)));
+
     while let Some(child) = process_spawn_results.pop_front() {
         let wait_result = if !stopped_children.is_empty() {
             child.poll().await?
@@ -717,6 +728,13 @@ async fn wait_for_pipeline_processes_and_update_status(
 
     if shell.options().interactive {
         sys::terminal::move_self_to_foreground()?;
+    }
+
+    // Bash reports a finished background job when a foreground job completes, not only
+    // at the next prompt: `sleep 1 & sleep 2; echo after` shows `[1]+  Done` before
+    // `after`. Not while a file is sourced (Bash 5.3): that waits until it returns.
+    if waits_for_a_process && shell.may_report_jobs_now() {
+        shell.check_for_completed_jobs()?;
     }
 
     // If there were stopped jobs, then encapsulate the pipeline as a managed job and hand it

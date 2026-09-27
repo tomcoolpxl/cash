@@ -126,7 +126,7 @@ there.
 | **1.gg** | `bind -p NAME` | Restrict output to bindings for named commands | **Fixed**, by the harness: `bind -p NAME` and `bind -P NAME` list one command's keys; a name that is not bound, or not a command, is reported as not bound, status 0, as in Bash. Keys are now spelled as terminals send them (`"\e[H"` and `"\eOH"` for Home, `"\e[1;5H"` for Ctrl-Home) rather than `"Home"`, so `bind -p` output reads back, and on Windows a binding spelled that way binds the key, as an `.inputrc` written for Bash expects. |
 | **1.ii** | Trap job notify | Print job notifications when trap completes | Job control event drain. |
 | **1.jj** | Compfunc 124 | Reload compspec and retry completion | **Verified** by the harness. |
-| **1.rr** | Sourcing notify | Suppress job notifications while sourcing | Flag during `source` execution. |
+| **1.rr** | Sourcing notify | Suppress job notifications while sourcing | **Fixed**, by the harness: a job that finishes while a file is sourced is reported when the file is done. The harness also found that cash reported jobs only at the prompt, where Bash reports them when a foreground command finishes; laid them out differently (`[1]+    PID`, `[1]+Done<tab>cmd`, no `Exit N`); and lost the `Done` of a job that finished before the next one started. All now as in Bash. |
 | **2.a-o** | Readline 8.3 | `search-ignore-case`, `force-meta-prefix`, etc. | Cash uses Reedline on Windows, not GNU Readline. |
 
 ---

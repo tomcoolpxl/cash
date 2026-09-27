@@ -1,0 +1,20 @@
+$ sleep 3 & sleep 3 &
+[1] PID
+[2] PID
+$ jobs
+[1]-  Running                    sleep 3 &
+[2]+  Running                    sleep 3 &
+$ jobs -l | sed -E 's/^(.{4}) +[0-9]+ /\1 PID /'
+[1]- PID Running                    sleep 3 &
+[2]+ PID Running                    sleep 3 &
+$ sleep 0.05 &
+[3] PID
+$ sleep 0.3
+[3]+  Done                       sleep 0.05
+$ bash -c 'sleep 0.1; exit 3' &
+[3] PID
+[1]   Done                       sleep 3
+[2]   Done                       sleep 3
+$ sleep 0.3
+[3]+  Exit 3                     bash -c 'sleep 0.1; exit 3'
+$

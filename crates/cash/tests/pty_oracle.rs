@@ -173,6 +173,27 @@ const CASES: &[Case] = &[
         name: "1cc-read-E",
         keys: &["read -E x\r", "cat al", "\t", "\r", "echo \"[$x]\"\r"],
     },
+    // When a finished job is reported: after a foreground command, not only at the prompt.
+    Case {
+        name: "notify-after-foreground",
+        keys: &["sleep 0.05 & sleep 0.2; echo after\r"],
+    },
+    // How `jobs` lays out running and finished jobs, with the current and previous marks.
+    Case {
+        name: "jobs-layout",
+        keys: &[
+            "sleep 3 & sleep 3 &\r",
+            "jobs\r",
+            // The pid, however wide, masked.
+            "jobs -l | sed -E 's/^(.{4}) +[0-9]+ /\\1 PID /'\r",
+            "sleep 0.05 &\r",
+            "sleep 0.3\r",
+            // A real process, so that both shells have its pid, and a sleep, so that
+            // neither sees it finish before the prompt.
+            "bash -c 'sleep 0.1; exit 3' &\r",
+            "sleep 0.3\r",
+        ],
+    },
     // 1.rr: a job finishing while a file is sourced is reported after it.
     Case {
         name: "1rr-sourcing-notify",
@@ -325,10 +346,7 @@ const DELIBERATE: &[(&str, &str)] = &[
 
 /// The cases where cash differs from Bash, not yet fixed, each with the difference. A
 /// case that starts to match fails the test until it is taken off this list.
-const KNOWN_DIFFERENCES: &[(&str, &str)] = &[(
-    "1rr-sourcing-notify",
-    "not yet fixed: job notices are worded differently and come after the line",
-)];
+const KNOWN_DIFFERENCES: &[(&str, &str)] = &[];
 
 #[test]
 fn cash_leaves_the_screen_bash_leaves() {
