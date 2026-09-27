@@ -130,6 +130,12 @@ path = "tests/ps_builtin.rs"
 name = "pty-oracle"
 path = "tests/pty_oracle.rs"
 
+# open-issues.md item 1: how fast the line editor keeps up on a ConPTY, against PowerShell.
+# A measurement, ignored and run by hand; the command is in the file's doc.
+[[test]]
+name = "pty-latency"
+path = "tests/pty_latency.rs"
+
 # D11/D22: `$!` and background job identity.
 [[test]]
 name = "background-pid"

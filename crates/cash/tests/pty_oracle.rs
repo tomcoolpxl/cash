@@ -84,6 +84,21 @@ const CASES: &[Case] = &[
         name: "1gg-bind-p-name",
         keys: &["bind -p beginning-of-line\r"],
     },
+    Case {
+        name: "1gg-bind-upper-P-name",
+        keys: &["bind -P beginning-of-line\r"],
+    },
+    Case {
+        name: "1gg-bind-p-unbound",
+        keys: &[
+            "bind -p vi-put; echo \"rc=$?\"\r",
+            "bind -P vi-put; echo \"rc=$?\"\r",
+        ],
+    },
+    Case {
+        name: "1gg-bind-p-unknown",
+        keys: &["bind -p no-such-thing; echo \"rc=$?\"\r"],
+    },
     // 1.dd: the vi-mode completion command has a Bash-specific name.
     Case {
         name: "1dd-bash-vi-complete",
@@ -131,6 +146,19 @@ const CASES: &[Case] = &[
             "\t",
         ],
     },
+    // Without it, a function's completion is inserted as it is.
+    Case {
+        name: "1u-compopt-no-fullquote",
+        keys: &[
+            "f() { COMPREPLY=('x y'); }; complete -F f cmd\r",
+            "cmd ",
+            "\t",
+        ],
+    },
+    Case {
+        name: "1u-complete-p-fullquote",
+        keys: &["complete -o fullquote -W 'a b' cmd; complete -p cmd\r"],
+    },
     // 1.jj: a completion function returning 124 has its compspec reloaded.
     Case {
         name: "1jj-compfunc-124",
@@ -145,12 +173,45 @@ const CASES: &[Case] = &[
         name: "1cc-read-E",
         keys: &["read -E x\r", "cat al", "\t", "\r", "echo \"[$x]\"\r"],
     },
+    // When a finished job is reported: after a foreground command, not only at the prompt.
+    Case {
+        name: "notify-after-foreground",
+        keys: &["sleep 0.05 & sleep 0.2; echo after\r"],
+    },
+    // How `jobs` lays out running and finished jobs, with the current and previous marks.
+    // The first two run throughout, so nothing depends on how long a step takes.
+    Case {
+        name: "jobs-layout",
+        keys: &[
+            "sleep 10 & sleep 10 &\r",
+            "jobs\r",
+            // The pid, however wide, masked.
+            "jobs -l | sed -E 's/^(.{4}) +[0-9]+ /\\1 PID /'\r",
+            "sleep 0.05 &\r",
+            "sleep 0.3\r",
+            // A real process, so that both shells have its pid.
+            "bash -c 'sleep 0.1; exit 3' &\r",
+            "sleep 0.3\r",
+        ],
+    },
+    // `read -t` at the console times out; the Enter that ran it must not wake it early.
+    Case {
+        name: "read-t-console",
+        keys: &["read -t 0.3; echo \"rc=$?\"\r"],
+    },
+    // A job that finishes during a builtin, with another started on the same line: its
+    // `Done` is still reported, and the new job does not take its id.
+    Case {
+        name: "notice-not-lost",
+        keys: &["sleep 0.05 & read -t 0.3; sleep 10 &\r"],
+    },
     // 1.rr: a job finishing while a file is sourced is reported after it.
     Case {
         name: "1rr-sourcing-notify",
         keys: &[
-            "printf 'sleep 0.4\\n' > s.sh\r",
-            "sleep 0.1 & . ./s.sh; echo after\r",
+            // Short sleeps: the harness moves on after 500 ms without output.
+            "printf 'sleep 0.2\\n' > s.sh\r",
+            "sleep 0.05 & . ./s.sh; echo after\r",
         ],
     },
 ];
@@ -288,24 +349,15 @@ const DELIBERATE: &[(&str, &str)] = &[
         "D40: the first Tab inserts the shared part and the second shows the candidates; \
          Bash beeps on the second and lists on the third",
     ),
+    (
+        "1u-compopt-fullquote",
+        "D40: `compopt -o fullquote` quotes as file names are quoted, `'x y'`",
+    ),
 ];
 
 /// The cases where cash differs from Bash, not yet fixed, each with the difference. A
 /// case that starts to match fails the test until it is taken off this list.
-const KNOWN_DIFFERENCES: &[(&str, &str)] = &[
-    (
-        "1u-compopt-fullquote",
-        "not yet fixed: the completion is inserted unquoted",
-    ),
-    (
-        "1gg-bind-p-name",
-        "not yet fixed: bind -p takes no command name",
-    ),
-    (
-        "1rr-sourcing-notify",
-        "not yet fixed: job notices are worded differently and come after the line",
-    ),
-];
+const KNOWN_DIFFERENCES: &[(&str, &str)] = &[];
 
 #[test]
 fn cash_leaves_the_screen_bash_leaves() {

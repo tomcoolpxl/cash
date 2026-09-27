@@ -118,13 +118,7 @@ impl builtins::Command for JobsCommand {
                     // carry its pid — `jobs -l` inside `$( )` would otherwise differ from
                     // the same command outside it.
                     let rendered = snapshot.to_string();
-                    match insertion_point(&rendered) {
-                        Some(at) => {
-                            let (marker, rest) = rendered.split_at(at);
-                            writeln!(context.stdout(), "{marker} {pid} {rest}")?;
-                        }
-                        None => writeln!(context.stdout(), "{rendered} {pid}")?,
-                    }
+                    writeln!(context.stdout(), "{}", with_pid(&rendered, pid))?;
                 } else {
                     writeln!(context.stdout(), "{snapshot}")?;
                 }
@@ -232,18 +226,8 @@ impl JobsCommand {
         if self.also_show_pids {
             match pid {
                 // bash puts the pid between the job marker and the status:
-                //     [1]+ 12345 Running   sleep 30 &
-                //
-                // The marker ends after `]` and its optional `+`/`-`; splitting on the
-                // first space instead would land inside the command, because the job's
-                // own rendering separates status from command with a tab.
-                Some(pid) => match insertion_point(rendered) {
-                    Some(at) => {
-                        let (marker, rest) = rendered.split_at(at);
-                        writeln!(context.stdout(), "{marker} {pid} {rest}")?;
-                    }
-                    None => writeln!(context.stdout(), "{rendered} {pid}")?,
-                },
+                //     [1]+ 12345 Running                    sleep 30 &
+                Some(pid) => writeln!(context.stdout(), "{}", with_pid(rendered, pid))?,
                 None => writeln!(context.stdout(), "{rendered}")?,
             }
             return Ok(());
@@ -256,12 +240,17 @@ impl JobsCommand {
 }
 
 /// Where the pid goes in a `jobs -l` line: just past the `[N]` marker and any `+`/`-`.
-fn insertion_point(rendered: &str) -> Option<usize> {
-    let close = rendered.find(']')? + 1;
-    let after = rendered
-        .get(close..)
+/// A job's line with its pid put in for `jobs -l`, as Bash lays it out: after `[N]` and
+/// the mark (`+`, `-` or a space), the pid right-aligned in five columns, then the
+/// status. Bash prints `[%d]%c %5d `.
+fn with_pid(rendered: &str, pid: i32) -> String {
+    let Some(close) = rendered.find(']') else {
+        return format!("{rendered} {pid}");
+    };
+    let head_end = rendered
+        .get(close + 1..)
         .and_then(|rest| rest.chars().next())
-        .filter(|c| matches!(c, '+' | '-'))
-        .map_or(close, |c| close + c.len_utf8());
-    Some(after)
+        .map_or(close + 1, |mark| close + 1 + mark.len_utf8());
+    let (head, rest) = rendered.split_at(head_end);
+    format!("{head} {pid:>5} {}", rest.trim_start())
 }

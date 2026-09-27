@@ -1,0 +1,3 @@
+$ complete -o fullquote -W 'a b' cmd; complete -p cmd
+complete -o fullquote -W 'a b' cmd
+$

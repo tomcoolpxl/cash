@@ -1025,6 +1025,9 @@ ROADMAP item 15's ConPTY harness):
   columnar menu to move the cursor, and gives the completer the whole line so it sees
   the quote after the cursor.
 - A file gets its closing quote and a space, finished like any other word.
+- Candidates that are not file names (a completion function's) are left as they are,
+  unless it asks for quoting with `compopt -o fullquote` (Bash 5.3), which quotes them
+  by these same rules. `-o noquote` turns quoting off and wins over `fullquote`.
 - Inside single quotes a `\` is a path separator, not an escape, so `'my\ dir` means a
   name with a backslash in it, as it does in Bash.
 

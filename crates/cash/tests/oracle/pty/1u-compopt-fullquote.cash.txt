@@ -1,0 +1,2 @@
+$ f() { compopt -o fullquote; COMPREPLY=('x y'); }; complete -F f cmd
+$ cmd 'x y'

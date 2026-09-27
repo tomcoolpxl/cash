@@ -3,7 +3,9 @@ pub use crate::sys::stubs::commands;
 pub(crate) mod env;
 pub use crate::sys::stubs::fd;
 pub(crate) mod fs;
-pub use crate::sys::stubs::input;
+/// Key sequences as xterm sends them, for bindings spelled as the key sends it.
+#[path = "windows/input.rs"]
+pub mod input;
 pub(crate) mod network;
 // cash: Windows has no poll(2), but it does have PeekNamedPipe and WaitForSingleObject,
 // which between them cover every handle kind `read -t` cares about.

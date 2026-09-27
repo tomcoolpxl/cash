@@ -1,0 +1,7 @@
+$ bind -p vi-put; echo "rc=$?"
+# vi-put (not bound)
+rc=0
+$ bind -P vi-put; echo "rc=$?"
+vi-put is not bound to any keys
+rc=0
+$

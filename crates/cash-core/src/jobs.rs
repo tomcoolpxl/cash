@@ -93,18 +93,54 @@ pub struct JobSnapshot {
     pub state: JobState,
     /// Whether the job was current, previous, or neither.
     pub annotation: JobAnnotation,
+    /// The job's exit status, once it has finished.
+    pub exit_status: Option<u8>,
     /// Whether this state has not yet been reported by `jobs` or prompt notification.
     notification_pending: bool,
 }
 
 impl Display for JobSnapshot {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
+        write_job_line(
             f,
-            "[{}]{}	{}	{}",
-            self.id, self.annotation, self.state, self.command_line
+            self.id,
+            &self.annotation,
+            &self.state,
+            self.exit_status,
+            &self.command_line,
         )
     }
+}
+
+/// A job as Bash's `jobs` and job notices show it: `[1]+  Running` and the command,
+/// the mark a space when the job is neither current nor previous, the status padded to
+/// 26 columns, a running job's command ending in ` &`, and a job that failed shown as
+/// `Exit 3` rather than `Done`.
+fn write_job_line(
+    f: &mut std::fmt::Formatter<'_>,
+    id: usize,
+    annotation: &JobAnnotation,
+    state: &JobState,
+    exit_status: Option<u8>,
+    command_line: &str,
+) -> std::fmt::Result {
+    // A finished job keeps the current job's `+` until it is reported, but not the
+    // previous job's `-`, as Bash shows them.
+    let mark = match annotation {
+        JobAnnotation::Current => '+',
+        JobAnnotation::Previous if !matches!(state, JobState::Done) => '-',
+        JobAnnotation::Previous | JobAnnotation::None => ' ',
+    };
+    let status = match (state, exit_status) {
+        (JobState::Done, Some(code)) if code != 0 => format!("Exit {code}"),
+        (state, _) => state.to_string(),
+    };
+    let ampersand = if matches!(state, JobState::Running) {
+        " &"
+    } else {
+        ""
+    };
+    write!(f, "[{id}]{mark}  {status:<26} {command_line}{ampersand}")
 }
 
 /// Represents a task that is part of a job.
@@ -288,6 +324,7 @@ impl JobManager {
                 command_line: job.command_line.clone(),
                 state: job.state.clone(),
                 annotation: job.annotation.clone(),
+                exit_status: job.exit_status,
                 notification_pending: job.notification_pending,
             })
             .chain(self.inherited.iter().cloned())
@@ -330,6 +367,7 @@ impl JobManager {
                     command_line: job.command_line.clone(),
                     state: job.state.clone(),
                     annotation: job.annotation.clone(),
+                    exit_status: job.exit_status,
                     notification_pending: true,
                 });
                 job.notification_pending = false;
@@ -624,6 +662,10 @@ pub struct Job {
     /// The current operational state of the job.
     pub state: JobState,
 
+    /// The job's exit status, once it has finished: a failed job is reported as
+    /// `Exit N`, as Bash reports it.
+    pub exit_status: Option<u8>,
+
     /// Whether the current state still needs to be shown by `jobs -n`.
     notification_pending: bool,
 
@@ -637,10 +679,13 @@ pub struct Job {
 
 impl Display for Job {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
+        write_job_line(
             f,
-            "[{}]{:3}{}\t{}",
-            self.id, self.annotation, self.state, self.command_line
+            self.id,
+            &self.annotation,
+            &self.state,
+            self.exit_status,
+            &self.command_line,
         )
     }
 }
@@ -669,6 +714,7 @@ impl Job {
             annotation: JobAnnotation::None,
             command_line,
             state,
+            exit_status: None,
             notification_pending: true,
             spawned_pids: None,
         }
@@ -691,7 +737,8 @@ impl Job {
             .map_or(Cow::Borrowed("<pid unknown>"), |pid| {
                 Cow::Owned(pid.to_string())
             });
-        std::format!("[{}]{}\t{}", self.id, self.annotation, display_pid)
+        // As Bash prints a job started at the prompt: `[1] 1234`, with no mark.
+        std::format!("[{}] {}", self.id, display_pid)
     }
 
     /// Returns the annotation of the job.
@@ -741,6 +788,9 @@ impl Job {
         tracing::debug!(target: trace_categories::JOBS, "Job {} has completed.", self.id);
 
         self.state = JobState::Done;
+        self.exit_status = result
+            .as_ref()
+            .map(|r| r.as_ref().map_or(1, |r| u8::from(r.exit_code)));
         self.notification_pending = true;
 
         Ok(result)
@@ -765,6 +815,7 @@ impl Job {
         }
 
         self.state = JobState::Done;
+        self.exit_status = Some(u8::from(result.exit_code));
         self.notification_pending = true;
 
         Ok(result)
