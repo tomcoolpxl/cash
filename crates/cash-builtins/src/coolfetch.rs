@@ -35,15 +35,20 @@ pub(crate) struct CoolfetchCommand {
     no_color: bool,
 }
 
-/// The four panes, drawn small enough to sit beside the facts.
+/// The four panes, drawn small enough to sit beside the facts: from the `OS` line to the
+/// first disk, split beside `Terminal`, the title and its rule standing clear above.
 const LOGO: &[&str] = &[
-    "  ####### #######  ",
-    "  ####### #######  ",
-    "  ####### #######  ",
-    "                   ",
-    "  ####### #######  ",
-    "  ####### #######  ",
-    "  ####### #######  ",
+    "",
+    "",
+    "  #######  #######  ",
+    "  #######  #######  ",
+    "  #######  #######  ",
+    "  #######  #######  ",
+    "",
+    "  #######  #######  ",
+    "  #######  #######  ",
+    "  #######  #######  ",
+    "  #######  #######  ",
 ];
 
 impl builtins::Command for CoolfetchCommand {
@@ -65,15 +70,18 @@ impl builtins::Command for CoolfetchCommand {
 
         for row in 0..rows {
             let art = logo.get(row).copied().unwrap_or("");
+            let fact = facts.get(row);
             if !self.no_logo {
-                write!(
-                    stdout,
-                    "{}",
-                    paint(&std::format!("{art:gutter$}"), "34", colour)
-                )?;
+                // Art alone on its row keeps no trailing spaces.
+                let art = if fact.is_some() {
+                    std::format!("{art:gutter$}")
+                } else {
+                    art.trim_end().to_owned()
+                };
+                write!(stdout, "{}", paint(&art, "34", colour))?;
             }
 
-            if let Some((label, value)) = facts.get(row) {
+            if let Some((label, value)) = fact {
                 if label.is_empty() {
                     writeln!(stdout, "{}", paint(value, "36", colour))?;
                 } else {
@@ -124,6 +132,13 @@ fn collect<SE: cash_core::ShellExtensions>(
         _ => edition,
     };
     facts.push((String::from("OS"), os));
+
+    // What `uname -s` says, and the NT version `ver` prints.
+    let kernel = cash_win32::sysinfo::nt_version().map_or_else(
+        || String::from("Windows_NT"),
+        |version| std::format!("Windows_NT {version}"),
+    );
+    facts.push((String::from("Kernel"), kernel));
 
     facts.push((
         String::from("Uptime"),

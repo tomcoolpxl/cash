@@ -228,6 +228,20 @@ pub fn os_build() -> Option<u32> {
     .and_then(|value| value.parse().ok())
 }
 
+/// The NT version as `ver` prints it, `10.0.26200.9550`: major and minor version, the
+/// build, and the update revision (UBR) that monthly updates raise.
+#[must_use]
+pub fn nt_version() -> Option<String> {
+    const KEY: &str = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion";
+    let major = registry_dword(KEY, "CurrentMajorVersionNumber").unwrap_or(10);
+    let minor = registry_dword(KEY, "CurrentMinorVersionNumber").unwrap_or(0);
+    let build = os_build()?;
+    Some(match registry_dword(KEY, "UBR") {
+        Some(revision) => std::format!("{major}.{minor}.{build}.{revision}"),
+        None => std::format!("{major}.{minor}.{build}"),
+    })
+}
+
 /// The feature update's name, e.g. `24H2`.
 #[must_use]
 pub fn os_release() -> Option<String> {
@@ -480,6 +494,32 @@ fn registry_string(subkey: &str, value: &str) -> Option<String> {
     // `size` is in bytes and counts the terminator.
     let chars = (size as usize / 2).saturating_sub(1);
     Some(String::from_utf16_lossy(&buffer[..chars.min(buffer.len())]))
+}
+
+/// A `REG_DWORD` under `HKEY_LOCAL_MACHINE`.
+fn registry_dword(subkey: &str, value: &str) -> Option<u32> {
+    use windows_sys::Win32::System::Registry::{
+        HKEY_LOCAL_MACHINE, RRF_RT_REG_DWORD, RegGetValueW,
+    };
+
+    let subkey = wide(subkey);
+    let value = wide(value);
+    let mut data = 0u32;
+    let mut size = u32::try_from(std::mem::size_of::<u32>()).unwrap_or(4);
+
+    // SAFETY: both names are NUL-terminated, and `data` is a DWORD described by `size`.
+    let status = unsafe {
+        RegGetValueW(
+            HKEY_LOCAL_MACHINE,
+            subkey.as_ptr(),
+            value.as_ptr(),
+            RRF_RT_REG_DWORD,
+            std::ptr::null_mut(),
+            (&raw mut data).cast(),
+            &raw mut size,
+        )
+    };
+    (status == ERROR_SUCCESS).then_some(data)
 }
 
 /// A NUL-terminated UTF-16 copy, as every `W` entry point wants.

@@ -212,6 +212,7 @@ fn every_line_is_filled_in() {
     let out = cash("coolfetch --no-color --no-logo");
     for label in [
         "OS",
+        "Kernel",
         "Uptime",
         "Shell",
         "Terminal",
@@ -223,4 +224,46 @@ fn every_line_is_filled_in() {
         assert!(!value.is_empty(), "{label} is missing: {}", out.stdout);
         assert!(value != "?", "{label} could not be determined");
     }
+}
+
+#[test]
+fn the_logo_sits_beside_os_to_the_first_disk_split_at_terminal() {
+    // The layout the user drew: a 20-column gutter, the title and its rule clear of the
+    // logo, the panes beside OS through the first disk, and a gap beside Terminal.
+    let out = cash("coolfetch --no-color");
+    let lines: Vec<&str> = out.stdout.lines().collect();
+    assert!(lines.len() >= 11, "{}", out.stdout);
+    let pane = "  #######  #######  ";
+    let blank = " ".repeat(20);
+    for (row, line) in lines.iter().enumerate() {
+        let art = if (2..=5).contains(&row) || (7..=10).contains(&row) {
+            pane
+        } else {
+            blank.as_str()
+        };
+        assert!(line.starts_with(art), "row {row}: {line:?}");
+        assert!(
+            !line.get(20..).unwrap_or("").starts_with(' '),
+            "row {row}: {line:?}"
+        );
+        assert_eq!(line.trim_end(), *line, "row {row} has trailing spaces");
+    }
+    assert!(
+        lines[2].get(20..).unwrap_or("").starts_with("OS: "),
+        "{}",
+        out.stdout
+    );
+    assert!(
+        lines[3]
+            .get(20..)
+            .unwrap_or("")
+            .starts_with("Kernel: Windows_NT 10."),
+        "{}",
+        out.stdout
+    );
+    assert!(
+        lines[6].get(20..).unwrap_or("").starts_with("Terminal: "),
+        "{}",
+        out.stdout
+    );
 }
