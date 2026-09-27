@@ -1011,6 +1011,14 @@ Starship is Rust and emits `\n`, so D20 never touches its output.
 Cost accepted: three artifacts to keep in sync per release. `cargo install` remains
 available and is the M0–M2 distribution channel, when the audience is one person.
 
+Refined with the user, 2026-09-28 (ROADMAP item 18, [packaging
+evaluation](research/packaging-evaluation.md)): **Scoop first**, from the author's own
+bucket `tomcoolpxl/scoop-bucket`; **winget later**, with a per-user **Inno Setup**
+installer, since a portable winget package cannot upgrade a running `cash.exe` and the
+installer type cannot change once published. Both install as a normal user; nothing
+needs admin. The Terminal fragment is written on every install and removed on uninstall.
+`cash` is taken on crates.io, so `cargo install` needs another crate name.
+
 ### D39 — Terminal shell integration is on by default
 
 cash emits OSC 133 (prompt / command / exit-code marks) and OSC 9;9 (cwd reporting).

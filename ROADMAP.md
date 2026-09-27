@@ -28,6 +28,7 @@ Feature work follows the sequence below.
 | 15 | ConPTY probe harness, then the interactive and Readline 5.3 items | **Complete** (cash reports `BASH_VERSION=5.3.15`) | Section 15 below |
 | 16 | `cash --link-tools`: hard links so programs outside cash can run its tools | **Complete** | Section 16 below; spec D65 |
 | 17 | What fish has at the prompt: highlighting, bash's Alt-. and Ctrl-X Ctrl-E, `abbr`, a collapsing prompt, folder history, carapace completions | **Complete** | Section 17 below; spec D59–D63 |
+| 18 | Installing cash: a Scoop bucket now, winget with an Inno Setup installer later; the tool links on the user PATH on request | **Active** | [Packaging evaluation and decisions](research/packaging-evaluation.md); section 18 below; spec D38, D65 |
 | — | Found on the way (not planned items) | **Complete** | MSYS2 argument encoding (spec D52); `shopt winpaths` and bash-worded `cd` errors (D53); a `TERM` that no longer reaches the whole console (D21) |
 
 The authoritative feature order is therefore:
@@ -38,7 +39,7 @@ Bash 5.2 completion (done)  ->  native awk (done)  ->  native sed (done)  ->  bu
   ->  fuser / lsof subset (done)  ->  ss subset (done)  ->  BusyBox-gap tools (done)
   ->  graceful signals for own jobs (done)  ->  exec path for bundled tools (done)
   ->  bc against GNU bc (done)  ->  Bash 5.3 remainder (no terminal) (done)  ->  ConPTY harness + 5.3 interactive (done)  ->  tool links
-  +  fish's prompt conveniences (done)
+  +  fish's prompt conveniences (done)  ->  installing cash: Scoop, then winget (active)
 ```
 
 ## 1. Finish Bash 5.2
@@ -432,7 +433,38 @@ prompt that cash did not. Decided, in this order:
   users too.
 
 Still open: the Scoop and winget manifests (D38) do not exist yet, so nothing yet offers
-carapace at install time; `cash doctor` suggests it instead.
+carapace at install time; `cash doctor` suggests it instead. Item 18 builds them.
+
+## 18. Installing cash: Scoop now, winget later
+
+The question began with `cash --link-tools`: is it tested, and should cash put its folder
+on PATH? It widened to installing cash as a normal user, without admin. The research,
+with sources, is in [the packaging evaluation](research/packaging-evaluation.md).
+Decided with the user, 2026-09-28:
+
+- **Scoop only, for now**, from `tomcoolpxl/scoop-bucket`, a bucket of the author's own
+  that its scheduled action keeps current. winget follows, with an **Inno Setup**
+  per-user installer: a portable winget package cannot upgrade while `cash.exe` runs,
+  and the installer type cannot change once published. Chocolatey is not planned; its
+  normal setup needs admin.
+- **The tool links on PATH are opt-in**, and go at the **front of the user PATH**, where
+  they win over Scoop's BusyBox shims while System32's `find`, `sort` and `timeout` still
+  win for `.bat` files. **cash writes PATH itself**, keeping `REG_EXPAND_SZ` and `%VAR%`
+  entries, in place of the PowerShell line it printed, which flattened them.
+- **A Windows Terminal profile** is written on every install and removed on uninstall.
+- **`tomcoolpxl/cash` goes public**, so its release zips can be downloaded.
+- **Unsigned for now**; the SignPath Foundation once cash has visible users.
+
+Work, in order:
+
+1. `cash.exe` links the C runtime statically (it needed `VCRUNTIME140.dll`), and CI checks
+   it; the zip carries `NOTICE`, `licenses/` and the third-party licences.
+2. An icon and a version resource in `cash.exe`.
+3. `--link-tools` renames a running link aside instead of stopping halfway; options to put
+   the links folder on the user PATH and to undo it all.
+4. Commands that write and remove the Windows Terminal fragment.
+5. `bucket/cash.json` for the bucket, and the README's install section.
+6. Later: the Inno Setup installer and the winget submission.
 
 ## Keeping the roadmap current
 
