@@ -279,7 +279,11 @@ fn build_batch_command<S: AsRef<OsStr>>(
         .iter()
         .map(|a| a.as_ref().to_string_lossy().into_owned())
         .collect();
-    let mut inner = cash_win32::cmd::escape_for_cmd(command_name);
+    // `cmd` reads `/` as a switch character, so `./showargs.cmd .` would run the command
+    // `.` with the switch `/showargs.cmd`. Hand it the same path with backslashes; the
+    // spelling stays relative, so `%0` and `%~dp0` still name the script.
+    let command_name = command_name.replace('/', "\\");
+    let mut inner = cash_win32::cmd::escape_for_cmd(&command_name);
     for arg in &string_args {
         inner.push(' ');
         inner.push_str(&cash_win32::cmd::escape_for_cmd(arg));
