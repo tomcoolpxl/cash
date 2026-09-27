@@ -126,19 +126,32 @@ pub fn roots() -> Vec<u32> {
 }
 
 /// Drop the job for a process that has exited, releasing its handle.
+///
+/// Whatever the process left running keeps running (see [`JobObject::release`]).
 pub fn forget(pid: u32) {
-    if let Ok(mut registry) = registry().lock() {
-        registry.remove(&pid);
+    let job = registry().lock().ok().and_then(|mut r| r.remove(&pid));
+    if let Some(job) = job {
+        job.release();
     }
 }
 
 /// Discard jobs whose root process is gone.
 ///
 /// Called opportunistically so a long-lived interactive session does not accumulate a
-/// handle per command ever run.
+/// handle per command ever run. A finished command's descendants — an editor window a
+/// launcher started — are left running, not reaped with the handle.
 pub fn sweep() {
     let Ok(mut registry) = registry().lock() else {
         return;
     };
-    registry.retain(|&pid, _| crate::process::is_pid_alive(pid));
+    let dead: Vec<u32> = registry
+        .keys()
+        .copied()
+        .filter(|&pid| !crate::process::is_pid_alive(pid))
+        .collect();
+    for pid in dead {
+        if let Some(job) = registry.remove(&pid) {
+            job.release();
+        }
+    }
 }

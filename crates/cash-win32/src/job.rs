@@ -259,6 +259,20 @@ impl JobObject {
         Ok(())
     }
 
+    /// Close the job *without* terminating what is still in it.
+    ///
+    /// Clears `KILL_ON_JOB_CLOSE` first, so the processes left behind keep running, as
+    /// bash leaves a finished command's orphans running. `code .` is the case: its
+    /// launcher starts the editor window and exits, and closing the launcher's job
+    /// with the flag set closed the window with it.
+    pub fn release(self) {
+        // A failure leaves the flag set, and closing then reaps the job as it always did.
+        let _ = self.apply(JobConfig {
+            kill_on_close: false,
+            allow_breakaway: false,
+        });
+    }
+
     /// The raw job handle, for callers that need it during process creation.
     #[must_use]
     pub const fn as_raw(&self) -> HANDLE {

@@ -113,6 +113,39 @@ fn dropping_the_job_reaps_the_whole_tree() {
 }
 
 #[test]
+fn releasing_the_job_leaves_the_tree_running() {
+    // What cash does with a finished command's job: `code .` leaves its editor window in
+    // it, and closing the job must not close the window.
+    let job = JobObject::for_pipeline().expect("create job");
+    let mut child = spawn_tree();
+    let child_pid = child.id();
+
+    job.assign_child(&child).expect("assign child to job");
+    assert!(
+        wait_until(Duration::from_secs(10), || {
+            job.process_ids().is_ok_and(|ids| ids.len() >= 2)
+        }),
+        "grandchild never joined the job, so this test would not prove anything"
+    );
+
+    job.release();
+
+    std::thread::sleep(Duration::from_millis(500));
+    assert!(
+        matches!(child.try_wait(), Ok(None)),
+        "child {child_pid} was reaped when its job was released"
+    );
+    assert!(is_pid_alive(child_pid));
+
+    let _ = Command::new("taskkill")
+        .args(["/f", "/t", "/pid", &child_pid.to_string()])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+    let _ = child.wait();
+}
+
+#[test]
 fn breakaway_is_opt_in() {
     // D45 records that permitting breakaway weakens D6 for every child, not just the
     // intended one. Per-pipeline jobs must therefore not permit it.
