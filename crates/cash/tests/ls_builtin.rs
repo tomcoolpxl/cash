@@ -498,3 +498,34 @@ fn ls_long_w_is_the_access_list_answer_not_just_read_only() {
     assert!(out.stdout.starts_with("drwxrwxr-x"), "{}", out.stdout);
     set_attributes(&folder, &["-r"]);
 }
+
+#[test]
+fn ls_long_colours_every_column_when_colour_is_on() {
+    let scratch = Scratch::new("column-colours");
+    std::fs::write(scratch.path().join("f.txt"), b"x").unwrap();
+    let dir = scratch.path().to_string_lossy().replace('\\', "/");
+
+    let out = cash(&format!("ls -l --color=always '{dir}/f.txt'"));
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    // lsd's scheme: r yellow, w red, - grey; the owner (this user) pale yellow; a small
+    // size pale; a date from the last hour bright green.
+    assert!(
+        out.stdout
+            .starts_with("\x1b[90m-\x1b[0m\x1b[33mr\x1b[0m\x1b[31mw\x1b[0m"),
+        "{:?}",
+        out.stdout
+    );
+    assert!(out.stdout.contains("\x1b[38;5;230m"), "{:?}", out.stdout);
+    assert!(
+        out.stdout.contains("\x1b[38;5;229m1\x1b[0m"),
+        "{:?}",
+        out.stdout
+    );
+    assert!(out.stdout.contains("\x1b[38;5;40m"), "{:?}", out.stdout);
+
+    // Off means off, for every column.
+    let out = cash(&format!("ls -l --color=never '{dir}/f.txt'"));
+    assert!(!out.stdout.contains('\x1b'), "{:?}", out.stdout);
+    let out = cash(&format!("ls -l '{dir}/f.txt' | cat"));
+    assert!(!out.stdout.contains('\x1b'), "{:?}", out.stdout);
+}

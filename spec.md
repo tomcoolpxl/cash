@@ -1886,6 +1886,14 @@ come from the directory listing instead of opening it twice. Plain `ls -a` of
 `C:/Windows/System32` went from 1.4 s to 12 ms, and `ls -la` from 1.45 s to 1.04 s with
 the access check included.
 
+Last, the user preferred the long format's colours as lsd (on Kali) draws them: with colour
+on, `-l` now colours every column in lsd's theme, not only the name, as GNU ls does. The
+permission letters one by one (the type blue, `r` yellow, `w` red, `x` green, `-` grey);
+owner and group pale yellow when they are this user and grey for any other account, so
+`Administrators` or `SYSTEM` stands out; the size by magnitude; the date by age, bright
+green within the hour. Each column is padded before it is coloured, and `--color=never`
+or a pipe leaves it all plain. Names still take `LS_COLORS`.
+
 ---
 
 ## 4. Deliberate divergences from bash

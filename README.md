@@ -217,7 +217,9 @@ as `C:/…`, like everything else cash prints.
 `ls` takes what lsd adds to it: `ls --icons` puts a Nerd Font icon before each name
 (`--icons-theme=unicode` for a terminal without one), `--tree` draws folders as a tree,
 names are coloured by kind and extension from `LS_COLORS` or `dircolors`' defaults, and
-`--group-directories-first`, `-X`, `-v` and `-U` sort as in GNU ls. For icons every time,
+`--group-directories-first`, `-X`, `-v` and `-U` sort as in GNU ls. `ls -l` colours
+every column as lsd does: permission letters, your files' owner, sizes by magnitude and
+dates by age. For icons every time,
 put `alias ls='ls --icons'` in `~/.cashrc`. With `-l`, `w` says whether you may write the
 file by its access list; `--attributes` adds Windows' `darhs` letters, and files both
 hidden and system stay out of a listing without `-a`, as in Explorer.

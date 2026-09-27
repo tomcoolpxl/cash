@@ -49,7 +49,8 @@ List information about the FILEs (the current directory by default).
       --group-directories-first
                              group directories before files
       --color[=WHEN]         color the output: always, auto (the default), never;
-                               the colors are LS_COLORS's, or dircolors' defaults
+                               names take LS_COLORS's colors, or dircolors'
+                               defaults; with -l, the other columns take lsd's
       --icons[=WHEN]         show an icon before each name: always, auto (when the
                                output is a terminal, the default), never
       --icons-theme=THEME    fancy (Nerd Font glyphs, the default) or unicode
@@ -239,6 +240,8 @@ enum IconTheme {
 struct Look {
     colors: Option<lscolors::LsColors>,
     icons: Option<IconTheme>,
+    /// This process's account, whose files `-l` shows in the owner's colour.
+    me: String,
 }
 
 /// A command line `ls` refuses, with its message.
@@ -402,6 +405,11 @@ impl LsCommand {
             )
         });
         Ok(Look {
+            me: if colors.is_some() && self.long {
+                cash_win32::fs::current_user()
+            } else {
+                String::new()
+            },
             colors,
             icons: icons.then_some(theme),
         })
@@ -665,26 +673,35 @@ impl LsCommand {
                 .and_then(|prefixes| prefixes.get(index))
                 .map_or("", String::as_str);
 
-            let permissions = if self.attributes {
-                std::format!("{} {}", item.permissions, attribute_letters(item))
+            // Each column padded first, then coloured, so the escapes never count as width.
+            let colour = look.colors.is_some();
+            let mut permissions = if colour {
+                paint_permissions(&item.permissions)
             } else {
                 item.permissions.clone()
             };
+            if self.attributes {
+                permissions.push(' ');
+                permissions.push_str(&attribute_letters(item));
+            }
+            let owner = std::format!("{:<max_owner_len$}", item.owner);
+            let group = std::format!("{:<max_group_len$}", item.group);
+            let size = std::format!("{size_str:>max_size_len$}");
+            let (owner, group, size, date) = if colour {
+                let me = look.me.as_str();
+                (
+                    paint(owner_colour(&item.owner, me), &owner),
+                    paint(owner_colour(&item.group, me), &group),
+                    paint(size_colour(item.size), &size),
+                    paint(date_colour(item.mtime), &date_str),
+                )
+            } else {
+                (owner, group, size, date_str)
+            };
             writeln!(
                 context.stdout(),
-                "{} {:>links_w$} {:<owner_w$} {:<group_w$} {:>size_w$} {} {}{}",
-                permissions,
+                "{permissions} {:>max_links_len$} {owner} {group} {size} {date} {prefix}{display_name}",
                 item.links,
-                item.owner,
-                item.group,
-                size_str,
-                date_str,
-                prefix,
-                display_name,
-                links_w = max_links_len,
-                owner_w = max_owner_len,
-                group_w = max_group_len,
-                size_w = max_size_len,
             )?;
         }
 
@@ -841,6 +858,67 @@ fn style_for(colors: &lscolors::LsColors, item: &ItemInfo) -> Option<nu_ansi_ter
         colors.style_for_indicator(indicator)
     };
     style.map(lscolors::Style::to_nu_ansi_term_style)
+}
+
+/// Wraps `text` in an SGR colour.
+fn paint(sgr: &str, text: &str) -> String {
+    std::format!("\x1b[{sgr}m{text}\x1b[0m")
+}
+
+/// The permission string with lsd's colours letter by letter: the type blue, `r`
+/// yellow, `w` red, `x` green, `-` grey.
+fn paint_permissions(permissions: &str) -> String {
+    let mut out = String::new();
+    for (index, letter) in permissions.chars().enumerate() {
+        let sgr = match letter {
+            'd' | 'l' if index == 0 => "1;34",
+            'r' => "33",
+            'w' => "31",
+            'x' | 's' | 't' => "32",
+            _ => "90",
+        };
+        out.push_str(&paint(sgr, &letter.to_string()));
+    }
+    out
+}
+
+/// The owner or group column: pale yellow when it is this user, grey for any other
+/// account (`Administrators`, `SYSTEM`, `TrustedInstaller`), so those stand out.
+fn owner_colour(account: &str, me: &str) -> &'static str {
+    if account.eq_ignore_ascii_case(me) {
+        "38;5;230"
+    } else {
+        "38;5;245"
+    }
+}
+
+/// The size by magnitude, as lsd's theme: nothing grey, under a megabyte pale, under a
+/// gigabyte orange, and a gigabyte or more a deeper, bold orange.
+const fn size_colour(bytes: u64) -> &'static str {
+    const MB: u64 = 1024 * 1024;
+    const GB: u64 = 1024 * MB;
+    match bytes {
+        0 => "38;5;245",
+        b if b < MB => "38;5;229",
+        b if b < GB => "38;5;216",
+        _ => "1;38;5;172",
+    }
+}
+
+/// The date by age, as lsd's theme: within the hour bright green, within the day green,
+/// older teal.
+fn date_colour(mtime: SystemTime) -> &'static str {
+    let age = SystemTime::now()
+        .duration_since(mtime)
+        .unwrap_or_default()
+        .as_secs();
+    if age < 3600 {
+        "38;5;40"
+    } else if age < 86_400 {
+        "38;5;42"
+    } else {
+        "38;5;36"
+    }
 }
 
 /// `LS_COLORS` as `eval "$(dircolors)"` would set it: the colours for each kind of file,
