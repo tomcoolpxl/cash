@@ -562,3 +562,26 @@ fn conpty_transient_prompt_replaces_an_entered_lines_prompt() {
     session.send("exit 0\r").unwrap();
     assert_eq!(session.wait().expect("process did not exit"), 0);
 }
+
+/// Keys typed right after a `bind -x` key, read in the same batch, reach the next prompt;
+/// the line editor dropped them (vendor/reedline/CASH-PATCHES.md, patch 5).
+#[test]
+fn conpty_keys_after_a_bound_key_reach_the_next_prompt() {
+    let mut session = start_reedline_cash();
+    session
+        .expect("PROMPT$", Duration::from_secs(10))
+        .expect("prompt displayed");
+    session.send("bind -x '\"\\C-t\": true'\r").unwrap();
+    session
+        .settle(Duration::from_millis(300), Duration::from_secs(5))
+        .unwrap();
+
+    // One write: the bound key, then a whole command typed ahead.
+    session.send("\x14echo TYPED_AHEAD_$((2 + 2))\r").unwrap();
+    session
+        .expect("TYPED_AHEAD_4", Duration::from_secs(10))
+        .expect("keys typed after a bound key were lost");
+
+    session.send("exit 0\r").unwrap();
+    assert_eq!(session.wait().expect("process did not exit"), 0);
+}

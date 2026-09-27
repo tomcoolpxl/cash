@@ -56,3 +56,11 @@ It sits outside the workspace, so cash's lints do not apply to it. Its own tests
    `gco` stayed as typed. The edit now runs up to each space it inserts, tries expansion
    there, and goes on. A bracketed paste arrives as one inserted string rather than as
    spaces, so pasted text still never expands, as in fish.
+
+5. **Keys typed after a bound key are kept** (`src/engine.rs`). A key bound to a host
+   command (`bind -x`, and cash's own Ctrl-X Ctrl-E and Alt-arrows) ends the read, and
+   Reedline dropped the rest of the batch it arrived in: typing on straight after Ctrl-R
+   for atuin, or after Ctrl-T for fzf, lost those keys. The rest of the batch is now kept,
+   unparsed, and read first by the next read, so it meets the bindings the command may
+   have changed. Keys typed after Enter never reach this batch: the console is read only
+   up to an Enter (crossterm's patch).

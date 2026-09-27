@@ -164,6 +164,10 @@ pub struct Reedline {
 
     transient_prompt: Option<Box<dyn Prompt>>,
 
+    // cash (CASH-PATCHES.md, patch 5): input read together with a key that runs a host
+    // command, left for the next read.
+    pending_input: Vec<Event>,
+
     // Edit Mode: Vi, Emacs
     edit_mode: Box<dyn EditMode>,
 
@@ -368,6 +372,7 @@ impl Reedline {
             last_render_snapshot: None,
             painter,
             transient_prompt: None,
+            pending_input: Vec::new(),
             edit_mode,
             completer,
             quick_completions: false,
@@ -1071,9 +1076,10 @@ impl Reedline {
                 }
             }
 
-            let mut events: Vec<Event> = vec![];
+            // cash patch 5: what a host command's key left behind is read first.
+            let mut events: Vec<Event> = std::mem::take(&mut self.pending_input);
 
-            if !self.immediately_accept {
+            if events.is_empty() && !self.immediately_accept {
                 if self.input_needs_polling() || completer_pending {
                     if event::poll(self.poll_interval)? {
                         events.push(crossterm::event::read()?);
@@ -1214,7 +1220,8 @@ impl Reedline {
         let mut reedline_events: Vec<ReedlineEvent> = vec![];
         let mut edits = vec![];
         let mut resize = None;
-        for event in events {
+        let mut events = events.into_iter();
+        while let Some(event) = events.next() {
             if let Ok(event) = ReedlineRawEvent::try_from(event) {
                 match self.edit_mode.parse_event(event) {
                     ReedlineEvent::Edit(edit) => edits.extend(edit),
@@ -1223,7 +1230,16 @@ impl Reedline {
                         if !edits.is_empty() {
                             reedline_events.push(ReedlineEvent::Edit(std::mem::take(&mut edits)));
                         }
+                        // cash (CASH-PATCHES.md, patch 5): a host command ends this read,
+                        // and the rest of the batch was dropped with it: keys typed while a
+                        // `bind -x` command started were lost. Keep them, unparsed, for the
+                        // next read; the command may change the bindings they meet.
+                        let ends_the_read = matches!(event, ReedlineEvent::ExecuteHostCommand(_));
                         reedline_events.push(event);
+                        if ends_the_read {
+                            self.pending_input.extend(&mut events);
+                            break;
+                        }
                     }
                 }
             }
@@ -3630,6 +3646,40 @@ mod tests {
             _ => panic!("expected Edit event"),
         });
         assert_eq!(reedline.current_buffer_contents(), "git commit");
+    }
+
+    /// cash patch 5: keys read together with a key that runs a host command are kept for
+    /// the next read instead of being dropped.
+    #[test]
+    fn keys_read_with_a_host_command_key_are_kept_for_the_next_read() {
+        let mut keybindings = crate::default_emacs_keybindings();
+        keybindings.add_binding(
+            KeyModifiers::CONTROL,
+            KeyCode::Char('t'),
+            ReedlineEvent::ExecuteHostCommand("bound".into()),
+        );
+        let mut reedline = Reedline::create().with_edit_mode(Box::new(Emacs::new(keybindings)));
+        reedline.painter.force_prompt_anchored_for_test(0);
+        let prompt = DefaultPrompt::default();
+
+        let batch = vec![
+            Event::Key(KeyEvent::new(KeyCode::Char('t'), KeyModifiers::CONTROL)),
+            Event::Key(ch('a')),
+            Event::Key(ch('b')),
+        ];
+        let flow = reedline.process_input_batch(&prompt, batch).expect("batch ok");
+        assert!(matches!(
+            flow,
+            ControlFlow::Break(Signal::HostCommand(command)) if command == "bound"
+        ));
+        assert_eq!(reedline.current_buffer_contents(), "");
+        assert_eq!(reedline.pending_input.len(), 2);
+
+        let pending = std::mem::take(&mut reedline.pending_input);
+        let _ = reedline
+            .process_input_batch(&prompt, pending)
+            .expect("batch ok");
+        assert_eq!(reedline.current_buffer_contents(), "ab");
     }
 
     /// cash patch 4: keys read together arrive as one merged edit, whose first command is
