@@ -371,8 +371,10 @@ fn logout_builtin_requires_login_shell() {
         non_login.stderr
     );
 
+    // A login shell, without the runner's own ~/.profile, whose last status logout would
+    // otherwise exit with.
     let login_out = Command::new(CASH)
-        .args(["--login", "-c", "logout"])
+        .args(["--login", "--noprofile", "-c", "logout"])
         .output()
         .expect("run cash");
     assert_eq!(login_out.status.code(), Some(0));

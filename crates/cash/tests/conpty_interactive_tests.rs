@@ -30,11 +30,14 @@ fn start_interactive_cash() -> ConPtySession {
         cash_path.display()
     );
 
-    // Start cash with isolated flags and basic backend for automated ConPTY testing.
+    // Start cash with isolated flags and basic backend for automated ConPTY testing: no
+    // startup file of whoever runs the tests, whose history format or banner would change
+    // what the screen shows.
     ConPtySession::start(
         &cash_path,
         &[
             "--noprofile",
+            "--norc",
             "--no-config",
             "--disable-bracketed-paste",
             "--disable-color",
