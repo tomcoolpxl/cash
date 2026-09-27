@@ -15,7 +15,7 @@ Feature work follows the sequence below.
 | 2 | Absorb and port a native `awk` | **Complete** | [`posixutils-rs` AWK evaluation](research/posixutils-rs-evaluation.md) |
 | 3 | Absorb and integrate a native `sed` | **Complete** | [`uutils/sed` evaluation](research/uutils-sed-evaluation.md) |
 | 4 | Expand bundled userland | **Complete** | `stat`, `tty`, `install`, `pathchk`, `nohup`, `who`, `users`, `pinky`, `logname`, `hostid` |
-| 5 | Bash 5.3 compatibility work | **Active** | [Bash 5.3 audit](research/bash-reference/bash-5.3-audit.md): portable and POSIX-mode items probed against Bash 5.3.15 |
+| 5 | Bash 5.3 compatibility work | **Complete** (cash reports `BASH_VERSION=5.3.15`) | [Bash 5.3 audit](research/bash-reference/bash-5.3-audit.md): every item probed against Bash 5.3.15, by script and on a ConPTY |
 | 6 | Differential corpus fixes | **Active** | [`tests/corpus`](tests/corpus): sourced sed/awk/Bash one-liners run against Git Bash 5.3 with GNU sed and gawk |
 | 7 | Line-ending controls: sed `-b`, `CASH_EOL`, `dos2unix`/`unix2dos` | **Complete** | Section 7 below; spec D49 |
 | 8 | `fuser` and an `lsof` subset | **Complete** | Section 8 below; spec D50 |
@@ -34,7 +34,7 @@ The authoritative feature order is therefore:
 
 ```text
 Bash 5.2 completion (done)  ->  native awk (done)  ->  native sed (done)  ->  bundled userland (done)
-  ->  Bash 5.3 (active)  +  corpus fixes (active)  ->  line-ending controls (done)
+  ->  Bash 5.3 (done)  +  corpus fixes (active)  ->  line-ending controls (done)
   ->  fuser / lsof subset (done)  ->  ss subset (done)  ->  BusyBox-gap tools (done)
   ->  graceful signals for own jobs (done)  ->  exec path for bundled tools (done)
   ->  bc against GNU bc (done)  ->  Bash 5.3 remainder (no terminal) (done)  ->  ConPTY harness + 5.3 interactive (done)  ->  tool links
