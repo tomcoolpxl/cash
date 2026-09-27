@@ -1837,6 +1837,32 @@ Asked for 2026-09-27, as a builtin with dashes for options and a help option.
 It shadows `System32\where.exe`, which `cash doctor` names among the deliberate
 shadows; `enable -n where` or the full path reaches the Windows one.
 
+### D67 — `ls`: icons, a colour per kind of file, a tree, and more of GNU's sorts
+
+On Arch the user's `ls` was lsd, which draws an icon for each kind of file. cash's `ls` is
+its own (D48), so the question was what lsd adds and whether `ls` could have it. Decided
+with the user, 2026-09-27, from lsd 1.2.0's options:
+
+- **Icons**, by option only: `--icons[=always|auto|never]`, bare `--icons` meaning `auto`,
+  so a pipe or a file never gets them. `--icons-theme=fancy` (the default) is lsd's Nerd
+  Font theme, matched by name, then extension, then kind, lsd's order; its tables are
+  generated into `ls_icon_table.rs` (Apache-2.0, `NOTICE`). `--icons-theme=unicode` is
+  lsd's plain-Unicode set, by kind only, for a terminal without a Nerd Font.
+- **A colour per kind of file**, as GNU ls gives with `LS_COLORS`: the shell's own
+  `LS_COLORS` when set, otherwise `dircolors`' defaults (uutils' copy), which colour
+  archives, backups and temporary files by extension as well as folders, links and
+  programs. Parsing is the `lscolors` crate's; a program is known by its extension or a
+  `#!` line, as before.
+- **`--tree`** with **`--depth=NUM`** (lsd's), which also limits `-R`; links to folders
+  are shown and not followed.
+- **`--group-directories-first`**, and GNU's **`-X`**, **`-v`**, **`-U`** and
+  **`--sort=WORD`**, which cash's `ls` lacked.
+
+Two fixes came with it: whether output is a terminal is now asked of the command's own
+standard output, so `ls | grep` inside an interactive cash gets one name a line and no
+colour, and grid columns are measured in screen cells, so icons and non-ASCII names line
+up.
+
 ---
 
 ## 4. Deliberate divergences from bash

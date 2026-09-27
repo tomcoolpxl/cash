@@ -3,20 +3,67 @@
 //! Provides accurate Windows file ownership (SIDs -> Account Names), NTFS hard link
 //! counts, directory subfolder link counts, proper permissions, sorting, and colored
 //! output matching POSIX / BusyBox conventions.
+//!
+//! cash (D67) adds what lsd shows beside GNU `ls`'s own options: icons (`--icons`, Nerd
+//! Font glyphs from lsd's theme, or plain Unicode with `--icons-theme=unicode`), a colour
+//! for each kind of file (`LS_COLORS`, or `dircolors`' defaults without it), a tree
+//! (`--tree`, `--depth`), `--group-directories-first`, and the sorts `-X`, `-v`, `-U` and
+//! `--sort=WORD`.
 
+use std::cell::OnceCell;
 use std::cmp::Ordering;
 use std::fs::Metadata;
-use std::io::{IsTerminal as _, Write as _};
+use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use cash_core::{ExecutionResult, builtins};
 use chrono::{DateTime, Local};
 use clap::Parser;
+use unicode_width::UnicodeWidthStr as _;
+
+use crate::ls_icon_table;
+
+const HELP: &str = "\
+Usage: ls [OPTION]... [FILE]...
+List information about the FILEs (the current directory by default).
+
+  -a, --all                  do not ignore entries starting with .
+  -A, --almost-all           do not list implied . and ..
+  -C                         list entries by columns
+  -d, --directory            list directories themselves, not their contents
+  -F, --classify             append indicator (one of */@) to entries
+  -h, --human-readable       with -l, print sizes like 1K 234M 2G
+  -l                         use a long listing format
+  -r, --reverse              reverse order while sorting
+  -R, --recursive            list subdirectories recursively
+  -S                         sort by file size, largest first
+  -t                         sort by time, newest first
+  -U                         do not sort; list entries in directory order
+  -v                         natural sort of (version) numbers within text
+  -X                         sort alphabetically by entry extension
+  -1                         list one file per line
+      --sort=WORD            sort by WORD instead of name: none (-U), size (-S),
+                               time (-t), version (-v), extension (-X), name
+      --group-directories-first
+                             group directories before files
+      --color[=WHEN]         color the output: always, auto (the default), never;
+                               the colors are LS_COLORS's, or dircolors' defaults
+      --icons[=WHEN]         show an icon before each name: always, auto (when the
+                               output is a terminal, the default), never
+      --icons-theme=THEME    fancy (Nerd Font glyphs, the default) or unicode
+      --tree                 list the directories as a tree
+      --depth=NUM            descend at most NUM levels, with --tree or -R
+      --help                 display this help and exit
+";
 
 /// List information about the FILEs (the current directory by default).
 #[derive(Parser)]
 #[clap(disable_help_flag = true, disable_version_flag = true)]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "one field per flag, as clap derives them"
+)]
 pub(crate) struct LsCommand {
     /// Display this help and exit.
     #[arg(long = "help")]
@@ -70,9 +117,57 @@ pub(crate) struct LsCommand {
     #[arg(short = 'S')]
     sort_by_size: bool,
 
+    /// Sort alphabetically by entry extension.
+    #[arg(short = 'X')]
+    sort_by_extension: bool,
+
+    /// Natural sort of (version) numbers within text.
+    #[arg(short = 'v')]
+    sort_by_version: bool,
+
+    /// Do not sort; list entries in directory order.
+    #[arg(short = 'U')]
+    unsorted: bool,
+
+    /// Sort by WORD instead of name.
+    #[arg(long = "sort", value_name = "WORD")]
+    sort: Option<String>,
+
+    /// Group directories before files.
+    #[arg(long = "group-directories-first")]
+    group_directories_first: bool,
+
     /// Colorize the output (always, auto, never).
-    #[arg(long = "color", value_name = "WHEN")]
+    #[arg(
+        long = "color",
+        value_name = "WHEN",
+        num_args = 0..=1,
+        default_missing_value = "always",
+        require_equals = true
+    )]
     color: Option<String>,
+
+    /// Show an icon before each name (always, auto, never).
+    #[arg(
+        long = "icons",
+        value_name = "WHEN",
+        num_args = 0..=1,
+        default_missing_value = "auto",
+        require_equals = true
+    )]
+    icons: Option<String>,
+
+    /// The icons to show: fancy (Nerd Font) or unicode.
+    #[arg(long = "icons-theme", value_name = "THEME")]
+    icons_theme: Option<String>,
+
+    /// List the directories as a tree.
+    #[arg(long = "tree")]
+    tree: bool,
+
+    /// Descend at most this many levels, with --tree or -R.
+    #[arg(long = "depth", value_name = "NUM")]
+    depth: Option<usize>,
 
     /// Files or directories to list.
     #[arg(value_name = "FILE")]
@@ -97,6 +192,60 @@ struct ItemInfo {
     size: u64,
     mtime: SystemTime,
     symlink_target: Option<String>,
+    /// Whether a symlink's target exists, and whether it is a directory.
+    target: Option<(bool, bool)>,
+    /// Whether the file runs: decided once, since it may read the file's first bytes.
+    executable: OnceCell<bool>,
+}
+
+impl ItemInfo {
+    fn is_executable(&self) -> bool {
+        *self
+            .executable
+            .get_or_init(|| self.kind == EntryKind::File && is_executable(&self.path))
+    }
+}
+
+/// How to order entries.
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum SortKey {
+    Name,
+    Time,
+    Size,
+    Extension,
+    Version,
+    None,
+}
+
+/// Which icons to show.
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum IconTheme {
+    /// Nerd Font glyphs, lsd's theme.
+    Fancy,
+    /// Plain Unicode symbols, which any font has.
+    Unicode,
+}
+
+/// How names are dressed: their colours and their icons.
+struct Look {
+    colors: Option<lscolors::LsColors>,
+    icons: Option<IconTheme>,
+}
+
+/// A command line `ls` refuses, with its message.
+struct Invalid(String);
+
+fn when(value: Option<&str>, option: &str, is_tty: bool) -> Result<bool, Invalid> {
+    match value {
+        None => Ok(false),
+        Some("always" | "yes" | "force") => Ok(true),
+        Some("never" | "no" | "none") => Ok(false),
+        Some("auto" | "tty" | "if-tty") => Ok(is_tty),
+        Some(other) => Err(Invalid(std::format!(
+            "invalid argument '{other}' for '--{option}'\n\
+             Valid arguments are: 'always', 'auto', 'never'"
+        ))),
+    }
 }
 
 impl builtins::Command for LsCommand {
@@ -107,23 +256,24 @@ impl builtins::Command for LsCommand {
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, Self::Error> {
         if self.help {
-            writeln!(
-                context.stdout(),
-                "Usage: {} [OPTION]... [FILE]...",
-                context.command_name
-            )?;
-            writeln!(
-                context.stdout(),
-                "List information about the FILEs (the current directory by default)."
-            )?;
+            write!(context.stdout(), "{HELP}")?;
             return Ok(ExecutionResult::success());
         }
 
-        let is_tty = std::io::stdout().is_terminal();
-        let use_color = match self.color.as_deref() {
-            Some("always" | "yes" | "force") => true,
-            Some("never" | "no" | "none") => false,
-            _ => is_tty,
+        // The command's own standard output, which a pipeline or a redirection replaces
+        // even though the shell's is still the terminal.
+        let is_tty = context.try_fd(1).is_some_and(|f| f.is_terminal());
+        let look = match self.look(&context, is_tty) {
+            Ok(look) => look,
+            Err(Invalid(message)) => {
+                writeln!(context.stderr(), "{}: {message}", context.command_name)?;
+                writeln!(
+                    context.stderr(),
+                    "Try '{} --help' for more information.",
+                    context.command_name
+                )?;
+                return Ok(ExecutionResult::new(2));
+            }
         };
 
         let mut paths = self.paths.clone();
@@ -167,7 +317,7 @@ impl builtins::Command for LsCommand {
         // Print standalone files first.
         if !file_items.is_empty() {
             self.sort_items(&mut file_items);
-            self.render_items(&context, &file_items, use_color, is_tty)?;
+            self.render_items(&context, &file_items, &look, is_tty)?;
             if !dir_paths.is_empty() {
                 writeln!(context.stdout())?;
             }
@@ -175,6 +325,14 @@ impl builtins::Command for LsCommand {
 
         // Print directories.
         for (i, (dir_path, dir_str)) in dir_paths.iter().enumerate() {
+            if self.tree {
+                if i > 0 || !file_items.is_empty() {
+                    writeln!(context.stdout())?;
+                }
+                self.render_tree(&context, dir_path, dir_str, &look)?;
+                continue;
+            }
+
             if multiple_paths || self.recursive {
                 if i > 0 || !file_items.is_empty() {
                     writeln!(context.stdout())?;
@@ -182,7 +340,7 @@ impl builtins::Command for LsCommand {
                 writeln!(context.stdout(), "{dir_str}:")?;
             }
 
-            if let Err(e) = self.list_directory(&context, dir_path, dir_str, use_color, is_tty) {
+            if let Err(e) = self.list_directory(&context, dir_path, dir_str, &look, is_tty, 1) {
                 writeln!(
                     context.stderr(),
                     "{}: cannot open directory '{}': {e}",
@@ -202,41 +360,113 @@ impl builtins::Command for LsCommand {
 }
 
 impl LsCommand {
-    fn sort_items(&self, items: &mut [ItemInfo]) {
-        items.sort_by(|a, b| {
-            let cmp = if self.sort_by_time {
-                b.mtime.cmp(&a.mtime)
-            } else if self.sort_by_size {
-                b.size.cmp(&a.size)
-            } else {
-                // Natural alphabetical sort (case-insensitive on Windows)
-                a.name.to_lowercase().cmp(&b.name.to_lowercase())
-            };
-
-            if cmp == Ordering::Equal {
-                a.name.cmp(&b.name)
-            } else {
-                cmp
+    /// The colours and icons this command line asks for.
+    fn look<SE: cash_core::ShellExtensions>(
+        &self,
+        context: &cash_core::ExecutionContext<'_, SE>,
+        is_tty: bool,
+    ) -> Result<Look, Invalid> {
+        // `--color` alone is `always`, as in GNU ls; no `--color` is `auto`.
+        let color = when(
+            Some(self.color.as_deref().unwrap_or("auto")),
+            "color",
+            is_tty,
+        )?;
+        let icons = when(self.icons.as_deref(), "icons", is_tty)?;
+        let theme = match self.icons_theme.as_deref() {
+            None | Some("fancy") => IconTheme::Fancy,
+            Some("unicode") => IconTheme::Unicode,
+            Some(other) => {
+                return Err(Invalid(std::format!(
+                    "invalid argument '{other}' for '--icons-theme'\n\
+                     Valid arguments are: 'fancy', 'unicode'"
+                )));
             }
-        });
+        };
+        self.sort_key()?;
 
-        if self.reverse {
-            items.reverse();
+        let colors = color.then(|| {
+            // The shell's own variable, which `export` need not have reached the process.
+            context.shell.env_str("LS_COLORS").map_or_else(
+                || lscolors::LsColors::from_string(&default_ls_colors()),
+                |value| lscolors::LsColors::from_string(&value),
+            )
+        });
+        Ok(Look {
+            colors,
+            icons: icons.then_some(theme),
+        })
+    }
+
+    fn sort_key(&self) -> Result<SortKey, Invalid> {
+        if let Some(word) = &self.sort {
+            return match word.as_str() {
+                "name" => Ok(SortKey::Name),
+                "none" => Ok(SortKey::None),
+                "size" => Ok(SortKey::Size),
+                "time" => Ok(SortKey::Time),
+                "version" => Ok(SortKey::Version),
+                "extension" => Ok(SortKey::Extension),
+                other => Err(Invalid(std::format!(
+                    "invalid argument '{other}' for '--sort'\n\
+                     Valid arguments are: 'name', 'none', 'size', 'time', 'version', 'extension'"
+                ))),
+            };
+        }
+        Ok(if self.unsorted {
+            SortKey::None
+        } else if self.sort_by_size {
+            SortKey::Size
+        } else if self.sort_by_time {
+            SortKey::Time
+        } else if self.sort_by_extension {
+            SortKey::Extension
+        } else if self.sort_by_version {
+            SortKey::Version
+        } else {
+            SortKey::Name
+        })
+    }
+
+    fn sort_items(&self, items: &mut [ItemInfo]) {
+        let key = self.sort_key().unwrap_or(SortKey::Name);
+        if key != SortKey::None {
+            items.sort_by(|a, b| {
+                let cmp = match key {
+                    SortKey::Time => b.mtime.cmp(&a.mtime),
+                    SortKey::Size => b.size.cmp(&a.size),
+                    SortKey::Extension => extension_of(&a.name)
+                        .to_lowercase()
+                        .cmp(&extension_of(&b.name).to_lowercase())
+                        .then_with(|| compare_names(&a.name, &b.name)),
+                    SortKey::Version => compare_versions(&a.name, &b.name),
+                    SortKey::Name | SortKey::None => compare_names(&a.name, &b.name),
+                };
+
+                if cmp == Ordering::Equal {
+                    a.name.cmp(&b.name)
+                } else {
+                    cmp
+                }
+            });
+
+            if self.reverse {
+                items.reverse();
+            }
+        }
+
+        // Directories first, each group keeping its order, as GNU ls does with -r too.
+        if self.group_directories_first {
+            items.sort_by_key(|item| item.kind != EntryKind::Dir);
         }
     }
 
-    fn list_directory<SE: cash_core::ShellExtensions>(
-        &self,
-        context: &cash_core::ExecutionContext<'_, SE>,
-        dir_path: &Path,
-        dir_str: &str,
-        use_color: bool,
-        is_tty: bool,
-    ) -> Result<(), std::io::Error> {
+    /// A directory's entries, with `.` and `..` under `-a` when `dots` is set, sorted.
+    fn read_entries(&self, dir_path: &Path, dots: bool) -> Result<Vec<ItemInfo>, std::io::Error> {
         let mut items = Vec::new();
 
         // Include . and .. if -a is set.
-        if self.all {
+        if self.all && dots {
             if let Some(dot) = inspect_dot(dir_path, ".") {
                 items.push(dot);
             }
@@ -262,6 +492,19 @@ impl LsCommand {
         }
 
         self.sort_items(&mut items);
+        Ok(items)
+    }
+
+    fn list_directory<SE: cash_core::ShellExtensions>(
+        &self,
+        context: &cash_core::ExecutionContext<'_, SE>,
+        dir_path: &Path,
+        dir_str: &str,
+        look: &Look,
+        is_tty: bool,
+        level: usize,
+    ) -> Result<(), std::io::Error> {
+        let items = self.read_entries(dir_path, true)?;
 
         // In long format, print total blocks at top of directory listing.
         if self.long {
@@ -269,16 +512,17 @@ impl LsCommand {
             writeln!(context.stdout(), "total {total_kb}")?;
         }
 
-        self.render_items(context, &items, use_color, is_tty)?;
+        self.render_items(context, &items, look, is_tty)?;
 
-        // Recursive descent if -R
-        if self.recursive {
+        // Recursive descent if -R, as deep as --depth allows.
+        if self.recursive && self.depth.is_none_or(|depth| level < depth) {
             for item in &items {
                 if item.kind == EntryKind::Dir && item.name != "." && item.name != ".." {
                     let sub_str = format!("{dir_str}/{}", item.name);
                     writeln!(context.stdout())?;
                     writeln!(context.stdout(), "{sub_str}:")?;
-                    let _ = self.list_directory(context, &item.path, &sub_str, use_color, is_tty);
+                    let _ =
+                        self.list_directory(context, &item.path, &sub_str, look, is_tty, level + 1);
                 }
             }
         }
@@ -286,11 +530,65 @@ impl LsCommand {
         Ok(())
     }
 
+    /// `--tree`: the directory, then everything below it with the branches drawn, as
+    /// deep as `--depth` allows. Links to directories are shown, not followed.
+    fn render_tree<SE: cash_core::ShellExtensions>(
+        &self,
+        context: &cash_core::ExecutionContext<'_, SE>,
+        dir_path: &Path,
+        dir_str: &str,
+        look: &Look,
+    ) -> Result<(), std::io::Error> {
+        let mut rows: Vec<(String, ItemInfo)> = Vec::new();
+        if let Some(root) = inspect_path(dir_path, dir_str) {
+            rows.push((String::new(), root));
+        }
+        self.tree_rows(dir_path, "", 1, &mut rows);
+
+        if self.long {
+            let (items, prefixes): (Vec<ItemInfo>, Vec<String>) = rows
+                .into_iter()
+                .map(|(prefix, item)| (item, prefix))
+                .unzip();
+            self.render_long(context, &items, look, Some(&prefixes))?;
+        } else {
+            for (prefix, item) in &rows {
+                writeln!(context.stdout(), "{prefix}{}", self.format_name(item, look))?;
+            }
+        }
+        Ok(())
+    }
+
+    fn tree_rows(
+        &self,
+        dir: &Path,
+        prefix: &str,
+        level: usize,
+        rows: &mut Vec<(String, ItemInfo)>,
+    ) {
+        let Ok(items) = self.read_entries(dir, false) else {
+            return;
+        };
+        let count = items.len();
+        for (index, item) in items.into_iter().enumerate() {
+            let last = index + 1 == count;
+            let branch = if last { "└── " } else { "├── " };
+            let descend =
+                item.kind == EntryKind::Dir && self.depth.is_none_or(|depth| level < depth);
+            let path = item.path.clone();
+            rows.push((std::format!("{prefix}{branch}"), item));
+            if descend {
+                let below = std::format!("{prefix}{}", if last { "    " } else { "│   " });
+                self.tree_rows(&path, &below, level + 1, rows);
+            }
+        }
+    }
+
     fn render_items<SE: cash_core::ShellExtensions>(
         &self,
         context: &cash_core::ExecutionContext<'_, SE>,
         items: &[ItemInfo],
-        use_color: bool,
+        look: &Look,
         is_tty: bool,
     ) -> Result<(), std::io::Error> {
         if items.is_empty() {
@@ -298,21 +596,23 @@ impl LsCommand {
         }
 
         if self.long {
-            self.render_long(context, items, use_color)?;
+            self.render_long(context, items, look, None)?;
         } else if self.one_column || (!is_tty && !self.multi_column) {
-            self.render_single_column(context, items, use_color)?;
+            self.render_single_column(context, items, look)?;
         } else {
-            self.render_grid(context, items, use_color)?;
+            self.render_grid(context, items, look)?;
         }
 
         Ok(())
     }
 
+    /// The long format, each name after its tree branch when there are `prefixes`.
     fn render_long<SE: cash_core::ShellExtensions>(
         &self,
         context: &cash_core::ExecutionContext<'_, SE>,
         items: &[ItemInfo],
-        use_color: bool,
+        look: &Look,
+        prefixes: Option<&[String]>,
     ) -> Result<(), std::io::Error> {
         let max_links_len = items
             .iter()
@@ -333,24 +633,28 @@ impl LsCommand {
             .max()
             .unwrap_or(1);
 
-        for item in items {
+        for (index, item) in items.iter().enumerate() {
             let size_str = if self.human_readable {
                 format_human_size(item.size)
             } else {
                 item.size.to_string()
             };
             let date_str = format_date(item.mtime);
-            let display_name = self.format_name(item, use_color);
+            let display_name = self.format_name(item, look);
+            let prefix = prefixes
+                .and_then(|prefixes| prefixes.get(index))
+                .map_or("", String::as_str);
 
             writeln!(
                 context.stdout(),
-                "{} {:>links_w$} {:<owner_w$} {:<group_w$} {:>size_w$} {} {}",
+                "{} {:>links_w$} {:<owner_w$} {:<group_w$} {:>size_w$} {} {}{}",
                 item.permissions,
                 item.links,
                 item.owner,
                 item.group,
                 size_str,
                 date_str,
+                prefix,
                 display_name,
                 links_w = max_links_len,
                 owner_w = max_owner_len,
@@ -366,10 +670,10 @@ impl LsCommand {
         &self,
         context: &cash_core::ExecutionContext<'_, SE>,
         items: &[ItemInfo],
-        use_color: bool,
+        look: &Look,
     ) -> Result<(), std::io::Error> {
         for item in items {
-            let display_name = self.format_name(item, use_color);
+            let display_name = self.format_name(item, look);
             writeln!(context.stdout(), "{display_name}")?;
         }
         Ok(())
@@ -379,21 +683,24 @@ impl LsCommand {
         &self,
         context: &cash_core::ExecutionContext<'_, SE>,
         items: &[ItemInfo],
-        use_color: bool,
+        look: &Look,
     ) -> Result<(), std::io::Error> {
         let (term_width, _) = crossterm::terminal::size().unwrap_or((80, 24));
         let term_width = (term_width as usize).max(20);
 
-        let pairs: Vec<(String, String)> = items
+        // Columns are measured in the cells a name takes on screen, not its bytes: an
+        // icon, an accented letter or a CJK name is one or two cells whatever its length.
+        let pairs: Vec<(usize, String)> = items
             .iter()
             .map(|i| {
-                let plain = self.format_name_plain(i);
-                let colored = self.format_name(i, use_color);
-                (plain, colored)
+                (
+                    self.format_name_plain(i, look).width(),
+                    self.format_name(i, look),
+                )
             })
             .collect();
 
-        let max_len = pairs.iter().map(|(p, _)| p.len()).max().unwrap_or(1);
+        let max_len = pairs.iter().map(|(width, _)| *width).max().unwrap_or(1);
         let col_width = max_len + 2;
         let num_cols = (term_width / col_width).max(1);
         let num_rows = pairs.len().div_ceil(num_cols);
@@ -403,10 +710,10 @@ impl LsCommand {
             for c in 0..num_cols {
                 let idx = c * num_rows + r;
                 if idx < pairs.len() {
-                    let (ref plain, ref colored) = pairs[idx];
+                    let (width, ref colored) = pairs[idx];
                     line.push_str(colored);
                     if c + 1 < num_cols && (c + 1) * num_rows + r < pairs.len() {
-                        let pad = col_width.saturating_sub(plain.len());
+                        let pad = col_width.saturating_sub(width);
                         for _ in 0..pad {
                             line.push(' ');
                         }
@@ -419,18 +726,28 @@ impl LsCommand {
         Ok(())
     }
 
-    fn format_name_plain(&self, item: &ItemInfo) -> String {
-        let mut s = item.name.clone();
-        if self.classify {
-            match item.kind {
-                EntryKind::Dir => s.push('/'),
-                EntryKind::Symlink => s.push('@'),
-                EntryKind::File => {
-                    if is_executable(&item.path) {
-                        s.push('*');
-                    }
-                }
-            }
+    /// The `-F` indicator for an entry.
+    fn indicator(&self, item: &ItemInfo) -> Option<char> {
+        if !self.classify {
+            return None;
+        }
+        match item.kind {
+            EntryKind::Dir => Some('/'),
+            EntryKind::Symlink => Some('@'),
+            EntryKind::File => item.is_executable().then_some('*'),
+        }
+    }
+
+    /// The name as it shows, without colour: for measuring.
+    fn format_name_plain(&self, item: &ItemInfo, look: &Look) -> String {
+        let mut s = String::new();
+        if let Some(theme) = look.icons {
+            s.push_str(icon_for(theme, item));
+            s.push(' ');
+        }
+        s.push_str(&item.name);
+        if let Some(indicator) = self.indicator(item) {
+            s.push(indicator);
         }
         if let Some(ref target) = item.symlink_target {
             s.push_str(" -> ");
@@ -439,33 +756,25 @@ impl LsCommand {
         s
     }
 
-    fn format_name(&self, item: &ItemInfo, use_color: bool) -> String {
-        let mut s = if use_color {
-            match item.kind {
-                EntryKind::Dir => format!("\x1b[1;34m{}\x1b[0m", item.name),
-                EntryKind::Symlink => format!("\x1b[1;36m{}\x1b[0m", item.name),
-                EntryKind::File => {
-                    if is_executable(&item.path) {
-                        format!("\x1b[1;32m{}\x1b[0m", item.name)
-                    } else {
-                        item.name.clone()
-                    }
-                }
-            }
-        } else {
-            item.name.clone()
+    fn format_name(&self, item: &ItemInfo, look: &Look) -> String {
+        let mut shown = String::new();
+        if let Some(theme) = look.icons {
+            shown.push_str(icon_for(theme, item));
+            shown.push(' ');
+        }
+        shown.push_str(&item.name);
+
+        let mut s = match look
+            .colors
+            .as_ref()
+            .and_then(|colors| style_for(colors, item))
+        {
+            Some(style) => style.paint(&shown).to_string(),
+            None => shown,
         };
 
-        if self.classify {
-            match item.kind {
-                EntryKind::Dir => s.push('/'),
-                EntryKind::Symlink => s.push('@'),
-                EntryKind::File => {
-                    if is_executable(&item.path) {
-                        s.push('*');
-                    }
-                }
-            }
+        if let Some(indicator) = self.indicator(item) {
+            s.push(indicator);
         }
 
         if let Some(ref target) = item.symlink_target {
@@ -474,6 +783,137 @@ impl LsCommand {
         }
 
         s
+    }
+}
+
+/// The colour an entry takes: its kind's, and for a plain file, its name's pattern in
+/// `LS_COLORS` (`*.zip`, `*~`), as GNU ls chooses. An executable is known by its
+/// extension or a `#!` line here, which `lscolors` cannot see on Windows.
+fn style_for(colors: &lscolors::LsColors, item: &ItemInfo) -> Option<nu_ansi_term::Style> {
+    use lscolors::Indicator;
+    let indicator = match (item.kind, item.target) {
+        (EntryKind::Dir, _) => Indicator::Directory,
+        (EntryKind::Symlink, Some((false, _))) => Indicator::OrphanedSymbolicLink,
+        (EntryKind::Symlink, _) => Indicator::SymbolicLink,
+        (EntryKind::File, _) if item.is_executable() => Indicator::ExecutableFile,
+        (EntryKind::File, _) => Indicator::RegularFile,
+    };
+    let style = if indicator == Indicator::RegularFile {
+        colors
+            .style_for_str(&item.name)
+            .or_else(|| colors.style_for_indicator(indicator))
+    } else {
+        colors.style_for_indicator(indicator)
+    };
+    style.map(lscolors::Style::to_nu_ansi_term_style)
+}
+
+/// `LS_COLORS` as `eval "$(dircolors)"` would set it: the colours for each kind of file,
+/// and for archives, backups and temporary files by extension. uutils' copy of
+/// `dircolors`' defaults.
+fn default_ls_colors() -> String {
+    use std::fmt::Write as _;
+    let mut spec = String::new();
+    for (_, code, color) in uucore::colors::FILE_TYPES {
+        let _ = write!(spec, "{code}={color}:");
+    }
+    for (extension, color) in uucore::colors::FILE_COLORS {
+        let _ = write!(spec, "*{extension}={color}:");
+    }
+    spec
+}
+
+/// The icon for an entry: lsd's order, a link as a link, then its name, then its
+/// extension, then its kind.
+fn icon_for(theme: IconTheme, item: &ItemInfo) -> &'static str {
+    let is_dir_link = matches!(item.target, Some((_, true)));
+    match theme {
+        IconTheme::Unicode => match item.kind {
+            EntryKind::Symlink if is_dir_link => "\u{1f5c2}",
+            EntryKind::Symlink => "\u{1f516}",
+            EntryKind::Dir => "\u{1f4c2}",
+            EntryKind::File if item.is_executable() => "\u{1f3d7}",
+            EntryKind::File => "\u{1f4c4}",
+        },
+        IconTheme::Fancy => {
+            if item.kind == EntryKind::Symlink {
+                return if is_dir_link { "\u{f482}" } else { "\u{f481}" };
+            }
+            let name = item.name.to_lowercase();
+            if let Some(icon) = lookup(ls_icon_table::BY_NAME, &name) {
+                return icon;
+            }
+            if item.kind == EntryKind::Dir {
+                return "\u{f115}";
+            }
+            if let Some(icon) = name
+                .rsplit_once('.')
+                .and_then(|(_, extension)| lookup(ls_icon_table::BY_EXTENSION, extension))
+            {
+                return icon;
+            }
+            if item.is_executable() {
+                "\u{f489}"
+            } else {
+                "\u{f016}"
+            }
+        }
+    }
+}
+
+fn lookup(table: &'static [(&'static str, &'static str)], key: &str) -> Option<&'static str> {
+    table
+        .binary_search_by(|(name, _)| (*name).cmp(key))
+        .ok()
+        .map(|index| table[index].1)
+}
+
+/// What `-X` sorts by: the text after the last `.`, empty for a name without one.
+fn extension_of(name: &str) -> &str {
+    name.rsplit_once('.').map_or("", |(_, extension)| extension)
+}
+
+/// Natural alphabetical order, case-insensitive on Windows.
+fn compare_names(a: &str, b: &str) -> Ordering {
+    a.to_lowercase().cmp(&b.to_lowercase())
+}
+
+/// `-v`: names compared with each run of digits as a number, so `file9` comes before
+/// `file10` and `1.9` before `1.10`.
+fn compare_versions(a: &str, b: &str) -> Ordering {
+    let (a, b) = (a.to_lowercase(), b.to_lowercase());
+    let (mut a, mut b) = (a.as_str(), b.as_str());
+    loop {
+        match (a.chars().next(), b.chars().next()) {
+            (None, None) => return Ordering::Equal,
+            (None, Some(_)) => return Ordering::Less,
+            (Some(_), None) => return Ordering::Greater,
+            (Some(x), Some(y)) if x.is_ascii_digit() && y.is_ascii_digit() => {
+                let a_end = a.find(|c: char| !c.is_ascii_digit()).unwrap_or(a.len());
+                let b_end = b.find(|c: char| !c.is_ascii_digit()).unwrap_or(b.len());
+                let (a_digits, a_rest) = a.split_at(a_end);
+                let (b_digits, b_rest) = b.split_at(b_end);
+                let a_trimmed = a_digits.trim_start_matches('0');
+                let b_trimmed = b_digits.trim_start_matches('0');
+                let order = a_trimmed
+                    .len()
+                    .cmp(&b_trimmed.len())
+                    .then_with(|| a_trimmed.cmp(b_trimmed))
+                    .then_with(|| a_digits.len().cmp(&b_digits.len()));
+                if order != Ordering::Equal {
+                    return order;
+                }
+                a = a_rest;
+                b = b_rest;
+            }
+            (Some(x), Some(y)) => {
+                if x != y {
+                    return x.cmp(&y);
+                }
+                a = a.split_at(x.len_utf8()).1;
+                b = b.split_at(y.len_utf8()).1;
+            }
+        }
     }
 }
 
@@ -497,6 +937,8 @@ fn inspect_dot(dir_path: &Path, name: &str) -> Option<ItemInfo> {
         size: metadata.len(),
         mtime,
         symlink_target: None,
+        target: None,
+        executable: OnceCell::new(),
     })
 }
 
@@ -525,12 +967,16 @@ fn inspect_path(path: &Path, display_name: &str) -> Option<ItemInfo> {
     let size = metadata.len();
     let mtime = metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH);
 
-    let symlink_target = if is_symlink {
-        std::fs::read_link(path)
-            .ok()
-            .map(|p| p.to_string_lossy().into_owned())
+    let (symlink_target, target) = if is_symlink {
+        let followed = std::fs::metadata(path);
+        (
+            std::fs::read_link(path)
+                .ok()
+                .map(|p| p.to_string_lossy().into_owned()),
+            Some((followed.is_ok(), followed.is_ok_and(|m| m.is_dir()))),
+        )
     } else {
-        None
+        (None, None)
     };
 
     Some(ItemInfo {
@@ -544,6 +990,8 @@ fn inspect_path(path: &Path, display_name: &str) -> Option<ItemInfo> {
         size,
         mtime,
         symlink_target,
+        target,
+        executable: OnceCell::new(),
     })
 }
 
@@ -635,5 +1083,34 @@ fn format_date(mtime: SystemTime) -> String {
         dt.format("%b %e %H:%M").to_string()
     } else {
         dt.format("%b %e  %Y").to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn version_sort_compares_numbers_as_numbers() {
+        let mut names = vec!["file10", "file9", "file1", "v1.10", "v1.9", "v1.2"];
+        names.sort_by(|a, b| compare_versions(a, b));
+        assert_eq!(names, ["file1", "file9", "file10", "v1.2", "v1.9", "v1.10"]);
+    }
+
+    #[test]
+    fn the_icon_tables_are_sorted_for_binary_search() {
+        for table in [ls_icon_table::BY_NAME, ls_icon_table::BY_EXTENSION] {
+            assert!(table.windows(2).all(|pair| pair[0].0 < pair[1].0));
+        }
+        assert_eq!(lookup(ls_icon_table::BY_EXTENSION, "rs"), Some("\u{e68b}"));
+        assert_eq!(lookup(ls_icon_table::BY_NAME, ".bashrc"), Some("\u{f1183}"));
+        assert_eq!(lookup(ls_icon_table::BY_NAME, "nope"), None);
+    }
+
+    #[test]
+    fn default_colours_include_dircolors_extensions() {
+        let colors = lscolors::LsColors::from_string(&default_ls_colors());
+        assert!(colors.style_for_str("backup.zip").is_some());
+        assert!(colors.style_for_str("notes.txt").is_none());
     }
 }

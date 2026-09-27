@@ -167,6 +167,12 @@ name resolves to something worse there: `find` and `xargs`, `ps`, `pgrep`, `pstr
 `-q`, `-f`, `-t` and `where -?` work as `/q`, `/f`, `/t` and `/?` do there. Paths print
 as `C:/…`, like everything else cash prints.
 
+`ls` takes what lsd adds to it: `ls --icons` puts a Nerd Font icon before each name
+(`--icons-theme=unicode` for a terminal without one), `--tree` draws folders as a tree,
+names are coloured by kind and extension from `LS_COLORS` or `dircolors`' defaults, and
+`--group-directories-first`, `-X`, `-v` and `-U` sort as in GNU ls. For icons every time,
+put `alias ls='ls --icons'` in `~/.cashrc`.
+
 Inside cash, `which ls` prints `C:/…/cash.exe/ls`, a path only cash can run. For programs
 outside cash (Python's `subprocess`, a `.bat` file, an editor), `cash --link-tools [DIR]`
 makes a hard link to `cash.exe` for each tool, `ls.exe`, `sort.exe` and so on, in DIR or

@@ -97,6 +97,9 @@ mod identity;
 // Native Windows-optimized pure-Rust `ls` builtin.
 #[cfg(windows)]
 mod ls;
+// cash (D67): lsd's Nerd Font icons, for `ls --icons`.
+#[cfg(windows)]
+mod ls_icon_table;
 
 #[cfg(windows)]
 mod tty;

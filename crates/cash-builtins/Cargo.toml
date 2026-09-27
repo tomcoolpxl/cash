@@ -159,6 +159,7 @@ tokio = { version = "1.52.3", features = [
     "time",
 ] }
 uucore = { version = "0.12.0", default-features = false, features = [
+    "colors",
     "format",
     "signals",
 ] }
@@ -186,3 +187,8 @@ cash-win32 = { workspace = true }
 # D48: the `less`/`more` pager needs the terminal size and raw-mode keys. Same
 # version cash-interactive already pulls in, so this adds no new tree.
 crossterm = "0.29.0"
+# `ls`: LS_COLORS and colour per file type, and the width of names with icons. All three are
+# already in the tree, through reedline.
+lscolors = "0.21.0"
+nu-ansi-term = "0.50.3"
+unicode-width = "0.2.2"

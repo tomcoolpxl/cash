@@ -50,3 +50,15 @@ comments referencing the decision in [spec.md](spec.md). As of absorption:
 - `brush-builtins`: CRLF line terminators in `read` (D20)
 - Removed: `brush` (a binstall alias crate), `brush-experimental-builtins`,
   `fuzz`, `benchmarks`, upstream documentation, CI and release tooling
+
+## lsd
+
+`crates/cash-builtins/src/ls_icon_table.rs`, the Nerd Font icons `ls --icons` shows by
+file name and extension, is generated from the default icon theme of
+[lsd](https://github.com/lsd-rs/lsd) 1.2.0 (`src/theme/icon.rs`), © the lsd
+contributors, used under the Apache License 2.0, whose text is in
+[licenses/lsd-Apache-2.0.txt](licenses/lsd-Apache-2.0.txt).
+
+Changes: the two tables were lower-cased, de-duplicated and sorted into Rust constant
+arrays for a binary search; lsd's theme files, its configuration and the rest of its
+code are not used.

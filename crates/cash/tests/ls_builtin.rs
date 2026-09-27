@@ -282,3 +282,132 @@ fn ls_nonexistent_path_returns_error() {
     assert_ne!(out.code, 0);
     assert!(out.stderr.contains("No such file or directory"));
 }
+
+/// A folder of files to sort, colour and draw (D67).
+fn lsd_fixture(name: &str) -> (Scratch, String) {
+    let scratch = Scratch::new(name);
+    let root = scratch.path();
+    std::fs::create_dir_all(root.join("src/deep")).unwrap();
+    std::fs::create_dir(root.join("docs")).unwrap();
+    for file in [
+        "b.txt",
+        "a.zip",
+        "c.rs",
+        "file10",
+        "file9",
+        "file1",
+        ".bashrc",
+        "run.exe",
+        "src/main.rs",
+        "src/deep/x.txt",
+    ] {
+        std::fs::write(root.join(file), b"x").unwrap();
+    }
+    let dir = root.to_string_lossy().replace('\\', "/");
+    (scratch, dir)
+}
+
+#[test]
+fn ls_icons_show_when_asked_and_stay_out_of_pipes() {
+    let (_scratch, dir) = lsd_fixture("icons");
+    let out = cash(&format!(
+        "cd '{dir}'; ls -1 --icons=always c.rs run.exe docs .bashrc"
+    ));
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    // lsd's glyphs: by extension, executable, folder (listed, so its contents), name.
+    assert!(out.stdout.contains("\u{e68b} c.rs"), "{}", out.stdout);
+    assert!(out.stdout.contains("\u{f17a} run.exe"), "{}", out.stdout);
+    assert!(out.stdout.contains("\u{f1183} .bashrc"), "{}", out.stdout);
+
+    let out = cash(&format!(
+        "cd '{dir}'; ls -1 -d --icons=always --icons-theme=unicode docs b.txt"
+    ));
+    assert_eq!(out.stdout, "\u{1f4c4} b.txt\n\u{1f4c2} docs");
+
+    // `--icons` alone is `auto`: a pipe gets plain names, which scripts can use.
+    let out = cash(&format!("cd '{dir}'; ls --icons b.txt | cat"));
+    assert_eq!(out.stdout, "b.txt");
+
+    let out = cash("ls --icons=maybe");
+    assert_eq!(out.code, 2);
+    assert!(
+        out.stderr
+            .contains("invalid argument 'maybe' for '--icons'"),
+        "{}",
+        out.stderr
+    );
+}
+
+#[test]
+fn ls_colours_by_kind_and_extension_from_dircolors_or_ls_colors() {
+    let (_scratch, dir) = lsd_fixture("colours");
+    // dircolors' defaults: archives red, folders bold blue, plain files uncoloured.
+    let out = cash(&format!(
+        "cd '{dir}'; ls -1 -d --color=always a.zip docs b.txt"
+    ));
+    let lines: Vec<&str> = out.stdout.lines().collect();
+    assert!(lines[0].contains("\x1b[01;31ma.zip"), "{:?}", out.stdout);
+    assert_eq!(lines[1], "b.txt");
+    assert!(lines[2].contains("\x1b[01;34mdocs"), "{:?}", out.stdout);
+
+    // The shell's LS_COLORS, exported or not.
+    let out = cash(&format!(
+        "cd '{dir}'; LS_COLORS='*.txt=01;33'; ls -1 --color=always b.txt"
+    ));
+    assert!(out.stdout.contains("\x1b[01;33mb.txt"), "{:?}", out.stdout);
+
+    let out = cash(&format!("cd '{dir}'; ls -1 --color=never a.zip"));
+    assert_eq!(out.stdout, "a.zip");
+}
+
+#[test]
+fn ls_sorts_by_extension_version_none_and_groups_directories() {
+    let (_scratch, dir) = lsd_fixture("sorts");
+    let out = cash(&format!("cd '{dir}'; ls -1 -v file*"));
+    assert_eq!(out.stdout, "file1\nfile9\nfile10");
+    let out = cash(&format!("cd '{dir}'; ls -1 --sort=version file10 file9"));
+    assert_eq!(out.stdout, "file9\nfile10");
+
+    // -X: names without an extension first, then by extension.
+    let out = cash(&format!("cd '{dir}'; ls -1 -X b.txt c.rs a.zip file1"));
+    assert_eq!(out.stdout, "file1\nc.rs\nb.txt\na.zip");
+
+    let out = cash(&format!("cd '{dir}'; ls -1 --group-directories-first"));
+    let lines: Vec<&str> = out.stdout.lines().collect();
+    assert_eq!(&lines[..2], ["docs", "src"], "{}", out.stdout);
+    // And with -r, each group is reversed, directories still first.
+    let out = cash(&format!("cd '{dir}'; ls -1 -r --group-directories-first"));
+    let lines: Vec<&str> = out.stdout.lines().collect();
+    assert_eq!(&lines[..2], ["src", "docs"], "{}", out.stdout);
+
+    let out = cash(&format!("cd '{dir}'; ls -1 -U | sort | head -1"));
+    assert_eq!(out.code, 0, "{}", out.stderr);
+
+    let out = cash("ls --sort=bogus");
+    assert_eq!(out.code, 2);
+    assert!(
+        out.stderr.contains("invalid argument 'bogus' for '--sort'"),
+        "{}",
+        out.stderr
+    );
+}
+
+#[test]
+fn ls_tree_draws_branches_to_the_depth_asked() {
+    let (_scratch, dir) = lsd_fixture("tree");
+    let out = cash(&format!("cd '{dir}'; ls --tree src"));
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert_eq!(out.stdout, "src\n├── deep\n│   └── x.txt\n└── main.rs");
+
+    let out = cash(&format!("cd '{dir}'; ls --tree --depth=1 src"));
+    assert_eq!(out.stdout, "src\n├── deep\n└── main.rs");
+
+    // With -l, the branches sit before each name.
+    let out = cash(&format!("cd '{dir}'; ls -l --tree --depth=1 src"));
+    let last = out.stdout.lines().last().unwrap_or_default();
+    assert!(last.ends_with(" └── main.rs"), "{}", out.stdout);
+
+    // --depth limits -R too.
+    let out = cash(&format!("cd '{dir}'; ls -R --depth=1 src"));
+    assert!(!out.stdout.contains("x.txt"), "{}", out.stdout);
+}

@@ -520,7 +520,9 @@ dependencies = [
  "fancy-regex",
  "futures",
  "itertools 0.14.0",
+ "lscolors",
  "nix 0.31.3",
+ "nu-ansi-term",
  "pretty_assertions",
  "procfs",
  "rlimit",
@@ -528,6 +530,7 @@ dependencies = [
  "thiserror 2.0.20",
  "tokio",
  "tracing",
+ "unicode-width 0.2.2",
  "utf8-chars",
  "uucore",
 ]
