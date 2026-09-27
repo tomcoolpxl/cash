@@ -62,8 +62,10 @@ fn fuser_prints_bare_pids_on_stdout_and_the_name_on_stderr() {
     let out = cash_in(&dir, "fuser held.txt");
     assert_eq!(out.code, 0, "{}", out.stderr);
     assert_eq!(out.stdout.trim(), me());
-    assert!(
-        out.stdout.starts_with(' '),
+    // `%6d`: padded to six columns, which a six-digit pid fills.
+    assert_eq!(
+        out.stdout.trim_end(),
+        std::format!("{:>6}", me()),
         "pids are %6d: {:?}",
         out.stdout
     );
