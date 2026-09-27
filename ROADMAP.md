@@ -25,7 +25,7 @@ Feature work follows the sequence below.
 | 12 | A path a script can exec for a bundled tool | **Complete** | Section 12 below; [open issue 4](open-issues.md) |
 | 13 | `bc` against GNU bc | **Complete** | Section 13 below; spec D56 |
 | 14 | Bash 5.3 remainder without a terminal: `wait -n` in POSIX mode, `array_expand_once`, the `RETURN` trap's status | **Complete** | Section 14 below; [Bash 5.3 audit](research/bash-reference/bash-5.3-audit.md) |
-| 15 | ConPTY probe harness, then the interactive and Readline 5.3 items | Planned | Section 15 below |
+| 15 | ConPTY probe harness, then the interactive and Readline 5.3 items | **Complete** (cash reports `BASH_VERSION=5.3.15`) | Section 15 below |
 | 16 | `cash --link-tools`: hard links so programs outside cash can run its tools | Planned | Section 16 below; follows D58 |
 | 17 | What fish has at the prompt: highlighting, bash's Alt-. and Ctrl-X Ctrl-E, `abbr`, a collapsing prompt, folder history, carapace completions | **Complete** | Section 17 below; spec D59–D63 |
 | — | Found on the way (not planned items) | **Complete** | MSYS2 argument encoding (spec D52); `shopt winpaths` and bash-worded `cd` errors (D53); a `TERM` that no longer reaches the whole console (D21) |
@@ -37,7 +37,7 @@ Bash 5.2 completion (done)  ->  native awk (done)  ->  native sed (done)  ->  bu
   ->  Bash 5.3 (active)  +  corpus fixes (active)  ->  line-ending controls (done)
   ->  fuser / lsof subset (done)  ->  ss subset (done)  ->  BusyBox-gap tools (done)
   ->  graceful signals for own jobs (done)  ->  exec path for bundled tools (done)
-  ->  bc against GNU bc (done)  ->  Bash 5.3 remainder (no terminal) (done)  ->  ConPTY harness + 5.3 interactive  ->  tool links
+  ->  bc against GNU bc (done)  ->  Bash 5.3 remainder (no terminal) (done)  ->  ConPTY harness + 5.3 interactive (done)  ->  tool links
   +  fish's prompt conveniences (done)
 ```
 
@@ -142,11 +142,10 @@ POSIX-mode or editor changes require focused designs and differential tests. Do 
 `BASH_VERSION=5.3` until the audit is complete and every applicable item has a final
 classification.
 
-**Status.** The audit exists, and every portable and POSIX-mode item that a `-c` script can
-observe has a probe (`research/bash-reference/probe.ps1 -Suite 53`); all 35 match the Bash
-5.3.15 oracle. The audit lists what remains before a version claim: the interactive and
-Readline items (they need ConPTY probes), real-signal traps, `wait -n` in POSIX mode,
-indexed `array_expand_once`, and the `RETURN` trap's pre-`return` status.
+**Status: complete.** Every item in the audit is implemented, verified or documented:
+the 39 script probes (`research/bash-reference/probe.ps1 -Suite 53`) and the ConPTY
+harness's interactive cases (item 15) match the Bash 5.3.15 oracle, and cash reports
+`BASH_VERSION=5.3.15`.
 
 ## 6. Differential corpus
 
@@ -341,6 +340,18 @@ does, and `{ exit 3; } &` no longer exits the shell that waits for it. Tests:
 The interactive and Readline items of the 5.3 audit need a real terminal: a harness that
 drives cash through ConPTY, sends keys and reads the screen, alongside the same session in
 Bash 5.3. Then the items themselves, and with them the `BASH_VERSION=5.3` claim.
+
+**Done:** cash reports `BASH_VERSION=5.3.15(1)-release`. The harness
+(`crates/cash/tests/pty_oracle.rs`) replays each case's keys in a ConPTY and compares the
+screen cash leaves with Git Bash 5.3.15's; 36 cases, none left unfixed, the deliberate
+differences pinned to cash's own screen. It found far more than the 5.3 items: completion
+quoted every name with a space twice, `bind -x` output was painted over (a patch to the
+carried Reedline), `read -t` never timed out at the console, job notices were laid out and
+timed differently and sometimes lost, `COLUMNS` and `LINES` were never set, and `kill $$`
+ended cash, trap or no trap. Decided on the way: completion quotes in the style the word
+was started in (D40), and `CHLD` is emulated (D64). Last, a stale test note led to a 5.3
+change the audit had missed: `BASH_SOURCE` names `$0` for what `-c` and standard input
+define.
 
 ## 16. `cash --link-tools`: tools that programs outside cash can run
 

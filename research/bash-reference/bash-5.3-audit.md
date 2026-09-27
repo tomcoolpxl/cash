@@ -17,7 +17,8 @@ cargo build -p cash
 ./research/bash-reference/probe.ps1 -Suite 53
 ```
 
-**Status (2026-09-26):** 39 of 39 probes match. The first run of this suite matched 17: several
+**Status (2026-09-27): complete, and cash reports `BASH_VERSION=5.3.15`.** 39 of 39 probes
+match, and the ConPTY harness covers section 2. The first run of this suite matched 17: several
 items earlier recorded here as "Complete" or "Verify" did not hold up against the oracle, and
 the probes also exposed older Bash behavior Cash had wrong (listed under
 [Found while auditing](#found-while-auditing)). Each fix has a regression in
@@ -61,6 +62,7 @@ signals needs its own isolated test (see below).
 | **1.ee** | `test` with >4 args | Parenthesized subexpression heuristic | **Verified** by probe. |
 | **1.ff** | `MULTIPLE_COPROCS` | Several coprocesses at once | **Verified** by probe. |
 | **1.kk** | `source -p PATH` | Search path for `.`/`source` | **Complete** (earlier regression). |
+| — | `BASH_SOURCE` from `-c` and stdin | A function defined in a `-c` string or read from standard input has `$0` as its `BASH_SOURCE` (5.2: `environment` and `main`); at the prompt it stays `main` | **Fixed.** Missed by the first pass of this audit; a compat test capped at 5.2 pointed to it, and it was probed against Git Bash 5.3.15 and Bash 5.2 and 5.3 in Docker. |
 | **1.pp** | `bash_source_fullpath` | Full paths in `BASH_SOURCE` | **Implemented.** The option existed but did nothing; the real path is now recorded when a file is entered, as `push_source` does. |
 | **1.ss** | EOF parse detail | More detail when EOF ends a command | Covered for compound commands by 1.c. |
 | **1.uu** | `exit` in a trap | Uses the pre-trap `$?` at the trap's top level | **Verified** by five probes, including subshell and function forms. |

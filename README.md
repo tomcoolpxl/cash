@@ -37,8 +37,9 @@ Full rationale in [spec.md](spec.md); the short version:
 cash's deliberate divergences from bash are documented in [spec.md](spec.md) §4.
 That list is meant to stay short.
 
-cash reports Bash 5.2.37 through `$BASH_VERSION`. It also supports selected
-Bash 5.3 additions: `${ command; }` runs a substitution in the current shell,
+cash reports Bash 5.3.15 through `$BASH_VERSION`: every Bash 5.3 change is implemented,
+checked against Git Bash 5.3.15, or documented as a deliberate difference
+([audit](research/bash-reference/bash-5.3-audit.md)). Among the 5.3 additions: `${ command; }` runs a substitution in the current shell,
 preserving changes to shell variables, while `${| command; }` expands a temporary
 `REPLY` and leaves command output on stdout. `compgen -V name` stores candidates
 in the indexed array `name` instead of printing them; no matches clear the array
