@@ -49,8 +49,11 @@ fn scripts_keep_bash_lexing() {
 
 #[test]
 fn the_interactive_prompt_has_it_on() {
+    // `--norc`: an interactive shell reads the runner's own ~/.bashrc, whose banner or
+    // prompt would land in the output.
     assert_eq!(
         cash(&[
+            "--norc",
             "-i",
             "-c",
             r#"shopt -q winpaths && printf '[%s]\n' C:\Users\me"#
@@ -129,6 +132,7 @@ fn cd_follows_a_pasted_path() {
 fn it_can_be_turned_off_at_the_prompt() {
     assert_eq!(
         cash(&[
+            "--norc",
             "-i",
             "-c",
             r#"shopt -u winpaths; printf '[%s]\n' C:\Users\me"#
