@@ -342,11 +342,14 @@ async fn spawn_async_ao_list_in_task<'a, SE: extensions::ShellExtensions>(
     shell: &'a mut Shell<SE>,
     params: &ExecutionParameters,
 ) -> Option<&'a jobs::Job> {
-    // Poll to reap finished background jobs, in a script, which never reaches a prompt
-    // to report them: a loop of background jobs would otherwise pile them up. At the
-    // prompt they stay in the table until reported, as in Bash, so `[1] Done` is not
-    // lost and a new job does not take the id of one not yet reported.
-    if !shell.options().interactive {
+    // Reap finished background jobs before numbering this one. At the prompt they are
+    // reported first, as Bash reports them, so `[1]+  Done` is printed and not lost;
+    // while a file is sourced they wait until it is done. A script, which never reaches
+    // a prompt to report them, reaps them silently, or a loop of background jobs would
+    // pile them up.
+    if shell.may_report_jobs_now() {
+        let _ = shell.check_for_completed_jobs();
+    } else if !shell.options().interactive {
         let _ = shell.jobs_mut().poll();
     }
 

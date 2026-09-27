@@ -179,20 +179,31 @@ const CASES: &[Case] = &[
         keys: &["sleep 0.05 & sleep 0.2; echo after\r"],
     },
     // How `jobs` lays out running and finished jobs, with the current and previous marks.
+    // The first two run throughout, so nothing depends on how long a step takes.
     Case {
         name: "jobs-layout",
         keys: &[
-            "sleep 3 & sleep 3 &\r",
+            "sleep 10 & sleep 10 &\r",
             "jobs\r",
             // The pid, however wide, masked.
             "jobs -l | sed -E 's/^(.{4}) +[0-9]+ /\\1 PID /'\r",
             "sleep 0.05 &\r",
             "sleep 0.3\r",
-            // A real process, so that both shells have its pid, and a sleep, so that
-            // neither sees it finish before the prompt.
+            // A real process, so that both shells have its pid.
             "bash -c 'sleep 0.1; exit 3' &\r",
             "sleep 0.3\r",
         ],
+    },
+    // `read -t` at the console times out; the Enter that ran it must not wake it early.
+    Case {
+        name: "read-t-console",
+        keys: &["read -t 0.3; echo \"rc=$?\"\r"],
+    },
+    // A job that finishes during a builtin, with another started on the same line: its
+    // `Done` is still reported, and the new job does not take its id.
+    Case {
+        name: "notice-not-lost",
+        keys: &["sleep 0.05 & read -t 0.3; sleep 10 &\r"],
     },
     // 1.rr: a job finishing while a file is sourced is reported after it.
     Case {
