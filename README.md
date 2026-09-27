@@ -155,6 +155,53 @@ Git's line-ending conversion warnings concern files on disk, not child-process
 output. `xargs` prefers enabled cash builtins, so `xargs echo` uses cash's `echo`
 regardless of which `echo.exe` is on `PATH`. Explicit executable paths bypass builtins.
 
+## Windows Terminal
+
+Add a profile that starts `cash.exe`, and make it the default, in Windows Terminal's
+`settings.json` (Settings → Open JSON file). The two `Marks` settings turn on shell
+integration: each command gets a mark on the scrollbar, green or red by its exit status,
+and Ctrl+↑/Ctrl+↓ jump between them. A Nerd Font shows `ls --icons`.
+
+```jsonc
+"defaultProfile": "{465d1d2d-478a-4eee-8c87-cd7cafd28372}",
+"profiles": { "list": [ {
+    "guid": "{465d1d2d-478a-4eee-8c87-cd7cafd28372}",
+    "name": "cash",
+    "commandline": "C:\\path\\to\\cash.exe",
+    "startingDirectory": "%USERPROFILE%",
+    "font": { "face": "UbuntuSansMono Nerd Font" },
+    "showMarksOnScrollbar": true,
+    "autoMarkPrompts": true
+} ] },
+"actions": [
+    { "command": { "action": "scrollToMark", "direction": "previous" }, "id": "User.scrollToMark.previous" },
+    { "command": { "action": "scrollToMark", "direction": "next" }, "id": "User.scrollToMark.next" }
+],
+"keybindings": [
+    { "id": "User.scrollToMark.previous", "keys": "ctrl+up" },
+    { "id": "User.scrollToMark.next", "keys": "ctrl+down" }
+]
+```
+
+Any GUID works for a new profile; keep it the same in `defaultProfile`. The marks come
+from the prompt, which has to send Microsoft's
+[shell-integration sequences](https://learn.microsoft.com/windows/terminal/tutorials/shell-integration):
+`OSC 133;A` and `B` around `PS1`, `C` in `PS0`, `D;$?` when a command ends, and `OSC 9;9`
+with the folder in Windows form so that a new tab or split pane opens where you are. In
+`~/.bashrc`, set from `PROMPT_COMMAND` so the exit status is the last command's:
+
+```bash
+__wt_prompt() {
+    local status=$? cwd=${PWD//\//\\}
+    PS1="\[\e]133;D;$status\e\\\\\]\[\e]133;A\e\\\\\]\[\e]9;9;${cwd//\\/\\\\}\e\\\\\]\w \$ \[\e]133;B\e\\\\\]"
+}
+[[ -n $WT_SESSION ]] && { PROMPT_COMMAND=__wt_prompt; PS0='\[\e]133;C\e\\\]'; }
+```
+
+The folder's backslashes are doubled because in `PS1` a lone backslash starts an escape
+(`\t` would print the time). Git Bash, whose `$PWD` is `/c/...`, needs it turned into
+`C:\...` first.
+
 ## Userland
 
 cash carries the whole of uutils coreutils, plus a set written for Windows because the
