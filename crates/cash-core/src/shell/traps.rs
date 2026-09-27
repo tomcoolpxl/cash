@@ -15,6 +15,19 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         Ok(())
     }
 
+    /// Runs the trap for a signal the shell sent itself (`kill -TERM $$`), if one is set:
+    /// `None` when there is none, so the caller applies the signal's default action.
+    pub async fn raise_signal_trap(
+        &mut self,
+        signal: TrapSignal,
+        params: &ExecutionParameters,
+    ) -> Option<Result<ExecutionResult, error::Error>> {
+        if !self.traps.handles(signal) {
+            return None;
+        }
+        Some(self.invoke_trap_handler(signal, params).await)
+    }
+
     /// Invokes the handler registered for `signal`, if any.
     ///
     /// Behavior varies by signal type:

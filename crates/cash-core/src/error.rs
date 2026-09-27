@@ -361,6 +361,12 @@ pub trait BuiltinError: std::error::Error + ConvertibleToExitCode + Send + Sync 
     fn is_arithmetic_error(&self) -> bool {
         false
     }
+
+    /// Whether this is an interrupt: an `INT` the interactive shell sent itself with no
+    /// trap set, which abandons the command line, as Ctrl-C does.
+    fn is_interrupt(&self) -> bool {
+        false
+    }
 }
 
 impl BuiltinError for Error {
@@ -372,6 +378,14 @@ impl BuiltinError for Error {
         match &self.kind {
             ErrorKind::EvalError(_) => true,
             ErrorKind::BuiltinError(inner, _) => inner.is_arithmetic_error(),
+            _ => false,
+        }
+    }
+
+    fn is_interrupt(&self) -> bool {
+        match &self.kind {
+            ErrorKind::Interrupted => true,
+            ErrorKind::BuiltinError(inner, _) => inner.is_interrupt(),
             _ => false,
         }
     }
@@ -460,7 +474,13 @@ impl Error {
     /// the top level. An arithmetic error in an expansion does so already, by propagating.
     pub fn discards_line(&self) -> bool {
         matches!(&self.kind, ErrorKind::BuiltinError(inner, name)
-            if name != "let" && inner.is_arithmetic_error())
+            if (name != "let" && inner.is_arithmetic_error()) || inner.is_interrupt())
+    }
+
+    /// Whether this is an interrupt that abandons the line with nothing to report: the
+    /// line is simply gone, as after Ctrl-C.
+    pub fn is_silent_interrupt(&self) -> bool {
+        BuiltinError::is_interrupt(self)
     }
 
     /// Returns a reference to the error kind.

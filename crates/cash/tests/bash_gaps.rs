@@ -1510,3 +1510,28 @@ fn a_chld_trap_that_runs_a_command_does_not_set_itself_off() {
     );
     assert_eq!(output(&script), (0, "runs=1".into()));
 }
+
+#[test]
+fn a_signal_the_shell_sends_itself_runs_its_trap_or_its_default() {
+    // `kill -SIG $$` is handled inside the shell, as in Bash: delivered through Windows it
+    // ended cash at once, trap or no trap. Checked against Git Bash 5.3.15.
+    assert_eq!(
+        output(concat!(
+            "trap 'echo \"sig=$BASH_TRAPSIG\"' INT TERM HUP\n",
+            "kill -INT $$; kill -TERM $$; kill -HUP $$; echo alive"
+        )),
+        (0, "sig=2\nsig=15\nsig=1\nalive".into())
+    );
+    // Untrapped, a script ends with 128 + the signal, except QUIT, which Bash ignores.
+    for (signal, status) in [("TERM", 143), ("INT", 130), ("HUP", 129), ("KILL", 137)] {
+        assert_eq!(
+            output(&format!("kill -{signal} $$; echo survived")),
+            (status, String::new()),
+            "{signal}"
+        );
+    }
+    assert_eq!(
+        output("kill -QUIT $$; echo survived"),
+        (0, "survived".into())
+    );
+}

@@ -1,0 +1,8 @@
+$ trap 'echo "sig=$BASH_TRAPSIG"' INT TERM HUP QUIT
+$ kill -INT $$; kill -TERM $$; kill -HUP $$; kill -QUIT $$; echo alive
+sig=2
+sig=15
+sig=1
+sig=3
+alive
+$

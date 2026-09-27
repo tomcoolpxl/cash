@@ -147,10 +147,60 @@ impl builtins::Command for KillCommand {
                 }
             } else {
                 let pid = cash_core::int_utils::parse(pid_or_job_spec.as_str(), 10)?;
+                if !signal_zero && u32::try_from(pid).is_ok_and(|pid| pid == std::process::id()) {
+                    return signal_self(context, trap_signal).await;
+                }
                 return signal_pid(&context, pid, signal_zero, trap_signal);
             }
         }
         Ok(ExecutionResult::success())
+    }
+}
+
+/// A signal the shell sends itself, `kill -TERM $$`: handled inside the shell, as Bash
+/// handles it, rather than delivered through the OS. Delivered, `INT` and `TERM` ended
+/// cash at once, trap or no trap.
+///
+/// `KILL` ends the shell. A trapped signal runs its trap and the shell goes on. Otherwise
+/// the signal's default: a script ends with 128 + the signal's number; an interactive
+/// shell ignores `TERM`, abandons the line on `INT` as Ctrl-C does, and exits on `HUP`.
+/// `QUIT` (which Bash ignores in all cases), `STOP`, `TSTP`, `CONT` and `CHLD` are ignored.
+async fn signal_self<SE: cash_core::ShellExtensions>(
+    context: cash_core::ExecutionContext<'_, SE>,
+    signal: TrapSignal,
+) -> Result<ExecutionResult, cash_core::Error> {
+    let TrapSignal::Signal(raw) = signal else {
+        return Ok(ExecutionResult::success());
+    };
+    #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let status = (128 + raw as i32) as u8;
+    let exit = |status: u8| ExecutionResult {
+        exit_code: ExecutionExitCode::from(status),
+        next_control_flow: cash_core::ExecutionControlFlow::ExitShell,
+    };
+
+    let name = signal.as_str();
+    if name == "KILL" {
+        return Ok(exit(status));
+    }
+    if let Some(result) = context
+        .shell
+        .raise_signal_trap(signal, &context.params)
+        .await
+    {
+        result?;
+        return Ok(ExecutionResult::success());
+    }
+    match name {
+        // Bash ignores QUIT in all cases, scripts included.
+        "STOP" | "TSTP" | "CONT" | "CHLD" | "QUIT" => Ok(ExecutionResult::success()),
+        _ if !context.shell.options().interactive => Ok(exit(status)),
+        "INT" => {
+            writeln!(context.stderr())?;
+            Err(cash_core::ErrorKind::Interrupted.into())
+        }
+        "HUP" => Ok(exit(status)),
+        _ => Ok(ExecutionResult::success()),
     }
 }
 

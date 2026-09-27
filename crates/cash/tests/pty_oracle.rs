@@ -233,6 +233,23 @@ const CASES: &[Case] = &[
             "echo \"$COLUMNS x $LINES\"; (echo \"sub $COLUMNS x $LINES\")\r",
         ],
     },
+    // 1.x: BASH_TRAPSIG for real signals, each shell signalling itself in its own console.
+    Case {
+        name: "1x-trapsig-real-signals",
+        keys: &[
+            "trap 'echo \"sig=$BASH_TRAPSIG\"' INT TERM HUP QUIT\r",
+            "kill -INT $$; kill -TERM $$; kill -HUP $$; kill -QUIT $$; echo alive\r",
+        ],
+    },
+    // The same signals with no trap: what an interactive shell does with each.
+    Case {
+        name: "self-signal-untrapped",
+        keys: &[
+            "kill -TERM $$; echo after-term; kill -QUIT $$; echo after-quit\r",
+            "kill -INT $$; echo after-int\r",
+            "echo next\r",
+        ],
+    },
     // `read -t` at the console times out; the Enter that ran it must not wake it early.
     Case {
         name: "read-t-console",

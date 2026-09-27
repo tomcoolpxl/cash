@@ -1,0 +1,8 @@
+$ kill -TERM $$; echo after-term; kill -QUIT $$; echo after-quit
+after-term
+after-quit
+$ kill -INT $$; echo after-int
+
+$ echo next
+next
+$

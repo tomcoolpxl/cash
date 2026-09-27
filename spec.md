@@ -659,6 +659,15 @@ the timer: the shell is not waiting on a foreground job here, so a real timer is
 Cost accepted: the escalation lives in the shell. A script that sends `TERM` and exits
 before the grace period ends leaves a program that ignored its `WM_CLOSE` running.
 
+**A signal the shell sends itself** (`kill -TERM $$`) is not delivered through Windows,
+which ended cash at once, trap or no trap. The shell handles it, as Bash does: `KILL`
+ends it; a trapped signal runs its trap, with `BASH_TRAPSIG` set, and the shell goes
+on; untrapped, a script ends with 128 plus the signal's number, and an interactive
+shell ignores `TERM`, abandons the line on `INT` as Ctrl-C does, and exits on `HUP`.
+`QUIT` is ignored in all cases, as Bash ignores it. Found by the ConPTY harness (ROADMAP
+item 15), where each shell runs in a console of its own, so it could be checked against
+Git Bash 5.3.15.
+
 ### D22 — Job specs kill trees; bare PIDs kill one process
 
 - `kill %1` → the job's entire tree, via its job object (D6).

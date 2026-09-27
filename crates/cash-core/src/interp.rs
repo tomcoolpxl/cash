@@ -263,7 +263,9 @@ impl Execute for ast::Program {
                 Ok(exec_result) => result = exec_result,
                 Err(err) => {
                     // Display the error and convert to an execution result.
-                    let _ = shell.display_error(&mut params.stderr(shell), &err);
+                    if !err.is_silent_interrupt() {
+                        let _ = shell.display_error(&mut params.stderr(shell), &err);
+                    }
                     let discards_line = err.discards_line();
                     result = err.into_result(shell);
                     // An error that abandons its line abandons the rest of a `-c` string,
