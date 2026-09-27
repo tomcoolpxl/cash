@@ -8,7 +8,7 @@ use crate::{
     ExecutionParameters, ShellFd,
     env::{EnvironmentLookup, EnvironmentScope},
     error, openfiles, pathsearch,
-    sys::users,
+    sys::{fs::PathExt as _, users},
     variables,
 };
 
@@ -227,6 +227,19 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         }
         let (dirs, _) = self.executable_search_dirs();
         self.path_index.contains_executable(&dirs, name)
+    }
+
+    /// Whether a command spelled with a path names a file the shell can run: the path
+    /// resolved as every path is (see [`Self::absolute_path`]), not a directory (which
+    /// carries the execute bit but is never a command), and executable by the platform's
+    /// rule, which on Windows includes `PATHEXT` and a runnable file's contents (D46).
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The command name, containing a path separator.
+    pub fn is_runnable_path(&self, name: &str) -> bool {
+        let candidate = self.absolute_path(Path::new(name));
+        !candidate.is_dir() && candidate.executable()
     }
 
     /// Determines whether the given filename is the name of an executable in one of the

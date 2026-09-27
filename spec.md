@@ -1447,12 +1447,13 @@ escape would only have removed it:
 
 The run ends at the first quote, expansion or substitution, and only a word's first
 characters can trigger the rule, so `x=C:\y` and `--dir=C:\y` keep bash's meaning.
-Completion follows the same rule. A word like `C:\Users` lexes under bash to something
-no script means, so the rule takes nothing a script relies on, but it is still a
-divergence and the same line can mean different things typed and in a script. It is
-therefore **on by default in interactive shells and off otherwise**; `shopt -u winpaths`
-in `.cashrc` turns it off at the prompt too. A failed `cd` whose target has lost its
-backslashes (`cd: C:Usersme: No such file or directory`) prints a hint naming the option.
+Completion and highlighting (D59) follow the same rule. A word like `C:\Users` lexes
+under bash to something no script means, so the rule takes nothing a script relies on,
+but it is still a divergence and the same line can mean different things typed and in a
+script. It is therefore **on by default in interactive shells and off otherwise**;
+`shopt -u winpaths` in `.cashrc` turns it off at the prompt too. A failed `cd` whose
+target has lost its backslashes (`cd: C:Usersme: No such file or directory`) prints a
+hint naming the option.
 
 ### D54 — `pkill`, `pidof` and `killall`: one set of name rules, `kill`'s signals
 
@@ -1625,6 +1626,14 @@ resolution still probes the disk as before.
 Every command of a line is checked, not only the first: a control operator (`;`, `&`,
 `&&`, `||`, `|`, `|&`, `(`, newline) or a reserved word that precedes a command (`if`,
 `then`, `do`, `!`, …) starts another, so `ls | nosuch` marks `nosuch`.
+
+A command spelled with a path is checked as the path the shell will run: its quotes
+removed, its backslashes read as D53 reads them, resolved as every path is (D3, so
+`/c/tools/x.exe` works), and executable by the rule `type` uses (a directory is not). A
+pasted `C:\Windows\System32\curl.exe` is therefore one path in one colour, not a run of
+escapes; with `winpaths` off its backslashes are escapes again and it is marked missing,
+because it would run as `C:WindowsSystem32curl.exe`. A path that waits on an expansion
+(`~/bin/x`, `$HOME/bin/x`) keeps the neutral colour.
 
 ### D60 — `abbr`: fish's abbreviations
 

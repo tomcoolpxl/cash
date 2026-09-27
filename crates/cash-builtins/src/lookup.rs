@@ -1,14 +1,9 @@
 //! Shared command-name resolution, used by the `type` and `command` builtins.
 
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-use cash_core::{
-    Shell, ShellExtensions,
-    parser::ast,
-    pathsearch,
-    sys::{self, fs::PathExt},
-};
+use cash_core::{Shell, ShellExtensions, parser::ast, pathsearch, sys};
 
 /// A way in which a name resolved, in the shell's lookup order.
 pub(crate) enum Resolved<'a> {
@@ -103,9 +98,7 @@ fn resolve_in_filesystem<SE: ShellExtensions>(
 
     // A name with a separator in it is used as-is; it's never searched for.
     if sys::fs::contains_path_separator(name) {
-        // A directory is never a command, even though it carries the execute bit.
-        let candidate = shell.absolute_path(Path::new(name));
-        if !candidate.is_dir() && candidate.executable() {
+        if shell.is_runnable_path(name) {
             resolved.push(to_file(PathBuf::from(name)));
         }
         return;

@@ -278,6 +278,7 @@ impl<'a, SE: cash_core::ShellExtensions> Highlighter<'a, SE> {
                             // command lookups ignore mid-word line continuations.
                             let default_text_kind = self.get_kind_for_word(
                                 w.as_str(),
+                                &word_pieces,
                                 &token_range,
                                 &mut saw_command_token,
                             );
@@ -314,6 +315,16 @@ impl<'a, SE: cash_core::ShellExtensions> Highlighter<'a, SE> {
         self.skip_ahead(piece.start);
 
         match word_piece.piece {
+            // `winpaths` (D53) keeps the backslashes of `C:\Users\me` by making each `\U`
+            // literal text: a path separator, part of the word rather than a quote.
+            cash_parser::word::WordPiece::SingleQuotedText(_)
+                if self
+                    .input_line
+                    .get(piece.clone())
+                    .is_some_and(|source| source.starts_with('\\')) =>
+            {
+                self.append_span(default_text_kind, piece.clone());
+            }
             cash_parser::word::WordPiece::SingleQuotedText(_)
             | cash_parser::word::WordPiece::AnsiCQuotedText(_)
             | cash_parser::word::WordPiece::EscapeSequence(_) => {
@@ -407,6 +418,7 @@ impl<'a, SE: cash_core::ShellExtensions> Highlighter<'a, SE> {
     fn get_kind_for_word(
         &self,
         w: &str,
+        pieces: &[cash_parser::word::WordPieceWithSource],
         token_range: &std::ops::Range<usize>,
         saw_command_token: &mut bool,
     ) -> HighlightKind {
@@ -416,7 +428,7 @@ impl<'a, SE: cash_core::ShellExtensions> Highlighter<'a, SE> {
             } else {
                 // After `if`, `then`, `do`, `!` and the like, the next word is a command too.
                 *saw_command_token = !KEYWORDS_BEFORE_A_COMMAND.contains(&w);
-                match self.classify_possible_command(w, token_range) {
+                match self.classify_possible_command(w, pieces, token_range) {
                     CommandType::Function => HighlightKind::Function,
                     CommandType::Keyword => HighlightKind::Keyword,
                     CommandType::Builtin => HighlightKind::Builtin,
@@ -440,6 +452,7 @@ impl<'a, SE: cash_core::ShellExtensions> Highlighter<'a, SE> {
     fn classify_possible_command(
         &self,
         name: &str,
+        pieces: &[cash_parser::word::WordPieceWithSource],
         token_range: &std::ops::Range<usize>,
     ) -> CommandType {
         if self.shell.is_keyword(name) {
@@ -458,10 +471,16 @@ impl<'a, SE: cash_core::ShellExtensions> Highlighter<'a, SE> {
             return CommandType::Unknown;
         }
 
-        if cash_core::sys::fs::contains_path_separator(name) {
-            // TODO(highlighting): Should check for executable-ness.
-            let candidate_path = self.shell.absolute_path(std::path::Path::new(name));
-            if candidate_path.exists() {
+        // Whether the command exists is asked of the word the shell will run, not of its
+        // spelling: `"C:\Program Files\Git\bin\git.exe"` is a path once its quotes go, and
+        // with `winpaths` off `C:\tools\x.exe` runs as `C:toolsx.exe`. A word whose meaning
+        // waits on an expansion stays neutral.
+        let Some(command) = literal_word(pieces) else {
+            return CommandType::Unknown;
+        };
+
+        if cash_core::sys::fs::contains_path_separator(&command) {
+            if self.shell.is_runnable_path(&command) {
                 CommandType::External
             } else {
                 CommandType::NotFound
@@ -470,13 +489,58 @@ impl<'a, SE: cash_core::ShellExtensions> Highlighter<'a, SE> {
             // From the background PATH listing: probing every PATH directory for every
             // PATHEXT extension here would cost a missing name over a hundred milliseconds
             // on each keystroke. Until the listing is ready, the word stays neutral.
-            match self.shell.executable_on_path_if_known(name) {
+            match self.shell.executable_on_path_if_known(&command) {
                 Some(true) => CommandType::External,
                 Some(false) => CommandType::NotFound,
                 None => CommandType::Unknown,
             }
         }
     }
+}
+
+/// Unquoted characters that make a word mean something only expansion settles: a glob
+/// or a brace expansion.
+const EXPANDED_WHEN_UNQUOTED: [char; 4] = ['*', '?', '[', '{'];
+
+/// The text a word stands for once its quotes are removed, when that is known without
+/// expanding anything; `None` for a word with an expansion, a substitution, a glob or
+/// braces in it.
+///
+/// The pieces come from the word parser, so `winpaths` (D53) has already settled which
+/// backslashes of `C:\Users\me` are path separators and which are escapes.
+fn literal_word(pieces: &[cash_parser::word::WordPieceWithSource]) -> Option<String> {
+    let mut literal = String::new();
+    for piece in pieces {
+        push_literal(&piece.piece, false, &mut literal)?;
+    }
+    Some(literal)
+}
+
+fn push_literal(
+    piece: &cash_parser::word::WordPiece,
+    in_double_quotes: bool,
+    literal: &mut String,
+) -> Option<()> {
+    use cash_parser::word::WordPiece;
+
+    match piece {
+        WordPiece::Text(text) if in_double_quotes || !text.contains(EXPANDED_WHEN_UNQUOTED) => {
+            literal.push_str(text);
+        }
+        WordPiece::SingleQuotedText(text) => literal.push_str(text),
+        // The parser only makes an escape of a character the backslash quotes, so the
+        // backslash goes; `\<newline>` is a line continuation and stands for nothing.
+        WordPiece::EscapeSequence(escape) => {
+            literal.extend(escape.strip_prefix('\\')?.chars().filter(|&c| c != '\n'));
+        }
+        WordPiece::DoubleQuotedSequence(pieces) => {
+            for piece in pieces {
+                push_literal(&piece.piece, true, literal)?;
+            }
+        }
+        _ => return None,
+    }
+    Some(())
 }
 
 #[cfg(test)]
@@ -662,6 +726,108 @@ mod tests {
             word_kind(&shell, "echo a > out-file", "out-file"),
             HighlightKind::Default
         );
+    }
+
+    /// `(kind, text)` of each span inside the first occurrence of `word` in `line`.
+    fn word_spans(
+        shell: &cash_core::Shell<impl cash_core::ShellExtensions>,
+        line: &str,
+        word: &str,
+    ) -> Vec<(HighlightKind, String)> {
+        let start = line.find(word).unwrap();
+        let end = start + word.len();
+        let highlighted = highlight_command(shell, line, line.len());
+        highlighted
+            .spans()
+            .iter()
+            .filter(|span| span.range.start >= start && span.range.end <= end)
+            .map(|span| (span.kind, highlighted.text(span).to_owned()))
+            .collect()
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn a_pasted_drive_path_is_a_path_not_escapes() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::create_dir(root.path().join("has space")).unwrap();
+        std::fs::write(root.path().join("has space").join("tool.exe"), b"MZ").unwrap();
+        std::fs::write(root.path().join("notes.txt"), b"notes").unwrap();
+        let dir = root.path().to_string_lossy().replace('/', r"\");
+        assert!(dir.starts_with(r"C:\"), "{dir}");
+
+        let mut shell = cash_core::Shell::builder().build().await.unwrap();
+        shell.options_mut().windows_drive_paths = true;
+
+        // `winpaths` keeps every backslash but the one before the space, which is bash's
+        // escape; the command is the path they spell, found without its `.exe` too.
+        for tool in [
+            format!(r"{dir}\has\ space\tool.exe"),
+            format!(r"{dir}\has\ space\tool"),
+        ] {
+            let spans = word_spans(&shell, &format!("{tool} --help"), &tool);
+            assert!(
+                spans.iter().all(|(kind, text)| *kind
+                    == if text == r"\ " {
+                        HighlightKind::Quoted
+                    } else {
+                        HighlightKind::ExternalCommand
+                    }),
+                "{spans:?}"
+            );
+        }
+
+        // A directory and a file that is not a program are not commands.
+        for not_a_command in [dir.clone(), format!(r"{dir}\notes.txt")] {
+            let spans = word_spans(&shell, &format!("{not_a_command} x"), &not_a_command);
+            assert!(
+                spans
+                    .iter()
+                    .all(|(kind, _)| *kind == HighlightKind::NotFoundCommand),
+                "{spans:?}"
+            );
+        }
+
+        // As an argument the path is plain text.
+        let notes = format!(r"{dir}\notes.txt");
+        let spans = word_spans(&shell, &format!("cat {notes}"), &notes);
+        assert!(
+            spans
+                .iter()
+                .all(|(kind, _)| *kind == HighlightKind::Default),
+            "{spans:?}"
+        );
+
+        // With `winpaths` off each backslash is an escape again, and the command is
+        // `C:Users...`, a name without a separator, which is not on PATH.
+        shell.options_mut().windows_drive_paths = false;
+        let tool = format!(r"{dir}\has\ space\tool.exe");
+        let line = format!("{tool} --help");
+        assert_eq!(
+            settled_word_kind(&shell, &line, "C:").await,
+            HighlightKind::NotFoundCommand
+        );
+        let spans = word_spans(&shell, &line, &tool);
+        assert!(
+            spans.iter().all(|(kind, text)| *kind
+                == if text.starts_with('\\') {
+                    HighlightKind::Quoted
+                } else {
+                    HighlightKind::NotFoundCommand
+                }),
+            "{spans:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_command_path_that_waits_on_an_expansion_stays_neutral() {
+        let shell = cash_core::Shell::builder().build().await.unwrap();
+        for line in ["~/no/such/tool x", "$HOME/no/such/tool x"] {
+            assert_eq!(
+                word_kind(&shell, line, "/no/such/tool"),
+                HighlightKind::UnknownCommand,
+                "{line}"
+            );
+        }
     }
 
     #[tokio::test]
