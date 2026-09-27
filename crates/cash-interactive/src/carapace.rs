@@ -38,33 +38,78 @@ pub(crate) struct Found {
     commands: HashSet<String>,
 }
 
+/// How long after carapace failed to answer it is tried again.
+const RETRY_AFTER: Duration = Duration::from_secs(30);
+
 /// Where carapace was found, remembered while `PATH` stays the same.
-#[derive(Default)]
 pub(crate) struct Cache {
+    /// The `PATH` the answer in `found` is for.
     path_value: Option<String>,
     found: Option<Found>,
+    /// The `PATH` for which carapace was found but did not answer, and when.
+    failed: Option<(String, Instant)>,
+    retry_after: Duration,
+}
+
+impl Default for Cache {
+    fn default() -> Self {
+        Self {
+            path_value: None,
+            found: None,
+            failed: None,
+            retry_after: RETRY_AFTER,
+        }
+    }
 }
 
 impl Cache {
+    /// A cache that tries a failed carapace again after `retry_after`.
+    #[cfg(test)]
+    pub fn retrying_after(retry_after: Duration) -> Self {
+        Self {
+            retry_after,
+            ..Self::default()
+        }
+    }
+
     /// carapace for the shell's current `PATH`, if it is installed.
+    ///
+    /// Found or absent, the answer is kept until `PATH` changes. A carapace that is there
+    /// but does not answer is not written off: a program just installed or updated can take
+    /// seconds to start while Windows scans it, longer than a Tab waits. It is asked again
+    /// once [`RETRY_AFTER`] has passed, so a broken one costs a Tab at most that often.
     pub fn get(
         &mut self,
         shell: &cash_core::Shell<impl cash_core::ShellExtensions>,
     ) -> Option<&Found> {
         let path_value = shell.env_str("PATH").unwrap_or_default().into_owned();
-        if self.path_value.as_deref() != Some(path_value.as_str()) {
-            self.found = match locate(shell) {
-                Location::At(exe) => Found::load(exe),
-                Location::Absent => None,
-                // The listing is not ready, as on a first Tab with highlighting off: look
-                // once by probing, which costs what one "command not found" does, and
-                // remember the answer until PATH changes.
-                Location::Unknown => shell
-                    .find_first_executable_in_path("carapace")
-                    .and_then(Found::load),
-            };
-            self.path_value = Some(path_value);
+        if self.path_value.as_deref() == Some(path_value.as_str()) {
+            return self.found.as_ref();
         }
+        if let Some((failed_path, when)) = &self.failed
+            && *failed_path == path_value
+            && when.elapsed() < self.retry_after
+        {
+            return None;
+        }
+
+        let exe = match locate(shell) {
+            Location::At(exe) => Some(exe),
+            Location::Absent => None,
+            // The listing is not ready, as on a first Tab with highlighting off: look once
+            // by probing, which costs what one "command not found" does.
+            Location::Unknown => shell.find_first_executable_in_path("carapace"),
+        };
+        match exe.map(Found::load) {
+            Some(None) => {
+                self.found = None;
+                self.failed = Some((path_value, Instant::now()));
+                return None;
+            }
+            found => self.found = found.flatten(),
+        }
+        self.failed = None;
+        self.path_value = Some(path_value);
         self.found.as_ref()
     }
 

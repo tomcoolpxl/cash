@@ -1706,6 +1706,12 @@ When carapace answers nothing, fails, or takes over three seconds, cash's own ca
 stand. The command's name, a word inside quotes, and a word after a redirection are left to
 cash.
 
+A carapace that is installed but does not answer its list is not written off. Measured
+right after `scoop install`, its first starts took 4.7 s, 3.1 s and 1.4 s while Windows
+scanned the new program, then about 0.5 s; a first Tab then gave up, and cash had remembered
+carapace as unusable until the next session. It is now asked again after 30 seconds, so a
+broken install costs one Tab in 30 rather than every Tab. The same happens after an update.
+
 **Cost.** Nothing per keystroke; only a Tab. Measured on the machine this was written on,
 carapace starts in about 50 ms, a Tab costs 85–100 ms where carapace has the list itself
 (`winget`, `terraform`, `gh pr`) and 220–450 ms where it runs the tool (`git checkout`,

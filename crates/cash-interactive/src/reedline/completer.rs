@@ -189,12 +189,38 @@ mod tests {
         "{\"value\":\"two words\",\"display\":\"two words\",\"description\":\"\"}]}\r\n",
     );
 
+    /// Like [`FAKE_CARAPACE`], but its first `--list` fails, as a first start that Windows
+    /// holds up past the Tab's wait does.
+    const FAKE_CARAPACE_SLOW_TO_START: &str = concat!(
+        "@echo off\r\n",
+        "if \"%1\"==\"--list\" if not exist \"%~dp0started\" (\r\n",
+        "  type nul > \"%~dp0started\"\r\n",
+        "  exit /b 1\r\n",
+        ")\r\n",
+        "if \"%1\"==\"--list\" (\r\n",
+        "  echo {\"fakecmd\":[{\"name\":\"fakecmd\"}]}\r\n",
+        "  exit /b 0\r\n",
+        ")\r\n",
+        "echo {\"nospace\":\"\",\"values\":[",
+        "{\"value\":\"alpha\",\"display\":\"alpha\",\"description\":\"\"}]}\r\n",
+    );
+
     async fn completer_with_fake_carapace() -> (
         ReedlineCompleter<cash_core::extensions::DefaultShellExtensions>,
         tempfile::TempDir,
     ) {
+        completer_with(FAKE_CARAPACE, carapace::Cache::default()).await
+    }
+
+    async fn completer_with(
+        script: &str,
+        cache: carapace::Cache,
+    ) -> (
+        ReedlineCompleter<cash_core::extensions::DefaultShellExtensions>,
+        tempfile::TempDir,
+    ) {
         let dir = tempfile::tempdir().unwrap();
-        std::fs::write(dir.path().join("carapace.cmd"), FAKE_CARAPACE).unwrap();
+        std::fs::write(dir.path().join("carapace.cmd"), script).unwrap();
         let mut shell = cash_core::Shell::builder().build().await.unwrap();
         let path = dir.path().to_string_lossy().into_owned();
         shell
@@ -202,9 +228,46 @@ mod tests {
             .unwrap();
         let completer = ReedlineCompleter {
             shell: std::sync::Arc::new(tokio::sync::Mutex::new(shell)),
-            carapace: carapace::Cache::default(),
+            carapace: cache,
         };
         (completer, dir)
+    }
+
+    #[tokio::test]
+    async fn a_carapace_that_did_not_answer_is_asked_again_later() {
+        let (mut completer, dir) = completer_with(
+            FAKE_CARAPACE_SLOW_TO_START,
+            carapace::Cache::retrying_after(std::time::Duration::ZERO),
+        )
+        .await;
+        let _ = settled(&mut completer, "fakecmd a").await;
+        assert!(
+            dir.path().join("started").exists(),
+            "the first start never failed"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_carapace_that_did_not_answer_waits_before_it_is_asked_again() {
+        let (mut completer, dir) = completer_with(
+            FAKE_CARAPACE_SLOW_TO_START,
+            carapace::Cache::retrying_after(std::time::Duration::from_secs(3600)),
+        )
+        .await;
+        // Until carapace has been tried once and failed, then several Tabs more.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while !dir.path().join("started").exists() {
+            let _ = completer.complete_async("fakecmd a", 9).await;
+            assert!(
+                std::time::Instant::now() < deadline,
+                "carapace was never tried"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        for _ in 0..3 {
+            let suggestions = completer.complete_async("fakecmd a", 9).await;
+            assert!(suggestions.iter().all(|s| s.value != "alpha"));
+        }
     }
 
     /// The suggestions for `line` once the PATH listing has found carapace.
