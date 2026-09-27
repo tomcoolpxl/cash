@@ -508,8 +508,9 @@ fn the_exit_trap_actually_fires() {
 #[test]
 fn a_signal_with_no_win32_mechanism_is_refused_not_faked() {
     // Accepting a trap that could never fire is the silent-failure pattern D20 and D26
-    // both reject. There is no Win32 mechanism behind SIGUSR1, so say so.
-    for signal in ["USR1", "USR2", "PIPE", "ALRM", "CHLD"] {
+    // both reject. There is no Win32 mechanism behind SIGUSR1, so say so. (CHLD is not
+    // here: cash sees its children exit, and emulates it, D64.)
+    for signal in ["USR1", "USR2", "PIPE", "ALRM"] {
         let out = cash(&format!(r#"trap "echo x" {signal}"#));
         assert!(
             out.stderr.contains("invalid signal"),
