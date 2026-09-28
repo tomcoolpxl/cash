@@ -33,12 +33,11 @@ const ICON_URL: &str =
 /// The name the logo is written under: [`ICON_URL`]'s file name.
 const ICON_FILE: &str = "cash_logo_small.png";
 
-/// The Nerd Fonts the profile asks for when one is installed, so that `ls --icons` draws
-/// its file icons (decided with the user, 2026-09-28): Cascadia's, to look like
-/// Terminal's own font. Each is Terminal's name for the family, then the names Windows
-/// lists its installed fonts under (`CaskaydiaMono NFM Bold (TrueType)`). The first is
-/// what Scoop's notes suggest: `scoop install nerd-fonts/CascadiaMono-NF`.
-const NERD_FONTS: &[(&str, &[&str])] = &[
+/// The Cascadia Nerd Fonts, asked for first so that the profile looks like Terminal's
+/// own font. Each is Terminal's name for the family, then the names Windows lists its
+/// installed fonts under (`CaskaydiaMono NFM Bold (TrueType)`). The first is what Scoop's
+/// notes suggest: `scoop install nerd-fonts/CascadiaMono-NF`.
+const CASCADIA_NERD_FONTS: &[(&str, &[&str])] = &[
     (
         "CaskaydiaMono Nerd Font Mono",
         &["CaskaydiaMono NFM", "CaskaydiaMono Nerd Font Mono"],
@@ -48,22 +47,51 @@ const NERD_FONTS: &[(&str, &[&str])] = &[
         "CaskaydiaCove Nerd Font Mono",
         &["CaskaydiaCove NFM", "CaskaydiaCove Nerd Font Mono"],
     ),
+    ("Cascadia Code NF", &["Cascadia Code NF"]),
 ];
 
-/// The first of [`NERD_FONTS`] that Windows has installed.
-fn nerd_font() -> Option<&'static str> {
-    let installed = cash_win32::terminal::installed_fonts();
-    NERD_FONTS
-        .iter()
-        .find(|(_, listed)| {
-            installed.iter().any(|font| {
-                listed.iter().any(|name| {
-                    font.strip_prefix(name)
-                        .is_some_and(|rest| rest.is_empty() || rest.starts_with([' ', '(']))
-                })
-            })
+/// The Nerd Font the profile asks for, so that `ls --icons` draws its file icons: `None`
+/// when this machine has none, and the profile keeps Terminal's font.
+fn nerd_font(local: &Path) -> Option<String> {
+    let program_data = std::env::var_os("ProgramData").map(PathBuf::from);
+    choose_nerd_font(
+        &cash_win32::terminal::installed_fonts(),
+        &cash_win32::terminal::nerd_fonts_in_use(local, program_data.as_deref()),
+        &cash_win32::terminal::monospace_families(),
+    )
+}
+
+/// Which Nerd Font, decided with the user, 2026-09-28: an installed Cascadia one, to look
+/// like Terminal's own; else the Nerd Font the user already has Terminal draw in
+/// (`in_use`, the default profile's first); else any Nerd Font Windows draws with a fixed
+/// pitch (`monospace`), `Nerd Font Mono` ones first. A Nerd Font of a proportional face
+/// (Ubuntu, Noto Sans) would put letters of every width in the grid, so it is never
+/// picked from what is merely installed.
+fn choose_nerd_font(
+    installed: &[String],
+    in_use: &[String],
+    monospace: &[String],
+) -> Option<String> {
+    let has = |listed: &str| {
+        installed.iter().any(|font| {
+            font.strip_prefix(listed)
+                .is_some_and(|rest| rest.is_empty() || rest.starts_with([' ', '(']))
         })
-        .map(|(family, _)| *family)
+    };
+    if let Some((family, _)) = CASCADIA_NERD_FONTS
+        .iter()
+        .find(|(_, listed)| listed.iter().any(|name| has(name)))
+    {
+        return Some((*family).to_owned());
+    }
+    if let Some(font) = in_use.first() {
+        return Some(font.clone());
+    }
+    monospace
+        .iter()
+        .filter_map(|family| cash_win32::terminal::terminal_family(family))
+        .min()
+        .map(|(_, family)| family)
 }
 
 const USAGE: &str = "usage: cash --terminal-profile\n       cash --remove-terminal-profile";
@@ -126,9 +154,9 @@ fn write_profile() -> Result<(), String> {
 
     let icon = dir.join(ICON_FILE);
     std::fs::write(&icon, ICON).map_err(|e| format!("{}: {e}", render(&icon)))?;
-    let font = nerd_font();
+    let font = nerd_font(&local);
     let fragment = dir.join("cash.json");
-    std::fs::write(&fragment, fragment_json(&exe, font))
+    std::fs::write(&fragment, fragment_json(&exe, font.as_deref()))
         .map_err(|e| format!("{}: {e}", render(&fragment)))?;
 
     let mut out = std::io::stdout().lock();
@@ -304,6 +332,41 @@ mod tests {
         );
         assert_eq!(derive(APP, "cash"), PROFILE_GUID);
         assert!(fragment_json("x", None).contains(&format!(r#""guid": "{PROFILE_GUID}""#)));
+    }
+
+    fn names(list: &[&str]) -> Vec<String> {
+        list.iter().map(|name| (*name).to_owned()).collect()
+    }
+
+    #[test]
+    fn a_cascadia_nerd_font_comes_first_then_the_one_in_use_then_any_monospaced() {
+        let caskaydia = names(&["CaskaydiaMono NFM Bold (TrueType)"]);
+        let in_use = names(&["UbuntuSansMono Nerd Font Mono"]);
+        let monospace = names(&["Consolas", "Hack Nerd Font Propo", "JetBrainsMono NFM"]);
+        assert_eq!(
+            choose_nerd_font(&caskaydia, &in_use, &monospace).as_deref(),
+            Some("CaskaydiaMono Nerd Font Mono")
+        );
+        assert_eq!(
+            choose_nerd_font(&[], &in_use, &monospace).as_deref(),
+            Some("UbuntuSansMono Nerd Font Mono")
+        );
+        // A Mono one before a Propo one, whatever the alphabet says.
+        assert_eq!(
+            choose_nerd_font(&[], &[], &monospace).as_deref(),
+            Some("JetBrainsMono Nerd Font Mono")
+        );
+        assert_eq!(choose_nerd_font(&[], &[], &names(&["Consolas"])), None);
+        // Microsoft's own Cascadia NF, by its own name.
+        assert_eq!(
+            choose_nerd_font(&names(&["Cascadia Mono NF (TrueType)"]), &[], &[]).as_deref(),
+            Some("Cascadia Mono NF")
+        );
+        // Cascadia Mono itself is no Nerd Font.
+        assert_eq!(
+            choose_nerd_font(&names(&["Cascadia Mono Regular (TrueType)"]), &[], &[]),
+            None
+        );
     }
 
     #[test]

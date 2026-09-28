@@ -318,10 +318,14 @@ fn ls_icons_show_when_asked_and_stay_out_of_pipes() {
     assert!(out.stdout.contains("\u{f17a} run.exe"), "{}", out.stdout);
     assert!(out.stdout.contains("\u{f1183} .bashrc"), "{}", out.stdout);
 
-    let out = cash(&format!(
-        "cd '{dir}'; ls -1 -d --icons=always --icons-theme=unicode docs b.txt"
-    ));
-    assert_eq!(out.stdout, "\u{1f4c4} b.txt\n\u{1f4c2} docs");
+    // The colour-emoji set is gone (2026-09-28): only the Nerd glyphs, or none.
+    let out = cash(&format!("cd '{dir}'; ls --icons-theme=unicode b.txt"));
+    assert_eq!(out.code, 2);
+    assert!(
+        out.stderr.contains("Valid arguments are: 'auto', 'fancy'"),
+        "{}",
+        out.stderr
+    );
 
     // `--icons` alone is `auto`: a pipe gets plain names, which scripts can use.
     let out = cash(&format!("cd '{dir}'; ls --icons b.txt | cat"));
@@ -397,24 +401,23 @@ fn ls_icons_are_nerd_glyphs_only_where_terminal_draws_a_nerd_font() {
     assert!(has_nerd_glyph(&out.stdout), "{:?}", out.stdout);
     assert!(out.stdout.ends_with(" b.txt"), "{:?}", out.stdout);
 
-    // In Terminal's own font, Cascadia Mono: plain Unicode, never empty boxes.
+    // In Terminal's own font, Cascadia Mono: no icons, rather than empty boxes.
     terminal_settings(local.path(), None);
     let out = cash_in_terminal(&script, Some(local.path()));
-    assert_eq!(out.stdout, "\u{1f4c4} b.txt");
+    assert_eq!(out.stdout, "b.txt");
 
-    // Outside Terminal nothing says which font: plain Unicode.
+    // Outside Terminal nothing says which font: no icons.
     let out = cash_in_terminal(&script, None);
-    assert_eq!(out.stdout, "\u{1f4c4} b.txt");
+    assert_eq!(out.stdout, "b.txt");
 
-    // A theme asked for is kept, wherever cash runs.
+    // `fancy` asks for the glyphs wherever cash runs.
     let fancy = format!("cd '{dir}'; ls -1 --icons=always --icons-theme=fancy b.txt");
-    assert!(has_nerd_glyph(&cash_in_terminal(&fancy, None).stdout));
+    let out = cash_in_terminal(&fancy, None);
+    assert!(has_nerd_glyph(&out.stdout), "{:?}", out.stdout);
+    // And `--icons=never` wins over a Nerd Font.
     terminal_settings(local.path(), Some("Hack NF"));
-    let unicode = format!("cd '{dir}'; ls -1 --icons=always --icons-theme=unicode b.txt");
-    assert_eq!(
-        cash_in_terminal(&unicode, Some(local.path())).stdout,
-        "\u{1f4c4} b.txt"
-    );
+    let never = format!("cd '{dir}'; ls -1 --icons=never b.txt");
+    assert_eq!(cash_in_terminal(&never, Some(local.path())).stdout, "b.txt");
 }
 
 #[test]

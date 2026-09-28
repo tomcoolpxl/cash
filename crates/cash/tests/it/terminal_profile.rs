@@ -98,15 +98,28 @@ fn an_installed_cascadia_nerd_font_becomes_the_profile_font() {
         String::from_utf8_lossy(&out.stdout)
     );
 
-    // Only Cascadia Mono itself, or another Nerd Font: Terminal's own font, and the
-    // suggestion.
-    let plain = Fonts::new(
-        "plain",
+    // No Cascadia one, but another monospaced Nerd Font installed: that one, Mono first.
+    let other = Fonts::new(
+        "other",
         &[
             "Cascadia Mono Regular (TrueType)",
+            "Hack Nerd Font Propo Regular (TrueType)",
             "UbuntuSansMono NFM (TrueType)",
         ],
     );
+    assert!(
+        cash_with_fonts(&local, "--terminal-profile", &other.0)
+            .status
+            .success()
+    );
+    let json = std::fs::read_to_string(fragments(&local).join("cash.json")).unwrap();
+    assert!(
+        json.contains(r#""font": { "face": "UbuntuSansMono Nerd Font Mono" }"#),
+        "{json}"
+    );
+
+    // No Nerd Font at all: Terminal's own font, and the suggestion.
+    let plain = Fonts::new("plain", &["Cascadia Mono Regular (TrueType)"]);
     let out = cash_with_fonts(&local, "--terminal-profile", &plain.0);
     let json = std::fs::read_to_string(fragments(&local).join("cash.json")).unwrap();
     assert!(!json.contains("\"font\""), "{json}");
@@ -114,6 +127,36 @@ fn an_installed_cascadia_nerd_font_becomes_the_profile_font() {
         String::from_utf8_lossy(&out.stdout).contains("nerd-fonts/CascadiaMono-NF"),
         "{}",
         String::from_utf8_lossy(&out.stdout)
+    );
+}
+
+#[test]
+fn the_nerd_font_the_user_already_uses_in_terminal_is_taken() {
+    let local = local_app_data("font-in-use");
+    let dir = local
+        .join("Packages")
+        .join("Microsoft.WindowsTerminal_8wekyb3d8bbwe")
+        .join("LocalState");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join("settings.json"),
+        r#"{ "defaultProfile": "{465d1d2d-478a-4eee-8c87-cd7cafd28372}",
+             "profiles": { "list": [ { "guid": "{465d1d2d-478a-4eee-8c87-cd7cafd28372}",
+                                       "name": "Bash",
+                                       "font": { "face": "UbuntuSansMono Nerd Font Mono" } } ] } }"#,
+    )
+    .unwrap();
+    // Installed, the registry says only JetBrains Mono's; the user's own choice wins.
+    let fonts = Fonts::new("in-use", &["JetBrainsMono NFM (TrueType)"]);
+    assert!(
+        cash_with_fonts(&local, "--terminal-profile", &fonts.0)
+            .status
+            .success()
+    );
+    let json = std::fs::read_to_string(fragments(&local).join("cash.json")).unwrap();
+    assert!(
+        json.contains(r#""font": { "face": "UbuntuSansMono Nerd Font Mono" }"#),
+        "{json}"
     );
 }
 

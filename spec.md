@@ -1036,12 +1036,18 @@ menu; so `--terminal-profile` adds one entry to the end of that list in each Ter
 install's `settings.json`, and `--remove-terminal-profile` cuts it out again. The file is
 JSON with comments and the user's own, so it is never rewritten whole: only that entry's
 text changes, and Terminal reloads the file, fragments included, at once.
-Terminal ships no Nerd Font, so the profile asks for a Cascadia one when Windows has it
-installed (the registry's font list): `CaskaydiaMono Nerd Font Mono`, Microsoft's
-`Cascadia Mono NF`, or `CaskaydiaCove Nerd Font Mono`, in that order; with none, it names
-no font, and `ls --icons` draws plain Unicode there (D67). Decided with the user,
-2026-09-28, with Scoop suggesting `nerd-fonts/CascadiaMono-NF` rather than installing it;
-`cash --terminal-profile` run again after installing a font picks it up.
+Terminal ships no Nerd Font, so the profile asks for one the machine has, decided with
+the user, 2026-09-28: first a Cascadia one (the registry's font list), to look like
+Terminal's own, `CaskaydiaMono Nerd Font Mono`, Microsoft's `Cascadia Mono NF`,
+`CaskaydiaCove Nerd Font Mono` or `Cascadia Code NF`; else the Nerd Font the user
+already has Terminal draw in, the default profile's first; else any Nerd Font GDI
+reports as fixed pitch, `Nerd Font Mono` ones first. A Nerd Font of a proportional face
+(Ubuntu, Noto Sans) is never picked from what is merely installed. Nerd Fonts 3 list
+short names (`UbuntuSansMono NFM`) where Terminal wants the long one (`UbuntuSansMono
+Nerd Font Mono`), so the name is turned. With none, the profile names no font, `ls
+--icons` shows no icons there (D67), and Scoop suggests `nerd-fonts/CascadiaMono-NF`
+rather than installing it; `cash --terminal-profile` run again after installing a font
+picks it up.
 Scoop's manifest (`packaging/scoop/cash.json`) runs them from its `post_install` and, on
 a real uninstall only, its `pre_uninstall`; it also offers carapace and the Nerd Font
 through `suggest` (D63). `cash.exe` links the C runtime statically, so no
@@ -1902,20 +1908,21 @@ its own (D48), so the question was what lsd adds and whether `ls` could have it.
 with the user, 2026-09-27, from lsd 1.2.0's options:
 
 - **Icons**, by option only: `--icons[=always|auto|never]`, bare `--icons` meaning `auto`,
-  so a pipe or a file never gets them. `--icons-theme=fancy` is lsd's Nerd Font theme,
-  matched by name, then extension, then kind, lsd's order; its tables are generated into
-  `ls_icon_table.rs` (Apache-2.0, `NOTICE`). `--icons-theme=unicode` is lsd's
-  plain-Unicode set, by kind only, for a terminal without a Nerd Font.
-- **Which icons by default** (revised with the user, 2026-09-28): `auto`. No terminal can
-  be asked its font, but Windows Terminal names the tab's profile in `WT_PROFILE_ID`, and
+  so a pipe or a file never gets them. The icons are lsd's Nerd Font theme, matched by
+  name, then extension, then kind, lsd's order; its tables are generated into
+  `ls_icon_table.rs` (Apache-2.0, `NOTICE`).
+- **Only where they draw** (revised with the user, 2026-09-28): `--icons-theme=auto`, the
+  default, shows them only when Windows Terminal draws the tab in a Nerd Font, and shows
+  no icons otherwise; `--icons-theme=fancy` shows them regardless. No terminal can be
+  asked its font, but Windows Terminal names the tab's profile in `WT_PROFILE_ID`, and
   the profile's font is in Terminal's settings, resolved as Terminal layers them: the
   user's entry for the profile, `profiles.defaults`, the fragment that brings it, then
   Cascadia Mono (`cash_win32::terminal`). A Nerd Font by name (`Nerd Font`, `NF`, `NFM`,
-  `NFP`) gets `fancy`; any other font, and anywhere cash cannot tell (the old console,
-  VS Code's terminal, SSH), gets `unicode`, which never comes out as empty boxes.
-  Terminal ships no Nerd Font of its own, so the profile `cash --terminal-profile` writes
-  asks for a Cascadia Nerd Font when one is installed (D38), and Scoop's notes suggest
-  `nerd-fonts/CascadiaMono-NF`.
+  `NFP`) gets the glyphs; any other font, and anywhere cash cannot tell (the old
+  console, VS Code's terminal, SSH), gets none. lsd's colour-emoji set
+  (`--icons-theme=unicode`, briefly the fallback) was dropped as too loud: Cascadia Mono
+  has no one-colour folder or file pictures, only shapes. Terminal ships no Nerd Font,
+  so the profile `cash --terminal-profile` writes asks for one the machine has (D38).
 - **A colour per kind of file**, as GNU ls gives with `LS_COLORS`: the shell's own
   `LS_COLORS` when set, otherwise `dircolors`' defaults (uutils' copy), which colour
   archives, backups and temporary files by extension as well as folders, links and

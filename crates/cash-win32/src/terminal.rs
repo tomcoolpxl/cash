@@ -176,6 +176,138 @@ pub fn is_nerd_font(face: &str) -> bool {
     })
 }
 
+/// The Nerd Fonts the user already has Terminal draw in, first seen first: each install's
+/// default profile's font, its `profiles.defaults`, then each profile's own.
+pub fn nerd_fonts_in_use(local_app_data: &Path, program_data: Option<&Path>) -> Vec<String> {
+    let mut fonts: Vec<String> = Vec::new();
+    for file in settings_files(local_app_data) {
+        let Some(settings) = std::fs::read_to_string(&file)
+            .ok()
+            .and_then(|text| jsonc::parse(&text))
+        else {
+            continue;
+        };
+        if let Some(default) = settings.get("defaultProfile").and_then(Value::as_str) {
+            fonts.push(profile_font(local_app_data, program_data, default));
+        }
+        let defaults = settings
+            .get("profiles")
+            .and_then(|profiles| profiles.get("defaults"));
+        fonts.extend(defaults.and_then(face_of));
+        fonts.extend(user_profiles(&settings).filter_map(face_of));
+    }
+    let mut seen = std::collections::HashSet::new();
+    fonts.retain(|font| is_nerd_font(font) && seen.insert(font.to_ascii_lowercase()));
+    fonts
+}
+
+/// The name Terminal knows a Nerd Font family by, from a name Windows lists it under.
+///
+/// With its kind: 0 for `Nerd Font Mono`, whose icons keep to one cell, 1 for `Nerd
+/// Font`, 2 for `Nerd Font Propo`. Nerd Fonts 3 list short names (`UbuntuSansMono NFM
+/// Bold`) and Terminal wants the long one (`UbuntuSansMono Nerd Font Mono`); older ones
+/// list the long name itself. `None` for any other font, for Symbols Nerd Font, which has
+/// icons but no letters, and for Microsoft's own `Cascadia … NF`, whose short name is its
+/// name.
+pub fn terminal_family(listed: &str) -> Option<(u8, String)> {
+    let name = listed
+        .strip_suffix(" (TrueType)")
+        .or_else(|| listed.strip_suffix(" (OpenType)"))
+        .unwrap_or(listed)
+        .trim();
+    let words: Vec<&str> = name.split_whitespace().collect();
+    let short = words.iter().enumerate().find_map(|(at, word)| {
+        let kind = match *word {
+            "NFM" => (0, "Nerd Font Mono"),
+            "NF" => (1, "Nerd Font"),
+            "NFP" => (2, "Nerd Font Propo"),
+            _ => return None,
+        };
+        Some((at, kind))
+    });
+    let (at, (kind, long)) = if let Some(found) = short {
+        found
+    } else {
+        let at = words.windows(2).position(|pair| pair == ["Nerd", "Font"])?;
+        let kind = match words.get(at + 2) {
+            Some(&"Mono") => (0, "Nerd Font Mono"),
+            Some(&"Propo") => (2, "Nerd Font Propo"),
+            Some(&"Complete") => return None,
+            _ => (1, "Nerd Font"),
+        };
+        (at, kind)
+    };
+    let base = words.get(..at)?.join(" ");
+    if base.is_empty() || base.starts_with("Symbols") || base.starts_with("Cascadia ") {
+        return None;
+    }
+    Some((kind, format!("{base} {long}")))
+}
+
+/// The font families Windows draws with a fixed pitch, as GDI names them.
+///
+/// `UbuntuSansMono NFM`, `Hack Nerd Font Mono`, `Consolas`. With [`FONTS_KEY_VAR`] set,
+/// that key's value names instead, as for [`installed_fonts`].
+pub fn monospace_families() -> Vec<String> {
+    use windows_sys::Win32::Foundation::LPARAM;
+    use windows_sys::Win32::Graphics::Gdi::{
+        CreateCompatibleDC, DEFAULT_CHARSET, DeleteDC, EnumFontFamiliesExW, LOGFONTW,
+    };
+
+    if std::env::var_os(FONTS_KEY_VAR).is_some() {
+        return installed_fonts();
+    }
+    let mut families: Vec<String> = Vec::new();
+    // SAFETY: a memory device context, which needs no screen; deleted below.
+    let dc = unsafe { CreateCompatibleDC(std::ptr::null_mut()) };
+    if dc.is_null() {
+        return families;
+    }
+    // SAFETY: LOGFONTW is plain data and valid all zeros: an empty face name with the
+    // default character set asks for every family, once each.
+    let mut wanted: LOGFONTW = unsafe { std::mem::zeroed() };
+    wanted.lfCharSet = DEFAULT_CHARSET;
+    // SAFETY: `add_fixed_pitch` runs only during this call, and `families` outlives it.
+    unsafe {
+        EnumFontFamiliesExW(
+            dc,
+            &raw const wanted,
+            Some(add_fixed_pitch),
+            (&raw mut families) as LPARAM,
+            0,
+        );
+    }
+    // SAFETY: the context came from CreateCompatibleDC above and is deleted once.
+    unsafe { DeleteDC(dc) };
+    families.sort();
+    families.dedup();
+    families
+}
+
+/// `EnumFontFamiliesExW` callback: keeps a family whose pitch is fixed.
+unsafe extern "system" fn add_fixed_pitch(
+    font: *const windows_sys::Win32::Graphics::Gdi::LOGFONTW,
+    _metrics: *const windows_sys::Win32::Graphics::Gdi::TEXTMETRICW,
+    _kind: u32,
+    families: windows_sys::Win32::Foundation::LPARAM,
+) -> i32 {
+    // SAFETY: `families` is the Vec `monospace_families` passed, alive for the call.
+    let families = unsafe { &mut *(families as *mut Vec<String>) };
+    // SAFETY: GDI hands the callback a valid LOGFONTW for the length of the call.
+    let font = unsafe { &*font };
+    let fixed = font.lfPitchAndFamily & 0x3 == 1;
+    let name = font
+        .lfFaceName
+        .split(|&unit| unit == 0)
+        .next()
+        .unwrap_or(&[]);
+    // `@` names are the same fonts turned for vertical writing.
+    if fixed && name.first() != Some(&u16::from(b'@')) {
+        families.push(String::from_utf16_lossy(name));
+    }
+    1
+}
+
 /// The fonts Windows has installed, for this user and for all, by the names it lists
 /// them under (`Cascadia Mono Regular (TrueType)`, `CaskaydiaMono NFM (TrueType)`).
 pub fn installed_fonts() -> Vec<String> {
@@ -485,6 +617,85 @@ mod tests {
         ] {
             assert!(!is_nerd_font(face), "{face}");
         }
+    }
+
+    #[test]
+    fn a_listed_font_maps_to_the_family_terminal_knows() {
+        let cases = [
+            (
+                "UbuntuSansMono NFM Bold (TrueType)",
+                Some((0, "UbuntuSansMono Nerd Font Mono")),
+            ),
+            (
+                "UbuntuSansMono NFM",
+                Some((0, "UbuntuSansMono Nerd Font Mono")),
+            ),
+            (
+                "JetBrainsMonoNL NF SemiBold",
+                Some((1, "JetBrainsMonoNL Nerd Font")),
+            ),
+            (
+                "NotoSans NFP Cond ExtBd",
+                Some((2, "NotoSans Nerd Font Propo")),
+            ),
+            (
+                "Hack Nerd Font Mono Regular (TrueType)",
+                Some((0, "Hack Nerd Font Mono")),
+            ),
+            (
+                "RobotoMono Nerd Font Mono Th It",
+                Some((0, "RobotoMono Nerd Font Mono")),
+            ),
+            (
+                "Inconsolata LGC Nerd Font",
+                Some((1, "Inconsolata LGC Nerd Font")),
+            ),
+            (
+                "FiraCode Nerd Font Propo Reg",
+                Some((2, "FiraCode Nerd Font Propo")),
+            ),
+        ];
+        for (listed, expected) in cases {
+            let expected = expected.map(|(kind, name)| (kind, name.to_owned()));
+            assert_eq!(terminal_family(listed), expected, "{listed}");
+        }
+        for listed in [
+            "Cascadia Mono Regular (TrueType)",
+            "Symbols Nerd Font Mono",
+            "Cascadia Mono NF SemiBold (TrueType)",
+            "Consolas Nerd Font Complete Mono Windows Compatible",
+            "NFM",
+        ] {
+            assert_eq!(terminal_family(listed), None, "{listed}");
+        }
+    }
+
+    #[test]
+    fn nerd_fonts_in_use_start_with_the_default_profile() {
+        let settings = format!(
+            r#"{{ "defaultProfile": "{GUID}", "profiles": {{ "list": [
+                {{ "guid": "{{aaaa}}", "font": {{ "face": "Hack Nerd Font Mono" }} }},
+                {{ "guid": "{{bbbb}}", "font": {{ "face": "Consolas" }} }},
+                {{ "guid": "{GUID}", "font": {{ "face": "UbuntuSansMono Nerd Font Mono" }} }} ] }} }}"#
+        );
+        let local = install("in-use", &settings, None);
+        assert_eq!(
+            nerd_fonts_in_use(&local, None),
+            ["UbuntuSansMono Nerd Font Mono", "Hack Nerd Font Mono"]
+        );
+        let _ = std::fs::remove_dir_all(&local);
+    }
+
+    #[test]
+    fn this_machine_reports_consolas_as_fixed_pitch() {
+        // Every Windows has Consolas; GDI says its pitch is fixed.
+        assert!(
+            monospace_families()
+                .iter()
+                .any(|family| family == "Consolas"),
+            "{:?}",
+            monospace_families()
+        );
     }
 
     #[test]

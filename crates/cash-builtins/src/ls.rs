@@ -5,8 +5,8 @@
 //! output matching POSIX / BusyBox conventions.
 //!
 //! cash (D67) adds what lsd shows beside GNU `ls`'s own options: icons (`--icons`, Nerd
-//! Font glyphs from lsd's theme when Windows Terminal draws the tab in a Nerd Font, plain
-//! Unicode otherwise, or either with `--icons-theme`), a colour
+//! Font glyphs from lsd's theme when Windows Terminal draws the tab in a Nerd Font, none
+//! otherwise, or always with `--icons-theme=fancy`), a colour
 //! for each kind of file (`LS_COLORS`, or `dircolors`' defaults without it), a tree
 //! (`--tree`, `--depth`), `--group-directories-first`, and the sorts `-X`, `-v`, `-U` and
 //! `--sort=WORD`.
@@ -54,9 +54,9 @@ List information about the FILEs (the current directory by default).
                                defaults; with -l, the other columns take lsd's
       --icons[=WHEN]         show an icon before each name: always, auto (when the
                                output is a terminal, the default), never
-      --icons-theme=THEME    fancy (Nerd Font glyphs), unicode, or auto (the default:
-                               fancy when Windows Terminal draws this tab in a
-                               Nerd Font, unicode anywhere else)
+      --icons-theme=THEME    auto (the default: Nerd Font glyphs when Windows
+                               Terminal draws this tab in a Nerd Font, no icons
+                               anywhere else) or fancy (the glyphs regardless)
       --attributes           show Windows' attributes as lsd does: d (or .),
                                archive, read-only, hidden, system (`.a-h-`)
       --tree                 list the directories as a tree
@@ -164,7 +164,7 @@ pub(crate) struct LsCommand {
     )]
     icons: Option<String>,
 
-    /// The icons to show: fancy (Nerd Font), unicode, or auto (by the tab's font).
+    /// When the Nerd Font glyphs show: auto (by the tab's font) or fancy (always).
     #[arg(long = "icons-theme", value_name = "THEME")]
     icons_theme: Option<String>,
 
@@ -230,19 +230,11 @@ enum SortKey {
     None,
 }
 
-/// Which icons to show.
-#[derive(Clone, Copy, Eq, PartialEq)]
-enum IconTheme {
-    /// Nerd Font glyphs, lsd's theme.
-    Fancy,
-    /// Plain Unicode symbols, which any font has.
-    Unicode,
-}
-
 /// How names are dressed: their colours and their icons.
 struct Look {
     colors: Option<lscolors::LsColors>,
-    icons: Option<IconTheme>,
+    /// Whether each name gets its Nerd Font glyph (lsd's theme).
+    icons: bool,
     /// This process's account, whose files `-l` shows in the owner's colour.
     me: String,
 }
@@ -387,21 +379,14 @@ impl LsCommand {
             "color",
             is_tty,
         )?;
-        let icons = when(self.icons.as_deref(), "icons", is_tty)?;
-        let theme = match self.icons_theme.as_deref() {
-            None | Some("auto") => {
-                if icons {
-                    auto_theme(context)
-                } else {
-                    IconTheme::Unicode
-                }
-            }
-            Some("fancy") => IconTheme::Fancy,
-            Some("unicode") => IconTheme::Unicode,
+        let asked = when(self.icons.as_deref(), "icons", is_tty)?;
+        let icons = match self.icons_theme.as_deref() {
+            None | Some("auto") => asked && terminal_font_is_nerd(context),
+            Some("fancy") => asked,
             Some(other) => {
                 return Err(Invalid(std::format!(
                     "invalid argument '{other}' for '--icons-theme'\n\
-                     Valid arguments are: 'auto', 'fancy', 'unicode'"
+                     Valid arguments are: 'auto', 'fancy'"
                 )));
             }
         };
@@ -421,7 +406,7 @@ impl LsCommand {
                 String::new()
             },
             colors,
-            icons: icons.then_some(theme),
+            icons,
         })
     }
 
@@ -802,8 +787,8 @@ impl LsCommand {
 
     fn format_name_plain(&self, item: &ItemInfo, look: &Look) -> String {
         let mut s = self.attribute_prefix(item);
-        if let Some(theme) = look.icons {
-            s.push_str(icon_for(theme, item));
+        if look.icons {
+            s.push_str(icon_for(item));
             s.push(' ');
         }
         s.push_str(&item.name);
@@ -819,8 +804,8 @@ impl LsCommand {
 
     fn format_name(&self, item: &ItemInfo, look: &Look) -> String {
         let mut shown = String::new();
-        if let Some(theme) = look.icons {
-            shown.push_str(icon_for(theme, item));
+        if look.icons {
+            shown.push_str(icon_for(item));
             shown.push(' ');
         }
         shown.push_str(&item.name);
@@ -946,15 +931,15 @@ fn default_ls_colors() -> String {
     spec
 }
 
-/// The icons `--icons` shows when no theme is asked for: Nerd Font glyphs when Windows
-/// Terminal draws this tab in a Nerd Font, plain Unicode anywhere cash cannot tell, where
-/// the glyphs could come out as empty boxes (decided with the user, 2026-09-28). No
-/// terminal can be asked its font, but Terminal names the tab's profile in
-/// `WT_PROFILE_ID`, and the profile's font is in Terminal's settings. Read from the
-/// shell's variables, as `LS_COLORS` is.
-fn auto_theme<SE: cash_core::ShellExtensions>(
+/// Whether Windows Terminal draws this tab in a Nerd Font, so that `--icons` shows its
+/// glyphs. Anywhere else, or in any other font, `--icons` shows no icons at all: the
+/// glyphs would come out as empty boxes, and the one other set, colour emoji, was too
+/// loud (decided with the user, 2026-09-28). No terminal can be asked its font, but
+/// Terminal names the tab's profile in `WT_PROFILE_ID`, and the profile's font is in
+/// Terminal's settings. Read from the shell's variables, as `LS_COLORS` is.
+fn terminal_font_is_nerd<SE: cash_core::ShellExtensions>(
     context: &cash_core::ExecutionContext<'_, SE>,
-) -> IconTheme {
+) -> bool {
     let var = |name: &str| {
         context
             .shell
@@ -964,7 +949,7 @@ fn auto_theme<SE: cash_core::ShellExtensions>(
     let (Some(_), Some(profile), Some(local)) =
         (var("WT_SESSION"), var("WT_PROFILE_ID"), var("LOCALAPPDATA"))
     else {
-        return IconTheme::Unicode;
+        return false;
     };
     let program_data = var("ProgramData").or_else(|| var("PROGRAMDATA"));
     let font = cash_win32::terminal::profile_font(
@@ -972,48 +957,33 @@ fn auto_theme<SE: cash_core::ShellExtensions>(
         program_data.as_deref().map(std::path::Path::new),
         &profile,
     );
-    if cash_win32::terminal::is_nerd_font(&font) {
-        IconTheme::Fancy
-    } else {
-        IconTheme::Unicode
-    }
+    cash_win32::terminal::is_nerd_font(&font)
 }
 
-/// The icon for an entry: lsd's order, a link as a link, then its name, then its
-/// extension, then its kind.
-fn icon_for(theme: IconTheme, item: &ItemInfo) -> &'static str {
+/// The Nerd Font glyph for an entry: lsd's order, a link as a link, then its name, then
+/// its extension, then its kind.
+fn icon_for(item: &ItemInfo) -> &'static str {
     let is_dir_link = matches!(item.target, Some((_, true)));
-    match theme {
-        IconTheme::Unicode => match item.kind {
-            EntryKind::Symlink if is_dir_link => "\u{1f5c2}",
-            EntryKind::Symlink => "\u{1f516}",
-            EntryKind::Dir => "\u{1f4c2}",
-            EntryKind::File if item.is_executable() => "\u{1f3d7}",
-            EntryKind::File => "\u{1f4c4}",
-        },
-        IconTheme::Fancy => {
-            if item.kind == EntryKind::Symlink {
-                return if is_dir_link { "\u{f482}" } else { "\u{f481}" };
-            }
-            let name = item.name.to_lowercase();
-            if let Some(icon) = lookup(ls_icon_table::BY_NAME, &name) {
-                return icon;
-            }
-            if item.kind == EntryKind::Dir {
-                return "\u{f115}";
-            }
-            if let Some(icon) = name
-                .rsplit_once('.')
-                .and_then(|(_, extension)| lookup(ls_icon_table::BY_EXTENSION, extension))
-            {
-                return icon;
-            }
-            if item.is_executable() {
-                "\u{f489}"
-            } else {
-                "\u{f016}"
-            }
-        }
+    if item.kind == EntryKind::Symlink {
+        return if is_dir_link { "\u{f482}" } else { "\u{f481}" };
+    }
+    let name = item.name.to_lowercase();
+    if let Some(icon) = lookup(ls_icon_table::BY_NAME, &name) {
+        return icon;
+    }
+    if item.kind == EntryKind::Dir {
+        return "\u{f115}";
+    }
+    if let Some(icon) = name
+        .rsplit_once('.')
+        .and_then(|(_, extension)| lookup(ls_icon_table::BY_EXTENSION, extension))
+    {
+        return icon;
+    }
+    if item.is_executable() {
+        "\u{f489}"
+    } else {
+        "\u{f016}"
     }
 }
 
