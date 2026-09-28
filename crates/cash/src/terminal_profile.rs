@@ -111,11 +111,16 @@ fn remove_profile() -> Result<(), String> {
     Ok(())
 }
 
-/// The fragment: one profile, named `cash`, running `exe` with the logo as its icon.
+/// The fragment: one profile, named `cash`, running `exe` with the logo as its icon, and
+/// with command marks on. `autoMarkPrompts` marks the line where each Enter was pressed,
+/// even when the prompt sends no `OSC 133`, and `showMarksOnScrollbar` shows the marks,
+/// which `scrollToMark` then jumps between (decided with the user, 2026-09-28). Fonts and
+/// colours stay the user's: a profile cannot know which fonts are installed.
 fn fragment_json(exe: &str) -> String {
     format!(
         "{{\n  \"profiles\": [\n    {{\n      \"name\": \"cash\",\n      \
-         \"commandline\": {},\n      \"icon\": {}\n    }}\n  ]\n}}\n",
+         \"commandline\": {},\n      \"icon\": {},\n      \
+         \"showMarksOnScrollbar\": true,\n      \"autoMarkPrompts\": true\n    }}\n  ]\n}}\n",
         json_string(&format!("\"{exe}\"")),
         json_string(ICON_URL)
     )
@@ -156,6 +161,8 @@ mod tests {
         );
         assert!(json.contains(&format!(r#""icon": "{ICON_URL}""#)), "{json}");
         assert!(json.contains(r#""name": "cash""#), "{json}");
+        assert!(json.contains(r#""showMarksOnScrollbar": true"#), "{json}");
+        assert!(json.contains(r#""autoMarkPrompts": true"#), "{json}");
     }
 
     #[test]

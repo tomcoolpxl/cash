@@ -176,22 +176,23 @@ regardless of which `echo.exe` is on `PATH`. Explicit executable paths bypass bu
 
 ## Windows Terminal
 
-`cash --terminal-profile`, which Scoop runs on install, adds a `cash` profile. To make it
-the default and turn on the command marks, write the profile yourself in Windows
-Terminal's `settings.json` (Settings → Open JSON file). The two `Marks` settings turn on shell
-integration: each command gets a mark on the scrollbar, green or red by its exit status,
-and Ctrl+↑/Ctrl+↓ jump between them. A Nerd Font shows `ls --icons`.
+`cash --terminal-profile`, which Scoop runs on install, adds a `cash` profile with the
+logo and command marks on: each command gets a mark on the scrollbar, green or red by
+its exit status once the prompt reports it (below). Its GUID is
+`{43e4cdd3-eb67-5e13-bd17-fa0d7f8cf3ff}`. To make it the default, or give it a font and
+colours, add an entry with that GUID to Windows Terminal's `settings.json` (Settings →
+Open JSON file) holding only your own settings; the program and icon keep coming from the
+install, so upgrades need nothing. If your `newTabMenu` lists profiles one by one, add
+it there too, or it stays out of the + menu. Ctrl+↑/Ctrl+↓ jump between marks with the
+two actions below. A Nerd Font shows `ls --icons`.
 
 ```jsonc
-"defaultProfile": "{465d1d2d-478a-4eee-8c87-cd7cafd28372}",
+"defaultProfile": "{43e4cdd3-eb67-5e13-bd17-fa0d7f8cf3ff}",
 "profiles": { "list": [ {
-    "guid": "{465d1d2d-478a-4eee-8c87-cd7cafd28372}",
-    "name": "cash",
-    "commandline": "C:\\path\\to\\cash.exe",
+    "guid": "{43e4cdd3-eb67-5e13-bd17-fa0d7f8cf3ff}",
+    "source": "cash",
     "startingDirectory": "%USERPROFILE%",
-    "font": { "face": "UbuntuSansMono Nerd Font" },
-    "showMarksOnScrollbar": true,
-    "autoMarkPrompts": true
+    "font": { "face": "UbuntuSansMono Nerd Font" }
 } ] },
 "actions": [
     { "command": { "action": "scrollToMark", "direction": "previous" }, "id": "User.scrollToMark.previous" },
@@ -203,8 +204,9 @@ and Ctrl+↑/Ctrl+↓ jump between them. A Nerd Font shows `ls --icons`.
 ]
 ```
 
-Any GUID works for a new profile; keep it the same in `defaultProfile`. The marks come
-from the prompt, which has to send Microsoft's
+A build of your own, outside an install, needs a whole profile instead: any GUID, the
+same in `defaultProfile`, a `name`, and `commandline` set to that `cash.exe`. The marks'
+colours come from the prompt, which has to send Microsoft's
 [shell-integration sequences](https://learn.microsoft.com/windows/terminal/tutorials/shell-integration):
 `OSC 133;A` and `B` around `PS1`, `C` in `PS0`, `D;$?` when a command ends, and `OSC 9;9`
 with the folder in Windows form so that a new tab or split pane opens where you are. In
