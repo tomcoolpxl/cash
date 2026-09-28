@@ -1,4 +1,4 @@
-//! Generates artifacts derived from the `brush` command-line interface: man
+//! Generates artifacts derived from the `cash` command-line interface: man
 //! pages, markdown help, shell completion scripts, and the config file's JSON
 //! schema.
 //!
@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use clap::{CommandFactory, Parser};
 
-/// Generate artifacts derived from the brush command-line interface.
+/// Generate artifacts derived from the cash command-line interface.
 #[derive(Parser)]
 enum GenCommand {
     /// Generate man content into the given directory.

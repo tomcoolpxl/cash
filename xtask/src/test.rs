@@ -2,10 +2,10 @@
 //!
 //! This module provides commands for running different types of tests:
 //!
-//! - **Unit tests**: Fast tests that don't execute the brush binary (excludes integration test
-//!   binaries like brush-compat-tests, brush-interactive-tests, brush-completion-tests)
-//! - **Integration tests**: All workspace tests including unit tests and integration tests that
-//!   execute the brush binary
+//! - **Unit tests**: Fast tests that don't execute `cash.exe` (everything but the `cash`
+//!   package's tests)
+//! - **Integration tests**: All workspace tests, including the `cash` package's tests that
+//!   drive `cash.exe`
 //! - **External suites**: Third-party test suites like bash-completion
 //!
 //! Both unit and integration tests support optional coverage collection via
@@ -17,25 +17,22 @@ use anyhow::{Context, Result};
 use clap::{Args, Parser, Subcommand};
 use xshell::{Shell, cmd};
 
-use crate::common::{BuildProfile, find_brush_binary, find_workspace_root};
+use crate::common::{BuildProfile, find_cash_binary, find_workspace_root};
 
-/// Integration test binaries that are excluded from unit tests.
-/// These tests execute the brush binary and are slower.
-const INTEGRATION_TEST_BINARIES: &[&str] = &[
-    "brush-compat-tests",
-    "brush-interactive-tests",
-    "brush-completion-tests",
-];
+/// The nextest filter for unit tests. The tests that drive `cash.exe` all live in the `cash`
+/// package, because `CARGO_BIN_EXE_cash` is only defined for the crate that declares the
+/// binary; everything else is a unit test.
+const UNIT_TEST_FILTER: &str = "not package(cash)";
 
-/// Shared arguments for test commands that need a brush binary.
+/// Shared arguments for test commands that need a cash binary.
 #[derive(Args, Debug, Clone)]
 pub struct BinaryArgs {
-    /// Path to the brush binary to test. If not specified, uses the binary
+    /// Path to the cash binary to test. If not specified, uses the binary
     /// from the workspace's target directory based on --profile/--debug/--release.
     #[clap(long, global = true)]
-    pub brush_path: Option<PathBuf>,
+    pub cash_path: Option<PathBuf>,
 
-    /// Build profile to use when auto-detecting the brush binary.
+    /// Build profile to use when auto-detecting the cash binary.
     #[clap(long, short = 'p', value_enum, default_value_t = BuildProfile::Debug, global = true)]
     pub profile: BuildProfile,
 
@@ -61,9 +58,9 @@ impl BinaryArgs {
         }
     }
 
-    /// Find the brush binary using these arguments.
-    pub fn find_brush_binary(&self) -> Result<PathBuf> {
-        find_brush_binary(self.brush_path.as_ref(), self.effective_profile())
+    /// Find the cash binary using these arguments.
+    pub fn find_cash_binary(&self) -> Result<PathBuf> {
+        find_cash_binary(self.cash_path.as_ref(), self.effective_profile())
     }
 }
 
@@ -82,16 +79,15 @@ pub struct TestCommand {
 /// Test subcommands.
 #[derive(Subcommand, Clone)]
 pub enum TestSubcommand {
-    /// Run unit tests (fast tests that don't execute the brush binary).
+    /// Run unit tests (fast tests that don't execute cash.exe).
     ///
-    /// Excludes integration test binaries: brush-compat-tests, brush-interactive-tests,
-    /// brush-completion-tests.
+    /// Excludes the `cash` package's tests, which drive the binary.
     Unit(UnitTestArgs),
 
     /// Run all workspace tests (unit + integration tests).
     ///
-    /// This includes all tests: unit tests plus integration tests that execute
-    /// the brush binary (compat tests, interactive tests, completion tests).
+    /// This includes all tests: unit tests plus the `cash` package's tests that
+    /// drive cash.exe.
     Integration(IntegrationTestArgs),
 
     /// Run external test suites.
@@ -136,7 +132,7 @@ pub struct CoverageArgs {
 /// External test suite commands.
 #[derive(Subcommand, Clone)]
 pub enum ExternalTestCommand {
-    /// Run the bash-completion test suite against brush.
+    /// Run the bash-completion test suite against cash.
     BashCompletion(BashCompletionArgs),
 }
 
@@ -212,7 +208,7 @@ fn run_external(
 
 /// Run unit tests (excludes integration test binaries).
 ///
-/// Unit tests are fast tests that don't execute the brush binary.
+/// Unit tests are fast tests that don't execute cash.exe.
 pub fn run_unit_tests(
     sh: &Shell,
     binary_args: &BinaryArgs,
@@ -222,23 +218,16 @@ pub fn run_unit_tests(
     let profile = binary_args.effective_profile();
     eprintln!("Running unit tests ({profile:?} profile)...");
 
-    // Build the filter expression to exclude integration test binaries
-    let exclusions: Vec<String> = INTEGRATION_TEST_BINARIES
-        .iter()
-        .map(|name| format!("not binary({name})"))
-        .collect();
-    let filter_expr = exclusions.join(" and ");
-
     if args.coverage.coverage {
         run_tests_with_coverage(
             sh,
             profile,
-            Some(&filter_expr),
+            Some(UNIT_TEST_FILTER),
             &args.coverage.coverage_output,
             verbose,
         )
     } else {
-        run_nextest(sh, profile, Some(&filter_expr), verbose)?;
+        run_nextest(sh, profile, Some(UNIT_TEST_FILTER), verbose)?;
         eprintln!("Unit tests passed.");
         Ok(())
     }
@@ -246,8 +235,8 @@ pub fn run_unit_tests(
 
 /// Run all workspace tests (unit + integration).
 ///
-/// This runs all tests in the workspace, including integration tests
-/// that execute the brush binary.
+/// This runs all tests in the workspace, including the integration tests
+/// that drive cash.exe.
 pub fn run_integration_tests(
     sh: &Shell,
     binary_args: &BinaryArgs,
@@ -454,9 +443,9 @@ fn list_bash_completion_tests(sh: &Shell, args: &BashCompletionArgs, verbose: bo
     Ok(())
 }
 
-/// Run the bash-completion project's test suite against brush.
+/// Run the bash-completion project's test suite against cash.
 ///
-/// This runs pytest on the bash-completion test suite with brush as the shell,
+/// This runs pytest on the bash-completion test suite with cash as the shell,
 /// configured via the `BASH_COMPLETION_TEST_BASH` environment variable.
 /// Results are output as JSON and optionally summarized to markdown.
 ///
@@ -469,8 +458,8 @@ fn run_bash_completion_tests(
     binary_args: &BinaryArgs,
     verbose: bool,
 ) -> Result<()> {
-    // Find the brush binary (use explicit path or auto-detect from target dir)
-    let brush_path = binary_args.find_brush_binary()?;
+    // Find the cash binary (use explicit path or auto-detect from target dir)
+    let cash_path = binary_args.find_cash_binary()?;
 
     let test_dir = args.bash_completion_path.join("test");
     if !test_dir.exists() {
@@ -484,10 +473,10 @@ fn run_bash_completion_tests(
     let dir_guard = sh.push_dir(&test_dir);
 
     // Set environment variable for the test suite
-    let brush_path_str = brush_path.display().to_string();
+    let cash_path_str = cash_path.display().to_string();
     let _env = sh.push_env(
         "BASH_COMPLETION_TEST_BASH",
-        format!("{brush_path_str} --noprofile --no-config --input-backend=basic"),
+        format!("{cash_path_str} --noprofile --no-config --input-backend=basic"),
     );
 
     // Handle --list mode: just collect and display tests
@@ -496,7 +485,7 @@ fn run_bash_completion_tests(
     }
 
     eprintln!("Running bash-completion test suite...");
-    eprintln!("Using brush binary: {}", brush_path.display());
+    eprintln!("Using cash binary: {}", cash_path.display());
 
     // Determine test targets - specific files or all tests
     let test_targets: Vec<String> = if args.file.is_empty() {

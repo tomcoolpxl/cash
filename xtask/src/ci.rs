@@ -18,7 +18,7 @@
 //! 2. **Pre-commit hooks** - File hygiene, spelling, workflow analysis, links,
 //!    and the cargo-deny audit: everything in `.pre-commit-config.yaml`
 //! 3. **Schema check** - Verifies generated schemas are up-to-date
-//! 4. **Integration tests** - Full workspace tests including compat tests
+//! 4. **Integration tests** - Full workspace tests, including those that drive cash.exe
 //!
 //! The ordering is intentional: fast checks run first to provide quick feedback,
 //! with slower comprehensive tests running last.
@@ -91,7 +91,7 @@ pub fn run(cmd: &CiCommand, verbose: bool) -> Result<()> {
 fn make_unit_test_command() -> TestCommand {
     TestCommand {
         binary_args: BinaryArgs {
-            brush_path: None,
+            cash_path: None,
             profile: crate::common::BuildProfile::Debug,
             debug: false,
             release: false,
@@ -104,7 +104,7 @@ fn make_unit_test_command() -> TestCommand {
 fn make_integration_test_command() -> TestCommand {
     TestCommand {
         binary_args: BinaryArgs {
-            brush_path: None,
+            cash_path: None,
             profile: crate::common::BuildProfile::Debug,
             debug: false,
             release: false,
