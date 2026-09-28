@@ -17,7 +17,7 @@ This script does, for this repository only. It deletes:
 A folder is left alone while it is in use: while a program inside it runs, or while a
 cargo build holds its lock. Anything else is renamed with a .cash-trash- suffix, which
 is instant, and then deleted by a background process, so the script returns at once.
-The installed shell itself (%LOCALAPPDATA%\cash-dev\cash.exe) is never touched, which is
+The installed shell itself (%USERPROFILE%\.cash-dev\cash.exe) is never touched, which is
 what makes every target\ folder safe to delete.
 
 Claude Code runs this at the start of every session (.claude\settings.json), with -Hook.
@@ -51,7 +51,7 @@ $ErrorActionPreference = 'Stop'
 
 $trashMarker = '.cash-trash-'
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-$installDir = Join-Path $env:LOCALAPPDATA 'cash-dev'
+$installDir = Join-Path $env:USERPROFILE '.cash-dev'
 
 # Folders renamed for deletion, and one line per deletion for the summary.
 $doomed = New-Object System.Collections.Generic.List[string]

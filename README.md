@@ -176,8 +176,10 @@ Build output is disposable, and each checkout and worktree has its own `target\`
   backtraces), `--profile debugging` keeps all of it. `release` is thin LTO and builds
   quickly; `dist`, fat LTO with one codegen unit, is what the release workflow ships.
 - **The shell you use** comes from `scripts\install.ps1`, which builds `release` and
-  installs `%LOCALAPPDATA%\cash-dev\cash.exe`; point a Windows Terminal profile there.
-  Nothing runs from `target\`, so any of it can be deleted at any time.
+  installs `%USERPROFILE%\.cash-dev\cash.exe`; point a Windows Terminal profile there.
+  Nothing runs from `target\`, so any of it can be deleted at any time. (Not under
+  `%LOCALAPPDATA%`: the Store's Windows Terminal sees a redirected AppData of its own and
+  cannot find a program installed there.)
 - **Cleanup.** `scripts\tidy.ps1` deletes build folders not built for a week, what removed
   worktrees leave behind, and old installed copies, skipping anything in use; `-All`
   takes every build folder. Claude Code runs it when a session starts

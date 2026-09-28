@@ -3,8 +3,8 @@
 Builds cash from this checkout and installs it as the shell used day to day.
 
 .DESCRIPTION
-Builds cash.exe and copies it to %LOCALAPPDATA%\cash-dev\cash.exe, the program the
-Windows Terminal "cash" profile starts. The installed copy lives outside target\, so
+Builds cash.exe and copies it to %USERPROFILE%\.cash-dev\cash.exe, the program the
+Windows Terminal profile for the dev build starts. The installed copy lives outside target\, so
 any build folder can be deleted at any time, and a rebuild never has to work around
 the shell that is running.
 
@@ -26,7 +26,10 @@ param(
     [ValidateSet('release', 'dist')]
     [string]$CargoProfile = 'release',
     # Where the shell is installed; the Windows Terminal profile starts cash.exe there.
-    [string]$Destination = (Join-Path $env:LOCALAPPDATA 'cash-dev'),
+    # Not under %LOCALAPPDATA%: Windows Terminal from the Store sees a redirected AppData
+    # of its own, where a folder another program made does not appear, and a profile
+    # pointing there fails with 0x80070002 (file not found).
+    [string]$Destination = (Join-Path $env:USERPROFILE '.cash-dev'),
     # Warn before building when the drive has less free space than this.
     [int]$MinFreeGB = 30
 )
