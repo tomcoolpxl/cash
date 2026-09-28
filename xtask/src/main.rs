@@ -30,7 +30,7 @@ struct CommandLineArgs {
 
 #[derive(Parser)]
 enum Command {
-    /// Run analysis tasks (benchmarks, public API diffing).
+    /// Run analysis tasks (benchmarks).
     #[clap(subcommand)]
     Analyze(analyze::AnalyzeCommand),
     /// Run code quality checks.

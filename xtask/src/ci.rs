@@ -13,26 +13,19 @@
 //!
 //! ## Full workflow (`cargo xtask ci full`)
 //!
-//! Comprehensive validation (~60s warm cache) before opening a pull request:
+//! Comprehensive validation before opening a pull request:
 //! 1. All quick workflow checks
-//! 2. **Pre-commit hooks** - File hygiene, spelling, workflow analysis, links,
-//!    and the cargo-deny audit: everything in `.pre-commit-config.yaml`
-//! 3. **Schema check** - Verifies generated schemas are up-to-date
-//! 4. **Integration tests** - Full workspace tests, including those that drive cash.exe
+//! 2. **Integration tests** - Full workspace tests, including those that drive cash.exe
 //!
 //! The ordering is intentional: fast checks run first to provide quick feedback,
 //! with slower comprehensive tests running last.
 //!
-//! `ci full` reproduces every CI check that does not need a different machine or
-//! toolchain. What it deliberately does not cover, because CI alone can: the
-//! three-OS matrix, the MSRV toolchain, cross-compilation, coverage, benchmarks,
-//! the bash-completion suite, the nightly-only `check unused-deps` and
-//! `analyze public-api`, `CodeQL`, and SARIF upload.
+//! Both workflows run their tests through cargo-nextest (`cargo install cargo-nextest`).
 
 use anyhow::Result;
 use clap::Parser;
 
-use crate::check::{self, BuildArgs, CheckCommand, HooksArgs};
+use crate::check::{self, BuildArgs, CheckCommand};
 use crate::test::{
     self, BinaryArgs, IntegrationTestArgs, TestCommand, TestSubcommand, UnitTestArgs,
 };
@@ -45,16 +38,12 @@ type Step<'a> = (&'a str, Box<dyn Fn() -> Result<()> + 'a>);
 pub enum CiCommand {
     /// Run quick inner-loop checks: fmt, build, lint, unit tests (~7s warm).
     ///
-    /// Use this for rapid iteration during development. Needs no tools beyond
-    /// the Rust toolchain, which is why it is also what the optional pre-push
-    /// git hook runs.
+    /// Use this for rapid iteration during development.
     Quick(QuickArgs),
 
-    /// Run the full workflow: quick + pre-commit hooks, schemas, integration tests (~60s warm).
+    /// Run the full workflow: quick + integration tests.
     ///
     /// This runs every check that should pass before opening a pull request.
-    /// Requires `prek` in addition to the Rust toolchain; pass `--no-hooks`
-    /// to skip the prek-backed portion, which includes the cargo-deny audit.
     Full(FullArgs),
 }
 
@@ -72,11 +61,6 @@ pub struct FullArgs {
     /// Continue running checks even if one fails.
     #[clap(short = 'k', long)]
     continue_on_error: bool,
-
-    /// Skip the pre-commit hooks (including the cargo-deny audit), which
-    /// require prek to be installed.
-    #[clap(long)]
-    no_hooks: bool,
 }
 
 /// Run a CI workflow command.
@@ -91,7 +75,6 @@ pub fn run(cmd: &CiCommand, verbose: bool) -> Result<()> {
 fn make_unit_test_command() -> TestCommand {
     TestCommand {
         binary_args: BinaryArgs {
-            cash_path: None,
             profile: crate::common::BuildProfile::Debug,
             debug: false,
             release: false,
@@ -104,7 +87,6 @@ fn make_unit_test_command() -> TestCommand {
 fn make_integration_test_command() -> TestCommand {
     TestCommand {
         binary_args: BinaryArgs {
-            cash_path: None,
             profile: crate::common::BuildProfile::Debug,
             debug: false,
             release: false,
@@ -145,32 +127,15 @@ fn run_quick(args: &QuickArgs, verbose: bool) -> Result<()> {
     )
 }
 
-/// Run the full pre-PR workflow (~60s warm cache).
+/// Run the full pre-PR workflow.
 fn run_full(args: &FullArgs, verbose: bool) -> Result<()> {
     eprintln!("Running full checks...\n");
 
     let mut steps = quick_steps(verbose);
-
-    if args.no_hooks {
-        eprintln!("Skipping pre-commit hooks (--no-hooks).\n");
-    } else {
-        steps.push((
-            "Pre-commit hooks",
-            Box::new(move || check::run(&CheckCommand::Hooks(HooksArgs::default()), verbose)),
-        ));
-    }
-
-    steps.extend([
-        (
-            "Schema check",
-            Box::new(move || check::run(&CheckCommand::Schemas, verbose))
-                as Box<dyn Fn() -> Result<()>>,
-        ),
-        (
-            "Integration tests",
-            Box::new(move || test::run(&make_integration_test_command(), verbose)),
-        ),
-    ]);
+    steps.push((
+        "Integration tests",
+        Box::new(move || test::run(&make_integration_test_command(), verbose)),
+    ));
 
     run_steps(&steps, args.continue_on_error, "Full checks")
 }

@@ -3,14 +3,13 @@
 //! This module provides shared functionality for:
 //! - Build profile selection (debug vs release)
 //! - Workspace root discovery
-//! - cash binary location for test commands
 
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use clap::ValueEnum;
 
-/// Build profile for selecting which binary to use.
+/// Build profile to run the tests under.
 #[derive(Clone, Copy, Debug, Default, ValueEnum, PartialEq, Eq)]
 pub enum BuildProfile {
     /// Debug build (target/debug/).
@@ -18,17 +17,6 @@ pub enum BuildProfile {
     Debug,
     /// Release build (target/release/).
     Release,
-}
-
-impl BuildProfile {
-    /// Returns the target subdirectory name for this profile.
-    #[must_use]
-    pub const fn target_dir_name(self) -> &'static str {
-        match self {
-            Self::Debug => "debug",
-            Self::Release => "release",
-        }
-    }
 }
 
 /// Find the workspace root directory.
@@ -47,51 +35,9 @@ pub fn find_workspace_root() -> Result<PathBuf> {
     Ok(workspace_root.to_path_buf())
 }
 
-/// Where `cargo build` puts `cash.exe` for the given build profile.
-pub fn default_cash_binary(profile: BuildProfile) -> Result<PathBuf> {
-    Ok(find_workspace_root()?
-        .join("target")
-        .join(profile.target_dir_name())
-        .join("cash.exe"))
-}
-
-/// Find the cash binary path for the given build profile.
-///
-/// If `override_path` is provided, it is used directly (after validation).
-/// Otherwise, the binary is located in the workspace's target directory
-/// based on the specified profile.
-pub fn find_cash_binary(override_path: Option<&PathBuf>, profile: BuildProfile) -> Result<PathBuf> {
-    let binary_path = match override_path {
-        Some(path) => path.clone(),
-        None => default_cash_binary(profile)?,
-    };
-
-    // Canonicalize to get absolute path and verify existence
-    let canonical_path = binary_path.canonicalize().with_context(|| {
-        format!(
-            "cash binary not found at: {} (profile: {:?}). Did you run `cargo build{}`?",
-            binary_path.display(),
-            profile,
-            if profile == BuildProfile::Release {
-                " --release"
-            } else {
-                ""
-            }
-        )
-    })?;
-
-    Ok(canonical_path)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_profile_dir_names() {
-        assert_eq!(BuildProfile::Debug.target_dir_name(), "debug");
-        assert_eq!(BuildProfile::Release.target_dir_name(), "release");
-    }
 
     #[test]
     fn test_find_workspace_root() {
@@ -102,30 +48,5 @@ mod tests {
         assert!(root.join("Cargo.toml").exists());
         // And it should contain the xtask directory
         assert!(root.join("xtask").exists());
-    }
-
-    #[test]
-    fn default_binary_is_cash_exe_in_the_profile_dir() {
-        let root = find_workspace_root().unwrap();
-        assert_eq!(
-            default_cash_binary(BuildProfile::Debug).unwrap(),
-            root.join("target").join("debug").join("cash.exe")
-        );
-        assert_eq!(
-            default_cash_binary(BuildProfile::Release).unwrap(),
-            root.join("target").join("release").join("cash.exe")
-        );
-    }
-
-    #[test]
-    fn a_missing_binary_is_reported_by_its_cash_name() {
-        let missing = PathBuf::from("no-such-dir").join("cash.exe");
-        let err = find_cash_binary(Some(&missing), BuildProfile::Debug).unwrap_err();
-        let message = err.to_string();
-        assert!(
-            message.starts_with("cash binary not found at:"),
-            "{message}"
-        );
-        assert!(message.contains("cash.exe"), "{message}");
     }
 }
