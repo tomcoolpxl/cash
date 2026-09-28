@@ -1,5 +1,5 @@
 {
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "Cool Again Shell: a Bash-language shell for Windows, with its Unix tools built in",
     "homepage": "https://github.com/tomcoolpxl/cash",
     "license": {
@@ -17,8 +17,8 @@
     },
     "architecture": {
         "64bit": {
-            "url": "https://github.com/tomcoolpxl/cash/releases/download/v1.0.0/cash-v1.0.0-x86_64-pc-windows-msvc.zip",
-            "hash": "7ff700cabc72ef73db16a26b84375ab6bec2773c81ef847884c92e5c6c7c3e28"
+            "url": "https://github.com/tomcoolpxl/cash/releases/download/v1.1.0/cash-v1.1.0-x86_64-pc-windows-msvc.zip",
+            "hash": "c23cd552600052ab0e8e0d0a3088f8b6c871004944140e6b448a3d10dc62274b"
         }
     },
     "bin": "cash.exe",
