@@ -168,7 +168,10 @@ fn gui_apps(
     #[cfg(not(windows))]
     {
         let _ = mode;
-        writeln!(context.stderr(), "cashctl gui-apps: only meaningful on Windows")?;
+        writeln!(
+            context.stderr(),
+            "cashctl gui-apps: only meaningful on Windows"
+        )?;
         Ok(ExecutionResult::general_error())
     }
 }

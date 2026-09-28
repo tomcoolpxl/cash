@@ -105,7 +105,10 @@ fn gui_apps_close_reaps_the_gui_application_too() {
     let console_gone = wait_until(Duration::from_secs(5), || !is_pid_alive(con));
     kill(gui);
     kill(con);
-    assert!(gui_gone, "the GUI program {gui} outlived cash under `gui-apps close`");
+    assert!(
+        gui_gone,
+        "the GUI program {gui} outlived cash under `gui-apps close`"
+    );
     assert!(console_gone, "the console program {con} outlived cash");
 }
 

@@ -318,8 +318,7 @@ fn bash_52_command_p_ignores_a_poisoned_hash_entry() {
     let (_, normal) = output("hash -p C:/definitely/missing/cmd.exe cmd; command -v cmd");
     assert!(normal.contains("definitely/missing"), "{normal}");
 
-    let (status, standard) =
-        output("hash -p C:/definitely/missing/cmd.exe cmd; command -p -v cmd");
+    let (status, standard) = output("hash -p C:/definitely/missing/cmd.exe cmd; command -p -v cmd");
     assert_eq!(status, 0);
     assert!(!standard.contains("definitely/missing"), "{standard}");
     assert!(
