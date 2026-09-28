@@ -182,8 +182,9 @@ its exit status once the prompt reports it (below). Its GUID is
 `{43e4cdd3-eb67-5e13-bd17-fa0d7f8cf3ff}`. To make it the default, or give it a font and
 colours, add an entry with that GUID to Windows Terminal's `settings.json` (Settings →
 Open JSON file) holding only your own settings; the program and icon keep coming from the
-install, so upgrades need nothing. If your `newTabMenu` lists profiles one by one, add
-it there too, or it stays out of the + menu. Ctrl+↑/Ctrl+↓ jump between marks with the
+install, so upgrades need nothing. If your `newTabMenu` lists profiles one by one, the
+install adds cash to the end of it, and uninstalling takes it out; nothing else in the
+file changes. Ctrl+↑/Ctrl+↓ jump between marks with the
 two actions below. A Nerd Font shows `ls --icons`.
 
 ```jsonc

@@ -13,6 +13,8 @@ mod doctor;
 #[cfg(windows)]
 mod link_tools;
 #[cfg(windows)]
+mod terminal_menu;
+#[cfg(windows)]
 mod terminal_profile;
 
 fn main() {

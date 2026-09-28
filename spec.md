@@ -1027,6 +1027,15 @@ deletes the folder. The profile's `icon` is the logo's address on GitHub, and th
 written beside the fragment under that address's file name, `cash_logo_small.png`:
 Terminal 1.24 and later loads a fragment's images from its own folder by that name,
 earlier versions take only a web address. `cash.exe` carries the same logo as its icon.
+The profile starts in `%USERPROFILE%`: without it Terminal starts a fragment's profile in
+its own folder, `C:\WINDOWS\system32`. Its GUID, `{43e4cdd3-eb67-5e13-bd17-fa0d7f8cf3ff}`,
+is the one Terminal derives from the names, written out. A user whose `newTabMenu` lists
+profiles one by one, with no `remainingProfiles` entry, would never see the profile in
+the + menu (the first Scoop install did exactly that), and a fragment cannot change the
+menu; so `--terminal-profile` adds one entry to the end of that list in each Terminal
+install's `settings.json`, and `--remove-terminal-profile` cuts it out again. The file is
+JSON with comments and the user's own, so it is never rewritten whole: only that entry's
+text changes, and Terminal reloads the file, fragments included, at once.
 Scoop's manifest (`packaging/scoop/cash.json`) runs them from its `post_install` and, on
 a real uninstall only, its `pre_uninstall`; it also offers carapace through `suggest`
 (D63). `cash.exe` links the C runtime statically, so no
