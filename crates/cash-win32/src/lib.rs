@@ -43,6 +43,7 @@ pub mod stdio;
 pub mod stop;
 /// What the machine is, asked directly — the numbers `coolfetch` prints.
 pub mod sysinfo;
+pub mod terminal;
 pub mod text;
 pub mod userpath;
 pub mod vtscreen;

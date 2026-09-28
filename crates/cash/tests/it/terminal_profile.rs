@@ -22,13 +22,99 @@ fn local_app_data(name: &str) -> PathBuf {
     dir
 }
 
+/// Registry key naming the installed fonts for a test: one that does not exist, so no
+/// font is installed, whatever this machine has.
+const NO_FONTS: &str = r"Software\cash-test-no-fonts";
+
 fn cash(local: &Path, arg: &str) -> Output {
+    cash_with_fonts(local, arg, NO_FONTS)
+}
+
+fn cash_with_fonts(local: &Path, arg: &str, fonts_key: &str) -> Output {
     Command::new(CASH)
         .arg(arg)
         .env("LOCALAPPDATA", local)
+        .env("CASH_FONTS_KEY", fonts_key)
         .stdin(Stdio::null())
         .output()
         .unwrap()
+}
+
+/// A registry key of one test's own under `HKEY_CURRENT_USER` listing `fonts` as Windows
+/// lists installed ones; deleted when dropped.
+struct Fonts(String);
+
+impl Fonts {
+    fn new(name: &str, fonts: &[&str]) -> Self {
+        let key = format!(r"Software\cash-test-fonts-{}-{name}", std::process::id());
+        for font in fonts {
+            let status = Command::new("reg")
+                .args(["add", &format!(r"HKCU\{key}"), "/v", font])
+                .args(["/t", "REG_SZ", "/d", "x.ttf", "/f"])
+                .stdout(Stdio::null())
+                .status()
+                .unwrap();
+            assert!(status.success());
+        }
+        Self(key)
+    }
+}
+
+impl Drop for Fonts {
+    fn drop(&mut self) {
+        let _ = Command::new("reg")
+            .args(["delete", &format!(r"HKCU\{}", self.0), "/f"])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+    }
+}
+
+#[test]
+fn an_installed_cascadia_nerd_font_becomes_the_profile_font() {
+    let local = local_app_data("font");
+    let fonts = Fonts::new(
+        "caskaydia",
+        &[
+            "Cascadia Mono Regular (TrueType)",
+            "CaskaydiaMono NFM Bold (TrueType)",
+            "CaskaydiaMono NFM (TrueType)",
+        ],
+    );
+    let out = cash_with_fonts(&local, "--terminal-profile", &fonts.0);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let json = std::fs::read_to_string(fragments(&local).join("cash.json")).unwrap();
+    assert!(
+        json.contains(r#""font": { "face": "CaskaydiaMono Nerd Font Mono" }"#),
+        "{json}"
+    );
+    assert!(
+        String::from_utf8_lossy(&out.stdout).contains("a Nerd Font"),
+        "{}",
+        String::from_utf8_lossy(&out.stdout)
+    );
+
+    // Only Cascadia Mono itself, or another Nerd Font: Terminal's own font, and the
+    // suggestion.
+    let plain = Fonts::new(
+        "plain",
+        &[
+            "Cascadia Mono Regular (TrueType)",
+            "UbuntuSansMono NFM (TrueType)",
+        ],
+    );
+    let out = cash_with_fonts(&local, "--terminal-profile", &plain.0);
+    let json = std::fs::read_to_string(fragments(&local).join("cash.json")).unwrap();
+    assert!(!json.contains("\"font\""), "{json}");
+    assert!(
+        String::from_utf8_lossy(&out.stdout).contains("nerd-fonts/CascadiaMono-NF"),
+        "{}",
+        String::from_utf8_lossy(&out.stdout)
+    );
 }
 
 fn fragments(local: &Path) -> PathBuf {

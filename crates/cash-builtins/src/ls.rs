@@ -5,7 +5,8 @@
 //! output matching POSIX / BusyBox conventions.
 //!
 //! cash (D67) adds what lsd shows beside GNU `ls`'s own options: icons (`--icons`, Nerd
-//! Font glyphs from lsd's theme, or plain Unicode with `--icons-theme=unicode`), a colour
+//! Font glyphs from lsd's theme when Windows Terminal draws the tab in a Nerd Font, plain
+//! Unicode otherwise, or either with `--icons-theme`), a colour
 //! for each kind of file (`LS_COLORS`, or `dircolors`' defaults without it), a tree
 //! (`--tree`, `--depth`), `--group-directories-first`, and the sorts `-X`, `-v`, `-U` and
 //! `--sort=WORD`.
@@ -53,7 +54,9 @@ List information about the FILEs (the current directory by default).
                                defaults; with -l, the other columns take lsd's
       --icons[=WHEN]         show an icon before each name: always, auto (when the
                                output is a terminal, the default), never
-      --icons-theme=THEME    fancy (Nerd Font glyphs, the default) or unicode
+      --icons-theme=THEME    fancy (Nerd Font glyphs), unicode, or auto (the default:
+                               fancy when Windows Terminal draws this tab in a
+                               Nerd Font, unicode anywhere else)
       --attributes           show Windows' attributes as lsd does: d (or .),
                                archive, read-only, hidden, system (`.a-h-`)
       --tree                 list the directories as a tree
@@ -161,7 +164,7 @@ pub(crate) struct LsCommand {
     )]
     icons: Option<String>,
 
-    /// The icons to show: fancy (Nerd Font) or unicode.
+    /// The icons to show: fancy (Nerd Font), unicode, or auto (by the tab's font).
     #[arg(long = "icons-theme", value_name = "THEME")]
     icons_theme: Option<String>,
 
@@ -386,12 +389,19 @@ impl LsCommand {
         )?;
         let icons = when(self.icons.as_deref(), "icons", is_tty)?;
         let theme = match self.icons_theme.as_deref() {
-            None | Some("fancy") => IconTheme::Fancy,
+            None | Some("auto") => {
+                if icons {
+                    auto_theme(context)
+                } else {
+                    IconTheme::Unicode
+                }
+            }
+            Some("fancy") => IconTheme::Fancy,
             Some("unicode") => IconTheme::Unicode,
             Some(other) => {
                 return Err(Invalid(std::format!(
                     "invalid argument '{other}' for '--icons-theme'\n\
-                     Valid arguments are: 'fancy', 'unicode'"
+                     Valid arguments are: 'auto', 'fancy', 'unicode'"
                 )));
             }
         };
@@ -934,6 +944,39 @@ fn default_ls_colors() -> String {
         let _ = write!(spec, "*{extension}={color}:");
     }
     spec
+}
+
+/// The icons `--icons` shows when no theme is asked for: Nerd Font glyphs when Windows
+/// Terminal draws this tab in a Nerd Font, plain Unicode anywhere cash cannot tell, where
+/// the glyphs could come out as empty boxes (decided with the user, 2026-09-28). No
+/// terminal can be asked its font, but Terminal names the tab's profile in
+/// `WT_PROFILE_ID`, and the profile's font is in Terminal's settings. Read from the
+/// shell's variables, as `LS_COLORS` is.
+fn auto_theme<SE: cash_core::ShellExtensions>(
+    context: &cash_core::ExecutionContext<'_, SE>,
+) -> IconTheme {
+    let var = |name: &str| {
+        context
+            .shell
+            .env_str(name)
+            .filter(|value| !value.is_empty())
+    };
+    let (Some(_), Some(profile), Some(local)) =
+        (var("WT_SESSION"), var("WT_PROFILE_ID"), var("LOCALAPPDATA"))
+    else {
+        return IconTheme::Unicode;
+    };
+    let program_data = var("ProgramData").or_else(|| var("PROGRAMDATA"));
+    let font = cash_win32::terminal::profile_font(
+        std::path::Path::new(local.as_ref()),
+        program_data.as_deref().map(std::path::Path::new),
+        &profile,
+    );
+    if cash_win32::terminal::is_nerd_font(&font) {
+        IconTheme::Fancy
+    } else {
+        IconTheme::Unicode
+    }
 }
 
 /// The icon for an entry: lsd's order, a link as a link, then its name, then its

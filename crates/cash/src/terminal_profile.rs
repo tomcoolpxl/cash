@@ -33,6 +33,39 @@ const ICON_URL: &str =
 /// The name the logo is written under: [`ICON_URL`]'s file name.
 const ICON_FILE: &str = "cash_logo_small.png";
 
+/// The Nerd Fonts the profile asks for when one is installed, so that `ls --icons` draws
+/// its file icons (decided with the user, 2026-09-28): Cascadia's, to look like
+/// Terminal's own font. Each is Terminal's name for the family, then the names Windows
+/// lists its installed fonts under (`CaskaydiaMono NFM Bold (TrueType)`). The first is
+/// what Scoop's notes suggest: `scoop install nerd-fonts/CascadiaMono-NF`.
+const NERD_FONTS: &[(&str, &[&str])] = &[
+    (
+        "CaskaydiaMono Nerd Font Mono",
+        &["CaskaydiaMono NFM", "CaskaydiaMono Nerd Font Mono"],
+    ),
+    ("Cascadia Mono NF", &["Cascadia Mono NF"]),
+    (
+        "CaskaydiaCove Nerd Font Mono",
+        &["CaskaydiaCove NFM", "CaskaydiaCove Nerd Font Mono"],
+    ),
+];
+
+/// The first of [`NERD_FONTS`] that Windows has installed.
+fn nerd_font() -> Option<&'static str> {
+    let installed = cash_win32::terminal::installed_fonts();
+    NERD_FONTS
+        .iter()
+        .find(|(_, listed)| {
+            installed.iter().any(|font| {
+                listed.iter().any(|name| {
+                    font.strip_prefix(name)
+                        .is_some_and(|rest| rest.is_empty() || rest.starts_with([' ', '(']))
+                })
+            })
+        })
+        .map(|(family, _)| *family)
+}
+
 const USAGE: &str = "usage: cash --terminal-profile\n       cash --remove-terminal-profile";
 
 /// `cash --terminal-profile` or `cash --remove-terminal-profile`: the process exit
@@ -93,13 +126,26 @@ fn write_profile() -> Result<(), String> {
 
     let icon = dir.join(ICON_FILE);
     std::fs::write(&icon, ICON).map_err(|e| format!("{}: {e}", render(&icon)))?;
+    let font = nerd_font();
     let fragment = dir.join("cash.json");
-    std::fs::write(&fragment, fragment_json(&exe))
+    std::fs::write(&fragment, fragment_json(&exe, font))
         .map_err(|e| format!("{}: {e}", render(&fragment)))?;
 
     let mut out = std::io::stdout().lock();
     let _ = writeln!(out, "cash --terminal-profile: {}", render(&fragment));
     let _ = writeln!(out, "  a \"cash\" profile running {exe}");
+    if let Some(font) = font {
+        let _ = writeln!(
+            out,
+            "  in {font}, a Nerd Font, so `ls --icons` draws its file icons"
+        );
+    } else {
+        let _ = writeln!(
+            out,
+            "  in Terminal's own font; for the file icons of `ls --icons`, install a Nerd Font \
+             (scoop install nerd-fonts/CascadiaMono-NF) and run this again"
+        );
+    }
     let menus = edit_menus(&local, |text| {
         crate::terminal_menu::with_profile(text, PROFILE_GUID)
     });
@@ -143,7 +189,7 @@ fn remove_profile() -> Result<(), String> {
 /// standard error and left as it was: the profile still works without the menu entry.
 fn edit_menus(local: &Path, edit: impl Fn(&str) -> Option<String>) -> Vec<PathBuf> {
     let mut changed = Vec::new();
-    for settings in crate::terminal_menu::settings_files(local) {
+    for settings in cash_win32::terminal::settings_files(local) {
         let result = std::fs::read_to_string(&settings).and_then(|text| match edit(&text) {
             Some(new) => replace_file(&settings, &new).map(|()| true),
             None => Ok(false),
@@ -173,14 +219,18 @@ fn replace_file(path: &Path, text: &str) -> std::io::Result<()> {
 /// was started from the Start menu (seen 2026-09-28). `autoMarkPrompts` marks the line
 /// where each Enter was pressed, even when the prompt sends no `OSC 133`, and
 /// `showMarksOnScrollbar` shows the marks, which `scrollToMark` then jumps between
-/// (decided with the user, 2026-09-28). Fonts and colours stay the user's: a profile
-/// cannot know which fonts are installed.
-fn fragment_json(exe: &str) -> String {
+/// (decided with the user, 2026-09-28). The font is `font` when one is given, a Nerd Font
+/// installed on this machine ([`nerd_font`]); otherwise Terminal's own, or whatever the
+/// user's `profiles.defaults` names. Colours stay the user's.
+fn fragment_json(exe: &str, font: Option<&str>) -> String {
+    let font = font.map_or_else(String::new, |face| {
+        format!("      \"font\": {{ \"face\": {} }},\n", json_string(face))
+    });
     format!(
         "{{\n  \"profiles\": [\n    {{\n      \"guid\": \"{PROFILE_GUID}\",\n      \
          \"name\": \"cash\",\n      \
          \"commandline\": {},\n      \"startingDirectory\": \"%USERPROFILE%\",\n      \
-         \"icon\": {},\n      \
+         \"icon\": {},\n{font}      \
          \"showMarksOnScrollbar\": true,\n      \"autoMarkPrompts\": true\n    }}\n  ]\n}}\n",
         json_string(&format!("\"{exe}\"")),
         json_string(ICON_URL)
@@ -215,7 +265,13 @@ mod tests {
 
     #[test]
     fn the_fragment_quotes_the_program_and_escapes_backslashes() {
-        let json = fragment_json(r"C:\Program Files\cash\cash.exe");
+        let json = fragment_json(r"C:\Program Files\cash\cash.exe", None);
+        assert!(!json.contains("\"font\""), "{json}");
+        let with_font = fragment_json("x", Some("CaskaydiaMono Nerd Font Mono"));
+        assert!(
+            with_font.contains(r#""font": { "face": "CaskaydiaMono Nerd Font Mono" },"#),
+            "{with_font}"
+        );
         assert!(
             json.contains(r#""commandline": "\"C:\\Program Files\\cash\\cash.exe\"""#),
             "{json}"
@@ -247,7 +303,7 @@ mod tests {
             "{2ece5bfe-50ed-5f3a-ab87-5cd4baafed2b}"
         );
         assert_eq!(derive(APP, "cash"), PROFILE_GUID);
-        assert!(fragment_json("x").contains(&format!(r#""guid": "{PROFILE_GUID}""#)));
+        assert!(fragment_json("x", None).contains(&format!(r#""guid": "{PROFILE_GUID}""#)));
     }
 
     #[test]

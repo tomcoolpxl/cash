@@ -12,31 +12,7 @@
 //! other byte stays as it was. Terminal reloads the file when it changes, fragments
 //! included, so the profile shows at once.
 
-use std::path::{Path, PathBuf};
-
-/// The settings files of the Windows Terminal installs this user has: the Store's
-/// release, Preview and Canary, and an unpackaged one's.
-pub fn settings_files(local_app_data: &Path) -> Vec<PathBuf> {
-    let mut files: Vec<PathBuf> = std::fs::read_dir(local_app_data.join("Packages"))
-        .into_iter()
-        .flatten()
-        .flatten()
-        .filter(|entry| {
-            let name = entry.file_name().to_string_lossy().to_ascii_lowercase();
-            name.starts_with("microsoft.windowsterminal") && name.ends_with("_8wekyb3d8bbwe")
-        })
-        .map(|entry| entry.path().join("LocalState").join("settings.json"))
-        .collect();
-    files.push(
-        local_app_data
-            .join("Microsoft")
-            .join("Windows Terminal")
-            .join("settings.json"),
-    );
-    files.retain(|file| file.is_file());
-    files.sort();
-    files
-}
+use cash_win32::terminal::jsonc::{Kind, Token, tokens};
 
 /// `text` with the profile `guid` added at the end of its new-tab menu, or `None` when
 /// the menu shows it already: there is no `newTabMenu` (Terminal's own menu lists every
@@ -122,96 +98,6 @@ pub fn without_profile(text: &str, guid: &str) -> Option<String> {
         changed = true;
     }
     changed.then_some(text)
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum Kind {
-    Punct(u8),
-    Str,
-    Word,
-}
-
-/// One token of JSON with comments: punctuation, a string (quotes included), or a bare
-/// word (`null`, `true`, a number). Whitespace and comments are skipped.
-#[derive(Clone, Copy, Debug)]
-struct Token {
-    kind: Kind,
-    start: usize,
-    end: usize,
-}
-
-fn tokens(text: &str) -> Option<Vec<Token>> {
-    let bytes = text.as_bytes();
-    let mut out = Vec::new();
-    let mut i = if text.starts_with('\u{feff}') { 3 } else { 0 };
-    while let Some(&byte) = bytes.get(i) {
-        match byte {
-            b' ' | b'\t' | b'\r' | b'\n' => i += 1,
-            b'/' if bytes.get(i + 1) == Some(&b'/') => {
-                while bytes.get(i).is_some_and(|&b| b != b'\n') {
-                    i += 1;
-                }
-            }
-            b'/' if bytes.get(i + 1) == Some(&b'*') => {
-                let close = text.get(i + 2..)?.find("*/")?;
-                i += 2 + close + 2;
-            }
-            b'{' | b'}' | b'[' | b']' | b':' | b',' => {
-                out.push(Token {
-                    kind: Kind::Punct(byte),
-                    start: i,
-                    end: i + 1,
-                });
-                i += 1;
-            }
-            b'"' => {
-                let start = i;
-                i += 1;
-                loop {
-                    match *bytes.get(i)? {
-                        b'\\' => i += 2,
-                        b'"' => {
-                            i += 1;
-                            break;
-                        }
-                        _ => i += 1,
-                    }
-                }
-                out.push(Token {
-                    kind: Kind::Str,
-                    start,
-                    end: i,
-                });
-            }
-            _ => {
-                let start = i;
-                while bytes.get(i).is_some_and(|&b| {
-                    !matches!(
-                        b,
-                        b' ' | b'\t'
-                            | b'\r'
-                            | b'\n'
-                            | b'{'
-                            | b'}'
-                            | b'['
-                            | b']'
-                            | b':'
-                            | b','
-                            | b'"'
-                            | b'/'
-                    )
-                }) {
-                    i += 1;
-                }
-                out.push(Token {
-                    kind: Kind::Word,
-                    start,
-                    end: i,
-                });
-            }
-        }
-    }
-    Some(out)
 }
 
 /// The top-level `newTabMenu` array: the tokens of its brackets, and each entry's tokens

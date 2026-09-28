@@ -310,7 +310,7 @@ fn lsd_fixture(name: &str) -> (Scratch, String) {
 fn ls_icons_show_when_asked_and_stay_out_of_pipes() {
     let (_scratch, dir) = lsd_fixture("icons");
     let out = cash(&format!(
-        "cd '{dir}'; ls -1 --icons=always c.rs run.exe docs .bashrc"
+        "cd '{dir}'; ls -1 --icons=always --icons-theme=fancy c.rs run.exe docs .bashrc"
     ));
     assert_eq!(out.code, 0, "{}", out.stderr);
     // lsd's glyphs: by extension, executable, folder (listed, so its contents), name.
@@ -334,6 +334,86 @@ fn ls_icons_show_when_asked_and_stay_out_of_pipes() {
             .contains("invalid argument 'maybe' for '--icons'"),
         "{}",
         out.stderr
+    );
+}
+
+/// Run `script` as Windows Terminal starts cash in a profile whose settings are under
+/// `local`, or, given `None`, outside Terminal.
+fn cash_in_terminal(script: &str, local: Option<&Path>) -> Output {
+    let mut command = Command::new(CASH);
+    command
+        .args(["-c", script])
+        .env_remove("WT_SESSION")
+        .env_remove("WT_PROFILE_ID");
+    if let Some(local) = local {
+        command
+            .env("WT_SESSION", "0f6b2c1e-0000-4000-8000-000000000000")
+            .env("WT_PROFILE_ID", "{43e4cdd3-eb67-5e13-bd17-fa0d7f8cf3ff}")
+            .env("LOCALAPPDATA", local);
+    }
+    let out = command.output().expect("failed to run cash");
+    Output {
+        stdout: String::from_utf8_lossy(&out.stdout).trim_end().to_string(),
+        stderr: String::from_utf8_lossy(&out.stderr).trim_end().to_string(),
+        code: out.status.code().unwrap_or(-1),
+    }
+}
+
+/// Terminal's settings under `local`, the profile drawn in `face` (Terminal's own font
+/// when `None`).
+fn terminal_settings(local: &Path, face: Option<&str>) {
+    let dir = local
+        .join("Packages")
+        .join("Microsoft.WindowsTerminal_8wekyb3d8bbwe")
+        .join("LocalState");
+    std::fs::create_dir_all(&dir).unwrap();
+    let font = face.map_or_else(String::new, |face| {
+        format!(r#", "font": {{ "face": "{face}" }}"#)
+    });
+    std::fs::write(
+        dir.join("settings.json"),
+        format!(
+            r#"{{ "profiles": {{ "list": [ {{ "guid": "{{43e4cdd3-eb67-5e13-bd17-fa0d7f8cf3ff}}", "name": "cash"{font} }} ] }} }}"#
+        ),
+    )
+    .unwrap();
+}
+
+fn has_nerd_glyph(text: &str) -> bool {
+    text.chars()
+        .any(|c| ('\u{e000}'..='\u{f8ff}').contains(&c) || c >= '\u{f0000}')
+}
+
+#[test]
+fn ls_icons_are_nerd_glyphs_only_where_terminal_draws_a_nerd_font() {
+    let (_scratch, dir) = lsd_fixture("icons-auto");
+    let local = Scratch::new("icons-auto-terminal");
+    let script = format!("cd '{dir}'; ls -1 --icons=always b.txt");
+
+    // The tab's profile is in a Nerd Font: lsd's glyphs.
+    terminal_settings(local.path(), Some("UbuntuSansMono Nerd Font Mono"));
+    let out = cash_in_terminal(&script, Some(local.path()));
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert!(has_nerd_glyph(&out.stdout), "{:?}", out.stdout);
+    assert!(out.stdout.ends_with(" b.txt"), "{:?}", out.stdout);
+
+    // In Terminal's own font, Cascadia Mono: plain Unicode, never empty boxes.
+    terminal_settings(local.path(), None);
+    let out = cash_in_terminal(&script, Some(local.path()));
+    assert_eq!(out.stdout, "\u{1f4c4} b.txt");
+
+    // Outside Terminal nothing says which font: plain Unicode.
+    let out = cash_in_terminal(&script, None);
+    assert_eq!(out.stdout, "\u{1f4c4} b.txt");
+
+    // A theme asked for is kept, wherever cash runs.
+    let fancy = format!("cd '{dir}'; ls -1 --icons=always --icons-theme=fancy b.txt");
+    assert!(has_nerd_glyph(&cash_in_terminal(&fancy, None).stdout));
+    terminal_settings(local.path(), Some("Hack NF"));
+    let unicode = format!("cd '{dir}'; ls -1 --icons=always --icons-theme=unicode b.txt");
+    assert_eq!(
+        cash_in_terminal(&unicode, Some(local.path())).stdout,
+        "\u{1f4c4} b.txt"
     );
 }
 

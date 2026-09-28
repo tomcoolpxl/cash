@@ -213,7 +213,9 @@ Open JSON file) holding only your own settings; the program and icon keep coming
 install, so upgrades need nothing. If your `newTabMenu` lists profiles one by one, the
 install adds cash to the end of it, and uninstalling takes it out; nothing else in the
 file changes. Ctrl+↑/Ctrl+↓ jump between marks with the
-two actions below. A Nerd Font shows `ls --icons`.
+two actions below. When a Cascadia Nerd Font is installed (`scoop install
+nerd-fonts/CascadiaMono-NF`, then `cash --terminal-profile` again), the profile uses it,
+and `ls --icons` draws its file icons.
 
 ```jsonc
 "defaultProfile": "{43e4cdd3-eb67-5e13-bd17-fa0d7f8cf3ff}",
@@ -265,8 +267,10 @@ name resolves to something worse there: `find` and `xargs`, `ps`, `pgrep`, `pstr
 `-q`, `-f`, `-t` and `where -?` work as `/q`, `/f`, `/t` and `/?` do there. Paths print
 as `C:/…`, like everything else cash prints.
 
-`ls` takes what lsd adds to it: `ls --icons` puts a Nerd Font icon before each name
-(`--icons-theme=unicode` for a terminal without one), `--tree` draws folders as a tree,
+`ls` takes what lsd adds to it: `ls --icons` puts an icon before each name, a Nerd Font
+glyph when Windows Terminal draws the tab in a Nerd Font and plain Unicode (📂 📄)
+anywhere else, so never an empty box (`--icons-theme=fancy` or `unicode` to choose),
+`--tree` draws folders as a tree,
 names are coloured by kind and extension from `LS_COLORS` or `dircolors`' defaults, and
 `--group-directories-first`, `-X`, `-v` and `-U` sort as in GNU ls. `ls -l` colours
 every column as lsd does: permission letters, your files' owner, sizes by magnitude and
