@@ -508,14 +508,21 @@ fn ls_long_colours_every_column_when_colour_is_on() {
     let out = cash(&format!("ls -l --color=always '{dir}/f.txt'"));
     assert_eq!(out.code, 0, "{}", out.stderr);
     // lsd's scheme: r yellow, w red, - grey; the owner (this user) pale yellow; a small
-    // size pale; a date from the last hour bright green.
+    // size pale; a date from the last hour bright green. An elevated process's files
+    // belong to Administrators, not the user, as on GitHub's runners: grey, like any
+    // other owner.
     assert!(
         out.stdout
             .starts_with("\x1b[90m-\x1b[0m\x1b[33mr\x1b[0m\x1b[31mw\x1b[0m"),
         "{:?}",
         out.stdout
     );
-    assert!(out.stdout.contains("\x1b[38;5;230m"), "{:?}", out.stdout);
+    let owner = if cash("echo $EUID").stdout == "0" {
+        "\x1b[38;5;245mAdministrators"
+    } else {
+        "\x1b[38;5;230m"
+    };
+    assert!(out.stdout.contains(owner), "{:?}", out.stdout);
     assert!(
         out.stdout.contains("\x1b[38;5;229m1\x1b[0m"),
         "{:?}",
