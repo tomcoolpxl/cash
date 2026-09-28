@@ -240,6 +240,7 @@ mod unimp;
 
 pub use builder::ShellBuilderExt;
 pub use factory::{BuiltinSet, default_builtins};
+#[cfg(windows)]
 pub use which::is_bash_builtin;
 
 /// Writes an alias definition in the reusable form printed by `alias` and `command -v`.
