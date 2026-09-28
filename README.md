@@ -159,11 +159,37 @@ Without Scoop, unpack a release zip anywhere and run `cash.exe`. `cash
 ## Build
 
 ```bash
-cargo build --release
-cargo test -p cash-win32
+cargo build                                    # target\debug\cash.exe
+cargo xtask ci quick                           # format check, clippy, unit tests
+cargo xtask ci full                            # everything CI runs
+powershell -File scripts\install.ps1           # build and install the shell you use
+powershell -File scripts\tidy.ps1 -Report      # delete unused build output, show sizes
 ```
 
-Windows 11 (or Windows 10 1809+, for ConPTY). Rust 1.88+.
+Windows 11 (or Windows 10 1809+, for ConPTY). Rust 1.88+; `rust-toolchain.toml` pins the
+toolchain used for development. The tests run through cargo-nextest (`cargo binstall
+cargo-nextest`), which gives each test a process of its own.
+
+Build output is disposable, and each checkout and worktree has its own `target\`:
+
+- **Profiles.** `dev` and `test` keep only line numbers as debug info (enough for panic
+  backtraces), `--profile debugging` keeps all of it. `release` is thin LTO and builds
+  quickly; `dist`, fat LTO with one codegen unit, is what the release workflow ships.
+- **The shell you use** comes from `scripts\install.ps1`, which builds `release` and
+  installs `%LOCALAPPDATA%\cash-dev\cash.exe`; point a Windows Terminal profile there.
+  Nothing runs from `target\`, so any of it can be deleted at any time.
+- **Cleanup.** `scripts\tidy.ps1` deletes build folders not built for a week, what removed
+  worktrees leave behind, and old installed copies, skipping anything in use; `-All`
+  takes every build folder. Claude Code runs it when a session starts
+  (`.claude\settings.json`). Do not point worktrees at one shared target folder: cargo
+  locks it, so builds queue behind each other, and it can mix up the worktrees' crates
+  ([cargo#12516](https://github.com/rust-lang/cargo/issues/12516)).
+- **Features.** Local builds use the default features, so that clippy and the tests share
+  one build; CI also lints with `--all-features`.
+- **Tests that drive `cash.exe`** are modules of one test executable,
+  `crates/cash/tests/it`: add a file there and a `mod` line to its `main.rs`, rather than
+  a new file directly under `tests/`, which would be one more executable linking the
+  whole shell.
 
 Source files use LF even on Windows. `.gitattributes` defines Git's line-ending
 policy, and `.editorconfig` asks editors to save matching endings. Windows scripts
