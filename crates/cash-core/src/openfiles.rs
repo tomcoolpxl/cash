@@ -17,16 +17,6 @@ use crate::sys;
 pub trait Stream: std::io::Read + std::io::Write + Send + Sync {
     /// Clones the stream into a boxed trait object.
     fn clone_box(&self) -> Box<dyn Stream>;
-
-    /// Converts the stream into an `OwnedFd`. Returns an error if the operation
-    /// is not supported or if it fails.
-    #[cfg(unix)]
-    fn try_clone_to_owned(&self) -> Result<std::os::fd::OwnedFd, error::Error>;
-
-    /// Borrows the stream as a `BorrowedFd`. Returns an error if the operation
-    /// is not supported or if it fails.
-    #[cfg(unix)]
-    fn try_borrow_as_fd(&self) -> Result<std::os::fd::BorrowedFd<'_>, error::Error>;
 }
 
 /// Represents a file open in a shell context.
@@ -133,43 +123,6 @@ impl std::fmt::Display for OpenFile {
 }
 
 impl OpenFile {
-    /// Converts the open file into an `OwnedFd`. For shared file/pipe handles this materializes
-    /// a real duplicate via `dup(2)` so the caller receives an independently owned descriptor.
-    #[cfg(unix)]
-    pub(crate) fn try_clone_to_owned(self) -> Result<std::os::fd::OwnedFd, error::Error> {
-        use std::os::fd::AsFd as _;
-
-        match self {
-            Self::Stdin(f) => Ok(f.as_fd().try_clone_to_owned()?),
-            Self::Stdout(f) => Ok(f.as_fd().try_clone_to_owned()?),
-            Self::Stderr(f) => Ok(f.as_fd().try_clone_to_owned()?),
-            Self::File(f) => Ok(f.as_fd().try_clone_to_owned()?),
-            Self::PipeReader(r) => Ok(r.as_fd().try_clone_to_owned()?),
-            Self::PipeWriter(w) => Ok(w.as_fd().try_clone_to_owned()?),
-            Self::Stream(s) => s.try_clone_to_owned(),
-        }
-    }
-
-    /// Borrows the open file as a `BorrowedFd`.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the operation is not supported for the underlying file type.
-    #[cfg(unix)]
-    pub fn try_borrow_as_fd(&self) -> Result<std::os::fd::BorrowedFd<'_>, error::Error> {
-        use std::os::fd::AsFd as _;
-
-        match self {
-            Self::Stdin(f) => Ok(f.as_fd()),
-            Self::Stdout(f) => Ok(f.as_fd()),
-            Self::Stderr(f) => Ok(f.as_fd()),
-            Self::File(f) => Ok(f.as_fd()),
-            Self::PipeReader(r) => Ok(r.as_fd()),
-            Self::PipeWriter(w) => Ok(w.as_fd()),
-            Self::Stream(s) => s.try_borrow_as_fd(),
-        }
-    }
-
     pub(crate) fn is_dir(&self) -> bool {
         match self {
             Self::Stdin(_) | Self::Stdout(_) | Self::Stderr(_) => false,

@@ -109,7 +109,7 @@ pub enum CharacterMode {
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
-/// A space mirroring IOChunk without mmap-backed storage.
+/// A space mirroring IOChunk's owned line storage.
 pub struct ByteSpace {
     pub content: Vec<u8>,  // Line content without newline
     pub has_newline: bool, // True if \n-terminated

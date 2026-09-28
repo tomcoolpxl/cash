@@ -18,14 +18,6 @@ pkg-url = "{ repo }/releases/download/{ name }-v{ version }/cash-{ target }{ arc
 [lib]
 bench = false
 
-
-
-
-
-# `cash_*_tests-*` artifact glob would otherwise ship them to the os-tests
-# jobs, which run prebuilt test binaries outside a cargo target dir and so
-# can't run pty-based tests (see the interactive/version test skips there).
-
 # Generates man pages, markdown help, completion scripts, and the config
 # schema. Lives here so that xtask doesn't have to depend on cash-shell;
 # `cargo xtask gen` shells out to it.
@@ -84,12 +76,6 @@ tracing = "0.1.44"
 tracing-subscriber = "0.3.23"
 human-panic = "2.0.6"
 
-[target.'cfg(not(any(unix, windows)))'.dependencies]
-cash-interactive = { workspace = true, features = [
-    "minimal",
-] }
-tokio = { version = "1.52.3", features = ["rt", "sync"] }
-
 [target.'cfg(windows)'.dependencies]
 # cash: the Win32 semantics layer. The bundled dispatcher (D48) needs D3's path
 # rendering, because a few uutils construct absolute paths and spell them natively.
@@ -102,10 +88,6 @@ cash-interactive = { workspace = true, features = [
 ] }
 crossterm = "0.29.0"
 tokio = { version = "1.52.3", features = ["rt", "rt-multi-thread", "sync"] }
-
-[target.wasm32-unknown-unknown.dependencies]
-getrandom = { version = "0.4.2", features = ["wasm_js"] }
-uuid = { version = "1.23.1", features = ["js"] }
 
 [dev-dependencies]
 anyhow = "1.0.102"
@@ -142,11 +124,3 @@ test-with = { version = "0.17.0", default-features = false, features = [
 version-compare = "0.2.1"
 walkdir = "2.5.0"
 which = "8.0.2"
-
-[target.'cfg(unix)'.dev-dependencies]
-nix = { version = "0.31.2" }
-
-# expectrl's pty support (via ptyprocess) is limited to these platforms;
-# the interactive tests that rely on it are gated accordingly.
-[target.'cfg(any(target_os = "linux", target_os = "android", target_os = "macos", target_os = "freebsd"))'.dev-dependencies]
-expectrl = "0.9.0"

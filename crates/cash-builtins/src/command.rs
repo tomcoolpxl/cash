@@ -80,8 +80,6 @@ impl CommandCommand {
                         // (`C:/WINDOWS/system32\netstat.exe`).
                         #[cfg(windows)]
                         let path = cash_win32::path::render(path);
-                        #[cfg(not(windows))]
-                        let path = path.to_string_lossy();
                         writeln!(context.stdout(), "{path}")?;
                     }
                 }

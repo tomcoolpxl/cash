@@ -188,8 +188,6 @@ pub fn run_with_args(mut args: Vec<String>) {
     //
     #[cfg(any(unix, windows))]
     let mut builder = tokio::runtime::Builder::new_multi_thread();
-    #[cfg(not(any(unix, windows)))]
-    let mut builder = tokio::runtime::Builder::new_current_thread();
 
     let Ok(runtime) = builder.enable_all().build() else {
         tracing::error!("error: failed to create Tokio runtime");
@@ -306,13 +304,13 @@ async fn run_async(
     let ui_options = file_config.to_ui_options(&args);
 
     let result = match selected_backend {
-        #[cfg(all(feature = "reedline", any(unix, windows)))]
+        #[cfg(feature = "reedline")]
         InputBackendType::Reedline => {
             let mut input_backend =
                 cash_interactive::ReedlineInputBackend::new(&ui_options, &shell)?;
             run_in_shell(&shell, args, &mut input_backend, &ui_options).await
         }
-        #[cfg(any(not(feature = "reedline"), not(any(unix, windows))))]
+        #[cfg(not(feature = "reedline"))]
         InputBackendType::Reedline => Err(cash_interactive::ShellError::InputBackendNotSupported),
 
         #[cfg(feature = "basic")]
@@ -677,20 +675,12 @@ const fn new_error_behavior(args: &CommandLineArgs) -> error_formatter::Formatte
 }
 
 fn get_default_input_backend_type(args: &CommandLineArgs) -> InputBackendType {
-    #[cfg(any(unix, windows))]
-    {
-        // If stdin isn't a terminal, then `reedline` doesn't do the right thing
-        // (reference: https://github.com/nushell/reedline/issues/509). Switch to
-        // the minimal input backend instead for that scenario.
-        if std::io::stdin().is_terminal() && args.will_read_commands_from_stdin() {
-            InputBackendType::Reedline
-        } else {
-            InputBackendType::Minimal
-        }
-    }
-    #[cfg(not(any(unix, windows)))]
-    {
-        let _args = args;
+    // If stdin isn't a terminal, then `reedline` doesn't do the right thing
+    // (reference: https://github.com/nushell/reedline/issues/509). Switch to
+    // the minimal input backend instead for that scenario.
+    if std::io::stdin().is_terminal() && args.will_read_commands_from_stdin() {
+        InputBackendType::Reedline
+    } else {
         InputBackendType::Minimal
     }
 }

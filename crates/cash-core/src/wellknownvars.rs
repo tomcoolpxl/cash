@@ -240,11 +240,6 @@ pub(crate) fn init_well_known_vars(
                     // reads the system tick counter.
                     unsafe { GetTickCount64() / 1000 }
                 };
-                #[cfg(not(windows))]
-                let secs = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_secs();
                 secs.to_string().into()
             },
             setter: |_| (),
@@ -370,8 +365,6 @@ pub(crate) fn init_well_known_vars(
         // backslash separator, which would leave `C:/Users/me\.cash_history`.
         #[cfg(windows)]
         let histfile_str = cash_win32::path::render(&histfile);
-        #[cfg(not(windows))]
-        let histfile_str = histfile.to_string_lossy().to_string();
 
         shell.env_mut().set_global(
             "HISTFILE",

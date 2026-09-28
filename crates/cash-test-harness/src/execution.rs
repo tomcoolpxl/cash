@@ -4,10 +4,6 @@ use crate::config::{ShellConfig, WhichShell};
 use crate::testcase::{ShellInvocation, TestCase, TestCaseSet, TestFile};
 use anyhow::{Context, Result};
 use assert_fs::fixture::{FileWriteStr, PathChild};
-#[cfg(pty)]
-use std::os::unix::process::ExitStatusExt;
-#[cfg(unix)]
-use std::os::unix::{fs::PermissionsExt, process::CommandExt};
 use std::{path::PathBuf, process::ExitStatus};
 
 /// Default timeout for test commands in seconds.
@@ -91,14 +87,6 @@ impl TestCase {
             test_file_path.write_str(source_contents.as_str())?;
         } else {
             test_file_path.write_str(test_file.contents.as_str())?;
-        }
-
-        #[cfg(unix)]
-        if test_file.executable {
-            // chmod u+x
-            let mut perms = test_file_path.metadata()?.permissions();
-            perms.set_mode(perms.mode() | 0o100);
-            std::fs::set_permissions(test_file_path, perms)?;
         }
 
         Ok(())
@@ -214,114 +202,17 @@ impl TestCase {
         test_cmd
     }
 
-    // Must keep the same signature as the `cfg(pty)` arm below, which does use `self`.
-    #[cfg(not(pty))]
-    #[expect(clippy::unused_self, reason = "signature must match the cfg(pty) arm")]
+    // The pty runner drove a Unix pseudo-terminal through expectrl; cash is Windows-only,
+    // so a case that asks for one is refused rather than silently run without it.
+    #[expect(
+        clippy::unused_self,
+        reason = "a method alongside `run_command_with_stdin`"
+    )]
     fn run_command_with_pty(&self, _cmd: std::process::Command) -> Result<RunResult> {
-        Err(anyhow::anyhow!("pty test not supported on this platform"))
+        Err(anyhow::anyhow!("pty tests are not supported on Windows"))
     }
 
-    #[cfg(pty)]
-    fn run_command_with_pty(&self, cmd: std::process::Command) -> Result<RunResult> {
-        use crate::util::{make_expectrl_output_readable, read_expectrl_log};
-        use expectrl::{Expect, process::Termios as _};
-
-        let mut log = Vec::new();
-        let writer = std::io::Cursor::new(&mut log);
-
-        let start_time = std::time::Instant::now();
-        let mut p = expectrl::session::log(expectrl::Session::spawn(cmd)?, writer)?;
-        p.set_echo(true)?;
-
-        if let Some(stdin) = &self.stdin {
-            for line in stdin.lines() {
-                if let Some(expectation) = line.strip_prefix("#expect:") {
-                    if let Err(inner) = p.expect(expectation) {
-                        return Ok(RunResult {
-                            exit_status: ExitStatus::from_raw(1),
-                            stdout: read_expectrl_log(log).unwrap_or_default(),
-                            stderr: std::format!("failed to expect '{expectation}': {inner}"),
-                            duration: start_time.elapsed(),
-                        });
-                    }
-                } else if let Some(control_code) = line.strip_prefix("#send:") {
-                    match control_code.to_lowercase().as_str() {
-                        "ctrl+d" => p.send(expectrl::ControlCode::EndOfTransmission)?,
-                        "tab" => p.send(expectrl::ControlCode::HorizontalTabulation)?,
-                        "enter" => p.send(expectrl::ControlCode::LineFeed)?,
-                        _ => (),
-                    }
-                } else if line.trim() == "#expect-prompt" {
-                    if let Err(inner) = p.expect("test$ ") {
-                        return Ok(RunResult {
-                            exit_status: ExitStatus::from_raw(1),
-                            stdout: read_expectrl_log(log).unwrap_or_default(),
-                            stderr: std::format!("failed to expect prompt: {inner}"),
-                            duration: start_time.elapsed(),
-                        });
-                    }
-                } else {
-                    p.send(line)?;
-                }
-            }
-        }
-
-        if let Err(inner) = p.expect(expectrl::Eof) {
-            return Ok(RunResult {
-                exit_status: ExitStatus::from_raw(1),
-                stdout: read_expectrl_log(log).unwrap_or_default(),
-                stderr: std::format!("failed to expect EOF: {inner}"),
-                duration: start_time.elapsed(),
-            });
-        }
-
-        let mut wait_status = p.get_process().status()?;
-
-        if matches!(wait_status, expectrl::process::unix::WaitStatus::StillAlive) {
-            // Try to terminate it safely.
-            p.get_process_mut()
-                .kill(expectrl::process::unix::Signal::SIGTERM)?;
-            wait_status = p.get_process().wait()?;
-        }
-
-        let duration = start_time.elapsed();
-        let output = read_expectrl_log(log)?;
-        let cleaned = make_expectrl_output_readable(output);
-
-        match wait_status {
-            expectrl::process::unix::WaitStatus::Exited(_, code) => Ok(RunResult {
-                exit_status: ExitStatus::from_raw(code),
-                stdout: cleaned,
-                stderr: String::new(),
-                duration,
-            }),
-            expectrl::process::unix::WaitStatus::Signaled(_, _, _) => {
-                Err(anyhow::anyhow!("process was signaled"))
-            }
-            _ => Err(anyhow::anyhow!(
-                "unexpected status for process: {wait_status:?}"
-            )),
-        }
-    }
-
-    #[allow(unused_mut, reason = "only mutated on some platforms")]
-    fn run_command_with_stdin(&self, mut cmd: std::process::Command) -> Result<RunResult> {
-        // SAFETY:
-        // To avoid bash trying to directly access /dev/tty and generate tty-related signals,
-        // we create a new session for the child process. The standard library has a setsid()
-        // API but it's unstable, so we use nix here. Calling pre_exec can be unsafe as
-        // it runs in the child process after fork() but before exec(), and there are constraints
-        // around what can be safely done in that context. However, calling setsid() is generally
-        // considered safe as it doesn't allocate memory or perform complex operations to forked
-        // state.
-        #[cfg(unix)]
-        unsafe {
-            cmd.pre_exec(|| {
-                let _ = nix::unistd::setsid();
-                Ok(())
-            })
-        };
-
+    fn run_command_with_stdin(&self, cmd: std::process::Command) -> Result<RunResult> {
         let mut test_cmd = assert_cmd::Command::from_std(cmd);
 
         test_cmd.timeout(std::time::Duration::from_secs(

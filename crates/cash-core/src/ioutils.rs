@@ -41,16 +41,6 @@ impl openfiles::Stream for FailingReaderWriter {
     fn clone_box(&self) -> Box<dyn openfiles::Stream> {
         Box::new(self.clone())
     }
-
-    #[cfg(unix)]
-    fn try_clone_to_owned(&self) -> Result<std::os::fd::OwnedFd, crate::error::Error> {
-        Err(crate::error::ErrorKind::CannotConvertToNativeFd.into())
-    }
-
-    #[cfg(unix)]
-    fn try_borrow_as_fd(&self) -> Result<std::os::fd::BorrowedFd<'_>, crate::error::Error> {
-        Err(crate::error::ErrorKind::CannotConvertToNativeFd.into())
-    }
 }
 
 impl std::io::Read for FailingReaderWriter {

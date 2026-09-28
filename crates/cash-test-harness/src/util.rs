@@ -16,24 +16,6 @@ pub fn get_host_os_id() -> Option<String> {
     })
 }
 
-/// Reads and processes the expectrl log output.
-#[cfg(pty)]
-pub fn read_expectrl_log(log: Vec<u8>) -> Result<String> {
-    let output_str = String::from_utf8(log)?;
-    let output: String = output_str
-        .lines()
-        .filter(|line| line.starts_with("read:"))
-        .map(|line| {
-            line.strip_prefix("read: \"")
-                .unwrap()
-                .strip_suffix('"')
-                .unwrap()
-        })
-        .collect();
-
-    Ok(output)
-}
-
 /// Makes expectrl output human-readable by unescaping and stripping ANSI codes.
 pub fn make_expectrl_output_readable<S: AsRef<str>>(output: S) -> String {
     // Unescape the escaping done by expectrl's logging mechanism.

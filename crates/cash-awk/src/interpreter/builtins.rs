@@ -451,17 +451,6 @@ fn run_system(command: &CString) -> i32 {
 
     match command_proc.status() {
         Ok(status) => {
-            #[cfg(unix)]
-            {
-                use std::os::unix::process::ExitStatusExt;
-                if let Some(code) = status.code() {
-                    code
-                } else if let Some(sig) = status.signal() {
-                    128 + sig
-                } else {
-                    -1
-                }
-            }
             #[cfg(not(unix))]
             {
                 status.code().unwrap_or(-1)

@@ -231,12 +231,6 @@ fn shell_command(cmd: &OsStr) -> std::process::Command {
         c.arg("/C").arg(cmd);
         c
     }
-    #[cfg(not(windows))]
-    {
-        let mut c = std::process::Command::new("/bin/sh");
-        c.arg("-c").arg(cmd);
-        c
-    }
 }
 
 /// Run the given command bytes in a shell, returning its raw standard
@@ -289,7 +283,7 @@ fn execute_pattern_as_shell_command(
         // On Windows a trailing \r\n is the line terminator. Strip both.
         shell_out.truncate(shell_out.len() - 2);
     }
-    // Unix (and some Windows tools) end with a single \n. Strip it, as GNU sed does.
+    // Cash and some Windows tools end with a single \n. Strip it, as GNU sed does.
     if shell_out.ends_with(b"\n") {
         shell_out.pop();
     }

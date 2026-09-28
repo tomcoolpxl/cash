@@ -7,8 +7,7 @@
 #![allow(missing_docs)]
 #![allow(clippy::unwrap_used)]
 
-#[cfg(unix)]
-mod unix {
+mod bench {
     use cash_parser::Token;
     use criterion::Criterion;
 
@@ -266,15 +265,10 @@ backtick=`echo (nested parens)`
     }
 }
 
-#[cfg(unix)]
 criterion::criterion_group! {
     name = benches;
     config = criterion::Criterion::default();
-    targets = unix::criterion_benchmark
+    targets = bench::criterion_benchmark
 }
 
-#[cfg(unix)]
 criterion::criterion_main!(benches);
-
-#[cfg(not(unix))]
-fn main() {}

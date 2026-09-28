@@ -249,14 +249,7 @@ impl builtins::Command for FindCommand {
 
 /// Renders a path the way cash renders every path it prints (D3).
 fn render(path: &Path) -> String {
-    #[cfg(windows)]
-    {
-        cash_win32::path::render(path)
-    }
-    #[cfg(not(windows))]
-    {
-        path.to_string_lossy().to_string()
-    }
+    cash_win32::path::render(path)
 }
 
 /// Splits the arguments into the walk's options, its starting points and the expression.

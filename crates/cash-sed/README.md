@@ -12,6 +12,17 @@ with some [GNU sed](https://www.gnu.org/software/sed/manual/sed.html),
 [FreeBSD sed](https://man.freebsd.org/cgi/man.cgi?sed(1)),
 and other extensions.
 
+## In Cash
+
+This crate is Cash's copy of [uutils/sed](https://github.com/uutils/sed). The rest of
+this README is upstream's: its installation, release and test instructions describe the
+upstream project, not this crate. Cash's changes from upstream are listed in
+[research/uutils-sed-evaluation.md](../../research/uutils-sed-evaluation.md).
+
+Cash builds for Windows only, so the Unix-only code paths were removed: the mmap(2) input
+and write(2)/copy_file_range(2) zero-copy output in `fast_io.rs`, the `/bin/sh` fallback
+for `e` and `s///e`, copying Unix permission bits on in-place edits, and the Unix-only tests.
+
 ## Status
 
 At this state _sed_ implements all [POSIX features](https://pubs.opengroup.org/onlinepubs/9799919799/)

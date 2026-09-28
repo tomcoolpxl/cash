@@ -235,14 +235,7 @@ impl<SE: extensions::ShellExtensions> AsMut<Self> for Shell<SE> {
 /// spelled with backslashes — which is exactly the one a session starts in, and the one
 /// `pwd` reports before the user has changed directory at all.
 fn canonical_working_dir(dir: &Path) -> PathBuf {
-    #[cfg(windows)]
-    {
-        PathBuf::from(cash_win32::path::render(dir))
-    }
-    #[cfg(not(windows))]
-    {
-        dir.to_path_buf()
-    }
+    PathBuf::from(cash_win32::path::render(dir))
 }
 
 impl<SE: extensions::ShellExtensions> Shell<SE> {

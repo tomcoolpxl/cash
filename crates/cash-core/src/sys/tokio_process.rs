@@ -27,14 +27,6 @@ pub(crate) fn spawn(
         tokio_cmd.kill_on_drop(kill_on_drop);
         tokio_cmd
     };
-    #[cfg(not(windows))]
-    let _ = new_group;
-    #[cfg(not(windows))]
-    let mut command = {
-        let mut tokio_cmd = tokio::process::Command::from(command);
-        tokio_cmd.kill_on_drop(kill_on_drop);
-        tokio_cmd
-    };
 
     let child = command.spawn()?;
 

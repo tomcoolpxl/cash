@@ -54,8 +54,9 @@ the first feature priority. Work through the existing plan in its own phase orde
    navigation, and the separately scoped custom-keymap work;
 4. variable file-descriptor redirection and `varredir_close`;
 5. the Bash 5.2 POSIX-mode pass;
-6. a Linux GitHub Actions differential job using an actual Bash 5.2 executable, while
-   retaining native Windows coverage for CRLF, ConPTY, paths, and handles.
+6. native Windows coverage for CRLF, ConPTY, paths, and handles. A Linux GitHub Actions
+   job diffed focused probes against a real Bash 5.2 until 2026-09-28, when cash became
+   Windows-only (spec D43).
 
 The [remaining plan](research/bash-reference/bash-5.2-remaining-plan.md) owns the probe
 matrix and implementation sequence. The [gap audit](research/bash-reference/bash-5.2-gaps.md)

@@ -851,46 +851,41 @@ impl Job {
     /// A job whose processes share the console's group receives Ctrl-C directly and is
     /// left to handle it, however many times it is pressed.
     pub async fn wait_in_foreground(&mut self) -> Result<ExecutionResult, error::Error> {
-        #[cfg(windows)]
-        {
-            let pids = self.spawned_pids.clone();
-            let current = move || -> Vec<u32> {
-                pids.as_ref()
-                    .and_then(|p| p.lock().ok().map(|p| p.clone()))
-                    .unwrap_or_default()
-                    .into_iter()
-                    .filter_map(|pid| u32::try_from(pid).ok())
-                    .collect()
-            };
-            let mut relayed = false;
-            let wait = self.wait();
-            tokio::pin!(wait);
-            loop {
-                tokio::select! {
-                    result = &mut wait => return result,
-                    _ = sys::signal::await_ctrl_c() => {
-                        let pids = current();
-                        if relayed {
-                            for pid in pids {
-                                // The second Ctrl-C ends it as SIGINT would: 130.
-                                let reaped = cash_win32::jobreg::terminate_tree(pid, 130)
-                                    .unwrap_or(false);
-                                if !reaped {
-                                    let _ = cash_win32::process::terminate(pid, 130);
-                                }
+        let pids = self.spawned_pids.clone();
+        let current = move || -> Vec<u32> {
+            pids.as_ref()
+                .and_then(|p| p.lock().ok().map(|p| p.clone()))
+                .unwrap_or_default()
+                .into_iter()
+                .filter_map(|pid| u32::try_from(pid).ok())
+                .collect()
+        };
+        let mut relayed = false;
+        let wait = self.wait();
+        tokio::pin!(wait);
+        loop {
+            tokio::select! {
+                result = &mut wait => return result,
+                _ = sys::signal::await_ctrl_c() => {
+                    let pids = current();
+                    if relayed {
+                        for pid in pids {
+                            // The second Ctrl-C ends it as SIGINT would: 130.
+                            let reaped = cash_win32::jobreg::terminate_tree(pid, 130)
+                                .unwrap_or(false);
+                            if !reaped {
+                                let _ = cash_win32::process::terminate(pid, 130);
                             }
-                        } else {
-                            // `|` rather than `||`: every leader gets the Ctrl-Break.
-                            relayed = pids
-                                .into_iter()
-                                .fold(false, |any, pid| any | cash_win32::stop::interrupt_group(pid));
                         }
+                    } else {
+                        // `|` rather than `||`: every leader gets the Ctrl-Break.
+                        relayed = pids
+                            .into_iter()
+                            .fold(false, |any, pid| any | cash_win32::stop::interrupt_group(pid));
                     }
                 }
             }
         }
-        #[cfg(not(windows))]
-        self.wait().await
     }
 
     /// Wait past stop notifications until the job has actually terminated.

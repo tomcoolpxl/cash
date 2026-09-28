@@ -149,8 +149,6 @@ pub(crate) fn describe(
             // `which` renders here too, and the two must not disagree about the same file.
             #[cfg(windows)]
             let path = cash_win32::path::render(path);
-            #[cfg(not(windows))]
-            let path = path.to_string_lossy();
             if *hashed {
                 writeln!(writer, "{name} is hashed ({path})")
             } else {

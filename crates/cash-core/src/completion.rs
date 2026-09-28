@@ -1521,8 +1521,6 @@ async fn get_file_completions(
         .map(|translated| cash_win32::path::render(&translated));
     #[cfg(windows)]
     let glob_token = unix_spelled.as_deref().unwrap_or(expanded_token.as_str());
-    #[cfg(not(windows))]
-    let glob_token = expanded_token.as_str();
 
     let glob = std::format!("{glob_token}*");
 
@@ -1721,9 +1719,6 @@ async fn get_completions_using_basic_lookup(
 /// against the process's current drive: it happened to work from `C:`, and completed
 /// nothing from a checkout on `D:` (GitHub's runners).
 fn is_drive_colon(input: &str, word_start: Option<usize>, index: usize) -> bool {
-    if !cfg!(windows) {
-        return false;
-    }
     let Some(start) = word_start else {
         return false;
     };

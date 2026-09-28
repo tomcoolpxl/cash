@@ -59,34 +59,14 @@ path = "tests/acceptance_edge_cases.rs"
 name = "corpus"
 path = "tests/corpus.rs"
 
-# The differential suite absorbed from brush: the same script under cash and real
-# bash, diffing stdout, stderr, exit status and filesystem effects. D43 runs these
-# on Linux, where a reference bash exists.
-[[test]]
-name = "cash-compat-tests"
-path = "tests/compat_tests.rs"
-harness = false
-
 [[test]]
 name = "cash-integration-tests"
 path = "tests/integration_tests.rs"
 harness = false
 
 [[test]]
-name = "cash-version-tests"
-path = "tests/version_tests.rs"
-
-[[test]]
-name = "cash-interactive-tests"
-path = "tests/interactive_tests.rs"
-
-[[test]]
 name = "conpty-interactive-tests"
 path = "tests/conpty_interactive_tests.rs"
-
-[[test]]
-name = "cash-completion-tests"
-path = "tests/completion_tests.rs"
 
 # D40: completion is the one part of the shell with no command-line surface, so
 # these drive a `Shell` directly.
@@ -183,8 +163,8 @@ path = "tests/coolfetch.rs"
 
 [dev-dependencies]
 anyhow = "1.0.102"
-# The absorbed differential suite parses its own CLI options and drives an async
-# shell, so it needs these directly rather than through cash-shell.
+# The YAML case runner parses its own CLI options and the completion tests drive an
+# async shell, so they need these directly rather than through cash-shell.
 clap = { version = "4.6.0", features = ["derive", "env"] }
 tokio = { version = "1.52.3", features = ["rt", "rt-multi-thread", "sync", "macros"] }
 tempfile = "3.27.0"

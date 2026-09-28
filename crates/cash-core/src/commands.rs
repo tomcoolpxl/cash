@@ -157,19 +157,8 @@ impl<SE: extensions::ShellExtensions> std::ops::DerefMut for ShellForCommand<'_,
     }
 }
 
-/// Composes a `std::process::Command` to execute the given command. Appropriately
-/// configures the command name and arguments, redirections, injected file
-/// descriptors, environment variables, etc.
-///
-/// # Arguments
-///
-/// * `context` - The execution context in which the command is being composed.
-/// * `command_name` - The name of the command to execute.
-/// * `argv0` - The value to use for `argv[0]` (may be different from the command).
-/// * `args` - The arguments to pass to the command.
-/// * `empty_env` - If true, the command will be executed with an empty environment; if false, the
-///   command will inherit environment variables marked as exported in the provided `Shell`.
-#[allow(unused_variables, reason = "argv0 is only used on unix platforms")]
+/// Writes the PowerShell runner script to the temp folder if it is not there yet, and
+/// returns its path.
 #[cfg(windows)]
 fn ensure_ps_runner() -> Result<PathBuf, error::Error> {
     let runner_path = std::env::temp_dir().join("cash_ps_runner.ps1");
@@ -508,7 +497,6 @@ pub fn exported_environment(
 /// * `args` - The arguments to pass to the command.
 /// * `empty_env` - If true, the command will be executed with an empty environment; if false, the
 ///   command will inherit environment variables marked as exported in the provided `Shell`.
-#[allow(unused_variables, reason = "argv0 is only used on unix platforms")]
 pub fn compose_std_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
     context: &ExecutionContext<'_, SE>,
     command_name: &str,
@@ -518,13 +506,6 @@ pub fn compose_std_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
 ) -> Result<std::process::Command, error::Error> {
     #[cfg(windows)]
     let (mut cmd, target_ps_script) = build_windows_command(context, command_name, argv0, args)?;
-    #[cfg(not(windows))]
-    let mut cmd = {
-        let mut c = std::process::Command::new(command_name);
-        c.arg0(argv0);
-        c.args(args);
-        c
-    };
 
     // Use the shell's current working dir.
     cmd.current_dir(context.shell.working_dir());
@@ -593,7 +574,6 @@ pub fn compose_std_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
     // this command redirects itself (`tool.exe 3>x`) reaches `inject_fds` and fails
     // loudly. Descriptors the shell merely holds — `exec 3>&1 1>log`, or `{ ...; } 3>x`
     // around the command — are left behind, as the child could not use them anyway.
-    #[cfg(not(unix))]
     let other_files =
         other_files.filter(|(fd, _)| context.params.command_redirected_fds.contains(fd));
 
@@ -796,8 +776,6 @@ impl<'a, SE: extensions::ShellExtensions> SimpleCommand<'a, SE> {
             // plainly exists.
             #[cfg(windows)]
             let command_name = cash_win32::path::accept_path(&self.command_name);
-            #[cfg(not(windows))]
-            let command_name = PathBuf::from(self.command_name.clone());
 
             self.execute_via_external(command_name.as_path())
         }

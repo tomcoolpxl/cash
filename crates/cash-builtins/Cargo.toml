@@ -59,7 +59,6 @@ default = [
     'builtin.set',
     'builtin.shift',
     'builtin.shopt',
-    'builtin.suspend',
     'builtin.test',
     'builtin.times',
     'builtin.trap',
@@ -115,7 +114,6 @@ default = [
 'builtin.set' = []
 'builtin.shift' = []
 'builtin.shopt' = []
-'builtin.suspend' = []
 'builtin.test' = []
 'builtin.times' = []
 'builtin.trap' = []
@@ -134,7 +132,6 @@ workspace = true
 futures = "0.3.32"
 cash-core = { workspace = true }
 cash-parser = { workspace = true }
-cfg-if = "1.0.4"
 chrono = "0.4.44"
 clap = { version = "4.6.0", features = ["derive", "wrap_help"] }
 fancy-regex = "0.19.0"
@@ -143,9 +140,6 @@ strum = "0.28.0"
 thiserror = "2.0.18"
 tracing = "0.1.44"
 utf8-chars = "3.0.6"
-
-[target.'cfg(target_family = "wasm")'.dependencies]
-tokio = { version = "1.52.3", features = ["io-util", "macros", "rt"] }
 
 [target.'cfg(any(unix, windows))'.dependencies]
 tokio = { version = "1.52.3", features = [
@@ -163,20 +157,6 @@ uucore = { version = "0.12.0", default-features = false, features = [
     "format",
     "signals",
 ] }
-
-[target.'cfg(unix)'.dependencies]
-nix = { version = "0.31.2", features = [
-    "fs",
-    "process",
-    "resource",
-    "signal",
-    "term",
-    "user",
-] }
-rlimit = "0.11.0"
-
-[target.'cfg(any(target_os = "linux", target_os = "android"))'.dependencies]
-procfs = "0.18.0"
 
 [dev-dependencies]
 anyhow = "1.0.102"

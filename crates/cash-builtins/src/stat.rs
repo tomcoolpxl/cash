@@ -194,8 +194,6 @@ impl FileStatInfo {
 
         #[cfg(windows)]
         let (inode, links, device) = query_file_index_and_links(path);
-        #[cfg(not(windows))]
-        let (inode, links, device) = (0u64, 1u32, 0u32);
 
         let (user, uid) = file_owner(path);
         // Windows files have no POSIX group, so the group is the owner, as in `ls -l`
@@ -210,8 +208,6 @@ impl FileStatInfo {
             let b = filetime_to_unix(meta.creation_time());
             (a, m, b)
         };
-        #[cfg(not(windows))]
-        let (atime, mtime, btime) = (0, 0, 0);
 
         let ctime = mtime; // Windows does not have a separate inode change time
 

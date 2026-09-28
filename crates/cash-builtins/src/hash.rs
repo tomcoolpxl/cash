@@ -165,12 +165,5 @@ impl builtins::Command for HashCommand {
 /// Renders a path with one canonical spelling (D3). A cached path is a `PATH` directory
 /// joined to the file name, which otherwise shows up as `C:/Program Files/Git/usr/bin\ls.exe`.
 fn render(path: &Path) -> String {
-    #[cfg(windows)]
-    {
-        cash_win32::path::render(path)
-    }
-    #[cfg(not(windows))]
-    {
-        path.to_string_lossy().to_string()
-    }
+    cash_win32::path::render(path)
 }

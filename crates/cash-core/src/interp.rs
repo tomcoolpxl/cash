@@ -2456,90 +2456,25 @@ const fn get_default_fd_for_redirect_kind(kind: &ast::IoFileRedirectKind) -> She
 /// Set up a process substitution, returning the argument the command should receive,
 /// the fd the file is installed on, and the file itself.
 ///
-/// cash (D17): the argument is `/dev/fd/N` on Unix, where the child inherits the fd, and
-/// a Win32 Named Pipe (`\\.\pipe\cash-procsub-...`) or direct pipe on Windows.
+/// cash (D17): the argument is a Win32 Named Pipe (`\\.\pipe\cash-procsub-...`), or a
+/// direct pipe when the substitution is itself a redirection.
 async fn setup_process_substitution(
     shell: &Shell<impl extensions::ShellExtensions>,
     params: &ExecutionParameters,
     kind: &ast::ProcessSubstitutionKind,
     subshell_cmd: &ast::SubshellCommand,
-    #[cfg_attr(not(windows), allow(unused_variables))] for_redirect: bool,
+    for_redirect: bool,
     requires_seekable_file: bool,
 ) -> Result<(String, Option<ShellFd>, OpenFile), error::Error> {
-    #[cfg(windows)]
-    {
-        return setup_process_substitution_win(
-            shell,
-            params,
-            kind,
-            subshell_cmd,
-            for_redirect,
-            requires_seekable_file,
-        )
-        .await;
-    }
-
-    #[cfg(not(windows))]
-    setup_process_substitution_posix(shell, params, kind, subshell_cmd, requires_seekable_file)
-}
-
-#[cfg(not(windows))]
-fn setup_process_substitution_posix(
-    shell: &Shell<impl extensions::ShellExtensions>,
-    params: &ExecutionParameters,
-    kind: &ast::ProcessSubstitutionKind,
-    subshell_cmd: &ast::SubshellCommand,
-    _requires_seekable_file: bool,
-) -> Result<(String, Option<ShellFd>, OpenFile), error::Error> {
-    // TODO(execute): Don't execute synchronously!
-    // Execute in a subshell.
-    let mut subshell = shell.clone();
-
-    // Set up execution parameters for the child execution.
-    let mut child_params = params.clone();
-    child_params.process_group_policy = ProcessGroupPolicy::SameProcessGroup;
-
-    // Set up pipe so we can connect to the command.
-    let (reader, writer) = std::io::pipe()?;
-    let (reader, writer) = (reader.into(), writer.into());
-
-    let target_file = match kind {
-        ast::ProcessSubstitutionKind::Read => {
-            child_params.open_files.set_fd(OpenFiles::STDOUT_FD, writer);
-            reader
-        }
-        ast::ProcessSubstitutionKind::Write => {
-            child_params.open_files.set_fd(OpenFiles::STDIN_FD, reader);
-            writer
-        }
-    };
-
-    // Asynchronously spawn off the subshell; we intentionally don't block on its
-    // completion.
-    let subshell_cmd = subshell_cmd.to_owned();
-    tokio::spawn(async move {
-        // Intentionally ignore the result of the subshell command.
-        let _ = subshell_cmd
-            .list
-            .execute(&mut subshell, &child_params)
-            .await;
-    });
-
-    // Starting at 63 (a.k.a. 64-1)--and decrementing--look for an
-    // available fd.
-    let mut candidate_fd_num = 63;
-    while params.open_files.contains_fd(candidate_fd_num) {
-        candidate_fd_num -= 1;
-        if candidate_fd_num == 0 {
-            return error::unimp("no available file descriptors");
-        }
-    }
-
-    Ok((
-        std::format!("/dev/fd/{candidate_fd_num}"),
-        Some(candidate_fd_num),
-        target_file,
-    ))
+    setup_process_substitution_win(
+        shell,
+        params,
+        kind,
+        subshell_cmd,
+        for_redirect,
+        requires_seekable_file,
+    )
+    .await
 }
 
 /// cash (D17): process substitution via Win32 Named Pipes and live streaming.
@@ -2661,27 +2596,5 @@ fn setup_open_file_with_contents(contents: &str) -> Result<OpenFile, error::Erro
     // cash: on Windows a pipe deadlocks above 4096 bytes, because nothing is draining it
     // until the command that reads the here-document starts. See
     // `sys::windows::fs::open_temp_with_contents`.
-    #[cfg(windows)]
-    {
-        Ok(crate::sys::fs::open_temp_with_contents(bytes)?.into())
-    }
-
-    #[cfg(not(windows))]
-    {
-        let (reader, mut writer) = std::io::pipe()?;
-
-        #[cfg(any(target_os = "linux", target_os = "android"))]
-        {
-            use std::os::fd::AsFd as _;
-
-            let len = i32::try_from(bytes.len())
-                .map_err(|_err| error::Error::from(error::ErrorKind::TooMuchData))?;
-            nix::fcntl::fcntl(reader.as_fd(), nix::fcntl::FcntlArg::F_SETPIPE_SZ(len))?;
-        }
-
-        writer.write_all(bytes)?;
-        drop(writer);
-
-        Ok(reader.into())
-    }
+    Ok(crate::sys::fs::open_temp_with_contents(bytes)?.into())
 }

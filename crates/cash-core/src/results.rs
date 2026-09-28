@@ -1,8 +1,5 @@
 //! Encapsulation of execution results.
 
-#[cfg(unix)]
-use std::os::unix::process::ExitStatusExt;
-
 use crate::{error, processes};
 
 /// Represents the result of executing a command or similar item.
@@ -123,22 +120,8 @@ impl From<std::process::Output> for ExecutionResult {
             // from success, which would silently pass an `&&` chain. Known crash classes
             // map to bash's `128 + n` instead, so an access violation is `139`, exactly
             // what a segfault yields on Linux.
-            #[cfg(windows)]
-            {
-                #[expect(clippy::cast_sign_loss)]
-                return Self::new(cash_win32::exit::from_windows(code as u32));
-            }
-            #[cfg(not(windows))]
-            {
-                #[expect(clippy::cast_sign_loss)]
-                return Self::new((code & 0xFF) as u8);
-            }
-        }
-
-        #[cfg(unix)]
-        if let Some(signal) = output.status.signal() {
             #[expect(clippy::cast_sign_loss)]
-            return Self::new((signal & 0xFF) as u8 + 128);
+            return Self::new(cash_win32::exit::from_windows(code as u32));
         }
 
         tracing::error!("unhandled process exit");

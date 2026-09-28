@@ -463,12 +463,6 @@ pub(crate) fn create_shell_command(cmd_str: &str) -> std::process::Command {
         cmd.args(["/c", cmd_str]);
         cmd
     }
-    #[cfg(not(windows))]
-    {
-        let mut cmd = std::process::Command::new("sh");
-        cmd.args(["-c", cmd_str]);
-        cmd
-    }
 }
 
 #[derive(Default)]

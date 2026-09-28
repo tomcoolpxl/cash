@@ -160,11 +160,7 @@ fn locate(shell: &cash_core::Shell<impl cash_core::ShellExtensions>) -> Location
 }
 
 const fn exe_name() -> &'static str {
-    if cfg!(windows) {
-        "carapace.exe"
-    } else {
-        "carapace"
-    }
+    "carapace.exe"
 }
 
 impl Found {

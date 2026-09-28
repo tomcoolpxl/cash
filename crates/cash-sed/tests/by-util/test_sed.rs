@@ -11,9 +11,6 @@
 use std::fs;
 use std::io::{Read, Write};
 
-#[cfg(unix)]
-use assert_fs::fixture::{FileWriteStr, PathChild};
-
 use sha2::{Digest, Sha256};
 use tempfile::NamedTempFile;
 use uutests::new_ucmd;
@@ -134,7 +131,7 @@ fn test_no_script_file() {
     }
 }
 
-/// Test correct functioning of copy_file_range.
+/// Test concatenation of multiple input files.
 #[test]
 fn test_multiple_input_files() {
     new_ucmd!()
@@ -167,20 +164,6 @@ fn test_delete_file() {
             .args(&["-e", "d", fixture])
             .succeeds()
             .no_stdout();
-    }
-}
-
-#[test]
-#[cfg(unix)]
-fn test_special_file() {
-    for fixture in INPUT_FILES {
-        // To test path avoiding copy_file_range
-        let devnull = fs::File::create("/dev/null").unwrap();
-
-        new_ucmd!()
-            .args(&["-e", "", fixture])
-            .set_stdout(devnull)
-            .succeeds();
     }
 }
 
@@ -758,43 +741,9 @@ fn test_subst_e_flag_strips_trailing_newline() {
 }
 
 #[test]
-#[cfg(unix)]
-fn test_subst_e_flag_multiline_output() {
-    // Command that produces multiple lines
-    new_ucmd!()
-        .arg(r#"s/.*/printf 'a\nb'/e"#)
-        .pipe_in("x\n")
-        .succeeds()
-        .stdout_is("a\nb\n");
-}
-
-#[test]
 fn test_subst_e_flag_combined_with_g() {
     // e flag with other flags
     new_ucmd!().arg("s/x/echo y/ge").pipe_in("x\n").succeeds();
-}
-
-#[cfg(unix)]
-#[test]
-fn test_subst_flags_ep_execute_then_print() {
-    // 'ep': execute first, then prints the command's result.
-    new_ucmd!()
-        .arg("s/.*/echo hi/ep")
-        .pipe_in("x\n")
-        .succeeds()
-        .stdout_is("hi\nhi\n");
-}
-
-#[cfg(unix)]
-#[test]
-fn test_subst_flags_pe_print_then_execute() {
-    // 'pe': prints the pre-execution text first, then execute. The 'p'
-    // and 'e' flags are applied in the order written, matching GNU sed.
-    new_ucmd!()
-        .arg("s/.*/echo hi/pe")
-        .pipe_in("x\n")
-        .succeeds()
-        .stdout_is("echo hi\nhi\n");
 }
 
 #[test]
@@ -838,10 +787,8 @@ fn test_subst_e_flag_no_match_no_exec() {
 ////////////////////////////////////////////////////////////
 // e command (execute)
 // The with-argument form writes the shell's raw, unmodified output to the
-// stream, so its byte-exact terminator differs by platform: LF from /bin/sh
-// on Unix, CRLF from cmd.exe on Windows. sed's own pattern-space auto-print
-// always uses LF. Hence the parallel Unix/Windows tests below.
-#[cfg(unix)]
+// stream, while sed's own pattern-space auto-print always uses LF.
+#[cfg(windows)]
 #[test]
 fn test_e_command_with_arg_basic() {
     // With an argument, the command runs immediately and its output is
@@ -855,16 +802,6 @@ fn test_e_command_with_arg_basic() {
 
 #[cfg(windows)]
 #[test]
-fn test_e_command_with_arg_basic() {
-    new_ucmd!()
-        .arg("e echo hi")
-        .pipe_in("a\n")
-        .succeeds()
-        .stdout_is("hi\na\n");
-}
-
-#[cfg(unix)]
-#[test]
 fn test_e_command_with_arg_no_space_required() {
     // No whitespace is required between 'e' and its argument.
     new_ucmd!()
@@ -872,35 +809,6 @@ fn test_e_command_with_arg_no_space_required() {
         .pipe_in("a\n")
         .succeeds()
         .stdout_is("hi\na\n");
-}
-
-#[cfg(windows)]
-#[test]
-fn test_e_command_with_arg_no_space_required() {
-    new_ucmd!()
-        .arg("eecho hi")
-        .pipe_in("a\n")
-        .succeeds()
-        .stdout_is("hi\na\n");
-}
-
-#[cfg(unix)]
-#[test]
-fn test_e_command_with_arg_runs_real_shell_command() -> Result<(), Box<dyn std::error::Error>> {
-    // The argument is executed and not just its output captured.
-    // Verify a real filesystem side effect, matching GNU sed's own
-    // testsuite check for this command (testsuite/sandbox.sh).
-    let temp_dir = assert_fs::TempDir::new()?;
-    let marker = temp_dir.child("marker");
-
-    new_ucmd!()
-        .arg(format!("etouch {}", marker.path().display()))
-        .pipe_in("a\n")
-        .succeeds()
-        .stdout_is("a\n");
-
-    assert!(marker.path().exists());
-    Ok(())
 }
 
 #[test]
@@ -914,17 +822,7 @@ fn test_e_command_no_arg_pattern_space_becomes_command() {
         .stdout_is("hi\n");
 }
 
-#[cfg(unix)]
-#[test]
-fn test_e_command_no_arg_strips_one_trailing_newline() {
-    new_ucmd!()
-        .arg("e")
-        .pipe_in("printf \"a\\nb\\n\"\n")
-        .succeeds()
-        .stdout_is("a\nb\n");
-}
-
-#[cfg(unix)]
+#[cfg(windows)]
 #[test]
 fn test_e_command_with_arg_does_not_strip_trailing_newline() {
     // Unlike the no-argument form, e-with-argument writes the child's
@@ -938,85 +836,12 @@ fn test_e_command_with_arg_does_not_strip_trailing_newline() {
 
 #[cfg(windows)]
 #[test]
-fn test_e_command_with_arg_does_not_strip_trailing_newline() {
-    new_ucmd!()
-        .arg("e echo hi")
-        .pipe_in("a\n")
-        .succeeds()
-        .stdout_is("hi\na\n");
-}
-
-#[cfg(unix)]
-#[test]
 fn test_e_command_with_address() {
     new_ucmd!()
         .arg("1e echo address")
         .pipe_in("a\nb\n")
         .succeeds()
         .stdout_is("address\na\nb\n");
-}
-
-#[cfg(windows)]
-#[test]
-fn test_e_command_with_address() {
-    new_ucmd!()
-        .arg("1e echo address")
-        .pipe_in("a\nb\n")
-        .succeeds()
-        .stdout_is("address\na\nb\n");
-}
-
-#[cfg(unix)]
-#[test]
-fn test_e_command_semicolon_is_part_of_argument() {
-    // Unlike most commands, ';' does not terminate e's argument.
-    // Rest of the line is consumed unconditionally, so the shell (not
-    // sed) is what splits on the ';' here.
-    new_ucmd!()
-        .arg("e echo hi; echo bye")
-        .pipe_in("a\n")
-        .succeeds()
-        .stdout_is("hi\nbye\na\n");
-}
-
-#[cfg(unix)]
-#[test]
-fn test_e_command_recognized_escape_decoded() {
-    // Escape sequences in the argument are decoded by sed itself (\t is
-    // the tab character) before the shell ever sees them, same as a/c/i.
-    new_ucmd!()
-        .arg(r#"e echo "hi\tthere""#)
-        .pipe_in("a\n")
-        .succeeds()
-        .stdout_is("hi\tthere\na\n");
-}
-
-#[cfg(unix)]
-#[test]
-fn test_e_command_unrecognized_escape_falls_back_to_literal() {
-    // '\;' is not a recognized escape, so the backslash is dropped and
-    // ';' is kept literally. It's then the shell's own ';' that splits
-    // the resulting single-line command into two statements.
-    new_ucmd!()
-        .arg(r"e echo hi\;there")
-        .pipe_in("a\n")
-        .succeeds()
-        .stdout_is("hi\na\n")
-        .stderr_contains("there");
-}
-
-#[cfg(unix)]
-#[test]
-fn test_e_command_backslash_continuation() {
-    // A trailing backslash continues the argument onto the next script
-    // line, joined by an embedded newline. The shell then treats that
-    // as two separate statements.
-    new_ucmd!()
-        .arg("e echo hi \\\nthere")
-        .pipe_in("x\n")
-        .succeeds()
-        .stdout_is("hi\nx\n")
-        .stderr_contains("there");
 }
 
 #[test]
@@ -1046,26 +871,6 @@ fn test_e_command_rejected_with_sandbox() {
         .stderr_contains("not allowed with --posix or --sandbox");
 }
 
-#[cfg(unix)]
-#[test]
-fn test_e_command_rejected_with_sandbox_no_side_effect() -> Result<(), Box<dyn std::error::Error>> {
-    // Rejection happens at compile time, before any input is processed, so
-    // the shell command must never run.
-    let temp_dir = assert_fs::TempDir::new()?;
-    let marker = temp_dir.child("marker");
-
-    new_ucmd!()
-        .args(&[
-            "--sandbox",
-            "-e",
-            &format!("etouch {}", marker.path().display()),
-        ])
-        .fails();
-
-    assert!(!marker.path().exists());
-    Ok(())
-}
-
 #[test]
 fn test_e_command_with_arg_command_failure() {
     // A failing command's own error goes to stderr. sed itself succeeds.
@@ -1085,32 +890,6 @@ fn test_e_command_no_arg_command_failure() {
         .succeeds()
         .stdout_is("\n")
         .stderr_contains("nonexistent_command");
-}
-
-#[cfg(unix)]
-#[test]
-fn test_e_command_no_arg_non_utf8_output_passthrough() {
-    // Non-UTF-8 shell output passes through as raw bytes, matching GNU
-    // sed rather than being rejected. The pattern space is passed to
-    // the shell verbatim, so its printf emits raw 0xff.
-    new_ucmd!()
-        .arg("e")
-        .pipe_in("printf '\\377'\n")
-        .succeeds()
-        .stdout_is_bytes(b"\xff\n");
-}
-
-#[cfg(unix)]
-#[test]
-fn test_e_command_with_arg_non_utf8_output_passthrough() {
-    // Same for the with-argument form (a separate execution path). The
-    // doubled backslashes survive sed's own escape decoding as single ones,
-    // so the shell's printf emits raw 0xff followed by a newline.
-    new_ucmd!()
-        .arg(r"e printf '\\377\\n'")
-        .pipe_in("a\n")
-        .succeeds()
-        .stdout_is_bytes(b"\xff\na\n");
 }
 
 ////////////////////////////////////////////////////////////
@@ -2102,142 +1881,6 @@ fn test_crlf_binary_mode_treats_cr_as_data() {
         .pipe_in(b"one\r\n".to_vec())
         .succeeds()
         .stdout_is_bytes(b"onE\r\n");
-}
-
-#[cfg(unix)]
-#[test]
-fn in_place_edit_follow_symlink_edits_target() -> Result<(), Box<dyn std::error::Error>> {
-    let temp_dir = assert_fs::TempDir::new()?;
-    let target = temp_dir.child("target.txt");
-    let link = temp_dir.child("link.txt");
-
-    target.write_str("hello, world\n")?;
-
-    std::os::unix::fs::symlink(target.path(), link.path())?;
-
-    new_ucmd!()
-        .args(&[
-            "--follow-symlinks",
-            "-i",
-            "-e",
-            "s/world/universe/",
-            link.path().to_str().unwrap(),
-        ])
-        .succeeds();
-
-    let actual = std::fs::read_to_string(target.path())?;
-    assert_eq!(actual, "hello, universe\n");
-
-    Ok(())
-}
-
-#[cfg(unix)]
-#[test]
-fn in_place_edit_symlink_replaced_when_not_following() -> Result<(), Box<dyn std::error::Error>> {
-    let temp_dir = assert_fs::TempDir::new()?;
-    let target = temp_dir.child("target.txt");
-    let link = temp_dir.child("link.txt");
-
-    target.write_str("hello, world\n")?;
-
-    std::os::unix::fs::symlink(target.path(), link.path())?;
-
-    // Run command without --follow-symlinks
-    new_ucmd!()
-        .args(&[
-            "-i",
-            "-e",
-            "s/world/universe/",
-            link.path().to_str().unwrap(),
-        ])
-        .succeeds();
-
-    // The original target should be untouched
-    let original = std::fs::read_to_string(target.path())?;
-    assert_eq!(original, "hello, world\n");
-
-    // The symlink path should now contain the edited content
-    let edited = std::fs::read_to_string(link.path())?;
-    assert_eq!(edited, "hello, universe\n");
-
-    Ok(())
-}
-
-#[cfg(unix)]
-#[test]
-fn in_place_edit_follow_symlink_with_backup() -> Result<(), Box<dyn std::error::Error>> {
-    let temp_dir = assert_fs::TempDir::new()?;
-    let target = temp_dir.child("target.txt");
-    let link = temp_dir.child("link.txt");
-
-    target.write_str("hello, world\n")?;
-
-    std::os::unix::fs::symlink(target.path(), link.path())?;
-
-    new_ucmd!()
-        .args(&[
-            "--follow-symlinks",
-            "-i",
-            ".bak",
-            "-e",
-            "s/world/universe/",
-            link.path().to_str().unwrap(),
-        ])
-        .succeeds();
-
-    // Verify target was modified
-    let edited = std::fs::read_to_string(target.path())?;
-    assert_eq!(edited, "hello, universe\n");
-
-    // Backup file is created alongside the target
-    let backup_path = target.path().with_file_name(format!(
-        "{}.bak",
-        target.file_name().unwrap().to_string_lossy()
-    ));
-    let backup = std::fs::read_to_string(&backup_path)?;
-    assert_eq!(backup, "hello, world\n");
-
-    Ok(())
-}
-
-#[cfg(unix)]
-#[test]
-fn in_place_edit_symlink_replaced_with_backup() -> Result<(), Box<dyn std::error::Error>> {
-    let temp_dir = assert_fs::TempDir::new()?;
-    let target = temp_dir.child("target.txt");
-    let link = temp_dir.child("link.txt");
-
-    target.write_str("hello, world\n")?;
-
-    std::os::unix::fs::symlink(target.path(), link.path())?;
-
-    new_ucmd!()
-        .args(&[
-            "-i",
-            ".bak",
-            "-e",
-            "s/world/universe/",
-            link.path().to_str().unwrap(),
-        ])
-        .succeeds();
-
-    // Target should remain untouched
-    let unchanged = std::fs::read_to_string(target.path())?;
-    assert_eq!(unchanged, "hello, world\n");
-
-    // Symlink path should now contain the updated content
-    let edited = std::fs::read_to_string(link.path())?;
-    assert_eq!(edited, "hello, universe\n");
-
-    // Backup of the symlink file (not the target) should exist
-    let backup_path = link.path().with_file_name(format!(
-        "{}.bak",
-        link.file_name().unwrap().to_string_lossy()
-    ));
-    let backup = std::fs::read_to_string(&backup_path)?;
-    assert_eq!(backup, "hello, world\n");
-
-    Ok(())
 }
 
 ////////////////////////////////////////////////////////////

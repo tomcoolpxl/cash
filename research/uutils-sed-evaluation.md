@@ -127,3 +127,4 @@ All gate requirements have passed:
 5. **CRLF preservation:** Preserved CRLF in line reading and in-place file modifications in `fast_io.rs`. `$` correctly matches before `\r\n`.
 6. **Differential tests:** 30 classic and esoteric sed tests run and pass against GNU sed in WSL (`tests/sed-differential.sh`). All 360 unit tests and 271 integration tests pass (`cargo test -p cash-sed`).
 7. **Shell integration:** Registered `sed` in `crates/cash-shell/src/bundled.rs`, updated `crates/cash/src/doctor.rs` to mark `sed` as carried, and verified all 30 `resolution-honesty` tests pass.
+8. **Windows-only (2026-09-28):** Removed upstream's Unix code paths — the mmap and `copy_file_range` zero-copy I/O in `fast_io.rs`, the `/bin/sh` fallback for `e`, Unix permission copying for `-i`, and their tests — when cash became Windows-only (spec D43).

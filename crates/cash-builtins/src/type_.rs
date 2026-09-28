@@ -134,8 +134,6 @@ impl builtins::Command for TypeCommand {
                         Resolved::File { path, .. } if self.show_path_only => {
                             #[cfg(windows)]
                             let rendered = cash_win32::path::render(path);
-                            #[cfg(not(windows))]
-                            let rendered = path.to_string_lossy();
                             writeln!(context.stdout(), "{rendered}")?;
                         }
                         _ => lookup::describe(context.stdout(), name, &resolved_type)?,

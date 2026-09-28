@@ -28,7 +28,6 @@ async-trait = "0.1.89"
 cash-parser = { workspace = true }
 bon = "3.9.1"
 cached = "2.0.2"
-cfg-if = "1.0.4"
 chrono = "0.4.44"
 clap = { version = "4.6.0", features = ["derive", "wrap_help"] }
 color-print = "0.3.7"
@@ -44,9 +43,6 @@ strum = "0.28.0"
 strum_macros = "0.28.0"
 thiserror = "2.0.18"
 tracing = "0.1.44"
-
-[target.'cfg(target_family = "wasm")'.dependencies]
-tokio = { version = "1.52.3", features = ["io-util", "macros", "rt", "sync"] }
 
 [target.'cfg(any(unix, windows))'.dependencies]
 hostname = "0.4.2"
@@ -68,25 +64,6 @@ tokio = { version = "1.52.3", features = [
 cash-win32 = { workspace = true }
 check_elevation = "0.2.7"
 whoami = "2.1.1"
-
-[target.'cfg(unix)'.dependencies]
-command-fds = "0.3.2"
-libc = "0.2.183"
-nix = { version = "0.31.2", features = [
-    "fs",
-    "poll",
-    "process",
-    "resource",
-    "signal",
-    "term",
-    "user",
-] }
-terminfo = "0.9.0"
-uzers = "0.12.2"
-
-[target.wasm32-unknown-unknown.dependencies]
-getrandom = { version = "0.4.2", features = ["wasm_js"] }
-uuid = { version = "1.23.1", features = ["js"] }
 
 [dev-dependencies]
 anyhow = "1.0.102"

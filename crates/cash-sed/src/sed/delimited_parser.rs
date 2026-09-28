@@ -15,16 +15,8 @@ use crate::sed::script_line_provider::ScriptLineProvider;
 
 use std::char;
 use std::ffi::OsString;
-#[cfg(unix)]
-use std::os::unix::ffi::OsStringExt;
 use std::string::FromUtf8Error;
 use uucore::error::UResult;
-
-/// Construct an OS string from arbitrary bytes.
-#[cfg(unix)]
-pub fn os_string_from_bytes(bytes: Vec<u8>) -> Result<OsString, FromUtf8Error> {
-    Ok(OsString::from_vec(bytes))
-}
 
 /// Construct an OS string from UTF-8 bytes on platforms without byte-native paths.
 #[cfg(not(unix))]
@@ -653,15 +645,6 @@ pub fn parse_transliteration_for_mode(
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[cfg(unix)]
-    use std::os::unix::ffi::OsStrExt;
-
-    #[test]
-    #[cfg(unix)]
-    fn test_os_string_from_bytes_preserves_non_utf8_on_unix() {
-        let os = os_string_from_bytes(b"a\xFFb".to_vec()).unwrap();
-        assert_eq!(os.as_os_str().as_bytes(), b"a\xFFb");
-    }
 
     #[test]
     fn test_os_string_from_bytes_accepts_utf8() {

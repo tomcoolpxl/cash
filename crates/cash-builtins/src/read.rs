@@ -459,8 +459,6 @@ enum EditingKey {
     KillBefore,
     KillAfter,
     KillWordBefore,
-    #[cfg(not(windows))]
-    Eof,
     CtrlD,
     Timeout,
     Interrupt,
@@ -605,69 +603,6 @@ impl InputReader {
                 _ => EditingKey::Ignore,
             });
         }
-    }
-
-    /// Decode the common ANSI and control-key sequences emitted by Unix terminals.
-    #[cfg(not(windows))]
-    fn read_editing_key(&mut self) -> Result<EditingKey, cash_core::Error> {
-        let event = self.read_event()?;
-        Ok(match event {
-            InputEvent::Eof => EditingKey::Eof,
-            InputEvent::Timeout => EditingKey::Timeout,
-            InputEvent::CtrlC => EditingKey::Interrupt,
-            InputEvent::CtrlD => EditingKey::CtrlD,
-            InputEvent::Char('\r' | '\n') => EditingKey::Enter,
-            InputEvent::Char('\x08' | '\x7f') => EditingKey::Backspace,
-            InputEvent::Char('\x01') => EditingKey::Home,
-            InputEvent::Char('\x05') => EditingKey::End,
-            InputEvent::Char('\x0b') => EditingKey::KillAfter,
-            InputEvent::Char('\x15') => EditingKey::KillBefore,
-            InputEvent::Char('\x17') => EditingKey::KillWordBefore,
-            InputEvent::Char('\x10') => EditingKey::PreviousHistory,
-            InputEvent::Char('\x0e') => EditingKey::NextHistory,
-            InputEvent::Char('\t') => EditingKey::Tab,
-            InputEvent::Char('\x1b') => self.read_escape_sequence()?,
-            InputEvent::Char(ch) if ch.is_ascii_control() => EditingKey::Ignore,
-            InputEvent::Char(ch) => EditingKey::Char(ch),
-        })
-    }
-
-    #[cfg(not(windows))]
-    fn read_escape_sequence(&mut self) -> Result<EditingKey, cash_core::Error> {
-        let InputEvent::Char(prefix) = self.read_event()? else {
-            return Ok(EditingKey::Ignore);
-        };
-        if prefix != '[' && prefix != 'O' {
-            return Ok(EditingKey::Ignore);
-        }
-
-        let InputEvent::Char(code) = self.read_event()? else {
-            return Ok(EditingKey::Ignore);
-        };
-        Ok(match code {
-            'A' => EditingKey::PreviousHistory,
-            'B' => EditingKey::NextHistory,
-            'C' => EditingKey::Right,
-            'D' => EditingKey::Left,
-            'H' => EditingKey::Home,
-            'F' => EditingKey::End,
-            '1' | '3' | '4' | '7' | '8' => {
-                let InputEvent::Char(terminator) = self.read_event()? else {
-                    return Ok(EditingKey::Ignore);
-                };
-                if terminator != '~' {
-                    EditingKey::Ignore
-                } else {
-                    match code {
-                        '1' | '7' => EditingKey::Home,
-                        '3' => EditingKey::Delete,
-                        '4' | '8' => EditingKey::End,
-                        _ => EditingKey::Ignore,
-                    }
-                }
-            }
-            _ => EditingKey::Ignore,
-        })
     }
 }
 
@@ -872,14 +807,6 @@ fn read_line_with_editor<SE: cash_core::ShellExtensions>(
 
     loop {
         match reader.read_editing_key()? {
-            #[cfg(not(windows))]
-            EditingKey::Eof => {
-                finish_editor_output(output)?;
-                committed.push_str(&edited_line(&line, config));
-                return Ok(ReadResult::Eof(
-                    (!committed.is_empty()).then_some(committed),
-                ));
-            }
             EditingKey::Timeout => {
                 finish_editor_output(output)?;
                 committed.push_str(&edited_line(&line, config));
@@ -1497,33 +1424,6 @@ mod tests {
     use super::*;
 
     // ==================== UTF-8 decoding tests ====================
-
-    // Decoding is otherwise covered end-to-end by the compat suite; what can't be
-    // expressed there is a partial sequence that never completes, since it needs a
-    // writer held open while `read` gives up on it.
-    //
-    // `-t` needs `poll_for_input`, which only the unix backend implements; elsewhere it
-    // reports `Unsupported`, so there's no timeout to observe.
-    #[cfg(unix)]
-    #[test]
-    fn test_read_times_out_mid_sequence_without_losing_the_partial_bytes() {
-        let (rx, mut tx) = std::io::pipe().unwrap();
-        tx.write_all(b"\xc3").unwrap();
-
-        let mut reader = InputReader::new(rx.into(), Some(Duration::from_millis(100)), None);
-        let config = LineReaderConfig {
-            delimiter: Some(DEFAULT_DELIMITER),
-            char_limit: None,
-            process_escapes: false,
-        };
-
-        // Holding `tx` means the continuation byte never arrives, so the deadline has to
-        // be enforced on it and not just on the byte that started the sequence.
-        let result = read_line_with_reader(&mut reader, &config).unwrap();
-        drop(tx);
-
-        assert!(matches!(result, ReadResult::TimedOut(Some(line)) if line == "\u{c3}"));
-    }
 
     #[test]
     fn test_edited_line_applies_read_backslash_rules() {

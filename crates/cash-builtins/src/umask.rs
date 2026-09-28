@@ -1,11 +1,5 @@
-#[cfg(unix)]
-use cash_core::ErrorKind;
 use cash_core::{ExecutionResult, builtins};
-#[cfg(unix)]
-use cfg_if::cfg_if;
 use clap::Parser;
-#[cfg(all(unix, not(any(target_os = "linux", target_os = "android"))))]
-use nix::sys::stat::Mode;
 use std::io::Write;
 
 /// Manage the process umask.
@@ -186,31 +180,6 @@ fn get_umask() -> Result<u32, cash_core::Error> {
 #[expect(clippy::unnecessary_wraps)]
 fn set_umask(value: u32) -> Result<(), cash_core::Error> {
     REMEMBERED_UMASK.store(value, std::sync::atomic::Ordering::Relaxed);
-    Ok(())
-}
-
-#[cfg(unix)]
-cfg_if! {
-    if #[cfg(any(target_os = "linux", target_os = "android"))] {
-        fn get_umask() -> Result<u32, cash_core::Error> {
-            let umask = procfs::process::Process::myself().ok().and_then(|me| me.status().ok()).and_then(|status| status.umask);
-            umask.ok_or_else(|| cash_core::ErrorKind::InvalidUmask.into())
-        }
-    } else {
-        #[expect(clippy::unnecessary_wraps)]
-        fn get_umask() -> Result<u32, cash_core::Error> {
-            let u = nix::sys::stat::umask(Mode::empty());
-            nix::sys::stat::umask(u);
-            Ok(u32::from(u.bits()))
-        }
-    }
-}
-
-#[cfg(unix)]
-fn set_umask(value: nix::sys::stat::mode_t) -> Result<(), cash_core::Error> {
-    // value of mode_t can be platform dependent
-    let mode = nix::sys::stat::Mode::from_bits(value).ok_or_else(|| ErrorKind::InvalidUmask)?;
-    nix::sys::stat::umask(mode);
     Ok(())
 }
 

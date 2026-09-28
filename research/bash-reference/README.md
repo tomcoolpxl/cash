@@ -186,11 +186,12 @@ do not establish full Bash 5.3 compatibility.
   GNU findutils is the relevant upstream. Cash's new builtin-first xargs dispatch
   is a deliberate extension of its bundled userland, not proof of Bash parity.
   Keep its explicit-path and `enable -n` behavior tested and documented.
-- The compatibility runner's comment says conformance runs on Linux CI and a
-  reference Bash is unavailable on Windows. The checked-in CI workflow currently
-  has only a Windows job, and `compat_tests.rs:159` skips the differential suite
-  on Windows. The Bash executable used by these probes demonstrates that useful
-  non-PTY differential tests can run on this Windows machine.
+- The compatibility runner's comment said conformance runs on Linux CI and a
+  reference Bash is unavailable on Windows, and the runner skipped the
+  differential suite on Windows. The runner, its cases and the Linux CI job were
+  removed on 2026-09-28, when cash became Windows-only (spec D43). The Bash
+  executable used by these probes demonstrates that useful non-PTY differential
+  tests can run on this Windows machine.
 - The earlier 1,165 passing workspace tests therefore did not establish Bash
   conformance. Keep Win32 process tests, but add a separate language-only oracle
   job with an explicit Bash path/version. Do not remove Windows-specific tests

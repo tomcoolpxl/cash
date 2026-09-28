@@ -1181,6 +1181,15 @@ refusing it outright is worse. The documentation must not overstate D6 because o
 
 ### D43 — Language conformance on Linux CI; Windows has its own acceptance corpus
 
+**Amended 2026-09-28: cash is Windows-only.** The Linux half of this decision is gone.
+bash already runs natively on Linux, so a Linux cash would add nothing, and brush's Unix
+code was removed together with the Linux CI job. brush's differential suite (2,588
+cases) went with it: it needed a Unix PTY, so it never ran on Windows, and the Linux job
+had only been running the 13 probes in `tests/bash52-differential.sh`. Language
+conformance now rests on the inline-expectation cases in `crates/cash/tests/cases/brush`,
+the Windows acceptance corpus, and the targeted Bash 5.2/5.3 probes recorded under
+`research/bash-reference/`. The original decision follows.
+
 brush's ~2,500 differential tests run the same script under brush and real bash. They
 stay on Linux CI, where a real bash exists, and cover the *language*.
 

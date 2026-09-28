@@ -149,31 +149,19 @@ fn gui_apps(
     context: &cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
     mode: Option<GuiAppsMode>,
 ) -> Result<cash_core::ExecutionResult, cash_core::Error> {
-    #[cfg(windows)]
-    {
-        match mode {
-            Some(GuiAppsMode::Outlive) => cash_win32::session::set_gui_apps_outlive(true),
-            Some(GuiAppsMode::Close) => cash_win32::session::set_gui_apps_outlive(false),
-            None => {
-                let current = if cash_win32::session::gui_apps_outlive() {
-                    "outlive"
-                } else {
-                    "close"
-                };
-                writeln!(context.stdout(), "{current}")?;
-            }
+    match mode {
+        Some(GuiAppsMode::Outlive) => cash_win32::session::set_gui_apps_outlive(true),
+        Some(GuiAppsMode::Close) => cash_win32::session::set_gui_apps_outlive(false),
+        None => {
+            let current = if cash_win32::session::gui_apps_outlive() {
+                "outlive"
+            } else {
+                "close"
+            };
+            writeln!(context.stdout(), "{current}")?;
         }
-        Ok(ExecutionResult::success())
     }
-    #[cfg(not(windows))]
-    {
-        let _ = mode;
-        writeln!(
-            context.stderr(),
-            "cashctl gui-apps: only meaningful on Windows"
-        )?;
-        Ok(ExecutionResult::general_error())
-    }
+    Ok(ExecutionResult::success())
 }
 
 impl CallCommand {

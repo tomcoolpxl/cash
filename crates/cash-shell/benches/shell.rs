@@ -3,8 +3,7 @@
 #![allow(missing_docs)]
 #![allow(clippy::unwrap_used)]
 
-#[cfg(unix)]
-mod unix {
+mod bench {
     use cash_builtins::ShellBuilderExt;
     use cash_parser::SourceSpan;
     use criterion::Criterion;
@@ -159,16 +158,11 @@ mod unix {
     }
 }
 
-#[cfg(unix)]
 criterion::criterion_group! {
     name = benches;
     config = criterion::Criterion::default()
                 .measurement_time(std::time::Duration::from_secs(10));
-    targets = unix::criterion_benchmark
+    targets = bench::criterion_benchmark
 }
 
-#[cfg(unix)]
 criterion::criterion_main!(benches);
-
-#[cfg(not(unix))]
-fn main() {}

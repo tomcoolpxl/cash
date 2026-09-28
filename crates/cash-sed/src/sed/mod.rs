@@ -93,8 +93,6 @@ pub fn uumain(args: impl uucore::Args) -> UResult<()> {
 pub fn uu_app() -> Command {
     #[cfg(windows)]
     let util_name = "sed";
-    #[cfg(not(windows))]
-    let util_name = uucore::util_name();
 
     Command::new(util_name)
         .version(VERSION)

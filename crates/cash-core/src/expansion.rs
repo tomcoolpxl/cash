@@ -1273,11 +1273,6 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
                     let trimmed_len = cash_win32::text::trim_substitution_output(&cmd_output).len();
                     cmd_output.truncate(trimmed_len);
                 }
-                #[cfg(not(windows))]
-                {
-                    let trimmed_len = cmd_output.trim_end_matches('\n').len();
-                    cmd_output.truncate(trimmed_len);
-                }
 
                 Expansion::from(ExpansionPiece::Splittable(cmd_output))
             }
@@ -1330,8 +1325,6 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
                     self.shell.set_last_exit_status(result.exit_code.into());
                     #[cfg(windows)]
                     output.truncate(cash_win32::text::trim_substitution_output(&output).len());
-                    #[cfg(not(windows))]
-                    output.truncate(output.trim_end_matches('\n').len());
                     output
                 };
                 Expansion::from(ExpansionPiece::Splittable(output))

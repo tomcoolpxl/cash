@@ -3,12 +3,13 @@
 This plan turns the unverified Bash 5.2 NEWS items into bounded work. It uses the
 currently checked-out GNU Bash 5.3 source as the implementation reference because every
 5.2 behavior is still present there. Behavior probes should also run against an actual
-Bash 5.2 executable in Linux GitHub Actions before cash claims the item as compatible.
+Bash 5.2 executable before cash claims the item as compatible.
 
 The rule for every item is: add the smallest discriminating Bash/cash probe first, record
 the observed result in [bash-5.2-gaps.md](bash-5.2-gaps.md), then either add a regression
-for an existing pass or implement the mismatch. Native Windows behavior gets a Windows
-integration test; portable language behavior also goes into the Linux differential suite.
+for an existing pass or implement the mismatch. Every item gets a Windows integration
+test. (Portable language behavior also went into a Linux differential suite until
+2026-09-28, when cash became Windows-only; see spec D43.)
 
 ## Phase 1: small, portable shell semantics
 
@@ -131,8 +132,8 @@ The audit should close these explicitly rather than leaving them as vague gaps:
 
 ## CI and completion criteria
 
-Add one Linux GitHub Actions job that runs the focused probes against Bash 5.2 and Cash,
-and keep native Windows tests for path, CRLF, ConPTY, and handle behavior. Do not use the
-developer's HOME or history file in either job. A NEWS item leaves this plan only when the
+Keep native Windows tests for path, CRLF, ConPTY, and handle behavior, and do not use the
+developer's HOME or history file in them. (A Linux GitHub Actions job ran the focused
+probes against Bash 5.2 until cash became Windows-only on 2026-09-28.) A NEWS item leaves this plan only when the
 gap audit records one of: verified compatible, fixed with regression, deliberate Windows
 divergence, or non-applicable build detail. “Needs investigation” is not a final state.

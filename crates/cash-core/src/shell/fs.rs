@@ -29,8 +29,6 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
             let accepted = cash_win32::path::accept_path(&spelled);
             self.absolute_path(accepted.as_path())
         };
-        #[cfg(not(windows))]
-        let abs_path = self.absolute_path(target_dir.as_ref());
 
         match std::fs::metadata(&abs_path) {
             Ok(m) => {
@@ -59,8 +57,6 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         // fatal rather than cosmetic: `terraform -chdir="$(pwd)/modules"` must work.
         #[cfg(windows)]
         let pwd = cash_win32::path::render(&cleaned_path);
-        #[cfg(not(windows))]
-        let pwd = cleaned_path.to_string_lossy().to_string();
 
         self.env.update_or_add(
             "PWD",
@@ -79,8 +75,6 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         // cash (D3): `cd -` echoes $OLDPWD, so it must carry the same spelling as $PWD.
         #[cfg(windows)]
         let oldpwd = cash_win32::path::render(&oldpwd);
-        #[cfg(not(windows))]
-        let oldpwd = oldpwd.to_string_lossy().to_string();
 
         self.env.update_or_add(
             "OLDPWD",
@@ -363,10 +357,7 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         // cash (D3): `PathBuf::join` inserts a backslash, so `cd /c/tmp; chmod +w f`
         // produced `C:/tmp\f` — a spelling Win32 accepts and D3 says cash never renders.
         // It reached the user through every diagnostic that names a resolved path.
-        #[cfg(windows)]
-        return PathBuf::from(cash_win32::path::render(&joined));
-        #[cfg(not(windows))]
-        joined
+        PathBuf::from(cash_win32::path::render(&joined))
     }
 
     /// Opens the given file, using the context of this shell and the provided execution parameters.

@@ -93,8 +93,10 @@ empty `-p` path as the current directory, and lets the last of repeated `-p` opt
 
 ## Differential test oracle
 
-Verification uses a genuine GNU Bash 5.2 release executable built under Linux / WSL
+Verification used a genuine GNU Bash 5.2 release executable built under Linux / WSL
 (`/tmp/cash-bash52-build/bash`), executed via `tests/bash52-differential.sh` and tracked in
-Linux CI (`.github/workflows/ci.yml`), alongside Windows-native integration tests in
-`crates/cash/tests/bash_gaps.rs` and `conpty_interactive_tests.rs`.
+Linux CI, alongside Windows-native integration tests in
+`crates/cash/tests/bash_gaps.rs` and `conpty_interactive_tests.rs`. The script and the
+Linux job were removed on 2026-09-28, when cash became Windows-only (spec D43); the
+Windows-native tests remain the regression net for the results recorded here.
 

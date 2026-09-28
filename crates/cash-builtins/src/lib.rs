@@ -206,8 +206,6 @@ mod set;
 mod shift;
 #[cfg(feature = "builtin.shopt")]
 mod shopt;
-#[cfg(all(feature = "builtin.suspend", unix))]
-mod suspend;
 #[cfg(feature = "builtin.test")]
 mod test;
 #[cfg(feature = "builtin.times")]
@@ -218,9 +216,7 @@ mod trap;
 mod true_;
 #[cfg(feature = "builtin.type")]
 mod type_;
-#[cfg(all(feature = "builtin.ulimit", unix))]
-mod ulimit;
-// cash: Windows has no rlimits; a separate, deliberately small builtin.
+// cash: Windows has no rlimits, so `ulimit` is a deliberately small builtin of its own.
 #[cfg(all(feature = "builtin.ulimit", windows))]
 mod ulimit_win;
 #[cfg(feature = "builtin.umask")]

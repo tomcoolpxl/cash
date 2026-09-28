@@ -623,13 +623,6 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         #[cfg(windows)]
         std::fs::write(dir.path().join("tool.exe"), b"MZ").unwrap();
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let tool = dir.path().join("tool");
-            std::fs::write(&tool, b"#!/bin/sh\n").unwrap();
-            std::fs::set_permissions(&tool, std::fs::Permissions::from_mode(0o755)).unwrap();
-        }
 
         let mut shell = cash_core::Shell::builder().build().await.unwrap();
         let path = dir.path().to_string_lossy().into_owned();

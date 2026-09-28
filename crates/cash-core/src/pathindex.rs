@@ -227,25 +227,14 @@ impl Listing {
 }
 
 /// The extensions that make a file runnable by its bare name, each with its leading dot
-/// and folded: `PATHEXT` on Windows, none elsewhere.
+/// and folded: `PATHEXT`.
 fn executable_extensions() -> Vec<String> {
-    #[cfg(windows)]
-    {
-        crate::sys::fs::pathext_extensions()
-    }
-    #[cfg(not(windows))]
-    {
-        Vec::new()
-    }
+    crate::sys::fs::pathext_extensions()
 }
 
 /// Folds a file name for comparison: Windows file names are case-insensitive.
 fn fold(name: &str) -> String {
-    if cfg!(windows) {
-        name.to_lowercase()
-    } else {
-        name.to_owned()
-    }
+    name.to_lowercase()
 }
 
 fn has_listed_extension(folded_name: &str, extensions: &[String]) -> bool {
@@ -254,8 +243,8 @@ fn has_listed_extension(folded_name: &str, extensions: &[String]) -> bool {
         .any(|ext| folded_name.len() > ext.len() && folded_name.ends_with(ext.as_str()))
 }
 
-/// Whether a file found under the exact name typed would run: its mode on Unix; its
-/// contents (a `#!` line or a PE image) on Windows, as execution decides (D46).
+/// Whether a file found under the exact name typed would run: its contents (a `#!` line
+/// or a PE image), as execution decides (D46).
 fn runs_by_bare_name(path: &Path) -> bool {
     use crate::sys::fs::PathExt;
     path.is_file() && path.executable()
@@ -278,23 +267,12 @@ mod tests {
     }
 
     fn write_program(path: &Path) {
-        #[cfg(windows)]
         std::fs::write(path, b"MZ").unwrap();
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::write(path, b"#!/bin/sh\n").unwrap();
-            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
-        }
     }
 
-    /// A name the platform runs by its bare name: `tool.exe` on Windows, `tool` elsewhere.
+    /// A name Windows runs by its bare name: `tool.exe`.
     fn program_file(name: &str) -> String {
-        if cfg!(windows) {
-            format!("{name}.exe")
-        } else {
-            name.to_owned()
-        }
+        format!("{name}.exe")
     }
 
     #[test]

@@ -12,11 +12,6 @@ use std::fs;
 use std::io::stdout;
 use std::path::{Path, PathBuf};
 
-#[cfg(unix)]
-use std::os::unix::fs::MetadataExt;
-#[cfg(unix)]
-use std::os::unix::fs::PermissionsExt;
-
 use tempfile::NamedTempFile;
 use uucore::display::Quotable;
 use uucore::error::{FromIo, UIoError, UResult, USimpleError};
@@ -91,16 +86,6 @@ impl InPlace {
         let dir = file_name.parent().unwrap_or_else(|| Path::new("."));
         let temp_file = NamedTempFile::new_in(dir)
             .map_err_context(|| format!("error creating temporary file in {}", dir.quote()))?;
-
-        // TODO: On Unix use fchown(metadata.{uid,dig}) and fchmod(mode)
-        // on let fd = temp_file.as_file().as_raw_fd() when uucore::libc
-        // support them.
-        #[cfg(unix)]
-        {
-            let mode = metadata.mode() & 0o7777;
-            let perms = fs::Permissions::from_mode(mode);
-            fs::set_permissions(temp_file.path(), perms)?;
-        }
 
         let output = OutputBuffer::new(Box::new(
             temp_file.reopen().expect("reopening NamedTempFile"),
@@ -241,56 +226,6 @@ mod tests {
 
         assert_eq!(read_file(file.path()), "new content\n");
         assert_eq!(read_file(backup.path()), "original\n");
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn test_symlink_follow_true() {
-        let temp = TempDir::new().unwrap();
-        let real = temp.child("target.txt");
-        let link = temp.child("link.txt");
-
-        write_original(real.path(), "real\n");
-        std::os::unix::fs::symlink(real.path(), link.path()).unwrap();
-
-        let mut ctx = minimal_context();
-        ctx.in_place = true;
-        ctx.follow_symlinks = true;
-
-        let mut inplace = InPlace::new(ctx);
-        let buf = inplace.begin(link.path()).unwrap();
-        writeln!(buf, "changed").unwrap();
-        inplace.end().unwrap();
-
-        assert_eq!(read_file(real.path()), "changed\n");
-        assert!(link.path().exists()); // Symlink still exists
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn test_symlink_follow_false() {
-        let temp = TempDir::new().unwrap();
-        let real = temp.child("target.txt");
-        let link = temp.child("link.txt");
-
-        write_original(real.path(), "real\n");
-        std::os::unix::fs::symlink(real.path(), link.path()).unwrap();
-
-        let mut ctx = minimal_context();
-        ctx.in_place = true;
-        ctx.follow_symlinks = false;
-
-        let mut inplace = InPlace::new(ctx);
-        let buf = inplace.begin(link.path()).unwrap();
-        writeln!(buf, "linked").unwrap();
-        inplace.end().unwrap();
-
-        // real file should remain untouched
-        assert_eq!(read_file(real.path()), "real\n");
-
-        // link (symlink path) now contains the new content
-        let contents = read_file(link.path());
-        assert_eq!(contents, "linked\n");
     }
 
     #[test]
