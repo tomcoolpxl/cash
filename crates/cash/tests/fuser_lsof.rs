@@ -5,7 +5,6 @@
 //! pids on standard output, names and access letters on standard error, exit 0 when
 //! something was found and 1 when nothing was.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

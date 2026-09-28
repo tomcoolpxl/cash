@@ -10,7 +10,6 @@
 //! reports that nothing matched — a wrong answer, not an error, which is exactly what
 //! D20 and D26 exist to prevent elsewhere.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

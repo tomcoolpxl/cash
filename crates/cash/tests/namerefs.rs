@@ -13,7 +13,6 @@
 //! — the way a bash function writes into a variable its caller owns — left `box` empty
 //! and reported success. Every expectation below was read off real bash first.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

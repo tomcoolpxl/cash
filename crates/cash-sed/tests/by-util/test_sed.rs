@@ -788,7 +788,6 @@ fn test_subst_e_flag_no_match_no_exec() {
 // e command (execute)
 // The with-argument form writes the shell's raw, unmodified output to the
 // stream, while sed's own pattern-space auto-print always uses LF.
-#[cfg(windows)]
 #[test]
 fn test_e_command_with_arg_basic() {
     // With an argument, the command runs immediately and its output is
@@ -800,7 +799,6 @@ fn test_e_command_with_arg_basic() {
         .stdout_is("hi\na\n");
 }
 
-#[cfg(windows)]
 #[test]
 fn test_e_command_with_arg_no_space_required() {
     // No whitespace is required between 'e' and its argument.
@@ -822,7 +820,6 @@ fn test_e_command_no_arg_pattern_space_becomes_command() {
         .stdout_is("hi\n");
 }
 
-#[cfg(windows)]
 #[test]
 fn test_e_command_with_arg_does_not_strip_trailing_newline() {
     // Unlike the no-argument form, e-with-argument writes the child's
@@ -834,7 +831,6 @@ fn test_e_command_with_arg_does_not_strip_trailing_newline() {
         .stdout_is("hi\na\n");
 }
 
-#[cfg(windows)]
 #[test]
 fn test_e_command_with_address() {
     new_ucmd!()

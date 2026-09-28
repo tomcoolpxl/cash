@@ -5,7 +5,6 @@
 //! and upstream GNU Bash test suites), gracefully catches infinite recursions/crashes,
 //! and compares differential behavior with GNU Bash in WSL2 Kali Linux.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

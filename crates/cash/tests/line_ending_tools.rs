@@ -7,7 +7,6 @@
 //! pages, UTF-16, Mac line breaks) is refused by name, and `enable -n` gives the name
 //! back to PATH.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

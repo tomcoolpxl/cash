@@ -6,7 +6,6 @@
 //! than one state is shown, Recv-Q/Send-Q as `0` (Windows does not expose them), and exit
 //! status 0 when nothing matches.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::unwrap_used,

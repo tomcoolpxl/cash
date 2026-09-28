@@ -32,7 +32,6 @@
 //! What ConPTY sends is replayed onto a `Screen` after every chunk, and the moment a key's
 //! effect first shows there is its latency.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

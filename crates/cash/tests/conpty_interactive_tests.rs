@@ -4,7 +4,6 @@
 //! with real terminal geometry (80x25), real VT100 / ANSI escape sequences,
 //! and raw character I/O.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

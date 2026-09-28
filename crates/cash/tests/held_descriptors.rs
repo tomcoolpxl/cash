@@ -7,7 +7,6 @@
 //! command or function call does not count as "on the command": `while read -u 3 ...;
 //! done 3<file` wraps whatever runs inside it, and the loop body has no say in that.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::unwrap_used,

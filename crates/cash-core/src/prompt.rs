@@ -74,13 +74,9 @@ fn shell_base_name(shell: &Shell<impl extensions::ShellExtensions>) -> String {
         .map(|name| name.to_string_lossy().to_string())
         .unwrap_or_default();
 
-    #[cfg(windows)]
-    let base = base
-        .strip_suffix(".exe")
+    base.strip_suffix(".exe")
         .or_else(|| base.strip_suffix(".EXE"))
-        .map_or_else(|| base.clone(), std::borrow::ToOwned::to_owned);
-
-    base
+        .map_or_else(|| base.clone(), std::borrow::ToOwned::to_owned)
 }
 
 fn format_prompt_piece(
@@ -204,9 +200,7 @@ fn format_current_working_directory(
         working_dir_str = filename.to_string_lossy().to_string();
     }
 
-    if cfg!(windows) {
-        working_dir_str = working_dir_str.replace('\\', "/");
-    }
+    working_dir_str = working_dir_str.replace('\\', "/");
 
     working_dir_str
 }

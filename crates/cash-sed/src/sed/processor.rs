@@ -225,12 +225,9 @@ fn shell_command(cmd: &OsStr) -> std::process::Command {
             return c;
         }
     }
-    #[cfg(windows)]
-    {
-        let mut c = std::process::Command::new("cmd.exe");
-        c.arg("/C").arg(cmd);
-        c
-    }
+    let mut c = std::process::Command::new("cmd.exe");
+    c.arg("/C").arg(cmd);
+    c
 }
 
 /// Run the given command bytes in a shell, returning its raw standard
@@ -278,7 +275,6 @@ fn execute_pattern_as_shell_command(
     context: &mut ProcessingContext,
 ) -> UResult<()> {
     let mut shell_out = shell_stdout(pattern.as_bytes().to_vec(), command, context)?;
-    #[cfg(windows)]
     if shell_out.ends_with(b"\r\n") {
         // On Windows a trailing \r\n is the line terminator. Strip both.
         shell_out.truncate(shell_out.len() - 2);

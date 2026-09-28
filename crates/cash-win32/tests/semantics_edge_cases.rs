@@ -5,7 +5,6 @@
 //! carriage returns, binary bytes, boundary exit codes, PATH entries that contain
 //! separators, and arguments built to defeat quoting.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

@@ -78,7 +78,6 @@ impl CommandCommand {
                         // cash (D3): rendered like `type` does, or a `PATH` directory is
                         // joined to the file name with a backslash
                         // (`C:/WINDOWS/system32\netstat.exe`).
-                        #[cfg(windows)]
                         let path = cash_win32::path::render(path);
                         writeln!(context.stdout(), "{path}")?;
                     }

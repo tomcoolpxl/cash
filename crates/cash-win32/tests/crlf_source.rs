@@ -10,7 +10,6 @@
 //! The streaming adapter is where the interesting cases are: a `\r` may be the last byte
 //! of a chunk, so whether to keep it cannot be decided until the next chunk arrives.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

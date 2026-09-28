@@ -7,7 +7,6 @@
 //! `trap 'kill 0' EXIT` — went straight down that path and took the whole console with
 //! it. This is the layer that makes the broadcast unreachable.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

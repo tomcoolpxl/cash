@@ -9,7 +9,6 @@
 //! `select` behaves when a script feeds it: the menu and prompt go to standard error, the
 //! body's output to standard output.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

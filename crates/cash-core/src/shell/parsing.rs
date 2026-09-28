@@ -14,7 +14,6 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
         // cash (D7): script source arriving with CRLF endings parses as if it had LF.
         // Git for Windows checks out `\r\n` by default, so this is the common case, not
         // the exotic one.
-        #[cfg(windows)]
         let reader = cash_win32::text::NormalizeCrlf::new(reader);
 
         let mut parser = create_parser(reader, &self.parser_options());
@@ -63,7 +62,6 @@ fn parse_string_impl(
 ) -> Result<cash_parser::ast::Program, cash_parser::ParseError> {
     // cash (D7): `-c`, `eval` and `source`d function bodies may all carry CRLF, picked
     // up from a file or from a Windows tool's output.
-    #[cfg(windows)]
     let s = &*cash_win32::text::normalize_crlf(s);
 
     let mut parser = create_parser(s.as_bytes(), parser_options);

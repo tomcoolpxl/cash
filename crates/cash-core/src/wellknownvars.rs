@@ -87,23 +87,17 @@ pub(crate) fn init_well_known_vars(
     shell.env_mut().set_global("BASHOPTS", bashopts_var)?;
 
     // BASHPID
-    #[cfg(not(target_family = "wasm"))]
-    {
-        let pid = std::process::id().to_string();
-        let mut bashpid_var = ShellVariable::new(ShellValue::String(pid.clone()));
-        bashpid_var.treat_as_integer();
-        shell.env_mut().set_global("BASHPID", bashpid_var)?;
+    let pid = std::process::id().to_string();
+    let mut bashpid_var = ShellVariable::new(ShellValue::String(pid.clone()));
+    bashpid_var.treat_as_integer();
+    shell.env_mut().set_global("BASHPID", bashpid_var)?;
 
-        #[cfg(windows)]
-        {
-            // cash: PowerShell and Windows documentation call this value PID. Bash spells
-            // it BASHPID or `$$`; exposing the direct spelling makes native-process
-            // examples work without changing either Bash spelling.
-            let mut pid_var = ShellVariable::new(ShellValue::String(pid));
-            pid_var.treat_as_integer().set_readonly();
-            shell.env_mut().set_global("PID", pid_var)?;
-        }
-    }
+    // cash: PowerShell and Windows documentation call this value PID. Bash spells
+    // it BASHPID or `$$`; exposing the direct spelling makes native-process
+    // examples work without changing either Bash spelling.
+    let mut pid_var = ShellVariable::new(ShellValue::String(pid));
+    pid_var.treat_as_integer().set_readonly();
+    shell.env_mut().set_global("PID", pid_var)?;
 
     // BASH_ALIASES
     shell.env_mut().set_global(
@@ -231,7 +225,6 @@ pub(crate) fn init_well_known_vars(
         "BASH_MONOSECONDS",
         ShellVariable::new(ShellValue::Dynamic {
             getter: |_shell| {
-                #[cfg(windows)]
                 let secs = {
                     unsafe extern "system" {
                         fn GetTickCount64() -> u64;
@@ -363,7 +356,6 @@ pub(crate) fn init_well_known_vars(
 
         // cash (D3): render after joining — joining a forward-slash path inserts a
         // backslash separator, which would leave `C:/Users/me\.cash_history`.
-        #[cfg(windows)]
         let histfile_str = cash_win32::path::render(&histfile);
 
         shell.env_mut().set_global(

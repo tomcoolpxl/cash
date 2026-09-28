@@ -6,7 +6,6 @@
 //! there is one. The shims here are fakes: a `.exe` name and a `.shim` file are all
 //! doctor reads.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

@@ -1,7 +1,6 @@
 //! `cash --link-tools [--add-to-path] [DIR]` and `cash --unlink-tools [DIR]` (ROADMAP
 //! items 16 and 18, D65): hard links to `cash.exe`, one per tool, that programs outside
 //! cash can run, and the user PATH entry that lets them.
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::unwrap_used,

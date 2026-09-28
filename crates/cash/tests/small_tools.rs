@@ -5,7 +5,6 @@
 //! cash. Where cash differs on purpose, the expected text is replaced in the test, with
 //! the reason beside it, so a difference cannot hide in the golden file.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

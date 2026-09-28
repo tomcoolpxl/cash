@@ -127,7 +127,6 @@ where
 /// `cash` matches too, so `cash doctor` and `cash -c` work inside cash whether or not its
 /// folder is on `PATH`: a terminal profile usually starts it by full path. Another cash on
 /// `PATH` is then reached by its path, as a real bash is.
-#[cfg(windows)]
 fn cash_as_shell(name: &Path) -> Option<PathBuf> {
     let stem = name.file_stem()?.to_str()?.to_ascii_lowercase();
     if matches!(stem.as_str(), "sh" | "bash" | "cash") {
@@ -168,7 +167,6 @@ where
     //
     // A real bash is still reachable by full path, which is what a script that genuinely
     // wants one should be using anyway.
-    #[cfg(windows)]
     if let Some(own) = cash_as_shell(filename.as_ref()) {
         return Some(own);
     }
@@ -224,8 +222,8 @@ mod tests {
 
     use super::*;
 
-    /// A directory carries the execute bit on Unix, so it must not be mistaken for a
-    /// command; an executable later in the search order takes its place.
+    /// A directory whose name matches must not be mistaken for a command; an executable
+    /// later in the search order takes its place.
     #[test]
     fn directory_is_not_a_command() -> Result<()> {
         let scratch = tempfile::tempdir()?;
@@ -249,7 +247,6 @@ mod tests {
 
     /// On Windows, `PATHEXT` resolution has to run before directories are rejected: a
     /// `prog` directory must not keep `prog.bat` in the same PATH entry from being found.
-    #[cfg(windows)]
     #[test]
     fn same_named_directory_does_not_hide_a_pathext_match() -> Result<()> {
         let scratch = tempfile::tempdir()?;

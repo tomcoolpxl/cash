@@ -3647,7 +3647,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(unix))]
     fn test_read_file_path_rejects_invalid_characters() {
         let lines = ScriptLineProvider::new(vec![]);
         let mut chars = ScriptCharProvider::new(b"w bad\xFFpath");

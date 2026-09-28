@@ -6,7 +6,6 @@
 //! opened and closed. In bash a finished command's orphans live on, and so they must here
 //! for as long as cash does.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

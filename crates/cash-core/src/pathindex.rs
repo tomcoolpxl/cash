@@ -326,7 +326,6 @@ mod tests {
         assert!(!settled(&index, &[without.path().to_path_buf()], "tool"));
     }
 
-    #[cfg(windows)]
     #[test]
     fn windows_names_are_case_insensitive_and_pathext_is_honoured() {
         let dir = tempfile::tempdir().unwrap();
@@ -341,7 +340,6 @@ mod tests {
         assert!(!settled(&index, &dirs, "notes.txt"));
     }
 
-    #[cfg(windows)]
     #[test]
     fn windows_bare_names_run_only_by_content() {
         let dir = tempfile::tempdir().unwrap();

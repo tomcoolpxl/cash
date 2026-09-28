@@ -15,7 +15,6 @@
 //! not stall the shell — which is the failure mode any naive "wait for the pid" would
 //! have.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

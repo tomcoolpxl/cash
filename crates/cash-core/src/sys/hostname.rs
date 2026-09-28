@@ -5,7 +5,6 @@ pub(crate) fn get() -> std::io::Result<std::ffi::OsString> {
     // `DESKTOP-TOMC`. Reporting both leaves `[ "$(hostname)" = "$COMPUTERNAME" ]` false
     // inside one shell, so cash reports the spelling everything else agrees on and falls
     // back to the portable lookup only if Windows will not answer.
-    #[cfg(windows)]
     if let Some(name) = cash_win32::process::computer_name() {
         return Ok(std::ffi::OsString::from(name));
     }

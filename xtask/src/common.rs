@@ -60,7 +60,7 @@ pub fn find_brush_binary(
         path.clone()
     } else {
         let workspace_root = find_workspace_root()?;
-        let binary_name = if cfg!(windows) { "brush.exe" } else { "brush" };
+        let binary_name = "brush.exe";
         workspace_root
             .join("target")
             .join(profile.target_dir_name())

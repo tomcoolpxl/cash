@@ -12,7 +12,6 @@
 //! - **Both spellings**, because D3 accepts `/c/...` as input and completion that only
 //!   understood `C:/...` would make the accepted spelling unusable in practice.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

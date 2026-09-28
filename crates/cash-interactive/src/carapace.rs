@@ -124,7 +124,6 @@ impl Cache {
 /// Tab (about 70 ms measured). Anything else — installed by winget or by hand, or a shim
 /// whose target is gone — is started as found.
 fn program_behind(exe: PathBuf) -> PathBuf {
-    #[cfg(windows)]
     if let Some(target) = cash_win32::scoop::shim_target(&exe).filter(|target| target.is_file()) {
         return target;
     }

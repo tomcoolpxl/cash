@@ -6,7 +6,6 @@
 //! wherever bash's escape would only have eaten them. It is on by default at the
 //! interactive prompt and off in scripts, which keep bash's lexing exactly.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

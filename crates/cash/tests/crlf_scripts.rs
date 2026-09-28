@@ -10,7 +10,6 @@
 //! and the reported position was wherever the parser finally gave up — nowhere near the
 //! cause.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

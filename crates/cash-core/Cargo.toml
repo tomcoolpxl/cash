@@ -43,8 +43,6 @@ strum = "0.28.0"
 strum_macros = "0.28.0"
 thiserror = "2.0.18"
 tracing = "0.1.44"
-
-[target.'cfg(any(unix, windows))'.dependencies]
 hostname = "0.4.2"
 tokio = { version = "1.52.3", features = [
     "io-util",
@@ -57,8 +55,6 @@ tokio = { version = "1.52.3", features = [
     "sync",
     "time",
 ] }
-
-[target.'cfg(windows)'.dependencies]
 # cash: the Win32 semantics layer (D3, D20, D28, D41, ...). Lives outside vendor/ so
 # the shell semantics and the platform layer stay separable.
 cash-win32 = { workspace = true }

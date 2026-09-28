@@ -186,7 +186,6 @@ pub fn run_with_args(mut args: Vec<String>) {
     //
     // Run.
     //
-    #[cfg(any(unix, windows))]
     let mut builder = tokio::runtime::Builder::new_multi_thread();
 
     let Ok(runtime) = builder.enable_all().build() else {
@@ -222,7 +221,6 @@ pub fn run_with_args(mut args: Vec<String>) {
 
     // D6: GUI applications cash started (`code .`) keep running after it; the console
     // programs it started do not.
-    #[cfg(windows)]
     cash_win32::session::release_at_exit();
 
     std::process::exit(i32::from(exit_code));
@@ -540,7 +538,6 @@ async fn instantiate_shell_from_args(
     // cash (D3): $0 is a path when cash was invoked by one, and the OS hands it over with
     // backslashes. A script doing `dirname "$0"` or `case "$0" in */foo) …` then sees a
     // spelling D3 says cash never renders.
-    #[cfg(windows)]
     let shell_name = shell_name.map(|name| {
         if name.contains('\\') {
             cash_win32::path::render(std::path::Path::new(&name))
@@ -588,7 +585,6 @@ async fn instantiate_shell_from_args(
 
     // cash (D13): an interactive shell takes Ctrl-C back from a parent that ignored it, so
     // that the programs it runs can be interrupted.
-    #[cfg(windows)]
     if args.is_interactive() {
         cash_win32::console::enable_ctrl_c();
     }
@@ -690,25 +686,22 @@ pub(crate) fn get_event_config() -> Arc<tokio::sync::Mutex<Option<events::TraceE
 }
 
 fn try_reset_terminal_to_defaults() -> Result<(), std::io::Error> {
-    #[cfg(any(unix, windows))]
-    {
-        // Reset the console.
-        let exec_result = crossterm::execute!(
-            std::io::stdout(),
-            crossterm::terminal::LeaveAlternateScreen,
-            crossterm::terminal::EnableLineWrap,
-            crossterm::style::ResetColor,
-            crossterm::event::DisableMouseCapture,
-            crossterm::event::DisableBracketedPaste,
-            crossterm::cursor::Show,
-            crossterm::cursor::MoveToNextLine(1),
-        );
+    // Reset the console.
+    let exec_result = crossterm::execute!(
+        std::io::stdout(),
+        crossterm::terminal::LeaveAlternateScreen,
+        crossterm::terminal::EnableLineWrap,
+        crossterm::style::ResetColor,
+        crossterm::event::DisableMouseCapture,
+        crossterm::event::DisableBracketedPaste,
+        crossterm::cursor::Show,
+        crossterm::cursor::MoveToNextLine(1),
+    );
 
-        let raw_result = crossterm::terminal::disable_raw_mode();
+    let raw_result = crossterm::terminal::disable_raw_mode();
 
-        exec_result?;
-        raw_result?;
-    }
+    exec_result?;
+    raw_result?;
 
     Ok(())
 }

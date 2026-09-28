@@ -11,7 +11,6 @@
 //! runner. `ping.exe` is the probe: a Ctrl-Break makes it print its statistics, whose
 //! loss line is the only one with a `%`, whatever the display language.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

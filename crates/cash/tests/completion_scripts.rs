@@ -18,7 +18,6 @@
 //! whether or not docker happens to be installed on the machine running them. The tests
 //! against real tools run opportunistically on top.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

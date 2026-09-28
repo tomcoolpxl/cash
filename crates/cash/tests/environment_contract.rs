@@ -12,7 +12,6 @@
 //! 4090 bytes worked, 4096 hung the shell outright. Linux escapes it with
 //! `F_SETPIPE_SZ`, which has no Windows equivalent.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

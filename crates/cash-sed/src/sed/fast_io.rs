@@ -19,9 +19,6 @@ use std::cell::Cell;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, BufWriter, Read, Write};
 
-#[cfg(not(unix))]
-use std::marker::PhantomData;
-
 use std::str;
 
 use std::path::PathBuf;
@@ -81,14 +78,14 @@ impl ReadLineCursor {
 
 /// A chunk of data that is input and can be output, often very efficiently
 #[derive(Debug, PartialEq, Eq)]
-pub struct IOChunk<'a> {
+pub struct IOChunk {
     utf8_verified: Cell<bool>, // True if the contents are valid UTF-8
-    content: IOChunkContent<'a>,
+    content: IOChunkContent,
 }
 
-impl<'a> IOChunk<'a> {
+impl IOChunk {
     /// Construct an IOChunk from the given content
-    fn from_content(content: IOChunkContent<'a>) -> Self {
+    fn from_content(content: IOChunkContent) -> Self {
         Self {
             utf8_verified: Cell::new(false),
             content,
@@ -187,25 +184,21 @@ impl<'a> IOChunk<'a> {
                 has_newline,
                 ..
             } => Ok((content, has_newline)),
-            #[allow(unreachable_patterns)]
-            _ => unreachable!("ensure_owned should convert to Owned"),
         }
     }
 }
 
 /// Data read from input or to be written to a file.
 #[derive(Debug, PartialEq, Eq)]
-enum IOChunkContent<'a> {
+enum IOChunkContent {
     Owned {
         content: Vec<u8>,  // Line content without newline
         has_newline: bool, // True if \n-terminated
         has_crlf: bool,    // True if \r\n-terminated
-        #[cfg(not(unix))]
-        _phantom: PhantomData<&'a ()>, // Silence E0392 warning
     },
 }
 
-impl IOChunkContent<'_> {
+impl IOChunkContent {
     /// Construct a new Owned chunk.
     pub fn new_owned(content: Vec<u8>, has_newline: bool) -> Self {
         Self::new_owned_with_crlf(content, has_newline, false)
@@ -213,14 +206,11 @@ impl IOChunkContent<'_> {
 
     /// Construct a new Owned chunk with explicit CRLF status.
     pub fn new_owned_with_crlf(content: Vec<u8>, has_newline: bool, has_crlf: bool) -> Self {
-        #[cfg(not(unix))]
-        return IOChunkContent::Owned {
+        IOChunkContent::Owned {
             content,
             has_newline,
             has_crlf,
-            // Avoid E0063 missing _phantom initialization errors
-            _phantom: std::marker::PhantomData,
-        };
+        }
     }
 
     /// Return the content's length (in bytes or characters).
@@ -232,27 +222,24 @@ impl IOChunkContent<'_> {
 }
 
 /// Line reader over buffered input.
-pub enum LineReader<'a> {
+pub enum LineReader {
     ReadInput(ReadLineCursor),
-    #[cfg(not(unix))]
-    _Phantom(std::marker::PhantomData<&'a ()>),
 }
 
 /// Return a LineReader that uses the ReadInput method fot the specified file.
-fn line_reader_read_input(file: File) -> io::Result<LineReader<'static>> {
+fn line_reader_read_input(file: File) -> io::Result<LineReader> {
     let boxed: Box<dyn Read> = Box::new(file);
     let reader = BufReader::new(boxed);
     Ok(LineReader::ReadInput(ReadLineCursor::new(reader)))
 }
 
-impl<'a> LineReader<'a> {
+impl LineReader {
     /// Open the specified file for line input, keeping carriage returns as data when
     /// `cr_is_data` is set (see `ProcessingContext::treats_cr_as_data`).
     pub fn open_with(path: &PathBuf, cr_is_data: bool) -> io::Result<Self> {
         let mut reader = Self::open(path)?;
-        if let LineReader::ReadInput(cursor) = &mut reader {
-            cursor.strip_cr = !cr_is_data;
-        }
+        let LineReader::ReadInput(cursor) = &mut reader;
+        cursor.strip_cr = !cr_is_data;
         Ok(reader)
     }
 
@@ -268,10 +255,7 @@ impl<'a> LineReader<'a> {
 
         let file = File::open(path)?;
 
-        #[cfg(not(unix))]
-        {
-            line_reader_read_input(file)
-        }
+        line_reader_read_input(file)
     }
 
     /// Open the specified file to read as a stream.
@@ -282,7 +266,7 @@ impl<'a> LineReader<'a> {
     }
 
     /// Return the next line, if available.
-    pub fn get_line(&mut self) -> io::Result<Option<IOChunk<'a>>> {
+    pub fn get_line(&mut self) -> io::Result<Option<IOChunk>> {
         match self {
             LineReader::ReadInput(cursor) => {
                 if let Some((line, has_newline, has_crlf)) = cursor.get_line()? {
@@ -296,9 +280,6 @@ impl<'a> LineReader<'a> {
                     Ok(None)
                 }
             }
-
-            #[cfg(not(unix))]
-            LineReader::_Phantom(_) => unreachable!("_Phantom should never be constructed"),
         }
     }
 
@@ -306,16 +287,11 @@ impl<'a> LineReader<'a> {
     pub fn last_line(&mut self) -> io::Result<bool> {
         match self {
             LineReader::ReadInput(cursor) => cursor.last_line(),
-
-            #[cfg(not(unix))]
-            LineReader::_Phantom(_) => unreachable!("_Phantom should never be constructed"),
         }
     }
 }
 
-#[cfg(not(unix))]
 pub trait OutputWrite: Write {}
-#[cfg(not(unix))]
 impl<T: Write> OutputWrite for T {}
 
 /// Abstraction for outputting data.
@@ -326,19 +302,14 @@ pub struct OutputBuffer {
     // that commands like `p` don't emit a spurious newline under -n.
     pending_newline: bool,
     pending_crlf: bool,
-    #[cfg(test)]
-    low_level_flushes: usize, // Number of system call flushes
 }
 
 impl OutputBuffer {
-    #[cfg(not(unix))]
     pub fn new(w: Box<dyn OutputWrite + 'static>) -> Self {
         Self {
             out: BufWriter::new(w),
             pending_newline: false,
             pending_crlf: false,
-            #[cfg(test)]
-            low_level_flushes: 0,
         }
     }
 
@@ -393,7 +364,6 @@ impl Write for OutputBuffer {
     }
 }
 
-#[cfg(not(unix))]
 impl OutputBuffer {
     /// Schedule the specified output chunk for eventual output
     pub fn write_chunk(&mut self, chunk: &IOChunk) -> io::Result<()> {
@@ -488,7 +458,6 @@ mod tests {
             out.write_str("foo\n")?;
             out.write_str("bar\n")?;
             out.flush()?;
-            assert_eq!(out.low_level_flushes, 0);
         } // File closes here as it leaves the scope
 
         let contents = fs::read(tmp.path())?;
@@ -522,7 +491,6 @@ mod tests {
         assert_eq!(nline, 3);
 
         out.flush()?;
-        assert_eq!(out.low_level_flushes, 0);
 
         // Verify that files match:
         let expected = fs::read(&input_path)?;
@@ -557,7 +525,6 @@ mod tests {
         assert_eq!(nline, 3);
 
         out.flush()?;
-        assert_eq!(out.low_level_flushes, 0);
 
         // Verify that files match:
         let expected = fs::read(&input_path)?;
@@ -690,20 +657,17 @@ mod tests {
             out: BufWriter::new(Box::new(file.try_clone().unwrap())),
             pending_newline: false,
             pending_crlf: false,
-            low_level_flushes: 0,
         };
         (buf, file)
     }
 
-    fn make_owned_chunk(s: &str, has_nl: bool) -> IOChunk<'_> {
+    fn make_owned_chunk(s: &str, has_nl: bool) -> IOChunk {
         IOChunk {
             utf8_verified: Cell::new(true),
             content: IOChunkContent::Owned {
                 content: s.as_bytes().to_vec(),
                 has_newline: has_nl,
                 has_crlf: false,
-                #[cfg(not(unix))]
-                _phantom: std::marker::PhantomData,
             },
         }
     }

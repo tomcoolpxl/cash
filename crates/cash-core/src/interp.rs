@@ -2489,7 +2489,6 @@ async fn setup_process_substitution(
 /// If `for_redirect` is false (e.g. `cat <(cmd)` or `cmd >(subshell)`), a Win32 Named
 /// Pipe (`\\.\pipe\cash-procsub-...`) is created. Native executables open it via standard
 /// Win32 file APIs, and data streams in real time via kernel memory pipes.
-#[cfg(windows)]
 async fn setup_process_substitution_win(
     shell: &Shell<impl extensions::ShellExtensions>,
     params: &ExecutionParameters,

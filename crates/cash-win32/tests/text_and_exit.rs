@@ -2,7 +2,6 @@
 //!
 //! §9 measured all three failing in brush today, so these tests encode the target.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

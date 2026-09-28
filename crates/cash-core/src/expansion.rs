@@ -1268,11 +1268,8 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
                 // `[ "$v" = "1.2.0" ]` fails while *printing identically*, because the
                 // `\r` merely returns the cursor. Python, .NET, classic Win32 tools and
                 // cmd.exe all emit CRLF and cannot be fixed at their source.
-                #[cfg(windows)]
-                {
-                    let trimmed_len = cash_win32::text::trim_substitution_output(&cmd_output).len();
-                    cmd_output.truncate(trimmed_len);
-                }
+                let trimmed_len = cash_win32::text::trim_substitution_output(&cmd_output).len();
+                cmd_output.truncate(trimmed_len);
 
                 Expansion::from(ExpansionPiece::Splittable(cmd_output))
             }
@@ -1323,7 +1320,6 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
                     let mut output = read_task.await??;
                     let result = run_result?;
                     self.shell.set_last_exit_status(result.exit_code.into());
-                    #[cfg(windows)]
                     output.truncate(cash_win32::text::trim_substitution_output(&output).len());
                     output
                 };

@@ -2,6 +2,7 @@
 
 use std::fs::OpenOptions;
 use std::io::Write;
+use std::os::windows::process::CommandExt as _;
 use std::path::PathBuf;
 
 use cash_core::{ExecutionResult, builtins};
@@ -74,12 +75,8 @@ impl builtins::Command for NohupCommand {
         full_args.extend(self.args.clone());
         cmd.args(full_args);
 
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt;
-            // CREATE_NEW_PROCESS_GROUP = 0x00000200
-            cmd.creation_flags(0x0000_0200);
-        }
+        // CREATE_NEW_PROCESS_GROUP = 0x00000200
+        cmd.creation_flags(0x0000_0200);
 
         if is_stdin_term {
             cmd.stdin(std::process::Stdio::null());

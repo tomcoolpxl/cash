@@ -140,8 +140,6 @@ strum = "0.28.0"
 thiserror = "2.0.18"
 tracing = "0.1.44"
 utf8-chars = "3.0.6"
-
-[target.'cfg(any(unix, windows))'.dependencies]
 tokio = { version = "1.52.3", features = [
     "io-util",
     "macros",
@@ -157,12 +155,6 @@ uucore = { version = "0.12.0", default-features = false, features = [
     "format",
     "signals",
 ] }
-
-[dev-dependencies]
-anyhow = "1.0.102"
-pretty_assertions = { version = "1.4.1", features = ["unstable"] }
-
-[target.'cfg(windows)'.dependencies]
 cash-win32 = { workspace = true }
 # D48: the `less`/`more` pager needs the terminal size and raw-mode keys. Same
 # version cash-interactive already pulls in, so this adds no new tree.
@@ -172,3 +164,7 @@ crossterm = "0.29.0"
 lscolors = "0.21.0"
 nu-ansi-term = "0.50.3"
 unicode-width = "0.2.2"
+
+[dev-dependencies]
+anyhow = "1.0.102"
+pretty_assertions = { version = "1.4.1", features = ["unstable"] }

@@ -119,7 +119,6 @@ impl InPlace {
             backup_name.push(suffix);
             backup_path.set_file_name(backup_name);
 
-            #[cfg(windows)]
             // Try to remove to ensure the rename won't fail on Windows.
             let _ = fs::remove_file(&backup_path);
 
@@ -131,7 +130,6 @@ impl InPlace {
                 )
             })?;
         } else {
-            #[cfg(windows)]
             // On Windows delete the original file for temp.persist to work
             if orig.exists() {
                 fs::remove_file(&orig).map_err_context(|| {

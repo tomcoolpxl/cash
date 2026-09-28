@@ -14,7 +14,6 @@
 //! records as absent on Windows; what *is* asserted is that nothing interactive leaks
 //! into the non-terminal path — no prompt, no filler, no escape sequences.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

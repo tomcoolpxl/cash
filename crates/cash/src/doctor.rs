@@ -99,26 +99,21 @@ pub fn run() -> u8 {
 }
 
 fn check_session(findings: &mut Vec<Finding>) {
-    #[cfg(windows)]
-    {
-        let nested = cash_win32::spawn::in_any_job();
-        findings.push(Finding {
-            level: Level::Ok,
-            subject: "process containment".into(),
-            detail: if nested {
-                "running inside another job object (nested jobs work since Windows 8)".into()
-            } else {
-                "no enclosing job object".into()
-            },
-            fix: None,
-        });
-    }
+    let nested = cash_win32::spawn::in_any_job();
+    findings.push(Finding {
+        level: Level::Ok,
+        subject: "process containment".into(),
+        detail: if nested {
+            "running inside another job object (nested jobs work since Windows 8)".into()
+        } else {
+            "no enclosing job object".into()
+        },
+        fix: None,
+    });
 }
 
 fn check_platform(findings: &mut Vec<Finding>) {
-    #[cfg(windows)]
-    {
-        findings.push(Finding {
+    findings.push(Finding {
             level: Level::Note,
             subject: "platform identity".into(),
             detail: "`uname -s` is `Windows_NT`, `$OSTYPE` is `windows` (§4 #25)".into(),
@@ -126,7 +121,6 @@ fn check_platform(findings: &mut Vec<Finding>) {
                 "scripts matching only `MINGW*|MSYS*` should also match `Windows_NT*` for their Windows branch".into(),
             ),
         });
-    }
 }
 
 /// Every name cash answers for itself, without building a shell.

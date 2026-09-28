@@ -5,7 +5,6 @@
 //! quoting that interacts with the path model, and the boundaries where two decisions
 //! meet.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

@@ -10,7 +10,6 @@
 //! no way out of one (§4 #23 — `detach` is the way to start a process that survives). The
 //! other half — the shell forgetting the job — is exactly what these tests pin down.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

@@ -4,7 +4,6 @@
 //! esoteric parameter transformations, arcane syntax hacks, and benchmark scripts
 //! written purely in Bash without external binaries or Linux `/proc`.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

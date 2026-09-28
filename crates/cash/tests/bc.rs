@@ -5,7 +5,6 @@
 //! below stands in for posixutils' test library, running `bc` as cash runs it — the
 //! bundled command behind `cash -c 'bc …'`. Cash's own checks are in `bc_cash.rs`.
 
-#![cfg(windows)]
 #![allow(
     clippy::all,
     clippy::pedantic,

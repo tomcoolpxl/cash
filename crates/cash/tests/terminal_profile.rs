@@ -1,7 +1,6 @@
 //! `cash --terminal-profile` and `--remove-terminal-profile` (spec D38, ROADMAP item 18):
 //! the Windows Terminal fragment Scoop's manifest writes on install and removes on
 //! uninstall. Each test points `LOCALAPPDATA` at a folder of its own.
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::unwrap_used,

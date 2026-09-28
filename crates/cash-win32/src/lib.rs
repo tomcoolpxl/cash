@@ -11,7 +11,8 @@
 //! Decisions implemented here are referenced by their spec identifiers (`D6`, `D13`, …);
 //! see `spec.md` at the repository root.
 
-#![cfg(windows)]
+#[cfg(not(windows))]
+compile_error!("cash builds only on Windows (spec D43)");
 
 pub mod cmd;
 pub mod conpty;

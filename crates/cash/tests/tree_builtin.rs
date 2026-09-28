@@ -1,6 +1,5 @@
 //! Native Windows `tree` builtin tests.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

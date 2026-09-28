@@ -6,7 +6,6 @@
 //! lexer turns into `C:Usersmesrc` before `cd` sees it, so the message has to show that
 //! word for the user to understand what happened.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

@@ -4,7 +4,6 @@
 //! cases are the ones where a blunt `replace('\\', "/")` would be wrong: NUL-delimited
 //! output, invalid UTF-8, empty fields, and the extended-length prefix.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

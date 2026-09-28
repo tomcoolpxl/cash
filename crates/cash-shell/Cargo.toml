@@ -75,13 +75,9 @@ thiserror = "2.0.18"
 tracing = "0.1.44"
 tracing-subscriber = "0.3.23"
 human-panic = "2.0.6"
-
-[target.'cfg(windows)'.dependencies]
 # cash: the Win32 semantics layer. The bundled dispatcher (D48) needs D3's path
 # rendering, because a few uutils construct absolute paths and spell them natively.
 cash-win32 = { workspace = true }
-
-[target.'cfg(any(unix, windows))'.dependencies]
 cash-interactive = { workspace = true, features = [
     "basic",
     "reedline",

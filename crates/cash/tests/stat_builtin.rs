@@ -5,7 +5,6 @@
 //! administrator's new files are owned by BUILTIN\Administrators (GitHub's runners), so
 //! the two differ there; the owner is checked against `Get-Acl`, an independent source.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

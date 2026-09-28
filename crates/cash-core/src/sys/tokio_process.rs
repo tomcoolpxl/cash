@@ -11,7 +11,6 @@ pub(crate) fn spawn(
     kill_on_drop: bool,
     new_group: bool,
 ) -> std::io::Result<Child> {
-    #[cfg(windows)]
     let mut command = {
         use std::os::windows::process::CommandExt;
         const CREATE_SUSPENDED: u32 = 0x0000_0004;
@@ -33,15 +32,12 @@ pub(crate) fn spawn(
     // cash (D6/D22): give the process its own nested job object so its descendants can
     // be reaped as a unit. Because it was created suspended, it cannot execute a single
     // instruction or fork before being contained in the job object.
-    #[cfg(windows)]
-    {
-        if let Some(pid) = child.id() {
-            cash_win32::jobreg::sweep();
-            cash_win32::jobreg::contain(pid);
-        }
-        if let Some(handle) = child.raw_handle() {
-            let _ = cash_win32::process::resume_process(handle.cast());
-        }
+    if let Some(pid) = child.id() {
+        cash_win32::jobreg::sweep();
+        cash_win32::jobreg::contain(pid);
+    }
+    if let Some(handle) = child.raw_handle() {
+        let _ = cash_win32::process::resume_process(handle.cast());
     }
 
     Ok(child)

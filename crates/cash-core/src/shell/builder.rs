@@ -27,7 +27,6 @@ impl<SE: extensions::ShellExtensions, S: shell_builder::IsComplete> ShellBuilder
         // completion scripts call. Before the rc files, so a user who installs the real
         // bash-completion package simply overrides these. Interactive shells only: that
         // is where completion happens, and a script's function table then matches Bash's.
-        #[cfg(windows)]
         if shell.options().interactive && !shell.options().sh_mode && !shell.options().posix_mode {
             shell.load_completion_shims().await?;
         }

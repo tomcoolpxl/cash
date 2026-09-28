@@ -10,7 +10,6 @@
 //! paths are rendered with forward slashes (D3) — which is also what makes the pipeline
 //! safe, since a backslash is an escape to `xargs`.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

@@ -11,7 +11,6 @@
 //! terminated at once. Every cash here runs in a console of its own, so a regression
 //! can only kill that console, never the test runner.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

@@ -167,16 +167,13 @@ const fn copy_permission_class(bits: u32, shift: u32) -> u32 {
 /// answers `command not found` kills any script running under `set -e` — a direct hit on
 /// D2. Reporting the stored value is the least-surprising behaviour available on a
 /// platform with no such concept.
-#[cfg(windows)]
 static REMEMBERED_UMASK: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0o022);
 
-#[cfg(windows)]
 #[expect(clippy::unnecessary_wraps)]
 fn get_umask() -> Result<u32, cash_core::Error> {
     Ok(REMEMBERED_UMASK.load(std::sync::atomic::Ordering::Relaxed))
 }
 
-#[cfg(windows)]
 #[expect(clippy::unnecessary_wraps)]
 fn set_umask(value: u32) -> Result<(), cash_core::Error> {
     REMEMBERED_UMASK.store(value, std::sync::atomic::Ordering::Relaxed);

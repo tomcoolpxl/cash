@@ -159,7 +159,6 @@ impl<SE: extensions::ShellExtensions> std::ops::DerefMut for ShellForCommand<'_,
 
 /// Writes the PowerShell runner script to the temp folder if it is not there yet, and
 /// returns its path.
-#[cfg(windows)]
 fn ensure_ps_runner() -> Result<PathBuf, error::Error> {
     let runner_path = std::env::temp_dir().join("cash_ps_runner.ps1");
     if !runner_path.exists() {
@@ -179,7 +178,6 @@ if ($LASTEXITCODE -ne $null) {\r\n\
     Ok(runner_path)
 }
 
-#[cfg(windows)]
 fn find_powershell_binary<SE: extensions::ShellExtensions>(
     context: &ExecutionContext<'_, SE>,
 ) -> PathBuf {
@@ -209,7 +207,6 @@ fn find_powershell_binary<SE: extensions::ShellExtensions>(
     PathBuf::from("powershell.exe")
 }
 
-#[cfg(windows)]
 fn build_powershell_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
     context: &ExecutionContext<'_, SE>,
     script: &Path,
@@ -245,12 +242,10 @@ fn build_powershell_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
 /// Adds `args` for the native program at `target`, in the command-line encoding that
 /// program decodes: Cygwin's for an MSYS2 or Cygwin program, which Git's `usr/bin` tools
 /// are, and the Microsoft C runtime's, which `Command::args` writes, for the rest.
-#[cfg(windows)]
 fn push_native_args<S: AsRef<OsStr>>(c: &mut std::process::Command, target: &Path, args: &[S]) {
     cash_win32::msys::add_args(c, Some(target), args);
 }
 
-#[cfg(windows)]
 fn build_batch_command<S: AsRef<OsStr>>(
     command_name: &str,
     argv0: &str,
@@ -281,7 +276,6 @@ fn build_batch_command<S: AsRef<OsStr>>(
     c
 }
 
-#[cfg(windows)]
 fn build_shebang_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
     context: &ExecutionContext<'_, SE>,
     interpreter: &str,
@@ -374,7 +368,6 @@ fn build_shebang_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
     }
 }
 
-#[cfg(windows)]
 fn build_windows_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
     context: &ExecutionContext<'_, SE>,
     command_name: &str,
@@ -475,7 +468,6 @@ pub fn exported_environment(
             // `IFS=: read -ra dirs <<< "$PATH"` works, but `git.exe` and
             // `terraform.exe` cannot read that — a child handed `/c/tools:/c/bin`
             // finds nothing at all.
-            #[cfg(windows)]
             if k.eq_ignore_ascii_case("PATH") {
                 return (k.clone(), cash_win32::env::path_to_windows(value.as_ref()));
             }
@@ -504,7 +496,6 @@ pub fn compose_std_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
     args: &[S],
     empty_env: bool,
 ) -> Result<std::process::Command, error::Error> {
-    #[cfg(windows)]
     let (mut cmd, target_ps_script) = build_windows_command(context, command_name, argv0, args)?;
 
     // Use the shell's current working dir.
@@ -522,7 +513,6 @@ pub fn compose_std_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
         cmd.env("_", command_name);
     }
 
-    #[cfg(windows)]
     if let Some(ps_script) = target_ps_script {
         cmd.env("CASH_PS_SCRIPT", ps_script);
     }
@@ -689,7 +679,6 @@ impl<'a, SE: extensions::ShellExtensions> SimpleCommand<'a, SE> {
         // carries, so that `"$(which ls)" -la` can be run. That path is no file; it names
         // the builtin, which runs as if typed by name — but never a function, as a path
         // never names one.
-        #[cfg(windows)]
         if let Some(tool) = cash_win32::path::virtual_tool(&self.command_name)
             && self
                 .shell
@@ -774,7 +763,6 @@ impl<'a, SE: extensions::ShellExtensions> SimpleCommand<'a, SE> {
             // `eval -- "$('/c/Program Files/starship/bin/starship.exe' init bash ...)"`,
             // and without this the prompt fails with `command not found` on a path that
             // plainly exists.
-            #[cfg(windows)]
             let command_name = cash_win32::path::accept_path(&self.command_name);
 
             self.execute_via_external(command_name.as_path())
@@ -1009,7 +997,6 @@ impl<'a, SE: extensions::ShellExtensions> SimpleCommand<'a, SE> {
         let mut shell = self.shell;
         let last_arg = Self::take_last_arg(&self.args);
 
-        #[cfg(windows)]
         if path.is_file() {
             let dispatch = cash_win32::resolve::classify(path);
             let exit_code = match dispatch {
@@ -1092,7 +1079,6 @@ impl<'a, SE: extensions::ShellExtensions> SimpleCommand<'a, SE> {
 /// nothing, and this is the single easiest mistake to make in cash. So: warn only when
 /// the literal spelling does not exist *and* the translated one does. That makes false
 /// positives essentially impossible, and says the useful thing.
-#[cfg(windows)]
 fn warn_about_unix_drive_spellings(
     context: &ExecutionContext<'_, impl extensions::ShellExtensions>,
     cmd_args: &[&String],
@@ -1126,7 +1112,6 @@ fn warn_about_unix_drive_spellings(
 
 /// cash (D13): a background job's process leads a group of its own, and the registry is
 /// what lets a Ctrl-Break be aimed at it safely later.
-#[cfg(windows)]
 fn register_background_leader(child: &sys::process::Child, background: bool) {
     if background && let Some(raw) = child.id() {
         cash_win32::stop::register_group_leader(raw);
@@ -1152,7 +1137,6 @@ pub(crate) fn execute_external_command(
         })
         .collect::<Vec<_>>();
 
-    #[cfg(windows)]
     warn_about_unix_drive_spellings(&context, cmd_args.as_slice());
 
     // Before we lose ownership of the open files, figure out if stdin will be a terminal.
@@ -1212,7 +1196,6 @@ pub(crate) fn execute_external_command(
     let kill_on_drop = context.shell.options().kill_external_commands_on_drop;
     match sys::process::spawn(cmd, kill_on_drop, context.params.background) {
         Ok(child) => {
-            #[cfg(windows)]
             register_background_leader(&child, context.params.background);
 
             // Retrieve the pid.

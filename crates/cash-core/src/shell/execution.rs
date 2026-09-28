@@ -110,11 +110,7 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         let source_path = if self.options().bash_source_full_path {
             std::fs::canonicalize(self.absolute_path(path)).map_or_else(
                 |_| path.to_owned(),
-                |real| {
-                    #[cfg(windows)]
-                    let real = std::path::PathBuf::from(cash_win32::path::render(&real));
-                    real
-                },
+                |real| std::path::PathBuf::from(cash_win32::path::render(&real)),
             )
         } else {
             path.to_owned()
@@ -177,6 +173,8 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         params: &ExecutionParameters,
         call_type: callstack::ScriptCallType,
     ) -> Result<ExecutionResult, error::Error> {
+        use std::io::BufRead;
+
         let mut reader = std::io::BufReader::new(file);
 
         // cash (D41): strip a leading UTF-8 BOM before parsing.
@@ -184,25 +182,18 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         // Windows editors write one, and it is otherwise invisible while breaking the
         // script completely: the shebang is not recognised and the first token carries
         // three phantom bytes, producing `command not found: ﻿echo`.
-        #[cfg(windows)]
-        {
-            use std::io::BufRead;
-            let bom_len = match reader.fill_buf() {
-                Ok(buffer) if buffer.starts_with(cash_win32::text::BOM) => {
-                    cash_win32::text::BOM.len()
-                }
-                _ => 0,
-            };
-            if bom_len > 0 {
-                reader.consume(bom_len);
-            }
+        let bom_len = match reader.fill_buf() {
+            Ok(buffer) if buffer.starts_with(cash_win32::text::BOM) => cash_win32::text::BOM.len(),
+            _ => 0,
+        };
+        if bom_len > 0 {
+            reader.consume(bom_len);
         }
 
         // cash (D7): CRLF script source parses as if it had LF endings. `core.autocrlf`
         // is on by default in Git for Windows, so every script in a checked-out
         // repository looks like this; without it `fi\r` is not `fi` and the whole file
         // fails to parse, at a line number nowhere near the real problem.
-        #[cfg(windows)]
         let mut reader = std::io::BufReader::new(cash_win32::text::NormalizeCrlf::new(reader));
 
         let mut parser = cash_parser::Parser::new(&mut reader, &self.parser_options());

@@ -23,7 +23,6 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         // script or a Windows tool might produce — `C:/src`, `C:\src`, `/c/src`, `/tmp`
         // — and store the canonical form, so `$PWD` renders correctly for free because
         // the rest of the shell simply echoes what was stored here.
-        #[cfg(windows)]
         let abs_path = {
             let spelled = target_dir.as_ref().to_string_lossy().into_owned();
             let accepted = cash_win32::path::accept_path(&spelled);
@@ -48,14 +47,12 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         // just in `$PWD`. Anything reading `working_dir()` — the `pwd` builtin, relative
         // path resolution, the prompt — then renders correctly without each one having
         // to remember to convert.
-        #[cfg(windows)]
         let cleaned_path = std::path::PathBuf::from(cash_win32::path::render(&cleaned_path));
 
         // cash (D3): render the one canonical spelling — drive letter, forward slashes.
         // `pwd` prints `C:/src/infra`, never `C:\src\infra`, because rendered paths
         // usually become arguments to native executables where the wrong spelling is
         // fatal rather than cosmetic: `terraform -chdir="$(pwd)/modules"` must work.
-        #[cfg(windows)]
         let pwd = cash_win32::path::render(&cleaned_path);
 
         self.env.update_or_add(
@@ -73,7 +70,6 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         }
 
         // cash (D3): `cd -` echoes $OLDPWD, so it must carry the same spelling as $PWD.
-        #[cfg(windows)]
         let oldpwd = cash_win32::path::render(&oldpwd);
 
         self.env.update_or_add(
@@ -142,10 +138,7 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         // — `~` expansion, `$HISTFILE`, the default `.cashrc` path — inherits whatever
         // this returns, so rendering here keeps them all consistent rather than leaving
         // `$PWD` as `C:/Users/thraa` while `$HISTFILE` is `C:\Users\thraa\.cash_history`.
-        #[cfg(windows)]
-        let home = home.map(|h| PathBuf::from(cash_win32::path::render(&h)));
-
-        home
+        home.map(|h| PathBuf::from(cash_win32::path::render(&h)))
     }
 
     /// Returns the directories named by `$PATH`, in search order, and whether any of
@@ -343,9 +336,7 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         // `/dev/null` and friends never reach this point — `open_file` intercepts them
         // first, because under D29's `\\?\` prefix `NUL` would name a file rather than
         // the device (D7, D28).
-        #[cfg(windows)]
         let accepted = cash_win32::path::accept_path(&path.to_string_lossy());
-        #[cfg(windows)]
         let path = accepted.as_path();
 
         if path.as_os_str().is_empty() || path.is_absolute() {

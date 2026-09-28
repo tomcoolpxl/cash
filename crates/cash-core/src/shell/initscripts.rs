@@ -84,7 +84,6 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
     ///
     /// Failure is not fatal. A shell that starts without tab completion for `docker` is
     /// a worse shell; a shell that refuses to start is not a shell.
-    #[cfg(windows)]
     pub(crate) async fn load_completion_shims(&mut self) -> Result<(), error::Error> {
         const SHIMS: &str = include_str!("../completion_shims.sh");
 
@@ -209,7 +208,6 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
                     // A native Windows environment naturally spells paths with backslashes.
                     // They are path separators here, not shell quote characters embedded by
                     // the user, so canonicalize before applying Bash's startup-name expansion.
-                    #[cfg(windows)]
                     let value = value.replace('\\', "/");
                     let expanded =
                         crate::expansion::basic_expand_word(self, &params, value.as_str()).await?;

@@ -5,7 +5,6 @@
 //! mixed separators, relative paths that look absolute, case, unicode, and the
 //! boundaries of the drive-letter rule.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

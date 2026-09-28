@@ -5,7 +5,6 @@
 //! arguments the Microsoft way turned `JSON.sh`'s `"[^[:cntrl:]"\\]*"|[[:space:]]+` into
 //! `\[^[:cntrl:]"\]*"|[[:space:]]+` on the way to `grep`, which then refused it.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

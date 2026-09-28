@@ -1178,7 +1178,6 @@ impl Config {
                 // The candidates leave here quoted, so the front end must not quote them
                 // again: it used to backslash-escape the result, turning `"a b"` into
                 // `\"a\ b\"`.
-                #[cfg(windows)]
                 let (candidates, options) = (
                     autoquote_candidates(candidates, completion_prefix, &options, |name| {
                         shell.absolute_path(Path::new(name)).is_dir()
@@ -1304,7 +1303,6 @@ impl Config {
 ///
 /// A directory keeps its `/` inside the quotes and gets no trailing space, so the path
 /// can go on; the front end leaves the cursor before the closing quote.
-#[cfg(windows)]
 fn autoquote_candidates(
     candidates: Vec<String>,
     replaced_prefix: &str,
@@ -1351,7 +1349,6 @@ fn autoquote_candidates(
 }
 
 /// How the user started quoting the word being completed.
-#[cfg(windows)]
 #[derive(Clone, Copy)]
 enum QuoteStyle {
     Single,
@@ -1362,7 +1359,6 @@ enum QuoteStyle {
 
 /// The quoting style of `prefix`, the part of the word typed so far. A backslash counts
 /// only before a character that needs it, so `C:\Prog` is a path, not an escape.
-#[cfg(windows)]
 fn typed_quote_style(prefix: &str) -> QuoteStyle {
     match prefix.chars().next() {
         Some('\'') => QuoteStyle::Single,
@@ -1383,18 +1379,15 @@ fn typed_quote_style(prefix: &str) -> QuoteStyle {
     }
 }
 
-#[cfg(windows)]
 fn single_quoted(body: &str) -> String {
     format!("'{}'", body.replace('\'', r"'\''"))
 }
 
-#[cfg(windows)]
 fn double_quoted(body: &str) -> String {
     format!("\"{}\"", escape_for_double_quotes(body))
 }
 
 /// `body` with a backslash before each character the shell would otherwise act on.
-#[cfg(windows)]
 fn backslash_escaped(body: &str) -> String {
     let mut out = String::with_capacity(body.len() + 4);
     for (i, c) in body.chars().enumerate() {
@@ -1407,7 +1400,6 @@ fn backslash_escaped(body: &str) -> String {
 }
 
 /// Whether `c` must be escaped in a bare word; `~` and `#` only at its start.
-#[cfg(windows)]
 const fn needs_backslash(c: char, at_start: bool) -> bool {
     c.is_whitespace()
         || (at_start && matches!(c, '~' | '#'))
@@ -1442,7 +1434,6 @@ const fn needs_backslash(c: char, at_start: bool) -> bool {
 /// and only there are they quoted: 8.3 short names put a `~` mid-path
 /// (`C:/Users/RUNNER~1/...`), and quoting such a candidate broke completion after the
 /// `C:` word break.
-#[cfg(windows)]
 fn needs_quoting(candidate: &str) -> bool {
     candidate.is_empty()
         || candidate
@@ -1452,7 +1443,6 @@ fn needs_quoting(candidate: &str) -> bool {
 }
 
 /// Escape the four characters that keep their meaning inside double quotes.
-#[cfg(windows)]
 fn escape_for_double_quotes(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     for c in text.chars() {
@@ -1516,10 +1506,8 @@ async fn get_file_completions(
     // else, so they have to complete too — a spelling you can only use by typing every
     // character of it is not really accepted. Glob in the Windows spelling and render
     // each result back into the spelling the user actually typed.
-    #[cfg(windows)]
     let unix_spelled = cash_win32::path::unix_drive_spelling(&expanded_token)
         .map(|translated| cash_win32::path::render(&translated));
-    #[cfg(windows)]
     let glob_token = unix_spelled.as_deref().unwrap_or(expanded_token.as_str());
 
     let glob = std::format!("{glob_token}*");
@@ -1550,7 +1538,6 @@ async fn get_file_completions(
     // Put the user's spelling back on the front. Sliced by length rather than by
     // `strip_prefix`, because a case-insensitive glob may have matched a prefix whose
     // case differs from what was typed — and what was typed is what should stay.
-    #[cfg(windows)]
     if let Some(windows_form) = unix_spelled.as_deref() {
         for completion in &mut completions {
             if let Some(rest) = completion.get(windows_form.len()..) {
@@ -1872,7 +1859,6 @@ fn replace_unescaped_ampersands<'a>(pattern: &'a str, replacement: &str) -> Cow<
 mod tests {
     use super::*;
 
-    #[cfg(windows)]
     #[test]
     fn a_drive_letter_colon_is_not_a_word_break() {
         let breaks = [' ', ':', '='];
@@ -1890,7 +1876,6 @@ mod tests {
         assert_eq!(texts("x ab:/p"), ["x", "ab", ":", "/p"]);
     }
 
-    #[cfg(windows)]
     #[test]
     fn only_a_leading_tilde_or_hash_needs_quoting() {
         // 8.3 short names put a `~` mid-path; GitHub's runner temp is RUNNER~1.

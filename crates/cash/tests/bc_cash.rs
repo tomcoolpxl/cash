@@ -3,7 +3,6 @@
 //! make `bc_cases.out`, and runs here under cash; where cash differs on purpose, the
 //! expected text is replaced in the test, with the reason beside it.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

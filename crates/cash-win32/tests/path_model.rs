@@ -3,7 +3,6 @@
 //! §4's divergence table says `pwd` prints `C:/src` rather than `/c/src`, and §9 measured
 //! brush printing `C:\Users\thraa\...` today. These tests pin the target behaviour.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

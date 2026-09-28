@@ -1,6 +1,5 @@
 //! `where`, Windows' `where.exe` with dashes for options and cash's paths (D66). The
 //! expectations were measured against `where.exe` on Windows 11.
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::unwrap_used,

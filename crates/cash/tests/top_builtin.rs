@@ -8,7 +8,6 @@
 //! Every test here drives batch mode, which is what makes them repeatable: a fixed number
 //! of refreshes, a short delay, plain text, no screen control.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

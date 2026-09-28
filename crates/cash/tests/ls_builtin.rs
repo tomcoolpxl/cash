@@ -4,7 +4,6 @@
 //! "somebody" / "somegroup", computes accurate hard link and directory link counts,
 //! and properly handles flags (-l, -a, -A, -1, -F, -h, -d, -r, -t, -S).
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

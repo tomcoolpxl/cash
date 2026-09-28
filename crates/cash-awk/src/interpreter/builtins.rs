@@ -450,12 +450,7 @@ fn run_system(command: &CString) -> i32 {
     let mut command_proc = super::io::create_shell_command(cmd_str);
 
     match command_proc.status() {
-        Ok(status) => {
-            #[cfg(not(unix))]
-            {
-                status.code().unwrap_or(-1)
-            }
-        }
+        Ok(status) => status.code().unwrap_or(-1),
         Err(_) => -1,
     }
 }

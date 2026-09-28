@@ -6,7 +6,6 @@
 //! network; a host that never answers is simulated with an address in TEST-NET-1's
 //! neighbourhood that the machine has no route to answer for, and skipped if it does.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

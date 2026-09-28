@@ -1,6 +1,5 @@
 //! D8 command resolution, D46's ordering constraint, D32 argument encoding.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

@@ -1,6 +1,5 @@
 //! Tests for Win32 Named Pipe streaming process substitution.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

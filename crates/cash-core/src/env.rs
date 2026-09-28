@@ -267,14 +267,11 @@ impl ShellEnvironment {
         // Deliberately a fallback rather than the primary lookup: an exact match always
         // wins, so a script that defines its own `$x` and `$X` keeps bash semantics. Only
         // a name that resolves to nothing at all gets the second chance.
-        #[cfg(windows)]
-        {
-            let wanted = name.as_ref();
-            for (scope_type, map) in self.scopes.iter().rev() {
-                for (key, var) in map.iter() {
-                    if key.eq_ignore_ascii_case(wanted) {
-                        return Some((*scope_type, var));
-                    }
+        let wanted = name.as_ref();
+        for (scope_type, map) in self.scopes.iter().rev() {
+            for (key, var) in map.iter() {
+                if key.eq_ignore_ascii_case(wanted) {
+                    return Some((*scope_type, var));
                 }
             }
         }

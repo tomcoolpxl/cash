@@ -132,7 +132,6 @@ impl builtins::Command for TypeCommand {
                 } else {
                     match &resolved_type {
                         Resolved::File { path, .. } if self.show_path_only => {
-                            #[cfg(windows)]
                             let rendered = cash_win32::path::render(path);
                             writeln!(context.stdout(), "{rendered}")?;
                         }

@@ -5,7 +5,6 @@
 //! scripts written the way they are actually written on Linux — no Windows
 //! accommodations, no cash-specific spellings.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,
@@ -30,8 +29,8 @@ const CORPUS_SCRIPTS: &[&str] = &["terraform-wrapper.sh", "ci-glue.sh"];
 
 /// The reference bash, if this machine has one.
 ///
-/// D43 keeps the differential suite on Linux because §4's divergences would make a bash
-/// reference report false failures. The corpus scripts are deliberately written to avoid
+/// D43 rejects a bash reference for cash's own behaviour because §4's divergences would
+/// make it report false failures. The corpus scripts are deliberately written to avoid
 /// every one of them, so comparing against bash here is a genuine cross-check rather
 /// than a restatement of cash's own behaviour.
 fn reference_bash() -> Option<PathBuf> {

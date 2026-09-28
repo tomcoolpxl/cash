@@ -8,7 +8,6 @@
 //! `wscript //B` stands in for the GUI application: it is built for the GUI subsystem
 //! and runs a script without showing a window.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

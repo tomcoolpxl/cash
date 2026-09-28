@@ -7,7 +7,6 @@
 //! this spawns nothing, and the tests below are really asking one question — do the
 //! banner and the rest of the shell agree about the machine they are on?
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

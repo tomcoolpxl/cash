@@ -10,7 +10,6 @@
 )]
 
 // cash (D45): Windows-specific builtins — winpath, start, elevate, detach.
-#[cfg(windows)]
 mod win;
 
 // cash (D60): fish's abbreviations.
@@ -20,102 +19,71 @@ mod dirhistory;
 
 // cash (D48): `ps`, which uutils does not carry and whose PATH stand-in reports MSYS
 // pids that `kill` cannot use.
-#[cfg(windows)]
 mod fileuse;
-#[cfg(windows)]
 mod fuser;
-#[cfg(windows)]
 mod getopt;
-#[cfg(windows)]
 mod killfam;
-#[cfg(windows)]
 mod lsof;
-#[cfg(windows)]
 mod pgrep;
-#[cfg(windows)]
 pub mod ping;
-#[cfg(windows)]
 mod procmatch;
-#[cfg(windows)]
 mod ps;
-#[cfg(windows)]
 mod pstree;
-#[cfg(windows)]
 mod rev;
-#[cfg(windows)]
 mod screen;
-#[cfg(windows)]
 mod ss;
-#[cfg(windows)]
 mod tree;
 
 // cash (D48, §4 #20): `hostname`, so the machine has one name inside the shell rather
 // than the DNS API's and Windows' own.
-#[cfg(windows)]
 mod hostname;
 
 // cash (D48, D3, D32): `find` and `xargs`. What answers `find` on a clean Windows
 // machine is a DOS tool that searches inside files, and there is no `xargs` at all.
-#[cfg(windows)]
 mod find;
-#[cfg(windows)]
 mod xargs;
 
 // cash: `coolfetch`, the banner. Every number is one cash already holds, so it spawns
 // nothing — which is the whole difference from the tools that print this elsewhere.
-#[cfg(windows)]
 mod coolfetch;
 
 // cash (D48): `top`, which Windows has no equivalent of at all — procps was never
 // ported, and the Cygwin build reports pids `kill` cannot use.
-#[cfg(windows)]
 mod top;
 
 // cash (D48): one pager behind both `less` and `more`. `less` is not coreutils, and the
 // bundled `more` corrupted a pipe.
-#[cfg(windows)]
 mod pager;
 
 // cash (D8): `which` must answer about cash's resolution, not about PATH.
-#[cfg(windows)]
 mod which;
 
 // cash (D66): `where`, Windows' where.exe with dashes for options and cash's paths.
-#[cfg(windows)]
 mod where_files;
 
 // cash (D23, D34): uutils' chmod is Unix-only, so the gap was filled by MSYS's, which
 // writes mode bits nothing outside MSYS reads.
-#[cfg(windows)]
 mod chmod;
 
 // cash (D48): uutils' `id` is Unix-only, and the MSYS stand-in reports a uid Windows
 // does not have.
-#[cfg(windows)]
 mod identity;
 
 // Native Windows-optimized pure-Rust `ls` builtin.
-#[cfg(windows)]
 mod ls;
 // cash (D67): lsd's Nerd Font icons, for `ls --icons`.
-#[cfg(windows)]
 mod ls_icon_table;
 
-#[cfg(windows)]
 mod tty;
 
-#[cfg(windows)]
 mod stat;
 
-#[cfg(windows)]
 mod nohup;
 
-#[cfg(windows)]
 mod install;
 
 // cash (D20, D48): `dos2unix`/`unix2dos`, which a clean Windows machine does not have and
 // Git for Windows only supplies when its `usr/bin` is on PATH.
-#[cfg(windows)]
 mod dos2unix;
 
 #[cfg(feature = "builtin.alias")]
@@ -190,7 +158,7 @@ mod logout;
 mod mapfile;
 #[cfg(feature = "builtin.popd")]
 mod popd;
-#[cfg(all(feature = "builtin.printf", any(unix, windows)))]
+#[cfg(feature = "builtin.printf")]
 mod printf;
 #[cfg(feature = "builtin.pushd")]
 mod pushd;
@@ -217,7 +185,7 @@ mod true_;
 #[cfg(feature = "builtin.type")]
 mod type_;
 // cash: Windows has no rlimits, so `ulimit` is a deliberately small builtin of its own.
-#[cfg(all(feature = "builtin.ulimit", windows))]
+#[cfg(feature = "builtin.ulimit")]
 mod ulimit_win;
 #[cfg(feature = "builtin.umask")]
 mod umask;
@@ -236,7 +204,6 @@ mod unimp;
 
 pub use builder::ShellBuilderExt;
 pub use factory::{BuiltinSet, default_builtins};
-#[cfg(windows)]
 pub use which::is_bash_builtin;
 
 /// Writes an alias definition in the reusable form printed by `alias` and `command -v`.

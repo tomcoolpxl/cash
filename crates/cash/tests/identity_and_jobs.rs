@@ -8,7 +8,6 @@
 //! `jobs -l` refused outright with "not yet implemented", although the pid it wanted was
 //! already tracked for `$!` and `kill %1`.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

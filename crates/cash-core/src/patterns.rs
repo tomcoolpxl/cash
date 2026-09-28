@@ -291,10 +291,9 @@ impl Pattern {
             }
         }
 
-        // Check if the path appears to be absolute by inspecting the first component.
-        // On Unix, a leading `/` produces an empty first component. On Windows, a
-        // drive-letter prefix like `c:` is also recognized. The platform-specific
-        // logic lives in `sys::fs::pattern_path_root`.
+        // Check if the path appears to be absolute by inspecting the first component:
+        // a leading `/` produces an empty first component, and a drive-letter prefix
+        // like `c:` is recognized too. That logic lives in `sys::fs::pattern_path_root`.
         let absolute_root = components.first().and_then(|first_component| {
             let flattened: String = first_component.iter().map(|p| p.as_str()).collect();
             sys::fs::pattern_path_root(&flattened)
@@ -1053,10 +1052,6 @@ mod tests {
     /// `strip_prefix` call a no-op, so relative globs produced absolute
     /// paths. This test exercises the expansion path and verifies results
     /// are returned relative to the working directory.
-    ///
-    /// On Unix, the same code path is exercised (both builds go through the
-    /// shared `normalize_path_separators` helpers), so this test serves as a
-    /// regression guard on both platforms.
     #[test]
     fn test_relative_glob_returns_relative_paths() -> Result<()> {
         let scratch = tempfile::tempdir()?;

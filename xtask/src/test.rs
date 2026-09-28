@@ -27,9 +27,6 @@ const INTEGRATION_TEST_BINARIES: &[&str] = &[
     "brush-completion-tests",
 ];
 
-#[cfg(windows)]
-const TEST_BINARIES_DISABLED_ON_WINDOWS: &[&str] = &["brush-compat-tests"];
-
 /// Shared arguments for test commands that need a brush binary.
 #[derive(Args, Debug, Clone)]
 pub struct BinaryArgs {
@@ -261,15 +258,7 @@ pub fn run_integration_tests(
 
     eprintln!("Running integration tests ({profile:?} profile)...");
 
-    #[cfg(windows)]
-    let exclusions: Vec<String> = TEST_BINARIES_DISABLED_ON_WINDOWS
-        .iter()
-        .map(|name| format!("not binary({name})"))
-        .collect();
-    #[cfg(windows)]
-    let filter_expr = exclusions.join(" and ");
-    #[cfg(windows)]
-    let filter = Some(filter_expr.as_str());
+    let filter = None;
 
     let test_result = if args.coverage.coverage {
         run_tests_with_coverage(sh, profile, filter, &args.coverage.coverage_output, verbose)

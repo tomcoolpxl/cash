@@ -4,7 +4,6 @@
 //! where killing bash leaves descendants reparented to init. It deserves a real test
 //! rather than a docs assertion.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

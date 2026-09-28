@@ -5,7 +5,6 @@
 //! command `.` followed by the switch `/showargs.cmd`: "'.' is not recognized". Git Bash
 //! prints `all=[.]`. The same holds for `../x.cmd`, `sub/x.cmd` and paths with spaces.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

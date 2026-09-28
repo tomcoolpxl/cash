@@ -17,7 +17,6 @@
 //!
 //! The sizes here are deliberate, not arbitrary: each one straddles the pipe buffer.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

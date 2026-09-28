@@ -1,6 +1,5 @@
 //! D13's escalation state machine and D19's suspend/resume.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

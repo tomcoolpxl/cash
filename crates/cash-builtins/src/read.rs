@@ -532,7 +532,6 @@ impl InputReader {
 
     /// Decode native Windows console key events. Crossterm enables this code to see
     /// navigation keys before the console's cooked input layer consumes them.
-    #[cfg(windows)]
     #[expect(
         clippy::needless_pass_by_ref_mut,
         reason = "the Unix implementation consumes buffered bytes through the same API"
@@ -740,7 +739,6 @@ fn read_line_with_reader(
                     // would on Linux. Only when the delimiter is the default newline —
                     // an explicit `-d` means the caller has its own framing, and a lone
                     // `\r` with no `\n` is data, not a terminator.
-                    #[cfg(windows)]
                     if delim == DEFAULT_DELIMITER
                         && let Some(stripped) = line.strip_suffix('\r')
                     {
@@ -1081,7 +1079,6 @@ struct EditorModeGuard;
 
 impl EditorModeGuard {
     fn new() -> Result<Self, cash_core::Error> {
-        #[cfg(windows)]
         crossterm::terminal::enable_raw_mode()?;
         Ok(Self)
     }
@@ -1089,7 +1086,6 @@ impl EditorModeGuard {
 
 impl Drop for EditorModeGuard {
     fn drop(&mut self) {
-        #[cfg(windows)]
         let _ = crossterm::terminal::disable_raw_mode();
     }
 }

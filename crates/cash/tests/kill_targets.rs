@@ -19,7 +19,6 @@
 //! The fact that these tests complete at all is part of what they assert. A regression
 //! here does not produce a failure message; it produces no output and a dead terminal.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

@@ -131,7 +131,7 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
     m.insert("true".into(), simple_builtin::<true_::TrueCommand, SE>());
     #[cfg(feature = "builtin.type")]
     m.insert("type".into(), builtin::<type_::TypeCommand, SE>());
-    #[cfg(all(feature = "builtin.ulimit", windows))]
+    #[cfg(feature = "builtin.ulimit")]
     m.insert("ulimit".into(), builtin::<ulimit_win::UlimitCommand, SE>());
     #[cfg(feature = "builtin.umask")]
     m.insert("umask".into(), builtin::<umask::UmaskCommand, SE>());
@@ -164,7 +164,7 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
         m.insert("mapfile".into(), builtin::<mapfile::MapFileCommand, SE>());
         #[cfg(feature = "builtin.mapfile")]
         m.insert("readarray".into(), builtin::<mapfile::MapFileCommand, SE>());
-        #[cfg(all(feature = "builtin.printf", any(unix, windows)))]
+        #[cfg(feature = "builtin.printf")]
         m.insert("printf".into(), builtin::<printf::PrintfCommand, SE>());
         #[cfg(feature = "builtin.shopt")]
         m.insert("shopt".into(), builtin::<shopt::ShoptCommand, SE>());
@@ -224,66 +224,62 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
         m.insert("cdh".into(), builtin::<dirhistory::CdhCommand, SE>());
     }
 
-    // cash (D45): Windows-specific builtins. Not feature-gated per builtin — they only
-    // exist on Windows at all, and each is the documented escape hatch for a decision
-    // made elsewhere (D4, D6, D42).
-    #[cfg(windows)]
-    {
-        m.insert("winpath".into(), builtin::<win::WinPathCommand, SE>());
-        m.insert("start".into(), builtin::<win::StartCommand, SE>());
-        m.insert("elevate".into(), builtin::<win::ElevateCommand, SE>());
-        m.insert("detach".into(), builtin::<win::DetachCommand, SE>());
-        m.insert("ps".into(), builtin::<ps::PsCommand, SE>());
-        m.insert("pgrep".into(), builtin::<pgrep::PgrepCommand, SE>());
-        m.insert("pkill".into(), builtin::<killfam::PkillCommand, SE>());
-        m.insert("pidof".into(), builtin::<killfam::PidofCommand, SE>());
-        m.insert("killall".into(), builtin::<killfam::KillallCommand, SE>());
-        m.insert("getopt".into(), builtin::<getopt::GetoptCommand, SE>());
-        m.insert("rev".into(), builtin::<rev::RevCommand, SE>());
-        m.insert("clear".into(), builtin::<screen::ClearCommand, SE>());
-        m.insert("reset".into(), builtin::<screen::ResetCommand, SE>());
-        m.insert("fuser".into(), builtin::<fuser::FuserCommand, SE>());
-        m.insert("lsof".into(), builtin::<lsof::LsofCommand, SE>());
-        m.insert("ss".into(), builtin::<ss::SsCommand, SE>());
-        m.insert("pstree".into(), builtin::<pstree::PsTreeCommand, SE>());
-        m.insert("tree".into(), builtin::<tree::TreeCommand, SE>());
-        m.insert("top".into(), builtin::<top::TopCommand, SE>());
-        m.insert("find".into(), builtin::<find::FindCommand, SE>());
-        m.insert("xargs".into(), builtin::<xargs::XargsCommand, SE>());
-        m.insert(
-            "coolfetch".into(),
-            builtin::<coolfetch::CoolfetchCommand, SE>(),
-        );
-        m.insert(
-            "hostname".into(),
-            builtin::<hostname::HostnameCommand, SE>(),
-        );
-        m.insert("less".into(), builtin::<pager::LessCommand, SE>());
-        m.insert("more".into(), builtin::<pager::MoreCommand, SE>());
-        m.insert("which".into(), builtin::<which::WhichCommand, SE>());
-        m.insert("where".into(), builtin::<where_files::WhereCommand, SE>());
-        m.insert("chmod".into(), builtin::<chmod::ChmodCommand, SE>());
-        m.insert("id".into(), builtin::<identity::IdCommand, SE>());
-        m.insert("groups".into(), builtin::<identity::GroupsCommand, SE>());
-        m.insert("logname".into(), builtin::<identity::LognameCommand, SE>());
-        m.insert("hostid".into(), builtin::<identity::HostidCommand, SE>());
-        m.insert("users".into(), builtin::<identity::UsersCommand, SE>());
-        m.insert("who".into(), builtin::<identity::WhoCommand, SE>());
-        m.insert("pinky".into(), builtin::<identity::PinkyCommand, SE>());
-        m.insert("ls".into(), builtin::<ls::LsCommand, SE>());
-        m.insert("tty".into(), builtin::<tty::TtyCommand, SE>());
-        m.insert("stat".into(), builtin::<stat::StatCommand, SE>());
-        m.insert("nohup".into(), builtin::<nohup::NohupCommand, SE>());
-        m.insert("install".into(), builtin::<install::InstallCommand, SE>());
-        m.insert(
-            "dos2unix".into(),
-            builtin::<dos2unix::Dos2UnixCommand, SE>(),
-        );
-        m.insert(
-            "unix2dos".into(),
-            builtin::<dos2unix::Unix2DosCommand, SE>(),
-        );
-    }
+    // cash (D45): Windows-specific builtins. Not feature-gated per builtin — each is the
+    // documented escape hatch for a decision made elsewhere (D4, D6, D42).
+    m.insert("winpath".into(), builtin::<win::WinPathCommand, SE>());
+    m.insert("start".into(), builtin::<win::StartCommand, SE>());
+    m.insert("elevate".into(), builtin::<win::ElevateCommand, SE>());
+    m.insert("detach".into(), builtin::<win::DetachCommand, SE>());
+    m.insert("ps".into(), builtin::<ps::PsCommand, SE>());
+    m.insert("pgrep".into(), builtin::<pgrep::PgrepCommand, SE>());
+    m.insert("pkill".into(), builtin::<killfam::PkillCommand, SE>());
+    m.insert("pidof".into(), builtin::<killfam::PidofCommand, SE>());
+    m.insert("killall".into(), builtin::<killfam::KillallCommand, SE>());
+    m.insert("getopt".into(), builtin::<getopt::GetoptCommand, SE>());
+    m.insert("rev".into(), builtin::<rev::RevCommand, SE>());
+    m.insert("clear".into(), builtin::<screen::ClearCommand, SE>());
+    m.insert("reset".into(), builtin::<screen::ResetCommand, SE>());
+    m.insert("fuser".into(), builtin::<fuser::FuserCommand, SE>());
+    m.insert("lsof".into(), builtin::<lsof::LsofCommand, SE>());
+    m.insert("ss".into(), builtin::<ss::SsCommand, SE>());
+    m.insert("pstree".into(), builtin::<pstree::PsTreeCommand, SE>());
+    m.insert("tree".into(), builtin::<tree::TreeCommand, SE>());
+    m.insert("top".into(), builtin::<top::TopCommand, SE>());
+    m.insert("find".into(), builtin::<find::FindCommand, SE>());
+    m.insert("xargs".into(), builtin::<xargs::XargsCommand, SE>());
+    m.insert(
+        "coolfetch".into(),
+        builtin::<coolfetch::CoolfetchCommand, SE>(),
+    );
+    m.insert(
+        "hostname".into(),
+        builtin::<hostname::HostnameCommand, SE>(),
+    );
+    m.insert("less".into(), builtin::<pager::LessCommand, SE>());
+    m.insert("more".into(), builtin::<pager::MoreCommand, SE>());
+    m.insert("which".into(), builtin::<which::WhichCommand, SE>());
+    m.insert("where".into(), builtin::<where_files::WhereCommand, SE>());
+    m.insert("chmod".into(), builtin::<chmod::ChmodCommand, SE>());
+    m.insert("id".into(), builtin::<identity::IdCommand, SE>());
+    m.insert("groups".into(), builtin::<identity::GroupsCommand, SE>());
+    m.insert("logname".into(), builtin::<identity::LognameCommand, SE>());
+    m.insert("hostid".into(), builtin::<identity::HostidCommand, SE>());
+    m.insert("users".into(), builtin::<identity::UsersCommand, SE>());
+    m.insert("who".into(), builtin::<identity::WhoCommand, SE>());
+    m.insert("pinky".into(), builtin::<identity::PinkyCommand, SE>());
+    m.insert("ls".into(), builtin::<ls::LsCommand, SE>());
+    m.insert("tty".into(), builtin::<tty::TtyCommand, SE>());
+    m.insert("stat".into(), builtin::<stat::StatCommand, SE>());
+    m.insert("nohup".into(), builtin::<nohup::NohupCommand, SE>());
+    m.insert("install".into(), builtin::<install::InstallCommand, SE>());
+    m.insert(
+        "dos2unix".into(),
+        builtin::<dos2unix::Dos2UnixCommand, SE>(),
+    );
+    m.insert(
+        "unix2dos".into(),
+        builtin::<dos2unix::Unix2DosCommand, SE>(),
+    );
 
     m
 }

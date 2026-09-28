@@ -9,7 +9,6 @@
 //! The assertion that matters most here is not the formatting — it is that a pid `ps`
 //! printed can be handed straight to `kill`.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

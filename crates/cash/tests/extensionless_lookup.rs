@@ -10,7 +10,6 @@
 //! the name would run. Windows has no execute bit, so a file's contents stand in for it:
 //! a `#!` line or a PE image makes an extensionless file executable.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

@@ -18,8 +18,7 @@ use std::ffi::OsString;
 use std::string::FromUtf8Error;
 use uucore::error::UResult;
 
-/// Construct an OS string from UTF-8 bytes on platforms without byte-native paths.
-#[cfg(not(unix))]
+/// Construct an OS string from UTF-8 bytes, as Windows has no byte-native paths.
 pub fn os_string_from_bytes(bytes: Vec<u8>) -> Result<OsString, FromUtf8Error> {
     String::from_utf8(bytes).map(OsString::from)
 }

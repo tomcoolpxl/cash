@@ -1,6 +1,5 @@
 //! D6's race-free containment: the child is in its job before it runs.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

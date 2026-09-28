@@ -9,7 +9,6 @@
 //! reference would report every one as a failure. The expectations are written out
 //! instead.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

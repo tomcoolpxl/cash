@@ -91,7 +91,6 @@ pub fn uumain(args: impl uucore::Args) -> UResult<()> {
 
 #[allow(clippy::cognitive_complexity)]
 pub fn uu_app() -> Command {
-    #[cfg(windows)]
     let util_name = "sed";
 
     Command::new(util_name)

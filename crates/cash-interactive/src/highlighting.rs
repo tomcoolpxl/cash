@@ -621,7 +621,6 @@ mod tests {
     #[tokio::test]
     async fn command_existence_comes_from_the_path_listing_without_waiting() {
         let dir = tempfile::tempdir().unwrap();
-        #[cfg(windows)]
         std::fs::write(dir.path().join("tool.exe"), b"MZ").unwrap();
 
         let mut shell = cash_core::Shell::builder().build().await.unwrap();
@@ -738,7 +737,6 @@ mod tests {
             .collect()
     }
 
-    #[cfg(windows)]
     #[tokio::test]
     async fn a_pasted_drive_path_is_a_path_not_escapes() {
         let root = tempfile::tempdir().unwrap();

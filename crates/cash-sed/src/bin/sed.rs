@@ -20,7 +20,6 @@ fn main() {
     let mut args = raw_args;
 
     // Strip .exe extension from binary name on Windows for consistent error messages
-    #[cfg(windows)]
     if let Some(binary_name) = args.get_mut(0) {
         let binary_str = binary_name.to_string_lossy();
         if let Some(stripped) = binary_str.strip_suffix(".exe") {

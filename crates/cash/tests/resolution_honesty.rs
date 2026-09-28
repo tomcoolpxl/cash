@@ -14,7 +14,6 @@
 //! The same audit found `pwd` printing backslashes before the first `cd`, which is §4's
 //! very first divergence row promising the opposite.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

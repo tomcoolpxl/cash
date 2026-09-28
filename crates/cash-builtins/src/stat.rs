@@ -7,7 +7,6 @@ use std::path::{Path, PathBuf};
 use cash_core::{ExecutionResult, builtins};
 use clap::Parser;
 
-#[cfg(windows)]
 use std::os::windows::fs::MetadataExt;
 
 /// Display file status.
@@ -192,7 +191,6 @@ impl FileStatInfo {
             }
         };
 
-        #[cfg(windows)]
         let (inode, links, device) = query_file_index_and_links(path);
 
         let (user, uid) = file_owner(path);
@@ -201,7 +199,6 @@ impl FileStatInfo {
         let group = user.clone();
         let gid = uid;
 
-        #[cfg(windows)]
         let (atime, mtime, btime) = {
             let a = filetime_to_unix(meta.last_access_time());
             let m = filetime_to_unix(meta.last_write_time());
@@ -255,7 +252,6 @@ fn file_owner(path: &Path) -> (String, u32) {
     )
 }
 
-#[cfg(windows)]
 fn query_file_index_and_links(path: &Path) -> (u64, u32, u32) {
     use std::os::windows::io::AsRawHandle;
 
@@ -297,7 +293,6 @@ fn query_file_index_and_links(path: &Path) -> (u64, u32, u32) {
     (0, 1, 0)
 }
 
-#[cfg(windows)]
 const fn filetime_to_unix(filetime: u64) -> u64 {
     // 100-ns intervals between 1601-01-01 and 1970-01-01 is 116444736000000000
     const UNIX_EPOCH_FILETIME: u64 = 116_444_736_000_000_000;

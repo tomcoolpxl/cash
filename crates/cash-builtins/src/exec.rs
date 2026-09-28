@@ -1,6 +1,5 @@
 use clap::Parser;
 use std::borrow::Cow;
-#[cfg(windows)]
 use std::io::Write as _;
 
 use cash_core::{ErrorKind, ExecutionExitCode, ExecutionResult, builtins, commands};

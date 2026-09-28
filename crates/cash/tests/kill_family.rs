@@ -6,7 +6,6 @@
 //! background `ping`s are the targets, and each script kills its own at the end.
 //! `kill_term.rs` covers the default `TERM`.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

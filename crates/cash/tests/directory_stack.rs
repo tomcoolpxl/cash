@@ -9,7 +9,6 @@
 //! script rotates between two trees it is working in. Every expectation here was read off
 //! real bash first.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

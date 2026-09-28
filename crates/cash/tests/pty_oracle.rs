@@ -19,7 +19,6 @@
 //! [`FIXTURE_DIRS`].
 //! Background job numbers and pids are masked.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

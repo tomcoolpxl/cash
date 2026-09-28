@@ -14,7 +14,6 @@
 //! - Scripts without shebang lines (POSIX fallback to cash)
 //! - Direct invocation and PATH resolution
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

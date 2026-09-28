@@ -7,7 +7,6 @@
 //! itself. The tests source the installed script in a scratch repository, and skip when Git
 //! for Windows is not installed.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

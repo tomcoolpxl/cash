@@ -73,7 +73,6 @@ fn run_bc_bundled(args: Vec<OsString>) -> i32 {
     cash_bc::run_bc(args)
 }
 
-#[cfg(windows)]
 fn run_ping_bundled(args: Vec<OsString>) -> i32 {
     cash_builtins::ping::run_ping(args)
 }
@@ -97,7 +96,6 @@ pub fn install_default_providers() {
     commands.insert("awk".to_string(), run_awk_bundled);
     commands.insert("sed".to_string(), run_sed_bundled);
     commands.insert("bc".to_string(), run_bc_bundled);
-    #[cfg(windows)]
     commands.insert("ping".to_string(), run_ping_bundled);
 
     install(commands);
@@ -151,7 +149,6 @@ pub fn maybe_dispatch() -> Option<i32> {
         return Some(exit_code(ExecutionExitCode::NotFound));
     };
 
-    #[cfg(windows)]
     if name_str == MSYS_RELAY {
         let [tool, program, rest @ ..] = args else {
             eprintln!("cash: {DISPATCH_FLAG} {MSYS_RELAY} requires a tool and a program");
@@ -173,17 +170,15 @@ pub fn maybe_dispatch() -> Option<i32> {
     argv.push(name.clone());
     argv.extend(args.iter().cloned());
 
-    #[cfg(windows)]
     if path_emitting(name_str) && !asks_for_help(args) {
         return Some(run_rendering_paths(*func, argv));
     }
 
-    #[cfg(windows)]
     if name_str == "uname" && !asks_for_help(args) {
         return Some(run_unified_uname(*func, argv));
     }
 
-    #[cfg(all(windows, feature = "experimental-bundled-coreutils"))]
+    #[cfg(feature = "experimental-bundled-coreutils")]
     let argv = relaying_msys_command(argv);
 
     Some(func(argv))
@@ -192,7 +187,6 @@ pub fn maybe_dispatch() -> Option<i32> {
 /// The bundled-dispatch name of [`cash_win32::msys::relay`]: `cash --invoke-bundled
 /// --msys-relay TOOL PROGRAM [ARGS...]`. Not a utility, so never a builtin; the leading
 /// dashes keep it from colliding with one.
-#[cfg(windows)]
 const MSYS_RELAY: &str = "--msys-relay";
 
 /// `argv` for a bundled `env` or `timeout`, with an MSYS2 command routed through
@@ -204,7 +198,7 @@ const MSYS_RELAY: &str = "--msys-relay";
 /// passes the arguments on in the program's own encoding. The program is looked up here
 /// only to decide whether that detour is needed, along the PATH and in the directory the
 /// tool will use as far as its options say; the relay looks it up again for real.
-#[cfg(all(windows, feature = "experimental-bundled-coreutils"))]
+#[cfg(feature = "experimental-bundled-coreutils")]
 fn relaying_msys_command(argv: Vec<OsString>) -> Vec<OsString> {
     let Some(operand) = cash_coreutils_builtins::command_operand(&argv) else {
         return argv;
@@ -253,7 +247,6 @@ fn relaying_msys_command(argv: Vec<OsString>) -> Vec<OsString> {
 /// Not here, deliberately: `find`, `grep -l`, `wc`, `du`, `dirname` and `basename` all
 /// echo back a spelling that reached them from the script, so they are already correct
 /// once their inputs are. `pwd` is a shell builtin and never reaches this dispatcher.
-#[cfg(windows)]
 fn path_emitting(name: &str) -> bool {
     matches!(name, "mktemp" | "realpath" | "readlink")
 }
@@ -262,7 +255,6 @@ fn path_emitting(name: &str) -> bool {
 ///
 /// Those outputs are prose, not paths, and some argument parsers exit the process while
 /// printing them — which would strand the text in the capture file. Cheaper to skip.
-#[cfg(windows)]
 fn asks_for_help(args: &[OsString]) -> bool {
     args.iter()
         .any(|a| a == "--help" || a == "--version" || a == "-h")
@@ -274,7 +266,6 @@ fn asks_for_help(args: &[OsString]) -> bool {
 /// If the capture itself fails — no writable temp directory, say — the utility still
 /// runs, just without the rendering. A wrong separator is a nuisance; refusing to run
 /// `mktemp` is a broken shell.
-#[cfg(windows)]
 fn run_rendering_paths(func: BundledFn, argv: Vec<OsString>) -> i32 {
     match cash_win32::stdio::with_captured_stdout(|| func(argv.clone())) {
         Ok((code, captured)) => {
@@ -287,7 +278,6 @@ fn run_rendering_paths(func: BundledFn, argv: Vec<OsString>) -> i32 {
 }
 
 /// Run a bundled `uname` with its nodename unified to cash's canonical hostname spelling.
-#[cfg(windows)]
 fn run_unified_uname(func: BundledFn, argv: Vec<OsString>) -> i32 {
     match cash_win32::stdio::with_captured_stdout(|| func(argv.clone())) {
         Ok((code, captured)) => {

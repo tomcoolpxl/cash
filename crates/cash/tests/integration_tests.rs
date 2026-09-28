@@ -3,8 +3,6 @@
 //! This test harness runs YAML-based test cases with inline expectations
 //! or insta snapshots, without comparing against an oracle shell.
 
-#![cfg(any(unix, windows))]
-
 use anyhow::Result;
 use cash_test_harness::{RunnerConfig, TestMode, TestOptions, TestRunner};
 use clap::Parser;

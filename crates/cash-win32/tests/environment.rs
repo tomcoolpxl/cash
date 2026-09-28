@@ -1,6 +1,5 @@
 //! D5 (PATH is the one translated variable) and D31 (case-insensitive lookup).
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

@@ -3,7 +3,6 @@
 //! Real end-to-end integration tests that invoke the actual `cash.exe` binary
 //! using real Windows pipes, real processes, exit codes, and stdout/stderr assertions.
 
-#![cfg(windows)]
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,

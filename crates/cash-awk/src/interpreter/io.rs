@@ -457,12 +457,9 @@ pub(crate) fn create_shell_command(cmd_str: &str) -> std::process::Command {
             return cmd;
         }
     }
-    #[cfg(windows)]
-    {
-        let mut cmd = std::process::Command::new("cmd");
-        cmd.args(["/c", cmd_str]);
-        cmd
-    }
+    let mut cmd = std::process::Command::new("cmd");
+    cmd.args(["/c", cmd_str]);
+    cmd
 }
 
 #[derive(Default)]
