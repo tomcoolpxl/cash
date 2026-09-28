@@ -1601,7 +1601,11 @@ p='a\
 b `echo "x y"` \`'; printf '<%s>\n' "${p@P}""#;
     // `\$` is bash's `#` when EUID is 0, which an elevated process is, as on GitHub's
     // runners, and `$` otherwise.
-    let prompt_sign = if output("echo $EUID").1 == "0" { '#' } else { '$' };
+    let prompt_sign = if output("echo $EUID").1 == "0" {
+        '#'
+    } else {
+        '$'
+    };
     assert_eq!(
         output(script),
         (
