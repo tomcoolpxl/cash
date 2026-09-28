@@ -60,7 +60,20 @@ fn the_profile_runs_this_cash_and_goes_away_again() {
         "{json}\nexpected {quoted}"
     );
     assert!(json.contains("\"name\": \"cash\""), "{json}");
-    assert!(folder.join("cash.png").is_file());
+
+    // The icon: an address whose file name Windows Terminal 1.24 and later finds beside
+    // the fragment, and the logo written there under it.
+    assert!(
+        json.contains(
+            "\"icon\": \"https://raw.githubusercontent.com/tomcoolpxl/cash/main/assets/cash_logo_small.png\""
+        ),
+        "{json}"
+    );
+    let logo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/cash_logo_small.png");
+    assert_eq!(
+        std::fs::read(folder.join("cash_logo_small.png")).unwrap(),
+        std::fs::read(logo).unwrap()
+    );
 
     // Written again, as every upgrade does: still one profile.
     assert!(cash(&local, "--terminal-profile").status.success());

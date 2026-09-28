@@ -19,6 +19,16 @@ const APP: &str = "cash";
 /// The logo, written beside the fragment for the profile's icon.
 const ICON: &[u8] = include_bytes!("../../../assets/cash_logo_small.png");
 
+/// The profile's `icon`. Windows Terminal 1.24 and later loads a fragment's image from
+/// the fragment's own folder, under this address's file name; earlier versions take
+/// only a web address for a fragment's icon, and download it. With the logo written
+/// beside the fragment under that name ([`ICON_FILE`]), every version shows it.
+const ICON_URL: &str =
+    "https://raw.githubusercontent.com/tomcoolpxl/cash/main/assets/cash_logo_small.png";
+
+/// The name the logo is written under: [`ICON_URL`]'s file name.
+const ICON_FILE: &str = "cash_logo_small.png";
+
 const USAGE: &str = "usage: cash --terminal-profile\n       cash --remove-terminal-profile";
 
 /// `cash --terminal-profile` or `cash --remove-terminal-profile`: the process exit
@@ -70,14 +80,11 @@ fn write_profile() -> Result<(), String> {
     let dir = folder()?;
     std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", render(&dir)))?;
 
-    let icon = dir.join("cash.png");
+    let icon = dir.join(ICON_FILE);
     std::fs::write(&icon, ICON).map_err(|e| format!("{}: {e}", render(&icon)))?;
     let fragment = dir.join("cash.json");
-    std::fs::write(
-        &fragment,
-        fragment_json(&exe, &cash_win32::path::to_backslash(&icon)),
-    )
-    .map_err(|e| format!("{}: {e}", render(&fragment)))?;
+    std::fs::write(&fragment, fragment_json(&exe))
+        .map_err(|e| format!("{}: {e}", render(&fragment)))?;
 
     let mut out = std::io::stdout().lock();
     let _ = writeln!(out, "cash --terminal-profile: {}", render(&fragment));
@@ -105,12 +112,12 @@ fn remove_profile() -> Result<(), String> {
 }
 
 /// The fragment: one profile, named `cash`, running `exe` with the logo as its icon.
-fn fragment_json(exe: &str, icon: &str) -> String {
+fn fragment_json(exe: &str) -> String {
     format!(
         "{{\n  \"profiles\": [\n    {{\n      \"name\": \"cash\",\n      \
          \"commandline\": {},\n      \"icon\": {}\n    }}\n  ]\n}}\n",
         json_string(&format!("\"{exe}\"")),
-        json_string(icon)
+        json_string(ICON_URL)
     )
 }
 
@@ -142,13 +149,18 @@ mod tests {
 
     #[test]
     fn the_fragment_quotes_the_program_and_escapes_backslashes() {
-        let json = fragment_json(r"C:\Program Files\cash\cash.exe", r"C:\x\cash.png");
+        let json = fragment_json(r"C:\Program Files\cash\cash.exe");
         assert!(
             json.contains(r#""commandline": "\"C:\\Program Files\\cash\\cash.exe\"""#),
             "{json}"
         );
-        assert!(json.contains(r#""icon": "C:\\x\\cash.png""#), "{json}");
+        assert!(json.contains(&format!(r#""icon": "{ICON_URL}""#)), "{json}");
         assert!(json.contains(r#""name": "cash""#), "{json}");
+    }
+
+    #[test]
+    fn the_logo_is_written_under_the_icon_address_file_name() {
+        assert_eq!(ICON_URL.rsplit('/').next(), Some(ICON_FILE));
     }
 
     #[test]

@@ -1023,9 +1023,13 @@ The fragment is cash's to write: `cash --terminal-profile` puts `cash.json` and 
 in `%LOCALAPPDATA%\Microsoft\Windows Terminal\Fragments\cash\`, one profile named `cash`
 running the `cash.exe` the command ran as, spelled as it was started (under Scoop
 `apps\cash\current\cash.exe`, which follows upgrades); `cash --remove-terminal-profile`
-deletes the folder. Scoop's manifest (`packaging/scoop/cash.json`) runs them from its
-`post_install` and, on a real uninstall only, its `pre_uninstall`; it also offers
-carapace through `suggest` (D63). `cash.exe` links the C runtime statically, so no
+deletes the folder. The profile's `icon` is the logo's address on GitHub, and the logo is
+written beside the fragment under that address's file name, `cash_logo_small.png`:
+Terminal 1.24 and later loads a fragment's images from its own folder by that name,
+earlier versions take only a web address. `cash.exe` carries the same logo as its icon.
+Scoop's manifest (`packaging/scoop/cash.json`) runs them from its `post_install` and, on
+a real uninstall only, its `pre_uninstall`; it also offers carapace through `suggest`
+(D63). `cash.exe` links the C runtime statically, so no
 installer has to bring the Visual C++ Redistributable, which needs admin.
 
 ### D39 — Terminal shell integration is on by default
