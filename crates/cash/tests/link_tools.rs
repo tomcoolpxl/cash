@@ -85,6 +85,15 @@ fn text(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes).replace("\r\n", "\n")
 }
 
+/// This process's PATH with `dir` in front.
+fn path_with(dir: &Path) -> String {
+    format!(
+        "{};{}",
+        dir.display(),
+        std::env::var("PATH").unwrap_or_default()
+    )
+}
+
 /// Run a program with `input` on its standard input, from outside any shell.
 fn run(program: &Path, args: &[&str], input: &str) -> Output {
     use std::io::Write as _;
@@ -196,11 +205,7 @@ fn a_replaced_link_is_refreshed_and_doctor_reports_it_first() {
     std::fs::remove_file(dir.join("wc.exe")).unwrap();
     std::fs::copy(CASH, dir.join("wc.exe")).unwrap();
 
-    let path = format!(
-        "{};{}",
-        dir.display(),
-        std::env::var("PATH").unwrap_or_default()
-    );
+    let path = path_with(&dir);
     let doctor = Command::new(CASH)
         .arg("doctor")
         .env("PATH", &path)
@@ -230,17 +235,67 @@ fn a_replaced_link_is_refreshed_and_doctor_reports_it_first() {
 }
 
 #[test]
+fn a_link_for_a_tool_no_longer_carried_is_removed() {
+    // What a cash that dropped a tool finds: a link an older one made, still listed. A
+    // listed link already gone is dropped from the manifest without a word.
+    let dir = folder("retired");
+    assert!(link_tools(&dir).status.success());
+    let manifest = dir.join(".cash-links");
+    let mut listed = std::fs::read_to_string(&manifest).unwrap();
+    listed.push_str("retired-tool\nvanished-tool\n");
+    std::fs::write(&manifest, listed).unwrap();
+    std::fs::hard_link(CASH, dir.join("retired-tool.exe")).unwrap();
+
+    let out = link_tools(&dir);
+    let stdout = text(&out.stdout);
+    assert!(out.status.success(), "{}", text(&out.stderr));
+    assert!(
+        stdout.contains("  removed, no longer carried: retired-tool\n"),
+        "{stdout}"
+    );
+    assert!(!dir.join("retired-tool.exe").exists());
+    let manifest = std::fs::read_to_string(&manifest).unwrap();
+    let names: Vec<&str> = manifest.lines().collect();
+    assert!(names.contains(&"ls"), "{manifest}");
+    assert!(!names.contains(&"retired-tool"), "{manifest}");
+    assert!(!names.contains(&"vanished-tool"), "{manifest}");
+}
+
+#[test]
+fn the_tools_system32_also_has_are_named() {
+    let dir = folder("system32");
+    // A file of the user's own is not cash's link, so its name is not cash's to note.
+    std::fs::write(dir.join("whoami.exe"), "not cash").unwrap();
+    let out = link_tools(&dir);
+    let stdout = text(&out.stdout);
+    assert!(out.status.success(), "{}", text(&out.stderr));
+
+    let named: Vec<&str> = stdout
+        .split_once("  note: System32 has its own ")
+        .and_then(|(_, rest)| rest.split_once(". Windows puts the user PATH after the machine's"))
+        .map(|(names, _)| names.split(", ").collect())
+        .unwrap_or_default();
+    // Every Windows has these three.
+    for tool in ["sort", "find", "timeout"] {
+        assert!(named.contains(&tool), "{tool} not named: {stdout}");
+    }
+    let system32 = Path::new(&std::env::var_os("SystemRoot").unwrap()).join("System32");
+    for tool in &named {
+        assert!(
+            system32.join(format!("{tool}.exe")).is_file(),
+            "{tool}: {stdout}"
+        );
+    }
+    assert!(!named.contains(&"whoami"), "{stdout}");
+}
+
+#[test]
 fn which_prints_the_link_when_it_is_on_path() {
     let dir = folder("which");
     assert!(link_tools(&dir).status.success());
-    let path = format!(
-        "{};{}",
-        dir.display(),
-        std::env::var("PATH").unwrap_or_default()
-    );
     let out = Command::new(CASH)
         .args(["-c", "which ls; which cd"])
-        .env("PATH", &path)
+        .env("PATH", path_with(&dir))
         .stdin(Stdio::null())
         .output()
         .unwrap();
@@ -395,17 +450,21 @@ impl UserEnvironment {
         Some((kind.to_owned(), value.trim().to_owned()))
     }
 
+    /// cash, pointed at this key.
+    fn command(&self) -> Command {
+        let mut command = Command::new(CASH);
+        command
+            .env("CASH_USER_ENVIRONMENT_KEY", &self.key)
+            .stdin(Stdio::null());
+        command
+    }
+
     fn cash<I, S>(&self, args: I) -> Output
     where
         I: IntoIterator<Item = S>,
         S: AsRef<std::ffi::OsStr>,
     {
-        Command::new(CASH)
-            .args(args)
-            .env("CASH_USER_ENVIRONMENT_KEY", &self.key)
-            .stdin(Stdio::null())
-            .output()
-            .unwrap()
+        self.command().args(args).output().unwrap()
     }
 }
 
@@ -495,6 +554,47 @@ fn without_add_to_path_it_says_how_and_writes_nothing() {
     );
     assert!(!stdout.contains("SetEnvironmentVariable"), "{stdout}");
     assert_eq!(env.path(), Some(expand_sz(r"C:\x")));
+}
+
+#[test]
+fn a_folder_already_on_path_needs_no_advice() {
+    // On the PATH cash was started with, as a terminal's own settings may put it, but not
+    // on the user Path.
+    let dir = folder("on-path");
+    let env = UserEnvironment::new("on-path", Some(r"C:\x"));
+    let out = env
+        .command()
+        .arg("--link-tools")
+        .arg(&dir)
+        .env("PATH", path_with(&dir))
+        .output()
+        .unwrap();
+    let stdout = text(&out.stdout);
+    assert!(out.status.success(), "{}", text(&out.stderr));
+    assert!(
+        stdout.contains("  the folder is on PATH: other programs can run these now\n"),
+        "{stdout}"
+    );
+    assert!(!stdout.contains("--add-to-path"), "{stdout}");
+    assert_eq!(env.path(), Some(expand_sz(r"C:\x")));
+}
+
+#[test]
+fn a_folder_the_user_path_names_needs_no_advice() {
+    // Named anywhere on it and spelled any way, though not on the PATH cash started with.
+    let dir = folder("on-user-path");
+    let entry = path_entry(&dir).replace('\\', "/").to_uppercase();
+    let user_path = format!(r"C:\x;{entry}/");
+    let env = UserEnvironment::new("on-user-path", Some(&user_path));
+    let out = env.cash(["--link-tools".as_ref(), dir.as_os_str()]);
+    let stdout = text(&out.stdout);
+    assert!(out.status.success(), "{}", text(&out.stderr));
+    assert!(
+        stdout.contains("  the folder is on your user PATH\n"),
+        "{stdout}"
+    );
+    assert!(!stdout.contains("--add-to-path"), "{stdout}");
+    assert_eq!(env.path(), Some(expand_sz(&user_path)));
 }
 
 #[test]
