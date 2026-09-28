@@ -27,6 +27,13 @@ filter = 'binary(pty-oracle)'
 slow-timeout = { period = "60s", terminate-after = 3 }
 threads-required = "num-test-threads"
 
+# Starts a background job, sends Ctrl-C a second later and looks a second after that:
+# it passed 10 runs in 10 alone, and failed about one full run in three with every core
+# busy. So it runs alone.
+[[profile.default.overrides]]
+filter = 'binary(it) and test(=job_groups::at_the_prompt_a_background_job_survives_ctrl_c)'
+threads-required = "num-test-threads"
+
 # math.sed computing pi: 9 s with every core busy.
 [[profile.default.overrides]]
 filter = 'package(cash-sed) and test(=test_sed::pi)'
