@@ -335,6 +335,13 @@ fn padded_name(name: &str) -> String {
     format!("{label:<NAME_FIELD$}")
 }
 
+/// A process ID as fuser lists it on standard output: right-aligned in six columns, as
+/// psmisc's `%6d` has it, but always after a space. Windows PIDs often run to six digits,
+/// and `%6d` ran those into the one before, so `kill $(fuser FILE)` read one number.
+fn pid_field(pid: u32) -> String {
+    format!(" {pid:>5}")
+}
+
 #[allow(
     clippy::too_many_lines,
     reason = "one pass over the names, mirroring psmisc's output order"
@@ -430,7 +437,7 @@ fn run(
             write!(stderr, "{}", padded_name(&display))?;
             stderr.flush()?;
             for used in &uses {
-                write!(stdout, "{:>6}", used.pid)?;
+                write!(stdout, "{}", pid_field(used.pid))?;
                 stdout.flush()?;
                 if options.user {
                     write!(stderr, "({})", processes.user(used.pid))?;
@@ -478,4 +485,19 @@ fn run(
     } else {
         ExecutionResult::general_error()
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pids_keep_psmisc_columns_and_stay_apart_at_six_digits() {
+        assert_eq!(pid_field(4) + &pid_field(13220), "     4 13220");
+        let listed = pid_field(13220) + &pid_field(108_896) + &pid_field(1_048_576);
+        assert_eq!(
+            listed.split_whitespace().collect::<Vec<_>>(),
+            ["13220", "108896", "1048576"]
+        );
+    }
 }
