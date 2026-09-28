@@ -4,28 +4,29 @@
 //!
 //! ## Quick workflow (`cargo xtask ci quick`)
 //!
-//! Fast inner-loop checks (~7s warm cache) for rapid iteration, using nothing
-//! but the Rust toolchain:
+//! Fast inner-loop checks for rapid iteration:
 //! 1. **Format check** - Fast, catches formatting issues early
-//! 2. **Build check** - Ensures code compiles with all features
-//! 3. **Lint check** - Clippy warnings that should be addressed
-//! 4. **Unit tests** - Fast tests excluding integration test binaries
+//! 2. **Lint check** - Clippy, which also proves the code compiles
+//! 3. **Unit tests** - Every test outside the `cash` package
 //!
 //! ## Full workflow (`cargo xtask ci full`)
 //!
-//! Comprehensive validation before opening a pull request:
-//! 1. All quick workflow checks
-//! 2. **Integration tests** - Full workspace tests, including those that drive cash.exe
+//! Everything CI checks on a push, and what should pass before one:
+//! 1. **Format check** and **Lint check**, as above
+//! 2. **All tests** - The whole workspace, including the tests that drive cash.exe
+//! 3. **Doc tests** - The examples in documentation comments, which nextest does not run
 //!
 //! The ordering is intentional: fast checks run first to provide quick feedback,
-//! with slower comprehensive tests running last.
+//! with slower comprehensive tests running last. CI runs `ci full` and then lints
+//! with every feature enabled (.github/workflows/ci.yml).
 //!
-//! Both workflows run their tests through cargo-nextest (`cargo install cargo-nextest`).
+//! Both workflows run their tests through cargo-nextest (`cargo binstall cargo-nextest`),
+//! which runs each test in a process of its own.
 
 use anyhow::Result;
 use clap::Parser;
 
-use crate::check::{self, BuildArgs, CheckCommand};
+use crate::check::{self, CheckCommand, LintArgs};
 use crate::test::{
     self, BinaryArgs, IntegrationTestArgs, TestCommand, TestSubcommand, UnitTestArgs,
 };
@@ -36,14 +37,14 @@ type Step<'a> = (&'a str, Box<dyn Fn() -> Result<()> + 'a>);
 /// Run CI workflows.
 #[derive(Parser)]
 pub enum CiCommand {
-    /// Run quick inner-loop checks: fmt, build, lint, unit tests (~7s warm).
+    /// Run quick inner-loop checks: fmt, lint, unit tests.
     ///
     /// Use this for rapid iteration during development.
     Quick(QuickArgs),
 
-    /// Run the full workflow: quick + integration tests.
+    /// Run the full workflow: fmt, lint, every test, doc tests.
     ///
-    /// This runs every check that should pass before opening a pull request.
+    /// This is what CI runs on every push.
     Full(FullArgs),
 }
 
@@ -95,47 +96,44 @@ fn make_integration_test_command() -> TestCommand {
     }
 }
 
-/// The checks shared by every workflow, fastest first.
-fn quick_steps(verbose: bool) -> Vec<Step<'static>> {
+/// The checks every workflow starts with, fastest first. Clippy compiles everything
+/// `cargo check` would, so a separate build check would only repeat it.
+fn static_checks(verbose: bool) -> Vec<Step<'static>> {
     vec![
         (
             "Format check",
             Box::new(move || check::run(&CheckCommand::Fmt, verbose)),
         ),
         (
-            "Build check",
-            Box::new(move || check::run(&CheckCommand::Build(BuildArgs::default()), verbose)),
-        ),
-        (
             "Lint check",
-            Box::new(move || check::run(&CheckCommand::Lint, verbose)),
-        ),
-        (
-            "Unit tests",
-            Box::new(move || test::run(&make_unit_test_command(), verbose)),
+            Box::new(move || check::run(&CheckCommand::Lint(LintArgs::default()), verbose)),
         ),
     ]
 }
 
-/// Run quick inner-loop checks (~7s warm cache).
+/// Run quick inner-loop checks.
 fn run_quick(args: &QuickArgs, verbose: bool) -> Result<()> {
     eprintln!("Running quick checks...\n");
-    run_steps(
-        &quick_steps(verbose),
-        args.continue_on_error,
-        "Quick checks",
-    )
+
+    let mut steps = static_checks(verbose);
+    steps.push((
+        "Unit tests",
+        Box::new(move || test::run(&make_unit_test_command(), verbose)),
+    ));
+
+    run_steps(&steps, args.continue_on_error, "Quick checks")
 }
 
-/// Run the full pre-PR workflow.
+/// Run the full workflow, as CI does.
 fn run_full(args: &FullArgs, verbose: bool) -> Result<()> {
     eprintln!("Running full checks...\n");
 
-    let mut steps = quick_steps(verbose);
+    let mut steps = static_checks(verbose);
     steps.push((
-        "Integration tests",
+        "All tests",
         Box::new(move || test::run(&make_integration_test_command(), verbose)),
     ));
+    steps.push(("Doc tests", Box::new(move || test::run_doc_tests(verbose))));
 
     run_steps(&steps, args.continue_on_error, "Full checks")
 }

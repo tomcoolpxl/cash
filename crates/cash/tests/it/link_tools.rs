@@ -18,7 +18,9 @@ const CASH: &str = env!("CARGO_BIN_EXE_cash");
 
 /// NTFS gives a file at most 1023 names, and each links folder gives the test's
 /// `cash.exe` 126 more. So the tests take turns: a test holds the turn while a folder of
-/// its own exists, and a folder is deleted when its test is done with it.
+/// its own exists, and a folder is deleted when its test is done with it. That serializes
+/// the threads of `cargo test`; nextest, which runs each test in a process of its own,
+/// runs them one at a time through the `link-tools` group in `.config/nextest.toml`.
 static TURN: Mutex<()> = Mutex::new(());
 
 thread_local! {

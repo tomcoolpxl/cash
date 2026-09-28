@@ -81,12 +81,11 @@ version = "0.9.2" # or target version
 ```
 
 ### 2. Update Lockfile and Verify Workspace
-Run cargo check and test to verify clean compilation and update `Cargo.lock`:
+Run the checks CI runs, which also updates `Cargo.lock`:
 
 ```powershell
-cargo check --workspace --all-targets
-cargo test --workspace
-cargo clippy --workspace --all-targets -- -D warnings
+cargo xtask ci full
+cargo xtask check lint --all-features
 ```
 
 Verify that cash reports the new version:
@@ -118,8 +117,10 @@ git push origin v0.9.2
 
 ### 6. Automated GitHub Release
 When a tag matching `v*.*.*` is pushed, the [Release Workflow](.github/workflows/release.yml) automatically:
-1. Compiles the optimized release binary (`cargo build --release --bin cash`) and checks
-   that it imports no C runtime DLL.
+1. Compiles the shipped binary with the fully optimized `dist` profile (`cargo build
+   --profile dist --bin cash`: fat LTO, one codegen unit) and checks that it imports no C
+   runtime DLL. The `release` profile, which `scripts/install.ps1` builds for local use,
+   trades a little speed for a much quicker build.
 2. Bundles `cash.exe`, `README.md`, `LICENSE`, `NOTICE`, `licenses/` and
    `THIRD-PARTY-LICENSES.html` (written by `cargo about` from
    [`.github/about`](.github/about)) into `cash-vX.Y.Z-x86_64-pc-windows-msvc.zip`.

@@ -25,11 +25,17 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
 
-      - name: Cargo Check Workspace
-        run: cargo check --workspace --all-targets
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
 
-      - name: Run Tests
-        run: cargo test --workspace --no-fail-fast
+      # The same command as a local run: format check, clippy, every test (each in a
+      # process of its own, through nextest), then the doc tests.
+      - name: Check and test
+        run: cargo xtask ci full
 
-      - name: Cargo Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+      # Local builds use the default features only, so that one build serves check,
+      # clippy and the tests; the other features are linted here.
+      - name: Clippy, all features
+        run: cargo xtask check lint --all-features

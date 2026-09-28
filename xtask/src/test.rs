@@ -185,6 +185,34 @@ pub fn run_integration_tests(
     test_result
 }
 
+/// Run the doc tests (the examples in documentation comments), which nextest does not run.
+pub fn run_doc_tests(verbose: bool) -> Result<()> {
+    let sh = Shell::new()?;
+    eprintln!("Running doc tests...");
+    if verbose {
+        eprintln!("Running: cargo test --workspace --doc");
+    }
+    cmd!(sh, "cargo test --workspace --doc")
+        .run()
+        .context("Doc tests failed")?;
+    eprintln!("Doc tests passed.");
+    Ok(())
+}
+
+/// Fails with the install command when cargo-nextest is missing, rather than letting
+/// cargo's "no such command" read like a test failure.
+fn require_nextest(sh: &Shell) -> Result<()> {
+    cmd!(sh, "cargo nextest --version")
+        .quiet()
+        .ignore_stdout()
+        .ignore_stderr()
+        .run()
+        .context(
+            "cargo-nextest is not installed; install it with `cargo binstall cargo-nextest` \
+             (or `cargo install cargo-nextest --locked`)",
+        )
+}
+
 /// Run cargo nextest with optional filter expression.
 fn run_nextest(
     sh: &Shell,
@@ -192,6 +220,7 @@ fn run_nextest(
     filter_expr: Option<&str>,
     verbose: bool,
 ) -> Result<()> {
+    require_nextest(sh)?;
     let mut args = vec!["nextest", "run", "--workspace", "--no-fail-fast"];
 
     if profile == BuildProfile::Release {
@@ -274,6 +303,7 @@ fn run_tests_with_coverage(
         .context("Failed to clean coverage data")?;
 
     // Build cargo nextest args
+    require_nextest(sh)?;
     let mut test_args = vec!["nextest", "run", "--workspace", "--no-fail-fast"];
     if profile == BuildProfile::Release {
         test_args.push("--release");

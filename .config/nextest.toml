@@ -6,3 +6,28 @@ fail-fast = false
 
 [profile.default.junit]
 path = "test-results.xml"
+
+# nextest runs each test in a process of its own, so a lock inside a test process
+# serializes nothing; these groups are how tests take turns.
+[test-groups]
+# Each links folder gives the test's cash.exe 126 more names, and NTFS allows a file
+# 1023 (link_tools.rs).
+link-tools = { max-threads = 1 }
+
+[[profile.default.overrides]]
+filter = 'binary(it) and test(/^link_tools::/)'
+test-group = 'link-tools'
+
+# Tests that are slow by nature, rather than stuck: each gets three periods.
+# A whole screen-by-screen comparison with Git Bash on a ConPTY: 45 s on an idle machine.
+# ConPTY paints on its own schedule and merges keys into late frames when the CPU is
+# busy (pty_latency.rs), so it takes every test slot and runs alone.
+[[profile.default.overrides]]
+filter = 'binary(pty-oracle)'
+slow-timeout = { period = "60s", terminate-after = 3 }
+threads-required = "num-test-threads"
+
+# math.sed computing pi: 9 s with every core busy.
+[[profile.default.overrides]]
+filter = 'package(cash-sed) and test(=test_sed::pi)'
+slow-timeout = { period = "15s", terminate-after = 3 }

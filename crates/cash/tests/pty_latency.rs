@@ -6,12 +6,12 @@
 //! `CASH-PATCHES.md`). Run it from the repository root:
 //!
 //! ```text
-//! cargo test --release --target-dir target/bench -p cash --test pty-latency -- --ignored --nocapture
+//! cargo test --profile dist -p cash --test pty-latency -- --ignored --nocapture
 //! ```
 //!
-//! `--target-dir` keeps the build away from `target/release/cash.exe`, which may be running
-//! as somebody's shell, and a debug build's numbers say little. `CASH_LATENCY_BIN` names a
-//! `cash.exe` to measure instead of the one cargo built, for instance an older build.
+//! `dist` is the profile cash ships with; a debug build's numbers say little.
+//! `CASH_LATENCY_BIN` names a `cash.exe` to measure instead of the one cargo built, for
+//! instance an older build, or the installed shell (`%LOCALAPPDATA%\cash-dev\cash.exe`).
 //!
 //! Run it on an idle machine. ConPTY draws its screen on its own schedule, and with the CPU
 //! busy (a `cargo test --workspace` alongside, say) it merges many keys into one late frame:

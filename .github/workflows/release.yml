@@ -38,14 +38,17 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
 
-      - name: Check workspace
-        run: cargo check --workspace --all-targets
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
 
-      - name: Run tests
-        run: cargo test --workspace --no-fail-fast
+      # The same steps as ci.yml.
+      - name: Check and test
+        run: cargo xtask ci full
 
-      - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Clippy, all features
+        run: cargo xtask check lint --all-features
 
   # ── Build release binary and publish GitHub Release ───────────────────
   release:
@@ -93,11 +96,13 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
 
+      # `dist` is the fully optimized profile (fat LTO, one codegen unit); `release`
+      # is the quicker one used for local installs. See Cargo.toml.
       - name: Build release binary
-        run: cargo build --release --bin cash
+        run: cargo build --profile dist --bin cash
 
       - name: Print version
-        run: target\release\cash.exe --version
+        run: target\dist\cash.exe --version
 
       # cash.exe carries the C runtime (.cargo/config.toml): a clean Windows has no
       # VCRUNTIME140.dll, and only an admin can install one (ROADMAP item 18).
@@ -106,7 +111,7 @@ jobs:
         run: |
           $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
           $dumpbin = & $vswhere -latest -products * -find 'VC\Tools\MSVC\**\bin\Hostx64\x64\dumpbin.exe' | Select-Object -First 1
-          $dlls = & $dumpbin /nologo /dependents target\release\cash.exe |
+          $dlls = & $dumpbin /nologo /dependents target\dist\cash.exe |
             Select-String -Pattern '^\s+\S+\.dll$' | ForEach-Object { $_.Line.Trim() }
           $dlls
           $crt = $dlls | Where-Object { $_ -match '^(vcruntime|msvcp|ucrtbase|api-ms-win-crt-)' }
@@ -136,7 +141,7 @@ jobs:
           $distDir = "dist"
           New-Item -ItemType Directory -Path $distDir -Force | Out-Null
 
-          Copy-Item target/release/cash.exe $distDir/
+          Copy-Item target/dist/cash.exe $distDir/
           Copy-Item README.md $distDir/
           Copy-Item LICENSE $distDir/
           # The notices of code cash absorbed (NOTICE, licenses/) and of the crates it is

@@ -100,13 +100,36 @@ result_large_err = "allow"
 similar_names = "allow"
 struct_excessive_bools = "allow"
 
+# Debug and test builds keep line numbers, which is all a panic backtrace needs, and no
+# debug info for dependencies. Full debug info made every test executable carry a
+# PDB of a quarter of a gigabyte; `--profile debugging` puts it back for a debugger.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+
+[profile.debugging]
+inherits = "dev"
+debug = true
+
+[profile.debugging.package."*"]
+debug = true
+
+# The everyday optimized build, which scripts/install.ps1 installs as the shell used
+# day to day: thin LTO over parallel codegen units builds in a fraction of the time.
 [profile.release]
 strip = true
-lto = "fat"
-codegen-units = 1
+lto = "thin"
 # Interactive cash catches an unexpected panic at the command boundary and returns to
 # the prompt. `abort` bypasses that recovery path and terminates the entire shell.
 panic = "unwind"
+
+# What is shipped: the release workflow builds `--profile dist`, into target/dist.
+[profile.dist]
+inherits = "release"
+lto = "fat"
+codegen-units = 1
 
 [profile.bench]
 inherits = "release"

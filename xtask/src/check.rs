@@ -6,6 +6,10 @@
 //!
 //! `check unused-deps` needs `cargo-udeps` (`cargo install cargo-udeps`) and a nightly
 //! toolchain; the other checks need only the pinned toolchain.
+//!
+//! `build` and `lint` check the default features, the set that is shipped and tested, so
+//! they reuse what `cargo test` already built. Each other feature set is a whole separate
+//! build of the workspace; `--all-features` asks for one, and CI does.
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -19,7 +23,7 @@ pub enum CheckCommand {
     /// Check code formatting.
     Fmt,
     /// Run clippy lints.
-    Lint,
+    Lint(LintArgs),
     /// Check for unused dependencies (requires nightly).
     UnusedDeps,
 }
@@ -32,6 +36,18 @@ pub struct BuildArgs {
     /// whole supports.
     #[clap(long = "workspace-msrv")]
     workspace_msrv: bool,
+
+    /// Check with every feature enabled instead of the default ones.
+    #[clap(long)]
+    all_features: bool,
+}
+
+/// Options for the lint check.
+#[derive(Default, Parser)]
+pub struct LintArgs {
+    /// Lint with every feature enabled instead of the default ones.
+    #[clap(long)]
+    all_features: bool,
 }
 
 /// Run a check command.
@@ -40,7 +56,7 @@ pub fn run(cmd: &CheckCommand, verbose: bool) -> Result<()> {
 
     match cmd {
         CheckCommand::Fmt => check_fmt(&sh, verbose),
-        CheckCommand::Lint => check_lint(&sh, verbose),
+        CheckCommand::Lint(args) => check_lint(&sh, args, verbose),
         CheckCommand::UnusedDeps => check_unused_deps(&sh, verbose),
         CheckCommand::Build(args) => check_build(&sh, args, verbose),
     }
@@ -58,9 +74,12 @@ fn check_fmt(sh: &Shell, verbose: bool) -> Result<()> {
     Ok(())
 }
 
-fn check_lint(sh: &Shell, verbose: bool) -> Result<()> {
+fn check_lint(sh: &Shell, lint_args: &LintArgs, verbose: bool) -> Result<()> {
     eprintln!("Running clippy...");
-    let mut args = vec!["clippy", "--workspace", "--all-features", "--all-targets"];
+    let mut args = vec!["clippy", "--workspace", "--all-targets"];
+    if lint_args.all_features {
+        args.push("--all-features");
+    }
     if verbose {
         args.push("--verbose");
         eprintln!("Running: cargo {}", args.join(" "));
@@ -141,10 +160,10 @@ fn crates_above_workspace_msrv(sh: &Shell) -> Result<Vec<String>> {
         .collect())
 }
 
-fn check_build(sh: &Shell, args: &BuildArgs, verbose: bool) -> Result<()> {
+fn check_build(sh: &Shell, build_args: &BuildArgs, verbose: bool) -> Result<()> {
     eprintln!("Checking that code compiles...");
 
-    let excluded = if args.workspace_msrv {
+    let excluded = if build_args.workspace_msrv {
         crates_above_workspace_msrv(sh)?
     } else {
         Vec::new()
@@ -156,7 +175,10 @@ fn check_build(sh: &Shell, args: &BuildArgs, verbose: bool) -> Result<()> {
         );
     }
 
-    let mut args = vec!["check", "--all-features", "--all-targets", "--workspace"];
+    let mut args = vec!["check", "--all-targets", "--workspace"];
+    if build_args.all_features {
+        args.push("--all-features");
+    }
     for name in &excluded {
         args.push("--exclude");
         args.push(name);
