@@ -37,6 +37,9 @@ pub struct Holder {
 /// array small.
 const REGISTER_BATCH: usize = 512;
 
+/// How many times [`holders`] asks again when the list outgrew the room it gave.
+const MORE_DATA_ATTEMPTS: u32 = 8;
+
 fn check(code: WIN32_ERROR) -> io::Result<()> {
     if code == ERROR_SUCCESS {
         Ok(())
@@ -105,9 +108,13 @@ pub fn holders(paths: &[&Path]) -> io::Result<Vec<Holder>> {
         })?;
     }
 
-    // The list can grow between the sizing call and the real one, so retry a few times.
+    // The list can grow between the sizing call and the real one, so retry, with room
+    // for the processes that start meanwhile. A list that never settles is an error: the
+    // buffer holds zeroed entries, and returning them reported pid 0 as a holder.
     let mut infos: Vec<RM_PROCESS_INFO> = Vec::new();
-    for _ in 0..4 {
+    let mut attempts = 0;
+    loop {
+        attempts += 1;
         let mut needed = 0u32;
         let mut count = u32::try_from(infos.len()).unwrap_or(u32::MAX);
         let mut reasons = 0u32;
@@ -126,8 +133,9 @@ pub fn holders(paths: &[&Path]) -> io::Result<Vec<Holder>> {
                 &raw mut reasons,
             )
         };
-        if code == ERROR_MORE_DATA {
-            infos = vec![RM_PROCESS_INFO::default(); needed as usize + 4];
+        if code == ERROR_MORE_DATA && attempts < MORE_DATA_ATTEMPTS {
+            let room = needed as usize;
+            infos = vec![RM_PROCESS_INFO::default(); room + room / 2 + 8];
             continue;
         }
         check(code)?;
