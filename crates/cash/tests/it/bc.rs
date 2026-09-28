@@ -14,11 +14,12 @@
               this workspace's"
 )]
 
-#[path = "../../cash-bc/tests/cases/mod.rs"]
+#[path = "../../../cash-bc/tests/cases/mod.rs"]
 mod upstream;
 
-/// The parts of posixutils' `plib` test library the upstream suite uses.
-mod plib {
+/// The parts of posixutils' `plib` test library the upstream suite uses. The suite
+/// reaches it as `crate::plib`, so main.rs brings it to the crate root.
+pub(crate) mod plib {
     pub mod testing {
         use std::io::Write as _;
         use std::process::{Command, Output, Stdio};

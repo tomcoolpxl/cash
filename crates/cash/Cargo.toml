@@ -39,23 +39,9 @@ winresource = "0.1.31"
 
 # Tests that drive the shell binary live with the binary: CARGO_BIN_EXE_cash is
 # only defined for the crate that declares it.
-
-# cash's own acceptance corpus — §4's divergences and every decision wired into
-# the shell, asserted against the real cash.exe.
-[[test]]
-name = "acceptance"
-path = "tests/acceptance.rs"
-
-# The awkward corners: spaces in paths, empty files, nesting, and the boundaries
-# where two decisions meet.
-[[test]]
-name = "acceptance-edge-cases"
-path = "tests/acceptance_edge_cases.rs"
-
-# M2: real scripts, written the way they are written on Linux.
-[[test]]
-name = "corpus"
-path = "tests/corpus.rs"
+#
+# Most of them are modules of one test executable, tests/it (found by cargo on its own;
+# see tests/it/main.rs for why). These four stand apart.
 
 [[test]]
 name = "cash-integration-tests"
@@ -65,47 +51,6 @@ harness = false
 [[test]]
 name = "conpty-interactive-tests"
 path = "tests/conpty_interactive_tests.rs"
-
-# D40: completion is the one part of the shell with no command-line surface, so
-# these drive a `Shell` directly.
-[[test]]
-name = "completion-windows"
-path = "tests/completion_windows.rs"
-
-# D22/§4 #20: $UID agreeing with `id`, and `jobs -l`.
-[[test]]
-name = "identity-and-jobs"
-path = "tests/identity_and_jobs.rs"
-
-# `select`, a bash construct cash could not parse at all.
-[[test]]
-name = "select-clause"
-path = "tests/select_clause.rs"
-
-# D11/D26: pipelines that actually overlap, and `read -t`.
-[[test]]
-name = "pipeline-concurrency"
-path = "tests/pipeline_concurrency.rs"
-
-# D3/D5: what a script sees of its environment, and the here-document deadlock.
-[[test]]
-name = "environment-contract"
-path = "tests/environment_contract.rs"
-
-# D3/D7/D8/D34/D35: what cash says it will run vs what it runs.
-[[test]]
-name = "resolution-honesty"
-path = "tests/resolution_honesty.rs"
-
-# D48: one pager behind `less` and `more`.
-[[test]]
-name = "pager"
-path = "tests/pager.rs"
-
-# D48: `ps`, which uutils does not carry.
-[[test]]
-name = "ps-builtin"
-path = "tests/ps_builtin.rs"
 
 # ROADMAP item 15: interactive behaviour against Git Bash 5.3 on a ConPTY.
 [[test]]
@@ -117,47 +62,6 @@ path = "tests/pty_oracle.rs"
 [[test]]
 name = "pty-latency"
 path = "tests/pty_latency.rs"
-
-# D11/D22: `$!` and background job identity.
-[[test]]
-name = "background-pid"
-path = "tests/background_pid.rs"
-
-# D21/D22: what a kill target means, including the `kill 0` that used to signal the
-# whole console.
-[[test]]
-name = "kill-targets"
-path = "tests/kill_targets.rs"
-
-# D40: `docker completion bash` and friends, which need bash-completion's helpers.
-[[test]]
-name = "completion-scripts"
-path = "tests/completion_scripts.rs"
-
-# Git for Windows' git-prompt.sh (`__git_ps1`), sourced from the Git install.
-[[test]]
-name = "git-prompt"
-path = "tests/git_prompt.rs"
-
-# Comprehensive parameter matrix across builtins
-[[test]]
-name = "builtin-parameters"
-path = "tests/builtin_parameters.rs"
-
-# find and xargs parity
-[[test]]
-name = "find-xargs"
-path = "tests/find_xargs.rs"
-
-# top builtin batch mode and monitoring
-[[test]]
-name = "top-builtin"
-path = "tests/top_builtin.rs"
-
-# coolfetch system banner
-[[test]]
-name = "coolfetch"
-path = "tests/coolfetch.rs"
 
 [dev-dependencies]
 anyhow = "1.0.102"
