@@ -28,7 +28,7 @@ Feature work follows the sequence below.
 | 15 | ConPTY probe harness, then the interactive and Readline 5.3 items | **Complete** (cash reports `BASH_VERSION=5.3.15`) | Section 15 below |
 | 16 | `cash --link-tools`: hard links so programs outside cash can run its tools | **Complete** | Section 16 below; spec D65 |
 | 17 | What fish has at the prompt: highlighting, bash's Alt-. and Ctrl-X Ctrl-E, `abbr`, a collapsing prompt, folder history, carapace completions | **Complete** | Section 17 below; spec D59–D63 |
-| 18 | Installing cash: a Scoop bucket now, winget with an Inno Setup installer later; the tool links on the user PATH on request | **Active** | [Packaging evaluation and decisions](research/packaging-evaluation.md); section 18 below; spec D38, D65 |
+| 18 | Installing cash: a Scoop bucket now, winget with an Inno Setup installer later; the tool links on the user PATH on request | **Active** (Scoop live since 1.1.0; winget to come) | [Packaging evaluation and decisions](research/packaging-evaluation.md); section 18 below; spec D38, D65 |
 | — | Found on the way (not planned items) | **Complete** | MSYS2 argument encoding (spec D52); `shopt winpaths` and bash-worded `cd` errors (D53); a `TERM` that no longer reaches the whole console (D21) |
 
 The authoritative feature order is therefore:
@@ -466,10 +466,16 @@ Work, in order:
 4. **Done.** `--terminal-profile` and `--remove-terminal-profile` (D38).
 5. **Done.** [`packaging/scoop/cash.json`](packaging/scoop/cash.json), the README's
    install section, and RELEASING's Scoop step.
-6. **The author's:** make `tomcoolpxl/cash` public; release a version with these
-   commands; create `tomcoolpxl/scoop-bucket` from Scoop's bucket template and add the
-   manifest to it.
+6. **Done, 2026-09-28.** `tomcoolpxl/cash` is public; 1.1.0 is released with these
+   commands; [`tomcoolpxl/scoop-bucket`](https://github.com/tomcoolpxl/scoop-bucket),
+   made from Scoop's bucket template, carries `bucket/cash.json` at 1.1.0, and its
+   Excavator workflow updates it from new releases. `scoop bucket add tomcoolpxl
+   https://github.com/tomcoolpxl/scoop-bucket` then `scoop install cash` installs it.
 7. Later: the Inno Setup installer and the winget submission.
+
+Found at the release: GitHub's Windows runners run elevated, so `$EUID` is 0 there and
+new files belong to Administrators; two tests that assumed a normal user failed there
+only, and now expect either.
 
 Found on the way: Windows deletes a name of a running program while the file has others,
 and refuses only the last; the tests had been leaving 126 links per folder behind, until
