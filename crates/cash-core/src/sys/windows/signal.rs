@@ -75,6 +75,10 @@ pub enum Signal {
     Tstp = 20,
 }
 
+/// cash's own `CHLD`, which a trap names to run once per child reaped. Unix names nix's
+/// `SIGCHLD` here, so shared code need not spell either variant.
+pub(crate) const CHLD: Option<Signal> = Some(Signal::Chld);
+
 impl Signal {
     /// Every signal cash supports on Windows.
     pub fn iterator() -> impl Iterator<Item = Self> {

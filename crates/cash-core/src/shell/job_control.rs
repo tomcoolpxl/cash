@@ -46,7 +46,7 @@ impl<SE: extensions::ShellExtensions> crate::Shell<SE> {
         if self.may_report_jobs_now() {
             return self.check_for_completed_jobs(params).await;
         }
-        if self.handles_chld() {
+        if self.chld_trap().is_some() {
             // A script reaps finished background jobs here only for a CHLD trap to
             // count them; at a prompt they wait for it, to be reported there.
             if !self.options().interactive {
@@ -57,9 +57,10 @@ impl<SE: extensions::ShellExtensions> crate::Shell<SE> {
         Ok(())
     }
 
-    fn handles_chld(&self) -> bool {
-        self.traps()
-            .handles(traps::TrapSignal::Signal(sys::signal::Signal::Chld))
+    /// The `CHLD` trap, when the platform has the signal and a handler is set for it.
+    fn chld_trap(&self) -> Option<traps::TrapSignal> {
+        let chld = traps::TrapSignal::Signal(sys::signal::CHLD?);
+        self.traps().handles(chld).then_some(chld)
     }
 
     /// Runs the `CHLD` trap once for each child reaped since it last ran: each process
@@ -71,13 +72,14 @@ impl<SE: extensions::ShellExtensions> crate::Shell<SE> {
         // A background job or a subshell runs in a copy of the shell; its children are
         // its own, and Bash resets a subshell's CHLD trap. Only the shell itself runs it,
         // once per job, when it reaps the job.
-        if reaped == 0 || self.is_subshell() || !self.handles_chld() {
+        if reaped == 0 || self.is_subshell() {
             return;
         }
+        let Some(chld) = self.chld_trap() else {
+            return;
+        };
         for _ in 0..reaped {
-            let _ = self
-                .invoke_trap_handler(traps::TrapSignal::Signal(sys::signal::Signal::Chld), params)
-                .await;
+            let _ = self.invoke_trap_handler(chld, params).await;
         }
         let _ = self.jobs.take_children_reaped();
     }

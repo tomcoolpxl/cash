@@ -7,6 +7,9 @@ use crate::{error, sys, traps};
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Signal {}
 
+/// No signals here, so no `CHLD` for a trap to name.
+pub(crate) const CHLD: Option<Signal> = None;
+
 impl Signal {
     /// Returns an iterator over all possible signals.
     pub fn iterator() -> impl Iterator<Item = Self> {
