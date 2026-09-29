@@ -94,21 +94,48 @@ fn a_large_here_string_survives_its_exact_bytes() {
 
 #[test]
 fn here_documents_do_not_leak_temp_files() {
-    let count = || {
-        std::fs::read_dir(std::env::temp_dir())
-            .into_iter()
+    // cash writes a here-document's file under TMP/TEMP, and so does every other test
+    // here that uses one. nextest runs them all at once, so counting the shared temp
+    // directory raced with them (`left: 2, right: 1`). A private one is this test's own.
+    let tmp = std::env::temp_dir().join(format!("cash-leak-check-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&tmp);
+    std::fs::create_dir_all(&tmp).unwrap();
+    let run = |script: &str| {
+        let out = Command::new(CASH)
+            .env("TMP", &tmp)
+            .env("TEMP", &tmp)
+            .args(["-c", script])
+            .output()
+            .expect("failed to run cash");
+        String::from_utf8_lossy(&out.stdout).trim_end().to_string()
+    };
+    let left = || -> Vec<String> {
+        std::fs::read_dir(&tmp)
+            .unwrap()
             .flatten()
-            .flatten()
-            .filter(|e| e.file_name().to_string_lossy().starts_with("cash-here-"))
-            .count()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .filter(|name| name.starts_with("cash-here-"))
+            .collect()
     };
 
-    let before = count();
+    // The file is listed while the command reading it runs. Without this, a cash that
+    // stopped honouring TMP would pass by leaking its files somewhere else.
+    let listed = run(r#"v=$(printf '%9000s' '' | tr ' ' 'x'); ls "$TEMP" <<< "$v""#);
+    assert!(
+        listed.contains("cash-here-"),
+        "the here-document was not written to TMP: {listed:?}"
+    );
+
     for _ in 0..5 {
-        let out = cash(r#"v=$(printf '%9000s' '' | tr ' ' 'x'); read -r l <<< "$v"; echo "${#l}""#);
-        assert_eq!(out.stdout, "9000");
+        let out = run(r#"v=$(printf '%9000s' '' | tr ' ' 'x'); read -r l <<< "$v"; echo "${#l}""#);
+        assert_eq!(out, "9000");
     }
-    assert_eq!(count(), before, "a here-document temp file was left behind");
+    assert_eq!(
+        left(),
+        Vec::<String>::new(),
+        "a here-document temp file was left behind"
+    );
+    let _ = std::fs::remove_dir_all(&tmp);
 }
 
 #[test]
