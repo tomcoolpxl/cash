@@ -493,6 +493,8 @@ mod tests {
 
     #[test]
     fn pids_keep_psmisc_columns_and_stay_apart_at_six_digits() {
+        assert_eq!(pid_field(13220), " 13220");
+        assert_eq!(pid_field(108_896), " 108896");
         assert_eq!(pid_field(4) + &pid_field(13220), "     4 13220");
         let listed = pid_field(13220) + &pid_field(108_896) + &pid_field(1_048_576);
         assert_eq!(

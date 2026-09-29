@@ -61,11 +61,12 @@ fn fuser_prints_bare_pids_on_stdout_and_the_name_on_stderr() {
     let out = cash_in(&dir, "fuser held.txt");
     assert_eq!(out.code, 0, "{}", out.stderr);
     assert_eq!(out.stdout.trim(), me());
-    // `%6d`: padded to six columns, which a six-digit pid fills.
+    // A space, then the pid right-aligned in five columns: psmisc's `%6d` below 100000,
+    // and still a space before a pid of six digits or more.
     assert_eq!(
         out.stdout.trim_end(),
-        std::format!("{:>6}", me()),
-        "pids are %6d: {:?}",
+        std::format!(" {:>5}", me()),
+        "pids are a space and %5d: {:?}",
         out.stdout
     );
     assert!(out.stderr.contains("/held.txt:"), "{}", out.stderr);
