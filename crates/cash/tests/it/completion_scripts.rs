@@ -31,8 +31,11 @@
               alternating the two forms by accident of content reads worse."
 )]
 
+use std::io::Read as _;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::sync::mpsc;
+use std::time::{Duration, Instant};
 
 use cash_builtins::ShellBuilderExt as _;
 use cash_core::Shell;
@@ -363,45 +366,179 @@ async fn a_cobra_shaped_script_offers_everything_for_an_empty_word() {
 // Real generated scripts, where the machine has the tool
 // ---------------------------------------------------------------------------
 
-/// Generate a tool's bash completion script, or `None` if the tool is not installed.
-fn generate(tool: &str, args: &[&str], into: &Path) -> Option<PathBuf> {
-    let output = Command::new(tool).args(args).output().ok()?;
-    if !output.status.success() || output.stdout.is_empty() {
-        return None;
-    }
+/// How long a tool gets to answer on its own, before cash is involved at all.
+///
+/// Warm, each of these tools answers in under a second. The first launch of docker,
+/// kubectl and gh on a fresh GitHub runner took 10 to 37 s: measured under `cargo test`,
+/// when these were the only tests running, and a nextest retry of the same test then
+/// passed in under a second. That is the tool's cold start, not cash, so it is paid here,
+/// outside cash, and a tool that has still not answered is skipped rather than failed.
+/// `.config/nextest.toml` gives these tests the time this takes, plus cash's share.
+const TOOL_DEADLINE: Duration = Duration::from_secs(60);
 
-    let path = into.join(format!("{tool}.bash"));
-    std::fs::write(&path, &output.stdout).ok()?;
-    Some(path)
+/// How a generated script finds its candidates (see the module docs).
+#[derive(Clone, Copy)]
+enum Family {
+    /// Pure bash: the candidates are in the script.
+    Clap,
+    /// The script asks the tool for them, as `tool __complete words…` inside `$(…)`.
+    Cobra,
 }
 
-async fn assert_real_tool_completes(tool: &str, args: &[&str], input: &str, expected: &str) {
-    let mut fixture = Fixture::new(tool).await;
-    let dir = fixture.dir.clone();
+/// Run one of a tool's own commands, outside cash, and return what it printed.
+///
+/// `Err` says why the tool cannot be tested here: it is not installed, it failed, or it
+/// was still running at `deadline`, in which case it is killed.
+fn run_tool(tool: &str, args: &[&str], deadline: Instant) -> Result<Vec<u8>, String> {
+    let command = format!("`{tool} {}`", args.join(" "));
+    let started = Instant::now();
+    let mut child = Command::new(tool)
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|e| match e.kind() {
+            std::io::ErrorKind::NotFound => format!("{tool} is not installed"),
+            _ => format!("{command} could not start: {e}"),
+        })?;
 
-    let Some(script) = generate(tool, args, &dir) else {
-        eprintln!("skipped: {tool} is not installed");
-        return;
+    // Read on a thread of its own, so that the deadline holds even while the tool is
+    // silent.
+    let mut stdout = child.stdout.take().expect("stdout is piped");
+    let (sender, receiver) = mpsc::channel();
+    std::thread::spawn(move || {
+        let mut bytes = Vec::new();
+        let _ = stdout.read_to_end(&mut bytes);
+        let _ = sender.send(bytes);
+    });
+
+    let output = receiver.recv_timeout(deadline.saturating_duration_since(Instant::now()));
+    let seconds = started.elapsed().as_secs_f64();
+    let Ok(output) = output else {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err(format!("{command} was still running after {seconds:.1} s"));
     };
 
-    fixture.source_file(&script).await;
+    let status = child.wait().map_err(|e| format!("{command}: {e}"))?;
+    if !status.success() || output.is_empty() {
+        return Err(format!("{command} failed ({status})"));
+    }
+    eprintln!("{command} answered in {seconds:.1} s");
+    Ok(output)
+}
 
+/// The request a Cobra script sends its tool for `input`: `__complete` and the words up
+/// to the cursor, the last one empty after a trailing space.
+fn cobra_request(input: &str) -> Vec<&str> {
+    let mut request = vec!["__complete"];
+    request.extend(input.split_whitespace().skip(1));
+    if input.ends_with(' ') {
+        request.push("");
+    }
+    request
+}
+
+async fn assert_real_tool_completes(
+    family: Family,
+    tool: &str,
+    args: &[&str],
+    input: &str,
+    expected: &str,
+) {
+    let mut fixture = Fixture::new(tool).await;
+
+    // Everything the tool does on its own shares one deadline.
+    let deadline = Instant::now() + TOOL_DEADLINE;
+    let script = match run_tool(tool, args, deadline) {
+        Ok(script) => String::from_utf8(script).expect("the generated script is UTF-8"),
+        Err(why) => {
+            eprintln!("skipped: {why}");
+            return;
+        }
+    };
+
+    // A Cobra script runs the tool again for every completion, and on a cold machine that
+    // second launch is slow too: docker, for one, starts each of its CLI plugins to ask
+    // for its commands. Making the same request once here warms all of it up, and says
+    // what the tool itself offers.
+    let answer = match family {
+        Family::Clap => None,
+        Family::Cobra => match run_tool(tool, &cobra_request(input), deadline) {
+            Ok(answer) => Some(String::from_utf8_lossy(&answer).into_owned()),
+            Err(why) => {
+                eprintln!("skipped: {why}");
+                return;
+            }
+        },
+    };
+
+    // From here on the time is cash's.
+    let started = Instant::now();
+    fixture.source(&script).await;
     let candidates = fixture.complete(input).await;
+    eprintln!(
+        "cash completed {input:?} in {:.1} s",
+        started.elapsed().as_secs_f64()
+    );
+
     assert!(
         candidates.iter().any(|c| c.trim_end() == expected),
-        "{tool}: completing {input:?} did not offer {expected:?}: {candidates:?}"
+        "{tool}: completing {input:?} did not offer {expected:?}: {candidates:?}\n\
+         {tool} itself answered: {answer:?}"
     );
+}
+
+#[test]
+fn a_tool_that_misses_the_deadline_is_stopped_and_reported() {
+    // The deadline is what turns a tool's cold start into a skip rather than a nextest
+    // timeout, so it has to hold against a program that is nowhere near done.
+    let started = Instant::now();
+    let deadline = started + Duration::from_secs(1);
+    let why = run_tool(CASH, &["--norc", "-c", "sleep 30"], deadline)
+        .expect_err("a 30 s sleep finished before a 1 s deadline");
+
+    assert!(why.contains("was still running"), "{why}");
+    assert!(
+        started.elapsed() < Duration::from_secs(10),
+        "the deadline did not hold: {:?}",
+        started.elapsed()
+    );
+}
+
+#[test]
+fn a_tool_that_is_not_installed_is_reported_as_such() {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let why = run_tool("cash-test-no-such-tool", &["completion", "bash"], deadline)
+        .expect_err("a missing tool ran");
+    assert_eq!(why, "cash-test-no-such-tool is not installed");
+}
+
+#[test]
+fn a_cobra_request_is_the_words_up_to_the_cursor() {
+    assert_eq!(cobra_request("docker ru"), ["__complete", "ru"]);
+    assert_eq!(cobra_request("gh pr cr"), ["__complete", "pr", "cr"]);
+    assert_eq!(cobra_request("docker run "), ["__complete", "run", ""]);
 }
 
 #[tokio::test]
 async fn docker_completion_works() {
     // Cobra. Before the shims this sourced cleanly and then completed nothing.
-    assert_real_tool_completes("docker", &["completion", "bash"], "docker ru", "run").await;
+    assert_real_tool_completes(
+        Family::Cobra,
+        "docker",
+        &["completion", "bash"],
+        "docker ru",
+        "run",
+    )
+    .await;
 }
 
 #[tokio::test]
 async fn kubectl_completion_works() {
     assert_real_tool_completes(
+        Family::Cobra,
         "kubectl",
         &["completion", "bash"],
         "kubectl api-r",
@@ -412,13 +549,21 @@ async fn kubectl_completion_works() {
 
 #[tokio::test]
 async fn gh_completion_works() {
-    assert_real_tool_completes("gh", &["completion", "-s", "bash"], "gh pr cr", "create").await;
+    assert_real_tool_completes(
+        Family::Cobra,
+        "gh",
+        &["completion", "-s", "bash"],
+        "gh pr cr",
+        "create",
+    )
+    .await;
 }
 
 #[tokio::test]
 async fn a_clap_generated_script_works_too() {
     // These never needed the shims; asserting it keeps the shims from breaking them.
     assert_real_tool_completes(
+        Family::Clap,
         "rustup",
         &["completions", "bash"],
         "rustup tool",

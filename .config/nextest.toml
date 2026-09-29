@@ -45,6 +45,17 @@ slow-timeout = { period = "20s", terminate-after = 3 }
 filter = 'binary(conpty-interactive-tests) and test(/^conpty_(ctrl_z|kill_stop|keys_typed_before_ctrl_z)/)'
 slow-timeout = { period = "20s", terminate-after = 3 }
 
+# Each runs a real docker, kubectl, gh or rustup, and then cash completes a word with it:
+# under a second when the tool is warm. On a fresh GitHub runner, the first launch of
+# each Go tool took 10 to 37 s, and nextest's retry then passed in under a second. The
+# test gives the tool up to a minute of its own, outside cash, and skips it if that runs
+# out (TOOL_DEADLINE in completion_scripts.rs); the last period is cash's. The output
+# says how long each part took, and why a test skipped.
+[[profile.default.overrides]]
+filter = 'binary(it) and test(/^completion_scripts::((docker|kubectl|gh)_completion_works|a_clap_generated_script_works_too)$/)'
+slow-timeout = { period = "30s", terminate-after = 3 }
+success-output = "final"
+
 # math.sed computing pi: 9 s with every core busy.
 [[profile.default.overrides]]
 filter = 'package(cash-sed) and test(=test_sed::pi)'
