@@ -147,7 +147,10 @@ scoop install cash
 ```
 
 Scoop puts `cash` on PATH, and Windows Terminal lists a `cash` profile from its next
-start. `cash.exe` carries its own C runtime, so nothing else needs installing. Scoop will
+start. If you have neither a `~/.bashrc` nor a `~/.cashrc`, the first install writes a
+starter `~/.bashrc`, read by cash and by Git Bash: a prompt with the folder and git
+branch, a large shared history, the usual aliases and `ls` with icons. `cash --init-rc`
+writes it later, when there is still neither file. `cash.exe` carries its own C runtime, so nothing else needs installing. Scoop will
 not upgrade an app while it runs: close the cash windows first, or run `scoop config
 ignore_running_processes true`. Each version gets a folder of its own, so a running
 `cash.exe` is never overwritten. A winget package is planned (ROADMAP item 18).

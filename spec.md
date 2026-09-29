@@ -747,6 +747,8 @@ works" behaviour.
 here and aliases tools that are not installed, producing noise or breakage at every
 startup. D30 is the mitigation.
 
+A user with neither file gets a starter `~/.bashrc` from Scoop's install (D69).
+
 ### D25 — Scoop shims are executed, not resolved through
 
 cash has **no Scoop knowledge**. A shim is just another executable found on `PATH`,
@@ -2046,6 +2048,32 @@ before every prompt, silently (`cash_win32::console::repair_before_prompt`).
 
 The `conpty_a_program_that_*` tests in `conpty_interactive_tests.rs` break each of these
 from a PowerShell child and check the prompt after it.
+
+### D69 — `cash --init-rc`: a starter `~/.bashrc` for a user with no startup file
+
+With neither `~/.bashrc` nor `~/.cashrc` (D24), a new user got bash's bare defaults: a `$ `
+prompt, 500 lines of history, no aliases. `cash --init-rc` writes a starter `~/.bashrc`
+then, and only then: an existing file of either name is left alone, and nothing is ever
+overwritten. Decided with the user on 2026-09-29:
+
+- **When: Scoop's install.** The manifest's `post_install` runs `cash --init-rc --once`.
+  Scoop runs `post_install` after every update too, so `--once` acts only the first time
+  for a user, as the marker `%LOCALAPPDATA%\cash\init-rc` records: a starter deleted on
+  purpose does not come back with the next update. It prints only when it writes. Run by
+  hand, without `--once`, it writes one whenever there is none; a zip install has that.
+- **Which file: `~/.bashrc`.** Git Bash reads it too, so the starter works in both: its
+  sections for cash alone check `$CASH_VERSION`, which Git Bash does not set. A Git Bash
+  user's own `.bashrc` counts as having a startup file and is kept.
+- **What: the author's own `~/.bashrc`, nearly as it is** (`crates/cash/src/starter.bashrc`,
+  compiled into `cash.exe`): history large and shared between windows, the usual aliases,
+  a prompt that shows the folder and the git branch (read from `.git/HEAD`, with no `git`
+  process) and sends Windows Terminal's shell-integration marks, `ls --icons` (a Nerd
+  Font draws them; Scoop's notes suggest one), and `coolfetch` once per window. Its
+  comments stay, as the way to adapt it. Left out: the Alt-E folder picker, which needs
+  broot and a hand-made broot configuration.
+
+The Scoop bucket's manifest takes the `post_install` line only with the first release
+that has `--init-rc`: an older `cash.exe` would take the flag for a shell option.
 
 ---
 

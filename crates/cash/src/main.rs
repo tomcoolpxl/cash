@@ -9,6 +9,7 @@
 //! contained. See `cash_win32::session`.
 
 mod doctor;
+mod init_rc;
 mod link_tools;
 mod terminal_menu;
 mod terminal_profile;
@@ -47,10 +48,14 @@ fn main() {
         return;
     }
 
-    // `cash --link-tools` and `--unlink-tools` (D65), and `--terminal-profile` (D38), like
-    // `cash doctor`, act on the installation rather than running anything in a shell.
+    // `cash --link-tools` and `--unlink-tools` (D65), `--terminal-profile` (D38) and
+    // `--init-rc` (D69), like `cash doctor`, act on the installation rather than running
+    // anything in a shell.
     let args: Vec<String> = std::env::args().collect();
-    if let Some(status) = link_tools::command(&args).or_else(|| terminal_profile::command(&args)) {
+    if let Some(status) = link_tools::command(&args)
+        .or_else(|| terminal_profile::command(&args))
+        .or_else(|| init_rc::command(&args))
+    {
         std::process::exit(i32::from(status));
     }
 

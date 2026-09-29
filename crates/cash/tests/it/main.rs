@@ -61,6 +61,8 @@ mod gui_apps_outlive;
 mod held_descriptors;
 // D22/§4 #20: $UID agreeing with `id`, and `jobs -l`.
 mod identity_and_jobs;
+// D69: `cash --init-rc`, the starter ~/.bashrc Scoop writes for a user with none.
+mod init_rc;
 mod job_groups;
 mod kill_family;
 // D21/D22: what a kill target means, including the `kill 0` that used to signal the

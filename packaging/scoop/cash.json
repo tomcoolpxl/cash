@@ -8,6 +8,7 @@
     },
     "notes": [
         "Windows Terminal lists a \"cash\" profile (restart Terminal if it does not show).",
+        "Without a ~/.bashrc or ~/.cashrc, the first install wrote a starter ~/.bashrc (cash --init-rc).",
         "For the file icons of `ls --icons`, a Nerd Font (per-user, no admin), then refresh the profile:",
         "    scoop bucket add nerd-fonts",
         "    scoop install nerd-fonts/CascadiaMono-NF",
@@ -31,7 +32,8 @@
     "post_install": [
         "$cash = \"$(Split-Path $dir)\\current\\cash.exe\"",
         "& $cash --terminal-profile | Out-Null",
-        "if (Test-Path \"$persist_dir\\bin\\.cash-links\") { & $cash --link-tools | Out-Null }"
+        "if (Test-Path \"$persist_dir\\bin\\.cash-links\") { & $cash --link-tools | Out-Null }",
+        "& $cash --init-rc --once"
     ],
     "pre_uninstall": [
         "if ($cmd -eq 'uninstall') {",
