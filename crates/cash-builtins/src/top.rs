@@ -1278,13 +1278,23 @@ fn tree_order<'a>(rows: &[&'a Row], sort: SortField) -> Vec<(&'a Row, usize)> {
     }
 }
 
-/// The widest a meter is drawn, however wide the screen.
-const WIDEST_METER: usize = 200;
+/// A meter's label, padded so that every meter's `[` lines up: `%Cpu(s) `, `Mem     `.
+fn meter_label(name: &str) -> String {
+    format!("{name:<7} ")
+}
 
-/// The summary above the table, `width` wide: the time and load, the tasks, then the
-/// processors and the memory, each as meters, as procps's text, or not at all.
+/// The summary above the table on a screen `width` wide: the time and load, the tasks,
+/// then the processors and the memory, each as meters, as procps's text, or not at all.
+///
+/// The meters form one block, as wide as the column header up to `COMMAND` (or the
+/// screen, if narrower), so that their readings stay by their bars however wide the
+/// window is, and their right edges end where the header's text does.
 fn summary(snapshot: &Snapshot, view: &View, width: usize) -> Vec<Line> {
-    let width = width.min(WIDEST_METER);
+    let show_shared = snapshot
+        .rows
+        .iter()
+        .any(|row| row.shared_resident.is_some());
+    let width = width.min(header(show_shared).chars().count());
     let uptime = format_uptime(cash_win32::sysinfo::uptime());
     let now = chrono::Local::now().format("%H:%M:%S");
     let mut lines = Vec::with_capacity(6 + snapshot.processors.len());
@@ -1333,21 +1343,24 @@ fn cpu_lines(lines: &mut Vec<Line>, snapshot: &Snapshot, view: &View, width: usi
         }
         (Summary::Bars, false) => {
             let mut line = Line::default();
-            cpu_meter(&mut line, "%Cpu(s) ", snapshot.cpu, width);
+            cpu_meter(&mut line, &meter_label("%Cpu(s)"), snapshot.cpu, width);
             lines.push(line);
         }
         (Summary::Bars, true) => {
-            // Two to a row, as htop lays out many processors.
-            let digits = (snapshot.processors.len() - 1).to_string().len();
-            let half = width.saturating_sub(1) / 2;
+            // Two to a row, as htop lays out many processors, filling the same width as
+            // the other meters: the right one takes what an odd width leaves over.
+            let left = width.saturating_sub(1) / 2;
+            let right = width.saturating_sub(left + 1);
             for (pair, cpus) in snapshot.processors.chunks(2).enumerate() {
                 let mut line = Line::default();
                 for (offset, cpu) in cpus.iter().enumerate() {
-                    if offset == 1 {
+                    let label = meter_label(&format!("%Cpu{}", pair * 2 + offset));
+                    if offset == 0 {
+                        cpu_meter(&mut line, &label, *cpu, left);
+                    } else {
                         line.push(" ", PLAIN);
+                        cpu_meter(&mut line, &label, *cpu, right);
                     }
-                    let label = format!("%Cpu{:<digits$} ", pair * 2 + offset);
-                    cpu_meter(&mut line, &label, *cpu, half);
                 }
                 lines.push(line);
             }
@@ -1388,14 +1401,28 @@ fn memory_lines(
             lines.push(commit);
         }
         Summary::Bars => {
-            let half = width.saturating_sub(1) / 2;
-            let mut line = Line::default();
-            let physical = memory.physical_total;
-            memory_meter(&mut line, "Mem ", used, physical, MEMORY_USED, half);
-            line.push(" ", PLAIN);
-            let (commit, limit) = (memory.commit_total, memory.commit_limit);
-            memory_meter(&mut line, "Commit ", commit, limit, COMMIT_USED, half);
-            lines.push(line);
+            let mut physical = Line::default();
+            let total = memory.physical_total;
+            memory_meter(
+                &mut physical,
+                &meter_label("Mem"),
+                used,
+                total,
+                MEMORY_USED,
+                width,
+            );
+            lines.push(physical);
+            let mut commit = Line::default();
+            let (used, limit) = (memory.commit_total, memory.commit_limit);
+            memory_meter(
+                &mut commit,
+                &meter_label("Commit"),
+                used,
+                limit,
+                COMMIT_USED,
+                width,
+            );
+            lines.push(commit);
         }
     }
 }
@@ -1805,11 +1832,44 @@ mod tests {
             .filter(|line| line.starts_with("%Cpu"))
             .collect();
         assert_eq!(meters.len(), 2, "{lines:#?}");
-        assert!(meters[1].contains("] %Cpu3 ["), "{}", meters[1]);
-        assert!(
-            meters.iter().all(|line| line.chars().count() == 81),
-            "{meters:#?}"
-        );
+        assert!(meters[1].contains("] %Cpu3   ["), "{}", meters[1]);
+    }
+
+    #[test]
+    fn the_meters_form_one_aligned_block() {
+        let mut memory = snapshot(Vec::new());
+        memory.memory = Some(cash_win32::sysinfo::MemoryStatus {
+            physical_total: 32 << 30,
+            physical_available: 13 << 30,
+            commit_total: 33 << 30,
+            commit_limit: 54 << 30,
+            commit_peak: 40 << 30,
+        });
+        // As wide as the column header up to COMMAND, however wide the screen.
+        let block = header(false).chars().count();
+        for per_processor in [false, true] {
+            let mut view = View::screen(SortField::Cpu, 3.0, true);
+            view.per_processor = per_processor;
+            let meters: Vec<String> = summary(&memory, &view, 200)
+                .iter()
+                .map(Line::text)
+                .filter(|line| line.contains('['))
+                .collect();
+            assert_eq!(
+                meters.len(),
+                if per_processor { 4 } else { 3 },
+                "{meters:#?}"
+            );
+            for line in &meters {
+                assert_eq!(line.chars().count(), block, "{line:?}");
+                assert_eq!(line.find('['), Some(8), "{line:?}");
+            }
+            if per_processor {
+                let right: Vec<Option<usize>> =
+                    meters[..2].iter().map(|line| line.rfind('[')).collect();
+                assert_eq!(right[0], right[1], "{meters:#?}");
+            }
+        }
     }
 
     #[test]
@@ -1841,7 +1901,8 @@ mod tests {
             summary(&memory, view, 80).iter().map(Line::text).collect()
         };
         assert!(texts(&view)[2].starts_with("%Cpu(s) ["));
-        assert!(texts(&view)[3].starts_with("Mem ["));
+        assert!(texts(&view)[3].starts_with("Mem     ["));
+        assert!(texts(&view)[4].starts_with("Commit  ["));
         view.cpu = view.cpu.next();
         view.memory = view.memory.next();
         assert!(texts(&view)[2].starts_with("%Cpu(s):"));

@@ -1406,9 +1406,12 @@ full command line of another process, which means reading that process's PEB.
   shell itself). `j` and `k` no longer scroll: procps's `k` is kill.
 - **Meters and colour**, also decided with the user on 2026-09-29. CPU and memory show
   as meters by default, as htop and NTop draw them: user time green, kernel time red,
-  memory in use green, commit yellow, the reading at the right end. `t` and `m` cycle
-  each between meters, procps's text and hidden, as procps-ng's `t` and `m` do; with `1`
-  the processors' meters come two to a row. Colour is on when `top` draws on a terminal
+  memory in use green, commit yellow, the reading at the right end. They form one
+  aligned block, as wide as the column header up to `COMMAND` (or the screen, if
+  narrower), so a reading stays by its bar however wide the window is; labels are padded
+  so every `[` lines up, and Mem and Commit have a line each. `t` and `m` cycle each
+  between meters, procps's text and hidden, as procps-ng's `t` and `m` do; with `1` the
+  processors' meters come two to a row within that width. Colour is on when `top` draws on a terminal
   and off in batch mode or with `NO_COLOR`; `z` toggles it: the summary's figures bold,
   the owner coloured as `ls` colours a file's owner, the sort column cyan, and a process
   that ran in the last sample bold. Batch mode keeps procps's plain text.
