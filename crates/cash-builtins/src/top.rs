@@ -546,6 +546,8 @@ fn interact(
             .chain(std::iter::once(action))
         {
             act(action, &mut view, current, out, sampler, &mut next_refresh)?;
+            let (_, height) = terminal_size();
+            view.first_row = view.first_row.min(last_first_row(current, &view, height));
         }
 
         let (width, height) = terminal_size();
@@ -578,16 +580,12 @@ fn act(
             view.sort = field;
             view.first_row = 0;
         }
-        Action::Up => view.first_row = view.first_row.saturating_sub(1),
-        Action::Down => view.first_row = view.first_row.saturating_add(1),
-        Action::PageUp => {
-            view.first_row = view.first_row.saturating_sub(page(current, view, height));
-        }
-        Action::PageDown => {
-            view.first_row = view.first_row.saturating_add(page(current, view, height));
-        }
-        Action::Home => view.first_row = 0,
-        Action::End => view.first_row = usize::MAX,
+        Action::Up
+        | Action::Down
+        | Action::PageUp
+        | Action::PageDown
+        | Action::Home
+        | Action::End => scroll(view, action, current, height),
         Action::Tree => {
             view.tree = !view.tree;
             view.first_row = 0;
@@ -1040,6 +1038,32 @@ fn paint(
 fn page(snapshot: &Snapshot, view: &View, height: usize) -> usize {
     let (width, _) = terminal_size();
     table_height(summary(snapshot, view, width).len(), height)
+}
+
+/// Moves the table by a row, a page, or to either end, never past the last page.
+fn scroll(view: &mut View, action: Action, snapshot: &Snapshot, height: usize) {
+    let page = page(snapshot, view, height);
+    view.first_row = match action {
+        Action::Up => view.first_row.saturating_sub(1),
+        Action::Down => view.first_row.saturating_add(1),
+        Action::PageUp => view.first_row.saturating_sub(page),
+        Action::PageDown => view.first_row.saturating_add(page),
+        Action::Home => 0,
+        Action::End => usize::MAX,
+        _ => view.first_row,
+    }
+    .min(last_first_row(snapshot, view, height));
+}
+
+/// The first row of the last page: scrolling stops there.
+///
+/// The position is kept within it after every key, refresh and resize. Kept only where
+/// it was drawn, `End` and repeated `PgDn` ran it far past the last page, which still
+/// showed, and `Up` then seemed stuck until it had counted all the way back.
+fn last_first_row(snapshot: &Snapshot, view: &View, height: usize) -> usize {
+    arrange(&snapshot.rows, view)
+        .len()
+        .saturating_sub(page(snapshot, view, height))
 }
 
 /// Rows of the table that fit under `summary` lines, a spacer and the header, above a
@@ -1802,6 +1826,39 @@ mod tests {
         assert_eq!(pids.first(), Some(&1));
         // Three summary lines, a spacer and the header above; a spacer and status below.
         assert_eq!(pids.len(), 24 - 3 - 4);
+    }
+
+    #[test]
+    fn scrolling_stops_at_the_last_page_so_up_moves_at_once() {
+        // In the tree view, as it was found: page down past the end, page up, then Up.
+        let rows = (1..=100)
+            .map(|pid| row(pid, 1, pid.into(), "p.exe", 0.0))
+            .collect();
+        let current = snapshot(rows);
+        let mut view = View::new(SortField::Pid, 3.0);
+        view.tree = true;
+        let height = 24;
+        let last = last_first_row(&current, &view, height);
+        assert!(last > 0);
+
+        for _ in 0..10 {
+            scroll(&mut view, Action::PageDown, &current, height);
+        }
+        assert_eq!(view.first_row, last);
+        scroll(&mut view, Action::PageUp, &current, height);
+        let page_up = view.first_row;
+        assert_eq!(page_up, last - page(&current, &view, height));
+        scroll(&mut view, Action::Up, &current, height);
+        assert_eq!(view.first_row, page_up - 1);
+        scroll(&mut view, Action::Down, &current, height);
+        assert_eq!(view.first_row, page_up);
+
+        scroll(&mut view, Action::End, &current, height);
+        assert_eq!(view.first_row, last);
+        scroll(&mut view, Action::Up, &current, height);
+        assert_eq!(view.first_row, last - 1);
+        let (_, pids) = frame(&current, &view, Some((80, height)));
+        assert_eq!(pids.first().copied(), u32::try_from(last).ok());
     }
 
     #[test]
