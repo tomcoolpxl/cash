@@ -1969,6 +1969,34 @@ owner and group pale yellow when they are this user and grey for any other accou
 green within the hour. Each column is padded before it is coloured, and `--color=never`
 or a pipe leaves it all plain. Names still take `LS_COLORS`.
 
+### D68 — The console is put back before each prompt
+
+After `k3d cluster create` in a cash tab, letters still appeared but Enter and Backspace
+did nothing, until the tab was closed. k3d had turned on `ENABLE_VIRTUAL_TERMINAL_INPUT`
+and exited without turning it off; the console then hands over Enter as `\r` and
+Backspace as `\x7f` instead of as keys, and the line editor reads keys. Bash on Linux
+has the same exposure to a program that leaves the terminal in raw mode, and `reset`
+(D55) was the only way back. Decided with the user, 2026-09-29: cash puts it right
+before every prompt, silently (`cash_win32::console::repair_before_prompt`).
+
+- **Console modes**, changed only where wrong: VT input off; processed output, wrapping
+  and VT processing on; line feeds returning to the margin
+  (`DISABLE_NEWLINE_AUTO_RETURN` off). The line editor's own raw mode is its business
+  and is left to it.
+- **The UTF-8 code page** (D41), which `chcp` or a program may have changed.
+- **The terminal**, only when a program ran since the last prompt, since no program can
+  ask the terminal what it left on: attributes reset, cursor shown, mouse tracking and
+  focus reporting off, cursor keys and keypad in their normal modes, the cursor shape
+  back to the profile's, lines wrapping at the edge, and the ASCII character set, since
+  a curses program that dies while drawing boxes leaves letters showing as line pieces.
+  Not the alternate screen: leaving it also restores a saved cursor position, which
+  would move a healthy prompt.
+
+Keys typed while the program still ran are the program's: the console has already
+turned them into VT text for it, and cash does not translate them back.
+`conpty_a_program_that_breaks_the_console_does_not_break_the_prompt` breaks all of the
+modes and the code page from a child and then types a command.
+
 ---
 
 ## 4. Deliberate divergences from bash

@@ -236,7 +236,13 @@ impl<'a, IB: InputBackend, SE: cash_core::ShellExtensions> InteractiveShell<'a, 
             }
 
             // Compose the prompt.
-            Self::compose_prompt(&mut shell, &self.terminal_integration).await?
+            let prompt = Self::compose_prompt(&mut shell, &self.terminal_integration).await?;
+
+            // A program can leave the console as the line editor cannot read it or the
+            // prompt cannot be drawn: `k3d cluster create` left VT input on, and Enter and
+            // Backspace stopped working. Put it back, after the prompt's own commands ran.
+            let _ = cash_win32::console::repair_before_prompt();
+            prompt
         } else {
             InteractivePrompt::default()
         };

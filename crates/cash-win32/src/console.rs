@@ -172,6 +172,122 @@ pub fn restore_modes() -> io::Result<bool> {
     Ok(true)
 }
 
+/// Whether cash has started a program since the last prompt: then the terminal may need
+/// putting back ([`repair_before_prompt`]).
+static PROGRAM_STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Notes that a program was started, for [`repair_before_prompt`].
+pub fn note_program_started() {
+    PROGRAM_STARTED.store(true, Ordering::Relaxed);
+}
+
+/// `ENABLE_VIRTUAL_TERMINAL_INPUT`: Windows then hands over Enter as `\r` and Backspace as
+/// `\x7f` rather than as keys. Letters still arrive, but the line editor reads keys, so
+/// Enter and Backspace do nothing. `k3d cluster create` left it on (2026-09-29).
+const VT_INPUT: u32 = 0x0200;
+/// Output modes the prompt needs: processed output, wrapping at the edge, VT sequences.
+const NEEDED_OUTPUT: u32 = 0x0001 | 0x0002 | 0x0004;
+/// `DISABLE_NEWLINE_AUTO_RETURN`: a line feed then stays in its column, and output steps
+/// down the screen diagonally.
+const NO_AUTO_RETURN: u32 = 0x0008;
+
+/// The terminal state a program may leave behind, put back before the prompt after one ran.
+///
+/// Attributes reset, cursor shown, mouse tracking (1000, 1002, 1003, 1006, 1015) and focus
+/// reporting off, cursor keys and keypad in their normal modes, the cursor shape the
+/// terminal's profile gives, lines wrapping at the edge, and ASCII in G0: a curses program
+/// that dies while drawing boxes leaves letters showing as line pieces. Not the alternate
+/// screen: leaving it also restores a saved cursor position, which would move a healthy
+/// prompt.
+pub const TERMINAL_RESET: &str = "\x1b[0m\x1b[?25h\x1b[?1000l\x1b[?1002l\x1b[?1003l\
+                                  \x1b[?1006l\x1b[?1015l\x1b[?1004l\x1b[?1l\x1b>\x1b[0 q\
+                                  \x1b[?7h\x1b(B\x0f";
+
+/// What [`repair_before_prompt`] found wrong and put back.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct Repaired {
+    /// VT input was on.
+    pub input: bool,
+    /// An output mode the prompt needs was off, or line feeds had stopped returning.
+    pub output: bool,
+    /// The code page was not UTF-8.
+    pub code_page: bool,
+    /// A program ran, and the terminal reset was sent.
+    pub terminal: bool,
+}
+
+/// Puts back, before a prompt, the console state a program may have left wrong (D68).
+///
+/// Wrong is where the line editor could not read keys, or the prompt could not be drawn
+/// (decided with the user, 2026-09-29, after `k3d cluster create` left VT input on). Only
+/// what is wrong is changed, silently: VT input off; processed output, wrapping and VT
+/// processing on, and line feeds returning to the margin; the UTF-8 code page (D41); and,
+/// when a program ran since the last prompt, [`TERMINAL_RESET`]. The line editor's own
+/// raw mode is its business and is left to it. Without a console, nothing is done.
+pub fn repair_before_prompt() -> Repaired {
+    use std::io::Write as _;
+    use std::os::windows::io::AsRawHandle as _;
+    use windows_sys::Win32::System::Console::{
+        GetConsoleCP, GetConsoleMode, GetConsoleOutputCP, SetConsoleMode,
+    };
+
+    let mut repaired = Repaired::default();
+    let open = |name: &str| {
+        std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(name)
+            .ok()
+    };
+    let mode = |file: &std::fs::File| {
+        let mut mode = 0u32;
+        // SAFETY: an open console handle owned by `file`, and a valid out-parameter.
+        (unsafe { GetConsoleMode(file.as_raw_handle(), &raw mut mode) } != 0).then_some(mode)
+    };
+    let set = |file: &std::fs::File, mode: u32| {
+        // SAFETY: an open console handle owned by `file`, alive for the call.
+        unsafe { SetConsoleMode(file.as_raw_handle(), mode) != 0 }
+    };
+
+    let input = open("CONIN$");
+    if let Some(input) = &input
+        && let Some(current) = mode(input)
+        && current & VT_INPUT != 0
+    {
+        repaired.input = set(input, current & !VT_INPUT);
+    }
+    let output = open("CONOUT$");
+    if let Some(output) = &output
+        && let Some(current) = mode(output)
+    {
+        let wanted = (current | NEEDED_OUTPUT) & !NO_AUTO_RETURN;
+        if wanted != current {
+            repaired.output = set(output, wanted);
+        }
+    }
+    if input.is_none() && output.is_none() {
+        return repaired;
+    }
+
+    // SAFETY: plain calls without arguments.
+    let input_page = unsafe { GetConsoleCP() };
+    // SAFETY: as above.
+    let output_page = unsafe { GetConsoleOutputCP() };
+    if input_page != CODE_PAGE_UTF8 || output_page != CODE_PAGE_UTF8 {
+        repaired.code_page = set_utf8_code_page().is_ok();
+    }
+
+    if PROGRAM_STARTED.swap(false, Ordering::Relaxed)
+        && let Some(mut output) = output
+    {
+        repaired.terminal = output
+            .write_all(TERMINAL_RESET.as_bytes())
+            .and_then(|()| output.flush())
+            .is_ok();
+    }
+    repaired
+}
+
 /// Set the console to UTF-8 (D41).
 ///
 /// Fixes console *display* and console-attached children. It deliberately does not claim

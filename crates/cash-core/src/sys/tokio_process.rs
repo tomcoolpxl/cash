@@ -28,6 +28,9 @@ pub(crate) fn spawn(
     };
 
     let child = command.spawn()?;
+    // A program on the console may leave it as the prompt cannot use it; the prompt puts
+    // it back (`repair_before_prompt`).
+    cash_win32::console::note_program_started();
 
     // cash (D6/D22): give the process its own nested job object so its descendants can
     // be reaped as a unit. Because it was created suspended, it cannot execute a single

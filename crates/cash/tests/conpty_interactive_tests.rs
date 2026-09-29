@@ -70,6 +70,145 @@ fn start_reedline_cash() -> ConPtySession {
     .expect("failed to start cash.exe attached to Win32 ConPTY")
 }
 
+/// A PowerShell script that leaves the console as `k3d cluster create` did (2026-09-29),
+/// and worse: `break` turns VT input on, VT processing off, stops line feeds returning to
+/// the margin and sets code page 437, then exits without putting anything back; `report`
+/// prints the console's state.
+const CONSOLE_STATE_PS1: &str = r#"param([string]$What)
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class ConsoleState {
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+    static extern IntPtr CreateFileW(string n, uint a, uint s, IntPtr sa, uint d, uint f, IntPtr t);
+    [DllImport("kernel32.dll")] static extern bool GetConsoleMode(IntPtr h, out uint m);
+    [DllImport("kernel32.dll")] static extern bool SetConsoleMode(IntPtr h, uint m);
+    [DllImport("kernel32.dll")] static extern bool SetConsoleCP(uint cp);
+    [DllImport("kernel32.dll")] static extern bool SetConsoleOutputCP(uint cp);
+    [DllImport("kernel32.dll")] static extern uint GetConsoleCP();
+    [DllImport("kernel32.dll")] static extern uint GetConsoleOutputCP();
+    static IntPtr Open(string n) { return CreateFileW(n, 0xC0000000u, 3, IntPtr.Zero, 3, 0, IntPtr.Zero); }
+    public static void Break() {
+        uint m;
+        IntPtr i = Open("CONIN$"); GetConsoleMode(i, out m); SetConsoleMode(i, m | 0x200u);
+        IntPtr o = Open("CONOUT$"); GetConsoleMode(o, out m); SetConsoleMode(o, (m & ~0x4u) | 0x8u);
+        SetConsoleCP(437); SetConsoleOutputCP(437);
+    }
+    public static string Report() {
+        uint i, o;
+        GetConsoleMode(Open("CONIN$"), out i); GetConsoleMode(Open("CONOUT$"), out o);
+        return "vt_input=" + ((i & 0x200u) != 0) + " vt_output=" + ((o & 0x4u) != 0)
+            + " no_auto_return=" + ((o & 0x8u) != 0) + " cp=" + GetConsoleCP() + "/" + GetConsoleOutputCP();
+    }
+}
+'@
+if ($What -eq 'break') { [ConsoleState]::Break(); [Console]::Out.WriteLine('BROKE_IT') }
+else { [Console]::Out.WriteLine('STATE ' + [ConsoleState]::Report()) }
+"#;
+
+/// A program that leaves the console in a state the line editor cannot read is put right
+/// before the next prompt (decided with the user, 2026-09-29). `k3d cluster create` left
+/// VT input on, and Enter and Backspace stopped working until the shell was closed.
+#[test]
+fn conpty_a_program_that_breaks_the_console_does_not_break_the_prompt() {
+    let dir = std::env::temp_dir().join(format!("cash-console-state-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let script = dir.join("console-state.ps1");
+    std::fs::write(&script, CONSOLE_STATE_PS1).unwrap();
+
+    // PowerShell 7 when installed, as on GitHub's runners; Windows PowerShell otherwise.
+    let system_root = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into());
+    let pwsh = std::env::var("ProgramFiles")
+        .map(|files| PathBuf::from(files).join(r"PowerShell\7\pwsh.exe"))
+        .ok()
+        .filter(|pwsh| pwsh.is_file())
+        .unwrap_or_else(|| {
+            PathBuf::from(&system_root).join(r"System32\WindowsPowerShell\v1.0\powershell.exe")
+        });
+    let run = |what: &str| {
+        format!(
+            "'{}' -NoProfile -ExecutionPolicy Bypass -File '{}' {what}\r",
+            pwsh.display(),
+            script.display()
+        )
+    };
+
+    // PowerShell needs more of the environment than cash does to start at all.
+    let temp = std::env::temp_dir();
+    let temp = temp.to_string_lossy();
+    let path = std::env::var("PATH").unwrap_or_default();
+    let local = std::env::var("LOCALAPPDATA").unwrap_or_default();
+    let profile = std::env::var("USERPROFILE").unwrap_or_default();
+    let mut session = ConPtySession::start(
+        &PathBuf::from(CASH),
+        &[
+            "--noprofile",
+            "--norc",
+            "--no-config",
+            "--disable-color",
+            "--input-backend=reedline",
+            "-i",
+        ],
+        Some(&[
+            ("HISTFILE", ""),
+            ("PS1", "PROMPT$ "),
+            ("TEMP", &temp),
+            ("TMP", &temp),
+            ("SystemRoot", &system_root),
+            ("PATH", &path),
+            ("LOCALAPPDATA", &local),
+            ("USERPROFILE", &profile),
+        ]),
+    )
+    .expect("failed to start cash.exe attached to Win32 ConPTY");
+    session
+        .expect("PROMPT$", Duration::from_secs(10))
+        .expect("prompt displayed");
+
+    session.send(&run("break")).unwrap();
+    session
+        .expect("BROKE_IT", Duration::from_secs(30))
+        .expect("the script did not break the console");
+
+    // Keys typed while the script still runs are its own, and the console already turns
+    // them into VT text for it; so the next line is typed once the prompt is back, as a
+    // user would.
+    let broke = session.output().rfind("BROKE_IT").unwrap();
+    let start = std::time::Instant::now();
+    while !session
+        .output()
+        .get(broke..)
+        .is_some_and(|after| after.contains("PROMPT$"))
+    {
+        assert!(
+            start.elapsed() < Duration::from_secs(10),
+            "no prompt after the script ended"
+        );
+        session.read_available().unwrap();
+        std::thread::sleep(Duration::from_millis(15));
+    }
+
+    // Enter must still end the line: without the repair it arrives as a bare `\r`, not
+    // as the Enter key, and the line editor waits on.
+    session.send("echo SUM=$((40+2))\r").unwrap();
+    session
+        .expect("SUM=42", Duration::from_secs(5))
+        .expect("Enter did not reach the line editor after the console was broken");
+
+    session.send(&run("report")).unwrap();
+    session
+        .expect(
+            "STATE vt_input=False vt_output=True no_auto_return=False cp=65001/65001",
+            Duration::from_secs(30),
+        )
+        .expect("the console was not put back before the prompt");
+
+    session.send("exit 0\r").unwrap();
+    let code = session.wait().expect("process did not exit");
+    assert_eq!(code, 0);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// Keys that arrive after Enter belong to the command Enter starts. The line editor reads
 /// the console in batches (vendor/crossterm/CASH-PATCHES.md), and a batch that ran past
 /// Enter would keep the answer below from `read`, handing it to the next prompt instead.
