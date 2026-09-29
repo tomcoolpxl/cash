@@ -304,9 +304,13 @@ memory, and a live process table, refreshed every 3 seconds as procps does. It d
 the terminal's alternate screen and overwrites each frame in one piece, so it neither
 flickers nor fills the scrollback, and quitting puts your screen back. Press `?` or `h`
 for its compact help; `P`, `M`, `T`, and `N` sort by CPU, memory, accumulated CPU time,
-and PID, while the arrow and page keys scroll. `V` shows the process tree, `1` a CPU line
-per processor, `o` or `/` only names containing some text (`=` shows all again), `d`
-changes the interval, and `k` sends a signal by `kill`'s rules. Enter, Space, or `r`
+and PID, while the arrow and page keys scroll. CPU and memory show as meters, as in htop;
+`t` and `m` switch them to procps's text or hide them, and `1` gives each processor its
+own. It is in colour on a terminal (`z` turns colour off; `NO_COLOR` too): figures in
+bold, your processes as `ls` colours your files, the sort column picked out, and
+processes that ran in the last sample in bold. `V` shows the process tree, `o` or `/`
+only names containing some text (`=` shows all again), `d` changes the interval, and `k`
+sends a signal by `kill`'s rules. Enter, Space, or `r`
 refreshes immediately, and `q` or Escape exits. Batch mode (`top -b`) remains plain text
 for pipes and logs. Sampling is local and cheap: one snapshot of every process and
 thread, each process's CPU and memory, and machine CPU, uptime and memory; a process's

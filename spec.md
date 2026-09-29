@@ -1401,9 +1401,20 @@ full command line of another process, which means reading that process's PEB.
   to 62 ms of CPU, and each further refresh from 27 to 5 ms, chiefly because a process's
   account is now looked up once rather than at every refresh.
 - **Keys** beyond sorting and scrolling, from procps's `top` and NTop: `V` a tree, off by
-  default; `1` a CPU line per processor; `o` or `/` only names containing some text, `=`
-  all again; `d` the interval; `k` a signal by `kill`'s rules (never to the shell itself).
-  `j` and `k` no longer scroll: procps's `k` is kill.
+  default; `1` a CPU meter or line per processor; `o` or `/` only names containing some
+  text, `=` all again; `d` the interval; `k` a signal by `kill`'s rules (never to the
+  shell itself). `j` and `k` no longer scroll: procps's `k` is kill.
+- **Meters and colour**, also decided with the user on 2026-09-29. CPU and memory show
+  as meters by default, as htop and NTop draw them: user time green, kernel time red,
+  memory in use green, commit yellow, the reading at the right end. `t` and `m` cycle
+  each between meters, procps's text and hidden, as procps-ng's `t` and `m` do; with `1`
+  the processors' meters come two to a row. Colour is on when `top` draws on a terminal
+  and off in batch mode or with `NO_COLOR`; `z` toggles it: the summary's figures bold,
+  the owner coloured as `ls` colours a file's owner, the sort column cyan, and a process
+  that ran in the last sample bold. Batch mode keeps procps's plain text.
+- **Columns stay put.** `TIME+` coarsens as time grows, as procps does (`1423:07.21`
+  becomes `1423:07`, then hours, days and weeks), and `%CPU` drops its decimal past
+  999.9, so no value pushes `COMMAND` out of line.
 
 The native `tree` covers the common, cheap filesystem view: `tree [DIRECTORY]`, `-a`,
 `-d`, `-L LEVEL`, `-f`, `--dirsfirst`, and `--noreport`. It prints directory links and
