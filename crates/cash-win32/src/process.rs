@@ -275,6 +275,25 @@ pub struct ProcessDetails {
 /// listing does this for every row.
 #[must_use]
 pub fn details(pid: u32) -> ProcessDetails {
+    details_of(pid, true)
+}
+
+/// [`details`] without the account, which a refresh of `top` has already: finding it
+/// is a call into Windows' security service for every process, and a process's
+/// account never changes. [`owner`] finds it.
+#[must_use]
+pub fn usage(pid: u32) -> ProcessDetails {
+    details_of(pid, false)
+}
+
+/// The account a process runs as, without its domain: `ps`'s `USER`.
+#[must_use]
+pub fn owner(pid: u32) -> Option<String> {
+    let process = ProcessHandle::open(pid, PROCESS_QUERY_LIMITED_INFORMATION)?;
+    token_user(process.0)
+}
+
+fn details_of(pid: u32, with_user: bool) -> ProcessDetails {
     use windows_sys::Win32::System::ProcessStatus::{
         K32GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS, PROCESS_MEMORY_COUNTERS_EX2,
     };
@@ -344,7 +363,9 @@ pub fn details(pid: u32) -> ProcessDetails {
         }
     }
 
-    details.user = token_user(handle);
+    if with_user {
+        details.user = token_user(handle);
+    }
 
     // SAFETY: closing a handle we just opened, exactly once.
     unsafe {

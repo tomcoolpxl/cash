@@ -300,15 +300,21 @@ callee re-splits (D32); `ps` and `top` print pids that `kill` must accept (D22).
 answer is no, cash stays out of the way.
 
 `top` uses the familiar procps overview with uptime, task and CPU summaries, physical
-memory, and a live process table. Press `?` or `h` for its compact help; `P`, `M`, `T`,
-and `N` sort by CPU, memory, accumulated CPU time, and PID, while the arrow and page keys
-scroll. Enter, Space, or `r` refreshes immediately, and `q` or Escape exits. Batch mode
-(`top -b`) remains plain text for pipes and logs. Sampling is local and cheap: process
-CPU/memory plus machine CPU, uptime, memory, and one local PDH processor-queue counter.
-The displayed load average is a session-local Windows analogue: busy CPU equivalents plus
-ready threads, exponentially averaged over 1, 5, and 15 minutes. Windows does not preserve
-that history before `top` starts, and the value does not include Linux's uninterruptible
-sleep state. Swap, nice values, and the Linux buffer/cache split are omitted. `Commit`
+memory, and a live process table, refreshed every 3 seconds as procps does. It draws on
+the terminal's alternate screen and overwrites each frame in one piece, so it neither
+flickers nor fills the scrollback, and quitting puts your screen back. Press `?` or `h`
+for its compact help; `P`, `M`, `T`, and `N` sort by CPU, memory, accumulated CPU time,
+and PID, while the arrow and page keys scroll. `V` shows the process tree, `1` a CPU line
+per processor, `o` or `/` only names containing some text (`=` shows all again), `d`
+changes the interval, and `k` sends a signal by `kill`'s rules. Enter, Space, or `r`
+refreshes immediately, and `q` or Escape exits. Batch mode (`top -b`) remains plain text
+for pipes and logs. Sampling is local and cheap: one snapshot of every process and
+thread, each process's CPU and memory, and machine CPU, uptime and memory; a process's
+account is looked up once. The load average follows Linux's definition, tasks running or
+waiting for a processor: processors busy over the interval plus threads ready to run,
+exponentially averaged over 1, 5, and 15 minutes. Windows does not preserve that history
+before `top` starts, and the value does not include Linux's uninterruptible sleep state.
+Swap, nice values, and the Linux buffer/cache split are omitted. `Commit`
 shows Windows committed memory against its limit and peak. `PRI` is the
 Windows base scheduling priority; on supported Windows releases, `SHR` is the shared part
 of the resident working set. The `S` column means no CPU time accrued in the latest

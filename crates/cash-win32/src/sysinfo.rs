@@ -36,93 +36,267 @@ pub struct MemoryStatus {
     pub commit_peak: u64,
 }
 
-/// A reusable local query for Windows' ready-to-run processor queue.
+/// One process in a [`SystemSnapshot`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SnapshotProcess {
+    /// Its process id.
+    pub pid: u32,
+    /// The id of the process that started it. Windows reuses ids, so that process may
+    /// have exited and the id now name another.
+    pub parent_pid: u32,
+    /// Its image name, as Task Manager shows it.
+    pub name: String,
+    /// The base priority its threads start at.
+    pub base_priority: i32,
+}
+
+/// Every process on the machine, and how many threads wait for a processor.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SystemSnapshot {
+    /// The processes, ordered by pid.
+    pub processes: Vec<SnapshotProcess>,
+    /// Threads ready to run that no processor is running: the processor queue.
+    pub ready_threads: u32,
+}
+
+/// Thread states of a thread that waits for a processor: ready, chosen to run next on
+/// one (standby), and ready but not yet given one (deferred ready). The first two are
+/// the states Windows' "Thread State" performance counter documents as 1 and 3.
+const READY: u32 = 1;
+const STANDBY: u32 = 3;
+const DEFERRED_READY: u32 = 7;
+
+/// `SystemProcessInformation` and `SystemProcessorPerformanceInformation`.
+const PROCESS_INFORMATION: i32 = 5;
+const PROCESSOR_PERFORMANCE_INFORMATION: i32 = 8;
+
+/// `STATUS_INFO_LENGTH_MISMATCH`: the buffer was too small.
+#[expect(
+    clippy::cast_possible_wrap,
+    reason = "NTSTATUS error codes are negative i32 values written as hex"
+)]
+const INFO_LENGTH_MISMATCH: i32 = 0xC000_0004_u32 as i32;
+
+type NtQuerySystemInformationFn =
+    unsafe extern "system" fn(i32, *mut core::ffi::c_void, u32, *mut u32) -> i32;
+
+/// `NtQuerySystemInformation`, looked up at run time as Microsoft advises: it documents
+/// the function, and the members read here, as possibly changing or going in a future
+/// Windows, and a lookup that fails leaves the callers to do without.
+fn nt_query_system_information() -> Option<NtQuerySystemInformationFn> {
+    use std::sync::LazyLock;
+    use windows_sys::Win32::System::LibraryLoader::{GetModuleHandleA, GetProcAddress};
+
+    static QUERY: LazyLock<Option<NtQuerySystemInformationFn>> = LazyLock::new(|| {
+        // SAFETY: ntdll is loaded into every Windows process.
+        let ntdll = unsafe { GetModuleHandleA(c"ntdll.dll".as_ptr().cast()) };
+        if ntdll.is_null() {
+            return None;
+        }
+        // SAFETY: the module handle is valid and the name is NUL terminated.
+        let found = unsafe { GetProcAddress(ntdll, c"NtQuerySystemInformation".as_ptr().cast()) };
+        found.map(|function| {
+            // SAFETY: the documented signature of NtQuerySystemInformation.
+            unsafe { std::mem::transmute::<_, NtQuerySystemInformationFn>(function) }
+        })
+    });
+    *QUERY
+}
+
+/// Takes [`SystemSnapshot`]s, keeping one buffer between them.
 ///
-/// This is the inexpensive `\\System\\Processor Queue Length` performance counter.
-/// It contains threads that are ready but waiting for a processor; it does not inspect
-/// processes or contact another machine.
-pub struct ProcessorQueue {
-    query: windows_sys::Win32::System::Performance::PDH_HQUERY,
-    counter: windows_sys::Win32::System::Performance::PDH_HCOUNTER,
+/// One `NtQuerySystemInformation(SystemProcessInformation)` call, the one Toolhelp's
+/// process snapshot is built on, returns every process followed by its threads, each
+/// thread with its state. Counting the threads that wait for a processor gives the
+/// processor queue that the `\System\Processor Queue Length` performance counter
+/// reports, without starting performance counters: opening that counter cost `top`
+/// about 350 ms of CPU at every start, and some Windows builds lack it.
+#[derive(Default)]
+pub struct SystemQuery {
+    /// `u64`s so that the structures in it are aligned.
+    buffer: Vec<u64>,
 }
 
-// SAFETY: PDH real-time query handles are not thread-affine. `sample` requires mutable
-// access, so a moved query is still collected serially, and `Drop` owns the only close.
-unsafe impl Send for ProcessorQueue {}
-
-impl ProcessorQueue {
-    /// Open the local, language-neutral processor-queue counter.
-    #[must_use]
-    pub fn open() -> Option<Self> {
-        use windows_sys::Win32::System::Performance::{
-            PdhAddEnglishCounterW, PdhCloseQuery, PdhOpenQueryW,
-        };
-
-        let mut query = std::ptr::null_mut();
-        // SAFETY: the data-source pointer is null for the local real-time source and
-        // `query` is a valid out-parameter.
-        if unsafe { PdhOpenQueryW(std::ptr::null(), 0, &raw mut query) } != ERROR_SUCCESS {
-            return None;
+impl SystemQuery {
+    /// Every process and the processor queue now; `None` where Windows will not say.
+    pub fn take(&mut self) -> Option<SystemSnapshot> {
+        let query = nt_query_system_information()?;
+        // Processes and threads come and go between asking for the size and asking for
+        // the data, so the buffer grows with room to spare, a few times at most.
+        for _ in 0..4 {
+            if self.buffer.is_empty() {
+                self.buffer.resize(1 << 17, 0);
+            }
+            let capacity = u32::try_from(self.buffer.len() * 8).unwrap_or(u32::MAX);
+            let mut needed = 0u32;
+            // SAFETY: the buffer holds `capacity` writable bytes and `needed` is a valid
+            // out-parameter.
+            let status = unsafe {
+                query(
+                    PROCESS_INFORMATION,
+                    self.buffer.as_mut_ptr().cast(),
+                    capacity,
+                    &raw mut needed,
+                )
+            };
+            if status == INFO_LENGTH_MISMATCH {
+                let words = (needed as usize).div_ceil(8) + (needed as usize).div_ceil(8) / 4;
+                self.buffer.resize(words.max(self.buffer.len() * 2), 0);
+                continue;
+            }
+            if status < 0 {
+                return None;
+            }
+            let length = (needed as usize).min(self.buffer.len() * 8);
+            // SAFETY: the call succeeded and wrote `length` bytes of process records.
+            return unsafe { parse_processes(self.buffer.as_ptr().cast(), length) };
         }
-
-        let path: Vec<u16> = "\\System\\Processor Queue Length\0"
-            .encode_utf16()
-            .collect();
-        let mut counter = std::ptr::null_mut();
-        // SAFETY: `query` is open, `path` is NUL terminated, and `counter` is a valid
-        // out-parameter. English counter names avoid locale-dependent registry names.
-        if unsafe { PdhAddEnglishCounterW(query, path.as_ptr(), 0, &raw mut counter) }
-            != ERROR_SUCCESS
-        {
-            // SAFETY: `query` was opened successfully above and has not been closed.
-            let _ = unsafe { PdhCloseQuery(query) };
-            return None;
-        }
-
-        Some(Self { query, counter })
-    }
-
-    /// Collect the current number of ready threads waiting for processor time.
-    #[must_use]
-    pub fn sample(&mut self) -> Option<f64> {
-        use windows_sys::Win32::System::Performance::{
-            PDH_CSTATUS_NEW_DATA, PDH_CSTATUS_VALID_DATA, PDH_FMT_COUNTERVALUE, PDH_FMT_DOUBLE,
-            PdhCollectQueryData, PdhGetFormattedCounterValue,
-        };
-
-        // SAFETY: the query remains open for `self`'s lifetime.
-        if unsafe { PdhCollectQueryData(self.query) } != ERROR_SUCCESS {
-            return None;
-        }
-
-        let mut value = PDH_FMT_COUNTERVALUE::default();
-        // SAFETY: `counter` belongs to the open query and `value` is a valid out-parameter.
-        if unsafe {
-            PdhGetFormattedCounterValue(
-                self.counter,
-                PDH_FMT_DOUBLE,
-                std::ptr::null_mut(),
-                &raw mut value,
-            )
-        } != ERROR_SUCCESS
-            || !matches!(value.CStatus, PDH_CSTATUS_VALID_DATA | PDH_CSTATUS_NEW_DATA)
-        {
-            return None;
-        }
-
-        // SAFETY: `PDH_FMT_DOUBLE` selects the union's `doubleValue` member.
-        let queue = unsafe { value.Anonymous.doubleValue };
-        queue.is_finite().then_some(queue.max(0.0))
+        None
     }
 }
 
-impl Drop for ProcessorQueue {
-    fn drop(&mut self) {
-        use windows_sys::Win32::System::Performance::PdhCloseQuery;
+/// Reads the process records `NtQuerySystemInformation` wrote at `base`, `length` bytes.
+///
+/// # Safety
+///
+/// `base` must point to `length` readable bytes holding the records the call wrote.
+unsafe fn parse_processes(base: *const u8, length: usize) -> Option<SystemSnapshot> {
+    use windows_sys::Win32::System::WindowsProgramming::{
+        SYSTEM_PROCESS_INFORMATION, SYSTEM_THREAD_INFORMATION,
+    };
 
-        // SAFETY: the query is owned by `self` and is closed exactly once here.
-        let _ = unsafe { PdhCloseQuery(self.query) };
+    let process_size = size_of::<SYSTEM_PROCESS_INFORMATION>();
+    let thread_size = size_of::<SYSTEM_THREAD_INFORMATION>();
+    let mut processes = Vec::new();
+    let mut ready_threads = 0u32;
+    let mut offset = 0usize;
+
+    loop {
+        if offset.checked_add(process_size)? > length {
+            return None;
+        }
+        let record = base.wrapping_add(offset);
+        // SAFETY: the record lies within the buffer, checked just above.
+        let process: SYSTEM_PROCESS_INFORMATION =
+            unsafe { std::ptr::read_unaligned(record.cast()) };
+        let pid = u32::try_from(process.UniqueProcessId as usize).unwrap_or(u32::MAX);
+        // The documentation now names this member InheritedFromUniqueProcessId.
+        let parent_pid = u32::try_from(process.Reserved2 as usize).unwrap_or(0);
+
+        let threads = process.NumberOfThreads as usize;
+        let threads_at = offset + process_size;
+        if threads_at.checked_add(threads.checked_mul(thread_size)?)? > length {
+            return None;
+        }
+        // The Idle process's threads stand for idle processors, never for work.
+        if pid != 0 {
+            for index in 0..threads {
+                let record = base.wrapping_add(threads_at + index * thread_size);
+                // SAFETY: every thread record lies within the buffer, checked above.
+                let thread: SYSTEM_THREAD_INFORMATION =
+                    unsafe { std::ptr::read_unaligned(record.cast()) };
+                if matches!(thread.ThreadState, READY | STANDBY | DEFERRED_READY) {
+                    ready_threads = ready_threads.saturating_add(1);
+                }
+            }
+        }
+
+        // SAFETY: the name is read only where it lies within the buffer.
+        let name = unsafe { image_name(base, length, &process.ImageName) }
+            .unwrap_or_else(|| String::from(if pid == 0 { "[System Process]" } else { "?" }));
+        processes.push(SnapshotProcess {
+            pid,
+            parent_pid,
+            name,
+            base_priority: process.BasePriority,
+        });
+
+        if process.NextEntryOffset == 0 {
+            break;
+        }
+        offset = offset.checked_add(process.NextEntryOffset as usize)?;
     }
+
+    processes.sort_by_key(|process| process.pid);
+    Some(SystemSnapshot {
+        processes,
+        ready_threads,
+    })
+}
+
+/// A process record's image name, where it points into the buffer at `base`.
+///
+/// # Safety
+///
+/// `base` must point to `length` readable bytes.
+unsafe fn image_name(
+    base: *const u8,
+    length: usize,
+    name: &windows_sys::Win32::Foundation::UNICODE_STRING,
+) -> Option<String> {
+    let start = name.Buffer as usize;
+    let bytes = usize::from(name.Length);
+    let buffer_start = base as usize;
+    if name.Buffer.is_null()
+        || bytes == 0
+        || start < buffer_start
+        || start.checked_add(bytes)? > buffer_start.checked_add(length)?
+    {
+        return None;
+    }
+    let units: Vec<u16> = (0..bytes / 2)
+        .map(|index| {
+            let unit = name.Buffer.wrapping_add(index);
+            // SAFETY: the name lies within the buffer, checked above; read unaligned.
+            unsafe { std::ptr::read_unaligned(unit) }
+        })
+        .collect();
+    Some(String::from_utf16_lossy(&units))
+}
+
+/// Cumulative idle, kernel and user time of each logical processor (of the calling
+/// thread's processor group), for `top`'s per-processor lines.
+///
+/// `GetSystemTimes` gives only the sum; this is the documented per-processor form of the
+/// same counters, through `NtQuerySystemInformation`.
+#[must_use]
+pub fn processor_times() -> Option<Vec<CpuTimes>> {
+    use windows_sys::Win32::System::WindowsProgramming::SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION;
+
+    /// More processors than one processor group holds.
+    const MOST: usize = 256;
+
+    let query = nt_query_system_information()?;
+    let mut buffer = vec![SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION::default(); MOST];
+    let capacity =
+        u32::try_from(MOST * size_of::<SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION>()).ok()?;
+    let mut written = 0u32;
+    // SAFETY: the buffer holds `capacity` writable bytes of the structure asked for, and
+    // `written` is a valid out-parameter.
+    let status = unsafe {
+        query(
+            PROCESSOR_PERFORMANCE_INFORMATION,
+            buffer.as_mut_ptr().cast(),
+            capacity,
+            &raw mut written,
+        )
+    };
+    if status < 0 {
+        return None;
+    }
+    let count =
+        (written as usize / size_of::<SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION>()).min(MOST);
+    let as_ticks = |value: i64| u64::try_from(value).unwrap_or(0);
+    Some(
+        buffer[..count]
+            .iter()
+            .map(|processor| CpuTimes {
+                idle: as_ticks(processor.IdleTime),
+                kernel: as_ticks(processor.KernelTime),
+                user: as_ticks(processor.UserTime),
+            })
+            .collect(),
+    )
 }
 
 /// How long the machine has been up.
@@ -525,4 +699,208 @@ fn registry_dword(subkey: &str, value: &str) -> Option<u32> {
 /// A NUL-terminated UTF-16 copy, as every `W` entry point wants.
 fn wide(value: &str) -> Vec<u16> {
     value.encode_utf16().chain(std::iter::once(0)).collect()
+}
+
+#[cfg(test)]
+#[allow(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    reason = "tests assert loudly on failure"
+)]
+mod tests {
+    use super::*;
+    use windows_sys::Win32::System::WindowsProgramming::{
+        SYSTEM_PROCESS_INFORMATION, SYSTEM_THREAD_INFORMATION,
+    };
+
+    /// Lays out process records as `NtQuerySystemInformation` does: each process, its
+    /// threads right after it, and its name after them.
+    fn records(processes: &[(usize, usize, &str, &[u32])]) -> Vec<u64> {
+        let process_size = size_of::<SYSTEM_PROCESS_INFORMATION>();
+        let thread_size = size_of::<SYSTEM_THREAD_INFORMATION>();
+        let mut buffer = vec![0u64; 4096];
+        let base = buffer.as_mut_ptr().cast::<u8>();
+        let mut offset = 0;
+        for (index, &(pid, parent, name, states)) in processes.iter().enumerate() {
+            let name: Vec<u16> = name.encode_utf16().collect();
+            let name_at = offset + process_size + states.len() * thread_size;
+            let next = (name_at + name.len() * 2).next_multiple_of(8);
+            let mut process = SYSTEM_PROCESS_INFORMATION {
+                NextEntryOffset: if index + 1 == processes.len() {
+                    0
+                } else {
+                    u32::try_from(next - offset).unwrap()
+                },
+                NumberOfThreads: u32::try_from(states.len()).unwrap(),
+                UniqueProcessId: pid as _,
+                Reserved2: parent as _,
+                BasePriority: 8,
+                ..Default::default()
+            };
+            process.ImageName.Length = u16::try_from(name.len() * 2).unwrap();
+            process.ImageName.MaximumLength = process.ImageName.Length;
+            process.ImageName.Buffer = base.wrapping_add(name_at).cast();
+            // SAFETY: every write here lands inside the 32 KiB buffer.
+            unsafe { std::ptr::write_unaligned(base.wrapping_add(offset).cast(), process) };
+            for (thread, &state) in states.iter().enumerate() {
+                let record = SYSTEM_THREAD_INFORMATION {
+                    ThreadState: state,
+                    ..Default::default()
+                };
+                let at = base.wrapping_add(offset + process_size + thread * thread_size);
+                // SAFETY: as above.
+                unsafe { std::ptr::write_unaligned(at.cast(), record) };
+            }
+            for (unit, &value) in name.iter().enumerate() {
+                let at = base.wrapping_add(name_at + unit * 2);
+                // SAFETY: as above.
+                unsafe { std::ptr::write_unaligned(at.cast(), value) };
+            }
+            offset = next;
+        }
+        buffer
+    }
+
+    #[test]
+    fn records_are_read_as_windows_lays_them_out() {
+        const RUNNING: u32 = 2;
+        const WAITING: u32 = 5;
+        let buffer = records(&[
+            (
+                1234,
+                4,
+                "tool.exe",
+                &[READY, WAITING, STANDBY, DEFERRED_READY],
+            ),
+            // The Idle process: its threads stand for idle processors, and do not count.
+            (0, 0, "", &[RUNNING, READY]),
+            (4, 0, "System", &[WAITING, RUNNING]),
+        ]);
+        // SAFETY: the buffer holds the records `records` wrote.
+        let snapshot = unsafe { parse_processes(buffer.as_ptr().cast(), buffer.len() * 8) }
+            .expect("records parse");
+        assert_eq!(snapshot.ready_threads, 3);
+        let names: Vec<_> = snapshot
+            .processes
+            .iter()
+            .map(|p| (p.pid, p.parent_pid, p.name.as_str()))
+            .collect();
+        assert_eq!(
+            names,
+            [
+                (0, 0, "[System Process]"),
+                (4, 0, "System"),
+                (1234, 4, "tool.exe")
+            ]
+        );
+    }
+
+    #[test]
+    fn a_record_running_past_the_buffer_is_refused() {
+        let buffer = records(&[(1234, 4, "tool.exe", &[READY; 3])]);
+        let cut = size_of::<SYSTEM_PROCESS_INFORMATION>() + 8;
+        // SAFETY: fewer bytes than were written are claimed; they are all readable.
+        let snapshot = unsafe { parse_processes(buffer.as_ptr().cast(), cut) };
+        assert_eq!(snapshot, None);
+    }
+
+    #[test]
+    fn a_snapshot_lists_this_process() {
+        let snapshot = SystemQuery::default().take().expect("a process snapshot");
+        let me = snapshot
+            .processes
+            .iter()
+            .find(|process| process.pid == std::process::id())
+            .expect("this process is listed");
+        assert!(me.name.to_ascii_lowercase().ends_with(".exe"), "{me:?}");
+        assert!(snapshot.processes.iter().any(|process| process.pid == 4));
+    }
+
+    #[test]
+    fn more_busy_threads_than_processors_make_a_queue() {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        let processors = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
+        let stop = Arc::new(AtomicBool::new(false));
+        let spinners: Vec<_> = (0..processors * 2)
+            .map(|_| {
+                let stop = Arc::clone(&stop);
+                std::thread::spawn(move || {
+                    while !stop.load(Ordering::Relaxed) {
+                        std::hint::spin_loop();
+                    }
+                })
+            })
+            .collect();
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        let snapshot = SystemQuery::default().take();
+        stop.store(true, Ordering::Relaxed);
+        for spinner in spinners {
+            spinner.join().unwrap();
+        }
+        let ready = snapshot.expect("a process snapshot").ready_threads;
+        assert!(
+            ready as usize >= processors / 2,
+            "{} spinning threads on {processors} processors, but {ready} ready",
+            processors * 2
+        );
+    }
+
+    #[test]
+    fn processor_times_add_up_to_the_machines() {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        let busy_time = |times: &[CpuTimes]| -> u64 {
+            times
+                .iter()
+                .map(|cpu| (cpu.kernel + cpu.user).saturating_sub(cpu.idle))
+                .sum()
+        };
+        let before = processor_times().expect("per-processor times");
+        let machine_before = cpu_times().expect("machine times");
+        let stop = Arc::new(AtomicBool::new(false));
+        let spinner = {
+            let stop = Arc::clone(&stop);
+            std::thread::spawn(move || {
+                while !stop.load(Ordering::Relaxed) {
+                    std::hint::spin_loop();
+                }
+            })
+        };
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        let after = processor_times().expect("per-processor times");
+        let machine_after = cpu_times().expect("machine times");
+        stop.store(true, Ordering::Relaxed);
+        spinner.join().unwrap();
+
+        let busy = busy_time(&after).saturating_sub(busy_time(&before));
+        let machine = (machine_after.kernel + machine_after.user)
+            .saturating_sub(machine_after.idle)
+            .saturating_sub(
+                (machine_before.kernel + machine_before.user).saturating_sub(machine_before.idle),
+            );
+        // One thread spun for 0.3 s: at least 0.2 s of busy time, 2,000,000 ticks.
+        assert!(
+            busy >= 2_000_000,
+            "per-processor busy {busy}, machine {machine}"
+        );
+        assert!(
+            busy.abs_diff(machine) <= machine / 2 + 1_000_000,
+            "per-processor busy {busy}, machine {machine}"
+        );
+    }
+
+    #[test]
+    fn processor_times_come_one_per_processor() {
+        let times = processor_times().expect("per-processor times");
+        let processors = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
+        assert!(
+            times.len() >= processors.min(64),
+            "{} for {processors}",
+            times.len()
+        );
+        assert!(times.iter().all(|cpu| cpu.kernel >= cpu.idle));
+    }
 }

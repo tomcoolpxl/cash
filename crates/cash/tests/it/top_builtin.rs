@@ -5,8 +5,9 @@
 //! Cygwin processes only — the same trap that made carrying `ps` necessary. So `top` was
 //! simply "command not found".
 //!
-//! Every test here drives batch mode, which is what makes them repeatable: a fixed number
-//! of refreshes, a short delay, plain text, no screen control.
+//! Most tests here drive batch mode, which is what makes them repeatable: a fixed number
+//! of refreshes, a short delay, plain text, no screen control. The interactive ones run
+//! `top` on a pseudo console and press its keys.
 
 #![allow(
     clippy::tests_outside_test_module,
@@ -381,5 +382,133 @@ fn question_mark_opens_help_and_q_exits() {
         .expect("\x1b[7m", Duration::from_secs(2))
         .expect("highlighted process header");
     session.send("q").expect("quit top");
+    assert_eq!(session.wait().expect("top exits"), 0);
+}
+
+fn interactive(script: &str) -> ConPtySession {
+    let mut session = ConPtySession::start(&PathBuf::from(CASH), &["-c", script], None)
+        .expect("start cash in a pseudo terminal");
+    session
+        .expect("Tasks:", Duration::from_secs(10))
+        .expect("top's first frame");
+    session
+}
+
+/// Reads for `period`, for refreshes to happen.
+fn read_for(session: &mut ConPtySession, period: Duration) {
+    let start = std::time::Instant::now();
+    while start.elapsed() < period {
+        session.read_available().unwrap();
+        std::thread::sleep(Duration::from_millis(15));
+    }
+}
+
+/// Waits for `needle` in what arrived after byte `from`.
+fn expect_after(session: &mut ConPtySession, from: usize, needle: &str) {
+    let start = std::time::Instant::now();
+    while !session
+        .output()
+        .get(from..)
+        .unwrap_or_default()
+        .contains(needle)
+    {
+        assert!(
+            start.elapsed() < Duration::from_secs(10),
+            "no {needle:?}; output since:\n{:?}",
+            session.output().get(from..).unwrap_or_default()
+        );
+        session.read_available().unwrap();
+        std::thread::sleep(Duration::from_millis(15));
+    }
+}
+
+/// Clearing flickered, and Windows Terminal scrolls a cleared screen into the scrollback,
+/// so every refresh left a copy there. Each frame now overwrites the last on the
+/// alternate screen, and quitting puts the screen back.
+#[test]
+fn top_draws_on_the_alternate_screen_and_never_clears_it() {
+    let mut session = interactive("top -d 0.3");
+    read_for(&mut session, Duration::from_millis(1500));
+    session.send("q").expect("quit top");
+    assert_eq!(session.wait().expect("top exits"), 0);
+
+    let output = session.output();
+    let entered = output
+        .find("\x1b[?1049h")
+        .expect("top draws on the alternate screen");
+    let left = output
+        .rfind("\x1b[?1049l")
+        .expect("and leaves it when it quits");
+    let drawn = output.get(entered..left).unwrap_or_default();
+    assert!(drawn.contains("Tasks:"), "{drawn:?}");
+    assert!(
+        !drawn.contains("\x1b[2J"),
+        "top cleared the screen: {drawn:?}"
+    );
+}
+
+#[test]
+fn one_v_and_slash_change_what_top_shows() {
+    let mut session = interactive("top -d 5");
+
+    let mark = session.output().len();
+    session.send("1").unwrap();
+    expect_after(&mut session, mark, "%Cpu0");
+    // Off again: sixteen processor lines leave an 80x25 screen room for one row.
+    session.send("1").unwrap();
+
+    let mark = session.output().len();
+    session.send("V").unwrap();
+    expect_after(&mut session, mark, "`- ");
+    expect_after(&mut session, mark, "tree");
+
+    let mark = session.output().len();
+    session.send("/").unwrap();
+    expect_after(&mut session, mark, "Show only names containing");
+    session.send("cash\r").unwrap();
+    expect_after(&mut session, mark, "names containing \"cash\"");
+
+    let mark = session.output().len();
+    session.send("d").unwrap();
+    expect_after(&mut session, mark, "Change delay from 5.0");
+    session.send("2\r").unwrap();
+
+    session.send("q").unwrap();
+    assert_eq!(session.wait().expect("top exits"), 0);
+}
+
+#[test]
+fn k_sends_the_signal_asked_for_to_the_pid_asked_for() {
+    let mut session =
+        interactive(r#"ping.exe -n 60 127.0.0.1 >/dev/null & echo "PING=$!"; top -d 5"#);
+    let output = session.output().to_owned();
+    let pid: u32 = output
+        .split("PING=")
+        .nth(1)
+        .and_then(|rest| {
+            rest.split(|c: char| !c.is_ascii_digit())
+                .next()
+                .and_then(|digits| digits.parse().ok())
+        })
+        .expect("the ping's pid");
+    assert!(cash_win32::process::is_pid_alive(pid));
+
+    let mark = session.output().len();
+    session.send("k").unwrap();
+    expect_after(&mut session, mark, "PID to signal/kill");
+    session.send(&format!("{pid}\r")).unwrap();
+    expect_after(&mut session, mark, &format!("Send pid {pid} signal"));
+    session.send("\r").unwrap();
+    expect_after(&mut session, mark, &format!("Sent TERM to {pid}"));
+
+    let start = std::time::Instant::now();
+    while cash_win32::process::is_pid_alive(pid) {
+        assert!(
+            start.elapsed() < Duration::from_secs(10),
+            "ping {pid} outlived TERM"
+        );
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    session.send("q").unwrap();
     assert_eq!(session.wait().expect("top exits"), 0);
 }

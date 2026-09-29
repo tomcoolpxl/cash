@@ -1375,6 +1375,36 @@ The `-efj` view substitutes Windows base priority for Linux job-control fields t
 no machine-wide Windows equivalent. Deliberately absent: `ps -o` format strings and the
 full command line of another process, which means reading that process's PEB.
 
+`top`, as decided with the user on 2026-09-29:
+
+- **The screen.** It draws on the terminal's alternate screen with the cursor hidden,
+  and writes each frame in one piece over the last: from the top-left corner, each line
+  overwrites the one before and erases the rest of itself, inside synchronized output
+  (mode 2026, which Windows Terminal has had since 1.23). It used to clear the screen
+  before every frame, which flickered, and Windows Terminal scrolls a cleared screen into
+  the scrollback, so each refresh left a copy there. Quitting puts the screen back.
+- **The interval** is 3 seconds, procps-ng's, and `d` changes it; the first frame comes
+  after a 0.3-second sample rather than a whole interval.
+- **The load average** takes Linux's definition, tasks running or waiting for a
+  processor: the processors busy over the interval, exactly, from the machine's CPU
+  times, plus the threads ready to run at the sample, counted from one
+  `NtQuerySystemInformation(SystemProcessInformation)` snapshot of every process and
+  thread (the Idle process's threads stand for idle processors and are left out). The
+  sample is smoothed over 1, 5 and 15 minutes from the moment `top` starts. It replaced
+  the `\System\Processor Queue Length` performance counter, which cost about 350 ms of CPU
+  at every start (measured on 361 processes) and is missing on some Windows builds. The
+  snapshot also replaces the Toolhelp process list, so a refresh costs no more. Microsoft
+  documents the function and the members read, with the warning that they may change in
+  a future Windows; it is looked up at run time as Microsoft advises, and without it the
+  load average is not shown. The same function gives per-processor times for `1`.
+- **Cost**, measured with 360 processes, release builds: the first frame went from 406
+  to 62 ms of CPU, and each further refresh from 27 to 5 ms, chiefly because a process's
+  account is now looked up once rather than at every refresh.
+- **Keys** beyond sorting and scrolling, from procps's `top` and NTop: `V` a tree, off by
+  default; `1` a CPU line per processor; `o` or `/` only names containing some text, `=`
+  all again; `d` the interval; `k` a signal by `kill`'s rules (never to the shell itself).
+  `j` and `k` no longer scroll: procps's `k` is kill.
+
 The native `tree` covers the common, cheap filesystem view: `tree [DIRECTORY]`, `-a`,
 `-d`, `-L LEVEL`, `-f`, `--dirsfirst`, and `--noreport`. It prints directory links and
 junctions as leaves instead of following them, preventing cycles and walks outside the
