@@ -591,10 +591,41 @@ reverses it. This is what Process Explorer's Suspend does. No undocumented
 `NtSuspendProcess`.
 
 **Scope follows D22**: `kill -STOP %1` suspends the job's whole tree; `kill -STOP 1234`
-suspends that process only. `Ctrl-Z` targets the foreground job, so it is tree-wide.
+suspends that process only. `Ctrl-Z` targets the foreground job, so it is tree-wide. `fg`,
+`bg` and `kill -CONT %1` resume the whole tree, and `jobs` shows the job `Stopped` in
+between. (Until 2026-09-29 `kill -STOP %1` suspended only the job's first process, so
+`cmd /c ping …` went on pinging, and `jobs` still said `Running`.)
+
+**Ctrl-Z is a key, not a signal.** Windows has no Ctrl-Z event: a console control handler
+hears Ctrl-C, Ctrl-Break, close, logoff and shutdown, and nothing else. Ctrl-Z is a record
+with the character 0x1A in the console's input queue, for whichever program reads it, and
+programs that read the keyboard use it as the end of input (`sort`, `copy con`, Python's
+prompt), as Unix uses Ctrl-D. So while the interactive shell waits for a foreground job,
+it looks at the queue every 50 ms without reading it, and takes a Ctrl-Z that has waited
+there unread for 200 ms: it removes that key alone (keys typed around it stay, in order,
+for the prompt), suspends the job's trees, shows `^Z` and `[1]+ Stopped`, and `$?` is 148.
+A program reading the keyboard takes the key within milliseconds and keeps it. Decided
+with the user on 2026-09-29, after a ConPTY test showed Ctrl-Z during `ping.exe` did
+nothing at all and the key vanished.
+
+Only the interactive shell itself listens, with job control on: a subshell, a command
+substitution or a background job has no job table from which a stopped job could be
+resumed. Nor while a stage of the pipeline runs inside the shell (a `while read` loop, a
+builtin): a stopped pipeline still waits for such a stage, and one reading from a
+suspended program would wait for ever.
+
+**Console state per job**, as zsh keeps each stopped job's terminal modes: Ctrl-Z saves the
+console's input and output modes and code pages, and `fg` puts them back; the prompt in
+between sets the console as it needs (D68). Unix sends a resumed program `SIGCONT` and a
+full-screen one redraws on it; Windows tells it nothing. So a job that was reading keys
+one at a time, as a full-screen program does, is handed a resize record at `fg`, on which
+such programs redraw. Best effort.
 
 Accepted costs: racy against thread creation during the sweep, and a process could in
-principle resume itself. Neither matters for the workloads in §1.
+principle resume itself. A program busy for longer than 200 ms between two reads of the
+keyboard can be suspended where it would have read the Ctrl-Z itself, and a key that
+arrives while the queue is rewritten comes before the ones put back. None of these
+matters for the workloads in §1.
 
 ### D20 — `\r\n` is a line terminator wherever cash interprets line boundaries
 

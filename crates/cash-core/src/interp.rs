@@ -692,12 +692,21 @@ async fn wait_for_pipeline_processes_and_update_status(
     // each, as in Bash.
     let mut reaped_processes = 0;
 
+    // cash (D19): the keyboard's Ctrl-Z stops the interactive shell's foreground job, which
+    // is then filed as a job for `fg` and `bg`. Not while a stage runs inside the shell: a
+    // stopped pipeline still waits for such a stage, and one reading from a suspended
+    // program would wait for ever.
+    let ctrl_z = shell.ctrl_z_stops_foreground_jobs()
+        && !process_spawn_results
+            .iter()
+            .any(|result| matches!(result, ExecutionSpawnResult::StartedTask(_)));
+
     while let Some(child) = process_spawn_results.pop_front() {
         let is_process = matches!(child, ExecutionSpawnResult::StartedProcess(_));
         let wait_result = if !stopped_children.is_empty() {
             child.poll().await?
         } else {
-            child.wait().await?
+            child.wait_or_stop(ctrl_z).await?
         };
 
         match wait_result {

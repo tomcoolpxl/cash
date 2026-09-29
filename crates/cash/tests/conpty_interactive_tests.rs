@@ -978,3 +978,221 @@ fn conpty_alt_arrows_walk_the_folder_history() {
     session.send("exit 0\r").unwrap();
     assert_eq!(session.wait().expect("process did not exit"), 0);
 }
+
+// ---- Ctrl-Z and `kill -STOP` (D19) ----
+//
+// Windows has no Ctrl-Z signal: the key is a record with the character 0x1A in the console's
+// input queue. cash takes one that no program reads and stops the foreground job with its
+// tree; a program that reads the keyboard keeps it. `ping.exe` never reads the keyboard
+// and prints a reply a second, so whether it runs shows in the output.
+
+/// What each of ping's replies contains, in any language Windows speaks.
+const REPLY: &str = "127.0.0.1: ";
+
+/// A reedline cash on a ConPTY whose commands can find `ping.exe`, `cmd` and `sort`.
+fn start_job_cash() -> ConPtySession {
+    let system_root = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into());
+    let temp = std::env::temp_dir();
+    let temp = temp.to_string_lossy();
+    let path = std::env::var("PATH").unwrap_or_default();
+    let mut session = ConPtySession::start(
+        &PathBuf::from(CASH),
+        &[
+            "--noprofile",
+            "--norc",
+            "--no-config",
+            "--disable-color",
+            "--input-backend=reedline",
+            "-i",
+        ],
+        Some(&[
+            ("HISTFILE", ""),
+            ("PS1", "PROMPT$ "),
+            ("TEMP", &temp),
+            ("TMP", &temp),
+            ("SystemRoot", &system_root),
+            ("PATH", &path),
+        ]),
+    )
+    .expect("failed to start cash.exe attached to Win32 ConPTY");
+    session
+        .expect("PROMPT$", Duration::from_secs(10))
+        .expect("prompt displayed");
+    session
+}
+
+/// Reads whatever arrives for `period`.
+fn read_for(session: &mut ConPtySession, period: Duration) {
+    let start = std::time::Instant::now();
+    while start.elapsed() < period {
+        session.read_available().unwrap();
+        std::thread::sleep(Duration::from_millis(15));
+    }
+}
+
+/// The output after byte `from`, an earlier length of it.
+fn since(session: &ConPtySession, from: usize) -> &str {
+    session.output().get(from..).unwrap_or_default()
+}
+
+/// Waits for `needle` in the output after byte `from`.
+fn expect_after(session: &mut ConPtySession, from: usize, needle: &str, timeout: Duration) {
+    let start = std::time::Instant::now();
+    while !since(session, from).contains(needle) {
+        assert!(
+            start.elapsed() < timeout,
+            "no {needle:?} within {timeout:?}; output since:\n{}",
+            since(session, from)
+        );
+        session.read_available().unwrap();
+        std::thread::sleep(Duration::from_millis(15));
+    }
+}
+
+/// How many of ping's replies arrived after byte `from`.
+fn replies_since(session: &ConPtySession, from: usize) -> usize {
+    since(session, from).matches(REPLY).count()
+}
+
+/// Waits a little over two replies' time and checks that none came: the job is suspended.
+fn assert_suspended(session: &mut ConPtySession, what: &str) {
+    let from = session.output().len();
+    read_for(session, Duration::from_millis(2500));
+    assert_eq!(
+        replies_since(session, from),
+        0,
+        "{what}: ping went on replying; output since:\n{}",
+        since(session, from)
+    );
+}
+
+fn finish(mut session: ConPtySession) {
+    session.send("exit 0\r").unwrap();
+    assert_eq!(session.wait().expect("process did not exit"), 0);
+}
+
+#[test]
+fn conpty_ctrl_z_stops_a_foreground_program_and_fg_resumes_it() {
+    let mut session = start_job_cash();
+    session.send("ping.exe -n 6 127.0.0.1\r").unwrap();
+    session.expect(REPLY, Duration::from_secs(10)).unwrap();
+
+    let at_ctrl_z = session.output().len();
+    session.send("\x1a").unwrap();
+    expect_after(&mut session, at_ctrl_z, "Stopped", Duration::from_secs(5));
+    assert!(since(&session, at_ctrl_z).contains("^Z"), "no ^Z shown");
+    assert_suspended(&mut session, "after Ctrl-Z");
+
+    let mark = session.output().len();
+    session.send("echo \"STATUS=[$?]\"; jobs\r").unwrap();
+    expect_after(&mut session, mark, "STATUS=[148]", Duration::from_secs(5));
+    expect_after(&mut session, mark, "Stopped", Duration::from_secs(5));
+
+    let mark = session.output().len();
+    session.send("fg; echo \"FG=[$?]\"\r").unwrap();
+    expect_after(&mut session, mark, REPLY, Duration::from_secs(5));
+    expect_after(&mut session, mark, "FG=[0]", Duration::from_secs(15));
+
+    let mark = session.output().len();
+    session.send("echo \"JOBS=[$(jobs)]\"\r").unwrap();
+    expect_after(&mut session, mark, "JOBS=[]", Duration::from_secs(5));
+    finish(session);
+}
+
+/// To a program reading the keyboard, Ctrl-Z then Enter ends the input, as Ctrl-D does on
+/// Unix; cash leaves it that key, however long it waits.
+#[test]
+fn conpty_ctrl_z_stays_end_of_input_for_a_program_reading_the_keyboard() {
+    let mut session = start_job_cash();
+    session.send("sort\r").unwrap();
+    read_for(&mut session, Duration::from_millis(1000));
+
+    let mark = session.output().len();
+    session.send("banana\rapple\r").unwrap();
+    read_for(&mut session, Duration::from_millis(300));
+    session.send("\x1a").unwrap();
+    // Well past the time after which cash takes a Ctrl-Z no program reads.
+    read_for(&mut session, Duration::from_millis(800));
+    session.send("\r").unwrap();
+    expect_after(
+        &mut session,
+        mark,
+        "apple\r\nbanana",
+        Duration::from_secs(10),
+    );
+    assert!(
+        !since(&session, mark).contains("Stopped"),
+        "sort was stopped rather than given its end of input"
+    );
+
+    let mark = session.output().len();
+    session.send("echo \"JOBS=[$(jobs)]\"\r").unwrap();
+    expect_after(&mut session, mark, "JOBS=[]", Duration::from_secs(5));
+    finish(session);
+}
+
+/// Only the Ctrl-Z is taken from the console: keys typed before it wait for the prompt.
+#[test]
+fn conpty_keys_typed_before_ctrl_z_reach_the_prompt() {
+    let mut session = start_job_cash();
+    session.send("ping.exe -n 6 127.0.0.1\r").unwrap();
+    session.expect(REPLY, Duration::from_secs(10)).unwrap();
+
+    let mark = session.output().len();
+    session.send("echo TYPED_$((40 + 2))").unwrap();
+    session.send("\x1a").unwrap();
+    expect_after(&mut session, mark, "Stopped", Duration::from_secs(5));
+    session.send("\r").unwrap();
+    expect_after(&mut session, mark, "TYPED_42", Duration::from_secs(5));
+
+    session.send("kill -KILL %1\r").unwrap();
+    finish(session);
+}
+
+/// `kill -STOP %1` stops the job's whole tree, as D19 and D22 have it: here `cmd` and the
+/// `ping` it runs, which went on replying when only `cmd` was suspended.
+#[test]
+fn conpty_kill_stop_stops_a_background_jobs_whole_tree() {
+    let mut session = start_job_cash();
+    session.send("cmd /c ping.exe -n 15 127.0.0.1 &\r").unwrap();
+    session.expect(REPLY, Duration::from_secs(10)).unwrap();
+
+    session.send("kill -STOP %1\r").unwrap();
+    read_for(&mut session, Duration::from_millis(700));
+    assert_suspended(&mut session, "after kill -STOP %1");
+    let mark = session.output().len();
+    session.send("jobs\r").unwrap();
+    expect_after(&mut session, mark, "Stopped", Duration::from_secs(5));
+
+    let mark = session.output().len();
+    session.send("kill -CONT %1\r").unwrap();
+    expect_after(&mut session, mark, REPLY, Duration::from_secs(5));
+    let mark = session.output().len();
+    session.send("jobs\r").unwrap();
+    expect_after(&mut session, mark, "Running", Duration::from_secs(5));
+
+    session.send("kill -KILL %1\r").unwrap();
+    finish(session);
+}
+
+/// A job started with `&` and brought back with `fg` stops on Ctrl-Z, and `bg` resumes it.
+#[test]
+fn conpty_ctrl_z_stops_a_job_brought_to_the_foreground() {
+    let mut session = start_job_cash();
+    session.send("ping.exe -n 15 127.0.0.1 &\r").unwrap();
+    session.expect(REPLY, Duration::from_secs(10)).unwrap();
+
+    let mark = session.output().len();
+    session.send("fg\r").unwrap();
+    expect_after(&mut session, mark, REPLY, Duration::from_secs(5));
+    session.send("\x1a").unwrap();
+    expect_after(&mut session, mark, "Stopped", Duration::from_secs(5));
+    assert_suspended(&mut session, "after Ctrl-Z under fg");
+
+    let mark = session.output().len();
+    session.send("bg\r").unwrap();
+    expect_after(&mut session, mark, REPLY, Duration::from_secs(5));
+
+    session.send("kill -KILL %1\r").unwrap();
+    finish(session);
+}

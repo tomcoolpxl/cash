@@ -101,6 +101,28 @@ pub fn tree_pids(pid: u32) -> Vec<u32> {
         .unwrap_or_default()
 }
 
+/// Suspend every process in the tree rooted at `pid`, or `pid` alone when it roots none
+/// (D19): what `kill -STOP %1` and the keyboard's Ctrl-Z do to a job. Returns how many
+/// threads were suspended.
+pub fn suspend_tree(pid: u32) -> io::Result<usize> {
+    for_each_in_tree(pid, crate::console::suspend_process)
+}
+
+/// Resume every process in the tree rooted at `pid`, or `pid` alone when it roots none
+/// (D19). Returns how many threads were resumed.
+pub fn resume_tree(pid: u32) -> io::Result<usize> {
+    for_each_in_tree(pid, crate::console::resume_process)
+}
+
+fn for_each_in_tree(pid: u32, action: fn(u32) -> io::Result<usize>) -> io::Result<usize> {
+    let mut pids = tree_pids(pid);
+    if pids.is_empty() {
+        pids.push(pid);
+    }
+    pids.into_iter()
+        .try_fold(0, |threads, member| Ok(threads + action(member)?))
+}
+
 /// The root pid of every process tree cash has spawned and still holds.
 ///
 /// This is what POSIX's "my process group" means here. `kill 0` on Linux signals every

@@ -696,6 +696,10 @@ pub struct Job {
     /// the whole and-or list — so the externals it spawns are not job tasks and cannot
     /// be found by walking them. The task reports them here instead.
     spawned_pids: Option<std::sync::Arc<std::sync::Mutex<Vec<sys::process::ProcessId>>>>,
+
+    /// The console as the job left it when Ctrl-Z stopped it under `fg`, for the next `fg`
+    /// to put back (D19). One stopped as it started keeps it in its processes instead.
+    console_at_stop: Option<cash_win32::console::ConsoleState>,
 }
 
 impl Display for Job {
@@ -738,6 +742,7 @@ impl Job {
             exit_status: None,
             notification_pending: true,
             spawned_pids: None,
+            console_at_stop: None,
         }
     }
 
@@ -850,7 +855,13 @@ impl Job {
     /// one console event a group can be sent, and a second Ctrl-C terminates its tree.
     /// A job whose processes share the console's group receives Ctrl-C directly and is
     /// left to handle it, however many times it is pressed.
-    pub async fn wait_in_foreground(&mut self) -> Result<ExecutionResult, error::Error> {
+    ///
+    /// cash (D19): when `ctrl_z`, the keyboard's Ctrl-Z stops the job again, suspending
+    /// every process it has with its tree.
+    pub async fn wait_in_foreground(
+        &mut self,
+        ctrl_z: bool,
+    ) -> Result<ExecutionResult, error::Error> {
         let pids = self.spawned_pids.clone();
         let current = move || -> Vec<u32> {
             pids.as_ref()
@@ -860,32 +871,42 @@ impl Job {
                 .filter_map(|pid| u32::try_from(pid).ok())
                 .collect()
         };
+        let mut sigtstp = sys::signal::tstp_signal_listener(ctrl_z)?;
         let mut relayed = false;
-        let wait = self.wait();
-        tokio::pin!(wait);
-        loop {
-            tokio::select! {
-                result = &mut wait => return result,
-                _ = sys::signal::await_ctrl_c() => {
-                    let pids = current();
-                    if relayed {
-                        for pid in pids {
-                            // The second Ctrl-C ends it as SIGINT would: 130.
-                            let reaped = cash_win32::jobreg::terminate_tree(pid, 130)
-                                .unwrap_or(false);
-                            if !reaped {
-                                let _ = cash_win32::process::terminate(pid, 130);
+        {
+            let wait = self.wait();
+            tokio::pin!(wait);
+            loop {
+                tokio::select! {
+                    result = &mut wait => return result,
+                    () = sigtstp.recv() => break,
+                    _ = sys::signal::await_ctrl_c() => {
+                        let pids = current();
+                        if relayed {
+                            for pid in pids {
+                                // The second Ctrl-C ends it as SIGINT would: 130.
+                                let reaped = cash_win32::jobreg::terminate_tree(pid, 130)
+                                    .unwrap_or(false);
+                                if !reaped {
+                                    let _ = cash_win32::process::terminate(pid, 130);
+                                }
                             }
+                        } else {
+                            // `|` rather than `||`: every leader gets the Ctrl-Break.
+                            relayed = pids.into_iter().fold(false, |any, pid| {
+                                any | cash_win32::stop::interrupt_group(pid)
+                            });
                         }
-                    } else {
-                        // `|` rather than `||`: every leader gets the Ctrl-Break.
-                        relayed = pids
-                            .into_iter()
-                            .fold(false, |any, pid| any | cash_win32::stop::interrupt_group(pid));
                     }
                 }
             }
         }
+
+        // Ctrl-Z.
+        self.console_at_stop = sys::signal::stop_for_ctrl_z(&self.pids());
+        self.state = JobState::Stopped;
+        self.notification_pending = true;
+        Ok(ExecutionResult::stopped())
     }
 
     /// Wait past stop notifications until the job has actually terminated.
@@ -904,28 +925,29 @@ impl Job {
     /// Moves the job to execute in the background.
     pub fn move_to_background(&mut self) -> Result<(), error::Error> {
         if matches!(self.state, JobState::Stopped) {
-            if let Some(pgid) = self.process_group_id() {
-                sys::signal::continue_process(pgid)?;
-                self.state = JobState::Running;
-                self.notification_pending = true;
-                Ok(())
-            } else {
-                Err(error::ErrorKind::FailedToSendSignal.into())
-            }
+            // Its console state was for the foreground; running in the background, the
+            // job gets the console as the prompt leaves it.
+            self.take_console_at_stop();
+            self.resume()
         } else {
             error::unimp("move job to background")
         }
     }
 
     /// Moves the job to execute in the foreground.
+    ///
+    /// cash (D19): a job Ctrl-Z stopped gets back the console as it left it, and one that
+    /// read keys one at a time, as a full-screen program does, is asked to redraw the
+    /// screen the prompt has drawn over.
     pub fn move_to_foreground(&mut self) -> Result<(), error::Error> {
         if matches!(self.state, JobState::Stopped) {
-            if let Some(pgid) = self.process_group_id() {
-                sys::signal::continue_process(pgid)?;
-                self.state = JobState::Running;
-                self.notification_pending = true;
-            } else {
-                return Err(error::ErrorKind::FailedToSendSignal.into());
+            let console = self.take_console_at_stop();
+            if let Some(console) = &console {
+                console.restore();
+            }
+            self.resume()?;
+            if console.is_some_and(|console| console.raw_input()) {
+                cash_win32::console::request_redraw();
             }
         }
 
@@ -950,12 +972,77 @@ impl Job {
     /// # Arguments
     ///
     /// * `signal` - The signal to send to the job.
-    pub fn kill(&self, signal: traps::TrapSignal) -> Result<(), error::Error> {
-        if let Some(pid) = self.process_group_id() {
-            sys::signal::kill_process(pid, signal)
-        } else {
-            Err(error::ErrorKind::FailedToSendSignal.into())
+    pub fn kill(&mut self, signal: traps::TrapSignal) -> Result<(), error::Error> {
+        use sys::signal::Signal;
+
+        match signal {
+            // cash (D19, D22): a job spec stops and continues the job's whole tree, and
+            // the job's state follows, as `jobs`, `fg` and `bg` read it. Stopping a job
+            // twice suspends it once, so one `CONT` resumes it.
+            traps::TrapSignal::Signal(Signal::Stop | Signal::Tstp) => {
+                if matches!(self.state, JobState::Stopped) {
+                    return Ok(());
+                }
+                let pids = self.pids();
+                if pids.is_empty() {
+                    return Err(error::ErrorKind::FailedToSendSignal.into());
+                }
+                sys::signal::suspend_trees(&pids)?;
+                self.state = JobState::Stopped;
+                self.notification_pending = true;
+                Ok(())
+            }
+            traps::TrapSignal::Signal(Signal::Cont) => self.resume(),
+            _ => {
+                if let Some(pid) = self.process_group_id() {
+                    sys::signal::kill_process(pid, signal)
+                } else {
+                    Err(error::ErrorKind::FailedToSendSignal.into())
+                }
+            }
         }
+    }
+
+    /// Resumes the job's processes with their trees, and marks it running (D19).
+    fn resume(&mut self) -> Result<(), error::Error> {
+        let pids = self.pids();
+        if pids.is_empty() {
+            return Err(error::ErrorKind::FailedToSendSignal.into());
+        }
+        sys::signal::resume_trees(&pids)?;
+        self.state = JobState::Running;
+        self.notification_pending = true;
+        Ok(())
+    }
+
+    /// Takes the console state saved when Ctrl-Z stopped the job (D19): its own when it
+    /// was stopped under `fg`, otherwise its processes'.
+    fn take_console_at_stop(&mut self) -> Option<cash_win32::console::ConsoleState> {
+        self.console_at_stop.take().or_else(|| {
+            self.tasks.iter_mut().find_map(|task| match task {
+                JobTask::External(process) => process.take_console_at_stop(),
+                JobTask::Internal(_) | JobTask::Completed(_) => None,
+            })
+        })
+    }
+
+    /// Every process the job has: its pipeline's and those its background task spawned.
+    /// Each roots a tree of its own (D22).
+    fn pids(&self) -> Vec<sys::process::ProcessId> {
+        let mut pids: Vec<_> = self
+            .tasks
+            .iter()
+            .filter_map(|task| match task {
+                JobTask::External(process) => process.pid(),
+                JobTask::Internal(_) | JobTask::Completed(_) => None,
+            })
+            .collect();
+        for pid in self.spawned_pids() {
+            if !pids.contains(&pid) {
+                pids.push(pid);
+            }
+        }
+        pids
     }
 
     /// Tries to retrieve a "representative" pid for the job.

@@ -17,6 +17,8 @@ pub struct ChildProcess {
     pid: Option<sys::process::ProcessId>,
     /// If available, the process group ID of the child.
     pgid: Option<sys::process::ProcessId>,
+    /// The console as the process left it when Ctrl-Z stopped it, for `fg` to put back.
+    console_at_stop: Option<cash_win32::console::ConsoleState>,
 }
 
 impl ChildProcess {
@@ -30,7 +32,15 @@ impl ChildProcess {
             exec_future: Box::pin(child.wait_with_output()),
             pid,
             pgid,
+            console_at_stop: None,
         }
+    }
+
+    /// Takes the console state saved when Ctrl-Z stopped the process (D19).
+    pub(crate) const fn take_console_at_stop(
+        &mut self,
+    ) -> Option<cash_win32::console::ConsoleState> {
+        self.console_at_stop.take()
     }
 
     /// Returns the process's ID.
@@ -45,8 +55,17 @@ impl ChildProcess {
 
     /// Waits for the process to exit.
     pub async fn wait(&mut self) -> Result<ProcessWaitResult, error::Error> {
-        #[allow(unused_mut, reason = "only mutated on some platforms")]
-        let mut sigtstp = sys::signal::tstp_signal_listener()?;
+        self.wait_or_stop(false).await
+    }
+
+    /// Waits for the process to exit or, when `ctrl_z`, for the keyboard's Ctrl-Z to stop
+    /// it.
+    ///
+    /// cash (D19): Windows stops nothing on Ctrl-Z. cash takes the key when no program
+    /// reads it and suspends the process's tree itself. Only the interactive shell's
+    /// foreground job listens, as only its job table can resume a stopped process.
+    pub async fn wait_or_stop(&mut self, ctrl_z: bool) -> Result<ProcessWaitResult, error::Error> {
+        let mut sigtstp = sys::signal::tstp_signal_listener(ctrl_z)?;
         #[allow(unused_mut, reason = "only mutated on some platforms")]
         let mut sigchld = sys::signal::chld_signal_listener()?;
 
@@ -56,7 +75,9 @@ impl ChildProcess {
                 output = &mut self.exec_future => {
                     break Ok(ProcessWaitResult::Completed(output?))
                 },
-                _ = sigtstp.recv() => {
+                () = sigtstp.recv() => {
+                    let pids: Vec<_> = self.pid.into_iter().collect();
+                    self.console_at_stop = sys::signal::stop_for_ctrl_z(&pids);
                     break Ok(ProcessWaitResult::Stopped)
                 },
                 _ = sigchld.recv() => {

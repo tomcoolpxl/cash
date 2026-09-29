@@ -362,6 +362,126 @@ pub fn set_utf8_code_page() -> io::Result<()> {
     Ok(())
 }
 
+/// `ENABLE_LINE_INPUT`: off, a program reads keys one at a time, as a full-screen one does.
+const LINE_INPUT: u32 = 0x0002;
+
+/// The console as a program left it: input and output modes, and code pages.
+///
+/// Saved when Ctrl-Z stops a job and put back when `fg` resumes it (D19), as zsh keeps
+/// each stopped job's terminal modes. The prompt in between sets the console as it needs
+/// it ([`repair_before_prompt`]), and a program resumed in modes it did not choose would
+/// find, in raw mode, its keys echoed and held back until Enter.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ConsoleState {
+    input: Option<u32>,
+    output: Option<u32>,
+    input_code_page: u32,
+    output_code_page: u32,
+}
+
+impl ConsoleState {
+    /// The console's state now; `None` without a console.
+    #[must_use]
+    pub fn save() -> Option<Self> {
+        use windows_sys::Win32::System::Console::{GetConsoleCP, GetConsoleOutputCP};
+
+        let input = console_mode("CONIN$");
+        let output = console_mode("CONOUT$");
+        if input.is_none() && output.is_none() {
+            return None;
+        }
+        Some(Self {
+            input,
+            output,
+            // SAFETY: plain calls without arguments.
+            input_code_page: unsafe { GetConsoleCP() },
+            // SAFETY: as above.
+            output_code_page: unsafe { GetConsoleOutputCP() },
+        })
+    }
+
+    /// Puts the saved state back, as far as the console accepts it.
+    pub fn restore(&self) {
+        use std::os::windows::io::AsRawHandle as _;
+        use windows_sys::Win32::System::Console::SetConsoleMode;
+
+        for (name, mode) in [("CONIN$", self.input), ("CONOUT$", self.output)] {
+            if let (Some(mode), Ok(file)) = (mode, open_console(name)) {
+                // SAFETY: an open console handle owned by `file`, alive for the call.
+                unsafe { SetConsoleMode(file.as_raw_handle(), mode) };
+            }
+        }
+        // SAFETY: a plain call taking a code page; it touches no memory of ours.
+        unsafe { SetConsoleCP(self.input_code_page) };
+        // SAFETY: as above.
+        unsafe { SetConsoleOutputCP(self.output_code_page) };
+    }
+
+    /// Whether the program was reading keys one at a time, as a full-screen program does.
+    #[must_use]
+    pub const fn raw_input(&self) -> bool {
+        matches!(self.input, Some(mode) if mode & LINE_INPUT == 0)
+    }
+}
+
+fn open_console(name: &str) -> io::Result<std::fs::File> {
+    std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(name)
+}
+
+fn console_mode(name: &str) -> Option<u32> {
+    use std::os::windows::io::AsRawHandle as _;
+    use windows_sys::Win32::System::Console::GetConsoleMode;
+
+    let file = open_console(name).ok()?;
+    let mut mode = 0u32;
+    // SAFETY: an open console handle owned by `file`, and a valid out-parameter.
+    (unsafe { GetConsoleMode(file.as_raw_handle(), &raw mut mode) } != 0).then_some(mode)
+}
+
+/// Asks the program reading the console to draw its screen again, as `fg` resumes a
+/// full-screen program (D19).
+///
+/// Unix sends a resumed program `SIGCONT`, and a full-screen one redraws on it; Windows
+/// tells it nothing, and the prompt has drawn over its screen meanwhile. Such a program
+/// redraws when the window changes size, so the console is handed a resize record with
+/// the size it already has. Best effort: a program that ignores resizes shows its old
+/// screen once it draws again.
+pub fn request_redraw() {
+    use std::os::windows::io::AsRawHandle as _;
+    use windows_sys::Win32::System::Console::{
+        CONSOLE_SCREEN_BUFFER_INFO, GetConsoleScreenBufferInfo, INPUT_RECORD,
+        WINDOW_BUFFER_SIZE_EVENT, WriteConsoleInputW,
+    };
+
+    let (Ok(input), Ok(output)) = (open_console("CONIN$"), open_console("CONOUT$")) else {
+        return;
+    };
+    // SAFETY: an all-zero CONSOLE_SCREEN_BUFFER_INFO is a valid out-parameter.
+    let mut info: CONSOLE_SCREEN_BUFFER_INFO = unsafe { std::mem::zeroed() };
+    // SAFETY: an open console handle owned by `output`, and a valid out-parameter.
+    if unsafe { GetConsoleScreenBufferInfo(output.as_raw_handle(), &raw mut info) } == 0 {
+        return;
+    }
+    // SAFETY: an all-zero INPUT_RECORD is valid; the resize fields follow.
+    let mut record: INPUT_RECORD = unsafe { std::mem::zeroed() };
+    record.EventType = u16::try_from(WINDOW_BUFFER_SIZE_EVENT).unwrap_or_default();
+    record.Event.WindowBufferSizeEvent.dwSize = info.dwSize;
+    let mut written = 0u32;
+    // SAFETY: an open console handle owned by `input`, one initialised record, and a valid
+    // out-parameter.
+    unsafe {
+        WriteConsoleInputW(
+            input.as_raw_handle(),
+            &raw const record,
+            1,
+            &raw mut written,
+        )
+    };
+}
+
 /// Suspend every thread of a process (D19).
 ///
 /// Windows has no `SIGSTOP` for arbitrary executables, so `Ctrl-Z` and `kill -STOP`

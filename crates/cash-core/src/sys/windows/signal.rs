@@ -147,14 +147,42 @@ impl TryFrom<i32> for Signal {
     }
 }
 
-/// Resume a suspended process (D19).
-pub(crate) fn continue_process(pid: sys::process::ProcessId) -> Result<(), error::Error> {
-    for target in resolve_targets(pid)? {
-        cash_win32::console::resume_process(target)
-            .map(|_| ())
-            .map_err(|e| error::Error::from(error::ErrorKind::from(e)))?;
+/// Suspend a job's processes, each with its whole tree (D19, D22): `kill -STOP %1`, and
+/// the keyboard's Ctrl-Z.
+pub(crate) fn suspend_trees(pids: &[sys::process::ProcessId]) -> Result<(), error::Error> {
+    for_each_tree(pids, cash_win32::jobreg::suspend_tree)
+}
+
+/// Resume a job's processes, each with its whole tree (D19): `fg`, `bg` and
+/// `kill -CONT %1`.
+pub(crate) fn resume_trees(pids: &[sys::process::ProcessId]) -> Result<(), error::Error> {
+    for_each_tree(pids, cash_win32::jobreg::resume_tree)
+}
+
+fn for_each_tree(
+    pids: &[sys::process::ProcessId],
+    action: fn(u32) -> std::io::Result<usize>,
+) -> Result<(), error::Error> {
+    for &pid in pids {
+        if let Ok(pid) = u32::try_from(pid) {
+            action(pid).map_err(|e| error::Error::from(error::ErrorKind::from(e)))?;
+        }
     }
     Ok(())
+}
+
+/// What the keyboard's Ctrl-Z does to the foreground job once cash has taken the key
+/// (D19): the job's processes are suspended with their trees, `^Z` is shown where their
+/// output stopped, and the console as they left it is returned, for `fg` to put back.
+pub(crate) fn stop_for_ctrl_z(
+    pids: &[sys::process::ProcessId],
+) -> Option<cash_win32::console::ConsoleState> {
+    // A process that cannot be suspended is left running; the job is still reported
+    // stopped, as `jobs` and `fg` are the way back to it.
+    let _ = suspend_trees(pids);
+    let console = cash_win32::console::ConsoleState::save();
+    cash_win32::ctrl_z::echo();
+    console
 }
 
 /// Whether a process exists and cash could signal it.
@@ -313,10 +341,40 @@ impl FakeSignal {
     }
 }
 
-/// Ctrl-Z arrives through the console input path rather than as a signal, so there is
-/// nothing to listen for here.
-pub(crate) fn tstp_signal_listener() -> Result<FakeSignal, error::Error> {
-    Ok(FakeSignal::new())
+/// The keyboard's Ctrl-Z, for a job in the foreground (D19).
+pub(crate) struct CtrlZListener {
+    watch: Option<cash_win32::ctrl_z::Watch>,
+}
+
+impl CtrlZListener {
+    /// Returns once a Ctrl-Z no program read has been taken from the console; never when
+    /// not listening.
+    pub async fn recv(&mut self) {
+        let Some(watch) = &mut self.watch else {
+            return futures::future::pending::<()>().await;
+        };
+        loop {
+            tokio::time::sleep(cash_win32::ctrl_z::POLL).await;
+            if watch.check() {
+                return;
+            }
+        }
+    }
+}
+
+/// Listens for the keyboard's Ctrl-Z while `foreground`, and not otherwise.
+///
+/// Windows has no Ctrl-Z signal or console event: the key waits in the console's input
+/// queue for whichever program reads it, and a program that reads the keyboard keeps it
+/// (as end of input, to `sort` or Python). So cash watches the queue and takes a Ctrl-Z
+/// that no program has read; see `cash_win32::ctrl_z`.
+pub(crate) fn tstp_signal_listener(foreground: bool) -> Result<CtrlZListener, error::Error> {
+    let watch = if foreground {
+        cash_win32::ctrl_z::Watch::new()
+    } else {
+        None
+    };
+    Ok(CtrlZListener { watch })
 }
 
 /// Windows has no `SIGCHLD`; child exits are observed by waiting on handles.

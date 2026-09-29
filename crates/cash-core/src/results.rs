@@ -1,6 +1,6 @@
 //! Encapsulation of execution results.
 
-use crate::{error, processes};
+use crate::{error, processes, sys};
 
 /// Represents the result of executing a command or similar item.
 #[derive(Default)]
@@ -262,11 +262,20 @@ impl From<ExecutionResult> for ExecutionSpawnResult {
 impl ExecutionSpawnResult {
     /// Waits for the command to complete.
     pub async fn wait(self) -> Result<ExecutionWaitResult, error::Error> {
+        self.wait_or_stop(false).await
+    }
+
+    /// Waits for the command to complete or, when `ctrl_z`, for the keyboard's Ctrl-Z to
+    /// stop it (D19).
+    pub(crate) async fn wait_or_stop(
+        self,
+        ctrl_z: bool,
+    ) -> Result<ExecutionWaitResult, error::Error> {
         let result = match self {
             Self::StartedProcess(mut child) => {
                 // Wait for the process to exit or for a relevant signal, whichever happens
                 // first.
-                match child.wait().await? {
+                match child.wait_or_stop(ctrl_z).await? {
                     processes::ProcessWaitResult::Completed(output) => {
                         ExecutionWaitResult::Completed(ExecutionResult::from(output))
                     }
@@ -285,7 +294,14 @@ impl ExecutionSpawnResult {
 
     pub(crate) async fn poll(self) -> Result<ExecutionWaitResult, error::Error> {
         let result = match self {
-            Self::StartedProcess(child) => ExecutionWaitResult::Stopped(child),
+            Self::StartedProcess(child) => {
+                // cash (D19): stopped with the pipeline stage before it. Unix stops a job's
+                // whole process group at once; Windows suspends each tree by hand.
+                if let Some(pid) = child.pid() {
+                    let _ = sys::signal::suspend_trees(&[pid]);
+                }
+                ExecutionWaitResult::Stopped(child)
+            }
             Self::Completed(result) => ExecutionWaitResult::Completed(result),
             Self::StartedTask(join_handle) => {
                 // TODO(jobs): This isn't right.

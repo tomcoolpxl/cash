@@ -40,6 +40,11 @@ threads-required = "num-test-threads"
 filter = 'binary(conpty-interactive-tests) and test(/^conpty_a_program_that_/)'
 slow-timeout = { period = "20s", terminate-after = 3 }
 
+# Each watches `ping.exe` reply once a second, stopped and running: 3 to 10 s idle.
+[[profile.default.overrides]]
+filter = 'binary(conpty-interactive-tests) and test(/^conpty_(ctrl_z|kill_stop|keys_typed_before_ctrl_z)/)'
+slow-timeout = { period = "20s", terminate-after = 3 }
+
 # math.sed computing pi: 9 s with every core busy.
 [[profile.default.overrides]]
 filter = 'package(cash-sed) and test(=test_sed::pi)'

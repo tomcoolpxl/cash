@@ -17,6 +17,8 @@ compile_error!("cash builds only on Windows (spec D43)");
 pub mod cmd;
 pub mod conpty;
 pub mod console;
+/// The keyboard's Ctrl-Z, which Windows delivers as a key: D19.
+pub mod ctrl_z;
 pub mod env;
 pub mod exit;
 pub mod fs;

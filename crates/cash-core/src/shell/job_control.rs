@@ -17,6 +17,13 @@ impl<SE: extensions::ShellExtensions> crate::Shell<SE> {
             && !self.in_sourced_script()
     }
 
+    /// Whether the keyboard's Ctrl-Z stops a foreground job here (D19): in the interactive
+    /// shell itself, with job control on. A subshell or a background task has no job
+    /// table to file a stopped job in, and nothing could then resume it.
+    pub fn ctrl_z_stops_foreground_jobs(&self) -> bool {
+        self.options().interactive && self.options().enable_job_control && !self.is_subshell()
+    }
+
     /// Checks for completed jobs in the shell, reporting any changes found. A `CHLD` trap
     /// runs for them first, and the notices follow it, as in Bash 5.3 (its item 1.ii).
     pub async fn check_for_completed_jobs(

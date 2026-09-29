@@ -21,13 +21,14 @@ impl builtins::Command for FgCommand {
 
         // Read interactive option before taking mutable borrow on jobs
         let is_interactive = context.shell.options().interactive;
+        let ctrl_z = context.shell.ctrl_z_stops_foreground_jobs();
 
         if let Some(job_spec) = &self.job_spec {
             if let Some(job) = context.shell.jobs_mut().resolve_job_spec(job_spec) {
                 job.move_to_foreground()?;
                 writeln!(stderr, "{}", job.command_line)?;
 
-                let result = job.wait_in_foreground().await?;
+                let result = job.wait_in_foreground(ctrl_z).await?;
                 if is_interactive {
                     sys::terminal::move_self_to_foreground()?;
                 }
@@ -52,7 +53,7 @@ impl builtins::Command for FgCommand {
                 job.move_to_foreground()?;
                 writeln!(stderr, "{}", job.command_line)?;
 
-                let result = job.wait_in_foreground().await?;
+                let result = job.wait_in_foreground(ctrl_z).await?;
                 if is_interactive {
                     sys::terminal::move_self_to_foreground()?;
                 }
