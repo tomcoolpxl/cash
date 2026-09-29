@@ -29,16 +29,16 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
     ) -> Result<bool, error::Error> {
         let path = path.as_ref();
         if path.exists() {
-            // Bash 5.2 makes $0 name the startup file while it is executing, then restores
-            // the caller's value. These internal calls are only used for startup/logout
-            // files; an ordinary `source` keeps the caller's $0 as before.
-            let saved_name = self.name.take();
-            self.name = Some(path.to_string_lossy().into_owned());
-            let result = self
-                .source_script(path, std::iter::empty::<String>(), params)
-                .await;
-            self.name = saved_name;
-            result?;
+            // cash: `$0` stays the shell's name while a startup file runs, as Git Bash
+            // 5.3.15 keeps it for `~/.bashrc`, `~/.bash_profile` and `$BASH_ENV` alike
+            // (checked 2026-09-29). It named the file, from a reading of Bash 5.2's notes
+            // that bash does not bear out, and `coolfetch` in `~/.bashrc` then called the
+            // shell `.bashrc`. The file is named as cash spells paths (D3): joined onto
+            // the home folder it was `C:/Users/me\.bashrc` in `BASH_SOURCE` and in error
+            // messages.
+            let path = std::path::PathBuf::from(cash_win32::path::render(path));
+            self.source_script(&path, std::iter::empty::<String>(), params)
+                .await?;
             Ok(true)
         } else {
             tracing::debug!("skipping non-existent file: {}", path.display());

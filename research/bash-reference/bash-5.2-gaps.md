@@ -32,7 +32,10 @@ The working tree now implements and verifies the advertised Bash 5.2 release fea
 - Here-document `$'...'` and `$"..."` quoting in here-document bodies;
 - `ulimit` trailing operand parsing where operands belong to the last specified option;
 - `command -p` bypassing the command hash table;
-- Non-interactive startup files (e.g. `BASH_ENV`) temporarily setting `$0` to the startup file name;
+- Non-interactive startup files (e.g. `BASH_ENV`) temporarily setting `$0` to the startup file name
+  (corrected 2026-09-29: Git Bash 5.3.15 does not; `$0` in `$BASH_ENV`, `~/.bashrc` and
+  `~/.bash_profile` is the shell's name, or the `-c` name or script name. cash followed this
+  line and called itself `.bashrc` in `coolfetch`);
 - Empty-word descriptor duplication (`>&WORD-` and `<&WORD-`) closing the descriptor when WORD expands to empty;
 - Invalid parameter transformation operators (`${v@X}`) causing fatal termination in non-interactive shells;
 - Single evaluation of indexed array subscripts across builtins (`printf`, `test`, `read`, `wait`);

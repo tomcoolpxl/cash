@@ -327,8 +327,20 @@ fn bash_52_command_p_ignores_a_poisoned_hash_entry() {
     );
 }
 
+/// The value between `label=<` and `>` on a line of `stdout`.
+fn labelled(stdout: &str, label: &str) -> Option<String> {
+    stdout.lines().find_map(|line| {
+        let rest = line.strip_prefix(label)?.strip_prefix("=<")?;
+        Some(rest.strip_suffix('>')?.to_owned())
+    })
+}
+
+/// `$0` stays the shell's name while a startup file runs: Git Bash 5.3.15 keeps it for
+/// `$BASH_ENV`, `~/.bashrc` and `~/.bash_profile` alike (checked 2026-09-29). cash named
+/// the file, after a reading of Bash 5.2's notes that bash does not bear out. A
+/// `$BASH_ENV` spelled with backslashes, as Windows spells it, still runs.
 #[test]
-fn bash_52_startup_file_temporarily_sets_zero_and_accepts_windows_paths() {
+fn startup_file_keeps_the_shells_zero_and_accepts_windows_paths() {
     let root = source_fixture("startup-zero");
     let startup = root.join("startup.sh");
     std::fs::write(&startup, "printf 'startup=<%s>\\n' \"$0\"\n").unwrap();
@@ -344,21 +356,52 @@ fn bash_52_startup_file_temporarily_sets_zero_and_accepts_windows_paths() {
         .output()
         .unwrap();
     assert_eq!(result.status.code(), Some(0));
-    let stdout = String::from_utf8(result.stdout)
-        .unwrap()
-        .replace("\\r\\n", "\\n");
-    let startup_name = startup.to_string_lossy().replace('\\', "/");
+    let stdout = String::from_utf8(result.stdout).unwrap();
+    let in_startup = labelled(&stdout, "startup");
     assert!(
-        stdout.contains(&format!("startup=<{startup_name}>")),
-        "{stdout}"
+        in_startup.is_some(),
+        "the startup file did not run: {stdout}"
     );
-    assert!(stdout.contains("body=<"), "{stdout}");
-    assert!(
-        !stdout.contains(&format!("body=<{startup_name}>")),
-        "{stdout}"
-    );
+    assert_eq!(in_startup, labelled(&stdout, "body"), "{stdout}");
 
     std::fs::remove_dir_all(root).unwrap();
+}
+
+/// In `~/.bashrc` too, `$0` is the shell's name, and `BASH_SOURCE` names the file as cash
+/// spells paths (D3), not with the backslash joining it onto the home folder left.
+/// `coolfetch`, the banner a `~/.bashrc` runs, called the shell `.bashrc`.
+#[test]
+fn bashrc_sees_the_shells_zero_and_its_own_name_with_forward_slashes() {
+    let home = source_fixture("bashrc-zero");
+    std::fs::write(
+        home.join(".bashrc"),
+        "printf 'rc=<%s>\\n' \"$0\"\nprintf 'source=<%s>\\n' \"$BASH_SOURCE\"\n\
+         coolfetch --no-color --no-logo | grep 'Shell:'\n",
+    )
+    .unwrap();
+
+    let result = Command::new(CASH)
+        .env("HOME", &home)
+        .args(["--noprofile", "-i", "-c", "printf 'body=<%s>\\n' \"$0\""])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8(result.stdout).unwrap();
+    let in_rc = labelled(&stdout, "rc");
+    assert!(in_rc.is_some(), "~/.bashrc did not run: {stdout}");
+    assert_eq!(in_rc, labelled(&stdout, "body"), "{stdout}");
+
+    let home_name = home.to_string_lossy().replace('\\', "/");
+    assert_eq!(
+        labelled(&stdout, "source"),
+        Some(format!("{home_name}/.bashrc")),
+        "{stdout}"
+    );
+    assert!(
+        stdout.lines().any(|line| line.contains("Shell: cash ")),
+        "coolfetch did not call the shell cash: {stdout}"
+    );
+
+    std::fs::remove_dir_all(home).unwrap();
 }
 
 #[test]
