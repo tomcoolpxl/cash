@@ -28,6 +28,8 @@ use crate::event::{
     InternalEvent,
 };
 
+mod vt_keys;
+
 /// cash: the most records one read takes from the console.
 const MAX_BATCH: u32 = 1024;
 
@@ -40,6 +42,8 @@ pub(crate) struct WindowsEventSource {
     mouse_buttons_pressed: MouseButtonsPressed,
     /// cash: records read in one batch and not yet turned into events.
     pending: VecDeque<InputRecord>,
+    /// cash: keys that arrived as VT text, decoded as they come (`vt_keys`).
+    vt: vt_keys::VtKeys,
 }
 
 impl WindowsEventSource {
@@ -58,7 +62,26 @@ impl WindowsEventSource {
             surrogate_buffer: None,
             mouse_buttons_pressed: MouseButtonsPressed::default(),
             pending: VecDeque::new(),
+            vt: vt_keys::VtKeys::default(),
         })
+    }
+
+    /// cash: the event `record` makes, decoding keys that arrived as VT text (patch 2).
+    ///
+    /// A key-down of VT text goes to the decoder. Anything else first ends a sequence the
+    /// decoder has open, and is then handled as before, except a key being let go: the
+    /// keys of VT text are let go as they arrive, and that must not cut a sequence short.
+    fn next_event(&mut self, record: InputRecord) -> Option<Event> {
+        if let Some(ch) = vt_text(&record, self.vt.is_open()) {
+            return self.vt.feed(ch).map(Event::Key);
+        }
+        let let_go = matches!(&record, InputRecord::KeyEvent(key) if !key.key_down);
+        if self.vt.is_open() && !let_go {
+            let key = self.vt.flush();
+            self.pending.push_front(record);
+            return key.map(Event::Key);
+        }
+        self.to_event(record)
     }
 
     fn to_event(&mut self, record: InputRecord) -> Option<Event> {
@@ -139,6 +162,22 @@ impl WindowsEventSource {
     }
 }
 
+/// cash: the character of `record` when it is a key typed as VT text that needs decoding
+/// (patch 2): a key-down with neither a virtual key nor a scan code, carrying a control
+/// character, or any character while a sequence is `open`. Printable text needs no
+/// decoding and is left to upstream, which types it.
+fn vt_text(record: &InputRecord, open: bool) -> Option<u16> {
+    match record {
+        InputRecord::KeyEvent(key)
+            if key.key_down && key.virtual_key_code == 0 && key.virtual_scan_code == 0 =>
+        {
+            let control = (0x01..0x20).contains(&key.u_char) || key.u_char == 0x7f;
+            (open || control).then_some(key.u_char)
+        }
+        _ => None,
+    }
+}
+
 /// cash: how many of `records` to read together: the run of plain typing they start
 /// with, and at least one record, so that anything else is still read by itself.
 fn batch_len(records: &[INPUT_RECORD]) -> u32 {
@@ -186,8 +225,15 @@ impl EventSource for WindowsEventSource {
         loop {
             // cash: hand out what the last batch read before touching the console again.
             while let Some(record) = self.pending.pop_front() {
-                if let Some(event) = self.to_event(record) {
+                if let Some(event) = self.next_event(record) {
                     return Ok(Some(InternalEvent::Event(event)));
+                }
+            }
+            // cash: a sequence of VT text that nothing more follows is complete as it is:
+            // a lone escape is the Escape key.
+            if self.vt.is_open() && self.console.number_of_console_input_events()? == 0 {
+                if let Some(key) = self.vt.flush() {
+                    return Ok(Some(InternalEvent::Event(Event::Key(key))));
                 }
             }
 

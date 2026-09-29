@@ -1983,19 +1983,38 @@ before every prompt, silently (`cash_win32::console::repair_before_prompt`).
   and VT processing on; line feeds returning to the margin
   (`DISABLE_NEWLINE_AUTO_RETURN` off). The line editor's own raw mode is its business
   and is left to it.
+- **The console's input settings as cash started** (added 2026-09-29, with the next
+  three): window and mouse input, insert mode, QuickEdit and auto-position, remembered
+  at startup (`remember_starting_modes`). A program that takes the mouse, as crossterm's
+  and tcell's mouse capture do, turns QuickEdit off; a console with mouse input and no
+  QuickEdit has Windows Terminal send the tab the mouse, so a plain drag no longer
+  selects text, and later programs type over text instead of inserting. What the user
+  set in the console's properties is kept, since it is the starting state that comes
+  back.
 - **The UTF-8 code page** (D41), which `chcp` or a program may have changed.
 - **The terminal**, only when a program ran since the last prompt, since no program can
-  ask the terminal what it left on: attributes reset, cursor shown, mouse tracking and
-  focus reporting off, cursor keys and keypad in their normal modes, the cursor shape
-  back to the profile's, lines wrapping at the edge, and the ASCII character set, since
-  a curses program that dies while drawing boxes leaves letters showing as line pieces.
-  Not the alternate screen: leaving it also restores a saved cursor position, which
-  would move a healthy prompt.
+  ask the terminal what it left on. First the screen: the main screen rather than the
+  alternate one a full-screen program died in, and scrolling over the whole screen
+  rather than a region left behind, both between saving the cursor and restoring it.
+  Bare, both move the cursor: leaving the alternate screen restores the cursor saved
+  on entering it, which on a healthy screen is a stale one, and on a ConPTY the output
+  landed back in the line before; setting the region moves it to the top. Terminals
+  keep a saved cursor per screen, so after a full-screen program the restore puts the
+  prompt where it was before the program started. Then attributes reset, cursor shown,
+  mouse tracking and focus reporting off, cursor keys and keypad in their normal modes,
+  the cursor shape back to the profile's, lines wrapping at the edge, and the ASCII
+  character set, since a curses program that dies while drawing boxes leaves letters
+  showing as line pieces. Colours and the palette are not reset: a program may have
+  set them on purpose.
+- **Keys typed ahead** while a program had VT input on reach the console as VT text
+  (key-downs with no virtual key, `\r` for Enter, `\x7f` for Backspace, `ESC [ A` for
+  Up), and stay that way after the repair. The line editor decodes them as crossterm
+  decodes a terminal's bytes on Unix (`vendor/crossterm/CASH-PATCHES.md`, patch 2);
+  before, the command typed ahead needed a second Enter, and Backspace and the arrows
+  typed `\x7f`, `[` and `A`.
 
-Keys typed while the program still ran are the program's: the console has already
-turned them into VT text for it, and cash does not translate them back.
-`conpty_a_program_that_breaks_the_console_does_not_break_the_prompt` breaks all of the
-modes and the code page from a child and then types a command.
+The `conpty_a_program_that_*` tests in `conpty_interactive_tests.rs` break each of these
+from a PowerShell child and check the prompt after it.
 
 ---
 

@@ -28,3 +28,22 @@ It sits outside the workspace, so cash's lints do not apply to it. Its own tests
    read on its own, exactly as before. That keeps Reedline's rule of reading nothing past
    Enter: keys typed after it stay in the console for the command it starts, which
    `crates/cash/tests/conpty_interactive_tests.rs` checks with `read`.
+
+2. **Keys that arrived as VT text are decoded** (`src/event/source/windows/vt_keys.rs`,
+   and `next_event` and `vt_text` in `src/event/source/windows.rs`). While a program has
+   `ENABLE_VIRTUAL_TERMINAL_INPUT` on, the console turns each key into the text a
+   terminal sends as it arrives: a key-down with no virtual key and no scan code per
+   character, `\r` for Enter, `\x7f` for Backspace, `ESC [ A` for Up. Keys typed ahead
+   while such a program ran are still in that form after it exits and cash has turned
+   VT input off (spec D68). Upstream found no key in them: Enter, Tab and Escape were
+   dropped, so a command typed ahead needed a second Enter, and Backspace and the arrows
+   typed DEL, `[` and `A` into the line.
+
+   Such records are now decoded as crossterm decodes a terminal's bytes on Unix: Enter,
+   Tab and Backspace; Ctrl with a letter for other control characters; the cursor,
+   editing and function keys with xterm's modifiers, in both cursor-key modes; Alt with
+   the key after an escape; and a lone escape as the Escape key. Other reports (mouse,
+   focus, bracketed-paste markers) are dropped. Printable characters were already typed
+   correctly and are left to upstream, and keys with a virtual key are untouched. Tested
+   by the module's unit tests and by
+   `conpty_a_program_that_had_vt_input_on_does_not_eat_keys_typed_ahead`.

@@ -75,6 +75,8 @@ pub fn install() -> (Option<JobObject>, SessionState) {
         None => false,
     };
 
+    // Before any program can change them (D68).
+    console::remember_starting_modes();
     let utf8_console = console::set_utf8_code_page().is_ok();
 
     (

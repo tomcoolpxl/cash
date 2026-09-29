@@ -34,9 +34,10 @@ threads-required = "num-test-threads"
 filter = 'binary(it) and test(=job_groups::at_the_prompt_a_background_job_survives_ctrl_c)'
 threads-required = "num-test-threads"
 
-# Starts PowerShell twice, and each compiles a C# helper: 2 s on an idle machine.
+# Each starts PowerShell once or twice, and each compiles a C# helper: 2 to 5 s on an idle
+# machine.
 [[profile.default.overrides]]
-filter = 'binary(conpty-interactive-tests) and test(=conpty_a_program_that_breaks_the_console_does_not_break_the_prompt)'
+filter = 'binary(conpty-interactive-tests) and test(/^conpty_a_program_that_/)'
 slow-timeout = { period = "20s", terminate-after = 3 }
 
 # math.sed computing pi: 9 s with every core busy.

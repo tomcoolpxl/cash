@@ -70,10 +70,16 @@ fn start_reedline_cash() -> ConPtySession {
     .expect("failed to start cash.exe attached to Win32 ConPTY")
 }
 
-/// A PowerShell script that leaves the console as `k3d cluster create` did (2026-09-29),
-/// and worse: `break` turns VT input on, VT processing off, stops line feeds returning to
-/// the margin and sets code page 437, then exits without putting anything back; `report`
-/// prints the console's state.
+/// A PowerShell script that leaves the console as a program that went wrong does, each
+/// action exiting without putting anything back:
+///
+/// - `break` leaves it as `k3d cluster create` did (2026-09-29), and worse: VT input on,
+///   VT processing off, line feeds no longer returning to the margin, code page 437;
+/// - `alt` dies in the alternate screen of a full-screen program;
+/// - `region` leaves a scroll region of rows 3 to 8;
+/// - `mouse` takes the mouse as crossterm's mouse capture does, turning quick edit off;
+/// - `early` turns VT input on and waits while keys are typed ahead;
+/// - `input` prints the console's input mode, and anything else its state.
 const CONSOLE_STATE_PS1: &str = r#"param([string]$What)
 Add-Type -TypeDefinition @'
 using System;
@@ -94,6 +100,13 @@ public static class ConsoleState {
         IntPtr o = Open("CONOUT$"); GetConsoleMode(o, out m); SetConsoleMode(o, (m & ~0x4u) | 0x8u);
         SetConsoleCP(437); SetConsoleOutputCP(437);
     }
+    public static void VtInput() {
+        uint m; IntPtr i = Open("CONIN$"); GetConsoleMode(i, out m); SetConsoleMode(i, m | 0x200u);
+    }
+    public static void TakeMouse() { SetConsoleMode(Open("CONIN$"), 0x98u); }
+    public static string Input() {
+        uint i; GetConsoleMode(Open("CONIN$"), out i); return "0x" + i.ToString("X4");
+    }
     public static string Report() {
         uint i, o;
         GetConsoleMode(Open("CONIN$"), out i); GetConsoleMode(Open("CONOUT$"), out o);
@@ -102,114 +115,296 @@ public static class ConsoleState {
     }
 }
 '@
-if ($What -eq 'break') { [ConsoleState]::Break(); [Console]::Out.WriteLine('BROKE_IT') }
-else { [Console]::Out.WriteLine('STATE ' + [ConsoleState]::Report()) }
+$e = [char]27
+switch ($What) {
+    'break' { [ConsoleState]::Break(); [Console]::Out.WriteLine('BROKE_IT') }
+    'alt' {
+        [Console]::Out.Write("$e[?1049h$e[2J$e[5;10HFULL_SCREEN_TEXT$e[20;1H")
+        [Console]::Out.WriteLine('LEFT_IN_FULL_SCREEN')
+    }
+    'region' { [Console]::Out.Write("$e[3;8r"); [Console]::Out.WriteLine('REGION_SET') }
+    'mouse' { [ConsoleState]::TakeMouse(); [Console]::Out.WriteLine('TOOK_THE_MOUSE') }
+    'early' {
+        [ConsoleState]::VtInput()
+        [Console]::Out.WriteLine('TYPE_NOW')
+        Start-Sleep -Milliseconds 2500
+    }
+    'input' { [Console]::Out.WriteLine('INPUT_MODE=' + [ConsoleState]::Input()) }
+    default { [Console]::Out.WriteLine('STATE ' + [ConsoleState]::Report()) }
+}
 "#;
 
+/// A reedline cash on a ConPTY that runs [`CONSOLE_STATE_PS1`], with the environment
+/// PowerShell needs to start at all.
+struct ConsoleStateSession {
+    session: ConPtySession,
+    dir: PathBuf,
+    pwsh: PathBuf,
+}
+
+impl ConsoleStateSession {
+    fn start(name: &str) -> Self {
+        let dir =
+            std::env::temp_dir().join(format!("cash-console-state-{name}-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("console-state.ps1"), CONSOLE_STATE_PS1).unwrap();
+
+        // PowerShell 7 when installed, as on GitHub's runners; Windows PowerShell otherwise.
+        let system_root = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into());
+        let pwsh = std::env::var("ProgramFiles")
+            .map(|files| PathBuf::from(files).join(r"PowerShell\7\pwsh.exe"))
+            .ok()
+            .filter(|pwsh| pwsh.is_file())
+            .unwrap_or_else(|| {
+                PathBuf::from(&system_root).join(r"System32\WindowsPowerShell\v1.0\powershell.exe")
+            });
+
+        let temp = std::env::temp_dir();
+        let temp = temp.to_string_lossy();
+        let path = std::env::var("PATH").unwrap_or_default();
+        let local = std::env::var("LOCALAPPDATA").unwrap_or_default();
+        let profile = std::env::var("USERPROFILE").unwrap_or_default();
+        let mut session = ConPtySession::start(
+            &PathBuf::from(CASH),
+            &[
+                "--noprofile",
+                "--norc",
+                "--no-config",
+                "--disable-color",
+                "--input-backend=reedline",
+                "-i",
+            ],
+            Some(&[
+                ("HISTFILE", ""),
+                ("PS1", "PROMPT$ "),
+                ("TEMP", &temp),
+                ("TMP", &temp),
+                ("SystemRoot", &system_root),
+                ("PATH", &path),
+                ("LOCALAPPDATA", &local),
+                ("USERPROFILE", &profile),
+            ]),
+        )
+        .expect("failed to start cash.exe attached to Win32 ConPTY");
+        session
+            .expect("PROMPT$", Duration::from_secs(10))
+            .expect("prompt displayed");
+        Self { session, dir, pwsh }
+    }
+
+    /// Types the command line that runs the script's action `what`.
+    fn run(&mut self, what: &str) {
+        let line = format!(
+            "'{}' -NoProfile -ExecutionPolicy Bypass -File '{}' {what}\r",
+            self.pwsh.display(),
+            self.dir.join("console-state.ps1").display()
+        );
+        self.session.send(&line).unwrap();
+    }
+
+    /// Runs `what`, waits for the script's `marker` and then for the prompt after it.
+    ///
+    /// Keys typed while the script still runs are its own, and the console may turn them
+    /// into VT text for it; so the next line is typed once the prompt is back, as a user
+    /// would.
+    fn run_to_prompt(&mut self, what: &str, marker: &str) {
+        self.run(what);
+        self.session
+            .expect(marker, Duration::from_secs(30))
+            .unwrap_or_else(|e| panic!("the script's {what} did not print {marker}: {e}"));
+        self.wait_for_prompt_after(marker);
+    }
+
+    fn wait_for_prompt_after(&mut self, marker: &str) {
+        let at = self.session.output().rfind(marker).unwrap();
+        let start = std::time::Instant::now();
+        while !self
+            .session
+            .output()
+            .get(at..)
+            .is_some_and(|after| after.contains("PROMPT$"))
+        {
+            assert!(
+                start.elapsed() < Duration::from_secs(10),
+                "no prompt after {marker}"
+            );
+            self.session.read_available().unwrap();
+            std::thread::sleep(Duration::from_millis(15));
+        }
+    }
+
+    /// The input mode the script's `input` action reports: a program sees the console's
+    /// settings and the modes the line editor puts back for a command.
+    fn input_mode(&mut self) -> String {
+        self.run_to_prompt("input", "INPUT_MODE=0x");
+        let output = self.session.output();
+        let at = output.rfind("INPUT_MODE=0x").unwrap() + "INPUT_MODE=0x".len();
+        output.get(at..at + 4).unwrap().to_owned()
+    }
+
+    /// What the screen shows, once output has stopped.
+    fn screen(&mut self) -> String {
+        self.session
+            .settle(Duration::from_millis(500), Duration::from_secs(5))
+            .unwrap();
+        self.session.screen().text()
+    }
+
+    fn finish(mut self) {
+        self.session.send("exit 0\r").unwrap();
+        let code = self.session.wait().expect("process did not exit");
+        assert_eq!(code, 0);
+        let _ = std::fs::remove_dir_all(&self.dir);
+    }
+}
+
 /// A program that leaves the console in a state the line editor cannot read is put right
-/// before the next prompt (decided with the user, 2026-09-29). `k3d cluster create` left
-/// VT input on, and Enter and Backspace stopped working until the shell was closed.
+/// before the next prompt (D68, decided with the user, 2026-09-29). `k3d cluster create`
+/// left VT input on, and Enter and Backspace stopped working until the shell was closed.
 #[test]
 fn conpty_a_program_that_breaks_the_console_does_not_break_the_prompt() {
-    let dir = std::env::temp_dir().join(format!("cash-console-state-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    let script = dir.join("console-state.ps1");
-    std::fs::write(&script, CONSOLE_STATE_PS1).unwrap();
-
-    // PowerShell 7 when installed, as on GitHub's runners; Windows PowerShell otherwise.
-    let system_root = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into());
-    let pwsh = std::env::var("ProgramFiles")
-        .map(|files| PathBuf::from(files).join(r"PowerShell\7\pwsh.exe"))
-        .ok()
-        .filter(|pwsh| pwsh.is_file())
-        .unwrap_or_else(|| {
-            PathBuf::from(&system_root).join(r"System32\WindowsPowerShell\v1.0\powershell.exe")
-        });
-    let run = |what: &str| {
-        format!(
-            "'{}' -NoProfile -ExecutionPolicy Bypass -File '{}' {what}\r",
-            pwsh.display(),
-            script.display()
-        )
-    };
-
-    // PowerShell needs more of the environment than cash does to start at all.
-    let temp = std::env::temp_dir();
-    let temp = temp.to_string_lossy();
-    let path = std::env::var("PATH").unwrap_or_default();
-    let local = std::env::var("LOCALAPPDATA").unwrap_or_default();
-    let profile = std::env::var("USERPROFILE").unwrap_or_default();
-    let mut session = ConPtySession::start(
-        &PathBuf::from(CASH),
-        &[
-            "--noprofile",
-            "--norc",
-            "--no-config",
-            "--disable-color",
-            "--input-backend=reedline",
-            "-i",
-        ],
-        Some(&[
-            ("HISTFILE", ""),
-            ("PS1", "PROMPT$ "),
-            ("TEMP", &temp),
-            ("TMP", &temp),
-            ("SystemRoot", &system_root),
-            ("PATH", &path),
-            ("LOCALAPPDATA", &local),
-            ("USERPROFILE", &profile),
-        ]),
-    )
-    .expect("failed to start cash.exe attached to Win32 ConPTY");
-    session
-        .expect("PROMPT$", Duration::from_secs(10))
-        .expect("prompt displayed");
-
-    session.send(&run("break")).unwrap();
-    session
-        .expect("BROKE_IT", Duration::from_secs(30))
-        .expect("the script did not break the console");
-
-    // Keys typed while the script still runs are its own, and the console already turns
-    // them into VT text for it; so the next line is typed once the prompt is back, as a
-    // user would.
-    let broke = session.output().rfind("BROKE_IT").unwrap();
-    let start = std::time::Instant::now();
-    while !session
-        .output()
-        .get(broke..)
-        .is_some_and(|after| after.contains("PROMPT$"))
-    {
-        assert!(
-            start.elapsed() < Duration::from_secs(10),
-            "no prompt after the script ended"
-        );
-        session.read_available().unwrap();
-        std::thread::sleep(Duration::from_millis(15));
-    }
+    let mut cash = ConsoleStateSession::start("break");
+    cash.run_to_prompt("break", "BROKE_IT");
 
     // Enter must still end the line: without the repair it arrives as a bare `\r`, not
     // as the Enter key, and the line editor waits on.
-    session.send("echo SUM=$((40+2))\r").unwrap();
-    session
+    cash.session.send("echo SUM=$((40+2))\r").unwrap();
+    cash.session
         .expect("SUM=42", Duration::from_secs(5))
         .expect("Enter did not reach the line editor after the console was broken");
 
-    session.send(&run("report")).unwrap();
-    session
+    cash.run("report");
+    cash.session
         .expect(
             "STATE vt_input=False vt_output=True no_auto_return=False cp=65001/65001",
             Duration::from_secs(30),
         )
         .expect("the console was not put back before the prompt");
-
-    session.send("exit 0\r").unwrap();
-    let code = session.wait().expect("process did not exit");
-    assert_eq!(code, 0);
-    let _ = std::fs::remove_dir_all(&dir);
+    cash.finish();
 }
 
-/// Keys that arrive after Enter belong to the command Enter starts. The line editor reads
+/// A full-screen program that dies without leaving the alternate screen would have the
+/// prompt drawn there, with everything before it out of sight (D68).
+#[test]
+fn conpty_a_program_that_dies_in_full_screen_leaves_the_prompt_on_the_main_screen() {
+    let mut cash = ConsoleStateSession::start("alt");
+    cash.session.send("echo MAIN_$((6*7))\r").unwrap();
+    cash.session
+        .expect("MAIN_42", Duration::from_secs(5))
+        .unwrap();
+    cash.run_to_prompt("alt", "LEFT_IN_FULL_SCREEN");
+    cash.session.send("echo AFTER_$((6*7))\r").unwrap();
+    cash.session
+        .expect("AFTER_42", Duration::from_secs(5))
+        .unwrap();
+
+    let screen = cash.screen();
+    assert!(
+        screen.contains("MAIN_42") && !screen.contains("FULL_SCREEN_TEXT"),
+        "the prompt stayed on the full-screen program's screen:\n{screen}"
+    );
+    cash.finish();
+}
+
+/// Leaving the alternate screen and resetting the scroll region move the cursor, and
+/// after a healthy program neither may move the prompt (D68): a bare leave put the
+/// output back into the line before it on a ConPTY.
+#[test]
+fn conpty_a_program_that_ran_leaves_a_healthy_prompt_where_it_was() {
+    let mut cash = ConsoleStateSession::start("healthy");
+    let mode = cash.input_mode();
+    cash.session.send("echo HEALTHY_$((6*7))\r").unwrap();
+    cash.session
+        .expect("HEALTHY_42", Duration::from_secs(5))
+        .unwrap();
+
+    let screen = cash.screen();
+    let lines: Vec<&str> = screen.lines().collect();
+    let report = lines
+        .iter()
+        .position(|line| line.contains(&format!("INPUT_MODE=0x{mode}")))
+        .unwrap_or_else(|| panic!("no report on the screen:\n{screen}"));
+    assert_eq!(
+        lines.get(report + 1..report + 3),
+        Some(&["PROMPT$ echo HEALTHY_$((6*7))", "HEALTHY_42"][..]),
+        "the prompt moved after the program:\n{screen}"
+    );
+    cash.finish();
+}
+
+/// A scroll region left behind confines everything after it to those rows, and output
+/// above them is lost as it scrolls (D68).
+#[test]
+fn conpty_a_program_that_leaves_a_scroll_region_does_not_confine_later_output() {
+    let mut cash = ConsoleStateSession::start("region");
+    cash.run_to_prompt("region", "REGION_SET");
+    let numbers: Vec<String> = (1..=30).map(|n| n.to_string()).collect();
+    cash.session
+        .send(&format!(
+            "for i in {}; do echo L$i; done\r",
+            numbers.join(" ")
+        ))
+        .unwrap();
+    cash.session.expect("L30", Duration::from_secs(5)).unwrap();
+
+    // Rows 3 to 8 hold six lines; the whole screen holds the last twenty or so.
+    let screen = cash.screen();
+    assert!(
+        screen.lines().any(|line| line == "L10") && screen.lines().any(|line| line == "L30"),
+        "output after the program still scrolled in its region:\n{screen}"
+    );
+    cash.finish();
+}
+
+/// A program that takes the mouse turns quick edit off, and Windows Terminal then sends
+/// the tab the mouse instead of selecting text. The prompt puts back the settings cash
+/// started with (D68).
+#[test]
+fn conpty_a_program_that_took_the_mouse_gives_it_back() {
+    let mut cash = ConsoleStateSession::start("mouse");
+    let before = cash.input_mode();
+    let took = cash.session.output().len();
+    cash.run_to_prompt("mouse", "TOOK_THE_MOUSE");
+    let after = cash.input_mode();
+    assert_eq!(
+        after, before,
+        "the console's input settings were not put back"
+    );
+
+    // Where the console asks the terminal for the mouse, it must also let it go.
+    let stream = cash.session.output().get(took..).unwrap_or_default();
+    if let Some(asked) = stream.rfind("\x1b[?1003;1006h") {
+        assert!(
+            stream
+                .rfind("\x1b[?1003;1006l")
+                .is_some_and(|gave| gave > asked),
+            "the terminal was left sending the mouse"
+        );
+    }
+    cash.finish();
+}
+
+/// Keys typed ahead while a program had VT input on reach the console as VT text: the
+/// line editor decodes them (vendor/crossterm/CASH-PATCHES.md, patch 2), so the typed-ahead
+/// command runs without a second Enter, and Backspace and the arrows edit it.
+#[test]
+fn conpty_a_program_that_had_vt_input_on_does_not_eat_keys_typed_ahead() {
+    let mut cash = ConsoleStateSession::start("early");
+    cash.run("early");
+    cash.session
+        .expect("TYPE_NOW", Duration::from_secs(30))
+        .expect("the script did not turn VT input on");
+    // X is rubbed out, and left then right leaves the cursor where it was.
+    cash.session
+        .send("echo EARLX\x7fY_\x1b[D\x1b[C$((1+1))\r")
+        .unwrap();
+    cash.session
+        .expect("EARLY_2", Duration::from_secs(15))
+        .expect("the command typed ahead did not run as typed");
+    cash.finish();
+}
+
+// Keys that arrive after Enter belong to the command Enter starts. The line editor reads
 /// the console in batches (vendor/crossterm/CASH-PATCHES.md), and a batch that ran past
 /// Enter would keep the answer below from `read`, handing it to the next prompt instead.
 #[test]

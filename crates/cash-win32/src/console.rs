@@ -185,6 +185,52 @@ pub fn note_program_started() {
 /// `\x7f` rather than as keys. Letters still arrive, but the line editor reads keys, so
 /// Enter and Backspace do nothing. `k3d cluster create` left it on (2026-09-29).
 const VT_INPUT: u32 = 0x0200;
+/// The input modes the line editor turns off for its raw mode and back on for a command:
+/// processed, line and echo input. Its business, so never touched here.
+const COOKED: u32 = 0x0001 | 0x0002 | 0x0004;
+/// The input modes that are the console's settings rather than a program's: window and
+/// mouse input, insert mode, quick edit and auto-position. A program that takes the mouse
+/// turns quick edit off, and a console with mouse input and no quick edit has Windows
+/// Terminal send it the mouse, so text no longer selects with a plain drag.
+const SETTINGS: u32 = 0x0008 | 0x0010 | 0x0020 | 0x0040 | 0x0100;
+/// `ENABLE_EXTENDED_FLAGS`: without it, setting a mode leaves insert mode and quick edit as
+/// they are.
+const EXTENDED_FLAGS: u32 = 0x0080;
+
+/// The console's input settings ([`SETTINGS`]) as cash started, for
+/// [`repair_before_prompt`] to put back.
+static STARTING_INPUT: std::sync::OnceLock<u32> = std::sync::OnceLock::new();
+
+/// Remembers the console's input settings as cash starts, before any program can change
+/// them, for [`repair_before_prompt`]. Without a console, nothing is remembered.
+pub fn remember_starting_modes() {
+    use std::os::windows::io::AsRawHandle as _;
+    use windows_sys::Win32::System::Console::GetConsoleMode;
+
+    let Ok(input) = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open("CONIN$")
+    else {
+        return;
+    };
+    let mut mode = 0u32;
+    // SAFETY: an open console handle owned by `input`, and a valid out-parameter.
+    if unsafe { GetConsoleMode(input.as_raw_handle(), &raw mut mode) } != 0 {
+        let _ = STARTING_INPUT.set(mode & SETTINGS);
+    }
+}
+
+/// The input mode to have at a prompt, given the `current` one and the settings cash
+/// started with, if known: the line editor's raw-mode bits as they are, the starting
+/// settings (or the current ones), and no VT input.
+const fn wanted_input(current: u32, starting: Option<u32>) -> u32 {
+    let settings = match starting {
+        Some(starting) => starting,
+        None => current,
+    };
+    ((current & COOKED) | (settings & SETTINGS) | EXTENDED_FLAGS) & !VT_INPUT
+}
 /// Output modes the prompt needs: processed output, wrapping at the edge, VT sequences.
 const NEEDED_OUTPUT: u32 = 0x0001 | 0x0002 | 0x0004;
 /// `DISABLE_NEWLINE_AUTO_RETURN`: a line feed then stays in its column, and output steps
@@ -193,20 +239,28 @@ const NO_AUTO_RETURN: u32 = 0x0008;
 
 /// The terminal state a program may leave behind, put back before the prompt after one ran.
 ///
-/// Attributes reset, cursor shown, mouse tracking (1000, 1002, 1003, 1006, 1015) and focus
-/// reporting off, cursor keys and keypad in their normal modes, the cursor shape the
+/// First the screen: the main screen rather than the alternate one a full-screen program
+/// died in, and scrolling over the whole screen rather than a region, both between saving
+/// the cursor and restoring it. Leaving the alternate screen restores the cursor saved on
+/// entering it, and setting the region moves it to the top; on a healthy screen the bare
+/// sequences would move the prompt into earlier output, and the save and restore keep it
+/// in place (tried on a ConPTY, 2026-09-29). Terminals keep a saved cursor per screen, so
+/// after a full-screen program the restore puts back the cursor from before it started.
+///
+/// Then attributes reset, cursor shown, mouse tracking (1000, 1002, 1003, 1006, 1015) and
+/// focus reporting off, cursor keys and keypad in their normal modes, the cursor shape the
 /// terminal's profile gives, lines wrapping at the edge, and ASCII in G0: a curses program
-/// that dies while drawing boxes leaves letters showing as line pieces. Not the alternate
-/// screen: leaving it also restores a saved cursor position, which would move a healthy
-/// prompt.
-pub const TERMINAL_RESET: &str = "\x1b[0m\x1b[?25h\x1b[?1000l\x1b[?1002l\x1b[?1003l\
+/// that dies while drawing boxes leaves letters showing as line pieces. These come after
+/// the restore, which also puts back the attributes and character set that were saved.
+pub const TERMINAL_RESET: &str = "\x1b7\x1b[?1049l\x1b[r\x1b8\
+                                  \x1b[0m\x1b[?25h\x1b[?1000l\x1b[?1002l\x1b[?1003l\
                                   \x1b[?1006l\x1b[?1015l\x1b[?1004l\x1b[?1l\x1b>\x1b[0 q\
                                   \x1b[?7h\x1b(B\x0f";
 
 /// What [`repair_before_prompt`] found wrong and put back.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct Repaired {
-    /// VT input was on.
+    /// VT input was on, or an input setting differed from cash's start.
     pub input: bool,
     /// An output mode the prompt needs was off, or line feeds had stopped returning.
     pub output: bool,
@@ -220,10 +274,11 @@ pub struct Repaired {
 ///
 /// Wrong is where the line editor could not read keys, or the prompt could not be drawn
 /// (decided with the user, 2026-09-29, after `k3d cluster create` left VT input on). Only
-/// what is wrong is changed, silently: VT input off; processed output, wrapping and VT
-/// processing on, and line feeds returning to the margin; the UTF-8 code page (D41); and,
-/// when a program ran since the last prompt, [`TERMINAL_RESET`]. The line editor's own
-/// raw mode is its business and is left to it. Without a console, nothing is done.
+/// what is wrong is changed, silently: VT input off, and the input settings as cash
+/// started ([`remember_starting_modes`]); processed output, wrapping and VT processing on,
+/// and line feeds returning to the margin; the UTF-8 code page (D41); and, when a program
+/// ran since the last prompt, [`TERMINAL_RESET`]. The line editor's own raw mode is its
+/// business and is left to it. Without a console, nothing is done.
 pub fn repair_before_prompt() -> Repaired {
     use std::io::Write as _;
     use std::os::windows::io::AsRawHandle as _;
@@ -252,9 +307,12 @@ pub fn repair_before_prompt() -> Repaired {
     let input = open("CONIN$");
     if let Some(input) = &input
         && let Some(current) = mode(input)
-        && current & VT_INPUT != 0
     {
-        repaired.input = set(input, current & !VT_INPUT);
+        let wanted = wanted_input(current, STARTING_INPUT.get().copied());
+        // The console need not report the extended-flags bit back, so it is not compared.
+        if (wanted ^ current) & !EXTENDED_FLAGS != 0 {
+            repaired.input = set(input, wanted);
+        }
     }
     let output = open("CONOUT$");
     if let Some(output) = &output
@@ -388,4 +446,40 @@ where
     unsafe { CloseHandle(snapshot) };
 
     Ok(affected)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Windows Terminal's console as cash starts: cooked, with mouse input, insert mode,
+    /// quick edit and auto-position, and extended flags.
+    const FRESH: u32 = 0x01F7;
+
+    #[test]
+    fn a_healthy_prompt_is_left_alone() {
+        assert_eq!(wanted_input(FRESH, Some(FRESH & SETTINGS)), FRESH);
+        // In the line editor's raw mode.
+        assert_eq!(wanted_input(0x01F0, Some(FRESH & SETTINGS)), 0x01F0);
+    }
+
+    #[test]
+    fn vt_input_goes_and_nothing_else_changes() {
+        // `k3d cluster create` left 0x03F0 (2026-09-29).
+        assert_eq!(wanted_input(0x03F0, Some(FRESH & SETTINGS)), 0x01F0);
+        assert_eq!(wanted_input(0x03F0, None), 0x01F0);
+    }
+
+    #[test]
+    fn a_program_that_took_the_mouse_gives_back_quickedit_and_insert_mode() {
+        // What crossterm's mouse capture sets: window and mouse input, extended flags.
+        assert_eq!(wanted_input(0x0098, Some(FRESH & SETTINGS)), 0x01F0);
+    }
+
+    #[test]
+    fn settings_the_user_started_with_are_kept() {
+        // quick edit off in the console's properties stays off.
+        let started = (FRESH & !0x0040) & SETTINGS;
+        assert_eq!(wanted_input(0x01B7, Some(started)), 0x01B7);
+    }
 }
