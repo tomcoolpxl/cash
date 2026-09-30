@@ -2493,10 +2493,11 @@ fn setup_redirect_output_and_error_to(
 }
 
 /// The name a redirection's target goes by when it cannot be opened: the path it was
-/// resolved to, or for a device the name as it was written. `/dev/tty` resolves to
-/// `C:/dev/tty` on its way to being opened, and no such file was ever looked for.
+/// resolved to, or for a device or a descriptor (`/dev/fd/9`) the name as it was written.
+/// `/dev/tty` resolves to `C:/dev/tty` on its way to being opened, and no such file was
+/// ever looked for.
 fn redirect_target_name(written: &str, resolved: &Path) -> String {
-    if sys::fs::is_special_file(resolved) {
+    if sys::fs::is_special_file(resolved) || sys::fs::named_descriptor(resolved).is_some() {
         written.to_owned()
     } else {
         resolved.to_string_lossy().to_string()

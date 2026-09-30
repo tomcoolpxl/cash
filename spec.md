@@ -319,8 +319,34 @@ A terminal is one file; a console's keys are `CONIN$` and its screen `CONOUT$`. 
 Without a console (a detached process, a service) the redirection fails with Bash's
 words for a process without a controlling terminal, `No such device or address`.
 
-Both names are devices only at `/dev`, as written or on whatever drive the working
-directory is: `C:/src/dev/null` is a file.
+**`/dev/stdin`, `/dev/stdout`, `/dev/stderr` and `/dev/fd/N` are the shell's
+descriptors.** `echo "message" > /dev/stderr` is `>&2` written out, and as common in
+scripts. Opening one of these names gives the descriptor the shell has under that number
+at that moment: the one a redirection or a pipe put there, not the one the process
+started with.
+
+```
+warn() { echo "$*" > /dev/stderr; }
+warn careful 2> log                  # goes to log
+echo 'echo sourced' | . /dev/stdin
+exec 9> out; echo nine > /dev/fd/9
+```
+
+The descriptor is duplicated, which is what Bash's manual says Bash does on a system
+without these files; nothing is opened a second time. So `> /dev/stderr` does not empty a
+file that standard error is going to. Git Bash, where the name is a file that gets opened
+again, does: `( echo one >&2; echo two > /dev/stderr ) 2> log` leaves both lines here
+and only `two` there. A name whose descriptor is not open fails in Bash's words,
+`/dev/fd/9: No such file or directory`, and no file is looked for or made in its place.
+
+All of these names are what they are only at `/dev`, as written or on whatever drive the
+working directory is: `C:/src/dev/null` is a file. N is a number as a listing of
+`/dev/fd` would write it, so `/dev/fd/03` is a file as well.
+
+They are recognised where cash opens a file by name itself: the word of a redirection and
+the operand of `source`. Not yet as an argument to a command (`tee /dev/stderr`,
+`cat /dev/null`), and not by the file tests (`[ -e /dev/null ]` is false, see the
+baseline table).
 
 ### D8 — Command resolution is cash's own
 

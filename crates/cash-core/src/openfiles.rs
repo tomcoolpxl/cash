@@ -191,7 +191,12 @@ impl TryFrom<OpenFile> for Stdio {
         // fail (e.g. under descriptor exhaustion), so the conversion is fallible and the error is
         // surfaced to the caller rather than silently degrading the child's streams.
         match open_file {
-            OpenFile::Stdin(_) | OpenFile::Stdout(_) | OpenFile::Stderr(_) => Ok(Self::inherit()),
+            OpenFile::Stdin(_) => Ok(Self::inherit()),
+            // Not `inherit()`, which gives the child whichever stream of ours has the
+            // number this one is put under: `program 2>&1` kept our standard error as the
+            // program's, and `program >&2` our standard output.
+            OpenFile::Stdout(stdout) => Ok(stdout.into()),
+            OpenFile::Stderr(stderr) => Ok(stderr.into()),
             OpenFile::File(f) => Ok(f.try_clone()?.into()),
             OpenFile::PipeReader(r) => Ok(r.try_clone()?.into()),
             OpenFile::PipeWriter(w) => Ok(w.try_clone()?.into()),

@@ -49,6 +49,14 @@ pub const fn is_special_file(_path: &std::path::Path) -> bool {
     false
 }
 
+/// The descriptor of the shell's that `path` names, if it names one (`/dev/stdin`,
+/// `/dev/fd/3`).
+//
+// This is a stub implementation that finds none.
+pub const fn named_descriptor(_path: &std::path::Path) -> Option<crate::ShellFd> {
+    None
+}
+
 /// Returns the path to the system-wide shell profile script.
 ///
 /// Stub implementation that returns `None`.

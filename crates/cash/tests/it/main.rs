@@ -44,6 +44,8 @@ mod coolfetch;
 // M2: real scripts, written the way they are written on Linux.
 mod corpus;
 mod crlf_scripts;
+// D7: `/dev/stdin`, `/dev/stdout`, `/dev/stderr` and `/dev/fd/N` as the shell's descriptors.
+mod dev_descriptors;
 mod directory_stack;
 mod disown;
 mod doctor_busybox;

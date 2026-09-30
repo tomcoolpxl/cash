@@ -751,6 +751,33 @@ fn a_failed_exec_exits_a_non_interactive_shell() {
 }
 
 // ---------------------------------------------------------------------------
+// A program's streams, sent to one of the shell's own.
+// ---------------------------------------------------------------------------
+
+/// `tool 2>&1` in a script whose output goes to a log puts the tool's errors in the log.
+/// It left them on the shell's standard error: a program was given whichever of the
+/// shell's streams had the number being set, so `2>&1` and `>&2` changed nothing for it
+/// unless the script had sent the stream somewhere itself.
+#[test]
+fn a_program_is_given_the_stream_its_own_is_sent_to() {
+    let errors_to_output = cash(r#"cmd.exe /d /c "echo an error 1>&2" 2>&1"#);
+    assert_eq!(errors_to_output.stdout, "an error");
+    assert_eq!(errors_to_output.stderr, "");
+
+    let output_to_errors = cash(r#"cmd.exe /d /c "echo a message" >&2"#);
+    assert_eq!(output_to_errors.stdout, "");
+    assert_eq!(output_to_errors.stderr, "a message");
+
+    let after_exec = cash(r#"exec 2>&1; cmd.exe /d /c "echo an error 1>&2""#);
+    assert_eq!(after_exec.stdout, "an error");
+    assert_eq!(after_exec.stderr, "");
+
+    let both = cash(r#"cmd.exe /d /c "echo a message & echo an error 1>&2""#);
+    assert_eq!(both.stdout, "a message");
+    assert_eq!(both.stderr, "an error");
+}
+
+// ---------------------------------------------------------------------------
 // Builtins that exist because their absence would break scripts (D2).
 // ---------------------------------------------------------------------------
 
