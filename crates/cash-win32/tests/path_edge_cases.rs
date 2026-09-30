@@ -243,7 +243,17 @@ fn unc_is_absolute_and_has_no_drive_spelling() {
 fn dev_paths_are_matched_exactly() {
     assert_eq!(accept("/dev/null"), Target::Null);
     // Near-misses are ordinary paths, not devices.
-    for near in ["/dev/nullx", "/dev/nul", "/dev/NULL", "dev/null", "/dev"] {
+    for near in [
+        "/dev/nullx",
+        "/dev/nul",
+        "/dev/NULL",
+        "dev/null",
+        "/dev",
+        "/dev/",
+        "/dev/null/x",
+        "/dev/stdin/0",
+        "/dev/../dev/null",
+    ] {
         assert!(
             matches!(accept(near), Target::Path(_)),
             "{near} was treated as a device"
@@ -252,10 +262,63 @@ fn dev_paths_are_matched_exactly() {
 }
 
 #[test]
+fn a_device_is_named_from_the_root_only() {
+    // The name is all there is to go on, so a folder called `dev` must not be enough:
+    // `cd ~/dev; echo x > null` writes a file, and so does naming that file in full.
+    for file in [
+        "dev/null",
+        "./dev/null",
+        "a/dev/null",
+        "C:/dev/null",
+        "/c/dev/null",
+        "C:/Users/me/dev/null",
+        "dev/stdout",
+        "C:/dev/stdin",
+        "C:/dev/fd/1",
+        // Two leading slashes are a UNC path: the server `dev`.
+        "//dev/null",
+        "//dev/stdin",
+    ] {
+        assert!(
+            matches!(accept(file), Target::Path(_)),
+            "{file} was treated as a device"
+        );
+    }
+}
+
+#[test]
+fn a_device_name_may_be_spelled_as_a_filesystem_would_read_it() {
+    // `"$dir/null"` with `dir=/dev/` is `/dev//null`, and Linux opens the device.
+    for null in [
+        "/dev//null",
+        "/dev/./null",
+        "/./dev/null",
+        "///dev/null",
+        "/dev/null/",
+        r"\dev\null",
+    ] {
+        assert_eq!(accept(null), Target::Null, "{null} is /dev/null");
+    }
+    assert_eq!(accept("/dev//stdin"), Target::Stdin);
+    assert_eq!(accept("/dev/./stdout"), Target::Stdout);
+    assert_eq!(accept(r"\dev\stderr"), Target::Stderr);
+    assert_eq!(accept("/dev/fd//3"), Target::Fd(3));
+}
+
+#[test]
 fn dev_fd_parses_only_real_numbers() {
     assert_eq!(accept("/dev/fd/0"), Target::Fd(0));
     assert_eq!(accept("/dev/fd/255"), Target::Fd(255));
-    for bad in ["/dev/fd/", "/dev/fd/x", "/dev/fd/-1", "/dev/fd/1x"] {
+    for bad in [
+        "/dev/fd",
+        "/dev/fd/",
+        "/dev/fd/x",
+        "/dev/fd/-1",
+        "/dev/fd/+1",
+        "/dev/fd/1x",
+        "/dev/fd/1/2",
+        "/dev/fd/99999999999",
+    ] {
         assert!(
             matches!(accept(bad), Target::Path(_)),
             "{bad} parsed as an fd"

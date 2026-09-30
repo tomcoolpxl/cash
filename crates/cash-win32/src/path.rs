@@ -51,17 +51,37 @@ pub fn accept(input: &str) -> Target {
     }
 }
 
-/// The `/dev/*` and `/tmp` mappings that D7 keeps always on.
+/// The `/dev/*` mappings that D7 keeps always on.
+///
+/// A device is named by the spelling alone, so the name has to be rooted at `/`:
+/// `dev/null` is a file in a folder called `dev`, and so is `C:/dev/null`. What a
+/// filesystem would read as the same name is accepted as that name — `/dev//null`,
+/// `/dev/./null`, either separator (D3) — because `"$dir/null"` with `dir=/dev/` writes
+/// the first. `//dev/null` is not: two leading slashes are a UNC path.
 fn device_target(input: &str) -> Option<Target> {
-    match input {
-        "/dev/null" => Some(Target::Null),
-        "/dev/stdin" => Some(Target::Stdin),
-        "/dev/stdout" => Some(Target::Stdout),
-        "/dev/stderr" => Some(Target::Stderr),
-        _ => input
-            .strip_prefix("/dev/fd/")
-            .and_then(|n| n.parse().ok())
-            .map(Target::Fd),
+    let unified = input.replace('\\', "/");
+    if unified.starts_with("//") && !unified.starts_with("///") {
+        return None;
+    }
+
+    let mut segments = unified
+        .strip_prefix('/')?
+        .split('/')
+        .filter(|segment| !segment.is_empty() && *segment != ".");
+    if segments.next()? != "dev" {
+        return None;
+    }
+
+    match (segments.next()?, segments.next(), segments.next()) {
+        ("null", None, _) => Some(Target::Null),
+        ("stdin", None, _) => Some(Target::Stdin),
+        ("stdout", None, _) => Some(Target::Stdout),
+        ("stderr", None, _) => Some(Target::Stderr),
+        // Digits only: `parse` on its own takes `+3` for a number.
+        ("fd", Some(number), None) if number.bytes().all(|b| b.is_ascii_digit()) => {
+            number.parse().ok().map(Target::Fd)
+        }
+        _ => None,
     }
 }
 

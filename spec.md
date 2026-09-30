@@ -2254,6 +2254,7 @@ someone who expected bash, so additions need to earn their place.
 | 36 | `which ls` prints `C:/…/cash.exe/ls`, a path no file is at, which cash runs as `ls` | A builtin has no file, and scripts run what `which` prints | D58 |
 | 37 | A subscript that `unset`, `read`, `printf -v`, `declare` or `[[ -v ]]` expands a second time never runs a command substitution: `unset "a[$key]"` with `key='$(cmd)'` is an error | Bash runs `cmd`, its best-known array injection; `$i` and `$((…))` still expand as in Bash (as 27 does for arithmetic) | — |
 | 38 | A `CHLD` trap runs once per child process cash starts and reaps; a bundled tool (`ls`, `cat`) and a command substitution run inside cash and raise none | Windows has no `SIGCHLD`; cash emulates it from the children it waits for, and those have no process | D64 |
+| 39 | `/dev/stdin`, `/dev/stdout`, `/dev/stderr` and `/dev/fd/N` work in a redirection and in `source`, and share the descriptor: `> /dev/stdout` never truncates the file standard output is writing, and a read from `/dev/fd/3` goes on where 3 stands. As an argument (`cat /dev/stdin`) or in a file test they name nothing | Windows has no `/dev` to open a second time, and an argument reaches a command as written | D7, D4 |
 
 `select` was missing outright until recently: it was a reserved word with no grammar
 rule, so `select x in a b; do …; done` was a syntax error that took the whole file with
