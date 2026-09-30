@@ -691,7 +691,19 @@ fn process_substitution_works_as_a_redirect() {
 fn write_process_substitution_works() {
     // Process substitution supports real-time streaming: `>(...)` connects the
     // consuming subshell via in-memory pipe and receives the stream cleanly.
-    assert_eq!(cash("echo x > >(cat); sleep 0.05").stdout, "x");
+    //
+    // Neither Bash nor cash waits for a `>(...)`. Bash's is a process that outlives the
+    // shell and still writes; cash's is a thread of the shell and ends with it, so a
+    // script that wants the output has to wait for it. The outer `cat` does, here and in
+    // Bash: it reads until the substitution has closed its output. No length of sleep
+    // decides the result, as `echo x > >(cat); sleep 0.05` did on a busy machine.
+    assert_eq!(cash("{ echo x > >(cat); } | cat").stdout, "x");
+    // A consumer slower than the rest of the script is waited for as well, and its
+    // output arrives before the script goes on.
+    assert_eq!(
+        cash("{ echo x > >(sleep 0.2; cat); } | cat; echo after").stdout,
+        "x\nafter"
+    );
 }
 
 // ---------------------------------------------------------------------------
