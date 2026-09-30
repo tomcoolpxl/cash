@@ -138,7 +138,7 @@ fn known_crash_classes_map_to_bash_signal_numbers() {
     assert_eq!(from_windows(0xC000_001D), 132); // illegal instruction -> SIGILL
     assert_eq!(from_windows(0xC000_0094), 136); // integer divide by zero -> SIGFPE
     assert_eq!(from_windows(0xC000_0409), 134); // stack buffer overrun -> SIGABRT
-    assert_eq!(from_windows(0xC000_013A), 137); // Ctrl-C exit -> SIGKILL
+    assert_eq!(from_windows(0xC000_013A), 130); // Ctrl-C exit -> SIGINT
 }
 
 #[test]

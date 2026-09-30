@@ -1,0 +1,5 @@
+$ ping.exe -n 30 127.0.0.1 > /dev/null; echo after
+
+$ echo "rc=$?"
+rc=130
+$

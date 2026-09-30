@@ -19,6 +19,8 @@ pub struct ChildProcess {
     pgid: Option<sys::process::ProcessId>,
     /// The console as the process left it when Ctrl-Z stopped it, for `fg` to put back.
     console_at_stop: Option<cash_win32::console::ConsoleState>,
+    /// Whether the keyboard's Ctrl-C arrived while the shell waited for the process.
+    saw_ctrl_c: bool,
 }
 
 impl ChildProcess {
@@ -33,7 +35,13 @@ impl ChildProcess {
             pid,
             pgid,
             console_at_stop: None,
+            saw_ctrl_c: false,
         }
+    }
+
+    /// Whether the keyboard's Ctrl-C arrived during a wait for the process.
+    pub(crate) const fn saw_ctrl_c(&self) -> bool {
+        self.saw_ctrl_c
     }
 
     /// Takes the console state saved when Ctrl-Z stopped the process (D19).
@@ -86,9 +94,11 @@ impl ChildProcess {
                     }
                 },
                 _ = sys::signal::await_ctrl_c() => {
-                    // SIGINT got thrown. Handle it and continue looping. The child should
+                    // SIGINT got thrown. Note it and continue looping. The child should
                     // have received it as well, and either handled it or ended up getting
-                    // terminated (in which case we'll see the child exit).
+                    // terminated (in which case we'll see the child exit). What it means
+                    // for the shell is decided once the child has ended.
+                    self.saw_ctrl_c = true;
                 },
             }
         }

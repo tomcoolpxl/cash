@@ -24,7 +24,7 @@ filter = 'binary(it) and test(/^link_tools::/)'
 test-group = 'link-tools'
 
 [[profile.default.overrides]]
-filter = 'binary(conpty-interactive-tests) or (binary(it) and test(/^read_console::/))'
+filter = 'binary(conpty-interactive-tests) or (binary(it) and test(/^(read_console|ctrl_c)::/))'
 test-group = 'conpty'
 
 # Tests that are slow by nature, rather than stuck: each gets three periods.

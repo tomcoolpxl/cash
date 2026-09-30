@@ -10,7 +10,7 @@ use crate::commands::{self, CommandArg};
 use crate::env::{EnvironmentLookup, EnvironmentScope, valid_variable_name};
 use crate::openfiles::{OpenFile, OpenFiles};
 use crate::results::{
-    ExecutionExitCode, ExecutionResult, ExecutionSpawnResult, ExecutionWaitResult,
+    ExecutionExitCode, ExecutionResult, ExecutionSpawnResult, ExecutionWaitResult, Interrupt,
 };
 use crate::shell::Shell;
 use crate::variables::{
@@ -83,6 +83,14 @@ pub struct ExecutionParameters {
     /// substitution) is a part of that one, and an interrupt is not its to act on: it
     /// passes the interrupt on, and the outermost program acts on it.
     pub(crate) within_program: bool,
+
+    /// Whether this runs in a command started with `&`.
+    ///
+    /// cash (D13): such a command is not the keyboard's to interrupt. Bash has it ignore
+    /// SIGINT when job control is off, and keeps it out of the terminal's foreground
+    /// group when it is on. Here it is a task of the shell's own process, so it leaves a
+    /// pending Ctrl-C for the foreground to act on.
+    pub(crate) asynchronous: bool,
 }
 
 impl ExecutionParameters {
@@ -270,6 +278,12 @@ impl Execute for ast::Program {
         params.within_program = true;
         let params = &params;
 
+        // A Ctrl-C that arrived when the prompt's last command line had nothing left to
+        // interrupt is not for the next one.
+        if !part_of_another && shell.options().interactive {
+            let _ = cash_win32::console::take_interrupt();
+        }
+
         for command in &self.complete_commands {
             // Execute the command and handle any errors without immediately propagating them.
             // This allows interactive shells to continue executing subsequent commands even after
@@ -393,6 +407,7 @@ async fn spawn_async_ao_list_in_task<'a, SE: extensions::ShellExtensions>(
     // cash (D13): at the prompt, a background job is out of the keyboard's reach. Scripts
     // keep sharing the console's group, as they always have.
     cloned_params.background = shell.options().enable_job_control;
+    cloned_params.asynchronous = true;
 
     // Mark the child shell as not interactive; we don't want it messing with the terminal too much.
     cloned_shell.options_mut().interactive = false;
@@ -520,6 +535,17 @@ impl Execute for ast::Pipeline {
             .transpose()?;
 
         let mut params = params.clone();
+
+        // cash (D13): a Ctrl-C that arrived while the shell ran commands of its own, a
+        // loop of builtins say, is acted on here, before the next command: the trap on
+        // INT runs and the shell goes on, or the script ends and the prompt's command
+        // line is abandoned. Windows used to end the shell where it stood.
+        if !params.asynchronous && cash_win32::console::take_interrupt() {
+            let trap_result = act_on_console_interrupt(shell, &params).await?;
+            if !trap_result.is_normal_flow() {
+                return Ok(trap_result);
+            }
+        }
 
         // If this pipeline is negated, suppress errexit for commands within it
         if self.bang {
@@ -727,12 +753,17 @@ async fn wait_for_pipeline_processes_and_update_status(
             .iter()
             .any(|result| matches!(result, ExecutionSpawnResult::StartedTask(_)));
 
+    // What the keyboard's Ctrl-C did to the pipeline's programs while the shell waited.
+    let mut interrupt = Interrupt::None;
+
     while let Some(child) = process_spawn_results.pop_front() {
         let is_process = matches!(child, ExecutionSpawnResult::StartedProcess(_));
         let wait_result = if !stopped_children.is_empty() {
             child.poll().await?
         } else {
-            child.wait_or_stop(ctrl_z).await?
+            let (wait_result, its_interrupt) = child.wait_or_stop(ctrl_z).await?;
+            interrupt = interrupt.or(its_interrupt);
+            wait_result
         };
 
         match wait_result {
@@ -802,7 +833,42 @@ async fn wait_for_pipeline_processes_and_update_status(
         writeln!(params.stderr(shell), "\r{formatted}")?;
     }
 
+    // cash (D13): what that Ctrl-C means for the shell, now that the pipeline has ended.
+    // As in Bash, a trap on INT runs once the foreground command is done, whatever the
+    // command made of the interrupt. Without a trap the shell is interrupted only if a
+    // program of the pipeline died of it: a script then ends, and the command line is
+    // abandoned at the prompt. A program that took the interrupt in its stride leaves the
+    // shell running. A command started with `&` is not the keyboard's to interrupt.
+    let int = crate::traps::TrapSignal::Signal(sys::signal::Signal::Int);
+    let acts = match interrupt {
+        Interrupt::Fatal => true,
+        Interrupt::Survived => shell.traps().handles(int),
+        Interrupt::None => false,
+    };
+    if acts && !params.asynchronous {
+        let trap_result = act_on_console_interrupt(shell, params).await?;
+        if !trap_result.is_normal_flow() {
+            return Ok(trap_result);
+        }
+    }
+
     Ok(result)
+}
+
+/// Acts on a Ctrl-C that reached the shell as the console's event: see
+/// [`Shell::interrupt`].
+///
+/// Nothing has shown that one, where a `read` shows the key it takes. At the prompt Bash
+/// starts a new line before it abandons the command line, and so does this.
+async fn act_on_console_interrupt(
+    shell: &mut Shell<impl extensions::ShellExtensions>,
+    params: &ExecutionParameters,
+) -> Result<ExecutionResult, error::Error> {
+    let int = crate::traps::TrapSignal::Signal(sys::signal::Signal::Int);
+    if shell.options().interactive && !shell.traps().handles(int) {
+        let _ = writeln!(params.stderr(shell));
+    }
+    shell.interrupt(params).await
 }
 
 #[async_trait::async_trait]

@@ -27,11 +27,11 @@
 //! timeout would either guillotine a valid apply or be long enough to feel broken.
 
 use std::io;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 use windows_sys::Win32::Foundation::{CloseHandle, FALSE, STILL_ACTIVE};
 use windows_sys::Win32::System::Console::{
-    CTRL_BREAK_EVENT, GenerateConsoleCtrlEvent, SetConsoleCP, SetConsoleCtrlHandler,
+    CTRL_BREAK_EVENT, CTRL_C_EVENT, GenerateConsoleCtrlEvent, SetConsoleCP, SetConsoleCtrlHandler,
     SetConsoleOutputCP,
 };
 use windows_sys::Win32::System::Diagnostics::ToolHelp::{
@@ -131,6 +131,42 @@ pub fn interrupt_process_group(group_id: u32) -> io::Result<()> {
 pub fn enable_ctrl_c() {
     // SAFETY: a plain call; a null handler with FALSE restores default Ctrl-C handling.
     unsafe { SetConsoleCtrlHandler(None, FALSE) };
+}
+
+/// A Ctrl-C the console delivered while the shell was running commands of its own, and
+/// which the shell has not acted on yet.
+static PENDING_INTERRUPT: AtomicBool = AtomicBool::new(false);
+
+/// Keeps a Ctrl-C that arrives while the shell runs its own commands, for the shell to
+/// act on before its next command ([`take_interrupt`]) (D13).
+///
+/// Windows ends a process that has no handler for Ctrl-C where it stands. A script in a
+/// loop of builtins was ended so, and an interactive shell running one as well: no
+/// `EXIT` trap, no trap on `INT`, no prompt to come back to. Bash runs the traps.
+///
+/// Handlers are asked newest first, and this one is installed when the shell starts, so
+/// anything that listens later is asked before it: the wait for a foreground program,
+/// which has its own rule for a Ctrl-C, and `ping`. It therefore hears only the Ctrl-C
+/// nothing else took. A second one that arrives before the shell has acted on the first
+/// is left to Windows, which ends the process: a shell stuck in a command that never
+/// returns can still be ended from the keyboard.
+///
+/// A shell started to ignore Ctrl-C hears nothing here, and goes on ignoring it.
+pub fn keep_interrupts() {
+    unsafe extern "system" fn handler(kind: u32) -> i32 {
+        i32::from(kind == CTRL_C_EVENT && !PENDING_INTERRUPT.swap(true, Ordering::SeqCst))
+    }
+
+    static INSTALLED: std::sync::Once = std::sync::Once::new();
+    INSTALLED.call_once(|| {
+        // SAFETY: registers a handler that only touches an atomic.
+        unsafe { SetConsoleCtrlHandler(Some(handler), 1) };
+    });
+}
+
+/// Whether a Ctrl-C is waiting to be acted on, which this call takes.
+pub fn take_interrupt() -> bool {
+    PENDING_INTERRUPT.swap(false, Ordering::SeqCst)
 }
 
 /// Input modes of a console waiting for a line: processed, line-buffered and echoed

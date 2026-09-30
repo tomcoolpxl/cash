@@ -69,27 +69,27 @@ const FINISHED: &str = "read-finished";
 const STUCK: Duration = Duration::from_secs(10);
 
 /// A script running in cash on a pseudo console, in a folder of its own.
-struct Script {
+pub(super) struct Script {
     session: ConPtySession,
     dir: PathBuf,
 }
 
 /// What a script left: the lines it wrote to `out.txt`, and what the console shows.
-struct Left {
-    out: String,
-    screen: String,
+pub(super) struct Left {
+    pub(super) out: String,
+    pub(super) screen: String,
 }
 
 impl Script {
     /// Runs `body` as a script file, as `cash script.sh`, and waits until it is about to
     /// read. `body` writes what it read to `out.txt`.
-    fn start(name: &str, body: &str) -> Self {
+    pub(super) fn start(name: &str, body: &str) -> Self {
         Self::start_beside(name, body, &[])
     }
 
     /// Like [`Self::start`], with `files` in the script's folder: a second script, for a
     /// cash the first one starts with a standard input and output of its own.
-    fn start_beside(name: &str, body: &str, files: &[(&str, &str)]) -> Self {
+    pub(super) fn start_beside(name: &str, body: &str, files: &[(&str, &str)]) -> Self {
         let dir =
             std::env::temp_dir().join(format!("cash-read-console-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
@@ -121,20 +121,25 @@ impl Script {
     /// console host takes a terminal's answer for itself. These tests used to type a
     /// fixed 300 ms after the script said it was about to read, which a busy machine
     /// outran (2026-09-30: the answer was gone, and the read timed out).
-    fn at_prompt(mut self, prompt: &str) -> Self {
+    pub(super) fn at_prompt(self, prompt: &str) -> Self {
+        self.when_shown(prompt)
+    }
+
+    /// Waits until the console shows `text`.
+    pub(super) fn when_shown(mut self, text: &str) -> Self {
         self.session
-            .expect(prompt, STUCK)
-            .expect("the read shows its prompt");
+            .expect(text, STUCK)
+            .expect("the console shows what the script was to write");
         self
     }
 
-    fn type_keys(mut self, keys: &str) -> Self {
+    pub(super) fn type_keys(mut self, keys: &str) -> Self {
         self.session.send(keys).expect("type at the console");
         self
     }
 
     /// Waits for the script to finish; a read that never returns fails the test here.
-    fn finish(mut self) -> Left {
+    pub(super) fn finish(mut self) -> Left {
         self.session
             .expect(FINISHED, STUCK)
             .expect("the script finishes: its read returned");
@@ -143,7 +148,7 @@ impl Script {
 
     /// Waits for cash to end, and returns its exit status with what the script left. A
     /// read that Ctrl-C does not end fails the test here.
-    fn ends(mut self) -> (u32, Left) {
+    pub(super) fn ends(mut self) -> (u32, Left) {
         let started = Instant::now();
         let status = loop {
             let _ = self.session.read_available();

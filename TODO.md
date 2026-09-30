@@ -29,7 +29,7 @@ trust its runs, then by what a user notices most.
 | Phase | What | Items |
 | --- | --- | --- |
 | 0 | Release 1.3.0 | what is on `main` |
-| 2 | Ctrl-C everywhere | 2.1 to 2.3 |
+| 2 | Ctrl-C everywhere | 2.2, 2.3 |
 | 3 | Process substitution | 3.1, 3.2 |
 | 4 | The `/dev` names and descriptors | 4.1 to 4.5 |
 | 5 | Jobs, `wait`, and the tools beside them | 5.1 to 5.3 |
@@ -47,35 +47,6 @@ and let the Scoop bucket pick it up, as RELEASING.md says.
 ---
 
 ## Phase 2. Ctrl-C everywhere
-
-### 2.1 Ctrl-C does not end a script outside `read`
-
-Checked on a ConPTY, `cash script.sh`, Ctrl-C handling enabled in the parent.
-
-```bash
-trap 'echo bye' EXIT
-ping.exe -n 4 127.0.0.1 > /dev/null
-echo "after-ping rc=$?"
-i=0; while [ $i -lt 300000 ]; do i=$((i+1)); done
-```
-
-- During `ping.exe`: ping dies, and the script goes on with `after-ping rc=137`.
-  `ChildProcess::wait_or_stop` (`crates/cash-core/src/processes.rs`) and
-  `Job::wait_in_foreground` (`jobs.rs`) wait on `await_ctrl_c()` and do nothing with it.
-- During the loop of builtins: nothing listens, Windows ends cash with `0xC000013A`, and
-  neither the `EXIT` trap nor a trap on `INT` runs.
-- Git Bash 5.3: the script ends at once in both cases, `bye` is printed, status is
-  SIGINT's; with a trap on `INT` the trap runs and the script goes on.
-
-**Decided: the script ends only if the program died of the Ctrl-C**, as in Bash: it ended
-with Windows' `0xC000013A`, or cash's relay killed it. Then the script ends with 130 and
-its `EXIT` trap runs, or its trap on `INT` runs instead. A program that handled Ctrl-C
-itself and lived on or exited normally (a REPL, `python`, `terraform apply` finishing its
-step) leaves the script running. D13 stays as it is.
-
-To build on: `ErrorKind::Interrupted` ends a script with 130 and abandons the line at the
-prompt (`Error::to_control_flow`, `Program::execute`), and `run_interrupt_trap` in
-`read.rs` runs a trap on `INT`.
 
 ### 2.2 Ctrl-C in `select` and `mapfile` at the console
 

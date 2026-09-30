@@ -543,6 +543,30 @@ as a Ctrl-Break, a regression for REPLs, so:
   otherwise run programs nothing can interrupt. Scripts keep what they inherit, as POSIX
   has a non-interactive shell keep signals ignored on entry.
 
+**What Ctrl-C does to the shell itself.** Windows sends the event to every process on
+the console, the shell among them, and ends a process that has no handler for it where
+it stands. Until 2026-09-30 that was the whole of it: a script waiting for a program went
+on with its next command once the program had died, and a shell busy with commands of its
+own was ended with no trap run, the interactive one included. Now the shell acts on an
+interrupt as Bash acts on SIGINT, in three places:
+
+- **After a foreground program.** A script ends only if the program died of the Ctrl-C:
+  it exited with `STATUS_CONTROL_C_EXIT`, as a program without a handler does and as
+  `ping.exe`, Python and Go programs do, or it is a shell that says so with status 130.
+  A program that took the interrupt in its stride (a REPL that stays, `terraform apply`
+  finishing its step) leaves the script running, which is what the bullets above promise
+  it. `$?` of a program Ctrl-C ended is 130, as for SIGINT; it was 137 (D15).
+- **Between commands of its own.** A Ctrl-C that arrives while nothing else of the shell
+  listens is kept, and acted on before the next command. A second one that arrives
+  before the first was acted on is left to Windows: a shell stuck in a command that does
+  not return can still be ended.
+- **In `read`, at a console,** where the key is read as a key (`cash_win32::conin`).
+
+Acting on it is one thing everywhere: a trap on `INT` runs (after the program has ended,
+when there was one) and the shell goes on; without a trap a script ends with status 130,
+its `EXIT` trap run, and the interactive shell abandons the command line and returns to
+the prompt. A command started with `&` is not the keyboard's to interrupt.
+
 ### D14 — `trap EXIT` runs to completion; a second Ctrl-C forces teardown
 
 No timeout by default — cleanup is sacred, and a guillotined cleanup is worse than a

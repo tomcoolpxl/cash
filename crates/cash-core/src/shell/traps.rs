@@ -28,6 +28,25 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         Some(self.invoke_trap_handler(signal, params).await)
     }
 
+    /// What the keyboard's interrupt does to the shell, once the shell has decided that
+    /// it is its to act on: a Ctrl-C typed at a `read`, one that arrived while the shell
+    /// ran commands of its own, a foreground program that died of one.
+    ///
+    /// With a trap on `INT`, the trap runs and its result is returned: the shell goes on,
+    /// unless the trap itself ends it or returns. Without one this is the error
+    /// [`error::ErrorKind::Interrupted`], which ends a script with status 130, its `EXIT`
+    /// trap run, and at the prompt abandons the command line.
+    pub async fn interrupt(
+        &mut self,
+        params: &ExecutionParameters,
+    ) -> Result<ExecutionResult, error::Error> {
+        let signal = TrapSignal::Signal(crate::sys::signal::Signal::Int);
+        match self.raise_signal_trap(signal, params).await {
+            Some(trap_result) => trap_result,
+            None => Err(error::ErrorKind::Interrupted.into()),
+        }
+    }
+
     /// Invokes the handler registered for `signal`, if any.
     ///
     /// Behavior varies by signal type:

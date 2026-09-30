@@ -263,18 +263,8 @@ impl builtins::Command for ReadCommand {
 async fn run_interrupt_trap(
     context: &mut cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
 ) -> Result<Option<cash_core::ExecutionResult>, cash_core::Error> {
-    let interrupt = cash_core::traps::TrapSignal::try_from("INT")?;
-    match context
-        .shell
-        .raise_signal_trap(interrupt, &context.params)
-        .await
-    {
-        Some(trap_result) => {
-            let trap_result = trap_result?;
-            Ok((!trap_result.is_normal_flow()).then_some(trap_result))
-        }
-        None => Err(ErrorKind::Interrupted.into()),
-    }
+    let trap_result = context.shell.interrupt(&context.params).await?;
+    Ok((!trap_result.is_normal_flow()).then_some(trap_result))
 }
 
 /// Assigns read input to shell variables based on the specified options.

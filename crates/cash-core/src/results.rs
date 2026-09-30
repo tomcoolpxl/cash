@@ -262,30 +262,36 @@ impl From<ExecutionResult> for ExecutionSpawnResult {
 impl ExecutionSpawnResult {
     /// Waits for the command to complete.
     pub async fn wait(self) -> Result<ExecutionWaitResult, error::Error> {
-        self.wait_or_stop(false).await
+        Ok(self.wait_or_stop(false).await?.0)
     }
 
     /// Waits for the command to complete or, when `ctrl_z`, for the keyboard's Ctrl-Z to
-    /// stop it (D19).
+    /// stop it (D19). Also says what the keyboard's Ctrl-C did to it meanwhile (D13).
     pub(crate) async fn wait_or_stop(
         self,
         ctrl_z: bool,
-    ) -> Result<ExecutionWaitResult, error::Error> {
+    ) -> Result<(ExecutionWaitResult, Interrupt), error::Error> {
         let result = match self {
             Self::StartedProcess(mut child) => {
                 // Wait for the process to exit or for a relevant signal, whichever happens
                 // first.
                 match child.wait_or_stop(ctrl_z).await? {
                     processes::ProcessWaitResult::Completed(output) => {
-                        ExecutionWaitResult::Completed(ExecutionResult::from(output))
+                        let interrupt = Interrupt::of(&output, child.saw_ctrl_c());
+                        (
+                            ExecutionWaitResult::Completed(ExecutionResult::from(output)),
+                            interrupt,
+                        )
                     }
-                    processes::ProcessWaitResult::Stopped => ExecutionWaitResult::Stopped(child),
+                    processes::ProcessWaitResult::Stopped => {
+                        (ExecutionWaitResult::Stopped(child), Interrupt::None)
+                    }
                 }
             }
-            Self::Completed(result) => ExecutionWaitResult::Completed(result),
+            Self::Completed(result) => (ExecutionWaitResult::Completed(result), Interrupt::None),
             Self::StartedTask(join_handle) => {
                 let result = join_handle.await?;
-                ExecutionWaitResult::Completed(result?)
+                (ExecutionWaitResult::Completed(result?), Interrupt::None)
             }
         };
 
@@ -311,6 +317,57 @@ impl ExecutionSpawnResult {
         };
 
         Ok(result)
+    }
+}
+
+/// What the keyboard's Ctrl-C did to a foreground program while the shell waited for it
+/// (D13).
+///
+/// Windows sends the event to every process on the console, the program and the shell
+/// alike, and the program decides for itself what it does with it. What the shell then
+/// does follows Bash, which looks at how the program ended: a script ends when its
+/// command died of the interrupt, and goes on when the command took it in its stride (a
+/// REPL that stays, `terraform apply` finishing its step).
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum Interrupt {
+    /// None arrived.
+    None,
+    /// One arrived, and the program lived on or ended in a way of its own.
+    Survived,
+    /// The program died of it.
+    Fatal,
+}
+
+impl Interrupt {
+    /// What a program that ended with `output` made of the interrupt, given whether one
+    /// arrived while the shell waited (`saw_ctrl_c`).
+    ///
+    /// A program that Ctrl-C ended exits with `STATUS_CONTROL_C_EXIT`, whether or not
+    /// the shell heard the event itself. A shell (cash, Bash) that an interrupt ended
+    /// says so as shells do, with status 130; that counts when the interrupt was heard
+    /// here, since 130 on its own is a status like any other.
+    fn of(output: &std::process::Output, saw_ctrl_c: bool) -> Self {
+        #[expect(clippy::cast_sign_loss, reason = "an exit code is a DWORD")]
+        let code = output.status.code().map(|code| code as u32);
+        let interrupted_shell =
+            saw_ctrl_c && code.is_some_and(|code| cash_win32::exit::from_windows(code) == 130);
+        if code == Some(cash_win32::exit::CONTROL_C_EXIT) || interrupted_shell {
+            Self::Fatal
+        } else if saw_ctrl_c {
+            Self::Survived
+        } else {
+            Self::None
+        }
+    }
+
+    /// The graver of two: what a pipeline made of the interrupt, from what its programs
+    /// did.
+    pub(crate) const fn or(self, other: Self) -> Self {
+        match (self, other) {
+            (Self::Fatal, _) | (_, Self::Fatal) => Self::Fatal,
+            (Self::Survived, _) | (_, Self::Survived) => Self::Survived,
+            (Self::None, Self::None) => Self::None,
+        }
     }
 }
 

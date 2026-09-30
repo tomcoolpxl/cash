@@ -12,7 +12,20 @@
 /// Bash reports a process killed by signal `n` as `128 + n`.
 const SIGNAL_BASE: u32 = 128;
 
+/// The exit code Windows gives a process that Ctrl-C ended: `STATUS_CONTROL_C_EXIT`.
+///
+/// It is what a program without a handler of its own exits with, and what `ping.exe`,
+/// Python and Go programs exit with when they let the interrupt end them. Bash reports a
+/// command SIGINT ended as 130, so that is what `$?` says here; it said 137, the status of
+/// a kill, until the shell came to act on an interrupted command (2026-09-30).
+#[allow(
+    clippy::unreadable_literal,
+    reason = "NTSTATUS values are quoted everywhere as eight unbroken hex digits"
+)]
+pub const CONTROL_C_EXIT: u32 = 0xC000013A;
+
 // Signal numbers as bash reports them, for the crashes Windows actually produces.
+const SIGINT: u32 = 2;
 const SIGILL: u32 = 4;
 const SIGABRT: u32 = 6;
 const SIGFPE: u32 = 8;
@@ -31,30 +44,30 @@ const SIGPIPE: u32 = 13;
     reason = "NTSTATUS values are quoted everywhere as eight unbroken hex digits; \n              `0xC000_0005` is harder to match against Microsoft's documentation"
 )]
 const NTSTATUS_SIGNALS: &[(u32, u32)] = &[
-    (0xC0000005, SIGSEGV), // STATUS_ACCESS_VIOLATION          -> 139
-    (0xC00000FD, SIGSEGV), // STATUS_STACK_OVERFLOW            -> 139
-    (0xC0000006, SIGSEGV), // STATUS_IN_PAGE_ERROR             -> 139
-    (0xC0000008, SIGSEGV), // STATUS_INVALID_HANDLE            -> 139
-    (0xC000001D, SIGILL),  // STATUS_ILLEGAL_INSTRUCTION       -> 132
-    (0xC000001E, SIGILL),  // STATUS_INVALID_LOCK_SEQUENCE     -> 132
-    (0xC0000025, SIGILL),  // STATUS_NONCONTINUABLE_EXCEPTION  -> 132
-    (0xC0000026, SIGILL),  // STATUS_INVALID_DISPOSITION       -> 132
-    (0xC000008C, SIGSEGV), // STATUS_ARRAY_BOUNDS_EXCEEDED     -> 139
-    (0xC000008D, SIGFPE),  // STATUS_FLOAT_DENORMAL_OPERAND    -> 136
-    (0xC000008E, SIGFPE),  // STATUS_FLOAT_DIVIDE_BY_ZERO      -> 136
-    (0xC000008F, SIGFPE),  // STATUS_FLOAT_INEXACT_RESULT      -> 136
-    (0xC0000090, SIGFPE),  // STATUS_FLOAT_INVALID_OPERATION   -> 136
-    (0xC0000091, SIGFPE),  // STATUS_FLOAT_OVERFLOW            -> 136
-    (0xC0000092, SIGFPE),  // STATUS_FLOAT_STACK_CHECK         -> 136
-    (0xC0000093, SIGFPE),  // STATUS_FLOAT_UNDERFLOW           -> 136
-    (0xC0000094, SIGFPE),  // STATUS_INTEGER_DIVIDE_BY_ZERO    -> 136
-    (0xC0000095, SIGFPE),  // STATUS_INTEGER_OVERFLOW          -> 136
-    (0xC0000096, SIGILL),  // STATUS_PRIVILEGED_INSTRUCTION    -> 132
-    (0xC0000409, SIGABRT), // STATUS_STACK_BUFFER_OVERRUN      -> 134
-    (0xC0000374, SIGABRT), // STATUS_HEAP_CORRUPTION           -> 134
-    (0xC000013A, SIGKILL), // STATUS_CONTROL_C_EXIT            -> 137
-    (0xC00000B1, SIGPIPE), // STATUS_PIPE_BROKEN               -> 141
-    (0xC000014B, SIGPIPE), // STATUS_PIPE_BROKEN (alt)         -> 141
+    (0xC0000005, SIGSEGV),    // STATUS_ACCESS_VIOLATION          -> 139
+    (0xC00000FD, SIGSEGV),    // STATUS_STACK_OVERFLOW            -> 139
+    (0xC0000006, SIGSEGV),    // STATUS_IN_PAGE_ERROR             -> 139
+    (0xC0000008, SIGSEGV),    // STATUS_INVALID_HANDLE            -> 139
+    (0xC000001D, SIGILL),     // STATUS_ILLEGAL_INSTRUCTION       -> 132
+    (0xC000001E, SIGILL),     // STATUS_INVALID_LOCK_SEQUENCE     -> 132
+    (0xC0000025, SIGILL),     // STATUS_NONCONTINUABLE_EXCEPTION  -> 132
+    (0xC0000026, SIGILL),     // STATUS_INVALID_DISPOSITION       -> 132
+    (0xC000008C, SIGSEGV),    // STATUS_ARRAY_BOUNDS_EXCEEDED     -> 139
+    (0xC000008D, SIGFPE),     // STATUS_FLOAT_DENORMAL_OPERAND    -> 136
+    (0xC000008E, SIGFPE),     // STATUS_FLOAT_DIVIDE_BY_ZERO      -> 136
+    (0xC000008F, SIGFPE),     // STATUS_FLOAT_INEXACT_RESULT      -> 136
+    (0xC0000090, SIGFPE),     // STATUS_FLOAT_INVALID_OPERATION   -> 136
+    (0xC0000091, SIGFPE),     // STATUS_FLOAT_OVERFLOW            -> 136
+    (0xC0000092, SIGFPE),     // STATUS_FLOAT_STACK_CHECK         -> 136
+    (0xC0000093, SIGFPE),     // STATUS_FLOAT_UNDERFLOW           -> 136
+    (0xC0000094, SIGFPE),     // STATUS_INTEGER_DIVIDE_BY_ZERO    -> 136
+    (0xC0000095, SIGFPE),     // STATUS_INTEGER_OVERFLOW          -> 136
+    (0xC0000096, SIGILL),     // STATUS_PRIVILEGED_INSTRUCTION    -> 132
+    (0xC0000409, SIGABRT),    // STATUS_STACK_BUFFER_OVERRUN      -> 134
+    (0xC0000374, SIGABRT),    // STATUS_HEAP_CORRUPTION           -> 134
+    (CONTROL_C_EXIT, SIGINT), // STATUS_CONTROL_C_EXIT         -> 130
+    (0xC00000B1, SIGPIPE),    // STATUS_PIPE_BROKEN               -> 141
+    (0xC000014B, SIGPIPE),    // STATUS_PIPE_BROKEN (alt)         -> 141
 ];
 
 /// Map a Windows process exit code to the value `$?` should report (D15).

@@ -588,6 +588,9 @@ async fn instantiate_shell_from_args(
     if args.is_interactive() {
         cash_win32::console::enable_ctrl_c();
     }
+    // A Ctrl-C while the shell runs commands of its own is kept for the shell to act on,
+    // rather than ending it where it stands. Installed before anything else listens.
+    cash_win32::console::keep_interrupts();
 
     // Set up the shell builder with the requested options.
     // NOTE: We skip loading profile and rc files here; that will be handled later after we've

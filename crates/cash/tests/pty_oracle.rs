@@ -329,6 +329,24 @@ const CASES: &[Case] = &[
             "cd\r",
         ],
     },
+    // Ctrl-C while the prompt's command line runs, in a loop of builtins and in a
+    // program: the rest of the line is abandoned, and the status is SIGINT's.
+    Case {
+        name: "ctrl-c-builtin-loop",
+        keys: &[
+            "while :; do :; done; echo after\r",
+            "\x03",
+            "echo \"rc=$?\"\r",
+        ],
+    },
+    Case {
+        name: "ctrl-c-program",
+        keys: &[
+            "ping.exe -n 30 127.0.0.1 > /dev/null; echo after\r",
+            "\x03",
+            "echo \"rc=$?\"\r",
+        ],
+    },
     // `/dev/tty` is the terminal whatever the standard streams are connected to: read
     // while input is a pipe, its keys taken as `read` asks for them, and written to while
     // output goes elsewhere.
