@@ -85,18 +85,20 @@ fn a_bundled_utility_sets_the_pid_too() {
 
 #[test]
 fn the_pid_is_the_one_that_can_be_signalled() {
-    // A pid that cannot be used is no better than an empty one.
+    // A pid that cannot be used is no better than an empty one. `wait` says how the ping
+    // ended: 137 when `KILL` ended it, 0 when it ran out its ten echoes. `kill -0` a
+    // second later would ask about the pid, which may be another process's by then (see
+    // `process_identity.rs`).
     let out = cash(
         r#"
-        ping.exe -n 30 127.0.0.1 > /dev/null &
+        ping.exe -n 10 127.0.0.1 > /dev/null &
         pid=$!
         kill -0 "$pid" && echo alive
         kill -KILL "$pid"
-        sleep 1
-        kill -0 "$pid" 2>/dev/null && echo "still alive" || echo gone
+        wait "$pid"; echo "status=$?"
         "#,
     );
-    assert_eq!(out.stdout, "alive\ngone", "stderr: {}", out.stderr);
+    assert_eq!(out.stdout, "alive\nstatus=137", "stderr: {}", out.stderr);
 }
 
 #[test]
@@ -187,12 +189,11 @@ fn a_job_spec_reaps_the_same_process_the_pid_names() {
     // D22: `kill %1` and `kill $!` must agree about what they are aiming at.
     let out = cash(
         r#"
-        ping.exe -n 30 127.0.0.1 > /dev/null &
+        ping.exe -n 10 127.0.0.1 > /dev/null &
         pid=$!
         kill -KILL %1
-        sleep 1
-        kill -0 "$pid" 2>/dev/null && echo "still alive" || echo reaped
+        wait "$pid"; echo "status=$?"
         "#,
     );
-    assert_eq!(out.stdout, "reaped", "stderr: {}", out.stderr);
+    assert_eq!(out.stdout, "status=137", "stderr: {}", out.stderr);
 }

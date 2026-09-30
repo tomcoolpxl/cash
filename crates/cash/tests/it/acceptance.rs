@@ -25,6 +25,8 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use crate::process_identity::OwnPing;
+
 /// The binary under test, as built by cargo for this integration test.
 const CASH: &str = env!("CARGO_BIN_EXE_cash");
 
@@ -583,21 +585,24 @@ fn a_background_job_reports_the_pid_it_spawned() {
 #[test]
 fn killing_a_background_job_actually_kills_it() {
     // Both spellings D22 distinguishes: a job spec reaps the job, a bare pid the process.
+    // `wait` says how the ping ended: 128 + the signal, or 0 had it run out its ten
+    // echoes. `kill -0 $p` a second later would ask about the pid, which may be another
+    // process's by then (see `process_identity.rs`).
     let by_spec = cash(
-        r#"ping.exe -n 30 127.0.0.1 >/dev/null & sleep 1; p=$!; kill %1; sleep 1; kill -0 $p 2>/dev/null && echo alive || echo dead"#,
+        r#"ping.exe -n 10 127.0.0.1 >/dev/null & sleep 1; p=$!; kill %1; wait $p; echo "status=$?""#,
     );
     assert_eq!(
         by_spec.stdout.lines().last().unwrap_or_default(),
-        "dead",
+        "status=143",
         "kill %1 did not kill"
     );
 
     let by_pid = cash(
-        r#"ping.exe -n 30 127.0.0.1 >/dev/null & sleep 1; p=$!; kill -9 $p; sleep 1; kill -0 $p 2>/dev/null && echo alive || echo dead"#,
+        r#"ping.exe -n 10 127.0.0.1 >/dev/null & sleep 1; p=$!; kill -9 $p; wait $p; echo "status=$?""#,
     );
     assert_eq!(
         by_pid.stdout.lines().last().unwrap_or_default(),
-        "dead",
+        "status=137",
         "kill -9 $! did not kill"
     );
 }
@@ -830,27 +835,28 @@ fn killing_a_job_reaps_its_whole_tree() {
     //
     // The session job eventually caught the orphan, but only when cash itself exited.
     //
-    // A nested cash is used as the middle of the tree so the grandchild's pid can be
-    // captured exactly — counting processes by name would race with other tests.
-    let scratch = Scratch::new("tree-kill");
-    let pidfile = format!("{}/grandchild.pid", scratch.as_script_path());
+    // A nested cash is the middle of the tree, and the grandchild is a ping under a name
+    // of its own, looked for by that name: counting `ping` processes would race with
+    // other tests, and the grandchild's pid may be another process's three seconds after
+    // it dies (see `process_identity.rs`).
+    let grandchild = OwnPing::new();
+    let (ping, name) = (grandchild.path(), grandchild.name());
     let cash_path = CASH.replace('\\', "/");
 
     let script = format!(
-        r#""{cash_path}" -c 'ping.exe -n 40 127.0.0.1 >/dev/null & echo $! > "{pidfile}"; sleep 30' &
+        r#""{cash_path}" -c '"{ping}" -n 40 127.0.0.1 >/dev/null & sleep 30' &
 sleep 3
-grandchild=$(cat "{pidfile}")
+pidof {name} >/dev/null && echo started
 kill %1
 sleep 3
-kill -0 "$grandchild" 2>/dev/null && echo alive || echo dead"#
+pidof {name} >/dev/null && echo alive || echo dead"#
     );
 
     let out = cash(&script);
-    let verdict = out.stdout.lines().last().unwrap_or_default();
     assert_eq!(
-        verdict, "dead",
-        "the grandchild survived `kill %1` (stdout: {:?}, stderr: {})",
-        out.stdout, out.stderr
+        out.stdout, "started\ndead",
+        "the grandchild survived `kill %1`, or never started (stderr: {})",
+        out.stderr
     );
 }
 

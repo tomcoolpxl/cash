@@ -28,6 +28,8 @@ use std::time::Duration;
 
 use cash_win32::conpty::ConPtySession;
 
+use crate::process_identity::still_running;
+
 const CASH: &str = env!("CARGO_BIN_EXE_cash");
 
 /// One refresh, as short as `top` allows, so the tests stay quick and deterministic.
@@ -491,7 +493,9 @@ fn k_sends_the_signal_asked_for_to_the_pid_asked_for() {
                 .and_then(|digits| digits.parse().ok())
         })
         .expect("the ping's pid");
-    assert!(cash_win32::process::is_pid_alive(pid));
+    // The ping is running now; a process with its pid that started later is another one.
+    let seen = cash_win32::process::now_filetime();
+    assert!(still_running(pid, seen));
 
     let mark = session.output().len();
     session.send("k").unwrap();
@@ -502,7 +506,7 @@ fn k_sends_the_signal_asked_for_to_the_pid_asked_for() {
     expect_after(&mut session, mark, &format!("Sent TERM to {pid}"));
 
     let start = std::time::Instant::now();
-    while cash_win32::process::is_pid_alive(pid) {
+    while still_running(pid, seen) {
         assert!(
             start.elapsed() < Duration::from_secs(10),
             "ping {pid} outlived TERM"

@@ -36,6 +36,12 @@ use std::process::Command;
 
 const CASH: &str = env!("CARGO_BIN_EXE_cash");
 
+/// What `wait "$child"; echo "status=$?"` prints for a child that `KILL` ended: 128 + 9.
+/// A child nothing ended runs out its ten echoes and reports 0. `wait` is asked, rather
+/// than `kill -0` a second later, because the status comes from the handle cash holds;
+/// the pid may be another process's by then (see `process_identity.rs`).
+const KILLED: &str = "status=137";
+
 struct Output {
     stdout: String,
     stderr: String,
@@ -85,15 +91,14 @@ fn kill_zero_reaps_the_shells_own_children() {
     // The useful half. `kill 0` has to *mean* something, or the fix is just a mute.
     let out = cash(
         r#"
-        ping.exe -n 30 127.0.0.1 > /dev/null &
+        ping.exe -n 10 127.0.0.1 > /dev/null &
         child=$!
         sleep 1
         kill -KILL 0
-        sleep 1
-        if kill -0 "$child" 2>/dev/null; then echo "still alive"; else echo reaped; fi
+        wait "$child"; echo "status=$?"
         "#,
     );
-    assert_eq!(out.stdout, "reaped", "stderr: {}", out.stderr);
+    assert_eq!(out.stdout, KILLED, "stderr: {}", out.stderr);
 }
 
 #[test]
@@ -143,15 +148,14 @@ fn an_exit_trap_may_use_kill_zero() {
 fn a_bare_pid_still_targets_one_process() {
     let out = cash(
         r#"
-        ping.exe -n 30 127.0.0.1 > /dev/null &
+        ping.exe -n 10 127.0.0.1 > /dev/null &
         child=$!
         sleep 1
         kill -KILL "$child"
-        sleep 1
-        if kill -0 "$child" 2>/dev/null; then echo "still alive"; else echo reaped; fi
+        wait "$child"; echo "status=$?"
         "#,
     );
-    assert_eq!(out.stdout, "reaped", "stderr: {}", out.stderr);
+    assert_eq!(out.stdout, KILLED, "stderr: {}", out.stderr);
 }
 
 #[test]
@@ -160,15 +164,14 @@ fn a_negative_pid_reaps_that_tree() {
     // specs; this is the same scope, named by pid.
     let out = cash(
         r#"
-        cmd.exe /d /s /c "ping.exe -n 30 127.0.0.1 > nul" &
+        cmd.exe /d /s /c "ping.exe -n 10 127.0.0.1 > nul" &
         child=$!
         sleep 1
         kill -KILL -"$child"
-        sleep 1
-        if kill -0 "$child" 2>/dev/null; then echo "still alive"; else echo reaped; fi
+        wait "$child"; echo "status=$?"
         "#,
     );
-    assert_eq!(out.stdout, "reaped", "stderr: {}", out.stderr);
+    assert_eq!(out.stdout, KILLED, "stderr: {}", out.stderr);
 }
 
 #[test]

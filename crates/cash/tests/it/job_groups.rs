@@ -72,10 +72,15 @@ fn run(dir: &Path, interactive: bool, body: &str) -> String {
 #[test]
 fn at_the_prompt_a_background_job_survives_ctrl_c() {
     let dir = tempfile::tempdir().unwrap();
+    // `jobs -pr` lists the pids of the jobs cash knows to be running, from the handles it
+    // holds. `kill -0 $bg` would ask Windows about the pid, which may be another
+    // process's a second after the ping dies, and `kill -9 $bg` would then end that one
+    // (see `process_identity.rs`).
     let body = "ping.exe -n 30 127.0.0.1 > /dev/null & bg=$!\n\
                 sleep 1; ctrlc; sleep 1\n\
-                kill -0 $bg 2>/dev/null && echo survived || echo killed\n\
-                kill -9 $bg 2>/dev/null";
+                jobs -pr > \"$T/running\"\n\
+                if grep -qx \"$bg\" \"$T/running\"; then echo survived; kill -9 $bg\n\
+                else echo killed; fi";
     let out = run(dir.path(), true, body);
     assert!(out.contains("survived"), "{out:?}");
     // A script's background commands still share the console's group, as before.
@@ -93,12 +98,14 @@ fn kill_term_sends_a_background_job_ctrl_break_then_terminates_it() {
          sleep 1; kill -TERM $p; sleep 1\n\
          grep -q '%' \"$T/ping.out\" && echo broke || echo 'no ctrl-break'\n\
          kill -0 $p 2>/dev/null && echo asked\n\
-         sleep 6\n\
-         kill -0 $p 2>/dev/null && echo 'still running' || echo terminated",
+         wait $p; echo \"status=$?\"",
     );
     assert!(out.contains("broke\n"), "{out}");
+    // A second after TERM the ping is still running, so the pid is still its own.
     assert!(out.contains("asked\n"), "{out}");
-    assert!(out.contains("terminated\n"), "{out}");
+    // `wait` returns when the grace period ends the ping, with TERM's status. A ping that
+    // nothing ended would keep `wait` for its 30 echoes, and then report 0.
+    assert!(out.contains("status=143\n"), "{out}");
 }
 
 #[test]

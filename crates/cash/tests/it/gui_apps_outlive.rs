@@ -21,7 +21,7 @@
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-use cash_win32::process::is_pid_alive;
+use crate::process_identity::still_running;
 
 const CASH: &str = env!("CARGO_BIN_EXE_cash");
 
@@ -42,8 +42,12 @@ fn wait_until<F: FnMut() -> bool>(timeout: Duration, mut predicate: F) -> bool {
 }
 
 /// Runs cash with `setting` first, starts a hidden GUI program and a console program in
-/// the background, and returns their pids once cash has exited.
-fn run_and_exit(setting: &str) -> (u32, u32) {
+/// the background, and returns their pids once cash has exited, and when it had.
+///
+/// The time tells each program from a later process given its pid (see
+/// `process_identity.rs`): both ran until cash exited, and Windows hands a pid out again
+/// only after its process has ended.
+fn run_and_exit(setting: &str) -> (u32, u32, u64) {
     let dir = tempfile::tempdir().expect("scratch dir");
     std::fs::write(dir.path().join("wait.vbs"), "WScript.Sleep 30000\r\n").expect("vbs");
     let script = format!(
@@ -65,6 +69,7 @@ fn run_and_exit(setting: &str) -> (u32, u32) {
         .stderr(Stdio::null())
         .status()
         .expect("failed to run cash");
+    let exited = cash_win32::process::now_filetime();
     let stdout = std::fs::read_to_string(&log).unwrap_or_default();
     let pid = |key: &str| -> u32 {
         stdout
@@ -73,11 +78,15 @@ fn run_and_exit(setting: &str) -> (u32, u32) {
             .and_then(|v| v.trim().parse().ok())
             .unwrap_or_else(|| panic!("no {key} in {stdout:?}; cash exited {status}"))
     };
-    (pid("gui="), pid("con="))
+    (pid("gui="), pid("con="), exited)
 }
 
-fn kill(pid: u32) {
-    let _ = cash_win32::process::terminate(pid, 1);
+/// Ends the program cash started with this pid, if it is still running: not a later
+/// process that was given the pid.
+fn kill(pid: u32, exited: u64) {
+    if still_running(pid, exited) {
+        let _ = cash_win32::process::terminate(pid, 1);
+    }
 }
 
 #[test]
@@ -85,11 +94,11 @@ fn a_gui_application_outlives_cash_and_a_console_program_does_not() {
     if wscript().is_none() {
         return;
     }
-    let (gui, con) = run_and_exit("");
-    let console_gone = wait_until(Duration::from_secs(5), || !is_pid_alive(con));
-    let gui_alive = is_pid_alive(gui);
-    kill(gui);
-    kill(con);
+    let (gui, con, exited) = run_and_exit("");
+    let console_gone = wait_until(Duration::from_secs(5), || !still_running(con, exited));
+    let gui_alive = still_running(gui, exited);
+    kill(gui, exited);
+    kill(con, exited);
     assert!(gui_alive, "the GUI program {gui} was closed with cash");
     assert!(console_gone, "the console program {con} outlived cash");
 }
@@ -99,11 +108,11 @@ fn gui_apps_close_reaps_the_gui_application_too() {
     if wscript().is_none() {
         return;
     }
-    let (gui, con) = run_and_exit("cashctl gui-apps close");
-    let gui_gone = wait_until(Duration::from_secs(5), || !is_pid_alive(gui));
-    let console_gone = wait_until(Duration::from_secs(5), || !is_pid_alive(con));
-    kill(gui);
-    kill(con);
+    let (gui, con, exited) = run_and_exit("cashctl gui-apps close");
+    let gui_gone = wait_until(Duration::from_secs(5), || !still_running(gui, exited));
+    let console_gone = wait_until(Duration::from_secs(5), || !still_running(con, exited));
+    kill(gui, exited);
+    kill(con, exited);
     assert!(
         gui_gone,
         "the GUI program {gui} outlived cash under `gui-apps close`"

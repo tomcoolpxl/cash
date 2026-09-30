@@ -10,6 +10,11 @@
 //! `/F` asks) and terminated if it has not exited after a grace period; one without is
 //! terminated at once. Every cash here runs in a console of its own, so a regression
 //! can only kill that console, never the test runner.
+//!
+//! `wait` says how each target ended: 128 + the signal when cash ended it, and 0 when it
+//! ran out its ten echoes because nothing did. Asking `kill -0 $pid` a moment later would
+//! ask about the pid, which Windows may have given to another process by then (see
+//! `process_identity.rs`).
 
 #![allow(
     clippy::tests_outside_test_module,
@@ -23,6 +28,8 @@ use std::os::windows::process::CommandExt as _;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
+
+use crate::process_identity::OwnPing;
 
 const CASH: &str = env!("CARGO_BIN_EXE_cash");
 
@@ -51,31 +58,38 @@ fn isolated_cash(script: &str) -> Output {
 #[test]
 fn kill_term_stops_a_background_job_and_the_shell_survives() {
     let out = isolated_cash(
-        "ping.exe -n 60 127.0.0.1 >/dev/null & p=$!; sleep 1; kill -TERM $p; echo rc=$?; \
-         sleep 0.5; kill -0 $p 2>/dev/null && echo alive || echo gone; echo shell-survived",
+        "ping.exe -n 10 127.0.0.1 >/dev/null & p=$!; sleep 1; kill -TERM $p; echo rc=$?; \
+         wait $p; echo status=$?; echo shell-survived",
     );
-    assert_eq!(out.stdout, "rc=0\ngone\nshell-survived");
+    assert_eq!(out.stdout, "rc=0\nstatus=143\nshell-survived");
     assert_eq!(out.code, 0);
 }
 
 #[test]
 fn int_and_hup_reach_one_process_too() {
     let out = isolated_cash(
-        "ping.exe -n 60 127.0.0.1 >/dev/null & a=$!; ping.exe -n 60 127.0.0.1 >/dev/null & b=$!; \
-         sleep 1; kill -INT $a; kill -HUP $b; sleep 0.5; \
-         kill -0 $a 2>/dev/null || kill -0 $b 2>/dev/null || echo both-gone; echo shell-survived",
+        "ping.exe -n 10 127.0.0.1 >/dev/null & a=$!; ping.exe -n 10 127.0.0.1 >/dev/null & b=$!; \
+         sleep 1; kill -INT $a; kill -HUP $b; \
+         wait $a; echo int=$?; wait $b; echo hup=$?; echo shell-survived",
     );
-    assert_eq!(out.stdout, "both-gone\nshell-survived");
+    assert_eq!(out.stdout, "int=130\nhup=129\nshell-survived");
 }
 
 #[test]
 fn pkill_and_killall_default_to_a_term_that_spares_the_shell() {
-    let out = isolated_cash(
-        "ping.exe -n 60 127.0.0.1 >/dev/null & a=$!; sleep 1; pkill -x ping; echo pkill=$?; \
-         ping.exe -n 60 127.0.0.1 >/dev/null & b=$!; sleep 1; killall -w ping; echo killall=$?; \
-         kill -0 $a 2>/dev/null || kill -0 $b 2>/dev/null || echo both-gone; echo shell-survived",
+    // Both take a program's name, so the target has one of its own: `ping` would name
+    // every ping on the machine, the other tests' among them.
+    let target = OwnPing::new();
+    let (path, name) = (target.path(), target.name());
+    let out = isolated_cash(&format!(
+        "'{path}' -n 10 127.0.0.1 >/dev/null & a=$!; sleep 1; pkill -x {name}; echo pkill=$?; \
+         '{path}' -n 10 127.0.0.1 >/dev/null & b=$!; sleep 1; killall -w {name}; echo killall=$?; \
+         wait $a; echo a=$?; wait $b; echo b=$?; echo shell-survived"
+    ));
+    assert_eq!(
+        out.stdout,
+        "pkill=0\nkillall=0\na=143\nb=143\nshell-survived"
     );
-    assert_eq!(out.stdout, "pkill=0\nkillall=0\nboth-gone\nshell-survived");
 }
 
 /// A PowerShell window: it exits 7 when closed, or refuses to close at all.
@@ -154,6 +168,8 @@ fn a_program_that_will_not_close_is_terminated_after_the_grace_period() {
         return;
     };
     // The escalation runs in the shell, so the shell stays up past the grace period.
+    // `form` holds the window's process, so its pid stays its own and `kill -0` asks
+    // about this process.
     let out = isolated_cash(&format!(
         "kill -TERM {pid}; sleep 1; kill -0 {pid} && echo asked; sleep 6; \
          kill -0 {pid} 2>/dev/null && echo alive || echo terminated",
