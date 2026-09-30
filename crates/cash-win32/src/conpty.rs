@@ -348,6 +348,8 @@ pub struct ConPtySession {
     pty: ConPty,
     child: ConPtyChild,
     accumulated_output: String,
+    /// The terminal's columns and rows.
+    size: (i16, i16),
 }
 
 impl ConPtySession {
@@ -363,12 +365,25 @@ impl ConPtySession {
         env: Option<&[(&str, &str)]>,
         cwd: Option<&Path>,
     ) -> io::Result<Self> {
-        let pty = ConPty::new(80, 25)?;
+        Self::start_sized(program, args, env, cwd, 80, 25)
+    }
+
+    /// Like [`Self::start_in`], on a terminal of `cols` by `rows`.
+    pub fn start_sized(
+        program: &Path,
+        args: &[&str],
+        env: Option<&[(&str, &str)]>,
+        cwd: Option<&Path>,
+        cols: i16,
+        rows: i16,
+    ) -> io::Result<Self> {
+        let pty = ConPty::new(cols, rows)?;
         let child = pty.spawn_in(program, args, env, cwd)?;
         Ok(Self {
             pty,
             child,
             accumulated_output: String::new(),
+            size: (cols, rows),
         })
     }
 
@@ -468,11 +483,15 @@ impl ConPtySession {
         Ok(())
     }
 
-    /// What the 80x25 console shows now: the output so far, replayed onto a
-    /// [`crate::vtscreen::Screen`].
+    /// What the console shows now: the output so far, replayed onto a
+    /// [`crate::vtscreen::Screen`] of the terminal's size.
     #[must_use]
     pub fn screen(&self) -> crate::vtscreen::Screen {
-        let mut screen = crate::vtscreen::Screen::new(80, 25);
+        let (cols, rows) = self.size;
+        let mut screen = crate::vtscreen::Screen::new(
+            usize::try_from(cols).unwrap_or(80),
+            usize::try_from(rows).unwrap_or(25),
+        );
         screen.feed(self.accumulated_output.as_bytes());
         screen
     }

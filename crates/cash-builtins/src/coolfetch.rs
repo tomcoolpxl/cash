@@ -17,6 +17,11 @@
 //! It is deliberately **not** called `neofetch`: printing different output under another
 //! tool's name is the identity mismatch `cash doctor` exists to catch, and it would
 //! shadow a real one on `PATH`.
+//!
+//! In Windows Terminal the logo is the real one, a sixel picture: the format DEC's
+//! terminals drew images in, which Windows Terminal reads from 1.22 on. It is some ten
+//! kilobytes, encoded once by `assets/make-sixel.ps1` and written out as it is, so drawing
+//! it decodes nothing either.
 
 use std::io::Write;
 
@@ -26,7 +31,12 @@ use clap::Parser;
 /// Show what this machine is.
 #[derive(Parser)]
 pub(crate) struct CoolfetchCommand {
-    /// Leave the logo out and print only the facts.
+    /// Which logo to draw: `auto` is the picture in Windows Terminal and the text logo
+    /// anywhere else.
+    #[arg(long = "logo", value_enum, default_value_t = Logo::Auto)]
+    logo: Logo,
+
+    /// Leave the logo out and print only the facts, as `--logo=none` does.
     #[arg(long = "no-logo")]
     no_logo: bool,
 
@@ -34,6 +44,36 @@ pub(crate) struct CoolfetchCommand {
     #[arg(long = "no-color", alias = "no-colour")]
     no_color: bool,
 }
+
+/// The logo beside the facts.
+#[derive(Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+enum Logo {
+    /// The picture in a Windows Terminal window with room for it; the text logo in a
+    /// smaller window or any other terminal, and when the output is not a terminal or is
+    /// not to be coloured.
+    Auto,
+    /// The picture, wherever the output goes.
+    Image,
+    /// The four panes, in text.
+    Ascii,
+    /// Only the facts.
+    None,
+}
+
+/// The logo as a picture: `assets/cash_logo.six`, which `assets/make-sixel.ps1` makes
+/// from the PNG. A terminal lays each character cell over 10x20 of a sixel image's
+/// pixels, whatever the font, so its 280x280 pixels cover 28 columns by 14 rows. It is
+/// larger than the panes because a display scaled past 100% stretches those pixels over
+/// bigger cells, and the softened edges are a smaller part of a larger picture.
+const IMAGE: &[u8] = include_bytes!("../../../assets/cash_logo.six");
+const IMAGE_ROWS: usize = 14;
+const IMAGE_COLUMNS: usize = 28;
+/// Where the picture starts, from zero: level with `OS`, below the title and its rule,
+/// and one column in.
+const IMAGE_TOP: usize = 2;
+const IMAGE_LEFT: usize = 1;
+/// The facts' column beside the picture, one clear of it.
+const IMAGE_GUTTER: usize = IMAGE_LEFT + IMAGE_COLUMNS + 1;
 
 /// The four panes, drawn small enough to sit beside the facts: from the `OS` line to the
 /// first disk, split beside `Terminal`, the title and its rule standing clear above.
@@ -60,42 +100,133 @@ impl builtins::Command for CoolfetchCommand {
     ) -> Result<ExecutionResult, Self::Error> {
         // The command's own standard output, which a pipeline or a redirection replaces
         // even though the shell's is still the terminal.
-        let colour = !self.no_color && context.try_fd(1).is_some_and(|f| f.is_terminal());
+        let terminal = context.try_fd(1).is_some_and(|f| f.is_terminal());
+        let colour = !self.no_color && terminal;
         let facts = collect(&context);
+        let logo = match self.logo {
+            _ if self.no_logo => Logo::None,
+            Logo::Auto if colour && in_windows_terminal(&context) && fits(&facts) => Logo::Image,
+            Logo::Auto => Logo::Ascii,
+            chosen => chosen,
+        };
 
         let mut stdout = context.stdout();
-        let logo: &[&str] = if self.no_logo { &[] } else { LOGO };
-        let rows = logo.len().max(facts.len());
-        // The facts outnumber the logo's lines, so the ones past its end still need its
-        // width — otherwise the tail of the list jumps back to column zero.
-        let gutter = logo.iter().map(|line| line.len()).max().unwrap_or(0);
-
-        for row in 0..rows {
-            let art = logo.get(row).copied().unwrap_or("");
-            let fact = facts.get(row);
-            if !self.no_logo {
-                // Art alone on its row keeps no trailing spaces.
-                let art = if fact.is_some() {
-                    std::format!("{art:gutter$}")
-                } else {
-                    art.trim_end().to_owned()
-                };
-                write!(stdout, "{}", paint(&art, "34", colour))?;
-            }
-
-            if let Some((label, value)) = fact {
-                if label.is_empty() {
-                    writeln!(stdout, "{}", paint(value, "36", colour))?;
-                } else {
-                    writeln!(stdout, "{}: {value}", paint(label.as_str(), "36;1", colour))?;
-                }
-            } else {
-                writeln!(stdout)?;
-            }
+        match logo {
+            Logo::Image => beside_image(&mut stdout, &facts, colour)?,
+            Logo::Ascii => beside_text(&mut stdout, &facts, LOGO, colour)?,
+            Logo::None | Logo::Auto => beside_text(&mut stdout, &facts, &[], colour)?,
         }
 
         Ok(ExecutionResult::success())
     }
+}
+
+/// The facts, with the text logo's lines, or none, down their left.
+fn beside_text(
+    stdout: &mut impl Write,
+    facts: &[(String, String)],
+    logo: &[&str],
+    colour: bool,
+) -> std::io::Result<()> {
+    let rows = logo.len().max(facts.len());
+    // The facts outnumber the logo's lines, so the ones past its end still need its
+    // width — otherwise the tail of the list jumps back to column zero.
+    let gutter = logo.iter().map(|line| line.len()).max().unwrap_or(0);
+
+    for row in 0..rows {
+        let art = logo.get(row).copied().unwrap_or("");
+        let fact = facts.get(row);
+        if !logo.is_empty() {
+            // Art alone on its row keeps no trailing spaces.
+            let art = if fact.is_some() {
+                std::format!("{art:gutter$}")
+            } else {
+                art.trim_end().to_owned()
+            };
+            write!(stdout, "{}", paint(&art, "34", colour))?;
+        }
+
+        if let Some(fact) = fact {
+            write_fact(stdout, fact, colour)?;
+        } else {
+            writeln!(stdout)?;
+        }
+    }
+    Ok(())
+}
+
+/// The facts, with the picture down their left.
+///
+/// Room is made before the picture is drawn, a line feed for each of its rows and back
+/// up, so that drawing it at the bottom of the window scrolls nothing. The cursor is
+/// saved around it (DECSC, DECRC), so the facts land in the same place wherever the
+/// terminal leaves the cursor after an image, and a terminal that cannot draw one, which
+/// throws the sequence away, shows a gap. Each fact goes straight to its column, since
+/// spaces written over the picture would erase it.
+fn beside_image(
+    stdout: &mut impl Write,
+    facts: &[(String, String)],
+    colour: bool,
+) -> std::io::Result<()> {
+    let column = IMAGE_GUTTER + 1;
+    for (row, fact) in facts.iter().enumerate() {
+        if row == IMAGE_TOP {
+            let room = "\n".repeat(IMAGE_ROWS);
+            write!(
+                stdout,
+                "{room}\x1b[{IMAGE_ROWS}A\x1b7\x1b[{}G",
+                IMAGE_LEFT + 1
+            )?;
+            stdout.write_all(IMAGE)?;
+            write!(stdout, "\x1b8")?;
+        }
+        write!(stdout, "\x1b[{column}G")?;
+        write_fact(stdout, fact, colour)?;
+    }
+    // Fewer facts than the picture is tall: finish below it.
+    for _ in facts.len()..IMAGE_TOP + IMAGE_ROWS {
+        writeln!(stdout)?;
+    }
+    Ok(())
+}
+
+fn write_fact(
+    stdout: &mut impl Write,
+    (label, value): &(String, String),
+    colour: bool,
+) -> std::io::Result<()> {
+    if label.is_empty() {
+        writeln!(stdout, "{}", paint(value, "36", colour))
+    } else {
+        writeln!(stdout, "{}: {value}", paint(label.as_str(), "36;1", colour))
+    }
+}
+
+/// Whether this is Windows Terminal, which draws sixel pictures from 1.22 on; an older one
+/// shows a gap. The `Terminal` line's test, `$TERM_PROGRAM` first: `$WT_SESSION` is
+/// inherited, and is still set in VS Code's terminal when VS Code was started from a
+/// Windows Terminal tab.
+fn in_windows_terminal<SE: cash_core::ShellExtensions>(
+    context: &cash_core::ExecutionContext<'_, SE>,
+) -> bool {
+    terminal_name(context) == "Windows Terminal"
+}
+
+/// Whether the window has room for the picture with the facts beside it. Making room for
+/// more rows than the window has would scroll the top of the picture away, and a fact too
+/// long for its line wraps onto the picture and erases the cells it lands on.
+fn fits(facts: &[(String, String)]) -> bool {
+    let widest = facts
+        .iter()
+        .map(|(label, value)| {
+            let label = label.chars().count();
+            value.chars().count() + if label == 0 { 0 } else { label + 2 }
+        })
+        .max()
+        .unwrap_or(0);
+    crossterm::terminal::size().is_ok_and(|(columns, rows)| {
+        usize::from(rows) > IMAGE_TOP + IMAGE_ROWS && usize::from(columns) >= IMAGE_GUTTER + widest
+    })
 }
 
 /// Wraps `value` in an ANSI colour, when there is a terminal to see it.
@@ -301,5 +432,26 @@ fn plural(count: u64, unit: &str) -> String {
         std::format!("{count} {unit}")
     } else {
         std::format!("{count} {unit}s")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{IMAGE, IMAGE_COLUMNS, IMAGE_ROWS};
+
+    #[test]
+    fn the_picture_is_the_size_the_layout_leaves_for_it() {
+        // Its raster attributes, `"1;1;width;height` after the introducer, at 10x20
+        // pixels a cell: a picture made at another size would overlap the facts or leave
+        // the rows below it short.
+        let sixel = std::str::from_utf8(IMAGE).unwrap();
+        let size = sixel.strip_prefix("\x1bP9;1q\"1;1;").unwrap();
+        let size: Vec<usize> = size
+            .split(|c: char| !c.is_ascii_digit())
+            .take(2)
+            .map(|n| n.parse().unwrap())
+            .collect();
+        assert_eq!(size, [IMAGE_COLUMNS * 10, IMAGE_ROWS * 20]);
+        assert!(sixel.ends_with("\x1b\\"), "the picture is never finished");
     }
 }

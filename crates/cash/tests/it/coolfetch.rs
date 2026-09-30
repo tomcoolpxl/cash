@@ -25,8 +25,12 @@ use std::process::Command;
 use std::time::Duration;
 
 use cash_win32::conpty::ConPtySession;
+use cash_win32::vtscreen::Screen;
 
 const CASH: &str = env!("CARGO_BIN_EXE_cash");
+
+/// The sixel introducer the picture starts with; a string terminator ends it.
+const PICTURE: &str = "\x1bP9;1q";
 
 struct Output {
     stdout: String,
@@ -271,11 +275,140 @@ fn the_logo_sits_beside_os_to_the_first_disk_split_at_terminal() {
     );
 }
 
-/// What an 80x25 pseudo terminal shows once `script` has run in cash, in `dir`.
-fn on_a_terminal(script: &str, dir: Option<&Path>) -> String {
+/// What `coolfetch --logo=image` writes: asked for by name, the picture goes even down a
+/// pipe.
+fn with_picture() -> String {
+    let out = Command::new(CASH)
+        .args(["-c", "coolfetch --logo=image --no-color"])
+        .output()
+        .expect("failed to run cash");
+    assert!(out.status.success(), "{out:?}");
+    String::from_utf8(out.stdout).unwrap()
+}
+
+/// `output` with the picture swapped for `stand_in`: what a terminal does with the cursor
+/// in its place.
+fn picture_as(output: &str, stand_in: &str) -> String {
+    let (before, rest) = output.split_once(PICTURE).expect("the picture");
+    let (_, after) = rest.split_once("\x1b\\").expect("the end of the picture");
+    std::format!("{before}{stand_in}{after}")
+}
+
+/// The picture covers 28 columns by 14 rows, from row 2 and one column in; the facts
+/// beside it start a column clear of it.
+const PICTURE_ROWS: usize = 14;
+const BESIDE_PICTURE: usize = 30;
+
+/// `before` and then `output` on a terminal of `rows` rows, wide enough that no fact
+/// wraps, a line feed going back to the first column as it does on the console. The
+/// screen ignores the picture, as a terminal that cannot draw one does.
+fn replay(before: &str, output: &str, rows: usize) -> Screen {
+    let mut screen = Screen::new(200, rows);
+    screen.feed(before.replace('\n', "\r\n").as_bytes());
+    screen.feed(output.replace('\n', "\r\n").as_bytes());
+    screen
+}
+
+/// Rows `rows` of `text` are blank where the picture goes, with a fact right after.
+fn assert_clear_for_the_picture(text: &str, rows: std::ops::Range<usize>) {
+    let lines: Vec<&str> = text.lines().collect();
+    for row in rows {
+        let line = lines.get(row).copied().unwrap_or("");
+        assert!(
+            line.get(..BESIDE_PICTURE)
+                .is_some_and(|logo| logo.trim().is_empty()),
+            "row {row} is not clear for the picture: {line:?}\n{text}"
+        );
+        assert!(
+            line.get(BESIDE_PICTURE..)
+                .is_some_and(|fact| !fact.starts_with(' ')),
+            "row {row} has no fact in the facts' column: {line:?}\n{text}"
+        );
+    }
+}
+
+#[test]
+fn the_picture_stands_left_of_the_facts() {
+    // Drawn from row 2, one column in; the facts in the rows they have beside the panes,
+    // and nothing written over the picture's cells.
+    let output = with_picture();
+    assert_eq!(output.matches(PICTURE).count(), 1, "{output:?}");
+    let (before, _) = output.split_once(PICTURE).unwrap();
+    assert_eq!(replay("", before, 40).cursor(), (2, 1), "where it is drawn");
+
+    let screen = replay("", &output, 40);
+    let text = screen.text();
+    assert_clear_for_the_picture(&text, 0..11);
+    let lines: Vec<&str> = text.lines().collect();
+    assert!(
+        lines[2]
+            .get(BESIDE_PICTURE..)
+            .unwrap_or("")
+            .starts_with("OS: "),
+        "{text}"
+    );
+    assert!(
+        screen.cursor().0 >= 2 + PICTURE_ROWS,
+        "the prompt would be on the picture"
+    );
+}
+
+#[test]
+fn the_facts_land_in_place_wherever_the_picture_leaves_the_cursor() {
+    // Windows Terminal leaves the cursor on the picture's last row, and one that cannot
+    // draw it leaves it where it was: the facts must not follow either.
+    let output = with_picture();
+    let dropped = replay("", &picture_as(&output, ""), 40).text();
+    let moved = replay("", &picture_as(&output, "\x1b[13B\x1b[27C"), 40).text();
+    assert_eq!(moved, dropped);
+}
+
+#[test]
+fn at_the_bottom_of_the_window_the_picture_makes_room_first() {
+    // Drawing a picture past the bottom scrolls the window mid-picture, and the facts
+    // would come back to a row that has moved. So nothing above the banner may be
+    // overwritten, and the picture's rows stay clear, with the picture standing in as the
+    // line feeds it amounts to.
+    let output = picture_as(&with_picture(), &"\n".repeat(PICTURE_ROWS - 1));
+    let filler: Vec<String> = (0..30).map(|n| std::format!("filler {n}\n")).collect();
+    let text = replay(&filler.concat(), &output, 25).text();
+    let lines: Vec<&str> = text.lines().collect();
+    let title = lines
+        .iter()
+        .position(|line| line.contains('@'))
+        .expect("the title");
+    assert_eq!(
+        lines.get(title.wrapping_sub(1)),
+        Some(&"filler 29"),
+        "{text}"
+    );
+    assert_clear_for_the_picture(&text, title..title + 11);
+    assert!(
+        lines[title + 2]
+            .get(BESIDE_PICTURE..)
+            .unwrap_or("")
+            .starts_with("OS: "),
+        "{text}"
+    );
+}
+
+#[test]
+fn no_logo_wins_over_a_named_logo() {
+    let out = cash("coolfetch --logo=image --no-logo --no-color");
+    assert!(!out.stdout.contains('\x1b'), "{:?}", out.stdout);
+    assert!(out.stdout.starts_with(|c: char| c != ' '), "{}", out.stdout);
+}
+
+/// A pseudo terminal with room for the picture and any machine's facts beside it.
+const ROOMY: (i16, i16) = (200, 40);
+
+/// What a pseudo terminal of `size` columns and rows shows once `script` has run in
+/// cash, in `dir`.
+fn on_a_terminal(script: &str, dir: Option<&Path>, size: (i16, i16)) -> String {
     let script = std::format!("{script}; echo coolfetch-finished");
-    let mut session = ConPtySession::start_in(Path::new(CASH), &["-c", &script], None, dir)
-        .expect("start cash in a pseudo terminal");
+    let mut session =
+        ConPtySession::start_sized(Path::new(CASH), &["-c", &script], None, dir, size.0, size.1)
+            .expect("start cash in a pseudo terminal");
     session
         .expect("coolfetch-finished", Duration::from_secs(20))
         .expect("the script finishes");
@@ -285,14 +418,64 @@ fn on_a_terminal(script: &str, dir: Option<&Path>) -> String {
     session.screen().text()
 }
 
+/// Windows Terminal, as `coolfetch` recognises it.
+const IN_WINDOWS_TERMINAL: &str = "unset TERM_PROGRAM; WT_SESSION=test";
+
+#[test]
+fn windows_terminal_gets_the_picture() {
+    let text = on_a_terminal(
+        &std::format!("{IN_WINDOWS_TERMINAL}; coolfetch"),
+        None,
+        ROOMY,
+    );
+    assert!(!text.contains('#'), "the panes are drawn:\n{text}");
+    let title = text
+        .lines()
+        .position(|line| line.contains('@'))
+        .expect("the title");
+    assert_clear_for_the_picture(&text, title..title + 11);
+}
+
+#[test]
+fn a_window_without_room_for_the_picture_gets_the_panes() {
+    // Too narrow, and a fact would wrap onto the picture and erase what it landed on; too
+    // short, and making room would scroll the picture's top away.
+    for size in [(40, 40), (200, 12)] {
+        let text = on_a_terminal(
+            &std::format!("{IN_WINDOWS_TERMINAL}; coolfetch"),
+            None,
+            size,
+        );
+        assert!(text.contains("  #######  #######"), "{size:?}:\n{text}");
+    }
+}
+
+#[test]
+fn other_terminals_get_the_panes() {
+    // VS Code's among them, when VS Code was started from Windows Terminal and
+    // inherited its `$WT_SESSION`.
+    for script in [
+        "unset TERM_PROGRAM WT_SESSION; coolfetch",
+        "TERM_PROGRAM=vscode; WT_SESSION=test; coolfetch",
+    ] {
+        let text = on_a_terminal(script, None, ROOMY);
+        assert!(text.contains("  #######  #######"), "{script}:\n{text}");
+    }
+}
+
 #[test]
 fn a_redirected_banner_is_plain_text() {
-    // The shell is on a terminal but the banner's output is a file: no colour.
+    // The shell is on a terminal but the banner's output is a file: no colour, and the
+    // panes rather than the picture.
     let dir = std::env::temp_dir().join(std::format!("cash-coolfetch-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    on_a_terminal("coolfetch > banner.txt", Some(&dir));
+    on_a_terminal(
+        &std::format!("{IN_WINDOWS_TERMINAL}; coolfetch > banner.txt"),
+        Some(&dir),
+        ROOMY,
+    );
     let banner = std::fs::read_to_string(dir.join("banner.txt")).unwrap_or_default();
     let _ = std::fs::remove_dir_all(&dir);
     assert!(!banner.contains('\x1b'), "{banner:?}");
-    assert!(banner.contains("OS: "), "{banner}");
+    assert!(banner.contains("  #######  #######"), "{banner}");
 }
