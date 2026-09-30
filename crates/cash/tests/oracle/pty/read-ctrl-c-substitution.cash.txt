@@ -1,0 +1,5 @@
+$ x=$(read v; echo in); echo after
+ab^C
+$ echo "rc=$?"
+rc=130
+$

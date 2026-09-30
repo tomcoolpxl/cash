@@ -1,0 +1,7 @@
+$ trap 'echo trapped' INT
+$ read v; echo "[$v]"
+ab^C
+trapped
+cd
+[cd]
+$

@@ -362,8 +362,9 @@ pub trait BuiltinError: std::error::Error + ConvertibleToExitCode + Send + Sync 
         false
     }
 
-    /// Whether this is an interrupt: an `INT` the interactive shell sent itself with no
-    /// trap set, which abandons the command line, as Ctrl-C does.
+    /// Whether this is an interrupt no trap is set for: Ctrl-C while a builtin waited for
+    /// the keyboard, or an `INT` the interactive shell sent itself. It abandons the
+    /// command line at the prompt, and ends a script (see [`Error::to_control_flow`]).
     fn is_interrupt(&self) -> bool {
         false
     }
@@ -420,6 +421,8 @@ impl From<&ErrorKind> for results::ExecutionExitCode {
                 Self::CannotExecute
             }
             ErrorKind::FunctionNameShadowsSpecialBuiltin { .. } => Self::InvalidUsage,
+            // 128 + SIGINT, the status Bash leaves after Ctrl-C.
+            ErrorKind::Interrupted => Self::Interrupted,
             ErrorKind::IoError(io_err) => io_err.into(),
             ErrorKind::BuiltinError(inner, ..) => inner.as_exit_code(),
             _ => Self::GeneralError,
@@ -500,6 +503,9 @@ impl Error {
     /// Converts this error into the appropriate control flow based on the shell's current state.
     /// This centralizes the logic for determining how fatal errors should affect execution flow.
     ///
+    /// An interrupt ends a shell that is not interactive, as SIGINT ends a Bash script;
+    /// the interactive shell goes back to its prompt.
+    ///
     /// # Arguments
     ///
     /// * `shell` - The shell instance, used to check interactive mode and script call stack.
@@ -507,7 +513,7 @@ impl Error {
         &self,
         shell: &Shell<impl extensions::ShellExtensions>,
     ) -> results::ExecutionControlFlow {
-        if self.is_fatal() && !shell.options().interactive {
+        if (self.is_fatal() || self.is_silent_interrupt()) && !shell.options().interactive {
             results::ExecutionControlFlow::ExitShell
         } else {
             results::ExecutionControlFlow::Normal

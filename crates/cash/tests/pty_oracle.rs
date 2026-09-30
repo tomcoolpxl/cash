@@ -296,6 +296,39 @@ const CASES: &[Case] = &[
         name: "read-t-line",
         keys: &["read -t 10 v; echo \"[$v] rc=$?\"\r", "helx\x7flo\r"],
     },
+    // Ctrl-C at a `read`: the line it is on is abandoned, with status 130, whatever the
+    // read is a part of.
+    Case {
+        name: "read-ctrl-c",
+        keys: &["read v; echo after\r", "ab\x03", "echo \"rc=$? [$v]\"\r"],
+    },
+    Case {
+        name: "read-ctrl-c-sourced",
+        keys: &[
+            "printf 'read v\\necho in-file\\n' > s.sh\r",
+            ". ./s.sh; echo after\r",
+            "ab\x03",
+            "echo \"rc=$?\"\r",
+        ],
+    },
+    Case {
+        name: "read-ctrl-c-substitution",
+        keys: &[
+            "x=$(read v; echo in); echo after\r",
+            "ab\x03",
+            "echo \"rc=$?\"\r",
+        ],
+    },
+    // With a trap on INT, the trap runs and the read goes on, with a new line.
+    Case {
+        name: "read-ctrl-c-trap",
+        keys: &[
+            "trap 'echo trapped' INT\r",
+            "read v; echo \"[$v]\"\r",
+            "ab\x03",
+            "cd\r",
+        ],
+    },
     // A job that finishes during a builtin, with another started on the same line: its
     // `Done` is still reported, and the new job does not take its id.
     Case {
@@ -448,6 +481,14 @@ const DELIBERATE: &[(&str, &str)] = &[
         "1u-compopt-fullquote",
         "D40: `compopt -o fullquote` quotes as file names are quoted, `'x y'`",
     ),
+    (
+        "read-ctrl-c",
+        "Ctrl-C at a `read` is shown as `^C`, as a Linux terminal shows it, and what \
+         follows starts on a new line; Git Bash's console shows nothing of it",
+    ),
+    ("read-ctrl-c-sourced", "`^C`, as above"),
+    ("read-ctrl-c-substitution", "`^C`, as above"),
+    ("read-ctrl-c-trap", "`^C`, as above"),
 ];
 
 /// The cases where cash differs from Bash, not yet fixed, each with the difference. A

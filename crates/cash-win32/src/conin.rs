@@ -9,6 +9,11 @@
 //! no Enter in it, was shown on the screen and then waited for until someone pressed the
 //! key (2026-09-30).
 //!
+//! Nor does the read end at Ctrl-C. The console makes a control event of the key, which
+//! ends a process that has no handler for it, and the read of one that has goes on
+//! waiting for Enter. So a plain `read` is served here as well: Ctrl-C ended the
+//! interactive shell, or did nothing to a script.
+//!
 //! A Unix shell turns the terminal driver's line collection off for such a read and takes
 //! the bytes as they come. The console's equivalent is its queue of input records: each
 //! key is a record, there whether or not a line is being collected, and a handle to the

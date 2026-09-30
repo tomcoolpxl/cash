@@ -1,0 +1,5 @@
+$ read v; echo after
+ab^C
+$ echo "rc=$? [$v]"
+rc=130 []
+$

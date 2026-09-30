@@ -75,6 +75,14 @@ pub struct ExecutionParameters {
     /// passed and do not stop the command. Each simple command starts with this
     /// cleared, so a compound command's entries never reach the commands inside it.
     pub(crate) command_redirected_fds: Vec<ShellFd>,
+
+    /// Whether these are the parameters of commands a program is running: a script, a
+    /// `-c` string, a line typed at the prompt.
+    ///
+    /// A program started under them (a sourced file, `eval`, a trap, a command
+    /// substitution) is a part of that one, and an interrupt is not its to act on: it
+    /// passes the interrupt on, and the outermost program acts on it.
+    pub(crate) within_program: bool,
 }
 
 impl ExecutionParameters {
@@ -255,6 +263,13 @@ impl Execute for ast::Program {
     ) -> Result<ExecutionResult, error::Error> {
         let mut result = ExecutionResult::success();
 
+        // Whether another program is running this one, which then has the last word on an
+        // interrupt.
+        let part_of_another = params.within_program;
+        let mut params = params.clone();
+        params.within_program = true;
+        let params = &params;
+
         for command in &self.complete_commands {
             // Execute the command and handle any errors without immediately propagating them.
             // This allows interactive shells to continue executing subsequent commands even after
@@ -262,20 +277,31 @@ impl Execute for ast::Program {
             match command.execute(shell, params).await {
                 Ok(exec_result) => result = exec_result,
                 Err(err) => {
+                    // cash: an interrupt (Ctrl-C while `read` waits for the keyboard) ends
+                    // everything that is running, as SIGINT reaches every process of a
+                    // Unix shell's foreground job: the sourced file, the `eval`, the
+                    // command substitution and whatever runs them. Each passes it on, and
+                    // the outermost program ends there: a script or a `-c` string ends the
+                    // shell with status 130, and at the prompt the line is abandoned.
+                    let interrupted = err.is_silent_interrupt();
+                    if interrupted && part_of_another {
+                        return Err(err);
+                    }
+
                     // Display the error and convert to an execution result.
-                    if !err.is_silent_interrupt() {
+                    if !interrupted {
                         let _ = shell.display_error(&mut params.stderr(shell), &err);
                     }
                     let discards_line = err.discards_line();
                     result = err.into_result(shell);
                     // An error that abandons its line abandons the rest of a `-c` string,
-                    // which Bash runs as one unit; a script goes on at its next line.
-                    if discards_line
-                        && shell
-                            .call_stack()
-                            .current_frame()
-                            .is_some_and(|frame| frame.frame_type.is_command_string())
-                    {
+                    // which Bash runs as one unit; a script goes on at its next line. An
+                    // interrupt leaves nothing of the program to go on with.
+                    let in_command_string = shell
+                        .call_stack()
+                        .current_frame()
+                        .is_some_and(|frame| frame.frame_type.is_command_string());
+                    if interrupted || (discards_line && in_command_string) {
                         shell.set_last_exit_status(result.exit_code.into());
                         break;
                     }
@@ -889,6 +915,8 @@ impl Execute for ast::CompoundCommand {
                 // from propagating to the parent shell.
                 let subshell_result = match list.execute(&mut subshell, params).await {
                     Ok(result) => result,
+                    // An interrupt ends the shell the subshell is a part of, too.
+                    Err(error) if error.is_silent_interrupt() => return Err(error),
                     Err(error) => {
                         // Display the error to stderr, but prevent fatal error propagation
                         let mut stderr = params.stderr(shell);

@@ -16,6 +16,12 @@ const TIMEOUT_EXIT_CODE: u8 = 142;
 const CTRL_C: char = '\x03';
 /// ASCII control character for Ctrl+D (EOT - End of Transmission).
 const CTRL_D: char = '\x04';
+/// Ctrl+U, which takes back the line typed so far: a terminal's kill character.
+const CTRL_U: char = '\x15';
+/// Ctrl+W, which takes back the last word typed: a terminal's word-erase character.
+const CTRL_W: char = '\x17';
+/// Ctrl+Z, which ends input at a Windows console.
+const CTRL_Z: char = '\x1a';
 /// What the Backspace key types at a console.
 const BACKSPACE: char = '\x08';
 /// What Ctrl+Backspace types at a console, and Backspace at one sending a terminal's
@@ -127,7 +133,7 @@ impl builtins::Command for ReadCommand {
 
     async fn execute<SE: cash_core::ShellExtensions>(
         &self,
-        context: cash_core::ExecutionContext<'_, SE>,
+        mut context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<cash_core::ExecutionResult, Self::Error> {
         // Validate timeout value if provided.
         if let Some(result) = self.validate_timeout(&context)? {
@@ -139,11 +145,6 @@ impl builtins::Command for ReadCommand {
             cash_core::openfiles::OpenFiles::STDIN_FD,
             cash_core::ShellFd::from,
         );
-
-        // Retrieve the file.
-        let input_stream = context
-            .try_fd(fd_num)
-            .ok_or_else(|| ErrorKind::BadFileDescriptor(fd_num))?;
 
         // Retrieve effective value of IFS for splitting.
         // We convert to owned String to release the borrow before the mutable borrow
@@ -173,8 +174,32 @@ impl builtins::Command for ReadCommand {
                     .collect()
             })
             .unwrap_or_default();
-        let stderr = context.stderr();
-        let read_result = self.read_line(input_stream, stderr, timeout, &history, context.shell)?;
+
+        // Ctrl-C ends the wait for input. With a trap on INT, the trap runs and the read
+        // goes on with what it had, as in Bash; without one the read is over, and so is
+        // the script, or the line typed at the prompt.
+        let mut progress = Progress::new();
+        let read_result = loop {
+            let input_stream = context
+                .try_fd(fd_num)
+                .ok_or_else(|| ErrorKind::BadFileDescriptor(fd_num))?;
+            let attempt = self.read_line(
+                input_stream,
+                context.stderr(),
+                timeout,
+                &mut progress,
+                &history,
+                context.shell,
+            )?;
+            match attempt {
+                Attempt::Done(read_result) => break read_result,
+                Attempt::Interrupted => {
+                    if let Some(result) = run_interrupt_trap(&mut context).await? {
+                        return Ok(result);
+                    }
+                }
+            }
+        };
 
         // Determine whether to skip IFS splitting (for -N option).
         let skip_ifs_splitting = self.ignores_delimiter();
@@ -185,10 +210,6 @@ impl builtins::Command for ReadCommand {
             ReadResult::Eof(Some(line)) => (
                 Some(line.clone()),
                 cash_core::ExecutionResult::general_error(),
-            ),
-            ReadResult::Interrupted => (
-                None,
-                cash_core::ExecutionResult::from(cash_core::ExecutionExitCode::Interrupted),
             ),
             ReadResult::Eof(None) | ReadResult::InputNotReady => {
                 (None, cash_core::ExecutionResult::general_error())
@@ -230,6 +251,29 @@ impl builtins::Command for ReadCommand {
         .await?;
 
         Ok(result)
+    }
+}
+
+/// Runs the trap on `INT` for a Ctrl-C that ended the wait for input.
+///
+/// With a trap set, the read goes on once it has run (`None`), as Bash's does, unless the
+/// trap itself ends the shell or returns: then that is the read's result. With none, the
+/// read ends as an interrupt, which is cash-core's to act on: it ends a script with
+/// status 130, and abandons the line at the interactive prompt.
+async fn run_interrupt_trap(
+    context: &mut cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
+) -> Result<Option<cash_core::ExecutionResult>, cash_core::Error> {
+    let interrupt = cash_core::traps::TrapSignal::try_from("INT")?;
+    match context
+        .shell
+        .raise_signal_trap(interrupt, &context.params)
+        .await
+    {
+        Some(trap_result) => {
+            let trap_result = trap_result?;
+            Ok((!trap_result.is_normal_flow()).then_some(trap_result))
+        }
+        None => Err(ErrorKind::Interrupted.into()),
     }
 }
 
@@ -404,14 +448,57 @@ enum ReadResult {
     Line(String),
     /// Reached end of input. Contains any partial content read before EOF.
     Eof(Option<String>),
-    /// Input was interrupted (e.g., Ctrl+C). No content is returned.
-    Interrupted,
     /// The operation timed out. Contains any partial content read before timeout.
     TimedOut(Option<String>),
     /// For `-t 0`: input is immediately available (exit 0).
     InputReady,
     /// For `-t 0`: no input immediately available (exit 1).
     InputNotReady,
+}
+
+/// How a wait for input ended.
+enum Attempt {
+    /// With the read's result.
+    Done(ReadResult),
+    /// With Ctrl-C. What the read had taken in is in its [`Progress`].
+    Interrupted,
+}
+
+/// What a read has taken in so far. It is kept while a trap on `INT` runs, and the read
+/// then goes on from it, as Bash's does: `read -n 5` interrupted after `ab` still ends
+/// three characters later.
+///
+/// A line the terminal was still collecting is not part of it: Ctrl-C drops that line, as
+/// a terminal driver does, and the read starts a new one.
+struct Progress {
+    /// When the read began. The time `-t` allows is counted from here, however often a
+    /// trap interrupts the wait.
+    started: Instant,
+    /// Whether the read has shown its prompt, which it does once.
+    prompted: bool,
+    /// The characters read, after backslash processing.
+    line: String,
+    /// How many characters `line` holds. The limit of `-n` counts characters, and
+    /// recounting a growing string on every one of them is quadratic.
+    output_chars: usize,
+    /// Whether the last character read was a backslash that quotes the next one.
+    pending_backslash: bool,
+    /// The line being edited under `-e`, which the editor shows again.
+    editing: Option<String>,
+}
+
+impl Progress {
+    /// Of a read that begins now.
+    fn new() -> Self {
+        Self {
+            started: Instant::now(),
+            prompted: false,
+            line: String::new(),
+            output_chars: 0,
+            pending_backslash: false,
+            editing: None,
+        }
+    }
 }
 
 /// Helper struct that encapsulates the state for reading input character by character.
@@ -435,11 +522,20 @@ struct InputReader {
 ///
 /// Bash leaves the terminal collecting lines unless `-n`, `-N` or a delimiter other than
 /// newline asks for characters as they are typed, turns the terminal's echo off for
-/// `-s`, and has a signal end the read when `-t` runs out. A Windows console collecting a
-/// line can do none of that: it hands over nothing before Enter, a read of it cannot be
-/// ended once a key is typed, and it shows keys only while it collects a line. So for
-/// any of those options the keys are read here (`cash_win32::conin`), and this shows
-/// them and collects the line.
+/// `-s`, and has a signal end the read when `-t` runs out or Ctrl-C is typed. A Windows
+/// console collecting a line can do none of that: it hands over nothing before Enter, a
+/// read of it cannot be ended once a key is typed, and it shows keys only while it
+/// collects a line. Of Ctrl-C it makes a console control event, and the read still waits
+/// for Enter: the event ends a process that has no handler for it where it stands, the
+/// interactive shell included, and one that has a handler, or was started to ignore
+/// Ctrl-C, reads on. So at a console every read takes the keys here
+/// (`cash_win32::conin`), where Ctrl-C is a key, and this shows them and collects the
+/// line.
+///
+/// A line is edited as a terminal driver lets it be: Backspace takes a character back,
+/// Ctrl-W a word, Ctrl-U all of it, and Ctrl-D ends input. The console's own editing of
+/// a line (the arrow keys, Escape, the function keys) is given up for it; `read -e` has
+/// an editor.
 struct ConsoleInput {
     keys: cash_win32::conin::Keys,
     /// The screen, to show what is typed on; `None` for `-s`.
@@ -509,10 +605,31 @@ impl ConsoleInput {
                         self.erase(taken_back);
                     }
                 }
+                CTRL_U => {
+                    while let Some(taken_back) = line.pop() {
+                        self.erase(taken_back);
+                    }
+                }
+                // The blanks after the last word go with it.
+                CTRL_W => {
+                    for of_word in [false, true] {
+                        while let Some(taken_back) =
+                            line.pop_if(|last| last.is_whitespace() != of_word)
+                        {
+                            self.erase(taken_back);
+                        }
+                    }
+                }
                 // Ctrl-C drops the line; Ctrl-D hands over what there is of it.
                 CTRL_C => {
                     self.show(ch);
                     return Ok(Some(ch));
+                }
+                // As the console's own line collection has it, and Windows users know it:
+                // Ctrl-Z where a line starts ends input.
+                CTRL_Z if line.is_empty() => {
+                    line.push(CTRL_D);
+                    break;
                 }
                 DEFAULT_DELIMITER | CTRL_D => {
                     self.show(ch);
@@ -611,17 +728,11 @@ enum EditingKey {
 }
 
 impl InputReader {
-    /// Creates a new input reader with optional timeout.
-    fn new(input: cash_core::openfiles::OpenFile, timeout: Option<Duration>) -> Self {
+    /// Creates a new input reader, which waits for input until `deadline` if there is one.
+    fn new(input: cash_core::openfiles::OpenFile, deadline: Option<Instant>) -> Self {
         let input_is_terminal = input.is_terminal();
         Self {
-            input: std::io::BufReader::with_capacity(
-                1,
-                PolledInput {
-                    input,
-                    deadline: timeout.map(|t| Instant::now() + t),
-                },
-            ),
+            input: std::io::BufReader::with_capacity(1, PolledInput { input, deadline }),
             console: None,
             pending: VecDeque::new(),
             input_is_terminal,
@@ -795,9 +906,11 @@ struct LineReaderConfig {
     process_escapes: bool,
 }
 
-/// Reads a complete line of input using the given reader and configuration.
+/// Reads a complete line of input using the given reader and configuration, going on
+/// from `progress`.
 ///
-/// Returns a `ReadResult` indicating success, EOF, timeout, or interruption.
+/// Returns the read's result (a line, EOF or a timeout), or that Ctrl-C interrupted it,
+/// with what it had read left in `progress`.
 ///
 /// Note on character counting for `-n` limit:
 /// Bash counts OUTPUT characters (after escape processing) toward the limit.
@@ -807,12 +920,15 @@ struct LineReaderConfig {
 fn read_line_with_reader(
     reader: &mut InputReader,
     config: &LineReaderConfig,
-) -> Result<ReadResult, cash_core::Error> {
-    let mut line = String::new();
-    // Tracked alongside `line`, which is a `String`: the limit counts characters, and
-    // recounting a growing string on every one of them is quadratic.
-    let mut output_chars = 0usize;
-    let mut pending_backslash = false;
+    progress: &mut Progress,
+) -> Result<Attempt, cash_core::Error> {
+    let Progress {
+        line,
+        output_chars,
+        pending_backslash,
+        ..
+    } = progress;
+    let if_any = |line: String| (!line.is_empty()).then_some(line);
 
     loop {
         let event = reader.read_event()?;
@@ -820,44 +936,38 @@ fn read_line_with_reader(
         match event {
             InputEvent::Eof => {
                 // Bash discards pending backslash on EOF.
-                return Ok(ReadResult::Eof(if line.is_empty() {
-                    None
-                } else {
-                    Some(line)
-                }));
+                let line = std::mem::take(line);
+                return Ok(Attempt::Done(ReadResult::Eof(if_any(line))));
             }
 
             InputEvent::Timeout => {
                 // Include pending backslash on timeout (different from EOF).
-                if pending_backslash {
+                if *pending_backslash {
                     line.push(BACKSLASH);
                 }
-                return Ok(ReadResult::TimedOut(if line.is_empty() {
-                    None
-                } else {
-                    Some(line)
-                }));
+                let line = std::mem::take(line);
+                return Ok(Attempt::Done(ReadResult::TimedOut(if_any(line))));
             }
 
             InputEvent::CtrlC => {
-                return Ok(ReadResult::Interrupted);
+                return Ok(Attempt::Interrupted);
             }
 
             InputEvent::CtrlD => {
                 // At line start = EOF, mid-input = flush current input.
                 // Bash discards pending backslash here too.
-                return Ok(if line.is_empty() && !pending_backslash {
+                return Ok(Attempt::Done(if line.is_empty() && !*pending_backslash {
                     ReadResult::Eof(None)
                 } else {
-                    ReadResult::Line(line)
-                });
+                    ReadResult::Line(std::mem::take(line))
+                }));
             }
 
             InputEvent::Char(ch) => {
                 // Handle backslash escape processing (when enabled).
                 if config.process_escapes {
-                    if pending_backslash {
-                        pending_backslash = false;
+                    if *pending_backslash {
+                        *pending_backslash = false;
 
                         // Bash removes backslash-newline and backslash-NUL pairs.
                         // Other escaped delimiters are retained as literal data.
@@ -867,19 +977,19 @@ fn read_line_with_reader(
 
                         // For other chars, add char literally (backslash consumed).
                         line.push(ch);
-                        output_chars += 1;
+                        *output_chars += 1;
 
                         // Check character limit (based on output length).
                         if let Some(limit) = config.char_limit
-                            && output_chars >= limit
+                            && *output_chars >= limit
                         {
-                            return Ok(ReadResult::Line(line));
+                            return Ok(Attempt::Done(ReadResult::Line(std::mem::take(line))));
                         }
                         continue;
                     }
 
                     if ch == BACKSLASH {
-                        pending_backslash = true;
+                        *pending_backslash = true;
                         continue;
                     }
                 }
@@ -900,7 +1010,7 @@ fn read_line_with_reader(
                         line.truncate(stripped_len);
                     }
 
-                    return Ok(ReadResult::Line(line));
+                    return Ok(Attempt::Done(ReadResult::Line(std::mem::take(line))));
                 }
 
                 // Bash discards NUL unless it is the requested delimiter. Other
@@ -910,13 +1020,13 @@ fn read_line_with_reader(
                 }
 
                 line.push(ch);
-                output_chars += 1;
+                *output_chars += 1;
 
                 // Check character limit (based on output length).
                 if let Some(limit) = config.char_limit
-                    && output_chars >= limit
+                    && *output_chars >= limit
                 {
-                    return Ok(ReadResult::Line(line));
+                    return Ok(Attempt::Done(ReadResult::Line(std::mem::take(line))));
                 }
             }
         }
@@ -928,6 +1038,9 @@ fn read_line_with_reader(
 /// This intentionally implements the portable, high-value part of Readline rather
 /// than importing the interactive shell editor into the builtin layer. Unix uses ANSI
 /// key sequences; Windows uses native console events through crossterm.
+///
+/// Ctrl-C interrupts it, leaving the line as it stood in `progress`. Called again, it
+/// shows that line and goes on editing it, as Readline does once a trap on `INT` has run.
 #[expect(
     clippy::too_many_lines,
     clippy::too_many_arguments,
@@ -943,17 +1056,28 @@ fn read_line_with_editor<SE: cash_core::ShellExtensions>(
     output: &mut impl Write,
     history: &[String],
     completion_shell: Option<&mut cash_core::Shell<SE>>,
-) -> Result<ReadResult, cash_core::Error> {
+    progress: &mut Progress,
+) -> Result<Attempt, cash_core::Error> {
     let _editor_mode = EditorModeGuard::new()?;
-    let mut committed = String::new();
-    let mut line: Vec<char> = initial_text.chars().collect();
+    let mut committed = std::mem::take(&mut progress.line);
+    let interrupted = progress.editing.take();
+    let mut line: Vec<char> = interrupted
+        .as_deref()
+        .unwrap_or(initial_text)
+        .chars()
+        .collect();
     let mut cursor = line.len();
     let scratch = line.clone();
     let mut history_index = history.len();
     let mut completion_shell = completion_shell;
 
-    if !silent && !line.is_empty() {
-        write!(output, "{}", line.iter().collect::<String>())?;
+    if interrupted.is_some() {
+        repaint_editor(output, prompt, &line, cursor, silent)?;
+    } else {
+        write!(output, "{prompt}")?;
+        if !silent {
+            write!(output, "{}", line.iter().collect::<String>())?;
+        }
         output.flush()?;
     }
 
@@ -962,16 +1086,18 @@ fn read_line_with_editor<SE: cash_core::ShellExtensions>(
             EditingKey::Timeout => {
                 finish_editor_output(output)?;
                 committed.push_str(&edited_line(&line, config));
-                return Ok(ReadResult::TimedOut(
+                return Ok(Attempt::Done(ReadResult::TimedOut(
                     (!committed.is_empty()).then_some(committed),
-                ));
+                )));
             }
             EditingKey::Interrupt => {
                 if !silent {
                     write!(output, "^C")?;
                 }
                 finish_editor_output(output)?;
-                return Ok(ReadResult::Interrupted);
+                progress.line = committed;
+                progress.editing = Some(line.into_iter().collect());
+                return Ok(Attempt::Interrupted);
             }
             EditingKey::Enter => {
                 if config.delimiter != Some(DEFAULT_DELIMITER) {
@@ -981,7 +1107,7 @@ fn read_line_with_editor<SE: cash_core::ShellExtensions>(
                     if editor_limit_reached(&committed, &line, config) {
                         committed.push_str(&edited_line(&line, config));
                         finish_editor_output(output)?;
-                        return Ok(ReadResult::Line(committed));
+                        return Ok(Attempt::Done(ReadResult::Line(committed)));
                     }
                 } else if accept_editor_segment(
                     &mut committed,
@@ -993,15 +1119,15 @@ fn read_line_with_editor<SE: cash_core::ShellExtensions>(
                     silent,
                     output,
                 )? {
-                    return Ok(ReadResult::Line(committed));
+                    return Ok(Attempt::Done(ReadResult::Line(committed)));
                 }
             }
             EditingKey::CtrlD => {
                 if line.is_empty() {
                     finish_editor_output(output)?;
-                    return Ok(ReadResult::Eof(
+                    return Ok(Attempt::Done(ReadResult::Eof(
                         (!committed.is_empty()).then_some(committed),
-                    ));
+                    )));
                 }
                 if cursor < line.len() {
                     line.remove(cursor);
@@ -1020,7 +1146,7 @@ fn read_line_with_editor<SE: cash_core::ShellExtensions>(
                         silent,
                         output,
                     )? {
-                        return Ok(ReadResult::Line(committed));
+                        return Ok(Attempt::Done(ReadResult::Line(committed)));
                     }
                     continue;
                 }
@@ -1031,7 +1157,7 @@ fn read_line_with_editor<SE: cash_core::ShellExtensions>(
                 if editor_limit_reached(&committed, &line, config) {
                     committed.push_str(&edited_line(&line, config));
                     finish_editor_output(output)?;
-                    return Ok(ReadResult::Line(committed));
+                    return Ok(Attempt::Done(ReadResult::Line(committed)));
                 }
             }
             EditingKey::Backspace if cursor > 0 => {
@@ -1303,14 +1429,18 @@ impl ReadCommand {
     /// - Without `-r`: backslash-newline is line continuation, other backslashes escape the next
     ///   char
     /// - With `-r`: backslash is treated as a literal character
+    ///
+    /// Ctrl-C interrupts it, and a second call with the same `progress` goes on with the
+    /// read, for the time that is left of `timeout`.
     fn read_line<SE: cash_core::ShellExtensions>(
         &self,
         input_file: cash_core::openfiles::OpenFile,
         mut stderr_file: impl std::io::Write,
         mut timeout: Option<Duration>,
+        progress: &mut Progress,
         history: &[String],
         shell: &mut cash_core::Shell<SE>,
-    ) -> Result<ReadResult, cash_core::Error> {
+    ) -> Result<Attempt, cash_core::Error> {
         let input_file_is_terminal = input_file.is_terminal();
 
         // Like Bash, a positive timeout has no effect on regular files. Keep
@@ -1339,29 +1469,22 @@ impl ReadCommand {
         let char_limit = self.character_limit();
 
         // Create the input reader.
-        let mut reader = InputReader::new(input_file, timeout);
+        let deadline = timeout.map(|timeout| progress.started + timeout);
+        let mut reader = InputReader::new(input_file, deadline);
 
         // Handle -t 0 special case: just check if input is available without reading.
         if timeout == Some(Duration::ZERO) {
-            return Ok(if reader.check_input_available() {
+            return Ok(Attempt::Done(if reader.check_input_available() {
                 ReadResult::InputReady
             } else {
                 ReadResult::InputNotReady
-            });
+            }));
         }
 
         // Bash treats both `read -n 0` and `read -N 0` as successful empty
         // reads and does not consume input or display a prompt.
         if char_limit == Some(0) {
-            return Ok(ReadResult::Line(String::new()));
-        }
-
-        // Display prompt on stderr, but only if input is from a terminal (per bash behavior).
-        if let Some(prompt) = &self.prompt
-            && input_file_is_terminal
-        {
-            write!(stderr_file, "{prompt}")?;
-            stderr_file.flush()?;
+            return Ok(Attempt::Done(ReadResult::Line(String::new())));
         }
 
         // Configure and perform the read.
@@ -1371,33 +1494,44 @@ impl ReadCommand {
             process_escapes: !self.raw_mode,
         };
 
-        // Bash has the terminal hand over characters as they are typed for `-n`, `-N` and
-        // a delimiter other than newline, and lines otherwise. A console collecting a
-        // line serves only the read that asks nothing else of it. A timeout could not
-        // end its read, and a silent line is collected here as well, where keys are
-        // shown only if this shows them, rather than by a second change to the console.
-        let as_typed = char_limit.is_some() || delimiter != Some(DEFAULT_DELIMITER);
-        if input_file_is_terminal
-            && !self.editing_requested()
-            && (as_typed || self.silent || timeout.is_some())
-        {
-            reader.read_console_keys(!as_typed, !self.silent);
-        }
+        // The prompt, which is shown only if input is from a terminal (per bash
+        // behavior). It is shown once the keys are this read's to take: what is typed at
+        // the sight of it, Ctrl-C included, then reaches the read.
+        let prompt = self
+            .prompt
+            .as_deref()
+            .filter(|_| input_file_is_terminal)
+            .unwrap_or_default();
 
         if input_file_is_terminal && self.editing_requested() {
-            read_line_with_editor(
+            return read_line_with_editor(
                 &mut reader,
                 &config,
-                self.prompt.as_deref().unwrap_or_default(),
+                prompt,
                 self.initial_text.as_deref().unwrap_or_default(),
                 self.silent,
                 &mut stderr_file,
                 history,
                 self.use_readline_with_bash_completion.then_some(shell),
-            )
-        } else {
-            read_line_with_reader(&mut reader, &config)
+                progress,
+            );
         }
+
+        // Bash has the terminal hand over characters as they are typed for `-n`, `-N` and
+        // a delimiter other than newline, and lines otherwise. At a console this does
+        // either, reading its keys: see `ConsoleInput`.
+        let as_typed = char_limit.is_some() || delimiter != Some(DEFAULT_DELIMITER);
+        if input_file_is_terminal {
+            reader.read_console_keys(!as_typed, !self.silent);
+        }
+
+        // Display the prompt on stderr, once: not again when the read goes on after a trap.
+        if !prompt.is_empty() && !std::mem::replace(&mut progress.prompted, true) {
+            write!(stderr_file, "{prompt}")?;
+            stderr_file.flush()?;
+        }
+
+        read_line_with_reader(&mut reader, &config, progress)
     }
 
     /// Validates the timeout value and returns an error result if invalid.

@@ -340,6 +340,8 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         // Report any errors.
         match result {
             Ok(result) => Ok(result),
+            // An interrupt a program passes on is for the program that runs it to act on.
+            Err(err) if err.is_silent_interrupt() => Err(err),
             Err(err) => {
                 let _ = self.display_error(&mut params.stderr(self), &err);
 

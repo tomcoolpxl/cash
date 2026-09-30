@@ -1,0 +1,6 @@
+$ printf 'read v\necho in-file\n' > s.sh
+$ . ./s.sh; echo after
+ab^C
+$ echo "rc=$?"
+rc=130
+$
