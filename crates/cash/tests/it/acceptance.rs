@@ -22,8 +22,9 @@
               alternating the two forms by accident of content reads worse."
 )]
 
+use std::io::Write as _;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 use crate::process_identity::OwnPing;
 
@@ -47,6 +48,30 @@ fn run(args: &[String]) -> Output {
         .args(args)
         .output()
         .expect("failed to run cash");
+    Output {
+        stdout: String::from_utf8_lossy(&out.stdout).trim_end().to_string(),
+        stderr: String::from_utf8_lossy(&out.stderr).trim_end().to_string(),
+        code: out.status.code().unwrap_or(-1),
+    }
+}
+
+/// Run a script through `cash -c` with `input` waiting on its standard input, a pipe.
+fn cash_reading(script: &str, input: &str) -> Output {
+    let mut child = Command::new(CASH)
+        .args(["-c", script])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("failed to run cash");
+    // A script that fails before it reads may be gone already, which is not the
+    // failure under test.
+    let _ = child
+        .stdin
+        .take()
+        .expect("stdin")
+        .write_all(input.as_bytes());
+    let out = child.wait_with_output().expect("wait for cash");
     Output {
         stdout: String::from_utf8_lossy(&out.stdout).trim_end().to_string(),
         stderr: String::from_utf8_lossy(&out.stderr).trim_end().to_string(),
@@ -458,6 +483,246 @@ fn globbing_is_case_insensitive() {
 #[test]
 fn dev_null_discards() {
     assert_eq!(cash("echo noise > /dev/null; echo done").stdout, "done");
+}
+
+// ---------------------------------------------------------------------------
+// D7 — /dev/stdin, /dev/stdout, /dev/stderr, /dev/fd/N.
+//
+// Windows has no such files: cash sees from the name that a descriptor is meant, and
+// hands over the one the command has at that moment. Every expectation here is what
+// the bash 5.3 of Git for Windows prints for the same script, but for the one test
+// that says otherwise.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn dev_stdin_is_standard_input() {
+    // Each of these said "failed to redirect to C:/dev/stdin": the name had been
+    // resolved to a path on the current drive before anything looked at it.
+    for (script, expected) in [
+        (r#"cat < /dev/stdin; echo "rc=$?""#, "x\ny\nrc=0"),
+        (r#"read -r l < /dev/stdin; echo "rc=$? l=$l""#, "rc=0 l=x"),
+        (
+            r#"while read -r l; do echo "got $l"; done < /dev/stdin; echo "rc=$?""#,
+            "got x\ngot y\nrc=0",
+        ),
+        (r#"cat < /dev/fd/0; echo "rc=$?""#, "x\ny\nrc=0"),
+        (
+            r#"mapfile -t a < /dev/stdin; echo "${#a[@]} ${a[*]}""#,
+            "2 x y",
+        ),
+        (r#"v=$(< /dev/stdin); echo "$v""#, "x\ny"),
+        (r#"v=$(cat < /dev/stdin); echo "$v""#, "x\ny"),
+        (r#"(cat < /dev/stdin)"#, "x\ny"),
+        (r#"cat < /dev/stdin | tr a-z A-Z"#, "X\nY"),
+        (r#"n=/dev/stdin; cat < "$n""#, "x\ny"),
+        // One input, read in turns: the second `read` goes on where the first stopped.
+        (
+            r#"read -r a < /dev/stdin; read -r b < /dev/stdin; echo "a=$a b=$b""#,
+            "a=x b=y",
+        ),
+        (r#"exec 3< /dev/stdin; read -r -u 3 l; echo "l=$l""#, "l=x"),
+    ] {
+        let out = cash_reading(script, "x\ny\n");
+        assert_eq!(
+            out.stdout, expected,
+            "failed for: {script}\nstderr: {}",
+            out.stderr
+        );
+    }
+}
+
+#[test]
+fn dev_stdin_is_the_commands_input_not_the_shells() {
+    // A here-string, a pipeline and a redirected function each give a command an input
+    // of its own, and that is the one the name means. The shell's input holds "shell".
+    let scratch = Scratch::new("dev-stdin");
+    std::fs::write(scratch.path().join("f.txt"), b"from a file\n").unwrap();
+
+    for (script, expected) in [
+        (
+            r#"{ cat < /dev/stdin; } <<< "from a here-string""#,
+            "from a here-string",
+        ),
+        (r#"echo "from a pipe" | cat < /dev/stdin"#, "from a pipe"),
+        (r#"f() { cat < /dev/stdin; }; f < f.txt"#, "from a file"),
+    ] {
+        let script = format!("cd {}; {script}", scratch.as_script_path());
+        let out = cash_reading(&script, "shell\n");
+        assert_eq!(
+            out.stdout, expected,
+            "failed for: {script}\nstderr: {}",
+            out.stderr
+        );
+    }
+}
+
+#[test]
+fn dev_stdout_and_dev_stderr_are_the_standard_streams() {
+    for name in ["/dev/stdout", "/dev/fd/1"] {
+        let out = cash(&format!("echo one > {name}; echo two >> {name}"));
+        assert_eq!(out.stdout, "one\ntwo", "failed for {name}: {}", out.stderr);
+        assert_eq!(out.stderr, "", "{name} wrote to standard error");
+    }
+    for name in ["/dev/stderr", "/dev/fd/2"] {
+        let out = cash(&format!("echo one > {name}; echo two >> {name}"));
+        assert_eq!(out.stderr, "one\ntwo", "failed for {name}");
+        assert_eq!(out.stdout, "", "{name} wrote to standard output");
+    }
+
+    let both = cash("echo both &> /dev/stderr; echo again &>> /dev/stderr");
+    assert_eq!(both.stderr, "both\nagain");
+    assert_eq!(both.stdout, "");
+
+    // The idiom for an error message, and its opposite.
+    let swapped = cash("{ echo oops >&2; } 2> /dev/stdout");
+    assert_eq!(swapped.stdout, "oops");
+    assert_eq!(swapped.stderr, "");
+}
+
+#[test]
+fn dev_stdout_is_the_commands_output_not_the_shells() {
+    let scratch = Scratch::new("dev-stdout");
+
+    for (script, expected) in [
+        (
+            r#"v=$(echo captured > /dev/stdout); echo "v=$v""#,
+            "v=captured",
+        ),
+        (r#"echo piped > /dev/stdout | tr a-z A-Z"#, "PIPED"),
+        (
+            r#"{ echo "to a file" > /dev/stderr; } 2> o.txt; cat o.txt"#,
+            "to a file",
+        ),
+        (
+            r#"f() { echo "in f" > /dev/stderr; }; f 2> o.txt; cat o.txt"#,
+            "in f",
+        ),
+    ] {
+        let script = format!("cd {}; {script}", scratch.as_script_path());
+        let out = cash(&script);
+        assert_eq!(
+            out.stdout, expected,
+            "failed for: {script}\nstderr: {}",
+            out.stderr
+        );
+        assert_eq!(out.stderr, "", "failed for: {script}");
+    }
+
+    // Standard error is not what a command substitution collects.
+    let out = cash(r#"v=$(echo aside > /dev/stderr); echo "v=$v""#);
+    assert_eq!(out.stdout, "v=");
+    assert_eq!(out.stderr, "aside");
+}
+
+#[test]
+fn dev_fd_n_is_a_descriptor_the_script_opened() {
+    let scratch = Scratch::new("dev-fd");
+    std::fs::write(scratch.path().join("f.txt"), b"from a file\n").unwrap();
+
+    for (script, expected) in [
+        (r#"exec 3< f.txt; cat < /dev/fd/3"#, "from a file"),
+        (r#"exec {fd}< f.txt; cat < /dev/fd/$fd"#, "from a file"),
+        (
+            r#"exec 3> o.txt; echo three > /dev/fd/3; exec 3>&-; cat o.txt"#,
+            "three",
+        ),
+        (
+            r#"exec 3<> o.txt; echo both-ways > /dev/fd/3; exec 3>&-; cat o.txt"#,
+            "both-ways",
+        ),
+    ] {
+        let script = format!("cd {}; {script}", scratch.as_script_path());
+        let out = cash(&script);
+        assert_eq!(
+            out.stdout, expected,
+            "failed for: {script}\nstderr: {}",
+            out.stderr
+        );
+    }
+}
+
+#[test]
+fn a_descriptor_that_is_not_open_fails_the_redirection() {
+    // bash: "/dev/fd/9: No such file or directory", and the command does not run. cash
+    // says what is wrong with the name as written: no file called C:/dev/fd/9 was
+    // looked for, so none can be opened or made by mistake.
+    for (script, name, fd) in [
+        ("cat < /dev/fd/9", "/dev/fd/9", 9),
+        ("echo x > /dev/fd/9", "/dev/fd/9", 9),
+        ("echo x &> /dev/fd/9", "/dev/fd/9", 9),
+        ("exec 0<&-; cat < /dev/stdin", "/dev/stdin", 0),
+    ] {
+        let out = cash_reading(&format!(r#"{script}; echo "rc=$?""#), "x\n");
+        assert_eq!(out.stdout, "rc=1", "failed for: {script}");
+        assert!(
+            out.stderr
+                .contains(&format!("{name}: descriptor {fd} is not open"))
+                && !out.stderr.contains(":/dev/"),
+            "failed for: {script}\nstderr: {}",
+            out.stderr
+        );
+    }
+}
+
+#[test]
+fn a_device_name_shares_the_descriptor_instead_of_opening_the_file_again() {
+    // The one deliberate difference. Linux and Git Bash open the file a second time,
+    // so `> /dev/stdout` truncates what standard output has already written to it and
+    // bash prints "b" alone; a read starts over from the first line. cash hands over
+    // the descriptor itself, which is what bash does on a system with no /dev/stdout
+    // and what `>&1` does everywhere.
+    let scratch = Scratch::new("dev-shared");
+    std::fs::write(scratch.path().join("f.txt"), b"l1\nl2\nl3\n").unwrap();
+
+    for (script, expected) in [
+        (
+            r#"{ echo a; echo b > /dev/stdout; } > o.txt; cat o.txt"#,
+            "a\nb",
+        ),
+        (r#"exec 3< f.txt; read -r a <&3; cat < /dev/fd/3"#, "l2\nl3"),
+    ] {
+        let script = format!("cd {}; {script}", scratch.as_script_path());
+        let out = cash(&script);
+        assert_eq!(
+            out.stdout, expected,
+            "failed for: {script}\nstderr: {}",
+            out.stderr
+        );
+    }
+}
+
+#[test]
+fn source_reads_a_device_name() {
+    // `kubectl completion bash | source /dev/stdin` is how completions are loaded.
+    let piped = cash_reading(r#". /dev/stdin; echo "v=$v""#, "v=sourced\n");
+    assert_eq!(piped.stdout, "v=sourced", "stderr: {}", piped.stderr);
+
+    let here = cash(r#"source /dev/stdin <<< 'echo "from a here-string"'"#);
+    assert_eq!(here.stdout, "from a here-string", "stderr: {}", here.stderr);
+
+    let null = cash(r#". /dev/null; echo "rc=$?""#);
+    assert_eq!(null.stdout, "rc=0", "stderr: {}", null.stderr);
+}
+
+#[test]
+fn a_name_that_only_resembles_a_device_is_a_file() {
+    let scratch = Scratch::new("dev-near");
+    let cd = format!("cd {}", scratch.as_script_path());
+
+    // A folder called `dev` is an ordinary folder.
+    let relative = cash(&format!(
+        "{cd}; mkdir dev; echo kept > dev/stdout; cat dev/stdout"
+    ));
+    assert_eq!(relative.stdout, "kept", "stderr: {}", relative.stderr);
+    assert!(scratch.path().join("dev").join("stdout").is_file());
+
+    // A longer name is a file that is not there.
+    let longer = cash_reading(r#"cat < /dev/stdinx; echo "rc=$?""#, "x\n");
+    assert_eq!(longer.stdout, "rc=1");
+
+    // What a filesystem reads as the same name is the same name.
+    let doubled = cash_reading(r#"d=/dev/; cat < "$d/stdin""#, "x\n");
+    assert_eq!(doubled.stdout, "x", "stderr: {}", doubled.stderr);
 }
 
 // ---------------------------------------------------------------------------

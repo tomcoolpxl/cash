@@ -2140,8 +2140,11 @@ pub(crate) async fn setup_redirect(
                         return Err(error::ErrorKind::InvalidRedirection.into());
                     }
 
+                    // The word itself goes to `open_file`, which has to see `/dev/stdin`
+                    // and its like (D7) as they were written.
+                    let target_word = expanded_fields.remove(0);
                     let expanded_file_path: PathBuf =
-                        shell.absolute_path(Path::new(expanded_fields.remove(0).as_str()));
+                        shell.absolute_path(Path::new(target_word.as_str()));
 
                     let default_fd_if_unspecified = get_default_fd_for_redirect_kind(kind);
                     match kind {
@@ -2192,14 +2195,15 @@ pub(crate) async fn setup_redirect(
 
                     let fd_num = specified_fd_num.unwrap_or(default_fd_if_unspecified);
 
-                    let opened_file = shell
-                        .open_file(&options, &expanded_file_path, params)
-                        .map_err(|err| {
-                            error::ErrorKind::RedirectionFailure(
-                                expanded_file_path.to_string_lossy().to_string(),
-                                err.to_string(),
-                            )
-                        })?;
+                    let opened_file =
+                        shell
+                            .open_file(&options, &target_word, params)
+                            .map_err(|err| {
+                                error::ErrorKind::RedirectionFailure(
+                                    redirect_target_name(&target_word, &expanded_file_path),
+                                    err.to_string(),
+                                )
+                            })?;
 
                     params.set_redirected_fd(fd_num, opened_file);
                 }
@@ -2439,10 +2443,10 @@ fn setup_redirect_output_and_error_to(
         .append(append);
 
     let stdout_file = shell
-        .open_file(&file_options, &abs_file_path, params)
+        .open_file(&file_options, file_path, params)
         .map_err(|err| {
             error::ErrorKind::RedirectionFailure(
-                abs_file_path.to_string_lossy().to_string(),
+                redirect_target_name(file_path, &abs_file_path),
                 err.to_string(),
             )
         })?;
@@ -2453,6 +2457,16 @@ fn setup_redirect_output_and_error_to(
     params.open_files.set_fd(OpenFiles::STDERR_FD, stderr_file);
 
     Ok(())
+}
+
+/// The name a failed redirection reports: a file by the path it resolved to, and a
+/// device name (D7) as it was written, since `C:/dev/stdin` is a file nothing tried to
+/// open.
+fn redirect_target_name(word: &str, resolved: &Path) -> String {
+    match cash_win32::path::accept(word) {
+        cash_win32::path::Target::Path(_) => resolved.to_string_lossy().to_string(),
+        _ => word.to_owned(),
+    }
 }
 
 const fn get_default_fd_for_redirect_kind(kind: &ast::IoFileRedirectKind) -> ShellFd {

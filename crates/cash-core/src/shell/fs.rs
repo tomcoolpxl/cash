@@ -356,7 +356,8 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
     /// # Arguments
     ///
     /// * `options` - The options to use opening the file.
-    /// * `path` - The path to the file to open; may be relative to the shell's working directory.
+    /// * `path` - The path to the file to open, as the script wrote it; may be relative to
+    ///   the shell's working directory.
     /// * `params` - Execution parameters.
     pub(crate) fn open_file(
         &self,
@@ -364,23 +365,31 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         path: impl AsRef<Path>,
         params: &ExecutionParameters,
     ) -> Result<openfiles::OpenFile, std::io::Error> {
-        // Give platform-specific code a chance to handle special files
-        // (e.g. /dev/null on Windows, which needs to open NUL instead).
-        // This is checked before absolute_path so that paths like /dev/null
-        // are intercepted on platforms where they aren't valid native paths.
-        if let Some(result) = crate::sys::fs::try_open_special_file(path.as_ref()) {
-            return result.map(openfiles::OpenFile::from);
+        // cash (D7): `/dev/stdin`, `/dev/stdout`, `/dev/stderr` and `/dev/fd/N` are the
+        // shell's descriptors as this command sees them, which after a redirection or a
+        // here-document are not the host process's. Windows has no such files, so the
+        // name is decided from the spelling as written, before anything resolves it:
+        // `absolute_path` makes `/dev/stdin` into `C:/dev/stdin`, which names a file.
+        // That is why a caller passes the word it was given, not a path it resolved.
+        //
+        // The descriptor is shared, not opened again: `> /dev/stdout` leaves in place
+        // what standard output has already written to a file, where Linux, opening the
+        // file a second time, truncates it.
+        if let Some(fd) = shell_fd_for_device_name(path.as_ref()) {
+            return params.try_fd(self, fd).ok_or_else(|| {
+                std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    format!("descriptor {fd} is not open"),
+                )
+            });
         }
 
         let path_to_open = self.absolute_path(path.as_ref());
 
-        // See if this is a reference to a file descriptor. These paths should
-        // reflect the shell's current execution fds, which can differ from the
-        // host process fds after redirections like here-docs.
-        if let Some(fd_num) = shell_fd_path_to_fd(&path_to_open)
-            && let Some(open_file) = params.try_fd(self, fd_num)
-        {
-            return Ok(open_file);
+        // Give platform-specific code a chance to handle special files
+        // (e.g. /dev/null on Windows, which needs to open NUL instead).
+        if let Some(result) = crate::sys::fs::try_open_special_file(&path_to_open) {
+            return result.map(openfiles::OpenFile::from);
         }
 
         Ok(options.open(path_to_open)?.into())
@@ -404,20 +413,17 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
     }
 }
 
-fn shell_fd_path_to_fd(path: &Path) -> Option<ShellFd> {
-    match path.to_str()? {
-        "/dev/stdin" => return Some(openfiles::OpenFiles::STDIN_FD),
-        "/dev/stdout" => return Some(openfiles::OpenFiles::STDOUT_FD),
-        "/dev/stderr" => return Some(openfiles::OpenFiles::STDERR_FD),
-        _ => {}
-    }
+/// The descriptor a device name stands for (D7), from the name as the script wrote it.
+/// `None` for every other name, `/dev/null` included.
+fn shell_fd_for_device_name(name: &Path) -> Option<ShellFd> {
+    use cash_win32::path::Target;
 
-    if let Some(parent) = path.parent()
-        && parent == Path::new("/dev/fd")
-        && let Some(filename) = path.file_name()
-    {
-        filename.to_string_lossy().parse::<ShellFd>().ok()
-    } else {
-        None
+    match cash_win32::path::accept(&name.to_string_lossy()) {
+        Target::Stdin => Some(openfiles::OpenFiles::STDIN_FD),
+        Target::Stdout => Some(openfiles::OpenFiles::STDOUT_FD),
+        Target::Stderr => Some(openfiles::OpenFiles::STDERR_FD),
+        // A number too large to be a descriptor is still one that is not open.
+        Target::Fd(number) => Some(ShellFd::try_from(number).unwrap_or(ShellFd::MAX)),
+        Target::Null | Target::Path(_) => None,
     }
 }
