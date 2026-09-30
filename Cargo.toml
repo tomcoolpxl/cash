@@ -20,7 +20,7 @@ default-members = ["crates/cash"]
 exclude = ["vendor/crossterm", "vendor/reedline"]
 
 [workspace.package]
-version = "1.3.1"
+version = "1.3.2"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/tomcoolpxl/cash"
@@ -31,17 +31,17 @@ keywords = ["cli", "shell", "sh", "bash", "windows"]
 readme = "README.md"
 
 [workspace.dependencies]
-cash-awk = { version = "1.3.1", path = "crates/cash-awk" }
-cash-bc = { version = "1.3.1", path = "crates/cash-bc" }
-cash-builtins = { version = "1.3.1", path = "crates/cash-builtins" }
-cash-core = { version = "1.3.1", path = "crates/cash-core" }
-cash-coreutils-builtins = { version = "1.3.1", path = "crates/cash-coreutils-builtins" }
-cash-interactive = { version = "1.3.1", path = "crates/cash-interactive" }
-cash-parser = { version = "1.3.1", path = "crates/cash-parser" }
-cash-sed = { version = "1.3.1", path = "crates/cash-sed" }
-cash-shell = { version = "1.3.1", path = "crates/cash-shell" }
-cash-test-harness = { version = "1.3.1", path = "crates/cash-test-harness" }
-cash-win32 = { version = "1.3.1", path = "crates/cash-win32" }
+cash-awk = { version = "1.3.2", path = "crates/cash-awk" }
+cash-bc = { version = "1.3.2", path = "crates/cash-bc" }
+cash-builtins = { version = "1.3.2", path = "crates/cash-builtins" }
+cash-core = { version = "1.3.2", path = "crates/cash-core" }
+cash-coreutils-builtins = { version = "1.3.2", path = "crates/cash-coreutils-builtins" }
+cash-interactive = { version = "1.3.2", path = "crates/cash-interactive" }
+cash-parser = { version = "1.3.2", path = "crates/cash-parser" }
+cash-sed = { version = "1.3.2", path = "crates/cash-sed" }
+cash-shell = { version = "1.3.2", path = "crates/cash-shell" }
+cash-test-harness = { version = "1.3.2", path = "crates/cash-test-harness" }
+cash-win32 = { version = "1.3.2", path = "crates/cash-win32" }
 
 # Lint configuration inherited from brush (MIT, (c) 2024 reuben olinsky). Kept as-is:
 # it is strict, the absorbed code already satisfies it, and loosening it would let the
