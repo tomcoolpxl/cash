@@ -21,14 +21,9 @@ the sessions themselves are not needed any more.
 
 ## Waiting for your decision
 
-- **Push and release.** `main` is 32 commits ahead of `origin/main` and of `v1.2.1`, and
-  exists only on this machine. The version in `Cargo.toml` is still 1.2.1. A session
-  asked "push `main` and release this as 1.3.0?" and got no answer. The installed `cash`
-  (Scoop's) shows none of this until a release.
-- **`wait %N` after `jobs` has shown the job.** cash returns the job's status, as the
-  brief for that fix asked; Bash answers `wait: %1: no such job`, 127. Matching Bash is a
-  one-line change in `collect_saved_job` (`open-issues.md` entry 8).
-- Items 3 and 5 below each need a decision before code.
+- **Release.** `main` is pushed (2026-09-30), not released: the version in `Cargo.toml`
+  is still 1.2.1, and the installed `cash` (Scoop's) shows none of this until a release.
+  When, and as which version (1.3.0 was proposed), is open.
 
 ---
 
@@ -86,8 +81,11 @@ Reported by the session that stabilised `write_process_substitution_works`.
   suspended. It never ends and locks `target\debug\cash.exe` ("Access is denied" on the
   next build). Likely the shell exits between creating the child suspended and resuming
   it; not proven.
-- To decide: whether cash waits for substitutions at exit, or supports `wait $!` for
-  them. `spec.md` D17 still describes the old temp-file model.
+- **Decided (2026-09-30): cash waits for its running substitutions before it exits**, so
+  their output always arrives, as it does in Bash. One that never ends keeps cash from
+  exiting. `wait $!` for a substitution is not asked for. Fix the leftover suspended
+  process with it, and bring `spec.md` D17 up to date: it still describes the old
+  temp-file model.
 
 ## 4. `tee >(cmd)` fails
 
@@ -108,8 +106,11 @@ Reported by both `/dev/stdin` sessions. `open-issues.md` entry 9, spec D7 and §
   `cp /dev/null f`: "The system cannot find the path specified.", status 1.
 - The names are known only where cash opens the file itself (a redirection, `source`).
   An argument reaches a command as written (D4); translating arguments for tools whose
-  grammar cash does not know is what D28 was revoked for. Needs a decision before code:
-  the bundled tools only, a hint as `/c/…` gets, or nothing.
+  grammar cash does not know is what D28 was revoked for.
+- **Decided (2026-09-30): the tools cash bundles accept the names themselves.** `cat`,
+  `tee`, `cp` and the others open `/dev/stdin`, `/dev/stdout`, `/dev/stderr`, `/dev/null`
+  and `/dev/fd/N` where they open a file, so cash translates no argument. A program on
+  `PATH` still gets the name as written and fails. This is a new decision for the spec.
 
 ## 6. File tests on the `/dev` names are false
 
@@ -146,6 +147,10 @@ Bash ends at once; cash never ends. A subshell gets a copy of the job table
 in the shell itself is right. Entry 8 lists eight smaller `jobs`/`wait` differences
 beside it (what a plain `wait` forgets, a finished job's number, `wait %5`'s message and
 status, `wait -n -p VAR`, `Done(3)` in POSIX mode).
+
+**Decided (2026-09-30): `wait %N` after `jobs` has shown the job matches Bash**,
+`wait: %1: no such job` and 127, where cash returns the job's status now. A one-line
+change in `collect_saved_job` and its test; `wait $pid` keeps returning the status.
 
 ## 10. `fuser` and `lsof` are slow on a system DLL
 
