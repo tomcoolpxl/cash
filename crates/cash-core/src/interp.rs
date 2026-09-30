@@ -2627,6 +2627,55 @@ const fn get_default_fd_for_redirect_kind(kind: &ast::IoFileRedirectKind) -> She
     }
 }
 
+/// A `>(...)` that may still be running: the thread that runs it, and the named pipe it
+/// reads from when it was handed to a command as a path.
+struct OutputSubstitution {
+    thread: std::thread::JoinHandle<()>,
+    pipe: Option<String>,
+}
+
+/// The `>(...)` substitutions started, for the shell to wait for before it exits.
+static OUTPUT_SUBSTITUTIONS: std::sync::Mutex<Vec<OutputSubstitution>> =
+    std::sync::Mutex::new(Vec::new());
+
+fn keep_output_substitution(thread: std::thread::JoinHandle<()>, pipe: Option<String>) {
+    let mut running = OUTPUT_SUBSTITUTIONS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    // Those that have finished are let go, so that a loop that starts many keeps few.
+    running.retain(|substitution| !substitution.thread.is_finished());
+    running.push(OutputSubstitution { thread, pipe });
+}
+
+/// Waits for the `>(...)` substitutions still running, as the shell exits (D17).
+///
+/// A substitution runs on a thread of the shell, where Bash's is a process of its own
+/// that outlives it. So the shell used to end them unfinished when it exited, and what
+/// they had not yet written was lost: `echo x > >(sleep 1; cat)` printed nothing, and
+/// neither did `exec > >(tee log)` for what the script wrote last. Bash's substitution
+/// writes it after Bash has gone; here the shell waits until it has.
+///
+/// Called once the shell itself is gone, when nothing of it holds the write end of a
+/// substitution's input open any more: each has then been given the end of its input,
+/// and ends when it has dealt with it. One handed a path no program opened is given the
+/// end of its input here. One that never ends keeps the shell from exiting, as a
+/// command that never ends does.
+pub fn finish_output_substitutions() {
+    let running = std::mem::take(
+        &mut *OUTPUT_SUBSTITUTIONS
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner),
+    );
+    for substitution in running {
+        if let Some(pipe) = &substitution.pipe
+            && !substitution.thread.is_finished()
+        {
+            cash_win32::pipe::release_unclaimed(pipe);
+        }
+        let _ = substitution.thread.join();
+    }
+}
+
 /// Set up a process substitution, returning the argument the command should receive,
 /// the fd the file is installed on, and the file itself.
 ///
@@ -2693,7 +2742,7 @@ async fn setup_process_substitution_win(
         };
 
         let subshell_cmd = subshell_cmd.to_owned();
-        std::thread::Builder::new()
+        let thread = std::thread::Builder::new()
             .name("cash-procsub".into())
             .spawn(move || {
                 let rt = tokio::runtime::Builder::new_current_thread()
@@ -2703,6 +2752,9 @@ async fn setup_process_substitution_win(
                     let _ = rt.block_on(subshell_cmd.list.execute(&mut subshell, &child_params));
                 }
             })?;
+        if matches!(kind, ast::ProcessSubstitutionKind::Write) {
+            keep_output_substitution(thread, None);
+        }
 
         return Ok((String::new(), None, target_file));
     }
@@ -2749,7 +2801,7 @@ async fn setup_process_substitution_win(
     };
 
     let subshell_cmd = subshell_cmd.to_owned();
-    std::thread::Builder::new()
+    let thread = std::thread::Builder::new()
         .name("cash-procsub".into())
         .spawn(move || {
             let rt = tokio::runtime::Builder::new_current_thread()
@@ -2759,6 +2811,9 @@ async fn setup_process_substitution_win(
                 let _ = rt.block_on(subshell_cmd.list.execute(&mut subshell, &child_params));
             }
         })?;
+    if matches!(kind, ast::ProcessSubstitutionKind::Write) {
+        keep_output_substitution(thread, Some(path.clone()));
+    }
 
     Ok((path, None, target_file))
 }

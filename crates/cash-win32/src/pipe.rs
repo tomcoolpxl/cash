@@ -301,6 +301,15 @@ pub fn create_read_substitution() -> io::Result<ReadSubstitution> {
     })
 }
 
+/// Gives the end of its input to the write substitution listening at `path`.
+///
+/// If no program has opened the path, this opens it as a program would, writes nothing
+/// and closes it. When one has opened it, the one instance the pipe has is taken, the
+/// open fails, and nothing happens.
+pub fn release_unclaimed(path: &str) {
+    let _ = std::fs::OpenOptions::new().write(true).open(path);
+}
+
 /// Result of setting up a write process substitution (`>(cmd)`).
 pub struct WriteSubstitution {
     /// The Win32 Named Pipe path to pass to the producing command.

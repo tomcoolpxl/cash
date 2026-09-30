@@ -29,31 +29,13 @@ trust its runs, then by what a user notices most.
 
 | Phase | What | Items |
 | --- | --- | --- |
-| 3 | Process substitution | 3.1, 3.2 |
+| 3 | Process substitution | 3.2 |
 | 4 | The `/dev` names, descriptors and the bundled tools | 4.1 to 4.6 |
 | 5 | Jobs, `wait`, and the tools beside them | 5.1 to 5.3 |
 
 ---
 
 ## Phase 3. Process substitution
-
-### 3.1 A running `>(...)` is lost when cash exits, and can leave a process behind
-
-Reported by the session that stabilised `write_process_substitution_works`.
-
-- `cash -c 'echo x > >(cat)'` with stdout a file printed nothing in 9 of 12 runs;
-  `cash -c 'echo x > >(sleep 1; cat)'` never prints `x`. The substitution is a thread of
-  the shell and ends with it; `wait` does not cover it (`$!` is empty). In Bash it is a
-  process that outlives the shell, so the output still arrives.
-- About 1 run in 15 left a `cash.exe --invoke-bundled cat` whose only thread was
-  suspended. It never ends and locks `target\debug\cash.exe` ("Access is denied" on the
-  next build). Likely the shell exits between creating the child suspended and resuming
-  it; not proven.
-
-**Decided: cash waits for its running substitutions before it exits**, so their output
-always arrives, as it does in Bash. One that never ends keeps cash from exiting.
-`wait $!` for a substitution is not asked for. The leftover suspended process is fixed
-with it, and `spec.md` D17, which still describes the old temp-file model, is rewritten.
 
 ### 3.2 `tee >(cmd)` fails
 
@@ -64,7 +46,29 @@ echo x | tee >(cat >&2)
 ```
 
 cash: `\\.\pipe\cash-procsub-…: The parameter is incorrect.`, status 1. Bash: `x` on both
-streams. Cause not looked for.
+streams.
+
+**Cause (2026-09-30):** handed to a command as a path, `>(...)` is a named pipe
+(`\\.\pipe\cash-procsub-…`, spec D17), and a named pipe cannot be created or truncated:
+a program that opens its output as a new file (`tee`, cash's own `echo x > "$1"`,
+Python's `open(path, 'w')`) gets "The parameter is incorrect", and one that appends
+(`tee -a`, `>>`) gets "Access is denied". Only a plain open for writing works.
+
+Beside it, from the same design: a `>(...)` handed as a path that no program opens holds
+the output of what runs it until the shell exits, so `x=$(echo >(cat))` waits for ever.
+(At exit it is released: 3.1, done.)
+
+**Decided (2026-09-30): the pipe for cash and the bundled tools, patched; a temp file for
+programs on `PATH`.** The bundled tools are uutils crates from crates.io, which open a
+file with the standard library and truncate it; they are to be patched (vendored, like
+crossterm and reedline) to open a `\\.\pipe\cash-procsub-…` path without creating or
+truncating it, through one small helper that 4.1 can use for the `/dev` names as well.
+cash's own opens (its redirections, a builtin that writes a file) learn the same. A
+`>(...)` handed to a program on `PATH` is a temp file instead, which the substitution
+reads as it is written until the command has ended: every program can create and
+truncate that. A function may pass the path on to either, and gets the temp file, which
+both can open. The `$(echo >(cat))` wait goes with it: the command's end is what ends the
+substitution's input.
 
 ---
 

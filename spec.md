@@ -602,9 +602,10 @@ Equivalent to bash's `nocaseglob`, **on by default**.
 cheap to honour, and a script that explicitly asks for case-sensitive matching has made a
 deliberate choice cash should not override.
 
-### D17 — Process substitution uses temp files
+### D17 — Process substitution: temp files first, pipes now
 
-`<(...)` and `>(...)` materialise a temp file and pass its path. Works with every
+*As first decided (the pipes that replaced it are at the end):* `<(...)` and `>(...)`
+materialise a temp file and pass its path. Works with every
 program, including ones that seek or stat for a regular file.
 
 Rejected alternative: named pipes (`\\.\pipe\cash-NNNN` passed as the filename). Elegant
@@ -641,6 +642,29 @@ diff <(a) <(b)                         works, correct exit status
 while read l; do ...; done < <(...)    works
 echo x > >(cat)                        clear error
 ```
+
+**Now: pipes, which stream (`cash_win32::pipe`).** A substitution that is a redirection
+(`< <(cmd)`, `> >(cmd)`, `exec > >(tee log)`) is joined to the command by an anonymous
+pipe. One handed to a command as a path is a named pipe,
+`\\.\pipe\cash-procsub-<pid>-<n>`, which native programs open with the ordinary file
+calls; a program that must stat or seek its file (`diff`, `cmp`) gets a temp file,
+written before it starts. The substitution runs in a subshell on a thread of the shell,
+where Bash's is a process of its own, so `>(...)` works and `tail -f` streams.
+
+**The shell waits for its `>(...)` before it exits (2026-09-30).** Bash's substitution
+outlives the shell and writes what it has left after the shell has gone. cash's ended
+with the shell, unfinished: `echo x > >(sleep 1; cat)` printed nothing, neither did
+`exec > >(tee log)` for what the script wrote last, and a substitution caught starting a
+program left that program suspended for ever, with `cash.exe` locked. Once the shell has
+gone, and with it every write end of a substitution's input, cash waits for each
+`>(...)` still running; one handed a path no program opened is given the end of its input
+first. One that never ends keeps cash from exiting, as a command that never ends does.
+`<(...)` is not waited for: its output has nowhere to go once the shell has gone.
+
+Open: a program that creates or truncates the path it is given (`tee`, Python's
+`open(path, 'w')`) cannot open a named pipe, so `tee >(cmd)` fails; and a `>(...)` handed
+as a path that no program opens holds the output of what runs it until the shell exits,
+so `x=$(echo >(cat))` waits for ever.
 
 ### D18 — Reuse `brush-interactive` now, replace when it blocks
 
@@ -2250,7 +2274,7 @@ someone who expected bash, so additions need to earn their place.
 | 7 | `test -x` requires ACL **and** extension/shebang | Default ACLs make every file execute-granted | D23 |
 | 8 | `chmod -x` warns and does nothing | Revoking execute needs Deny ACEs | D34 |
 | 9 | `kill -STOP` suspends threads, not a real `SIGSTOP` | Windows has no `SIGSTOP` for arbitrary exes | D19 |
-| 10 | Process substitution does not stream | Temp files, not pipes | D17 |
+| 10 | A `>(...)` runs in the shell, which waits for it before it exits; handed as a path it is a named pipe, which a program that creates or truncates its file cannot open (`tee >(cmd)`) | Windows has no `/dev/fd` to hand a pipe on, and no `fork` | D17 |
 | 11 | `[ -s file ]` is false for App Execution Aliases | They are genuinely 0 bytes | D46 |
 | 12 | Elevated and `detach`ed processes, and GUI applications, survive cash; other processes it started do not | Integrity boundary; breakaway flag; an editor should outlive the shell (`cashctl gui-apps close` to reap them) | D6, D42, D45 |
 | 13 | A bundled builtin cannot delete the shell's current directory | It re-enters the binary as a child inheriting that cwd, and Windows refuses to delete a process's own cwd | D48 |
@@ -2415,7 +2439,7 @@ and most of it needs a **test** rather than an argument:
 **Needs testing, not deciding:**
 
 - OSC 9;9 path spelling that Windows Terminal accepts (D39)
-- Whether `FILE_SHARE_DELETE` on process-substitution temp files survives real tools'
+- Whether `FILE_SHARE_DELETE` on the temp file a seeking consumer of `<(...)` gets survives real tools'
   sharing modes (D17)
 - Whether packaged apps launched via an alias land in cash's job object (D46)
 - Which non-Go tools handle `CTRL_C_EVENT` but ignore `CTRL_BREAK_EVENT` (D13)

@@ -76,7 +76,7 @@ pub mod parser {
 pub use commands::{CommandArg, ExecutionContext};
 pub use error::{BuiltinError, Error, ErrorKind};
 pub use extensions::ShellExtensions;
-pub use interp::{ExecutionParameters, ProcessGroupPolicy};
+pub use interp::{ExecutionParameters, ProcessGroupPolicy, finish_output_substitutions};
 pub use parser::{SourcePosition, SourcePositionOffset, SourceSpan};
 pub use results::{ExecutionControlFlow, ExecutionExitCode, ExecutionResult, ExecutionSpawnResult};
 pub use shell::{

@@ -219,6 +219,9 @@ pub fn run_with_args(mut args: Vec<String>) {
         }
     };
 
+    // D17: what a `>(...)` still has to write, it writes before the shell is gone.
+    cash_core::finish_output_substitutions();
+
     // D6: GUI applications cash started (`code .`) keep running after it; the console
     // programs it started do not.
     cash_win32::session::release_at_exit();

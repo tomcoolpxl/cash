@@ -1001,8 +1001,8 @@ fn timeout_works_without_an_external_one() {
 #[test]
 fn process_substitution_works_via_temp_files() {
     // Windows has no /dev/fd and a child cannot inherit an arbitrary descriptor (D26),
-    // so the pipe-and-/dev/fd/63 approach upstream uses cannot work. D17 materialises
-    // the subshell's output into a temp file and passes its path.
+    // so the pipe-and-/dev/fd/63 approach upstream uses cannot work. D17 passes the path
+    // of a named pipe instead (the name of this test is from when it was a temp file).
     assert_eq!(cash("cat <(echo hello)").stdout, "hello");
     assert_eq!(cash(r#"cat <(printf 'a\nb\n')"#).stdout, "a\nb");
 }
@@ -1034,11 +1034,9 @@ fn write_process_substitution_works() {
     // Process substitution supports real-time streaming: `>(...)` connects the
     // consuming subshell via in-memory pipe and receives the stream cleanly.
     //
-    // Neither Bash nor cash waits for a `>(...)`. Bash's is a process that outlives the
-    // shell and still writes; cash's is a thread of the shell and ends with it, so a
-    // script that wants the output has to wait for it. The outer `cat` does, here and in
-    // Bash: it reads until the substitution has closed its output. No length of sleep
-    // decides the result, as `echo x > >(cat); sleep 0.05` did on a busy machine.
+    // The outer `cat` reads until the substitution has closed its output, here and in
+    // Bash. No length of sleep decides the result, as `echo x > >(cat); sleep 0.05` did
+    // on a busy machine.
     assert_eq!(cash("{ echo x > >(cat); } | cat").stdout, "x");
     // A consumer slower than the rest of the script is waited for as well, and its
     // output arrives before the script goes on.
@@ -1046,6 +1044,34 @@ fn write_process_substitution_works() {
         cash("{ echo x > >(sleep 0.2; cat); } | cat; echo after").stdout,
         "x\nafter"
     );
+}
+
+#[test]
+fn a_write_substitution_still_running_when_the_shell_exits_finishes_first() {
+    // Bash's `>(...)` is a process that outlives the shell and still writes. cash's is a
+    // thread of the shell, which ended it unfinished at exit: this printed nothing, and
+    // about one run in fifteen left a `cash --invoke-bundled cat` suspended for ever,
+    // with cash.exe locked (2026-09-30). The shell waits for it now.
+    assert_eq!(cash("echo x > >(sleep 1; cat)").stdout, "x");
+}
+
+#[test]
+fn exec_into_a_write_substitution_loses_nothing_at_exit() {
+    // The logging idiom: everything the script writes goes through the substitution,
+    // which gets the end of its input only when the shell has gone. The sleep makes it
+    // slower than the script, as a real log writer on a busy machine is.
+    assert_eq!(
+        cash("exec > >(sleep 1; tr a-z A-Z); echo shout; echo more").stdout,
+        "SHOUT\nMORE"
+    );
+}
+
+#[test]
+fn a_write_substitution_no_program_opened_does_not_keep_the_shell_from_exiting() {
+    // The path is printed, not opened: the substitution waits for a writer that never
+    // comes, and is given the end of its input as the shell exits.
+    let out = cash(r#"echo >(cat) > /dev/null; echo done"#);
+    assert_eq!(out.stdout, "done");
 }
 
 // ---------------------------------------------------------------------------
