@@ -56,8 +56,10 @@ struct SavedStatus {
     status: u8,
     /// Not yet returned by `wait -n`, nor collected by `wait PID`.
     unreported: bool,
-    /// Returned by `wait -n`; a plain `wait` forgets these.
-    reported_by_wait_n: bool,
+    /// Returned by `wait -n` or shown by `jobs`, either of which takes the job out of
+    /// Bash's job table and leaves its status with its process id. A plain `wait`
+    /// forgets these, and `wait -n` returns one only by that process id or in POSIX mode.
+    reported: bool,
 }
 
 /// Which finished job `wait -n` may return.
@@ -80,6 +82,14 @@ impl WaitTarget<'_> {
             Self::Only { pids: wanted, ids } => {
                 ids.contains(&id) || pids.iter().any(|pid| wanted.contains(pid))
             }
+        }
+    }
+
+    /// Whether one of these process ids is asked for by number.
+    fn names(&self, pids: &[sys::process::ProcessId]) -> bool {
+        match self {
+            Self::Any => false,
+            Self::Only { pids: wanted, .. } => pids.iter().any(|pid| wanted.contains(pid)),
         }
     }
 }
@@ -247,7 +257,7 @@ impl JobManager {
         std::mem::take(&mut self.reaped_children)
     }
 
-    fn save_status(&mut self, job: &Job, status: u8, unreported: bool, by_wait_n: bool) {
+    fn save_status(&mut self, job: &Job, status: u8, unreported: bool, reported: bool) {
         let mut pids = job.spawned_pids();
         if let Some(pid) = job.representative_pid()
             && !pids.contains(&pid)
@@ -262,55 +272,70 @@ impl JobManager {
             pids,
             status,
             unreported,
-            reported_by_wait_n: by_wait_n,
+            reported,
         });
     }
 
     /// The saved status of a finished job with this process id, for `wait PID`. It stays
-    /// saved, and `wait -n` will not return it.
-    pub fn collect_saved_pid(&mut self, pid: sys::process::ProcessId) -> Option<u8> {
-        let entry = self
-            .saved
-            .iter_mut()
-            .rev()
-            .find(|s| s.pids.contains(&pid))?;
-        entry.unreported = false;
-        Some(entry.status)
+    /// saved, and `wait -n` will not return it; in POSIX mode (`forget`) it is removed,
+    /// and a second `wait PID` finds nothing (Bash 5.3).
+    pub fn collect_saved_pid(&mut self, pid: sys::process::ProcessId, forget: bool) -> Option<u8> {
+        let index = self.saved.iter().rposition(|s| s.pids.contains(&pid))?;
+        self.collect_saved(index, forget)
     }
 
     /// Like [`Self::collect_saved_pid`], for `wait %N`.
-    pub fn collect_saved_job(&mut self, id: usize) -> Option<u8> {
-        let entry = self.saved.iter_mut().rev().find(|s| s.id == id)?;
+    pub fn collect_saved_job(&mut self, id: usize, forget: bool) -> Option<u8> {
+        let index = self.saved.iter().rposition(|s| s.id == id)?;
+        self.collect_saved(index, forget)
+    }
+
+    fn collect_saved(&mut self, index: usize, forget: bool) -> Option<u8> {
+        if forget {
+            return self.saved.remove(index).map(|entry| entry.status);
+        }
+        let entry = self.saved.get_mut(index)?;
         entry.unreported = false;
         Some(entry.status)
     }
 
     /// The oldest finished job `wait -n` has not returned, with its status and process
-    /// id. Bash 5.3 keeps its status for a later `wait PID`, except in POSIX mode, where
-    /// `wait -n` removes it (`forget`).
+    /// id. Failing that, one already reported, by `wait -n` or by `jobs`, that `target`
+    /// asks for by process id: Bash 5.3 returns that one each time it is asked.
+    ///
+    /// Bash 5.3 keeps the status for a later `wait PID`, except in POSIX mode
+    /// (`posix_mode`), where `wait -n` removes the status it returns, and where a bare
+    /// `wait -n` returns a reported job too.
     pub fn take_unreported(
         &mut self,
         target: &WaitTarget<'_>,
-        forget: bool,
+        posix_mode: bool,
     ) -> Option<(u8, Option<sys::process::ProcessId>, usize)> {
         let index = self
             .saved
             .iter()
-            .position(|s| s.unreported && target.matches(s.id, &s.pids))?;
-        let entry = if forget {
+            .position(|s| s.unreported && target.matches(s.id, &s.pids))
+            .or_else(|| {
+                let any = posix_mode && matches!(target, WaitTarget::Any);
+                self.saved
+                    .iter()
+                    .position(|s| s.reported && (any || target.names(&s.pids)))
+            })?;
+        let entry = if posix_mode {
             self.saved.remove(index)?
         } else {
             let entry = self.saved.get_mut(index)?;
             entry.unreported = false;
-            entry.reported_by_wait_n = true;
+            entry.reported = true;
             entry.clone()
         };
         Some((entry.status, entry.pids.first().copied(), entry.id))
     }
 
-    /// A plain `wait` forgets the statuses `wait -n` returned, as Bash does.
-    pub fn forget_reported_by_wait_n(&mut self) {
-        self.saved.retain(|s| !s.reported_by_wait_n);
+    /// A plain `wait` forgets the statuses `wait -n` returned and those of the jobs
+    /// `jobs` showed as finished, as Bash does.
+    pub fn forget_reported(&mut self) {
+        self.saved.retain(|s| !s.reported);
     }
 
     /// Returns a new job manager.
@@ -354,7 +379,9 @@ impl JobManager {
     }
 
     /// Poll jobs without removing completed entries. This lets `jobs -n` report a
-    /// transition to Done before the entry is cleaned from the table.
+    /// transition to Done before the entry is cleaned from the table. A job seen to
+    /// finish here keeps its status in `exit_status`, for whatever takes it out of the
+    /// table later: `jobs` once it has shown it, a `wait`, or the next poll.
     pub fn refresh_statuses(&mut self) -> Result<(), error::Error> {
         for job in &mut self.jobs {
             if !matches!(job.state, JobState::Done) {
@@ -411,14 +438,23 @@ impl JobManager {
         self.remove_notified_done_jobs();
     }
 
+    /// Removes the finished jobs that have been shown. Each keeps its status for a later
+    /// `wait PID`, as in Bash, where `jobs` takes a finished job it has shown out of the
+    /// job table and `wait -n` no longer returns it.
     fn remove_notified_done_jobs(&mut self) {
         self.inherited.retain(|snapshot| {
             snapshot.notification_pending || !matches!(snapshot.state, JobState::Done)
         });
-        let before = self.jobs.len();
-        self.jobs
-            .retain(|job| job.notification_pending || !matches!(job.state, JobState::Done));
-        self.note_children_reaped(before - self.jobs.len());
+        let (kept, shown): (Vec<_>, Vec<_>) = std::mem::take(&mut self.jobs)
+            .into_iter()
+            .partition(|job| job.notification_pending || !matches!(job.state, JobState::Done));
+        self.jobs = kept;
+        self.note_children_reaped(shown.len());
+        for job in &shown {
+            if let Some(status) = job.exit_status {
+                self.save_status(job, status, false, true);
+            }
+        }
         self.reannotate();
     }
 
@@ -555,7 +591,7 @@ impl JobManager {
         // A job that finished before the wait keeps its status for `wait PID`; one the wait
         // itself collects does not, as in Bash.
         let mut done: Vec<Job> = self.poll()?.into_iter().map(|(job, _)| job).collect();
-        self.forget_reported_by_wait_n();
+        self.forget_reported();
         for job in &mut self.jobs {
             job.wait().await?;
         }
@@ -577,10 +613,18 @@ impl JobManager {
                 self.save_status(&job, status, true, false);
                 results.push((job, result));
             } else if matches!(self.jobs[i].state, JobState::Done) {
-                // TODO(jobs): This is a workaround to remove jobs that are done but for which we
-                // don't know what happened.
-                results.push((self.jobs.remove(i), Ok(ExecutionResult::success())));
+                // Seen to finish by an earlier poll that left it in the table: `jobs`
+                // polls every job, and removes only those it shows. Its status is the
+                // one recorded then.
+                // TODO(jobs): A job that is done with no status recorded is removed as
+                // a success, and leaves no status behind.
+                let job = self.jobs.remove(i);
                 self.note_children_reaped(1);
+                if let Some(status) = job.exit_status {
+                    self.save_status(&job, status, true, false);
+                }
+                let result = ExecutionResult::new(job.exit_status.unwrap_or(0));
+                results.push((job, Ok(result)));
             } else {
                 i += 1;
             }
@@ -796,6 +840,12 @@ impl Job {
     ) -> Result<Option<Result<ExecutionResult, error::Error>>, error::Error> {
         let mut result: Option<Result<ExecutionResult, error::Error>> = None;
 
+        // An earlier poll saw it finish and handed out its result; there is nothing new,
+        // and the status recorded then stays.
+        if self.tasks.is_empty() && matches!(self.state, JobState::Done) {
+            return Ok(None);
+        }
+
         tracing::debug!(target: trace_categories::JOBS, "Polling job {} for completion...", self.id);
 
         while !self.tasks.is_empty() {
@@ -824,7 +874,12 @@ impl Job {
 
     /// Waits for the job to complete.
     pub async fn wait(&mut self) -> Result<ExecutionResult, error::Error> {
-        let mut result = ExecutionResult::success();
+        // A job a poll has already seen finish has no task left to wait for: its status
+        // is the one recorded then, not success.
+        let mut result = match (&self.state, self.exit_status) {
+            (JobState::Done, Some(status)) => ExecutionResult::new(status),
+            _ => ExecutionResult::success(),
+        };
 
         while let Some(task) = self.tasks.back_mut() {
             match task.wait().await? {

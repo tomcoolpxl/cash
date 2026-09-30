@@ -161,10 +161,14 @@ impl builtins::Command for JobsCommand {
             }
         }
 
-        context
-            .shell
-            .jobs_mut()
-            .mark_notifications(Some(&displayed_ids));
+        // Printing only a job's pid does not report it, as in Bash: a finished job stays
+        // in the table for `jobs`, `jobs -n` or `wait -n` to report.
+        if !self.show_pids_only {
+            context
+                .shell
+                .jobs_mut()
+                .mark_notifications(Some(&displayed_ids));
+        }
         Ok(ExecutionResult::success())
     }
 }

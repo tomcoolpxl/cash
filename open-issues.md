@@ -161,3 +161,43 @@ the same one, so the banner and the prompt cannot disagree. `$BASH_VERSION` stay
 `5.2.37`: that is the *interface* version a script tests, and it is a different question
 from which shell is running.
 
+---
+
+## 8. `jobs` and `wait`: what still differs from Bash 5.3
+
+**Seen (2026-09-30)** while fixing `jobs` losing a finished job's status (`jobs`, then
+`wait PID`, answered 127). Each script below was run as a file by Git Bash 5.3.15 and by
+cash; `$X` is an external program that takes `-c`. None of these is fixed.
+
+| Script | Bash 5.3.15 | cash |
+| --- | --- | --- |
+| `"$X" -c 'exit 3' & sleep 0.5; while [ -n "$(jobs -pr)" ]; do sleep 0.1; done` | ends at once | never ends |
+| `"$X" -c 'exit 3' & sleep 0.5; echo "$(jobs)"` | `[1]+  Exit 3 …` | `[1]+  Running … &` |
+| `"$X" -c 'exit 3' & p=$!; wait $p; wait; wait $p; echo $?` | 127 | 3 |
+| two jobs, 3 then 4, both ended: `wait; wait $a; echo $?; wait $b; echo $?` | 127, 4 | 3, 4 |
+| `"$X" -c 'exit 3' & sleep 0.5; jobs > /dev/null; wait %1; echo $?` | `wait: %1: no such job`, 127 | 3 |
+| `"$X" -c 'exit 3' & sleep 0.5; wait -n; wait %1; echo $?` | `wait: %1: no such job`, 127 | 3 |
+| `"$X" -c 'exit 3' & sleep 0.5; "$X" -c 'sleep 0.5; exit 4' & wait %1; echo $?; wait %2; echo $?` | 3, 4 | 4, then `wait: no such job: %2`, 1 |
+| `wait %5; echo $?` | `wait: %5: no such job`, 127 | `wait: no such job: %5`, 1 |
+| `v=old; wait -n -p v; echo "${v-unset}"` | `unset` | `old` |
+| `set -o posix; "$X" -c 'exit 3' & sleep 0.5; jobs` | `[1]+  Done(3) …` | `[1]+  Exit 3 …` |
+
+What is behind them, as far as it is known:
+
+- **A subshell sees the parent's jobs as they were when last polled.** `$(jobs)` and
+  `jobs | …` get a copy of the job table (`Shell::clone`, `JobManager::snapshot`) that is
+  taken without polling the jobs, so a job that has ended since still reads `Running`.
+  `jobs -pr > file`, in the shell itself, is right. This is the one a script is likely to
+  meet: a loop that waits for `$(jobs -pr)` to be empty does not end.
+- **A plain `wait` forgets more in Bash.** It forgets every saved status, and keeps only
+  that of `$!` when that job had ended and not been reported. cash forgets the ones
+  `wait -n` returned or `jobs` showed.
+- **A finished job's number.** In Bash a finished job keeps its number until it is
+  reported, and `%N` names nothing after that. A cash script reaps a finished job when the
+  next one starts, which takes its number, and `wait %N` still finds a status that was
+  saved under that number. Keeping `%N` after `jobs` was asked for with the fix; Bash
+  answers `no such job` there.
+- The last three are a message, a status and a variable: `wait` for a job that does not
+  exist says it Bash's way round and returns 127, `wait -n -p VAR` unsets `VAR` when it
+  has nothing to return, and POSIX mode prints a failed job as `Done(3)`.
+

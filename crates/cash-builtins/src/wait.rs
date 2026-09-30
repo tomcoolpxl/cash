@@ -12,6 +12,10 @@ use futures::{FutureExt, future::select_all};
 /// finished job once, oldest first, before waiting for a running one. In POSIX mode
 /// `wait -n` also forgets the status it returns, so a later `wait PID` finds nothing
 /// (Bash 5.3).
+///
+/// A finished job that `jobs` has shown leaves the table too, and counts as returned:
+/// `wait PID` reads its status, `wait -n` passes it over unless it is asked for by
+/// process id or the shell is in POSIX mode, and a plain `wait` forgets it (Bash 5.3).
 #[derive(Parser)]
 pub(crate) struct WaitCommand {
     /// Wait for specified job to terminate (instead of change status).
@@ -43,6 +47,8 @@ impl builtins::Command for WaitCommand {
         }
 
         let mut result = ExecutionResult::success();
+        // In POSIX mode a status is forgotten once `wait` has returned it (Bash 5.3).
+        let forget = context.shell.options().posix_mode;
 
         if self.ids.is_empty() {
             // Wait for all jobs.
@@ -71,7 +77,7 @@ impl builtins::Command for WaitCommand {
                 } else if let Some(status) = id
                     .strip_prefix('%')
                     .and_then(|n| n.parse().ok())
-                    .and_then(|n| context.shell.jobs_mut().collect_saved_job(n))
+                    .and_then(|n| context.shell.jobs_mut().collect_saved_job(n, forget))
                 {
                     result = ExecutionResult::new(status);
                 } else {
@@ -101,7 +107,8 @@ impl builtins::Command for WaitCommand {
                 let job_id = context.shell.jobs_mut().resolve_pid(pid).map(|job| job.id);
                 if let Some(job_id) = job_id {
                     result = self.wait_for_job(context.shell, job_id).await?;
-                } else if let Some(status) = context.shell.jobs_mut().collect_saved_pid(pid) {
+                } else if let Some(status) = context.shell.jobs_mut().collect_saved_pid(pid, forget)
+                {
                     result = ExecutionResult::new(status);
                 } else {
                     // bash's wording and its exit code: 127 specifically, which
@@ -124,12 +131,13 @@ impl builtins::Command for WaitCommand {
 
 impl WaitCommand {
     /// Waits for the job with this id; once it has finished, it leaves the table and its
-    /// status is saved for another `wait PID`.
+    /// status is saved for another `wait PID`, except in POSIX mode.
     async fn wait_for_job<SE: cash_core::ShellExtensions>(
         &self,
         shell: &mut cash_core::Shell<SE>,
         job_id: usize,
     ) -> Result<ExecutionResult, cash_core::Error> {
+        let keep_status = !shell.options().posix_mode;
         let jobs = shell.jobs_mut();
         let Some(job) = jobs.jobs.iter_mut().find(|job| job.id == job_id) else {
             return Ok(ExecutionResult::success());
@@ -140,7 +148,7 @@ impl WaitCommand {
             job.wait().await?
         };
         if !job.has_unwaited_tasks() {
-            jobs.remove_waited_job(job_id, u8::from(result.exit_code), true, false);
+            jobs.remove_waited_job(job_id, u8::from(result.exit_code), keep_status, false);
         }
         Ok(result)
     }

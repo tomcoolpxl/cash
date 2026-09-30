@@ -96,6 +96,16 @@ Found with the last three items (ROADMAP item 14):
   one now abandons the rest of the line, or of a `-c` string, as Bash's does; in `(( ))`
   it fails the command with status 1 and the line goes on, where cash had abandoned it.
 
+Found later, in a script that called `jobs` before `wait` (2026-09-30):
+
+- **`jobs` lost a finished job's status.** `jobs` took a finished job it had shown out of
+  the table without saving its status, so `wait PID` answered 127; for one it had seen
+  finish but not shown (`jobs -r`), `wait` answered 0. Both keep the status now. As in
+  Bash, a job `jobs` has shown is no longer `wait -n`'s to return, except by pid or in
+  POSIX mode; a plain `wait` forgets it; `jobs -p` reports nothing; and in POSIX mode
+  `wait PID` forgets a status once it has returned it. What is left is in
+  [open-issues.md](../../open-issues.md), item 8.
+
 ### Known remaining differences
 
 - A command substitution in a subscript that a builtin expands a second time

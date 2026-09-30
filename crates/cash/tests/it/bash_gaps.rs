@@ -1515,6 +1515,204 @@ fn wait_reports_the_status_of_a_job_that_has_already_finished() {
     );
 }
 
+/// `wait` after `jobs`, each case in a fresh cash, with `$X` as in [`wait_case`] and
+/// `ended`, which returns once the shell has seen every job end: a sleep only makes that
+/// likely. `ended` asks `jobs -r` until it lists nothing, in the shell itself, since a
+/// pipeline or a command substitution is a subshell with a table of its own. `jobs -r`
+/// shows no finished job, so Bash leaves each one in the job table, not yet reported.
+/// Expected output is Git Bash 5.3.15's.
+fn jobs_case(script: &str) -> String {
+    let root = tempfile::tempdir().unwrap();
+    let listed = root
+        .path()
+        .join("running")
+        .to_string_lossy()
+        .replace('\\', "/");
+    let cash = CASH.replace('\\', "/");
+    let (_, stdout, _) = output_with_stderr(&format!(
+        "X='{cash}'; T='{listed}'\n\
+         ended() {{ local n=0; while jobs -r > \"$T\"; [ -s \"$T\" ] && [ $((n += 1)) -lt 200 ]; \
+         do sleep 0.05; done; }}\n\
+         {script}"
+    ));
+    stdout
+}
+
+#[test]
+fn wait_reports_the_status_of_a_finished_job_that_jobs_has_shown() {
+    // `jobs` takes a finished job it has shown out of the job table. Its status went
+    // with it, and `wait PID` then said the pid was not a child of this shell (127).
+    // First as it was reported, where the job ends during a sleep.
+    assert_eq!(
+        wait_case("\"$X\" -c 'exit 3' & p=$!; sleep 0.5; jobs > /dev/null; wait $p; echo \"p=$?\""),
+        "p=3"
+    );
+    // A killed job, asked for twice.
+    assert_eq!(
+        jobs_case(concat!(
+            "\"$X\" -c 'sleep 30' & p=$!; kill -KILL $p; ended; jobs > /dev/null; ",
+            "wait $p; echo \"p=$?\"; wait $p; echo \"again=$?\""
+        )),
+        "p=137\nagain=137"
+    );
+    // It is shown once, and a status of 0 is kept like any other.
+    assert_eq!(
+        jobs_case("\"$X\" -c 'exit 0' & p=$!; ended; jobs; jobs; wait $p; echo \"p=$?\""),
+        "[1]+  Done                       \"$X\" -c 'exit 0'\np=0"
+    );
+    // A plain `wait` forgets it, as it forgets what `wait -n` returned.
+    assert_eq!(
+        jobs_case(
+            "\"$X\" -c 'exit 3' & p=$!; ended; jobs > /dev/null; wait; wait $p; echo \"p=$?\""
+        ),
+        "p=127"
+    );
+    // Not Bash's: Bash 5.3 has no `%1` by then (`wait: %1: no such job`, 127). cash
+    // keeps a finished job's number with its status, as it does after `wait -n`.
+    assert_eq!(
+        jobs_case("\"$X\" -c 'exit 3' & p=$!; ended; jobs > /dev/null; wait %1; echo \"j=$?\""),
+        "j=3"
+    );
+}
+
+#[test]
+fn wait_reports_the_status_whichever_way_jobs_showed_the_job() {
+    for jobs in ["jobs", "jobs -l", "jobs -n", "jobs %1"] {
+        assert_eq!(
+            jobs_case(&format!(
+                "\"$X\" -c 'exit 3' & p=$!; ended; {jobs} > /dev/null; wait $p; echo \"p=$?\""
+            )),
+            "p=3",
+            "{jobs}"
+        );
+    }
+}
+
+#[test]
+fn bash_53_wait_n_passes_over_a_finished_job_that_jobs_has_shown() {
+    assert_eq!(
+        jobs_case(concat!(
+            "\"$X\" -c 'exit 3' & p=$!; ended; jobs > /dev/null; ",
+            "wait -n; echo \"n=$?\"; wait $p; echo \"p=$?\""
+        )),
+        "n=127\np=3"
+    );
+    // Two finished jobs, one of them shown.
+    assert_eq!(
+        jobs_case(concat!(
+            "\"$X\" -c 'exit 3' & a=$!; \"$X\" -c 'exit 4' & b=$!; ended; jobs %1 > /dev/null; ",
+            "wait -n; echo \"n=$?\"; wait -n; echo \"n2=$?\"; ",
+            "wait $a; echo \"a=$?\"; wait $b; echo \"b=$?\""
+        )),
+        "n=4\nn2=127\na=3\nb=4"
+    );
+    // Asked for by its pid, `wait -n` returns it, each time; and so one that an earlier
+    // `wait -n` returned.
+    assert_eq!(
+        jobs_case(concat!(
+            "\"$X\" -c 'exit 3' & p=$!; ended; jobs > /dev/null; wait -n $p; echo \"n=$?\"; ",
+            "wait -n -p v $p; echo \"n=$? $([ \"$v\" = \"$p\" ] && echo v)\"; ",
+            "wait $p; echo \"p=$?\""
+        )),
+        "n=3\nn=3 v\np=3"
+    );
+    assert_eq!(
+        jobs_case(
+            "\"$X\" -c 'exit 3' & p=$!; ended; wait -n; echo \"n=$?\"; wait -n $p; echo \"n2=$?\""
+        ),
+        "n=3\nn2=3"
+    );
+    // In POSIX mode a bare `wait -n` returns it too, and forgets it.
+    assert_eq!(
+        jobs_case(concat!(
+            "set -o posix; \"$X\" -c 'exit 3' & p=$!; ended; jobs > /dev/null; ",
+            "wait -n; echo \"n=$?\"; wait -n; echo \"n2=$?\"; wait $p; echo \"p=$?\""
+        )),
+        "n=3\nn2=127\np=127"
+    );
+    assert_eq!(
+        jobs_case(concat!(
+            "set -o posix; \"$X\" -c 'exit 3' & p=$!; ended; jobs > /dev/null; ",
+            "wait -n $p; echo \"n=$?\"; wait $p; echo \"p=$?\""
+        )),
+        "n=3\np=127"
+    );
+}
+
+#[test]
+fn in_posix_mode_wait_forgets_a_status_once_it_has_returned_it() {
+    // Whether the job was running, had finished, or had been shown by `jobs`, which
+    // leaves nothing for `wait -n` either.
+    assert_eq!(
+        wait_case(
+            "set -o posix; \"$X\" -c 'exit 3' & p=$!; wait $p; echo \"1=$?\"; wait $p; echo \"2=$?\""
+        ),
+        "1=3\n2=127"
+    );
+    assert_eq!(
+        jobs_case(
+            "set -o posix; \"$X\" -c 'exit 3' & p=$!; ended; wait $p; echo \"1=$?\"; wait $p; echo \"2=$?\""
+        ),
+        "1=3\n2=127"
+    );
+    assert_eq!(
+        jobs_case(concat!(
+            "set -o posix; \"$X\" -c 'exit 3' & p=$!; ended; jobs > /dev/null; ",
+            "wait $p; echo \"1=$?\"; wait -n; echo \"n=$?\"; wait $p; echo \"2=$?\""
+        )),
+        "1=3\nn=127\n2=127"
+    );
+}
+
+#[test]
+fn a_finished_job_that_jobs_did_not_show_keeps_its_status() {
+    // `jobs` looks at every job and shows the ones it was asked for. A finished job it
+    // did not show (`jobs -r`, here in `ended`) stays in the table with no task left to
+    // wait for: `wait` reported 0 for it, and the next poll dropped it with its status.
+    assert_eq!(
+        jobs_case("\"$X\" -c 'exit 3' & p=$!; ended; wait $p; echo \"p=$?\""),
+        "p=3"
+    );
+    assert_eq!(
+        jobs_case(
+            "\"$X\" -c 'exit 3' & p=$!; ended; wait %1; echo \"j=$?\"; wait %1; echo \"j2=$?\""
+        ),
+        "j=3\nj2=3"
+    );
+    assert_eq!(
+        jobs_case(concat!(
+            "\"$X\" -c 'exit 3' & p=$!; ended; ",
+            "wait -n; echo \"n=$?\"; wait -n; echo \"n2=$?\"; wait $p; echo \"p=$?\""
+        )),
+        "n=3\nn2=127\np=3"
+    );
+    // A script reaps it when the next job starts, and a plain `wait` when it has no job
+    // to wait for.
+    assert_eq!(
+        jobs_case(concat!(
+            "\"$X\" -c 'exit 3' & p=$!; ended; \"$X\" -c 'exit 4' & q=$!; ",
+            "wait $p; echo \"p=$?\"; wait $q; echo \"q=$?\""
+        )),
+        "p=3\nq=4"
+    );
+    assert_eq!(
+        jobs_case("\"$X\" -c 'exit 3' & p=$!; ended; wait; wait $p; echo \"p=$?\""),
+        "p=3"
+    );
+    // `jobs -p` prints a pid and reports nothing: the job is still `wait -n`'s to
+    // return, and `jobs -n`'s to show.
+    assert_eq!(
+        jobs_case("\"$X\" -c 'exit 3' & p=$!; ended; jobs -p > /dev/null; wait -n; echo \"n=$?\""),
+        "n=3"
+    );
+    assert_eq!(
+        jobs_case(
+            "\"$X\" -c 'exit 3' & p=$!; ended; jobs -p > /dev/null; jobs -n; jobs -n; echo end"
+        ),
+        "[1]+  Exit 3                     \"$X\" -c 'exit 3'\nend"
+    );
+}
+
 #[test]
 fn a_chld_trap_runs_once_for_each_child_reaped() {
     // cash's CHLD (spec D64): once per process the shell starts and reaps, foreground or
