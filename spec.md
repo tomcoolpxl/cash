@@ -560,7 +560,8 @@ interrupt as Bash acts on SIGINT, in three places:
   listens is kept, and acted on before the next command. A second one that arrives
   before the first was acted on is left to Windows: a shell stuck in a command that does
   not return can still be ended.
-- **In `read`, at a console,** where the key is read as a key (`cash_win32::conin`).
+- **In `read`, `select` and `mapfile`, at a console,** where the key is read as a key
+  (`cash_win32::conin`).
 
 Acting on it is one thing everywhere: a trap on `INT` runs (after the program has ended,
 when there was one) and the shell goes on; without a trap a script ends with status 130,

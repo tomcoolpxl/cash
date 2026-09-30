@@ -4,6 +4,7 @@ use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
 use cash_core::{ErrorKind, builtins, env, variables};
+use cash_win32::conin::{CTRL_C, CTRL_D};
 
 use std::io::{Read, Write};
 use utf8_chars::BufReadCharsExt;
@@ -12,21 +13,6 @@ use utf8_chars::BufReadCharsExt;
 /// This is 128 + SIGALRM (14) = 142, matching bash behavior.
 const TIMEOUT_EXIT_CODE: u8 = 142;
 
-/// ASCII control character for Ctrl+C (ETX - End of Text).
-const CTRL_C: char = '\x03';
-/// ASCII control character for Ctrl+D (EOT - End of Transmission).
-const CTRL_D: char = '\x04';
-/// Ctrl+U, which takes back the line typed so far: a terminal's kill character.
-const CTRL_U: char = '\x15';
-/// Ctrl+W, which takes back the last word typed: a terminal's word-erase character.
-const CTRL_W: char = '\x17';
-/// Ctrl+Z, which ends input at a Windows console.
-const CTRL_Z: char = '\x1a';
-/// What the Backspace key types at a console.
-const BACKSPACE: char = '\x08';
-/// What Ctrl+Backspace types at a console, and Backspace at one sending a terminal's
-/// sequences.
-const DELETE: char = '\x7f';
 /// Backslash character used for escape processing.
 const BACKSLASH: char = '\\';
 /// Default line delimiter (newline).
@@ -500,185 +486,11 @@ struct InputReader {
     input: std::io::BufReader<PolledInput>,
     /// The console's keys, when the input is a console and the read asks of it what a
     /// console collecting a line cannot do. Characters then come from here.
-    console: Option<ConsoleInput>,
+    console: Option<cash_win32::conin::Terminal>,
     /// Bytes from a malformed UTF-8 sequence, still owed to the caller one at a time.
     pending: VecDeque<char>,
     /// Whether control bytes should have terminal meanings instead of being data.
     input_is_terminal: bool,
-}
-
-/// A console read a key at a time, doing for `read` what a terminal driver does for it
-/// on Unix.
-///
-/// Bash leaves the terminal collecting lines unless `-n`, `-N` or a delimiter other than
-/// newline asks for characters as they are typed, turns the terminal's echo off for
-/// `-s`, and has a signal end the read when `-t` runs out or Ctrl-C is typed. A Windows
-/// console collecting a line can do none of that: it hands over nothing before Enter, a
-/// read of it cannot be ended once a key is typed, and it shows keys only while it
-/// collects a line. Of Ctrl-C it makes a console control event, and the read still waits
-/// for Enter: the event ends a process that has no handler for it where it stands, the
-/// interactive shell included, and one that has a handler, or was started to ignore
-/// Ctrl-C, reads on. So at a console every read takes the keys here
-/// (`cash_win32::conin`), where Ctrl-C is a key, and this shows them and collects the
-/// line.
-///
-/// A line is edited as a terminal driver lets it be: Backspace takes a character back,
-/// Ctrl-W a word, Ctrl-U all of it, and Ctrl-D ends input. The console's own editing of
-/// a line (the arrow keys, Escape, the function keys) is given up for it; `read -e` has
-/// an editor.
-struct ConsoleInput {
-    keys: cash_win32::conin::Keys,
-    /// The screen, to show what is typed on; `None` for `-s`.
-    screen: Option<std::fs::File>,
-    /// Whether a line is collected and handed over at Enter, with Backspace taking a
-    /// character back, as a terminal does unless told otherwise. If not, each character
-    /// is handed over as it is typed, Backspace among them.
-    collects_lines: bool,
-    /// Characters handed over and not yet taken.
-    ready: VecDeque<char>,
-}
-
-impl ConsoleInput {
-    /// Takes over the console `input` is; `None` when it is not a console.
-    fn open(
-        input: &cash_core::openfiles::OpenFile,
-        collects_lines: bool,
-        shows_keys: bool,
-    ) -> Option<Self> {
-        use cash_core::openfiles::OpenFile;
-        use cash_win32::conin::Keys;
-
-        // As they are typed, the keys without a character are wanted too, as the
-        // sequences a terminal sends: a script reads an arrow as `\e[A`, and the answer
-        // to a terminal query starts with `\e`. In a line they are left out, as the
-        // console leaves them out of the lines it collects.
-        let sequences = !collects_lines;
-        let keys = match input {
-            OpenFile::Stdin(stdin) => Keys::open(stdin, sequences),
-            OpenFile::File(file) => Keys::open(file, sequences),
-            _ => None,
-        }?;
-        let screen = shows_keys
-            .then(|| std::fs::OpenOptions::new().write(true).open("CONOUT$").ok())
-            .flatten();
-        Some(Self {
-            keys,
-            screen,
-            collects_lines,
-            ready: VecDeque::new(),
-        })
-    }
-
-    /// The next character, or `None` when `deadline` passed first. Collecting a line,
-    /// that is its first character, once it has been ended; what was typed of a line
-    /// that was not ended in time is dropped, as a terminal hands `read` none of it.
-    fn next(&mut self, deadline: Option<Instant>) -> std::io::Result<Option<char>> {
-        if let Some(ch) = self.ready.pop_front() {
-            return Ok(Some(ch));
-        }
-        if !self.collects_lines {
-            let ch = self.key(deadline)?;
-            if let Some(ch) = ch {
-                self.show(ch);
-            }
-            return Ok(ch);
-        }
-
-        let mut line = Vec::new();
-        loop {
-            let Some(ch) = self.key(deadline)? else {
-                return Ok(None);
-            };
-            match ch {
-                BACKSPACE | DELETE => {
-                    if let Some(taken_back) = line.pop() {
-                        self.erase(taken_back);
-                    }
-                }
-                CTRL_U => {
-                    while let Some(taken_back) = line.pop() {
-                        self.erase(taken_back);
-                    }
-                }
-                // The blanks after the last word go with it.
-                CTRL_W => {
-                    for of_word in [false, true] {
-                        while let Some(taken_back) =
-                            line.pop_if(|last| last.is_whitespace() != of_word)
-                        {
-                            self.erase(taken_back);
-                        }
-                    }
-                }
-                // Ctrl-C drops the line; Ctrl-D hands over what there is of it.
-                CTRL_C => {
-                    self.show(ch);
-                    return Ok(Some(ch));
-                }
-                // As the console's own line collection has it, and Windows users know it:
-                // Ctrl-Z where a line starts ends input.
-                CTRL_Z if line.is_empty() => {
-                    line.push(CTRL_D);
-                    break;
-                }
-                DEFAULT_DELIMITER | CTRL_D => {
-                    self.show(ch);
-                    line.push(ch);
-                    break;
-                }
-                _ => {
-                    self.show(ch);
-                    line.push(ch);
-                }
-            }
-        }
-        self.ready.extend(line);
-        Ok(self.ready.pop_front())
-    }
-
-    /// The next key's character. Enter is a newline, as a terminal makes it: the
-    /// console's own is a carriage return.
-    fn key(&mut self, deadline: Option<Instant>) -> std::io::Result<Option<char>> {
-        Ok(self
-            .keys
-            .next(deadline)?
-            .map(|ch| if ch == '\r' { DEFAULT_DELIMITER } else { ch }))
-    }
-
-    /// Shows a character as a terminal echoes it: a control character as `^C`, and
-    /// Ctrl-D, which ends input, not at all.
-    fn show(&mut self, ch: char) {
-        let Some(screen) = &mut self.screen else {
-            return;
-        };
-        let shown = match ch {
-            DEFAULT_DELIMITER => "\r\n".to_owned(),
-            CTRL_C => "^C\r\n".to_owned(),
-            CTRL_D => return,
-            _ => shown_as(ch),
-        };
-        // A screen that cannot be written to is no reason to fail the read.
-        let _ = screen.write_all(shown.as_bytes());
-    }
-
-    /// Takes a character back off the screen.
-    fn erase(&mut self, ch: char) {
-        if let Some(screen) = &mut self.screen {
-            let columns = unicode_width::UnicodeWidthStr::width(shown_as(ch).as_str());
-            let _ = screen.write_all("\x08 \x08".repeat(columns).as_bytes());
-        }
-    }
-}
-
-/// What the screen shows for a character typed: itself, or for a control character the
-/// key that types it with Ctrl, as `^[` for Escape. Tab too, which a terminal shows as
-/// itself: taking `^I` back off the screen needs no knowledge of the column it began in.
-fn shown_as(ch: char) -> String {
-    match u8::try_from(ch) {
-        Ok(control @ 0..=0x1f) => format!("^{}", char::from(control + b'@')),
-        Ok(0x7f) => "^?".to_owned(),
-        _ => ch.to_string(),
-    }
 }
 
 /// Events that can occur when reading input.
@@ -730,9 +542,13 @@ impl InputReader {
     }
 
     /// Reads the console's keys from here on rather than the lines it collects, if the
-    /// input is a console. See [`ConsoleInput`].
+    /// input is a console. See [`cash_win32::conin::Terminal`].
     fn read_console_keys(&mut self, collects_lines: bool, shows_keys: bool) {
-        self.console = ConsoleInput::open(&self.input.get_ref().input, collects_lines, shows_keys);
+        self.console = self
+            .input
+            .get_ref()
+            .input
+            .console(collects_lines, shows_keys);
     }
 
     /// Checks if input is immediately available (for `-t 0`). Returns `false` if an error
@@ -1507,7 +1323,7 @@ impl ReadCommand {
 
         // Bash has the terminal hand over characters as they are typed for `-n`, `-N` and
         // a delimiter other than newline, and lines otherwise. At a console this does
-        // either, reading its keys: see `ConsoleInput`. That serves a console opened by
+        // either, reading its keys: see `conin::Terminal`. That serves a console opened by
         // name as well, as `< /dev/tty` opens it, whose line would arrive as bytes in the
         // console's code page, none at all from an older console host for a character
         // outside ASCII. The keys are UTF-16 whatever the handle.
@@ -1722,16 +1538,6 @@ mod tests {
             "café"
         );
         assert_eq!(common_completion_prefix(&[]), "");
-    }
-
-    #[test]
-    fn test_shown_as_spells_a_control_character_with_its_key() {
-        assert_eq!(shown_as('a'), "a");
-        assert_eq!(shown_as('é'), "é");
-        assert_eq!(shown_as('\x1b'), "^[");
-        assert_eq!(shown_as(CTRL_C), "^C");
-        assert_eq!(shown_as('\t'), "^I");
-        assert_eq!(shown_as(DELETE), "^?");
     }
 
     // ==================== split_line_by_ifs tests ====================

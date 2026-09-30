@@ -280,6 +280,19 @@ fn the_variable_survives_the_loop() {
 }
 
 #[test]
+fn the_end_of_input_ends_the_loop_on_a_new_line_with_status_1() {
+    // Bash 5.3 prints a newline after the prompt it got no answer to, and `select`
+    // fails. cash left the prompt where it was and said 0.
+    let out = cash_with_input(
+        r#"select x in a b; do echo "got=$x"; done; echo "rc=$?""#,
+        "",
+    );
+    assert_eq!(out.stdout, "rc=1");
+    assert_eq!(out.stderr, "1) a\n2) b\n#?");
+    assert_eq!(out.code, 0);
+}
+
+#[test]
 fn a_word_list_is_expanded() {
     let out = cash_with_input(
         r#"opts="a b"; select x in $opts; do echo "got=$x"; break; done"#,

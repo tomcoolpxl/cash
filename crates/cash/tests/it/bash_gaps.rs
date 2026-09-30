@@ -552,6 +552,18 @@ fn mapfile_callback_sees_lines_before_assignment() {
 }
 
 #[test]
+fn mapfile_keeps_control_bytes_of_input_that_is_not_a_terminal() {
+    // Ctrl-C and Ctrl-D are keys at a terminal, and data in a pipe or a file: a 0x03
+    // ended mapfile's input, and so did a 0x04 where a line started.
+    assert_eq!(
+        output(
+            "printf 'a\\003b\\n\\004d\\n' | { mapfile -t x; printf '%q\\n' \"${#x[@]}\" \"${x[@]}\"; }"
+        ),
+        (0, "2\n$'a\\003b'\n$'\\004d'".into())
+    );
+}
+
+#[test]
 fn printf_count_assigns_shell_variable() {
     assert_eq!(
         output("printf 'abc%n\\n' n; echo \"$n\""),

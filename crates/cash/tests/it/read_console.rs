@@ -603,6 +603,21 @@ fn ctrl_u_takes_back_the_line_and_ctrl_w_its_last_word() {
     assert_eq!(left.screen, "right\none three");
 }
 
+/// A tab is shown as a terminal shows it, as blanks up to the next tab stop, and
+/// Backspace takes all of them back. It was shown as `^I`.
+#[test]
+fn a_tab_is_shown_up_to_the_next_tab_stop_and_taken_back_whole() {
+    let left = Script::start(
+        "tab",
+        r#"read -r first; read -r second; printf '%q %q\n' "$first" "$second" >> out.txt"#,
+    )
+    .type_keys("a\tb\ra\t\x7fb\r")
+    .finish();
+
+    assert_eq!(left.out, r"$'a\tb' ab");
+    assert_eq!(left.screen, "a       b\nab");
+}
+
 /// Ctrl-Z where a line starts ends input, as it did when the console collected the line
 /// and as Windows users know it. Further on it is a character.
 #[test]

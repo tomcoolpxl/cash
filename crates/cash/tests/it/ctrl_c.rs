@@ -14,9 +14,13 @@
 //! trap, no trap on `INT`. Git Bash ends the script in both cases, its `EXIT` trap run,
 //! or runs the trap on `INT` and goes on.
 //!
-//! Each test runs a script file in cash on a pseudo console and types Ctrl-C at it. The
-//! console is collecting a line then, so the key is the console's control event, as it is
-//! for a user; `read_console.rs` has the reads, where it is a key.
+//! `select` and `mapfile` waited for the keyboard as `read` had: they left the console to
+//! collect a line, where Ctrl-C did nothing before Enter or ended cash. They take the
+//! console's keys now, as `read` does, and their tests are at the end of this file.
+//!
+//! Each test runs a script file in cash on a pseudo console and types Ctrl-C at it. In the
+//! first tests the console is collecting a line then, so the key is the console's control
+//! event, as it is for a user; `read_console.rs` has the reads, where it is a key.
 
 #![allow(
     clippy::tests_outside_test_module,
@@ -163,4 +167,80 @@ echo "outer went on: rc=$?" >> out.txt"#
 
     assert_eq!(status, 130);
     assert_eq!(left.out, "outer exit trap");
+}
+
+/// `select` asks with its prompt, which it shows once the keys are its own.
+#[test]
+fn ctrl_c_ends_a_script_waiting_in_select() {
+    let (status, left) = script(
+        "ctrl-c-select",
+        r#"trap 'echo "exit trap" >> out.txt' EXIT
+select x in one two; do echo "chose $x" >> out.txt; break; done
+echo "went on: rc=$?" >> out.txt"#,
+    )
+    .at_prompt("#? ")
+    .type_keys("ab\x03")
+    .ends();
+
+    assert_eq!(status, 130);
+    assert_eq!(left.out, "exit trap");
+    assert_eq!(left.screen, "1) one\n2) two\n#? ab^C");
+}
+
+/// As in Bash: the trap runs, and `select` goes on waiting for its answer, without
+/// asking again. What was typed of the line is dropped, as a terminal drops it.
+#[test]
+fn a_trap_on_int_runs_and_select_goes_on_waiting() {
+    let left = script(
+        "trap-select",
+        r#"trap 'echo trapped >> out.txt' INT
+select x in one two; do echo "chose $x" >> out.txt; break; done"#,
+    )
+    .at_prompt("#? ")
+    .type_keys("ab\x03")
+    .type_keys("1\r")
+    .finish();
+
+    assert_eq!(left.out, "trapped\nchose one");
+    assert_eq!(left.screen, "1) one\n2) two\n#? ab^C\n1");
+}
+
+/// `mapfile` has no prompt. A line it has shown was read by it, so the first line typed
+/// says when it has the keys.
+#[test]
+fn ctrl_c_ends_a_script_waiting_in_mapfile() {
+    let (status, left) = script(
+        "ctrl-c-mapfile",
+        r#"trap 'echo "exit trap" >> out.txt' EXIT
+mapfile -t lines
+echo "went on: ${#lines[@]}" >> out.txt"#,
+    )
+    .type_keys("one\r")
+    .when_shown("one")
+    .type_keys("tw\x03")
+    .ends();
+
+    assert_eq!(status, 130);
+    assert_eq!(left.out, "exit trap");
+    assert_eq!(left.screen, "one\ntw^C");
+}
+
+/// The trap runs and the reading goes on: the line Ctrl-C was typed in is dropped, and
+/// Ctrl-D where a line starts ends the input.
+#[test]
+fn a_trap_on_int_runs_and_mapfile_goes_on_reading() {
+    let left = script(
+        "trap-mapfile",
+        r#"trap 'echo trapped >> out.txt' INT
+mapfile -t lines
+echo "${#lines[@]}: ${lines[*]}" >> out.txt"#,
+    )
+    .type_keys("one\r")
+    .when_shown("one")
+    .type_keys("tw\x03")
+    .type_keys("three\r\x04")
+    .finish();
+
+    assert_eq!(left.out, "trapped\n2: one three");
+    assert_eq!(left.screen, "one\ntw^C\nthree");
 }

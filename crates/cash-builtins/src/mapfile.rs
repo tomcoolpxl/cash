@@ -88,18 +88,22 @@ impl builtins::Command for MapFileCommand {
             )?;
         }
 
-        self.read_entries(input_file, context).await?;
+        if let Some(interrupted) = self.read_entries(input_file, context).await? {
+            return Ok(interrupted);
+        }
 
         Ok(ExecutionResult::success())
     }
 }
 
 impl MapFileCommand {
+    /// Reads the entries and stores them. `Some` is the result of a trap on `INT` that
+    /// ended the reading, by exiting or returning, when Ctrl-C was typed at a console.
     async fn read_entries<SE: cash_core::ShellExtensions>(
         &self,
         mut input_file: cash_core::openfiles::OpenFile,
         context: cash_core::ExecutionContext<'_, SE>,
-    ) -> Result<(), cash_core::Error> {
+    ) -> Result<Option<ExecutionResult>, cash_core::Error> {
         let _term_mode = setup_terminal_settings(&input_file)?;
 
         let mut stored = 0usize;
@@ -113,25 +117,61 @@ impl MapFileCommand {
 
         let mut buf = [0u8; 1];
 
+        // cash (D13): at a console the lines are read a key at a time, as `read` reads
+        // there, so that Ctrl-C is a key: left to the console's own collection of a
+        // line, it did nothing before Enter or ended the shell. Ctrl-D where a line
+        // starts ends the input.
+        let open_console =
+            |file: &cash_core::openfiles::OpenFile| file.console(delimiter == b'\n', true);
+        let mut console = open_console(&input_file);
+        // The bytes of a character typed, still to be taken.
+        let mut typed: std::collections::VecDeque<u8> = std::collections::VecDeque::new();
+
         while max_count == 0 || stored < max_count {
             let mut line = vec![];
             let mut saw_delimiter = false;
 
             loop {
-                match input_file.read(&mut buf) {
-                    Ok(0) => break,                                         // End of input
-                    Ok(1) if buf[0] == b'\x03' => break,                    // Ctrl+C
-                    Ok(1) if buf[0] == b'\x04' && line.is_empty() => break, // Ctrl+D
-                    Ok(1) => {
-                        let byte = buf[0];
-                        line.push(byte);
-                        if byte == delimiter {
-                            saw_delimiter = true;
-                            break;
-                        }
+                let byte = if let Some(keys) = &mut console {
+                    if typed.is_empty()
+                        && let Some(ch) = keys.next(None)?
+                    {
+                        typed.extend(ch.encode_utf8(&mut [0u8; 4]).bytes());
                     }
-                    Ok(_) => unreachable!("input can only be 0, 1, or error"),
-                    Err(e) => return Err(e.into()),
+                    match typed.pop_front() {
+                        // A trap on INT runs and the reading goes on, as in Bash; what
+                        // was typed of the line is dropped. The trap's commands get the
+                        // console as it was.
+                        Some(b'\x03') => {
+                            drop(console.take());
+                            line.clear();
+                            let trap_result = context.shell.interrupt(&context.params).await?;
+                            if !trap_result.is_normal_flow() {
+                                return Ok(Some(trap_result));
+                            }
+                            console = open_console(&input_file);
+                            continue;
+                        }
+                        // Ctrl-D: end of input where a line starts, and further on the
+                        // line so far handed over.
+                        Some(b'\x04') if line.is_empty() => None,
+                        Some(b'\x04') => continue,
+                        byte => byte,
+                    }
+                } else {
+                    match input_file.read(&mut buf)? {
+                        0 => None,
+                        _ => Some(buf[0]),
+                    }
+                };
+
+                let Some(byte) = byte else {
+                    break; // End of input
+                };
+                line.push(byte);
+                if byte == delimiter {
+                    saw_delimiter = true;
+                    break;
                 }
             }
 
@@ -172,7 +212,7 @@ impl MapFileCommand {
             stored += 1;
         }
 
-        Ok(())
+        Ok(None)
     }
 }
 

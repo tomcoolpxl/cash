@@ -16,8 +16,9 @@ for working through it.
   the phase is released once CI is green, and a short report is written. The next phase
   starts without waiting. The work stops only for a decision marked **yours** below, or
   for a release whose CI fails.
-- **Releases:** what was on `main` on 2026-09-30 is 1.3.0; each phase ends with a release
-  of its own. A tag is made only after CI has passed on the commit (RELEASING.md).
+- **Releases:** each phase ends with a release of its own. A tag is made only after CI
+  has passed on the commit (RELEASING.md). So far: 1.3.0 is what was on `main` on
+  2026-09-30, 1.3.1 the test suite (phase 1), 1.3.2 Ctrl-C everywhere (phase 2).
 - An item says what was seen and what Bash does; a cause only where it was looked for.
   Longer notes on a thing that stays open belong in `open-issues.md`.
 
@@ -28,57 +29,9 @@ trust its runs, then by what a user notices most.
 
 | Phase | What | Items |
 | --- | --- | --- |
-| 0 | Release 1.3.0 | what is on `main` |
-| 2 | Ctrl-C everywhere | 2.2, 2.3 |
 | 3 | Process substitution | 3.1, 3.2 |
-| 4 | The `/dev` names and descriptors | 4.1 to 4.5 |
+| 4 | The `/dev` names, descriptors and the bundled tools | 4.1 to 4.6 |
 | 5 | Jobs, `wait`, and the tools beside them | 5.1 to 5.3 |
-
----
-
-## Phase 0. Release 1.3.0
-
-`main` was pushed on 2026-09-30 (`d947c837`) with 34 commits since `v1.2.1`: `read` at
-the console (`-t`, `-d`, `-n`, `-s`, Ctrl-C), `/dev/tty`, `/dev/stdin` and the other
-descriptor names, standard input read without a buffer, `kill` and reused pids, a finished
-job's status, `top`, `coolfetch`. Once CI is green on it: bump the version to 1.3.0, tag,
-and let the Scoop bucket pick it up, as RELEASING.md says.
-
----
-
-## Phase 2. Ctrl-C everywhere
-
-### 2.2 Ctrl-C in `select` and `mapfile` at the console
-
-Checked. Both still read the console through the standard library, as `read` did.
-
-```bash
-trap 'echo bye' EXIT
-select x in one two; do echo "chose $x"; break; done; echo "after-select rc=$?"
-```
-
-- Ctrl-C enabled: Windows ends cash (`0xC000013A`), no `EXIT` trap.
-- Ctrl-C ignored (a test runner's children): nothing happens; after Enter the script goes
-  on. `mapfile -t lines` behaves the same way.
-- Git Bash: the script ends at once and `bye` is printed.
-
-`select` reads its answer in `crates/cash-core/src/interp.rs`; `mapfile` looks for 0x03
-in bytes a console collecting lines never hands over. `ConsoleInput` in `read.rs` does the
-job for `read` but lives in cash-builtins, and `select` is in cash-core.
-
-### 2.3 Small differences left in `read` at a console
-
-Each is done only if it is cheap once 2.2 has moved the console's key reading; what is
-not moves to `open-issues.md` as a known difference.
-
-- Tab in a line is shown as `^I`, where a terminal shows blanks up to the tab stop
-  (erasing it would need the column it began in).
-- Keys typed past the count of `-n` are shown when something reads them, not when typed.
-- A line not ended when `-t` runs out is dropped; a terminal keeps it for the next read.
-- An answer to a terminal query that arrives before `read` has begun can be swallowed by
-  an older console host (Windows Terminal passes it through).
-- The console's own line editing (arrow keys, Escape, function keys) is gone from a plain
-  `read`, the price of Ctrl-C working there; `read -e` has an editor.
 
 ---
 
@@ -115,7 +68,7 @@ streams. Cause not looked for.
 
 ---
 
-## Phase 4. The `/dev` names and descriptors
+## Phase 4. The `/dev` names, descriptors and the bundled tools
 
 ### 4.1 The `/dev` names as an argument of the bundled tools
 
@@ -156,7 +109,29 @@ Reported; present before the `/dev` fixes. cash:
 `operation not supported on this platform: fd redirections`, status 1. Bash prints the
 contents of `f`. Cause not looked for.
 
-### 4.5 Small differences left in the `/dev` names
+### 4.5 A bundled tool calls itself `cash.exe` in its messages
+
+Reported by the user on 2026-09-30, from the installed cash (Scoop's), at the prompt:
+
+```text
+❯ cut
+cash.exe: you must specify a list of bytes, characters, or fields
+Try 'C:/Users/thraa/scoop/apps/cash/current/cash.exe --help' for more information.
+❯ cut dfdfd
+cash.exe: you must specify a list of bytes, characters, or fields
+Try 'C:/Users/thraa/scoop/apps/cash/current/cash.exe --help' for more information.
+```
+
+GNU `cut` says `cut: you must specify a list of bytes, characters, or fields` and
+`Try 'cut --help' for more information.` The tool runs as `cash.exe --invoke-bundled
+cut`, and takes its name for messages from the program it runs in, not from the name it
+was called by; `cut --help` itself says `Usage: cut OPTION... [FILE]...`, so the name is
+known. To check for the other bundled tools as well: the fault is likely in the one
+place they are dispatched (`crates/cash-shell/src/bundled.rs`,
+`crates/cash-coreutils-builtins`), not in `cut`. It sits in this phase because 4.1 is in
+the same layer.
+
+### 4.6 Small differences left in the `/dev` names
 
 Each is done only if it is cheap while 4.1 and 4.2 are in that code; what is not moves to
 `open-issues.md`.

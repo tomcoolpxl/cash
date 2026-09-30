@@ -1116,7 +1116,6 @@ impl Execute for ast::CoprocessCommand {
 }
 
 #[async_trait::async_trait]
-#[async_trait::async_trait]
 impl Execute for ast::SelectClauseCommand {
     async fn execute(
         &self,
@@ -1160,17 +1159,49 @@ impl Execute for ast::SelectClauseCommand {
                 .env()
                 .get_str("PS3", shell)
                 .map_or_else(|| String::from("#? "), |value| value.to_string());
-            {
-                let mut stderr = params.stderr(shell);
-                write!(stderr, "{prompt}")?;
-                let _ = stderr.flush();
-            }
 
-            let mut line = String::new();
-            if input.read_line(&mut line)? == 0 {
-                // End of input ends the loop, as bash's does.
+            // cash (D13): at a console the answer is read a key at a time, as `read` reads
+            // there, so that Ctrl-C is a key: left to the console's own collection of a
+            // line, it did nothing before Enter or ended the shell. The keys are taken
+            // before the prompt is shown, so that what is typed at the sight of it is the
+            // answer's, and handed back before anything else runs.
+            let mut prompted = false;
+            let line = loop {
+                let console = params
+                    .try_stdin(shell)
+                    .and_then(|stdin| stdin.console(true, true));
+                if !std::mem::replace(&mut prompted, true) {
+                    let mut stderr = params.stderr(shell);
+                    write!(stderr, "{prompt}")?;
+                    let _ = stderr.flush();
+                }
+
+                let Some(mut console) = console else {
+                    let mut line = String::new();
+                    break (input.read_line(&mut line)? != 0).then_some(line);
+                };
+                match console.line()? {
+                    cash_win32::conin::Line::Typed(line) => break Some(line),
+                    cash_win32::conin::Line::EndOfInput => break None,
+                    cash_win32::conin::Line::Interrupted => {
+                        // A trap on INT runs, and the wait for the answer goes on, as in
+                        // Bash, without a second prompt.
+                        drop(console);
+                        let trap_result = shell.interrupt(params).await?;
+                        if !trap_result.is_normal_flow() {
+                            return Ok(trap_result);
+                        }
+                    }
+                }
+            };
+            // End of input ends the loop, as bash's does: on a new line, and with status 1.
+            let Some(line) = line else {
+                let mut stderr = params.stderr(shell);
+                writeln!(stderr)?;
+                let _ = stderr.flush();
+                result = ExecutionResult::general_error();
                 break;
-            }
+            };
 
             let answer = line.trim_end_matches(['\r', '\n']).to_string();
 

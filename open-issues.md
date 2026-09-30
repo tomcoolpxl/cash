@@ -251,3 +251,24 @@ loop sized for a quiet machine), and the ConPTY tests now run four at a time
 - `job_groups::at_the_prompt_a_background_job_survives_ctrl_c`, which already runs alone
 - `pty-oracle` `cash_leaves_the_screen_bash_leaves`, a different case each time; it
   already runs alone, and its own documentation says why it is bound to timing
+
+---
+
+## 11. `read`, `select` and `mapfile` at a console: what a terminal does differently
+
+**Seen (2026-09-30)**, once these took the keys of a console themselves
+(`cash_win32::conin`) so that `-t`, `-d`, `-n`, `-s` and Ctrl-C work there. None of these
+is known to bother anyone, and each would cost more than it is worth until one does.
+
+- **The console's own editing of a line is gone** from a plain `read`: the arrow keys,
+  Escape and the function keys do nothing there. A line is edited as a terminal driver
+  lets it be: Backspace, Ctrl-W, Ctrl-U. `read -e` has an editor. This is the price of
+  Ctrl-C working, since a console collecting a line makes an event of it.
+- **Keys typed past the count of `-n` are shown when something reads them,** not when
+  they are typed: a console shows keys only while something reads them.
+- **A line not ended when `-t` runs out is dropped.** A terminal keeps it for the next
+  read. Keeping it means putting the keys back into the console's queue, and not showing
+  them a second time when they are read again.
+- **An answer to a terminal query that arrives before `read` has begun** can be taken by
+  an older console host for itself; Windows Terminal passes it through. The keys are
+  taken before the prompt is shown, so a script that asks after its prompt is safe.

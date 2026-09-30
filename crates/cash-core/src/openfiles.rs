@@ -141,6 +141,28 @@ impl OpenFile {
             Self::PipeReader(_) | Self::PipeWriter(_) | Self::Stream(_) => false,
         }
     }
+
+    /// Takes the keys of the console this file is the input of, for one of the shell's
+    /// own readers (`read`, `select`, `mapfile`); `None` when it is not a console's input.
+    ///
+    /// A console left to collect its lines makes a console control event of Ctrl-C, which
+    /// no reader waiting for a line hears; read a key at a time, Ctrl-C is a key. With
+    /// `collects_lines` a line is handed over when it is ended, as a terminal hands it
+    /// over; `shows_keys` says whether what is typed is shown. The console is as it was
+    /// once the value is dropped. See [`cash_win32::conin::Terminal`].
+    pub fn console(
+        &self,
+        collects_lines: bool,
+        shows_keys: bool,
+    ) -> Option<cash_win32::conin::Terminal> {
+        use cash_win32::conin::Terminal;
+
+        match self {
+            Self::Stdin(stdin) => Terminal::open(stdin, collects_lines, shows_keys),
+            Self::File(file) => Terminal::open(file, collects_lines, shows_keys),
+            _ => None,
+        }
+    }
 }
 
 impl From<std::io::Stdin> for OpenFile {
