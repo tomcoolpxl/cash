@@ -18,7 +18,7 @@
 //! tool's name is the identity mismatch `cash doctor` exists to catch, and it would
 //! shadow a real one on `PATH`.
 
-use std::io::{IsTerminal, Write};
+use std::io::Write;
 
 use cash_core::{ExecutionResult, builtins};
 use clap::Parser;
@@ -58,7 +58,9 @@ impl builtins::Command for CoolfetchCommand {
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, Self::Error> {
-        let colour = !self.no_color && std::io::stdout().is_terminal();
+        // The command's own standard output, which a pipeline or a redirection replaces
+        // even though the shell's is still the terminal.
+        let colour = !self.no_color && context.try_fd(1).is_some_and(|f| f.is_terminal());
         let facts = collect(&context);
 
         let mut stdout = context.stdout();

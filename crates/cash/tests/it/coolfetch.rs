@@ -20,7 +20,11 @@
               alternating the two forms by accident of content reads worse."
 )]
 
+use std::path::Path;
 use std::process::Command;
+use std::time::Duration;
+
+use cash_win32::conpty::ConPtySession;
 
 const CASH: &str = env!("CARGO_BIN_EXE_cash");
 
@@ -265,4 +269,30 @@ fn the_logo_sits_beside_os_to_the_first_disk_split_at_terminal() {
         "{}",
         out.stdout
     );
+}
+
+/// What an 80x25 pseudo terminal shows once `script` has run in cash, in `dir`.
+fn on_a_terminal(script: &str, dir: Option<&Path>) -> String {
+    let script = std::format!("{script}; echo coolfetch-finished");
+    let mut session = ConPtySession::start_in(Path::new(CASH), &["-c", &script], None, dir)
+        .expect("start cash in a pseudo terminal");
+    session
+        .expect("coolfetch-finished", Duration::from_secs(20))
+        .expect("the script finishes");
+    session
+        .settle(Duration::from_millis(200), Duration::from_secs(5))
+        .expect("the screen settles");
+    session.screen().text()
+}
+
+#[test]
+fn a_redirected_banner_is_plain_text() {
+    // The shell is on a terminal but the banner's output is a file: no colour.
+    let dir = std::env::temp_dir().join(std::format!("cash-coolfetch-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    on_a_terminal("coolfetch > banner.txt", Some(&dir));
+    let banner = std::fs::read_to_string(dir.join("banner.txt")).unwrap_or_default();
+    let _ = std::fs::remove_dir_all(&dir);
+    assert!(!banner.contains('\x1b'), "{banner:?}");
+    assert!(banner.contains("OS: "), "{banner}");
 }
