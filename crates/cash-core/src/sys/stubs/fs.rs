@@ -36,8 +36,17 @@ pub fn open_null_file() -> Result<std::fs::File, error::Error> {
 // This is a stub implementation that returns no result.
 pub fn try_open_special_file(
     _path: &std::path::Path,
+    _access: crate::sys::fs::Access,
 ) -> Option<Result<std::fs::File, std::io::Error>> {
     None
+}
+
+/// Whether [`try_open_special_file`] handles `path` rather than leaving it to be opened
+/// as a file.
+//
+// This is a stub implementation that handles none.
+pub const fn is_special_file(_path: &std::path::Path) -> bool {
+    false
 }
 
 /// Returns the path to the system-wide shell profile script.

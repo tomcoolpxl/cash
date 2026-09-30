@@ -1,0 +1,4 @@
+$ echo piped | { IFS= read -rs -t 10 -d t v < /dev/tty; printf '%q rc=%s\n' "$v"
+ "$?"; }
+$'\E[6;20;10' rc=0
+$

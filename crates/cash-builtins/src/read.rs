@@ -1442,14 +1442,12 @@ impl ReadCommand {
         shell: &mut cash_core::Shell<SE>,
     ) -> Result<Attempt, cash_core::Error> {
         let input_file_is_terminal = input_file.is_terminal();
+        let input_file_is_file = matches!(&input_file, cash_core::openfiles::OpenFile::File(_));
 
         // Like Bash, a positive timeout has no effect on regular files. Keep
         // explicit `-t 0`, which is a readiness query even for a file. A console is not
         // a regular file, however it was opened.
-        if matches!(&input_file, cash_core::openfiles::OpenFile::File(_))
-            && !input_file_is_terminal
-            && timeout != Some(Duration::ZERO)
-        {
+        if input_file_is_file && !input_file_is_terminal && timeout != Some(Duration::ZERO) {
             timeout = None;
         }
 
@@ -1519,7 +1517,10 @@ impl ReadCommand {
 
         // Bash has the terminal hand over characters as they are typed for `-n`, `-N` and
         // a delimiter other than newline, and lines otherwise. At a console this does
-        // either, reading its keys: see `ConsoleInput`.
+        // either, reading its keys: see `ConsoleInput`. That serves a console opened by
+        // name as well, as `< /dev/tty` opens it, whose line would arrive as bytes in the
+        // console's code page, none at all from an older console host for a character
+        // outside ASCII. The keys are UTF-16 whatever the handle.
         let as_typed = char_limit.is_some() || delimiter != Some(DEFAULT_DELIMITER);
         if input_file_is_terminal {
             reader.read_console_keys(!as_typed, !self.silent);

@@ -2,6 +2,21 @@
 
 pub use super::platform::fs::*;
 
+/// What a file is opened to do.
+///
+/// Most names open the same file either way. `/dev/tty` does not on Windows, where a
+/// console's keys and its screen are two files (`CONIN$` and `CONOUT$`), so the platform
+/// is told which is wanted when it is asked to open a special file.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Access {
+    /// Opened to be read from, as `<` does.
+    Read,
+    /// Opened to be written to, as `>` and `>>` do.
+    Write,
+    /// Opened for both, as `<>` does.
+    ReadWrite,
+}
+
 /// Extension trait for path-related filesystem operations.
 pub trait PathExt {
     /// Returns true if the path exists and is readable by the current user.

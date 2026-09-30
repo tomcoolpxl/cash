@@ -356,19 +356,22 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
     /// # Arguments
     ///
     /// * `options` - The options to use opening the file.
+    /// * `access` - What the file is opened to do, as `options` say it; they cannot be asked.
     /// * `path` - The path to the file to open; may be relative to the shell's working directory.
     /// * `params` - Execution parameters.
     pub(crate) fn open_file(
         &self,
         options: &std::fs::OpenOptions,
+        access: crate::sys::fs::Access,
         path: impl AsRef<Path>,
         params: &ExecutionParameters,
     ) -> Result<openfiles::OpenFile, std::io::Error> {
         // Give platform-specific code a chance to handle special files
-        // (e.g. /dev/null on Windows, which needs to open NUL instead).
-        // This is checked before absolute_path so that paths like /dev/null
-        // are intercepted on platforms where they aren't valid native paths.
-        if let Some(result) = crate::sys::fs::try_open_special_file(path.as_ref()) {
+        // (e.g. /dev/null on Windows, which needs to open NUL instead, and /dev/tty,
+        // which is the console's input or its output). This is checked before
+        // absolute_path so that paths like /dev/null are intercepted on platforms
+        // where they aren't valid native paths.
+        if let Some(result) = crate::sys::fs::try_open_special_file(path.as_ref(), access) {
             return result.map(openfiles::OpenFile::from);
         }
 
