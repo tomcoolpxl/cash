@@ -62,15 +62,15 @@ enum Logo {
 
 /// The logo as a picture: `assets/cash_logo.six`, which `assets/make-sixel.ps1` makes
 /// from the PNG. A terminal lays each character cell over 10x20 of a sixel image's
-/// pixels, whatever the font, so its 280x280 pixels cover 28 columns by 14 rows. It is
+/// pixels, whatever the font, so its 240x240 pixels cover 24 columns by 12 rows. It is
 /// larger than the panes because a display scaled past 100% stretches those pixels over
 /// bigger cells, and the softened edges are a smaller part of a larger picture.
 const IMAGE: &[u8] = include_bytes!("../../../assets/cash_logo.six");
-const IMAGE_ROWS: usize = 14;
-const IMAGE_COLUMNS: usize = 28;
+const IMAGE_ROWS: usize = 12;
+const IMAGE_COLUMNS: usize = 24;
 /// Where the picture starts, from zero: level with the title's rule, and one column in.
-/// A machine with one drive has some thirteen facts, and from here the picture ends two
-/// rows below the last of them.
+/// A machine with one drive has some thirteen facts, and from here the picture ends
+/// level with the last of them.
 const IMAGE_TOP: usize = 1;
 const IMAGE_LEFT: usize = 1;
 /// The facts' column beside the picture, one clear of it.

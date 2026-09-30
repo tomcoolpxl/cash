@@ -294,11 +294,11 @@ fn picture_as(output: &str, stand_in: &str) -> String {
     std::format!("{before}{stand_in}{after}")
 }
 
-/// The picture covers 28 columns by 14 rows, from row 1 and one column in; the facts
+/// The picture covers 24 columns by 12 rows, from row 1 and one column in; the facts
 /// beside it start a column clear of it.
 const PICTURE_TOP: usize = 1;
-const PICTURE_ROWS: usize = 14;
-const BESIDE_PICTURE: usize = 30;
+const PICTURE_ROWS: usize = 12;
+const BESIDE_PICTURE: usize = 26;
 
 /// `before` and then `output` on a terminal of `rows` rows, wide enough that no fact
 /// wraps, a line feed going back to the first column as it does on the console. The
@@ -364,7 +364,7 @@ fn the_facts_land_in_place_wherever_the_picture_leaves_the_cursor() {
     // draw it leaves it where it was: the facts must not follow either.
     let output = with_picture();
     let dropped = replay("", &picture_as(&output, ""), 40).text();
-    let moved = replay("", &picture_as(&output, "\x1b[13B\x1b[27C"), 40).text();
+    let moved = replay("", &picture_as(&output, "\x1b[11B\x1b[23C"), 40).text();
     assert_eq!(moved, dropped);
 }
 

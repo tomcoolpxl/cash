@@ -3,10 +3,11 @@
 #
 # Sixel is the DEC format terminals draw pictures in, and Windows Terminal reads it from
 # 1.22 on. It lays every character cell over 10x20 of the image's pixels whatever the font,
-# so this 280x280 image covers 28 columns by 14 rows, and no image can carry more detail
-# than that into a cell: on a display scaled past 100% the terminal stretches those pixels
-# over the font's larger cells, which softens the edges. A larger picture is the only
-# thing that makes them a smaller part of it, which is why this one is the size it is.
+# so this 240x240 image covers 24 columns by 12 rows: from the title's rule to the last
+# fact on a machine with one drive. No image can carry more detail than that into a cell.
+# On a display scaled past 100% the terminal stretches those pixels over the font's larger
+# cells, which softens the edges, and only a larger picture makes them a smaller part of
+# it, which is why this one is as large as the facts allow.
 #
 # ImageMagick writes sixel itself, but paints the transparent corners in, and a general
 # quantiser asked for 16 colours drops the green cursor, half a percent of the pixels. The
@@ -17,7 +18,7 @@
 
 $ErrorActionPreference = 'Stop'
 $here = $PSScriptRoot
-$size = 280
+$size = 240
 $esc = [char]27
 $raw = Join-Path ([IO.Path]::GetTempPath()) "cash-sixel-$PID.rgba"
 
