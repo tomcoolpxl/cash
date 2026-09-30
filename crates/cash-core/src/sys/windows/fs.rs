@@ -194,15 +194,6 @@ pub fn open_null_file() -> Result<std::fs::File, error::Error> {
     Ok(f)
 }
 
-/// Gives the platform an opportunity to handle a special file path (e.g. `/dev/null`).
-pub fn try_open_special_file(path: &Path) -> Option<Result<std::fs::File, std::io::Error>> {
-    if path.ends_with("dev/null") && path.is_absolute() {
-        Some(open_null_file().map_err(std::io::Error::other))
-    } else {
-        None
-    }
-}
-
 /// Returns the default paths where executables are typically found on Windows.
 pub(crate) fn get_default_executable_search_paths() -> Vec<PathBuf> {
     default_system_paths()

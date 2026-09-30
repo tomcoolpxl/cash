@@ -57,8 +57,13 @@ fn run(args: &[String]) -> Output {
 
 /// Run a script through `cash -c` with `input` waiting on its standard input, a pipe.
 fn cash_reading(script: &str, input: &str) -> Output {
+    run_reading(&["-c", script], input)
+}
+
+/// Run `cash` with arbitrary arguments and `input` waiting on its standard input.
+fn run_reading(args: &[&str], input: &str) -> Output {
     let mut child = Command::new(CASH)
-        .args(["-c", script])
+        .args(args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -483,6 +488,69 @@ fn globbing_is_case_insensitive() {
 #[test]
 fn dev_null_discards() {
     assert_eq!(cash("echo noise > /dev/null; echo done").stdout, "done");
+
+    // Every way a script reaches it, and the spelling `"$dir/null"` makes of it.
+    for script in [
+        "echo noise >> /dev/null",
+        "echo noise &> /dev/null",
+        "{ echo noise; echo more >&2; } > /dev/null 2>&1",
+        "set -C; echo noise > /dev/null",
+        "exec 3> /dev/null; echo noise >&3",
+        r#"d=/dev/; echo noise > "$d/null""#,
+        "cat < /dev/null",
+        "read -r l < /dev/null",
+    ] {
+        let out = cash(&format!("{script}; echo done"));
+        assert_eq!(out.stdout, "done", "failed for: {script}");
+        assert_eq!(out.stderr, "", "failed for: {script}");
+    }
+}
+
+#[test]
+fn a_file_called_null_in_a_folder_called_dev_is_a_file() {
+    // Any resolved path that ended in `dev/null` was the device, so in a folder called
+    // `dev`, which is where many people keep their work, output sent to a file called
+    // `null` was thrown away without a word. bash writes the file.
+    for (name, script, file) in [
+        ("relative", "mkdir dev; echo kept > dev/null", "dev/null"),
+        ("inside", "mkdir dev; cd dev; echo kept > null", "dev/null"),
+        ("dotted", "mkdir dev; echo kept > ./dev/null", "dev/null"),
+        (
+            "absolute",
+            r#"mkdir dev; echo kept > "$PWD/dev/null""#,
+            "dev/null",
+        ),
+        ("appended", "mkdir dev; echo kept >> dev/null", "dev/null"),
+        ("both", "mkdir dev; echo kept &> dev/null", "dev/null"),
+        (
+            "nested",
+            "mkdir -p a/dev; echo kept > a/dev/null",
+            "a/dev/null",
+        ),
+    ] {
+        let scratch = Scratch::new(&format!("dev-null-file-{name}"));
+        let out = cash(&format!(
+            r#"cd {}; {script}; echo "rc=$?""#,
+            scratch.as_script_path()
+        ));
+        assert_eq!(out.stdout, "rc=0", "failed for: {script}");
+        assert_eq!(
+            std::fs::read_to_string(scratch.path().join(file)).ok(),
+            Some("kept\n".to_string()),
+            "no file written for: {script}\nstderr: {}",
+            out.stderr
+        );
+    }
+
+    // And read: the file's contents, not the device's nothing.
+    let scratch = Scratch::new("dev-null-file-read");
+    std::fs::create_dir(scratch.path().join("dev")).unwrap();
+    std::fs::write(scratch.path().join("dev").join("null"), b"kept\n").unwrap();
+    let out = cash(&format!(
+        "cd {}; cat < dev/null; cd dev; cat < null",
+        scratch.as_script_path()
+    ));
+    assert_eq!(out.stdout, "kept\nkept", "stderr: {}", out.stderr);
 }
 
 // ---------------------------------------------------------------------------
@@ -702,6 +770,15 @@ fn source_reads_a_device_name() {
 
     let null = cash(r#". /dev/null; echo "rc=$?""#);
     assert_eq!(null.stdout, "rc=0", "stderr: {}", null.stderr);
+
+    // The script file is opened the same way: `curl … | cash /dev/stdin`.
+    let script = run_reading(&["/dev/stdin"], "echo \"from the script\"\n");
+    assert_eq!(
+        script.stdout, "from the script",
+        "stderr: {}",
+        script.stderr
+    );
+    assert_eq!(run_reading(&["/dev/null"], "").code, 0);
 }
 
 #[test]

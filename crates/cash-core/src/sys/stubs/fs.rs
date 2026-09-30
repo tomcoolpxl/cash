@@ -31,15 +31,6 @@ pub fn open_null_file() -> Result<std::fs::File, error::Error> {
     Err(error::ErrorKind::NotSupportedOnThisPlatform("opening null file").into())
 }
 
-/// Gives the platform an opportunity to handle a special file path (e.g. `/dev/null`).
-//
-// This is a stub implementation that returns no result.
-pub fn try_open_special_file(
-    _path: &std::path::Path,
-) -> Option<Result<std::fs::File, std::io::Error>> {
-    None
-}
-
 /// Returns the path to the system-wide shell profile script.
 ///
 /// Stub implementation that returns `None`.
