@@ -204,7 +204,10 @@ impl TryFrom<OpenFile> for Stdio {
 impl std::io::Read for OpenFile {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         match self {
-            Self::Stdin(f) => f.read(buf),
+            // Not through `std::io::Stdin`, whose buffer takes more of a pipe than was
+            // asked for: what this read leaves belongs to the next reader, which may be
+            // a child process, and `read -t` cannot wait on bytes held in that buffer.
+            Self::Stdin(_) => cash_win32::stdio::RawStdin.read(buf),
             Self::Stdout(_) => Err(std::io::Error::other(
                 error::ErrorKind::OpenFileNotReadable("stdout"),
             )),

@@ -203,6 +203,21 @@ fn continue_asks_again() {
 }
 
 #[test]
+fn an_answer_is_one_line_and_the_lines_after_it_are_left() {
+    // They are the input of the body's commands and of whatever follows the loop.
+    // `select` read ahead and took them all: both reads found the end of input.
+    let out = cash_with_input(
+        r#"select x in a b; do read -r note; echo "$x: $note"; break; done; read -r after; echo "after=$after""#,
+        "2\nfirst\nsecond\n",
+    );
+    assert_eq!(
+        out.stdout, "b: first\nafter=second",
+        "stderr: {}",
+        out.stderr
+    );
+}
+
+#[test]
 fn the_positional_parameters_are_the_default_list() {
     // `select x; do ...; done` offers "$@", exactly as `for` does.
     let out = cash_with_input(

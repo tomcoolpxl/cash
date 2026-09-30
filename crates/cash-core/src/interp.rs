@@ -1074,7 +1074,9 @@ impl Execute for ast::SelectClauseCommand {
             return Ok(result);
         }
 
-        let mut input = std::io::BufReader::new(params.stdin(shell));
+        // A byte at a time: an answer is one line, and the lines after it are the input
+        // of the body's commands and of whatever follows the loop.
+        let mut input = std::io::BufReader::with_capacity(1, params.stdin(shell));
         let mut show_menu = true;
 
         loop {
