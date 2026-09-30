@@ -294,8 +294,9 @@ fn picture_as(output: &str, stand_in: &str) -> String {
     std::format!("{before}{stand_in}{after}")
 }
 
-/// The picture covers 28 columns by 14 rows, from row 2 and one column in; the facts
+/// The picture covers 28 columns by 14 rows, from row 1 and one column in; the facts
 /// beside it start a column clear of it.
+const PICTURE_TOP: usize = 1;
 const PICTURE_ROWS: usize = 14;
 const BESIDE_PICTURE: usize = 30;
 
@@ -329,12 +330,16 @@ fn assert_clear_for_the_picture(text: &str, rows: std::ops::Range<usize>) {
 
 #[test]
 fn the_picture_stands_left_of_the_facts() {
-    // Drawn from row 2, one column in; the facts in the rows they have beside the panes,
-    // and nothing written over the picture's cells.
+    // Drawn level with the title's rule, one column in; the facts in the rows they have
+    // beside the panes, and nothing written over the picture's cells.
     let output = with_picture();
     assert_eq!(output.matches(PICTURE).count(), 1, "{output:?}");
     let (before, _) = output.split_once(PICTURE).unwrap();
-    assert_eq!(replay("", before, 40).cursor(), (2, 1), "where it is drawn");
+    assert_eq!(
+        replay("", before, 40).cursor(),
+        (PICTURE_TOP, 1),
+        "where it is drawn"
+    );
 
     let screen = replay("", &output, 40);
     let text = screen.text();
@@ -348,7 +353,7 @@ fn the_picture_stands_left_of_the_facts() {
         "{text}"
     );
     assert!(
-        screen.cursor().0 >= 2 + PICTURE_ROWS,
+        screen.cursor().0 >= PICTURE_TOP + PICTURE_ROWS,
         "the prompt would be on the picture"
     );
 }

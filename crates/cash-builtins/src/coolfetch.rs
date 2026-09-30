@@ -68,9 +68,10 @@ enum Logo {
 const IMAGE: &[u8] = include_bytes!("../../../assets/cash_logo.six");
 const IMAGE_ROWS: usize = 14;
 const IMAGE_COLUMNS: usize = 28;
-/// Where the picture starts, from zero: level with `OS`, below the title and its rule,
-/// and one column in.
-const IMAGE_TOP: usize = 2;
+/// Where the picture starts, from zero: level with the title's rule, and one column in.
+/// A machine with one drive has some thirteen facts, and from here the picture ends two
+/// rows below the last of them.
+const IMAGE_TOP: usize = 1;
 const IMAGE_LEFT: usize = 1;
 /// The facts' column beside the picture, one clear of it.
 const IMAGE_GUTTER: usize = IMAGE_LEFT + IMAGE_COLUMNS + 1;
