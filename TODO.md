@@ -29,7 +29,6 @@ trust its runs, then by what a user notices most.
 | Phase | What | Items |
 | --- | --- | --- |
 | 0 | Release 1.3.0 | what is on `main` |
-| 1 | A test suite that can be trusted | 1.3 |
 | 2 | Ctrl-C everywhere | 2.1 to 2.3 |
 | 3 | Process substitution | 3.1, 3.2 |
 | 4 | The `/dev` names and descriptors | 4.1 to 4.5 |
@@ -44,38 +43,6 @@ the console (`-t`, `-d`, `-n`, `-s`, Ctrl-C), `/dev/tty`, `/dev/stdin` and the o
 descriptor names, standard input read without a buffer, `kill` and reused pids, a finished
 job's status, `top`, `coolfetch`. Once CI is green on it: bump the version to 1.3.0, tag,
 and let the Scoop bucket pick it up, as RELEASING.md says.
-
----
-
-## Phase 1. A test suite that can be trusted
-
-Decided: fix the tests whose timing fault can be named, fence the ConPTY tests, leave the
-ones that cannot be reproduced on a quiet machine, with a note.
-
-### 1.3 Tests that fail when the machine is busy
-
-Each failed once in some session's full run (`--retries 0`) while other sessions were
-building, and passed when run alone.
-
-- With a fault that can be named, to be made to wait for a condition:
-  - `read_console::a_script_with_both_streams_redirected_asks_the_terminal_by_name`: the
-    answer is typed 300 ms after the query is shown, and is swallowed by the console if
-    the inner cash has not begun its read by then.
-  - `pipeline_concurrency::a_while_loop_does_not_lose_output` (timed out).
-- ConPTY tests, to get a nextest group that limits how many run at once:
-  - `pty-oracle` `cash_leaves_the_screen_bash_leaves` (different cases each time; it
-    already runs alone).
-  - `conpty_ctrl_z_stops_a_foreground_program_and_fg_resumes_it`,
-    `conpty_ctrl_z_stays_end_of_input_for_a_program_reading_the_keyboard`,
-    `conpty_interactive_variables_and_arithmetic`.
-- To look at once, and leave with a note if they do not fail on a quiet machine:
-  - `bash_gaps::wait_preserves_status_and_waits_for_next_completion`,
-    `bash_gaps::a_chld_trap_runs_once_for_each_child_reaped`
-  - `job_groups::at_the_prompt_a_background_job_survives_ctrl_c`
-  - `git_prompt::git_ps1_shows_the_branch_its_state_and_the_upstream` (timed out)
-  - four `cash-sed` tests, `completion_scripts::docker_completion_works`
-  - `fuser_lsof::fuser_marks_an_executable_and_a_loaded_module`: given three periods of
-    30 s in `.config/nextest.toml`; item 5.3 is its cause.
 
 ---
 

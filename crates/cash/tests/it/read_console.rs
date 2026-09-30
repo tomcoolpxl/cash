@@ -112,34 +112,20 @@ impl Script {
         Self { session, dir }
     }
 
-    /// Waits a moment for the read to have begun, as a terminal's answer to a query
-    /// arrives after the query. What is typed ahead of a read waits for it, but the
-    /// console makes a key's or an answer's escape sequence of what arrives while the
-    /// read is on.
-    fn once_reading(mut self) -> Self {
-        self.session
-            .settle(Duration::from_millis(300), Duration::from_secs(2))
-            .expect("read the console");
-        self
-    }
-
     /// Waits for a read to show `prompt`, which it does once the keys are its to take.
-    /// Ctrl-C typed before that is the console's to act on, not the read's.
+    ///
+    /// What is typed ahead of a read waits for it, with two exceptions that a test has to
+    /// wait for the read for. Ctrl-C typed before the read is the console's to act on,
+    /// not the read's. And a key's or an answer's escape sequence is made of what arrives
+    /// while the read is on: earlier, an arrow is a key without a character, and the
+    /// console host takes a terminal's answer for itself. These tests used to type a
+    /// fixed 300 ms after the script said it was about to read, which a busy machine
+    /// outran (2026-09-30: the answer was gone, and the read timed out).
     fn at_prompt(mut self, prompt: &str) -> Self {
         self.session
             .expect(prompt, STUCK)
             .expect("the read shows its prompt");
         self
-    }
-
-    /// Waits until the console shows `text`, which the script writes just before it
-    /// reads, and then as [`Self::once_reading`] does: for a read that a second cash has
-    /// to start for.
-    fn once_shown(mut self, text: &str) -> Self {
-        self.session
-            .expect(text, STUCK)
-            .expect("the script writes to the console before it reads");
-        self.once_reading()
     }
 
     fn type_keys(mut self, keys: &str) -> Self {
@@ -206,18 +192,18 @@ fn a_terminals_answer_is_read_to_its_last_character_and_not_shown() {
         r#"ask() {
     local reply=
     printf '\033[%s' "$1"
-    IFS= read -rs -t 2 -d "$2" reply
+    IFS= read -rs -t 2 -d "$2" -p 'answer> ' reply
     printf '%s -> %q rc=%s\n' "$1" "$reply" "$?" >> out.txt
 }
 ask 16t t"#,
     )
-    .once_reading()
+    .at_prompt("answer> ")
     .type_keys("\x1b[6;20;10t")
     .finish();
 
     // A read the timeout ended would report 142.
     assert_eq!(left.out, r#"16t -> $'\E[6;20;10' rc=0"#);
-    assert_eq!(left.screen, "", "the answer was shown");
+    assert_eq!(left.screen, "answer>", "the answer was shown");
 }
 
 /// Each option on its own, with keys that arrive as the characters they are whatever
@@ -338,10 +324,10 @@ fn backspace_takes_back_a_character_of_a_line_read_with_a_timeout() {
 fn an_arrow_key_is_read_as_the_sequence_a_terminal_sends() {
     let left = Script::start(
         "arrow",
-        r#"IFS= read -rs -n 1 key; IFS= read -rs -n 2 -t 0.05 rest
+        r#"IFS= read -rs -n 1 -p 'key> ' key; IFS= read -rs -n 2 -t 0.05 rest
 printf '%q %q\n' "$key" "$rest" >> out.txt"#,
     )
-    .once_reading()
+    .at_prompt("key> ")
     .type_keys("\x1b[A")
     .finish();
 
@@ -638,19 +624,19 @@ fn a_script_with_both_streams_redirected_asks_the_terminal_by_name() {
         &[(
             "asks.sh",
             r#"printf 'cell size? ' > /dev/tty
-IFS= read -rs -t 5 -d t reply < /dev/tty
+IFS= read -rs -t 5 -d t -p 'answer> ' reply < /dev/tty
 printf '%q rc=%s\n' "$reply" "$?"
 IFS= read -r rest
 printf 'stdin: %s\n' "$rest"
 "#,
         )],
     )
-    .once_shown("cell size?")
+    .at_prompt("answer> ")
     .type_keys("\x1b[6;20;10t")
     .finish();
 
     assert_eq!(left.out, "$'\\E[6;20;10' rc=0\nstdin: piped");
-    assert_eq!(left.screen, "cell size?", "the answer was shown");
+    assert_eq!(left.screen, "cell size? answer>", "the answer was shown");
 }
 
 /// A line from the terminal while standard input is a pipe: it is typed, shown and

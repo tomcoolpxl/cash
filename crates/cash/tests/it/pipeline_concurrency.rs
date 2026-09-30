@@ -83,9 +83,12 @@ fn a_for_loop_does_not_lose_output() {
 
 #[test]
 fn a_while_loop_does_not_lose_output() {
+    // 2000 lines are 8890 bytes, twice the pipe buffer. It was 5000, as for the others,
+    // but this one runs three builtins a line where they run `seq` once, and on a busy
+    // machine it did not finish in nextest's fifteen seconds (2026-09-30).
     assert_eq!(
-        lines(r#"i=0; while [ "$i" -lt 5000 ]; do echo "$i"; i=$((i+1)); done"#),
-        "5000"
+        lines(r#"i=0; while [ "$i" -lt 2000 ]; do echo "$i"; i=$((i+1)); done"#),
+        "2000"
     );
 }
 

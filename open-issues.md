@@ -234,3 +234,20 @@ What is behind them, as far as it is known:
 - **The last three have nothing to do with the names** and were only met on the way; all
   three were there before the fix, and their causes have not been looked for.
 
+---
+
+## 10. Tests that failed once on a busy machine, and not since
+
+**Seen (2026-09-30)**, a day on which up to ten sessions built and ran the suite at the
+same time. Each test below failed in one full run (`--retries 0`) and passed alone; none
+has failed on a machine that was doing nothing else. The ones whose fault could be named
+were fixed that day (a fixed 300 ms before typing at a `read`, two jobs 150 ms apart, a
+loop sized for a quiet machine), and the ConPTY tests now run four at a time
+(`.config/nextest.toml`). These are what is left, to look at if one fails again:
+
+- `git_prompt::git_ps1_shows_the_branch_its_state_and_the_upstream` (timed out)
+- four `cash-sed` tests, in one run
+- `completion_scripts::docker_completion_works`
+- `job_groups::at_the_prompt_a_background_job_survives_ctrl_c`, which already runs alone
+- `pty-oracle` `cash_leaves_the_screen_bash_leaves`, a different case each time; it
+  already runs alone, and its own documentation says why it is bound to timing

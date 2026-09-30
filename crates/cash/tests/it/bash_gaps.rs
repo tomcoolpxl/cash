@@ -240,8 +240,10 @@ fn wait_preserves_status_and_waits_for_next_completion() {
         output("bash -c 'exit 7' & wait %1; wait -n; echo $?"),
         (0, "127".into())
     );
+    // The second job ends a second before the first: 150 ms apart, a busy machine had
+    // started them too far apart for that order to hold (2026-09-30).
     let (_, first) = output(
-        "bash -c 'sleep 0.2; exit 3' & a=$!; bash -c 'sleep 0.05; exit 7' & b=$!; wait -n $a $b; echo $?; wait $a; echo $?",
+        "bash -c 'sleep 1; exit 3' & a=$!; bash -c 'exit 7' & b=$!; wait -n $a $b; echo $?; wait $a; echo $?",
     );
     assert_eq!(first, "7\n3");
     let (_, assigned) =
@@ -1727,7 +1729,7 @@ fn a_chld_trap_runs_once_for_each_child_reaped() {
          echo pipe; \"$X\" -c true | \"$X\" -c true\n\
          echo builtin; true\n\
          echo bg; \"$X\" -c true & \"$X\" -c true & wait\n\
-         echo bg-then-fg; \"$X\" -c true & \"$X\" -c 'sleep 0.3'; echo after\n\
+         echo bg-then-fg; \"$X\" -c true & \"$X\" -c 'sleep 1'; echo after\n\
          trap - CHLD; \"$X\" -c true; echo end"
     );
     assert_eq!(

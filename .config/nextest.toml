@@ -13,10 +13,19 @@ path = "test-results.xml"
 # Each links folder gives the test's cash.exe 126 more names, and NTFS allows a file
 # 1023 (link_tools.rs).
 link-tools = { max-threads = 1 }
+# Each runs a cash on a pseudo console of its own and types at it. A console host paints
+# on its own schedule, and late when every core is busy: with a dozen consoles at once,
+# `conpty_ctrl_z_…` and `conpty_interactive_variables_and_arithmetic` each failed a full
+# run on 2026-09-30 and passed alone. So no more than four run at the same time.
+conpty = { max-threads = 4 }
 
 [[profile.default.overrides]]
 filter = 'binary(it) and test(/^link_tools::/)'
 test-group = 'link-tools'
+
+[[profile.default.overrides]]
+filter = 'binary(conpty-interactive-tests) or (binary(it) and test(/^read_console::/))'
+test-group = 'conpty'
 
 # Tests that are slow by nature, rather than stuck: each gets three periods.
 # A whole screen-by-screen comparison with Git Bash on a ConPTY: 45 s on an idle machine.
