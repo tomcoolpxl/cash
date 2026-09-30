@@ -3,7 +3,9 @@
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
+use crate::ShellFd;
 use crate::error;
+use crate::openfiles::OpenFiles;
 
 // Selectively re-export items from stubs that we don't override.
 pub(crate) use crate::sys::stubs::fs::MetadataExt;
@@ -221,29 +223,67 @@ fn open_console(access: crate::sys::fs::Access) -> std::io::Result<std::fs::File
         .map_err(|err| std::io::Error::new(err.kind(), "No such device or address"))
 }
 
-/// The device `path` names under `/dev`, if it names one: `null` for `/dev/null`.
+/// The names `path` goes by under `/dev`, if that is where it is: `null` for `/dev/null`,
+/// and `fd` then `3` for `/dev/fd/3`.
 ///
-/// A path names one as a script writes it, `/dev/null`, or as resolving that against a
-/// working directory leaves it, `C:/dev/null`. One level deeper (`/dev/fd/3`) or anywhere
-/// else (`C:/src/dev/null`) it is a file like any other.
-fn device_name(path: &Path) -> Option<&str> {
+/// A path is there as a script writes it, `/dev/null`, or as resolving that against a
+/// working directory leaves it, `C:/dev/null`. Anywhere else (`C:/src/dev/null`), or
+/// deeper than those two names, it is a file like any other.
+fn names_under_dev(path: &Path) -> Option<(&str, Option<&str>)> {
     use std::path::Component;
 
     let mut components = path.components().peekable();
     components.next_if(|component| matches!(component, Component::Prefix(_)));
-    match (
-        components.next(),
-        components.next(),
-        components.next(),
-        components.next(),
-    ) {
-        (
-            Some(Component::RootDir),
-            Some(Component::Normal(dev)),
-            Some(Component::Normal(name)),
-            None,
-        ) if dev == "dev" => name.to_str(),
+    match (components.next(), components.next()) {
+        (Some(Component::RootDir), Some(Component::Normal(dev))) if dev == "dev" => {}
+        _ => return None,
+    }
+    match (components.next(), components.next(), components.next()) {
+        (Some(Component::Normal(name)), None, _) => Some((name.to_str()?, None)),
+        (Some(Component::Normal(name)), Some(Component::Normal(inner)), None) => {
+            Some((name.to_str()?, Some(inner.to_str()?)))
+        }
         _ => None,
+    }
+}
+
+/// The device `path` names under `/dev`, if it names one: `null` for `/dev/null`.
+///
+/// See `names_under_dev` for the spellings. One level deeper (`/dev/fd/3`) it is no
+/// device: that is a descriptor of the shell's, which `named_descriptor` tells.
+fn device_name(path: &Path) -> Option<&str> {
+    match names_under_dev(path)? {
+        (name, None) => Some(name),
+        (_, Some(_)) => None,
+    }
+}
+
+/// The descriptor of the shell's that `path` names, if it names one: 0, 1 and 2 for
+/// `/dev/stdin`, `/dev/stdout` and `/dev/stderr`, and N for `/dev/fd/N`.
+///
+/// These are no files here. Whoever opens one is given the descriptor the shell has
+/// under that number at the time, which a redirection may have changed from the one
+/// the process started with. See `names_under_dev` for the spellings.
+pub fn named_descriptor(path: &Path) -> Option<ShellFd> {
+    match names_under_dev(path)? {
+        ("stdin", None) => Some(OpenFiles::STDIN_FD),
+        ("stdout", None) => Some(OpenFiles::STDOUT_FD),
+        ("stderr", None) => Some(OpenFiles::STDERR_FD),
+        ("fd", Some(number)) => descriptor_number(number),
+        _ => None,
+    }
+}
+
+/// The descriptor `name` is the number of, written as a listing of `/dev/fd` would have
+/// it: digits and nothing else, and no zero in front. `+3`, `-1` and `03` are numbers to
+/// `parse` and no such names, in Bash either.
+fn descriptor_number(name: &str) -> Option<ShellFd> {
+    let digits_only = name.bytes().all(|byte| byte.is_ascii_digit());
+    let zero_in_front = name.len() > 1 && name.starts_with('0');
+    if digits_only && !zero_in_front {
+        name.parse().ok()
+    } else {
+        None
     }
 }
 
@@ -688,6 +728,56 @@ mod tests {
         assert!(!is_special_file(Path::new("/dev/stdin")));
         assert!(
             try_open_special_file(Path::new("/dev/stdin"), crate::sys::fs::Access::Read).is_none()
+        );
+    }
+
+    #[test]
+    fn a_descriptor_is_named_as_written_or_as_resolved_on_any_drive() {
+        assert_eq!(named_descriptor(Path::new("/dev/stdin")), Some(0));
+        assert_eq!(named_descriptor(Path::new("/dev/stdout")), Some(1));
+        assert_eq!(named_descriptor(Path::new("/dev/stderr")), Some(2));
+        assert_eq!(named_descriptor(Path::new("/dev/fd/9")), Some(9));
+        // As a redirection hands them over, resolved against the working directory.
+        assert_eq!(named_descriptor(Path::new("C:/dev/stdin")), Some(0));
+        assert_eq!(named_descriptor(Path::new("C:/dev/stdout")), Some(1));
+        assert_eq!(named_descriptor(Path::new(r"d:\dev\stderr")), Some(2));
+        assert_eq!(named_descriptor(Path::new("C:/dev/fd/9")), Some(9));
+        assert_eq!(named_descriptor(Path::new(r"d:\dev\fd\63")), Some(63));
+        assert_eq!(
+            named_descriptor(Path::new(r"\\server\share\dev\fd\10")),
+            Some(10)
+        );
+    }
+
+    #[test]
+    fn a_file_elsewhere_or_another_name_is_not_a_descriptor() {
+        // A folder of one's own called `dev`, and a name in the folder one is in.
+        assert_eq!(named_descriptor(Path::new("C:/src/dev/stderr")), None);
+        assert_eq!(named_descriptor(Path::new("C:/src/dev/fd/3")), None);
+        assert_eq!(named_descriptor(Path::new("dev/stderr")), None);
+        assert_eq!(named_descriptor(Path::new("dev/fd/3")), None);
+        assert_eq!(named_descriptor(Path::new("C:dev/fd/3")), None);
+        assert_eq!(named_descriptor(Path::new("/DEV/stderr")), None);
+        // The devices, and names that are neither.
+        assert_eq!(named_descriptor(Path::new("/dev/null")), None);
+        assert_eq!(named_descriptor(Path::new("/dev/tty")), None);
+        assert_eq!(named_descriptor(Path::new("/dev/fd")), None);
+        assert_eq!(named_descriptor(Path::new("/dev/stderr/2")), None);
+        assert_eq!(named_descriptor(Path::new("/dev/fd/3/x")), None);
+        assert_eq!(named_descriptor(Path::new("/dev/fdx/3")), None);
+        // A number is written one way: what `parse` would take besides is no descriptor.
+        assert_eq!(named_descriptor(Path::new("/dev/fd/0")), Some(0));
+        assert_eq!(named_descriptor(Path::new("/dev/fd/10")), Some(10));
+        assert_eq!(named_descriptor(Path::new("/dev/fd/+3")), None);
+        assert_eq!(named_descriptor(Path::new("/dev/fd/-1")), None);
+        assert_eq!(named_descriptor(Path::new("/dev/fd/03")), None);
+        assert_eq!(named_descriptor(Path::new("/dev/fd/00")), None);
+        assert_eq!(named_descriptor(Path::new("/dev/fd/3a")), None);
+        assert_eq!(named_descriptor(Path::new("/dev/fd/99999999999")), None);
+        // None of them is a file the platform opens: the shell looks the descriptor up.
+        assert!(!is_special_file(Path::new("/dev/fd/3")));
+        assert!(
+            try_open_special_file(Path::new("/dev/fd/3"), crate::sys::fs::Access::Write).is_none()
         );
     }
 

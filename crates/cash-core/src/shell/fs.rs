@@ -333,9 +333,10 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         // knowing about it. Relative paths and ordinary Windows paths pass through
         // unchanged.
         //
-        // `/dev/null` and friends never reach this point — `open_file` intercepts them
-        // first, because under D29's `\\?\` prefix `NUL` would name a file rather than
-        // the device (D7, D28).
+        // `/dev/null` and friends do reach this point: a redirection resolves its word
+        // before `open_file` sees it, and they leave as `C:/dev/null`. `open_file` tells
+        // them in that spelling too, and opens no file for one, because under D29's
+        // `\\?\` prefix `NUL` would name a file rather than the device (D7, D28).
         let accepted = cash_win32::path::accept_path(&path.to_string_lossy());
         let path = accepted.as_path();
 
@@ -380,10 +381,15 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         // See if this is a reference to a file descriptor. These paths should
         // reflect the shell's current execution fds, which can differ from the
         // host process fds after redirections like here-docs.
-        if let Some(fd_num) = shell_fd_path_to_fd(&path_to_open)
-            && let Some(open_file) = params.try_fd(self, fd_num)
-        {
-            return Ok(open_file);
+        //
+        // cash (D7): the name is told as `absolute_path` leaves it, `C:/dev/stderr`, and
+        // one whose descriptor is not open is no file, in Bash's words. Going on to look
+        // for it would find a file of that name in a folder of the user's own called
+        // `C:\dev`, or with `>` make one.
+        if let Some(fd_num) = crate::sys::fs::named_descriptor(&path_to_open) {
+            return params.try_fd(self, fd_num).ok_or_else(|| {
+                std::io::Error::new(std::io::ErrorKind::NotFound, "No such file or directory")
+            });
         }
 
         Ok(options.open(path_to_open)?.into())
@@ -404,23 +410,5 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
 
     pub(crate) const fn persistent_open_files(&self) -> &openfiles::OpenFiles {
         &self.open_files
-    }
-}
-
-fn shell_fd_path_to_fd(path: &Path) -> Option<ShellFd> {
-    match path.to_str()? {
-        "/dev/stdin" => return Some(openfiles::OpenFiles::STDIN_FD),
-        "/dev/stdout" => return Some(openfiles::OpenFiles::STDOUT_FD),
-        "/dev/stderr" => return Some(openfiles::OpenFiles::STDERR_FD),
-        _ => {}
-    }
-
-    if let Some(parent) = path.parent()
-        && parent == Path::new("/dev/fd")
-        && let Some(filename) = path.file_name()
-    {
-        filename.to_string_lossy().parse::<ShellFd>().ok()
-    } else {
-        None
     }
 }
