@@ -233,7 +233,7 @@ const fn status_only(mut result: ExecutionResult) -> ExecutionResult {
 
 impl JobManager {
     /// Removes a job a wait has collected, updating the current/previous marks. Its
-    /// status is saved for a later `wait PID` when `keep_status` (see [`SavedStatus`]);
+    /// status is saved for a later `wait PID` when `keep_status` (see `SavedStatus`);
     /// `by_wait_n` marks it as `wait -n`'s, which a plain `wait` forgets.
     pub fn remove_waited_job(&mut self, id: usize, status: u8, keep_status: bool, by_wait_n: bool) {
         let Some(index) = self.jobs.iter().position(|job| job.id == id) else {

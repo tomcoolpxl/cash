@@ -199,6 +199,22 @@ pub fn run_doc_tests(verbose: bool) -> Result<()> {
     Ok(())
 }
 
+/// Builds the documentation of every crate of the workspace, which fails on a link to
+/// something that is not there: the rustdoc lints are errors (`Cargo.toml`), but nothing
+/// ran rustdoc, and ten such links had gathered in four crates by 2026-09-30.
+pub fn run_docs(verbose: bool) -> Result<()> {
+    let sh = Shell::new()?;
+    eprintln!("Building the documentation...");
+    if verbose {
+        eprintln!("Running: cargo doc --workspace --no-deps");
+    }
+    cmd!(sh, "cargo doc --workspace --no-deps")
+        .run()
+        .context("The documentation does not build")?;
+    eprintln!("The documentation builds.");
+    Ok(())
+}
+
 /// Fails with the install command when cargo-nextest is missing, rather than letting
 /// cargo's "no such command" read like a test failure.
 fn require_nextest(sh: &Shell) -> Result<()> {

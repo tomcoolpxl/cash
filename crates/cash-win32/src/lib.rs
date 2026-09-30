@@ -14,13 +14,11 @@
 #[cfg(not(windows))]
 compile_error!("cash builds only on Windows (spec D43)");
 
-/// The processes of cash's jobs, held open so that their pids stay theirs: D22.
 pub mod children;
 pub mod cmd;
 pub mod conin;
 pub mod conpty;
 pub mod console;
-/// The keyboard's Ctrl-Z, which Windows delivers as a key: D19.
 pub mod ctrl_z;
 pub mod env;
 pub mod exit;

@@ -29,7 +29,7 @@ trust its runs, then by what a user notices most.
 | Phase | What | Items |
 | --- | --- | --- |
 | 0 | Release 1.3.0 | what is on `main` |
-| 1 | A test suite that can be trusted | 1.2, 1.3 |
+| 1 | A test suite that can be trusted | 1.3 |
 | 2 | Ctrl-C everywhere | 2.1 to 2.3 |
 | 3 | Process substitution | 3.1, 3.2 |
 | 4 | The `/dev` names and descriptors | 4.1 to 4.5 |
@@ -51,10 +51,6 @@ and let the Scoop bucket pick it up, as RELEASING.md says.
 
 Decided: fix the tests whose timing fault can be named, fence the ConPTY tests, leave the
 ones that cannot be reproduced on a quiet machine, with a note.
-
-### 1.2 `cargo doc -p cash-win32` fails
-
-Reported: four broken doc links in `crates/cash-win32/src/children.rs` and `ctrl_z.rs`.
 
 ### 1.3 Tests that fail when the machine is busy
 

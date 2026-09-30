@@ -22,7 +22,7 @@ pub enum BuildProfile {
 /// Find the workspace root directory.
 ///
 /// This walks up from the xtask crate directory to find the workspace root
-/// (the directory containing the top-level Cargo.toml with [workspace]).
+/// (the directory containing the top-level Cargo.toml with `[workspace]`).
 pub fn find_workspace_root() -> Result<PathBuf> {
     // Start from the xtask crate directory
     let xtask_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));

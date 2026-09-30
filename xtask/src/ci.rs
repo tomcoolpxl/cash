@@ -15,6 +15,7 @@
 //! 1. **Format check** and **Lint check**, as above
 //! 2. **All tests** - The whole workspace, including the tests that drive cash.exe
 //! 3. **Doc tests** - The examples in documentation comments, which nextest does not run
+//! 4. **Documentation** - `cargo doc`, which fails on a link to something that is not there
 //!
 //! The ordering is intentional: fast checks run first to provide quick feedback,
 //! with slower comprehensive tests running last. CI runs `ci full` and then lints
@@ -42,7 +43,7 @@ pub enum CiCommand {
     /// Use this for rapid iteration during development.
     Quick(QuickArgs),
 
-    /// Run the full workflow: fmt, lint, every test, doc tests.
+    /// Run the full workflow: fmt, lint, every test, doc tests, the documentation.
     ///
     /// This is what CI runs on every push.
     Full(FullArgs),
@@ -134,6 +135,7 @@ fn run_full(args: &FullArgs, verbose: bool) -> Result<()> {
         Box::new(move || test::run(&make_integration_test_command(), verbose)),
     ));
     steps.push(("Doc tests", Box::new(move || test::run_doc_tests(verbose))));
+    steps.push(("Documentation", Box::new(move || test::run_docs(verbose))));
 
     run_steps(&steps, args.continue_on_error, "Full checks")
 }

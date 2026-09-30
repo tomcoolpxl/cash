@@ -6,11 +6,11 @@ use crate::{ShellFd, error, openfiles};
 
 /// Extension trait for Unix-like command extensions.
 pub trait CommandExt {
-    /// Sets the zeroth argument (argv[0]) of the command.
+    /// Sets the zeroth argument (`argv[0]`) of the command.
     ///
     /// # Arguments
     ///
-    /// * `arg` - The argument to set as argv[0].
+    /// * `arg` - The argument to set as `argv[0]`.
     fn arg0<S>(&mut self, arg: S) -> &mut Self
     where
         S: AsRef<OsStr>;
