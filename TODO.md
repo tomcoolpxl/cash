@@ -2,17 +2,33 @@
 
 Everything found while working on cash that is not done yet, in one list.
 
-- Work from the top, in the main checkout, one item at a time. **No worktrees and no
-  spawned sessions** for these: what a session finds on the way is added here, not
-  started beside it.
+- Work from the top, in one session, one item at a time: commit, bring `main` up to the
+  commit, take the next. **No further worktrees and no spawned sessions**: what is found
+  on the way is added here, not started beside it.
 - An item says what was seen and what Bash does. A cause is given only where it was
   looked for. "Checked" means the behaviour was reproduced by the session that wrote the
   item down; re-run the script before trusting it, the code has moved since.
 - A done item is deleted, and its commit says what it fixed. Longer notes on a thing that
   stays open belong in `open-issues.md`.
 
-Collected on 2026-09-30 from the sessions that fixed `read` at the console, `/dev/tty`,
-`/dev/stdin` and friends, piped standard input, and two load-sensitive tests.
+Collected on 2026-09-30 from every cash session of that day and the day before: `read`
+at the console, `/dev/tty`, `/dev/stdin` and friends, piped standard input, the
+load-sensitive tests, `kill` and reused pids, `jobs` and `wait`, `top`, `coolfetch`. All
+of their work is in `main`; this file and `open-issues.md` hold what they left open, so
+the sessions themselves are not needed any more.
+
+---
+
+## Waiting for your decision
+
+- **Push and release.** `main` is 32 commits ahead of `origin/main` and of `v1.2.1`, and
+  exists only on this machine. The version in `Cargo.toml` is still 1.2.1. A session
+  asked "push `main` and release this as 1.3.0?" and got no answer. The installed `cash`
+  (Scoop's) shows none of this until a release.
+- **`wait %N` after `jobs` has shown the job.** cash returns the job's status, as the
+  brief for that fix asked; Bash answers `wait: %1: no such job`, 127. Matching Bash is a
+  one-line change in `collect_saved_job` (`open-issues.md` entry 8).
+- Items 3 and 5 below each need a decision before code.
 
 ---
 
@@ -116,7 +132,22 @@ Reported; present before the `/dev` fixes. cash:
 `operation not supported on this platform: fd redirections`, status 1. Bash prints the
 contents of `f`.
 
-## 9. `fuser` and `lsof` are slow on a system DLL
+## 9. `$(jobs)` and `jobs | …` show a finished job as still running
+
+Reported by the session that fixed `jobs` losing a job's status; `open-issues.md`
+entry 8 has the scripts and both outputs.
+
+```bash
+"$X" -c 'exit 3' & sleep 0.5; while [ -n "$(jobs -pr)" ]; do sleep 0.1; done
+```
+
+Bash ends at once; cash never ends. A subshell gets a copy of the job table
+(`Shell::clone`, `JobManager::snapshot`) taken without polling the jobs. `jobs -pr > file`
+in the shell itself is right. Entry 8 lists eight smaller `jobs`/`wait` differences
+beside it (what a plain `wait` forgets, a finished job's number, `wait %5`'s message and
+status, `wait -n -p VAR`, `Done(3)` in POSIX mode).
+
+## 10. `fuser` and `lsof` are slow on a system DLL
 
 Reported, with measurements. `fuser -v kernel32.dll` took 2.5 to 6.5 s alone and 41.8 s
 beside another build. The Restart Manager refuses a system DLL at once, and
@@ -124,7 +155,7 @@ beside another build. The Restart Manager refuses a system DLL at once, and
 (0.9 s idle, up to 14 s under load), and `path_key` opens each module's file to
 canonicalize it (1.3 to 4.9 s). `crates/cash-builtins/src/fileuse.rs`.
 
-## 10. Tests that fail when the machine is busy
+## 11. Tests that fail when the machine is busy
 
 Each failed once in some session's full run (`--retries 0`) while other sessions were
 building, and passed when run alone. Several sessions at once was most of the cause, and
@@ -145,13 +176,13 @@ machine.
 - `git_prompt::git_ps1_shows_the_branch_its_state_and_the_upstream` (timed out)
 - four `cash-sed` tests, `completion_scripts::docker_completion_works`
 - `fuser_lsof::fuser_marks_an_executable_and_a_loaded_module`: given three periods of
-  30 s in `.config/nextest.toml`; item 9 is its cause
+  30 s in `.config/nextest.toml`; item 10 is its cause
 
-## 11. `cargo doc -p cash-win32` fails
+## 12. `cargo doc -p cash-win32` fails
 
 Reported: four broken doc links in `crates/cash-win32/src/children.rs` and `ctrl_z.rs`.
 
-## 12. `stdout_capture` sometimes fails while nextest lists tests, and no test runs
+## 13. `stdout_capture` sometimes fails while nextest lists tests, and no test runs
 
 Seen twice on 2026-09-30, and it passed on the rerun both times. nextest asks each test
 binary for its tests with `--list`; `stdout_capture` of cash-win32 has a harness of its
@@ -159,7 +190,7 @@ own, runs its cases instead, and `the_handle_is_restored_even_if_the_body_panics
 at `crates/cash-win32/tests/stdout_capture.rs:233` with "the panic was swallowed". The
 whole run then ends with exit code 104 before any test has started. Not looked into.
 
-## 13. Small differences left in `read` at a console
+## 14. Small differences left in `read` at a console
 
 None of these is known to bother anyone yet.
 
@@ -172,13 +203,23 @@ None of these is known to bother anyone yet.
 - The console's own line editing (arrow keys, Escape, function keys) is gone from a plain
   `read`, the price of Ctrl-C working there; `read -e` has an editor.
 
-## 14. Small differences left in the `/dev` names
+## 15. Small differences left in the `/dev` names
 
 - `/DEV/STDIN` works in Git Bash and is a path in cash; `/dev/null/` is refused by Bash
   and is still the device in cash.
 - `read x < 'CONIN$'` fails; only the `/dev/tty` name is mapped to the console.
 - `exec 3<>/dev/tty` can be read from but not written to: a console has no one handle
   that is both (spec D7).
+
+## 16. Small things left in `kill` and held processes
+
+From the session that guarded `kill` against reused pids (spec D22).
+
+- Holding a job stopped with Ctrl-Z open has no test of its own: one line calling the
+  tested `hold`, and a test needs the ConPTY harness.
+- Still asked by number, and so open to a reused pid: a pid cash never started as a job's
+  (a foreground command, one read from `ps`), and a job's process pushed out of the held
+  set after 1024 later ones ended.
 
 ---
 
