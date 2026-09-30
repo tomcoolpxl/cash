@@ -13,11 +13,22 @@
               alternating the two forms by accident of content reads worse."
 )]
 
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, Stdio};
 use std::time::Duration;
 
+use cash_win32::JobObject;
 use cash_win32::console::{Escalation, InterruptState, resume_process, suspend_process};
 use cash_win32::process::cpu_time;
+
+/// Puts `child` in a job that closes with the test, so nothing the test started outlives
+/// it. A test that fails between its suspend and its resume never reaches its own `kill`,
+/// and would leave a suspended process behind for good: the job ends it as the test
+/// unwinds.
+fn end_with_the_test(child: &Child) -> JobObject {
+    let job = JobObject::for_pipeline().expect("create job");
+    job.assign_child(child).expect("assign child to job");
+    job
+}
 
 #[test]
 fn the_user_is_the_timer() {
@@ -61,13 +72,19 @@ fn a_fresh_job_starts_gracefully() {
 fn suspend_and_resume_affect_real_threads() {
     // D19: Windows has no SIGSTOP for arbitrary exes, so Ctrl-Z enumerates threads and
     // suspends each — documented APIs only, no NtSuspendProcess.
-    let mut child = Command::new("cmd.exe")
-        .args(["/d", "/s", "/c", "ping -n 30 127.0.0.1 >nul"])
-        .stdin(Stdio::null())
+    //
+    // `findstr` waits for its input, so it lives for as long as the test holds its stdin,
+    // and it starts nothing of its own. `cmd /c ping -n 30` was the child here once:
+    // `kill` ended `cmd` and left its `ping.exe` running for half a minute after the
+    // test, where another test's `pkill ping` could find it.
+    let mut child = Command::new("findstr.exe")
+        .arg("x")
+        .stdin(Stdio::piped())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
         .expect("spawn child");
+    let _job = end_with_the_test(&child);
 
     // Give the process a moment to have threads worth suspending.
     std::thread::sleep(Duration::from_millis(300));
@@ -173,6 +190,7 @@ fn suspension_actually_stops_the_cpu() {
         .stderr(Stdio::null())
         .spawn()
         .expect("spawn cpu burner");
+    let _job = end_with_the_test(&child);
 
     let pid = child.id();
 
