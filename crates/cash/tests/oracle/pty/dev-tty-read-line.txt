@@ -1,0 +1,4 @@
+$ echo piped | { read -t 10 v < /dev/tty; read w; echo "[$v] [$w]"; }
+hello
+[hello] [piped]
+$

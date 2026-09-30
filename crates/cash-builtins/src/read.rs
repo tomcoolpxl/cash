@@ -1312,14 +1312,12 @@ impl ReadCommand {
         shell: &mut cash_core::Shell<SE>,
     ) -> Result<ReadResult, cash_core::Error> {
         let input_file_is_terminal = input_file.is_terminal();
+        let input_file_is_file = matches!(&input_file, cash_core::openfiles::OpenFile::File(_));
 
         // Like Bash, a positive timeout has no effect on regular files. Keep
         // explicit `-t 0`, which is a readiness query even for a file. A console is not
         // a regular file, however it was opened.
-        if matches!(&input_file, cash_core::openfiles::OpenFile::File(_))
-            && !input_file_is_terminal
-            && timeout != Some(Duration::ZERO)
-        {
+        if input_file_is_file && !input_file_is_terminal && timeout != Some(Duration::ZERO) {
             timeout = None;
         }
 
@@ -1376,10 +1374,15 @@ impl ReadCommand {
         // line serves only the read that asks nothing else of it. A timeout could not
         // end its read, and a silent line is collected here as well, where keys are
         // shown only if this shows them, rather than by a second change to the console.
+        //
+        // Nor does it serve a console opened by name, as `< /dev/tty` opens it. Standard
+        // input's line is read as UTF-16 by the standard library; a file's arrives as
+        // bytes in the console's code page, and an older console host hands over none
+        // for a character outside ASCII. The keys are UTF-16 whatever the handle.
         let as_typed = char_limit.is_some() || delimiter != Some(DEFAULT_DELIMITER);
         if input_file_is_terminal
             && !self.editing_requested()
-            && (as_typed || self.silent || timeout.is_some())
+            && (as_typed || self.silent || timeout.is_some() || input_file_is_file)
         {
             reader.read_console_keys(!as_typed, !self.silent);
         }

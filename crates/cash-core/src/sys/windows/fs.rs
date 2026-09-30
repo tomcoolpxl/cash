@@ -194,13 +194,77 @@ pub fn open_null_file() -> Result<std::fs::File, error::Error> {
     Ok(f)
 }
 
-/// Gives the platform an opportunity to handle a special file path (e.g. `/dev/null`).
-pub fn try_open_special_file(path: &Path) -> Option<Result<std::fs::File, std::io::Error>> {
-    if path.ends_with("dev/null") && path.is_absolute() {
-        Some(open_null_file().map_err(std::io::Error::other))
-    } else {
-        None
+/// Opens the console this process is attached to, as `/dev/tty` opens a process's
+/// terminal whatever its standard streams are connected to.
+///
+/// A console is two files where a terminal is one: `CONIN$` is its keys and `CONOUT$`
+/// its screen. Which one `/dev/tty` is depends on what it is opened to do. Opened for
+/// both (`<>`) it is the keys, so such a descriptor can be read from and not written to.
+///
+/// Either is opened with read and write access, whatever is asked for. A screen opened
+/// only to be written cannot be asked for its mode or its size, so `[ -t 1 ]` said it was
+/// no terminal; keys opened only to be read cannot have their mode set, so `read` could
+/// not have a terminal's answer arrive as its escape sequence, and waited out its timeout.
+fn open_console(access: crate::sys::fs::Access) -> std::io::Result<std::fs::File> {
+    use crate::sys::fs::Access;
+
+    let name = match access {
+        Access::Read | Access::ReadWrite => "CONIN$",
+        Access::Write => "CONOUT$",
+    };
+    std::fs::File::options()
+        .read(true)
+        .write(true)
+        .open(name)
+        // The only way this fails is that there is no console: a detached process, or a
+        // service. Bash says the same of a process without a controlling terminal.
+        .map_err(|err| std::io::Error::new(err.kind(), "No such device or address"))
+}
+
+/// The device `path` names under `/dev`, if it names one: `null` for `/dev/null`.
+///
+/// A path names one as a script writes it, `/dev/null`, or as resolving that against a
+/// working directory leaves it, `C:/dev/null`. One level deeper (`/dev/fd/3`) or anywhere
+/// else (`C:/src/dev/null`) it is a file like any other.
+fn device_name(path: &Path) -> Option<&str> {
+    use std::path::Component;
+
+    let mut components = path.components().peekable();
+    components.next_if(|component| matches!(component, Component::Prefix(_)));
+    match (
+        components.next(),
+        components.next(),
+        components.next(),
+        components.next(),
+    ) {
+        (
+            Some(Component::RootDir),
+            Some(Component::Normal(dev)),
+            Some(Component::Normal(name)),
+            None,
+        ) if dev == "dev" => name.to_str(),
+        _ => None,
     }
+}
+
+/// Gives the platform an opportunity to handle a special file path (e.g. `/dev/null`).
+///
+/// `/dev/null` is the null device and `/dev/tty` the console (see `open_console`).
+pub fn try_open_special_file(
+    path: &Path,
+    access: crate::sys::fs::Access,
+) -> Option<Result<std::fs::File, std::io::Error>> {
+    match device_name(path)? {
+        "null" => Some(open_null_file().map_err(std::io::Error::other)),
+        "tty" => Some(open_console(access)),
+        _ => None,
+    }
+}
+
+/// Whether [`try_open_special_file`] handles `path` rather than leaving it to be opened
+/// as a file.
+pub fn is_special_file(path: &Path) -> bool {
+    matches!(device_name(path), Some("null" | "tty"))
 }
 
 /// Returns the default paths where executables are typically found on Windows.
@@ -594,6 +658,61 @@ mod tests {
         assert_eq!(normalized.as_ref(), "c:/foo/bar");
         let normalized = normalize_path_separators(r"c:\foo/bar");
         assert_eq!(normalized.as_ref(), "c:/foo/bar");
+    }
+
+    #[test]
+    fn a_device_is_named_as_written_or_as_resolved_on_any_drive() {
+        assert_eq!(device_name(Path::new("/dev/null")), Some("null"));
+        assert_eq!(device_name(Path::new("/dev/tty")), Some("tty"));
+        assert_eq!(device_name(Path::new("C:/dev/tty")), Some("tty"));
+        assert_eq!(device_name(Path::new(r"d:\dev\tty")), Some("tty"));
+        assert_eq!(
+            device_name(Path::new(r"\\server\share\dev\null")),
+            Some("null")
+        );
+        assert!(is_special_file(Path::new("/dev/tty")));
+        assert!(is_special_file(Path::new("C:/dev/null")));
+    }
+
+    #[test]
+    fn a_file_elsewhere_is_not_a_device() {
+        // A folder of one's own called `dev`, and a name in the folder one is in.
+        assert_eq!(device_name(Path::new("C:/src/dev/null")), None);
+        assert_eq!(device_name(Path::new("dev/tty")), None);
+        assert_eq!(device_name(Path::new("C:dev/tty")), None);
+        assert_eq!(device_name(Path::new("/dev/fd/3")), None);
+        assert_eq!(device_name(Path::new("/dev")), None);
+        assert_eq!(device_name(Path::new("/DEV/tty")), None);
+        // The standard streams are the shell's own descriptors, looked up by the caller.
+        assert_eq!(device_name(Path::new("/dev/stdin")), Some("stdin"));
+        assert!(!is_special_file(Path::new("/dev/stdin")));
+        assert!(
+            try_open_special_file(Path::new("/dev/stdin"), crate::sys::fs::Access::Read).is_none()
+        );
+    }
+
+    #[test]
+    fn the_null_device_opens_whatever_it_is_opened_to_do() {
+        use crate::sys::fs::Access;
+        use std::io::{Read as _, Write as _};
+
+        /// Writes to `/dev/null` opened for `access`, and reads it to its end.
+        fn written_then_read(access: Access) -> std::io::Result<Vec<u8>> {
+            let mut null = try_open_special_file(Path::new("/dev/null"), access)
+                .ok_or(std::io::ErrorKind::NotFound)??;
+            null.write_all(b"discarded")?;
+            let mut read = Vec::new();
+            null.read_to_end(&mut read)?;
+            Ok(read)
+        }
+
+        for access in [Access::Read, Access::Write, Access::ReadWrite] {
+            assert_eq!(
+                written_then_read(access).ok(),
+                Some(Vec::new()),
+                "{access:?}"
+            );
+        }
     }
 
     #[test]

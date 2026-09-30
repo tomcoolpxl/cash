@@ -276,7 +276,7 @@ shebang sniffing, no `set -o` switch.
 
 Always on:
 
-- `/dev/null`, `/dev/stdin`, `/dev/stdout`, `/dev/stderr`, `/dev/fd/N`
+- `/dev/null`, `/dev/tty`, `/dev/stdin`, `/dev/stdout`, `/dev/stderr`, `/dev/fd/N`
 - CRLF tolerated in script parsing (D20 covers CRLF in *data*)
 - UTF-8 BOM stripped from scripts (D41)
 - Virtual `/usr/bin/env`, so `#!/usr/bin/env bash` resolves with no fake filesystem
@@ -304,6 +304,23 @@ device explicitly (`\\.\NUL`), bypassing D29's prefix rule for this specific map
 Consequence, and it is consistent rather than accidental: `> /dev/null` discards, while
 `> NUL` creates a file called `NUL` (D28). A POSIX script means the former; only a
 Windows-ism means the latter.
+
+**`/dev/tty` is the console, which is two files.** A script whose input or output is a
+pipe talks to the terminal by name, the usual form of a terminal query:
+
+```
+printf '\033[16t' > /dev/tty
+IFS= read -rs -t 2 -d t reply < /dev/tty
+```
+
+A terminal is one file; a console's keys are `CONIN$` and its screen `CONOUT$`. So what
+`/dev/tty` opens depends on what it is opened to do: the keys for `<`, the screen for
+`>`, `>>` and `&>`. Opened for both (`<>`) it is the keys, and cannot be written to.
+Without a console (a detached process, a service) the redirection fails with Bash's
+words for a process without a controlling terminal, `No such device or address`.
+
+Both names are devices only at `/dev`, as written or on whatever drive the working
+directory is: `C:/src/dev/null` is a file.
 
 ### D8 — Command resolution is cash's own
 

@@ -296,6 +296,27 @@ const CASES: &[Case] = &[
         name: "read-t-line",
         keys: &["read -t 10 v; echo \"[$v] rc=$?\"\r", "helx\x7flo\r"],
     },
+    // `/dev/tty` is the terminal whatever the standard streams are connected to: read
+    // while input is a pipe, its keys taken as `read` asks for them, and written to while
+    // output goes elsewhere.
+    Case {
+        name: "dev-tty-read-line",
+        keys: &[
+            "echo piped | { read -t 10 v < /dev/tty; read w; echo \"[$v] [$w]\"; }\r",
+            "helx\x7flo\r",
+        ],
+    },
+    Case {
+        name: "dev-tty-read-answer",
+        keys: &[
+            "echo piped | { IFS= read -rs -t 10 -d t v < /dev/tty; printf '%q rc=%s\\n' \"$v\" \"$?\"; }\r",
+            "\x1b[6;20;10t",
+        ],
+    },
+    Case {
+        name: "dev-tty-write",
+        keys: &["{ echo shown > /dev/tty; echo hidden; } > /dev/null; echo \"rc=$?\"\r"],
+    },
     // A job that finishes during a builtin, with another started on the same line: its
     // `Done` is still reported, and the new job does not take its id.
     Case {

@@ -1,0 +1,4 @@
+$ { echo shown > /dev/tty; echo hidden; } > /dev/null; echo "rc=$?"
+shown
+rc=0
+$

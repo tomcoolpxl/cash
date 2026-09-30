@@ -2140,10 +2140,12 @@ pub(crate) async fn setup_redirect(
                         return Err(error::ErrorKind::InvalidRedirection.into());
                     }
 
+                    let written_file_path = expanded_fields.remove(0);
                     let expanded_file_path: PathBuf =
-                        shell.absolute_path(Path::new(expanded_fields.remove(0).as_str()));
+                        shell.absolute_path(Path::new(written_file_path.as_str()));
 
                     let default_fd_if_unspecified = get_default_fd_for_redirect_kind(kind);
+                    let access = get_access_for_redirect_kind(kind);
                     match kind {
                         ast::IoFileRedirectKind::Read => {
                             options.read(true);
@@ -2193,10 +2195,10 @@ pub(crate) async fn setup_redirect(
                     let fd_num = specified_fd_num.unwrap_or(default_fd_if_unspecified);
 
                     let opened_file = shell
-                        .open_file(&options, &expanded_file_path, params)
+                        .open_file(&options, access, &expanded_file_path, params)
                         .map_err(|err| {
                             error::ErrorKind::RedirectionFailure(
-                                expanded_file_path.to_string_lossy().to_string(),
+                                redirect_target_name(&written_file_path, &expanded_file_path),
                                 err.to_string(),
                             )
                         })?;
@@ -2439,10 +2441,15 @@ fn setup_redirect_output_and_error_to(
         .append(append);
 
     let stdout_file = shell
-        .open_file(&file_options, &abs_file_path, params)
+        .open_file(
+            &file_options,
+            sys::fs::Access::Write,
+            &abs_file_path,
+            params,
+        )
         .map_err(|err| {
             error::ErrorKind::RedirectionFailure(
-                abs_file_path.to_string_lossy().to_string(),
+                redirect_target_name(file_path, &abs_file_path),
                 err.to_string(),
             )
         })?;
@@ -2453,6 +2460,31 @@ fn setup_redirect_output_and_error_to(
     params.open_files.set_fd(OpenFiles::STDERR_FD, stderr_file);
 
     Ok(())
+}
+
+/// The name a redirection's target goes by when it cannot be opened: the path it was
+/// resolved to, or for a device the name as it was written. `/dev/tty` resolves to
+/// `C:/dev/tty` on its way to being opened, and no such file was ever looked for.
+fn redirect_target_name(written: &str, resolved: &Path) -> String {
+    if sys::fs::is_special_file(resolved) {
+        written.to_owned()
+    } else {
+        resolved.to_string_lossy().to_string()
+    }
+}
+
+/// What a redirection of the given kind opens its file to do.
+const fn get_access_for_redirect_kind(kind: &ast::IoFileRedirectKind) -> sys::fs::Access {
+    match kind {
+        ast::IoFileRedirectKind::Read | ast::IoFileRedirectKind::DuplicateInput => {
+            sys::fs::Access::Read
+        }
+        ast::IoFileRedirectKind::Write
+        | ast::IoFileRedirectKind::Append
+        | ast::IoFileRedirectKind::Clobber
+        | ast::IoFileRedirectKind::DuplicateOutput => sys::fs::Access::Write,
+        ast::IoFileRedirectKind::ReadAndWrite => sys::fs::Access::ReadWrite,
+    }
 }
 
 const fn get_default_fd_for_redirect_kind(kind: &ast::IoFileRedirectKind) -> ShellFd {
