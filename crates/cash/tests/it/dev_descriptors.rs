@@ -160,6 +160,20 @@ fn a_program_writes_to_the_stream_named() {
     assert_eq!(left.stderr, "");
 }
 
+/// The same where the streams are the ones the shell was started with, which a program
+/// is handed by another way than a file or a pipe of the script's.
+#[test]
+fn a_program_writes_to_the_shells_own_stream_named() {
+    let left = cash_given(
+        "",
+        r#"cmd.exe /d /c "echo from a program" > /dev/stderr
+cmd.exe /d /c "echo its errors 1>&2" 2> /dev/stdout"#,
+    );
+
+    assert_eq!(left.stdout.trim_end(), "its errors");
+    assert_eq!(left.stderr.trim_end(), "from a program");
+}
+
 /// `> /dev/stderr` in a function whose standard error the caller redirected goes where
 /// the caller sent it, as `>&2` would.
 #[test]
