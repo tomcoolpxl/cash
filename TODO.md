@@ -29,7 +29,7 @@ trust its runs, then by what a user notices most.
 | Phase | What | Items |
 | --- | --- | --- |
 | 0 | Release 1.3.0 | what is on `main` |
-| 1 | A test suite that can be trusted | 1.1 to 1.3 |
+| 1 | A test suite that can be trusted | 1.2, 1.3 |
 | 2 | Ctrl-C everywhere | 2.1 to 2.3 |
 | 3 | Process substitution | 3.1, 3.2 |
 | 4 | The `/dev` names and descriptors | 4.1 to 4.5 |
@@ -51,14 +51,6 @@ and let the Scoop bucket pick it up, as RELEASING.md says.
 
 Decided: fix the tests whose timing fault can be named, fence the ConPTY tests, leave the
 ones that cannot be reproduced on a quiet machine, with a note.
-
-### 1.1 `stdout_capture` sometimes fails while nextest lists tests, and no test runs
-
-Seen twice on 2026-09-30, and it passed on the rerun both times. nextest asks each test
-binary for its tests with `--list`; `stdout_capture` of cash-win32 has a harness of its
-own, runs its cases instead, and `the_handle_is_restored_even_if_the_body_panics` fails
-at `crates/cash-win32/tests/stdout_capture.rs:233` with "the panic was swallowed". The
-whole run then ends with exit code 104 before any test has started. Not looked into.
 
 ### 1.2 `cargo doc -p cash-win32` fails
 

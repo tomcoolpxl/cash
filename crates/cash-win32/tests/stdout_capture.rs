@@ -223,6 +223,7 @@ fn stdout_still_works_after_a_capture() {
 
 fn the_handle_is_restored_even_if_the_body_panics() {
     let _guard = exclusive();
+    let before = capture_files_outstanding();
     // The panic is the point; keep its message out of the output.
     let hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(|_| {}));
@@ -236,6 +237,36 @@ fn the_handle_is_restored_even_if_the_body_panics() {
     let ((), captured) =
         with_captured_stdout(|| write_stdout(b"after panic").unwrap()).expect("capture failed");
     assert_eq!(String::from_utf8(captured).unwrap(), "after panic");
+
+    // Each run of this case used to leave its file in the temp directory.
+    assert_eq!(
+        capture_files_outstanding(),
+        before,
+        "the capture that panicked left its file behind"
+    );
+}
+
+fn a_file_left_under_this_pid_does_not_stop_a_capture() {
+    // Windows hands a pid out again soon after its process ends, and a capture's file is
+    // named by pid and a count. A file an earlier process left under this one's pid (it
+    // was killed, or an older cash's capture panicked) made the capture fail: the body
+    // did not run, and `the_handle_is_restored_even_if_the_body_panics` reported "the
+    // panic was swallowed" on the runs where that happened.
+    let _guard = exclusive();
+    let pid = std::process::id();
+    let leftovers: Vec<_> = (0..64)
+        .map(|n| std::env::temp_dir().join(format!("cash-capture-{pid}-{n}.tmp")))
+        .filter(|path| std::fs::write(path, b"left by another process").is_ok())
+        .collect();
+    assert!(!leftovers.is_empty(), "no leftover could be made");
+
+    let captured = with_captured_stdout(|| write_stdout(b"mine").unwrap());
+    for path in &leftovers {
+        let _ = std::fs::remove_file(path);
+    }
+
+    let ((), captured) = captured.expect("a leftover under this pid stopped the capture");
+    assert_eq!(String::from_utf8(captured).unwrap(), "mine");
 }
 
 fn captures_do_not_leave_temp_files_behind() {
@@ -253,13 +284,14 @@ fn captures_do_not_leave_temp_files_behind() {
     );
 }
 
-/// Runs every case in turn, without libtest.
+/// Runs the cases asked for in turn, all of them by default, without libtest.
 ///
 /// A capture redirects the whole process's standard output, and libtest prints each
 /// finished test's result from its own thread, so under the harness another test's
 /// `ok` landed inside a capture (`"captured line\nok\n"` on GitHub's runner). This
 /// binary is built with `harness = false` so that nothing else writes to standard output
-/// while a capture is open; progress goes to standard error.
+/// while a capture is open; progress goes to standard error. It lists its cases and runs
+/// one by name as libtest's harness would (see [`Request`]), which is what nextest asks.
 fn main() {
     let cases: &[(&str, fn())] = &[
         (
@@ -323,14 +355,87 @@ fn main() {
             the_handle_is_restored_even_if_the_body_panics,
         ),
         (
+            "a_file_left_under_this_pid_does_not_stop_a_capture",
+            a_file_left_under_this_pid_does_not_stop_a_capture,
+        ),
+        (
             "captures_do_not_leave_temp_files_behind",
             captures_do_not_leave_temp_files_behind,
         ),
     ];
-    for (name, case) in cases {
+
+    let request = Request::from_args(std::env::args().skip(1));
+    if request.list {
+        // Nothing here is ignored, so that listing is empty.
+        if !request.ignored {
+            for (name, _) in cases {
+                println!("{name}: test");
+            }
+        }
+        return;
+    }
+
+    let chosen: Vec<_> = cases
+        .iter()
+        .filter(|(name, _)| !request.ignored && request.wants(name))
+        .collect();
+    for (name, case) in &chosen {
         eprint!("test {name} ... ");
         case();
         eprintln!("ok");
     }
-    eprintln!("{} capture cases passed", cases.len());
+    eprintln!("{} capture cases passed", chosen.len());
+}
+
+/// What the command line asks of this binary, in the words libtest's own harness takes.
+///
+/// cargo-nextest asks every test binary for its tests (`--list --format terse`, and again
+/// with `--ignored`), and then runs each in a process of its own (`NAME --exact
+/// --nocapture`). This binary answered neither: it ran every case whenever it was started,
+/// so they ran twice while nextest was listing, showed up in no report, and one that
+/// failed ended the whole run before a single test had started (exit code 104,
+/// 2026-09-30).
+struct Request {
+    list: bool,
+    ignored: bool,
+    exact: bool,
+    names: Vec<String>,
+}
+
+impl Request {
+    fn from_args(args: impl Iterator<Item = String>) -> Self {
+        let mut request = Self {
+            list: false,
+            ignored: false,
+            exact: false,
+            names: Vec::new(),
+        };
+        let mut args = args;
+        while let Some(arg) = args.next() {
+            match arg.as_str() {
+                "--list" => request.list = true,
+                "--ignored" => request.ignored = true,
+                "--exact" => request.exact = true,
+                // Options with a value of their own, which is not a test's name.
+                "--format" | "--color" | "--test-threads" | "--skip" | "--logfile" | "-Z" => {
+                    args.next();
+                }
+                option if option.starts_with('-') => {}
+                name => request.names.push(name.to_owned()),
+            }
+        }
+        request
+    }
+
+    /// Whether the case called `name` is asked for: all of them are when none is named.
+    fn wants(&self, name: &str) -> bool {
+        self.names.is_empty()
+            || self.names.iter().any(|asked| {
+                if self.exact {
+                    asked == name
+                } else {
+                    name.contains(asked.as_str())
+                }
+            })
+    }
 }

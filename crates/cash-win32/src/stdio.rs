@@ -33,6 +33,7 @@ use std::path::Path;
 use std::sync::atomic::{AtomicPtr, Ordering};
 
 use windows_sys::Win32::Foundation::{ERROR_INVALID_HANDLE, HANDLE, INVALID_HANDLE_VALUE};
+use windows_sys::Win32::Storage::FileSystem::FILE_FLAG_DELETE_ON_CLOSE;
 use windows_sys::Win32::System::Console::{
     GetConsoleMode, GetStdHandle, STD_OUTPUT_HANDLE, SetStdHandle,
 };
@@ -161,16 +162,28 @@ pub fn write_stdout(bytes: &[u8]) -> std::io::Result<()> {
 /// The bundled dispatcher calls this once, before any shell state or task runtime
 /// exists, which is why that is not a constraint in practice.
 ///
+/// The file is one Windows deletes when its handle is closed, so none is left behind
+/// however the capture ends: a `body` that panics, one that exits the process, a process
+/// that is killed. A body that panicked used to leave its file, and a later process that
+/// was given the same pid then found the name taken and could not capture: a bundled
+/// tool ran without its paths rendered, and the test of this failed now and then
+/// (2026-09-30). A name this process makes is this process's, so a file already there is
+/// a leftover and is written over.
+///
 /// # Errors
 ///
 /// Returns an error if the temporary file cannot be created or read, or if the standard
 /// handle cannot be replaced. In that case `body` is not run.
 pub fn with_captured_stdout<T>(body: impl FnOnce() -> T) -> std::io::Result<(T, Vec<u8>)> {
+    use std::os::windows::fs::OpenOptionsExt as _;
+
     let path = capture_file_path();
     let mut file = std::fs::OpenOptions::new()
-        .create_new(true)
+        .create(true)
+        .truncate(true)
         .read(true)
         .write(true)
+        .custom_flags(FILE_FLAG_DELETE_ON_CLOSE)
         .open(&path)?;
 
     // Whatever is already buffered belongs to the real standard output, not to the
@@ -184,10 +197,7 @@ pub fn with_captured_stdout<T>(body: impl FnOnce() -> T) -> std::io::Result<(T, 
     // after `RestoreStdout` has put `saved` back. `SetStdHandle` stores the value and
     // does not take ownership of it.
     if unsafe { SetStdHandle(STD_OUTPUT_HANDLE, file.as_raw_handle() as HANDLE) } == 0 {
-        let error = std::io::Error::last_os_error();
-        drop(file);
-        let _ = std::fs::remove_file(&path);
-        return Err(error);
+        return Err(std::io::Error::last_os_error());
     }
 
     let value = {
@@ -202,8 +212,6 @@ pub fn with_captured_stdout<T>(body: impl FnOnce() -> T) -> std::io::Result<(T, 
     file.rewind()?;
     let mut captured = Vec::new();
     file.read_to_end(&mut captured)?;
-    drop(file);
-    let _ = std::fs::remove_file(&path);
 
     Ok((value, captured))
 }
