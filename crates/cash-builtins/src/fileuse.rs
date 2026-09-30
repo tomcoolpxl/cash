@@ -264,9 +264,17 @@ mod tests {
     fn a_loaded_dll_is_mapped() {
         let root = std::env::var_os("SystemRoot").unwrap();
         let kernel32 = Path::new(&root).join(r"System32\kernel32.dll");
-        let found = file_holders(&kernel32).unwrap();
-        let me = found.iter().find(|h| h.pid == std::process::id()).unwrap();
-        assert_eq!(me.access, Access::Mapped);
+        // Asked of this process alone. The Restart Manager cannot answer for a system
+        // DLL, so `file_holders` reads the module list of every process on the machine
+        // and resolves each module's path: 15,000 modules in 290 processes here, 2 to
+        // 3 s on an idle machine and past nextest's 15 s on a busy one. `fuser` on a
+        // system DLL (fuser_lsof.rs) is the one test that makes that walk.
+        let access = classify(
+            std::process::id(),
+            &path_key(&kernel32),
+            &mut HashMap::new(),
+        );
+        assert_eq!(access, Access::Mapped);
     }
 
     #[test]
