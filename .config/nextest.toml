@@ -34,6 +34,13 @@ threads-required = "num-test-threads"
 filter = 'binary(it) and test(=job_groups::at_the_prompt_a_background_job_survives_ctrl_c)'
 threads-required = "num-test-threads"
 
+# Spins two threads per processor for a tenth of a second, to make a processor queue it
+# can count. It runs alone, rather than take every core from the timing-bound tests that
+# would otherwise run beside it.
+[[profile.default.overrides]]
+filter = 'package(cash-win32) and test(=sysinfo::tests::more_busy_threads_than_processors_make_a_queue)'
+threads-required = "num-test-threads"
+
 # Each starts PowerShell once or twice, and each compiles a C# helper: 2 to 5 s on an idle
 # machine.
 [[profile.default.overrides]]
