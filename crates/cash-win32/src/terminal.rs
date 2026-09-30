@@ -83,6 +83,18 @@ pub fn fragment_files(local_app_data: &Path, program_data: Option<&Path>) -> Vec
 /// it, then [`DEFAULT_FONT`]. Of several Terminal installs, the one whose settings list
 /// the profile is read.
 pub fn profile_font(local_app_data: &Path, program_data: Option<&Path>, guid: &str) -> String {
+    profile_setting(local_app_data, program_data, guid, face_of)
+        .unwrap_or_else(|| DEFAULT_FONT.to_owned())
+}
+
+/// One setting of the profile `guid`, as `setting` reads it from a profile's entry,
+/// resolved the way [`profile_font`] describes.
+fn profile_setting(
+    local_app_data: &Path,
+    program_data: Option<&Path>,
+    guid: &str,
+    setting: fn(&Value) -> Option<String>,
+) -> Option<String> {
     let guid = guid.to_ascii_lowercase();
     let settings: Vec<Value> = settings_files(local_app_data)
         .iter()
@@ -98,8 +110,8 @@ pub fn profile_font(local_app_data: &Path, program_data: Option<&Path>, guid: &s
         let defaults = install
             .get("profiles")
             .and_then(|profiles| profiles.get("defaults"));
-        if let Some(face) = own.and_then(face_of).or_else(|| defaults.and_then(face_of)) {
-            return face;
+        if let Some(found) = own.and_then(setting).or_else(|| defaults.and_then(setting)) {
+            return Some(found);
         }
     }
     for fragment in fragment_files(local_app_data, program_data) {
@@ -109,18 +121,208 @@ pub fn profile_font(local_app_data: &Path, program_data: Option<&Path>, guid: &s
         else {
             continue;
         };
-        let face = fragment
+        let found = fragment
             .get("profiles")
             .and_then(Value::as_array)
             .into_iter()
             .flatten()
             .filter(|profile| names(profile, &guid) || updates(profile, &guid))
-            .find_map(face_of);
-        if let Some(face) = face {
-            return face;
+            .find_map(setting);
+        if found.is_some() {
+            return found;
         }
     }
-    DEFAULT_FONT.to_owned()
+    None
+}
+
+/// How many times as tall as wide the character cells of the profile `guid` are, or
+/// `None` when that cannot be worked out.
+///
+/// Terminal makes a cell as wide as the font's `0` and as tall as its line, unless the
+/// profile's `font.cellWidth` or `font.cellHeight` says otherwise, and no terminal can be
+/// asked the size of its cells in real pixels: Terminal answers `CSI 16 t` with the 10x20
+/// of its sixel grid. A picture is drawn over that grid and stretched onto the real cells,
+/// so this is what decides its shape on the screen. With Terminal's own spacing a cell is
+/// about twice as tall as wide; `"cellHeight": "1.4"` makes it some 2.4 times.
+pub fn profile_cell_ratio(
+    local_app_data: &Path,
+    program_data: Option<&Path>,
+    guid: &str,
+) -> Option<f64> {
+    let face = profile_font(local_app_data, program_data, guid);
+    let height = profile_setting(local_app_data, program_data, guid, cell_height_of);
+    let width = profile_setting(local_app_data, program_data, guid, cell_width_of);
+    cell_ratio(height.as_deref(), width.as_deref(), || {
+        font_cell(face.split(',').next().unwrap_or_default().trim())
+    })
+}
+
+/// A cell's height over its width, from the profile's two settings where it has them and
+/// the font's own `(line height, advance)` in ems where it has not.
+///
+/// A setting is a multiple of the font size, as Terminal's settings page writes it
+/// (`"1.4"`). One with a unit (`"20px"`) would need the font's size and the display's
+/// scale as well, and gives `None`, as does a shape no font has. A font that cannot be
+/// measured is taken to be like most monospaced ones ([`TYPICAL_CELL`]), which is near
+/// enough to tell a profile with extra line spacing from one without.
+fn cell_ratio(
+    height: Option<&str>,
+    width: Option<&str>,
+    font: impl FnOnce() -> Option<(f64, f64)>,
+) -> Option<f64> {
+    let ems = |setting: Option<&str>| match setting {
+        Some(text) => text.trim().parse::<f64>().ok().map(Some),
+        None => Some(None),
+    };
+    let (height, width) = (ems(height)?, ems(width)?);
+    let (height, width) = match (height, width) {
+        (Some(height), Some(width)) => (height, width),
+        (height, width) => {
+            let (line, advance) = font().unwrap_or(TYPICAL_CELL);
+            (height.unwrap_or(line), width.unwrap_or(advance))
+        }
+    };
+    let ratio = height / width;
+    (width > 0.0 && (1.0..=4.0).contains(&ratio)).then_some(ratio)
+}
+
+/// The line height and advance, in ems, that monospaced fonts are near: Consolas is 1.17
+/// and 0.55, Cascadia Mono 1.16 and 0.59, Ubuntu Sans Mono 1.12 and 0.56.
+const TYPICAL_CELL: (f64, f64) = (1.17, 0.57);
+
+/// A font's line height and the advance of its `0`, in ems: the cell Terminal gives it
+/// when the profile sets neither. `None` when Windows has no font of that name.
+///
+/// Terminal names a font by its family (`UbuntuSansMono Nerd Font Mono`); GDI, asked
+/// here, knows a Nerd Fonts 3 family by the short name it registers
+/// (`UbuntuSansMono NFM`), so that is tried as well.
+pub fn font_cell(face: &str) -> Option<(f64, f64)> {
+    let short = [
+        (" Nerd Font Mono", " NFM"),
+        (" Nerd Font Propo", " NFP"),
+        (" Nerd Font", " NF"),
+    ]
+    .iter()
+    .find_map(|(long, short)| Some(format!("{}{short}", face.strip_suffix(long)?)));
+    measured_cell(face).or_else(|| short.as_deref().and_then(measured_cell))
+}
+
+/// [`font_cell`] for the one name GDI knows the font under.
+fn measured_cell(face: &str) -> Option<(f64, f64)> {
+    use windows_sys::Win32::Graphics::Gdi::{
+        CLIP_DEFAULT_PRECIS, CreateCompatibleDC, CreateFontW, DEFAULT_CHARSET, DEFAULT_QUALITY,
+        DeleteDC, DeleteObject, FW_NORMAL, GetCharWidth32W, GetTextFaceW, OUT_DEFAULT_PRECIS,
+        SelectObject,
+    };
+
+    // LOGFONT's face name holds 31 UTF-16 units and a NUL.
+    let name: Vec<u16> = face.encode_utf16().collect();
+    if name.is_empty() || name.len() > 31 {
+        return None;
+    }
+    let wide: Vec<u16> = name.iter().copied().chain(std::iter::once(0)).collect();
+    // SAFETY: a memory device context, which needs no screen; deleted below.
+    let dc = unsafe { CreateCompatibleDC(std::ptr::null_mut()) };
+    if dc.is_null() {
+        return None;
+    }
+    // SAFETY: the face name is NUL-terminated; a negative height asks for that em size.
+    let font = unsafe {
+        CreateFontW(
+            -EM,
+            0,
+            0,
+            0,
+            FW_NORMAL.cast_signed(),
+            0,
+            0,
+            0,
+            u32::from(DEFAULT_CHARSET),
+            u32::from(OUT_DEFAULT_PRECIS),
+            u32::from(CLIP_DEFAULT_PRECIS),
+            u32::from(DEFAULT_QUALITY),
+            0,
+            wide.as_ptr(),
+        )
+    };
+    let mut cell = None;
+    if !font.is_null() {
+        // SAFETY: both handles were created above; the font stays selected until the
+        // context is deleted, which is before the font is.
+        unsafe { SelectObject(dc, font) };
+        let mut chosen = [0u16; 32];
+        // SAFETY: `chosen` holds the 32 units it is said to.
+        let length = unsafe { GetTextFaceW(dc, 32, chosen.as_mut_ptr()) };
+        // GDI substitutes a font it does have for one it has not, without saying so.
+        let chosen = chosen
+            .get(..usize::try_from(length).unwrap_or(0).saturating_sub(1))
+            .unwrap_or_default();
+        let same = String::from_utf16_lossy(chosen).eq_ignore_ascii_case(face);
+        let mut advance = 0i32;
+        let zero = u32::from(b'0');
+        // SAFETY: the context has the font selected; the range asked for is the one
+        // character `advance` has room for.
+        let spaced = unsafe { GetCharWidth32W(dc, zero, zero, &raw mut advance) } != 0;
+        if let Some(line) = line_height(dc).filter(|_| same && spaced && advance > 0) {
+            let em = f64::from(EM);
+            cell = Some((f64::from(line) / em, f64::from(advance) / em));
+        }
+    }
+    // SAFETY: the context came from CreateCompatibleDC above and is deleted once, before
+    // the font, which is then selected into nothing.
+    unsafe { DeleteDC(dc) };
+    if !font.is_null() {
+        // SAFETY: the font came from CreateFontW above and is deleted once.
+        unsafe { DeleteObject(font) };
+    }
+    cell
+}
+
+/// The units to the em a font is measured at, large enough that the rounding of its
+/// metrics to whole units does not show.
+const EM: i32 = 2048;
+
+/// The height of a line of the font selected into `dc`, as Terminal takes it.
+///
+/// A font says which of its two sets of metrics makes its line: with `USE_TYPO_METRICS`
+/// set, bit 7 of `fsSelection`, it is the typographic ascent, descent and line gap, and
+/// DirectWrite, which Terminal draws with, honours that. GDI's text metrics never do: for
+/// Cascadia Mono they make a line a seventh taller than the one Terminal draws.
+fn line_height(dc: windows_sys::Win32::Graphics::Gdi::HDC) -> Option<i32> {
+    use windows_sys::Win32::Graphics::Gdi::{
+        GetOutlineTextMetricsW, GetTextMetricsW, OUTLINETEXTMETRICW, TEXTMETRICW,
+    };
+
+    const USE_TYPO_METRICS: u32 = 1 << 7;
+    // SAFETY: with no buffer, this only says how large the structure and the strings
+    // after it are; zero for a font that is not an outline font.
+    let size = unsafe { GetOutlineTextMetricsW(dc, 0, std::ptr::null_mut()) };
+    let length = usize::try_from(size).unwrap_or(0);
+    if length >= std::mem::size_of::<OUTLINETEXTMETRICW>() {
+        // In `u64`s, so that the structure in it is aligned.
+        let mut buffer = vec![0u64; length.div_ceil(8)];
+        let outline = buffer.as_mut_ptr().cast::<OUTLINETEXTMETRICW>();
+        // SAFETY: the buffer holds the `size` bytes it is said to.
+        let written = unsafe { GetOutlineTextMetricsW(dc, size, outline) };
+        if written != 0 {
+            // SAFETY: GDI has filled the structure, in a buffer large and aligned enough
+            // for it, which outlives this reference.
+            let outline = unsafe { &*outline };
+            let text = &outline.otmTextMetrics;
+            return Some(if outline.otmfsSelection & USE_TYPO_METRICS == 0 {
+                text.tmHeight + text.tmExternalLeading
+            } else {
+                outline.otmAscent
+                    + outline.otmDescent.abs()
+                    + i32::try_from(outline.otmLineGap).unwrap_or(0)
+            });
+        }
+    }
+    // SAFETY: TEXTMETRICW is plain data and valid all zeros.
+    let mut text: TEXTMETRICW = unsafe { std::mem::zeroed() };
+    // SAFETY: the context has a font selected, and `text` is a valid out-parameter.
+    let measured = unsafe { GetTextMetricsW(dc, &raw mut text) } != 0;
+    measured.then_some(text.tmHeight + text.tmExternalLeading)
 }
 
 /// The profiles a `settings.json` lists: `profiles.list`, or `profiles` itself in the
@@ -158,6 +360,26 @@ fn face_of(profile: &Value) -> Option<String> {
         .and_then(Value::as_str)
         .map(str::trim)
         .filter(|face| !face.is_empty())
+        .map(str::to_owned)
+}
+
+/// A profile's `font.cellHeight`: its line height, where it overrides the font's.
+fn cell_height_of(profile: &Value) -> Option<String> {
+    font_text(profile, "cellHeight")
+}
+
+/// A profile's `font.cellWidth`: its cell width, where it overrides the font's.
+fn cell_width_of(profile: &Value) -> Option<String> {
+    font_text(profile, "cellWidth")
+}
+
+fn font_text(profile: &Value, key: &str) -> Option<String> {
+    profile
+        .get("font")
+        .and_then(|font| font.get(key))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|text| !text.is_empty())
         .map(str::to_owned)
 }
 
@@ -779,6 +1001,85 @@ mod tests {
         assert_eq!(profile_font(&local, None, GUID), DEFAULT_FONT);
 
         for name in ["own", "defaults", "fragment", "none"] {
+            let _ = std::fs::remove_dir_all(
+                std::env::temp_dir().join(format!("cash-win32-terminal-{name}")),
+            );
+        }
+    }
+
+    #[test]
+    fn a_cell_is_the_fonts_own_unless_the_profile_says() {
+        // Ubuntu Sans Mono's line and the advance of its `0`, in ems.
+        let font = || Some((1.121, 0.56));
+        let close = |ratio: Option<f64>, to: f64| ratio.is_some_and(|r| (r - to).abs() < 0.005);
+
+        assert!(close(cell_ratio(None, None, font), 2.002));
+        // `"cellHeight": "1.4"`, the line spacing that makes a picture come out narrow.
+        assert!(close(cell_ratio(Some("1.4"), None, font), 2.5));
+        assert!(close(cell_ratio(None, Some(" 0.6 "), font), 1.868));
+        // With both set the font is not asked.
+        assert!(close(cell_ratio(Some("1.2"), Some("0.6"), || None), 2.0));
+        // A font that cannot be measured is taken to be a typical one: extra line
+        // spacing still shows, and its absence still does not.
+        assert!(close(cell_ratio(Some("1.4"), None, || None), 2.456));
+        assert!(close(cell_ratio(None, None, || None), 2.053));
+        // A length with a unit would need the font's size too.
+        assert_eq!(cell_ratio(Some("20px"), None, font), None);
+        // No font has cells like these.
+        assert_eq!(cell_ratio(Some("9"), None, font), None);
+        assert_eq!(cell_ratio(Some("1.2"), Some("0"), font), None);
+    }
+
+    #[test]
+    fn this_machines_consolas_has_a_cell_about_twice_as_tall_as_wide() {
+        let (line, advance) = font_cell("Consolas").unwrap_or_default();
+        assert!((1.1..1.3).contains(&line), "line {line}");
+        assert!((0.5..0.6).contains(&advance), "advance {advance}");
+        // GDI draws a font it does not have in one it does, and must not be believed.
+        assert_eq!(font_cell("No Such Font Anywhere"), None);
+        assert_eq!(font_cell("No Such Nerd Font Mono"), None);
+        assert_eq!(font_cell(""), None);
+    }
+
+    #[test]
+    fn a_line_is_as_tall_as_terminal_draws_it_not_as_gdi_reports_it() {
+        // Cascadia Mono, where Windows has it, sets USE_TYPO_METRICS: its line is 1.16
+        // ems, and GDI's text metrics say 1.32, which would make an ordinary profile look
+        // like one with extra line spacing.
+        if let Some((line, advance)) = font_cell("Cascadia Mono") {
+            assert!((1.1..1.25).contains(&line), "line {line}");
+            assert!((1.9..2.1).contains(&(line / advance)), "{}", line / advance);
+        }
+    }
+
+    #[test]
+    fn a_profiles_cell_comes_from_its_entry_then_defaults_then_its_fragment() {
+        let fragment = format!(
+            r#"{{ "profiles": [ {{ "guid": "{GUID}", "font": {{ "cellHeight": "1.6", "cellWidth": "0.5" }} }} ] }}"#
+        );
+        let close = |ratio: Option<f64>, to: f64| ratio.is_some_and(|r| (r - to).abs() < 0.005);
+
+        // The height from the profile's own entry, the width from profiles.defaults.
+        let own = format!(
+            r#"{{ "profiles": {{ "defaults": {{ "font": {{ "cellHeight": "1.2", "cellWidth": "0.6" }} }}, "list": [ {{ "guid": "{GUID}", "font": {{ "cellHeight": "1.5" }} }} ] }} }}"#
+        );
+        let local = install("cell-own", &own, Some(&fragment));
+        assert!(close(profile_cell_ratio(&local, None, GUID), 2.5));
+
+        // Then the fragment's.
+        let stub = format!(r#"{{ "profiles": {{ "list": [ {{ "guid": "{GUID}" }} ] }} }}"#);
+        let local = install("cell-fragment", &stub, Some(&fragment));
+        assert!(close(profile_cell_ratio(&local, None, GUID), 3.2));
+
+        // Then the font's own: Consolas here, which every Windows has.
+        let consolas = format!(
+            r#"{{ "profiles": {{ "list": [ {{ "guid": "{GUID}", "font": {{ "face": "Consolas, Segoe UI", "cellHeight": "1.4" }} }} ] }} }}"#
+        );
+        let local = install("cell-font", &consolas, None);
+        let ratio = profile_cell_ratio(&local, None, GUID).unwrap_or_default();
+        assert!((2.35..2.75).contains(&ratio), "{ratio}");
+
+        for name in ["cell-own", "cell-fragment", "cell-font"] {
             let _ = std::fs::remove_dir_all(
                 std::env::temp_dir().join(format!("cash-win32-terminal-{name}")),
             );

@@ -19,9 +19,9 @@
 //! shadow a real one on `PATH`.
 //!
 //! In Windows Terminal the logo is the real one, a sixel picture: the format DEC's
-//! terminals drew images in, which Windows Terminal reads from 1.22 on. It is some ten
-//! kilobytes, encoded once by `assets/make-sixel.ps1` and written out as it is, so drawing
-//! it decodes nothing either.
+//! terminals drew images in, which Windows Terminal reads from 1.22 on. It is some 24
+//! kilobytes, encoded once by chafa (`assets/make-sixel.ps1`) and written out as it is, so
+//! drawing it decodes nothing either.
 
 use std::io::Write;
 
@@ -60,21 +60,62 @@ enum Logo {
     None,
 }
 
-/// The logo as a picture: `assets/cash_logo.six`, which `assets/make-sixel.ps1` makes
-/// from the PNG. A terminal lays each character cell over 10x20 of a sixel image's
-/// pixels, whatever the font, so its 240x240 pixels cover 24 columns by 12 rows. It is
-/// larger than the panes because a display scaled past 100% stretches those pixels over
-/// bigger cells, and the softened edges are a smaller part of a larger picture.
-const IMAGE: &[u8] = include_bytes!("../../../assets/cash_logo.six");
+/// The logo as a picture, and the columns it covers.
+struct Picture {
+    /// A sixel image, which `assets/make-sixel.ps1` makes from the PNG of the same name.
+    sixel: &'static [u8],
+    columns: usize,
+}
+
+/// The logo, drawn for two shapes of cell.
+///
+/// A terminal lays each character cell over 10x20 of a sixel image's pixels, whatever the
+/// font and however large the cell really is, and stretches the image onto the cells. So
+/// every picture here is 240 pixels and [`IMAGE_ROWS`] rows tall, and its width decides its
+/// shape on the screen. 240 pixels, 24 columns, is square where a cell is twice as tall as
+/// wide, which is Terminal's own spacing. A profile with `"cellHeight": "1.4"` has cells
+/// some 2.4 times as tall as wide, where those 24 columns come out a fifth too narrow; for
+/// those the logo is drawn 290 pixels wide, 29 columns.
+const PICTURES: [Picture; 2] = [
+    Picture {
+        sixel: include_bytes!("../../../assets/cash_logo-240x240.six"),
+        columns: 24,
+    },
+    Picture {
+        sixel: include_bytes!("../../../assets/cash_logo-290x240.six"),
+        columns: 29,
+    },
+];
 const IMAGE_ROWS: usize = 12;
-const IMAGE_COLUMNS: usize = 24;
 /// Where the picture starts, from zero: level with the title's rule, and one column in.
 /// A machine with one drive has some thirteen facts, and from here the picture ends
 /// level with the last of them.
 const IMAGE_TOP: usize = 1;
 const IMAGE_LEFT: usize = 1;
-/// The facts' column beside the picture, one clear of it.
-const IMAGE_GUTTER: usize = IMAGE_LEFT + IMAGE_COLUMNS + 1;
+
+impl Picture {
+    /// The picture that comes out nearest its true shape in cells `cell_ratio` times as
+    /// tall as wide: the first, for Terminal's own spacing, when that is not known.
+    fn for_cells(cell_ratio: Option<f64>) -> &'static Self {
+        let [standard, wide] = &PICTURES;
+        // A picture is its true shape where its columns are as wide as its rows are tall.
+        #[allow(clippy::cast_precision_loss, reason = "a few dozen columns")]
+        let off = |picture: &Self, ratio: f64| {
+            (picture.columns as f64 / IMAGE_ROWS as f64 / ratio)
+                .ln()
+                .abs()
+        };
+        match cell_ratio {
+            Some(ratio) if off(wide, ratio) < off(standard, ratio) => wide,
+            _ => standard,
+        }
+    }
+
+    /// The facts' column beside the picture, one clear of it.
+    const fn gutter(&self) -> usize {
+        IMAGE_LEFT + self.columns + 1
+    }
+}
 
 /// The four panes, drawn small enough to sit beside the facts: from the `OS` line to the
 /// first disk, split beside `Terminal`, the title and its rule standing clear above.
@@ -104,16 +145,19 @@ impl builtins::Command for CoolfetchCommand {
         let terminal = context.try_fd(1).is_some_and(|f| f.is_terminal());
         let colour = !self.no_color && terminal;
         let facts = collect(&context);
+        let picture = Picture::for_cells(cell_ratio(&context));
         let logo = match self.logo {
             _ if self.no_logo => Logo::None,
-            Logo::Auto if colour && in_windows_terminal(&context) && fits(&facts) => Logo::Image,
+            Logo::Auto if colour && in_windows_terminal(&context) && fits(&facts, picture) => {
+                Logo::Image
+            }
             Logo::Auto => Logo::Ascii,
             chosen => chosen,
         };
 
         let mut stdout = context.stdout();
         match logo {
-            Logo::Image => beside_image(&mut stdout, &facts, colour)?,
+            Logo::Image => beside_image(&mut stdout, &facts, picture, colour)?,
             Logo::Ascii => beside_text(&mut stdout, &facts, LOGO, colour)?,
             Logo::None | Logo::Auto => beside_text(&mut stdout, &facts, &[], colour)?,
         }
@@ -167,9 +211,10 @@ fn beside_text(
 fn beside_image(
     stdout: &mut impl Write,
     facts: &[(String, String)],
+    picture: &Picture,
     colour: bool,
 ) -> std::io::Result<()> {
-    let column = IMAGE_GUTTER + 1;
+    let column = picture.gutter() + 1;
     for (row, fact) in facts.iter().enumerate() {
         if row == IMAGE_TOP {
             let room = "\n".repeat(IMAGE_ROWS);
@@ -178,7 +223,7 @@ fn beside_image(
                 "{room}\x1b[{IMAGE_ROWS}A\x1b7\x1b[{}G",
                 IMAGE_LEFT + 1
             )?;
-            stdout.write_all(IMAGE)?;
+            stdout.write_all(picture.sixel)?;
             write!(stdout, "\x1b8")?;
         }
         write!(stdout, "\x1b[{column}G")?;
@@ -213,10 +258,32 @@ fn in_windows_terminal<SE: cash_core::ShellExtensions>(
     terminal_name(context) == "Windows Terminal"
 }
 
+/// How many times as tall as wide this tab's cells are, from the settings of the Terminal
+/// profile it runs, which Terminal names in `WT_PROFILE_ID`: a terminal asked for the size
+/// of its cells answers with the 10x20 of its sixel grid, whatever it draws them at. Read
+/// from the shell's variables, as `ls` reads them for the profile's font.
+fn cell_ratio<SE: cash_core::ShellExtensions>(
+    context: &cash_core::ExecutionContext<'_, SE>,
+) -> Option<f64> {
+    let var = |name: &str| {
+        context
+            .shell
+            .env_str(name)
+            .filter(|value| !value.is_empty())
+    };
+    let (profile, local) = (var("WT_PROFILE_ID")?, var("LOCALAPPDATA")?);
+    let program_data = var("ProgramData").or_else(|| var("PROGRAMDATA"));
+    cash_win32::terminal::profile_cell_ratio(
+        std::path::Path::new(local.as_ref()),
+        program_data.as_deref().map(std::path::Path::new),
+        &profile,
+    )
+}
+
 /// Whether the window has room for the picture with the facts beside it. Making room for
 /// more rows than the window has would scroll the top of the picture away, and a fact too
 /// long for its line wraps onto the picture and erases the cells it lands on.
-fn fits(facts: &[(String, String)]) -> bool {
+fn fits(facts: &[(String, String)], picture: &Picture) -> bool {
     let widest = facts
         .iter()
         .map(|(label, value)| {
@@ -226,7 +293,8 @@ fn fits(facts: &[(String, String)]) -> bool {
         .max()
         .unwrap_or(0);
     crossterm::terminal::size().is_ok_and(|(columns, rows)| {
-        usize::from(rows) > IMAGE_TOP + IMAGE_ROWS && usize::from(columns) >= IMAGE_GUTTER + widest
+        usize::from(rows) > IMAGE_TOP + IMAGE_ROWS
+            && usize::from(columns) >= picture.gutter() + widest
     })
 }
 
@@ -438,21 +506,41 @@ fn plural(count: u64, unit: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{IMAGE, IMAGE_COLUMNS, IMAGE_ROWS};
+    use super::{IMAGE_ROWS, PICTURES, Picture};
 
     #[test]
-    fn the_picture_is_the_size_the_layout_leaves_for_it() {
-        // Its raster attributes, `"1;1;width;height` after the introducer, at 10x20
-        // pixels a cell: a picture made at another size would overlap the facts or leave
-        // the rows below it short.
-        let sixel = std::str::from_utf8(IMAGE).unwrap();
-        let size = sixel.strip_prefix("\x1bP9;1q\"1;1;").unwrap();
-        let size: Vec<usize> = size
-            .split(|c: char| !c.is_ascii_digit())
-            .take(2)
-            .map(|n| n.parse().unwrap())
-            .collect();
-        assert_eq!(size, [IMAGE_COLUMNS * 10, IMAGE_ROWS * 20]);
-        assert!(sixel.ends_with("\x1b\\"), "the picture is never finished");
+    fn each_picture_is_the_size_the_layout_leaves_for_it() {
+        // A sixel is one device control string, `ESC P … q` to `ESC \`, and nothing
+        // else: anything around it would be written into the banner. Its raster
+        // attributes, `"1;1;width;height`, are at 10x20 pixels a cell; a picture made at
+        // another size would overlap the facts or leave the rows below it short. And
+        // `;1` for its second parameter leaves the pixels it does not paint transparent.
+        for picture in &PICTURES {
+            let sixel = std::str::from_utf8(picture.sixel).unwrap();
+            assert!(sixel.starts_with("\x1bP0;1;"), "{:?}", sixel.get(..12));
+            assert!(sixel.ends_with("\x1b\\"), "the picture is never finished");
+            assert_eq!(sixel.matches('\x1b').count(), 2);
+            let (_, size) = sixel.split_once("q\"1;1;").unwrap();
+            let size: Vec<usize> = size
+                .split(|c: char| !c.is_ascii_digit())
+                .take(2)
+                .map(|n| n.parse().unwrap())
+                .collect();
+            assert_eq!(size, [picture.columns * 10, IMAGE_ROWS * 20]);
+        }
+    }
+
+    #[test]
+    fn the_picture_is_chosen_for_the_shape_of_the_cells() {
+        let columns = |ratio| Picture::for_cells(ratio).columns;
+        // Terminal's own spacing, and a profile cash cannot read.
+        assert_eq!(columns(Some(2.0)), 24);
+        assert_eq!(columns(None), 24);
+        // Fonts differ a little: Consolas's cells are 2.13 times as tall as wide.
+        assert_eq!(columns(Some(2.13)), 24);
+        // `"cellHeight": "1.4"`.
+        assert_eq!(columns(Some(2.44)), 29);
+        assert_eq!(columns(Some(2.3)), 29);
+        assert_eq!(columns(Some(3.0)), 29);
     }
 }

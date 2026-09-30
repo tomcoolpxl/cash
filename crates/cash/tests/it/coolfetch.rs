@@ -29,8 +29,9 @@ use cash_win32::vtscreen::Screen;
 
 const CASH: &str = env!("CARGO_BIN_EXE_cash");
 
-/// The sixel introducer the picture starts with; a string terminator ends it.
-const PICTURE: &str = "\x1bP9;1q";
+/// The picture is a sixel: a device control string, from this introducer to a string
+/// terminator.
+const PICTURE: &str = "\x1bP";
 
 struct Output {
     stdout: String,
@@ -275,15 +276,26 @@ fn the_logo_sits_beside_os_to_the_first_disk_split_at_terminal() {
     );
 }
 
-/// What `coolfetch --logo=image` writes: asked for by name, the picture goes even down a
-/// pipe.
-fn with_picture() -> String {
+/// No Terminal profile to read the cells' shape from, whatever the tests themselves run
+/// in: the picture for Terminal's own spacing.
+const NO_PROFILE: &str = "unset WT_PROFILE_ID";
+
+/// What `coolfetch --logo=image` writes after `setup`: asked for by name, the picture goes
+/// even down a pipe.
+fn with_picture_after(setup: &str) -> String {
     let out = Command::new(CASH)
-        .args(["-c", "coolfetch --logo=image --no-color"])
+        .args([
+            "-c",
+            &std::format!("{setup}; coolfetch --logo=image --no-color"),
+        ])
         .output()
         .expect("failed to run cash");
     assert!(out.status.success(), "{out:?}");
     String::from_utf8(out.stdout).unwrap()
+}
+
+fn with_picture() -> String {
+    with_picture_after(NO_PROFILE)
 }
 
 /// `output` with the picture swapped for `stand_in`: what a terminal does with the cursor
@@ -294,11 +306,13 @@ fn picture_as(output: &str, stand_in: &str) -> String {
     std::format!("{before}{stand_in}{after}")
 }
 
-/// The picture covers 24 columns by 12 rows, from row 1 and one column in; the facts
-/// beside it start a column clear of it.
+/// The picture covers 12 rows from row 1 and one column in, and 24 columns where cells
+/// are twice as tall as wide, 29 where they are taller; the facts beside it start a
+/// column clear of it.
 const PICTURE_TOP: usize = 1;
 const PICTURE_ROWS: usize = 12;
 const BESIDE_PICTURE: usize = 26;
+const BESIDE_WIDE_PICTURE: usize = 31;
 
 /// `before` and then `output` on a terminal of `rows` rows, wide enough that no fact
 /// wraps, a line feed going back to the first column as it does on the console. The
@@ -310,22 +324,65 @@ fn replay(before: &str, output: &str, rows: usize) -> Screen {
     screen
 }
 
-/// Rows `rows` of `text` are blank where the picture goes, with a fact right after.
-fn assert_clear_for_the_picture(text: &str, rows: std::ops::Range<usize>) {
+/// Rows `rows` of `text` are blank where the picture goes, with a fact right after, in
+/// column `beside`.
+fn assert_clear_beside(text: &str, rows: std::ops::Range<usize>, beside: usize) {
     let lines: Vec<&str> = text.lines().collect();
     for row in rows {
         let line = lines.get(row).copied().unwrap_or("");
         assert!(
-            line.get(..BESIDE_PICTURE)
+            line.get(..beside)
                 .is_some_and(|logo| logo.trim().is_empty()),
             "row {row} is not clear for the picture: {line:?}\n{text}"
         );
         assert!(
-            line.get(BESIDE_PICTURE..)
+            line.get(beside..)
                 .is_some_and(|fact| !fact.starts_with(' ')),
             "row {row} has no fact in the facts' column: {line:?}\n{text}"
         );
     }
+}
+
+fn assert_clear_for_the_picture(text: &str, rows: std::ops::Range<usize>) {
+    assert_clear_beside(text, rows, BESIDE_PICTURE);
+}
+
+#[test]
+fn a_profile_with_taller_cells_gets_the_wider_picture() {
+    // Terminal stretches a picture onto its cells, so the square one comes out a fifth
+    // too narrow where a profile's line spacing makes them 2.4 times as tall as wide.
+    // Here the profile says so in a settings file of its own; Consolas is on every
+    // Windows.
+    const GUID: &str = "{0caa0dad-35be-5f56-a8ff-afceeeaa6101}";
+    let local =
+        std::env::temp_dir().join(std::format!("cash-coolfetch-cells-{}", std::process::id()));
+    let state = local
+        .join("Packages")
+        .join("Microsoft.WindowsTerminal_8wekyb3d8bbwe")
+        .join("LocalState");
+    std::fs::create_dir_all(&state).unwrap();
+    let settings = |cell_height: &str| {
+        std::fs::write(
+            state.join("settings.json"),
+            std::format!(
+                r#"{{ "profiles": {{ "list": [ {{ "guid": "{GUID}", "font": {{ "face": "Consolas"{cell_height} }} }} ] }} }}"#
+            ),
+        )
+        .unwrap();
+        with_picture_after(&std::format!(
+            "WT_PROFILE_ID='{GUID}'; LOCALAPPDATA='{}'",
+            local.display().to_string().replace('\\', "/")
+        ))
+    };
+    let taller = settings(r#", "cellHeight": "1.4""#);
+    let own = settings("");
+    let _ = std::fs::remove_dir_all(&local);
+
+    assert!(taller.contains("q\"1;1;290;240"), "{:?}", taller.get(..200));
+    assert_clear_beside(&replay("", &taller, 40).text(), 0..11, BESIDE_WIDE_PICTURE);
+    assert!(own.contains("q\"1;1;240;240"), "{:?}", own.get(..200));
+    assert_clear_beside(&replay("", &own, 40).text(), 0..11, BESIDE_PICTURE);
+    assert!(with_picture().contains("q\"1;1;240;240"));
 }
 
 #[test]
@@ -423,8 +480,8 @@ fn on_a_terminal(script: &str, dir: Option<&Path>, size: (i16, i16)) -> String {
     session.screen().text()
 }
 
-/// Windows Terminal, as `coolfetch` recognises it.
-const IN_WINDOWS_TERMINAL: &str = "unset TERM_PROGRAM; WT_SESSION=test";
+/// Windows Terminal, as `coolfetch` recognises it, in no profile it can read.
+const IN_WINDOWS_TERMINAL: &str = "unset TERM_PROGRAM WT_PROFILE_ID; WT_SESSION=test";
 
 #[test]
 fn windows_terminal_gets_the_picture() {
