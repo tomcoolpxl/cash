@@ -15,10 +15,14 @@ impl InputBackend for MinimalInputBackend {
         shell_ref: &crate::ShellRef<impl cash_core::ShellExtensions>,
         prompt: InteractivePrompt,
     ) -> Result<ReadResult, ShellError> {
-        let stdin = std::io::stdin();
-        let prompt = stdin.is_terminal().then_some(&prompt);
+        let prompt = std::io::stdin().is_terminal().then_some(&prompt);
 
-        Self::read_program_from(shell_ref, prompt, &mut stdin.lock(), &mut std::io::stderr())
+        // A byte at a time, and never through `std::io::stdin()`: the lines after this
+        // program are the input of the commands in it (`read`, or a `cat` the script
+        // runs), and what a buffer took of them here they would not see.
+        let mut stdin = std::io::BufReader::with_capacity(1, cash_win32::stdio::RawStdin);
+
+        Self::read_program_from(shell_ref, prompt, &mut stdin, &mut std::io::stderr())
     }
 }
 
