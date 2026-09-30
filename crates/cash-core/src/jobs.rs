@@ -863,12 +863,15 @@ impl Job {
         ctrl_z: bool,
     ) -> Result<ExecutionResult, error::Error> {
         let pids = self.spawned_pids.clone();
+        // Those still running: one that has ended is not to be terminated or sent a
+        // Ctrl-Break by its number.
         let current = move || -> Vec<u32> {
             pids.as_ref()
                 .and_then(|p| p.lock().ok().map(|p| p.clone()))
                 .unwrap_or_default()
                 .into_iter()
                 .filter_map(|pid| u32::try_from(pid).ok())
+                .filter(|&pid| cash_win32::children::is_running(pid))
                 .collect()
         };
         let mut sigtstp = sys::signal::tstp_signal_listener(ctrl_z)?;
@@ -958,10 +961,13 @@ impl Job {
         Ok(())
     }
 
-    /// Checks whether the job can be signaled.
+    /// Checks whether the job can be signaled: `kill -0 %1`.
+    ///
+    /// cash: a job whose processes have all ended, and which is still listed, can: there
+    /// is nothing left to refuse the signal. Bash 5.3 answers 0 and says nothing.
     pub fn check_signalable(&self) -> Result<(), error::Error> {
-        if let Some(pid) = self.process_group_id() {
-            sys::signal::check_signalable(pid)
+        if self.has_processes() {
+            Ok(())
         } else {
             Err(error::ErrorKind::FailedToSendSignal.into())
         }
@@ -969,11 +975,22 @@ impl Job {
 
     /// Kills the job.
     ///
+    /// cash (D22): the signal goes to every process of the job that is still running,
+    /// as Bash's goes to the job's process group: both ends of `a | b &`, and `b` in
+    /// `{ a; b; } &` once `a` has ended. One that has ended is passed over, as Bash
+    /// passes it over ("avoid pid recycling problem", its `jobs.c`): its pid is not
+    /// signalled, because on Windows that number is soon another process's. So a job
+    /// with nothing left running is signalled without effect and without error.
+    ///
     /// # Arguments
     ///
     /// * `signal` - The signal to send to the job.
     pub fn kill(&mut self, signal: traps::TrapSignal) -> Result<(), error::Error> {
         use sys::signal::Signal;
+
+        if !self.has_processes() {
+            return Err(error::ErrorKind::FailedToSendSignal.into());
+        }
 
         match signal {
             // cash (D19, D22): a job spec stops and continues the job's whole tree, and
@@ -985,7 +1002,8 @@ impl Job {
                 }
                 let pids = self.pids();
                 if pids.is_empty() {
-                    return Err(error::ErrorKind::FailedToSendSignal.into());
+                    // Nothing is running, so nothing is stopped.
+                    return Ok(());
                 }
                 sys::signal::suspend_trees(&pids)?;
                 self.state = JobState::Stopped;
@@ -994,22 +1012,30 @@ impl Job {
             }
             traps::TrapSignal::Signal(Signal::Cont) => self.resume(),
             _ => {
-                if let Some(pid) = self.process_group_id() {
-                    sys::signal::kill_process(pid, signal)
-                } else {
-                    Err(error::ErrorKind::FailedToSendSignal.into())
+                let mut first_error = None;
+                for pid in self.pids() {
+                    if let Err(e) = sys::signal::kill_process(pid, signal) {
+                        // One that ended between the look and the signal is like one
+                        // that had ended before.
+                        let ended = e
+                            .as_io_error()
+                            .is_some_and(|io| io.kind() == std::io::ErrorKind::NotFound);
+                        if !ended {
+                            first_error.get_or_insert(e);
+                        }
+                    }
                 }
+                first_error.map_or(Ok(()), Err)
             }
         }
     }
 
     /// Resumes the job's processes with their trees, and marks it running (D19).
     fn resume(&mut self) -> Result<(), error::Error> {
-        let pids = self.pids();
-        if pids.is_empty() {
+        if !self.has_processes() {
             return Err(error::ErrorKind::FailedToSendSignal.into());
         }
-        sys::signal::resume_trees(&pids)?;
+        sys::signal::resume_trees(&self.pids())?;
         self.state = JobState::Running;
         self.notification_pending = true;
         Ok(())
@@ -1026,9 +1052,15 @@ impl Job {
         })
     }
 
-    /// Every process the job has: its pipeline's and those its background task spawned.
-    /// Each roots a tree of its own (D22).
+    /// Every process of the job that is still running: its pipeline's and those its
+    /// background task spawned. Each roots a tree of its own (D22).
+    ///
+    /// cash: only those still running, because these are acted on by pid (a signal, a
+    /// suspend, a resume), and the pid of one that has ended is soon another process's on
+    /// Windows. Running is asked of a process cash holds open, not of the number.
     fn pids(&self) -> Vec<sys::process::ProcessId> {
+        // A pipeline's process is held by its task, which waits for it: its pid is its
+        // own, so the pid can be asked.
         let mut pids: Vec<_> = self
             .tasks
             .iter()
@@ -1036,13 +1068,25 @@ impl Job {
                 JobTask::External(process) => process.pid(),
                 JobTask::Internal(_) | JobTask::Completed(_) => None,
             })
+            .filter(|&pid| u32::try_from(pid).is_ok_and(cash_win32::process::is_pid_alive))
             .collect();
+        // One a background task spawned is held from its start (`cash_win32::children`)
+        // and let go only long after it has ended. Asked of the pid, one that had been
+        // let go would be whichever process has the number now.
         for pid in self.spawned_pids() {
-            if !pids.contains(&pid) {
+            if !pids.contains(&pid)
+                && u32::try_from(pid).is_ok_and(cash_win32::children::is_running)
+            {
                 pids.push(pid);
             }
         }
         pids
+    }
+
+    /// Whether the job has, or has had, a process to signal. One that runs inside the
+    /// shell alone (`{ read x; } &`) has none.
+    fn has_processes(&self) -> bool {
+        self.representative_pid().is_some()
     }
 
     /// Tries to retrieve a "representative" pid for the job.

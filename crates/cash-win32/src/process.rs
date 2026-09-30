@@ -1,12 +1,110 @@
 //! Process queries that the job-object layer and D42's elevated-child tracking need.
 
-use windows_sys::Win32::Foundation::{CloseHandle, FALSE, FILETIME};
+use windows_sys::Win32::Foundation::{CloseHandle, FALSE, FILETIME, HANDLE, WAIT_TIMEOUT};
 use windows_sys::Win32::System::Threading::{
     GetExitCodeProcess, GetProcessTimes, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
+    PROCESS_SYNCHRONIZE, WaitForSingleObject,
 };
 
 /// `GetExitCodeProcess` reports this while a process is still running.
 const STILL_ACTIVE: u32 = 259;
+
+/// A process held open, so that its pid stays its own.
+///
+/// Windows hands a pid out again soon after its process ends: within a second on a busy
+/// machine (measured 2026-09-30, see `crates/cash/tests/it/process_identity.rs`). It does
+/// not while a handle to the process is open. So for as long as this is held, its pid
+/// names this process and no other, running or ended, and whatever asks by pid (`kill -0`,
+/// a signal, [`is_pid_alive`]) gets this process's answer. It is what a zombie is on
+/// Linux, where a child's pid stays reserved until its parent has reaped it.
+///
+/// An ended process that is held is not listed (by [`list`], `ps` or Task Manager), and
+/// its executable is not kept open: it can be replaced or deleted (checked 2026-09-30).
+#[derive(Debug)]
+pub struct Held {
+    handle: HANDLE,
+    pid: u32,
+}
+
+// SAFETY: the handle is an index into a process-wide table with no thread affinity, the
+// calls made through it (`WaitForSingleObject`, `GetProcessTimes`, `CloseHandle`) are
+// thread-safe, and `Drop` closes it exactly once because `Held` is not `Clone`.
+unsafe impl Send for Held {}
+// SAFETY: as above; shared references only ever reach thread-safe Win32 calls.
+unsafe impl Sync for Held {}
+
+impl Held {
+    /// Holds the process that has `pid` now, or `None` if there is none or it may not be
+    /// opened.
+    ///
+    /// Which process that is, is the caller's to know: one it has just started, or one it
+    /// checks with [`Self::started_by`].
+    #[must_use]
+    pub fn open(pid: u32) -> Option<Self> {
+        let access = PROCESS_SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION;
+        // SAFETY: OpenProcess returns null rather than a bad handle on failure.
+        let handle = unsafe { OpenProcess(access, FALSE, pid) };
+        (!handle.is_null()).then_some(Self { handle, pid })
+    }
+
+    /// The process's id.
+    #[must_use]
+    pub const fn pid(&self) -> u32 {
+        self.pid
+    }
+
+    /// Whether the process is still running. Asked of the process, not of its exit
+    /// status: a process may exit with 259, the status that means "still running".
+    #[must_use]
+    pub fn is_running(&self) -> bool {
+        // SAFETY: the handle is valid and was opened with SYNCHRONIZE.
+        unsafe { WaitForSingleObject(self.handle, 0) == WAIT_TIMEOUT }
+    }
+
+    /// When the process started, as a `FILETIME` count.
+    #[must_use]
+    pub fn started(&self) -> Option<u64> {
+        creation_time(self.handle)
+    }
+
+    /// Whether the process had started by `seen`, a [`now_filetime`] count: whether it
+    /// can be the process that had this pid then.
+    ///
+    /// A pid is handed out again only after its process has ended, so a process that
+    /// started after the pid was seen is another one. One whose start time cannot be
+    /// read is taken at its word.
+    #[must_use]
+    pub fn started_by(&self, seen: u64) -> bool {
+        self.started().is_none_or(|at| at <= seen)
+    }
+}
+
+impl Drop for Held {
+    fn drop(&mut self) {
+        // SAFETY: the handle is valid and closed exactly once.
+        unsafe { CloseHandle(self.handle) };
+    }
+}
+
+/// When the process behind `handle` started, as a `FILETIME` count.
+fn creation_time(handle: HANDLE) -> Option<u64> {
+    let zero = FILETIME {
+        dwLowDateTime: 0,
+        dwHighDateTime: 0,
+    };
+    let (mut creation, mut exit, mut kernel, mut user) = (zero, zero, zero, zero);
+    // SAFETY: the handle is valid and all four out-params are valid FILETIMEs.
+    let ok = unsafe {
+        GetProcessTimes(
+            handle,
+            &raw mut creation,
+            &raw mut exit,
+            &raw mut kernel,
+            &raw mut user,
+        )
+    };
+    (ok != 0).then(|| as_u64(creation))
+}
 
 /// Whether a process ID currently refers to a running process.
 ///
@@ -14,10 +112,18 @@ const STILL_ACTIVE: u32 = 259;
 /// which cannot be assigned to cash's job object — is still alive at exit.
 ///
 /// PIDs are reused by Windows, so a `true` result means "some process with this id is
-/// running", not necessarily the one you started. Callers that need certainty should
-/// hold a handle instead.
+/// running", not necessarily the one you started. It is that one only while a handle to
+/// it is open: hold one ([`Held`], or [`crate::children`] for a background job's).
 #[must_use]
 pub fn is_pid_alive(pid: u32) -> bool {
+    // Asked of the process where Windows lets this user wait on it. Its exit status is
+    // no answer: a process may exit with 259, which would read as running for as long
+    // as anything held it open.
+    if let Some(process) = Held::open(pid) {
+        return process.is_running();
+    }
+
+    // A process that may be queried but not waited on: its exit status is all there is.
     // SAFETY: OpenProcess returns null rather than a bad handle on failure.
     let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid) };
     if handle.is_null() {
@@ -93,22 +199,7 @@ pub fn cpu_time(pid: u32) -> Option<u64> {
 #[must_use]
 pub fn started(pid: u32) -> Option<u64> {
     let process = ProcessHandle::open(pid, PROCESS_QUERY_LIMITED_INFORMATION)?;
-    let zero = FILETIME {
-        dwLowDateTime: 0,
-        dwHighDateTime: 0,
-    };
-    let (mut creation, mut exit, mut kernel, mut user) = (zero, zero, zero, zero);
-    // SAFETY: the handle is valid and all four out-params are valid FILETIMEs.
-    let ok = unsafe {
-        GetProcessTimes(
-            process.0,
-            &raw mut creation,
-            &raw mut exit,
-            &raw mut kernel,
-            &raw mut user,
-        )
-    };
-    (ok != 0).then(|| as_u64(creation))
+    creation_time(process.0)
 }
 
 /// Whether `child` can really be a child of the process `parent_pid`, which started at
@@ -819,6 +910,37 @@ mod module_tests {
                 .ends_with("kernel32.dll")),
             "{modules:?}"
         );
+    }
+
+    #[test]
+    fn a_held_process_is_asked_and_not_its_exit_status() {
+        let mut child = std::process::Command::new("cmd.exe")
+            .args(["/d", "/c", "set /p line= & exit 259"])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::null())
+            .spawn()
+            .unwrap();
+        let held = Held::open(child.id()).unwrap();
+        assert_eq!(held.pid(), child.id());
+        assert!(held.is_running());
+
+        drop(child.stdin.take());
+        // 259 is what Windows reports for a process that has not exited.
+        assert_eq!(child.wait().unwrap().code(), Some(259));
+        assert!(!held.is_running());
+        assert!(!is_pid_alive(child.id()));
+    }
+
+    #[test]
+    fn a_process_that_started_after_its_pid_was_seen_is_another_one() {
+        // This process has the pid: only its start time says it is not the one that had
+        // the pid a moment before it started.
+        let me = Held::open(std::process::id()).unwrap();
+        let began = me.started().unwrap();
+        assert_eq!(started(std::process::id()), Some(began));
+        assert!(me.started_by(began));
+        assert!(me.started_by(now_filetime()));
+        assert!(!me.started_by(began - 1));
     }
 
     #[test]

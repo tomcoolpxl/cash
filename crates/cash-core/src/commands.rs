@@ -1118,6 +1118,24 @@ fn register_background_leader(child: &sys::process::Child, background: bool) {
     }
 }
 
+/// cash (D11/D22): report a process upward so a background job can answer `$!` and
+/// `kill %1`. There is a `sink` only when running under a background job; otherwise the
+/// caller already holds the child.
+///
+/// The process is held open first, so its pid stays its own after it ends: Windows hands
+/// a pid out again within a second, and a later `kill $!` must find no such process, not
+/// whichever one was given the number.
+fn report_to_job(child: &sys::process::Child, sink: Option<&std::sync::Mutex<Vec<i32>>>) {
+    let (Some(raw), Some(sink)) = (child.id(), sink) else {
+        return;
+    };
+    cash_win32::children::hold(raw);
+    #[expect(clippy::cast_possible_wrap)]
+    if let Ok(mut pids) = sink.lock() {
+        pids.push(raw as i32);
+    }
+}
+
 pub(crate) fn execute_external_command(
     context: ExecutionContext<'_, impl extensions::ShellExtensions>,
     executable_path: &str,
@@ -1210,15 +1228,7 @@ pub(crate) fn execute_external_command(
                 tracing::warn!("could not retrieve pid for child process");
             }
 
-            // cash (D11/D22): report upward so a background job can answer `$!` and
-            // `kill %1`. Only set when running under a background job; otherwise the
-            // caller already holds the child.
-            if let Some(pid) = pid
-                && let Some(sink) = &context.params.spawned_pid_sink
-                && let Ok(mut pids) = sink.lock()
-            {
-                pids.push(pid);
-            }
+            report_to_job(&child, context.params.spawned_pid_sink.as_deref());
 
             // The pid is now readable, so `&` may return and `$!` will answer.
             if let Some(ready) = &context.params.spawned_pid_ready {

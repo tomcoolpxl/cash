@@ -732,6 +732,11 @@ async fn wait_for_pipeline_processes_and_update_status(
                     .last_pipeline_statuses_mut()
                     .push(result.exit_code.into());
 
+                // It becomes a job's process, whose pid `jobs -l` shows: held open, like
+                // a background job's, so the pid stays its own after it ends.
+                if let Some(pid) = child.pid().and_then(|pid| u32::try_from(pid).ok()) {
+                    cash_win32::children::hold(pid);
+                }
                 stopped_children.push(jobs::JobTask::External(child));
             }
         }

@@ -716,6 +716,47 @@ POSIX semantics and nothing surprising. D19 follows the same rule for suspend.
 Note this does not weaken D6: a child orphaned by `kill $pid` is still inside the job
 object and still dies when the job or session is torn down.
 
+**A job's pid names the process cash started, or none.** A script keeps `$!` and uses it
+after the job has ended: `kill "$pid"` in a cleanup trap, `while kill -0 "$pid"`. Bash
+calls `kill(2)` on the number and is told "No such process", because Linux hands pids out
+in ascending order and comes back to one after millions of others. Windows hands one out
+again within a second on a busy machine (measured 2026-09-30: a second after a job was
+killed, `kill -0 $pid` succeeded 8 times in 360, on another program), and cash asked only
+whether some process had the number. So `kill -0` could report an ended job as running,
+and `kill` could end a program the script never started.
+
+cash therefore keeps a handle on each process of a job, background or stopped
+(`cash_win32::children`). Windows does not reuse a pid while a handle to its process is
+open, so the pid stays the job's after the job has ended, as a zombie's does on Linux
+until its parent reaps it, and `kill $pid` and `kill -0 $pid` answer "No such process",
+status 1. Running processes are held while they run; of those that have ended, the most
+recent 1024, the number of finished jobs `wait PID` remembers. Past that the pid is free
+again and cash knows nothing of it, as Bash knows nothing of a pid the kernel has reused.
+An ended process that is held costs the kernel about 15 KB, is not listed by `ps` or Task
+Manager, and does not keep its executable open. Of a pid cash never started as a job's
+(one read from `ps`, a foreground command's), `kill` does what the number says, as
+`kill(2)` does.
+
+Whether a process still runs is asked of the process, through a handle, and not of its
+exit status: a process may exit with 259, which Windows also reports for one that has not
+exited.
+
+**`kill %1` signals every process of the job that is still running**, as Bash signals
+the job's process group: both ends of `a | b &`, and `b` in `{ a; b; } &` once `a` has
+ended. It signalled the first process only, by pid, so after `a` had ended it failed
+(`entity not found`) or reached another program, and `b` ran on. A process that has
+ended is passed over, as Bash passes it over (`jobs.c`: "avoid pid recycling problem").
+So `kill %1` and `kill -0 %1`, for a job that is still listed and has nothing left
+running, do nothing, say nothing and return 0, as in Bash 5.3. `kill -STOP %1`, `fg`,
+`bg`, Ctrl-Z and the second Ctrl-C under `fg` act on the running processes only, for the
+same reason.
+
+`kill 0` and the sweep of finished commands' job objects ask each tree's root, which the
+registry holds open, whether it still runs. `killall -w` holds each process open before
+signalling it and waits for those; asked by pid, it waited for as long as any process had
+the number. `pkill` and `killall` do not signal a process that started after they listed
+the processes: the pid was the listed one's and has changed hands.
+
 ### D23 — `test -x` requires an execute ACL **and** a discriminator
 
 ```
@@ -1598,7 +1639,10 @@ The rules were decided for the family together with `pgrep`, which now shares th
   all find `notepad.exe`. A pattern's own `.exe` is set aside too, so `pkill exe` does
   not mean every process.
 - Signals go through `kill`'s path: `TERM`, the default, asks and escalates (D21);
-  `KILL` terminates; `STOP`/`CONT` suspend and resume (D19); each pid alone (D22).
+  `KILL` terminates; `STOP`/`CONT` suspend and resume (D19); each pid alone (D22). A
+  process is held open while it is signalled, and one that started after the listing is
+  passed over, so the signal reaches the process that was listed and no later owner of
+  its pid; `killall -w` waits for those processes, not for their pids (D22).
 - The kill family never signals the shell running it, pid 0 and 4, images Windows cannot
   survive losing (`csrss`, `wininit`, `winlogon`, `smss`, `services`, `lsass`, …), or a
   process running as `SYSTEM`, `LOCAL SERVICE` or `NETWORK SERVICE`. A process the user

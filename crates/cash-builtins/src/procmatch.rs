@@ -13,7 +13,7 @@
 
 use cash_core::traps::TrapSignal;
 use cash_core::{error, sys};
-use cash_win32::process::ProcessInfo;
+use cash_win32::process::{Held, ProcessInfo};
 use fancy_regex::Regex;
 
 /// `name` without a trailing `.exe`, compared case-insensitively.
@@ -192,7 +192,7 @@ pub(crate) enum Delivery {
 
 /// Sends `signal` to the one process `pid`, through `kill`'s own path (D21, D22), so
 /// `TERM` asks first and escalates, and `STOP`/`CONT` suspend and resume.
-pub(crate) fn deliver(pid: u32, signal: Signal) -> Delivery {
+fn deliver(pid: u32, signal: Signal) -> Delivery {
     let Ok(target) = i32::try_from(pid) else {
         return Delivery::Gone;
     };
@@ -204,6 +204,24 @@ pub(crate) fn deliver(pid: u32, signal: Signal) -> Delivery {
         Ok(()) => Delivery::Sent,
         Err(error) => classify(error),
     }
+}
+
+/// [`deliver`], for a pid that came from a process listing finished by `listed` (a
+/// `now_filetime` count): the signal goes to the process the listing named, or to none.
+///
+/// The process is held open before it is signalled, so the pid cannot change hands in
+/// between, and one that started after the listing is not the process that was listed:
+/// Windows gave it the pid since, which takes under a second on a busy machine. The
+/// held process is returned for a caller that waits for it to end (`killall -w`).
+pub(crate) fn deliver_listed(pid: u32, listed: u64, signal: Signal) -> (Delivery, Option<Held>) {
+    let held = Held::open(pid);
+    if held
+        .as_ref()
+        .is_some_and(|process| !process.started_by(listed))
+    {
+        return (Delivery::Gone, None);
+    }
+    (deliver(pid, signal), held)
 }
 
 fn classify(error: error::Error) -> Delivery {

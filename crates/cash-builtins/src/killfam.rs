@@ -19,7 +19,7 @@
 use std::io::Write;
 
 use cash_core::{ExecutionResult, builtins};
-use cash_win32::process::ProcessInfo;
+use cash_win32::process::{Held, ProcessInfo};
 use clap::Parser;
 
 use crate::procmatch::{self, Delivery, NameMatcher, Signal};
@@ -127,7 +127,9 @@ impl builtins::Command for PkillCommand {
             None => Signal::term()?,
         };
 
-        let mut targets: Vec<ProcessInfo> = cash_win32::process::list()
+        let processes = cash_win32::process::list();
+        let listed = cash_win32::process::now_filetime();
+        let mut targets: Vec<ProcessInfo> = processes
             .into_iter()
             .filter(|p| options.parents.is_empty() || options.parents.contains(&p.parent_pid))
             .filter(|p| {
@@ -155,7 +157,7 @@ impl builtins::Command for PkillCommand {
 
         let mut signalled = 0usize;
         for process in &targets {
-            match procmatch::deliver(process.pid, signal) {
+            match procmatch::deliver_listed(process.pid, listed, signal).0 {
                 Delivery::Sent => {
                     signalled += 1;
                     if options.echo {
@@ -501,9 +503,10 @@ impl builtins::Command for KillallCommand {
         };
 
         let processes = cash_win32::process::list();
+        let listed = cash_win32::process::now_filetime();
         let mut stderr = context.stderr();
         let mut all_found = true;
-        let mut signalled_pids = Vec::new();
+        let mut signalled = Vec::new();
         for name in &options.names {
             let matcher = if options.regexp {
                 match NameMatcher::pattern(name, false) {
@@ -519,10 +522,11 @@ impl builtins::Command for KillallCommand {
 
             let (matched, sent) = signal_name_matches(
                 &processes,
+                listed,
                 &matcher,
                 signal,
                 &options,
-                &mut signalled_pids,
+                &mut signalled,
                 &mut stderr,
             )?;
 
@@ -543,11 +547,11 @@ impl builtins::Command for KillallCommand {
         }
 
         if options.wait && !matches!(signal, Signal::Probe) {
-            while !signalled_pids.is_empty() {
-                signalled_pids.retain(|&pid| cash_win32::process::is_pid_alive(pid));
-                if !signalled_pids.is_empty() {
-                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-                }
+            // Each was held open before it was signalled, so it is that process this
+            // waits for. Asked by pid, the wait went on for as long as any process had
+            // the number: the next one Windows gave it to, for its whole life.
+            while signalled.iter().any(Held::is_running) {
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
             }
         }
 
@@ -559,14 +563,16 @@ impl builtins::Command for KillallCommand {
     }
 }
 
-/// Signals every process `matcher` names, reporting as psmisc does under `-v`; returns how
-/// many matched and how many were signalled.
+/// Signals every process `matcher` names in a listing finished by `listed`, reporting as
+/// psmisc does under `-v`; returns how many matched and how many were signalled. Those
+/// signalled are added to `signalled`, held open, for `-w` to wait for.
 fn signal_name_matches(
     processes: &[ProcessInfo],
+    listed: u64,
     matcher: &NameMatcher,
     signal: Signal,
     options: &KillallOptions,
-    signalled_pids: &mut Vec<u32>,
+    signalled: &mut Vec<Held>,
     stderr: &mut impl Write,
 ) -> Result<(usize, usize), cash_core::Error> {
     let mut matched = 0usize;
@@ -585,10 +591,11 @@ fn signal_name_matches(
             }
             continue;
         }
-        match procmatch::deliver(process.pid, signal) {
+        let (delivery, held) = procmatch::deliver_listed(process.pid, listed, signal);
+        match delivery {
             Delivery::Sent => {
                 sent += 1;
-                signalled_pids.push(process.pid);
+                signalled.extend(held);
                 if options.verbose {
                     writeln!(
                         stderr,

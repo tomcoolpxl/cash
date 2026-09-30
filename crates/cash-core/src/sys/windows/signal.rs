@@ -186,6 +186,12 @@ pub(crate) fn stop_for_ctrl_z(
 }
 
 /// Whether a process exists and cash could signal it.
+///
+/// Asked by pid, and Windows hands a pid out again soon after its process ends. The
+/// answer is about the process the caller means because cash holds its jobs' processes
+/// open (`cash_win32::children`): while it does, the pid of one that has ended is no
+/// other process's, and this reports that there is none. Of a pid cash never knew, it
+/// says what the number says, as `kill(2)` does.
 pub fn check_signalable(pid: sys::process::ProcessId) -> Result<(), error::Error> {
     let targets = resolve_targets(pid)?;
     if targets
@@ -287,6 +293,10 @@ fn deliver(raw: u32, signal: Signal) -> Result<(), error::Error> {
     // Check first, so that a target that does not exist reports as such. Windows answers
     // a signal aimed at nothing with `ERROR_INVALID_PARAMETER`, and "The parameter is
     // incorrect. (os error 87)" tells the user nothing about what went wrong.
+    //
+    // This is also what keeps `kill $!` from another process once the job has ended:
+    // cash holds the job's process open, so its pid is still its own and is not alive
+    // (see `check_signalable`).
     if !cash_win32::process::is_pid_alive(raw) {
         return Err(
             error::ErrorKind::from(std::io::Error::from(std::io::ErrorKind::NotFound)).into(),

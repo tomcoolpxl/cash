@@ -14,6 +14,8 @@
 #[cfg(not(windows))]
 compile_error!("cash builds only on Windows (spec D43)");
 
+/// The processes of cash's jobs, held open so that their pids stay theirs: D22.
+pub mod children;
 pub mod cmd;
 pub mod conpty;
 pub mod console;

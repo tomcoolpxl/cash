@@ -47,6 +47,8 @@ mod crlf_scripts;
 mod directory_stack;
 mod disown;
 mod doctor_busybox;
+// D22: a job's pid names the process cash started, or none, after the job has ended.
+mod ended_children;
 // D3/D5: what a script sees of its environment, and the here-document deadlock.
 mod environment_contract;
 mod extensionless_lookup;

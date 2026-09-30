@@ -21,6 +21,11 @@
 //!
 //! A pid the test holds a handle to (a [`std::process::Child`]) stays its process's:
 //! Windows does not hand it out again while the handle is open.
+//!
+//! cash has since come to rely on the same thing: it holds each process of a job open, so
+//! `kill -0 $pid` of the shell's own background child is about that child, ended or not
+//! (spec D22, `ended_children.rs`). The three ways above remain right for what cash does
+//! not hold: a grandchild, a foreground command, a pid the test read from a listing.
 
 #![allow(
     clippy::tests_outside_test_module,

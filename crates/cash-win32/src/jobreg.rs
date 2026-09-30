@@ -34,10 +34,30 @@ use windows_sys::Win32::Foundation::FALSE;
 use windows_sys::Win32::System::Threading::{OpenProcess, PROCESS_SET_QUOTA, PROCESS_TERMINATE};
 
 use crate::job::{JobConfig, JobObject};
+use crate::process::Held;
+
+/// A spawned process tree: the job that contains it, and its root process.
+struct Tree {
+    job: JobObject,
+    /// The root, held open from before it first ran. Its pid is the registry's key, and
+    /// Windows hands a pid out again soon after its process ends; held, the key names
+    /// this root until the entry is dropped, and whether it still runs is asked of the
+    /// process, not of the number.
+    root: Option<Held>,
+}
+
+impl Tree {
+    /// Whether the root process, which cash knows as `pid`, is still running.
+    fn root_is_running(&self, pid: u32) -> bool {
+        self.root
+            .as_ref()
+            .map_or_else(|| crate::process::is_pid_alive(pid), Held::is_running)
+    }
+}
 
 /// Jobs holding spawned process trees, keyed by the pid cash knows them as.
-fn registry() -> &'static Mutex<HashMap<u32, JobObject>> {
-    static REGISTRY: OnceLock<Mutex<HashMap<u32, JobObject>>> = OnceLock::new();
+fn registry() -> &'static Mutex<HashMap<u32, Tree>> {
+    static REGISTRY: OnceLock<Mutex<HashMap<u32, Tree>>> = OnceLock::new();
     REGISTRY.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
@@ -67,7 +87,10 @@ pub fn contain(pid: u32) {
     }
 
     if assigned && let Ok(mut registry) = registry().lock() {
-        registry.insert(pid, job);
+        // The caller has just started `pid` and still holds it, so this opens that
+        // process and no other.
+        let root = Held::open(pid);
+        registry.insert(pid, Tree { job, root });
     }
 }
 
@@ -80,14 +103,14 @@ pub fn terminate_tree(pid: u32, status: u32) -> io::Result<bool> {
         return Ok(false);
     };
 
-    let Some(job) = registry.remove(&pid) else {
+    let Some(tree) = registry.remove(&pid) else {
         return Ok(false);
     };
 
     // Dropping the job would also reap it, since it is created with
     // KILL_ON_JOB_CLOSE — but terminate first so the outcome does not depend on when
     // the handle happens to be dropped.
-    job.terminate(status)?;
+    tree.job.terminate(status)?;
     Ok(true)
 }
 
@@ -97,7 +120,11 @@ pub fn tree_pids(pid: u32) -> Vec<u32> {
     registry()
         .lock()
         .ok()
-        .and_then(|registry| registry.get(&pid).and_then(|job| job.process_ids().ok()))
+        .and_then(|registry| {
+            registry
+                .get(&pid)
+                .and_then(|tree| tree.job.process_ids().ok())
+        })
         .unwrap_or_default()
 }
 
@@ -132,16 +159,18 @@ fn for_each_in_tree(pid: u32, action: fn(u32) -> io::Result<usize>) -> io::Resul
 ///
 /// Only live roots are returned. The registry keeps a job until it is swept, so a
 /// command that has already exited would otherwise be handed to `kill` as a target and
-/// come back as "No such process" — for a process the user never named.
+/// come back as "No such process" — for a process the user never named. Live is asked
+/// of the root each entry holds: asked of the pid, a root that had ended counted as live
+/// once Windows had given its pid to another process, and `kill 0` signalled that one.
 #[must_use]
 pub fn roots() -> Vec<u32> {
     registry()
         .lock()
         .map(|registry| {
             registry
-                .keys()
-                .copied()
-                .filter(|&pid| crate::process::is_pid_alive(pid))
+                .iter()
+                .filter(|&(&pid, tree)| tree.root_is_running(pid))
+                .map(|(&pid, _)| pid)
                 .collect()
         })
         .unwrap_or_default()
@@ -151,21 +180,21 @@ pub fn roots() -> Vec<u32> {
 ///
 /// Whatever the process left running keeps running (see [`JobObject::release`]).
 pub fn forget(pid: u32) {
-    let job = registry().lock().ok().and_then(|mut r| r.remove(&pid));
-    if let Some(job) = job {
-        job.release();
+    let tree = registry().lock().ok().and_then(|mut r| r.remove(&pid));
+    if let Some(tree) = tree {
+        tree.job.release();
     }
 }
 
 /// Release every job still held, so its members outlive cash's exit — for
 /// [`crate::session::release_at_exit`], once it has ended what should not.
 pub fn release_all() {
-    let jobs: Vec<JobObject> = registry()
+    let trees: Vec<Tree> = registry()
         .lock()
-        .map(|mut r| r.drain().map(|(_, job)| job).collect())
+        .map(|mut r| r.drain().map(|(_, tree)| tree).collect())
         .unwrap_or_default();
-    for job in jobs {
-        job.release();
+    for tree in trees {
+        tree.job.release();
     }
 }
 
@@ -174,18 +203,21 @@ pub fn release_all() {
 /// Called opportunistically so a long-lived interactive session does not accumulate a
 /// handle per command ever run. A finished command's descendants — an editor window a
 /// launcher started — are left running, not reaped with the handle.
+///
+/// Gone is asked of the root each entry holds. Asked of the pid, an entry whose pid
+/// Windows had given to another process stayed for as long as that process ran.
 pub fn sweep() {
     let Ok(mut registry) = registry().lock() else {
         return;
     };
     let dead: Vec<u32> = registry
-        .keys()
-        .copied()
-        .filter(|&pid| !crate::process::is_pid_alive(pid))
+        .iter()
+        .filter(|&(&pid, tree)| !tree.root_is_running(pid))
+        .map(|(&pid, _)| pid)
         .collect();
     for pid in dead {
-        if let Some(job) = registry.remove(&pid) {
-            job.release();
+        if let Some(tree) = registry.remove(&pid) {
+            tree.job.release();
         }
     }
 }
