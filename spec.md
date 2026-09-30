@@ -305,6 +305,30 @@ Consequence, and it is consistent rather than accidental: `> /dev/null` discards
 `> NUL` creates a file called `NUL` (D28). A POSIX script means the former; only a
 Windows-ism means the latter.
 
+**The `/dev` names are names, not files.** Windows has no `/dev`, so there is nothing to
+open. cash reads the name where it opens a file itself — the target of a redirection
+(`< /dev/stdin`, `> /dev/stderr`, `&> /dev/null`, `exec 3< /dev/fd/0`), the operand of
+`source`, and the script file (`cash /dev/stdin`) — and supplies the null device, or the
+descriptor the command has at that moment: inside `f < file`, a pipeline or a
+here-document, `/dev/stdin` is that input, not the shell's. Three things follow.
+
+- *The name is decided from the word as written, before any path resolution.* Resolving
+  first is what made `< /dev/stdin` fail with `failed to redirect to C:/dev/stdin`: a
+  rooted path gains the current drive, and the name is gone. Only a name rooted at `/`
+  is one. `dev/null` and `C:/dev/null` are files, so `cd ~/dev; echo x > null` writes a
+  file. `/dev//null`, `/dev/./null` and the backslash spelling are the same name, as a
+  filesystem would read them; `/dev/NULL` and `//dev/null` (a UNC path) are not.
+- *The descriptor is shared, not opened again.* Linux and Git Bash open the file a second
+  time, so `{ echo a; echo b > /dev/stdout; } > out` leaves `b` alone in `out`, and a read
+  from `/dev/fd/3` starts at the first line whatever was already read from 3. In cash the
+  first leaves `a` and `b`, and the second goes on where 3 stands — what `>&1` and `<&3`
+  do, and what bash does on a system with no `/dev/fd`. For a pipe or a terminal there is
+  no difference. A descriptor that is not open fails the redirection, as in bash.
+- *An argument is not a file cash opens* (D4). `cat /dev/stdin` and `tee /dev/stderr`
+  hand the name to the command, bundled or not, and it finds no such path; `cat -` and
+  `cat < /dev/stdin` are the spellings that work. The file tests do not know the names
+  either: `[ -e /dev/stdin ]` is false, as `[ -e /dev/null ]` is (§9).
+
 ### D8 — Command resolution is cash's own
 
 ```
@@ -2211,6 +2235,7 @@ someone who expected bash, so additions need to earn their place.
 | 36 | `which ls` prints `C:/…/cash.exe/ls`, a path no file is at, which cash runs as `ls` | A builtin has no file, and scripts run what `which` prints | D58 |
 | 37 | A subscript that `unset`, `read`, `printf -v`, `declare` or `[[ -v ]]` expands a second time never runs a command substitution: `unset "a[$key]"` with `key='$(cmd)'` is an error | Bash runs `cmd`, its best-known array injection; `$i` and `$((…))` still expand as in Bash (as 27 does for arithmetic) | — |
 | 38 | A `CHLD` trap runs once per child process cash starts and reaps; a bundled tool (`ls`, `cat`) and a command substitution run inside cash and raise none | Windows has no `SIGCHLD`; cash emulates it from the children it waits for, and those have no process | D64 |
+| 39 | `/dev/stdin`, `/dev/stdout`, `/dev/stderr` and `/dev/fd/N` work in a redirection and in `source`, and share the descriptor: `> /dev/stdout` never truncates the file standard output is writing, and a read from `/dev/fd/3` goes on where 3 stands. As an argument (`cat /dev/stdin`) or in a file test they name nothing | Windows has no `/dev` to open a second time, and an argument reaches a command as written | D7, D4 |
 
 `select` was missing outright until recently: it was a reserved word with no grammar
 rule, so `select x in a b; do …; done` was a syntax error that took the whole file with
