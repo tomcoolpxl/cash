@@ -262,6 +262,40 @@ const CASES: &[Case] = &[
         name: "read-t-console",
         keys: &["read -t 0.3; echo \"rc=$?\"\r"],
     },
+    // `read` taking keys as they are typed, where a console left to itself waits for
+    // Enter: a count, a delimiter, and a terminal's answer to a query, read unseen.
+    Case {
+        name: "read-n-no-enter",
+        keys: &["read -n 3 v; echo \"[$v]\"\r", "abc"],
+    },
+    Case {
+        name: "read-d-no-enter",
+        keys: &["read -d : v; echo \"[$v]\"\r", "ab:"],
+    },
+    Case {
+        name: "read-terminal-answer",
+        keys: &[
+            "IFS= read -rs -t 10 -d t v; printf '%q rc=%s\\n' \"$v\" \"$?\"\r",
+            "\x1b[6;20;10t",
+        ],
+    },
+    // An arrow key, as a script's menu reads it: Escape, then the rest if there is any.
+    Case {
+        name: "read-arrow-key",
+        keys: &[
+            "IFS= read -rsn1 k; IFS= read -rsn2 -t 0.05 r; printf '%q %q\\n' \"$k\" \"$r\"\r",
+            "\x1b[A",
+        ],
+    },
+    // A silent line, and a line with a timeout, edited with Backspace and ended in time.
+    Case {
+        name: "read-s-line",
+        keys: &["read -s v; echo \"[$v]\"\r", "secret\r"],
+    },
+    Case {
+        name: "read-t-line",
+        keys: &["read -t 10 v; echo \"[$v] rc=$?\"\r", "helx\x7flo\r"],
+    },
     // A job that finishes during a builtin, with another started on the same line: its
     // `Done` is still reported, and the new job does not take its id.
     Case {

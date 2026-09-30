@@ -1,0 +1,3 @@
+$ read -d : v; echo "[$v]"
+ab:[ab]
+$

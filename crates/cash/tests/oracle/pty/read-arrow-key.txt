@@ -1,0 +1,3 @@
+$ IFS= read -rsn1 k; IFS= read -rsn2 -t 0.05 r; printf '%q %q\n' "$k" "$r"
+$'\E' \[A
+$

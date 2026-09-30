@@ -16,6 +16,11 @@ const TIMEOUT_EXIT_CODE: u8 = 142;
 const CTRL_C: char = '\x03';
 /// ASCII control character for Ctrl+D (EOT - End of Transmission).
 const CTRL_D: char = '\x04';
+/// What the Backspace key types at a console.
+const BACKSPACE: char = '\x08';
+/// What Ctrl+Backspace types at a console, and Backspace at one sending a terminal's
+/// sequences.
+const DELETE: char = '\x7f';
 /// Backslash character used for escape processing.
 const BACKSLASH: char = '\\';
 /// Default line delimiter (newline).
@@ -416,17 +421,157 @@ enum ReadResult {
 struct InputReader {
     /// The input source.
     input: std::io::BufReader<PolledInput>,
+    /// The console's keys, when the input is a console and the read asks of it what a
+    /// console collecting a line cannot do. Characters then come from here.
+    console: Option<ConsoleInput>,
     /// Bytes from a malformed UTF-8 sequence, still owed to the caller one at a time.
     pending: VecDeque<char>,
     /// Whether control bytes should have terminal meanings instead of being data.
     input_is_terminal: bool,
-    /// Terminal mode guard - kept alive for RAII cleanup on drop.
-    /// The guard restores original terminal settings when dropped, even though
-    /// we don't access the field directly after construction.
-    ///
-    /// The leading underscore suppresses the "unused field" warning while making
-    /// it explicit this field exists solely for its `Drop` implementation.
-    _term_mode: Option<cash_core::terminal::AutoModeGuard>,
+}
+
+/// A console read a key at a time, doing for `read` what a terminal driver does for it
+/// on Unix.
+///
+/// Bash leaves the terminal collecting lines unless `-n`, `-N` or a delimiter other than
+/// newline asks for characters as they are typed, turns the terminal's echo off for
+/// `-s`, and has a signal end the read when `-t` runs out. A Windows console collecting a
+/// line can do none of that: it hands over nothing before Enter, a read of it cannot be
+/// ended once a key is typed, and it shows keys only while it collects a line. So for
+/// any of those options the keys are read here (`cash_win32::conin`), and this shows
+/// them and collects the line.
+struct ConsoleInput {
+    keys: cash_win32::conin::Keys,
+    /// The screen, to show what is typed on; `None` for `-s`.
+    screen: Option<std::fs::File>,
+    /// Whether a line is collected and handed over at Enter, with Backspace taking a
+    /// character back, as a terminal does unless told otherwise. If not, each character
+    /// is handed over as it is typed, Backspace among them.
+    collects_lines: bool,
+    /// Characters handed over and not yet taken.
+    ready: VecDeque<char>,
+}
+
+impl ConsoleInput {
+    /// Takes over the console `input` is; `None` when it is not a console.
+    fn open(
+        input: &cash_core::openfiles::OpenFile,
+        collects_lines: bool,
+        shows_keys: bool,
+    ) -> Option<Self> {
+        use cash_core::openfiles::OpenFile;
+        use cash_win32::conin::Keys;
+
+        // As they are typed, the keys without a character are wanted too, as the
+        // sequences a terminal sends: a script reads an arrow as `\e[A`, and the answer
+        // to a terminal query starts with `\e`. In a line they are left out, as the
+        // console leaves them out of the lines it collects.
+        let sequences = !collects_lines;
+        let keys = match input {
+            OpenFile::Stdin(stdin) => Keys::open(stdin, sequences),
+            OpenFile::File(file) => Keys::open(file, sequences),
+            _ => None,
+        }?;
+        let screen = shows_keys
+            .then(|| std::fs::OpenOptions::new().write(true).open("CONOUT$").ok())
+            .flatten();
+        Some(Self {
+            keys,
+            screen,
+            collects_lines,
+            ready: VecDeque::new(),
+        })
+    }
+
+    /// The next character, or `None` when `deadline` passed first. Collecting a line,
+    /// that is its first character, once it has been ended; what was typed of a line
+    /// that was not ended in time is dropped, as a terminal hands `read` none of it.
+    fn next(&mut self, deadline: Option<Instant>) -> std::io::Result<Option<char>> {
+        if let Some(ch) = self.ready.pop_front() {
+            return Ok(Some(ch));
+        }
+        if !self.collects_lines {
+            let ch = self.key(deadline)?;
+            if let Some(ch) = ch {
+                self.show(ch);
+            }
+            return Ok(ch);
+        }
+
+        let mut line = Vec::new();
+        loop {
+            let Some(ch) = self.key(deadline)? else {
+                return Ok(None);
+            };
+            match ch {
+                BACKSPACE | DELETE => {
+                    if let Some(taken_back) = line.pop() {
+                        self.erase(taken_back);
+                    }
+                }
+                // Ctrl-C drops the line; Ctrl-D hands over what there is of it.
+                CTRL_C => {
+                    self.show(ch);
+                    return Ok(Some(ch));
+                }
+                DEFAULT_DELIMITER | CTRL_D => {
+                    self.show(ch);
+                    line.push(ch);
+                    break;
+                }
+                _ => {
+                    self.show(ch);
+                    line.push(ch);
+                }
+            }
+        }
+        self.ready.extend(line);
+        Ok(self.ready.pop_front())
+    }
+
+    /// The next key's character. Enter is a newline, as a terminal makes it: the
+    /// console's own is a carriage return.
+    fn key(&mut self, deadline: Option<Instant>) -> std::io::Result<Option<char>> {
+        Ok(self
+            .keys
+            .next(deadline)?
+            .map(|ch| if ch == '\r' { DEFAULT_DELIMITER } else { ch }))
+    }
+
+    /// Shows a character as a terminal echoes it: a control character as `^C`, and
+    /// Ctrl-D, which ends input, not at all.
+    fn show(&mut self, ch: char) {
+        let Some(screen) = &mut self.screen else {
+            return;
+        };
+        let shown = match ch {
+            DEFAULT_DELIMITER => "\r\n".to_owned(),
+            CTRL_C => "^C\r\n".to_owned(),
+            CTRL_D => return,
+            _ => shown_as(ch),
+        };
+        // A screen that cannot be written to is no reason to fail the read.
+        let _ = screen.write_all(shown.as_bytes());
+    }
+
+    /// Takes a character back off the screen.
+    fn erase(&mut self, ch: char) {
+        if let Some(screen) = &mut self.screen {
+            let columns = unicode_width::UnicodeWidthStr::width(shown_as(ch).as_str());
+            let _ = screen.write_all("\x08 \x08".repeat(columns).as_bytes());
+        }
+    }
+}
+
+/// What the screen shows for a character typed: itself, or for a control character the
+/// key that types it with Ctrl, as `^[` for Escape. Tab too, which a terminal shows as
+/// itself: taking `^I` back off the screen needs no knowledge of the column it began in.
+fn shown_as(ch: char) -> String {
+    match u8::try_from(ch) {
+        Ok(control @ 0..=0x1f) => format!("^{}", char::from(control + b'@')),
+        Ok(0x7f) => "^?".to_owned(),
+        _ => ch.to_string(),
+    }
 }
 
 /// Events that can occur when reading input.
@@ -467,11 +612,7 @@ enum EditingKey {
 
 impl InputReader {
     /// Creates a new input reader with optional timeout.
-    fn new(
-        input: cash_core::openfiles::OpenFile,
-        timeout: Option<Duration>,
-        term_mode: Option<cash_core::terminal::AutoModeGuard>,
-    ) -> Self {
+    fn new(input: cash_core::openfiles::OpenFile, timeout: Option<Duration>) -> Self {
         let input_is_terminal = input.is_terminal();
         Self {
             input: std::io::BufReader::with_capacity(
@@ -481,10 +622,16 @@ impl InputReader {
                     deadline: timeout.map(|t| Instant::now() + t),
                 },
             ),
+            console: None,
             pending: VecDeque::new(),
             input_is_terminal,
-            _term_mode: term_mode,
         }
+    }
+
+    /// Reads the console's keys from here on rather than the lines it collects, if the
+    /// input is a console. See [`ConsoleInput`].
+    fn read_console_keys(&mut self, collects_lines: bool, shows_keys: bool) {
+        self.console = ConsoleInput::open(&self.input.get_ref().input, collects_lines, shows_keys);
     }
 
     /// Checks if input is immediately available (for `-t 0`). Returns `false` if an error
@@ -497,6 +644,13 @@ impl InputReader {
     /// Reads the next input event, handling timeout and control characters.
     fn read_event(&mut self) -> Result<InputEvent, cash_core::Error> {
         let ch = loop {
+            if let Some(console) = &mut self.console {
+                match console.next(self.input.get_ref().deadline)? {
+                    Some(ch) => break ch,
+                    None => return Ok(InputEvent::Timeout),
+                }
+            }
+
             if let Some(ch) = self.pending.pop_front() {
                 break ch;
             }
@@ -1072,9 +1226,7 @@ fn editor_limit_reached(committed: &str, line: &[char], config: &LineReaderConfi
     })
 }
 
-/// Windows needs an explicit raw-console guard because its cash-core terminal
-/// configuration is currently a stub. Unix was already placed in raw mode by
-/// `setup_terminal_settings`.
+/// The console in raw mode for as long as the editor reads its key events.
 struct EditorModeGuard;
 
 impl EditorModeGuard {
@@ -1160,11 +1312,12 @@ impl ReadCommand {
         shell: &mut cash_core::Shell<SE>,
     ) -> Result<ReadResult, cash_core::Error> {
         let input_file_is_terminal = input_file.is_terminal();
-        let term_mode = self.setup_terminal_settings(&input_file)?;
 
         // Like Bash, a positive timeout has no effect on regular files. Keep
-        // explicit `-t 0`, which is a readiness query even for a file.
+        // explicit `-t 0`, which is a readiness query even for a file. A console is not
+        // a regular file, however it was opened.
         if matches!(&input_file, cash_core::openfiles::OpenFile::File(_))
+            && !input_file_is_terminal
             && timeout != Some(Duration::ZERO)
         {
             timeout = None;
@@ -1186,7 +1339,7 @@ impl ReadCommand {
         let char_limit = self.character_limit();
 
         // Create the input reader.
-        let mut reader = InputReader::new(input_file, timeout, term_mode);
+        let mut reader = InputReader::new(input_file, timeout);
 
         // Handle -t 0 special case: just check if input is available without reading.
         if timeout == Some(Duration::ZERO) {
@@ -1218,6 +1371,19 @@ impl ReadCommand {
             process_escapes: !self.raw_mode,
         };
 
+        // Bash has the terminal hand over characters as they are typed for `-n`, `-N` and
+        // a delimiter other than newline, and lines otherwise. A console collecting a
+        // line serves only the read that asks nothing else of it. A timeout could not
+        // end its read, and a silent line is collected here as well, where keys are
+        // shown only if this shows them, rather than by a second change to the console.
+        let as_typed = char_limit.is_some() || delimiter != Some(DEFAULT_DELIMITER);
+        if input_file_is_terminal
+            && !self.editing_requested()
+            && (as_typed || self.silent || timeout.is_some())
+        {
+            reader.read_console_keys(!as_typed, !self.silent);
+        }
+
         if input_file_is_terminal && self.editing_requested() {
             read_line_with_editor(
                 &mut reader,
@@ -1232,25 +1398,6 @@ impl ReadCommand {
         } else {
             read_line_with_reader(&mut reader, &config)
         }
-    }
-
-    fn setup_terminal_settings(
-        &self,
-        file: &cash_core::openfiles::OpenFile,
-    ) -> Result<Option<cash_core::terminal::AutoModeGuard>, cash_core::Error> {
-        let mode = cash_core::terminal::AutoModeGuard::new(file.to_owned()).ok();
-        if let Some(mode) = &mode {
-            let editing = self.editing_requested();
-            let config = cash_core::terminal::Settings::builder()
-                .line_input(false)
-                .interrupt_signals(false)
-                .echo_input(!self.silent && !editing)
-                .build();
-
-            mode.apply_settings(&config)?;
-        }
-
-        Ok(mode)
     }
 
     /// Validates the timeout value and returns an error result if invalid.
@@ -1450,6 +1597,16 @@ mod tests {
             "café"
         );
         assert_eq!(common_completion_prefix(&[]), "");
+    }
+
+    #[test]
+    fn test_shown_as_spells_a_control_character_with_its_key() {
+        assert_eq!(shown_as('a'), "a");
+        assert_eq!(shown_as('é'), "é");
+        assert_eq!(shown_as('\x1b'), "^[");
+        assert_eq!(shown_as(CTRL_C), "^C");
+        assert_eq!(shown_as('\t'), "^I");
+        assert_eq!(shown_as(DELETE), "^?");
     }
 
     // ==================== split_line_by_ifs tests ====================

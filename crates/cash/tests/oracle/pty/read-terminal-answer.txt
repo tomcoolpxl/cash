@@ -1,0 +1,3 @@
+$ IFS= read -rs -t 10 -d t v; printf '%q rc=%s\n' "$v" "$?"
+$'\E[6;20;10' rc=0
+$

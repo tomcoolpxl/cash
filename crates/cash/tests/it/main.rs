@@ -86,6 +86,8 @@ mod process_identity;
 // D48: `ps`, which uutils does not carry.
 mod ps_builtin;
 mod pure_bash_corpus;
+// `read -t`, `-d`, `-n` and `-s` at a console, which collects a line unless told not to.
+mod read_console;
 mod real_world_tests;
 // D3/D7/D8/D34/D35: what cash says it will run vs what it runs.
 mod resolution_honesty;

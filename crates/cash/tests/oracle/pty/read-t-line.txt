@@ -1,0 +1,4 @@
+$ read -t 10 v; echo "[$v] rc=$?"
+hello
+[hello] rc=0
+$

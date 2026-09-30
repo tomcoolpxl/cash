@@ -18,6 +18,11 @@
 //! completion, not by bytes arriving, so waiting on it would return immediately and
 //! forever. Peeking on a cycle is what every Windows program that needs this ends up
 //! doing; the interval is short enough to feel instant and long enough not to spin a core.
+//!
+//! The console row serves `read -t 0`, which only asks. A `read` that waits at a console
+//! with a timeout takes the console's keys itself ([`crate::conin`]): a key waiting says
+//! nothing about a line being complete, and a console's read of a line, once begun,
+//! cannot be ended.
 
 use std::io;
 use std::time::{Duration, Instant};

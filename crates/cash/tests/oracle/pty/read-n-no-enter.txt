@@ -1,0 +1,3 @@
+$ read -n 3 v; echo "[$v]"
+abc[abc]
+$
