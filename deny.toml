@@ -1,0 +1,18 @@
+# cargo-deny: CI runs `cargo deny --all-features check advisories` (ci.yml), so a crate
+# cash.exe is built from that RustSec lists as vulnerable, or that was yanked, fails the
+# build rather than shipping unnoticed. Licences are checked by cargo-about at release
+# (.github/about/about.toml).
+#
+# An advisory that does not apply is added to `ignore` with its ID and the reason, never
+# silenced in bulk.
+
+[graph]
+targets = ["x86_64-pc-windows-msvc"]
+all-features = true
+
+[advisories]
+yanked = "deny"
+# Unmaintained crates are reported for direct dependencies only; deep in the tree there
+# is nothing cash can do about one.
+unmaintained = "workspace"
+ignore = []

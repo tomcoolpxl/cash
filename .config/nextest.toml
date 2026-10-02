@@ -7,6 +7,14 @@ fail-fast = false
 [profile.default.junit]
 path = "test-results.xml"
 
+# CI's profile (NEXTEST_PROFILE=ci in the workflows): the default profile's retries,
+# groups and timeouts, which it inherits, with its results in target/nextest/ci, where
+# .github/scripts/report-flaky.ps1 lists the tests that passed only on a retry.
+[profile.ci]
+
+[profile.ci.junit]
+path = "test-results.xml"
+
 # nextest runs each test in a process of its own, so a lock inside a test process
 # serializes nothing; these groups are how tests take turns.
 [test-groups]

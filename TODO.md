@@ -54,15 +54,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ## Phase 8. Crashes and security (R2, R4, R9)
 
-### 8.6 CI and release hardening
-
-`permissions: contents: read` with `write` only on the release job; SHA-pinned actions;
-`cargo deny check advisories` (or rustsec audit); a `dependabot.yml` (rust-toolchain.toml
-already cites one); `--locked` on the dist build; no rust-cache in the release job;
-`checkout` of the tag on `workflow_dispatch`; `inputs.tag` through `env:`; pre-release
-from a `-` in the tag; a nextest `ci` profile that shows flaky passes; the vendored
-reedline and crossterm tests in `xtask ci full`. ARCH-03, ARCH-12, BIN-21, PI-09.
-
 ---
 
 ## Phase 9. The shell owns its state (R1)

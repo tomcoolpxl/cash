@@ -6,32 +6,46 @@ on:
   pull_request:
     branches: [ main ]
 
+# Nothing here writes to the repository.
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
+  # The profile whose results the flaky-test report below reads (.config/nextest.toml).
+  NEXTEST_PROFILE: ci
 
+# Third-party actions are pinned to a commit, with the version it was in a comment;
+# Dependabot proposes the updates (.github/dependabot.yml).
 jobs:
   test:
     name: Build, Test & Lint (Windows)
     runs-on: windows-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
 
+      # The version rust-toolchain.toml names, with the components it lists.
       - name: Install Rust toolchain
-        run: |
-          rustup toolchain install 1.98.1 --profile minimal --component rustfmt,clippy
-          rustup default 1.98.1
+        run: rustup toolchain install --profile minimal
 
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
 
-      - name: Install cargo-nextest
-        uses: taiki-e/install-action@v2
+      - name: Install cargo-nextest and cargo-deny
+        uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
         with:
-          tool: cargo-nextest
+          tool: cargo-nextest,cargo-deny
+
+      # A crate cash.exe is built from that RustSec lists, or that was yanked (deny.toml).
+      - name: RustSec advisories
+        run: cargo deny check advisories
 
       # The same command as a local run: format check, clippy, every test (each in a
-      # process of its own, through nextest), then the doc tests.
+      # process of its own, through nextest), the doc tests, the documentation and the
+      # vendored crates' own tests.
       - name: Check and test
         run: cargo xtask ci full
 
@@ -39,3 +53,10 @@ jobs:
       # clippy and the tests; the other features are linted here.
       - name: Clippy, all features
         run: cargo xtask check lint --all-features
+
+      # nextest retries a failed test (.config/nextest.toml). One that passed on a retry
+      # is listed in the run's summary and as a warning, rather than hidden by a green run.
+      - name: Report flaky tests
+        if: always()
+        shell: pwsh
+        run: ./.github/scripts/report-flaky.ps1 -Results target/nextest/ci/test-results.xml

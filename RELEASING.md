@@ -84,9 +84,13 @@ version = "0.9.2" # or target version
 Run the checks CI runs, which also updates `Cargo.lock`:
 
 ```powershell
+cargo deny check advisories
 cargo xtask ci full
 cargo xtask check lint --all-features
 ```
+
+`cargo deny` (`cargo binstall cargo-deny`) fails on a crate RustSec lists or that was
+yanked (`deny.toml`); `ci full` also runs the vendored crates' own tests.
 
 Verify that cash reports the new version:
 

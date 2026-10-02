@@ -7,99 +7,121 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to release (e.g. v0.8.0). Leave empty to use HEAD.'
+        description: 'Tag to release (e.g. v1.3.8). Leave empty when the run is started from the tag itself.'
         required: false
         default: ''
       prerelease:
-        description: 'Mark as pre-release'
+        description: 'Mark as pre-release (a tag with a "-", such as v1.4.0-rc.1, always is)'
         type: boolean
         default: false
 
+# Read-only, except for the one job that publishes the release.
 permissions:
-  contents: write
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
+  NEXTEST_PROFILE: ci
 
+# Third-party actions are pinned to a commit, with the version it was in a comment;
+# Dependabot proposes the updates (.github/dependabot.yml).
 jobs:
-  # ── Gate: run the full CI suite before releasing ──────────────────────
+  # ── Gate: run the full CI suite on the commit being released ──────────
   ci:
     name: CI Gate (Windows)
     runs-on: windows-latest
     steps:
+      # The tag's commit, also when the run was started by hand from another branch.
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          persist-credentials: false
 
       - name: Install Rust toolchain
-        run: |
-          rustup toolchain install 1.98.1 --profile minimal --component rustfmt,clippy
-          rustup default 1.98.1
+        run: rustup toolchain install --profile minimal
 
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
 
-      - name: Install cargo-nextest
-        uses: taiki-e/install-action@v2
+      - name: Install cargo-nextest and cargo-deny
+        uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
         with:
-          tool: cargo-nextest
+          tool: cargo-nextest,cargo-deny
 
       # The same steps as ci.yml.
+      - name: RustSec advisories
+        run: cargo deny check advisories
+
       - name: Check and test
         run: cargo xtask ci full
 
       - name: Clippy, all features
         run: cargo xtask check lint --all-features
 
+      - name: Report flaky tests
+        if: always()
+        shell: pwsh
+        run: ./.github/scripts/report-flaky.ps1 -Results target/nextest/ci/test-results.xml
+
   # ── Build release binary and publish GitHub Release ───────────────────
   release:
     name: Build & Publish Release
     needs: ci
     runs-on: windows-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
+          ref: ${{ inputs.tag || github.ref }}
           # Full history and tags, for the release notes below.
           fetch-depth: 0
+          persist-credentials: false
 
+      # The tag reaches the script through the environment, never pasted into it, and
+      # must look like a release tag before anything else uses it.
       - name: Determine release tag
         id: tag
         shell: pwsh
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
-          if ("${{ github.event_name }}" -eq "workflow_dispatch" -and "${{ inputs.tag }}" -ne "") {
-            $tag = "${{ inputs.tag }}"
-          } else {
-            $tag = "${{ github.ref_name }}"
+          $tag = if ($env:INPUT_TAG) { $env:INPUT_TAG } else { $env:REF_NAME }
+          if ($tag -notmatch '^v\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$') {
+            Write-Error "Not a release tag: '$tag'. Start the run from a tag, or name one."
+            exit 1
           }
-          Write-Host "Release tag: $tag"
+          $prerelease = if ($tag.Contains('-')) { 'true' } else { 'false' }
+          Write-Host "Release tag: $tag (pre-release: $prerelease)"
           "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "prerelease=$prerelease" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       - name: Verify tag matches Cargo.toml version
         shell: pwsh
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
         run: |
-          $tag = "${{ steps.tag.outputs.tag }}"
           $cargoVersion = (Select-String -Path Cargo.toml -Pattern '^\s*version\s*=\s*"([^"]+)"' | Select-Object -First 1).Matches.Groups[1].Value
-          $tagVersion = $tag -replace '^v', ''
+          $tagVersion = $env:TAG -replace '^v', ''
           # Strip any pre-release suffix for comparison (e.g. v0.8.0-rc.1 → 0.8.0)
           $tagBase = ($tagVersion -split '-')[0]
           if ($tagBase -ne $cargoVersion) {
             Write-Error "Tag version ($tagBase) does not match Cargo.toml version ($cargoVersion)"
             exit 1
           }
-          Write-Host "✓ Tag $tag matches Cargo.toml version $cargoVersion"
+          Write-Host "✓ Tag $env:TAG matches Cargo.toml version $cargoVersion"
 
       - name: Install Rust toolchain
-        run: |
-          rustup toolchain install 1.98.1 --profile minimal
-          rustup default 1.98.1
+        run: rustup toolchain install --profile minimal
 
-      - name: Rust Cache
-        uses: Swatinem/rust-cache@v2
-
+      # No build cache here: what ships is built from the lock file alone.
       # `dist` is the fully optimized profile (fat LTO, one codegen unit); `release`
       # is the quicker one used for local installs. See Cargo.toml.
       - name: Build release binary
-        run: cargo build --profile dist --bin cash
+        run: cargo build --profile dist --bin cash --locked
 
       - name: Print version
         run: target\dist\cash.exe --version
@@ -121,7 +143,7 @@ jobs:
           }
 
       - name: Install cargo-about
-        uses: taiki-e/install-action@v2
+        uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
         with:
           tool: cargo-about
 
@@ -135,9 +157,10 @@ jobs:
 
       - name: Package release assets
         shell: pwsh
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
         run: |
-          $tag = "${{ steps.tag.outputs.tag }}"
-          $archiveName = "cash-$tag-x86_64-pc-windows-msvc.zip"
+          $archiveName = "cash-$env:TAG-x86_64-pc-windows-msvc.zip"
           $distDir = "dist"
           New-Item -ItemType Directory -Path $distDir -Force | Out-Null
 
@@ -165,15 +188,17 @@ jobs:
       # below them.
       - name: Write release notes
         shell: pwsh
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
         # Grouped by Conventional Commits type; see RELEASING.md, "Commit messages".
-        run: ./.github/scripts/release-notes.ps1 -Tag "${{ steps.tag.outputs.tag }}" -Out release-notes.md
+        run: ./.github/scripts/release-notes.ps1 -Tag $env:TAG -Out release-notes.md
 
       - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           tag_name: ${{ steps.tag.outputs.tag }}
           draft: false
-          prerelease: ${{ inputs.prerelease || false }}
+          prerelease: ${{ inputs.prerelease || steps.tag.outputs.prerelease == 'true' }}
           body_path: release-notes.md
           generate_release_notes: true
           files: |

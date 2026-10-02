@@ -16,6 +16,7 @@
 //! 2. **All tests** - The whole workspace, including the tests that drive cash.exe
 //! 3. **Doc tests** - The examples in documentation comments, which nextest does not run
 //! 4. **Documentation** - `cargo doc`, which fails on a link to something that is not there
+//! 5. **Vendored crates' tests** - reedline's and crossterm's own, outside the workspace
 //!
 //! The ordering is intentional: fast checks run first to provide quick feedback,
 //! with slower comprehensive tests running last. CI runs `ci full` and then lints
@@ -136,6 +137,10 @@ fn run_full(args: &FullArgs, verbose: bool) -> Result<()> {
     ));
     steps.push(("Doc tests", Box::new(move || test::run_doc_tests(verbose))));
     steps.push(("Documentation", Box::new(move || test::run_docs(verbose))));
+    steps.push((
+        "Vendored crates' tests",
+        Box::new(move || test::run_vendored_tests(verbose)),
+    ));
 
     run_steps(&steps, args.continue_on_error, "Full checks")
 }

@@ -78,6 +78,9 @@ pub enum TestSubcommand {
     /// This includes all tests: unit tests plus the `cash` package's tests that
     /// drive cash.exe.
     Integration(IntegrationTestArgs),
+
+    /// Run the tests of the patched crates in `vendor/`, which are outside the workspace.
+    Vendored,
 }
 
 /// Arguments for unit tests.
@@ -123,6 +126,7 @@ pub fn run(cmd: &TestCommand, verbose: bool) -> Result<()> {
         TestSubcommand::Integration(args) => {
             run_integration_tests(&sh, &cmd.binary_args, args, verbose)
         }
+        TestSubcommand::Vendored => run_vendored_tests(verbose),
     }
 }
 
@@ -199,6 +203,47 @@ pub fn run_doc_tests(verbose: bool) -> Result<()> {
     Ok(())
 }
 
+/// The crates in `vendor/` that carry a patch of cash's with tests of their own.
+const VENDORED_CRATES_WITH_TESTS: [&str; 2] = ["reedline", "crossterm"];
+
+/// Runs the tests of the vendored crates, among them the tests of cash's patches
+/// (`vendor/*/CASH-PATCHES.md`). They are outside the workspace, so nothing else runs
+/// them.
+///
+/// Each is built in a target folder of its own under `target/`, and the `Cargo.lock` a
+/// run writes into `vendor/` is removed again. `NO_COLOR` is cleared: crossterm honours
+/// it, and a reedline test checks the colours it would have.
+pub fn run_vendored_tests(verbose: bool) -> Result<()> {
+    let sh = Shell::new()?;
+    let root = find_workspace_root()?;
+    sh.change_dir(&root);
+    for name in VENDORED_CRATES_WITH_TESTS {
+        let manifest = format!("vendor/{name}/Cargo.toml");
+        let target_dir = format!("target/vendor-{name}");
+        let lock = root.join("vendor").join(name).join("Cargo.lock");
+        let lock_was_there = lock.exists();
+        eprintln!("Running the tests of vendor/{name}...");
+        if verbose {
+            eprintln!(
+                "Running: cargo test --manifest-path {manifest} --lib --target-dir {target_dir}"
+            );
+        }
+        let result = cmd!(
+            sh,
+            "cargo test --manifest-path {manifest} --lib --target-dir {target_dir}"
+        )
+        .env_remove("NO_COLOR")
+        .run()
+        .with_context(|| format!("The tests of vendor/{name} failed"));
+        if !lock_was_there {
+            let _ = std::fs::remove_file(&lock);
+        }
+        result?;
+    }
+    eprintln!("The vendored crates' tests passed.");
+    Ok(())
+}
+
 /// Builds the documentation of every crate of the workspace, which fails on a link to
 /// something that is not there: the rustdoc lints are errors (`Cargo.toml`), but nothing
 /// ran rustdoc, and ten such links had gathered in four crates by 2026-09-30.
@@ -261,7 +306,13 @@ fn run_nextest(
 /// Copy the nextest `JUnit` XML results to the given output path.
 fn copy_nextest_results(output: &Path) -> Result<()> {
     let workspace_root = find_workspace_root()?;
-    let source = workspace_root.join("target/nextest/default/test-results.xml");
+    // nextest writes the results under the profile it ran, which `NEXTEST_PROFILE` picks
+    // (CI runs `ci`).
+    let profile = std::env::var("NEXTEST_PROFILE").unwrap_or_else(|_| "default".to_owned());
+    let source = workspace_root
+        .join("target/nextest")
+        .join(profile)
+        .join("test-results.xml");
     std::fs::copy(&source, output).with_context(|| {
         format!(
             "Failed to copy nextest results from {} to {}",
