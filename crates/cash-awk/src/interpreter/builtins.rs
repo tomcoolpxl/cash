@@ -12,8 +12,8 @@ use std::fmt::Write;
 
 use super::format::{
     FormatArgs, IntegerFormat, fmt_write_decimal_float, fmt_write_float_general,
-    fmt_write_hex_float, fmt_write_scientific_float, fmt_write_signed, fmt_write_string,
-    fmt_write_unsigned, parse_conversion_specifier_args,
+    fmt_write_hex_float, fmt_write_scientific_float, fmt_write_signed, fmt_write_signed_f64,
+    fmt_write_string, fmt_write_unsigned, parse_conversion_specifier_args,
 };
 use super::record::{FieldSeparator, FieldsState, split_record};
 use super::stack::Stack;
@@ -91,14 +91,12 @@ fn format_one_conversion(
 ) -> Result<(), String> {
     match specifier {
         'd' | 'i' => {
-            let value = value.scalar_as_f64() as i64;
-            fmt_write_signed(result, value, args);
+            fmt_write_signed_f64(result, value.scalar_as_f64(), args);
         }
         'u' | 'o' | 'x' | 'X' => {
+            // A negative number is written as its 64-bit two's complement, as gawk and C
+            // write it (`printf "%x", -1` is `ffffffffffffffff`); it was a fatal error.
             let value = value.scalar_as_f64() as i64;
-            if value.is_negative() {
-                return Err("negative value for unsigned format specifier".to_string());
-            }
             let format = match specifier {
                 'u' => IntegerFormat::Decimal,
                 'o' => IntegerFormat::Octal,
@@ -106,7 +104,7 @@ fn format_one_conversion(
                 'X' => IntegerFormat::HexUpper,
                 _ => unreachable!(),
             };
-            fmt_write_unsigned(result, value as u64, format, args);
+            fmt_write_unsigned(result, value.cast_unsigned(), format, args);
         }
         'a' | 'A' => {
             let value = value.scalar_as_f64();

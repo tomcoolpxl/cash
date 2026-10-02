@@ -83,7 +83,14 @@ impl AwkValue {
         match self.value {
             AwkValueVariant::Number(num) => {
                 if is_integer(num) {
-                    Ok((num as i64).to_string().into())
+                    // All of an integer's digits, also beyond what an `i64` holds: `print
+                    // 2^64` printed 9223372036854775807 (`REVIEW_REPORT.md` TXT-02).
+                    Ok(if num.abs() < 9_223_372_036_854_775_808.0 {
+                        (num as i64).to_string()
+                    } else {
+                        format!("{num:.0}")
+                    }
+                    .into())
                 } else {
                     sprintf(num_fmt, &mut [num.into()], num_fmt)
                 }

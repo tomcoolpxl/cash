@@ -56,13 +56,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ## Phase 10. awk, sed and bc (R3)
 
-### 10.1 awk prints wrong numbers
-
-`awk 'BEGIN{print 100000.4, 150000.2}'` prints `1 15`; gawk `100000 150000`.
-`printf "%g", 100000` prints `1`; `print 0.00001234` prints `0.000012`; `print 2^64`
-prints `9223372036854775807`; `printf "%x", -1` is fatal. `format.rs:169-235, 737-833`
-and `value.rs:85`. Add the cases to `tests/awk-differential.sh`. TXT-01, TXT-02.
-
 ### 10.2 awk and sed bugs that break ordinary scripts
 
 - awk: a `for (k in a)` left by `break` or `return` locks `a`, so the usual dedup function

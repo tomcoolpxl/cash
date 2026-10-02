@@ -166,74 +166,6 @@ fn write_exponent(
     }
 }
 
-fn remove_trailing_zeros(
-    target: &mut String,
-    sign: &str,
-    write_starting_index: usize,
-    width: usize,
-    zero_padded: bool,
-    left_justified: bool,
-) {
-    let trailing_spaces = target.chars().rev().take_while(|c| *c == ' ').count();
-    let trailing_zeros = target
-        .chars()
-        .rev()
-        .skip(trailing_spaces)
-        .take_while(|c| *c == '0')
-        .count();
-
-    // Check if removing trailing zeros would leave a trailing decimal point
-    let dot_index = target.len() - trailing_spaces - trailing_zeros;
-    let has_trailing_dot =
-        dot_index > 0 && target.as_bytes()[dot_index - 1] == decimal_point() as u8;
-
-    // Total removable characters: trailing zeros plus the orphaned decimal point
-    let removable = trailing_zeros + has_trailing_dot as usize;
-    let final_number_length = target.len() - write_starting_index - removable;
-
-    if final_number_length >= width {
-        // the number cannot have trailing spaces and trailing zeros, otherwise it would mean that
-        // even if we remove chars we could still stay under width, but this cannot be, as any padding
-        // chars mean that the number alone was not wide enough
-        assert!(trailing_spaces == 0 || trailing_zeros == 0);
-
-        target.truncate(target.len() - removable);
-    } else if left_justified {
-        let start_replace =
-            target.len() - trailing_spaces - trailing_zeros - has_trailing_dot as usize;
-        // this is safe as we just swap ascii bytes for other ascii bytes. No multibyte chars
-        // involved
-        unsafe {
-            let bytes = target[start_replace..start_replace + removable].as_bytes_mut();
-            for c in bytes {
-                *c = b' ';
-            }
-        }
-    } else if zero_padded {
-        // we need to rotate the removable chars after the sign
-        let first = write_starting_index + sign.len();
-        // safe: we only rotate ascii bytes (b'0' and b'.'), no multibyte chars are split
-        unsafe {
-            let bytes = target[first..].as_bytes_mut();
-            bytes.rotate_right(removable);
-            // Rotated chars may include '.', replace with '0' for correct zero-padding
-            for b in bytes[..removable].iter_mut() {
-                *b = b'0';
-            }
-        };
-    } else {
-        unsafe {
-            let bytes = target[write_starting_index..].as_bytes_mut();
-            // rotate is safe, see above
-            bytes.rotate_right(removable);
-            // we just replace b'0'/b'.' with b' '. No multibyte chars are involved
-            for b in bytes[..removable].iter_mut() {
-                *b = b' ';
-            }
-        }
-    }
-}
-
 fn base_scientific_float_format(
     args: &FormatArgs,
     target: &mut String,
@@ -470,12 +402,33 @@ pub fn fmt_write_signed(target: &mut String, value: i64, args: &FormatArgs) {
     let mut buffer = [0u8; 20];
     let buffer_length = number_to_digits(&mut buffer, unsigned_value, 10, &BASE_10_DIGITS);
     let buffer_start = buffer.len() - buffer_length;
+    write_signed_digits(target, value.is_negative(), &buffer[buffer_start..], args);
+}
+
+/// `%d` of a number, which may be beyond what an `i64` holds: such a number is written
+/// with all of its digits, as gawk writes it (`printf "%d", 2^64` is
+/// `18446744073709551616`), where a cast to `i64` saturated (`REVIEW_REPORT.md` TXT-02).
+pub fn fmt_write_signed_f64(target: &mut String, value: f64, args: &FormatArgs) {
+    if !value.is_finite() || value.abs() < 9_223_372_036_854_775_808.0 {
+        fmt_write_signed(target, value as i64, args);
+        return;
+    }
+    let digits = format!("{:.0}", value.trunc().abs());
+    write_signed_digits(target, value.is_sign_negative(), digits.as_bytes(), args);
+}
+
+/// Writes a sign and the decimal `digits` of an integer, with the width, precision and
+/// flags of `args`.
+fn write_signed_digits(target: &mut String, negative: bool, digits: &[u8], args: &FormatArgs) {
+    let buffer = digits;
+    let buffer_length = digits.len();
+    let buffer_start = 0;
 
     let precision = args.precision.unwrap_or(1);
     // Per C standard, precision overrides zero-flag for integer conversions
     let zero_padded = args.zero_padded && args.precision.is_none();
 
-    let sign = sign_str(value.is_negative(), args);
+    let sign = sign_str(negative, args);
     let number_length = buffer_length.max(precision) + sign.len();
 
     // left justified:
@@ -723,123 +676,65 @@ pub fn fmt_write_float_general(
         return;
     }
 
-    let abs_value = value.abs();
-
-    // the POSIX standard doesn't specify a default value. Here we follow the C standard
-    // which uses 6. This also matches other implementations
-    // We also want to always print at least one digit
+    // C's `%g` (C17 7.21.6.1): with P the precision (6 when omitted, 1 when 0) and X the
+    // exponent `%e` would print with P significant digits, the number is written as `%f`
+    // with precision P-1-X when P > X >= -4, and as `%e` with precision P-1 otherwise.
+    // Without `#`, the zeros that end a fraction go, and a point with nothing after it.
+    // The width is applied last, to what is left.
+    //
+    // This replaced a version that took X as log10's truncation rather than the exponent
+    // printed, stripped zeros from numbers with no fraction, and padded before stripping:
+    // `print 100000.4` printed `1` and `printf "%-12g", 1e-7` printed `1      e-07`
+    // (`REVIEW_REPORT.md` TXT-01).
     let significant_digits = args.precision.unwrap_or(6).max(1);
+    let abs_value = value.abs();
+    let scientific = format!("{:.*e}", significant_digits - 1, abs_value);
+    let (mantissa, exponent) = scientific.split_once('e').unwrap_or((&scientific, "0"));
+    let exponent: i64 = exponent.parse().unwrap_or(0);
+    let digits = i64::try_from(significant_digits).unwrap_or(i64::MAX);
 
-    // Special-case zero: log10(0) is -inf, so handle it as decimal notation
-    let exponent = if abs_value == 0.0 {
-        0
+    let body = if exponent < -4 || exponent >= digits {
+        let mut mantissa = mantissa.to_owned();
+        finish_general_fraction(&mut mantissa, args.alternative_form);
+        format!(
+            "{mantissa}{}{}{:02}",
+            if lowercase_version { 'e' } else { 'E' },
+            if exponent < 0 { '-' } else { '+' },
+            exponent.unsigned_abs()
+        )
     } else {
-        abs_value.log10().trunc() as i64
+        let decimals = usize::try_from(digits - 1 - exponent).unwrap_or(0);
+        let mut fixed = format!("{abs_value:.decimals$}");
+        finish_general_fraction(&mut fixed, args.alternative_form);
+        fixed
     };
 
-    if exponent < -4 || significant_digits <= exponent.max(0) as usize {
-        // in scientific notation, the number of significant digits is the precision plus one
-        let precision = significant_digits - 1;
-
-        let mut additional_exponent_length = 0;
-        // if the exponent is not negative, we need to add a '+' sign to the exponent part
-        if !exponent.is_negative() {
-            additional_exponent_length += 1;
-        }
-        // if the exponent value is only one digit, we need to pad it with a zero
-        if exponent.abs() < 10 {
-            additional_exponent_length += 1;
-        }
-
-        let value = value.abs();
-        let write_starting_index = target.len();
-        let should_add_dot_after_number = precision == 0 && args.alternative_form;
-        let width = args.width.saturating_sub(
-            sign.len() + should_add_dot_after_number as usize + additional_exponent_length,
-        );
-
-        base_scientific_float_format(args, target, sign, value, precision, width);
-
-        let (exponent_buffer, exponent_buffer_length) = gather_exponent(target);
-
-        if !args.alternative_form {
-            remove_trailing_zeros(
-                target,
-                sign,
-                write_starting_index,
-                width,
-                args.zero_padded,
-                args.left_justified,
-            );
-        }
-
-        write_exponent(
-            target,
-            &exponent_buffer,
-            exponent_buffer_length,
-            lowercase_version,
-            should_add_dot_after_number,
-        );
-
-        if args.left_justified {
-            let number_length = target.len() - write_starting_index;
-            pad_target(target, args.width.saturating_sub(number_length), b' ');
-        }
+    let padding = args.width.saturating_sub(sign.len() + body.len());
+    if args.left_justified {
+        target.push_str(sign);
+        target.push_str(&body);
+        pad_target(target, padding, b' ');
+    } else if args.zero_padded {
+        target.push_str(sign);
+        pad_target(target, padding, b'0');
+        target.push_str(&body);
     } else {
-        let contains_significant_integer_digits = value.trunc() != 0.0;
-        // in decimal notation, the number of significant digits is the precision plus the number of
-        // digits in the integer part of the number. If the integer part is 0, the leading zero is
-        // not considered a significant digit
-        let precision = significant_digits.saturating_sub(
-            exponent.max(0) as usize + contains_significant_integer_digits as usize,
-        );
+        pad_target(target, padding, b' ');
+        target.push_str(sign);
+        target.push_str(&body);
+    }
+}
 
-        let value = value.abs();
-        let write_starting_index = target.len();
-        let should_add_dot_after_number = precision == 0 && args.alternative_form;
-        let width = args
-            .width
-            .saturating_sub(sign.len() + should_add_dot_after_number as usize);
-
-        // left justified
-        //   sign integer_part <decimal_point> fractional_part padding
-        // right justified zero padded
-        //   sign padding integer_part <decimal point> fractional_part
-        // right justified space padded
-        //  padding sign integer_part <decimal point> fractional_part
-
-        if args.left_justified {
-            target.push_str(sign);
-            write!(target, "{:.1$}", value, precision).expect("error writing to string");
-        } else if args.zero_padded {
-            target.push_str(sign);
-            write!(target, "{:01$.2$}", value, width, precision).expect("error writing to string");
-        } else {
-            target.push_str(sign);
-            write!(target, "{:1$.2$}", value, width, precision).expect("error writing to string");
-            swap_sign_in_front_of_number(target, sign, write_starting_index);
+/// The end of a `%g` number: without `#`, the zeros that end its fraction and a point left
+/// with nothing after it are dropped; with `#`, there is always a point.
+fn finish_general_fraction(number: &mut String, alternative_form: bool) {
+    if alternative_form {
+        if !number.contains('.') {
+            number.push('.');
         }
-
-        // in this case `precision` is an upper bound on the number of decimal digits
-        if !args.alternative_form {
-            remove_trailing_zeros(
-                target,
-                sign,
-                write_starting_index,
-                width,
-                args.zero_padded,
-                args.left_justified,
-            );
-        }
-
-        if should_add_dot_after_number {
-            target.push(decimal_point());
-        }
-
-        if args.left_justified {
-            let number_length = target.len() - write_starting_index;
-            pad_target(target, args.width.saturating_sub(number_length), b' ');
-        }
+    } else if number.contains('.') {
+        let kept = number.trim_end_matches('0').trim_end_matches('.').len();
+        number.truncate(kept);
     }
 }
 

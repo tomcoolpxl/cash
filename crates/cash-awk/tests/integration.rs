@@ -91,6 +91,20 @@ fn test_awk_printf() {
     test_awk!(printf);
 }
 
+// `%g`, OFMT and CONVFMT, against gawk 5.4's output: `print 100000.4` printed `1`, and
+// the mean of 100000 and 200001 printed `15` (REVIEW_REPORT.md TXT-01).
+#[test]
+fn test_awk_general_float_format_matches_gawk() {
+    test_awk!(general_float_format_matches_gawk);
+}
+
+// Integers beyond an i64, against gawk 5.4's output: `print 2^64` printed
+// 9223372036854775807, and `printf "%x", -1` was a fatal error (TXT-02).
+#[test]
+fn test_awk_integers_beyond_i64_match_gawk() {
+    test_awk!(integers_beyond_i64_match_gawk);
+}
+
 #[test]
 fn test_awk_hello_world() {
     test_awk!(hello_world)
