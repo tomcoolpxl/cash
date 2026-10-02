@@ -34,6 +34,8 @@ mod bc_cash;
 mod builtin_parameters;
 mod bundled_paths;
 mod cd_errors;
+// The binary, a run of it isolated from the user's settings, and a scratch folder.
+mod common;
 // D40: `docker completion bash` and friends, which need bash-completion's helpers.
 mod completion_scripts;
 // D40: completion is the one part of the shell with no command-line surface, so these

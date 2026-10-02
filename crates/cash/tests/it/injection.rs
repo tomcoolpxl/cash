@@ -18,47 +18,14 @@
               throughout, including where they are not strictly needed."
 )]
 
-use std::path::{Path, PathBuf};
-use std::process::Command;
-
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
-
-struct Output {
-    stdout: String,
-    stderr: String,
-    code: i32,
-}
-
-/// Runs `script` with `dir` as cash's working directory.
-fn cash_in(dir: &Path, script: &str) -> Output {
-    let out = Command::new(CASH)
-        .args(["-c", script])
-        .current_dir(dir)
-        .output()
-        .expect("failed to run cash");
-    Output {
-        stdout: String::from_utf8_lossy(&out.stdout).trim_end().to_string(),
-        stderr: String::from_utf8_lossy(&out.stderr).trim_end().to_string(),
-        code: out.status.code().unwrap_or(-1),
-    }
-}
-
-/// A scratch folder of the test's own, empty.
-fn scratch(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("cash-injection-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    dir
-}
+use crate::common::{Scratch, run_in as cash_in};
 
 #[test]
 fn start_hands_an_ampersand_to_no_command_processor() {
-    let dir = scratch("start");
+    let scratch = Scratch::new("injection-start");
+    let dir = scratch.path();
     // No such file, so nothing opens; with `cmd /c start` in between, `&` ran the rest.
-    let out = cash_in(
-        &dir,
-        "start 'no-such-file.txt&echo x>pwned'; echo \"rc=$?\"",
-    );
+    let out = cash_in(dir, "start 'no-such-file.txt&echo x>pwned'; echo \"rc=$?\"");
     assert!(
         !dir.join("pwned").exists(),
         "the text after & ran: {}",
@@ -72,7 +39,6 @@ fn start_hands_an_ampersand_to_no_command_processor() {
         "{}",
         out.stderr
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -95,11 +61,12 @@ fn a_subscript_expanded_a_second_time_runs_no_command() {
         r#"a=(1 2); printf -v "a[$k]" x"#,
         r#"a=(1 2); declare "a[$k]=v""#,
     ];
-    let dir = scratch("subscript");
+    let scratch = Scratch::new("injection-subscript");
+    let dir = scratch.path();
     for key in keys {
         for use_ in uses {
             let script = format!("k='{key}'; {use_}; echo after");
-            let out = cash_in(&dir, &script);
+            let out = cash_in(dir, &script);
             assert!(
                 !dir.join("pwned").exists(),
                 "{script} ran the command: {}",
@@ -108,5 +75,4 @@ fn a_subscript_expanded_a_second_time_runs_no_command() {
             assert_eq!(out.stdout, "after", "{script}: {}", out.stderr);
         }
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }

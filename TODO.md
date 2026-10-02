@@ -55,13 +55,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ## Phase 9. The shell owns its state (R1)
 
-### 9.1 One test helper module for `it`
-
-First, so the items after it write their tests on it: an `it/common.rs` with the run
-helper, the output struct and a unique scratch folder, isolating config.toml and
-`BASH_ENV`. Today 60 of 62 modules declare their own `CASH`, 43 their own run helper, 36
-their own output struct. Existing modules move to it as they are touched. BIN-18.
-
 ### 9.2 Programs run from the folder cash started in, not from the shell's
 
 `cd sub && ./tool.exe` runs `tool.exe` from the folder cash was started in, or reports
