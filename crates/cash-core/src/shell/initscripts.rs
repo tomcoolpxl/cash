@@ -64,9 +64,22 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
                 .history
                 .as_ref()
                 .is_none_or(crate::history::History::is_empty)
-            && let Ok(Some(history)) = self.load_history()
         {
-            self.history = Some(history);
+            // As Bash does when it starts, the file is cut to `HISTFILESIZE` entries, then
+            // read. Cutting first keeps the offset `history -n` starts from right.
+            if let Some(max_entries) = self.history_size_limit("HISTFILESIZE")
+                && let Some(path) = self.history_file_path()
+                && let Err(err) = crate::history::History::truncate_file(&path, max_entries)
+            {
+                tracing::debug!("couldn't truncate the history file: {err}");
+            }
+
+            if let Ok(Some(mut history)) = self.load_history() {
+                if let Some(max_items) = self.history_size_limit("HISTSIZE") {
+                    history.keep_newest(max_items);
+                }
+                self.history = Some(history);
+            }
         }
 
         Ok(())

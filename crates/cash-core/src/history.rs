@@ -1,6 +1,7 @@
 //! Facilities for tracking and persisting the shell's command history.
 
 use chrono::Utc;
+use std::fmt::Write as _;
 use std::{
     collections::HashMap,
     io::{BufRead, Read, Write},
@@ -16,7 +17,6 @@ use crate::error;
 type ItemId = i64;
 
 /// Interface for querying and manipulating the shell's recorded history of commands.
-// TODO(history): support maximum item count
 #[derive(Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct History {
@@ -27,6 +27,10 @@ pub struct History {
     /// `history -n`, which imports only lines appended since the file was last read.
     #[cfg_attr(feature = "serde", serde(default))]
     file_offsets: HashMap<PathBuf, u64>,
+    /// How many items are dirty, so that a flush after every command (D44) finds them
+    /// without walking the whole history.
+    #[cfg_attr(feature = "serde", serde(default))]
+    unsaved: usize,
 }
 
 impl History {
@@ -107,14 +111,62 @@ impl History {
             .id_map
             .get_mut(&id)
             .ok_or(error::ErrorKind::HistoryItemNotFound)?;
+        match (existing_item.dirty, item.dirty) {
+            (false, true) => self.unsaved += 1,
+            (true, false) => self.unsaved = self.unsaved.saturating_sub(1),
+            _ => (),
+        }
         *existing_item = item;
         Ok(())
+    }
+
+    /// Forgets that the item `id` exists, in the dirty count; the caller removes it.
+    fn forget_dirty(&mut self, id: ItemId) {
+        if self.id_map.get(&id).is_some_and(|item| item.dirty) {
+            self.unsaved = self.unsaved.saturating_sub(1);
+        }
+    }
+
+    /// Removes every item whose command line is `command_line` (`HISTCONTROL=erasedups`).
+    pub fn remove_matching(&mut self, command_line: &str) {
+        let matching: Vec<ItemId> = self
+            .iter()
+            .filter(|item| item.command_line == command_line)
+            .map(|item| item.id)
+            .collect();
+        if matching.is_empty() {
+            return;
+        }
+        for id in &matching {
+            self.forget_dirty(*id);
+            self.id_map.remove_mut(id);
+        }
+        self.items = self
+            .items
+            .into_iter()
+            .filter(|id| !matching.contains(id))
+            .copied()
+            .collect();
+    }
+
+    /// Keeps only the newest `max_items` items (`HISTSIZE`).
+    pub fn keep_newest(&mut self, max_items: usize) {
+        let Some(excess) = self.items.len().checked_sub(max_items).filter(|n| *n > 0) else {
+            return;
+        };
+        let dropped: Vec<ItemId> = self.items.iter().take(excess).copied().collect();
+        for id in &dropped {
+            self.forget_dirty(*id);
+            self.id_map.remove_mut(id);
+        }
+        self.items = self.items.iter().skip(excess).copied().collect();
     }
 
     /// Removes the nth item from the history. Returns the removed item, or `None` if no such item
     /// exists (i.e., because it was out of range).
     pub fn remove_nth_item(&mut self, n: usize) -> bool {
         if let Some(id) = self.items.get(n).copied() {
+            self.forget_dirty(id);
             self.items = self
                 .items
                 .into_iter()
@@ -141,6 +193,9 @@ impl History {
 
         item.id = id;
         self.next_id += 1;
+        if item.dirty {
+            self.unsaved += 1;
+        }
 
         self.items.push_back_mut(item.id);
         self.id_map.insert_mut(item.id, item);
@@ -155,6 +210,7 @@ impl History {
     ///
     /// * `id` - The unique identifier of the history item to delete.
     pub fn delete_item_by_id(&mut self, id: ItemId) -> Result<(), error::Error> {
+        self.forget_dirty(id);
         self.id_map.remove_mut(&id);
         self.items = self
             .items
@@ -170,6 +226,7 @@ impl History {
     pub fn clear(&mut self) -> Result<(), error::Error> {
         self.id_map = rpds::HashTrieMapSync::new_sync();
         self.items = rpds::VectorSync::new_sync();
+        self.unsaved = 0;
         Ok(())
     }
 
@@ -189,37 +246,107 @@ impl History {
         unsaved_items_only: bool,
         write_timestamps: bool,
     ) -> Result<(), error::Error> {
-        // Open the file
-        let mut file_options = std::fs::File::options();
+        // With nothing new, the file is not even opened: this runs after every command.
+        if unsaved_items_only && self.unsaved == 0 {
+            return Ok(());
+        }
 
+        // The dirty items are the newest ones in practice, so they are found from the end.
+        let ids: Vec<ItemId> = if unsaved_items_only {
+            let mut ids: Vec<ItemId> = self
+                .items
+                .iter()
+                .rev()
+                .filter(|id| self.id_map.get(id).is_some_and(|item| item.dirty))
+                .take(self.unsaved)
+                .copied()
+                .collect();
+            ids.reverse();
+            ids
+        } else {
+            self.items.iter().copied().collect()
+        };
+
+        // One write for all of it: an append of one buffer is a single `WriteFile`, which
+        // another tab's append cannot land in the middle of (D44).
+        let mut text = String::new();
+        for id in &ids {
+            if let Some(item) = self.id_map.get(id) {
+                if write_timestamps && let Some(timestamp) = item.timestamp {
+                    let _ = writeln!(text, "#{}", timestamp.timestamp());
+                }
+                text.push_str(&item.command_line);
+                text.push('\n');
+            }
+        }
+
+        let mut file_options = std::fs::File::options();
         if append {
             file_options.append(true);
         } else {
             file_options.write(true).truncate(true);
         }
-
         let mut file = file_options.create(true).open(history_file_path.as_ref())?;
-
-        for item_id in &self.items {
-            if let Some(item) = self.id_map.get_mut(item_id) {
-                if unsaved_items_only && !item.dirty {
-                    continue;
-                }
-
-                if write_timestamps && let Some(timestamp) = item.timestamp {
-                    writeln!(file, "#{}", timestamp.timestamp())?;
-                }
-
-                writeln!(file, "{}", item.command_line)?;
-
-                if unsaved_items_only {
-                    item.dirty = false;
-                }
-            }
-        }
-
+        file.write_all(text.as_bytes())?;
         file.flush()?;
 
+        for id in &ids {
+            if let Some(item) = self.id_map.get_mut(id) {
+                item.dirty = false;
+            }
+        }
+        if unsaved_items_only {
+            self.unsaved = 0;
+        } else {
+            self.unsaved = self.iter().filter(|item| item.dirty).count();
+        }
+
+        Ok(())
+    }
+
+    /// Cuts the history file at `path` down to its newest `max_entries` entries
+    /// (`HISTFILESIZE`), as Bash does when it starts. A timestamp line stays with the entry
+    /// it belongs to. The file is replaced whole, through a temporary file beside it, so
+    /// it is never left half written.
+    pub fn truncate_file(path: impl AsRef<Path>, max_entries: usize) -> Result<(), error::Error> {
+        let path = path.as_ref();
+        let contents = match std::fs::read(path) {
+            Ok(contents) => contents,
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(err) => return Err(err.into()),
+        };
+
+        // Where each entry begins, its timestamp line included.
+        let mut entry_starts = Vec::new();
+        let mut pending_timestamp = None;
+        let mut offset = 0;
+        for line in contents.split_inclusive(|b| *b == b'\n') {
+            if is_timestamp_line(line) {
+                pending_timestamp.get_or_insert(offset);
+            } else {
+                entry_starts.push(pending_timestamp.take().unwrap_or(offset));
+            }
+            offset += line.len();
+        }
+
+        let Some(excess) = entry_starts
+            .len()
+            .checked_sub(max_entries)
+            .filter(|n| *n > 0)
+        else {
+            return Ok(());
+        };
+        let keep_from = entry_starts.get(excess).copied().unwrap_or(contents.len());
+        let kept = contents.get(keep_from..).unwrap_or_default();
+
+        let mut temp_name = path.as_os_str().to_owned();
+        temp_name.push(format!(".cash-truncate-{}", std::process::id()));
+        let temp = PathBuf::from(temp_name);
+        std::fs::write(&temp, kept)?;
+        if let Err(err) = std::fs::rename(&temp, path) {
+            let _ = std::fs::remove_file(&temp);
+            return Err(err.into());
+        }
         Ok(())
     }
 
@@ -301,6 +428,14 @@ impl History {
     pub fn count(&self) -> usize {
         self.items.len()
     }
+}
+
+/// Whether a line of a history file is the timestamp of the entry after it: `#` and
+/// digits, as `import` reads them.
+fn is_timestamp_line(line: &[u8]) -> bool {
+    let line = line.trim_ascii_end();
+    line.strip_prefix(b"#")
+        .is_some_and(|digits| !digits.is_empty() && digits.iter().all(u8::is_ascii_digit))
 }
 
 /// Represents a timestamp for a history item.
@@ -548,5 +683,73 @@ impl<'a> Iterator for Search<'a> {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn read(path: &Path) -> String {
+        std::fs::read_to_string(path).unwrap()
+    }
+
+    #[test]
+    fn a_flush_appends_only_what_is_new() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("hist");
+        let mut history = History::default();
+        history.add(Item::new("one")).unwrap();
+        history.add(Item::new("two")).unwrap();
+        history.flush(&path, true, true, false).unwrap();
+        history.add(Item::new("three")).unwrap();
+        history.flush(&path, true, true, false).unwrap();
+        // Nothing new: the file is not touched.
+        history.flush(&path, true, true, false).unwrap();
+        assert_eq!(read(&path), "one\ntwo\nthree\n");
+    }
+
+    #[test]
+    fn the_newest_items_are_kept() {
+        let mut history = History::default();
+        for line in ["a", "b", "c", "d"] {
+            history.add(Item::new(line)).unwrap();
+        }
+        history.keep_newest(2);
+        let lines: Vec<_> = history
+            .iter()
+            .map(|item| item.command_line.as_str())
+            .collect();
+        assert_eq!(lines, ["c", "d"]);
+        history.keep_newest(0);
+        assert!(history.is_empty());
+    }
+
+    #[test]
+    fn dropped_items_are_not_written() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("hist");
+        let mut history = History::default();
+        for line in ["a", "b", "a", "c"] {
+            history.add(Item::new(line)).unwrap();
+        }
+        history.remove_matching("a");
+        history.flush(&path, true, true, false).unwrap();
+        assert_eq!(read(&path), "b\nc\n");
+    }
+
+    #[test]
+    fn the_file_is_cut_to_its_newest_entries_with_their_timestamps() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("hist");
+        std::fs::write(&path, "#1\none\n#2\ntwo\nthree\n#4\nfour\n").unwrap();
+        History::truncate_file(&path, 2).unwrap();
+        assert_eq!(read(&path), "three\n#4\nfour\n");
+        History::truncate_file(&path, 5).unwrap();
+        assert_eq!(read(&path), "three\n#4\nfour\n");
+        History::truncate_file(&path, 0).unwrap();
+        assert_eq!(read(&path), "");
+        // A file that does not exist is left alone.
+        History::truncate_file(dir.path().join("none"), 1).unwrap();
     }
 }

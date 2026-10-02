@@ -54,14 +54,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ## Phase 8. Crashes and security (R2, R4, R9)
 
-### 8.5 History ignores HISTCONTROL and the rest
-
-` export TOKEN=…`, typed with a leading space, is in `~/.cash_history` at once;
-`HISTCONTROL`, `HISTIGNORE`, `HISTSIZE`, `HISTFILESIZE` are read nowhere, `set +o history`
-does not stop recording, and the starter `.bashrc` sets `HISTCONTROL=ignoreboth`. Also:
-each flush walks all of history; one entry is written in two or three writes
-(`history.rs:209`). PI-03, LANG-05, PI-11.
-
 ### 8.6 CI and release hardening
 
 `permissions: contents: read` with `write` only on the release job; SHA-pinned actions;
@@ -294,7 +286,14 @@ MSRV (1.88 vs 1.95, a missing `msrv-policy.md`). ARCH-05, ARCH-13, ARCH-14, EXE-
 the `thraa/cash` URL, the `experimental-bundled-coreutils` feature name. ARCH-02,
 ARCH-09, ARCH-10.
 
-### 14.4 Dead code, allows and dependencies
+### 14.4 **Yours:** default `HISTSIZE` and `HISTFILESIZE`
+
+Seen while fixing 8.5. Bash sets both to 500 when they are unset; cash leaves them unset,
+so a user who sets neither keeps every line, in memory and in `~/.cash_history`. Following
+Bash would cut an existing long history file to 500 entries at the next start. Follow
+Bash, or keep "no limit" and add a row to spec §4.
+
+### 14.5 Dead code, allows and dependencies
 
 - `spawn::spawn`, `build_cmd_command_line`, the winnow stub, the `sys` stubs behind
   `#![allow(unused)]`, `#![allow(dead_code)]` in cash-shell, the harness's oracle mode,
