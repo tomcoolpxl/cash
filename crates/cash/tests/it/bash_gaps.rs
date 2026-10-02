@@ -1581,11 +1581,124 @@ fn wait_reports_the_status_of_a_finished_job_that_jobs_has_shown() {
         ),
         "p=127"
     );
-    // Not Bash's: Bash 5.3 has no `%1` by then (`wait: %1: no such job`, 127). cash
-    // keeps a finished job's number with its status, as it does after `wait -n`.
+    // A job `jobs` has shown has no `%1` any more (`wait: %1: no such job`, 127), as in
+    // Bash 5.3: cash kept a finished job's number with its status (TODO 5.1).
     assert_eq!(
         jobs_case("\"$X\" -c 'exit 3' & p=$!; ended; jobs > /dev/null; wait %1; echo \"j=$?\""),
-        "j=3"
+        "j=127"
+    );
+}
+
+/// Every difference from Bash 5.3 in `open-issues.md` entry 8, each script in a fresh
+/// cash, and Git Bash 5.3.15's answer (TODO 5.1).
+#[test]
+fn jobs_and_wait_answer_as_bash_53_does() {
+    // A subshell sees the jobs as they are when it is made: this never ended.
+    assert_eq!(
+        wait_case(concat!(
+            "\"$X\" -c 'exit 3' & sleep 0.5; ",
+            "while [ -n \"$(jobs -pr)\" ]; do sleep 0.1; done; echo ended"
+        )),
+        "ended"
+    );
+    assert_eq!(
+        wait_case("\"$X\" -c 'exit 3' & sleep 0.5; echo \"$(jobs)\""),
+        "[1]+  Exit 3                     \"$X\" -c 'exit 3'"
+    );
+    // A plain `wait` forgets every status but that of `$!`, when that job ended before
+    // it and nothing reported it.
+    assert_eq!(
+        wait_case("\"$X\" -c 'exit 3' & p=$!; wait $p; wait; wait $p; echo $?"),
+        "127"
+    );
+    assert_eq!(
+        wait_case(concat!(
+            "\"$X\" -c 'exit 3' & a=$!; \"$X\" -c 'exit 4' & b=$!; sleep 0.5; ",
+            "wait; wait $a; echo $?; wait $b; echo $?"
+        )),
+        "127\n4"
+    );
+    assert_eq!(
+        wait_case("\"$X\" -c 'sleep 0.3; exit 5' & wait; wait $!; echo $?"),
+        "127"
+    );
+    // A finished job keeps its number until it is reported, and then has none.
+    assert_eq!(
+        wait_case("\"$X\" -c 'exit 3' & sleep 0.5; jobs > /dev/null; wait %1; echo $?"),
+        "127"
+    );
+    assert_eq!(
+        wait_case("\"$X\" -c 'exit 3' & sleep 0.5; wait -n; wait %1; echo $?"),
+        "127"
+    );
+    assert_eq!(
+        wait_case(concat!(
+            "\"$X\" -c 'exit 3' & sleep 0.5; \"$X\" -c 'sleep 0.5; exit 4' & ",
+            "wait %1; echo $?; wait %2; echo $?"
+        )),
+        "3\n4"
+    );
+    assert_eq!(
+        wait_case(concat!(
+            "for i in 1 2 3; do \"$X\" -c \"exit $i\" & done; sleep 0.5; ",
+            "\"$X\" -c 'sleep 1' & jobs"
+        )),
+        concat!(
+            "[1]   Exit 1                     \"$X\" -c \"exit $i\"\n",
+            "[2]   Exit 2                     \"$X\" -c \"exit $i\"\n",
+            "[3]   Exit 3                     \"$X\" -c \"exit $i\"\n",
+            "[4]+  Running                    \"$X\" -c 'sleep 1' &"
+        )
+    );
+    // A job a `wait` collected stays in the table, reported, until the next job or
+    // `jobs` takes it out: `%1` finds it again until then, `jobs` does not show it, and
+    // `wait -n` does not return it.
+    assert_eq!(
+        jobs_case(concat!(
+            "\"$X\" -c 'exit 5' & ended; wait %1; echo \"j=$?\"; ",
+            "wait -n; echo \"n=$?\"; wait %1; echo \"j2=$?\""
+        )),
+        "j=5\nn=127\nj2=5"
+    );
+    assert_eq!(
+        jobs_case(
+            "\"$X\" -c 'exit 3' & ended; wait %1; echo \"j=$?\"; jobs; wait %1; echo \"j2=$?\""
+        ),
+        "j=3\nj2=127"
+    );
+    assert_eq!(
+        jobs_case(
+            "\"$X\" -c 'exit 4' & q=$!; ended; wait $q; echo \"q=$?\"; wait %1; echo \"j=$?\""
+        ),
+        "q=4\nj=4"
+    );
+    assert_eq!(
+        jobs_case("\"$X\" -c 'exit 7' & ended; wait %1; \"$X\" -c 'exit 8' & ended; jobs"),
+        "[1]+  Exit 8                     \"$X\" -c 'exit 8'"
+    );
+    let (_, stdout, stderr) = output_with_stderr("wait %5; echo $?");
+    assert_eq!(
+        (stdout.as_str(), stderr.as_str()),
+        ("127", "wait: %5: no such job")
+    );
+    // `-p` with nothing to wait for unsets the variable.
+    assert_eq!(
+        wait_case("v=old; wait -n -p v; echo \"${v-unset}\""),
+        "unset"
+    );
+    // POSIX mode shows a failed job as `Done(3)`.
+    assert_eq!(
+        wait_case("set -o posix; \"$X\" -c 'exit 3' & sleep 0.5; jobs"),
+        "[1]+  Done(3)                    \"$X\" -c 'exit 3'"
+    );
+    // `$!` outlives the job's place in the table, and a subshell has it.
+    assert_eq!(
+        wait_case(concat!(
+            "\"$X\" -c 'exit 3' & p=$!; sleep 0.5; jobs > /dev/null; ",
+            "[ \"$!\" = \"$p\" ] && echo kept; (echo \"sub=$!\") | grep -c \"$p\"; ",
+            "echo \"$(echo $!)\" | grep -c \"$p\""
+        )),
+        "kept\n1\n1"
     );
 }
 

@@ -30,34 +30,12 @@ trust its runs, then by what a user notices most.
 
 | Phase | What | Items |
 | --- | --- | --- |
-| 5 | Jobs, `wait`, and the tools beside them | 5.1 to 5.3 |
+| 5 | Jobs, `wait`, and the tools beside them | 5.2 to 5.4 |
 | 6 | Updating cash | 6.1 |
 
 ---
 
 ## Phase 5. Jobs, `wait`, and the tools beside them
-
-### 5.1 `jobs` and `wait`: every difference from Bash 5.3 in `open-issues.md` entry 8
-
-**Decided: all ten**, until cash and Bash 5.3 print the same for every script in that
-entry's table. It has the scripts and both outputs.
-
-- `$(jobs)` and `jobs | …` show a finished job as still running, so
-  `while [ -n "$(jobs -pr)" ]; do sleep 0.1; done` never ends. A subshell gets a copy of
-  the job table (`Shell::clone`, `JobManager::snapshot`) taken without polling the jobs.
-  This is the one a script is likely to meet.
-- **Decided:** `wait %N` after `jobs` has shown the job matches Bash,
-  `wait: %1: no such job` and 127, where cash returns the job's status now
-  (`collect_saved_job`); `wait $pid` keeps returning the status.
-- A plain `wait` forgets more in Bash: every saved status, except that of `$!` when that
-  job had ended and not been reported.
-- A finished job keeps its number until it is reported, and `%N` names nothing after
-  that; a cash script reaps a finished job when the next one starts, which takes its
-  number. This one changes when a job gives up its number, in the job table that was
-  changed twice that week.
-- `wait %5` for a job that does not exist: Bash's message, and 127.
-- `wait -n -p VAR` unsets `VAR` when it has nothing to return.
-- POSIX mode prints a failed job as `Done(3)`.
 
 ### 5.2 Small things left in `kill` and held processes
 
@@ -77,6 +55,12 @@ beside another build. The Restart Manager refuses a system DLL at once, and
 `file_holders` then walks every process: about 15,500 modules in 290 processes to list
 (0.9 s idle, up to 14 s under load), and `path_key` opens each module's file to
 canonicalize it (1.3 to 4.9 s). `crates/cash-builtins/src/fileuse.rs`.
+
+### 5.4 `${!}` and `${!:+word}` are not expanded
+
+Found in 5.1 (2026-10-02). `echo "[${!}]"` prints `[${!}]` and `echo "${!:+set}"` prints
+`${!:+set}`, as written, where Git Bash 5.3.15 prints the pid and `set`. `$!` and `${#!}`
+work. Likely the parser taking `${!` for the start of an indirection (`${!name}`).
 
 ---
 

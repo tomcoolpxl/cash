@@ -39,11 +39,20 @@ pub struct JobManager {
     /// Bash's saved-status list (`bgpids`). `wait PID` reads a status here after the job
     /// is gone, as POSIX requires, and `wait -n` takes the ones it has not returned yet.
     saved: VecDeque<SavedStatus>,
+
+    /// `$!`: the process id of the last job started in the background, here or, for a
+    /// subshell, in the parent. It outlives the job's place in the table, as in Bash.
+    last_started_pid: Option<sys::process::ProcessId>,
 }
 
 /// How many finished jobs' statuses are kept; the oldest go first. Bash keeps as many
 /// as the child-process limit.
 const MAX_SAVED_STATUSES: usize = 1024;
+
+/// How many finished jobs a script keeps in the table, numbers and all, until `jobs` or
+/// `wait` reports them; past that the oldest leave it, so that a script that starts
+/// jobs in a loop and never waits does not keep them all.
+const MAX_FINISHED_JOBS: usize = 1024;
 
 /// A finished background job's status, kept for `wait`.
 #[derive(Clone, Debug)]
@@ -122,6 +131,47 @@ impl Display for JobSnapshot {
             &self.state,
             self.exit_status,
             &self.command_line,
+            false,
+        )
+    }
+}
+
+impl JobSnapshot {
+    /// The job as `jobs` shows it; in POSIX mode (`posix`) a failed one is `Done(3)`.
+    #[must_use]
+    pub fn line(&self, posix: bool) -> String {
+        JobLine {
+            id: self.id,
+            annotation: &self.annotation,
+            state: &self.state,
+            exit_status: self.exit_status,
+            command_line: &self.command_line,
+            posix,
+        }
+        .to_string()
+    }
+}
+
+/// A job's line, for [`Job::line`] and [`JobSnapshot::line`].
+struct JobLine<'a> {
+    id: usize,
+    annotation: &'a JobAnnotation,
+    state: &'a JobState,
+    exit_status: Option<u8>,
+    command_line: &'a str,
+    posix: bool,
+}
+
+impl Display for JobLine<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write_job_line(
+            f,
+            self.id,
+            self.annotation,
+            self.state,
+            self.exit_status,
+            self.command_line,
+            self.posix,
         )
     }
 }
@@ -129,7 +179,7 @@ impl Display for JobSnapshot {
 /// A job as Bash's `jobs` and job notices show it: `[1]+  Running` and the command,
 /// the mark a space when the job is neither current nor previous, the status padded to
 /// 26 columns, a running job's command ending in ` &`, and a job that failed shown as
-/// `Exit 3` rather than `Done`.
+/// `Exit 3` rather than `Done`, or in POSIX mode (`posix`) as `Done(3)`.
 fn write_job_line(
     f: &mut std::fmt::Formatter<'_>,
     id: usize,
@@ -137,6 +187,7 @@ fn write_job_line(
     state: &JobState,
     exit_status: Option<u8>,
     command_line: &str,
+    posix: bool,
 ) -> std::fmt::Result {
     // A finished job keeps the current job's `+` until it is reported, but not the
     // previous job's `-`, as Bash shows them.
@@ -146,6 +197,7 @@ fn write_job_line(
         JobAnnotation::Previous | JobAnnotation::None => ' ',
     };
     let status = match (state, exit_status) {
+        (JobState::Done, Some(code)) if code != 0 && posix => format!("Done({code})"),
         (JobState::Done, Some(code)) if code != 0 => format!("Exit {code}"),
         (state, _) => state.to_string(),
     };
@@ -240,11 +292,35 @@ impl JobManager {
             return;
         };
         let job = self.jobs.remove(index);
-        self.note_children_reaped(1);
+        self.count_reaped(&job);
         if keep_status {
             self.save_status(&job, status, false, by_wait_n);
         }
         self.reannotate();
+    }
+
+    /// Marks a job a `wait PID` or `wait %N` has collected as reported. It stays in the
+    /// table, so that `%N` and the pid still find it, but `jobs` does not show it and
+    /// `wait -n` does not return it; the next job, `jobs` or a plain `wait` takes it out,
+    /// keeping its status for `wait PID` (Bash 5.3).
+    pub fn mark_waited(&mut self, id: usize) {
+        if let Some(job) = self.jobs.iter_mut().find(|job| job.id == id) {
+            job.notification_pending = false;
+        }
+    }
+
+    /// Takes the finished jobs that have been reported, by `jobs` or a `wait`, out of the
+    /// table, keeping their statuses for `wait PID`: what Bash does when a new job starts.
+    pub fn clean_up_reported(&mut self) {
+        self.remove_notified_done_jobs();
+    }
+
+    /// Counts a job leaving the table for the `CHLD` trap, unless its end was counted
+    /// when it was seen to finish.
+    const fn count_reaped(&mut self, job: &Job) {
+        if !job.reap_counted {
+            self.note_children_reaped(1);
+        }
     }
 
     /// Counts children reaped, for the `CHLD` trap.
@@ -284,12 +360,6 @@ impl JobManager {
         self.collect_saved(index, forget)
     }
 
-    /// Like [`Self::collect_saved_pid`], for `wait %N`.
-    pub fn collect_saved_job(&mut self, id: usize, forget: bool) -> Option<u8> {
-        let index = self.saved.iter().rposition(|s| s.id == id)?;
-        self.collect_saved(index, forget)
-    }
-
     fn collect_saved(&mut self, index: usize, forget: bool) -> Option<u8> {
         if forget {
             return self.saved.remove(index).map(|entry| entry.status);
@@ -311,6 +381,27 @@ impl JobManager {
         target: &WaitTarget<'_>,
         posix_mode: bool,
     ) -> Option<(u8, Option<sys::process::ProcessId>, usize)> {
+        // One still in the table, finished and not reported, after those that left it.
+        let unreported_in_table = self.jobs.iter().position(|job| {
+            matches!(job.state, JobState::Done)
+                && job.notification_pending
+                && target.matches(job.id, &job.all_pids())
+        });
+        if !self
+            .saved
+            .iter()
+            .any(|s| s.unreported && target.matches(s.id, &s.pids))
+            && let Some(index) = unreported_in_table
+        {
+            let job = self.jobs.remove(index);
+            self.count_reaped(&job);
+            let status = job.exit_status.unwrap_or(0);
+            if !posix_mode {
+                self.save_status(&job, status, false, true);
+            }
+            self.reannotate();
+            return Some((status, job.representative_pid(), job.id));
+        }
         let index = self
             .saved
             .iter()
@@ -332,10 +423,21 @@ impl JobManager {
         Some((entry.status, entry.pids.first().copied(), entry.id))
     }
 
-    /// A plain `wait` forgets the statuses `wait -n` returned and those of the jobs
-    /// `jobs` showed as finished, as Bash does.
-    pub fn forget_reported(&mut self) {
-        self.saved.retain(|s| !s.reported);
+    /// What a plain `wait` leaves of the saved statuses: only that of `$!`, when its job
+    /// had ended before the wait and nothing had reported it (Bash 5.3). One `wait PID`,
+    /// `wait -n` or `jobs` reported is forgotten with the rest.
+    fn forget_on_plain_wait(&mut self) {
+        let last = self.last_started_pid;
+        self.saved.retain(|s| {
+            s.unreported && !s.reported && last.is_some_and(|pid| s.pids.contains(&pid))
+        });
+    }
+
+    /// `$!`: the process id of the last job started in the background, which outlives
+    /// its place in the table; a subshell has its parent's.
+    #[must_use]
+    pub const fn last_background_pid(&self) -> Option<sys::process::ProcessId> {
+        self.last_started_pid
     }
 
     /// Returns a new job manager.
@@ -343,14 +445,19 @@ impl JobManager {
         Self::default()
     }
 
-    /// A manager for a subshell: no jobs of its own, but able to see the parent's.
+    /// A manager for a subshell: no jobs of its own, but able to see the parent's, and
+    /// its `$!`.
     #[must_use]
-    pub const fn with_inherited(inherited: Vec<JobSnapshot>) -> Self {
+    pub const fn with_inherited(
+        inherited: Vec<JobSnapshot>,
+        last_started_pid: Option<sys::process::ProcessId>,
+    ) -> Self {
         Self {
             jobs: Vec::new(),
             inherited,
             reaped_children: 0,
             saved: VecDeque::new(),
+            last_started_pid,
         }
     }
 
@@ -382,13 +489,48 @@ impl JobManager {
     /// transition to Done before the entry is cleaned from the table. A job seen to
     /// finish here keeps its status in `exit_status`, for whatever takes it out of the
     /// table later: `jobs` once it has shown it, a `wait`, or the next poll.
+    ///
+    /// A job seen to finish is counted for the `CHLD` trap now, as the process it was has
+    /// ended, whenever it leaves the table.
     pub fn refresh_statuses(&mut self) -> Result<(), error::Error> {
+        let mut finished = 0;
         for job in &mut self.jobs {
             if !matches!(job.state, JobState::Done) {
                 let _ = job.poll_done()?;
+                if matches!(job.state, JobState::Done) && !job.reap_counted {
+                    job.reap_counted = true;
+                    finished += 1;
+                }
             }
         }
+        self.note_children_reaped(finished);
         Ok(())
+    }
+
+    /// Takes the oldest finished jobs out of the table while more than
+    /// [`MAX_FINISHED_JOBS`] are in it, saving their statuses for `wait PID`.
+    pub fn reap_excess_finished(&mut self) {
+        while self
+            .jobs
+            .iter()
+            .filter(|job| matches!(job.state, JobState::Done))
+            .count()
+            > MAX_FINISHED_JOBS
+        {
+            let Some(index) = self
+                .jobs
+                .iter()
+                .position(|job| matches!(job.state, JobState::Done))
+            else {
+                break;
+            };
+            let job = self.jobs.remove(index);
+            self.count_reaped(&job);
+            if let Some(status) = job.exit_status {
+                self.save_status(&job, status, true, false);
+            }
+        }
+        self.reannotate();
     }
 
     /// Consume pending status notifications, optionally restricted to job IDs.
@@ -449,8 +591,8 @@ impl JobManager {
             .into_iter()
             .partition(|job| job.notification_pending || !matches!(job.state, JobState::Done));
         self.jobs = kept;
-        self.note_children_reaped(shown.len());
         for job in &shown {
+            self.count_reaped(job);
             if let Some(status) = job.exit_status {
                 self.save_status(job, status, false, true);
             }
@@ -476,6 +618,8 @@ impl JobManager {
         let id = self.jobs.iter().map(|j| j.id).max().unwrap_or(0) + 1;
         job.id = id;
         job.annotation = JobAnnotation::None;
+        // `&` returns once the job has its process id, so `$!` is known now.
+        self.last_started_pid = job.representative_pid();
         self.jobs.push(job);
         self.reannotate();
 
@@ -588,10 +732,11 @@ impl JobManager {
 
     /// Waits for all managed jobs to complete.
     pub async fn wait_all(&mut self) -> Result<Vec<Job>, error::Error> {
-        // A job that finished before the wait keeps its status for `wait PID`; one the wait
-        // itself collects does not, as in Bash.
+        // Of the jobs that finished before the wait, `$!`'s keeps its status for
+        // `wait PID`, unless something reported it; one the wait itself collects does
+        // not, as in Bash 5.3.
         let mut done: Vec<Job> = self.poll()?.into_iter().map(|(job, _)| job).collect();
-        self.forget_reported();
+        self.forget_on_plain_wait();
         for job in &mut self.jobs {
             job.wait().await?;
         }
@@ -608,7 +753,7 @@ impl JobManager {
         while i != self.jobs.len() {
             if let Some(result) = self.jobs[i].poll_done()? {
                 let job = self.jobs.remove(i);
-                self.note_children_reaped(1);
+                self.count_reaped(&job);
                 let status = result.as_ref().map_or(1, |r| u8::from(r.exit_code));
                 self.save_status(&job, status, true, false);
                 results.push((job, result));
@@ -619,9 +764,10 @@ impl JobManager {
                 // TODO(jobs): A job that is done with no status recorded is removed as
                 // a success, and leaves no status behind.
                 let job = self.jobs.remove(i);
-                self.note_children_reaped(1);
+                self.count_reaped(&job);
                 if let Some(status) = job.exit_status {
-                    self.save_status(&job, status, true, false);
+                    let reported = !job.notification_pending;
+                    self.save_status(&job, status, !reported, reported);
                 }
                 let result = ExecutionResult::new(job.exit_status.unwrap_or(0));
                 results.push((job, Ok(result)));
@@ -647,8 +793,9 @@ impl JobManager {
         let mut i = 0;
         while i != self.jobs.len() {
             if self.jobs[i].tasks.is_empty() {
-                completed_jobs.push(self.jobs.remove(i));
-                self.note_children_reaped(1);
+                let job = self.jobs.remove(i);
+                self.count_reaped(&job);
+                completed_jobs.push(job);
             } else {
                 i += 1;
             }
@@ -744,6 +891,10 @@ pub struct Job {
     /// The console as the job left it when Ctrl-Z stopped it under `fg`, for the next `fg`
     /// to put back (D19). One stopped as it started keeps it in its processes instead.
     console_at_stop: Option<cash_win32::console::ConsoleState>,
+
+    /// Whether the job's end has been counted for the `CHLD` trap: when it was seen to
+    /// finish, which may be long before it leaves the table.
+    reap_counted: bool,
 }
 
 impl Display for Job {
@@ -755,11 +906,26 @@ impl Display for Job {
             &self.state,
             self.exit_status,
             &self.command_line,
+            false,
         )
     }
 }
 
 impl Job {
+    /// The job as `jobs` shows it; in POSIX mode (`posix`) a failed one is `Done(3)`.
+    #[must_use]
+    pub fn line(&self, posix: bool) -> String {
+        JobLine {
+            id: self.id,
+            annotation: &self.annotation,
+            state: &self.state,
+            exit_status: self.exit_status,
+            command_line: &self.command_line,
+            posix,
+        }
+        .to_string()
+    }
+
     /// Whether a wait can still consume a task result for this job.
     pub fn has_unwaited_tasks(&self) -> bool {
         !self.tasks.is_empty()
@@ -787,6 +953,7 @@ impl Job {
             notification_pending: true,
             spawned_pids: None,
             console_at_stop: None,
+            reap_counted: false,
         }
     }
 
@@ -1163,6 +1330,24 @@ impl Job {
         self.spawned_pids
             .as_ref()
             .and_then(|pids| pids.lock().ok()?.first().copied())
+    }
+
+    /// Whether the job has finished and been reported, by `jobs` or a `wait`: `jobs`
+    /// does not show it again, nor a notice.
+    #[must_use]
+    pub const fn is_reported(&self) -> bool {
+        matches!(self.state, JobState::Done) && !self.notification_pending
+    }
+
+    /// Every process ID the job is known by: those it spawned, and its representative.
+    fn all_pids(&self) -> Vec<sys::process::ProcessId> {
+        let mut pids = self.spawned_pids();
+        if let Some(pid) = self.representative_pid()
+            && !pids.contains(&pid)
+        {
+            pids.push(pid);
+        }
+        pids
     }
 
     /// Every process ID this job has spawned, for tree-scoped operations (D22).

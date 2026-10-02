@@ -522,8 +522,24 @@ kill -9 $!    kills the process
 This was inherited rather than Windows-specific — it behaved the same on Linux — but D11
 claims cash owns job control, so it was cash's to fix.
 
-- OPEN: `$(jobs -p)` is empty where bash lists the job, because a subshell does not
-  inherit the job table. A separate divergence from this one, and not yet in §4.
+**`jobs` and `wait` as Bash 5.3 has them (2026-10-02).** Every difference
+`open-issues.md` entry 8 listed, measured against Git Bash 5.3.15:
+
+- A subshell, a command substitution and a stage of a pipeline see the parent's jobs as
+  they are when it is made (`Shell::subshell`), and `jobs -r` and `-s` choose among them:
+  `while [ -n "$(jobs -pr)" ]` ended never.
+- `$!` is the last background job's pid, in a subshell too, and after the job has left
+  the table; it had been the current job's.
+- A finished job keeps its number until it is reported. A script no longer reaps it when
+  the next job starts; only past 1,024 finished jobs do the oldest leave.
+- A `wait PID` or `wait %N` reports the job and leaves it in the table, where `%N` and the
+  pid find it again, `jobs` does not show it and `wait -n` does not return it; the next
+  job, `jobs` or a plain `wait` takes it out, with its status kept for `wait PID`. Once
+  out, `%N` names nothing: `wait: %1: no such job`, 127.
+- A plain `wait` forgets every saved status but `$!`'s, and that one only when its job
+  had ended before the wait and nothing had reported it.
+- `wait -n -p VAR` unsets `VAR` when there is nothing to wait for, and POSIX mode shows a
+  failed job as `Done(3)`.
 
 ### D12 — The name is cash
 

@@ -40,6 +40,7 @@ impl builtins::Command for JobsCommand {
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<cash_core::ExecutionResult, Self::Error> {
         context.shell.jobs_mut().refresh_statuses()?;
+        let posix = context.shell.options().posix_mode;
 
         if self.list_changed_only {
             let mut missing = false;
@@ -88,7 +89,7 @@ impl builtins::Command for JobsCommand {
             for snapshot in notifications {
                 self.display_rendered(
                     &context,
-                    &snapshot.to_string(),
+                    &snapshot.line(posix),
                     &snapshot.state,
                     snapshot.pid,
                 )?;
@@ -102,11 +103,14 @@ impl builtins::Command for JobsCommand {
 
         let mut displayed_ids = Vec::new();
         if self.job_specs.is_empty() {
-            // cash: a subshell owns no jobs but can see the parent's (read-only).
+            // cash: a subshell owns no jobs but can see the parent's (read-only). `-r` and
+            // `-s` choose among them as among its own: `$(jobs -pr)` printed a finished
+            // job's pid, and a loop waiting for it to print nothing never ended.
             for snapshot in context.shell.jobs().inherited() {
-                if self.matches_state_filter(&snapshot.state) {
-                    displayed_ids.push(snapshot.id);
+                if !self.matches_state_filter(&snapshot.state) {
+                    continue;
                 }
+                displayed_ids.push(snapshot.id);
                 if self.show_pids_only {
                     if let Some(pid) = snapshot.pid {
                         writeln!(context.stdout(), "{pid}")?;
@@ -117,10 +121,10 @@ impl builtins::Command for JobsCommand {
                     // A subshell sees the parent's jobs as snapshots, and a snapshot does
                     // carry its pid — `jobs -l` inside `$( )` would otherwise differ from
                     // the same command outside it.
-                    let rendered = snapshot.to_string();
+                    let rendered = snapshot.line(posix);
                     writeln!(context.stdout(), "{}", with_pid(&rendered, pid))?;
                 } else {
-                    writeln!(context.stdout(), "{snapshot}")?;
+                    writeln!(context.stdout(), "{}", snapshot.line(posix))?;
                 }
             }
 
@@ -147,7 +151,7 @@ impl builtins::Command for JobsCommand {
 
                 // Take what printing needs while the mutable borrow is held; a `Job`
                 // owns task handles and cannot be cloned.
-                let rendered = job.to_string();
+                let rendered = job.line(posix);
                 let state = job.state.clone();
                 let pid = job.representative_pid();
                 if self.matches_state_filter(&state) {
@@ -190,10 +194,14 @@ impl JobsCommand {
         if self.stopped_jobs_only && !matches!(job.state, jobs::JobState::Stopped) {
             return Ok(());
         }
+        // A finished job a `wait` has collected is reported already, as in Bash.
+        if job.is_reported() {
+            return Ok(());
+        }
 
         self.display_rendered(
             context,
-            &job.to_string(),
+            &job.line(context.shell.options().posix_mode),
             &job.state,
             job.representative_pid(),
         )

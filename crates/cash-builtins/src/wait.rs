@@ -57,8 +57,9 @@ impl builtins::Command for WaitCommand {
             context.shell.run_pending_chld_traps(&context.params).await;
 
             if context.shell.options().enable_job_control {
+                let posix = context.shell.options().posix_mode;
                 for job in jobs {
-                    writeln!(context.stdout(), "{job}")?;
+                    writeln!(context.stdout(), "{}", job.line(posix))?;
                 }
             }
             return Ok(result);
@@ -74,21 +75,17 @@ impl builtins::Command for WaitCommand {
                     .map(|job| job.id);
                 if let Some(job_id) = job_id {
                     result = self.wait_for_job(context.shell, job_id).await?;
-                } else if let Some(status) = id
-                    .strip_prefix('%')
-                    .and_then(|n| n.parse().ok())
-                    .and_then(|n| context.shell.jobs_mut().collect_saved_job(n, forget))
-                {
-                    result = ExecutionResult::new(status);
                 } else {
+                    // A job spec names only a job in the table: once `jobs`, `wait` or
+                    // `wait -n` has reported a finished job it names nothing, though
+                    // `wait PID` still finds its status (Bash 5.3). Bash's words, and 127.
                     writeln!(
                         context.stderr(),
-                        "{}: no such job: {}",
+                        "{}: {}: no such job",
                         context.command_name,
                         id
                     )?;
-
-                    result = ExecutionExitCode::GeneralError.into();
+                    result = ExecutionResult::from(ExecutionExitCode::from(127u8));
                 }
             } else {
                 // It's a process ID. cash: `pid=$!; wait "$pid"` is the companion to
@@ -130,14 +127,16 @@ impl builtins::Command for WaitCommand {
 }
 
 impl WaitCommand {
-    /// Waits for the job with this id; once it has finished, it leaves the table and its
-    /// status is saved for another `wait PID`, except in POSIX mode.
+    /// Waits for the job with this id. Once it has finished it is reported and stays in
+    /// the table, so that `%N` and its pid find it again, until the next job, `jobs` or a
+    /// plain `wait` takes it out (Bash 5.3). In POSIX mode it leaves at once, and its
+    /// status with it.
     async fn wait_for_job<SE: cash_core::ShellExtensions>(
         &self,
         shell: &mut cash_core::Shell<SE>,
         job_id: usize,
     ) -> Result<ExecutionResult, cash_core::Error> {
-        let keep_status = !shell.options().posix_mode;
+        let posix = shell.options().posix_mode;
         let jobs = shell.jobs_mut();
         let Some(job) = jobs.jobs.iter_mut().find(|job| job.id == job_id) else {
             return Ok(ExecutionResult::success());
@@ -148,7 +147,11 @@ impl WaitCommand {
             job.wait().await?
         };
         if !job.has_unwaited_tasks() {
-            jobs.remove_waited_job(job_id, u8::from(result.exit_code), keep_status, false);
+            if posix {
+                jobs.remove_waited_job(job_id, u8::from(result.exit_code), false, false);
+            } else {
+                jobs.mark_waited(job_id);
+            }
         }
         Ok(result)
     }
@@ -161,8 +164,9 @@ impl WaitCommand {
     ) -> Result<ExecutionResult, cash_core::Error> {
         let forget = context.shell.options().posix_mode;
         let jobs = context.shell.jobs_mut();
-        // Move every job that has finished into the saved statuses, in table order.
-        let _ = jobs.poll()?;
+        // See which jobs have finished; the one returned leaves the table, and the others
+        // keep their numbers.
+        jobs.refresh_statuses()?;
 
         let mut pids = Vec::new();
         let mut ids = Vec::new();
@@ -215,6 +219,11 @@ impl WaitCommand {
                     })
                     .collect();
                 if futures.is_empty() {
+                    drop(futures);
+                    // Nothing to wait for: the variable `-p` names is unset, as in Bash.
+                    if let Some(name) = &self.variable_to_receive_id {
+                        context.shell.env_mut().unset(name)?;
+                    }
                     return Ok(ExecutionResult::new(127));
                 }
                 let ((result, id, pid), _, _) = select_all(futures).await;

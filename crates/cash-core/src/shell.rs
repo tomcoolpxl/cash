@@ -182,7 +182,10 @@ impl<SE: extensions::ShellExtensions> Clone for Shell<SE> {
             // cash: a subshell sees the parent's jobs but cannot manage them, so it gets
             // read-only snapshots rather than an empty table. `$(jobs -p)` is a
             // documented way to collect background pids and was returning nothing.
-            jobs: jobs::JobManager::with_inherited(self.jobs.snapshot()),
+            jobs: jobs::JobManager::with_inherited(
+                self.jobs.snapshot(),
+                self.jobs.last_background_pid(),
+            ),
             aliases: self.aliases.clone(),
             last_exit_status: self.last_exit_status,
             last_exit_status_change_count: self.last_exit_status_change_count,
@@ -307,6 +310,18 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
 }
 
 impl<SE: extensions::ShellExtensions> Shell<SE> {
+    /// A copy of the shell for a subshell, a command substitution or a stage of a
+    /// pipeline, which sees the jobs as they are now.
+    ///
+    /// A subshell gets a copy of the job table, and a job that had finished since the
+    /// shell last looked still read `Running` there: `while [ -n "$(jobs -pr)" ]` never
+    /// ended. The jobs are looked at first, as Bash's child sees their state when it is
+    /// made; nothing is reported or taken out of the table by it.
+    pub(crate) fn subshell(&mut self) -> Self {
+        let _ = self.jobs.refresh_statuses();
+        self.clone()
+    }
+
     /// Increments the interactive line offset in the shell by the indicated number
     /// of lines.
     ///

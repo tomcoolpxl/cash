@@ -396,13 +396,17 @@ async fn spawn_async_ao_list_in_task<'a, SE: extensions::ShellExtensions>(
 ) -> Option<&'a jobs::Job> {
     // Reap finished background jobs before numbering this one. At the prompt they are
     // reported first, as Bash reports them, so `[1]+  Done` is printed and not lost;
-    // while a file is sourced they wait until it is done. A script, which never reaches
-    // a prompt to report them, reaps them silently, or a loop of background jobs would
-    // pile them up.
+    // while a file is sourced they wait until it is done. A script keeps them, number and
+    // status, until `jobs` or `wait` reports them, as Bash does: `wait %1` after job 2
+    // has started still finds job 1. Only past `MAX_FINISHED_JOBS` do the oldest leave,
+    // or a loop of background jobs would pile them up.
     if shell.may_report_jobs_now() {
         let _ = shell.check_for_completed_jobs(params).await;
     } else if !shell.options().interactive {
-        let _ = shell.jobs_mut().poll();
+        // A job `jobs` or a `wait` has reported leaves now, and its number is free.
+        let _ = shell.jobs_mut().refresh_statuses();
+        shell.jobs_mut().clean_up_reported();
+        shell.jobs_mut().reap_excess_finished();
         shell.run_pending_chld_traps(params).await;
     }
 
@@ -707,7 +711,7 @@ async fn spawn_pipeline_processes(
 
             PipelineExecutionContext {
                 shell: commands::ShellForCommand::OwnedShell {
-                    target: Box::new(shell.clone()),
+                    target: Box::new(shell.subshell()),
                     parent: shell,
                 },
                 process_group_id,
@@ -985,7 +989,7 @@ impl Execute for ast::CompoundCommand {
             Self::Subshell(ast::SubshellCommand { list, .. }) => {
                 // Clone off a new subshell, and run the body of the subshell there.
                 // TODO(source-info): Do we need to reset the line number?
-                let mut subshell = shell.clone();
+                let mut subshell = shell.subshell();
 
                 // Handle errors within the subshell context to prevent fatal errors
                 // from propagating to the parent shell.

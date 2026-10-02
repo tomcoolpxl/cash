@@ -2425,14 +2425,14 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
             cash_parser::word::SpecialParameter::ProcessId => {
                 Expansion::from(std::process::id().to_string())
             }
-            cash_parser::word::SpecialParameter::LastBackgroundProcessId => {
-                if let Some(job) = self.shell.jobs().current_job()
-                    && let Some(pid) = job.representative_pid()
-                {
-                    return Expansion::from(pid.to_string());
-                }
-                Expansion::from(String::new())
-            }
+            // cash: `$!` was the current job's pid, so it was empty once the job had been
+            // reported, and in every subshell, which has no jobs of its own.
+            cash_parser::word::SpecialParameter::LastBackgroundProcessId => Expansion::from(
+                self.shell
+                    .jobs()
+                    .last_background_pid()
+                    .map_or_else(String::new, |pid| pid.to_string()),
+            ),
             cash_parser::word::SpecialParameter::ShellName => Expansion::from(
                 self.shell
                     .current_shell_name()

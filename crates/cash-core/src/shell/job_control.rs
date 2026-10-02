@@ -35,8 +35,10 @@ impl<SE: extensions::ShellExtensions> crate::Shell<SE> {
         self.run_pending_chld_traps(params).await;
 
         if self.options.enable_job_control {
-            for (job, _result) in results {
-                writeln!(self.stderr(), "{job}")?;
+            let posix = self.options.posix_mode;
+            // One a `wait` or `jobs` has reported is not reported again.
+            for (job, _result) in results.iter().filter(|(job, _)| !job.is_reported()) {
+                writeln!(self.stderr(), "{}", job.line(posix))?;
             }
         }
 
@@ -54,10 +56,10 @@ impl<SE: extensions::ShellExtensions> crate::Shell<SE> {
             return self.check_for_completed_jobs(params).await;
         }
         if self.chld_trap().is_some() {
-            // A script reaps finished background jobs here only for a CHLD trap to
-            // count them; at a prompt they wait for it, to be reported there.
+            // A script looks at its background jobs here only for a CHLD trap to count
+            // those that finished; they stay in the table until reported, as at a prompt.
             if !self.options().interactive {
-                let _ = self.jobs.poll()?;
+                self.jobs.refresh_statuses()?;
             }
             self.run_pending_chld_traps(params).await;
         }
