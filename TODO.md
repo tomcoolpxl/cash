@@ -58,7 +58,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 10.2 awk and sed bugs that break ordinary scripts
 
-- awk: plain `getline` reads only the current file. TXT-06.
 - The rest of TXT-09 to TXT-18 (sed `-z`, `\$` in the literal fast path, NUL and RS in
   awk, stale element references, `-i` atomicity, awk speed, sed locale, arrays passed to
   functions) in the report, §4.6.

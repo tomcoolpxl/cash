@@ -264,6 +264,12 @@ impl Interpreter {
     /// `AwkValue` and the cached `global_env` copy in sync via `assign`.
     /// Borrowing a global mutably while `global_env` is also borrowed mutably
     /// breaks the stacked-borrows rules, so the cell is reached via a raw pointer.
+    /// Counts a record read from the main input, by the main loop or by `getline`.
+    fn count_record(&mut self, global_env: &mut GlobalEnv) -> Result<(), String> {
+        self.bump_counter(SpecialVar::Nr, global_env)?;
+        self.bump_counter(SpecialVar::Fnr, global_env)
+    }
+
     fn bump_counter(&mut self, var: SpecialVar, global_env: &mut GlobalEnv) -> Result<(), String> {
         let ptr = self.globals[var as usize].get();
         let next = unsafe { (*ptr).scalar_as_f64() } + 1.0;
@@ -283,7 +289,7 @@ impl Interpreter {
         argc: u16,
         stack: &mut Stack<'a, 'a>,
         global_env: &mut GlobalEnv,
-        current_file: &mut dyn RecordReader,
+        input: &mut MainInput,
     ) -> Result<FieldsState, String> {
         let mut fields_state = FieldsState::Ok;
         match function {
@@ -358,14 +364,12 @@ impl Interpreter {
             BuiltinFunction::GetLine => {
                 let var = stack.pop_ref()?;
                 if let Some((next_record, crlf)) =
-                    current_file.read_next_record(&global_env.rs, global_env.strip_cr)?
+                    input.next_record(&mut self.globals, global_env)?
                 {
                     // Main input: this record now decides how `print` ends lines.
                     global_env.last_record_crlf = crlf;
                     fields_state = var.assign(maybe_numeric_string(next_record), global_env)?;
-                    // `getline` (from the main input) advances both NR and FNR.
-                    self.bump_counter(SpecialVar::Nr, global_env)?;
-                    self.bump_counter(SpecialVar::Fnr, global_env)?;
+                    self.count_record(global_env)?;
                     stack.push_value(1.0)?;
                 } else {
                     stack.push_value(0.0)?;
@@ -434,10 +438,10 @@ impl Interpreter {
         record: &mut Record,
         stack: &mut [StackValue],
         global_env: &mut GlobalEnv,
-        current_file: &mut dyn RecordReader,
+        input: &mut MainInput,
     ) -> Result<ExecutionResult, String> {
         let mut stack = Stack::new(action, stack);
-        match self.run_internal(functions, record, &mut stack, global_env, current_file) {
+        match self.run_internal(functions, record, &mut stack, global_env, input) {
             Err(err) => Err(stack_trace(err, stack)),
             Ok(result) => Ok(result),
         }
@@ -449,7 +453,7 @@ impl Interpreter {
         record: &Record,
         stack: &mut Stack<'a, 'a>,
         global_env: &mut GlobalEnv,
-        current_file: &mut dyn RecordReader,
+        input: &mut MainInput,
     ) -> Result<ExecutionResult, String> {
         // # Safety
         // To meat the requirements of stacked borrows (as checked by miri),
@@ -721,8 +725,7 @@ impl Interpreter {
                     ip_increment = 0;
                 }
                 OpCode::CallBuiltin { function, argc } => {
-                    fields_state =
-                        self.call_builtin(function, argc, stack, global_env, current_file)?;
+                    fields_state = self.call_builtin(function, argc, stack, global_env, input)?;
                 }
                 OpCode::PushConstant(index) => match self.constants[index as usize].clone() {
                     Constant::Number(num) => stack.push_value(num)?,
@@ -861,6 +864,123 @@ fn is_valid_variable(s: &str) -> bool {
         && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
+/// The main input: the files ARGV names, in turn, with the assignments between them made
+/// as they are reached, or standard input when ARGV names none.
+///
+/// The main loop and plain `getline` both read from it, so `getline` goes on into the
+/// next file and, in `BEGIN`, opens the first, as POSIX has it. It read only from the file
+/// the main loop had open, and from nothing in `BEGIN` (`REVIEW_REPORT.md` TXT-06).
+struct MainInput {
+    reader: Box<dyn RecordReader>,
+    /// The ARGV index to look at next.
+    next_arg: usize,
+    /// Whether a file (or standard input) has been opened, which is what decides whether
+    /// standard input is read when ARGV runs out.
+    opened: bool,
+    exhausted: bool,
+    /// The program's global variables by name, for `var=value` operands.
+    globals_by_name: HashMap<String, u32>,
+}
+
+impl MainInput {
+    fn new(globals_by_name: HashMap<String, u32>) -> Self {
+        Self {
+            reader: Box::new(EmptyRecordReader::default()),
+            next_arg: 1,
+            opened: false,
+            exhausted: false,
+            globals_by_name,
+        }
+    }
+
+    /// A main input with nothing to read, for running code with no ARGV behind it.
+    #[cfg(test)]
+    fn without_input() -> Self {
+        Self {
+            exhausted: true,
+            ..Self::new(HashMap::new())
+        }
+    }
+
+    /// The next record of the main input, opening the files ARGV names as each runs out.
+    /// Counting it in NR and FNR is the caller's, through `Interpreter::count_record`.
+    fn next_record(
+        &mut self,
+        globals: &mut [AwkValueRef],
+        global_env: &mut GlobalEnv,
+    ) -> Result<Option<(String, bool)>, String> {
+        while !self.exhausted {
+            if let Some(record) = self
+                .reader
+                .read_next_record(&global_env.rs, global_env.strip_cr)?
+            {
+                return Ok(Some(record));
+            }
+            self.open_next(globals, global_env)?;
+        }
+        Ok(None)
+    }
+
+    /// Leaves the file being read (`nextfile`).
+    fn skip_file(&mut self) {
+        self.reader = Box::new(EmptyRecordReader::default());
+    }
+
+    /// Opens the next file ARGV names, making the assignments before it; standard input
+    /// when ARGV names no file at all. FILENAME names it, and FNR starts over.
+    fn open_next(
+        &mut self,
+        globals: &mut [AwkValueRef],
+        global_env: &mut GlobalEnv,
+    ) -> Result<(), String> {
+        loop {
+            let argc = globals[SpecialVar::Argc as usize].get_mut().scalar_as_f64() as usize;
+            let arg = if self.next_arg >= argc {
+                if self.opened {
+                    self.exhausted = true;
+                    self.reader = Box::new(EmptyRecordReader::default());
+                    return Ok(());
+                }
+                AwkString::from("-")
+            } else {
+                globals[SpecialVar::Argv as usize]
+                    .get_mut()
+                    .as_array()?
+                    .get_value(self.next_arg.to_string().into())?
+                    .clone()
+                    .scalar_to_string(&global_env.convfmt)?
+            };
+            self.next_arg += 1;
+
+            if arg.is_empty() {
+                continue;
+            }
+            if let Some((var, value)) = parse_assignment(&arg) {
+                if let Some(&global_index) = self.globals_by_name.get(var) {
+                    globals[global_index as usize].get_mut().assign(
+                        maybe_numeric_string(escape_string_contents(value)?),
+                        global_env,
+                    )?;
+                }
+                continue;
+            }
+
+            globals[SpecialVar::Filename as usize].get_mut().value =
+                AwkValueVariant::String(maybe_numeric_string(arg.clone()));
+            self.reader = if arg.as_str() == "-" {
+                Box::new(StdinRecordReader::default())
+            } else {
+                Box::new(FileStream::open(&arg)?)
+            };
+            self.opened = true;
+            globals[SpecialVar::Fnr as usize]
+                .get_mut()
+                .assign(0.0, global_env)?;
+            return Ok(());
+        }
+    }
+}
+
 fn parse_assignment(s: &str) -> Option<(&str, &str)> {
     let (lhs, rhs) = s.split_once('=')?;
     if is_valid_variable(lhs) {
@@ -952,6 +1072,8 @@ pub fn interpret_with_eol(
             .assign(AwkString::from(separator), &mut global_env)?;
     }
 
+    let mut input = MainInput::new(program.globals.clone());
+
     for action in program.begin_actions {
         let begin_result = interpreter.run(
             &action,
@@ -959,7 +1081,7 @@ pub fn interpret_with_eol(
             &mut current_record,
             &mut stack,
             &mut global_env,
-            &mut EmptyRecordReader::default(),
+            &mut input,
         )?;
         if let ExecutionResult::Exit(val) = begin_result {
             return_value = val;
@@ -971,94 +1093,60 @@ pub fn interpret_with_eol(
         return Ok(return_value);
     }
 
-    let mut current_arg_index = 1;
-    let mut input_read = false;
-    'file_loop: loop {
-        let argc = interpreter.globals[SpecialVar::Argc as usize]
-            .get_mut()
-            .scalar_as_f64() as usize;
+    'record_loop: while let Some((record, crlf)) =
+        input.next_record(&mut interpreter.globals, &mut global_env)?
+    {
+        interpreter.count_record(&mut global_env)?;
+        global_env.last_record_crlf = crlf;
+        let fs = global_env.effective_fs()?;
+        current_record.reset(record, fs)?;
+        interpreter.globals[SpecialVar::Nf as usize].get_mut().value =
+            AwkValue::from(current_record.get_last_field() as f64).value;
+        global_env.nf = current_record.get_last_field();
 
-        let arg = if current_arg_index >= argc {
-            if input_read {
-                break;
-            } else {
-                "-".into()
-            }
-        } else {
-            interpreter.globals[SpecialVar::Argv as usize]
-                .get_mut()
-                .as_array()
-                .expect("ARGV is not an array")
-                .get_value(current_arg_index.to_string().into())
-                // there cannot be active iterators at this point, so this is safe
-                .unwrap()
-                .clone()
-                .scalar_to_string(&global_env.convfmt)?
-        };
-
-        if arg.is_empty() {
-            current_arg_index += 1;
-            continue;
-        }
-
-        if let Some((var, value)) = parse_assignment(&arg) {
-            if let Some(&global_index) = program.globals.get(var) {
-                interpreter.globals[global_index as usize]
-                    .get_mut()
-                    .assign(
-                        maybe_numeric_string(escape_string_contents(value)?),
+        for (i, rule) in program.rules.iter().enumerate() {
+            let should_execute = match &rule.pattern {
+                Pattern::All => true,
+                Pattern::Expr(expr) => interpreter
+                    .run(
+                        expr,
+                        &program.functions,
+                        &mut current_record,
+                        &mut stack,
                         &mut global_env,
-                    )?;
-            }
-            current_arg_index += 1;
-            continue;
-        }
-
-        interpreter.globals[SpecialVar::Filename as usize]
-            .get_mut()
-            .value = AwkValueVariant::String(maybe_numeric_string(arg.clone()));
-
-        let reader: &mut dyn RecordReader = if arg.as_str() == "-" {
-            &mut StdinRecordReader::default()
-        } else {
-            &mut FileStream::open(&arg)?
-        };
-
-        // at this point we know that some input will be read
-        input_read = true;
-
-        global_env.fnr = 1;
-        'record_loop: while let Some((record, crlf)) =
-            reader.read_next_record(&global_env.rs, global_env.strip_cr)?
-        {
-            global_env.last_record_crlf = crlf;
-            let fs = global_env.effective_fs()?;
-            current_record.reset(record, fs)?;
-            interpreter.globals[SpecialVar::Nf as usize].get_mut().value =
-                AwkValue::from(current_record.get_last_field() as f64).value;
-            global_env.nf = current_record.get_last_field();
-
-            interpreter.globals[SpecialVar::Fnr as usize]
-                .get_mut()
-                .value = AwkValue::from(global_env.fnr as f64).value;
-            interpreter.globals[SpecialVar::Nr as usize].get_mut().value =
-                AwkValue::from(global_env.nr as f64).value;
-
-            for (i, rule) in program.rules.iter().enumerate() {
-                let should_execute = match &rule.pattern {
-                    Pattern::All => true,
-                    Pattern::Expr(expr) => interpreter
-                        .run(
-                            expr,
-                            &program.functions,
-                            &mut current_record,
-                            &mut stack,
-                            &mut global_env,
-                            reader,
-                        )?
-                        .expr_to_bool(),
-                    Pattern::Range { start, end } => {
-                        if range_pattern_started[i] {
+                        &mut input,
+                    )?
+                    .expr_to_bool(),
+                Pattern::Range { start, end } => {
+                    if range_pattern_started[i] {
+                        let end_matches = interpreter
+                            .run(
+                                end,
+                                &program.functions,
+                                &mut current_record,
+                                &mut stack,
+                                &mut global_env,
+                                &mut input,
+                            )?
+                            .expr_to_bool();
+                        if end_matches {
+                            range_pattern_started[i] = false;
+                        }
+                        // range is inclusive
+                        true
+                    } else {
+                        let should_start = interpreter
+                            .run(
+                                start,
+                                &program.functions,
+                                &mut current_record,
+                                &mut stack,
+                                &mut global_env,
+                                &mut input,
+                            )?
+                            .expr_to_bool();
+                        if should_start {
+                            // Check if end also matches on the same line
                             let end_matches = interpreter
                                 .run(
                                     end,
@@ -1066,74 +1154,39 @@ pub fn interpret_with_eol(
                                     &mut current_record,
                                     &mut stack,
                                     &mut global_env,
-                                    reader,
+                                    &mut input,
                                 )?
                                 .expr_to_bool();
-                            if end_matches {
-                                range_pattern_started[i] = false;
-                            }
-                            // range is inclusive
-                            true
-                        } else {
-                            let should_start = interpreter
-                                .run(
-                                    start,
-                                    &program.functions,
-                                    &mut current_record,
-                                    &mut stack,
-                                    &mut global_env,
-                                    reader,
-                                )?
-                                .expr_to_bool();
-                            if should_start {
-                                // Check if end also matches on the same line
-                                let end_matches = interpreter
-                                    .run(
-                                        end,
-                                        &program.functions,
-                                        &mut current_record,
-                                        &mut stack,
-                                        &mut global_env,
-                                        reader,
-                                    )?
-                                    .expr_to_bool();
-                                // If end matches on the same line, don't keep range open
-                                range_pattern_started[i] = !end_matches;
-                            }
-                            should_start
+                            // If end matches on the same line, don't keep range open
+                            range_pattern_started[i] = !end_matches;
                         }
-                    }
-                };
-                if should_execute {
-                    let rule_result = interpreter.run(
-                        &rule.action,
-                        &program.functions,
-                        &mut current_record,
-                        &mut stack,
-                        &mut global_env,
-                        reader,
-                    )?;
-                    match rule_result {
-                        ExecutionResult::Next => break,
-                        ExecutionResult::NextFile => {
-                            global_env.fnr += 1;
-                            global_env.nr += 1;
-                            break 'record_loop;
-                        }
-                        ExecutionResult::Exit(val) => {
-                            return_value = val;
-                            break 'file_loop;
-                        }
-                        ExecutionResult::Expression(_) => {}
+                        should_start
                     }
                 }
+            };
+            if should_execute {
+                let rule_result = interpreter.run(
+                    &rule.action,
+                    &program.functions,
+                    &mut current_record,
+                    &mut stack,
+                    &mut global_env,
+                    &mut input,
+                )?;
+                match rule_result {
+                    ExecutionResult::Next => break,
+                    ExecutionResult::NextFile => {
+                        input.skip_file();
+                        break;
+                    }
+                    ExecutionResult::Exit(val) => {
+                        return_value = val;
+                        break 'record_loop;
+                    }
+                    ExecutionResult::Expression(_) => {}
+                }
             }
-
-            global_env.fnr += 1;
-            global_env.nr += 1;
         }
-
-        current_arg_index += 1;
     }
 
     for action in program.end_actions {
@@ -1143,7 +1196,7 @@ pub fn interpret_with_eol(
             &mut current_record,
             &mut stack,
             &mut global_env,
-            &mut EmptyRecordReader::default(),
+            &mut input,
         )?;
         if let ExecutionResult::Exit(val) = end_result {
             return_value = val;
