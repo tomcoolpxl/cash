@@ -58,8 +58,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 10.2 awk and sed bugs that break ordinary scripts
 
-- awk: a `for (k in a)` left by `break` or `return` locks `a`, so the usual dedup function
-  dies with "active iterator"; `for (k in a) delete a` panics. TXT-03.
 - awk: `split(s, a, "\.")` is a parse error. TXT-05.
 - awk: plain `getline` reads only the current file. TXT-06.
 - awk: `awk '{print}' | head -1` panics; one `WriteFile` per record; no flush before

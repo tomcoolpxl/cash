@@ -105,6 +105,15 @@ fn test_awk_integers_beyond_i64_match_gawk() {
     test_awk!(integers_beyond_i64_match_gawk);
 }
 
+// A `for (k in a)` left by `return` or `break` locked `a` against insertion for the rest
+// of the run, so the usual dedup function died with "active iterator"; `for (k in a)
+// delete a` panicked (TXT-03). Counts, not iteration order, which differs between awks;
+// the expected output is gawk 5.4's.
+#[test]
+fn test_awk_array_loops_left_early_release_the_array() {
+    test_awk!(array_loops_left_early_release_the_array);
+}
+
 #[test]
 fn test_awk_hello_world() {
     test_awk!(hello_world)

@@ -197,26 +197,39 @@ struct Interpreter {
     rng: SmallRng,
 }
 
+/// The error, and where each function on the call stack was when it happened.
+///
+/// An instruction pointer can be past the last instruction it has a location for (a
+/// `return` from inside a loop leaves it there), so a missing location is written as `?`
+/// rather than indexed for: the reporter panicked and hid the error it was reporting
+/// (`REVIEW_REPORT.md` TXT-24).
 fn stack_trace(error: String, stack: Stack) -> String {
+    fn place(locations: &[crate::program::SourceLocation], ip: isize) -> String {
+        usize::try_from(ip)
+            .ok()
+            .and_then(|ip| locations.get(ip))
+            .map_or_else(
+                || "?".to_string(),
+                |location| format!("{}:{}", location.line, location.column),
+            )
+    }
+
     let mut result = format!("runtime error: {}\ncall trace:\n", error);
-    let error_location = stack.source_locations[stack.ip as usize];
-    writeln!(
+    let _ = writeln!(
         result,
-        "=> {} at {}:{}:{}",
+        "=> {} at {}:{}",
         stack.current_function_name,
         stack.current_function_file,
-        error_location.line,
-        error_location.column
-    )
-    .expect("error writing to string");
+        place(stack.source_locations, stack.ip)
+    );
     for frame in stack.call_frames.iter().rev() {
-        let source_location = frame.source_locations[frame.ip as usize];
-        writeln!(
+        let _ = writeln!(
             result,
-            "=> {} at {}:{}:{}",
-            frame.function_name, frame.function_file, source_location.line, source_location.column
-        )
-        .expect("error writing to string");
+            "=> {} at {}:{}",
+            frame.function_name,
+            frame.function_file,
+            place(frame.source_locations, frame.ip)
+        );
     }
 
     result
