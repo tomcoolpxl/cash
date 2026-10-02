@@ -2333,3 +2333,29 @@ fn escaped_anchors_in_a_literal_pattern_are_characters() {
             .stdout_is(expected);
     }
 }
+
+/// `-z` separates lines by NUL, compared with GNU sed 4.9: it was accepted and ignored,
+/// so `sed -z 's/\n/,/g'`, GNU's way to edit across lines, changed nothing
+/// (`REVIEW_REPORT.md` TXT-09).
+#[test]
+fn null_data_separates_lines_by_nul() {
+    let cases: [(&[&str], &[u8], &[u8]); 6] = [
+        (&["-z", "-n", "2p"], b"a\0b\0c\0", b"b\0"),
+        (&["-z", "s/$/Y/"], b"a\0b\0", b"aY\0bY\0"),
+        (
+            &["-z", "s/\\n/,/g"],
+            b"one\ntwo\nthree\n",
+            b"one,two,three,",
+        ),
+        (&["-z", "N;s/\\x00/+/"], b"a\0b\0c\0", b"a+b\0c\0"),
+        (&["-z", "$!d"], b"x\ny\0z\0", b"z\0"),
+        (&["-z", "G"], b"p\0q\0", b"p\0\0q\0\0"),
+    ];
+    for (args, input, expected) in cases {
+        new_ucmd!()
+            .args(args)
+            .pipe_in(input)
+            .succeeds()
+            .stdout_is_bytes(expected);
+    }
+}

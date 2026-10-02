@@ -82,6 +82,14 @@ pub struct ProcessingContext {
 }
 
 impl ProcessingContext {
+    /// The byte that ends a line: NUL with `-z`, newline otherwise. GNU sed uses it to
+    /// split the input, to end each output line, and in place of newline in `N`, `G`,
+    /// `H`, `D`, `P` and `W`. `-z` used to be accepted and ignored (`REVIEW_REPORT.md`
+    /// TXT-09).
+    pub fn delimiter(&self) -> u8 {
+        if self.null_data { 0 } else { b'\n' }
+    }
+
     /// Whether input lines keep their carriage return as ordinary data.
     ///
     /// By default a CRLF line is matched without its CR and written back with it, so

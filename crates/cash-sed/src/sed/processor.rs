@@ -680,7 +680,7 @@ fn process_file(
             if let Some(action) = context.input_action.take() {
                 // Continue processing the `N` command.
                 let mut combined_lines = action.prepend;
-                combined_lines.push(b'\n');
+                combined_lines.push(context.delimiter());
                 combined_lines.extend_from_slice(pattern.as_bytes());
 
                 pattern.set_to_bytes(combined_lines, pattern.is_newline_terminated());
@@ -748,7 +748,7 @@ fn process_file(
                 }
                 'D' => {
                     // Delete up to \n and start a new cycle without new input.
-                    if let Some(pos) = memchr(b'\n', pattern.as_bytes()) {
+                    if let Some(pos) = memchr(context.delimiter(), pattern.as_bytes()) {
                         let (s, _) = pattern.fields_mut()?;
                         s.drain(..=pos);
                         current.clone_from(&commands);
@@ -781,7 +781,7 @@ fn process_file(
                 'G' => {
                     // Append to pattern \n followed by hold space contents.
                     let (pat_content, pat_has_newline) = pattern.fields_mut()?;
-                    pat_content.push(b'\n');
+                    pat_content.push(context.delimiter());
                     pat_content.extend_from_slice(&context.hold.content);
                     *pat_has_newline = context.hold.has_newline;
                 }
@@ -792,7 +792,8 @@ fn process_file(
                 }
                 'H' => {
                     // Append to hold \n followed by pattern space contents.
-                    context.hold.content.push(b'\n');
+                    let delimiter = context.delimiter();
+                    context.hold.content.push(delimiter);
                     context.hold.content.extend_from_slice(pattern.as_bytes());
                     context.hold.has_newline = pattern.is_newline_terminated();
                 }
@@ -836,7 +837,7 @@ fn process_file(
                 }
                 'P' => {
                     let line = pattern.as_bytes();
-                    if let Some(pos) = memchr(b'\n', line) {
+                    if let Some(pos) = memchr(context.delimiter(), line) {
                         output.write_bytes(&line[..=pos])?;
                     } else {
                         write_chunk(output, context, &pattern)?;
@@ -912,7 +913,7 @@ fn process_file(
                     let writer = extract_variant!(command, NamedWriter);
                     let pattern_bytes = pattern.as_bytes();
                     let (first_line, found_newline) =
-                        match pattern_bytes.iter().position(|&b| b == b'\n') {
+                        match pattern_bytes.iter().position(|&b| b == context.delimiter()) {
                             // A slice including the newline
                             Some(pos) => (&pattern_bytes[..=pos], true),
                             None => (pattern_bytes, false),
@@ -1028,7 +1029,9 @@ pub fn process_all_files(
             index == last_file_index || remaining_files_are_empty(&files[index + 1..]);
         let mut reader = LineReader::open_with(path, context.treats_cr_as_data())
             .map_err_context(|| format!("error opening input file {}", path.quote()))?;
+        reader.set_delimiter(context.delimiter());
         let output = in_place.begin(path)?;
+        output.set_delimiter(context.delimiter());
 
         if context.separate || index == 0 {
             context.line_number = 0;

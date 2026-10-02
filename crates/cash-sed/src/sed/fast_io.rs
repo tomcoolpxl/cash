@@ -33,6 +33,8 @@ pub struct ReadLineCursor {
     /// Whether a CR before the LF is split off and remembered (the default), rather than
     /// kept as part of the line.
     strip_cr: bool,
+    /// The byte that ends a line (`ProcessingContext::delimiter`).
+    delimiter: u8,
 }
 
 impl ReadLineCursor {
@@ -43,24 +45,27 @@ impl ReadLineCursor {
             reader: Box::new(buf),
             buffer: Vec::new(),
             strip_cr: true,
+            delimiter: b'\n',
         }
     }
 
     /// If a line is available, return it and its \n termination.
     fn get_line(&mut self) -> io::Result<Option<(Vec<u8>, bool, bool)>> {
         self.buffer.clear();
-        // read_line *includes* the '\n' if present
-        let bytes_read = self.reader.read_until(b'\n', &mut self.buffer)?;
+        // read_until *includes* the delimiter if present
+        let bytes_read = self.reader.read_until(self.delimiter, &mut self.buffer)?;
         if bytes_read == 0 {
             return Ok(None);
         }
-        // O(1) check whether it ended in '\n'
-        let has_newline = self.buffer.ends_with(b"\n");
+        // O(1) check whether it ended in the delimiter
+        let has_newline = self.buffer.last() == Some(&self.delimiter);
         // strip it if you don’t want to expose it to the caller
         if has_newline {
             self.buffer.pop();
         }
-        let has_crlf = self.strip_cr && has_newline && self.buffer.ends_with(b"\r");
+        // A CR belongs to a CRLF line ending only where lines end in LF.
+        let has_crlf =
+            self.strip_cr && self.delimiter == b'\n' && has_newline && self.buffer.ends_with(b"\r");
         if has_crlf {
             self.buffer.pop();
         }
@@ -289,6 +294,13 @@ impl LineReader {
             LineReader::ReadInput(cursor) => cursor.last_line(),
         }
     }
+
+    /// Set the byte that ends a line (`ProcessingContext::delimiter`).
+    pub fn set_delimiter(&mut self, delimiter: u8) {
+        match self {
+            LineReader::ReadInput(cursor) => cursor.delimiter = delimiter,
+        }
+    }
 }
 
 pub trait OutputWrite: Write {}
@@ -302,6 +314,8 @@ pub struct OutputBuffer {
     // that commands like `p` don't emit a spurious newline under -n.
     pending_newline: bool,
     pending_crlf: bool,
+    /// The byte that ends a line (`ProcessingContext::delimiter`).
+    delimiter: u8,
 }
 
 impl OutputBuffer {
@@ -310,6 +324,21 @@ impl OutputBuffer {
             out: BufWriter::new(w),
             pending_newline: false,
             pending_crlf: false,
+            delimiter: b'\n',
+        }
+    }
+
+    /// Set the byte that ends a line (`ProcessingContext::delimiter`).
+    pub fn set_delimiter(&mut self, delimiter: u8) {
+        self.delimiter = delimiter;
+    }
+
+    /// Write the end of a line: CRLF for a CRLF line (D49), else the delimiter.
+    fn write_line_end(&mut self, crlf: bool) -> io::Result<()> {
+        if crlf && self.delimiter == b'\n' {
+            self.out.write_all(b"\r\n")
+        } else {
+            self.out.write_all(&[self.delimiter])
         }
     }
 
@@ -372,11 +401,7 @@ impl OutputBuffer {
         }
 
         if self.pending_newline {
-            if self.pending_crlf {
-                self.out.write_all(b"\r\n")?;
-            } else {
-                self.out.write_all(b"\n")?;
-            }
+            self.write_line_end(self.pending_crlf)?;
             self.pending_newline = false;
             self.pending_crlf = false;
         }
@@ -390,11 +415,7 @@ impl OutputBuffer {
             } => {
                 self.out.write_all(content)?;
                 if *has_newline {
-                    if *has_crlf {
-                        self.out.write_all(b"\r\n")?;
-                    } else {
-                        self.out.write_all(b"\n")?;
-                    }
+                    self.write_line_end(*has_crlf)?;
                 }
                 self.pending_newline = !has_newline;
                 self.pending_crlf = *has_crlf;
@@ -406,11 +427,7 @@ impl OutputBuffer {
     /// Write a deferred newline if the last output didn't end with one.
     pub fn flush_pending_newline(&mut self) -> io::Result<()> {
         if self.pending_newline {
-            if self.pending_crlf {
-                self.out.write_all(b"\r\n")?;
-            } else {
-                self.out.write_all(b"\n")?;
-            }
+            self.write_line_end(self.pending_crlf)?;
             self.pending_newline = false;
             self.pending_crlf = false;
         }
@@ -657,6 +674,7 @@ mod tests {
             out: BufWriter::new(Box::new(file.try_clone().unwrap())),
             pending_newline: false,
             pending_crlf: false,
+            delimiter: b'\n',
         };
         (buf, file)
     }
