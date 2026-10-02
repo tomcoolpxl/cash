@@ -419,3 +419,55 @@ fn standard_output_is_not_read_as_input() {
     assert_eq!(left.stdout, "cat: 1\nby name: 1\ngroup: 1\n");
     assert_eq!(left.stderr.lines().count(), 3, "{}", left.stderr);
 }
+
+/// `/dev/zero`, `/dev/random` and `/dev/urandom`, which Git Bash has and cash did not: in a
+/// redirection, as a bundled tool's argument, and to the file tests (TODO 4.6).
+#[test]
+fn the_endless_devices_are_read_and_written_as_in_git_bash() {
+    let dir = tempfile::tempdir().expect("a scratch folder");
+    let left = cash_in(
+        dir.path(),
+        "",
+        r#"head -c 4 /dev/zero | od -An -tx1; head -c 3 < /dev/zero | od -An -tx1
+head -c 16 /dev/urandom | wc -c; head -c 16 < /dev/random | wc -c
+echo gone > /dev/zero; echo "write: $?"
+[ -c /dev/zero ] && [ -r /dev/urandom ] && [ ! -s /dev/zero ] && echo "tests: yes""#,
+    );
+
+    assert_eq!(
+        left.stdout,
+        " 00 00 00 00\n 00 00 00\n16\n16\nwrite: 0\ntests: yes\n"
+    );
+    assert_eq!(left.stderr, "");
+}
+
+/// `dd` counts a read as a block, so a device must answer each in full: from a pipe, as
+/// `/dev/zero` first was, `bs=1M count=8` made 512 KiB.
+#[test]
+fn dd_reads_whole_blocks_of_zeros() {
+    let dir = tempfile::tempdir().expect("a scratch folder");
+    let left = cash_in(
+        dir.path(),
+        "",
+        r#"dd if=/dev/zero of=zeros bs=1M count=8 status=none; echo "rc=$?""#,
+    );
+
+    assert_eq!(left.stdout, "rc=0\n", "{}", left.stderr);
+    let zeros = std::fs::read(dir.path().join("zeros")).expect("the file dd wrote");
+    assert_eq!(zeros.len(), 8 << 20);
+    assert!(zeros.iter().all(|&byte| byte == 0));
+}
+
+/// With a separator after it a name is a folder, which no device is: Bash says "Not a
+/// directory". cash took `/dev/null/` for the null device.
+#[test]
+fn a_name_with_a_separator_after_it_is_no_device() {
+    let left = cash_given(
+        "",
+        r#"echo y > /dev/null/; echo "redirect: $?"; cat /dev/null/; echo "cat: $?"
+[ -e /dev/null/ ]; echo "test: $?""#,
+    );
+
+    assert_eq!(left.stdout, "redirect: 1\ncat: 1\ntest: 1\n");
+    assert_eq!(left.stderr.lines().count(), 2, "{}", left.stderr);
+}

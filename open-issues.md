@@ -251,3 +251,21 @@ is known to bother anyone, and each would cost more than it is worth until one d
 - **An answer to a terminal query that arrives before `read` has begun** can be taken by
   an older console host for itself; Windows Terminal passes it through. The keys are
   taken before the prompt is shown, so a script that asks after its prompt is safe.
+
+---
+
+## 12. Small differences left in the `/dev` names
+
+**Seen (2026-10-02)** in TODO 4.6, measured against Git Bash 5.3.15; each was judged not
+worth its cost, or a decision.
+
+- **`/DEV/STDIN`** works with Git Bash's MSYS programs (`cat /DEV/STDIN`), which take
+  `/dev` paths without regard to case. Bash's own redirections (`< /DEV/NULL`: "Permission
+  denied") and file tests (`[ -e /DEV/NULL ]`: false) do not, and cash follows Bash's own.
+- **`read x < 'CONIN$'`** fails: a reserved Windows name is an ordinary file name (D28),
+  and the console's name is `/dev/tty` (D7).
+- **`exec 3<>/dev/tty`** can be read from and not written to: a console's keys and its
+  screen are two handles, and a descriptor is one (spec D7).
+- **A read of more than a mebibyte from `/dev/urandom` or `/dev/random`** can come back
+  short: they are a pipe of that size, where Linux answers up to 32 MiB at once.
+  `dd if=/dev/urandom bs=4M count=1` gets less than 4 MiB; `iflag=fullblock` takes it all.

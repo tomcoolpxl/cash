@@ -455,9 +455,7 @@ impl Follower {
 fn release_space(path: &std::path::Path, upto: u64) {
     use std::os::windows::io::AsRawHandle;
     use windows_sys::Win32::System::IO::DeviceIoControl;
-    use windows_sys::Win32::System::Ioctl::{
-        FILE_ZERO_DATA_INFORMATION, FSCTL_SET_SPARSE, FSCTL_SET_ZERO_DATA,
-    };
+    use windows_sys::Win32::System::Ioctl::{FILE_ZERO_DATA_INFORMATION, FSCTL_SET_ZERO_DATA};
 
     let Ok(file) = std::fs::OpenOptions::new().write(true).open(path) else {
         return;
@@ -465,32 +463,21 @@ fn release_space(path: &std::path::Path, upto: u64) {
     let Ok(upto) = i64::try_from(upto) else {
         return;
     };
-    let handle = file.as_raw_handle();
+    // The file is set sparse again each time, as a program truncating it may have
+    // cleared that.
+    if make_sparse(&file).is_err() {
+        return;
+    }
     let mut returned = 0u32;
     let range = FILE_ZERO_DATA_INFORMATION {
         FileOffset: 0,
         BeyondFinalZero: upto,
     };
-    // The file is set sparse again each time, as a program truncating it may have
-    // cleared that.
-    // SAFETY: the handle is open for writing; no buffer is passed or asked for.
-    unsafe {
-        DeviceIoControl(
-            handle,
-            FSCTL_SET_SPARSE,
-            std::ptr::null(),
-            0,
-            std::ptr::null_mut(),
-            0,
-            &raw mut returned,
-            std::ptr::null_mut(),
-        )
-    };
     // SAFETY: the handle is open for writing; `range` is valid for the call, and no
     // output buffer is asked for.
     unsafe {
         DeviceIoControl(
-            handle,
+            file.as_raw_handle(),
             FSCTL_SET_ZERO_DATA,
             (&raw const range).cast(),
             u32::try_from(size_of::<FILE_ZERO_DATA_INFORMATION>()).unwrap_or(0),
@@ -500,6 +487,38 @@ fn release_space(path: &std::path::Path, upto: u64) {
             std::ptr::null_mut(),
         )
     };
+}
+
+/// Makes `file`, open for writing, sparse: a range never written, or made a hole, takes no
+/// disk space and reads as zeros.
+///
+/// # Errors
+///
+/// Returns the error of the call, as on a volume that keeps no sparse files (FAT).
+pub(crate) fn make_sparse(file: &File) -> io::Result<()> {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::System::IO::DeviceIoControl;
+    use windows_sys::Win32::System::Ioctl::FSCTL_SET_SPARSE;
+
+    let mut returned = 0u32;
+    // SAFETY: the handle is open; no buffer is passed or asked for.
+    let done = unsafe {
+        DeviceIoControl(
+            file.as_raw_handle(),
+            FSCTL_SET_SPARSE,
+            std::ptr::null(),
+            0,
+            std::ptr::null_mut(),
+            0,
+            &raw mut returned,
+            std::ptr::null_mut(),
+        )
+    };
+    if done == 0 {
+        Err(io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
 }
 
 /// Result of setting up a write process substitution (`>(cmd)`).

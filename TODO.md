@@ -30,25 +30,12 @@ trust its runs, then by what a user notices most.
 
 | Phase | What | Items |
 | --- | --- | --- |
-| 4 | The `/dev` names, descriptors and the bundled tools | 4.6 and 4.7 |
+| 4 | The `/dev` names, descriptors and the bundled tools | 4.7 |
 | 5 | Jobs, `wait`, and the tools beside them | 5.1 to 5.3 |
 
 ---
 
 ## Phase 4. The `/dev` names, descriptors and the bundled tools
-
-### 4.6 Small differences left in the `/dev` names
-
-Each is done only if it is cheap while 4.1 and 4.2 are in that code; what is not moves to
-`open-issues.md`.
-
-- `/DEV/STDIN` works in Git Bash and is a path in cash; `/dev/null/` is refused by Bash
-  and is still the device in cash.
-- `read x < 'CONIN$'` fails; only the `/dev/tty` name is mapped to the console.
-- `exec 3<>/dev/tty` can be read from but not written to: a console has no one handle
-  that is both (spec D7).
-- Found in 4.1: `/dev/zero`, `/dev/random` and `/dev/urandom` are known nowhere
-  (`head -c 4 /dev/zero`); Git Bash has all three.
 
 ### 4.7 `ls` and `stat` on the `/dev` names
 

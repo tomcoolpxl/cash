@@ -22,6 +22,7 @@ pub mod conpty;
 pub mod console;
 pub mod ctrl_z;
 pub mod devices;
+pub mod endless;
 pub mod env;
 pub mod exit;
 pub mod fs;

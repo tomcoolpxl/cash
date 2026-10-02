@@ -276,7 +276,8 @@ shebang sniffing, no `set -o` switch.
 
 Always on:
 
-- `/dev/null`, `/dev/tty`, `/dev/stdin`, `/dev/stdout`, `/dev/stderr`, `/dev/fd/N`
+- `/dev/null`, `/dev/tty`, `/dev/stdin`, `/dev/stdout`, `/dev/stderr`, `/dev/fd/N`,
+  `/dev/zero`, `/dev/random`, `/dev/urandom`
 - CRLF tolerated in script parsing (D20 covers CRLF in *data*)
 - UTF-8 BOM stripped from scripts (D41)
 - Virtual `/usr/bin/env`, so `#!/usr/bin/env bash` resolves with no fake filesystem
@@ -341,7 +342,17 @@ and only `two` there. A name whose descriptor is not open fails in Bash's words,
 
 All of these names are what they are only at `/dev`, as written or on whatever drive the
 working directory is: `C:/src/dev/null` is a file. N is a number as a listing of
-`/dev/fd` would write it, so `/dev/fd/03` is a file as well.
+`/dev/fd` would write it, so `/dev/fd/03` is a file as well. With a separator after it,
+`/dev/null/` names a folder, which no device is, and fails as in Bash. The names are
+case-sensitive, as Bash's own redirections and file tests take them: Git Bash's MSYS
+programs accept `/DEV/STDIN`, Bash itself does not.
+
+**`/dev/zero`, `/dev/random` and `/dev/urandom` are endless input (2026-10-02)**, as in
+Git Bash, and discard what is written to them (`cash_win32::endless`). `/dev/zero` is a
+temp file a tebibyte long and all hole: sparse, so it takes no space, deleted by Windows
+when it is closed, and read in whole blocks, which `dd if=/dev/zero bs=1M count=8` needs,
+as `dd` counts each read as a block. The random ones are a pipe a thread keeps full of the
+system's random bytes, a mebibyte at a time; a read of more than that can come back short.
 
 They are recognised where cash opens a file by name itself: the word of a redirection and
 the operand of `source`.

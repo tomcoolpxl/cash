@@ -31,7 +31,7 @@
 
 use std::ffi::c_void;
 use std::fs::File;
-use std::os::windows::io::FromRawHandle;
+use std::os::windows::io::{FromRawHandle, IntoRawHandle};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use windows_sys::Win32::Foundation::{
@@ -53,6 +53,8 @@ use windows_sys::Win32::System::Console::{
 use windows_sys::Win32::System::SystemInformation::GetSystemTimeAsFileTime;
 use windows_sys::Win32::System::Threading::GetCurrentProcess;
 use windows_sys::core::{BOOL, PCWSTR};
+
+use crate::endless::Endless;
 
 type CreateFileW = unsafe extern "system" fn(
     PCWSTR,
@@ -160,36 +162,52 @@ enum Device {
     Null,
     /// The console.
     Tty,
+    /// `/dev/zero`, `/dev/random` or `/dev/urandom`.
+    Endless(Endless),
 }
 
 /// The device `name`, a path as `CreateFileW` is given it, is, if it is one.
+///
+/// By the shell's rule (`names_under_dev` in cash-core): `\dev` at the root, after any
+/// prefix (a drive, `\\?\C:`, a share), and one name under it, or `fd` and a number. A
+/// separator after the name makes it a folder, which no device is.
 fn device(name: &str) -> Option<Device> {
-    let unified = name.replace('/', "\\");
-    let path = unified.strip_prefix(r"\\?\").unwrap_or(&unified);
-    // A drive, any: the shell takes `D:/dev/null` for the name as well.
-    let rooted = match path.as_bytes() {
-        [letter, b':', b'\\', ..] if letter.is_ascii_alphabetic() => path.get(2..)?,
-        [b'\\', second, ..] if *second != b'\\' => path,
-        [b'\\'] => path,
-        _ => return None,
-    };
+    use std::path::{Component, Path};
 
-    let mut names = rooted
-        .split('\\')
-        .filter(|name| !name.is_empty() && *name != ".");
-    if names.next()? != "dev" {
+    if name.ends_with(['/', '\\']) {
         return None;
     }
-    let device = match (names.next()?, names.next(), names.next()) {
-        ("null", None, _) => Device::Null,
-        ("tty", None, _) => Device::Tty,
-        ("stdin", None, _) => Device::Std(STD_INPUT_HANDLE),
-        ("stdout", None, _) => Device::Std(STD_OUTPUT_HANDLE),
-        ("stderr", None, _) => Device::Std(STD_ERROR_HANDLE),
-        ("fd", Some(number), None) => descriptor(number)?,
+    let mut components = Path::new(name).components().peekable();
+    components.next_if(|component| matches!(component, Component::Prefix(_)));
+    match (components.next(), components.next()) {
+        (Some(Component::RootDir), Some(Component::Normal(dev))) if dev == "dev" => {}
         _ => return None,
-    };
-    Some(device)
+    }
+    let first = normal(components.next())?;
+    let second = components.next();
+    if second.is_none() {
+        return match first {
+            "null" => Some(Device::Null),
+            "tty" => Some(Device::Tty),
+            "stdin" => Some(Device::Std(STD_INPUT_HANDLE)),
+            "stdout" => Some(Device::Std(STD_OUTPUT_HANDLE)),
+            "stderr" => Some(Device::Std(STD_ERROR_HANDLE)),
+            other => Endless::named(other).map(Device::Endless),
+        };
+    }
+    let number = normal(second)?;
+    if first != "fd" || components.next().is_some() {
+        return None;
+    }
+    descriptor(number)
+}
+
+/// The name `component` is, if it is a plain one.
+fn normal(component: Option<std::path::Component<'_>>) -> Option<&str> {
+    match component {
+        Some(std::path::Component::Normal(name)) => name.to_str(),
+        _ => None,
+    }
 }
 
 /// The device `/dev/fd/<number>` is: a number as a listing of `/dev/fd` would write it,
@@ -306,6 +324,35 @@ unsafe extern "system" fn create_file(
                 )
             }
         }
+        // Written to, it discards, as the null device does.
+        Device::Endless(_)
+            if access & (GENERIC_WRITE | FILE_WRITE_DATA | FILE_APPEND_DATA) != 0 =>
+        {
+            let null = wide(r"\\.\NUL");
+            // SAFETY: `null` is null-terminated; the rest are the caller's arguments.
+            unsafe {
+                open(
+                    null.as_ptr(),
+                    access,
+                    share,
+                    security,
+                    disposition,
+                    flags,
+                    template,
+                )
+            }
+        }
+        Device::Endless(kind) => match crate::endless::open(kind) {
+            Ok(file) => file.into_raw_handle(),
+            Err(error) => {
+                let code = error
+                    .raw_os_error()
+                    .and_then(|code| u32::try_from(code).ok());
+                // SAFETY: always safe.
+                unsafe { SetLastError(code.unwrap_or(ERROR_FILE_NOT_FOUND)) };
+                INVALID_HANDLE_VALUE
+            }
+        },
     }
 }
 
@@ -619,6 +666,11 @@ mod tests {
         assert_eq!(device("/dev/null"), Some(Device::Null));
         assert_eq!(device("/dev/tty"), Some(Device::Tty));
         assert_eq!(device("/dev//./null"), Some(Device::Null));
+        assert_eq!(device("/dev/zero"), Some(Device::Endless(Endless::Zeros)));
+        assert_eq!(
+            device("/dev/urandom"),
+            Some(Device::Endless(Endless::Random))
+        );
     }
 
     #[test]
@@ -632,13 +684,15 @@ mod tests {
             device(r"\\?\Q:\dev\fd\1"),
             Some(Device::Std(STD_OUTPUT_HANDLE))
         );
+        assert_eq!(device(r"\\server\share\dev\null"), Some(Device::Null));
     }
 
     #[test]
     fn a_path_elsewhere_is_a_path() {
         assert_eq!(device("C:/src/dev/null"), None);
         assert_eq!(device("dev/null"), None);
-        assert_eq!(device(r"\\server\share\dev\null"), None);
+        assert_eq!(device("/dev/null/"), None);
+        assert_eq!(device(r"\\?\C:\dev\stdin\"), None);
         assert_eq!(device("/dev/sda"), None);
         assert_eq!(device("/dev/null/x"), None);
         assert_eq!(device("/dev/fd/03"), None);

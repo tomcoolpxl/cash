@@ -228,10 +228,14 @@ fn open_console(access: crate::sys::fs::Access) -> std::io::Result<std::fs::File
 ///
 /// A path is there as a script writes it, `/dev/null`, or as resolving that against a
 /// working directory leaves it, `C:/dev/null`. Anywhere else (`C:/src/dev/null`), or
-/// deeper than those two names, it is a file like any other.
+/// deeper than those two names, it is a file like any other. With a separator after it,
+/// `/dev/null/`, it names a folder, which none of them is: Bash says "Not a directory".
 fn names_under_dev(path: &Path) -> Option<(&str, Option<&str>)> {
     use std::path::Component;
 
+    if path.as_os_str().to_string_lossy().ends_with(['/', '\\']) {
+        return None;
+    }
     let mut components = path.components().peekable();
     components.next_if(|component| matches!(component, Component::Prefix(_)));
     match (components.next(), components.next()) {
@@ -290,11 +294,22 @@ fn descriptor_number(name: &str) -> Option<ShellFd> {
 /// Gives the platform an opportunity to handle a special file path (e.g. `/dev/null`).
 ///
 /// `/dev/null` is the null device and `/dev/tty` the console (see `open_console`).
+/// `/dev/zero`, `/dev/random` and `/dev/urandom` are endless input to read, and discard
+/// what is written, as Git Bash's do (`cash_win32::endless`).
 pub fn try_open_special_file(
     path: &Path,
     access: crate::sys::fs::Access,
 ) -> Option<Result<std::fs::File, std::io::Error>> {
-    match device_name(path)? {
+    use crate::sys::fs::Access;
+
+    let name = device_name(path)?;
+    if let Some(endless) = cash_win32::endless::Endless::named(name) {
+        return Some(match access {
+            Access::Read | Access::ReadWrite => cash_win32::endless::open(endless),
+            Access::Write => open_null_file().map_err(std::io::Error::other),
+        });
+    }
+    match name {
         "null" => Some(open_null_file().map_err(std::io::Error::other)),
         "tty" => Some(open_console(access)),
         _ => None,
@@ -304,7 +319,10 @@ pub fn try_open_special_file(
 /// Whether [`try_open_special_file`] handles `path` rather than leaving it to be opened
 /// as a file.
 pub fn is_special_file(path: &Path) -> bool {
-    matches!(device_name(path), Some("null" | "tty"))
+    matches!(
+        device_name(path),
+        Some("null" | "tty" | "zero" | "random" | "urandom")
+    )
 }
 
 /// Returns the default paths where executables are typically found on Windows.
@@ -742,6 +760,9 @@ mod tests {
         assert_eq!(device_name(Path::new("/dev/fd/3")), None);
         assert_eq!(device_name(Path::new("/dev")), None);
         assert_eq!(device_name(Path::new("/DEV/tty")), None);
+        // A folder of that name, which no device is.
+        assert_eq!(device_name(Path::new("/dev/null/")), None);
+        assert_eq!(named_descriptor(Path::new(r"C:\dev\fd\0\")), None);
         // The standard streams are the shell's own descriptors, looked up by the caller.
         assert_eq!(device_name(Path::new("/dev/stdin")), Some("stdin"));
         assert!(!is_special_file(Path::new("/dev/stdin")));
