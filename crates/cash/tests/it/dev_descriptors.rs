@@ -404,3 +404,18 @@ exec 3< f; ops /dev/fd/3 $all
     );
     assert_eq!(left.stderr, "");
 }
+
+/// Standard output, a pipe, is no input: Bash says `cat: -: Bad file descriptor` and 1.
+/// cash read its standard input instead, `x` and 0 (TODO 4.3). Windows words it "Access is
+/// denied".
+#[test]
+fn standard_output_is_not_read_as_input() {
+    let left = cash_given(
+        "x\n",
+        r#"cat <&1; echo "cat: $?"; cat < /dev/stdout; echo "by name: $?"
+{ cat; echo "group: $?"; } <&1"#,
+    );
+
+    assert_eq!(left.stdout, "cat: 1\nby name: 1\ngroup: 1\n");
+    assert_eq!(left.stderr.lines().count(), 3, "{}", left.stderr);
+}

@@ -210,18 +210,19 @@ A redirection to `/dev/null`, `/dev/stdin`, `/dev/stdout`, `/dev/stderr` or `/de
 and `source` of one now work (spec D7). Each script below was run with `x` piped to it,
 by Git Bash 5.3.15 and by cash. The names as an argument of a bundled tool
 (`cat /dev/stdin`, `cp /dev/null f`, `tee /dev/stderr`) and in the file tests
-(`[ -e /dev/null ]`) work since 1.3.4 (spec D7); the two below are not fixed.
+(`[ -e /dev/null ]`) work since 1.3.4 (spec D7). `cat <&1` with output a pipe, which
+read standard input, fails as in Bash since then, in Windows' words ("Access is denied").
+The one below is not fixed.
 
 | Script | Bash 5.3.15 | cash |
 | --- | --- | --- |
-| `cat <&1`, `cat < /dev/stdout` (output a pipe) | `cat: -: Bad file descriptor`, 1 | prints `x`, 0 |
 | `cat 3< f <&3` | the contents of `f` | `operation not supported on this platform: fd redirections`, 1 |
 
 What is behind them, as far as it is known:
 
-- **Neither has anything to do with the names**; both were only met on the way, were
-  there before the fix, and their causes have not been looked for. A third,
-  `echo x | tee >(cat >&2)` failing on the named pipe, was fixed in 1.3.3 (spec D17).
+- **It has nothing to do with the names**; it was only met on the way, was there before
+  the fix, and its cause has not been looked for. Another, `echo x | tee >(cat >&2)`
+  failing on the named pipe, was fixed in 1.3.3 (spec D17).
 
 ---
 

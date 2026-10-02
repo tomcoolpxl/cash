@@ -30,18 +30,12 @@ trust its runs, then by what a user notices most.
 
 | Phase | What | Items |
 | --- | --- | --- |
-| 4 | The `/dev` names, descriptors and the bundled tools | 4.3 to 4.7 |
+| 4 | The `/dev` names, descriptors and the bundled tools | 4.4 to 4.7 |
 | 5 | Jobs, `wait`, and the tools beside them | 5.1 to 5.3 |
 
 ---
 
 ## Phase 4. The `/dev` names, descriptors and the bundled tools
-
-### 4.3 `cat <&1` reads standard input instead of failing
-
-Reported; present before the `/dev` fixes. With `x` piped in and output a pipe,
-`cat <&1` and `cat < /dev/stdout` print `x`, status 0. Bash:
-`cat: -: Bad file descriptor`, status 1. Cause not looked for.
 
 ### 4.4 `cat 3< f <&3` is refused
 
