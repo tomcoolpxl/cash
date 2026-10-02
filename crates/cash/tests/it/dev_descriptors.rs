@@ -519,9 +519,9 @@ stat /dev/fd/9; echo "stat: $?""#,
 fn ls_shows_a_links_target_only_in_the_long_format() {
     let left = cash_given(
         "x\n",
-        r#"ls /dev/stdin; ls -F /dev/stdin
+        r"ls /dev/stdin; ls -F /dev/stdin
 ls -lF /dev/stdin | awk '{ print $(NF-2), $(NF-1), $NF }'
-ls -l /dev/stdin | awk '{ print $(NF-2), $(NF-1), $NF }'"#,
+ls -l /dev/stdin | awk '{ print $(NF-2), $(NF-1), $NF }'",
     );
 
     assert_eq!(
