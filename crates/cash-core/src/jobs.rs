@@ -508,7 +508,7 @@ impl JobManager {
     }
 
     /// Takes the oldest finished jobs out of the table while more than
-    /// [`MAX_FINISHED_JOBS`] are in it, saving their statuses for `wait PID`.
+    /// `MAX_FINISHED_JOBS` are in it, saving their statuses for `wait PID`.
     pub fn reap_excess_finished(&mut self) {
         while self
             .jobs
