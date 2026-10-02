@@ -289,9 +289,12 @@ pub fn escape_string_contents(s: &str) -> Result<Rc<str>, String> {
                         }
                         char::from_u32(char_code).ok_or("invalid character".to_string())?
                     }
-                    other => {
-                        return Err(format!("invalid escape sequence: \\{}", other));
-                    }
+                    // A backslash before a newline continues the line, as in gawk.
+                    '\n' => continue,
+                    // An escape awk does not define stands for the character itself, as
+                    // gawk has it (`"\."` is `.`, `"\&"` is `&`); it was a parse error, so
+                    // `split(s, parts, "\.")` stopped the whole program (TXT-05).
+                    other => other,
                 };
                 result.push(escaped_char);
             }

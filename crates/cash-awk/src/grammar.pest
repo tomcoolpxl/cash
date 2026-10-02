@@ -12,10 +12,12 @@ COMMENT    = _{ "#" ~ (!"\n" ~ ANY)* ~ (&"\n" | &EOI) }
 
 string          = ${ "\"" ~ string_contents ~ "\"" }
 string_contents = @{ string_char* }
+// Any character may follow a backslash: one awk does not define stands for itself, as gawk
+// has it (`split(s, parts, "\.")`); see `escape_string_contents`.
 string_char     =  {
     !("\"" | "\\") ~ ANY
-  | "\\\\" | "\\" ~ ("\"" | "/" | "a" | "b" | "f" | "n" | "r" | "t" | "v")
   | "\\" ~ ASCII_DIGIT{1, 3}
+  | "\\" ~ ANY
 }
 ere             =  { "/" ~ (("\\" ~ ANY) | (!("/" | "\n") ~ ANY))* ~ "/" }
 number          = @{ decimal_float | integer }

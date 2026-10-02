@@ -114,6 +114,13 @@ fn test_awk_array_loops_left_early_release_the_array() {
     test_awk!(array_loops_left_early_release_the_array);
 }
 
+// An escape awk does not define stands for the character, as in gawk (whose output this
+// is, without its warnings): `split(s, parts, "\.")` was a parse error (TXT-05).
+#[test]
+fn test_awk_unknown_string_escapes_stand_for_the_character() {
+    test_awk!(unknown_string_escapes_stand_for_the_character);
+}
+
 #[test]
 fn test_awk_hello_world() {
     test_awk!(hello_world)

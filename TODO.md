@@ -58,7 +58,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 10.2 awk and sed bugs that break ordinary scripts
 
-- awk: `split(s, a, "\.")` is a parse error. TXT-05.
 - awk: plain `getline` reads only the current file. TXT-06.
 - awk: `awk '{print}' | head -1` panics; one `WriteFile` per record; no flush before
   `system()`. TXT-08, TXT-14.
