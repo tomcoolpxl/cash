@@ -32,6 +32,7 @@ trust its runs, then by what a user notices most.
 | --- | --- | --- |
 | 4 | The `/dev` names, descriptors and the bundled tools | 4.7 |
 | 5 | Jobs, `wait`, and the tools beside them | 5.1 to 5.3 |
+| 6 | Updating cash | 6.1 |
 
 ---
 
@@ -106,6 +107,43 @@ beside another build. The Restart Manager refuses a system DLL at once, and
 `file_holders` then walks every process: about 15,500 modules in 290 processes to list
 (0.9 s idle, up to 14 s under load), and `path_key` opens each module's file to
 canonicalize it (1.3 to 4.9 s). `crates/cash-builtins/src/fileuse.rs`.
+
+---
+
+## Phase 6. Updating cash
+
+### 6.1 `scoop update cash` from within cash
+
+Asked by the user on 2026-10-02. Updating from 1.1.5 to 1.2.1 on 2026-09-30, Scoop said:
+
+```text
+ERROR The following instances of "cash" are still running. Close them and try again.
+ ...  49516   1 cash
+Running process detected, skip updating.
+```
+
+The shell `scoop update cash` was typed into was Scoop's own cash
+(`~\scoop\apps\cash\current\cash.exe`), so the update refused itself; it went through
+later from elsewhere (`current` points at 1.2.1 since 2026-09-30 20:25). What is known:
+
+- Scoop refuses to update an app while a process runs from the app's folder, and goes on
+  with `scoop config ignore_running_processes true`. The README (Install) and the
+  manifest's notes (`packaging/scoop/cash.json`) say so.
+- Each version is installed in a folder of its own and `current` is a junction Scoop
+  points at the new one, so a running cash holds only its own version's files. Not yet
+  looked at: what Scoop does meanwhile with the old folder, `persist`, the shim and the
+  Windows Terminal fragment the installer writes.
+- The bucket's Excavator picks a release up within hours (every few hours, by schedule),
+  so `scoop update` right after a release can still offer the one before.
+
+Options to investigate, none decided:
+
+- Setting `ignore_running_processes` for the user, at install or on request: a setting
+  of the user's, so **yours** if it comes to that.
+- A builtin or a command of cash's (`cash update`?) that runs the update from a process
+  outside the app's folder, or once the shell that asked has exited.
+- How other shells installed with Scoop deal with it (PowerShell 7, Nushell, Git's bash).
+- Whether a manifest can tell Scoop which running processes to ignore.
 
 ---
 
