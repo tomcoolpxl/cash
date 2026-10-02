@@ -49,11 +49,26 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
         builtin::<continue_::ContinueCommand, SE>().special(),
     );
     #[cfg(feature = "builtin.dot")]
-    m.insert(".".into(), builtin::<dot::DotCommand, SE>().special());
+    m.insert(
+        ".".into(),
+        builtin::<dot::DotCommand, SE>()
+            .special()
+            .with_substitution_files(),
+    );
     #[cfg(feature = "builtin.eval")]
-    m.insert("eval".into(), builtin::<eval::EvalCommand, SE>().special());
+    m.insert(
+        "eval".into(),
+        builtin::<eval::EvalCommand, SE>()
+            .special()
+            .with_substitution_files(),
+    );
     #[cfg(feature = "builtin.exec")]
-    m.insert("exec".into(), builtin::<exec::ExecCommand, SE>().special());
+    m.insert(
+        "exec".into(),
+        builtin::<exec::ExecCommand, SE>()
+            .special()
+            .with_substitution_files(),
+    );
     #[cfg(feature = "builtin.exit")]
     m.insert("exit".into(), builtin::<exit::ExitCommand, SE>().special());
     #[cfg(feature = "builtin.export")]
@@ -103,7 +118,10 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
     #[cfg(feature = "builtin.cd")]
     m.insert("cd".into(), builtin::<cd::CdCommand, SE>());
     #[cfg(feature = "builtin.command")]
-    m.insert("command".into(), builtin::<command::CommandCommand, SE>());
+    m.insert(
+        "command".into(),
+        builtin::<command::CommandCommand, SE>().with_substitution_files(),
+    );
     #[cfg(feature = "builtin.false")]
     m.insert("false".into(), simple_builtin::<false_::FalseCommand, SE>());
     #[cfg(feature = "builtin.fg")]
@@ -147,7 +165,7 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
         #[cfg(feature = "builtin.builtin")]
         m.insert(
             "builtin".into(),
-            raw_arg_builtin::<builtin_::BuiltinCommand, SE>(),
+            raw_arg_builtin::<builtin_::BuiltinCommand, SE>().with_substitution_files(),
         );
         #[cfg(feature = "builtin.declare")]
         m.insert(
@@ -169,7 +187,12 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
         #[cfg(feature = "builtin.shopt")]
         m.insert("shopt".into(), builtin::<shopt::ShoptCommand, SE>());
         #[cfg(feature = "builtin.dot")]
-        m.insert("source".into(), builtin::<dot::DotCommand, SE>().special());
+        m.insert(
+            "source".into(),
+            builtin::<dot::DotCommand, SE>()
+                .special()
+                .with_substitution_files(),
+        );
         #[cfg(feature = "builtin.test")]
         m.insert("test".into(), builtin::<test::TestCommand, SE>());
         #[cfg(feature = "builtin.test")]
@@ -227,9 +250,18 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
     // cash (D45): Windows-specific builtins. Not feature-gated per builtin — each is the
     // documented escape hatch for a decision made elsewhere (D4, D6, D42).
     m.insert("winpath".into(), builtin::<win::WinPathCommand, SE>());
-    m.insert("start".into(), builtin::<win::StartCommand, SE>());
-    m.insert("elevate".into(), builtin::<win::ElevateCommand, SE>());
-    m.insert("detach".into(), builtin::<win::DetachCommand, SE>());
+    m.insert(
+        "start".into(),
+        builtin::<win::StartCommand, SE>().with_substitution_files(),
+    );
+    m.insert(
+        "elevate".into(),
+        builtin::<win::ElevateCommand, SE>().with_substitution_files(),
+    );
+    m.insert(
+        "detach".into(),
+        builtin::<win::DetachCommand, SE>().with_substitution_files(),
+    );
     m.insert("ps".into(), builtin::<ps::PsCommand, SE>());
     m.insert("pgrep".into(), builtin::<pgrep::PgrepCommand, SE>());
     m.insert("pkill".into(), builtin::<killfam::PkillCommand, SE>());
@@ -245,8 +277,14 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
     m.insert("pstree".into(), builtin::<pstree::PsTreeCommand, SE>());
     m.insert("tree".into(), builtin::<tree::TreeCommand, SE>());
     m.insert("top".into(), builtin::<top::TopCommand, SE>());
-    m.insert("find".into(), builtin::<find::FindCommand, SE>());
-    m.insert("xargs".into(), builtin::<xargs::XargsCommand, SE>());
+    m.insert(
+        "find".into(),
+        builtin::<find::FindCommand, SE>().with_substitution_files(),
+    );
+    m.insert(
+        "xargs".into(),
+        builtin::<xargs::XargsCommand, SE>().with_substitution_files(),
+    );
     m.insert(
         "coolfetch".into(),
         builtin::<coolfetch::CoolfetchCommand, SE>(),
@@ -270,15 +308,21 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
     m.insert("ls".into(), builtin::<ls::LsCommand, SE>());
     m.insert("tty".into(), builtin::<tty::TtyCommand, SE>());
     m.insert("stat".into(), builtin::<stat::StatCommand, SE>());
-    m.insert("nohup".into(), builtin::<nohup::NohupCommand, SE>());
-    m.insert("install".into(), builtin::<install::InstallCommand, SE>());
+    m.insert(
+        "nohup".into(),
+        builtin::<nohup::NohupCommand, SE>().with_substitution_files(),
+    );
+    m.insert(
+        "install".into(),
+        builtin::<install::InstallCommand, SE>().with_substitution_files(),
+    );
     m.insert(
         "dos2unix".into(),
-        builtin::<dos2unix::Dos2UnixCommand, SE>(),
+        builtin::<dos2unix::Dos2UnixCommand, SE>().with_substitution_files(),
     );
     m.insert(
         "unix2dos".into(),
-        builtin::<dos2unix::Unix2DosCommand, SE>(),
+        builtin::<dos2unix::Unix2DosCommand, SE>().with_substitution_files(),
     );
 
     m

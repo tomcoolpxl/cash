@@ -84,6 +84,35 @@ fn run_reading(args: &[&str], input: &str) -> Output {
     }
 }
 
+/// Run a script through `cash -c` in `dir`, which is its temp directory as well; one
+/// still running after 30 seconds is ended, and the test fails.
+fn cash_in_scratch(dir: &Path, script: &str) -> Output {
+    let mut child = Command::new(CASH)
+        .args(["-c", script])
+        .current_dir(dir)
+        .env("TEMP", dir)
+        .env("TMP", dir)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("failed to run cash");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    while child.try_wait().expect("poll cash").is_none() {
+        if std::time::Instant::now() > deadline {
+            let _ = child.kill();
+            panic!("cash was still running after 30 s: {script}");
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    let out = child.wait_with_output().expect("wait for cash");
+    Output {
+        stdout: String::from_utf8_lossy(&out.stdout).trim_end().to_string(),
+        stderr: String::from_utf8_lossy(&out.stderr).trim_end().to_string(),
+        code: out.status.code().unwrap_or(-1),
+    }
+}
+
 /// A scratch directory that cleans itself up.
 struct Scratch(PathBuf);
 
@@ -1072,6 +1101,118 @@ fn a_write_substitution_no_program_opened_does_not_keep_the_shell_from_exiting()
     // comes, and is given the end of its input as the shell exits.
     let out = cash(r#"echo >(cat) > /dev/null; echo done"#);
     assert_eq!(out.stdout, "done");
+}
+
+#[test]
+fn tee_writes_into_a_write_substitution() {
+    // `tee >(cmd)` is the classic use of `>(...)`, and it failed: handed a named pipe,
+    // tee opened it as a new file, which a pipe does not allow ("The parameter is
+    // incorrect"), and `tee -a` appended to it, "Access is denied" (2026-09-30). The
+    // bundled tee is patched to open it as the pipe it is.
+    let out = cash("echo x | tee >(cat >&2)");
+    assert_eq!((out.code, out.stdout.as_str()), (0, "x"), "{}", out.stderr);
+    assert_eq!(out.stderr, "x");
+
+    let out = cash("echo y | tee -a >(cat >&2)");
+    assert_eq!((out.code, out.stdout.as_str()), (0, "y"), "{}", out.stderr);
+    assert_eq!(out.stderr, "y");
+}
+
+#[test]
+fn the_other_patched_bundled_tools_write_into_a_write_substitution() {
+    // `sort` also truncated what it had opened, which Windows allows for a regular file
+    // and says a named pipe is.
+    let sorted = cash(r"printf 'b\na\n' | sort -o >(cat)");
+    assert_eq!(sorted.stdout, "a\nb", "{}", sorted.stderr);
+    let unique = cash(r"printf 'a\na\nb\n' | uniq - >(cat)");
+    assert_eq!(unique.stdout, "a\nb", "{}", unique.stderr);
+    let shuffled = cash(r"printf 'z\n' | shuf -o >(cat)");
+    assert_eq!(shuffled.stdout, "z", "{}", shuffled.stderr);
+}
+
+#[test]
+fn a_program_writes_into_a_write_substitution_through_a_file() {
+    // A program opens the file it is to write as a new one and cannot be made to ask
+    // otherwise, so it is handed a temp file, which the substitution reads as it is
+    // written, and to its end once the program has exited. .NET's `WriteAllText`
+    // creates or truncates, and lets others only read the file while it writes.
+    let scratch = Scratch::new("procsub-program");
+    std::fs::write(
+        scratch.path().join("write.ps1"),
+        "[IO.File]::WriteAllText($args[0], \"from dotnet`n\")\n",
+    )
+    .unwrap();
+    let out = cash_in_scratch(
+        scratch.path(),
+        r#"powershell.exe -NoProfile -ExecutionPolicy Bypass -File write.ps1 >(cat)
+           echo "status $?""#,
+    );
+    let mut lines: Vec<&str> = out.stdout.lines().map(str::trim_end).collect();
+    lines.sort_unstable();
+    assert_eq!(lines, ["from dotnet", "status 0"], "{}", out.stderr);
+}
+
+#[test]
+fn an_unpatched_bundled_tool_writes_into_a_write_substitution_through_a_file() {
+    // `cp` opens its target as a new file, as a program on PATH does, and gets the file.
+    let scratch = Scratch::new("procsub-cp");
+    std::fs::write(scratch.path().join("src"), "copied\n").unwrap();
+    let out = cash_in_scratch(scratch.path(), "cp src >(cat)");
+    assert_eq!(
+        (out.code, out.stdout.as_str()),
+        (0, "copied"),
+        "{}",
+        out.stderr
+    );
+}
+
+#[test]
+fn a_function_writes_into_a_write_substitution() {
+    // A function may hand the path on to a program or to cash's own redirections, and
+    // gets the file, which both can create, truncate and append to.
+    assert_eq!(
+        cash(r#"f() { echo one > "$1"; echo two >> "$1"; }; f >(cat)"#).stdout,
+        "one\ntwo"
+    );
+}
+
+#[test]
+fn a_write_substitution_ends_with_the_command_it_was_handed_to() {
+    // `$(...)` reads until everything that could write to it is done, and the
+    // substitution could until its input ended; for a path no program opened, that was
+    // when the shell exited, so this waited for ever. The input ends with the command,
+    // as the last copy of the descriptor is closed in Bash.
+    let scratch = Scratch::new("procsub-end");
+    let out = cash_in_scratch(scratch.path(), r#"x=$(echo >(cat)); echo "got ${#x}""#);
+    assert!(out.stdout.starts_with("got "), "{}", out.stderr);
+
+    // A program's file is read to its end as the program exits, while the script goes
+    // on, as Bash's substitution runs beside it.
+    let out = cash_in_scratch(
+        scratch.path(),
+        r#"cmd.exe /d /c "echo late>" >(sleep 0.3; cat > out.txt); sleep 2; cat out.txt"#,
+    );
+    assert_eq!(out.stdout, "late", "{}", out.stderr);
+}
+
+#[test]
+fn process_substitutions_leave_no_temp_file_behind() {
+    // `diff <(a) <(b)` gets files written before it starts, which were never deleted:
+    // 2,614 of them in one user's temp directory on 2026-09-30. Neither is a program's
+    // `>(...)` left, nor, once the shell has exited, the directory they were in.
+    let scratch = Scratch::new("procsub-temp");
+    let out = cash_in_scratch(
+        scratch.path(),
+        r#"diff <(echo a) <(echo a) && echo same
+           cmd.exe /d /c "echo x>" >(cat > /dev/null)
+           sleep 0.5; find "$TEMP" -type f"#,
+    );
+    assert_eq!(out.stdout, "same", "{}", out.stderr);
+    let left: Vec<_> = std::fs::read_dir(scratch.path())
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect();
+    assert!(left.is_empty(), "left behind: {left:?}");
 }
 
 // ---------------------------------------------------------------------------

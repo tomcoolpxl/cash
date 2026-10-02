@@ -1136,6 +1136,31 @@ fn report_to_job(child: &sys::process::Child, sink: Option<&std::sync::Mutex<Vec
     }
 }
 
+/// cash (D17): keeps the process substitutions handed to a program as a path from ending
+/// before the program has exited.
+///
+/// The shell learns that a program in the background has ended only when it next looks,
+/// so the end is waited for here, on a thread of its own, when there are substitutions
+/// to end. The substitutions end as the program does, as in Bash.
+fn hold_substitutions_until_exit(
+    child: &sys::process::Child,
+    ends: &[std::sync::Arc<crate::interp::SubstitutionEnd>],
+) {
+    if ends.is_empty() {
+        return;
+    }
+    let Some(process) = child.id().and_then(cash_win32::process::Held::open) else {
+        return;
+    };
+    let ends = ends.to_vec();
+    let _ = std::thread::Builder::new()
+        .name("cash-procsub-end".into())
+        .spawn(move || {
+            process.wait();
+            drop(ends);
+        });
+}
+
 pub(crate) fn execute_external_command(
     context: ExecutionContext<'_, impl extensions::ShellExtensions>,
     executable_path: &str,
@@ -1229,6 +1254,7 @@ pub(crate) fn execute_external_command(
             }
 
             report_to_job(&child, context.params.spawned_pid_sink.as_deref());
+            hold_substitutions_until_exit(&child, &context.params.substitution_ends);
 
             // The pid is now readable, so `&` may return and `$!` will answer.
             if let Some(ready) = &context.params.spawned_pid_ready {

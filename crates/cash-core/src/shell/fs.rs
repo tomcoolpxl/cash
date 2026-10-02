@@ -392,6 +392,10 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
             });
         }
 
+        // A process substitution's pipe cannot be created or truncated (D17).
+        if !matches!(access, crate::sys::fs::Access::Read) {
+            return Ok(cash_win32::pipe::open_output(options, &path_to_open)?.into());
+        }
         Ok(options.open(path_to_open)?.into())
     }
 

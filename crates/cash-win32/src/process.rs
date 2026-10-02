@@ -2,7 +2,7 @@
 
 use windows_sys::Win32::Foundation::{CloseHandle, FALSE, FILETIME, HANDLE, WAIT_TIMEOUT};
 use windows_sys::Win32::System::Threading::{
-    GetExitCodeProcess, GetProcessTimes, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
+    GetExitCodeProcess, GetProcessTimes, INFINITE, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
     PROCESS_SYNCHRONIZE, WaitForSingleObject,
 };
 
@@ -59,6 +59,12 @@ impl Held {
     pub fn is_running(&self) -> bool {
         // SAFETY: the handle is valid and was opened with SYNCHRONIZE.
         unsafe { WaitForSingleObject(self.handle, 0) == WAIT_TIMEOUT }
+    }
+
+    /// Waits until the process has ended.
+    pub fn wait(&self) {
+        // SAFETY: the handle is valid and was opened with SYNCHRONIZE.
+        unsafe { WaitForSingleObject(self.handle, INFINITE) };
     }
 
     /// When the process started, as a `FILETIME` count.

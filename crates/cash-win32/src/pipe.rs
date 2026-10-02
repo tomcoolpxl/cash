@@ -301,6 +301,38 @@ pub fn create_read_substitution() -> io::Result<ReadSubstitution> {
     })
 }
 
+/// Whether `path` is the named pipe of a process substitution:
+/// `\\.\pipe\cash-procsub-…`, in either slash.
+#[must_use]
+pub fn is_substitution(path: &std::path::Path) -> bool {
+    let path = path.to_string_lossy().replace('/', "\\");
+    path.get(..PIPE_PREFIX.len())
+        .is_some_and(|start| start.eq_ignore_ascii_case(PIPE_PREFIX))
+}
+
+/// Where every process substitution's named pipe is.
+const PIPE_PREFIX: &str = r"\\.\pipe\cash-procsub-";
+
+/// Opens `path` for writing as `options` say; a process substitution's pipe, as a pipe
+/// can be opened (D17).
+///
+/// A program that writes a file creates it, truncates it or appends to it, and a named
+/// pipe allows none of that: the open fails with "The parameter is incorrect", or with
+/// "Access is denied" for appending, and `tee >(cmd)` failed so (2026-09-30). A pipe is
+/// opened for writing as it is, which is what each of those means for one. cash's own
+/// opens and the bundled tools that write a file they are named go through here.
+///
+/// # Errors
+///
+/// Returns the error of the open.
+pub fn open_output(options: &std::fs::OpenOptions, path: &std::path::Path) -> io::Result<File> {
+    if is_substitution(path) {
+        std::fs::OpenOptions::new().write(true).open(path)
+    } else {
+        options.open(path)
+    }
+}
+
 /// Gives the end of its input to the write substitution listening at `path`.
 ///
 /// If no program has opened the path, this opens it as a program would, writes nothing
@@ -308,6 +340,166 @@ pub fn create_read_substitution() -> io::Result<ReadSubstitution> {
 /// open fails, and nothing happens.
 pub fn release_unclaimed(path: &str) {
     let _ = std::fs::OpenOptions::new().write(true).open(path);
+}
+
+/// A write process substitution (`>(cmd)`) handed to a program as a file: see
+/// [`follow_file`].
+pub struct FollowedFile {
+    /// What the program writes into the file, for the substitution's standard input.
+    pub reader: PipeReader,
+    /// To be raised once the program is done with the file: what the file holds then is
+    /// the rest of the substitution's input.
+    pub done: Arc<AtomicBool>,
+}
+
+/// Sets up a write process substitution (`>(cmd)`) as the file at `path`, which the
+/// substitution reads as it is written (D17).
+///
+/// A program opens a file it is to write as a new one, creating or truncating it
+/// (`open(path, 'w')`), which the named pipe of [`create_write_substitution`] does not
+/// allow, and a program on `PATH` cannot be made to ask differently. A file allows it.
+/// What is written is read as it comes, a moment later, until [`FollowedFile::done`]
+/// says the program is done; then the rest, and the substitution's input ends. The file
+/// is deleted then.
+///
+/// The file is read through a handle that only reads, so that a program that lets
+/// others read its file but not write it (.NET's default) can still open it. What has
+/// been read is given back to the disk as the file grows, so that a program that writes
+/// for hours does not fill it; also when the substitution has stopped reading.
+///
+/// # Errors
+///
+/// Returns an error if the file or the pipe cannot be made, or the thread started.
+pub fn follow_file(path: &std::path::Path) -> io::Result<FollowedFile> {
+    File::create(path)?;
+    let file = File::open(path)?;
+    let (reader, writer) = io::pipe()?;
+    let done = Arc::new(AtomicBool::new(false));
+
+    let follower = Follower {
+        file,
+        path: path.to_owned(),
+        writer: Some(writer),
+        done: Arc::clone(&done),
+        read: 0,
+        released: 0,
+    };
+    std::thread::Builder::new()
+        .name("cash-psub-file".into())
+        .spawn(move || follower.run())?;
+
+    Ok(FollowedFile { reader, done })
+}
+
+/// The reading side of a [`FollowedFile`].
+struct Follower {
+    file: File,
+    path: std::path::PathBuf,
+    /// The substitution's input; `None` once it has stopped reading.
+    writer: Option<PipeWriter>,
+    done: Arc<AtomicBool>,
+    /// How much of the file has been read.
+    read: u64,
+    /// How much of it has been given back to the disk.
+    released: u64,
+}
+
+impl Follower {
+    /// How long to wait for more when the file has been read to its end.
+    const POLL: std::time::Duration = std::time::Duration::from_millis(15);
+
+    /// How much is read between two releases of disk space.
+    const RELEASE_EVERY: u64 = 1 << 20;
+
+    fn run(mut self) {
+        let mut buf = vec![0u8; 64 * 1024];
+        loop {
+            // Whether the program was done before this read: all it wrote is in the file
+            // then, and a read that finds nothing more is the end.
+            let done = self.done.load(Ordering::SeqCst);
+            match self.file.read(&mut buf) {
+                Ok(0) if done => break,
+                Ok(0) => std::thread::sleep(Self::POLL),
+                Ok(n) => {
+                    if let Some(writer) = &mut self.writer
+                        && writer.write_all(&buf[..n]).is_err()
+                    {
+                        self.writer = None;
+                    }
+                    self.read += n as u64;
+                    if self.read - self.released >= Self::RELEASE_EVERY {
+                        release_space(&self.path, self.read);
+                        self.released = self.read;
+                    }
+                }
+                Err(e) if e.kind() == io::ErrorKind::Interrupted => {}
+                Err(_) => break,
+            }
+        }
+        let Self {
+            file, path, writer, ..
+        } = self;
+        drop(file);
+        let _ = std::fs::remove_file(path);
+        // The substitution's input ends here, once the file is gone: a shell waiting for
+        // the substitution finds nothing of it left.
+        drop(writer);
+    }
+}
+
+/// Gives the disk space of the first `upto` bytes of the file at `path` back, keeping
+/// the file's size: it is made sparse, and that range a hole.
+///
+/// Through a handle of its own, which writes: if the program writing the file lets no one
+/// else write it, nothing is given back.
+fn release_space(path: &std::path::Path, upto: u64) {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::System::IO::DeviceIoControl;
+    use windows_sys::Win32::System::Ioctl::{
+        FILE_ZERO_DATA_INFORMATION, FSCTL_SET_SPARSE, FSCTL_SET_ZERO_DATA,
+    };
+
+    let Ok(file) = std::fs::OpenOptions::new().write(true).open(path) else {
+        return;
+    };
+    let Ok(upto) = i64::try_from(upto) else {
+        return;
+    };
+    let handle = file.as_raw_handle();
+    let mut returned = 0u32;
+    let range = FILE_ZERO_DATA_INFORMATION {
+        FileOffset: 0,
+        BeyondFinalZero: upto,
+    };
+    // The file is set sparse again each time, as a program truncating it may have
+    // cleared that.
+    // SAFETY: the handle is open for writing; no buffer is passed or asked for.
+    unsafe {
+        DeviceIoControl(
+            handle,
+            FSCTL_SET_SPARSE,
+            std::ptr::null(),
+            0,
+            std::ptr::null_mut(),
+            0,
+            &raw mut returned,
+            std::ptr::null_mut(),
+        )
+    };
+    // SAFETY: the handle is open for writing; `range` is valid for the call, and no
+    // output buffer is asked for.
+    unsafe {
+        DeviceIoControl(
+            handle,
+            FSCTL_SET_ZERO_DATA,
+            (&raw const range).cast(),
+            u32::try_from(size_of::<FILE_ZERO_DATA_INFORMATION>()).unwrap_or(0),
+            std::ptr::null_mut(),
+            0,
+            &raw mut returned,
+            std::ptr::null_mut(),
+        )
+    };
 }
 
 /// Result of setting up a write process substitution (`>(cmd)`).
@@ -341,4 +533,88 @@ pub fn create_write_substitution() -> io::Result<WriteSubstitution> {
         path,
         reader: pipe_reader,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::os::windows::ffi::OsStrExt;
+    use std::path::Path;
+    use std::time::{Duration, Instant};
+
+    use super::*;
+
+    /// How much of the disk the file at `path` takes.
+    fn allocated(path: &Path) -> u64 {
+        use windows_sys::Win32::Storage::FileSystem::GetCompressedFileSizeW;
+
+        let wide: Vec<u16> = path
+            .as_os_str()
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect();
+        let mut high = 0u32;
+        // SAFETY: `wide` is null-terminated and `high` a valid out-param.
+        let low = unsafe { GetCompressedFileSizeW(wide.as_ptr(), &raw mut high) };
+        (u64::from(high) << 32) | u64::from(low)
+    }
+
+    #[test]
+    fn a_followed_file_is_read_as_it_is_written_and_to_its_end_once_done() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("substitution");
+        let followed = follow_file(&path).unwrap();
+        let mut reader = followed.reader;
+
+        // The program opens it as a new file, truncating it, while it is followed.
+        let mut program = File::create(&path).unwrap();
+        program.write_all(b"first\n").unwrap();
+        let mut first = [0u8; 6];
+        reader.read_exact(&mut first).unwrap();
+        assert_eq!(&first, b"first\n", "not read before the program was done");
+
+        program.write_all(b"last\n").unwrap();
+        drop(program);
+        followed.done.store(true, Ordering::SeqCst);
+        let mut rest = String::new();
+        reader.read_to_string(&mut rest).unwrap();
+        assert_eq!(rest, "last\n");
+        assert!(!path.exists(), "the file was left behind");
+    }
+
+    #[test]
+    fn what_has_been_read_of_a_followed_file_is_given_back_to_the_disk() {
+        const MIB: usize = 1 << 20;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("substitution");
+        let followed = follow_file(&path).unwrap();
+        let mut reader = followed.reader;
+
+        let mut program = File::create(&path).unwrap();
+        let chunk = vec![b'x'; MIB];
+        let mut buf = vec![0u8; MIB];
+        for _ in 0..8 {
+            program.write_all(&chunk).unwrap();
+            reader.read_exact(&mut buf).unwrap();
+        }
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while allocated(&path) > 2 * MIB as u64 {
+            assert!(
+                Instant::now() < deadline,
+                "8 MiB read, and {} bytes still on the disk",
+                allocated(&path)
+            );
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert_eq!(
+            program.metadata().unwrap().len(),
+            8 * MIB as u64,
+            "the file's size changed under the program"
+        );
+
+        drop(program);
+        followed.done.store(true, Ordering::SeqCst);
+        let mut rest = Vec::new();
+        reader.read_to_end(&mut rest).unwrap();
+        assert!(rest.is_empty());
+    }
 }

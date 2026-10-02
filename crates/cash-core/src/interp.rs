@@ -91,6 +91,16 @@ pub struct ExecutionParameters {
     /// group when it is on. Here it is a task of the shell's own process, so it leaves a
     /// pending Ctrl-C for the foreground to act on.
     pub(crate) asynchronous: bool,
+
+    /// The process substitutions handed as a path to the command run under these
+    /// parameters, each ending its substitution's input once the last copy is dropped.
+    ///
+    /// cash (D17): in Bash, a `>(...)` reads until the last copy of its descriptor is
+    /// closed, which is when the command it was handed to has ended, and whatever that
+    /// started with it. Here they are held by the command's parameters, the copies of
+    /// them that what it runs gets, and a program it runs until the program has exited
+    /// (`commands::hold_substitutions_until_exit`).
+    pub(crate) substitution_ends: Vec<std::sync::Arc<SubstitutionEnd>>,
 }
 
 impl ExecutionParameters {
@@ -1675,19 +1685,21 @@ impl<SE: extensions::ShellExtensions> ExecuteInPipeline<SE> for ast::SimpleComma
                     }
                 }
                 CommandPrefixOrSuffixItem::ProcessSubstitution(kind, subshell_command) => {
-                    let (arg_path, installed_fd_num, substitution_file) =
-                        setup_process_substitution(
-                            &context.shell,
-                            &params,
-                            kind,
-                            subshell_command,
-                            false,
-                            requires_seekable_file,
-                        )
-                        .await?;
+                    let handed = SubstitutionPath {
+                        seekable: requires_seekable_file,
+                        pipe: takes_substitution_pipes(&context.shell, args.first()),
+                    };
+                    let (arg_path, end) = setup_process_substitution_path(
+                        &context.shell,
+                        &params,
+                        kind,
+                        subshell_command,
+                        handed,
+                    )
+                    .await?;
 
-                    if let Some(fd) = installed_fd_num {
-                        params.open_files.set_fd(fd, substitution_file);
+                    if let Some(end) = end {
+                        params.substitution_ends.push(std::sync::Arc::new(end));
                     }
 
                     args.push(CommandArg::String(arg_path));
@@ -2374,21 +2386,12 @@ pub(crate) async fn setup_redirect(
                         | ast::IoFileRedirectKind::Append
                         | ast::IoFileRedirectKind::ReadAndWrite
                         | ast::IoFileRedirectKind::Clobber => {
-                            let (_arg_path, substitution_fd, substitution_file) =
-                                setup_process_substitution(
-                                    shell,
-                                    params,
-                                    substitution_kind,
-                                    subshell_cmd,
-                                    true,
-                                    false,
-                                )
-                                .await?;
-
-                            let target_file = substitution_file.clone();
-                            if let Some(fd) = substitution_fd {
-                                params.open_files.set_fd(fd, substitution_file);
-                            }
+                            let target_file = setup_redirected_process_substitution(
+                                shell,
+                                params,
+                                substitution_kind,
+                                subshell_cmd,
+                            )?;
 
                             let fd_num = specified_fd_num
                                 .unwrap_or_else(|| get_default_fd_for_redirect_kind(kind));
@@ -2674,148 +2677,211 @@ pub fn finish_output_substitutions() {
         }
         let _ = substitution.thread.join();
     }
+    sys::fs::remove_process_substitution_dir();
 }
 
-/// Set up a process substitution, returning the argument the command should receive,
-/// the fd the file is installed on, and the file itself.
-///
-/// cash (D17): the argument is a Win32 Named Pipe (`\\.\pipe\cash-procsub-...`), or a
-/// direct pipe when the substitution is itself a redirection.
-async fn setup_process_substitution(
-    shell: &Shell<impl extensions::ShellExtensions>,
-    params: &ExecutionParameters,
-    kind: &ast::ProcessSubstitutionKind,
-    subshell_cmd: &ast::SubshellCommand,
-    for_redirect: bool,
-    requires_seekable_file: bool,
-) -> Result<(String, Option<ShellFd>, OpenFile), error::Error> {
-    setup_process_substitution_win(
-        shell,
-        params,
-        kind,
-        subshell_cmd,
-        for_redirect,
-        requires_seekable_file,
-    )
-    .await
+/// Ends the input of a process substitution handed to a command as a path, or cleans up
+/// after it, once dropped: see `ExecutionParameters::substitution_ends` (D17).
+pub(crate) enum SubstitutionEnd {
+    /// A `>(...)` as a named pipe: given the end of its input if no program opened it.
+    Pipe(String),
+    /// A `>(...)` as a temp file: the program is done with it, and what the file holds
+    /// is the rest of the substitution's input.
+    File(std::sync::Arc<std::sync::atomic::AtomicBool>),
+    /// A `<(...)` as a temp file: deleted.
+    Remove(PathBuf),
 }
 
-/// cash (D17): process substitution via Win32 Named Pipes and live streaming.
+impl Drop for SubstitutionEnd {
+    fn drop(&mut self) {
+        match self {
+            Self::Pipe(path) => cash_win32::pipe::release_unclaimed(path),
+            Self::File(done) => done.store(true, std::sync::atomic::Ordering::SeqCst),
+            Self::Remove(path) => {
+                let _ = std::fs::remove_file(path);
+            }
+        }
+    }
+}
+
+/// What a process substitution handed to a command as a path is made of (D17).
+#[derive(Clone, Copy)]
+struct SubstitutionPath {
+    /// A `<(...)` is a temp file written in full first, for a command that seeks in it or
+    /// asks what file it is (`diff`, `cmp`); otherwise the named pipe.
+    seekable: bool,
+    /// A `>(...)` is the named pipe, for a command that opens it as a pipe may be opened;
+    /// otherwise a temp file read as it is written.
+    pipe: bool,
+}
+
+/// Whether the command named `name` takes a `>(...)` as the named pipe: a builtin that
+/// says it can ([`crate::builtins::Registration::substitution_pipes`]).
 ///
-/// Windows has no `/dev/fd`, and a child cannot inherit an arbitrary descriptor (D26),
-/// so the pipe-and-`/dev/fd/63` approach cannot work for native executables.
-///
-/// If `for_redirect` is true (e.g. `< <(cmd)` or `> >(cmd)`), the redirection is
-/// handled entirely in-process: an anonymous pipe connects the subshell directly to the
-/// outer command's standard input or output with zero disk usage and live streaming.
-///
-/// If `for_redirect` is false (e.g. `cat <(cmd)` or `cmd >(subshell)`), a Win32 Named
-/// Pipe (`\\.\pipe\cash-procsub-...`) is created. Native executables open it via standard
-/// Win32 file APIs, and data streams in real time via kernel memory pipes.
-async fn setup_process_substitution_win(
+/// A program opens a file it is to write as a new one, creating or truncating it, which a
+/// named pipe does not allow; it gets the temp file. So does a function, which may hand
+/// the path on to either.
+fn takes_substitution_pipes(
     shell: &Shell<impl extensions::ShellExtensions>,
-    params: &ExecutionParameters,
-    kind: &ast::ProcessSubstitutionKind,
-    subshell_cmd: &ast::SubshellCommand,
-    for_redirect: bool,
-    requires_seekable_file: bool,
-) -> Result<(String, Option<ShellFd>, OpenFile), error::Error> {
-    let mut subshell = shell.clone();
-    let mut child_params = params.clone();
-    child_params.process_group_policy = ProcessGroupPolicy::SameProcessGroup;
-
-    if for_redirect {
-        let (reader, writer) = std::io::pipe()?;
-        let target_file = match kind {
-            ast::ProcessSubstitutionKind::Read => {
-                child_params
-                    .open_files
-                    .set_fd(OpenFiles::STDOUT_FD, writer.into());
-                OpenFile::from(reader)
-            }
-            ast::ProcessSubstitutionKind::Write => {
-                child_params
-                    .open_files
-                    .set_fd(OpenFiles::STDIN_FD, reader.into());
-                OpenFile::from(writer)
-            }
-        };
-
-        let subshell_cmd = subshell_cmd.to_owned();
-        let thread = std::thread::Builder::new()
-            .name("cash-procsub".into())
-            .spawn(move || {
-                let rt = tokio::runtime::Builder::new_current_thread()
-                    .enable_all()
-                    .build();
-                if let Ok(rt) = rt {
-                    let _ = rt.block_on(subshell_cmd.list.execute(&mut subshell, &child_params));
-                }
-            })?;
-        if matches!(kind, ast::ProcessSubstitutionKind::Write) {
-            keep_output_substitution(thread, None);
-        }
-
-        return Ok((String::new(), None, target_file));
-    }
-
-    // Windows CRT `_stat()` cannot stat Win32 Named Pipes (returning ERROR_INVALID_NAME / ENOENT).
-    // Commands that require seeking or regular file stat (such as `diff` or `cmp`) fall back to
-    // an awaited temp file so `diff <(a) <(b)` succeeds transparently.
-    if requires_seekable_file && matches!(kind, ast::ProcessSubstitutionKind::Read) {
-        static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-        let n = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let path =
-            std::env::temp_dir().join(format!("cash-procsub-seek-{}-{n}", std::process::id()));
-
-        child_params.open_files.set_fd(
-            OpenFiles::STDOUT_FD,
-            OpenFile::from(std::fs::File::create(&path)?),
-        );
-
-        let subshell_cmd = subshell_cmd.to_owned();
-        let _ = subshell_cmd
-            .list
-            .execute(&mut subshell, &child_params)
-            .await;
-
-        let target_file = OpenFile::from(std::fs::File::open(&path)?);
-        return Ok((cash_win32::path::render(&path), None, target_file));
-    }
-
-    let (path, target_file) = match kind {
-        ast::ProcessSubstitutionKind::Read => {
-            let sub = cash_win32::pipe::create_read_substitution()?;
-            child_params
-                .open_files
-                .set_fd(OpenFiles::STDOUT_FD, sub.writer.into());
-            (sub.path, openfiles::null()?)
-        }
-        ast::ProcessSubstitutionKind::Write => {
-            let sub = cash_win32::pipe::create_write_substitution()?;
-            child_params
-                .open_files
-                .set_fd(OpenFiles::STDIN_FD, sub.reader.into());
-            (sub.path, openfiles::null()?)
-        }
+    name: Option<&CommandArg>,
+) -> bool {
+    let Some(CommandArg::String(name)) = name else {
+        return false;
     };
+    // A path to a bundled tool names the builtin, and never a function (ROADMAP item 12).
+    let (name, functions) = match cash_win32::path::virtual_tool(name) {
+        Some(tool) => (Cow::Owned(tool), false),
+        None => (Cow::Borrowed(name.as_str()), true),
+    };
+    if functions && shell.funcs().get(name.as_ref()).is_some() {
+        return false;
+    }
+    shell
+        .builtins()
+        .get(name.as_ref())
+        .is_some_and(|builtin| !builtin.disabled && builtin.substitution_pipes)
+}
 
+/// Runs a process substitution's commands on a thread of their own.
+fn spawn_substitution(
+    mut subshell: Shell<impl extensions::ShellExtensions>,
+    params: ExecutionParameters,
+    subshell_cmd: &ast::SubshellCommand,
+) -> std::io::Result<std::thread::JoinHandle<()>> {
     let subshell_cmd = subshell_cmd.to_owned();
-    let thread = std::thread::Builder::new()
+    std::thread::Builder::new()
         .name("cash-procsub".into())
         .spawn(move || {
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build();
             if let Ok(rt) = rt {
-                let _ = rt.block_on(subshell_cmd.list.execute(&mut subshell, &child_params));
+                let _ = rt.block_on(subshell_cmd.list.execute(&mut subshell, &params));
             }
-        })?;
-    if matches!(kind, ast::ProcessSubstitutionKind::Write) {
-        keep_output_substitution(thread, Some(path.clone()));
-    }
+        })
+}
 
-    Ok((path, None, target_file))
+/// The shell and parameters a process substitution's commands run with.
+fn substitution_shell<SE: extensions::ShellExtensions>(
+    shell: &Shell<SE>,
+    params: &ExecutionParameters,
+) -> (Shell<SE>, ExecutionParameters) {
+    let mut child_params = params.clone();
+    child_params.process_group_policy = ProcessGroupPolicy::SameProcessGroup;
+    // What ends the input of the command's other substitutions is not this one's to hold.
+    child_params.substitution_ends.clear();
+    (shell.clone(), child_params)
+}
+
+/// Sets up a process substitution that is a redirection's target (`< <(cmd)`,
+/// `> >(cmd)`), returning the file for the command's descriptor.
+///
+/// cash (D17): an anonymous pipe connects the substitution to the command, in the shell's
+/// own process.
+fn setup_redirected_process_substitution(
+    shell: &Shell<impl extensions::ShellExtensions>,
+    params: &ExecutionParameters,
+    kind: &ast::ProcessSubstitutionKind,
+    subshell_cmd: &ast::SubshellCommand,
+) -> Result<OpenFile, error::Error> {
+    let (subshell, mut child_params) = substitution_shell(shell, params);
+    let (reader, writer) = std::io::pipe()?;
+    let target_file = match kind {
+        ast::ProcessSubstitutionKind::Read => {
+            child_params
+                .open_files
+                .set_fd(OpenFiles::STDOUT_FD, writer.into());
+            OpenFile::from(reader)
+        }
+        ast::ProcessSubstitutionKind::Write => {
+            child_params
+                .open_files
+                .set_fd(OpenFiles::STDIN_FD, reader.into());
+            OpenFile::from(writer)
+        }
+    };
+
+    let thread = spawn_substitution(subshell, child_params, subshell_cmd)?;
+    if matches!(kind, ast::ProcessSubstitutionKind::Write) {
+        keep_output_substitution(thread, None);
+    }
+    Ok(target_file)
+}
+
+/// Sets up a process substitution handed to a command as an argument (`cat <(cmd)`,
+/// `tee >(cmd)`), returning the path for the command and what ends the substitution's
+/// input once the command has ended.
+///
+/// cash (D17): Windows has no `/dev/fd`, and a program cannot be handed a descriptor
+/// above 2 (D26). The path is a Win32 named pipe (`\\.\pipe\cash-procsub-...`), which a
+/// program opens as it opens a file, and through which the data streams, or a temp file
+/// where the command could not use that ([`SubstitutionPath`]).
+async fn setup_process_substitution_path(
+    shell: &Shell<impl extensions::ShellExtensions>,
+    params: &ExecutionParameters,
+    kind: &ast::ProcessSubstitutionKind,
+    subshell_cmd: &ast::SubshellCommand,
+    handed: SubstitutionPath,
+) -> Result<(String, Option<SubstitutionEnd>), error::Error> {
+    let (mut subshell, mut child_params) = substitution_shell(shell, params);
+
+    match kind {
+        // The Windows CRT's `_stat()` cannot stat a named pipe, and a pipe cannot be
+        // sought in; `diff <(a) <(b)` gets files, written before the command starts.
+        ast::ProcessSubstitutionKind::Read if handed.seekable => {
+            let path = substitution_temp_path()?;
+            child_params.open_files.set_fd(
+                OpenFiles::STDOUT_FD,
+                OpenFile::from(std::fs::File::create(&path)?),
+            );
+            let _ = subshell_cmd
+                .list
+                .execute(&mut subshell, &child_params)
+                .await;
+            drop(child_params);
+
+            let rendered = cash_win32::path::render(&path);
+            Ok((rendered, Some(SubstitutionEnd::Remove(path))))
+        }
+        ast::ProcessSubstitutionKind::Read => {
+            let sub = cash_win32::pipe::create_read_substitution()?;
+            child_params
+                .open_files
+                .set_fd(OpenFiles::STDOUT_FD, sub.writer.into());
+            spawn_substitution(subshell, child_params, subshell_cmd)?;
+            Ok((sub.path, None))
+        }
+        ast::ProcessSubstitutionKind::Write if handed.pipe => {
+            let sub = cash_win32::pipe::create_write_substitution()?;
+            child_params
+                .open_files
+                .set_fd(OpenFiles::STDIN_FD, sub.reader.into());
+            let thread = spawn_substitution(subshell, child_params, subshell_cmd)?;
+            keep_output_substitution(thread, Some(sub.path.clone()));
+            Ok((sub.path.clone(), Some(SubstitutionEnd::Pipe(sub.path))))
+        }
+        ast::ProcessSubstitutionKind::Write => {
+            let path = substitution_temp_path()?;
+            let followed = cash_win32::pipe::follow_file(&path)?;
+            child_params
+                .open_files
+                .set_fd(OpenFiles::STDIN_FD, followed.reader.into());
+            let thread = spawn_substitution(subshell, child_params, subshell_cmd)?;
+            keep_output_substitution(thread, None);
+
+            let rendered = cash_win32::path::render(&path);
+            Ok((rendered, Some(SubstitutionEnd::File(followed.done))))
+        }
+    }
+}
+
+/// A new path for a process substitution's temp file, in the directory of this shell's.
+fn substitution_temp_path() -> std::io::Result<PathBuf> {
+    let path = sys::fs::process_substitution_temp_path();
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    Ok(path)
 }
 
 fn setup_open_file_with_contents(contents: &str) -> Result<OpenFile, error::Error> {

@@ -217,7 +217,6 @@ by Git Bash 5.3.15 and by cash. None of these is fixed.
 | `echo x \| tee /dev/stderr` | `x` on both | the same message, 1 |
 | `[ -e /dev/stdin ]`, `[ -e /dev/null ]`, `[ -c /dev/null ]`, `[ -p /dev/stdin ]`, `[ -w /dev/stdout ]`, `[ -e /dev/fd/0 ]`, `[[ -e /dev/stdin ]]` | 0 | 1 |
 | `cat <&1`, `cat < /dev/stdout` (output a pipe) | `cat: -: Bad file descriptor`, 1 | prints `x`, 0 |
-| `echo x \| tee >(cat >&2)` | `x` on both | `\\.\pipe\cash-procsub-…: The parameter is incorrect.`, 1 |
 | `cat 3< f <&3` | the contents of `f` | `operation not supported on this platform: fd redirections`, 1 |
 
 What is behind them, as far as it is known:
@@ -231,8 +230,9 @@ What is behind them, as far as it is known:
 - **The file tests ask the filesystem.** §9 of the spec has listed `[ -e /dev/null ]` as a
   D7 gap since the first baseline. `cash_win32::path::accept` already tells the names
   from paths; the tests do not ask it.
-- **The last three have nothing to do with the names** and were only met on the way; all
-  three were there before the fix, and their causes have not been looked for.
+- **The last two have nothing to do with the names** and were only met on the way; both
+  were there before the fix, and their causes have not been looked for. A third,
+  `echo x | tee >(cat >&2)` failing on the named pipe, was fixed in 1.3.3 (spec D17).
 
 ---
 

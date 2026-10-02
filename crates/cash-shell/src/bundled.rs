@@ -432,10 +432,9 @@ fn shim_execute<SE: ShellExtensions>(
     })
 }
 
-/// Constructs a [`Registration`] for the bundled-shim builtin. The same
-/// registration value can be reused for every bundled name; per-name
+/// Constructs a [`Registration`] for the bundled-shim builtin of `name`; per-name
 /// dispatch happens via `context.command_name` at execution time.
-fn shim_registration<SE: ShellExtensions>() -> Registration<SE> {
+fn shim_registration<SE: ShellExtensions>(name: &str) -> Registration<SE> {
     Registration {
         execute_func: shim_execute::<SE>,
         spawn_func: Some(shim_spawn::<SE>),
@@ -443,8 +442,15 @@ fn shim_registration<SE: ShellExtensions>() -> Registration<SE> {
         disabled: false,
         special_builtin: false,
         declaration_builtin: false,
+        substitution_pipes: SUBSTITUTION_PIPES.contains(&name),
     }
 }
+
+/// The bundled tools that open a file they are to write as a pipe may be opened, when it
+/// is a `>(...)`: patched for it, see `vendor/uutils/CASH-PATCHES.md` (D17). Every other
+/// one opens it as a new file, which a named pipe does not allow, and is handed a temp file
+/// instead.
+const SUBSTITUTION_PIPES: &[&str] = &["tee", "sort", "uniq", "shuf"];
 
 /// Registers a shim builtin for every name in the installed bundled-command
 /// registry.
@@ -456,6 +462,6 @@ pub fn register_shims<SE: ShellExtensions>(shell: &mut cash_core::Shell<SE>) {
         return;
     };
     for name in registry.keys() {
-        shell.register_builtin_if_unset(name.clone(), shim_registration::<SE>());
+        shell.register_builtin_if_unset(name.clone(), shim_registration::<SE>(name));
     }
 }

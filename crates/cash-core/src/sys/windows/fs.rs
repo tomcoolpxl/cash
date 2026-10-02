@@ -547,9 +547,18 @@ pub(crate) fn process_substitution_temp_path() -> PathBuf {
         sweep_stale_process_substitution_dirs();
     }
 
-    std::env::temp_dir()
-        .join(std::format!("cash-psub-{}", std::process::id()))
-        .join(std::format!("{n}"))
+    process_substitution_dir().join(std::format!("{n}"))
+}
+
+/// The directory of this shell's process-substitution temp files.
+fn process_substitution_dir() -> PathBuf {
+    std::env::temp_dir().join(std::format!("cash-psub-{}", std::process::id()))
+}
+
+/// Removes the directory of this shell's process-substitution temp files as it exits,
+/// if it is there and empty. One still in use is left for a later shell to sweep.
+pub(crate) fn remove_process_substitution_dir() {
+    let _ = std::fs::remove_dir(process_substitution_dir());
 }
 
 /// Remove process-substitution temp directories left by sessions that are gone.
@@ -567,7 +576,13 @@ fn sweep_stale_process_substitution_dirs() {
     for entry in entries.flatten() {
         let name = entry.file_name();
         let name = name.to_string_lossy();
-        let Some(pid) = name.strip_prefix("cash-psub-") else {
+        // Before 1.3.3 the file of a `<(...)` for `diff` or `cmp` was put in the temp
+        // directory itself, as `cash-procsub-seek-<pid>-<n>`, and never deleted.
+        let (pid, directory) = if let Some(pid) = name.strip_prefix("cash-psub-") {
+            (pid, true)
+        } else if let Some(rest) = name.strip_prefix("cash-procsub-seek-") {
+            (rest.split('-').next().unwrap_or_default(), false)
+        } else {
             continue;
         };
         let Ok(pid) = pid.parse::<u32>() else {
@@ -579,7 +594,11 @@ fn sweep_stale_process_substitution_dirs() {
             continue;
         }
 
-        let _ = std::fs::remove_dir_all(entry.path());
+        let _ = if directory {
+            std::fs::remove_dir_all(entry.path())
+        } else {
+            std::fs::remove_file(entry.path())
+        };
     }
 }
 

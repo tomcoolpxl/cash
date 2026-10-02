@@ -29,46 +29,8 @@ trust its runs, then by what a user notices most.
 
 | Phase | What | Items |
 | --- | --- | --- |
-| 3 | Process substitution | 3.2 |
 | 4 | The `/dev` names, descriptors and the bundled tools | 4.1 to 4.6 |
 | 5 | Jobs, `wait`, and the tools beside them | 5.1 to 5.3 |
-
----
-
-## Phase 3. Process substitution
-
-### 3.2 `tee >(cmd)` fails
-
-Reported; present before the `/dev` fixes. `open-issues.md` entry 9.
-
-```bash
-echo x | tee >(cat >&2)
-```
-
-cash: `\\.\pipe\cash-procsub-…: The parameter is incorrect.`, status 1. Bash: `x` on both
-streams.
-
-**Cause (2026-09-30):** handed to a command as a path, `>(...)` is a named pipe
-(`\\.\pipe\cash-procsub-…`, spec D17), and a named pipe cannot be created or truncated:
-a program that opens its output as a new file (`tee`, cash's own `echo x > "$1"`,
-Python's `open(path, 'w')`) gets "The parameter is incorrect", and one that appends
-(`tee -a`, `>>`) gets "Access is denied". Only a plain open for writing works.
-
-Beside it, from the same design: a `>(...)` handed as a path that no program opens holds
-the output of what runs it until the shell exits, so `x=$(echo >(cat))` waits for ever.
-(At exit it is released: 3.1, done.)
-
-**Decided (2026-09-30): the pipe for cash and the bundled tools, patched; a temp file for
-programs on `PATH`.** The bundled tools are uutils crates from crates.io, which open a
-file with the standard library and truncate it; they are to be patched (vendored, like
-crossterm and reedline) to open a `\\.\pipe\cash-procsub-…` path without creating or
-truncating it, through one small helper that 4.1 can use for the `/dev` names as well.
-cash's own opens (its redirections, a builtin that writes a file) learn the same. A
-`>(...)` handed to a program on `PATH` is a temp file instead, which the substitution
-reads as it is written until the command has ended: every program can create and
-truncate that. A function may pass the path on to either, and gets the temp file, which
-both can open. The `$(echo >(cat))` wait goes with it: the command's end is what ends the
-substitution's input.
 
 ---
 
@@ -87,7 +49,8 @@ Reported by both `/dev/stdin` sessions. `open-issues.md` entry 9, spec D7 and §
 **Decided: the tools cash bundles accept the names themselves, all of them, in one shared
 place.** Where a bundled tool opens a file, `/dev/stdin`, `/dev/stdout`, `/dev/stderr`,
 `/dev/null` and `/dev/fd/N` are what they are in a redirection, so cash translates no
-argument. A program on `PATH` still gets the name as written and fails. This is a new
+argument. 3.2 made a start: `cash_win32::pipe::open_output` is where `tee`, `sort`,
+`uniq` and `shuf` open the file they write, patched in `vendor/uutils`. A program on `PATH` still gets the name as written and fails. This is a new
 decision for the spec. **Yours, if it comes to it:** should the bundled tools turn out to
 have no one layer their file opening goes through, the work stops with the list of tools
 and what each would cost.

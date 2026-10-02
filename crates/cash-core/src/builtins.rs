@@ -182,6 +182,14 @@ pub struct Registration<SE: extensions::ShellExtensions> {
 
     /// Is this builtin one that takes specially handled declarations?
     pub declaration_builtin: bool,
+
+    /// Whether a `>(...)` handed to the builtin as an argument is the named pipe itself
+    /// (D17), rather than a temp file read as it is written.
+    ///
+    /// True of a builtin that opens such a path as a pipe may be opened (cash's own
+    /// opens, `cash_win32::pipe::open_output`) or does not open it, and runs no other
+    /// command with it.
+    pub substitution_pipes: bool,
 }
 
 impl<SE: extensions::ShellExtensions> Registration<SE> {
@@ -190,6 +198,17 @@ impl<SE: extensions::ShellExtensions> Registration<SE> {
     pub const fn special(self) -> Self {
         Self {
             special_builtin: true,
+            ..self
+        }
+    }
+
+    /// Updates the given registration to hand a `>(...)` to the builtin as a temp file:
+    /// for one that runs another command with its arguments, or writes a file it is named
+    /// as a new one.
+    #[must_use]
+    pub const fn with_substitution_files(self) -> Self {
+        Self {
+            substitution_pipes: false,
             ..self
         }
     }
@@ -401,6 +420,7 @@ pub fn simple_builtin<B: SimpleCommand + Send + Sync, SE: extensions::ShellExten
         disabled: false,
         special_builtin: false,
         declaration_builtin: false,
+        substitution_pipes: true,
     }
 }
 
@@ -414,6 +434,7 @@ pub fn builtin<B: Command + Send + Sync, SE: extensions::ShellExtensions>() -> R
         disabled: false,
         special_builtin: false,
         declaration_builtin: false,
+        substitution_pipes: true,
     }
 }
 
@@ -429,6 +450,7 @@ pub fn decl_builtin<B: DeclarationCommand + Send + Sync, SE: extensions::ShellEx
         disabled: false,
         special_builtin: false,
         declaration_builtin: true,
+        substitution_pipes: true,
     }
 }
 
@@ -450,6 +472,7 @@ pub fn raw_arg_builtin<
         disabled: false,
         special_builtin: false,
         declaration_builtin: true,
+        substitution_pipes: true,
     }
 }
 

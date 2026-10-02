@@ -661,10 +661,32 @@ gone, and with it every write end of a substitution's input, cash waits for each
 first. One that never ends keeps cash from exiting, as a command that never ends does.
 `<(...)` is not waited for: its output has nowhere to go once the shell has gone.
 
-Open: a program that creates or truncates the path it is given (`tee`, Python's
-`open(path, 'w')`) cannot open a named pipe, so `tee >(cmd)` fails; and a `>(...)` handed
-as a path that no program opens holds the output of what runs it until the shell exits,
-so `x=$(echo >(cat))` waits for ever.
+**A `>(...)` handed as a path is a pipe or a file, chosen per command (2026-09-30).** A
+named pipe cannot be created, truncated or appended to, and a program opens a file it is
+to write in one of those ways: `tee >(cmd)` failed with "The parameter is incorrect",
+`tee -a` with "Access is denied". So:
+
+- **A builtin gets the named pipe,** as it opens the path as a pipe may be opened
+  (`cash_win32::pipe::open_output`, through which cash's own opens go) or not at all.
+  Among the bundled tools, `tee`, `sort`, `uniq` and `shuf` are patched to open their
+  output through it (`vendor/uutils/CASH-PATCHES.md`), and get the pipe too.
+- **Everything else gets a temp file**, which every program can create and truncate: a
+  program on `PATH`, a bundled tool that is not patched, a builtin that runs another
+  command with its arguments or writes a file it is named (`command`, `exec`, `eval`,
+  `source`, `xargs`, `find`, `install`, ...: `Registration::substitution_pipes`), and a
+  function, which may hand the path on to any of these. The substitution reads the file
+  as it is written, a moment later, and gives its disk space back as it goes, so a program
+  that writes for hours does not fill the disk. The file is in the per-session directory
+  above, and deleted as the substitution's input ends.
+
+**A `>(...)` ends with the command it was handed to.** In Bash its input ends when the
+last copy of its descriptor is closed: when the command has ended, and whatever that
+started with it. Here the command's parameters hold it, as do the copies of them that
+what it runs gets, and a program it runs until the program has exited; the last one to
+let go ends the input. `x=$(echo >(cat))` waited for ever, as a path no program opened
+held the substitution open until the shell exited. The file of a `<(...)` for `diff` or
+`cmp` is deleted then too; they were never deleted before, and the sweep takes the ones
+earlier versions left.
 
 ### D18 — Reuse `brush-interactive` now, replace when it blocks
 
@@ -2274,7 +2296,7 @@ someone who expected bash, so additions need to earn their place.
 | 7 | `test -x` requires ACL **and** extension/shebang | Default ACLs make every file execute-granted | D23 |
 | 8 | `chmod -x` warns and does nothing | Revoking execute needs Deny ACEs | D34 |
 | 9 | `kill -STOP` suspends threads, not a real `SIGSTOP` | Windows has no `SIGSTOP` for arbitrary exes | D19 |
-| 10 | A `>(...)` runs in the shell, which waits for it before it exits; handed as a path it is a named pipe, which a program that creates or truncates its file cannot open (`tee >(cmd)`) | Windows has no `/dev/fd` to hand a pipe on, and no `fork` | D17 |
+| 10 | A `>(...)` runs in the shell, which waits for it before it exits; handed as a path it is a named pipe to a builtin, and to a program or function a temp file read as it is written, a moment behind | Windows has no `/dev/fd` to hand a pipe on, and no `fork`; a named pipe cannot be created or truncated | D17 |
 | 11 | `[ -s file ]` is false for App Execution Aliases | They are genuinely 0 bytes | D46 |
 | 12 | Elevated and `detach`ed processes, and GUI applications, survive cash; other processes it started do not | Integrity boundary; breakaway flag; an editor should outlive the shell (`cashctl gui-apps close` to reap them) | D6, D42, D45 |
 | 13 | A bundled builtin cannot delete the shell's current directory | It re-enters the binary as a child inheriting that cwd, and Windows refuses to delete a process's own cwd | D48 |
