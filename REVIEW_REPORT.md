@@ -1,573 +1,647 @@
-# Comprehensive Architectural, Code & Quality Review Report: Cash (Cool Again Shell)
+# Code review of cash, 2026-10-02
 
-**Target Workspace:** `c:\Users\thraa\github\cash`  
-**Review Date:** September 2026  
-**Auditor:** Antigravity Pair Programmer / Deep Systems Review  
-**Evaluation Target:** Rust 2024 Edition, Windows 11 (x86_64-pc-windows-msvc), Win32 Kernel & Subsystems  
+Reviewed: `main` at `c367166a` (v1.3.7). The whole workspace was in scope: the
+repository, the build and release, the architecture, the algorithms and the code. This
+report replaces the one of 2026-09-22, which is in git history (`git show
+c367166a:REVIEW_REPORT.md`); §9 says which of its findings still hold.
 
----
-
-## Table of Contents
-
-1. [Executive Summary & Verdict](#1-executive-summary--verdict)
-2. [Project Organization, Architecture & Crate Boundaries](#2-project-organization-architecture--crate-boundaries)
-3. [Setup, Build Configuration & Packaging Review](#3-setup-build-configuration--packaging-review)
-4. [Algorithmic Soundness & Windows Kernel Integration](#4-algorithmic-soundness--windows-kernel-integration)
-   - 4.1 [Job Object Containment & Process Lifecycle (D6)](#41-job-object-containment--process-lifecycle-d6)
-   - 4.2 [Handle Inheritance & Leakage in Win32 Process Spawning](#42-handle-inheritance--leakage-in-win32-process-spawning)
-   - 4.3 [Command-Line Escaping & Batch Dispatch (D32 / CVE-2024-24576)](#43-command-line-escaping--batch-dispatch-d32--cve-2024-24576)
-   - 4.4 [Path Canonicalization, Lexical Normalization & The Translation Cliff (D3, D4, D29)](#44-path-canonicalization-lexical-normalization--the-translation-cliff-d3-d4-d29)
-   - 4.5 [Console Subsystem, VT Processing & Line Editor](#45-console-subsystem-vt-processing--line-editor)
-5. [Deep Code Analysis: Bugs, Anti-Patterns & False Assumptions Uncovered](#5-deep-code-analysis-bugs-anti-patterns--false-assumptions-uncovered)
-   - 5.1 [Defect 1: Copy-Paste Bug in `declare.rs` Trace-Attribute Filtering](#51-defect-1-copy-paste-bug-in-declarers-trace-attribute-filtering)
-   - 5.2 [Defect 2: Integer-Attribute Assignment (`declare -i`) String Parsing Assumption](#52-defect-2-integer-attribute-assignment-declare--i-string-parsing-assumption)
-   - 5.3 [Defect 3: Bundled Utilities Pipeline Serialization](#53-defect-3-bundled-utilities-pipeline-serialization)
-   - 5.4 [Defect 4: Process-Group Disconnect in Bundled Commands](#54-defect-4-process-group-disconnect-in-bundled-commands)
-   - 5.5 [Defect 5: Architectural Disconnect — Uncalled `build_cmd_command_line` in `commands.rs`](#55-defect-5-architectural-disconnect--uncalled-build_cmd_command_line-in-commandsrs)
-   - 5.6 [Defect 6: Dead Code & Divergent PATHEXT Caching in `sys/windows/fs.rs`](#56-defect-6-dead-code--divergent-pathext-caching-in-syswindowsfsrs)
-   - 5.7 [Defect 7: Stale `chmod` Finding in `cash doctor`](#57-defect-7-stale-chmod-finding-in-cash-doctor)
-   - 5.8 [Defect 8: Interactive-Only State Traps in `history` and `bind`](#58-defect-8-interactive-only-state-traps-in-history-and-bind)
-   - 5.9 [Defect 9: Fork Rebranding Debt & Residual Upstream Metadata](#59-defect-9-fork-rebranding-debt--residual-upstream-metadata)
-6. [Test Harness & Quality Verification Review](#6-test-harness--quality-verification-review)
-   - 6.1 [Current State: Builtin Parameter Integration Coverage (81 Passing Tests)](#61-current-state-builtin-parameter-integration-coverage-81-passing-tests)
-   - 6.2 [The Major Blindspot: 100% of Interactive PTY Tests Are Disabled on Windows](#62-the-major-blindspot-100-of-interactive-pty-tests-are-disabled-on-windows)
-   - 6.3 [The Major Blindspot: Differential & Integration Suites Stubbed on Windows](#63-the-major-blindspot-differential--integration-suites-stubbed-on-windows)
-   - 6.4 [Recommended Blueprint for a Native Win32 ConPTY Test Harness](#64-recommended-blueprint-for-a-native-win32-conpty-test-harness)
-7. [Performance, Memory & Allocation Profiling](#7-performance-memory--allocation-profiling)
-8. [Actionable Recommendations & Phased Roadmap](#8-actionable-recommendations--phased-roadmap)
+The findings to be worked are in `TODO.md`, phase 8, in the order to work them.
 
 ---
 
-## 1. Executive Summary & Verdict
+## 1. How the review was done
 
-**Cash (Cool Again Shell)** is an ambitious and well-conceived native Windows shell. Its core premise is compelling: deliver a **bash-language compatible shell whose execution model is Win32**, eliminating the overhead, path corruption, and fragility of POSIX emulation layers (`msys-2.0.dll`, Cygwin) and virtualization (WSL).
+**The checklist** came from three sources:
 
-### Key Architectural Strengths
-1. **Kernel-Level Process Containment (D6):** Cash correctly identifies that Windows Job Objects (`CreateJobObjectW`, `SetInformationJobObject` with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`) provide stronger tree-cleanup guarantees than POSIX process groups.
-2. **Canonical Forward-Slash Path Model (D3, D29):** Eliminates backslash-escaping bugs across pipelines by standardizing internal paths on forward slashes and uppercase drive letters while leaving command-line arguments untouched (D4).
-3. **In-Process Coreutils Shimming (D48):** Bundling uutils/coreutils inside the binary reduces process spawn overhead by 2.2x and provides an out-of-the-box userland.
-4. **Clean Code Hygiene:** Zero compiler warnings and zero Clippy lints across the workspace under exceptionally strict deny rules (`unwrap_used = "deny"`, `panic = "deny"`, `expect_used = "deny"`).
+- Google's engineering practices on [what a reviewer looks
+  for](https://google.github.io/eng-practices/review/reviewer/looking-for.html):
+  design, functionality, complexity, tests, naming, comments, style, consistency,
+  documentation and context, in that order.
+- The [Rust API Guidelines checklist](https://rust-lang.github.io/api-guidelines/checklist.html),
+  for the API and dependability items that make sense in an application workspace.
+- Unsafe and FFI review practice: a SAFETY comment that is actually true, handle
+  ownership, buffer sizes, GetLastError order, and no panic unwinding across an FFI
+  boundary. Sources: [Effective Rust item 34](https://effective-rust.com/ffi.html), the
+  [Rust FAQ on soundness](https://www.rustfaq.org/en/what-are-the-rules-for-unsafe-code-soundness/)
+  and [Microsoft's Rust training, unsafe and FFI](https://microsoft.github.io/RustTraining/c-cpp-book/ch14-unsafe-rust-and-ffi.html).
 
-### Critical Vulnerabilities & Strategic Gaps
-1. **The "Bypassed Engine" Problem:** Several of the most sophisticated modules in `cash-win32` (e.g. raw suspended process creation in `spawn.rs`, command line escaping in `cmd.rs`, dispatch classification in `resolve.rs`) are **completely bypassed** by `cash-core`. The execution engine instead uses standard library / Tokio wrappers with post-spawn containment, leaving known races open and batch file command lines unescaped.
-2. **Interactive Testing Vacuum on Windows:** 100% of the interactive PTY integration tests in `crates/cash/tests/interactive_tests.rs`, `pty_startup_tests.rs`, and `reedline_interactive_tests.rs` are hardcoded to `#![cfg(any(target_os = "linux", ...))]`. On Windows—the primary target OS—they compile to zero tests.
-3. **Pipeline Serialization in Bundled Utilities:** Multi-stage pipelines involving bundled commands (e.g. `cat file | tr a-z A-Z | wc -l`) execute synchronously stage-by-stage rather than streaming concurrently.
-4. **Evaluation Bugs in Shell Attributes:** `declare -i` fails to evaluate arithmetic expressions due to scalar integer parsing assumptions (`parse::<i64>().unwrap_or(0)`), and `declare.rs` contains an active copy-paste bug in attribute filtering.
+**The reviewers.** Nine of them worked in parallel, one per layer: the repository,
+build, CI and release; `cash-win32`; the execution half of `cash-core`; the language
+half of `cash-core`; parser, interactive and `vendor/`; the builtins; the binary,
+`cash-shell` and the tests; awk, sed and bc; and a cross-cutting pass for duplication
+and smells. Each was read-only and built nothing. The machine is shared, and CI was
+green on 1.3.7: fmt, clippy pedantic+nursery with `unwrap`/`expect`/`panic` denied,
+nextest and doc tests. So the review looked for what those tools miss.
 
-| Dimension | Grade | Status & Commentary |
-|:---|:---:|:---|
-| **Architectural Vision** | **A** | Brilliant design spec (`spec.md`); pragmatically solves real Windows pain points. |
-| **Win32 Kernel Integration** | **B+** | Job objects and console VT are solid; handle inheritance and fork-race seams need closure. |
-| **Language & Builtins** | **B+** | 81 passing end-to-end integration tests; minor arithmetic evaluation & attribute bugs. |
-| **Test Harness Reality** | **C+** | Strong acceptance tests, but differential and interactive PTY suites are 100% disabled on Windows. |
-| **Code Consistency** | **B** | High linter compliance, but significant rebranding debt and bypassed helper modules. |
+**Decisions first.** Before anything was called a defect, it was checked against:
 
----
+- `spec.md` §3 (D1–D69) and §4 (the 39 deliberate divergences)
+- the "Decided" list in `TODO.md`
+- `open-issues.md`
+- each `vendor/*/CASH-PATCHES.md`
+- `research/`
 
-## 2. Project Organization, Architecture & Crate Boundaries
+Something decided is not a finding. It is reported only where the code does not do
+what the decision says, or the decision has a cost nobody recorded. §8 lists what was
+checked and found to be decided.
 
-The project is structured as a Cargo workspace with 9 primary member crates and an `xtask` crate:
+**Evidence.** Bugs were shown by running the installed cash (Scoop, 1.3.4) against
+Git Bash 5.3.15 (GNU sed 4.9, gawk 5.4, GNU bc 1.07.1 under WSL). For every such bug,
+the code behind it was checked to be unchanged between 1.3.4 and HEAD. Every finding
+carries one mark:
 
-```text
-c:\Users\thraa\github\cash
-├── crates/
-│   ├── cash                       # CLI binary entry point, doctor diagnostics, end-to-end integration tests
-│   ├── cash-win32                 # Low-level Win32 FFI: Job objects, console VT, poll, cmd escaping, path rendering
-│   ├── cash-core                  # Core shell engine: evaluation, AST traversal, jobs, variables, open files
-│   ├── cash-parser                # Shell grammar parser (PEG/Winnow), AST definitions, tokenization
-│   ├── cash-builtins              # POSIX special, Bash-mode, and Windows-specific builtins (winpath, ps, top, chmod)
-│   ├── cash-coreutils-builtins    # uutils/coreutils integration shims and registry
-│   ├── cash-interactive           # REPL, Reedline input backend, syntax highlighting, zsh hooks
-│   ├── cash-shell                 # High-level coordinator facade integrating core, builtins, interactive, bundled dispatch
-│   └── cash-test-harness          # Absorbed test runner and bash differential comparison harness
-└── xtask/                         # Build automation and maintenance tasks
-```
+- ✅ reproduced a second time by the lead reviewer in this session;
+- 🔁 reproduced by the reviewer who found it (the probe is quoted);
+- 📖 from reading the code.
 
-### Dependency Flow Analysis
+**Severity.**
 
-```mermaid
-graph TD
-    cash[crates/cash - cash.exe] --> cash-shell
-    cash --> cash-builtins
-    cash --> cash-core
-    cash --> cash-win32
-
-    cash-shell --> cash-core
-    cash-shell --> cash-builtins
-    cash-shell --> cash-interactive
-    cash-shell --> cash-coreutils-builtins
-    cash-shell --> cash-win32
-
-    cash-builtins --> cash-core
-    cash-builtins --> cash-win32
-
-    cash-interactive --> cash-core
-    cash-interactive --> cash-parser
-
-    cash-core --> cash-parser
-    cash-core --> cash-win32
-
-    cash-coreutils-builtins --> cash-core
-```
-
-### Architectural Seams & Inconsistencies
-
-#### 1. The Bypassed `cash-win32` Spawner
-`crates/cash-win32/src/spawn.rs` implements `pub fn spawn(command_line: &str, options: &SpawnOptions)` using raw `CreateProcessW(..., CREATE_SUSPENDED)` followed by `job.assign_process()` and `ResumeThread()`. This closes the race where a child forks a grandchild before being added to a nested job object (D6).
-**Reality:** `crates/cash-core/src/sys/tokio_process.rs` does not use `cash_win32::spawn::spawn`. Instead, it converts `std::process::Command` to `tokio::process::Command`, spawns it, and performs a post-spawn assignment via `cash_win32::jobreg::contain(pid)`. The code contains an explicit comment admitting the race condition:
-```rust
-// This is the post-spawn assignment, with the race §6 documents: tokio owns process
-// creation, so the CREATE_SUSPENDED path `cash_win32::spawn` uses is unavailable
-// here. The window is narrow, and the session job still catches anything through it.
-```
-As a result, `cash_win32::spawn::spawn` is completely unused dead code in production.
-
-#### 2. Redundant Filesystem & Resolution Modules
-`cash-win32/src/resolve.rs` contains complete logic for `Dispatch::Native`, `Dispatch::Batch`, `Dispatch::PowerShell`, and `Dispatch::Shebang`, including checking file extensions before reading files (essential to handle App Execution Aliases like 0-byte reparse points `python.exe`).  
-However, `cash-core/src/pathsearch.rs` does not call `cash_win32::resolve::resolve`. Instead, it routes through `cash-core/src/sys/windows/fs.rs::resolve_executable`, maintaining a separate, static `LazyLock<Vec<String>>` for `PATHEXT`.
+- **Critical:** a wrong result with no error, in something scripts rely on.
+- **High:** a wrong result, a crash or a security hole a user can hit in ordinary use.
+- **Medium:** wrong in a narrower case, a resource leak, or a decision not implemented.
+- **Low:** an edge case, robustness, or consistency.
+- **Info:** worth knowing.
 
 ---
 
-## 3. Setup, Build Configuration & Packaging Review
+## 2. Verdict
 
-### 1. Workspace Profile Settings
-In root [`Cargo.toml`](file:///c:/Users/thraa/github/cash/Cargo.toml):
-```toml
-[profile.release]
-strip = true
-lto = "fat"
-codegen-units = 1
-panic = "abort"
-```
-- **Strengths:** `lto = "fat"`, `codegen-units = 1`, and `strip = true` are optimal for production command-line utilities. They eliminate unused symbols across the 9 workspace crates and produce a lean, highly optimized binary (~14 MB with bundled coreutils).
-- **Caveat:** `panic = "abort"` means panic hooks cannot unwind. While appropriate for a shell release binary, all resources (temporary process substitution files, console modes) must rely on explicit cleanup or OS-level reclamation rather than drop unwinding.
+cash is a well-made codebase with a clear design record: almost every module cites the
+decision it implements, and that made this review possible. The crate graph is sound.
+`cash-win32` is a real bottom layer that holds nearly all of the unsafe code, and the
+unsafe code there is careful (alignment, bounded retry loops, `cb` fields, pid-reuse
+safety). CI, local runs and the release gate all go through one entry point. The test
+suite is large (about 3,000 `#[test]`s) and now drives real ConPTY sessions against Git
+Bash's screens.
 
-### 2. Workspace Lint Configuration
-The linting discipline is exemplary:
-- `warnings = "deny"`, `missing_docs = "deny"`, `rust_2018_idioms = "deny"`.
-- Denied Clippy lints: `unwrap_used`, `expect_used`, `panic`, `panic_in_result_fn`, `format_push_string`, `string_slice`, `multiple_unsafe_ops_per_block`.
-- **Finding:** Clippy passes across all crates with 0 warnings.
+Six things stand out.
 
-### 3. Packaging & Version Coupling Debt
-- In `crates/cash/Cargo.toml`:
-  - `cash-builtins = { version = "^0.2.0", path = "../cash-builtins" }`
-  - `cash-core = { version = "^0.5.0", path = "../cash-core" }`
-  Notice that `cash-builtins` is declared as version `^0.2.0` and `cash-core` as `^0.5.0`, while `cash` itself is `0.1.0`. These versions are artifacts from upstream `brush` and should be synchronized under a single workspace version.
+1. **The shell's state and the process's state get mixed up.** cash never changes its
+   own working directory, and `export` never touches the process environment. That is
+   right, but any code that reaches for `std::process::Command`, `std::env::var` or a
+   relative `Path` gets the *process's* cwd and environment. It finds the wrong file,
+   misses an exported variable, or runs the wrong program. This one cause produces
+   about a dozen findings, from `./tool.exe` after `cd` (which runs the copy in the
+   start folder) to `xargs` and `find -exec` losing `export`, and PATHEXT changes being
+   ignored (§4.1).
+2. **Some crashes bypass the panic recovery.** A recursion only 200 deep, or about 20
+   deep inside a pipeline, overflows a 2 MiB tokio worker stack and kills the shell. A
+   stack overflow is an abort, not a panic, so the documented recovery never runs.
+   Five other inputs panic outright (§4.2).
+3. **Errors and blocking inside pipelines and background jobs.** An error in a
+   pipeline stage takes down the whole pipeline, or the whole shell. Background lists
+   of builtins hold tokio worker threads. Coprocesses deadlock (§4.3).
+4. **awk prints wrong numbers.** `%g`, OFMT and CONVFMT drop digits: `print 100000.4`
+   prints `1`, an average of 150000 prints `15`, and integers stop at 2^63. These bugs
+   come from posixutils-rs, and awk, bc and sed are the one part of the workspace that
+   opts out of every lint (§4.6).
+5. **Quoting at the edges.** These are the places where a string becomes a command:
+   - batch arguments get stray carets;
+   - `start` hands an unquoted URL to `cmd.exe`, so `&` runs a second command;
+   - two spellings of command substitution slip past the §4 #37 subscript hardening;
+   - `declare -f` and `export -f` print functions with here-documents that cannot be
+     read back (§4.5).
+6. **Privacy.** `HISTCONTROL`, `HISTIGNORE`, `HISTSIZE` and `HISTFILESIZE` are not
+   read anywhere. A command typed with a leading space, the usual way to keep a secret
+   out of history, goes into `~/.cash_history` at once. That is despite the starter
+   `.bashrc` (D69) setting `HISTCONTROL=ignoreboth` (§4.7).
 
----
+Around those sit supply-chain gaps in CI, spec text that has drifted from the code,
+brush leftovers that users can see, and duplicated helpers that already disagree with
+each other.
 
-## 4. Algorithmic Soundness & Windows Kernel Integration
-
-### 4.1 Job Object Containment & Process Lifecycle (D6)
-Windows Job Objects are kernel-managed structures that enforce resource limits and lifecycle boundaries on groups of processes.
-- **Session-Level Job Object:** In `crates/cash-win32/src/session.rs`, Cash installs an outermost Job Object during `main()` before executing any shell command:
-  ```rust
-  let mut limits: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = unsafe { std::mem::zeroed() };
-  limits.BasicLimitInformation.LimitFlags =
-      JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK;
-  ```
-  `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` guarantees that if `cash.exe` terminates (cleanly, by crash, or via Task Manager), the Windows kernel forcibly terminates all processes spawned under it.
-- **Nested Job Objects (D22):** For individual background jobs (`%1`, `&`), Cash creates nested job objects (`crates/cash-win32/src/jobreg.rs`). Because Windows 8+ supports nested job hierarchies, child processes belong to both the session job and their specific job object.
-- **Race Condition Vulnerability:** Because `cash-core` uses post-spawn assignment (`child = command.spawn()?; cash_win32::jobreg::contain(pid);`), if a newly spawned process rapidly executes child processes before the parent shell executes `AssignProcessToJobObject`, those grandchildren are captured by the session job but miss the per-command job object. This prevents `kill %1` from reliably targeting them until session exit.
-
-### 4.2 Handle Inheritance & Leakage in Win32 Process Spawning
-In `crates/cash-win32/src/spawn.rs:204`:
-```rust
-let created = unsafe {
-    CreateProcessW(
-        std::ptr::null(),
-        command.as_mut_ptr(),
-        std::ptr::null(),
-        std::ptr::null(),
-        TRUE, // inherit handles, so redirected stdio reaches the child
-        flags,
-        environment.as_ref().map_or(std::ptr::null(), |e| e.as_ptr().cast()),
-        cwd.as_ref().map_or(std::ptr::null(), |c| c.as_ptr()),
-        &raw const startup,
-        &raw mut info,
-    )
-};
-```
-#### Defect & Mechanism:
-Passing `bInheritHandles = TRUE` with standard `STARTUPINFOW` causes **every inheritable handle in the parent process** to be inherited by the child.
-- On Windows, if one thread opens an anonymous pipe for a pipeline or process substitution and marks it inheritable, any concurrent `CreateProcessW` call with `bInheritHandles = TRUE` leaks that pipe handle into unrelated child processes.
-- The child process holds the write handle open. Even if the shell closes its own write handle, the reading process at the other end of the pipe never receives `ERROR_BROKEN_PIPE` / EOF and hangs indefinitely.
-- **Fix:** Modern Win32 code must use `STARTUPINFOEXW` with `InitializeProcThreadAttributeList` and `PROC_THREAD_ATTRIBUTE_HANDLE_LIST`, explicitly whitelisting only the handles intended for the child's stdin, stdout, and stderr.
-
-### 4.3 Command-Line Escaping & Batch Dispatch (D32 / CVE-2024-24576)
-Windows executables do not receive an `argv` array from the kernel; `CreateProcessW` takes a single command line string, and the target executable's runtime parses it via `CommandLineToArgvW` or Microsoft C Runtime (MSVCRT) parsing rules.
-
-#### The `cmd.exe` Quoting Hazard
-`cmd.exe` does not use MSVCRT parsing rules. It uses caret-escaping (`^`), `%VAR%` variable substitution, and custom quote stripping rules. In April 2024, CVE-2024-24576 demonstrated that passing unescaped arguments to batch files (`.bat` / `.cmd`) on Windows allows arbitrary argument injection.
-- In `crates/cash-win32/src/cmd.rs`, Cash implements `build_cmd_command_line`, `escape_for_cmd`, and `is_safe_for_cmd`, caret-escaping `CMD_METACHARACTERS = &['(', ')', '%', '!', '^', '"', '<', '>', '&', '|']`.
-- **THE CRITICAL DEFECT:** In `crates/cash-core/src/commands.rs`, when an external command is executed:
-  ```rust
-  let mut cmd = std::process::Command::new(command_name);
-  cmd.args(args);
-  ```
-  `cash-core` **never calls `build_cmd_command_line`**! When executing `test.bat arg1 arg2`, it passes raw arguments to `std::process::Command`. While Rust 1.77.2+ added defensive batch-file mitigations in `std::process::Command`, Cash's own specification (D8, D32) mandates that Cash own batch file escaping via `build_cmd_command_line`.
-
-### 4.4 Path Canonicalization, Lexical Normalization & The Translation Cliff (D3, D4, D29)
-- **Forward Slash Invariant (D3):** Paths stored in variables (`$PWD`, `$PATH`, `$HOME`) and printed by builtins (`pwd`, `cd`, `type`) always use forward slashes and uppercase drive letters (e.g., `C:/Users/thraa`).
-- **Verbatim Argument Invariant (D4):** Arguments passed to external commands are never rewritten or translated. If a script executes `git.exe /c/src/repo`, Git receives `/c/src/repo` verbatim.
-- **The Diagnostic Warning Seam:** `crates/cash-core/src/commands.rs::warn_about_unix_drive_spellings` actively inspects command arguments. If an argument matches `/c/...`, does not exist literally, but exists when translated to `C:/...`, Cash emits an explanatory warning:
-  ```text
-  cash: /c/src: a command receives this path as written; cash does not translate Unix path spellings in arguments (D4). Try C:/src or "$(winpath /c/src)"
-  ```
-  This is an exceptionally user-friendly design that prevents developer confusion without compromising argument purity.
-
-### 4.5 Console Subsystem, VT Processing & Line Editor
-In `crates/cash-win32/src/session.rs`:
-- Cash enables `ENABLE_VIRTUAL_TERMINAL_PROCESSING` on `STD_OUTPUT_HANDLE` and `STD_ERROR_HANDLE`, and `ENABLE_VIRTUAL_TERMINAL_INPUT` on `STD_INPUT_HANDLE`.
-- The REPL integrates with `reedline` (0.42.0) and `crossterm`.
-- **Clean Terminal Teardown:** `entry.rs::try_reset_terminal_to_defaults()` executes on exit or panic:
-  ```rust
-  crossterm::terminal::LeaveAlternateScreen,
-  crossterm::terminal::EnableLineWrap,
-  crossterm::style::ResetColor,
-  crossterm::event::DisableMouseCapture,
-  crossterm::cursor::Show,
-  crossterm::terminal::disable_raw_mode();
-  ```
-  This prevents terminal corruption if a command aborts while raw mode or mouse tracking is engaged.
+| Area | Assessment |
+| --- | --- |
+| Architecture and layering | Good. One structural weakness: the shell-vs-process state boundary (§4.1). |
+| Win32 layer and unsafe code | Good. Sound where checked; edge bugs are in D17 pipes, D19 stop and D32 escaping. |
+| Language semantics | Good on the common path (field splitting, arithmetic, IFS all match bash); arrays, extglob and history have real bugs. |
+| Execution engine | Mixed. Process creation is right; error containment and async blocking are not. |
+| Builtins | Mixed. Strong ones resolve through the shell; the ones that spawn do not. |
+| awk / sed / bc | bc is excellent, sed good, awk has Critical number-formatting bugs. |
+| Tests | Strong and broad. Gaps: language conformance, release-only paths, no fuzzing, CI retries hide flakes. |
+| Build, CI, release | Good gates. Missing supply-chain checks; token scope and action pinning are loose. |
+| Docs | The decision record is excellent, but parts of `spec.md` now describe old code. |
 
 ---
 
-## 5. Deep Code Analysis: Bugs, Anti-Patterns & False Assumptions Uncovered
+## 3. Architecture
 
-### 5.1 Defect 1: Copy-Paste Bug in `declare.rs` Trace-Attribute Filtering
-- **Location:** [`crates/cash-builtins/src/declare.rs:622-624`](file:///c:/Users/thraa/github/cash/crates/cash-builtins/src/declare.rs#L622-L624)
-- **Severity:** Medium (Functional Bug / Attribute Filtering)
-- **Code:**
-  ```rust
-  if let Some(value) = self.make_readonly.to_bool() {
-      filters.push(Box::new(move |(_, v)| v.is_readonly() == value));
-  }
-  if let Some(value) = self.make_readonly.to_bool() {
-      filters.push(Box::new(move |(_, v)| v.is_trace_enabled() == value));
-  }
-  ```
-- **Analysis:**
-  `make_readonly` is checked twice consecutively. The second block checks `self.make_readonly.to_bool()` to filter `v.is_trace_enabled()`. It should check `self.make_traced.to_bool()`.
-- **Impact:**
-  Running `declare -t` filters on the readonly attribute instead of trace, and running `declare -r` erroneously filters out any variable where trace status does not match readonly status.
+**The layers.** Dependencies point one way:
 
----
+- `cash-win32` has no internal dependencies and sits at the bottom.
+- `cash-parser` is next.
+- `cash-core` depends on parser and win32.
+- `cash-builtins` and `cash-interactive` depend on core.
+- `cash-shell` depends on all of them.
+- `cash` (the binary) sits on top.
+- The absorbed tools (`cash-awk`, `cash-bc`, `cash-sed`, the uutils) are leaves, which
+  `cash-shell`'s bundled dispatcher re-enters as `cash.exe --invoke-bundled`.
 
-### 5.2 Defect 2: Integer-Attribute Assignment (`declare -i`) String Parsing Assumption
-- **Location:** [`crates/cash-core/src/variables.rs:296, 498`](file:///c:/Users/thraa/github/cash/crates/cash-core/src/variables.rs#L296)
-- **Severity:** High (Bash Semantic Divergence / Arithmetic Evaluation)
-- **Code:**
-  ```rust
-  // crates/cash-core/src/variables.rs:497-499
-  if treat_as_int {
-      *s = (*s).parse::<i64>().unwrap_or(0).to_string();
-  }
+There are no cycles. `windows_sys` is used only inside `cash-win32`. `unsafe` outside
+it is limited to:
 
-  // crates/cash-core/src/variables.rs:295-300 (append assignment)
-  if treat_as_int {
-      let int_value = base.parse::<i64>().unwrap_or(0)
-          + suffix.parse::<i64>().unwrap_or(0);
-      base.clear();
-      base.push_str(int_value.to_string().as_str());
-  }
-  ```
-- **Analysis:**
-  In POSIX/Bash: When a variable has the `-i` (integer) attribute (`declare -i x`), any assignment to it evaluates the right-hand side as an **arithmetic expression**.
-  - `declare -i x; x="3 + 4"; echo $x` must output `7`.
-  - In Cash: `(*s).parse::<i64>()` fails on `"3 + 4"`, falling back to `0`!
-  - `declare -i x=5; x+=2*3; echo $x` must output `11`. In Cash, it evaluates `5 + 0 = 5`.
-- **Recommendation:**
-  In `variables.rs`, when `treat_as_int` is true, pass the assigned string through `cash_core::arithmetic::evaluate(expr, shell)` instead of `parse::<i64>()`.
+- awk's VM (59 lines);
+- `stat.rs` and `wellknownvars.rs` (private FFI, ARCH-06);
+- one `set_var` before the runtime starts.
 
----
+**Where the brush legacy shows:**
 
-### 5.3 Defect 3: Bundled Utilities Pipeline Serialization
-- **Location:** [`crates/cash-shell/src/bundled.rs:281-294`](file:///c:/Users/thraa/github/cash/crates/cash-shell/src/bundled.rs#L281-L294)
-- **Severity:** High (Performance & Pipeline Concurrency)
-- **Code:**
-  ```rust
-  let spawn_result = cmd.execute().await?;
-  let wait_result = spawn_result.wait().await?;
-  Ok(wait_result.into())
-  ```
-- **Analysis:**
-  The `builtins::Registration` execution interface returns `BoxFuture<Result<ExecutionResult, Error>>` (a finished command), not an `ExecutionSpawnResult` (a running process handle). Because bundled coreutils are registered as builtins, `shim_execute` synchronously `.await`s child completion before returning.
-- **Impact:**
-  In a pipeline such as `seq 1 1000000 | grep 5 | head -n 10`:
-  1. `seq` must run to full completion and close its pipe before `grep` begins processing.
-  2. If the pipeline output exceeds the OS anonymous pipe buffer (typically 64 KB on Windows), the producer blocks waiting for the consumer to read, but the consumer has not even been started by the shell. **This causes an immediate pipeline deadlock.**
+- **The platform seam.** brush's `sys` layer is still there for one platform, behind
+  `#![allow(unused)]`. That is the `sys::platform` alias, stubs for `commands`, `fd`,
+  `terminal` and `resource`, an empty `PlatformError`, and no-op `arg0`,
+  `process_group` and `take_foreground`.
+- **Features and metadata named as in brush.** The `experimental-bundled-coreutils`
+  feature is on and shipped (D48). There is also `binstall` metadata for tags that
+  never exist, `msrv-policy.md` references to a missing file, and dev-dependency sets
+  copied from brush-shell.
+- **User-visible strings:** `brush:` messages, `brush$ ` as the default prompt,
+  `$BRUSH_VERSION`, `BRUSH_PS_ALT`.
+- **Broken LICENSE symlinks** in seven crates. They point at `crates/LICENSE`, which
+  does not exist.
+
+**The biggest structural risks:**
+
+1. **State ownership.** Nothing stops new code from using process state. A rule plus a
+   check would: "a builtin gets cwd, environment, PATH and PATHEXT only from `Shell`,
+   and spawns only through one cash-core helper" (§4.1, R1).
+2. **Execution depth.** Every nesting level is a set of large boxed async state
+   machines on a 2 MiB worker stack (§4.2).
+3. **Quality is uneven across crates.** About 34k lines of absorbed tool code sit
+   outside the lint regime the rest of the workspace relies on (ARCH-01).
+4. **Command resolution has two homes.** It lives in `cash-core` and in
+   `cash-win32::resolve`, with three PATHEXT parsers that disagree (ARCH-04).
+5. **Spec drift.** `spec.md` is the decision record, so a stale row costs more there
+   than elsewhere (ARCH-13, W32-09).
 
 ---
 
-### 5.4 Defect 4: Process-Group Disconnect in Bundled Commands
-- **Location:** [`crates/cash-shell/src/bundled.rs:272-279`](file:///c:/Users/thraa/github/cash/crates/cash-shell/src/bundled.rs#L272-L279)
-- **Severity:** Medium (Job Control & Signal Routing)
-- **Analysis:**
-  `shim_execute` constructs a `SimpleCommand` but leaves `process_group_id` as `None`. Bundled commands executed in a pipeline or background job do not join the pipeline's PGID. As a result, job-control signals (such as Ctrl+C or `kill %1`) fail to propagate to bundled subprocesses.
+## 4. Themes
+
+### 4.1 Shell state and process state
+
+cash keeps its working directory and its exported variables in `Shell`; it never calls
+`set_current_dir` and never writes to the process environment. That is the right
+design (D10), but every site below uses the process's copy instead:
+
+| ID | Site | What happens | Mark |
+| --- | --- | --- | --- |
+| EXE-01 | `cash-core/src/commands.rs:420-425`, `:1000` | `cd sub && ./tool.exe` runs `tool.exe` from the folder cash started in. With none there, it is "command not found". `Command::new(relative)` resolves against the process cwd although `candidate` was already joined to the shell's. | ✅ |
+| XC-1, BI-01 | `xargs.rs:206-230`, `find.rs:692-731` | `xargs` and `find -exec` lose `export`ed variables and PATH changes. They do not find `npm` (a `.cmd`), cannot run a shebang script, and print `find -exec` output past a redirection. xargs' child also reads cash's stdin. | 🔁 |
+| BI-02 | `nohup.rs` | `nohup sh -c …` is refused (`-c`). The child runs in the process cwd, inherits process stdout past `> file`, and `nohup.out` lands in the wrong folder. | 🔁 |
+| BI-08 | `win.rs:245-256` | `detach` passes a null cwd and environment: `cd proj; detach code .` opens the wrong folder. | 🔁 |
+| BI-06 | `win.rs:120-131` | `start report.pdf` after `cd` resolves against the process cwd (see also §4.5). | 📖 |
+| BI-07 | `install.rs` | Every operand is relative to the process cwd. `-m` knows four literal modes. | 🔁 |
+| BI-12 | `find.rs:488-493` | `-newer FILE` is relative to the process cwd. | 🔁 |
+| ARCH-04, XC-10 | `sys/windows/fs.rs:19-33`, `pathindex.rs:232`, `msys.rs:89` | PATHEXT for lookup and `test -x` comes from the process environment. `export PATHEXT=.EXE` changes children but not cash. There are three parsers: lowercase and untrimmed, uppercase and trimmed, and one that ignores PATHEXT. The doc comment says the opposite. | 🔁 |
+| XC-11 | `commands.rs:257`, `:334` | `COMSPEC` is read from the process environment. | 📖 |
+| EXE-05 | `shell/fs.rs:298-320` | Assigning `PATH` does not clear the command hash: `PATH=a:$PATH; foo; PATH=b:$PATH; foo` runs `a/foo` twice. Bash runs `b/foo` the second time. | ✅ |
+| XC-7 | `umask.rs:170` | The mask is a process-wide static, so `( umask 077 )` changes the parent's umask. | ✅ |
+
+**Fix (R1).**
+
+- Absolutize the command path once, in `SimpleCommand::execute`.
+- Give builtins one helper, say `ExecutionContext::external_command(program, args)`,
+  built on the existing `compose_std_command` and `exported_environment`, with the
+  context's fds and `jobreg::contain`.
+- Give `Shell` a `pathext()`.
+- Add an `xtask check` that fails on `std::process::Command::new`, `std::env::var` and
+  `File::open(<relative>)` in `cash-builtins` and `cash-core`, outside an allow-list.
+
+### 4.2 Crashes that the recovery does not catch
+
+README "Shell robustness" promises that a panic in an interactive command is reported
+and the prompt comes back. These inputs end the shell instead:
+
+| ID | Input | Result | Mark |
+| --- | --- | --- | --- |
+| BIN-01 | `f(){ (( $1 > 0 )) && f $(( $1 - 1 )); }; f 200`; depth 45 inside `$()`; depth 20 in a pipeline stage | `thread 'main' / 'tokio-rt-worker' has overflowed its stack`. Bash runs depth 500. | ✅ |
+| PI-06, XC-2 | `echo {1..3..99999999999999999999}` | "cash had a problem and crashed" (`word.rs:961`, `unwrap` inside `peg!`, which clippy cannot see; the crate has `#![allow(clippy::unwrap_used)]`). | ✅ |
+| LANG-08 | `declare -c c; c=éa` | Panics in `variables.rs:524` (`replace_range(0..1)` on a 2-byte character). | ✅ |
+| LANG-07 | `PS1='\D{%Q} '` | Panics on the first prompt (`prompt.rs:236`). `\!` and `\#` give "not yet implemented". | 🔁 |
+| PI-22 | about 10,000 nested `$(` pasted at the prompt | Stack overflow. Bash fails at 3,000 too, but cash loses the session. | 🔁 |
+| BIN-02 | a settings.json or fragment containing a lone `/` | `terminal.rs:655-680` loops forever, allocating. Reached by `ls --icons`, which the starter rc aliases, and by `--terminal-profile`. | 📖 (read and confirmed) |
+
+**Why BIN-01 happens.**
+
+- The runtime is built without `thread_stack_size` (`cash-shell/src/entry.rs:189`).
+  `/STACK:8388608` in `build.rs` covers only the main thread.
+- The 500-deep function guard (`callstack.rs:126`) never fires before the stack runs
+  out.
+- Each level is several boxed `async_trait` futures plus very large inline state
+  machines: `expand_parameter_expr` is one async fn of about 600 lines,
+  `execute_in_pipeline` about 240 (EXE-18, LANG-26).
+
+**Fix (R2).**
+
+- Give the runtime big worker stacks (`Builder::thread_stack_size`, tens of MiB) and
+  run `block_on` on a big-stack thread.
+- Set the depth guard below the measured capacity.
+- Split the largest async fns into boxed helpers.
+- Remove the parser's crate-wide `unwrap` allow.
+- Add a cargo-fuzz target over `tokenize_str`, `parse_program`, `word::parse` and the
+  JSONC tokenizer. The parser already derives `Arbitrary`; nothing uses it (PI-14).
+
+### 4.3 Pipelines, background jobs and async
+
+| ID | Severity | Finding | Mark |
+| --- | --- | --- | --- |
+| EXE-02 | High | **An error inside a pipeline stage escapes the stage.** `read -u 99 x \| cat; echo after` prints only the error, with no `after` and an empty PIPESTATUS. Bash prints `after 0 1 0`. `true \| echo ${u:?boom}; echo after` exits the whole shell. The waiter's `?` (`results.rs:292`, `interp.rs:773`, `:1743`, `commands.rs:836`) aborts the pipeline. | ✅ |
+| EXE-03 | High | **Background lists run on tokio workers.** `interp.rs:444`, and command substitutions at `commands.rs:1432`, use `tokio::spawn`. Builtins block that worker (`read` on a pipe, `while read`). With as many such jobs as cores, a foreground `$(…)` waits for them; with `tail -f` it hangs for ever. Pipeline stages already use `spawn_blocking` (`interp.rs:960`). | 🔁 |
+| EXE-04 | High | **Coprocesses.** The coproc holds the write end of its own stdin (the fds are added before `shell.clone()`), so `coproc cat` never sees EOF and `wait` hangs. `COPROC_PID` is the job number. `kill %1` fails. The fds are 3 and 4, not 63 and 60, so `exec 3>log` clobbers them. | 🔁 |
+| EXE-08 | Medium | **A background job of builtins only.** `{ while ((1)); do x=1; done; } &` hangs the `&`: `pid_ready` never fires. `while :; do :; done & kill %1` cannot be killed. | 🔁 |
+| EXE-06 | Medium | **Process substitution drops its own runtime when the list returns.** `cat <( { sleep 1; echo late; } & echo early )` loses `late` (`interp.rs:2758`). | 🔁 |
+| EXE-09 | Medium | **An undocumented 128-slot cap** (`CASH_MAX_SUBSHELLS`) is shared by `&` jobs and by compound/function pipeline stages. While 128 jobs run, `{ …; } \| x` fails with status 1. | 🔁 |
+| EXE-07 | Medium | **A script file is parsed whole before it runs.** A syntax error on line 2 stops line 1, and a self-extracting payload after `exit` must parse (`shell/execution.rs:199`). | 🔁 |
+| EXE-15 | Low | **A panicked background task** is polled again after completion (`jobs.rs:266`). | 📖 |
+| EXE-14, XC-9, W32-09 | Low | **Resume after `CREATE_SUSPENDED` is unchecked.** It uses `let _ = resume_process(…)` (undocumented `NtResumeProcess`, NTSTATUS mapped as a Win32 error). If it fails, the child stays suspended and the shell waits for ever. | 📖 |
+
+**Fix (R3):**
+
+- Handle failure per stage: display the error and turn it into the stage's status.
+- Run background lists as `spawn_blocking` plus `Handle::block_on`.
+- Clone the coproc's shell before adding the fds.
+- Give internal jobs a cancel token checked at command boundaries.
+- Run process substitutions on the shell's runtime.
+- Check the resume result.
+
+### 4.4 Process substitution pipes (D17)
+
+| ID | Severity | Finding | Mark |
+| --- | --- | --- | --- |
+| W32-02 | High | **`<(…)` sometimes delivers nothing to a consumer that opens it twice.** `cmd /c type <(echo x)` failed 11 times in 80 with "The pipe has been ended". Likely cause: a race between the replay check (`pipe.rs:134`) and `reader_eof` (`:155`). | 🔁 |
+| W32-03 | Medium | **Each unopened `<(…)` leaks two threads blocked in `ConnectNamedPipe`.** 30 substitutions took the shell from 26 to 86 threads. A read substitution has no `SubstitutionEnd`. | 🔁 |
+| W32-04, EXE-10 | Medium | **The replay buffer keeps every byte for the life of the pump.** `<(tail -f log)` grows without bound. | 📖 |
+| W32-07 | Medium | **The pipes have default security and accept remote clients.** They are created with a null `SECURITY_ATTRIBUTES` and without `PIPE_REJECT_REMOTE_CLIENTS`, at a predictable name. | 📖 |
+
+**Fix (R5):**
+
+- One pump thread owns the reader; instances only replay.
+- Trim the replay buffer once both clients connect.
+- Release unclaimed instances when the command ends.
+- Use `PIPE_REJECT_REMOTE_CLIENTS`, a current-user DACL and a random name part.
+
+### 4.5 Quoting where a string becomes a command
+
+| ID | Severity | Finding | Mark |
+| --- | --- | --- | --- |
+| BI-06 | High | **Command injection through `start`.** `start` runs `cmd.exe /d /s /c start "" <target>` through std, which quotes only arguments with spaces. A URL with `&` (`https://x/?a=1&b=2`) ends `start` and runs the rest as a command; `%VAR%` expands. Fix: call `ShellExecuteExW` with the absolute path. | 📖 |
+| W32-01 | High | **Batch arguments get stray carets.** `escape_for_cmd` (`cmd.rs:81-92`) quotes, then caret-escapes metacharacters inside those quotes. A `.bat`/`.cmd` receives `Q^&A notes.txt` and `a ^\| b`. Probed: `%` and `(x86)` came through clean. `az.cmd --query "… \| …"` is the realistic case. Fix: track cmd's quote state and add a round-trip test through a real `.bat`. | ✅ |
+| LANG-04 | High | **The §4 #37 injection hardening is incomplete.** `runs_a_command` (`expansion.rs:781`) checks text, not syntax. `unset "a[$k]"` with `k='$((touch x) )'` or `'${ touch x; }'` creates `x`. The plain `$(…)` form is refused, as promised. Fix: decide on the parsed word. | ✅ |
+| PI-01 | High | **`declare -f` and `export -f` print a here-doc that cannot be parsed.** The printer indents the body and the end tag (`ast.rs:1762`), so `eval "$(declare -f g)"` fails and `export -f g; bash -c g` is "not found". | ✅ |
+| PI-02 | High | **A `)` inside a here-doc ends `$(…)` early.** `word.rs:1453` has its own `$(` scanner that knows nothing of here-docs, while the tokenizer's is correct. `a=$(cat <<'Z' … ) … Z )` gives the wrong text. | ✅ |
+| BI-19 | Low | **`elevate` builds PowerShell `-ArgumentList` by hand.** An argument with a space is split. | 📖 |
+
+### 4.6 awk, sed and bc
+
+bc matched GNU bc on every non-decided probe and is faster on big base conversion.
+sed matched GNU on about 50 probes. awk has the worst defects in the review, almost all
+inherited from posixutils-rs 0.9.0 (96bd8a3):
+
+| ID | Severity | Finding | Mark |
+| --- | --- | --- | --- |
+| TXT-01 | **Critical** | **`%g`, OFMT and CONVFMT drop digits.** `print 100000.4` → `1`; the mean of 100000 and 200001 → `15`; `printf "%g",100000` → `1`; `print 0.00001234` → `0.000012`; `a[100000.4]` is key `1`. Four defects in `format.rs`: zeros stripped with no decimal point, `trunc` for `floor`, negative exponents, and padding. | ✅ |
+| TXT-02 | High | **Integral values print through `i64`.** `print 2^64` → `9223372036854775807`; `printf "%x",-1` is fatal. | ✅ |
+| TXT-03 | High | **A `for (k in a)` left by `break` or `return` locks `a` for the rest of the run.** The standard dedup function dies ("active iterator"). `for(k in a) delete a` panics. | ✅ |
+| TXT-05 | High | **Unknown string escapes (`"\."`, `"\&"`) are parse errors.** gawk, mawk and BWK accept them. | 🔁 |
+| TXT-06 | High | **Plain `getline` reads only the current file**, and nothing in BEGIN. | 🔁 |
+| TXT-04 | High | **sed `/x/,+1` and `/x/,3` do not re-check `addr1` after a range ends.** `/x/,+1p` misses the second range. | ✅ |
+| TXT-07 | Medium | **sed `2,3c T` never prints `T`.** `2,4!c` misses lines. | 🔁 |
+| TXT-08, TXT-14 | Medium | **awk writes with `print!`.** `awk '{print}' \| head -1` panics. Every record is one `WriteFile` (28× slower than gawk). There is no flush before `system()`. | ✅ |
+| TXT-09 | Medium | **sed `-z` is accepted and ignored.** | 🔁 |
+| TXT-10 | Medium | **sed's literal fast path turns `\$` and `\^` into anchors.** | 🔁 |
+| TXT-11, TXT-12 | Medium | **NUL bytes and regex-RS boundaries make awk fail outright.** A NUL in a record is fatal ("invalid string"). A UTF-8 character across the 8 KiB boundary with a regex RS is fatal. | 🔁 |
+| TXT-13 | Medium | **Stale array-element references.** `a["x"] = split(…, a)` is wrong; deleting in the right-hand side panics. | 🔁 |
+| TXT-15 | Medium | **sed `-i` deletes the original before `persist`.** It is not atomic, a failed persist loses both files, and the read-only attribute is lost. | 📖 |
+| TXT-16 | Medium | **awk reads one byte per syscall and has no dynamic-regex cache.** It is 10–28× slower than gawk. | 🔁 |
+| TXT-17 | Medium | **sed without `LANG` is in byte mode while awk is UTF-8.** `LANG=en_US` is a hard error. | 🔁 |
+| TXT-18 | Medium | **An untyped variable passed to a function and used there as an array stays empty.** | 🔁 |
+| TXT-19–25 | Low | `print $1==$2` is a parse error; bc ignores `BC_LINE_LENGTH`; sed backrefs need UTF-8; leftmost-longest is approximated in both crates; sed `\U` is silently literal; awk's error reporter can panic; awk and sed duplicate the shell-command spawner and the regex helpers. | 🔁 |
+
+**The awk VM's unsafe code is sound as far as it was examined.** The stack is fixed,
+fields are boxed and never freed before exit, and array references are indices, so a
+staleness bug panics instead of dangling. One off-by-one is latent: `stack.rs:230` has
+`>=` where it should have `>`.
+
+**Fix (R6):**
+
+- Fix TXT-01/02/03/04 with differential cases added to `tests/awk-differential.sh` and
+  the sed corpus.
+- Make those differentials frozen goldens that run in `it` (BIN-05).
+- Put the three crates under `[lints] workspace = true`, with a local allow-list for
+  style lints and the unsafe lints kept on (ARCH-01).
+- Report the inherited bugs upstream.
+
+### 4.7 History
+
+| ID | Severity | Finding | Mark |
+| --- | --- | --- | --- |
+| PI-03, LANG-05 | High | **The history variables are ignored.** `HISTCONTROL`, `HISTIGNORE`, `HISTSIZE` and `HISTFILESIZE` are read nowhere, and `set +o history` does not stop recording. ` export TOKEN=…` (leading space) is in `~/.cash_history` the moment Enter is pressed (D44). The file grows without bound, and each flush walks all of it. | ✅ |
+| LANG-06 | Medium | **History expansion fires inside `${!arr[@]}`, `$!` and `[!a]`.** These give "event not found" at the prompt. | 🔁 |
+| PI-11 | Low | **A history entry is written in two or three `WriteFile` calls**, so two tabs can interleave. | 📖 |
+| LANG-22 | Low | **Multi-line entries come back split.** Also, `:q` does not escape `'`, and searches collect the whole history. | 🔁 |
 
 ---
 
-### 5.5 Defect 5: Architectural Disconnect — Uncalled `build_cmd_command_line` in `commands.rs`
-- **Location:** [`crates/cash-core/src/commands.rs:180-187`](file:///c:/Users/thraa/github/cash/crates/cash-core/src/commands.rs#L180-L187) vs [`crates/cash-win32/src/cmd.rs:95`](file:///c:/Users/thraa/github/cash/crates/cash-win32/src/cmd.rs#L95)
-- **Severity:** Medium-High (Security / Quoting Accuracy)
-- **Analysis:**
-  `cash-win32/src/cmd.rs` defines `build_cmd_command_line` specifically to implement Decision D32. However, a repository-wide grep reveals that `build_cmd_command_line` is called **only in tests inside `cash-win32`**. When `cash-core` invokes a `.bat` or `.cmd` file, it passes arguments to `std::process::Command` without caret-escaping.
+## 5. Other findings, by area
+
+These are not covered by §4. Every reviewer's full list was read; what is left out here
+is a duplicate of a row above.
+
+### 5.1 Language (`cash-core`, `cash-parser`)
+
+| ID | Severity | Finding | Mark |
+| --- | --- | --- | --- |
+| LANG-01 | High | **extglob `!(a\|ab)` matches `ab`.** `echo !(*.tar\|*.tar.gz)` lists `x.tar.gz`, so `rm !(*.tar\|*.tar.gz)` deletes what was excluded (`pattern.rs:152`, an atomic group that commits too early). | ✅ |
+| LANG-02 | High | **Subscripts in `c=([2+1]=y z [i]=w)` are not arithmetic.** Everything lands on 0 and 1. `a+=([-1]=X)` writes `[0]`. | ✅ |
+| LANG-03 | High | **Negative indices count from the element count, not the highest index + 1.** After `unset 'a[1]'`, `${a[-1]}` reads, writes and unsets the wrong element. | ✅ |
+| LANG-09 | Medium | **`${#x}` counts bytes and `${x: -1}` is empty for `café`.** Bash in UTF-8 gives 4 and `é`. | ✅ |
+| LANG-10 | Medium | **`$(( $empty ))` is a parse error that aborts the script.** Bash gives 0. | 🔁 |
+| LANG-11 | Medium | **`declare -i` through `read`, `printf -v`, array literals and `for` treats names as 0.** `x=1/0` is silently 0. Plain `x=expr` was fixed. | 🔁 |
+| LANG-12 | Medium | **`declare -n r='a[1]'; r=Z` creates a variable named `a[1]`.** | 🔁 |
+| LANG-13 | Medium | **Inside backquotes, `\$` and `\"` are not unescaped.** | 🔁 |
+| LANG-14 | Medium | **`${x/b/"$r"}` with `r='&&'` substitutes the match.** Quoting should protect it (patsub_replacement). | 🔁 |
+| LANG-15 | Medium | **The D31 case-insensitive fallback scans every variable on each miss.** 20k new variables take 2.2 s against bash's 0.23 s, and with `Foo` and `FOO` both set the result depends on HashMap order. | 🔁 |
+| PI-04 | Medium | **Backslash-newline is kept in an unquoted here-doc.** | 🔁 |
+| PI-05 | Medium | **`$(( $((1)) << 2 ))` is read as a here-doc.** The arithmetic flag is a bool, not a depth. | 🔁 |
+| PI-07 | Medium | **Nested `case` without a final `;;` parses in exponential time.** Depth 21 takes 10.5 s (`peg.rs:327`). | 🔁 |
+| LANG-16 | Low | **Completion turns typed glob characters into a glob.** `[draft] ` completes nothing. | 🔁 |
+| LANG-17 | Low | **`[[ ab =~ a\|ab ]]` gives `a`.** POSIX leftmost-longest gives `ab`. | 🔁 |
+| LANG-18 | Low | **`${x:=1+2}` with `-i` returns `1+2`, not 3.** | 🔁 |
+| LANG-19 | Low | **`${x@u}` capitalises every word.** Bash capitalises only the first character. | 🔁 |
+| LANG-20 | Low | **`${a[@]@K}` gives values only, not key/value pairs.** | 🔁 |
+| LANG-21 | Low | **An assignment through a circular nameref silently succeeds.** | 🔁 |
+| LANG-23 | Low | **`RANDOM=42` does not seed.** | 🔁 |
+| LANG-24 | Low | **`printf %s x=~` does not expand the tilde.** | 🔁 |
+| PI-12 | Low | **`$$'…'` and `\$'…'` open ANSI-C quoting.** | 🔁 |
+| PI-13 | Low | **The winnow parser is an `unimplemented!()` stub behind a feature.** | 📖 |
+| PI-20, LANG-25 | Info | **Duplicated tables and conversions.** Char vs byte offsets are rebuilt in three consumers; two metacharacter tables disagree. | 📖 |
+
+### 5.2 Execution, builtins and binary
+
+| ID | Severity | Finding | Mark |
+| --- | --- | --- | --- |
+| BI-03 | High | **`kill $a $b` refuses the second operand.** `kill $(jobs -p)` kills nothing. | ✅ |
+| BI-04 | High | **`find d -delete` runs pre-order and cannot delete directories.** GNU implies `-depth`. | ✅ |
+| BI-05 | High | **`chmod go-w f` makes `f` read-only for its owner.** The who-part is discarded, and `u+rw,go-w` is "invalid mode". D23/D34 decide "read-only attribute only", not this. | ✅ |
+| XC-3, ARCH-06 | Medium | **`[ a -ef b ]` is "operation not supported".** `stat` on a directory gives inode 0 and 1 link, because a private FFI copy opens without `FILE_FLAG_BACKUP_SEMANTICS`. `cash_win32::fs::same_file` already exists. | ✅ |
+| XC-4 | Medium | **`mapfile -t` keeps the `\r`.** D20 names mapfile. `text::split_lines` is documented for mapfile but used by nobody; pager and xargs carry copies. | ✅ |
+| XC-5, EXE-11 | Medium | **`time` and `times` always show 0 user and sys.** `cash_win32::process::cpu_time` already exists. | 🔁 |
+| XC-6 | Medium | **Two D31 name tables (24 vs 8 names); the short one is used.** `declare -p` shows `Lang=`, `ComSpec=`. | 🔁 |
+| XC-8, BIN-04 | Medium | **Error output is ANSI-coloured into pipes and files, and `NO_COLOR` is ignored.** There are three prefix styles (`error:`, `cash:`, `name:`) and three private `paint` helpers. | ✅ |
+| BI-09 | Medium | **`printf '%d' abc` exits 0 with a `cash.exe:` prefix.** `%(…)T` is an error with a raw Fluent key. | 🔁 |
+| BI-10 | Medium | **`\c` in `%b` does not stop format reuse.** | 🔁 |
+| BI-11 | Medium | **`find -exec` problems.** `{}` inside a word is not substituted. `-exec … +` has no 32 KiB batching, and spawn errors are silent. | 🔁 |
+| BI-13 | Medium | **No loop detection on links.** `find -L` has no visited set, and `chmod -R` follows junctions. | 📖 |
+| W32-05 | Medium | **Two `kill -STOP` need two `kill -CONT`.** Each STOP adds to the suspend count. | 🔁 |
+| W32-06 | Medium | **`kill -9 <pid>` kills the pid's whole job tree.** D22 says a bare pid is one process. | 🔁 |
+| W32-08 | Medium | **`#!/usr/bin/env -S bash -e` takes `-S` as the command.** | 🔁 |
+| BIN-03 | Medium | **`--remove-terminal-profile` cuts a whole `newTabMenu` folder that contains the cash entry.** | 📖 |
+| EXE-13, W32-10 | Medium | **D36's pooled prompt job does not exist.** Every Starship spawn sweeps the registry and creates a job. D6's exception table still lists it. | 📖 |
+| PI-08 | Medium | **`READLINE_LINE` replacement clears only the first line of a multi-line buffer** (Ctrl-X Ctrl-E, `bind -x`). | 📖 |
+| PI-10 | Medium | **Highlighting checks a slash-containing command synchronously on every key.** An offline UNC path stalls typing. There is a tension inside D59 here. | 📖 |
+| EXE-12 | Low | **`exec -a name` does nothing.** `arg0` is a no-op stub, and the process-group and terminal plumbing is dead. | 🔁 |
+| BI-14 | Low | **`ls \| head -1` reports "pipe is being closed", exit 2.** `ls -R` hides errors in subdirectories. | 🔁 |
+| BI-15 | Low | **Smaller `kill` gaps.** `kill -s 0`, `kill -l 137` and the message for `kill abc` differ from bash. `kill -l` lacks a final newline. | 🔁 |
+| BI-16 | Low | **`--help` and usage errors are not uniform.** Stdout vs stderr, exit 0 vs 2, and bare clap errors. | 🔁 |
+| BI-17 | Low | **`chmod +x` warns "not represented", against D23.** D23 says it is a silent no-op. Every install script prints it. | 🔁 |
+| BI-18 | Low | **xargs budget counts unquoted bytes.** It also reads all of stdin before starting, and accepts an unmatched quote. | 📖 |
+| BIN-06 | Low | **`cash doctor` always says "inside another job object".** It asks after cash made its own. | 🔁 |
+| BIN-07 | Low | **A path-rendering bundled tool runs twice if reading its output fails.** A second `mktemp` file is created. | 📖 |
+| BIN-09 | Low | **`CASH_LINKED_TOOL_EXE` is inherited by every descendant.** | 📖 |
+| BIN-10, BIN-11, BIN-12 | Low | **Settings and links can be left half-done on error.** A symlinked settings.json becomes a file; a failed folder delete leaves the menu entry; links made before an error are not recorded. | 📖 |
+| BIN-13 | Low | **`--enable-highlighting` cannot override `false` in config.toml**, and its test asserts the default. | 📖 |
+| BIN-14 | Low | **A recovered panic still prints "cash had a problem and crashed"** and writes a crash report to `%TEMP%`. | 📖 |
+| W32-11, W32-12 | Low | **Unused code in `cash-win32`.** `spawn::spawn`, `build_cmd_command_line`, `path::to_extended` and `lexically_normalize` (which keeps `C:/..`) are not used in production. `conpty` and `vtscreen` are test-only but public. | 📖 |
+| W32-13, W32-14, XC-13 | Low | **Handle and wide-string helpers.** There are five RAII handle types and 15+ manual `CloseHandle`s; three leak on error in `pipe.rs`. There are about 12 copies of the UTF-16 encoder, some via `to_string_lossy`. | 📖 |
+| W32-15 | Low | **Win32 error codes get misreported.** `GetLastError` is read after other calls, and HRESULT and NTSTATUS go through `from_raw_os_error`. | 📖 |
+| W32-16 | Low | **Avoidable per-call scans.** Suspend takes one system-wide thread snapshot per tree member, and `real_case` reads a whole directory. | 📖 |
+| W32-18 | Low | **Test hooks are live in production.** `CASH_EXE` and `CARGO_BIN_EXE_cash` redirect every `#!/bin/sh` script. | 📖 |
+| W32-19, W32-20 | Low | **Two small loop and decoding bugs.** A registry enumeration spins on persistent errors, and a lone surrogate drops the next unit. | 📖 |
+| XC-12, XC-14, XC-16 | Low | **Parallel copies of shared mechanisms.** There are three process-creation paths and two environment-block builders. Paths are shown via `replace('\\','/')` past the D10 chokepoint. Case folding is a mix of ASCII and Unicode. | 📖 |
+| XC-18 | Low | **`TerminalInfo` has 48 bools; two are read.** D39 promises OSC 133 and 9;9, but only 633 is emitted. | 📖 |
+| XC-19 | Low | **Runtimes and `read -e` tab.** Each process substitution builds a tokio runtime. `block_in_place` in `read -e` tab would panic on a current-thread runtime. | 📖 |
+
+### 5.3 Repository, build, CI and release
+
+| ID | Severity | Finding |
+| --- | --- | --- |
+| ARCH-01 | Medium | **awk, bc and sed opt out of every workspace lint, rustc warnings included.** That covers about 34k lines, 678 `unwrap`/`expect`/`panic` and 59 unsafe lines without SAFETY comments. No decision records it; vendor/'s exemption is recorded. |
+| ARCH-03 | Medium | **CI and release supply-chain gaps.** No `cargo deny`/`audit` and no Dependabot; `rust-toolchain.toml` cites a `dependabot.yml` that does not exist. `contents: write` covers the whole release workflow, including the test job. Third-party actions are pinned by tag. rust-cache runs in the release job. `cargo build --profile dist` lacks `--locked`. `ci.yml` has no `permissions`. |
+| ARCH-12 | Low | **release.yml: dispatch, pre-release and injection.** A `workflow_dispatch` with a `tag` builds the dispatched ref, not the tag (`checkout` has no `ref`). `"${{ inputs.tag }}"` is interpolated into PowerShell. A `-rc` tag pushed publishes as latest. No provenance attestation. |
+| ARCH-05 | Low | **The MSRV is incoherent.** The workspace says 1.88; cash-shell and cash-interactive say 1.95, citing a missing `docs/reference/msrv-policy.md`. No MSRV job runs. |
+| ARCH-02 | Low | **The wrong repository URL in user-facing text.** `--help`, the panic report and "not yet implemented" point at `github.com/thraa/cash`; the repository is `tomcoolpxl/cash`. `CARGO_PKG_HOMEPAGE` is empty. |
+| ARCH-08 | Low | **Unused dependencies.** cash-sed's runtime deps `predicates`, `textwrap` and `phf` are unused; about 20 dev-deps in cash-shell and about 15 in `cash` are copied from brush. |
+| ARCH-09, ARCH-10, BIN-15, XC-21 | Low | **brush names users can see.** `brush:` messages; `help cat` says "executes via `brush --invoke-bundled`"; the default prompt is `brush$ `; `$BRUSH_VERSION`; `BRUSH_PS_ALT`; `experimental-bundled-coreutils` is a shipped default; dead `binstall` and `about.toml` metadata. |
+| ARCH-11 | Low | **Lint allows hide too much.** Crate-wide `allow(unused)` (sys), `allow(dead_code)` (cash-shell) and `allow(unwrap_used)` (parser). `allow` outnumbers `expect`, so stale allows never surface. |
+| ARCH-15 | Low | **Licence files.** NOTICE omits posixutils-rs and uutils sed. Seven crates' `LICENSE` is a symlink to a missing `crates/LICENSE`. |
+| ARCH-17, ARCH-16 | Info | **Dependency versions.** External versions are repeated per crate and drift (regex, serde_json, fancy-regex). Actionable duplicates: `check_elevation` pulls `windows` 0.51 (replace it with a TokenElevation call in cash-win32, ARCH-07); `human-panic` pulls `sysinfo` and `windows` 0.62; cash-awk uses rand 0.8. |
+| ARCH-07 | Low | **The user identity is found by running `whoami.exe /user /fo csv` and scraping its output.** Done twice, at every start, while cash-win32 already reads the token SID. |
+| ARCH-13, EXE-17, W32-09, BI-22 | Low | **The spec describes old code.** D1 says Bash 5.2.37 (it is 5.3.15). §1 and §4 row 19 say `stat` is not carried (it is). §5 still draws brush crates. D6 and §6 say the spawn race is open (it was closed by `CREATE_SUSPENDED`). The D9 table names cash crates as their own upstream. |
+| ARCH-14 | Low | **README and RELEASING are out of date.** The README Layout omits five crates and three folders. The RELEASING crate list omits awk, bc and sed. The toolchain version is hard-coded in five places. |
+| BIN-21, ARCH-19 | Info | **CI hides flaky tests.** CI runs nextest with `retries = 3`, while the local rule is `--retries 0`, so flakes pass silently there. A `ci` profile that fails or reports on FLAKY would show them. |
+
+### 5.4 Tests
+
+| ID | Severity | Finding |
+| --- | --- | --- |
+| BIN-05 | Medium | **The language-conformance basis D43 rests on is nearly empty.** `cases/brush` holds 46 cases and none of them test the language. The 209-case `tests/corpus` and the awk/sed/git-prompt differential scripts run only by hand (`results.json` is from 2026-09-27). Only 3 of 8 GNU `.tests` files are used. |
+| PI-09 | Medium | **The vendored reedline and crossterm tests, including those for cash's own patches, never run in CI.** |
+| BIN-18 | Low | **Test helpers are duplicated across `it/`.** 60 of 62 modules declare their own `CASH`; 43 their own run helper; 36 their own output struct. An `it/common.rs` would hold them. |
+| BIN-19 | Low | **About 19 tests use fixed-name `%TEMP%` folders and `remove_dir_all` them first.** Two runs delete each other's. That is shared-state flakiness, not timing. |
+| BIN-20 | Low | **Some tests test the wrong thing or depend on the machine.** One test skips unless an external awk exists, though cash runs its own. One needs the author's `kali-linux` WSL. 14 tests pass silently when skipped. `it` tests inherit the developer's config.toml and `BASH_ENV`. |
+| BIN-17, PI-14 | Low | **No fuzzing or property testing.** The parser's `Arbitrary` derives are unused, and the absorbed harness carries unreachable oracle machinery. |
+
+**Counts of `#[test]`:**
+
+| Crate | Tests | Notes |
+| --- | --- | --- |
+| cash | 1,078 | 1,002 in `it`, 29 ConPTY |
+| cash-sed | 510 | |
+| cash-awk | 422 | |
+| cash-parser | 239 | |
+| cash-bc | 222 | |
+| cash-win32 | 221 | |
+| cash-core | 121 | |
+| cash-builtins | 89 | |
+| cash-interactive | 67 | |
+| cash-shell | 30 | |
+| cash-coreutils-builtins | 3 | |
+
+Not in the table: the 51-screen `pty_oracle` comparison against Git Bash, and the 46
+YAML cases. Unit tests are strong in the tool crates. The binary is covered through
+`it`. The thinnest coverage is in `cash-core` (121 tests for 32k lines) and in release-only behaviour:
+CI tests debug builds, and the human_panic path exists only in release.
 
 ---
 
-### 5.6 Defect 6: Dead Code & Divergent PATHEXT Caching in `sys/windows/fs.rs`
-- **Location:** [`crates/cash-core/src/sys/windows/fs.rs:19-26`](file:///c:/Users/thraa/github/cash/crates/cash-core/src/sys/windows/fs.rs#L19-L26)
-- **Severity:** Low-Medium (Dynamic Environment Handling)
-- **Code:**
-  ```rust
-  static PATHEXT_EXTENSIONS: LazyLock<Vec<String>> = LazyLock::new(|| {
-      std::env::var("PATHEXT")
-          .unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".to_string())
-          .split(';')
-          .filter(|s| !s.is_empty())
-          .map(|s| s.to_ascii_lowercase())
-          .collect()
-  });
-  ```
-- **Analysis:**
-  Caching `PATHEXT` in a process-wide `LazyLock` means that if a user or script alters `PATHEXT` inside the shell (e.g. `export PATHEXT="$PATHEXT;.PY"`), `cash-core` will never see the update for the remainder of the session. In contrast, `cash-win32::resolve::resolve` properly accepts dynamic `pathext: &[String]`.
+## 6. Metrics
+
+| Crate | Lines | unsafe | `#[allow` | `#[expect` | `let _ =` | TODO | `.unwrap()` in src |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| cash | 27,358 | 1 | 66 | 0 | 131 | 13 | 12 |
+| cash-awk | 14,812 | 59 | 4 | 0 | 6 | 0 | 92 |
+| cash-bc | 6,625 | 0 | 0 | 0 | 4 | 0 | 106 |
+| cash-builtins | 28,049 | 3 | 32 | 41 | 40 | 17 | 42 |
+| cash-core | 32,579 | 3 | 43 | 42 | 64 | 60 | 52 |
+| cash-coreutils-builtins | 509 | 0 | 4 | 0 | 1 | 0 | 10 |
+| cash-interactive | 6,951 | 0 | 17 | 7 | 26 | 15 | 46 |
+| cash-parser | 11,566 | 0 | 22 | 9 | 1 | 26 | 17 |
+| cash-sed | 12,560 | 1 | 3 | 0 | 2 | 2 | 317 |
+| cash-shell | 2,946 | 0 | 13 | 1 | 13 | 4 | 10 |
+| cash-test-harness | 2,519 | 0 | 3 | 4 | 0 | 0 | 7 |
+| cash-win32 | 16,106 | 451 | 23 | 2 | 47 | 0 | 92 |
+
+`unwrap` counts in clippy-linted crates are mostly in tests or justified. Those in awk,
+bc and sed are not linted at all (ARCH-01).
+
+**The longest functions:**
+
+| Lines | Function | Location |
+| --- | --- | --- |
+| 588 | `expand_parameter_expr` | `cash-core/src/expansion.rs:1498` |
+| 517 | `init_well_known_vars` | `cash-core/src/wellknownvars.rs:59` |
+| 502 | `next_token_until` | `cash-parser/src/tokenizer.rs:768` (nesting 9) |
+| 462 | `expand_history` | `cash-core/src/history/expansion.rs:326` (nesting 10) |
+
+21 functions are over 200 lines. The biggest files:
+
+| Lines | File |
+| --- | --- |
+| 4,571 | awk `compiler.rs` |
+| 3,657 | sed `compiler.rs` |
+| 2,906 | `interp.rs` |
+| 2,834 | `expansion.rs` |
+
+Startup: `cash -c true` takes about 147 ms through the Scoop shim, and every `cash -c`
+builds a multi-thread runtime with one worker per core.
 
 ---
 
-### 5.7 Defect 7: Stale `chmod` Finding in `cash doctor`
-- **Location:** [`crates/cash/src/doctor.rs:64`](file:///c:/Users/thraa/github/cash/crates/cash/src/doctor.rs#L64)
-- **Severity:** Low (Diagnostic Accuracy)
-- **Analysis:**
-  `doctor.rs` lists:
-  ```rust
-  const EXPECTED: &[(&str, &str)] = &[
-      ...
-      ("chmod", "not bundled with cash; coreutils"),
-  ];
-  ```
-  However, `chmod` was subsequently implemented as a native Windows builtin in `crates/cash-builtins/src/chmod.rs` and registered in `crates/cash-builtins/src/factory.rs:250`. When `cash doctor` executes, it detects `chmod` is a builtin, but the static table in `EXPECTED` is stale and contradictory.
+## 7. Recommendations, in order
+
+The order is: what a user can be hurt by, then what makes the next bug cheaper. Each
+one is a group of items in `TODO.md` phase 8.
+
+1. **R1. One owner for cwd, environment, PATH and PATHEXT** (§4.1). Absolutize the
+   command path. Add one spawn helper for builtins, `Shell::pathext()`, a PATH setter
+   that clears the hash, and `umask` in `Shell` state. Then add an `xtask check` that
+   forbids `std::process::Command::new` and `std::env::var` in core and builtins
+   outside an allow-list. This one guard prevents the most common bug class found.
+2. **R2. Crashes** (§4.2). Big worker stacks and a depth guard that fires first. Fix
+   the five panics and the JSONC loop. Remove the parser's crate-wide `unwrap` allow.
+   Add cargo-fuzz targets for the tokenizer, parser, word parser and JSONC.
+3. **R3. awk numbers and the text-tool bugs** (§4.6). TXT-01 to TXT-06 first, each
+   with a differential case. Then bring awk, bc and sed under the workspace lints.
+4. **R4. Security and privacy at the edges** (§4.5, §4.7). `start` via
+   `ShellExecuteExW`. A quote-aware `escape_for_cmd` with a real `.bat` round-trip
+   test. The #37 check on the parsed word. `HISTCONTROL`, `HISTIGNORE`, `HISTSIZE`
+   and `HISTFILESIZE`. Pipe DACL and remote-client rejection.
+5. **R5. Pipeline and job semantics** (§4.3). Contain each stage's errors. Background
+   lists on `spawn_blocking`. Coproc. Cancellable internal jobs. Check the resume
+   result.
+6. **R6. D17 pipes** (§4.4). One pump, a bounded replay buffer, release of unclaimed
+   instances.
+7. **R7. Language correctness** (§5.1). Arrays (LANG-02, LANG-03, LANG-12), extglob
+   (LANG-01; a backtracking matcher rather than more regex), here-docs (PI-01, PI-02,
+   PI-04, PI-05), UTF-8 lengths, `$(( ))`, `declare -i`, backquote escapes,
+   patsub_replacement.
+8. **R8. Builtins** (§5.2). `kill` with several operands, `find -delete`, `chmod`
+   who-sets, `-ef` and `stat` via one `cash_win32::fs::file_info`, `mapfile` CR,
+   `times`, colour only on a terminal with `NO_COLOR`, uniform `--help` and usage
+   statuses.
+9. **R9. CI and release** (§5.3). `permissions: contents: read` by default; SHA-pinned
+   actions; `cargo deny check advisories`; `dependabot.yml`; `--locked`; checkout of
+   the tag on dispatch; tag input through `env:`; pre-release from the tag; a nextest
+   `ci` profile that shows flakes; the vendored crates' tests in `xtask ci full`.
+10. **R10. Tests** (§5.4). Freeze the corpus and differential outputs as goldens in
+    `it`, add `it/common.rs`, unique temp folders, and isolate the user's config in
+    every `it` test.
+11. **R11. Records and leftovers.** Bring `spec.md` (D1, §1, §4 row 19, §5, D6, D9,
+    D23, D36) and README/RELEASING up to date. Remove brush strings, dead code
+    (`spawn::spawn`, winnow, `sys` stubs, the harness's oracle mode), the stale
+    `TODO(bundled)` comments and the unused dependencies. Fix the LICENSE links and
+    NOTICE. Replace `whoami.exe` scraping and `check_elevation` with token calls in
+    cash-win32.
+
+**Three decisions are yours and are marked as such in `TODO.md`:**
+
+- D36: implement the pooled prompt job, or record that it was dropped.
+- D23: `chmod +x` silent as written, or amend D23.
+- Whether `time` and `times` should report CPU time (spec §6.1 called `resource` "not
+  needed" in the M0 survey; that was not a decision about `time`).
 
 ---
 
-### 5.8 Defect 8: Interactive-Only State Traps in `history` and `bind`
-- **Location:** [`crates/cash-core/src/shell/builder.rs`](file:///c:/Users/thraa/github/cash/crates/cash-core/src/shell/builder.rs)
-- **Severity:** Low-Medium (Non-Interactive Error Reporting)
-- **Analysis:**
-  `self.history` and `self.key_bindings` are only allocated when `options.interactive` is true. When running non-interactive commands via `cash.exe -c "history"` or `cash.exe -c "bind -p"`, the builtins emit `HistoryNotEnabled` or fail silently. Bash supports manipulating history in non-interactive scripts if `set -o history` is enabled.
+## 8. Checked and found to be decided
+
+Reviewers found these, checked them against the record, and left them out as findings:
+
+- **Paths and naming:** `pwd` prints `C:/…` (D3); `$SHELL` names cash (§4 #21); `sh`,
+  `bash` and `cash` are cash (§4 #17).
+- **Arguments and tools:** an argument reaches a command as written (D4); `which ls`
+  prints a virtual path (D58); `ls` colours on a terminal (§4 #24).
+- **Matching:** globbing and `find -name` are case-insensitive (D16); case-insensitive
+  environment lookup (D31).
+- **CRLF:** trimmed in `$(…)` and `read` (D20).
+- **Descriptors:** redirections above fd 2 are refused for programs (D26); `/dev/stdout`
+  shares the descriptor (§4 #39).
+- **Process substitution:** `>(…)` is waited for at exit and `<(…)` is not (D17); temp
+  files are used for `diff` and `cmp` (D17).
+- **Jobs and processes:** `$!` is empty for a builtin-only job (§4 #14); CHLD is not
+  raised for `$(…)` or bundled tools (D64); finished jobs are released, not reaped (D6);
+  GUI apps outlive cash (D6, D45).
+- **Signals:** TERM terminates console programs at once (D21); `kill 0` and `kill -1`
+  (§4 #15, #16); a thread created during the suspend sweep is missed (D19).
+- **Tools:** a bundled producer prints "Broken pipe" (§4 #22); bc's GNU extensions are
+  errors and bc exits 1 after one (D56); sed and awk keep CRLF (D49); `chmod -x` warns
+  and returns 0 (D34).
+- **Build and release:** release builds use `panic = "unwind"` (README); binaries are
+  unsigned (research/packaging-evaluation.md); there is no Linux CI (D43 amended);
+  `multiple_crate_versions` is allowed; vendor/ is outside the lints (CASH-PATCHES.md).
+- **Tests:** timing tests run on an idle machine and are never lengthened (TODO
+  "Decided"); one `it` test executable (README).
+- **Interactive:** Tab inserts the shared part, then opens the grid (TODO "Decided",
+  D40); history appends at once (D44, as to *when*).
+
+**Also checked and found sound:**
+
+- **Handle inheritance.** std serialises inheritable stdio, and cash creates no
+  inheritable handles, so the old report's §4.2 risk does not apply to production.
+- **Unsafe code details:**
+  - variable-length Win32 buffers are aligned or read with `read_unaligned`;
+  - all size-retry loops are bounded;
+  - the console control handlers cannot unwind;
+  - the IAT patching in bundled-tool processes is bounds-checked.
+- **Script behaviour matches Bash 5.3 exactly** for errexit, pipefail, the ERR trap,
+  PIPESTATUS, lastpipe and `|&`.
+- **Expansion matches bash** in more than 30 field-splitting and IFS cases and in
+  arithmetic wrapping.
+- **Pattern matching:** the regex translation has no catastrophic backtracking (bash
+  itself does).
+- **bc matches GNU bc.**
+- **`tidy.ps1`'s deletion logic is safe.**
 
 ---
 
-### 5.9 Defect 9: Fork Rebranding Debt & Residual Upstream Metadata
-- **Location:** Multiple crates
-- **Severity:** Low (Code Cleanliness / Professionalism)
-- **Findings:**
-  - `crates/cash-shell/src/entry.rs:217`: `human_panic` points bug reports to `https://github.com/reubeno/brush/issues/new`.
-  - `crates/cash-shell/src/bundled.rs:119, 127, 304`: Error messages emit `brush:` instead of `cash:`.
-  - `crates/cash-coreutils-builtins/src/lib.rs:65, 82`: Emits `brush: could not initialize localization...`.
-  - `crates/cash/tests/version_tests.rs:16`: Asserts `BRUSH_VERSION` environment variable.
+## 9. The report of 2026-09-22
 
----
-
-## 6. Test Harness & Quality Verification Review
-
-### 6.1 Current State: Builtin Parameter Integration Coverage (81 Passing Tests)
-To address prior testing deficiencies, we authored and verified **81 real end-to-end integration tests** in [`crates/cash/tests/builtin_parameters.rs`](file:///c:/Users/thraa/github/cash/crates/cash/tests/builtin_parameters.rs). These tests launch `target/debug/cash.exe -c` on Windows and assert real stdout, stderr, and exit codes:
-
-```text
-running 81 tests
-test alias_definition_and_unalias_all ... ok
-test break_terminates_loop ... ok
-test builtin_keyword_bypasses_function_override ... ok
-test cd_hyphen_toggles_previous_directory ... ok
-test chmod_modify_readonly_attribute ... ok
-test declare_integer_attribute ... ok
-test detach_starts_background_process ... ok
-test export_passes_variable_to_subprocesses ... ok
-test find_boolean_compound_operators ... ok
-test getopts_parses_flags_and_arguments ... ok
-test let_returns_exit_1_on_zero_result ... ok
-test logout_in_login_shell_default_code ... ok
-test mapfile_strips_delimiters_with_t ... ok
-test read_custom_delimiter ... ok
-test top_sorting_options ... ok
-test which_finds_builtins_by_default ... ok
-test xargs_null_separated_preserves_spaces_and_newlines ... ok
-... (81 tests total, 0 failures)
-```
-
-In addition, the following existing suites pass cleanly on Windows:
-- `acceptance.rs` (53 passed)
-- `acceptance_edge_cases.rs` (28 passed)
-- `builtin_parameters.rs` (81 passed)
-- `pipeline_concurrency.rs` (22 passed)
-- `environment_contract.rs` (22 passed)
-- `crlf_scripts.rs` (19 passed)
-- `cash-win32` crate unit & integration tests (126 passed across 11 binaries)
-
----
-
-### 6.2 The Major Blindspot: 100% of Interactive PTY Tests Are Disabled on Windows
-In a shell designed specifically for Windows, interactive terminal sessions represent the primary user touchpoint. Yet inspecting the interactive test suites reveals:
-
-#### In `crates/cash/tests/interactive_tests.rs`:
-```rust
-// Only compile this for platforms supported by expectrl's pty backend.
-#![cfg(any(
-    target_os = "linux",
-    target_os = "android",
-    target_os = "macos",
-    target_os = "freebsd"
-))]
-```
-#### In `crates/cash/tests/pty_startup_tests.rs`:
-```rust
-#![cfg(any(
-    target_os = "linux",
-    target_os = "android",
-    target_os = "macos",
-    target_os = "freebsd"
-))]
-```
-#### In `crates/cash/tests/reedline_interactive_tests.rs`:
-```rust
-#![cfg(any(
-    target_os = "linux",
-    target_os = "macos",
-    target_os = "freebsd",
-    target_os = "netbsd",
-    target_os = "openbsd"
-))]
-```
-When running `cargo test --test interactive_tests` on Windows:
-```text
-running 0 tests
-test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
-```
-**Consequence:** Job control suspension, foreground/background switching, line-editor keybindings (`bind -x`), prompt redraws, cursor position queries (`DSR 6n`), and terminal resize events have **zero automated test coverage on Windows**.
-
----
-
-### 6.3 The Major Blindspot: Differential & Integration Suites Stubbed on Windows
-In [`crates/cash/tests/compat_tests.rs:159-166`](file:///c:/Users/thraa/github/cash/crates/cash/tests/compat_tests.rs#L159-L166) and [`integration_tests.rs:71-78`](file:///c:/Users/thraa/github/cash/crates/cash/tests/integration_tests.rs#L71-L78):
-```rust
-#[cfg(windows)]
-{
-    eprintln!(
-        "skipped: the differential suite runs on Linux (D43); Windows is \
-         covered by `cargo test -p cash --test acceptance`."
-    );
-    return Ok(());
-}
-```
-While diffing against GNU bash requires a reference binary (typically on Linux), `integration_tests.rs` runs self-contained YAML-based test cases (`tests/cases/brush/*.yaml`) with fixed expected outputs. Skipping `integration_tests.rs` on Windows is unnecessary and leaves hundreds of pure bash language edge cases unverified on Windows.
-
----
-
-### 6.4 Recommended Blueprint for a Native Win32 ConPTY Test Harness
-
-To test interactive shell behaviors on Windows without Linux emulation, Cash should adopt a ConPTY-based integration harness:
-
-```mermaid
-sequenceDiagram
-    participant TestRunner as Rust Integration Test
-    participant ConPTY as Windows ConPTY (CreatePseudoConsole)
-    participant Cash as cash.exe (Interactive Child)
-
-    TestRunner->>ConPTY: CreatePseudoConsole(size, input_read, output_write)
-    TestRunner->>Cash: CreateProcessW with PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE
-    Cash->>ConPTY: Emits ANSI/VT Prompt ("cash> ")
-    ConPTY->>TestRunner: Reads prompt stream from output_read
-    TestRunner->>ConPTY: Writes keystrokes ("echo hello\r\n") to input_write
-    ConPTY->>Cash: Delivers VT input
-    Cash->>ConPTY: Writes "hello\r\n" + next prompt
-    ConPTY->>TestRunner: Asserts VT output sequence
-    TestRunner->>Cash: Closes ConPTY & reaps child
-```
-
-1. Use `windows_sys::Win32::System::Console::CreatePseudoConsole` to create a real Win32 pseudo-terminal.
-2. Spawn `cash.exe` using `STARTUPINFOEXW` with `PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE`.
-3. Drive user input (keystrokes, Ctrl+C, Ctrl+Z, Escape sequences) through the ConPTY input pipe and assert VT escape sequences from the output pipe.
-4. This will enable `interactive_tests.rs` to run natively on Windows 10/11 CI.
-
----
-
-## 7. Performance, Memory & Allocation Profiling
-
-### 1. Process Startup Latency
-Running `cash doctor` or `cash -c "exit 0"` takes ~15ms on an Intel Core i7 / AMD Ryzen Windows 11 machine.
-- Initializing `cash_win32::session::install_and_leak()` adds < 0.2ms.
-- Enabling UTF-8 console output modes adds < 0.1ms.
-- Initializing clap argument parsing and command line shims accounts for ~3ms.
-- **Verdict:** Startup is sufficiently fast for CLI scripts and interactive prompts (e.g. Starship integration).
-
-### 2. Subshell Memory Overhead
-When Cash executes a subshell `( cd /tmp && cargo build )` or command substitution `$(date)`, it clones the `Shell` state (`crates/cash-core/src/commands.rs:936`):
-```rust
-let mut subshell = shell.clone();
-```
-`Shell::clone()` performs a deep copy of:
-- All environment variable tables (`HashMap<String, ShellVariable>`).
-- Function definitions and aliases.
-- Open file descriptor descriptors.
-- **Optimization:** Adopt Copy-on-Write (`Arc` / `im::HashMap` or persistent data structures) for variable tables to eliminate bulk string reallocations on subshell creation.
-
-### 3. Coreutils stdout Capturing
-In `crates/cash-shell/src/bundled.rs:188-198`:
-```rust
-fn run_rendering_paths(func: BundledFn, argv: Vec<OsString>) -> i32 {
-    match cash_win32::stdio::with_captured_stdout(|| func(argv.clone())) {
-        Ok((code, captured)) => {
-            let rendered = cash_win32::stdio::render_paths(&captured);
-            let _ = cash_win32::stdio::write_stdout(&rendered);
-            code
-        }
-        Err(_) => func(argv),
-    }
-}
-```
-`with_captured_stdout` redirects stdout to an anonymous pipe or temporary file, captures all output bytes into a `Vec<u8>`, scans and replaces backslashes with forward slashes in memory, and writes the transformed buffer back to stdout.
-- For commands producing massive streams (e.g. `mktemp` or `find`), capturing the entire buffer in memory causes unbounded allocation.
-- **Optimization:** Use a streaming line-based pipe filter that transforms backslashes chunk-by-chunk on the fly.
-
----
-
-## 8. Actionable Recommendations & Phased Roadmap
-
-### Phase 1: Immediate Correctness & Safety Fixes (P0)
-1. **Fix `declare.rs` Trace Attribute Check:**
-   - Change line 622 in `crates/cash-builtins/src/declare.rs` from `self.make_readonly.to_bool()` to `self.make_traced.to_bool()`.
-2. **Implement Arithmetic Evaluation in `declare -i`:**
-   - In `crates/cash-core/src/variables.rs`, update `apply_value_transforms` and scalar assignment to call `cash_core::arithmetic::evaluate(expr, shell)` when `treat_as_int` is set.
-3. **Connect `build_cmd_command_line` to Batch Invocation:**
-   - In `crates/cash-core/src/commands.rs`, detect `.bat` and `.cmd` extensions and route the command string through `cash_win32::cmd::build_cmd_command_line` to prevent `cmd.exe` argument injection.
-4. **Update `doctor.rs` Builtin Table:**
-   - Remove `chmod` from the `EXPECTED` missing tools array in `crates/cash/src/doctor.rs`.
-
-### Phase 2: Pipeline Concurrency & Process Isolation (P1)
-1. **Decouple Bundled Command Execution in Pipelines:**
-   - Refactor `SimpleCommand::execute` and `cash-shell/src/bundled.rs::shim_execute` so that bundled commands return an `ExecutionSpawnResult::StartedProcess` directly, enabling true asynchronous streaming between pipeline stages without deadlocks.
-2. **Plumb Process Group IDs (PGID) to Bundled Commands:**
-   - Pass the pipeline's `process_group_id` into `SimpleCommand` inside `bundled.rs` so that bundled utilities join the job group and honor Ctrl+C / job termination.
-3. **Harden Handle Inheritance in `spawn.rs`:**
-   - Replace bare `bInheritHandles = TRUE` with `STARTUPINFOEXW` and `PROC_THREAD_ATTRIBUTE_HANDLE_LIST`, whitelisting only active stdio handles to eliminate anonymous pipe leaks.
-
-### Phase 3: Test Harness Modernization (P2)
-1. **Build a Native Windows ConPTY Integration Harness:**
-   - Replace Unix-only `expectrl` in `crates/cash/tests/interactive_tests.rs` with a Windows ConPTY runner (`CreatePseudoConsole`), bringing real interactive testing to Windows.
-2. **Un-stub `integration_tests.rs` on Windows:**
-   - Enable the standalone YAML-based integration tests (`tests/cases/brush/*.yaml`) on Windows by replacing the blanket skip with an automated test runner.
-
-### Phase 4: Architecture Unification & Rebranding Cleanup (P3)
-1. **Consolidate File Resolution:**
-   - Deprecate `LazyLock<Vec<String>>` in `cash-core/src/sys/windows/fs.rs` and route executable searches through `cash_win32::resolve::resolve`.
-2. **Eliminate Upstream Rebranding Artifacts:**
-   - Replace `reubeno/brush` issue links in `entry.rs` with `thraa/cash`.
-   - Replace remaining `brush:` log and error strings in `bundled.rs` and `coreutils-builtins/src/lib.rs` with `cash:`.
-   - Synchronize workspace crate versions under a unified versioning scheme.
-
-### Phase 5: Performance & Resource Scaling (P4)
-1. **Streaming Path Normalization:**
-   - Replace `with_captured_stdout` whole-buffer allocations in `bundled.rs` with streaming pipe filters.
-2. **Copy-on-Write Subshell State:**
-   - Introduce `Arc`-wrapped / persistent maps for shell variables to eliminate deep clone overhead on `$(subshells)`.
+| Item | Status now |
+| --- | --- |
+| §1/§2.1 Bypassed spawner, post-spawn race | **Race fixed** (`tokio_process.rs` spawns `CREATE_SUSPENDED`, contains, resumes). `cash_win32::spawn::spawn` remains, unused. The resume is unchecked (EXE-14). |
+| §2.2/§5.6 PATHEXT in a `LazyLock` | The cache is gone; the value is still read from the process environment (ARCH-04). |
+| §3.1 `panic = "abort"` | No longer applies: release is `unwind` by decision. |
+| §3.2 Clippy covers all crates | No longer true: awk, bc and sed opted out afterwards (ARCH-01). |
+| §3.3 Version coupling | Fixed: lockstep via `[workspace.dependencies]`. |
+| §4.2 Handle-inheritance leak | Only in dead code; not a production risk. |
+| §4.3/§5.5 Uncalled `build_cmd_command_line` | Batch escaping is used now, but it is wrong inside quotes (W32-01); the named function is still unused. |
+| §4.5 `session.rs` enables VT input | Wrong for current code (D68 removes VT input before each prompt). |
+| §5.1 `declare -t` filter | Fixed. |
+| §5.2 `declare -i` parsing | Partly fixed (LANG-11). |
+| §5.3/§5.4 Bundled pipelines serialised | Fixed (`seq 1 2000000 \| head -n2` takes 0.17 s); the `TODO(bundled)` comments are stale. |
+| §5.7 Stale `chmod` in doctor | Fixed. |
+| §5.8 `history`/`bind` need interactive state | Was wrong. |
+| §5.9 Rebranding | Partly done. The URL it recommended (`thraa/cash`) is itself wrong (ARCH-02); `brush:` strings remain. |
+| §6.2 Interactive tests Linux-only | Fixed: ConPTY tests, `pty_oracle`, `read_console`, `ctrl_c`. |
+| §6.3 Differential suites stubbed | Partly fixed, partly wrong (BIN-05). |
+| §6.4 ConPTY harness blueprint | Implemented (`cash_win32::conpty`). |
+| §7.2 Subshell clone cost | Partly fixed (`rpds` history, `Arc` path index); env, functions, builtins and aliases are still deep-cloned per stage. |
