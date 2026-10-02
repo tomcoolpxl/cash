@@ -1,6 +1,10 @@
 //! Process queries that the job-object layer and D42's elevated-child tracking need.
 
-use windows_sys::Win32::Foundation::{CloseHandle, FALSE, FILETIME, HANDLE, WAIT_TIMEOUT};
+use std::os::windows::ffi::OsStringExt as _;
+
+use windows_sys::Win32::Foundation::{
+    CloseHandle, FALSE, FILETIME, GetLastError, HANDLE, INVALID_HANDLE_VALUE, WAIT_TIMEOUT,
+};
 use windows_sys::Win32::System::Threading::{
     GetExitCodeProcess, GetProcessTimes, INFINITE, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
     PROCESS_SYNCHRONIZE, WaitForSingleObject,
@@ -847,56 +851,92 @@ pub fn is_gui_image(path: &std::path::Path) -> Option<bool> {
 ///
 /// `None` when the process cannot be opened for reading (other users' processes and
 /// protected ones, without elevation); the caller then leaves those rows out.
+///
+/// The list comes from a Toolhelp snapshot, which reads a process's modules in one call:
+/// asking for each module's path in turn (`GetModuleFileNameExW`) took five times as long,
+/// about a second for the 12,500 modules of 220 processes (2026-10-02), and `fuser` on a
+/// system DLL asks every process. A snapshot keeps a path to 259 characters, so a path
+/// that long is asked for in full, as before.
 #[must_use]
 pub fn modules(pid: u32) -> Option<Vec<std::path::PathBuf>> {
-    use std::os::windows::ffi::OsStringExt;
-    use windows_sys::Win32::Foundation::HMODULE;
-    use windows_sys::Win32::System::ProcessStatus::{
-        K32EnumProcessModulesEx, K32GetModuleFileNameExW, LIST_MODULES_ALL,
+    use windows_sys::Win32::Foundation::ERROR_BAD_LENGTH;
+    use windows_sys::Win32::System::Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, MODULEENTRY32W, Module32FirstW, Module32NextW, TH32CS_SNAPMODULE,
+        TH32CS_SNAPMODULE32,
     };
-    use windows_sys::Win32::System::Threading::{PROCESS_QUERY_INFORMATION, PROCESS_VM_READ};
 
-    let process = ProcessHandle::open(pid, PROCESS_QUERY_INFORMATION | PROCESS_VM_READ)?;
-    let mut handles: Vec<HMODULE> = vec![std::ptr::null_mut(); 256];
-    // Modules can load between the calls, so grow and retry a few times.
+    // To a snapshot, 0 is the calling process; here it is the System Idle Process, which
+    // no one may open.
+    if pid == 0 {
+        return None;
+    }
+    // The snapshot fails with "bad length" while the process is loading a module.
+    let mut snapshot = INVALID_HANDLE_VALUE;
     for _ in 0..4 {
-        let bytes = u32::try_from(handles.len() * size_of::<HMODULE>()).unwrap_or(u32::MAX);
-        let mut needed = 0u32;
-        // SAFETY: `handles` has `bytes` writable bytes; `needed` is writable.
-        let ok = unsafe {
-            K32EnumProcessModulesEx(
-                process.0,
-                handles.as_mut_ptr(),
-                bytes,
-                &raw mut needed,
-                LIST_MODULES_ALL,
-            )
-        };
-        if ok == 0 {
-            return None;
-        }
-        let count = needed as usize / size_of::<HMODULE>();
-        if count <= handles.len() {
-            handles.truncate(count);
+        // SAFETY: always safe; the result is checked.
+        snapshot =
+            unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, pid) };
+        // SAFETY: always safe.
+        if snapshot != INVALID_HANDLE_VALUE || unsafe { GetLastError() } != ERROR_BAD_LENGTH {
             break;
         }
-        handles = vec![std::ptr::null_mut(); count + 32];
     }
+    if snapshot == INVALID_HANDLE_VALUE {
+        return None;
+    }
+    let snapshot = ProcessHandle(snapshot);
+
+    // SAFETY: an all-zero `MODULEENTRY32W` is valid; its size is set below.
+    let mut entry: MODULEENTRY32W = unsafe { std::mem::zeroed() };
+    entry.dwSize = u32::try_from(size_of::<MODULEENTRY32W>()).unwrap_or(u32::MAX);
+    let mut paths = Vec::new();
+    let mut full_paths = None;
+    // SAFETY: the snapshot is open and `entry` is a valid out-param of the size it says.
+    let mut more = unsafe { Module32FirstW(snapshot.0, &raw mut entry) } != 0;
+    while more {
+        let length = entry
+            .szExePath
+            .iter()
+            .position(|&unit| unit == 0)
+            .unwrap_or(entry.szExePath.len());
+        let path = if length + 1 >= entry.szExePath.len() {
+            // Possibly cut short: asked of the process in full.
+            let process =
+                full_paths.get_or_insert_with(|| ProcessHandle::open(pid, MODULE_QUERY_ACCESS));
+            process
+                .as_ref()
+                .and_then(|process| module_path(process, entry.hModule))
+        } else {
+            entry
+                .szExePath
+                .get(..length)
+                .map(std::ffi::OsString::from_wide)
+        };
+        paths.extend(path.map(std::path::PathBuf::from));
+        // SAFETY: as above.
+        more = unsafe { Module32NextW(snapshot.0, &raw mut entry) } != 0;
+    }
+    Some(paths)
+}
+
+/// What a process is opened with to ask for a module's full path.
+const MODULE_QUERY_ACCESS: u32 = windows_sys::Win32::System::Threading::PROCESS_QUERY_INFORMATION
+    | windows_sys::Win32::System::Threading::PROCESS_VM_READ;
+
+/// The full path of the module `module` in `process`.
+fn module_path(
+    process: &ProcessHandle,
+    module: windows_sys::Win32::Foundation::HMODULE,
+) -> Option<std::ffi::OsString> {
+    use windows_sys::Win32::System::ProcessStatus::K32GetModuleFileNameExW;
 
     let mut name = vec![0u16; 32_768];
     let size = u32::try_from(name.len()).unwrap_or(u32::MAX);
-    Some(
-        handles
-            .iter()
-            .filter_map(|&module| {
-                // SAFETY: the handle is valid, `module` came from the enumeration, and
-                // `name` has `size` writable units.
-                let length =
-                    unsafe { K32GetModuleFileNameExW(process.0, module, name.as_mut_ptr(), size) };
-                (length > 0).then(|| std::ffi::OsString::from_wide(&name[..length as usize]).into())
-            })
-            .collect(),
-    )
+    // SAFETY: the handle is open with the access the call needs, `module` is one of the
+    // process's, and `name` has `size` writable units.
+    let length = unsafe { K32GetModuleFileNameExW(process.0, module, name.as_mut_ptr(), size) };
+    let length = usize::try_from(length).ok().filter(|&length| length > 0)?;
+    name.get(..length).map(std::ffi::OsString::from_wide)
 }
 
 #[cfg(test)]
@@ -916,6 +956,35 @@ mod module_tests {
                 .ends_with("kernel32.dll")),
             "{modules:?}"
         );
+    }
+
+    #[test]
+    fn another_process_has_its_modules_and_pid_0_none() {
+        let mut child = std::process::Command::new("cmd.exe")
+            .args(["/d", "/c", "set /p line="])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::null())
+            .spawn()
+            .unwrap();
+        // A process being started has no module list to read until its loader has run.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        let listed = loop {
+            if let Some(listed) = modules(child.id()) {
+                break listed;
+            }
+            assert!(std::time::Instant::now() < deadline, "no module list");
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        };
+        drop(child.stdin.take());
+        let _ = child.wait();
+        let named = |name: &str| {
+            listed
+                .iter()
+                .any(|m| m.to_string_lossy().to_ascii_lowercase().ends_with(name))
+        };
+        assert!(named("\\cmd.exe") && named("\\kernel32.dll"), "{listed:?}");
+        // To a snapshot 0 is the caller; the System Idle Process lists nothing.
+        assert_eq!(modules(0), None);
     }
 
     #[test]

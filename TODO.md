@@ -30,20 +30,12 @@ trust its runs, then by what a user notices most.
 
 | Phase | What | Items |
 | --- | --- | --- |
-| 5 | Jobs, `wait`, and the tools beside them | 5.3 and 5.4 |
+| 5 | Jobs, `wait`, and the tools beside them | 5.4 |
 | 6 | Updating cash | 6.1 |
 
 ---
 
 ## Phase 5. Jobs, `wait`, and the tools beside them
-
-### 5.3 `fuser` and `lsof` are slow on a system DLL
-
-Reported, with measurements. `fuser -v kernel32.dll` took 2.5 to 6.5 s alone and 41.8 s
-beside another build. The Restart Manager refuses a system DLL at once, and
-`file_holders` then walks every process: about 15,500 modules in 290 processes to list
-(0.9 s idle, up to 14 s under load), and `path_key` opens each module's file to
-canonicalize it (1.3 to 4.9 s). `crates/cash-builtins/src/fileuse.rs`.
 
 ### 5.4 `${!}` and `${!:+word}` are not expanded
 

@@ -40,18 +40,52 @@ pub(crate) fn path_key(path: &Path) -> String {
         .to_ascii_lowercase()
 }
 
-/// How `pid` uses the file whose [`path_key`] is `key`.
-fn classify(pid: u32, key: &str, modules: &mut HashMap<u32, Option<Vec<String>>>) -> Access {
-    if process::image_path(pid).is_some_and(|image| path_key(&image) == key) {
+/// The file a holder is asked about: its [`path_key`], and the names it may go by in a
+/// process's image or module list.
+struct Target {
+    key: String,
+    /// Its file name as given and as resolved, lowercase: `kernel32.dll`.
+    names: Vec<String>,
+}
+
+impl Target {
+    fn new(file: &Path) -> Self {
+        let key = path_key(file);
+        let mut names: Vec<String> = [Some(file), Some(Path::new(&key))]
+            .into_iter()
+            .flatten()
+            .filter_map(|path| path.file_name())
+            .map(|name| name.to_string_lossy().to_ascii_lowercase())
+            .collect();
+        names.dedup();
+        Self { key, names }
+    }
+
+    /// Whether `path`, from an image or module list, is this file.
+    ///
+    /// Only a path of the same file name is resolved and compared: resolving opens the
+    /// file, and for a system DLL there are some 15,000 modules in a few hundred
+    /// processes to look through, which made `fuser kernel32.dll` take seconds alone and
+    /// tens of seconds beside a build (2026-09-30).
+    fn is(&self, path: &Path) -> bool {
+        let named = path.file_name().is_some_and(|name| {
+            let name = name.to_string_lossy().to_ascii_lowercase();
+            self.names.contains(&name)
+        });
+        named && path_key(path) == self.key
+    }
+}
+
+/// How `pid` uses `target`.
+fn classify(pid: u32, target: &Target, modules: &mut HashMap<u32, Option<Vec<PathBuf>>>) -> Access {
+    if process::image_path(pid).is_some_and(|image| target.is(&image)) {
         return Access::Executable;
     }
     let loaded = modules
         .entry(pid)
-        .or_insert_with(|| {
-            process::modules(pid).map(|list| list.iter().map(|m| path_key(m)).collect())
-        })
+        .or_insert_with(|| process::modules(pid))
         .as_ref()
-        .is_some_and(|list| list.iter().any(|m| m == key));
+        .is_some_and(|list| list.iter().any(|module| target.is(module)));
     if loaded { Access::Mapped } else { Access::Open }
 }
 
@@ -62,12 +96,12 @@ fn classify(pid: u32, key: &str, modules: &mut HashMap<u32, Option<Vec<String>>>
 /// each process's image and module list instead: that finds executables and loaded
 /// modules in every process this user can open, which is what such files are held as.
 pub(crate) fn file_holders(file: &Path) -> std::io::Result<Vec<FileHolder>> {
-    let key = path_key(file);
+    let target = Target::new(file);
     let mut modules = HashMap::new();
     let holders = match restart::holders(&[file]) {
         Ok(holders) => holders.into_iter().map(|h| h.pid).collect::<Vec<_>>(),
         Err(error) if error.raw_os_error() == Some(6) => {
-            return Ok(module_holders(file, &key, &mut modules));
+            return Ok(module_holders(file, &target, &mut modules));
         }
         Err(error) => return Err(error),
     };
@@ -76,21 +110,21 @@ pub(crate) fn file_holders(file: &Path) -> std::io::Result<Vec<FileHolder>> {
         .map(|pid| FileHolder {
             pid,
             path: file.to_path_buf(),
-            access: classify(pid, &key, &mut modules),
+            access: classify(pid, &target, &mut modules),
         })
         .collect())
 }
 
-/// The processes whose executable or a loaded module is the file with `key`.
+/// The processes whose executable or a loaded module is `target`.
 fn module_holders(
     file: &Path,
-    key: &str,
-    modules: &mut HashMap<u32, Option<Vec<String>>>,
+    target: &Target,
+    modules: &mut HashMap<u32, Option<Vec<PathBuf>>>,
 ) -> Vec<FileHolder> {
     process::list()
         .into_iter()
         .filter_map(|p| {
-            let access = classify(p.pid, key, modules);
+            let access = classify(p.pid, target, modules);
             (access != Access::Open).then(|| FileHolder {
                 pid: p.pid,
                 path: file.to_path_buf(),
@@ -265,13 +299,23 @@ mod tests {
         let root = std::env::var_os("SystemRoot").unwrap();
         let kernel32 = Path::new(&root).join(r"System32\kernel32.dll");
         // Asked of this process alone. The Restart Manager cannot answer for a system
-        // DLL, so `file_holders` reads the module list of every process on the machine
-        // and resolves each module's path: 15,000 modules in 290 processes here, 2 to
-        // 3 s on an idle machine and past nextest's 15 s on a busy one. `fuser` on a
-        // system DLL (fuser_lsof.rs) is the one test that makes that walk.
+        // DLL, so `file_holders` reads the module list of every process on the machine:
+        // 12,500 modules in 220 processes here. `fuser` on a system DLL (fuser_lsof.rs)
+        // is the one test that makes that walk.
         let access = classify(
             std::process::id(),
-            &path_key(&kernel32),
+            &Target::new(&kernel32),
+            &mut HashMap::new(),
+        );
+        assert_eq!(access, Access::Mapped);
+        // Spelled another way, in another case and the other separator.
+        let spelled = kernel32
+            .to_string_lossy()
+            .to_ascii_uppercase()
+            .replace('\\', "/");
+        let access = classify(
+            std::process::id(),
+            &Target::new(Path::new(&spelled)),
             &mut HashMap::new(),
         );
         assert_eq!(access, Access::Mapped);
