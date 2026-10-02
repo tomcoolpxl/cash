@@ -110,6 +110,8 @@ mod small_tools;
 mod ss;
 mod stat_builtin;
 mod terminal_profile;
+// D48/D49/D56: the bundled awk, sed and bc in a pipeline.
+mod text_tools;
 // top builtin batch mode and monitoring.
 mod top_builtin;
 mod tree_builtin;

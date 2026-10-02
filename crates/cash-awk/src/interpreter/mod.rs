@@ -38,6 +38,7 @@ mod array;
 mod builtins;
 mod format;
 mod io;
+pub(crate) use io::flush_stdout;
 mod record;
 mod stack;
 mod string;
@@ -347,7 +348,7 @@ impl Interpreter {
                     AwkString::default()
                 };
                 let result = if expr_str.is_empty() {
-                    let stdout_ok = std::io::Write::flush(&mut std::io::stdout()).is_ok();
+                    let stdout_ok = io::flush_stdout().is_ok();
                     stdout_ok && self.write_files.flush_all() && self.write_pipes.flush_all()
                 } else {
                     self.write_files.flush_file(&expr_str) && self.write_pipes.flush_file(&expr_str)

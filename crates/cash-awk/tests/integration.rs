@@ -121,6 +121,13 @@ fn test_awk_unknown_string_escapes_stand_for_the_character() {
     test_awk!(unknown_string_escapes_stand_for_the_character);
 }
 
+// What awk printed comes before what `system()` prints, and `print > "/dev/stdout"` keeps
+// its place among `print`s: gawk 5.4's output (TXT-08, TXT-14).
+#[test]
+fn test_awk_output_is_flushed_before_another_program_writes() {
+    test_awk!(output_is_flushed_before_another_program_writes);
+}
+
 #[test]
 fn test_awk_hello_world() {
     test_awk!(hello_world)

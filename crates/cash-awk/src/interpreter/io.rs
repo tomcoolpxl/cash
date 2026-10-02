@@ -16,6 +16,67 @@ use std::{
 use super::string::AwkString;
 use crate::regex::Regex;
 
+/// awk's standard output, buffered as C's stdio buffers it: by line on a terminal, so
+/// what is printed shows at once, and in blocks otherwise.
+///
+/// `print` went through `print!`, Rust's own standard output, which writes every line
+/// with a call of its own (28 times slower than gawk over half a million records) and
+/// panics when the reader has gone (`awk '{print}' | head -1`; `REVIEW_REPORT.md`
+/// TXT-08). awk is one thread, so the writer is the thread's.
+enum StdoutWriter {
+    Line(std::io::LineWriter<std::io::Stdout>),
+    Block(std::io::BufWriter<std::io::Stdout>),
+}
+
+impl StdoutWriter {
+    fn new() -> Self {
+        use std::io::IsTerminal as _;
+        let stdout = std::io::stdout();
+        if stdout.is_terminal() {
+            Self::Line(std::io::LineWriter::new(stdout))
+        } else {
+            Self::Block(std::io::BufWriter::with_capacity(64 * 1024, stdout))
+        }
+    }
+
+    fn writer(&mut self) -> &mut dyn Write {
+        match self {
+            Self::Line(writer) => writer,
+            Self::Block(writer) => writer,
+        }
+    }
+}
+
+thread_local! {
+    static STDOUT: std::cell::RefCell<StdoutWriter> = std::cell::RefCell::new(StdoutWriter::new());
+}
+
+/// Writes `text` to standard output.
+pub(crate) fn write_stdout(text: &str) -> Result<(), String> {
+    STDOUT
+        .with_borrow_mut(|stdout| stdout.writer().write_all(text.as_bytes()))
+        .map_err(stdout_failed)
+}
+
+/// Writes out what standard output holds: before another program runs (`system()`, a
+/// pipe), which writes to the same place and must not overtake it, and when awk ends.
+pub(crate) fn flush_stdout() -> Result<(), String> {
+    STDOUT
+        .with_borrow_mut(|stdout| stdout.writer().flush())
+        .map_err(stdout_failed)
+}
+
+/// What a failed write to standard output means. When the reader has gone, awk stops as
+/// the other bundled tools do on Windows, which has no `SIGPIPE` (spec §4 row 22), and as
+/// gawk does with the signal ignored: with a message and status 2.
+fn stdout_failed(error: std::io::Error) -> String {
+    if error.kind() == std::io::ErrorKind::BrokenPipe {
+        eprintln!("awk: write error: Broken pipe");
+        std::process::exit(2);
+    }
+    format!("write error: {error}")
+}
+
 pub enum RecordSeparator {
     Char(u8),
     Null,
@@ -352,6 +413,10 @@ pub struct WriteFiles {
 
 impl WriteFiles {
     pub fn write(&mut self, filename: &str, contents: &str, append: bool) -> Result<(), String> {
+        // The same stream as `print`, so the two keep their order.
+        if filename == "/dev/stdout" {
+            return write_stdout(contents);
+        }
         match self.files.entry(filename.to_string()) {
             Entry::Occupied(mut e) => {
                 e.get_mut()
@@ -432,6 +497,11 @@ impl ReadFiles {
 }
 
 pub(crate) fn create_shell_command(cmd_str: &str) -> std::process::Command {
+    // Another program writes where awk does, so what awk has printed goes first, as gawk,
+    // mawk and BWK awk (and POSIX, for system()) have it (TXT-14). A failure here is the
+    // write's to report, when it is tried again.
+    let _ = flush_stdout();
+
     if let Some(path) = std::env::var_os("CASH_BIN") {
         let mut cmd = std::process::Command::new(path);
         cmd.args(["--norc", "--noprofile", "-c", cmd_str]);

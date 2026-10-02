@@ -432,10 +432,10 @@ pub(crate) fn call_simple_builtin(
             stack.push_value(run_system(&command) as f64)?;
         }
         BuiltinFunction::Print => {
-            print!("{}", print_to_string(stack, argc, global_env)?);
+            super::io::write_stdout(&print_to_string(stack, argc, global_env)?)?;
         }
         BuiltinFunction::Printf => {
-            print!("{}", builtin_sprintf(stack, argc, global_env)?);
+            super::io::write_stdout(&builtin_sprintf(stack, argc, global_env)?)?;
         }
         _ => unreachable!("call_simple_builtin was passed an invalid builtin function kind"),
     }

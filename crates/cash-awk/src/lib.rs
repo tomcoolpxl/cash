@@ -128,6 +128,18 @@ fn normalize_awk_args(args: Vec<OsString>) -> Vec<OsString> {
     normalized
 }
 
+/// Writes out what awk printed and has not written yet, and returns `code`, or 2 when the
+/// output cannot be written.
+fn finish(code: i32) -> i32 {
+    match interpreter::flush_stdout() {
+        Ok(()) => code,
+        Err(e) => {
+            eprintln!("awk: {e}");
+            2
+        }
+    }
+}
+
 /// Runs awk with the given command-line arguments and returns the exit status.
 pub fn run_awk<I, T>(args: I) -> i32
 where
@@ -186,8 +198,9 @@ where
             parsed_args.separator_string,
             cr_is_data,
         ) {
-            Ok(code) => code as i32,
+            Ok(code) => finish(code as i32),
             Err(e) => {
+                finish(1);
                 eprintln!("{e}");
                 1
             }
@@ -209,8 +222,9 @@ where
             parsed_args.separator_string,
             cr_is_data,
         ) {
-            Ok(code) => code as i32,
+            Ok(code) => finish(code as i32),
             Err(e) => {
+                finish(1);
                 eprintln!("{e}");
                 1
             }

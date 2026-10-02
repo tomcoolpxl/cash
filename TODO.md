@@ -59,8 +59,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 ### 10.2 awk and sed bugs that break ordinary scripts
 
 - awk: plain `getline` reads only the current file. TXT-06.
-- awk: `awk '{print}' | head -1` panics; one `WriteFile` per record; no flush before
-  `system()`. TXT-08, TXT-14.
 - sed: `/x/,+1p` and `/x/,3p` miss the second range; `2,3c T` never prints `T`. TXT-04,
   TXT-07.
 - The rest of TXT-09 to TXT-18 (sed `-z`, `\$` in the literal fast path, NUL and RS in
