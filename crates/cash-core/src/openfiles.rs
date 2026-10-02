@@ -122,7 +122,50 @@ impl std::fmt::Display for OpenFile {
     }
 }
 
+/// What an open file is, as a file test on its descriptor's name asks it (D7).
+pub(crate) enum FileKind {
+    /// A pipe, and which of its ends this is.
+    Pipe {
+        /// The end read from.
+        reads: bool,
+        /// The end written to.
+        writes: bool,
+    },
+    /// A character device: the console, the null device.
+    Device,
+    /// A file or folder on a disk.
+    File(std::fs::Metadata),
+    /// Anything else.
+    Other,
+}
+
 impl OpenFile {
+    /// What the file is open on (D7).
+    pub(crate) fn kind(&self) -> FileKind {
+        use cash_win32::fs::HandleKind;
+        use std::os::windows::io::AsHandle;
+
+        let (handle, reads, writes) = match self {
+            Self::Stdin(stdin) => (stdin.as_handle(), true, false),
+            Self::Stdout(stdout) => (stdout.as_handle(), false, true),
+            Self::Stderr(stderr) => (stderr.as_handle(), false, true),
+            Self::File(file) => (file.as_handle(), true, true),
+            Self::PipeReader(reader) => (reader.as_handle(), true, false),
+            Self::PipeWriter(writer) => (writer.as_handle(), false, true),
+            Self::Stream(_) => return FileKind::Other,
+        };
+        match cash_win32::fs::handle_kind(handle) {
+            HandleKind::Pipe => FileKind::Pipe { reads, writes },
+            HandleKind::Char => FileKind::Device,
+            HandleKind::Disk => handle
+                .try_clone_to_owned()
+                .ok()
+                .and_then(|owned| std::fs::File::from(owned).metadata().ok())
+                .map_or(FileKind::Other, FileKind::File),
+            HandleKind::Unknown => FileKind::Other,
+        }
+    }
+
     pub(crate) fn is_dir(&self) -> bool {
         match self {
             Self::Stdin(_) | Self::Stdout(_) | Self::Stderr(_) => false,

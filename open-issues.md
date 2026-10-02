@@ -209,22 +209,18 @@ What is behind them, as far as it is known:
 A redirection to `/dev/null`, `/dev/stdin`, `/dev/stdout`, `/dev/stderr` or `/dev/fd/N`
 and `source` of one now work (spec D7). Each script below was run with `x` piped to it,
 by Git Bash 5.3.15 and by cash. The names as an argument of a bundled tool
-(`cat /dev/stdin`, `cp /dev/null f`, `tee /dev/stderr`) work since 1.3.4 (spec D7); the
-rest are not fixed.
+(`cat /dev/stdin`, `cp /dev/null f`, `tee /dev/stderr`) and in the file tests
+(`[ -e /dev/null ]`) work since 1.3.4 (spec D7); the two below are not fixed.
 
 | Script | Bash 5.3.15 | cash |
 | --- | --- | --- |
-| `[ -e /dev/stdin ]`, `[ -e /dev/null ]`, `[ -c /dev/null ]`, `[ -p /dev/stdin ]`, `[ -w /dev/stdout ]`, `[ -e /dev/fd/0 ]`, `[[ -e /dev/stdin ]]` | 0 | 1 |
 | `cat <&1`, `cat < /dev/stdout` (output a pipe) | `cat: -: Bad file descriptor`, 1 | prints `x`, 0 |
 | `cat 3< f <&3` | the contents of `f` | `operation not supported on this platform: fd redirections`, 1 |
 
 What is behind them, as far as it is known:
 
-- **The file tests ask the filesystem.** §9 of the spec has listed `[ -e /dev/null ]` as a
-  D7 gap since the first baseline. `cash_win32::path::accept` already tells the names
-  from paths; the tests do not ask it.
-- **The last two have nothing to do with the names** and were only met on the way; both
-  were there before the fix, and their causes have not been looked for. A third,
+- **Neither has anything to do with the names**; both were only met on the way, were
+  there before the fix, and their causes have not been looked for. A third,
   `echo x | tee >(cat >&2)` failing on the named pipe, was fixed in 1.3.3 (spec D17).
 
 ---

@@ -77,6 +77,9 @@ pub(crate) async fn apply_unary_predicate_to_str(
     params: &ExecutionParameters,
     in_test_builtin: bool,
 ) -> Result<bool, error::Error> {
+    if let Some(answer) = dev_test(op, operand, shell, params) {
+        return Ok(answer);
+    }
     match op {
         ast::UnaryPredicate::StringHasNonZeroLength => Ok(!operand.is_empty()),
         ast::UnaryPredicate::StringHasZeroLength => Ok(operand.is_empty()),
@@ -205,6 +208,105 @@ pub(crate) async fn apply_unary_predicate_to_str(
             None => Ok(false),
         },
     }
+}
+
+/// What a `/dev` name is to a file test (D7).
+enum DevNode {
+    /// `/dev/null` or `/dev/tty`: a character device.
+    Device,
+    /// A descriptor's name, `/dev/stdin` or `/dev/fd/N`: a link to what is open under the
+    /// number, if anything is.
+    Descriptor(Option<crate::openfiles::FileKind>),
+}
+
+/// The `/dev` name `operand` is, as a redirection takes it, if it is one.
+fn dev_node(
+    operand: &str,
+    shell: &Shell<impl extensions::ShellExtensions>,
+    params: &ExecutionParameters,
+) -> Option<DevNode> {
+    let path = shell.absolute_path(Path::new(operand));
+    if crate::sys::fs::is_special_file(&path) {
+        return Some(DevNode::Device);
+    }
+    let fd = crate::sys::fs::named_descriptor(&path)?;
+    let open = params.try_fd(shell, fd).map(|file| file.kind());
+    Some(DevNode::Descriptor(open))
+}
+
+/// cash (D7): what the file test `op` says of a `/dev` name, which no file on Windows
+/// holds; `None` when `operand` is not one, or `op` asks no file.
+///
+/// Every test said false, `[ -e /dev/null ]` included, as Git Bash says true. The answers
+/// are Git Bash 5.3's, measured with each kind of descriptor: a device can be read and
+/// written, a descriptor's name is a link to what is open under the number, and that is
+/// a pipe that can be read or written as its end is, a file as the file is, or a device.
+/// Each is owned by the user, as Git Bash says.
+fn dev_test(
+    op: &ast::UnaryPredicate,
+    operand: &str,
+    shell: &Shell<impl extensions::ShellExtensions>,
+    params: &ExecutionParameters,
+) -> Option<bool> {
+    use crate::openfiles::FileKind;
+    use ast::UnaryPredicate as P;
+
+    let asks_a_file = matches!(
+        op,
+        P::FileExists
+            | P::FileExistsAndIsBlockSpecialFile
+            | P::FileExistsAndIsCharSpecialFile
+            | P::FileExistsAndIsDir
+            | P::FileExistsAndIsRegularFile
+            | P::FileExistsAndIsSetgid
+            | P::FileExistsAndIsSymlink
+            | P::FileExistsAndHasStickyBit
+            | P::FileExistsAndIsFifo
+            | P::FileExistsAndIsReadable
+            | P::FileExistsAndIsNotZeroLength
+            | P::FileExistsAndIsSetuid
+            | P::FileExistsAndIsWritable
+            | P::FileExistsAndIsExecutable
+            | P::FileExistsAndOwnedByEffectiveGroupId
+            | P::FileExistsAndOwnedByEffectiveUserId
+            | P::FileExistsAndIsSocket
+    );
+    if !asks_a_file {
+        return None;
+    }
+
+    let (kind, link) = match dev_node(operand, shell, params)? {
+        DevNode::Device => (FileKind::Device, false),
+        DevNode::Descriptor(Some(kind)) => (kind, true),
+        DevNode::Descriptor(None) => return Some(false),
+    };
+    let answer = match op {
+        P::FileExists | P::FileExistsAndOwnedByEffectiveUserId => true,
+        P::FileExistsAndOwnedByEffectiveGroupId => true,
+        P::FileExistsAndIsSymlink => link,
+        P::FileExistsAndIsCharSpecialFile => matches!(kind, FileKind::Device),
+        P::FileExistsAndIsFifo => matches!(kind, FileKind::Pipe { .. }),
+        P::FileExistsAndIsRegularFile => {
+            matches!(&kind, FileKind::File(metadata) if metadata.is_file())
+        }
+        P::FileExistsAndIsDir => matches!(&kind, FileKind::File(metadata) if metadata.is_dir()),
+        P::FileExistsAndIsNotZeroLength => {
+            matches!(&kind, FileKind::File(metadata) if metadata.len() > 0)
+        }
+        P::FileExistsAndIsReadable => match kind {
+            FileKind::Pipe { reads, .. } => reads,
+            FileKind::Device | FileKind::File(_) => true,
+            FileKind::Other => false,
+        },
+        P::FileExistsAndIsWritable => match &kind {
+            FileKind::Pipe { writes, .. } => *writes,
+            FileKind::Device => true,
+            FileKind::File(metadata) => !metadata.permissions().readonly(),
+            FileKind::Other => false,
+        },
+        _ => false,
+    };
+    Some(answer)
 }
 
 /// Implements Bash's `test -v name[subscript]` handling. The subscript is expanded, then

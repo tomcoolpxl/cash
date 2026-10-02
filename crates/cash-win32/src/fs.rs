@@ -338,6 +338,36 @@ pub fn same_file(a: &Path, b: &Path) -> bool {
     }
 }
 
+/// What an open handle is open on, as Windows tells it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HandleKind {
+    /// A file or folder on a disk.
+    Disk,
+    /// A pipe, anonymous or named.
+    Pipe,
+    /// A character device: the console, the null device.
+    Char,
+    /// Anything else, or a handle that is not open.
+    Unknown,
+}
+
+/// What `handle` is open on.
+#[must_use]
+pub fn handle_kind(handle: std::os::windows::io::BorrowedHandle<'_>) -> HandleKind {
+    use windows_sys::Win32::Storage::FileSystem::{
+        FILE_TYPE_CHAR, FILE_TYPE_DISK, FILE_TYPE_PIPE, GetFileType,
+    };
+
+    // SAFETY: the handle is borrowed open; any handle may be asked.
+    let kind = unsafe { GetFileType(handle.as_raw_handle()) };
+    match kind {
+        FILE_TYPE_DISK => HandleKind::Disk,
+        FILE_TYPE_PIPE => HandleKind::Pipe,
+        FILE_TYPE_CHAR => HandleKind::Char,
+        _ => HandleKind::Unknown,
+    }
+}
+
 /// A Windows program by its full path in System32 (`whoami.exe`), for cash to start.
 ///
 /// By a bare name, Windows looks first in the folder of the exe that asks, and

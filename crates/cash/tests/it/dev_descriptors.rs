@@ -369,3 +369,38 @@ fn a_bundled_tool_knows_the_names_where_a_redirection_does() {
     assert_eq!(left.stdout, "rc=0\na file\n");
     assert_eq!(left.stderr, "");
 }
+
+/// The file tests on the names, as Git Bash 5.3.15 answers them with standard input and
+/// output a pipe, standard input a file, and 3 open on a file. Each said false: the tests
+/// asked the filesystem, where Windows has no `/dev` (TODO 4.2).
+#[test]
+fn the_file_tests_answer_for_the_names_as_git_bash_does() {
+    let dir = tempfile::tempdir().expect("a scratch folder");
+    std::fs::write(dir.path().join("f"), "contents\n").expect("a file");
+    let left = cash_in(
+        dir.path(),
+        "",
+        r#"ops() { name=$1 line=$1; shift; for op in "$@"; do test "$op" "$name" && line="$line $op"; done; echo "$line"; }
+all="-e -f -d -c -b -p -S -L -h -r -w -x -s -O -G -u -g -k"
+for name in /dev/null /dev/tty /dev/stdin /dev/stdout /dev/stderr /dev/fd/0 /dev/fd/2 /dev/fd/9; do ops $name $all; done
+ops /dev/stdin $all < f
+exec 3< f; ops /dev/fd/3 $all
+[[ -e /dev/null && -p /dev/stdin && ! -e /dev/fd/9 ]] && echo "[[ ]] too""#,
+    );
+
+    assert_eq!(
+        left.stdout,
+        "/dev/null -e -c -r -w -O -G\n\
+         /dev/tty -e -c -r -w -O -G\n\
+         /dev/stdin -e -p -L -h -r -O -G\n\
+         /dev/stdout -e -p -L -h -w -O -G\n\
+         /dev/stderr -e -p -L -h -w -O -G\n\
+         /dev/fd/0 -e -p -L -h -r -O -G\n\
+         /dev/fd/2 -e -p -L -h -w -O -G\n\
+         /dev/fd/9\n\
+         /dev/stdin -e -f -L -h -r -w -s -O -G\n\
+         /dev/fd/3 -e -f -L -h -r -w -s -O -G\n\
+         [[ ]] too\n"
+    );
+    assert_eq!(left.stderr, "");
+}

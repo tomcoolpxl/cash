@@ -344,8 +344,16 @@ working directory is: `C:/src/dev/null` is a file. N is a number as a listing of
 `/dev/fd` would write it, so `/dev/fd/03` is a file as well.
 
 They are recognised where cash opens a file by name itself: the word of a redirection and
-the operand of `source`. Not by the file tests (`[ -e /dev/null ]` is false, see the
-baseline table).
+the operand of `source`.
+
+**The file tests answer for them as Git Bash does (2026-10-02).** `[ -e /dev/null ]` was
+false, as was every test of every name: the tests asked the filesystem. Now a test on a
+name is answered from what the name is, by the same rule as a redirection's, with Git Bash
+5.3's answers, measured: `/dev/null` and `/dev/tty` are character devices that can be read
+and written (`-e -c -r -w -O -G`); a descriptor's name is a link (`-L`, `-h`) to what is
+open under the number, which is a pipe read or written as its end is (`-p` and `-r` or
+`-w`), a file as the file is (`-f`, `-s`, `-r`, `-w`), or a device; a name whose
+descriptor is not open is nothing, every test false.
 
 **A bundled tool opens them too (2026-10-02).** An argument reaches a command as written
 (D4), so `cat /dev/stdin`, `tee /dev/stderr` and `cp /dev/null f` failed with "The
@@ -369,9 +377,8 @@ every other path on:
   drive, which is also what the standard library makes of `/dev/stdin` before it opens
   it (`\\?\C:\dev\stdin`). `C:/src/dev/null` is a file.
 
-A program on `PATH` still gets the name as written and fails on it. cash's own builtins
-that ask the filesystem (`ls`, `stat`, the file tests) run in the shell and are not
-covered by this; they are TODO 4.2.
+A program on `PATH` still gets the name as written and fails on it. cash's own `ls` and
+`stat`, which run in the shell, are not covered by this; they are TODO 4.7.
 
 ### D8 — Command resolution is cash's own
 
@@ -2350,7 +2357,7 @@ someone who expected bash, so additions need to earn their place.
 | 36 | `which ls` prints `C:/…/cash.exe/ls`, a path no file is at, which cash runs as `ls` | A builtin has no file, and scripts run what `which` prints | D58 |
 | 37 | A subscript that `unset`, `read`, `printf -v`, `declare` or `[[ -v ]]` expands a second time never runs a command substitution: `unset "a[$key]"` with `key='$(cmd)'` is an error | Bash runs `cmd`, its best-known array injection; `$i` and `$((…))` still expand as in Bash (as 27 does for arithmetic) | — |
 | 38 | A `CHLD` trap runs once per child process cash starts and reaps; a bundled tool (`ls`, `cat`) and a command substitution run inside cash and raise none | Windows has no `SIGCHLD`; cash emulates it from the children it waits for, and those have no process | D64 |
-| 39 | `/dev/stdin`, `/dev/stdout`, `/dev/stderr` and `/dev/fd/N` work in a redirection and in `source`, and share the descriptor: `> /dev/stdout` never truncates the file standard output is writing, and a read from `/dev/fd/3` goes on where 3 stands. A bundled tool opens them as well (`cat /dev/stdin`); a program on `PATH` and a file test do not | Windows has no `/dev` to open a second time, and an argument reaches a command as written | D7, D4 |
+| 39 | `/dev/stdin`, `/dev/stdout`, `/dev/stderr` and `/dev/fd/N` work in a redirection and in `source`, and share the descriptor: `> /dev/stdout` never truncates the file standard output is writing, and a read from `/dev/fd/3` goes on where 3 stands. A bundled tool opens them as well (`cat /dev/stdin`) and the file tests know them; a program on `PATH` does not | Windows has no `/dev` to open a second time, and an argument reaches a command as written | D7, D4 |
 
 `select` was missing outright until recently: it was a reserved word with no grammar
 rule, so `select x in a b; do …; done` was a syntax error that took the whole file with
