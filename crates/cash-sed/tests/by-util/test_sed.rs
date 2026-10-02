@@ -2269,3 +2269,39 @@ fn test_l_wraps_at_the_length_option() {
             .stdout_is("x".repeat(100) + "$\n");
     }
 }
+
+/// Ranges ended by a line number, compared with GNU sed 4.9 (`REVIEW_REPORT.md` TXT-04,
+/// TXT-07): the line after `addr1,+N` or `addr1,N` ended was refused without asking
+/// whether it starts a new range, and `c` never printed its text at such a range's end.
+#[test]
+fn ranges_ended_by_a_line_number_match_gnu_sed() {
+    let cases: [(&str, &[&str], &str, &str); 14] = [
+        ("/x/,+1p", &["-n"], "x\nb\nx\nd\ne\n", "x\nb\nx\nd\n"),
+        ("/x/,3p", &["-n"], "x\nb\nc\nx\ne\n", "x\nb\nc\nx\n"),
+        ("/x/,+2d", &[], "x\na\nb\nx\nc\nd\ne\n", "e\n"),
+        ("2,3c T", &[], "1\n2\n3\n4\n5\n6\n", "1\nT\n4\n5\n6\n"),
+        ("/2/,+1c T", &[], "1\n2\n3\n4\n5\n6\n", "1\nT\n4\n5\n6\n"),
+        ("2,4!c X", &[], "1\n2\n3\n4\n5\n", "X\n2\n3\n4\nX\n"),
+        (
+            "/[26]/,+1p",
+            &["-n"],
+            "1\n2\n3\n4\n5\n6\n7\n8\n",
+            "2\n3\n6\n7\n",
+        ),
+        ("4,2p", &["-n"], "1\n2\n3\n4\n5\n6\n", "4\n"),
+        ("/3/,1p", &["-n"], "1\n2\n3\n4\n5\n6\n", "3\n"),
+        ("/[159]/,+0p", &["-n"], "1\n2\n5\n6\n9\n10\n", "1\n5\n9\n10\n"),
+        ("2,~4p", &["-n"], "1\n2\n3\n4\n5\n", "2\n3\n4\n"),
+        ("/x/,/never/c T", &[], "a\nx\nb\n", "a\n"),
+        ("/x/,$c T", &[], "a\nx\nb\n", "a\nT\n"),
+        ("2c T", &[], "1\n2\n3\n", "1\nT\n3\n"),
+    ];
+    for (script, options, input, expected) in cases {
+        new_ucmd!()
+            .args(options)
+            .arg(script)
+            .pipe_in(input)
+            .succeeds()
+            .stdout_is(expected);
+    }
+}

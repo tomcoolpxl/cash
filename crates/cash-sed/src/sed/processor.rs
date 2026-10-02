@@ -85,43 +85,56 @@ fn applies(
         // No address
         Ok(true)
     } else if let Some(addr2) = &command.addr2 {
-        // Two addresses
+        // Two addresses. What a range already latched says about this line, or `None`
+        // when the line is past a numbered end and the first address decides again.
+        let mut latched = None;
         if let Some(start) = command.start_line {
-            // Range is already latched active.
             match addr2 {
-                Address::RelLine(n) => {
-                    if linenum - start > *n {
-                        command.start_line = None;
-                        Ok(false)
+                // `addr1,N` and `addr1,+N` end on a line number, inclusive, which is the
+                // range's last line (`c` prints its text there). A line already past it,
+                // reached when the command was skipped, closes the range and is the first
+                // address's to start again, as GNU sed has it. The line after the end was
+                // refused without that check, so `/x/,+1p` missed a second `x` right after
+                // a range, and `2,3c T` never printed `T` (`REVIEW_REPORT.md` TXT-04,
+                // TXT-07).
+                Address::RelLine(_) | Address::Line(_) => {
+                    let end = match addr2 {
+                        Address::RelLine(n) => start + *n,
+                        Address::Line(n) => *n,
+                        _ => unreachable!(),
+                    };
+                    if linenum < end {
+                        latched = Some(true);
                     } else {
-                        Ok(true)
+                        command.start_line = None;
+                        if linenum == end {
+                            context.last_address = true;
+                            latched = Some(true);
+                        }
                     }
                 }
-                Address::Line(n) => {
-                    // Special case: already ended
-                    if linenum > *n {
-                        command.start_line = None;
-                        Ok(false)
-                    } else {
-                        Ok(true)
-                    }
+                Address::StepMatch(step) => {
+                    latched = Some((linenum - start).is_multiple_of(*step));
                 }
-                Address::StepMatch(step) => Ok((linenum - start).is_multiple_of(*step)),
                 Address::StepEnd(step) => {
                     // Inclusive end on multiple of step
                     if linenum.is_multiple_of(*step) {
                         command.start_line = None;
                     }
-                    Ok(true)
+                    latched = Some(true);
                 }
                 _ => {
                     if match_address(addr2, reader, pattern, context, &command.location)? {
                         command.start_line = None;
                         context.last_address = true;
                     }
-                    Ok(true)
+                    latched = Some(true);
                 }
             }
+        }
+
+        if let Some(latched) = latched {
+            Ok(latched)
         } else if let Some(addr1) = &command.addr1 {
             // See if latch must start.
             if match_address(addr1, reader, pattern, context, &command.location)? {
@@ -716,10 +729,13 @@ fn process_file(
                     break;
                 }
                 'c' => {
-                    // At range end replace pattern space with text and
-                    // start the next cycle.
+                    // Replace the pattern space with the text unless the command's range
+                    // is still open after this line, as GNU sed has it: once at a range's
+                    // end, on every line of a single address or a negated range (`2,4!c X`
+                    // missed line 1), and not at all for a range left open at the end of
+                    // the input. Then start the next cycle.
                     pattern.clear();
-                    if command.addr2.is_none() || context.last_address || reader.last_line()? {
+                    if command.start_line.is_none() {
                         let text = extract_variant!(command, Text);
                         output.write_bytes(text.as_ref())?;
                     }
