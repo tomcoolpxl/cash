@@ -145,7 +145,7 @@ impl builtins::Command for FindCommand {
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, Self::Error> {
-        let (walk, expr) = match parse(&self.args) {
+        let (walk, expr) = match parse(&self.args, context.shell.working_dir()) {
             Ok(parsed) => parsed,
             Err(complaint) => {
                 writeln!(context.stderr(), "{}: {complaint}", context.command_name)?;
@@ -249,7 +249,10 @@ fn render(path: &Path) -> String {
 }
 
 /// Splits the arguments into the walk's options, its starting points and the expression.
-fn parse(args: &[String]) -> Result<(Walk, Expr), String> {
+///
+/// `here` is the shell's working directory, which a file an expression names (`-newer`)
+/// is relative to, not the process's (D10).
+fn parse(args: &[String], here: &Path) -> Result<(Walk, Expr), String> {
     let mut walk = Walk {
         starts: Vec::new(),
         min_depth: 0,
@@ -312,7 +315,11 @@ fn parse(args: &[String]) -> Result<(Walk, Expr), String> {
         }
     }
 
-    let mut parser = ExprParser { args: &rest, at: 0 };
+    let mut parser = ExprParser {
+        args: &rest,
+        at: 0,
+        here,
+    };
     let expr = parser.parse_or()?;
     if parser.at < rest.len() {
         return Err(std::format!("unexpected `{}'", rest[parser.at]));
@@ -344,6 +351,8 @@ fn has_action(expr: &Expr) -> bool {
 struct ExprParser<'a> {
     args: &'a [String],
     at: usize,
+    /// The shell's working directory, for a file an expression names.
+    here: &'a Path,
 }
 
 impl ExprParser<'_> {
@@ -483,7 +492,8 @@ impl ExprParser<'_> {
             }
             "-newer" => {
                 let value = self.argument_to(&token)?;
-                let when = std::fs::metadata(&value)
+                let file = self.here.join(cash_win32::path::accept_path(&value));
+                let when = std::fs::metadata(&file)
                     .and_then(|m| m.modified())
                     .map_err(|e| std::format!("{value}: {e}"))?;
                 Ok(Expr::Test(Test::Newer(when)))

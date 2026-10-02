@@ -1,4 +1,9 @@
 //! `install` builtin — copy files and set attributes for Makefiles and build systems.
+//!
+//! Every operand is a path the shell resolves, against its own working directory (D10):
+//! the process's is the folder cash was started in, so after `cd sub`, `install a b`
+//! looked for `a` in the wrong place (`REVIEW_REPORT.md` BI-07). Messages name the
+//! operands as they were written.
 
 use std::fs;
 use std::io::Write;
@@ -43,6 +48,21 @@ pub(crate) struct InstallCommand {
     operands: Vec<PathBuf>,
 }
 
+/// A path as it was written, and where the shell resolves it.
+struct Operand<'a> {
+    shown: &'a Path,
+    actual: PathBuf,
+}
+
+impl<'a> Operand<'a> {
+    fn new(path: &'a Path, shell: &cash_core::Shell<impl cash_core::ShellExtensions>) -> Self {
+        Self {
+            shown: path,
+            actual: shell.absolute_path(path),
+        }
+    }
+}
+
 impl builtins::Command for InstallCommand {
     type Error = cash_core::Error;
 
@@ -51,21 +71,30 @@ impl builtins::Command for InstallCommand {
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, Self::Error> {
         let mut stdout = context.stdout();
+        let operands: Vec<Operand<'_>> = self
+            .operands
+            .iter()
+            .map(|path| Operand::new(path, context.shell))
+            .collect();
 
         // 1. Directory creation mode (-d)
         if self.directory {
-            for dir in &self.operands {
-                if let Err(e) = fs::create_dir_all(dir) {
+            for dir in &operands {
+                if let Err(e) = fs::create_dir_all(&dir.actual) {
                     writeln!(
                         context.stderr(),
                         "install: cannot create directory '{}': {}",
-                        dir.display(),
+                        dir.shown.display(),
                         e
                     )?;
                     return Ok(ExecutionResult::general_error());
                 }
                 if self.verbose {
-                    writeln!(stdout, "install: creating directory '{}'", dir.display())?;
+                    writeln!(
+                        stdout,
+                        "install: creating directory '{}'",
+                        dir.shown.display()
+                    )?;
                 }
             }
             return Ok(ExecutionResult::success());
@@ -73,58 +102,53 @@ impl builtins::Command for InstallCommand {
 
         // 2. Target directory mode (-t DIR)
         if let Some(target_dir) = &self.target_directory {
+            let target = Operand::new(target_dir, context.shell);
             if self.create_leading {
-                let _ = fs::create_dir_all(target_dir);
+                let _ = fs::create_dir_all(&target.actual);
             }
-            if !target_dir.is_dir() {
+            if !target.actual.is_dir() {
                 writeln!(
                     context.stderr(),
                     "install: target directory '{}' is not a directory",
-                    target_dir.display()
+                    target.shown.display()
                 )?;
                 return Ok(ExecutionResult::general_error());
             }
 
-            for src in &self.operands {
-                let Some(file_name) = src.file_name() else {
-                    continue;
-                };
-                let dest = target_dir.join(file_name);
-                if let Err(e) = self.copy_one(src, &dest, &context) {
-                    writeln!(context.stderr(), "install: {e}")?;
-                    return Ok(ExecutionResult::general_error());
-                }
-            }
-            return Ok(ExecutionResult::success());
+            return self.copy_into(&operands, &target, &context);
         }
 
         // 3. Positional operands
-        if self.operands.len() < 2 {
+        let [sources @ .., last] = operands.as_slice() else {
+            return Ok(ExecutionResult::general_error());
+        };
+        let Some(first) = sources.first() else {
             writeln!(
                 context.stderr(),
                 "install: missing destination file operand after '{}'",
-                self.operands[0].display()
+                last.shown.display()
             )?;
             return Ok(ExecutionResult::general_error());
-        }
+        };
 
-        if self.operands.len() == 2 {
-            let src = &self.operands[0];
-            let dest_arg = &self.operands[1];
-
-            let dest = if dest_arg.is_dir() {
-                let file_name = src.file_name().unwrap_or(src.as_os_str());
-                dest_arg.join(file_name)
+        if sources.len() == 1 {
+            let (shown, actual) = if last.actual.is_dir() {
+                let file_name = first.shown.file_name().unwrap_or(first.shown.as_os_str());
+                (last.shown.join(file_name), last.actual.join(file_name))
             } else {
-                if self.create_leading {
-                    if let Some(parent) = dest_arg.parent() {
-                        let _ = fs::create_dir_all(parent);
-                    }
+                if self.create_leading
+                    && let Some(parent) = last.actual.parent()
+                {
+                    let _ = fs::create_dir_all(parent);
                 }
-                dest_arg.clone()
+                (last.shown.to_path_buf(), last.actual.clone())
             };
 
-            if let Err(e) = self.copy_one(src, &dest, &context) {
+            let dest = Operand {
+                shown: &shown,
+                actual,
+            };
+            if let Err(e) = self.copy_one(first, &dest, &context) {
                 writeln!(context.stderr(), "install: {e}")?;
                 return Ok(ExecutionResult::general_error());
             }
@@ -132,57 +156,77 @@ impl builtins::Command for InstallCommand {
         }
 
         // More than 2 operands: last one MUST be an existing directory
-        let (sources, dest_dir) = self.operands.split_at(self.operands.len() - 1);
-        let target_dir = &dest_dir[0];
-
-        if !target_dir.is_dir() {
+        if !last.actual.is_dir() {
             writeln!(
                 context.stderr(),
                 "install: target '{}' is not a directory",
-                target_dir.display()
+                last.shown.display()
             )?;
             return Ok(ExecutionResult::general_error());
         }
 
-        for src in sources {
-            let Some(file_name) = src.file_name() else {
-                continue;
-            };
-            let dest = target_dir.join(file_name);
-            if let Err(e) = self.copy_one(src, &dest, &context) {
-                writeln!(context.stderr(), "install: {e}")?;
-                return Ok(ExecutionResult::general_error());
-            }
-        }
-
-        Ok(ExecutionResult::success())
+        self.copy_into(sources, last, &context)
     }
 }
 
 impl InstallCommand {
+    /// Copies each of `sources` into the folder `target`, under its own name.
+    fn copy_into<SE: cash_core::ShellExtensions>(
+        &self,
+        sources: &[Operand<'_>],
+        target: &Operand<'_>,
+        context: &cash_core::ExecutionContext<'_, SE>,
+    ) -> Result<ExecutionResult, cash_core::Error> {
+        for src in sources {
+            let Some(file_name) = src.shown.file_name() else {
+                continue;
+            };
+            let dest = Operand {
+                shown: &target.shown.join(file_name),
+                actual: target.actual.join(file_name),
+            };
+            if let Err(e) = self.copy_one(src, &dest, context) {
+                writeln!(context.stderr(), "install: {e}")?;
+                return Ok(ExecutionResult::general_error());
+            }
+        }
+        Ok(ExecutionResult::success())
+    }
+
+    /// Copies `src` to `dest`; an error names the file it is about.
     fn copy_one<SE: cash_core::ShellExtensions>(
         &self,
-        src: &Path,
-        dest: &Path,
+        src: &Operand<'_>,
+        dest: &Operand<'_>,
         context: &cash_core::ExecutionContext<'_, SE>,
     ) -> std::io::Result<()> {
-        if self.compare && dest.exists() {
-            if let (Ok(src_bytes), Ok(dest_bytes)) = (fs::read(src), fs::read(dest)) {
+        if self.compare && dest.actual.exists() {
+            if let (Ok(src_bytes), Ok(dest_bytes)) = (fs::read(&src.actual), fs::read(&dest.actual))
+            {
                 if src_bytes == dest_bytes {
                     return Ok(());
                 }
             }
         }
 
-        fs::copy(src, dest)?;
+        fs::copy(&src.actual, &dest.actual).map_err(|e| {
+            std::io::Error::new(
+                e.kind(),
+                format!(
+                    "cannot install '{}' to '{}': {e}",
+                    src.shown.display(),
+                    dest.shown.display()
+                ),
+            )
+        })?;
 
         if let Some(mode_str) = &self.mode {
             // Apply read-only mode if mode specifies non-writable (e.g. 444 or 555)
             if mode_str == "444" || mode_str == "0444" || mode_str == "555" || mode_str == "0555" {
-                if let Ok(meta) = fs::metadata(dest) {
+                if let Ok(meta) = fs::metadata(&dest.actual) {
                     let mut perms = meta.permissions();
                     perms.set_readonly(true);
-                    let _ = fs::set_permissions(dest, perms);
+                    let _ = fs::set_permissions(&dest.actual, perms);
                 }
             }
         }
@@ -191,8 +235,8 @@ impl InstallCommand {
             writeln!(
                 context.stdout(),
                 "'{}' -> '{}'",
-                src.display(),
-                dest.display()
+                src.shown.display(),
+                dest.shown.display()
             )?;
         }
 

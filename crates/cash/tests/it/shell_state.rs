@@ -214,3 +214,34 @@ fn detach_starts_its_program_where_the_shell_is_and_lets_it_outlive_cash() {
     let out = run_in(scratch.path(), "detach nosuchcmd; echo \"rc=$?\"");
     assert_eq!(out.stdout, "rc=127", "{}", out.stderr);
 }
+
+#[test]
+fn install_and_find_newer_take_their_files_from_the_shells_folder() {
+    // After `cd sub`, both looked for their files in the folder cash was started in.
+    let scratch = Scratch::new("install-newer");
+    let sub = scratch.path().join("sub");
+    std::fs::create_dir(&sub).unwrap();
+    std::fs::write(sub.join("src.txt"), "data\n").unwrap();
+    std::fs::write(sub.join("old.txt"), "old\n").unwrap();
+    let old = std::fs::File::options()
+        .write(true)
+        .open(sub.join("old.txt"))
+        .unwrap();
+    old.set_modified(std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1))
+        .unwrap();
+    drop(old);
+
+    let out = run_in(
+        scratch.path(),
+        r#"cd sub && install src.txt dst.txt && cat dst.txt && find . -newer old.txt -name "*.txt" | sort"#,
+    );
+    assert_eq!(out.stdout, "data\n./dst.txt\n./src.txt", "{}", out.stderr);
+
+    let out = run_in(scratch.path(), "cd sub && install src.txt no/such/x");
+    assert!(
+        out.stderr
+            .starts_with("install: cannot install 'src.txt' to 'no/such/x':"),
+        "{}",
+        out.stderr
+    );
+}

@@ -55,14 +55,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ## Phase 9. The shell owns its state (R1)
 
-### 9.3 Builtins that start programs skip the shell's environment and folder
-
-`xargs`, `find -exec` and `nohup` run through the shell now
-(`cash_core::commands::run_for_builtin`). Left:
-
-- `install` operands and `find -newer FILE` are relative to the process folder: after
-  `cd sub`, `install a b` and `find . -newer ref` do not find their files. BI-07, BI-12.
-
 ### 9.4 PATHEXT, PATH and `umask` live in the process, not the shell
 
 - `export PATHEXT=.EXE` still finds `hello.cmd`; `PATHEXT=…;.FOO` does not find `z.foo`.
