@@ -55,20 +55,35 @@ later from elsewhere (`current` points at 1.2.1 since 2026-09-30 20:25). What is
   with `scoop config ignore_running_processes true`. The README (Install) and the
   manifest's notes (`packaging/scoop/cash.json`) say so.
 - Each version is installed in a folder of its own and `current` is a junction Scoop
-  points at the new one, so a running cash holds only its own version's files. Not yet
-  looked at: what Scoop does meanwhile with the old folder, `persist`, the shim and the
-  Windows Terminal fragment the installer writes.
+  points at the new one, so a running cash holds only its own version's files.
+- Tried on the user's install on 2026-10-02: `scoop update cash --force` with the option
+  set, while three were running: a cash from `apps\cash\current`, one started through
+  the shim, and a `sleep.exe` tool link. The update went through and all three kept
+  running. Scoop rewrote `current`, `cash.shim`, all 126 tool links (the running
+  `sleep.exe` too) and the Windows Terminal fragment.
+  - The one failure: Scoop could neither remove nor copy `shims\cash.exe` while the
+    shim-started cash ran. It printed two errors, then "installed successfully".
+  - That file is Scoop's generic shim, the same for every version. `cash.shim`, which
+    names the target, was rewritten, and the shim worked afterwards.
+  - The Terminal profile starts `apps\cash\current\cash.exe` itself, not the shim.
+- Scoop's check (`test_running_process`) is `Get-Process` filtered to paths under
+  `apps\cash\`. Only the global option turns it off: there is no manifest field and no
+  per-command flag. A cash started from a tool link in `persist\cash\bin` is not seen
+  by it.
+- PowerShell 7's manifest tells its users to update it from another shell. Nushell's
+  says nothing about it.
 - The bucket's Excavator picks a release up within hours (every few hours, by schedule),
   so `scoop update` right after a release can still offer the one before.
 
-Options to investigate, none decided:
+Options, none decided (**yours**):
 
-- Setting `ignore_running_processes` for the user, at install or on request: a setting
-  of the user's, so **yours** if it comes to that.
-- A builtin or a command of cash's (`cash update`?) that runs the update from a process
-  outside the app's folder, or once the shell that asked has exited.
-- How other shells installed with Scoop deal with it (PowerShell 7, Nushell, Git's bash).
-- Whether a manifest can tell Scoop which running processes to ignore.
+- Set `ignore_running_processes` on the user's machine and keep the manifest's note.
+  The try above is the case for it.
+- A command of cash's (`cash --update`?) that runs `scoop update cash` with the check
+  off for that one run: it sets the option and restores it afterwards, and an
+  interrupted run leaves it on. Or it runs the update from a helper outside the app's
+  folder once the shell that asked has exited.
+- Leave it to the notes: update from another shell, as PowerShell 7 does.
 
 ---
 
