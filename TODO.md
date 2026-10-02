@@ -55,14 +55,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ## Phase 9. The shell owns its state (R1)
 
-### 9.2 Programs run from the folder cash started in, not from the shell's
-
-`cd sub && ./tool.exe` runs `tool.exe` from the folder cash was started in, or reports
-"command not found" when there is none; Bash runs `sub/tool.exe`. `build_windows_command`
-finds `candidate` against the shell's folder, then gives `Command::new` the relative name
-(`crates/cash-core/src/commands.rs:420-425`, also `:1000`). Absolutize the command path
-once in `SimpleCommand::execute`. EXE-01.
-
 ### 9.3 Builtins that start programs skip the shell's environment and folder
 
 `xargs`, `find -exec`, `nohup`, `detach` and `start` spawn through

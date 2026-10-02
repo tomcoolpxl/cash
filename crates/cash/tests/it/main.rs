@@ -104,6 +104,8 @@ mod resolution_honesty;
 // `select`, a bash construct cash could not parse at all.
 mod select_clause;
 mod shebang_dispatch;
+// D10: the working directory, environment and PATH are the shell's, not the process's.
+mod shell_state;
 mod small_tools;
 mod ss;
 mod stat_builtin;

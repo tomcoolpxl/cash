@@ -418,8 +418,11 @@ fn build_windows_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
     }
 
     match cash_win32::resolve::classify(&candidate) {
+        // Started by the file found, in Windows' spelling: the program's own command line
+        // begins with it, and `cmd.exe` reads a `/` there as a switch, so
+        // `C:/Windows/System32/cmd.exe /c …` failed with "cannot be created".
         cash_win32::resolve::Dispatch::Native(_) => {
-            let mut c = std::process::Command::new(command_name);
+            let mut c = std::process::Command::new(cash_win32::path::to_backslash(&candidate));
             c.arg0(argv0);
             push_native_args(&mut c, &candidate, args);
             Ok((c, None))
@@ -996,6 +999,18 @@ impl<'a, SE: extensions::ShellExtensions> SimpleCommand<'a, SE> {
     fn execute_via_external(self, path: &Path) -> Result<ExecutionSpawnResult, error::Error> {
         let mut shell = self.shell;
         let last_arg = Self::take_last_arg(&self.args);
+
+        // cash (D10): a relative path — `./build.exe`, `sub/tool`, a relative `PATH`
+        // entry — is the shell's working directory's, which is not the process's: cash
+        // never changes its own. Windows resolves a relative program name against the
+        // process's folder, so `cd sub && ./tool.exe` ran the `tool.exe` of the folder cash
+        // started in, or found none.
+        let path = if path.is_relative() {
+            shell.absolute_path(path)
+        } else {
+            path.to_path_buf()
+        };
+        let path = path.as_path();
 
         if path.is_file() {
             let dispatch = cash_win32::resolve::classify(path);
