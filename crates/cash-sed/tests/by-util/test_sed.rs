@@ -2310,3 +2310,26 @@ fn ranges_ended_by_a_line_number_match_gnu_sed() {
             .stdout_is(expected);
     }
 }
+
+/// Escaped anchors in a literal pattern, compared with GNU sed 4.9: the fast path for
+/// literal patterns removed the escapes before deciding about anchors, so `\$` anchored
+/// (`REVIEW_REPORT.md` TXT-10).
+#[test]
+fn escaped_anchors_in_a_literal_pattern_are_characters() {
+    let cases = [
+        ("s/a\\$/X/", "a$b\n", "Xb\n"),
+        ("s/a\\$/X/", "ba\n", "ba\n"),
+        ("s/\\^a/X/", "^ab\n", "Xb\n"),
+        ("s/^a/X/", "ab\n", "Xb\n"),
+        ("s/a$/X/", "ba\n", "bX\n"),
+        ("s/a\\\\$/X/", "a\\\n", "X\n"),
+        ("s/x^y/Z/", "x^y\n", "Z\n"),
+    ];
+    for (script, input, expected) in cases {
+        new_ucmd!()
+            .arg(script)
+            .pipe_in(input)
+            .succeeds()
+            .stdout_is(expected);
+    }
+}

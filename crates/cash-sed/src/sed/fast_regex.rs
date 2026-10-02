@@ -120,6 +120,35 @@ impl LiteralMatcher {
         }
     }
 
+    /// Construct a matcher from a literal pattern as written, escapes and all.
+    ///
+    /// Whether it is anchored is decided before its escapes are removed: `\$` and `\^` are
+    /// the characters, not anchors. Deciding after turned `s/a\$/X/` into `s/a$/X/`, which
+    /// left `a$b` alone and changed `ba` (`REVIEW_REPORT.md` TXT-10).
+    pub fn from_pattern(pattern: &[u8]) -> Self {
+        let begin = pattern.first() == Some(&b'^');
+        let body = if begin { &pattern[1..] } else { pattern };
+        // A `$` is an anchor only with an even number of backslashes before it.
+        let backslashes_before_last = body
+            .iter()
+            .rev()
+            .skip(1)
+            .take_while(|&&byte| byte == b'\\')
+            .count();
+        let end = body.last() == Some(&b'$') && backslashes_before_last % 2 == 0;
+        let body = if end { &body[..body.len() - 1] } else { body };
+        let match_type = match (begin, end) {
+            (true, true) => AnchoredMatch::Both,
+            (true, false) => AnchoredMatch::Begin,
+            (false, true) => AnchoredMatch::End,
+            (false, false) => AnchoredMatch::Free,
+        };
+        LiteralMatcher {
+            needle: remove_escapes(body),
+            match_type,
+        }
+    }
+
     /// Returns the start index of a match, if any
     fn anchored_find(&self, haystack: &[u8]) -> Option<usize> {
         let nlen = self.needle.len();
@@ -352,8 +381,7 @@ impl Regex {
                 ))
             }
         } else {
-            let pattern = remove_escapes(pattern);
-            Ok(Self::Literal(LiteralMatcher::new(pattern)))
+            Ok(Self::Literal(LiteralMatcher::from_pattern(pattern)))
         }
     }
 
