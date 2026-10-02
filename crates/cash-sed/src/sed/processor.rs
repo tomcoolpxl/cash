@@ -1053,6 +1053,9 @@ pub fn process_all_files(
             output.write_bytes(&pending)?;
         }
 
+        // The input is closed before an in-place edit replaces it: Windows does not move
+        // one file over another that is still open.
+        drop(reader);
         in_place.end()?;
 
         if context.stop_processing {

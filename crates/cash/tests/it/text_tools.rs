@@ -75,3 +75,34 @@ fn plain_getline_reads_on_into_the_next_file_as_gawk_does() {
         assert_eq!(out.stdout, expected, "{script}: {}", out.stderr);
     }
 }
+
+#[test]
+fn sed_in_place_replaces_a_file_in_one_move_and_keeps_its_attributes() {
+    // The original was deleted before the edit was moved in, so a failed move lost both
+    // (REVIEW_REPORT.md TXT-15); a read-only file came out writable.
+    let scratch = crate::common::Scratch::new("sed-in-place");
+    let file = scratch.path().join("ro.txt");
+    std::fs::write(&file, "a\r\nb\r\n").unwrap();
+    let mut permissions = std::fs::metadata(&file).unwrap().permissions();
+    permissions.set_readonly(true);
+    std::fs::set_permissions(&file, permissions).unwrap();
+
+    let out = crate::common::run_in(scratch.path(), "sed -i 's/a/A/' ro.txt; echo \"rc=$?\"");
+    let after = std::fs::read(&file).unwrap();
+    let read_only = std::fs::metadata(&file).unwrap().permissions().readonly();
+    let mut permissions = std::fs::metadata(&file).unwrap().permissions();
+    permissions.set_readonly(false);
+    std::fs::set_permissions(&file, permissions).unwrap();
+
+    assert_eq!(out.stdout, "rc=0", "{}", out.stderr);
+    // D49: CRLF lines stay CRLF.
+    assert_eq!(after, b"A\r\nb\r\n");
+    assert!(read_only, "the edited file lost its read-only attribute");
+    let leftovers: Vec<_> = std::fs::read_dir(scratch.path())
+        .unwrap()
+        .filter_map(Result::ok)
+        .map(|entry| entry.file_name())
+        .filter(|name| name != "ro.txt")
+        .collect();
+    assert!(leftovers.is_empty(), "left behind: {leftovers:?}");
+}

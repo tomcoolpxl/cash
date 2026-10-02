@@ -129,31 +129,54 @@ impl InPlace {
                     backup_path.quote()
                 )
             })?;
-        } else {
-            // On Windows delete the original file for temp.persist to work
-            if orig.exists() {
-                fs::remove_file(&orig).map_err_context(|| {
-                    format!("error removing original input file {}", orig.quote())
-                })?;
-            }
         }
 
-        // Atomically replace the original
+        // cash: the edited file replaces the original in one move (`persist` replaces an
+        // existing file on Windows too), so there is no moment with neither. The original
+        // used to be deleted first, and a failed move then dropped the temporary file as
+        // well, losing both (`REVIEW_REPORT.md` TXT-15). A read-only original cannot be
+        // replaced, so the attribute is lifted for the move and given to the new file, as
+        // GNU sed gives it the original's mode.
+        let read_only = fs::metadata(&orig).is_ok_and(|meta| meta.permissions().readonly());
+        if read_only {
+            set_read_only(&orig, false);
+        }
         match temp.persist(&orig) {
-            Ok(_) => {}
+            Ok(_) => {
+                if read_only {
+                    set_read_only(&orig, true);
+                }
+            }
             Err(e) => {
+                if read_only {
+                    set_read_only(&orig, true);
+                }
+                // Keep the edit rather than drop it with the error, and say where it is.
+                let kept = e
+                    .file
+                    .keep()
+                    .map_or_else(|_| PathBuf::new(), |(_, kept)| kept);
                 return Err(UIoError::new(
                     e.error.kind(),
                     format!(
-                        "error persisting temporary file {} to {}",
-                        e.file.path().quote(),
-                        orig.quote()
+                        "error replacing {} with the edited file, which is kept at {}",
+                        orig.quote(),
+                        kept.quote()
                     ),
                 ));
             }
         }
 
         Ok(())
+    }
+}
+
+/// Sets or clears the read-only attribute of `path`, as far as it can.
+fn set_read_only(path: &std::path::Path, read_only: bool) {
+    if let Ok(meta) = fs::metadata(path) {
+        let mut permissions = meta.permissions();
+        permissions.set_readonly(read_only);
+        let _ = fs::set_permissions(path, permissions);
     }
 }
 
