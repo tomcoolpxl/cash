@@ -213,6 +213,9 @@ struct ItemInfo {
     executable: OnceCell<bool>,
     /// A device's numbers, major and minor, which `-l` shows in place of the size.
     device: Option<(u32, u32)>,
+    /// What `-lF` marks a link's target with, when its kind is known beyond a folder:
+    /// `|` for a descriptor's name whose descriptor is a pipe.
+    target_mark: Option<char>,
 }
 
 impl ItemInfo {
@@ -808,14 +811,28 @@ impl LsCommand {
             s.push(' ');
         }
         s.push_str(&item.name);
-        if let Some(indicator) = self.indicator(item) {
-            s.push(indicator);
-        }
-        if let Some(ref target) = item.symlink_target {
-            s.push_str(" -> ");
-            s.push_str(target);
-        }
+        self.push_marks(&mut s, item);
         s
+    }
+
+    /// What follows a name: its `-F` mark, or in the long format a link's target and the
+    /// target's mark, as GNU ls writes them. Outside the long format a link shows no
+    /// target: `link@` with `-F`, `link` without.
+    fn push_marks(&self, s: &mut String, item: &ItemInfo) {
+        match &item.symlink_target {
+            Some(target) if self.long => {
+                s.push_str(" -> ");
+                s.push_str(target);
+                if self.classify {
+                    let mark = match item.target {
+                        Some((_, true)) => Some('/'),
+                        _ => item.target_mark,
+                    };
+                    s.extend(mark);
+                }
+            }
+            _ => s.extend(self.indicator(item)),
+        }
     }
 
     fn format_name(&self, item: &ItemInfo, look: &Look) -> String {
@@ -836,15 +853,7 @@ impl LsCommand {
             None => shown,
         });
 
-        if let Some(indicator) = self.indicator(item) {
-            s.push(indicator);
-        }
-
-        if let Some(ref target) = item.symlink_target {
-            s.push_str(" -> ");
-            s.push_str(target);
-        }
-
+        self.push_marks(&mut s, item);
         s
     }
 }
@@ -1124,6 +1133,7 @@ fn inspect_dot(dir_path: &Path, name: &str, long: bool) -> Option<ItemInfo> {
         target: None,
         executable: OnceCell::new(),
         device: None,
+        target_mark: None,
     };
     if long {
         let subdirs = cash_win32::fs::count_subdirectories(dir_path);
@@ -1158,14 +1168,18 @@ fn dev_entry<SE: cash_core::ShellExtensions>(
         target: None,
         executable: OnceCell::new(),
         device: name.numbers(),
+        target_mark: None,
     };
     if let cash_win32::devices::DevName::Descriptor(number) = name {
         let fd = cash_core::ShellFd::try_from(number).ok()?;
-        context.try_fd(fd)?;
+        let open = context.try_fd(fd)?;
         item.kind = EntryKind::Symlink;
         item.permissions = String::from("lrwxrwxrwx");
         item.symlink_target = Some(std::format!("/proc/self/fd/{number}"));
         item.target = Some((true, false));
+        if matches!(open.kind(), cash_core::openfiles::FileKind::Pipe { .. }) {
+            item.target_mark = Some('|');
+        }
     }
     Some(item)
 }
@@ -1222,6 +1236,7 @@ fn inspect_path(
         target,
         executable: OnceCell::new(),
         device: None,
+        target_mark: None,
     };
     if long {
         item.links = cash_win32::fs::file_link_count(path, &symlink_metadata);

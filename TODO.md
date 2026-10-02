@@ -30,20 +30,8 @@ trust its runs, then by what a user notices most.
 
 | Phase | What | Items |
 | --- | --- | --- |
-| 4 | The `/dev` names, descriptors and the bundled tools | 4.8 |
 | 5 | Jobs, `wait`, and the tools beside them | 5.1 to 5.3 |
 | 6 | Updating cash | 6.1 |
-
----
-
-## Phase 4. The `/dev` names, descriptors and the bundled tools
-
-### 4.8 `ls` shows a link's target outside the long format
-
-Found in 4.7 (2026-10-02). `ls link` and `ls -F link` print `link -> target`, as `ls -l`
-does; GNU's prints the target only in the long format: `link` and `link@`. The name is
-built in `format_name` and `format_name_plain` in `crates/cash-builtins/src/ls.rs`,
-which add the target whenever there is one.
 
 ---
 

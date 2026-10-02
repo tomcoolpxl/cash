@@ -511,3 +511,25 @@ stat /dev/fd/9; echo "stat: $?""#,
          stat: cannot stat '/dev/fd/9': No such file or directory\n"
     );
 }
+
+/// `ls` showed a link's target outside the long format, `link -> target` and with `-F`
+/// `link@ -> target`; GNU shows it only with `-l`, and there marks the target, not the name
+/// (TODO 4.8). As Git Bash 5.3.15 shows its own `/dev/stdin`, standard input a pipe.
+#[test]
+fn ls_shows_a_links_target_only_in_the_long_format() {
+    let left = cash_given(
+        "x\n",
+        r#"ls /dev/stdin; ls -F /dev/stdin
+ls -lF /dev/stdin | awk '{ print $(NF-2), $(NF-1), $NF }'
+ls -l /dev/stdin | awk '{ print $(NF-2), $(NF-1), $NF }'"#,
+    );
+
+    assert_eq!(
+        left.stdout,
+        "/dev/stdin\n\
+         /dev/stdin@\n\
+         /dev/stdin -> /proc/self/fd/0|\n\
+         /dev/stdin -> /proc/self/fd/0\n"
+    );
+    assert_eq!(left.stderr, "");
+}
