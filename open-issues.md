@@ -209,6 +209,10 @@ One that fails is run again on an idle machine and judged from that. Seen so far
   `fuser_lsof::fuser_finds_tcp_and_udp_owners`, `cash-sed` `test_sed::pi`, two ConPTY
   tests, and `cash_leaves_the_screen_bash_leaves` again (100 and 135 s; 65 s and passing
   alone). Each passed alone.
+- Later on 2026-10-02, in the second of two full runs at 8 threads (227 s, against 176 s
+  for the first): `bash_gaps::jobs_and_wait_answer_as_bash_53_does`, timed out at 15 s.
+  It runs about 16 scripts in a row with half-second sleeps, and alone it took 7.5 s in
+  each of five runs.
 
 ---
 

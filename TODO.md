@@ -20,7 +20,8 @@ for working through it.
   has passed on the commit (RELEASING.md). So far: 1.3.0 is what was on `main` on
   2026-09-30, 1.3.1 the test suite (phase 1), 1.3.2 Ctrl-C everywhere (phase 2), 1.3.3
   process substitution (phase 3), 1.3.4 the `/dev` names and the bundled tools (phase 4),
-  1.3.5 jobs, `wait` and the tools beside them (phase 5).
+  1.3.5 jobs, `wait` and the tools beside them (phase 5), 1.3.6 the Tab menu opening on
+  the history hint's candidate (asked by the user on 2026-10-02, outside the phases).
 - An item says what was seen and what Bash does; a cause only where it was looked for.
   Longer notes on a thing that stays open belong in `open-issues.md`.
 
