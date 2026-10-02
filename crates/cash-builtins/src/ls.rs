@@ -190,6 +190,8 @@ enum EntryKind {
     Dir,
     File,
     Symlink,
+    /// A character device: `/dev/null`, `/dev/tty`, `/dev/zero` and the like (D7).
+    CharDevice,
 }
 
 struct ItemInfo {
@@ -209,6 +211,8 @@ struct ItemInfo {
     target: Option<(bool, bool)>,
     /// Whether the file runs: decided once, since it may read the file's first bytes.
     executable: OnceCell<bool>,
+    /// A device's numbers, major and minor, which `-l` shows in place of the size.
+    device: Option<(u32, u32)>,
 }
 
 impl ItemInfo {
@@ -301,6 +305,22 @@ impl builtins::Command for LsCommand {
             // `.` (and every relative name) silently lists the directory cash was
             // launched from.
             let path = context.shell.absolute_path(Path::new(path_str));
+            // cash (D7): a `/dev` name is no file Windows has; it is listed as Git Bash
+            // lists it, or, for a descriptor that is not open, not at all.
+            if let Some(name) = cash_win32::devices::dev_name(&path) {
+                if let Some(item) = dev_entry(&context, name, &path, path_str) {
+                    file_items.push(item);
+                } else {
+                    writeln!(
+                        context.stderr(),
+                        "{}: cannot access '{}': No such file or directory",
+                        context.command_name,
+                        path_str
+                    )?;
+                    had_error = true;
+                }
+                continue;
+            }
             if !path.exists() && !path.is_symlink() {
                 writeln!(
                     context.stderr(),
@@ -644,24 +664,19 @@ impl LsCommand {
             .unwrap_or(1);
         let max_owner_len = items.iter().map(|i| i.owner.len()).max().unwrap_or(1);
         let max_group_len = items.iter().map(|i| i.group.len()).max().unwrap_or(1);
-        let max_size_len = items
-            .iter()
-            .map(|i| {
-                if self.human_readable {
-                    format_human_size(i.size).len()
-                } else {
-                    i.size.to_string().len()
-                }
-            })
-            .max()
-            .unwrap_or(1);
-
-        for (index, item) in items.iter().enumerate() {
-            let size_str = if self.human_readable {
+        let size_text = |item: &ItemInfo| {
+            if let Some((major, minor)) = item.device {
+                std::format!("{major}, {minor}")
+            } else if self.human_readable {
                 format_human_size(item.size)
             } else {
                 item.size.to_string()
-            };
+            }
+        };
+        let max_size_len = items.iter().map(|i| size_text(i).len()).max().unwrap_or(1);
+
+        for (index, item) in items.iter().enumerate() {
+            let size_str = size_text(item);
             let date_str = format_date(item.mtime);
             let display_name = self.format_name(item, look);
             let prefix = prefixes
@@ -772,6 +787,7 @@ impl LsCommand {
             EntryKind::Dir => Some('/'),
             EntryKind::Symlink => Some('@'),
             EntryKind::File => item.is_executable().then_some('*'),
+            EntryKind::CharDevice => None,
         }
     }
 
@@ -844,6 +860,7 @@ fn style_for(colors: &lscolors::LsColors, item: &ItemInfo) -> Option<nu_ansi_ter
         (EntryKind::Symlink, _) => Indicator::SymbolicLink,
         (EntryKind::File, _) if item.is_executable() => Indicator::ExecutableFile,
         (EntryKind::File, _) => Indicator::RegularFile,
+        (EntryKind::CharDevice, _) => Indicator::CharacterDevice,
     };
     let style = if indicator == Indicator::RegularFile {
         colors
@@ -966,6 +983,10 @@ fn icon_for(item: &ItemInfo) -> &'static str {
     let is_dir_link = matches!(item.target, Some((_, true)));
     if item.kind == EntryKind::Symlink {
         return if is_dir_link { "\u{f482}" } else { "\u{f481}" };
+    }
+    if item.kind == EntryKind::CharDevice {
+        // lsd's `device-char`.
+        return "\u{e601}";
     }
     let name = item.name.to_lowercase();
     if let Some(icon) = lookup(ls_icon_table::BY_NAME, &name) {
@@ -1102,11 +1123,49 @@ fn inspect_dot(dir_path: &Path, name: &str, long: bool) -> Option<ItemInfo> {
         symlink_target: None,
         target: None,
         executable: OnceCell::new(),
+        device: None,
     };
     if long {
         let subdirs = cash_win32::fs::count_subdirectories(dir_path);
         item.links = 2 + u32::try_from(subdirs).unwrap_or(0);
         fill_long(&mut item, &metadata);
+    }
+    Some(item)
+}
+
+/// The entry for a `/dev` name (D7), as Git Bash 5.3 lists it: a device as a character
+/// device, `crw-rw-rw-`, with Linux's numbers where the size goes, and a descriptor's
+/// name as a link to `/proc/self/fd/N`, if the descriptor is open. Owned by the user, and
+/// as new as now.
+fn dev_entry<SE: cash_core::ShellExtensions>(
+    context: &cash_core::ExecutionContext<'_, SE>,
+    name: cash_win32::devices::DevName,
+    path: &Path,
+    display_name: &str,
+) -> Option<ItemInfo> {
+    let mut item = ItemInfo {
+        name: display_name.to_string(),
+        path: path.to_path_buf(),
+        kind: EntryKind::CharDevice,
+        permissions: String::from("crw-rw-rw-"),
+        links: 1,
+        owner: cash_win32::fs::current_user(),
+        group: cash_win32::fs::current_user(),
+        size: 0,
+        mtime: SystemTime::now(),
+        attributes: 0,
+        symlink_target: None,
+        target: None,
+        executable: OnceCell::new(),
+        device: name.numbers(),
+    };
+    if let cash_win32::devices::DevName::Descriptor(number) = name {
+        let fd = cash_core::ShellFd::try_from(number).ok()?;
+        context.try_fd(fd)?;
+        item.kind = EntryKind::Symlink;
+        item.permissions = String::from("lrwxrwxrwx");
+        item.symlink_target = Some(std::format!("/proc/self/fd/{number}"));
+        item.target = Some((true, false));
     }
     Some(item)
 }
@@ -1162,6 +1221,7 @@ fn inspect_path(
         symlink_target,
         target,
         executable: OnceCell::new(),
+        device: None,
     };
     if long {
         item.links = cash_win32::fs::file_link_count(path, &symlink_metadata);

@@ -388,8 +388,17 @@ every other path on:
   drive, which is also what the standard library makes of `/dev/stdin` before it opens
   it (`\\?\C:\dev\stdin`). `C:/src/dev/null` is a file.
 
-A program on `PATH` still gets the name as written and fails on it. cash's own `ls` and
-`stat`, which run in the shell, are not covered by this; they are TODO 4.7.
+A program on `PATH` still gets the name as written and fails on it.
+
+**`ls` and `stat` show them as Git Bash does (2026-10-02).** cash's own, which run in
+the shell, asked the filesystem: "No such file or directory" for `/dev/null`. A device
+is a character special file, `crw-rw-rw-`, owned by the user, with Linux's numbers
+(`1, 3` for `/dev/null`) where `ls -l` shows a size and in `stat`'s `%t`, `%T` and
+"Device type". A descriptor's name is a link to `/proc/self/fd/N`, and `stat -L` says
+what is open under the number: a fifo, a file, a device. One whose descriptor is not
+open is no file. Every one of them, the shell's redirections and file tests, `ls`,
+`stat` and the bundled tools, knows the names by one rule,
+`cash_win32::devices::dev_name`.
 
 ### D8 — Command resolution is cash's own
 

@@ -151,6 +151,116 @@ unsafe fn original<F: Copy>(original: &AtomicUsize) -> F {
     unsafe { std::mem::transmute_copy::<usize, F>(&address) }
 }
 
+/// A name under `/dev`, as the shell's redirections, its file tests, `ls`, `stat` and the
+/// bundled tools all take it (D7): see [`dev_name`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DevName {
+    /// `/dev/null`.
+    Null,
+    /// `/dev/tty`, the console.
+    Tty,
+    /// `/dev/zero`.
+    Zero,
+    /// `/dev/random`.
+    Random,
+    /// `/dev/urandom`.
+    Urandom,
+    /// `/dev/stdin` (0), `/dev/stdout` (1), `/dev/stderr` (2) or `/dev/fd/N`: a
+    /// descriptor's name.
+    Descriptor(u32),
+}
+
+impl DevName {
+    /// The device numbers Linux gives the device, major and minor, which `ls -l` and
+    /// `stat` show; none for a descriptor's name, which is a link.
+    #[must_use]
+    pub const fn numbers(self) -> Option<(u32, u32)> {
+        match self {
+            Self::Null => Some((1, 3)),
+            Self::Tty => Some((5, 0)),
+            Self::Zero => Some((1, 5)),
+            Self::Random => Some((1, 8)),
+            Self::Urandom => Some((1, 9)),
+            Self::Descriptor(_) => None,
+        }
+    }
+
+    /// The endless input the device is, if it is one.
+    #[must_use]
+    pub const fn endless(self) -> Option<Endless> {
+        match self {
+            Self::Zero => Some(Endless::Zeros),
+            Self::Random | Self::Urandom => Some(Endless::Random),
+            _ => None,
+        }
+    }
+}
+
+/// The `/dev` name `path` is, if it is one.
+///
+/// `\dev` at the root, after any prefix (a drive, `\\?\C:`, a share), either separator,
+/// and one name under it, or `fd` and a number: as a script writes it, `/dev/null`, or as
+/// resolving it against a folder leaves it, `C:/dev/null`, or as the standard library
+/// hands it to `CreateFileW`, `\\?\C:\dev\null`. Anywhere else (`C:/src/dev/null`), or
+/// deeper, it is a file like any other. With a separator after it, `/dev/null/`, it names
+/// a folder, which none of them is, as in Bash. The names are as Bash's own redirections
+/// take them, case and all.
+#[must_use]
+pub fn dev_name(path: &std::path::Path) -> Option<DevName> {
+    use std::path::Component;
+
+    if path.as_os_str().to_string_lossy().ends_with(['/', '\\']) {
+        return None;
+    }
+    let mut components = path.components().peekable();
+    components.next_if(|component| matches!(component, Component::Prefix(_)));
+    match (components.next(), components.next()) {
+        (Some(Component::RootDir), Some(Component::Normal(dev))) if dev == "dev" => {}
+        _ => return None,
+    }
+    let first = normal(components.next())?;
+    let second = components.next();
+    if second.is_none() {
+        return match first {
+            "null" => Some(DevName::Null),
+            "tty" => Some(DevName::Tty),
+            "stdin" => Some(DevName::Descriptor(0)),
+            "stdout" => Some(DevName::Descriptor(1)),
+            "stderr" => Some(DevName::Descriptor(2)),
+            "zero" => Some(DevName::Zero),
+            "random" => Some(DevName::Random),
+            "urandom" => Some(DevName::Urandom),
+            _ => None,
+        };
+    }
+    let number = normal(second)?;
+    if first != "fd" || components.next().is_some() {
+        return None;
+    }
+    descriptor_number(number).map(DevName::Descriptor)
+}
+
+/// The name `component` is, if it is a plain one.
+fn normal(component: Option<std::path::Component<'_>>) -> Option<&str> {
+    match component {
+        Some(std::path::Component::Normal(name)) => name.to_str(),
+        _ => None,
+    }
+}
+
+/// The descriptor `name` is the number of, as a listing of `/dev/fd` would write it:
+/// digits and nothing else, and no zero in front. `+3`, `-1` and `03` are numbers to
+/// `parse` and no such names, in Bash either.
+fn descriptor_number(name: &str) -> Option<u32> {
+    let digits = !name.is_empty() && name.bytes().all(|byte| byte.is_ascii_digit());
+    let zero_in_front = name.len() > 1 && name.starts_with('0');
+    if digits && !zero_in_front {
+        name.parse().ok()
+    } else {
+        None
+    }
+}
+
 /// What a `/dev` name is in a tool's process.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Device {
@@ -167,61 +277,17 @@ enum Device {
 }
 
 /// The device `name`, a path as `CreateFileW` is given it, is, if it is one.
-///
-/// By the shell's rule (`names_under_dev` in cash-core): `\dev` at the root, after any
-/// prefix (a drive, `\\?\C:`, a share), and one name under it, or `fd` and a number. A
-/// separator after the name makes it a folder, which no device is.
 fn device(name: &str) -> Option<Device> {
-    use std::path::{Component, Path};
-
-    if name.ends_with(['/', '\\']) {
-        return None;
-    }
-    let mut components = Path::new(name).components().peekable();
-    components.next_if(|component| matches!(component, Component::Prefix(_)));
-    match (components.next(), components.next()) {
-        (Some(Component::RootDir), Some(Component::Normal(dev))) if dev == "dev" => {}
-        _ => return None,
-    }
-    let first = normal(components.next())?;
-    let second = components.next();
-    if second.is_none() {
-        return match first {
-            "null" => Some(Device::Null),
-            "tty" => Some(Device::Tty),
-            "stdin" => Some(Device::Std(STD_INPUT_HANDLE)),
-            "stdout" => Some(Device::Std(STD_OUTPUT_HANDLE)),
-            "stderr" => Some(Device::Std(STD_ERROR_HANDLE)),
-            other => Endless::named(other).map(Device::Endless),
-        };
-    }
-    let number = normal(second)?;
-    if first != "fd" || components.next().is_some() {
-        return None;
-    }
-    descriptor(number)
-}
-
-/// The name `component` is, if it is a plain one.
-fn normal(component: Option<std::path::Component<'_>>) -> Option<&str> {
-    match component {
-        Some(std::path::Component::Normal(name)) => name.to_str(),
-        _ => None,
-    }
-}
-
-/// The device `/dev/fd/<number>` is: a number as a listing of `/dev/fd` would write it,
-/// digits and no zero in front, as the shell takes it.
-fn descriptor(number: &str) -> Option<Device> {
-    let digits = !number.is_empty() && number.bytes().all(|byte| byte.is_ascii_digit());
-    if !digits || (number.len() > 1 && number.starts_with('0')) {
-        return None;
-    }
-    Some(match number {
-        "0" => Device::Std(STD_INPUT_HANDLE),
-        "1" => Device::Std(STD_OUTPUT_HANDLE),
-        "2" => Device::Std(STD_ERROR_HANDLE),
-        _ => Device::Missing,
+    Some(match dev_name(std::path::Path::new(name))? {
+        DevName::Null => Device::Null,
+        DevName::Tty => Device::Tty,
+        name @ (DevName::Zero | DevName::Random | DevName::Urandom) => {
+            Device::Endless(name.endless()?)
+        }
+        DevName::Descriptor(0) => Device::Std(STD_INPUT_HANDLE),
+        DevName::Descriptor(1) => Device::Std(STD_OUTPUT_HANDLE),
+        DevName::Descriptor(2) => Device::Std(STD_ERROR_HANDLE),
+        DevName::Descriptor(_) => Device::Missing,
     })
 }
 

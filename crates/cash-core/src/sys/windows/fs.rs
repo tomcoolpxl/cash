@@ -223,71 +223,17 @@ fn open_console(access: crate::sys::fs::Access) -> std::io::Result<std::fs::File
         .map_err(|err| std::io::Error::new(err.kind(), "No such device or address"))
 }
 
-/// The names `path` goes by under `/dev`, if that is where it is: `null` for `/dev/null`,
-/// and `fd` then `3` for `/dev/fd/3`.
-///
-/// A path is there as a script writes it, `/dev/null`, or as resolving that against a
-/// working directory leaves it, `C:/dev/null`. Anywhere else (`C:/src/dev/null`), or
-/// deeper than those two names, it is a file like any other. With a separator after it,
-/// `/dev/null/`, it names a folder, which none of them is: Bash says "Not a directory".
-fn names_under_dev(path: &Path) -> Option<(&str, Option<&str>)> {
-    use std::path::Component;
-
-    if path.as_os_str().to_string_lossy().ends_with(['/', '\\']) {
-        return None;
-    }
-    let mut components = path.components().peekable();
-    components.next_if(|component| matches!(component, Component::Prefix(_)));
-    match (components.next(), components.next()) {
-        (Some(Component::RootDir), Some(Component::Normal(dev))) if dev == "dev" => {}
-        _ => return None,
-    }
-    match (components.next(), components.next(), components.next()) {
-        (Some(Component::Normal(name)), None, _) => Some((name.to_str()?, None)),
-        (Some(Component::Normal(name)), Some(Component::Normal(inner)), None) => {
-            Some((name.to_str()?, Some(inner.to_str()?)))
-        }
-        _ => None,
-    }
-}
-
-/// The device `path` names under `/dev`, if it names one: `null` for `/dev/null`.
-///
-/// See `names_under_dev` for the spellings. One level deeper (`/dev/fd/3`) it is no
-/// device: that is a descriptor of the shell's, which `named_descriptor` tells.
-fn device_name(path: &Path) -> Option<&str> {
-    match names_under_dev(path)? {
-        (name, None) => Some(name),
-        (_, Some(_)) => None,
-    }
-}
-
 /// The descriptor of the shell's that `path` names, if it names one: 0, 1 and 2 for
 /// `/dev/stdin`, `/dev/stdout` and `/dev/stderr`, and N for `/dev/fd/N`.
 ///
 /// These are no files here. Whoever opens one is given the descriptor the shell has
 /// under that number at the time, which a redirection may have changed from the one
-/// the process started with. See `names_under_dev` for the spellings.
+/// the process started with. The spellings are `cash_win32::devices::dev_name`'s, which
+/// the bundled tools, `ls` and `stat` share.
 pub fn named_descriptor(path: &Path) -> Option<ShellFd> {
-    match names_under_dev(path)? {
-        ("stdin", None) => Some(OpenFiles::STDIN_FD),
-        ("stdout", None) => Some(OpenFiles::STDOUT_FD),
-        ("stderr", None) => Some(OpenFiles::STDERR_FD),
-        ("fd", Some(number)) => descriptor_number(number),
+    match cash_win32::devices::dev_name(path)? {
+        cash_win32::devices::DevName::Descriptor(number) => ShellFd::try_from(number).ok(),
         _ => None,
-    }
-}
-
-/// The descriptor `name` is the number of, written as a listing of `/dev/fd` would have
-/// it: digits and nothing else, and no zero in front. `+3`, `-1` and `03` are numbers to
-/// `parse` and no such names, in Bash either.
-fn descriptor_number(name: &str) -> Option<ShellFd> {
-    let digits_only = name.bytes().all(|byte| byte.is_ascii_digit());
-    let zero_in_front = name.len() > 1 && name.starts_with('0');
-    if digits_only && !zero_in_front {
-        name.parse().ok()
-    } else {
-        None
     }
 }
 
@@ -301,28 +247,27 @@ pub fn try_open_special_file(
     access: crate::sys::fs::Access,
 ) -> Option<Result<std::fs::File, std::io::Error>> {
     use crate::sys::fs::Access;
+    use cash_win32::devices::DevName;
 
-    let name = device_name(path)?;
-    if let Some(endless) = cash_win32::endless::Endless::named(name) {
+    let name = cash_win32::devices::dev_name(path)?;
+    if let Some(endless) = name.endless() {
         return Some(match access {
             Access::Read | Access::ReadWrite => cash_win32::endless::open(endless),
             Access::Write => open_null_file().map_err(std::io::Error::other),
         });
     }
     match name {
-        "null" => Some(open_null_file().map_err(std::io::Error::other)),
-        "tty" => Some(open_console(access)),
+        DevName::Null => Some(open_null_file().map_err(std::io::Error::other)),
+        DevName::Tty => Some(open_console(access)),
         _ => None,
     }
 }
 
 /// Whether [`try_open_special_file`] handles `path` rather than leaving it to be opened
-/// as a file.
+/// as a file: a device, not a descriptor's name.
 pub fn is_special_file(path: &Path) -> bool {
-    matches!(
-        device_name(path),
-        Some("null" | "tty" | "zero" | "random" | "urandom")
-    )
+    cash_win32::devices::dev_name(path)
+        .is_some_and(|name| !matches!(name, cash_win32::devices::DevName::Descriptor(_)))
 }
 
 /// Returns the default paths where executables are typically found on Windows.
@@ -739,32 +684,36 @@ mod tests {
 
     #[test]
     fn a_device_is_named_as_written_or_as_resolved_on_any_drive() {
-        assert_eq!(device_name(Path::new("/dev/null")), Some("null"));
-        assert_eq!(device_name(Path::new("/dev/tty")), Some("tty"));
-        assert_eq!(device_name(Path::new("C:/dev/tty")), Some("tty"));
-        assert_eq!(device_name(Path::new(r"d:\dev\tty")), Some("tty"));
-        assert_eq!(
-            device_name(Path::new(r"\\server\share\dev\null")),
-            Some("null")
-        );
-        assert!(is_special_file(Path::new("/dev/tty")));
-        assert!(is_special_file(Path::new("C:/dev/null")));
+        for path in [
+            "/dev/null",
+            "/dev/tty",
+            "C:/dev/tty",
+            r"d:\dev\tty",
+            r"\\server\share\dev\null",
+            "/dev/zero",
+            "/dev/urandom",
+        ] {
+            assert!(is_special_file(Path::new(path)), "{path}");
+        }
     }
 
     #[test]
     fn a_file_elsewhere_is_not_a_device() {
         // A folder of one's own called `dev`, and a name in the folder one is in.
-        assert_eq!(device_name(Path::new("C:/src/dev/null")), None);
-        assert_eq!(device_name(Path::new("dev/tty")), None);
-        assert_eq!(device_name(Path::new("C:dev/tty")), None);
-        assert_eq!(device_name(Path::new("/dev/fd/3")), None);
-        assert_eq!(device_name(Path::new("/dev")), None);
-        assert_eq!(device_name(Path::new("/DEV/tty")), None);
-        // A folder of that name, which no device is.
-        assert_eq!(device_name(Path::new("/dev/null/")), None);
+        for path in [
+            "C:/src/dev/null",
+            "dev/tty",
+            "C:dev/tty",
+            "/dev/fd/3",
+            "/dev",
+            "/DEV/tty",
+            // A folder of that name, which no device is.
+            "/dev/null/",
+        ] {
+            assert!(!is_special_file(Path::new(path)), "{path}");
+        }
         assert_eq!(named_descriptor(Path::new(r"C:\dev\fd\0\")), None);
         // The standard streams are the shell's own descriptors, looked up by the caller.
-        assert_eq!(device_name(Path::new("/dev/stdin")), Some("stdin"));
         assert!(!is_special_file(Path::new("/dev/stdin")));
         assert!(
             try_open_special_file(Path::new("/dev/stdin"), crate::sys::fs::Access::Read).is_none()

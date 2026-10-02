@@ -211,7 +211,7 @@ What is behind them, as far as it is known:
 (`[ -e /dev/null ]`) work (spec D7); `cat <&1` with output a pipe, which read standard
 input, fails as in Bash, in Windows' words ("Access is denied"); `cat 3< f <&3` runs
 (spec D26); `echo x | tee >(cat >&2)` was fixed in 1.3.3 (spec D17). What is left of the
-names is TODO 4.6 and 4.7.
+names is entry 12.
 
 ---
 

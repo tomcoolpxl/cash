@@ -123,7 +123,7 @@ impl std::fmt::Display for OpenFile {
 }
 
 /// What an open file is, as a file test on its descriptor's name asks it (D7).
-pub(crate) enum FileKind {
+pub enum FileKind {
     /// A pipe, and which of its ends this is.
     Pipe {
         /// The end read from.
@@ -141,7 +141,7 @@ pub(crate) enum FileKind {
 
 impl OpenFile {
     /// What the file is open on (D7).
-    pub(crate) fn kind(&self) -> FileKind {
+    pub fn kind(&self) -> FileKind {
         use cash_win32::fs::HandleKind;
         use std::os::windows::io::AsHandle;
 

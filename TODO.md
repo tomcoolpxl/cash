@@ -30,7 +30,7 @@ trust its runs, then by what a user notices most.
 
 | Phase | What | Items |
 | --- | --- | --- |
-| 4 | The `/dev` names, descriptors and the bundled tools | 4.7 |
+| 4 | The `/dev` names, descriptors and the bundled tools | 4.8 |
 | 5 | Jobs, `wait`, and the tools beside them | 5.1 to 5.3 |
 | 6 | Updating cash | 6.1 |
 
@@ -38,30 +38,12 @@ trust its runs, then by what a user notices most.
 
 ## Phase 4. The `/dev` names, descriptors and the bundled tools
 
-### 4.7 `ls` and `stat` on the `/dev` names
+### 4.8 `ls` shows a link's target outside the long format
 
-Found in 4.1 (2026-10-02). cash's own `ls` and `stat` builtins run in the shell, where the
-bundled tools' answer to the names does not reach, and ask the filesystem:
-`ls -l /dev/null` says "No such file or directory", `stat /dev/stdin` "The system cannot
-find the path specified". Git Bash 5.3.15, with standard input a pipe:
-
-```text
-$ ls /dev/null; ls -l /dev/null /dev/tty /dev/stdin
-/dev/null
-crw-rw-rw- 1 thraa 197609 1, 3 Oct  2 14:08 /dev/null
-crw-rw-rw- 1 thraa 197609 5, 0 Oct  2 14:08 /dev/tty
-lrwxrwxrwx 1 thraa 197609 0 Oct  2 14:08 /dev/stdin -> /proc/self/fd/0
-$ stat -c '%F %s %a' /dev/null; stat -c %F /dev/stdin; stat -L -c %F /dev/stdin
-character special file 0 666
-symbolic link
-fifo
-$ ls -d /dev/fd/9
-ls: cannot access '/dev/fd/9': No such file or directory
-```
-
-A device is a new kind of entry for `ls` (its size column shows the device numbers, and it
-has a colour and an icon of its own); the file tests' answer to what a name is
-(`dev_node` in `crates/cash-core/src/extendedtests.rs`) is the place to start.
+Found in 4.7 (2026-10-02). `ls link` and `ls -F link` print `link -> target`, as `ls -l`
+does; GNU's prints the target only in the long format: `link` and `link@`. The name is
+built in `format_name` and `format_name_plain` in `crates/cash-builtins/src/ls.rs`,
+which add the target whenever there is one.
 
 ---
 

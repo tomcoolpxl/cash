@@ -34,18 +34,6 @@ pub enum Endless {
     Random,
 }
 
-impl Endless {
-    /// The endless input `name`, a name under `/dev`, is, if it is one.
-    #[must_use]
-    pub fn named(name: &str) -> Option<Self> {
-        match name {
-            "zero" => Some(Self::Zeros),
-            "random" | "urandom" => Some(Self::Random),
-            _ => None,
-        }
-    }
-}
-
 /// How much the pipe holds, and is written into it at a time.
 const CHUNK: usize = 1 << 20;
 
@@ -163,13 +151,5 @@ mod tests {
             .unwrap();
         assert!(random.iter().any(|&byte| byte != 0));
         assert!(random.iter().any(|&byte| byte != random[0]));
-    }
-
-    #[test]
-    fn the_names() {
-        assert_eq!(Endless::named("zero"), Some(Endless::Zeros));
-        assert_eq!(Endless::named("urandom"), Some(Endless::Random));
-        assert_eq!(Endless::named("random"), Some(Endless::Random));
-        assert_eq!(Endless::named("null"), None);
     }
 }

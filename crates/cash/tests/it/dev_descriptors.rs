@@ -471,3 +471,43 @@ fn a_name_with_a_separator_after_it_is_no_device() {
     assert_eq!(left.stdout, "redirect: 1\ncat: 1\ntest: 1\n");
     assert_eq!(left.stderr.lines().count(), 2, "{}", left.stderr);
 }
+
+/// `ls` and `stat`, cash's own and run in the shell, asked the filesystem: "No such file
+/// or directory" for `/dev/null` (TODO 4.7). Git Bash 5.3.15's answers, the date aside.
+#[test]
+fn ls_and_stat_show_the_names_as_git_bash_does() {
+    let dir = tempfile::tempdir().expect("a scratch folder");
+    std::fs::write(dir.path().join("f"), "contents\n").expect("a file");
+    let left = cash_in(
+        dir.path(),
+        "x\n",
+        r#"ls /dev/null
+ls -l /dev/null /dev/tty /dev/zero | awk '{ print $1, $5, $6, $NF }'
+ls -l /dev/stdin | awk '{ print $1, $(NF-2), $(NF-1), $NF }'
+ls -d /dev/fd/9; echo "ls: $?"
+stat -c "%F|%s|%a|%A|%t|%T|%h" /dev/null /dev/stdin
+stat -L -c "%F|%a|%A" /dev/stdin
+stat -L -c "%F|%s" /dev/stdin < f
+stat /dev/fd/9; echo "stat: $?""#,
+    );
+
+    assert_eq!(
+        left.stdout,
+        "/dev/null\n\
+         crw-rw-rw- 1, 3 /dev/null\n\
+         crw-rw-rw- 5, 0 /dev/tty\n\
+         crw-rw-rw- 1, 5 /dev/zero\n\
+         lrwxrwxrwx /dev/stdin -> /proc/self/fd/0\n\
+         ls: 2\n\
+         character special file|0|666|crw-rw-rw-|1|3|1\n\
+         symbolic link|0|777|lrwxrwxrwx|0|0|1\n\
+         fifo|400|pr--------\n\
+         regular file|9\n\
+         stat: 1\n"
+    );
+    assert_eq!(
+        left.stderr,
+        "ls: cannot access '/dev/fd/9': No such file or directory\n\
+         stat: cannot stat '/dev/fd/9': No such file or directory\n"
+    );
+}

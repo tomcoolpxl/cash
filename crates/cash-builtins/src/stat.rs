@@ -44,27 +44,42 @@ impl builtins::Command for StatCommand {
         let mut stdout = context.stdout();
 
         for path in &self.files {
-            let metadata_res = if self.dereference {
-                std::fs::metadata(path)
-            } else {
-                std::fs::symlink_metadata(path)
-            };
+            // A builtin runs in the shell's process, whose working folder is not the
+            // shell's: a path is resolved against the shell's, as `ls` resolves it.
+            let resolved = context.shell.absolute_path(path);
 
-            let meta = match metadata_res {
-                Ok(m) => m,
-                Err(e) => {
+            let info = if let Some(name) = cash_win32::devices::dev_name(&resolved) {
+                let Some(info) = dev_info(&context, path, name, self.dereference) else {
                     writeln!(
                         context.stderr(),
-                        "stat: cannot stat '{}': {}",
-                        path.display(),
-                        e
+                        "stat: cannot stat '{}': No such file or directory",
+                        path.display()
                     )?;
                     had_error = true;
                     continue;
+                };
+                info
+            } else {
+                let metadata_res = if self.dereference {
+                    std::fs::metadata(&resolved)
+                } else {
+                    std::fs::symlink_metadata(&resolved)
+                };
+
+                match metadata_res {
+                    Ok(meta) => FileStatInfo::from_path_and_meta(path, &resolved, &meta),
+                    Err(e) => {
+                        writeln!(
+                            context.stderr(),
+                            "stat: cannot stat '{}': {}",
+                            path.display(),
+                            e
+                        )?;
+                        had_error = true;
+                        continue;
+                    }
                 }
             };
-
-            let info = FileStatInfo::from_path_and_meta(path, &meta);
 
             if let Some(format_str) = &self.format {
                 let formatted = format_stat(&info, format_str, false);
@@ -80,11 +95,15 @@ impl builtins::Command for StatCommand {
                     "  Size: {:<10} Blocks: {:<10} IO Block: 4096   {}",
                     info.size, info.blocks, info.file_type
                 )?;
-                writeln!(
+                write!(
                     stdout,
                     "Device: {:x}h/{}d\tInode: {:<16} Links: {}",
                     info.device, info.device, info.inode, info.links
                 )?;
+                if let Some((major, minor)) = info.device_type {
+                    write!(stdout, "     Device type: {major},{minor}")?;
+                }
+                writeln!(stdout)?;
                 writeln!(
                     stdout,
                     "Access: (0{}/{})  Uid: ({:>5}/{:>8})   Gid: ({:>5}/{:>8})",
@@ -128,11 +147,14 @@ struct FileStatInfo {
     change_time_str: String,
     birth_time_secs: u64,
     birth_time_str: String,
+    /// A device's numbers, major and minor (`%t`, `%T`).
+    device_type: Option<(u32, u32)>,
 }
 
 impl FileStatInfo {
-    fn from_path_and_meta(path: &Path, meta: &std::fs::Metadata) -> Self {
-        let name = path.to_string_lossy().to_string();
+    /// `path` as written, for the report, and as resolved, to ask the file.
+    fn from_path_and_meta(written: &Path, path: &Path, meta: &std::fs::Metadata) -> Self {
+        let name = written.to_string_lossy().to_string();
         let size = meta.len();
         let blocks = size.div_ceil(512);
 
@@ -231,8 +253,98 @@ impl FileStatInfo {
             change_time_str: format_unix_time(ctime),
             birth_time_secs: btime,
             birth_time_str: format_unix_time(btime),
+            device_type: None,
         }
     }
+
+    /// What `stat` says of a `/dev` name that is no file (D7): of the type and mode
+    /// given, empty, with one link, owned by the user, and as new as now.
+    fn special(name: &Path, file_type: &str, raw_mode: u32) -> Self {
+        let perms = raw_mode & 0o777;
+        let letter = match raw_mode & 0o170_000 {
+            0o020_000 => 'c',
+            0o010_000 => 'p',
+            0o120_000 => 'l',
+            _ => '-',
+        };
+        let human: String = std::iter::once(letter)
+            .chain((0..9).rev().map(|bit| {
+                if perms & (1 << bit) == 0 {
+                    '-'
+                } else {
+                    ['x', 'w', 'r'][bit % 3]
+                }
+            }))
+            .collect();
+        let (user, uid) = cash_win32::fs::current_owner().map_or_else(
+            || (cash_win32::fs::current_user(), 65534),
+            |owner| (owner.name, owner.rid),
+        );
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |since| since.as_secs());
+        Self {
+            name: name.to_string_lossy().to_string(),
+            size: 0,
+            blocks: 0,
+            raw_mode,
+            octal_perms: format!("{perms:o}"),
+            human_perms: human,
+            file_type: file_type.to_string(),
+            links: 1,
+            inode: 0,
+            device: 0,
+            group: user.clone(),
+            gid: uid,
+            user,
+            uid,
+            access_time_secs: now,
+            access_time_str: format_unix_time(now),
+            modify_time_secs: now,
+            modify_time_str: format_unix_time(now),
+            change_time_secs: now,
+            change_time_str: format_unix_time(now),
+            birth_time_secs: now,
+            birth_time_str: format_unix_time(now),
+            device_type: None,
+        }
+    }
+}
+
+/// What `stat` says of the `/dev` name `name` (D7), as Git Bash 5.3 says it; `None` for
+/// a descriptor that is not open.
+///
+/// A device is a character special file, read and written by all, with Linux's numbers.
+/// A descriptor's name is a link to `/proc/self/fd/N`, and with `-L` what is open under
+/// the number: a fifo, read or written as its end is; a file, as the file is; a device.
+fn dev_info<SE: cash_core::ShellExtensions>(
+    context: &cash_core::ExecutionContext<'_, SE>,
+    written: &Path,
+    name: cash_win32::devices::DevName,
+    dereference: bool,
+) -> Option<FileStatInfo> {
+    use cash_core::openfiles::FileKind;
+    use cash_win32::devices::DevName;
+
+    let DevName::Descriptor(number) = name else {
+        let mut info = FileStatInfo::special(written, "character special file", 0o020_666);
+        info.device_type = name.numbers();
+        return Some(info);
+    };
+    let open = context.try_fd(cash_core::ShellFd::try_from(number).ok()?)?;
+    if !dereference {
+        return Some(FileStatInfo::special(written, "symbolic link", 0o120_777));
+    }
+    Some(match open.kind() {
+        FileKind::Pipe { reads, writes } => {
+            let mode = 0o010_000 | if reads { 0o400 } else { 0 } | if writes { 0o200 } else { 0 };
+            FileStatInfo::special(written, "fifo", mode)
+        }
+        FileKind::File(metadata) => FileStatInfo::from_path_and_meta(written, written, &metadata),
+        FileKind::Device | FileKind::Other => {
+            FileStatInfo::special(written, "character special file", 0o020_666)
+        }
+    })
 }
 
 /// The file's owner name and uid.
@@ -382,6 +494,21 @@ fn format_stat(info: &FileStatInfo, spec: &str, interpret_escapes: bool) -> Stri
                 'a' => result.push_str(&info.octal_perms),
                 'A' => result.push_str(&info.human_perms),
                 'F' => result.push_str(&info.file_type),
+                // A device's numbers, in hex as GNU's: 0 for a file.
+                't' => {
+                    let _ = write!(
+                        result,
+                        "{:x}",
+                        info.device_type.map_or(0, |(major, _)| major)
+                    );
+                }
+                'T' => {
+                    let _ = write!(
+                        result,
+                        "{:x}",
+                        info.device_type.map_or(0, |(_, minor)| minor)
+                    );
+                }
                 'h' => result.push_str(&info.links.to_string()),
                 'i' => result.push_str(&info.inode.to_string()),
                 'd' => result.push_str(&info.device.to_string()),
