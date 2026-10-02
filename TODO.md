@@ -18,7 +18,8 @@ for working through it.
   for a release whose CI fails.
 - **Releases:** each phase ends with a release of its own. A tag is made only after CI
   has passed on the commit (RELEASING.md). So far: 1.3.0 is what was on `main` on
-  2026-09-30, 1.3.1 the test suite (phase 1), 1.3.2 Ctrl-C everywhere (phase 2).
+  2026-09-30, 1.3.1 the test suite (phase 1), 1.3.2 Ctrl-C everywhere (phase 2), 1.3.3
+  process substitution (phase 3).
 - An item says what was seen and what Bash does; a cause only where it was looked for.
   Longer notes on a thing that stays open belong in `open-issues.md`.
 
