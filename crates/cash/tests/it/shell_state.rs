@@ -9,6 +9,7 @@
     clippy::tests_outside_test_module,
     clippy::expect_used,
     clippy::unwrap_used,
+    clippy::panic,
     reason = "an integration test is outside a test module by construction, and a \
               failed assumption in a test should abort it loudly"
 )]
@@ -156,4 +157,60 @@ fn nohup_runs_a_command_as_the_shell_does() {
         .to_string_lossy()
         .replace('\\', "/");
     assert_eq!(out.stdout, format!("rc=0\n[bar]\n{sub}"), "{}", out.stderr);
+}
+
+/// The pid `detach` printed.
+fn detached_pid(stdout: &str) -> u32 {
+    stdout
+        .lines()
+        .find_map(|line| line.strip_prefix("[detached] pid "))
+        .and_then(|pid| pid.trim().parse().ok())
+        .unwrap_or_else(|| panic!("no pid in {stdout:?}"))
+}
+
+#[test]
+fn detach_starts_its_program_where_the_shell_is_and_lets_it_outlive_cash() {
+    let scratch = batch_scratch("detach-shell");
+    std::fs::write(
+        scratch.path().join("bin").join("info.cmd"),
+        "@echo off\r\ncd > detached.txt\r\necho [%XF%] >> detached.txt\r\n",
+    )
+    .unwrap();
+
+    // The shell's folder and exported variables, and a `.cmd` found by its bare name:
+    // `detach` used to pass a null folder and environment to CreateProcessW.
+    let out = run_in(scratch.path(), &format!("{SETUP}; detach info"));
+    assert!(out.stdout.starts_with("[detached] pid "), "{}", out.stderr);
+    let written = scratch.path().join("sub").join("detached.txt");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while !std::fs::read_to_string(&written).is_ok_and(|text| text.contains(']')) {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "info.cmd never wrote its file"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    let text = std::fs::read_to_string(&written).unwrap();
+    let lines: Vec<&str> = text.lines().map(str::trim_end).collect();
+    let sub = scratch.path().join("sub");
+    assert_eq!(lines, [sub.to_string_lossy().as_ref(), "[bar]"]);
+
+    // It is out of cash's job: still running after cash has exited.
+    let out = run_in(scratch.path(), "detach ping.exe -n 30 127.0.0.1");
+    let pid = detached_pid(&out.stdout);
+    let listing = Command::new("tasklist")
+        .args(["/FI", &format!("PID eq {pid}"), "/FO", "CSV", "/NH"])
+        .output()
+        .unwrap();
+    let listing = String::from_utf8_lossy(&listing.stdout).to_ascii_lowercase();
+    let _ = Command::new("taskkill")
+        .args(["/PID", &pid.to_string(), "/F"])
+        .output();
+    assert!(
+        listing.contains("ping.exe"),
+        "pid {pid} ended with cash: {listing}"
+    );
+
+    let out = run_in(scratch.path(), "detach nosuchcmd; echo \"rc=$?\"");
+    assert_eq!(out.stdout, "rc=127", "{}", out.stderr);
 }

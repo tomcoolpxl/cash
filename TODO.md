@@ -60,10 +60,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 `xargs`, `find -exec` and `nohup` run through the shell now
 (`cash_core::commands::run_for_builtin`). Left:
 
-- `detach` starts its program through `CreateProcessW` with a null folder and
-  environment: `cd proj; detach code .` opens the wrong folder, an exported variable does
-  not reach it, and `detach npm start` does not find `npm.cmd`. It needs the shell's
-  folder, its exported environment and its lookup, outside the job (D45). BI-08.
 - `install` operands and `find -newer FILE` are relative to the process folder: after
   `cd sub`, `install a b` and `find . -newer ref` do not find their files. BI-07, BI-12.
 

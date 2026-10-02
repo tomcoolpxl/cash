@@ -257,7 +257,9 @@ pub fn in_any_job() -> bool {
     ok != 0 && result != 0
 }
 
-/// Start a process that deliberately leaves cash's job object (D45's `detach`).
+/// Start a process that deliberately leaves cash's job object (D45's `detach`), in the
+/// folder `cwd` and with the environment `env` (the shell's, which are not the process's:
+/// D5, D10).
 ///
 /// `CREATE_BREAKAWAY_FROM_JOB` only succeeds if the enclosing job permits it, which is
 /// why the session job is created with `JOB_OBJECT_LIMIT_BREAKAWAY_OK`
@@ -266,11 +268,20 @@ pub fn in_any_job() -> bool {
 /// slightly for everything.
 ///
 /// `DETACHED_PROCESS` additionally gives the child no console, so it does not die with
-/// the terminal and does not scribble on cash's output.
-pub fn spawn_detached(command_line: &str) -> io::Result<Child> {
+/// the terminal and does not scribble on cash's output. And it inherits no handle at all,
+/// which the standard library cannot promise: a child it starts inherits every
+/// inheritable handle of cash's, among them a pipe cash's own output goes to, which then
+/// stays open for as long as the detached program runs.
+pub fn spawn_detached(
+    command_line: &str,
+    cwd: &Path,
+    env: &[(String, String)],
+) -> io::Result<Child> {
     use windows_sys::Win32::System::Threading::{CREATE_BREAKAWAY_FROM_JOB, DETACHED_PROCESS};
 
     let mut command = to_wide(command_line);
+    let cwd = to_wide(&cwd.to_string_lossy());
+    let environment = build_environment_block(env);
 
     // SAFETY: `STARTUPINFOW` is plain old data — integers, pointers and a handle triple —
     // for which all-zero is the documented "use the defaults" value. `cb` is set below,
@@ -284,8 +295,9 @@ pub fn spawn_detached(command_line: &str) -> io::Result<Child> {
     // in; all-zero is a valid starting state.
     let mut info: PROCESS_INFORMATION = unsafe { std::mem::zeroed() };
 
-    // SAFETY: command is a live, writable UTF-16 buffer; every other pointer is null or
-    // points at a correctly-sized local that outlives the call.
+    // SAFETY: command is a live, writable UTF-16 buffer; the folder and the environment
+    // block are NUL-terminated (the block doubly) and outlive the call; every other
+    // pointer is null or points at a correctly-sized local that outlives the call.
     let created = unsafe {
         CreateProcessW(
             std::ptr::null(),
@@ -294,8 +306,8 @@ pub fn spawn_detached(command_line: &str) -> io::Result<Child> {
             std::ptr::null(),
             FALSE, // do not inherit handles: a detached process should hold none of ours
             CREATE_BREAKAWAY_FROM_JOB | DETACHED_PROCESS | CREATE_UNICODE_ENVIRONMENT,
-            std::ptr::null(),
-            std::ptr::null(),
+            environment.as_ptr().cast(),
+            cwd.as_ptr(),
             &raw const startup,
             &raw mut info,
         )

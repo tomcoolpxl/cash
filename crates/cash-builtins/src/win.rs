@@ -136,6 +136,46 @@ impl builtins::Command for StartCommand {
     }
 }
 
+/// The command line that starts the file at `resolved` with `args`, as the shell would
+/// start it: a program directly, a batch file through cmd (as D32 escapes it), and a
+/// script cash dispatches by its kind (PowerShell, a shebang) through a cash of its own.
+fn detached_command_line<SE: cash_core::ShellExtensions>(
+    context: &cash_core::ExecutionContext<'_, SE>,
+    resolved: &Path,
+    args: &[String],
+) -> String {
+    let program = cash_win32::path::to_backslash(resolved);
+    match cash_win32::resolve::classify(resolved) {
+        cash_win32::resolve::Dispatch::Native(_) => {
+            cash_win32::cmd::build_command_line(&program, args)
+        }
+        cash_win32::resolve::Dispatch::Batch(_) => {
+            let comspec = context
+                .shell
+                .env_str("COMSPEC")
+                .map_or_else(|| "cmd.exe".to_owned(), |value| value.into_owned());
+            let mut inner = cash_win32::cmd::escape_for_cmd(&program);
+            for arg in args {
+                inner.push(' ');
+                inner.push_str(&cash_win32::cmd::escape_for_cmd(arg));
+            }
+            format!(
+                "{} /d /s /c \"{inner}\"",
+                cash_win32::cmd::quote_argument(&comspec)
+            )
+        }
+        _ => {
+            let cash = std::env::current_exe().map_or_else(
+                |_| "cash.exe".to_owned(),
+                |exe| exe.to_string_lossy().into_owned(),
+            );
+            let mut all = vec!["-c".to_owned(), "\"$0\" \"$@\"".to_owned(), program];
+            all.extend(args.iter().cloned());
+            cash_win32::cmd::build_command_line(&cash, &all)
+        }
+    }
+}
+
 /// Run a command elevated, via UAC.
 ///
 /// A first-class verb rather than shelling out to an external helper, so cash knows the
@@ -241,23 +281,32 @@ impl builtins::Command for DetachCommand {
             .split_first()
             .ok_or_else(|| cash_core::Error::from(std::io::Error::other("detach: no command")))?;
 
-        let resolved = Path::new(program).to_path_buf();
-        let command_line = cash_win32::cmd::build_command_line(
-            &resolved.to_string_lossy(),
-            &args.iter().map(ToString::to_string).collect::<Vec<_>>(),
-        );
+        // Found as the shell finds a command: on its PATH with its PATHEXT (D8), or a path
+        // resolved against its working directory, which is not the process's (D10).
+        let resolved = if cash_core::sys::fs::contains_path_separator(program) {
+            Some(context.shell.absolute_path(Path::new(program)))
+        } else {
+            context.shell.resolve_command_in_path_using_cache(program)
+        };
+        let Some(resolved) = resolved.filter(|path| path.is_file()) else {
+            writeln!(context.stderr(), "detach: {program}: command not found")?;
+            return Ok(ExecutionResult::new(127));
+        };
 
-        match cash_win32::spawn::spawn_detached(&command_line) {
+        // Started in the shell's working directory, with its exported environment (D5),
+        // out of the session job, with no console and holding no handle of cash's.
+        let command_line = detached_command_line(&context, &resolved, args);
+        let env = cash_core::commands::exported_environment(context.shell);
+        match cash_win32::spawn::spawn_detached(&command_line, context.shell.working_dir(), &env) {
             Ok(child) => {
+                // Dropping the child closes cash's handles to it; it neither waits for the
+                // program nor ends it.
                 writeln!(context.stdout(), "[detached] pid {}", child.id())?;
-                // Deliberately leak the handles: the point is that this process outlives
-                // the shell, so cash must not hold anything that reaps it.
-                std::mem::forget(child);
                 Ok(ExecutionResult::success())
             }
             Err(e) => {
-                writeln!(context.stderr(), "detach: {e}")?;
-                Ok(ExecutionResult::new(1))
+                writeln!(context.stderr(), "detach: {program}: {e}")?;
+                Ok(ExecutionResult::new(126))
             }
         }
     }
