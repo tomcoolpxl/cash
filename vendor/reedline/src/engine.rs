@@ -1445,7 +1445,9 @@ impl Reedline {
             ReedlineEvent::Menu(name) => {
                 if self.active_menu().is_none() {
                     if let Some(index) = self.menus.iter().position(|menu| menu.name() == name) {
+                        let hinted_line = self.hinted_line();
                         self.menus[index].menu_event(MenuEvent::Activate(self.quick_completions));
+                        self.menus[index].set_hinted_line(hinted_line);
                         invalidate_anchor_if_host_completer_runs(
                             &self.menus[index],
                             &mut self.painter,
@@ -2122,6 +2124,31 @@ impl Reedline {
     /// Checks if hints should be displayed and are able to be completed
     fn hints_active(&self) -> bool {
         !self.hide_hints && matches!(self.input_mode, InputMode::Regular)
+    }
+
+    /// The line the history hint for the buffer would make, for a completion menu
+    /// opened over it to start on the value leading there. Only where a hint can be
+    /// accepted: hints active and the cursor at the buffer end. The hinter is asked
+    /// again rather than trusted from the last paint, which keys read in one batch
+    /// leave behind.
+    ///
+    /// cash (CASH-PATCHES.md, patch 6).
+    fn hinted_line(&mut self) -> Option<String> {
+        if !self.hints_active() || !self.editor.is_cursor_at_buffer_end() {
+            return None;
+        }
+        let buffer = self.editor.get_buffer().to_string();
+        let cwd = self.cwd.clone().unwrap_or_else(|| {
+            std::env::current_dir()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string()
+        });
+        let hint =
+            self.hinter
+                .as_mut()?
+                .handle(&buffer, buffer.len(), self.history.as_ref(), false, &cwd);
+        (!hint.is_empty()).then(|| buffer + &hint)
     }
 
     /// Accept a trailing history hint (full hint or next word) by appending it at
@@ -4589,6 +4616,62 @@ mod tests {
 
     fn vi_with_hint(hint: &'static str) -> Reedline {
         seam_engine(Box::<crate::Vi>::default()).with_hinter(Box::new(FixedHinter(hint)))
+    }
+
+    /// Completes the word before the cursor from a fixed list, as a path completer would.
+    struct WordCompleter(&'static [&'static str]);
+    impl Completer for WordCompleter {
+        fn complete(&mut self, line: &str, pos: usize) -> CompletionResult {
+            let start = line[..pos].rfind(' ').map_or(0, |space| space + 1);
+            let word = &line[start..pos];
+            CompletionResult::fresh(
+                self.0
+                    .iter()
+                    .filter(|value| value.starts_with(word))
+                    .map(|value| Suggestion {
+                        value: (*value).to_string(),
+                        span: Span { start, end: pos },
+                        ..Default::default()
+                    })
+                    .collect::<Vec<_>>(),
+            )
+        }
+    }
+
+    /// cash (CASH-PATCHES.md, patch 6): Tab over a history hint inserts what the values
+    /// share, as before, and opens the menu on the value the hint leads to, so Enter
+    /// takes that one. Without a hint, or with one leading nowhere, it is the first.
+    #[rstest]
+    #[case::hint_leading_to_a_value("er-labs/", "cd docker-labs/")]
+    #[case::no_hint("", "cd docker-fullstack-lab/")]
+    #[case::hint_leading_nowhere("er-gone/", "cd docker-fullstack-lab/")]
+    fn tab_over_a_history_hint_opens_the_menu_on_its_value(
+        #[case] hint: &'static str,
+        #[case] accepted: &str,
+    ) {
+        let prompt = DefaultPrompt::default();
+        let mut rl = seam_engine(Box::<crate::Emacs>::default())
+            .with_completer(Box::new(WordCompleter(&[
+                "docker-fullstack-lab/",
+                "docker-labs/",
+                "dockersub/",
+            ])))
+            .with_menu(ReedlineMenu::EngineCompleter(Box::new(
+                ColumnarMenu::default().with_name("completion_menu"),
+            )))
+            .with_quick_completions(true)
+            .with_partial_completions(true)
+            .with_hinter(Box::new(FixedHinter(hint)));
+        rl.painter.handle_resize(80, 24);
+        rl.run_edit_commands(&[EditCommand::InsertString("cd dock".into())]);
+
+        rl.handle_event(&prompt, ReedlineEvent::Menu("completion_menu".into()))
+            .unwrap();
+        assert_eq!(rl.editor.get_buffer(), "cd docker");
+        rl.repaint(&prompt).unwrap();
+        rl.handle_event(&prompt, ReedlineEvent::Enter).unwrap();
+
+        assert_eq!(rl.editor.get_buffer(), accepted);
     }
 
     #[test]

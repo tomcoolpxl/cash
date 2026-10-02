@@ -979,6 +979,46 @@ fn conpty_alt_arrows_walk_the_folder_history() {
     assert_eq!(session.wait().expect("process did not exit"), 0);
 }
 
+/// Tab over a history hint opens the completion menu on the folder the hint leads to, so
+/// Enter takes that one rather than the first (vendor/reedline/CASH-PATCHES.md, patch 6).
+#[test]
+fn conpty_tab_over_a_history_hint_opens_the_menu_on_its_folder() {
+    let root = tempfile::tempdir().unwrap();
+    for name in ["docker-fullstack-lab", "docker-labs", "dockersub"] {
+        std::fs::create_dir(root.path().join(name)).unwrap();
+    }
+    let mut session = start_reedline_cash();
+    session
+        .expect("PROMPT$", Duration::from_secs(10))
+        .expect("prompt displayed");
+
+    let root = root.path().to_string_lossy().replace('\\', "/");
+    session
+        .send(&format!("cd '{root}'; history -s 'cd docker-labs/'\r"))
+        .unwrap();
+    let quiet = |session: &mut ConPtySession| {
+        session
+            .settle(Duration::from_millis(300), Duration::from_secs(5))
+            .unwrap();
+    };
+    quiet(&mut session);
+
+    // The hint after `cd dock` is `er-labs/`. Tab inserts the shared `er` and opens the
+    // menu; the first Enter takes the folder selected there, the second runs the line.
+    session.send("cd dock\t").unwrap();
+    quiet(&mut session);
+    session.send("\r").unwrap();
+    quiet(&mut session);
+    session.send("\r").unwrap();
+    session.send("echo \"AT=${PWD##*/}\"\r").unwrap();
+    session
+        .expect("AT=docker-labs", Duration::from_secs(10))
+        .expect("Tab over the hint did not open the menu on the hinted folder");
+
+    session.send("exit 0\r").unwrap();
+    assert_eq!(session.wait().expect("process did not exit"), 0);
+}
+
 // ---- Ctrl-Z and `kill -STOP` (D19) ----
 //
 // Windows has no Ctrl-Z signal: the key is a record with the character 0x1A in the console's

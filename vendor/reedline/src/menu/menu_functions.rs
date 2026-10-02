@@ -511,6 +511,36 @@ impl CompletionDisplay {
         }
     }
 
+    /// The suggestion leading to `line`, the line a history hint would make: the one
+    /// whose acceptance turns the buffer into the longest start of it, the first of
+    /// equals. One that appends a space leads there only where `line` has whitespace
+    /// after it or ends. `None` when the spans are stale or none leads there.
+    ///
+    /// cash (CASH-PATCHES.md, patch 6).
+    pub fn index_leading_to(
+        &self,
+        line: &str,
+        editor: &Editor,
+        output_mode: Option<OutputMode>,
+    ) -> Option<usize> {
+        if !self.is_current(editor) {
+            return None;
+        }
+        let buffer = editor.get_buffer();
+        self.values
+            .iter()
+            .enumerate()
+            .filter_map(|(index, suggestion)| {
+                let (start, end) = replacement_range(suggestion, buffer, output_mode);
+                let accepted = [&buffer[..start], &suggestion.value, &buffer[end..]].concat();
+                let rest = line.strip_prefix(accepted.as_str())?;
+                let word_ends = rest.is_empty() || rest.starts_with(char::is_whitespace);
+                (!suggestion.append_whitespace || word_ends).then_some((accepted.len(), index))
+            })
+            .min_by_key(|&(length, index)| (std::cmp::Reverse(length), index))
+            .map(|(_, index)| index)
+    }
+
     /// Apply partial completion (completer-supplied or derived). No-op and returns false when stale or unchanged.
     pub fn common_prefix(&self, editor: &mut Editor) -> bool {
         if !self.is_current(editor) {
@@ -591,17 +621,26 @@ pub fn replace_in_buffer(
     editor: &mut Editor,
     output_mode: Option<OutputMode>,
 ) {
-    let Some(Suggestion {
-        mut value,
-        span,
-        append_whitespace,
-        ..
-    }) = value
-    else {
+    let Some(suggestion) = value else {
         return;
     };
 
-    let buffer = editor.get_buffer();
+    let (start, end) = replacement_range(&suggestion, editor.get_buffer(), output_mode);
+    let mut value = suggestion.value;
+    if suggestion.append_whitespace {
+        value.push(' ');
+    }
+
+    commit_buffer_replacement(editor, start, end, &value);
+}
+
+/// The part of `buffer` that accepting `suggestion` replaces.
+fn replacement_range(
+    suggestion: &Suggestion,
+    buffer: &str,
+    output_mode: Option<OutputMode>,
+) -> (usize, usize) {
+    let span = suggestion.span;
     let (raw_start, raw_end) = match output_mode {
         Some(OutputMode::FullBuffer) => (0, buffer.len()),
         Some(OutputMode::ExtendToEnd) => (span.start, buffer.len()),
@@ -610,12 +649,7 @@ pub fn replace_in_buffer(
 
     let end = floor_char_boundary(buffer, raw_end);
     let start = floor_char_boundary(buffer, raw_start).min(end);
-
-    if append_whitespace {
-        value.push(' ');
-    }
-
-    commit_buffer_replacement(editor, start, end, &value);
+    (start, end)
 }
 
 #[derive(Debug, PartialEq)]
@@ -1543,5 +1577,34 @@ mod tests {
         #[case] expected: &str,
     ) {
         assert_eq!(expected, truncate_with_ansi(value, max_width));
+    }
+
+    /// cash (CASH-PATCHES.md, patch 6): a value that appends a space leads to a hinted
+    /// line only where the line has whitespace after it, or ends.
+    #[rstest]
+    #[case::word_followed_by_a_space("foo bar", Some(0))]
+    #[case::word_ending_the_line("foo", Some(0))]
+    #[case::word_going_on("foobar", Some(1))]
+    #[case::nothing_leading_there("fox", None)]
+    fn a_value_appending_a_space_leads_only_to_the_end_of_a_word(
+        #[case] line: &str,
+        #[case] expected: Option<usize>,
+    ) {
+        let mut editor = Editor::default();
+        editor.set_buffer("fo".to_string(), UndoBehavior::CreateUndoPoint);
+        let suggestion = |value: &str, append_whitespace| Suggestion {
+            value: value.to_string(),
+            span: Span { start: 0, end: 2 },
+            append_whitespace,
+            ..Default::default()
+        };
+        let display = CompletionDisplay::from_result(
+            CompletionResult::fresh(vec![suggestion("foo", true), suggestion("foobar", false)]),
+            &[],
+            &editor,
+        )
+        .expect("a fresh answer is adopted");
+
+        assert_eq!(display.index_leading_to(line, &editor, None), expected);
     }
 }

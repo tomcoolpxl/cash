@@ -1376,6 +1376,20 @@ by calling the completer directly.
 (`ga<TAB>` → `gam`), and the next Tab shows them in the grid, where further Tabs move
 through them. Bash beeps on the second Tab and lists on the third.
 
+**The grid opens on the history hint's candidate** (the user, 2026-10-02). With
+`cd docker-labs/` in history, `cd dock` shows the grey hint `er-labs/`. The grid then
+opens on `docker-labs/`, not on its first candidate, so Tab then Enter takes what the
+hint showed:
+- The chosen candidate is the one that turns the line into the longest start of the
+  hinted line. A file, which gets a space after it, counts only where the hinted line
+  has whitespace after the name or ends there.
+- Without a hint, or when no candidate leads there, the grid opens on the first
+  candidate.
+- Tab and the arrows move on from the chosen one.
+
+fish, zsh-autosuggestions and PowerShell open their menus at the top: this is cash's
+own (vendor/reedline/CASH-PATCHES.md, patch 6).
+
 Quoting applies only to filename candidates, and `complete -o noquote` turns it off, as
 in bash. Windows-only, so D43's differential suite is untouched.
 

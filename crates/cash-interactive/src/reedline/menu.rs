@@ -90,6 +90,10 @@ impl<M: Menu> Menu for QuoteAwareMenu<M> {
         self.0.reset_position();
     }
 
+    fn set_hinted_line(&mut self, line: Option<String>) {
+        self.0.set_hinted_line(line);
+    }
+
     fn reload(&mut self, updated: bool, editor: &mut Editor, completer: &mut dyn Completer) {
         self.0.reload(updated, editor, completer);
     }

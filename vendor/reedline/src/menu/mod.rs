@@ -152,6 +152,13 @@ pub trait Menu: Send {
     /// Resets the menu's selection back to its initial position.
     fn reset_position(&mut self);
 
+    /// Offers, as the menu opens, the line that the history hint on screen would make.
+    /// A menu that can starts on the value leading to it: the one whose acceptance
+    /// turns the line into the longest start of it. Other menus ignore it.
+    ///
+    /// cash (CASH-PATCHES.md, patch 6).
+    fn set_hinted_line(&mut self, _line: Option<String>) {}
+
     /// Handles a menu event that reloads the menu's contents
     fn reload(&mut self, updated: bool, editor: &mut Editor, completer: &mut dyn Completer) {
         self.reset_position();
@@ -593,6 +600,10 @@ impl Menu for ReedlineMenu {
 
     fn reset_position(&mut self) {
         self.as_mut().reset_position();
+    }
+
+    fn set_hinted_line(&mut self, line: Option<String>) {
+        self.as_mut().set_hinted_line(line);
     }
 
     fn update_working_details(

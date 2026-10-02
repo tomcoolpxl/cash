@@ -86,6 +86,9 @@ pub struct ColumnarMenu {
     event: Option<MenuEvent>,
     /// String collected after the menu is activated
     input: Option<String>,
+    /// The line the history hint would make, offered as the menu opened: the
+    /// selection starts on the value leading to it (cash, CASH-PATCHES.md, patch 6)
+    hinted_line: Option<String>,
 }
 
 impl Default for ColumnarMenu {
@@ -103,6 +106,7 @@ impl Default for ColumnarMenu {
             skip_rows: 0,
             event: None,
             input: None,
+            hinted_line: None,
         }
     }
 }
@@ -507,6 +511,10 @@ impl ColumnarMenu {
         editor: &mut Editor,
         completer: &mut dyn Completer,
     ) {
+        // A move or an edit of the user's wins over the hint.
+        if !matches!(event, MenuEvent::Activate(_)) {
+            self.hinted_line = None;
+        }
         match event {
             MenuEvent::Activate(updated) | MenuEvent::Edit(updated) => {
                 self.reload(updated, editor, completer)
@@ -564,6 +572,25 @@ impl ColumnarMenu {
         let available = available_lines(painter, self.min_rows(), u16::MAX);
         self.skip_rows = scroll_offset(self.row_pos, self.skip_rows, available);
     }
+
+    /// Selects the value leading to the hinted line once the first final answer is
+    /// in, which spends the line. Whether the selection moved.
+    fn select_hinted_value(&mut self, editor: &Editor) -> bool {
+        if self.phase.awaiting_first_answer() || self.phase.provisional() {
+            return false;
+        }
+        let Some(line) = self.hinted_line.take() else {
+            return false;
+        };
+        let Some(index) =
+            self.completions
+                .index_leading_to(&line, editor, self.settings.output_mode)
+        else {
+            return false;
+        };
+        (self.row_pos, self.col_pos) = self.position_from_index(index);
+        true
+    }
 }
 
 impl Menu for ColumnarMenu {
@@ -619,6 +646,7 @@ impl Menu for ColumnarMenu {
         // Reset completions on activation
         self.completions = CompletionDisplay::default();
         self.phase.on_activate();
+        self.hinted_line = None;
     }
 
     /// Queue menu event
@@ -631,6 +659,10 @@ impl Menu for ColumnarMenu {
     fn reset_position(&mut self) {
         self.col_pos = 0;
         self.row_pos = 0;
+    }
+
+    fn set_hinted_line(&mut self, line: Option<String>) {
+        self.hinted_line = line;
     }
 
     fn update_values(&mut self, editor: &mut Editor, completer: &mut dyn Completer) {
@@ -657,6 +689,11 @@ impl Menu for ColumnarMenu {
         }
 
         self.recompute_layout(painter);
+
+        // The selection needs the layout, and the scroll offset the selection.
+        if self.select_hinted_value(editor) {
+            self.recompute_layout(painter);
+        }
     }
 
     /// Replace buffer at span via completion display
@@ -761,6 +798,7 @@ mod tests {
     use crate::painting::W;
 
     use crate::{CompletionOrigin, Span, UndoBehavior};
+    use rstest::rstest;
 
     use super::*;
 
@@ -945,6 +983,92 @@ mod tests {
             1,
             "descriptions must relayout to one column without a menu event"
         );
+    }
+
+    const DOCKER_DIRS: &[&str] = &[
+        "docker-fullstack-lab/",
+        "docker-labs/",
+        "docker-node-devcontainer-lab/",
+        "dockersub/",
+    ];
+
+    /// A menu opened over "docker", offered `hinted_line` as it opens, and painted once.
+    fn menu_opened_over_a_hint(
+        values: &[&str],
+        hinted_line: Option<&str>,
+        terminal_size: (u16, u16),
+    ) -> (ColumnarMenu, Editor, FakeCompleter) {
+        let mut completer = FakeCompleter::new(values);
+        let mut menu = ColumnarMenu::default().with_name("testmenu");
+        let mut editor = Editor::default();
+        editor.set_buffer("docker".to_string(), UndoBehavior::CreateUndoPoint);
+        let mut painter = Painter::new(W::sink());
+        painter.handle_resize(terminal_size.0, terminal_size.1);
+
+        menu.menu_event(MenuEvent::Activate(false));
+        menu.set_hinted_line(hinted_line.map(String::from));
+        menu.update_working_details(&mut editor, &mut completer, &painter);
+        (menu, editor, completer)
+    }
+
+    /// cash (CASH-PATCHES.md, patch 6): the menu opens on the value the history hint
+    /// leads to, so accepting it gives the hinted line.
+    #[test]
+    fn a_hinted_line_opens_the_menu_on_its_value() {
+        let (menu, mut editor, _) =
+            menu_opened_over_a_hint(DOCKER_DIRS, Some("docker-labs/ && ls"), (120, 10));
+        assert_eq!(menu.index(), 1);
+
+        menu.replace_in_buffer(&mut editor);
+        assert_eq!(editor.get_buffer(), "docker-labs/");
+    }
+
+    /// Without a hint, or with one no value leads to, the menu opens on its first value.
+    #[rstest]
+    #[case::no_hint(None)]
+    #[case::hint_leading_nowhere(Some("docker-gone/"))]
+    #[case::hint_for_another_word(Some("echo docker-labs/"))]
+    fn a_menu_without_a_hinted_value_opens_on_the_first(#[case] hinted_line: Option<&str>) {
+        let (menu, _, _) = menu_opened_over_a_hint(DOCKER_DIRS, hinted_line, (120, 10));
+        assert_eq!(menu.index(), 0);
+    }
+
+    /// Of values that all start the hinted line, the longest is the one it leads to.
+    #[test]
+    fn the_longest_start_of_the_hinted_line_wins() {
+        let (menu, _, _) = menu_opened_over_a_hint(
+            &["docker", "docker-labs", "docker-l"],
+            Some("docker-labs/x"),
+            (120, 10),
+        );
+        assert_eq!(menu.index(), 1);
+    }
+
+    /// The hint chooses where the menu opens, and only that: a move goes on from there,
+    /// and a later paint does not take the selection back.
+    #[test]
+    fn a_move_after_opening_goes_on_from_the_hinted_value() {
+        let (mut menu, mut editor, mut completer) =
+            menu_opened_over_a_hint(DOCKER_DIRS, Some("docker-labs/"), (120, 10));
+        let mut painter = Painter::new(W::sink());
+        painter.handle_resize(120, 10);
+
+        menu.menu_event(MenuEvent::NextElement);
+        menu.update_working_details(&mut editor, &mut completer, &painter);
+        assert_eq!(menu.index(), 2);
+
+        menu.update_working_details(&mut editor, &mut completer, &painter);
+        assert_eq!(menu.index(), 2);
+    }
+
+    /// A hinted value below the rows on screen scrolls the menu to it.
+    #[test]
+    fn a_hinted_value_off_screen_is_scrolled_to() {
+        let values: Vec<String> = (0..60).map(|n| format!("docker{n:02}")).collect();
+        let values: Vec<&str> = values.iter().map(String::as_str).collect();
+        let (menu, _, _) = menu_opened_over_a_hint(&values, Some("docker59"), (40, 6));
+        assert_eq!(menu.index(), 59);
+        assert!(menu.skip_rows > 0, "the selected row must be on screen");
     }
 
     #[test]

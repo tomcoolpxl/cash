@@ -64,3 +64,20 @@ It sits outside the workspace, so cash's lints do not apply to it. Its own tests
    unparsed, and read first by the next read, so it meets the bindings the command may
    have changed. Keys typed after Enter never reach this batch: the console is read only
    up to an Enter (crossterm's patch).
+
+6. **Tab over a history hint opens the menu on the hint's value** (`src/engine.rs`,
+   `src/menu/mod.rs`, `src/menu/columnar_menu.rs`, `src/menu/menu_functions.rs`; spec
+   D40). The hint and the completion menu knew nothing of each other. With
+   `cd docker-labs/` in history, `cd dock` showed the hint `er-labs/`, and Tab opened
+   the menu on its first value, `docker-fullstack-lab/`.
+   - As a menu opens, the engine offers it the line the hint would make, through a new
+     `Menu::set_hinted_line` that other menus ignore. It asks the hinter again for the
+     line on screen, because keys read in one batch leave the last paint's hint behind.
+     This happens only where a hint could be accepted: hints active, the cursor at the
+     buffer end.
+   - On its first final answer, the columnar menu selects the value whose acceptance
+     turns the buffer into the longest start of that line
+     (`CompletionDisplay::index_leading_to`). A value that appends a space counts only
+     where the line has whitespace after it, or ends.
+   - A move or an edit in the menu drops the line.
+   - Cash's menu wrapper (`QuoteAwareMenu`) forwards the call.
