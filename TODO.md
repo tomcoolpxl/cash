@@ -149,6 +149,12 @@ Options to investigate, none decided:
 
 ## Decided, written down so it is not decided twice
 
+- **Timing-sensitive tests run on an idle machine, and their failures under load are
+  never fixed** (the user, 2026-10-02). They are run with the CPU free and nothing else
+  of this project beside them: no second build or test run, no other session's. One
+  that fails under load is run again on an idle machine and judged from that; no
+  timeout is lengthened and no test rewritten for it. `open-issues.md` entry 10 lists
+  the ones seen.
 - **`> /dev/stdout` shares the descriptor, it does not open the file again** (spec D7,
   §4 row 39). Git Bash reopens, so `{ echo a; echo b > /dev/stdout; } > out` leaves `b`
   there and `a`, `b` in cash. Both `/dev/stdin` sessions chose sharing, on their own.

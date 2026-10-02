@@ -215,14 +215,18 @@ names is TODO 4.6 and 4.7.
 
 ---
 
-## 10. Tests that failed once on a busy machine, and not since
+## 10. Tests that fail on a busy machine: run them on an idle one
 
 **Seen (2026-09-30)**, a day on which up to ten sessions built and ran the suite at the
 same time. Each test below failed in one full run (`--retries 0`) and passed alone; none
 has failed on a machine that was doing nothing else. The ones whose fault could be named
 were fixed that day (a fixed 300 ms before typing at a `read`, two jobs 150 ms apart, a
 loop sized for a quiet machine), and the ConPTY tests now run four at a time
-(`.config/nextest.toml`). These are what is left, to look at if one fails again:
+(`.config/nextest.toml`).
+
+**Decided (2026-10-02), by the user: these are run on a machine whose CPU is free, with
+nothing else of this project beside them, and their failing under load is never fixed.**
+One that fails is run again on an idle machine and judged from that. Seen so far:
 
 - `git_prompt::git_ps1_shows_the_branch_its_state_and_the_upstream` (timed out)
 - four `cash-sed` tests, in one run
@@ -230,6 +234,12 @@ loop sized for a quiet machine), and the ConPTY tests now run four at a time
 - `job_groups::at_the_prompt_a_background_job_survives_ctrl_c`, which already runs alone
 - `pty-oracle` `cash_leaves_the_screen_bash_leaves`, a different case each time; it
   already runs alone, and its own documentation says why it is bound to timing
+- On 2026-10-02, with Playwright tests, Docker and this project's own full runs on the
+  machine: `bc_cash::bc_matches_gnu_bc`, `corpus::every_corpus_script_runs_with_crlf_endings`
+  and `corpus::the_ci_glue_script_matches_real_bash` (timed out at 15 s),
+  `fuser_lsof::fuser_finds_tcp_and_udp_owners`, `cash-sed` `test_sed::pi`, two ConPTY
+  tests, and `cash_leaves_the_screen_bash_leaves` again (100 and 135 s; 65 s and passing
+  alone). Each passed alone.
 
 ---
 
