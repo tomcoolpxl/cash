@@ -54,12 +54,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ## Phase 8. Crashes and security (R2, R4, R9)
 
-### 8.4 Two forms get past the subscript hardening of §4 row 37
-
-`unset "a[$k]"` with `k='$((touch x) )'` or `k='${ touch x; }'` creates `x`; plain
-`$(…)` is refused as promised. `runs_a_command` (`expansion.rs:781`) checks text; decide
-on the parsed word instead. LANG-04.
-
 ### 8.5 History ignores HISTCONTROL and the rest
 
 ` export TOKEN=…`, typed with a leading space, is in `~/.cash_history` at once;

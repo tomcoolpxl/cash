@@ -776,13 +776,34 @@ pub async fn resolve_subscript(
     Ok(value.to_string())
 }
 
-/// Whether expanding `text` would run a command: a backquote, or a `$(` that does not
-/// open `$((` arithmetic, anywhere in it, nested ones included.
+/// Whether expanding `text` would run a command, anywhere in it, nested ones included:
+/// a backquote; a `$(` that does not open `$((`; a `$((` that the parser takes for a
+/// command substitution after all (`$((cmd) )`, as Bash does); or a `${ cmd; }` or
+/// `${| cmd; }` current-shell substitution, which no parameter expansion looks like.
 fn runs_a_command(text: &str) -> bool {
     text.contains('`')
-        || text
-            .match_indices("$(")
-            .any(|(at, _)| !text.get(at + 2..).is_some_and(|rest| rest.starts_with('(')))
+        || text.match_indices("$(").any(|(at, _)| {
+            let from = text.get(at..).unwrap_or_default();
+            !from.starts_with("$((") || !opens_arithmetic(from)
+        })
+        || text.match_indices("${").any(|(at, _)| {
+            text.get(at + 2..)
+                .and_then(|rest| rest.chars().next())
+                .is_some_and(|c| c == '|' || c.is_whitespace())
+        })
+}
+
+/// Whether `text`, which starts `$((`, opens arithmetic rather than a command
+/// substitution of a subshell. Text that does not parse counts as a command.
+fn opens_arithmetic(text: &str) -> bool {
+    cash_parser::word::parse(text, &cash_parser::ParserOptions::default()).is_ok_and(|pieces| {
+        pieces.first().is_some_and(|first| {
+            matches!(
+                first.piece,
+                cash_parser::word::WordPiece::ArithmeticExpression(_)
+            )
+        })
+    })
 }
 
 struct WordExpander<'a, SE: extensions::ShellExtensions> {
@@ -2774,6 +2795,39 @@ mod tests {
         );
 
         Ok(())
+    }
+
+    #[test]
+    fn a_subscript_that_would_run_a_command_is_recognised() {
+        for text in [
+            "$(cmd)",
+            "`cmd`",
+            "$((cmd) )",
+            "$((touch x) )",
+            "${ cmd; }",
+            "${| cmd; }",
+            "${\tcmd; }",
+            "1+$(( $(cmd) ))",
+            "${a[0]:-$((cmd) )}",
+            "${a[0]:-${ cmd; }}",
+            "$((",
+        ] {
+            assert!(runs_a_command(text), "{text}");
+        }
+        for text in [
+            "",
+            "1",
+            "$i",
+            "i+1",
+            "$((i+1))",
+            "$(( (1+2)*3 ))",
+            "${a[0]:-1}",
+            "${#a[@]}",
+            "key with spaces",
+            "${x}",
+        ] {
+            assert!(!runs_a_command(text), "{text}");
+        }
     }
 
     /// Regression test: a quoted empty string `""` must survive word expansion

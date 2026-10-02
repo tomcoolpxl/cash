@@ -74,3 +74,39 @@ fn start_hands_an_ampersand_to_no_command_processor() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn a_subscript_expanded_a_second_time_runs_no_command() {
+    // Every spelling of a command substitution, held in a variable, then handed to each
+    // builtin that expands a subscript again. Plain `$(...)` was refused already; the
+    // other three ran.
+    let keys = [
+        "$(touch pwned)",
+        "`touch pwned`",
+        "$((touch pwned) )",
+        "${ touch pwned; }",
+        "${| touch pwned; }",
+    ];
+    let uses = [
+        r#"a=(1 2); unset "a[$k]""#,
+        r#"declare -A h=([x]=1); unset "h[$k]""#,
+        r#"a=(1 2); [[ -v "a[$k]" ]]"#,
+        r#"a=(1 2); read "a[$k]" <<< v"#,
+        r#"a=(1 2); printf -v "a[$k]" x"#,
+        r#"a=(1 2); declare "a[$k]=v""#,
+    ];
+    let dir = scratch("subscript");
+    for key in keys {
+        for use_ in uses {
+            let script = format!("k='{key}'; {use_}; echo after");
+            let out = cash_in(&dir, &script);
+            assert!(
+                !dir.join("pwned").exists(),
+                "{script} ran the command: {}",
+                out.stderr
+            );
+            assert_eq!(out.stdout, "after", "{script}: {}", out.stderr);
+        }
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
