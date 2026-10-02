@@ -29,8 +29,33 @@ their work is in `main`; the sessions themselves are not needed any more. The or
 the grouping were chosen that day: the test suite first, so that every later phase can
 trust its runs, then by what a user notices most.
 
-Nothing is open: phases 1 to 6 are done. Phase 6 changed no code and had no release
-of its own.
+| Phase | What | Items |
+| --- | --- | --- |
+| 7 | Completion | 7.1 |
+
+Phases 1 to 6 are done. Phase 6 changed no code and had no release of its own.
+
+---
+
+## Phase 7. Completion
+
+### 7.1 One Tab inserts the shared part and opens the grid at once
+
+Seen on 2026-10-02 in the ConPTY test of the hint-led menu. In a folder holding
+`docker-fullstack-lab/`, `docker-labs/` and `dockersub/`, `cd dock` and one Tab give
+`cd docker` with the grid open beneath it.
+
+That is not what is written down:
+- Spec D40 ("Several candidates: the shared part first") says the first Tab inserts the
+  shared part and the next shows the grid.
+- So does the comment on `with_partial_completions` in
+  `crates/cash-interactive/src/reedline/input_backend.rs`.
+- The oracle case `complete-common-prefix` presses Tab twice, so it cannot tell the two
+  apart.
+
+Bash 5.3 inserts on the first Tab, beeps on the second and lists on the third. On
+2026-10-02 the user called the grid after one Tab correct, so this may be only the spec
+and the comment to correct. Which one cash does is **yours**.
 
 ---
 
