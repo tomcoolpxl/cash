@@ -281,6 +281,7 @@ impl<SE: extensions::ShellExtensions> Default for Shell<SE> {
             key_bindings: None,
             history: None,
             commands_read: 0,
+            umask: 0o022,
         }
     }
 }

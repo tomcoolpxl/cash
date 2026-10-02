@@ -31,7 +31,9 @@ pub trait PathExt {
     /// or a PE image). To recover the actual on-disk path in the
     /// latter case, use [`resolve_executable`] which takes ownership
     /// and avoids copies on platforms where no resolution is needed.
-    fn executable(&self) -> bool;
+    ///
+    /// `extensions` are the shell's `PATHEXT` (`Shell::pathext`).
+    fn executable(&self, extensions: &[String]) -> bool;
 
     /// Returns true if the path exists and is a block device.
     fn exists_and_is_block_device(&self) -> bool;

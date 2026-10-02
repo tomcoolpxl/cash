@@ -88,10 +88,17 @@ impl PathIndex {
     /// `name` must not contain a path separator. Never waits on the file system, except
     /// once per matching file named without an extension (`egrep`), whose contents decide
     /// whether it runs; that answer is remembered until the directory is listed again.
-    pub fn contains_executable(&self, dirs: &[PathBuf], name: &str) -> Option<bool> {
+    ///
+    /// `extensions` are the shell's `PATHEXT` (`Shell::pathext`).
+    pub fn contains_executable(
+        &self,
+        dirs: &[PathBuf],
+        name: &str,
+        extensions: &[String],
+    ) -> Option<bool> {
         let key = Key {
             dirs: dirs.to_vec(),
-            extensions: executable_extensions(),
+            extensions: extensions.iter().map(|ext| fold(ext)).collect(),
         };
 
         let mut inner = self.lock();
@@ -137,11 +144,11 @@ impl PathIndex {
         // Check the file without holding the lock, then remember the answer and look
         // again: the directories after this one may still hold a match.
         drop(inner);
-        let runnable = runs_by_bare_name(&dir.join(name));
+        let runnable = runs_by_bare_name(&dir.join(name), extensions);
         if let Some(listing) = self.lock().dirs.get_mut(&dir) {
             listing.checked.insert(wanted, runnable);
         }
-        self.contains_executable(dirs, name)
+        self.contains_executable(dirs, name, extensions)
     }
 
     fn lock(&self) -> MutexGuard<'_, Inner> {
@@ -226,12 +233,6 @@ impl Listing {
     }
 }
 
-/// The extensions that make a file runnable by its bare name, each with its leading dot
-/// and folded: `PATHEXT`.
-fn executable_extensions() -> Vec<String> {
-    crate::sys::fs::pathext_extensions()
-}
-
 /// Folds a file name for comparison: Windows file names are case-insensitive.
 fn fold(name: &str) -> String {
     name.to_lowercase()
@@ -245,9 +246,9 @@ fn has_listed_extension(folded_name: &str, extensions: &[String]) -> bool {
 
 /// Whether a file found under the exact name typed would run: its contents (a `#!` line
 /// or a PE image), as execution decides (D46).
-fn runs_by_bare_name(path: &Path) -> bool {
+fn runs_by_bare_name(path: &Path, extensions: &[String]) -> bool {
     use crate::sys::fs::PathExt;
-    path.is_file() && path.executable()
+    path.is_file() && path.executable(extensions)
 }
 
 #[cfg(test)]
@@ -258,7 +259,9 @@ mod tests {
     fn settled(index: &PathIndex, dirs: &[PathBuf], name: &str) -> bool {
         let deadline = Instant::now() + Duration::from_secs(5);
         loop {
-            if let Some(answer) = index.contains_executable(dirs, name) {
+            if let Some(answer) =
+                index.contains_executable(dirs, name, &cash_win32::resolve::pathext_of(None))
+            {
                 return answer;
             }
             assert!(Instant::now() < deadline, "the index never became ready");
@@ -282,7 +285,10 @@ mod tests {
         let dirs = vec![dir.path().to_path_buf()];
         let index = PathIndex::default();
 
-        assert_eq!(index.contains_executable(&dirs, "tool"), None);
+        assert_eq!(
+            index.contains_executable(&dirs, "tool", &cash_win32::resolve::pathext_of(None)),
+            None
+        );
         assert!(settled(&index, &dirs, "tool"));
         assert!(!settled(&index, &dirs, "no-such-tool"));
     }

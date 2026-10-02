@@ -26,6 +26,9 @@ pub enum CheckCommand {
     Lint(LintArgs),
     /// Check for unused dependencies (requires nightly).
     UnusedDeps,
+    /// Check that the shell's crates take the working directory and environment from the
+    /// shell, not from the process.
+    ProcessState,
 }
 
 /// Options for the build check.
@@ -58,6 +61,7 @@ pub fn run(cmd: &CheckCommand, verbose: bool) -> Result<()> {
         CheckCommand::Fmt => check_fmt(&sh, verbose),
         CheckCommand::Lint(args) => check_lint(&sh, args, verbose),
         CheckCommand::UnusedDeps => check_unused_deps(&sh, verbose),
+        CheckCommand::ProcessState => check_process_state(verbose),
         CheckCommand::Build(args) => check_build(&sh, args, verbose),
     }
 }
@@ -191,5 +195,109 @@ fn check_build(sh: &Shell, build_args: &BuildArgs, verbose: bool) -> Result<()> 
         .run()
         .context("Build check failed")?;
     eprintln!("Build check passed.");
+    Ok(())
+}
+
+/// Calls that take the cash *process*'s state: its working directory, its environment,
+/// or a program started with both.
+///
+/// cash keeps its working directory and exported variables in the shell (D10) and never
+/// moves the process's, so in the shell's crates each of these is a bug unless the line,
+/// or the one before it, says why it is not (`// process state: <reason>`): `cd sub &&
+/// ./tool.exe` ran the start folder's `tool.exe`, `xargs` lost `export`, `PATHEXT` and
+/// `umask` were the process's (`REVIEW_REPORT.md` §4.1).
+const PROCESS_STATE_CALLS: [&str; 5] = [
+    "Command::new(",
+    "env::var(",
+    "env::var_os(",
+    "env::current_dir(",
+    "set_current_dir(",
+];
+
+/// The crates that run shell code, whose state is the shell's.
+const PROCESS_STATE_CRATES: [&str; 2] = ["crates/cash-core/src", "crates/cash-builtins/src"];
+
+/// The marker that says why a call may take the process's state.
+const PROCESS_STATE_MARKER: &str = "process state:";
+
+/// Fails on a call in [`PROCESS_STATE_CRATES`] that takes the process's state with no
+/// reason given.
+fn check_process_state(verbose: bool) -> Result<()> {
+    let root = crate::common::find_workspace_root()?;
+    let mut files = Vec::new();
+    for dir in PROCESS_STATE_CRATES {
+        collect_rust_files(&root.join(dir), &mut files)?;
+    }
+    files.sort();
+
+    let mut unmarked = Vec::new();
+    for file in &files {
+        let text =
+            std::fs::read_to_string(file).with_context(|| format!("reading {}", file.display()))?;
+        let lines: Vec<&str> = text.lines().collect();
+        for (index, line) in lines.iter().enumerate() {
+            if line.trim_start().starts_with("//") || !takes_process_state(line) {
+                continue;
+            }
+            let reason_before = index
+                .checked_sub(1)
+                .and_then(|previous| lines.get(previous))
+                .is_some_and(|previous| previous.contains(PROCESS_STATE_MARKER));
+            if !line.contains(PROCESS_STATE_MARKER) && !reason_before {
+                let shown = file.strip_prefix(&root).unwrap_or(file);
+                unmarked.push(format!(
+                    "{}:{}: {}",
+                    shown.display(),
+                    index + 1,
+                    line.trim()
+                ));
+            }
+        }
+    }
+
+    if verbose {
+        eprintln!("Checked {} files for the process's state.", files.len());
+    }
+    if unmarked.is_empty() {
+        eprintln!("Process state check passed.");
+        return Ok(());
+    }
+    for found in &unmarked {
+        eprintln!("{found}");
+    }
+    anyhow::bail!(
+        "{} call(s) take the process's working directory or environment, which in the \
+         shell's crates are the shell's (D10). Use the shell's (`Shell::working_dir`, \
+         `env_str`, `pathext`, `commands::run_for_builtin`), or say why on the line \
+         before: `// {PROCESS_STATE_MARKER} <reason>`.",
+        unmarked.len()
+    )
+}
+
+/// Whether `line` calls one of [`PROCESS_STATE_CALLS`], as a whole name: `SimpleCommand::new`
+/// is not `Command::new`.
+fn takes_process_state(line: &str) -> bool {
+    PROCESS_STATE_CALLS.iter().any(|call| {
+        line.match_indices(call).any(|(at, _)| {
+            !line
+                .get(..at)
+                .unwrap_or_default()
+                .chars()
+                .next_back()
+                .is_some_and(|c| c.is_alphanumeric() || c == '_')
+        })
+    })
+}
+
+/// Every `.rs` file under `dir`.
+fn collect_rust_files(dir: &std::path::Path, files: &mut Vec<std::path::PathBuf>) -> Result<()> {
+    for entry in std::fs::read_dir(dir).with_context(|| format!("reading {}", dir.display()))? {
+        let path = entry?.path();
+        if path.is_dir() {
+            collect_rust_files(&path, files)?;
+        } else if path.extension().is_some_and(|ext| ext == "rs") {
+            files.push(path);
+        }
+    }
     Ok(())
 }

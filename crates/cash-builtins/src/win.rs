@@ -238,6 +238,7 @@ impl builtins::Command for ElevateCommand {
             )
         };
 
+        // process state: only asks UAC; the elevated command gets no shell state yet (TODO.md 13.2).
         let status = std::process::Command::new("powershell.exe")
             .args(["-NoProfile", "-NonInteractive", "-Command", &script])
             .status();

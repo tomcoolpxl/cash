@@ -10,28 +10,6 @@ use crate::openfiles::OpenFiles;
 // Selectively re-export items from stubs that we don't override.
 pub(crate) use crate::sys::stubs::fs::MetadataExt;
 
-/// Returns the current list of executable extensions from `PATHEXT`.
-///
-/// Each entry retains its leading dot (e.g. `".exe"`) and is stored
-/// lowercased so case-insensitive comparisons can be done efficiently.
-/// Changes to `PATHEXT` made inside the running shell or test environments
-/// are dynamically reflected here.
-pub fn pathext_extensions() -> Vec<String> {
-    std::env::var("PATHEXT")
-        .unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".to_string())
-        .split(';')
-        .filter(|s| !s.is_empty())
-        .map(|s| {
-            let lower = s.to_ascii_lowercase();
-            if lower.starts_with('.') {
-                lower
-            } else {
-                format!(".{lower}")
-            }
-        })
-        .collect()
-}
-
 /// Returns the stem of a PATHEXT entry (with any leading `.` removed).
 ///
 /// `PATHEXT` canonically stores entries like `.EXE`, but tolerant parsing
@@ -47,12 +25,6 @@ fn has_executable_extension_with(path: &Path, extensions: &[String]) -> bool {
             .iter()
             .any(|e| ext.eq_ignore_ascii_case(pathext_entry_stem(e)))
     })
-}
-
-#[cfg(test)]
-fn has_executable_extension(path: &Path) -> bool {
-    let exts = pathext_extensions();
-    has_executable_extension_with(path, &exts)
 }
 
 /// Returns true if `path` is, by itself, an existing executable file.
@@ -75,18 +47,21 @@ fn is_executable_by_content(path: &Path) -> bool {
 /// runnable; then each `PATHEXT` extension is appended in turn; and last, the path itself
 /// is returned if its contents are runnable. That last step is what finds Git for
 /// Windows' extensionless `#!/bin/sh` wrappers such as `/usr/bin/egrep`.
-pub fn resolve_executable(path: PathBuf) -> Option<PathBuf> {
-    let extensions = pathext_extensions();
-    if is_executable_file(&path, &extensions) {
+///
+/// `extensions` are the shell's `PATHEXT` (`Shell::pathext`), which a script can change
+/// without changing the process's. An extension is appended in lower case, so a match
+/// is spelled as Windows programs are, `tool.exe`.
+pub fn resolve_executable(path: PathBuf, extensions: &[String]) -> Option<PathBuf> {
+    if is_executable_file(&path, extensions) {
         return Some(path);
     }
     if path.extension().is_some() && is_executable_by_content(&path) {
         return Some(path);
     }
     // Try appending each PATHEXT extension.
-    for ext in &extensions {
+    for ext in extensions {
         let mut name = path.as_os_str().to_owned();
-        name.push(ext);
+        name.push(ext.to_ascii_lowercase());
         let candidate = PathBuf::from(name);
         if candidate.is_file() {
             return Some(candidate);
@@ -104,9 +79,8 @@ impl crate::sys::fs::PathExt for Path {
         self.metadata().is_ok_and(|m| !m.permissions().readonly())
     }
 
-    fn executable(&self) -> bool {
-        let extensions = pathext_extensions();
-        if is_executable_file(self, &extensions) {
+    fn executable(&self, extensions: &[String]) -> bool {
+        if is_executable_file(self, extensions) {
             return true;
         }
         // Try each PATHEXT extension without allocating a separate PathBuf
@@ -282,6 +256,7 @@ pub fn get_default_standard_utils_paths() -> Vec<PathBuf> {
 
 fn default_system_paths() -> Vec<PathBuf> {
     let mut paths = Vec::new();
+    // process state: the system's folders, which no script moves.
     if let Ok(sysroot) = std::env::var("SystemRoot") {
         paths.push(PathBuf::from(&sysroot).join("system32"));
         paths.push(PathBuf::from(&sysroot));
@@ -293,6 +268,7 @@ fn default_system_paths() -> Vec<PathBuf> {
                 .join("v1.0"),
         );
     }
+    // process state: the account's own folder, for the default PATH.
     if let Ok(userprofile) = std::env::var("USERPROFILE") {
         paths.push(
             PathBuf::from(userprofile)
@@ -802,11 +778,24 @@ mod tests {
     #[test]
     fn has_executable_extension_is_case_insensitive() {
         // Force the PATHEXT cache for this test's defaults.
-        assert!(has_executable_extension(Path::new("foo.exe")));
-        assert!(has_executable_extension(Path::new("foo.EXE")));
-        assert!(has_executable_extension(Path::new("foo.Cmd")));
-        assert!(!has_executable_extension(Path::new("foo.txt")));
-        assert!(!has_executable_extension(Path::new("foo")));
+        let defaults = cash_win32::resolve::pathext_of(None);
+        assert!(has_executable_extension_with(
+            Path::new("foo.exe"),
+            &defaults
+        ));
+        assert!(has_executable_extension_with(
+            Path::new("foo.EXE"),
+            &defaults
+        ));
+        assert!(has_executable_extension_with(
+            Path::new("foo.Cmd"),
+            &defaults
+        ));
+        assert!(!has_executable_extension_with(
+            Path::new("foo.txt"),
+            &defaults
+        ));
+        assert!(!has_executable_extension_with(Path::new("foo"), &defaults));
     }
 
     #[test]
@@ -822,14 +811,14 @@ mod tests {
     fn resolve_executable_for_nonexistent_returns_none() {
         // A path that cannot exist on any test host.
         let path = PathBuf::from(r"C:\__brush_test_definitely_missing__");
-        assert!(resolve_executable(path).is_none());
+        assert!(resolve_executable(path, &cash_win32::resolve::pathext_of(None)).is_none());
     }
 
     #[test]
     fn test_dynamic_pathext() {
-        let exts = pathext_extensions();
-        assert!(exts.contains(&".exe".to_string()));
-        assert!(exts.contains(&".bat".to_string()) || exts.contains(&".cmd".to_string()));
+        let exts = cash_win32::resolve::pathext_of(None);
+        assert!(exts.contains(&".EXE".to_string()));
+        assert!(exts.contains(&".BAT".to_string()) || exts.contains(&".CMD".to_string()));
 
         // Test with custom extensions slice
         let custom = vec![".custom".to_string(), ".xyz".to_string()];

@@ -118,10 +118,14 @@ fn resolve_in_filesystem<SE: ShellExtensions>(
 
     match (&options.path_dirs, options.all_locations) {
         (Some(dirs), true) => {
-            resolved.extend(pathsearch::search_for_executable(dirs.iter(), name).map(to_file));
+            resolved.extend(
+                pathsearch::search_for_executable(dirs.iter(), name, shell.pathext()).map(to_file),
+            );
         }
         (Some(dirs), false) => {
-            resolved.extend(pathsearch::resolve_command(dirs.iter(), name).map(to_file));
+            resolved.extend(
+                pathsearch::resolve_command(dirs.iter(), name, &shell.pathext()).map(to_file),
+            );
         }
         (None, true) => resolved.extend(shell.find_executables_in_path(name).map(to_file)),
         (None, false) => resolved.extend(shell.resolve_command_in_path(name).map(to_file)),

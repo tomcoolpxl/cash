@@ -245,3 +245,51 @@ fn install_and_find_newer_take_their_files_from_the_shells_folder() {
         out.stderr
     );
 }
+
+#[test]
+fn pathext_is_the_shells() {
+    // The lookup read the process's PATHEXT, so a script's had no effect on what cash
+    // found, only on what its children did.
+    let scratch = Scratch::new("pathext");
+    let bin = scratch.path().join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    std::fs::write(bin.join("hello.cmd"), "@echo hello\r\n").unwrap();
+    std::fs::write(bin.join("zz.foo"), "#!/bin/sh\necho zz\n").unwrap();
+
+    let out = run_in(
+        scratch.path(),
+        r#"PATH="$PWD/bin:$PATH"; export PATHEXT=.EXE; type -t hello || echo hidden; PATHEXT=".EXE;.CMD;.FOO"; type -t zz; zz"#,
+    );
+    assert_eq!(out.stdout, "hidden\nfile\nzz", "{}", out.stderr);
+}
+
+#[test]
+fn assigning_path_forgets_the_remembered_locations() {
+    // As Bash does: `foo` ran `a/foo` again after PATH put `b` first.
+    let scratch = Scratch::new("path-hash");
+    for dir in ["a", "b"] {
+        std::fs::create_dir(scratch.path().join(dir)).unwrap();
+        std::fs::write(
+            scratch.path().join(dir).join("foo.cmd"),
+            format!("@echo {dir}\r\n"),
+        )
+        .unwrap();
+    }
+    let out = run_in(
+        scratch.path(),
+        r#"PATH="$PWD/a:$PATH"; foo; PATH="$PWD/b:$PATH"; foo; export PATH; PATH="$PWD/a:$PATH" foo"#,
+    );
+    let lines: Vec<&str> = out.stdout.lines().map(str::trim_end).collect();
+    assert_eq!(lines, ["a", "b", "a"], "{}", out.stderr);
+}
+
+#[test]
+fn a_subshells_umask_is_its_own() {
+    // The mask was a process-wide static, so `( umask 077 )` changed the caller's.
+    let scratch = Scratch::new("umask");
+    let out = run_in(
+        scratch.path(),
+        "umask; ( umask 077 ); umask; x=$(umask 027); umask; umask 0002; umask",
+    );
+    assert_eq!(out.stdout, "0022\n0022\n0022\n0002", "{}", out.stderr);
+}

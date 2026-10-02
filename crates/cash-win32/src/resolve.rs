@@ -57,6 +57,29 @@ impl Dispatch {
 /// The default `PATHEXT`, used when the environment does not supply one.
 pub const DEFAULT_PATHEXT: &[&str] = &[".COM", ".EXE", ".BAT", ".CMD"];
 
+/// The extensions a `PATHEXT` value names, or the default ones when it is unset or
+/// empty: each with its leading dot, in upper case.
+///
+/// The shell's value is the shell's variable (`Shell::pathext`), which a script can change
+/// without changing the process's; only code that runs as a process of its own (a bundled
+/// tool, `cash doctor`) reads the process's, through [`process_pathext`].
+#[must_use]
+pub fn pathext_of(value: Option<&str>) -> Vec<String> {
+    match value.map(str::trim) {
+        Some(value) if !value.is_empty() => parse_pathext(value),
+        _ => DEFAULT_PATHEXT
+            .iter()
+            .map(|ext| (*ext).to_owned())
+            .collect(),
+    }
+}
+
+/// The extensions of this process's own `PATHEXT`; see [`pathext_of`].
+#[must_use]
+pub fn process_pathext() -> Vec<String> {
+    pathext_of(std::env::var("PATHEXT").ok().as_deref())
+}
+
 /// Parse a `PATHEXT` value into extensions, each including the leading dot.
 #[must_use]
 pub fn parse_pathext(value: &str) -> Vec<String> {

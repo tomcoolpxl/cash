@@ -159,7 +159,7 @@ pub(crate) async fn apply_unary_predicate_to_str(
                 return Ok(shell.builtins().get(&tool).is_some_and(|r| !r.disabled));
             }
             let path = shell.absolute_path(Path::new(operand));
-            Ok(path.executable())
+            Ok(path.executable(&shell.pathext()))
         }
         ast::UnaryPredicate::FileExistsAndOwnedByEffectiveGroupId => {
             let path = shell.absolute_path(Path::new(operand));

@@ -127,7 +127,9 @@ impl builtins::Command for LognameCommand {
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, Self::Error> {
+        // process state: the account cash runs as, as whoami reports it.
         let user = std::env::var("USERNAME")
+            // process state: the account cash runs as.
             .or_else(|_| std::env::var("USER"))
             .ok();
         if let Some(user) = user {
@@ -151,7 +153,9 @@ impl builtins::Command for HostidCommand {
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, Self::Error> {
+        // process state: the machine cash runs on, as hostname reports it.
         let name = std::env::var("COMPUTERNAME")
+            // process state: the machine cash runs on.
             .or_else(|_| std::env::var("HOSTNAME"))
             .unwrap_or_else(|_| "localhost".to_string());
         let mut hash: u32 = 0x811c_9dc5;
@@ -227,6 +231,7 @@ impl builtins::Command for WhoCommand {
             writeln!(stdout, "{:<12} {:<12} {:<16}", "NAME", "LINE", "TIME")?;
         }
 
+        // process state: the account cash runs as.
         let my_user = std::env::var("USERNAME").unwrap_or_default();
         for s in &sessions {
             if only_me && !my_user.is_empty() && s.username != my_user {
@@ -275,6 +280,7 @@ impl builtins::Command for PinkyCommand {
         } else {
             for user in &self.users {
                 let profile =
+                    // process state: the account cash runs as.
                     std::env::var("USERPROFILE").unwrap_or_else(|_| format!("C:\\Users\\{user}"));
                 writeln!(stdout, "Login name: {user:<20} In real life: {user}")?;
                 writeln!(stdout, "Directory:  {profile:<20} Shell:        cash")?;
@@ -292,6 +298,7 @@ struct SessionInfo {
 
 fn query_sessions() -> Vec<SessionInfo> {
     if let Ok(output) =
+        // process state: a system program asked about the machine's sessions.
         std::process::Command::new(cash_win32::fs::system_program("quser.exe")).output()
     {
         if output.status.success() {
@@ -321,6 +328,7 @@ fn query_sessions() -> Vec<SessionInfo> {
         }
     }
 
+    // process state: the account cash runs as.
     let user = std::env::var("USERNAME").unwrap_or_else(|_| "user".to_string());
     vec![SessionInfo {
         username: user,
@@ -354,13 +362,16 @@ impl Identity {
 
 /// `DOMAIN\user` for the current process.
 fn whoami_string() -> Option<String> {
+    // process state: the account cash runs as.
     let user = std::env::var("USERNAME").ok()?;
+    // process state: the account cash runs as.
     let domain = std::env::var("USERDOMAIN").ok();
     Some(domain.map_or_else(|| user.clone(), |d| std::format!("{d}\\{user}")))
 }
 
 /// The current user's SID, read from the process token.
 fn current_sid() -> Option<String> {
+    // process state: the account cash runs as (TODO.md 14.5 replaces whoami.exe).
     let output = std::process::Command::new(cash_win32::fs::system_program("whoami.exe"))
         .args(["/user", "/fo", "csv", "/nh"])
         .output()

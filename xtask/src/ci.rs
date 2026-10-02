@@ -107,6 +107,10 @@ fn static_checks(verbose: bool) -> Vec<Step<'static>> {
             Box::new(move || check::run(&CheckCommand::Fmt, verbose)),
         ),
         (
+            "Process state check",
+            Box::new(move || check::run(&CheckCommand::ProcessState, verbose)),
+        ),
+        (
             "Lint check",
             Box::new(move || check::run(&CheckCommand::Lint(LintArgs::default()), verbose)),
         ),

@@ -83,19 +83,16 @@ pub fn add_args<S: AsRef<OsStr>>(
 /// The native executable `program` names, or `None` if there is none.
 ///
 /// It is searched for the way `Command::new` will search: as a path from `cwd` if it has
-/// a separator, otherwise along the directories in `path` with `PATHEXT`. The caller
-/// splits PATH, because the shell's is spelled with `:` and the process's with `;`.
-pub fn locate(program: &OsStr, path: &[PathBuf], cwd: &Path) -> Option<PathBuf> {
-    let pathext = std::env::var("PATHEXT").map_or_else(
-        |_| {
-            crate::resolve::DEFAULT_PATHEXT
-                .iter()
-                .map(|s| (*s).to_owned())
-                .collect()
-        },
-        |value| crate::resolve::parse_pathext(&value),
-    );
-    match crate::resolve::resolve(&program.to_string_lossy(), path, &pathext, cwd)? {
+/// a separator, otherwise along the directories in `path` with the extensions `pathext`.
+/// The caller supplies both, because the shell's are not the process's: the shell's PATH
+/// is spelled with `:`, and a script can change either without changing the process's.
+pub fn locate(
+    program: &OsStr,
+    path: &[PathBuf],
+    pathext: &[String],
+    cwd: &Path,
+) -> Option<PathBuf> {
+    match crate::resolve::resolve(&program.to_string_lossy(), path, pathext, cwd)? {
         crate::resolve::Dispatch::Native(target) => Some(target),
         _ => None,
     }
@@ -129,7 +126,7 @@ pub fn relay(tool: &str, program: &OsStr, args: &[OsString]) -> i32 {
         .map(|value| std::env::split_paths(&value).collect())
         .unwrap_or_default();
     let cwd = std::env::current_dir().unwrap_or_default();
-    let target = locate(program, &path, &cwd);
+    let target = locate(program, &path, &crate::resolve::process_pathext(), &cwd);
     let mut command =
         std::process::Command::new(target.as_deref().map_or(program, Path::as_os_str));
     add_args(&mut command, target.as_deref(), args);

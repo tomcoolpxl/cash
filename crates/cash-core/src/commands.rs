@@ -214,6 +214,7 @@ fn build_powershell_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
     args: &[S],
 ) -> Result<(std::process::Command, Option<String>), error::Error> {
     let pwsh_bin = find_powershell_binary(context);
+    // process state: the shell's spawn layer, which sets the folder and environment.
     let mut c = std::process::Command::new(pwsh_bin);
     c.arg("-NoProfile")
         .arg("-NonInteractive")
@@ -246,15 +247,27 @@ fn push_native_args<S: AsRef<OsStr>>(c: &mut std::process::Command, target: &Pat
     cash_win32::msys::add_args(c, Some(target), args);
 }
 
+/// The command processor a batch file runs in: the shell's `COMSPEC`, as the batch file's
+/// other variables are the shell's, or `cmd.exe`.
+fn comspec(shell: &Shell<impl extensions::ShellExtensions>) -> PathBuf {
+    shell
+        .env_str("COMSPEC")
+        .filter(|value| !value.is_empty())
+        .map_or_else(
+            || PathBuf::from("cmd.exe"),
+            |value| PathBuf::from(value.as_ref()),
+        )
+}
+
 fn build_batch_command<S: AsRef<OsStr>>(
+    comspec: PathBuf,
     command_name: &str,
     argv0: &str,
     args: &[S],
 ) -> std::process::Command {
     use std::os::windows::process::CommandExt as _;
 
-    let comspec =
-        std::env::var_os("COMSPEC").map_or_else(|| PathBuf::from("cmd.exe"), PathBuf::from);
+    // process state: the shell's spawn layer, which sets the folder and environment.
     let mut c = std::process::Command::new(comspec);
     c.arg0(argv0);
     c.arg("/d").arg("/s").arg("/c");
@@ -291,19 +304,7 @@ fn build_shebang_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
         .unwrap_or_default();
     let path_entries: Vec<PathBuf> =
         crate::sys::fs::split_paths_preserving_empty(path_var.as_ref()).collect();
-    let pathext_var = context
-        .shell
-        .env()
-        .get_str("PATHEXT", context.shell)
-        .unwrap_or_default();
-    let pathext = if pathext_var.is_empty() {
-        cash_win32::resolve::DEFAULT_PATHEXT
-            .iter()
-            .map(|s| (*s).to_string())
-            .collect()
-    } else {
-        cash_win32::resolve::parse_pathext(pathext_var.as_ref())
-    };
+    let pathext = context.shell.pathext();
 
     let resolved = cash_win32::resolve::resolve_interpreter(
         interpreter,
@@ -320,6 +321,7 @@ fn build_shebang_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
     match dispatch {
         cash_win32::resolve::Dispatch::Exit(code) => {
             let own = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("cash.exe"));
+            // process state: cash re-entering itself, in the shell's folder and environment.
             let mut c = std::process::Command::new(own);
             c.arg("-c").arg(format!("exit {code}"));
             Ok((c, None))
@@ -330,9 +332,8 @@ fn build_shebang_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
         cash_win32::resolve::Dispatch::Batch(ref batch_target) => {
             use std::os::windows::process::CommandExt as _;
 
-            let comspec =
-                std::env::var_os("COMSPEC").map_or_else(|| PathBuf::from("cmd.exe"), PathBuf::from);
-            let mut c = std::process::Command::new(comspec);
+            // process state: the shell's spawn layer, which sets the folder and environment.
+            let mut c = std::process::Command::new(comspec(context.shell));
             c.arg0(argv0);
             c.arg("/d").arg("/s").arg("/c");
 
@@ -352,6 +353,7 @@ fn build_shebang_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
             Ok((c, None))
         }
         cash_win32::resolve::Dispatch::Native(ref target) => {
+            // process state: the shell's spawn layer, which sets the folder and environment.
             let mut c = std::process::Command::new(target);
             c.arg0(argv0);
             push_native_args(&mut c, target, &extra_args);
@@ -360,6 +362,7 @@ fn build_shebang_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
             Ok((c, None))
         }
         cash_win32::resolve::Dispatch::Shebang { .. } => {
+            // process state: the shell's spawn layer, which sets the folder and environment.
             let mut c = std::process::Command::new(script);
             c.arg0(argv0);
             c.args(args);
@@ -409,8 +412,10 @@ fn build_windows_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
         let target = cash_win32::msys::locate(
             OsStr::new(command_name),
             &entries,
+            &context.shell.pathext(),
             context.shell.working_dir(),
         );
+        // process state: the shell's spawn layer, which sets the folder and environment.
         let mut c = std::process::Command::new(command_name);
         c.arg0(argv0);
         cash_win32::msys::add_args(&mut c, target.as_deref(), args);
@@ -422,14 +427,16 @@ fn build_windows_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
         // begins with it, and `cmd.exe` reads a `/` there as a switch, so
         // `C:/Windows/System32/cmd.exe /c …` failed with "cannot be created".
         cash_win32::resolve::Dispatch::Native(_) => {
+            // process state: the shell's spawn layer, which sets the folder and environment.
             let mut c = std::process::Command::new(cash_win32::path::to_backslash(&candidate));
             c.arg0(argv0);
             push_native_args(&mut c, &candidate, args);
             Ok((c, None))
         }
-        cash_win32::resolve::Dispatch::Batch(_) => {
-            Ok((build_batch_command(command_name, argv0, args), None))
-        }
+        cash_win32::resolve::Dispatch::Batch(_) => Ok((
+            build_batch_command(comspec(context.shell), command_name, argv0, args),
+            None,
+        )),
         cash_win32::resolve::Dispatch::PowerShell(_) => {
             build_powershell_command(context, &candidate, &[], args)
         }
@@ -440,6 +447,7 @@ fn build_windows_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
         } => build_shebang_command(context, &interpreter, &shebang_args, &script, argv0, args),
         cash_win32::resolve::Dispatch::Exit(code) => {
             let own = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("cash.exe"));
+            // process state: cash re-entering itself, in the shell's folder and environment.
             let mut c = std::process::Command::new(own);
             c.arg("-c").arg(format!("exit {code}"));
             Ok((c, None))
@@ -714,6 +722,10 @@ impl<'a, SE: extensions::ShellExtensions> SimpleCommand<'a, SE> {
         reason = "these unwrap calls should not panic"
     )]
     pub async fn execute(mut self) -> Result<ExecutionSpawnResult, error::Error> {
+        // Before anything consults the remembered locations — running a command, `type`,
+        // `hash`, `command -v` — they are forgotten if `PATH` or `PATHEXT` has changed.
+        self.shell.sync_program_location_cache();
+
         // cash (ROADMAP item 12): `which ls` prints `C:/…/cash.exe/ls` for a command cash
         // carries, so that `"$(which ls)" -la` can be run. That path is no file; it names
         // the builtin, which runs as if typed by name — but never a function, as a path
@@ -770,7 +782,11 @@ impl<'a, SE: extensions::ShellExtensions> SimpleCommand<'a, SE> {
             // All else failed; if we were given path directories to search, look through them
             // for a match. Otherwise, use our default search logic.
             let path = if let Some(path_dirs) = &self.path_dirs {
-                pathsearch::resolve_command(path_dirs, self.command_name.as_str())
+                pathsearch::resolve_command(
+                    path_dirs,
+                    self.command_name.as_str(),
+                    &self.shell.pathext(),
+                )
             } else {
                 self.shell
                     .resolve_command_in_path_using_cache(&self.command_name)
@@ -1060,15 +1076,7 @@ impl<'a, SE: extensions::ShellExtensions> SimpleCommand<'a, SE> {
                     let path_var = shell.env().get_str("PATH", &shell).unwrap_or_default();
                     let path_entries: Vec<PathBuf> =
                         crate::sys::fs::split_paths_preserving_empty(path_var.as_ref()).collect();
-                    let pathext_var = shell.env().get_str("PATHEXT", &shell).unwrap_or_default();
-                    let pathext = if pathext_var.is_empty() {
-                        cash_win32::resolve::DEFAULT_PATHEXT
-                            .iter()
-                            .map(|s| (*s).to_string())
-                            .collect()
-                    } else {
-                        cash_win32::resolve::parse_pathext(pathext_var.as_ref())
-                    };
+                    let pathext = shell.pathext();
                     cash_win32::resolve::resolve_interpreter(
                         interpreter,
                         args,

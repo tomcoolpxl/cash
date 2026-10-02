@@ -55,19 +55,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ## Phase 9. The shell owns its state (R1)
 
-### 9.4 PATHEXT, PATH and `umask` live in the process, not the shell
-
-- `export PATHEXT=.EXE` still finds `hello.cmd`; `PATHEXT=…;.FOO` does not find `z.foo`.
-  Three parsers disagree (`sys/windows/fs.rs:19`, `cash-win32/src/resolve.rs:58`,
-  `commands.rs:290`); `pathindex.rs` and `msys.rs` also read the process. One
-  `Shell::pathext()`. ARCH-04, XC-10.
-- `PATH=a:$PATH; foo; PATH=b:$PATH; foo` runs `a/foo` twice; Bash clears the hash on a
-  PATH assignment. EXE-05.
-- `( umask 077 ); umask` prints `0077`; the mask is a process static
-  (`cash-builtins/src/umask.rs:170`). XC-7.
-- Then an `xtask check` that refuses `std::process::Command::new` and `std::env::var` in
-  cash-core and cash-builtins outside an allow-list.
-
 ---
 
 ## Phase 10. awk, sed and bc (R3)
@@ -204,6 +191,10 @@ Track cmd's quote state; a round-trip test through a real `.bat`. W32-01.
   and `chmod -R` through junctions. BI-11, BI-13.
 - Two `kill -STOP` need two `-CONT` (W32-05); `kill -9 PID` kills the tree, against D22
   (W32-06); `#!/usr/bin/env -S` (W32-08).
+- `elevate` asks UAC through `powershell.exe` started with the process's folder and
+  environment, so the elevated command gets neither the shell's working directory nor its
+  exported variables (the `process state:` mark at `cash-builtins/src/win.rs`); with
+  BI-19's quoting, through `ShellExecuteExW("runas")` with the shell's folder.
 
 ### 13.3 `time` and `times` report CPU time
 

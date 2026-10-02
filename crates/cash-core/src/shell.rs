@@ -168,6 +168,11 @@ pub struct Shell<SE: extensions::ShellExtensions = extensions::DefaultShellExten
 
     /// How many command lines the shell has read at the prompt, for the prompt's `\#`.
     commands_read: usize,
+
+    /// The file-creation mask `umask` reports and sets. Windows has none to apply (D23),
+    /// so it is only remembered, and like Bash's it is the shell's own: a subshell gets a
+    /// copy, so `( umask 077 )` leaves the caller's as it was.
+    umask: u32,
 }
 
 impl<SE: extensions::ShellExtensions> Clone for Shell<SE> {
@@ -219,6 +224,7 @@ impl<SE: extensions::ShellExtensions> Clone for Shell<SE> {
             key_bindings: self.key_bindings.clone(),
             history: self.history.clone(),
             commands_read: self.commands_read,
+            umask: self.umask,
             depth: self.depth + 1,
         }
     }

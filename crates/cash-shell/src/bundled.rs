@@ -222,7 +222,9 @@ fn relaying_msys_command(argv: Vec<OsString>) -> Vec<OsString> {
         .or_else(|| std::env::var_os("PATH"))
         .map(|value| std::env::split_paths(&value).collect())
         .unwrap_or_default();
-    let is_msys = cash_win32::msys::locate(program, &path, &cwd)
+    // A bundled tool runs as a process of its own, whose environment the shell built.
+    let pathext = cash_win32::resolve::process_pathext();
+    let is_msys = cash_win32::msys::locate(program, &path, &pathext, &cwd)
         .is_some_and(|target| cash_win32::msys::is_msys_program(&target));
     let (true, Some(exe), Some(tool)) = (is_msys, self_exe(), argv.first()) else {
         return argv;

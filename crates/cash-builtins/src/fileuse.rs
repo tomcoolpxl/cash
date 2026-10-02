@@ -223,6 +223,7 @@ impl Services {
             by_port: HashMap::new(),
             by_name: HashMap::new(),
         };
+        // process state: the system's folder, which no script moves.
         let root = std::env::var_os("SystemRoot").unwrap_or_else(|| "C:\\Windows".into());
         let file = Path::new(&root).join(r"System32\drivers\etc\services");
         let Ok(text) = std::fs::read_to_string(file) else {
@@ -296,6 +297,7 @@ mod tests {
 
     #[test]
     fn a_loaded_dll_is_mapped() {
+        // process state: a test, reading the system's folder.
         let root = std::env::var_os("SystemRoot").unwrap();
         let kernel32 = Path::new(&root).join(r"System32\kernel32.dll");
         // Asked of this process alone. The Restart Manager cannot answer for a system

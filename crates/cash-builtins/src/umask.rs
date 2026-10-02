@@ -27,17 +27,21 @@ impl builtins::Command for UmaskCommand {
         if let Some(mode) = &self.mode {
             if mode.starts_with(|c: char| c.is_digit(8)) {
                 let parsed = cash_core::int_utils::parse(mode.as_str(), 8)?;
-                set_umask(parsed)?;
+                context.shell.set_umask(parsed);
             } else {
-                let parsed = parse_symbolic_umask(mode, get_umask()?)?;
-                set_umask(parsed)?;
+                let parsed = parse_symbolic_umask(mode, context.shell.umask())?;
+                context.shell.set_umask(parsed);
             }
 
             if self.symbolic_output {
-                writeln!(context.stdout(), "{}", format_symbolic_umask(get_umask()?))?;
+                writeln!(
+                    context.stdout(),
+                    "{}",
+                    format_symbolic_umask(context.shell.umask())
+                )?;
             }
         } else {
-            let umask = get_umask()?;
+            let umask = context.shell.umask();
 
             let formatted = if self.symbolic_output {
                 format_symbolic_umask(umask)
@@ -157,28 +161,17 @@ const fn copy_permission_class(bits: u32, shift: u32) -> u32 {
     read | write | execute
 }
 
-/// cash: Windows has no umask.
-///
-/// File permissions come from ACLs inherited from the parent directory (D23), and there
-/// is no process-wide mask to consult or set. The value is nonetheless *remembered*, so
-/// that `umask 022` and a later `umask` round-trip as a script expects.
-///
-/// Absent entirely would be worse. `umask 022` is a commonplace line, and a shell that
-/// answers `command not found` kills any script running under `set -e` — a direct hit on
-/// D2. Reporting the stored value is the least-surprising behaviour available on a
-/// platform with no such concept.
-static REMEMBERED_UMASK: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0o022);
-
-#[expect(clippy::unnecessary_wraps)]
-fn get_umask() -> Result<u32, cash_core::Error> {
-    Ok(REMEMBERED_UMASK.load(std::sync::atomic::Ordering::Relaxed))
-}
-
-#[expect(clippy::unnecessary_wraps)]
-fn set_umask(value: u32) -> Result<(), cash_core::Error> {
-    REMEMBERED_UMASK.store(value, std::sync::atomic::Ordering::Relaxed);
-    Ok(())
-}
+// cash: Windows has no umask.
+//
+// File permissions come from ACLs inherited from the parent directory (D23), and there
+// is no process-wide mask to consult or set. The value is nonetheless *remembered*, in the
+// shell (`Shell::umask`), so that `umask 022` and a later `umask` round-trip as a script
+// expects, and a subshell's `umask` stays its own.
+//
+// Absent entirely would be worse. `umask 022` is a commonplace line, and a shell that
+// answers `command not found` kills any script running under `set -e` — a direct hit on
+// D2. Reporting the stored value is the least-surprising behaviour available on a
+// platform with no such concept.
 
 fn symbolic_mask_from_bits(bits: u32) -> String {
     let mut result = String::new();

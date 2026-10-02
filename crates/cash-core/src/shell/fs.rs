@@ -175,7 +175,7 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
     ) -> impl Iterator<Item = PathBuf> + 'a {
         let (paths, _) = self.executable_search_dirs();
 
-        pathsearch::search_for_executable(paths.into_iter(), filename)
+        pathsearch::search_for_executable(paths.into_iter(), filename, self.pathext())
     }
 
     /// Finds executables in the shell's current default PATH, with filenames matching the
@@ -195,6 +195,7 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
             paths.into_iter(),
             filename_prefix,
             case_insensitive,
+            self.pathext(),
         )
     }
 
@@ -213,7 +214,8 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
             return Some(true);
         }
         let (dirs, _) = self.executable_search_dirs();
-        self.path_index.contains_executable(&dirs, name)
+        self.path_index
+            .contains_executable(&dirs, name, &self.pathext())
     }
 
     /// Whether a command spelled with a path names a file the shell can run: the path
@@ -226,7 +228,39 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
     /// * `name` - The command name, containing a path separator.
     pub fn is_runnable_path(&self, name: &str) -> bool {
         let candidate = self.absolute_path(Path::new(name));
-        !candidate.is_dir() && candidate.executable()
+        !candidate.is_dir() && candidate.executable(&self.pathext())
+    }
+
+    /// The file-creation mask `umask` reports. Windows has none to apply (D23), so it is
+    /// only remembered; like Bash's it is the shell's own, and a subshell has a copy.
+    pub const fn umask(&self) -> u32 {
+        self.umask
+    }
+
+    /// Sets the file-creation mask `umask` reports.
+    pub const fn set_umask(&mut self, umask: u32) {
+        self.umask = umask;
+    }
+
+    /// Forgets the remembered command locations (`hash`) if `PATH` or `PATHEXT` changed
+    /// since they were found, as Bash does when `PATH` is assigned: `PATH=a:$PATH; foo;
+    /// PATH=b:$PATH; foo` ran `a/foo` twice.
+    pub(crate) fn sync_program_location_cache(&mut self) {
+        let basis = format!(
+            "{}\0{}",
+            self.env_str("PATH").unwrap_or_default(),
+            self.env_str("PATHEXT").unwrap_or_default()
+        );
+        self.program_location_cache.forget_unless_found_with(&basis);
+    }
+
+    /// The extensions that make a file runnable by its bare name: the shell's `PATHEXT`,
+    /// or Windows' default ones when it is unset or empty (D8).
+    ///
+    /// The shell's variable, not the process's: `export PATHEXT=.EXE` changes what cash
+    /// finds as well as what its children do.
+    pub fn pathext(&self) -> Vec<String> {
+        cash_win32::resolve::pathext_of(self.env_str("PATHEXT").as_deref())
     }
 
     /// Determines whether the given filename is the name of an executable in one of the
@@ -283,7 +317,7 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
     /// * `candidate_name` - The name of the command to resolve.
     pub fn resolve_command_in_path<S: AsRef<str>>(&self, candidate_name: S) -> Option<PathBuf> {
         let (paths, _) = self.executable_search_dirs();
-        pathsearch::resolve_command(paths, candidate_name.as_ref())
+        pathsearch::resolve_command(paths, candidate_name.as_ref(), &self.pathext())
     }
 
     /// Like [`Self::resolve_command_in_path`], but consults the shell's hash-based path cache

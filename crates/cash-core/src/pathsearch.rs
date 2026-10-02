@@ -12,6 +12,8 @@ use crate::sys::fs::PathExt;
 pub struct ExecutablePathSearch<PI, N> {
     paths: VecDeque<PI>,
     filename: N,
+    /// The shell's `PATHEXT`.
+    extensions: Vec<String>,
 }
 
 impl<PI, N> Iterator for ExecutablePathSearch<PI, N>
@@ -34,7 +36,7 @@ where
             // the *resolved* path rather than the input: on Windows, resolution appends a
             // PATHEXT extension, so a `prog` directory must not stop `prog.exe` in the
             // same PATH entry from being found.
-            if let Some(resolved) = sys::fs::resolve_executable(path)
+            if let Some(resolved) = sys::fs::resolve_executable(path, &self.extensions)
                 && !resolved.is_dir()
             {
                 return Some(resolved);
@@ -50,6 +52,8 @@ pub(crate) struct ExecutablePathPrefixSearch<PI> {
     queued_items: VecDeque<PathBuf>,
     filename_prefix: String,
     case_insensitive: bool,
+    /// The shell's `PATHEXT`.
+    extensions: Vec<String>,
 }
 
 impl<PI> Iterator for ExecutablePathPrefixSearch<PI>
@@ -81,11 +85,11 @@ where
 
                     let entry_path = entry.path();
                     if let Ok(file_type) = entry.file_type() {
-                        if file_type.is_file() && entry_path.executable() {
+                        if file_type.is_file() && entry_path.executable(&self.extensions) {
                             self.queued_items.push_back(entry_path);
                             continue;
                         }
-                        if file_type.is_symlink() && entry_path.executable() {
+                        if file_type.is_symlink() && entry_path.executable(&self.extensions) {
                             self.queued_items.push_back(entry_path);
                         }
                     }
@@ -106,7 +110,12 @@ where
 ///
 /// * `paths` - An iterator over the paths to search.
 /// * `filename` - The name of the executable file to search for.
-pub fn search_for_executable<P, PI, N>(paths: P, filename: N) -> ExecutablePathSearch<PI, N>
+/// * `extensions` - The shell's `PATHEXT` (`Shell::pathext`).
+pub fn search_for_executable<P, PI, N>(
+    paths: P,
+    filename: N,
+    extensions: Vec<String>,
+) -> ExecutablePathSearch<PI, N>
 where
     P: Iterator<Item = PI>,
     PI: AsRef<Path>,
@@ -115,6 +124,7 @@ where
     ExecutablePathSearch {
         paths: paths.collect(),
         filename,
+        extensions,
     }
 }
 
@@ -150,7 +160,8 @@ pub(crate) fn runs_cash_itself(name: &str) -> bool {
 ///
 /// * `paths` - An iterator over the paths to search.
 /// * `filename` - The name of the command to resolve.
-pub fn resolve_command<P, PI, N>(paths: P, filename: N) -> Option<PathBuf>
+/// * `extensions` - The shell's `PATHEXT` (`Shell::pathext`).
+pub fn resolve_command<P, PI, N>(paths: P, filename: N, extensions: &[String]) -> Option<PathBuf>
 where
     P: IntoIterator<Item = PI>,
     PI: AsRef<Path>,
@@ -182,7 +193,7 @@ where
         }
 
         // Resolve, then reject directories; see `ExecutablePathSearch::next`.
-        if let Some(resolved) = sys::fs::resolve_executable(path)
+        if let Some(resolved) = sys::fs::resolve_executable(path, extensions)
             && !resolved.is_dir()
         {
             return Some(resolved);
@@ -196,6 +207,7 @@ pub(crate) fn search_for_executable_with_prefix<P, PI>(
     paths: P,
     filename_prefix: &str,
     case_insensitive: bool,
+    extensions: Vec<String>,
 ) -> ExecutablePathPrefixSearch<PI>
 where
     P: Iterator<Item = PI>,
@@ -212,6 +224,7 @@ where
         queued_items: VecDeque::new(),
         filename_prefix: stored_prefix,
         case_insensitive,
+        extensions,
     }
 }
 
@@ -237,10 +250,17 @@ mod tests {
 
         // The plain (non-executable) file wins over the directory, rather than the
         // directory being reported as the command.
-        assert_eq!(resolve_command(paths, "prog"), Some(second.join("prog")));
+        let pathext = cash_win32::resolve::pathext_of(None);
+        assert_eq!(
+            resolve_command(paths, "prog", &pathext),
+            Some(second.join("prog"))
+        );
 
         // ...and a directory is never yielded as an executable at all.
-        assert_eq!(search_for_executable(paths.iter(), "prog").next(), None);
+        assert_eq!(
+            search_for_executable(paths.iter(), "prog", pathext).next(),
+            None
+        );
 
         Ok(())
     }
@@ -254,9 +274,10 @@ mod tests {
         std::fs::write(scratch.path().join("prog.bat"), "@echo off\r\n")?;
 
         let paths = [scratch.path()];
+        let pathext = cash_win32::resolve::pathext_of(None);
         for found in [
-            search_for_executable(paths.iter(), "prog").next(),
-            resolve_command(paths, "prog"),
+            search_for_executable(paths.iter(), "prog", pathext.clone()).next(),
+            resolve_command(paths, "prog", &pathext),
         ] {
             assert!(
                 found.as_ref().is_some_and(|path| path

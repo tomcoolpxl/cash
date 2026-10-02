@@ -1380,6 +1380,7 @@ impl SubshellSlotGuard {
     /// Attempts to acquire a slot for a concurrent subshell or async background task.
     /// Returns `Err(ErrorKind::ForkResourceUnavailable)` if the concurrency limit is reached.
     pub fn try_acquire() -> Result<Self, error::Error> {
+        // process state: a setting of the cash process itself, not of a script.
         let max = match std::env::var("CASH_MAX_SUBSHELLS")
             .ok()
             .and_then(|v| v.parse::<usize>().ok())

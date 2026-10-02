@@ -506,15 +506,7 @@ impl builtins::Command for WhereCommand {
             Err(Usage(lines)) => return usage_error(&context, &lines),
         };
 
-        let pathext = shell.env_str("PATHEXT").map_or_else(
-            || {
-                cash_win32::resolve::DEFAULT_PATHEXT
-                    .iter()
-                    .map(|ext| (*ext).to_owned())
-                    .collect()
-            },
-            |value| cash_win32::resolve::parse_pathext(&value),
-        );
+        let pathext = shell.pathext();
 
         let mut any_found = false;
         let mut missing = Vec::new();

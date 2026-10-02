@@ -19,6 +19,9 @@ pub struct PathCache {
     buckets: Vec<Vec<Entry>>,
     /// The number of entries across all buckets.
     len: usize,
+    /// What the entries were found with: the shell's `PATH` and `PATHEXT` at the time.
+    #[cfg_attr(feature = "serde", serde(default))]
+    basis: String,
 }
 
 /// One remembered location, and how often the shell has run it from there.
@@ -42,6 +45,17 @@ impl PathCache {
     pub fn reset(&mut self) {
         self.buckets.iter_mut().for_each(Vec::clear);
         self.len = 0;
+    }
+
+    /// Empties the table when what its entries were found with has changed: Bash forgets
+    /// every remembered location when `PATH` is assigned, and on Windows `PATHEXT` decides
+    /// what a name finds as well. Checking the values, rather than catching each way of
+    /// assigning them (`export`, `local`, `read`, a prefix assignment), cannot miss one.
+    pub fn forget_unless_found_with(&mut self, basis: &str) {
+        if self.basis != basis {
+            self.reset();
+            basis.clone_into(&mut self.basis);
+        }
     }
 
     fn bucket_of(&self, name: &str) -> usize {
