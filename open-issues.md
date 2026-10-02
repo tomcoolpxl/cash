@@ -163,7 +163,7 @@ from which shell is running.
 
 ---
 
-## 8. `jobs` and `wait`: what still differs from Bash 5.3
+## 8. `jobs` and `wait`: what differed from Bash 5.3 — closed
 
 **Seen (2026-09-30)** while fixing `jobs` losing a finished job's status; **closed
 (2026-10-02)** in TODO 5.1: each of the ten scripts that were listed here now prints what
@@ -172,7 +172,7 @@ Git Bash 5.3.15 prints, and spec D11 says how. `crates/cash/tests/it/bash_gaps.r
 
 ---
 
-## 9. The `/dev` names outside a redirection, and three things seen beside them
+## 9. The `/dev` names outside a redirection, and three things seen beside them — closed
 
 **Seen (2026-09-30)** while fixing `< /dev/stdin` ("failed to redirect to C:/dev/stdin"),
 **closed (2026-10-02)** in 1.3.4: the names as an argument of a bundled tool

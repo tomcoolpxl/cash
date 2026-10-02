@@ -30,23 +30,12 @@ trust its runs, then by what a user notices most.
 
 | Phase | What | Items |
 | --- | --- | --- |
-| 5 | Jobs, `wait`, and the tools beside them | 5.2 to 5.4 |
+| 5 | Jobs, `wait`, and the tools beside them | 5.3 and 5.4 |
 | 6 | Updating cash | 6.1 |
 
 ---
 
 ## Phase 5. Jobs, `wait`, and the tools beside them
-
-### 5.2 Small things left in `kill` and held processes
-
-From the session that guarded `kill` against reused pids (spec D22). Each is done only if
-it is cheap while 5.1 is in the job table; what is not moves to `open-issues.md`.
-
-- Holding a job stopped with Ctrl-Z open has no test of its own: one line calling the
-  tested `hold`, and a test needs the ConPTY harness.
-- Still asked by number, and so open to a reused pid: a pid cash never started as a job's
-  (a foreground command, one read from `ps`), and a job's process pushed out of the held
-  set after 1024 later ones ended.
 
 ### 5.3 `fuser` and `lsof` are slow on a system DLL
 

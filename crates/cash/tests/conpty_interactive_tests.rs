@@ -1196,3 +1196,69 @@ fn conpty_ctrl_z_stops_a_job_brought_to_the_foreground() {
     session.send("kill -KILL %1\r").unwrap();
     finish(session);
 }
+
+/// A program stopped with Ctrl-Z becomes a job's, and its process is held open as a
+/// background job's is (spec D22): once it has ended, its pid still names it, so Windows
+/// cannot hand the number to another program while cash may be asked about it.
+#[test]
+fn conpty_ctrl_z_holds_the_stopped_programs_pid_after_it_ends() {
+    use cash_win32::process::{is_pid_alive, now_filetime, started};
+
+    let before = now_filetime();
+    let mut session = start_job_cash();
+    session.send("ping.exe -n 3 127.0.0.1\r").unwrap();
+    session.expect(REPLY, Duration::from_secs(10)).unwrap();
+    let at_ctrl_z = session.output().len();
+    session.send("\x1a").unwrap();
+    expect_after(&mut session, at_ctrl_z, "Stopped", Duration::from_secs(5));
+
+    // `PI""D` as typed, so that `PID=[` is only ever the output.
+    let mark = session.output().len();
+    session.send("echo \"PI\"\"D=[$(jobs -p)]\"\r").unwrap();
+    expect_after(&mut session, mark, "PID=[", Duration::from_secs(5));
+    let start = std::time::Instant::now();
+    let pid: u32 = loop {
+        let shown = since(&session, mark);
+        let pid = shown
+            .rsplit("PID=[")
+            .next()
+            .filter(|rest| rest.contains(']'))
+            .and_then(|rest| rest.split(']').next())
+            .and_then(|pid| pid.trim().parse().ok());
+        if let Some(pid) = pid {
+            break pid;
+        }
+        assert!(
+            start.elapsed() < Duration::from_secs(5),
+            "no pid in: {shown}"
+        );
+        session.read_available().unwrap();
+        std::thread::sleep(Duration::from_millis(15));
+    };
+
+    let mark = session.output().len();
+    session.send("fg; echo \"FG=[$?]\"\r").unwrap();
+    expect_after(&mut session, mark, "FG=[0]", Duration::from_secs(15));
+
+    // The job has left the table, and with it the job's own handle on the process; the
+    // next program started lets go of the job object's (`jobreg::sweep`).
+    let mark = session.output().len();
+    session
+        .send("echo \"JOBS=[$(jobs)]\"; cmd.exe /d /c exit 0\r")
+        .unwrap();
+    expect_after(&mut session, mark, "JOBS=[]", Duration::from_secs(5));
+    let mark = session.output().len();
+    session.send("echo \"SWEPT=[$?]\"\r").unwrap();
+    expect_after(&mut session, mark, "SWEPT=[0]", Duration::from_secs(5));
+
+    // The program has ended, and nothing but cash's hold keeps its process.
+    let began = started(pid);
+    let after = now_filetime();
+    assert!(
+        began.is_some_and(|at| before <= at && at <= after),
+        "pid {pid} no longer names the stopped program: started {began:?}, \
+         test ran {before}..{after}"
+    );
+    assert!(!is_pid_alive(pid), "pid {pid} names a running process");
+    finish(session);
+}
