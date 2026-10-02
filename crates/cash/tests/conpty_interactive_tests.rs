@@ -979,8 +979,9 @@ fn conpty_alt_arrows_walk_the_folder_history() {
     assert_eq!(session.wait().expect("process did not exit"), 0);
 }
 
-/// Tab over a history hint opens the completion menu on the folder the hint leads to, so
-/// Enter takes that one rather than the first (vendor/reedline/CASH-PATCHES.md, patch 6).
+/// The first Tab inserts what the folders share, and the second opens the completion menu
+/// on the folder the history hint leads to, so Enter takes that one rather than the first
+/// (D40; vendor/reedline/CASH-PATCHES.md, patches 6 and 7).
 #[test]
 fn conpty_tab_over_a_history_hint_opens_the_menu_on_its_folder() {
     let root = tempfile::tempdir().unwrap();
@@ -1003,9 +1004,12 @@ fn conpty_tab_over_a_history_hint_opens_the_menu_on_its_folder() {
     };
     quiet(&mut session);
 
-    // The hint after `cd dock` is `er-labs/`. Tab inserts the shared `er` and opens the
-    // menu; the first Enter takes the folder selected there, the second runs the line.
+    // The hint after `cd dock` is `er-labs/`. The first Tab inserts the shared `er`, the
+    // second opens the menu; the first Enter takes the folder selected there, the second
+    // runs the line.
     session.send("cd dock\t").unwrap();
+    quiet(&mut session);
+    session.send("\t").unwrap();
     quiet(&mut session);
     session.send("\r").unwrap();
     quiet(&mut session);

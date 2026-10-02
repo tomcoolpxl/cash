@@ -81,3 +81,13 @@ It sits outside the workspace, so cash's lints do not apply to it. Its own tests
      where the line has whitespace after it, or ends.
    - A move or an edit in the menu drops the line.
    - Cash's menu wrapper (`QuoteAwareMenu`) forwards the call.
+
+7. **A Tab that inserts the shared prefix does only that** (`src/engine.rs`, spec D40).
+   With partial completions on, Reedline spliced in the prefix the suggestions share and
+   opened the menu beneath it, on the same Tab. With the new
+   `with_shared_prefix_first(true)`, which cash sets, the menu is closed again, and the
+   next Tab opens it, as Bash lists only on a later Tab.
+   - A Tab with nothing shared left to insert opens the menu at once.
+   - `decide_menu_completion` now returns what the caller does next (`MenuOpening`), so
+     the `Menu` event and a late answer in `settle_completions` still decide alike.
+   - Off by default, so Reedline's own behaviour and tests stay as they were.

@@ -21,7 +21,8 @@ for working through it.
   2026-09-30, 1.3.1 the test suite (phase 1), 1.3.2 Ctrl-C everywhere (phase 2), 1.3.3
   process substitution (phase 3), 1.3.4 the `/dev` names and the bundled tools (phase 4),
   1.3.5 jobs, `wait` and the tools beside them (phase 5), 1.3.6 the Tab menu opening on
-  the history hint's candidate (asked by the user on 2026-10-02, outside the phases).
+  the history hint's candidate (asked by the user on 2026-10-02, outside the phases),
+  1.3.7 the shared part on the first Tab and the grid on the second (phase 7).
 - An item says what was seen and what Bash does; a cause only where it was looked for.
   Longer notes on a thing that stays open belong in `open-issues.md`.
 
@@ -30,38 +31,17 @@ their work is in `main`; the sessions themselves are not needed any more. The or
 the grouping were chosen that day: the test suite first, so that every later phase can
 trust its runs, then by what a user notices most.
 
-| Phase | What | Items |
-| --- | --- | --- |
-| 7 | Completion | 7.1 |
-
-Phases 1 to 6 are done. Phase 6 changed no code and had no release of its own.
-
----
-
-## Phase 7. Completion
-
-### 7.1 One Tab inserts the shared part and opens the grid at once
-
-Seen on 2026-10-02 in the ConPTY test of the hint-led menu. In a folder holding
-`docker-fullstack-lab/`, `docker-labs/` and `dockersub/`, `cd dock` and one Tab give
-`cd docker` with the grid open beneath it.
-
-That is not what is written down:
-- Spec D40 ("Several candidates: the shared part first") says the first Tab inserts the
-  shared part and the next shows the grid.
-- So does the comment on `with_partial_completions` in
-  `crates/cash-interactive/src/reedline/input_backend.rs`.
-- The oracle case `complete-common-prefix` presses Tab twice, so it cannot tell the two
-  apart.
-
-Bash 5.3 inserts on the first Tab, beeps on the second and lists on the third. On
-2026-10-02 the user called the grid after one Tab correct, so this may be only the spec
-and the comment to correct. Which one cash does is **yours**.
+Nothing is open: phases 1 to 7 are done. Phase 6 changed no code and had no release
+of its own.
 
 ---
 
 ## Decided, written down so it is not decided twice
 
+- **The first Tab inserts the shared part, the second opens the grid on the hinted
+  candidate** (the user, 2026-10-02; spec D40, reedline patches 6 and 7). One Tab used
+  to do both, against what D40 said. Bash, which beeps on the second Tab and lists on
+  the third, and keeping one Tab were turned down.
 - **`scoop update cash` from within cash: the user's Scoop ignores running processes**
   (the user, 2026-10-02, on their machine; no code change). Tried before deciding:
   with `ignore_running_processes` set, the update goes through while cash runs. The

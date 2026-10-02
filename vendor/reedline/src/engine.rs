@@ -175,6 +175,8 @@ pub struct Reedline {
     completer: Box<dyn Completer + Send>,
     quick_completions: bool,
     partial_completions: bool,
+    // A Tab that splices in the shared prefix only does that (cash, CASH-PATCHES.md, patch 7)
+    shared_prefix_first: bool,
     persistent_menus: bool,
     // Completions owed to a menu activation the completer could not answer in time
     deferred_menu_completion: Option<DeferredMenuCompletion>,
@@ -247,6 +249,19 @@ pub struct Reedline {
 struct BufferEditor {
     command: Command,
     temp_file: PathBuf,
+}
+
+/// What an opening menu does with the line, as `decide_menu_completion` decides it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum MenuOpening {
+    /// One suggestion: the caller accepts it.
+    AcceptLone,
+    /// The prefix the suggestions share was spliced in, and with
+    /// `shared_prefix_first` that is all: the caller closes the menu again (cash,
+    /// CASH-PATCHES.md, patch 7).
+    SharedPrefixOnly,
+    /// The menu stays open.
+    Open,
 }
 
 /// The completions the [`Menu`](ReedlineEvent::Menu) event could not decide, because the
@@ -377,6 +392,7 @@ impl Reedline {
             completer,
             quick_completions: false,
             partial_completions: false,
+            shared_prefix_first: false,
             persistent_menus: false,
             deferred_menu_completion: None,
             highlighter: buffer_highlighter,
@@ -537,6 +553,19 @@ impl Reedline {
     #[must_use]
     pub fn with_partial_completions(mut self, partial_completions: bool) -> Self {
         self.partial_completions = partial_completions;
+        self
+    }
+
+    /// With partial completions on, a menu activation that splices in the prefix the
+    /// suggestions share does only that and leaves the menu closed; the next one opens
+    /// it, as a shell lists the candidates only on a later Tab. An activation with
+    /// nothing to splice in opens the menu at once. Off by default: the menu opens
+    /// beneath the spliced prefix.
+    ///
+    /// cash (CASH-PATCHES.md, patch 7).
+    #[must_use]
+    pub fn with_shared_prefix_first(mut self, shared_prefix_first: bool) -> Self {
+        self.shared_prefix_first = shared_prefix_first;
         self
     }
 
@@ -1150,8 +1179,11 @@ impl Reedline {
             .is_some_and(|deferred| deferred.still_applies(menu, &self.editor));
 
         // Values were just refreshed above, so the menu must not re-fetch them.
-        let accept_lone_value =
-            owed && !still_provisional && self.decide_menu_completion(menu_index, true);
+        let opening = if owed && !still_provisional {
+            self.decide_menu_completion(menu_index, true)
+        } else {
+            MenuOpening::Open
+        };
 
         // Spent once a final answer had its say, so it cannot act on a later one.
         // Provisional results decided nothing, so the arm outlives them.
@@ -1159,10 +1191,16 @@ impl Reedline {
             self.deferred_menu_completion = None;
         }
 
-        if accept_lone_value {
+        match opening {
             // With a menu active this replaces in the buffer and deactivates, rather than
             // submitting the line.
-            self.handle_editor_event(prompt, ReedlineEvent::Enter)?;
+            MenuOpening::AcceptLone => {
+                self.handle_editor_event(prompt, ReedlineEvent::Enter)?;
+            }
+            MenuOpening::SharedPrefixOnly => {
+                self.menus[menu_index].menu_event(MenuEvent::Deactivate);
+            }
+            MenuOpening::Open => {}
         }
 
         // One paint for every outcome, since painting the menu and then the accepted or
@@ -1171,14 +1209,15 @@ impl Reedline {
     }
 
     /// The completion an opening menu applies to the line: a lone suggestion is accepted
-    /// outright, otherwise the prefix the suggestions share is spliced in. Returns whether
-    /// the caller should accept that lone suggestion.
+    /// outright, otherwise the prefix the suggestions share is spliced in. Returns what
+    /// the caller does next: accept that lone suggestion, close the menu again over the
+    /// spliced prefix (`shared_prefix_first`), or leave it open.
     ///
     /// Both the [`Menu`](ReedlineEvent::Menu) event and the deferred replay in
     /// [`settle_completions`](Self::settle_completions) decide this, and they have to
     /// decide it identically. `values_updated` says whether the caller already refreshed
     /// the menu's values, so they are not fetched twice.
-    fn decide_menu_completion(&mut self, menu_index: usize, values_updated: bool) -> bool {
+    fn decide_menu_completion(&mut self, menu_index: usize, values_updated: bool) -> MenuOpening {
         let menu = &mut self.menus[menu_index];
 
         let accept_lone_value = if self.quick_completions && menu.can_quick_complete() {
@@ -1197,16 +1236,21 @@ impl Reedline {
             false
         };
 
-        if !accept_lone_value && self.partial_completions {
-            menu.can_partially_complete(
+        if accept_lone_value {
+            return MenuOpening::AcceptLone;
+        }
+        let spliced = self.partial_completions
+            && menu.can_partially_complete(
                 values_updated || self.quick_completions,
                 &mut self.editor,
                 self.completer.as_mut(),
                 self.history.as_ref(),
             );
+        if spliced && self.shared_prefix_first {
+            MenuOpening::SharedPrefixOnly
+        } else {
+            MenuOpening::Open
         }
-
-        accept_lone_value
     }
 
     fn process_input_batch(
@@ -1453,8 +1497,15 @@ impl Reedline {
                             &mut self.painter,
                         );
 
-                        if self.decide_menu_completion(index, false) {
-                            return self.handle_editor_event(prompt, ReedlineEvent::Enter);
+                        match self.decide_menu_completion(index, false) {
+                            MenuOpening::AcceptLone => {
+                                return self.handle_editor_event(prompt, ReedlineEvent::Enter);
+                            }
+                            MenuOpening::SharedPrefixOnly => {
+                                self.menus[index].menu_event(MenuEvent::Deactivate);
+                                return Ok(EventStatus::Handled);
+                            }
+                            MenuOpening::Open => {}
                         }
 
                         // A final answer already had its say above, so only a
@@ -4345,6 +4396,25 @@ mod tests {
         assert_eq!(reedline.current_buffer_contents(), "t");
     }
 
+    /// cash (CASH-PATCHES.md, patch 7): late values decide as a synchronous answer would.
+    /// With `shared_prefix_first`, splicing in the shared prefix closes the menu again,
+    /// and the next Tab opens it; without, the menu stays open beneath the prefix.
+    #[rstest]
+    #[case::shared_prefix_first(true, false)]
+    #[case::menu_beneath_the_prefix(false, true)]
+    fn late_results_splicing_the_shared_prefix_close_the_menu_when_it_comes_first(
+        #[case] shared_prefix_first: bool,
+        #[case] menu_stays_open: bool,
+    ) {
+        let mut reedline = engine_awaiting(&["nu-cmd-base", "nu-cmd-lang"], "nu-cm", true, true);
+        reedline.shared_prefix_first = shared_prefix_first;
+
+        settle(&mut reedline);
+
+        assert_eq!(reedline.current_buffer_contents(), "nu-cmd-");
+        assert_eq!(menu_is_active(&reedline), menu_stays_open);
+    }
+
     /// The other half of the same Tab: partial completions read the same empty menu the
     /// quick check did, so a shared prefix must be spliced in when the values land.
     #[test]
@@ -4638,18 +4708,36 @@ mod tests {
         }
     }
 
-    /// cash (CASH-PATCHES.md, patch 6): Tab over a history hint inserts what the values
-    /// share, as before, and opens the menu on the value the hint leads to, so Enter
-    /// takes that one. Without a hint, or with one leading nowhere, it is the first.
-    #[rstest]
-    #[case::hint_leading_to_a_value("er-labs/", "cd docker-labs/")]
-    #[case::no_hint("", "cd docker-fullstack-lab/")]
-    #[case::hint_leading_nowhere("er-gone/", "cd docker-fullstack-lab/")]
-    fn tab_over_a_history_hint_opens_the_menu_on_its_value(
-        #[case] hint: &'static str,
-        #[case] accepted: &str,
-    ) {
-        let prompt = DefaultPrompt::default();
+    /// Hints from one history line, as `DefaultHinter` does from the newest line that
+    /// starts with the buffer: the rest of that line, or nothing.
+    struct LineHinter {
+        history_line: Option<&'static str>,
+        hint: String,
+    }
+    impl Hinter for LineHinter {
+        fn handle(&mut self, line: &str, _: usize, _: &dyn History, _: bool, _: &str) -> String {
+            self.hint = self
+                .history_line
+                .and_then(|history_line| history_line.strip_prefix(line))
+                .unwrap_or_default()
+                .to_string();
+            self.hint.clone()
+        }
+        fn complete_hint(&self) -> String {
+            self.hint.clone()
+        }
+        fn next_hint_token(&self) -> String {
+            self.hint.clone()
+        }
+    }
+
+    /// An engine with `typed` on the line, three folders to complete, Tab's options as
+    /// cash sets them, and `history_line` the one line of history.
+    fn docker_engine(
+        typed: &str,
+        history_line: Option<&'static str>,
+        shared_prefix_first: bool,
+    ) -> Reedline {
         let mut rl = seam_engine(Box::<crate::Emacs>::default())
             .with_completer(Box::new(WordCompleter(&[
                 "docker-fullstack-lab/",
@@ -4661,15 +4749,81 @@ mod tests {
             )))
             .with_quick_completions(true)
             .with_partial_completions(true)
-            .with_hinter(Box::new(FixedHinter(hint)));
+            .with_shared_prefix_first(shared_prefix_first)
+            .with_hinter(Box::new(LineHinter {
+                history_line,
+                hint: String::new(),
+            }));
         rl.painter.handle_resize(80, 24);
-        rl.run_edit_commands(&[EditCommand::InsertString("cd dock".into())]);
+        rl.run_edit_commands(&[EditCommand::InsertString(typed.into())]);
+        rl
+    }
 
-        rl.handle_event(&prompt, ReedlineEvent::Menu("completion_menu".into()))
-            .unwrap();
-        assert_eq!(rl.editor.get_buffer(), "cd docker");
+    /// Tab as cash binds it, then the paint that follows a key.
+    fn tab(rl: &mut Reedline) {
+        let prompt = DefaultPrompt::default();
+        rl.handle_event(
+            &prompt,
+            ReedlineEvent::UntilFound(vec![
+                ReedlineEvent::Menu("completion_menu".into()),
+                ReedlineEvent::MenuNext,
+            ]),
+        )
+        .unwrap();
         rl.repaint(&prompt).unwrap();
-        rl.handle_event(&prompt, ReedlineEvent::Enter).unwrap();
+    }
+
+    /// cash (CASH-PATCHES.md, patch 7): with `shared_prefix_first`, a Tab that inserts
+    /// what the values share does only that, and the next opens the menu. Without, the
+    /// menu opens beneath the prefix on the same Tab.
+    #[rstest]
+    #[case::shared_prefix_first(true, false)]
+    #[case::menu_beneath_the_prefix(false, true)]
+    fn a_tab_inserting_the_shared_prefix_opens_the_menu_only_beneath_it_when_asked(
+        #[case] shared_prefix_first: bool,
+        #[case] menu_after_one_tab: bool,
+    ) {
+        let mut rl = docker_engine("cd dock", None, shared_prefix_first);
+
+        tab(&mut rl);
+        assert_eq!(rl.editor.get_buffer(), "cd docker");
+        assert_eq!(menu_is_active(&rl), menu_after_one_tab);
+
+        if !menu_after_one_tab {
+            tab(&mut rl);
+            assert_eq!(rl.editor.get_buffer(), "cd docker");
+            assert!(menu_is_active(&rl), "the second Tab opens the menu");
+        }
+    }
+
+    /// With nothing shared left to insert, the first Tab opens the menu.
+    #[test]
+    fn a_tab_with_nothing_to_insert_opens_the_menu_at_once() {
+        let mut rl = docker_engine("cd docker", None, true);
+
+        tab(&mut rl);
+
+        assert_eq!(rl.editor.get_buffer(), "cd docker");
+        assert!(menu_is_active(&rl));
+    }
+
+    /// cash (CASH-PATCHES.md, patches 6 and 7): the first Tab inserts what the folders
+    /// share, the second opens the menu on the one the history hint leads to, and Enter
+    /// takes it. Without a hint, or with one leading nowhere, the menu opens on the first.
+    #[rstest]
+    #[case::hint_leading_to_a_value(Some("cd docker-labs/"), "cd docker-labs/")]
+    #[case::no_hint(None, "cd docker-fullstack-lab/")]
+    #[case::hint_leading_nowhere(Some("cd docker-gone/"), "cd docker-fullstack-lab/")]
+    fn the_second_tab_opens_the_menu_on_the_hinted_value(
+        #[case] history_line: Option<&'static str>,
+        #[case] accepted: &str,
+    ) {
+        let mut rl = docker_engine("cd dock", history_line, true);
+
+        tab(&mut rl);
+        tab(&mut rl);
+        rl.handle_event(&DefaultPrompt::default(), ReedlineEvent::Enter)
+            .unwrap();
 
         assert_eq!(rl.editor.get_buffer(), accepted);
     }

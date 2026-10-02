@@ -125,8 +125,9 @@ impl ReedlineInputBackend {
             .with_completer(Box::new(completer))
             .with_quick_completions(true)
             // As Bash does, a Tab first inserts what all the candidates share; the next
-            // shows them.
+            // shows them (D40). With nothing shared left to insert, the first shows them.
             .with_partial_completions(true)
+            .with_shared_prefix_first(true)
             .with_validator(Box::new(validator))
             .with_hinter(Box::new(hinter))
             .with_highlighter(Box::new(highlighter))

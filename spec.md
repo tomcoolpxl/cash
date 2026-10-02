@@ -1373,13 +1373,16 @@ already-quoted candidates a second time, `\"alpha\ beta.txt\"`: D40 had been tes
 by calling the completer directly.
 
 **Several candidates: the shared part first.** A Tab inserts what all candidates share
-(`ga<TAB>` → `gam`), and the next Tab shows them in the grid, where further Tabs move
-through them. Bash beeps on the second Tab and lists on the third.
+(`ga<TAB>` → `gam`) and does nothing more. The next Tab shows them in the grid, where
+further Tabs move through them. With nothing shared left to insert, the first Tab shows
+them. Bash beeps on the second Tab and lists on the third. Until 2026-10-02 one Tab
+both inserted and showed the grid, against this paragraph; the user chose the second Tab
+(vendor/reedline/CASH-PATCHES.md, patch 7).
 
 **The grid opens on the history hint's candidate** (the user, 2026-10-02). With
-`cd docker-labs/` in history, `cd dock` shows the grey hint `er-labs/`. The grid then
-opens on `docker-labs/`, not on its first candidate, so Tab then Enter takes what the
-hint showed:
+`cd docker-labs/` in history, `cd dock` shows the grey hint `er-labs/`. The first Tab
+inserts the shared `er`. The second opens the grid on `docker-labs/`, not on its first
+candidate, so Tab, Tab, Enter takes what the hint showed:
 - The chosen candidate is the one that turns the line into the longest start of the
   hinted line. A file, which gets a space after it, counts only where the hinted line
   has whitespace after the name or ends there.

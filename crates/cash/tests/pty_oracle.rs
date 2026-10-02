@@ -145,6 +145,11 @@ const CASES: &[Case] = &[
         name: "complete-common-prefix",
         keys: &["ls ga", "\t", "\t"],
     },
+    // One Tab inserts the shared part and shows nothing more, as in Bash (D40).
+    Case {
+        name: "complete-common-prefix-one-tab",
+        keys: &["ls ga", "\t"],
+    },
     // 1.u: `compopt -o fullquote` quotes the whole completion.
     Case {
         name: "1u-compopt-fullquote",
