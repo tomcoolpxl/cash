@@ -651,7 +651,7 @@ impl Interpreter {
                 },
                 OpCode::LocalScalarRef(index) => {
                     let value = stack
-                        .get_mut_value_ptr(index as usize)
+                        .local_scalar_ptr(index as usize)
                         .expect("invalid local index");
                     // this value is valid until the stack value at `index` is popped
                     // so this preserves the stack invariance

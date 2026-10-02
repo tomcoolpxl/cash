@@ -229,6 +229,19 @@ impl<'i, 's> Stack<'i, 's> {
         }
     }
 
+    /// A local to write a scalar to: a parameter still linked to the caller's unused
+    /// variable is detached first, into a value of its own, since scalars are passed by
+    /// value (see `call_function`).
+    pub(crate) fn local_scalar_ptr(&mut self, index: usize) -> Option<*mut AwkValue> {
+        if unsafe { self.sp.offset_from(self.bp) } >= index as isize {
+            let slot = unsafe { &mut *self.bp.add(index) };
+            if let StackValue::UninitializedRef(_) = slot {
+                *slot = StackValue::Value(UnsafeCell::new(AwkValue::uninitialized()));
+            }
+        }
+        self.get_mut_value_ptr(index)
+    }
+
     pub(crate) fn get_mut_value_ptr(&mut self, index: usize) -> Option<*mut AwkValue> {
         if unsafe { self.sp.offset_from(self.bp) } >= index as isize {
             let value = unsafe { &*self.bp.add(index) };
@@ -279,15 +292,13 @@ impl<'i, 's> Stack<'i, 's> {
 
     pub(crate) fn call_function(&mut self, function: &'i Function) {
         unsafe { assert!(self.sp.offset_from(self.bp) >= function.parameters_count as isize) };
+        // A variable the caller has not used yet stays linked to the caller's: if the
+        // function uses it as an array, the caller's variable becomes that array, as in
+        // every awk. A scalar is passed by value instead, so the first scalar write
+        // detaches the parameter (`local_scalar_ptr`). The link used to be cut at the
+        // call, so `function f(a) { a[1] = 5 } BEGIN { f(arr); print arr[1] }` printed
+        // nothing (`REVIEW_REPORT.md` TXT-18).
         let new_bp = unsafe { self.sp.sub(function.parameters_count) };
-        // Convert UninitializedRef parameters to owned values to break aliasing
-        // between function parameters and the caller's variables
-        for i in 0..function.parameters_count {
-            let param = unsafe { &mut *new_bp.add(i) };
-            if let StackValue::UninitializedRef(_) = param {
-                *param = StackValue::Value(UnsafeCell::new(AwkValue::uninitialized()));
-            }
-        }
         let caller_frame = CallFrame {
             bp: self.bp,
             sp: new_bp,

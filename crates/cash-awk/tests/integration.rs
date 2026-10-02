@@ -136,6 +136,13 @@ fn test_awk_array_element_assigned_after_the_array_changes() {
     test_awk!(array_element_assigned_after_the_array_changes);
 }
 
+// A variable not used yet, passed to a function that uses it as an array, is that array
+// in the caller too; a scalar stays the function's own (TXT-18). gawk 5.4's output.
+#[test]
+fn test_awk_an_unused_variable_passed_to_a_function_can_become_an_array() {
+    test_awk!(an_unused_variable_passed_to_a_function_can_become_an_array);
+}
+
 #[test]
 fn test_awk_hello_world() {
     test_awk!(hello_world)
