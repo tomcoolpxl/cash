@@ -212,7 +212,9 @@ One that fails is run again on an idle machine and judged from that. Seen so far
 - Later on 2026-10-02, in the second of two full runs at 8 threads (227 s, against 176 s
   for the first): `bash_gaps::jobs_and_wait_answer_as_bash_53_does`, timed out at 15 s.
   It runs about 16 scripts in a row with half-second sleeps, and alone it took 7.5 s in
-  each of five runs.
+  each of five runs. In the next release's second run it timed out again, with both
+  `corpus` tests above and `git_prompt`, while other sessions kept two cores busy (362 s,
+  against 195 s for the first run). All four passed alone.
 
 ---
 
