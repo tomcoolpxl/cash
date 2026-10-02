@@ -54,13 +54,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ## Phase 8. Crashes and security (R2, R4, R9)
 
-### 8.3 `start` passes a URL to cmd unquoted
-
-`start 'https://x/?a=1&b=2'` hands `&b=2` to `cmd.exe` as a second command; `%VAR%`
-expands; a relative path resolves against the process folder
-(`cash-builtins/src/win.rs:120-131`). Call `ShellExecuteExW` with the absolute path. From
-reading. BI-06.
-
 ### 8.4 Two forms get past the subscript hardening of §4 row 37
 
 `unset "a[$k]"` with `k='$((touch x) )'` or `k='${ touch x; }'` creates `x`; plain

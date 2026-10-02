@@ -115,27 +115,21 @@ impl builtins::Command for StartCommand {
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, Self::Error> {
-        // A path is normalised so every accepted spelling works (D3); anything that is
-        // not a path — a URL — is passed through untouched.
-        let target = if self.target.contains("://") {
-            self.target.clone()
+        // A file or folder that exists is resolved against the shell's working directory,
+        // not the process's (cash never changes its own), in every spelling D3 accepts.
+        // Anything else — a URL, `mailto:`, `ms-settings:`, a program's name — goes to the
+        // handler as written. No command processor sees it, so `&` and `%` mean nothing.
+        let path = context.shell.absolute_path(Path::new(&self.target));
+        let target = if path.exists() {
+            cash_win32::path::to_backslash(&path)
         } else {
-            cash_win32::path::to_backslash(&cash_win32::path::accept_path(&self.target))
+            self.target.clone()
         };
 
-        // `cmd /c start` is the documented way to reach the shell handler. The empty
-        // title argument is required: `start` treats a lone quoted argument as a window
-        // title rather than a target.
-        let status = std::process::Command::new("cmd.exe")
-            .args(["/d", "/s", "/c", "start", "", &target])
-            .status();
-
-        match status {
-            Ok(status) => Ok(ExecutionResult::new(
-                u8::try_from(status.code().unwrap_or(1) & 0xFF).unwrap_or(1),
-            )),
+        match cash_win32::shellopen::open(&target, context.shell.working_dir()) {
+            Ok(()) => Ok(ExecutionResult::success()),
             Err(e) => {
-                writeln!(context.stderr(), "start: {e}")?;
+                writeln!(context.stderr(), "start: {}: {e}", self.target)?;
                 Ok(ExecutionResult::new(1))
             }
         }

@@ -44,6 +44,7 @@ pub mod resolve;
 pub mod restart;
 pub mod scoop;
 pub mod session;
+pub mod shellopen;
 pub mod spawn;
 pub mod stdio;
 /// Asking one process to stop, then making it: D21's `TERM`.

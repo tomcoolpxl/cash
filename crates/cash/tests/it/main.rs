@@ -71,6 +71,8 @@ mod held_descriptors;
 mod identity_and_jobs;
 // D69: `cash --init-rc`, the starter ~/.bashrc Scoop writes for a user with none.
 mod init_rc;
+// Text that must never become a command: `start`'s target, a twice-expanded subscript.
+mod injection;
 mod job_groups;
 mod kill_family;
 // D21/D22: what a kill target means, including the `kill 0` that used to signal the
