@@ -128,6 +128,14 @@ fn test_awk_output_is_flushed_before_another_program_writes() {
     test_awk!(output_is_flushed_before_another_program_writes);
 }
 
+// An element is found by its key when it is assigned, after the right-hand side ran:
+// `b["x"] = split(s, b)` wrote into `b[1]`, and deleting an element on the right panicked
+// (TXT-13). gawk 5.4's output.
+#[test]
+fn test_awk_array_element_assigned_after_the_array_changes() {
+    test_awk!(array_element_assigned_after_the_array_changes);
+}
+
 #[test]
 fn test_awk_hello_world() {
     test_awk!(hello_world)

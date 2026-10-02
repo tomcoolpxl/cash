@@ -11,7 +11,7 @@ use std::cell::UnsafeCell;
 use std::marker::PhantomData;
 use std::rc::Rc;
 
-use super::array::{KeyIterator, ValueIndex};
+use super::array::{Key, KeyIterator};
 use super::value::{AwkRefType, AwkValue, AwkValueVariant};
 use crate::program::{Action, Function, OpCode, SourceLocation};
 
@@ -27,7 +27,12 @@ pub(crate) struct ArrayIterator {
 #[derive(Clone, PartialEq)]
 pub(crate) struct ArrayElementRef {
     pub(crate) array: *mut AwkValue,
-    pub(crate) value_index: ValueIndex,
+    /// The element's key. An index into the array's storage went stale when the
+    /// expression using the reference changed the array first: `a["x"] = split(s, a)`
+    /// wrote into `a[1]`, and deleting an element on the right panicked
+    /// (`REVIEW_REPORT.md` TXT-13). The key is looked up when the reference is used, and
+    /// the element made again if it has gone, as gawk has it.
+    pub(crate) key: Key,
 }
 
 pub(crate) enum StackValue {
@@ -52,8 +57,8 @@ impl StackValue {
                 StackValue::ArrayElementRef(array_element_ref) => (*array_element_ref.array)
                     .as_array()
                     .expect("expected array")
-                    .index_to_value(array_element_ref.value_index)
-                    .expect("invalid array value index"),
+                    .get_value(array_element_ref.key.clone())
+                    .expect("array element"),
                 _ => unreachable!("invalid stack value"),
             }
         }
@@ -70,10 +75,8 @@ impl StackValue {
                 StackValue::UninitializedRef(ptr) => Ok(ptr),
                 StackValue::ArrayElementRef(array_element_ref) => {
                     let arr = (*array_element_ref.array).as_array()?;
-                    let val_ptr = arr
-                        .index_to_value(array_element_ref.value_index)
-                        .ok_or_else(|| "invalid array value index".to_string())?;
-                    Ok(val_ptr)
+                    let value: *mut AwkValue = arr.get_value(array_element_ref.key.clone())?;
+                    Ok(value)
                 }
                 StackValue::Value(_) => Err("scalar used in array context".to_string()),
                 _ => Err("expected lvalue".to_string()),
@@ -101,8 +104,8 @@ impl StackValue {
                     let val = (*array_element_ref.array)
                         .as_array()
                         .expect("expected array")
-                        .index_to_value(array_element_ref.value_index)
-                        .expect("invalid array value index");
+                        .get_value(array_element_ref.key.clone())
+                        .expect("array element");
                     (*val).clone().into_ref(AwkRefType::None)
                 }
                 _ => unreachable!("invalid stack value"),

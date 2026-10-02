@@ -674,17 +674,16 @@ impl Interpreter {
                             .ok_or_else(|| "empty stack".to_string())?
                             .unwrap_ptr()?
                     };
+                    // Referring to an element makes it, as in every awk.
+                    let key: array::Key = key.into();
                     // safe by type invariance
-                    let value_index = unsafe { &mut *array }
+                    unsafe { &mut *array }
                         .as_array()?
-                        .get_value_index(key.into())?;
+                        .get_value_index(key.clone())?;
                     // array is valid at least until this stack value is popped by stack invariance,
                     // so this is safe
                     unsafe {
-                        stack.push(StackValue::ArrayElementRef(ArrayElementRef {
-                            array,
-                            value_index,
-                        }))?
+                        stack.push(StackValue::ArrayElementRef(ArrayElementRef { array, key }))?
                     };
                 }
                 OpCode::Assign => {
