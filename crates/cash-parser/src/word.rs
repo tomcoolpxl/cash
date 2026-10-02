@@ -861,6 +861,11 @@ fn parse_array_elements<'a>(
         .collect()
 }
 
+/// `$!`, the parameter.
+const fn last_background() -> Parameter {
+    Parameter::Special(SpecialParameter::LastBackgroundProcessId)
+}
+
 peg::parser! {
     grammar expansion_parser(parser_options: &ParserOptions) for str {
         // Helper rule that enables pegviz to be used to visualize debug peg traces.
@@ -1255,6 +1260,26 @@ peg::parser! {
             }
 
         rule parameter_expression() -> ParameterExpr =
+            // cash: `${#?}` is the length of `$?`, as in Bash, when nothing follows the
+            // parameter; read as `${#}` with the `?` operator it was `$#` or an error.
+            "#" parameter:parameter() &"}" {
+                ParameterExpr::ParameterLength { parameter, indirect: false }
+            } /
+            // cash: `${!}`, and `$!` with an operator (`${!:+set}`, `${!-none}`), are `$!`
+            // itself. Indirection takes a name, and taking the `!` for it left them as
+            // written.
+            "!" &"}" {
+                ParameterExpr::Parameter { parameter: last_background(), indirect: false }
+            } /
+            "!" test_type:parameter_test_type() "-" default_value:parameter_expression_word()? {
+                ParameterExpr::UseDefaultValues { parameter: last_background(), indirect: false, test_type, default_value }
+            } /
+            "!" test_type:parameter_test_type() "?" error_message:parameter_expression_word()? {
+                ParameterExpr::IndicateErrorIfNullOrUnset { parameter: last_background(), indirect: false, test_type, error_message }
+            } /
+            "!" test_type:parameter_test_type() "+" alternative_value:parameter_expression_word()? {
+                ParameterExpr::UseAlternativeValue { parameter: last_background(), indirect: false, test_type, alternative_value }
+            } /
             indirect:parameter_indirection() parameter:parameter() test_type:parameter_test_type() "-" default_value:parameter_expression_word()? {
                 ParameterExpr::UseDefaultValues { parameter, indirect, test_type, default_value }
             } /

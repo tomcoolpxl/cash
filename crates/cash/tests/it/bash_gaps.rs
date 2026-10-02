@@ -1702,6 +1702,31 @@ fn jobs_and_wait_answer_as_bash_53_does() {
     );
 }
 
+/// `${!}` and `$!` with an operator were left as written: the `!` was taken for an
+/// indirection (`${!name}`), which needs a name. `${#?}` was `$#` or an error, not the
+/// length of `$?`. Before any job `$!` is unset. Git Bash 5.3.15's answers (TODO 5.4).
+#[test]
+fn braced_special_parameters_expand_as_in_bash() {
+    assert_eq!(
+        output(r#"echo "[${!}] [${!-none}] [${!:+set}] [${#!}] [${#?}]""#),
+        (0, "[] [none] [] [0] [1]".into())
+    );
+    assert_eq!(
+        output(r#"sleep 0.1 & p=$!; [ "${!}" = "$p" ] && echo same; echo "[${!:+set}]""#),
+        (0, "same\n[set]".into())
+    );
+    // `set -u` refuses an unset `$!`, as it refuses `$1`.
+    let (code, stdout, stderr) = output_with_stderr(r#"set -u; echo "[$!]"; echo after"#);
+    assert_ne!(code, 0);
+    assert_eq!(stdout, "");
+    assert!(stderr.contains("$!"), "{stderr}");
+    // An indirection is still one.
+    assert_eq!(
+        output(r#"x=y; y=5; echo "${!x} ${!x:-d}""#),
+        (0, "5 5".into())
+    );
+}
+
 #[test]
 fn wait_reports_the_status_whichever_way_jobs_showed_the_job() {
     for jobs in ["jobs", "jobs -l", "jobs -n", "jobs %1"] {

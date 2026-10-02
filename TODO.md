@@ -30,18 +30,7 @@ trust its runs, then by what a user notices most.
 
 | Phase | What | Items |
 | --- | --- | --- |
-| 5 | Jobs, `wait`, and the tools beside them | 5.4 |
 | 6 | Updating cash | 6.1 |
-
----
-
-## Phase 5. Jobs, `wait`, and the tools beside them
-
-### 5.4 `${!}` and `${!:+word}` are not expanded
-
-Found in 5.1 (2026-10-02). `echo "[${!}]"` prints `[${!}]` and `echo "${!:+set}"` prints
-`${!:+set}`, as written, where Git Bash 5.3.15 prints the pid and `set`. `$!` and `${#!}`
-work. Likely the parser taking `${!` for the start of an indirection (`${!name}`).
 
 ---
 

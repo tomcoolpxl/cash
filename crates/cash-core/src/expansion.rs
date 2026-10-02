@@ -2293,7 +2293,13 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
                     self.undefined_expansion(parameter, allow_unset_vars)
                 }
             }
-            cash_parser::word::Parameter::Special(s) => Ok(self.expand_special_parameter(s)),
+            // `$!` before any job is unset, and `set -u` refuses it as Bash does.
+            cash_parser::word::Parameter::Special(s) => match self.expand_special_parameter(s) {
+                expansion if expansion.undefined => {
+                    self.undefined_expansion(parameter, allow_unset_vars)
+                }
+                expansion => Ok(expansion),
+            },
             cash_parser::word::Parameter::Named(n) => {
                 if !env::valid_variable_name(n.as_str()) {
                     Err(error::ErrorKind::BadSubstitution(n.clone()).into())
@@ -2426,13 +2432,13 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
                 Expansion::from(std::process::id().to_string())
             }
             // cash: `$!` was the current job's pid, so it was empty once the job had been
-            // reported, and in every subshell, which has no jobs of its own.
-            cash_parser::word::SpecialParameter::LastBackgroundProcessId => Expansion::from(
-                self.shell
-                    .jobs()
-                    .last_background_pid()
-                    .map_or_else(String::new, |pid| pid.to_string()),
-            ),
+            // reported, and in every subshell, which has no jobs of its own. Before any
+            // job has started it is unset, as in Bash: `${!-none}` is `none`.
+            cash_parser::word::SpecialParameter::LastBackgroundProcessId => self
+                .shell
+                .jobs()
+                .last_background_pid()
+                .map_or_else(Expansion::undefined, |pid| Expansion::from(pid.to_string())),
             cash_parser::word::SpecialParameter::ShellName => Expansion::from(
                 self.shell
                     .current_shell_name()
