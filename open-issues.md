@@ -215,6 +215,11 @@ One that fails is run again on an idle machine and judged from that. Seen so far
   each of five runs. In the next release's second run it timed out again, with both
   `corpus` tests above and `git_prompt`, while other sessions kept two cores busy (362 s,
   against 195 s for the first run). All four passed alone.
+- On 2026-10-03, in a run of 283 tests at 8 threads with other Claude sessions keeping
+  the CPU at 30 to 48 %: `acceptance::an_unpatched_bundled_tool_writes_into_a_write_substitution_through_a_file`
+  (`cp src >(cat)`, where `cat` reads a temp file as `cp` writes it). It passed alone,
+  in three runs of the acceptance module and in the full run for 1.3.8 (3221 tests,
+  175 s, all passed with `--retries 0`).
 
 ---
 

@@ -22,7 +22,8 @@ for working through it.
   process substitution (phase 3), 1.3.4 the `/dev` names and the bundled tools (phase 4),
   1.3.5 jobs, `wait` and the tools beside them (phase 5), 1.3.6 the Tab menu opening on
   the history hint's candidate (asked by the user on 2026-10-02, outside the phases),
-  1.3.7 the shared part on the first Tab and the grid on the second (phase 7).
+  1.3.7 the shared part on the first Tab and the grid on the second (phase 7), 1.3.8
+  crashes, security and CI hardening (phase 8).
 - An item says what was seen and what Bash does; a cause only where it was looked for.
   Longer notes on a thing that stays open belong in `open-issues.md`.
 
@@ -31,7 +32,7 @@ their work is in `main`; the sessions themselves are not needed any more. The or
 the grouping were chosen that day: the test suite first, so that every later phase can
 trust its runs, then by what a user notices most.
 
-Phases 1 to 7 are done. Phase 6 changed no code and had no release of its own.
+Phases 1 to 8 are done. Phase 6 changed no code and had no release of its own.
 
 Phases 8 to 14 are the code review of 2026-10-02. `REVIEW_REPORT.md` has the evidence
 and the reasons; the IDs (EXE-01, TXT-01, …) are its findings, and R1 to R11 its
@@ -49,10 +50,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 | 12 | 1.3.12 | Language |
 | 13 | 1.3.13 | Builtins and error output |
 | 14 | 1.3.14 | Tests, records and leftovers |
-
----
-
-## Phase 8. Crashes and security (R2, R4, R9)
 
 ---
 
