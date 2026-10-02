@@ -166,6 +166,10 @@ pub fn maybe_dispatch() -> Option<i32> {
         return Some(exit_code(ExecutionExitCode::NotFound));
     };
 
+    // The tool opens `/dev/stdin`, `/dev/null` and the rest as a redirection does (D7):
+    // in this process only, which runs nothing but the tool.
+    cash_win32::devices::install();
+
     let mut argv: Vec<OsString> = Vec::with_capacity(1 + args.len());
     argv.push(name.clone());
     argv.extend(args.iter().cloned());

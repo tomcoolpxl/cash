@@ -30,31 +30,12 @@ trust its runs, then by what a user notices most.
 
 | Phase | What | Items |
 | --- | --- | --- |
-| 4 | The `/dev` names, descriptors and the bundled tools | 4.1 to 4.6 |
+| 4 | The `/dev` names, descriptors and the bundled tools | 4.2 to 4.6 |
 | 5 | Jobs, `wait`, and the tools beside them | 5.1 to 5.3 |
 
 ---
 
 ## Phase 4. The `/dev` names, descriptors and the bundled tools
-
-### 4.1 The `/dev` names as an argument of the bundled tools
-
-Reported by both `/dev/stdin` sessions. `open-issues.md` entry 9, spec D7 and §4 row 39.
-
-- `cat /dev/stdin`, `cat /dev/fd/0`, `tee /dev/stderr`, `cat /dev/null > f`,
-  `cp /dev/null f`: "The system cannot find the path specified.", status 1.
-- The names are known only where cash opens the file itself (a redirection, `source`).
-  An argument reaches a command as written (D4); translating arguments for tools whose
-  grammar cash does not know is what D28 was revoked for.
-
-**Decided: the tools cash bundles accept the names themselves, all of them, in one shared
-place.** Where a bundled tool opens a file, `/dev/stdin`, `/dev/stdout`, `/dev/stderr`,
-`/dev/null` and `/dev/fd/N` are what they are in a redirection, so cash translates no
-argument. 3.2 made a start: `cash_win32::pipe::open_output` is where `tee`, `sort`,
-`uniq` and `shuf` open the file they write, patched in `vendor/uutils`. A program on `PATH` still gets the name as written and fails. This is a new
-decision for the spec. **Yours, if it comes to it:** should the bundled tools turn out to
-have no one layer their file opening goes through, the work stops with the list of tools
-and what each would cost.
 
 ### 4.2 File tests on the `/dev` names are false
 
@@ -64,6 +45,11 @@ Reported by three sessions. `open-issues.md` entry 9.
 `[ -e /dev/stdin ]`, `[ -p /dev/stdin ]`, `[ -w /dev/stdout ]`, `[ -e /dev/fd/0 ]` and
 `[[ -e /dev/stdin ]]` are all false where Git Bash says true. The tests ask the
 filesystem; each predicate needs its own answer for each name.
+
+Found in 4.1 (2026-10-02): cash's own `ls` and `stat` builtins ask the filesystem the same
+way, and run in the shell, where the bundled tools' answer to the names does not reach:
+`ls -l /dev/null` says "No such file or directory", `stat /dev/stdin` "The system cannot
+find the path specified". Git Bash lists `crw-rw-rw-` for `/dev/null`.
 
 ### 4.3 `cat <&1` reads standard input instead of failing
 
@@ -109,6 +95,8 @@ Each is done only if it is cheap while 4.1 and 4.2 are in that code; what is not
 - `read x < 'CONIN$'` fails; only the `/dev/tty` name is mapped to the console.
 - `exec 3<>/dev/tty` can be read from but not written to: a console has no one handle
   that is both (spec D7).
+- Found in 4.1: `/dev/zero`, `/dev/random` and `/dev/urandom` are known nowhere
+  (`head -c 4 /dev/zero`); Git Bash has all three.
 
 ---
 

@@ -282,3 +282,90 @@ source /dev/stdin; echo "rc=$? seen=$seen""#,
     );
     assert_eq!(left.stderr, "");
 }
+
+// The names as an argument of a bundled tool, which opens the file itself (D7, TODO 4.1).
+// Each of these said "The system cannot find the path specified." and returned 1.
+
+#[test]
+fn a_bundled_tool_reads_standard_input_by_name() {
+    let left = cash_given(
+        "x\n",
+        r#"cat /dev/stdin; echo "cat: $?"; echo y | cat /dev/fd/0; echo z | cat /dev/stdin -
+printf 'b\na\n' | sort /dev/stdin; printf '1\n2\n' | wc -l /dev/stdin"#,
+    );
+
+    assert_eq!(left.stdout, "x\ncat: 0\ny\nz\na\nb\n2 /dev/stdin\n");
+    assert_eq!(left.stderr, "");
+}
+
+#[test]
+fn a_bundled_tool_writes_each_output_stream_by_name() {
+    let left = cash_given(
+        "",
+        r#"echo to-err | tee /dev/stderr; echo to-out | tee /dev/stdout > /dev/null
+echo gone | tee /dev/null; echo "rc=$?""#,
+    );
+
+    // `tee /dev/stdout > /dev/null`: tee's standard output is the null device, and so
+    // is the stream it names; Bash says nothing either.
+    assert_eq!(left.stdout, "to-err\ngone\nrc=0\n");
+    assert_eq!(left.stderr, "to-err\n");
+}
+
+#[test]
+fn a_bundled_tool_empties_a_file_from_the_null_device() {
+    let dir = tempfile::tempdir().expect("a scratch folder");
+    std::fs::write(dir.path().join("a"), "old\n").expect("a file to empty");
+    std::fs::write(dir.path().join("b"), "old\n").expect("a file to empty");
+    let left = cash_in(
+        dir.path(),
+        "",
+        r#"cat /dev/null > a; echo "cat: $?"; cp /dev/null b; echo "cp: $?"
+echo piped | cp /dev/stdin c; echo "cp stdin: $?""#,
+    );
+
+    assert_eq!(left.stdout, "cat: 0\ncp: 0\ncp stdin: 0\n");
+    assert_eq!(left.stderr, "");
+    assert_eq!(read(dir.path(), "a"), "");
+    assert_eq!(read(dir.path(), "b"), "");
+    assert_eq!(read(dir.path(), "c"), "piped\n");
+}
+
+#[test]
+fn dd_writes_to_the_null_device_and_a_pipe() {
+    // uutils' dd asks where its output is and truncates it there, which a pipe or `NUL`
+    // refuses on Windows: `dd of=NUL` failed with "Incorrect function" before any name.
+    let left = cash_given(
+        "x\n",
+        r#"dd if=/dev/stdin of=/dev/stdout status=none; echo y | dd of=/dev/null status=none
+echo "rc=$?""#,
+    );
+
+    assert_eq!(left.stdout, "x\nrc=0\n");
+    assert_eq!(left.stderr, "");
+}
+
+#[test]
+fn a_bundled_tool_finds_no_descriptor_above_two() {
+    // A program has standard input, output and error only (D26).
+    let left = cash_given("", r#"cat /dev/fd/3; echo "rc=$?""#);
+
+    assert_eq!(left.stdout, "rc=1\n");
+    assert!(left.stderr.contains("/dev/fd/3"), "{}", left.stderr);
+}
+
+#[test]
+fn a_bundled_tool_knows_the_names_where_a_redirection_does() {
+    // At the root of a drive, as resolving `/dev/null` leaves it; deeper down, a file.
+    let dir = tempfile::tempdir().expect("a scratch folder");
+    std::fs::create_dir(dir.path().join("dev")).expect("a folder called dev");
+    std::fs::write(dir.path().join("dev").join("null"), "a file\n").expect("a file");
+    let left = cash_in(
+        dir.path(),
+        "",
+        r#"cat "${PWD:0:2}/dev/null"; echo "rc=$?"; cat dev/null"#,
+    );
+
+    assert_eq!(left.stdout, "rc=0\na file\n");
+    assert_eq!(left.stderr, "");
+}

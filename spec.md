@@ -344,9 +344,34 @@ working directory is: `C:/src/dev/null` is a file. N is a number as a listing of
 `/dev/fd` would write it, so `/dev/fd/03` is a file as well.
 
 They are recognised where cash opens a file by name itself: the word of a redirection and
-the operand of `source`. Not yet as an argument to a command (`tee /dev/stderr`,
-`cat /dev/null`), and not by the file tests (`[ -e /dev/null ]` is false, see the
+the operand of `source`. Not by the file tests (`[ -e /dev/null ]` is false, see the
 baseline table).
+
+**A bundled tool opens them too (2026-10-02).** An argument reaches a command as written
+(D4), so `cat /dev/stdin`, `tee /dev/stderr` and `cp /dev/null f` failed with "The
+system cannot find the path specified." cash translates no argument, as D28's revocation
+requires; the tools cash bundles accept the names themselves. They are 85 uutils crates
+with no one function in Rust that their opens go through, but every open in `cash.exe` is
+a call to `CreateFileW` in `kernel32.dll`. So in a bundled tool's own process, and never
+in the shell, cash points its imports of that and of the calls beside it at its own
+functions (`cash_win32::devices`), which answer the names as a redirection does and pass
+every other path on:
+
+- `/dev/stdin`, `/dev/stdout`, `/dev/stderr` and `/dev/fd/0` to `2` are the tool's own
+  standard streams, duplicated, not opened again; `/dev/fd/3` and up are no file, as a
+  program has no descriptor above 2 (D26). `/dev/null` is the null device, `/dev/tty` the
+  console, its keys to read and its screen to write.
+- A pipe or a device is an empty file to a tool that asks (`cat` whether its input is a
+  folder, `cp` what to copy, `dd` where its output stands): Windows answers "Incorrect
+  function", and uutils stopped there even on `NUL`. `cp` from or to a name copies by
+  reading and writing.
+- A name is one where a redirection takes it: at `/dev` at the root, with or without a
+  drive, which is also what the standard library makes of `/dev/stdin` before it opens
+  it (`\\?\C:\dev\stdin`). `C:/src/dev/null` is a file.
+
+A program on `PATH` still gets the name as written and fails on it. cash's own builtins
+that ask the filesystem (`ls`, `stat`, the file tests) run in the shell and are not
+covered by this; they are TODO 4.2.
 
 ### D8 — Command resolution is cash's own
 
@@ -2325,7 +2350,7 @@ someone who expected bash, so additions need to earn their place.
 | 36 | `which ls` prints `C:/…/cash.exe/ls`, a path no file is at, which cash runs as `ls` | A builtin has no file, and scripts run what `which` prints | D58 |
 | 37 | A subscript that `unset`, `read`, `printf -v`, `declare` or `[[ -v ]]` expands a second time never runs a command substitution: `unset "a[$key]"` with `key='$(cmd)'` is an error | Bash runs `cmd`, its best-known array injection; `$i` and `$((…))` still expand as in Bash (as 27 does for arithmetic) | — |
 | 38 | A `CHLD` trap runs once per child process cash starts and reaps; a bundled tool (`ls`, `cat`) and a command substitution run inside cash and raise none | Windows has no `SIGCHLD`; cash emulates it from the children it waits for, and those have no process | D64 |
-| 39 | `/dev/stdin`, `/dev/stdout`, `/dev/stderr` and `/dev/fd/N` work in a redirection and in `source`, and share the descriptor: `> /dev/stdout` never truncates the file standard output is writing, and a read from `/dev/fd/3` goes on where 3 stands. As an argument (`cat /dev/stdin`) or in a file test they name nothing | Windows has no `/dev` to open a second time, and an argument reaches a command as written | D7, D4 |
+| 39 | `/dev/stdin`, `/dev/stdout`, `/dev/stderr` and `/dev/fd/N` work in a redirection and in `source`, and share the descriptor: `> /dev/stdout` never truncates the file standard output is writing, and a read from `/dev/fd/3` goes on where 3 stands. A bundled tool opens them as well (`cat /dev/stdin`); a program on `PATH` and a file test do not | Windows has no `/dev` to open a second time, and an argument reaches a command as written | D7, D4 |
 
 `select` was missing outright until recently: it was a reserved word with no grammar
 rule, so `select x in a b; do …; done` was a syntax error that took the whole file with

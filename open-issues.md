@@ -208,25 +208,18 @@ What is behind them, as far as it is known:
 **Seen (2026-09-30)** while fixing `< /dev/stdin` ("failed to redirect to C:/dev/stdin").
 A redirection to `/dev/null`, `/dev/stdin`, `/dev/stdout`, `/dev/stderr` or `/dev/fd/N`
 and `source` of one now work (spec D7). Each script below was run with `x` piped to it,
-by Git Bash 5.3.15 and by cash. None of these is fixed.
+by Git Bash 5.3.15 and by cash. The names as an argument of a bundled tool
+(`cat /dev/stdin`, `cp /dev/null f`, `tee /dev/stderr`) work since 1.3.4 (spec D7); the
+rest are not fixed.
 
 | Script | Bash 5.3.15 | cash |
 | --- | --- | --- |
-| `cat /dev/stdin`, `cat /dev/fd/0` | `x` | `/dev/stdin: The system cannot find the path specified.`, 1 |
-| `cat /dev/null > f`, `cp /dev/null f` | empties `f`, 0 | the same message, 1 (the first still empties `f`) |
-| `echo x \| tee /dev/stderr` | `x` on both | the same message, 1 |
 | `[ -e /dev/stdin ]`, `[ -e /dev/null ]`, `[ -c /dev/null ]`, `[ -p /dev/stdin ]`, `[ -w /dev/stdout ]`, `[ -e /dev/fd/0 ]`, `[[ -e /dev/stdin ]]` | 0 | 1 |
 | `cat <&1`, `cat < /dev/stdout` (output a pipe) | `cat: -: Bad file descriptor`, 1 | prints `x`, 0 |
 | `cat 3< f <&3` | the contents of `f` | `operation not supported on this platform: fd redirections`, 1 |
 
 What is behind them, as far as it is known:
 
-- **An argument reaches a command as written (D4).** cash knows the names where it opens
-  the file itself. A bundled tool opens its own files, as a program on `PATH` does, and
-  Windows has no `/dev`. The `/c/…` spelling has the same cliff and gets a hint
-  (`warn_about_unix_drive_spellings`); these names get none. Making them work for the
-  bundled tools would mean cash translating arguments for tools whose grammar it does
-  not know, which is what D28 was revoked for.
 - **The file tests ask the filesystem.** §9 of the spec has listed `[ -e /dev/null ]` as a
   D7 gap since the first baseline. `cash_win32::path::accept` already tells the names
   from paths; the tests do not ask it.
