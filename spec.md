@@ -1535,6 +1535,15 @@ commands cash carries itself.
 **Builtins take precedence, as in bash**, with bash's own escape hatch: `enable -n cat`
 disables the builtin and the `PATH` executable is used instead. Verified working.
 
+**A bundled tool names itself (2026-10-02).** It runs as a process of its own,
+`cash.exe --invoke-bundled cut -f1`, and uutils names a tool after the first word of
+the process's command line, which Windows makes the program's path and lets no one
+choose: `cut` said `cash.exe: you must specify a list of bytes, characters, or fields`
+and `Try 'C:/…/cash.exe --help'`. In that process, and with the import patching D7
+describes for the `/dev` names, `GetCommandLineW` answers with the command line the tool
+would have had on its own, `"cut" "-f1"`, so it says `cut:` and `Try 'cut --help'` as
+GNU's does (`cash_win32::cmdline`).
+
 cash's `xargs` follows this precedence too, including its default `echo` command.
 Each builtin invocation uses an isolated shell copy, so state changes and `exit`
 do not affect the caller. Arguments remain data, without another shell parse.

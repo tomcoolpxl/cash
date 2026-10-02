@@ -174,6 +174,9 @@ pub fn maybe_dispatch() -> Option<i32> {
     argv.push(name.clone());
     argv.extend(args.iter().cloned());
 
+    // And it is `cut` to itself, not `cash.exe`, in its messages.
+    cash_win32::cmdline::present(&argv);
+
     if path_emitting(name_str) && !asks_for_help(args) {
         return Some(run_rendering_paths(*func, argv));
     }

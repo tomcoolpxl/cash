@@ -30,34 +30,12 @@ trust its runs, then by what a user notices most.
 
 | Phase | What | Items |
 | --- | --- | --- |
-| 4 | The `/dev` names, descriptors and the bundled tools | 4.5 to 4.7 |
+| 4 | The `/dev` names, descriptors and the bundled tools | 4.6 and 4.7 |
 | 5 | Jobs, `wait`, and the tools beside them | 5.1 to 5.3 |
 
 ---
 
 ## Phase 4. The `/dev` names, descriptors and the bundled tools
-
-### 4.5 A bundled tool calls itself `cash.exe` in its messages
-
-Reported by the user on 2026-09-30, from the installed cash (Scoop's), at the prompt:
-
-```text
-❯ cut
-cash.exe: you must specify a list of bytes, characters, or fields
-Try 'C:/Users/thraa/scoop/apps/cash/current/cash.exe --help' for more information.
-❯ cut dfdfd
-cash.exe: you must specify a list of bytes, characters, or fields
-Try 'C:/Users/thraa/scoop/apps/cash/current/cash.exe --help' for more information.
-```
-
-GNU `cut` says `cut: you must specify a list of bytes, characters, or fields` and
-`Try 'cut --help' for more information.` The tool runs as `cash.exe --invoke-bundled
-cut`, and takes its name for messages from the program it runs in, not from the name it
-was called by; `cut --help` itself says `Usage: cut OPTION... [FILE]...`, so the name is
-known. To check for the other bundled tools as well: the fault is likely in the one
-place they are dispatched (`crates/cash-shell/src/bundled.rs`,
-`crates/cash-coreutils-builtins`), not in `cut`. It sits in this phase because 4.1 is in
-the same layer.
 
 ### 4.6 Small differences left in the `/dev` names
 

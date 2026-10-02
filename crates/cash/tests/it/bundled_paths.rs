@@ -304,3 +304,31 @@ fn several_paths_in_one_invocation_are_each_rendered() {
         out.stdout
     );
 }
+
+/// A bundled tool runs as `cash.exe --invoke-bundled cut`, and named itself after the first
+/// word of that command line: `cash.exe: you must specify a list of bytes, characters, or
+/// fields` and `Try 'C:/…/cash.exe --help'` (TODO 4.5). GNU's names itself `cut`.
+#[test]
+fn a_bundled_tool_names_itself_in_its_messages() {
+    let out = cash("cut");
+    assert_eq!(out.code, 1);
+    assert_eq!(
+        out.stderr.replace("\r\n", "\n"),
+        "cut: you must specify a list of bytes, characters, or fields\n\
+         Try 'cut --help' for more information."
+    );
+
+    let out = cash("cat /nonexistent; wc /nonexistent; head -n x");
+    for (line, tool) in out.stderr.lines().zip(["cat: ", "wc: ", "head: "]) {
+        assert!(line.starts_with(tool), "{line}");
+    }
+    assert!(!out.stderr.contains("cash"), "{}", out.stderr);
+
+    // The arguments the tool reads are its own, quotes and patterns as cash passed them.
+    let out = cash(r#"echo "a*b c" | cut -d " " -f1; cut -c1-2 nothing*here 2>&1"#);
+    assert!(
+        out.stdout.starts_with("a*b\ncut: 'nothing*here': "),
+        "{}",
+        out.stdout
+    );
+}

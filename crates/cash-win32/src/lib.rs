@@ -16,6 +16,7 @@ compile_error!("cash builds only on Windows (spec D43)");
 
 pub mod children;
 pub mod cmd;
+pub mod cmdline;
 pub mod conin;
 pub mod conpty;
 pub mod console;
