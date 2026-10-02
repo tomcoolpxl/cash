@@ -98,6 +98,30 @@ fn a_redirection_above_2_on_the_native_exe_itself_is_still_refused() {
 }
 
 #[test]
+fn a_descriptor_copied_down_into_0_1_or_2_is_a_step_not_a_refusal() {
+    // `cat 3< f <&3` and the swap idiom `cmd 3>&1 1>&2 2>&3` (`dialog`, `whiptail`) were
+    // refused: fd 3 is set on the command, but only to be copied into 0, 1 or 2, and the
+    // program gets what it held there (TODO 4.4). Bash runs both.
+    let dir = fixture("step");
+    std::fs::write(dir.join("f"), "contents\n").unwrap();
+    let out = cash_in(
+        &dir,
+        "cat 3< f <&3; echo rc=$?; cmd.exe /d /c \"echo swapped\" 3>&1 1>&2 2>&3; echo rc=$?",
+    );
+    assert_eq!(
+        out.stdout, "contents\nrc=0\nrc=0\n",
+        "stderr: {}",
+        out.stderr
+    );
+    assert_eq!(out.stderr.trim_end(), "swapped");
+
+    // Set again after the copy, it is on the command once more.
+    let out = cash_in(&dir, "cat 3< f <&3 3< f; echo rc=$?");
+    assert_eq!(out.stdout, "rc=1\n");
+    assert!(out.stderr.contains(REFUSAL), "stderr: {}", out.stderr);
+}
+
+#[test]
 fn closing_a_held_descriptor_on_the_command_is_not_a_redirection_to_refuse() {
     let dir = fixture("close");
     let out = cash_in(

@@ -961,7 +961,10 @@ Consistent with D20's principle that invisible failure is the enemy.
 **Which case errors.** Only a redirection above 2 written on the simple command that
 spawns the process: `tool.exe 3>x`, `tool.exe 4>&3`, `tool.exe {fd}>x`. That is the script
 explicitly targeting a descriptor the child cannot see, so it is refused. Closing one
-(`tool.exe 3>&-`) asks for nothing the child lacks and is not refused.
+(`tool.exe 3>&-`) asks for nothing the child lacks and is not refused, and neither does one
+the command copies down into 0, 1 or 2 (2026-10-02): in `cat 3< f <&3` and in the swap
+idiom `cmd 3>&1 1>&2 2>&3` fd 3 is a step on the way, and the program gets what it held
+under the number it can see. Set again after the copy, it is on the command once more.
 
 Descriptors the shell merely *holds* are not passed and do not stop the command:
 

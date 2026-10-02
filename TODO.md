@@ -30,18 +30,12 @@ trust its runs, then by what a user notices most.
 
 | Phase | What | Items |
 | --- | --- | --- |
-| 4 | The `/dev` names, descriptors and the bundled tools | 4.4 to 4.7 |
+| 4 | The `/dev` names, descriptors and the bundled tools | 4.5 to 4.7 |
 | 5 | Jobs, `wait`, and the tools beside them | 5.1 to 5.3 |
 
 ---
 
 ## Phase 4. The `/dev` names, descriptors and the bundled tools
-
-### 4.4 `cat 3< f <&3` is refused
-
-Reported; present before the `/dev` fixes. cash:
-`operation not supported on this platform: fd redirections`, status 1. Bash prints the
-contents of `f`. Cause not looked for.
 
 ### 4.5 A bundled tool calls itself `cash.exe` in its messages
 

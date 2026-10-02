@@ -205,24 +205,13 @@ What is behind them, as far as it is known:
 
 ## 9. The `/dev` names outside a redirection, and three things seen beside them
 
-**Seen (2026-09-30)** while fixing `< /dev/stdin` ("failed to redirect to C:/dev/stdin").
-A redirection to `/dev/null`, `/dev/stdin`, `/dev/stdout`, `/dev/stderr` or `/dev/fd/N`
-and `source` of one now work (spec D7). Each script below was run with `x` piped to it,
-by Git Bash 5.3.15 and by cash. The names as an argument of a bundled tool
-(`cat /dev/stdin`, `cp /dev/null f`, `tee /dev/stderr`) and in the file tests
-(`[ -e /dev/null ]`) work since 1.3.4 (spec D7). `cat <&1` with output a pipe, which
-read standard input, fails as in Bash since then, in Windows' words ("Access is denied").
-The one below is not fixed.
-
-| Script | Bash 5.3.15 | cash |
-| --- | --- | --- |
-| `cat 3< f <&3` | the contents of `f` | `operation not supported on this platform: fd redirections`, 1 |
-
-What is behind them, as far as it is known:
-
-- **It has nothing to do with the names**; it was only met on the way, was there before
-  the fix, and its cause has not been looked for. Another, `echo x | tee >(cat >&2)`
-  failing on the named pipe, was fixed in 1.3.3 (spec D17).
+**Seen (2026-09-30)** while fixing `< /dev/stdin` ("failed to redirect to C:/dev/stdin"),
+**closed (2026-10-02)** in 1.3.4: the names as an argument of a bundled tool
+(`cat /dev/stdin`, `tee /dev/stderr`, `cp /dev/null f`) and in the file tests
+(`[ -e /dev/null ]`) work (spec D7); `cat <&1` with output a pipe, which read standard
+input, fails as in Bash, in Windows' words ("Access is denied"); `cat 3< f <&3` runs
+(spec D26); `echo x | tee >(cat >&2)` was fixed in 1.3.3 (spec D17). What is left of the
+names is TODO 4.6 and 4.7.
 
 ---
 

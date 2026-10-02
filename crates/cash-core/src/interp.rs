@@ -2528,6 +2528,14 @@ fn setup_duplicate_redirect(
             return Err(error::ErrorKind::BadFileDescriptor(source_fd_num).into());
         };
         params.set_redirected_fd(fd_num, target_file);
+        // cash (D26): a descriptor above 2 that this command set and copies down into 0,
+        // 1 or 2 (`3< f <&3`, `3>&1 1>&2 2>&3`) was a step on the way. The program gets
+        // what it held, and is not meant to see it under its own number.
+        if fd_num <= OpenFiles::STDERR_FD {
+            params
+                .command_redirected_fds
+                .retain(|&fd| fd != source_fd_num);
+        }
     } else if fd_num == 1 && !dash {
         setup_redirect_output_and_error_to(shell, params, &expanded, false)?;
     } else {
