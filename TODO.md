@@ -57,14 +57,15 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 9.3 Builtins that start programs skip the shell's environment and folder
 
-`xargs`, `find -exec`, `nohup`, `detach` and `start` spawn through
-`std::process::Command` or `CreateProcessW` with the process's folder, environment and
-PATH. `export FOO=bar; echo x | xargs cmd /c echo %FOO%` prints `%FOO%`; `xargs npm` and
-`find -exec npm` do not find `npm.cmd`; `find -exec … > out` writes past the redirection;
-`nohup sh -c …` is refused; `cd proj; detach code .` opens the wrong folder. One helper in
-cash-core on `compose_std_command` and `exported_environment`, with the context's fds and
-`jobreg::contain`, used by all of them. Same pattern: `install` operands and `find -newer`
-are relative to the process folder. XC-1, BI-01, BI-02, BI-07, BI-08, BI-12.
+`xargs`, `find -exec` and `nohup` run through the shell now
+(`cash_core::commands::run_for_builtin`). Left:
+
+- `detach` starts its program through `CreateProcessW` with a null folder and
+  environment: `cd proj; detach code .` opens the wrong folder, an exported variable does
+  not reach it, and `detach npm start` does not find `npm.cmd`. It needs the shell's
+  folder, its exported environment and its lookup, outside the job (D45). BI-08.
+- `install` operands and `find -newer FILE` are relative to the process folder: after
+  `cd sub`, `install a b` and `find . -newer ref` do not find their files. BI-07, BI-12.
 
 ### 9.4 PATHEXT, PATH and `umask` live in the process, not the shell
 

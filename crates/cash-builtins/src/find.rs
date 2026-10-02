@@ -156,16 +156,12 @@ impl builtins::Command for FindCommand {
         let mut failed = false;
         let mut batches: Vec<(Vec<String>, Vec<String>)> = Vec::new();
 
-        // cash: the shell's working directory is its own (D3/D10) — `cd` updates what the
-        // shell believes without moving the process — so a builtin that touches the
-        // filesystem has to ask the shell where it is. Reading `.` from the process's
-        // directory made `cd crates; find .` walk the repository root while `pwd` and
-        // `ls` agreed it was somewhere else.
-        let here = context.shell.working_dir().to_path_buf();
-
         'walking: for start in &walk.starts {
             // Two paths per entry: the one to print, spelled as the caller asked, and the
-            // one to open, which is where that actually is.
+            // one to open, which is where that actually is. cash: the shell's working
+            // directory is its own (D3/D10) — `cd` updates what the shell believes without
+            // moving the process — so a start is resolved by the shell. Reading `.` from
+            // the process's directory made `cd crates; find .` walk the repository root.
             let shown = PathBuf::from(start);
             let actual = context.shell.absolute_path(Path::new(start));
             let mut stack = vec![(shown, actual, 0usize)];
@@ -187,7 +183,7 @@ impl builtins::Command for FindCommand {
                 };
 
                 if depth >= walk.min_depth {
-                    evaluate(&expr, &mut visit, &context, &mut batches, here.as_path())?;
+                    evaluate(&expr, &mut visit, &context, &mut batches).await?;
                 }
 
                 failed |= visit.failed;
@@ -234,7 +230,7 @@ impl builtins::Command for FindCommand {
             if collected.is_empty() {
                 continue;
             }
-            if !run(&argv, &collected, here.as_path()) {
+            if !run(&context, &argv, &collected).await? {
                 failed = true;
             }
         }
@@ -539,31 +535,30 @@ impl ExprParser<'_> {
 }
 
 /// Evaluates the expression against one entry, performing any actions it reaches.
-fn evaluate<SE: cash_core::ShellExtensions>(
+async fn evaluate<SE: cash_core::ShellExtensions>(
     expr: &Expr,
     visit: &mut Visit<'_>,
     context: &cash_core::ExecutionContext<'_, SE>,
     batches: &mut Vec<(Vec<String>, Vec<String>)>,
-    here: &Path,
 ) -> Result<bool, cash_core::Error> {
     match expr {
         Expr::Test(test) => Ok(matches(test, visit)),
-        Expr::Not(inner) => Ok(!evaluate(inner, visit, context, batches, here)?),
+        Expr::Not(inner) => Ok(!Box::pin(evaluate(inner, visit, context, batches)).await?),
         Expr::And(left, right) => {
-            if evaluate(left, visit, context, batches, here)? {
-                evaluate(right, visit, context, batches, here)
+            if Box::pin(evaluate(left, visit, context, batches)).await? {
+                Box::pin(evaluate(right, visit, context, batches)).await
             } else {
                 Ok(false)
             }
         }
         Expr::Or(left, right) => {
-            if evaluate(left, visit, context, batches, here)? {
+            if Box::pin(evaluate(left, visit, context, batches)).await? {
                 Ok(true)
             } else {
-                evaluate(right, visit, context, batches, here)
+                Box::pin(evaluate(right, visit, context, batches)).await
             }
         }
-        Expr::Action(action) => act(action, visit, context, batches, here),
+        Expr::Action(action) => act(action, visit, context, batches).await,
     }
 }
 
@@ -616,12 +611,11 @@ fn matches(test: &Test, visit: &Visit<'_>) -> bool {
 }
 
 /// Performs an action, returning what it contributes to the expression's value.
-fn act<SE: cash_core::ShellExtensions>(
+async fn act<SE: cash_core::ShellExtensions>(
     action: &Action,
     visit: &mut Visit<'_>,
     context: &cash_core::ExecutionContext<'_, SE>,
     batches: &mut Vec<(Vec<String>, Vec<String>)>,
-    here: &Path,
 ) -> Result<bool, cash_core::Error> {
     match action {
         Action::Print => {
@@ -676,7 +670,7 @@ fn act<SE: cash_core::ShellExtensions>(
                 return Ok(true);
             }
 
-            let ran = run(argv, std::slice::from_ref(&visit.rendered), here);
+            let ran = run(context, argv, std::slice::from_ref(&visit.rendered)).await?;
             if !ran {
                 visit.failed = true;
             }
@@ -685,47 +679,42 @@ fn act<SE: cash_core::ShellExtensions>(
     }
 }
 
-/// Runs one `-exec` command, substituting `{}` with the paths it was given.
+/// Runs one `-exec` command, substituting `{}` with the paths it was given, and says
+/// whether it succeeded.
 ///
 /// The paths are already rendered (D3), so what the child receives is the spelling cash
-/// prints everywhere else rather than the one Windows stores.
-fn run(argv: &[String], paths: &[String], here: &Path) -> bool {
+/// prints everywhere else rather than the one Windows stores. The shell runs the command
+/// (`run_for_builtin`): found on its `PATH`, in its working directory, with its exported
+/// variables, its output where find's goes. One that cannot be started is reported.
+async fn run<SE: cash_core::ShellExtensions>(
+    context: &cash_core::ExecutionContext<'_, SE>,
+    argv: &[String],
+    paths: &[String],
+) -> Result<bool, cash_core::Error> {
+    // `-exec cmd \;` with no `{}` still runs once per match, as `find` does.
     let mut parts: Vec<String> = Vec::new();
-    let mut substituted = false;
-
     for part in argv {
         if part == "{}" {
             parts.extend(paths.iter().cloned());
-            substituted = true;
         } else {
             parts.push(part.clone());
         }
     }
-
-    // `-exec cmd \;` with no `{}` still runs once per match, as `find` does.
-    if !substituted {
-        // Nothing to add: the command was written without a placeholder.
-    }
-
-    let Some((program, rest)) = parts.split_first() else {
-        return false;
+    let Some(program) = parts.first() else {
+        return Ok(false);
     };
 
-    // Run it where the shell believes it is, not where the process happens to be: the
-    // paths handed over are relative to the former.
-    // A virtual path from `which` re-enters cash to run the command it names.
-    let mut command = cash_win32::path::virtual_tool(program).map_or_else(
-        || std::process::Command::new(program),
-        |tool| cash_win32::path::reentry_command(&tool),
-    );
-    let target = cash_win32::msys::locate(
-        std::ffi::OsStr::new(program),
-        &std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()).collect::<Vec<_>>(),
-        here,
-    );
-    cash_win32::msys::add_args(&mut command, target.as_deref(), rest);
-    command
-        .current_dir(here)
-        .status()
-        .is_ok_and(|status| status.success())
+    match cash_core::commands::run_for_builtin(context.shell, context.params.clone(), &parts).await
+    {
+        Ok(result) => Ok(result.is_success()),
+        Err(e) => {
+            writeln!(
+                context.stderr(),
+                "{}: {program}: {}",
+                context.command_name,
+                crate::xargs::start_failure(&e)
+            )?;
+            Ok(false)
+        }
+    }
 }

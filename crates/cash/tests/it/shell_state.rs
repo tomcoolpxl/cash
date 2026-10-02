@@ -69,3 +69,91 @@ fn a_relative_program_runs_from_the_shells_folder() {
     let out = run_in(scratch.path(), r#"PATH=".:$PATH"; cd sub && only-here"#);
     assert_eq!(out.stdout, hostname, "{}", out.stderr);
 }
+
+/// A scratch folder with `sub/a.txt` and `show.cmd`, a batch file that prints `$XF` and
+/// its first argument, found by its bare name through a `bin` folder put on `PATH`.
+fn batch_scratch(name: &str) -> Scratch {
+    let scratch = Scratch::new(name);
+    std::fs::create_dir_all(scratch.path().join("sub")).unwrap();
+    std::fs::create_dir_all(scratch.path().join("bin")).unwrap();
+    std::fs::write(scratch.path().join("sub").join("a.txt"), "a").unwrap();
+    std::fs::write(
+        scratch.path().join("bin").join("show.cmd"),
+        "@echo [%XF%] [%1]\r\n",
+    )
+    .unwrap();
+    scratch
+}
+
+/// `bin` on `PATH`, `XF` exported, and the shell in `sub`.
+const SETUP: &str = r#"PATH="$PWD/bin:$PATH"; export XF=bar; cd sub"#;
+
+#[test]
+fn xargs_runs_a_command_as_the_shell_does() {
+    // The exported variable, the shell's PATH, a `.cmd` by its bare name: each was lost
+    // when xargs started the command itself.
+    let scratch = batch_scratch("xargs-shell");
+    let out = run_in(scratch.path(), &format!("{SETUP}; echo hi | xargs show"));
+    assert_eq!(out.stdout.trim_end(), "[bar] [hi]", "{}", out.stderr);
+
+    let out = run_in(scratch.path(), "echo x | xargs nosuchcmd; echo \"rc=$?\"");
+    assert_eq!(out.stdout, "rc=127", "{}", out.stderr);
+    assert!(
+        out.stderr.contains("xargs: nosuchcmd: command not found"),
+        "{}",
+        out.stderr
+    );
+}
+
+#[test]
+fn xargs_gives_the_command_an_empty_input() {
+    // What xargs reads is its own, as in GNU xargs: the command used to read cash's.
+    let scratch = Scratch::new("xargs-stdin");
+    let input = scratch.path().join("input.txt");
+    std::fs::write(&input, "SECRET\n").unwrap();
+    let out = crate::common::output_of(
+        crate::common::cash_command()
+            .args(["-c", "printf \"\" | xargs C:/Windows/System32/sort.exe"])
+            .stdin(std::fs::File::open(&input).unwrap()),
+    );
+    assert_eq!(out.stdout, "", "{}", out.stderr);
+}
+
+#[test]
+fn find_exec_runs_a_command_as_the_shell_does() {
+    let scratch = batch_scratch("find-exec-shell");
+    let out = run_in(
+        scratch.path(),
+        &format!(r"{SETUP}; find . -name a.txt -exec show {{}} \; > out.txt; cat out.txt"),
+    );
+    // The output went where find's goes, and the command saw the shell's state.
+    assert_eq!(out.stdout.trim_end(), "[bar] [./a.txt]", "{}", out.stderr);
+
+    let out = run_in(
+        scratch.path(),
+        r"find . -name a.txt -exec nosuchcmd {} \;; echo rc=$?",
+    );
+    assert_eq!(out.stdout, "rc=1", "{}", out.stderr);
+    assert!(
+        out.stderr.contains("find: nosuchcmd: command not found"),
+        "{}",
+        out.stderr
+    );
+}
+
+#[test]
+fn nohup_runs_a_command_as_the_shell_does() {
+    let scratch = batch_scratch("nohup-shell");
+    let out = run_in(
+        scratch.path(),
+        &format!(
+            r#"{SETUP}; nohup sh -c 'echo "[$XF]"; pwd' > out.txt; echo "rc=$?"; cat out.txt"#
+        ),
+    );
+    let sub = scratch
+        .path()
+        .join("sub")
+        .to_string_lossy()
+        .replace('\\', "/");
+    assert_eq!(out.stdout, format!("rc=0\n[bar]\n{sub}"), "{}", out.stderr);
+}

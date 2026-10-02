@@ -1,23 +1,33 @@
 //! `nohup` builtin — run a command immune to hangups.
+//!
+//! What GNU `nohup` does with the streams, it does: input from a terminal is replaced by
+//! an empty one, output to a terminal goes to `nohup.out` in the shell's working directory
+//! (or the home folder's), and standard error to a terminal follows standard output.
+//!
+//! The command is run as the shell runs a command that names no function
+//! (`run_for_builtin`): a builtin, or a program found on the shell's `PATH`, in the shell's
+//! folder and with its exported variables. It used to start a second cash through the
+//! standard library, with the process's folder, environment and standard output, so
+//! `cd build && nohup ./run.sh > log` ran the wrong path and wrote to the terminal
+//! (`REVIEW_REPORT.md` BI-02).
+//!
+//! On Windows a hangup is the console closing, and what cash started ends with it (D6);
+//! a program that is to outlive the console is started with `detach` (D45).
 
 use std::fs::OpenOptions;
 use std::io::Write;
-use std::os::windows::process::CommandExt as _;
 use std::path::PathBuf;
 
+use cash_core::openfiles::{OpenFile, OpenFiles};
 use cash_core::{ExecutionResult, builtins};
 use clap::Parser;
 
 /// Run COMMAND, ignoring hangup signals.
 #[derive(Parser)]
 pub(crate) struct NohupCommand {
-    /// Command to run.
-    #[arg(required = true)]
-    command: String,
-
-    /// Arguments to pass to the command.
-    #[arg(trailing_var_arg = true)]
-    args: Vec<String>,
+    /// The command to run, and its arguments.
+    #[arg(required = true, trailing_var_arg = true, allow_hyphen_values = true)]
+    command: Vec<String>,
 }
 
 impl builtins::Command for NohupCommand {
@@ -27,76 +37,73 @@ impl builtins::Command for NohupCommand {
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, Self::Error> {
-        let is_stdin_term = context.try_fd(0).is_some_and(|f| f.is_terminal());
-        let is_stdout_term = context.try_fd(1).is_some_and(|f| f.is_terminal());
+        let is_terminal = |fd| {
+            context
+                .try_fd(fd)
+                .is_some_and(|file: OpenFile| file.is_terminal())
+        };
+        let stdin_is_terminal = is_terminal(OpenFiles::STDIN_FD);
+        let stdout_is_terminal = is_terminal(OpenFiles::STDOUT_FD);
+        let stderr_is_terminal = is_terminal(OpenFiles::STDERR_FD);
 
-        let mut out_file = None;
-        if is_stdout_term {
-            let path = PathBuf::from("nohup.out");
-            let file = OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(&path)
-                .or_else(|_| {
-                    let home = std::env::var("USERPROFILE")
-                        .or_else(|_| std::env::var("HOME"))
-                        .unwrap_or_else(|_| ".".to_string());
-                    let fallback = PathBuf::from(home).join("nohup.out");
-                    OpenOptions::new().create(true).append(true).open(fallback)
-                });
+        let mut params = context.params.clone();
+        if stdin_is_terminal {
+            params.set_fd(OpenFiles::STDIN_FD, cash_core::openfiles::null()?);
+        }
 
-            match file {
-                Ok(f) => {
-                    writeln!(
-                        context.stderr(),
-                        "nohup: ignoring input and appending output to 'nohup.out'"
-                    )?;
-                    out_file = Some(f);
+        if stdout_is_terminal {
+            let Some(output) = open_nohup_out(&context) else {
+                writeln!(context.stderr(), "nohup: failed to open 'nohup.out'")?;
+                return Ok(ExecutionResult::new(125));
+            };
+            writeln!(
+                context.stderr(),
+                "nohup: {}appending output to 'nohup.out'",
+                if stdin_is_terminal {
+                    "ignoring input and "
+                } else {
+                    ""
                 }
-                Err(e) => {
-                    writeln!(context.stderr(), "nohup: failed to open 'nohup.out': {e}")?;
-                    return Ok(ExecutionResult::new(126));
-                }
+            )?;
+            if stderr_is_terminal {
+                params.set_fd(OpenFiles::STDERR_FD, output.clone());
             }
-        } else if is_stdin_term {
-            writeln!(context.stderr(), "nohup: ignoring input")?;
-        }
-
-        // Run via cash executable so shell functions, builtins, and external commands all work
-        let current_exe = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("cash.exe"));
-        let mut cmd = std::process::Command::new(current_exe);
-
-        let mut full_args = vec![
-            "-c".to_string(),
-            "\"$@\"".to_string(),
-            self.command.clone(),
-            self.command.clone(),
-        ];
-        full_args.extend(self.args.clone());
-        cmd.args(full_args);
-
-        // CREATE_NEW_PROCESS_GROUP = 0x00000200
-        cmd.creation_flags(0x0000_0200);
-
-        if is_stdin_term {
-            cmd.stdin(std::process::Stdio::null());
-        }
-
-        if let Some(out) = out_file {
-            let out_clone = out.try_clone().map_err(cash_core::Error::from)?;
-            cmd.stdout(out);
-            cmd.stderr(out_clone);
-        }
-
-        match cmd.status() {
-            Ok(status) => {
-                let code = status.code().unwrap_or(1);
-                Ok(ExecutionResult::new(u8::try_from(code & 0xFF).unwrap_or(1)))
+            params.set_fd(OpenFiles::STDOUT_FD, output);
+        } else {
+            if stdin_is_terminal {
+                writeln!(context.stderr(), "nohup: ignoring input")?;
             }
+            if stderr_is_terminal && let Some(output) = context.try_fd(OpenFiles::STDOUT_FD) {
+                params.set_fd(OpenFiles::STDERR_FD, output);
+            }
+        }
+
+        match cash_core::commands::run_for_builtin(context.shell, params, &self.command).await {
+            Ok(result) => Ok(result),
             Err(e) => {
-                writeln!(context.stderr(), "nohup: failed to run command: {e}")?;
+                let program = self.command.first().map_or("", String::as_str);
+                writeln!(
+                    context.stderr(),
+                    "nohup: {program}: {}",
+                    crate::xargs::start_failure(&e)
+                )?;
+                // GNU's status for a command that could not be found.
                 Ok(ExecutionResult::new(127))
             }
         }
     }
+}
+
+/// `nohup.out` in the shell's working directory, or in the home folder when that cannot
+/// be written, opened to append.
+fn open_nohup_out<SE: cash_core::ShellExtensions>(
+    context: &cash_core::ExecutionContext<'_, SE>,
+) -> Option<OpenFile> {
+    let open = |path: PathBuf| OpenOptions::new().create(true).append(true).open(path).ok();
+    open(context.shell.absolute_path("nohup.out"))
+        .or_else(|| {
+            let home = context.shell.env_str("HOME")?;
+            open(PathBuf::from(home.as_ref()).join("nohup.out"))
+        })
+        .map(OpenFile::from)
 }

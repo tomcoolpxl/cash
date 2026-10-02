@@ -637,6 +637,42 @@ pub struct SimpleCommand<'a, SE: extensions::ShellExtensions> {
     pub post_execute: Option<fn(&mut Shell<SE>) -> Result<(), error::Error>>,
 }
 
+/// Runs `argv` for a builtin that starts commands of its own (`xargs`, `find -exec`,
+/// `nohup`), as the shell runs a command that names no function, and waits for it.
+///
+/// It runs in a copy of the shell, so nothing it does changes the caller's state, and
+/// with `params`, which say where its input and output go. Everything else is the shell's:
+/// a builtin by its name, or a program found on the shell's `PATH` with its `PATHEXT`
+/// (D8), started as the shell starts one — batch files, PowerShell scripts and shebangs
+/// dispatched, in the shell's working directory (D10), with its exported environment
+/// (D5), contained in a job (D6).
+///
+/// Before this, each such builtin started its programs through the standard library with
+/// the process's folder, environment and `PATH`, so `export` and `cd` did not reach them
+/// and `npm` (a `.cmd`) was not found (`REVIEW_REPORT.md` XC-1).
+///
+/// A command that cannot be found or started is an error, as it is to the shell; the
+/// caller reports it in its own words.
+pub async fn run_for_builtin<SE: extensions::ShellExtensions>(
+    shell: &Shell<SE>,
+    params: ExecutionParameters,
+    argv: &[String],
+) -> Result<ExecutionResult, error::Error> {
+    let Some(name) = argv.first() else {
+        return Ok(ExecutionResult::success());
+    };
+    let mut shell = shell.clone();
+    let mut command = SimpleCommand::new(
+        ShellForCommand::ParentShell(&mut shell),
+        params,
+        name.clone(),
+        argv.iter().map(CommandArg::from),
+    );
+    command.use_functions = false;
+    let spawned = command.execute().await?;
+    Ok(spawned.wait().await?.into())
+}
+
 impl<'a, SE: extensions::ShellExtensions> SimpleCommand<'a, SE> {
     /// Creates a new `SimpleCommand` instance.
     ///

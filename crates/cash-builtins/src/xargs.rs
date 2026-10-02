@@ -170,7 +170,7 @@ impl XargsCommand {
         context: &cash_core::ExecutionContext<'_, SE>,
         argv: &[String],
     ) -> Result<ExecutionResult, cash_core::Error> {
-        let Some((program, rest)) = argv.split_first() else {
+        let Some(program) = argv.first() else {
             return Ok(ExecutionResult::success());
         };
 
@@ -178,70 +178,42 @@ impl XargsCommand {
             writeln!(context.stderr(), "{}", argv.join(" "))?;
         }
 
-        // Match cash's builtin precedence, including `enable -n`. A separate shell
-        // keeps stateful builtins and control flow from changing xargs's caller.
-        // Arguments are already parsed data; never turn them back into shell source.
-        if let Some(builtin) = context.shell.builtins().get(program)
-            && !builtin.disabled
-        {
-            let mut shell = context.shell.clone();
-            let child_context = cash_core::ExecutionContext {
-                shell: &mut shell,
-                command_name: program.clone(),
-                params: context.params.clone(),
-            };
-            let args = argv.iter().map(cash_core::CommandArg::from).collect();
-            let result = (builtin.execute_func)(child_context, args).await?;
-            return Ok(if result.is_success() {
-                ExecutionResult::success()
-            } else {
-                ExecutionResult::new(123)
-            });
-        }
-
-        // cash: run where the shell believes it is. `cd` moves the shell's own working
-        // directory without moving the process (D3/D10), so a builtin that spawns has to
-        // ask — otherwise `cd build; ls | xargs rm` reaches into the wrong directory.
-        // A virtual path from `which` re-enters cash to run the command it names.
-        let mut cmd = cash_win32::path::virtual_tool(program).map_or_else(
-            || std::process::Command::new(program),
-            |tool| cash_win32::path::reentry_command(&tool),
+        // The shell runs it, as it runs a command that names no function: a builtin by
+        // its name (`enable -n` honoured), or a program found on the shell's PATH and
+        // started in the shell's folder with its exported variables (D5, D8, D10). A copy
+        // of the shell keeps builtins and control flow from changing xargs's caller, and
+        // the arguments are already parsed data, never turned back into shell source.
+        //
+        // As GNU xargs does, the command reads an empty input: what xargs reads is its own.
+        let mut params = context.params.clone();
+        params.set_fd(
+            cash_core::openfiles::OpenFiles::STDIN_FD,
+            cash_core::openfiles::null()?,
         );
-        let target = cash_win32::msys::locate(
-            std::ffi::OsStr::new(program),
-            &std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
-                .collect::<Vec<_>>(),
-            context.shell.working_dir(),
-        );
-        cash_win32::msys::add_args(&mut cmd, target.as_deref(), rest);
-        cmd.current_dir(context.shell.working_dir());
-
-        if let Some(stdout_file) = context.try_fd(cash_core::openfiles::OpenFiles::STDOUT_FD) {
-            if let Ok(as_stdio) = std::process::Stdio::try_from(stdout_file) {
-                cmd.stdout(as_stdio);
-            }
-        }
-        if let Some(stderr_file) = context.try_fd(cash_core::openfiles::OpenFiles::STDERR_FD) {
-            if let Ok(as_stdio) = std::process::Stdio::try_from(stderr_file) {
-                cmd.stderr(as_stdio);
-            }
-        }
-
-        match cmd.status() {
-            Ok(status) => {
-                if status.success() {
-                    Ok(ExecutionResult::success())
-                } else {
-                    // GNU's code for "a command exited non-zero", which is what a script
-                    // testing `xargs`'s status is looking for.
-                    Ok(ExecutionResult::from(ExecutionExitCode::from(123u8)))
-                }
-            }
+        match cash_core::commands::run_for_builtin(context.shell, params, argv).await {
+            Ok(result) if result.is_success() => Ok(ExecutionResult::success()),
+            // GNU's code for "a command exited non-zero", which is what a script testing
+            // `xargs`'s status is looking for.
+            Ok(_) => Ok(ExecutionResult::from(ExecutionExitCode::from(123u8))),
             Err(e) => {
-                writeln!(context.stderr(), "{}: {program}: {e}", context.command_name)?;
+                writeln!(
+                    context.stderr(),
+                    "{}: {program}: {}",
+                    context.command_name,
+                    start_failure(&e)
+                )?;
                 Ok(ExecutionResult::from(ExecutionExitCode::from(127u8)))
             }
         }
+    }
+}
+
+/// Why a command a builtin runs (`xargs`, `find -exec`) could not be started, worded to
+/// follow `name: command:` as Bash words it: "command not found", or the system's reason.
+pub(crate) fn start_failure(error: &cash_core::Error) -> String {
+    match error.kind() {
+        cash_core::ErrorKind::CommandNotFound(_) => "command not found".to_owned(),
+        _ => error.to_string(),
     }
 }
 
