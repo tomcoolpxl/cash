@@ -956,10 +956,12 @@ peg::parser! {
             parse_sequence_bound(text).map(|n| (n, text)).ok_or("number out of range")
         }
 
-        rule number() -> i64 = sign:number_sign()? n:$(['0'..='9']+) {
-            let sign = sign.unwrap_or(1);
-            let num: i64 = n.parse().unwrap();
-            num * sign
+        // An increment too large for an `i64` declines the sequence, which then stays
+        // literal text as in Bash: `{1..3..99999999999999999999}`.
+        rule number() -> i64 = sign:number_sign()? n:$(['0'..='9']+) {?
+            n.parse::<i64>()
+                .map(|num| num * sign.unwrap_or(1))
+                .map_err(|_| "number out of range")
         }
 
         rule number_sign() -> i64 =

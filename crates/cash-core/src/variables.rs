@@ -521,7 +521,7 @@ impl ShellVariable {
                     // This isn't really title-case; only the first character is capitalized.
                     *s = s.to_lowercase();
                     if let Some(c) = s.chars().next() {
-                        s.replace_range(0..1, &c.to_uppercase().to_string());
+                        s.replace_range(..c.len_utf8(), &c.to_uppercase().to_string());
                     }
                 }
             }

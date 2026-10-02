@@ -591,6 +591,12 @@ impl<'a, R: ?Sized + std::io::BufRead> Tokenizer<'a, R> {
         Ok(c)
     }
 
+    /// Consumes a character the caller has already peeked, or was stopped in front of.
+    fn next_peeked_char(&mut self) -> Result<char, TokenizerError> {
+        self.next_char()?
+            .ok_or(TokenizerError::UnterminatedExpansion)
+    }
+
     fn consume_char(&mut self) -> Result<(), TokenizerError> {
         let _ = self.next_char()?;
         Ok(())
@@ -724,7 +730,7 @@ impl<'a, R: ?Sized + std::io::BufRead> Tokenizer<'a, R> {
                     // counted — otherwise the construct appears to end here.
                     if case_depth > 0 && expecting_pattern && !pattern_had_open_paren {
                         expecting_pattern = false;
-                        state.append_char(self.next_char()?.unwrap());
+                        state.append_char(self.next_peeked_char()?);
                         continue;
                     }
 
@@ -737,7 +743,7 @@ impl<'a, R: ?Sized + std::io::BufRead> Tokenizer<'a, R> {
                     if nesting_count == 0 {
                         break;
                     }
-                    state.append_char(self.next_char()?.unwrap());
+                    state.append_char(self.next_peeked_char()?);
                 }
                 TokenEndReason::EndOfInput => {
                     return Err(TokenizerError::UnterminatedExpansion);
@@ -746,7 +752,7 @@ impl<'a, R: ?Sized + std::io::BufRead> Tokenizer<'a, R> {
             }
         }
 
-        state.append_char(self.next_char()?.unwrap());
+        state.append_char(self.next_peeked_char()?);
         Ok(())
     }
 
@@ -989,14 +995,14 @@ impl<'a, R: ?Sized + std::io::BufRead> Tokenizer<'a, R> {
                             state.append_char('$');
 
                             // Consume the '(' and add it to the token.
-                            state.append_char(self.next_char()?.unwrap());
+                            state.append_char(self.next_peeked_char()?);
 
                             // Check to see if this is possibly an arithmetic expression
                             // (i.e., one that starts with `$((`).
                             let (initial_nesting, is_arithmetic) =
                                 if matches!(self.peek_char()?, Some('(')) {
                                     // Consume the second '(' and add it to the token.
-                                    state.append_char(self.next_char()?.unwrap());
+                                    state.append_char(self.next_peeked_char()?);
                                     (2, true)
                                 } else {
                                     (1, false)
@@ -1018,7 +1024,7 @@ impl<'a, R: ?Sized + std::io::BufRead> Tokenizer<'a, R> {
                             state.append_char('$');
 
                             // Consume the '[' and add it to the token.
-                            state.append_char(self.next_char()?.unwrap());
+                            state.append_char(self.next_peeked_char()?);
 
                             // Keep track that we're in an arithmetic expression, since
                             // some text will be interpreted differently as a result.
@@ -1034,7 +1040,7 @@ impl<'a, R: ?Sized + std::io::BufRead> Tokenizer<'a, R> {
                             state.append_char('$');
 
                             // Consume the '{' and add it to the token.
-                            state.append_char(self.next_char()?.unwrap());
+                            state.append_char(self.next_peeked_char()?);
 
                             let mut pending_here_doc_tokens = vec![];
                             let mut drain_here_doc_tokens = false;
@@ -1092,7 +1098,7 @@ impl<'a, R: ?Sized + std::io::BufRead> Tokenizer<'a, R> {
                                     TokenEndReason::SpecifiedTerminatingChar => {
                                         // We hit the end brace we were looking for but did not
                                         // yet consume it. Do so now.
-                                        state.append_char(self.next_char()?.unwrap());
+                                        state.append_char(self.next_peeked_char()?);
                                         break;
                                     }
                                     TokenEndReason::EndOfInput => {
@@ -1263,9 +1269,8 @@ impl<'a, R: ?Sized + std::io::BufRead> Tokenizer<'a, R> {
             }
         }
 
-        let result = result.unwrap();
-
-        Ok(result)
+        // The loop above ends only once there is a result.
+        result.ok_or(TokenizerError::UnterminatedExpansion)
     }
 
     fn remove_here_end_tag(

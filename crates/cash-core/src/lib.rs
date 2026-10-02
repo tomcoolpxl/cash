@@ -60,6 +60,15 @@ pub mod identity {
         crate::sys::users::get_effective_gid().ok()
     }
 }
+/// The stack each thread that runs shell code reserves: the thread that drives the
+/// shell, the runtime's workers and blocking threads, and a process substitution's thread.
+///
+/// Every level of a function call, `$(...)` or pipeline stage is several large futures
+/// deep, and a stack overflow is an abort that no panic recovery can catch. Windows
+/// reserves the address space and commits pages only as they are used, so a thread costs
+/// no more memory for a large reservation; a 64-bit process has address space to spare.
+pub const SHELL_THREAD_STACK_SIZE: usize = 256 * 1024 * 1024;
+
 pub mod trace_categories;
 pub mod traps;
 pub mod variables;

@@ -41,6 +41,8 @@ mod completion_scripts;
 mod completion_windows;
 // coolfetch system banner.
 mod coolfetch;
+// Inputs that used to take the whole shell down: deep recursion, and panics.
+mod crash_safety;
 // M2: real scripts, written the way they are written on Linux.
 mod corpus;
 mod crlf_scripts;

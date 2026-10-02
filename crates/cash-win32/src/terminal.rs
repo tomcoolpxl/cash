@@ -672,6 +672,11 @@ pub mod jsonc {
                     }) {
                         i += 1;
                     }
+                    // A `/` that opens no comment ends a word before it starts: the text
+                    // is not JSONC, and an empty word would never move `i` on.
+                    if i == start {
+                        return None;
+                    }
                     out.push(Token {
                         kind: Kind::Word,
                         start,
@@ -817,6 +822,38 @@ pub mod jsonc {
 mod tests {
     use super::jsonc::{Value, parse};
     use super::*;
+
+    #[test]
+    fn a_slash_that_opens_no_comment_is_not_jsonc() {
+        // It used to push an empty word without moving on, for ever: every `ls --icons`
+        // hung on a settings.json with a stray `/`.
+        for text in ["/", "{\"x\": 1, / note\n}", "{\"a\": 1}/", "[1 /2]"] {
+            assert!(jsonc::tokens(text).is_none(), "{text:?}");
+            assert!(parse(text).is_none(), "{text:?}");
+        }
+        assert!(jsonc::tokens("{\"a\": 1} // note\n/* x */").is_some());
+    }
+
+    proptest::proptest! {
+        #![proptest_config(proptest::prelude::ProptestConfig::with_cases(1024))]
+
+        /// Terminal's files are the user's to edit by hand, so whatever they hold must be
+        /// read without a panic or a hang.
+        #[test]
+        fn any_text_is_read_without_a_panic_or_a_hang(
+            chars in proptest::collection::vec(
+                proptest::prop_oneof![
+                    8 => proptest::sample::select("{}[]:,\"/\\* \n\ttrue1-.ab".chars().collect::<Vec<_>>()),
+                    1 => proptest::prelude::any::<char>(),
+                ],
+                0..120,
+            )
+        ) {
+            let text: String = chars.into_iter().collect();
+            let _ = jsonc::tokens(&text);
+            let _ = parse(&text);
+        }
+    }
 
     #[test]
     fn nerd_fonts_are_known_by_name() {

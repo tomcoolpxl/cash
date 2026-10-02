@@ -54,27 +54,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ## Phase 8. Crashes and security (R2, R4, R9)
 
-### 8.1 Shallow recursion overflows the stack and kills the shell
-
-`f(){ (( $1 > 0 )) && f $(( $1 - 1 )); }; f 200` ends with "has overflowed its stack";
-inside `$(…)` at depth 45, in a pipeline stage at depth 20. Bash runs depth 500. Tokio's
-workers keep their 2 MiB stack (`cash-shell/src/entry.rs:189`); the 500-deep guard
-(`callstack.rs:126`) never fires first. Big worker stacks, a guard below the measured
-depth, tests at depth 200 in all three places. BIN-01.
-
-### 8.2 Inputs that panic or hang
-
-- `echo {1..3..99999999999999999999}`: crash (`cash-parser/src/word.rs:961`); then drop
-  the crate-wide `#![allow(clippy::unwrap_used)]` in `cash-parser/src/lib.rs`. PI-06.
-- `declare -c c; c=éa`: crash (`variables.rs:524`). LANG-08.
-- `PS1='\D{%Q} '`: crash (`prompt.rs:236`); `\!` and `\#` are "not yet implemented".
-  LANG-07.
-- A lone `/` in Terminal's settings.json: the JSONC tokenizer loops for ever
-  (`cash-win32/src/terminal.rs:655-680`), reached by `ls --icons`. From reading. BIN-02.
-- Then property tests (proptest, on the stable toolchain, so CI runs them) feeding
-  random input to the tokenizer, the parser, `word::parse` and the JSONC tokenizer.
-  PI-14.
-
 ### 8.3 `start` passes a URL to cmd unquoted
 
 `start 'https://x/?a=1&b=2'` hands `&b=2` to `cmd.exe` as a second command; `%VAR%`
@@ -247,6 +226,10 @@ Check it, terminate on failure, record the API choice beside D19. From reading. 
 (LANG-13); `${x/b/"$r"}` with `&` in `r` (LANG-14); history expansion inside `${!a[@]}`,
 `$!`, `[!a]` (LANG-06); the D31 fallback scan is quadratic (LANG-15); nested `case` parses
 in exponential time (PI-07). Low ones in the report §5.1.
+
+Also seen while fixing 8.1: past the function depth limit (500, or `FUNCNEST`) cash
+reports "maximum function call depth exceeded" and the script goes on, `$?` 0; Bash 5.3
+reports "maximum function nesting level exceeded (500)" and abandons the command.
 
 ### 12.4 extglob `!(…)` with alternatives
 

@@ -3,6 +3,7 @@ use crate::{
     shell::Shell,
     sys::{self, users},
 };
+use std::fmt::Write as _;
 use std::path::Path;
 
 const VERSION_MAJOR: &str = env!("CARGO_PKG_VERSION_MAJOR");
@@ -92,11 +93,12 @@ fn format_prompt_piece(
         cash_parser::prompt::PromptPiece::Backslash => "\\".to_owned(),
         cash_parser::prompt::PromptPiece::BellCharacter => "\x07".to_owned(),
         cash_parser::prompt::PromptPiece::CarriageReturn => "\r".to_owned(),
+        // Both count the command about to be read, as Bash's `\#` and `\!` do.
         cash_parser::prompt::PromptPiece::CurrentCommandNumber => {
-            return error::unimp("prompt: current command number");
+            (shell.commands_read() + 1).to_string()
         }
         cash_parser::prompt::PromptPiece::CurrentHistoryNumber => {
-            return error::unimp("prompt: current history number");
+            (shell.history().map_or(0, |h| h.count()) + 1).to_string()
         }
         cash_parser::prompt::PromptPiece::CurrentUser => users::get_current_username()?,
         cash_parser::prompt::PromptPiece::CurrentWorkingDirectory {
@@ -233,9 +235,16 @@ where
         cash_parser::prompt::PromptDateFormat::WeekdayMonthDate => {
             datetime.format("%a %b %d").to_string()
         }
+        // An empty format is the locale's time, as in Bash. A specifier chrono does not
+        // know gives nothing, as Git Bash's strftime does, where `to_string` would panic.
         cash_parser::prompt::PromptDateFormat::Custom(fmt) => {
+            let fmt = if fmt.is_empty() { "%X" } else { fmt.as_str() };
             let fmt_items = chrono::format::StrftimeItems::new(fmt);
-            datetime.format_with_items(fmt_items).to_string()
+            let mut formatted = String::new();
+            if write!(formatted, "{}", datetime.format_with_items(fmt_items)).is_err() {
+                formatted.clear();
+            }
+            formatted
         }
     }
 }

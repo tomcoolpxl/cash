@@ -2763,6 +2763,7 @@ fn spawn_substitution(
     let subshell_cmd = subshell_cmd.to_owned();
     std::thread::Builder::new()
         .name("cash-procsub".into())
+        .stack_size(crate::SHELL_THREAD_STACK_SIZE)
         .spawn(move || {
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()

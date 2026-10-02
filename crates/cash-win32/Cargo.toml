@@ -53,4 +53,5 @@ name = "stdout_capture"
 harness = false
 
 [dev-dependencies]
+proptest = "1"
 tempfile = "3.27.0"

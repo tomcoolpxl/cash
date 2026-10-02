@@ -165,6 +165,9 @@ pub struct Shell<SE: extensions::ShellExtensions = extensions::DefaultShellExten
 
     /// History of commands executed in the shell.
     history: Option<crate::history::History>,
+
+    /// How many command lines the shell has read at the prompt, for the prompt's `\#`.
+    commands_read: usize,
 }
 
 impl<SE: extensions::ShellExtensions> Clone for Shell<SE> {
@@ -215,6 +218,7 @@ impl<SE: extensions::ShellExtensions> Clone for Shell<SE> {
             parser_impl: self.parser_impl,
             key_bindings: self.key_bindings.clone(),
             history: self.history.clone(),
+            commands_read: self.commands_read,
             depth: self.depth + 1,
         }
     }

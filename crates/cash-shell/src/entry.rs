@@ -184,11 +184,33 @@ pub fn run_with_args(mut args: Vec<String>) {
     };
 
     //
-    // Run.
+    // Run, on a thread with the stack shell code needs: the main thread has only what
+    // the executable's header reserves. `run_shell` ends the process itself, so the
+    // runtime is never dropped (which would wait for every blocking thread).
     //
+    let runner = std::thread::Builder::new()
+        .name("cash-shell".into())
+        .stack_size(cash_core::SHELL_THREAD_STACK_SIZE)
+        .spawn(move || run_shell(&args, parsed_args));
+    match runner.map(std::thread::JoinHandle::join) {
+        Ok(Ok(never)) => match never {},
+        Ok(Err(_)) => std::process::exit(1),
+        Err(err) => {
+            eprintln!("cash: failed to start the shell's thread: {err}");
+            std::process::exit(1);
+        }
+    }
+}
+
+/// Runs the shell to its end and exits the process with its status.
+fn run_shell(args: &[String], parsed_args: CommandLineArgs) -> std::convert::Infallible {
     let mut builder = tokio::runtime::Builder::new_multi_thread();
 
-    let Ok(runtime) = builder.enable_all().build() else {
+    let Ok(runtime) = builder
+        .enable_all()
+        .thread_stack_size(cash_core::SHELL_THREAD_STACK_SIZE)
+        .build()
+    else {
         tracing::error!("error: failed to create Tokio runtime");
         std::process::exit(1);
     };
@@ -197,7 +219,7 @@ pub fn run_with_args(mut args: Vec<String>) {
     // abnormal process termination. Interactive command panics are recovered inside the
     // prompt loop so that session can continue; this outer boundary covers everything else.
     let result = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        runtime.block_on(run_async(&args, parsed_args))
+        runtime.block_on(run_async(args, parsed_args))
     })) {
         Ok(result) => result,
         Err(payload) => {

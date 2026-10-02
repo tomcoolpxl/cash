@@ -96,8 +96,15 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         Ok(())
     }
 
+    /// How many command lines the shell has read at the prompt.
+    pub(crate) const fn commands_read(&self) -> usize {
+        self.commands_read
+    }
+
     /// Adds a command to history.
     pub fn add_to_history(&mut self, command: &str) -> Result<(), error::Error> {
+        self.commands_read += 1;
+
         if let Some(history) = &mut self.history {
             // Trim.
             let command = command.trim();
