@@ -58,15 +58,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 The riskiest phase: judge its runs on an idle machine (Decided, below).
 
-### 11.4 Process substitution pipes
-
-- `cmd /c type <(echo x)` sometimes prints `x` and then "The pipe has been ended" (the
-  review saw 11 in 80 on a busy machine; on 2026-10-03, 1 in 450 on an idle one, with
-  1.3.10 and with the fix below alike). The race the review suspected, between a pump's
-  look at the replay and its look at the end, was real and is closed, but it is not
-  this. Unexplained: `type` may take the pipe's end (ERROR_BROKEN_PIPE) for an error
-  depending on when the server closes. W32-02.
-
 ---
 
 ## Phase 12. Language (R7)
@@ -210,6 +201,12 @@ Bash, or keep "no limit" and add a row to spec §4.
   `missing_panics_doc`): 58 `unwrap` and 34 `expect` in awk, 37 `expect` and 8 `panic!`
   in bc, 41 `panic!` and 24 `unwrap` in sed. Each is an input that can crash the tool
   or an invariant to write down. Left from 10.3, ARCH-01.
+- Left from phase 11: `cmd /c type <(echo x)` sometimes prints `x` and then "The pipe has been ended" (the
+  review saw 11 in 80 on a busy machine; on 2026-10-03, 1 in 450 on an idle one, with
+  1.3.10 and with the replay fix of phase 11 alike). The race the review suspected, between a pump's
+  look at the replay and its look at the end, was real and is closed, but it is not
+  this. Unexplained: `type` may take the pipe's end (ERROR_BROKEN_PIPE) for an error
+  depending on when the server closes. W32-02.
 - The Low findings not listed in phases 8 to 14 are in the report, §5.
 
 ---
