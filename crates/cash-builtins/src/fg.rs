@@ -17,6 +17,17 @@ impl builtins::Command for FgCommand {
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<cash_core::ExecutionResult, Self::Error> {
+        // Without job control, as in a script, there is no foreground to move a job
+        // between, and Bash refuses: `set -m` turns it on (the user, 2026-10-03).
+        if !context.shell.options().enable_job_control {
+            writeln!(
+                context.error_stream(),
+                "{}: no job control",
+                context.command_name
+            )?;
+            return Ok(ExecutionResult::general_error());
+        }
+
         // The job's command line goes to standard output, as in Bash.
         let mut stdout = context.stdout();
 

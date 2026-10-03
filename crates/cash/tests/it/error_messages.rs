@@ -155,7 +155,8 @@ fn a_builtin_of_bashs_is_located_and_a_tool_is_not() {
     for (script, expected) in [
         ("cd /no/such", "cd: /no/such: No such file or directory"),
         ("kill %9", "kill: %9: no such job"),
-        ("fg %3", "fg: %3: no such job"),
+        ("set -m; fg %3", "fg: %3: no such job"),
+        ("fg", "fg: no job control"),
         (
             "complete -p nosuch",
             "complete: nosuch: no completion specification",

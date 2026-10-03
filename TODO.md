@@ -60,11 +60,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 13.4 Error output: colour, prefixes, `--help`
 
-
-`fg` and `bg` act in a script, where Bash says `fg: no job control` and returns 1, as job
-control is off there; cash's tests rely on `{ exit 5; } & fg` giving 5. Which one cash
-should do is the user's call. Found in 1.3.12 surveying builtin errors.
-
 An array index before the start (`a=(1 2)`): `${a[-3]}` expands to nothing in both
 shells, but Bash also says `a: bad array subscript`, and cash says nothing; `a[-3]=x`
 ends both with 1, cash saying `array index out of range: -3`. Found in phase 12.
@@ -188,6 +183,9 @@ in Bash they are Bash's version. `\s` gives `cash`. Keep cash's, and add a row t
   not found` interactively, with Bash's message text (`r: readonly variable`,
   `x: unbound variable`), builtins' messages included. Keeping cash's words with Bash's
   location, and `error:` with a location added, were turned down.
+- **`fg` and `bg` need job control, as in Bash** (the user, 2026-10-03): in a script
+  they say `fg: no job control` and return 1, until `set -m`. Keeping cash's leniency,
+  where `fg` in a script waited for the job, was turned down.
 - **Errors are coloured only on a terminal** (the user, 2026-10-03): the prefix is red
   when stderr is a terminal and `NO_COLOR` is unset; a pipe or a file gets plain text,
   through one helper for every stream. No colour at all was turned down.

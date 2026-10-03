@@ -1491,12 +1491,13 @@ fn bash_53_wait_n_keeps_the_status_for_wait_pid_except_in_posix_mode() {
 
 #[test]
 fn exit_in_a_background_job_ends_the_job_not_the_shell_that_waits() {
-    // `wait` and `fg` used to exit the waiting shell with the job's status.
+    // `wait` and `fg` used to exit the waiting shell with the job's status. `fg` needs job
+    // control, which a script turns on with `set -m`, as in Bash.
     assert_eq!(
         output(concat!(
             "{ sleep 0.01; exit 3; } & p=$!; wait $p; echo \"wait: $?\"; ",
             "{ exit 4; } & wait %1; echo \"spec: $?\"; ",
-            "{ exit 5; } & fg > /dev/null; echo \"fg: $?\""
+            "set -m; { exit 5; } & fg > /dev/null; echo \"fg: $?\""
         )),
         (0, "wait: 3\nspec: 4\nfg: 5".into())
     );
