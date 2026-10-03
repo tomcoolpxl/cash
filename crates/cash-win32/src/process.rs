@@ -6,8 +6,8 @@ use windows_sys::Win32::Foundation::{
     CloseHandle, FALSE, FILETIME, GetLastError, HANDLE, INVALID_HANDLE_VALUE, WAIT_TIMEOUT,
 };
 use windows_sys::Win32::System::Threading::{
-    GetExitCodeProcess, GetProcessTimes, INFINITE, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
-    PROCESS_SYNCHRONIZE, WaitForSingleObject,
+    GetCurrentProcess, GetExitCodeProcess, GetProcessTimes, INFINITE, OpenProcess,
+    PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE, WaitForSingleObject,
 };
 
 /// `GetExitCodeProcess` reports this while a process is still running.
@@ -203,6 +203,34 @@ pub fn cpu_time(pid: u32) -> Option<u64> {
     }
 
     Some(as_u64(kernel) + as_u64(user))
+}
+
+/// The user and kernel CPU time this process has used, in 100-nanosecond units: `time`
+/// and `times` report the shell's own from it.
+#[must_use]
+pub fn own_cpu_time() -> (u64, u64) {
+    let zero = || FILETIME {
+        dwLowDateTime: 0,
+        dwHighDateTime: 0,
+    };
+    let (mut creation, mut exit, mut kernel, mut user) = (zero(), zero(), zero(), zero());
+    // SAFETY: takes no arguments; the pseudo-handle it returns needs no closing.
+    let current = unsafe { GetCurrentProcess() };
+    // SAFETY: `current` is this process's handle, and all four out-params are valid
+    // FILETIMEs.
+    let ok = unsafe {
+        GetProcessTimes(
+            current,
+            &raw mut creation,
+            &raw mut exit,
+            &raw mut kernel,
+            &raw mut user,
+        )
+    };
+    if ok == 0 {
+        return (0, 0);
+    }
+    (as_u64(user), as_u64(kernel))
 }
 
 /// When a process started, as a `FILETIME` count, or `None` if it cannot be opened.

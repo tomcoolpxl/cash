@@ -51,6 +51,14 @@ pub struct SessionState {
 /// keeps the handle open exactly as leaking it would, and lets exit find it.
 static SESSION_JOB: OnceLock<JobObject> = OnceLock::new();
 
+/// The user and kernel CPU time of every process the session job has held, the ended
+/// ones and cash itself included, in 100-nanosecond units; `None` when cash runs
+/// without one.
+#[must_use]
+pub fn cpu_time() -> Option<(u64, u64)> {
+    SESSION_JOB.get()?.cpu_time().ok()
+}
+
 /// Whether GUI applications cash started outlive it. On unless the session says not.
 static GUI_APPS_OUTLIVE: AtomicBool = AtomicBool::new(true);
 

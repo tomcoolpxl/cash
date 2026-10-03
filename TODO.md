@@ -58,14 +58,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ## Phase 13. Builtins and error output (R4, R8)
 
-### 13.2 Builtins
-
-
-### 13.3 `time` and `times` report CPU time
-
-They show 0 user and sys. The shell's own from `GetProcessTimes`, children's from the
-job objects' accounting (decided, below). EXE-11, XC-5.
-
 ### 13.4 Error output: colour, prefixes, `--help`
 
 Errors are ANSI-coloured into pipes and files and ignore `NO_COLOR`

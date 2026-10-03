@@ -996,6 +996,32 @@ fn times_reports_execution_time() {
     assert!(lines[1].contains('m') && lines[1].contains('s'));
 }
 
+#[test]
+fn time_and_times_count_cpu_time() {
+    // Both always said 0 (EXE-11): busy work in the shell is its own user time, and in a
+    // child (`bash` is cash, D7) the children's, which `times` reports on its second line.
+    let out = cash(
+        r#"
+        TIMEFORMAT='%3U'
+        time { i=0; while ((i < 20000)); do ((i++)); done; }
+        time bash -c 'i=0; while ((i < 20000)); do ((i++)); done'
+        times
+        "#,
+    );
+    let seconds = |text: &str| -> f64 { text.trim().parse().expect("a number of seconds") };
+    let reports: Vec<&str> = out.stderr.lines().collect();
+    assert_eq!(reports.len(), 2, "{}", out.stderr);
+    assert!(seconds(reports[0]) > 0.0, "shell: {}", out.stderr);
+    assert!(seconds(reports[1]) > 0.0, "child: {}", out.stderr);
+
+    let children = out.stdout.lines().nth(1).expect("times' second line");
+    assert_ne!(
+        children.split_whitespace().next(),
+        Some("0m0.000s"),
+        "{children}"
+    );
+}
+
 // ===========================================================================
 // 27. trap EXIT execution
 // ===========================================================================
