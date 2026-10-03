@@ -1,0 +1,6 @@
+declare -- __git_printf_supports_v="yes"
+declare -- __git_SOH=$'\001'
+declare -- __git_STX=$'\002'
+declare -- __git_ESC=$'\E'
+declare -- __git_LF=$'\n'
+declare -- __git_CRLF=$'\n'

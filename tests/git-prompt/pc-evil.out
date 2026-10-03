@@ -1,0 +1,2 @@
+A (${__git_ps1_branch_name})B
+x$(echo-pwned)`echo-pwned2`

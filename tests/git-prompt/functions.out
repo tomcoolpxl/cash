@@ -1,0 +1,5 @@
+declare -f __git_eread
+declare -f __git_ps1
+declare -f __git_ps1_colorize_gitstring
+declare -f __git_ps1_show_upstream
+declare -f __git_sequencer_status

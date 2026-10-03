@@ -19,6 +19,8 @@ tests/fixtures/crlf/** -text
 tests/fixtures/bom/**  -text
 *.crlf  -text
 *.bom   -text
+# Git Bash's output, byte for byte, CRs included (tests/git-prompt-differential.sh --freeze).
+tests/git-prompt/** -text
 
 # Binaries
 # A sixel picture is ASCII, but one line of escape sequences that no diff can show.

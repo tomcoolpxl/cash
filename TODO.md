@@ -61,10 +61,9 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 14.1 Tests
 
-Freeze the git-prompt differential outputs as goldens in `it` (D43 rests on `cases/brush`,
-which has no language cases; `tests/corpus`, with the awk and sed differentials folded in,
-is frozen, `it/corpus_goldens.rs`); move the remaining `it` modules to `it/common.rs`.
-BIN-05, BIN-20.
+Move the remaining `it` modules to `it/common.rs`. BIN-05's goldens are done:
+`tests/corpus` with the awk and sed differentials folded in (`it/corpus_goldens.rs`), and
+the git-prompt differential (`it/git_prompt_goldens.rs`). BIN-20.
 
 ### 14.2 Records
 
@@ -127,6 +126,12 @@ ARCH-09, ARCH-10.
 ---
 
 ## Decided, written down so it is not decided twice
+
+- **The git-prompt goldens are frozen against the installed Git for Windows** (the user,
+  2026-10-04): `tests/git-prompt/SOURCES` holds the hashes of the scripts the output came
+  from, and the test fails and says to re-freeze when they change, a runner's Git update
+  included; without Git for Windows it fails. Vendoring the GPL-2.0 `git-prompt.sh`, and
+  keeping the differential a by-hand script, were turned down.
 
 - **History is not cut while `HISTSIZE` and `HISTFILESIZE` are unset** (the user,
   2026-10-03): every line is kept, where Bash defaults both to 500. Spec §4 row 43.

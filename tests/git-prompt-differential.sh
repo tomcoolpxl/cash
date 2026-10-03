@@ -6,20 +6,58 @@
 # cash differs on purpose, the case names the spec decision and checks cash's own output.
 #
 #   bash tests/git-prompt-differential.sh [oracle-bash] [cash] [case-glob]
+#   bash tests/git-prompt-differential.sh --freeze [oracle-bash]
+#   bash tests/git-prompt-differential.sh --check [cash]
 #
-# Run it from Git Bash on Windows; it finds both scripts through `git --exec-path`.
+# --freeze writes the oracle's output and status for each case into tests/git-prompt/,
+# with the hashes of the scripts it came from; --check runs cash alone against them, and
+# is what `it/git_prompt_goldens.rs` runs (BIN-05). When Git for Windows updates its
+# scripts, --check says so: re-freeze, and look at what changed.
+#
+# Run it from Git Bash on Windows; it finds the scripts through `git --exec-path`.
 set -uo pipefail
 
-oracle=${1:-bash}
-cash=${2:-target/debug/cash}
-filter=${3:-*}
+mode=compare
+case ${1-} in
+--freeze | --check) mode=${1#--}; shift ;;
+esac
+case $mode in
+compare) oracle=${1:-bash} cash=${2:-target/debug/cash} filter=${3:-*} ;;
+freeze) oracle=${1:-bash} cash= filter='*' ;;
+check) oracle= cash=${1:-target/debug/cash} filter='*' ;;
+esac
+G=$(cd "$(dirname "$0")" && pwd)/git-prompt
 
 git_exec=$(git --exec-path) || exit 2
 GP=${git_exec%/libexec/git-core}/share/git/completion/git-prompt.sh
+GC=${git_exec%/libexec/git-core}/share/git/completion/git-completion.bash
 PD=${git_exec%/mingw64/libexec/git-core}/etc/profile.d/git-prompt.sh
 if [[ ! -f $GP ]]; then
     printf 'git-prompt.sh not found at %s\n' "$GP" >&2
     exit 2
+fi
+
+# The scripts the oracle's output came from, by hash.
+sources() {
+    local label f
+    for label in completion/git-prompt.sh completion/git-completion.bash profile.d/git-prompt.sh; do
+        case $label in
+        completion/git-prompt.sh) f=$GP ;;
+        completion/*) f=$GC ;;
+        profile.d/*) f=$PD ;;
+        esac
+        if [[ -f $f ]]; then
+            printf '%s  %s\n' "$(sha256sum <"$f" | cut -d' ' -f1)" "$label"
+        else
+            printf 'missing  %s\n' "$label"
+        fi
+    done
+}
+if [[ $mode == check ]] && ! diff <(sources) "$G/SOURCES" >/dev/null 2>&1; then
+    printf 'the installed scripts are not the ones tests/git-prompt was frozen from:\n' >&2
+    diff <(sources) "$G/SOURCES" >&2
+    printf 're-freeze with `bash tests/git-prompt-differential.sh --freeze` and look at what changed\n' >&2
+    exit 3
 fi
 
 W=$(cygpath -m "$(mktemp -d)")
@@ -141,43 +179,68 @@ setup() {
     mk cfg-nodirty; (cd cfg-nodirty && echo x >>a.txt && git config bash.showDirtyState false)
     mk cfg-nountracked
     (cd cfg-nountracked && : >new.txt && git config bash.showUntrackedFiles false)
+    # Cases run at the same time; this one writes into its repository.
+    mk pd-config
 }
 if ! (setup) >"$W/setup.log" 2>&1; then
     cat "$W/setup.log" >&2
     exit 2
 fi
+printf 'fixtures made in %ds\n' "$SECONDS"
 
 # t NAME REPO BODY [CASH-OUTPUT DECISION]
-# Runs BODY in $W/repos/REPO under both shells with git-prompt.sh sourced. With
-# CASH-OUTPUT, cash differs on purpose (DECISION says where) and must print exactly that.
-passes=0 failures=0
+# Writes a case that runs BODY in $W/repos/REPO with git-prompt.sh sourced; they run
+# together, at the end. With CASH-OUTPUT, cash differs on purpose (DECISION says where)
+# and must print exactly that.
+order=()
+declare -A want why
 t() {
-    local name=$1 repo=$2 body=$3 f="$W/cases/$1.sh" out="$W/out/$1" bs cs
+    local name=$1 repo=$2 body=$3
     [[ $name == $filter ]] || return 0
-    mkdir -p "$W/cases" "$W/out"
+    mkdir -p "$W/cases"
+    # GIT_OPTIONAL_LOCKS=0: cases run at the same time, in the same repositories, and
+    # `git status` would otherwise refresh the index under a lock.
     printf '%s\n' \
-        "export GIT_CONFIG_GLOBAL='$W/gitconfig' GIT_CONFIG_NOSYSTEM=1 LC_ALL=C" \
+        "export GIT_CONFIG_GLOBAL='$W/gitconfig' GIT_CONFIG_NOSYSTEM=1 LC_ALL=C GIT_OPTIONAL_LOCKS=0" \
         "unset \${!GIT_PS1_*} PROMPT_COMMAND" \
         "cd '$W' && HOME=\$PWD" \
         ". '$GP'" \
         "cd '$W/repos/$repo' || exit 99" \
-        "$body" >"$f"
-    "$oracle" --noprofile --norc "$f" >"$out.bash" 2>/dev/null; bs=$?
+        "$body" >"$W/cases/$name.sh"
+    order+=("$name")
+    if (($# > 3)); then want[$name]=$4 why[$name]=$5; fi
+}
+
+# run NAME: one case in the mode asked for; PASS or FAIL on stdout.
+run() {
+    local name=$1 f="$W/cases/$1.sh" out="$W/out/$1" bs cs
+    if [[ $mode != check ]]; then
+        "$oracle" --noprofile --norc "$f" >"$out.bash" 2>/dev/null; bs=$?
+    else
+        if [[ ! -f $G/$name.out ]]; then
+            printf 'FAIL %s\n  not frozen: re-freeze\n' "$name"
+            return
+        fi
+        cp "$G/$name.out" "$out.bash"; bs=$(<"$G/$name.status")
+    fi
+    if [[ $mode == freeze ]]; then
+        cp "$out.bash" "$G/$name.out"
+        printf '%s\n' "$bs" >"$G/$name.status"
+        printf 'FROZE %s\n' "$name"
+        return
+    fi
     "$cash" --noprofile --norc "$f" >"$out.cash" 2>/dev/null; cs=$?
-    if (($# > 3)); then
-        if [[ $cs == 0 && $(<"$out.cash") == "$4" ]]; then
-            passes=$((passes + 1))
-            printf 'PASS %s (differs on purpose, %s)\n' "$name" "$5"
+    if [[ -v want[$name] ]]; then
+        if [[ $cs == 0 && $(<"$out.cash") == "${want[$name]}" ]]; then
+            printf 'PASS %s (differs on purpose, %s)\n' "$name" "${why[$name]}"
             return
         fi
     elif [[ $bs == "$cs" ]] && cmp -s "$out.bash" "$out.cash"; then
-        passes=$((passes + 1))
         printf 'PASS %s\n' "$name"
         return
     fi
-    failures=$((failures + 1))
     printf 'FAIL %s\n  bash[%s]=<%s>\n  cash[%s]=<%s>\n' "$name" \
-        "$bs" "$(cat -v "$out.bash")" "$cs" "$(cat -v "$out.cash")" >&2
+        "$bs" "$(cat -v "$out.bash")" "$cs" "$(cat -v "$out.cash")"
 }
 
 # --- load-time globals
@@ -305,7 +368,7 @@ if [[ -f $PD ]]; then
     t pd-ps1 clean "MSYSTEM=MINGW64; . '$PD'; printf '%s\n' \"\$PS1\" \"\$TITLEPREFIX\"; shopt -p no_empty_cmd_completion"
     t pd-expand dirty-w "MSYSTEM=MINGW64; . '$PD'; PS1=\${PS1//\\\$PWD/PWD}; PS1=\${PS1//\\\\h/HOST}; printf '%s' \"\${PS1@P}\""
     t pd-complete-spec clean "MSYSTEM=MINGW64; . '$PD'; complete -p git gitk"
-    t pd-userconfig clean "mkdir -p .config/git; echo 'PS1=custom' >.config/git/git-prompt.sh; HOME=\$PWD; MSYSTEM=MINGW64; . '$PD'; echo \"\$PS1\"; rm -r .config"
+    t pd-userconfig pd-config "mkdir -p .config/git; echo 'PS1=custom' >.config/git/git-prompt.sh; HOME=\$PWD; MSYSTEM=MINGW64; . '$PD'; echo \"\$PS1\"; rm -r .config"
 
     # git-completion.bash, driven the way readline would drive it.
     C='_c() { COMP_LINE=$1; COMP_POINT=${#1}; read -ra COMP_WORDS <<<"$1"; [[ $1 == *" " ]] && COMP_WORDS+=(""); COMP_CWORD=$((${#COMP_WORDS[@]} - 1)); COMPREPLY=(); __git_wrap__git_main; printf "<%s>" "${COMPREPLY[@]}"; echo; }'
@@ -317,5 +380,30 @@ if [[ -f $PD ]]; then
     t comp-remote up-diverged "MSYSTEM=MINGW64; . '$PD'; $C; _c 'git push '; _c 'git push origin m'"
 fi
 
+# Eight at a time; each case's lines are printed in order once all are done.
+mkdir -p "$W/out" "$W/results"
+if [[ $mode == freeze ]]; then
+    mkdir -p "$G"
+    rm -f "$G"/*.out "$G"/*.status
+    sources >"$G/SOURCES"
+fi
+for name in "${order[@]}"; do
+    while (($(jobs -rp | wc -l) >= 8)); do wait -n; done
+    run "$name" >"$W/results/$name" 2>&1 &
+done
+wait
+for name in "${order[@]}"; do cat "$W/results/$name"; done >"$W/all"
+if [[ $mode == freeze ]]; then
+    printf 'froze %d case(s) into %s\n' "${#order[@]}" "$G"
+    exit 0
+fi
+if [[ $mode == check ]]; then
+    for golden in "$G"/*.out; do
+        name=${golden##*/} name=${name%.out}
+        [[ -f $W/cases/$name.sh ]] || printf 'FAIL %s\n  frozen, but no longer a case: re-freeze\n' "$name" >>"$W/all"
+    done
+fi
+cat "$W/all"
+passes=$(grep -c '^PASS' "$W/all") failures=$(grep -c '^FAIL' "$W/all")
 printf '%d passed, %d failed\n' "$passes" "$failures"
-((failures == 0))
+((failures == 0 && passes == ${#order[@]}))

@@ -97,6 +97,13 @@ filter = 'binary(it) and test(=corpus_goldens::every_corpus_case_gives_the_oracl
 threads-required = 8
 slow-timeout = { period = "30s", terminate-after = 3 }
 
+# Makes about forty git repositories (15 s idle) and runs 115 prompt cases in them, eight
+# at a time (25 s idle; tests/git-prompt-differential.sh).
+[[profile.default.overrides]]
+filter = 'binary(it) and test(=git_prompt_goldens::git_prompt_scripts_give_git_bashs_frozen_output)'
+threads-required = 8
+slow-timeout = { period = "60s", terminate-after = 3 }
+
 # math.sed computing pi: 9 s with every core busy.
 [[profile.default.overrides]]
 filter = 'package(cash-sed) and test(=test_sed::pi)'

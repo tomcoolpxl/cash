@@ -1,0 +1,2 @@
+A (${__git_ps1_branch_name}|u+2-1 ${__git_ps1_upstream_name})B
+origin/main
