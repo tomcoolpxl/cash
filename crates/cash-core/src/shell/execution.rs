@@ -209,9 +209,17 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         self.call_stack
             .push_script(call_type, source_info, script_positional_args, extdebug);
 
-        let result = self
-            .run_parsed_result(parse_result, source_info, params)
-            .await;
+        let result = match parse_result {
+            // A sourced file that does not parse fails `source` with 2, as in Bash, and
+            // the script goes on, in POSIX mode too; a script that is run ends.
+            Err(parse_err) if matches!(call_type, callstack::ScriptCallType::Source) => {
+                Ok(self.syntax_error_of_a_builtin(parse_err, source_info, params, false))
+            }
+            parse_result => {
+                self.run_parsed_result(parse_result, source_info, params)
+                    .await
+            }
+        };
 
         if matches!(call_type, callstack::ScriptCallType::Source) && result.is_ok() {
             crate::commands::run_return_trap(self, params).await;
@@ -319,6 +327,27 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         let _ = self.on_exit().await;
 
         Ok(result)
+    }
+
+    /// A syntax error in the text `eval` or `source` was given: reported, and the builtin
+    /// fails with 2 while the script goes on, as in Bash. With `fatal` it ends a script
+    /// that is not interactive instead, as Bash's POSIX mode does for `eval`.
+    pub(crate) fn syntax_error_of_a_builtin(
+        &mut self,
+        parse_err: cash_parser::ParseError,
+        source_info: &crate::SourceInfo,
+        params: &ExecutionParameters,
+        fatal: bool,
+    ) -> ExecutionResult {
+        let mut err =
+            error::Error::from(error::ErrorKind::ParseError(parse_err, source_info.clone()));
+        if fatal {
+            err = err.into_fatal();
+        }
+        let _ = self.display_error(&mut params.stderr(self), &err);
+        let result = err.into_result(self);
+        self.set_last_exit_status(result.exit_code.into());
+        result
     }
 
     pub(crate) async fn run_parsed_result(

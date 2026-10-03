@@ -60,9 +60,11 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 13.2 Builtins
 
-- A syntax error in `eval` ends a script with status 2; Bash reports it, sets `$?` to 2
-  and goes on (`eval 'if then'; echo "after $?"` prints `after 2`). Seen in 1.3.10 while
-  fixing PI-07.
+- EXE-07, a Medium finding no phase carried: a script, and a sourced file, are parsed
+  whole before they run, so a syntax error on line 2 stops line 1 from running (Bash
+  runs `echo first` and then reports `if then`), and a self-extracting payload after
+  `exit` must parse (`shell/execution.rs`, `source_file`). Bash reads one complete
+  command at a time. Seen again in 1.3.12 while fixing `eval`'s syntax errors.
 
 ### 13.3 `time` and `times` report CPU time
 

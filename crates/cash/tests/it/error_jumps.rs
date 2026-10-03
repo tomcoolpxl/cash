@@ -2,10 +2,12 @@
 
 #![allow(
     clippy::tests_outside_test_module,
-    reason = "an integration test is outside a test module by construction"
+    clippy::expect_used,
+    reason = "an integration test is outside a test module by construction, and a \
+              failed set-up should abort it loudly"
 )]
 
-use crate::common::run;
+use crate::common::{Scratch, run, run_in};
 
 /// Runs each script and checks its standard output and status against Bash's.
 fn check(cases: &[(&str, &str)]) {
@@ -67,6 +69,39 @@ fn a_call_past_the_nesting_limit_abandons_the_command() {
         "{}",
         out.stderr
     );
+}
+
+#[test]
+fn a_syntax_error_in_eval_fails_eval_and_the_script_goes_on() {
+    // Bash reports it, `eval` returns 2, and the next command runs; cash ended the
+    // script. In POSIX mode, as for any special builtin, it ends a script.
+    check(&[(
+        "eval 'if then'; echo \"after $?\"\nf() { eval 'done'; echo \"in f $?\"; }; f; echo \"after f $?\"\nx=$(eval 'fi'); echo \"sub $?\"",
+        "after 2\nin f 2\nafter f 0\nsub 2",
+    )]);
+    let out = run("set -e; eval 'case'; echo not reached");
+    assert_eq!((out.stdout.as_str(), out.code), ("", 2), "{}", out.stderr);
+    let out = run("set -o posix; eval 'if then'; echo not reached");
+    assert_eq!((out.stdout.as_str(), out.code), ("", 2), "{}", out.stderr);
+}
+
+#[test]
+fn a_sourced_file_that_does_not_parse_fails_source_and_the_script_goes_on() {
+    // As `eval`, and in POSIX mode too, as Bash 5.3 has it.
+    let scratch = Scratch::new("source-syntax");
+    std::fs::write(scratch.path().join("bad.inc"), "if then\n").expect("write");
+    for script in [
+        ". ./bad.inc; echo \"after $?\"",
+        "set -o posix; . ./bad.inc; echo \"after $?\"",
+    ] {
+        let out = run_in(scratch.path(), script);
+        assert_eq!(
+            (out.stdout.as_str(), out.code),
+            ("after 2", 0),
+            "{script}: {}",
+            out.stderr
+        );
+    }
 }
 
 #[test]
