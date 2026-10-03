@@ -1925,6 +1925,45 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
                     });
                 }
 
+                // `${a[@]@K}` is one word of key and value pairs, each value double
+                // quoted, as `declare -p` prints them; an associative array's pairs each
+                // end with a space, as in Bash. It gave the values only (LANG-20).
+                if matches!(
+                    op,
+                    ParameterTransformOp::PossiblyQuoteWithArraysExpanded {
+                        separate_words: false
+                    }
+                ) && matches!(
+                    parameter,
+                    cash_parser::word::Parameter::NamedWithAllIndices { .. }
+                ) && let (_, _, Some(variable)) = self
+                    .try_resolve_parameter_to_variable(&parameter, indirect)
+                    .await?
+                {
+                    let value = |v: &str| escape::force_quote(v, escape::QuoteMode::DoubleQuote);
+                    let pairs = match variable.value() {
+                        ShellValue::AssociativeArray(elements) => {
+                            let mut pairs = String::new();
+                            for (key, v) in elements {
+                                pairs.push_str(&escape::quote_if_needed(
+                                    key,
+                                    escape::QuoteMode::DoubleQuote,
+                                ));
+                                pairs.push(' ');
+                                pairs.push_str(&value(v));
+                                pairs.push(' ');
+                            }
+                            pairs
+                        }
+                        ShellValue::IndexedArray(elements) => elements
+                            .iter()
+                            .map(|(key, v)| std::format!("{key} {}", value(v)))
+                            .join(" "),
+                        _ => String::new(),
+                    };
+                    return Ok(Expansion::from(ExpansionPiece::Splittable(pairs)));
+                }
+
                 let expanded_parameter = self.expand_parameter(&parameter, indirect).await?;
                 let came_from_undefined = expanded_parameter.undefined;
 
@@ -2659,9 +2698,7 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
             cash_parser::word::ParameterTransformOp::PromptExpand => {
                 prompt::expand_prompt(self.shell, self.params, s).await
             }
-            cash_parser::word::ParameterTransformOp::CapitalizeInitial => {
-                Ok(to_initial_capitals(s))
-            }
+            cash_parser::word::ParameterTransformOp::CapitalizeInitial => Ok(to_initial_capital(s)),
             cash_parser::word::ParameterTransformOp::ExpandEscapeSequences => {
                 let (result, _) =
                     escape::expand_backslash_escapes(s, escape::EscapeExpansionMode::AnsiCQuotes)?;
@@ -2735,23 +2772,12 @@ fn coalesce_expansions(expansions: Vec<Expansion>) -> Expansion {
         })
 }
 
-fn to_initial_capitals(s: &str) -> String {
-    let mut result = String::new();
-    let mut capitalize_next = true;
-
-    for c in s.chars() {
-        if c.is_whitespace() {
-            capitalize_next = true;
-            result.push(c);
-        } else if capitalize_next {
-            result.push_str(c.to_uppercase().to_string().as_str());
-            capitalize_next = false;
-        } else {
-            result.push(c);
-        }
-    }
-
-    result
+/// `${x@u}`: the first character in upper case, as in Bash. Every word's was (LANG-19).
+fn to_initial_capital(s: &str) -> String {
+    let mut chars = s.chars();
+    chars.next().map_or_else(String::new, |first| {
+        first.to_uppercase().chain(chars).collect()
+    })
 }
 
 async fn transform_expansion<F, FReturn>(
@@ -2931,9 +2957,10 @@ mod tests {
     }
 
     #[test]
-    fn test_to_initial_capitals() {
-        assert_eq!(to_initial_capitals("ab bc cd"), String::from("Ab Bc Cd"));
-        assert_eq!(to_initial_capitals(" a "), String::from(" A "));
-        assert_eq!(to_initial_capitals(""), String::new());
+    fn test_to_initial_capital() {
+        assert_eq!(to_initial_capital("ab bc cd"), String::from("Ab bc cd"));
+        assert_eq!(to_initial_capital(" a "), String::from(" a "));
+        assert_eq!(to_initial_capital("éa"), String::from("Éa"));
+        assert_eq!(to_initial_capital(""), String::new());
     }
 }

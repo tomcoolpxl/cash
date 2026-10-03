@@ -132,3 +132,28 @@ fn a_quoted_ampersand_in_a_replacement_is_literal() {
         ("x=abc; q='\\&'; echo ${x/b/$q} ${x//?/&-}", "a&c a-b-c-"),
     ]);
 }
+
+#[test]
+fn transformations_u_and_k_do_what_bash_does() {
+    // `@u` capitalised every word (LANG-19); `${a[@]@K}` gave the values only (LANG-20).
+    check(&[
+        ("x='hello big world'; echo \"${x@u}\"", "Hello big world"),
+        ("w=(abc déf); echo \"${w[@]@u}\"", "Abc Déf"),
+        (
+            "a=(p 'q r'); printf '<%s>' \"${a[@]@K}\"",
+            "<0 \"p\" 1 \"q r\">",
+        ),
+        (
+            "declare -A m=([k]='$v'); printf '<%s>' \"${m[@]@K}\"",
+            "<k \"\\$v\" >",
+        ),
+        (
+            "a=(p 'q r'); printf '<%s>' ${a[@]@K}",
+            "<0><\"p\"><1><\"q><r\">",
+        ),
+        (
+            "x=hi; a=(p); printf '<%s>' \"${x@K}\" \"${a[0]@K}\"",
+            "<'hi'><'p'>",
+        ),
+    ]);
+}
