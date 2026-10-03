@@ -60,9 +60,10 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 13.2 Builtins
 
-- `env bash` runs the `bash.exe` on `PATH` (Git Bash's, or WSL's in `System32`) while a
-  bare `bash`, `type bash` and a `#!/usr/bin/env bash` line all mean cash. Seen in 1.3.12
-  while fixing W32-08; which one `env` should mean is the user's call.
+- `bash -c 'echo $0'` prints cash's own path where Bash prints `bash`, and `sh -c` does
+  not know it was started as `sh`: `arg0` is a no-op stub on Windows (EXE-12), though a
+  process's `argv[0]` there is only the first word of its command line, which cash
+  writes. Seen in 1.3.12 while making `env bash` follow D7.
 - `elevate` asks UAC through `powershell.exe` started with the process's folder and
   environment, so the elevated command gets neither the shell's working directory nor its
   exported variables (the `process state:` mark at `cash-builtins/src/win.rs`); with
@@ -168,6 +169,10 @@ in Bash they are Bash's version. `\s` gives `cash`. Keep cash's, and add a row t
   look at the replay and its look at the end, was real and is closed, but it is not
   this. Unexplained: `type` may take the pipe's end (ERROR_BROKEN_PIPE) for an error
   depending on when the server closes. W32-02.
+- A worktree `.claude/worktrees/intelligent-meninsky-05ffe4` (branch
+  `claude/intelligent-meninsky-05ffe4`, at the 1.3.7 release commit, clean and merged
+  into main) is still registered; remove it with its branch once no session uses it.
+  Seen 2026-10-03.
 - The Low findings not listed in phases 8 to 14 are in the report, §5.
 
 ---

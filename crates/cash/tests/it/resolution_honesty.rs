@@ -235,6 +235,21 @@ fn sh_and_bash_resolve_to_cash() {
 }
 
 #[test]
+fn env_and_timeout_run_cash_for_sh_and_bash() {
+    // They searched PATH, so `env bash` on the bare PATH was the WSL launcher, where
+    // `bash`, `xargs bash` and `nohup bash` were cash. `type -t ls` says `builtin` only in
+    // cash; anything after the `-S` split counts too.
+    let out = cash_bare(
+        r#"env bash -c 'type -t ls'; env A=1 sh -c 'echo "$A $(type -t ls)"'; env -S 'bash -c "type -t ls"'; timeout 5 bash -c 'type -t ls'"#,
+    );
+    assert_eq!(
+        out.stdout, "builtin\n1 builtin\nbuiltin\nbuiltin",
+        "{}",
+        out.stderr
+    );
+}
+
+#[test]
 fn cash_resolves_to_the_running_cash() {
     // A terminal profile starts cash by full path, so its folder is usually not on PATH;
     // `cash doctor` must work anyway.

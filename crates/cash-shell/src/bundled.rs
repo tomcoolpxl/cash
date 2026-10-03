@@ -186,7 +186,7 @@ pub fn maybe_dispatch() -> Option<i32> {
     }
 
     #[cfg(feature = "experimental-bundled-coreutils")]
-    let argv = relaying_msys_command(argv);
+    let argv = relaying_msys_command(cash_for_shell_names(argv));
 
     // A tool that runs a command hands it its standard output, which would keep the
     // relay's pipe open after the tool is done.
@@ -201,6 +201,34 @@ pub fn maybe_dispatch() -> Option<i32> {
 /// --msys-relay TOOL PROGRAM [ARGS...]`. Not a utility, so never a builtin; the leading
 /// dashes keep it from colliding with one.
 const MSYS_RELAY: &str = "--msys-relay";
+
+/// `argv` for a bundled `env` or `timeout` whose command is a bare `sh`, `bash` or
+/// `cash`, with cash itself in its place, as every other way of running those names
+/// reaches it (D7). The tools search `PATH`, which finds Git's bash, or the WSL launcher
+/// in `System32`. A path still reaches the program it names.
+#[cfg(feature = "experimental-bundled-coreutils")]
+fn cash_for_shell_names(argv: Vec<OsString>) -> Vec<OsString> {
+    let Some(operand) = cash_coreutils_builtins::command_operand(&argv) else {
+        return argv;
+    };
+    let Some(program) = operand.args.get(operand.index) else {
+        return argv;
+    };
+    let name = program.to_string_lossy();
+    let stem = std::path::Path::new(name.as_ref())
+        .file_stem()
+        .map(|stem| stem.to_string_lossy().to_ascii_lowercase());
+    let is_shell = !name.contains(['/', '\\'])
+        && stem.is_some_and(|stem| matches!(stem.as_str(), "sh" | "bash" | "cash"));
+    let (true, Some(exe)) = (is_shell, self_exe()) else {
+        return argv;
+    };
+    let mut args = operand.args;
+    if let Some(slot) = args.get_mut(operand.index) {
+        exe.as_os_str().clone_into(slot);
+    }
+    args
+}
 
 /// `argv` for a bundled `env` or `timeout`, with an MSYS2 command routed through
 /// [`MSYS_RELAY`] (D52).

@@ -280,7 +280,9 @@ Always on:
   `/dev/zero`, `/dev/random`, `/dev/urandom`
 - CRLF tolerated in script parsing (D20 covers CRLF in *data*)
 - UTF-8 BOM stripped from scripts (D41)
-- Virtual `/usr/bin/env`, so `#!/usr/bin/env bash` resolves with no fake filesystem
+- Virtual `/usr/bin/env`, so `#!/usr/bin/env bash` resolves with no fake filesystem,
+  and reads the line as GNU `env` does: `-S` splits it, then assignments, `-i`, `-u`
+  and `-C` come before the command
 - Unix path spellings accepted as input (D3)
 
 **CRLF in script source is the one that earns its keep.** `core.autocrlf` is `true` by
@@ -2463,7 +2465,7 @@ someone who expected bash, so additions need to earn their place.
 | 14 | `$!` for a background job that starts no program is a number of cash's own (4n + 1) that no process has; `kill` and `wait` take it to mean the job | bash forks and reports the subshell's pid; cash runs the job on a thread of its own process, so there is no process to name | D70 |
 | 15 | `kill 0` signals the trees cash spawned, not a process group | Windows has no process group that excludes the terminal; the console-wide alternative would kill it | D22 |
 | 16 | `kill -1` is refused | "every process I may signal" on Windows reaches far past anything a script could mean | D22 |
-| 17 | `sh`, `bash` and `cash` are cash, ahead of `PATH` | Otherwise `bash` is the WSL launcher and a script continues under Linux; `cash` is often not on `PATH` at all, since a terminal starts it by full path | D7 |
+| 17 | `sh`, `bash` and `cash` are cash, ahead of `PATH`, however the command is started: by name, through `exec`, `command`, `xargs`, `find -exec`, `nohup`, `env` and `timeout` | Otherwise `bash` is the WSL launcher and a script continues under Linux; `cash` is often not on `PATH` at all, since a terminal starts it by full path | D7 |
 | 18 | `chmod` changes only the read-only attribute, from the owner's write bit | Windows has no execute or read bit outside ACLs and no group or other bits per file; where something is lost (`-x`, `-r`, setuid, setgid, sticky) it warns and returns 0, and the rest (`+x`, `+r`, `go-w`, a numeric mode's other bits) is silent (the user, 2026-10-02 and 2026-10-03) | D23, D34 |
 | 19 | `which` reports builtins; `stat` is not carried | `which` must agree with the shell; uutils' `stat` is Unix-only | D8, D48 |
 | 20 | `id`, `$UID` and `$EUID` report the account's RID, not a uid, and 0 in an elevated shell | Windows identifies a user by SID; the RID is its last component and the nearest true equivalent. Elevated, all three are 0, so `[ "$EUID" -eq 0 ]` and `[ "$(id -u)" -eq 0 ]` agree on "running as Administrator" | D48 |
