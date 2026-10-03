@@ -638,6 +638,35 @@ pub(crate) async fn full_expand_and_split_word(
     expander.full_expand_with_splitting(word_str.as_ref()).await
 }
 
+/// [`full_expand_and_split_word`] for a word of a command, a `for` list or a `case`: one
+/// shaped like an assignment (`prefix=~/x`) gets tilde expansion after its `=` and its
+/// `:`s, as in Bash outside POSIX mode (LANG-24). An array literal's elements do not.
+pub(crate) async fn full_expand_and_split_command_word(
+    shell: &mut Shell<impl extensions::ShellExtensions>,
+    params: &ExecutionParameters,
+    word_str: impl AsRef<str>,
+) -> Result<Vec<String>, error::Error> {
+    let mut expander = WordExpander::new(shell, params);
+    expander.parser_options.tilde_expansion_in_assignment_words =
+        !expander.parser_options.posix_mode;
+    expander.full_expand_with_splitting(word_str.as_ref()).await
+}
+
+/// [`basic_expand_word`] for the word a `case` tests, with the tilde expansion of
+/// [`full_expand_and_split_command_word`].
+pub(crate) async fn basic_expand_command_word(
+    shell: &mut Shell<impl extensions::ShellExtensions>,
+    params: &ExecutionParameters,
+    word_str: impl AsRef<str>,
+) -> Result<String, error::Error> {
+    let mut expander = WordExpander::new(shell, params);
+    // Bash performs no brace expansion in this context.
+    expander.disable_brace_expansion = true;
+    expander.parser_options.tilde_expansion_in_assignment_words =
+        !expander.parser_options.posix_mode;
+    expander.basic_expand_to_str(word_str.as_ref()).await
+}
+
 /// Apply tilde-expansion, parameter expansion, command substitution, and arithmetic expansion;
 /// then perform field splitting and pathname expansion on the result.
 ///

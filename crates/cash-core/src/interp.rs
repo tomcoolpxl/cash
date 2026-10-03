@@ -1500,7 +1500,8 @@ impl Execute for ast::CaseClauseCommand {
                 .await;
         }
 
-        let expanded_value = expansion::basic_expand_word(shell, params, &self.value).await?;
+        let expanded_value =
+            expansion::basic_expand_command_word(shell, params, &self.value).await?;
         let mut result: ExecutionResult = ExecutionResult::success();
         let mut force_execute_next_case = false;
 
@@ -1874,7 +1875,7 @@ impl<SE: extensions::ShellExtensions> ExecuteInPipeline<SE> for ast::SimpleComma
                             // This *looks* like an assignment, but it's really a string we should
                             // fully treat as a regular looking
                             // argument.
-                            let mut next_args = expansion::full_expand_and_split_word(
+                            let mut next_args = expansion::full_expand_and_split_command_word(
                                 &mut context.shell,
                                 &params,
                                 word,
@@ -1891,9 +1892,12 @@ impl<SE: extensions::ShellExtensions> ExecuteInPipeline<SE> for ast::SimpleComma
                     }
                 }
                 CommandPrefixOrSuffixItem::Word(arg) => {
-                    let mut next_args =
-                        expansion::full_expand_and_split_word(&mut context.shell, &params, arg)
-                            .await?;
+                    let mut next_args = expansion::full_expand_and_split_command_word(
+                        &mut context.shell,
+                        &params,
+                        arg,
+                    )
+                    .await?;
                     // A process substitution inside the word lasts as long as the command.
                     params
                         .substitution_ends
@@ -2128,7 +2132,7 @@ async fn expand_words(
     // N.B. Expansion needs `&mut shell`, so the words have to be expanded in sequence.
     let mut fields = vec![];
     for word in words {
-        fields.extend(expansion::full_expand_and_split_word(shell, params, word).await?);
+        fields.extend(expansion::full_expand_and_split_command_word(shell, params, word).await?);
     }
     Ok(fields)
 }

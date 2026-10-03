@@ -622,6 +622,40 @@ const fn starts_with_drive_backslash(word: &str) -> bool {
 ///
 /// Kept characters become single-quoted text so they are literal in a glob pattern
 /// too, just as they would be had the user quoted the path.
+/// Whether a tilde at `pos` of a word shaped like an assignment is expanded, as Bash does
+/// in a command's words: right after the first `=` of `name=`, `name[sub]=` or `name+=`,
+/// and after any `:` past it. A quoted or escaped name is not one.
+fn is_assignment_word_tilde_position(word: &str, pos: usize) -> bool {
+    let bytes = word.as_bytes();
+    let name_end = bytes
+        .iter()
+        .position(|b| !(b.is_ascii_alphanumeric() || *b == b'_'))
+        .unwrap_or(bytes.len());
+    if name_end == 0 || bytes.first().is_some_and(u8::is_ascii_digit) {
+        return false;
+    }
+    let mut at = name_end;
+    if bytes.get(at) == Some(&b'[') {
+        let Some(close) = bytes
+            .get(at..)
+            .and_then(|rest| rest.iter().position(|b| *b == b']'))
+        else {
+            return false;
+        };
+        at += close + 1;
+    }
+    if bytes.get(at) == Some(&b'+') {
+        at += 1;
+    }
+    if bytes.get(at) != Some(&b'=') {
+        return false;
+    }
+    let Some(before) = pos.checked_sub(1) else {
+        return false;
+    };
+    before == at || (before > at && bytes.get(before) == Some(&b':'))
+}
+
 /// Where the body of a here-document that starts at `start` ends: past its end line, a line
 /// that is the delimiter, after tabs when `strip_tabs` (`<<-`). `None` when there is none.
 fn here_document_body_end(
@@ -1182,7 +1216,16 @@ peg::parser! {
         }}
 
         rule enabled_tilde_expr_after_colon() -> WordPiece =
-            tilde_exprs_after_colon_enabled() last_char_is_colon() piece:tilde_expression_piece() { piece }
+            tilde_exprs_after_colon_enabled() last_char_is_colon() piece:tilde_expression_piece() { piece } /
+            tilde_exprs_in_assignment_words_enabled() assignment_word_tilde_position() piece:tilde_expression_piece() { piece }
+
+        rule assignment_word_tilde_position() = #{|input, pos| {
+            if is_assignment_word_tilde_position(input, pos) {
+                peg::RuleResult::Matched(pos, ())
+            } else {
+                peg::RuleResult::Failed
+            }
+        }}
 
         rule last_char_is_colon() = #{|input, pos| {
             if pos == 0 {
@@ -1633,6 +1676,9 @@ peg::parser! {
 
         rule tilde_exprs_after_colon_enabled() -> () =
             &[_] {? if parser_options.tilde_expansion_after_colon { Ok(()) } else { Err("no tilde expansion after colon") } }
+
+        rule tilde_exprs_in_assignment_words_enabled() -> () =
+            &[_] {? if parser_options.tilde_expansion_in_assignment_words { Ok(()) } else { Err("no tilde expansion in assignment words") } }
 
         // Assignment rules.
 

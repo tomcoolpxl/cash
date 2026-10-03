@@ -150,6 +150,28 @@ fn machtype_names_the_machine() {
 }
 
 #[test]
+fn a_word_shaped_like_an_assignment_gets_tilde_expansion() {
+    // After its `=` and its `:`s, in a command's words, `for` and `case`, as in Bash
+    // outside POSIX mode; there was none (LANG-24).
+    check(&[
+        (
+            "printf '%s\\n' a=~ a=x:~/d a[1]+=~ | sed \"s#$HOME#H#g\"",
+            "a=H\na=x:H/d\na[1]+=H",
+        ),
+        (
+            "for i in a=~; do [ \"$i\" = \"a=$HOME\" ] && echo for; done",
+            "for",
+        ),
+        ("case a=~ in \"a=$HOME\") echo case;; esac", "case"),
+        // Not a name, quoted, escaped, after a second `=`, an array element, POSIX mode.
+        (
+            "echo --p=~ 1a=~ \"a\"=~ \\a=~ a=\\~ a=b=~; x=(a=~); echo ${x[0]}; set -o posix; echo a=~",
+            "--p=~ 1a=~ a=~ a=~ a=~ a=b=~\na=~\na=~",
+        ),
+    ]);
+}
+
+#[test]
 fn an_assignment_seeds_random_as_in_bash() {
     // It was dropped (LANG-23); the numbers are Git Bash 5.3's.
     check(&[
