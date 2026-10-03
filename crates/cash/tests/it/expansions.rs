@@ -33,3 +33,17 @@ fn lengths_and_offsets_count_characters() {
         ("set -- héllo; echo ${#1}", "5"),
     ]);
 }
+
+#[test]
+fn an_arithmetic_expression_that_expands_to_nothing_is_zero() {
+    // It was a parse error that abandoned the line (LANG-10).
+    check(&[
+        (
+            "e=; echo $(( $e )) $(( $unset )) $[ $e ] $((  ))",
+            "0 0 0 0",
+        ),
+        ("s='   '; echo $(( $s ))", "0"),
+        ("e=; (( $e )); echo $?", "1"),
+        ("e=; [[ $e -eq 0 ]] && echo yes", "yes"),
+    ]);
+}
