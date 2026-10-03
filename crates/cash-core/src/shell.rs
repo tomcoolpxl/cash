@@ -111,6 +111,19 @@ pub struct Shell<SE: extensions::ShellExtensions = extensions::DefaultShellExten
     /// Clone depth from the original ancestor shell.
     depth: usize,
 
+    /// `$BASH_SUBSHELL`: how many subshells deep this shell is, as Bash counts them:
+    /// `( … )`, command and process substitutions, compound and function pipeline stages
+    /// and background jobs, not a simple command in a pipeline, which Bash forks without
+    /// entering a subshell. `depth` counted every copy, so `true | echo $BASH_SUBSHELL`
+    /// was 1 where Bash's is 0, and `true | (echo $BASH_SUBSHELL)` 2 where it is 1.
+    subshell_level: usize,
+
+    /// How many command and process substitutions and `eval`s deep this shell is: the
+    /// `set -x` prefix repeats PS4's first character once more for each, and for each
+    /// sourced file, as Bash's does. It repeated it for every copy of the shell, so a
+    /// subshell, a pipeline stage and a background job traced with `++`.
+    trace_level: usize,
+
     /// Whether this shell is a subshell that catches a fatal expansion error itself, as
     /// Bash's `( … )`, compound pipeline stage and command substitution do: the error
     /// ends it with 1, where at the top level it ends the shell with 127.
@@ -231,6 +244,8 @@ impl<SE: extensions::ShellExtensions> Clone for Shell<SE> {
             commands_read: self.commands_read,
             umask: self.umask,
             depth: self.depth + 1,
+            subshell_level: self.subshell_level,
+            trace_level: self.trace_level,
             catches_fatal_errors: self.catches_fatal_errors,
         }
     }
@@ -342,9 +357,12 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
     /// simple command there, a function included, and a fatal expansion error ends it as
     /// at the top level, with 127; a compound command runs as a subshell, which catches
     /// the error and ends with 1.
-    pub(crate) fn pipeline_stage_shell(&mut self, compound: bool) -> Self {
+    pub(crate) fn pipeline_stage_shell(&mut self, compound: bool, is_subshell: bool) -> Self {
         let mut stage = self.subshell();
         stage.catches_fatal_errors = compound;
+        if compound && !is_subshell {
+            stage.subshell_level += 1;
+        }
         stage
     }
 
@@ -353,7 +371,44 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
     pub(crate) fn subshell_that_catches_errors(&mut self) -> Self {
         let mut subshell = self.subshell();
         subshell.catches_fatal_errors = true;
+        subshell.subshell_level += 1;
         subshell
+    }
+
+    /// Counts this shell as a subshell one level deeper (`$BASH_SUBSHELL`), as a
+    /// function pipeline stage and a background job are.
+    pub(crate) const fn enter_subshell_level(&mut self) {
+        self.subshell_level += 1;
+    }
+
+    /// Counts this shell as running a command or process substitution, one level deeper
+    /// for the `set -x` prefix.
+    pub(crate) const fn enter_substitution(&mut self) {
+        self.trace_level += 1;
+    }
+
+    /// How many command and process substitutions and `eval`s deep this shell is, for
+    /// the `set -x` prefix (`trace_level`).
+    pub(crate) const fn trace_level(&self) -> usize {
+        self.trace_level
+    }
+
+    /// Runs `command` as `eval` runs it: in this shell, one level deeper for the `set -x`
+    /// prefix, as Bash's `eval` traces `++ echo ev`.
+    ///
+    /// # Errors
+    ///
+    /// Returns the error of running the command.
+    pub async fn run_eval_string(
+        &mut self,
+        command: String,
+        source_info: &crate::SourceInfo,
+        params: &crate::ExecutionParameters,
+    ) -> Result<crate::ExecutionResult, error::Error> {
+        self.trace_level += 1;
+        let result = self.run_string(command, source_info, params).await;
+        self.trace_level -= 1;
+        result
     }
 
     /// Whether a fatal expansion error (`${u:?}`, an unset variable under `set -u`) ends
@@ -656,6 +711,11 @@ impl<SE: extensions::ShellExtensions> ShellState for Shell<SE> {
     /// Returns the current subshell depth; 0 is returned if this shell is not a subshell.
     pub fn depth(&self) -> usize {
         self.depth
+    }
+
+    /// `$BASH_SUBSHELL` (`subshell_level`).
+    pub fn subshell_level(&self) -> usize {
+        self.subshell_level
     }
 
     /// Returns the call stack for the shell.

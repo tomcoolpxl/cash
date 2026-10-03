@@ -479,6 +479,7 @@ where
 
     // Mark the child shell as not interactive; we don't want it messing with the terminal too much.
     cloned_shell.options_mut().interactive = false;
+    cloned_shell.enter_subshell_level();
 
     // cash (D11/D22): give the task somewhere to report the pid it spawns, so the job
     // can answer `$!` and `kill %1`.
@@ -804,9 +805,14 @@ async fn spawn_pipeline_processes(
 
             PipelineExecutionContext {
                 shell: commands::ShellForCommand::OwnedShell {
-                    target: Box::new(
-                        shell.pipeline_stage_shell(!matches!(command, ast::Command::Simple(_))),
-                    ),
+                    target: Box::new(shell.pipeline_stage_shell(
+                        !matches!(command, ast::Command::Simple(_)),
+                        // A `( … )` stage is counted once, by the subshell it is.
+                        matches!(
+                            command,
+                            ast::Command::Compound(ast::CompoundCommand::Subshell(_), _)
+                        ),
+                    )),
                     parent: shell,
                 },
                 process_group_id,
@@ -2920,7 +2926,10 @@ fn substitution_shell<SE: extensions::ShellExtensions>(
     child_params.process_group_policy = ProcessGroupPolicy::SameProcessGroup;
     // What ends the input of the command's other substitutions is not this one's to hold.
     child_params.substitution_ends.clear();
-    (shell.clone(), child_params)
+    let mut subshell = shell.clone();
+    subshell.enter_subshell_level();
+    subshell.enter_substitution();
+    (subshell, child_params)
 }
 
 /// Sets up a process substitution that is a redirection's target (`< <(cmd)`,

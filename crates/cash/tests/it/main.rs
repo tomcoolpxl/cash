@@ -115,6 +115,8 @@ mod shell_state;
 mod small_tools;
 mod ss;
 mod stat_builtin;
+// $BASH_SUBSHELL and the `set -x` prefix count what Bash counts.
+mod subshell_levels;
 mod terminal_profile;
 // D48/D49/D56: the bundled awk, sed and bc in a pipeline.
 mod text_tools;

@@ -77,11 +77,6 @@ The riskiest phase: judge its runs on an idle machine (Decided, below).
 
 ### 11.6 Found while fixing 11.1
 
-- `$BASH_SUBSHELL` in a pipeline stage: `true | echo $BASH_SUBSHELL` is 1, Bash 0 (a
-  forked simple command is no subshell); `true | (echo $BASH_SUBSHELL)` is 2, Bash 1.
-  The same count makes `set -x` write `++ echo hi` for a stage where Bash writes `+`.
-  `Shell::depth` also decides `is_subshell()` (job control, traps, `exec`), so the count
-  `$BASH_SUBSHELL` and PS4 show needs a field of its own.
 - `f=<(seq 1 5)` is a syntax error in cash; Bash expands the substitution and assigns
   its path. Found while fixing 11.4.
 - `jobs` writes a brace group over several lines: `{ sleep 1; } & jobs` shows `{`,
@@ -91,6 +86,12 @@ The riskiest phase: judge its runs on an idle machine (Decided, below).
 ---
 
 ## Phase 12. Language (R7)
+
+### 12.0 Found while fixing phase 11
+
+- `( ( echo nested ) )` is a parse error ("arithmetic evaluation error: failed to parse
+  expression"): cash reads the two parentheses as `((`, though a space is between them.
+  Bash runs two nested subshells, and needs `((` written together for arithmetic.
 
 ### 12.1 Arrays
 

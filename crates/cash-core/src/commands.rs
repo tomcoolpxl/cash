@@ -998,6 +998,8 @@ impl<'a, SE: extensions::ShellExtensions> SimpleCommand<'a, SE> {
         post_execute: Option<fn(&mut Shell<SE>) -> Result<(), error::Error>>,
     ) -> ExecutionSpawnResult {
         let last_arg = Self::take_last_arg(&args);
+        // A function in a pipeline runs in a subshell, as `$BASH_SUBSHELL` shows.
+        shell.enter_subshell_level();
 
         let Ok(slot_guard) = crate::jobs::SubshellSlotGuard::try_acquire() else {
             use std::io::Write as _;
@@ -1521,6 +1523,7 @@ pub(crate) async fn invoke_command_in_subshell_and_get_output(
 ) -> Result<String, error::Error> {
     // Instantiate a subshell to run the command in.
     let mut subshell = shell.subshell_that_catches_errors();
+    subshell.enter_substitution();
 
     // Command substitutions don't inherit errexit by default. Only inherit it when
     // command_subst_inherits_errexit is enabled, otherwise disable errexit in the subshell.
