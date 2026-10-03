@@ -773,6 +773,15 @@ D37's Starship test becomes the regression baseline.
 reverses it. This is what Process Explorer's Suspend does. No undocumented
 `NtSuspendProcess`.
 
+**One exception: the resume of a program cash starts.** Every program is created
+suspended, so that it is in its job object (D6) before it runs, and resumed with
+`NtResumeProcess`, an `ntdll` export that is undocumented but has been there since NT and
+costs one call; enumerating every thread of the system for each command would cost more.
+Its result is checked (2026-10-03): when it fails, the program's threads are resumed one
+by one with `ResumeThread`, as above, and when that fails too the program is ended and the
+command fails with the error. Unchecked, a program it failed for stayed suspended and the
+shell waited for it for ever.
+
 **Scope follows D22**: `kill -STOP %1` suspends the job's whole tree; `kill -STOP 1234`
 suspends that process only. `Ctrl-Z` targets the foreground job, so it is tree-wide. `fg`,
 `bg` and `kill -CONT %1` resume the whole tree, and `jobs` shows the job `Stopped` in

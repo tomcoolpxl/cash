@@ -75,12 +75,6 @@ The riskiest phase: judge its runs on an idle machine (Decided, below).
   this. Unexplained: `type` may take the pipe's end (ERROR_BROKEN_PIPE) for an error
   depending on when the server closes. W32-02.
 
-### 11.5 The resume after a suspended spawn is unchecked
-
-`let _ = resume_process(…)` (`sys/tokio_process.rs:43`), through undocumented
-`NtResumeProcess`: on failure the child stays suspended and the shell waits for ever.
-Check it, terminate on failure, record the API choice beside D19. From reading. EXE-14.
-
 ### 11.6 Found while fixing 11.1
 
 - `$BASH_SUBSHELL` in a pipeline stage: `true | echo $BASH_SUBSHELL` is 1, Bash 0 (a
