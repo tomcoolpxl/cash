@@ -85,19 +85,6 @@ Seen in 1.3.12 while moving `elevate` to `ShellExecuteExW`.
 the `thraa/cash` URL, the `experimental-bundled-coreutils` feature name. ARCH-02,
 ARCH-09, ARCH-10.
 
-### 14.4 **Yours:** default `HISTSIZE` and `HISTFILESIZE`
-
-Seen while fixing 8.5. Bash sets both to 500 when they are unset; cash leaves them unset,
-so a user who sets neither keeps every line, in memory and in `~/.cash_history`. Following
-Bash would cut an existing long history file to 500 entries at the next start. Follow
-Bash, or keep "no limit" and add a row to spec §4.
-
-### 14.5 **Yours:** `\v` and `\V` in a prompt
-
-They give cash's version (`1.3`, `1.3.11`) while `$BASH_VERSION` says `5.3.15(1)-release`;
-in Bash they are Bash's version. `\s` gives `cash`. Keep cash's, and add a row to spec
-§4, or follow `$BASH_VERSION`. Seen in 12.3.
-
 ### 14.6 Dead code, allows and dependencies
 
 - `spawn::spawn`, `build_cmd_command_line`, the winnow stub, the `sys` stubs behind
@@ -136,6 +123,11 @@ in Bash they are Bash's version. `\s` gives `cash`. Keep cash's, and add a row t
 
 ## Decided, written down so it is not decided twice
 
+- **History is not cut while `HISTSIZE` and `HISTFILESIZE` are unset** (the user,
+  2026-10-03): every line is kept, where Bash defaults both to 500. Spec §4 row 43.
+  Following Bash, which would cut an existing long `~/.cash_history`, was turned down.
+- **`\v` and `\V` in a prompt give cash's version** (the user, 2026-10-03), as `\s`
+  gives `cash`. Spec §4 row 44. Following `$BASH_VERSION` was turned down.
 - **Errors are worded as Bash words them** (the user, 2026-10-03): `script.sh: line 3:
   foo: command not found` in a script, `cash: line 1: …` for `-c`, `cash: foo: command
   not found` interactively, with Bash's message text (`r: readonly variable`,

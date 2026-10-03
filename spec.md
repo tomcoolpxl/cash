@@ -2490,6 +2490,8 @@ someone who expected bash, so additions need to earn their place.
 | 40 | Tab completes a typed `*` and `?` as globs (`cat **/nee`, `cat *.tx`); every other character, `[`, `(` and `!` included, is completed as typed, as in Bash | No Windows file name can hold `*` or `?`, so they can only mean a glob; Bash completes them literally and finds nothing (the user, 2026-10-03; LANG-16) | D40 |
 | 41 | With `FUNCNEST` unset, functions nest at most 500 deep: the 501st call fails as `FUNCNEST=500` would, with Bash's message, and abandons its top-level command | Bash has no limit and its stack decides: Git Bash 5.3 crashes (139) between 600 and 800; cash's own stack holds about 2,000, and 500 keeps it far from that | — |
 | 42 | The children's CPU time `time` and `times` report counts a child that is still running, such as a background job running through the `time`d command | Windows has no `getrusage(RUSAGE_CHILDREN)`; the session job's accounting counts every process it has held, cash's own share taken out (the user, 2026-10-02; EXE-11) | D6 |
+| 43 | With `HISTSIZE` and `HISTFILESIZE` unset, history is not cut: every line is kept, in memory and in `~/.cash_history`, until one of them is set | Bash sets both to 500 when they are unset; following it would cut an existing long `~/.cash_history` to 500 entries at the next start (the user, 2026-10-03) | — |
+| 44 | `\v` and `\V` in a prompt give cash's version (`1.3`, `1.3.13`), as `\s` gives `cash`, while `$BASH_VERSION` says `5.3.15(1)-release` | A prompt in cash is about cash; Bash's give Bash's version (the user, 2026-10-03) | — |
 
 `select` was missing outright until recently: it was a reserved word with no grammar
 rule, so `select x in a b; do …; done` was a syntax error that took the whole file with
