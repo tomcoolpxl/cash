@@ -2375,6 +2375,30 @@ async fn apply_assignment(
         return Ok(());
     }
 
+    // An assignment to RANDOM seeds it while it is the shell's own; it was dropped
+    // (LANG-23). `+=` adds to the number it gives next, as Bash's arithmetic does.
+    if variable_name == "RANDOM"
+        && array_index.is_none()
+        && shell
+            .env()
+            .assignment_target("RANDOM")
+            .is_some_and(|var| matches!(var.value(), ShellValue::Dynamic { .. }))
+        && let ShellValueLiteral::Scalar(value) = &new_value
+    {
+        let assigned = value.parse::<i64>().unwrap_or(0);
+        let assigned = if assignment.append {
+            i64::from(shell.next_random()).wrapping_add(assigned)
+        } else {
+            assigned
+        };
+        #[expect(clippy::cast_sign_loss, reason = "Bash reads the seed as unsigned")]
+        shell.seed_random(assigned as u64);
+        if export && let Some((_, random)) = shell.env_mut().get_mut("RANDOM") {
+            random.export();
+        }
+        return Ok(());
+    }
+
     // See if we can find an existing value associated with the variable.
     if let Some((existing_value_scope, existing_value)) =
         shell.env_mut().get_mut(variable_name.as_str())

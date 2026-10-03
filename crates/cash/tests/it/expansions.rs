@@ -150,6 +150,22 @@ fn machtype_names_the_machine() {
 }
 
 #[test]
+fn an_assignment_seeds_random_as_in_bash() {
+    // It was dropped (LANG-23); the numbers are Git Bash 5.3's.
+    check(&[
+        (
+            "RANDOM=42; echo $RANDOM $RANDOM $RANDOM",
+            "17772 26794 1435",
+        ),
+        (
+            "RANDOM=40+2; echo $RANDOM; RANDOM=-1; echo $RANDOM",
+            "17772\n16807",
+        ),
+        ("unset RANDOM; RANDOM=5; echo $RANDOM", "5"),
+    ]);
+}
+
+#[test]
 fn transformations_u_and_k_do_what_bash_does() {
     // `@u` capitalised every word (LANG-19); `${a[@]@K}` gave the values only (LANG-20).
     check(&[

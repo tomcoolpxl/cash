@@ -599,11 +599,8 @@ fn get_current_user_gids() -> Vec<u32> {
     groups
 }
 
-fn get_random_value(_shell: &dyn ShellState) -> ShellValue {
-    let mut rng = rand::rng();
-    let num = rng.random_range(0..32768);
-    let str = num.to_string();
-    str.into()
+fn get_random_value(shell: &dyn ShellState) -> ShellValue {
+    shell.next_random().to_string().into()
 }
 
 fn get_srandom_value(_shell: &dyn ShellState) -> ShellValue {

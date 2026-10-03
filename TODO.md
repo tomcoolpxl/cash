@@ -66,6 +66,11 @@ Low ones in the report §5.1.
 an arithmetic command's tokens joined by single spaces, not its text, so the blanks
 around and inside it are lost. `((x+$x))` and `for ((` already match. Found in 12.3.
 
+`read RANDOM`, `printf -v SECONDS`, `declare RANDOM=1` and every other assignment to a
+dynamic variable but `NAME=value` are dropped (`variables.rs`, "for now we just drop
+them"); Bash seeds RANDOM and resets SECONDS however they are assigned. The setter of a
+dynamic variable is never called. Found fixing LANG-23.
+
 Also seen while fixing 8.1: past the function depth limit (500, or `FUNCNEST`) cash
 reports "maximum function call depth exceeded" and the script goes on, `$?` 0; Bash 5.3
 reports "maximum function nesting level exceeded (500)" and abandons the command.

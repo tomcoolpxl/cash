@@ -286,6 +286,7 @@ impl<SE: extensions::ShellExtensions> Default for Shell<SE> {
             history: None,
             commands_read: 0,
             umask: 0o022,
+            random: crate::random::ShellRandom::default(),
         }
     }
 }

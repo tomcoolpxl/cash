@@ -33,6 +33,7 @@ pub mod pathsearch;
 pub mod patterns;
 pub mod processes;
 mod prompt;
+mod random;
 mod regex;
 pub mod results;
 mod shell;

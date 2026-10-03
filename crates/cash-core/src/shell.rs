@@ -197,6 +197,10 @@ pub struct Shell<SE: extensions::ShellExtensions = extensions::DefaultShellExten
     /// so it is only remembered, and like Bash's it is the shell's own: a subshell gets a
     /// copy, so `( umask 077 )` leaves the caller's as it was.
     umask: u32,
+
+    /// `$RANDOM`'s generator. A subshell gets a new one, as Bash reseeds in each.
+    #[cfg_attr(feature = "serde", serde(skip))]
+    random: crate::random::ShellRandom,
 }
 
 impl<SE: extensions::ShellExtensions> Clone for Shell<SE> {
@@ -249,6 +253,7 @@ impl<SE: extensions::ShellExtensions> Clone for Shell<SE> {
             history: self.history.clone(),
             commands_read: self.commands_read,
             umask: self.umask,
+            random: crate::random::ShellRandom::default(),
             depth: self.depth + 1,
             subshell_level: self.subshell_level,
             trace_level: self.trace_level,
@@ -614,6 +619,16 @@ impl<SE: extensions::ShellExtensions> ShellState for Shell<SE> {
     pub fn set_stopwatch_seconds(&mut self, seconds: i64) {
         self.last_stopwatch_time = std::time::SystemTime::now();
         self.last_stopwatch_offset = seconds;
+    }
+
+    /// The next `$RANDOM`, from 0 to 32767.
+    pub fn next_random(&self) -> u16 {
+        self.random.next()
+    }
+
+    /// Seeds `$RANDOM`, as an assignment to it does.
+    pub fn seed_random(&self, seed: u64) {
+        self.random.seed(seed);
     }
 
     /// Returns the shell environment containing variables.

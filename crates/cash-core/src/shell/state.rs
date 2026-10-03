@@ -25,6 +25,12 @@ pub trait ShellState {
     /// Resets Bash's `SECONDS` stopwatch to the assigned signed value.
     fn set_stopwatch_seconds(&mut self, seconds: i64);
 
+    /// The next `$RANDOM`, from 0 to 32767.
+    fn next_random(&self) -> u16;
+
+    /// Seeds `$RANDOM`, as an assignment to it does.
+    fn seed_random(&self, seed: u64);
+
     /// Returns the shell environment containing variables.
     fn env(&self) -> &ShellEnvironment;
 
