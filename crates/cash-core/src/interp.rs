@@ -60,6 +60,14 @@ pub struct ExecutionParameters {
     /// pid, so there is nothing further to wait for.
     pub(crate) spawned_pid_ready: Option<std::sync::Arc<tokio::sync::Notify>>,
 
+    /// The signal `kill` ended this background job with, 0 while it runs.
+    ///
+    /// A background job runs inside the shell, so `kill %1` cannot end it as Bash ends a
+    /// forked subshell: the job looks here before each pipeline and ends with 128 plus
+    /// the signal. A loop of builtins (`while :; do :; done &`) could not be killed at
+    /// all (`REVIEW_REPORT.md` EXE-08).
+    pub(crate) job_cancel: Option<std::sync::Arc<std::sync::atomic::AtomicI32>>,
+
     /// Whether this runs in a background job of a shell with job control.
     ///
     /// cash (D13): on Windows, the externals such a job spawns start in a process group
@@ -441,11 +449,17 @@ async fn spawn_async_ao_list_in_task<'a, SE: extensions::ShellExtensions>(
     let pid_ready = std::sync::Arc::new(tokio::sync::Notify::new());
     cloned_params.spawned_pid_ready = Some(std::sync::Arc::clone(&pid_ready));
 
-    let mut join_handle = tokio::spawn(async move {
+    let cancel = std::sync::Arc::new(std::sync::atomic::AtomicI32::new(0));
+    cloned_params.job_cancel = Some(std::sync::Arc::clone(&cancel));
+
+    // The job runs on a thread of its own, as a pipeline stage does. As a task on the
+    // runtime's workers, a job that never waits (a loop of builtins) held its worker for
+    // good, and as many such jobs as cores left a foreground `$(…)` waiting for ever
+    // (`REVIEW_REPORT.md` EXE-03).
+    let mut join_handle = tokio::task::spawn_blocking(move || {
         let _guard = slot_guard;
-        cloned_ao_list
-            .execute(&mut cloned_shell, &cloned_params)
-            .await
+        tokio::runtime::Handle::current()
+            .block_on(cloned_ao_list.execute(&mut cloned_shell, &cloned_params))
     });
 
     // Either the task reached a point where `$!` is as accurate as it will ever be, or
@@ -473,7 +487,8 @@ async fn spawn_async_ao_list_in_task<'a, SE: extensions::ShellExtensions>(
     Some(
         shell.jobs_mut().add_as_current(
             jobs::Job::new([task], ao_list.to_string(), jobs::JobState::Running)
-                .with_spawned_pids(pid_sink),
+                .with_spawned_pids(pid_sink)
+                .with_cancel(cancel),
         ),
     )
 }
@@ -548,6 +563,19 @@ impl Execute for ast::Pipeline {
             .then(timing::start_timing)
             .transpose()?;
 
+        // A background job `kill` ended goes no further (`job_cancel`).
+        if let Some(signal) = params
+            .job_cancel
+            .as_ref()
+            .map(|cancel| cancel.load(std::sync::atomic::Ordering::Relaxed))
+            .filter(|&signal| signal != 0)
+        {
+            return Ok(ExecutionResult {
+                next_control_flow: crate::ExecutionControlFlow::ExitShell,
+                exit_code: ExecutionExitCode::from(u8::try_from(128 + signal).unwrap_or(u8::MAX)),
+            });
+        }
+
         let mut params = params.clone();
 
         // cash (D13): a Ctrl-C that arrived while the shell ran commands of its own, a
@@ -579,6 +607,14 @@ impl Execute for ast::Pipeline {
         let mut result =
             wait_for_pipeline_processes_and_update_status(self, spawn_results, shell, &params)
                 .await?;
+
+        // A background job whose first pipeline has ended without a program to report
+        // will not report one later in time for `$!`, so `&` returns now. It waited for a
+        // builtin to end, and a job of arithmetic and assignments
+        // (`{ while ((1)); do x=1; done; } &`) ran none: `&` waited for ever (EXE-08).
+        if let Some(ready) = &params.spawned_pid_ready {
+            ready.notify_one();
+        }
 
         // Invert the exit code if requested.
         if self.bang {

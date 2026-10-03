@@ -888,6 +888,10 @@ pub struct Job {
     /// be found by walking them. The task reports them here instead.
     spawned_pids: Option<std::sync::Arc<std::sync::Mutex<Vec<sys::process::ProcessId>>>>,
 
+    /// Where `kill` leaves the signal for a background task running inside the shell,
+    /// which looks there before each pipeline (`ExecutionParameters::job_cancel`).
+    cancel: Option<std::sync::Arc<std::sync::atomic::AtomicI32>>,
+
     /// The console as the job left it when Ctrl-Z stopped it under `fg`, for the next `fg`
     /// to put back (D19). One stopped as it started keeps it in its processes instead.
     console_at_stop: Option<cash_win32::console::ConsoleState>,
@@ -952,6 +956,7 @@ impl Job {
             exit_status: None,
             notification_pending: true,
             spawned_pids: None,
+            cancel: None,
             console_at_stop: None,
             reap_counted: false,
         }
@@ -965,6 +970,26 @@ impl Job {
     ) -> Self {
         self.spawned_pids = Some(pids);
         self
+    }
+
+    /// Attach the flag `kill` sets to end the job's task running inside the shell.
+    #[must_use]
+    pub(crate) fn with_cancel(
+        mut self,
+        cancel: std::sync::Arc<std::sync::atomic::AtomicI32>,
+    ) -> Self {
+        self.cancel = Some(cancel);
+        self
+    }
+
+    /// Whether a task of the job still runs inside the shell, where `kill` reaches it
+    /// through `cancel`.
+    fn runs_inside_the_shell(&self) -> bool {
+        self.cancel.is_some()
+            && self
+                .tasks
+                .iter()
+                .any(|task| matches!(task, JobTask::Internal(handle) if !handle.is_finished()))
     }
 
     /// Returns a pid-style string for the job.
@@ -1188,7 +1213,7 @@ impl Job {
     /// cash: a job whose processes have all ended, and which is still listed, can: there
     /// is nothing left to refuse the signal. Bash 5.3 answers 0 and says nothing.
     pub fn check_signalable(&self) -> Result<(), error::Error> {
-        if self.has_processes() {
+        if self.has_processes() || self.runs_inside_the_shell() {
             Ok(())
         } else {
             Err(error::ErrorKind::FailedToSendSignal.into())
@@ -1210,7 +1235,8 @@ impl Job {
     pub fn kill(&mut self, signal: traps::TrapSignal) -> Result<(), error::Error> {
         use sys::signal::Signal;
 
-        if !self.has_processes() {
+        let inside = self.runs_inside_the_shell();
+        if !self.has_processes() && !inside {
             return Err(error::ErrorKind::FailedToSendSignal.into());
         }
 
@@ -1234,6 +1260,11 @@ impl Job {
             }
             traps::TrapSignal::Signal(Signal::Cont) => self.resume(),
             _ => {
+                // The part of the job running inside the shell ends at its next pipeline,
+                // and the program it waits for, if any, is signalled below with the rest.
+                if inside && let Some(cancel) = &self.cancel {
+                    cancel.store(signal.trap_number(), std::sync::atomic::Ordering::Relaxed);
+                }
                 let mut first_error = None;
                 for pid in self.pids() {
                     if let Err(e) = sys::signal::kill_process(pid, signal) {

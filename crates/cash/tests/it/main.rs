@@ -26,6 +26,8 @@ mod acceptance;
 mod acceptance_edge_cases;
 // D11/D22: `$!` and background job identity.
 mod background_pid;
+// EXE-03, EXE-06, EXE-08: background jobs of builtins start, run beside the foreground, and end.
+mod background_builtins;
 mod bash_gaps;
 mod batch_relative_path;
 mod bc;

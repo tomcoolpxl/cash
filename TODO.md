@@ -60,12 +60,12 @@ The riskiest phase: judge its runs on an idle machine (Decided, below).
 
 ### 11.2 Background jobs of builtins
 
-- They run on tokio workers and block them; with as many as cores, a foreground `$(…)`
-  waits (with `tail -f`, for ever). EXE-03.
-- `{ while ((1)); do x=1; done; } &` hangs at the `&`; `while :; do :; done & kill %1`
-  cannot be killed. EXE-08.
-- `cat <( { sleep 1; echo late; } & echo early )` loses `late`. EXE-06.
 - The 128-slot `CASH_MAX_SUBSHELLS` also fails pipeline stages, undocumented. EXE-09.
+- `$!` is empty for a job that starts no program first (`{ x=1; } &`, `while :; do :;
+  done &`), and `jobs -p` lists nothing for it, so `kill $!` fails; Bash's `$!` is the
+  pid of the forked subshell. `kill %1` and `wait` work.
+- A job ended by `kill -9` is reported by Bash even in a script (`line 1: 140823 Killed
+  while :; do :; done`); cash says nothing.
 
 ### 11.3 Coprocesses deadlock
 
