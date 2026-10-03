@@ -207,12 +207,21 @@ fn find_powershell_binary<SE: extensions::ShellExtensions>(
     PathBuf::from("powershell.exe")
 }
 
+/// What the spawn adds to a command built for a program.
+#[derive(Default)]
+struct Extras {
+    /// The script a PowerShell runner starts, passed as `CASH_PS_SCRIPT`.
+    ps_script: Option<String>,
+    /// What a `#!/usr/bin/env` line changes in the environment and folder (W32-08).
+    env: crate::shebang_env::EnvChanges,
+}
+
 fn build_powershell_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
     context: &ExecutionContext<'_, SE>,
     script: &Path,
     extra_args: &[String],
     args: &[S],
-) -> Result<(std::process::Command, Option<String>), error::Error> {
+) -> Result<(std::process::Command, Extras), error::Error> {
     let pwsh_bin = find_powershell_binary(context);
     // process state: the shell's spawn layer, which sets the folder and environment.
     let mut c = std::process::Command::new(pwsh_bin);
@@ -229,14 +238,20 @@ fn build_powershell_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
         c.arg(script);
         c.args(extra_args);
         c.args(args);
-        Ok((c, None))
+        Ok((c, Extras::default()))
     } else {
         let runner_path = ensure_ps_runner()?;
         c.arg("-File");
         c.arg(runner_path);
         c.args(extra_args);
         c.args(args);
-        Ok((c, Some(script.to_string_lossy().into_owned())))
+        Ok((
+            c,
+            Extras {
+                ps_script: Some(script.to_string_lossy().into_owned()),
+                ..Extras::default()
+            },
+        ))
     }
 }
 
@@ -291,38 +306,55 @@ fn build_shebang_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
     context: &ExecutionContext<'_, SE>,
     interpreter: &str,
     shebang_args: &[String],
+    line: &str,
     script: &Path,
     argv0: &str,
     args: &[S],
-) -> Result<(std::process::Command, Option<String>), error::Error> {
-    let path_var = context
-        .shell
-        .env()
-        .get_str("PATH", context.shell)
-        .unwrap_or_default();
+) -> Result<(std::process::Command, Extras), error::Error> {
+    let crate::shebang_env::Interpreter {
+        command: interpreter,
+        args: shebang_args,
+        changes,
+    } = crate::shebang_env::interpreter(interpreter, shebang_args, line)
+        .map_err(|e| error::ErrorKind::EnvShebang(interpreter.to_string(), e))?;
+    // `env PATH=… cmd` looks the command up in the PATH it sets.
+    let path_var = match changes
+        .assignments
+        .iter()
+        .rev()
+        .find(|(name, _)| name.eq_ignore_ascii_case("PATH"))
+    {
+        Some((_, value)) => value.clone(),
+        None => context
+            .shell
+            .env()
+            .get_str("PATH", context.shell)
+            .unwrap_or_default()
+            .into_owned(),
+    };
     let path_entries: Vec<PathBuf> =
-        crate::sys::fs::split_paths_preserving_empty(path_var.as_ref()).collect();
+        crate::sys::fs::split_paths_preserving_empty(path_var.as_str()).collect();
     let pathext = context.shell.pathext();
 
     let resolved = cash_win32::resolve::resolve_interpreter(
-        interpreter,
-        shebang_args,
+        &interpreter,
+        &shebang_args,
         &path_entries,
         &pathext,
         context.shell.working_dir(),
     );
 
     let Some((dispatch, extra_args)) = resolved else {
-        return Err(error::ErrorKind::CommandNotFound(interpreter.to_string()).into());
+        return Err(error::ErrorKind::CommandNotFound(interpreter).into());
     };
 
-    match dispatch {
+    let (command, extras) = match dispatch {
         cash_win32::resolve::Dispatch::Exit(code) => {
             let own = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("cash.exe"));
             // process state: cash re-entering itself, in the shell's folder and environment.
             let mut c = std::process::Command::new(own);
             c.arg("-c").arg(format!("exit {code}"));
-            Ok((c, None))
+            Ok((c, Extras::default()))
         }
         cash_win32::resolve::Dispatch::PowerShell(_) => {
             build_powershell_command(context, script, &extra_args, args)
@@ -344,7 +376,7 @@ fn build_shebang_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
             );
             let inner = cash_win32::cmd::escape_words_for_cmd(words.iter().map(String::as_str));
             c.raw_arg(format!("\"{inner}\""));
-            Ok((c, None))
+            Ok((c, Extras::default()))
         }
         cash_win32::resolve::Dispatch::Native(ref target) => {
             // process state: the shell's spawn layer, which sets the folder and environment.
@@ -353,16 +385,23 @@ fn build_shebang_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
             push_native_args(&mut c, target, &extra_args);
             push_native_args(&mut c, target, &[script]);
             push_native_args(&mut c, target, args);
-            Ok((c, None))
+            Ok((c, Extras::default()))
         }
         cash_win32::resolve::Dispatch::Shebang { .. } => {
             // process state: the shell's spawn layer, which sets the folder and environment.
             let mut c = std::process::Command::new(script);
             c.arg0(argv0);
             c.args(args);
-            Ok((c, None))
+            Ok((c, Extras::default()))
         }
-    }
+    }?;
+    Ok((
+        command,
+        Extras {
+            env: changes,
+            ..extras
+        },
+    ))
 }
 
 fn build_windows_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
@@ -370,7 +409,7 @@ fn build_windows_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
     command_name: &str,
     argv0: &str,
     args: &[S],
-) -> Result<(std::process::Command, Option<String>), error::Error> {
+) -> Result<(std::process::Command, Extras), error::Error> {
     let path = Path::new(command_name);
     let candidate = if path.is_absolute() {
         path.to_path_buf()
@@ -390,7 +429,7 @@ fn build_windows_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
     {
         let mut command = cash_win32::path::reentry_command(&tool);
         command.args(args);
-        return Ok((command, None));
+        return Ok((command, Extras::default()));
     }
 
     if !candidate.is_file() {
@@ -413,7 +452,7 @@ fn build_windows_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
         let mut c = std::process::Command::new(command_name);
         c.arg0(argv0);
         cash_win32::msys::add_args(&mut c, target.as_deref(), args);
-        return Ok((c, None));
+        return Ok((c, Extras::default()));
     }
 
     match cash_win32::resolve::classify(&candidate) {
@@ -425,11 +464,11 @@ fn build_windows_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
             let mut c = std::process::Command::new(cash_win32::path::to_backslash(&candidate));
             c.arg0(argv0);
             push_native_args(&mut c, &candidate, args);
-            Ok((c, None))
+            Ok((c, Extras::default()))
         }
         cash_win32::resolve::Dispatch::Batch(_) => Ok((
             build_batch_command(comspec(context.shell), command_name, argv0, args),
-            None,
+            Extras::default(),
         )),
         cash_win32::resolve::Dispatch::PowerShell(_) => {
             build_powershell_command(context, &candidate, &[], args)
@@ -437,14 +476,23 @@ fn build_windows_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
         cash_win32::resolve::Dispatch::Shebang {
             interpreter,
             args: shebang_args,
+            line,
             script,
-        } => build_shebang_command(context, &interpreter, &shebang_args, &script, argv0, args),
+        } => build_shebang_command(
+            context,
+            &interpreter,
+            &shebang_args,
+            &line,
+            &script,
+            argv0,
+            args,
+        ),
         cash_win32::resolve::Dispatch::Exit(code) => {
             let own = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("cash.exe"));
             // process state: cash re-entering itself, in the shell's folder and environment.
             let mut c = std::process::Command::new(own);
             c.arg("-c").arg(format!("exit {code}"));
-            Ok((c, None))
+            Ok((c, Extras::default()))
         }
     }
 }
@@ -501,10 +549,21 @@ pub fn compose_std_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
     args: &[S],
     empty_env: bool,
 ) -> Result<std::process::Command, error::Error> {
-    let (mut cmd, target_ps_script) = build_windows_command(context, command_name, argv0, args)?;
+    let (
+        mut cmd,
+        Extras {
+            ps_script: target_ps_script,
+            env: env_changes,
+        },
+    ) = build_windows_command(context, command_name, argv0, args)?;
+    // `#!/usr/bin/env -i` starts from nothing, as `empty_env` does (W32-08).
+    let empty_env = empty_env || env_changes.ignore_environment;
 
-    // Use the shell's current working dir.
-    cmd.current_dir(context.shell.working_dir());
+    // Use the shell's current working dir, or the one `#!/usr/bin/env -C` names.
+    match &env_changes.chdir {
+        Some(dir) => cmd.current_dir(context.shell.absolute_path(Path::new(dir))),
+        None => cmd.current_dir(context.shell.working_dir()),
+    };
 
     // Start with a clear environment.
     cmd.env_clear();
@@ -520,6 +579,19 @@ pub fn compose_std_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
 
     if let Some(ps_script) = target_ps_script {
         cmd.env("CASH_PS_SCRIPT", ps_script);
+    }
+
+    // `#!/usr/bin/env -u NAME NAME=VALUE`: the unsets, then the assignments, as GNU
+    // `env` applies them, and `PATH` in the form a Windows program reads (D5).
+    for name in &env_changes.unset {
+        cmd.env_remove(name);
+    }
+    for (name, value) in &env_changes.assignments {
+        if name.eq_ignore_ascii_case("PATH") {
+            cmd.env(name, cash_win32::env::path_to_windows(value));
+        } else {
+            cmd.env(name, value);
+        }
     }
 
     // Add in exported functions.
@@ -1069,23 +1141,28 @@ impl<'a, SE: extensions::ShellExtensions> SimpleCommand<'a, SE> {
                 cash_win32::resolve::Dispatch::Shebang {
                     ref interpreter,
                     ref args,
+                    ref line,
                     ..
                 } => {
                     let path_var = shell.env().get_str("PATH", &shell).unwrap_or_default();
                     let path_entries: Vec<PathBuf> =
                         crate::sys::fs::split_paths_preserving_empty(path_var.as_ref()).collect();
                     let pathext = shell.pathext();
-                    cash_win32::resolve::resolve_interpreter(
-                        interpreter,
-                        args,
-                        &path_entries,
-                        &pathext,
-                        shell.working_dir(),
-                    )
-                    .and_then(|(d, _)| match d {
-                        cash_win32::resolve::Dispatch::Exit(c) => Some(c),
-                        _ => None,
-                    })
+                    crate::shebang_env::interpreter(interpreter, args, line)
+                        .ok()
+                        .and_then(|found| {
+                            cash_win32::resolve::resolve_interpreter(
+                                &found.command,
+                                &found.args,
+                                &path_entries,
+                                &pathext,
+                                shell.working_dir(),
+                            )
+                        })
+                        .and_then(|(d, _)| match d {
+                            cash_win32::resolve::Dispatch::Exit(c) => Some(c),
+                            _ => None,
+                        })
                 }
                 _ => None,
             };

@@ -60,7 +60,12 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 13.2 Builtins
 
-- `#!/usr/bin/env -S` (W32-08).
+- A shebang script started as `./s` sees the absolute path in `$0` and in the
+  interpreter's script argument (`C:/…/dir/./s`); Bash passes `./s` as typed, as the
+  kernel does. Seen in 1.3.12 while fixing W32-08.
+- `env bash` runs the `bash.exe` on `PATH` (Git Bash's, or WSL's in `System32`) while a
+  bare `bash`, `type bash` and a `#!/usr/bin/env bash` line all mean cash. Seen in 1.3.12
+  while fixing W32-08; which one `env` should mean is the user's call.
 - `elevate` asks UAC through `powershell.exe` started with the process's folder and
   environment, so the elevated command gets neither the shell's working directory nor its
   exported variables (the `process state:` mark at `cash-builtins/src/win.rs`); with

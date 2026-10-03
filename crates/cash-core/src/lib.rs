@@ -36,6 +36,7 @@ mod prompt;
 mod random;
 mod regex;
 pub mod results;
+mod shebang_env;
 mod shell;
 pub mod sourceinfo;
 pub mod sys;

@@ -103,6 +103,7 @@ fn shebang_scripts_name_their_interpreter() {
         interpreter,
         args,
         script,
+        ..
     } = classify(&dir.join("deploy"))
     else {
         panic!("expected a shebang dispatch");

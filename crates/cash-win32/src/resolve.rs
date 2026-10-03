@@ -35,6 +35,10 @@ pub enum Dispatch {
         interpreter: String,
         /// Arguments given on the shebang line, before the script path.
         args: Vec<String>,
+        /// The text after the interpreter as it stands, which is what the kernel hands it
+        /// as one argument: `#!/usr/bin/env -S bash -e` gives `env` the string
+        /// `-S bash -e` to split (W32-08).
+        line: String,
         /// The script itself.
         script: PathBuf,
     },
@@ -231,10 +235,11 @@ pub fn classify(path: &Path) -> Dispatch {
         "EXE" | "COM" => Dispatch::Native(path.to_path_buf()),
         "CMD" | "BAT" => Dispatch::Batch(path.to_path_buf()),
         "PS1" => Dispatch::PowerShell(path.to_path_buf()),
-        _ => match read_shebang(path) {
-            Some((interpreter, args)) => Dispatch::Shebang {
+        _ => match read_shebang_line(path) {
+            Some((interpreter, line)) => Dispatch::Shebang {
                 interpreter,
-                args,
+                args: line.split_whitespace().map(str::to_string).collect(),
+                line,
                 script: path.to_path_buf(),
             },
             None => {
@@ -245,6 +250,7 @@ pub fn classify(path: &Path) -> Dispatch {
                     Dispatch::Shebang {
                         interpreter: "sh".to_string(),
                         args: Vec::new(),
+                        line: String::new(),
                         script: path.to_path_buf(),
                     }
                 }
@@ -259,6 +265,16 @@ pub fn classify(path: &Path) -> Dispatch {
 /// by one is otherwise invisible — which is exactly how a Notepad-saved script fails.
 #[must_use]
 pub fn read_shebang(path: &Path) -> Option<(String, Vec<String>)> {
+    let (interpreter, line) = read_shebang_line(path)?;
+    Some((
+        interpreter,
+        line.split_whitespace().map(str::to_string).collect(),
+    ))
+}
+
+/// The interpreter a `#!` line names and the text after it, unsplit.
+#[must_use]
+pub fn read_shebang_line(path: &Path) -> Option<(String, String)> {
     use std::io::Read as _;
     let mut file = std::fs::File::open(path).ok()?;
     let mut buf = [0u8; 1024];
@@ -278,11 +294,8 @@ pub fn read_shebang(path: &Path) -> Option<(String, Vec<String>)> {
         return None;
     }
 
-    let mut parts = rest.split_whitespace();
-    let interpreter = parts.next()?.to_string();
-    let args: Vec<String> = parts.map(str::to_string).collect();
-
-    Some((interpreter, args))
+    let (interpreter, line) = rest.split_once(char::is_whitespace).unwrap_or((rest, ""));
+    Some((interpreter.to_string(), line.trim().to_string()))
 }
 
 fn resolve_named_interpreter(

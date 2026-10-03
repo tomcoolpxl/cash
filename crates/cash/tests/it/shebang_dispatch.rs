@@ -210,3 +210,52 @@ fn extensionless_script_resolves_from_path() {
     assert_eq!(out.code, 0, "stderr: {}", out.stderr);
     assert_eq!(out.stdout.trim(), "NOEXT_PATH_OK: verified");
 }
+
+#[test]
+fn env_dash_s_splits_the_shebang_line() {
+    // `#!/usr/bin/env -S bash -e` hands `env` one string to split, and cash took `-S` for
+    // the command (W32-08). The words are `env`'s: assignments, `-i`, `-u`, the command.
+    let scratch = Scratch::new("env-split");
+    let dir = scratch.path();
+    let scripts: [(&str, &str); 5] = [
+        (
+            "strict",
+            "#!/usr/bin/env -S bash -e\nfalse\necho not reached\n",
+        ),
+        (
+            "greet",
+            "#!/usr/bin/env -S GREETING=hi bash\necho \"$GREETING $*\"\n",
+        ),
+        (
+            "quoted",
+            "#!/usr/bin/env -S bash -c 'echo \"[$0] [${1##*/}]\"' zero\n",
+        ),
+        (
+            "bare",
+            "#!/usr/bin/env -S -i bash\necho \"[${CASH_SHEBANG_MARK-unset}]\"\n",
+        ),
+        (
+            "unclosed",
+            "#!/usr/bin/env -S bash 'unclosed\necho not run\n",
+        ),
+    ];
+    for (name, text) in scripts {
+        std::fs::write(dir.join(name), text).expect("write");
+    }
+
+    let dir_str = dir.to_string_lossy().replace('\\', "/");
+    let out = run_cash_cmd(&format!(
+        r#"cd '{dir_str}'; export CASH_SHEBANG_MARK=set; ./strict; echo "strict $?"; ./greet a b; ./quoted; ./bare; ./unclosed; echo "unclosed $?""#
+    ));
+    assert_eq!(
+        out.stdout, "strict 1\nhi a b\n[zero] [quoted]\n[unset]\nunclosed 125\n",
+        "stderr: {}",
+        out.stderr
+    );
+    assert!(
+        out.stderr
+            .contains("/usr/bin/env: no terminating quote in -S string"),
+        "stderr: {}",
+        out.stderr
+    );
+}

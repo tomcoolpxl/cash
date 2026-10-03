@@ -348,6 +348,11 @@ pub enum ErrorKind {
     /// A glob pattern failed to match any files (failglob).
     #[error("no match: {0}")]
     NoMatch(String),
+
+    /// A `#!/usr/bin/env` line `env` refuses, worded as `env` words it; status 125, as
+    /// GNU `env` exits (W32-08).
+    #[error("{0}: {1}")]
+    EnvShebang(String, String),
 }
 
 /// Trait implementable by built-in commands to represent errors.
@@ -425,6 +430,7 @@ impl From<&ErrorKind> for results::ExecutionExitCode {
                 Self::CannotExecute
             }
             ErrorKind::FunctionNameShadowsSpecialBuiltin { .. } => Self::InvalidUsage,
+            ErrorKind::EnvShebang(..) => Self::Custom(125),
             // 128 + SIGINT, the status Bash leaves after Ctrl-C.
             ErrorKind::Interrupted => Self::Interrupted,
             ErrorKind::IoError(io_err) => io_err.into(),
