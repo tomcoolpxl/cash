@@ -394,7 +394,21 @@ pub fn parse_regex_for_mode(
                     line.advance();
                     continue;
                 }
-                if let Some(decoded) = parse_char_escape(line) {
+                // GNU sed's anchors: \` and \' are the start and end of the pattern
+                // space, whatever `M` says, which the RE engine spells \A and \z. And
+                // in a regex \b is a word boundary, not a backspace: GNU sed's manual
+                // leaves backspace out of the escapes for that reason.
+                let anchor = match line.current() {
+                    '`' => Some(b'A'),
+                    '\'' => Some(b'z'),
+                    'b' => Some(b'b'),
+                    _ => None,
+                };
+                if let Some(anchor) = anchor {
+                    result.push(b'\\');
+                    result.push(anchor);
+                    line.advance();
+                } else if let Some(decoded) = parse_char_escape(line) {
                     push_script_char(&mut result, decoded, character_mode);
                 } else {
                     // Pass through \<any> to RE engine for further treatment

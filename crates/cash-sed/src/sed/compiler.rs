@@ -1224,7 +1224,13 @@ fn compile_label_command(
         cmd.data = CommandData::Label(Some(label));
     }
 
+    // GNU sed ends a label at a blank too, and reads what follows as the next command:
+    // `:x /\\$/ { N; s/\\\n//; bx }`. A label ended by `;` or the line's end is POSIX's.
+    let ended_by_blank = !line.eol() && line.current().is_whitespace();
     line.eat_spaces(); // Skip any trailing whitespace
+    if ended_by_blank && !line.eol() && !matches!(line.current(), ';' | '}' | '#') {
+        return Ok(CommandHandling::Continue);
+    }
     parse_command_ending(lines, line, cmd)?;
     Ok(CommandHandling::Continue)
 }

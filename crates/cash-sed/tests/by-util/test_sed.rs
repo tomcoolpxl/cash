@@ -2359,3 +2359,43 @@ fn null_data_separates_lines_by_nul() {
             .stdout_is_bytes(expected);
     }
 }
+
+/// GNU sed's word and buffer anchors in a regex: `\b` a word boundary (not a backspace),
+/// `\<` and `\>` a word's start and end, `` \` `` and `\'` the pattern space's start and
+/// end, whatever `M` says. The outputs are GNU sed 4.9's; `\b`, `\<`, `\>` and `` \` ``
+/// left the line as it was.
+#[test]
+fn test_gnu_word_and_buffer_anchors() {
+    let cases: [(&str, &str, &str); 7] = [
+        (r"s/\bb\b/X/", "a b ab\n", "a X ab\n"),
+        (r"s/\<b/X/g", "a b ab\n", "a X ab\n"),
+        (r"s/b\>/X/g", "a b ab\n", "a X aX\n"),
+        (r"s/\Bb/X/g", "a b ab\n", "a b aX\n"),
+        (r"s/\(a\) \<b\>/\1-/", "a b ab\n", "a- ab\n"),
+        (r"N;s/\`a/X/Mg", "ab\nab\n", "Xb\nab\n"),
+        (r"N;s/b\'/X/Mg", "ab\nab\n", "ab\naX\n"),
+    ];
+    for (script, input, expected) in cases {
+        new_ucmd!()
+            .arg(script)
+            .pipe_in(input)
+            .succeeds()
+            .stdout_is(expected);
+    }
+}
+
+/// GNU sed ends a label at a blank, and reads what follows as the next command, where
+/// cash's sed said "extra characters at the end of the : command".
+#[test]
+fn test_gnu_label_ended_by_a_blank() {
+    new_ucmd!()
+        .arg(r":x /\\$/ { N; s/\\\n//; bx }")
+        .pipe_in("a\\\nb\nc\n")
+        .succeeds()
+        .stdout_is("ab\nc\n");
+    new_ucmd!()
+        .args(&["-n", ":x p"])
+        .pipe_in("a\n")
+        .succeeds()
+        .stdout_is("a\n");
+}

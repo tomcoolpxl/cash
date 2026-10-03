@@ -79,12 +79,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
   which `std::process::Command` always makes the program's path; `CreateProcessW` with
   the application name apart, or a flag for cash re-entering itself, would carry it.
   Seen in 1.3.12 while making `env bash` follow D7.
-- cash's sed lacks two GNU sed extensions the corpus uses: `\b`, `\w` and `\s` in a
-  regex (`echo 'a b' | sed -E 's/\bb\b/X/'` prints `a b`, GNU sed `a X`;
-  `sed/gnu-doubled-words.sh`), and a label ended by a blank before `{` or `;`
-  (`:x /\\$/ { N; s/\\\n//; bx }` fails with "extra characters at the end of the :
-  command", rc 1; `sed/gnu-join-backslash.sh`). Both are in the known list of
-  `it/corpus_goldens.rs`; take them off it when fixed. Seen 2026-10-03 freezing the corpus.
 - The Low findings not listed in phases 8 to 14 are in the report, §5.
 
 ---
