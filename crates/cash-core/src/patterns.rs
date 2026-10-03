@@ -280,7 +280,11 @@ impl Pattern {
 
             if let Some(first_piece) = split_result.pop_front() {
                 if let Some(last_component) = components.last_mut() {
-                    last_component.push(first_piece);
+                    // An empty piece adds nothing, and would keep `**` from being seen
+                    // as a whole component (`**` then `/nee` in completion).
+                    if !first_piece.as_str().is_empty() {
+                        last_component.push(first_piece);
+                    }
                 } else {
                     components.push(vec![first_piece]);
                 }

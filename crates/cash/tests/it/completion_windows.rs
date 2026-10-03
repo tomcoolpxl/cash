@@ -194,6 +194,34 @@ async fn a_completion_containing_a_space_is_quoted() {
 }
 
 #[tokio::test]
+async fn typed_glob_characters_are_completed_as_they_are() {
+    // `[draft]` was a bracket expression, so a name starting with it completed nothing
+    // (LANG-16). Only `*` and `?` glob, as no Windows name can hold them (spec §4).
+    let mut fixture = Fixture::new("glob-chars").await;
+    fixture.touch("[draft] notes.txt");
+    fixture.touch("(old) list.txt");
+    fixture.touch("d.txt");
+
+    for input in ["cat '[dr", "cat [dr", "cat \\[draft\\]"] {
+        let candidates = fixture.complete(input).await;
+        assert!(
+            contains_ending_with(&candidates, "[draft] notes.txt'")
+                || contains_ending_with(&candidates, "[draft] notes.txt")
+                || contains_ending_with(&candidates, "\\[draft\\]\\ notes.txt"),
+            "{input}: {candidates:?}"
+        );
+    }
+    assert!(contains_ending_with(
+        &fixture.complete("cat '(ol").await,
+        "(old) list.txt'"
+    ));
+    assert!(contains_ending_with(
+        &fixture.complete("cat ?.tx").await,
+        "d.txt"
+    ));
+}
+
+#[tokio::test]
 async fn completing_before_a_closing_quote_replaces_it() {
     // After `'my dir/'` the cursor sits before the closing quote; typing and Tab there
     // must not leave the old quote behind (`'my dir/inner/''`).

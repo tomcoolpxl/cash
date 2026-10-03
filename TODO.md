@@ -76,6 +76,11 @@ after`) ends a Bash script with status 1; cash returns from the function with st
 and goes on to `after`. At the top level both end the script. The same for a circular
 name reference. Found fixing LANG-21.
 
+`compgen -f '\[d'` lists `[draft] notes.txt`; Bash lists nothing, the backslash being
+part of the name it was given. Completion and `compgen` share `get_file_completions`,
+which removes quotes from the word as typed at the prompt, and `compgen`'s word has had
+them removed already. Found fixing LANG-16.
+
 Also seen while fixing 8.1: past the function depth limit (500, or `FUNCNEST`) cash
 reports "maximum function call depth exceeded" and the script goes on, `$?` 0; Bash 5.3
 reports "maximum function nesting level exceeded (500)" and abandons the command.

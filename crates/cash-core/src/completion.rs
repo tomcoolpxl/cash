@@ -1465,6 +1465,36 @@ fn is_unquoted_drive_path(token: &str) -> bool {
         && !token.contains(['\'', '"', '`'])
 }
 
+/// The pattern a typed word completes: its `*` and `?` glob, as no Windows file name can
+/// hold them (`**/nee`, `*.tx`), and every other character is itself. A `[draft] ` typed
+/// was a bracket expression and completed nothing (LANG-16); Bash takes all of it as
+/// typed (spec §4).
+fn typed_completion_pieces(typed: &str) -> Vec<patterns::PatternPiece> {
+    let mut pieces = Vec::new();
+    let mut run = String::new();
+    let mut run_is_glob = false;
+    for c in typed.chars() {
+        let is_glob = matches!(c, '*' | '?');
+        if is_glob != run_is_glob && !run.is_empty() {
+            pieces.push(completion_piece(std::mem::take(&mut run), run_is_glob));
+        }
+        run_is_glob = is_glob;
+        run.push(c);
+    }
+    if !run.is_empty() {
+        pieces.push(completion_piece(run, run_is_glob));
+    }
+    pieces
+}
+
+const fn completion_piece(text: String, is_glob: bool) -> patterns::PatternPiece {
+    if is_glob {
+        patterns::PatternPiece::Pattern(text)
+    } else {
+        patterns::PatternPiece::Literal(text)
+    }
+}
+
 async fn get_file_completions(
     shell: &Shell<impl extensions::ShellExtensions>,
     token_to_complete: &str,
@@ -1510,7 +1540,8 @@ async fn get_file_completions(
         .map(|translated| cash_win32::path::render(&translated));
     let glob_token = unix_spelled.as_deref().unwrap_or(expanded_token.as_str());
 
-    let glob = std::format!("{glob_token}*");
+    let mut glob = typed_completion_pieces(glob_token);
+    glob.push(patterns::PatternPiece::Pattern(String::from("*")));
 
     let path_filter = |path: &Path| !must_be_dir || shell.absolute_path(path).is_dir();
 
