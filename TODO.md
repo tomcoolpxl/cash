@@ -60,8 +60,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 12.3 Smaller expansion differences
 
-Low ones in the report §5.1.
-
 `set -x` prints `(( 1 + 2 ))` for `(( 1 + 2 ))`, Bash `((  1 + 2  ))`: the parser keeps
 an arithmetic command's tokens joined by single spaces, not its text, so the blanks
 around and inside it are lost. `((x+$x))` and `for ((` already match. Found in 12.3.
@@ -222,6 +220,15 @@ in Bash they are Bash's version. `\s` gives `cash`. Keep cash's, and add a row t
 ---
 
 ## Decided, written down so it is not decided twice
+
+- **Tab globs a typed `*` and `?`, and completes everything else as typed** (the user,
+  2026-10-03): no Windows name can hold `*` or `?`, so `**/nee` keeps completing, and
+  `[draft]` now does. Spec §4 row 40, LANG-16. Completing all of it literally, as Bash
+  does, and leaving every glob character a glob, were turned down.
+- **The D31 case-insensitive fallback keeps reaching every variable** (the user,
+  2026-10-03): an unset `$seconds` still reads `SECONDS`; only its speed and the order
+  among `Foo`/`FOO` changed (LANG-15). Limiting it to exported or imported names was
+  turned down.
 
 - **A writer whose reader went away ends with 141 in silence, if it is cash's own** (the
   user, 2026-10-03): builtins and bundled tools, as SIGPIPE ends Bash's; a program on
