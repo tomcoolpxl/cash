@@ -52,6 +52,24 @@ esac";
 }
 
 #[test]
+fn a_nested_case_without_its_last_terminator_parses_in_linear_time() {
+    // The last item's commands were parsed twice, and a nested `case` in them twice
+    // again: 21 levels took 10.5 s (PI-07). 30 would take hours.
+    let mut input = String::from("echo x");
+    for _ in 0..30 {
+        input = format!("case a in a) {input}\nesac");
+    }
+    assert!(super::test_with_snapshot(&input).is_ok());
+}
+
+#[test]
+fn only_the_last_case_item_may_go_without_a_terminator() {
+    let peg = &super::parser_configs()[0];
+    assert!(super::parse_with_config("case a in a) echo x\nb) echo y ;; esac", peg).is_err());
+    assert!(super::parse_with_config("case a in a) echo x ;; b) echo y\nesac", peg).is_ok());
+}
+
+#[test]
 fn parse_nested_if_while() -> Result<()> {
     let input = r#"if true; then
     while read line; do

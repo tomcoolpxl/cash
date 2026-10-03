@@ -60,7 +60,7 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 12.3 Smaller expansion differences
 
-Nested `case` parses in exponential time (PI-07). Low ones in the report §5.1.
+Low ones in the report §5.1.
 
 Also seen while fixing 8.1: past the function depth limit (500, or `FUNCNEST`) cash
 reports "maximum function call depth exceeded" and the script goes on, `$?` 0; Bash 5.3
@@ -102,6 +102,9 @@ Track cmd's quote state; a round-trip test through a real `.bat`. W32-01.
   environment, so the elevated command gets neither the shell's working directory nor its
   exported variables (the `process state:` mark at `cash-builtins/src/win.rs`); with
   BI-19's quoting, through `ShellExecuteExW("runas")` with the shell's folder.
+- A syntax error in `eval` ends a script with status 2; Bash reports it, sets `$?` to 2
+  and goes on (`eval 'if then'; echo "after $?"` prints `after 2`). Seen in 1.3.10 while
+  fixing PI-07.
 
 ### 13.3 `time` and `times` report CPU time
 

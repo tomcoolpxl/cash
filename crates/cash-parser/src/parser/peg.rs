@@ -346,47 +346,36 @@ peg::parser! {
         rule wordlist() -> Vec<ast::Word> =
             (w:word() { ast::Word::from(w) })+
 
+        // Only the last item may go without `;;`. Each item is parsed once, its terminator
+        // optional, and that checked here: one rule for items with it and another for the
+        // last without parsed the last item's commands twice, a nested `case` in them twice
+        // again, so 21 levels took 10.5 s (PI-07).
         pub(crate) rule case_clause() -> ast::CaseClauseCommand =
-            start:specific_word("case") w:word() linebreak() _in() linebreak() first_items:case_item()* last_item:case_item_ns()? end:specific_word("esac") {
-                let mut cases = first_items;
-
-                if let Some(last_item) = last_item {
-                    cases.push(last_item);
+            start:specific_word("case") w:word() linebreak() _in() linebreak() items:case_item()* end:specific_word("esac") {?
+                let unterminated_before_last =
+                    items.iter().rev().skip(1).any(|(_, terminated)| !terminated);
+                if unterminated_before_last {
+                    return Err("`;;` after a case item");
                 }
-
+                let cases = items.into_iter().map(|(item, _)| item).collect();
                 let loc = SourceSpan::within(start.location(), end.location());
-                ast::CaseClauseCommand { value: ast::Word::from(w), cases, loc }
+                Ok(ast::CaseClauseCommand { value: ast::Word::from(w), cases, loc })
             }
 
-        pub(crate) rule case_item_ns() -> ast::CaseItem =
-            s:specific_operator("(")? p:pattern() specific_operator(")") c:compound_list() {
+        // A case item, and whether a terminator such as `;;` ended it.
+        rule case_item() -> (ast::CaseItem, bool) =
+            s:specific_operator("(")? p:pattern() e:specific_operator(")") linebreak() c:compound_list()?
+            post_action:(a:case_item_post_action() linebreak() { a })? {
                 let start = s.map(Token::location).or_else(|| p.first().and_then(|w| w.loc.as_ref()));
-                let end = c.location();
-
-                let loc = maybe_location(start, end.as_ref());
-
-                ast::CaseItem { patterns: p, cmd: Some(c), post_action: ast::CaseItemPostAction::ExitCase, loc }
-            } /
-            s:specific_operator("(")? p:pattern() e:specific_operator(")") linebreak() {
-                let start = s.map(Token::location).or_else(|| p.first().and_then(|w| w.loc.as_ref()));
-                let end = Some(e.location());
-
+                let cmd_end = c.as_ref().and_then(|c| c.location());
+                let end = match &post_action {
+                    Some((_, span)) => Some(*span),
+                    None => cmd_end.as_ref().or_else(|| Some(e.location())),
+                };
                 let loc = maybe_location(start, end);
-                ast::CaseItem { patterns: p, cmd: None, post_action: ast::CaseItemPostAction::ExitCase, loc }
-            }
-
-        pub(crate) rule case_item() -> ast::CaseItem =
-            s:specific_operator("(")? p:pattern() specific_operator(")") linebreak() post_action:case_item_post_action() linebreak() {
-                let start = s.map(Token::location).or_else(|| p.first().and_then(|w| w.loc.as_ref()));
-                let end = Some(post_action.1);
-                let loc = maybe_location(start, end);
-                ast::CaseItem { patterns: p, cmd: None, post_action: post_action.0, loc }
-            } /
-            s:specific_operator("(")? p:pattern() specific_operator(")") c:compound_list() post_action:case_item_post_action() linebreak() {
-                let start = s.map(Token::location).or_else(|| p.first().and_then(|w| w.loc.as_ref()));
-                let end = Some(post_action.1);
-                let loc = maybe_location(start, end);
-                ast::CaseItem { patterns: p, cmd: Some(c), post_action: post_action.0, loc }
+                let terminated = post_action.is_some();
+                let post_action = post_action.map_or(ast::CaseItemPostAction::ExitCase, |a| a.0);
+                (ast::CaseItem { patterns: p, cmd: c, post_action, loc }, terminated)
             }
 
         rule case_item_post_action() -> (ast::CaseItemPostAction, &'input SourceSpan)  =
