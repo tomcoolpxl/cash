@@ -175,6 +175,8 @@ pub(crate) fn convert_peg_parse_error(
             text => text,
         };
         ParseError::ParsingNear((*token.location().start).clone(), name.to_owned())
+    } else if let Some(near) = stray_open_paren(tokens) {
+        near
     } else if let Some((keyword, line)) = innermost_unclosed_compound(tokens) {
         if keyword == "=(" {
             ParseError::UnterminatedArray { line }
@@ -184,6 +186,26 @@ pub(crate) fn convert_peg_parse_error(
     } else {
         ParseError::ParsingAtEndOfInput
     }
+}
+
+/// A line that ends `word (`, as Bash names it: after a command's name it is the start of
+/// a function definition, and Bash names the end of the line, where it wanted `)` (`echo
+/// (`); after an argument it names the `(` (`echo a (`).
+fn stray_open_paren(tokens: &[crate::Token]) -> Option<ParseError> {
+    let [before @ .., crate::Token::Word(..), open, newline] = tokens else {
+        return None;
+    };
+    if open.to_str() != "(" || newline.to_str() != "\n" {
+        return None;
+    }
+    let (token, name) = match before.last() {
+        Some(crate::Token::Word(..)) => (open, "("),
+        _ => (newline, "newline"),
+    };
+    Some(ParseError::ParsingNear(
+        (*token.location().start).clone(),
+        name.to_owned(),
+    ))
 }
 
 /// The first reserved word in `tokens` that cannot stand where it is, the token Bash's

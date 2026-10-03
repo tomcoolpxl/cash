@@ -381,7 +381,40 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         while let Some(line) = lines.next() {
             pending.extend_from_slice(line);
             pending_lines += 1;
-            let program = match self.parse_prefix(&pending) {
+            let mut parsed = self.parse_prefix(&pending);
+            // A here-document still open at the end is closed there, with Bash's warning,
+            // and the command runs with what it holds, as in Bash; cash refused it.
+            if lines.peek().is_none()
+                && let Prefix::NeedsMore(Err(cash_parser::ParseError::Tokenizing {
+                    inner: cash_parser::TokenizerError::UnterminatedHereDocuments(tags, positions),
+                    ..
+                })) = &parsed
+            {
+                let tags: Vec<String> = tags
+                    .split(", ")
+                    .map(|tag| tag.replace(['\'', '"', '\\'], ""))
+                    .collect();
+                let opened = positions
+                    .split(',')
+                    .next()
+                    .and_then(|line| line.trim().parse::<usize>().ok())
+                    .unwrap_or(1);
+                let warning = format!(
+                    "{}: line {}: warning: here-document at line {} delimited by end-of-file \
+                     (wanted `{}')\n",
+                    self.name_for_errors(),
+                    first_line(origin) + lines_before + pending_lines - 1,
+                    first_line(origin) + lines_before + opened - 1,
+                    tags.first().map_or("", String::as_str),
+                );
+                let _ = params.stderr(self).write_all(warning.as_bytes());
+                for tag in &tags {
+                    pending.extend_from_slice(tag.as_bytes());
+                    pending.push(b'\n');
+                }
+                parsed = self.parse_prefix(&pending);
+            }
+            let program = match parsed {
                 Prefix::NeedsMore(_) if lines.peek().is_some() => continue,
                 Prefix::Complete(program) | Prefix::NeedsMore(Ok(program)) => program,
                 Prefix::NeedsMore(Err(err)) | Prefix::Wrong(err) => {
@@ -608,6 +641,14 @@ pub(crate) enum TextOrigin {
         /// That line.
         line: usize,
     },
+}
+
+/// The line a text's first line is, by where it came from.
+const fn first_line(origin: TextOrigin) -> usize {
+    match origin {
+        TextOrigin::Whole => 1,
+        TextOrigin::Eval { line } => line,
+    }
 }
 
 /// The lines in `text`, a last one without a newline included.

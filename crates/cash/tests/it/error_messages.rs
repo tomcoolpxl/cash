@@ -130,14 +130,35 @@ fn a_syntax_error_is_reported_on_two_lines() {
             "( echo a",
             "line 2: syntax error: unexpected end of file from `(' command on line 1",
         ),
+        (
+            "echo (",
+            "line 1: syntax error near unexpected token `newline'\nbash: -c: line 1: `echo ('",
+        ),
+        (
+            "echo a (",
+            "line 1: syntax error near unexpected token `('\nbash: -c: line 1: `echo a ('",
+        ),
     ] {
-        let out = run(script);
+        let out = output_of(cash_command().args(["-c", script, "bash"]));
         assert!(
             out.stderr.ends_with(&format!(": -c: {expected}")),
             "{script}: {}",
             out.stderr
         );
     }
+
+    // A here-document still open at the end is closed there, with Bash's warning, and the
+    // command runs; cash refused the whole text.
+    let out = output_of(cash_command().args(["-c", "cat <<EOF\nline1", "bash"]));
+    assert_eq!(
+        (out.stdout.as_str(), out.stderr.as_str(), out.code),
+        (
+            "line1",
+            "bash: line 2: warning: here-document at line 1 delimited by end-of-file \
+             (wanted `EOF')",
+            0
+        )
+    );
 }
 
 #[test]

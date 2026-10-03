@@ -60,13 +60,9 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 13.4 Error output: colour, prefixes, `--help`
 
-A syntax error is now Bash's, near the token Bash names, and input that ends inside a
-quote or substitution is ``unexpected EOF while looking for matching `"'``. Left: `-c
-'echo ('` is `unexpected end of file` on line 2 where Bash says near `newline` on line 1
-(and `echo a (` near `(`). A here-document with no closing line fails, `unterminated here
-document sequence; tag(s) [EOF] found at: [1,10]`, where Bash warns `here-document at
-line 1 delimited by end-of-file (wanted `EOF')` and runs the command with what there was.
-Found in 1.3.12.
+A here-document left open at the end, when an earlier one on its line was closed (`cat
+<<A; cat <<B`), is said to open on the line of its `<<`, where Bash names the line before
+its body. Found in 1.3.12.
 
 ### 13.5 D36: measure the pooled prompt job, then build it or drop it
 
