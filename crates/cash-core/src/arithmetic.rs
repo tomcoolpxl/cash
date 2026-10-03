@@ -272,6 +272,11 @@ fn last_token_start(expression: &str) -> usize {
         }
         start = at;
     }
+    // `++` and `--` are one token only before a name, as Bash reads them; at the end they
+    // are two, and the last is a `+` or `-` of its own.
+    if matches!(trimmed.get(start..), Some("++" | "--")) {
+        start += 1;
+    }
     start
 }
 
@@ -468,6 +473,12 @@ fn deref_lvalue(
 ) -> Result<i64, EvalError> {
     let value_str: Cow<'_, str> = match lvalue {
         ast::ArithmeticTarget::Variable(name) => get_var_value(shell, name.as_str())?,
+        // An empty subscript is said, `a[]: bad array subscript`, and is 0, as in Bash.
+        ast::ArithmeticTarget::ArrayElement(name, subscript) if subscript.text.is_empty() => {
+            let warning = crate::error::ErrorKind::ArrayIndexOutOfRange(format!("{name}[]")).into();
+            let _ = shell.display_error(&mut shell.stderr(), &warning);
+            return Ok(0);
+        }
         ast::ArithmeticTarget::ArrayElement(name, subscript) => {
             let index_str = resolve_subscript(shell, name, subscript, depth)?;
 

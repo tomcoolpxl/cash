@@ -60,10 +60,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 13.4 Error output: colour, prefixes, `--help`
 
-Arithmetic errors are Bash's now, with two left: `$((x++ ++))` names the token `++`
-where Bash names `+`, and `$((a[]))` is a syntax error at `]` where Bash says `a[]: bad
-array subscript`. Found in 1.3.12.
-
 Errors cash does not report at all: `echo "${x!@#}"` prints `${x!@#}` where Bash says
 `${x!@#}: bad substitution` and fails, and `"${a[}"` prints itself where Bash says
 ``bad substitution: no closing `}' in "${a[}"``; `[ 1 -eq x ]` is quietly false where

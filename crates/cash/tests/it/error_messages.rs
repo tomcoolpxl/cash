@@ -333,6 +333,21 @@ fn an_arithmetic_error_names_the_expression_and_its_token() {
         );
     }
 
-    // A blank subscript is 0, as in Bash, where cash failed.
+    // A blank subscript is 0, as in Bash, where cash failed; an empty one is said, and
+    // is 0 itself. `++` at the end is two tokens, as Bash reads it.
     assert_eq!(run("a=(1); echo $((a[ ]))").stdout, "1");
+    let out = run("a=(1); echo $((a[] + 1))");
+    assert_eq!(out.stdout, "1");
+    assert!(
+        out.stderr.ends_with("line 1: a[]: bad array subscript"),
+        "{}",
+        out.stderr
+    );
+    let out = run("echo $((x++ ++))");
+    assert!(
+        out.stderr
+            .ends_with("operand expected (error token is \"+\")"),
+        "{}",
+        out.stderr
+    );
 }

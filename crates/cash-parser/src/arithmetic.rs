@@ -91,7 +91,7 @@ peg::parser! {
         }
 
         rule lvalue() -> ast::ArithmeticTarget =
-            name:variable_name() "[" text:$(subscript_text()) "]" {
+            name:variable_name() "[" text:$(subscript_text()?) "]" {
                 let expr = full_expression(text).ok().map(Box::new);
                 ast::ArithmeticTarget::ArrayElement(
                     name.to_owned(),
