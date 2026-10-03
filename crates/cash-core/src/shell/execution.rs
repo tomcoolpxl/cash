@@ -215,7 +215,8 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         let fatal = !matches!(call_type, callstack::ScriptCallType::Source);
         let result = self
             .run_text(&text, whole, TextOrigin::Whole, source_info, params, fatal)
-            .await;
+            .await
+            .map_err(|e| e.located_at(self.error_prefix()));
 
         if matches!(call_type, callstack::ScriptCallType::Source) && result.is_ok() {
             crate::commands::run_return_trap(self, params).await;

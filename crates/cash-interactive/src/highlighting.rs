@@ -369,7 +369,8 @@ impl<'a, SE: cash_core::ShellExtensions> Highlighter<'a, SE> {
                 // itself.
                 self.append_span(HighlightKind::Arithmetic, piece.clone());
             }
-            cash_parser::word::WordPiece::Text(_text) => {
+            cash_parser::word::WordPiece::Text(_)
+            | cash_parser::word::WordPiece::BadSubstitution(_) => {
                 self.append_span(default_text_kind, piece.clone());
             }
         }

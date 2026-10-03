@@ -68,6 +68,10 @@ pub enum WordPiece {
     EscapeSequence(String),
     /// An arithmetic expression.
     ArithmeticExpression(ast::UnexpandedArithmeticExpr),
+    /// A `${…}` that is no parameter expansion: expanding it is Bash's `bad
+    /// substitution`, with the message [`parse`] words for its word. It was taken for a
+    /// `$` and text, and printed as it stood.
+    BadSubstitution(String),
     /// A process substitution inside a word: `<(cmd)` in `--file=<(cmd)`.
     ProcessSubstitution {
         /// Whether the command's output is read (`<(…)`) or its input written (`>(…)`).
@@ -571,7 +575,34 @@ pub fn parse(
     word: &str,
     options: &ParserOptions,
 ) -> Result<Vec<WordPieceWithSource>, error::WordParseError> {
-    cacheable_parse(word, options)
+    let mut pieces = cacheable_parse(word, options)?;
+    name_bad_substitutions(&mut pieces, word, false);
+    Ok(pieces)
+}
+
+/// Words each bad substitution in `pieces` as Bash words it, naming the whole of `word`
+/// without its quotes: `a${x y}b: bad substitution`, and in double quotes, where the
+/// subscript of `"${a[}"` swallows the `}`, ``bad substitution: no closing `}' in
+/// "${a[}"``.
+fn name_bad_substitutions(pieces: &mut [WordPieceWithSource], word: &str, quoted: bool) {
+    for piece in pieces {
+        match &mut piece.piece {
+            WordPiece::BadSubstitution(message) => {
+                let unquoted = word.replace(['"', '\''], "");
+                let unclosed = message.matches('[').count() > message.matches(']').count();
+                *message = if quoted && unclosed {
+                    std::format!("bad substitution: no closing `}}' in \"{unquoted}\"")
+                } else {
+                    std::format!("{unquoted}: bad substitution")
+                };
+            }
+            WordPiece::DoubleQuotedSequence(inner)
+            | WordPiece::GettextDoubleQuotedSequence(inner) => {
+                name_bad_substitutions(inner, word, true);
+            }
+            _ => {}
+        }
+    }
 }
 
 #[cached::macros::cached(
@@ -1373,9 +1404,15 @@ peg::parser! {
             "$" parameter:unbraced_parameter() {
                 WordPiece::ParameterExpansion(ParameterExpr::Parameter { parameter, indirect: false })
             } /
+            "${" body:$(bad_substitution_body()) "}" {
+                WordPiece::BadSubstitution(std::format!("${{{body}}}"))
+            } /
             "$" !['\''] {
                 WordPiece::Text("$".to_owned())
             }
+
+        // What a `${` that is no parameter expansion holds, up to its `}`, braces balanced.
+        rule bad_substitution_body() = ([^ '{' | '}'] / "{" bad_substitution_body() "}")*
 
         rule parameter_expression() -> ParameterExpr =
             // cash: `${#?}` is the length of `$?`, as in Bash, when nothing follows the
@@ -1456,8 +1493,14 @@ peg::parser! {
             "!" prefix:variable_name() "@" &"}" {
                 ParameterExpr::VariableNames { prefix: prefix.to_owned(), concatenate: false }
             } /
-            indirect:parameter_indirection() parameter:parameter() ":" offset:substring_offset() length:(":" l:substring_length() { l })? {
-                ParameterExpr::Substring { parameter, indirect, offset, length }
+            // `${x:}`, with neither an offset nor a length, is Bash's bad substitution;
+            // `${x::1}` and `${x:1:}` are not.
+            indirect:parameter_indirection() parameter:parameter() ":" offset:substring_offset() length:(":" l:substring_length() { l })? {?
+                if offset.value.is_empty() && length.is_none() {
+                    Err("an offset")
+                } else {
+                    Ok(ParameterExpr::Substring { parameter, indirect, offset, length })
+                }
             } /
             indirect:parameter_indirection() parameter:parameter() "@" op:non_posix_parameter_transformation_op() {
                 ParameterExpr::Transform { parameter, indirect, op }

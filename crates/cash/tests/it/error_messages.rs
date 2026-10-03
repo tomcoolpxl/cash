@@ -403,3 +403,40 @@ fn declare_will_not_turn_one_kind_of_array_into_the_other() {
         out.stderr
     );
 }
+
+#[test]
+fn a_bad_substitution_is_said_and_abandons_its_command() {
+    // They were printed as they stood, `${x y}` and all.
+    for (script, expected) in [
+        ("echo \"a${x y}b\"", "a${x y}b: bad substitution"),
+        ("echo \"${x!@#}\"", "${x!@#}: bad substitution"),
+        ("echo \"${}\"", "${}: bad substitution"),
+        (
+            "echo \"pre ${x:} post\"",
+            "pre ${x:} post: bad substitution",
+        ),
+        (
+            "echo \"x${a[}y\"",
+            "bad substitution: no closing `}' in \"x${a[}y\"",
+        ),
+        ("echo x${a[}y", "x${a[}y: bad substitution"),
+    ] {
+        let out = run(&format!("{script}; echo same"));
+        assert_eq!(out.stdout, "", "{script}");
+        assert!(
+            out.stderr.ends_with(&format!("line 1: {expected}")),
+            "{script}: {}",
+            out.stderr
+        );
+    }
+    // The script goes on at its next line; a function's names the line it is on.
+    let scratch = Scratch::new("bad-substitution");
+    std::fs::write(
+        scratch.path().join("s.sh"),
+        "f() {\n  echo \"${x y}\"\n}\nf; echo same\necho next\nx=abc; echo \"${x::1}${x:1:}${x: }\"\n",
+    )
+    .expect("write");
+    let out = output_of(cash_command().arg("s.sh").current_dir(scratch.path()));
+    assert_eq!(out.stdout, "next\naabc", "{}", out.stderr);
+    assert_eq!(out.stderr, "s.sh: line 2: ${x y}: bad substitution");
+}

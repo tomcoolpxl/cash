@@ -39,7 +39,9 @@ pub trait ErrorFormatter: Clone + Default + Send + Sync + 'static {
         shell: &Shell<impl extensions::ShellExtensions>,
         colour: bool,
     ) -> String {
-        let prefix = shell.error_prefix();
+        let prefix = error
+            .location()
+            .map_or_else(|| shell.error_prefix(), str::to_owned);
         if colour {
             std::format!("\x1b[31m{prefix}\x1b[39m{error:#}\n")
         } else {

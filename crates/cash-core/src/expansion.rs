@@ -1444,6 +1444,9 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
             cash_parser::word::WordPiece::ArithmeticExpression(e) => Expansion::from(
                 ExpansionPiece::Splittable(self.expand_arithmetic_expr(e).await?),
             ),
+            cash_parser::word::WordPiece::BadSubstitution(message) => {
+                return Err(error::ErrorKind::BadSubstitutionText(message).into());
+            }
         };
 
         Ok(expansion)

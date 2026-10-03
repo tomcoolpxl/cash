@@ -1608,7 +1608,10 @@ pub(crate) async fn invoke_shell_function(
     // so the parameters are passed through by shared reference rather than cloned. This prevents
     // direct mutation of the caller's `ExecutionParameters` open-file table, though the function
     // may still change the shell's persistent open files via builtins (e.g. `exec`).
-    let result = body.execute(context.shell, &context.params).await;
+    let result = body
+        .execute(context.shell, &context.params)
+        .await
+        .map_err(|e| e.located_at(context.shell.error_prefix()));
 
     // The RETURN trap runs in the function's own context, before its frame is popped, and
     // sees the caller-visible `$?`.

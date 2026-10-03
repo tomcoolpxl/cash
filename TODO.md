@@ -60,10 +60,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 13.4 Error output: colour, prefixes, `--help`
 
-Errors cash does not report at all: `echo "${x!@#}"` prints `${x!@#}` where Bash says
-`${x!@#}: bad substitution` and fails, and `"${a[}"` prints itself where Bash says
-``bad substitution: no closing `}' in "${a[}"``. Found in 1.3.12 surveying error output.
-
 `declare -A d; declare -a d=(1 2)` refuses as Bash does, but says `declare: d: cannot
 convert …` and goes on, where Bash treats it as an assignment error: `d: cannot convert
 associative to indexed array`, and the rest of the line is abandoned. Found in 1.3.12.

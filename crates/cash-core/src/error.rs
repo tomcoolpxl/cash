@@ -16,6 +16,10 @@ pub struct Error {
     /// Whether or not the error should be considered a "fatal" error that would
     /// result in abnormal exit of a non-interactive shell.
     fatal: bool,
+
+    /// Where it happened, as the start of its message (`lib.sh: line 3: `), when it
+    /// left the function or file it happened in before it was shown.
+    location: Option<String>,
 }
 
 /// Monolithic error type for the shell
@@ -203,6 +207,12 @@ pub enum ErrorKind {
     /// while an interactive shell recovers with status 1.
     #[error("bad substitution: {0}")]
     InvalidParameterTransformation(String),
+
+    /// A `${…}` that is no parameter expansion, worded as Bash words it:
+    /// `${x y}: bad substitution`, or for an unclosed subscript ``bad substitution: no
+    /// closing `}' in "${a[}"``. It abandons the command it is in, as in Bash.
+    #[error("{0}")]
+    BadSubstitutionText(String),
 
     /// An error occurred while creating a child process.
     #[error("failed to create child process")]
@@ -496,6 +506,7 @@ where
         Self {
             kind: convertible_to_kind.into(),
             fatal: false,
+            location: None,
         }
     }
 }
@@ -533,6 +544,7 @@ impl Error {
         matches!(
             self.kind,
             ErrorKind::ReadonlyVariable(_)
+                | ErrorKind::BadSubstitutionText(_)
                 | ErrorKind::CircularNameReference(_)
                 | ErrorKind::EvalError(_)
                 | ErrorKind::MaxFunctionCallDepthExceeded(..)
@@ -642,6 +654,22 @@ pub fn os_error_text(error: &std::io::Error) -> String {
 }
 
 impl Error {
+    /// This error, happened where `prefix` says (`Shell::error_prefix`), unless it already
+    /// says where. An error that abandons the command line is shown once it has left the
+    /// function or file it happened in, and Bash names where it happened: the line in
+    /// `lib.sh`, not the call in `main.sh`.
+    #[must_use]
+    pub fn located_at(mut self, prefix: String) -> Self {
+        self.location.get_or_insert(prefix);
+        self
+    }
+
+    /// Where this error happened, as the start of its message, if it left the function or
+    /// file it happened in.
+    pub fn location(&self) -> Option<&str> {
+        self.location.as_deref()
+    }
+
     /// This error's message, with an I/O error worded as the C library words it
     /// ([`os_error_text`]) rather than as Rust does (`i/o error: … (os error 2)`).
     pub fn worded(&self) -> String {
