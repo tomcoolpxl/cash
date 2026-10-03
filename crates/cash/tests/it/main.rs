@@ -24,6 +24,8 @@ mod acceptance;
 // The awkward corners: spaces in paths, empty files, nesting, and the boundaries where
 // two decisions meet.
 mod acceptance_edge_cases;
+// Indexed arrays as Bash has them: negative indices, `[expr]=` in a list, namerefs.
+mod arrays;
 // D11/D22: `$!` and background job identity.
 mod background_pid;
 // EXE-03, EXE-06, EXE-08: background jobs of builtins start, run beside the foreground, and end.

@@ -61,8 +61,9 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 ### 12.1 Arrays
 
 - `c=([2+1]=y z [i]=w)` puts everything on 0 and 1; Bash `[2] [3] [4]`. LANG-02.
-- After `unset 'a[1]'`, `${a[-1]}` is the wrong element (counted from the element count).
-  LANG-03.
+- An index before the start, `a=(1 2); echo "${a[-3]}"`, ends a cash script with "array
+  index out of range"; Bash says `a: bad array subscript`, expands to nothing and goes
+  on (and `a[-3]=x` fails with status 1). Found while fixing LANG-03.
 - `declare -n r='a[1]'; r=Z` creates a variable named `a[1]`. LANG-12.
 
 ### 12.2 Here-documents
