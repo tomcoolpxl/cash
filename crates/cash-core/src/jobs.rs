@@ -43,6 +43,10 @@ pub struct JobManager {
     /// `$!`: the process id of the last job started in the background, here or, for a
     /// subshell, in the parent. It outlives the job's place in the table, as in Bash.
     last_started_pid: Option<sys::process::ProcessId>,
+
+    /// Notices of jobs that left the table before a script printed them
+    /// (`Job::take_signal_notice`).
+    signal_notices: Vec<String>,
 }
 
 /// How many finished jobs' statuses are kept; the oldest go first. Bash keeps as many
@@ -118,6 +122,8 @@ pub struct JobSnapshot {
     pub annotation: JobAnnotation,
     /// The job's exit status, once it has finished.
     pub exit_status: Option<u8>,
+    /// The signal cash's `kill` sent the job, if any (`Job::killed_by`).
+    killed_by: Option<sys::signal::Signal>,
     /// Whether this state has not yet been reported by `jobs` or prompt notification.
     notification_pending: bool,
 }
@@ -130,6 +136,7 @@ impl Display for JobSnapshot {
             &self.annotation,
             &self.state,
             self.exit_status,
+            self.killed_by,
             &self.command_line,
             false,
         )
@@ -145,6 +152,7 @@ impl JobSnapshot {
             annotation: &self.annotation,
             state: &self.state,
             exit_status: self.exit_status,
+            killed_by: self.killed_by,
             command_line: &self.command_line,
             posix,
         }
@@ -158,6 +166,7 @@ struct JobLine<'a> {
     annotation: &'a JobAnnotation,
     state: &'a JobState,
     exit_status: Option<u8>,
+    killed_by: Option<sys::signal::Signal>,
     command_line: &'a str,
     posix: bool,
 }
@@ -170,6 +179,7 @@ impl Display for JobLine<'_> {
             self.annotation,
             self.state,
             self.exit_status,
+            self.killed_by,
             self.command_line,
             self.posix,
         )
@@ -179,13 +189,20 @@ impl Display for JobLine<'_> {
 /// A job as Bash's `jobs` and job notices show it: `[1]+  Running` and the command,
 /// the mark a space when the job is neither current nor previous, the status padded to
 /// 26 columns, a running job's command ending in ` &`, and a job that failed shown as
-/// `Exit 3` rather than `Done`, or in POSIX mode (`posix`) as `Done(3)`.
+/// `Exit 3` rather than `Done`, or in POSIX mode (`posix`) as `Done(3)`. A job that ended
+/// of the signal cash's `kill` sent it (`killed_by`) is shown by the signal, `Killed`,
+/// where it was `Exit 137`.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "each is one column or rule of the line, as its callers hold them"
+)]
 fn write_job_line(
     f: &mut std::fmt::Formatter<'_>,
     id: usize,
     annotation: &JobAnnotation,
     state: &JobState,
     exit_status: Option<u8>,
+    killed_by: Option<sys::signal::Signal>,
     command_line: &str,
     posix: bool,
 ) -> std::fmt::Result {
@@ -196,7 +213,9 @@ fn write_job_line(
         JobAnnotation::Previous if !matches!(state, JobState::Done) => '-',
         JobAnnotation::Previous | JobAnnotation::None => ' ',
     };
+    let killed = killed_by.filter(|&signal| exit_status == u8::try_from(128 + signal as i32).ok());
     let status = match (state, exit_status) {
+        (JobState::Done, Some(_)) if let Some(signal) = killed => signal.description().to_owned(),
         (JobState::Done, Some(code)) if code != 0 && posix => format!("Done({code})"),
         (JobState::Done, Some(code)) if code != 0 => format!("Exit {code}"),
         (state, _) => state.to_string(),
@@ -284,6 +303,59 @@ const fn status_only(mut result: ExecutionResult) -> ExecutionResult {
 }
 
 impl JobManager {
+    /// Takes the job at `index` out of the table, keeping its notice for a script, if it
+    /// has one not yet printed (`Job::take_signal_notice`).
+    fn take_out(&mut self, index: usize) -> Job {
+        let mut job = self.jobs.remove(index);
+        if let Some(notice) = job.take_signal_notice() {
+            self.signal_notices.push(notice);
+        }
+        job
+    }
+
+    /// Looks for the jobs a signal cash's `kill` sent them has ended, and keeps their
+    /// notices for a script to print (`Shell::report_signalled_jobs`). Only a job `kill`
+    /// has signalled is looked at.
+    pub fn collect_signal_notices(&mut self) {
+        for job in &mut self.jobs {
+            if job.killed_by.is_none() {
+                continue;
+            }
+            if !matches!(job.state, JobState::Done) {
+                let _ = job.poll_done();
+            }
+            if let Some(notice) = job.take_signal_notice() {
+                self.signal_notices.push(notice);
+            }
+        }
+    }
+
+    /// The notice of job `id`, if a signal cash's `kill` sent it ended it: `wait` tells of
+    /// the jobs it waited for, as Bash's does, and leaves the others' notices for later.
+    pub fn take_signal_notice_of(&mut self, id: usize) -> Option<String> {
+        self.jobs
+            .iter_mut()
+            .find(|job| job.id == id)
+            .and_then(Job::take_signal_notice)
+    }
+
+    /// Whether notices are kept for a script to print (`collect_signal_notices`).
+    #[must_use]
+    pub const fn has_signal_notices(&self) -> bool {
+        !self.signal_notices.is_empty()
+    }
+
+    /// The notices kept for a script to print (`collect_signal_notices`).
+    pub fn take_signal_notices(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.signal_notices)
+    }
+
+    /// Whether a job here has been signalled by `kill`, and may have a notice to collect.
+    #[must_use]
+    pub fn has_signalled_jobs(&self) -> bool {
+        self.jobs.iter().any(|job| job.killed_by.is_some())
+    }
+
     /// Removes a job a wait has collected, updating the current/previous marks. Its
     /// status is saved for a later `wait PID` when `keep_status` (see `SavedStatus`);
     /// `by_wait_n` marks it as `wait -n`'s, which a plain `wait` forgets.
@@ -291,7 +363,7 @@ impl JobManager {
         let Some(index) = self.jobs.iter().position(|job| job.id == id) else {
             return;
         };
-        let job = self.jobs.remove(index);
+        let job = self.take_out(index);
         self.count_reaped(&job);
         if keep_status {
             self.save_status(&job, status, false, by_wait_n);
@@ -393,7 +465,7 @@ impl JobManager {
             .any(|s| s.unreported && target.matches(s.id, &s.pids))
             && let Some(index) = unreported_in_table
         {
-            let job = self.jobs.remove(index);
+            let job = self.take_out(index);
             self.count_reaped(&job);
             let status = job.exit_status.unwrap_or(0);
             if !posix_mode {
@@ -458,6 +530,7 @@ impl JobManager {
             reaped_children: 0,
             saved: VecDeque::new(),
             last_started_pid,
+            signal_notices: Vec::new(),
         }
     }
 
@@ -473,6 +546,7 @@ impl JobManager {
                 state: job.state.clone(),
                 annotation: job.annotation.clone(),
                 exit_status: job.exit_status,
+                killed_by: job.killed_by,
                 notification_pending: job.notification_pending,
             })
             .chain(self.inherited.iter().cloned())
@@ -524,7 +598,7 @@ impl JobManager {
             else {
                 break;
             };
-            let job = self.jobs.remove(index);
+            let job = self.take_out(index);
             self.count_reaped(&job);
             if let Some(status) = job.exit_status {
                 self.save_status(&job, status, true, false);
@@ -553,6 +627,7 @@ impl JobManager {
                     state: job.state.clone(),
                     annotation: job.annotation.clone(),
                     exit_status: job.exit_status,
+                    killed_by: job.killed_by,
                     notification_pending: true,
                 });
                 job.notification_pending = false;
@@ -636,7 +711,7 @@ impl JobManager {
     /// waiting for it.
     pub fn remove_job(&mut self, id: usize) -> Option<Job> {
         let index = self.jobs.iter().position(|j| j.id == id)?;
-        let job = self.jobs.remove(index);
+        let job = self.take_out(index);
         self.reannotate();
         Some(job)
     }
@@ -756,7 +831,7 @@ impl JobManager {
         let mut i = 0;
         while i != self.jobs.len() {
             if let Some(result) = self.jobs[i].poll_done()? {
-                let job = self.jobs.remove(i);
+                let job = self.take_out(i);
                 self.count_reaped(&job);
                 let status = result.as_ref().map_or(1, |r| u8::from(r.exit_code));
                 self.save_status(&job, status, true, false);
@@ -767,7 +842,7 @@ impl JobManager {
                 // one recorded then.
                 // TODO(jobs): A job that is done with no status recorded is removed as
                 // a success, and leaves no status behind.
-                let job = self.jobs.remove(i);
+                let job = self.take_out(i);
                 self.count_reaped(&job);
                 if let Some(status) = job.exit_status {
                     let reported = !job.notification_pending;
@@ -797,7 +872,7 @@ impl JobManager {
         let mut i = 0;
         while i != self.jobs.len() {
             if self.jobs[i].tasks.is_empty() {
-                let job = self.jobs.remove(i);
+                let job = self.take_out(i);
                 self.count_reaped(&job);
                 completed_jobs.push(job);
             } else {
@@ -898,6 +973,12 @@ pub struct Job {
     /// work for any job; here they find the job by this number.
     own_pid: Option<sys::process::ProcessId>,
 
+    /// The signal cash's `kill` sent the job, which it is shown by if it ended of it.
+    killed_by: Option<sys::signal::Signal>,
+
+    /// Whether a script has printed the notice of the job's death by that signal.
+    signal_noticed: bool,
+
     /// Where `kill` leaves the signal for a background task running inside the shell,
     /// which looks there before each pipeline (`ExecutionParameters::job_cancel`).
     cancel: Option<std::sync::Arc<std::sync::atomic::AtomicI32>>,
@@ -919,6 +1000,7 @@ impl Display for Job {
             &self.annotation,
             &self.state,
             self.exit_status,
+            self.killed_by,
             &self.command_line,
             false,
         )
@@ -934,6 +1016,7 @@ impl Job {
             annotation: &self.annotation,
             state: &self.state,
             exit_status: self.exit_status,
+            killed_by: self.killed_by,
             command_line: &self.command_line,
             posix,
         }
@@ -967,6 +1050,8 @@ impl Job {
             notification_pending: true,
             spawned_pids: None,
             own_pid: None,
+            killed_by: None,
+            signal_noticed: false,
             cancel: None,
             console_at_stop: None,
             reap_counted: false,
@@ -991,6 +1076,20 @@ impl Job {
     ) -> Self {
         self.cancel = Some(cancel);
         self
+    }
+
+    /// Records that cash's `kill` sent the job `signal`, which it is then shown by if it
+    /// ends of it (`killed_by`): by `kill %1`, and by `kill PID` with one of its pids.
+    pub const fn record_signal(&mut self, signal: traps::TrapSignal) {
+        use sys::signal::Signal;
+        if let traps::TrapSignal::Signal(sent) = signal
+            && !matches!(
+                sent,
+                Signal::Stop | Signal::Tstp | Signal::Cont | Signal::Chld
+            )
+        {
+            self.killed_by = Some(sent);
+        }
     }
 
     /// Gives the job a number of its own for `$!` (`own_pid`, D70).
@@ -1050,6 +1149,32 @@ impl Job {
     /// Returns whether the job is the previous job.
     pub const fn is_prev(&self) -> bool {
         matches!(self.annotation, JobAnnotation::Previous)
+    }
+
+    /// The notice a script prints, once, for the job when the signal cash's `kill` sent
+    /// it has ended it, as Bash prints `script: line 4: 145006 Killed  sleep 5`. Bash
+    /// leaves out those whose signal a user sends to stop a job, INT, TERM and QUIT.
+    fn take_signal_notice(&mut self) -> Option<String> {
+        use sys::signal::Signal;
+
+        if self.signal_noticed || !matches!(self.state, JobState::Done) {
+            return None;
+        }
+        let signal = self
+            .killed_by
+            .filter(|signal| matches!(signal, Signal::Hup | Signal::Kill))?;
+        if self.exit_status != u8::try_from(128 + signal as i32).ok() {
+            return None;
+        }
+        self.signal_noticed = true;
+        let pid = self
+            .representative_pid()
+            .map_or_else(String::new, |pid| pid.to_string());
+        Some(format!(
+            "{pid:>5} {:<26} {}",
+            signal.description(),
+            self.command_line
+        ))
     }
 
     /// Polls whether the job has completed.
@@ -1286,6 +1411,9 @@ impl Job {
             }
             traps::TrapSignal::Signal(Signal::Cont) => self.resume(),
             _ => {
+                if let traps::TrapSignal::Signal(sent) = signal {
+                    self.killed_by = Some(sent);
+                }
                 // The part of the job running inside the shell ends at its next pipeline,
                 // and the program it waits for, if any, is signalled below with the rest.
                 if inside && let Some(cancel) = &self.cancel {

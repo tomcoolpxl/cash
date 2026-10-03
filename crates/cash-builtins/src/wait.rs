@@ -42,8 +42,28 @@ impl builtins::Command for WaitCommand {
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, Self::Error> {
+        let waiting = cash_core::ExecutionContext {
+            shell: &mut *context.shell,
+            command_name: context.command_name.clone(),
+            params: context.params.clone(),
+        };
+        let mut notices = Vec::new();
+        let result = self.wait(waiting, &mut notices).await;
+        // A script tells here of the jobs it waited for that a signal ended, as Bash's
+        // `wait` does: `script: line 3: 145010 Hangup  sleep 5`.
+        context.shell.print_signal_notices(notices, &context.params);
+        result
+    }
+}
+
+impl WaitCommand {
+    async fn wait<SE: cash_core::ShellExtensions>(
+        &self,
+        context: cash_core::ExecutionContext<'_, SE>,
+        notices: &mut Vec<String>,
+    ) -> Result<ExecutionResult, cash_core::Error> {
         if self.wait_for_first_or_next {
-            return self.wait_for_next(context).await;
+            return self.wait_for_next(context, notices).await;
         }
 
         let mut result = ExecutionResult::success();
@@ -53,6 +73,8 @@ impl builtins::Command for WaitCommand {
         if self.ids.is_empty() {
             // Wait for all jobs.
             let jobs = context.shell.jobs_mut().wait_all().await?;
+            context.shell.jobs_mut().collect_signal_notices();
+            notices.extend(context.shell.jobs_mut().take_signal_notices());
             // A CHLD trap runs for the children reaped, inside `wait`, as in Bash.
             context.shell.run_pending_chld_traps(&context.params).await;
 
@@ -74,7 +96,7 @@ impl builtins::Command for WaitCommand {
                     .resolve_job_spec(id)
                     .map(|job| job.id);
                 if let Some(job_id) = job_id {
-                    result = self.wait_for_job(context.shell, job_id).await?;
+                    result = self.wait_for_job(context.shell, job_id, notices).await?;
                 } else {
                     // A job spec names only a job in the table: once `jobs`, `wait` or
                     // `wait -n` has reported a finished job it names nothing, though
@@ -103,7 +125,7 @@ impl builtins::Command for WaitCommand {
 
                 let job_id = context.shell.jobs_mut().resolve_pid(pid).map(|job| job.id);
                 if let Some(job_id) = job_id {
-                    result = self.wait_for_job(context.shell, job_id).await?;
+                    result = self.wait_for_job(context.shell, job_id, notices).await?;
                 } else if let Some(status) = context.shell.jobs_mut().collect_saved_pid(pid, forget)
                 {
                     result = ExecutionResult::new(status);
@@ -124,9 +146,7 @@ impl builtins::Command for WaitCommand {
         context.shell.run_pending_chld_traps(&context.params).await;
         Ok(result)
     }
-}
 
-impl WaitCommand {
     /// Waits for the job with this id. Once it has finished it is reported and stays in
     /// the table, so that `%N` and its pid find it again, until the next job, `jobs` or a
     /// plain `wait` takes it out (Bash 5.3). In POSIX mode it leaves at once, and its
@@ -135,6 +155,7 @@ impl WaitCommand {
         &self,
         shell: &mut cash_core::Shell<SE>,
         job_id: usize,
+        notices: &mut Vec<String>,
     ) -> Result<ExecutionResult, cash_core::Error> {
         let posix = shell.options().posix_mode;
         let jobs = shell.jobs_mut();
@@ -146,7 +167,8 @@ impl WaitCommand {
         } else {
             job.wait().await?
         };
-        if !job.has_unwaited_tasks() {
+        notices.extend(jobs.take_signal_notice_of(job_id));
+        if !job_has_unwaited_tasks(jobs, job_id) {
             if posix {
                 jobs.remove_waited_job(job_id, u8::from(result.exit_code), false, false);
             } else {
@@ -161,6 +183,7 @@ impl WaitCommand {
     async fn wait_for_next<SE: cash_core::ShellExtensions>(
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
+        notices: &mut Vec<String>,
     ) -> Result<ExecutionResult, cash_core::Error> {
         let forget = context.shell.options().posix_mode;
         let jobs = context.shell.jobs_mut();
@@ -228,6 +251,7 @@ impl WaitCommand {
                 }
                 let ((result, id, pid), _, _) = select_all(futures).await;
                 let result = result?;
+                notices.extend(jobs.take_signal_notice_of(id));
                 if jobs
                     .jobs
                     .iter()
@@ -250,4 +274,11 @@ impl WaitCommand {
         }
         Ok(result)
     }
+}
+
+/// Whether job `id` still has tasks a wait has not consumed.
+fn job_has_unwaited_tasks(jobs: &cash_core::jobs::JobManager, id: usize) -> bool {
+    jobs.jobs
+        .iter()
+        .any(|job| job.id == id && job.has_unwaited_tasks())
 }

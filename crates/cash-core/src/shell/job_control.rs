@@ -52,6 +52,7 @@ impl<SE: extensions::ShellExtensions> crate::Shell<SE> {
         &mut self,
         params: &ExecutionParameters,
     ) -> Result<(), error::Error> {
+        self.notice_signalled_jobs();
         if self.may_report_jobs_now() {
             return self.check_for_completed_jobs(params).await;
         }
@@ -64,6 +65,46 @@ impl<SE: extensions::ShellExtensions> crate::Shell<SE> {
             self.run_pending_chld_traps(params).await;
         }
         Ok(())
+    }
+
+    /// Looks, as a script, for the jobs a signal cash's `kill` sent them has ended, for
+    /// [`Self::report_signalled_jobs`] to tell of. Bash finds them when it waits for a
+    /// program in the foreground, or in `wait`; not after builtins alone, nor at the end.
+    pub fn notice_signalled_jobs(&mut self) {
+        if !self.options().interactive && self.jobs.has_signalled_jobs() {
+            self.jobs.collect_signal_notices();
+        }
+    }
+
+    /// Prints, as a script, the notices [`Self::notice_signalled_jobs`] found, as Bash
+    /// does before its next command and in `wait`: `script: line 4: 145006 Killed  sleep
+    /// 5`. An interactive shell reports its jobs its own way.
+    pub fn report_signalled_jobs(&mut self, params: &ExecutionParameters) {
+        let notices = self.jobs.take_signal_notices();
+        self.print_signal_notices(notices, params);
+    }
+
+    /// Prints, as a script, notices of jobs a signal ended: `script: line 3: 145010
+    /// Hangup  sleep 5`. An interactive shell reports its jobs its own way.
+    pub fn print_signal_notices(&self, notices: Vec<String>, params: &ExecutionParameters) {
+        if self.options().interactive {
+            return;
+        }
+        if notices.is_empty() {
+            return;
+        }
+        let name = self
+            .current_shell_name()
+            .map_or_else(|| "cash".to_owned(), |name| name.into_owned());
+        let line = self
+            .call_stack()
+            .current_frame()
+            .and_then(|frame| frame.current_line())
+            .unwrap_or(1);
+        let mut stderr = params.stderr(self);
+        for notice in notices {
+            let _ = writeln!(stderr, "{name}: line {line}: {notice}");
+        }
     }
 
     /// The `CHLD` trap, when the platform has the signal and a handler is set for it.

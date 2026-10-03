@@ -96,6 +96,22 @@ impl Signal {
         .into_iter()
     }
 
+    /// What a job this signal ended is shown as, as Bash's `jobs` shows it (`strsignal`):
+    /// `Killed`, `Terminated`, `Hangup`.
+    pub const fn description(self) -> &'static str {
+        match self {
+            Self::Hup => "Hangup",
+            Self::Int => "Interrupt",
+            Self::Quit => "Quit",
+            Self::Kill => "Killed",
+            Self::Term => "Terminated",
+            Self::Stop => "Stopped (signal)",
+            Self::Tstp => "Stopped",
+            Self::Cont => "Continued",
+            Self::Chld => "Child exited",
+        }
+    }
+
     /// The signal's name, without the `SIG` prefix, as `trap -l` and `kill -l` print it.
     pub const fn as_str(self) -> &'static str {
         match self {

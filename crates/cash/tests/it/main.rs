@@ -81,6 +81,8 @@ mod init_rc;
 mod injection;
 mod job_groups;
 mod kill_family;
+// A job a signal ended is told of by the signal, in `jobs` and in a script's notice.
+mod killed_jobs;
 // D21/D22: what a kill target means, including the `kill 0` that used to signal the
 // whole console.
 mod kill_targets;

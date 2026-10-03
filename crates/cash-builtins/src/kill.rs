@@ -139,6 +139,10 @@ impl builtins::Command for KillCommand {
         if !signal_zero && u32::try_from(pid).is_ok_and(|pid| pid == std::process::id()) {
             return signal_self(context, trap_signal).await;
         }
+        // A job ended by a signal to its pid is shown by the signal, as by `kill %1`.
+        if !signal_zero && let Some(job) = context.shell.jobs_mut().resolve_pid(pid) {
+            job.record_signal(trap_signal);
+        }
         signal_pid(&context, pid, signal_zero, trap_signal)
     }
 }

@@ -303,6 +303,13 @@ impl Execute for ast::Program {
         }
 
         for command in &self.complete_commands {
+            // A script tells of the jobs a signal ended before its next line, as Bash's
+            // reader does, with that line's number.
+            if shell.jobs_mut().has_signal_notices() {
+                shell.set_current_cmd(command);
+                shell.report_signalled_jobs(params);
+            }
+
             // Execute the command and handle any errors without immediately propagating them.
             // This allows interactive shells to continue executing subsequent commands even after
             // errors.
