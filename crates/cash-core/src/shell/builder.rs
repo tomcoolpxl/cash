@@ -263,6 +263,7 @@ impl<SE: extensions::ShellExtensions> Default for Shell<SE> {
             status_before_return: None,
             last_pipeline_statuses: vec![0],
             depth: 0,
+            catches_fatal_errors: false,
             name: None,
             args: vec![],
             version: None,

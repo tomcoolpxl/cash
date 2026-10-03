@@ -530,7 +530,17 @@ impl Error {
         shell: &Shell<impl extensions::ShellExtensions>,
     ) -> results::ExecutionResult {
         let next_control_flow = self.to_control_flow(shell);
-        let exit_code = if matches!(self.kind, ErrorKind::InvalidParameterTransformation(..))
+        // `${u:?}` and an unset variable under `set -u` end a shell that is not
+        // interactive with 127, where Bash's top level catches them, a forked pipeline
+        // stage's included; a subshell, a compound stage and a command substitution catch
+        // them themselves and end with 1 (`execute_in_subshell`). Cash ended with 1.
+        let discarded = matches!(
+            self.kind,
+            ErrorKind::CheckedExpansionError(..) | ErrorKind::ExpandingUnsetVariable(..)
+        ) && self.is_fatal()
+            && !shell.catches_fatal_errors();
+        let exit_code = if (discarded
+            || matches!(self.kind, ErrorKind::InvalidParameterTransformation(..)))
             && !shell.options().interactive
         {
             // This is the status used by Bash 5.2 when an invalid `${v@...}`

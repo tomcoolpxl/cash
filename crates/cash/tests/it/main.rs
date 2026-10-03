@@ -91,6 +91,8 @@ mod pager;
 mod ping;
 // D11/D26: pipelines that actually overlap, and `read -t`.
 mod pipeline_concurrency;
+// EXE-02: an error, `exit` or `break` in a pipeline stage ends only the stage.
+mod pipeline_errors;
 // How a test asks whether a process is gone, when its pid may be another's by now.
 mod process_identity;
 // D48: `ps`, which uutils does not carry.

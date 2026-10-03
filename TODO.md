@@ -58,12 +58,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 The riskiest phase: judge its runs on an idle machine (Decided, below).
 
-### 11.1 An error in a pipeline stage ends the pipeline or the shell
-
-`read -u 99 x | cat; echo after` prints only the error; Bash `after 0 1 0`.
-`true | echo ${u:?boom}; echo after` exits cash. Contain each stage's error as the
-parent-shell case already does (`interp.rs:1833`). EXE-02.
-
 ### 11.2 Background jobs of builtins
 
 - They run on tokio workers and block them; with as many as cores, a foreground `$(…)`
@@ -91,6 +85,17 @@ and 60. EXE-04.
 `let _ = resume_process(…)` (`sys/tokio_process.rs:43`), through undocumented
 `NtResumeProcess`: on failure the child stays suspended and the shell waits for ever.
 Check it, terminate on failure, record the API choice beside D19. From reading. EXE-14.
+
+### 11.6 Found while fixing 11.1
+
+- `$BASH_SUBSHELL` in a pipeline stage: `true | echo $BASH_SUBSHELL` is 1, Bash 0 (a
+  forked simple command is no subshell); `true | (echo $BASH_SUBSHELL)` is 2, Bash 1.
+  The same count makes `set -x` write `++ echo hi` for a stage where Bash writes `+`.
+  `Shell::depth` also decides `is_subshell()` (job control, traps, `exec`), so the count
+  `$BASH_SUBSHELL` and PS4 show needs a field of its own.
+- `yes | head -1; echo "${PIPESTATUS[*]}"` is `0 0`; Bash `141 0`, the writer killed by
+  SIGPIPE. Windows has no SIGPIPE: decide what a writer whose reader went away ends
+  with, and record it.
 
 ---
 

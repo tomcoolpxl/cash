@@ -711,7 +711,9 @@ async fn spawn_pipeline_processes(
 
             PipelineExecutionContext {
                 shell: commands::ShellForCommand::OwnedShell {
-                    target: Box::new(shell.subshell()),
+                    target: Box::new(
+                        shell.pipeline_stage_shell(!matches!(command, ast::Command::Simple(_))),
+                    ),
                     parent: shell,
                 },
                 process_group_id,
@@ -723,9 +725,20 @@ async fn spawn_pipeline_processes(
             }
         };
 
-        let spawn_result = command
+        let outcome = command
             .execute_in_pipeline(pipeline_context, cmd_params)
-            .await?;
+            .await;
+        // A stage in a shell of its own ends with a status, whatever it ran into on the way
+        // (`commands::stage_result`); a stage in this shell is this shell's own command.
+        let spawn_result = match outcome {
+            Ok(ExecutionSpawnResult::Completed(result)) if !run_in_current_shell => {
+                ExecutionSpawnResult::Completed(commands::stage_result(shell, params, Ok(result))?)
+            }
+            Err(error) if !run_in_current_shell => {
+                ExecutionSpawnResult::Completed(commands::stage_result(shell, params, Err(error))?)
+            }
+            outcome => outcome?,
+        };
 
         // Update the process group ID if something was spawned.
         if let ExecutionSpawnResult::StartedProcess(child) = &spawn_result {
@@ -960,7 +973,8 @@ async fn spawn_or_run_in_pipeline<SE: extensions::ShellExtensions>(
             let join_handle = tokio::task::spawn_blocking(move || {
                 let _guard = slot_guard;
                 let rt = tokio::runtime::Handle::current();
-                rt.block_on(compound.execute(&mut shell, &params))
+                let outcome = rt.block_on(compound.execute(&mut shell, &params));
+                commands::stage_result(&shell, &params, outcome)
             });
             Ok(ExecutionSpawnResult::StartedTask(join_handle))
         }
@@ -989,7 +1003,7 @@ impl Execute for ast::CompoundCommand {
             Self::Subshell(ast::SubshellCommand { list, .. }) => {
                 // Clone off a new subshell, and run the body of the subshell there.
                 // TODO(source-info): Do we need to reset the line number?
-                let mut subshell = shell.subshell();
+                let mut subshell = shell.subshell_that_catches_errors();
 
                 // Handle errors within the subshell context to prevent fatal errors
                 // from propagating to the parent shell.

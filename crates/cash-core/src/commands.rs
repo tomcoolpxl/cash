@@ -889,6 +889,7 @@ impl<'a, SE: extensions::ShellExtensions> SimpleCommand<'a, SE> {
     ) -> ExecutionSpawnResult {
         let last_arg = Self::take_last_arg(&args);
         let join_handle = tokio::task::spawn_blocking(move || {
+            let stage_params = params.clone();
             let cmd_context = ExecutionContext {
                 shell: &mut shell,
                 command_name,
@@ -901,7 +902,7 @@ impl<'a, SE: extensions::ShellExtensions> SimpleCommand<'a, SE> {
             // Update $_ after command execution.
             shell.update_last_arg_variable(last_arg);
 
-            result
+            stage_result(&shell, &stage_params, result)
         });
 
         ExecutionSpawnResult::StartedTask(join_handle)
@@ -1010,6 +1011,7 @@ impl<'a, SE: extensions::ShellExtensions> SimpleCommand<'a, SE> {
         let join_handle = tokio::task::spawn_blocking(move || {
             let _guard = slot_guard;
             let rt = tokio::runtime::Handle::current();
+            let stage_params = params.clone();
 
             let spawned = {
                 let cmd_context = ExecutionContext {
@@ -1042,7 +1044,7 @@ impl<'a, SE: extensions::ShellExtensions> SimpleCommand<'a, SE> {
                 let _ = post_execute(&mut shell);
             }
 
-            result
+            stage_result(&shell, &stage_params, result)
         });
 
         ExecutionSpawnResult::StartedTask(join_handle)
@@ -1464,13 +1466,33 @@ pub(crate) async fn run_return_trap(
         .await;
 }
 
+/// What a pipeline stage that ran in a shell of its own leaves to the pipeline: its
+/// status, as all a forked stage leaves Bash is its exit status. An error ends the stage,
+/// shown on its standard error, and an `exit`, `break` or `return` ends only the stage:
+/// either ended the whole shell (`read -u 99 x | cat`, `true | exit 4`;
+/// `REVIEW_REPORT.md` EXE-02). An interrupt is passed on, for the shell to act on.
+pub(crate) fn stage_result<SE: extensions::ShellExtensions>(
+    shell: &Shell<SE>,
+    params: &ExecutionParameters,
+    outcome: Result<ExecutionResult, error::Error>,
+) -> Result<ExecutionResult, error::Error> {
+    match outcome {
+        Ok(result) => Ok(ExecutionResult::from(result.exit_code)),
+        Err(error) if error.is_silent_interrupt() => Err(error),
+        Err(error) => {
+            let _ = shell.display_error(&mut params.stderr(shell), &error);
+            Ok(ExecutionResult::from(error.into_result(shell).exit_code))
+        }
+    }
+}
+
 pub(crate) async fn invoke_command_in_subshell_and_get_output(
     shell: &mut Shell<impl extensions::ShellExtensions>,
     params: &ExecutionParameters,
     s: String,
 ) -> Result<String, error::Error> {
     // Instantiate a subshell to run the command in.
-    let mut subshell = shell.subshell();
+    let mut subshell = shell.subshell_that_catches_errors();
 
     // Command substitutions don't inherit errexit by default. Only inherit it when
     // command_subst_inherits_errexit is enabled, otherwise disable errexit in the subshell.

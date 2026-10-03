@@ -111,6 +111,11 @@ pub struct Shell<SE: extensions::ShellExtensions = extensions::DefaultShellExten
     /// Clone depth from the original ancestor shell.
     depth: usize,
 
+    /// Whether this shell is a subshell that catches a fatal expansion error itself, as
+    /// Bash's `( … )`, compound pipeline stage and command substitution do: the error
+    /// ends it with 1, where at the top level it ends the shell with 127.
+    catches_fatal_errors: bool,
+
     /// Shell name
     name: Option<String>,
 
@@ -226,6 +231,7 @@ impl<SE: extensions::ShellExtensions> Clone for Shell<SE> {
             commands_read: self.commands_read,
             umask: self.umask,
             depth: self.depth + 1,
+            catches_fatal_errors: self.catches_fatal_errors,
         }
     }
 }
@@ -330,6 +336,30 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
     pub(crate) fn subshell(&mut self) -> Self {
         let _ = self.jobs.refresh_statuses();
         self.clone()
+    }
+
+    /// The shell for a stage of a pipeline that does not run in this one. Bash forks a
+    /// simple command there, a function included, and a fatal expansion error ends it as
+    /// at the top level, with 127; a compound command runs as a subshell, which catches
+    /// the error and ends with 1.
+    pub(crate) fn pipeline_stage_shell(&mut self, compound: bool) -> Self {
+        let mut stage = self.subshell();
+        stage.catches_fatal_errors = compound;
+        stage
+    }
+
+    /// A shell for a subshell, `( … )`, or a command substitution, which catch a fatal
+    /// expansion error themselves and end with 1 (`catches_fatal_errors`).
+    pub(crate) fn subshell_that_catches_errors(&mut self) -> Self {
+        let mut subshell = self.subshell();
+        subshell.catches_fatal_errors = true;
+        subshell
+    }
+
+    /// Whether a fatal expansion error (`${u:?}`, an unset variable under `set -u`) ends
+    /// this shell with 1 rather than 127; see `Error::into_result`.
+    pub(crate) const fn catches_fatal_errors(&self) -> bool {
+        self.catches_fatal_errors
     }
 
     /// Increments the interactive line offset in the shell by the indicated number
