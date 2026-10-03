@@ -906,7 +906,7 @@ fn paint_permissions(permissions: &str) -> String {
 
 /// The owner or group column: pale yellow when it is this user, grey for any other
 /// account (`Administrators`, `SYSTEM`, `TrustedInstaller`), so those stand out.
-pub(crate) fn owner_colour(account: &str, me: &str) -> &'static str {
+pub(crate) const fn owner_colour(account: &str, me: &str) -> &'static str {
     if account.eq_ignore_ascii_case(me) {
         "38;5;230"
     } else {

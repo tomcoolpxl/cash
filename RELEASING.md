@@ -20,14 +20,19 @@ The Cash project uses Cargo workspace package inheritance (`version.workspace = 
 - `cash-builtins`
 - `cash-coreutils-builtins`
 - `cash-interactive`
+- `cash-sed`
+- `cash-awk`
+- `cash-bc`
 - `cash-test-harness`
 - `xtask`
+
+The vendored crates under `vendor/` keep their own versions.
 
 The authoritative version is declared in the root [Cargo.toml](Cargo.toml) under:
 
 ```toml
 [workspace.package]
-version = "0.9.1"
+version = "X.Y.Z"
 ```
 
 Internal workspace dependencies reference `{ workspace = true }`, guaranteeing version lockstep across all crates.

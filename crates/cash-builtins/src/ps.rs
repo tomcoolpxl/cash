@@ -244,7 +244,7 @@ fn write_row(
     clippy::cast_sign_loss,
     reason = "clamped to 0..=99 immediately before the conversion"
 )]
-fn whole_percent(share: f64) -> u64 {
+const fn whole_percent(share: f64) -> u64 {
     share.round().clamp(0.0, 99.0) as u64
 }
 

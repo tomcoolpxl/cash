@@ -121,15 +121,25 @@ crates/cash-parser       bash grammar — tokenizer and parser
 crates/cash-builtins     the standard builtins
 crates/cash-interactive  line editing, history, completion
 crates/cash-shell        the shell library that crates/cash drives
+crates/cash-coreutils-builtins  uutils coreutils, as builtins
+crates/cash-sed          sed, from uutils
+crates/cash-awk          awk, from posixutils-rs
+crates/cash-bc           bc, from posixutils-rs
+crates/cash-test-harness runs the YAML compatibility cases
+vendor/                  patched copies of crossterm, reedline and uutils crates
+tests/                   the differential corpus and the git-prompt check, with frozen output
+packaging/               the Scoop manifest
 xtask/                   test orchestration
 spec.md                  the decisions, with the reasoning behind each
 NOTICE                   brush attribution and the list of modifications
 ```
 
-The `cash-core`, `cash-parser`, `cash-builtins`, `cash-interactive`, `cash-shell` and
-`cash-test-harness` crates are **absorbed from brush** at upstream commit `737dd57` and
-modified. Both projects are MIT, so this is a straightforward absorption rather than a
-dependency; see [NOTICE](NOTICE) for attribution and the list of changes.
+The `cash-core`, `cash-parser`, `cash-builtins`, `cash-interactive`, `cash-shell`,
+`cash-coreutils-builtins` and `cash-test-harness` crates are **absorbed from brush** at
+upstream commit `737dd57` and modified. Both projects are MIT, so this is a
+straightforward absorption rather than a dependency; see [NOTICE](NOTICE) for attribution
+and the list of changes. `cash-sed`, `cash-awk` and `cash-bc` were absorbed later, from
+uutils and posixutils-rs.
 
 Nothing is upstreamed. The trade is a coherent codebase instead of a patched copy of
 someone else's, at the cost of porting future upstream improvements by hand.
@@ -169,8 +179,8 @@ powershell -File scripts\install.ps1           # build and install the shell you
 powershell -File scripts\tidy.ps1 -Report      # delete unused build output, show sizes
 ```
 
-Windows 11 (or Windows 10 1809+, for ConPTY). Rust 1.88+; `rust-toolchain.toml` pins the
-toolchain used for development. The tests run through cargo-nextest (`cargo binstall
+Windows 11 (or Windows 10 1809+, for ConPTY). Rust 1.98, which `rust-toolchain.toml` pins
+and rustup installs on the first build; it is also the oldest Rust that builds cash. The tests run through cargo-nextest (`cargo binstall
 cargo-nextest`), which gives each test a process of its own.
 
 Build output is disposable, and each checkout and worktree has its own `target\`:

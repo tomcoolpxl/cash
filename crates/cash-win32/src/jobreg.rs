@@ -15,16 +15,13 @@
 //! has worked since Windows 8, so a process being in both this job and the session job
 //! is fine.
 //!
-//! ## The race, stated plainly
+//! ## The race, and why there is none
 //!
 //! §6 records that assigning a child to a job *after* `spawn()` leaves a window in which
-//! it can fork a grandchild that never joins. The clean fix is `CREATE_SUSPENDED` →
-//! assign → resume, which [`crate::spawn`] implements — but the shell spawns through
-//! tokio, which owns process creation and cannot start one suspended.
-//!
-//! So this is the post-spawn assignment, with that window open. It is a real but narrow
-//! gap, and the session job still catches anything that slips through it: such a process
-//! cannot outlive cash, only a `kill` of its own job.
+//! it can fork a grandchild that never joins. The shell's spawn
+//! (`cash_core::sys::tokio_process::spawn`) creates every program with `CREATE_SUSPENDED`,
+//! calls [`contain`], and only then resumes it, so the process cannot run, let alone fork,
+//! before it is in its job (spec D6).
 
 use std::collections::HashMap;
 use std::io;

@@ -6,8 +6,9 @@
 # `rust-toolchain` ecosystem bumps it as new releases become available
 # (see .github/dependabot.yml).
 #
-# Note that this is not the MSRV; that's separately specified; see
-# docs/reference/msrv-policy.md.
+# The MSRV (`rust-version` in the root Cargo.toml) is this version's minor:
+# nothing builds cash with an older Rust, so nothing older is promised. Raise
+# it with this file.
 #
 # For CI authors: install this version via `rustup toolchain install`
 # (no toolchain name, which causes rustup to honor the version in this

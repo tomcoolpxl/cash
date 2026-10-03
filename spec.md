@@ -42,13 +42,15 @@ Note the second row carefully: it is **not** a complete userland. MS Coreutils s
 `sed` and no `awk`, because those are separate GNU projects. D35 covers the consequences.
 
 **And note what cash bundles, which is a narrower thing.** That row describes a package a
-user may install, not something cash carries. D48 bundles **uutils coreutils only** —
-there is no `uu_find`, `uu_xargs` or `uu_grep` on crates.io, so `find`, `xargs`, `grep`,
-`sed`, `awk`, `diff` and `stat` are *not* in the binary. Measured with `PATH` reduced to
-`C:\WINDOWS\system32;C:\WINDOWS`: 65 of 103 expected commands resolve, 34 are absent,
-and 4 are shadowed by unrelated Windows tools of the same name. cash's own M2 corpus
-script fails on such a machine — loudly, with exit 2, because `set -euo pipefail` catches
-it, but only after DOS `find` has produced `File not found - *.rs`.
+user may install, not something cash carries. D48 bundled **uutils coreutils only** at
+first — there is no `uu_find`, `uu_xargs` or `uu_grep` on crates.io, so `find`, `xargs`,
+`grep`, `sed`, `awk`, `diff` and `stat` were *not* in the binary. Measured then with
+`PATH` reduced to `C:\WINDOWS\system32;C:\WINDOWS`: 65 of 103 expected commands resolved,
+34 were absent, and 4 were shadowed by unrelated Windows tools of the same name. cash's
+own M2 corpus script failed on such a machine — loudly, with exit 2, because
+`set -euo pipefail` caught it, but only after DOS `find` had produced
+`File not found - *.rs`. cash has since come to carry `find`, `xargs`, `sed`, `awk`, `bc`
+and `stat` of its own; `grep` and `diff` are still not in the binary (2026-10-04).
 
 So **Git for Windows, or Microsoft's Coreutils, is a prerequisite for the §1 workload**,
 and `cash doctor` says so. The three utilities cash does own that would otherwise come
@@ -98,11 +100,13 @@ cash is its own binary providing a Win32 semantics layer, built on `cash-core` a
 `cash-parser` rather than starting from scratch. It inherits the bash compatibility test
 suite.
 
-The advertised Bash interface remains 5.2.37. The shell also implements the
-Bash 5.3 `${ command; }` and `${| command; }` current-shell substitutions and
-`compgen -V name` array output. These are individual supported features, not
-a claim of complete Bash 5.3 compatibility. The focused source comparison and
-regressions are recorded in `research/bash-reference/README.md`.
+The advertised Bash interface is 5.3.15: `$BASH_VERSION` is `5.3.15(1)-release`, claimed
+once every Bash 5.3 item was implemented, verified or documented
+(`research/bash-reference/bash-5.3-audit.md`), and 5.3.15 is the Git Bash build every
+probe and ConPTY case is checked against. It was 5.2.37, with the 5.3 `${ command; }`
+and `${| command; }` substitutions and `compgen -V` as single features, until then. The
+focused source comparison and regressions are recorded in
+`research/bash-reference/README.md`.
 
 *How* it builds on them — library dependency versus fork — is D9, decided after the seam
 analysis in §6. D1 asserts only that the language layer is not rewritten.
@@ -234,14 +238,14 @@ after  (before): ping=1 cmd=0    <- grandchild orphaned
 after  (now)   : ping=0 cmd=0
 ```
 
-**The race is real and is accepted here.** §6 records that assigning a child to a job
-*after* `spawn()` leaves a window in which it can fork a grandchild that never joins, and
-that `CREATE_SUSPENDED` → assign → resume closes it. `cash_win32::spawn` implements that
-path, but the shell spawns through tokio, which owns process creation and cannot start
-one suspended. So the wiring uses post-spawn assignment with that window open.
-
-It is narrow, and the session job still catches anything through it: such a process
-cannot outlive cash, only a `kill` of its own job.
+**The spawn race is closed.** §6 records that assigning a child to a job *after*
+`spawn()` leaves a window in which it can fork a grandchild that never joins, and that
+`CREATE_SUSPENDED` → assign → resume closes it. The shell spawns through tokio, which was
+first thought unable to start a process suspended, so the wiring at first assigned after
+the spawn with that window open. tokio takes a `std` `Command`'s creation flags, so every
+program is now created suspended, contained in its job, and only then resumed
+(`cash_core::sys::tokio_process::spawn`): it cannot run an instruction, let alone start a
+grandchild, outside the job.
 
 **A finished command's job is released, not reaped.** When a command's root process
 has exited, cash clears `KILL_ON_JOB_CLOSE` on its job before closing the handle, so
@@ -445,13 +449,16 @@ a border that no longer exists.
 
 | Crate | Was |
 |---|---|
-| `cash-core` | `cash-core` |
-| `cash-parser` | `cash-parser` |
+| `cash-core` | `brush-core` |
+| `cash-parser` | `brush-parser` |
 | `cash-builtins` | `brush-builtins` |
 | `cash-interactive` | `brush-interactive` |
 | `cash-shell` | `brush-shell` (library only; `crates/cash` is the binary) |
 | `cash-coreutils-builtins` | `brush-coreutils-builtins` |
 | `cash-test-harness` | `brush-test-harness` |
+
+Absorbed later, from other projects: `cash-sed` from uutils' `sed`, and `cash-awk` and
+`cash-bc` from posixutils-rs.
 
 **What was discarded:** the `brush` binstall alias crate, `brush-experimental-builtins`,
 fuzzing, benchmarks, upstream documentation, CI, devcontainer and release tooling, and a
@@ -1472,14 +1479,17 @@ design choice:
   process cannot acquire `PROCESS_SET_QUOTA` / `PROCESS_TERMINATE` on a high-integrity
   one.
 
-cash therefore records elevated children by PID and attempts to terminate them at exit,
-while documenting plainly that the kernel-enforced guarantee stops at the boundary.
-`elevate` (D45) is the first-class verb so cash sees the elevation rather than having it
-happen behind its back via an external unmonitored runner.
+So an elevated program outlives cash, and cash says so rather than pretending otherwise.
+`elevate` (D45) is the first-class verb, so the elevation happens where cash can see it
+rather than behind its back through an external runner: it warns, on standard error,
+that the program runs outside cash's job object and will not be reaped when cash exits,
+and then asks UAC to start it (`-q` drops the warning). It does not record the program
+or try to end it at exit. An earlier text of this decision said cash would, by pid; by
+the second point above the attempt could not succeed, and `elevate` never made it
+(found in 1.3.12, while moving `elevate` to `ShellExecuteExW`).
 
-Acknowledged tension: "best-effort tracking" is precisely the cooperative cleanup D6 was
-built to replace. It is retained because UAC elevation is in real daily use and
-refusing it outright is worse. The documentation must not overstate D6 because of this.
+UAC elevation is in real daily use and refusing it outright is worse, so it stays, as a
+hole stated plainly. The documentation must not overstate D6 because of this.
 
 ### D43 — Language conformance on Linux CI; Windows has its own acceptance corpus
 
@@ -1532,7 +1542,7 @@ Four, all justified by decisions made above rather than invented:
 |---|---|
 | `winpath` | Explicit conversion between `C:/foo`, `C:\foo` and `/c/foo`. D4 forbids cash rewriting arguments automatically, so this is the deliberate escape hatch when a tool genuinely needs backslashes. |
 | `detach` | Deliberate job-object breakaway — start something meant to outlive the shell. |
-| `elevate` | UAC elevation as a first-class verb, so cash can warn that the child escapes D6 and register it for D42's tracking. |
+| `elevate` | UAC elevation as a first-class verb, so cash can warn that the child escapes D6 and will outlive it (D42). |
 | `start` | Open a file or URL with its default handler — the Windows `xdg-open`. |
 | `abbr` | fish's abbreviations, which the prompt expands in place (D60). Added later, and not Windows-specific. |
 | `prevd`, `nextd`, `cdh` | fish's folder history, also on Alt-← and Alt-→ (D62). Added later, and not Windows-specific. |
@@ -2466,7 +2476,7 @@ someone who expected bash, so additions need to earn their place.
 | 16 | `kill -1` is refused | "every process I may signal" on Windows reaches far past anything a script could mean | D22 |
 | 17 | `sh`, `bash` and `cash` are cash, ahead of `PATH`, however the command is started: by name, through `exec`, `command`, `xargs`, `find -exec`, `nohup`, `env` and `timeout` | Otherwise `bash` is the WSL launcher and a script continues under Linux; `cash` is often not on `PATH` at all, since a terminal starts it by full path | D7 |
 | 18 | `chmod` changes only the read-only attribute, from the owner's write bit | Windows has no execute or read bit outside ACLs and no group or other bits per file; where something is lost (`-x`, `-r`, setuid, setgid, sticky) it warns and returns 0, and the rest (`+x`, `+r`, `go-w`, a numeric mode's other bits) is silent (the user, 2026-10-02 and 2026-10-03) | D23, D34 |
-| 19 | `which` reports builtins; `stat` is not carried | `which` must agree with the shell; uutils' `stat` is Unix-only | D8, D48 |
+| 19 | `which` reports builtins; `stat` is cash's own, not uutils' | `which` must agree with the shell; uutils' `stat` is Unix-only, so cash carries one that shows a Windows file as Git Bash's does | D8, D48 |
 | 20 | `id`, `$UID` and `$EUID` report the account's RID, not a uid, and 0 in an elevated shell | Windows identifies a user by SID; the RID is its last component and the nearest true equivalent. Elevated, all three are 0, so `[ "$EUID" -eq 0 ]` and `[ "$(id -u)" -eq 0 ]` agree on "running as Administrator" | D48 |
 | 21 | `$SHELL` names cash, replacing whatever launched it | `make`, `npm run` and editors read it to decide what to launch | D5 |
 | 22 | A program on `PATH` whose reader went away ends as it chooses (Python: `BrokenPipeError`, status 1), not with 141 | Windows has no `SIGPIPE`; cash's builtins and bundled tools end with 141 in silence, as Bash's do | D71 |
@@ -2516,24 +2526,30 @@ Windows Terminal
       |
     ConPTY
       |
-   cash.exe
+   cash.exe                    (crates/cash: the binary, `cash doctor`)
       |
-      +-- brush-parser      (bash grammar)
-      +-- brush-core        (expansion, control flow, traps, most builtins)
-      +-- brush-interactive (line editing, history UI — reused, D18)
+      +-- cash-shell              (start-up, options, the bundled tools' dispatch)
+      +-- cash-parser             (bash grammar; brush's, absorbed, D9)
+      +-- cash-core               (expansion, control flow, traps; brush's, absorbed)
+      +-- cash-builtins           (bash's builtins, and cash's: winpath detach
+      |                            elevate start, D45)
+      +-- cash-interactive        (line editing, history, completion, D18)
+      +-- cash-coreutils-builtins (uutils coreutils as builtins, D48)
+      +-- cash-sed, cash-awk, cash-bc (sed from uutils, awk and bc from posixutils-rs)
       |
-      +-- cash Win32 layer  <-- the part that is actually ours
+      +-- cash-win32              <-- the Win32 layer
       |     path model                                   (D3, D10, D29)
       |     command resolution + PATHEXT dispatch        (D8)
       |     child env construction, PATH translation     (D5)
       |     CreateProcessW + job objects                 (D6, D36)
       |     job control, signals, suspend                (D11, D13, D19, D21, D22)
       |     redirection: /dev/*, fd table -> HANDLEs     (D7, D26)
-      |     cash builtins: winpath detach elevate start  (D45)
       |
       +-- native Windows processes
-            MS Coreutils, sed, gawk, terraform.exe, git.exe, Scoop shims
+            git.exe, grep and diff from Git or MS Coreutils, terraform.exe, Scoop shims
 ```
+
+(`cash-test-harness` runs the YAML compatibility cases, D43; it is not in the binary.)
 
 ---
 
@@ -2566,7 +2582,10 @@ Two specifics that matter:
   `std::process::Child` does not expose the thread handle. cash needs raw
   `CreateProcessW`. Mitigating factor: if cash itself is in the session job, children
   inherit it automatically, so the *session-level* guarantee (D6) holds regardless. Only
-  *per-job* nesting races.
+  *per-job* nesting races. *Since closed:* the thread handle is not needed, because
+  `NtResumeProcess` resumes a process by the process handle `Child` does expose, and
+  tokio passes a `Command`'s `CREATE_SUSPENDED` through; every program is contained
+  before it runs (D6).
 
 Seam 4 drove D10. Seams 1–3 drove D9.
 

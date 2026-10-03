@@ -65,23 +65,12 @@ Move the remaining `it` modules to `it/common.rs`. BIN-05's goldens are done:
 `tests/corpus` with the awk and sed differentials folded in (`it/corpus_goldens.rs`), and
 the git-prompt differential (`it/git_prompt_goldens.rs`). BIN-20.
 
-### 14.2 Records
-
-spec.md: D1 (5.3.15, not 5.2.37), §1 and §4 row 19 (`stat` is carried), §5, D6 and §6
-(the spawn race is closed), the D9 table; README Layout; RELEASING's crate list; the
-MSRV (1.88 vs 1.95, a missing `msrv-policy.md`). ARCH-05, ARCH-13, ARCH-14, EXE-17.
-
-D42 says cash records elevated children by pid and tries to end them at exit, and the
-`elevate` row of the D45 table says it registers them; `elevate` never did either, and
-the same section says a medium-integrity process cannot get `PROCESS_TERMINATE` on a
-high-integrity one, so the attempt could not succeed. Say what `elevate` does: it warns.
-Seen in 1.3.12 while moving `elevate` to `ShellExecuteExW`.
-
 ### 14.3 brush names users see
 
 `brush:` messages, `help cat`, the `brush$ ` prompt, `$BRUSH_VERSION`, `BRUSH_PS_ALT`,
 the `thraa/cash` URL, the `experimental-bundled-coreutils` feature name. ARCH-02,
-ARCH-09, ARCH-10.
+ARCH-09, ARCH-10. Also `cash-test-harness`'s Cargo description, "Test harness library
+for brush shell integration tests" (seen 2026-10-04).
 
 ### 14.6 Dead code, allows and dependencies
 
@@ -126,6 +115,11 @@ ARCH-09, ARCH-10.
 ---
 
 ## Decided, written down so it is not decided twice
+
+- **The MSRV is the pinned toolchain's minor, 1.98** (the user, 2026-10-04): it is the
+  only Rust CI builds with, so it is the only one promised; it rises with
+  `rust-toolchain.toml`. A 1.95 floor with a CI job of its own, and no `rust-version`
+  at all, were turned down.
 
 - **The git-prompt goldens are frozen against the installed Git for Windows** (the user,
   2026-10-04): `tests/git-prompt/SOURCES` holds the hashes of the scripts the output came
