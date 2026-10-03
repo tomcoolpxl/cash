@@ -15,17 +15,14 @@
 use crate::common::run;
 
 #[test]
-fn awk_stops_with_a_write_error_when_its_reader_goes() {
+fn awk_ends_with_141_when_its_reader_goes() {
     // `print` went through Rust's `print!`, which panics when the pipe is closed:
     // "failed printing to stdout: The pipe is being closed" (REVIEW_REPORT.md TXT-08).
-    let out = run(r#"seq 1 200000 | awk '{print}' | head -1; echo "status ${PIPESTATUS[1]}""#);
-    assert_eq!(out.stdout, "1\nstatus 2", "{}", out.stderr);
-    assert!(!out.stderr.contains("panicked"), "{}", out.stderr);
-    assert!(
-        out.stderr.contains("awk: write error: Broken pipe"),
-        "{}",
-        out.stderr
-    );
+    // Then it said "awk: write error: Broken pipe" and ended with 2; Git Bash's gawk
+    // ends with 141 and says nothing, as SIGPIPE ends it, and so does cash's (D71).
+    let out = run(r#"seq 1 200000 | awk '{print}' | head -1; echo "status ${PIPESTATUS[*]}""#);
+    assert_eq!(out.stdout, "1\nstatus 141 141 0", "{}", out.stderr);
+    assert!(out.stderr.is_empty(), "{}", out.stderr);
 }
 
 #[test]

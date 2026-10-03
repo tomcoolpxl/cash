@@ -1377,6 +1377,7 @@ async fn execute_builtin_command<SE: extensions::ShellExtensions>(
 ) -> Result<ExecutionResult, error::Error> {
     // In POSIX mode, special builtins that return errors are to be treated as fatal.
     let mark_errors_fatal = builtin.special_builtin && context.shell.options().posix_mode;
+    let interactive = context.shell.options().interactive;
 
     // Release a background job's `$!` waiter once this builtin is done. A builtin is the
     // shell's own code, so if it did not publish a pid along the way there will never be
@@ -1395,10 +1396,17 @@ async fn execute_builtin_command<SE: extensions::ShellExtensions>(
     match outcome {
         Ok(result) => Ok(result),
         Err(e) => {
-            // Broken pipe errors should silently return the appropriate exit code
+            // A builtin whose reader went away ends the shell it runs in, a pipeline stage,
+            // a subshell or a script, with 141 and in silence, as SIGPIPE ends Bash's
+            // (D71). It only failed, so `while :; do echo y; done | head -1` went on for
+            // ever.
             if let Some(io_err) = e.as_io_error() {
                 if io_err.kind() == std::io::ErrorKind::BrokenPipe {
-                    return Ok(ExecutionExitCode::from(io_err).into());
+                    let mut result = ExecutionResult::from(ExecutionExitCode::from(io_err));
+                    if !interactive {
+                        result.next_control_flow = ExecutionControlFlow::ExitShell;
+                    }
+                    return Ok(result);
                 }
             }
 

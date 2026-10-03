@@ -2384,6 +2384,26 @@ overwritten. Decided with the user on 2026-09-29:
 The Scoop bucket's manifest takes the `post_install` line only with the first release
 that has `--init-rc`: an older `cash.exe` would take the flag for a shell option.
 
+### D71 — A program whose reader went away ends as SIGPIPE ends it, if it is cash's
+
+On Unix, a program that writes to a pipe whose reader has gone is killed by SIGPIPE: it
+ends at once, says nothing, and `$?` and `PIPESTATUS` show 141 (`yes | head -1` gives
+`141 0`). Windows has no SIGPIPE: the write fails, and the program decides for itself
+what to say and how to end. Decided with the user on 2026-10-03:
+
+- **cash's own end as on Unix.** A builtin whose reader went away ends the shell it runs
+  in with 141: a pipeline stage, a subshell, or a script, as SIGPIPE ends Bash's process;
+  it only failed, so `while :; do echo y; done | head -1` went on for ever. An interactive
+  shell goes on. A bundled tool (D48)
+  runs in a child cash, and when its standard output is a pipe, it writes into a pipe of
+  that child's own, whose contents a thread passes on; when the passing on finds the
+  reader gone, the child ends there with 141, before the tool hears of it. So `seq`,
+  `yes`, `cat`, `awk` and `sed` end in silence with 141, where they said `write error:
+  Broken pipe` and ended with 0, 1 or 2. `env` and `timeout` are left out: they hand
+  their standard output to the command they run, which would keep that pipe open.
+- **Other programs keep their own ending.** cash cannot tell why a program it did not
+  build ended, so `python -c 'print(…)' | head -1` ends as Python ends it (§4).
+
 ### D70 — Background jobs and subshells run inside the shell, on threads of their own
 
 Bash forks a subshell for a background job, a compound or function pipeline stage, `( … )`
@@ -2445,7 +2465,7 @@ someone who expected bash, so additions need to earn their place.
 | 19 | `which` reports builtins; `stat` is not carried | `which` must agree with the shell; uutils' `stat` is Unix-only | D8, D48 |
 | 20 | `id`, `$UID` and `$EUID` report the account's RID, not a uid, and 0 in an elevated shell | Windows identifies a user by SID; the RID is its last component and the nearest true equivalent. Elevated, all three are 0, so `[ "$EUID" -eq 0 ]` and `[ "$(id -u)" -eq 0 ]` agree on "running as Administrator" | D48 |
 | 21 | `$SHELL` names cash, replacing whatever launched it | `make`, `npm run` and editors read it to decide what to launch | D5 |
-| 22 | A bundled producer prints `write error: Broken pipe` when its consumer leaves | Windows has no `SIGPIPE`, so uutils reports the failed write instead of dying silently | D48 |
+| 22 | A program on `PATH` whose reader went away ends as it chooses (Python: `BrokenPipeError`, status 1), not with 141 | Windows has no `SIGPIPE`; cash's builtins and bundled tools end with 141 in silence, as Bash's do | D71 |
 | 23 | `disown` forgets a job but does not make it outlive cash | A process cannot leave a Windows job object once assigned; `detach` starts one outside it | D6, D45 |
 | 24 | `ls` colours when stdout is a terminal | Linux gets this from an alias in a system rc file; Windows has none, and an alias is the one spelling a builtin has no path behind | D48 |
 | 25 | `uname -s` is `Windows_NT`, `$OSTYPE` is `windows` | cash is native Win32, not MSYS or Cygwin; scripts testing only `MINGW*|MSYS*` will miss their Windows branch | D48 |

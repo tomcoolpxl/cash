@@ -216,6 +216,105 @@ pub fn with_captured_stdout<T>(body: impl FnOnce() -> T) -> std::io::Result<(T, 
     Ok((value, captured))
 }
 
+/// Runs `body` so that when the reader of this process's standard output goes away, the
+/// process ends at once with 141 and says nothing, as SIGPIPE ends a Unix program (D71).
+///
+/// Windows has no SIGPIPE: a program's next write fails, and the program says so and
+/// ends as it likes. A bundled tool said `seq: write error: Broken pipe` and ended 0 or 1
+/// after `seq 1 1000000 | head -1`, where Bash's `seq` ends with 141 in silence. When
+/// standard output is a pipe, `body` writes into a pipe of its own instead, and a thread
+/// passes what it writes on; when the passing on finds the reader gone, the process is
+/// ended there, before the tool hears of it. Otherwise `body` just runs.
+pub fn with_broken_pipe_ending<T>(body: impl FnOnce() -> T) -> T {
+    use windows_sys::Win32::Storage::FileSystem::{FILE_TYPE_PIPE, GetFileType};
+
+    // SAFETY: reads the process's standard-handle table and returns a handle.
+    let real = unsafe { GetStdHandle(STD_OUTPUT_HANDLE) };
+    if real.is_null() || real == INVALID_HANDLE_VALUE {
+        return body();
+    }
+    // SAFETY: `GetFileType` only asks about the handle, whatever it is.
+    if unsafe { GetFileType(real) } != FILE_TYPE_PIPE {
+        return body();
+    }
+    let Ok((reader, writer)) = std::io::pipe() else {
+        return body();
+    };
+
+    // Whatever is already buffered belongs to the real standard output.
+    let _ = std::io::stdout().flush();
+    // SAFETY: `writer` stays open until `RestoreStdout` has put `real` back. `SetStdHandle`
+    // stores the value and does not take ownership of it.
+    if unsafe { SetStdHandle(STD_OUTPUT_HANDLE, writer.as_raw_handle() as HANDLE) } == 0 {
+        return body();
+    }
+
+    let real_value = real as usize;
+    let relay = std::thread::Builder::new()
+        .name("cash-stdout-relay".into())
+        .spawn(move || relay_or_end(reader, real_value as HANDLE));
+
+    let value = {
+        let _restore = RestoreStdout(real);
+        let value = body();
+        // Flush inside the guard: buffered bytes go through the relay.
+        let _ = std::io::stdout().flush();
+        value
+    };
+    // The relay's input ends with its last write end, and it has passed everything on
+    // when it returns.
+    drop(writer);
+    if let Ok(relay) = relay {
+        let _ = relay.join();
+    }
+    value
+}
+
+/// Passes what `reader` gives on to `real`, the process's standard output, until it
+/// ends; ends the process with 141 when the reader of `real` has gone.
+fn relay_or_end(mut reader: std::io::PipeReader, real: HANDLE) {
+    use windows_sys::Win32::Foundation::{ERROR_BROKEN_PIPE, ERROR_NO_DATA, GetLastError};
+    use windows_sys::Win32::Storage::FileSystem::WriteFile;
+    use windows_sys::Win32::System::Threading::{GetCurrentProcess, TerminateProcess};
+
+    let mut buf = vec![0u8; 64 * 1024];
+    loop {
+        let n = match reader.read(&mut buf) {
+            Ok(0) | Err(_) => return,
+            Ok(n) => n,
+        };
+        let mut sent = 0;
+        while sent < n {
+            let rest = buf.get(sent..n).unwrap_or_default();
+            let mut written = 0u32;
+            // SAFETY: `real` is the process's standard output, open for its life; the
+            // buffer and its length go together.
+            let ok = unsafe {
+                WriteFile(
+                    real,
+                    rest.as_ptr(),
+                    u32::try_from(rest.len()).unwrap_or(u32::MAX),
+                    &raw mut written,
+                    std::ptr::null_mut(),
+                )
+            };
+            if ok == 0 {
+                // SAFETY: called right after the failed call.
+                let error = unsafe { GetLastError() };
+                if error == ERROR_NO_DATA || error == ERROR_BROKEN_PIPE {
+                    // As SIGPIPE does: at once, with nothing run or written on the way out.
+                    // SAFETY: returns the pseudo-handle of this process.
+                    let this = unsafe { GetCurrentProcess() };
+                    // SAFETY: `this` is the pseudo-handle of this process.
+                    unsafe { TerminateProcess(this, 141) };
+                }
+                return;
+            }
+            sent += written as usize;
+        }
+    }
+}
+
 /// A unique name for one capture. The process id plus a counter is enough: captures are
 /// per-process and never concurrent, since the bundled dispatch owns the whole process.
 fn capture_file_path() -> std::path::PathBuf {

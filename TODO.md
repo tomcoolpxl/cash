@@ -82,11 +82,6 @@ The riskiest phase: judge its runs on an idle machine (Decided, below).
   The same count makes `set -x` write `++ echo hi` for a stage where Bash writes `+`.
   `Shell::depth` also decides `is_subshell()` (job control, traps, `exec`), so the count
   `$BASH_SUBSHELL` and PS4 show needs a field of its own.
-- `yes | head -1; echo "${PIPESTATUS[*]}"` is `0 0`; Bash `141 0`, the writer killed by
-  SIGPIPE. Windows has no SIGPIPE: decide what a writer whose reader went away ends
-  with, and record it. The bundled `seq` says so on stderr, `seq: write error: Broken
-  pipe`, after `seq 1 1000000 | head -1` and now also after `head -1 <(seq 1 1000000)`,
-  where Bash's dies in silence.
 - `f=<(seq 1 5)` is a syntax error in cash; Bash expands the substitution and assigns
   its path. Found while fixing 11.4.
 - `jobs` writes a brace group over several lines: `{ sleep 1; } & jobs` shows `{`,
@@ -233,6 +228,10 @@ Bash, or keep "no limit" and add a row to spec §4.
 ---
 
 ## Decided, written down so it is not decided twice
+
+- **A writer whose reader went away ends with 141 in silence, if it is cash's own** (the
+  user, 2026-10-03): builtins and bundled tools, as SIGPIPE ends Bash's; a program on
+  `PATH` ends as it chooses. D71.
 
 - **`$!` for a background job that starts no program is a number of cash's own** (the
   user, 2026-10-03): 4n + 1, which no Windows process has; `kill`, `wait` and `jobs -p`

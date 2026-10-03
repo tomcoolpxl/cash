@@ -188,7 +188,13 @@ pub fn maybe_dispatch() -> Option<i32> {
     #[cfg(feature = "experimental-bundled-coreutils")]
     let argv = relaying_msys_command(argv);
 
-    Some(func(argv))
+    // A tool that runs a command hands it its standard output, which would keep the
+    // relay's pipe open after the tool is done.
+    if matches!(name_str, "env" | "timeout") {
+        return Some(func(argv));
+    }
+    // Its reader going away ends it with 141, as SIGPIPE does (D71).
+    Some(cash_win32::stdio::with_broken_pipe_ending(|| func(argv)))
 }
 
 /// The bundled-dispatch name of [`cash_win32::msys::relay`]: `cash --invoke-bundled

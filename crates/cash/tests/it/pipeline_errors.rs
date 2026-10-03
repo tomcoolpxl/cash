@@ -100,6 +100,47 @@ fn exit_break_and_return_in_a_stage_end_only_the_stage() {
 }
 
 #[test]
+fn a_bundled_tool_whose_reader_goes_ends_with_141_and_says_nothing() {
+    // It said `seq: write error: Broken pipe` and ended with 0 or 1; Bash's ends as
+    // SIGPIPE ends it (D71). A builtin already did.
+    for (script, expected) in [
+        (
+            r#"seq 1 1000000 | head -1; echo "${PIPESTATUS[*]}""#,
+            "1\n141 0",
+        ),
+        (
+            r#"yes | tr y n | head -1; echo "${PIPESTATUS[*]}""#,
+            "n\n141 141 0",
+        ),
+        (
+            r#"seq 1 200000 | sed p | head -1; echo "${PIPESTATUS[*]}""#,
+            "1\n141 141 0",
+        ),
+        (
+            r#"while :; do echo y; done | head -1; echo "${PIPESTATUS[*]}""#,
+            "y\n141 0",
+        ),
+        (
+            r#"( while :; do echo y; done; echo after >&2 ) | head -1; echo "${PIPESTATUS[*]}""#,
+            "y\n141 0",
+        ),
+        (
+            r#"f() { while :; do echo y; done; echo after >&2; }; f | head -1; echo "${PIPESTATUS[*]}""#,
+            "y\n141 0",
+        ),
+        // A reader that stays sees all of it.
+        (
+            r#"seq 1 5 | cat | wc -l; echo "${PIPESTATUS[*]}""#,
+            "5\n0 0 0",
+        ),
+    ] {
+        let out = run(script);
+        assert_eq!(out.stdout, expected, "{script}");
+        assert!(out.stderr.is_empty(), "{script}: {}", out.stderr);
+    }
+}
+
+#[test]
 fn a_fatal_expansion_error_ends_the_shell_with_127_and_a_subshell_with_1() {
     check(&[
         ("echo ${u:?boom}; echo no", "", 127),
