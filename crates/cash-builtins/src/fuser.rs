@@ -342,7 +342,7 @@ fn pid_field(pid: u32) -> String {
     format!(" {pid:>5}")
 }
 
-#[allow(
+#[expect(
     clippy::too_many_lines,
     reason = "one pass over the names, mirroring psmisc's output order"
 )]

@@ -831,7 +831,7 @@ pub fn terminate(pid: u32, status: u32) -> std::io::Result<()> {
 /// Resume a process created suspended, resuming all its threads.
 ///
 /// Uses NT native API `NtResumeProcess` from `ntdll.dll`.
-#[allow(
+#[expect(
     clippy::not_unsafe_ptr_arg_deref,
     reason = "process is an opaque Win32 kernel handle, not a dereferenceable memory pointer"
 )]

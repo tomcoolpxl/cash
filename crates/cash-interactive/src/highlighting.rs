@@ -950,7 +950,7 @@ mod tests {
             .chain(std::iter::once((full.len(), ' ')))
         {
             // `boundary` is sourced from char_indices(), so slicing is on a char boundary.
-            #[allow(clippy::string_slice)]
+            #[expect(clippy::string_slice)]
             let line = &full[..boundary];
             let highlighted = highlight_command(&shell, line, line.len());
             assert_spans_are_valid(&highlighted);

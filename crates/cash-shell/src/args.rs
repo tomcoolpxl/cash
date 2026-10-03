@@ -255,14 +255,14 @@ impl CommandLineArgs {
     /// This is useful for detecting which CLI arguments were explicitly provided
     /// vs. which retained their default values (e.g., for config file merging).
     #[must_use]
-    #[allow(
+    #[expect(
         clippy::missing_panics_doc,
         reason = "parsing defaults should not panic"
     )]
     pub fn default_values() -> Self {
         // Parse with just the program name to get all defaults.
         // This won't fail because all arguments have defaults or are optional.
-        #[allow(clippy::expect_used)]
+        #[expect(clippy::expect_used)]
         Self::try_parse_from([String::from("cash")]).expect("parsing defaults should never fail")
     }
 
@@ -337,7 +337,7 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::expect_used)]
+    #[expect(clippy::expect_used)]
     fn test_will_read_commands_from_stdin() {
         // (arguments, whether commands will be read from stdin)
         let cases = [

@@ -702,7 +702,7 @@ pub(crate) fn remove_largest_matching_prefix<'a>(
         let indices = s.char_indices().rev();
         let mut last_idx = s.len();
 
-        #[allow(
+        #[expect(
             clippy::string_slice,
             reason = "because we get the indices from char_indices()"
         )]
@@ -737,7 +737,7 @@ pub(crate) fn remove_smallest_matching_prefix<'a>(
         }
         let mut indices = s.char_indices();
 
-        #[allow(
+        #[expect(
             clippy::string_slice,
             reason = "because we get the indices from char_indices()"
         )]
@@ -764,7 +764,7 @@ pub(crate) fn remove_largest_matching_suffix<'a>(
 ) -> Result<&'a str, error::Error> {
     if let Some(pattern) = pattern {
         let re = pattern.matcher()?;
-        #[allow(
+        #[expect(
             clippy::string_slice,
             reason = "because we get the indices from char_indices()"
         )]
@@ -794,7 +794,7 @@ pub(crate) fn remove_smallest_matching_suffix<'a>(
         if re.is_match("")? {
             return Ok(s);
         }
-        #[allow(
+        #[expect(
             clippy::string_slice,
             reason = "because we get the indices from char_indices()"
         )]

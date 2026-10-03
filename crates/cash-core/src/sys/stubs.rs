@@ -1,8 +1,7 @@
-#![allow(dead_code)]
-#![allow(clippy::missing_const_for_fn)]
+#![expect(clippy::missing_const_for_fn)]
 #![allow(clippy::needless_pass_by_ref_mut)]
 #![allow(clippy::needless_pass_by_value)]
-#![allow(clippy::unnecessary_wraps)]
+#![expect(clippy::unnecessary_wraps)]
 // These stubs stand in for POSIX facilities Windows lacks (descriptor passing, resource
 // limits, async pipes). They keep the signatures the shell code was written against --
 // including `async` on functions a real implementation would await in. A stub body that
@@ -18,5 +17,4 @@ pub mod async_pipe;
 pub mod commands;
 pub mod fd;
 pub mod fs;
-pub mod resource;
 pub mod terminal;

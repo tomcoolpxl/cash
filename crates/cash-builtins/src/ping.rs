@@ -555,7 +555,7 @@ fn round_trip(ms: f64) -> String {
 }
 
 /// A count as a float, for statistics; packet counts stay far below 2^52.
-#[allow(
+#[expect(
     clippy::cast_precision_loss,
     reason = "packet counts and sample counts never approach 2^52"
 )]

@@ -201,7 +201,7 @@ fn split_list<T>(text: &str, item: impl Fn(&str) -> Option<T>) -> Option<ListSel
     Some(selection)
 }
 
-#[allow(
+#[expect(
     clippy::too_many_lines,
     reason = "lsof's option grammar is one flat list; splitting it would scatter it"
 )]
@@ -483,7 +483,7 @@ fn state_matches(states: &(Vec<String>, Vec<String>), socket: &net::Socket) -> b
         && !states.1.iter().any(|s| s == name)
 }
 
-#[allow(
+#[expect(
     clippy::too_many_lines,
     reason = "gathering, selecting and printing rows is one pipeline"
 )]

@@ -57,7 +57,7 @@ static SELF_EXE: OnceLock<Option<PathBuf>> = OnceLock::new();
 
 /// Installs the bundled-command registry. Idempotent: only the first call
 /// takes effect.
-#[allow(
+#[expect(
     clippy::implicit_hasher,
     reason = "registry uses the default hasher; callers build with HashMap::new()"
 )]
@@ -354,7 +354,7 @@ fn self_exe() -> Option<&'static PathBuf> {
 
 /// Help/usage content provider for the shim builtin. The shell calls this for
 /// `help <name>`, `type <name>`, etc.
-#[allow(
+#[expect(
     clippy::needless_pass_by_value,
     clippy::unnecessary_wraps,
     reason = "signature dictated by cash_core::builtins::CommandContentFunc"

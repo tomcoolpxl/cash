@@ -34,7 +34,7 @@ pub(crate) struct ShoptCommand {
 impl builtins::Command for ShoptCommand {
     type Error = cash_core::Error;
 
-    #[allow(clippy::too_many_lines)]
+    #[expect(clippy::too_many_lines)]
     async fn execute<SE: cash_core::ShellExtensions>(
         &self,
         context: cash_core::ExecutionContext<'_, SE>,

@@ -132,7 +132,7 @@ impl builtins::Command for GetOptsCommand {
             context.shell.env_mut().unset(VAR_GETOPTS_NEXT_CHAR_INDEX)?;
         }
 
-        #[allow(clippy::cast_sign_loss)] // .max(1) guarantees positive
+        #[expect(clippy::cast_sign_loss)] // .max(1) guarantees positive
         let next_index = next_index_signed.max(1) as usize;
 
         // Select the arguments to parse. If none were explicitly provided, we
@@ -276,7 +276,7 @@ fn parse_next_option<SE: cash_core::ShellExtensions>(
 
 /// Resolves the argument for an option that takes a value. Returns the updated
 /// `(variable_value, optarg, is_last_char, next_index)` tuple.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 fn resolve_option_argument<SE: cash_core::ShellExtensions>(
     context: &cash_core::ExecutionContext<'_, SE>,
     spec: &OptionSpec,

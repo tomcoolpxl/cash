@@ -37,7 +37,7 @@
     clippy::useless_let_if_seq,
     reason = "uutils code, not written to the workspace's style lints"
 )]
-#![allow(
+#![expect(
     clippy::expect_used,
     clippy::missing_panics_doc,
     clippy::panic,

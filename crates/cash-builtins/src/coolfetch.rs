@@ -99,7 +99,7 @@ impl Picture {
     fn for_cells(cell_ratio: Option<f64>) -> &'static Self {
         let [standard, wide] = &PICTURES;
         // A picture is its true shape where its columns are as wide as its rows are tall.
-        #[allow(clippy::cast_precision_loss, reason = "a few dozen columns")]
+        #[expect(clippy::cast_precision_loss, reason = "a few dozen columns")]
         let off = |picture: &Self, ratio: f64| {
             (picture.columns as f64 / IMAGE_ROWS as f64 / ratio)
                 .ln()

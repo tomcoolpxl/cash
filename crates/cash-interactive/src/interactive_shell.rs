@@ -564,7 +564,7 @@ mod tests {
     }
 
     impl InputBackend for PanicThenEof {
-        #[allow(
+        #[expect(
             clippy::manual_assert,
             clippy::panic,
             clippy::panic_in_result_fn,
@@ -584,7 +584,7 @@ mod tests {
     }
 
     #[test]
-    #[allow(
+    #[expect(
         clippy::panic,
         clippy::panic_in_result_fn,
         reason = "the recovery boundary needs an actual unwinding panic"

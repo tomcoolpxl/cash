@@ -1,5 +1,5 @@
-#![allow(clippy::missing_const_for_fn)]
-#![allow(clippy::unnecessary_wraps)]
+#![expect(clippy::missing_const_for_fn)]
+#![expect(clippy::unnecessary_wraps)]
 
 use crate::error;
 use std::path::PathBuf;
@@ -72,16 +72,6 @@ pub(crate) fn get_current_uid() -> Result<u32, error::Error> {
     })
 }
 
-pub(crate) fn get_current_gid() -> Result<u32, error::Error> {
-    // Windows has no primary group the way POSIX does; the account's own RID is the
-    // closest honest answer, and it is what the `id` builtin reports too.
-    Ok(if is_elevated() {
-        0
-    } else {
-        ACCOUNT_RID.unwrap_or(NON_ELEVATED_GID)
-    })
-}
-
 pub(crate) fn get_effective_uid() -> Result<u32, error::Error> {
     // Elevated reports 0, matching the root convention scripts test for. Otherwise the
     // account's RID, so `$UID` agrees with `id -u`.
@@ -109,7 +99,7 @@ pub(crate) fn get_current_username() -> Result<String, error::Error> {
         .ok_or_else(|| std::io::Error::other("the process token names no account").into())
 }
 
-#[allow(clippy::unnecessary_wraps)]
+#[expect(clippy::unnecessary_wraps)]
 pub(crate) fn get_user_group_ids() -> Result<Vec<u32>, error::Error> {
     // TODO(windows): implement some version of this for Windows
     Ok(vec![])

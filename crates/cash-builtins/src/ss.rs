@@ -420,7 +420,7 @@ fn tokenize(args: &[String]) -> Vec<String> {
 }
 
 #[derive(Default)]
-#[allow(
+#[expect(
     clippy::struct_excessive_bools,
     reason = "each flag is one of ss's independent switches"
 )]
@@ -737,7 +737,7 @@ const fn scope_of(addr: SocketAddr) -> u32 {
     }
 }
 
-#[allow(
+#[expect(
     clippy::too_many_lines,
     reason = "selecting and printing the table is one pipeline"
 )]

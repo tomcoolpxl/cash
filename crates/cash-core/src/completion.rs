@@ -1058,7 +1058,7 @@ impl Config {
     /// # Arguments
     ///
     /// * `name` - The name of the command.
-    #[allow(
+    #[expect(
         clippy::missing_panics_doc,
         clippy::unwrap_used,
         reason = "these unwrap calls should not fail"
@@ -1828,7 +1828,7 @@ fn is_drive_colon(input: &str, word_start: Option<usize>, index: usize) -> bool 
 /// Tokenizes input by splitting on delimiter characters. Words (non-delimiter sequences)
 /// are emitted as tokens. Consecutive non-whitespace delimiters are grouped into a single
 /// token. Whitespace delimiters separate tokens but are not emitted themselves.
-#[allow(clippy::string_slice, reason = "used indices come from char_indices")]
+#[expect(clippy::string_slice, reason = "used indices come from char_indices")]
 fn simple_tokenize_by_delimiters<'a>(
     input: &'a str,
     delimiters: &[char],
@@ -1998,7 +1998,7 @@ mod tests {
     use pretty_assertions::assert_matches;
 
     #[test]
-    #[allow(clippy::too_many_lines)]
+    #[expect(clippy::too_many_lines)]
     fn completion_tokenization() {
         assert_matches!(
             simple_tokenize_by_delimiters("one two", &[' ']).as_slice(),

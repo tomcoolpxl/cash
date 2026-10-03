@@ -12,7 +12,7 @@ use crate::{BuiltinError, CommandArg, commands, error, extensions, results};
 ///
 /// * The context in which the command is being executed.
 /// * The arguments to the command.
-#[allow(type_alias_bounds)]
+#[expect(type_alias_bounds)]
 pub type CommandExecuteFunc<SE: extensions::ShellExtensions> =
     fn(
         commands::ExecutionContext<'_, SE>,
@@ -26,7 +26,7 @@ pub type CommandExecuteFunc<SE: extensions::ShellExtensions> =
 /// * The context in which the command is being executed.
 /// * The arguments to the command.
 /// * The process group id, if running in a pipeline.
-#[allow(type_alias_bounds)]
+#[expect(type_alias_bounds)]
 pub type CommandSpawnFunc<SE: extensions::ShellExtensions> =
     fn(
         commands::ExecutionContext<'_, SE>,
@@ -459,7 +459,7 @@ pub fn decl_builtin<B: DeclarationCommand + Send + Sync, SE: extensions::ShellEx
     }
 }
 
-#[allow(clippy::too_long_first_doc_paragraph)]
+#[expect(clippy::too_long_first_doc_paragraph)]
 /// Returns a built-in command registration, given an implementation of the
 /// `DeclarationCommand` trait that can be default-constructed. The command
 /// implementation is expected to implement clap's `Parser` trait solely

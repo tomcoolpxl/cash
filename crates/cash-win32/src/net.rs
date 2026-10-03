@@ -349,7 +349,7 @@ pub(crate) unsafe fn widestring_at(pointer: *const u16) -> String {
 /// # Errors
 ///
 /// Fails if IP Helper cannot produce a table.
-#[allow(
+#[expect(
     clippy::too_many_lines,
     reason = "the four owner-module row layouts differ only in field names"
 )]

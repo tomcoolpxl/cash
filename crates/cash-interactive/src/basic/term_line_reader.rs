@@ -171,7 +171,7 @@ impl<'a> ReadLineState<'a> {
         Ok(())
     }
 
-    #[allow(clippy::string_slice, reason = "it's calculated based on char indices")]
+    #[expect(clippy::string_slice, reason = "it's calculated based on char indices")]
     fn backspace(&mut self) -> Result<(), ShellError> {
         let char_indices = self.line.char_indices();
 
@@ -299,7 +299,7 @@ impl<'a> ReadLineState<'a> {
     }
 }
 
-#[allow(clippy::string_slice)]
+#[expect(clippy::string_slice)]
 fn format_completion_candidate(
     mut candidate: &str,
     options: &cash_core::completion::ProcessingOptions,

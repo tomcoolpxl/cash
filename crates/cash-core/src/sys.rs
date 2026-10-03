@@ -1,6 +1,5 @@
 //! Platform abstraction facilities
 
-#![allow(unused)]
 
 pub(crate) mod windows;
 pub(crate) use windows as platform;

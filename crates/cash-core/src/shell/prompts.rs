@@ -89,7 +89,7 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
 }
 
 #[cfg(test)]
-#[allow(clippy::panic_in_result_fn, reason = "assertions in a fallible test")]
+#[expect(clippy::panic_in_result_fn, reason = "assertions in a fallible test")]
 mod tests {
     use crate::{ProfileLoadBehavior, RcLoadBehavior, Shell, ShellVariable, error};
 

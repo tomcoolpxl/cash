@@ -74,10 +74,10 @@ impl ChildProcess {
     /// foreground job listens, as only its job table can resume a stopped process.
     pub async fn wait_or_stop(&mut self, ctrl_z: bool) -> Result<ProcessWaitResult, error::Error> {
         let mut sigtstp = sys::signal::tstp_signal_listener(ctrl_z)?;
-        #[allow(unused_mut, reason = "only mutated on some platforms")]
+        #[expect(unused_mut, reason = "only mutated on some platforms")]
         let mut sigchld = sys::signal::chld_signal_listener()?;
 
-        #[allow(clippy::ignored_unit_patterns)]
+        #[expect(clippy::ignored_unit_patterns)]
         loop {
             tokio::select! {
                 output = &mut self.exec_future => {

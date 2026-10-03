@@ -18,7 +18,7 @@ const SIGNAL_BASE: u32 = 128;
 /// Python and Go programs exit with when they let the interrupt end them. Bash reports a
 /// command SIGINT ended as 130, so that is what `$?` says here; it said 137, the status of
 /// a kill, until the shell came to act on an interrupted command (2026-09-30).
-#[allow(
+#[expect(
     clippy::unreadable_literal,
     reason = "NTSTATUS values are quoted everywhere as eight unbroken hex digits"
 )]
@@ -39,7 +39,7 @@ const SIGPIPE: u32 = 13;
 /// Deliberately a small hand-maintained table rather than a range heuristic: D15 accepts
 /// that cost, because the whole point is producing the *specific* values scripts compare
 /// against.
-#[allow(
+#[expect(
     clippy::unreadable_literal,
     reason = "NTSTATUS values are quoted everywhere as eight unbroken hex digits; \n              `0xC000_0005` is harder to match against Microsoft's documentation"
 )]

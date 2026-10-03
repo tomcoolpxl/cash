@@ -728,7 +728,7 @@ fn try_reset_terminal_to_defaults() -> Result<(), std::io::Error> {
 }
 
 #[cfg(test)]
-#[allow(clippy::panic_in_result_fn)]
+#[expect(clippy::panic_in_result_fn)]
 mod tests {
     use super::*;
     use anyhow::Result;

@@ -53,7 +53,7 @@ fn expand_brace_expr_member(bem: word::BraceExpressionMember) -> Box<dyn Iterato
                 Box::new((start..=end).step_by(increment).map(format))
             } else {
                 // Iterate from start down to end by decrementing.
-                #[allow(clippy::cast_possible_wrap)]
+                #[expect(clippy::cast_possible_wrap)]
                 let increment = increment as i64;
                 Box::new(
                     std::iter::successors(Some(start), move |&n| {

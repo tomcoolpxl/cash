@@ -792,7 +792,7 @@ pub struct SimpleCommand<'a, SE: extensions::ShellExtensions> {
     /// Optionally provides a function that can run after execution occurs. Note
     /// that it is *not* invoked if the shell is discarded during the execution
     /// process.
-    #[allow(clippy::type_complexity)]
+    #[expect(clippy::type_complexity)]
     pub post_execute: Option<fn(&mut Shell<SE>) -> Result<(), error::Error>>,
 }
 
@@ -868,7 +868,7 @@ impl<'a, SE: extensions::ShellExtensions> SimpleCommand<'a, SE> {
     /// The command may be a builtin, a shell function, or an externally
     /// executed command. This function's implementation is responsible for
     /// dispatching it appropriately according to the context provided.
-    #[allow(
+    #[expect(
         clippy::missing_panics_doc,
         reason = "these unwrap calls should not panic"
     )]
@@ -905,7 +905,7 @@ impl<'a, SE: extensions::ShellExtensions> SimpleCommand<'a, SE> {
                 .as_ref()
                 .is_some_and(|r| !r.disabled && r.special_builtin)
         {
-            #[allow(clippy::unwrap_used, reason = "we just checked that builtin is Some")]
+            #[expect(clippy::unwrap_used, reason = "we just checked that builtin is Some")]
             let builtin = builtin.unwrap();
             return self.execute_via_builtin(builtin).await;
         }
@@ -1136,7 +1136,7 @@ impl<'a, SE: extensions::ShellExtensions> SimpleCommand<'a, SE> {
     }
 
     /// Run a function pipeline member on its own shell, concurrently with the rest.
-    #[allow(
+    #[expect(
         clippy::type_complexity,
         reason = "the hook's type is the field's; naming it separately would not clarify it"
     )]

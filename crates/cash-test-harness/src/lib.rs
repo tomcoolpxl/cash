@@ -15,8 +15,8 @@
 //! 3. **Hybrid**: Combines both modes - runs oracle comparison AND validates against expectations.
 //!    Both must pass for the test to succeed.
 
-#![allow(clippy::missing_panics_doc)]
-#![allow(clippy::unwrap_used)]
+#![expect(clippy::missing_panics_doc)]
+#![expect(clippy::unwrap_used)]
 
 mod comparison;
 mod config;

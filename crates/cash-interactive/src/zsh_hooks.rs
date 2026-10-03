@@ -273,7 +273,7 @@ fn assign_global<SE: cash_core::ShellExtensions>(
 }
 
 #[cfg(test)]
-#[allow(clippy::panic_in_result_fn, reason = "assertions in a fallible test")]
+#[expect(clippy::panic_in_result_fn, reason = "assertions in a fallible test")]
 mod tests {
     use super::*;
 

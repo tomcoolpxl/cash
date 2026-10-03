@@ -10,7 +10,7 @@ pub(crate) struct TerminalIntegration {
     term: term_detection::TerminalInfo,
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 impl TerminalIntegration {
     /// Starts terminal integration, emitting the sequence that announces it, and returns the
     /// utility the interactive loop reports events to.

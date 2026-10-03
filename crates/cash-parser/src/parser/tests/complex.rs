@@ -156,7 +156,7 @@ fn parse_brace_expansion_context() -> Result<()> {
 }
 
 #[test]
-#[allow(clippy::literal_string_with_formatting_args)]
+#[expect(clippy::literal_string_with_formatting_args)]
 fn parse_parameter_expansion_complex() -> Result<()> {
     let input = r#"echo "${var:-default}" "${var:+alt}" "${var:=assign}""#;
     let result = test_with_snapshot(input)?;

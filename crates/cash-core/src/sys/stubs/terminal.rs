@@ -36,13 +36,6 @@ impl Config {
     pub fn update(&mut self, _settings: &terminal::Settings) {}
 }
 
-/// Get the process ID of this process's parent.
-///
-/// This is a stub implementation that returns `None`.
-pub fn get_parent_process_id() -> Option<sys::process::ProcessId> {
-    None
-}
-
 /// Get the process group ID for this process's process group.
 ///
 /// This is a stub implementation that returns `None`.

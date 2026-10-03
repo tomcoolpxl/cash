@@ -564,7 +564,7 @@ impl ExprParser<'_> {
         }
     }
 
-    #[allow(
+    #[expect(
         clippy::too_many_lines,
         reason = "one arm per predicate; splitting it would only move the list"
     )]

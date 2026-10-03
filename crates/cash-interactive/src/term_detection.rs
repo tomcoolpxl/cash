@@ -1,6 +1,6 @@
 /// Holds information about the hosting terminal.
 #[derive(Clone, Debug, Default)]
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub struct TerminalInfo {
     /// The detected terminal, if any.
     pub terminal: Option<KnownTerminal>,
@@ -190,7 +190,7 @@ pub(crate) trait TerminalEnvironment {
     fn get_env_var(&self, key: &str) -> Option<String>;
 }
 
-#[allow(clippy::too_many_lines)]
+#[expect(clippy::too_many_lines)]
 pub(crate) fn get_terminal_info(env: &impl TerminalEnvironment) -> TerminalInfo {
     let mut info = TerminalInfo {
         terminal: try_detect_terminal(env),

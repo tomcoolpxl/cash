@@ -192,7 +192,7 @@ impl Display for JobLine<'_> {
 /// `Exit 3` rather than `Done`, or in POSIX mode (`posix`) as `Done(3)`. A job that ended
 /// of the signal cash's `kill` sent it (`killed_by`) is shown by the signal, `Killed`,
 /// where it was `Exit 137`.
-#[allow(
+#[expect(
     clippy::too_many_arguments,
     reason = "each is one column or rule of the line, as its callers hold them"
 )]
@@ -681,7 +681,7 @@ impl JobManager {
     /// # Arguments
     ///
     /// * `job` - The job to add.
-    #[allow(
+    #[expect(
         clippy::missing_panics_doc,
         reason = "push() guarantees the vector length is >= 1"
     )]
@@ -698,7 +698,7 @@ impl JobManager {
         self.jobs.push(job);
         self.reannotate();
 
-        #[allow(clippy::unwrap_used, reason = "we just pushed an element")]
+        #[expect(clippy::unwrap_used, reason = "we just pushed an element")]
         self.jobs.last().unwrap()
     }
 

@@ -91,7 +91,7 @@ impl<SE: cash_core::ShellExtensions> ReedlineCompleter<SE> {
         })
     }
 
-    #[allow(
+    #[expect(
         clippy::string_slice,
         reason = "all indices + counts are expected to be at char boundaries"
     )]

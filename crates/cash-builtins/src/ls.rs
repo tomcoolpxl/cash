@@ -67,7 +67,7 @@ List information about the FILEs (the current directory by default).
 /// List information about the FILEs (the current directory by default).
 #[derive(Parser)]
 #[clap(disable_help_flag = true, disable_version_flag = true)]
-#[allow(
+#[expect(
     clippy::struct_excessive_bools,
     reason = "one field per flag, as clap derives them"
 )]

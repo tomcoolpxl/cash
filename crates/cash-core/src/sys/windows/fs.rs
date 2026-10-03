@@ -5,7 +5,6 @@ use std::path::{Path, PathBuf};
 
 use crate::ShellFd;
 use crate::error;
-use crate::openfiles::OpenFiles;
 
 // Selectively re-export items from stubs that we don't override.
 pub(crate) use crate::sys::stubs::fs::MetadataExt;
@@ -457,26 +456,6 @@ pub(crate) fn open_temp_with_contents(contents: &[u8]) -> std::io::Result<std::f
     file.write_all(contents)?;
     file.seek(SeekFrom::Start(0))?;
     Ok(file)
-}
-
-/// Creates a file whose contents Windows should keep in memory.
-///
-/// cash: the same `FILE_ATTRIBUTE_TEMPORARY` hint as a here-document's, for the file a
-/// process substitution writes. This one cannot also be delete-on-close — the child opens
-/// it by path, and a delete-pending file cannot be opened afresh (D17) — so it is swept
-/// instead, but the contents still need not travel to the disk and back.
-pub(crate) fn create_temporary_file(path: &std::path::Path) -> std::io::Result<std::fs::File> {
-    use std::os::windows::fs::OpenOptionsExt;
-
-    /// Transient: hold it in the cache, write it out only under memory pressure.
-    const FILE_ATTRIBUTE_TEMPORARY: u32 = 0x0000_0100;
-
-    std::fs::OpenOptions::new()
-        .create(true)
-        .truncate(true)
-        .write(true)
-        .attributes(FILE_ATTRIBUTE_TEMPORARY)
-        .open(path)
 }
 
 pub(crate) fn process_substitution_temp_path() -> PathBuf {

@@ -141,7 +141,7 @@ impl builtins::Command for BindCommand {
 }
 
 impl BindCommand {
-    #[allow(clippy::too_many_lines)]
+    #[expect(clippy::too_many_lines)]
     async fn execute_impl(
         &self,
         bindings: &Arc<Mutex<dyn interfaces::KeyBindings>>,

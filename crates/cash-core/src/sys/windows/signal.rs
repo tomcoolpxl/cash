@@ -30,7 +30,7 @@
 //! §4 divergence #9 records the consequence: `kill -STOP` suspends threads rather than
 //! being a real `SIGSTOP`.
 
-#![allow(
+#![expect(
     clippy::should_implement_trait,
     clippy::unnecessary_wraps,
     clippy::missing_const_for_fn,

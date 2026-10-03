@@ -1244,7 +1244,7 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
         }
     }
 
-    #[allow(
+    #[expect(
         clippy::too_many_lines,
         reason = "one match arm per word-piece kind; splitting it would scatter the                   grammar across helpers without making any arm easier to read"
     )]

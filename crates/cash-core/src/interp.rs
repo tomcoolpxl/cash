@@ -239,7 +239,7 @@ impl ExecutionParameters {
             .iter_fds()
             .filter(|(fd, _)| !self.open_files.contains_fd(*fd));
 
-        #[allow(clippy::needless_collect)]
+        #[expect(clippy::needless_collect)]
         let all_fds: Vec<_> = our_fds
             .chain(shell_fds)
             .map(|(fd, file)| (fd, file.clone()))
@@ -1792,7 +1792,7 @@ impl Execute for ast::FunctionDefinition {
 }
 
 #[async_trait::async_trait]
-#[allow(clippy::too_many_lines)]
+#[expect(clippy::too_many_lines)]
 impl<SE: extensions::ShellExtensions> ExecuteInPipeline<SE> for ast::SimpleCommand {
     async fn execute_in_pipeline(
         &self,

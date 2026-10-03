@@ -117,7 +117,7 @@ pub(crate) struct Record {
     /// reallocated by a later growth — the operand stack holds such pointers
     /// across opcodes. Index 0 is `$0`; index `i` is `$i`. (The boxing is load
     /// bearing for pointer stability, so `clippy::vec_box` does not apply.)
-    #[allow(clippy::vec_box)]
+    #[expect(clippy::vec_box)]
     fields: RefCell<Vec<Box<AwkValueRef>>>,
     pub(crate) last_field: RefCell<usize>,
 }
@@ -141,7 +141,7 @@ impl Record {
     /// uninitialized value via [`Self::clear_fields_above`]; the boxed storage
     /// is retained (high-water mark), not dropped, so any stack-held raw field
     /// pointers remain valid. Returns the new last field index (NF).
-    #[allow(clippy::vec_box)] // boxed for pointer stability; see `fields`
+    #[expect(clippy::vec_box)] // boxed for pointer stability; see `fields`
     fn fill_fields(
         fields: &mut Vec<Box<AwkValueRef>>,
         record: AwkString,

@@ -123,7 +123,7 @@ enum Verbosity {
 
 /// The `-i`/`--info` flags.
 #[derive(Clone, Copy, Default, Debug)]
-#[allow(
+#[expect(
     clippy::struct_excessive_bools,
     reason = "one bool per documented flag"
 )]
@@ -181,7 +181,7 @@ enum Job {
 }
 
 #[derive(Debug)]
-#[allow(
+#[expect(
     clippy::struct_excessive_bools,
     reason = "one bool per documented option"
 )]
@@ -244,7 +244,7 @@ fn set_convmode(tool: &str, mode: &str, seven_bit: &mut bool) -> Result<(), Stri
     Ok(())
 }
 
-#[allow(clippy::too_many_lines, reason = "one arm per documented option")]
+#[expect(clippy::too_many_lines, reason = "one arm per documented option")]
 fn parse(direction: Direction, args: &[String]) -> Parsed {
     let tool = direction.tool();
     let mut options = Options {
@@ -759,7 +759,7 @@ fn help(direction: Direction) -> String {
     )
 }
 
-#[allow(
+#[expect(
     clippy::too_many_lines,
     reason = "one pass over the jobs, kept together"
 )]
@@ -939,7 +939,7 @@ fn finish(options: &Options, status: u8, refused_input: bool) -> ExecutionResult
 }
 
 #[cfg(test)]
-#[allow(
+#[expect(
     clippy::panic,
     reason = "a failed assumption in a test should abort it loudly"
 )]

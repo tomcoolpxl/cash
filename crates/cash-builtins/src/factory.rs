@@ -20,7 +20,7 @@ pub enum BuiltinSet {
 /// # Arguments
 ///
 /// * `set` - The set of built-ins to return.
-#[allow(clippy::too_many_lines)]
+#[expect(clippy::too_many_lines)]
 pub fn default_builtins<SE: cash_core::ShellExtensions>(
     set: BuiltinSet,
 ) -> HashMap<String, builtins::Registration<SE>> {

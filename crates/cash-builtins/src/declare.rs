@@ -370,7 +370,7 @@ impl DeclareCommand {
         Ok(Some(index))
     }
 
-    #[allow(clippy::too_many_lines)]
+    #[expect(clippy::too_many_lines)]
     fn process_declaration(
         &self,
         context: &mut cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
@@ -601,7 +601,7 @@ impl DeclareCommand {
     /// Splits a word of the form `name=value`, `name+=value` or `name[index]=value` into
     /// its name, index, append flag and value. Returns `None` for anything else.
     fn string_assignment(s: &str) -> Option<StringAssignment> {
-        #[allow(clippy::unwrap_used, reason = "regex is valid and should not fail")]
+        #[expect(clippy::unwrap_used, reason = "regex is valid and should not fail")]
         static ASSIGNMENT_RE: LazyLock<fancy_regex::Regex> = LazyLock::new(|| {
             fancy_regex::Regex::new(r"(?s)^([A-Za-z_][A-Za-z0-9_]*)(?:\[(.*?)\])?(\+?)=(.*)$")
                 .unwrap()

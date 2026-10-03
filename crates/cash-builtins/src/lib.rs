@@ -4,7 +4,7 @@
 // `-> impl Future<...> + Send` so that `cash_core::builtins::exec_builtin` can box and dispatch
 // every builtin uniformly. Most builtins in this crate do purely synchronous work, so their
 // `execute` bodies contain no `.await` -- that is the trait contract being honored, not a defect.
-#![allow(
+#![expect(
     clippy::unused_async_trait_impl,
     reason = "builtins implement a trait whose `execute` is async by contract"
 )]

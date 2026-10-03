@@ -661,7 +661,7 @@ fn process_address_0(
     Ok(())
 }
 
-#[allow(clippy::cognitive_complexity)]
+#[expect(clippy::cognitive_complexity)]
 /// Process a single input file
 fn process_file(
     commands: Option<Rc<RefCell<Command>>>,

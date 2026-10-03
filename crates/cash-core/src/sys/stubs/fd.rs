@@ -1,6 +1,6 @@
 //! File descriptor utilities.
 
-use crate::{ShellFd, error, openfiles};
+use crate::{ShellFd, openfiles};
 
 /// Stub implementation for platforms that do not support enumerating file descriptors.
 pub fn try_iter_open_fds() -> impl Iterator<Item = (ShellFd, openfiles::OpenFile)> {
