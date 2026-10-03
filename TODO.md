@@ -59,9 +59,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 12.0 Found while fixing phase 11
 
-- `( ( echo nested ) )` is a parse error ("arithmetic evaluation error: failed to parse
-  expression"): cash reads the two parentheses as `((`, though a space is between them.
-  Bash runs two nested subshells, and needs `((` written together for arithmetic.
 - `f=<(seq 1 5)` is a syntax error in cash; Bash expands the substitution and assigns
   its path. Found while fixing 11.4.
 

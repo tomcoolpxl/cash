@@ -110,7 +110,7 @@ peg::parser! {
             expected!("compound command")
 
         pub(crate) rule arithmetic_command() -> ast::ArithmeticCommand =
-            start:specific_operator("(") specific_operator("(") expr:arithmetic_expression() specific_operator(")") end:specific_operator(")") {
+            start:double_paren_open() expr:arithmetic_expression() end:double_paren_close() {
                 let loc = SourceSpan::within(
                     start.location(),
                     end.location()
@@ -132,8 +132,30 @@ peg::parser! {
 
         // TODO(arithmetic): evaluate arithmetic end; the semicolon is used in arithmetic for loops.
         rule arithmetic_end() -> () =
-            specific_operator(")") specific_operator(")") {} /
+            double_paren_close() {} /
             specific_operator(";") {}
+
+        // `((` and `))` written together, as Bash reads an arithmetic command: `( (` with a
+        // space is two subshells, and so is `((echo a) )`, whose `))` is not together. Any
+        // two parentheses were taken for one, and `( ( echo nested ) )` failed as
+        // arithmetic.
+        rule double_paren_open() -> &'input Token =
+            first:specific_operator("(") second:specific_operator("(") {?
+                if first.location().end.index == second.location().start.index {
+                    Ok(first)
+                } else {
+                    Err("((")
+                }
+            }
+
+        rule double_paren_close() -> &'input Token =
+            first:specific_operator(")") second:specific_operator(")") {?
+                if first.location().end.index == second.location().start.index {
+                    Ok(second)
+                } else {
+                    Err("))")
+                }
+            }
 
         rule subshell() -> ast::SubshellCommand =
             start:specific_operator("(") list:compound_list() end:specific_operator(")") {
