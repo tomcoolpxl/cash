@@ -11,15 +11,9 @@ ParseResult(
           first: Pipeline(
             seq: [
               Compound(ArithmeticForClause(ArithmeticForClauseCommand(
-                initializer: Some(UnexpandedArithmeticExpr(
-                  value: "",
-                )),
-                condition: Some(UnexpandedArithmeticExpr(
-                  value: "",
-                )),
-                updater: Some(UnexpandedArithmeticExpr(
-                  value: "",
-                )),
+                initializer: None,
+                condition: None,
+                updater: None,
                 body: DoGroupCommand(
                   list: CompoundList([
                     CompoundListItem(AndOrList(

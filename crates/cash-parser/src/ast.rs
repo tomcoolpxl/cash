@@ -725,25 +725,18 @@ impl SourceLocation for ArithmeticForClauseCommand {
 
 impl Display for ArithmeticForClauseCommand {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "for ((")?;
-
-        if let Some(initializer) = &self.initializer {
-            write!(f, "{initializer}")?;
-        }
-
-        write!(f, "; ")?;
-
-        if let Some(condition) = &self.condition {
-            write!(f, "{condition}")?;
-        }
-
-        write!(f, "; ")?;
-
-        if let Some(updater) = &self.updater {
-            write!(f, "{updater}")?;
-        }
-
-        writeln!(f, "))")?;
+        // An expression left out is printed as `1`, as Bash prints it.
+        let part = |expr: &Option<UnexpandedArithmeticExpr>| {
+            expr.as_ref()
+                .map_or_else(|| String::from("1"), ToString::to_string)
+        };
+        writeln!(
+            f,
+            "for (({}; {}; {}))",
+            part(&self.initializer),
+            part(&self.condition),
+            part(&self.updater)
+        )?;
 
         write!(f, "{}", self.body)
     }

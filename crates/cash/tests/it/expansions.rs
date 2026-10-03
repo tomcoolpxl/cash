@@ -141,6 +141,37 @@ fn an_arithmetic_command_is_traced_as_its_expanded_text() {
 }
 
 #[test]
+fn an_arithmetic_command_keeps_its_blanks() {
+    // The parser joined its tokens by single spaces: `((  y  ))` was traced as `(( y ))`
+    // and printed by `declare -f` as `((y))`. Bash keeps the text as written; in `for ((`
+    // without its leading blanks, and a part left out is `1`.
+    let out = run("e=; set -x; (( 1 + $e 2 )); for ((  i=0  ;;  )); do break; done");
+    assert_eq!(
+        out.stderr,
+        "+ ((  1 +  2  ))\n+ (( i=0   ))\n+ (( 1 ))\n+ break"
+    );
+    check(&[(
+        "f() { ((  y  )); for (( ; i<1 ; )); do :; done; }; declare -f f",
+        "f () \n{ \n    ((  y  ));\n    for ((1; i<1 ; 1))\n    do\n        :;\n    done\n}",
+    )]);
+}
+
+#[test]
+fn for_with_no_condition_loops() {
+    // `;;` is one token, so `for ((;;))`, the endless loop, was a syntax error.
+    check(&[
+        (
+            "n=0; for ((;;)); do ((++n == 3)) && break; done; echo $n",
+            "3",
+        ),
+        (
+            "for ((i=0;;i++)); do ((i == 2)) && break; done; echo $i",
+            "2",
+        ),
+    ]);
+}
+
+#[test]
 fn machtype_names_the_machine() {
     // It was "unknown"; `$HOSTTYPE-pc-$OSTYPE`, as Bash builds it.
     check(&[(

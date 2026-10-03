@@ -1705,17 +1705,21 @@ impl Execute for ast::ArithmeticForClauseCommand {
         shell: &mut Shell<impl extensions::ShellExtensions>,
         params: &ExecutionParameters,
     ) -> Result<ExecutionResult, error::Error> {
+        // An expression left out is `1`, as in Bash, which also traces it as `(( 1 ))`; a
+        // missing condition is then always true.
+        let one = ast::UnexpandedArithmeticExpr {
+            value: String::from("1"),
+        };
+        let initializer = self.initializer.as_ref().unwrap_or(&one);
+        let condition = self.condition.as_ref().unwrap_or(&one);
+        let updater = self.updater.as_ref().unwrap_or(&one);
+
         let mut result = ExecutionResult::success();
-        if let Some(initializer) = &self.initializer {
-            initializer.eval(shell, params, true).await?;
-        }
+        initializer.eval(shell, params, true).await?;
 
         loop {
-            if let Some(condition) = &self.condition {
-                // An empty condition (e.g., `for (( ; ; ))`) means "always true".
-                if !condition.value.is_empty() && condition.eval(shell, params, true).await? == 0 {
-                    break;
-                }
+            if condition.eval(shell, params, true).await? == 0 {
+                break;
             }
 
             result = self.body.list.execute(shell, params).await?;
@@ -1731,9 +1735,7 @@ impl Execute for ast::ArithmeticForClauseCommand {
                 break;
             }
 
-            if let Some(updater) = &self.updater {
-                updater.eval(shell, params, true).await?;
-            }
+            updater.eval(shell, params, true).await?;
         }
 
         shell.set_last_exit_status(result.exit_code.into());

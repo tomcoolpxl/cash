@@ -60,10 +60,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 12.3 Smaller expansion differences
 
-`set -x` prints `(( 1 + 2 ))` for `(( 1 + 2 ))`, Bash `((  1 + 2  ))`: the parser keeps
-an arithmetic command's tokens joined by single spaces, not its text, so the blanks
-around and inside it are lost. `((x+$x))` and `for ((` already match. Found in 12.3.
-
 `read RANDOM`, `printf -v SECONDS`, `declare RANDOM=1` and every other assignment to a
 dynamic variable but `NAME=value` are dropped (`variables.rs`, "for now we just drop
 them"); Bash seeds RANDOM and resets SECONDS however they are assigned. The setter of a

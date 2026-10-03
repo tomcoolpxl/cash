@@ -110,12 +110,18 @@ peg::parser! {
             expected!("compound command")
 
         pub(crate) rule arithmetic_command() -> ast::ArithmeticCommand =
-            start:double_paren_open() expr:arithmetic_expression() end:double_paren_close() {
+            // The text as written, blanks and all, as Bash keeps it for `set -x` and
+            // `declare -f`; the tokens joined by single spaces lost the blanks, so `((  y  ))`
+            // was traced as `(( y ))` and printed as `((y))`.
+            start:double_paren_open() lead:#{|input, pos| input.gap_before(pos)} from:position!() arithmetic_expression_piece()*
+            text:#{|input, pos| input.exact_text(pos, from)} trail:#{|input, pos| input.gap_before(pos)} end:double_paren_close() {
                 let loc = SourceSpan::within(
                     start.location(),
                     end.location()
                 );
-                ast::ArithmeticCommand { expr, loc }
+                let trail = if text.is_empty() { 0 } else { trail };
+                let value = std::format!("{}{text}{}", " ".repeat(lead), " ".repeat(trail));
+                ast::ArithmeticCommand { expr: ast::UnexpandedArithmeticExpr { value }, loc }
             }
 
         pub(crate) rule arithmetic_expression() -> ast::UnexpandedArithmeticExpr =
@@ -133,7 +139,9 @@ peg::parser! {
         // TODO(arithmetic): evaluate arithmetic end; the semicolon is used in arithmetic for loops.
         rule arithmetic_end() -> () =
             double_paren_close() {} /
-            specific_operator(";") {}
+            specific_operator(";") {} /
+            // Two separators of `for ((` with nothing between are one token.
+            specific_operator(";;") {}
 
         // `((` and `))` written together, as Bash reads an arithmetic command: `( (` with a
         // space is two subshells, and so is `((echo a) )`, whose `))` is not together. Any
@@ -217,15 +225,37 @@ peg::parser! {
         rule arithmetic_for_clause() -> ast::ArithmeticForClauseCommand =
             s:specific_word("for")
             specific_operator("(") specific_operator("(")
-                initializer:arithmetic_expression()? specific_operator(";")
-                condition:arithmetic_expression()? specific_operator(";")
-                updater:arithmetic_expression()?
+                head:arithmetic_for_head()
             specific_operator(")") specific_operator(")")
             body:arithmetic_for_body() {
+                let (initializer, condition, updater) = head;
                 let start = s.location();
                 let end = &body.loc;
                 let loc = SourceSpan::within(start, end);
                 ast::ArithmeticForClauseCommand { initializer, condition, updater, body, loc }
+            }
+
+        // The three expressions of `for ((`. With no condition the two `;` are one `;;`
+        // token, so `for ((;;))`, the endless loop, was a syntax error.
+        rule arithmetic_for_head() -> (
+            Option<ast::UnexpandedArithmeticExpr>,
+            Option<ast::UnexpandedArithmeticExpr>,
+            Option<ast::UnexpandedArithmeticExpr>,
+        ) =
+            i:arithmetic_for_part()? specific_operator(";;") u:arithmetic_for_part()? {
+                (i, None, u)
+            } /
+            i:arithmetic_for_part()? specific_operator(";") c:arithmetic_for_part()?
+            specific_operator(";") u:arithmetic_for_part()? {
+                (i, c, u)
+            }
+
+        // One of the three expressions of `for ((`, as Bash keeps it: as written from its
+        // first token, with the blanks after it. They were joined by single spaces.
+        rule arithmetic_for_part() -> ast::UnexpandedArithmeticExpr =
+            from:position!() arithmetic_expression_piece()+
+            text:#{|input, pos| input.exact_text(pos, from)} trail:#{|input, pos| input.gap_before(pos)} {
+                ast::UnexpandedArithmeticExpr { value: std::format!("{text}{}", " ".repeat(trail)) }
             }
 
         // Bash also accepts a brace group as the body of `for` and `select`, even in POSIX
@@ -807,6 +837,43 @@ fn add_pipe_extension_redirection(c: &mut ast::Command) {
 #[inline]
 fn locations_are_contiguous(loc_left: &crate::SourceSpan, loc_right: &crate::SourceSpan) -> bool {
     loc_left.end.index == loc_right.start.index
+}
+
+// Called by the grammar as `##gap_before()` and `##exact_text(from)`, to keep the text of
+// an arithmetic command as it was written.
+impl Tokens<'_> {
+    /// How many characters lie between the token at `pos` and the one before it; it
+    /// consumes nothing.
+    fn gap_before(&self, pos: usize) -> peg::RuleResult<usize> {
+        let gap = pos
+            .checked_sub(1)
+            .and_then(|before| self.tokens.get(before))
+            .zip(self.tokens.get(pos))
+            .map_or(0, |(before, here)| {
+                here.location()
+                    .start
+                    .index
+                    .saturating_sub(before.location().end.index)
+            });
+        peg::RuleResult::Matched(pos, gap)
+    }
+
+    /// The tokens from `from` up to `pos`, each gap between them as that many spaces,
+    /// where [`peg::ParseSlice`] puts one; it consumes nothing.
+    fn exact_text(&self, pos: usize, from: usize) -> peg::RuleResult<String> {
+        let mut text = String::new();
+        for at in from..pos {
+            if at > from
+                && let peg::RuleResult::Matched(_, gap) = self.gap_before(at)
+            {
+                text.extend(std::iter::repeat_n(' ', gap));
+            }
+            if let Some(token) = self.tokens.get(at) {
+                text.push_str(token.to_str());
+            }
+        }
+        peg::RuleResult::Matched(pos, text)
+    }
 }
 
 impl peg::Parse for Tokens<'_> {
