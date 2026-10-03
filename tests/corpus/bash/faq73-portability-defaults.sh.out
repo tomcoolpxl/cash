@@ -1,0 +1,4 @@
+unset: [word] [] [word] [] [assigned]
+empty: [] [word] [word] [] []
+set: [val] [word] [val] [word] [val]
+status=1

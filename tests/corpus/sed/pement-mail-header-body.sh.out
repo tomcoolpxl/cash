@@ -1,0 +1,13 @@
+From: Jo <jo@x.org>
+Subject: Hello there
+Reply-To: Rep (Mr R) <rep@y.org>
+
+--
+body line 1
+body line 2
+--
+Hello there
+--
+Reply-To: Rep (Mr R) <rep@y.org>
+--
+rep@y.org

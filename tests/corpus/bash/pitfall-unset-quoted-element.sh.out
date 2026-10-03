@@ -1,0 +1,4 @@
+declare -a a=([0]="x" [1]="y" [2]="z")
+a0=unset
+declare -a a=([1]="y" [2]="z")
+a0=keep

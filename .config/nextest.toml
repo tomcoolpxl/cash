@@ -90,6 +90,13 @@ success-output = "final"
 filter = 'binary(it) and test(=fuser_lsof::fuser_marks_an_executable_and_a_loaded_module)'
 slow-timeout = { period = "30s", terminate-after = 3 }
 
+# Every `tests/corpus` case, eight at a time (WORKERS in corpus_goldens.rs), so it takes
+# eight slots and three periods of its own.
+[[profile.default.overrides]]
+filter = 'binary(it) and test(=corpus_goldens::every_corpus_case_gives_the_oracles_output)'
+threads-required = 8
+slow-timeout = { period = "30s", terminate-after = 3 }
+
 # math.sed computing pi: 9 s with every core busy.
 [[profile.default.overrides]]
 filter = 'package(cash-sed) and test(=test_sed::pi)'

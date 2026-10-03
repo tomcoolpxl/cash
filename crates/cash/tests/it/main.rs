@@ -53,6 +53,8 @@ mod coprocesses;
 mod crash_safety;
 // M2: real scripts, written the way they are written on Linux.
 mod corpus;
+// BIN-05: every `tests/corpus` case against the oracle's frozen output.
+mod corpus_goldens;
 mod crlf_scripts;
 // D13: what the keyboard's Ctrl-C does to a script, outside `read`.
 mod ctrl_c;

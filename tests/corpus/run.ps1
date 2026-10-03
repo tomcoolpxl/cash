@@ -9,6 +9,8 @@
   pwsh tests/corpus/run.ps1
   pwsh tests/corpus/run.ps1 -Filter 'sed/pement-*'
   pwsh tests/corpus/run.ps1 -CheckArgPassing   # also runs oracle bash on the file itself, to prove script passing is lossless
+  pwsh tests/corpus/run.ps1 -Freeze            # also writes the oracle's stdout and status beside each case
+                                               # (case.sh.out, case.sh.status), which the `it` test corpus_goldens checks cash against
 #>
 param(
     [string]$Cash = (Join-Path $PSScriptRoot '../../target/debug/cash.exe'),
@@ -17,7 +19,8 @@ param(
     [int]$TimeoutSec = 10,
     [int]$Throttle = 8,
     [string]$Json = (Join-Path $PSScriptRoot 'results.json'),
-    [switch]$CheckArgPassing
+    [switch]$CheckArgPassing,
+    [switch]$Freeze
 )
 $ErrorActionPreference = 'Stop'
 $Cash = (Resolve-Path $Cash).Path
@@ -140,6 +143,16 @@ if ($CheckArgPassing) {
     $bad = @($results | Where-Object { $_.argPassingOk -eq $false })
     Write-Host "arg-passing check: $($bad.Count) case(s) where '<shell> -c <text>' differs from '<shell> <file>'"
     $bad | ForEach-Object { Write-Host "  $($_.name)" }
+}
+
+if ($Freeze) {
+    $utf8 = [System.Text.UTF8Encoding]::new($false)
+    foreach ($r in $results) {
+        $file = Join-Path $PSScriptRoot $r.name
+        [IO.File]::WriteAllText("$file.out", $r.bash.stdout, $utf8)
+        [IO.File]::WriteAllText("$file.status", "$($r.bash.status)`n", $utf8)
+    }
+    Write-Host "froze the oracle's output for $(@($results).Count) case(s)"
 }
 
 $report = [ordered]@{

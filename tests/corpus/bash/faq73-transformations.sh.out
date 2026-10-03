@@ -1,0 +1,11 @@
+Hello, World!
+HELLO, WORLD!
+hello, World!
+hello, world!
+'nice "day" isn'\''t it?'
+hello	world
+string='hello'
+declare -a a=([0]="an" [1]="array")
+declare -ir i='3'
+
+a ir

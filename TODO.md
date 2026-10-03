@@ -61,9 +61,9 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 14.1 Tests
 
-Freeze `tests/corpus` and the awk, sed and git-prompt differential outputs as goldens in
-`it` (D43 rests on `cases/brush`, which has no language cases); move the remaining `it`
-modules to `it/common.rs`. BIN-05, BIN-20.
+Freeze the awk, sed and git-prompt differential outputs as goldens in `it` (D43 rests on
+`cases/brush`, which has no language cases; `tests/corpus` is frozen, `it/corpus_goldens.rs`);
+move the remaining `it` modules to `it/common.rs`. BIN-05, BIN-20.
 
 ### 14.2 Records
 
@@ -115,6 +115,12 @@ ARCH-09, ARCH-10.
   `claude/intelligent-meninsky-05ffe4`, at the 1.3.7 release commit, clean and merged
   into main) is still registered; remove it with its branch once no session uses it.
   Seen 2026-10-03.
+- cash's sed lacks two GNU sed extensions the corpus uses: `\b`, `\w` and `\s` in a
+  regex (`echo 'a b' | sed -E 's/\bb\b/X/'` prints `a b`, GNU sed `a X`;
+  `sed/gnu-doubled-words.sh`), and a label ended by a blank before `{` or `;`
+  (`:x /\\$/ { N; s/\\\n//; bx }` fails with "extra characters at the end of the :
+  command", rc 1; `sed/gnu-join-backslash.sh`). Both are in the known list of
+  `it/corpus_goldens.rs`; take them off it when fixed. Seen 2026-10-03 freezing the corpus.
 - The Low findings not listed in phases 8 to 14 are in the report, §5.
 
 ---

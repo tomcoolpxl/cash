@@ -1,0 +1,59 @@
+Africa:Sudan:19
+Africa:Algeria:18
+Asia:China:866
+Asia:India:637
+Asia:Russia:262
+Australia:Australia:14
+North America:USA:219
+North America:Canada:24
+South America:Brazil:116
+South America:Argentina:26
+--
+
+Africa:
+	Sudan          19
+	Algeria        18
+
+Asia:
+	China         866
+	India         637
+	Russia        262
+
+Australia:
+	Australia      14
+
+North America:
+	USA           219
+	Canada         24
+
+South America:
+	Brazil        116
+	Argentina      26
+--
+
+Africa:
+	Sudan          19
+	Algeria        18
+	total     	     37
+
+Asia:
+	China         866
+	India         637
+	Russia        262
+	total     	   1765
+
+Australia:
+	Australia      14
+	total     	     14
+
+North America:
+	USA           219
+	Canada         24
+	total     	    243
+
+South America:
+	Brazil        116
+	Argentina      26
+	total     	    142
+
+World Total		   2201

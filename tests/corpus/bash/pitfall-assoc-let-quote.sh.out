@@ -1,0 +1,2 @@
+declare -A arr=(["']"]="1" )
+declare -A hash=([k1]="3" )

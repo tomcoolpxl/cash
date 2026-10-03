@@ -1,0 +1,8 @@
+declare -a fields=([0]="a" [1]="b")
+declare -a fields=([0]="a" [1]="b" [2]="c")
+declare -a fields=([0]="a" [1]="b" [2]="")
+declare -- f1="foo"
+declare -- rest="bar"
+declare -- rest="bar:f"
+declare -- rest="bar::"
+declare -- rest="bar:"

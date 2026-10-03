@@ -1,0 +1,17 @@
+regex line two three four five six zed
+--
+a b c d abc123 x afoo
+1 2 3 4 other 6 7
+--
+a b c d abc123 x afoo
+--
+regex line two three four five six zed
+1 2 3 4 other 6 7
+--
+regex line two three four five six zed
+1 2 3 4 other 6 7
+--
+a b c d abc123 x afoo
+--
+regex line two three four five six zed
+1 2 3 4 other 6 7
