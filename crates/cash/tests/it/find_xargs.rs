@@ -434,6 +434,48 @@ fn exec_plus_wants_braces_alone_and_splits_a_long_list() {
     assert_eq!(counts.iter().sum::<usize>(), 2000, "{}", out.stderr);
 }
 
+/// A junction at `sub/deep/back` to the sandbox's `sub`: a loop for whoever follows it.
+fn junction_loop(sandbox: &Sandbox) {
+    let link = sandbox.root.join("sub").join("deep").join("back");
+    let target = sandbox.root.join("sub");
+    let status = Command::new("cmd")
+        .args(["/d", "/c", "mklink", "/J"])
+        .arg(&link)
+        .arg(&target)
+        .stdout(std::process::Stdio::null())
+        .status()
+        .expect("run mklink");
+    assert!(status.success(), "mklink /J failed");
+}
+
+#[test]
+fn following_links_a_loop_is_said_and_left() {
+    // `find -L` went round a junction to a folder above without end (BI-13).
+    let sandbox = Sandbox::new("loop");
+    junction_loop(&sandbox);
+    let out = sandbox.run(r#"find -L sub; echo "rc $?""#);
+    assert_eq!(
+        out.stdout, "sub\nsub/b.txt\nsub/deep\nsub/deep/c.txt\nrc 1",
+        "{}",
+        out.stderr
+    );
+    assert_eq!(
+        out.stderr,
+        "find: File system loop detected; 'sub/deep/back' is part of the same file system loop as 'sub'."
+    );
+}
+
+#[test]
+fn chmod_recursive_neither_enters_nor_changes_a_link() {
+    // `chmod -R` went round the same loop until Windows refused the path (BI-13).
+    let sandbox = Sandbox::new("chmod-loop");
+    junction_loop(&sandbox);
+    let out = sandbox.run(
+        r#"chmod -R -w sub; echo "rc $?"; [ -w sub/deep/c.txt ] || echo ro; chmod -R +w sub; [ -w sub/deep/c.txt ] && echo rw"#,
+    );
+    assert_eq!(out.stdout, "rc 0\nro\nrw", "{}", out.stderr);
+}
+
 #[test]
 fn depth_lists_a_directory_after_its_contents() {
     // `-depth` was an unknown predicate.

@@ -142,6 +142,35 @@ struct Visit<'a> {
     failed: bool,
 }
 
+/// Adds a folder to the ones above what is under it; if it is one of them already, how
+/// that one was printed, for the loop it closes.
+fn enter_folder(
+    actual: &Path,
+    path: &Path,
+    ancestors: &mut Vec<((u32, u64), String)>,
+) -> Option<String> {
+    let info = cash_win32::fs::file_info(actual).ok()?;
+    let identity = (info.volume, info.index);
+    if let Some((_, first)) = ancestors.iter().find(|(seen, _)| *seen == identity) {
+        return Some(first.clone());
+    }
+    ancestors.push((identity, render(path)));
+    None
+}
+
+/// An entry waiting on the walk's stack.
+struct Entry {
+    /// The path to print, as the caller spelled it.
+    path: PathBuf,
+    /// Where it actually is.
+    actual: PathBuf,
+    depth: usize,
+    /// A directory whose contents have been walked, in a contents-first walk.
+    contents_done: bool,
+    /// Under `-L`, the folders above it: their identity and how they were printed.
+    ancestors: Vec<((u32, u64), String)>,
+}
+
 /// The options that apply to the whole walk rather than to one entry.
 struct Walk {
     starts: Vec<String>,
@@ -183,9 +212,22 @@ impl builtins::Command for FindCommand {
             // An entry is visited when it comes off the stack, unless the walk is
             // contents-first and it is a directory: it then goes back on, done, under its
             // contents, and is visited when it comes off again.
-            let mut stack = vec![(shown, actual, 0usize, false)];
+            let mut stack = vec![Entry {
+                path: shown,
+                actual,
+                depth: 0,
+                contents_done: false,
+                ancestors: Vec::new(),
+            }];
 
-            while let Some((path, actual, depth, contents_done)) = stack.pop() {
+            while let Some(entry) = stack.pop() {
+                let Entry {
+                    path,
+                    actual,
+                    depth,
+                    contents_done,
+                    mut ancestors,
+                } = entry;
                 let metadata = if walk.follow {
                     std::fs::metadata(&actual).ok()
                 } else {
@@ -194,9 +236,32 @@ impl builtins::Command for FindCommand {
                 let is_dir = metadata.as_ref().is_some_and(std::fs::Metadata::is_dir);
                 let descends = is_dir && depth < walk.max_depth;
 
+                // Following links, a folder can be its own ancestor; it is said and left,
+                // as GNU `find` does. The walk went round it without end (BI-13).
+                if walk.follow
+                    && is_dir
+                    && !contents_done
+                    && let Some(first) = enter_folder(&actual, &path, &mut ancestors)
+                {
+                    writeln!(
+                        context.stderr(),
+                        "{}: File system loop detected; '{}' is part of the same file system loop as '{first}'.",
+                        context.command_name,
+                        render(path.as_path())
+                    )?;
+                    failed = true;
+                    continue;
+                }
+
                 if walk.contents_first && descends && !contents_done {
-                    stack.push((path.clone(), actual.clone(), depth, true));
-                    if !push_contents(&context, &mut stack, &path, &actual, depth)? {
+                    stack.push(Entry {
+                        path: path.clone(),
+                        actual: actual.clone(),
+                        depth,
+                        contents_done: true,
+                        ancestors: ancestors.clone(),
+                    });
+                    if !push_contents(&context, &mut stack, &path, &actual, depth, &ancestors)? {
                         failed = true;
                     }
                     continue;
@@ -223,7 +288,7 @@ impl builtins::Command for FindCommand {
                 if walk.contents_first || !descends || visit.prune {
                     continue;
                 }
-                if !push_contents(&context, &mut stack, &path, &actual, depth)? {
+                if !push_contents(&context, &mut stack, &path, &actual, depth, &ancestors)? {
                     failed = true;
                 }
             }
@@ -274,10 +339,11 @@ fn command_line_chunks<'a>(argv: &[String], paths: &'a [String]) -> Vec<&'a [Str
 /// read, with the reason said if not.
 fn push_contents<SE: cash_core::ShellExtensions>(
     context: &cash_core::ExecutionContext<'_, SE>,
-    stack: &mut Vec<(PathBuf, PathBuf, usize, bool)>,
+    stack: &mut Vec<Entry>,
     path: &Path,
     actual: &Path,
     depth: usize,
+    ancestors: &[((u32, u64), String)],
 ) -> Result<bool, cash_core::Error> {
     match std::fs::read_dir(actual) {
         Ok(entries) => {
@@ -289,7 +355,13 @@ fn push_contents<SE: cash_core::ShellExtensions>(
                 .collect();
             names.sort();
             for name in names.into_iter().rev() {
-                stack.push((path.join(&name), actual.join(&name), depth + 1, false));
+                stack.push(Entry {
+                    path: path.join(&name),
+                    actual: actual.join(&name),
+                    depth: depth + 1,
+                    contents_done: false,
+                    ancestors: ancestors.to_vec(),
+                });
             }
             Ok(true)
         }

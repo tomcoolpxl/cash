@@ -60,7 +60,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 13.2 Builtins
 
-- Loops under `find -L`, and `chmod -R` through junctions. BI-13.
 - Two `kill -STOP` need two `-CONT` (W32-05); `kill -9 PID` kills the tree, against D22
   (W32-06); `#!/usr/bin/env -S` (W32-08).
 - `elevate` asks UAC through `powershell.exe` started with the process's folder and

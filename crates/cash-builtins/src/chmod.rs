@@ -250,14 +250,22 @@ fn describe(path: &Path) -> &'static str {
     }
 }
 
-/// Gather a directory's contents for `-R`.
+/// Gather a directory's contents for `-R`. A symbolic link or junction met on the way is
+/// neither entered nor changed, as GNU `chmod -R` leaves them: one to a folder above went
+/// round until Windows refused the path (BI-13).
 fn collect(root: &Path, into: &mut Vec<std::path::PathBuf>) {
     let Ok(entries) = std::fs::read_dir(root) else {
         return;
     };
     for entry in entries.flatten() {
+        let Ok(kind) = entry.file_type() else {
+            continue;
+        };
+        if kind.is_symlink() {
+            continue;
+        }
         let path = entry.path();
-        if path.is_dir() {
+        if kind.is_dir() {
             collect(&path, into);
         }
         into.push(path);
