@@ -21,7 +21,7 @@
 use std::path::PathBuf;
 use std::process::Command;
 
-use crate::common::cash_command;
+use crate::common::{cash_command, git_for_windows};
 
 /// Every script in the corpus. Tests that apply to all of them iterate this, so adding a
 /// script gets the cross-cutting coverage — CRLF endings, for one — without being asked.
@@ -33,9 +33,10 @@ const CORPUS_SCRIPTS: &[&str] = &["terraform-wrapper.sh", "ci-glue.sh"];
 /// make it report false failures. The corpus scripts are deliberately written to avoid
 /// every one of them, so comparing against bash here is a genuine cross-check rather
 /// than a restatement of cash's own behaviour.
-fn reference_bash() -> Option<PathBuf> {
-    let path = PathBuf::from(r"C:\Program Files\Git\bin\bash.exe");
-    path.is_file().then_some(path)
+/// Git Bash, the oracle: Git for Windows is a prerequisite (spec D35), so a machine
+/// without it fails these tests rather than passing them unrun (BIN-20).
+fn reference_bash() -> PathBuf {
+    PathBuf::from(format!("{}/bin/bash.exe", git_for_windows()))
 }
 
 fn corpus_dir() -> PathBuf {
@@ -107,11 +108,7 @@ fn the_terraform_wrapper_runs_unmodified() {
 
 #[test]
 fn the_terraform_wrapper_matches_real_bash() {
-    // Skipped where no reference bash exists.
-    let Some(bash) = reference_bash() else {
-        eprintln!("skipped: no reference bash available");
-        return;
-    };
+    let bash = reference_bash();
 
     let script = corpus_dir().join("terraform-wrapper.sh");
     let reference = Command::new(&bash)
@@ -161,10 +158,7 @@ fn the_ci_glue_script_runs_unmodified() {
 
 #[test]
 fn the_ci_glue_script_matches_real_bash() {
-    let Some(bash) = reference_bash() else {
-        eprintln!("skipped: no reference bash available");
-        return;
-    };
+    let bash = reference_bash();
 
     let script = corpus_dir().join("ci-glue.sh");
     let reference = Command::new(&bash)

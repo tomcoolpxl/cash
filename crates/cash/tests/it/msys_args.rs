@@ -13,14 +13,12 @@
     reason = "an integration test is outside a test module by construction"
 )]
 
-use std::path::{Path, PathBuf};
+use crate::common::{cash_command, git_for_windows};
 
-use crate::common::cash_command;
-
-/// Git's MSYS2 `printf`, or `None` where Git for Windows is not installed.
-fn msys_printf() -> Option<PathBuf> {
-    let path = Path::new(r"C:\Program Files\Git\usr\bin\printf.exe");
-    path.is_file().then(|| path.to_path_buf())
+/// Git for Windows' `usr/bin`, its MSYS2 tools, with forward slashes. The scripts below
+/// get it as `$U`.
+fn usr_bin() -> String {
+    format!("{}/usr/bin", git_for_windows())
 }
 
 /// `value` as one single-quoted shell word.
@@ -60,10 +58,7 @@ const HOSTILE: &[&str] = &[
 
 #[test]
 fn hostile_arguments_survive_the_trip_to_an_msys_program() {
-    let Some(printf) = msys_printf() else {
-        eprintln!("skipping: Git for Windows' printf.exe is not installed");
-        return;
-    };
+    let printf = format!("{}/printf.exe", usr_bin());
 
     // Files for a glob to find and a response file for `@file` to read, so that either
     // mistake changes the output rather than passing by luck.
@@ -75,7 +70,6 @@ fn hostile_arguments_survive_the_trip_to_an_msys_program() {
     std::fs::write(dir.join("file"), "INJECTED").unwrap();
     std::fs::write(dir.join("a"), "").unwrap();
 
-    let printf = printf.to_string_lossy().replace('\\', "/");
     let args: Vec<String> = HOSTILE.iter().map(|arg| sh_quote(arg)).collect();
     let script = format!("{} '<%s>' {}", sh_quote(&printf), args.join(" "));
     let out = cash_command()
@@ -96,26 +90,20 @@ fn hostile_arguments_survive_the_trip_to_an_msys_program() {
 }
 
 /// What Git's `echo.exe` prints for `ARG` when cash reaches it by `how`, a script
-/// fragment that runs `$E "$A"` some way; `None` where Git for Windows is absent.
-fn echoed_via(how: &str) -> Option<String> {
-    let echo = Path::new(r"C:\Program Files\Git\usr\bin\echo.exe");
-    if !echo.is_file() {
-        eprintln!("skipping: Git for Windows' echo.exe is not installed");
-        return None;
-    }
+/// fragment that runs `$E "$A"` some way, with Git's `usr/bin` as `$U` and first on `PATH`.
+fn echoed_via(how: &str) -> String {
     let script = format!(
-        r#"E='C:/Program Files/Git/usr/bin/echo.exe'; A='"x\\"|[[:space:]]+'
-        PATH="C:/Program Files/Git/usr/bin:$PATH"
+        r#"E="$U/echo.exe"; A='"x\\"|[[:space:]]+'
+        PATH="$U:$PATH"
         {how}"#
     );
     let out = cash_command()
+        .env("U", usr_bin())
         .args(["-c", &script])
         .output()
         .expect("run cash");
-    Some(
-        String::from_utf8_lossy(&out.stdout).trim_end().to_owned()
-            + &String::from_utf8_lossy(&out.stderr),
-    )
+    String::from_utf8_lossy(&out.stdout).trim_end().to_owned()
+        + &String::from_utf8_lossy(&out.stderr)
 }
 
 // No space in it: a space made Rust wrap the argument in quotes, which Cygwin happens to
@@ -126,23 +114,20 @@ const SENT: &str = r#""x\\"|[[:space:]]+"#;
 fn exec_by_bare_name_encodes_for_msys() {
     // `exec grep -E "$@"` is Git's own `egrep`; the name is resolved late, by
     // `Command::new`, which is where the encoding used to be decided without looking.
-    if let Some(out) = echoed_via(r#"exec echo.exe "$A""#) {
-        assert_eq!(out, SENT);
-    }
+    let out = echoed_via(r#"exec echo.exe "$A""#);
+    assert_eq!(out, SENT);
 }
 
 #[test]
 fn xargs_encodes_for_msys() {
-    if let Some(out) = echoed_via(r#"printf '%s' "$A" | xargs -0 "$E""#) {
-        assert_eq!(out, SENT);
-    }
+    let out = echoed_via(r#"printf '%s' "$A" | xargs -0 "$E""#);
+    assert_eq!(out, SENT);
 }
 
 #[test]
 fn find_exec_encodes_for_msys() {
-    if let Some(out) = echoed_via(r#"find . -maxdepth 0 -exec "$E" "$A" \;"#) {
-        assert_eq!(out, SENT);
-    }
+    let out = echoed_via(r#"find . -maxdepth 0 -exec "$E" "$A" \;"#);
+    assert_eq!(out, SENT);
 }
 
 // The bundled `env` and `timeout` (uutils) spawn their command with `Command` themselves;
@@ -150,50 +135,40 @@ fn find_exec_encodes_for_msys() {
 
 #[test]
 fn env_encodes_for_msys() {
-    if let Some(out) = echoed_via(r#"env "$E" "$A""#) {
-        assert_eq!(out, SENT);
-    }
+    let out = echoed_via(r#"env "$E" "$A""#);
+    assert_eq!(out, SENT);
 }
 
 #[test]
 fn env_with_options_and_assignments_encodes_for_msys() {
-    if let Some(out) = echoed_via(r#"env -u NOPE -C / FOO=1 echo.exe "$A""#) {
-        assert_eq!(out, SENT);
-    }
+    let out = echoed_via(r#"env -u NOPE -C / FOO=1 echo.exe "$A""#);
+    assert_eq!(out, SENT);
 }
 
 #[test]
 fn env_split_string_encodes_for_msys() {
-    if let Some(out) = echoed_via(r#"env -S 'FOO=1 echo.exe' "$A""#) {
-        assert_eq!(out, SENT);
-    }
+    let out = echoed_via(r#"env -S 'FOO=1 echo.exe' "$A""#);
+    assert_eq!(out, SENT);
 }
 
 #[test]
 fn env_passes_its_assignments_through_the_relay() {
-    let Some(out) = echoed_via(
-        r#"env CASH_MSYS_PROBE="$A" 'C:/Program Files/Git/usr/bin/printenv.exe' CASH_MSYS_PROBE"#,
-    ) else {
-        return;
-    };
+    let out = echoed_via(r#"env CASH_MSYS_PROBE="$A" "$U/printenv.exe" CASH_MSYS_PROBE"#);
     assert_eq!(out, SENT);
 }
 
 #[test]
 fn env_reports_the_programs_exit_status() {
-    if let Some(out) = echoed_via(r#"env 'C:/Program Files/Git/usr/bin/false.exe'; echo "$?""#) {
-        assert_eq!(out, "1");
-    }
+    let out = echoed_via(r#"env "$U/false.exe"; echo "$?""#);
+    assert_eq!(out, "1");
 }
 
 #[test]
 fn timeout_encodes_for_msys() {
-    if let Some(out) = echoed_via(r#"timeout -s KILL 30 "$E" "$A""#) {
-        assert_eq!(out, SENT);
-    }
-    if let Some(out) = echoed_via(r#"timeout --foreground 30 echo.exe "$A""#) {
-        assert_eq!(out, SENT);
-    }
+    let out = echoed_via(r#"timeout -s KILL 30 "$E" "$A""#);
+    assert_eq!(out, SENT);
+    let out = echoed_via(r#"timeout --foreground 30 echo.exe "$A""#);
+    assert_eq!(out, SENT);
 }
 
 #[test]
@@ -202,16 +177,14 @@ fn timeout_still_kills_an_msys_program() {
     // the program dying with it: a surviving `sleep` would hold the output pipe open.
     for how in ["", "--foreground"] {
         let started = std::time::Instant::now();
-        let script =
-            format!(r#"timeout {how} 1 'C:/Program Files/Git/usr/bin/sleep.exe' 30; echo "$?""#);
-        if let Some(out) = echoed_via(&script) {
-            assert_eq!(out, "124", "timeout {how}");
-            assert!(
-                started.elapsed().as_secs() < 20,
-                "took {:?}",
-                started.elapsed()
-            );
-        }
+        let script = format!(r#"timeout {how} 1 "$U/sleep.exe" 30; echo "$?""#);
+        let out = echoed_via(&script);
+        assert_eq!(out, "124", "timeout {how}");
+        assert!(
+            started.elapsed().as_secs() < 20,
+            "took {:?}",
+            started.elapsed()
+        );
     }
 }
 
@@ -219,15 +192,11 @@ fn timeout_still_kills_an_msys_program() {
 fn git_egrep_script_gets_json_sh_pattern_intact() {
     // The exact failure on GitHub's runner: Git's extensionless `egrep` script, reached
     // by full path so that no native egrep.exe earlier on PATH can stand in for it.
-    let egrep = Path::new(r"C:\Program Files\Git\usr\bin\egrep");
-    if !egrep.is_file() {
-        eprintln!("skipping: Git for Windows' egrep is not installed");
-        return;
-    }
     let script = r#"CHAR='[^[:cntrl:]"\\]'; SPACE='[[:space:]]+'
-        PATH="C:/Program Files/Git/usr/bin:$PATH"
-        printf '"ab" c\n' | 'C:/Program Files/Git/usr/bin/egrep' -ao "\"$CHAR*\"|$SPACE" | od -An -c | tr -s ' '"#;
+        PATH="$U:$PATH"
+        printf '"ab" c\n' | "$U/egrep" -ao "\"$CHAR*\"|$SPACE" | od -An -c | tr -s ' '"#;
     let out = cash_command()
+        .env("U", usr_bin())
         .args(["-c", script])
         .output()
         .expect("run cash");
@@ -241,12 +210,7 @@ fn git_egrep_script_gets_json_sh_pattern_intact() {
 
 #[test]
 fn json_sh_patterns_reach_git_grep_intact() {
-    let grep = Path::new(r"C:\Program Files\Git\usr\bin\grep.exe");
-    if !grep.is_file() {
-        eprintln!("skipping: Git for Windows' grep.exe is not installed");
-        return;
-    }
-    let grep = grep.to_string_lossy().replace('\\', "/");
+    let grep = format!("{}/grep.exe", usr_bin());
     let script = format!(
         r#"CHAR='[^[:cntrl:]"\\]'; SPACE='[[:space:]]+'
         printf '"ab" c\n' | '{grep}' -Eo "\"$CHAR*\"|$SPACE" | od -An -c | tr -s ' '"#

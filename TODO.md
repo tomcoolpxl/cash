@@ -69,17 +69,6 @@ Every `it` module starts cash from `it/common.rs` now. Left, seen while moving t
   line_ending_tools and git_prompt; `Sandbox` in directory_stack, find_xargs and
   builtin_parameters; link_tools' folders; the fixtures of fuser_lsof and
   held_descriptors.
-- Interactive runs that read the developer's own `~/.bashrc`: `builtin_parameters.rs`
-  (`-i -c "history -c; history"`) and `job_groups.rs` (`-i script`, `-i -c`), without
-  `--norc` or a `HOME` of their own.
-- Tests that pass without a word when what they need is missing: msys_args (no Git for
-  Windows), gui_apps_outlive (no `wscript.exe`), `ping::an_interrupt_prints_the_statistics`
-  (no console), completion_scripts' tool tests (tool not installed), and a test that skips
-  unless an external awk exists.
-- A cash that a test's cash starts (a shebang script, `sh -c`, bash_gaps' `"$X" -c`) reads
-  the developer's `config.toml`: there is no variable that turns it off for a child.
-- The ConPTY sessions (read_console, coolfetch, top_builtin) pass the whole environment,
-  `BASH_ENV` and the rest included.
 
 ### 14.6 Dead code, allows and dependencies
 
@@ -107,10 +96,6 @@ Every `it` module starts cash from `it/common.rs` now. Left, seen while moving t
   which `std::process::Command` always makes the program's path; `CreateProcessW` with
   the application name apart, or a flag for cash re-entering itself, would carry it.
   Seen in 1.3.12 while making `env bash` follow D7.
-- A worktree `.claude/worktrees/intelligent-meninsky-05ffe4` (branch
-  `claude/intelligent-meninsky-05ffe4`, at the 1.3.7 release commit, clean and merged
-  into main) is still registered; remove it with its branch once no session uses it.
-  Seen 2026-10-03.
 - cash's sed lacks two GNU sed extensions the corpus uses: `\b`, `\w` and `\s` in a
   regex (`echo 'a b' | sed -E 's/\bb\b/X/'` prints `a b`, GNU sed `a X`;
   `sed/gnu-doubled-words.sh`), and a label ended by a blank before `{` or `;`

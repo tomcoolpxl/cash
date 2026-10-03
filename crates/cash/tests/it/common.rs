@@ -2,7 +2,8 @@
 //! a scratch folder.
 //!
 //! A test runs cash as a user would, but not with the user's settings: without the
-//! developer's `%APPDATA%\cash\config.toml` (`--no-config`), and without the variables
+//! developer's `%APPDATA%\cash\config.toml` (`--no-config`, and an empty `APPDATA` for
+//! the cash it starts in turn), and without the variables
 //! that make a non-interactive shell run code or behave differently before the script
 //! starts (`BASH_ENV`, `ENV`, `FUNCNEST`, `CDPATH`, `GLOBIGNORE`). Before this module,
 //! 43 modules had a run helper of their own and most passed the developer's environment
@@ -17,7 +18,8 @@
 
 #![allow(
     clippy::expect_used,
-    reason = "a test that cannot even start cash should stop loudly"
+    clippy::panic,
+    reason = "a test that cannot even start cash, or lacks what it needs, should stop loudly"
 )]
 
 use std::path::{Path, PathBuf};
@@ -47,7 +49,40 @@ pub fn cash_command() -> Command {
     for name in ISOLATED_VARIABLES {
         command.env_remove(name);
     }
+    command.env("APPDATA", no_appdata());
     command
+}
+
+/// Calls `start` with the environment `cash_command()` gives cash, for a cash started some
+/// other way, as on a pseudo terminal, which takes a whole environment block: the test's
+/// own, without [`ISOLATED_VARIABLES`] and with the empty `APPDATA`.
+pub fn with_isolated_environment<R>(start: impl FnOnce(&[(&str, &str)]) -> R) -> R {
+    let appdata = no_appdata().to_string_lossy().into_owned();
+    let vars: Vec<(String, String)> = std::env::vars()
+        .filter(|(name, _)| {
+            !name.eq_ignore_ascii_case("APPDATA")
+                && !ISOLATED_VARIABLES
+                    .iter()
+                    .any(|isolated| name.eq_ignore_ascii_case(isolated))
+        })
+        .collect();
+    let mut env: Vec<(&str, &str)> = vars
+        .iter()
+        .map(|(name, value)| (name.as_str(), value.as_str()))
+        .collect();
+    env.push(("APPDATA", &appdata));
+    start(&env)
+}
+
+/// An empty folder for `%APPDATA%`, where cash looks for `cash\config.toml`. `--no-config`
+/// keeps the developer's config from the cash a test starts; this keeps it from every cash
+/// that one starts in turn (a shebang script, `sh -c`, `bash -c`), which inherit the
+/// variable and take no flag. Shared by every test and never written, so its fixed name
+/// is safe.
+fn no_appdata() -> PathBuf {
+    let dir = std::env::temp_dir().join("cash-it-no-appdata");
+    std::fs::create_dir_all(&dir).expect("create the empty APPDATA folder");
+    dir
 }
 
 /// Runs `command` to its end.
@@ -68,6 +103,32 @@ pub fn run(script: &str) -> Output {
 /// Runs `script` with `cash -c`, in the folder `dir`.
 pub fn run_in(dir: &Path, script: &str) -> Output {
     output_of(cash_command().args(["-c", script]).current_dir(dir))
+}
+
+/// The folder Git for Windows is installed in, found through the `git` on `PATH`
+/// (`git --exec-path` is `<root>/mingw64/libexec/git-core`), with forward slashes.
+///
+/// Git for Windows is a prerequisite of cash's workload (spec D35), and CI has it: a test
+/// that needs it fails without it, saying so, rather than passing without a word
+/// (BIN-20; the user, 2026-10-04).
+pub fn git_for_windows() -> String {
+    let output = Command::new("git")
+        .arg("--exec-path")
+        .output()
+        .expect("git, from Git for Windows, which this test needs (spec D35)");
+    let exec_path = String::from_utf8_lossy(&output.stdout)
+        .trim()
+        .replace('\\', "/");
+    let root = exec_path
+        .strip_suffix("/mingw64/libexec/git-core")
+        .unwrap_or_else(|| {
+            panic!("`git --exec-path` is {exec_path:?}, not Git for Windows' mingw64 layout")
+        });
+    assert!(
+        Path::new(root).join("usr/bin").is_dir(),
+        "Git for Windows at {root} has no usr/bin"
+    );
+    root.to_owned()
 }
 
 /// A folder of the test's own, empty when made and removed when dropped.

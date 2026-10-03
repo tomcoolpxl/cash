@@ -1275,7 +1275,7 @@ fn bind_lists_readline_functions_and_variables() {
 #[test]
 fn history_inspection_and_clear() {
     // History is enabled in interactive shells (-i)
-    let out = run(&["-i", "-c", "history -c; history"]);
+    let out = run(&["--norc", "-i", "-c", "history -c; history"]);
     assert_eq!(out.code, 0);
 }
 

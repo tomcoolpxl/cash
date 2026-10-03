@@ -27,7 +27,7 @@ use std::time::Duration;
 
 use cash_win32::conpty::ConPtySession;
 
-use crate::common::{CASH, run as cash};
+use crate::common::{CASH, run as cash, with_isolated_environment};
 use crate::process_identity::still_running;
 
 /// One refresh, as short as `top` allows, so the tests stay quick and deterministic.
@@ -351,11 +351,13 @@ fn the_shell_has_a_working_set() {
 
 #[test]
 fn question_mark_opens_help_and_q_exits() {
-    let mut session = ConPtySession::start(
-        &PathBuf::from(CASH),
-        &["--no-config", "-c", "top -d 5"],
-        None,
-    )
+    let mut session = with_isolated_environment(|env| {
+        ConPtySession::start(
+            &PathBuf::from(CASH),
+            &["--no-config", "-c", "top -d 5"],
+            Some(env),
+        )
+    })
     .expect("start cash in a pseudo terminal");
 
     session.send("?").expect("send help key");
@@ -375,9 +377,14 @@ fn question_mark_opens_help_and_q_exits() {
 }
 
 fn interactive(script: &str) -> ConPtySession {
-    let mut session =
-        ConPtySession::start(&PathBuf::from(CASH), &["--no-config", "-c", script], None)
-            .expect("start cash in a pseudo terminal");
+    let mut session = with_isolated_environment(|env| {
+        ConPtySession::start(
+            &PathBuf::from(CASH),
+            &["--no-config", "-c", script],
+            Some(env),
+        )
+    })
+    .expect("start cash in a pseudo terminal");
     session
         .expect("Tasks:", Duration::from_secs(10))
         .expect("top's first frame");

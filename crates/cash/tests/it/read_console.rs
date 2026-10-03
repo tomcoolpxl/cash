@@ -58,7 +58,7 @@ use std::time::{Duration, Instant};
 
 use cash_win32::conpty::ConPtySession;
 
-use crate::common::{CASH, cash_command};
+use crate::common::{CASH, cash_command, with_isolated_environment};
 
 /// What a script prints before it reads, and once it is done.
 const READING: &str = "now-reading";
@@ -103,14 +103,15 @@ impl Script {
         )
         .expect("write the script");
 
-        // `--no-config`, as `cash_command()` gives it; the pseudo terminal's cash
-        // inherits the test's environment whole.
-        let mut session = ConPtySession::start_in(
-            Path::new(CASH),
-            &["--no-config", "script.sh"],
-            None,
-            Some(&dir),
-        )
+        // `--no-config` and the environment, as `cash_command()` gives them.
+        let mut session = with_isolated_environment(|env| {
+            ConPtySession::start_in(
+                Path::new(CASH),
+                &["--no-config", "script.sh"],
+                Some(env),
+                Some(&dir),
+            )
+        })
         .expect("start cash in a pseudo terminal");
         session
             .expect(READING, STUCK)

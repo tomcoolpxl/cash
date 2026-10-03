@@ -318,6 +318,7 @@ fn a_folder_on_another_drive_is_an_error() {
         .filter(|letter| *letter != here)
         .find(|letter| Path::new(&format!("{letter}:\\")).is_dir())
     else {
+        eprintln!("skipped: this machine has no second drive");
         return;
     };
     let dir = PathBuf::from(format!(

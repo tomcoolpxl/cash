@@ -104,6 +104,16 @@ filter = 'binary(it) and test(=git_prompt_goldens::git_prompt_scripts_give_git_b
 threads-required = 8
 slow-timeout = { period = "60s", terminate-after = 3 }
 
+# Tests that skip where an optional thing is missing: a tool cash does not need
+# (starship), a second drive, a desktop that can show a window, a network on which an
+# address does not answer. Each says "skipped: why" on standard error, and this prints it
+# at the end of the run, so a skip is seen rather than counted as a pass (BIN-20). What
+# cash does need, Git for Windows (spec D35) and Windows' own programs, fails a test
+# instead. completion_scripts' tool tests do the same, above.
+[[profile.default.overrides]]
+filter = 'binary(it) and test(/^(acceptance::starship_initialises_and_renders_a_prompt|ping::an_interrupt_prints_the_statistics|link_tools::a_folder_on_another_drive_is_an_error|kill_term::a_program_(with_a_window_is_asked_to_close|that_will_not_close_is_terminated_after_the_grace_period)|ping::an_unanswered_ping_reports_total_loss)$/)'
+success-output = "final"
+
 # math.sed computing pi: 9 s with every core busy.
 [[profile.default.overrides]]
 filter = 'package(cash-sed) and test(=test_sed::pi)'

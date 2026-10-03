@@ -90,9 +90,9 @@ fn kill(pid: u32, exited: u64) {
 
 #[test]
 fn a_gui_application_outlives_cash_and_a_console_program_does_not() {
-    if wscript().is_none() {
-        return;
-    }
+    // Windows Script Host comes with Windows; a machine without it fails the test
+    // rather than passing it unrun (BIN-20).
+    assert!(wscript().is_some(), "no wscript.exe in System32");
     let (gui, con, exited) = run_and_exit("");
     let console_gone = wait_until(Duration::from_secs(5), || !still_running(con, exited));
     let gui_alive = still_running(gui, exited);
@@ -104,9 +104,9 @@ fn a_gui_application_outlives_cash_and_a_console_program_does_not() {
 
 #[test]
 fn gui_apps_close_reaps_the_gui_application_too() {
-    if wscript().is_none() {
-        return;
-    }
+    // Windows Script Host comes with Windows; a machine without it fails the test
+    // rather than passing it unrun (BIN-20).
+    assert!(wscript().is_some(), "no wscript.exe in System32");
     let (gui, con, exited) = run_and_exit("cashctl gui-apps close");
     let gui_gone = wait_until(Duration::from_secs(5), || !still_running(gui, exited));
     let console_gone = wait_until(Duration::from_secs(5), || !still_running(con, exited));

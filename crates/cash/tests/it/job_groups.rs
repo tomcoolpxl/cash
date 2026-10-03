@@ -53,7 +53,9 @@ fn run(dir: &Path, interactive: bool, body: &str) -> String {
     // The test runner may start everything with Ctrl-C ignored, a flag Windows passes to
     // children. An interactive cash clears it (D13); a script keeps what it inherits, so
     // the script case runs under an interactive cash that has cleared it.
+    // `--norc`: an interactive cash reads `~/.bashrc`, and the developer's is not the test's.
     let mut command = cash_command();
+    command.arg("--norc");
     if interactive {
         command.arg("-i").arg(&script);
     } else {

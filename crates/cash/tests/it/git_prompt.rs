@@ -18,7 +18,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::common::{CASH, ISOLATED_VARIABLES};
+use crate::common::{CASH, ISOLATED_VARIABLES, git_for_windows};
 
 /// A scratch directory, removed on drop, whose git sees neither the user's nor the system's
 /// configuration and makes the same commits every run.
@@ -93,12 +93,13 @@ impl Drop for Scratch {
 
 /// The installed `git-prompt.sh`, found the way Git for Windows' own
 /// `/etc/profile.d/git-prompt.sh` finds it; `None` without Git for Windows.
-fn installed_git_prompt() -> Option<PathBuf> {
-    let output = Command::new("git").arg("--exec-path").output().ok()?;
-    let exec_path = String::from_utf8(output.stdout).ok()?;
-    let prefix = exec_path.trim_end().strip_suffix("/libexec/git-core")?;
-    let script = Path::new(prefix).join("share/git/completion/git-prompt.sh");
-    script.is_file().then_some(script)
+/// The installed `git-prompt.sh`. Git for Windows is a prerequisite (spec D35), so a
+/// machine without it fails the test rather than passing it unrun (BIN-20).
+fn installed_git_prompt() -> PathBuf {
+    let script =
+        PathBuf::from(git_for_windows()).join("mingw64/share/git/completion/git-prompt.sh");
+    assert!(script.is_file(), "no git-prompt.sh at {}", script.display());
+    script
 }
 
 #[test]
@@ -118,10 +119,7 @@ fn a_tab_inside_a_parameter_expansion_stays_a_tab() {
 
 #[test]
 fn git_ps1_shows_the_branch_its_state_and_the_upstream() {
-    let Some(git_prompt) = installed_git_prompt() else {
-        eprintln!("skipped: Git for Windows' git-prompt.sh is not installed");
-        return;
-    };
+    let git_prompt = installed_git_prompt();
     let scratch = Scratch::new("ps1");
     let work = scratch.dir.join("work");
     let origin = scratch.dir.join("origin.git");

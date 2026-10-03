@@ -20,7 +20,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use crate::common::cash_command;
+use crate::common::{cash_command, git_for_windows};
 
 #[derive(Debug, PartialEq, Eq)]
 struct Output {
@@ -126,8 +126,8 @@ fn test_real_world_dominictarr_json_sh() {
     // which decodes its command line by Cygwin's rules; its tools go first on PATH so
     // that path is what is tested, as on GitHub's runner, rather than whatever native
     // grep a developer's machine happens to find first.
-    let git_usr_bin = Path::new(r"C:\Program Files\Git\usr\bin");
-    let cash_out = cash_stdin_with_path_first(&script_path, complex_json, git_usr_bin);
+    let git_usr_bin = format!("{}/usr/bin", git_for_windows());
+    let cash_out = cash_stdin_with_path_first(&script_path, complex_json, Path::new(&git_usr_bin));
     assert_eq!(cash_out.code, 0, "cash stderr: {}", cash_out.stderr);
 
     // Git Bash 5.3's output for the same input, byte for byte, frozen on 2026-10-03. It
@@ -343,19 +343,8 @@ echo "sum=$sum"
 
 #[test]
 fn test_external_awk_and_sed_pipeline_combos() {
-    // Only run if awk and sed exist in PATH (e.g. from Scoop or MSYS2)
-    let awk_exists = Command::new("where.exe")
-        .arg("awk")
-        .output()
-        .is_ok_and(|o| o.status.success());
-    let sed_exists = Command::new("where.exe")
-        .arg("sed")
-        .output()
-        .is_ok_and(|o| o.status.success());
-    if !awk_exists || !sed_exists {
-        return;
-    }
-
+    // `awk` and `sed` are cash's own here. The test returned unrun unless some other awk
+    // and sed were on PATH, which it never used (BIN-20).
     // 1. Multi-stage pipeline with awk, sed, and while-read loop
     let script = r#"
 printf "%s\n" "apple 5 red" "banana 12 yellow" "cherry 8 red" "date 20 brown" | \

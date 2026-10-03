@@ -26,7 +26,7 @@ use std::time::Duration;
 use cash_win32::conpty::ConPtySession;
 use cash_win32::vtscreen::Screen;
 
-use crate::common::{CASH, cash_command, run as cash};
+use crate::common::{CASH, cash_command, run as cash, with_isolated_environment};
 
 /// The picture is a sixel: a device control string, from this introducer to a string
 /// terminator.
@@ -449,16 +449,17 @@ const ROOMY: (i16, i16) = (200, 40);
 /// cash, in `dir`.
 fn on_a_terminal(script: &str, dir: Option<&Path>, size: (i16, i16)) -> String {
     let script = std::format!("{script}; echo coolfetch-finished");
-    // `--no-config`, as `cash_command()` gives it; the pseudo terminal's cash inherits
-    // the test's environment whole.
-    let mut session = ConPtySession::start_sized(
-        Path::new(CASH),
-        &["--no-config", "-c", &script],
-        None,
-        dir,
-        size.0,
-        size.1,
-    )
+    // `--no-config` and the environment, as `cash_command()` gives them.
+    let mut session = with_isolated_environment(|env| {
+        ConPtySession::start_sized(
+            Path::new(CASH),
+            &["--no-config", "-c", &script],
+            Some(env),
+            dir,
+            size.0,
+            size.1,
+        )
+    })
     .expect("start cash in a pseudo terminal");
     session
         .expect("coolfetch-finished", Duration::from_secs(20))

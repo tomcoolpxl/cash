@@ -24,23 +24,11 @@
 use std::path::PathBuf;
 use std::process::Command;
 
-use crate::common::{CASH, ISOLATED_VARIABLES};
+use crate::common::{CASH, ISOLATED_VARIABLES, git_for_windows};
 
 /// The `bash.exe` of the Git for Windows whose `git` is on `PATH`.
 fn git_bash() -> PathBuf {
-    let output = Command::new("git")
-        .arg("--exec-path")
-        .output()
-        .expect("git, from Git for Windows, which provides the prompt scripts under test");
-    let exec_path = String::from_utf8_lossy(&output.stdout)
-        .trim()
-        .replace('\\', "/");
-    let root = exec_path
-        .strip_suffix("/mingw64/libexec/git-core")
-        .unwrap_or_else(|| {
-            panic!("`git --exec-path` is {exec_path:?}, not Git for Windows' mingw64 layout")
-        });
-    let bash = PathBuf::from(root).join("bin/bash.exe");
+    let bash = PathBuf::from(git_for_windows()).join("bin/bash.exe");
     assert!(bash.is_file(), "no Git Bash at {}", bash.display());
     bash
 }
