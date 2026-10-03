@@ -60,9 +60,7 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 13.4 Error output: colour, prefixes, `--help`
 
-A here-document left open at the end, when an earlier one on its line was closed (`cat
-<<A; cat <<B`), is said to open on the line of its `<<`, where Bash names the line before
-its body. Found in 1.3.12.
+13.4 is done.
 
 ### 13.5 D36: measure the pooled prompt job, then build it or drop it
 

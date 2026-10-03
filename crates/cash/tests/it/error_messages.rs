@@ -159,6 +159,16 @@ fn a_syntax_error_is_reported_on_two_lines() {
             0
         )
     );
+    // After one closed on the same line, Bash names the line it closed on.
+    let out = output_of(cash_command().args(["-c", "cat <<A; cat <<B\nx\nA\ny", "bash"]));
+    assert_eq!(
+        (out.stdout.as_str(), out.stderr.as_str()),
+        (
+            "x\ny",
+            "bash: line 4: warning: here-document at line 3 delimited by end-of-file \
+             (wanted `B')"
+        )
+    );
 }
 
 #[test]

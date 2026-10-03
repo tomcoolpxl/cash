@@ -394,11 +394,12 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
                     .split(", ")
                     .map(|tag| tag.replace(['\'', '"', '\\'], ""))
                     .collect();
-                let opened = positions
+                let tag_line = positions
                     .split(',')
                     .next()
                     .and_then(|line| line.trim().parse::<usize>().ok())
                     .unwrap_or(1);
+                let opened = here_document_opened(&pending, tag_line, &tags);
                 let warning = format!(
                     "{}: line {}: warning: here-document at line {} delimited by end-of-file \
                      (wanted `{}')\n",
@@ -641,6 +642,48 @@ pub(crate) enum TextOrigin {
         /// That line.
         line: usize,
     },
+}
+
+/// The line Bash names for a here-document left open at the end: the line before its
+/// body, which is the `<<`'s line, or where the last of the here-documents before it on
+/// that line closed (`cat <<A; cat <<B`: the line of `A`).
+fn here_document_opened(text: &[u8], tag_line: usize, open_tags: &[String]) -> usize {
+    let lines: Vec<String> = text
+        .split(|&byte| byte == b'\n')
+        .map(|line| {
+            String::from_utf8_lossy(line)
+                .trim_end_matches('\r')
+                .to_owned()
+        })
+        .collect();
+    let Some(opener) = lines.get(tag_line.saturating_sub(1)) else {
+        return tag_line;
+    };
+    // The tags on the `<<` line that were closed: those before the first still open.
+    let closed: Vec<String> = opener
+        .split("<<")
+        .skip(1)
+        .map(|rest| {
+            rest.trim_start_matches('-')
+                .trim_start()
+                .split(|c: char| c.is_whitespace() || c == ';' || c == '|' || c == '&')
+                .next()
+                .unwrap_or_default()
+                .replace(['\'', '"', '\\'], "")
+        })
+        .take_while(|tag| open_tags.first() != Some(tag))
+        .collect();
+    lines
+        .iter()
+        .enumerate()
+        .skip(tag_line)
+        .rev()
+        .find(|(_, line)| {
+            closed
+                .iter()
+                .any(|tag| line.trim_start_matches('\t') == tag)
+        })
+        .map_or(tag_line, |(index, _)| index + 1)
 }
 
 /// The line a text's first line is, by where it came from.
