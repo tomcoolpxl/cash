@@ -14,7 +14,13 @@ const BASH_MINOR: u32 = 3;
 const BASH_PATCH: u32 = 15;
 const BASH_BUILD: u32 = 1;
 const BASH_RELEASE: &str = "release";
-const BASH_MACHINE: &str = "unknown";
+
+/// `$MACHTYPE` and `${BASH_VERSINFO[5]}`, Bash's `cpu-company-system`: `$HOSTTYPE` and
+/// `$OSTYPE` (spec §4 row 25) with Bash's company. It was "unknown"; Git Bash says
+/// `x86_64-pc-cygwin`.
+fn machine_type() -> String {
+    std::format!("{}-pc-windows", std::env::consts::ARCH)
+}
 
 const DEFAULT_LINENO: usize = 1;
 
@@ -202,7 +208,7 @@ pub(crate) fn init_well_known_vars(
             BASH_PATCH.to_string().as_str(),
             BASH_BUILD.to_string().as_str(),
             BASH_RELEASE,
-            BASH_MACHINE,
+            machine_type().as_str(),
         ]
         .as_slice(),
     ));
@@ -398,7 +404,7 @@ pub(crate) fn init_well_known_vars(
     // MACHTYPE
     shell
         .env_mut()
-        .set_global("MACHTYPE", ShellVariable::new(BASH_MACHINE))?;
+        .set_global("MACHTYPE", ShellVariable::new(machine_type()))?;
 
     // OLDPWD (initialization)
     if !shell.env().is_set("OLDPWD") {
