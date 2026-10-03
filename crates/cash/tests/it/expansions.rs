@@ -260,3 +260,14 @@ fn transformations_u_and_k_do_what_bash_does() {
         ),
     ]);
 }
+
+/// `$$'…'` is the pid and then a quoted word, and `\$'…'` a `$` and then one: neither
+/// opens ANSI-C quoting, as Bash's outputs below show (PI-12).
+#[test]
+fn only_a_bare_dollar_opens_ansi_c_quoting() {
+    check(&[
+        (r"echo $$'a\tb' | sed 's/^[0-9]*/N/'", r"Na\tb"),
+        (r"echo \$'a\tb'", r"$a\tb"),
+        (r"echo \\$'a\tb'", "\\a\tb"),
+    ]);
+}

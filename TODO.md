@@ -90,7 +90,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 Each from `REVIEW_REPORT.md` §5, found in no commit on 2026-10-04; reproduce first, as
 some may have gone with other work.
 
-- PI-12: `$$'…'` and `\$'…'` open ANSI-C quoting.
 - PI-08: `READLINE_LINE` replacement clears only the first line of a multi-line buffer
   (Ctrl-X Ctrl-E, `bind -x`).
 - PI-10: highlighting checks a command with a slash synchronously on every key; an
