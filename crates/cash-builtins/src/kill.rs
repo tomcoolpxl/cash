@@ -88,7 +88,7 @@ impl builtins::Command for KillCommand {
         // not a second signal. Treating every hyphenated argument as a sigspec rejected
         // that spelling outright.
         let signal_already_given = self.signal_name.is_some() || self.signal_number.is_some();
-        let mut pid_or_job_spec = None;
+        let mut targets = Vec::new();
         for (index, arg) in self.args.iter().enumerate() {
             let may_be_sigspec = index == 0 && !signal_already_given;
 
@@ -109,42 +109,66 @@ impl builtins::Command for KillCommand {
                     )?;
                     return Ok(ExecutionResult::general_error());
                 }
-            } else if pid_or_job_spec.is_none() {
-                pid_or_job_spec = Some(arg);
             } else {
-                writeln!(
-                    context.stderr(),
-                    "{}: too many jobs or processes specified",
-                    context.command_name
-                )?;
-                return Ok(ExecutionExitCode::InvalidUsage.into());
+                targets.push(arg);
             }
         }
 
         if self.list_signals {
             return print_signals(&context, self.args.as_ref());
         }
-        let Some(pid_or_job_spec) = pid_or_job_spec else {
+        if targets.is_empty() {
             writeln!(context.stderr(), "{}: invalid usage", context.command_name)?;
             return Ok(ExecutionExitCode::InvalidUsage.into());
-        };
+        }
 
-        if pid_or_job_spec.starts_with('%') {
-            return signal_job_spec(&mut context, pid_or_job_spec, signal_zero, trap_signal);
+        // Every target is signalled, and the status is 0 if one of them was, as in Bash;
+        // a second one was "too many jobs or processes specified" (BI-03).
+        let mut any_signalled = false;
+        for target in targets {
+            let result = signal_target(&mut context, target, signal_zero, trap_signal).await?;
+            if !result.is_normal_flow() {
+                return Ok(result);
+            }
+            any_signalled |= result.is_success();
         }
-        let pid = cash_core::int_utils::parse(pid_or_job_spec.as_str(), 10)?;
-        if let Some(result) = signal_job_known_as(&mut context, pid, signal_zero, trap_signal)? {
-            return Ok(result);
-        }
-        if !signal_zero && u32::try_from(pid).is_ok_and(|pid| pid == std::process::id()) {
-            return signal_self(context, trap_signal).await;
-        }
-        // A job ended by a signal to its pid is shown by the signal, as by `kill %1`.
-        if !signal_zero && let Some(job) = context.shell.jobs_mut().resolve_pid(pid) {
-            job.record_signal(trap_signal);
-        }
-        signal_pid(&context, pid, signal_zero, trap_signal)
+        Ok(if any_signalled {
+            ExecutionResult::success()
+        } else {
+            ExecutionResult::general_error()
+        })
     }
+}
+
+/// Signals one target of `kill`: a job spec, a pid or the shell itself.
+async fn signal_target<SE: cash_core::ShellExtensions>(
+    context: &mut cash_core::ExecutionContext<'_, SE>,
+    target: &str,
+    signal_zero: bool,
+    trap_signal: TrapSignal,
+) -> Result<ExecutionResult, cash_core::Error> {
+    if target.starts_with('%') {
+        return signal_job_spec(context, target, signal_zero, trap_signal);
+    }
+    let Ok(pid) = cash_core::int_utils::parse(target, 10) else {
+        writeln!(
+            context.stderr(),
+            "{}: `{target}': not a pid or valid job spec",
+            context.command_name
+        )?;
+        return Ok(ExecutionResult::general_error());
+    };
+    if let Some(result) = signal_job_known_as(context, pid, signal_zero, trap_signal)? {
+        return Ok(result);
+    }
+    if !signal_zero && u32::try_from(pid).is_ok_and(|pid| pid == std::process::id()) {
+        return signal_self(context, trap_signal).await;
+    }
+    // A job ended by a signal to its pid is shown by the signal, as by `kill %1`.
+    if !signal_zero && let Some(job) = context.shell.jobs_mut().resolve_pid(pid) {
+        job.record_signal(trap_signal);
+    }
+    signal_pid(context, pid, signal_zero, trap_signal)
 }
 
 /// A signal the shell sends itself, `kill -TERM $$`: handled inside the shell, as Bash
@@ -156,7 +180,7 @@ impl builtins::Command for KillCommand {
 /// shell ignores `TERM`, abandons the line on `INT` as Ctrl-C does, and exits on `HUP`.
 /// `QUIT` (which Bash ignores in all cases), `STOP`, `TSTP`, `CONT` and `CHLD` are ignored.
 async fn signal_self<SE: cash_core::ShellExtensions>(
-    context: cash_core::ExecutionContext<'_, SE>,
+    context: &mut cash_core::ExecutionContext<'_, SE>,
     signal: TrapSignal,
 ) -> Result<ExecutionResult, cash_core::Error> {
     let TrapSignal::Signal(raw) = signal else {

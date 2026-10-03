@@ -60,7 +60,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 13.2 Builtins
 
-- `kill $a $b` refuses the second operand. BI-03.
 - `find d -delete` cannot remove directories (pre-order). BI-04.
 - `chmod go-w f` makes `f` read-only for its owner; `u+rw,go-w` is refused. BI-05.
 - `chmod +x` prints "execute: not represented"; make it silent, as D23 says (decided,

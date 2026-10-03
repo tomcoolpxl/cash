@@ -201,3 +201,17 @@ fn signalling_a_nonexistent_pid_fails_without_side_effects() {
         out.stdout
     );
 }
+
+#[test]
+fn every_target_is_signalled() {
+    // A second one was "too many jobs or processes specified" (BI-03). The status is 0
+    // when one of them was signalled, as in Bash.
+    let out = cash(
+        r#"sleep 30 & a=$!; sleep 30 & b=$!; kill $a $b; echo "rc $?"; wait $a; echo "a $?"; wait $b; echo "b $?"; sleep 30 & c=$!; kill abc $c 2>/dev/null; echo "rc2 $?"; kill 999998 999999 2>/dev/null; echo "rc3 $?""#,
+    );
+    assert_eq!(
+        out.stdout, "rc 0\na 143\nb 143\nrc2 0\nrc3 1",
+        "{}",
+        out.stderr
+    );
+}
