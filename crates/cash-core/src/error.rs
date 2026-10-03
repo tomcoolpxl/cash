@@ -267,6 +267,12 @@ pub enum ErrorKind {
     #[error("{}: {}", .0, os_error_text(.1))]
     FileError(String, std::io::Error),
 
+    /// An error in the assignment a declaration builtin makes (`declare -a d=(1 2)` of an
+    /// associative `d`), as Bash reports one: without the builtin's name, abandoning the
+    /// command line.
+    #[error("{0}")]
+    AssignmentError(Box<Error>),
+
     /// `test` or `[` refused its arguments, worded as Bash words it: `x: integer
     /// expected`, `1: unary operator expected`, `too many arguments`. Status 2.
     #[error("{0}")]
@@ -414,11 +420,24 @@ pub trait BuiltinError: std::error::Error + ConvertibleToExitCode + Send + Sync 
     fn names_its_builtin(&self) -> bool {
         true
     }
+
+    /// Whether this is an error of the assignment a declaration builtin makes, which
+    /// abandons the command line as an assignment's error does ([`Error::jumps_to_top_level`]).
+    fn is_assignment_error(&self) -> bool {
+        false
+    }
 }
 
 impl BuiltinError for Error {
+    fn is_assignment_error(&self) -> bool {
+        matches!(self.kind, ErrorKind::AssignmentError(_))
+    }
+
     fn names_its_builtin(&self) -> bool {
-        !matches!(self.kind, ErrorKind::FailedSourcingFile(..))
+        !matches!(
+            self.kind,
+            ErrorKind::FailedSourcingFile(..) | ErrorKind::AssignmentError(_)
+        )
     }
 
     fn as_io_error(&self) -> Option<&std::io::Error> {
@@ -539,16 +558,18 @@ impl Error {
     /// an arithmetic error in an expansion, and a call past the function nesting limit. A
     /// command that a function's error came out of went on with status 1 (`f; echo same`
     /// echoed); the nesting limit's error left 0. A builtin's own failure, as `read` into
-    /// a read-only variable, is not one.
-    pub const fn jumps_to_top_level(&self) -> bool {
-        matches!(
-            self.kind,
+    /// a read-only variable, is not one; the assignment a declaration builtin makes is.
+    pub fn jumps_to_top_level(&self) -> bool {
+        match &self.kind {
             ErrorKind::ReadonlyVariable(_)
-                | ErrorKind::BadSubstitutionText(_)
-                | ErrorKind::CircularNameReference(_)
-                | ErrorKind::EvalError(_)
-                | ErrorKind::MaxFunctionCallDepthExceeded(..)
-        )
+            | ErrorKind::AssignmentError(_)
+            | ErrorKind::BadSubstitutionText(_)
+            | ErrorKind::CircularNameReference(_)
+            | ErrorKind::EvalError(_)
+            | ErrorKind::MaxFunctionCallDepthExceeded(..) => true,
+            ErrorKind::BuiltinError(inner, _) => inner.is_assignment_error(),
+            _ => false,
+        }
     }
 
     /// Whether this is an interrupt that abandons the line with nothing to report: the

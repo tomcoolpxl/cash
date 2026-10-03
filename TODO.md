@@ -60,10 +60,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 13.4 Error output: colour, prefixes, `--help`
 
-`declare -A d; declare -a d=(1 2)` refuses as Bash does, but says `declare: d: cannot
-convert …` and goes on, where Bash treats it as an assignment error: `d: cannot convert
-associative to indexed array`, and the rest of the line is abandoned. Found in 1.3.12.
-
 A syntax error is now Bash's two lines, near the token Bash names. Left: `-c 'echo ('`
 is `unexpected end of file` on line 2 where Bash says near `newline` on line 1, and the
 tokenizer's errors keep their own words (`unterminated single quote at line 1 col 6`

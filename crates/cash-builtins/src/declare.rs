@@ -534,13 +534,22 @@ impl DeclareCommand {
         };
 
         if let Some(var) = self.look_up(context, name.as_str(), lookup) {
+            // With a value to assign, a refused conversion is an error of the assignment,
+            // as Bash reports it: `d: cannot convert …`, and the line is abandoned.
+            let assigning = initial_value.is_some();
+            let refused = |e: cash_core::Error| {
+                let e = e.of_variable(&name);
+                if assigning {
+                    cash_core::Error::from(ErrorKind::AssignmentError(Box::new(e)))
+                } else {
+                    e
+                }
+            };
             if self.make_associative_array.is_some() {
-                var.convert_to_associative_array()
-                    .map_err(|e| e.of_variable(&name))?;
+                var.convert_to_associative_array().map_err(refused)?;
             }
             if self.make_indexed_array.is_some() {
-                var.convert_to_indexed_array()
-                    .map_err(|e| e.of_variable(&name))?;
+                var.convert_to_indexed_array().map_err(refused)?;
             }
 
             self.apply_attributes_before_update(var)?;

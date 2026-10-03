@@ -385,6 +385,17 @@ fn test_says_what_it_cannot_read_and_returns_2() {
 
 #[test]
 fn declare_will_not_turn_one_kind_of_array_into_the_other() {
+    // With a value, it is an error of the assignment, as in Bash: no `declare:`, and the
+    // rest of the line is abandoned.
+    let out = run("declare -A d; declare -a d=(1 2); echo same\ndeclare -p d");
+    assert_eq!(out.stdout, "declare -A d", "{}", out.stderr);
+    assert!(
+        out.stderr
+            .ends_with("line 1: d: cannot convert associative to indexed array"),
+        "{}",
+        out.stderr
+    );
+
     // `declare -A a; declare -a a` made it indexed with an empty element, and said nothing.
     let out = run("declare -A a; declare -a a; echo \"rc $?\"; declare -p a");
     assert_eq!(out.stdout, "rc 1\ndeclare -A a", "{}", out.stderr);
