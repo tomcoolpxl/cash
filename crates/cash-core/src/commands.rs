@@ -280,11 +280,9 @@ fn build_batch_command<S: AsRef<OsStr>>(
     // `.` with the switch `/showargs.cmd`. Hand it the same path with backslashes; the
     // spelling stays relative, so `%0` and `%~dp0` still name the script.
     let command_name = command_name.replace('/', "\\");
-    let mut inner = cash_win32::cmd::escape_for_cmd(&command_name);
-    for arg in &string_args {
-        inner.push(' ');
-        inner.push_str(&cash_win32::cmd::escape_for_cmd(arg));
-    }
+    let inner = cash_win32::cmd::escape_words_for_cmd(
+        std::iter::once(command_name.as_str()).chain(string_args.iter().map(String::as_str)),
+    );
     c.raw_arg(format!("\"{inner}\""));
     c
 }
@@ -337,18 +335,14 @@ fn build_shebang_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
             c.arg0(argv0);
             c.arg("/d").arg("/s").arg("/c");
 
-            let mut inner = cash_win32::cmd::escape_for_cmd(&batch_target.to_string_lossy());
-            for arg in &extra_args {
-                inner.push(' ');
-                inner.push_str(&cash_win32::cmd::escape_for_cmd(arg));
-            }
-            inner.push(' ');
-            inner.push_str(&cash_win32::cmd::escape_for_cmd(&script.to_string_lossy()));
-            for arg in args {
-                inner.push(' ');
-                let a = arg.as_ref().to_string_lossy();
-                inner.push_str(&cash_win32::cmd::escape_for_cmd(&a));
-            }
+            let mut words = vec![batch_target.to_string_lossy().into_owned()];
+            words.extend(extra_args.iter().cloned());
+            words.push(script.to_string_lossy().into_owned());
+            words.extend(
+                args.iter()
+                    .map(|arg| arg.as_ref().to_string_lossy().into_owned()),
+            );
+            let inner = cash_win32::cmd::escape_words_for_cmd(words.iter().map(String::as_str));
             c.raw_arg(format!("\"{inner}\""));
             Ok((c, None))
         }

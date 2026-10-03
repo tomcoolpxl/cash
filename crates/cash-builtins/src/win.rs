@@ -154,11 +154,9 @@ fn detached_command_line<SE: cash_core::ShellExtensions>(
                 .shell
                 .env_str("COMSPEC")
                 .map_or_else(|| "cmd.exe".to_owned(), |value| value.into_owned());
-            let mut inner = cash_win32::cmd::escape_for_cmd(&program);
-            for arg in args {
-                inner.push(' ');
-                inner.push_str(&cash_win32::cmd::escape_for_cmd(arg));
-            }
+            let inner = cash_win32::cmd::escape_words_for_cmd(
+                std::iter::once(program.as_str()).chain(args.iter().map(String::as_str)),
+            );
             format!(
                 "{} /d /s /c \"{inner}\"",
                 cash_win32::cmd::quote_argument(&comspec)

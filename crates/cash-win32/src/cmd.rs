@@ -73,20 +73,38 @@ pub fn build_command_line(program: &str, args: &[String]) -> String {
 // escape the actual command metacharacters inside them.
 const CMD_METACHARACTERS: &[char] = &['(', ')', '%', '!', '^', '<', '>', '&', '|'];
 
-/// Encode one argument to survive `cmd.exe`'s parse *and* the callee's (D32).
-///
-/// Applies CRT quoting first, then caret-escapes every character `cmd` would otherwise
-/// act on. The caret survives `cmd`'s parse and is removed before the callee sees it.
+/// Encode one argument to survive `cmd.exe`'s parse *and* the callee's (D32); see
+/// [`escape_words_for_cmd`].
 #[must_use]
 pub fn escape_for_cmd(arg: &str) -> String {
-    let quoted = quote_argument(arg);
+    escape_words_for_cmd([arg])
+}
 
-    let mut out = String::with_capacity(quoted.len() * 2);
-    for ch in quoted.chars() {
-        if CMD_METACHARACTERS.contains(&ch) {
-            out.push('^');
+/// Encode the words of a command for `cmd.exe /s /c` (D32): the script and its
+/// arguments, separated by spaces.
+///
+/// Each word gets CRT quoting first. A character `cmd` would act on then gets a caret
+/// where `cmd` is outside quotes, which it removes before the callee sees the word; inside
+/// quotes it is already literal to `cmd`, and so would a caret be. A caret everywhere
+/// gave a batch file `Q^&A notes.txt` for `"Q&A notes.txt"` (W32-01). `cmd` knows no
+/// escaped quote, so the `\"` of a quote in a word turns its quoting on or off too, which
+/// is why the state goes on from one word to the next.
+#[must_use]
+pub fn escape_words_for_cmd<'a>(words: impl IntoIterator<Item = &'a str>) -> String {
+    let mut out = String::new();
+    let mut in_quotes = false;
+    for (index, word) in words.into_iter().enumerate() {
+        if index > 0 {
+            out.push(' ');
         }
-        out.push(ch);
+        for ch in quote_argument(word).chars() {
+            if ch == '"' {
+                in_quotes = !in_quotes;
+            } else if !in_quotes && CMD_METACHARACTERS.contains(&ch) {
+                out.push('^');
+            }
+            out.push(ch);
+        }
     }
     out
 }
@@ -97,11 +115,8 @@ pub fn escape_for_cmd(arg: &str) -> String {
 /// predictable, and `/c` runs and exits.
 #[must_use]
 pub fn build_cmd_command_line(script: &str, args: &[String]) -> String {
-    let mut inner = escape_for_cmd(script);
-    for arg in args {
-        inner.push(' ');
-        inner.push_str(&escape_for_cmd(arg));
-    }
+    let inner =
+        escape_words_for_cmd(std::iter::once(script).chain(args.iter().map(String::as_str)));
 
     // /s plus the outer quotes means cmd strips exactly the first and last quote and
     // treats everything between as the command.

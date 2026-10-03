@@ -58,12 +58,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ## Phase 13. Builtins and error output (R4, R8)
 
-### 13.1 Batch files get stray carets
-
-`./show.bat "Q&A notes.txt"` receives `Q^&A notes.txt`, `"a | b"` receives `a ^| b`:
-`escape_for_cmd` escapes inside the quotes it added (`cash-win32/src/cmd.rs:81-92`).
-Track cmd's quote state; a round-trip test through a real `.bat`. W32-01.
-
 ### 13.2 Builtins
 
 - `kill $a $b` refuses the second operand. BI-03.

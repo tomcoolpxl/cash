@@ -101,6 +101,27 @@ fn subdirectory_batch_file_with_a_space_receives_its_arguments() {
 }
 
 #[test]
+fn a_batch_file_receives_quoted_metacharacters_without_carets() {
+    // A caret went inside the quotes cash added, where cmd keeps it: `"Q&A notes.txt"`
+    // arrived as `"Q^&A notes.txt"` (W32-01). These are what Git Bash delivers.
+    let dir = tempfile::tempdir().expect("temp dir");
+    std::fs::write(dir.path().join("show.bat"), "@echo [%1] [%2] [%3]\r\n").expect("write");
+    let out = cash_in(
+        dir.path(),
+        r#"./show.bat "Q&A notes.txt" "a | b" "x(y)z"; ./show.bat "p^q" "50%" "say \"hi\" & bye""#,
+    );
+    assert_eq!(
+        (out.stdout.as_str(), out.code),
+        (
+            "[\"Q&A notes.txt\"] [\"a | b\"] [x(y)z]\r\n[pq] [50%] [\"say \\\"hi\\\" & bye\"]",
+            0
+        ),
+        "{}",
+        out.stderr
+    );
+}
+
+#[test]
 fn absolute_forward_slash_batch_file_receives_its_arguments() {
     let (root, sub) = layout();
     let abs = sub

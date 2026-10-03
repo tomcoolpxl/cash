@@ -288,6 +288,20 @@ fn cmd_metacharacters_are_caret_escaped() {
 }
 
 #[test]
+fn inside_quotes_a_metacharacter_gets_no_caret() {
+    // cmd keeps a caret inside quotes: a batch file got `Q^&A notes.txt` (W32-01).
+    assert_eq!(escape_for_cmd("Q&A notes.txt"), r#""Q&A notes.txt""#);
+    assert_eq!(escape_for_cmd("a | b"), r#""a | b""#);
+    // A quote in a word turns cmd's quoting off and on again; what follows is judged by it.
+    assert_eq!(escape_for_cmd(r#"say "hi" & bye"#), r#""say \"hi\" & bye""#);
+    // An odd quote leaves cmd inside quotes for the next word.
+    assert_eq!(
+        cash_win32::cmd::escape_words_for_cmd([r#"a"b"#, "c&d"]),
+        r#""a\"b" c&d"#
+    );
+}
+
+#[test]
 fn cmd_escaping_keeps_argument_quotes_structural() {
     assert_eq!(
         escape_for_cmd(r"C:\Program Files\tool.cmd"),
