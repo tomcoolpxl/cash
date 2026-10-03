@@ -113,3 +113,22 @@ fn a_backslash_in_backquotes_is_removed_before_dollar_backquote_and_backslash() 
         ("x=val; cat <<EOF\n`echo \\\"q\\\" \\$x`\nEOF", "\"q\" val"),
     ]);
 }
+
+#[test]
+fn a_quoted_ampersand_in_a_replacement_is_literal() {
+    // Only the replacement text's own quotes were seen: `"$r"` with `r='&&'` and `"&"`
+    // put the match in, and a quoted backslash escaped the `&` after it (LANG-14).
+    check(&[
+        (
+            "x=abc; r='&&'; echo \"${x/b/\"$r\"}\" ${x/b/\"$r\"}",
+            "a&&c a&&c",
+        ),
+        ("x=abc; r='&&'; echo ${x/b/$r} ${x/b/&&}", "abbc abbc"),
+        (
+            "x=abc; echo \"${x/b/\"&\"}\" ${x/b/'&'} ${x/b/\\&}",
+            "a&c a&c a&c",
+        ),
+        ("x=abc; echo ${x/b/'\\'&} ${x/b/\\\\&}", "a\\bc a\\bc"),
+        ("x=abc; q='\\&'; echo ${x/b/$q} ${x//?/&-}", "a&c a-b-c-"),
+    ]);
+}

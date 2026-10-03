@@ -27,27 +27,26 @@ use crate::variables::{self, ShellValue};
 
 mod fieldsplit;
 
+// An `&` and a backslash of a pattern replacement that were quoted: literal, rather than
+// the match and an escape.
 const QUOTED_REPLACEMENT_AMPERSAND: char = '\u{F0000}';
+const QUOTED_REPLACEMENT_BACKSLASH: char = '\u{F0001}';
 
-fn quote_replacement_ampersands(word: &str) -> String {
-    let mut result = String::with_capacity(word.len());
-    let mut chars = word.chars().peekable();
-    let mut single_quoted = false;
-    while let Some(ch) = chars.next() {
-        match ch {
-            '\'' => {
-                single_quoted = !single_quoted;
-                result.push(ch);
-            }
-            '\\' if !single_quoted && chars.peek() == Some(&'&') => {
-                chars.next();
-                result.push(QUOTED_REPLACEMENT_AMPERSAND);
-            }
-            '&' if single_quoted => result.push(QUOTED_REPLACEMENT_AMPERSAND),
-            _ => result.push(ch),
-        }
+/// A pattern replacement's expanded text, with each quoted `&` and backslash marked:
+/// `"&"` and `"$r"` are literal, as `'&'` and `\&` are. Only the text's own quotes were
+/// seen, so `"$r"` with `r='&&'` put the match in (LANG-14).
+fn mark_quoted_replacement_text(piece: ExpansionPiece) -> String {
+    match piece {
+        ExpansionPiece::Unsplittable(s) => s
+            .chars()
+            .map(|c| match c {
+                '&' => QUOTED_REPLACEMENT_AMPERSAND,
+                '\\' => QUOTED_REPLACEMENT_BACKSLASH,
+                c => c,
+            })
+            .collect(),
+        piece => String::from(piece),
     }
-    result
 }
 
 /// Controls how the expander handles a backslash-escape sequence (`\X`)
@@ -890,6 +889,20 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
     /// Apply tilde-expansion, parameter expansion, command substitution, and arithmetic expansion.
     pub async fn basic_expand_to_str(&mut self, word: &str) -> Result<String, error::Error> {
         let expansion = self.basic_expand(word).await?;
+        Ok(self.fields_to_string(expansion))
+    }
+
+    /// [`Self::basic_expand_to_str`] for a pattern replacement, with what was quoted
+    /// marked by [`mark_quoted_replacement_text`].
+    async fn basic_expand_replacement(&mut self, word: &str) -> Result<String, error::Error> {
+        let mut expansion = self.basic_expand(word).await?;
+        for field in &mut expansion.fields {
+            let pieces = std::mem::take(&mut field.0);
+            field.0 = pieces
+                .into_iter()
+                .map(|piece| ExpansionPiece::Splittable(mark_quoted_replacement_text(piece)))
+                .collect();
+        }
         Ok(self.fields_to_string(expansion))
     }
 
@@ -2050,11 +2063,7 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
 
                 // If no replacement was provided, then we replace with an empty string.
                 let replacement = replacement.unwrap_or(String::new());
-                // Preserve ampersands quoted in the replacement word through word
-                // expansion. The expansion API returns plain text and loses that
-                // quoting information otherwise.
-                let quoted_replacement = quote_replacement_ampersands(&replacement);
-                let expanded_replacement = self.basic_expand_to_str(&quoted_replacement).await?;
+                let expanded_replacement = self.basic_expand_replacement(&replacement).await?;
                 let expand_match = self.shell.options().patsub_replacement;
 
                 let regex = expanded_pattern.to_regex(
@@ -2610,6 +2619,8 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
             while let Some(ch) = chars.next() {
                 if ch == QUOTED_REPLACEMENT_AMPERSAND {
                     output.push('&');
+                } else if ch == QUOTED_REPLACEMENT_BACKSLASH {
+                    output.push('\\');
                 } else if ch == '\\' && matches!(chars.clone().next(), Some('&')) {
                     chars.next();
                     output.push('&');
