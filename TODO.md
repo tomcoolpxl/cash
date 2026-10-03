@@ -56,21 +56,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ---
 
-## Phase 13. Builtins and error output (R4, R8)
-
-### 13.4 Error output: colour, prefixes, `--help`
-
-13.4 is done.
-
-### 13.5 D36: measure the pooled prompt job, then build it or drop it
-
-Every prompt spawn creates a job object and sweeps the registry; D36's pool was never
-built. Time a Starship prompt with and without the job creation. Build the pool if it
-saves more than about 5 ms a prompt; otherwise amend D36 and D6's exception table, with
-the measurement (decided, below). EXE-13, W32-10.
-
----
-
 ## Phase 14. Tests, records and leftovers (R10, R11)
 
 ### 14.1 Tests
@@ -197,7 +182,9 @@ in Bash they are Bash's version. `\s` gives `cash`. Keep cash's, and add a row t
   Keeping the warning and adding the execute ACE were turned down.
 - **D36 is measured before it is built or dropped** (the user, 2026-10-02): the pool is
   built only if it saves a noticeable amount (about 5 ms a prompt); otherwise D36 and
-  D6's table are amended, with the measurement.
+  D6's table are amended, with the measurement. Measured 2026-10-03: the job setup is
+  0.18 ms a spawn against 128 ms for a Starship prompt (`prompt_job_cost` example), so
+  the pool was dropped and D36 and D6's table amended.
 - **`time` and `times` report real CPU time** (the user, 2026-10-02). Documenting zeros
   as a divergence was turned down.
 - **The first Tab inserts the shared part, the second opens the grid on the hinted

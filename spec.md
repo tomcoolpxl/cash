@@ -256,14 +256,13 @@ and their descendants (VS Code's terminals and language servers) running, as Pow
 does. `cashctl gui-apps close` turns this off for the session; `cashctl gui-apps` prints
 the setting. A crash or a kill from Task Manager still reaps everything.
 
-**Four documented exceptions to that guarantee.** They must be stated wherever the
+**Three documented exceptions to that guarantee.** They must be stated wherever the
 guarantee is claimed:
 
 | Exception | Why | Ref |
 |---|---|---|
 | Elevated processes | Cannot be assigned across an integrity boundary | D42 |
 | `detach`ed processes | Requires `JOB_OBJECT_LIMIT_BREAKAWAY_OK` on the session job, which any child can then exploit | D45 |
-| Prompt commands | Share a pooled job rather than getting their own | D36 |
 | GUI applications, on an orderly exit | An editor opened from the shell should not close with it; `cashctl gui-apps close` restores the full guarantee | D6 |
 
 Resolved sub-questions: `trap EXIT` ordering → D14; the `detach` builtin → D45.
@@ -1225,20 +1224,20 @@ otherwise it names what to install. Applets whose reduction nothing notices (`ca
 `cat`) are not reported. Doctor also notes the System32 tools cash shadows on purpose
 (`ping`, D57; `reset`, D55) and how to reach them.
 
-### D36 — Short-lived prompt commands use a pooled job object
+### D36 — Prompt commands get their own job, as every command does (measured)
 
-`PROMPT_COMMAND` and `PS1` command substitutions run in a long-lived, reused job object
-rather than getting a freshly created nested one per invocation.
+*Superseded on 2026-10-03, by measurement.* D36 had `PROMPT_COMMAND` and `PS1` command
+substitutions share a long-lived, pooled job object, for fear that D6's per-job setup on
+the prompt's path (`CreateJobObject`, `SetInformationJobObject`,
+`AssignProcessToJobObject`, the handle close, and the registry sweep) would slow every
+prompt. The pool was never built, and it would save nothing anyone could see:
+`cargo run --release -p cash-win32 --example prompt_job_cost` measures the setup at
+0.18 ms a spawn, against 128 ms for a Starship prompt start to finish, about 0.14% of it,
+far under the 5 ms that was to justify building it (TODO, decided 2026-10-02).
 
-**Why this is not premature optimisation.** Starship spawns a process on *every prompt
-render*, so D6's per-job setup — `CreateJobObject`, `SetInformationJobObject`,
-`AssignProcessToJobObject`, handle close — lands on the single most latency-sensitive
-path in the shell, paid on every keystroke-to-prompt cycle. Windows process creation is
-already expensive enough that Starship feels slower here than on Linux.
-
-D6's containment is preserved: prompt commands are still inside a job, just a shared one.
-They share a kill scope, which is acceptable because they are by definition trivial and
-short-lived.
+So prompt commands are contained as every command is, each in its own job, and they are
+no longer an exception to D6's guarantee. What makes Starship slower here than on Linux
+is process creation itself, not the job.
 
 ### D37 — Starship is a stated requirement, tested from M1
 
