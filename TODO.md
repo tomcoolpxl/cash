@@ -60,11 +60,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 12.3 Smaller expansion differences
 
-Tab turns `ls ~/Doc` into `ls C:/Users/me/Documents`; Bash keeps `~/Documents`, as
-`compgen` now does. Keeping it means the auto-quoting (D40) has to leave a leading `~/`
-outside the quotes (`~/'my dir/'`), or the tilde is no longer expanded. Found fixing
-`compgen`'s word.
-
 Also seen while fixing 8.1: past the function depth limit (500, or `FUNCNEST`) cash
 reports "maximum function call depth exceeded" and the script goes on, `$?` 0; Bash 5.3
 reports "maximum function nesting level exceeded (500)" and abandons the command.

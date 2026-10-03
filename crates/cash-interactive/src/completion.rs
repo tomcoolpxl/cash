@@ -78,7 +78,6 @@ pub(crate) async fn complete_async(
     completions
 }
 
-#[allow(dead_code)]
 fn postprocess_completion_candidate(
     mut candidate: String,
     options: &cash_core::completion::ProcessingOptions,

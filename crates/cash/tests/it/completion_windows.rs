@@ -222,6 +222,22 @@ async fn typed_glob_characters_are_completed_as_they_are() {
 }
 
 #[tokio::test]
+async fn a_typed_tilde_stays_in_the_completion() {
+    // Tab put the home folder in place of `~/`; Bash keeps it, and the quotes a name
+    // needs go after it, where the tilde is still expanded.
+    let mut fixture = Fixture::new("tilde").await;
+    fixture.mkdir("Docs");
+    fixture.mkdir("my dir");
+    fixture.touch("notes.txt");
+    let home = fixture.path().to_string_lossy().replace('\\', "/");
+    fixture.define(&format!("HOME='{home}'")).await;
+
+    assert_eq!(fixture.complete("ls ~/Do").await, vec!["~/Docs/"]);
+    assert_eq!(fixture.complete("ls ~/my").await, vec!["~/'my dir/'"]);
+    assert_eq!(fixture.complete("ls ~/no").await, vec!["~/notes.txt"]);
+}
+
+#[tokio::test]
 async fn compgen_takes_its_word_as_given() {
     // As Bash's `compgen -f` and `-d`: quotes and backslashes in the word are part of
     // the name, and a `~/` or `$HOME/` keeps its spelling. Cash removed the quotes a

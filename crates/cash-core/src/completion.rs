@@ -1340,10 +1340,20 @@ fn autoquote_candidates(
         .map(|candidate| {
             // A trailing space is the "this completion is finished" marker further down
             // the pipeline; it must stay outside the quotes.
-            let (mut body, trailing) = match candidate.strip_suffix(' ') {
+            let (body, trailing) = match candidate.strip_suffix(' ') {
                 Some(body) => (body.to_string(), " "),
                 None => (candidate, ""),
             };
+            // A typed `~/` (or `~user/`) stays outside the quotes, where it is still
+            // expanded: `~/'my dir/'`.
+            let tilde_len = if replaced_prefix.starts_with('~') {
+                tilde_prefix_len(&body)
+            } else {
+                0
+            };
+            let (tilde, rest) = body.split_at(tilde_len);
+            let tilde = tilde.to_owned();
+            let mut body = rest.to_owned();
             let quote = |body: &str| match style {
                 QuoteStyle::Single => single_quoted(body),
                 QuoteStyle::Double => double_quoted(body),
@@ -1360,9 +1370,27 @@ fn autoquote_candidates(
                 body.push('/');
                 quoted = quote(&body);
             }
-            quoted + trailing
+            tilde + &quoted + trailing
         })
         .collect()
+}
+
+/// The length of a leading `~/` or `~user/` of `name`; 0 if it has none.
+fn tilde_prefix_len(name: &str) -> usize {
+    let Some(after_tilde) = name.strip_prefix('~') else {
+        return 0;
+    };
+    match after_tilde.find('/') {
+        Some(slash)
+            if after_tilde.get(..slash).is_some_and(|user| {
+                user.chars()
+                    .all(|c| c.is_alphanumeric() || matches!(c, '_' | '-' | '.'))
+            }) =>
+        {
+            slash + 2
+        }
+        _ => 0,
+    }
 }
 
 /// How the user started quoting the word being completed.
@@ -1605,8 +1633,11 @@ async fn get_file_completions(
         }
     }
 
-    // `compgen` gives the names in the spelling of the folder it was given.
-    if from_compgen {
+    // `compgen` gives the names in the spelling of the folder it was given, and Tab keeps
+    // a typed `~/` as Bash does; it put the home folder in its place. A folder then gets
+    // its `/` here, where it can still be looked up.
+    let keeps_tilde = !from_compgen && token_to_complete.starts_with('~');
+    if from_compgen || keeps_tilde {
         let folder = |word: &str| word.rfind('/').map(|slash| slash + 1);
         let typed_folder = folder(&to_expand).and_then(|end| to_expand.get(..end));
         let expanded_folder = folder(&expanded_token).and_then(|end| expanded_token.get(..end));
@@ -1614,8 +1645,11 @@ async fn get_file_completions(
             && typed != expanded
         {
             for completion in &mut completions {
+                let is_dir = keeps_tilde
+                    && !completion.ends_with('/')
+                    && shell.absolute_path(Path::new(completion.as_str())).is_dir();
                 if let Some(rest) = completion.get(expanded.len()..) {
-                    *completion = std::format!("{typed}{rest}");
+                    *completion = std::format!("{typed}{rest}{}", if is_dir { "/" } else { "" });
                 }
             }
         }
