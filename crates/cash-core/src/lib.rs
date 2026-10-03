@@ -80,8 +80,8 @@ mod wellknownvars;
 /// Re-export parser types used in core definitions.
 pub mod parser {
     pub use cash_parser::{
-        BindingParseError, ParseError, ParserImpl, SourcePosition, SourcePositionOffset,
-        SourceSpan, TestCommandParseError, WordParseError, ast,
+        BindingParseError, ParseError, SourcePosition, SourcePositionOffset, SourceSpan,
+        TestCommandParseError, WordParseError, ast,
     };
 }
 

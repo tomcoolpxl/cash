@@ -32,19 +32,12 @@ default = ["basic", "reedline", "minimal"]
 basic = ["cash-interactive/basic"]
 minimal = ["cash-interactive/minimal"]
 reedline = ["cash-interactive/reedline"]
-experimental = [
-    "experimental-load",
-    "experimental-parser",
-]
+experimental = ["experimental-load"]
 bundled-coreutils = [
     "dep:cash-coreutils-builtins",
     "cash-coreutils-builtins/coreutils.all",
 ]
 experimental-load = ["dep:serde_json", "cash-core/serde"]
-experimental-parser = [
-    "cash-core/experimental-parser",
-    "cash-parser/winnow-parser",
-]
 schema = ["dep:schemars"]
 
 [lints]

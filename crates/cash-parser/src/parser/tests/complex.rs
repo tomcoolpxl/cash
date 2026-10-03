@@ -64,9 +64,8 @@ fn a_nested_case_without_its_last_terminator_parses_in_linear_time() {
 
 #[test]
 fn only_the_last_case_item_may_go_without_a_terminator() {
-    let peg = &super::parser_configs()[0];
-    assert!(super::parse_with_config("case a in a) echo x\nb) echo y ;; esac", peg).is_err());
-    assert!(super::parse_with_config("case a in a) echo x ;; b) echo y\nesac", peg).is_ok());
+    assert!(super::parse("case a in a) echo x\nb) echo y ;; esac").is_err());
+    assert!(super::parse("case a in a) echo x ;; b) echo y\nesac").is_ok());
 }
 
 #[test]

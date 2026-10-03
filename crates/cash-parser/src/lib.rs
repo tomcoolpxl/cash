@@ -25,9 +25,7 @@ pub use error::{
 #[cfg(feature = "diagnostics")]
 pub use error::miette::PrettyError;
 
-#[cfg(feature = "winnow-parser")]
-pub use parser::winnow_str;
-pub use parser::{Parser, ParserBuilder, ParserImpl, ParserOptions, SourceInfo, parse_tokens};
+pub use parser::{Parser, ParserBuilder, ParserOptions, SourceInfo, parse_tokens};
 
 pub use source::{SourcePosition, SourcePositionOffset, SourceSpan};
 pub use tokenizer::{

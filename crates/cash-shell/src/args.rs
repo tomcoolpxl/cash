@@ -195,11 +195,6 @@ pub struct CommandLineArgs {
     )]
     pub enable_highlighting: bool,
 
-    /// Enable experimental parser (not ready for use).
-    #[cfg(feature = "experimental-parser")]
-    #[clap(long = "experimental-parser", help_heading = HEADING_EXPERIMENTAL_OPTIONS)]
-    pub experimental_parser: bool,
-
     /// Terminal shell integration: OSC 133 prompt/command marks and OSC 9;9 working
     /// directory reporting.
     ///

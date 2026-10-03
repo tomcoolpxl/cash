@@ -602,17 +602,6 @@ async fn instantiate_shell_from_args(
         .filter_map(|&fd| cash_core::sys::fd::try_get_file_for_open_fd(fd).map(|file| (fd, file)))
         .collect();
 
-    // Select parser implementation to use.
-    #[cfg(feature = "experimental-parser")]
-    let parser_impl = if args.experimental_parser {
-        cash_core::parser::ParserImpl::Winnow
-    } else {
-        cash_core::parser::ParserImpl::Peg
-    };
-
-    #[cfg(not(feature = "experimental-parser"))]
-    let parser_impl = cash_core::parser::ParserImpl::Peg;
-
     // cash (D13): an interactive shell takes Ctrl-C back from a parent that ignored it, so
     // that the programs it runs can be interrupted.
     if args.is_interactive() {
@@ -654,7 +643,6 @@ async fn instantiate_shell_from_args(
         .exit_on_nonzero_command_exit(args.exit_on_nonzero_command_exit)
         .disable_pathname_expansion(args.disable_pathname_expansion)
         .verbose(args.verbose)
-        .parser(parser_impl)
         .error_formatter(new_error_behavior(args))
         .shell_version(env!("CARGO_PKG_VERSION").to_string());
 

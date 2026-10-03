@@ -179,10 +179,6 @@ pub struct Shell<SE: extensions::ShellExtensions = extensions::DefaultShellExten
     /// Last "SECONDS" offset requested.
     last_stopwatch_offset: i64,
 
-    /// Parser implementation to use.
-    #[cfg_attr(feature = "serde", serde(skip))]
-    parser_impl: crate::parser::ParserImpl,
-
     /// Key bindings for the shell, optionally implemented by an interactive shell.
     #[cfg_attr(feature = "serde", serde(skip))]
     key_bindings: Option<KeyBindingsHelper>,
@@ -252,7 +248,6 @@ impl<SE: extensions::ShellExtensions> Clone for Shell<SE> {
             directory_history: self.directory_history.clone(),
             last_stopwatch_time: self.last_stopwatch_time,
             last_stopwatch_offset: self.last_stopwatch_offset,
-            parser_impl: self.parser_impl,
             key_bindings: self.key_bindings.clone(),
             history: self.history.clone(),
             commands_read: self.commands_read,
@@ -320,7 +315,6 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
                     .as_path(),
             ),
             builtins: options.builtins,
-            parser_impl: options.parser,
             key_bindings: options.key_bindings,
             ..Self::default()
         };

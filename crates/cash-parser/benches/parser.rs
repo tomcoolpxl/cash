@@ -1,8 +1,4 @@
-//! Benchmarks for the brush-parser crate.
-//!
-//! Compares parsing approaches:
-//! 1. PEG parser (tokenize + peg parse)
-//! 2. `Winnow_str` parser (direct string parse) - when winnow-parser feature enabled
+//! Benchmarks for the cash-parser crate: tokenizing, and the PEG parser.
 
 #![allow(missing_docs)]
 #![allow(clippy::unwrap_used)]
@@ -23,13 +19,6 @@ mod bench {
 
     fn parse_peg(tokens: &[Token]) -> cash_parser::ast::Program {
         cash_parser::parse_tokens(tokens, &cash_parser::ParserOptions::default()).unwrap()
-    }
-
-    #[cfg(feature = "winnow-parser")]
-    fn parse_winnow_str(content: &str) -> cash_parser::ast::Program {
-        use cash_parser::{ParserOptions, SourceInfo, winnow_str};
-        winnow_str::parse_program(content, &ParserOptions::default(), &SourceInfo::default())
-            .unwrap()
     }
 
     // Combined tokenize + parse functions for full pipeline comparison
@@ -130,19 +119,11 @@ backtick=`echo (nested parens)`
         // Simple script benchmarks
         let simple_tokens = uncached_tokenize(SIMPLE_SCRIPT);
         c.bench_function("parse_peg_simple", |b| b.iter(|| parse_peg(&simple_tokens)));
-        #[cfg(feature = "winnow-parser")]
-        c.bench_function("parse_winnow_str_simple", |b| {
-            b.iter(|| parse_winnow_str(SIMPLE_SCRIPT));
-        });
 
         // Pipeline script benchmarks
         let pipeline_tokens = uncached_tokenize(PIPELINE_SCRIPT);
         c.bench_function("parse_peg_pipeline", |b| {
             b.iter(|| parse_peg(&pipeline_tokens));
-        });
-        #[cfg(feature = "winnow-parser")]
-        c.bench_function("parse_winnow_str_pipeline", |b| {
-            b.iter(|| parse_winnow_str(PIPELINE_SCRIPT));
         });
 
         // Sample script (for loop) benchmarks
@@ -150,19 +131,11 @@ backtick=`echo (nested parens)`
         c.bench_function("parse_peg_for_loop", |b| {
             b.iter(|| parse_peg(&sample_tokens));
         });
-        #[cfg(feature = "winnow-parser")]
-        c.bench_function("parse_winnow_str_for_loop", |b| {
-            b.iter(|| parse_winnow_str(SAMPLE_SCRIPT));
-        });
 
         // Complex script benchmarks
         let complex_tokens = uncached_tokenize(COMPLEX_SCRIPT);
         c.bench_function("parse_peg_complex", |b| {
             b.iter(|| parse_peg(&complex_tokens));
-        });
-        #[cfg(feature = "winnow-parser")]
-        c.bench_function("parse_winnow_str_complex", |b| {
-            b.iter(|| parse_winnow_str(COMPLEX_SCRIPT));
         });
 
         // Real-world bash completion script (if available)
@@ -179,51 +152,30 @@ backtick=`echo (nested parens)`
         // These benchmarks measure the complete parsing pipeline from string to AST,
         // allowing fair comparison between different approaches:
         // - tokenize_and_parse_peg: Legacy tokenizer + PEG parser
-        // - parse_winnow_str: Direct string parsing (no separate tokenization)
 
         // Simple script full pipeline
         c.bench_function("full_peg_simple", |b| {
             b.iter(|| tokenize_and_parse_peg(SIMPLE_SCRIPT));
-        });
-        #[cfg(feature = "winnow-parser")]
-        c.bench_function("full_winnow_str_simple", |b| {
-            b.iter(|| parse_winnow_str(SIMPLE_SCRIPT));
         });
 
         // Pipeline script full pipeline
         c.bench_function("full_peg_pipeline", |b| {
             b.iter(|| tokenize_and_parse_peg(PIPELINE_SCRIPT));
         });
-        #[cfg(feature = "winnow-parser")]
-        c.bench_function("full_winnow_str_pipeline", |b| {
-            b.iter(|| parse_winnow_str(PIPELINE_SCRIPT));
-        });
 
         // For loop full pipeline
         c.bench_function("full_peg_for_loop", |b| {
             b.iter(|| tokenize_and_parse_peg(SAMPLE_SCRIPT));
-        });
-        #[cfg(feature = "winnow-parser")]
-        c.bench_function("full_winnow_str_for_loop", |b| {
-            b.iter(|| parse_winnow_str(SAMPLE_SCRIPT));
         });
 
         // Complex script full pipeline
         c.bench_function("full_peg_complex", |b| {
             b.iter(|| tokenize_and_parse_peg(COMPLEX_SCRIPT));
         });
-        #[cfg(feature = "winnow-parser")]
-        c.bench_function("full_winnow_str_complex", |b| {
-            b.iter(|| parse_winnow_str(COMPLEX_SCRIPT));
-        });
 
         // Nested expansions (balanced delimiter parsing stress test)
         c.bench_function("full_peg_nested_expansions", |b| {
             b.iter(|| tokenize_and_parse_peg(NESTED_EXPANSIONS_SCRIPT));
-        });
-        #[cfg(feature = "winnow-parser")]
-        c.bench_function("full_winnow_str_nested_expansions", |b| {
-            b.iter(|| parse_winnow_str(NESTED_EXPANSIONS_SCRIPT));
         });
 
         // ========================================================================
@@ -232,36 +184,33 @@ backtick=`echo (nested parens)`
         // Benchmarks for the refactored extended test ([[ ]]) parser
         // Tests various patterns: simple, binary, regex, logical operators, nesting
 
-        #[cfg(feature = "winnow-parser")]
-        {
-            c.bench_function("extended_test_simple", |b| {
-                b.iter(|| parse_winnow_str(EXTENDED_TEST_SIMPLE));
-            });
+        c.bench_function("extended_test_simple", |b| {
+            b.iter(|| tokenize_and_parse_peg(EXTENDED_TEST_SIMPLE));
+        });
 
-            c.bench_function("extended_test_binary", |b| {
-                b.iter(|| parse_winnow_str(EXTENDED_TEST_BINARY));
-            });
+        c.bench_function("extended_test_binary", |b| {
+            b.iter(|| tokenize_and_parse_peg(EXTENDED_TEST_BINARY));
+        });
 
-            c.bench_function("extended_test_regex", |b| {
-                b.iter(|| parse_winnow_str(EXTENDED_TEST_REGEX));
-            });
+        c.bench_function("extended_test_regex", |b| {
+            b.iter(|| tokenize_and_parse_peg(EXTENDED_TEST_REGEX));
+        });
 
-            c.bench_function("extended_test_complex_regex", |b| {
-                b.iter(|| parse_winnow_str(EXTENDED_TEST_COMPLEX_REGEX));
-            });
+        c.bench_function("extended_test_complex_regex", |b| {
+            b.iter(|| tokenize_and_parse_peg(EXTENDED_TEST_COMPLEX_REGEX));
+        });
 
-            c.bench_function("extended_test_logical", |b| {
-                b.iter(|| parse_winnow_str(EXTENDED_TEST_LOGICAL));
-            });
+        c.bench_function("extended_test_logical", |b| {
+            b.iter(|| tokenize_and_parse_peg(EXTENDED_TEST_LOGICAL));
+        });
 
-            c.bench_function("extended_test_nested", |b| {
-                b.iter(|| parse_winnow_str(EXTENDED_TEST_NESTED));
-            });
+        c.bench_function("extended_test_nested", |b| {
+            b.iter(|| tokenize_and_parse_peg(EXTENDED_TEST_NESTED));
+        });
 
-            c.bench_function("extended_test_complex", |b| {
-                b.iter(|| parse_winnow_str(EXTENDED_TEST_COMPLEX));
-            });
-        }
+        c.bench_function("extended_test_complex", |b| {
+            b.iter(|| tokenize_and_parse_peg(EXTENDED_TEST_COMPLEX));
+        });
     }
 }
 

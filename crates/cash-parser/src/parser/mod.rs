@@ -6,19 +6,6 @@ use crate::ast;
 use crate::tokenizer::{Token, TokenEndReason, Tokenizer, TokenizerOptions, Tokens};
 
 pub mod peg;
-#[cfg(feature = "winnow-parser")]
-pub mod winnow_str;
-
-/// Parser implementation to use
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Default)]
-pub enum ParserImpl {
-    /// PEG-based parser (token-based)
-    #[default]
-    Peg,
-    /// Winnow-based parser (string-based, direct)
-    #[cfg(feature = "winnow-parser")]
-    Winnow,
-}
 
 /// Options used to control the behavior of the parser.
 #[derive(Clone, Eq, Hash, PartialEq)]
@@ -40,8 +27,6 @@ pub struct ParserOptions {
     /// Whether an unquoted word that starts with a drive and a backslash (`C:\`) keeps
     /// the backslashes in its leading unquoted run (cash's `winpaths`, D53).
     pub windows_drive_paths: bool,
-    /// Select the parser internal implementation
-    pub parser_impl: ParserImpl,
 }
 
 impl Default for ParserOptions {
@@ -54,7 +39,6 @@ impl Default for ParserOptions {
             tilde_expansion_after_colon: false,
             tilde_expansion_in_assignment_words: false,
             windows_drive_paths: false,
-            parser_impl: ParserImpl::default(),
         }
     }
 }
@@ -137,9 +121,6 @@ impl<R: std::io::BufRead> Parser<R> {
         #[builder(default = false)]
         /// Whether a word starting `C:\` keeps its backslashes (cash's `winpaths`).
         windows_drive_paths: bool,
-        #[builder(default)]
-        /// Select the parser internal implementation
-        parser_impl: ParserImpl,
     ) -> Self {
         let options = ParserOptions {
             enable_extended_globbing,
@@ -149,7 +130,6 @@ impl<R: std::io::BufRead> Parser<R> {
             tilde_expansion_after_colon,
             tilde_expansion_in_assignment_words: false,
             windows_drive_paths,
-            parser_impl,
         };
         Self { reader, options }
     }
@@ -163,30 +143,8 @@ impl<R: std::io::BufRead> Parser<R> {
         //   * https://aosabook.org/en/v1/bash.html
         //   * https://pubs.opengroup.org/onlinepubs/9699919799/utilities/V3_chap02.html
         //
-        match self.options.parser_impl {
-            ParserImpl::Peg => {
-                let tokens = self.tokenize()?;
-                parse_tokens(&tokens, &self.options)
-            }
-            #[cfg(feature = "winnow-parser")]
-            ParserImpl::Winnow => {
-                // Read entire input to string for winnow_str parser
-                let mut input_str = String::new();
-                std::io::Read::read_to_string(&mut self.reader, &mut input_str).map_err(|e| {
-                    crate::error::ParseError::Tokenizing {
-                        inner: crate::tokenizer::TokenizerError::from(e),
-                        position: None,
-                    }
-                })?;
-
-                winnow_str::parse_program(&input_str, &self.options, &SourceInfo::default())
-                    .map_err(|_e| {
-                        // Convert winnow error to ParseError
-                        // TODO: Extract position information from winnow error
-                        crate::error::ParseError::ParsingAtEndOfInput
-                    })
-            }
-        }
+        let tokens = self.tokenize()?;
+        parse_tokens(&tokens, &self.options)
     }
 
     /// Parses a function definition body from the input. The body is expected to be

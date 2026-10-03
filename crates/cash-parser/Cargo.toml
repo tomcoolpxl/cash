@@ -22,7 +22,6 @@ arbitrary = ["dep:arbitrary"]
 debug-tracing = ["peg/trace"]
 diagnostics = ["dep:miette"]
 serde = ["dep:serde"]
-winnow-parser = ["dep:winnow"]
 
 [dependencies]
 itertools = { workspace = true }
@@ -37,7 +36,6 @@ serde = { workspace = true, optional = true, features = ["derive", "rc"] }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 utf8-chars = { workspace = true }
-winnow = { version = "1.0.0", optional = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }

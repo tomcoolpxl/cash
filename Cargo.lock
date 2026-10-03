@@ -687,7 +687,6 @@ dependencies = [
  "thiserror 2.0.20",
  "tracing",
  "utf8-chars",
- "winnow",
 ]
 
 [[package]]

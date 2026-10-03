@@ -20,7 +20,6 @@ workspace = true
 [features]
 default = []
 serde = ["dep:serde", "cash-parser/serde", "rpds/serde", "chrono/serde"]
-experimental-parser = ["cash-parser/winnow-parser"]
 
 [dependencies]
 async-recursion = "1.1.1"
