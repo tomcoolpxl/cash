@@ -17,7 +17,7 @@ workspace = true
 [dependencies]
 # How many columns a character takes on the screen, to take it back off (conin.rs).
 unicode-width = "0.2.2"
-vte = "0.14"
+vte = "0.15"
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_Globalization",
