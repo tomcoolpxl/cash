@@ -11,8 +11,8 @@ use std::fmt::Write;
 
 use super::format::{
     FormatArgs, IntegerFormat, fmt_write_decimal_float, fmt_write_float_general,
-    fmt_write_hex_float, fmt_write_scientific_float, fmt_write_signed, fmt_write_signed_f64,
-    fmt_write_special_float, fmt_write_string, fmt_write_unsigned, parse_conversion_specifier_args,
+    fmt_write_hex_float, fmt_write_scientific_float, fmt_write_signed_f64, fmt_write_special_float,
+    fmt_write_string, fmt_write_unsigned, parse_conversion_specifier_args,
 };
 use super::record::{FieldSeparator, FieldsState, split_record};
 use super::stack::Stack;

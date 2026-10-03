@@ -48,19 +48,21 @@ impl StackValue {
     /// # Safety
     /// the caller has to ensure that the value is valid and dereferencable
     pub(crate) unsafe fn value_ref(&mut self) -> &mut AwkValue {
-        // SAFETY: the caller upholds this function's `# Safety` contract.
-        unsafe {
-            match self {
-                StackValue::Value(val) => val.get_mut(),
-                StackValue::ValueRef(val_ref) => &mut **val_ref,
-                StackValue::UninitializedRef(val_ref) => &mut **val_ref,
-                StackValue::ArrayElementRef(array_element_ref) => (*array_element_ref.array)
+        match self {
+            StackValue::Value(val) => val.get_mut(),
+            // SAFETY: the caller ensures the pointer is valid (`# Safety`).
+            StackValue::ValueRef(val_ref) => unsafe { &mut **val_ref },
+            // SAFETY: the caller ensures the pointer is valid (`# Safety`).
+            StackValue::UninitializedRef(val_ref) => unsafe { &mut **val_ref },
+            StackValue::ArrayElementRef(array_element_ref) => {
+                // SAFETY: the caller ensures the array pointer is valid (`# Safety`).
+                unsafe { &mut *array_element_ref.array }
                     .as_array()
                     .expect("expected array")
                     .get_value(array_element_ref.key.clone())
-                    .expect("array element"),
-                _ => unreachable!("invalid stack value"),
+                    .expect("array element")
             }
+            _ => unreachable!("invalid stack value"),
         }
     }
 
@@ -94,22 +96,24 @@ impl StackValue {
     /// # Safety
     /// pointers inside the `StackValue` have to be valid and dereferencable
     pub(crate) unsafe fn into_owned(self) -> AwkValue {
-        // SAFETY: the caller upholds this function's `# Safety` contract.
-        unsafe {
-            match self {
-                StackValue::Value(val) => val.into_inner(),
-                StackValue::ValueRef(ref_val) => (*ref_val).clone().into_ref(AwkRefType::None),
-                StackValue::UninitializedRef(_) => AwkValue::uninitialized_scalar(),
-                StackValue::ArrayElementRef(array_element_ref) => {
-                    let val = (*array_element_ref.array)
-                        .as_array()
-                        .expect("expected array")
-                        .get_value(array_element_ref.key.clone())
-                        .expect("array element");
-                    (*val).clone().into_ref(AwkRefType::None)
-                }
-                _ => unreachable!("invalid stack value"),
+        match self {
+            StackValue::Value(val) => val.into_inner(),
+            StackValue::ValueRef(ref_val) => {
+                // SAFETY: the caller ensures the pointer is valid (`# Safety`).
+                unsafe { &*ref_val }.clone().into_ref(AwkRefType::None)
             }
+            StackValue::UninitializedRef(_) => AwkValue::uninitialized_scalar(),
+            StackValue::ArrayElementRef(array_element_ref) => {
+                // SAFETY: the caller ensures the array pointer is valid (`# Safety`).
+                unsafe { &mut *array_element_ref.array }
+                    .as_array()
+                    .expect("expected array")
+                    .get_value(array_element_ref.key.clone())
+                    .expect("array element")
+                    .clone()
+                    .into_ref(AwkRefType::None)
+            }
+            _ => unreachable!("invalid stack value"),
         }
     }
 
@@ -194,7 +198,11 @@ impl<'i, 's> Stack<'i, 's> {
     pub(crate) fn pop(&mut self) -> Option<StackValue> {
         if self.sp != self.bp {
             let mut value = StackValue::Invalid;
+            // SAFETY: `sp` is above `bp`, so the slot below it is in the stack (`Stack`'s
+            // invariants).
             self.sp = unsafe { self.sp.sub(1) };
+            // SAFETY: `sp` is in [`bp`, `stack_end`), a slot of the stack's slice, which is
+            // initialized; it is left holding `Invalid`.
             unsafe { core::ptr::swap(&mut value, self.sp) };
             Some(value)
         } else {
@@ -208,33 +216,37 @@ impl<'i, 's> Stack<'i, 's> {
     /// # Safety
     /// `value` has to be valid at least until the value preceding it is popped
     pub(crate) unsafe fn push(&mut self, value: StackValue) -> Result<(), String> {
-        // SAFETY: the caller upholds this function's `# Safety` contract.
-        unsafe {
-            if self.sp == self.stack_end {
-                Err("stack overflow".to_string())
-            } else {
-                *self.sp = value;
-                self.sp = self.sp.add(1);
-                Ok(())
-            }
+        if self.sp == self.stack_end {
+            Err("stack overflow".to_string())
+        } else {
+            // SAFETY: `sp` is below `stack_end`, so it is a slot of the stack's slice, which
+            // is initialized; the value it held is dropped.
+            unsafe { *self.sp = value };
+            // SAFETY: one past a slot of the stack is at most `stack_end`, one past the end
+            // of the slice.
+            self.sp = unsafe { self.sp.add(1) };
+            Ok(())
         }
     }
 
     pub(crate) fn pop_scalar_value(&mut self) -> Result<AwkValue, String> {
         let mut value = self.pop().expect("empty stack");
-        // safe by type invariance
-        unsafe {
-            value.ensure_value_is_scalar()?;
-            Ok(value.into_owned())
-        }
+        // SAFETY: a popped value's pointers stay valid until the value pushed before it is
+        // popped (`push`), and that value is still on the stack.
+        unsafe { value.ensure_value_is_scalar()? };
+        // SAFETY: as above.
+        Ok(unsafe { value.into_owned() })
     }
 
     /// A local to write a scalar to: a parameter still linked to the caller's unused
     /// variable is detached first, into a value of its own, since scalars are passed by
     /// value (see `call_function`).
     pub(crate) fn local_scalar_ptr(&mut self, index: usize) -> Option<*mut AwkValue> {
-        if unsafe { self.sp.offset_from(self.bp) } >= index as isize {
-            let slot = unsafe { &mut *self.bp.add(index) };
+        if index < self.len() {
+            // SAFETY: the index is below `sp`, so the slot is in the stack.
+            let slot = unsafe { self.bp.add(index) };
+            // SAFETY: a slot below `sp` holds a value (`Stack`'s invariants).
+            let slot = unsafe { &mut *slot };
             if let StackValue::UninitializedRef(_) = slot {
                 *slot = StackValue::Value(UnsafeCell::new(AwkValue::uninitialized()));
             }
@@ -242,9 +254,23 @@ impl<'i, 's> Stack<'i, 's> {
         self.get_mut_value_ptr(index)
     }
 
+    /// How many values the current call frame has on the stack.
+    fn len(&self) -> usize {
+        // SAFETY: `sp` and `bp` point into the same slice, and `sp` is not below `bp`
+        // (`Stack`'s invariants).
+        let len = unsafe { self.sp.offset_from(self.bp) };
+        len.unsigned_abs()
+    }
+
+    /// A pointer to local `index` of the current call frame, `None` past its values. A
+    /// local at `sp` itself, one past the last value, was taken for one (`>=` where `>`
+    /// belonged), reading a slot that holds no value (`REVIEW_REPORT.md` ARCH-01).
     pub(crate) fn get_mut_value_ptr(&mut self, index: usize) -> Option<*mut AwkValue> {
-        if unsafe { self.sp.offset_from(self.bp) } >= index as isize {
-            let value = unsafe { &*self.bp.add(index) };
+        if index < self.len() {
+            // SAFETY: the index is below `sp`, so the slot is in the stack.
+            let value = unsafe { self.bp.add(index) };
+            // SAFETY: a slot below `sp` holds a value (`Stack`'s invariants).
+            let value = unsafe { &*value };
             match value {
                 StackValue::Value(val) => Some(val.get()),
                 StackValue::ValueRef(val_ref) => Some(*val_ref),
@@ -257,23 +283,23 @@ impl<'i, 's> Stack<'i, 's> {
     }
 
     pub(crate) fn pop_value(&mut self) -> AwkValue {
-        // safe by type invariance
-        unsafe {
-            let value = self.pop().expect("empty stack");
-            value.into_owned()
-        }
+        let value = self.pop().expect("empty stack");
+        // SAFETY: a popped value's pointers stay valid until the value pushed before it is
+        // popped (`push`), and that value is still on the stack.
+        unsafe { value.into_owned() }
     }
 
     pub(crate) fn pop_ref(&mut self) -> Result<&mut AwkValue, String> {
         let val = self.pop().ok_or_else(|| "empty stack".to_string())?;
-        unsafe {
-            let ptr = val.unwrap_ptr()?;
-            Ok(&mut *ptr)
-        }
+        // SAFETY: as in `pop_value`.
+        let ptr = unsafe { val.unwrap_ptr()? };
+        // SAFETY: as in `pop_value`.
+        Ok(unsafe { &mut *ptr })
     }
 
     pub(crate) fn push_value<V: Into<AwkValue>>(&mut self, value: V) -> Result<(), String> {
-        // a `StackValue::Value` is always valid, so this is safe
+        // SAFETY: a `StackValue::Value` holds no pointer, so it is valid for as long as it
+        // is on the stack.
         unsafe { self.push(StackValue::from(value.into())) }
     }
 
@@ -291,13 +317,15 @@ impl<'i, 's> Stack<'i, 's> {
     }
 
     pub(crate) fn call_function(&mut self, function: &'i Function) {
-        unsafe { assert!(self.sp.offset_from(self.bp) >= function.parameters_count as isize) };
+        assert!(self.len() >= function.parameters_count);
         // A variable the caller has not used yet stays linked to the caller's: if the
         // function uses it as an array, the caller's variable becomes that array, as in
         // every awk. A scalar is passed by value instead, so the first scalar write
         // detaches the parameter (`local_scalar_ptr`). The link used to be cut at the
         // call, so `function f(a) { a[1] = 5 } BEGIN { f(arr); print arr[1] }` printed
         // nothing (`REVIEW_REPORT.md` TXT-18).
+        // SAFETY: the frame holds the parameters, so `sp` less their count is not below
+        // `bp`.
         let new_bp = unsafe { self.sp.sub(function.parameters_count) };
         let caller_frame = CallFrame {
             bp: self.bp,
@@ -331,7 +359,7 @@ impl<'i, 's> Stack<'i, 's> {
     pub(crate) fn new(main: &'i Action, stack: &'s mut [StackValue]) -> Self {
         let stack_len = stack.len();
         let bp = stack.as_mut_ptr();
-        // one past the end pointers are safe
+        // SAFETY: one past the end of the slice is in bounds for `add`.
         let stack_end = unsafe { bp.add(stack_len) };
         Self {
             current_function_file: main.debug_info.file.clone(),
@@ -417,3 +445,26 @@ macro_rules! compare_op {
 
 pub(crate) use compare_op;
 pub(crate) use numeric_op;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_local_past_the_last_value_is_none() {
+        // `>=` took the slot at `sp` for a local, which holds no value, and the read
+        // reached `unreachable!` (REVIEW_REPORT.md ARCH-01).
+        let action = Action {
+            debug_info: Default::default(),
+            instructions: Vec::new(),
+        };
+        let mut slots: Vec<StackValue> = std::iter::repeat_with(|| StackValue::Invalid)
+            .take(4)
+            .collect();
+        let mut stack = Stack::new(&action, &mut slots);
+        stack.push_value(1.0).unwrap();
+        assert!(stack.get_mut_value_ptr(0).is_some());
+        assert!(stack.get_mut_value_ptr(1).is_none());
+        assert!(stack.local_scalar_ptr(1).is_none());
+    }
+}

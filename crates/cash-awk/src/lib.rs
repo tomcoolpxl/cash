@@ -8,6 +8,75 @@
 // SPDX-License-Identifier: MIT
 //
 
+//! POSIX awk for cash, absorbed from posixutils-rs (`posixutils-awk` 0.9.0). See
+//! README.md for what changed on the way in.
+
+// The workspace lints apply here as everywhere, the unsafe ones and rustc's warnings
+// included (REVIEW_REPORT.md ARCH-01); this crate came from posixutils-rs written to
+// other rules, so the style lints it was not written to are allowed rather than
+// rewritten, and the lints for code that can panic wait on TODO.md 14.5.
+#![allow(
+    elided_lifetimes_in_paths,
+    missing_docs,
+    clippy::borrow_as_ptr,
+    clippy::branches_sharing_code,
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::default_trait_access,
+    clippy::derive_partial_eq_without_eq,
+    clippy::doc_markdown,
+    clippy::enum_glob_use,
+    clippy::explicit_iter_loop,
+    clippy::float_cmp,
+    clippy::format_push_string,
+    clippy::implicit_clone,
+    clippy::inconsistent_struct_constructor,
+    clippy::items_after_statements,
+    clippy::manual_string_new,
+    clippy::map_unwrap_or,
+    clippy::match_wildcard_for_single_variants,
+    clippy::missing_const_for_fn,
+    clippy::needless_pass_by_ref_mut,
+    clippy::needless_pass_by_value,
+    clippy::needless_raw_string_hashes,
+    clippy::or_fun_call,
+    clippy::range_plus_one,
+    clippy::redundant_clone,
+    clippy::ref_as_ptr,
+    clippy::semicolon_if_nothing_returned,
+    clippy::single_match_else,
+    clippy::struct_field_names,
+    clippy::too_long_first_doc_paragraph,
+    clippy::too_many_lines,
+    clippy::trivially_copy_pass_by_ref,
+    clippy::uninlined_format_args,
+    clippy::unnecessary_box_returns,
+    clippy::unnecessary_cast,
+    clippy::unnecessary_map_or,
+    clippy::unnecessary_semicolon,
+    clippy::unnecessary_sort_by,
+    clippy::unnecessary_wraps,
+    clippy::unnested_or_patterns,
+    clippy::unreadable_literal,
+    clippy::unused_self,
+    clippy::use_self,
+    clippy::useless_let_if_seq,
+    reason = "posixutils-rs code, not written to the workspace's style lints"
+)]
+#![allow(
+    clippy::expect_used,
+    clippy::missing_panics_doc,
+    clippy::panic,
+    clippy::panic_in_result_fn,
+    clippy::string_slice,
+    clippy::unwrap_in_result,
+    clippy::unwrap_used,
+    reason = "panicking code from posixutils-rs, to be reviewed (TODO.md 14.5)"
+)]
+
 pub mod compiler;
 pub mod interpreter;
 pub mod program;

@@ -108,8 +108,8 @@ fn swap_sign_in_front_of_number(target: &mut String, sign: &str, write_starting_
         // the first byte before the start of the number is ASCII
         assert!(target.as_bytes()[final_sign_index].is_ascii());
 
-        // both the value at sign_index and final_sign_index are single byte ASCII character,
-        // so it's safe to swap them
+        // SAFETY: the bytes at `sign_index` and `final_sign_index` are both one-byte ASCII
+        // characters, so swapping them keeps the string UTF-8.
         unsafe { target.as_bytes_mut().swap(sign_index, final_sign_index) };
     }
 }

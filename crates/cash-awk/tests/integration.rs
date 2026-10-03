@@ -7,6 +7,22 @@
 // SPDX-License-Identifier: MIT
 //
 
+//! awk programs run against the expected output in `tests/awk`, most of it gawk's.
+
+#![allow(
+    missing_docs,
+    clippy::expect_used,
+    clippy::manual_assert,
+    clippy::manual_string_new,
+    clippy::missing_panics_doc,
+    clippy::needless_pass_by_value,
+    clippy::panic,
+    clippy::semicolon_if_nothing_returned,
+    clippy::tests_outside_test_module,
+    reason = "posixutils-rs tests: an integration test is outside a test module by \
+              construction, and a failed assumption in a test should abort it loudly"
+)]
+
 use std::io::Write;
 use std::process::{Command, Output, Stdio};
 

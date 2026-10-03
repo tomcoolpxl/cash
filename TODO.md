@@ -56,13 +56,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ## Phase 10. awk, sed and bc (R3)
 
-### 10.3 awk, bc and sed are outside every lint
-
-The three crates set `warnings = "allow"` and `clippy::all = "allow"`. Move them to
-`[lints] workspace = true` with a local allow-list for style lints, keeping the unsafe
-lints and rustc warnings on; add SAFETY comments to awk's VM; fix `>=` to `>` at
-`cash-awk/src/interpreter/stack.rs:230`. ARCH-01.
-
 ---
 
 ## Phase 11. Pipelines, jobs and process substitution (R5, R6)
@@ -233,6 +226,11 @@ Bash, or keep "no limit" and add a row to spec §4.
   by token calls in cash-win32. ARCH-07, ARCH-08, ARCH-17.
 - LICENSE symlinks to a missing `crates/LICENSE`; NOTICE without posixutils-rs and uutils
   sed. ARCH-15.
+- awk, bc and sed allow the lints for code that can panic (`unwrap_used`, `expect_used`,
+  `panic`, `panic_in_result_fn`, `unwrap_in_result`, `string_slice`,
+  `missing_panics_doc`): 58 `unwrap` and 34 `expect` in awk, 37 `expect` and 8 `panic!`
+  in bc, 41 `panic!` and 24 `unwrap` in sed. Each is an input that can crash the tool
+  or an invariant to write down. Left from 10.3, ARCH-01.
 - The Low findings not listed in phases 8 to 14 are in the report, §5.
 
 ---

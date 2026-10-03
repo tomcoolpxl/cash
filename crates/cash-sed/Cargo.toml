@@ -42,8 +42,5 @@ sha2 = { version = "0.11.0", default-features = false, features = ["alloc"] }
 uucore = { version = "0.12.0", features = ["entries", "process", "signals", "benchmark"] }
 uutests = "0.12.0"
 
-[lints.rust]
-warnings = "allow"
-
-[lints.clippy]
-all = { level = "allow", priority = -1 }
+[lints]
+workspace = true

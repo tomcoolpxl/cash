@@ -11,6 +11,47 @@
 //! POSIX `bc` for cash, absorbed from posixutils-rs (`calc/bc.rs` and `calc/bc_util`).
 //! See README.md for what changed on the way in.
 
+// The workspace lints apply here as everywhere, the unsafe ones and rustc's warnings
+// included (REVIEW_REPORT.md ARCH-01); this crate came from posixutils-rs written to
+// other rules, so the style lints it was not written to are allowed rather than
+// rewritten, and the lints for code that can panic wait on TODO.md 14.5.
+#![allow(
+    elided_lifetimes_in_paths,
+    clippy::assigning_clones,
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::derive_partial_eq_without_eq,
+    clippy::doc_markdown,
+    clippy::manual_let_else,
+    clippy::manual_string_new,
+    clippy::missing_const_for_fn,
+    clippy::needless_pass_by_value,
+    clippy::or_fun_call,
+    clippy::redundant_clone,
+    clippy::single_match_else,
+    clippy::too_many_lines,
+    clippy::uninlined_format_args,
+    clippy::unnecessary_box_returns,
+    clippy::unnecessary_trailing_comma,
+    clippy::unnested_or_patterns,
+    clippy::use_self,
+    clippy::useless_let_if_seq,
+    clippy::wildcard_imports,
+    reason = "posixutils-rs code, not written to the workspace's style lints"
+)]
+#![allow(
+    clippy::expect_used,
+    clippy::panic,
+    clippy::panic_in_result_fn,
+    clippy::string_slice,
+    clippy::unwrap_in_result,
+    clippy::unwrap_used,
+    reason = "panicking code from posixutils-rs, to be reviewed (TODO.md 14.5)"
+)]
+
 mod bc_util;
 mod diag;
 mod gnu;

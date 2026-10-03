@@ -19,7 +19,7 @@ enum AwkStringVariant {
 
 #[cfg_attr(test, derive(Debug))]
 #[derive(Clone)]
-pub struct AwkString {
+pub(crate) struct AwkString {
     value: AwkStringVariant,
     pub is_numeric: bool,
 }
@@ -46,12 +46,6 @@ impl AwkString {
 
     pub fn is_empty(&self) -> bool {
         self.as_str().is_empty()
-    }
-
-    pub fn numeric_string<V: Into<AwkString>>(val: V) -> AwkString {
-        let mut result = val.into();
-        result.is_numeric = true;
-        result
     }
 }
 

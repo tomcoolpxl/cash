@@ -352,7 +352,10 @@ impl Interpreter {
 
     fn bump_counter(&mut self, var: SpecialVar, global_env: &mut GlobalEnv) -> Result<(), String> {
         let ptr = self.globals[var as usize].get();
+        // SAFETY: a global's cell lives as long as the interpreter, and nothing else
+        // refers to NR or FNR while the record is counted.
         let next = unsafe { (*ptr).scalar_as_f64() } + 1.0;
+        // SAFETY: as above.
         unsafe { &mut *ptr }.assign(next, global_env)?;
         Ok(())
     }
@@ -379,8 +382,11 @@ impl Interpreter {
                 // `SpecialGlobalVar` ref_type; reach the cells through raw
                 // pointers because borrowing `self.globals` mutably would break
                 // the stacked borrows rules.
+                // SAFETY: a global's cell lives as long as the interpreter, and nothing
+                // else refers to RSTART while `match` returns.
                 unsafe { &mut *self.globals[SpecialVar::Rstart as usize].get() }
                     .assign(start, global_env)?;
+                // SAFETY: as above, for RLENGTH.
                 unsafe { &mut *self.globals[SpecialVar::Rlength as usize].get() }
                     .assign(len, global_env)?;
             }
@@ -649,10 +655,10 @@ impl Interpreter {
                     iter_var.ensure_value_is_scalar()?;
                     let iter_var = iter_var as *mut AwkValue;
                     let array = self.globals[index as usize].get();
+                    // SAFETY: a global's cell lives as long as the interpreter.
                     let key_iter = unsafe { &mut *array }.as_array()?.key_iter();
-                    // both iter_var and array are valid until the stack value is popped.
-                    // The first from stack invariance, the second because its a global,
-                    // so it will outlive the stack.
+                    // SAFETY: `iter_var` stays valid while the values below it are on the
+                    // stack (`push`), and `array` is a global, which outlives the stack.
                     unsafe {
                         stack.push(StackValue::Iterator(ArrayIterator {
                             iter_var,
@@ -668,9 +674,10 @@ impl Interpreter {
                     let array = stack
                         .get_mut_value_ptr(index as usize)
                         .expect("invalid local index");
-                    // has to be valid, by stack invariance
+                    // SAFETY: a local is a value of the current frame, on the stack.
                     let key_iter = unsafe { &mut *array }.as_array()?.key_iter();
-                    // both iter_var and array are valid, at least until this stack value is popped.
+                    // SAFETY: `iter_var` and the local `array` stay valid while the values
+                    // below the iterator are on the stack (`push`).
                     unsafe {
                         stack.push(StackValue::Iterator(ArrayIterator {
                             iter_var,
@@ -683,15 +690,15 @@ impl Interpreter {
                     // if the top of the stack is not an iterator
                     // the code is malformed
                     let mut iter = stack.pop().expect("empty stack").unwrap_array_iterator();
-                    // The pointer value is valid by stack invariance
+                    // SAFETY: the iterator's pointers stay valid while the values below
+                    // it are on the stack (`push`), and it was just popped.
                     let array = unsafe { &mut *iter.array }.as_array()?;
                     if let Some(key) = array.key_iter_next(&mut iter.key_iter) {
-                        unsafe {
-                            // `iter_var` is a valid by stack invariance
-                            *iter.iter_var = key.to_string().into();
-                            // we only modified the key iterator, so `iter` is still valid
-                            stack.push(StackValue::Iterator(iter))?;
-                        }
+                        // SAFETY: as above.
+                        unsafe { *iter.iter_var = key.to_string().into() };
+                        // SAFETY: only the key iterator changed, so the pointers are as
+                        // valid as when the iterator was pushed.
+                        unsafe { stack.push(StackValue::Iterator(iter))? };
                     } else {
                         ip_increment = offset as isize;
                     }
@@ -700,17 +707,22 @@ impl Interpreter {
                     let val = stack.pop_scalar_value()?;
                     stack.push_value(val.scalar_as_f64())?;
                 }
-                OpCode::GetGlobal(index) => unsafe {
-                    // globals outlive the stack, so this is safe even if the global is an array
-                    stack.push(StackValue::from_var(self.globals[index as usize].get()))?
-                },
+                OpCode::GetGlobal(index) => {
+                    let global = self.globals[index as usize].get();
+                    // SAFETY: a global's cell outlives the stack, array or not.
+                    let value = unsafe { StackValue::from_var(global) };
+                    // SAFETY: as above.
+                    unsafe { stack.push(value)? };
+                }
                 OpCode::GetLocal(index) => {
                     let value = stack
                         .get_mut_value_ptr(index as usize)
                         .expect("invalid local index");
-                    // this value is valid until the stack value at `index` is popped
-                    // so this preserves the stack invariance
-                    unsafe { stack.push(StackValue::from_var(value))? };
+                    // SAFETY: the local is valid until the value at `index` is popped, which
+                    // is below the one pushed here.
+                    let value = unsafe { StackValue::from_var(value) };
+                    // SAFETY: as above.
+                    unsafe { stack.push(value)? };
                 }
                 OpCode::GetField => {
                     let index = stack.pop_scalar_value()?.scalar_as_f64() as usize;
@@ -725,43 +737,40 @@ impl Interpreter {
                     let element = array.get_value(key.into())?.clone();
                     stack.push_value(element)?
                 }
-                OpCode::GlobalScalarRef(index) => unsafe {
-                    // globals outlive the stack, so this is safe
-                    stack.push_ref(self.globals[index as usize].get())?
-                },
+                OpCode::GlobalScalarRef(index) => {
+                    // SAFETY: a global's cell outlives the stack.
+                    unsafe { stack.push_ref(self.globals[index as usize].get())? };
+                }
                 OpCode::LocalScalarRef(index) => {
                     let value = stack
                         .local_scalar_ptr(index as usize)
                         .expect("invalid local index");
-                    // this value is valid until the stack value at `index` is popped
-                    // so this preserves the stack invariance
+                    // SAFETY: the local is valid until the value at `index` is popped, which
+                    // is below the one pushed here.
                     unsafe { stack.push_ref(value)? };
                 }
                 OpCode::FieldRef => {
                     let index = stack.pop_scalar_value()?.scalar_as_f64() as usize;
                     is_valid_record_index(index)?;
-                    // The boxed cell keeps this pointer valid across later field
-                    // growth, and fields outlive the stack, so this is safe.
+                    // SAFETY: the boxed cell keeps this pointer valid across later field
+                    // growth, and fields outlive the stack.
                     unsafe { stack.push_ref(record.field_ref_ptr(index))? };
                 }
                 OpCode::IndexArrayGetRef => {
                     let key = stack
                         .pop_scalar_value()?
                         .scalar_to_string(&global_env.convfmt)?;
-                    let array = unsafe {
-                        stack
-                            .pop()
-                            .ok_or_else(|| "empty stack".to_string())?
-                            .unwrap_ptr()?
-                    };
+                    let array = stack.pop().ok_or_else(|| "empty stack".to_string())?;
+                    // SAFETY: a popped value's pointers stay valid until the value pushed
+                    // before it is popped (`push`), and that value is still on the stack.
+                    let array = unsafe { array.unwrap_ptr()? };
                     // Referring to an element makes it, as in every awk.
                     let key: array::Key = key.into();
-                    // safe by type invariance
+                    // SAFETY: as above.
                     unsafe { &mut *array }
                         .as_array()?
                         .get_value_index(key.clone())?;
-                    // array is valid at least until this stack value is popped by stack invariance,
-                    // so this is safe
+                    // SAFETY: as above; the reference is pushed where the array's was.
                     unsafe {
                         stack.push(StackValue::ArrayElementRef(ArrayElementRef { array, key }))?
                     };
@@ -828,14 +837,15 @@ impl Interpreter {
                 OpCode::Dup => {
                     // there has to be a value, otherwise the code is malformed
                     let mut val = stack.pop().unwrap();
-                    // val is valid at least until the value preceding it is popped
-                    // (by stack invariance), so this is safe
+                    // SAFETY: `val` is valid until the value pushed before it is popped
+                    // (`push`), which is still on the stack below both copies.
                     unsafe {
                         stack
                             .push(val.duplicate())
                             .expect("failed to push a popped value");
-                        stack.push(val)?;
-                    }
+                    };
+                    // SAFETY: as above.
+                    unsafe { stack.push(val)? };
                 }
                 OpCode::Pop => {
                     stack.pop();
@@ -858,20 +868,24 @@ impl Interpreter {
                     // no need to recompute anything
                 }
                 FieldsState::RecordChanged => {
-                    // there are no active field references at this point, so this is safe
+                    // SAFETY: between instructions no reference to a field is held.
                     unsafe { record.recompute_fields(global_env)? };
+                    // SAFETY: a global's cell lives as long as the interpreter, and nothing
+                    // else refers to NF between instructions.
                     let nf = unsafe { &mut *self.globals[SpecialVar::Nf as usize].get() };
                     nf.assign(record.get_last_field() as f64, global_env)?;
                 }
                 FieldsState::FieldChanged { changed_field } => {
-                    // there are no active field references at this point, so this is safe
+                    // SAFETY: between instructions no reference to a field is held.
                     unsafe { record.recompute_record(global_env, changed_field, false)? };
+                    // SAFETY: as for `RecordChanged`.
                     let nf = unsafe { &mut *self.globals[SpecialVar::Nf as usize].get() };
                     nf.assign(record.get_last_field() as f64, global_env)?;
                 }
-                FieldsState::NfChanged => unsafe {
-                    record.recompute_record(global_env, global_env.nf, true)?;
-                },
+                FieldsState::NfChanged => {
+                    // SAFETY: between instructions no reference to a field is held.
+                    unsafe { record.recompute_record(global_env, global_env.nf, true)? };
+                }
             }
             fields_state = FieldsState::Ok;
             stack.ip += ip_increment;
@@ -879,7 +893,8 @@ impl Interpreter {
         Ok(ExecutionResult::Expression(
             stack
                 .pop()
-                // there are no active references to stack values at this point, so this is safe
+                // SAFETY: the action has ended, and every pointer on the stack is to a
+                // global, a field or the stack's own values, which are all still alive.
                 .map(|sv| unsafe { sv.into_owned() })
                 .unwrap_or_default(),
         ))

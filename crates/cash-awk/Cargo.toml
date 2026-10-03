@@ -24,8 +24,5 @@ regex-syntax = "0.8.5"
 [dev-dependencies]
 tempfile = "3.27.0"
 
-[lints.rust]
-warnings = "allow"
-
-[lints.clippy]
-all = { level = "allow", priority = -1 }
+[lints]
+workspace = true

@@ -28,7 +28,7 @@ use clap::{Arg, ArgMatches, Command, arg};
 use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
-use uucore::error::{ExitCode, UResult, USimpleError, UUsageError};
+use uucore::error::{ExitCode, UResult, UUsageError};
 use uucore::format_usage;
 
 const ABOUT: &str = "Stream editor for filtering and transforming text (part of uutils)";
