@@ -64,8 +64,11 @@ impl<SE: extensions::ShellExtensions> crate::Shell<SE> {
         };
 
         // If we have a valid trace file, write to it.
+        // In one write: the stages of a pipeline and the background jobs trace from threads
+        // of their own, and a line written in pieces could be split by another's.
         if let Some(mut trace_file) = trace_file {
-            let _ = writeln!(trace_file, "{prefix}{}", command.as_ref());
+            let line = format!("{prefix}{}\n", command.as_ref());
+            let _ = trace_file.write_all(line.as_bytes());
         }
     }
 
