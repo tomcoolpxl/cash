@@ -61,7 +61,7 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 14.6 Dead code, allows and dependencies
 
-- The harness's oracle mode, stale `TODO(bundled)` comments; `path::to_extended` and
+- The harness's oracle mode; `path::to_extended` and
   `lexically_normalize`, and `conpty` and `vtscreen` public though only tests use them
   (W32-12). EXE-12, BIN-16, BIN-17.
 - awk, bc and sed allow the lints for code that can panic (`unwrap_used`, `expect_used`,

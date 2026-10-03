@@ -394,28 +394,12 @@ fn shim_content(
 /// branch already skips function dispatch, we don't want a hypothetical
 /// refactor of `SimpleCommand` to silently break us.
 //
-// TODO(bundled): Process-group propagation.
-// The shim leaves `SimpleCommand::process_group_id` as `None`, so when a
-// bundled command appears in a pipeline it doesn't join the pipeline's
-// pgid — job control and pipeline-wide signal delivery misbehave.
-// `ExecutionContext` doesn't currently carry the dispatcher's pgid, so
-// fixing this requires plumbing the pgid through the builtin dispatch
-// boundary (likely as a field on `ExecutionParameters` or a new
-// `ExecutionContext` accessor).
-//
-// TODO(bundled): Pipeline serialization.
-// The builtin contract returns an `ExecutionResult` (a completed command),
-// not an `ExecutionSpawnResult` (a spawn handle), so this function has to
-// `.await` the child to completion before returning. That's fine for a
-// standalone bundled command or for the tail of a pipeline, but for a
-// bundled stage in the middle of `a | b | c` it means stage N only
-// "starts" (from the shell's perspective) after its child has fully exited —
-// downstream stages get no parallelism with it. Fixing this means
-// bypassing the builtin API for bundled dispatch: either detect the shim
-// inside `SimpleCommand::execute`'s dispatch table and return an
-// `ExecutionSpawnResult::StartedProcess` directly (same shape as external
-// dispatch), or generalize the builtin API so a builtin can return a
-// spawn handle instead of a finished result.
+// The shim waits for its child before returning, as a builtin returns a finished result.
+// A bundled stage in the middle of a pipeline still runs alongside the others, as every
+// builtin stage of a pipeline runs in a task of its own (`yes | head -1` ends), and
+// `kill %1` reaches its process through the job's job object, not a process group, which
+// Windows does not have. Two notes from brush said otherwise; both were checked on
+// 2026-10-04 and were no longer so.
 fn shim_spawn<SE: ShellExtensions>(
     context: ExecutionContext<'_, SE>,
     args: Vec<CommandArg>,
