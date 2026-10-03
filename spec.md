@@ -2385,12 +2385,14 @@ on a thread of cash's own process. Decided with the user on 2026-10-03:
   thread of the runtime's blocking pool. As tasks on the runtime's workers, a job that
   never waits (a loop of builtins) held its worker for good, and as many as cores left a
   foreground `$(…)` waiting for ever.
-- **`$!` names every job.** A job that has started no program by the time `&` returns
-  (`{ x=1; } &`, `while :; do :; done &`) is given a number of its own: 4n + 1, from
-  100001 up, which no Windows process can have, since their ids are multiples of 4.
-  `$!`, `jobs -p`, `kill PID` and `wait PID` take it to mean the job, as Bash's take the
-  forked subshell's pid. A job that starts a program first is known by that program's
-  pid, as before.
+- **`$!` names every job.** A job that is not a program is given a number of its own:
+  4n + 1, from 100001 up, which no Windows process can have, since their ids are
+  multiples of 4. `$!`, `jobs -p`, `kill PID` and `wait PID` take it to mean the job, as
+  Bash's take the forked subshell's pid. So is a job that begins with a compound command
+  (`{ x=1; } &`, `while :; do :; done &`, `coproc { …; }`), at once: `&` does not wait
+  for it to get anywhere, which deadlocked one that first read what the shell would write
+  to it next. A job that begins with a simple command is waited for until that command
+  has started a program, whose pid `$!` then is, or has ended.
 - **`kill` ends a job running inside the shell.** It has no process to signal, so the
   signal is left where the job looks before each of its pipelines; the job ends there,
   with 128 plus the signal, and a program it waits for is signalled with the rest of its

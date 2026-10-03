@@ -45,6 +45,8 @@ mod completion_scripts;
 mod completion_windows;
 // coolfetch system banner.
 mod coolfetch;
+// EXE-04: `coproc` ends when its input does, and is a job with a pid.
+mod coprocesses;
 // Inputs that used to take the whole shell down: deep recursion, and panics.
 mod crash_safety;
 // M2: real scripts, written the way they are written on Linux.

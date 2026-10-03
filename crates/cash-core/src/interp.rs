@@ -418,13 +418,59 @@ async fn spawn_async_ao_list_in_task<'a, SE: extensions::ShellExtensions>(
         shell.run_pending_chld_traps(params).await;
     }
 
+    let mut job_params = params.clone();
+
+    // Redirect stdin to null, per spec.
+    if let Ok(null) = openfiles::null() {
+        job_params.set_fd(openfiles::OpenFiles::STDIN_FD, null);
+    }
+
+    let ao_list = ao_list.clone();
+    let command_line = ao_list.to_string();
+    let simple = matches!(ao_list.first.seq.first(), Some(ast::Command::Simple(_)));
+    start_background_job(
+        shell,
+        job_params,
+        command_line,
+        simple,
+        move |mut job_shell, job_params| {
+            tokio::runtime::Handle::current().block_on(ao_list.execute(&mut job_shell, &job_params))
+        },
+    )
+    .await
+}
+
+/// Starts `run` as a background job of `shell`, on a thread of its own, with `params`
+/// as its parameters, and files it as the current job; `None` when as many subshells as
+/// may run at once already do (D70). `&` and `coproc` both start one.
+///
+/// `run` gets a copy of the shell, which is not interactive, and the parameters, which
+/// the job's machinery has been added to: where it reports the pids of the programs it
+/// starts, the release of `&` once `$!` is known, and the flag `kill` ends it with.
+///
+/// A job that begins with a simple command, which may be a program, is waited for until
+/// that program has started, so `$!` is its pid. Any other is known by a number of its
+/// own at once (D70): waiting for its first pipeline to end deadlocked a job that first
+/// reads what the shell writes to it next (`coproc { read -r x; … }`).
+async fn start_background_job<SE, F>(
+    shell: &mut Shell<SE>,
+    params: ExecutionParameters,
+    command_line: String,
+    begins_with_simple_command: bool,
+    run: F,
+) -> Option<&jobs::Job>
+where
+    SE: extensions::ShellExtensions,
+    F: FnOnce(Shell<SE>, ExecutionParameters) -> Result<ExecutionResult, error::Error>
+        + Send
+        + 'static,
+{
     // Guard against runaway background jobs / fork bombs (matching ulimit -u).
     let slot_guard = jobs::SubshellSlotGuard::try_acquire().ok()?;
 
     // Clone the inputs.
     let mut cloned_shell = shell.clone();
-    let mut cloned_params = params.clone();
-    let cloned_ao_list = ao_list.clone();
+    let mut cloned_params = params;
 
     // cash (D13): at the prompt, a background job is out of the keyboard's reach. Scripts
     // keep sharing the console's group, as they always have.
@@ -433,11 +479,6 @@ async fn spawn_async_ao_list_in_task<'a, SE: extensions::ShellExtensions>(
 
     // Mark the child shell as not interactive; we don't want it messing with the terminal too much.
     cloned_shell.options_mut().interactive = false;
-
-    // Redirect stdin to null, per spec.
-    if let Ok(null) = openfiles::null() {
-        cloned_params.set_fd(openfiles::OpenFiles::STDIN_FD, null);
-    }
 
     // cash (D11/D22): give the task somewhere to report the pid it spawns, so the job
     // can answer `$!` and `kill %1`.
@@ -459,8 +500,7 @@ async fn spawn_async_ao_list_in_task<'a, SE: extensions::ShellExtensions>(
     let job_cancel = std::sync::Arc::clone(&cancel);
     let mut join_handle = tokio::task::spawn_blocking(move || {
         let _guard = slot_guard;
-        let outcome = tokio::runtime::Handle::current()
-            .block_on(cloned_ao_list.execute(&mut cloned_shell, &cloned_params));
+        let outcome = run(cloned_shell, cloned_params);
         // A job `kill` ended ends with 128 plus the signal, as Bash's killed subshell
         // does, whatever its last command ended with: the program it was waiting for,
         // killed with it, may have ended otherwise.
@@ -475,9 +515,13 @@ async fn spawn_async_ao_list_in_task<'a, SE: extensions::ShellExtensions>(
     // Either the task reached a point where `$!` is as accurate as it will ever be, or
     // it finished outright. Both arms resolve promptly: the task's first pipeline either
     // spawned a process (first arm) or ended (also first arm).
-    let (completed_result, join_handle_opt) = tokio::select! {
-        () = pid_ready.notified() => (None, Some(join_handle)),
-        res = &mut join_handle => (Some(res), None),
+    let (completed_result, join_handle_opt) = if begins_with_simple_command {
+        tokio::select! {
+            () = pid_ready.notified() => (None, Some(join_handle)),
+            res = &mut join_handle => (Some(res), None),
+        }
+    } else {
+        (None, Some(join_handle))
     };
 
     let task = match completed_result {
@@ -496,7 +540,7 @@ async fn spawn_async_ao_list_in_task<'a, SE: extensions::ShellExtensions>(
 
     // A job that has started no program by now is known by a number of its own (D70).
     let started_a_program = pid_sink.lock().is_ok_and(|pids| !pids.is_empty());
-    let mut job = jobs::Job::new([task], ao_list.to_string(), jobs::JobState::Running)
+    let mut job = jobs::Job::new([task], command_line, jobs::JobState::Running)
         .with_spawned_pids(pid_sink)
         .with_cancel(cancel);
     if !started_a_program {
@@ -1136,16 +1180,7 @@ impl Execute for ast::CoprocessCommand {
         let (stdin_reader, stdin_writer) = std::io::pipe()?;
         let (stdout_reader, stdout_writer) = std::io::pipe()?;
 
-        // Allocate new fds in the (parent) shell for the read end of the coprocess's stdout
-        // and the write end of the coprocess's stdin.
-        let stdout_fd = shell.open_files_mut().add(stdout_reader.into())?;
-        let stdin_fd = shell.open_files_mut().add(stdin_writer.into())?;
-
-        // Crete a subshell that the coprocess will own and run in.
-        let mut child_shell = shell.clone();
-        child_shell.options_mut().interactive = false;
-
-        // Setup redirection for the coprocess's shell's stdin/stdout.
+        // The coprocess's own ends are its standard input and output.
         let mut child_params = params.clone();
         child_params
             .open_files
@@ -1154,27 +1189,47 @@ impl Execute for ast::CoprocessCommand {
             .open_files
             .set_fd(OpenFiles::STDOUT_FD, stdout_writer.into());
 
+        // It runs as a background job, on a thread of its own, which `kill` and `wait`
+        // know as they know one started with `&` (D70). It ran as a task of its own, filed
+        // without the pids it started, so `kill %1` found nothing to signal.
         let body = self.body.clone();
-        let join_handle = tokio::spawn(async move {
-            let pipeline_context = PipelineExecutionContext {
-                shell: commands::ShellForCommand::ParentShell(&mut child_shell),
-                process_group_id: None,
-            };
-            let spawn_result = body
-                .execute_in_pipeline(pipeline_context, child_params)
-                .await?;
-            match spawn_result.wait().await? {
-                ExecutionWaitResult::Completed(result) => Ok(result),
-                ExecutionWaitResult::Stopped(_) => Ok(ExecutionResult::stopped()),
-            }
-        });
+        let simple = matches!(*body, ast::Command::Simple(_));
+        let started = start_background_job(
+            shell,
+            child_params,
+            self.to_string(),
+            simple,
+            move |mut child_shell, child_params| {
+                tokio::runtime::Handle::current().block_on(async move {
+                    let pipeline_context = PipelineExecutionContext {
+                        shell: commands::ShellForCommand::ParentShell(&mut child_shell),
+                        process_group_id: None,
+                    };
+                    let spawn_result = body
+                        .execute_in_pipeline(pipeline_context, child_params)
+                        .await?;
+                    match spawn_result.wait().await? {
+                        ExecutionWaitResult::Completed(result) => Ok(result),
+                        ExecutionWaitResult::Stopped(_) => Ok(ExecutionResult::stopped()),
+                    }
+                })
+            },
+        )
+        .await;
+        let Some(pid) = started.map(jobs::Job::representative_pid) else {
+            writeln!(
+                params.stderr(shell),
+                "cash: fork: retry: Resource temporarily unavailable"
+            )?;
+            return Ok(ExecutionResult::general_error());
+        };
 
-        let job = shell.jobs_mut().add_as_current(jobs::Job::new(
-            [jobs::JobTask::Internal(join_handle)],
-            format!("coproc {name}"),
-            jobs::JobState::Running,
-        ));
-        let job_id = job.id;
+        // The shell's ends go in only now: the copy of the shell the coprocess runs in
+        // held the write end of its own input, so it never saw the end of it, and
+        // `exec {COPROC[1]}>&-; wait` waited for ever. As in Bash, the read end is fd 63
+        // and the write end fd 60, or the highest free ones below.
+        let stdout_fd = add_fd_at_or_below(shell, 63, stdout_reader.into());
+        let stdin_fd = add_fd_at_or_below(shell, 60, stdin_writer.into());
 
         // Fill out the fd variable.
         let arr_value = ShellValue::from(vec![stdout_fd.to_string(), stdin_fd.to_string()]);
@@ -1182,14 +1237,30 @@ impl Execute for ast::CoprocessCommand {
             .env_mut()
             .set_global(name.clone(), ShellVariable::new(arr_value))?;
 
-        // Set the job ID for the coprocess in a separate variable with the _PID suffix.
+        // The coprocess's pid, which `kill` and `wait` take; it was the job's number.
         let pid_name = format!("{name}_PID");
+        let pid = pid.map_or_else(String::new, |pid| pid.to_string());
         shell
             .env_mut()
-            .set_global(pid_name, ShellVariable::new(job_id.to_string()))?;
+            .set_global(pid_name, ShellVariable::new(pid))?;
 
         Ok(ExecutionResult::success())
     }
+}
+
+/// Opens `file` in `shell` at the highest free descriptor no higher than `highest`, as
+/// Bash places a coprocess's ends; above that when none is free.
+fn add_fd_at_or_below<SE: extensions::ShellExtensions>(
+    shell: &mut Shell<SE>,
+    highest: ShellFd,
+    file: openfiles::OpenFile,
+) -> ShellFd {
+    let fd = (3..=highest)
+        .rev()
+        .find(|&fd| !shell.open_files().contains_fd(fd))
+        .unwrap_or(highest + 1);
+    shell.open_files_mut().set_fd(fd, file);
+    fd
 }
 
 #[async_trait::async_trait]

@@ -66,12 +66,6 @@ The riskiest phase: judge its runs on an idle machine (Decided, below).
   TERM and PIPE); cash says nothing. Windows has only exit codes, so the job would have
   to keep the signal cash's own `kill` sent it. Found while fixing EXE-08.
 
-### 11.3 Coprocesses deadlock
-
-`coproc cat; …; exec {COPROC[1]}>&-; wait` hangs: the coproc holds its own stdin's write
-end. `COPROC_PID` is the job number, `kill %1` fails, the fds are 3 and 4 instead of 63
-and 60. EXE-04.
-
 ### 11.4 Process substitution pipes
 
 - `<(…)` sometimes gives an empty read to a consumer that opens it twice (`cmd /c type
@@ -95,6 +89,9 @@ Check it, terminate on failure, record the API choice beside D19. From reading. 
 - `yes | head -1; echo "${PIPESTATUS[*]}"` is `0 0`; Bash `141 0`, the writer killed by
   SIGPIPE. Windows has no SIGPIPE: decide what a writer whose reader went away ends
   with, and record it.
+- `jobs` writes a brace group over several lines: `{ sleep 1; } & jobs` shows `{`,
+  `sleep 1` and `} &` on lines of their own, where Bash writes `{ sleep 1; } &` (a
+  `while` loop takes several lines in both). Found while fixing 11.3.
 
 ---
 
