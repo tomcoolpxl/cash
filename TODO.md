@@ -81,8 +81,6 @@ for brush shell integration tests" (seen 2026-10-04).
 - cash-sed's unused `predicates`, `textwrap`, `phf`; brush's dev-deps; external versions
   into `[workspace.dependencies]`; `check_elevation` and `whoami.exe` scraping replaced
   by token calls in cash-win32. ARCH-07, ARCH-08, ARCH-17.
-- LICENSE symlinks to a missing `crates/LICENSE`; NOTICE without posixutils-rs and uutils
-  sed. ARCH-15.
 - awk, bc and sed allow the lints for code that can panic (`unwrap_used`, `expect_used`,
   `panic`, `panic_in_result_fn`, `unwrap_in_result`, `string_slice`,
   `missing_panics_doc`): 58 `unwrap` and 34 `expect` in awk, 37 `expect` and 8 `panic!`

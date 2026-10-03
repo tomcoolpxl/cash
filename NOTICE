@@ -51,6 +51,29 @@ comments referencing the decision in [spec.md](spec.md). As of absorption:
 - Removed: `brush` (a binstall alias crate), `brush-experimental-builtins`,
   `fuzz`, `benchmarks`, upstream documentation, CI and release tooling
 
+## posixutils-rs
+
+`crates/cash-awk` and `crates/cash-bc` are absorbed and modified from
+[posixutils-rs](https://github.com/rustcoreutils/posixutils-rs) (`posixutils-awk` and
+`posixutils-calc` 0.9.0, revision `96bd8a372541cf7e4c427010a5414a40cf20c805`),
+© 2024 Jeff Garzik, under the MIT License, whose text is in each crate's `LICENSE`. The
+changes are listed in each crate's `README.md`.
+
+## uutils sed
+
+`crates/cash-sed` is absorbed and modified from [uutils/sed](https://github.com/uutils/sed),
+© 2025 Diomidis Spinellis, under the MIT License, whose text is in
+[crates/cash-sed/LICENSE](crates/cash-sed/LICENSE). The changes are listed in
+`research/uutils-sed-evaluation.md`.
+
+## Vendored crates
+
+`vendor/` carries patched copies of [reedline](https://github.com/nushell/reedline)
+0.51.0 (© 2021 the Nushell Project), [crossterm](https://github.com/crossterm-rs/crossterm)
+0.29.0 (© 2019 Timon) and the uutils coreutils crates `uu_tee`, `uu_sort`, `uu_uniq`
+and `uu_shuf` 0.12.0 (© the uutils developers), all under the MIT License, whose text is
+in each one's `LICENSE`. Each `CASH-PATCHES.md` lists the changes.
+
 ## lsd
 
 `crates/cash-builtins/src/ls_icon_table.rs`, the Nerd Font icons `ls --icons` shows by
