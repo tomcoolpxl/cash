@@ -1121,6 +1121,19 @@ Three consequences:
 - It bypasses reserved-name parsing, which is what makes D28 work — and why D7 needs an
   explicit carve-out for `/dev/null`.
 
+**How it is met (2026-10-04).** Rust's standard library adds the `\\?\` prefix itself to
+a path too long for the plain form, so cash's file operations take paths of any length
+without a conversion of their own; `cash_win32::path::to_extended`, written for this,
+had no caller and is gone. One limit no prefix lifts: Windows starts no process in a
+folder whose path is longer than 258 characters. cash's builtins worked in such a folder,
+but every program failed, its bundled tools included, with `C:\…\cash.exe: Not a
+directory`. A program is now started in the folder's 8.3 short name
+(`…\CASH-L~2\AAAAAA~1`), which Windows keeps on most volumes and which fits; it sees that
+spelling as its working directory. Where a folder has no short name that fits, the
+command fails with status 126 and says why (`cash_win32::path::process_directory`; the
+user, 2026-10-04). Git Bash's own tools work there; its native programs fail, with an
+error that says the folder is too long.
+
 ### D30 — `.bashrc` errors warn per occurrence, then summarise
 
 Each failing command prints as bash would, and startup continues. Startup then ends with
@@ -2502,6 +2515,7 @@ someone who expected bash, so additions need to earn their place.
 | 42 | The children's CPU time `time` and `times` report counts a child that is still running, such as a background job running through the `time`d command | Windows has no `getrusage(RUSAGE_CHILDREN)`; the session job's accounting counts every process it has held, cash's own share taken out (the user, 2026-10-02; EXE-11) | D6 |
 | 43 | With `HISTSIZE` and `HISTFILESIZE` unset, history is not cut: every line is kept, in memory and in `~/.cash_history`, until one of them is set | Bash sets both to 500 when they are unset; following it would cut an existing long `~/.cash_history` to 500 entries at the next start (the user, 2026-10-03) | — |
 | 44 | `\v` and `\V` in a prompt give cash's version (`1.3`, `1.3.13`), as `\s` gives `cash`, while `$BASH_VERSION` says `5.3.15(1)-release` | A prompt in cash is about cash; Bash's give Bash's version (the user, 2026-10-03) | — |
+| 45 | In a folder whose path is longer than 258 characters, a program starts in the folder's 8.3 short name, and sees that as its working directory; with no short name that fits, it fails with status 126 | Windows starts no process in a longer one; Git Bash's native programs fail there (the user, 2026-10-04) | D29 |
 
 `select` was missing outright until recently: it was a reserved word with no grammar
 rule, so `select x in a b; do …; done` was a syntax error that took the whole file with

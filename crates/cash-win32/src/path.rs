@@ -1,17 +1,18 @@
 //! Path model — **D3**, **D7**, **D29**.
 //!
-//! Three operations, deliberately separated because they are three different questions:
+//! Two operations, deliberately separated because they are two different questions:
 //!
 //! - [`accept`] — take any spelling a script or a Windows tool might produce and work out
 //!   what it means. `C:/foo`, `C:\foo`, `/c/foo`, `/tmp`, `/dev/null` all land here.
 //! - [`render`] — produce cash's one canonical spelling, `C:/foo`. Forward slashes,
 //!   always, because rendered paths usually become arguments to native `.exe` files.
-//! - [`to_extended`] — produce the `\\?\C:\foo` form the filesystem layer actually uses
-//!   (D29). This is the only place backslashes are mandatory.
 //!
-//! The asymmetry is the point: cash accepts everything and emits one thing.
+//! The asymmetry is the point: cash accepts everything and emits one thing. A path longer
+//! than `MAX_PATH` reaches the filesystem in its `\\?\` form through the standard library,
+//! which adds the prefix itself (D29); [`process_directory`] handles the one place that
+//! form cannot go, a new program's working directory.
 
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 
 /// What a path-shaped string actually refers to.
 ///
@@ -127,8 +128,7 @@ pub fn accept_path(input: &str) -> PathBuf {
 
 /// Render a path in cash's canonical spelling: `C:/foo/bar`.
 ///
-/// This is what `pwd` prints and what `$PWD` holds (D3). Never backslashes — those only
-/// appear inside [`to_extended`].
+/// This is what `pwd` prints and what `$PWD` holds (D3). Never backslashes.
 #[must_use]
 pub fn render(path: &Path) -> String {
     let text = path.to_string_lossy().replace('\\', "/");
@@ -201,38 +201,76 @@ pub fn reentry_command(tool: &str) -> std::process::Command {
     command
 }
 
-/// Produce the `\\?\` form used at the filesystem boundary (D29).
+/// The longest working directory a process can be started in.
 ///
-/// Requires an absolute, backslash-separated path with `.` and `..` already resolved,
-/// because `\\?\` is passed verbatim to the object manager — it does no normalisation
-/// for us. `base` supplies the working directory for relative inputs.
+/// `MAX_PATH` less the backslash Windows appends and the terminating NUL
+/// (`SetCurrentDirectoryW`). Long-path support does not lift it for a new process.
+pub const MAX_PROCESS_DIRECTORY: usize = 258;
+
+/// The folder to start a program in for the shell's working directory `dir`.
 ///
-/// Returns `None` for a relative path when `base` is itself relative, since no absolute
-/// form can be produced.
-#[must_use]
-pub fn to_extended(path: &Path, base: &Path) -> Option<std::ffi::OsString> {
-    let absolute = if is_absolute(path) {
-        path.to_path_buf()
-    } else if is_absolute(base) {
-        base.join(path)
+/// Windows starts no process in a folder whose path is longer than
+/// [`MAX_PROCESS_DIRECTORY`], long-path support or not, and says only "The directory name is
+/// invalid", which reached the user as `C:\…\cash.exe: Not a directory` for every
+/// program, cash's bundled tools included. Such a folder is given by its 8.3 short name
+/// (`C:\…\CASH-L~2\AAAAAA~1`), which Windows keeps on most volumes and which usually
+/// fits; the program sees that spelling as its working directory, and relative paths
+/// mean what they meant. Where there is none short enough, the error says why (the user,
+/// 2026-10-04).
+///
+/// # Errors
+///
+/// The folder is too long and has no short name that fits.
+pub fn process_directory(dir: &Path) -> std::io::Result<PathBuf> {
+    let text = dir.to_string_lossy();
+    let plain = text
+        .strip_prefix(r"\\?\")
+        .unwrap_or(&text)
+        .replace('/', "\\");
+    let length = plain.encode_utf16().count();
+    if length <= MAX_PROCESS_DIRECTORY {
+        return Ok(dir.to_path_buf());
+    }
+    if let Some(short) = short_name(&plain)
+        && short.encode_utf16().count() <= MAX_PROCESS_DIRECTORY
+    {
+        return Ok(PathBuf::from(short));
+    }
+    Err(std::io::Error::other(format!(
+        "the working directory is too long for Windows to start a program in \
+         ({length} characters, the limit is {MAX_PROCESS_DIRECTORY}), and it has no short \
+         name that fits"
+    )))
+}
+
+/// The 8.3 short form of the folder `plain` (backslashes, no `\\?\`), without `\\?\`.
+fn short_name(plain: &str) -> Option<String> {
+    use windows_sys::Win32::Storage::FileSystem::GetShortPathNameW;
+
+    // A path this long reaches the API only in its extended form.
+    let long = if let Some(unc) = plain.strip_prefix(r"\\") {
+        format!(r"\\?\UNC\{unc}")
     } else {
-        return None;
+        format!(r"\\?\{plain}")
     };
-
-    let cleaned = lexically_normalize(&absolute);
-    let text = cleaned.to_string_lossy().replace('/', "\\");
-
-    // Already extended: leave it alone.
-    if text.starts_with("\\\\?\\") {
-        return Some(text.into());
+    let wide: Vec<u16> = long.encode_utf16().chain(std::iter::once(0)).collect();
+    // SAFETY: a null buffer of length 0 asks for the length needed, NUL included.
+    let needed = unsafe { GetShortPathNameW(wide.as_ptr(), std::ptr::null_mut(), 0) };
+    if needed == 0 {
+        return None;
     }
-
-    // UNC \\server\share -> \\?\UNC\server\share
-    if let Some(rest) = text.strip_prefix("\\\\") {
-        return Some(format!("\\\\?\\UNC\\{rest}").into());
+    let mut buffer = vec![0u16; needed as usize];
+    // SAFETY: `buffer` holds `needed` units, the length the call above asked for.
+    let written = unsafe { GetShortPathNameW(wide.as_ptr(), buffer.as_mut_ptr(), needed) };
+    if written == 0 || written >= needed {
+        return None;
     }
-
-    Some(format!("\\\\?\\{text}").into())
+    let short = String::from_utf16_lossy(&buffer[..written as usize]);
+    Some(if let Some(unc) = short.strip_prefix(r"\\?\UNC\") {
+        format!(r"\\{unc}")
+    } else {
+        short.strip_prefix(r"\\?\").unwrap_or(&short).to_owned()
+    })
 }
 
 /// Whether a path is absolute in the Windows sense cash cares about.
@@ -251,40 +289,6 @@ pub fn is_absolute(path: &Path) -> bool {
         && bytes[0].is_ascii_alphabetic()
         && bytes[1] == b':'
         && (bytes[2] == b'/' || bytes[2] == b'\\')
-}
-
-/// Resolve `.` and `..` without touching the filesystem.
-///
-/// D29 requires this: the `\\?\` prefix disables the OS normalisation that would
-/// otherwise do it for us. Purely lexical, so it does not follow symlinks — which is the
-/// correct behaviour for building a path to hand to `CreateFileW`.
-#[must_use]
-pub fn lexically_normalize(path: &Path) -> PathBuf {
-    let mut out = PathBuf::new();
-    let mut depth = 0usize;
-
-    for component in path.components() {
-        match component {
-            Component::CurDir => {}
-            Component::ParentDir => {
-                if depth > 0 {
-                    out.pop();
-                    depth -= 1;
-                } else {
-                    // Above the root: Windows clamps rather than erroring.
-                    out.push("..");
-                }
-            }
-            other => {
-                out.push(other.as_os_str());
-                if matches!(other, Component::Normal(_)) {
-                    depth += 1;
-                }
-            }
-        }
-    }
-
-    out
 }
 
 /// Convert a path to the Unix compat spelling, `/c/foo`.

@@ -59,6 +59,7 @@ fn execute(
     let verb = verb.map(wide);
     let target = wide(target);
     let parameters = parameters.map(wide);
+    let directory = crate::path::process_directory(directory)?;
     let directory: Vec<u16> = directory.as_os_str().encode_wide().chain(Some(0)).collect();
     std::thread::Builder::new()
         .name("cash-shell-open".into())

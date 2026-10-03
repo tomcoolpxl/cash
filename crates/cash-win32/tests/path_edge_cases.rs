@@ -21,24 +21,13 @@
 use std::path::{Path, PathBuf};
 
 use cash_win32::path::{
-    Target, accept, accept_path, is_absolute, is_reserved_name, lexically_normalize, render,
-    to_backslash, to_extended, to_unix, unix_drive_spelling,
+    MAX_PROCESS_DIRECTORY, Target, accept, accept_path, is_absolute, is_reserved_name,
+    process_directory, render, to_backslash, to_unix, unix_drive_spelling,
 };
 
 // ---------------------------------------------------------------------------
 // Degenerate inputs
 // ---------------------------------------------------------------------------
-
-#[test]
-fn empty_and_trivial_inputs_do_not_panic() {
-    assert_eq!(render(Path::new("")), "");
-    assert_eq!(accept_path(""), PathBuf::from(""));
-    assert!(!is_absolute(Path::new("")));
-    assert!(!is_reserved_name(Path::new("")));
-    assert_eq!(unix_drive_spelling(""), None);
-    assert_eq!(unix_drive_spelling("/"), None);
-    assert_eq!(render(&lexically_normalize(Path::new(""))), "");
-}
 
 #[test]
 fn a_lone_separator_is_not_a_drive() {
@@ -124,89 +113,6 @@ fn the_rest_of_the_path_keeps_its_case() {
         render(&accept_path("c:/Users/ThRaa/MyFile.TXT")),
         "C:/Users/ThRaa/MyFile.TXT"
     );
-}
-
-// ---------------------------------------------------------------------------
-// Dot segments
-// ---------------------------------------------------------------------------
-
-#[test]
-fn dot_segments_resolve_in_awkward_positions() {
-    assert_eq!(
-        render(&lexically_normalize(Path::new("C:/a/./././b"))),
-        "C:/a/b"
-    );
-    assert_eq!(
-        render(&lexically_normalize(Path::new("C:/a/b/c/../../d"))),
-        "C:/a/d"
-    );
-    assert_eq!(
-        render(&lexically_normalize(Path::new("C:/a/../b/../c"))),
-        "C:/c"
-    );
-}
-
-#[test]
-fn a_filename_of_dots_is_not_a_dot_segment() {
-    // `...` and `..foo` are ordinary names, not parent references.
-    let got = render(&lexically_normalize(Path::new("C:/a/.../b")));
-    assert!(
-        got.contains("..."),
-        "`...` was treated as a dot segment: {got}"
-    );
-    let got = render(&lexically_normalize(Path::new("C:/a/..b")));
-    assert!(
-        got.contains("..b"),
-        "`..b` was treated as a dot segment: {got}"
-    );
-}
-
-#[test]
-fn climbing_past_the_root_clamps() {
-    for input in ["C:/..", "C:/../..", "C:/a/../../.."] {
-        let got = render(&lexically_normalize(Path::new(input)));
-        assert!(got.starts_with("C:"), "{input} escaped the drive: {got}");
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Extended-length form (D29)
-// ---------------------------------------------------------------------------
-
-#[test]
-fn extended_form_never_double_prefixes() {
-    let once = to_extended(Path::new("C:/x"), Path::new("C:/")).expect("absolute");
-    let twice = to_extended(Path::new(&once), Path::new("C:/")).expect("already extended");
-    assert_eq!(once, twice, "prefix was applied twice");
-}
-
-#[test]
-fn extended_form_needs_an_absolute_base_for_relative_input() {
-    assert!(to_extended(Path::new("rel/x"), Path::new("also/relative")).is_none());
-    assert!(to_extended(Path::new("rel/x"), Path::new("C:/base")).is_some());
-}
-
-#[test]
-fn extended_form_resolves_dots_because_the_os_will_not() {
-    // The whole hazard of D29: `\\?\` is passed verbatim to the object manager.
-    let got = to_extended(Path::new("C:/a/b/../../c"), Path::new("C:/")).expect("absolute");
-    assert_eq!(got.to_string_lossy(), r"\\?\C:\c");
-    assert!(
-        !got.to_string_lossy().contains(".."),
-        "a .. survived into the \\\\?\\ form"
-    );
-}
-
-#[test]
-fn extended_form_of_a_long_path_is_not_truncated() {
-    // Past MAX_PATH, which is the reason D29 exists.
-    let deep = format!("C:/{}", vec!["segment"; 60].join("/"));
-    let got = to_extended(Path::new(&deep), Path::new("C:/")).expect("absolute");
-    assert!(
-        got.to_string_lossy().len() > 260,
-        "path was not long enough to test"
-    );
-    assert!(got.to_string_lossy().starts_with(r"\\?\C:\"));
 }
 
 // ---------------------------------------------------------------------------
@@ -415,4 +321,57 @@ fn the_tmp_spelling_is_also_diagnosable() {
     // A directory that merely starts with the letters is not /tmp.
     assert_eq!(unix_drive_spelling("/tmpfoo"), None);
     assert_eq!(unix_drive_spelling("/tmpfoo/x"), None);
+}
+
+// ---------------------------------------------------------------------------
+// A program's working directory (process_directory)
+// ---------------------------------------------------------------------------
+
+/// A folder under `%TEMP%` whose path is longer than Windows will start a program in.
+fn long_folder(name: &str) -> PathBuf {
+    let mut dir = std::env::temp_dir().join(format!("cash-long-{name}-{}", std::process::id()));
+    for i in 0..6 {
+        dir.push(format!("{}{i}", "a".repeat(50)));
+    }
+    assert!(dir.to_string_lossy().len() > MAX_PROCESS_DIRECTORY);
+    dir
+}
+
+#[test]
+fn a_folder_that_fits_is_left_as_it_is() {
+    let dir = Path::new("C:/Users/someone/project");
+    assert_eq!(process_directory(dir).unwrap(), dir);
+}
+
+#[test]
+fn a_folder_too_long_is_given_by_its_short_name() {
+    let dir = long_folder("short");
+    std::fs::create_dir_all(&dir).unwrap();
+    let short = process_directory(&dir);
+    let top = dir.ancestors().nth(6).unwrap().to_path_buf();
+    let same = short
+        .as_ref()
+        .ok()
+        .map(|short| std::fs::canonicalize(short).unwrap() == std::fs::canonicalize(&dir).unwrap());
+    let _ = std::fs::remove_dir_all(&top);
+
+    let short = short.expect("a short name (8.3 names are on for the system drive)");
+    assert!(
+        short.to_string_lossy().len() <= MAX_PROCESS_DIRECTORY,
+        "{}",
+        short.display()
+    );
+    assert_eq!(same, Some(true), "{} is another folder", short.display());
+}
+
+#[test]
+fn a_folder_too_long_without_a_short_name_says_why() {
+    // A folder that does not exist has no short name either.
+    let error = process_directory(&long_folder("missing")).unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("too long for Windows to start a program in"),
+        "{error}"
+    );
 }

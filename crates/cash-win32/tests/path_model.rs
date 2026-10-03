@@ -18,10 +18,7 @@
 
 use std::path::{Path, PathBuf};
 
-use cash_win32::path::{
-    Target, accept, accept_path, is_absolute, lexically_normalize, render, to_backslash,
-    to_extended, to_unix,
-};
+use cash_win32::path::{Target, accept, accept_path, is_absolute, render, to_backslash, to_unix};
 
 #[test]
 fn every_accepted_spelling_reaches_the_same_place() {
@@ -89,52 +86,6 @@ fn unc_paths_survive_both_spellings() {
     };
     assert_eq!(render(&from_slashes), render(&from_backslashes));
     assert_eq!(render(&from_slashes), "//server/share/file");
-}
-
-#[test]
-fn extended_form_is_absolute_backslashed_and_prefixed() {
-    // D29: \\?\ requires absolute, backslash-separated paths.
-    let base = Path::new("C:/work");
-    let got = to_extended(Path::new("C:/src/infra"), base).expect("absolute input");
-    assert_eq!(got.to_string_lossy(), r"\\?\C:\src\infra");
-
-    // Relative inputs resolve against the working directory.
-    let got = to_extended(Path::new("sub/file.txt"), base).expect("base is absolute");
-    assert_eq!(got.to_string_lossy(), r"\\?\C:\work\sub\file.txt");
-}
-
-#[test]
-fn extended_form_uses_the_unc_spelling() {
-    let got = to_extended(Path::new(r"\\server\share\f"), Path::new("C:/")).expect("absolute");
-    assert_eq!(got.to_string_lossy(), r"\\?\UNC\server\share\f");
-}
-
-#[test]
-fn dot_segments_are_resolved_because_the_os_no_longer_will() {
-    // D29's second consequence: \\?\ disables OS path normalisation, so cash must do it.
-    // If this regresses, paths containing .. silently fail to open.
-    assert_eq!(
-        render(&lexically_normalize(Path::new("C:/a/b/../c"))),
-        "C:/a/c"
-    );
-    assert_eq!(
-        render(&lexically_normalize(Path::new("C:/a/./b"))),
-        "C:/a/b"
-    );
-    assert_eq!(
-        render(&lexically_normalize(Path::new("C:/a/b/../../c"))),
-        "C:/c"
-    );
-
-    let got = to_extended(Path::new("C:/a/b/../c"), Path::new("C:/")).expect("absolute");
-    assert_eq!(got.to_string_lossy(), r"\\?\C:\a\c");
-}
-
-#[test]
-fn normalising_does_not_climb_above_the_root() {
-    // Windows clamps rather than erroring, so cash does too.
-    let got = lexically_normalize(Path::new("C:/../.."));
-    assert!(render(&got).starts_with("C:"), "got {}", render(&got));
 }
 
 #[test]

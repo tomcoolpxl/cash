@@ -77,7 +77,7 @@ pub fn spawn_detached(command_line: &str, cwd: &Path, env: &[(String, String)]) 
     use windows_sys::Win32::System::Threading::{CREATE_BREAKAWAY_FROM_JOB, DETACHED_PROCESS};
 
     let mut command = to_wide(command_line);
-    let cwd = to_wide(&cwd.to_string_lossy());
+    let cwd = to_wide(&crate::path::process_directory(cwd)?.to_string_lossy());
     let environment = build_environment_block(env);
 
     // SAFETY: `STARTUPINFOW` is plain old data — integers, pointers and a handle triple —

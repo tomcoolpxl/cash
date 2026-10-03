@@ -644,11 +644,15 @@ pub fn compose_std_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
     // `#!/usr/bin/env -i` starts from nothing, as `empty_env` does (W32-08).
     let empty_env = empty_env || env_changes.ignore_environment;
 
-    // Use the shell's current working dir, or the one `#!/usr/bin/env -C` names.
-    match &env_changes.chdir {
-        Some(dir) => cmd.current_dir(context.shell.absolute_path(Path::new(dir))),
-        None => cmd.current_dir(context.shell.working_dir()),
+    // Use the shell's current working dir, or the one `#!/usr/bin/env -C` names, by its
+    // short name where it is too long for Windows to start a program in.
+    let dir = match &env_changes.chdir {
+        Some(dir) => context.shell.absolute_path(Path::new(dir)),
+        None => context.shell.working_dir().to_path_buf(),
     };
+    let dir = cash_win32::path::process_directory(&dir)
+        .map_err(|e| error::ErrorKind::FailedToExecuteCommand(context.command_name.clone(), e))?;
+    cmd.current_dir(dir);
 
     // Start with a clear environment.
     cmd.env_clear();

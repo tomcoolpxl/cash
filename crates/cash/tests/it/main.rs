@@ -107,6 +107,8 @@ mod kill_targets;
 mod kill_term;
 mod line_ending_tools;
 mod link_tools;
+// Programs started from a folder too long for Windows to start one in.
+mod long_folders;
 mod ls_builtin;
 mod msys_args;
 mod namerefs;

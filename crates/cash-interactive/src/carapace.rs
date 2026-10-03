@@ -193,6 +193,9 @@ impl Found {
         cwd: &Path,
         environment: Vec<(String, String)>,
     ) -> Option<Vec<Candidate>> {
+        // A folder too long to start a program in is given by its short name, or there
+        // are no candidates (`process_directory`).
+        let cwd = cash_win32::path::process_directory(cwd).ok()?;
         let mut command = Command::new(&self.exe);
         command
             .arg(words.first()?)
