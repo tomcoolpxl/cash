@@ -467,6 +467,14 @@ fn build_shebang_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
             // process state: the shell's spawn layer, which sets the folder and environment.
             let mut c = std::process::Command::new(target);
             c.arg0(argv0);
+            // `#!/bin/sh` runs cash in POSIX mode, as it runs Bash (the user, 2026-10-04).
+            if is_own_executable(target.as_os_str())
+                && Path::new(&interpreter)
+                    .file_stem()
+                    .is_some_and(|stem| stem.eq_ignore_ascii_case("sh"))
+            {
+                c.arg("--posix");
+            }
             push_native_args(&mut c, target, &extra_args);
             push_native_args(&mut c, target, &[named]);
             push_native_args(&mut c, target, args);
@@ -505,6 +513,18 @@ fn build_windows_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
         } else {
             path.to_path_buf()
         }
+    };
+
+    // A bare `sh`, `bash` or `cash` is cash itself, as every other way of running it is
+    // (D7, §4 row 17): `exec bash` passed the name on, and `Command::new` found Git's.
+    let candidate = match std::env::current_exe() {
+        Ok(own)
+            if !command_name.contains(['/', '\\'])
+                && crate::pathsearch::runs_cash_itself(command_name) =>
+        {
+            own
+        }
+        _ => candidate,
     };
 
     // A virtual path from `which` (`C:/…/cash.exe/ls`) run as a process — `exec
@@ -615,6 +635,29 @@ pub fn exported_environment(
         .collect()
 }
 
+/// The variable through which a cash learns the name it was started by.
+///
+/// The shell that started it ran it as `bash`, `sh` or `exec -a NAME`: that gives its `$0`,
+/// and POSIX mode for `sh`, as Bash takes them from `argv[0]`. Windows gives a program no
+/// `argv[0]` of its own, only the first word of
+/// its command line, which `std::process::Command` makes the program's path, so
+/// `bash -c 'echo $0'` printed cash's path (EXE-12). The cash it reaches drops it, so it
+/// goes no further.
+pub const ARGV0_VARIABLE: &str = "CASH_ARGV0";
+
+/// Whether `program` is this cash's own executable.
+fn is_own_executable(program: &OsStr) -> bool {
+    let Ok(own) = std::env::current_exe() else {
+        return false;
+    };
+    let program = Path::new(program);
+    program == own
+        || program
+            .to_string_lossy()
+            .replace('/', "\\")
+            .eq_ignore_ascii_case(&own.to_string_lossy())
+}
+
 /// Composes a `std::process::Command` to execute the given command. Appropriately
 /// configures the command name and arguments, redirections, injected file
 /// descriptors, environment variables, etc.
@@ -681,6 +724,14 @@ pub fn compose_std_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
         } else {
             cmd.env(name, value);
         }
+    }
+
+    // A cash this shell starts for `bash`, `sh` or `exec -a NAME` learns the name, which
+    // Windows cannot put in its `argv[0]` (EXE-12).
+    if is_own_executable(cmd.get_program())
+        && cmd.get_args().next() != Some(OsStr::new("--invoke-bundled"))
+    {
+        cmd.env(ARGV0_VARIABLE, argv0);
     }
 
     // Add in exported functions.

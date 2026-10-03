@@ -137,6 +137,8 @@ mod run_by_command;
 mod select_clause;
 mod shebang_dispatch;
 // D10: the working directory, environment and PATH are the shell's, not the process's.
+// EXE-12: the name a cash is started by, as bash, sh or exec -a.
+mod shell_names;
 mod shell_state;
 // Assignments to the variables the shell keeps itself.
 mod small_tools;

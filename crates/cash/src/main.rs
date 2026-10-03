@@ -15,6 +15,9 @@ mod terminal_menu;
 mod terminal_profile;
 
 fn main() {
+    // Read first, while cash has a single thread, so it can be removed safely.
+    let invoked_as = take_invoked_name();
+
     // D6's outermost guarantee, installed before anything can spawn.
     let state = cash_win32::session::install_and_leak();
 
@@ -71,5 +74,29 @@ fn main() {
         std::process::exit(i32::from(doctor::run()));
     }
 
-    cash_shell::entry::run();
+    let mut args: Vec<String> = std::env::args().collect();
+    if let Some(name) = invoked_as {
+        // Bash started as `sh` runs in POSIX mode, every builtin still there.
+        let as_sh = std::path::Path::new(&name)
+            .file_stem()
+            .is_some_and(|stem| stem.eq_ignore_ascii_case("sh"));
+        if let Some(argv0) = args.first_mut() {
+            *argv0 = name;
+        }
+        if as_sh {
+            args.insert(1.min(args.len()), "--posix".to_owned());
+        }
+    }
+    cash_shell::entry::run_with_args(args);
+}
+
+/// The name a cash that started this one ran it by (`bash`, `sh`, `exec -a NAME`), which
+/// Windows cannot put in `argv[0]` (EXE-12, `cash_core::commands::ARGV0_VARIABLE`). The
+/// variable is removed, so a program this cash starts does not inherit it.
+fn take_invoked_name() -> Option<String> {
+    let name = std::env::var(cash_core::commands::ARGV0_VARIABLE).ok()?;
+    // SAFETY: called first in `main`, before any other thread exists, so nothing reads
+    // the environment while it changes.
+    unsafe { std::env::remove_var(cash_core::commands::ARGV0_VARIABLE) };
+    (!name.is_empty()).then_some(name)
 }

@@ -81,12 +81,10 @@ then the riskiest changes once the crashes and state bugs are out of the way.
   look at the replay and its look at the end, was real and is closed, but it is not
   this. Unexplained: `type` may take the pipe's end (ERROR_BROKEN_PIPE) for an error
   depending on when the server closes. W32-02.
-- EXE-12 is not only dead code: because `arg0` is a no-op on Windows, `bash -c 'echo $0'`
-  prints cash's own path where Bash prints `bash`, and `sh -c` does not know it was
-  started as `sh`. A process's `argv[0]` there is only the first word of its command line,
-  which `std::process::Command` always makes the program's path; `CreateProcessW` with
-  the application name apart, or a flag for cash re-entering itself, would carry it.
-  Seen in 1.3.12 while making `env bash` follow D7.
+- `exec` with an option (`-a NAME`, `-c`, `-l`) in a subshell fails with "exec with
+  options in subshell not yet supported", where Bash runs it: a subshell is in cash's own
+  process, so its `exec` runs the command through `command`, which takes none of them.
+  `(exec -a foo bash -c 'echo $0')` prints `foo` in Bash. Seen 2026-10-04 fixing EXE-12.
 - The Low findings not listed in phases 8 to 14 are in the report, §5.
 
 ---

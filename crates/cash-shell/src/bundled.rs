@@ -223,6 +223,11 @@ fn cash_for_shell_names(argv: Vec<OsString>) -> Vec<OsString> {
     let (true, Some(exe)) = (is_shell, self_exe()) else {
         return argv;
     };
+    // The cash it starts learns the name, `bash` or `sh` (POSIX mode), as one the shell
+    // starts does (EXE-12). The tool starts it with this process's environment.
+    // SAFETY: this runs before the tool does, while this process, which runs nothing but
+    // the tool, has its one thread; nothing reads the environment while it changes.
+    unsafe { std::env::set_var(cash_core::commands::ARGV0_VARIABLE, name.as_ref()) };
     let mut args = operand.args;
     if let Some(slot) = args.get_mut(operand.index) {
         exe.as_os_str().clone_into(slot);

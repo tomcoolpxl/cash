@@ -288,6 +288,14 @@ Always on:
   and `-C` come before the command
 - Unix path spellings accepted as input (D3)
 
+**`sh` is Bash's POSIX mode (the user, 2026-10-04).** No compat behaviour is switched
+off, but a cash started as `sh` (`sh -c …`, `exec sh`, `#!/bin/sh`, `#!/usr/bin/env sh`)
+runs with `set -o posix`, every builtin still there, as Bash started as `sh` does, and
+says `sh` for `$0`. A cash started as `bash` says `bash`. Windows gives a program no
+`argv[0]` of its own, so the cash that starts it says the name in `CASH_ARGV0`, which the
+started cash reads and removes; `exec -a NAME` reaches a cash the same way (EXE-12).
+`exec bash` ran Git's bash, found on `PATH`, until then.
+
 **CRLF in script source is the one that earns its keep.** `core.autocrlf` is `true` by
 default in Git for Windows, so *every* `.sh` in a repository checked out on this machine
 has `\r\n` endings unless someone wrote a `.gitattributes`. Without this, `fi\r` is not
