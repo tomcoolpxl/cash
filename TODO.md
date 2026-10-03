@@ -60,11 +60,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 13.4 Error output: colour, prefixes, `--help`
 
-The shell's errors, and its builtins', now carry Bash's `script.sh: line 3: `
-(`Shell::error_prefix`, `ExecutionContext::error_stream`), coloured only on a terminal
-(`Shell::colours`), in Bash's words. Left: clap's block for a bad option or a missing
-operand (`getopts` alone); `--help` on stdout or stderr, exit 0 or 2, by builtin. XC-8,
-BIN-04, BI-16; decided, below.
 
 `fg` and `bg` act in a script, where Bash says `fg: no job control` and returns 1, as job
 control is off there; cash's tests rely on `{ exit 5; } & fg` giving 5. Which one cash
@@ -197,8 +192,9 @@ in Bash they are Bash's version. `\s` gives `cash`. Keep cash's, and add a row t
   when stderr is a terminal and `NO_COLOR` is unset; a pipe or a file gets plain text,
   through one helper for every stream. No colour at all was turned down.
 - **A builtin's bad option is Bash's two lines** (the user, 2026-10-03): `name: -q:
-  invalid option` and `name: usage: <synopsis>`, status 2; `--help` on stdout with
-  status 0 for every builtin. Keeping clap's block was turned down.
+  invalid option` and `name: usage: <synopsis>`, status 2. Keeping clap's block was
+  turned down. `name --help` goes to stdout with status 2, as Bash's does (the user,
+  2026-10-03, correcting the status 0 first written here); `help name` gives 0.
 
 - **`chmod` is silent about group and other bits** (the user, 2026-10-03): Windows has
   none per file, so `chmod go-w ~/.ssh` and `chmod o+r f` change nothing and say nothing,

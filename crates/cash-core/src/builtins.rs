@@ -227,6 +227,11 @@ fn get_builtin_short_description(name: &str, command: &clap::Command) -> String 
 }
 
 fn get_builtin_short_usage(name: &str, command: &clap::Command) -> String {
+    // Bash's own synopsis for a builtin it has, as `help -s` prints it there.
+    if let Some(synopsis) = crate::bash_synopses::synopsis(name) {
+        return format!("{name}: {synopsis}\n");
+    }
+
     let mut usage = String::new();
 
     let mut needs_space = false;
@@ -507,6 +512,71 @@ async fn exec_simple_builtin_impl<
     T::execute(context, plain_args)
 }
 
+/// Arguments clap could not take, reported as Bash reports them for its own builtins:
+/// `--help` on standard output with Bash's status 2; a bad option as `read: -q: invalid
+/// option`, or `read: -u: option requires an argument`, then Bash's usage line, `read:
+/// usage: read [-Eers] …`, status 2 (BI-16). clap printed its own block, `--help`
+/// included, on standard error. A builtin Bash does not have keeps clap's words, on
+/// standard error, with its `--help` on standard output and status 0.
+fn report_parse_error(
+    context: &commands::ExecutionContext<'_, impl extensions::ShellExtensions>,
+    error: &clap::Error,
+) -> results::ExecutionResult {
+    use clap::error::{ContextKind, ContextValue, ErrorKind};
+
+    let name = context.command_name.as_str();
+    let synopsis = crate::bash_synopses::synopsis(name);
+    if matches!(
+        error.kind(),
+        ErrorKind::DisplayHelp | ErrorKind::DisplayVersion
+    ) {
+        let _ = write!(context.stdout(), "{}", error.render());
+        return if synopsis.is_some() {
+            results::ExecutionExitCode::InvalidUsage.into()
+        } else {
+            results::ExecutionResult::success()
+        };
+    }
+    let Some(synopsis) = synopsis else {
+        let _ = write!(context.stderr(), "{}", error.render());
+        return results::ExecutionExitCode::InvalidUsage.into();
+    };
+
+    let mut stderr = context.error_stream();
+    let argument = match error.get(ContextKind::InvalidArg) {
+        Some(ContextValue::String(argument)) => argument.split_whitespace().next(),
+        _ => None,
+    };
+    let no_value = matches!(
+        error.get(ContextKind::InvalidValue),
+        Some(ContextValue::String(value)) if value.is_empty()
+    );
+    match (error.kind(), argument) {
+        // Bash's builtins take no long options: `--foo` is `--` to them.
+        (ErrorKind::UnknownArgument, Some(argument)) => {
+            let option = if argument.starts_with("--") {
+                "--"
+            } else {
+                argument
+            };
+            let _ = writeln!(stderr, "{name}: {option}: invalid option");
+        }
+        (ErrorKind::InvalidValue, Some(argument)) if no_value => {
+            let _ = writeln!(stderr, "{name}: {argument}: option requires an argument");
+        }
+        // A missing operand is the usage line alone, as `getopts` says it.
+        (ErrorKind::MissingRequiredArgument | ErrorKind::TooFewValues, _) => {}
+        _ => {
+            let rendered = error.render().to_string();
+            let first = rendered.lines().next().unwrap_or_default();
+            let message = first.strip_prefix("error: ").unwrap_or(first);
+            let _ = writeln!(stderr, "{name}: {message}");
+        }
+    }
+    let _ = writeln!(stderr, "{name}: usage: {synopsis}");
+    results::ExecutionExitCode::InvalidUsage.into()
+}
+
 fn exec_builtin<T: Command + Send + Sync, SE: extensions::ShellExtensions>(
     context: commands::ExecutionContext<'_, SE>,
     args: Vec<CommandArg>,
@@ -526,10 +596,7 @@ async fn exec_builtin_impl<T: Command + Send + Sync, SE: extensions::ShellExtens
     let result = T::new(plain_args);
     let command = match result {
         Ok(command) => command,
-        Err(e) => {
-            let _ = writeln!(context.stderr(), "{e}");
-            return Ok(results::ExecutionExitCode::InvalidUsage.into());
-        }
+        Err(e) => return Ok(report_parse_error(&context, &e)),
     };
 
     call_builtin(command, context).await
@@ -569,10 +636,7 @@ async fn exec_declaration_builtin_impl<
     let result = T::new(options);
     let mut command = match result {
         Ok(command) => command,
-        Err(e) => {
-            let _ = writeln!(context.stderr(), "{e}");
-            return Ok(results::ExecutionExitCode::InvalidUsage.into());
-        }
+        Err(e) => return Ok(report_parse_error(&context, &e)),
     };
 
     command.set_declarations(declarations);

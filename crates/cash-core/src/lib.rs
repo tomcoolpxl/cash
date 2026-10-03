@@ -3,6 +3,7 @@
 
 pub mod abbreviations;
 pub mod arithmetic;
+mod bash_synopses;
 mod braceexpansion;
 pub mod builtins;
 pub mod callstack;

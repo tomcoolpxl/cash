@@ -187,3 +187,49 @@ fn a_builtin_of_bashs_is_located_and_a_tool_is_not() {
         out.stderr
     );
 }
+
+#[test]
+fn a_bad_option_is_bashs_two_lines() {
+    // clap printed its own block: `error: unexpected argument '-q' found`, a tip, a usage
+    // line of its own and `try '--help'` (BI-16).
+    let read_usage = "read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] \
+                      [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]";
+    for (script, first) in [
+        ("read -q", Some("read: -q: invalid option")),
+        ("read --foo", Some("read: --: invalid option")),
+        ("read -u", Some("read: -u: option requires an argument")),
+    ] {
+        let out = run(script);
+        let lines: Vec<&str> = out.stderr.lines().collect();
+        assert_eq!(lines.len(), 2, "{script}: {}", out.stderr);
+        assert!(
+            first.is_some_and(|first| lines[0].ends_with(&format!(": line 1: {first}"))),
+            "{script}: {}",
+            out.stderr
+        );
+        assert_eq!((lines[1], out.code), (read_usage, 2), "{script}");
+    }
+    let out = run("getopts");
+    assert_eq!(
+        (out.stderr.as_str(), out.code),
+        ("getopts: usage: getopts optstring name [arg ...]", 2)
+    );
+
+    let out = run("read -t 1e1 x < /dev/null");
+    assert!(
+        out.stderr
+            .ends_with("line 1: read: 1e1: invalid timeout specification"),
+        "{}",
+        out.stderr
+    );
+    assert_eq!(out.code, 1);
+}
+
+#[test]
+fn help_goes_to_standard_output() {
+    // Bash's builtins give it with status 2; a tool cash carries, as a program does, 0.
+    let out =
+        run("read --help >/dev/null; echo \"read $?\"; tree --help >/dev/null; echo \"tree $?\"");
+    assert_eq!(out.stdout, "read 2\ntree 0", "{}", out.stderr);
+    assert!(out.stderr.is_empty(), "{}", out.stderr);
+}

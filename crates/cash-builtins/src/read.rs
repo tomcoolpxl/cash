@@ -80,7 +80,7 @@ pub(crate) struct ReadCommand {
     /// Specify timeout in seconds; fail if the timeout elapses before
     /// input is completed.
     #[clap(short = 't', value_name = "SECONDS", allow_hyphen_values = true)]
-    timeout_in_seconds: Option<f64>,
+    timeout_in_seconds: Option<String>,
 
     /// File descriptor to read from instead of stdin.
     #[clap(short = 'u', name = "FD")]
@@ -139,7 +139,7 @@ impl builtins::Command for ReadCommand {
 
         // An explicit -t wins. Otherwise Bash uses a positive, valid TMOUT value;
         // invalid or zero TMOUT values simply mean no default timeout.
-        let timeout_seconds = self.timeout_in_seconds.or_else(|| {
+        let timeout_seconds = self.timeout_seconds().or_else(|| {
             context
                 .shell
                 .env()
@@ -330,6 +330,28 @@ async fn assign_to_named_variables(
         }
     }
     Ok(())
+}
+
+/// A `-t` timeout as Bash reads one: digits, and a fraction after a `.`, nothing else
+/// (`1x`, `1e1`, `inf` and `-1` are invalid). Clap's float parser took `inf` and `1e1`,
+/// and refused `1x` with its own words.
+fn bash_timeout(text: &str) -> Option<f64> {
+    let (whole, fraction) = text.split_once('.').unwrap_or((text, ""));
+    let digits = |part: &str| part.bytes().all(|byte| byte.is_ascii_digit());
+    if !(digits(whole) && digits(fraction)) {
+        return None;
+    }
+    if whole.is_empty() && fraction.is_empty() {
+        return Some(0.0);
+    }
+    format!(
+        "{}.{}",
+        if whole.is_empty() { "0" } else { whole },
+        fraction
+    )
+    .trim_end_matches('.')
+    .parse()
+    .ok()
 }
 
 /// Assign one `read` result, including Bash's `read 'array[subscript]'` form.
@@ -1340,17 +1362,22 @@ impl ReadCommand {
         &self,
         context: &cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
     ) -> Result<Option<cash_core::ExecutionResult>, cash_core::Error> {
-        if let Some(timeout) = self.timeout_in_seconds {
-            if !timeout.is_finite() || timeout < 0.0 {
-                writeln!(
-                    context.error_stream(),
-                    "{}: -t: invalid timeout specification",
-                    context.command_name
-                )?;
-                return Ok(Some(cash_core::ExecutionResult::general_error()));
-            }
+        if let Some(text) = &self.timeout_in_seconds
+            && bash_timeout(text).is_none()
+        {
+            writeln!(
+                context.error_stream(),
+                "{}: {text}: invalid timeout specification",
+                context.command_name
+            )?;
+            return Ok(Some(cash_core::ExecutionResult::general_error()));
         }
         Ok(None)
+    }
+
+    /// The `-t` timeout, in seconds, once [`Self::validate_timeout`] let it pass.
+    fn timeout_seconds(&self) -> Option<f64> {
+        self.timeout_in_seconds.as_deref().and_then(bash_timeout)
     }
 
     const fn editing_requested(&self) -> bool {
