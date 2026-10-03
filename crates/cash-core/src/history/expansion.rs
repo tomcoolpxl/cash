@@ -316,6 +316,20 @@ fn resolve_event_text(
     }
 }
 
+/// Whether the `!` at `i` is the shell's own rather than a history event, as Bash's
+/// `bash_history_inhibit_expansion` decides: `[!a]` in a bracket expression, `${!name}`,
+/// and `$!`. They gave "event not found" at the prompt (LANG-06).
+fn is_shell_syntax_bang(chars: &[char], i: usize) -> bool {
+    let before = |n: usize| i.checked_sub(n).and_then(|at| chars.get(at)).copied();
+    let follows = |c: char| chars.get(i + 1..).is_some_and(|rest| rest.contains(&c));
+    match (before(2), before(1)) {
+        (_, Some('[')) => follows(']'),
+        (Some('$'), Some('{')) => follows('}'),
+        (_, Some('$')) => true,
+        _ => false,
+    }
+}
+
 /// Performs history expansion on a command line string.
 ///
 /// # Errors
@@ -394,7 +408,7 @@ pub fn expand_history(
                 None => false,
                 Some(' ' | '\t' | '\r' | '\n' | '=' | '(') => false,
                 Some('"') if in_double_quotes => false,
-                _ => true,
+                _ => !is_shell_syntax_bang(&chars, i),
             };
 
             if !is_event {
@@ -796,6 +810,29 @@ mod tests {
             let _ = hist.add(crate::history::Item::new(cmd));
         }
         hist
+    }
+
+    #[test]
+    fn a_bang_of_shell_syntax_is_not_an_event() {
+        // `[!a]`, `${!name}` and `$!` gave "event not found" (LANG-06).
+        let hist = make_test_history(&["echo prev"]);
+        for line in [
+            "ls [!a]*",
+            "echo ${!a[@]}",
+            "echo ${!prefix*}",
+            "echo $!",
+            "kill $!; echo done",
+        ] {
+            let res = expand_history(line, Some(&hist)).unwrap();
+            assert_eq!(res.line, line);
+            assert!(!res.changed, "{line}");
+        }
+        // Without its closing bracket or brace it is an event, as in Bash.
+        assert!(expand_history("echo [!x", Some(&hist)).is_err());
+        assert_eq!(
+            expand_history("echo $! !!", Some(&hist)).unwrap().line,
+            "echo $! echo prev"
+        );
     }
 
     #[test]
