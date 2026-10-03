@@ -75,6 +75,8 @@ mod fuser_lsof;
 mod git_prompt;
 mod gui_apps_outlive;
 mod held_descriptors;
+// Here-documents as Bash reads and writes them.
+mod here_documents;
 // D22/§4 #20: $UID agreeing with `id`, and `jobs -l`.
 mod identity_and_jobs;
 // D69: `cash --init-rc`, the starter ~/.bashrc Scoop writes for a user with none.

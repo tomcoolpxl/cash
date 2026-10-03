@@ -7,6 +7,49 @@ use crate::{SourceSpan, tokenizer};
 
 const DISPLAY_INDENT: &str = "    ";
 
+thread_local! {
+    /// Whether a here-document's body and its end are being written: their lines are
+    /// written as they are, never indented, or the end would no longer be found
+    /// (`eval "$(declare -f g)"` of a function with a here-document failed, PI-01).
+    static WRITING_HERE_DOCUMENT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// A writer that indents each line written through it that is not empty by
+/// `DISPLAY_INDENT`, the first included, but not the lines of a here-document
+/// (`WRITING_HERE_DOCUMENT`).
+struct Indented<'a, 'b> {
+    inner: &'a mut std::fmt::Formatter<'b>,
+    needs_indent: bool,
+}
+
+/// An [`Indented`] writer onto `f`.
+const fn indented<'a, 'b>(f: &'a mut std::fmt::Formatter<'b>) -> Indented<'a, 'b> {
+    Indented {
+        inner: f,
+        needs_indent: true,
+    }
+}
+
+impl std::fmt::Write for Indented<'_, '_> {
+    fn write_str(&mut self, s: &str) -> std::fmt::Result {
+        for (index, line) in s.split('\n').enumerate() {
+            if index > 0 {
+                self.inner.write_char('\n')?;
+                self.needs_indent = true;
+            }
+            if line.is_empty() {
+                continue;
+            }
+            if self.needs_indent && !WRITING_HERE_DOCUMENT.get() {
+                self.inner.write_str(DISPLAY_INDENT)?;
+            }
+            self.needs_indent = false;
+            self.inner.write_str(line)?;
+        }
+        Ok(())
+    }
+}
+
 /// Trait implemented by all AST nodes. Used to aggregate traits expected
 /// to be implemented.
 pub trait Node: Display + SourceLocation {}
@@ -736,7 +779,7 @@ impl Display for CaseClauseCommand {
         // Note the trailing space, which the shell emits when printing a case clause.
         write!(f, "case {} in ", self.value)?;
         for case in &self.cases {
-            write!(indenter::indented(f).with_str(DISPLAY_INDENT), "{case}")?;
+            write!(indented(f), "{case}")?;
         }
         writeln!(f)?;
         write!(f, "esac")
@@ -875,11 +918,7 @@ impl SourceLocation for IfClauseCommand {
 impl Display for IfClauseCommand {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "if {}; then", self.condition)?;
-        write!(
-            indenter::indented(f).with_str(DISPLAY_INDENT),
-            "{}",
-            self.then.terminated()
-        )?;
+        write!(indented(f), "{}", self.then.terminated())?;
         if let Some(elses) = &self.elses {
             for else_clause in elses {
                 write!(f, "{else_clause}")?;
@@ -920,11 +959,7 @@ impl Display for ElseClause {
             writeln!(f, "else")?;
         }
 
-        write!(
-            indenter::indented(f).with_str(DISPLAY_INDENT),
-            "{}",
-            self.body.terminated()
-        )
+        write!(indented(f), "{}", self.body.terminated())
     }
 }
 
@@ -1007,7 +1042,7 @@ impl Display for CaseItem {
         writeln!(f, ")")?;
 
         if let Some(cmd) = &self.cmd {
-            write!(indenter::indented(f).with_str(DISPLAY_INDENT), "{cmd}")?;
+            write!(indented(f), "{cmd}")?;
         }
         writeln!(f)?;
         write!(f, "{}", self.post_action)
@@ -1194,11 +1229,7 @@ impl Display for BraceGroupCommand {
             return write!(f, "}}");
         }
         writeln!(f, "{{ ")?;
-        write!(
-            indenter::indented(f).with_str(DISPLAY_INDENT),
-            "{}",
-            self.list
-        )?;
+        write!(indented(f), "{}", self.list)?;
         writeln!(f)?;
         write!(f, "}}")?;
 
@@ -1223,11 +1254,7 @@ pub struct DoGroupCommand {
 impl Display for DoGroupCommand {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "do")?;
-        write!(
-            indenter::indented(f).with_str(DISPLAY_INDENT),
-            "{}",
-            self.list.terminated()
-        )?;
+        write!(indented(f), "{}", self.list.terminated())?;
         writeln!(f)?;
         write!(f, "done")
     }
@@ -1795,10 +1822,10 @@ impl Display for IoHereDocument {
         }
 
         writeln!(f, "{}", self.here_end)?;
-        write!(f, "{}", self.doc)?;
-        writeln!(f, "{}", self.here_end)?;
-
-        Ok(())
+        WRITING_HERE_DOCUMENT.set(true);
+        let written = write!(f, "{}", self.doc).and_then(|()| writeln!(f, "{}", self.here_end));
+        WRITING_HERE_DOCUMENT.set(false);
+        written
     }
 }
 

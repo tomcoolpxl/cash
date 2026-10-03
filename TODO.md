@@ -60,12 +60,9 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 12.2 Here-documents
 
-- `eval "$(declare -f g)"` and `export -f g; bash -c g` fail for a function with a
-  here-doc (`ast.rs:1762`). PI-01.
 - A `)` in a here-doc inside `$(…)` ends it early (`word.rs:1453`; the tokenizer's own
   scanner is right). PI-02.
 - Backslash-newline is kept in an unquoted here-doc. PI-04.
-- `echo $(( $((1)) << 2 ))` is taken for a here-doc. PI-05.
 
 ### 12.3 Smaller expansion differences
 

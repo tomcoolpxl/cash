@@ -1017,6 +1017,10 @@ impl<'a, R: ?Sized + std::io::BufRead> Tokenizer<'a, R> {
                                     (1, false)
                                 };
 
+                            // Inside an arithmetic expansion `<<` is a shift. The outer one's
+                            // state comes back at the end of an inner one: it was cleared, and
+                            // `$(( $((1)) << 2 ))` read `<< 2` as a here-document (PI-05).
+                            let outer_arithmetic = self.cross_state.arithmetic_expansion;
                             if is_arithmetic {
                                 self.cross_state.arithmetic_expansion = true;
                             }
@@ -1024,7 +1028,7 @@ impl<'a, R: ?Sized + std::io::BufRead> Tokenizer<'a, R> {
                             self.consume_nested_construct(&mut state, ')', "(", initial_nesting)?;
 
                             if is_arithmetic {
-                                self.cross_state.arithmetic_expansion = false;
+                                self.cross_state.arithmetic_expansion = outer_arithmetic;
                             }
                         }
 
@@ -1036,12 +1040,14 @@ impl<'a, R: ?Sized + std::io::BufRead> Tokenizer<'a, R> {
                             state.append_char(self.next_peeked_char()?);
 
                             // Keep track that we're in an arithmetic expression, since
-                            // some text will be interpreted differently as a result.
+                            // some text will be interpreted differently as a result; the
+                            // outer state comes back at its end, as for `$((`.
+                            let outer_arithmetic = self.cross_state.arithmetic_expansion;
                             self.cross_state.arithmetic_expansion = true;
 
                             self.consume_nested_construct(&mut state, ']', "[", 1)?;
 
-                            self.cross_state.arithmetic_expansion = false;
+                            self.cross_state.arithmetic_expansion = outer_arithmetic;
                         }
 
                         Some('{') => {
