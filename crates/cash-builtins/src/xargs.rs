@@ -24,7 +24,7 @@ use clap::Parser;
 
 /// Windows caps a command line at 32,767 characters; leave room for the program name and
 /// the terminator rather than finding out at the boundary.
-const MAX_COMMAND_LINE: usize = 30_000;
+pub(crate) const MAX_COMMAND_LINE: usize = 30_000;
 
 /// Build and run command lines from standard input.
 #[derive(Parser)]
@@ -212,7 +212,8 @@ impl XargsCommand {
 /// follow `name: command:` as Bash words it: "command not found", or the system's reason.
 pub(crate) fn start_failure(error: &cash_core::Error) -> String {
     match error.kind() {
-        cash_core::ErrorKind::CommandNotFound(_) => "command not found".to_owned(),
+        // The C library's words, which GNU `xargs` and `find` say.
+        cash_core::ErrorKind::CommandNotFound(_) => "No such file or directory".to_owned(),
         _ => error.to_string(),
     }
 }

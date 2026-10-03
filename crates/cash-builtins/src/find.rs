@@ -229,13 +229,14 @@ impl builtins::Command for FindCommand {
             }
         }
 
-        // `-exec cmd {} +` holds its arguments until the walk is over.
+        // `-exec cmd {} +` holds its arguments until the walk is over, and runs as often
+        // as a Windows command line needs to hold them all; it ran once, and a long list
+        // failed to start (BI-11). A run that fails fails find, as in GNU `find`.
         for (argv, collected) in batches {
-            if collected.is_empty() {
-                continue;
-            }
-            if !run(&context, &argv, &collected).await? {
-                failed = true;
+            for chunk in command_line_chunks(&argv, &collected) {
+                if !run(&context, &argv, chunk).await? {
+                    failed = true;
+                }
             }
         }
 
@@ -245,6 +246,28 @@ impl builtins::Command for FindCommand {
 
         Ok(ExecutionResult::success())
     }
+}
+
+/// `paths` split so that each part, with the command, fits a Windows command line, as
+/// `xargs` splits its input.
+fn command_line_chunks<'a>(argv: &[String], paths: &'a [String]) -> Vec<&'a [String]> {
+    let base: usize = argv.iter().map(|part| part.len() + 3).sum();
+    let mut chunks = Vec::new();
+    let mut start = 0;
+    let mut length = base;
+    for (index, path) in paths.iter().enumerate() {
+        let size = path.len() + 3;
+        if index > start && length + size > crate::xargs::MAX_COMMAND_LINE {
+            chunks.extend(paths.get(start..index));
+            start = index;
+            length = base;
+        }
+        length += size;
+    }
+    if start < paths.len() {
+        chunks.extend(paths.get(start..));
+    }
+    chunks
 }
 
 /// Puts what is in a directory on the walk's stack, in name order; whether it could be
@@ -578,6 +601,24 @@ impl ExprParser<'_> {
                 if argv.is_empty() {
                     return Err(String::from("missing command to `-exec'"));
                 }
+                // With `+` the paths are words of their own, so `{}` must be one, and
+                // once, as GNU `find` requires; `x{}y {}` ran `x{}y` as it was.
+                if batch {
+                    let holders = argv.iter().filter(|part| part.contains("{}")).count();
+                    if holders > 1 {
+                        return Err(String::from(
+                            "Only one instance of {} is supported with -exec ... +",
+                        ));
+                    }
+                    if let Some(part) = argv
+                        .iter()
+                        .find(|part| part.contains("{}") && *part != "{}")
+                    {
+                        return Err(std::format!(
+                            "In '-exec ... {{}} +' the '{{}}' must appear by itself, but you specified '{part}'"
+                        ));
+                    }
+                }
                 Ok(Expr::Action(Action::Exec(argv, batch)))
             }
             other => Err(std::format!(
@@ -726,11 +767,9 @@ async fn act<SE: cash_core::ShellExtensions>(
                 return Ok(true);
             }
 
-            let ran = run(context, argv, std::slice::from_ref(&visit.rendered)).await?;
-            if !ran {
-                visit.failed = true;
-            }
-            Ok(ran)
+            // A command that fails, or cannot start, makes the test false; it is not
+            // find's failure, as in GNU `find`, whose status stays 0.
+            run(context, argv, std::slice::from_ref(&visit.rendered)).await
         }
     }
 }
@@ -747,11 +786,14 @@ async fn run<SE: cash_core::ShellExtensions>(
     argv: &[String],
     paths: &[String],
 ) -> Result<bool, cash_core::Error> {
-    // `-exec cmd \;` with no `{}` still runs once per match, as `find` does.
+    // `-exec cmd \;` with no `{}` still runs once per match, as `find` does. With one
+    // path, `{}` is replaced inside a word too, `"<{}>"`, as in GNU `find`; it was left.
     let mut parts: Vec<String> = Vec::new();
     for part in argv {
         if part == "{}" {
             parts.extend(paths.iter().cloned());
+        } else if let [path] = paths {
+            parts.push(part.replace("{}", path));
         } else {
             parts.push(part.clone());
         }
@@ -766,7 +808,7 @@ async fn run<SE: cash_core::ShellExtensions>(
         Err(e) => {
             writeln!(
                 context.stderr(),
-                "{}: {program}: {}",
+                "{}: '{program}': {}",
                 context.command_name,
                 crate::xargs::start_failure(&e)
             )?;

@@ -387,6 +387,54 @@ fn delete_removes_a_directory_after_its_contents() {
 }
 
 #[test]
+fn exec_substitutes_inside_a_word_and_its_failure_is_only_false() {
+    // `"<{}>"` was passed as it was, and a command that failed made find fail; in GNU
+    // `find` it only makes the test false (BI-11).
+    let sandbox = Sandbox::new("exec-word");
+    let out = sandbox.run(
+        r#"find sub -name b.txt -exec echo "<{}>" \;; find sub -name b.txt -exec false \; ; echo "rc $?"; find sub -name b.txt -exec nosuchcmd {} \; ; echo "rc $?""#,
+    );
+    assert_eq!(out.stdout, "<sub/b.txt>\nrc 0\nrc 0");
+    assert_eq!(out.stderr, "find: 'nosuchcmd': No such file or directory");
+}
+
+#[test]
+fn exec_plus_wants_braces_alone_and_splits_a_long_list() {
+    let sandbox = Sandbox::new("exec-plus");
+    let out = sandbox.run("find sub -exec echo x{}y +; echo \"rc $?\"");
+    assert_eq!(out.stdout, "rc 1");
+    assert!(
+        out.stderr.contains("must appear by itself"),
+        "{}",
+        out.stderr
+    );
+
+    // A list longer than a Windows command line is run in parts; it was one command line,
+    // which could not start.
+    std::fs::create_dir(sandbox.root.join("many")).expect("create dir");
+    for index in 0..2000 {
+        std::fs::write(
+            sandbox
+                .root
+                .join(format!("many/file-with-a-long-name-{index:05}.txt")),
+            b"",
+        )
+        .expect("write file");
+    }
+    let cash = CASH.replace('\\', "/");
+    let out = sandbox.run(&format!(
+        r#"find many -type f -exec '{cash}' --no-config -c 'echo $#' x {{}} +"#
+    ));
+    let counts: Vec<usize> = out
+        .stdout
+        .lines()
+        .filter_map(|line| line.parse().ok())
+        .collect();
+    assert!(counts.len() > 1, "one run: {}", out.stdout);
+    assert_eq!(counts.iter().sum::<usize>(), 2000, "{}", out.stderr);
+}
+
+#[test]
 fn depth_lists_a_directory_after_its_contents() {
     // `-depth` was an unknown predicate.
     let sandbox = Sandbox::new("depth");

@@ -100,7 +100,7 @@ fn xargs_runs_a_command_as_the_shell_does() {
     let out = run_in(scratch.path(), "echo x | xargs nosuchcmd; echo \"rc=$?\"");
     assert_eq!(out.stdout, "rc=127", "{}", out.stderr);
     assert!(
-        out.stderr.contains("xargs: nosuchcmd: command not found"),
+        out.stderr.contains("xargs: nosuchcmd: No such file or directory"),
         "{}",
         out.stderr
     );
@@ -130,13 +130,15 @@ fn find_exec_runs_a_command_as_the_shell_does() {
     // The output went where find's goes, and the command saw the shell's state.
     assert_eq!(out.stdout.trim_end(), "[bar] [./a.txt]", "{}", out.stderr);
 
+    // A command that cannot start is said, in GNU's words, and only makes the test
+    // false, as in GNU `find`, whose status stays 0.
     let out = run_in(
         scratch.path(),
         r"find . -name a.txt -exec nosuchcmd {} \;; echo rc=$?",
     );
-    assert_eq!(out.stdout, "rc=1", "{}", out.stderr);
+    assert_eq!(out.stdout, "rc=0", "{}", out.stderr);
     assert!(
-        out.stderr.contains("find: nosuchcmd: command not found"),
+        out.stderr.contains("find: 'nosuchcmd': No such file or directory"),
         "{}",
         out.stderr
     );
