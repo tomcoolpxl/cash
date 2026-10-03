@@ -65,6 +65,8 @@ mod doctor_busybox;
 mod ended_children;
 // D3/D5: what a script sees of its environment, and the here-document deadlock.
 mod environment_contract;
+// Expansions as Bash performs them.
+mod expansions;
 mod extensionless_lookup;
 // find and xargs parity.
 mod find_xargs;

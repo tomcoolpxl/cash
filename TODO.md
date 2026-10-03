@@ -60,7 +60,7 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 12.3 Smaller expansion differences
 
-`${#x}` and `${x: -1}` count bytes (LANG-09); `$(( $empty ))` aborts (LANG-10);
+`$(( $empty ))` aborts (LANG-10);
 `declare -i` through `read`/`printf -v`/arrays/`for` (LANG-11); `\$` in backquotes
 (LANG-13); `${x/b/"$r"}` with `&` in `r` (LANG-14); history expansion inside `${!a[@]}`,
 `$!`, `[!a]` (LANG-06); the D31 fallback scan is quadratic (LANG-15); nested `case` parses

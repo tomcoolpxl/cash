@@ -265,7 +265,9 @@ impl Expansion {
 
     fn len_in(&self, chars: bool) -> usize {
         if chars {
-            self.fields.iter().fold(0, |acc, field| acc + field.len())
+            self.fields
+                .iter()
+                .fold(0, |acc, field| acc + field.char_count())
         } else {
             self.fields.len()
         }
@@ -372,8 +374,10 @@ impl WordField {
         Self(vec![])
     }
 
-    pub fn len(&self) -> usize {
-        self.0.iter().fold(0, |acc, piece| acc + piece.len())
+    /// Its length in characters, as `${#x}` and `${x:offset}` count in a UTF-8 locale; in
+    /// bytes, `café` was 5 and `${x: -1}` empty (LANG-09).
+    pub fn char_count(&self) -> usize {
+        self.0.iter().fold(0, |acc, piece| acc + piece.char_count())
     }
 }
 
@@ -463,8 +467,8 @@ impl ExpansionPiece {
         }
     }
 
-    const fn len(&self) -> usize {
-        self.as_str().len()
+    fn char_count(&self) -> usize {
+        self.as_str().chars().count()
     }
 
     fn make_unsplittable(self) -> Self {
