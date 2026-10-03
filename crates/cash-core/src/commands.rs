@@ -1186,6 +1186,24 @@ fn register_background_leader(child: &sys::process::Child, background: bool) {
 /// The process is held open first, so its pid stays its own after it ends: Windows hands
 /// a pid out again within a second, and a later `kill $!` must find no such process, not
 /// whichever one was given the number.
+/// Sends a program a background job started the signal `kill` ended the job with, when
+/// that happened as the program started (D70).
+///
+/// The signal did not find it among the job's processes then. The pid was published
+/// before this look, so a `kill` after it finds the program there.
+fn signal_if_its_job_was_killed(params: &ExecutionParameters, pid: Option<i32>) {
+    if let Some(signal) = params
+        .job_cancel
+        .as_ref()
+        .map(|cancel| cancel.load(std::sync::atomic::Ordering::SeqCst))
+        .filter(|&signal| signal != 0)
+        && let Some(pid) = pid
+        && let Ok(signal) = sys::signal::Signal::try_from(signal)
+    {
+        let _ = sys::signal::kill_process(pid, traps::TrapSignal::Signal(signal));
+    }
+}
+
 fn report_to_job(child: &sys::process::Child, sink: Option<&std::sync::Mutex<Vec<i32>>>) {
     let (Some(raw), Some(sink)) = (child.id(), sink) else {
         return;
@@ -1321,6 +1339,8 @@ pub(crate) fn execute_external_command(
             if let Some(ready) = &context.params.spawned_pid_ready {
                 ready.notify_one();
             }
+
+            signal_if_its_job_was_killed(&context.params, pid);
 
             Ok(ExecutionSpawnResult::StartedProcess(
                 processes::ChildProcess::new(child, pid, actual_pgid),

@@ -206,9 +206,14 @@ pub fn run_with_args(mut args: Vec<String>) {
 fn run_shell(args: &[String], parsed_args: CommandLineArgs) -> std::convert::Infallible {
     let mut builder = tokio::runtime::Builder::new_multi_thread();
 
+    // Each subshell running at once is a thread of the blocking pool (D70), and so is a
+    // builtin's pipeline stage, which the limit does not count: the pool is made twice as
+    // large as the limit, and never smaller than tokio's 512.
+    let blocking_threads = (cash_core::jobs::max_concurrent_subshells() * 2).max(512);
     let Ok(runtime) = builder
         .enable_all()
         .thread_stack_size(cash_core::SHELL_THREAD_STACK_SIZE)
+        .max_blocking_threads(blocking_threads)
         .build()
     else {
         tracing::error!("error: failed to create Tokio runtime");

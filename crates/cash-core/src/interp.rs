@@ -456,15 +456,25 @@ async fn spawn_async_ao_list_in_task<'a, SE: extensions::ShellExtensions>(
     // runtime's workers, a job that never waits (a loop of builtins) held its worker for
     // good, and as many such jobs as cores left a foreground `$(…)` waiting for ever
     // (`REVIEW_REPORT.md` EXE-03).
+    let job_cancel = std::sync::Arc::clone(&cancel);
     let mut join_handle = tokio::task::spawn_blocking(move || {
         let _guard = slot_guard;
-        tokio::runtime::Handle::current()
-            .block_on(cloned_ao_list.execute(&mut cloned_shell, &cloned_params))
+        let outcome = tokio::runtime::Handle::current()
+            .block_on(cloned_ao_list.execute(&mut cloned_shell, &cloned_params));
+        // A job `kill` ended ends with 128 plus the signal, as Bash's killed subshell
+        // does, whatever its last command ended with: the program it was waiting for,
+        // killed with it, may have ended otherwise.
+        match job_cancel.load(std::sync::atomic::Ordering::SeqCst) {
+            0 => outcome,
+            signal => Ok(ExecutionResult::from(ExecutionExitCode::from(
+                u8::try_from(128 + signal).unwrap_or(u8::MAX),
+            ))),
+        }
     });
 
     // Either the task reached a point where `$!` is as accurate as it will ever be, or
-    // it finished outright. Both arms resolve promptly: a task that runs forever either
-    // spawned a process (first arm) or ran a builtin on the way (also first arm).
+    // it finished outright. Both arms resolve promptly: the task's first pipeline either
+    // spawned a process (first arm) or ended (also first arm).
     let (completed_result, join_handle_opt) = tokio::select! {
         () = pid_ready.notified() => (None, Some(join_handle)),
         res = &mut join_handle => (Some(res), None),
@@ -484,13 +494,16 @@ async fn spawn_async_ao_list_in_task<'a, SE: extensions::ShellExtensions>(
         }
     };
 
-    Some(
-        shell.jobs_mut().add_as_current(
-            jobs::Job::new([task], ao_list.to_string(), jobs::JobState::Running)
-                .with_spawned_pids(pid_sink)
-                .with_cancel(cancel),
-        ),
-    )
+    // A job that has started no program by now is known by a number of its own (D70).
+    let started_a_program = pid_sink.lock().is_ok_and(|pids| !pids.is_empty());
+    let mut job = jobs::Job::new([task], ao_list.to_string(), jobs::JobState::Running)
+        .with_spawned_pids(pid_sink)
+        .with_cancel(cancel);
+    if !started_a_program {
+        job = job.with_own_pid();
+    }
+
+    Some(shell.jobs_mut().add_as_current(job))
 }
 
 #[async_trait::async_trait]
@@ -567,7 +580,7 @@ impl Execute for ast::Pipeline {
         if let Some(signal) = params
             .job_cancel
             .as_ref()
-            .map(|cancel| cancel.load(std::sync::atomic::Ordering::Relaxed))
+            .map(|cancel| cancel.load(std::sync::atomic::Ordering::SeqCst))
             .filter(|&signal| signal != 0)
         {
             return Ok(ExecutionResult {

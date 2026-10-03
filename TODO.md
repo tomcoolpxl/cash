@@ -60,12 +60,8 @@ The riskiest phase: judge its runs on an idle machine (Decided, below).
 
 ### 11.2 Background jobs of builtins
 
-- The 128-slot `CASH_MAX_SUBSHELLS` also fails pipeline stages, undocumented. EXE-09.
-- `$!` is empty for a job that starts no program first (`{ x=1; } &`, `while :; do :;
-  done &`), and `jobs -p` lists nothing for it, so `kill $!` fails; Bash's `$!` is the
-  pid of the forked subshell. `kill %1` and `wait` work.
 - A job ended by `kill -9` is reported by Bash even in a script (`line 1: 140823 Killed
-  while :; do :; done`); cash says nothing.
+  while :; do :; done`); cash says nothing. Found while fixing EXE-08.
 
 ### 11.3 Coprocesses deadlock
 
@@ -237,6 +233,11 @@ Bash, or keep "no limit" and add a row to spec §4.
 ---
 
 ## Decided, written down so it is not decided twice
+
+- **`$!` for a background job that starts no program is a number of cash's own** (the
+  user, 2026-10-03): 4n + 1, which no Windows process has; `kill`, `wait` and `jobs -p`
+  take it to mean the job. And **at most 256 subshells at once**, as Git Bash's
+  `ulimit -u` says, documented with `CASH_MAX_SUBSHELLS`. Both are D70.
 
 - **The code review's findings are worked as phases 8 to 14** (the user, 2026-10-02):
   crashes and security first, with CI hardening pulled into phase 8 and the `it` test

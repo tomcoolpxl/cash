@@ -7,13 +7,17 @@
 //! itself hung; and `kill %1` had no process to signal, so such a loop could not be
 //! ended (EXE-08). A job started inside a process substitution lost what it wrote after
 //! the substitution's own command ended (EXE-06).
+//!
+//! Such a job had an empty `$!`. It now has a number of its own that no process has, and
+//! `kill`, `wait` and `jobs -p` know it; and the limit on subshells running at once,
+//! which pipeline stages count against too, is 256 and written down (D70, EXE-09).
 
 #![allow(
     clippy::tests_outside_test_module,
     reason = "an integration test is outside a test module by construction"
 )]
 
-use crate::common::run;
+use crate::common::{cash_command, output_of, run};
 
 /// Runs each script and checks its standard output and status.
 fn check(cases: &[(&str, &str)]) {
@@ -72,4 +76,55 @@ fn a_job_started_in_a_process_substitution_writes_into_it() {
         "cat <( { sleep 1; echo late; } & echo early )",
         "early\nlate",
     )]);
+}
+
+#[test]
+fn a_job_that_starts_no_program_is_known_by_a_number_of_its_own() {
+    check(&[
+        (
+            r#"while :; do :; done & p=$!; [ -n "$p" ] && echo has-pid; kill $p; wait $p; echo "waited $?""#,
+            "has-pid\nwaited 143",
+        ),
+        (
+            r#"while :; do :; done & p=$!; kill -0 $p; echo "zero $?"; kill $p; wait; kill -0 $p 2>/dev/null; echo "after $?""#,
+            "zero 0\nafter 1",
+        ),
+        (
+            r#"while :; do :; done & p=$!; [ "$(jobs -p)" = "$p" ] && echo match; kill %1; wait"#,
+            "match",
+        ),
+        (r#"{ exit 3; } & p=$!; wait $p; echo "w $?""#, "w 3"),
+        // Killed while it waits for a program, the job still ends with 143.
+        (
+            r#"{ :; sleep 5; } & p=$!; [ "$(jobs -p)" = "$p" ] && echo match; kill $p; wait $p; echo "w $?""#,
+            "match\nw 143",
+        ),
+        // No Windows process id is 4n + 1.
+        (r"{ x=1; } & echo $(( $! % 4 )); wait", "1"),
+    ]);
+}
+
+#[test]
+fn subshells_at_once_are_limited_to_256() {
+    // 135 compound stages at once: past the old limit of 128, which failed them.
+    let stages = "{ sleep 1; } | ".repeat(135);
+    check(&[(
+        &format!("{stages}{{ true; }}; echo \"stages $?\""),
+        "stages 0",
+    )]);
+
+    // One more than `CASH_MAX_SUBSHELLS` fails as Bash's fork does.
+    let mut command = cash_command();
+    command.env("CASH_MAX_SUBSHELLS", "2");
+    let out = output_of(command.args([
+        "-c",
+        "{ sleep 1; } & { sleep 1; } & { echo ran; } & wait; echo end",
+    ]));
+    assert_eq!(out.stdout, "end", "{}", out.stderr);
+    assert!(
+        out.stderr
+            .contains("fork: retry: Resource temporarily unavailable"),
+        "{}",
+        out.stderr
+    );
 }

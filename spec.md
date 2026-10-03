@@ -520,7 +520,8 @@ kill -9 $!    kills the process
 ```
 
 This was inherited rather than Windows-specific — it behaved the same on Linux — but D11
-claims cash owns job control, so it was cash's to fix.
+claims cash owns job control, so it was cash's to fix. A job that starts no program has
+a number of its own instead (D70).
 
 **`jobs` and `wait` as Bash 5.3 has them (2026-10-02).** Every difference
 `open-issues.md` entry 8 listed, measured against Git Bash 5.3.15:
@@ -2374,6 +2375,34 @@ overwritten. Decided with the user on 2026-09-29:
 The Scoop bucket's manifest takes the `post_install` line only with the first release
 that has `--init-rc`: an older `cash.exe` would take the flag for a shell option.
 
+### D70 — Background jobs and subshells run inside the shell, on threads of their own
+
+Bash forks a subshell for a background job, a compound or function pipeline stage, `( … )`
+and a command substitution. cash forks nothing (D11): each is a copy of the shell running
+on a thread of cash's own process. Decided with the user on 2026-10-03:
+
+- **A thread of its own.** A background job and a compound or function stage run on a
+  thread of the runtime's blocking pool. As tasks on the runtime's workers, a job that
+  never waits (a loop of builtins) held its worker for good, and as many as cores left a
+  foreground `$(…)` waiting for ever.
+- **`$!` names every job.** A job that has started no program by the time `&` returns
+  (`{ x=1; } &`, `while :; do :; done &`) is given a number of its own: 4n + 1, from
+  100001 up, which no Windows process can have, since their ids are multiples of 4.
+  `$!`, `jobs -p`, `kill PID` and `wait PID` take it to mean the job, as Bash's take the
+  forked subshell's pid. A job that starts a program first is known by that program's
+  pid, as before.
+- **`kill` ends a job running inside the shell.** It has no process to signal, so the
+  signal is left where the job looks before each of its pipelines; the job ends there,
+  with 128 plus the signal, and a program it waits for is signalled with the rest of its
+  processes. A builtin that is still running, such as a `read` that waits, runs to its
+  end first.
+- **At most 256 at once.** Background jobs and compound or function stages running at
+  the same time are limited to 256, what Git Bash's `ulimit -u` reports; one more fails
+  with Bash's `fork: retry: Resource temporarily unavailable`. `CASH_MAX_SUBSHELLS` sets
+  another limit, read when cash starts. The limit guards the blocking pool, which is made
+  twice as large: a stage queued behind a full pool, waited for by the stages that hold
+  it, would never start.
+
 ---
 
 ## 4. Deliberate divergences from bash
@@ -2397,7 +2426,7 @@ someone who expected bash, so additions need to earn their place.
 | 11 | `[ -s file ]` is false for App Execution Aliases | They are genuinely 0 bytes | D46 |
 | 12 | Elevated and `detach`ed processes, and GUI applications, survive cash; other processes it started do not | Integrity boundary; breakaway flag; an editor should outlive the shell (`cashctl gui-apps close` to reap them) | D6, D42, D45 |
 | 13 | A bundled builtin cannot delete the shell's current directory | It re-enters the binary as a child inheriting that cwd, and Windows refuses to delete a process's own cwd | D48 |
-| 14 | `$!` is empty for a background job made only of shell builtins | bash forks and reports the subshell's pid; cash runs the job as a task, so there is no process to name | D11 |
+| 14 | `$!` for a background job that starts no program is a number of cash's own (4n + 1) that no process has; `kill` and `wait` take it to mean the job | bash forks and reports the subshell's pid; cash runs the job on a thread of its own process, so there is no process to name | D70 |
 | 15 | `kill 0` signals the trees cash spawned, not a process group | Windows has no process group that excludes the terminal; the console-wide alternative would kill it | D22 |
 | 16 | `kill -1` is refused | "every process I may signal" on Windows reaches far past anything a script could mean | D22 |
 | 17 | `sh`, `bash` and `cash` are cash, ahead of `PATH` | Otherwise `bash` is the WSL launcher and a script continues under Linux; `cash` is often not on `PATH` at all, since a terminal starts it by full path | D7 |

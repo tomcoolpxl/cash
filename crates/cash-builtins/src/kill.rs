@@ -31,7 +31,7 @@ impl builtins::Command for KillCommand {
 
     async fn execute<SE: cash_core::ShellExtensions>(
         &self,
-        context: cash_core::ExecutionContext<'_, SE>,
+        mut context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<cash_core::ExecutionResult, Self::Error> {
         let mut signal_zero = false;
 
@@ -123,38 +123,23 @@ impl builtins::Command for KillCommand {
 
         if self.list_signals {
             return print_signals(&context, self.args.as_ref());
-        } else {
-            let Some(pid_or_job_spec) = pid_or_job_spec else {
-                writeln!(context.stderr(), "{}: invalid usage", context.command_name)?;
-                return Ok(ExecutionExitCode::InvalidUsage.into());
-            };
-
-            if pid_or_job_spec.starts_with('%') {
-                // It's a job spec.
-                if let Some(job) = context.shell.jobs_mut().resolve_job_spec(pid_or_job_spec) {
-                    if signal_zero {
-                        job.check_signalable()?;
-                    } else {
-                        job.kill(trap_signal)?;
-                    }
-                } else {
-                    writeln!(
-                        context.stderr(),
-                        "{}: {}: no such job",
-                        context.command_name,
-                        pid_or_job_spec
-                    )?;
-                    return Ok(ExecutionResult::general_error());
-                }
-            } else {
-                let pid = cash_core::int_utils::parse(pid_or_job_spec.as_str(), 10)?;
-                if !signal_zero && u32::try_from(pid).is_ok_and(|pid| pid == std::process::id()) {
-                    return signal_self(context, trap_signal).await;
-                }
-                return signal_pid(&context, pid, signal_zero, trap_signal);
-            }
         }
-        Ok(ExecutionResult::success())
+        let Some(pid_or_job_spec) = pid_or_job_spec else {
+            writeln!(context.stderr(), "{}: invalid usage", context.command_name)?;
+            return Ok(ExecutionExitCode::InvalidUsage.into());
+        };
+
+        if pid_or_job_spec.starts_with('%') {
+            return signal_job_spec(&mut context, pid_or_job_spec, signal_zero, trap_signal);
+        }
+        let pid = cash_core::int_utils::parse(pid_or_job_spec.as_str(), 10)?;
+        if let Some(result) = signal_job_known_as(&mut context, pid, signal_zero, trap_signal)? {
+            return Ok(result);
+        }
+        if !signal_zero && u32::try_from(pid).is_ok_and(|pid| pid == std::process::id()) {
+            return signal_self(context, trap_signal).await;
+        }
+        signal_pid(&context, pid, signal_zero, trap_signal)
     }
 }
 
@@ -206,6 +191,59 @@ async fn signal_self<SE: cash_core::ShellExtensions>(
 }
 
 /// Signal one process id, reporting failure the way bash reports it.
+/// Signals the job a job spec (`%1`) names.
+fn signal_job_spec<SE: cash_core::ShellExtensions>(
+    context: &mut cash_core::ExecutionContext<'_, SE>,
+    job_spec: &str,
+    signal_zero: bool,
+    trap_signal: TrapSignal,
+) -> Result<ExecutionResult, cash_core::Error> {
+    let Some(job) = context.shell.jobs_mut().resolve_job_spec(job_spec) else {
+        writeln!(
+            context.stderr(),
+            "{}: {}: no such job",
+            context.command_name,
+            job_spec
+        )?;
+        return Ok(ExecutionResult::general_error());
+    };
+    if signal_zero {
+        job.check_signalable()?;
+    } else {
+        job.kill(trap_signal)?;
+    }
+    Ok(ExecutionResult::success())
+}
+
+/// Signals the job `pid` is the number of, when it is the number of a job that started
+/// no program (D70): it names that job, which has no process of its own.
+fn signal_job_known_as<SE: cash_core::ShellExtensions>(
+    context: &mut cash_core::ExecutionContext<'_, SE>,
+    pid: i32,
+    signal_zero: bool,
+    trap_signal: TrapSignal,
+) -> Result<Option<ExecutionResult>, cash_core::Error> {
+    let Some(job) = context
+        .shell
+        .jobs_mut()
+        .resolve_pid(pid)
+        .filter(|job| job.is_known_as(pid))
+    else {
+        return Ok(None);
+    };
+    if !signal_zero {
+        job.kill(trap_signal)?;
+    } else if !job.runs_inside_the_shell() {
+        writeln!(
+            context.stderr(),
+            "{}: ({pid}) - No such process",
+            context.command_name
+        )?;
+        return Ok(Some(ExecutionResult::general_error()));
+    }
+    Ok(Some(ExecutionResult::success()))
+}
+
 fn signal_pid<SE: cash_core::ShellExtensions>(
     context: &cash_core::ExecutionContext<'_, SE>,
     pid: i32,

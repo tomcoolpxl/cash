@@ -725,6 +725,10 @@ impl JobManager {
     /// spawned rather than only its representative means `wait` finds a job by any
     /// process in its tree, which is what `kill` already does for job specs (D22).
     pub fn resolve_pid(&mut self, pid: sys::process::ProcessId) -> Option<&mut Job> {
+        // A job's own number (D70) names that job alone.
+        if let Some(index) = self.jobs.iter().position(|job| job.is_known_as(pid)) {
+            return self.jobs.get_mut(index);
+        }
         self.jobs
             .iter_mut()
             .find(|job| job.spawned_pids().contains(&pid) || job.representative_pid() == Some(pid))
@@ -888,6 +892,12 @@ pub struct Job {
     /// be found by walking them. The task reports them here instead.
     spawned_pids: Option<std::sync::Arc<std::sync::Mutex<Vec<sys::process::ProcessId>>>>,
 
+    /// The number `$!` names a background job by that had started no program when `&`
+    /// returned (D70): 4n + 1, which no Windows process has, since their ids are multiples
+    /// of 4. Bash's `$!` is the pid of the subshell it forks, so `kill $!` and `wait $!`
+    /// work for any job; here they find the job by this number.
+    own_pid: Option<sys::process::ProcessId>,
+
     /// Where `kill` leaves the signal for a background task running inside the shell,
     /// which looks there before each pipeline (`ExecutionParameters::job_cancel`).
     cancel: Option<std::sync::Arc<std::sync::atomic::AtomicI32>>,
@@ -956,6 +966,7 @@ impl Job {
             exit_status: None,
             notification_pending: true,
             spawned_pids: None,
+            own_pid: None,
             cancel: None,
             console_at_stop: None,
             reap_counted: false,
@@ -982,9 +993,24 @@ impl Job {
         self
     }
 
+    /// Gives the job a number of its own for `$!` (`own_pid`, D70).
+    #[must_use]
+    pub(crate) fn with_own_pid(mut self) -> Self {
+        static NEXT: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(25_000);
+        let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.own_pid = Some(n.saturating_mul(4).saturating_add(1));
+        self
+    }
+
+    /// Whether `pid` is the job's own number (`own_pid`), which `kill` and `wait` take
+    /// to mean the job.
+    pub fn is_known_as(&self, pid: sys::process::ProcessId) -> bool {
+        self.own_pid == Some(pid)
+    }
+
     /// Whether a task of the job still runs inside the shell, where `kill` reaches it
     /// through `cancel`.
-    fn runs_inside_the_shell(&self) -> bool {
+    pub fn runs_inside_the_shell(&self) -> bool {
         self.cancel.is_some()
             && self
                 .tasks
@@ -1263,7 +1289,7 @@ impl Job {
                 // The part of the job running inside the shell ends at its next pipeline,
                 // and the program it waits for, if any, is signalled below with the rest.
                 if inside && let Some(cancel) = &self.cancel {
-                    cancel.store(signal.trap_number(), std::sync::atomic::Ordering::Relaxed);
+                    cancel.store(signal.trap_number(), std::sync::atomic::Ordering::SeqCst);
                 }
                 let mut first_error = None;
                 for pid in self.pids() {
@@ -1355,6 +1381,12 @@ impl Job {
             }
         }
 
+        // A job that had started no program when `&` returned is known by a number of
+        // its own (D70), as Bash's is by its subshell's pid, also once it has started one.
+        if self.own_pid.is_some() {
+            return self.own_pid;
+        }
+
         // cash (D11/D22): an `Internal` task is a tokio task running the and-or list, so
         // the process it spawned is not among `tasks`. It reports the pid here instead,
         // which is what makes `$!` and `kill %1` work for a background job.
@@ -1400,8 +1432,23 @@ impl Job {
 static ACTIVE_SUBSHELL_COUNT: std::sync::atomic::AtomicUsize =
     std::sync::atomic::AtomicUsize::new(0);
 
-/// Default limit on concurrent background tasks / subshell branches (matching `ulimit -u`).
-pub const DEFAULT_MAX_CONCURRENT_SUBSHELLS: usize = 128;
+/// Default limit on subshells running at the same time: background jobs, and compound
+/// and function pipeline stages (D70). Git Bash's `ulimit -u` says 256.
+pub const DEFAULT_MAX_CONCURRENT_SUBSHELLS: usize = 256;
+
+/// The limit on subshells running at the same time (D70).
+///
+/// It is `CASH_MAX_SUBSHELLS` when that is a positive number, otherwise
+/// `DEFAULT_MAX_CONCURRENT_SUBSHELLS`. Each one is a thread of the runtime's blocking
+/// pool, which is made larger than this at startup.
+pub fn max_concurrent_subshells() -> usize {
+    // process state: a setting of the cash process itself, not of a script.
+    std::env::var("CASH_MAX_SUBSHELLS")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+        .filter(|&n| n > 0)
+        .unwrap_or(DEFAULT_MAX_CONCURRENT_SUBSHELLS)
+}
 
 /// RAII slot guard for concurrent subshell/async task execution.
 #[derive(Debug)]
@@ -1411,14 +1458,7 @@ impl SubshellSlotGuard {
     /// Attempts to acquire a slot for a concurrent subshell or async background task.
     /// Returns `Err(ErrorKind::ForkResourceUnavailable)` if the concurrency limit is reached.
     pub fn try_acquire() -> Result<Self, error::Error> {
-        // process state: a setting of the cash process itself, not of a script.
-        let max = match std::env::var("CASH_MAX_SUBSHELLS")
-            .ok()
-            .and_then(|v| v.parse::<usize>().ok())
-        {
-            Some(n) if n > 0 => n,
-            _ => DEFAULT_MAX_CONCURRENT_SUBSHELLS,
-        };
+        let max = max_concurrent_subshells();
 
         let current = ACTIVE_SUBSHELL_COUNT.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         if current >= max {
