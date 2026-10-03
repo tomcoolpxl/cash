@@ -1,4 +1,4 @@
-//! Test harness library for brush shell integration tests.
+//! Test harness library for cash's YAML compatibility cases.
 //!
 //! This crate provides a unified framework for running YAML-based integration tests
 //! that support both oracle-based comparison (comparing brush output against bash)

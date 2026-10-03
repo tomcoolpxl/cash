@@ -1,14 +1,14 @@
-//! Bundled commands: utilities that ship inside the brush binary.
+//! Bundled commands: utilities that ship inside the cash binary.
 //!
 //! Utilities are shipped busybox-style (one binary, many names) but execute
-//! as a subprocess of brush so that shell redirections, pipes, and
+//! as a subprocess of cash so that shell redirections, pipes, and
 //! process-group state are honored by code that reads/writes the host
 //! process's standard fds (e.g., uutils crates).
 //!
 //! ## Protocol
 //!
-//! The brush binary recognizes a hidden first-position argument
-//! [`DISPATCH_FLAG`] followed by `<NAME> [ARGS...]`. When present, brush
+//! The cash binary recognizes a hidden first-position argument
+//! [`DISPATCH_FLAG`] followed by `<NAME> [ARGS...]`. When present, cash
 //! dispatches early in `main()` to the registered function for `NAME`, before
 //! any shell state is built, and exits with the function's return code. The
 //! dispatched function has the same signature as `uutils`' `uumain`:
@@ -16,14 +16,14 @@
 //!
 //! ## Shell integration
 //!
-//! For every entry in the registry, [`register_shims`] installs a brush
-//! builtin (using `register_builtin_if_unset`, so brush's own builtins always
-//! win on conflict). The builtin's execution path uses brush-core's existing
+//! For every entry in the registry, [`register_shims`] installs a
+//! builtin (using `register_builtin_if_unset`, so the shell's own builtins always
+//! win on conflict). The builtin's execution path uses cash-core's existing
 //! external-command machinery to spawn `current_exe() <DISPATCH_FLAG> <name>
 //! <args...>`, inheriting the shell's redirection state for free.
 //!
 //! The mechanism is generic — the registry is just `name → fn pointer`. The
-//! `experimental-bundled-coreutils` feature populates it with uutils, but
+//! `bundled-coreutils` feature populates it with uutils, but
 //! anything matching the signature can be registered.
 
 use std::collections::HashMap;
@@ -51,7 +51,7 @@ pub type BundledFn = fn(args: Vec<OsString>) -> i32;
 /// (and during bundled-dispatch fast path).
 static REGISTRY: OnceLock<HashMap<String, BundledFn>> = OnceLock::new();
 
-/// Cached path to the running brush executable. Populated lazily on first
+/// Cached path to the running cash executable. Populated lazily on first
 /// shim invocation; left as `Err`-equivalent if `current_exe()` fails.
 static SELF_EXE: OnceLock<Option<PathBuf>> = OnceLock::new();
 
@@ -90,7 +90,7 @@ pub fn install_default_providers() {
     #[allow(unused_mut)]
     let mut commands: HashMap<String, BundledFn> = HashMap::new();
 
-    #[cfg(feature = "experimental-bundled-coreutils")]
+    #[cfg(feature = "bundled-coreutils")]
     commands.extend(cash_coreutils_builtins::bundled_commands());
 
     commands.insert("awk".to_string(), run_awk_bundled);
@@ -109,7 +109,7 @@ pub fn registry() -> Option<&'static HashMap<String, BundledFn>> {
 
 /// Runs the bundled-command fast path if the process was invoked for it.
 ///
-/// If the process was invoked as `brush <DISPATCH_FLAG> <NAME> [ARGS...]`
+/// If the process was invoked as `cash <DISPATCH_FLAG> <NAME> [ARGS...]`
 /// (with `<DISPATCH_FLAG>` as the very first argument after `argv[0]`), runs
 /// the registered function and returns its exit code as `Some(code)`. The
 /// caller is responsible for exiting the process with that code —
@@ -137,7 +137,7 @@ pub fn maybe_dispatch() -> Option<i32> {
     // `uutils` and most CLI tools expect).
     let rest: Vec<OsString> = raw.collect();
     let Some((name, args)) = rest.split_first() else {
-        eprintln!("brush: {DISPATCH_FLAG} requires a command name");
+        eprintln!("cash: {DISPATCH_FLAG} requires a command name");
         return Some(exit_code(ExecutionExitCode::InvalidUsage));
     };
 
@@ -145,7 +145,7 @@ pub fn maybe_dispatch() -> Option<i32> {
     // match. Reject up front rather than allocating a lossy-substituted
     // lookup key that could accidentally collide with a real registration.
     let Some(name_str) = name.to_str() else {
-        eprintln!("brush: unknown bundled command: {}", name.to_string_lossy());
+        eprintln!("cash: unknown bundled command: {}", name.to_string_lossy());
         return Some(exit_code(ExecutionExitCode::NotFound));
     };
 
@@ -162,7 +162,7 @@ pub fn maybe_dispatch() -> Option<i32> {
     }
 
     let Some(func) = REGISTRY.get().and_then(|r| r.get(name_str)) else {
-        eprintln!("brush: unknown bundled command: {name_str}");
+        eprintln!("cash: unknown bundled command: {name_str}");
         return Some(exit_code(ExecutionExitCode::NotFound));
     };
 
@@ -185,7 +185,7 @@ pub fn maybe_dispatch() -> Option<i32> {
         return Some(run_unified_uname(*func, argv));
     }
 
-    #[cfg(feature = "experimental-bundled-coreutils")]
+    #[cfg(feature = "bundled-coreutils")]
     let argv = relaying_msys_command(cash_for_shell_names(argv));
 
     // A tool that runs a command hands it its standard output, which would keep the
@@ -206,7 +206,7 @@ const MSYS_RELAY: &str = "--msys-relay";
 /// `cash`, with cash itself in its place, as every other way of running those names
 /// reaches it (D7). The tools search `PATH`, which finds Git's bash, or the WSL launcher
 /// in `System32`. A path still reaches the program it names.
-#[cfg(feature = "experimental-bundled-coreutils")]
+#[cfg(feature = "bundled-coreutils")]
 fn cash_for_shell_names(argv: Vec<OsString>) -> Vec<OsString> {
     let Some(operand) = cash_coreutils_builtins::command_operand(&argv) else {
         return argv;
@@ -239,7 +239,7 @@ fn cash_for_shell_names(argv: Vec<OsString>) -> Vec<OsString> {
 /// passes the arguments on in the program's own encoding. The program is looked up here
 /// only to decide whether that detour is needed, along the PATH and in the directory the
 /// tool will use as far as its options say; the relay looks it up again for real.
-#[cfg(feature = "experimental-bundled-coreutils")]
+#[cfg(feature = "bundled-coreutils")]
 fn relaying_msys_command(argv: Vec<OsString>) -> Vec<OsString> {
     let Some(operand) = cash_coreutils_builtins::command_operand(&argv) else {
         return argv;
@@ -345,14 +345,14 @@ fn exit_code(code: ExecutionExitCode) -> i32 {
     u8::from(code).into()
 }
 
-/// Returns the path to the running brush executable (cached).
+/// Returns the path to the running cash executable (cached).
 fn self_exe() -> Option<&'static PathBuf> {
     SELF_EXE
         .get_or_init(|| std::env::current_exe().ok())
         .as_ref()
 }
 
-/// Help/usage content provider for the shim builtin. brush calls this for
+/// Help/usage content provider for the shim builtin. The shell calls this for
 /// `help <name>`, `type <name>`, etc.
 #[allow(
     clippy::needless_pass_by_value,
@@ -365,24 +365,27 @@ fn shim_content(
     _options: &ContentOptions,
 ) -> Result<String, cash_core::Error> {
     match content_type {
-        ContentType::ShortDescription => Ok(format!("{name} - bundled command")),
+        // Ended by a newline, as every other builtin's is: `help -d cd cat` printed
+        // `cat - bundled command` with the next prompt or line glued on.
+        ContentType::ShortDescription => Ok(format!("{name} - bundled command\n")),
+        // It named the internal dispatch, as `brush --invoke-bundled cat` (ARCH-09).
         ContentType::DetailedHelp => Ok(format!(
-            "{name} - bundled command (executes via `brush {DISPATCH_FLAG} {name}`)\n"
+            "{name} - bundled command: cash carries it, and `{name} --help` describes it\n"
         )),
         // A bundled command never contributes its own short-usage or man page
         // through this path; detailed help comes from the bundled utility
-        // itself (`brush <DISPATCH_FLAG> <name> --help` or equivalent).
+        // itself (`<name> --help`).
         ContentType::ShortUsage | ContentType::ManPage => Ok(String::new()),
     }
 }
 
 /// Builtin execute function shared by all bundled commands. Looks up the
 /// invoked name from `context.command_name` and re-executes the running
-/// brush binary as `brush <DISPATCH_FLAG> <name> <args>`.
+/// cash binary as `cash <DISPATCH_FLAG> <name> <args>`.
 ///
 /// Reuses the same entry point the `command` builtin uses (see
-/// `brush-builtins/src/command.rs`): constructs a [`commands::SimpleCommand`]
-/// whose `command_name` is the absolute brush exe path. Because that contains
+/// `cash-builtins/src/command.rs`): constructs a [`commands::SimpleCommand`]
+/// whose `command_name` is the absolute cash exe path. Because that contains
 /// a path separator, `SimpleCommand::execute` routes directly to the
 /// external-execution path, bypassing the builtin/function lookup that would
 /// otherwise re-enter this very shim.
@@ -406,7 +409,7 @@ fn shim_content(
 // `.await` the child to completion before returning. That's fine for a
 // standalone bundled command or for the tail of a pipeline, but for a
 // bundled stage in the middle of `a | b | c` it means stage N only
-// "starts" (from brush's perspective) after its child has fully exited —
+// "starts" (from the shell's perspective) after its child has fully exited —
 // downstream stages get no parallelism with it. Fixing this means
 // bypassing the builtin API for bundled dispatch: either detect the shim
 // inside `SimpleCommand::execute`'s dispatch table and return an
@@ -498,7 +501,7 @@ const SUBSTITUTION_PIPES: &[&str] = &["tee", "sort", "uniq", "shuf"];
 /// Registers a shim builtin for every name in the installed bundled-command
 /// registry.
 ///
-/// Uses `register_builtin_if_unset` so brush's own builtins (echo, printf,
+/// Uses `register_builtin_if_unset` so the shell's own builtins (echo, printf,
 /// true, false, etc.) win on conflict.
 pub fn register_shims<SE: ShellExtensions>(shell: &mut cash_core::Shell<SE>) {
     let Some(registry) = REGISTRY.get() else {

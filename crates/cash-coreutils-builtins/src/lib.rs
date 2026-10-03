@@ -1,4 +1,4 @@
-//! Optional bundled coreutils for brush, powered by uutils/coreutils.
+//! Optional bundled coreutils for cash, powered by uutils/coreutils.
 //!
 //! Each utility is feature-gated (e.g., `coreutils.cat`, `coreutils.ls`) and
 //! can be individually enabled or disabled. The `coreutils.all` feature enables
@@ -62,7 +62,7 @@ fn prepare_uutil_runtime(util_crate_name: &str) {
     uucore::panic::mute_sigpipe_panic();
     let localization_name = uucore::get_canonical_util_name(util_crate_name);
     if let Err(err) = uucore::locale::setup_localization(localization_name) {
-        eprintln!("brush: could not initialize localization for '{localization_name}': {err}");
+        eprintln!("cash: could not initialize localization for '{localization_name}': {err}");
         std::process::exit(99);
     }
 }
@@ -79,7 +79,7 @@ fn prepare_uutil_runtime(util_crate_name: &str) {
 fn finalize_uutil_runtime() {
     use std::io::Write;
     if let Err(e) = std::io::stdout().flush() {
-        eprintln!("brush: error flushing stdout: {e}");
+        eprintln!("cash: error flushing stdout: {e}");
     }
 }
 

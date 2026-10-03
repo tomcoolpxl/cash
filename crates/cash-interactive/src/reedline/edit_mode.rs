@@ -685,8 +685,8 @@ fn translate_input_function_to_reedline_event(
         InputFunction::HistorySearchBackward => Some(ReedlineEvent::SearchHistory),
         InputFunction::RedrawCurrentLine => Some(ReedlineEvent::Repaint),
         InputFunction::Complete => Some(ReedlineEvent::Edit(vec![EditCommand::Complete])),
-        InputFunction::BrushAcceptHint => Some(ReedlineEvent::HistoryHintComplete),
-        InputFunction::BrushAcceptHintWord => Some(ReedlineEvent::HistoryHintWordComplete),
+        InputFunction::CashAcceptHint => Some(ReedlineEvent::HistoryHintComplete),
+        InputFunction::CashAcceptHintWord => Some(ReedlineEvent::HistoryHintWordComplete),
         _ => None,
     }
 }
@@ -852,10 +852,10 @@ fn translate_reedline_event_to_action(event: &reedline::ReedlineEvent) -> Option
             Some(KeyAction::DoInputFunction(InputFunction::RedrawCurrentLine))
         }
         reedline::ReedlineEvent::HistoryHintComplete => {
-            Some(KeyAction::DoInputFunction(InputFunction::BrushAcceptHint))
+            Some(KeyAction::DoInputFunction(InputFunction::CashAcceptHint))
         }
         reedline::ReedlineEvent::HistoryHintWordComplete => Some(KeyAction::DoInputFunction(
-            InputFunction::BrushAcceptHintWord,
+            InputFunction::CashAcceptHintWord,
         )),
         reedline::ReedlineEvent::Multiple(evts) => {
             if let &[

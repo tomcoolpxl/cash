@@ -6,13 +6,13 @@ use std::path::PathBuf;
 
 use crate::{events, productinfo};
 
-const SHORT_DESCRIPTION: &str = "cash 🦀 (https://github.com/thraa/cash)";
+const SHORT_DESCRIPTION: &str = "cash 🦀 (https://github.com/tomcoolpxl/cash)";
 
 const LONG_DESCRIPTION: &str = r"cash is a bash-compatible, Rust-implemented, POSIX-style Windows shell.
 
-cash is distributed under the terms of the MIT license. If you encounter any issues or discrepancies in behavior from bash, please report them at https://github.com/thraa/cash.
+cash is distributed under the terms of the MIT license. If you encounter any issues or discrepancies in behavior from bash, please report them at https://github.com/tomcoolpxl/cash.
 
-For more information, visit https://github.com/thraa/cash.";
+For more information, visit https://github.com/tomcoolpxl/cash.";
 
 const USAGE: &str = color_print::cstr!(
     "<bold>cash</bold> <italics>[OPTIONS]</italics>... <italics>[SCRIPT_PATH [SCRIPT_ARGS]...]</italics>"

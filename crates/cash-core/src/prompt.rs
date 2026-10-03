@@ -146,7 +146,7 @@ fn format_prompt_piece(
         }
         cash_parser::prompt::PromptPiece::ShellBaseName => shell_base_name(shell),
         // cash: the version escapes report the *product's* version -- the one the shell
-        // was handed at startup and publishes as $BRUSH_VERSION -- rather than the
+        // was handed at startup and publishes as $CASH_VERSION -- rather than the
         // version of whichever crate happens to hold this code. The default prompt
         // carries one, so this is the number on screen before anyone configures
         // anything, and it claimed 0.5 (cash-core's) while cash --version said something

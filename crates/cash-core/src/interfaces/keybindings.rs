@@ -34,7 +34,8 @@ impl Display for KeyAction {
 }
 
 /// Defines all input functions. Based on standard `readline` functions,
-/// augmented with some `brush`-specific extensions.
+/// augmented with some cash-specific extensions (`cash-accept-hint`,
+/// `cash-accept-hint-word`, which were brush's).
 #[derive(
     Clone,
     Debug,
@@ -63,10 +64,10 @@ pub enum InputFunction {
     BeginningOfHistory,
     BeginningOfLine,
     BracketedPasteBegin,
-    BrushAcceptHint,
-    BrushAcceptHintWord,
     CallLastKbdMacro,
     CapitalizeWord,
+    CashAcceptHint,
+    CashAcceptHintWord,
     CharacterSearch,
     CharacterSearchBackward,
     ClearDisplay,
@@ -513,5 +514,21 @@ mod tests {
             stroke(Key::Delete, false, false).spellings(),
             vec![r"\e[3~".to_owned()]
         );
+    }
+
+    /// `bind` takes the history hint's functions by cash's names, not brush's (ARCH-10).
+    #[test]
+    fn the_hint_functions_have_cash_names() {
+        use std::str::FromStr as _;
+
+        assert_eq!(
+            InputFunction::from_str("cash-accept-hint"),
+            Ok(InputFunction::CashAcceptHint)
+        );
+        assert_eq!(
+            InputFunction::from_str("cash-accept-hint-word"),
+            Ok(InputFunction::CashAcceptHintWord)
+        );
+        assert!(InputFunction::from_str("brush-accept-hint").is_err());
     }
 }

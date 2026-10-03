@@ -11,9 +11,6 @@ readme.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
-[package.metadata.binstall]
-pkg-url = "{ repo }/releases/download/{ name }-v{ version }/cash-{ target }{ archive-suffix }"
-
 [lib]
 bench = false
 
@@ -36,11 +33,10 @@ basic = ["cash-interactive/basic"]
 minimal = ["cash-interactive/minimal"]
 reedline = ["cash-interactive/reedline"]
 experimental = [
-    "experimental-bundled-coreutils",
     "experimental-load",
     "experimental-parser",
 ]
-experimental-bundled-coreutils = [
+bundled-coreutils = [
     "dep:cash-coreutils-builtins",
     "cash-coreutils-builtins/coreutils.all",
 ]

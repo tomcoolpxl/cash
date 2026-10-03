@@ -82,7 +82,7 @@ fn it_names_the_account_and_the_machine_the_shell_does() {
 fn the_shell_line_carries_the_shells_own_version() {
     // The same version the shell publishes, rather than whichever crate the code happens
     // to live in.
-    let out = cash(r#"coolfetch --no-color --no-logo; echo "ver=$BRUSH_VERSION""#);
+    let out = cash(r#"coolfetch --no-color --no-logo; echo "ver=$CASH_VERSION""#);
     let shell = field(&out.stdout, "Shell");
     let version = field(&out.stdout, "ver");
 

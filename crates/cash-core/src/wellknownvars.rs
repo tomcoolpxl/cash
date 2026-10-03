@@ -65,11 +65,8 @@ pub(crate) fn inherit_env_vars(
 pub(crate) fn init_well_known_vars(
     shell: &mut Shell<impl extensions::ShellExtensions>,
 ) -> Result<(), error::Error> {
+    // cash's own version; brush's `BRUSH_VERSION` beside it went in 1.3.14 (ARCH-10).
     let shell_version = shell.version().map(ToString::to_string);
-    shell.env_mut().set_global(
-        "BRUSH_VERSION",
-        ShellVariable::new(shell_version.clone().unwrap_or_default()),
-    )?;
     shell.env_mut().set_global(
         "CASH_VERSION",
         ShellVariable::new(shell_version.unwrap_or_default()),
@@ -218,7 +215,7 @@ pub(crate) fn init_well_known_vars(
         .set_global("BASH_VERSINFO", bash_versinfo_var)?;
 
     // BASH_VERSION
-    // This is the Bash interface version. See BRUSH_VERSION for its implementation version.
+    // This is the Bash interface version. See CASH_VERSION for its implementation version.
     shell.env_mut().set_global(
         "BASH_VERSION",
         ShellVariable::new(std::format!(

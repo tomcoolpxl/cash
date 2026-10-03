@@ -353,7 +353,7 @@ fn collect<SE: cash_core::ShellExtensions>(
         .current_shell_name()
         .map_or_else(|| String::from("cash"), |name| trim_exe(name.as_ref()));
     // The product's version, which the shell was handed at startup and reports as
-    // `$BRUSH_VERSION` — not this crate's, which is a different number that happens to be
+    // `$CASH_VERSION` — not this crate's, which is a different number that happens to be
     // nearby.
     let version = context.shell.version().unwrap_or("").to_string();
     facts.push((

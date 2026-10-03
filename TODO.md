@@ -81,13 +81,6 @@ Every `it` module starts cash from `it/common.rs` now. Left, seen while moving t
 - The ConPTY sessions (read_console, coolfetch, top_builtin) pass the whole environment,
   `BASH_ENV` and the rest included.
 
-### 14.3 brush names users see
-
-`brush:` messages, `help cat`, the `brush$ ` prompt, `$BRUSH_VERSION`, `BRUSH_PS_ALT`,
-the `thraa/cash` URL, the `experimental-bundled-coreutils` feature name. ARCH-02,
-ARCH-09, ARCH-10. Also `cash-test-harness`'s Cargo description, "Test harness library
-for brush shell integration tests" (seen 2026-10-04).
-
 ### 14.6 Dead code, allows and dependencies
 
 - `spawn::spawn`, `build_cmd_command_line`, the winnow stub, the `sys` stubs behind

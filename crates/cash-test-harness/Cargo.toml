@@ -1,6 +1,6 @@
 [package]
 name = "cash-test-harness"
-description = "Test harness library for brush shell integration tests"
+description = "Runs the YAML compatibility cases against cash and an oracle shell"
 version.workspace = true
 authors.workspace = true
 categories.workspace = true

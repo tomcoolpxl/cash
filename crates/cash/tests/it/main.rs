@@ -34,6 +34,8 @@ mod bash_gaps;
 mod batch_relative_path;
 mod bc;
 mod bc_cash;
+// ARCH-02, ARCH-09, ARCH-10: what a user sees names cash, not brush.
+mod brush_names;
 // Comprehensive parameter matrix across builtins.
 mod builtin_parameters;
 mod bundled_paths;

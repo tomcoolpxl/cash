@@ -264,8 +264,8 @@ fn install_panic_handlers() {
     //
     human_panic::setup_panic!(
         human_panic::Metadata::new(productinfo::PRODUCT_NAME, productinfo::PRODUCT_VERSION)
-            .homepage(env!("CARGO_PKG_HOMEPAGE"))
-            .support("please post a GitHub issue at https://github.com/thraa/cash/issues/new")
+            .homepage(productinfo::PRODUCT_DISPLAY_URI)
+            .support("please post a GitHub issue at https://github.com/tomcoolpxl/cash/issues/new")
     );
 
     //

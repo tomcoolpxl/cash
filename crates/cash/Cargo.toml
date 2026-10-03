@@ -31,7 +31,7 @@ cash-win32 = { workspace = true }
 # +4 MB and 2.2x faster than spawning, and it makes cash self-contained for the
 # commands it carries. `--no-default-features` builds without them.
 default = ["bundled-coreutils"]
-bundled-coreutils = ["cash-shell/experimental-bundled-coreutils"]
+bundled-coreutils = ["cash-shell/bundled-coreutils"]
 
 [build-dependencies]
 # The icon and version resource in cash.exe (ROADMAP item 18).

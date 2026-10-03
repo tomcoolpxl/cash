@@ -8,29 +8,24 @@ use crate::{Shell, error, extensions, prompt};
 const TRANSIENT_PROMPT_VAR: &str = "CASH_TRANSIENT_PS1";
 
 impl<SE: extensions::ShellExtensions> Shell<SE> {
-    /// Returns the default prompt string for the shell.
-    const fn default_prompt(&self) -> &'static str {
-        if self.options.sh_mode {
-            "$ "
-        } else {
-            "brush$ "
-        }
-    }
-
     /// Composes the shell's post-input, pre-command prompt, applying all appropriate expansions.
     pub async fn compose_precmd_prompt(&mut self) -> Result<String, error::Error> {
         self.expand_prompt_var("PS0", "").await
     }
 
     /// Composes the shell's prompt, applying all appropriate expansions.
+    ///
+    /// An interactive shell starts with `PS1` set to Bash's `\s-\v\$ `; one that unsets it
+    /// prompts with nothing, as Bash does. It fell back to brush's `brush$ ` (ARCH-10).
     pub async fn compose_prompt(&mut self) -> Result<String, error::Error> {
-        self.expand_prompt_var("PS1", self.default_prompt()).await
+        self.expand_prompt_var("PS1", "").await
     }
 
     /// Composes the shell's alternate-side prompt, applying all appropriate expansions.
+    ///
+    /// A cash extension, from brush, where it was `BRUSH_PS_ALT`.
     pub async fn compose_alt_side_prompt(&mut self) -> Result<String, error::Error> {
-        // This is a brush extension.
-        self.expand_prompt_var("BRUSH_PS_ALT", "").await
+        self.expand_prompt_var("CASH_PS_ALT", "").await
     }
 
     /// Composes the shell's continuation prompt.
@@ -118,6 +113,42 @@ mod tests {
             r#"a"b"c 'd' it's x hi "hi" 'hi' q"r \ s\x hi "#
         );
 
+        Ok(())
+    }
+
+    /// With `PS1` unset Bash prompts with nothing; brush's fallback was `brush$ `, and
+    /// `$ ` as `sh`.
+    #[tokio::test]
+    async fn an_unset_ps1_prompts_with_nothing() -> Result<(), error::Error> {
+        for sh_mode in [false, true] {
+            let mut shell = Shell::builder()
+                .profile(ProfileLoadBehavior::Skip)
+                .rc(RcLoadBehavior::Skip)
+                .sh_mode(sh_mode)
+                .build()
+                .await?;
+            shell.env.unset("PS1")?;
+            assert_eq!(shell.compose_prompt().await?, "", "sh mode {sh_mode}");
+        }
+        Ok(())
+    }
+
+    /// The right-hand prompt is `CASH_PS_ALT`; brush's `BRUSH_PS_ALT` is not read.
+    #[tokio::test]
+    async fn the_alternate_side_prompt_is_cash_ps_alt() -> Result<(), error::Error> {
+        let mut shell = Shell::builder()
+            .profile(ProfileLoadBehavior::Skip)
+            .rc(RcLoadBehavior::Skip)
+            .build()
+            .await?;
+        shell
+            .env
+            .set_global("BRUSH_PS_ALT", ShellVariable::new("brush"))?;
+        assert_eq!(shell.compose_alt_side_prompt().await?, "");
+        shell
+            .env
+            .set_global("CASH_PS_ALT", ShellVariable::new("right"))?;
+        assert_eq!(shell.compose_alt_side_prompt().await?, "right");
         Ok(())
     }
 }
