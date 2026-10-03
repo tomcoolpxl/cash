@@ -60,7 +60,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 13.2 Builtins
 
-- `find d -delete` cannot remove directories (pre-order). BI-04.
 - `chmod go-w f` makes `f` read-only for its owner; `u+rw,go-w` is refused. BI-05.
 - `chmod +x` prints "execute: not represented"; make it silent, as D23 says (decided,
   below). BI-17.
@@ -98,6 +97,11 @@ Bash says `script: line 6: warning: c1: circular name reference`. Found in phase
 An array index before the start (`a=(1 2)`): `${a[-3]}` expands to nothing in both
 shells, but Bash also says `a: bad array subscript`, and cash says nothing; `a[-3]=x`
 ends both with 1, cash saying `array index out of range: -3`. Found in phase 12.
+
+An I/O error is worded by each builtin its own way: `cd`, `dos2unix`, `rev` and bc's
+`diag.rs` each map a few `io::ErrorKind`s to the C library's words, and the rest print
+Rust's ("The directory is not empty. (os error 145)"). `cash_core::error::os_error_text`
+now does it once (used by `find`); move the others onto it. Found fixing BI-04.
 
 Arithmetic errors name neither the line nor the expression: cash says `error: arithmetic
 evaluation error: division by zero` and `failed to parse expression: 1 +` (and `08`, and

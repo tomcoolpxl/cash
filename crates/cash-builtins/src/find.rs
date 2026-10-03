@@ -120,6 +120,18 @@ enum Expr {
     Or(Box<Self>, Box<Self>),
 }
 
+impl Expr {
+    /// Whether `-delete` is anywhere in it, which makes the walk depth-first.
+    fn deletes(&self) -> bool {
+        match self {
+            Self::Action(Action::Delete) => true,
+            Self::Test(_) | Self::Action(_) => false,
+            Self::Not(inner) => inner.deletes(),
+            Self::And(left, right) | Self::Or(left, right) => left.deletes() || right.deletes(),
+        }
+    }
+}
+
 /// Everything an expression can ask for or change while one entry is evaluated.
 struct Visit<'a> {
     path: &'a Path,
@@ -136,6 +148,10 @@ struct Walk {
     min_depth: usize,
     max_depth: usize,
     follow: bool,
+    /// `-depth`, or implied by `-delete`: a directory after what is in it, as GNU `find`
+    /// does. `-delete` went the other way, so it never removed a directory: it was not
+    /// empty yet when its turn came (BI-04).
+    contents_first: bool,
 }
 
 impl builtins::Command for FindCommand {
@@ -164,14 +180,27 @@ impl builtins::Command for FindCommand {
             // the process's directory made `cd crates; find .` walk the repository root.
             let shown = PathBuf::from(start);
             let actual = context.shell.absolute_path(Path::new(start));
-            let mut stack = vec![(shown, actual, 0usize)];
+            // An entry is visited when it comes off the stack, unless the walk is
+            // contents-first and it is a directory: it then goes back on, done, under its
+            // contents, and is visited when it comes off again.
+            let mut stack = vec![(shown, actual, 0usize, false)];
 
-            while let Some((path, actual, depth)) = stack.pop() {
+            while let Some((path, actual, depth, contents_done)) = stack.pop() {
                 let metadata = if walk.follow {
                     std::fs::metadata(&actual).ok()
                 } else {
                     std::fs::symlink_metadata(&actual).ok()
                 };
+                let is_dir = metadata.as_ref().is_some_and(std::fs::Metadata::is_dir);
+                let descends = is_dir && depth < walk.max_depth;
+
+                if walk.contents_first && descends && !contents_done {
+                    stack.push((path.clone(), actual.clone(), depth, true));
+                    if !push_contents(&context, &mut stack, &path, &actual, depth)? {
+                        failed = true;
+                    }
+                    continue;
+                }
 
                 let mut visit = Visit {
                     path: actual.as_path(),
@@ -191,36 +220,11 @@ impl builtins::Command for FindCommand {
                     break 'walking;
                 }
 
-                let is_dir = visit
-                    .metadata
-                    .as_ref()
-                    .is_some_and(std::fs::Metadata::is_dir);
-                if !is_dir || visit.prune || depth >= walk.max_depth {
+                if walk.contents_first || !descends || visit.prune {
                     continue;
                 }
-
-                match std::fs::read_dir(&actual) {
-                    Ok(entries) => {
-                        // Reversed, because the stack hands them back in reverse — the
-                        // listing then comes out in the order the directory gave it.
-                        let mut names: Vec<std::ffi::OsString> = entries
-                            .filter_map(Result::ok)
-                            .map(|entry| entry.file_name())
-                            .collect();
-                        names.sort();
-                        for name in names.into_iter().rev() {
-                            stack.push((path.join(&name), actual.join(&name), depth + 1));
-                        }
-                    }
-                    Err(e) => {
-                        writeln!(
-                            context.stderr(),
-                            "{}: {}: {e}",
-                            context.command_name,
-                            render(path.as_path())
-                        )?;
-                        failed = true;
-                    }
+                if !push_contents(&context, &mut stack, &path, &actual, depth)? {
+                    failed = true;
                 }
             }
         }
@@ -243,6 +247,41 @@ impl builtins::Command for FindCommand {
     }
 }
 
+/// Puts what is in a directory on the walk's stack, in name order; whether it could be
+/// read, with the reason said if not.
+fn push_contents<SE: cash_core::ShellExtensions>(
+    context: &cash_core::ExecutionContext<'_, SE>,
+    stack: &mut Vec<(PathBuf, PathBuf, usize, bool)>,
+    path: &Path,
+    actual: &Path,
+    depth: usize,
+) -> Result<bool, cash_core::Error> {
+    match std::fs::read_dir(actual) {
+        Ok(entries) => {
+            // Reversed, because the stack hands them back in reverse — the listing then
+            // comes out in name order.
+            let mut names: Vec<std::ffi::OsString> = entries
+                .filter_map(Result::ok)
+                .map(|entry| entry.file_name())
+                .collect();
+            names.sort();
+            for name in names.into_iter().rev() {
+                stack.push((path.join(&name), actual.join(&name), depth + 1, false));
+            }
+            Ok(true)
+        }
+        Err(e) => {
+            writeln!(
+                context.stderr(),
+                "{}: {}: {e}",
+                context.command_name,
+                render(path)
+            )?;
+            Ok(false)
+        }
+    }
+}
+
 /// Renders a path the way cash renders every path it prints (D3).
 fn render(path: &Path) -> String {
     cash_win32::path::render(path)
@@ -258,6 +297,7 @@ fn parse(args: &[String], here: &Path) -> Result<(Walk, Expr), String> {
         min_depth: 0,
         max_depth: usize::MAX,
         follow: false,
+        contents_first: false,
     };
 
     let mut index = 0;
@@ -308,6 +348,10 @@ fn parse(args: &[String], here: &Path) -> Result<(Walk, Expr), String> {
                 walk.follow = true;
                 index += 1;
             }
+            "-depth" | "-d" => {
+                walk.contents_first = true;
+                index += 1;
+            }
             _ => {
                 rest.push(args[index].clone());
                 index += 1;
@@ -331,6 +375,7 @@ fn parse(args: &[String], here: &Path) -> Result<(Walk, Expr), String> {
     } else {
         Expr::And(Box::new(expr), Box::new(Expr::Action(Action::Print)))
     };
+    walk.contents_first |= expr.deletes();
 
     Ok((walk, expr))
 }
@@ -660,9 +705,10 @@ async fn act<SE: cash_core::ShellExtensions>(
                 Err(e) => {
                     writeln!(
                         context.stderr(),
-                        "{}: cannot delete {}: {e}",
+                        "{}: cannot delete '{}': {}",
                         context.command_name,
-                        visit.rendered
+                        visit.rendered,
+                        cash_core::error::os_error_text(&e)
                     )?;
                     visit.failed = true;
                     Ok(false)

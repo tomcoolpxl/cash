@@ -367,6 +367,36 @@ fn delete_removes_what_it_matched() {
     assert!(sandbox.exists("a.txt"), "it deleted more than it matched");
 }
 
+#[test]
+fn delete_removes_a_directory_after_its_contents() {
+    // It went in name order, so a directory was not empty yet when its turn came (BI-04).
+    let sandbox = Sandbox::new("delete-tree");
+    let out = sandbox.run(r#"find sub -delete; echo "code: $?""#);
+    assert_eq!(out.stdout.trim(), "code: 0", "stderr: {}", out.stderr);
+    assert!(!sandbox.exists("sub"), "the directory is still there");
+
+    // A directory that keeps its contents is reported as GNU find reports it.
+    let out = sandbox.run(r#"find skip -type d -delete; echo "code: $?""#);
+    assert_eq!(out.stdout.trim(), "code: 1");
+    assert!(
+        out.stderr
+            .contains("cannot delete 'skip': Directory not empty"),
+        "{}",
+        out.stderr
+    );
+}
+
+#[test]
+fn depth_lists_a_directory_after_its_contents() {
+    // `-depth` was an unknown predicate.
+    let sandbox = Sandbox::new("depth");
+    let out = sandbox.run("find sub -depth");
+    assert_eq!(
+        out.stdout.lines().collect::<Vec<_>>(),
+        ["sub/b.txt", "sub/deep/c.txt", "sub/deep", "sub"]
+    );
+}
+
 // ---------------------------------------------------------------------------
 // xargs
 // ---------------------------------------------------------------------------

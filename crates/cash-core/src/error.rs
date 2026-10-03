@@ -579,6 +579,30 @@ impl Error {
     }
 }
 
+/// An I/O error worded as the C library's `strerror` words it, which is what Bash and the
+/// GNU tools print: `Directory not empty`, not Windows's "The directory is not empty.
+/// (os error 145)".
+pub fn os_error_text(error: &std::io::Error) -> String {
+    use std::io::ErrorKind;
+    let text = match error.kind() {
+        ErrorKind::NotFound => "No such file or directory",
+        ErrorKind::PermissionDenied => "Permission denied",
+        ErrorKind::DirectoryNotEmpty => "Directory not empty",
+        ErrorKind::AlreadyExists => "File exists",
+        ErrorKind::IsADirectory => "Is a directory",
+        ErrorKind::NotADirectory => "Not a directory",
+        ErrorKind::ResourceBusy => "Device or resource busy",
+        _ => {
+            let text = error.to_string();
+            return match text.find(" (os error ") {
+                Some(at) => text.get(..at).unwrap_or_default().to_owned(),
+                None => text,
+            };
+        }
+    };
+    text.to_owned()
+}
+
 /// Convenience function for returning an error for unimplemented functionality.
 ///
 /// # Arguments
