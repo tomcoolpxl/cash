@@ -296,17 +296,25 @@ impl InputBackend for ReedlineInputBackend {
 
     fn set_read_buffer(&mut self, buffer: String, cursor: usize) {
         if let Some(reedline) = &mut self.reedline {
-            reedline.run_edit_commands(&[
-                reedline::EditCommand::MoveToStart { select: false },
-                reedline::EditCommand::ClearToLineEnd,
-                reedline::EditCommand::InsertString(buffer),
-                reedline::EditCommand::MoveToPosition {
-                    position: cursor,
-                    select: false,
-                },
-            ]);
+            replace_buffer(reedline, buffer, cursor);
         }
     }
+}
+
+/// Puts `buffer` in place of the line being edited, with the cursor at `cursor`.
+///
+/// The whole buffer: it cleared from the start to the end of the first line, so the
+/// lines after it stayed when a `bind -x` command or Ctrl-X Ctrl-E set `READLINE_LINE`
+/// for a buffer of several lines (PI-08).
+fn replace_buffer(reedline: &mut reedline::Reedline, buffer: String, cursor: usize) {
+    reedline.run_edit_commands(&[
+        reedline::EditCommand::Clear,
+        reedline::EditCommand::InsertString(buffer),
+        reedline::EditCommand::MoveToPosition {
+            position: cursor,
+            select: false,
+        },
+    ]);
 }
 
 fn compose_key_bindings(completion_menu_name: &str) -> reedline::Keybindings {
@@ -399,6 +407,15 @@ fn compose_key_bindings(completion_menu_name: &str) -> reedline::Keybindings {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_new_buffer_replaces_every_line_of_the_old() {
+        let mut reedline = reedline::Reedline::create();
+        replace_buffer(&mut reedline, "one\ntwo\nthree".to_owned(), 13);
+        replace_buffer(&mut reedline, "new".to_owned(), 3);
+        assert_eq!(reedline.current_buffer_contents(), "new");
+        assert_eq!(reedline.current_insertion_point(), 3);
+    }
 
     #[test]
     fn history_hint_style_is_theme_adaptive() {
