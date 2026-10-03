@@ -685,14 +685,14 @@ fn chmod_execute_warning_and_silence_flag() {
     let sb = Sandbox::new("chmod-warn");
     std::fs::write(sb.root.join("script.sh"), "#!/bin/sh\n").unwrap();
 
-    let out_warn = sb.run("chmod +x script.sh");
+    let out_warn = sb.run("chmod -x script.sh");
     assert!(
         out_warn.stderr.contains("not represented"),
         "expected warning on stderr: {}",
         out_warn.stderr
     );
 
-    let out_silent = sb.run("chmod -f +x script.sh");
+    let out_silent = sb.run("chmod -f -x script.sh");
     assert!(out_silent.stderr.is_empty());
 }
 

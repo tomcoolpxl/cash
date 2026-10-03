@@ -12,15 +12,16 @@
 //!
 //! | Request | What happens |
 //! |---|---|
-//! | `-w`, `a-w`, `u-w` | clears the read-only attribute's inverse: the file becomes read-only. Real, and visible to every Windows program |
-//! | `+w` | clears read-only |
-//! | `+x` | D23: executability comes from the extension or a shebang, so this warns and returns 0 |
+//! | `-w`, `a-w`, `u-w` | sets the read-only attribute: the file becomes read-only. Real, and visible to every Windows program |
+//! | `+w`, `u+w` | clears read-only |
+//! | `+x`, `+r` | D23: executability comes from the extension or a shebang, and a file is readable; silent, 0 |
 //! | `-x` | D34: revoking execute needs a Deny ACE, which is blunt enough to lock you out of your own file. Warns and returns 0 |
-//! | `+r`, `-r` | Windows has no per-file read bit outside ACLs. Warns and returns 0 |
+//! | `-r` | Windows has no per-file read bit outside ACLs. Warns and returns 0 |
+//! | `g…`, `o…` | Windows has no per-file group or other bits; silent, 0 |
 //!
-//! Numeric modes (`755`, `644`) are read for their write bit and otherwise treated the
-//! same way. `chmod 644 f` does the one real thing it implies here — clearing read-only —
-//! rather than claiming to have set nine mode bits it cannot.
+//! Numeric modes (`755`, `644`) are read for the owner's write bit, silently. `chmod 644 f`
+//! does the one real thing it implies here — clearing read-only — rather than claiming to
+//! have set nine mode bits it cannot.
 
 use std::io::Write;
 use std::path::Path;
@@ -142,50 +143,84 @@ impl builtins::Command for ChmodCommand {
     }
 }
 
-/// Reduce a mode argument to the one bit Windows actually keeps per file.
+/// Reduce a mode argument to the one bit Windows actually keeps per file: the owner's
+/// write bit.
+///
+/// What else a mode asks for is said only where something is lost: taking read or
+/// execute away from the owner (D34), setuid, setgid and sticky. Giving the owner read or
+/// execute (D23; the user, 2026-10-02) and anything for group and other, which Windows
+/// has no per-file bits for (the user, 2026-10-03), go without a word, as the execute bits
+/// of a numeric mode do. A symbolic mode is a list of clauses (`u+rw,go-w`); only the first
+/// was read, and as if it were the owner's, so `chmod go-w f` made `f` read-only (BI-05).
 fn parse_mode(mode: &str) -> Option<Request> {
-    let mut unsupported = Vec::new();
-
     // Numeric: only the owner's write bit has a Windows equivalent.
     if mode.chars().all(|c| c.is_ascii_digit()) {
         let value = u32::from_str_radix(mode, 8).ok()?;
         let owner = (value >> 6) & 0o7;
-        if owner & 0o1 != 0 {
-            unsupported.push("execute");
-        }
         return Some(Request {
             writable: Some(owner & 0o2 != 0),
-            unsupported,
+            unsupported: Vec::new(),
         });
     }
 
-    // Symbolic: [ugoa]*[+-=][rwx]+
-    let operator = mode.find(['+', '-', '='])?;
-    let (_who, rest) = mode.split_at(operator);
-    let mut chars = rest.chars();
-    let op = chars.next()?;
-    let bits: String = chars.collect();
-    if bits.is_empty() || !bits.chars().all(|c| "rwxXst".contains(c)) {
-        return None;
-    }
-
     let mut writable = None;
-    for bit in bits.chars() {
-        match bit {
-            'w' => writable = Some(op != '-'),
-            'x' | 'X' => unsupported.push("execute"),
-            'r' => unsupported.push("read"),
-            's' => unsupported.push("setuid/setgid"),
-            't' => unsupported.push("sticky"),
-            _ => (),
+    let mut unsupported = Vec::new();
+    for clause in mode.split(',') {
+        // [ugoa]* then one or more [+-=][rwxXst]*
+        let who_end = clause.find(['+', '-', '='])?;
+        let (who, mut rest) = clause.split_at(who_end);
+        if !who.chars().all(|c| "ugoa".contains(c)) {
+            return None;
+        }
+        let owner = who.is_empty() || who.contains(['u', 'a']);
+        while let Some(op) = rest.chars().next() {
+            let perms_end = rest
+                .get(1..)?
+                .find(['+', '-', '='])
+                .map_or(rest.len(), |at| at + 1);
+            let perms = rest.get(1..perms_end)?;
+            rest = rest.get(perms_end..)?;
+            if !perms.chars().all(|c| "rwxXst".contains(c)) {
+                return None;
+            }
+            if !owner {
+                continue;
+            }
+            let has = |bit: char| perms.contains(bit);
+            match op {
+                '+' => {
+                    if has('w') {
+                        writable = Some(true);
+                    }
+                }
+                '-' => {
+                    if has('w') {
+                        writable = Some(false);
+                    }
+                    if has('r') {
+                        unsupported.push("read");
+                    }
+                    if has('x') || has('X') {
+                        unsupported.push("execute");
+                    }
+                }
+                _ => {
+                    writable = Some(has('w'));
+                    if !has('r') {
+                        unsupported.push("read");
+                    }
+                }
+            }
+            if op != '-' && has('s') {
+                unsupported.push("setuid/setgid");
+            }
+            if op != '-' && has('t') {
+                unsupported.push("sticky");
+            }
         }
     }
 
-    // `=` without `w` means write is being taken away.
-    if op == '=' && writable.is_none() {
-        writable = Some(false);
-    }
-
+    unsupported.sort_unstable();
     unsupported.dedup();
     Some(Request {
         writable,

@@ -392,11 +392,21 @@ fn chmod_plus_w_restores_writability() {
 }
 
 #[test]
-fn chmod_plus_x_warns_rather_than_lying() {
-    // D34: executability comes from the extension or a shebang (D23), so there is no
-    // mode bit to set. Saying nothing would repeat MSYS's mistake.
+fn chmod_plus_x_is_silent() {
+    // D23: executability comes from the extension or a shebang, so there is nothing to
+    // set and nothing lost; it said "execute: not represented" (the user, 2026-10-02).
+    let out = cash(
+        r#"d=$(mktemp -d); cd "$d"; : > f; chmod +x f; chmod 755 f; echo "rc=$?"; cd /; rm -rf "$d""#,
+    );
+    assert_eq!(out.stdout, "rc=0");
+    assert!(out.stderr.is_empty(), "{}", out.stderr);
+}
+
+#[test]
+fn chmod_minus_x_warns_rather_than_lying() {
+    // D34: revoking execute needs a Deny ACE, so it is not done, and said.
     let out =
-        cash(r#"d=$(mktemp -d); cd "$d"; : > f; chmod +x f; echo "rc=$?"; cd /; rm -rf "$d""#);
+        cash(r#"d=$(mktemp -d); cd "$d"; : > f; chmod -x f; echo "rc=$?"; cd /; rm -rf "$d""#);
     assert_eq!(out.stdout, "rc=0", "D34 says return 0");
     assert!(
         out.stderr.contains("execute") && out.stderr.contains("Windows"),
@@ -406,9 +416,26 @@ fn chmod_plus_x_warns_rather_than_lying() {
 }
 
 #[test]
+fn group_and_other_bits_leave_the_owner_alone() {
+    // `chmod go-w f` made `f` read-only for its owner, and `u+rw,go-w` was an invalid
+    // mode (BI-05). Group and other have no per-file bits on Windows: silent (the user,
+    // 2026-10-03).
+    let out = cash(
+        r#"d=$(mktemp -d); cd "$d"; : > f; chmod go-w f; echo x > f && echo wrote; chmod u-w,o+r f; (echo x > f) 2>/dev/null || echo refused; chmod u+rw,go-w f; echo x > f && echo wrote-again; cd /; rm -rf "$d""#,
+    );
+    assert_eq!(
+        out.stdout,
+        "wrote
+refused
+wrote-again"
+    );
+    assert!(out.stderr.is_empty(), "{}", out.stderr);
+}
+
+#[test]
 fn chmod_is_quiet_under_dash_f() {
     let out =
-        cash(r#"d=$(mktemp -d); cd "$d"; : > f; chmod -f +x f; echo "rc=$?"; cd /; rm -rf "$d""#);
+        cash(r#"d=$(mktemp -d); cd "$d"; : > f; chmod -f -x f; echo "rc=$?"; cd /; rm -rf "$d""#);
     assert_eq!(out.stdout, "rc=0");
     assert!(out.stderr.is_empty(), "-f was not silent: {}", out.stderr);
 }

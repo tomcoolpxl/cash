@@ -60,9 +60,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 13.2 Builtins
 
-- `chmod go-w f` makes `f` read-only for its owner; `u+rw,go-w` is refused. BI-05.
-- `chmod +x` prints "execute: not represented"; make it silent, as D23 says (decided,
-  below). BI-17.
 - `[ a -ef b ]` is "not supported"; `stat` on a directory gives inode 0: one
   `cash_win32::fs::file_info` with backup semantics. XC-3, ARCH-06.
 - `mapfile -t` keeps the `\r` (D20 names mapfile). XC-4.
@@ -181,6 +178,11 @@ in Bash they are Bash's version. `\s` gives `cash`. Keep cash's, and add a row t
 ---
 
 ## Decided, written down so it is not decided twice
+
+- **`chmod` is silent about group and other bits** (the user, 2026-10-03): Windows has
+  none per file, so `chmod go-w ~/.ssh` and `chmod o+r f` change nothing and say nothing,
+  as a numeric mode's other bits do. Spec §4 row 18. Warning on grants only, or on all of
+  them, were turned down.
 
 - **Tab globs a typed `*` and `?`, and completes everything else as typed** (the user,
   2026-10-03): no Windows name can hold `*` or `?`, so `**/nee` keeps completing, and

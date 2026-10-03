@@ -2464,7 +2464,7 @@ someone who expected bash, so additions need to earn their place.
 | 15 | `kill 0` signals the trees cash spawned, not a process group | Windows has no process group that excludes the terminal; the console-wide alternative would kill it | D22 |
 | 16 | `kill -1` is refused | "every process I may signal" on Windows reaches far past anything a script could mean | D22 |
 | 17 | `sh`, `bash` and `cash` are cash, ahead of `PATH` | Otherwise `bash` is the WSL launcher and a script continues under Linux; `cash` is often not on `PATH` at all, since a terminal starts it by full path | D7 |
-| 18 | `chmod` changes only the read-only attribute | Windows has no execute or read bit outside ACLs; the rest warns and returns 0 | D23, D34 |
+| 18 | `chmod` changes only the read-only attribute, from the owner's write bit | Windows has no execute or read bit outside ACLs and no group or other bits per file; where something is lost (`-x`, `-r`, setuid, setgid, sticky) it warns and returns 0, and the rest (`+x`, `+r`, `go-w`, a numeric mode's other bits) is silent (the user, 2026-10-02 and 2026-10-03) | D23, D34 |
 | 19 | `which` reports builtins; `stat` is not carried | `which` must agree with the shell; uutils' `stat` is Unix-only | D8, D48 |
 | 20 | `id`, `$UID` and `$EUID` report the account's RID, not a uid, and 0 in an elevated shell | Windows identifies a user by SID; the RID is its last component and the nearest true equivalent. Elevated, all three are 0, so `[ "$EUID" -eq 0 ]` and `[ "$(id -u)" -eq 0 ]` agree on "running as Administrator" | D48 |
 | 21 | `$SHELL` names cash, replacing whatever launched it | `make`, `npm run` and editors read it to decide what to launch | D5 |
