@@ -222,6 +222,32 @@ async fn typed_glob_characters_are_completed_as_they_are() {
 }
 
 #[tokio::test]
+async fn compgen_takes_its_word_as_given() {
+    // As Bash's `compgen -f` and `-d`: quotes and backslashes in the word are part of
+    // the name, and a `~/` or `$HOME/` keeps its spelling. Cash removed the quotes a
+    // second time and gave the expanded folder. `-W` words still match unquoted.
+    let fixture = Fixture::new("compgen-word").await;
+    fixture.touch("[draft] notes.txt");
+    fixture.touch("my file.txt");
+
+    let out = fixture.run(
+        r#"compgen -f "my f"; compgen -f "'my f"; compgen -f "my\ f"; compgen -f "\[d"; compgen -W "xa xb" -- "'x""#,
+    );
+    assert_eq!(out, "my file.txt\nxa\nxb\n");
+
+    let out = fixture.run(r#"cd ~; compgen -d "~/" | head -1; compgen -d '$HOME/' | head -1"#);
+    let mut lines = out.lines();
+    assert!(
+        lines.next().is_some_and(|line| line.starts_with("~/")),
+        "{out}"
+    );
+    assert!(
+        lines.next().is_some_and(|line| line.starts_with("$HOME/")),
+        "{out}"
+    );
+}
+
+#[tokio::test]
 async fn completing_before_a_closing_quote_replaces_it() {
     // After `'my dir/'` the cursor sits before the closing quote; typing and Tab there
     // must not leave the old quote behind (`'my dir/inner/''`).

@@ -329,6 +329,23 @@ pub struct Context<'a> {
     pub trigger: CompletionTrigger,
 }
 
+impl<'a> Context<'a> {
+    /// The word file and folder names are completed from, and whether it is the word
+    /// `compgen` was given, as it was given (see `get_file_completions`); at the prompt it
+    /// is the word as typed.
+    fn file_word(&self) -> (&'a str, bool) {
+        match self.trigger {
+            CompletionTrigger::Programmatic => (
+                self.tokens
+                    .get(self.token_index)
+                    .map_or(self.token_to_complete, |token| token.text),
+                true,
+            ),
+            CompletionTrigger::InteractiveComplete => (self.token_to_complete, false),
+        }
+    }
+}
+
 impl Spec {
     /// Generates completion candidates using this specification.
     ///
@@ -462,12 +479,9 @@ impl Spec {
 
         // plusdirs always adds directory names; dirnames only does so when nothing else matched.
         if options.plus_dirs || (options.dir_names && candidates.is_empty()) {
-            let mut dir_candidates = get_file_completions(
-                shell,
-                context.token_to_complete,
-                /* must_be_dir */ true,
-            )
-            .await;
+            let (word, from_compgen) = context.file_word();
+            let mut dir_candidates =
+                get_file_completions(shell, word, /* must_be_dir */ true, from_compgen).await;
 
             // If directories are all we have, let them be marked as such.
             if candidates.is_empty() && shell.completion_config().fallback_options.mark_directories
@@ -494,8 +508,9 @@ impl Spec {
             // dir completions.
             let must_be_dir = options.dir_names;
 
+            let (word, from_compgen) = context.file_word();
             let mut default_candidates =
-                get_file_completions(shell, context.token_to_complete, must_be_dir).await;
+                get_file_completions(shell, word, must_be_dir, from_compgen).await;
             candidates.append(&mut default_candidates);
 
             if shell.completion_config().fallback_options.mark_directories {
@@ -575,8 +590,9 @@ impl Spec {
                     }
                 }
                 CompleteAction::Directory => {
+                    let (word, from_compgen) = context.file_word();
                     let mut file_completions =
-                        get_file_completions(shell, context.token_to_complete, true).await;
+                        get_file_completions(shell, word, true, from_compgen).await;
                     candidates.append(&mut file_completions);
                 }
                 CompleteAction::Disabled => {
@@ -601,8 +617,9 @@ impl Spec {
                     }
                 }
                 CompleteAction::File => {
+                    let (word, from_compgen) = context.file_word();
                     let mut file_completions =
-                        get_file_completions(shell, context.token_to_complete, false).await;
+                        get_file_completions(shell, word, false, from_compgen).await;
                     candidates.append(&mut file_completions);
                 }
                 CompleteAction::Function => {
@@ -1495,16 +1512,27 @@ const fn completion_piece(text: String, is_glob: bool) -> patterns::PatternPiece
     }
 }
 
+/// The file and folder names `token_to_complete` completes to. `from_compgen` is for the
+/// word `compgen -f` or `-d` was given, which Bash takes as it is: its quotes and
+/// backslashes are part of the name, where at the prompt they are the typed ones to
+/// remove, and the names keep the spelling of its folder (`~/`, `$HOME/`). Cash took
+/// them out a second time and gave the expanded folder.
 async fn get_file_completions(
     shell: &Shell<impl extensions::ShellExtensions>,
     token_to_complete: &str,
     must_be_dir: bool,
+    from_compgen: bool,
 ) -> Vec<String> {
     // Basic-expand the token-to-be-completed; it won't have been expanded to this point.
     let mut throwaway_shell = shell.clone();
     let params = throwaway_shell.default_exec_params();
     let options = expansion::ExpanderOptions {
         execute_command_substitutions: false,
+        unquoted_backslash_handling: if from_compgen {
+            expansion::UnquotedBackslashHandling::Preserve
+        } else {
+            expansion::UnquotedBackslashHandling::default()
+        },
         ..Default::default()
     };
     // cash (D53): with `winpaths`, `C:\Users\me\sr` keeps its backslashes, and the
@@ -1513,7 +1541,7 @@ async fn get_file_completions(
     // which copes with a quote left open mid-completion.
     let keeps_backslashes =
         shell.options().windows_drive_paths && is_unquoted_drive_path(token_to_complete);
-    let to_expand = if keeps_backslashes {
+    let to_expand = if keeps_backslashes || from_compgen {
         token_to_complete.to_owned()
     } else {
         unquote_str(token_to_complete)
@@ -1573,6 +1601,22 @@ async fn get_file_completions(
         for completion in &mut completions {
             if let Some(rest) = completion.get(windows_form.len()..) {
                 *completion = std::format!("{expanded_token}{rest}");
+            }
+        }
+    }
+
+    // `compgen` gives the names in the spelling of the folder it was given.
+    if from_compgen {
+        let folder = |word: &str| word.rfind('/').map(|slash| slash + 1);
+        let typed_folder = folder(&to_expand).and_then(|end| to_expand.get(..end));
+        let expanded_folder = folder(&expanded_token).and_then(|end| expanded_token.get(..end));
+        if let (Some(typed), Some(expanded)) = (typed_folder, expanded_folder)
+            && typed != expanded
+        {
+            for completion in &mut completions {
+                if let Some(rest) = completion.get(expanded.len()..) {
+                    *completion = std::format!("{typed}{rest}");
+                }
             }
         }
     }
@@ -1713,7 +1757,7 @@ async fn get_completions_using_basic_lookup(
     }
 
     // File completions
-    let mut candidates = get_file_completions(shell, token, false).await;
+    let mut candidates = get_file_completions(shell, token, false, false).await;
 
     // If this appears to be the command token (and if there's *some* prefix without
     // a path separator) then also consider whether we should search the path for

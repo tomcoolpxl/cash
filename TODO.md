@@ -60,10 +60,10 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 12.3 Smaller expansion differences
 
-`compgen -f '\[d'` lists `[draft] notes.txt`; Bash lists nothing, the backslash being
-part of the name it was given. Completion and `compgen` share `get_file_completions`,
-which removes quotes from the word as typed at the prompt, and `compgen`'s word has had
-them removed already. Found fixing LANG-16.
+Tab turns `ls ~/Doc` into `ls C:/Users/me/Documents`; Bash keeps `~/Documents`, as
+`compgen` now does. Keeping it means the auto-quoting (D40) has to leave a leading `~/`
+outside the quotes (`~/'my dir/'`), or the tilde is no longer expanded. Found fixing
+`compgen`'s word.
 
 Also seen while fixing 8.1: past the function depth limit (500, or `FUNCNEST`) cash
 reports "maximum function call depth exceeded" and the script goes on, `$?` 0; Bash 5.3
