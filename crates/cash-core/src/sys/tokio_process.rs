@@ -93,6 +93,7 @@ mod tests {
         use std::os::windows::process::CommandExt;
         const CREATE_SUSPENDED: u32 = 0x0000_0004;
 
+        // process state: a test of the resume, in the test's own process.
         let mut child = std::process::Command::new("cmd")
             .args(["/c", "exit 7"])
             .creation_flags(CREATE_SUSPENDED)
