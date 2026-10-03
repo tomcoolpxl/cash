@@ -437,18 +437,13 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
         params: &crate::ExecutionParameters,
     ) -> Result<crate::ExecutionResult, error::Error> {
         self.trace_level += 1;
-        let result = match self.parse_string(command) {
-            // `eval` fails with 2 and the script goes on, where cash ended it; in POSIX
-            // mode it ends the script, as an error in a special builtin does.
-            Err(parse_err) => {
-                let fatal = self.options().posix_mode;
-                Ok(self.syntax_error_of_a_builtin(parse_err, source_info, params, fatal))
-            }
-            parse_result => {
-                self.run_parsed_result(parse_result, source_info, params)
-                    .await
-            }
-        };
+        // A syntax error fails `eval` with 2 and the script goes on, where cash ended
+        // it; in POSIX mode it ends the script, as an error in a special builtin does.
+        let whole = self.parse_string(command.as_str());
+        let fatal = self.options().posix_mode;
+        let result = self
+            .run_text(command.as_bytes(), whole, source_info, params, fatal)
+            .await;
         self.trace_level -= 1;
         result
     }

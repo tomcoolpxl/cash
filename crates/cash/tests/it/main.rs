@@ -121,6 +121,8 @@ mod read_console;
 mod real_world_tests;
 // D3/D7/D8/D34/D35: what cash says it will run vs what it runs.
 mod resolution_honesty;
+// EXE-07: a script that does not parse runs a complete command at a time, up to the error.
+mod run_by_command;
 // `select`, a bash construct cash could not parse at all.
 mod select_clause;
 mod shebang_dispatch;

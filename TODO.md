@@ -60,11 +60,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 13.2 Builtins
 
-- EXE-07, a Medium finding no phase carried: a script, and a sourced file, are parsed
-  whole before they run, so a syntax error on line 2 stops line 1 from running (Bash
-  runs `echo first` and then reports `if then`), and a self-extracting payload after
-  `exit` must parse (`shell/execution.rs`, `source_file`). Bash reads one complete
-  command at a time. Seen again in 1.3.12 while fixing `eval`'s syntax errors.
 
 ### 13.3 `time` and `times` report CPU time
 
@@ -96,6 +91,12 @@ evaluation error: division by zero` and `failed to parse expression: 1 +` (and `
 "0")`, `((: 1 + : arithmetic syntax error: operand expected (error token is "+ ")`,
 `08: value too great for base (error token is "08")`, and `read: 1/0: …` from `read`.
 Found in phase 12.
+
+A syntax error is worded by the parser's position, not by the token: cash says
+`script.sh: syntax error at line 2 col 8`, `syntax error at end of input` or `unexpected
+end of file from `if' command` where Bash says `script.sh: line 2: syntax error near
+unexpected token `then'` and then quotes the line (`script.sh: line 2: `if then'`), and
+`eval: line 2:` for `eval`'s. Found in 1.3.12 fixing EXE-07.
 
 ### 13.5 D36: measure the pooled prompt job, then build it or drop it
 

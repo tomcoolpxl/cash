@@ -29,53 +29,11 @@ pub(crate) fn needs_more_input(
     needs_more_input_locked(&shell, input)
 }
 
-/// Returns whether more input is needed, given an already-acquired shell.
+/// Returns whether more input is needed, given an already-acquired shell: the question a
+/// script that does not parse also asks, line by line (`Shell::needs_more_input`).
 #[allow(dead_code)]
 fn needs_more_input_locked(shell: &Shell<impl cash_core::ShellExtensions>, input: &str) -> bool {
-    match shell.parse_string(input) {
-        // Mid-token: unclosed quotes, unterminated here documents, and the like.
-        Err(cash_parser::ParseError::Tokenizing { inner, position: _ })
-            if inner.is_incomplete() =>
-        {
-            true
-        }
-        // Ran out of tokens partway through a construct; more input may complete it.
-        Err(
-            cash_parser::ParseError::ParsingAtEndOfInput
-            | cash_parser::ParseError::UnterminatedCompound { .. },
-        ) => true,
-        // A bad token at a specific position stays bad no matter what follows it.
-        Err(_) => false,
-        // Parsed cleanly. One catch: a trailing backslash-newline is a line
-        // continuation, which the tokenizer drops silently at end of input. Ask again
-        // with the newline removed; the tokenizer reports an unterminated escape only
-        // if that backslash was really escaping something.
-        Ok(_) => ends_with_line_continuation(shell, input),
-    }
-}
-
-/// Returns whether the given input ends with a backslash-newline acting as a line
-/// continuation.
-fn ends_with_line_continuation(
-    shell: &Shell<impl cash_core::ShellExtensions>,
-    input: &str,
-) -> bool {
-    let Some(truncated) = input.strip_suffix('\n') else {
-        return false;
-    };
-
-    // Keeps the extra parse off the common path.
-    if !truncated.ends_with('\\') {
-        return false;
-    }
-
-    matches!(
-        shell.parse_string(truncated),
-        Err(cash_parser::ParseError::Tokenizing {
-            inner: cash_parser::TokenizerError::UnterminatedEscapeSequence,
-            position: _,
-        })
-    )
+    shell.needs_more_input(input)
 }
 
 #[cfg(test)]

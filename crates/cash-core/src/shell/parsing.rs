@@ -4,6 +4,17 @@ use std::io::Read;
 
 use crate::{Shell, extensions, trace_categories};
 
+/// What the lines read so far are: a complete program, the start of one, or wrong.
+pub(crate) enum Prefix {
+    /// A complete program, to run.
+    Complete(cash_parser::ast::Program),
+    /// The start of one: more lines may complete it. What it parses as now is what to
+    /// run, or to report, if no more lines come.
+    NeedsMore(Result<cash_parser::ast::Program, cash_parser::ParseError>),
+    /// Wrong, whatever follows.
+    Wrong(cash_parser::ParseError),
+}
+
 impl<SE: extensions::ShellExtensions> Shell<SE> {
     /// Parses the given reader as a shell program, returning the resulting Abstract Syntax Tree
     /// for the program.
@@ -34,6 +45,62 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
     ) -> Result<cash_parser::ast::Program, cash_parser::ParseError> {
         let s: String = s.into();
         parse_string_impl(&s, &self.parser_options())
+    }
+
+    /// Whether `input` is an incomplete program: more lines must be read before it can
+    /// run. An interactive shell asks this before it runs what was typed.
+    ///
+    /// # Arguments
+    ///
+    /// * `input` - The input accumulated so far.
+    pub fn needs_more_input(&self, input: &str) -> bool {
+        matches!(self.parse_prefix(input.as_bytes()), Prefix::NeedsMore(_))
+    }
+
+    /// What a parse of the lines read so far says about them.
+    pub(crate) fn parse_prefix(&self, input: &[u8]) -> Prefix {
+        match self.parse(input) {
+            // Mid-token: unclosed quotes, unterminated here documents, and the like.
+            Err(cash_parser::ParseError::Tokenizing { inner, position })
+                if inner.is_incomplete() =>
+            {
+                Prefix::NeedsMore(Err(cash_parser::ParseError::Tokenizing { inner, position }))
+            }
+            // Ran out of tokens partway through a construct; more input may complete it.
+            Err(
+                err @ (cash_parser::ParseError::ParsingAtEndOfInput
+                | cash_parser::ParseError::UnterminatedCompound { .. }),
+            ) => Prefix::NeedsMore(Err(err)),
+            // A bad token at a specific position stays bad no matter what follows it.
+            Err(err) => Prefix::Wrong(err),
+            // Parsed cleanly. One catch: a trailing backslash-newline is a line
+            // continuation, which the tokenizer drops silently at end of input.
+            Ok(program) if self.ends_with_line_continuation(input) => {
+                Prefix::NeedsMore(Ok(program))
+            }
+            Ok(program) => Prefix::Complete(program),
+        }
+    }
+
+    /// Whether `input` ends with a backslash-newline acting as a line continuation: asked
+    /// again with the newline removed, the tokenizer reports an unterminated escape only if
+    /// that backslash was really escaping something.
+    fn ends_with_line_continuation(&self, input: &[u8]) -> bool {
+        let Some(truncated) = input.strip_suffix(b"\n") else {
+            return false;
+        };
+        let truncated = truncated.strip_suffix(b"\r").unwrap_or(truncated);
+        // Keeps the extra parse off the common path.
+        if !truncated.ends_with(b"\\") {
+            return false;
+        }
+        matches!(
+            self.parse(truncated),
+            Err(cash_parser::ParseError::Tokenizing {
+                inner: cash_parser::TokenizerError::UnterminatedEscapeSequence,
+                position: _,
+            })
+        )
     }
 
     /// Returns the options that should be used for parsing shell programs; reflects

@@ -2,6 +2,7 @@
 
 use std::{io::Read, path::Path};
 
+use super::parsing::Prefix;
 use crate::{
     ExecutionControlFlow, ExecutionParameters, ExecutionResult, ProcessGroupPolicy, SourceInfo,
     arithmetic::Evaluatable as _, callstack, error, interp::Execute as _, openfiles,
@@ -190,16 +191,15 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
             reader.consume(bom_len);
         }
 
-        // cash (D7): CRLF script source parses as if it had LF endings. `core.autocrlf`
-        // is on by default in Git for Windows, so every script in a checked-out
-        // repository looks like this; without it `fi\r` is not `fi` and the whole file
-        // fails to parse, at a line number nowhere near the real problem.
-        let mut reader = std::io::BufReader::new(cash_win32::text::NormalizeCrlf::new(reader));
-
-        let mut parser = cash_parser::Parser::new(&mut reader, &self.parser_options());
+        // Read whole, so that a file that does not parse can be run a command at a time
+        // ([`Self::run_text`]). CRLF script source parses as if it had LF endings (D7,
+        // in `Shell::parse`): `core.autocrlf` is on by default in Git for Windows, so
+        // every script in a checked-out repository has them, and `fi\r` is not `fi`.
+        let mut text = Vec::new();
+        reader.read_to_end(&mut text)?;
 
         tracing::debug!(target: trace_categories::PARSE, "Parsing sourced file: {}", source_info.source);
-        let parse_result = parser.parse_program();
+        let whole = self.parse(text.as_slice());
 
         let script_positional_args: Vec<String> = args.map(Into::into).collect();
         let source_was_given_args = matches!(call_type, callstack::ScriptCallType::Source)
@@ -209,17 +209,12 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         self.call_stack
             .push_script(call_type, source_info, script_positional_args, extdebug);
 
-        let result = match parse_result {
-            // A sourced file that does not parse fails `source` with 2, as in Bash, and
-            // the script goes on, in POSIX mode too; a script that is run ends.
-            Err(parse_err) if matches!(call_type, callstack::ScriptCallType::Source) => {
-                Ok(self.syntax_error_of_a_builtin(parse_err, source_info, params, false))
-            }
-            parse_result => {
-                self.run_parsed_result(parse_result, source_info, params)
-                    .await
-            }
-        };
+        // A sourced file that does not parse fails `source` with 2, as in Bash, and the
+        // script goes on, in POSIX mode too; a script that is run ends.
+        let fatal = !matches!(call_type, callstack::ScriptCallType::Source);
+        let result = self
+            .run_text(&text, whole, source_info, params, fatal)
+            .await;
 
         if matches!(call_type, callstack::ScriptCallType::Source) && result.is_ok() {
             crate::commands::run_return_trap(self, params).await;
@@ -264,8 +259,9 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         source_info: &crate::SourceInfo,
         params: &ExecutionParameters,
     ) -> Result<ExecutionResult, error::Error> {
-        let parse_result = self.parse_string(command);
-        self.run_parsed_result(parse_result, source_info, params)
+        let command: String = command.into();
+        let whole = self.parse_string(command.as_str());
+        self.run_text(command.as_bytes(), whole, source_info, params, true)
             .await
     }
 
@@ -329,10 +325,71 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         Ok(result)
     }
 
-    /// A syntax error in the text `eval` or `source` was given: reported, and the builtin
-    /// fails with 2 while the script goes on, as in Bash. With `fatal` it ends a script
-    /// that is not interactive instead, as Bash's POSIX mode does for `eval`.
-    pub(crate) fn syntax_error_of_a_builtin(
+    /// Runs `text` as Bash runs a script, a sourced file, a `-c` string or `eval`'s:
+    /// whole when `whole`, its parse, succeeded, which is the common case; when it did
+    /// not, a complete command at a time, as Bash reads it, so the commands before the
+    /// error run and a payload after an `exit` is never read (EXE-07). A command a line
+    /// before it changed, as `shopt -s extglob` does, parses as that command left it.
+    ///
+    /// The syntax error is reported where it is reached, as [`Self::report_syntax_error`]
+    /// reports it with `fatal`.
+    pub(crate) async fn run_text(
+        &mut self,
+        text: &[u8],
+        whole: Result<cash_parser::ast::Program, cash_parser::ParseError>,
+        source_info: &crate::SourceInfo,
+        params: &ExecutionParameters,
+        fatal: bool,
+    ) -> Result<ExecutionResult, error::Error> {
+        if let Ok(program) = whole {
+            return self
+                .run_parsed_result(Ok(program), source_info, params)
+                .await;
+        }
+
+        let mut result = ExecutionResult::success();
+        let mut pending: Vec<u8> = Vec::new();
+        // The lines before `pending`, which its own line numbers do not count.
+        let mut lines_before = 0;
+        let mut pending_lines = 0;
+        let mut lines = text.split_inclusive(|&byte| byte == b'\n').peekable();
+        while let Some(line) = lines.next() {
+            pending.extend_from_slice(line);
+            pending_lines += 1;
+            let program = match self.parse_prefix(&pending) {
+                Prefix::NeedsMore(_) if lines.peek().is_some() => continue,
+                Prefix::Complete(program) | Prefix::NeedsMore(Ok(program)) => program,
+                Prefix::NeedsMore(Err(err)) | Prefix::Wrong(err) => {
+                    let err = counted_from_the_start(err, lines_before);
+                    return Ok(self.report_syntax_error(err, source_info, params, fatal));
+                }
+            };
+
+            self.call_stack.increment_current_line_offset(lines_before);
+            let ran = self
+                .run_parsed_result(Ok(program), source_info, params)
+                .await;
+            self.call_stack.decrement_current_line_offset(lines_before);
+            result = ran?;
+            if matches!(
+                result.next_control_flow,
+                ExecutionControlFlow::ExitShell | ExecutionControlFlow::ReturnFromFunctionOrScript
+            ) {
+                break;
+            }
+
+            lines_before += pending_lines;
+            pending_lines = 0;
+            pending.clear();
+        }
+        Ok(result)
+    }
+
+    /// A syntax error in the text a script, `eval` or `source` was given: reported, and
+    /// with `fatal` it ends a shell that is not interactive, as for a script, a `-c`
+    /// string, and `eval` in POSIX mode. Otherwise the builtin fails with 2 and the
+    /// script goes on, as Bash has it for `eval` and `source`.
+    pub(crate) fn report_syntax_error(
         &mut self,
         parse_err: cash_parser::ParseError,
         source_info: &crate::SourceInfo,
@@ -402,6 +459,30 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         expr: &cash_parser::ast::ArithmeticExpr,
     ) -> Result<i64, error::Error> {
         Ok(expr.eval(self)?)
+    }
+}
+
+/// `err`, from a parse of text that began `lines` lines into the whole, with its lines
+/// counted from the start of the whole.
+fn counted_from_the_start(err: cash_parser::ParseError, lines: usize) -> cash_parser::ParseError {
+    use cash_parser::ParseError;
+    match err {
+        ParseError::ParsingNear(mut position) => {
+            position.line += lines;
+            ParseError::ParsingNear(position)
+        }
+        ParseError::UnterminatedCompound { keyword, line } => ParseError::UnterminatedCompound {
+            keyword,
+            line: line + lines,
+        },
+        ParseError::Tokenizing { inner, position } => ParseError::Tokenizing {
+            inner,
+            position: position.map(|mut position| {
+                position.line += lines;
+                position
+            }),
+        },
+        other @ ParseError::ParsingAtEndOfInput => other,
     }
 }
 

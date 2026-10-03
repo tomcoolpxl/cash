@@ -498,6 +498,19 @@ impl CallStack {
         frame.current_line_offset += delta;
     }
 
+    /// Takes back an [`Self::increment_current_line_offset`] of the top stack frame.
+    ///
+    /// # Arguments
+    ///
+    /// * `delta` - The number of lines it was incremented by.
+    pub(crate) fn decrement_current_line_offset(&mut self, delta: usize) {
+        let Some(frame) = self.frames.front_mut() else {
+            return;
+        };
+
+        frame.current_line_offset = frame.current_line_offset.saturating_sub(delta);
+    }
+
     /// Pushes a new script call frame onto the stack.
     ///
     /// # Arguments
