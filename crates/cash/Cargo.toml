@@ -73,6 +73,8 @@ tempfile = { workspace = true }
 # The completion tests drive a `Shell` directly rather than through the binary,
 # because completion has no command-line surface to assert against.
 cash-test-harness = { workspace = true, features = ["insta"] }
+# The pseudo console the terminal tests drive cash on (W32-12).
+cash-win32 = { workspace = true, features = ["pseudo-console"] }
 assert_cmd = { workspace = true }
 # Checks the Windows Terminal profile GUID against Terminal's own derivation (UUIDv5).
 uuid = { version = "1.26.1", features = ["v5"] }

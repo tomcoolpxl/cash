@@ -61,8 +61,7 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 14.6 Dead code, allows and dependencies
 
-- The harness's oracle mode; `conpty` and `vtscreen` public though only tests use them
-  (W32-12). EXE-12, BIN-16, BIN-17.
+- The harness's oracle mode. EXE-12, BIN-16, BIN-17.
 - awk, bc and sed allow the lints for code that can panic (`unwrap_used`, `expect_used`,
   `panic`, `panic_in_result_fn`, `unwrap_in_result`, `string_slice`,
   `missing_panics_doc`): 58 `unwrap` and 34 `expect` in awk, 37 `expect` and 8 `panic!`

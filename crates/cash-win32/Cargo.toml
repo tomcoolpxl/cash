@@ -14,10 +14,15 @@ rust-version.workspace = true
 [lints]
 workspace = true
 
+[features]
+# `conpty` and `vtscreen`: a pseudo console and a screen to read it into, which the tests
+# of programs on a terminal use and cash does not (W32-12).
+pseudo-console = ["dep:vte"]
+
 [dependencies]
 # How many columns a character takes on the screen, to take it back off (conin.rs).
 unicode-width = { workspace = true }
-vte = "0.14"
+vte = { version = "0.14", optional = true }
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_Globalization",
@@ -56,5 +61,7 @@ name = "stdout_capture"
 harness = false
 
 [dev-dependencies]
+# `vtscreen` in the unit tests, which have it without the feature.
+vte = "0.14"
 proptest = { workspace = true }
 tempfile = { workspace = true }

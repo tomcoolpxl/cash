@@ -18,6 +18,9 @@ pub mod children;
 pub mod cmd;
 pub mod cmdline;
 pub mod conin;
+// A pseudo console and a screen to read it into, for the tests of programs on a terminal;
+// not part of cash (W32-12).
+#[cfg(any(test, feature = "pseudo-console"))]
 pub mod conpty;
 pub mod console;
 pub mod ctrl_z;
@@ -54,6 +57,7 @@ pub mod sysinfo;
 pub mod terminal;
 pub mod text;
 pub mod userpath;
+#[cfg(any(test, feature = "pseudo-console"))]
 pub mod vtscreen;
 
 pub use job::{JobConfig, JobObject};
