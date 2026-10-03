@@ -22,6 +22,14 @@ pub enum ParseError {
         line: usize,
     },
 
+    /// The input ended inside an array assignment's `(`, as Bash reports it, on the line
+    /// the `(` is on.
+    #[error("unexpected EOF while looking for matching `)'")]
+    UnterminatedArray {
+        /// The 1-based line of the `(`.
+        line: usize,
+    },
+
     /// An error occurred while tokenizing the input stream.
     #[error("{} (detected near {})", .inner, .position.as_ref().map_or_else(|| String::from("<unknown position>"), |p| std::format!("line {} col {}", p.line, p.column)))]
     Tokenizing {
@@ -50,7 +58,9 @@ pub mod miette {
                 Self::Tokenizing { ref position, .. } => position
                     .as_ref()
                     .map(|p| SourceOffset::from_location(&input, p.line, p.column)),
-                Self::ParsingAtEndOfInput | Self::UnterminatedCompound { .. } => {
+                Self::ParsingAtEndOfInput
+                | Self::UnterminatedCompound { .. }
+                | Self::UnterminatedArray { .. } => {
                     Some(SourceOffset::from_location(&input, usize::MAX, usize::MAX))
                 }
             };
@@ -166,7 +176,11 @@ pub(crate) fn convert_peg_parse_error(
         };
         ParseError::ParsingNear((*token.location().start).clone(), name.to_owned())
     } else if let Some((keyword, line)) = innermost_unclosed_compound(tokens) {
-        ParseError::UnterminatedCompound { keyword, line }
+        if keyword == "=(" {
+            ParseError::UnterminatedArray { line }
+        } else {
+            ParseError::UnterminatedCompound { keyword, line }
+        }
     } else {
         ParseError::ParsingAtEndOfInput
     }
@@ -322,9 +336,26 @@ impl<'a> Scan<'a> {
 fn innermost_unclosed_compound(tokens: &[crate::Token]) -> Option<(String, usize)> {
     let mut open: Vec<(&str, usize)> = Vec::new();
     let mut command_position = true;
+    let mut after_assignment = false;
     for token in tokens {
+        let assignment = after_assignment;
+        after_assignment = matches!(token, crate::Token::Word(word, _) if word.ends_with('='));
         match token {
-            crate::Token::Operator(op, _) => {
+            crate::Token::Operator(op, span) => {
+                // A subshell opens in command position, as Bash names it: `from `(' command`;
+                // after `a=` it is an array's, `=(`.
+                match op.as_str() {
+                    "(" if command_position => open.push(("(", span.start.line)),
+                    "(" if assignment => open.push(("=(", span.start.line)),
+                    ")" => {
+                        if let Some(index) =
+                            open.iter().rposition(|(o, _)| matches!(*o, "(" | "=("))
+                        {
+                            open.truncate(index);
+                        }
+                    }
+                    _ => {}
+                }
                 command_position = matches!(
                     op.as_str(),
                     "\n" | ";" | ";;" | ";&" | ";;&" | "&" | "&&" | "||" | "|" | "|&" | "(" | ")"

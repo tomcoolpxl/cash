@@ -144,6 +144,50 @@ pub enum TokenizerError {
 }
 
 impl TokenizerError {
+    /// This error from text that began `lines` lines into the whole, with the position it
+    /// names counted from the start of the whole.
+    #[must_use]
+    pub fn later_by(self, lines: usize) -> Self {
+        let shift = |mut position: SourcePosition| {
+            position.line += lines;
+            position
+        };
+        match self {
+            Self::UnterminatedSingleQuote(position) => {
+                Self::UnterminatedSingleQuote(shift(position))
+            }
+            Self::UnterminatedAnsiCQuote(position) => Self::UnterminatedAnsiCQuote(shift(position)),
+            Self::UnterminatedDoubleQuote(position) => {
+                Self::UnterminatedDoubleQuote(shift(position))
+            }
+            Self::UnterminatedBackquote(position) => Self::UnterminatedBackquote(shift(position)),
+            Self::UnterminatedExtendedGlob(position) => {
+                Self::UnterminatedExtendedGlob(shift(position))
+            }
+            other => other,
+        }
+    }
+
+    /// What Bash says of input that ended inside this construct, with the line in the
+    /// input it names, if it is one Bash reads to its end: ``unexpected EOF while looking
+    /// for matching `"'`` on the line the quote opened on, `` `)' `` for a command
+    /// substitution on the line after the last.
+    pub const fn bash_eof(&self) -> Option<(char, Option<usize>)> {
+        match self {
+            Self::UnterminatedSingleQuote(position) | Self::UnterminatedAnsiCQuote(position) => {
+                Some(('\'', Some(position.line)))
+            }
+            Self::UnterminatedDoubleQuote(position) => Some(('"', Some(position.line))),
+            Self::UnterminatedBackquote(position) => Some(('`', Some(position.line))),
+            Self::UnterminatedExtendedGlob(position) => Some((')', Some(position.line))),
+            Self::UnterminatedCommandSubstitution | Self::UnterminatedExpansion => {
+                Some((')', None))
+            }
+            Self::UnterminatedVariable => Some(('}', None)),
+            _ => None,
+        }
+    }
+
     /// Returns true if the error represents an error that could possibly be due
     /// to an incomplete input stream.
     pub const fn is_incomplete(&self) -> bool {

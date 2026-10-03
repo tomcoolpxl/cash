@@ -69,7 +69,8 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
             // Ran out of tokens partway through a construct; more input may complete it.
             Err(
                 err @ (cash_parser::ParseError::ParsingAtEndOfInput
-                | cash_parser::ParseError::UnterminatedCompound { .. }),
+                | cash_parser::ParseError::UnterminatedCompound { .. }
+                | cash_parser::ParseError::UnterminatedArray { .. }),
             ) => Prefix::NeedsMore(Err(err)),
             // A bad token at a specific position stays bad no matter what follows it.
             Err(err) => Prefix::Wrong(err),

@@ -98,6 +98,46 @@ fn a_syntax_error_is_reported_on_two_lines() {
         "{}",
         out.stderr
     );
+
+    // Input that ends inside a quote or a substitution: the tokenizer said `unterminated
+    // single quote at 1,6 (detected near line 2 col 1)`.
+    for (script, expected) in [
+        (
+            "echo 'abc",
+            "line 1: unexpected EOF while looking for matching `''",
+        ),
+        (
+            "echo a\necho \"abc",
+            "line 2: unexpected EOF while looking for matching `\"'",
+        ),
+        (
+            "echo $(abc",
+            "line 2: unexpected EOF while looking for matching `)'",
+        ),
+        (
+            "echo $((1+",
+            "line 1: unexpected EOF while looking for matching `)'",
+        ),
+        (
+            "echo ${abc",
+            "line 1: unexpected EOF while looking for matching `}'",
+        ),
+        (
+            "a=(1 2",
+            "line 1: unexpected EOF while looking for matching `)'",
+        ),
+        (
+            "( echo a",
+            "line 2: syntax error: unexpected end of file from `(' command on line 1",
+        ),
+    ] {
+        let out = run(script);
+        assert!(
+            out.stderr.ends_with(&format!(": -c: {expected}")),
+            "{script}: {}",
+            out.stderr
+        );
+    }
 }
 
 #[test]

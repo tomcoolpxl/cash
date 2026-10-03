@@ -495,6 +495,33 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
             }
             other => other.to_string(),
         };
+        // Input that ended inside a quote or a substitution, as Bash words it.
+        if let ParseError::Tokenizing { inner, .. } = err
+            && let Some((closer, opened)) = inner.bash_eof()
+        {
+            // `${` and `$((` name the line they opened on, which the tokenizer does not
+            // keep; a command substitution, the line after the last.
+            let last_opened = |opener: &[u8]| {
+                text.windows(opener.len())
+                    .rposition(|window| window == opener)
+                    .map(|at| first_line + text[..at].split(|&b| b == b'\n').count() - 1)
+            };
+            let last_substitution = text.windows(2).rposition(|pair| pair == b"$(");
+            let line = match (closer, opened) {
+                (_, Some(line)) => first_line + line - 1,
+                ('}', None) => last_opened(b"${").unwrap_or(first_line),
+                (_, None) if last_substitution == text.windows(3).rposition(|w| w == b"$((") => {
+                    last_opened(b"$((").unwrap_or(first_line)
+                }
+                (_, None) => first_line + count_lines(text),
+            };
+            let prefix = paint(format!("{name}: line {line}: "));
+            return format!("{prefix}unexpected EOF while looking for matching `{closer}'\n");
+        }
+        if let ParseError::UnterminatedArray { line } = err {
+            let prefix = paint(format!("{name}: line {}: ", first_line + line - 1));
+            return format!("{prefix}{err}\n");
+        }
         let (line, quoted) = match err {
             ParseError::ParsingNear(position, _) => (
                 first_line + position.line.saturating_sub(1),
@@ -606,12 +633,15 @@ fn counted_from_the_start(err: cash_parser::ParseError, lines: usize) -> cash_pa
             position.line += lines;
             ParseError::ParsingNear(position, token)
         }
+        ParseError::UnterminatedArray { line } => {
+            ParseError::UnterminatedArray { line: line + lines }
+        }
         ParseError::UnterminatedCompound { keyword, line } => ParseError::UnterminatedCompound {
             keyword,
             line: line + lines,
         },
         ParseError::Tokenizing { inner, position } => ParseError::Tokenizing {
-            inner,
+            inner: inner.later_by(lines),
             position: position.map(|mut position| {
                 position.line += lines;
                 position

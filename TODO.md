@@ -60,10 +60,13 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 13.4 Error output: colour, prefixes, `--help`
 
-A syntax error is now Bash's two lines, near the token Bash names. Left: `-c 'echo ('`
-is `unexpected end of file` on line 2 where Bash says near `newline` on line 1, and the
-tokenizer's errors keep their own words (`unterminated single quote at line 1 col 6`
-where Bash says ``unexpected EOF while looking for matching `''``). Found in 1.3.12.
+A syntax error is now Bash's, near the token Bash names, and input that ends inside a
+quote or substitution is ``unexpected EOF while looking for matching `"'``. Left: `-c
+'echo ('` is `unexpected end of file` on line 2 where Bash says near `newline` on line 1
+(and `echo a (` near `(`). A here-document with no closing line fails, `unterminated here
+document sequence; tag(s) [EOF] found at: [1,10]`, where Bash warns `here-document at
+line 1 delimited by end-of-file (wanted `EOF')` and runs the command with what there was.
+Found in 1.3.12.
 
 ### 13.5 D36: measure the pooled prompt job, then build it or drop it
 
