@@ -2126,19 +2126,19 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
                 let expanded_replacement = self.basic_expand_replacement(&replacement).await?;
                 let expand_match = self.shell.options().patsub_replacement;
 
-                let regex = expanded_pattern.to_regex(
+                let finder = expanded_pattern.finder(
                     matches!(match_kind, cash_parser::word::SubstringMatchKind::Prefix),
                     matches!(match_kind, cash_parser::word::SubstringMatchKind::Suffix),
                 )?;
 
                 transform_expansion(expanded_parameter, async |s| {
-                    Ok(Self::replace_substring(
+                    Self::replace_substring(
                         s.as_str(),
-                        &regex,
+                        &finder,
                         expanded_replacement.as_str(),
                         &match_kind,
                         expand_match,
-                    ))
+                    )
                 })
                 .await
             }
@@ -2646,35 +2646,45 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
     where
         F: Fn(&str) -> String,
     {
-        if let Some(pattern) = pattern {
-            if !pattern.is_empty() {
-                let regex = pattern.to_regex(false, false)?;
-                let result = regex
-                    .replace_all(s.as_ref(), |caps: &fancy_regex::Captures<'_, str>| {
-                        transform(&caps[0])
-                    });
-                Ok(result.into_owned())
-            } else {
-                Ok(transform(s))
+        // Each character is tested against the pattern, as in Bash; a match over several
+        // (`${x^^@(ab)}`) changed them.
+        if let Some(pattern) = pattern
+            && !pattern.is_empty()
+        {
+            let matcher = pattern.matcher()?;
+            let mut result = String::with_capacity(s.len());
+            let mut one = [0u8; 4];
+            for c in s.chars() {
+                let c = c.encode_utf8(&mut one);
+                if matcher.is_match(c)? {
+                    result.push_str(&transform(c));
+                } else {
+                    result.push_str(c);
+                }
             }
+            Ok(result)
         } else {
             Ok(transform(s))
         }
     }
 
+    /// `${x/pattern/replacement}` and its forms, on one value: at the leftmost place the
+    /// pattern matches, its longest match, as Bash finds it (see [`patterns::PatternFinder`]).
+    /// With `//` each match after it too; after an empty one the next character is kept
+    /// and the search goes on past it, and the end of a value that is not empty is not a
+    /// place to match, as in Bash. The regex's own replacement put one there: `abc` with
+    /// `${x//*(z)/_}` was `_a_b_c_`, Bash `_a_b_c`.
     fn replace_substring(
         s: &str,
-        regex: &fancy_regex::Regex,
+        finder: &patterns::PatternFinder,
         replacement: &str,
         match_kind: &SubstringMatchKind,
         expand_match: bool,
-    ) -> String {
+    ) -> Result<String, error::Error> {
         // The replacement is shell data, not fancy-regex replacement syntax: `$1`
         // must remain literal. Bash's patsub_replacement option substitutes only
         // unescaped ampersands with the entire match.
-        let render = |caps: &fancy_regex::Captures<'_, str>| {
-            let matched = caps.get(0).map_or("", |m| m.as_str());
-            let mut output = String::new();
+        let render = |matched: &str, output: &mut String| {
             let mut chars = replacement.chars();
             while let Some(ch) = chars.next() {
                 if ch == QUOTED_REPLACEMENT_AMPERSAND {
@@ -2690,19 +2700,43 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
                     output.push(ch);
                 }
             }
-            output
         };
-        match match_kind {
-            cash_parser::word::SubstringMatchKind::Prefix
-            | cash_parser::word::SubstringMatchKind::Suffix
-            | cash_parser::word::SubstringMatchKind::FirstOccurrence => {
-                regex.replace(s, render).into_owned()
-            }
+        let every = matches!(match_kind, cash_parser::word::SubstringMatchKind::Anywhere);
+        let to_end = matches!(match_kind, cash_parser::word::SubstringMatchKind::Suffix);
 
-            cash_parser::word::SubstringMatchKind::Anywhere => {
-                regex.replace_all(s, render).into_owned()
+        let mut output = String::with_capacity(s.len());
+        let mut copied = 0;
+        let mut from = 0;
+        while let Some((start, end)) = finder.find(s, from)? {
+            // At the end of the value only a pattern that starts with `*` matches, except
+            // for `/%`, and `//` does not look there once it has passed something.
+            if start == s.len()
+                && !to_end
+                && ((every && !s.is_empty()) || !finder.may_match_at_end())
+            {
+                break;
+            }
+            output.push_str(s.get(copied..start).unwrap_or_default());
+            render(s.get(start..end).unwrap_or_default(), &mut output);
+            copied = end;
+            from = end;
+            if end == start {
+                // An empty match: keep the next character and go on after it.
+                match s.get(start..).and_then(|rest| rest.chars().next()) {
+                    Some(next) => {
+                        output.push(next);
+                        copied = start + next.len_utf8();
+                        from = copied;
+                    }
+                    None => break,
+                }
+            }
+            if !every || from > s.len() {
+                break;
             }
         }
+        output.push_str(s.get(copied..).unwrap_or_default());
+        Ok(output)
     }
 
     async fn apply_transform_to(

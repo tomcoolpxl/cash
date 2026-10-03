@@ -69,7 +69,9 @@ mod environment_contract;
 mod error_jumps;
 // Expansions as Bash performs them.
 mod expansions;
+// Extended patterns, `!(…)` above all.
 mod extensionless_lookup;
+mod extglob;
 // find and xargs parity.
 mod find_xargs;
 mod finished_command_orphans;

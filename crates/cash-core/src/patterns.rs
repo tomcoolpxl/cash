@@ -1,10 +1,100 @@
 //! Shell patterns
 
+mod backtracking;
+
 use crate::{error, regex, sys, trace_categories};
 use std::{
     collections::{HashSet, VecDeque},
     path::{Path, PathBuf},
 };
+
+/// A pattern compiled to match a whole text: a regular expression, or for a pattern
+/// with `!(…)`, which no regular expression can express, the backtracking matcher.
+#[derive(Debug)]
+pub(crate) enum PatternMatcher {
+    Regex(fancy_regex::Regex),
+    Backtracking(backtracking::BacktrackingMatcher),
+}
+
+impl PatternMatcher {
+    /// Whether the whole of `text` matches.
+    pub(crate) fn is_match(&self, text: &str) -> Result<bool, error::Error> {
+        match self {
+            Self::Regex(regex) => Ok(regex.is_match(text)?),
+            Self::Backtracking(matcher) => matcher.is_match(text),
+        }
+    }
+}
+
+/// A pattern compiled to find where it matches in a text, as `${x/pattern/…}` does: at
+/// the leftmost place a match starts, the longest match, as in Bash. A regular
+/// expression takes the first alternative that matches, so `${x/@(a|ab)/X}` of `abc`
+/// was `Xbc` where Bash gives `Xc`.
+#[derive(Debug)]
+pub(crate) struct PatternFinder {
+    kind: FinderKind,
+    at_start: bool,
+    at_end: bool,
+    starts_with_star: bool,
+}
+
+#[derive(Debug)]
+enum FinderKind {
+    Regex {
+        regex: fancy_regex::Regex,
+        /// The pattern as an unanchored regular expression, for the longest end.
+        longest: String,
+        case_insensitive: bool,
+        multiline: bool,
+    },
+    Backtracking(backtracking::BacktrackingMatcher),
+}
+
+impl PatternFinder {
+    /// Whether a match may start at the end of the text, as Bash's `match_pattern_char`
+    /// decides for `${x/…}`, `${x//…}` and `${x/#…}`: only for a pattern that starts with
+    /// `*`. `${e/!(z)/_}` of an empty value is empty in Bash, `${e/*(z)/_}` is `_`.
+    pub(crate) const fn may_match_at_end(&self) -> bool {
+        self.starts_with_star
+    }
+
+    /// Where the pattern matches in `text` at or after `from`, a byte offset on a character
+    /// boundary.
+    pub(crate) fn find(
+        &self,
+        text: &str,
+        from: usize,
+    ) -> Result<Option<(usize, usize)>, error::Error> {
+        match &self.kind {
+            FinderKind::Regex {
+                regex,
+                longest,
+                case_insensitive,
+                multiline,
+            } => {
+                let Some(found) = regex.find_from_pos(text, from)? else {
+                    return Ok(None);
+                };
+                let end = if self.at_end {
+                    found.end()
+                } else {
+                    regex::longest_match_end(
+                        longest,
+                        *case_insensitive,
+                        *multiline,
+                        text,
+                        found.start(),
+                    )
+                    .map_or_else(|| found.end(), |longest| longest.max(found.end()))
+                };
+                Ok(Some((found.start(), end)))
+            }
+            FinderKind::Backtracking(matcher) => {
+                matcher.find(text, from, self.at_start, self.at_end)
+            }
+        }
+    }
+}
 
 /// Represents a piece of a shell pattern.
 #[derive(Clone, Debug)]
@@ -381,7 +471,7 @@ impl Pattern {
                     !dir_entry.file_name().to_string_lossy().starts_with('.') || allow_dot_files
                 };
 
-                let regex = subpattern.to_regex(true, true)?;
+                let regex = subpattern.matcher()?;
                 let matches_regex = |dir_entry: &std::fs::DirEntry| {
                     regex
                         .is_match(dir_entry.file_name().to_string_lossy().as_ref())
@@ -469,23 +559,7 @@ impl Pattern {
             regex_str.push('^');
         }
 
-        let mut current_pattern = String::new();
-        for piece in &self.pieces {
-            match piece {
-                PatternPiece::Pattern(s) => {
-                    current_pattern.push_str(s);
-                }
-                PatternPiece::Literal(s) => {
-                    for c in s.chars() {
-                        if crate::regex::regex_char_is_special(c) {
-                            current_pattern.push('\\');
-                        }
-                        current_pattern.push(c);
-                    }
-                }
-            }
-        }
-
+        let current_pattern = self.glob_text();
         let regex_piece =
             pattern_to_regex_str(current_pattern.as_str(), self.enable_extended_globbing)?;
         regex_str.push_str(regex_piece.as_str());
@@ -526,8 +600,73 @@ impl Pattern {
     ///
     /// * `value` - The string to check for a match.
     pub fn exactly_matches(&self, value: &str) -> Result<bool, error::Error> {
-        let re = self.to_regex(true, true)?;
-        Ok(re.is_match(value)?)
+        self.matcher()?.is_match(value)
+    }
+
+    /// The pattern as glob text: its pieces, a literal one with each special character
+    /// escaped.
+    fn glob_text(&self) -> String {
+        let mut text = String::new();
+        for piece in &self.pieces {
+            match piece {
+                PatternPiece::Pattern(s) => text.push_str(s),
+                PatternPiece::Literal(s) => {
+                    for c in s.chars() {
+                        if crate::regex::regex_char_is_special(c) {
+                            text.push('\\');
+                        }
+                        text.push(c);
+                    }
+                }
+            }
+        }
+        text
+    }
+
+    /// The backtracking matcher, if the pattern holds a `!(…)` (with extended globbing).
+    fn backtracking_matcher(
+        &self,
+    ) -> Result<Option<backtracking::BacktrackingMatcher>, error::Error> {
+        if !self.enable_extended_globbing {
+            return Ok(None);
+        }
+        backtracking::BacktrackingMatcher::for_pattern(
+            &self.glob_text(),
+            self.case_insensitive,
+            self.multiline,
+        )
+    }
+
+    /// The pattern compiled to match whole texts.
+    pub(crate) fn matcher(&self) -> Result<PatternMatcher, error::Error> {
+        Ok(match self.backtracking_matcher()? {
+            Some(matcher) => PatternMatcher::Backtracking(matcher),
+            None => PatternMatcher::Regex(self.to_regex(true, true)?),
+        })
+    }
+
+    /// The pattern compiled to find matches in a text, starting at its start only, or
+    /// ending at its end only, when those are asked for.
+    pub(crate) fn finder(
+        &self,
+        at_start: bool,
+        at_end: bool,
+    ) -> Result<PatternFinder, error::Error> {
+        let kind = match self.backtracking_matcher()? {
+            Some(matcher) => FinderKind::Backtracking(matcher),
+            None => FinderKind::Regex {
+                regex: self.to_regex(at_start, at_end)?,
+                longest: self.to_regex_str(false, false)?,
+                case_insensitive: self.case_insensitive,
+                multiline: self.multiline,
+            },
+        };
+        Ok(PatternFinder {
+            kind,
+            at_start,
+            at_end,
+            starts_with_star: self.glob_text().starts_with('*'),
+        })
     }
 }
 
@@ -559,7 +698,7 @@ pub(crate) fn remove_largest_matching_prefix<'a>(
     pattern: Option<&Pattern>,
 ) -> Result<&'a str, error::Error> {
     if let Some(pattern) = pattern {
-        let re = pattern.to_regex(true, true)?;
+        let re = pattern.matcher()?;
         let indices = s.char_indices().rev();
         let mut last_idx = s.len();
 
@@ -590,7 +729,12 @@ pub(crate) fn remove_smallest_matching_prefix<'a>(
     pattern: Option<&Pattern>,
 ) -> Result<&'a str, error::Error> {
     if let Some(pattern) = pattern {
-        let re = pattern.to_regex(true, true)?;
+        let re = pattern.matcher()?;
+        // The empty prefix is the smallest: `${f#*}` removes nothing, as in Bash. It was
+        // never tried, so `*` took the first character.
+        if re.is_match("")? {
+            return Ok(s);
+        }
         let mut indices = s.char_indices();
 
         #[allow(
@@ -619,7 +763,7 @@ pub(crate) fn remove_largest_matching_suffix<'a>(
     pattern: Option<&Pattern>,
 ) -> Result<&'a str, error::Error> {
     if let Some(pattern) = pattern {
-        let re = pattern.to_regex(true, true)?;
+        let re = pattern.matcher()?;
         #[allow(
             clippy::string_slice,
             reason = "because we get the indices from char_indices()"
@@ -645,7 +789,11 @@ pub(crate) fn remove_smallest_matching_suffix<'a>(
     pattern: Option<&Pattern>,
 ) -> Result<&'a str, error::Error> {
     if let Some(pattern) = pattern {
-        let re = pattern.to_regex(true, true)?;
+        let re = pattern.matcher()?;
+        // The empty suffix is the smallest: `${f%*}` removes nothing, as in Bash.
+        if re.is_match("")? {
+            return Ok(s);
+        }
         #[allow(
             clippy::string_slice,
             reason = "because we get the indices from char_indices()"

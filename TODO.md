@@ -26,7 +26,7 @@ for working through it.
   crashes, security and CI hardening (phase 8), 1.3.9 the shell's own working directory,
   environment, PATHEXT and umask (phase 9), 1.3.10 awk, sed and bc (phase 10), 1.3.11 pipelines, jobs and process
   substitution (phase 11), with the two parser bugs phase 11 found (`( ( … ) )` and
-  `--file=<(…)`), fixed while CI was put right.
+  `--file=<(…)`), fixed while CI was put right, 1.3.12 the language (phase 12).
 - An item says what was seen and what Bash does; a cause only where it was looked for.
   Longer notes on a thing that stays open belong in `open-issues.md`.
 
@@ -35,7 +35,7 @@ their work is in `main`; the sessions themselves are not needed any more. The or
 the grouping were chosen that day: the test suite first, so that every later phase can
 trust its runs, then by what a user notices most.
 
-Phases 1 to 11 are done. Phase 6 changed no code and had no release of its own.
+Phases 1 to 12 are done. Phase 6 changed no code and had no release of its own.
 
 Phases 8 to 14 are the code review of 2026-10-02. `REVIEW_REPORT.md` has the evidence
 and the reasons; the IDs (EXE-01, TXT-01, …) are its findings, and R1 to R11 its
@@ -53,17 +53,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 | 12 | 1.3.12 | Language |
 | 13 | 1.3.13 | Builtins and error output |
 | 14 | 1.3.14 | Tests, records and leftovers |
-
----
-
-## Phase 12. Language (R7)
-
-### 12.4 extglob `!(…)` with alternatives
-
-Last in the phase, the largest single change: `echo !(*.tar|*.tar.gz)` lists
-`x.tar.gz`; `[[ ab == !(a|ab) ]]` is true. The atomic group in
-`cash-parser/src/pattern.rs:152` cannot be patched right; a backtracking matcher for
-extglob patterns. LANG-01.
 
 ---
 

@@ -141,14 +141,32 @@ impl Regex {
 /// The end of the longest match of `pattern` that starts at `start`, by a lazy DFA that
 /// reports every match rather than the first alternative's. `None` when the pattern is
 /// beyond it (a backreference, a Unicode word boundary in non-ASCII text).
-fn longest_match_end(
+pub(crate) fn longest_match_end(
     pattern: &str,
     case_insensitive: bool,
     multiline: bool,
     haystack: &str,
     start: usize,
 ) -> Option<usize> {
-    use regex_automata::{Anchored, Input, MatchKind, hybrid::dfa::DFA, util::syntax};
+    use regex_automata::{Anchored, Input};
+
+    let dfa = every_match_dfa(pattern, case_insensitive, multiline)?;
+    let mut cache = dfa.create_cache();
+    let input = Input::new(haystack).range(start..).anchored(Anchored::Yes);
+    dfa.try_search_fwd(&mut cache, &input)
+        .ok()
+        .flatten()
+        .map(|found| found.offset())
+}
+
+/// A lazy DFA for `pattern` that reports every match, not the first alternative's; the
+/// longest match is its last. `None` when the pattern is beyond it.
+pub(crate) fn every_match_dfa(
+    pattern: &str,
+    case_insensitive: bool,
+    multiline: bool,
+) -> Option<regex_automata::hybrid::dfa::DFA> {
+    use regex_automata::{MatchKind, hybrid::dfa::DFA, util::syntax};
 
     let key = (pattern.to_owned(), case_insensitive, multiline);
     let cached = LONGEST_MATCH_CACHE.with(|cache| {
@@ -157,7 +175,7 @@ fn longest_match_end(
             .as_mut()
             .and_then(|c| c.cache_get(&key).cloned())
     });
-    let dfa = if let Some(dfa) = cached {
+    if let Some(dfa) = cached {
         dfa
     } else {
         let prepared = add_missing_escape_chars_to_regex(pattern);
@@ -176,13 +194,7 @@ fn longest_match_end(
             }
         });
         dfa
-    }?;
-    let mut cache = dfa.create_cache();
-    let input = Input::new(haystack).range(start..).anchored(Anchored::Yes);
-    dfa.try_search_fwd(&mut cache, &input)
-        .ok()
-        .flatten()
-        .map(|found| found.offset())
+    }
 }
 
 pub(crate) fn compile_regex(
