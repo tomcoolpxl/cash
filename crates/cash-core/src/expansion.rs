@@ -1647,8 +1647,16 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
                     ) => Ok(expanded_parameter),
                     _ => {
                         let result = self.basic_expand_to_str(error_message).await?;
-                        let err: error::Error =
-                            error::ErrorKind::CheckedExpansionError(result).into();
+                        let message = if result.is_empty() {
+                            "parameter null or not set"
+                        } else {
+                            result.as_str()
+                        };
+                        let err: error::Error = error::ErrorKind::CheckedExpansionError(format!(
+                            "{}: {message}",
+                            name_for_error(&parameter, false)
+                        ))
+                        .into();
 
                         // Expansion errors are fatal per POSIX spec
                         Err(err.into_fatal())
@@ -2221,7 +2229,12 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
                 concatenate: _,
             }
             | cash_parser::word::Parameter::Special(_) => {
-                return Err(error::ErrorKind::CannotAssignToSpecialParameter.into());
+                return Err(
+                    error::ErrorKind::CannotAssignToSpecialParameter(name_for_error(
+                        parameter, true,
+                    ))
+                    .into(),
+                );
             }
         };
 
@@ -2311,7 +2324,7 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
             Ok(Expansion::undefined())
         } else {
             let err: error::Error =
-                error::ErrorKind::ExpandingUnsetVariable(parameter.to_string()).into();
+                error::ErrorKind::ExpandingUnsetVariable(name_for_error(parameter, true)).into();
             Err(err.into_fatal())
         }
     }
@@ -2783,6 +2796,23 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
             | cash_parser::word::ParameterTransformOp::ToAttributeFlags => {
                 unreachable!("covered in caller")
             }
+        }
+    }
+}
+
+/// `parameter` as Bash names it in an error: `u`, `a[3]`, `a[@]`; a positional or
+/// special one with its `$` when `dollar` (`$1: unbound variable`), without it otherwise
+/// (`1: parameter null or not set`).
+fn name_for_error(parameter: &cash_parser::word::Parameter, dollar: bool) -> String {
+    use cash_parser::word::Parameter;
+    let sigil = if dollar { "$" } else { "" };
+    match parameter {
+        Parameter::Positional(number) => format!("{sigil}{number}"),
+        Parameter::Special(special) => format!("{sigil}{special}"),
+        Parameter::Named(name) => name.clone(),
+        Parameter::NamedWithIndex { name, index } => format!("{name}[{index}]"),
+        Parameter::NamedWithAllIndices { name, concatenate } => {
+            format!("{name}[{}]", if *concatenate { '*' } else { '@' })
         }
     }
 }

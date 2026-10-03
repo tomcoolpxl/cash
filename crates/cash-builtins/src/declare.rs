@@ -687,7 +687,10 @@ impl DeclareCommand {
                     }
                     ast::AssignmentName::ArrayElementName(var_name, index) => {
                         if matches!(assignment.value, ast::AssignmentValue::Array(_)) {
-                            return Err(ErrorKind::AssigningListToArrayMember.into());
+                            return Err(ErrorKind::AssigningListToArrayMember(format!(
+                                "{var_name}[{index}]"
+                            ))
+                            .into());
                         }
 
                         name = var_name.to_owned();

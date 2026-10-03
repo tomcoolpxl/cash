@@ -842,7 +842,7 @@ fn conpty_abbr_expands_as_the_command_word() {
     session.send("abbr -e pj\r").unwrap();
     session.send("pj D E\r").unwrap();
     session
-        .expect("command not found: pj", Duration::from_secs(10))
+        .expect("pj: command not found", Duration::from_secs(10))
         .expect("an erased abbreviation still expanded");
 
     session.send("exit 0\r").unwrap();

@@ -25,9 +25,9 @@ pub enum ErrorKind {
     #[error("cannot expand tilde expression with HOME not set")]
     TildeWithoutValidHome,
 
-    /// An attempt was made to assign a list to an array member
-    #[error("cannot assign list to array member")]
-    AssigningListToArrayMember,
+    /// An attempt was made to assign a list to an array member, named as `a[0]`.
+    #[error("{0}: cannot assign list to array member")]
+    AssigningListToArrayMember(String),
 
     /// An attempt was made to convert an associative array to an indexed array.
     #[error("cannot convert associative array to indexed array")]
@@ -38,7 +38,7 @@ pub enum ErrorKind {
     ConvertingIndexedArrayToAssociativeArray,
 
     /// An error occurred while sourcing the indicated script file.
-    #[error("failed to source file: {0}")]
+    #[error("{}: {}", .0.display(), os_error_text(.1))]
     FailedSourcingFile(PathBuf, #[source] std::io::Error),
 
     /// A script file given to the shell looks like a binary file.
@@ -57,12 +57,12 @@ pub enum ErrorKind {
     #[error("failed to send signal to process")]
     FailedToSendSignal,
 
-    /// An attempt was made to assign a value to a special parameter.
-    #[error("cannot assign in this way")]
-    CannotAssignToSpecialParameter,
+    /// An attempt was made to assign a value to a special parameter, named as `$1`.
+    #[error("{0}: cannot assign in this way")]
+    CannotAssignToSpecialParameter(String),
 
     /// Checked expansion error.
-    #[error("expansion error: {0}")]
+    #[error("{0}")]
     CheckedExpansionError(String),
 
     /// A reference was made to an unknown shell function.
@@ -70,7 +70,7 @@ pub enum ErrorKind {
     FunctionNotFound(String),
 
     /// Command was not found.
-    #[error("command not found: {0}")]
+    #[error("{}", command_not_found(.0))]
     CommandNotFound(String),
 
     /// Not a builtin.
@@ -82,7 +82,7 @@ pub enum ErrorKind {
     WorkingDirMissing(PathBuf),
 
     /// Failed to execute command.
-    #[error("failed to execute command '{0}': {1}")]
+    #[error("{}: {}", .0, os_error_text(.1))]
     FailedToExecuteCommand(String, #[source] std::io::Error),
 
     /// History item was not found.
@@ -116,7 +116,7 @@ pub enum ErrorKind {
     },
 
     /// The given path is not a directory.
-    #[error("not a directory: {0}")]
+    #[error("{}: Not a directory", .0.display())]
     NotADirectory(PathBuf),
 
     /// The given path is a directory.
@@ -136,7 +136,7 @@ pub enum ErrorKind {
     InvalidRedirection,
 
     /// An error occurred while redirecting input or output with the given file.
-    #[error("failed to redirect to {0}: {1}")]
+    #[error("{0}: {1}")]
     RedirectionFailure(String, String),
 
     /// An error occurred evaluating an arithmetic expression.
@@ -168,9 +168,10 @@ pub enum ErrorKind {
     #[error("failed to decode utf-8")]
     Utf8Error(#[from] std::str::Utf8Error),
 
-    /// An attempt was made to modify a readonly variable.
-    #[error("cannot mutate readonly variable")]
-    ReadonlyVariable,
+    /// An attempt was made to modify a readonly variable, named where the error is
+    /// known to be about one ([`Error::of_variable`]).
+    #[error("{}", if .0.is_empty() { "readonly variable".to_owned() } else { format!("{}: readonly variable", .0) })]
+    ReadonlyVariable(String),
 
     /// An assignment through a chain of name references that comes back to itself.
     #[error("warning: {0}: circular name reference")]
@@ -243,8 +244,12 @@ pub enum ErrorKind {
     PlatformError(#[from] sys::PlatformError),
 
     /// An invalid umask was provided.
-    #[error("invalid umask value")]
-    InvalidUmask,
+    #[error("{0}")]
+    InvalidUmask(String),
+
+    /// `unset` of a readonly variable.
+    #[error("{0}: cannot unset: readonly variable")]
+    CannotUnsetReadonly(String),
 
     /// The given open file cannot be read from.
     #[error("cannot read from {0}")]
@@ -255,7 +260,7 @@ pub enum ErrorKind {
     OpenFileNotWritable(&'static str),
 
     /// Bad file descriptor.
-    #[error("bad file descriptor: {0}")]
+    #[error("{0}: Bad file descriptor")]
     BadFileDescriptor(ShellFd),
 
     /// Printf failure
@@ -295,7 +300,7 @@ pub enum ErrorKind {
     UnhandledKeyCode(Vec<u8>),
 
     /// An error occurred in a built-in command.
-    #[error("{1}: {0}")]
+    #[error("{}", if .0.names_its_builtin() { format!("{}: {}", .1, .0) } else { .0.to_string() })]
     BuiltinError(Box<dyn BuiltinError>, String),
 
     /// Operation not supported on this platform.
@@ -306,8 +311,8 @@ pub enum ErrorKind {
     #[error("command history is not enabled in this shell")]
     HistoryNotEnabled,
 
-    /// Expanding an unset variable.
-    #[error("expanding unset variable: {0}")]
+    /// Expanding an unset variable, named as Bash names it (`u`, `a[3]`, `$1`).
+    #[error("{0}: unbound variable")]
     ExpandingUnsetVariable(String),
 
     /// An internal error occurred.
@@ -377,9 +382,20 @@ pub trait BuiltinError: std::error::Error + ConvertibleToExitCode + Send + Sync 
     fn is_interrupt(&self) -> bool {
         false
     }
+
+    /// Whether the builtin's name goes before the message, as Bash's `builtin_error`
+    /// puts it (`cd: /x: No such file or directory`). A file `.` cannot find is
+    /// named alone, as Bash's `file_error` does.
+    fn names_its_builtin(&self) -> bool {
+        true
+    }
 }
 
 impl BuiltinError for Error {
+    fn names_its_builtin(&self) -> bool {
+        !matches!(self.kind, ErrorKind::FailedSourcingFile(..))
+    }
+
     fn as_io_error(&self) -> Option<&std::io::Error> {
         self.as_io_error()
     }
@@ -500,7 +516,7 @@ impl Error {
     pub const fn jumps_to_top_level(&self) -> bool {
         matches!(
             self.kind,
-            ErrorKind::ReadonlyVariable
+            ErrorKind::ReadonlyVariable(_)
                 | ErrorKind::CircularNameReference(_)
                 | ErrorKind::EvalError(_)
                 | ErrorKind::MaxFunctionCallDepthExceeded(..)
@@ -607,6 +623,30 @@ pub fn os_error_text(error: &std::io::Error) -> String {
         }
     };
     text.to_owned()
+}
+
+impl Error {
+    /// This error with the variable `name` it is about, where it is one that names a
+    /// variable and does not yet: `r: readonly variable`.
+    #[must_use]
+    pub fn of_variable(mut self, name: &str) -> Self {
+        if let ErrorKind::ReadonlyVariable(named) = &mut self.kind
+            && named.is_empty()
+        {
+            name.clone_into(named);
+        }
+        self
+    }
+}
+
+/// Bash's words for a command it cannot find: `x: command not found`, or for a path,
+/// `./x: No such file or directory`.
+fn command_not_found(name: &str) -> String {
+    if name.contains(['/', '\\']) {
+        format!("{name}: No such file or directory")
+    } else {
+        format!("{name}: command not found")
+    }
 }
 
 /// Convenience function for returning an error for unimplemented functionality.

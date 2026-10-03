@@ -61,12 +61,10 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 ### 13.4 Error output: colour, prefixes, `--help`
 
 The shell's own errors now carry Bash's `script.sh: line 3: ` (`Shell::error_prefix`),
-coloured only on a terminal (`Shell::colours`). Left: their messages in Bash's words
-(`command not found: x` is `x: command not found`, `cannot mutate readonly variable` is
-`r: readonly variable`, `expanding unset variable: ${u}` is `u: unbound variable`,
-`expansion error: must be set` is `x: must be set`); the builtins' own messages
-(`cd: …`) without the prefix; clap's block for a bad option; `--help` on stdout or
-stderr, exit 0 or 2, by builtin. XC-8, BIN-04, BI-16; decided, below.
+coloured only on a terminal (`Shell::colours`), in Bash's words. Left: the builtins' own
+messages (`cd: …`, written straight to stderr) without the prefix; clap's block for a bad
+option; `--help` on stdout or stderr, exit 0 or 2, by builtin. XC-8, BIN-04, BI-16;
+decided, below.
 
 An array index before the start (`a=(1 2)`): `${a[-3]}` expands to nothing in both
 shells, but Bash also says `a: bad array subscript`, and cash says nothing; `a[-3]=x`
@@ -84,9 +82,13 @@ evaluation error: division by zero` and `failed to parse expression: 1 +` (and `
 `08: value too great for base (error token is "08")`, and `read: 1/0: …` from `read`.
 Found in phase 12.
 
-Two errors cash does not report at all: `echo "${x!@#}"` prints `${x!@#}` where Bash says
-`${x!@#}: bad substitution` and fails, and `[ 1 -eq x ]` is quietly false where Bash
-says `[: x: integer expected` and returns 2. Found in 1.3.12 surveying error output.
+Errors cash does not report at all: `echo "${x!@#}"` prints `${x!@#}` where Bash says
+`${x!@#}: bad substitution` and fails, and `"${a[}"` prints itself where Bash says
+``bad substitution: no closing `}' in "${a[}"``; `[ 1 -eq x ]` is quietly false where
+Bash says `[: x: integer expected` and returns 2; `declare -A a; declare -a a` (and the
+other way round) changes nothing and says nothing, where Bash says `declare: a: cannot
+convert associative to indexed array` and returns 1. Found in 1.3.12 surveying error
+output.
 
 A syntax error is now Bash's two lines, near the token Bash names. Left: `-c 'echo ('`
 is `unexpected end of file` on line 2 where Bash says near `newline` on line 1, and the

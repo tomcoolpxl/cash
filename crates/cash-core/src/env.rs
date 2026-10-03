@@ -458,7 +458,7 @@ impl ShellEnvironment {
         name: &str,
     ) -> Result<Option<ShellVariable>, error::Error> {
         match map.get(name).map(|v| v.is_readonly()) {
-            Some(true) => Err(error::ErrorKind::ReadonlyVariable.into()),
+            Some(true) => Err(error::ErrorKind::ReadonlyVariable(name.to_owned()).into()),
             Some(false) => Ok(map.unset(name)),
             None => Ok(None),
         }
@@ -606,7 +606,7 @@ impl ShellEnvironment {
 
         let auto_export = self.export_variables_on_modification;
         if let Some(var) = self.get_mut_using_policy_raw(&name, lookup_policy) {
-            var.assign(value, false)?;
+            var.assign(value, false).map_err(|e| e.of_variable(&name))?;
             if auto_export {
                 var.export();
             }
@@ -651,7 +651,8 @@ impl ShellEnvironment {
         let name = name.into_owned();
 
         if let Some(var) = self.get_mut_using_policy_raw(&name, lookup_policy) {
-            var.assign_at_index(index, value, false)?;
+            var.assign_at_index(index, value, false)
+                .map_err(|e| e.of_variable(&name))?;
             updater(var)
         } else {
             let mut var = ShellVariable::new(ShellValue::Unset(ShellValueUnsetType::Untyped));

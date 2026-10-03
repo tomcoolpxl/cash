@@ -1450,6 +1450,12 @@ pub(crate) fn execute_external_command(
                     Err(error::ErrorKind::CommandNotFound(context.command_name).into())
                 }
             } else {
+                // Windows refuses to start a folder as access denied; Bash says what it is.
+                let spawn_err = if Path::new(executable_path).is_dir() {
+                    std::io::Error::from(std::io::ErrorKind::IsADirectory)
+                } else {
+                    spawn_err
+                };
                 Err(
                     error::ErrorKind::FailedToExecuteCommand(context.command_name, spawn_err)
                         .into(),

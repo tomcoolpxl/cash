@@ -8,8 +8,9 @@
 #![allow(
     clippy::tests_outside_test_module,
     clippy::expect_used,
+    clippy::literal_string_with_formatting_args,
     reason = "an integration test is outside a test module by construction, and a \
-              failed set-up should abort it loudly"
+              failed set-up should abort it loudly; `${x:?}` is shell, not a format"
 )]
 
 use crate::common::{Scratch, cash_command, output_of, run, run_in};
@@ -45,7 +46,7 @@ fn an_error_names_the_file_and_line_it_came_from() {
     let out = run_in(scratch.path(), "true\nnosuch-in-c");
     assert!(
         out.stderr
-            .ends_with(": line 2: command not found: nosuch-in-c"),
+            .ends_with(": line 2: nosuch-in-c: command not found"),
         "{}",
         out.stderr
     );
@@ -97,4 +98,52 @@ fn a_syntax_error_is_reported_on_two_lines() {
         "{}",
         out.stderr
     );
+}
+
+#[test]
+fn errors_are_worded_as_bash_words_them() {
+    // Each as Git Bash 5.3 says it, after `bash: line 1: `.
+    let scratch = Scratch::new("wording");
+    std::fs::create_dir_all(scratch.path().join("folder")).expect("mkdir");
+    let cases = [
+        ("nosuch", "nosuch: command not found"),
+        (
+            "./no-such-script",
+            "./no-such-script: No such file or directory",
+        ),
+        ("./folder", "./folder: Is a directory"),
+        ("readonly r=1; r=2", "r: readonly variable"),
+        (
+            "readonly r=1; unset r",
+            "unset: r: cannot unset: readonly variable",
+        ),
+        ("set -u; echo \"$u\"", "u: unbound variable"),
+        ("set -u; echo \"$1\"", "$1: unbound variable"),
+        (": \"${x:?must be set}\"", "x: must be set"),
+        (": \"${x:?}\"", "x: parameter null or not set"),
+        (
+            ". ./no-such-file",
+            "./no-such-file: No such file or directory",
+        ),
+        (
+            "echo hi > /no/such/dir/f",
+            "/no/such/dir/f: No such file or directory",
+        ),
+        ("exec 3<&9", "9: Bad file descriptor"),
+        (
+            "a=(1); a[0]=(2)",
+            "a[0]: cannot assign list to array member",
+        ),
+        (": ${1:=x}", "$1: cannot assign in this way"),
+        ("umask 999", "umask: 999: octal number out of range"),
+        ("umask u=q", "umask: `q': invalid symbolic mode character"),
+    ];
+    for (script, expected) in cases {
+        let out = run_in(scratch.path(), script);
+        assert!(
+            out.stderr.ends_with(&format!("line 1: {expected}")),
+            "{script}: {:?}",
+            out.stderr
+        );
+    }
 }

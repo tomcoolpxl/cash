@@ -252,7 +252,7 @@ exec 0<&-; read -r line < /dev/stdin; echo "closed rc=$?""#,
     );
     assert_eq!(
         left.stderr
-            .matches("failed to redirect to /dev/fd/9: No such file or directory")
+            .matches(": /dev/fd/9: No such file or directory")
             .count(),
         4,
         "{}",
@@ -260,7 +260,7 @@ exec 0<&-; read -r line < /dev/stdin; echo "closed rc=$?""#,
     );
     assert!(
         left.stderr
-            .contains("failed to redirect to /dev/stdin: No such file or directory"),
+            .contains(": /dev/stdin: No such file or directory"),
         "{}",
         left.stderr
     );

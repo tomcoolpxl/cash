@@ -25,8 +25,10 @@ impl builtins::Command for UmaskCommand {
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<cash_core::ExecutionResult, Self::Error> {
         if let Some(mode) = &self.mode {
-            if mode.starts_with(|c: char| c.is_digit(8)) {
-                let parsed = cash_core::int_utils::parse(mode.as_str(), 8)?;
+            if mode.starts_with(|c: char| c.is_ascii_digit()) {
+                let parsed = cash_core::int_utils::parse(mode.as_str(), 8).map_err(|_| {
+                    cash_core::ErrorKind::InvalidUmask(format!("{mode}: octal number out of range"))
+                })?;
                 context.shell.set_umask(parsed);
             } else {
                 let parsed = parse_symbolic_umask(mode, context.shell.umask())?;
@@ -93,9 +95,9 @@ fn parse_symbolic_umask(mode: &str, current_mask: u32) -> Result<u32, cash_core:
         }
 
         loop {
-            let operation = *bytes.get(index).ok_or(cash_core::ErrorKind::InvalidUmask)?;
+            let operation = bytes.get(index).copied().unwrap_or(0);
             if !matches!(operation, b'+' | b'-' | b'=') {
-                return Err(cash_core::ErrorKind::InvalidUmask.into());
+                return Err(invalid_mode(operation, "operator"));
             }
             index += 1;
 
@@ -145,12 +147,22 @@ fn parse_symbolic_umask(mode: &str, current_mask: u32) -> Result<u32, cash_core:
                     break;
                 }
                 Some(b'+' | b'-' | b'=') => {}
-                Some(_) => return Err(cash_core::ErrorKind::InvalidUmask.into()),
+                Some(&other) => return Err(invalid_mode(other, "character")),
             }
         }
     }
 
-    Err(cash_core::ErrorKind::InvalidUmask.into())
+    Err(invalid_mode(0, "operator"))
+}
+
+/// Bash's complaint about a symbolic mode, naming the character it stopped at in quotes
+/// (`q` in `u=q`). The end of the mode is a NUL between them, as Bash prints it.
+fn invalid_mode(byte: u8, what: &str) -> cash_core::Error {
+    cash_core::ErrorKind::InvalidUmask(format!(
+        "`{}': invalid symbolic mode {what}",
+        char::from(byte)
+    ))
+    .into()
 }
 
 const fn copy_permission_class(bits: u32, shift: u32) -> u32 {

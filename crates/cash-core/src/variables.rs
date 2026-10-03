@@ -108,7 +108,7 @@ impl ShellVariable {
     /// Marks the variable as not read-only.
     pub fn unset_readonly(&mut self) -> Result<&mut Self, error::Error> {
         if self.readonly {
-            return Err(error::ErrorKind::ReadonlyVariable.into());
+            return Err(error::ErrorKind::ReadonlyVariable(String::new()).into());
         }
 
         self.readonly = false;
@@ -254,7 +254,7 @@ impl ShellVariable {
     #[expect(clippy::too_many_lines)]
     pub fn assign(&mut self, value: ShellValueLiteral, append: bool) -> Result<(), error::Error> {
         if self.is_readonly() {
-            return Err(error::ErrorKind::ReadonlyVariable.into());
+            return Err(error::ErrorKind::ReadonlyVariable(String::new()).into());
         }
 
         let value = self.convert_value_literal_for_assignment(value);

@@ -814,7 +814,7 @@ echo both &> /dev/tty; echo "both rc=$?""#,
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert_eq!(
         stderr
-            .matches("failed to redirect to /dev/tty: No such device or address")
+            .matches(": /dev/tty: No such device or address")
             .count(),
         3,
         "{stderr}"

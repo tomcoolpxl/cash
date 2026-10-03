@@ -1825,7 +1825,9 @@ impl<SE: extensions::ShellExtensions> ExecuteInPipeline<SE> for ast::SimpleComma
                 CommandPrefixOrSuffixItem::IoRedirect(redirect) => {
                     if let Err(e) = setup_redirect(&mut context.shell, &mut params, redirect).await
                     {
-                        writeln!(params.stderr(&context.shell), "error: {e}")?;
+                        let _ = context
+                            .shell
+                            .display_error(&mut params.stderr(&context.shell), &e);
                         return Ok(ExecutionResult::general_error().into());
                     }
                 }
@@ -2363,10 +2365,15 @@ async fn apply_assignment(
             if let Some(array_index) = array_index {
                 match new_value {
                     ShellValueLiteral::Scalar(s) => {
-                        existing_value.assign_at_index(array_index, s, assignment.append)?;
+                        existing_value
+                            .assign_at_index(array_index, s, assignment.append)
+                            .map_err(|e| e.of_variable(variable_name))?;
                     }
                     ShellValueLiteral::Array(_) => {
-                        return error::unimp("replacing an array item with an array");
+                        return Err(error::ErrorKind::AssigningListToArrayMember(format!(
+                            "{variable_name}[{array_index}]"
+                        ))
+                        .into());
                     }
                 }
             } else {
@@ -2377,7 +2384,9 @@ async fn apply_assignment(
                     export = true;
                 }
 
-                existing_value.assign(new_value, assignment.append)?;
+                existing_value
+                    .assign(new_value, assignment.append)
+                    .map_err(|e| e.of_variable(variable_name))?;
             }
 
             if export {
@@ -2506,8 +2515,8 @@ pub(crate) async fn setup_redirect(
                         .open_file(&options, access, &expanded_file_path, params)
                         .map_err(|err| {
                             error::ErrorKind::RedirectionFailure(
-                                redirect_target_name(&written_file_path, &expanded_file_path),
-                                err.to_string(),
+                                written_file_path.clone(),
+                                error::os_error_text(&err),
                             )
                         })?;
 
@@ -2755,10 +2764,7 @@ fn setup_redirect_output_and_error_to(
             params,
         )
         .map_err(|err| {
-            error::ErrorKind::RedirectionFailure(
-                redirect_target_name(file_path, &abs_file_path),
-                err.to_string(),
-            )
+            error::ErrorKind::RedirectionFailure(file_path.to_owned(), error::os_error_text(&err))
         })?;
 
     let stderr_file = stdout_file.clone();
@@ -2767,18 +2773,6 @@ fn setup_redirect_output_and_error_to(
     params.open_files.set_fd(OpenFiles::STDERR_FD, stderr_file);
 
     Ok(())
-}
-
-/// The name a redirection's target goes by when it cannot be opened: the path it was
-/// resolved to, or for a device or a descriptor (`/dev/fd/9`) the name as it was written.
-/// `/dev/tty` resolves to `C:/dev/tty` on its way to being opened, and no such file was
-/// ever looked for.
-fn redirect_target_name(written: &str, resolved: &Path) -> String {
-    if sys::fs::is_special_file(resolved) || sys::fs::named_descriptor(resolved).is_some() {
-        written.to_owned()
-    } else {
-        resolved.to_string_lossy().to_string()
-    }
 }
 
 /// What a redirection of the given kind opens its file to do.

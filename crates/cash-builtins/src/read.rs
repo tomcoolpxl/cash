@@ -363,7 +363,7 @@ async fn assign_read_value(
         cash_parser::word::Parameter::Positional(_)
         | cash_parser::word::Parameter::Special(_)
         | cash_parser::word::Parameter::NamedWithAllIndices { .. } => {
-            Err(ErrorKind::CannotAssignToSpecialParameter.into())
+            Err(ErrorKind::CannotAssignToSpecialParameter(target.to_owned()).into())
         }
     }
 }

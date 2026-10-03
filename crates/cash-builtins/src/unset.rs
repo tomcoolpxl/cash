@@ -1,6 +1,6 @@
 use clap::Parser;
 
-use cash_core::{ExecutionResult, Shell, builtins};
+use cash_core::{ErrorKind, ExecutionResult, Shell, builtins};
 
 /// Unset a variable.
 #[derive(Parser)]
@@ -53,6 +53,7 @@ impl builtins::Command for UnsetCommand {
         }
 
         let unspecified = self.name_interpretation.unspecified();
+        let mut failed = false;
 
         #[expect(clippy::needless_continue)]
         for name in &self.names {
@@ -66,7 +67,25 @@ impl builtins::Command for UnsetCommand {
                         cash_parser::word::Parameter::Positional(_) => continue,
                         cash_parser::word::Parameter::Special(_) => continue,
                         cash_parser::word::Parameter::Named(name) => {
-                            context.shell.env_mut().unset(name.as_str())?.is_some()
+                            match context.shell.env_mut().unset(name.as_str()) {
+                                Ok(unset) => unset.is_some(),
+                                // Said, and the rest are unset, as in Bash.
+                                Err(e) if matches!(e.kind(), ErrorKind::ReadonlyVariable(_)) => {
+                                    let refused = cash_core::Error::from(ErrorKind::BuiltinError(
+                                        Box::new(cash_core::Error::from(
+                                            ErrorKind::CannotUnsetReadonly(name),
+                                        )),
+                                        context.command_name.clone(),
+                                    ));
+                                    let _ = context.shell.display_error(
+                                        &mut context.params.stderr(context.shell),
+                                        &refused,
+                                    );
+                                    failed = true;
+                                    continue;
+                                }
+                                Err(e) => return Err(e),
+                            }
                         }
                         cash_parser::word::Parameter::NamedWithIndex { name, index } => {
                             unset_array_index(
@@ -100,6 +119,9 @@ impl builtins::Command for UnsetCommand {
             }
         }
 
+        if failed {
+            return Ok(ExecutionResult::general_error());
+        }
         Ok(ExecutionResult::success())
     }
 }

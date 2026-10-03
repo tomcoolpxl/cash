@@ -320,7 +320,7 @@ mod tests {
             let result = init(&mut shell, &hooks_enabled());
             assert!(
                 matches!(&result, Err(ShellError::ShellError(e))
-                    if matches!(e.kind(), cash_core::ErrorKind::ReadonlyVariable)),
+                    if matches!(e.kind(), cash_core::ErrorKind::ReadonlyVariable(_))),
                 "readonly '{name}' should have failed initialization as a readonly \
                  violation; got: {result:?}"
             );
