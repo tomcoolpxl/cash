@@ -106,3 +106,20 @@ fn sed_in_place_replaces_a_file_in_one_move_and_keeps_its_attributes() {
         .collect();
     assert!(leftovers.is_empty(), "left behind: {leftovers:?}");
 }
+
+#[test]
+fn sed_reads_utf8_when_no_locale_is_set() {
+    // Without LANG, sed was in byte mode and split an accented letter in two, though awk
+    // and the console are UTF-8 and Git Bash sets LANG from the Windows locale; a locale
+    // naming another character set was a hard error (REVIEW_REPORT.md TXT-17).
+    let mut command = crate::common::cash_command();
+    for name in ["LANG", "LC_ALL", "LC_CTYPE"] {
+        command.env_remove(name);
+    }
+    let out = crate::common::output_of(command.args([
+        "-c",
+        "echo café | sed 's/.$/E/'; LANG=en_US sed 's/a/b/' <<< a; \
+         echo é | LC_ALL=C sed 's/./X/' | wc -c",
+    ]));
+    assert_eq!(out.stdout, "cafE\nb\n3", "{}", out.stderr);
+}

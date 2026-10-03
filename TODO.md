@@ -58,7 +58,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 10.2 awk and sed bugs that break ordinary scripts
 
-- TXT-17, sed locale, in the report, §4.6.
 - awk stops at 65,535 fields with "too many fields" (`Record::MAX_FIELDS`, a `u16`
   field index); gawk splits a 4.6 MB paragraph of 800,000 words. Found while measuring
   TXT-16.

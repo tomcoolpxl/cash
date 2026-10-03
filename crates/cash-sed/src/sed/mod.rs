@@ -238,22 +238,16 @@ fn get_scripts_files(matches: &ArgMatches) -> UResult<(Vec<ScriptValue>, Vec<Pat
 
 /// Return the character interpretation mode implied by the process locale.
 ///
-/// The mode is determined from the first non-empty of LC_ALL, LC_CTYPE, and
-/// LANG. The C and POSIX locales select byte mode. UTF-8 locales (including
-/// C.UTF-8) select UTF-8 mode. All other locales result in an error.
-pub fn character_mode_for_locale(locale: &str) -> UResult<CharacterMode> {
-    if locale == "C" || locale == "POSIX" {
-        Ok(CharacterMode::Byte)
-    } else if locale.eq_ignore_ascii_case("C.UTF-8")
-        || locale.to_ascii_lowercase().ends_with(".utf-8")
-        || locale.to_ascii_lowercase().ends_with(".utf8")
-    {
-        Ok(CharacterMode::Utf8)
+/// The locale is the first non-empty of LC_ALL, LC_CTYPE, and LANG. A UTF-8 locale
+/// (including C.UTF-8) selects UTF-8 mode; any other, C and POSIX included, is a
+/// single-byte character set to GNU sed, which is byte mode. A locale naming another
+/// character set, such as `en_US`, was a hard error (`REVIEW_REPORT.md` TXT-17).
+pub fn character_mode_for_locale(locale: &str) -> CharacterMode {
+    let locale = locale.to_ascii_lowercase();
+    if locale.ends_with(".utf-8") || locale.ends_with(".utf8") {
+        CharacterMode::Utf8
     } else {
-        Err(USimpleError::new(
-            1,
-            format!("unsupported locale: {locale}"),
-        ))
+        CharacterMode::Byte
     }
 }
 
@@ -271,8 +265,10 @@ fn build_context(matches: &ArgMatches) -> UResult<ProcessingContext> {
             let value = env::var(name).ok()?;
             (!value.is_empty()).then_some(value)
         })
-        // Same default as GNU sed
-        .unwrap_or_else(|| "C".to_string());
+        // UTF-8 when no locale is set, unlike GNU sed's C: the console is UTF-8 (D41),
+        // awk reads UTF-8, and Git Bash sets LANG from the Windows locale, en_US.UTF-8
+        // and the like. Byte mode split every accented letter (`REVIEW_REPORT.md` TXT-17).
+        .unwrap_or_else(|| "C.UTF-8".to_string());
 
     Ok(ProcessingContext {
         // CLI arguments
@@ -296,7 +292,7 @@ fn build_context(matches: &ArgMatches) -> UResult<ProcessingContext> {
         cr_in_script: std::cell::Cell::new(false),
 
         // Environment
-        character_mode: character_mode_for_locale(&locale)?,
+        character_mode: character_mode_for_locale(&locale),
 
         // Other context
         input_name: PathBuf::from("-"),
@@ -513,38 +509,38 @@ mod tests {
 
     #[test]
     fn c_locale_selects_byte_mode() {
-        assert_eq!(character_mode_for_locale("C").unwrap(), CharacterMode::Byte);
+        assert_eq!(character_mode_for_locale("C"), CharacterMode::Byte);
     }
 
     #[test]
     fn posix_locale_selects_byte_mode() {
-        assert_eq!(
-            character_mode_for_locale("POSIX").unwrap(),
-            CharacterMode::Byte
-        );
+        assert_eq!(character_mode_for_locale("POSIX"), CharacterMode::Byte);
     }
 
     #[test]
     fn c_utf8_locale_selects_utf8_mode() {
-        assert_eq!(
-            character_mode_for_locale("C.UTF-8").unwrap(),
-            CharacterMode::Utf8
-        );
+        assert_eq!(character_mode_for_locale("C.UTF-8"), CharacterMode::Utf8);
     }
 
     #[test]
     fn dot_utf8_locale_selects_utf8_mode() {
         assert_eq!(
-            character_mode_for_locale("en_US.UTF-8").unwrap(),
+            character_mode_for_locale("en_US.UTF-8"),
             CharacterMode::Utf8
         );
     }
 
     #[test]
     fn dot_utf8_locale_is_case_insensitive() {
+        assert_eq!(character_mode_for_locale("el_GR.utf8"), CharacterMode::Utf8);
+    }
+
+    #[test]
+    fn a_locale_of_another_character_set_selects_byte_mode() {
+        assert_eq!(character_mode_for_locale("en_US"), CharacterMode::Byte);
         assert_eq!(
-            character_mode_for_locale("el_GR.utf8").unwrap(),
-            CharacterMode::Utf8
+            character_mode_for_locale("de_DE.CP1252"),
+            CharacterMode::Byte
         );
     }
 

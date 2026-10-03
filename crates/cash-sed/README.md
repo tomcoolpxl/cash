@@ -144,10 +144,12 @@ that aren't compatible with GNU sed or POSIX.
 ### Incompatibilities
 * Similarly to GNU _sed_, input is processed as raw bytes or as valid UTF-8
   (this includes 7-bit ASCII) based on the locale as specified by the
-  `LC_ALL`, `LC_CTYPE`, and `LANG` environment variables,
-  with the default being byte processing.
-  However, in contrast with GNU _sed_, other locales (e.g. ISO-8859-1)
-  are not supported. If the input is in another code page or encoding
+  `LC_ALL`, `LC_CTYPE`, and `LANG` environment variables.
+  In cash the default, with none of them set, is UTF-8, as the console and awk are;
+  GNU _sed_'s is byte processing.
+  Any locale that does not name UTF-8 (C, POSIX, `en_US`, `de_DE.CP1252`) is byte
+  processing: in contrast with GNU _sed_, the character set it names (e.g.
+  ISO-8859-1) is not used. If the input is in another code page or encoding
   and requires locale-specific processing (e.g. ignore/map case,
   character classes), consider converting it through UTF-8 to ensure
   the correct handling of locale-specific regular expressions.
