@@ -100,7 +100,8 @@ fn xargs_runs_a_command_as_the_shell_does() {
     let out = run_in(scratch.path(), "echo x | xargs nosuchcmd; echo \"rc=$?\"");
     assert_eq!(out.stdout, "rc=127", "{}", out.stderr);
     assert!(
-        out.stderr.contains("xargs: nosuchcmd: No such file or directory"),
+        out.stderr
+            .contains("xargs: nosuchcmd: No such file or directory"),
         "{}",
         out.stderr
     );
@@ -138,7 +139,8 @@ fn find_exec_runs_a_command_as_the_shell_does() {
     );
     assert_eq!(out.stdout, "rc=0", "{}", out.stderr);
     assert!(
-        out.stderr.contains("find: 'nosuchcmd': No such file or directory"),
+        out.stderr
+            .contains("find: 'nosuchcmd': No such file or directory"),
         "{}",
         out.stderr
     );
