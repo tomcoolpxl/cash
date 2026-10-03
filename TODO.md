@@ -25,7 +25,8 @@ for working through it.
   1.3.7 the shared part on the first Tab and the grid on the second (phase 7), 1.3.8
   crashes, security and CI hardening (phase 8), 1.3.9 the shell's own working directory,
   environment, PATHEXT and umask (phase 9), 1.3.10 awk, sed and bc (phase 10), 1.3.11 pipelines, jobs and process
-  substitution (phase 11).
+  substitution (phase 11), with the two parser bugs phase 11 found (`( ( … ) )` and
+  `--file=<(…)`), fixed while CI was put right.
 - An item says what was seen and what Bash does; a cause only where it was looked for.
   Longer notes on a thing that stays open belong in `open-issues.md`.
 
