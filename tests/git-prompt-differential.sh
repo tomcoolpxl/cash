@@ -229,7 +229,8 @@ run() {
         printf 'FROZE %s\n' "$name"
         return
     fi
-    "$cash" --noprofile --norc "$f" >"$out.cash" 2>/dev/null; cs=$?
+    # --no-config: the developer's config.toml is not part of the test.
+    "$cash" --no-config --noprofile --norc "$f" >"$out.cash" 2>/dev/null; cs=$?
     if [[ -v want[$name] ]]; then
         if [[ $cs == 0 && $(<"$out.cash") == "${want[$name]}" ]]; then
             printf 'PASS %s (differs on purpose, %s)\n' "$name" "${why[$name]}"

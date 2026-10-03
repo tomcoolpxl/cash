@@ -24,6 +24,8 @@
 use std::path::PathBuf;
 use std::process::Command;
 
+use crate::common::{CASH, ISOLATED_VARIABLES};
+
 /// The `bash.exe` of the Git for Windows whose `git` is on `PATH`.
 fn git_bash() -> PathBuf {
     let output = Command::new("git")
@@ -46,16 +48,18 @@ fn git_bash() -> PathBuf {
 #[test]
 fn git_prompt_scripts_give_git_bashs_frozen_output() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let cash = env!("CARGO_BIN_EXE_cash").replace('\\', "/");
-    let output = Command::new(git_bash())
+    let cash = CASH.replace('\\', "/");
+    let mut command = Command::new(git_bash());
+    command
         .args(["tests/git-prompt-differential.sh", "--check", &cash])
         .current_dir(&root)
-        // The script and the cases are non-interactive shells, which would source it.
-        .env_remove("BASH_ENV")
         .env_remove("GIT_DIR")
-        .env_remove("GIT_WORK_TREE")
-        .output()
-        .expect("run the git-prompt differential");
+        .env_remove("GIT_WORK_TREE");
+    // Neither Git Bash nor the cash it starts (with `--no-config`) takes the developer's.
+    for name in ISOLATED_VARIABLES {
+        command.env_remove(name);
+    }
+    let output = command.output().expect("run the git-prompt differential");
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
