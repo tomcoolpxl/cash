@@ -50,19 +50,19 @@ fn plain_getline_reads_on_into_the_next_file_as_gawk_does() {
             "got b\ngot c\ngot d\ngot e\n5 2",
         ),
         (
-            r#"awk 'BEGIN{getline; print $0, NR, FNR, FILENAME}' f2.txt"#,
+            r"awk 'BEGIN{getline; print $0, NR, FNR, FILENAME}' f2.txt",
             "d 1 1 f2.txt",
         ),
         (
-            r#"awk 'BEGIN{while ((getline line) > 0) n++; print n, NR}' f1.txt f2.txt"#,
+            r"awk 'BEGIN{while ((getline line) > 0) n++; print n, NR}' f1.txt f2.txt",
             "5 5",
         ),
         (
-            r#"awk '{print FILENAME, FNR, NR, $0; nextfile}' f1.txt f2.txt"#,
+            r"awk '{print FILENAME, FNR, NR, $0; nextfile}' f1.txt f2.txt",
             "f1.txt 1 1 a\nf2.txt 1 2 d",
         ),
         (
-            r#"awk 'FNR==2{getline; getline} {print FILENAME, FNR, NR, $0}' f1.txt empty.txt f2.txt"#,
+            r"awk 'FNR==2{getline; getline} {print FILENAME, FNR, NR, $0}' f1.txt empty.txt f2.txt",
             "f1.txt 1 1 a\nf2.txt 1 4 d\nf2.txt 2 5 e",
         ),
         (
@@ -91,6 +91,10 @@ fn sed_in_place_replaces_a_file_in_one_move_and_keeps_its_attributes() {
     let after = std::fs::read(&file).unwrap();
     let read_only = std::fs::metadata(&file).unwrap().permissions().readonly();
     let mut permissions = std::fs::metadata(&file).unwrap().permissions();
+    #[expect(
+        clippy::permissions_set_readonly_false,
+        reason = "on Windows this clears the read-only attribute, so the scratch folder can go"
+    )]
     permissions.set_readonly(false);
     std::fs::set_permissions(&file, permissions).unwrap();
 
