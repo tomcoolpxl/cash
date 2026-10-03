@@ -34,7 +34,7 @@ color-print = "0.3.7"
 fancy-regex = "0.19.0"
 futures = "0.3.32"
 inherent = "1.0.13"
-itertools = "0.14.0"
+itertools = "0.15.0"
 normalize-path = "0.2.1"
 rand = "0.10.0"
 # The leftmost-longest match of `[[ =~ ]]` (LANG-17); already built for `regex`.
@@ -60,7 +60,7 @@ tokio = { version = "1.52.3", features = [
 # cash: the Win32 semantics layer (D3, D20, D28, D41, ...). Lives outside vendor/ so
 # the shell semantics and the platform layer stay separable.
 cash-win32 = { workspace = true }
-check_elevation = "0.2.7"
+check_elevation = "0.3.0"
 # GNU `env -S` splitting for `#!/usr/bin/env -S …` lines (W32-08); the `env` builtin
 # already builds it.
 uu_env = "0.12.0"
