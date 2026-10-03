@@ -160,6 +160,46 @@ fn test_awk_dynamic_regexes_beyond_the_cache_still_match() {
     test_awk!(dynamic_regexes_beyond_the_cache_still_match);
 }
 
+// A NUL in a record stopped the program with "invalid string", and "\0" in a string was a
+// parse error (TXT-11). gawk 5.4's output.
+#[test]
+fn test_awk_nul_bytes_are_ordinary_characters() {
+    test_awk!(
+        nul_bytes_are_ordinary_characters,
+        "tests/awk/nul_bytes_are_ordinary_characters.txt"
+    );
+}
+
+// A character split by the edge of what the reader had read was fatal with a regex RS
+// (TXT-12). gawk 5.4's output in a UTF-8 locale.
+#[test]
+fn test_awk_regex_rs_reads_a_character_split_by_the_buffer() {
+    test_awk!(
+        regex_rs_reads_a_character_split_by_the_buffer,
+        "tests/awk/regex_rs_reads_a_character_split_by_the_buffer.txt"
+    );
+}
+
+// A separator at the end of what had been read was taken as whole, so each newline of a
+// blank line ended a record of its own (TXT-12). gawk 5.4's output.
+#[test]
+fn test_awk_regex_rs_that_spans_lines_ends_one_record() {
+    test_awk!(
+        regex_rs_that_spans_lines_ends_one_record,
+        "tests/awk/regex_rs_that_spans_lines_ends_one_record.txt"
+    );
+}
+
+// An RS that matches empty text looped forever on empty records (TXT-12). gawk 5.4 ends
+// four empty records and loses `a` and `b`; this is the records the separators delimit.
+#[test]
+fn test_awk_rs_matching_empty_text_ends_no_record() {
+    test_awk!(
+        rs_matching_empty_text_ends_no_record,
+        "tests/awk/rs_matching_empty_text_ends_no_record.txt"
+    );
+}
+
 #[test]
 fn test_awk_hello_world() {
     test_awk!(hello_world)

@@ -21,7 +21,6 @@ use pest::iterators::{Pair, Pairs};
 use pest::pratt_parser::{Assoc, Op, PrattParser};
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
-use std::ffi::CString;
 use std::hash::Hash;
 use std::rc::Rc;
 use std::sync::LazyLock;
@@ -283,9 +282,6 @@ pub fn escape_string_contents(s: &str) -> Result<Rc<str>, String> {
                                     break;
                                 }
                             }
-                        }
-                        if char_code == 0 {
-                            return Err("invalid escape sequence: \\0".to_string());
                         }
                         char::from_u32(char_code).ok_or("invalid character".to_string())?
                     }
@@ -618,9 +614,8 @@ impl Compiler {
             }
             Rule::ere => {
                 let ere = translate_ere_escapes(primary.as_str().trim_matches('/'));
-                let ere_c_str = CString::new(ere).unwrap();
-                let regex = Regex::new(ere_c_str)
-                    .map_err(|e| pest_error_from_span(primary.as_span(), e))?;
+                let regex =
+                    Regex::new(&ere).map_err(|e| pest_error_from_span(primary.as_span(), e))?;
                 let index = self.push_constant(Constant::Regex(Rc::new(regex)));
                 Ok(Expr::new(
                     ExprKind::Regex,

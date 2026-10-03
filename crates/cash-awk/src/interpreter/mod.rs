@@ -28,7 +28,6 @@ use crate::program::{
 };
 use crate::regex::Regex;
 use std::collections::HashMap;
-use std::ffi::CString;
 use std::fmt::Write;
 use std::iter;
 use std::rc::Rc;
@@ -219,15 +218,11 @@ impl GlobalEnv {
             FieldSeparator::Char(c) => {
                 let escaped = ere_escape_char(*c as char);
                 let pattern = format!("\n|{}", escaped);
-                Some(FieldSeparator::Ere(Rc::new(Regex::new(
-                    CString::new(pattern).map_err(|e| e.to_string())?,
-                )?)))
+                Some(FieldSeparator::Ere(Rc::new(Regex::new(&pattern)?)))
             }
             FieldSeparator::Ere(re) => {
                 let pattern = format!("\n|{}", re.pattern());
-                Some(FieldSeparator::Ere(Rc::new(Regex::new(
-                    CString::new(pattern).map_err(|e| e.to_string())?,
-                )?)))
+                Some(FieldSeparator::Ere(Rc::new(Regex::new(&pattern)?)))
             }
         };
         match combined {
@@ -560,7 +555,7 @@ impl Interpreter {
                     let string = stack
                         .pop_scalar_value()?
                         .scalar_to_string(&global_env.convfmt)?;
-                    let result = ere.matches(&string.try_into()?);
+                    let result = ere.matches(&string);
                     stack.push_value(bool_to_f64(result))?;
                 }
                 OpCode::Concat => {

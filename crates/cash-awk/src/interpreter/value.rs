@@ -8,7 +8,6 @@
 //
 
 use std::cell::UnsafeCell;
-use std::ffi::CString;
 use std::rc::Rc;
 
 use super::array::Array;
@@ -168,9 +167,7 @@ impl AwkValue {
         match self.value {
             AwkValueVariant::Regex { ere, .. } => Ok(ere),
             AwkValueVariant::String(s) => cached_dynamic_ere(s),
-            AwkValueVariant::UninitializedScalar => {
-                Ok(Rc::new(Regex::new(CString::new("").unwrap())?))
-            }
+            AwkValueVariant::UninitializedScalar => Ok(Rc::new(Regex::new("")?)),
             _ => Err("expected extended regular expression".to_string()),
         }
     }
@@ -189,7 +186,7 @@ impl AwkValue {
         }
     }
 
-    pub(crate) fn from_ere(ere: Rc<Regex>, record: &CString) -> Self {
+    pub(crate) fn from_ere(ere: Rc<Regex>, record: &str) -> Self {
         let matches_record = ere.matches(record);
         Self {
             value: AwkValueVariant::Regex {
@@ -269,7 +266,7 @@ fn cached_dynamic_ere(pattern: AwkString) -> Result<Rc<Regex>, String> {
     if let Some(ere) = DYNAMIC_ERES.with_borrow(|cache| cache.get(&key).cloned()) {
         return Ok(ere);
     }
-    let ere = Rc::new(Regex::new(pattern.try_into()?)?);
+    let ere = Rc::new(Regex::new(pattern.as_str())?);
     DYNAMIC_ERES.with_borrow_mut(|cache| {
         if cache.len() >= DYNAMIC_ERE_CACHE_SIZE {
             cache.clear();

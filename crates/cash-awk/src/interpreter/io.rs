@@ -92,7 +92,7 @@ impl TryFrom<AwkString> for RecordSeparator {
         } else if value.len() == 1 {
             Ok(RecordSeparator::Char(value.as_bytes()[0]))
         } else {
-            let ere = Regex::new(value.try_into()?)?;
+            let ere = Regex::new(value.as_str())?;
             Ok(RecordSeparator::Ere(ere))
         }
     }
@@ -122,20 +122,24 @@ fn bytes_to_string(buf: Vec<u8>) -> String {
     }
 }
 
-/// Try to find a regex match in the byte buffer. Returns the record before
-/// the match and the remainder after it, or None if no match found.
-fn ere_try_match(buf: &[u8], re: &Regex) -> Result<Option<(String, Vec<u8>)>, String> {
-    if buf.is_empty() {
-        return Ok(None);
+/// The record before the first RS match in `buf`, and the bytes after the match, or
+/// `None` if no record ends in `buf` yet.
+///
+/// The match is found in the bytes, which may end inside a character or not be UTF-8:
+/// they were decoded first, so a character split by the buffer's edge was fatal
+/// (`REVIEW_REPORT.md` TXT-12). A match that reaches the end of the buffer before the
+/// end of the input may go on in the bytes still to come (`RS = "\n+"` saw a separator
+/// in each newline of a blank line, so a paragraph was followed by empty records), so
+/// the record waits for more input.
+fn ere_try_match(buf: &[u8], re: &Regex, at_end: bool) -> Option<(String, Vec<u8>)> {
+    let m = re.find_separator(buf)?;
+    if m.end == buf.len() && !at_end {
+        return None;
     }
-    let input = std::str::from_utf8(buf).map_err(|e| e.to_string())?;
-    if let Some(m) = re.find_first(input) {
-        let record = input[..m.start].to_string();
-        let remainder = buf[m.end..].to_vec();
-        Ok(Some((record, remainder)))
-    } else {
-        Ok(None)
-    }
+    Some((
+        bytes_to_string(buf[..m.start].to_vec()),
+        buf[m.end..].to_vec(),
+    ))
 }
 
 pub trait RecordReader: Iterator<Item = ReadResult> {
@@ -188,7 +192,7 @@ pub trait RecordReader: Iterator<Item = ReadResult> {
                 let mut byte_buf = std::mem::take(self.ere_byte_buffer());
 
                 // Check existing buffer first (remainder from previous call)
-                if let Some((record, remainder)) = ere_try_match(&byte_buf, re)? {
+                if let Some((record, remainder)) = ere_try_match(&byte_buf, re, false) {
                     *self.ere_byte_buffer() = remainder;
                     return Ok(Some((record, false)));
                 }
@@ -213,7 +217,9 @@ pub trait RecordReader: Iterator<Item = ReadResult> {
                             };
                             if check {
                                 bytes_since_check = 0;
-                                if let Some((record, remainder)) = ere_try_match(&byte_buf, re)? {
+                                if let Some((record, remainder)) =
+                                    ere_try_match(&byte_buf, re, false)
+                                {
                                     *self.ere_byte_buffer() = remainder;
                                     return Ok(Some((record, false)));
                                 }
@@ -226,7 +232,7 @@ pub trait RecordReader: Iterator<Item = ReadResult> {
                             if byte_buf.is_empty() {
                                 return Ok(None);
                             }
-                            if let Some((record, remainder)) = ere_try_match(&byte_buf, re)? {
+                            if let Some((record, remainder)) = ere_try_match(&byte_buf, re, true) {
                                 if !remainder.is_empty() {
                                     *self.ere_byte_buffer() = remainder;
                                 }

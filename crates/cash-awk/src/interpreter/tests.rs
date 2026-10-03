@@ -1015,9 +1015,7 @@ fn test_match_op() {
     ];
     let constant = vec![
         Constant::from("hello"),
-        Constant::Regex(Rc::new(
-            Regex::new(CString::new("e").unwrap()).expect("failed to compile regex"),
-        )),
+        Constant::Regex(Rc::new(Regex::new("e").expect("failed to compile regex"))),
     ];
     assert_eq!(interpret_expr(instructions, constant), AwkValue::from(1.0));
 }

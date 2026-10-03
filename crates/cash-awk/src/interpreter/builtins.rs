@@ -7,7 +7,6 @@
 // SPDX-License-Identifier: MIT
 //
 
-use std::ffi::CString;
 use std::fmt::Write;
 
 use super::format::{
@@ -193,7 +192,7 @@ pub(crate) fn builtin_match(
         .pop_scalar_value()?
         .scalar_to_string(&global_env.convfmt)?;
     let text = string.as_str().to_owned();
-    let mut locations = ere.match_locations(string.try_into()?);
+    let mut locations = ere.match_locations(&text);
     let start;
     let len;
     if let Some(first_match) = locations.next() {
@@ -246,7 +245,7 @@ pub(crate) fn gsub(
     repl_parts.push(current_repl_part);
 
     let mut num_replacements = 0;
-    for m in ere.match_locations(AwkString::from(in_str).try_into()?) {
+    for m in ere.match_locations(in_str) {
         result.push_str(&in_str[last_match_end..m.start]);
         let replaced_string = &in_str[m.start..m.end];
         result.push_str(&repl_parts[0]);
@@ -425,10 +424,9 @@ pub(crate) fn call_simple_builtin(
             return builtin_gsub(stack, global_env, function == BuiltinFunction::Sub);
         }
         BuiltinFunction::System => {
-            let command: CString = stack
+            let command = stack
                 .pop_scalar_value()?
-                .scalar_to_string(&global_env.convfmt)?
-                .try_into()?;
+                .scalar_to_string(&global_env.convfmt)?;
             stack.push_value(run_system(&command) as f64)?;
         }
         BuiltinFunction::Print => {
@@ -443,9 +441,8 @@ pub(crate) fn call_simple_builtin(
 }
 
 /// Run `command` via shell process and translate its status into awk's `system()` return code.
-fn run_system(command: &CString) -> i32 {
-    let cmd_str = command.to_str().unwrap_or("");
-    let mut command_proc = super::io::create_shell_command(cmd_str);
+fn run_system(command: &str) -> i32 {
+    let mut command_proc = super::io::create_shell_command(command);
 
     match command_proc.status() {
         Ok(status) => status.code().unwrap_or(-1),

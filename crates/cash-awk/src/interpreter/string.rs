@@ -8,7 +8,7 @@
 //
 
 use core::fmt;
-use std::{ffi::CString, ops::Deref, rc::Rc};
+use std::{ops::Deref, rc::Rc};
 
 #[cfg_attr(test, derive(Debug))]
 #[derive(Clone, PartialEq)]
@@ -126,17 +126,11 @@ impl From<AwkString> for Rc<str> {
     }
 }
 
-impl TryInto<CString> for AwkString {
-    type Error = String;
-
-    fn try_into(self) -> Result<CString, Self::Error> {
-        match self.value {
-            AwkStringVariant::Owned(value) => {
-                CString::new(value).map_err(|_| "invalid string".to_string())
-            }
-            AwkStringVariant::Shared(value) => {
-                CString::new(value.as_bytes()).map_err(|_| "invalid string".to_string())
-            }
+impl From<AwkString> for String {
+    fn from(val: AwkString) -> Self {
+        match val.value {
+            AwkStringVariant::Owned(value) => value,
+            AwkStringVariant::Shared(value) => value.to_string(),
         }
     }
 }

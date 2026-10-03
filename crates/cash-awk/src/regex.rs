@@ -10,9 +10,10 @@
 
 use regex_automata::Input;
 use regex_automata::meta::Regex as MetaRegex;
-use std::ffi::CString;
 
-/// A regex wrapper that provides CString-compatible API for AWK.
+/// A regex wrapper for AWK. Text is a `&str`, so a NUL is an ordinary character: the
+/// wrapper took C strings, from posixutils' libc regex, and a NUL in a record was
+/// fatal (`REVIEW_REPORT.md` TXT-11).
 /// Uses regex_automata configured for MatchKind::All and selects leftmost-longest
 /// for POSIX ERE support.
 pub struct Regex {
@@ -28,21 +29,20 @@ pub struct RegexMatch {
 }
 
 /// Iterator over regex matches in a string.
-/// Owns the input CString to preserve lifetimes.
-pub struct MatchIter<'re> {
-    string: String,
+pub struct MatchIter<'re, 's> {
+    string: &'s str,
     next_start: usize,
     regex: &'re Regex,
 }
 
-impl Iterator for MatchIter<'_> {
+impl Iterator for MatchIter<'_, '_> {
     type Item = RegexMatch;
     fn next(&mut self) -> Option<Self::Item> {
         if self.next_start > self.string.len() {
             return None;
         }
 
-        let input = Input::new(&self.string).range(self.next_start..);
+        let input = Input::new(self.string).range(self.next_start..);
         let m = self.regex.inner.find(input)?;
 
         let result = RegexMatch {
@@ -117,8 +117,7 @@ fn sort_alternations(hir: regex_syntax::hir::Hir) -> regex_syntax::hir::Hir {
 }
 
 impl Regex {
-    pub fn new(regex: CString) -> Result<Self, String> {
-        let pattern = regex.to_str().map_err(|e| e.to_string())?;
+    pub fn new(pattern: &str) -> Result<Self, String> {
         let inner = if let Ok(hir) = regex_syntax::ParserBuilder::new().build().parse(pattern) {
             let hir = sort_alternations(hir);
             MetaRegex::builder()
@@ -135,22 +134,25 @@ impl Regex {
         })
     }
 
-    /// Returns the first match location in the string, or `None`.
-    pub fn find_first(&self, string: &str) -> Option<RegexMatch> {
-        self.inner.find(string).map(|m| RegexMatch {
-            start: m.start(),
-            end: m.end(),
-        })
+    /// The first match that is not empty, in bytes that need not be UTF-8 nor end on a
+    /// character: where a record ends when this is RS. An empty match ends no record, as
+    /// it would end one at every position and never move on.
+    pub fn find_separator(&self, bytes: &[u8]) -> Option<RegexMatch> {
+        self.inner
+            .find_iter(bytes)
+            .find(|m| !m.is_empty())
+            .map(|m| RegexMatch {
+                start: m.start(),
+                end: m.end(),
+            })
     }
 
     /// Returns an iterator over all match locations in the string.
-    /// Takes ownership of the CString.
-    pub fn match_locations(&self, string: CString) -> MatchIter<'_> {
-        let s = string.into_string().unwrap_or_default();
+    pub fn match_locations<'s>(&self, string: &'s str) -> MatchIter<'_, 's> {
         MatchIter {
             next_start: 0,
             regex: self,
-            string: s,
+            string,
         }
     }
 
@@ -158,9 +160,8 @@ impl Regex {
         &self.pattern_string
     }
 
-    pub fn matches(&self, string: &CString) -> bool {
-        let s = string.to_str().unwrap_or("");
-        self.inner.is_match(s)
+    pub fn matches(&self, string: &str) -> bool {
+        self.inner.is_match(string)
     }
 }
 
@@ -180,7 +181,7 @@ impl PartialEq for Regex {
 /// utility function for writing tests
 #[cfg(test)]
 pub fn regex_from_str(re: &str) -> Regex {
-    Regex::new(CString::new(re).unwrap()).expect("error compiling ere")
+    Regex::new(re).expect("error compiling ere")
 }
 
 #[cfg(test)]
@@ -195,13 +196,13 @@ mod tests {
     #[test]
     fn test_regex_matches() {
         let ere = regex_from_str("ab*c");
-        assert!(ere.matches(&CString::new("abbbbc").unwrap()));
+        assert!(ere.matches("abbbbc"));
     }
 
     #[test]
     fn test_leftmost_longest_ere() {
         let ere = regex_from_str("a|aa");
-        let m = ere.find_first("aa").unwrap();
+        let m = ere.find_separator(b"aa").unwrap();
         assert_eq!(m.start, 0);
         assert_eq!(m.end, 2);
     }
@@ -213,7 +214,7 @@ mod tests {
         for m in ere.inner.find_iter(text) {
             println!("find_iter match: {m:?}");
         }
-        let mut iter = ere.match_locations(CString::new(text).unwrap());
+        let mut iter = ere.match_locations(text);
         assert_eq!(iter.next(), Some(RegexMatch { start: 0, end: 5 }));
         assert_eq!(iter.next(), Some(RegexMatch { start: 12, end: 17 }));
         assert_eq!(iter.next(), Some(RegexMatch { start: 19, end: 24 }));

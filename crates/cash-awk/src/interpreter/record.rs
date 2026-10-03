@@ -8,7 +8,6 @@
 //
 
 use std::cell::RefCell;
-use std::ffi::CString;
 use std::fmt::Write;
 use std::rc::Rc;
 
@@ -70,7 +69,7 @@ pub(crate) fn split_record<S: FnMut(usize, AwkString) -> Result<(), String>>(
         FieldSeparator::Ere(re) => {
             let mut split_start = 0;
             let mut index = 0;
-            for separator_range in re.match_locations(record.clone().try_into()?) {
+            for separator_range in re.match_locations(&record) {
                 store_result(index, string(&record[split_start..separator_range.start]))?;
                 split_start = separator_range.end;
                 index += 1;
@@ -98,7 +97,7 @@ impl TryFrom<AwkString> for FieldSeparator {
         } else if value.len() == 1 {
             Ok(FieldSeparator::Char(*value.as_bytes().first().unwrap()))
         } else {
-            let ere = Regex::new(value.try_into()?)?;
+            let ere = Regex::new(value.as_str())?;
             Ok(FieldSeparator::Ere(Rc::from(ere)))
         }
     }
@@ -112,7 +111,7 @@ pub(crate) enum FieldsState {
 }
 
 pub(crate) struct Record {
-    pub(crate) record: RefCell<CString>,
+    pub(crate) record: RefCell<String>,
     /// Field storage, grown on demand. Each field lives in its own `Box`, so a
     /// raw pointer obtained from a cell stays valid even when the outer `Vec` is
     /// reallocated by a later growth — the operand stack holds such pointers
@@ -219,7 +218,7 @@ impl Record {
         let last_field =
             Self::fill_fields(fields, record.clone(), field_separator, previous_last_field)?;
         *fields[0].get_mut() = AwkValue::field_ref(record.clone(), 0);
-        *self.record.get_mut() = record.try_into()?;
+        *self.record.get_mut() = record.into();
         *self.last_field.get_mut() = last_field;
         Ok(())
     }
@@ -263,7 +262,7 @@ impl Record {
             if last_field == 0 {
                 let record_str = maybe_numeric_string(String::new());
                 *self.fields.borrow()[0].get() = AwkValue::field_ref(record_str.clone(), 0);
-                *self.record.borrow_mut() = record_str.try_into()?;
+                *self.record.borrow_mut() = record_str.into();
                 *self.last_field.borrow_mut() = 0;
                 return Ok(());
             }
@@ -287,7 +286,7 @@ impl Record {
             // mark it as a numeric string if appropriate
             let record_str = maybe_numeric_string(new_record);
             *self.fields.borrow()[0].get() = AwkValue::field_ref(record_str.clone(), 0);
-            *self.record.borrow_mut() = record_str.try_into()?;
+            *self.record.borrow_mut() = record_str.into();
             *self.last_field.borrow_mut() = last_field;
             Ok(())
         }
@@ -307,7 +306,7 @@ impl Record {
         )?;
         *fields[0].get_mut() = AwkValue::field_ref(record_str.clone(), 0);
         drop(fields);
-        *self.record.borrow_mut() = record_str.try_into()?;
+        *self.record.borrow_mut() = record_str.into();
         *self.last_field.borrow_mut() = last_field;
         Ok(())
     }
@@ -328,7 +327,7 @@ impl Default for Record {
         // Only `$0` is allocated up front; numbered fields grow on demand.
         let fields = vec![Record::new_field_cell(0)];
         Self {
-            record: CString::default().into(),
+            record: String::new().into(),
             fields: RefCell::new(fields),
             last_field: 0.into(),
         }
