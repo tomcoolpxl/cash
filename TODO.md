@@ -68,10 +68,12 @@ The riskiest phase: judge its runs on an idle machine (Decided, below).
 
 ### 11.4 Process substitution pipes
 
-- `<(…)` sometimes gives an empty read to a consumer that opens it twice (`cmd /c type
-  <(echo x)` failed 11 in 80). W32-02.
-- An unopened `<(…)` leaks two threads; the replay buffer keeps every byte. W32-03, W32-04.
-- The pipes have the default DACL and accept remote clients (from reading). W32-07.
+- `cmd /c type <(echo x)` sometimes prints `x` and then "The pipe has been ended" (the
+  review saw 11 in 80 on a busy machine; on 2026-10-03, 1 in 450 on an idle one, with
+  1.3.10 and with the fix below alike). The race the review suspected, between a pump's
+  look at the replay and its look at the end, was real and is closed, but it is not
+  this. Unexplained: `type` may take the pipe's end (ERROR_BROKEN_PIPE) for an error
+  depending on when the server closes. W32-02.
 
 ### 11.5 The resume after a suspended spawn is unchecked
 
@@ -88,7 +90,11 @@ Check it, terminate on failure, record the API choice beside D19. From reading. 
   `$BASH_SUBSHELL` and PS4 show needs a field of its own.
 - `yes | head -1; echo "${PIPESTATUS[*]}"` is `0 0`; Bash `141 0`, the writer killed by
   SIGPIPE. Windows has no SIGPIPE: decide what a writer whose reader went away ends
-  with, and record it.
+  with, and record it. The bundled `seq` says so on stderr, `seq: write error: Broken
+  pipe`, after `seq 1 1000000 | head -1` and now also after `head -1 <(seq 1 1000000)`,
+  where Bash's dies in silence.
+- `f=<(seq 1 5)` is a syntax error in cash; Bash expands the substitution and assigns
+  its path. Found while fixing 11.4.
 - `jobs` writes a brace group over several lines: `{ sleep 1; } & jobs` shows `{`,
   `sleep 1` and `} &` on lines of their own, where Bash writes `{ sleep 1; } &` (a
   `while` loop takes several lines in both). Found while fixing 11.3.

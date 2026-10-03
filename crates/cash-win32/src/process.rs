@@ -497,11 +497,66 @@ fn token_user(process: windows_sys::Win32::Foundation::HANDLE) -> Option<String>
     token_account(process).map(|(name, _)| name)
 }
 
+/// The current user's SID as text (`S-1-5-21-…`), as a security descriptor names it.
+pub(crate) fn current_user_sid_string() -> Option<String> {
+    use windows_sys::Win32::Foundation::LocalFree;
+    use windows_sys::Win32::Security::Authorization::ConvertSidToStringSidW;
+
+    // SAFETY: GetCurrentProcess returns a pseudo-handle for the current process.
+    let current = unsafe { windows_sys::Win32::System::Threading::GetCurrentProcess() };
+    with_token_user(current, |user| {
+        let mut text: *mut u16 = std::ptr::null_mut();
+        // SAFETY: the SID comes from the token, and `text` is a valid out-param.
+        if unsafe { ConvertSidToStringSidW(user.User.Sid, &raw mut text) } == 0 {
+            return None;
+        }
+        // SAFETY: on success `text` is a null-terminated string the call allocated.
+        let sid = unsafe { crate::net::widestring_at(text) };
+        // SAFETY: the string was allocated by the call above, with LocalAlloc.
+        unsafe { LocalFree(text.cast()) };
+        Some(sid)
+    })
+}
+
 /// The account a process's token names, without its domain, and its SID's RID.
 fn token_account(process: windows_sys::Win32::Foundation::HANDLE) -> Option<(String, u32)> {
-    use windows_sys::Win32::Security::{
-        GetTokenInformation, LookupAccountSidW, SID_NAME_USE, TOKEN_QUERY, TOKEN_USER, TokenUser,
-    };
+    use windows_sys::Win32::Security::{LookupAccountSidW, SID_NAME_USE};
+
+    with_token_user(process, |user| {
+        let mut name = [0u16; 256];
+        let mut name_len = u32::try_from(name.len()).unwrap_or(u32::MAX);
+        let mut domain = [0u16; 256];
+        let mut domain_len = u32::try_from(domain.len()).unwrap_or(u32::MAX);
+        let mut kind: SID_NAME_USE = 0;
+
+        // SAFETY: the SID comes from the token, and both buffers are sized by their lengths.
+        let ok = unsafe {
+            LookupAccountSidW(
+                std::ptr::null(),
+                user.User.Sid,
+                name.as_mut_ptr(),
+                &raw mut name_len,
+                domain.as_mut_ptr(),
+                &raw mut domain_len,
+                &raw mut kind,
+            )
+        };
+
+        if ok == 0 {
+            return None;
+        }
+
+        let rid = crate::fs::sid_rid(user.User.Sid)?;
+        Some((String::from_utf16_lossy(&name[..name_len as usize]), rid))
+    })
+}
+
+/// Runs `with` on the user a process's token names.
+fn with_token_user<T>(
+    process: windows_sys::Win32::Foundation::HANDLE,
+    with: impl FnOnce(&windows_sys::Win32::Security::TOKEN_USER) -> Option<T>,
+) -> Option<T> {
+    use windows_sys::Win32::Security::{GetTokenInformation, TOKEN_QUERY, TOKEN_USER, TokenUser};
     use windows_sys::Win32::System::Threading::OpenProcessToken;
 
     let mut token = std::ptr::null_mut();
@@ -544,32 +599,7 @@ fn token_account(process: windows_sys::Win32::Foundation::HANDLE) -> Option<(Str
     // SAFETY: on success the buffer holds a TOKEN_USER followed by the SID it points at,
     // it is aligned for one by construction, and it outlives this borrow.
     let user: &TOKEN_USER = unsafe { &*buffer.as_ptr().cast::<TOKEN_USER>() };
-
-    let mut name = [0u16; 256];
-    let mut name_len = u32::try_from(name.len()).unwrap_or(u32::MAX);
-    let mut domain = [0u16; 256];
-    let mut domain_len = u32::try_from(domain.len()).unwrap_or(u32::MAX);
-    let mut kind: SID_NAME_USE = 0;
-
-    // SAFETY: the SID comes from the token, and both buffers are sized by their lengths.
-    let ok = unsafe {
-        LookupAccountSidW(
-            std::ptr::null(),
-            user.User.Sid,
-            name.as_mut_ptr(),
-            &raw mut name_len,
-            domain.as_mut_ptr(),
-            &raw mut domain_len,
-            &raw mut kind,
-        )
-    };
-
-    if ok == 0 {
-        return None;
-    }
-
-    let rid = crate::fs::sid_rid(user.User.Sid)?;
-    Some((String::from_utf16_lossy(&name[..name_len as usize]), rid))
+    with(user)
 }
 
 /// The machine's name, spelled the way Windows spells it.

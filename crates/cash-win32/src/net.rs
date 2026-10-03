@@ -327,7 +327,7 @@ fn owner_name(call: impl Fn(*mut core::ffi::c_void, *mut u32) -> u32) -> Option<
 /// # Safety
 ///
 /// `pointer` must point at a readable, NUL-terminated UTF-16 string.
-unsafe fn widestring_at(pointer: *const u16) -> String {
+pub(crate) unsafe fn widestring_at(pointer: *const u16) -> String {
     let mut length = 0;
     loop {
         // SAFETY: the caller guarantees a terminator is reachable, so every unit up to

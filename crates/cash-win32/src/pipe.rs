@@ -27,16 +27,18 @@ use std::fs::File;
 use std::io::{self, PipeReader, PipeWriter, Read, Write};
 use std::os::windows::io::FromRawHandle;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use windows_sys::Win32::Foundation::{
     CloseHandle, ERROR_PIPE_CONNECTED, GetLastError, INVALID_HANDLE_VALUE,
 };
+use windows_sys::Win32::Security::SECURITY_ATTRIBUTES;
 use windows_sys::Win32::Storage::FileSystem::{
     FILE_FLAG_FIRST_PIPE_INSTANCE, PIPE_ACCESS_INBOUND, PIPE_ACCESS_OUTBOUND,
 };
 use windows_sys::Win32::System::Pipes::{
-    ConnectNamedPipe, CreateNamedPipeW, PIPE_READMODE_BYTE, PIPE_TYPE_BYTE, PIPE_WAIT,
+    ConnectNamedPipe, CreateNamedPipeW, PIPE_READMODE_BYTE, PIPE_REJECT_REMOTE_CLIENTS,
+    PIPE_TYPE_BYTE, PIPE_WAIT,
 };
 
 static COUNTER: AtomicU64 = AtomicU64::new(1);
@@ -75,7 +77,40 @@ unsafe fn wait_for_client_connection(
     err == ERROR_PIPE_CONNECTED || err == windows_sys::Win32::Foundation::ERROR_NO_DATA
 }
 
+/// The security descriptor of every process substitution's pipe: the current user and
+/// SYSTEM may open it, and no one else. With the default one, at a name anyone can work
+/// out, any user of the machine could read it (`REVIEW_REPORT.md` W32-07). `None` when
+/// it cannot be made, and the pipe has the default.
+fn user_only_descriptor() -> Option<usize> {
+    use windows_sys::Win32::Security::Authorization::{
+        ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1,
+    };
+
+    static DESCRIPTOR: OnceLock<Option<usize>> = OnceLock::new();
+    *DESCRIPTOR.get_or_init(|| {
+        let sid = crate::process::current_user_sid_string()?;
+        let sddl: Vec<u16> = format!("D:P(A;;GA;;;{sid})(A;;GA;;;SY)")
+            .encode_utf16()
+            .chain(std::iter::once(0))
+            .collect();
+        let mut descriptor = std::ptr::null_mut();
+        // SAFETY: `sddl` is null-terminated and `descriptor` a valid out-param. The
+        // descriptor is kept for the life of the process.
+        let made = unsafe {
+            ConvertStringSecurityDescriptorToSecurityDescriptorW(
+                sddl.as_ptr(),
+                SDDL_REVISION_1,
+                &raw mut descriptor,
+                std::ptr::null_mut(),
+            )
+        };
+        (made != 0).then_some(descriptor as usize)
+    })
+}
+
 /// Helper that creates a named pipe server instance.
+///
+/// Remote clients are refused: the pipe is for programs of this machine.
 unsafe fn create_pipe_instance(
     wide_path: &[u16],
     access: u32,
@@ -87,17 +122,27 @@ unsafe fn create_pipe_instance(
         flags |= FILE_FLAG_FIRST_PIPE_INSTANCE;
     }
 
-    // SAFETY: `wide_path` is null-terminated and valid for the call duration.
+    let attributes = user_only_descriptor().map(|descriptor| SECURITY_ATTRIBUTES {
+        nLength: u32::try_from(size_of::<SECURITY_ATTRIBUTES>()).unwrap_or(0),
+        lpSecurityDescriptor: descriptor as *mut std::ffi::c_void,
+        bInheritHandle: 0,
+    });
+    let attributes = attributes
+        .as_ref()
+        .map_or(std::ptr::null(), std::ptr::from_ref);
+
+    // SAFETY: `wide_path` is null-terminated and valid for the call duration, and the
+    // attributes, if any, point at a descriptor that lives as long as the process.
     let handle = unsafe {
         CreateNamedPipeW(
             wide_path.as_ptr(),
             flags,
-            PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
+            PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS,
             max_instances,
             PIPE_BUFFER_SIZE,
             PIPE_BUFFER_SIZE,
             0,
-            std::ptr::null(),
+            attributes,
         )
     };
 
@@ -108,12 +153,85 @@ unsafe fn create_pipe_instance(
     }
 }
 
-/// Spawns a background pump thread for a read substitution instance.
+/// How much of a read substitution's output is kept for an instance of its pipe that no
+/// program has opened yet. A program that probes the path before it reads it opens it
+/// twice, the second time a moment after the first; one that opens it once leaves the
+/// other instance waiting, and what is kept for it is bounded by this, where it grew
+/// with all the output of `<(tail -f log)` (`REVIEW_REPORT.md` W32-04).
+const REPLAY_LIMIT: usize = 8 << 20;
+
+/// What the two instances of a read substitution's pipe share.
+struct ReadPump {
+    /// The substitution's output.
+    reader: Mutex<PipeReader>,
+    /// Whether the substitution's output has ended. Raised only after the last of it is
+    /// in `replay`.
+    ended: AtomicBool,
+    replay: Mutex<Replay>,
+}
+
+/// What has been read of a read substitution and may still be wanted: each instance
+/// sends all of it, so a program that opens the path twice, to probe it and to read it,
+/// reads all of it the second time.
+struct Replay {
+    data: Vec<u8>,
+    /// Where `data` starts in the output.
+    base: usize,
+    /// Where each instance is in the output: `None` until a program opens it, then how
+    /// much it has sent, and `usize::MAX` once it is done.
+    places: [Option<usize>; 2],
+}
+
+impl Replay {
+    /// What instance `index` has not sent yet, which it is about to send.
+    fn take(&mut self, index: usize) -> Option<Vec<u8>> {
+        let place = self.places[index]?;
+        let end = self.base + self.data.len();
+        if place >= end {
+            return None;
+        }
+        let chunk = self.data[place.saturating_sub(self.base)..].to_vec();
+        self.places[index] = Some(end);
+        self.trim();
+        Some(chunk)
+    }
+
+    /// Marks instance `index` as opened by a program, from what is still kept.
+    const fn open(&mut self, index: usize) {
+        self.places[index] = Some(self.base);
+    }
+
+    /// Marks instance `index` as done.
+    fn close(&mut self, index: usize) {
+        self.places[index] = Some(usize::MAX);
+        self.trim();
+    }
+
+    /// Lets go of what every instance has sent or will not be sent.
+    fn trim(&mut self) {
+        let end = self.base + self.data.len();
+        let keep_from = self
+            .places
+            .iter()
+            .map(|place| match place {
+                // Not opened yet: everything, up to the limit.
+                None if end <= REPLAY_LIMIT => self.base,
+                None => usize::MAX,
+                Some(place) => *place,
+            })
+            .min()
+            .unwrap_or(end)
+            .clamp(self.base, end);
+        self.data.drain(..keep_from - self.base);
+        self.base = keep_from;
+    }
+}
+
+/// Spawns a background pump thread for instance `index` of a read substitution.
 fn spawn_read_instance(
     handle: windows_sys::Win32::Foundation::HANDLE,
-    reader: Arc<Mutex<PipeReader>>,
-    replay_buffer: Arc<Mutex<Vec<u8>>>,
-    reader_eof: Arc<AtomicBool>,
+    pump: Arc<ReadPump>,
+    index: usize,
     name: &'static str,
 ) -> io::Result<()> {
     let handle_val = handle as usize;
@@ -123,84 +241,74 @@ fn spawn_read_instance(
             let handle = handle_val as windows_sys::Win32::Foundation::HANDLE;
             // SAFETY: `handle` is an open named pipe server handle transferred to this thread.
             let connected = unsafe { wait_for_client_connection(handle) };
-            if connected {
-                // SAFETY: `handle` is owned and connected.
-                let mut server_file = unsafe { File::from_raw_handle(handle.cast()) };
-                let mut cursor = 0;
-                let mut streamed_any = false;
-
-                loop {
-                    let next_chunk = {
-                        if let Ok(buf) = replay_buffer.lock() {
-                            if cursor < buf.len() {
-                                let chunk = buf[cursor..].to_vec();
-                                cursor = buf.len();
-                                Some(chunk)
-                            } else {
-                                None
-                            }
-                        } else {
-                            None
-                        }
-                    };
-
-                    if let Some(chunk) = next_chunk {
-                        if server_file.write_all(&chunk).is_err() {
-                            break;
-                        }
-                        streamed_any = true;
-                        continue;
-                    }
-
-                    if reader_eof.load(Ordering::Relaxed) {
-                        break;
-                    }
-
-                    if let Ok(mut r) = reader.lock() {
-                        if reader_eof.load(Ordering::Relaxed) {
-                            continue;
-                        }
-
-                        let mut buf = [0u8; 8192];
-                        match r.read(&mut buf) {
-                            Ok(0) => {
-                                reader_eof.store(true, Ordering::Relaxed);
-                            }
-                            Ok(n) => {
-                                let chunk = &buf[..n];
-                                let to_send = if let Ok(mut shared) = replay_buffer.lock() {
-                                    let old_cursor = cursor;
-                                    shared.extend_from_slice(chunk);
-                                    cursor = shared.len();
-                                    shared[old_cursor..].to_vec()
-                                } else {
-                                    cursor += n;
-                                    chunk.to_vec()
-                                };
-                                if server_file.write_all(&to_send).is_err() {
-                                    break;
-                                }
-                                streamed_any = true;
-                            }
-                            Err(e) if e.kind() == io::ErrorKind::Interrupted => {}
-                            Err(_) => {
-                                reader_eof.store(true, Ordering::Relaxed);
-                            }
-                        }
-                    } else {
-                        break;
-                    }
-                }
-
-                if streamed_any {
-                    let _ = server_file.flush();
-                }
-            } else {
+            if !connected {
                 // SAFETY: Client never connected; close handle.
                 unsafe { CloseHandle(handle) };
+                if let Ok(mut replay) = pump.replay.lock() {
+                    replay.close(index);
+                }
+                return;
+            }
+            // SAFETY: `handle` is owned and connected.
+            let mut server_file = unsafe { File::from_raw_handle(handle.cast()) };
+            if let Ok(mut replay) = pump.replay.lock() {
+                replay.open(index);
+            }
+            pump_read_instance(&pump, index, &mut server_file);
+            if let Ok(mut replay) = pump.replay.lock() {
+                replay.close(index);
             }
         })?;
     Ok(())
+}
+
+/// Sends the substitution's output to the program connected to instance `index`, until
+/// it ends or the program goes.
+fn pump_read_instance(pump: &ReadPump, index: usize, server_file: &mut File) {
+    let mut sent_any = false;
+    loop {
+        // Whether the output had ended before what is kept is looked at: all of it is
+        // there then. Looked at after, the last of it, added in between by the other
+        // instance, was not sent, and the program read nothing (`REVIEW_REPORT.md`
+        // W32-02).
+        let ended = pump.ended.load(Ordering::SeqCst);
+        let chunk = pump
+            .replay
+            .lock()
+            .ok()
+            .and_then(|mut replay| replay.take(index));
+        if let Some(chunk) = chunk {
+            if server_file.write_all(&chunk).is_err() {
+                return;
+            }
+            sent_any = true;
+            continue;
+        }
+        if ended {
+            break;
+        }
+
+        let Ok(mut reader) = pump.reader.lock() else {
+            return;
+        };
+        if pump.ended.load(Ordering::SeqCst) {
+            continue;
+        }
+        let mut buf = [0u8; 8192];
+        match reader.read(&mut buf) {
+            Ok(0) => pump.ended.store(true, Ordering::SeqCst),
+            Ok(n) => {
+                if let Ok(mut replay) = pump.replay.lock() {
+                    replay.data.extend_from_slice(&buf[..n]);
+                }
+            }
+            Err(e) if e.kind() == io::ErrorKind::Interrupted => {}
+            Err(_) => pump.ended.store(true, Ordering::SeqCst),
+        }
+    }
+    if sent_any {
+        let _ = server_file.flush();
+    }
 }
 
 /// Spawns a background pump thread for a write substitution instance.
@@ -276,24 +384,18 @@ pub fn create_read_substitution() -> io::Result<ReadSubstitution> {
 
     let (pipe_reader, pipe_writer) = io::pipe()?;
 
-    let reader_shared = Arc::new(Mutex::new(pipe_reader));
-    let replay_buffer = Arc::new(Mutex::new(Vec::<u8>::new()));
-    let reader_eof = Arc::new(AtomicBool::new(false));
+    let pump = Arc::new(ReadPump {
+        reader: Mutex::new(pipe_reader),
+        ended: AtomicBool::new(false),
+        replay: Mutex::new(Replay {
+            data: Vec::new(),
+            base: 0,
+            places: [None, None],
+        }),
+    });
 
-    spawn_read_instance(
-        h1,
-        Arc::clone(&reader_shared),
-        Arc::clone(&replay_buffer),
-        Arc::clone(&reader_eof),
-        "cash-psub-read-1",
-    )?;
-    spawn_read_instance(
-        h2,
-        Arc::clone(&reader_shared),
-        Arc::clone(&replay_buffer),
-        Arc::clone(&reader_eof),
-        "cash-psub-read-2",
-    )?;
+    spawn_read_instance(h1, Arc::clone(&pump), 0, "cash-psub-read-1")?;
+    spawn_read_instance(h2, pump, 1, "cash-psub-read-2")?;
 
     Ok(ReadSubstitution {
         path,
@@ -330,6 +432,18 @@ pub fn open_output(options: &std::fs::OpenOptions, path: &std::path::Path) -> io
         std::fs::OpenOptions::new().write(true).open(path)
     } else {
         options.open(path)
+    }
+}
+
+/// Lets the read substitution at `path` go, once the command it was handed to is done.
+///
+/// An instance of its pipe that no program opened is opened and closed, so its thread
+/// ends. Two threads waited for a program for the life of the shell for every `<(…)`
+/// whose path was not opened (`REVIEW_REPORT.md` W32-03). An instance a program is
+/// reading is taken, the open fails, and nothing happens to it.
+pub fn release_unread(path: &str) {
+    for _ in 0..2 {
+        let _ = std::fs::OpenOptions::new().read(true).open(path);
     }
 }
 
@@ -561,6 +675,145 @@ mod tests {
     use std::time::{Duration, Instant};
 
     use super::*;
+
+    #[test]
+    fn a_read_substitution_opened_twice_gives_all_of_it_to_both() {
+        // A program that opens the path twice and reads both, as `cmd /c type` seems to,
+        // read nothing from the second when the first instance added the last of the
+        // output between the second's look at what is kept and its look at the end
+        // (W32-02). The output arrives just as the second is opened, for that window.
+        for round in 0..50 {
+            let sub = create_read_substitution().unwrap();
+            let path = sub.path.clone();
+            let first = std::thread::spawn(move || {
+                let mut text = String::new();
+                File::open(&path)
+                    .unwrap()
+                    .read_to_string(&mut text)
+                    .unwrap();
+                text
+            });
+            std::thread::sleep(Duration::from_millis(2));
+            let mut second = File::open(&sub.path).unwrap();
+            std::thread::sleep(Duration::from_millis(5));
+            let mut writer = sub.writer;
+            writer.write_all(b"x\n").unwrap();
+            drop(writer);
+            let mut text = String::new();
+            second.read_to_string(&mut text).unwrap();
+            assert_eq!(text, "x\n", "round {round}: the second open");
+            assert_eq!(
+                first.join().unwrap(),
+                "x\n",
+                "round {round}: the first open"
+            );
+        }
+    }
+
+    #[test]
+    fn a_read_substitution_no_program_opened_is_let_go() {
+        // Its two threads waited for a program for ever, and held its output (W32-03).
+        let sub = create_read_substitution().unwrap();
+        release_unread(&sub.path);
+        let mut writer = sub.writer;
+        let chunk = vec![b'x'; 64 * 1024];
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            match writer.write_all(&chunk) {
+                Err(e) => {
+                    assert_eq!(e.kind(), io::ErrorKind::BrokenPipe);
+                    break;
+                }
+                Ok(()) => assert!(Instant::now() < deadline, "its output is still read"),
+            }
+        }
+    }
+
+    #[test]
+    fn the_replay_keeps_only_what_an_instance_may_still_send() {
+        let mut replay = Replay {
+            data: Vec::new(),
+            base: 0,
+            places: [None, None],
+        };
+        replay.open(0);
+        replay.data.extend_from_slice(b"abc");
+        assert_eq!(replay.take(0).as_deref(), Some(&b"abc"[..]));
+        // The other instance has not been opened: all of it is kept for it.
+        assert_eq!((replay.base, replay.data.len()), (0, 3));
+        replay.open(1);
+        assert_eq!(replay.take(1).as_deref(), Some(&b"abc"[..]));
+        assert_eq!((replay.base, replay.data.len()), (3, 0));
+        replay.data.extend_from_slice(b"de");
+        replay.close(0);
+        assert_eq!(replay.take(1).as_deref(), Some(&b"de"[..]));
+        assert!(replay.data.is_empty());
+
+        // Past the limit, nothing more is kept for an instance never opened (W32-04).
+        let mut replay = Replay {
+            data: Vec::new(),
+            base: 0,
+            places: [None, None],
+        };
+        replay.open(0);
+        replay.data.resize(REPLAY_LIMIT + 1, b'x');
+        assert!(replay.take(0).is_some());
+        assert!(replay.data.is_empty(), "{} bytes kept", replay.data.len());
+    }
+
+    #[test]
+    fn a_substitution_pipe_is_for_the_current_user_and_system_alone() {
+        use windows_sys::Win32::Foundation::LocalFree;
+        use windows_sys::Win32::Security::Authorization::{
+            ConvertSecurityDescriptorToStringSecurityDescriptorW, GetSecurityInfo, SDDL_REVISION_1,
+            SE_KERNEL_OBJECT,
+        };
+        use windows_sys::Win32::Security::DACL_SECURITY_INFORMATION;
+
+        let (_, wide) = generate_pipe_path();
+        // SAFETY: `wide` is a null-terminated pipe name.
+        let handle = unsafe { create_pipe_instance(&wide, PIPE_ACCESS_OUTBOUND, true, 1) }.unwrap();
+        let mut descriptor = std::ptr::null_mut();
+        // SAFETY: `handle` is open; the out-params are valid.
+        let got = unsafe {
+            GetSecurityInfo(
+                handle,
+                SE_KERNEL_OBJECT,
+                DACL_SECURITY_INFORMATION,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                &raw mut descriptor,
+            )
+        };
+        assert_eq!(got, 0);
+        let mut text: *mut u16 = std::ptr::null_mut();
+        // SAFETY: `descriptor` came from the call above; `text` is a valid out-param.
+        let made = unsafe {
+            ConvertSecurityDescriptorToStringSecurityDescriptorW(
+                descriptor,
+                SDDL_REVISION_1,
+                DACL_SECURITY_INFORMATION,
+                &raw mut text,
+                std::ptr::null_mut(),
+            )
+        };
+        assert_ne!(made, 0);
+        // SAFETY: on success `text` is a null-terminated string.
+        let sddl = unsafe { crate::net::widestring_at(text) };
+        // SAFETY: allocated by the call above, with LocalAlloc.
+        unsafe { LocalFree(text.cast()) };
+        // SAFETY: allocated by GetSecurityInfo, with LocalAlloc.
+        unsafe { LocalFree(descriptor) };
+        // SAFETY: the handle is ours, and closed once.
+        unsafe { CloseHandle(handle) };
+
+        let user = crate::process::current_user_sid_string().unwrap();
+        assert!(sddl.contains(&user), "{sddl}");
+        assert!(sddl.contains(";SY)"), "{sddl}");
+        assert!(!sddl.contains(";WD)") && !sddl.contains(";AN)"), "{sddl}");
+    }
 
     /// How much of the disk the file at `path` takes.
     fn allocated(path: &Path) -> u64 {

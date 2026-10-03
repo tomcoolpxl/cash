@@ -2831,6 +2831,8 @@ pub fn finish_output_substitutions() {
 pub(crate) enum SubstitutionEnd {
     /// A `>(...)` as a named pipe: given the end of its input if no program opened it.
     Pipe(String),
+    /// A `<(...)` as a named pipe: what no program opened of it is let go.
+    ReadPipe(String),
     /// A `>(...)` as a temp file: the program is done with it, and what the file holds
     /// is the rest of the substitution's input.
     File(std::sync::Arc<std::sync::atomic::AtomicBool>),
@@ -2842,6 +2844,7 @@ impl Drop for SubstitutionEnd {
     fn drop(&mut self) {
         match self {
             Self::Pipe(path) => cash_win32::pipe::release_unclaimed(path),
+            Self::ReadPipe(path) => cash_win32::pipe::release_unread(path),
             Self::File(done) => done.store(true, std::sync::atomic::Ordering::SeqCst),
             Self::Remove(path) => {
                 let _ = std::fs::remove_file(path);
@@ -2996,7 +2999,7 @@ async fn setup_process_substitution_path(
                 .open_files
                 .set_fd(OpenFiles::STDOUT_FD, sub.writer.into());
             spawn_substitution(subshell, child_params, subshell_cmd)?;
-            Ok((sub.path, None))
+            Ok((sub.path.clone(), Some(SubstitutionEnd::ReadPipe(sub.path))))
         }
         ast::ProcessSubstitutionKind::Write if handed.pipe => {
             let sub = cash_win32::pipe::create_write_substitution()?;
