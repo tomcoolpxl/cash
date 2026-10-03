@@ -193,7 +193,7 @@ fn every_corpus_script_runs_with_crlf_endings() {
     // checked out on this machine has CRLF scripts. `.gitattributes` keeps cash's own
     // corpus at LF, which means the CRLF case has to be manufactured here rather than
     // assumed — and it is the case most users will actually hit.
-    let staging = std::env::temp_dir().join("cash-corpus-crlf");
+    let staging = std::env::temp_dir().join(format!("cash-corpus-crlf-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&staging);
     std::fs::create_dir_all(&staging).expect("create staging dir");
 

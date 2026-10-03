@@ -85,7 +85,8 @@ struct Fixture {
 
 impl Fixture {
     async fn new(name: &str) -> Self {
-        let dir = std::env::temp_dir().join(format!("cash-compscript-{name}"));
+        let dir =
+            std::env::temp_dir().join(format!("cash-compscript-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("create fixture dir");
 
@@ -292,7 +293,7 @@ fn filedir_d_offers_only_directories() {
 fn an_rc_file_can_override_a_shim() {
     // The shims load before rc files so that a user who installs the real
     // bash-completion package gets theirs. Proven by overriding one.
-    let dir = std::env::temp_dir().join("cash-compscript-override");
+    let dir = std::env::temp_dir().join(format!("cash-compscript-override-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("create dir");
     let rc = dir.join("rc.sh");

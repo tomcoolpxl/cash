@@ -52,7 +52,7 @@ struct Sandbox {
 
 impl Sandbox {
     fn new(name: &str) -> Self {
-        let root = std::env::temp_dir().join(format!("cash-find-{name}"));
+        let root = std::env::temp_dir().join(format!("cash-find-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
 
         for dir in ["sub/deep", "skip", "empty"] {

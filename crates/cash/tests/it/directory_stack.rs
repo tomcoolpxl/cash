@@ -45,8 +45,9 @@ struct Sandbox {
 
 impl Sandbox {
     fn new(name: &str) -> Self {
-        let root = std::env::temp_dir().join(format!("cash-dirstack-{name}"));
-        // Named after the test, and cleared on the way in as well as out, so a run that
+        let root =
+            std::env::temp_dir().join(format!("cash-dirstack-{name}-{}", std::process::id()));
+        // Named after the test and the run, and cleared on the way in as well as out, so a run that
         // died half way through does not change what the next one sees.
         let _ = std::fs::remove_dir_all(&root);
         for sub in ["a", "b", "c", "d e"] {
@@ -383,7 +384,8 @@ fn popd_still_pops() {
     let sandbox = Sandbox::new("popd-plain");
     let out = sandbox.run(r#"pushd a > /dev/null; popd; echo "pwd: $(basename "$PWD")""#);
     assert_eq!(
-        out.stdout, "~\npwd: cash-dirstack-popd-plain",
+        out.stdout,
+        format!("~\npwd: cash-dirstack-popd-plain-{}", std::process::id()),
         "stderr: {}",
         out.stderr
     );
@@ -445,7 +447,11 @@ fn rotating_to_the_last_entry_brings_everything_round() {
         r#"{BUILD} pushd +3; echo "pwd: $(basename "$PWD")""#
     ));
     assert_eq!(
-        out.stdout, "~ ~/c ~/b ~/a\npwd: cash-dirstack-edge-rotate-last",
+        out.stdout,
+        format!(
+            "~ ~/c ~/b ~/a\npwd: cash-dirstack-edge-rotate-last-{}",
+            std::process::id()
+        ),
         "stderr: {}",
         out.stderr
     );

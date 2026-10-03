@@ -289,7 +289,7 @@ fn a_nested_shell_is_cash_and_keeps_cash_semantics() {
 
 #[test]
 fn a_bin_sh_shebang_has_an_interpreter() {
-    let dir = std::env::temp_dir().join("cash-shebang-sh");
+    let dir = std::env::temp_dir().join(format!("cash-shebang-sh-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("create dir");
     let script = dir.join("s.sh");

@@ -87,7 +87,7 @@ fn an_escaped_space_still_joins_the_word() {
 
 #[test]
 fn a_wildcard_after_a_backslash_still_globs() {
-    let dir = std::env::temp_dir().join("cash-winpaths-glob");
+    let dir = std::env::temp_dir().join(format!("cash-winpaths-glob-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("a.txt"), "").unwrap();
@@ -152,7 +152,7 @@ async fn a_backslashed_drive_path_completes() -> anyhow::Result<()> {
         .await?;
     shell.options_mut().windows_drive_paths = true;
 
-    let dir = std::env::temp_dir().join("cash-winpaths-complete");
+    let dir = std::env::temp_dir().join(format!("cash-winpaths-complete-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(dir.join("alpha-dir"))?;
 

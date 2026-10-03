@@ -102,7 +102,10 @@ impl Form {
     /// Starts the window and waits for it to be shown; `None` where this session cannot
     /// show one (a runner without a desktop), which the caller treats as a skip.
     fn start(name: &str, refuses_to_close: bool) -> Option<Self> {
-        let ready = std::env::temp_dir().join(format!("cash-kill-term-{name}.ready"));
+        let ready = std::env::temp_dir().join(format!(
+            "cash-kill-term-{name}-{}.ready",
+            std::process::id()
+        ));
         let _ = std::fs::remove_file(&ready);
         let closing = if refuses_to_close {
             "$form.Add_FormClosing({ param($s, $e) $e.Cancel = $true })"

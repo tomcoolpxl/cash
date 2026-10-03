@@ -68,7 +68,7 @@ fn hostile_arguments_survive_the_trip_to_an_msys_program() {
 
     // Files for a glob to find and a response file for `@file` to read, so that either
     // mistake changes the output rather than passing by luck.
-    let dir = std::env::temp_dir().join("cash-msys-args");
+    let dir = std::env::temp_dir().join(format!("cash-msys-args-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("one.rs"), "").unwrap();

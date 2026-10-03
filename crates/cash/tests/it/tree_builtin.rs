@@ -16,7 +16,8 @@ struct Scratch(PathBuf);
 
 impl Scratch {
     fn new(name: &str) -> Self {
-        let path = std::env::temp_dir().join(format!("cash-tree-test-{name}"));
+        let path =
+            std::env::temp_dir().join(format!("cash-tree-test-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&path);
         std::fs::create_dir_all(path.join("beta/deep")).expect("create directory tree");
         std::fs::write(path.join("alpha.txt"), b"alpha").expect("create file");

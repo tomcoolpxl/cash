@@ -63,7 +63,7 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 Freeze `tests/corpus` and the awk, sed and git-prompt differential outputs as goldens in
 `it` (D43 rests on `cases/brush`, which has no language cases); move the remaining `it`
-modules to `it/common.rs`; unique temp folders for the 19 fixed `%TEMP%` names; drop the
+modules to `it/common.rs`; drop the
 test that needs the author's `kali-linux` WSL or make it skip loudly. BIN-05, BIN-19,
 BIN-20.
 

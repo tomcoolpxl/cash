@@ -37,7 +37,7 @@ struct Fixture {
 
 impl Fixture {
     async fn new(name: &str) -> Self {
-        let dir = std::env::temp_dir().join(format!("cash-complete-{name}"));
+        let dir = std::env::temp_dir().join(format!("cash-complete-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("create fixture dir");
 

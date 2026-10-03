@@ -53,7 +53,8 @@ struct Sandbox {
 
 impl Sandbox {
     fn new(name: &str) -> Self {
-        let root = std::env::temp_dir().join(format!("cash-builtin-test-{name}"));
+        let root =
+            std::env::temp_dir().join(format!("cash-builtin-test-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).expect("failed to create sandbox root");
         Self { root }
