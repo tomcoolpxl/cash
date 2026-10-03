@@ -67,6 +67,8 @@ mod ended_children;
 mod environment_contract;
 // Errors that abandon the whole top-level command.
 mod error_jumps;
+// 13.4: errors as Bash words them, named by file and line, coloured only on a terminal.
+mod error_messages;
 // Expansions as Bash performs them.
 mod expansions;
 // Extended patterns, `!(…)` above all.

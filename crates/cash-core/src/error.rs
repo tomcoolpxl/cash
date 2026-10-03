@@ -211,7 +211,7 @@ pub enum ErrorKind {
     FormattingError(#[from] std::fmt::Error),
 
     /// An error occurred while parsing.
-    #[error("{1}: {0}")]
+    #[error("{0}")]
     ParseError(crate::parser::ParseError, crate::SourceInfo),
 
     /// An error occurred while parsing a function body.

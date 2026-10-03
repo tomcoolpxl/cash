@@ -187,9 +187,9 @@ cases:
       AFTER[6]
       LATER-RAN
     expected_stderr: |
-      error: cannot mutate readonly variable
-      error: cannot mutate readonly variable
-      error: cannot mutate readonly variable
+      cash: cannot mutate readonly variable
+      cash: cannot mutate readonly variable
+      cash: cannot mutate readonly variable
       exit
 
   - name: "zsh preexec failures are non-fatal"
@@ -201,7 +201,7 @@ cases:
     expected_stdout: |
       STILL-RAN
     expected_stderr: |
-      error: cannot mutate readonly variable
+      cash: cannot mutate readonly variable
       exit
 
   # A name that resolves to nothing is quiet, so a hook may be registered before it is
@@ -463,7 +463,7 @@ cases:
       PREEXEC[echo REAL]
       REAL
     expected_stderr: |
-      error: main: syntax error at line 1 col 6
+      cash: syntax error near unexpected token `)'
       exit
 
   # A line that only defines a function runs no command: bash's `DEBUG` trap does not fire

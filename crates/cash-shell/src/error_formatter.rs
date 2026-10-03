@@ -4,17 +4,18 @@ pub(crate) struct Formatter {
 }
 
 impl cash_core::extensions::ErrorFormatter for Formatter {
+    /// Bash's wording, as the default has it; `--disable-color` turns colour off even on
+    /// a terminal.
     fn format_error(
         &self,
         err: &cash_core::error::Error,
-        _shell: &cash_core::Shell<impl cash_core::ShellExtensions>,
+        shell: &cash_core::Shell<impl cash_core::ShellExtensions>,
+        colour: bool,
     ) -> String {
-        let prefix = if self.use_color {
-            color_print::cstr!("<red>error:</red> ")
-        } else {
-            "error: "
-        };
-
-        std::format!("{prefix}{err:#}\n")
+        cash_core::extensions::DefaultErrorFormatter.format_error(
+            err,
+            shell,
+            colour && self.use_color,
+        )
     }
 }

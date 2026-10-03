@@ -441,9 +441,23 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
         // it; in POSIX mode it ends the script, as an error in a special builtin does.
         let whole = self.parse_string(command.as_str());
         let fatal = self.options().posix_mode;
+        let line = self
+            .call_stack
+            .current_frame()
+            .and_then(crate::callstack::Frame::current_line)
+            .unwrap_or(1);
+        let nested = self.enter_nested_text();
         let result = self
-            .run_text(command.as_bytes(), whole, source_info, params, fatal)
+            .run_text(
+                command.as_bytes(),
+                whole,
+                execution::TextOrigin::Eval { line },
+                source_info,
+                params,
+                fatal,
+            )
             .await;
+        self.leave_nested_text(nested);
         self.trace_level -= 1;
         result
     }

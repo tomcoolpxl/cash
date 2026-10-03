@@ -82,7 +82,19 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         signal: crate::traps::TrapSignal,
         handler: Option<&crate::traps::TrapHandler>,
     ) {
+        // A trap's `$LINENO`, and the line its errors name, are the line of the command
+        // that set it off, as in Bash: `ERR` names the command that failed. `EXIT`'s
+        // are its own string's, from 1. Cash gave the line the trap was set on.
+        let line = match signal {
+            crate::traps::TrapSignal::Exit => 1,
+            _ => self
+                .call_stack
+                .current_frame()
+                .and_then(callstack::Frame::current_line)
+                .unwrap_or(1),
+        };
         self.call_stack.push_trap_handler(signal, handler);
+        self.call_stack.increment_current_line_offset(line - 1);
     }
 
     pub(crate) fn leave_trap_handler(&mut self) {
@@ -277,6 +289,35 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
             frame.positional_args_changed = true;
         }
     }
+
+    /// Before running a text parsed apart from the file, `eval`'s string or a command
+    /// substitution's: moves the current frame's line numbers so that the text's line 1
+    /// is the line the current command is on, as Bash counts them. Its `$LINENO`, and the
+    /// line its errors name, were 1. [`Self::leave_nested_text`] takes it back.
+    pub(crate) fn enter_nested_text(&mut self) -> NestedText {
+        let current = self
+            .call_stack
+            .current_frame()
+            .and_then(|frame| frame.current.clone());
+        let delta = current
+            .as_ref()
+            .map_or(0, |position| position.line.saturating_sub(1));
+        self.call_stack.increment_current_line_offset(delta);
+        NestedText { delta, current }
+    }
+
+    /// After running a text [`Self::enter_nested_text`] was called for: the frame's line
+    /// numbers, and the command it is on, are as they were.
+    pub(crate) fn leave_nested_text(&mut self, nested: NestedText) {
+        self.call_stack.decrement_current_line_offset(nested.delta);
+        self.call_stack.set_current_pos(nested.current);
+    }
+}
+
+/// What [`crate::Shell::enter_nested_text`] changed, for `leave_nested_text` to undo.
+pub(crate) struct NestedText {
+    delta: usize,
+    current: Option<std::sync::Arc<crate::SourcePosition>>,
 }
 
 fn repeated_char_str(c: char, count: usize) -> String {

@@ -25,19 +25,26 @@ pub type DefaultShellExtensions = ShellExtensionsImpl<DefaultErrorFormatter>;
 
 /// Trait for defining shell error behaviors.
 pub trait ErrorFormatter: Clone + Default + Send + Sync + 'static {
-    /// Format the given error for display within the context of the provided shell.
+    /// Format the given error for display within the context of the provided shell, as
+    /// Bash words it: `script.sh: line 3: ` ([`Shell::error_prefix`]) and the message.
     ///
     /// # Arguments
     ///
     /// * `error` - The error to format
     /// * `shell` - The shell context in which the error occurred.
+    /// * `colour` - Whether the stream it goes to may be coloured ([`Shell::colours`]).
     fn format_error(
         &self,
         error: &error::Error,
         shell: &Shell<impl extensions::ShellExtensions>,
+        colour: bool,
     ) -> String {
-        let _ = shell;
-        std::format!("error: {error:#}\n")
+        let prefix = shell.error_prefix();
+        if colour {
+            std::format!("\x1b[31m{prefix}\x1b[39m{error:#}\n")
+        } else {
+            std::format!("{prefix}{error:#}\n")
+        }
     }
 }
 

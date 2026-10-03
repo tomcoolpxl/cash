@@ -2,7 +2,7 @@
 
 use std::io::Write;
 
-use crate::{error, extensions, ioutils};
+use crate::{callstack, error, extensions, ioutils, openfiles};
 
 impl<SE: extensions::ShellExtensions> crate::Shell<SE> {
     /// Returns a value that can be used to write to the shell's currently configured
@@ -14,11 +14,70 @@ impl<SE: extensions::ShellExtensions> crate::Shell<SE> {
     }
 
     /// Returns a value that can be used to write to the shell's currently configured
-    /// standard error stream using `write!` et al.
-    pub fn stderr(&self) -> impl std::io::Write + 'static {
+    /// standard error stream using `write!` et al.; it says whether it is a terminal.
+    pub fn stderr(&self) -> openfiles::OpenFile {
         self.open_files.try_stderr().cloned().unwrap_or_else(|| {
             ioutils::FailingReaderWriter::new("standard error not available").into()
         })
+    }
+
+    /// Whether what is written to `stream` may be coloured: only a terminal, and only
+    /// while `NO_COLOR` is unset or empty. The one place an error stream's colour is
+    /// decided (XC-8), where cash wrote ANSI colour into pipes and files.
+    ///
+    /// # Arguments
+    ///
+    /// * `stream` - The stream about to be written to.
+    pub fn colours(&self, stream: &openfiles::OpenFile) -> bool {
+        stream.is_terminal()
+            && self
+                .env_str("NO_COLOR")
+                .is_none_or(|value| value.is_empty())
+    }
+
+    /// The start of an error message, as Bash's `get_name_for_error` and its `line N:`
+    /// make it: `script.sh: line 3: ` in a shell that is not interactive, the name being
+    /// the file the running code came from (`BASH_SOURCE[0]`), or `$0` where there is
+    /// none (`cash: line 1: ` for `-c`); `cash: ` in an interactive one.
+    pub fn error_prefix(&self) -> String {
+        if self.options.interactive {
+            return format!("{}: ", self.name_for_interactive_errors());
+        }
+        let line = self
+            .call_stack
+            .current_frame()
+            .and_then(callstack::Frame::current_line)
+            .unwrap_or(1);
+        format!("{}: line {line}: ", self.name_for_errors())
+    }
+
+    /// `BASH_SOURCE[0]`, or `$0` where the running code came from no file.
+    pub(crate) fn name_for_errors(&self) -> String {
+        let source = self
+            .call_stack
+            .iter()
+            .find_map(|frame| match &frame.frame_type {
+                callstack::FrameType::Function(call) => Some(&call.function.source().source),
+                callstack::FrameType::Script(script) => Some(&script.source_info.source),
+                _ => None,
+            });
+        match source {
+            Some(source) if !matches!(source.as_str(), "" | "-c" | "main") => source.clone(),
+            _ => self
+                .current_shell_name()
+                .map_or_else(|| "cash".to_owned(), std::borrow::Cow::into_owned),
+        }
+    }
+
+    /// The shell's own name, as Bash's `base_pathname (shell_name)`: `cash`.
+    pub(crate) fn name_for_interactive_errors(&self) -> String {
+        self.name
+            .as_deref()
+            .and_then(|name| std::path::Path::new(name).file_stem())
+            .map_or_else(
+                || "cash".to_owned(),
+                |stem| stem.to_string_lossy().into_owned(),
+            )
     }
 
     /// Outputs `set -x` style trace output for a command. Intentionally does not return
@@ -76,15 +135,16 @@ impl<SE: extensions::ShellExtensions> crate::Shell<SE> {
     ///
     /// # Arguments
     ///
-    /// * `file_table` - The open file table to use for any file descriptor references.
+    /// * `file` - The stream to write it to, coloured only if [`Self::colours`] says so.
     /// * `err` - The error to display.
     pub fn display_error(
         &self,
-        file: &mut impl std::io::Write,
+        file: &mut openfiles::OpenFile,
         err: &error::Error,
     ) -> Result<(), error::Error> {
         use crate::extensions::ErrorFormatter as _;
-        let str = self.error_formatter.format_error(err, self);
+        let colour = self.colours(file);
+        let str = self.error_formatter.format_error(err, self, colour);
         write!(file, "{str}")?;
 
         Ok(())

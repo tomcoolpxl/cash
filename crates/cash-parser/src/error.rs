@@ -3,12 +3,13 @@ use crate::tokenizer;
 /// Represents an error that occurred while parsing tokens.
 #[derive(thiserror::Error, Debug)]
 pub enum ParseError {
-    /// A parsing error occurred near the given position.
-    #[error("syntax error at line {} col {}", .0.line, .0.column)]
-    ParsingNear(crate::SourcePosition),
+    /// A parsing error occurred at a token: where it starts, and the token as Bash names
+    /// it (`newline` for a line's end).
+    #[error("syntax error near unexpected token `{1}'")]
+    ParsingNear(crate::SourcePosition, String),
 
     /// A parsing error occurred at the end of the input.
-    #[error("syntax error at end of input")]
+    #[error("syntax error: unexpected end of file")]
     ParsingAtEndOfInput,
 
     /// The input ended inside a compound command, as Bash 5.3 reports it: naming the
@@ -43,7 +44,7 @@ pub mod miette {
         pub fn to_pretty_error(self, input: impl Into<String>) -> PrettyError {
             let input = input.into();
             let location = match self {
-                Self::ParsingNear(ref pos) => {
+                Self::ParsingNear(ref pos, _) => {
                     Some(SourceOffset::from_location(&input, pos.line, pos.column))
                 }
                 Self::Tokenizing { ref position, .. } => position
@@ -134,12 +135,164 @@ pub(crate) fn convert_peg_parse_error(
     let approx_token_index = err.location;
 
     if approx_token_index < tokens.len() {
-        let token = &tokens[approx_token_index];
-        ParseError::ParsingNear((*token.location().start).clone())
+        let mut token = &tokens[approx_token_index];
+        // The furthest token any rule reached is often the end of the line after the word
+        // Bash stops at: `if then`, `fi` alone.
+        if matches!(token.to_str(), "\n" | ";")
+            && let Some(word) = misplaced_reserved_word(&tokens[..approx_token_index])
+        {
+            token = word;
+        }
+        let name = match token.to_str() {
+            "\n" => "newline",
+            text => text,
+        };
+        ParseError::ParsingNear((*token.location().start).clone(), name.to_owned())
     } else if let Some((keyword, line)) = innermost_unclosed_compound(tokens) {
         ParseError::UnterminatedCompound { keyword, line }
     } else {
         ParseError::ParsingAtEndOfInput
+    }
+}
+
+/// The first reserved word in `tokens` that cannot stand where it is, the token Bash's
+/// parser stops at: `then` with no condition before it, `fi` with no `if` open, `done`
+/// after an empty body. The peg parser's error is the furthest token any rule reached,
+/// which for these is the end of the line.
+///
+/// A token-level approximation, as [`innermost_unclosed_compound`] is: a `case` is
+/// skipped to its `esac`, and the head of a `for` or `select` to its `;` or newline.
+fn misplaced_reserved_word(tokens: &[crate::Token]) -> Option<&crate::Token> {
+    let mut scan = Scan {
+        command_position: true,
+        ..Scan::default()
+    };
+    for token in tokens {
+        let word = match token {
+            crate::Token::Operator(op, _) => {
+                let op = op.as_str();
+                if scan.in_head && matches!(op, "\n" | ";") {
+                    scan.in_head = false;
+                }
+                scan.command_position = matches!(
+                    op,
+                    "\n" | ";" | ";;" | "&" | "&&" | "||" | "|" | "|&" | "(" | ")"
+                );
+                continue;
+            }
+            crate::Token::Word(word, _) => word.as_str(),
+        };
+        if scan.cases > 0 {
+            match word {
+                "case" => scan.cases += 1,
+                "esac" => scan.cases -= 1,
+                _ => {}
+            }
+            continue;
+        }
+        if scan.in_head || !scan.command_position {
+            continue;
+        }
+        if !scan.takes(word) {
+            return Some(token);
+        }
+        scan.command_position = matches!(
+            word,
+            "if" | "then" | "else" | "elif" | "while" | "until" | "do" | "{" | "!" | "time"
+        );
+    }
+    None
+}
+
+/// What [`misplaced_reserved_word`] has seen so far.
+#[derive(Default)]
+struct Scan<'a> {
+    /// The compound commands open, innermost last.
+    open: Vec<Open<'a>>,
+    /// Whether the next word starts a command.
+    command_position: bool,
+    /// How many `case`s deep the scan is, skipping them.
+    cases: usize,
+    /// Whether the scan is in a `for` or `select` head, which it skips.
+    in_head: bool,
+}
+
+/// A compound command open at a point of the scan, in the part `phase` names: 0 its
+/// condition or head, 1 its body (`then` or `do`), 2 an `else`.
+struct Open<'a> {
+    keyword: &'a str,
+    phase: u8,
+    commands: bool,
+}
+
+impl<'a> Scan<'a> {
+    /// Takes `word`, in command position: false if it is a reserved word that cannot
+    /// stand there.
+    fn takes(&mut self, word: &'a str) -> bool {
+        let top = self.open.last_mut();
+        match (word, top) {
+            ("if" | "while" | "until" | "{" | "for" | "select", _) => {
+                self.open.push(Open {
+                    keyword: word,
+                    phase: u8::from(word == "{"),
+                    commands: false,
+                });
+                self.in_head = matches!(word, "for" | "select");
+                true
+            }
+            ("case", _) => {
+                self.cases += 1;
+                true
+            }
+            ("then", Some(top)) if top.keyword == "if" && top.phase == 0 && top.commands => {
+                top.phase = 1;
+                top.commands = false;
+                true
+            }
+            ("elif" | "else", Some(top))
+                if top.keyword == "if" && top.phase == 1 && top.commands =>
+            {
+                top.phase = if word == "elif" { 0 } else { 2 };
+                top.commands = false;
+                true
+            }
+            ("do", Some(top))
+                if top.phase == 0
+                    && (matches!(top.keyword, "for" | "select")
+                        || (matches!(top.keyword, "while" | "until") && top.commands)) =>
+            {
+                top.phase = 1;
+                top.commands = false;
+                true
+            }
+            ("fi", Some(top)) if top.keyword == "if" && top.phase >= 1 && top.commands => {
+                self.close()
+            }
+            ("done", Some(top))
+                if matches!(top.keyword, "while" | "until" | "for" | "select")
+                    && top.phase == 1
+                    && top.commands =>
+            {
+                self.close()
+            }
+            ("}", Some(top)) if top.keyword == "{" && top.commands => self.close(),
+            ("then" | "elif" | "else" | "do" | "fi" | "done" | "}", _) => false,
+            ("!" | "time", _) | (_, None) => true,
+            (_, Some(top)) => {
+                top.commands = true;
+                true
+            }
+        }
+    }
+
+    /// Closes the innermost compound command, which counts as a command of the one
+    /// around it.
+    fn close(&mut self) -> bool {
+        self.open.pop();
+        if let Some(parent) = self.open.last_mut() {
+            parent.commands = true;
+        }
+        true
     }
 }
 
@@ -194,4 +347,39 @@ fn innermost_unclosed_compound(tokens: &[crate::Token]) -> Option<(String, usize
     }
     open.last()
         .map(|(keyword, line)| ((*keyword).to_owned(), *line))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ParseError;
+
+    /// The token a syntax error in `text` names, and its line.
+    fn near(text: &str) -> Option<(String, usize)> {
+        let options = crate::parser::ParserOptions::default();
+        match crate::parser::Parser::new(text.as_bytes(), &options).parse_program() {
+            Err(ParseError::ParsingNear(position, token)) => Some((token, position.line)),
+            _ => None,
+        }
+    }
+
+    #[test]
+    fn a_misplaced_reserved_word_is_named_as_bash_names_it() {
+        // The peg parser fails at the end of the line; Bash at the word.
+        assert_eq!(near("if then\n"), Some(("then".into(), 1)));
+        assert_eq!(near("echo a\nfi\n"), Some(("fi".into(), 2)));
+        assert_eq!(near("while true; do done\n"), Some(("done".into(), 1)));
+        assert_eq!(near("if true; then fi\n"), Some(("fi".into(), 1)));
+        assert_eq!(near("{ }\n"), Some(("}".into(), 1)));
+    }
+
+    #[test]
+    fn other_tokens_are_named_where_the_parser_stopped() {
+        assert_eq!(near("echo )\n"), Some((")".into(), 1)));
+        // Reserved words that are arguments, or closed properly, are not misplaced.
+        assert_eq!(near("echo fi done\n"), None);
+        assert_eq!(
+            near("for x in a; do echo; done\nif true; then :; fi\n"),
+            None
+        );
+    }
 }

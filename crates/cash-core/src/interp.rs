@@ -168,10 +168,7 @@ impl ExecutionParameters {
     /// # Arguments
     ///
     /// * `shell` - The shell context.
-    pub fn stderr(
-        &self,
-        shell: &Shell<impl extensions::ShellExtensions>,
-    ) -> impl std::io::Write + 'static {
+    pub fn stderr(&self, shell: &Shell<impl extensions::ShellExtensions>) -> OpenFile {
         self.try_stderr(shell).unwrap_or_else(|| {
             ioutils::FailingReaderWriter::new("standard error not available").into()
         })

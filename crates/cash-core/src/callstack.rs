@@ -569,8 +569,12 @@ impl CallStack {
         signal: traps::TrapSignal,
         handler: Option<&traps::TrapHandler>,
     ) {
-        let source_info =
-            handler.map_or_else(crate::SourceInfo::default, |h| h.source_info.clone());
+        // Its file, but not where the trap was set: its lines are the command's that set
+        // it off (`Shell::enter_trap_handler`).
+        let source_info = handler.map_or_else(crate::SourceInfo::default, |h| crate::SourceInfo {
+            source: h.source_info.source.clone(),
+            start: None,
+        });
 
         self.frames.push_front(Frame {
             frame_type: FrameType::TrapHandler(signal),

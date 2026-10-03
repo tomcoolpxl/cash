@@ -1,6 +1,7 @@
 //! Execution support for shell.
 
-use std::{io::Read, path::Path};
+use std::io::{Read, Write as _};
+use std::path::Path;
 
 use super::parsing::Prefix;
 use crate::{
@@ -213,7 +214,7 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         // script goes on, in POSIX mode too; a script that is run ends.
         let fatal = !matches!(call_type, callstack::ScriptCallType::Source);
         let result = self
-            .run_text(&text, whole, source_info, params, fatal)
+            .run_text(&text, whole, TextOrigin::Whole, source_info, params, fatal)
             .await;
 
         if matches!(call_type, callstack::ScriptCallType::Source) && result.is_ok() {
@@ -261,8 +262,15 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
     ) -> Result<ExecutionResult, error::Error> {
         let command: String = command.into();
         let whole = self.parse_string(command.as_str());
-        self.run_text(command.as_bytes(), whole, source_info, params, true)
-            .await
+        self.run_text(
+            command.as_bytes(),
+            whole,
+            TextOrigin::Whole,
+            source_info,
+            params,
+            true,
+        )
+        .await
     }
 
     /// Executes the given command, provided to a shell executable on the command
@@ -309,6 +317,10 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         script_path: P,
         args: I,
     ) -> Result<ExecutionResult, error::Error> {
+        // `$0` is the script for as long as the shell runs, as in Bash: an `EXIT` trap
+        // run once the script is done said cash's own path.
+        self.name = Some(script_path.as_ref().to_string_lossy().into_owned());
+
         let params = self.default_exec_params();
         let result = self
             .parse_and_execute_script_file(
@@ -337,6 +349,7 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         &mut self,
         text: &[u8],
         whole: Result<cash_parser::ast::Program, cash_parser::ParseError>,
+        origin: TextOrigin,
         source_info: &crate::SourceInfo,
         params: &ExecutionParameters,
         fatal: bool,
@@ -346,6 +359,17 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
                 .run_parsed_result(Ok(program), source_info, params)
                 .await;
         }
+
+        // A last line ends as the others do, as Bash ends a `-c` or `eval` string: `echo (`
+        // is wrong at its newline, not at the end of the text.
+        let mut ended;
+        let text = if text.last().is_some_and(|&byte| byte != b'\n') {
+            ended = text.to_vec();
+            ended.push(b'\n');
+            ended.as_slice()
+        } else {
+            text
+        };
 
         let mut result = ExecutionResult::success();
         let mut pending: Vec<u8> = Vec::new();
@@ -361,7 +385,14 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
                 Prefix::Complete(program) | Prefix::NeedsMore(Ok(program)) => program,
                 Prefix::NeedsMore(Err(err)) | Prefix::Wrong(err) => {
                     let err = counted_from_the_start(err, lines_before);
-                    return Ok(self.report_syntax_error(err, source_info, params, fatal));
+                    return Ok(self.report_syntax_error(
+                        err,
+                        text,
+                        origin,
+                        source_info,
+                        params,
+                        fatal,
+                    ));
                 }
             };
 
@@ -392,19 +423,95 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
     pub(crate) fn report_syntax_error(
         &mut self,
         parse_err: cash_parser::ParseError,
+        text: &[u8],
+        origin: TextOrigin,
         source_info: &crate::SourceInfo,
         params: &ExecutionParameters,
         fatal: bool,
     ) -> ExecutionResult {
+        let mut stderr = params.stderr(self);
+        let colour = self.colours(&stderr);
+        let message = self.syntax_error_message(&parse_err, text, origin, source_info, colour);
+        let _ = stderr.write_all(message.as_bytes());
+
         let mut err =
             error::Error::from(error::ErrorKind::ParseError(parse_err, source_info.clone()));
         if fatal {
             err = err.into_fatal();
         }
-        let _ = self.display_error(&mut params.stderr(self), &err);
         let result = err.into_result(self);
         self.set_last_exit_status(result.exit_code.into());
         result
+    }
+
+    /// Bash's words for a syntax error: after `script.sh: line 2: `, the error, and on a
+    /// second line the line it is on, quoted; `cash: -c: line 2: ` for a `-c` string,
+    /// `script.sh: eval: line 7: ` for `eval`'s, counted from the line the `eval` is on;
+    /// at the end of the text, the line after its last, and no quote. What was typed at
+    /// the prompt gets `cash: ` and one line.
+    fn syntax_error_message(
+        &self,
+        err: &cash_parser::ParseError,
+        text: &[u8],
+        origin: TextOrigin,
+        source_info: &crate::SourceInfo,
+        colour: bool,
+    ) -> String {
+        use cash_parser::ParseError;
+
+        use std::fmt::Write as _;
+
+        let paint = |prefix: String| {
+            if colour {
+                format!("\x1b[31m{prefix}\x1b[39m")
+            } else {
+                prefix
+            }
+        };
+        if self.options.interactive && source_info.source == "main" {
+            let prefix = paint(format!("{}: ", self.name_for_interactive_errors()));
+            return format!("{prefix}{err}\n");
+        }
+
+        let (name, first_line) = match origin {
+            TextOrigin::Eval { line } => (format!("{}: eval", self.name_for_errors()), line),
+            TextOrigin::Whole if source_info.source == "-c" => {
+                let zero = self
+                    .current_shell_name()
+                    .map_or_else(|| "cash".to_owned(), std::borrow::Cow::into_owned);
+                (format!("{zero}: -c"), 1)
+            }
+            TextOrigin::Whole => (source_info.source.clone(), 1),
+        };
+        // The line a compound command began on is counted as the others are.
+        let shown = match err {
+            ParseError::UnterminatedCompound { keyword, line } => {
+                ParseError::UnterminatedCompound {
+                    keyword: keyword.clone(),
+                    line: line + first_line - 1,
+                }
+                .to_string()
+            }
+            other => other.to_string(),
+        };
+        let (line, quoted) = match err {
+            ParseError::ParsingNear(position, _) => (
+                first_line + position.line.saturating_sub(1),
+                line_of(text, position.line),
+            ),
+            ParseError::Tokenizing {
+                inner,
+                position: Some(position),
+            } if !inner.is_incomplete() => (first_line + position.line.saturating_sub(1), None),
+            _ => (first_line + count_lines(text), None),
+        };
+
+        let prefix = paint(format!("{name}: line {line}: "));
+        let mut message = format!("{prefix}{shown}\n");
+        if let Some(quoted) = quoted {
+            let _ = writeln!(message, "{prefix}`{quoted}'");
+        }
+        message
     }
 
     pub(crate) async fn run_parsed_result(
@@ -462,14 +569,41 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
     }
 }
 
+/// Where a text [`crate::Shell::run_text`] runs came from, for the line numbers its
+/// syntax errors name.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum TextOrigin {
+    /// A file, a `-c` string or what was typed: its first line is line 1.
+    Whole,
+    /// `eval`'s string: its first line is the line the `eval` is on.
+    Eval {
+        /// That line.
+        line: usize,
+    },
+}
+
+/// The lines in `text`, a last one without a newline included.
+fn count_lines(text: &[u8]) -> usize {
+    text.split_inclusive(|&byte| byte == b'\n').count()
+}
+
+/// Line `number` of `text`, counted from 1, without its line ending.
+fn line_of(text: &[u8], number: usize) -> Option<String> {
+    let line = text
+        .split(|&byte| byte == b'\n')
+        .nth(number.checked_sub(1)?)?;
+    let line = line.strip_suffix(b"\r").unwrap_or(line);
+    Some(String::from_utf8_lossy(line).into_owned())
+}
+
 /// `err`, from a parse of text that began `lines` lines into the whole, with its lines
 /// counted from the start of the whole.
 fn counted_from_the_start(err: cash_parser::ParseError, lines: usize) -> cash_parser::ParseError {
     use cash_parser::ParseError;
     match err {
-        ParseError::ParsingNear(mut position) => {
+        ParseError::ParsingNear(mut position, token) => {
             position.line += lines;
-            ParseError::ParsingNear(position)
+            ParseError::ParsingNear(position, token)
         }
         ParseError::UnterminatedCompound { keyword, line } => ParseError::UnterminatedCompound {
             keyword,

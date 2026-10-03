@@ -60,13 +60,13 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 13.4 Error output: colour, prefixes, `--help`
 
-Errors are ANSI-coloured into pipes and files and ignore `NO_COLOR`
-(`cash-shell/src/entry.rs:675`); three prefixes (`error:`, `cash:`, `name:`); `--help`
-goes to stdout or stderr, exit 0 or 2, by builtin. One "colour this stream" helper. XC-8,
-BIN-04, BI-16.
-
-A warning is printed as an error: `error: warning: c1: circular name reference`, where
-Bash says `script: line 6: warning: c1: circular name reference`. Found in phase 12.
+The shell's own errors now carry Bash's `script.sh: line 3: ` (`Shell::error_prefix`),
+coloured only on a terminal (`Shell::colours`). Left: their messages in Bash's words
+(`command not found: x` is `x: command not found`, `cannot mutate readonly variable` is
+`r: readonly variable`, `expanding unset variable: ${u}` is `u: unbound variable`,
+`expansion error: must be set` is `x: must be set`); the builtins' own messages
+(`cd: …`) without the prefix; clap's block for a bad option; `--help` on stdout or
+stderr, exit 0 or 2, by builtin. XC-8, BIN-04, BI-16; decided, below.
 
 An array index before the start (`a=(1 2)`): `${a[-3]}` expands to nothing in both
 shells, but Bash also says `a: bad array subscript`, and cash says nothing; `a[-3]=x`
@@ -88,11 +88,10 @@ Two errors cash does not report at all: `echo "${x!@#}"` prints `${x!@#}` where 
 `${x!@#}: bad substitution` and fails, and `[ 1 -eq x ]` is quietly false where Bash
 says `[: x: integer expected` and returns 2. Found in 1.3.12 surveying error output.
 
-A syntax error is worded by the parser's position, not by the token: cash says
-`script.sh: syntax error at line 2 col 8`, `syntax error at end of input` or `unexpected
-end of file from `if' command` where Bash says `script.sh: line 2: syntax error near
-unexpected token `then'` and then quotes the line (`script.sh: line 2: `if then'`), and
-`eval: line 2:` for `eval`'s. Found in 1.3.12 fixing EXE-07.
+A syntax error is now Bash's two lines, near the token Bash names. Left: `-c 'echo ('`
+is `unexpected end of file` on line 2 where Bash says near `newline` on line 1, and the
+tokenizer's errors keep their own words (`unterminated single quote at line 1 col 6`
+where Bash says ``unexpected EOF while looking for matching `''``). Found in 1.3.12.
 
 ### 13.5 D36: measure the pooled prompt job, then build it or drop it
 

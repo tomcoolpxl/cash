@@ -1667,6 +1667,10 @@ async fn run_substitution_command(
     // TODO(source-info): review this
     let source_info = crate::SourceInfo::from("main");
 
+    // Its lines are the line it is on, as in Bash; the shell is a copy, so nothing needs
+    // taking back.
+    let _nested = shell.enter_nested_text();
+
     // Handle the parse result using default shell behavior.
     shell
         .run_parsed_result(parse_result, &source_info, &params)
