@@ -259,3 +259,35 @@ fn env_dash_s_splits_the_shebang_line() {
         out.stderr
     );
 }
+
+#[test]
+fn a_script_sees_itself_as_it_was_named() {
+    // The kernel hands the interpreter the path as typed, so `./sub/z` is `$0`; cash
+    // made it absolute. One found on `PATH` came with a `\` from the join.
+    let scratch = Scratch::new("named");
+    let dir = scratch.path();
+    std::fs::create_dir_all(dir.join("sub")).expect("mkdir");
+    std::fs::create_dir_all(dir.join("bin")).expect("mkdir");
+    std::fs::write(dir.join("sub").join("z"), "#!/bin/bash\necho \"[$0]\"\n").expect("write");
+    std::fs::write(dir.join("bin").join("zz"), "#!/bin/bash\necho \"[$0]\"\n").expect("write");
+
+    let dir_str = dir.to_string_lossy().replace('\\', "/");
+    let out = run_cash_cmd(&format!(
+        r#"cd '{dir_str}'; ./sub/z; sub/z; cd sub; ../sub/z; PATH="{dir_str}/bin:$PATH"; zz"#
+    ));
+    let rendered = cash_rendered(&dir_str);
+    assert_eq!(
+        out.stdout,
+        format!("[./sub/z]\n[sub/z]\n[../sub/z]\n[{rendered}/bin/zz]\n"),
+        "stderr: {}",
+        out.stderr
+    );
+}
+
+/// A Windows path as cash spells it (D3): forward slashes and an upper-case drive.
+fn cash_rendered(path: &str) -> String {
+    let mut chars = path.chars();
+    chars.next().map_or_else(String::new, |drive| {
+        format!("{}{}", drive.to_ascii_uppercase(), chars.as_str())
+    })
+}

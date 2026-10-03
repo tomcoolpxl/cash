@@ -311,6 +311,22 @@ fn build_shebang_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
     argv0: &str,
     args: &[S],
 ) -> Result<(std::process::Command, Extras), error::Error> {
+    // The interpreter is handed the script as it was typed, as the kernel hands
+    // it: `./s` stays `./s` for `$0` and `sys.argv[0]`, and the interpreter starts
+    // in the shell's folder. The shell has made it absolute by now (D10), and a
+    // path spelled whole or found on `PATH` is given in cash's spelling (D3);
+    // `PATH`'s join left a `\` in it.
+    let typed = context.command_name.as_str();
+    let named = if typed.contains(['/', '\\'])
+        && !typed.starts_with(['/', '\\'])
+        && !cash_win32::path::is_absolute(Path::new(typed))
+        && context.shell.absolute_path(Path::new(typed)) == script
+    {
+        typed.to_string()
+    } else {
+        cash_win32::path::render(script)
+    };
+
     let crate::shebang_env::Interpreter {
         command: interpreter,
         args: shebang_args,
@@ -369,7 +385,7 @@ fn build_shebang_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
 
             let mut words = vec![batch_target.to_string_lossy().into_owned()];
             words.extend(extra_args.iter().cloned());
-            words.push(script.to_string_lossy().into_owned());
+            words.push(named);
             words.extend(
                 args.iter()
                     .map(|arg| arg.as_ref().to_string_lossy().into_owned()),
@@ -383,7 +399,7 @@ fn build_shebang_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
             let mut c = std::process::Command::new(target);
             c.arg0(argv0);
             push_native_args(&mut c, target, &extra_args);
-            push_native_args(&mut c, target, &[script]);
+            push_native_args(&mut c, target, &[named]);
             push_native_args(&mut c, target, args);
             Ok((c, Extras::default()))
         }
