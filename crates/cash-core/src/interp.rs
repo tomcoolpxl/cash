@@ -2251,12 +2251,32 @@ async fn apply_assignment(
             ShellValueLiteral::Scalar(value)
         }
         ast::AssignmentValue::Array(unexpanded_values) => {
+            // A subscript in the list is an arithmetic expression, as in Bash, unless the
+            // array is associative: `c=([2+1]=y z [i]=w)` sets 3 and 4 and then `i`. It was
+            // read as a number, so `2+1` and `i` were 0 (LANG-02).
+            let associative = shell.env().get(variable_name).is_some_and(|(_, var)| {
+                matches!(
+                    var.value(),
+                    ShellValue::AssociativeArray(_)
+                        | ShellValue::Unset(ShellValueUnsetType::AssociativeArray)
+                )
+            });
             let mut elements = vec![];
             for (unexpanded_key, unexpanded_value) in unexpanded_values {
                 let key = match unexpanded_key {
-                    Some(unexpanded_key) => Some(
+                    Some(unexpanded_key) if associative => Some(
                         expansion::basic_expand_assignment_word(shell, params, unexpanded_key)
                             .await?,
+                    ),
+                    Some(unexpanded_key) => Some(
+                        arithmetic::expand_and_eval(
+                            shell,
+                            params,
+                            unexpanded_key.value.as_str(),
+                            false,
+                        )
+                        .await?
+                        .to_string(),
                     ),
                     None => None,
                 };

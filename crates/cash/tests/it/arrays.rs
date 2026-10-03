@@ -31,3 +31,34 @@ fn a_negative_index_counts_back_from_the_highest_index() {
         (r#"a=([0]=x [5]=y [9]=z); echo "${a[-1]} ${a[-5]}""#, "z y"),
     ]);
 }
+
+#[test]
+fn a_subscript_in_a_list_is_arithmetic_unless_the_array_is_associative() {
+    // `2+1` and `i` were read as numbers, 0 (LANG-02).
+    check(&[
+        (
+            "i=4; c=([2+1]=y z [i]=w); declare -p c",
+            "declare -a c=([3]=\"y\" [4]=\"w\")",
+        ),
+        (
+            "a=([1+1]=x); a+=([10/2]=y); declare -p a",
+            "declare -a a=([2]=\"x\" [5]=\"y\")",
+        ),
+        (
+            "declare -a d=([3*2]=z); declare -p d",
+            "declare -a d=([6]=\"z\")",
+        ),
+        (
+            "f() { local -a l=([1+2]=q); declare -p l; }; f",
+            "declare -a l=([3]=\"q\")",
+        ),
+        (
+            "declare -A h=([a+b]=1 [k]=v); declare -p h",
+            "declare -A h=([a+b]=\"1\" [k]=\"v\" )",
+        ),
+        (
+            "declare -A g; g=([x+1]=2); declare -p g",
+            "declare -A g=([x+1]=\"2\" )",
+        ),
+    ]);
+}

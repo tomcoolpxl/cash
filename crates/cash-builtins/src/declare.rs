@@ -414,6 +414,33 @@ impl DeclareCommand {
             }
         }
 
+        // A subscript in a list is an arithmetic expression, as in Bash, unless the array
+        // is associative: `declare -a d=([3*2]=z)` sets 6. It was read as a number, 0.
+        let associative = self.make_associative_array.to_bool() == Some(true)
+            || context
+                .shell
+                .env()
+                .get(name.as_str())
+                .is_some_and(|(_, var)| {
+                    matches!(
+                        var.value(),
+                        ShellValue::AssociativeArray(_)
+                            | ShellValue::Unset(ShellValueUnsetType::AssociativeArray)
+                    )
+                });
+        if !associative
+            && assigned_index.is_none()
+            && let Some(ShellValueLiteral::Array(ArrayLiteral(elements))) = &mut initial_value
+        {
+            for (key, _) in elements.iter_mut() {
+                if let Some(subscript) = key {
+                    *subscript =
+                        cash_core::arithmetic::evaluate_str(context.shell, subscript.as_str())?
+                            .to_string();
+                }
+            }
+        }
+
         // Special-case: `local -`
         if name == "-" && matches!(verb, DeclareVerb::Local) {
             context.shell.save_local_options();
