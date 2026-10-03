@@ -807,6 +807,27 @@ fn printf_hex_and_padded_numbers() {
 }
 
 #[test]
+fn printf_says_what_is_not_a_number_and_fails() {
+    // uucore said it straight to the process's standard error, past `2>/dev/null` and
+    // `$(…)`, and the status was 0 (BI-09).
+    let out = cash(
+        r#"printf '%d\n' abc; echo "rc $?"; printf '%d\n' 2x 2>/dev/null; echo "rc $?"; e=$(printf '%d' q 2>&1); echo "[$e]""#,
+    );
+    assert_eq!(
+        out.stdout,
+        "0\nrc 1\n2\nrc 1\n[printf: q: invalid number\n0]"
+    );
+    assert_eq!(out.stderr, "printf: abc: invalid number");
+}
+
+#[test]
+fn printf_stops_all_output_at_backslash_c() {
+    // `\c` in `%b` ended only that pass; the arguments left over were formatted (BI-10).
+    let out = cash(r#"printf '%b|' 'a\cb' c d; echo; printf '%s %b\n' x 'y\cz' w v"#);
+    assert_eq!(out.stdout, "a\nx y");
+}
+
+#[test]
 fn echo_n_and_e_escape_processing() {
     let out_n = cash(r#"echo -n "no-newline""#);
     assert_eq!(out_n.stdout, "no-newline");

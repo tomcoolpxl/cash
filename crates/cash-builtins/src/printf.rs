@@ -4,6 +4,8 @@ use uucore::format;
 
 use cash_core::{Error, ErrorKind, ExecutionResult, builtins, escape, expansion};
 
+mod numbers;
+
 /// Format a string.
 #[derive(Parser)]
 #[clap(disable_help_flag = true, disable_version_flag = true)]
@@ -29,16 +31,34 @@ impl builtins::Command for PrintfCommand {
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, Self::Error> {
-        if self
-            .format_and_args
-            .first()
-            .is_some_and(|fmt| has_count_spec(fmt))
-        {
+        let Some((fmt, args)) = self.format_and_args.split_first() else {
+            return Err(ErrorKind::PrintfInvalidUsage("missing operand".into()).into());
+        };
+        // Numbers are read here, as Bash reads them, and what is wrong with one is said
+        // here, on the builtin's standard error (BI-09).
+        let (args, complaints) = numbers::prepare(fmt, args);
+        let mut say = |batch: usize| -> Result<(), Error> {
+            for (_, complaint) in complaints.iter().filter(|(of, _)| *of == batch) {
+                writeln!(context.stderr(), "{}: {complaint}", context.command_name)?;
+            }
+            Ok(())
+        };
+        let status = if complaints.is_empty() {
+            ExecutionResult::success()
+        } else {
+            ExecutionResult::general_error()
+        };
+
+        if has_count_spec(fmt) {
             let mut output = Vec::new();
             let mut counts = Vec::new();
-            if let Some((fmt, args)) = self.format_and_args.split_first() {
-                format_via_uucore_with_counts(fmt, args.iter(), &mut output, &mut counts)?;
-            }
+            format_via_uucore_with_counts(
+                fmt,
+                args.iter().cloned(),
+                &mut output,
+                &mut counts,
+                &mut say,
+            )?;
             for (name, count) in counts {
                 if name.is_empty() {
                     continue;
@@ -66,12 +86,12 @@ impl builtins::Command for PrintfCommand {
                 context.stdout().write_all(&output)?;
                 context.stdout().flush()?;
             }
-            return Ok(ExecutionResult::success());
+            return Ok(status);
         }
         if let Some(variable_name) = &self.output_variable {
             // Format to a u8 vector.
             let mut result: Vec<u8> = vec![];
-            format(self.format_and_args.as_slice(), &mut result)?;
+            format_via_uucore(fmt, args.iter().cloned(), &mut result, &mut say)?;
 
             // Convert to a string.
             let result_str = String::from_utf8(result).map_err(|_| {
@@ -87,21 +107,11 @@ impl builtins::Command for PrintfCommand {
             )
             .await?;
         } else {
-            format(self.format_and_args.as_slice(), context.stdout())?;
+            format_via_uucore(fmt, args.iter().cloned(), context.stdout(), &mut say)?;
             context.stdout().flush()?;
         }
 
-        Ok(ExecutionResult::success())
-    }
-}
-
-fn format(format_and_args: &[String], writer: impl Write) -> Result<(), cash_core::Error> {
-    match format_and_args {
-        // Handle format string with arguments using uucore
-        [fmt, args @ ..] => format_via_uucore(fmt, args.iter(), writer),
-        // Handle case with no format string (we shouldn't be able to get here since clap will
-        // fail parsing when the format string is missing)
-        [] => Err(ErrorKind::PrintfInvalidUsage("missing operand".into()).into()),
+        Ok(status)
     }
 }
 
@@ -127,12 +137,14 @@ fn has_count_spec(fmt: &str) -> bool {
     false
 }
 
+/// `before_pass` is told the number of each pass over the format before it starts.
 fn format_via_uucore(
     format_string: &str,
     args: impl Iterator<Item = impl Into<OsString>>,
     writer: impl Write,
+    before_pass: &mut dyn FnMut(usize) -> Result<(), Error>,
 ) -> Result<(), cash_core::Error> {
-    format_via_uucore_with_counts(format_string, args, writer, &mut Vec::new())
+    format_via_uucore_with_counts(format_string, args, writer, &mut Vec::new(), before_pass)
 }
 
 fn format_via_uucore_with_counts(
@@ -140,6 +152,7 @@ fn format_via_uucore_with_counts(
     args: impl Iterator<Item = impl Into<OsString>>,
     mut writer: impl Write,
     counts: &mut Vec<(String, usize)>,
+    before_pass: &mut dyn FnMut(usize) -> Result<(), Error>,
 ) -> Result<(), cash_core::Error> {
     // Convert string arguments to FormatArgument::Unparsed
     let format_args: Vec<_> = args
@@ -165,7 +178,11 @@ fn format_via_uucore_with_counts(
 
     // Keep going until we've exhausted all format arguments. Also make sure to run at least once
     // even if there's no format arguments.
+    let mut pass = 0;
     while format_args.is_empty() || !format_args_wrapper.is_exhausted() {
+        writer.flush()?;
+        before_pass(pass)?;
+        pass += 1;
         // Process all format items, in order. We'll bail when we're told to stop.
         for (item, backslash_quote, quoted_format) in &format_items {
             if item.is_none() {
@@ -221,8 +238,10 @@ fn format_via_uucore_with_counts(
                     ))),
                 })?;
 
+            // A `\c` ends all output, not only this pass over the format: the
+            // arguments left over were formatted again (BI-10).
             if control_flow == ControlFlow::Break(()) {
-                break;
+                return Ok(());
             }
         }
 
@@ -461,7 +480,7 @@ mod tests {
         args: impl Iterator<Item = impl Into<OsString>>,
     ) -> Result<String> {
         let mut result = vec![];
-        format_via_uucore(format_string, args, &mut result)?;
+        format_via_uucore(format_string, args, &mut result, &mut |_| Ok(()))?;
 
         Ok(String::from_utf8(result)?)
     }
