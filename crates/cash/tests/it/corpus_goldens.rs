@@ -34,14 +34,6 @@ const KNOWN_DIFFERENT: &[(&str, &str)] = &[
         "sed/pement-dos2unix-dot.sh",
         "D49: `s/.$//` names no CR, so cash's sed removes the last visible character",
     ),
-    (
-        "sed/gnu-doubled-words.sh",
-        "GNU sed's `\\b`, `\\w` and `\\s`, which cash's sed lacks (TODO 14.6)",
-    ),
-    (
-        "sed/gnu-join-backslash.sh",
-        "a label ended by a blank, a GNU sed extension cash's sed lacks (TODO 14.6)",
-    ),
 ];
 
 /// Cases whose result depends on the machine, not on cash: they call GNU awk by name,
