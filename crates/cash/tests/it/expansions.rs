@@ -101,3 +101,15 @@ fn an_assigned_default_expands_to_the_value_stored() {
         ("echo ${v:=plain} $v", "plain plain"),
     ]);
 }
+
+#[test]
+fn a_backslash_in_backquotes_is_removed_before_dollar_backquote_and_backslash() {
+    // `\$x` and `\"` were passed on, and `\\` stayed two backslashes (LANG-13).
+    check(&[
+        ("x=val; echo `echo \\$x` \"`echo \\$x`\"", "val val"),
+        ("echo \"`echo \\\"q\\\"`\" `echo \\\"q\\\"`", "q \"q\""),
+        ("echo `echo \\\\\\\\` \"`echo \\\\\\\\`\"", "\\ \\"),
+        ("echo `echo a\\`echo b\\\\\\`echo c\\\\\\`\\`d`", "abcd"),
+        ("x=val; cat <<EOF\n`echo \\\"q\\\" \\$x`\nEOF", "\"q\" val"),
+    ]);
+}

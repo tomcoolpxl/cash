@@ -1093,6 +1093,7 @@ peg::parser! {
             arithmetic_expansion() /
             legacy_arithmetic_expansion() /
             current_shell_command_substitution() /
+            double_quoted_backquoted_substitution() /
             command_substitution() /
             parameter_expansion() /
             double_quoted_escape_sequence() /
@@ -1509,7 +1510,10 @@ peg::parser! {
 
         pub(crate) rule command_substitution() -> WordPiece =
             "$(" c:command() ")" { WordPiece::CommandSubstitution(c.to_owned()) } /
-            "`" c:backquoted_command() "`" { WordPiece::BackquotedCommandSubstitution(c) }
+            "`" c:backquoted_command(false) "`" { WordPiece::BackquotedCommandSubstitution(c) }
+
+        rule double_quoted_backquoted_substitution() -> WordPiece =
+            "`" c:backquoted_command(true) "`" { WordPiece::BackquotedCommandSubstitution(c) }
 
         rule current_shell_command_substitution() -> WordPiece =
             "${|" c:$(current_shell_command_piece()*) current_shell_end() {
@@ -1586,12 +1590,15 @@ peg::parser! {
                 s.to_owned()
             }
 
-        rule backquoted_command() -> String =
-            chars:(backquoted_char()*) { chars.into_iter().collect() }
+        // The command of a backquoted substitution. A backslash before `$`, a backquote or
+        // a backslash is removed, and before `"` too inside double quotes, as in Bash;
+        // `\$x` and `\"` were passed on, and `\\` stayed two backslashes (LANG-13).
+        rule backquoted_command(in_double_quotes: bool) -> String =
+            chars:(backquoted_char(in_double_quotes)*) { chars.into_iter().collect() }
 
-        rule backquoted_char() -> &'input str =
-            "\\`" { "`" } /
-            "\\\\" { "\\\\" } /
+        rule backquoted_char(in_double_quotes: bool) -> &'input str =
+            "\\" s:$(['$' | '`' | '\\']) { s } /
+            is_true(in_double_quotes) "\\\"" { "\"" } /
             s:$([^'`']) { s }
 
         rule arithmetic_expansion() -> WordPiece =
