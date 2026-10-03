@@ -22,7 +22,7 @@ use stack::{
 use string::AwkString;
 use value::{AwkRefType, AwkValue, AwkValueRef, AwkValueVariant};
 
-use crate::compiler::{escape_string_contents, is_valid_number};
+use crate::compiler::escape_string_contents;
 use crate::program::{
     Action, BuiltinFunction, Constant, Function, OpCode, Pattern, Program, SpecialVar,
 };
@@ -74,9 +74,62 @@ pub(crate) fn swap_with_default<T: Default>(value: &mut T) -> T {
 
 pub(crate) fn maybe_numeric_string<S: Into<AwkString>>(str: S) -> AwkString {
     let mut str = str.into();
-    let numeric_string = is_valid_number(str.as_str().trim().trim_start_matches(['+', '-']));
-    str.is_numeric = numeric_string;
+    str.is_numeric = is_numeric_string(str.as_str());
     str
+}
+
+/// Whether input text (a field, `$0`, a `getline` var, an ARGV or `-v` value) is a
+/// numeric string, which compares as a number, as gawk decides it: a decimal floating
+/// constant with one optional sign and C white space around it, or `+inf`, `-inf`,
+/// `+nan` or `-nan` in any case. An exponent needs its digits, and hexadecimal, a C
+/// suffix such as `1f` and anything after the number make it a string.
+///
+/// It ran the program grammar's number rule on every field of every record, the most
+/// of an awk run's time (`REVIEW_REPORT.md` TXT-16), and that rule matched only a
+/// prefix, so `9abc` compared as the number 9.
+pub(crate) fn is_numeric_string(text: &str) -> bool {
+    let blank = |b: &u8| matches!(b, b' ' | b'\t' | b'\n' | b'\r' | 0x0b | 0x0c);
+    let mut bytes = text.as_bytes();
+    while let [first, rest @ ..] = bytes
+        && blank(first)
+    {
+        bytes = rest;
+    }
+    while let [rest @ .., last] = bytes
+        && blank(last)
+    {
+        bytes = rest;
+    }
+    let (signed, bytes) = match bytes {
+        [b'+' | b'-', rest @ ..] => (true, rest),
+        _ => (false, bytes),
+    };
+    if signed && (bytes.eq_ignore_ascii_case(b"inf") || bytes.eq_ignore_ascii_case(b"nan")) {
+        return true;
+    }
+    let digits = |bytes: &[u8]| bytes.iter().take_while(|b| b.is_ascii_digit()).count();
+    let whole = digits(bytes);
+    let mut at = whole;
+    let mut fraction = 0;
+    if bytes.get(at) == Some(&b'.') {
+        fraction = digits(&bytes[at + 1..]);
+        at += 1 + fraction;
+    }
+    if whole + fraction == 0 {
+        return false;
+    }
+    if let Some(b'e' | b'E') = bytes.get(at) {
+        at += 1;
+        if let Some(b'+' | b'-') = bytes.get(at) {
+            at += 1;
+        }
+        let exponent = digits(&bytes[at..]);
+        if exponent == 0 {
+            return false;
+        }
+        at += exponent;
+    }
+    at == bytes.len()
 }
 
 struct GlobalEnv {

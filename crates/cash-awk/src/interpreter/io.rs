@@ -607,7 +607,9 @@ impl Drop for WritePipes {
 
 pub struct PipeRecordReader {
     child: std::process::Child,
-    stdout_reader: Option<std::io::Bytes<std::process::ChildStdout>>,
+    /// Buffered: unbuffered, every byte of a command's output was a read of its own
+    /// (`REVIEW_REPORT.md` TXT-16).
+    stdout_reader: Option<std::io::Bytes<BufReader<std::process::ChildStdout>>>,
     is_done: bool,
     closed: bool,
     ere_byte_buffer: Vec<u8>,
@@ -625,7 +627,7 @@ impl PipeRecordReader {
         use std::io::Read as _;
         Ok(Self {
             child,
-            stdout_reader: Some(stdout.bytes()),
+            stdout_reader: Some(BufReader::new(stdout).bytes()),
             is_done: false,
             closed: false,
             ere_byte_buffer: Vec::new(),
@@ -720,17 +722,29 @@ impl ReadPipes {
     }
 }
 
-#[derive(Default)]
 pub struct StdinRecordReader {
+    /// Standard input, locked once for the reader's life: it was locked and unlocked for
+    /// every byte (`REVIEW_REPORT.md` TXT-16).
+    bytes: Bytes<std::io::StdinLock<'static>>,
     is_done: bool,
     ere_byte_buffer: Vec<u8>,
+}
+
+impl Default for StdinRecordReader {
+    fn default() -> Self {
+        Self {
+            bytes: std::io::stdin().lock().bytes(),
+            is_done: false,
+            ere_byte_buffer: Vec::new(),
+        }
+    }
 }
 
 impl Iterator for StdinRecordReader {
     type Item = ReadResult;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let next = std::io::stdin().lock().bytes().next();
+        let next = self.bytes.next();
         match next {
             Some(Ok(byte)) => Some(Ok(byte)),
             Some(Err(e)) => Some(Err(e.to_string())),

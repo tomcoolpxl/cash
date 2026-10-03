@@ -2000,11 +2000,6 @@ pub fn compile_program(sources: &[SourceFile]) -> Result<Program, CompilerErrors
     }
 }
 
-/// Returns true if the given string is a valid number token.
-pub fn is_valid_number(s: &str) -> bool {
-    AwkParser::parse(Rule::number, s).is_ok()
-}
-
 /// Rewrites the escapes POSIX awk defines in a regex literal into the syntax of the Rust
 /// regex engine: `\ddd` (one to three octal digits) and `\b`, which is a backspace in
 /// awk but a word boundary in Rust, become `\x{..}`; `\"` becomes `"`. Everything else,

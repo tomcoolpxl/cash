@@ -143,6 +143,23 @@ fn test_awk_an_unused_variable_passed_to_a_function_can_become_an_array() {
     test_awk!(an_unused_variable_passed_to_a_function_can_become_an_array);
 }
 
+// A field is a numeric string only when all of it is a number: `9abc`, `1f` and `1e`
+// compared as numbers, and `+inf` and `-nan` as text (TXT-16). gawk 5.4's output.
+#[test]
+fn test_awk_numeric_strings_are_whole_numbers() {
+    test_awk!(
+        numeric_strings_are_whole_numbers,
+        "tests/awk/numeric_strings_are_whole_numbers.txt"
+    );
+}
+
+// Dynamic regular expressions are compiled once and cached; a program using more of them
+// than the cache holds still matches each against its own pattern (TXT-16).
+#[test]
+fn test_awk_dynamic_regexes_beyond_the_cache_still_match() {
+    test_awk!(dynamic_regexes_beyond_the_cache_still_match);
+}
+
 #[test]
 fn test_awk_hello_world() {
     test_awk!(hello_world)

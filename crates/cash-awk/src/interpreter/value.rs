@@ -167,7 +167,7 @@ impl AwkValue {
     pub(crate) fn into_ere(self) -> Result<Rc<Regex>, String> {
         match self.value {
             AwkValueVariant::Regex { ere, .. } => Ok(ere),
-            AwkValueVariant::String(s) => Ok(Rc::new(Regex::new(s.try_into()?)?)),
+            AwkValueVariant::String(s) => cached_dynamic_ere(s),
             AwkValueVariant::UninitializedScalar => {
                 Ok(Rc::new(Regex::new(CString::new("").unwrap())?))
             }
@@ -249,4 +249,32 @@ impl From<Array> for AwkValue {
             ref_type: AwkRefType::None,
         }
     }
+}
+
+/// The most dynamic regular expressions a program keeps compiled at once.
+const DYNAMIC_ERE_CACHE_SIZE: usize = 64;
+
+thread_local! {
+    /// Dynamic regular expressions (a string used as one, `$0 ~ pattern`), by their text.
+    static DYNAMIC_ERES: std::cell::RefCell<std::collections::HashMap<String, Rc<Regex>>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+}
+
+/// The compiled form of `pattern`, compiled once rather than for every record it is
+/// matched against: `$0 ~ pattern` over half a million lines spent most of its time
+/// compiling (`REVIEW_REPORT.md` TXT-16). The cache is emptied when it is full, so a
+/// program that builds a new pattern for every record does not grow it without bound.
+fn cached_dynamic_ere(pattern: AwkString) -> Result<Rc<Regex>, String> {
+    let key = pattern.as_str().to_owned();
+    if let Some(ere) = DYNAMIC_ERES.with_borrow(|cache| cache.get(&key).cloned()) {
+        return Ok(ere);
+    }
+    let ere = Rc::new(Regex::new(pattern.try_into()?)?);
+    DYNAMIC_ERES.with_borrow_mut(|cache| {
+        if cache.len() >= DYNAMIC_ERE_CACHE_SIZE {
+            cache.clear();
+        }
+        cache.insert(key, ere.clone());
+    });
+    Ok(ere)
 }
