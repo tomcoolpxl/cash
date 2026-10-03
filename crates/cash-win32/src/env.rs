@@ -22,7 +22,9 @@ use std::path::Path;
 use crate::path;
 
 /// POSIX names that normalise to uppercase on import (D31), so scripts see the spelling
-/// they expect regardless of how Windows spelled it.
+/// they expect regardless of how Windows spelled it. With the Windows names Git Bash
+/// (Cygwin) upper-cases, so `$ComSpec` and `$windir` are `$COMSPEC` and `$WINDIR` in both;
+/// `OneDrive`, `ProgramData` and `PSModulePath` keep their spelling in both (XC-6).
 const POSIX_NAMES: &[&str] = &[
     "PATH",
     "HOME",
@@ -46,8 +48,12 @@ const POSIX_NAMES: &[&str] = &[
     "APPDATA",
     "LOCALAPPDATA",
     "PROGRAMFILES",
+    "COMMONPROGRAMFILES",
+    "SYSTEMDRIVE",
     "SYSTEMROOT",
     "WINDIR",
+    "HOMEDRIVE",
+    "HOMEPATH",
 ];
 
 /// Canonicalise a variable name for storage (D31).

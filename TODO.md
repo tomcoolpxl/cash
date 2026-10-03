@@ -90,8 +90,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 Each from `REVIEW_REPORT.md` §5, found in no commit on 2026-10-04; reproduce first, as
 some may have gone with other work.
 
-- XC-6: two D31 name tables (24 and 8 names), the short one used; `declare -p` shows
-  `Lang=`, `ComSpec=`.
 - PI-12: `$$'…'` and `\$'…'` open ANSI-C quoting.
 - PI-08: `READLINE_LINE` replacement clears only the first line of a multi-line buffer
   (Ctrl-X Ctrl-E, `bind -x`).

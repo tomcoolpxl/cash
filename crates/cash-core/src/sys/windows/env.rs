@@ -108,27 +108,9 @@ where
 ///
 /// * `name` - The environment variable name to normalize.
 fn normalize_env_name(name: &str) -> String {
-    // Normalize well-known variable names so that later lookups by
-    // canonical (uppercase) spelling always succeed regardless of the
-    // host's original casing.
-    const WELL_KNOWN: &[&str] = &[
-        "PATH",
-        "HOME",
-        "USERPROFILE",
-        "HOMEDRIVE",
-        "HOMEPATH",
-        "TEMP",
-        "TMP",
-        "TMPDIR",
-    ];
-
-    for &canonical in WELL_KNOWN {
-        if name.eq_ignore_ascii_case(canonical) {
-            return canonical.to_string();
-        }
-    }
-
-    name.to_string()
+    // D31's one table. This had its own, of 8 names to cash-win32's 24, and it was the
+    // one used, so `declare -p` showed `ComSpec=` and `SystemRoot=` (XC-6).
+    cash_win32::env::canonical_name(name).into_owned()
 }
 
 #[cfg(test)]
@@ -156,12 +138,29 @@ mod tests {
         assert_eq!(normalize_env_name("TmpDir"), "TMPDIR");
     }
 
+    /// The mixed-case names Windows gives that Git Bash upper-cases (XC-6).
+    #[test]
+    fn normalize_env_name_upper_cases_what_git_bash_does() {
+        for (windows, bash) in [
+            ("ComSpec", "COMSPEC"),
+            ("SystemRoot", "SYSTEMROOT"),
+            ("SystemDrive", "SYSTEMDRIVE"),
+            ("windir", "WINDIR"),
+            ("ProgramFiles", "PROGRAMFILES"),
+            ("CommonProgramFiles", "COMMONPROGRAMFILES"),
+        ] {
+            assert_eq!(normalize_env_name(windows), bash);
+        }
+    }
+
     #[test]
     fn normalize_env_name_leaves_unknown_alone() {
         assert_eq!(normalize_env_name("FOO"), "FOO");
         assert_eq!(normalize_env_name("myVar"), "myVar");
-        // Does not uppercase unknown names.
-        assert_eq!(normalize_env_name("AppData"), "AppData");
+        // Nor the Windows names Git Bash leaves as they are.
+        for name in ["OneDrive", "ProgramData", "PSModulePath", "ProgramW6432"] {
+            assert_eq!(normalize_env_name(name), name);
+        }
     }
 
     #[test]
