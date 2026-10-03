@@ -484,6 +484,21 @@ impl Error {
             if (name != "let" && inner.is_arithmetic_error()) || inner.is_interrupt())
     }
 
+    /// Whether this error abandons the whole top-level command it happened in, however deep
+    /// in functions, as Bash's `jump_to_top_level` does, and the shell goes on at the next
+    /// one: an assignment to a read-only variable or through a circular name reference,
+    /// and an arithmetic error in an expansion. A command that a function's error came out
+    /// of went on with status 1 (`f; echo same` echoed). A builtin's own failure, as
+    /// `read` into a read-only variable, is not one.
+    pub const fn jumps_to_top_level(&self) -> bool {
+        matches!(
+            self.kind,
+            ErrorKind::ReadonlyVariable
+                | ErrorKind::CircularNameReference(_)
+                | ErrorKind::EvalError(_)
+        )
+    }
+
     /// Whether this is an interrupt that abandons the line with nothing to report: the
     /// line is simply gone, as after Ctrl-C.
     pub fn is_silent_interrupt(&self) -> bool {

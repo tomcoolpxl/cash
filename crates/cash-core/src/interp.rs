@@ -1983,7 +1983,7 @@ impl<SE: extensions::ShellExtensions> ExecuteInPipeline<SE> for ast::SimpleComma
 
             match execute_command(context, params, cmd_name, &assignments, &args).await {
                 Ok(result) => Ok(result),
-                Err(err) if err.discards_line() => Err(err),
+                Err(err) if err.discards_line() || err.jumps_to_top_level() => Err(err),
                 Err(err) => {
                     let _ = parent_shell.display_error(&mut stderr, &err);
 

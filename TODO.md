@@ -60,11 +60,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 12.3 Smaller expansion differences
 
-An assignment error inside a function (`readonly r=1; f() { r=2; echo in; }; f; echo
-after`) ends a Bash script with status 1; cash returns from the function with status 1
-and goes on to `after`. At the top level both end the script. The same for a circular
-name reference. Found fixing LANG-21.
-
 `compgen -f '\[d'` lists `[draft] notes.txt`; Bash lists nothing, the backslash being
 part of the name it was given. Completion and `compgen` share `get_file_completions`,
 which removes quotes from the word as typed at the prompt, and `compgen`'s word has had
