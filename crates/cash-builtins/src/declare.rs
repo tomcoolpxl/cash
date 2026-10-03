@@ -535,10 +535,12 @@ impl DeclareCommand {
 
         if let Some(var) = self.look_up(context, name.as_str(), lookup) {
             if self.make_associative_array.is_some() {
-                var.convert_to_associative_array()?;
+                var.convert_to_associative_array()
+                    .map_err(|e| e.of_variable(&name))?;
             }
             if self.make_indexed_array.is_some() {
-                var.convert_to_indexed_array()?;
+                var.convert_to_indexed_array()
+                    .map_err(|e| e.of_variable(&name))?;
             }
 
             self.apply_attributes_before_update(var)?;

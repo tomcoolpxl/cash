@@ -29,13 +29,14 @@ pub enum ErrorKind {
     #[error("{0}: cannot assign list to array member")]
     AssigningListToArrayMember(String),
 
-    /// An attempt was made to convert an associative array to an indexed array.
-    #[error("cannot convert associative array to indexed array")]
-    ConvertingAssociativeArrayToIndexedArray,
+    /// An attempt was made to convert an associative array to an indexed array, named
+    /// where the caller knows it ([`Error::of_variable`]).
+    #[error("{}cannot convert associative to indexed array", named(.0))]
+    ConvertingAssociativeArrayToIndexedArray(String),
 
     /// An attempt was made to convert an indexed array to an associative array.
-    #[error("cannot convert indexed array to associative array")]
-    ConvertingIndexedArrayToAssociativeArray,
+    #[error("{}cannot convert indexed to associative array", named(.0))]
+    ConvertingIndexedArrayToAssociativeArray(String),
 
     /// An error occurred while sourcing the indicated script file.
     #[error("{}: {}", .0.display(), os_error_text(.1))]
@@ -667,7 +668,13 @@ impl Error {
     #[must_use]
     pub fn of_variable(mut self, name: &str) -> Self {
         match &mut self.kind {
-            ErrorKind::ReadonlyVariable(named) if named.is_empty() => name.clone_into(named),
+            ErrorKind::ReadonlyVariable(named)
+            | ErrorKind::ConvertingAssociativeArrayToIndexedArray(named)
+            | ErrorKind::ConvertingIndexedArrayToAssociativeArray(named)
+                if named.is_empty() =>
+            {
+                name.clone_into(named);
+            }
             // `[-3]` becomes `a[-3]`, as Bash names the element of an assignment.
             ErrorKind::ArrayIndexOutOfRange(element) if element.starts_with('[') => {
                 element.insert_str(0, name);
@@ -675,6 +682,15 @@ impl Error {
             _ => {}
         }
         self
+    }
+}
+
+/// `name: ` before a message about it, or nothing when it has no name.
+fn named(name: &str) -> String {
+    if name.is_empty() {
+        String::new()
+    } else {
+        format!("{name}: ")
     }
 }
 

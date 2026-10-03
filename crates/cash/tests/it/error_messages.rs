@@ -382,3 +382,24 @@ fn test_says_what_it_cannot_read_and_returns_2() {
         "ok"
     );
 }
+
+#[test]
+fn declare_will_not_turn_one_kind_of_array_into_the_other() {
+    // `declare -A a; declare -a a` made it indexed with an empty element, and said nothing.
+    let out = run("declare -A a; declare -a a; echo \"rc $?\"; declare -p a");
+    assert_eq!(out.stdout, "rc 1\ndeclare -A a", "{}", out.stderr);
+    assert!(
+        out.stderr
+            .ends_with("line 1: declare: a: cannot convert associative to indexed array"),
+        "{}",
+        out.stderr
+    );
+    let out = run("declare -a b=(1); declare -A b; echo \"rc $?\"");
+    assert_eq!(out.stdout, "rc 1", "{}", out.stderr);
+    assert!(
+        out.stderr
+            .ends_with("line 1: declare: b: cannot convert indexed to associative array"),
+        "{}",
+        out.stderr
+    );
+}

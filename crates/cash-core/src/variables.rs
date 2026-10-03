@@ -210,10 +210,15 @@ impl ShellVariable {
     /// Converts the variable to an indexed array.
     pub fn convert_to_indexed_array(&mut self) -> Result<(), error::Error> {
         match self.value() {
-            ShellValue::IndexedArray(_) => Ok(()),
-            ShellValue::AssociativeArray(_) => {
-                Err(error::ErrorKind::ConvertingAssociativeArrayToIndexedArray.into())
+            ShellValue::IndexedArray(_) | ShellValue::Unset(ShellValueUnsetType::IndexedArray) => {
+                Ok(())
             }
+            // `declare -A a` makes an associative array with nothing in it yet, which is
+            // one all the same: `declare -a a` made it indexed, with an empty element.
+            ShellValue::AssociativeArray(_)
+            | ShellValue::Unset(ShellValueUnsetType::AssociativeArray) => Err(
+                error::ErrorKind::ConvertingAssociativeArrayToIndexedArray(String::new()).into(),
+            ),
             _ => {
                 let mut new_values = BTreeMap::new();
                 new_values.insert(
@@ -229,9 +234,13 @@ impl ShellVariable {
     /// Converts the variable to an associative array.
     pub fn convert_to_associative_array(&mut self) -> Result<(), error::Error> {
         match self.value() {
-            ShellValue::AssociativeArray(_) => Ok(()),
-            ShellValue::IndexedArray(_) => {
-                Err(error::ErrorKind::ConvertingIndexedArrayToAssociativeArray.into())
+            ShellValue::AssociativeArray(_)
+            | ShellValue::Unset(ShellValueUnsetType::AssociativeArray) => Ok(()),
+            ShellValue::IndexedArray(_) | ShellValue::Unset(ShellValueUnsetType::IndexedArray) => {
+                Err(
+                    error::ErrorKind::ConvertingIndexedArrayToAssociativeArray(String::new())
+                        .into(),
+                )
             }
             _ => {
                 let mut new_values: BTreeMap<String, String> = BTreeMap::new();
