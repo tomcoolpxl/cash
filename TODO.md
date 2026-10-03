@@ -84,6 +84,10 @@ evaluation error: division by zero` and `failed to parse expression: 1 +` (and `
 `08: value too great for base (error token is "08")`, and `read: 1/0: …` from `read`.
 Found in phase 12.
 
+Two errors cash does not report at all: `echo "${x!@#}"` prints `${x!@#}` where Bash says
+`${x!@#}: bad substitution` and fails, and `[ 1 -eq x ]` is quietly false where Bash
+says `[: x: integer expected` and returns 2. Found in 1.3.12 surveying error output.
+
 A syntax error is worded by the parser's position, not by the token: cash says
 `script.sh: syntax error at line 2 col 8`, `syntax error at end of input` or `unexpected
 end of file from `if' command` where Bash says `script.sh: line 2: syntax error near
@@ -177,6 +181,18 @@ in Bash they are Bash's version. `\s` gives `cash`. Keep cash's, and add a row t
 ---
 
 ## Decided, written down so it is not decided twice
+
+- **Errors are worded as Bash words them** (the user, 2026-10-03): `script.sh: line 3:
+  foo: command not found` in a script, `cash: line 1: …` for `-c`, `cash: foo: command
+  not found` interactively, with Bash's message text (`r: readonly variable`,
+  `x: unbound variable`), builtins' messages included. Keeping cash's words with Bash's
+  location, and `error:` with a location added, were turned down.
+- **Errors are coloured only on a terminal** (the user, 2026-10-03): the prefix is red
+  when stderr is a terminal and `NO_COLOR` is unset; a pipe or a file gets plain text,
+  through one helper for every stream. No colour at all was turned down.
+- **A builtin's bad option is Bash's two lines** (the user, 2026-10-03): `name: -q:
+  invalid option` and `name: usage: <synopsis>`, status 2; `--help` on stdout with
+  status 0 for every builtin. Keeping clap's block was turned down.
 
 - **`chmod` is silent about group and other bits** (the user, 2026-10-03): Windows has
   none per file, so `chmod go-w ~/.ssh` and `chmod o+r f` change nothing and say nothing,
