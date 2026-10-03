@@ -172,6 +172,23 @@ fn a_word_shaped_like_an_assignment_gets_tilde_expansion() {
 }
 
 #[test]
+fn a_regular_expression_takes_the_longest_match_at_its_leftmost_start() {
+    // As POSIX says; the first alternative that worked was taken (LANG-17).
+    check(&[
+        ("[[ ab =~ a|ab ]] && echo ${BASH_REMATCH[*]}", "ab"),
+        (
+            "[[ aab =~ (a*)(ab)? ]] && echo ${BASH_REMATCH[*]}",
+            "aab a ab",
+        ),
+        ("[[ xyz =~ y|yz ]] && echo ${BASH_REMATCH[*]}", "yz"),
+        (
+            "shopt -s nocasematch; [[ AB =~ a|ab ]] && echo ${BASH_REMATCH[*]}",
+            "AB",
+        ),
+    ]);
+}
+
+#[test]
 fn an_assignment_seeds_random_as_in_bash() {
     // It was dropped (LANG-23); the numbers are Git Bash 5.3's.
     check(&[

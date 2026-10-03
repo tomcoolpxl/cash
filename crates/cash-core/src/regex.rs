@@ -9,11 +9,18 @@ use cached::Cached;
 /// Cache mapping a (pattern, case-insensitive, multiline) key to a compiled regex.
 type RegexCache = cached::LruCache<(String, bool, bool), fancy_regex::Regex>;
 
+/// The same for the lazy DFAs that find the longest match; `None` for a pattern one cannot
+/// be built for.
+type LongestMatchCache =
+    cached::LruCache<(String, bool, bool), Option<regex_automata::hybrid::dfa::DFA>>;
+
 thread_local! {
     // Wrapped in `Option` so that if cache construction ever fails we gracefully
     // degrade to compiling regexes uncached rather than panicking. (With a fixed
     // positive `max_size` this always succeeds, but `build()` is fallible.)
     static REGEX_CACHE: RefCell<Option<RegexCache>> =
+        RefCell::new(cached::LruCache::builder().max_size(64).build().ok());
+    static LONGEST_MATCH_CACHE: RefCell<Option<LongestMatchCache>> =
         RefCell::new(cached::LruCache::builder().max_size(64).build().ok());
 }
 
@@ -90,15 +97,92 @@ impl Regex {
             .map(|piece| piece.to_regex_str())
             .collect();
 
-        let re = compile_regex(regex_pattern, self.case_insensitive, self.multiline)?;
-
-        Ok(re.captures(value)?.map(|captures| {
+        let re = compile_regex(regex_pattern.clone(), self.case_insensitive, self.multiline)?;
+        let collect = |captures: fancy_regex::Captures<'_, str>| -> Vec<Option<String>> {
             captures
                 .iter()
                 .map(|c| c.map(|m| m.as_str().to_owned()))
                 .collect()
-        }))
+        };
+
+        let Some(captures) = re.captures(value)? else {
+            return Ok(None);
+        };
+
+        // POSIX takes the longest match at the leftmost place one starts; the backtracking
+        // engine takes the first that works, so `[[ ab =~ a|ab ]]` matched `a` (LANG-17).
+        // Where a longer one exists, the groups are taken again from a match of exactly
+        // it.
+        if let Some(whole) = captures.get(0)
+            && let Some(longest) = longest_match_end(
+                &regex_pattern,
+                self.case_insensitive,
+                self.multiline,
+                value,
+                whole.start(),
+            )
+            && longest > whole.end()
+            && let Some(span) = value.get(whole.start()..longest)
+        {
+            let exact = compile_regex(
+                std::format!("^(?:{regex_pattern})$"),
+                self.case_insensitive,
+                self.multiline,
+            )?;
+            if let Some(exact_captures) = exact.captures(span)? {
+                return Ok(Some(collect(exact_captures)));
+            }
+        }
+
+        Ok(Some(collect(captures)))
     }
+}
+
+/// The end of the longest match of `pattern` that starts at `start`, by a lazy DFA that
+/// reports every match rather than the first alternative's. `None` when the pattern is
+/// beyond it (a backreference, a Unicode word boundary in non-ASCII text).
+fn longest_match_end(
+    pattern: &str,
+    case_insensitive: bool,
+    multiline: bool,
+    haystack: &str,
+    start: usize,
+) -> Option<usize> {
+    use regex_automata::{Anchored, Input, MatchKind, hybrid::dfa::DFA, util::syntax};
+
+    let key = (pattern.to_owned(), case_insensitive, multiline);
+    let cached = LONGEST_MATCH_CACHE.with(|cache| {
+        cache
+            .borrow_mut()
+            .as_mut()
+            .and_then(|c| c.cache_get(&key).cloned())
+    });
+    let dfa = if let Some(dfa) = cached {
+        dfa
+    } else {
+        let prepared = add_missing_escape_chars_to_regex(pattern);
+        let dfa = DFA::builder()
+            .configure(DFA::config().match_kind(MatchKind::All))
+            .syntax(
+                syntax::Config::new()
+                    .case_insensitive(case_insensitive)
+                    .dot_matches_new_line(multiline),
+            )
+            .build(prepared.as_ref())
+            .ok();
+        LONGEST_MATCH_CACHE.with(|cache| {
+            if let Some(c) = cache.borrow_mut().as_mut() {
+                c.cache_set(key, dfa.clone());
+            }
+        });
+        dfa
+    }?;
+    let mut cache = dfa.create_cache();
+    let input = Input::new(haystack).range(start..).anchored(Anchored::Yes);
+    dfa.try_search_fwd(&mut cache, &input)
+        .ok()
+        .flatten()
+        .map(|found| found.offset())
 }
 
 pub(crate) fn compile_regex(

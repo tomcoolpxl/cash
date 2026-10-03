@@ -37,6 +37,8 @@ inherent = "1.0.13"
 itertools = "0.14.0"
 normalize-path = "0.2.1"
 rand = "0.10.0"
+# The leftmost-longest match of `[[ =~ ]]` (LANG-17); already built for `regex`.
+regex-automata = "0.4.18"
 rpds = "1.2.0"
 serde = { version = "1.0.228", optional = true, features = ["derive"] }
 strum = "0.28.0"
