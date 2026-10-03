@@ -62,6 +62,10 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 Low ones in the report §5.1.
 
+`set -x` prints `(( 1 + 2 ))` for `(( 1 + 2 ))`, Bash `((  1 + 2  ))`: the parser keeps
+an arithmetic command's tokens joined by single spaces, not its text, so the blanks
+around and inside it are lost. `((x+$x))` and `for ((` already match. Found in 12.3.
+
 Also seen while fixing 8.1: past the function depth limit (500, or `FUNCNEST`) cash
 reports "maximum function call depth exceeded" and the script goes on, `$?` 0; Bash 5.3
 reports "maximum function nesting level exceeded (500)" and abandons the command.
@@ -122,6 +126,13 @@ An array index before the start (`a=(1 2)`): `${a[-3]}` expands to nothing in bo
 shells, but Bash also says `a: bad array subscript`, and cash says nothing; `a[-3]=x`
 ends both with 1, cash saying `array index out of range: -3`. Found in phase 12.
 
+Arithmetic errors name neither the line nor the expression: cash says `error: arithmetic
+evaluation error: division by zero` and `failed to parse expression: 1 +` (and `08`, and
+`i = ` in `for ((`); Bash says `script: line 14: 1/0: division by 0 (error token is
+"0")`, `((: 1 + : arithmetic syntax error: operand expected (error token is "+ ")`,
+`08: value too great for base (error token is "08")`, and `read: 1/0: …` from `read`.
+Found in phase 12.
+
 ### 13.5 D36: measure the pooled prompt job, then build it or drop it
 
 Every prompt spawn creates a job object and sweeps the registry; D36's pool was never
@@ -160,7 +171,13 @@ so a user who sets neither keeps every line, in memory and in `~/.cash_history`.
 Bash would cut an existing long history file to 500 entries at the next start. Follow
 Bash, or keep "no limit" and add a row to spec §4.
 
-### 14.5 Dead code, allows and dependencies
+### 14.5 **Yours:** `\v` and `\V` in a prompt
+
+They give cash's version (`1.3`, `1.3.11`) while `$BASH_VERSION` says `5.3.15(1)-release`;
+in Bash they are Bash's version. `\s` gives `cash`. Keep cash's, and add a row to spec
+§4, or follow `$BASH_VERSION`. Seen in 12.3.
+
+### 14.6 Dead code, allows and dependencies
 
 - `spawn::spawn`, `build_cmd_command_line`, the winnow stub, the `sys` stubs behind
   `#![allow(unused)]`, `#![allow(dead_code)]` in cash-shell, the harness's oracle mode,

@@ -98,25 +98,23 @@ pub(crate) async fn expand_and_eval(
         .await
         .map_err(|_e| EvalError::FailedToExpandExpression(expr.to_owned()))?;
 
+    // Traced as Bash traces it, the expanded text as it is, before it is parsed: it was
+    // the parsed expression printed again, `((  x = 3  ))` as `(( x = 3 ))`.
+    if trace_if_needed && shell.options().print_commands_and_arguments {
+        shell
+            .trace_command(params, std::format!("(( {expanded_self} ))"))
+            .await;
+    }
+
     // An expression that expands to nothing is 0, as in Bash: `$(( $empty ))` was a parse
     // error that abandoned the line (LANG-10).
     if expanded_self.trim().is_empty() {
-        if trace_if_needed && shell.options().print_commands_and_arguments {
-            shell.trace_command(params, "(( ))").await;
-        }
         return Ok(0);
     }
 
     // Now parse.
     let expr = cash_parser::arithmetic::parse(&expanded_self)
         .map_err(|_e| EvalError::ParseError(expanded_self))?;
-
-    // Trace if applicable.
-    if trace_if_needed && shell.options().print_commands_and_arguments {
-        shell
-            .trace_command(params, std::format!("(( {expr} ))"))
-            .await;
-    }
 
     // Now evaluate.
     expr.eval(shell)

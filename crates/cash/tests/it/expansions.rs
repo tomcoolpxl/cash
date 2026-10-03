@@ -134,6 +134,22 @@ fn a_quoted_ampersand_in_a_replacement_is_literal() {
 }
 
 #[test]
+fn an_arithmetic_command_is_traced_as_its_expanded_text() {
+    // It was the parsed expression printed again: `(( x + 5 ))` for `((x+$x))`.
+    let out = run("x=5; set -x; ((x+$x)); for ((i=x; i<x; i++)); do :; done");
+    assert_eq!(out.stderr, "+ (( x+5 ))\n+ (( i=x ))\n+ (( i<x ))");
+}
+
+#[test]
+fn machtype_names_the_machine() {
+    // It was "unknown"; `$HOSTTYPE-pc-$OSTYPE`, as Bash builds it.
+    check(&[(
+        "m=$HOSTTYPE-pc-windows; [[ $MACHTYPE == \"$m\" && ${BASH_VERSINFO[5]} == \"$m\" ]] && echo ok",
+        "ok",
+    )]);
+}
+
+#[test]
 fn transformations_u_and_k_do_what_bash_does() {
     // `@u` capitalised every word (LANG-19); `${a[@]@K}` gave the values only (LANG-20).
     check(&[
