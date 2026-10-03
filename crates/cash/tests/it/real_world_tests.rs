@@ -3,7 +3,7 @@
 //! Verifies that `cash` accurately runs famous, complex, real-world open-source
 //! Bash programs (such as Dominic Tarr's `JSON.sh`, Dylan Araps' `pure-bash-bible`,
 //! and upstream GNU Bash test suites), gracefully catches infinite recursions/crashes,
-//! and compares differential behavior with GNU Bash in WSL2 Kali Linux.
+//! and compares their output with Git Bash 5.3's, frozen in the tests.
 
 #![allow(
     clippy::tests_outside_test_module,
@@ -97,46 +97,6 @@ fn run_cash_stdin(mut command: Command, script_path: &Path, input: &str) -> Outp
     }
 }
 
-fn wsl_kali_stdin(script_path: &Path, input: &str) -> Option<Output> {
-    // Convert Windows path to WSL /mnt path
-    let path_str = script_path.to_str()?.replace('\\', "/");
-    let wsl_path = if let Some(stripped) = path_str.strip_prefix("c:/") {
-        format!("/mnt/c/{stripped}")
-    } else if let Some(stripped) = path_str.strip_prefix("C:/") {
-        format!("/mnt/c/{stripped}")
-    } else {
-        path_str
-    };
-
-    let mut child = Command::new("wsl.exe")
-        .args(["-d", "kali-linux", "bash", &wsl_path])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .ok()?;
-
-    if let Some(mut stdin) = child.stdin.take() {
-        let _ = stdin.write_all(input.as_bytes());
-    }
-
-    let out = child.wait_with_output().ok()?;
-    if !out.status.success() {
-        return None;
-    }
-    Some(Output {
-        stdout: String::from_utf8_lossy(&out.stdout)
-            .replace("\r\n", "\n")
-            .trim_end()
-            .to_string(),
-        stderr: String::from_utf8_lossy(&out.stderr)
-            .replace("\r\n", "\n")
-            .trim_end()
-            .to_string(),
-        code: out.status.code().unwrap_or(-1),
-    })
-}
-
 // ---------------------------------------------------------------------------
 // 1. Real-World Suite: Dominic Tarr's JSON.sh
 // ---------------------------------------------------------------------------
@@ -169,19 +129,27 @@ fn test_real_world_dominictarr_json_sh() {
     let git_usr_bin = Path::new(r"C:\Program Files\Git\usr\bin");
     let cash_out = cash_stdin_with_path_first(&script_path, complex_json, git_usr_bin);
     assert_eq!(cash_out.code, 0, "cash stderr: {}", cash_out.stderr);
-    assert!(cash_out.stdout.contains("[\"name\"]\t\"cash\""));
-    assert!(cash_out.stdout.contains("[\"nested\",\"num\"]\t42"));
-    assert!(cash_out.stdout.contains("[\"nested\",\"arr\",0]\t\"one\""));
-    assert!(cash_out.stdout.contains("[\"nested\",\"arr\",2]\t3"));
 
-    // Differential test against WSL2 Kali Linux GNU Bash if available
-    if let Some(kali_out) = wsl_kali_stdin(&script_path, complex_json) {
-        assert_eq!(
-            cash_out.stdout, kali_out.stdout,
-            "cash output must match WSL2 Kali GNU Bash output byte-for-byte"
-        );
-        assert_eq!(cash_out.code, kali_out.code);
-    }
+    // Git Bash 5.3's output for the same input, byte for byte, frozen on 2026-10-03. It
+    // was compared with a `kali-linux` WSL distribution's when there was one, and the test
+    // passed without a word on a machine without it (BIN-20).
+    let bash = concat!(
+        "[\"name\"]\t\"cash\"\n",
+        "[\"version\"]\t\"0.8.0\"\n",
+        "[\"boolean_true\"]\ttrue\n",
+        "[\"boolean_false\"]\tfalse\n",
+        "[\"null_val\"]\tnull\n",
+        "[\"nested\",\"num\"]\t42\n",
+        "[\"nested\",\"arr\",0]\t\"one\"\n",
+        "[\"nested\",\"arr\",1]\t\"two\"\n",
+        "[\"nested\",\"arr\",2]\t3\n",
+        "[\"nested\",\"arr\"]\t[\"one\",\"two\",3]\n",
+        "[\"nested\"]\t{\"num\":42,\"arr\":[\"one\",\"two\",3]}\n",
+        "[]\t{\"name\":\"cash\",\"version\":\"0.8.0\",\"boolean_true\":true,",
+        "\"boolean_false\":false,\"null_val\":null,\"nested\":{\"num\":42,",
+        "\"arr\":[\"one\",\"two\",3]}}",
+    );
+    assert_eq!(cash_out.stdout, bash);
 }
 
 // ---------------------------------------------------------------------------
