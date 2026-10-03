@@ -24,7 +24,8 @@ for working through it.
   the history hint's candidate (asked by the user on 2026-10-02, outside the phases),
   1.3.7 the shared part on the first Tab and the grid on the second (phase 7), 1.3.8
   crashes, security and CI hardening (phase 8), 1.3.9 the shell's own working directory,
-  environment, PATHEXT and umask (phase 9), 1.3.10 awk, sed and bc (phase 10).
+  environment, PATHEXT and umask (phase 9), 1.3.10 awk, sed and bc (phase 10), 1.3.11 pipelines, jobs and process
+  substitution (phase 11).
 - An item says what was seen and what Bash does; a cause only where it was looked for.
   Longer notes on a thing that stays open belong in `open-issues.md`.
 
@@ -33,7 +34,7 @@ their work is in `main`; the sessions themselves are not needed any more. The or
 the grouping were chosen that day: the test suite first, so that every later phase can
 trust its runs, then by what a user notices most.
 
-Phases 1 to 10 are done. Phase 6 changed no code and had no release of its own.
+Phases 1 to 11 are done. Phase 6 changed no code and had no release of its own.
 
 Phases 8 to 14 are the code review of 2026-10-02. `REVIEW_REPORT.md` has the evidence
 and the reasons; the IDs (EXE-01, TXT-01, …) are its findings, and R1 to R11 its
@@ -51,12 +52,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 | 12 | 1.3.12 | Language |
 | 13 | 1.3.13 | Builtins and error output |
 | 14 | 1.3.14 | Tests, records and leftovers |
-
----
-
-## Phase 11. Pipelines, jobs and process substitution (R5, R6)
-
-The riskiest phase: judge its runs on an idle machine (Decided, below).
 
 ---
 
