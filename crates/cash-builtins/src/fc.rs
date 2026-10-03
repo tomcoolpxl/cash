@@ -124,9 +124,9 @@ impl FcCommand {
         }
 
         // Bash temporarily enables verbose input while it executes the edited file.
-        write!(context.stderr(), "{edited}")?;
+        write!(context.error_stream(), "{edited}")?;
         if !edited.ends_with('\n') {
-            writeln!(context.stderr())?;
+            writeln!(context.error_stream())?;
         }
 
         let result = context
@@ -219,7 +219,7 @@ impl FcCommand {
         };
 
         // Echo the command to stderr.
-        writeln!(context.stderr(), "{final_cmd}")?;
+        writeln!(context.error_stream(), "{final_cmd}")?;
 
         // Remove the fc command from history before executing the substituted command
         // This matches bash behavior where the fc command is replaced by the executed command

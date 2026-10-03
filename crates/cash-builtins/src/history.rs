@@ -67,7 +67,7 @@ impl builtins::Command for HistoryCommand {
         };
 
         let stdout = context.stdout();
-        let stderr = context.stderr();
+        let stderr = context.error_stream();
 
         if let Some(history) = context.shell.history_mut() {
             self.execute_with_history(history, &config, stdout, stderr)

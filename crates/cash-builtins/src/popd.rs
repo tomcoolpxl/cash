@@ -31,7 +31,7 @@ impl builtins::Command for PopdCommand {
         // is empty".
         if listing.len() < 2 {
             writeln!(
-                context.stderr(),
+                context.error_stream(),
                 "{}: directory stack empty",
                 context.command_name
             )?;
@@ -50,12 +50,12 @@ impl builtins::Command for PopdCommand {
                         "invalid argument"
                     };
                     writeln!(
-                        context.stderr(),
+                        context.error_stream(),
                         "{}: {arg}: {complaint}",
                         context.command_name
                     )?;
                     writeln!(
-                        context.stderr(),
+                        context.error_stream(),
                         "{}: usage: popd [-n] [+N | -N]",
                         context.command_name
                     )?;

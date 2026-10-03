@@ -57,12 +57,12 @@ impl builtins::Command for DirsCommand {
                         "invalid option"
                     };
                     writeln!(
-                        context.stderr(),
+                        context.error_stream(),
                         "{}: {arg}: {complaint}",
                         context.command_name
                     )?;
                     writeln!(
-                        context.stderr(),
+                        context.error_stream(),
                         "{}: usage: dirs [-clpv] [+N] [-N]",
                         context.command_name
                     )?;
@@ -210,13 +210,13 @@ pub(crate) fn report_bad_index<SE: cash_core::ShellExtensions>(
 ) -> Result<ExecutionResult, cash_core::Error> {
     if listing_len <= 1 {
         writeln!(
-            context.stderr(),
+            context.error_stream(),
             "{}: directory stack empty",
             context.command_name
         )?;
     } else {
         writeln!(
-            context.stderr(),
+            context.error_stream(),
             "{}: {shown}: directory stack index out of range",
             context.command_name
         )?;

@@ -813,11 +813,22 @@ fn printf_says_what_is_not_a_number_and_fails() {
     let out = cash(
         r#"printf '%d\n' abc; echo "rc $?"; printf '%d\n' 2x 2>/dev/null; echo "rc $?"; e=$(printf '%d' q 2>&1); echo "[$e]""#,
     );
-    assert_eq!(
-        out.stdout,
-        "0\nrc 1\n2\nrc 1\n[printf: q: invalid number\n0]"
+    // As Bash says them, after `script: line 1: `.
+    assert!(
+        out.stdout.starts_with("0\nrc 1\n2\nrc 1\n[")
+            && out
+                .stdout
+                .ends_with(": line 1: printf: q: invalid number\n0]"),
+        "{}",
+        out.stdout
     );
-    assert_eq!(out.stderr, "printf: abc: invalid number");
+    assert!(
+        out.stderr
+            .ends_with(": line 1: printf: abc: invalid number")
+            && out.stderr.lines().count() == 1,
+        "{}",
+        out.stderr
+    );
 }
 
 #[test]

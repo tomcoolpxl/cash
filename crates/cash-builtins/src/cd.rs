@@ -50,7 +50,7 @@ impl builtins::Command for CdCommand {
                 if let Some(oldpwd) = context.shell.env_str("OLDPWD") {
                     PathBuf::from(oldpwd.to_string())
                 } else {
-                    writeln!(context.stderr(), "OLDPWD not set")?;
+                    writeln!(context.error_stream(), "OLDPWD not set")?;
                     return Ok(ExecutionResult::general_error());
                 }
             } else {
@@ -62,7 +62,7 @@ impl builtins::Command for CdCommand {
             if let Some(home_var) = context.shell.env_str("HOME") {
                 PathBuf::from(home_var.to_string())
             } else {
-                writeln!(context.stderr(), "HOME not set")?;
+                writeln!(context.error_stream(), "HOME not set")?;
                 return Ok(ExecutionResult::general_error());
             }
         };
@@ -119,10 +119,10 @@ fn report_failure(
         _ => error.to_string(),
     };
     let spelled = target.to_string_lossy();
-    writeln!(context.stderr(), "cd: {spelled}: {reason}")?;
+    writeln!(context.error_stream(), "cd: {spelled}: {reason}")?;
     if lost_its_backslashes(&spelled) {
         writeln!(
-            context.stderr(),
+            context.error_stream(),
             "cd: hint: a backslash is an escape character, so an unquoted C:\\dir\\sub \
              arrives as C:dirsub; quote it ('C:\\dir\\sub'), use forward slashes \
              (C:/dir/sub), or turn on shopt -s winpaths"

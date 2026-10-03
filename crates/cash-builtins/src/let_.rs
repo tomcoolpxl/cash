@@ -21,7 +21,11 @@ impl builtins::Command for LetCommand {
         let mut result = ExecutionExitCode::InvalidUsage.into();
 
         if self.exprs.is_empty() {
-            writeln!(context.stderr(), "missing expression")?;
+            writeln!(
+                context.error_stream(),
+                "{}: expression expected",
+                context.command_name
+            )?;
             return Ok(result);
         }
 

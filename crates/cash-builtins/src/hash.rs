@@ -45,7 +45,7 @@ impl builtins::Command for HashCommand {
         if self.names.is_empty() && (self.remove || self.display_paths) {
             let option = if self.remove { "-d" } else { "-t" };
             writeln!(
-                context.stderr(),
+                context.error_stream(),
                 "{cmd}: {option}: option requires an argument"
             )?;
             return Ok(ExecutionResult::general_error());
@@ -86,7 +86,7 @@ impl builtins::Command for HashCommand {
         } else if self.remove {
             for name in &self.names {
                 if !context.shell.program_location_cache_mut().unset(name) {
-                    writeln!(context.stderr(), "{cmd}: {name}: not found")?;
+                    writeln!(context.error_stream(), "{cmd}: {name}: not found")?;
                     result = ExecutionResult::general_error();
                 }
             }
@@ -111,7 +111,7 @@ impl builtins::Command for HashCommand {
                         writeln!(context.stdout(), "{prefix}{path}")?;
                     }
                 } else {
-                    writeln!(context.stderr(), "{cmd}: {name}: not found")?;
+                    writeln!(context.error_stream(), "{cmd}: {name}: not found")?;
                     result = ExecutionResult::general_error();
                 }
             }
@@ -123,7 +123,7 @@ impl builtins::Command for HashCommand {
             for name in &self.names {
                 if is_dir {
                     writeln!(
-                        context.stderr(),
+                        context.error_stream(),
                         "{cmd}: {}: Is a directory",
                         path.display()
                     )?;
@@ -152,7 +152,7 @@ impl builtins::Command for HashCommand {
                     .find_first_executable_in_path_using_cache(name)
                     .is_none()
                 {
-                    writeln!(context.stderr(), "{cmd}: {name}: not found")?;
+                    writeln!(context.error_stream(), "{cmd}: {name}: not found")?;
                     result = ExecutionResult::general_error();
                 }
             }

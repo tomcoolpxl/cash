@@ -168,10 +168,10 @@ impl builtins::Command for ReadCommand {
         let read_result = loop {
             let input_stream = context
                 .try_fd(fd_num)
-                .ok_or_else(|| ErrorKind::BadFileDescriptor(fd_num))?;
+                .ok_or_else(|| ErrorKind::InvalidFileDescriptor(fd_num))?;
             let attempt = self.read_line(
                 input_stream,
-                context.stderr(),
+                context.error_stream(),
                 timeout,
                 &mut progress,
                 &history,
@@ -217,7 +217,7 @@ impl builtins::Command for ReadCommand {
                 .is_some_and(|(_, var)| var.value().is_associative_array())
         {
             writeln!(
-                context.stderr(),
+                context.error_stream(),
                 "{}: {array_variable}: not an indexed array",
                 context.command_name
             )?;
@@ -1343,7 +1343,7 @@ impl ReadCommand {
         if let Some(timeout) = self.timeout_in_seconds {
             if !timeout.is_finite() || timeout < 0.0 {
                 writeln!(
-                    context.stderr(),
+                    context.error_stream(),
                     "{}: -t: invalid timeout specification",
                     context.command_name
                 )?;

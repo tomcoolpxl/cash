@@ -66,7 +66,7 @@ impl builtins::Command for DisownCommand {
         if self.job_specs.is_empty() {
             let Some(target) = current_job(context.shell.jobs()) else {
                 writeln!(
-                    context.stderr(),
+                    context.error_stream(),
                     "{}: current: no such job",
                     context.command_name
                 )?;
@@ -85,14 +85,14 @@ impl builtins::Command for DisownCommand {
                 // because only the first word may carry options.
                 if !spec.is_empty() && !spec.starts_with('%') && !is_pid_shaped(spec) {
                     writeln!(
-                        context.stderr(),
+                        context.error_stream(),
                         "{}: warning: {spec}: job specification requires leading `%'",
                         context.command_name
                     )?;
                 }
 
                 writeln!(
-                    context.stderr(),
+                    context.error_stream(),
                     "{}: {spec}: no such job",
                     context.command_name
                 )?;

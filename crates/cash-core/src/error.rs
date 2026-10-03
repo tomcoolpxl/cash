@@ -247,6 +247,15 @@ pub enum ErrorKind {
     #[error("{0}")]
     InvalidUmask(String),
 
+    /// A descriptor `read -u` or `mapfile -u` was given that is not open.
+    #[error("{0}: invalid file descriptor: Bad file descriptor")]
+    InvalidFileDescriptor(ShellFd),
+
+    /// A file or folder a builtin could not use, as Bash's `file_error` names it:
+    /// `/no/such: No such file or directory`.
+    #[error("{}: {}", .0, os_error_text(.1))]
+    FileError(String, std::io::Error),
+
     /// `unset` of a readonly variable.
     #[error("{0}: cannot unset: readonly variable")]
     CannotUnsetReadonly(String),
@@ -626,6 +635,20 @@ pub fn os_error_text(error: &std::io::Error) -> String {
 }
 
 impl Error {
+    /// `error` as one about the file or folder `name`, where it is an I/O error:
+    /// `/no/such: No such file or directory`.
+    #[must_use]
+    pub fn file_error(name: &str, error: Self) -> Self {
+        match error.as_io_error() {
+            Some(io) => ErrorKind::FileError(
+                name.to_owned(),
+                std::io::Error::new(io.kind(), io.to_string()),
+            )
+            .into(),
+            None => error,
+        }
+    }
+
     /// This error with the variable `name` it is about, where it is one that names a
     /// variable and does not yet: `r: readonly variable`.
     #[must_use]

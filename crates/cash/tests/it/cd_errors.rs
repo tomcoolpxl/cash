@@ -16,10 +16,11 @@ use std::process::Command;
 
 const CASH: &str = env!("CARGO_BIN_EXE_cash");
 
-/// Standard error and the exit status of `script`.
+/// Standard error and the exit status of `script`, run as `bash -c` would be: with `$0`
+/// `bash`, so its errors read as Bash's do, `bash: line 1: cd: …`.
 fn stderr_and_status(script: &str) -> (String, i32) {
     let out = Command::new(CASH)
-        .args(["-c", script])
+        .args(["-c", script, "bash"])
         .output()
         .expect("run cash");
     (
@@ -33,7 +34,7 @@ fn a_missing_directory_is_named_with_bash_wording() {
     let (stderr, status) = stderr_and_status("cd no-such-directory-here");
     assert_eq!(
         stderr,
-        "cd: no-such-directory-here: No such file or directory"
+        "bash: line 1: cd: no-such-directory-here: No such file or directory"
     );
     assert_eq!(status, 1);
 }
@@ -41,7 +42,7 @@ fn a_missing_directory_is_named_with_bash_wording() {
 #[test]
 fn a_file_is_not_a_directory() {
     let (stderr, status) = stderr_and_status("cd Cargo.toml");
-    assert_eq!(stderr, "cd: Cargo.toml: Not a directory");
+    assert_eq!(stderr, "bash: line 1: cd: Cargo.toml: Not a directory");
     assert_eq!(status, 1);
 }
 
@@ -50,7 +51,7 @@ fn physical_mode_reports_the_same_way() {
     let (stderr, _) = stderr_and_status("cd -P no-such-directory-here");
     assert_eq!(
         stderr,
-        "cd: no-such-directory-here: No such file or directory"
+        "bash: line 1: cd: no-such-directory-here: No such file or directory"
     );
 }
 
@@ -60,11 +61,11 @@ fn a_path_that_lost_its_backslashes_gets_a_hint() {
     let mut lines = stderr.lines();
     assert_eq!(
         lines.next(),
-        Some("cd: C:nosuchplace: No such file or directory")
+        Some("bash: line 1: cd: C:nosuchplace: No such file or directory")
     );
     let hint = lines.next().unwrap_or_default();
     assert!(
-        hint.starts_with("cd: hint:") && hint.contains("C:/dir/sub"),
+        hint.starts_with("bash: line 1: cd: hint:") && hint.contains("C:/dir/sub"),
         "{stderr}"
     );
     assert_eq!(status, 1);

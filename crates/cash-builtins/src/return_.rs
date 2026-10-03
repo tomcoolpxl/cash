@@ -32,8 +32,8 @@ impl builtins::Command for ReturnCommand {
             Ok(result)
         } else {
             let _ = writeln!(
-                context.stderr(),
-                "return: can only be used in a function or sourced script"
+                context.error_stream(),
+                "return: can only `return' from a function or sourced script"
             );
             Ok(ExecutionExitCode::InvalidUsage.into())
         }

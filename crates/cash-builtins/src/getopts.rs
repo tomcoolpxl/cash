@@ -104,7 +104,7 @@ impl builtins::Command for GetOptsCommand {
         // Validate the target variable name.
         if !env::valid_variable_name(&self.variable_name) {
             writeln!(
-                context.stderr(),
+                context.error_stream(),
                 "{}: `{}': not a valid identifier",
                 context.command_name,
                 self.variable_name
@@ -297,7 +297,7 @@ fn resolve_option_argument<SE: cash_core::ShellExtensions>(
             } else {
                 if is_opterr_enabled(context) {
                     writeln!(
-                        context.stderr(),
+                        context.error_stream(),
                         "getopts: option requires an argument -- {c}"
                     )?;
                 }
@@ -326,7 +326,7 @@ fn report_unknown_option<SE: cash_core::ShellExtensions>(
     c: char,
 ) -> Result<(String, Option<String>), cash_core::Error> {
     if !spec.silent_errors && is_opterr_enabled(context) {
-        writeln!(context.stderr(), "getopts: illegal option -- {c}")?;
+        writeln!(context.error_stream(), "getopts: illegal option -- {c}")?;
     }
 
     let optarg = if spec.silent_errors {

@@ -1677,9 +1677,10 @@ fn jobs_and_wait_answer_as_bash_53_does() {
         "[1]+  Exit 8                     \"$X\" -c 'exit 8'"
     );
     let (_, stdout, stderr) = output_with_stderr("wait %5; echo $?");
-    assert_eq!(
-        (stdout.as_str(), stderr.as_str()),
-        ("127", "wait: %5: no such job")
+    assert_eq!(stdout.as_str(), "127");
+    assert!(
+        stderr.ends_with(": line 1: wait: %5: no such job"),
+        "{stderr}"
     );
     // `-p` with nothing to wait for unsets the variable.
     assert_eq!(

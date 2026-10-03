@@ -54,7 +54,7 @@ impl builtins::Command for MapFileCommand {
         if let Some(origin) = self.origin {
             if origin < 0 {
                 writeln!(
-                    context.stderr(),
+                    context.error_stream(),
                     "{}: {origin}: invalid array origin",
                     context.command_name
                 )?;
@@ -65,7 +65,7 @@ impl builtins::Command for MapFileCommand {
         if let Some((_, var)) = context.shell.env().get(&self.array_var_name) {
             if var.value().is_associative_array() {
                 writeln!(
-                    context.stderr(),
+                    context.error_stream(),
                     "{}: {}: not an indexed array",
                     context.command_name,
                     self.array_var_name
@@ -76,7 +76,7 @@ impl builtins::Command for MapFileCommand {
 
         let input_file = context
             .try_fd(self.fd)
-            .ok_or_else(|| ErrorKind::BadFileDescriptor(self.fd))?;
+            .ok_or_else(|| ErrorKind::InvalidFileDescriptor(self.fd))?;
 
         if self.origin.is_none() {
             context.shell.env_mut().update_or_add(

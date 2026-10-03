@@ -41,7 +41,7 @@ impl builtins::Command for ShoptCommand {
     ) -> Result<cash_core::ExecutionResult, Self::Error> {
         if self.set && self.unset {
             writeln!(
-                context.stderr(),
+                context.error_stream(),
                 "cannot set and unset shell options simultaneously"
             )?;
             return Ok(ExecutionExitCode::InvalidUsage.into());
@@ -144,7 +144,7 @@ impl builtins::Command for ShoptCommand {
                     }
                 } else {
                     writeln!(
-                        context.stderr(),
+                        context.error_stream(),
                         "{}: {}: invalid shell option name",
                         context.command_name,
                         option_name

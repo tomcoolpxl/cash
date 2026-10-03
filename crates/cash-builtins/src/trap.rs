@@ -31,11 +31,14 @@ impl builtins::Command for TrapCommand {
     ) -> Result<ExecutionResult, Self::Error> {
         if self.print_trap_actions {
             if self.print_trap_commands {
-                writeln!(context.stderr(), "trap: cannot specify both -p and -P")?;
+                writeln!(
+                    context.error_stream(),
+                    "trap: cannot specify both -p and -P"
+                )?;
                 return Ok(ExecutionResult::new(2));
             }
             if self.args.is_empty() {
-                writeln!(context.stderr(), "trap: -P: signal argument required")?;
+                writeln!(context.error_stream(), "trap: -P: signal argument required")?;
                 return Ok(ExecutionResult::new(2));
             }
             for signal_type in &self.args {

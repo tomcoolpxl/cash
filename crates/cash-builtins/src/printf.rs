@@ -39,7 +39,11 @@ impl builtins::Command for PrintfCommand {
         let (args, complaints) = numbers::prepare(fmt, args);
         let mut say = |batch: usize| -> Result<(), Error> {
             for (_, complaint) in complaints.iter().filter(|(of, _)| *of == batch) {
-                writeln!(context.stderr(), "{}: {complaint}", context.command_name)?;
+                writeln!(
+                    context.error_stream(),
+                    "{}: {complaint}",
+                    context.command_name
+                )?;
             }
             Ok(())
         };

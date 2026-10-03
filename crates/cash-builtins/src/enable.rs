@@ -50,7 +50,7 @@ impl builtins::Command for EnableCommand {
             // be safely loaded into cash's Rust builtin registry, and Git for Windows'
             // own Bash build reports the same platform capability as unavailable.
             writeln!(
-                context.stderr(),
+                context.error_stream(),
                 "{}: dynamic loading not available",
                 context.command_name
             )?;
@@ -62,7 +62,11 @@ impl builtins::Command for EnableCommand {
                 if let Some(builtin) = context.shell.builtin_mut(name) {
                     builtin.disabled = self.disable;
                 } else {
-                    writeln!(context.stderr(), "{name}: not a shell builtin")?;
+                    writeln!(
+                        context.error_stream(),
+                        "{}: {name}: not a shell builtin",
+                        context.command_name
+                    )?;
                     result = ExecutionResult::general_error();
                 }
             }

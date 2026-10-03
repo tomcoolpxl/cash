@@ -87,7 +87,7 @@ impl builtins::Command for ExecCommand {
             Ok(status) => status,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                 writeln!(
-                    context.stderr(),
+                    context.error_stream(),
                     "{}: {}: not found",
                     context.command_name,
                     self.args[0]

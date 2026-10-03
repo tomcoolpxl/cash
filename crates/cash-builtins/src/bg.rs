@@ -25,7 +25,7 @@ impl builtins::Command for BgCommand {
                     job.move_to_background()?;
                 } else {
                     writeln!(
-                        context.stderr(),
+                        context.error_stream(),
                         "{}: {}: no such job",
                         context.command_name,
                         job_spec
@@ -37,7 +37,11 @@ impl builtins::Command for BgCommand {
             if let Some(job) = context.shell.jobs_mut().current_job_mut() {
                 job.move_to_background()?;
             } else {
-                writeln!(context.stderr(), "{}: no current job", context.command_name)?;
+                writeln!(
+                    context.error_stream(),
+                    "{}: no current job",
+                    context.command_name
+                )?;
                 exit_code = ExecutionResult::general_error();
             }
         }

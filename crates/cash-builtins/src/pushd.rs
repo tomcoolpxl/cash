@@ -57,7 +57,10 @@ impl builtins::Command for PushdCommand {
                     .push(std::path::PathBuf::from(dir));
             } else {
                 let prev_working_dir = context.shell.working_dir().to_path_buf();
-                context.shell.set_working_dir(std::path::Path::new(dir))?;
+                context
+                    .shell
+                    .set_working_dir(std::path::Path::new(dir))
+                    .map_err(|e| cash_core::Error::file_error(dir, e))?;
                 context.shell.directory_stack_mut().push(prev_working_dir);
             }
 
@@ -76,7 +79,7 @@ impl builtins::Command for PushdCommand {
         let mut listing = dirs::listing(context.shell);
         if listing.len() < 2 {
             writeln!(
-                context.stderr(),
+                context.error_stream(),
                 "{}: no other directory",
                 context.command_name
             )?;

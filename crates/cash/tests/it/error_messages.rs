@@ -147,3 +147,43 @@ fn errors_are_worded_as_bash_words_them() {
         );
     }
 }
+
+#[test]
+fn a_builtin_of_bashs_is_located_and_a_tool_is_not() {
+    // Bash's builtins report through `builtin_error`, after the location; `chmod` is a
+    // program in Bash, and cash's says what a program says. Its `usage:` line is bare.
+    for (script, expected) in [
+        ("cd /no/such", "cd: /no/such: No such file or directory"),
+        ("kill %9", "kill: %9: no such job"),
+        ("fg %3", "fg: %3: no such job"),
+        (
+            "complete -p nosuch",
+            "complete: nosuch: no completion specification",
+        ),
+        ("enable nosuch", "enable: nosuch: not a shell builtin"),
+        ("let", "let: expression expected"),
+        (
+            "read -u 9 x",
+            "read: 9: invalid file descriptor: Bad file descriptor",
+        ),
+        (
+            "pushd /no/such",
+            "pushd: /no/such: No such file or directory",
+        ),
+    ] {
+        let out = run(script);
+        assert!(
+            out.stderr.ends_with(&format!(": line 1: {expected}")) && !out.stdout.contains(':'),
+            "{script}: {:?} {:?}",
+            out.stdout,
+            out.stderr
+        );
+    }
+
+    let out = run("chmod");
+    assert!(
+        out.stderr.starts_with("chmod: missing operand"),
+        "{}",
+        out.stderr
+    );
+}

@@ -42,6 +42,54 @@ pub struct ExecutionContext<'a, SE: ShellExtensions = extensions::DefaultShellEx
     pub params: ExecutionParameters,
 }
 
+/// A builtin's standard error that puts the location before its messages
+/// ([`ExecutionContext::error_stream`]). It writes a line once it is whole, and what is
+/// left when it is dropped.
+pub struct ErrorStream {
+    file: openfiles::OpenFile,
+    prefix: String,
+    name: String,
+    line: Vec<u8>,
+}
+
+impl ErrorStream {
+    fn write_line(&mut self) -> std::io::Result<()> {
+        let line = std::mem::take(&mut self.line);
+        let message = line
+            .strip_prefix(self.name.as_bytes())
+            .filter(|rest| !rest.starts_with(b"usage:"));
+        if message.is_some() {
+            std::io::Write::write_all(&mut self.file, self.prefix.as_bytes())?;
+        }
+        std::io::Write::write_all(&mut self.file, &line)
+    }
+}
+
+impl std::io::Write for ErrorStream {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        for piece in buf.split_inclusive(|&byte| byte == b'\n') {
+            self.line.extend_from_slice(piece);
+            if piece.ends_with(b"\n") {
+                self.write_line()?;
+            }
+        }
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        if !self.line.is_empty() {
+            self.write_line()?;
+        }
+        std::io::Write::flush(&mut self.file)
+    }
+}
+
+impl Drop for ErrorStream {
+    fn drop(&mut self) {
+        let _ = std::io::Write::flush(self);
+    }
+}
+
 impl<SE: ShellExtensions> ExecutionContext<'_, SE> {
     /// Returns the standard input file; usable with `write!` et al.
     pub fn stdin(&self) -> impl std::io::Read + 'static {
@@ -56,6 +104,27 @@ impl<SE: ShellExtensions> ExecutionContext<'_, SE> {
     /// Returns the standard error file; usable with `write!` et al.
     pub fn stderr(&self) -> impl std::io::Write + 'static {
         self.params.stderr(self.shell)
+    }
+
+    /// Standard error for a builtin of Bash's own to report through, as Bash's
+    /// `builtin_error` does: a line that begins with the builtin's name gets the
+    /// location first, `script.sh: line 3: cd: /x: No such file or directory`, the
+    /// location red on a terminal. Its `usage:` line, and anything else, are written as
+    /// they are.
+    pub fn error_stream(&self) -> ErrorStream {
+        let file = self.params.stderr(self.shell);
+        let prefix = self.shell.error_prefix();
+        let prefix = if self.shell.colours(&file) {
+            format!("\x1b[31m{prefix}\x1b[39m")
+        } else {
+            prefix
+        };
+        ErrorStream {
+            file,
+            prefix,
+            name: format!("{}: ", self.command_name),
+            line: Vec::new(),
+        }
     }
 
     /// Returns the file descriptor with the given number. Returns `None`

@@ -60,11 +60,15 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 13.4 Error output: colour, prefixes, `--help`
 
-The shell's own errors now carry Bash's `script.sh: line 3: ` (`Shell::error_prefix`),
-coloured only on a terminal (`Shell::colours`), in Bash's words. Left: the builtins' own
-messages (`cd: …`, written straight to stderr) without the prefix; clap's block for a bad
-option; `--help` on stdout or stderr, exit 0 or 2, by builtin. XC-8, BIN-04, BI-16;
-decided, below.
+The shell's errors, and its builtins', now carry Bash's `script.sh: line 3: `
+(`Shell::error_prefix`, `ExecutionContext::error_stream`), coloured only on a terminal
+(`Shell::colours`), in Bash's words. Left: clap's block for a bad option or a missing
+operand (`getopts` alone); `--help` on stdout or stderr, exit 0 or 2, by builtin. XC-8,
+BIN-04, BI-16; decided, below.
+
+`fg` and `bg` act in a script, where Bash says `fg: no job control` and returns 1, as job
+control is off there; cash's tests rely on `{ exit 5; } & fg` giving 5. Which one cash
+should do is the user's call. Found in 1.3.12 surveying builtin errors.
 
 An array index before the start (`a=(1 2)`): `${a[-3]}` expands to nothing in both
 shells, but Bash also says `a: bad array subscript`, and cash says nothing; `a[-3]=x`
@@ -85,7 +89,8 @@ Found in phase 12.
 Errors cash does not report at all: `echo "${x!@#}"` prints `${x!@#}` where Bash says
 `${x!@#}: bad substitution` and fails, and `"${a[}"` prints itself where Bash says
 ``bad substitution: no closing `}' in "${a[}"``; `[ 1 -eq x ]` is quietly false where
-Bash says `[: x: integer expected` and returns 2; `declare -A a; declare -a a` (and the
+Bash says `[: x: integer expected` and returns 2, and `test 1 -eq` says `invalid test
+command` where Bash says `test: 1: unary operator expected`; `declare -A a; declare -a a` (and the
 other way round) changes nothing and says nothing, where Bash says `declare: a: cannot
 convert associative to indexed array` and returns 1. Found in 1.3.12 surveying error
 output.

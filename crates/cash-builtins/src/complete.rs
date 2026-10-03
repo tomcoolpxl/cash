@@ -294,7 +294,11 @@ impl CompleteCommand {
             Self::display_spec(context, None, Some(name), spec)?;
             Ok(true)
         } else {
-            writeln!(context.stderr(), "no completion found for command")?;
+            writeln!(
+                context.error_stream(),
+                "{}: {name}: no completion specification",
+                context.command_name
+            )?;
             Ok(false)
         }
     }
@@ -442,7 +446,7 @@ impl CompleteCommand {
 
             if !result {
                 if context.shell.options().interactive {
-                    writeln!(context.stderr(), "complete: {name}: not found")?;
+                    writeln!(context.error_stream(), "complete: {name}: not found")?;
                 } else {
                     // For some reason, this is not supposed to be treated as a failure
                     // in non-interactive execution.
@@ -517,7 +521,10 @@ impl builtins::Command for CompGenCommand {
                 if let Some(name) = &self.variable_name {
                     if let Some((_, var)) = context.shell.env().get(name) {
                         if var.value().is_associative_array() {
-                            writeln!(context.stderr(), "compgen: {name}: not an indexed array")?;
+                            writeln!(
+                                context.error_stream(),
+                                "compgen: {name}: not an indexed array"
+                            )?;
                             return Ok(ExecutionResult::general_error());
                         }
                     }
@@ -598,7 +605,7 @@ impl builtins::Command for CompOptCommand {
         if !self.names.is_empty() {
             if self.update_default || self.update_empty || self.update_initial_word {
                 writeln!(
-                    context.stderr(),
+                    context.error_stream(),
                     "compopt: cannot specify names with -D, -E, or -I"
                 )?;
                 return Ok(ExecutionExitCode::InvalidUsage.into());

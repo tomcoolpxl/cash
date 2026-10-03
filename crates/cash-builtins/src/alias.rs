@@ -45,7 +45,7 @@ impl builtins::Command for AliasCommand {
                     write_alias_definition(context.stdout(), alias, value)?;
                 } else {
                     writeln!(
-                        context.stderr(),
+                        context.error_stream(),
                         "{}: {alias}: not found",
                         context.command_name
                     )?;

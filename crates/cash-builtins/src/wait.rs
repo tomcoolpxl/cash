@@ -102,7 +102,7 @@ impl WaitCommand {
                     // `wait -n` has reported a finished job it names nothing, though
                     // `wait PID` still finds its status (Bash 5.3). Bash's words, and 127.
                     writeln!(
-                        context.stderr(),
+                        context.error_stream(),
                         "{}: {}: no such job",
                         context.command_name,
                         id
@@ -114,7 +114,7 @@ impl WaitCommand {
                 // `$!`, so a pid has to resolve back to the job that owns it.
                 let Ok(pid) = cash_core::int_utils::parse(id.as_str(), 10) else {
                     writeln!(
-                        context.stderr(),
+                        context.error_stream(),
                         "{}: `{}': not a pid or valid job spec",
                         context.command_name,
                         id
@@ -133,7 +133,7 @@ impl WaitCommand {
                     // bash's wording and its exit code: 127 specifically, which
                     // scripts test for to tell "already finished" from "never mine".
                     writeln!(
-                        context.stderr(),
+                        context.error_stream(),
                         "{}: pid {} is not a child of this shell",
                         context.command_name,
                         pid

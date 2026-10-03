@@ -107,7 +107,12 @@ impl HelpCommand {
         }
 
         if !matched {
-            writeln!(context.stderr(), "No help topics match '{topic_pattern}'")?;
+            writeln!(
+                context.error_stream(),
+                "{}: no help topics match `{topic_pattern}'.  Try `help help' or `man -k \
+                 {topic_pattern}' or `info {topic_pattern}'.",
+                context.command_name
+            )?;
         }
 
         Ok(matched)

@@ -50,8 +50,8 @@ impl builtins::Command for KillCommand {
                 trap_signal = parsed_trap_signal;
             } else {
                 writeln!(
-                    context.stderr(),
-                    "{}: invalid signal name: {}",
+                    context.error_stream(),
+                    "{}: {}: invalid signal specification",
                     context.command_name,
                     signal_name
                 )?;
@@ -70,7 +70,7 @@ impl builtins::Command for KillCommand {
                     trap_signal = parsed_trap_signal;
                 } else {
                     writeln!(
-                        context.stderr(),
+                        context.error_stream(),
                         "{}: invalid signal number: {}",
                         context.command_name,
                         signal_number
@@ -102,7 +102,7 @@ impl builtins::Command for KillCommand {
                     trap_signal = parsed_trap_signal;
                 } else {
                     writeln!(
-                        context.stderr(),
+                        context.error_stream(),
                         "{}: {}: invalid signal specification",
                         context.command_name,
                         possible_sigspec
@@ -118,7 +118,11 @@ impl builtins::Command for KillCommand {
             return print_signals(&context, self.args.as_ref());
         }
         if targets.is_empty() {
-            writeln!(context.stderr(), "{}: invalid usage", context.command_name)?;
+            writeln!(
+                context.error_stream(),
+                "{}: invalid usage",
+                context.command_name
+            )?;
             return Ok(ExecutionExitCode::InvalidUsage.into());
         }
 
@@ -152,7 +156,7 @@ async fn signal_target<SE: cash_core::ShellExtensions>(
     }
     let Ok(pid) = cash_core::int_utils::parse(target, 10) else {
         writeln!(
-            context.stderr(),
+            context.error_stream(),
             "{}: `{target}': not a pid or valid job spec",
             context.command_name
         )?;
@@ -210,7 +214,7 @@ async fn signal_self<SE: cash_core::ShellExtensions>(
         "STOP" | "TSTP" | "CONT" | "CHLD" | "QUIT" => Ok(ExecutionResult::success()),
         _ if !context.shell.options().interactive => Ok(exit(status)),
         "INT" => {
-            writeln!(context.stderr())?;
+            writeln!(context.error_stream())?;
             Err(cash_core::ErrorKind::Interrupted.into())
         }
         "HUP" => Ok(exit(status)),
@@ -228,7 +232,7 @@ fn signal_job_spec<SE: cash_core::ShellExtensions>(
 ) -> Result<ExecutionResult, cash_core::Error> {
     let Some(job) = context.shell.jobs_mut().resolve_job_spec(job_spec) else {
         writeln!(
-            context.stderr(),
+            context.error_stream(),
             "{}: {}: no such job",
             context.command_name,
             job_spec
@@ -263,7 +267,7 @@ fn signal_job_known_as<SE: cash_core::ShellExtensions>(
         job.kill(trap_signal)?;
     } else if !job.runs_inside_the_shell() {
         writeln!(
-            context.stderr(),
+            context.error_stream(),
             "{}: ({pid}) - No such process",
             context.command_name
         )?;
@@ -291,12 +295,12 @@ fn signal_pid<SE: cash_core::ShellExtensions>(
             .is_some_and(|io| io.kind() == std::io::ErrorKind::NotFound)
         {
             writeln!(
-                context.stderr(),
+                context.error_stream(),
                 "{}: ({pid}) - No such process",
                 context.command_name
             )?;
         } else {
-            writeln!(context.stderr(), "{}: {e}", context.command_name)?;
+            writeln!(context.error_stream(), "{}: {e}", context.command_name)?;
         }
         return Ok(ExecutionResult::general_error());
     }
@@ -337,7 +341,7 @@ fn print_signals(
                     writeln!(context.stdout(), "{s}")?;
                 }
                 Err(e) => {
-                    writeln!(context.stderr(), "{e}")?;
+                    writeln!(context.error_stream(), "{e}")?;
                     exit_code = ExecutionResult::general_error();
                 }
             }

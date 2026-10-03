@@ -53,7 +53,7 @@ impl builtins::Command for JobsCommand {
                         ids.push(job.id);
                     } else {
                         writeln!(
-                            context.stderr(),
+                            context.error_stream(),
                             "{}: {spec}: no such job",
                             context.command_name
                         )?;
@@ -141,7 +141,7 @@ impl builtins::Command for JobsCommand {
             for spec in &self.job_specs {
                 let Some(job) = context.shell.jobs_mut().resolve_job_spec(spec) else {
                     writeln!(
-                        context.stderr(),
+                        context.error_stream(),
                         "{}: {spec}: no such job",
                         context.command_name
                     )?;

@@ -145,7 +145,11 @@ impl builtins::Command for DeclareCommand {
         };
 
         if matches!(verb, DeclareVerb::Local) && !context.shell.in_function() {
-            writeln!(context.stderr(), "can only be used in a function")?;
+            writeln!(
+                context.error_stream(),
+                "{}: can only be used in a function",
+                context.command_name
+            )?;
             return Ok(ExecutionResult::general_error());
         }
 
@@ -193,7 +197,7 @@ impl DeclareCommand {
         let name = match declaration {
             cash_core::CommandArg::String(s) => s,
             cash_core::CommandArg::Assignment(_) => {
-                writeln!(context.stderr(), "declare: {declaration}: not found")?;
+                writeln!(context.error_stream(), "declare: {declaration}: not found")?;
                 return Ok(false);
             }
         };
@@ -241,7 +245,7 @@ impl DeclareCommand {
 
             Ok(true)
         } else {
-            writeln!(context.stderr(), "declare: {name}: not found")?;
+            writeln!(context.error_stream(), "declare: {name}: not found")?;
             Ok(false)
         }
     }
@@ -303,7 +307,7 @@ impl DeclareCommand {
 
         if create_var_local {
             writeln!(
-                context.stderr(),
+                context.error_stream(),
                 "{}: warning: {name}: circular name reference",
                 context.command_name
             )?;
@@ -311,7 +315,7 @@ impl DeclareCommand {
         }
 
         writeln!(
-            context.stderr(),
+            context.error_stream(),
             "{}: {name}: nameref variable self references not allowed",
             context.command_name
         )?;
@@ -459,7 +463,7 @@ impl DeclareCommand {
         // Make sure it's a valid name.
         if !env::valid_variable_name(name.as_str()) {
             writeln!(
-                context.stderr(),
+                context.error_stream(),
                 "{}: {name}: not a valid variable name",
                 context.command_name
             )?;

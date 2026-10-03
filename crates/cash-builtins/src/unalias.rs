@@ -29,7 +29,7 @@ impl builtins::Command for UnaliasCommand {
             for alias in &self.aliases {
                 if context.shell.aliases_mut().remove(alias).is_none() {
                     writeln!(
-                        context.stderr(),
+                        context.error_stream(),
                         "{}: {}: not found",
                         context.command_name,
                         alias

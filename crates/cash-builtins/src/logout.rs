@@ -20,7 +20,10 @@ impl builtins::Command for LogoutCommand {
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<cash_core::ExecutionResult, Self::Error> {
         if !context.shell.options().login_shell {
-            writeln!(context.stderr(), "logout: not login shell: use `exit'")?;
+            writeln!(
+                context.error_stream(),
+                "logout: not login shell: use `exit'"
+            )?;
             return Ok(ExecutionResult::new(1));
         }
 

@@ -17,7 +17,8 @@ impl builtins::Command for FgCommand {
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<cash_core::ExecutionResult, Self::Error> {
-        let mut stderr = context.stdout();
+        // The job's command line goes to standard output, as in Bash.
+        let mut stdout = context.stdout();
 
         // Read interactive option before taking mutable borrow on jobs
         let is_interactive = context.shell.options().interactive;
@@ -26,7 +27,7 @@ impl builtins::Command for FgCommand {
         if let Some(job_spec) = &self.job_spec {
             if let Some(job) = context.shell.jobs_mut().resolve_job_spec(job_spec) {
                 job.move_to_foreground()?;
-                writeln!(stderr, "{}", job.command_line)?;
+                writeln!(stdout, "{}", job.command_line)?;
 
                 let result = job.wait_in_foreground(ctrl_z).await?;
                 if is_interactive {
@@ -36,22 +37,25 @@ impl builtins::Command for FgCommand {
                 if matches!(job.state, jobs::JobState::Stopped) {
                     // N.B. We use the '\r' to overwrite any ^Z output.
                     let formatted = job.to_string();
-                    writeln!(context.stderr(), "\r{formatted}")?;
+                    writeln!(context.error_stream(), "\r{formatted}")?;
                 }
 
                 Ok(result)
             } else {
+                // On standard error, the builtin's name first, as in Bash: it went to
+                // standard output as `%3: fg: no such job`.
                 writeln!(
-                    stderr,
+                    context.error_stream(),
                     "{}: {}: no such job",
-                    job_spec, context.command_name
+                    context.command_name,
+                    job_spec
                 )?;
                 Ok(ExecutionResult::general_error())
             }
         } else {
             if let Some(job) = context.shell.jobs_mut().current_job_mut() {
                 job.move_to_foreground()?;
-                writeln!(stderr, "{}", job.command_line)?;
+                writeln!(stdout, "{}", job.command_line)?;
 
                 let result = job.wait_in_foreground(ctrl_z).await?;
                 if is_interactive {
@@ -61,12 +65,16 @@ impl builtins::Command for FgCommand {
                 if matches!(job.state, jobs::JobState::Stopped) {
                     // N.B. We use the '\r' to overwrite any ^Z output.
                     let formatted = job.to_string();
-                    writeln!(context.stderr(), "\r{formatted}")?;
+                    writeln!(context.error_stream(), "\r{formatted}")?;
                 }
 
                 Ok(result)
             } else {
-                writeln!(stderr, "{}: no current job", context.command_name)?;
+                writeln!(
+                    context.error_stream(),
+                    "{}: no current job",
+                    context.command_name
+                )?;
                 Ok(ExecutionResult::general_error())
             }
         }

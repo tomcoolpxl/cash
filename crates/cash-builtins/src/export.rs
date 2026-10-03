@@ -81,7 +81,11 @@ impl ExportCommand {
                             func.export();
                         }
                     } else {
-                        writeln!(context.stderr(), "{s}: not a function")?;
+                        writeln!(
+                            context.error_stream(),
+                            "{}: {s}: not a function",
+                            context.command_name
+                        )?;
                         return Ok(ExecutionExitCode::InvalidUsage.into());
                     }
                 }
@@ -109,7 +113,7 @@ impl ExportCommand {
                 let name = match &assignment.name {
                     ast::AssignmentName::VariableName(name) => name,
                     ast::AssignmentName::ArrayElementName(_, _) => {
-                        writeln!(context.stderr(), "not a valid variable name")?;
+                        writeln!(context.error_stream(), "not a valid variable name")?;
                         return Ok(ExecutionExitCode::InvalidUsage.into());
                     }
                 };
