@@ -321,10 +321,9 @@ impl builtins::Command for DetachCommand {
         let command_line = detached_command_line(&context, &resolved, args);
         let env = cash_core::commands::exported_environment(context.shell);
         match cash_win32::spawn::spawn_detached(&command_line, context.shell.working_dir(), &env) {
-            Ok(child) => {
-                // Dropping the child closes cash's handles to it; it neither waits for the
-                // program nor ends it.
-                writeln!(context.stdout(), "[detached] pid {}", child.id())?;
+            Ok(pid) => {
+                // cash keeps no handle to it: it neither waits for the program nor ends it.
+                writeln!(context.stdout(), "[detached] pid {pid}")?;
                 Ok(ExecutionResult::success())
             }
             Err(e) => {

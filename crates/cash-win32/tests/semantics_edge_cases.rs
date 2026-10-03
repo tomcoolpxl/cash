@@ -19,8 +19,7 @@
 )]
 
 use cash_win32::cmd::{
-    CmdHazard, build_cmd_command_line, build_command_line, escape_for_cmd, is_safe_for_cmd,
-    quote_argument,
+    CmdHazard, build_command_line, escape_for_cmd, is_safe_for_cmd, quote_argument,
 };
 use cash_win32::env::{Environment, canonical_name, path_to_unix, path_to_windows, split_path};
 use cash_win32::exit::{from_windows, is_ntstatus_error};
@@ -327,15 +326,4 @@ fn cmd_hazards_are_classified_precisely() {
 
     // NUL is reported ahead of the others: it cannot appear in a command line at all.
     assert_eq!(is_safe_for_cmd("a%b\0"), Err(CmdHazard::Nul));
-}
-
-#[test]
-fn the_cmd_command_line_is_wrapped_exactly_once() {
-    let line = build_cmd_command_line("s.bat", &["a".into()]);
-    assert!(line.starts_with("cmd.exe /d /s /c \""));
-    assert!(line.ends_with('"'));
-    // `/s` makes cmd strip precisely the first and last quote, so there must be exactly
-    // one outer pair.
-    let after_c = line.strip_prefix("cmd.exe /d /s /c ").unwrap();
-    assert!(!after_c.starts_with("\"\""), "double-wrapped: {line}");
 }

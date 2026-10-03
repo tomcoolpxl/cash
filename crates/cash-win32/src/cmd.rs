@@ -109,20 +109,6 @@ pub fn escape_words_for_cmd<'a>(words: impl IntoIterator<Item = &'a str>) -> Str
     out
 }
 
-/// Build the command line for `cmd.exe /d /s /c` (D8's `.bat` / `.cmd` dispatch).
-///
-/// `/d` skips `AutoRun` commands from the registry, `/s` makes the outer quoting rules
-/// predictable, and `/c` runs and exits.
-#[must_use]
-pub fn build_cmd_command_line(script: &str, args: &[String]) -> String {
-    let inner =
-        escape_words_for_cmd(std::iter::once(script).chain(args.iter().map(String::as_str)));
-
-    // /s plus the outer quotes means cmd strips exactly the first and last quote and
-    // treats everything between as the command.
-    format!("cmd.exe /d /s /c \"{inner}\"")
-}
-
 /// Why an argument cannot be passed safely through `cmd.exe`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CmdHazard {

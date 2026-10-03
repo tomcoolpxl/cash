@@ -102,4 +102,56 @@ mod tests {
         assert!(cash_win32::console::start_threads(child.id()).unwrap() > 0);
         assert_eq!(child.wait().unwrap().code(), Some(7));
     }
+
+    /// `cmd /c ping` that waits: a program with a child of its own.
+    fn sleeper() -> std::process::Command {
+        let mut command = std::process::Command::new("cmd");
+        command.args(["/c", "ping -n 30 127.0.0.1 >nul"]);
+        command
+    }
+
+    /// Whether `pid` still runs.
+    fn alive(pid: u32) -> bool {
+        cash_win32::process::is_pid_alive(pid)
+    }
+
+    /// The race spec §6 records: a program assigned to its job after it starts can start
+    /// a child before then, outside the job. Created suspended, it is in its job when
+    /// `spawn` returns, and so is everything it starts (D6). These were tests of
+    /// `cash_win32::spawn::spawn`, which nothing ran (W32-11).
+    #[tokio::test]
+    async fn a_program_is_in_its_job_when_spawn_returns_and_so_are_its_children() {
+        let mut child = spawn(sleeper(), true, false).unwrap();
+        let pid = child.id().unwrap();
+        assert!(
+            cash_win32::jobreg::tree_pids(pid).contains(&pid),
+            "{pid} was not in its job when spawn returned"
+        );
+
+        let started = std::time::Instant::now();
+        let grandchild = loop {
+            if let Some(&other) = cash_win32::jobreg::tree_pids(pid)
+                .iter()
+                .find(|&&p| p != pid)
+            {
+                break other;
+            }
+            assert!(
+                started.elapsed() < std::time::Duration::from_secs(10),
+                "ping never joined the job"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        };
+
+        assert!(cash_win32::jobreg::terminate_tree(pid, 1).unwrap());
+        let _ = child.wait().await;
+        let started = std::time::Instant::now();
+        while alive(grandchild) {
+            assert!(
+                started.elapsed() < std::time::Duration::from_secs(10),
+                "{grandchild} outlived its job"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+    }
 }

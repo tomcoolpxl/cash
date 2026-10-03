@@ -17,8 +17,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use cash_win32::cmd::{
-    CmdHazard, build_cmd_command_line, build_command_line, escape_for_cmd, is_safe_for_cmd,
-    quote_argument,
+    CmdHazard, build_command_line, escape_for_cmd, is_safe_for_cmd, quote_argument,
 };
 use cash_win32::resolve::{
     DEFAULT_PATHEXT, Dispatch, classify, parse_pathext, read_shebang, resolve,
@@ -320,12 +319,4 @@ fn cmd_hazards_are_reported_rather_than_hidden() {
     assert_eq!(is_safe_for_cmd("%PATH%"), Err(CmdHazard::PercentExpansion));
     assert_eq!(is_safe_for_cmd("two\nlines"), Err(CmdHazard::Newline));
     assert_eq!(is_safe_for_cmd("nul\0byte"), Err(CmdHazard::Nul));
-}
-
-#[test]
-fn the_cmd_command_line_has_the_expected_shape() {
-    let line = build_cmd_command_line("deploy.bat", &["arg".to_string()]);
-    assert!(line.starts_with("cmd.exe /d /s /c \""), "got {line}");
-    assert!(line.ends_with('"'), "got {line}");
-    assert!(line.contains("deploy.bat"));
 }
