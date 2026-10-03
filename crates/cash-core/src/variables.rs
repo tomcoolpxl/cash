@@ -1080,7 +1080,9 @@ fn get_key_for_indexed_array(
     // elements, so it was `1`, and a sparse array's `${a[-1]}` was empty.
     #[expect(clippy::cast_possible_wrap)]
     if index_value < 0 {
-        let end = values.last_key_value().map_or(0, |(&last, _)| last.saturating_add(1));
+        let end = values
+            .last_key_value()
+            .map_or(0, |(&last, _)| last.saturating_add(1));
         index_value += end as i64;
         if index_value < 0 {
             return Err(error::ErrorKind::ArrayIndexOutOfRange(index_str.to_owned()).into());
