@@ -33,10 +33,6 @@ pub struct TestFile {
 }
 
 /// A single test case.
-#[allow(
-    clippy::unsafe_derive_deserialize,
-    reason = "the unsafe call is unrelated to deserialization"
-)]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct TestCase {
     /// Name of the test case.
@@ -49,10 +45,6 @@ pub struct TestCase {
     /// Command-line arguments to the shell.
     #[serde(default)]
     pub args: Vec<String>,
-
-    /// Command-line arguments to append for the shell-under-test only.
-    #[serde(default)]
-    pub additional_test_args: Vec<String>,
 
     /// Default command-line shell arguments that should be *removed*.
     #[serde(default)]
@@ -78,18 +70,6 @@ pub struct TestCase {
     #[serde(default)]
     pub stdin: Option<String>,
 
-    /// Whether to ignore exit status differences.
-    #[serde(default)]
-    pub ignore_exit_status: bool,
-
-    /// Whether to ignore stderr differences.
-    #[serde(default)]
-    pub ignore_stderr: bool,
-
-    /// Whether to ignore stdout differences.
-    #[serde(default)]
-    pub ignore_stdout: bool,
-
     /// Whether to normalize whitespace when comparing output.
     #[serde(default)]
     pub ignore_whitespace: bool,
@@ -102,10 +82,6 @@ pub struct TestCase {
     #[serde(default)]
     pub known_failure: bool,
 
-    /// Configurations that are incompatible with this test.
-    #[serde(default)]
-    pub incompatible_configs: HashSet<String>,
-
     /// Operating systems that are incompatible with this test.
     #[serde(default)]
     pub incompatible_os: HashSet<String>,
@@ -116,57 +92,26 @@ pub struct TestCase {
     #[serde(default)]
     pub incompatible_platforms: HashSet<String>,
 
-    /// Minimum oracle version required for this test.
-    #[serde(default)]
-    pub min_oracle_version: Option<String>,
-
-    /// Maximum oracle version allowed for this test.
-    #[serde(default)]
-    pub max_oracle_version: Option<String>,
-
     /// Timeout for this test in seconds.
     #[serde(default)]
     pub timeout_in_seconds: Option<u64>,
 
     // ==================== Expectation fields ====================
-    /// Expected stdout content (for expectation-based testing).
+    /// Expected stdout content.
     #[serde(default)]
     pub expected_stdout: Option<String>,
 
-    /// Expected stderr content (for expectation-based testing).
+    /// Expected stderr content.
     #[serde(default)]
     pub expected_stderr: Option<String>,
 
-    /// Expected exit code (for expectation-based testing).
+    /// Expected exit code.
     #[serde(default)]
     pub expected_exit_code: Option<i32>,
 
     /// Whether to use insta snapshot for this test's expectations.
     #[serde(default)]
     pub snapshot: bool,
-
-    /// Whether to skip oracle comparison even when an oracle is configured.
-    #[serde(default)]
-    pub skip_oracle: bool,
-}
-
-impl TestCase {
-    /// Returns whether this test case has any inline expectations defined.
-    pub const fn has_inline_expectations(&self) -> bool {
-        self.expected_stdout.is_some()
-            || self.expected_stderr.is_some()
-            || self.expected_exit_code.is_some()
-    }
-
-    /// Returns whether this test case uses snapshots for expectations.
-    pub const fn uses_snapshot(&self) -> bool {
-        self.snapshot
-    }
-
-    /// Returns whether this test case has any expectations (inline or snapshot).
-    pub const fn has_expectations(&self) -> bool {
-        self.has_inline_expectations() || self.uses_snapshot()
-    }
 }
 
 /// A set of test cases loaded from a single YAML file.
@@ -181,10 +126,6 @@ pub struct TestCaseSet {
     /// Common test files applicable to all children test cases.
     #[serde(default)]
     pub common_test_files: Vec<TestFile>,
-
-    /// Configurations that are incompatible with this entire test set.
-    #[serde(default)]
-    pub incompatible_configs: HashSet<String>,
 
     /// Runtime platform tags (e.g., "wasi", "wasm") that are incompatible
     /// with this entire test set.

@@ -1,19 +1,8 @@
 //! Test harness library for cash's YAML compatibility cases.
 //!
-//! This crate provides a unified framework for running YAML-based integration tests
-//! that support both oracle-based comparison (comparing brush output against bash)
-//! and expectation-based testing (inline expectations or insta snapshots).
-//!
-//! # Modes of Operation
-//!
-//! 1. **Oracle comparison**: Runs both an oracle shell (e.g., bash) and the test shell (brush),
-//!    comparing their outputs. This is the traditional compatibility testing mode.
-//!
-//! 2. **Expectation-based**: Runs only the test shell and compares against inline expectations
-//!    specified in the YAML or against insta snapshots.
-//!
-//! 3. **Hybrid**: Combines both modes - runs oracle comparison AND validates against expectations.
-//!    Both must pass for the test to succeed.
+//! This crate runs YAML-based integration tests against cash and checks each case's
+//! output against inline expectations specified in the YAML (`expected_stdout`,
+//! `expected_stderr`, `expected_exit_code`) or against insta snapshots (`snapshot: true`).
 
 #![expect(clippy::missing_panics_doc)]
 #![expect(clippy::unwrap_used)]
@@ -27,13 +16,9 @@ mod testcase;
 pub mod util;
 
 pub use comparison::{
-    DirComparison, DirComparisonEntry, DurationComparison, ExitStatusComparison,
-    ExpectationComparison, OracleComparison, SingleExpectationComparison, SnapshotResult,
-    StringComparison, TestComparison,
+    ExpectationComparison, SingleExpectationComparison, SnapshotResult, TestComparison,
 };
-pub use config::{
-    OracleConfig, OutputFormat, RunnerConfig, ShellConfig, TestMode, TestOptions, WhichShell,
-};
+pub use config::{OutputFormat, RunnerConfig, ShellConfig, TestOptions};
 pub use execution::RunResult;
 pub use runner::TestRunner;
 pub use testcase::{ShellInvocation, TestCase, TestCaseSet, TestFile};

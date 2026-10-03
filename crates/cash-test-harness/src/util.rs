@@ -1,7 +1,6 @@
 //! Utility functions for the test harness.
 
 use anyhow::Result;
-use descape::UnescapeExt;
 
 /// Get the OS ID from /etc/os-release file.
 /// Returns the value of the ID field, which is the canonical OS identifier.
@@ -14,15 +13,6 @@ pub fn get_host_os_id() -> Option<String> {
             Some(info.id)
         }
     })
-}
-
-/// Makes expectrl output human-readable by unescaping and stripping ANSI codes.
-pub fn make_expectrl_output_readable<S: AsRef<str>>(output: S) -> String {
-    // Unescape the escaping done by expectrl's logging mechanism.
-    let unescaped = output.as_ref().to_unescaped().unwrap().to_string();
-
-    // Remove VT escape sequences.
-    strip_ansi_escapes::strip_str(unescaped)
 }
 
 /// Writes a diff between two strings to a writer.
@@ -70,22 +60,4 @@ pub fn resolve_launcher_path(tokens: &mut [String]) -> Result<()> {
         .ok_or_else(|| anyhow::anyhow!("could not resolve launcher binary '{first}' in PATH"))?;
     tokens[0] = resolved.to_string_lossy().into_owned();
     Ok(())
-}
-
-/// Gets the bash version string from the given bash path.
-pub fn get_bash_version_str(bash_path: &std::path::Path) -> Result<String> {
-    use anyhow::Context;
-
-    let output = std::process::Command::new(bash_path)
-        .arg("--norc")
-        .arg("--noprofile")
-        .arg("-c")
-        .arg("echo -n ${BASH_VERSINFO[0]}.${BASH_VERSINFO[1]}.${BASH_VERSINFO[2]}")
-        .output()
-        .context("failed to retrieve bash version")?
-        .stdout;
-
-    let ver_str = String::from_utf8(output)?;
-
-    Ok(ver_str)
 }

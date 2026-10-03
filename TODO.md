@@ -61,7 +61,15 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 14.6 Dead code, allows and dependencies
 
-- The harness's oracle mode. EXE-12, BIN-16, BIN-17.
+- What is left of brush's Unix and wasi set-up in `cash-test-harness`, seen removing its
+  oracle mode (2026-10-04): 13 YAML cases say `incompatible_platforms: ["wasi"]` and the
+  harness keeps a launcher and platform tags for it; `incompatible_os` reads
+  `/etc/os-release`, so it never applies (and `os-release` is a dependency for it);
+  `compute_test_path_var` adds `/usr/bin` and looks for a file named `sh`, never
+  `sh.exe`; the coverage directory defaults to `crates/target`; `pty: true` always errors
+  and `ShellInvocation::ExecScript` is `unimplemented!()`; `--show-output`,
+  `--nocapture`, `--color` and `-Z` do nothing; a case with no expectation passes; the
+  cases are in `tests/cases/brush/`.
 - awk, bc and sed allow the lints for code that can panic (`unwrap_used`, `expect_used`,
   `panic`, `panic_in_result_fn`, `unwrap_in_result`, `string_slice`,
   `missing_panics_doc`): 58 `unwrap` and 34 `expect` in awk, 37 `expect` and 8 `panic!`

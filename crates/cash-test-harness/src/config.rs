@@ -3,20 +3,11 @@
 use clap::Parser;
 use std::{collections::HashSet, ffi::OsString, path::PathBuf};
 
-/// Which shell to use for a test.
-#[derive(Clone, Debug)]
-pub enum WhichShell {
-    /// The shell under test (brush).
-    ShellUnderTest(PathBuf),
-    /// A named shell (e.g., bash, sh).
-    NamedShell(PathBuf),
-}
-
-/// Configuration for a shell.
+/// Configuration for the shell under test (cash).
 #[derive(Clone, Debug)]
 pub struct ShellConfig {
-    /// Which shell this is.
-    pub which: WhichShell,
+    /// Path to the shell binary.
+    pub path: PathBuf,
     /// Default arguments to pass to this shell.
     pub default_args: Vec<String>,
     /// Default PATH variable for this shell.
@@ -61,37 +52,10 @@ impl ShellConfig {
     }
 }
 
-/// Configuration for the oracle shell (e.g., bash).
-#[derive(Clone, Debug)]
-pub struct OracleConfig {
-    /// Name of this oracle configuration (e.g., "bash", "sh").
-    pub name: String,
-    /// Shell configuration for the oracle.
-    pub shell: ShellConfig,
-    /// Version string of the oracle.
-    pub version_str: Option<String>,
-}
-
-/// The mode in which to run tests.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum TestMode {
-    /// Compare test shell output against an oracle shell.
-    #[default]
-    Oracle,
-    /// Validate against inline expectations or snapshots only.
-    Expectation,
-    /// Both oracle comparison and expectation validation.
-    Hybrid,
-}
-
 /// Configuration for the test runner.
 #[derive(Clone, Debug)]
 pub struct RunnerConfig {
-    /// The test mode to use.
-    pub mode: TestMode,
-    /// Configuration for the oracle shell (if using oracle mode).
-    pub oracle: Option<OracleConfig>,
-    /// Configuration for the test shell (brush).
+    /// Configuration for the shell under test (cash).
     pub test_shell: ShellConfig,
     /// Directory containing test case YAML files.
     pub test_cases_dir: PathBuf,
@@ -105,27 +69,14 @@ pub struct RunnerConfig {
 }
 
 impl RunnerConfig {
-    /// Creates a new runner config with minimal safe defaults.
+    /// Creates a new runner config for the given shell under test.
     ///
-    /// N.B. Callers typically override `test_shell` via
-    /// `TestOptions::create_test_shell_config()`, which adds
-    /// platform-appropriate flags like `--input-backend=basic`.
-    pub fn new(test_shell_path: PathBuf, test_cases_dir: PathBuf) -> Self {
+    /// Callers typically build `test_shell` with
+    /// `TestOptions::create_test_shell_config()`, which adds the standard
+    /// flags like `--input-backend=basic`.
+    pub fn new(test_shell: ShellConfig, test_cases_dir: PathBuf) -> Self {
         Self {
-            mode: TestMode::Expectation,
-            oracle: None,
-            test_shell: ShellConfig {
-                which: WhichShell::ShellUnderTest(test_shell_path),
-                default_args: vec![
-                    "--norc".into(),
-                    "--noprofile".into(),
-                    "--no-config".into(),
-                    "--disable-bracketed-paste".into(),
-                    "--disable-color".into(),
-                ],
-                default_path_var: None,
-                launcher: None,
-            },
+            test_shell,
             test_cases_dir,
             snapshot_dir_name: String::from("snaps"),
             host_os_id: crate::util::get_host_os_id(),
@@ -137,21 +88,6 @@ impl RunnerConfig {
     #[must_use]
     pub fn with_platform_tags(mut self, tags: HashSet<String>) -> Self {
         self.platform_tags = tags;
-        self
-    }
-
-    /// Sets the oracle configuration, enabling oracle comparison mode.
-    #[must_use]
-    pub fn with_oracle(mut self, oracle: OracleConfig) -> Self {
-        self.oracle = Some(oracle);
-        self.mode = TestMode::Oracle;
-        self
-    }
-
-    /// Sets the test mode.
-    #[must_use]
-    pub const fn with_mode(mut self, mode: TestMode) -> Self {
-        self.mode = mode;
         self
     }
 
@@ -199,12 +135,8 @@ pub struct TestOptions {
     pub display_known_failure_details: bool,
 
     /// Display details regarding successful test cases.
-    #[clap(short = 'v', long = "verbose", env = "BRUSH_VERBOSE")]
+    #[clap(short = 'v', long = "verbose", env = "CASH_TEST_VERBOSE")]
     pub verbose: bool,
-
-    /// Enable a specific configuration.
-    #[clap(long = "enable-config")]
-    pub enabled_configs: Vec<String>,
 
     /// List available tests without running them.
     #[clap(long = "list")]
@@ -214,44 +146,44 @@ pub struct TestOptions {
     #[clap(long = "exact")]
     pub exact_match: bool,
 
-    /// Optionally specify a non-default path for bash.
-    #[clap(long = "bash-path", default_value = "bash", env = "BASH_PATH")]
-    pub bash_path: PathBuf,
+    /// Optionally specify a non-default path for cash.
+    #[clap(long = "cash-path", default_value = "", env = "CASH_TEST_SHELL_PATH")]
+    pub cash_path: String,
 
-    /// Optionally specify a non-default path for brush.
-    #[clap(long = "brush-path", default_value = "", env = "BRUSH_PATH")]
-    pub brush_path: String,
+    /// Optionally specify additional arguments for cash.
+    #[clap(long = "cash-args", default_value = "", env = "CASH_TEST_SHELL_ARGS")]
+    pub cash_args: String,
 
-    /// Optionally specify additional arguments for brush.
-    #[clap(long = "brush-args", default_value = "", env = "BRUSH_ARGS")]
-    pub brush_args: String,
-
-    /// Optionally specify a launcher command to prepend when invoking brush
+    /// Optionally specify a launcher command to prepend when invoking cash
     /// (e.g., "wasmtime run --" to execute a wasm build under wasmtime).
     /// The string is split on whitespace; the first token becomes the program
     /// to execute and the remainder are passed as leading arguments before
-    /// the brush binary path.
-    #[clap(long = "brush-launcher", default_value = "", env = "BRUSH_LAUNCHER")]
-    pub brush_launcher: String,
+    /// the cash binary path.
+    #[clap(
+        long = "cash-launcher",
+        default_value = "",
+        env = "CASH_TEST_SHELL_LAUNCHER"
+    )]
+    pub cash_launcher: String,
 
     /// Runtime platform tags (e.g., "wasi", "wasm") describing the
-    /// environment in which brush is being executed. Test cases that
+    /// environment in which cash is being executed. Test cases that
     /// declare any of these tags in `incompatible_platforms` will be
     /// skipped. May be specified multiple times on the CLI or as a
     /// space-separated value in the environment variable.
     #[clap(
-        long = "brush-platform-tags",
+        long = "cash-platform-tags",
         value_delimiter = ' ',
-        env = "BRUSH_PLATFORM_TAGS"
+        env = "CASH_TEST_PLATFORM_TAGS"
     )]
-    pub brush_platform_tags: Vec<String>,
+    pub cash_platform_tags: Vec<String>,
 
     /// Optionally specify path to test cases.
-    #[clap(long = "test-cases-path", env = "BRUSH_TEST_CASES")]
+    #[clap(long = "test-cases-path", env = "CASH_TEST_CASES")]
     pub test_cases_path: Option<PathBuf>,
 
     /// Optionally specify PATH variable to use in shells.
-    #[clap(long = "test-path-var", env = "BRUSH_TEST_PATH_VAR")]
+    #[clap(long = "test-path-var", env = "CASH_TEST_PATH_VAR")]
     pub test_path_var: Option<String>,
 
     /// Show output from test cases (for compatibility only, has no effect).
@@ -285,10 +217,10 @@ pub struct TestOptions {
 impl TestOptions {
     /// Returns the configured platform tags as a set.
     pub fn platform_tags(&self) -> HashSet<String> {
-        self.brush_platform_tags.iter().cloned().collect()
+        self.cash_platform_tags.iter().cloned().collect()
     }
 
-    /// Builds the default `ShellConfig` for the shell under test based on
+    /// Builds the `ShellConfig` for the shell under test based on
     /// the common options (path, launcher, platform tags, extra args).
     ///
     /// Resolves the launcher binary to an absolute path (if one is
@@ -306,21 +238,21 @@ impl TestOptions {
         // Use the basic input backend for native builds. WASI builds are
         // compiled with `--features minimal` which doesn't include the basic
         // backend, so passing this flag would cause a startup error. Omitting
-        // it lets brush pick its own default (Minimal on wasm targets).
+        // it lets the shell pick its own default (Minimal on wasm targets).
         if !self.platform_tags().contains("wasi") {
             default_args.push("--input-backend=basic".into());
         }
 
-        // Append any additional brush args specified by the caller.
-        self.brush_args.split_whitespace().for_each(|arg| {
+        // Append any additional shell args specified by the caller.
+        self.cash_args.split_whitespace().for_each(|arg| {
             default_args.push(arg.into());
         });
 
-        let launcher = if self.brush_launcher.is_empty() {
+        let launcher = if self.cash_launcher.is_empty() {
             None
         } else {
             let mut tokens: Vec<String> = self
-                .brush_launcher
+                .cash_launcher
                 .split_whitespace()
                 .map(Into::into)
                 .collect();
@@ -329,22 +261,11 @@ impl TestOptions {
         };
 
         Ok(ShellConfig {
-            which: WhichShell::ShellUnderTest(PathBuf::from(&self.brush_path)),
+            path: PathBuf::from(&self.cash_path),
             default_args,
             default_path_var: self.test_path_var.clone(),
             launcher,
         })
-    }
-
-    /// Returns whether the given config name should be enabled.
-    pub fn should_enable_config(&self, config: &str, default_configs: &[&str]) -> bool {
-        let enabled_configs = if self.enabled_configs.is_empty() {
-            default_configs.iter().map(|s| String::from(*s)).collect()
-        } else {
-            self.enabled_configs.clone()
-        };
-
-        enabled_configs.contains(&config.to_string())
     }
 
     /// Returns whether a test should run based on include/exclude filters.

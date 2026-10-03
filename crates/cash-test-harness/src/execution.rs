@@ -1,6 +1,6 @@
 //! Execution logic for running shell commands.
 
-use crate::config::{ShellConfig, WhichShell};
+use crate::config::ShellConfig;
 use crate::testcase::{ShellInvocation, TestCase, TestCaseSet, TestFile};
 use anyhow::{Context, Result};
 use assert_fs::fixture::{FileWriteStr, PathChild};
@@ -18,8 +18,6 @@ pub struct RunResult {
     pub stdout: String,
     /// Standard error.
     pub stderr: String,
-    /// Duration of the command.
-    pub duration: std::time::Duration,
 }
 
 impl TestCase {
@@ -115,30 +113,12 @@ impl TestCase {
         shell_config: &ShellConfig,
         working_dir: &assert_fs::TempDir,
     ) -> std::process::Command {
-        let (mut test_cmd, coverage_target_dir) = match self.invocation {
-            ShellInvocation::ExecShellBinary => match &shell_config.which {
-                WhichShell::ShellUnderTest(name) => {
-                    let cli_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-                    let default_target_dir = || cli_dir.parent().unwrap().join("target");
-                    let target_dir = std::env::var("CARGO_TARGET_DIR")
-                        .ok()
-                        .map_or_else(default_target_dir, PathBuf::from);
-                    (
-                        Self::new_shell_command(name, shell_config.launcher.as_deref()),
-                        Some(target_dir),
-                    )
-                }
-                // Launcher only applies to the shell under test; the oracle is invoked directly.
-                WhichShell::NamedShell(name) => (Self::new_shell_command(name, None), None),
-            },
+        let mut test_cmd = match self.invocation {
+            ShellInvocation::ExecShellBinary => {
+                Self::new_shell_command(&shell_config.path, shell_config.launcher.as_deref())
+            }
             ShellInvocation::ExecScript(_) => unimplemented!("exec script test"),
         };
-
-        if matches!(shell_config.which, WhichShell::ShellUnderTest(_)) {
-            for arg in &self.additional_test_args {
-                test_cmd.arg(arg);
-            }
-        }
 
         for arg in &shell_config.default_args {
             if !self.removed_default_args.contains(arg) {
@@ -172,13 +152,16 @@ impl TestCase {
         test_cmd.env("HOME", working_dir.to_string_lossy().to_string());
 
         // Set up any env vars needed for collecting coverage data.
-        if let Some(coverage_target_dir) = &coverage_target_dir {
-            test_cmd.env("CARGO_LLVM_COV_TARGET_DIR", coverage_target_dir);
-            test_cmd.env(
-                "LLVM_PROFILE_FILE",
-                coverage_target_dir.join("brush-%p-%40m.profraw"),
-            );
-        }
+        let cli_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let default_target_dir = || cli_dir.parent().unwrap().join("target");
+        let coverage_target_dir = std::env::var("CARGO_TARGET_DIR")
+            .ok()
+            .map_or_else(default_target_dir, PathBuf::from);
+        test_cmd.env("CARGO_LLVM_COV_TARGET_DIR", &coverage_target_dir);
+        test_cmd.env(
+            "LLVM_PROFILE_FILE",
+            coverage_target_dir.join("cash-%p-%40m.profraw"),
+        );
 
         for (k, v) in &self.env {
             test_cmd.env(k, v);
@@ -221,15 +204,12 @@ impl TestCase {
             test_cmd.write_stdin(stdin.as_bytes());
         }
 
-        let start_time = std::time::Instant::now();
         let cmd_result = test_cmd.output()?;
-        let duration = start_time.elapsed();
 
         Ok(RunResult {
             exit_status: cmd_result.status,
             stdout: String::from_utf8_lossy(cmd_result.stdout.as_slice()).to_string(),
             stderr: String::from_utf8_lossy(cmd_result.stderr.as_slice()).to_string(),
-            duration,
         })
     }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "cash-test-harness"
-description = "Runs the YAML compatibility cases against cash and an oracle shell"
+description = "Runs the YAML compatibility cases against cash"
 version.workspace = true
 authors.workspace = true
 categories.workspace = true
@@ -28,10 +28,8 @@ assert_cmd = { workspace = true }
 assert_fs = { workspace = true }
 clap = { workspace = true, features = ["derive", "env"] }
 colored = "3.1.1"
-descape = "3.0.0"
 diff = { workspace = true }
 glob = { workspace = true }
-indent = { workspace = true }
 insta = { workspace = true, features = ["yaml"], optional = true }
 junit-report = "0.9.0"
 os-release = "0.1.0"
@@ -40,5 +38,3 @@ serde = { workspace = true, features = ["derive"] }
 serde_yaml = { workspace = true }
 strip-ansi-escapes = "0.2.1"
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "sync"] }
-version-compare = "0.2.1"
-walkdir = "2.5.0"
