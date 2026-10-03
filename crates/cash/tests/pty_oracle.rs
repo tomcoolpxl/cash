@@ -30,7 +30,7 @@
 use cash_win32::conpty::ConPtySession;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 const CASH: &str = env!("CARGO_BIN_EXE_cash");
 const BASH: &str = "C:/Program Files/Git/usr/bin/bash.exe";
@@ -439,7 +439,15 @@ fn screen(program: &str, args: &[&str], case: &Case) -> String {
     }
     let text = session.screen().text();
     drop(session);
-    let _ = std::fs::remove_dir_all(&dir);
+    // The shell may still be exiting, its working directory this one, which Windows will
+    // not delete: seven runs had left their folders in %TEMP% by 2026-10-04.
+    let started = Instant::now();
+    while std::fs::remove_dir_all(&dir).is_err()
+        && dir.exists()
+        && started.elapsed() < Duration::from_secs(5)
+    {
+        std::thread::sleep(Duration::from_millis(50));
+    }
     mask(&text)
 }
 

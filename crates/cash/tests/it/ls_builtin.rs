@@ -14,30 +14,10 @@
     reason = "an integration test is outside a test module by construction"
 )]
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
-use crate::common::{Output, cash_command, output_of, run as cash};
-
-struct Scratch(PathBuf);
-
-impl Scratch {
-    fn new(name: &str) -> Self {
-        let dir = std::env::temp_dir().join(format!("cash-ls-test-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).expect("create scratch dir");
-        Self(dir)
-    }
-    fn path(&self) -> &Path {
-        &self.0
-    }
-}
-
-impl Drop for Scratch {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
-}
+use crate::common::{Output, Scratch, cash_command, output_of, run as cash};
 
 #[test]
 fn ls_is_a_builtin() {

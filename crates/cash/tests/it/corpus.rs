@@ -21,7 +21,7 @@
 use std::path::PathBuf;
 use std::process::Command;
 
-use crate::common::{cash_command, git_for_windows};
+use crate::common::{Scratch, cash_command, git_for_windows};
 
 /// Every script in the corpus. Tests that apply to all of them iterate this, so adding a
 /// script gets the cross-cutting coverage — CRLF endings, for one — without being asked.
@@ -187,9 +187,7 @@ fn every_corpus_script_runs_with_crlf_endings() {
     // checked out on this machine has CRLF scripts. `.gitattributes` keeps cash's own
     // corpus at LF, which means the CRLF case has to be manufactured here rather than
     // assumed — and it is the case most users will actually hit.
-    let staging = std::env::temp_dir().join(format!("cash-corpus-crlf-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&staging);
-    std::fs::create_dir_all(&staging).expect("create staging dir");
+    let staging = Scratch::new("corpus-crlf");
 
     for name in CORPUS_SCRIPTS {
         let lf = std::fs::read_to_string(corpus_dir().join(name)).expect("read corpus script");
@@ -217,8 +215,6 @@ fn every_corpus_script_runs_with_crlf_endings() {
             "{name} produced different output with CRLF endings"
         );
     }
-
-    let _ = std::fs::remove_dir_all(&staging);
 }
 
 #[test]

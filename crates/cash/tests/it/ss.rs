@@ -17,7 +17,7 @@
 use std::net::{TcpListener, TcpStream, UdpSocket};
 use std::process::Stdio;
 
-use crate::common::cash_command;
+use crate::common::{Scratch, cash_command};
 
 struct Output {
     stdout: String,
@@ -228,13 +228,12 @@ fn filters_by_port_address_and_file() {
     let gt = cash(&format!("ss -Htn 'dport >= :{port} and dport <= :{port}'"));
     assert_eq!(gt.stdout.lines().count(), 1, "{}", gt.stdout);
 
-    let dir = std::env::temp_dir().join(format!("cash-ss-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = Scratch::new("ss");
     let file = dir.join("filter");
     std::fs::write(&file, format!("sport = :{port}\n")).unwrap();
     let from_file = cash(&format!("ss -Hltn -F '{}'", file.display()));
     assert_eq!(from_file.stdout.lines().count(), 1, "{}", from_file.stdout);
-    let _ = std::fs::remove_dir_all(dir);
+    drop(dir);
 
     // Nothing matches: the header alone and status 0, as in iproute2.
     let none = cash("ss -tn sport = :1");

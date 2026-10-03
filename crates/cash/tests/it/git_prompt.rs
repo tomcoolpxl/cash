@@ -18,28 +18,30 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::common::{CASH, ISOLATED_VARIABLES, git_for_windows};
+use crate::common::{CASH, Scratch, git_for_windows, isolate};
 
-/// A scratch directory, removed on drop, whose git sees neither the user's nor the system's
-/// configuration and makes the same commits every run.
-struct Scratch {
-    dir: PathBuf,
+/// A scratch folder whose git sees neither the user's nor the system's configuration and
+/// makes the same commits every run.
+struct GitScratch {
+    folder: Scratch,
 }
 
-impl Scratch {
+impl GitScratch {
     fn new(name: &str) -> Self {
-        let dir =
-            std::env::temp_dir().join(format!("cash-git-prompt-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        Self { dir }
+        Self {
+            folder: Scratch::new(&format!("git-prompt-{name}")),
+        }
+    }
+
+    fn dir(&self) -> &Path {
+        self.folder.path()
     }
 
     fn command(&self, program: &str, cwd: &Path) -> Command {
         let mut command = Command::new(program);
         command
             .current_dir(cwd)
-            .env("GIT_CONFIG_GLOBAL", self.dir.join("gitconfig"))
+            .env("GIT_CONFIG_GLOBAL", self.folder.join("gitconfig"))
             .env("GIT_CONFIG_NOSYSTEM", "1")
             .env("GIT_AUTHOR_NAME", "T")
             .env("GIT_AUTHOR_EMAIL", "t@example.com")
@@ -66,9 +68,7 @@ impl Scratch {
         // `cash_command()`'s isolation, on a command that already has git's.
         let mut command = self.command(CASH, cwd);
         command.args(["--no-config", "--noprofile", "--norc", "-c", script]);
-        for name in ISOLATED_VARIABLES {
-            command.env_remove(name);
-        }
+        isolate(&mut command);
         for (name, value) in env {
             command.env(name, value);
         }
@@ -85,14 +85,6 @@ impl Scratch {
     }
 }
 
-impl Drop for Scratch {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.dir);
-    }
-}
-
-/// The installed `git-prompt.sh`, found the way Git for Windows' own
-/// `/etc/profile.d/git-prompt.sh` finds it; `None` without Git for Windows.
 /// The installed `git-prompt.sh`. Git for Windows is a prerequisite (spec D35), so a
 /// machine without it fails the test rather than passing it unrun (BIN-20).
 fn installed_git_prompt() -> PathBuf {
@@ -107,12 +99,12 @@ fn a_tab_inside_a_parameter_expansion_stays_a_tab() {
     // `git rev-list --count --left-right` separates its two counts with a tab, and
     // git-prompt.sh takes them apart with patterns that hold a literal one. cash's tokenizer
     // put a space back in the tab's place inside `${ }`, so none of them matched.
-    let scratch = Scratch::new("tab");
+    let scratch = GitScratch::new("tab");
     let script = "count=$'2\\t1'; unset u; \
                   printf '<%s>' \"${count#2\t}\" \"${count%\t1}\" \"${count#*\t}\" \
                   ${count/\t/+} \"${u:-a\tb}\"";
     assert_eq!(
-        scratch.cash(&scratch.dir, script, &[]),
+        scratch.cash(scratch.dir(), script, &[]),
         "<1><2><1><2+1><a\tb>"
     );
 }
@@ -120,12 +112,12 @@ fn a_tab_inside_a_parameter_expansion_stays_a_tab() {
 #[test]
 fn git_ps1_shows_the_branch_its_state_and_the_upstream() {
     let git_prompt = installed_git_prompt();
-    let scratch = Scratch::new("ps1");
-    let work = scratch.dir.join("work");
-    let origin = scratch.dir.join("origin.git");
+    let scratch = GitScratch::new("ps1");
+    let work = scratch.dir().join("work");
+    let origin = scratch.dir().join("origin.git");
 
     // `work` is two commits ahead of origin/main and one behind it.
-    scratch.git(&scratch.dir, &["init", "-q", "-b", "main", "work"]);
+    scratch.git(scratch.dir(), &["init", "-q", "-b", "main", "work"]);
     std::fs::write(work.join("a.txt"), "one\n").unwrap();
     scratch.git(&work, &["add", "a.txt"]);
     scratch.git(&work, &["commit", "-qm", "c1"]);
@@ -133,7 +125,7 @@ fn git_ps1_shows_the_branch_its_state_and_the_upstream() {
     std::fs::write(work.join("a.txt"), "one\ntwo\n").unwrap();
     scratch.git(&work, &["commit", "-qam", "c2"]);
     scratch.git(
-        &scratch.dir,
+        scratch.dir(),
         &["clone", "-q", "--bare", "work", "origin.git"],
     );
     scratch.git(

@@ -26,7 +26,7 @@ use std::time::Duration;
 use cash_win32::conpty::ConPtySession;
 use cash_win32::vtscreen::Screen;
 
-use crate::common::{CASH, cash_command, run as cash, with_isolated_environment};
+use crate::common::{CASH, Scratch, cash_command, run as cash, with_isolated_environment};
 
 /// The picture is a sixel: a device control string, from this introducer to a string
 /// terminator.
@@ -335,8 +335,7 @@ fn a_profile_with_taller_cells_gets_the_wider_picture() {
     // Here the profile says so in a settings file of its own; Consolas is on every
     // Windows.
     const GUID: &str = "{0caa0dad-35be-5f56-a8ff-afceeeaa6101}";
-    let local =
-        std::env::temp_dir().join(std::format!("cash-coolfetch-cells-{}", std::process::id()));
+    let local = Scratch::new("coolfetch-cells");
     let state = local
         .join("Packages")
         .join("Microsoft.WindowsTerminal_8wekyb3d8bbwe")
@@ -352,12 +351,11 @@ fn a_profile_with_taller_cells_gets_the_wider_picture() {
         .unwrap();
         with_picture_after(&std::format!(
             "WT_PROFILE_ID='{GUID}'; LOCALAPPDATA='{}'",
-            local.display().to_string().replace('\\', "/")
+            local.as_script_path()
         ))
     };
     let taller = settings(r#", "cellHeight": "1.4""#);
     let own = settings("");
-    let _ = std::fs::remove_dir_all(&local);
 
     assert!(taller.contains("q\"1;1;290;240"), "{:?}", taller.get(..200));
     assert_clear_beside(&replay("", &taller, 40).text(), 0..11, BESIDE_WIDE_PICTURE);
@@ -519,15 +517,13 @@ fn other_terminals_get_the_panes() {
 fn a_redirected_banner_is_plain_text() {
     // The shell is on a terminal but the banner's output is a file: no colour, and the
     // panes rather than the picture.
-    let dir = std::env::temp_dir().join(std::format!("cash-coolfetch-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = Scratch::new("coolfetch");
     on_a_terminal(
         &std::format!("{IN_WINDOWS_TERMINAL}; coolfetch > banner.txt"),
-        Some(&dir),
+        Some(dir.path()),
         ROOMY,
     );
     let banner = std::fs::read_to_string(dir.join("banner.txt")).unwrap_or_default();
-    let _ = std::fs::remove_dir_all(&dir);
     assert!(!banner.contains('\x1b'), "{banner:?}");
     assert!(banner.contains("  #######  #######"), "{banner}");
 }

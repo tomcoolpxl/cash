@@ -59,17 +59,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ## Phase 14. Tests, records and leftovers (R10, R11)
 
-### 14.1 Tests
-
-Every `it` module starts cash from `it/common.rs` now. Left, seen while moving them
-(2026-10-04), BIN-19 and BIN-20:
-
-- Scratch folders named by pid only, beside `common::Scratch`: `Scratch` in
-  acceptance_edge_cases, crlf_scripts, ls_builtin, stat_builtin, tree_builtin,
-  line_ending_tools and git_prompt; `Sandbox` in directory_stack, find_xargs and
-  builtin_parameters; link_tools' folders; the fixtures of fuser_lsof and
-  held_descriptors.
-
 ### 14.6 Dead code, allows and dependencies
 
 - The winnow stub, the `sys` stubs behind `#![allow(unused)]`, `#![allow(dead_code)]` in

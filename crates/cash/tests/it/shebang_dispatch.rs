@@ -24,29 +24,7 @@
     reason = "an integration test is outside a test module by construction"
 )]
 
-use std::path::{Path, PathBuf};
-
-use crate::common::cash_command;
-
-struct Scratch(PathBuf);
-
-impl Scratch {
-    fn new(name: &str) -> Self {
-        let dir = std::env::temp_dir().join(format!("cash-shebang-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).expect("create scratch");
-        Self(dir)
-    }
-    fn path(&self) -> &Path {
-        &self.0
-    }
-}
-
-impl Drop for Scratch {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
-}
+use crate::common::{Scratch, cash_command};
 
 struct Output {
     stdout: String,

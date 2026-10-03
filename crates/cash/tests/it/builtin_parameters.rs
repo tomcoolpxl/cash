@@ -14,9 +14,7 @@
     reason = "Integration tests test the compiled binary and assert loudly on failure."
 )]
 
-use std::path::PathBuf;
-
-use crate::common::{CASH, Output, cash_command, output_of};
+use crate::common::{CASH, Output, Scratch, cash_command, output_of};
 
 fn cash(script: &str) -> Output {
     run(&["-c", script])
@@ -32,31 +30,23 @@ fn run(args: &[&str]) -> Output {
 
 /// Scratch sandbox directory in %TEMP% that cleans up after itself.
 struct Sandbox {
-    root: PathBuf,
+    root: Scratch,
 }
 
 impl Sandbox {
     fn new(name: &str) -> Self {
-        let root =
-            std::env::temp_dir().join(format!("cash-builtin-test-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&root).expect("failed to create sandbox root");
-        Self { root }
+        Self {
+            root: Scratch::new(&format!("builtin-test-{name}")),
+        }
     }
 
     fn run(&self, script: &str) -> Output {
         output_of(
             cash_command()
-                .current_dir(&self.root)
+                .current_dir(self.root.path())
                 .args(["-c", script])
                 .env("HISTFILE", ""),
         )
-    }
-}
-
-impl Drop for Sandbox {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.root);
     }
 }
 
@@ -374,7 +364,7 @@ fn xargs_prefers_builtins_over_path_for_default_and_explicit_echo() {
     std::fs::copy(CASH, &external).unwrap();
     for script in ["printf 'hello' | xargs", "printf 'hello' | xargs echo"] {
         let out = cash_command()
-            .env("PATH", &sandbox.root)
+            .env("PATH", sandbox.root.path())
             .args(["-c", script])
             .output()
             .unwrap();
@@ -385,7 +375,7 @@ fn xargs_prefers_builtins_over_path_for_default_and_explicit_echo() {
     // Disabling the builtin must restore external lookup, without falling back
     // to the bundled utility. The renamed cash understands this explicit mode.
     let out = cash_command()
-        .env("PATH", &sandbox.root)
+        .env("PATH", sandbox.root.path())
         .args([
             "-c",
             "enable -n echo; printf 'hello' | xargs echo --invoke-bundled echo EXTERNAL",

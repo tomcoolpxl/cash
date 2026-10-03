@@ -13,7 +13,7 @@
     reason = "an integration test is outside a test module by construction"
 )]
 
-use crate::common::{cash_command, git_for_windows};
+use crate::common::{Scratch, cash_command, git_for_windows};
 
 /// Git for Windows' `usr/bin`, its MSYS2 tools, with forward slashes. The scripts below
 /// get it as `$U`.
@@ -62,9 +62,7 @@ fn hostile_arguments_survive_the_trip_to_an_msys_program() {
 
     // Files for a glob to find and a response file for `@file` to read, so that either
     // mistake changes the output rather than passing by luck.
-    let dir = std::env::temp_dir().join(format!("cash-msys-args-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = Scratch::new("msys-args");
     std::fs::write(dir.join("one.rs"), "").unwrap();
     std::fs::write(dir.join("two.rs"), "").unwrap();
     std::fs::write(dir.join("file"), "INJECTED").unwrap();
@@ -74,10 +72,9 @@ fn hostile_arguments_survive_the_trip_to_an_msys_program() {
     let script = format!("{} '<%s>' {}", sh_quote(&printf), args.join(" "));
     let out = cash_command()
         .args(["-c", &script])
-        .current_dir(&dir)
+        .current_dir(dir.path())
         .output()
         .expect("run cash");
-    let _ = std::fs::remove_dir_all(&dir);
 
     let stdout = String::from_utf8_lossy(&out.stdout);
     let expected: String = HOSTILE.iter().flat_map(|arg| ["<", arg, ">"]).collect();

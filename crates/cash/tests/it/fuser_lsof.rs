@@ -14,11 +14,11 @@
               failed assumption in a test should abort it loudly"
 )]
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Stdio;
 use std::time::{Duration, Instant};
 
-use crate::common::cash_command;
+use crate::common::{Scratch, cash_command};
 
 struct Output {
     stdout: String,
@@ -40,11 +40,8 @@ fn cash_in(dir: &Path, script: &str) -> Output {
     }
 }
 
-fn fixture(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("cash-fuser-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    dir
+fn fixture(name: &str) -> Scratch {
+    Scratch::new(&format!("fuser-{name}"))
 }
 
 fn me() -> String {
@@ -58,7 +55,7 @@ fn fuser_prints_bare_pids_on_stdout_and_the_name_on_stderr() {
     std::fs::write(dir.join("free.txt"), "x").unwrap();
     let _held = std::fs::File::open(dir.join("held.txt")).unwrap();
 
-    let out = cash_in(&dir, "fuser held.txt");
+    let out = cash_in(dir.path(), "fuser held.txt");
     assert_eq!(out.code, 0, "{}", out.stderr);
     assert_eq!(out.stdout.trim(), me());
     // A space, then the pid right-aligned in five columns: psmisc's `%6d` below 100000,
@@ -71,10 +68,10 @@ fn fuser_prints_bare_pids_on_stdout_and_the_name_on_stderr() {
     );
     assert!(out.stderr.contains("/held.txt:"), "{}", out.stderr);
 
-    let free = cash_in(&dir, "fuser free.txt");
+    let free = cash_in(dir.path(), "fuser free.txt");
     assert_eq!((free.code, free.stdout.as_str()), (1, ""));
 
-    let missing = cash_in(&dir, "fuser nope.txt");
+    let missing = cash_in(dir.path(), "fuser nope.txt");
     assert_eq!(missing.code, 1);
     assert!(
         missing
@@ -83,7 +80,6 @@ fn fuser_prints_bare_pids_on_stdout_and_the_name_on_stderr() {
         "{}",
         missing.stderr
     );
-    let _ = std::fs::remove_dir_all(dir);
 }
 
 #[test]
@@ -92,7 +88,7 @@ fn fuser_verbose_and_user_listings() {
     std::fs::write(dir.join("held.txt"), "x").unwrap();
     let _held = std::fs::File::open(dir.join("held.txt")).unwrap();
 
-    let out = cash_in(&dir, "fuser -v held.txt");
+    let out = cash_in(dir.path(), "fuser -v held.txt");
     assert_eq!(out.code, 0);
     assert!(
         out.stdout.is_empty(),
@@ -111,7 +107,7 @@ fn fuser_verbose_and_user_listings() {
         out.stderr
     );
 
-    let user = cash_in(&dir, "fuser -u held.txt");
+    let user = cash_in(dir.path(), "fuser -u held.txt");
     assert_eq!(user.stdout.trim(), me());
     assert!(
         user.stderr.contains('(') && user.stderr.contains(')'),
@@ -121,21 +117,20 @@ fn fuser_verbose_and_user_listings() {
 
     // -a lists names nobody uses; -s prints nothing but keeps the status.
     std::fs::write(dir.join("free.txt"), "x").unwrap();
-    let all = cash_in(&dir, "fuser -a held.txt free.txt");
+    let all = cash_in(dir.path(), "fuser -a held.txt free.txt");
     assert!(all.stderr.contains("/free.txt:"), "{}", all.stderr);
-    let silent = cash_in(&dir, "fuser -s held.txt");
+    let silent = cash_in(dir.path(), "fuser -s held.txt");
     assert_eq!(
         (silent.code, silent.stdout.as_str(), silent.stderr.as_str()),
         (0, "", "")
     );
-    let _ = std::fs::remove_dir_all(dir);
 }
 
 #[test]
 fn fuser_marks_an_executable_and_a_loaded_module() {
     let dir = fixture("exe");
     let exe = std::env::current_exe().unwrap();
-    let out = cash_in(&dir, &format!("fuser '{}'", exe.display()));
+    let out = cash_in(dir.path(), &format!("fuser '{}'", exe.display()));
     assert_eq!(out.code, 0);
     assert!(
         out.stdout.split_whitespace().any(|p| p == me()),
@@ -150,13 +145,12 @@ fn fuser_marks_an_executable_and_a_loaded_module() {
 
     let root = std::env::var("SystemRoot").unwrap();
     let dll = Path::new(&root).join(r"System32\kernel32.dll");
-    let dll_out = cash_in(&dir, &format!("fuser -v '{}'", dll.display()));
+    let dll_out = cash_in(dir.path(), &format!("fuser -v '{}'", dll.display()));
     assert!(
         dll_out.stderr.contains(&format!("{:>6} ....m ", me())),
         "{}",
         dll_out.stderr
     );
-    let _ = std::fs::remove_dir_all(dir);
 }
 
 #[test]
@@ -165,14 +159,13 @@ fn fuser_on_a_directory_reports_holders_of_the_files_below_it() {
     std::fs::create_dir_all(dir.join("sub/deeper")).unwrap();
     std::fs::write(dir.join("sub/deeper/inner.txt"), "x").unwrap();
     let _held = std::fs::File::open(dir.join("sub/deeper/inner.txt")).unwrap();
-    let out = cash_in(&dir, "fuser sub");
+    let out = cash_in(dir.path(), "fuser sub");
     assert_eq!(
         (out.code, out.stdout.trim()),
         (0, me().as_str()),
         "{}",
         out.stderr
     );
-    let _ = std::fs::remove_dir_all(dir);
 }
 
 #[test]
@@ -187,7 +180,7 @@ fn fuser_finds_tcp_and_udp_owners() {
         format!("fuser {tcp_port}/tcp"),
         format!("fuser -n tcp {tcp_port}"),
     ] {
-        let out = cash_in(&dir, &script);
+        let out = cash_in(dir.path(), &script);
         assert_eq!(
             (out.code, out.stdout.trim()),
             (0, me().as_str()),
@@ -200,7 +193,7 @@ fn fuser_finds_tcp_and_udp_owners() {
             out.stderr
         );
     }
-    let out = cash_in(&dir, &format!("fuser -v {udp_port}/udp"));
+    let out = cash_in(dir.path(), &format!("fuser -v {udp_port}/udp"));
     assert!(
         out.stderr.contains(&format!("{:>6} F.... ", me())),
         "{}",
@@ -209,9 +202,8 @@ fn fuser_finds_tcp_and_udp_owners() {
 
     // A port nobody uses: nothing found.
     drop(tcp);
-    let gone = cash_in(&dir, &format!("fuser {tcp_port}/tcp"));
+    let gone = cash_in(dir.path(), &format!("fuser {tcp_port}/tcp"));
     assert_eq!(gone.code, 1);
-    let _ = std::fs::remove_dir_all(dir);
 }
 
 #[test]
@@ -221,7 +213,7 @@ fn fuser_kill_ends_the_holder() {
     // A child cash holds the file on descriptor 3 and spins; D26 keeps fd 3 from being
     // handed to an external `sleep`, so the wait stays inside the shell.
     let mut child = cash_command()
-        .current_dir(&dir)
+        .current_dir(dir.path())
         .args([
             "--noprofile",
             "--norc",
@@ -233,7 +225,7 @@ fn fuser_kill_ends_the_holder() {
         .unwrap();
     let deadline = Instant::now() + Duration::from_secs(10);
     loop {
-        let out = cash_in(&dir, "fuser held.txt");
+        let out = cash_in(dir.path(), "fuser held.txt");
         if out
             .stdout
             .split_whitespace()
@@ -249,11 +241,10 @@ fn fuser_kill_ends_the_holder() {
         std::thread::sleep(Duration::from_millis(100));
     }
 
-    let out = cash_in(&dir, "fuser -k held.txt");
+    let out = cash_in(dir.path(), "fuser -k held.txt");
     assert_eq!(out.code, 0, "{}", out.stderr);
     let status = child.wait().unwrap();
     assert!(!status.success(), "the holder was not killed: {status:?}");
-    let _ = std::fs::remove_dir_all(dir);
 }
 
 #[test]
@@ -265,11 +256,10 @@ fn fuser_refuses_what_windows_cannot_answer() {
         ("fuser", "No process specification given"),
         ("fuser -z x", "Invalid option z"),
     ] {
-        let out = cash_in(&dir, script);
+        let out = cash_in(dir.path(), script);
         assert_eq!(out.code, 1, "{script}");
         assert!(out.stderr.contains(needle), "{script}: {}", out.stderr);
     }
-    let _ = std::fs::remove_dir_all(dir);
 }
 
 #[test]
@@ -279,7 +269,7 @@ fn lsof_lists_file_holders_with_linux_columns() {
     std::fs::write(dir.join("free.txt"), "x").unwrap();
     let _held = std::fs::File::open(dir.join("held.txt")).unwrap();
 
-    let out = cash_in(&dir, "lsof held.txt");
+    let out = cash_in(dir.path(), "lsof held.txt");
     assert_eq!(out.code, 0, "{}", out.stderr);
     let lines: Vec<&str> = out.stdout.lines().collect();
     let header: Vec<&str> = lines[0].split_whitespace().collect();
@@ -293,12 +283,11 @@ fn lsof_lists_file_holders_with_linux_columns() {
     assert_eq!(row[1], me());
     assert_eq!(&row[3..], ["-", "REG", "-", "5", "-", "held.txt"]);
 
-    assert_eq!(cash_in(&dir, "lsof -t held.txt").stdout.trim(), me());
-    assert_eq!(cash_in(&dir, "lsof free.txt").code, 1);
+    assert_eq!(cash_in(dir.path(), "lsof -t held.txt").stdout.trim(), me());
+    assert_eq!(cash_in(dir.path(), "lsof free.txt").code, 1);
 
-    let below = cash_in(&dir, "lsof +D .");
+    let below = cash_in(dir.path(), "lsof +D .");
     assert!(below.stdout.contains("./held.txt"), "{}", below.stdout);
-    let _ = std::fs::remove_dir_all(dir);
 }
 
 #[test]
@@ -307,7 +296,7 @@ fn lsof_selects_sockets_by_address_state_and_process() {
     let tcp = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let port = tcp.local_addr().unwrap().port();
 
-    let out = cash_in(&dir, &format!("lsof -nP -iTCP:{port} -sTCP:LISTEN"));
+    let out = cash_in(dir.path(), &format!("lsof -nP -iTCP:{port} -sTCP:LISTEN"));
     assert_eq!(out.code, 0, "{}", out.stderr);
     assert!(
         out.stdout
@@ -317,9 +306,9 @@ fn lsof_selects_sockets_by_address_state_and_process() {
     );
     // By address and protocol: another program may hold the same port number over UDP
     // or on another address.
-    let terse = cash_in(&dir, &format!("lsof -t -iTCP@127.0.0.1:{port}"));
+    let terse = cash_in(dir.path(), &format!("lsof -t -iTCP@127.0.0.1:{port}"));
     assert_eq!(terse.stdout.trim(), me());
-    let named = cash_in(&dir, &format!("lsof -i :{port}"));
+    let named = cash_in(dir.path(), &format!("lsof -i :{port}"));
     assert!(
         named.stdout.contains(&format!("localhost:{port}")),
         "{}",
@@ -327,7 +316,7 @@ fn lsof_selects_sockets_by_address_state_and_process() {
     );
 
     // -a narrows -p to that process's sockets; OR without it.
-    let anded = cash_in(&dir, &format!("lsof -a -p {} -i", me()));
+    let anded = cash_in(dir.path(), &format!("lsof -a -p {} -i", me()));
     assert!(
         anded
             .stdout
@@ -351,7 +340,7 @@ fn lsof_selects_sockets_by_address_state_and_process() {
     ] {
         // A range can also catch a neighbouring port another process holds, so only
         // require this process to be among the results.
-        let out = cash_in(&dir, &format!("lsof -t -i {spec}"));
+        let out = cash_in(dir.path(), &format!("lsof -t -i {spec}"));
         assert!(
             out.stdout.lines().any(|pid| pid == me()),
             "{spec}: {} {}",
@@ -361,19 +350,21 @@ fn lsof_selects_sockets_by_address_state_and_process() {
     }
     let v6 = std::net::TcpListener::bind("[::1]:0").unwrap();
     let v6_port = v6.local_addr().unwrap().port();
-    let bracketed = cash_in(&dir, &format!("lsof -t -i 6tcp@[::1]:{v6_port}"));
+    let bracketed = cash_in(dir.path(), &format!("lsof -t -i 6tcp@[::1]:{v6_port}"));
     assert_eq!(bracketed.stdout.trim(), me(), "{}", bracketed.stderr);
 
     // Not listening on that port: nothing.
-    let other = cash_in(&dir, &format!("lsof -nP -iTCP:{port} -sTCP:ESTABLISHED"));
+    let other = cash_in(
+        dir.path(),
+        &format!("lsof -nP -iTCP:{port} -sTCP:ESTABLISHED"),
+    );
     assert_eq!(other.code, 1);
-    let _ = std::fs::remove_dir_all(dir);
 }
 
 #[test]
 fn lsof_p_shows_executable_modules_and_a_note() {
     let dir = fixture("lsof-p");
-    let out = cash_in(&dir, &format!("lsof -p {}", me()));
+    let out = cash_in(dir.path(), &format!("lsof -p {}", me()));
     assert_eq!(out.code, 0, "{}", out.stderr);
     assert!(
         out.stderr
@@ -389,12 +380,11 @@ fn lsof_p_shows_executable_modules_and_a_note() {
             .any(|l| l.contains(" mem ") && l.to_ascii_lowercase().contains("kernel32.dll"))
     );
     // -t suppresses the note.
-    let terse = cash_in(&dir, &format!("lsof -t -p {}", me()));
+    let terse = cash_in(dir.path(), &format!("lsof -t -p {}", me()));
     assert_eq!(
         (terse.stdout.trim(), terse.stderr.as_str()),
         (me().as_str(), "")
     );
-    let _ = std::fs::remove_dir_all(dir);
 }
 
 #[test]
@@ -406,11 +396,10 @@ fn lsof_refuses_what_windows_cannot_answer() {
         ("lsof -Z", "illegal option character: Z"),
         ("lsof -F p -i", "not supported"),
     ] {
-        let out = cash_in(&dir, script);
+        let out = cash_in(dir.path(), script);
         assert_eq!(out.code, 1, "{script}");
         assert!(out.stderr.contains(needle), "{script}: {}", out.stderr);
     }
-    let _ = std::fs::remove_dir_all(dir);
 }
 
 #[test]

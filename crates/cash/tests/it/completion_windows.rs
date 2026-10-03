@@ -25,23 +25,21 @@
               alternating the two forms by accident of content reads worse."
 )]
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use cash_builtins::ShellBuilderExt as _;
 use cash_core::Shell;
 
-use crate::common::cash_command;
+use crate::common::{Scratch, cash_command};
 
 struct Fixture {
     shell: Shell,
-    dir: PathBuf,
+    dir: Scratch,
 }
 
 impl Fixture {
     async fn new(name: &str) -> Self {
-        let dir = std::env::temp_dir().join(format!("cash-complete-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).expect("create fixture dir");
+        let dir = Scratch::new(&format!("complete-{name}"));
 
         let mut shell = Shell::builder()
             .profile(cash_core::ProfileLoadBehavior::Skip)
@@ -51,13 +49,13 @@ impl Fixture {
             .await
             .expect("build shell");
 
-        shell.set_working_dir(&dir).expect("set working dir");
+        shell.set_working_dir(dir.path()).expect("set working dir");
 
         Self { shell, dir }
     }
 
     fn path(&self) -> &Path {
-        &self.dir
+        self.dir.path()
     }
 
     fn touch(&self, relative: &str) {
@@ -124,16 +122,10 @@ impl Fixture {
     fn run(&self, line: &str) -> String {
         let output = cash_command()
             .args(["-c", line])
-            .current_dir(&self.dir)
+            .current_dir(self.dir.path())
             .output()
             .expect("failed to run cash");
         String::from_utf8_lossy(&output.stdout).into_owned()
-    }
-}
-
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.dir);
     }
 }
 

@@ -9,14 +9,25 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::common::cash_command;
+use crate::common::{Scratch, cash_command};
 
-/// A folder of files named like the ones `where.exe` was measured on.
-fn fixture(name: &str) -> PathBuf {
-    let dir = Path::new(env!("CARGO_TARGET_TMPDIR"))
-        .join("where")
-        .join(name);
-    let _ = std::fs::remove_dir_all(&dir);
+/// A folder of files named like the ones `where.exe` was measured on, by its canonical
+/// path: `%TEMP%` may be spelled with 8.3 names (`RUNNER~1` on CI), and a test runs `where`
+/// in the folder and expects it printed in one spelling.
+struct Fixture {
+    real: PathBuf,
+    _scratch: Scratch,
+}
+
+impl std::ops::Deref for Fixture {
+    type Target = Path;
+    fn deref(&self) -> &Path {
+        &self.real
+    }
+}
+
+fn fixture(name: &str) -> Fixture {
+    let dir = Scratch::new(&format!("where-{name}"));
     for sub in ["sub/deep", "a_sub", "foo.exe.d"] {
         std::fs::create_dir_all(dir.join(sub)).unwrap();
     }
@@ -34,7 +45,10 @@ fn fixture(name: &str) -> PathBuf {
     ] {
         std::fs::write(dir.join(file), "x").unwrap();
     }
-    std::fs::canonicalize(&dir).unwrap()
+    Fixture {
+        real: std::fs::canonicalize(dir.path()).unwrap(),
+        _scratch: dir,
+    }
 }
 
 /// The folder as `where` prints it.

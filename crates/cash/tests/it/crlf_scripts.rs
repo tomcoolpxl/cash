@@ -24,29 +24,9 @@
               alternating the two forms by accident of content reads worse."
 )]
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use crate::common::{Output, cash_command, output_of};
-
-struct Scratch(PathBuf);
-
-impl Scratch {
-    fn new(name: &str) -> Self {
-        let dir = std::env::temp_dir().join(format!("cash-crlf-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).expect("create scratch");
-        Self(dir)
-    }
-    fn path(&self) -> &Path {
-        &self.0
-    }
-}
-
-impl Drop for Scratch {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
-}
+use crate::common::{Output, Scratch, cash_command, output_of};
 
 fn run(path: &Path) -> Output {
     output_of(cash_command().arg(path.to_string_lossy().replace('\\', "/")))

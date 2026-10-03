@@ -23,10 +23,9 @@
               alternating the two forms by accident of content reads worse."
 )]
 
-use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::common::{CASH, Output, run_in};
+use crate::common::{CASH, Output, Scratch, run_in};
 
 /// A small tree to search, rebuilt per test so the runs do not see each other.
 ///
@@ -41,13 +40,12 @@ use crate::common::{CASH, Output, run_in};
 /// empty/         (empty directory)
 /// ```
 struct Sandbox {
-    root: PathBuf,
+    root: Scratch,
 }
 
 impl Sandbox {
     fn new(name: &str) -> Self {
-        let root = std::env::temp_dir().join(format!("cash-find-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
+        let root = Scratch::new(&format!("find-{name}"));
 
         for dir in ["sub/deep", "skip", "empty"] {
             std::fs::create_dir_all(root.join(dir)).expect("failed to create the sandbox");
@@ -68,17 +66,11 @@ impl Sandbox {
     }
 
     fn run(&self, script: &str) -> Output {
-        run_in(&self.root, script)
+        run_in(self.root.path(), script)
     }
 
     fn exists(&self, path: &str) -> bool {
-        Path::new(&self.root).join(path).exists()
-    }
-}
-
-impl Drop for Sandbox {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.root);
+        self.root.join(path).exists()
     }
 }
 

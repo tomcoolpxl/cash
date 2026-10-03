@@ -18,7 +18,7 @@
 
 use std::process::Stdio;
 
-use crate::common::cash_command;
+use crate::common::{Scratch, cash_command};
 
 fn cash(args: &[&str]) -> String {
     let out = cash_command()
@@ -87,16 +87,13 @@ fn an_escaped_space_still_joins_the_word() {
 
 #[test]
 fn a_wildcard_after_a_backslash_still_globs() {
-    let dir = std::env::temp_dir().join(format!("cash-winpaths-glob-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = Scratch::new("winpaths-glob");
     std::fs::write(dir.join("a.txt"), "").unwrap();
     std::fs::write(dir.join("b.txt"), "").unwrap();
     std::fs::write(dir.join("c.log"), "").unwrap();
 
-    let spelled = dir.to_string_lossy().replace('/', r"\");
+    let spelled = dir.path().to_string_lossy().replace('/', r"\");
     let listed = words_with_winpaths(&format!(r"{spelled}\*.txt"));
-    let _ = std::fs::remove_dir_all(&dir);
 
     let names: Vec<&str> = listed
         .lines()
@@ -152,13 +149,14 @@ async fn a_backslashed_drive_path_completes() -> anyhow::Result<()> {
         .await?;
     shell.options_mut().windows_drive_paths = true;
 
-    let dir = std::env::temp_dir().join(format!("cash-winpaths-complete-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+    let dir = Scratch::new("winpaths-complete");
     std::fs::create_dir_all(dir.join("alpha-dir"))?;
 
-    let line = format!(r"ls {}\alp", dir.to_string_lossy().replace('/', r"\"));
+    let line = format!(
+        r"ls {}\alp",
+        dir.path().to_string_lossy().replace('/', r"\")
+    );
     let completions = shell.complete(&line, line.len()).await?;
-    let _ = std::fs::remove_dir_all(&dir);
 
     assert!(
         completions

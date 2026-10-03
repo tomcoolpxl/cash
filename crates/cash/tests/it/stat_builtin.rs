@@ -16,28 +16,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::common::cash_command;
-
-struct Scratch(PathBuf);
-
-impl Scratch {
-    fn new(name: &str) -> Self {
-        let dir =
-            std::env::temp_dir().join(format!("cash-stat-test-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).expect("create scratch dir");
-        Self(dir)
-    }
-    fn path(&self) -> &Path {
-        &self.0
-    }
-}
-
-impl Drop for Scratch {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
-}
+use crate::common::{Scratch, cash_command};
 
 fn cash(script: &str) -> String {
     let out = cash_command()

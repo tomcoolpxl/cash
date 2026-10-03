@@ -25,7 +25,7 @@
               alternating the two forms by accident of content reads worse."
 )]
 
-use crate::common::{cash_command, run as cash};
+use crate::common::{Scratch, cash_command, run as cash};
 
 // ---------------------------------------------------------------------------
 // Here-documents above the pipe buffer (the deadlock)
@@ -77,20 +77,18 @@ fn here_documents_do_not_leak_temp_files() {
     // cash writes a here-document's file under TMP/TEMP, and so does every other test
     // here that uses one. nextest runs them all at once, so counting the shared temp
     // directory raced with them (`left: 2, right: 1`). A private one is this test's own.
-    let tmp = std::env::temp_dir().join(format!("cash-leak-check-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&tmp);
-    std::fs::create_dir_all(&tmp).unwrap();
+    let tmp = Scratch::new("leak-check");
     let run = |script: &str| {
         let out = cash_command()
-            .env("TMP", &tmp)
-            .env("TEMP", &tmp)
+            .env("TMP", tmp.path())
+            .env("TEMP", tmp.path())
             .args(["-c", script])
             .output()
             .expect("failed to run cash");
         String::from_utf8_lossy(&out.stdout).trim_end().to_string()
     };
     let left = || -> Vec<String> {
-        std::fs::read_dir(&tmp)
+        std::fs::read_dir(tmp.path())
             .unwrap()
             .flatten()
             .map(|e| e.file_name().to_string_lossy().into_owned())
@@ -115,7 +113,6 @@ fn here_documents_do_not_leak_temp_files() {
         Vec::<String>::new(),
         "a here-document temp file was left behind"
     );
-    let _ = std::fs::remove_dir_all(&tmp);
 }
 
 #[test]

@@ -21,11 +21,11 @@
 )]
 
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Stdio;
 use std::time::{Duration, SystemTime};
 
-use crate::common::cash_command;
+use crate::common::{Scratch, cash_command};
 
 /// A PATH with nothing but Windows itself on it: no Git for Windows `dos2unix.exe`.
 const BARE_PATH: &str = r"C:\WINDOWS\system32;C:\WINDOWS";
@@ -79,33 +79,24 @@ fn cash_with_path(script: &str, path: &str) -> Output {
     }
 }
 
-/// A fresh scratch directory, removed when dropped.
-struct Scratch(PathBuf);
+/// What these tests do in a scratch folder: write a file, read one back, run cash there.
+trait Fixture {
+    fn write(&self, name: &str, bytes: &[u8]);
+    fn read(&self, name: &str) -> Vec<u8>;
+    fn run(&self, script: &str) -> Output;
+}
 
-impl Scratch {
-    fn new(name: &str) -> Self {
-        let dir = std::env::temp_dir().join(format!("cash-d2u-{}-{name}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).expect("create scratch dir");
-        Self(dir)
-    }
-
+impl Fixture for Scratch {
     fn write(&self, name: &str, bytes: &[u8]) {
-        std::fs::write(self.0.join(name), bytes).expect("write fixture");
+        std::fs::write(self.join(name), bytes).expect("write fixture");
     }
 
     fn read(&self, name: &str) -> Vec<u8> {
-        std::fs::read(self.0.join(name)).expect("read result")
+        std::fs::read(self.join(name)).expect("read result")
     }
 
     fn run(&self, script: &str) -> Output {
-        cash_in(&self.0, script, b"")
-    }
-}
-
-impl Drop for Scratch {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
+        cash_in(self.path(), script, b"")
     }
 }
 
@@ -125,7 +116,7 @@ fn dos2unix_converts_in_place_byte_exact() {
         "the real tool's message"
     );
     // No temporary file is left behind.
-    let names: Vec<_> = std::fs::read_dir(&s.0).unwrap().collect();
+    let names: Vec<_> = std::fs::read_dir(s.path()).unwrap().collect();
     assert_eq!(names.len(), 1, "leftover files: {names:?}");
 }
 
@@ -156,7 +147,7 @@ fn unix2dos_does_not_double_an_existing_cr() {
 #[test]
 fn both_tools_filter_standard_input() {
     let s = Scratch::new("stdin");
-    let out = cash_in(&s.0, "dos2unix", b"a\r\nb\r\n");
+    let out = cash_in(s.path(), "dos2unix", b"a\r\nb\r\n");
     assert_eq!(out.stdout, b"a\nb\n", "stderr: {}", out.stderr);
     assert!(
         out.stderr.is_empty(),
@@ -164,10 +155,10 @@ fn both_tools_filter_standard_input() {
         out.stderr
     );
 
-    let out = cash_in(&s.0, "unix2dos", b"a\nb\n");
+    let out = cash_in(s.path(), "unix2dos", b"a\nb\n");
     assert_eq!(out.stdout, b"a\r\nb\r\n");
 
-    let out = cash_in(&s.0, "printf 'x\\r\\n' | dos2unix - | od -An -c", b"");
+    let out = cash_in(s.path(), "printf 'x\\r\\n' | dos2unix - | od -An -c", b"");
     assert_eq!(
         out.text().split_whitespace().collect::<Vec<_>>(),
         ["x", "\\n"]
@@ -207,19 +198,14 @@ fn keepdate_keeps_the_modification_time() {
     for name in ["k.txt", "n.txt"] {
         std::fs::File::options()
             .write(true)
-            .open(s.0.join(name))
+            .open(s.join(name))
             .unwrap()
             .set_modified(old)
             .unwrap();
     }
     let out = s.run("dos2unix -k k.txt && dos2unix n.txt");
     assert_eq!(out.code, 0, "stderr: {}", out.stderr);
-    let mtime = |name: &str| {
-        std::fs::metadata(s.0.join(name))
-            .unwrap()
-            .modified()
-            .unwrap()
-    };
+    let mtime = |name: &str| std::fs::metadata(s.join(name)).unwrap().modified().unwrap();
     assert_eq!(s.read("k.txt"), b"k\n");
     assert_eq!(mtime("k.txt"), old, "-k did not keep the date");
     assert!(mtime("n.txt") > old, "without -k the date should move");

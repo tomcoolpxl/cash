@@ -29,7 +29,7 @@
 
 use std::process::Command;
 
-use crate::common::{CASH, Output, cash_command, output_of as run, run as cash};
+use crate::common::{CASH, Output, Scratch, cash_command, output_of as run, run as cash};
 
 /// A `PATH` with nothing but Windows on it, which is what a machine without Git for
 /// Windows looks like.
@@ -268,9 +268,7 @@ fn a_nested_shell_is_cash_and_keeps_cash_semantics() {
 
 #[test]
 fn a_bin_sh_shebang_has_an_interpreter() {
-    let dir = std::env::temp_dir().join(format!("cash-shebang-sh-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("create dir");
+    let dir = Scratch::new("shebang-sh");
     let script = dir.join("s.sh");
     std::fs::write(&script, b"#!/bin/sh\necho shebang-ran\n").expect("write");
 
@@ -279,7 +277,6 @@ fn a_bin_sh_shebang_has_an_interpreter() {
         .env("PATH", BARE_PATH));
 
     assert_eq!(out.stdout, "shebang-ran", "stderr: {}", out.stderr);
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]

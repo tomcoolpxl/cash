@@ -18,32 +18,7 @@
               alternating the two forms by accident of content reads worse."
 )]
 
-use std::path::{Path, PathBuf};
-
-use crate::common::run as cash;
-
-struct Scratch(PathBuf);
-
-impl Scratch {
-    fn new(name: &str) -> Self {
-        let dir = std::env::temp_dir().join(format!("cash-edge-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).expect("create scratch");
-        Self(dir)
-    }
-    fn path(&self) -> &Path {
-        &self.0
-    }
-    fn script_path(&self) -> String {
-        self.0.to_string_lossy().replace('\\', "/")
-    }
-}
-
-impl Drop for Scratch {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
-}
+use crate::common::{Scratch, run as cash};
 
 // ---------------------------------------------------------------------------
 // Paths with spaces — the most common Windows path shape
@@ -54,7 +29,7 @@ fn directories_with_spaces_work_in_every_spelling() {
     let scratch = Scratch::new("spaces");
     let dir = scratch.path().join("Program Files Like");
     std::fs::create_dir_all(&dir).unwrap();
-    let base = scratch.script_path();
+    let base = scratch.as_script_path();
 
     for spelling in [
         format!(r#"cd "{base}/Program Files Like""#),
@@ -120,7 +95,7 @@ fn an_empty_file_captures_as_empty() {
     std::fs::write(scratch.path().join("e.txt"), b"").unwrap();
     let out = cash(&format!(
         r#"v=$(cat {}/e.txt); printf '[%s]' "$v""#,
-        scratch.script_path()
+        scratch.as_script_path()
     ));
     assert_eq!(out.stdout, "[]");
 }
@@ -131,7 +106,7 @@ fn a_file_with_no_trailing_newline_is_captured_whole() {
     std::fs::write(scratch.path().join("f.txt"), b"no newline here").unwrap();
     let out = cash(&format!(
         r#"v=$(cat {}/f.txt); printf '[%s]' "$v""#,
-        scratch.script_path()
+        scratch.as_script_path()
     ));
     assert_eq!(out.stdout, "[no newline here]");
 }
@@ -142,7 +117,7 @@ fn a_crlf_file_with_no_final_terminator_still_loses_interior_carriage_returns() 
     std::fs::write(scratch.path().join("f.txt"), b"a\r\nb").unwrap();
     let out = cash(&format!(
         r#"n=0; while read -r l; do n=$((n+1)); done < {}/f.txt; echo $n"#,
-        scratch.script_path()
+        scratch.as_script_path()
     ));
     // Two lines: bash counts a final unterminated line only if `read` returns it, which
     // it does not — so this matches bash's one.
@@ -159,7 +134,7 @@ fn blank_crlf_lines_are_preserved_as_empty_not_dropped() {
     std::fs::write(scratch.path().join("f.txt"), b"a\r\n\r\nb\r\n").unwrap();
     let out = cash(&format!(
         r#"while read -r l; do printf '[%s]' "$l"; done < {}/f.txt"#,
-        scratch.script_path()
+        scratch.as_script_path()
     ));
     assert_eq!(out.stdout, "[a][][b]");
 }
@@ -269,7 +244,7 @@ fn nested_process_substitution_works() {
 #[test]
 fn an_unmatched_glob_stays_literal_as_in_bash() {
     let scratch = Scratch::new("glob-nomatch");
-    let out = cash(&format!("cd {}; echo *.nomatch", scratch.script_path()));
+    let out = cash(&format!("cd {}; echo *.nomatch", scratch.as_script_path()));
     assert_eq!(out.stdout, "*.nomatch");
 }
 
@@ -278,7 +253,7 @@ fn globbing_matches_regardless_of_case_in_either_direction() {
     let scratch = Scratch::new("glob-case");
     std::fs::write(scratch.path().join("UPPER.TXT"), b"").unwrap();
     std::fs::write(scratch.path().join("lower.txt"), b"").unwrap();
-    let dir = scratch.script_path();
+    let dir = scratch.as_script_path();
 
     let lower = cash(&format!("cd {dir}; echo *.txt")).stdout;
     let upper = cash(&format!("cd {dir}; echo *.TXT")).stdout;
@@ -298,7 +273,7 @@ fn a_glob_over_names_with_spaces_yields_separate_words() {
     std::fs::write(scratch.path().join("a b.txt"), b"").unwrap();
     let out = cash(&format!(
         r#"cd {}; for f in *.txt; do printf '[%s]' "$f"; done"#,
-        scratch.script_path()
+        scratch.as_script_path()
     ));
     assert_eq!(out.stdout, "[a b.txt]", "the space split the filename");
 }

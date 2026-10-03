@@ -53,12 +53,12 @@
               alternating the two forms by accident of content reads worse."
 )]
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::{Duration, Instant};
 
 use cash_win32::conpty::ConPtySession;
 
-use crate::common::{CASH, cash_command, with_isolated_environment};
+use crate::common::{CASH, Scratch, cash_command, with_isolated_environment};
 
 /// What a script prints before it reads, and once it is done.
 const READING: &str = "now-reading";
@@ -68,10 +68,11 @@ const FINISHED: &str = "read-finished";
 /// second, or a timeout of two at most: one still running after this is stuck.
 const STUCK: Duration = Duration::from_secs(10);
 
-/// A script running in cash on a pseudo console, in a folder of its own.
+/// A script running in cash on a pseudo console, in a folder of its own. The session is
+/// dropped before the folder, which is cash's working folder.
 pub(super) struct Script {
     session: ConPtySession,
-    dir: PathBuf,
+    dir: Scratch,
 }
 
 /// What a script left: the lines it wrote to `out.txt`, and what the console shows.
@@ -90,10 +91,7 @@ impl Script {
     /// Like [`Self::start`], with `files` in the script's folder: a second script, for a
     /// cash the first one starts with a standard input and output of its own.
     pub(super) fn start_beside(name: &str, body: &str, files: &[(&str, &str)]) -> Self {
-        let dir =
-            std::env::temp_dir().join(format!("cash-read-console-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).expect("create scratch");
+        let dir = Scratch::new(&format!("read-console-{name}"));
         for (file, contents) in files {
             std::fs::write(dir.join(file), contents).expect("write a file beside the script");
         }
@@ -109,7 +107,7 @@ impl Script {
                 Path::new(CASH),
                 &["--no-config", "script.sh"],
                 Some(env),
-                Some(&dir),
+                Some(dir.path()),
             )
         })
         .expect("start cash in a pseudo terminal");
@@ -186,12 +184,6 @@ impl Script {
                 .trim()
                 .to_owned(),
         }
-    }
-}
-
-impl Drop for Script {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.dir);
     }
 }
 

@@ -10,7 +10,7 @@
 
 use std::path::Path;
 
-use crate::common::{CASH, cash_command};
+use crate::common::{CASH, Scratch, cash_command};
 
 fn output(script: &str) -> (i32, String) {
     let result = cash_command()
@@ -41,11 +41,8 @@ fn output_in(directory: &Path, script: &str) -> (i32, String) {
     )
 }
 
-fn source_fixture(name: &str) -> std::path::PathBuf {
-    let root = std::env::temp_dir().join(format!("cash-source-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&root);
-    std::fs::create_dir_all(&root).unwrap();
-    root
+fn source_fixture(name: &str) -> Scratch {
+    Scratch::new(&format!("source-{name}"))
 }
 
 #[test]
@@ -143,8 +140,6 @@ fn source_and_dot_follow_bash_53_path_lookup() {
         ),
         (0, "rc=1 local=".into())
     );
-
-    std::fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
@@ -168,7 +163,7 @@ fn source_argument_mutations_follow_bash_scope_rules() {
 
     assert_eq!(
         output_in(
-            &root,
+            root.path(),
             "set -- outer; source ./mutate.sh inner; printf 'after=<%s>\\n' \"$*\"",
         ),
         (
@@ -178,7 +173,7 @@ fn source_argument_mutations_follow_bash_scope_rules() {
     );
     assert_eq!(
         output_in(
-            &root,
+            root.path(),
             "f() { set -- function outer; source ./mutate.sh inner; printf 'function-after=<%s>\\n' \"$*\"; }; f",
         ),
         (
@@ -188,20 +183,18 @@ fn source_argument_mutations_follow_bash_scope_rules() {
     );
     assert_eq!(
         output_in(
-            &root,
+            root.path(),
             "set -- outer; source ./empty.sh inner; printf 'after-count=%s\\n' \"$#\"",
         ),
         (0, "inside-count=0\nafter-count=0".into())
     );
     assert_eq!(
         output_in(
-            &root,
+            root.path(),
             "set -- outer; source ./shift.sh first second; printf 'after-shift=<%s>\\n' \"$*\"",
         ),
         (0, "shifted=<second>\nafter-shift=<outer>".into())
     );
-
-    std::fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
@@ -211,13 +204,11 @@ fn source_inherits_debug_trap_only_with_functrace() {
 
     assert_eq!(
         output_in(
-            &root,
+            root.path(),
             "trap 'case $BASH_SOURCE in *body.sh) echo inherited-debug;; esac' DEBUG; source ./body.sh; set -T; source ./body.sh",
         ),
         (0, "inside\ninherited-debug\ninside".into())
     );
-
-    std::fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
@@ -282,8 +273,7 @@ fn local_dash_restores_set_options() {
 
 #[test]
 fn posix_shell_does_not_load_bash_env() {
-    let root = std::env::temp_dir().join(format!("cash-bash-env-{}", std::process::id()));
-    std::fs::create_dir_all(&root).unwrap();
+    let root = Scratch::new("bash-env");
     let startup = root.join("startup.sh");
     std::fs::write(&startup, "echo startup\n").unwrap();
     let run = |posix| {
@@ -302,8 +292,6 @@ fn posix_shell_does_not_load_bash_env() {
     };
     assert_eq!(run(false), "startup\nbody");
     assert_eq!(run(true), "body");
-    std::fs::remove_file(startup).unwrap();
-    std::fs::remove_dir(root).unwrap();
 }
 
 #[test]
@@ -366,8 +354,6 @@ fn startup_file_keeps_the_shells_zero_and_accepts_windows_paths() {
         "the startup file did not run: {stdout}"
     );
     assert_eq!(in_startup, labelled(&stdout, "body"), "{stdout}");
-
-    std::fs::remove_dir_all(root).unwrap();
 }
 
 /// In `~/.bashrc` too, `$0` is the shell's name, and `BASH_SOURCE` names the file as cash
@@ -384,7 +370,7 @@ fn bashrc_sees_the_shells_zero_and_its_own_name_with_forward_slashes() {
     .unwrap();
 
     let result = cash_command()
-        .env("HOME", &home)
+        .env("HOME", home.path())
         .args(["--noprofile", "-i", "-c", "printf 'body=<%s>\\n' \"$0\""])
         .output()
         .unwrap();
@@ -393,7 +379,7 @@ fn bashrc_sees_the_shells_zero_and_its_own_name_with_forward_slashes() {
     assert!(in_rc.is_some(), "~/.bashrc did not run: {stdout}");
     assert_eq!(in_rc, labelled(&stdout, "body"), "{stdout}");
 
-    let home_name = home.to_string_lossy().replace('\\', "/");
+    let home_name = home.as_script_path();
     assert_eq!(
         labelled(&stdout, "source"),
         Some(format!("{home_name}/.bashrc")),
@@ -403,8 +389,6 @@ fn bashrc_sees_the_shells_zero_and_its_own_name_with_forward_slashes() {
         stdout.lines().any(|line| line.contains("Shell: cash ")),
         "coolfetch did not call the shell cash: {stdout}"
     );
-
-    std::fs::remove_dir_all(home).unwrap();
 }
 
 #[test]
@@ -534,8 +518,6 @@ fn bash_52_variable_fd_redirections_and_varredir_close() {
         lines.collect::<Vec<_>>(),
         ["kept:read=from-input", "auto=1", "exec-kept+array"]
     );
-
-    std::fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
@@ -603,15 +585,12 @@ fn local_print_includes_the_saved_option_scope() {
 
 #[test]
 fn disabling_globskipdots_exposes_dot_and_dotdot() {
-    let root = std::env::temp_dir().join(format!("cash-globskipdots-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&root);
-    std::fs::create_dir_all(&root).unwrap();
+    let root = Scratch::new("globskipdots");
     std::fs::write(root.join(".hidden"), "").unwrap();
-    let path = root.to_string_lossy().replace('\\', "/");
+    let path = root.as_script_path();
     let result = output(&format!(
         "cd '{path}'; shopt -u globskipdots; printf '<%s>\\n' .*"
     ));
-    std::fs::remove_dir_all(&root).unwrap();
     assert_eq!(result, (0, "<.>\n<..>\n<.hidden>".into()));
 }
 
@@ -747,9 +726,7 @@ fn array_k_transform_keeps_key_value_word_boundaries() {
 
 #[test]
 fn history_file_operations_expansion_and_fc_editor_mode_work() {
-    let root = std::env::temp_dir().join(format!("cash-history-gaps-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&root);
-    std::fs::create_dir_all(&root).unwrap();
+    let root = Scratch::new("history-gaps");
     let history_file = root.join("history.txt");
     std::fs::write(&history_file, "one\ntwo\n").unwrap();
     let path = history_file.to_string_lossy().replace('\\', "/");
@@ -765,8 +742,6 @@ fn history_file_operations_expansion_and_fc_editor_mode_work() {
         ),
         (0, "EDITED".into())
     );
-
-    std::fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
@@ -881,11 +856,9 @@ fn bash_53_empty_path_resolves_to_current_directory() {
     let script_file = fixture.join("hello.bat");
     std::fs::write(&script_file, "@echo hello from bat\r\n").unwrap();
 
-    let (code, stdout) = output_in(&fixture, "PATH= hello; PATH='' hello; PATH=':' hello");
+    let (code, stdout) = output_in(fixture.path(), "PATH= hello; PATH='' hello; PATH=':' hello");
     assert_eq!(code, 0);
     assert_eq!(stdout, "hello from bat\nhello from bat\nhello from bat");
-
-    let _ = std::fs::remove_dir_all(&fixture);
 }
 
 fn output_with_stderr(script: &str) -> (i32, String, String) {
@@ -930,13 +903,11 @@ fn bash_53_relative_path_entries_follow_the_shell_working_directory() {
     std::fs::write(fixture.join("bin").join("tool"), "#!/bin/sh\necho ran\n").unwrap();
 
     let (code, stdout) = output_in(
-        &fixture,
+        fixture.path(),
         "cd bin; PATH= tool; PATH=. tool; PATH=: tool; cd ..; PATH=. tool; echo rc=$?",
     );
     assert_eq!(code, 0);
     assert_eq!(stdout, "ran\nran\nran\nrc=127");
-
-    let _ = std::fs::remove_dir_all(&fixture);
 }
 
 #[test]
@@ -980,14 +951,13 @@ fn return_trap_fires_for_source_traced_functions_and_functrace() {
     let root = source_fixture("return-trap");
     std::fs::write(root.join("rt.sh"), "echo in\n").unwrap();
     let (code, stdout) = output_in(
-        &root,
+        root.path(),
         "trap 'echo ret' RETURN; . ./rt.sh; f() { :; }; f; declare -ft f; f; declare +ft f; f; g() { :; }; set -T; g",
     );
     assert_eq!(code, 0);
     // `declare +ft f` does not clear the function's attribute: as in Bash, `+f` is
     // ignored and the `+t` applies to a variable named `f`.
     assert_eq!(stdout, "in\nret\nret\nret\nret");
-    let _ = std::fs::remove_dir_all(root);
 }
 
 #[test]
@@ -1081,12 +1051,11 @@ fn bash_53_globsort_orders_pathname_expansion() {
     std::fs::write(root.join("c"), "a").unwrap();
     std::fs::write(root.join("a"), "aa").unwrap();
     let (code, stdout) = output_in(
-        &root,
+        root.path(),
         "echo *; GLOBSORT=-name; echo *; GLOBSORT=size; echo *; GLOBSORT=-size; echo *; GLOBSORT=bogus; echo *; touch -t 202001010000 a; touch -t 202101010000 b; touch -t 201901010000 c; GLOBSORT=mtime; echo *; GLOBSORT=-mtime; echo *",
     );
     assert_eq!(code, 0);
     assert_eq!(stdout, "a b c\nc b a\nc a b\nb a c\na b c\nc a b\nb a c");
-    let _ = std::fs::remove_dir_all(&root);
 
     let numeric = source_fixture("globsort-numeric");
     for name in ["10", "9", "100", "1"] {
@@ -1094,12 +1063,11 @@ fn bash_53_globsort_orders_pathname_expansion() {
     }
     assert_eq!(
         output_in(
-            &numeric,
+            numeric.path(),
             "echo *; GLOBSORT=numeric; echo *; GLOBSORT=-numeric; echo *"
         ),
         (0, "1 10 100 9\n1 9 10 100\n100 10 9 1".into())
     );
-    let _ = std::fs::remove_dir_all(&numeric);
 }
 
 #[test]
@@ -1107,7 +1075,7 @@ fn bash_53_bash_source_fullpath_records_the_real_path() {
     let root = source_fixture("source-fullpath");
     std::fs::write(root.join("src.sh"), "echo \"${BASH_SOURCE[0]}\"\n").unwrap();
     let (code, stdout) = output_in(
-        &root,
+        root.path(),
         ". ./src.sh; shopt -s bash_source_fullpath; . ./src.sh",
     );
     assert_eq!(code, 0);
@@ -1120,7 +1088,6 @@ fn bash_53_bash_source_fullpath_records_the_real_path() {
         lines[1].eq_ignore_ascii_case(expected),
         "{stdout} vs {expected}"
     );
-    let _ = std::fs::remove_dir_all(root);
 }
 
 #[test]
@@ -1161,7 +1128,6 @@ fn bash_53_unterminated_compound_names_its_starting_line() {
             "{name}: {stderr}"
         );
     }
-    let _ = std::fs::remove_dir_all(root);
 }
 
 #[test]
@@ -1193,13 +1159,12 @@ fn bash_53_binary_script_check_and_nul_bytes() {
 
     // `source` does not check, and still drops the NUL.
     assert_eq!(
-        output_in(&root, ". ./first-line.sh"),
+        output_in(root.path(), ". ./first-line.sh"),
         (0, "ranx\ntwo".into())
     );
 
     let (code, _, _) = run_script_file(&root.join("does-not-exist.sh"));
     assert_eq!(code, 127);
-    let _ = std::fs::remove_dir_all(root);
 }
 
 #[test]
@@ -1332,12 +1297,11 @@ fn bash_53_return_trap_sees_the_status_from_before_return() {
     std::fs::write(root.join("rs.sh"), "false; return 6\n").unwrap();
     assert_eq!(
         output_in(
-            &root,
+            root.path(),
             "trap 'echo \"in:$?\"' RETURN; . ./rs.sh; echo \"after:$?\""
         ),
         (0, "in:1\nafter:6".into())
     );
-    let _ = std::fs::remove_dir_all(root);
 }
 
 #[test]
@@ -1441,7 +1405,6 @@ fn script_output(name: &str, script: &str) -> (String, String) {
         .arg(&file)
         .output()
         .unwrap();
-    let _ = std::fs::remove_dir_all(root);
     let text = |bytes: Vec<u8>| {
         String::from_utf8(bytes)
             .unwrap()

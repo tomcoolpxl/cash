@@ -24,7 +24,7 @@
 use std::path::PathBuf;
 use std::process::Command;
 
-use crate::common::{CASH, ISOLATED_VARIABLES, git_for_windows};
+use crate::common::{CASH, git_for_windows, isolate};
 
 /// The `bash.exe` of the Git for Windows whose `git` is on `PATH`.
 fn git_bash() -> PathBuf {
@@ -44,9 +44,7 @@ fn git_prompt_scripts_give_git_bashs_frozen_output() {
         .env_remove("GIT_DIR")
         .env_remove("GIT_WORK_TREE");
     // Neither Git Bash nor the cash it starts (with `--no-config`) takes the developer's.
-    for name in ISOLATED_VARIABLES {
-        command.env_remove(name);
-    }
+    isolate(&mut command);
     let output = command.output().expect("run the git-prompt differential");
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);

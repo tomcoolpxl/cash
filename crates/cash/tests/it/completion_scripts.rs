@@ -32,7 +32,7 @@
 )]
 
 use std::io::Read as _;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Command, Stdio};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
@@ -40,7 +40,7 @@ use std::time::{Duration, Instant};
 use cash_builtins::ShellBuilderExt as _;
 use cash_core::Shell;
 
-use crate::common::{CASH, cash_command};
+use crate::common::{CASH, Scratch, cash_command};
 
 /// A miniature of a Cobra-generated script: the same helper calls, the same fallback
 /// probe, the same `COMPREPLY` protocol — without needing docker installed.
@@ -80,15 +80,12 @@ complete -o default -F __start_mytool mytool
 
 struct Fixture {
     shell: Shell,
-    dir: PathBuf,
+    dir: Scratch,
 }
 
 impl Fixture {
     async fn new(name: &str) -> Self {
-        let dir =
-            std::env::temp_dir().join(format!("cash-compscript-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).expect("create fixture dir");
+        let dir = Scratch::new(&format!("compscript-{name}"));
 
         let mut shell = Shell::builder()
             .interactive(true)
@@ -99,7 +96,7 @@ impl Fixture {
             .await
             .expect("build shell");
 
-        shell.set_working_dir(&dir).expect("set working dir");
+        shell.set_working_dir(dir.path()).expect("set working dir");
 
         Self { shell, dir }
     }
@@ -126,12 +123,6 @@ impl Fixture {
             .await
             .expect("completion failed")
             .candidates
-    }
-}
-
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.dir);
     }
 }
 
@@ -293,9 +284,7 @@ fn filedir_d_offers_only_directories() {
 fn an_rc_file_can_override_a_shim() {
     // The shims load before rc files so that a user who installs the real
     // bash-completion package gets theirs. Proven by overriding one.
-    let dir = std::env::temp_dir().join(format!("cash-compscript-override-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("create dir");
+    let dir = Scratch::new("compscript-override");
     let rc = dir.join("rc.sh");
     std::fs::write(&rc, b"_filedir() { echo overridden; }\n").expect("write rc");
 
@@ -317,8 +306,6 @@ fn an_rc_file_can_override_a_shim() {
         "an rc file could not override a shim: {stdout} {}",
         String::from_utf8_lossy(&out.stderr)
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 // ---------------------------------------------------------------------------

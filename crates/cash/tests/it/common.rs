@@ -46,11 +46,17 @@ pub struct Output {
 pub fn cash_command() -> Command {
     let mut command = Command::new(CASH);
     command.arg("--no-config");
+    isolate(&mut command);
+    command
+}
+
+/// The environment `cash_command()` gives cash, on a command built some other way: no
+/// [`ISOLATED_VARIABLES`], and the empty `APPDATA`.
+pub fn isolate(command: &mut Command) -> &mut Command {
     for name in ISOLATED_VARIABLES {
         command.env_remove(name);
     }
-    command.env("APPDATA", no_appdata());
-    command
+    command.env("APPDATA", no_appdata())
 }
 
 /// Calls `start` with the environment `cash_command()` gives cash, for a cash started some
@@ -149,6 +155,11 @@ impl Scratch {
     /// The folder.
     pub fn path(&self) -> &Path {
         &self.0
+    }
+
+    /// `path` inside the folder.
+    pub fn join(&self, path: impl AsRef<Path>) -> PathBuf {
+        self.0.join(path)
     }
 
     /// The folder in cash's canonical spelling, safe to paste into a script.

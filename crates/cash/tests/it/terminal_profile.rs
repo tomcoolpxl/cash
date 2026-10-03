@@ -11,15 +11,10 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
-use crate::common::CASH;
+use crate::common::{CASH, Scratch};
 
-fn local_app_data(name: &str) -> PathBuf {
-    let dir = Path::new(env!("CARGO_TARGET_TMPDIR"))
-        .join("terminal_profile")
-        .join(name);
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    dir
+fn local_app_data(name: &str) -> Scratch {
+    Scratch::new(&format!("terminal-profile-{name}"))
 }
 
 /// Registry key naming the installed fonts for a test: one that does not exist, so no
@@ -84,13 +79,13 @@ fn an_installed_cascadia_nerd_font_becomes_the_profile_font() {
             "CaskaydiaMono NFM (TrueType)",
         ],
     );
-    let out = cash_with_fonts(&local, "--terminal-profile", &fonts.0);
+    let out = cash_with_fonts(local.path(), "--terminal-profile", &fonts.0);
     assert!(
         out.status.success(),
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
-    let json = std::fs::read_to_string(fragments(&local).join("cash.json")).unwrap();
+    let json = std::fs::read_to_string(fragments(local.path()).join("cash.json")).unwrap();
     assert!(
         json.contains(r#""font": { "face": "CaskaydiaMono Nerd Font Mono" }"#),
         "{json}"
@@ -111,11 +106,11 @@ fn an_installed_cascadia_nerd_font_becomes_the_profile_font() {
         ],
     );
     assert!(
-        cash_with_fonts(&local, "--terminal-profile", &other.0)
+        cash_with_fonts(local.path(), "--terminal-profile", &other.0)
             .status
             .success()
     );
-    let json = std::fs::read_to_string(fragments(&local).join("cash.json")).unwrap();
+    let json = std::fs::read_to_string(fragments(local.path()).join("cash.json")).unwrap();
     assert!(
         json.contains(r#""font": { "face": "UbuntuSansMono Nerd Font Mono" }"#),
         "{json}"
@@ -123,8 +118,8 @@ fn an_installed_cascadia_nerd_font_becomes_the_profile_font() {
 
     // No Nerd Font at all: Terminal's own font, and the suggestion.
     let plain = Fonts::new("plain", &["Cascadia Mono Regular (TrueType)"]);
-    let out = cash_with_fonts(&local, "--terminal-profile", &plain.0);
-    let json = std::fs::read_to_string(fragments(&local).join("cash.json")).unwrap();
+    let out = cash_with_fonts(local.path(), "--terminal-profile", &plain.0);
+    let json = std::fs::read_to_string(fragments(local.path()).join("cash.json")).unwrap();
     assert!(!json.contains("\"font\""), "{json}");
     assert!(
         String::from_utf8_lossy(&out.stdout).contains("nerd-fonts/CascadiaMono-NF"),
@@ -152,11 +147,11 @@ fn the_nerd_font_the_user_already_uses_in_terminal_is_taken() {
     // Installed, the registry says only JetBrains Mono's; the user's own choice wins.
     let fonts = Fonts::new("in-use", &["JetBrainsMono NFM (TrueType)"]);
     assert!(
-        cash_with_fonts(&local, "--terminal-profile", &fonts.0)
+        cash_with_fonts(local.path(), "--terminal-profile", &fonts.0)
             .status
             .success()
     );
-    let json = std::fs::read_to_string(fragments(&local).join("cash.json")).unwrap();
+    let json = std::fs::read_to_string(fragments(local.path()).join("cash.json")).unwrap();
     assert!(
         json.contains(r#""font": { "face": "UbuntuSansMono Nerd Font Mono" }"#),
         "{json}"
@@ -174,14 +169,14 @@ fn fragments(local: &Path) -> PathBuf {
 #[test]
 fn the_profile_runs_this_cash_and_goes_away_again() {
     let local = local_app_data("write");
-    let out = cash(&local, "--terminal-profile");
+    let out = cash(local.path(), "--terminal-profile");
     assert!(
         out.status.success(),
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
 
-    let folder = fragments(&local);
+    let folder = fragments(local.path());
     let json = std::fs::read_to_string(folder.join("cash.json")).unwrap();
     // The program as this test started it, quoted, with JSON's doubled backslashes.
     let exe = Path::new(CASH).display().to_string().replace('/', "\\");
@@ -212,18 +207,18 @@ fn the_profile_runs_this_cash_and_goes_away_again() {
     );
 
     // Written again, as every upgrade does: still one profile.
-    assert!(cash(&local, "--terminal-profile").status.success());
+    assert!(cash(local.path(), "--terminal-profile").status.success());
     assert_eq!(
         std::fs::read_to_string(folder.join("cash.json")).unwrap(),
         json
     );
 
-    let gone = cash(&local, "--remove-terminal-profile");
+    let gone = cash(local.path(), "--remove-terminal-profile");
     assert!(gone.status.success());
     assert!(!folder.exists());
 
     // Removing what is not there is not an error: Scoop may run it twice.
-    let again = cash(&local, "--remove-terminal-profile");
+    let again = cash(local.path(), "--remove-terminal-profile");
     assert!(again.status.success());
     assert!(String::from_utf8_lossy(&again.stdout).contains("no profile to remove"));
 }
@@ -249,13 +244,13 @@ const LISTED_MENU: &str = "{\r\n    \"$schema\": \"https://aka.ms/terminal-profi
 #[test]
 fn a_menu_listed_profile_by_profile_gets_cash_and_loses_it_on_removal() {
     let local = local_app_data("menu");
-    let settings = store_settings(&local, LISTED_MENU);
+    let settings = store_settings(local.path(), LISTED_MENU);
     let unpackaged_dir = local.join("Microsoft").join("Windows Terminal");
     std::fs::create_dir_all(&unpackaged_dir).unwrap();
     let unpackaged = unpackaged_dir.join("settings.json");
     std::fs::write(&unpackaged, LISTED_MENU).unwrap();
 
-    let out = cash(&local, "--terminal-profile");
+    let out = cash(local.path(), "--terminal-profile");
     assert!(
         out.status.success(),
         "{}",
@@ -277,7 +272,7 @@ fn a_menu_listed_profile_by_profile_gets_cash_and_loses_it_on_removal() {
         assert!(!text.contains("\n    {\n"), "CRLF kept: {text:?}");
     }
     // The fragment names the same profile.
-    let fragment = std::fs::read_to_string(fragments(&local).join("cash.json")).unwrap();
+    let fragment = std::fs::read_to_string(fragments(local.path()).join("cash.json")).unwrap();
     assert!(
         fragment.contains(&format!("\"guid\": \"{GUID}\"")),
         "{fragment}"
@@ -285,11 +280,15 @@ fn a_menu_listed_profile_by_profile_gets_cash_and_loses_it_on_removal() {
 
     // An upgrade writes it again: the menu keeps one entry.
     let before = std::fs::read_to_string(&settings).unwrap();
-    assert!(cash(&local, "--terminal-profile").status.success());
+    assert!(cash(local.path(), "--terminal-profile").status.success());
     assert_eq!(std::fs::read_to_string(&settings).unwrap(), before);
 
     // Uninstalled: the menu is as the user left it, to the byte.
-    assert!(cash(&local, "--remove-terminal-profile").status.success());
+    assert!(
+        cash(local.path(), "--remove-terminal-profile")
+            .status
+            .success()
+    );
     assert_eq!(std::fs::read_to_string(&settings).unwrap(), LISTED_MENU);
     assert_eq!(std::fs::read_to_string(&unpackaged).unwrap(), LISTED_MENU);
 }
@@ -298,13 +297,13 @@ fn a_menu_listed_profile_by_profile_gets_cash_and_loses_it_on_removal() {
 fn a_menu_that_shows_every_profile_is_not_touched() {
     let local = local_app_data("menu-untouched");
     let plain = "{\n    \"profiles\": { \"list\": [] }\n}\n";
-    let settings = store_settings(&local, plain);
-    assert!(cash(&local, "--terminal-profile").status.success());
+    let settings = store_settings(local.path(), plain);
+    assert!(cash(local.path(), "--terminal-profile").status.success());
     assert_eq!(std::fs::read_to_string(&settings).unwrap(), plain);
 
     let remaining = "{ \"newTabMenu\": [ { \"type\": \"remainingProfiles\" } ] }";
     std::fs::write(&settings, remaining).unwrap();
-    assert!(cash(&local, "--terminal-profile").status.success());
+    assert!(cash(local.path(), "--terminal-profile").status.success());
     assert_eq!(std::fs::read_to_string(&settings).unwrap(), remaining);
 }
 
@@ -313,10 +312,10 @@ fn an_extra_argument_is_refused() {
     let local = local_app_data("extra");
     let out = Command::new(CASH)
         .args(["--terminal-profile", "now"])
-        .env("LOCALAPPDATA", &local)
+        .env("LOCALAPPDATA", local.path())
         .stdin(Stdio::null())
         .output()
         .unwrap();
     assert_eq!(out.status.code(), Some(2));
-    assert!(!fragments(&local).exists());
+    assert!(!fragments(local.path()).exists());
 }

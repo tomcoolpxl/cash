@@ -12,6 +12,7 @@ use std::cell::RefCell;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use crate::common::{CASH, cash_command};
@@ -29,8 +30,17 @@ thread_local! {
         const { RefCell::new((0, None)) };
 }
 
+/// `name` with this process's id and a count after it, so that no two folders, in this
+/// run or another one at the same time, share a name (BIN-19).
+fn unique(name: &str) -> String {
+    static COUNT: AtomicU32 = AtomicU32::new(0);
+    let count = COUNT.fetch_add(1, Ordering::Relaxed);
+    format!("{name}-{}-{count}", std::process::id())
+}
+
 /// A fresh folder on the same drive as the test's `cash.exe`, which a hard link needs;
-/// deleted when dropped.
+/// deleted when dropped. Not `common::Scratch`, which is in `%TEMP%`: on CI that is on
+/// C:, and the build on D:.
 struct Folder(PathBuf);
 
 fn folder(name: &str) -> Folder {
@@ -42,7 +52,7 @@ fn folder(name: &str) -> Folder {
     });
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR"))
         .join("link_tools")
-        .join(name);
+        .join(unique(name));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     Folder(dir)
@@ -306,7 +316,11 @@ fn which_prints_the_link_when_it_is_on_path() {
     let stdout = text(&out.stdout);
     let mut lines = stdout.lines();
     let ls = lines.next().unwrap_or_default().to_lowercase();
-    assert!(ls.ends_with("/link_tools/which/ls.exe"), "{stdout}");
+    let name = dir.file_name().unwrap().to_string_lossy().to_lowercase();
+    assert!(
+        ls.ends_with(&format!("/link_tools/{name}/ls.exe")),
+        "{stdout}"
+    );
     assert_eq!(lines.next(), Some("cd: shell builtin"), "{stdout}");
 }
 
@@ -321,10 +335,8 @@ fn a_folder_on_another_drive_is_an_error() {
         eprintln!("skipped: this machine has no second drive");
         return;
     };
-    let dir = PathBuf::from(format!(
-        "{other}:\\cash-link-tools-test-{}",
-        std::process::id()
-    ));
+    // At the root of that drive, not in a scratch folder: the drive is the point.
+    let dir = PathBuf::from(format!("{other}:\\{}", unique("cash-link-tools-test")));
     let out = link_tools(&dir);
     let _ = std::fs::remove_dir_all(&dir);
     assert_eq!(out.status.code(), Some(1));

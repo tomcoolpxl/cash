@@ -7,33 +7,16 @@
     reason = "integration-test setup should fail loudly"
 )]
 
-use std::path::{Path, PathBuf};
+use crate::common::{Scratch, cash_command};
 
-use crate::common::cash_command;
-
-struct Scratch(PathBuf);
-
-impl Scratch {
-    fn new(name: &str) -> Self {
-        let path =
-            std::env::temp_dir().join(format!("cash-tree-test-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&path);
-        std::fs::create_dir_all(path.join("beta/deep")).expect("create directory tree");
-        std::fs::write(path.join("alpha.txt"), b"alpha").expect("create file");
-        std::fs::write(path.join("beta/deep/leaf.txt"), b"leaf").expect("create leaf");
-        std::fs::write(path.join(".hidden"), b"hidden").expect("create hidden file");
-        Self(path)
-    }
-
-    fn path(&self) -> &Path {
-        &self.0
-    }
-}
-
-impl Drop for Scratch {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
+/// A scratch folder holding a small tree to draw.
+fn tree(name: &str) -> Scratch {
+    let scratch = Scratch::new(name);
+    std::fs::create_dir_all(scratch.join("beta/deep")).expect("create directory tree");
+    std::fs::write(scratch.join("alpha.txt"), b"alpha").expect("create file");
+    std::fs::write(scratch.join("beta/deep/leaf.txt"), b"leaf").expect("create leaf");
+    std::fs::write(scratch.join(".hidden"), b"hidden").expect("create hidden file");
+    scratch
 }
 
 fn cash(script: &str) -> std::process::Output {
@@ -51,7 +34,7 @@ fn tree_is_a_builtin() {
 
 #[test]
 fn tree_draws_a_sorted_hierarchy_and_counts_it() {
-    let scratch = Scratch::new("shape");
+    let scratch = tree("shape");
     let path = scratch.path().to_string_lossy().replace('\\', "/");
     let output = cash(&format!("tree '{path}'"));
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -70,7 +53,7 @@ fn tree_draws_a_sorted_hierarchy_and_counts_it() {
 
 #[test]
 fn common_filters_are_supported() {
-    let scratch = Scratch::new("options");
+    let scratch = tree("options");
     let path = scratch.path().to_string_lossy().replace('\\', "/");
 
     let shallow = cash(&format!("tree -a -L 1 --noreport '{path}'"));

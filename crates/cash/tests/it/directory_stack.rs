@@ -22,9 +22,9 @@
               alternating the two forms by accident of content reads worse."
 )]
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use crate::common::{Output, cash_command, output_of};
+use crate::common::{Output, Scratch, cash_command, output_of};
 
 /// Pushes three directories, leaving the listing `[c, b, a, ~]`.
 const BUILD: &str = "pushd a > /dev/null; pushd ../b > /dev/null; pushd ../c > /dev/null; ";
@@ -33,16 +33,12 @@ const BUILD: &str = "pushd a > /dev/null; pushd ../b > /dev/null; pushd ../c > /
 /// renders every path in it as `~/...` and the assertions can say what they mean instead
 /// of carrying the machine's temp path around.
 struct Sandbox {
-    root: PathBuf,
+    root: Scratch,
 }
 
 impl Sandbox {
     fn new(name: &str) -> Self {
-        let root =
-            std::env::temp_dir().join(format!("cash-dirstack-{name}-{}", std::process::id()));
-        // Named after the test and the run, and cleared on the way in as well as out, so a run that
-        // died half way through does not change what the next one sees.
-        let _ = std::fs::remove_dir_all(&root);
+        let root = Scratch::new(&format!("dirstack-{name}"));
         for sub in ["a", "b", "c", "d e"] {
             std::fs::create_dir_all(root.join(sub)).expect("failed to create the sandbox");
         }
@@ -50,13 +46,17 @@ impl Sandbox {
     }
 
     fn run(&self, script: &str) -> Output {
-        run_in(&self.root, script)
+        run_in(self.root.path(), script)
     }
-}
 
-impl Drop for Sandbox {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.root);
+    /// The sandbox folder's own name, as `basename "$PWD"` prints it there.
+    fn name(&self) -> String {
+        self.root
+            .path()
+            .file_name()
+            .expect("the sandbox has a name")
+            .to_string_lossy()
+            .into_owned()
     }
 }
 
@@ -373,7 +373,7 @@ fn popd_still_pops() {
     let out = sandbox.run(r#"pushd a > /dev/null; popd; echo "pwd: $(basename "$PWD")""#);
     assert_eq!(
         out.stdout,
-        format!("~\npwd: cash-dirstack-popd-plain-{}", std::process::id()),
+        format!("~\npwd: {}", sandbox.name()),
         "stderr: {}",
         out.stderr
     );
@@ -436,10 +436,7 @@ fn rotating_to_the_last_entry_brings_everything_round() {
     ));
     assert_eq!(
         out.stdout,
-        format!(
-            "~ ~/c ~/b ~/a\npwd: cash-dirstack-edge-rotate-last-{}",
-            std::process::id()
-        ),
+        format!("~ ~/c ~/b ~/a\npwd: {}", sandbox.name()),
         "stderr: {}",
         out.stderr
     );
