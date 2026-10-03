@@ -526,20 +526,56 @@ pub fn request_redraw() {
 ///
 /// Accepted costs, recorded in D19: racy against thread creation during the sweep, and a
 /// process could in principle resume itself.
+///
+/// A process cash has already stopped is left as it is: a thread's suspend count adds up,
+/// so a second `kill -STOP` took a second `kill -CONT` to undo, where a stopped Unix
+/// process is simply stopped (W32-05). What cash has stopped is known by pid and start
+/// time, so a pid handed out again is another process.
 pub fn suspend_process(pid: u32) -> io::Result<usize> {
-    for_each_thread(pid, |handle| {
+    let identity = (pid, crate::process::started(pid));
+    let mut stopped = STOPPED
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    stopped.retain(|&(other, _)| crate::process::is_pid_alive(other));
+    if stopped.contains(&identity) {
+        return Ok(0);
+    }
+    let threads = for_each_thread(pid, |handle| {
         // SAFETY: handle is a valid thread handle with THREAD_SUSPEND_RESUME.
         unsafe { SuspendThread(handle) };
-    })
+    })?;
+    stopped.push(identity);
+    drop(stopped);
+    Ok(threads)
 }
 
-/// Resume every thread of a process (D19).
+/// Resume every thread of a process (D19), if cash stopped it; a process cash did not
+/// stop is left running, or stopped by whoever stopped it, as `SIGCONT` leaves a running
+/// one.
 pub fn resume_process(pid: u32) -> io::Result<usize> {
+    let identity = (pid, crate::process::started(pid));
+    let mut stopped = STOPPED
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let Some(at) = stopped.iter().position(|&known| known == identity) else {
+        return Ok(0);
+    };
+    stopped.swap_remove(at);
+    drop(stopped);
+    start_threads(pid)
+}
+
+/// Resume every thread of a process once, whoever suspended it: for a process cash
+/// created suspended, which job control did not stop.
+pub fn start_threads(pid: u32) -> io::Result<usize> {
     for_each_thread(pid, |handle| {
         // SAFETY: handle is a valid thread handle with THREAD_SUSPEND_RESUME.
         unsafe { ResumeThread(handle) };
     })
 }
+
+/// The processes cash has stopped, by pid and start time.
+static STOPPED: std::sync::Mutex<Vec<(u32, Option<u64>)>> = std::sync::Mutex::new(Vec::new());
 
 /// Apply an operation to every thread of a process, returning how many were affected.
 fn for_each_thread<F>(pid: u32, mut action: F) -> io::Result<usize>

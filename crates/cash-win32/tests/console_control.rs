@@ -100,6 +100,29 @@ fn suspend_and_resume_affect_real_threads() {
 }
 
 #[test]
+fn a_second_stop_adds_nothing_and_one_continue_undoes_it() {
+    // A thread's suspend count adds up: two `kill -STOP` took two `kill -CONT` (W32-05).
+    let mut child = Command::new("findstr.exe")
+        .arg("x")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("spawn child");
+    let _job = end_with_the_test(&child);
+    std::thread::sleep(Duration::from_millis(300));
+
+    let first = suspend_process(child.id()).expect("suspend");
+    assert!(first > 0);
+    assert_eq!(suspend_process(child.id()).expect("suspend again"), 0);
+    assert_eq!(resume_process(child.id()).expect("resume"), first);
+    assert_eq!(resume_process(child.id()).expect("resume again"), 0);
+
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+#[test]
 fn suspending_a_dead_process_affects_nothing() {
     // A pid that has exited must not error — `kill -STOP` on a finished job is a normal
     // race, not a failure.

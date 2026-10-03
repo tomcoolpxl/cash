@@ -43,7 +43,7 @@ pub(crate) fn spawn(
         let pid = child.id();
         let resumed = resume_with(
             || cash_win32::process::resume_process(handle.cast()),
-            || pid.map_or(Ok(0), cash_win32::console::resume_process),
+            || pid.map_or(Ok(0), cash_win32::console::start_threads),
         );
         if let Err(error) = resumed {
             let _ = child.start_kill();
@@ -99,7 +99,7 @@ mod tests {
             .creation_flags(CREATE_SUSPENDED)
             .spawn()
             .unwrap();
-        assert!(cash_win32::console::resume_process(child.id()).unwrap() > 0);
+        assert!(cash_win32::console::start_threads(child.id()).unwrap() > 0);
         assert_eq!(child.wait().unwrap().code(), Some(7));
     }
 }
