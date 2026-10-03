@@ -60,7 +60,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 13.2 Builtins
 
-- `mapfile -t` keeps the `\r` (D20 names mapfile). XC-4.
 - `printf '%d' abc` exits 0; `\c` in `%b` does not stop reuse. BI-09, BI-10.
 - `find -exec echo "<{}>"`, `-exec … +` batching, silent spawn errors; loops under `-L`
   and `chmod -R` through junctions. BI-11, BI-13.

@@ -186,6 +186,11 @@ impl MapFileCommand {
 
             if self.remove_delimiter && line.ends_with(&[delimiter]) {
                 line.pop();
+                // D20: `\r\n` ends a line as `\n` does, so `-t` takes all of it; it left the
+                // `\r` (XC-4). A `\r` inside the line is the line's.
+                if delimiter == b'\n' && line.ends_with(b"\r") {
+                    line.pop();
+                }
             }
 
             let line_str = String::from_utf8_lossy(&line).to_string();

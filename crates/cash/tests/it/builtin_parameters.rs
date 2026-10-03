@@ -452,6 +452,16 @@ EOF
 }
 
 #[test]
+fn mapfile_t_takes_a_crlf_ending_whole() {
+    // D20: `\r\n` ends a line as `\n` does; `-t` left the `\r` (XC-4). Without `-t` the
+    // ending is kept as it came, and a `\r` inside a line is the line's.
+    let out = cash(
+        r#"printf 'a\r\nb\r\n' | { mapfile -t t; printf '[%q]' "${t[@]}"; echo; }; printf 'a\r\n' | { mapfile k; printf '[%q]' "${k[@]}"; echo; }; printf 'p\rq\r\n' | { mapfile -t w; printf '[%q]' "${w[@]}"; }"#,
+    );
+    assert_eq!(out.stdout, "[a][b]\n[$'a\\r\\n']\n[$'p\\rq']");
+}
+
+#[test]
 fn mapfile_max_count_and_skip() {
     let out = cash(
         r#"
