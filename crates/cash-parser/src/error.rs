@@ -83,6 +83,23 @@ pub struct ParseErrorLocation {
     inner: peg::error::ParseError<peg::str::LineCol>,
 }
 
+impl ParseErrorLocation {
+    /// The byte offset in the input where parsing failed.
+    pub const fn offset(&self) -> usize {
+        self.inner.location.offset
+    }
+}
+
+impl WordParseError {
+    /// For an arithmetic expression, the byte offset where parsing it failed.
+    pub const fn arithmetic_offset(&self) -> Option<usize> {
+        match self {
+            Self::ArithmeticExpression(location) => Some(location.offset()),
+            _ => None,
+        }
+    }
+}
+
 /// Represents an error that occurred while parsing a word.
 #[derive(Debug, thiserror::Error)]
 pub enum WordParseError {

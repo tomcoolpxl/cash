@@ -140,7 +140,7 @@ pub enum ErrorKind {
     RedirectionFailure(String, String),
 
     /// An error occurred evaluating an arithmetic expression.
-    #[error("arithmetic evaluation error: {0}")]
+    #[error("{0}")]
     EvalError(#[from] crate::arithmetic::EvalError),
 
     /// The given string could not be parsed as an integer.

@@ -1669,6 +1669,7 @@ impl Execute for ast::ArithmeticCommand {
                 | arithmetic::EvalError::ExpandingUnsetVariable(_)),
             ) => return Err(err.into()),
             Err(err) => {
+                let err = arithmetic::EvalError::InArithmeticCommand(Box::new(err));
                 let _ = shell.display_error(&mut params.stderr(shell), &err.into());
                 let result = ExecutionResult::general_error();
                 shell.set_last_exit_status(result.exit_code.into());
@@ -1703,11 +1704,25 @@ impl Execute for ast::ArithmeticForClauseCommand {
         let condition = self.condition.as_ref().unwrap_or(&one);
         let updater = self.updater.as_ref().unwrap_or(&one);
 
+        // Its errors are named `((: …`, as Bash names them.
+        let in_command = |e: arithmetic::EvalError| match e {
+            e @ (arithmetic::EvalError::FailedToExpandExpression(_)
+            | arithmetic::EvalError::ExpandingUnsetVariable(_)) => e,
+            e => arithmetic::EvalError::InArithmeticCommand(Box::new(e)),
+        };
         let mut result = ExecutionResult::success();
-        initializer.eval(shell, params, true).await?;
+        initializer
+            .eval(shell, params, true)
+            .await
+            .map_err(in_command)?;
 
         loop {
-            if condition.eval(shell, params, true).await? == 0 {
+            if condition
+                .eval(shell, params, true)
+                .await
+                .map_err(in_command)?
+                == 0
+            {
                 break;
             }
 
@@ -1724,7 +1739,10 @@ impl Execute for ast::ArithmeticForClauseCommand {
                 break;
             }
 
-            updater.eval(shell, params, true).await?;
+            updater
+                .eval(shell, params, true)
+                .await
+                .map_err(in_command)?;
         }
 
         shell.set_last_exit_status(result.exit_code.into());

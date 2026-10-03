@@ -60,12 +60,9 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 13.4 Error output: colour, prefixes, `--help`
 
-Arithmetic errors name neither the line nor the expression: cash says `error: arithmetic
-evaluation error: division by zero` and `failed to parse expression: 1 +` (and `08`, and
-`i = ` in `for ((`); Bash says `script: line 14: 1/0: division by 0 (error token is
-"0")`, `((: 1 + : arithmetic syntax error: operand expected (error token is "+ ")`,
-`08: value too great for base (error token is "08")`, and `read: 1/0: …` from `read`.
-Found in phase 12.
+Arithmetic errors are Bash's now, with two left: `$((x++ ++))` names the token `++`
+where Bash names `+`, and `$((a[]))` is a syntax error at `]` where Bash says `a[]: bad
+array subscript`. Found in 1.3.12.
 
 Errors cash does not report at all: `echo "${x!@#}"` prints `${x!@#}` where Bash says
 `${x!@#}: bad substitution` and fails, and `"${a[}"` prints itself where Bash says

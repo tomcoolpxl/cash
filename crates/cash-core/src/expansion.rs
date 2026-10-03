@@ -795,7 +795,7 @@ pub async fn resolve_subscript(
     }
     let value = if expand_once {
         let expression = cash_parser::arithmetic::parse(index)
-            .map_err(|_e| arithmetic::EvalError::ParseError(index.to_owned()))?;
+            .map_err(|e| arithmetic::syntax_error(index, e.arithmetic_offset()))?;
         shell.eval_arithmetic(&expression)?
     } else {
         arithmetic::expand_and_eval(shell, params, index, false).await?

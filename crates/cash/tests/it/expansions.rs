@@ -84,7 +84,8 @@ fn an_arithmetic_error_in_an_integer_assignment_is_reported() {
         let out = run(script);
         assert_eq!(out.stdout, "", "{script}");
         assert!(
-            out.stderr.contains("division by zero"),
+            out.stderr
+                .contains("1/0: division by 0 (error token is \"0\")"),
             "{script}: {}",
             out.stderr
         );

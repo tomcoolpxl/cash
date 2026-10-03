@@ -30,8 +30,12 @@ impl builtins::Command for LetCommand {
         }
 
         for expr in &self.exprs {
-            let parsed = cash_parser::arithmetic::parse(expr.as_str())?;
-            let evaluated = parsed.eval(context.shell)?;
+            // As Bash words it: `let: 1/0: division by 0 (error token is "0")`.
+            let parsed = cash_parser::arithmetic::parse(expr.as_str())
+                .map_err(|e| cash_core::arithmetic::syntax_error(expr, e.arithmetic_offset()))?;
+            let evaluated = parsed
+                .eval(context.shell)
+                .map_err(|e| e.in_expression(expr))?;
 
             if evaluated == 0 {
                 result = ExecutionResult::general_error();

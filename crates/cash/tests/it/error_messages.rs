@@ -271,3 +271,68 @@ fn a_tool_words_an_io_error_as_the_c_library_does() {
         assert!(out.stderr.contains(expected), "{expected}: {}", out.stderr);
     }
 }
+
+#[test]
+fn an_arithmetic_error_names_the_expression_and_its_token() {
+    // cash said `arithmetic evaluation error: division by zero` and `failed to parse
+    // expression: 1 + `. Each here is Git Bash 5.3's, after `bash: line 1: `.
+    let cases = [
+        ("echo $((1/0))", "1/0: division by 0 (error token is \"0\")"),
+        (
+            "echo $((1/0 + 5))",
+            "1/0 + 5: division by 0 (error token is \"0 + 5\")",
+        ),
+        (
+            "x=0; echo $((10 / x))",
+            "10 / x: division by 0 (error token is \"x\")",
+        ),
+        (
+            "echo $((2**-1 + 3))",
+            "2**-1 + 3: exponent less than 0 (error token is \"+ 3\")",
+        ),
+        (
+            "echo $(( 1 + ))",
+            "1 + : arithmetic syntax error: operand expected (error token is \"+ \")",
+        ),
+        (
+            "echo $((a b))",
+            "a b: arithmetic syntax error in expression (error token is \"b\")",
+        ),
+        (
+            "echo $((1 ? 2))",
+            "1 ? 2: `:' expected for conditional expression (error token is \"2\")",
+        ),
+        (
+            "echo $((08))",
+            "08: value too great for base (error token is \"08\")",
+        ),
+        (
+            "x=08; echo $((x))",
+            "08: value too great for base (error token is \"08\")",
+        ),
+        (
+            "echo $((65#1))",
+            "65#1: invalid arithmetic base (error token is \"65#1\")",
+        ),
+        ("((1/0))", "((: 1/0: division by 0 (error token is \"0\")"),
+        (
+            "for ((i = ; i < 2; i++)); do :; done",
+            "((: i = : arithmetic syntax error: operand expected (error token is \"= \")",
+        ),
+        (
+            "let 'x='",
+            "let: x=: arithmetic syntax error: operand expected (error token is \"=\")",
+        ),
+    ];
+    for (script, expected) in cases {
+        let out = run(script);
+        assert!(
+            out.stderr.ends_with(&format!("line 1: {expected}")),
+            "{script}: {:?}",
+            out.stderr
+        );
+    }
+
+    // A blank subscript is 0, as in Bash, where cash failed.
+    assert_eq!(run("a=(1); echo $((a[ ]))").stdout, "1");
+}
