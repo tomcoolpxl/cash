@@ -210,15 +210,22 @@ impl InstallCommand {
         }
 
         fs::copy(&src.actual, &dest.actual).map_err(|e| {
-            std::io::Error::new(
-                e.kind(),
+            // A source that is not there is one GNU install cannot `stat`.
+            let message = if e.kind() == std::io::ErrorKind::NotFound && !src.actual.exists() {
+                format!(
+                    "cannot stat '{}': {}",
+                    src.shown.display(),
+                    cash_core::error::os_error_text(&e)
+                )
+            } else {
                 format!(
                     "cannot install '{}' to '{}': {}",
                     src.shown.display(),
                     dest.shown.display(),
                     cash_core::error::os_error_text(&e)
-                ),
-            )
+                )
+            };
+            std::io::Error::new(e.kind(), message)
         })?;
 
         if let Some(mode_str) = &self.mode {

@@ -60,10 +60,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 13.4 Error output: colour, prefixes, `--help`
 
-`install` with a missing source says `cannot install 'x' to 'y': No such file or
-directory` where GNU says `install: cannot stat 'x': No such file or directory`. Found in
-1.3.12 moving the tools' I/O errors onto `os_error_text`.
-
 Arithmetic errors name neither the line nor the expression: cash says `error: arithmetic
 evaluation error: division by zero` and `failed to parse expression: 1 +` (and `08`, and
 `i = ` in `for ((`); Bash says `script: line 14: 1/0: division by 0 (error token is
