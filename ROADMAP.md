@@ -106,8 +106,9 @@ extensions remain outside the initial gate.
 `crates/cash-sed` is integrated from the reviewed `uutils/sed` source, hardened, and verified.
 POSIX earliest/longest regex matching, BRE backreferences in default Windows mode, `n` cycle behavior,
 ordinary GNU `-i`, trailing empty file `$`, combined numeric/`g` flags, CRLF preservation, and `cash -c`
-execution are verified with 360 unit tests, 271 integration tests, and 30 differential tests against
-GNU sed in WSL (`tests/sed-differential.sh`).
+execution are verified with 360 unit tests, 271 integration tests, and the sed cases of the
+differential corpus, frozen from Git Bash's GNU sed and checked in `it` (`tests/corpus/sed`,
+`it/corpus_goldens.rs`).
 
 ## 4. Expand bundled userland (Complete & Verified)
 

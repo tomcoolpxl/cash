@@ -61,9 +61,10 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 14.1 Tests
 
-Freeze the awk, sed and git-prompt differential outputs as goldens in `it` (D43 rests on
-`cases/brush`, which has no language cases; `tests/corpus` is frozen, `it/corpus_goldens.rs`);
-move the remaining `it` modules to `it/common.rs`. BIN-05, BIN-20.
+Freeze the git-prompt differential outputs as goldens in `it` (D43 rests on `cases/brush`,
+which has no language cases; `tests/corpus`, with the awk and sed differentials folded in,
+is frozen, `it/corpus_goldens.rs`); move the remaining `it` modules to `it/common.rs`.
+BIN-05, BIN-20.
 
 ### 14.2 Records
 

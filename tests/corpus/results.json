@@ -1,18 +1,18 @@
 {
-  "generated": "2026-09-27T06:06:07.1536921+02:00",
+  "generated": "2026-10-03T23:51:16.0736580+02:00",
   "oracle": "C:/Program Files/Git/bin/bash.exe",
-  "cash": "C:\\Users\\thraa\\github\\cash\\target\\claude-check\\debug\\cash.exe",
+  "cash": "C:\\Users\\thraa\\github\\cash\\target\\debug\\cash.exe",
   "summary": [
     {
       "group": "sed",
-      "cases": 98,
-      "pass": 95,
+      "cases": 129,
+      "pass": 126,
       "fail": 3
     },
     {
       "group": "awk",
-      "cases": 61,
-      "pass": 61,
+      "cases": 72,
+      "pass": 72,
       "fail": 0
     },
     {
@@ -37,8 +37,8 @@
         "status": 0
       },
       "cash": {
-        "stdout": "",
-        "stderr": "\u001b[31merror:\u001b[39m arithmetic evaluation error: failed to parse expression: $(echo injection >&2)\n",
+        "stdout": "C:/Users/thraa/github/cash/target/debug/cash.exe: line 4: $(echo injection >&2): arithmetic syntax error: operand expected (error token is \")\")\n",
+        "stderr": "",
         "status": 1
       }
     },
@@ -76,7 +76,7 @@
       },
       "cash": {
         "stdout": "",
-        "stderr": "cash.exe: <script argument 1>:1:4: error: extra characters at the end of the : command\n",
+        "stderr": "sed: <script argument 1>:1:4: error: extra characters at the end of the : command\n",
         "status": 1
       }
     },
