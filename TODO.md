@@ -56,14 +56,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ## Phase 10. awk, sed and bc (R3)
 
-### 10.2 awk and sed bugs that break ordinary scripts
-
-- awk stops at 65,535 fields with "too many fields" (`Record::MAX_FIELDS`, a `u16`
-  field index); gawk splits a 4.6 MB paragraph of 800,000 words. Found while measuring
-  TXT-16.
-- awk prints an infinite or NaN number as `inf` or `nan`; gawk 5.4 writes the sign
-  (`+inf`, `-inf`, `+nan`, `-nan`). Found while measuring TXT-16.
-
 ### 10.3 awk, bc and sed are outside every lint
 
 The three crates set `warnings = "allow"` and `clippy::all = "allow"`. Move them to

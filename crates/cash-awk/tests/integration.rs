@@ -190,6 +190,21 @@ fn test_awk_regex_rs_that_spans_lines_ends_one_record() {
     );
 }
 
+// A record of more than 65,535 fields stopped the program with "too many fields": the
+// field index was a u16. gawk 5.4's output.
+#[test]
+fn test_awk_records_of_more_than_65535_fields_split() {
+    test_awk!(records_of_more_than_65535_fields_split);
+}
+
+// Infinite and NaN numbers, as gawk 5.4 writes them (always signed, under every numeric
+// conversion) and reads them (only `+inf`, `-inf`, `+nan` and `-nan`). `print` wrote
+// `inf`, `%d` 9223372036854775807, `"inf" + 0` was infinite and `".5e" + 0` was 0.
+#[test]
+fn test_awk_infinite_and_nan_numbers_match_gawk() {
+    test_awk!(infinite_and_nan_numbers_match_gawk);
+}
+
 // An RS that matches empty text looped forever on empty records (TXT-12). gawk 5.4 ends
 // four empty records and loses `a` and `b`; this is the records the separators delimit.
 #[test]
@@ -747,6 +762,7 @@ fn test_awk_variable_assignment_arguments() {
     test_awk!(variable_assignment_arguments, "tests/awk/test_data.txt");
 }
 
+// gawk 5.4's output: `+"nan"` is 0, as only a signed `+nan` or `-nan` is NaN in gawk.
 #[test]
 fn test_awk_correct_comparisons() {
     test_awk!(correct_comparisons, "tests/awk/test_data.txt");

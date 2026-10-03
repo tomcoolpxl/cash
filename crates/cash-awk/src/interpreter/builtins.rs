@@ -12,7 +12,7 @@ use std::fmt::Write;
 use super::format::{
     FormatArgs, IntegerFormat, fmt_write_decimal_float, fmt_write_float_general,
     fmt_write_hex_float, fmt_write_scientific_float, fmt_write_signed, fmt_write_signed_f64,
-    fmt_write_string, fmt_write_unsigned, parse_conversion_specifier_args,
+    fmt_write_special_float, fmt_write_string, fmt_write_unsigned, parse_conversion_specifier_args,
 };
 use super::record::{FieldSeparator, FieldsState, split_record};
 use super::stack::Stack;
@@ -88,6 +88,16 @@ fn format_one_conversion(
     args: &FormatArgs,
     float_format: &str,
 ) -> Result<(), String> {
+    if matches!(
+        specifier,
+        'd' | 'i' | 'u' | 'o' | 'x' | 'X' | 'a' | 'A' | 'f' | 'F' | 'e' | 'E' | 'g' | 'G'
+    ) {
+        let number = value.scalar_as_f64();
+        if !number.is_finite() {
+            fmt_write_special_float(result, number, specifier.is_ascii_uppercase(), args);
+            return Ok(());
+        }
+    }
     match specifier {
         'd' | 'i' => {
             fmt_write_signed_f64(result, value.scalar_as_f64(), args);

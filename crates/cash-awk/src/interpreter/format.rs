@@ -738,6 +738,42 @@ fn finish_general_fraction(number: &mut String, alternative_form: bool) {
     }
 }
 
+/// An infinite or NaN number as gawk writes it: always with its sign. On a 64-bit
+/// machine NaN from `log(-1)` has its sign bit set, so it is `-nan`.
+pub fn special_float_text(value: f64) -> &'static str {
+    match (value.is_nan(), value.is_sign_negative()) {
+        (true, false) => "+nan",
+        (true, true) => "-nan",
+        (false, false) => "+inf",
+        (false, true) => "-inf",
+    }
+}
+
+/// An infinite or NaN number under any numeric conversion, as gawk writes it: its text
+/// padded with spaces to the width, on the right with `-`; `0`, `+`, a space and the
+/// precision do not apply. An upper-case conversion (`%X`, `%E`, …) writes `+INF`.
+/// `%d` wrote 9223372036854775807 and `%x` 7fffffffffffffff.
+pub fn fmt_write_special_float(
+    target: &mut String,
+    value: f64,
+    upper_case: bool,
+    args: &FormatArgs,
+) {
+    let text = special_float_text(value);
+    let padding = args.width.saturating_sub(text.len());
+    if !args.left_justified {
+        pad_target(target, padding, b' ');
+    }
+    if upper_case {
+        target.push_str(&text.to_ascii_uppercase());
+    } else {
+        target.push_str(text);
+    }
+    if args.left_justified {
+        pad_target(target, padding, b' ');
+    }
+}
+
 pub fn fmt_write_string(target: &mut String, value: &str, args: &FormatArgs) {
     let precision = args.precision.unwrap_or(usize::MAX);
     let str_len = value.len().min(precision);

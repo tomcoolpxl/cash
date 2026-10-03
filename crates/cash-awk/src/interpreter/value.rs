@@ -11,6 +11,7 @@ use std::cell::UnsafeCell;
 use std::rc::Rc;
 
 use super::array::Array;
+use super::format::special_float_text;
 use super::string::AwkString;
 use super::{bool_to_f64, is_integer, sprintf, strtod};
 use crate::program::SpecialVar;
@@ -34,7 +35,7 @@ pub(crate) enum AwkValueVariant {
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) enum AwkRefType {
     None,
-    Field(u16),
+    Field(u32),
     SpecialGlobalVar(SpecialVar),
 }
 
@@ -81,7 +82,9 @@ impl AwkValue {
     pub(crate) fn scalar_to_string(self, num_fmt: &str) -> Result<AwkString, String> {
         match self.value {
             AwkValueVariant::Number(num) => {
-                if is_integer(num) {
+                if !num.is_finite() {
+                    Ok(special_float_text(num).into())
+                } else if is_integer(num) {
                     // All of an integer's digits, also beyond what an `i64` holds: `print
                     // 2^64` printed 9223372036854775807 (`REVIEW_REPORT.md` TXT-02).
                     Ok(if num.abs() < 9_223_372_036_854_775_808.0 {
@@ -197,7 +200,7 @@ impl AwkValue {
         }
     }
 
-    pub(crate) fn field_ref<V: Into<AwkValue>>(value: V, field_index: u16) -> Self {
+    pub(crate) fn field_ref<V: Into<AwkValue>>(value: V, field_index: u32) -> Self {
         let value = value.into();
         value.into_ref(AwkRefType::Field(field_index))
     }

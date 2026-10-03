@@ -52,13 +52,82 @@ pub(crate) fn bool_to_f64(p: bool) -> f64 {
     if p { 1.0 } else { 0.0 }
 }
 
+/// The number at the start of input text, as gawk reads it (C's `strtod` without
+/// hexadecimal, `inf` and `nan`): white space, then the longest decimal floating constant,
+/// or `+inf`, `-inf`, `+nan` or `-nan` with only white space around it; 0 when there is
+/// neither. `.5e` was 0 rather than 0.5, `inf` and `+infinity` were infinite, and `  -nan`
+/// was 0 (`REVIEW_REPORT.md` TXT-16).
 pub(crate) fn strtod(s: &str) -> f64 {
-    lexical::parse_partial_with_options::<f64, _, { lexical::format::C_STRING }>(
-        s,
-        &lexical::ParseFloatOptions::default(),
-    )
-    .map(|(val, _)| val)
-    .unwrap_or(0.0)
+    match scan_number(s) {
+        NumberText::Special(value) => value,
+        NumberText::Decimal { number, .. } => number.parse().unwrap_or(0.0),
+        NumberText::Nothing => 0.0,
+    }
+}
+
+/// How input text reads as a number; see [`strtod`] and [`is_numeric_string`].
+enum NumberText<'a> {
+    /// `+inf`, `-inf`, `+nan` or `-nan`, in any case.
+    Special(f64),
+    /// The decimal floating constant at the start, with its sign, and whether nothing but
+    /// white space follows it.
+    Decimal {
+        number: &'a str,
+        whole: bool,
+    },
+    Nothing,
+}
+
+/// C's white space, which may surround a number in input text.
+fn is_c_space(byte: u8) -> bool {
+    matches!(byte, b' ' | b'\t' | b'\n' | b'\r' | 0x0b | 0x0c)
+}
+
+fn scan_number(text: &str) -> NumberText<'_> {
+    let start = text.bytes().take_while(|&b| is_c_space(b)).count();
+    let text = &text[start..];
+    let bytes = text.as_bytes();
+    let core = text.trim_end_matches(|c: char| c.is_ascii() && is_c_space(c as u8));
+    if let [sign @ (b'+' | b'-'), name @ ..] = core.as_bytes() {
+        let value = if name.eq_ignore_ascii_case(b"inf") {
+            Some(f64::INFINITY)
+        } else if name.eq_ignore_ascii_case(b"nan") {
+            Some(f64::NAN)
+        } else {
+            None
+        };
+        if let Some(value) = value {
+            return NumberText::Special(if *sign == b'-' { -value } else { value });
+        }
+    }
+    let digits = |from: usize| {
+        bytes[from..]
+            .iter()
+            .take_while(|b| b.is_ascii_digit())
+            .count()
+    };
+    let mut at = usize::from(matches!(bytes.first(), Some(b'+' | b'-')));
+    let whole = digits(at);
+    at += whole;
+    let mut fraction = 0;
+    if bytes.get(at) == Some(&b'.') {
+        fraction = digits(at + 1);
+        at += 1 + fraction;
+    }
+    if whole + fraction == 0 {
+        return NumberText::Nothing;
+    }
+    if let Some(b'e' | b'E') = bytes.get(at) {
+        let sign = usize::from(matches!(bytes.get(at + 1), Some(b'+' | b'-')));
+        let exponent = digits(at + 1 + sign);
+        if exponent > 0 {
+            at += 1 + sign + exponent;
+        }
+    }
+    NumberText::Decimal {
+        number: &text[..at],
+        whole: at == core.len(),
+    }
 }
 
 pub(crate) fn is_integer(num: f64) -> bool {
@@ -87,48 +156,11 @@ pub(crate) fn maybe_numeric_string<S: Into<AwkString>>(str: S) -> AwkString {
 /// of an awk run's time (`REVIEW_REPORT.md` TXT-16), and that rule matched only a
 /// prefix, so `9abc` compared as the number 9.
 pub(crate) fn is_numeric_string(text: &str) -> bool {
-    let blank = |b: &u8| matches!(b, b' ' | b'\t' | b'\n' | b'\r' | 0x0b | 0x0c);
-    let mut bytes = text.as_bytes();
-    while let [first, rest @ ..] = bytes
-        && blank(first)
-    {
-        bytes = rest;
+    match scan_number(text) {
+        NumberText::Special(_) => true,
+        NumberText::Decimal { whole, .. } => whole,
+        NumberText::Nothing => false,
     }
-    while let [rest @ .., last] = bytes
-        && blank(last)
-    {
-        bytes = rest;
-    }
-    let (signed, bytes) = match bytes {
-        [b'+' | b'-', rest @ ..] => (true, rest),
-        _ => (false, bytes),
-    };
-    if signed && (bytes.eq_ignore_ascii_case(b"inf") || bytes.eq_ignore_ascii_case(b"nan")) {
-        return true;
-    }
-    let digits = |bytes: &[u8]| bytes.iter().take_while(|b| b.is_ascii_digit()).count();
-    let whole = digits(bytes);
-    let mut at = whole;
-    let mut fraction = 0;
-    if bytes.get(at) == Some(&b'.') {
-        fraction = digits(&bytes[at + 1..]);
-        at += 1 + fraction;
-    }
-    if whole + fraction == 0 {
-        return false;
-    }
-    if let Some(b'e' | b'E') = bytes.get(at) {
-        at += 1;
-        if let Some(b'+' | b'-') = bytes.get(at) {
-            at += 1;
-        }
-        let exponent = digits(&bytes[at..]);
-        if exponent == 0 {
-            return false;
-        }
-        at += exponent;
-    }
-    at == bytes.len()
 }
 
 struct GlobalEnv {
