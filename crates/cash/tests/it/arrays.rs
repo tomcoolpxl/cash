@@ -62,3 +62,22 @@ fn a_subscript_in_a_list_is_arithmetic_unless_the_array_is_associative() {
         ),
     ]);
 }
+
+#[test]
+fn a_reference_to_an_element_assigns_to_the_element() {
+    // It created a variable named `a[1]` (LANG-12).
+    check(&[
+        (
+            r#"a=(x y z); declare -n r="a[1]"; r=Z; declare -p a; echo "$r""#,
+            "declare -a a=([0]=\"x\" [1]=\"Z\" [2]=\"z\")\nZ",
+        ),
+        (
+            r#"f() { local -n out=$1; out=done; }; a=(1 2); f "a[1]"; declare -p a"#,
+            "declare -a a=([0]=\"1\" [1]=\"done\")",
+        ),
+        (
+            r#"declare -A h=([k]=v); declare -n r="h[k]"; r=W; declare -p h"#,
+            "declare -A h=([k]=\"W\" )",
+        ),
+    ]);
+}

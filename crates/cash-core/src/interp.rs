@@ -2240,7 +2240,17 @@ async fn apply_assignment(
         // itself, which would quietly break the chain.
         return Ok(());
     };
-    let resolved_name = resolved_name.into_owned();
+    let mut resolved_name = resolved_name.into_owned();
+    // A reference to an array element (`declare -n r='a[1]'; r=Z`) assigns to the element,
+    // as in Bash. It created a variable named `a[1]` (LANG-12).
+    if array_index.is_none()
+        && resolved_name.ends_with(']')
+        && let Some(open) = resolved_name.find('[').filter(|&open| open > 0)
+        && let Some(subscript) = resolved_name.get(open + 1..resolved_name.len() - 1)
+    {
+        array_index = Some(subscript.to_owned());
+        resolved_name.truncate(open);
+    }
     let variable_name = &resolved_name;
 
     // Expand the values.
