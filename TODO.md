@@ -60,10 +60,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 13.2 Builtins
 
-- `elevate` asks UAC through `powershell.exe` started with the process's folder and
-  environment, so the elevated command gets neither the shell's working directory nor its
-  exported variables (the `process state:` mark at `cash-builtins/src/win.rs`); with
-  BI-19's quoting, through `ShellExecuteExW("runas")` with the shell's folder.
 - A syntax error in `eval` ends a script with status 2; Bash reports it, sets `$?` to 2
   and goes on (`eval 'if then'; echo "after $?"` prints `after 2`). Seen in 1.3.10 while
   fixing PI-07.
@@ -123,6 +119,12 @@ BIN-20.
 spec.md: D1 (5.3.15, not 5.2.37), §1 and §4 row 19 (`stat` is carried), §5, D6 and §6
 (the spawn race is closed), the D9 table; README Layout; RELEASING's crate list; the
 MSRV (1.88 vs 1.95, a missing `msrv-policy.md`). ARCH-05, ARCH-13, ARCH-14, EXE-17.
+
+D42 says cash records elevated children by pid and tries to end them at exit, and the
+`elevate` row of the D45 table says it registers them; `elevate` never did either, and
+the same section says a medium-integrity process cannot get `PROCESS_TERMINATE` on a
+high-integrity one, so the attempt could not succeed. Say what `elevate` does: it warns.
+Seen in 1.3.12 while moving `elevate` to `ShellExecuteExW`.
 
 ### 14.3 brush names users see
 

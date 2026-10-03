@@ -144,23 +144,34 @@ fn detached_command_line<SE: cash_core::ShellExtensions>(
     resolved: &Path,
     args: &[String],
 ) -> String {
+    let (program, parameters) = launch_parts(context.shell, resolved, args);
+    let program = cash_win32::cmd::quote_argument(&program);
+    if parameters.is_empty() {
+        program
+    } else {
+        format!("{program} {parameters}")
+    }
+}
+
+/// The program that starts the file `resolved` with `args`, and the rest of its command
+/// line, quoted: a program directly, a batch file through cmd (as D32 escapes it), and a
+/// script cash dispatches by its kind (PowerShell, a shebang) through a cash of its own.
+fn launch_parts(
+    shell: &cash_core::Shell<impl cash_core::ShellExtensions>,
+    resolved: &Path,
+    args: &[String],
+) -> (String, String) {
     let program = cash_win32::path::to_backslash(resolved);
     match cash_win32::resolve::classify(resolved) {
-        cash_win32::resolve::Dispatch::Native(_) => {
-            cash_win32::cmd::build_command_line(&program, args)
-        }
+        cash_win32::resolve::Dispatch::Native(_) => (program, quoted_arguments(args)),
         cash_win32::resolve::Dispatch::Batch(_) => {
-            let comspec = context
-                .shell
+            let comspec = shell
                 .env_str("COMSPEC")
                 .map_or_else(|| "cmd.exe".to_owned(), |value| value.into_owned());
             let inner = cash_win32::cmd::escape_words_for_cmd(
                 std::iter::once(program.as_str()).chain(args.iter().map(String::as_str)),
             );
-            format!(
-                "{} /d /s /c \"{inner}\"",
-                cash_win32::cmd::quote_argument(&comspec)
-            )
+            (comspec, format!("/d /s /c \"{inner}\""))
         }
         _ => {
             let cash = std::env::current_exe().map_or_else(
@@ -169,9 +180,17 @@ fn detached_command_line<SE: cash_core::ShellExtensions>(
             );
             let mut all = vec!["-c".to_owned(), "\"$0\" \"$@\"".to_owned(), program];
             all.extend(args.iter().cloned());
-            cash_win32::cmd::build_command_line(&cash, &all)
+            (cash, quoted_arguments(&all))
         }
     }
+}
+
+/// Each argument quoted as the Microsoft C runtime parses it, joined by spaces.
+fn quoted_arguments(args: &[String]) -> String {
+    args.iter()
+        .map(|arg| cash_win32::cmd::quote_argument(arg))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// Run a command elevated, via UAC.
@@ -181,6 +200,12 @@ fn detached_command_line<SE: cash_core::ShellExtensions>(
 /// assigned to cash's job object — a medium-integrity process cannot acquire
 /// `PROCESS_SET_QUOTA` on a high-integrity one — so D6's containment guarantee stops at
 /// the integrity boundary, and cash should say so rather than imply otherwise.
+///
+/// The command starts in the shell's folder, found on the shell's `PATH`, with its
+/// arguments as written. It used to go through PowerShell's `Start-Process`, which
+/// started it in the folder cash was started in and split an argument with a space
+/// (BI-19). It starts from the user's own environment: UAC takes none, so the shell's
+/// exported variables do not follow it.
 #[derive(Parser)]
 pub(crate) struct ElevateCommand {
     /// Suppress the warning that the elevated process escapes cash's containment.
@@ -212,43 +237,42 @@ impl builtins::Command for ElevateCommand {
             )?;
         }
 
-        // Elevation cannot go through CreateProcessW; it needs ShellExecuteEx with the
-        // `runas` verb, which PowerShell's Start-Process exposes directly.
-        let mut argument_list = String::new();
-        for arg in args {
-            if !argument_list.is_empty() {
-                argument_list.push(',');
-            }
-            argument_list.push('\'');
-            argument_list.push_str(&arg.replace('\'', "''"));
-            argument_list.push('\'');
-        }
-
-        let script = if argument_list.is_empty() {
-            format!(
-                "Start-Process -Verb RunAs -FilePath '{}'",
-                program.replace('\'', "''")
-            )
-        } else {
-            format!(
-                "Start-Process -Verb RunAs -FilePath '{}' -ArgumentList {argument_list}",
-                program.replace('\'', "''")
-            )
-        };
-
-        // process state: only asks UAC; the elevated command gets no shell state yet (TODO.md 13.2).
-        let status = std::process::Command::new("powershell.exe")
-            .args(["-NoProfile", "-NonInteractive", "-Command", &script])
-            .status();
-
-        match status {
-            Ok(status) if status.success() => Ok(ExecutionResult::success()),
-            Ok(_) => Ok(ExecutionResult::new(1)),
+        let (target, parameters) = elevation_request(context.shell, program, args);
+        match cash_win32::shellopen::run_elevated(&target, &parameters, context.shell.working_dir())
+        {
+            Ok(()) => Ok(ExecutionResult::success()),
             Err(e) => {
-                writeln!(context.stderr(), "elevate: {e}")?;
+                writeln!(
+                    context.stderr(),
+                    "elevate: {program}: {}",
+                    cash_core::error::os_error_text(&e)
+                )?;
                 Ok(ExecutionResult::new(1))
             }
         }
+    }
+}
+
+/// The program `elevate` asks UAC to start, and the rest of its command line.
+///
+/// Found as the shell finds a command: a name on its `PATH` (`bash` is cash, D7), a path
+/// against its working directory (D10). The file is then started as `detach` starts one,
+/// so `elevate tool "a b"` hands `tool` one argument, where PowerShell's `-ArgumentList`
+/// split it (BI-19), and a batch file's arguments are escaped for cmd (D32). A name found
+/// nowhere is left for Windows to find, as `App Paths` registers some programs only there.
+fn elevation_request(
+    shell: &cash_core::Shell<impl cash_core::ShellExtensions>,
+    program: &str,
+    args: &[String],
+) -> (String, String) {
+    let found = if cash_core::sys::fs::contains_path_separator(program) {
+        Some(shell.absolute_path(Path::new(program)))
+    } else {
+        shell.resolve_command_in_path(program)
+    };
+    match found.filter(|path| path.is_file()) {
+        Some(resolved) => launch_parts(shell, &resolved, args),
+        None => (program.to_string(), quoted_arguments(args)),
     }
 }
 
@@ -308,5 +332,21 @@ impl builtins::Command for DetachCommand {
                 Ok(ExecutionResult::new(126))
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn arguments_reach_the_program_whole() {
+        // PowerShell's `-ArgumentList` split `"a b"` in two on the way to an elevated
+        // program (BI-19); the C runtime's quoting keeps each argument one.
+        let args = ["a b", "it's", r#"say "hi""#, r"C:\my dir\", ""].map(String::from);
+        assert_eq!(
+            quoted_arguments(&args),
+            r#""a b" it's "say \"hi\"" "C:\my dir\\" """#
+        );
     }
 }
