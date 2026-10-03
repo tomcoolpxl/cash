@@ -270,9 +270,13 @@ async fn assign_input_to_variables(
 ) -> Result<(), cash_core::Error> {
     if let Some(array_variable) = array_variable {
         let literal_fields = build_array_fields(input_line, ifs, skip_ifs_splitting);
-        shell.env_mut().update_or_add(
+        let value = shell.value_for_assignment(
             array_variable,
             variables::ShellValueLiteral::Array(variables::ArrayLiteral(literal_fields)),
+        )?;
+        shell.env_mut().update_or_add(
+            array_variable,
+            value,
             |_| Ok(()),
             env::EnvironmentLookup::Anywhere,
             env::EnvironmentScope::Global,
@@ -288,9 +292,11 @@ async fn assign_input_to_variables(
         )
         .await?;
     } else {
+        let value =
+            shell.scalar_for_assignment("REPLY", input_line.unwrap_or_default().to_owned())?;
         shell.env_mut().update_or_add(
             "REPLY",
-            variables::ShellValueLiteral::Scalar(input_line.unwrap_or_default().to_owned()),
+            variables::ShellValueLiteral::Scalar(value),
             |_| Ok(()),
             env::EnvironmentLookup::Anywhere,
             env::EnvironmentScope::Global,
@@ -344,13 +350,16 @@ async fn assign_read_value(
     value: String,
 ) -> Result<(), cash_core::Error> {
     match cash_parser::word::parse_parameter(target, &shell.parser_options())? {
-        cash_parser::word::Parameter::Named(name) => shell.env_mut().update_or_add(
-            name,
-            variables::ShellValueLiteral::Scalar(value),
-            |_| Ok(()),
-            env::EnvironmentLookup::Anywhere,
-            env::EnvironmentScope::Global,
-        ),
+        cash_parser::word::Parameter::Named(name) => {
+            let value = shell.scalar_for_assignment(&name, value)?;
+            shell.env_mut().update_or_add(
+                name,
+                variables::ShellValueLiteral::Scalar(value),
+                |_| Ok(()),
+                env::EnvironmentLookup::Anywhere,
+                env::EnvironmentScope::Global,
+            )
+        }
         cash_parser::word::Parameter::NamedWithIndex { name, index } => {
             let expand_once = shell.options().assoc_expand_once;
             let index = cash_core::expansion::resolve_subscript(
@@ -362,6 +371,7 @@ async fn assign_read_value(
                 expand_once,
             )
             .await?;
+            let value = shell.scalar_for_assignment(&name, value)?;
             shell.env_mut().update_or_add_array_element(
                 name,
                 index,

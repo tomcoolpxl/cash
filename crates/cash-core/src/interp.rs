@@ -1456,9 +1456,11 @@ impl Execute for ast::ForClauseCommand {
             }
 
             // Update the variable.
+            let value = shell
+                .value_for_assignment(&self.variable_name, ShellValueLiteral::Scalar(value))?;
             shell.env_mut().update_or_add(
                 &self.variable_name,
-                ShellValueLiteral::Scalar(value),
+                value,
                 |_| Ok(()),
                 EnvironmentLookup::Anywhere,
                 EnvironmentScope::Global,
@@ -2254,7 +2256,7 @@ async fn apply_assignment(
     let variable_name = &resolved_name;
 
     // Expand the values.
-    let mut new_value = match &assignment.value {
+    let new_value = match &assignment.value {
         ast::AssignmentValue::Scalar(unexpanded_value) => {
             let value =
                 expansion::basic_expand_assignment_word(shell, params, unexpanded_value).await?;
@@ -2346,16 +2348,8 @@ async fn apply_assignment(
     // Read option before taking mutable borrow on env.
     let export_variables_on_modification = shell.options().export_variables_on_modification;
 
-    // If the target variable is marked as an integer, evaluate its scalar value arithmetically.
-    if let Some((_, var)) = shell.env().get(variable_name) {
-        if var.is_treated_as_integer() {
-            if let ShellValueLiteral::Scalar(s) = &mut new_value {
-                if let Ok(eval_val) = arithmetic::evaluate_str(shell, s.as_str()) {
-                    *s = eval_val.to_string();
-                }
-            }
-        }
-    }
+    // If the target variable is marked as an integer, evaluate its value arithmetically.
+    let new_value = shell.value_for_assignment(variable_name, new_value)?;
 
     // SECONDS is a live stopwatch rather than a stored scalar. Assignment resets its
     // baseline, including Bash's supported negative values; `+=` starts from the value

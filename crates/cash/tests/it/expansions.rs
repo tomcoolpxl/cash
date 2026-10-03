@@ -47,3 +47,57 @@ fn an_arithmetic_expression_that_expands_to_nothing_is_zero() {
         ("e=; [[ $e -eq 0 ]] && echo yes", "yes"),
     ]);
 }
+
+#[test]
+fn an_integer_variable_evaluates_its_value_however_it_is_assigned() {
+    // `read`, `printf -v`, array literals and `for` read names as 0 (LANG-11).
+    check(&[
+        ("y=3; declare -i x; read x <<< 'y*2'; echo $x", "6"),
+        ("y=3; declare -i x; printf -v x '%s' 'y+10'; echo $x", "13"),
+        ("y=3; declare -ia a=(y+1 2*y); echo ${a[*]}", "4 6"),
+        (
+            "y=3; declare -ia b; b=(y+2 y*y); b+=(y+5); echo ${b[*]}",
+            "5 9 8",
+        ),
+        ("y=3; declare -i x; for x in y+100; do echo $x; done", "103"),
+        (
+            "y=3; declare -i r; read -a r <<< 'y 2*y'; echo ${r[*]}",
+            "3 6",
+        ),
+        ("y=3; declare -iA h; h+=([j]=y*3); echo ${h[j]}", "9"),
+        ("y=3; declare -i t; declare -n ref=t; ref=y+4; echo $t", "7"),
+        // `pid` is not `PID`, an integer found by the case-insensitive fallback (D31).
+        (
+            "read -r pid <<< PID; pid2=PID; declare pid3=PID; echo $pid $pid2 $pid3",
+            "PID PID PID",
+        ),
+    ]);
+}
+
+#[test]
+fn an_arithmetic_error_in_an_integer_assignment_is_reported() {
+    // It was silently 0 (LANG-11); the rest of the line is abandoned, as in Bash.
+    for script in [
+        "declare -i w; w=1/0; echo \"after $w\"",
+        "declare -i w; read w <<< 1/0; echo \"after $w\"",
+    ] {
+        let out = run(script);
+        assert_eq!(out.stdout, "", "{script}");
+        assert!(
+            out.stderr.contains("division by zero"),
+            "{script}: {}",
+            out.stderr
+        );
+    }
+}
+
+#[test]
+fn an_assigned_default_expands_to_the_value_stored() {
+    // It expanded to the text given, before the variable's attributes (LANG-18).
+    check(&[
+        ("declare -i x; echo ${x:=1+2} $x", "3 3"),
+        ("declare -u u; echo ${u:=abc} $u", "ABC ABC"),
+        ("declare -ia a; echo ${a[2]:=2*4}", "8"),
+        ("echo ${v:=plain} $v", "plain plain"),
+    ]);
+}

@@ -695,7 +695,8 @@ pub async fn assign_to_named_parameter(
     let parser_options = shell.parser_options();
     let mut expander = WordExpander::new(shell, params);
     let parameter = cash_parser::word::parse_parameter(name, &parser_options)?;
-    expander.assign_to_parameter(&parameter, value).await
+    expander.assign_to_parameter(&parameter, value).await?;
+    Ok(())
 }
 
 /// Like [`assign_to_named_parameter`], for a builtin (`printf -v`, `wait -p`).
@@ -712,6 +713,7 @@ pub async fn assign_to_named_parameter_in_builtin(
     if let cash_parser::word::Parameter::NamedWithIndex { name, index } = &parameter {
         let expand_once = shell.options().assoc_expand_once;
         let index = resolve_subscript(shell, params, name, index, false, expand_once).await?;
+        let value = shell.scalar_for_assignment(name, value)?;
         return shell.env_mut().update_or_add_array_element(
             name,
             index,
@@ -723,7 +725,8 @@ pub async fn assign_to_named_parameter_in_builtin(
     }
     WordExpander::new(shell, params)
         .assign_to_parameter(&parameter, value)
-        .await
+        .await?;
+    Ok(())
 }
 
 /// Resolves the subscript of a `name[subscript]` that reached a builtin as an argument.
@@ -1584,9 +1587,10 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
                     _ => {
                         let expanded_default = self.expand_parameter_word(default_value).await?;
                         let expanded_default_value = self.fields_to_string(expanded_default);
-                        self.assign_to_parameter(&parameter, expanded_default_value.clone())
+                        let stored = self
+                            .assign_to_parameter(&parameter, expanded_default_value)
                             .await?;
-                        Ok(Expansion::from(expanded_default_value))
+                        Ok(Expansion::from(stored))
                     }
                 }
             }
@@ -2127,7 +2131,7 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
         &mut self,
         parameter: &cash_parser::word::Parameter,
         value: T,
-    ) -> Result<(), error::Error> {
+    ) -> Result<String, error::Error> {
         let (variable_name, index) = match parameter {
             cash_parser::word::Parameter::Named(name) => (name, None),
             cash_parser::word::Parameter::NamedWithIndex { name, index } => {
@@ -2156,17 +2160,30 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
             }
         };
 
-        let value = value.into();
+        let value = self
+            .shell
+            .scalar_for_assignment(variable_name, value.into())?;
 
+        // The value stored, after the variable's attributes: `${x:=1+2}` with `-i` is 3
+        // and with `-u` upper case, as in Bash; it was the text given (LANG-18).
         if let Some(index) = index {
             self.shell.env_mut().update_or_add_array_element(
                 variable_name,
-                index,
+                index.clone(),
                 value,
                 |_| Ok(()),
                 env::EnvironmentLookup::Anywhere,
                 env::EnvironmentScope::Global,
-            )
+            )?;
+            let stored = self
+                .shell
+                .env()
+                .get(variable_name)
+                .map(|(_, var)| var.value().get_at(index.as_str(), self.shell))
+                .transpose()?
+                .flatten()
+                .map(Cow::into_owned);
+            Ok(stored.unwrap_or_default())
         } else {
             self.shell.env_mut().update_or_add(
                 variable_name,
@@ -2174,7 +2191,12 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
                 |_| Ok(()),
                 env::EnvironmentLookup::Anywhere,
                 env::EnvironmentScope::Global,
-            )
+            )?;
+            Ok(self
+                .shell
+                .env_str(variable_name)
+                .map(Cow::into_owned)
+                .unwrap_or_default())
         }
     }
 

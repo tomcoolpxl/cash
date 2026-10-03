@@ -397,6 +397,14 @@ impl ShellEnvironment {
         self.follow_namerefs(name)
     }
 
+    /// The variable an assignment to `name` lands on: through a name reference, and
+    /// spelled exactly, as `update_or_add` finds it. The case-insensitive fallback of
+    /// `get` (D31) would take `pid` for `PID`, an integer.
+    pub fn assignment_target(&self, name: &str) -> Option<&ShellVariable> {
+        let name = self.follow_namerefs(name)?;
+        self.get_using_policy(name.as_ref(), EnvironmentLookup::Anywhere)
+    }
+
     /// Follows a chain of name references to the name that is actually being talked
     /// about.
     ///

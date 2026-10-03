@@ -403,13 +403,22 @@ impl DeclareCommand {
             || context
                 .shell
                 .env()
-                .get(name.as_str())
-                .is_some_and(|(_, v)| v.is_treated_as_integer());
+                .assignment_target(name.as_str())
+                .is_some_and(ShellVariable::is_treated_as_integer);
+        // Each value is evaluated as arithmetic, an array's elements too: `declare -ia
+        // a=(y+1)` read `y` as 0, and an error such as `1/0` was silently 0 (LANG-11).
         if is_int_decl {
-            if let Some(ShellValueLiteral::Scalar(ref mut s)) = initial_value {
-                if let Ok(eval_val) = cash_core::arithmetic::evaluate_str(context.shell, s.as_str())
-                {
-                    *s = eval_val.to_string();
+            let values: Vec<&mut String> = match &mut initial_value {
+                Some(ShellValueLiteral::Scalar(s)) => vec![s],
+                Some(ShellValueLiteral::Array(ArrayLiteral(elements))) => {
+                    elements.iter_mut().map(|(_, value)| value).collect()
+                }
+                None => vec![],
+            };
+            for value in values {
+                if !value.trim().is_empty() {
+                    *value = cash_core::arithmetic::evaluate_str(context.shell, value.as_str())?
+                        .to_string();
                 }
             }
         }
