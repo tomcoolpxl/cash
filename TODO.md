@@ -58,12 +58,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ## Phase 12. Language (R7)
 
-### 12.1 Arrays
-
-- An index before the start, `a=(1 2); echo "${a[-3]}"`, ends a cash script with "array
-  index out of range"; Bash says `a: bad array subscript`, expands to nothing and goes
-  on (and `a[-3]=x` fails with status 1). Found while fixing LANG-03.
-
 ### 12.2 Here-documents
 
 - `eval "$(declare -f g)"` and `export -f g; bash -c g` fail for a function with a
@@ -133,6 +127,10 @@ Errors are ANSI-coloured into pipes and files and ignore `NO_COLOR`
 (`cash-shell/src/entry.rs:675`); three prefixes (`error:`, `cash:`, `name:`); `--help`
 goes to stdout or stderr, exit 0 or 2, by builtin. One "colour this stream" helper. XC-8,
 BIN-04, BI-16.
+
+An array index before the start (`a=(1 2)`): `${a[-3]}` expands to nothing in both
+shells, but Bash also says `a: bad array subscript`, and cash says nothing; `a[-3]=x`
+ends both with 1, cash saying `array index out of range: -3`. Found in phase 12.
 
 ### 13.5 D36: measure the pooled prompt job, then build it or drop it
 
