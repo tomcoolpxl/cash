@@ -1,6 +1,5 @@
 //! Create for brush, an executable bash-compatible shell.
 
-
 pub mod args;
 pub mod bundled;
 mod cashctl;
