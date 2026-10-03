@@ -1698,6 +1698,19 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
                     }
                     _ => false,
                 };
+                // An index before the start fails the command, as in Bash: `[-3]: bad
+                // array subscript`. Reading the element says so and goes on with nothing.
+                if let cash_parser::word::Parameter::NamedWithIndex { name, index } = &parameter
+                    && let Some(variable) = self.shell.env().get(name).map(|(_, var)| var.clone())
+                    && !variable.is_associative(self.shell)
+                {
+                    let index = self.expand_array_index(index.as_str(), false).await?;
+                    if let Err(e) = variable.value().get_at(&index, self.shell)
+                        && matches!(e.kind(), error::ErrorKind::ArrayIndexOutOfRange(_))
+                    {
+                        return Err(e);
+                    }
+                }
                 let expansion = if allow_unset {
                     self.expand_parameter_allowing_unset(&parameter, indirect)
                         .await?
@@ -2315,6 +2328,15 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
         (name, index, var)
     }
 
+    /// `name: bad array subscript`, said and gone on from, as Bash says it on reading an
+    /// element before the start of an indexed array.
+    fn report_bad_subscript(&self, name: &str) {
+        let warning = error::ErrorKind::ArrayIndexOutOfRange(name.to_owned()).into();
+        let _ = self
+            .shell
+            .display_error(&mut self.params.stderr(self.shell), &warning);
+    }
+
     fn undefined_expansion(
         &self,
         parameter: &cash_parser::word::Parameter,
@@ -2479,12 +2501,22 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
                     .await?;
 
                 // Index into the array.
-                if let Some((_, var)) = self.shell.env().get(name)
-                    && let Ok(Some(value)) = var.value().get_at(index_to_use.as_str(), self.shell)
-                {
-                    Ok(Expansion::from(value.to_string()))
-                } else {
-                    self.undefined_expansion(parameter, allow_unset_vars)
+                let found = self
+                    .shell
+                    .env()
+                    .get(name)
+                    .map(|(_, var)| var.value().get_at(index_to_use.as_str(), self.shell));
+                match found {
+                    Some(Ok(Some(value))) => Ok(Expansion::from(value.to_string())),
+                    // An index before the start is said, as Bash says it, and the
+                    // element is unset; cash said nothing.
+                    Some(Err(e))
+                        if matches!(e.kind(), error::ErrorKind::ArrayIndexOutOfRange(_)) =>
+                    {
+                        self.report_bad_subscript(name);
+                        self.undefined_expansion(parameter, allow_unset_vars)
+                    }
+                    _ => self.undefined_expansion(parameter, allow_unset_vars),
                 }
             }
             cash_parser::word::Parameter::NamedWithAllIndices { name, concatenate } => {

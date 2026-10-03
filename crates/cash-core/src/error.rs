@@ -297,7 +297,7 @@ pub enum ErrorKind {
     TimeError(#[from] std::time::SystemTimeError),
 
     /// Array index out of range.
-    #[error("array index out of range: {0}")]
+    #[error("{0}: bad array subscript")]
     ArrayIndexOutOfRange(String),
 
     /// A command substitution in a subscript that a builtin would expand a second time.
@@ -653,10 +653,13 @@ impl Error {
     /// variable and does not yet: `r: readonly variable`.
     #[must_use]
     pub fn of_variable(mut self, name: &str) -> Self {
-        if let ErrorKind::ReadonlyVariable(named) = &mut self.kind
-            && named.is_empty()
-        {
-            name.clone_into(named);
+        match &mut self.kind {
+            ErrorKind::ReadonlyVariable(named) if named.is_empty() => name.clone_into(named),
+            // `[-3]` becomes `a[-3]`, as Bash names the element of an assignment.
+            ErrorKind::ArrayIndexOutOfRange(element) if element.starts_with('[') => {
+                element.insert_str(0, name);
+            }
+            _ => {}
         }
         self
     }

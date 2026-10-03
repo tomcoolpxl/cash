@@ -234,3 +234,22 @@ fn help_goes_to_standard_output() {
     assert_eq!(out.stdout, "read 2\ntree 0", "{}", out.stderr);
     assert!(out.stderr.is_empty(), "{}", out.stderr);
 }
+
+#[test]
+fn an_index_before_the_start_is_a_bad_array_subscript() {
+    // Reading said nothing, `${#a[-3]}` gave 0, and the rest said `array index out of
+    // range: -3`; Bash says `bad array subscript`, naming each as here.
+    let scratch = Scratch::new("subscript");
+    std::fs::write(
+        scratch.path().join("s.sh"),
+        "a=(1 2)\necho \"[${a[-3]}] $?\"\necho \"len ${#a[-3]}\"\nunset 'a[-3]'; echo \"unset $?\"\na[-3]=x\necho \"assign $?\"\n",
+    )
+    .expect("write");
+    let out = output_of(cash_command().arg("s.sh").current_dir(scratch.path()));
+    assert_eq!(out.stdout, "[] 0\nunset 1\nassign 1", "{}", out.stderr);
+    assert_eq!(
+        out.stderr,
+        "s.sh: line 2: a: bad array subscript\ns.sh: line 3: [-3]: bad array subscript\n\
+         s.sh: line 4: unset: [-3]: bad array subscript\ns.sh: line 5: a[-3]: bad array subscript"
+    );
+}

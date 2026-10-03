@@ -60,10 +60,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 13.4 Error output: colour, prefixes, `--help`
 
-An array index before the start (`a=(1 2)`): `${a[-3]}` expands to nothing in both
-shells, but Bash also says `a: bad array subscript`, and cash says nothing; `a[-3]=x`
-ends both with 1, cash saying `array index out of range: -3`. Found in phase 12.
-
 An I/O error is worded by each builtin its own way: `cd`, `dos2unix`, `rev` and bc's
 `diag.rs` each map a few `io::ErrorKind`s to the C library's words, and the rest print
 Rust's ("The directory is not empty. (os error 145)"). `cash_core::error::os_error_text`
