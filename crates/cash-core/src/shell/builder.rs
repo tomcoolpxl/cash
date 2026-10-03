@@ -266,6 +266,7 @@ impl<SE: extensions::ShellExtensions> Default for Shell<SE> {
             subshell_level: 0,
             trace_level: 0,
             catches_fatal_errors: false,
+            word_substitution_ends: Vec::new(),
             name: None,
             args: vec![],
             version: None,

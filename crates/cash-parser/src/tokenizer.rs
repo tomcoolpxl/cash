@@ -245,7 +245,7 @@ impl Default for TokenizerOptions {
 
 /// A tokenizer for shell scripts.
 pub(crate) struct Tokenizer<'a, R: ?Sized + std::io::BufRead> {
-    char_reader: std::iter::Peekable<utf8_chars::Chars<'a, R>>,
+    char_reader: itertools::PeekNth<utf8_chars::Chars<'a, R>>,
     cross_state: CrossTokenParseState,
     options: TokenizerOptions,
 }
@@ -551,7 +551,7 @@ impl<'a, R: ?Sized + std::io::BufRead> Tokenizer<'a, R> {
     pub fn new(reader: &'a mut R, options: &TokenizerOptions) -> Self {
         Tokenizer {
             options: options.clone(),
-            char_reader: reader.chars().peekable(),
+            char_reader: itertools::peek_nth(reader.chars()),
             cross_state: CrossTokenParseState {
                 cursor: SourcePosition {
                     index: 0,
@@ -608,6 +608,15 @@ impl<'a, R: ?Sized + std::io::BufRead> Tokenizer<'a, R> {
                 Ok(c) => Ok(Some(*c)),
                 Err(_) => Err(TokenizerError::FailedDecoding),
             },
+            None => Ok(None),
+        }
+    }
+
+    /// The character after the next one, without consuming either.
+    fn peek_second_char(&mut self) -> Result<Option<char>, TokenizerError> {
+        match self.char_reader.peek_nth(1) {
+            Some(Ok(c)) => Ok(Some(*c)),
+            Some(Err(_)) => Err(TokenizerError::FailedDecoding),
             None => Ok(None),
         }
     }
@@ -1189,6 +1198,21 @@ impl<'a, R: ?Sized + std::io::BufRead> Tokenizer<'a, R> {
                     }
                 }
             //
+            // [bash] A process substitution inside a word is part of the word:
+            // `--file=<(cmd)`, `f=<(cmd)`. It ended the word there, and `--file=` and the
+            // substitution's path were two arguments. One that begins a word is still
+            // read as the operator it starts, as before.
+            } else if (c == '<' || c == '>')
+                && state.unquoted()
+                && !state.in_operator()
+                && state.started_token()
+                && matches!(self.peek_second_char()?, Some('('))
+            {
+                self.consume_char()?;
+                state.append_char(c);
+                state.append_char(self.next_peeked_char()?);
+                self.consume_nested_construct(&mut state, ')', "(", 1)?;
+            //
             // If the character *can* start an operator, then it will.
             //
             } else if state.unquoted() && Self::can_start_operator(c) {
@@ -1449,6 +1473,18 @@ mod tests {
             input,
             result: tokenize_str(input)?,
         })
+    }
+
+    #[test]
+    fn tokenize_process_substitution_inside_a_word() {
+        // Inside a word it is part of the word, as in Bash; at a word's start it is the
+        // operator, as before.
+        let words: Vec<String> = tokenize_str("echo --file=<(echo hi) <(x)")
+            .unwrap()
+            .iter()
+            .map(|token| token.to_str().to_owned())
+            .collect();
+        assert_eq!(words, ["echo", "--file=<(echo hi)", "<", "(", "x", ")"]);
     }
 
     #[test]

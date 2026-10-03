@@ -129,6 +129,12 @@ pub struct Shell<SE: extensions::ShellExtensions = extensions::DefaultShellExten
     /// ends it with 1, where at the top level it ends the shell with 127.
     catches_fatal_errors: bool,
 
+    /// The ends of the process substitutions expanded inside words (`--file=<(cmd)`) and
+    /// not yet taken by the command those words belong to
+    /// (`interp::start_word_process_substitution`).
+    #[cfg_attr(feature = "serde", serde(skip))]
+    word_substitution_ends: Vec<std::sync::Arc<crate::interp::SubstitutionEnd>>,
+
     /// Shell name
     name: Option<String>,
 
@@ -247,6 +253,7 @@ impl<SE: extensions::ShellExtensions> Clone for Shell<SE> {
             subshell_level: self.subshell_level,
             trace_level: self.trace_level,
             catches_fatal_errors: self.catches_fatal_errors,
+            word_substitution_ends: Vec::new(),
         }
     }
 }
@@ -373,6 +380,20 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
         subshell.catches_fatal_errors = true;
         subshell.subshell_level += 1;
         subshell
+    }
+
+    /// Keeps the end of a process substitution expanded inside a word until the command the
+    /// word belongs to takes it ([`Self::take_word_substitution_ends`]).
+    pub(crate) fn keep_word_substitution_end(&mut self, end: crate::interp::SubstitutionEnd) {
+        self.word_substitution_ends.push(std::sync::Arc::new(end));
+    }
+
+    /// The ends kept by [`Self::keep_word_substitution_end`], for the command whose words
+    /// were expanded to hold until it is done.
+    pub(crate) fn take_word_substitution_ends(
+        &mut self,
+    ) -> Vec<std::sync::Arc<crate::interp::SubstitutionEnd>> {
+        std::mem::take(&mut self.word_substitution_ends)
     }
 
     /// Counts this shell as a subshell one level deeper (`$BASH_SUBSHELL`), as a

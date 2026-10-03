@@ -1881,6 +1881,9 @@ impl<SE: extensions::ShellExtensions> ExecuteInPipeline<SE> for ast::SimpleComma
                             .into_iter()
                             .map(CommandArg::String)
                             .collect();
+                            params
+                                .substitution_ends
+                                .extend(context.shell.take_word_substitution_ends());
                             args.append(&mut next_args);
                         }
                     }
@@ -1889,6 +1892,10 @@ impl<SE: extensions::ShellExtensions> ExecuteInPipeline<SE> for ast::SimpleComma
                     let mut next_args =
                         expansion::full_expand_and_split_word(&mut context.shell, &params, arg)
                             .await?;
+                    // A process substitution inside the word lasts as long as the command.
+                    params
+                        .substitution_ends
+                        .extend(context.shell.take_word_substitution_ends());
 
                     if args.is_empty() {
                         if let Some(cmd_name) = next_args.first() {
@@ -1999,6 +2006,9 @@ impl<SE: extensions::ShellExtensions> ExecuteInPipeline<SE> for ast::SimpleComma
                 )
                 .await?;
             }
+            // A process substitution in the value (`f=<(cmd)`) ends with the statement, as
+            // Bash's descriptor is closed then.
+            drop(context.shell.take_word_substitution_ends());
 
             // Assignment-only statements clear $_ (set to empty string).
             // This matches bash behavior where assignments don't have a "last
@@ -2023,7 +2033,7 @@ impl<SE: extensions::ShellExtensions> ExecuteInPipeline<SE> for ast::SimpleComma
 
 async fn execute_command<T: Into<String>>(
     mut context: PipelineExecutionContext<'_, impl extensions::ShellExtensions>,
-    params: ExecutionParameters,
+    mut params: ExecutionParameters,
     cmd_name: T,
     assignments: &[&ast::Assignment],
     args: &[CommandArg],
@@ -2045,6 +2055,10 @@ async fn execute_command<T: Into<String>>(
         )
         .await?;
     }
+    // A process substitution in a prefix assignment's value lasts as long as the command.
+    params
+        .substitution_ends
+        .extend(guard.shell().take_word_substitution_ends());
 
     if guard.shell().options().print_commands_and_arguments {
         guard
@@ -3039,6 +3053,48 @@ async fn setup_process_substitution_path(
             Ok((rendered, Some(SubstitutionEnd::File(followed.done))))
         }
     }
+}
+
+/// Starts a process substitution written inside a word (`--file=<(cmd)`, `f=<(cmd)`),
+/// returning the path it expands to. Its end is kept with the shell until the command the
+/// word belongs to takes it (`Shell::take_word_substitution_ends`), as a substitution
+/// handed as an argument of its own is held by the command's parameters.
+///
+/// The command it is handed to is not known while its word is expanded, so a `<(…)` is
+/// the named pipe and a `>(…)` a temp file read as it is written (`SubstitutionPath`).
+pub(crate) async fn start_word_process_substitution<SE: extensions::ShellExtensions>(
+    shell: &mut Shell<SE>,
+    params: &ExecutionParameters,
+    kind: &ast::ProcessSubstitutionKind,
+    command: &str,
+) -> Result<String, error::Error> {
+    let program = shell.parse_string(command.to_owned()).map_err(|error| {
+        error::Error::from(error::ErrorKind::ParseError(
+            error,
+            crate::SourceInfo::from("process substitution"),
+        ))
+    })?;
+    let list = ast::CompoundList(
+        program
+            .complete_commands
+            .into_iter()
+            .flat_map(|list| list.0)
+            .collect(),
+    );
+    let subshell = ast::SubshellCommand {
+        list,
+        loc: cash_parser::SourceSpan::default(),
+    };
+    let handed = SubstitutionPath {
+        seekable: false,
+        pipe: false,
+    };
+    let (path, end) =
+        setup_process_substitution_path(shell, params, kind, &subshell, handed).await?;
+    if let Some(end) = end {
+        shell.keep_word_substitution_end(end);
+    }
+    Ok(path)
 }
 
 /// A new path for a process substitution's temp file, in the directory of this shell's.

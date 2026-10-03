@@ -101,6 +101,8 @@ mod pipeline_concurrency;
 mod pipeline_errors;
 // How a test asks whether a process is gone, when its pid may be another's by now.
 mod process_identity;
+// A `<(…)` inside a word, as in `--file=<(cmd)`, is part of the word.
+mod process_substitution_words;
 // D48: `ps`, which uutils does not carry.
 mod ps_builtin;
 mod pure_bash_corpus;

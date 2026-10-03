@@ -350,9 +350,13 @@ impl<'a, SE: cash_core::ShellExtensions> Highlighter<'a, SE> {
                 );
                 self.set_next_missing_kind(HighlightKind::CommandSubstitution);
             }
-            cash_parser::word::WordPiece::CommandSubstitution(command) => {
+            cash_parser::word::WordPiece::CommandSubstitution(command)
+            | cash_parser::word::WordPiece::ProcessSubstitution { command, .. } => {
                 self.set_next_missing_kind(HighlightKind::CommandSubstitution);
-                self.highlight_program(command.as_str(), piece.start + 2 /* opening $( */);
+                self.highlight_program(
+                    command.as_str(),
+                    piece.start + 2, /* opening $( or <( */
+                );
                 self.set_next_missing_kind(HighlightKind::CommandSubstitution);
             }
             cash_parser::word::WordPiece::CurrentShellCommandSubstitution { command, reply } => {

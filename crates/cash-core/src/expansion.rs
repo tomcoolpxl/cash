@@ -990,7 +990,10 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
         } else {
             &['$', '`', '\\', '\'', '\"', '~', '{']
         };
-        if !word.contains(expansion_chars) {
+        // A process substitution inside the word (`--file=<(cmd)`) is one too.
+        let has_substitution =
+            self.literal_quotes.is_none() && (word.contains("<(") || word.contains(">("));
+        if !word.contains(expansion_chars) && !has_substitution {
             return Ok(Expansion::from(ExpansionPiece::UnquotedLiteral(
                 word.to_owned(),
             )));
@@ -1263,6 +1266,17 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
             }
             cash_parser::word::WordPiece::ParameterExpansion(p) => {
                 self.expand_parameter_expr(p).await?
+            }
+            cash_parser::word::WordPiece::ProcessSubstitution { kind, command } => {
+                // Its path is one field, never split or matched as a pattern.
+                let path = crate::interp::start_word_process_substitution(
+                    self.shell,
+                    self.params,
+                    &kind,
+                    &command,
+                )
+                .await?;
+                Expansion::from(ExpansionPiece::Unsplittable(path))
             }
             cash_parser::word::WordPiece::BackquotedCommandSubstitution(s)
             | cash_parser::word::WordPiece::CommandSubstitution(s) => {

@@ -68,6 +68,13 @@ pub enum WordPiece {
     EscapeSequence(String),
     /// An arithmetic expression.
     ArithmeticExpression(ast::UnexpandedArithmeticExpr),
+    /// A process substitution inside a word: `<(cmd)` in `--file=<(cmd)`.
+    ProcessSubstitution {
+        /// Whether the command's output is read (`<(…)`) or its input written (`>(…)`).
+        kind: ast::ProcessSubstitutionKind,
+        /// The command.
+        command: String,
+    },
 }
 
 /// Represents an expandable tilde expression (e.g., ~).
@@ -1025,8 +1032,24 @@ peg::parser! {
             normal_escape_sequence() /
             // Allow tilde expression to be matched as a word piece (for tilde-after-colon expansion)
             enabled_tilde_expr_after_colon() /
+            // A process substitution inside a word; inside a command it is that command's text.
+            !is_true(in_command) p:process_substitution() { p } /
             // Finally, match unquoted literal text.
             unquoted_literal_text(<stop_condition()>, in_command)
+
+        rule process_substitution() -> WordPiece =
+            "<(" c:command() ")" {
+                WordPiece::ProcessSubstitution {
+                    kind: ast::ProcessSubstitutionKind::Read,
+                    command: c.to_owned(),
+                }
+            } /
+            ">(" c:command() ")" {
+                WordPiece::ProcessSubstitution {
+                    kind: ast::ProcessSubstitutionKind::Write,
+                    command: c.to_owned(),
+                }
+            }
 
         rule dollar_sign_word_piece() -> WordPiece =
             arithmetic_expansion() /
@@ -1073,7 +1096,12 @@ peg::parser! {
             is_true(in_command) extglob_pattern() /
             is_true(in_command) case_command() /
             is_true(in_command) subshell_command() /
-            !stop_condition() !normal_escape_sequence() !enabled_tilde_expr_after_colon() [^'\'' | '\"' | '$' | '`'] {}
+            !stop_condition() !normal_escape_sequence() !enabled_tilde_expr_after_colon() !process_substitution_start(in_command) [^'\'' | '\"' | '$' | '`'] {}
+
+        // Where a process substitution inside a word begins, which ends literal text; inside a
+        // command's text it is that command's.
+        rule process_substitution_start(in_command: bool) =
+            !is_true(in_command) ['<' | '>'] "(" {}
 
         // cash (D2): a `case` construct inside `$( ... )` must be consumed whole.
         //
@@ -1679,6 +1707,33 @@ mod tests {
 
         assert_ron_snapshot!(test_parse(r#"$(echo "hi")"#)?);
         Ok(())
+    }
+
+    #[test]
+    fn parse_process_substitution_inside_a_word() {
+        // `--file=<(cmd)` is text and a substitution, as Bash reads it; the substitution
+        // ended the word and became an argument of its own.
+        let pieces = super::parse("--file=<(echo hi)", &ParserOptions::default()).unwrap();
+        assert!(matches!(&pieces[0].piece, WordPiece::Text(text) if text == "--file="));
+        assert!(matches!(
+            &pieces[1].piece,
+            WordPiece::ProcessSubstitution { kind: ast::ProcessSubstitutionKind::Read, command }
+                if command == "echo hi"
+        ));
+        let pieces = super::parse("x>(cat)", &ParserOptions::default()).unwrap();
+        assert!(matches!(
+            &pieces[1].piece,
+            WordPiece::ProcessSubstitution {
+                kind: ast::ProcessSubstitutionKind::Write,
+                ..
+            }
+        ));
+        // Inside a command substitution it is the command's own text.
+        let pieces = super::parse("$(cat a<(echo x))", &ParserOptions::default()).unwrap();
+        assert!(
+            matches!(&pieces[0].piece, WordPiece::CommandSubstitution(command)
+            if command == "cat a<(echo x)")
+        );
     }
 
     #[test]

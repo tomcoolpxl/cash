@@ -40,7 +40,7 @@ fn parse_arithmetic_complex() -> Result<()> {
 }
 
 #[test]
-fn parse_double_paren_apart_as_nested_subshells() -> Result<()> {
+fn parse_double_paren_apart_as_nested_subshells() {
     // `((` and `))` written together are an arithmetic command, as Bash reads them; apart
     // they are two subshells. Any two parentheses were taken for one, and
     // `( ( echo nested ) )` failed as arithmetic.
@@ -50,17 +50,16 @@ fn parse_double_paren_apart_as_nested_subshells() -> Result<()> {
         "( (echo b))",
         "(( 1 ) )",
     ] {
-        let program = format!("{:?}", test_with_snapshot(input)?);
+        let program = format!("{:?}", test_with_snapshot(input).unwrap());
         assert!(
             program.contains("Subshell") && !program.contains("Arithmetic"),
             "{input}: {program}"
         );
     }
     for input in ["((echo a))", "(( (1+2)*3 == 9 ))"] {
-        let program = format!("{:?}", test_with_snapshot(input)?);
+        let program = format!("{:?}", test_with_snapshot(input).unwrap());
         assert!(program.contains("Arithmetic"), "{input}: {program}");
     }
-    Ok(())
 }
 
 // Arithmetic for clause

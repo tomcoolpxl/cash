@@ -57,11 +57,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ## Phase 12. Language (R7)
 
-### 12.0 Found while fixing phase 11
-
-- `f=<(seq 1 5)` is a syntax error in cash; Bash expands the substitution and assigns
-  its path. Found while fixing 11.4.
-
 ### 12.1 Arrays
 
 - `c=([2+1]=y z [i]=w)` puts everything on 0 and 1; Bash `[2] [3] [4]`. LANG-02.
