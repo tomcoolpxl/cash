@@ -40,3 +40,13 @@ fn a_shift_after_a_nested_arithmetic_expansion_is_a_shift() {
         ("echo $[ $[1] << 2 ]", "4"),
     ]);
 }
+
+#[test]
+fn a_backslash_newline_joins_lines_in_an_unquoted_here_document() {
+    // Both were kept (PI-04); a quoted here-document keeps them, as in Bash.
+    check(&[
+        ("cat <<EOF\none \\\ntwo\nEOF", "one two"),
+        ("cat <<'EOF'\nquoted \\\nstays\nEOF", "quoted \\\nstays"),
+        ("x=$(cat <<EOF\nin \\\nsub\nEOF\n)\necho \"$x\"", "in sub"),
+    ]);
+}

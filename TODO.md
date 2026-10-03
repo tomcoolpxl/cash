@@ -62,7 +62,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 - A `)` in a here-doc inside `$(…)` ends it early (`word.rs:1453`; the tokenizer's own
   scanner is right). PI-02.
-- Backslash-newline is kept in an unquoted here-doc. PI-04.
 
 ### 12.3 Smaller expansion differences
 
