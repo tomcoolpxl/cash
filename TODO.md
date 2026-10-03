@@ -62,9 +62,7 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 Errors cash does not report at all: `echo "${x!@#}"` prints `${x!@#}` where Bash says
 `${x!@#}: bad substitution` and fails, and `"${a[}"` prints itself where Bash says
-``bad substitution: no closing `}' in "${a[}"``; `[ 1 -eq x ]` is quietly false where
-Bash says `[: x: integer expected` and returns 2, and `test 1 -eq` says `invalid test
-command` where Bash says `test: 1: unary operator expected`; `declare -A a; declare -a a` (and the
+``bad substitution: no closing `}' in "${a[}"``; `declare -A a; declare -a a` (and the
 other way round) changes nothing and says nothing, where Bash says `declare: a: cannot
 convert associative to indexed array` and returns 1. Found in 1.3.12 surveying error
 output.

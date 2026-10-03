@@ -40,7 +40,7 @@ impl builtins::Command for TestCommand {
             match args.last() {
                 Some(s) if s == "]" => (),
                 None | Some(_) => {
-                    writeln!(context.error_stream(), "[: missing ']'")?;
+                    writeln!(context.error_stream(), "[: missing `]'")?;
                     return Ok(ExecutionExitCode::InvalidUsage.into());
                 }
             }
@@ -61,7 +61,40 @@ async fn execute_test(
     params: &ExecutionParameters,
     args: &[String],
 ) -> Result<bool, cash_core::Error> {
-    let test_command =
-        cash_parser::test_command::parse(args).map_err(ErrorKind::TestCommandParseError)?;
+    let test_command = cash_parser::test_command::parse(args)
+        .map_err(|_| ErrorKind::TestError(complaint(args)))?;
     tests::eval_expr(&test_command, shell, params).await
+}
+
+/// Bash's complaint about arguments `test` cannot read, found as Bash finds it, by their
+/// number (POSIX's rules): two that are not `! x` or a unary test are `1: unary operator
+/// expected`, three without a binary operator `a: binary operator expected`, and more
+/// `argument expected` when an operator ends them, `too many arguments` otherwise. cash
+/// said `invalid test command`.
+fn complaint(args: &[String]) -> String {
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    complaint_for(&args)
+}
+
+fn complaint_for(args: &[&str]) -> String {
+    match args {
+        ["!", rest @ ..] if (2..=4).contains(&args.len()) && rest.len() >= 2 => complaint_for(rest),
+        ["(", inner @ .., ")"] if args.len() == 4 => complaint_for(inner),
+        [first, _] => format!("{first}: unary operator expected"),
+        [_, second, _] => format!("{second}: binary operator expected"),
+        [.., last] if is_operator(last) => "argument expected".to_owned(),
+        _ => "too many arguments".to_owned(),
+    }
+}
+
+/// Whether `word` is an operator of `test`'s that needs an operand after it.
+fn is_operator(word: &str) -> bool {
+    matches!(
+        word,
+        "!" | "-a" | "-o" | "(" | "=" | "==" | "!=" | "<" | ">"
+    ) || (word.len() == 2 && word.starts_with('-'))
+        || matches!(
+            word,
+            "-eq" | "-ne" | "-lt" | "-le" | "-gt" | "-ge" | "-nt" | "-ot" | "-ef"
+        )
 }

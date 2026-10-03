@@ -256,6 +256,11 @@ pub enum ErrorKind {
     #[error("{}: {}", .0, os_error_text(.1))]
     FileError(String, std::io::Error),
 
+    /// `test` or `[` refused its arguments, worded as Bash words it: `x: integer
+    /// expected`, `1: unary operator expected`, `too many arguments`. Status 2.
+    #[error("{0}")]
+    TestError(String),
+
     /// `unset` of a readonly variable.
     #[error("{0}: cannot unset: readonly variable")]
     CannotUnsetReadonly(String),
@@ -456,6 +461,7 @@ impl From<&ErrorKind> for results::ExecutionExitCode {
             }
             ErrorKind::FunctionNameShadowsSpecialBuiltin { .. } => Self::InvalidUsage,
             ErrorKind::EnvShebang(..) => Self::Custom(125),
+            ErrorKind::TestError(_) => Self::InvalidUsage,
             // 128 + SIGINT, the status Bash leaves after Ctrl-C.
             ErrorKind::Interrupted => Self::Interrupted,
             ErrorKind::IoError(io_err) => io_err.into(),

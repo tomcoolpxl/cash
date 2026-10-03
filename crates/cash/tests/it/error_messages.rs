@@ -351,3 +351,34 @@ fn an_arithmetic_error_names_the_expression_and_its_token() {
         out.stderr
     );
 }
+
+#[test]
+fn test_says_what_it_cannot_read_and_returns_2() {
+    // `[ 1 -eq x ]` was quietly false, and the rest `invalid test command`.
+    for (script, expected) in [
+        ("[ 1 -eq x ]", "[: x: integer expected"),
+        (
+            "[ 1 -gt 99999999999999999999 ]",
+            "[: 99999999999999999999: integer expected",
+        ),
+        ("test 1 -eq", "test: 1: unary operator expected"),
+        ("[ -z a b ]", "[: a: binary operator expected"),
+        ("[ a = b c ]", "[: too many arguments"),
+        ("[ 1 -eq 1 -a ]", "[: argument expected"),
+        ("[ ! a = ]", "[: a: unary operator expected"),
+        ("[ 1 -eq 1", "[: missing `]'"),
+    ] {
+        let out = run(&format!("{script}; echo \"rc $?\""));
+        assert_eq!(out.stdout, "rc 2", "{script}: {}", out.stderr);
+        assert!(
+            out.stderr.ends_with(&format!("line 1: {expected}")),
+            "{script}: {}",
+            out.stderr
+        );
+    }
+    // Blanks around a number are allowed, as in Bash, and `[[` reads arithmetic.
+    assert_eq!(
+        run("[ ' 3 ' -eq 3 ] && [[ 1 -eq x ]] || echo ok").stdout,
+        "ok"
+    );
+}

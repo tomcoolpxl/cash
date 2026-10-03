@@ -682,32 +682,24 @@ pub(crate) fn apply_binary_predicate_to_strs(
             // TODO(test): According to docs, should be lexicographical order of the current locale.
             Ok(left > right)
         }
-        ast::BinaryPredicate::ArithmeticEqualTo => Ok(apply_test_binary_arithmetic_predicate(
-            left,
-            right,
-            |left, right| left == right,
-        )),
-        ast::BinaryPredicate::ArithmeticNotEqualTo => Ok(apply_test_binary_arithmetic_predicate(
-            left,
-            right,
-            |left, right| left != right,
-        )),
-        ast::BinaryPredicate::ArithmeticLessThan => Ok(apply_test_binary_arithmetic_predicate(
-            left,
-            right,
-            |left, right| left < right,
-        )),
-        ast::BinaryPredicate::ArithmeticLessThanOrEqualTo => Ok(
-            apply_test_binary_arithmetic_predicate(left, right, |left, right| left <= right),
-        ),
-        ast::BinaryPredicate::ArithmeticGreaterThan => Ok(apply_test_binary_arithmetic_predicate(
-            left,
-            right,
-            |left, right| left > right,
-        )),
-        ast::BinaryPredicate::ArithmeticGreaterThanOrEqualTo => Ok(
-            apply_test_binary_arithmetic_predicate(left, right, |left, right| left >= right),
-        ),
+        ast::BinaryPredicate::ArithmeticEqualTo => {
+            apply_test_binary_arithmetic_predicate(left, right, |left, right| left == right)
+        }
+        ast::BinaryPredicate::ArithmeticNotEqualTo => {
+            apply_test_binary_arithmetic_predicate(left, right, |left, right| left != right)
+        }
+        ast::BinaryPredicate::ArithmeticLessThan => {
+            apply_test_binary_arithmetic_predicate(left, right, |left, right| left < right)
+        }
+        ast::BinaryPredicate::ArithmeticLessThanOrEqualTo => {
+            apply_test_binary_arithmetic_predicate(left, right, |left, right| left <= right)
+        }
+        ast::BinaryPredicate::ArithmeticGreaterThan => {
+            apply_test_binary_arithmetic_predicate(left, right, |left, right| left > right)
+        }
+        ast::BinaryPredicate::ArithmeticGreaterThanOrEqualTo => {
+            apply_test_binary_arithmetic_predicate(left, right, |left, right| left >= right)
+        }
         ast::BinaryPredicate::StringExactlyMatchesPattern => {
             let pattern = patterns::Pattern::from(right)
                 .set_extended_globbing(shell.options().extended_globbing)
@@ -729,20 +721,22 @@ pub(crate) fn apply_binary_predicate_to_strs(
     }
 }
 
+/// `test`'s `-eq` and the rest, on decimal integers as Bash reads them: blanks around
+/// them are allowed, anything else, or a number past 64 bits, is `x: integer expected`,
+/// status 2. cash took them for false and said nothing.
 fn apply_test_binary_arithmetic_predicate(
     left: &str,
     right: &str,
     op: fn(i64, i64) -> bool,
-) -> bool {
-    // We trim leading/trailing whitespace (including newlines) before parsing integers.
-    let left: Result<i64, _> = left.trim().parse();
-    let right: Result<i64, _> = right.trim().parse();
-
-    if let (Ok(left), Ok(right)) = (left, right) {
-        op(left, right)
-    } else {
-        false
-    }
+) -> Result<bool, error::Error> {
+    let integer = |operand: &str| {
+        operand.trim().parse::<i64>().map_err(|_| {
+            error::Error::from(error::ErrorKind::TestError(format!(
+                "{operand}: integer expected"
+            )))
+        })
+    };
+    Ok(op(integer(left)?, integer(right)?))
 }
 
 fn left_file_is_older_or_does_not_exist_when_right_does(
