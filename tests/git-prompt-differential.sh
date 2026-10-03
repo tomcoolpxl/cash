@@ -366,11 +366,12 @@ t P-pc-upstream up-diverged 'GIT_PS1_SHOWUPSTREAM="verbose name"; __git_ps1 "\W"
 t P-cmdsub-color allflags 'GIT_PS1_SHOWCOLORHINTS=1 GIT_PS1_SHOWDIRTYSTATE=1; PS1="\W\$(__git_ps1)\\\$ "; printf "%s" "${PS1@P}"'
 
 # --- Git for Windows' profile.d/git-prompt.sh, which sources git-completion.bash too.
-# Its PS1 shows $PWD (C:/ in cash, /c/ in Git Bash) and \h (%COMPUTERNAME% in cash, the
-# DNS host name in Git Bash); both are masked before expanding it.
+# Its PS1 shows $PWD (C:/ in cash, /c/ in Git Bash), \h (%COMPUTERNAME% in cash, the
+# DNS host name in Git Bash) and \u (whoever froze the output, or runneradmin on CI);
+# all three are masked before expanding it.
 if [[ -f $PD ]]; then
     t pd-ps1 clean "MSYSTEM=MINGW64; . '$PD'; printf '%s\n' \"\$PS1\" \"\$TITLEPREFIX\"; shopt -p no_empty_cmd_completion"
-    t pd-expand dirty-w "MSYSTEM=MINGW64; . '$PD'; PS1=\${PS1//\\\$PWD/PWD}; PS1=\${PS1//\\\\h/HOST}; printf '%s' \"\${PS1@P}\""
+    t pd-expand dirty-w "MSYSTEM=MINGW64; . '$PD'; PS1=\${PS1//\\\$PWD/PWD}; PS1=\${PS1//\\\\h/HOST}; PS1=\${PS1//\\\\u/USER}; printf '%s' \"\${PS1@P}\""
     t pd-complete-spec clean "MSYSTEM=MINGW64; . '$PD'; complete -p git gitk"
     t pd-userconfig pd-config "mkdir -p .config/git; echo 'PS1=custom' >.config/git/git-prompt.sh; HOME=\$PWD; MSYSTEM=MINGW64; . '$PD'; echo \"\$PS1\"; rm -r .config"
 
