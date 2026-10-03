@@ -1098,10 +1098,24 @@ impl SourceLocation for FunctionDefinition {
 
 impl Display for FunctionDefinition {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Inside another, Bash writes the keyword: `function g () `.
+        if FUNCTIONS_BEING_WRITTEN.get() > 0 {
+            write!(f, "function ")?;
+        }
         writeln!(f, "{} () ", self.fname.value)?;
-        write!(f, "{}", self.body)?;
-        Ok(())
+        FUNCTIONS_BEING_WRITTEN.set(FUNCTIONS_BEING_WRITTEN.get() + 1);
+        let written = write!(f, "{}", self.body);
+        FUNCTIONS_BEING_WRITTEN.set(FUNCTIONS_BEING_WRITTEN.get().saturating_sub(1));
+        written
     }
+}
+
+thread_local! {
+    /// How many function definitions are being written: a brace group inside one is
+    /// written over several lines, as `declare -f` shows it, and one outside on one
+    /// line, as `jobs` shows `{ sleep 1; } &`. Bash's `print_cmd.c` keeps the same
+    /// count (`inside_function_def`).
+    static FUNCTIONS_BEING_WRITTEN: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// Encapsulates the body of a function definition.
@@ -1167,6 +1181,18 @@ impl SourceLocation for BraceGroupCommand {
 
 impl Display for BraceGroupCommand {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if FUNCTIONS_BEING_WRITTEN.get() == 0 {
+            // One line, each command with its separator, as Bash writes a job's:
+            // `{ sleep 1; sleep 0; }`, `{ sleep 1 & sleep 1; }`.
+            write!(f, "{{ ")?;
+            for item in &self.list.0 {
+                match item.1 {
+                    SeparatorOperator::Async => write!(f, "{} & ", item.0)?,
+                    SeparatorOperator::Sequence => write!(f, "{}; ", item.0)?,
+                }
+            }
+            return write!(f, "}}");
+        }
         writeln!(f, "{{ ")?;
         write!(
             indenter::indented(f).with_str(DISPLAY_INDENT),
@@ -1572,9 +1598,12 @@ impl SourceLocation for RedirectList {
 }
 
 impl Display for RedirectList {
+    /// Each redirection after a space, as Bash writes them after a compound command or a
+    /// function's body: `{ x; } > a 2> b`. They were written together and against the
+    /// brace: `{ x; }> a2> b`.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for item in &self.0 {
-            write!(f, "{item}")?;
+            write!(f, " {item}")?;
         }
         Ok(())
     }

@@ -128,3 +128,21 @@ fn subshells_at_once_are_limited_to_256() {
         out.stderr
     );
 }
+
+#[test]
+fn a_job_is_written_as_bash_writes_it() {
+    // A brace group was written over several lines, and its redirections against the
+    // brace; Bash's `jobs` writes one line, and `declare -f` keeps the lines (11.6).
+    check(&[
+        (
+            "{ sleep 1; sleep 0; } & { sleep 1 & sleep 1; } & { sleep 1; } > /dev/null & jobs; wait",
+            "[1]   Running                    { sleep 1; sleep 0; } &\n\
+             [2]-  Running                    { sleep 1 & sleep 1; } &\n\
+             [3]+  Running                    { sleep 1; } > /dev/null &",
+        ),
+        (
+            "f() { { echo a; }; g() { :; }; } > /dev/null; declare -f f",
+            "f () \n{ \n    { \n        echo a\n    };\n    function g () \n    { \n        :\n    }\n} > /dev/null",
+        ),
+    ]);
+}

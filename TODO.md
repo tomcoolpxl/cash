@@ -77,11 +77,6 @@ The riskiest phase: judge its runs on an idle machine (Decided, below).
 
 ### 11.6 Found while fixing 11.1
 
-- `f=<(seq 1 5)` is a syntax error in cash; Bash expands the substitution and assigns
-  its path. Found while fixing 11.4.
-- `jobs` writes a brace group over several lines: `{ sleep 1; } & jobs` shows `{`,
-  `sleep 1` and `} &` on lines of their own, where Bash writes `{ sleep 1; } &` (a
-  `while` loop takes several lines in both). Found while fixing 11.3.
 
 ---
 
@@ -92,6 +87,8 @@ The riskiest phase: judge its runs on an idle machine (Decided, below).
 - `( ( echo nested ) )` is a parse error ("arithmetic evaluation error: failed to parse
   expression"): cash reads the two parentheses as `((`, though a space is between them.
   Bash runs two nested subshells, and needs `((` written together for arithmetic.
+- `f=<(seq 1 5)` is a syntax error in cash; Bash expands the substitution and assigns
+  its path. Found while fixing 11.4.
 
 ### 12.1 Arrays
 
