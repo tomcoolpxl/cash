@@ -85,11 +85,69 @@ then the riskiest changes once the crashes and state bugs are out of the way.
   options in subshell not yet supported", where Bash runs it: a subshell is in cash's own
   process, so its `exec` runs the command through `command`, which takes none of them.
   `(exec -a foo bash -c 'echo $0')` prints `foo` in Bash. Seen 2026-10-04 fixing EXE-12.
-- The Low findings not listed in phases 8 to 14 are in the report, §5.
+### 14.7 The review's §5 findings no phase took up
+
+Each from `REVIEW_REPORT.md` §5, found in no commit on 2026-10-04; reproduce first, as
+some may have gone with other work.
+
+- XC-6: two D31 name tables (24 and 8 names), the short one used; `declare -p` shows
+  `Lang=`, `ComSpec=`.
+- PI-12: `$$'…'` and `\$'…'` open ANSI-C quoting.
+- PI-08: `READLINE_LINE` replacement clears only the first line of a multi-line buffer
+  (Ctrl-X Ctrl-E, `bind -x`).
+- PI-10: highlighting checks a command with a slash synchronously on every key; an
+  offline UNC path stalls typing.
+- BI-14: `ls | head -1` reports "pipe is being closed", exit 2; `ls -R` hides errors in
+  subdirectories.
+- BI-15: `kill -s 0`, `kill -l 137` and the message for `kill abc` differ from Bash;
+  `kill -l` lacks a final newline.
+- BI-18: xargs' budget counts unquoted bytes; it reads all of stdin before starting, and
+  accepts an unmatched quote.
+- BIN-03: `--remove-terminal-profile` cuts a whole `newTabMenu` folder that holds the
+  cash entry.
+- BIN-06: `cash doctor` always says "inside another job object", asking after cash made
+  its own.
+- BIN-07: a path-rendering bundled tool runs twice if reading its output fails (a second
+  `mktemp` file).
+- BIN-09: `CASH_LINKED_TOOL_EXE` is inherited by every descendant.
+- BIN-10, BIN-11, BIN-12: a symlinked settings.json becomes a file; a failed folder
+  delete leaves the menu entry; links made before an error are not recorded.
+- BIN-13: `--enable-highlighting` cannot override `false` in config.toml, and its test
+  asserts the default.
+- BIN-14: a recovered panic still prints "cash had a problem and crashed" and writes a
+  crash report to `%TEMP%`.
+- W32-13, W32-14, XC-13: five RAII handle types and 15+ manual `CloseHandle`s, three
+  leaking on error in `pipe.rs`; about 12 copies of the UTF-16 encoder.
+- W32-15: `GetLastError` read after other calls; HRESULT and NTSTATUS through
+  `from_raw_os_error`.
+- W32-16: suspend takes a system-wide thread snapshot per tree member; `real_case` reads
+  a whole directory.
+- W32-18: `CASH_EXE` and `CARGO_BIN_EXE_cash` redirect every `#!/bin/sh` script in
+  production.
+- W32-19, W32-20: a registry enumeration spins on persistent errors; a lone surrogate
+  drops the next unit.
+- XC-12, XC-14, XC-16: three process-creation paths and two environment-block builders;
+  paths shown via `replace('\\','/')` past the D10 chokepoint; case folding mixes ASCII
+  and Unicode.
+- XC-18: `TerminalInfo` has 48 bools, two read; D39 promises OSC 133 and 9;9, only 633
+  is emitted.
+- XC-19: each process substitution builds a tokio runtime; `block_in_place` in `read -e`'s
+  Tab would panic on a current-thread runtime.
+- PI-20, LANG-25: char and byte offsets rebuilt in three consumers; two metacharacter
+  tables disagree.
+- ARCH-16: `human-panic` pulls `sysinfo` and `windows` 0.62 (the other duplicates went
+  with ARCH-17).
 
 ---
 
 ## Decided, written down so it is not decided twice
+
+- **A cash started as `sh` runs in POSIX mode, as Bash does** (the user, 2026-10-04):
+  `sh -c`, `exec sh`, `#!/bin/sh` and `#!/usr/bin/env sh` turn on `set -o posix`, every
+  builtin kept. Keeping D7's "no modes", with `sh` plain cash, was turned down. Spec D7.
+- **A program in a folder too long for Windows starts in its 8.3 short name** (the user,
+  2026-10-04), and fails saying why where there is none that fits. A clear error alone,
+  as Git Bash gives for native programs, was turned down. Spec D29, §4 row 45.
 
 - **The MSRV is the pinned toolchain's minor, 1.98** (the user, 2026-10-04): it is the
   only Rust CI builds with, so it is the only one promised; it rises with
