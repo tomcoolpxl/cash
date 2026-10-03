@@ -622,6 +622,37 @@ const fn starts_with_drive_backslash(word: &str) -> bool {
 ///
 /// Kept characters become single-quoted text so they are literal in a glob pattern
 /// too, just as they would be had the user quoted the path.
+/// Where the body of a here-document that starts at `start` ends: past its end line, a line
+/// that is the delimiter, after tabs when `strip_tabs` (`<<-`). `None` when there is none.
+fn here_document_body_end(
+    input: &str,
+    start: usize,
+    delimiter: &str,
+    strip_tabs: bool,
+) -> Option<usize> {
+    let mut pos = start;
+    loop {
+        let rest = input.get(pos..)?;
+        let (line, next) = match rest.split_once('\n') {
+            Some((line, _)) => (line, pos + line.len() + 1),
+            None => (rest, input.len()),
+        };
+        let line = line.strip_suffix('\r').unwrap_or(line);
+        let line = if strip_tabs {
+            line.trim_start_matches('\t')
+        } else {
+            line
+        };
+        if line == delimiter {
+            return Some(next);
+        }
+        if next >= input.len() {
+            return None;
+        }
+        pos = next;
+    }
+}
+
 /// Characters a Windows file name can start with that a backslash before them in bash
 /// only removes, never gives meaning: letters, digits and `. _ - $ @ + % , = ^ ~ # [ ] { }`.
 /// (`{` and `}` so that a `{GUID}` folder stays one literal name.)
@@ -1096,7 +1127,13 @@ peg::parser! {
             is_true(in_command) extglob_pattern() /
             is_true(in_command) case_command() /
             is_true(in_command) subshell_command() /
-            !stop_condition() !normal_escape_sequence() !enabled_tilde_expr_after_colon() !process_substitution_start(in_command) [^'\'' | '\"' | '$' | '`'] {}
+            is_true(in_command) "<<<" /
+            !stop_condition() !normal_escape_sequence() !enabled_tilde_expr_after_colon() !process_substitution_start(in_command) !here_document_start(in_command) [^'\'' | '\"' | '$' | '`'] {}
+
+        // Where a here-document begins inside a command's text, which ends the text so that
+        // the here-document is read whole (PI-02).
+        rule here_document_start(in_command: bool) =
+            is_true(in_command) here_document_in_command() {}
 
         // Where a process substitution inside a word begins, which ends literal text; inside a
         // command's text it is that command's.
@@ -1491,9 +1528,63 @@ peg::parser! {
             $(command_piece()*)
 
         pub(crate) rule command_piece() -> () =
+            here_document_in_command() {} /
             word_piece(<[')']>, true /*in_command*/) {} /
             ([' ' | '\t'])+ {} /
             ['\'' | '`'] {}
+
+        // A here-document inside a command substitution, read to its end, so that a `)` in
+        // its body does not end the substitution: `$(cat <<EOF` with `a ) b` in the body
+        // ended at that `)` (PI-02). The rest of the line it starts on is the command's,
+        // and the bodies of the others that start on it follow in order. One whose end is
+        // not found is left to the rules after it.
+        rule here_document_in_command() =
+            tags:here_document_tags() here_document_bodies(&tags) {}
+
+        // The delimiter of each here-document that starts on this line, and whether its
+        // operator is `<<-`, which lets tabs come before the end.
+        rule here_document_tags() -> Vec<(String, bool)> =
+            first:here_document_operator() rest:here_document_line_part()* "\n" {
+                let mut tags = vec![first];
+                tags.extend(rest.into_iter().flatten());
+                tags
+            }
+
+        rule here_document_operator() -> (String, bool) =
+            "<<" !"<" dash:"-"? [' ' | '\t']* delimiter:here_document_delimiter() {
+                (delimiter, dash.is_some())
+            }
+
+        rule here_document_line_part() -> Option<(String, bool)> =
+            "<<<" { None } /
+            tag:here_document_operator() { Some(tag) } /
+            "'" [^'\'']* "'" { None } /
+            "\"" ("\\" [_] / [^'"' | '\\'])* "\"" { None } /
+            "\\" [^'\n'] { None } /
+            [^'\n'] { None }
+
+        rule here_document_bodies(tags: &[(String, bool)]) = #{|input, pos| {
+            let mut pos = pos;
+            for (delimiter, strip_tabs) in tags {
+                match here_document_body_end(input, pos, delimiter, *strip_tabs) {
+                    Some(end) => pos = end,
+                    None => return peg::RuleResult::Failed,
+                }
+            }
+            peg::RuleResult::Matched(pos, ())
+        }}
+
+        // The word that ends a here-document, its quotes removed: `'EOF'`, `"EOF"`, `\EOF`.
+        rule here_document_delimiter() -> String =
+            parts:here_document_delimiter_part()+ { parts.concat() }
+
+        rule here_document_delimiter_part() -> String =
+            "'" s:$([^'\'']*) "'" { s.to_owned() } /
+            "\"" s:$([^'"']*) "\"" { s.to_owned() } /
+            "\\" c:$([_]) { c.to_owned() } /
+            s:$([^' ' | '\t' | '\r' | '\n' | ';' | '&' | '|' | '<' | '>' | '(' | ')' | '\'' | '"' | '\\']+) {
+                s.to_owned()
+            }
 
         rule backquoted_command() -> String =
             chars:(backquoted_char()*) { chars.into_iter().collect() }

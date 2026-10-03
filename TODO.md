@@ -58,11 +58,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ## Phase 12. Language (R7)
 
-### 12.2 Here-documents
-
-- A `)` in a here-doc inside `$(…)` ends it early (`word.rs:1453`; the tokenizer's own
-  scanner is right). PI-02.
-
 ### 12.3 Smaller expansion differences
 
 `${#x}` and `${x: -1}` count bytes (LANG-09); `$(( $empty ))` aborts (LANG-10);

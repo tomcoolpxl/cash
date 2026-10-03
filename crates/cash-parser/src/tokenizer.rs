@@ -661,6 +661,12 @@ impl<'a, R: ?Sized + std::io::BufRead> Tokenizer<'a, R> {
         let mut expecting_pattern = false;
         let mut pattern_had_open_paren = false;
 
+        // The nesting outside a `((` command that began inside the construct. The `)`s that
+        // close it end here as the terminating char, not as the `))` operator that ends its
+        // arithmetic, so the arithmetic ends when the nesting is back to this: it went on,
+        // and the `<<` of a later here-document was read as a shift (PI-02).
+        let mut arithmetic_command_nesting: Option<u32> = None;
+
         loop {
             let cur_token = if drain_here_doc_tokens && !pending_here_doc_tokens.is_empty() {
                 if pending_here_doc_tokens.len() == 1 {
@@ -668,7 +674,14 @@ impl<'a, R: ?Sized + std::io::BufRead> Tokenizer<'a, R> {
                 }
                 pending_here_doc_tokens.remove(0)
             } else {
+                let was_arithmetic = self.cross_state.arithmetic_expansion;
                 let cur_token = self.next_token_until(Some(terminating_char), true)?;
+                if !was_arithmetic
+                    && self.cross_state.arithmetic_expansion
+                    && arithmetic_command_nesting.is_none()
+                {
+                    arithmetic_command_nesting = Some(nesting_count);
+                }
 
                 if matches!(
                     cur_token.reason,
@@ -749,6 +762,10 @@ impl<'a, R: ?Sized + std::io::BufRead> Tokenizer<'a, R> {
                     }
 
                     nesting_count -= 1;
+                    if arithmetic_command_nesting == Some(nesting_count) {
+                        arithmetic_command_nesting = None;
+                        self.cross_state.arithmetic_expansion = false;
+                    }
                     if nesting_count == 0 {
                         break;
                     }
@@ -1020,16 +1037,13 @@ impl<'a, R: ?Sized + std::io::BufRead> Tokenizer<'a, R> {
                             // Inside an arithmetic expansion `<<` is a shift. The outer one's
                             // state comes back at the end of an inner one: it was cleared, and
                             // `$(( $((1)) << 2 ))` read `<< 2` as a here-document (PI-05).
+                            // A command substitution's text is commands, even inside one.
                             let outer_arithmetic = self.cross_state.arithmetic_expansion;
-                            if is_arithmetic {
-                                self.cross_state.arithmetic_expansion = true;
-                            }
+                            self.cross_state.arithmetic_expansion = is_arithmetic;
 
                             self.consume_nested_construct(&mut state, ')', "(", initial_nesting)?;
 
-                            if is_arithmetic {
-                                self.cross_state.arithmetic_expansion = outer_arithmetic;
-                            }
+                            self.cross_state.arithmetic_expansion = outer_arithmetic;
                         }
 
                         Some('[') => {
