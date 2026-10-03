@@ -843,7 +843,7 @@ fn kill_prompt(
     Ok(Some(
         match cash_core::sys::signal::kill_process(target, signal) {
             Ok(()) => format!("Sent {} to {pid}", signal.as_str()),
-            Err(error) => format!("{pid}: {error}"),
+            Err(error) => format!("{pid}: {}", error.worded()),
         },
     ))
 }

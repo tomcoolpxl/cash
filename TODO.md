@@ -60,10 +60,9 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 13.4 Error output: colour, prefixes, `--help`
 
-An I/O error is worded by each builtin its own way: `cd`, `dos2unix`, `rev` and bc's
-`diag.rs` each map a few `io::ErrorKind`s to the C library's words, and the rest print
-Rust's ("The directory is not empty. (os error 145)"). `cash_core::error::os_error_text`
-now does it once (used by `find`); move the others onto it. Found fixing BI-04.
+`install` with a missing source says `cannot install 'x' to 'y': No such file or
+directory` where GNU says `install: cannot stat 'x': No such file or directory`. Found in
+1.3.12 moving the tools' I/O errors onto `os_error_text`.
 
 Arithmetic errors name neither the line nor the expression: cash says `error: arithmetic
 evaluation error: division by zero` and `failed to parse expression: 1 +` (and `08`, and

@@ -117,11 +117,23 @@ impl builtins::Command for ChmodCommand {
             for target in targets {
                 if let Err(e) = apply(&target, &request) {
                     if !self.silent {
+                        // As GNU chmod words it, naming the operand as it was written and
+                        // what is under it from there.
+                        let shown = match target.strip_prefix(&path) {
+                            Ok(rest) if rest.as_os_str().is_empty() => file.clone(),
+                            Ok(rest) => format!("{file}/{}", cash_win32::path::render(rest)),
+                            Err(_) => cash_win32::path::render(&target),
+                        };
+                        let what = if e.kind() == std::io::ErrorKind::NotFound {
+                            "cannot access"
+                        } else {
+                            "changing permissions of"
+                        };
+                        let e = cash_core::error::os_error_text(&e);
                         writeln!(
                             context.stderr(),
-                            "{}: {}: {e}",
-                            context.command_name,
-                            cash_win32::path::render(&target)
+                            "{}: {what} '{shown}': {e}",
+                            context.command_name
                         )?;
                     }
                     failed = true;

@@ -155,6 +155,7 @@ impl builtins::Command for ResetCommand {
         let _ = (&self.erase, &self.interrupt, &self.kill, self.quiet);
 
         if let Err(error) = cash_win32::console::restore_modes() {
+            let error = cash_core::error::os_error_text(&error);
             writeln!(
                 context.stderr(),
                 "reset: could not restore the console modes: {error}"

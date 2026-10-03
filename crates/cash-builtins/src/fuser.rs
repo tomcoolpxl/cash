@@ -378,6 +378,7 @@ fn run(
                 match file_uses(&path) {
                     Ok(uses) => (display, uses),
                     Err(error) => {
+                        let error = cash_core::error::os_error_text(&error);
                         writeln!(stderr, "fuser: {display}: {error}")?;
                         continue;
                     }
@@ -397,6 +398,7 @@ fn run(
                 match socket_uses(&spec, options) {
                     Ok(uses) => (display, uses),
                     Err(error) => {
+                        let error = cash_core::error::os_error_text(&error);
                         writeln!(stderr, "fuser: {display}: {error}")?;
                         continue;
                     }
@@ -475,6 +477,7 @@ fn run(
             if let Ok(target) = i32::try_from(pid)
                 && let Err(error) = sys::signal::kill_process(target, signal)
             {
+                let error = error.worded();
                 writeln!(stderr, "Could not kill process {pid}: {error}")?;
             }
         }

@@ -635,6 +635,13 @@ pub fn os_error_text(error: &std::io::Error) -> String {
 }
 
 impl Error {
+    /// This error's message, with an I/O error worded as the C library words it
+    /// ([`os_error_text`]) rather than as Rust does (`i/o error: … (os error 2)`).
+    pub fn worded(&self) -> String {
+        self.as_io_error()
+            .map_or_else(|| self.to_string(), os_error_text)
+    }
+
     /// `error` as one about the file or folder `name`, where it is an I/O error:
     /// `/no/such: No such file or directory`.
     #[must_use]

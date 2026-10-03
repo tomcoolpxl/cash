@@ -609,11 +609,7 @@ fn errno(error: &std::io::Error) -> u8 {
 }
 
 fn describe(error: &std::io::Error) -> String {
-    match error.kind() {
-        std::io::ErrorKind::NotFound => "No such file or directory".to_string(),
-        std::io::ErrorKind::PermissionDenied => "Permission denied".to_string(),
-        _ => error.to_string(),
-    }
+    cash_core::error::os_error_text(error)
 }
 
 /// Replace `target` with `bytes` via a temporary file in the same directory.

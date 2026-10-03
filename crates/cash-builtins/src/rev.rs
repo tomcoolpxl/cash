@@ -139,11 +139,7 @@ impl builtins::Command for RevCommand {
             match std::fs::read(&path) {
                 Ok(input) => reversed.extend(reverse_all(&input, separator)),
                 Err(error) => {
-                    let reason = if error.kind() == std::io::ErrorKind::NotFound {
-                        "No such file or directory".to_owned()
-                    } else {
-                        error.to_string()
-                    };
+                    let reason = cash_core::error::os_error_text(&error);
                     writeln!(context.stderr(), "rev: cannot open {file}: {reason}")?;
                     status = ExecutionResult::general_error();
                 }

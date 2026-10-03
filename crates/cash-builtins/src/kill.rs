@@ -300,6 +300,7 @@ fn signal_pid<SE: cash_core::ShellExtensions>(
                 context.command_name
             )?;
         } else {
+            let e = e.worded();
             writeln!(context.error_stream(), "{}: {e}", context.command_name)?;
         }
         return Ok(ExecutionResult::general_error());

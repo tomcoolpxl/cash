@@ -770,6 +770,7 @@ fn run(
             std::fs::read_to_string(context.shell.absolute_path(file)).map(|t| text = t)
         };
         if let Err(error) = read {
+            let error = cash_core::error::os_error_text(&error);
             writeln!(
                 context.stderr(),
                 "ss: can't read filter file {file}: {error}"
@@ -841,6 +842,7 @@ fn run(
     let sockets = match fetched {
         Ok(sockets) => sockets,
         Err(error) => {
+            let error = cash_core::error::os_error_text(&error);
             writeln!(
                 context.stderr(),
                 "ss: can't read the socket tables: {error}"

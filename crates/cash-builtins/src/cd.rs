@@ -110,12 +110,9 @@ fn report_failure(
     target: &std::path::Path,
     error: &error::Error,
 ) -> Result<ExecutionResult, error::Error> {
-    let reason = match (error.kind(), error.as_io_error().map(std::io::Error::kind)) {
-        (error::ErrorKind::NotADirectory(_), _) | (_, Some(std::io::ErrorKind::NotADirectory)) => {
-            "Not a directory".to_owned()
-        }
-        (_, Some(std::io::ErrorKind::NotFound)) => "No such file or directory".to_owned(),
-        (_, Some(std::io::ErrorKind::PermissionDenied)) => "Permission denied".to_owned(),
+    let reason = match (error.kind(), error.as_io_error()) {
+        (error::ErrorKind::NotADirectory(_), _) => "Not a directory".to_owned(),
+        (_, Some(io)) => error::os_error_text(io),
         _ => error.to_string(),
     };
     let spelled = target.to_string_lossy();

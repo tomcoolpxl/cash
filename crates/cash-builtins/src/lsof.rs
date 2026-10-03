@@ -524,7 +524,11 @@ fn run(
                 };
                 file_row(h.pid, &h.path, display, h.access)
             })),
-            Err(error) => writeln!(stderr, "lsof: {name}: {error}")?,
+            Err(error) => writeln!(
+                stderr,
+                "lsof: {name}: {}",
+                cash_core::error::os_error_text(&error)
+            )?,
         }
     }
     for (dir, recursive) in &options.dirs {
@@ -584,6 +588,7 @@ fn run(
         match net::sockets(&[net::Proto::Tcp, net::Proto::Udp], v4, v6) {
             Ok(sockets) => sockets.into_iter().filter(|s| s.pid != 0).collect(),
             Err(error) => {
+                let error = cash_core::error::os_error_text(&error);
                 writeln!(stderr, "lsof: can't read the socket tables: {error}")?;
                 Vec::new()
             }

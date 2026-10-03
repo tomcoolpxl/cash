@@ -85,7 +85,7 @@ impl builtins::Command for InstallCommand {
                         context.stderr(),
                         "install: cannot create directory '{}': {}",
                         dir.shown.display(),
-                        e
+                        cash_core::error::os_error_text(&e)
                     )?;
                     return Ok(ExecutionResult::general_error());
                 }
@@ -213,9 +213,10 @@ impl InstallCommand {
             std::io::Error::new(
                 e.kind(),
                 format!(
-                    "cannot install '{}' to '{}': {e}",
+                    "cannot install '{}' to '{}': {}",
                     src.shown.display(),
-                    dest.shown.display()
+                    dest.shown.display(),
+                    cash_core::error::os_error_text(&e)
                 ),
             )
         })?;

@@ -253,3 +253,19 @@ fn an_index_before_the_start_is_a_bad_array_subscript() {
          s.sh: line 4: unset: [-3]: bad array subscript\ns.sh: line 5: a[-3]: bad array subscript"
     );
 }
+
+#[test]
+fn a_tool_words_an_io_error_as_the_c_library_does() {
+    // Each said Rust's words, "The system cannot find the path specified. (os error 3)",
+    // or worded a few kinds of its own; `chmod` named the resolved path.
+    let out = run("tree /no/such; rev /no/such; chmod +x /no/such; pushd /no/such");
+    assert!(!out.stderr.contains("os error"), "{}", out.stderr);
+    for expected in [
+        "tree: /no/such: No such file or directory",
+        "rev: cannot open /no/such: No such file or directory",
+        "chmod: cannot access '/no/such': No such file or directory",
+        "pushd: /no/such: No such file or directory",
+    ] {
+        assert!(out.stderr.contains(expected), "{expected}: {}", out.stderr);
+    }
+}

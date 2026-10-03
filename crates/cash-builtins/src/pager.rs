@@ -133,6 +133,7 @@ impl LessCommand {
                 match read_file(context, file) {
                     Ok(contents) => text.push_str(&contents),
                     Err(e) => {
+                        let e = cash_core::error::os_error_text(&e);
                         writeln!(context.stderr(), "{}: {file}: {e}", context.command_name)?;
                         failed = true;
                     }

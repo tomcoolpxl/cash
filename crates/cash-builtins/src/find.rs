@@ -366,6 +366,7 @@ fn push_contents<SE: cash_core::ShellExtensions>(
             Ok(true)
         }
         Err(e) => {
+            let e = cash_core::error::os_error_text(&e);
             writeln!(
                 context.stderr(),
                 "{}: {}: {e}",

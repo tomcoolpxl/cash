@@ -171,6 +171,7 @@ impl builtins::Command for PkillCommand {
                 }
                 Delivery::Denied | Delivery::Gone => {}
                 Delivery::Failed(error) => {
+                    let error = error.worded();
                     writeln!(
                         context.stderr(),
                         "pkill: killing pid {} failed: {error}",
@@ -617,6 +618,7 @@ fn signal_name_matches(
             }
             Delivery::Gone => {}
             Delivery::Failed(error) => {
+                let error = error.worded();
                 writeln!(stderr, "{}({}): {error}", process.name, process.pid)?;
             }
         }

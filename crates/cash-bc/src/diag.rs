@@ -45,9 +45,22 @@ pub fn error_at(line: usize, col: usize, message: &str) {
 }
 
 /// An I/O error as a system utility words it, without Rust's "(os error N)".
+///
+/// The same table as `cash_core::error::os_error_text`, which the shell and its other
+/// tools use; bc depends on nothing of cash's, so it keeps a copy.
 pub fn io_error_text(e: &io::Error) -> String {
-    if e.kind() == io::ErrorKind::NotFound {
-        return "No such file or directory".to_owned();
+    let worded = match e.kind() {
+        io::ErrorKind::NotFound => Some("No such file or directory"),
+        io::ErrorKind::PermissionDenied => Some("Permission denied"),
+        io::ErrorKind::DirectoryNotEmpty => Some("Directory not empty"),
+        io::ErrorKind::AlreadyExists => Some("File exists"),
+        io::ErrorKind::IsADirectory => Some("Is a directory"),
+        io::ErrorKind::NotADirectory => Some("Not a directory"),
+        io::ErrorKind::ResourceBusy => Some("Device or resource busy"),
+        _ => None,
+    };
+    if let Some(worded) = worded {
+        return worded.to_owned();
     }
     let text = e.to_string();
     match text.find(" (os error ") {

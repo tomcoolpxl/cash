@@ -59,6 +59,7 @@ impl builtins::Command for TreeCommand {
         let metadata = match std::fs::symlink_metadata(&actual) {
             Ok(metadata) => metadata,
             Err(error) => {
+                let error = cash_core::error::os_error_text(&error);
                 writeln!(context.stderr(), "tree: {}: {error}", render(&shown))?;
                 return Ok(ExecutionResult::general_error());
             }
@@ -115,6 +116,7 @@ impl TreeCommand {
         let entries = match std::fs::read_dir(actual) {
             Ok(entries) => entries,
             Err(error) => {
+                let error = cash_core::error::os_error_text(&error);
                 writeln!(context.stderr(), "tree: {}: {error}", render(shown))?;
                 state.failed = true;
                 return Ok(());

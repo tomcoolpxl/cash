@@ -195,6 +195,7 @@ fn go<SE: cash_core::ShellExtensions>(
     match context.shell.set_working_dir(dir) {
         Ok(()) => Ok(ExecutionResult::success()),
         Err(error) => {
+            let error = error.worded();
             writeln!(context.stderr(), "{name}: {}: {error}", dir.display())?;
             Ok(ExecutionResult::general_error())
         }

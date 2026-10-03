@@ -371,6 +371,7 @@ impl builtins::Command for LsCommand {
             }
 
             if let Err(e) = self.list_directory(&context, dir_path, dir_str, &look, is_tty, 1) {
+                let e = cash_core::error::os_error_text(&e);
                 writeln!(
                     context.stderr(),
                     "{}: cannot open directory '{}': {e}",
