@@ -384,17 +384,54 @@ pub fn system_program(name: &str) -> std::path::PathBuf {
         .join(name)
 }
 
-/// A file's volume serial number and file index, which identify it across its names.
-fn file_identity(path: &Path) -> Option<(u32, u32, u32)> {
-    let file = std::fs::File::open(path).ok()?;
+/// What identifies a file across its names, and how many it has.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FileInfo {
+    /// The serial number of the volume it is on: `stat`'s device.
+    pub volume: u32,
+    /// Its file index on that volume: `stat`'s inode.
+    pub index: u64,
+    /// Its hard links.
+    pub links: u32,
+}
+
+/// A file's or folder's [`FileInfo`].
+///
+/// Opened with backup semantics, without which a folder cannot be opened at all: `stat`
+/// gave a folder inode 0 and `[ d -ef d ]` was "not supported" (XC-3, ARCH-06). It asks
+/// only to read attributes, and shares everything.
+///
+/// # Errors
+///
+/// The error of opening it or of asking.
+pub fn file_info(path: &Path) -> std::io::Result<FileInfo> {
+    use std::os::windows::fs::OpenOptionsExt as _;
+    use windows_sys::Win32::Storage::FileSystem::{
+        FILE_FLAG_BACKUP_SEMANTICS, FILE_READ_ATTRIBUTES, FILE_SHARE_DELETE, FILE_SHARE_READ,
+        FILE_SHARE_WRITE,
+    };
+
+    let file = std::fs::OpenOptions::new()
+        .access_mode(FILE_READ_ATTRIBUTES)
+        .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE)
+        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
+        .open(path)?;
     let handle = file.as_raw_handle() as windows_sys::Win32::Foundation::HANDLE;
     // SAFETY: zeroed struct is valid for BY_HANDLE_FILE_INFORMATION.
     let mut info: BY_HANDLE_FILE_INFORMATION = unsafe { std::mem::zeroed() };
     // SAFETY: `handle` is a valid open file handle, `info` is a valid out-pointer.
     let ok = unsafe { GetFileInformationByHandle(handle, &raw mut info) };
-    (ok != 0).then_some((
-        info.dwVolumeSerialNumber,
-        info.nFileIndexHigh,
-        info.nFileIndexLow,
-    ))
+    if ok == 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    Ok(FileInfo {
+        volume: info.dwVolumeSerialNumber,
+        index: (u64::from(info.nFileIndexHigh) << 32) | u64::from(info.nFileIndexLow),
+        links: info.nNumberOfLinks,
+    })
+}
+
+/// A file's volume serial number and file index, which identify it across its names.
+fn file_identity(path: &Path) -> Option<(u32, u64)> {
+    file_info(path).ok().map(|info| (info.volume, info.index))
 }

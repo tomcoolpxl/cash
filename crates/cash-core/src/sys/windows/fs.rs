@@ -120,9 +120,11 @@ impl crate::sys::fs::PathExt for Path {
         false
     }
 
+    /// The volume serial number and file index, which `[ a -ef b ]` compares; it was
+    /// "not supported" (XC-3).
     fn get_device_and_inode(&self) -> Result<(u64, u64), crate::error::Error> {
-        // TODO(windows): implement using file index / volume serial number.
-        Err(error::ErrorKind::NotSupportedOnThisPlatform("get_device_and_inode").into())
+        let info = cash_win32::fs::file_info(self)?;
+        Ok((u64::from(info.volume), info.index))
     }
 }
 

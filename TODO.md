@@ -60,8 +60,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 13.2 Builtins
 
-- `[ a -ef b ]` is "not supported"; `stat` on a directory gives inode 0: one
-  `cash_win32::fs::file_info` with backup semantics. XC-3, ARCH-06.
 - `mapfile -t` keeps the `\r` (D20 names mapfile). XC-4.
 - `printf '%d' abc` exits 0; `\c` in `%b` does not stop reuse. BI-09, BI-10.
 - `find -exec echo "<{}>"`, `-exec … +` batching, silent spawn errors; loops under `-L`

@@ -140,3 +140,18 @@ fn stat_default_report_names_the_real_owner() {
         "the Gid field should be {rid}/{owner}: {row}"
     );
 }
+
+#[test]
+fn a_folder_has_an_inode_and_ef_compares_files() {
+    // A folder could not be opened without backup semantics: `stat` gave it inode 0 on
+    // device 0 (ARCH-06), and `[ a -ef b ]` was "not supported" (XC-3).
+    let scratch = Scratch::new("ef");
+    let (file, posix) = sample_file(&scratch);
+    std::fs::hard_link(&file, scratch.path().join("beta.txt")).expect("hard link");
+    std::fs::create_dir(scratch.path().join("dir")).expect("create dir");
+    let dir = scratch.path().to_string_lossy().replace('\\', "/");
+    let out = cash(&format!(
+        r"cd '{dir}'; [ $(stat -c %i dir) != 0 ] && echo inode; [ $(stat -c %d dir) = $(stat -c %d '{posix}') ] && echo device; [ alpha.txt -ef beta.txt ] && echo linked; [ dir -ef ./dir ] && echo same-dir; [ alpha.txt -ef dir ] || echo different"
+    ));
+    assert_eq!(out, "inode\ndevice\nlinked\nsame-dir\ndifferent");
+}

@@ -1,6 +1,5 @@
 //! `stat` builtin — display file status.
 
-use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
@@ -364,45 +363,10 @@ fn file_owner(path: &Path) -> (String, u32) {
     )
 }
 
+/// The inode, links and device `stat` shows. A folder's are its own: it could not be
+/// opened without backup semantics, and was inode 0 on device 0 (ARCH-06).
 fn query_file_index_and_links(path: &Path) -> (u64, u32, u32) {
-    use std::os::windows::io::AsRawHandle;
-
-    if let Ok(file) = File::open(path) {
-        #[repr(C)]
-        struct ByHandleFileInformation {
-            dw_file_attributes: u32,
-            ft_creation_time: [u32; 2],
-            ft_last_access_time: [u32; 2],
-            ft_last_write_time: [u32; 2],
-            dw_volume_serial_number: u32,
-            n_file_size_high: u32,
-            n_file_size_low: u32,
-            n_number_of_links: u32,
-            n_file_index_high: u32,
-            n_file_index_low: u32,
-        }
-        unsafe extern "system" {
-            fn GetFileInformationByHandle(
-                h_file: *mut std::ffi::c_void,
-                lp_file_information: *mut ByHandleFileInformation,
-            ) -> i32;
-        }
-        // SAFETY: `ByHandleFileInformation` is a `#[repr(C)]` struct consisting
-        // solely of integer fields, for which the all-zero bit pattern is valid.
-        let mut info: ByHandleFileInformation = unsafe { std::mem::zeroed() };
-        // SAFETY: `file` is open for the duration of the call, so its raw handle
-        // is valid; `info` is a live, writable, correctly laid out
-        // `BY_HANDLE_FILE_INFORMATION` that the call fills in and does not retain.
-        let res = unsafe {
-            GetFileInformationByHandle(file.as_raw_handle(), std::ptr::from_mut(&mut info))
-        };
-        if res != 0 {
-            let inode =
-                (u64::from(info.n_file_index_high) << 32) | u64::from(info.n_file_index_low);
-            return (inode, info.n_number_of_links, info.dw_volume_serial_number);
-        }
-    }
-    (0, 1, 0)
+    cash_win32::fs::file_info(path).map_or((0, 1, 0), |info| (info.index, info.links, info.volume))
 }
 
 const fn filetime_to_unix(filetime: u64) -> u64 {
