@@ -231,6 +231,9 @@ run() {
     fi
     # --no-config: the developer's config.toml is not part of the test.
     "$cash" --no-config --noprofile --norc "$f" >"$out.cash" 2>/dev/null; cs=$?
+    # An elevated cash is root to a prompt, so `\$` gives `#` where Git Bash gives `$`
+    # (spec §4 row 20); GitHub's runners are elevated.
+    if [[ $elevated ]]; then sed -i -E 's/#( ?)$/$\1/' "$out.cash"; fi
     if [[ -v want[$name] ]]; then
         if [[ $cs == 0 && $(<"$out.cash") == "${want[$name]}" ]]; then
             printf 'PASS %s (differs on purpose, %s)\n' "$name" "${why[$name]}"
@@ -379,6 +382,12 @@ if [[ -f $PD ]]; then
     t comp-file dirty-w "MSYSTEM=MINGW64; . '$PD'; $C; _c 'git add '; _c 'git restore s'"
     t comp-config clean "MSYSTEM=MINGW64; . '$PD'; $C; _c 'git config core.autoc'; _c 'git -c color.u'"
     t comp-remote up-diverged "MSYSTEM=MINGW64; . '$PD'; $C; _c 'git push '; _c 'git push origin m'"
+fi
+
+elevated=
+if [[ $mode != freeze && $("$cash" --no-config -c 'echo $EUID') == 0 ]]; then
+    elevated=1
+    printf 'cash is elevated: a prompt'"'"'s closing # is read as $\n'
 fi
 
 # Eight at a time; each case's lines are printed in order once all are done.
