@@ -198,7 +198,7 @@ default = []
 workspace = true
 
 [dependencies]
-uucore = { version = "0.12.0", default-features = false, features = [
+uucore = { workspace = true, features = [
     "signals",
 ] }
 
@@ -228,7 +228,7 @@ uu_dircolors = { version = "0.12.0", optional = true }
 uu_dirname = { version = "0.12.0", optional = true }
 uu_du = { version = "0.12.0", optional = true }
 uu_echo = { version = "0.12.0", optional = true }
-uu_env = { version = "0.12.0", optional = true }
+uu_env = { workspace = true, optional = true }
 uu_expand = { version = "0.12.0", optional = true }
 uu_expr = { version = "0.12.0", optional = true }
 uu_factor = { version = "0.12.0", optional = true }

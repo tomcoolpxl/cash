@@ -13,7 +13,7 @@ rust-version.workspace = true
 
 [dependencies]
 bigdecimal = "0.4"
-clap = { version = "4.6.0", features = ["derive"] }
+clap = { workspace = true, features = ["derive"] }
 
 [lints]
 workspace = true

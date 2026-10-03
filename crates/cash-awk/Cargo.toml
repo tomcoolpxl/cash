@@ -12,17 +12,17 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-clap = { version = "4.6.0", features = ["derive"] }
+clap = { workspace = true, features = ["derive"] }
 pest = "2.9.2"
 pest_derive = "2.9.2"
 lexical = { version = "7", features = ["format"] }
 rand = { version = "0.8.5", default-features = false, features = ["small_rng"] }
-regex = "1.13.1"
+regex = { workspace = true }
 regex-automata = { version = "0.4.18", default-features = false, features = ["std", "syntax", "meta"] }
-regex-syntax = "0.8.5"
+regex-syntax = { workspace = true }
 
 [dev-dependencies]
-tempfile = "3.27.0"
+tempfile = { workspace = true }
 
 [lints]
 workspace = true

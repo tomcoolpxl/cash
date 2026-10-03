@@ -129,18 +129,18 @@ default = [
 workspace = true
 
 [dependencies]
-futures = "0.3.32"
+futures = { workspace = true }
 cash-core = { workspace = true }
 cash-parser = { workspace = true }
-chrono = "0.4.44"
-clap = { version = "4.6.0", features = ["derive", "wrap_help"] }
-fancy-regex = "0.19.0"
-itertools = "0.14.0"
-strum = "0.28.0"
-thiserror = "2.0.18"
-tracing = "0.1.44"
-utf8-chars = "3.0.6"
-tokio = { version = "1.52.3", features = [
+chrono = { workspace = true }
+clap = { workspace = true, features = ["derive", "wrap_help"] }
+fancy-regex = { workspace = true }
+itertools = { workspace = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+utf8-chars = { workspace = true }
+tokio = { workspace = true, features = [
     "io-util",
     "macros",
     "process",
@@ -150,7 +150,7 @@ tokio = { version = "1.52.3", features = [
     "sync",
     "time",
 ] }
-uucore = { version = "0.12.0", default-features = false, features = [
+uucore = { workspace = true, features = [
     "colors",
     "format",
     "signals",
@@ -158,13 +158,13 @@ uucore = { version = "0.12.0", default-features = false, features = [
 cash-win32 = { workspace = true }
 # D48: the `less`/`more` pager needs the terminal size and raw-mode keys. Same
 # version cash-interactive already pulls in, so this adds no new tree.
-crossterm = "0.29.0"
+crossterm = { workspace = true }
 # `ls`: LS_COLORS and colour per file type, and the width of names with icons. All three are
 # already in the tree, through reedline.
 lscolors = "0.21.0"
-nu-ansi-term = "0.50.3"
-unicode-width = "0.2.2"
+nu-ansi-term = { workspace = true }
+unicode-width = { workspace = true }
 
 [dev-dependencies]
-anyhow = "1.0.102"
-pretty_assertions = { version = "1.4.1", features = ["unstable"] }
+anyhow = { workspace = true }
+pretty_assertions = { workspace = true, features = ["unstable"] }

@@ -26,27 +26,27 @@ experimental-parser = ["cash-parser/winnow-parser"]
 async-recursion = "1.1.1"
 async-trait = "0.1.89"
 cash-parser = { workspace = true }
-bon = "3.9.1"
-cached = "2.0.2"
-chrono = "0.4.44"
-clap = { version = "4.6.0", features = ["derive", "wrap_help"] }
-color-print = "0.3.7"
-fancy-regex = "0.19.0"
-futures = "0.3.32"
+bon = { workspace = true }
+cached = { workspace = true }
+chrono = { workspace = true }
+clap = { workspace = true, features = ["derive", "wrap_help"] }
+color-print = { workspace = true }
+fancy-regex = { workspace = true }
+futures = { workspace = true }
 inherent = "1.0.13"
-itertools = "0.14.0"
+itertools = { workspace = true }
 normalize-path = "0.2.1"
 rand = "0.10.0"
 # The leftmost-longest match of `[[ =~ ]]` (LANG-17); already built for `regex`.
 regex-automata = "0.4.18"
 rpds = "1.2.0"
-serde = { version = "1.0.228", optional = true, features = ["derive"] }
-strum = "0.28.0"
+serde = { workspace = true, optional = true, features = ["derive"] }
+strum = { workspace = true }
 strum_macros = "0.28.0"
-thiserror = "2.0.18"
-tracing = "0.1.44"
+thiserror = { workspace = true }
+tracing = { workspace = true }
 hostname = "0.4.2"
-tokio = { version = "1.52.3", features = [
+tokio = { workspace = true, features = [
     "io-util",
     "macros",
     "net",
@@ -62,9 +62,9 @@ tokio = { version = "1.52.3", features = [
 cash-win32 = { workspace = true }
 # GNU `env -S` splitting for `#!/usr/bin/env -S …` lines (W32-08); the `env` builtin
 # already builds it.
-uu_env = "0.12.0"
+uu_env = { workspace = true }
 
 [dev-dependencies]
-anyhow = "1.0.102"
-pretty_assertions = { version = "1.4.1", features = ["unstable"] }
-tempfile = "3.27.0"
+anyhow = { workspace = true }
+pretty_assertions = { workspace = true, features = ["unstable"] }
+tempfile = { workspace = true }

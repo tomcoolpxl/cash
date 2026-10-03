@@ -64,38 +64,20 @@ name = "pty-latency"
 path = "tests/pty_latency.rs"
 
 [dev-dependencies]
-anyhow = "1.0.102"
+anyhow = { workspace = true }
 # The YAML case runner parses its own CLI options and the completion tests drive an
 # async shell, so they need these directly rather than through cash-shell.
-clap = { version = "4.6.0", features = ["derive", "env"] }
-tokio = { version = "1.52.3", features = ["rt", "rt-multi-thread", "sync", "macros"] }
-tempfile = "3.27.0"
-cash-parser = { workspace = true }
+clap = { workspace = true, features = ["derive", "env"] }
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "sync", "macros"] }
+tempfile = { workspace = true }
 # The completion tests drive a `Shell` directly rather than through the binary,
 # because completion has no command-line surface to assert against.
 cash-test-harness = { workspace = true, features = ["insta"] }
-assert_cmd = "2.2.0"
-assert_fs = "1.1.3"
+assert_cmd = { workspace = true }
 # Checks the Windows Terminal profile GUID against Terminal's own derivation (UUIDv5).
 uuid = { version = "1.26.1", features = ["v5"] }
-colored = "3.1.1"
-descape = "3.0.0"
-diff = "0.1.13"
-glob = "0.3.3"
-indent = "0.1.1"
-indexmap = "2.13.0"
-junit-report = "0.9.0"
-os-release = "0.1.0"
-predicates = "3.1.4"
-pretty_assertions = { version = "1.4.1", features = ["unstable"] }
-regex = "1.12.3"
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.149"
-serde_yaml = "0.9.34"
-strip-ansi-escapes = "0.2.1"
-test-with = { version = "0.17.0", default-features = false, features = [
-    "executable",
-] }
-version-compare = "0.2.1"
-walkdir = "2.5.0"
-which = "8.0.2"
+diff = { workspace = true }
+glob = { workspace = true }
+indent = { workspace = true }
+regex = { workspace = true }
+which = { workspace = true }

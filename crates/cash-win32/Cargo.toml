@@ -16,7 +16,7 @@ workspace = true
 
 [dependencies]
 # How many columns a character takes on the screen, to take it back off (conin.rs).
-unicode-width = "0.2.2"
+unicode-width = { workspace = true }
 vte = "0.14"
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
@@ -56,5 +56,5 @@ name = "stdout_capture"
 harness = false
 
 [dev-dependencies]
-proptest = "1"
-tempfile = "3.27.0"
+proptest = { workspace = true }
+tempfile = { workspace = true }
