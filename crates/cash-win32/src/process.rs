@@ -525,8 +525,48 @@ fn token_user(process: windows_sys::Win32::Foundation::HANDLE) -> Option<String>
     token_account(process).map(|(name, _)| name)
 }
 
+/// Whether the current process runs elevated, as its token's `TokenElevation` says: what
+/// UAC raises, and what `$EUID` 0 stands for (spec §4 row 20). `None` if the token cannot
+/// be read.
+///
+/// It was the `check_elevation` crate, which pulled a second `windows` (ARCH-17).
+#[must_use]
+pub fn current_process_is_elevated() -> Option<bool> {
+    use windows_sys::Win32::Security::{
+        GetTokenInformation, TOKEN_ELEVATION, TOKEN_QUERY, TokenElevation,
+    };
+    use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+
+    // SAFETY: GetCurrentProcess returns a pseudo-handle for the current process.
+    let current = unsafe { GetCurrentProcess() };
+    let mut token = std::ptr::null_mut();
+    // SAFETY: `current` is a live handle, and `token` is a valid out-param.
+    if unsafe { OpenProcessToken(current, TOKEN_QUERY, &raw mut token) } == 0 {
+        return None;
+    }
+    let mut elevation = TOKEN_ELEVATION { TokenIsElevated: 0 };
+    let size = u32::try_from(size_of::<TOKEN_ELEVATION>()).ok()?;
+    let mut needed: u32 = 0;
+    // SAFETY: the buffer is a TOKEN_ELEVATION of the size passed.
+    let ok = unsafe {
+        GetTokenInformation(
+            token,
+            TokenElevation,
+            (&raw mut elevation).cast(),
+            size,
+            &raw mut needed,
+        )
+    };
+    // SAFETY: closing a handle we just opened, exactly once.
+    unsafe {
+        CloseHandle(token);
+    }
+    (ok != 0).then_some(elevation.TokenIsElevated != 0)
+}
+
 /// The current user's SID as text (`S-1-5-21-…`), as a security descriptor names it.
-pub(crate) fn current_user_sid_string() -> Option<String> {
+#[must_use]
+pub fn current_user_sid_string() -> Option<String> {
     use windows_sys::Win32::Foundation::LocalFree;
     use windows_sys::Win32::Security::Authorization::ConvertSidToStringSidW;
 
@@ -1000,6 +1040,32 @@ fn module_path(
 #[cfg(test)]
 mod module_tests {
     use super::*;
+
+    /// The token's elevation agrees with its integrity level, which `whoami /groups`
+    /// lists: High (`S-1-16-12288`) when elevated, Medium otherwise. And the SID and RID
+    /// read from the token are `whoami /user`'s, which they replace (ARCH-07).
+    #[test]
+    fn the_token_reads_agree_with_whoami() {
+        let whoami = |arg: &str| {
+            let out = std::process::Command::new(crate::fs::system_program("whoami.exe"))
+                .args([arg, "/fo", "csv", "/nh"])
+                .output()
+                .unwrap();
+            String::from_utf8_lossy(&out.stdout).into_owned()
+        };
+        let high = whoami("/groups").contains("S-1-16-12288");
+        assert_eq!(current_process_is_elevated(), Some(high));
+
+        let user = whoami("/user");
+        let sid = current_user_sid_string().unwrap();
+        assert!(user.contains(&format!("\"{sid}\"")), "{sid} not in {user}");
+        let (name, rid) = current_process_account().unwrap();
+        assert!(sid.ends_with(&format!("-{rid}")), "{sid} {rid}");
+        assert!(
+            user.contains(&format!("\\{name}\"")),
+            "{name} not in {user}"
+        );
+    }
 
     #[test]
     fn this_process_has_an_image_and_modules() {

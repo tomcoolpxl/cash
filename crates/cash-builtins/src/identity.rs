@@ -369,15 +369,8 @@ fn whoami_string() -> Option<String> {
     Some(domain.map_or_else(|| user.clone(), |d| std::format!("{d}\\{user}")))
 }
 
-/// The current user's SID, read from the process token.
+/// The current user's SID, read from the process token. It ran `whoami.exe /user` and
+/// took its output apart (ARCH-07).
 fn current_sid() -> Option<String> {
-    // process state: the account cash runs as (TODO.md 14.5 replaces whoami.exe).
-    let output = std::process::Command::new(cash_win32::fs::system_program("whoami.exe"))
-        .args(["/user", "/fo", "csv", "/nh"])
-        .output()
-        .ok()?;
-
-    let text = String::from_utf8_lossy(&output.stdout);
-    let sid = text.split('"').nth(3)?.trim().to_string();
-    sid.starts_with("S-").then_some(sid)
+    cash_win32::process::current_user_sid_string()
 }

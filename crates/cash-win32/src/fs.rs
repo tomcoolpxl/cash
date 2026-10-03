@@ -368,11 +368,11 @@ pub fn handle_kind(handle: std::os::windows::io::BorrowedHandle<'_>) -> HandleKi
     }
 }
 
-/// A Windows program by its full path in System32 (`whoami.exe`), for cash to start.
+/// A Windows program by its full path in System32 (`quser.exe`), for cash to start.
 ///
-/// By a bare name, Windows looks first in the folder of the exe that asks, and
-/// in a folder of `cash --link-tools` links `whoami.exe` is cash: started that way, cash
-/// under the name `whoami` would start `whoami.exe` again as it came up, without end (D65).
+/// By a bare name, Windows looks first in the folder of the exe that asks, and in a
+/// folder of `cash --link-tools` links a tool of that name is cash: started that way, cash
+/// would start itself again as it came up, without end (D65).
 #[must_use]
 pub fn system_program(name: &str) -> std::path::PathBuf {
     std::env::var_os("SystemRoot")

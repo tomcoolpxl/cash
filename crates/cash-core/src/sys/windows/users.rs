@@ -24,31 +24,18 @@ const NON_ELEVATED_GID: u32 = 1000;
 /// change — saw two different answers.
 static ACCOUNT_RID: LazyLock<Option<u32>> = LazyLock::new(account_rid);
 
-/// Read the account's RID from its SID.
+/// Read the account's RID from its SID, in the process token.
+///
+/// It ran `whoami.exe /user` and took its output apart, at every start (ARCH-07).
 fn account_rid() -> Option<u32> {
-    // `whoami /user` is the documented way to reach the process token's SID without a
-    // Win32 binding, and it ships with every Windows install.
-    // process state: the account cash runs as (TODO.md 14.5 replaces whoami.exe).
-    let output = std::process::Command::new(cash_win32::fs::system_program("whoami.exe"))
-        .args(["/user", "/fo", "csv", "/nh"])
-        .output()
-        .ok()?;
-
-    let text = String::from_utf8_lossy(&output.stdout);
-    // `"DOMAIN\user","S-1-5-21-...-1001"`
-    let sid = text.split('"').nth(3)?.trim();
-    if !sid.starts_with("S-") {
-        return None;
-    }
-
-    sid.rsplit('-').next()?.parse().ok()
+    cash_win32::process::current_process_account().map(|(_, rid)| rid)
 }
 
 /// Cached elevation status. The underlying check queries the process token,
 /// which can't change after process start, so it's safe to memoize.
 static IS_ELEVATED: LazyLock<bool> = LazyLock::new(|| {
-    check_elevation::is_elevated().unwrap_or_else(|err| {
-        tracing::warn!("failed to determine process elevation: {err}");
+    cash_win32::process::current_process_is_elevated().unwrap_or_else(|| {
+        tracing::warn!("failed to determine process elevation");
         false
     })
 });
@@ -116,8 +103,10 @@ pub(crate) fn get_effective_gid() -> Result<u32, error::Error> {
 }
 
 pub(crate) fn get_current_username() -> Result<String, error::Error> {
-    let username = whoami::username().map_err(std::io::Error::from)?;
-    Ok(username)
+    // The account the process token names, as `id -un` and `whoami` report it.
+    cash_win32::process::current_process_account()
+        .map(|(name, _)| name)
+        .ok_or_else(|| std::io::Error::other("the process token names no account").into())
 }
 
 #[allow(clippy::unnecessary_wraps)]
