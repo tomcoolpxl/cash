@@ -71,6 +71,11 @@ dynamic variable but `NAME=value` are dropped (`variables.rs`, "for now we just 
 them"); Bash seeds RANDOM and resets SECONDS however they are assigned. The setter of a
 dynamic variable is never called. Found fixing LANG-23.
 
+An assignment error inside a function (`readonly r=1; f() { r=2; echo in; }; f; echo
+after`) ends a Bash script with status 1; cash returns from the function with status 1
+and goes on to `after`. At the top level both end the script. The same for a circular
+name reference. Found fixing LANG-21.
+
 Also seen while fixing 8.1: past the function depth limit (500, or `FUNCNEST`) cash
 reports "maximum function call depth exceeded" and the script goes on, `$?` 0; Bash 5.3
 reports "maximum function nesting level exceeded (500)" and abandons the command.
@@ -126,6 +131,9 @@ Errors are ANSI-coloured into pipes and files and ignore `NO_COLOR`
 (`cash-shell/src/entry.rs:675`); three prefixes (`error:`, `cash:`, `name:`); `--help`
 goes to stdout or stderr, exit 0 or 2, by builtin. One "colour this stream" helper. XC-8,
 BIN-04, BI-16.
+
+A warning is printed as an error: `error: warning: c1: circular name reference`, where
+Bash says `script: line 6: warning: c1: circular name reference`. Found in phase 12.
 
 An array index before the start (`a=(1 2)`): `${a[-3]}` expands to nothing in both
 shells, but Bash also says `a: bad array subscript`, and cash says nothing; `a[-3]=x`

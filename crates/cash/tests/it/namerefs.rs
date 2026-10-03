@@ -115,11 +115,28 @@ fn a_self_reference_is_refused() {
 }
 
 #[test]
-fn a_circular_pair_reads_as_unset() {
-    // bash warns and reads nothing. cash reads nothing without the warning, which is the
-    // part a script can act on.
+fn a_circular_pair_reads_as_unset_with_a_warning() {
+    // Bash warns and reads nothing; the warning was missing (LANG-21).
     let out = cash(r#"declare -n p=q; declare -n q=p; echo "[${p-unset}]""#);
     assert_eq!(out.stdout, "[unset]", "stderr: {}", out.stderr);
+    assert!(
+        out.stderr.contains("warning: p: circular name reference"),
+        "{}",
+        out.stderr
+    );
+}
+
+#[test]
+fn an_assignment_through_a_circular_pair_ends_the_script() {
+    // As an assignment to a read-only variable does, in Bash; it was dropped in silence
+    // and the script went on (LANG-21).
+    let out = cash(r#"declare -n p=q; declare -n q=p; p=z; echo after"#);
+    assert_eq!((out.stdout.as_str(), out.code), ("", 1), "{}", out.stderr);
+    assert!(
+        out.stderr.contains("warning: p: circular name reference"),
+        "{}",
+        out.stderr
+    );
 }
 
 // ---------------------------------------------------------------------------

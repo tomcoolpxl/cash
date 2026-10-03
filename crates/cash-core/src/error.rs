@@ -172,6 +172,10 @@ pub enum ErrorKind {
     #[error("cannot mutate readonly variable")]
     ReadonlyVariable,
 
+    /// An assignment through a chain of name references that comes back to itself.
+    #[error("warning: {0}: circular name reference")]
+    CircularNameReference(String),
+
     /// The indicated pattern is invalid.
     #[error("invalid pattern: '{0}'")]
     InvalidPattern(String),

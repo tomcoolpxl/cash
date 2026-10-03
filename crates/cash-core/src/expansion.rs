@@ -2254,7 +2254,7 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
         indirect: bool,
     ) -> Result<(Option<String>, Option<String>, Option<ShellVariable>), error::Error> {
         if !indirect {
-            let resolved = self.resolve_nameref_parameter(parameter)?;
+            let (resolved, _) = self.resolve_nameref_parameter(parameter)?;
             Ok(self.try_resolve_parameter_to_variable_without_indirect(&resolved))
         } else {
             let expansion = self.expand_parameter(parameter, false).await?;
@@ -2339,7 +2339,15 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
             return Ok(Expansion::from(target.to_string()));
         }
 
-        let resolved_parameter = self.resolve_nameref_parameter(parameter)?;
+        let (resolved_parameter, circular) = self.resolve_nameref_parameter(parameter)?;
+        // A circular chain expands to nothing, with Bash's warning; there was none
+        // (LANG-21).
+        if circular && let cash_parser::word::Parameter::Named(name) = parameter {
+            let warning = error::ErrorKind::CircularNameReference(name.clone()).into();
+            let _ = self
+                .shell
+                .display_error(&mut self.params.stderr(self.shell), &warning);
+        }
         let expansion = self
             .expand_parameter_without_indirect(&resolved_parameter, allow_unset_vars)
             .await?;
@@ -2358,30 +2366,34 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
     /// Resolves namerefs whose target includes an array subscript. The environment's ordinary
     /// nameref path deliberately resolves plain variable names, but `declare -n r='v[@]'`
     /// names a parameter expression and must preserve its list semantics.
+    /// The parameter a chain of name references ends at, and whether the chain came back
+    /// to a name it had passed, which names nothing.
     fn resolve_nameref_parameter(
         &self,
         parameter: &cash_parser::word::Parameter,
-    ) -> Result<cash_parser::word::Parameter, error::Error> {
+    ) -> Result<(cash_parser::word::Parameter, bool), error::Error> {
         let mut current = parameter.clone();
+        let mut seen = std::collections::HashSet::new();
 
-        for _ in 0..64 {
+        loop {
             let cash_parser::word::Parameter::Named(name) = &current else {
-                return Ok(current);
+                return Ok((current, false));
             };
             let Some((_, variable)) = self.shell.env().get_raw(name) else {
-                return Ok(current);
+                return Ok((current, false));
             };
             let Some(target) = variable.nameref_target() else {
-                return Ok(current);
+                return Ok((current, false));
             };
             if target == name.as_str() {
-                return Ok(current);
+                return Ok((current, false));
+            }
+            if !seen.insert(name.clone()) {
+                return Ok((current, true));
             }
 
             current = cash_parser::word::parse_parameter(target.as_ref(), &self.parser_options)?;
         }
-
-        Ok(current)
     }
 
     async fn expand_parameter_without_indirect(

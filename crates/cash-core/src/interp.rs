@@ -2238,9 +2238,9 @@ async fn apply_assignment(
     // what makes the creation path land in the right place.
     let Some(resolved_name) = shell.env().resolved_name(variable_name.as_str()) else {
         // A circular chain of references names nothing, so there is nowhere for the value
-        // to go. bash warns and drops the assignment rather than writing to the reference
-        // itself, which would quietly break the chain.
-        return Ok(());
+        // to go. Bash warns and, like an assignment to a read-only variable, ends a script;
+        // it was dropped in silence (LANG-21).
+        return Err(error::ErrorKind::CircularNameReference(variable_name.clone()).into());
     };
     let mut resolved_name = resolved_name.into_owned();
     // A reference to an array element (`declare -n r='a[1]'; r=Z`) assigns to the element,
