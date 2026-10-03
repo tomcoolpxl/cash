@@ -267,12 +267,9 @@ impl ShellEnvironment {
         // Deliberately a fallback rather than the primary lookup: an exact match always
         // wins, so a script that defines its own `$x` and `$X` keeps bash semantics. Only
         // a name that resolves to nothing at all gets the second chance.
-        let wanted = name.as_ref();
         for (scope_type, map) in self.scopes.iter().rev() {
-            for (key, var) in map.iter() {
-                if key.eq_ignore_ascii_case(wanted) {
-                    return Some((*scope_type, var));
-                }
+            if let Some(var) = map.get_ignoring_case(name.as_ref()) {
+                return Some((*scope_type, var));
             }
         }
 
@@ -719,12 +716,48 @@ impl ShellEnvironment {
 
 /// Represents a map from names to shell variables.
 #[derive(Clone, Debug, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(from = "SerializedVariableMap")
+)]
 pub struct ShellVariableMap {
+    variables: HashMap<String, ShellVariable>,
+    /// The names in `variables` by their lower-case spelling, for the case-insensitive
+    /// fallback (D31). It scanned every variable on each miss, so creating 20k variables
+    /// took ten times as long as in Bash (LANG-15).
+    #[cfg_attr(feature = "serde", serde(skip))]
+    by_folded_name: HashMap<String, Vec<String>>,
+}
+
+/// What is serialized of a [`ShellVariableMap`]; its index is rebuilt.
+#[cfg(feature = "serde")]
+#[derive(serde::Deserialize)]
+struct SerializedVariableMap {
     variables: HashMap<String, ShellVariable>,
 }
 
+#[cfg(feature = "serde")]
+impl From<SerializedVariableMap> for ShellVariableMap {
+    fn from(map: SerializedVariableMap) -> Self {
+        let mut result = Self::default();
+        for (name, var) in map.variables {
+            result.set(name, var);
+        }
+        result
+    }
+}
+
 impl ShellVariableMap {
+    /// The variable whose name differs from `name` only in case (D31). Of several, the
+    /// first in sorted order, which is the one spelled in upper case if there is one:
+    /// with `Foo` and `FOO` both set the answer depended on the order of the hash map
+    /// (LANG-15).
+    pub fn get_ignoring_case(&self, name: &str) -> Option<&ShellVariable> {
+        let names = self.by_folded_name.get(&name.to_ascii_lowercase())?;
+        self.variables.get(names.iter().min()?)
+    }
+
     //
     // Iterators/Getters
     //
@@ -763,7 +796,15 @@ impl ShellVariableMap {
     ///
     /// * `name` - The name of the variable to unset.
     pub fn unset(&mut self, name: &str) -> Option<ShellVariable> {
-        self.variables.remove(name)
+        let removed = self.variables.remove(name)?;
+        let folded = name.to_ascii_lowercase();
+        if let Some(names) = self.by_folded_name.get_mut(&folded) {
+            names.retain(|candidate| candidate != name);
+            if names.is_empty() {
+                self.by_folded_name.remove(&folded);
+            }
+        }
+        Some(removed)
     }
 
     /// Sets a variable in the map.
@@ -773,7 +814,14 @@ impl ShellVariableMap {
     /// * `name` - The name of the variable to set.
     /// * `var` - The variable to set.
     pub fn set<N: Into<String>>(&mut self, name: N, var: ShellVariable) -> Option<ShellVariable> {
-        self.variables.insert(name.into(), var)
+        let name = name.into();
+        if !self.variables.contains_key(&name) {
+            self.by_folded_name
+                .entry(name.to_ascii_lowercase())
+                .or_default()
+                .push(name.clone());
+        }
+        self.variables.insert(name, var)
     }
 }
 
@@ -791,6 +839,43 @@ pub fn valid_variable_name(s: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn scalar(value: &str) -> ShellVariable {
+        ShellVariable::new(ShellValue::String(value.to_owned()))
+    }
+
+    fn value_of(var: Option<&ShellVariable>) -> Option<String> {
+        match var.map(ShellVariable::value) {
+            Some(ShellValue::String(value)) => Some(value.clone()),
+            _ => None,
+        }
+    }
+
+    #[test]
+    fn a_case_insensitive_lookup_takes_the_first_name_in_sorted_order() {
+        // The fallback scanned every variable in hash map order (LANG-15).
+        let mut map = ShellVariableMap::default();
+        map.set("fOO", scalar("mixed"));
+        map.set("Foo", scalar("title"));
+        map.set("FOO", scalar("upper"));
+        assert_eq!(
+            value_of(map.get_ignoring_case("foo")).as_deref(),
+            Some("upper")
+        );
+        map.unset("FOO");
+        assert_eq!(
+            value_of(map.get_ignoring_case("foo")).as_deref(),
+            Some("title")
+        );
+        map.unset("Foo");
+        map.unset("fOO");
+        assert!(map.get_ignoring_case("foo").is_none());
+        // Setting a name again does not list it twice.
+        map.set("Path", scalar("a"));
+        map.set("Path", scalar("b"));
+        map.unset("Path");
+        assert!(map.get_ignoring_case("PATH").is_none());
+    }
 
     #[test]
     fn test_valid_variable_name() {

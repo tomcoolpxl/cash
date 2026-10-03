@@ -1128,7 +1128,10 @@ Windows environment blocks conventionally use `Path`, `ProgramFiles`, `Temp`,
 **empty** on a Windows-supplied environment while `$Path` worked — probably the
 highest-frequency breakage available.
 
-- Lookup is case-insensitive: `$PATH`, `$Path` and `$path` all resolve.
+- Lookup is case-insensitive: `$PATH`, `$Path` and `$path` all resolve. An exact match
+  always wins; of several names that differ only in case, the first in sorted order
+  does, which is the upper-case spelling when there is one. It reaches every variable,
+  the shell's own included: an unset `$seconds` reads `SECONDS` (kept, 2026-10-03).
 - Well-known POSIX names (`PATH`, `HOME`, `TMPDIR`, `USER`, …) normalise to uppercase on
   import, so scripts see the spelling they expect.
 

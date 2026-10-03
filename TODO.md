@@ -60,8 +60,7 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 12.3 Smaller expansion differences
 
-The D31 fallback scan is quadratic (LANG-15); nested `case` parses
-in exponential time (PI-07). Low ones in the report §5.1.
+Nested `case` parses in exponential time (PI-07). Low ones in the report §5.1.
 
 Also seen while fixing 8.1: past the function depth limit (500, or `FUNCNEST`) cash
 reports "maximum function call depth exceeded" and the script goes on, `$?` 0; Bash 5.3
