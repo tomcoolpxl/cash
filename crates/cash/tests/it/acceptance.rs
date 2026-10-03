@@ -23,36 +23,15 @@
 )]
 
 use std::io::Write as _;
-use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::path::Path;
+use std::process::Stdio;
 
+use crate::common::{CASH, Output, Scratch, cash_command, output_of, run as cash};
 use crate::process_identity::OwnPing;
-
-/// The binary under test, as built by cargo for this integration test.
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
-
-struct Output {
-    stdout: String,
-    stderr: String,
-    code: i32,
-}
-
-/// Run a script through `cash -c`.
-fn cash(script: &str) -> Output {
-    run(&["-c".to_string(), script.to_string()])
-}
 
 /// Run `cash` with arbitrary arguments.
 fn run(args: &[String]) -> Output {
-    let out = Command::new(CASH)
-        .args(args)
-        .output()
-        .expect("failed to run cash");
-    Output {
-        stdout: String::from_utf8_lossy(&out.stdout).trim_end().to_string(),
-        stderr: String::from_utf8_lossy(&out.stderr).trim_end().to_string(),
-        code: out.status.code().unwrap_or(-1),
-    }
+    output_of(cash_command().args(args))
 }
 
 /// Run a script through `cash -c` with `input` waiting on its standard input, a pipe.
@@ -62,7 +41,7 @@ fn cash_reading(script: &str, input: &str) -> Output {
 
 /// Run `cash` with arbitrary arguments and `input` waiting on its standard input.
 fn run_reading(args: &[&str], input: &str) -> Output {
-    let mut child = Command::new(CASH)
+    let mut child = cash_command()
         .args(args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -87,7 +66,7 @@ fn run_reading(args: &[&str], input: &str) -> Output {
 /// Run a script through `cash -c` in `dir`, which is its temp directory as well; one
 /// still running after 30 seconds is ended, and the test fails.
 fn cash_in_scratch(dir: &Path, script: &str) -> Output {
-    let mut child = Command::new(CASH)
+    let mut child = cash_command()
         .args(["-c", script])
         .current_dir(dir)
         .env("TEMP", dir)
@@ -110,34 +89,6 @@ fn cash_in_scratch(dir: &Path, script: &str) -> Output {
         stdout: String::from_utf8_lossy(&out.stdout).trim_end().to_string(),
         stderr: String::from_utf8_lossy(&out.stderr).trim_end().to_string(),
         code: out.status.code().unwrap_or(-1),
-    }
-}
-
-/// A scratch directory that cleans itself up.
-struct Scratch(PathBuf);
-
-impl Scratch {
-    fn new(name: &str) -> Self {
-        let dir =
-            std::env::temp_dir().join(format!("cash-acceptance-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).expect("create scratch");
-        Self(dir)
-    }
-
-    fn path(&self) -> &Path {
-        &self.0
-    }
-
-    /// The directory in cash's canonical spelling, safe to paste into a script.
-    fn as_script_path(&self) -> String {
-        self.0.to_string_lossy().replace('\\', "/")
-    }
-}
-
-impl Drop for Scratch {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
     }
 }
 
@@ -838,7 +789,7 @@ fn a_name_that_only_resembles_a_device_is_a_file() {
 
 #[test]
 fn the_session_job_is_installed() {
-    let out = Command::new(CASH)
+    let out = cash_command()
         .args(["-c", "true"])
         .env("CASH_DEBUG_SESSION", "1")
         .output()
@@ -1393,7 +1344,7 @@ fn killing_a_job_reaps_its_whole_tree() {
     let cash_path = CASH.replace('\\', "/");
 
     let script = format!(
-        r#""{cash_path}" -c '"{ping}" -n 40 127.0.0.1 >/dev/null & sleep 30' &
+        r#""{cash_path}" --no-config -c '"{ping}" -n 40 127.0.0.1 >/dev/null & sleep 30' &
 sleep 3
 pidof {name} >/dev/null && echo started
 kill %1

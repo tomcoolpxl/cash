@@ -23,30 +23,14 @@
 )]
 
 use std::path::Path;
-use std::process::Command;
 
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
-
-struct Output {
-    stdout: String,
-    stderr: String,
-    code: i32,
-}
+use crate::common::{Output, cash_command, output_of};
 
 /// Runs `script` with `dir` as the only `PATH` entry ahead of Windows itself, so nothing
 /// installed on the machine (Git, Scoop) can answer in its place.
 fn cash_with_path(dir: &Path, script: &str) -> Output {
     let path = format!(r"{};C:\WINDOWS\system32;C:\WINDOWS", dir.display());
-    let out = Command::new(CASH)
-        .args(["-c", script])
-        .env("PATH", path)
-        .output()
-        .expect("failed to run cash");
-    Output {
-        stdout: String::from_utf8_lossy(&out.stdout).trim_end().to_string(),
-        stderr: String::from_utf8_lossy(&out.stderr).trim_end().to_string(),
-        code: out.status.code().unwrap_or(-1),
-    }
+    output_of(cash_command().args(["-c", script]).env("PATH", path))
 }
 
 /// A directory holding an extensionless `#!/bin/sh` script, the shape of Git's `egrep`.

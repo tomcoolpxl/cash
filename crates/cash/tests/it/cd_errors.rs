@@ -12,14 +12,12 @@
     reason = "an integration test is outside a test module by construction"
 )]
 
-use std::process::Command;
-
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
+use crate::common::cash_command;
 
 /// Standard error and the exit status of `script`, run as `bash -c` would be: with `$0`
 /// `bash`, so its errors read as Bash's do, `bash: line 1: cd: …`.
 fn stderr_and_status(script: &str) -> (String, i32) {
-    let out = Command::new(CASH)
+    let out = cash_command()
         .args(["-c", script, "bash"])
         .output()
         .expect("run cash");

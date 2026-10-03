@@ -15,15 +15,8 @@
 )]
 
 use std::path::PathBuf;
-use std::process::Command;
 
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
-
-struct Output {
-    stdout: String,
-    stderr: String,
-    code: i32,
-}
+use crate::common::{CASH, Output, cash_command, output_of};
 
 fn cash(script: &str) -> Output {
     run(&["-c", script])
@@ -34,16 +27,7 @@ fn cash_login(script: &str) -> Output {
 }
 
 fn run(args: &[&str]) -> Output {
-    let out = Command::new(CASH)
-        .args(args)
-        .env("HISTFILE", "")
-        .output()
-        .expect("failed to run cash");
-    Output {
-        stdout: String::from_utf8_lossy(&out.stdout).trim_end().to_string(),
-        stderr: String::from_utf8_lossy(&out.stderr).trim_end().to_string(),
-        code: out.status.code().unwrap_or(-1),
-    }
+    output_of(cash_command().args(args).env("HISTFILE", ""))
 }
 
 /// Scratch sandbox directory in %TEMP% that cleans up after itself.
@@ -61,17 +45,12 @@ impl Sandbox {
     }
 
     fn run(&self, script: &str) -> Output {
-        let out = Command::new(CASH)
-            .current_dir(&self.root)
-            .args(["-c", script])
-            .env("HISTFILE", "")
-            .output()
-            .expect("failed to run cash in sandbox");
-        Output {
-            stdout: String::from_utf8_lossy(&out.stdout).trim_end().to_string(),
-            stderr: String::from_utf8_lossy(&out.stderr).trim_end().to_string(),
-            code: out.status.code().unwrap_or(-1),
-        }
+        output_of(
+            cash_command()
+                .current_dir(&self.root)
+                .args(["-c", script])
+                .env("HISTFILE", ""),
+        )
     }
 }
 
@@ -394,7 +373,7 @@ fn xargs_prefers_builtins_over_path_for_default_and_explicit_echo() {
     let external = sandbox.root.join("echo.exe");
     std::fs::copy(CASH, &external).unwrap();
     for script in ["printf 'hello' | xargs", "printf 'hello' | xargs echo"] {
-        let out = Command::new(CASH)
+        let out = cash_command()
             .env("PATH", &sandbox.root)
             .args(["-c", script])
             .output()
@@ -405,7 +384,7 @@ fn xargs_prefers_builtins_over_path_for_default_and_explicit_echo() {
 
     // Disabling the builtin must restore external lookup, without falling back
     // to the bundled utility. The renamed cash understands this explicit mode.
-    let out = Command::new(CASH)
+    let out = cash_command()
         .env("PATH", &sandbox.root)
         .args([
             "-c",

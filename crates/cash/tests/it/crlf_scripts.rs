@@ -25,9 +25,8 @@
 )]
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
+use crate::common::{Output, cash_command, output_of};
 
 struct Scratch(PathBuf);
 
@@ -49,22 +48,8 @@ impl Drop for Scratch {
     }
 }
 
-struct Output {
-    stdout: String,
-    stderr: String,
-    code: i32,
-}
-
 fn run(path: &Path) -> Output {
-    let out = Command::new(CASH)
-        .arg(path.to_string_lossy().replace('\\', "/"))
-        .output()
-        .expect("failed to run cash");
-    Output {
-        stdout: String::from_utf8_lossy(&out.stdout).trim_end().to_string(),
-        stderr: String::from_utf8_lossy(&out.stderr).trim_end().to_string(),
-        code: out.status.code().unwrap_or(-1),
-    }
+    output_of(cash_command().arg(path.to_string_lossy().replace('\\', "/")))
 }
 
 /// Write `source` twice — once with LF endings, once with CRLF — run both, and require
@@ -152,7 +137,7 @@ fn here_document_content_is_delivered_with_lf_endings() {
     )
     .expect("write");
 
-    let out = Command::new(CASH)
+    let out = cash_command()
         .arg(script.to_string_lossy().replace('\\', "/"))
         .current_dir(scratch.path())
         .output()
@@ -273,7 +258,7 @@ fn a_sourced_file_may_have_crlf_independently_of_its_caller() {
     )
     .expect("write main");
 
-    let out = Command::new(CASH)
+    let out = cash_command()
         .arg("./main.sh")
         .current_dir(scratch.path())
         .output()
@@ -292,7 +277,7 @@ fn a_sourced_file_may_have_crlf_independently_of_its_caller() {
 fn dash_c_accepts_crlf() {
     // A `-c` string can be assembled from a CRLF file by a caller that never looked at
     // its bytes — a CI system reading a step out of a YAML file, for instance.
-    let out = Command::new(CASH)
+    let out = cash_command()
         .args(["-c", "if true; then\r\n    echo dash-c-ok\r\nfi\r\n"])
         .output()
         .expect("failed to run cash");
@@ -307,7 +292,7 @@ fn dash_c_accepts_crlf() {
 
 #[test]
 fn eval_accepts_crlf() {
-    let out = Command::new(CASH)
+    let out = cash_command()
         .args([
             "-c",
             r#"eval "$(printf 'if true; then\r\n  echo eval-ok\r\nfi\r\n')""#,
@@ -377,7 +362,7 @@ fn a_lone_carriage_return_in_a_crlf_script_is_still_data() {
     let script = scratch.path().join("s.sh");
     std::fs::write(&script, b"printf 'a\rb' > out.txt\r\n").expect("write");
 
-    let out = Command::new(CASH)
+    let out = cash_command()
         .arg(script.to_string_lossy().replace('\\', "/"))
         .current_dir(scratch.path())
         .output()

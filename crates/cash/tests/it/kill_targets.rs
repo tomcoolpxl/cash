@@ -34,31 +34,13 @@
 
 use std::process::Command;
 
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
+use crate::common::run as cash;
 
 /// What `wait "$child"; echo "status=$?"` prints for a child that `KILL` ended: 128 + 9.
 /// A child nothing ended runs out its ten echoes and reports 0. `wait` is asked, rather
 /// than `kill -0` a second later, because the status comes from the handle cash holds;
 /// the pid may be another process's by then (see `process_identity.rs`).
 const KILLED: &str = "status=137";
-
-struct Output {
-    stdout: String,
-    stderr: String,
-    code: i32,
-}
-
-fn cash(script: &str) -> Output {
-    let out = Command::new(CASH)
-        .args(["-c", script])
-        .output()
-        .expect("failed to run cash");
-    Output {
-        stdout: String::from_utf8_lossy(&out.stdout).trim_end().to_string(),
-        stderr: String::from_utf8_lossy(&out.stderr).trim_end().to_string(),
-        code: out.status.code().unwrap_or(-1),
-    }
-}
 
 // ---------------------------------------------------------------------------
 // Target 0 — the one that took the console down

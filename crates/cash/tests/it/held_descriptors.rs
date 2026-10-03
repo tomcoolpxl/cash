@@ -15,9 +15,9 @@
 )]
 
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
+use crate::common::cash_command;
 
 /// The fd-injection refusal from `sys/stubs/commands.rs`.
 const REFUSAL: &str = "fd redirections";
@@ -28,7 +28,7 @@ struct Output {
 }
 
 fn cash_in(dir: &Path, script: &str) -> Output {
-    let out = Command::new(CASH)
+    let out = cash_command()
         .current_dir(dir)
         .args(["--noprofile", "--norc", "-c", script])
         .stdin(Stdio::null())

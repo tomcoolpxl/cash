@@ -11,7 +11,7 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
+use crate::common::CASH;
 
 fn local_app_data(name: &str) -> PathBuf {
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR"))
@@ -30,6 +30,9 @@ fn cash(local: &Path, arg: &str) -> Output {
     cash_with_fonts(local, arg, NO_FONTS)
 }
 
+/// `cash ARG`. Here and below, not `cash_command()`: `--terminal-profile` and
+/// `--remove-terminal-profile` are only the subcommands as cash's first argument, and
+/// neither reads the config or runs a script.
 fn cash_with_fonts(local: &Path, arg: &str, fonts_key: &str) -> Output {
     Command::new(CASH)
         .arg(arg)

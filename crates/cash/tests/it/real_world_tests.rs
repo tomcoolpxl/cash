@@ -20,7 +20,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
+use crate::common::cash_command;
 
 #[derive(Debug, PartialEq, Eq)]
 struct Output {
@@ -39,7 +39,7 @@ fn repo_root() -> PathBuf {
 }
 
 fn cash_eval(script: &str) -> Output {
-    let out = Command::new(CASH)
+    let out = cash_command()
         .args(["-c", script])
         .output()
         .expect("failed to execute cash");
@@ -59,7 +59,7 @@ fn cash_eval(script: &str) -> Output {
 /// Runs the script at `script_path` on `input`, with `dir` searched first for commands
 /// if it exists.
 fn cash_stdin_with_path_first(script_path: &Path, input: &str, dir: &Path) -> Output {
-    let mut command = Command::new(CASH);
+    let mut command = cash_command();
     if dir.is_dir() {
         let mut entries = vec![dir.to_path_buf()];
         entries.extend(std::env::split_paths(
@@ -165,7 +165,7 @@ fn test_real_world_pure_bash_bible_suite() {
         run_script
     );
 
-    let out = Command::new(CASH)
+    let out = cash_command()
         .arg(&run_script)
         .output()
         .expect("failed to run pure-bash-bible runner");
@@ -201,7 +201,7 @@ fn test_gnu_bash_strip_tests() {
     assert!(test_file.exists());
     assert!(right_file.exists());
 
-    let out = Command::new(CASH)
+    let out = cash_command()
         .arg(&test_file)
         .current_dir(test_file.parent().unwrap())
         .output()
@@ -231,7 +231,7 @@ fn test_gnu_bash_herestr_tests() {
     assert!(test_file.exists());
     assert!(right_file.exists());
 
-    let out = Command::new(CASH)
+    let out = cash_command()
         .arg(&test_file)
         .current_dir(test_file.parent().unwrap())
         .output()
@@ -259,7 +259,7 @@ fn test_gnu_bash_casemod_tests() {
     let test_file = repo_root().join("crates/cash/tests/gnu_bash_tests/casemod.tests");
     assert!(test_file.exists());
 
-    let out = Command::new(CASH)
+    let out = cash_command()
         .arg(&test_file)
         .current_dir(test_file.parent().unwrap())
         .output()

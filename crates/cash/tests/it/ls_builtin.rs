@@ -17,7 +17,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
+use crate::common::{Output, cash_command, output_of, run as cash};
 
 struct Scratch(PathBuf);
 
@@ -36,24 +36,6 @@ impl Scratch {
 impl Drop for Scratch {
     fn drop(&mut self) {
         let _ = std::fs::remove_dir_all(&self.0);
-    }
-}
-
-struct Output {
-    stdout: String,
-    stderr: String,
-    code: i32,
-}
-
-fn cash(script: &str) -> Output {
-    let out = Command::new(CASH)
-        .args(["-c", script])
-        .output()
-        .expect("failed to run cash");
-    Output {
-        stdout: String::from_utf8_lossy(&out.stdout).trim_end().to_string(),
-        stderr: String::from_utf8_lossy(&out.stderr).trim_end().to_string(),
-        code: out.status.code().unwrap_or(-1),
     }
 }
 
@@ -344,7 +326,7 @@ fn ls_icons_show_when_asked_and_stay_out_of_pipes() {
 /// Run `script` as Windows Terminal starts cash in a profile whose settings are under
 /// `local`, or, given `None`, outside Terminal.
 fn cash_in_terminal(script: &str, local: Option<&Path>) -> Output {
-    let mut command = Command::new(CASH);
+    let mut command = cash_command();
     command
         .args(["-c", script])
         .env_remove("WT_SESSION")
@@ -355,12 +337,7 @@ fn cash_in_terminal(script: &str, local: Option<&Path>) -> Output {
             .env("WT_PROFILE_ID", "{43e4cdd3-eb67-5e13-bd17-fa0d7f8cf3ff}")
             .env("LOCALAPPDATA", local);
     }
-    let out = command.output().expect("failed to run cash");
-    Output {
-        stdout: String::from_utf8_lossy(&out.stdout).trim_end().to_string(),
-        stderr: String::from_utf8_lossy(&out.stderr).trim_end().to_string(),
-        code: out.status.code().unwrap_or(-1),
-    }
+    output_of(&mut command)
 }
 
 /// Terminal's settings under `local`, the profile drawn in `face` (Terminal's own font

@@ -15,9 +15,9 @@
 )]
 
 use std::net::{TcpListener, TcpStream, UdpSocket};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
+use crate::common::cash_command;
 
 struct Output {
     stdout: String,
@@ -26,7 +26,7 @@ struct Output {
 }
 
 fn cash(script: &str) -> Output {
-    let out = Command::new(CASH)
+    let out = cash_command()
         .args(["--noprofile", "--norc", "-c", script])
         .stdin(Stdio::null())
         .output()

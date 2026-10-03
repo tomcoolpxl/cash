@@ -14,9 +14,9 @@
 
 use std::os::windows::process::CommandExt as _;
 use std::path::PathBuf;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
+use crate::common::cash_command;
 
 /// A console of its own, without a window, for `reset` to restore.
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -30,7 +30,7 @@ fn oracle_dir() -> PathBuf {
 /// Runs an oracle script under cash; standard output and error together, as the golden
 /// files were made.
 fn run_oracle_script(name: &str) -> String {
-    let out = Command::new(CASH)
+    let out = cash_command()
         .arg(format!("{name}.sh"))
         .current_dir(oracle_dir())
         .stdin(Stdio::null())
@@ -91,7 +91,7 @@ fn getopt_drives_a_real_option_loop() {
         }
         parse file1 -v --output='C:\out dir\x.txt' "it's" -o- --verb -- -v
     "#;
-    let out = Command::new(CASH)
+    let out = cash_command()
         .args(["-c", script])
         .output()
         .expect("run cash");
@@ -105,7 +105,7 @@ fn getopt_drives_a_real_option_loop() {
 #[test]
 fn getopt_reports_itself_as_enhanced() {
     // Scripts test `getopt -T` for 4 before relying on long options.
-    let out = Command::new(CASH)
+    let out = cash_command()
         .args(["-c", "getopt -T; echo $?"])
         .output()
         .expect("run cash");
@@ -114,7 +114,7 @@ fn getopt_reports_itself_as_enhanced() {
 
 #[test]
 fn clear_writes_ncurses_bytes() {
-    let out = Command::new(CASH)
+    let out = cash_command()
         .args(["-c", "clear; printf '|'; clear -x"])
         .output()
         .expect("run cash");
@@ -123,7 +123,7 @@ fn clear_writes_ncurses_bytes() {
 
 #[test]
 fn reset_restores_the_console_and_writes_the_reset_sequence() {
-    let out = Command::new(CASH)
+    let out = cash_command()
         .args(["-c", "reset; echo rc=$?; reset -q"])
         .creation_flags(CREATE_NO_WINDOW)
         .stdin(Stdio::null())
@@ -141,7 +141,7 @@ fn reset_restores_the_console_and_writes_the_reset_sequence() {
 
 #[test]
 fn a_terminal_that_is_not_vt_is_refused() {
-    let out = Command::new(CASH)
+    let out = cash_command()
         .args(["-c", "clear -T dumb; echo $?; reset dumb; echo $?"])
         .output()
         .expect("run cash");

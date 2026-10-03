@@ -11,13 +11,13 @@
 //! A scratch folder's name carries the process id and a counter, so two test runs at
 //! once, another session's included, never empty each other's folders (BIN-19).
 //!
-//! Modules move to these helpers as they are touched.
+//! Every module starts cash from here. Where a test cannot take `cash_command()` whole
+//! (a subcommand such as `cash doctor` that must be cash's first argument), it uses
+//! [`CASH`] and says why.
 
 #![allow(
-    dead_code,
     clippy::expect_used,
-    reason = "a helper that no module calls yet is not an error while modules move here \
-              one at a time, and a test that cannot even start cash should stop loudly"
+    reason = "a test that cannot even start cash should stop loudly"
 )]
 
 use std::path::{Path, PathBuf};

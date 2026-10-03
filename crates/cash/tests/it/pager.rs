@@ -27,9 +27,7 @@
               alternating the two forms by accident of content reads worse."
 )]
 
-use std::process::Command;
-
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
+use crate::common::cash_command;
 
 struct Output {
     stdout: String,
@@ -38,7 +36,7 @@ struct Output {
 }
 
 fn cash(script: &str) -> Output {
-    let out = Command::new(CASH)
+    let out = cash_command()
         .args(["-c", script])
         .output()
         .expect("failed to run cash");

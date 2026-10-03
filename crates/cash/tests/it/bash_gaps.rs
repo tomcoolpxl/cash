@@ -9,12 +9,11 @@
 )]
 
 use std::path::Path;
-use std::process::Command;
 
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
+use crate::common::{CASH, cash_command};
 
 fn output(script: &str) -> (i32, String) {
-    let result = Command::new(CASH)
+    let result = cash_command()
         .args(["--noprofile", "--norc", "-c", script])
         .output()
         .unwrap();
@@ -28,7 +27,7 @@ fn output(script: &str) -> (i32, String) {
 }
 
 fn output_in(directory: &Path, script: &str) -> (i32, String) {
-    let result = Command::new(CASH)
+    let result = cash_command()
         .current_dir(directory)
         .args(["--noprofile", "--norc", "-c", script])
         .output()
@@ -288,7 +287,8 @@ fn posix_shell_does_not_load_bash_env() {
     let startup = root.join("startup.sh");
     std::fs::write(&startup, "echo startup\n").unwrap();
     let run = |posix| {
-        let mut command = Command::new(CASH);
+        // The test's own `BASH_ENV`, in place of the developer's `cash_command()` removed.
+        let mut command = cash_command();
         command.env("BASH_ENV", startup.to_string_lossy().replace('\\', "/"));
         if posix {
             command.arg("--posix");
@@ -347,7 +347,8 @@ fn startup_file_keeps_the_shells_zero_and_accepts_windows_paths() {
     let startup = root.join("startup.sh");
     std::fs::write(&startup, "printf 'startup=<%s>\\n' \"$0\"\n").unwrap();
 
-    let result = Command::new(CASH)
+    // The test's own `BASH_ENV`, in place of the developer's `cash_command()` removed.
+    let result = cash_command()
         .env("BASH_ENV", &startup)
         .args([
             "--noprofile",
@@ -382,7 +383,7 @@ fn bashrc_sees_the_shells_zero_and_its_own_name_with_forward_slashes() {
     )
     .unwrap();
 
-    let result = Command::new(CASH)
+    let result = cash_command()
         .env("HOME", &home)
         .args(["--noprofile", "-i", "-c", "printf 'body=<%s>\\n' \"$0\""])
         .output()
@@ -835,7 +836,7 @@ fn bash_53_bash_monoseconds_is_monotonic() {
 fn bash_53_bash_trapsig_and_trap_p() {
     // trap -P validation
     let (code, stderr) = {
-        let res = Command::new(CASH)
+        let res = cash_command()
             .args(["--noprofile", "--norc", "-c", "trap -P"])
             .output()
             .unwrap();
@@ -849,7 +850,7 @@ fn bash_53_bash_trapsig_and_trap_p() {
 
     // trap -p and -P collision
     let (code, stderr) = {
-        let res = Command::new(CASH)
+        let res = cash_command()
             .args(["--noprofile", "--norc", "-c", "trap -p -P EXIT"])
             .output()
             .unwrap();
@@ -888,7 +889,7 @@ fn bash_53_empty_path_resolves_to_current_directory() {
 }
 
 fn output_with_stderr(script: &str) -> (i32, String, String) {
-    let result = Command::new(CASH)
+    let result = cash_command()
         .args(["--noprofile", "--norc", "-c", script])
         .output()
         .unwrap();
@@ -907,7 +908,7 @@ fn output_with_stderr(script: &str) -> (i32, String, String) {
 }
 
 fn run_script_file(path: &Path) -> (i32, String, String) {
-    let result = Command::new(CASH)
+    let result = cash_command()
         .args(["--noprofile", "--norc"])
         .arg(path)
         .output()
@@ -1435,7 +1436,7 @@ fn script_output(name: &str, script: &str) -> (String, String) {
     let root = source_fixture(name);
     let file = root.join("script.sh");
     std::fs::write(&file, script).unwrap();
-    let result = Command::new(CASH)
+    let result = cash_command()
         .args(["--noprofile", "--norc"])
         .arg(&file)
         .output()
@@ -1948,7 +1949,7 @@ fn kill_defaults_to_term_and_a_killed_process_reports_bashs_status() {
 }
 
 fn output_with_args(script: &str, args: &[&str]) -> String {
-    let result = Command::new(CASH)
+    let result = cash_command()
         .args(["--noprofile", "--norc", "-c", script])
         .args(args)
         .output()

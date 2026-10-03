@@ -29,30 +29,20 @@ use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
+use crate::common::{Output, cash_command, output_of};
 use crate::process_identity::OwnPing;
-
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
 
 /// A console of its own, without a window.
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
-struct Output {
-    stdout: String,
-    code: i32,
-}
-
 /// Runs `script` in a cash that has a console to itself.
 fn isolated_cash(script: &str) -> Output {
-    let out = Command::new(CASH)
-        .args(["-c", script])
-        .creation_flags(CREATE_NO_WINDOW)
-        .stdin(Stdio::null())
-        .output()
-        .expect("run cash");
-    Output {
-        stdout: String::from_utf8_lossy(&out.stdout).trim_end().to_owned(),
-        code: out.status.code().unwrap_or(-1),
-    }
+    output_of(
+        cash_command()
+            .args(["-c", script])
+            .creation_flags(CREATE_NO_WINDOW)
+            .stdin(Stdio::null()),
+    )
 }
 
 #[test]

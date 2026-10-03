@@ -18,7 +18,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
+use crate::common::{CASH, ISOLATED_VARIABLES};
 
 /// A scratch directory, removed on drop, whose git sees neither the user's nor the system's
 /// configuration and makes the same commits every run.
@@ -63,8 +63,12 @@ impl Scratch {
 
     /// Run `script` in cash from `cwd` and return its stdout, CRLF normalized.
     fn cash(&self, cwd: &Path, script: &str, env: &[(&str, &Path)]) -> String {
+        // `cash_command()`'s isolation, on a command that already has git's.
         let mut command = self.command(CASH, cwd);
-        command.args(["--noprofile", "--norc", "-c", script]);
+        command.args(["--no-config", "--noprofile", "--norc", "-c", script]);
+        for name in ISOLATED_VARIABLES {
+            command.env_remove(name);
+        }
         for (name, value) in env {
             command.env(name, value);
         }

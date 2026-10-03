@@ -16,7 +16,7 @@
 use std::path::Path;
 use std::process::Command;
 
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
+use crate::common::CASH;
 
 /// A fake Scoop shim for `name`, pointing at `target`.
 fn shim(dir: &Path, name: &str, target: &str) {
@@ -29,6 +29,8 @@ fn shim(dir: &Path, name: &str, target: &str) {
 }
 
 fn doctor(path: &str) -> String {
+    // Not `cash_command()`: `doctor` is only the subcommand as cash's one argument, and
+    // it reads no config and runs no script.
     let out = Command::new(CASH)
         .arg("doctor")
         .env("PATH", path)

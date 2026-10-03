@@ -14,9 +14,8 @@
 )]
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
+use crate::common::cash_command;
 
 /// Git's MSYS2 `printf`, or `None` where Git for Windows is not installed.
 fn msys_printf() -> Option<PathBuf> {
@@ -79,7 +78,7 @@ fn hostile_arguments_survive_the_trip_to_an_msys_program() {
     let printf = printf.to_string_lossy().replace('\\', "/");
     let args: Vec<String> = HOSTILE.iter().map(|arg| sh_quote(arg)).collect();
     let script = format!("{} '<%s>' {}", sh_quote(&printf), args.join(" "));
-    let out = Command::new(CASH)
+    let out = cash_command()
         .args(["-c", &script])
         .current_dir(&dir)
         .output()
@@ -109,7 +108,7 @@ fn echoed_via(how: &str) -> Option<String> {
         PATH="C:/Program Files/Git/usr/bin:$PATH"
         {how}"#
     );
-    let out = Command::new(CASH)
+    let out = cash_command()
         .args(["-c", &script])
         .output()
         .expect("run cash");
@@ -228,7 +227,7 @@ fn git_egrep_script_gets_json_sh_pattern_intact() {
     let script = r#"CHAR='[^[:cntrl:]"\\]'; SPACE='[[:space:]]+'
         PATH="C:/Program Files/Git/usr/bin:$PATH"
         printf '"ab" c\n' | 'C:/Program Files/Git/usr/bin/egrep' -ao "\"$CHAR*\"|$SPACE" | od -An -c | tr -s ' '"#;
-    let out = Command::new(CASH)
+    let out = cash_command()
         .args(["-c", script])
         .output()
         .expect("run cash");
@@ -252,7 +251,7 @@ fn json_sh_patterns_reach_git_grep_intact() {
         r#"CHAR='[^[:cntrl:]"\\]'; SPACE='[[:space:]]+'
         printf '"ab" c\n' | '{grep}' -Eo "\"$CHAR*\"|$SPACE" | od -An -c | tr -s ' '"#
     );
-    let out = Command::new(CASH)
+    let out = cash_command()
         .args(["-c", &script])
         .output()
         .expect("run cash");

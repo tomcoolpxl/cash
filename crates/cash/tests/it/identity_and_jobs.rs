@@ -23,23 +23,7 @@
 
 use std::process::Command;
 
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
-
-struct Output {
-    stdout: String,
-    stderr: String,
-}
-
-fn cash(script: &str) -> Output {
-    let out = Command::new(CASH)
-        .args(["-c", script])
-        .output()
-        .expect("failed to run cash");
-    Output {
-        stdout: String::from_utf8_lossy(&out.stdout).trim_end().to_string(),
-        stderr: String::from_utf8_lossy(&out.stderr).trim_end().to_string(),
-    }
-}
+use crate::common::run as cash;
 
 // ---------------------------------------------------------------------------
 // Identity

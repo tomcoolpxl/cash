@@ -16,12 +16,12 @@
               test returns a Result so that setup can use ?"
 )]
 
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
+use crate::common::cash_command;
 
 fn cash(args: &[&str]) -> String {
-    let out = Command::new(CASH)
+    let out = cash_command()
         .args(args)
         .stdin(Stdio::null())
         .output()

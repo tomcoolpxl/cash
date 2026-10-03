@@ -20,9 +20,9 @@
 
 use std::os::windows::process::CommandExt as _;
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
+use crate::common::{CASH, cash_command};
 
 /// A console of its own, without a window.
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -53,13 +53,13 @@ fn run(dir: &Path, interactive: bool, body: &str) -> String {
     // The test runner may start everything with Ctrl-C ignored, a flag Windows passes to
     // children. An interactive cash clears it (D13); a script keeps what it inherits, so
     // the script case runs under an interactive cash that has cleared it.
-    let mut command = Command::new(CASH);
+    let mut command = cash_command();
     if interactive {
         command.arg("-i").arg(&script);
     } else {
         let spelled = script.to_string_lossy().replace('\\', "/");
         let cash = CASH.replace('\\', "/");
-        command.args(["-i", "-c", &format!("'{cash}' '{spelled}'")]);
+        command.args(["-i", "-c", &format!("'{cash}' --no-config '{spelled}'")]);
     }
     let out = command
         .creation_flags(CREATE_NO_WINDOW)

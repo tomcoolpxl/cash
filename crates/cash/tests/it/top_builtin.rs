@@ -23,35 +23,15 @@
 )]
 
 use std::path::PathBuf;
-use std::process::Command;
 use std::time::Duration;
 
 use cash_win32::conpty::ConPtySession;
 
+use crate::common::{CASH, run as cash};
 use crate::process_identity::still_running;
-
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
 
 /// One refresh, as short as `top` allows, so the tests stay quick and deterministic.
 const ONCE: &str = "top -b -n 1 -d 0.1";
-
-struct Output {
-    stdout: String,
-    stderr: String,
-    code: i32,
-}
-
-fn cash(script: &str) -> Output {
-    let out = Command::new(CASH)
-        .args(["-c", script])
-        .output()
-        .expect("failed to run cash");
-    Output {
-        stdout: String::from_utf8_lossy(&out.stdout).trim_end().to_string(),
-        stderr: String::from_utf8_lossy(&out.stderr).trim_end().to_string(),
-        code: out.status.code().unwrap_or(-1),
-    }
-}
 
 /// The rows of a refresh: everything after the header block.
 fn rows(stdout: &str) -> Vec<Vec<String>> {
@@ -366,10 +346,17 @@ fn the_shell_has_a_working_set() {
 // Interactive controls
 // ---------------------------------------------------------------------------
 
+// `--no-config` here, as `cash_command()` gives it; the pseudo terminal's cash inherits
+// the test's environment whole.
+
 #[test]
 fn question_mark_opens_help_and_q_exits() {
-    let mut session = ConPtySession::start(&PathBuf::from(CASH), &["-c", "top -d 5"], None)
-        .expect("start cash in a pseudo terminal");
+    let mut session = ConPtySession::start(
+        &PathBuf::from(CASH),
+        &["--no-config", "-c", "top -d 5"],
+        None,
+    )
+    .expect("start cash in a pseudo terminal");
 
     session.send("?").expect("send help key");
     session
@@ -388,8 +375,9 @@ fn question_mark_opens_help_and_q_exits() {
 }
 
 fn interactive(script: &str) -> ConPtySession {
-    let mut session = ConPtySession::start(&PathBuf::from(CASH), &["-c", script], None)
-        .expect("start cash in a pseudo terminal");
+    let mut session =
+        ConPtySession::start(&PathBuf::from(CASH), &["--no-config", "-c", script], None)
+            .expect("start cash in a pseudo terminal");
     session
         .expect("Tasks:", Duration::from_secs(10))
         .expect("top's first frame");

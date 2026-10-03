@@ -15,10 +15,10 @@
 )]
 
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::time::{Duration, Instant};
 
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
+use crate::common::cash_command;
 
 struct Output {
     stdout: String,
@@ -27,7 +27,7 @@ struct Output {
 }
 
 fn cash_in(dir: &Path, script: &str) -> Output {
-    let out = Command::new(CASH)
+    let out = cash_command()
         .current_dir(dir)
         .args(["--noprofile", "--norc", "-c", script])
         .stdin(Stdio::null())
@@ -220,7 +220,7 @@ fn fuser_kill_ends_the_holder() {
     std::fs::write(dir.join("held.txt"), "x").unwrap();
     // A child cash holds the file on descriptor 3 and spins; D26 keeps fd 3 from being
     // handed to an external `sleep`, so the wait stays inside the shell.
-    let mut child = Command::new(CASH)
+    let mut child = cash_command()
         .current_dir(&dir)
         .args([
             "--noprofile",

@@ -21,7 +21,7 @@
 use std::path::PathBuf;
 use std::process::Command;
 
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
+use crate::common::cash_command;
 
 /// Every script in the corpus. Tests that apply to all of them iterate this, so adding a
 /// script gets the cross-cutting coverage — CRLF endings, for one — without being asked.
@@ -61,7 +61,7 @@ fn run_script(name: &str) -> Run {
         script.display()
     );
 
-    let out = Command::new(CASH)
+    let out = cash_command()
         .arg(script.to_string_lossy().replace('\\', "/"))
         .output()
         .expect("failed to run cash");
@@ -204,7 +204,7 @@ fn every_corpus_script_runs_with_crlf_endings() {
         let crlf_path = staging.join(name);
         std::fs::write(&crlf_path, lf.replace('\n', "\r\n").as_bytes()).expect("write crlf copy");
 
-        let out = Command::new(CASH)
+        let out = cash_command()
             .arg(crlf_path.to_string_lossy().replace('\\', "/"))
             .output()
             .expect("failed to run cash");
@@ -235,7 +235,7 @@ fn a_trap_can_remove_a_directory_it_moved_out_of() {
     //
     // The workaround is to leave the directory first, which is good practice regardless.
     // Asserting it here means the recommended form stays working.
-    let out = Command::new(CASH)
+    let out = cash_command()
         .args([
             "-c",
             r#"d=$(mktemp -d); trap 'cd /; rm -rf "$d"' EXIT; cd "$d"; echo worked"#,

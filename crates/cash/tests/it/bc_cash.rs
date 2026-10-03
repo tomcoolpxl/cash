@@ -12,9 +12,9 @@
 )]
 
 use std::io::Write as _;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
+use crate::common::cash_command;
 
 struct Output {
     stdout: String,
@@ -24,7 +24,7 @@ struct Output {
 
 /// `cash -c SCRIPT` with `input` on standard input.
 fn cash(script: &str, input: &str) -> Output {
-    let mut child = Command::new(CASH)
+    let mut child = cash_command()
         .args(["-c", script])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -134,7 +134,7 @@ fn bc_matches_gnu_bc() {
     // so `set -e` and `|| die` catch a failed calculation (D56).
     let (head, errors) = golden.split_at(golden.find("## 49:\n").expect("error cases"));
     let expected = format!("{head}{}", errors.replace("rc=0\n", "rc=1\n"));
-    let out = Command::new(CASH)
+    let out = cash_command()
         .arg("bc_cases.sh")
         .current_dir(dir)
         .stdin(Stdio::null())

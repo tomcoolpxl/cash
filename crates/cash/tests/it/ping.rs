@@ -18,7 +18,7 @@ use std::os::windows::process::CommandExt as _;
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
+use crate::common::{CASH, cash_command};
 
 struct Output {
     stdout: String,
@@ -27,7 +27,7 @@ struct Output {
 }
 
 fn cash(script: &str) -> Output {
-    let out = Command::new(CASH)
+    let out = cash_command()
         .args(["-c", script])
         .stdin(Stdio::null())
         .output()
@@ -210,6 +210,8 @@ fn an_interrupt_prints_the_statistics() {
     // The bundled ping in a process group of its own, sharing this console, so a
     // Ctrl-Break can be aimed at it alone.
     const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
+    // Not `cash_command()`: `--invoke-bundled` is only the dispatch as cash's first
+    // argument, and the bundled ping reads no config and runs no script.
     let child = Command::new(CASH)
         .args(["--invoke-bundled", "ping", "-i", "0.2", "127.0.0.1"])
         .creation_flags(CREATE_NEW_PROCESS_GROUP)

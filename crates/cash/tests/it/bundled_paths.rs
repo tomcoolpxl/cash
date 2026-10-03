@@ -23,27 +23,7 @@
               alternating the two forms by accident of content reads worse."
 )]
 
-use std::process::Command;
-
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
-
-struct Output {
-    stdout: String,
-    stderr: String,
-    code: i32,
-}
-
-fn cash(script: &str) -> Output {
-    let out = Command::new(CASH)
-        .args(["-c", script])
-        .output()
-        .expect("failed to run cash");
-    Output {
-        stdout: String::from_utf8_lossy(&out.stdout).trim_end().to_string(),
-        stderr: String::from_utf8_lossy(&out.stderr).trim_end().to_string(),
-        code: out.status.code().unwrap_or(-1),
-    }
-}
+use crate::common::{Output, run as cash};
 
 /// Assert that every line of `stdout` is a canonically spelled path.
 fn assert_canonical(out: &Output, what: &str) {

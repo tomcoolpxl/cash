@@ -14,7 +14,7 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
+use crate::common::{CASH, cash_command};
 
 struct Dirs {
     _root: tempfile::TempDir,
@@ -36,6 +36,8 @@ fn dirs() -> Dirs {
 }
 
 fn init_rc(dirs: &Dirs, extra: &[&str]) -> Output {
+    // Not `cash_command()`: `--init-rc` is only the subcommand as cash's first argument,
+    // and it reads no config and runs no script.
     Command::new(CASH)
         .arg("--init-rc")
         .args(extra)
@@ -63,7 +65,7 @@ fn init_rc_writes_a_starter_that_cash_reads_without_complaint() {
 
     // An interactive cash reads it: its aliases, prompt and history settings are there,
     // and no line of it fails, which would print an error. SHLVL 2 skips the banner.
-    let shell = Command::new(CASH)
+    let shell = cash_command()
         .env("HOME", &d.home)
         .env("SHLVL", "2")
         .env_remove("WT_SESSION")

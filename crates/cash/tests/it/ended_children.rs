@@ -36,28 +36,19 @@ use std::time::{Duration, Instant};
 
 use cash_win32::process::{is_pid_alive, now_filetime, started};
 
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
+use crate::common::{Output, cash_command, output_of};
 
 /// How long a step may take before the test gives up on it; each takes well under a
 /// second when it works.
 const PATIENCE: Duration = Duration::from_secs(10);
 
-struct Output {
-    stdout: String,
-    stderr: String,
-}
-
 fn cash_in(dir: &Path, script: &str) -> Output {
-    let out = Command::new(CASH)
-        .args(["-c", script])
-        .current_dir(dir)
-        .stdin(Stdio::null())
-        .output()
-        .expect("failed to run cash");
-    Output {
-        stdout: String::from_utf8_lossy(&out.stdout).trim_end().to_string(),
-        stderr: String::from_utf8_lossy(&out.stderr).trim_end().to_string(),
-    }
+    output_of(
+        cash_command()
+            .args(["-c", script])
+            .current_dir(dir)
+            .stdin(Stdio::null()),
+    )
 }
 
 fn cash(script: &str) -> Output {
@@ -133,7 +124,7 @@ fn an_ended_background_childs_pid_stays_its_own() {
     // The shell reports on its ended child and then waits, so the test can look at the
     // pid while cash still remembers the job.
     let before = now_filetime();
-    let mut shell = Command::new(CASH)
+    let mut shell = cash_command()
         .args([
             "-c",
             r#"cmd.exe /d /c exit 7 & pid=$!
@@ -289,7 +280,7 @@ fn killall_w_waits_for_the_process_and_not_for_its_pid() {
 
     // `CONT` does nothing to a running process, so `-w` waits for the target to end by
     // itself; `-v` says when the signal has been sent.
-    let mut shell = Command::new(CASH)
+    let mut shell = cash_command()
         .args([
             "-c",
             &format!(r#"killall -v -w -CONT {name}; echo "rc=$?""#),

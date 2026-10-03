@@ -16,9 +16,7 @@
               threaded back through a Result."
 )]
 
-use std::process::Command;
-
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
+use crate::common::cash_command;
 
 /// Starts a process that outlives the batch file: after about two seconds it writes
 /// `marker`, then the batch file exits at once, as `code.cmd` does.
@@ -32,7 +30,7 @@ fn a_launched_process_survives_the_next_command() {
 
     // `whoami.exe` is any external command: spawning one sweeps finished jobs, which
     // is where the launcher's job used to be closed and its orphan killed.
-    let out = Command::new(CASH)
+    let out = cash_command()
         .args([
             "-c",
             "./launch.cmd; whoami.exe >/dev/null; sleep 5; cat marker",

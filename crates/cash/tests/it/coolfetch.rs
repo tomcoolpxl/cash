@@ -21,35 +21,16 @@
 )]
 
 use std::path::Path;
-use std::process::Command;
 use std::time::Duration;
 
 use cash_win32::conpty::ConPtySession;
 use cash_win32::vtscreen::Screen;
 
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
+use crate::common::{CASH, cash_command, run as cash};
 
 /// The picture is a sixel: a device control string, from this introducer to a string
 /// terminator.
 const PICTURE: &str = "\x1bP";
-
-struct Output {
-    stdout: String,
-    stderr: String,
-    code: i32,
-}
-
-fn cash(script: &str) -> Output {
-    let out = Command::new(CASH)
-        .args(["-c", script])
-        .output()
-        .expect("failed to run cash");
-    Output {
-        stdout: String::from_utf8_lossy(&out.stdout).trim_end().to_string(),
-        stderr: String::from_utf8_lossy(&out.stderr).trim_end().to_string(),
-        code: out.status.code().unwrap_or(-1),
-    }
-}
 
 /// The value of one labelled line, e.g. `OS`.
 fn field(stdout: &str, label: &str) -> String {
@@ -183,7 +164,7 @@ fn lists_all_accessible_drives_regardless_of_working_directory() {
     assert!(!drives.is_empty(), "expected at least the system drive");
 
     for cwd in &drives {
-        let out = Command::new(CASH)
+        let out = cash_command()
             .current_dir(format!("{cwd}/"))
             .args(["-c", "coolfetch --no-color --no-logo"])
             .output()
@@ -283,7 +264,7 @@ const NO_PROFILE: &str = "unset WT_PROFILE_ID";
 /// What `coolfetch --logo=image` writes after `setup`: asked for by name, the picture goes
 /// even down a pipe.
 fn with_picture_after(setup: &str) -> String {
-    let out = Command::new(CASH)
+    let out = cash_command()
         .args([
             "-c",
             &std::format!("{setup}; coolfetch --logo=image --no-color"),
@@ -468,9 +449,17 @@ const ROOMY: (i16, i16) = (200, 40);
 /// cash, in `dir`.
 fn on_a_terminal(script: &str, dir: Option<&Path>, size: (i16, i16)) -> String {
     let script = std::format!("{script}; echo coolfetch-finished");
-    let mut session =
-        ConPtySession::start_sized(Path::new(CASH), &["-c", &script], None, dir, size.0, size.1)
-            .expect("start cash in a pseudo terminal");
+    // `--no-config`, as `cash_command()` gives it; the pseudo terminal's cash inherits
+    // the test's environment whole.
+    let mut session = ConPtySession::start_sized(
+        Path::new(CASH),
+        &["--no-config", "-c", &script],
+        None,
+        dir,
+        size.0,
+        size.1,
+    )
+    .expect("start cash in a pseudo terminal");
     session
         .expect("coolfetch-finished", Duration::from_secs(20))
         .expect("the script finishes");

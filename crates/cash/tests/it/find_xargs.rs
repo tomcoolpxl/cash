@@ -26,13 +26,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
-
-struct Output {
-    stdout: String,
-    stderr: String,
-    code: i32,
-}
+use crate::common::{CASH, Output, run_in};
 
 /// A small tree to search, rebuilt per test so the runs do not see each other.
 ///
@@ -74,16 +68,7 @@ impl Sandbox {
     }
 
     fn run(&self, script: &str) -> Output {
-        let out = Command::new(CASH)
-            .current_dir(&self.root)
-            .args(["-c", script])
-            .output()
-            .expect("failed to run cash");
-        Output {
-            stdout: String::from_utf8_lossy(&out.stdout).trim_end().to_string(),
-            stderr: String::from_utf8_lossy(&out.stderr).trim_end().to_string(),
-            code: out.status.code().unwrap_or(-1),
-        }
+        run_in(&self.root, script)
     }
 
     fn exists(&self, path: &str) -> bool {

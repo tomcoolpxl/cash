@@ -14,17 +14,12 @@
 )]
 
 use std::os::windows::process::CommandExt as _;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
+use crate::common::{Output, cash_command, output_of};
 
 /// A console of its own, without a window, so no signal can reach the test runner.
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-
-struct Output {
-    stdout: String,
-    stderr: String,
-}
 
 /// Runs `script` after starting two background `ping`s whose pids are `$a` and `$b`
 /// (`$a` the older), and kills them afterwards.
@@ -34,16 +29,12 @@ fn with_two_pings(script: &str) -> Output {
          ping.exe -n 60 127.0.0.1 >/dev/null & b=$!; sleep 0.5; \
          {script}; kill -9 $a 2>/dev/null; kill -9 $b 2>/dev/null"
     );
-    let out = Command::new(CASH)
-        .args(["-c", &full])
-        .creation_flags(CREATE_NO_WINDOW)
-        .stdin(Stdio::null())
-        .output()
-        .expect("run cash");
-    Output {
-        stdout: String::from_utf8_lossy(&out.stdout).trim_end().to_owned(),
-        stderr: String::from_utf8_lossy(&out.stderr).trim_end().to_owned(),
-    }
+    output_of(
+        cash_command()
+            .args(["-c", &full])
+            .creation_flags(CREATE_NO_WINDOW)
+            .stdin(Stdio::null()),
+    )
 }
 
 #[test]

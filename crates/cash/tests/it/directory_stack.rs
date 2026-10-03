@@ -23,18 +23,11 @@
 )]
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
+use crate::common::{Output, cash_command, output_of};
 
 /// Pushes three directories, leaving the listing `[c, b, a, ~]`.
 const BUILD: &str = "pushd a > /dev/null; pushd ../b > /dev/null; pushd ../c > /dev/null; ";
-
-struct Output {
-    stdout: String,
-    stderr: String,
-    code: i32,
-}
 
 /// A directory tree to move around in, which is also the shell's `$HOME` — so cash
 /// renders every path in it as `~/...` and the assertions can say what they mean instead
@@ -68,17 +61,12 @@ impl Drop for Sandbox {
 }
 
 fn run_in(dir: &Path, script: &str) -> Output {
-    let out = Command::new(CASH)
-        .current_dir(dir)
-        .env("HOME", dir)
-        .args(["-c", script])
-        .output()
-        .expect("failed to run cash");
-    Output {
-        stdout: String::from_utf8_lossy(&out.stdout).trim_end().to_string(),
-        stderr: String::from_utf8_lossy(&out.stderr).trim_end().to_string(),
-        code: out.status.code().unwrap_or(-1),
-    }
+    output_of(
+        cash_command()
+            .current_dir(dir)
+            .env("HOME", dir)
+            .args(["-c", script]),
+    )
 }
 
 // ---------------------------------------------------------------------------

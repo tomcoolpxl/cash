@@ -7,13 +7,13 @@
     reason = "an integration test is outside a test module by construction"
 )]
 
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
+use crate::common::cash_command;
 
 /// Runs `script` under cash; standard output, standard error and the exit status.
 fn run(script: &str) -> (String, String, i32) {
-    let out = Command::new(CASH)
+    let out = cash_command()
         .args(["--norc", "--noprofile", "-c", script])
         .stdin(Stdio::null())
         .output()

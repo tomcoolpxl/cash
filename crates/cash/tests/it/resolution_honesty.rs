@@ -29,36 +29,15 @@
 
 use std::process::Command;
 
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
+use crate::common::{CASH, Output, cash_command, output_of as run, run as cash};
 
 /// A `PATH` with nothing but Windows on it, which is what a machine without Git for
 /// Windows looks like.
 const BARE_PATH: &str = r"C:\WINDOWS\system32;C:\WINDOWS";
 
-struct Output {
-    stdout: String,
-    stderr: String,
-    code: i32,
-}
-
-fn cash(script: &str) -> Output {
-    run(Command::new(CASH).args(["-c", script]))
-}
-
-/// The same, on a machine that has only Windows installed.
+/// `cash -c SCRIPT` on a machine that has only Windows installed.
 fn cash_bare(script: &str) -> Output {
-    run(Command::new(CASH)
-        .args(["-c", script])
-        .env("PATH", BARE_PATH))
-}
-
-fn run(command: &mut Command) -> Output {
-    let out = command.output().expect("failed to run cash");
-    Output {
-        stdout: String::from_utf8_lossy(&out.stdout).trim_end().to_string(),
-        stderr: String::from_utf8_lossy(&out.stderr).trim_end().to_string(),
-        code: out.status.code().unwrap_or(-1),
-    }
+    run(cash_command().args(["-c", script]).env("PATH", BARE_PATH))
 }
 
 // ---------------------------------------------------------------------------
@@ -253,7 +232,7 @@ fn env_and_timeout_run_cash_for_sh_and_bash() {
 fn cash_resolves_to_the_running_cash() {
     // A terminal profile starts cash by full path, so its folder is usually not on PATH;
     // `cash doctor` must work anyway.
-    let out = cash_bare("which cash; cash -c 'echo nested-cash-ran'");
+    let out = cash_bare("which cash; cash --no-config -c 'echo nested-cash-ran'");
     let lines: Vec<&str> = out.stdout.lines().collect();
     assert!(
         lines
@@ -295,7 +274,7 @@ fn a_bin_sh_shebang_has_an_interpreter() {
     let script = dir.join("s.sh");
     std::fs::write(&script, b"#!/bin/sh\necho shebang-ran\n").expect("write");
 
-    let out = run(Command::new(CASH)
+    let out = run(cash_command()
         .arg(script.to_string_lossy().replace('\\', "/"))
         .env("PATH", BARE_PATH));
 
@@ -503,6 +482,9 @@ fn chmod_r_reaches_into_a_directory() {
 // ---------------------------------------------------------------------------
 // `cash doctor` reports cash's answer (D35)
 // ---------------------------------------------------------------------------
+
+// These run `cash doctor` without `cash_command()`: `doctor` is only the subcommand as
+// cash's one argument, and it reads no config and runs no script.
 
 #[test]
 fn doctor_does_not_advise_installing_a_builtin() {

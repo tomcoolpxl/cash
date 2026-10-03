@@ -25,27 +25,7 @@
               alternating the two forms by accident of content reads worse."
 )]
 
-use std::process::Command;
-
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
-
-struct Output {
-    stdout: String,
-    stderr: String,
-    code: i32,
-}
-
-fn cash(script: &str) -> Output {
-    let out = Command::new(CASH)
-        .args(["-c", script])
-        .output()
-        .expect("failed to run cash");
-    Output {
-        stdout: String::from_utf8_lossy(&out.stdout).trim_end().to_string(),
-        stderr: String::from_utf8_lossy(&out.stderr).trim_end().to_string(),
-        code: out.status.code().unwrap_or(-1),
-    }
-}
+use crate::common::{cash_command, run as cash};
 
 // ---------------------------------------------------------------------------
 // Here-documents above the pipe buffer (the deadlock)
@@ -101,7 +81,7 @@ fn here_documents_do_not_leak_temp_files() {
     let _ = std::fs::remove_dir_all(&tmp);
     std::fs::create_dir_all(&tmp).unwrap();
     let run = |script: &str| {
-        let out = Command::new(CASH)
+        let out = cash_command()
             .env("TMP", &tmp)
             .env("TEMP", &tmp)
             .args(["-c", script])
@@ -399,7 +379,7 @@ fn logout_builtin_requires_login_shell() {
 
     // A login shell, without the runner's own ~/.profile, whose last status logout would
     // otherwise exit with.
-    let login_out = Command::new(CASH)
+    let login_out = cash_command()
         .args(["--login", "--noprofile", "-c", "logout"])
         .output()
         .expect("run cash");

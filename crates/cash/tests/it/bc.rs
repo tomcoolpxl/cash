@@ -22,9 +22,9 @@ mod upstream;
 pub(crate) mod plib {
     pub mod testing {
         use std::io::Write as _;
-        use std::process::{Command, Output, Stdio};
+        use std::process::{Output, Stdio};
 
-        const CASH: &str = env!("CARGO_BIN_EXE_cash");
+        use crate::common::{CASH, cash_command};
 
         /// One run of a utility and what it must produce.
         pub struct TestPlan {
@@ -43,7 +43,7 @@ pub(crate) mod plib {
                 .map(|a| format!("'{}'", a.replace('\'', r"'\''")))
                 .collect();
             let script = format!("{cmd} {}", quoted.join(" "));
-            let mut child = Command::new(CASH)
+            let mut child = cash_command()
                 .args(["-c", &script])
                 .stdin(Stdio::piped())
                 .stdout(Stdio::piped())

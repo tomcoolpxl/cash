@@ -23,19 +23,13 @@
 )]
 
 use std::io::Write;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
-
-struct Output {
-    stdout: String,
-    stderr: String,
-    code: i32,
-}
+use crate::common::{Output, cash_command};
 
 /// Run a script with `input` on standard input.
 fn cash_with_input(script: &str, input: &str) -> Output {
-    let mut child = Command::new(CASH)
+    let mut child = cash_command()
         .args(["-c", script])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

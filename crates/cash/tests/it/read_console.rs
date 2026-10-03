@@ -58,7 +58,7 @@ use std::time::{Duration, Instant};
 
 use cash_win32::conpty::ConPtySession;
 
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
+use crate::common::{CASH, cash_command};
 
 /// What a script prints before it reads, and once it is done.
 const READING: &str = "now-reading";
@@ -103,9 +103,15 @@ impl Script {
         )
         .expect("write the script");
 
-        let mut session =
-            ConPtySession::start_in(Path::new(CASH), &["script.sh"], None, Some(&dir))
-                .expect("start cash in a pseudo terminal");
+        // `--no-config`, as `cash_command()` gives it; the pseudo terminal's cash
+        // inherits the test's environment whole.
+        let mut session = ConPtySession::start_in(
+            Path::new(CASH),
+            &["--no-config", "script.sh"],
+            None,
+            Some(&dir),
+        )
+        .expect("start cash in a pseudo terminal");
         session
             .expect(READING, STUCK)
             .expect("the script reaches its read");
@@ -795,7 +801,7 @@ fn without_a_console_there_is_no_terminal_to_open() {
     /// The process is given no console, where it would inherit or be given one.
     const DETACHED_PROCESS: u32 = 0x0000_0008;
 
-    let output = std::process::Command::new(CASH)
+    let output = cash_command()
         .args([
             "-c",
             r#"echo written > /dev/tty; echo "write rc=$?"

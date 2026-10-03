@@ -22,10 +22,10 @@
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::time::{Duration, SystemTime};
 
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
+use crate::common::cash_command;
 
 /// A PATH with nothing but Windows itself on it: no Git for Windows `dos2unix.exe`.
 const BARE_PATH: &str = r"C:\WINDOWS\system32;C:\WINDOWS";
@@ -44,7 +44,7 @@ impl Output {
 
 /// Runs `script` in `dir`, feeding `stdin`, and keeps stdout byte-exact.
 fn cash_in(dir: &Path, script: &str, stdin: &[u8]) -> Output {
-    let mut child = Command::new(CASH)
+    let mut child = cash_command()
         .args(["-c", script])
         .current_dir(dir)
         .stdin(Stdio::piped())
@@ -67,7 +67,7 @@ fn cash_in(dir: &Path, script: &str, stdin: &[u8]) -> Output {
 }
 
 fn cash_with_path(script: &str, path: &str) -> Output {
-    let out = Command::new(CASH)
+    let out = cash_command()
         .args(["-c", script])
         .env("PATH", path)
         .output()
@@ -203,7 +203,7 @@ fn keepdate_keeps_the_modification_time() {
     let s = Scratch::new("keepdate");
     s.write("k.txt", b"k\r\n");
     s.write("n.txt", b"n\r\n");
-    let old = SystemTime::now() - Duration::from_secs(3 * 24 * 3600);
+    let old = SystemTime::now() - Duration::from_hours(3 * 24);
     for name in ["k.txt", "n.txt"] {
         std::fs::File::options()
             .write(true)

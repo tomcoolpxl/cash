@@ -7,9 +7,9 @@
     reason = "an integration test is outside a test module by construction"
 )]
 
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
+use crate::common::cash_command;
 
 /// Runs `script` under cash in a fresh folder holding `a`, `b` and `c`; standard output
 /// and standard error.
@@ -18,7 +18,7 @@ fn run_in_folders(script: &str) -> (String, String) {
     for name in ["a", "b", "c"] {
         std::fs::create_dir(root.path().join(name)).expect("create folder");
     }
-    let out = Command::new(CASH)
+    let out = cash_command()
         .args(["--norc", "--noprofile", "-c", script])
         .current_dir(root.path())
         .stdin(Stdio::null())

@@ -30,6 +30,8 @@ use std::path::{Path, PathBuf};
 use cash_builtins::ShellBuilderExt as _;
 use cash_core::Shell;
 
+use crate::common::cash_command;
+
 struct Fixture {
     shell: Shell,
     dir: PathBuf,
@@ -120,7 +122,7 @@ impl Fixture {
 
     /// Run a command line in the fixture's shell and return its standard output.
     fn run(&self, line: &str) -> String {
-        let output = std::process::Command::new(env!("CARGO_BIN_EXE_cash"))
+        let output = cash_command()
             .args(["-c", line])
             .current_dir(&self.dir)
             .output()

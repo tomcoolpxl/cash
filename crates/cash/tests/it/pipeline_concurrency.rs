@@ -34,25 +34,9 @@
 )]
 
 use std::io::{BufRead as _, BufReader, Write as _};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
-
-struct Output {
-    stdout: String,
-    stderr: String,
-}
-
-fn cash(script: &str) -> Output {
-    let out = Command::new(CASH)
-        .args(["-c", script])
-        .output()
-        .expect("failed to run cash");
-    Output {
-        stdout: String::from_utf8_lossy(&out.stdout).trim_end().to_string(),
-        stderr: String::from_utf8_lossy(&out.stderr).trim_end().to_string(),
-    }
-}
+use crate::common::{Output, cash_command, output_of, run as cash};
 
 /// Count lines out of a pipeline, trimmed of `wc`'s padding.
 fn lines(script: &str) -> String {
@@ -262,7 +246,7 @@ fn a_timeout_does_not_take_longer_than_it_says() {
 /// The writer is another cash, which writes, says so, and then waits for the test. So the
 /// input is in the pipe before the script starts, and a read of it needs no time to pass.
 fn cash_reading_a_pipe_that_stays_open(format: &str, script: &str) -> Output {
-    let mut writer = Command::new(CASH)
+    let mut writer = cash_command()
         .args([
             "-c",
             &format!("printf '{format}'; echo written >&2; read -r _"),
@@ -281,24 +265,17 @@ fn cash_reading_a_pipe_that_stays_open(format: &str, script: &str) -> Output {
         .expect("failed to read from the writer");
     assert_eq!(said.trim_end(), "written", "the writer did not write");
 
-    let out = Command::new(CASH)
-        .args(["-c", script])
-        .stdin(Stdio::from(pipe))
-        .output()
-        .expect("failed to run cash");
+    let out = output_of(cash_command().args(["-c", script]).stdin(Stdio::from(pipe)));
 
     drop(release_writer);
     writer.wait().expect("the writer did not end");
 
-    Output {
-        stdout: String::from_utf8_lossy(&out.stdout).trim_end().to_string(),
-        stderr: String::from_utf8_lossy(&out.stderr).trim_end().to_string(),
-    }
+    out
 }
 
 /// Runs cash with `args`, and `input` as its standard input, to the end.
 fn cash_given(args: &[&str], input: &str) -> Output {
-    let mut child = Command::new(CASH)
+    let mut child = cash_command()
         .args(args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -315,6 +292,7 @@ fn cash_given(args: &[&str], input: &str) -> Output {
     Output {
         stdout: String::from_utf8_lossy(&out.stdout).trim_end().to_string(),
         stderr: String::from_utf8_lossy(&out.stderr).trim_end().to_string(),
+        code: out.status.code().unwrap_or(-1),
     }
 }
 

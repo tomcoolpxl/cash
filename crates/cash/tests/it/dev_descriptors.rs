@@ -20,9 +20,9 @@
 
 use std::io::Write as _;
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
+use crate::common::cash_command;
 
 /// What a script left: each output stream apart, and its exit status.
 struct Left {
@@ -33,7 +33,7 @@ struct Left {
 
 /// Runs `script` in `dir` with `input` on its standard input, which is a pipe.
 fn cash_in(dir: &Path, input: &str, script: &str) -> Left {
-    let mut child = Command::new(CASH)
+    let mut child = cash_command()
         .current_dir(dir)
         .args(["--noprofile", "--norc", "-c", script])
         .stdin(Stdio::piped())

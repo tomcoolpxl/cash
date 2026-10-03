@@ -40,7 +40,7 @@ use std::time::{Duration, Instant};
 use cash_builtins::ShellBuilderExt as _;
 use cash_core::Shell;
 
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
+use crate::common::{CASH, cash_command};
 
 /// A miniature of a Cobra-generated script: the same helper calls, the same fallback
 /// probe, the same `COMPREPLY` protocol — without needing docker installed.
@@ -138,7 +138,7 @@ impl Drop for Fixture {
 /// Run a snippet in a real interactive cash process (where the shims are defined) and
 /// return trimmed stdout.
 fn cash(script: &str) -> String {
-    let out = Command::new(CASH)
+    let out = cash_command()
         .args(["--norc", "-i", "-c", script])
         .env("HISTFILE", "")
         .output()
@@ -153,7 +153,7 @@ fn cash(script: &str) -> String {
 #[test]
 fn a_script_does_not_see_the_helpers() {
     // Non-interactive shells get Bash's function table: no completion shims.
-    let out = Command::new(CASH)
+    let out = cash_command()
         .args([
             "--norc",
             "-c",
@@ -299,7 +299,7 @@ fn an_rc_file_can_override_a_shim() {
     let rc = dir.join("rc.sh");
     std::fs::write(&rc, b"_filedir() { echo overridden; }\n").expect("write rc");
 
-    let out = Command::new(CASH)
+    let out = cash_command()
         .args([
             "--rcfile",
             &rc.to_string_lossy().replace('\\', "/"),
@@ -497,7 +497,7 @@ fn a_tool_that_misses_the_deadline_is_stopped_and_reported() {
     // timeout, so it has to hold against a program that is nowhere near done.
     let started = Instant::now();
     let deadline = started + Duration::from_secs(1);
-    let why = run_tool(CASH, &["--norc", "-c", "sleep 30"], deadline)
+    let why = run_tool(CASH, &["--no-config", "--norc", "-c", "sleep 30"], deadline)
         .expect_err("a 30 s sleep finished before a 1 s deadline");
 
     assert!(why.contains("was still running"), "{why}");

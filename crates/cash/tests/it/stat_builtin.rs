@@ -16,7 +16,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
+use crate::common::cash_command;
 
 struct Scratch(PathBuf);
 
@@ -40,7 +40,7 @@ impl Drop for Scratch {
 }
 
 fn cash(script: &str) -> String {
-    let out = Command::new(CASH)
+    let out = cash_command()
         .args(["-c", script])
         .output()
         .expect("failed to run cash");

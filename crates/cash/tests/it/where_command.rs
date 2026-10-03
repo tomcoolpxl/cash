@@ -8,9 +8,8 @@
 )]
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
+use crate::common::cash_command;
 
 /// A folder of files named like the ones `where.exe` was measured on.
 fn fixture(name: &str) -> PathBuf {
@@ -47,7 +46,7 @@ fn shown(dir: &Path) -> String {
 /// Run `script` in `dir`, with only System32 and `extra` on PATH.
 fn run(dir: &Path, extra: &str, script: &str) -> (i32, String, String) {
     let path = format!(r"C:\Windows\System32;{extra}");
-    let out = Command::new(CASH)
+    let out = cash_command()
         .args(["--noprofile", "--norc", "-c", script])
         .current_dir(dir)
         .env("PATH", path)

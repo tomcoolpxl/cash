@@ -61,9 +61,25 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 14.1 Tests
 
-Move the remaining `it` modules to `it/common.rs`. BIN-05's goldens are done:
-`tests/corpus` with the awk and sed differentials folded in (`it/corpus_goldens.rs`), and
-the git-prompt differential (`it/git_prompt_goldens.rs`). BIN-20.
+Every `it` module starts cash from `it/common.rs` now. Left, seen while moving them
+(2026-10-04), BIN-19 and BIN-20:
+
+- Scratch folders named by pid only, beside `common::Scratch`: `Scratch` in
+  acceptance_edge_cases, crlf_scripts, ls_builtin, stat_builtin, tree_builtin,
+  line_ending_tools and git_prompt; `Sandbox` in directory_stack, find_xargs and
+  builtin_parameters; link_tools' folders; the fixtures of fuser_lsof and
+  held_descriptors.
+- Interactive runs that read the developer's own `~/.bashrc`: `builtin_parameters.rs`
+  (`-i -c "history -c; history"`) and `job_groups.rs` (`-i script`, `-i -c`), without
+  `--norc` or a `HOME` of their own.
+- Tests that pass without a word when what they need is missing: msys_args (no Git for
+  Windows), gui_apps_outlive (no `wscript.exe`), `ping::an_interrupt_prints_the_statistics`
+  (no console), completion_scripts' tool tests (tool not installed), and a test that skips
+  unless an external awk exists.
+- A cash that a test's cash starts (a shebang script, `sh -c`, bash_gaps' `"$X" -c`) reads
+  the developer's `config.toml`: there is no variable that turns it off for a child.
+- The ConPTY sessions (read_console, coolfetch, top_builtin) pass the whole environment,
+  `BASH_ENV` and the rest included.
 
 ### 14.3 brush names users see
 

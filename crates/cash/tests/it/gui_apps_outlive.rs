@@ -18,12 +18,11 @@
               threaded back through a Result."
 )]
 
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::time::{Duration, Instant};
 
+use crate::common::cash_command;
 use crate::process_identity::still_running;
-
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
 
 fn wscript() -> Option<std::path::PathBuf> {
     let path = std::path::PathBuf::from(r"C:\Windows\System32\wscript.exe");
@@ -61,7 +60,7 @@ fn run_and_exit(setting: &str) -> (u32, u32, u64) {
     // Output goes to a file, not a pipe: a surviving program inherits cash's handles,
     // and reading a pipe to its end would wait for that program as well as for cash.
     let log = dir.path().join("out.txt");
-    let status = Command::new(CASH)
+    let status = cash_command()
         .args(["-c", &script])
         .current_dir(dir.path())
         .stdin(Stdio::null())
@@ -122,7 +121,7 @@ fn gui_apps_close_reaps_the_gui_application_too() {
 
 #[test]
 fn cashctl_gui_apps_reports_the_setting() {
-    let out = Command::new(CASH)
+    let out = cash_command()
         .args([
             "-c",
             "cashctl gui-apps; cashctl gui-apps close; cashctl gui-apps",

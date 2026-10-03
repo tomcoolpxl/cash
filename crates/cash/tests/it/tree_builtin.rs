@@ -8,9 +8,8 @@
 )]
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
+use crate::common::cash_command;
 
 struct Scratch(PathBuf);
 
@@ -38,7 +37,7 @@ impl Drop for Scratch {
 }
 
 fn cash(script: &str) -> std::process::Output {
-    Command::new(CASH)
+    cash_command()
         .args(["-c", script])
         .output()
         .expect("run cash")

@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
+use crate::common::{CASH, cash_command};
 
 /// NTFS gives a file at most 1023 names, and each links folder gives the test's
 /// `cash.exe` 126 more. So the tests take turns: a test holds the turn while a folder of
@@ -73,6 +73,9 @@ impl AsRef<OsStr> for Folder {
     }
 }
 
+/// `cash --link-tools DIR`. Here and below, `--link-tools`, `--unlink-tools` and `doctor`
+/// run without `cash_command()`: each is only the subcommand as cash's first argument,
+/// and none reads the config or runs a script.
 fn link_tools(dir: &Path) -> Output {
     Command::new(CASH)
         .arg("--link-tools")
@@ -294,7 +297,7 @@ fn the_tools_system32_also_has_are_named() {
 fn which_prints_the_link_when_it_is_on_path() {
     let dir = folder("which");
     assert!(link_tools(&dir).status.success());
-    let out = Command::new(CASH)
+    let out = cash_command()
         .args(["-c", "which ls; which cd"])
         .env("PATH", path_with(&dir))
         .stdin(Stdio::null())
@@ -451,7 +454,8 @@ impl UserEnvironment {
         Some((kind.to_owned(), value.trim().to_owned()))
     }
 
-    /// cash, pointed at this key.
+    /// cash, pointed at this key, for `--link-tools` and `--unlink-tools` (not
+    /// `cash_command()`, as at [`link_tools`]).
     fn command(&self) -> Command {
         let mut command = Command::new(CASH);
         command

@@ -37,7 +37,7 @@
 
 use super::read_console::Script;
 
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
+use crate::common::CASH;
 
 /// A program that runs until something ends it, and writes `127.0.0.1` to the console
 /// once it is running, whatever the display language.
@@ -132,7 +132,7 @@ fn a_program_that_handles_ctrl_c_itself_leaves_the_script_running() {
     let left = script(
         "survivor",
         &format!(
-            r#"'{cash}' -c 'trap "echo handled >> out.txt" INT; {PING}; exit 0'
+            r#"'{cash}' --no-config -c 'trap "echo handled >> out.txt" INT; {PING}; exit 0'
 echo "went on: rc=$?" >> out.txt"#
         ),
     )
@@ -153,7 +153,7 @@ fn ctrl_c_ends_the_script_that_started_the_interrupted_script() {
         "ctrl-c-nested",
         &format!(
             r#"trap 'echo "outer exit trap" >> out.txt' EXIT
-'{cash}' inner.sh
+'{cash}' --no-config inner.sh
 echo "outer went on: rc=$?" >> out.txt"#
         ),
         &[(

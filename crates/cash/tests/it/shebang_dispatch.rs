@@ -25,9 +25,8 @@
 )]
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
-const CASH: &str = env!("CARGO_BIN_EXE_cash");
+use crate::common::cash_command;
 
 struct Scratch(PathBuf);
 
@@ -56,7 +55,7 @@ struct Output {
 }
 
 fn run_cash_cmd(cmd: &str) -> Output {
-    let out = Command::new(CASH)
+    let out = cash_command()
         .arg("-c")
         .arg(cmd)
         .output()
