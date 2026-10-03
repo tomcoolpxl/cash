@@ -470,8 +470,12 @@ impl ShellVariable {
                 }
                 Ok(())
             }
-            _ => {
-                tracing::error!("assigning to index {array_index} of {:?}", self.value);
+            // Only a dynamic variable is left. The shell gives an element of `DIRSTACK` or
+            // `BASH_ALIASES` its meaning before it gets here (`Shell::assign_special`); for
+            // the others an assignment has no effect, as in Bash. It was "not yet
+            // implemented", after a debug line with the getter's address.
+            ShellValue::Dynamic { .. } => Ok(()),
+            ShellValue::Unset(_) | ShellValue::String(_) => {
                 error::unimp("assigning to index of non-array variable")
             }
         }
@@ -549,6 +553,22 @@ impl ShellVariable {
                 Ok(values.remove(&key).is_some())
             }
             ShellValue::Dynamic { .. } => Ok(false),
+        }
+    }
+
+    /// Whether it is an associative array, or declared one; a dynamic variable by the value
+    /// it gives, so that `BASH_ALIASES[ll]` is a key and not the arithmetic `ll`.
+    pub fn is_associative(&self, shell: &Shell<impl extensions::ShellExtensions>) -> bool {
+        let is_associative = |value: &ShellValue| {
+            matches!(
+                value,
+                ShellValue::AssociativeArray(_)
+                    | ShellValue::Unset(ShellValueUnsetType::AssociativeArray)
+            )
+        };
+        match &self.value {
+            ShellValue::Dynamic { getter, .. } => is_associative(&getter(shell)),
+            value => is_associative(value),
         }
     }
 

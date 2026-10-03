@@ -122,7 +122,9 @@ mod select_clause;
 mod shebang_dispatch;
 // D10: the working directory, environment and PATH are the shell's, not the process's.
 mod shell_state;
+// Assignments to the variables the shell keeps itself.
 mod small_tools;
+mod special_variables;
 mod ss;
 mod stat_builtin;
 // $BASH_SUBSHELL and the `set -x` prefix count what Bash counts.

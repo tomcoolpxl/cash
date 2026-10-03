@@ -512,6 +512,23 @@ impl DeclareCommand {
             }
         }
 
+        // A variable the shell keeps takes the value its own way (`declare RANDOM=42`
+        // seeds it); its attributes still apply below.
+        let handled_by_shell = match &initial_value {
+            Some(value) if !create_var_local => context.shell.assign_special(
+                name.as_str(),
+                assigned_index.as_deref(),
+                value,
+                append,
+            )?,
+            _ => false,
+        };
+        let initial_value = if handled_by_shell {
+            None
+        } else {
+            initial_value
+        };
+
         if let Some(var) = self.look_up(context, name.as_str(), lookup) {
             if self.make_associative_array.is_some() {
                 var.convert_to_associative_array()?;

@@ -201,6 +201,10 @@ pub struct Shell<SE: extensions::ShellExtensions = extensions::DefaultShellExten
     /// `$RANDOM`'s generator. A subshell gets a new one, as Bash reseeds in each.
     #[cfg_attr(feature = "serde", serde(skip))]
     random: crate::random::ShellRandom,
+
+    /// What `BASH_ARGV0` set `$0` to, which takes the place of the shell's or the
+    /// script's name.
+    pub(crate) renamed_zero: Option<String>,
 }
 
 impl<SE: extensions::ShellExtensions> Clone for Shell<SE> {
@@ -254,6 +258,7 @@ impl<SE: extensions::ShellExtensions> Clone for Shell<SE> {
             commands_read: self.commands_read,
             umask: self.umask,
             random: crate::random::ShellRandom::default(),
+            renamed_zero: self.renamed_zero.clone(),
             depth: self.depth + 1,
             subshell_level: self.subshell_level,
             trace_level: self.trace_level,
@@ -734,6 +739,10 @@ impl<SE: extensions::ShellExtensions> ShellState for Shell<SE> {
     /// Returns the *current* name of the shell ($0).
     /// Influenced by the current call stack.
     pub fn current_shell_name(&self) -> Option<Cow<'_, str>> {
+        // `BASH_ARGV0=name` renames `$0` from then on, a running script's name too.
+        if let Some(renamed) = &self.renamed_zero {
+            return Some(renamed.as_str().into());
+        }
         for frame in self.call_stack.iter() {
             // Executed scripts shadow the shell name.
             if frame.frame_type.is_run_script() {

@@ -2,7 +2,7 @@
 
 use std::borrow::Cow;
 
-use crate::{ExecutionParameters, Shell, env, expansion, extensions, variables};
+use crate::{ExecutionParameters, Shell, expansion, extensions, variables};
 use cash_parser::ast;
 
 /// Maximum recursion depth for arithmetic variable dereference chains
@@ -211,7 +211,7 @@ fn resolve_subscript(
     let is_associative = shell
         .env()
         .get(name)
-        .is_some_and(|(_, v)| v.value().is_associative_array());
+        .is_some_and(|(_, v)| v.is_associative(shell));
     if is_associative {
         return expand_simple_references(shell, &subscript.text);
     }
@@ -444,15 +444,13 @@ fn assign(
     depth: u32,
 ) -> Result<i64, EvalError> {
     match lvalue {
+        // As any assignment: `(( RANDOM = 5 ))` seeds it.
         ast::ArithmeticTarget::Variable(name) => {
             shell
-                .env_mut()
-                .update_or_add(
+                .assign_variable(
                     name.as_str(),
+                    None,
                     variables::ShellValueLiteral::Scalar(value.to_string()),
-                    |_| Ok(()),
-                    env::EnvironmentLookup::Anywhere,
-                    env::EnvironmentScope::Global,
                 )
                 .map_err(|_err| EvalError::FailedToUpdateEnvironment)?;
         }
@@ -460,14 +458,10 @@ fn assign(
             let index_str = resolve_subscript(shell, name, subscript, depth)?;
 
             shell
-                .env_mut()
-                .update_or_add_array_element(
+                .assign_variable(
                     name.as_str(),
-                    index_str,
-                    value.to_string(),
-                    |_| Ok(()),
-                    env::EnvironmentLookup::Anywhere,
-                    env::EnvironmentScope::Global,
+                    Some(index_str),
+                    variables::ShellValueLiteral::Scalar(value.to_string()),
                 )
                 .map_err(|_err| EvalError::FailedToUpdateEnvironment)?;
         }

@@ -3,7 +3,7 @@ use itertools::Itertools;
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
-use cash_core::{ErrorKind, builtins, env, variables};
+use cash_core::{ErrorKind, builtins, variables};
 use cash_win32::conin::{CTRL_C, CTRL_D};
 
 use std::io::{Read, Write};
@@ -270,16 +270,10 @@ async fn assign_input_to_variables(
 ) -> Result<(), cash_core::Error> {
     if let Some(array_variable) = array_variable {
         let literal_fields = build_array_fields(input_line, ifs, skip_ifs_splitting);
-        let value = shell.value_for_assignment(
+        shell.assign_variable(
             array_variable,
+            None,
             variables::ShellValueLiteral::Array(variables::ArrayLiteral(literal_fields)),
-        )?;
-        shell.env_mut().update_or_add(
-            array_variable,
-            value,
-            |_| Ok(()),
-            env::EnvironmentLookup::Anywhere,
-            env::EnvironmentScope::Global,
         )?;
     } else if !variable_names.is_empty() {
         assign_to_named_variables(
@@ -292,14 +286,10 @@ async fn assign_input_to_variables(
         )
         .await?;
     } else {
-        let value =
-            shell.scalar_for_assignment("REPLY", input_line.unwrap_or_default().to_owned())?;
-        shell.env_mut().update_or_add(
+        shell.assign_variable(
             "REPLY",
-            variables::ShellValueLiteral::Scalar(value),
-            |_| Ok(()),
-            env::EnvironmentLookup::Anywhere,
-            env::EnvironmentScope::Global,
+            None,
+            variables::ShellValueLiteral::Scalar(input_line.unwrap_or_default().to_owned()),
         )?;
     }
     Ok(())
@@ -351,14 +341,7 @@ async fn assign_read_value(
 ) -> Result<(), cash_core::Error> {
     match cash_parser::word::parse_parameter(target, &shell.parser_options())? {
         cash_parser::word::Parameter::Named(name) => {
-            let value = shell.scalar_for_assignment(&name, value)?;
-            shell.env_mut().update_or_add(
-                name,
-                variables::ShellValueLiteral::Scalar(value),
-                |_| Ok(()),
-                env::EnvironmentLookup::Anywhere,
-                env::EnvironmentScope::Global,
-            )
+            shell.assign_variable(&name, None, variables::ShellValueLiteral::Scalar(value))
         }
         cash_parser::word::Parameter::NamedWithIndex { name, index } => {
             let expand_once = shell.options().assoc_expand_once;
@@ -371,14 +354,10 @@ async fn assign_read_value(
                 expand_once,
             )
             .await?;
-            let value = shell.scalar_for_assignment(&name, value)?;
-            shell.env_mut().update_or_add_array_element(
-                name,
-                index,
-                value,
-                |_| Ok(()),
-                env::EnvironmentLookup::Anywhere,
-                env::EnvironmentScope::Global,
+            shell.assign_variable(
+                &name,
+                Some(index),
+                variables::ShellValueLiteral::Scalar(value),
             )
         }
         cash_parser::word::Parameter::Positional(_)

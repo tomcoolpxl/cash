@@ -60,11 +60,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 12.3 Smaller expansion differences
 
-`read RANDOM`, `printf -v SECONDS`, `declare RANDOM=1` and every other assignment to a
-dynamic variable but `NAME=value` are dropped (`variables.rs`, "for now we just drop
-them"); Bash seeds RANDOM and resets SECONDS however they are assigned. The setter of a
-dynamic variable is never called. Found fixing LANG-23.
-
 An assignment error inside a function (`readonly r=1; f() { r=2; echo in; }; f; echo
 after`) ends a Bash script with status 1; cash returns from the function with status 1
 and goes on to `after`. At the top level both end the script. The same for a circular

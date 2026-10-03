@@ -21,7 +21,6 @@ use crate::prompt;
 use crate::shell::Shell;
 use crate::sys;
 use crate::trace_categories;
-use crate::variables::ShellValueUnsetType;
 use crate::variables::ShellVariable;
 use crate::variables::{self, ShellValue};
 
@@ -741,14 +740,10 @@ pub async fn assign_to_named_parameter_in_builtin(
     if let cash_parser::word::Parameter::NamedWithIndex { name, index } = &parameter {
         let expand_once = shell.options().assoc_expand_once;
         let index = resolve_subscript(shell, params, name, index, false, expand_once).await?;
-        let value = shell.scalar_for_assignment(name, value)?;
-        return shell.env_mut().update_or_add_array_element(
+        return shell.assign_variable(
             name,
-            index,
-            value,
-            |_| Ok(()),
-            env::EnvironmentLookup::Anywhere,
-            env::EnvironmentScope::Global,
+            Some(index),
+            variables::ShellValueLiteral::Scalar(value),
         );
     }
     WordExpander::new(shell, params)
@@ -787,13 +782,10 @@ pub async fn resolve_subscript(
         );
     }
     let associative = associative
-        || shell.env().get(name).is_some_and(|(_, var)| {
-            matches!(
-                var.value(),
-                ShellValue::AssociativeArray(_)
-                    | ShellValue::Unset(ShellValueUnsetType::AssociativeArray)
-            )
-        });
+        || shell
+            .env()
+            .get(name)
+            .is_some_and(|(_, var)| var.is_associative(shell));
     if associative {
         return if expand_once {
             Ok(index.to_owned())
@@ -2212,15 +2204,11 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
         let (variable_name, index) = match parameter {
             cash_parser::word::Parameter::Named(name) => (name, None),
             cash_parser::word::Parameter::NamedWithIndex { name, index } => {
-                let is_set_assoc_array = if let Some((_, var)) = self.shell.env().get(name) {
-                    matches!(
-                        var.value(),
-                        ShellValue::AssociativeArray(_)
-                            | ShellValue::Unset(ShellValueUnsetType::AssociativeArray)
-                    )
-                } else {
-                    false
-                };
+                let is_set_assoc_array = self
+                    .shell
+                    .env()
+                    .get(name)
+                    .is_some_and(|(_, var)| var.is_associative(self.shell));
 
                 let index_to_use = self
                     .expand_array_index(index.as_str(), is_set_assoc_array)
@@ -2237,21 +2225,24 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
             }
         };
 
-        let value = self
-            .shell
-            .scalar_for_assignment(variable_name, value.into())?;
+        let value = value.into();
+        self.shell.assign_variable(
+            variable_name,
+            index.clone(),
+            variables::ShellValueLiteral::Scalar(value.clone()),
+        )?;
 
         // The value stored, after the variable's attributes: `${x:=1+2}` with `-i` is 3
-        // and with `-u` upper case, as in Bash; it was the text given (LANG-18).
-        if let Some(index) = index {
-            self.shell.env_mut().update_or_add_array_element(
-                variable_name,
-                index.clone(),
-                value,
-                |_| Ok(()),
-                env::EnvironmentLookup::Anywhere,
-                env::EnvironmentScope::Global,
-            )?;
+        // and with `-u` upper case, as in Bash; it was the text given (LANG-18). Not read
+        // back from a variable the shell keeps: reading `RANDOM` draws the next number.
+        let is_dynamic = self
+            .shell
+            .env()
+            .get(variable_name)
+            .is_some_and(|(_, var)| matches!(var.value(), ShellValue::Dynamic { .. }));
+        if is_dynamic {
+            Ok(value)
+        } else if let Some(index) = index {
             let stored = self
                 .shell
                 .env()
@@ -2262,13 +2253,6 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
                 .map(Cow::into_owned);
             Ok(stored.unwrap_or_default())
         } else {
-            self.shell.env_mut().update_or_add(
-                variable_name,
-                variables::ShellValueLiteral::Scalar(value),
-                |_| Ok(()),
-                env::EnvironmentLookup::Anywhere,
-                env::EnvironmentScope::Global,
-            )?;
             Ok(self
                 .shell
                 .env_str(variable_name)
@@ -2470,15 +2454,11 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
             }
             cash_parser::word::Parameter::NamedWithIndex { name, index } => {
                 // First check to see if it's an associative array.
-                let is_set_assoc_array = if let Some((_, var)) = self.shell.env().get(name) {
-                    matches!(
-                        var.value(),
-                        ShellValue::AssociativeArray(_)
-                            | ShellValue::Unset(ShellValueUnsetType::AssociativeArray)
-                    )
-                } else {
-                    false
-                };
+                let is_set_assoc_array = self
+                    .shell
+                    .env()
+                    .get(name)
+                    .is_some_and(|(_, var)| var.is_associative(self.shell));
 
                 // Figure out which index to use.
                 let index_to_use = self

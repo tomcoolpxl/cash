@@ -1456,15 +1456,7 @@ impl Execute for ast::ForClauseCommand {
             }
 
             // Update the variable.
-            let value = shell
-                .value_for_assignment(&self.variable_name, ShellValueLiteral::Scalar(value))?;
-            shell.env_mut().update_or_add(
-                &self.variable_name,
-                value,
-                |_| Ok(()),
-                EnvironmentLookup::Anywhere,
-                EnvironmentScope::Global,
-            )?;
+            shell.assign_variable(&self.variable_name, None, ShellValueLiteral::Scalar(value))?;
 
             result = self.body.list.execute(shell, params).await?;
             if result.is_return_or_exit() {
@@ -2331,16 +2323,11 @@ async fn apply_assignment(
         // associative array (in which case the subscript is used as a literal key).
         // A scalar or unset/untyped variable becomes an indexed array, so its
         // subscript still needs to be evaluated.
-        let will_be_indexed_array =
-            if let Some((_, existing_value)) = shell.env().get(variable_name) {
-                !matches!(
-                    existing_value.value(),
-                    ShellValue::AssociativeArray(_)
-                        | ShellValue::Unset(ShellValueUnsetType::AssociativeArray)
-                )
-            } else {
-                true
-            };
+        // A dynamic one by the value it gives: `BASH_ALIASES[ll]=…` stored the alias as `0`.
+        let will_be_indexed_array = !shell
+            .env()
+            .get(variable_name)
+            .is_some_and(|(_, existing_value)| existing_value.is_associative(shell));
 
         if will_be_indexed_array {
             array_index = Some(
@@ -2357,50 +2344,16 @@ async fn apply_assignment(
     // If the target variable is marked as an integer, evaluate its value arithmetically.
     let new_value = shell.value_for_assignment(variable_name, new_value)?;
 
-    // SECONDS is a live stopwatch rather than a stored scalar. Assignment resets its
-    // baseline, including Bash's supported negative values; `+=` starts from the value
-    // observed at the instant of assignment.
-    if variable_name == "SECONDS"
-        && array_index.is_none()
-        && let ShellValueLiteral::Scalar(value) = &new_value
-    {
-        let assigned = value.parse::<i64>().unwrap_or(0);
-        let assigned = if assignment.append {
-            shell
-                .env_str("SECONDS")
-                .and_then(|current| current.parse::<i64>().ok())
-                .unwrap_or(0)
-                .saturating_add(assigned)
-        } else {
-            assigned
-        };
-        shell.set_stopwatch_seconds(assigned);
-        if export && let Some((_, seconds)) = shell.env_mut().get_mut("SECONDS") {
-            seconds.export();
-        }
-        return Ok(());
-    }
-
-    // An assignment to RANDOM seeds it while it is the shell's own; it was dropped
-    // (LANG-23). `+=` adds to the number it gives next, as Bash's arithmetic does.
-    if variable_name == "RANDOM"
-        && array_index.is_none()
-        && shell
-            .env()
-            .assignment_target("RANDOM")
-            .is_some_and(|var| matches!(var.value(), ShellValue::Dynamic { .. }))
-        && let ShellValueLiteral::Scalar(value) = &new_value
-    {
-        let assigned = value.parse::<i64>().unwrap_or(0);
-        let assigned = if assignment.append {
-            i64::from(shell.next_random()).wrapping_add(assigned)
-        } else {
-            assigned
-        };
-        #[expect(clippy::cast_sign_loss, reason = "Bash reads the seed as unsigned")]
-        shell.seed_random(assigned as u64);
-        if export && let Some((_, random)) = shell.env_mut().get_mut("RANDOM") {
-            random.export();
+    // A variable the shell keeps itself (`SECONDS`, `RANDOM`, `DIRSTACK[n]`, ...) takes
+    // the assignment its own way, or ignores it, as in Bash.
+    if shell.assign_special(
+        variable_name,
+        array_index.as_deref(),
+        &new_value,
+        assignment.append,
+    )? {
+        if export && let Some((_, special)) = shell.env_mut().get_mut(variable_name.as_str()) {
+            special.export();
         }
         return Ok(());
     }
