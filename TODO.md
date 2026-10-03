@@ -60,8 +60,11 @@ The riskiest phase: judge its runs on an idle machine (Decided, below).
 
 ### 11.2 Background jobs of builtins
 
-- A job ended by `kill -9` is reported by Bash even in a script (`line 1: 140823 Killed
-  while :; do :; done`); cash says nothing. Found while fixing EXE-08.
+- A job a signal ended is named by the signal. After `sleep 5 & kill -9 %1`, Bash's
+  `jobs` says `Killed` where cash says `Exit 137`, and a script prints `bash: line 1:
+  141968 Killed  sleep 5` when the job is reaped (`Hangup` for HUP; nothing for INT,
+  TERM and PIPE); cash says nothing. Windows has only exit codes, so the job would have
+  to keep the signal cash's own `kill` sent it. Found while fixing EXE-08.
 
 ### 11.3 Coprocesses deadlock
 
