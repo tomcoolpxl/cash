@@ -809,8 +809,13 @@ mod tests {
         // SAFETY: the handle is ours, and closed once.
         unsafe { CloseHandle(handle) };
 
+        // The built-in Administrator (RID 500), as CI's runner is, is written `LA`.
         let user = crate::process::current_user_sid_string().unwrap();
-        assert!(sddl.contains(&user), "{sddl}");
+        assert!(
+            sddl.contains(&format!(";{user})"))
+                || (user.ends_with("-500") && sddl.contains(";LA)")),
+            "{sddl}"
+        );
         assert!(sddl.contains(";SY)"), "{sddl}");
         assert!(!sddl.contains(";WD)") && !sddl.contains(";AN)"), "{sddl}");
     }
