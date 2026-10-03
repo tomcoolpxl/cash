@@ -256,11 +256,30 @@ fn resolve_targets(pid: sys::process::ProcessId) -> Result<Vec<u32>, error::Erro
 /// Deliver a signal to a process (D21, D22).
 ///
 /// D22's scope rule — job specs reap trees, bare PIDs hit one process — is applied by
-/// the caller, which knows which spelling was used. This acts on the single process it
-/// is given.
+/// the caller, which knows which spelling was used: this is the bare pid, and a job's
+/// processes go through [`kill_job_process`]. A negative pid names a group and `0` the
+/// trees cash started, and those are reaped whole.
 pub fn kill_process(
     pid: sys::process::ProcessId,
     signal: traps::TrapSignal,
+) -> Result<(), error::Error> {
+    // `kill -9 $pid` reaped the whole tree the pid roots (W32-06).
+    signal_targets(pid, signal, pid <= 0)
+}
+
+/// [`kill_process`] for a process of a job, which takes its tree with it (D22): `kill %1`,
+/// and the end of a background job that was killed.
+pub fn kill_job_process(
+    pid: sys::process::ProcessId,
+    signal: traps::TrapSignal,
+) -> Result<(), error::Error> {
+    signal_targets(pid, signal, true)
+}
+
+fn signal_targets(
+    pid: sys::process::ProcessId,
+    signal: traps::TrapSignal,
+    trees: bool,
 ) -> Result<(), error::Error> {
     let traps::TrapSignal::Signal(signal) = signal else {
         // DEBUG/ERR/EXIT/RETURN are shell-internal traps, not deliverable to a process.
@@ -281,7 +300,7 @@ pub fn kill_process(
     let mut first_error = None;
 
     for target in targets {
-        if let Err(e) = deliver(target, signal) {
+        if let Err(e) = deliver(target, signal, trees) {
             let vanished = e
                 .as_io_error()
                 .is_some_and(|io| io.kind() == std::io::ErrorKind::NotFound);
@@ -304,8 +323,8 @@ const fn exit_status(signal: Signal) -> u32 {
     (128 + signal.number()) as u32
 }
 
-/// Deliver one signal to one process.
-fn deliver(raw: u32, signal: Signal) -> Result<(), error::Error> {
+/// Deliver one signal to one process, or with `tree` a KILL to the tree it roots.
+fn deliver(raw: u32, signal: Signal, tree: bool) -> Result<(), error::Error> {
     // Check first, so that a target that does not exist reports as such. Windows answers
     // a signal aimed at nothing with `ERROR_INVALID_PARAMETER`, and "The parameter is
     // incorrect. (os error 87)" tells the user nothing about what went wrong.
@@ -336,14 +355,17 @@ fn deliver(raw: u32, signal: Signal) -> Result<(), error::Error> {
         Signal::Int | Signal::Term | Signal::Hup | Signal::Quit => {
             cash_win32::stop::request_stop(raw, cash_win32::stop::GRACE, exit_status(signal))
         }
-        // D22: reap the whole tree when this pid roots one, falling back to the single
-        // process otherwise. That is what makes `kill %1` reap a pipeline's descendants
-        // rather than orphaning them.
-        Signal::Kill => match cash_win32::jobreg::terminate_tree(raw, exit_status(signal)) {
-            Ok(true) => Ok(()),
-            Ok(false) => cash_win32::process::terminate(raw, exit_status(signal)),
-            Err(e) => Err(e),
-        },
+        // D22: for a job, reap the whole tree when this pid roots one, falling back to
+        // the single process otherwise. That is what makes `kill %1` reap a pipeline's
+        // descendants rather than orphaning them. A bare pid is that process.
+        Signal::Kill if tree => {
+            match cash_win32::jobreg::terminate_tree(raw, exit_status(signal)) {
+                Ok(true) => Ok(()),
+                Ok(false) => cash_win32::process::terminate(raw, exit_status(signal)),
+                Err(e) => Err(e),
+            }
+        }
+        Signal::Kill => cash_win32::process::terminate(raw, exit_status(signal)),
     };
 
     result.map_err(|e| error::ErrorKind::from(e).into())

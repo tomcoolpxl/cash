@@ -159,6 +159,32 @@ fn a_bare_pid_still_targets_one_process() {
 }
 
 #[test]
+fn kill_9_on_a_bare_pid_leaves_its_children_running() {
+    // `kill -9 $pid` reaped the whole tree the pid roots, as `kill %1` does; a bare pid
+    // is that process (D22, W32-06). The orphaned ping still finishes its four echoes
+    // into the file and writes the summary; a job spec takes it with the shell.
+    let out = cash(
+        r#"
+        cd "$(mktemp -d)" || exit
+        finished() { for _ in $(seq 25); do grep -q 'Sent = 4' "$1" && return; sleep 0.2; done; return 1; }
+        cmd.exe /d /s /c "ping.exe -n 4 127.0.0.1 > pid.txt" &
+        sleep 1
+        kill -KILL $!
+        finished pid.txt && echo "pid: ping finished" || echo "pid: ping killed"
+        cmd.exe /d /s /c "ping.exe -n 4 127.0.0.1 > job.txt" &
+        sleep 1
+        kill -KILL %%
+        finished job.txt && echo "job: ping finished" || echo "job: ping killed"
+        "#,
+    );
+    assert_eq!(
+        out.stdout, "pid: ping finished\njob: ping killed",
+        "stderr: {}",
+        out.stderr
+    );
+}
+
+#[test]
 fn a_negative_pid_reaps_that_tree() {
     // POSIX spells "the process group led by N" as `-N`. D22 already reaps trees for job
     // specs; this is the same scope, named by pid.

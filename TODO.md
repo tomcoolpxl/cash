@@ -60,7 +60,7 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 13.2 Builtins
 
-- `kill -9 PID` kills the tree, against D22 (W32-06); `#!/usr/bin/env -S` (W32-08).
+- `#!/usr/bin/env -S` (W32-08).
 - `elevate` asks UAC through `powershell.exe` started with the process's folder and
   environment, so the elevated command gets neither the shell's working directory nor its
   exported variables (the `process state:` mark at `cash-builtins/src/win.rs`); with

@@ -1421,7 +1421,7 @@ impl Job {
                 }
                 let mut first_error = None;
                 for pid in self.pids() {
-                    if let Err(e) = sys::signal::kill_process(pid, signal) {
+                    if let Err(e) = sys::signal::kill_job_process(pid, signal) {
                         // One that ended between the look and the signal is like one
                         // that had ended before.
                         let ended = e

@@ -1196,7 +1196,7 @@ fn signal_if_its_job_was_killed(params: &ExecutionParameters, pid: Option<i32>) 
         && let Some(pid) = pid
         && let Ok(signal) = sys::signal::Signal::try_from(signal)
     {
-        let _ = sys::signal::kill_process(pid, traps::TrapSignal::Signal(signal));
+        let _ = sys::signal::kill_job_process(pid, traps::TrapSignal::Signal(signal));
     }
 }
 
