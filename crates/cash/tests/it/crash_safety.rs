@@ -64,7 +64,8 @@ fn a_function_recurses_two_hundred_deep_in_a_pipeline_stage() {
 fn the_depth_guard_fires_before_the_stack_runs_out() {
     let out = cash(&format!("{COUNTDOWN}; f 600"));
     assert!(
-        out.stderr.contains("maximum function call depth exceeded"),
+        out.stderr
+            .contains("maximum function nesting level exceeded (500)"),
         "{}",
         out.stderr
     );

@@ -49,6 +49,27 @@ fn an_arithmetic_error_in_a_function_abandons_the_callers_command() {
 }
 
 #[test]
+fn a_call_past_the_nesting_limit_abandons_the_command() {
+    // It went on with status 0 and said "maximum function call depth exceeded"; Bash
+    // names the function and the limit.
+    let out = run(
+        "FUNCNEST=3\nn=0\ng() { n=$((n+1)); g; echo back; }\ng; echo same\necho \"next $? $n\"",
+    );
+    assert_eq!(
+        (out.stdout.as_str(), out.code),
+        ("next 1 3", 0),
+        "{}",
+        out.stderr
+    );
+    assert!(
+        out.stderr
+            .contains("g: maximum function nesting level exceeded (3)"),
+        "{}",
+        out.stderr
+    );
+}
+
+#[test]
 fn eval_source_a_subshell_and_a_builtin_still_stop_it() {
     // As in Bash: they catch it, and the line goes on.
     check(&[(

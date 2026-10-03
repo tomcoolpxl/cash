@@ -270,9 +270,9 @@ pub enum ErrorKind {
     #[error("interrupted")]
     Interrupted,
 
-    /// Maximum function call depth was exceeded.
-    #[error("maximum function call depth exceeded")]
-    MaxFunctionCallDepthExceeded,
+    /// A call to the named function would go past the nesting limit (`FUNCNEST`, or 500).
+    #[error("{0}: maximum function nesting level exceeded ({1})")]
+    MaxFunctionCallDepthExceeded(String, usize),
 
     /// Fork resource temporarily unavailable (process / subshell limit reached).
     #[error("fork: retry: Resource temporarily unavailable")]
@@ -487,15 +487,17 @@ impl Error {
     /// Whether this error abandons the whole top-level command it happened in, however deep
     /// in functions, as Bash's `jump_to_top_level` does, and the shell goes on at the next
     /// one: an assignment to a read-only variable or through a circular name reference,
-    /// and an arithmetic error in an expansion. A command that a function's error came out
-    /// of went on with status 1 (`f; echo same` echoed). A builtin's own failure, as
-    /// `read` into a read-only variable, is not one.
+    /// an arithmetic error in an expansion, and a call past the function nesting limit. A
+    /// command that a function's error came out of went on with status 1 (`f; echo same`
+    /// echoed); the nesting limit's error left 0. A builtin's own failure, as `read` into
+    /// a read-only variable, is not one.
     pub const fn jumps_to_top_level(&self) -> bool {
         matches!(
             self.kind,
             ErrorKind::ReadonlyVariable
                 | ErrorKind::CircularNameReference(_)
                 | ErrorKind::EvalError(_)
+                | ErrorKind::MaxFunctionCallDepthExceeded(..)
         )
     }
 

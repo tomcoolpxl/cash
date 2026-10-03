@@ -346,7 +346,8 @@ fn test_crash_prevention_funcnest_limit() {
     let out = cash_eval(r#"FUNCNEST=25; recurse() { recurse; }; recurse"#);
     assert_eq!(out.code, 1);
     assert!(
-        out.stderr.contains("maximum function call depth exceeded"),
+        out.stderr
+            .contains("recurse: maximum function nesting level exceeded (25)"),
         "stderr: {}",
         out.stderr
     );

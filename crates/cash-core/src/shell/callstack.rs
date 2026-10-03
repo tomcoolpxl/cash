@@ -129,7 +129,11 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         if let Some(max_call_depth) = max_call_depth
             && self.call_stack.function_call_depth() >= max_call_depth
         {
-            return Err(error::ErrorKind::MaxFunctionCallDepthExceeded.into());
+            return Err(error::ErrorKind::MaxFunctionCallDepthExceeded(
+                name.to_owned(),
+                max_call_depth,
+            )
+            .into());
         }
 
         if tracing::enabled!(target: trace_categories::FUNCTIONS, tracing::Level::DEBUG) {

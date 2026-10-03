@@ -58,12 +58,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ## Phase 12. Language (R7)
 
-### 12.3 Smaller expansion differences
-
-Also seen while fixing 8.1: past the function depth limit (500, or `FUNCNEST`) cash
-reports "maximum function call depth exceeded" and the script goes on, `$?` 0; Bash 5.3
-reports "maximum function nesting level exceeded (500)" and abandons the command.
-
 ### 12.4 extglob `!(…)` with alternatives
 
 Last in the phase, the largest single change: `echo !(*.tar|*.tar.gz)` lists
