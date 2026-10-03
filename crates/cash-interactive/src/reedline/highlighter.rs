@@ -28,8 +28,10 @@ mod styles {
         Style::new().fg(Color::Yellow)
     }
 
+    /// Bold, not italic: an italic `|` leans until it reads as `/` in many terminal fonts,
+    /// so `cat f | gh …` looked like `cat f / gh …`.
     pub fn operator() -> Style {
-        Style::new().fg(Color::Default).italic()
+        Style::new().fg(Color::Default).bold()
     }
 
     pub fn assignment() -> Style {
@@ -161,5 +163,13 @@ mod tests {
         assert_eq!(styled.buffer[0].0.foreground, None);
         assert_eq!(styled.buffer[0].0.background, None);
         assert_eq!(styled.buffer[0].1, "echo hello");
+    }
+
+    #[test]
+    fn an_operator_is_not_italic() {
+        // An italic `|` read as `/`.
+        let style = kind_to_style(highlighting::HighlightKind::Operator);
+        assert!(!style.is_italic);
+        assert!(style.is_bold);
     }
 }
