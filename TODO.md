@@ -80,42 +80,16 @@ Restart Manager file by file, and takes under two seconds. Done.
 
 ## Phase 18. `ss` as iproute2 7.2 has it
 
-Compared with iproute2 7.2.0's `ss` in WSL on 2026-10-05 (the commands are those listed).
+Compared with iproute2 7.2.0's `ss` in WSL and its `misc/ss.c` on 2026-10-05; done the
+same day. The default view, `state`/`exclude`, the state names, the filter grammar's
+errors, peerless sockets, `-s` with a selection, IPv6 scope names, getopt_long parsing,
+`-A !table`, the Linux-only long options, row order, `-V` and `-F` follow iproute2; `-r`,
+`-K` and `-B` were added, as the user chose. As in iproute2, whose `SS_CONN` keeps the
+bound-inactive bit, plain `ss -t` lists bound sockets as `UNCONN`.
 
-Wrong:
-
-- The default view (no `-a`/`-l`) lists TIME-WAIT and SYN-RECV; iproute2's `SS_CONN`
-  leaves out LISTEN, CLOSE, TIME-WAIT and SYN-RECV (`ss -tn`). `state connected` keeps
-  TIME-WAIT, so `CONNECTED` in ss.rs cannot serve both.
-- `exclude STATE` without `state` subtracts from the default set, not from all states
-  (`ss -tn exclude established` shows no LISTEN).
-- `state listening` is LISTEN and CLOSED; iproute2's is LISTEN alone (`ss -uan state
-  listening` lists every UDP socket).
-- State names: `unconnected`, `close` and `syn-rcv` are refused; `listen` is taken, which
-  iproute2 refuses.
-- `src`/`dst` swallow a following operator: `ss -tln src != 127.0.0.1` is `src =`, and
-  `dst > 1.2.3.4` is taken; iproute2 calls both a syntax error.
-- `dport`/`dst` never match a socket without a peer; iproute2's peer is `0.0.0.0:0`
-  (`ss -tan 'dport = :0'` lists the listeners there).
-- `ss -st` narrows the summary's counts and prints no list; iproute2 prints the whole
-  summary, then the list.
-- IPv6 scope shows as `%17`, not an interface name (`ConvertInterfaceIndexToLuid` and
-  `ConvertInterfaceLuidToNameW` give one without spaces).
-- Long options are not getopt_long: `--num` (a prefix) is refused, `--listening=x` taken.
-- `-A 'all,!udp'`: `!` is refused.
-- `-B`, `--tos`, `--cgroup`, `--inet-sockopt`, `--tipcinfo` get "unrecognized option"
-  (255) where the other Linux-only options are refused by name (1).
-- Order: listeners do not come first in each family; a dual-mode socket is two lines
-  (`0.0.0.0` and `[::]`) where Linux has one `*`; `-V` has no `iproute2-` string; the
-  `-F /nonexistent` message differs.
-
-Missing, chosen by the user on 2026-10-05:
-
-- `-r`: names through `GetNameInfoW`, with a cache and a time limit per address.
-- `-K`: closes the matching TCP connections with `SetTcpEntry` (`DELETE_TCB`); Windows
-  allows it elevated and for IPv4 only, and says so otherwise.
-- `-B`: bound, not listening TCP sockets, from the undocumented
-  `InternalGetBoundTcpEndpointTable` (netstat's BOUND).
+Left as differences (spec D51, row 29): a dual-mode socket is two lines, not one `*`;
+`-K` closes IPv4 connections only and only elevated; `-K`'s elevated path has not run
+on the author's machine (the test runs it when elevated).
 
 Not chosen: `dev NAME`, `-i` and real queue sizes and `-m` (`GetPerTcpConnectionEStats`
 needs an administrator to switch collection on per connection), `-E` (polling only).

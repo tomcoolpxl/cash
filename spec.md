@@ -1846,18 +1846,33 @@ Linux scripts use `ss` for "is anything listening" (`ss -ltn | grep -q ':5432 '`
 `ss -tulpn`. Windows' `netstat.exe` answers the same questions with other flags and
 another layout, so those scripts fail. cash's `ss` reads the same owner-PID socket tables
 as `fuser` and `lsof` (D50) and prints them in iproute2 7.2's layout: its columns and
-widths, `Netid` only when several protocols are shown, `State` only when more than one
-state is, service names for ports unless `-n`, and status 0 when nothing matches. State
-filters and the `sport`/`dport`/`src`/`dst` expression language (with `and`, `or`,
-`not`, parentheses, prefixes and `-F FILE`) are supported.
+widths, `Netid` only when several socket tables are selected, `State` only when more than
+one state is, listeners first in each family, service names for ports unless `-n`, host
+names with `-r`, an IPv6 scope as an interface name without spaces (`%ethernet_32769`),
+and status 0 when nothing matches. Options are parsed as iproute2's getopt_long parses
+them (unambiguous prefixes such as `--num`, its error messages, status 255), and the
+selection follows iproute2's `main`: without `-a` or `-l` the default view leaves out
+listeners, TIME-WAIT and SYN-RECV, `exclude` alone starts from every state, `-A` takes
+`!table`, and `-s` with a selection prints the whole summary and then the list. State
+filters (iproute2's names, `bound-inactive` included) and the `sport`/`dport`/`src`/`dst`
+expression language (with `and`, `or`, `not`, parentheses, prefixes and `-F FILE`) are
+supported; a socket without a peer has peer `0.0.0.0:0`, and what iproute2's grammar
+rejects gets its `bison bellows` message.
 
 Where Windows differs (decided in research/ss-evaluation.md): Recv-Q and Send-Q are not
 exposed and print `0`, so column positions stay the same; `-p` prints `fd=-`, and for a
 service hosted in `svchost.exe` adds `service=NAME` from the socket's owning module; UDP
-sockets have no peer and are always `UNCONN`. Options with nothing behind them (`-x`,
-`-e`, `-m`, `-o`, `-i`, `-K`, `-r`, other socket families) are refused by name, and a
-netstat habit such as `ss -ano` gets a hint with the `ss` spelling. `netstat.exe` is not
-shadowed.
+sockets have no peer and are always `UNCONN`. `-K` closes connections with
+`SetTcpEntry`, which Windows allows only elevated and only for IPv4: unelevated it is
+refused before anything is done, and an IPv6 match is reported as not closable. `-B`
+(bound-inactive sockets, netstat's `BOUND`) comes from the undocumented
+`InternalGetBoundTcpEndpointTable`, looked up at run time; Windows lists there the
+binding of every socket that went on to connect or listen, so those are left out. A
+dual-mode IPv6 socket shows as two lines (`0.0.0.0` and `[::]`) where Linux prints one
+`*`: the tables do not say whether a socket is dual-mode. Options with nothing behind
+them (`-x`, `-e`, `-m`, `-o`, `-i`, `--tos`, `--cgroup`, other socket families) are
+refused by name, and a netstat habit such as `ss -ano` gets a hint with the `ss`
+spelling. `netstat.exe` is not shadowed.
 
 ### D52 — MSYS2 and Cygwin programs get their arguments in Cygwin's encoding
 
@@ -2565,7 +2580,7 @@ someone who expected bash, so additions need to earn their place.
 | 26 | Bundled `sed` and `awk` keep CRLF lines CRLF and match them without the CR | Windows files stay intact and `$` works on them; a program naming `\r`, or `CASH_EOL=lf`, gets Linux behaviour | D49 |
 | 27 | Arithmetic never executes `$(...)` found in an array subscript inside a variable's value | Bash runs it (`read n; echo $((n+1))` with input `a[$(cmd)]`), a well-known code-injection hole; Cash reports an error for indexed arrays and uses the text as a literal key for associative ones | — |
 | 28 | `fuser DIR` and `lsof DIR` report holders of the files below the directory, not processes using it as their working directory; lsof's DEVICE and NODE are `-`, and its FD a handle value, not a descriptor | Windows exposes no per-process descriptor or working-directory information through a documented API | D50 |
-| 29 | `ss` prints Recv-Q/Send-Q as `0`, `fd=-` for processes, and every UDP socket as `UNCONN` | Windows' socket tables carry no queue sizes, descriptor numbers or UDP peers | D51 |
+| 29 | `ss` prints Recv-Q/Send-Q as `0`, `fd=-` for processes, every UDP socket as `UNCONN` and a dual-mode socket as two lines; `ss -K` closes only IPv4 connections, and only elevated | Windows' socket tables carry no queue sizes, descriptor numbers, UDP peers or dual-mode flag, and `SetTcpEntry` is IPv4-only and needs elevation | D51 |
 | 30 | At the interactive prompt, an unquoted word starting `C:\` keeps its backslashes (`shopt winpaths`, off in scripts) | Pasted Windows paths are otherwise mangled to `C:Usersme` | D53 |
 | 31 | `TERM` terminates a console program at once, and gives a program with a window five seconds after `WM_CLOSE` | A console control event cannot be aimed at one process that leads no group | D21 |
 | 32 | `pgrep`, `pkill`, `pidof` and `killall` match names without case and with `.exe` optional; the kill family never signals the shell, system images or service accounts' processes | Windows image names are case-insensitive, and killing `csrss.exe` is a blue screen | D54 |

@@ -1,9 +1,11 @@
-//! `ss`: a subset of iproute2's socket statistics, on IP Helper's socket tables.
+//! `ss`: iproute2's socket statistics, on IP Helper's socket tables.
 //!
-//! ROADMAP item 9 and research/ss-evaluation.md. Output follows iproute2 7.2 (checked in
-//! WSL): the same columns and widths, `Netid` only when several protocols are shown,
-//! `State` only when the filter allows more than one state, ports as service names
-//! unless `-n`, hosts numeric, and exit status 0 even when nothing matches.
+//! ROADMAP item 9 and research/ss-evaluation.md. Output and option handling follow
+//! iproute2 7.2 (checked in WSL and against its `misc/ss.c`): the same columns and
+//! widths, `Netid` only when several socket tables are selected, `State` only when the
+//! state filter allows more than one state, ports as service names unless `-n`, hosts
+//! numeric unless `-r`, `getopt_long`'s option spellings and messages, and exit status 0
+//! even when nothing matches.
 //!
 //! Windows differences, decided in the evaluation:
 //!
@@ -11,11 +13,15 @@
 //! * `-p` prints `fd=-` (Windows has no descriptor numbers) and, for services hosted
 //!   in `svchost.exe`, `service=NAME` from the socket's owning module;
 //! * UDP sockets carry no peer, so they are always `UNCONN`;
-//! * options with no Windows backing (`-x`, `-e`, `-m`, `-o`, `-i`, `-K`, `-r`, other
-//!   socket families) are refused by name, and netstat-style flags get a hint.
+//! * `-K` closes IPv4 TCP connections only, and only from an elevated shell;
+//! * `-B` reads an undocumented table (netstat's `BOUND`);
+//! * options with no Windows backing (`-x`, `-e`, `-m`, `-o`, `-i`, other socket
+//!   families) are refused by name, and netstat-style flags get a hint.
 
+use std::collections::HashMap;
 use std::io::{Read, Write};
-use std::net::{IpAddr, SocketAddr, ToSocketAddrs};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, ToSocketAddrs};
+use std::time::Duration;
 
 use cash_core::{ExecutionExitCode, ExecutionResult, builtins};
 use cash_win32::net::{self, Proto, Socket, TcpState};
@@ -23,7 +29,13 @@ use clap::Parser;
 
 use crate::fileuse::{ProcessNames, Services};
 
-const USAGE: &str = "Usage: ss [ OPTIONS ]\n       ss [ OPTIONS ] [ FILTER ]\n   -h, --help          this message\n   -V, --version       output version information\n   -n, --numeric       don't resolve service names\n   -a, --all           display all sockets\n   -l, --listening     display listening sockets\n   -p, --processes     show process using socket\n   -s, --summary       show socket usage summary\n   -4, --ipv4          display only IP version 4 sockets\n   -6, --ipv6          display only IP version 6 sockets\n   -t, --tcp           display only TCP sockets\n   -u, --udp           display only UDP sockets\n   -H, --no-header     Suppress header line\n   -O, --oneline       socket's data printed on a single line\n   -Q, --no-queues     Suppress sending and receiving queue columns\n   -f, --family=FAMILY display sockets of type FAMILY (inet, inet6)\n   -A, --query=QUERY   socket tables to show (all, inet, tcp, udp)\n   -F, --filter=FILE   read filter information from FILE\n\n   FILTER := [ state STATE-FILTER ] [ EXPRESSION ]\n\ncash's ss is the Windows subset described in ROADMAP item 9.";
+const USAGE: &str = "Usage: ss [ OPTIONS ]\n       ss [ OPTIONS ] [ FILTER ]\n   -h, --help          this message\n   -V, --version       output version information\n   -n, --numeric       don't resolve service names\n   -r, --resolve       resolve host names\n   -a, --all           display all sockets\n   -l, --listening     display listening sockets\n   -B, --bound-inactive display TCP bound but inactive sockets\n   -p, --processes     show process using socket\n   -s, --summary       show socket usage summary\n\n   -4, --ipv4          display only IP version 4 sockets\n   -6, --ipv6          display only IP version 6 sockets\n   -t, --tcp           display only TCP sockets\n   -u, --udp           display only UDP sockets\n   -f, --family=FAMILY display sockets of type FAMILY\n       FAMILY := {inet|inet6|help}\n\n   -K, --kill          forcibly close sockets, display what was closed\n   -H, --no-header     Suppress header line\n   -Q, --no-queues     Suppress sending and receiving queue columns\n   -O, --oneline       socket's data printed on a single line\n\n   -A, --query=QUERY, --socket=QUERY\n       QUERY := {all|inet|tcp|udp}[,QUERY]\n\n   -F, --filter=FILE   read filter information from FILE\n       FILTER := [ state STATE-FILTER ] [ EXPRESSION ]\n\ncash's ss is the Windows subset described in ROADMAP item 9.";
+
+/// The iproute2 release whose `ss` this one follows.
+const IPROUTE2_VERSION: &str = "7.2.0";
+
+/// How long `-r` waits for reverse lookups, all of them together.
+const RESOLVE_LIMIT: Duration = Duration::from_secs(2);
 
 /// Investigate sockets.
 #[derive(Parser)]
@@ -35,36 +47,27 @@ pub(crate) struct SsCommand {
     args: Vec<String>,
 }
 
-/// The states a socket can be in, as ss names them. UDP sockets are `Closed`
-/// (shown `UNCONN`), as in Linux.
+/// The states a socket can be in, numbered as iproute2 numbers them, so that a state
+/// filter has the same bits, and so decides the State column the same way. UDP sockets
+/// are `Close` (shown `UNCONN`), as in Linux.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(u16)]
 enum State {
-    Established,
-    SynSent,
-    SynRecv,
-    FinWait1,
-    FinWait2,
-    TimeWait,
-    Closed,
-    CloseWait,
-    LastAck,
-    Listen,
-    Closing,
+    Established = 1,
+    SynSent = 2,
+    SynRecv = 3,
+    FinWait1 = 4,
+    FinWait2 = 5,
+    TimeWait = 6,
+    Close = 7,
+    CloseWait = 8,
+    LastAck = 9,
+    Listen = 10,
+    Closing = 11,
+    /// Bound, neither listening nor connected (`-B`). Linux reports these sockets as
+    /// closed, so they print as `UNCONN`.
+    BoundInactive = 13,
 }
-
-const ALL_STATES: [State; 11] = [
-    State::Established,
-    State::SynSent,
-    State::SynRecv,
-    State::FinWait1,
-    State::FinWait2,
-    State::TimeWait,
-    State::Closed,
-    State::CloseWait,
-    State::LastAck,
-    State::Listen,
-    State::Closing,
-];
 
 impl State {
     const fn bit(self) -> u16 {
@@ -73,7 +76,7 @@ impl State {
 
     const fn of(socket: &Socket) -> Self {
         match socket.state {
-            None => Self::Closed,
+            None => Self::Close,
             Some(state) => match state {
                 TcpState::Established => Self::Established,
                 TcpState::SynSent => Self::SynSent,
@@ -81,7 +84,7 @@ impl State {
                 TcpState::FinWait1 => Self::FinWait1,
                 TcpState::FinWait2 => Self::FinWait2,
                 TcpState::TimeWait => Self::TimeWait,
-                TcpState::Closed => Self::Closed,
+                TcpState::Closed => Self::Close,
                 TcpState::CloseWait => Self::CloseWait,
                 TcpState::LastAck => Self::LastAck,
                 TcpState::Listen => Self::Listen,
@@ -98,11 +101,21 @@ impl State {
             Self::FinWait1 => "FIN-WAIT-1",
             Self::FinWait2 => "FIN-WAIT-2",
             Self::TimeWait => "TIME-WAIT",
-            Self::Closed => "UNCONN",
+            Self::Close | Self::BoundInactive => "UNCONN",
             Self::CloseWait => "CLOSE-WAIT",
             Self::LastAck => "LAST-ACK",
             Self::Listen => "LISTEN",
             Self::Closing => "CLOSING",
+        }
+    }
+
+    /// Where the socket comes in its family's listing: iproute2 shows what the kernel
+    /// dumps, listeners first, then bound-inactive sockets, then the rest.
+    const fn rank(self) -> u8 {
+        match self {
+            Self::Listen => 0,
+            Self::BoundInactive => 1,
+            _ => 2,
         }
     }
 }
@@ -117,36 +130,106 @@ const fn mask(states: &[State]) -> u16 {
     bits
 }
 
-const ALL: u16 = mask(&ALL_STATES);
-const LISTENING: u16 = mask(&[State::Listen, State::Closed]);
-const CONNECTED: u16 = ALL & !LISTENING;
+/// iproute2's `SS_ALL`: every state bit below `SS_MAX` (14), unknown and kernel-only
+/// ones included.
+const ALL: u16 = (1 << 14) - 1;
+/// `SS_CONN`, the default view: no listeners, closed, TIME-WAIT or SYN-RECV sockets.
+const CONN: u16 = ALL & !mask(&[State::Listen, State::Close, State::TimeWait, State::SynRecv]);
+/// The `connected` group, which unlike the default keeps TIME-WAIT and SYN-RECV.
+const CONNECTED: u16 = ALL & !mask(&[State::Close, State::Listen]);
 const SYNCHRONIZED: u16 = CONNECTED & !State::SynSent.bit();
 const BUCKET: u16 = mask(&[State::SynRecv, State::TimeWait]);
 const BIG: u16 = ALL & !BUCKET;
+/// What `-l` shows: listeners and unconnected sockets (UDP).
+const LISTENING: u16 = mask(&[State::Listen, State::Close]);
 
-/// A state name or group in a `state`/`exclude` clause.
+/// A state name or group in a `state`/`exclude` clause, as iproute2's `scan_state`
+/// takes them (without case).
 fn state_bits(name: &str) -> Option<u16> {
     Some(match name.to_ascii_lowercase().as_str() {
+        "close" | "closed" | "unconnected" => State::Close.bit(),
+        "syn-rcv" | "syn-recv" => State::SynRecv.bit(),
+        "established" => State::Established.bit(),
         "all" => ALL,
         "connected" => CONNECTED,
         "synchronized" => SYNCHRONIZED,
         "bucket" => BUCKET,
         "big" => BIG,
-        "listening" => LISTENING,
-        "established" => State::Established.bit(),
+        "unknown" => 1,
         "syn-sent" => State::SynSent.bit(),
-        "syn-recv" => State::SynRecv.bit(),
         "fin-wait-1" => State::FinWait1.bit(),
         "fin-wait-2" => State::FinWait2.bit(),
         "time-wait" => State::TimeWait.bit(),
-        "closed" => State::Closed.bit(),
         "close-wait" => State::CloseWait.bit(),
         "last-ack" => State::LastAck.bit(),
-        "listen" => State::Listen.bit(),
+        "listening" => State::Listen.bit(),
         "closing" => State::Closing.bit(),
+        "bound-inactive" => State::BoundInactive.bit(),
+        // `new-syn-recv` is a kernel detail iproute2 refuses; `listen` is no name.
         _ => return None,
     })
 }
+
+// iproute2's socket tables. Only TCP and UDP exist on Windows; the others are kept so
+// that `-A` and the Netid column work as in iproute2.
+const DB_UDP: u32 = 1;
+const DB_TCP: u32 = 1 << 1;
+const DB_MPTCP: u32 = 1 << 2;
+const DB_RAW: u32 = 1 << 3;
+const DB_UNIX_STREAM: u32 = 1 << 4;
+const DB_UNIX_DGRAM: u32 = 1 << 5;
+const DB_UNIX_SEQPACKET: u32 = 1 << 6;
+const DB_PACKET_RAW: u32 = 1 << 7;
+const DB_PACKET_DGRAM: u32 = 1 << 8;
+const DB_NETLINK: u32 = 1 << 9;
+const DB_SCTP: u32 = 1 << 10;
+const DB_VSOCK_STREAM: u32 = 1 << 11;
+const DB_VSOCK_DGRAM: u32 = 1 << 12;
+const DB_TIPC: u32 = 1 << 13;
+const DB_XDP: u32 = 1 << 14;
+/// `-A all`, which leaves out TIPC as iproute2's does.
+const DB_ALL: u32 = ((1 << 15) - 1) & !DB_TIPC;
+/// The tables of the inet families, what `-4`/`-6` alone select.
+const DB_INET: u32 = DB_UDP | DB_TCP | DB_MPTCP | DB_SCTP | DB_RAW;
+
+/// A `-A` table name's tables.
+fn table_bits(name: &str) -> Option<u32> {
+    Some(match name {
+        "all" => DB_ALL,
+        "inet" => DB_INET,
+        "udp" => DB_UDP,
+        "tcp" => DB_TCP,
+        "mptcp" => DB_MPTCP,
+        "sctp" => DB_SCTP,
+        "raw" => DB_RAW,
+        "unix" => DB_UNIX_STREAM | DB_UNIX_DGRAM | DB_UNIX_SEQPACKET,
+        "unix_stream" | "u_str" => DB_UNIX_STREAM,
+        "unix_dgram" | "u_dgr" => DB_UNIX_DGRAM,
+        "unix_seqpacket" | "u_seq" => DB_UNIX_SEQPACKET,
+        "packet" => DB_PACKET_RAW | DB_PACKET_DGRAM,
+        "packet_raw" | "p_raw" => DB_PACKET_RAW,
+        "packet_dgram" | "p_dgr" => DB_PACKET_DGRAM,
+        "netlink" => DB_NETLINK,
+        "tipc" => DB_TIPC,
+        "vsock" => DB_VSOCK_STREAM | DB_VSOCK_DGRAM,
+        "vsock_stream" | "v_str" => DB_VSOCK_STREAM,
+        "vsock_dgram" | "v_dgr" => DB_VSOCK_DGRAM,
+        "xdp" => DB_XDP,
+        _ => return None,
+    })
+}
+
+/// The states a table shows when nothing else is said (iproute2's `default_dbs`).
+const fn table_default_states(table: u32) -> u16 {
+    match table {
+        DB_UDP | DB_RAW => State::Established.bit(),
+        DB_UNIX_DGRAM | DB_PACKET_RAW | DB_PACKET_DGRAM | DB_NETLINK | DB_XDP => State::Close.bit(),
+        _ => CONN,
+    }
+}
+
+const FAMILY_V4: u8 = 1;
+const FAMILY_V6: u8 = 2;
 
 /// A comparison in a filter expression.
 #[derive(Clone, Copy)]
@@ -192,10 +275,7 @@ struct AddrMatch {
 }
 
 impl AddrMatch {
-    fn matches(&self, addr: Option<SocketAddr>) -> bool {
-        let Some(addr) = addr else {
-            return false;
-        };
+    fn matches(&self, addr: SocketAddr) -> bool {
         self.port.is_none_or(|p| addr.port() == p)
             && self
                 .hosts
@@ -228,6 +308,19 @@ fn in_prefix(network: IpAddr, ip: IpAddr, prefix: Option<u8>) -> bool {
     }
 }
 
+/// The peer a filter sees: a socket without one (a listener, a UDP or bound socket) has
+/// the unspecified address and port 0, as the kernel reports to iproute2.
+fn peer_of(socket: &Socket) -> SocketAddr {
+    socket.remote.unwrap_or_else(|| {
+        let ip = if socket.local.is_ipv6() {
+            IpAddr::V6(Ipv6Addr::UNSPECIFIED)
+        } else {
+            IpAddr::V4(Ipv4Addr::UNSPECIFIED)
+        };
+        SocketAddr::new(ip, 0)
+    })
+}
+
 /// A filter expression.
 enum Expr {
     Sport(Compare, u16),
@@ -243,9 +336,9 @@ impl Expr {
     fn matches(&self, socket: &Socket) -> bool {
         match self {
             Self::Sport(op, port) => op.holds(socket.local.port(), *port),
-            Self::Dport(op, port) => socket.remote.is_some_and(|r| op.holds(r.port(), *port)),
-            Self::Src(addr) => addr.matches(Some(socket.local)),
-            Self::Dst(addr) => addr.matches(socket.remote),
+            Self::Dport(op, port) => op.holds(peer_of(socket).port(), *port),
+            Self::Src(addr) => addr.matches(socket.local),
+            Self::Dst(addr) => addr.matches(peer_of(socket)),
             Self::Not(inner) => !inner.matches(socket),
             Self::And(a, b) => a.matches(socket) && b.matches(socket),
             Self::Or(a, b) => a.matches(socket) || b.matches(socket),
@@ -253,10 +346,43 @@ impl Expr {
     }
 }
 
-/// Why a filter failed to parse, with ss's wording.
-struct FilterError(String);
+/// Why a filter failed to parse.
+enum FilterError {
+    /// The grammar does not allow it: iproute2's bison message and the usage, status
+    /// 255.
+    Syntax,
+    /// A message of iproute2's own wording, status 1.
+    Message(String),
+}
 
-/// Parses the free-form filter: `state`/`exclude` clauses and an expression.
+/// iproute2's message for a filter its grammar rejects.
+const SYNTAX_ERROR: &str = "ss: bison bellows (while parsing filter): \"syntax error!\" Sorry.";
+
+/// Splits `text` into a host and a port: `[v6]:port`, `v4:port`, `*:port`, `:port`.
+fn split_port(text: &str) -> Option<(&str, Option<&str>)> {
+    if let Some(rest) = text.strip_prefix('[') {
+        let (host, after) = rest.split_once(']')?;
+        Some((host, after.strip_prefix(':')))
+    } else if text.matches(':').count() == 1 {
+        let (host, port) = text.split_once(':')?;
+        Some((host, Some(port)))
+    } else {
+        Some((text, None))
+    }
+}
+
+/// Whether a bare word reads as a numeric address condition, which iproute2's lexer
+/// takes as one and its grammar then rejects on its own.
+fn looks_like_address(text: &str) -> bool {
+    let Some((host, port)) = split_port(text) else {
+        return false;
+    };
+    let port_ok = port.is_none_or(|p| p == "*" || p.parse::<u16>().is_ok());
+    let host = host.split_once('/').map_or(host, |(host, _)| host);
+    port_ok && (host.is_empty() || host == "*" || host.parse::<IpAddr>().is_ok())
+}
+
+/// Parses the free-form filter expression.
 struct FilterParser<'a> {
     tokens: Vec<String>,
     position: usize,
@@ -282,7 +408,7 @@ impl FilterParser<'_> {
             .find_map(|p| self.services.port(bare, p.name()))
             .or_else(|| self.services.port(bare, "tcp"))
             .ok_or_else(|| {
-                FilterError(format!(
+                FilterError::Message(format!(
                     "Error: \"{bare}\" does not look like a port.\nCannot parse dst/src address."
                 ))
             })
@@ -290,20 +416,11 @@ impl FilterParser<'_> {
 
     fn address(&self, text: &str) -> Result<AddrMatch, FilterError> {
         let bad = || {
-            FilterError(format!(
-                "Error: an inet prefix is expected rather than \"{text}\"."
+            FilterError::Message(format!(
+                "Error: an inet prefix is expected rather than \"{text}\".\nCannot parse dst/src address."
             ))
         };
-        // Split off a port: `[v6]:port`, `v4:port`, `*:port`, `:port`.
-        let (host, port) = if let Some(rest) = text.strip_prefix('[') {
-            let (host, after) = rest.split_once(']').ok_or_else(bad)?;
-            (host, after.strip_prefix(':'))
-        } else if text.matches(':').count() == 1 {
-            let (host, port) = text.split_once(':').ok_or_else(bad)?;
-            (host, Some(port))
-        } else {
-            (text, None)
-        };
+        let (host, port) = split_port(text).ok_or_else(bad)?;
         let port = match port {
             Some("*") | None => None,
             Some(port) => Some(self.port(port)?),
@@ -330,30 +447,25 @@ impl FilterParser<'_> {
     }
 
     fn primary(&mut self) -> Result<Expr, FilterError> {
-        let Some(token) = self.next() else {
-            return Err(FilterError(
-                "ss: bad filter expression: unexpected end".to_owned(),
-            ));
-        };
+        let token = self.next().ok_or(FilterError::Syntax)?;
         match token.as_str() {
             "(" => {
                 let inner = self.or()?;
                 if self.next().as_deref() != Some(")") {
-                    return Err(FilterError(
-                        "ss: bad filter expression: missing ')'".to_owned(),
-                    ));
+                    return Err(FilterError::Syntax);
                 }
                 Ok(inner)
             }
             "not" | "!" => Ok(Expr::Not(Box::new(self.primary()?))),
             "sport" | "dport" => {
-                let (op, value) = match self.peek().and_then(Compare::parse) {
+                let op = match self.peek().and_then(Compare::parse) {
                     Some(op) => {
                         self.next();
-                        (op, self.next().unwrap_or_default())
+                        op
                     }
-                    None => (Compare::Eq, self.next().unwrap_or_default()),
+                    None => Compare::Eq,
                 };
+                let value = self.next().ok_or(FilterError::Syntax)?;
                 let port = self.port(&value)?;
                 Ok(if token == "sport" {
                     Expr::Sport(op, port)
@@ -362,10 +474,14 @@ impl FilterParser<'_> {
                 })
             }
             "src" | "dst" => {
-                if self.peek().and_then(Compare::parse).is_some() {
+                // Addresses are only ever equal: `=`, `==` or `eq`, or nothing.
+                if let Some(op) = self.peek().and_then(Compare::parse) {
+                    if !matches!(op, Compare::Eq) {
+                        return Err(FilterError::Syntax);
+                    }
                     self.next();
                 }
-                let value = self.next().unwrap_or_default();
+                let value = self.next().ok_or(FilterError::Syntax)?;
                 let addr = self.address(&value)?;
                 Ok(if token == "src" {
                     Expr::Src(addr)
@@ -373,12 +489,15 @@ impl FilterParser<'_> {
                     Expr::Dst(addr)
                 })
             }
-            "dev" | "fwmark" | "cgroup" | "autobound" | "inet-sockopt" => Err(FilterError(
-                format!("ss: \"{token}\" filters are not supported on Windows"),
-            )),
-            other => Err(FilterError(format!(
-                "ss: bad filter expression near \"{other}\""
-            ))),
+            "dev" | "fwmark" | "cgroup" | "autobound" | "inet-sockopt" => {
+                Err(FilterError::Message(format!(
+                    "ss: \"{token}\" filters are not supported on Windows"
+                )))
+            }
+            other if Compare::parse(other).is_some() => Err(FilterError::Syntax),
+            ")" | "and" | "&&" | "&" | "or" | "||" | "|" => Err(FilterError::Syntax),
+            other if looks_like_address(other) => Err(FilterError::Syntax),
+            other => Err(self.address(other).err().unwrap_or(FilterError::Syntax)),
         }
     }
 
@@ -407,6 +526,15 @@ impl FilterParser<'_> {
         }
         Ok(left)
     }
+
+    /// The whole expression; anything left over is a syntax error.
+    fn parse(&mut self) -> Result<Expr, FilterError> {
+        let expression = self.or()?;
+        if self.position < self.tokens.len() {
+            return Err(FilterError::Syntax);
+        }
+        Ok(expression)
+    }
 }
 
 /// Splits filter arguments into tokens; parentheses stand alone even when attached.
@@ -419,25 +547,76 @@ fn tokenize(args: &[String]) -> Vec<String> {
     tokens
 }
 
-#[derive(Default)]
+/// What the options select, kept as iproute2 keeps it (`current_filter`, `state_filter`,
+/// `do_default`), so that combinations come out the same.
 #[expect(
     clippy::struct_excessive_bools,
     reason = "each flag is one of ss's independent switches"
 )]
 struct Options {
     numeric: bool,
-    all: bool,
-    listening: bool,
+    resolve: bool,
     processes: bool,
     summary: bool,
+    kill: bool,
     no_header: bool,
     no_queues: bool,
-    v4: bool,
-    v6: bool,
-    tcp: bool,
-    udp: bool,
-    filter_file: Option<String>,
+    /// The selected socket tables (`DB_*`).
+    tables: u32,
+    /// The selected families (`FAMILY_*`).
+    families: u8,
+    /// The states the selected tables and families show by default.
+    default_states: u16,
+    /// The states `-a`, `-l`, `-B` or `-A` chose; 0 for none.
+    state_filter: u16,
+    /// No table or family was chosen: all tables, the default states.
+    do_default: bool,
+    saw_query: bool,
+    /// The text of `-F FILE`.
+    filter_text: Option<String>,
     filter: Vec<String>,
+}
+
+impl Options {
+    const fn new() -> Self {
+        Self {
+            numeric: false,
+            resolve: false,
+            processes: false,
+            summary: false,
+            kill: false,
+            no_header: false,
+            no_queues: false,
+            tables: 0,
+            families: 0,
+            default_states: 0,
+            state_filter: 0,
+            do_default: true,
+            saw_query: false,
+            filter_text: None,
+            filter: Vec::new(),
+        }
+    }
+
+    /// iproute2's `filter_db_set`.
+    fn set_tables(&mut self, tables: u32, enable: bool) {
+        for bit in (0..32).map(|i| 1u32 << i).filter(|bit| tables & bit != 0) {
+            if enable {
+                self.default_states |= table_default_states(bit);
+                self.tables |= bit;
+            } else {
+                self.tables &= !bit;
+            }
+        }
+        self.do_default = false;
+    }
+
+    /// iproute2's `filter_af_set`.
+    const fn set_family(&mut self, family: u8) {
+        self.default_states |= CONN;
+        self.families |= family;
+        self.do_default = false;
+    }
 }
 
 enum Parsed {
@@ -468,73 +647,138 @@ impl builtins::Command for SsCommand {
     }
 }
 
-/// Status 255, which iproute2 uses for option errors.
+/// Status 255, which iproute2 uses for option errors (`exit(-1)`).
 fn option_error() -> ExecutionResult {
     ExecutionResult::new(255)
 }
 
-/// The refusal for an option Windows cannot back, by short name.
-const fn refusal(flag: char) -> Option<&'static str> {
-    Some(match flag {
-        'x' => "-x: Unix domain sockets cannot be listed on Windows",
-        'w' => "-w: raw sockets are not listed by Windows' socket tables",
-        '0' => "-0: packet sockets do not exist on Windows",
-        'd' => "-d: DCCP is not available on Windows",
-        'S' => "-S: SCTP is not available on Windows",
-        'M' => "-M: MPTCP is not available on Windows",
-        'e' => "-e: Windows has no socket uid or inode to show",
-        'm' => "-m: Windows does not expose socket memory",
-        'o' => "-o: Windows does not expose socket timers",
-        'i' => "-i: TCP internals (RTT, cwnd) are not supported by cash's ss",
-        'K' => "-K: killing sockets is not supported",
-        'r' => "-r: resolving host names is not supported; addresses are numeric",
-        'Z' | 'z' => "-Z: SELinux does not exist on Windows",
-        'N' => "-N: network namespaces do not exist on Windows",
-        'b' => "-b: BPF socket filters do not exist on Windows",
-        'E' => "-E: socket events are not supported",
-        'D' => "-D: dumping raw socket tables is not supported",
-        'T' => "-T: thread information is not supported",
-        _ => return None,
-    })
+/// An option as `getopt_long` knows it: a short letter, or a long-only name.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum Code {
+    Short(char),
+    Long(&'static str),
 }
 
-/// A long option's short equivalent.
-fn long_to_short(name: &str) -> Option<char> {
-    Some(match name {
-        "numeric" => 'n',
-        "resolve" => 'r',
-        "all" => 'a',
-        "listening" => 'l',
-        "options" => 'o',
-        "extended" => 'e',
-        "memory" => 'm',
-        "info" => 'i',
-        "processes" => 'p',
-        "kill" => 'K',
-        "summary" => 's',
-        "events" => 'E',
-        "context" => 'Z',
-        "contexts" => 'z',
-        "net" => 'N',
-        "bpf" => 'b',
-        "ipv4" => '4',
-        "ipv6" => '6',
-        "packet" => '0',
-        "tcp" => 't',
-        "udp" => 'u',
-        "dccp" => 'd',
-        "raw" => 'w',
-        "unix" => 'x',
-        "sctp" => 'S',
-        "mptcp" => 'M',
-        "no-header" => 'H',
-        "oneline" => 'O',
-        "no-queues" => 'Q',
-        "threads" => 'T',
-        "diag" => 'D',
-        "family" => 'f',
-        "query" | "socket" => 'A',
-        "filter" => 'F',
+/// iproute2 7.2's long options, in its order (which `getopt_long`'s ambiguity message
+/// follows), and whether each takes an argument.
+const LONG_OPTIONS: &[(&str, bool, Code)] = &[
+    ("numeric", false, Code::Short('n')),
+    ("resolve", false, Code::Short('r')),
+    ("options", false, Code::Short('o')),
+    ("extended", false, Code::Short('e')),
+    ("memory", false, Code::Short('m')),
+    ("info", false, Code::Short('i')),
+    ("processes", false, Code::Short('p')),
+    ("threads", false, Code::Short('T')),
+    ("bpf", false, Code::Short('b')),
+    ("events", false, Code::Short('E')),
+    ("tcp", false, Code::Short('t')),
+    ("sctp", false, Code::Short('S')),
+    ("udp", false, Code::Short('u')),
+    ("raw", false, Code::Short('w')),
+    ("unix", false, Code::Short('x')),
+    ("tipc", false, Code::Long("tipc")),
+    ("vsock", false, Code::Long("vsock")),
+    ("all", false, Code::Short('a')),
+    ("listening", false, Code::Short('l')),
+    ("bound-inactive", false, Code::Short('B')),
+    ("ipv4", false, Code::Short('4')),
+    ("ipv6", false, Code::Short('6')),
+    ("packet", false, Code::Short('0')),
+    ("family", true, Code::Short('f')),
+    ("socket", true, Code::Short('A')),
+    ("query", true, Code::Short('A')),
+    ("summary", false, Code::Short('s')),
+    ("diag", true, Code::Short('D')),
+    ("filter", true, Code::Short('F')),
+    ("version", false, Code::Short('V')),
+    ("help", false, Code::Short('h')),
+    ("context", false, Code::Short('Z')),
+    ("contexts", false, Code::Short('z')),
+    ("net", true, Code::Short('N')),
+    ("tipcinfo", false, Code::Long("tipcinfo")),
+    ("tos", false, Code::Long("tos")),
+    ("cgroup", false, Code::Long("cgroup")),
+    ("kill", false, Code::Short('K')),
+    ("no-header", false, Code::Short('H')),
+    ("no-queues", false, Code::Short('Q')),
+    ("xdp", false, Code::Long("xdp")),
+    ("mptcp", false, Code::Short('M')),
+    ("oneline", false, Code::Short('O')),
+    ("inet-sockopt", false, Code::Long("inet-sockopt")),
+    ("bpf-maps", false, Code::Long("bpf-maps")),
+    ("bpf-map-id", true, Code::Long("bpf-map-id")),
+];
+
+/// iproute2 7.2's short options (`halBetuwxnro460spTbEf:mMiA:D:F:vVzZN:KHQSO`).
+const SHORT_OPTIONS: &str = "halBetuwxnro460spTbEfmMiADFvVzZNKHQSO";
+
+/// Short options that take an argument.
+const fn takes_argument(flag: char) -> bool {
+    matches!(flag, 'f' | 'A' | 'D' | 'F' | 'N')
+}
+
+/// How a long option name failed to match.
+enum LongError {
+    Unrecognized,
+    Ambiguous(Vec<&'static str>),
+}
+
+/// `getopt_long`'s lookup: an exact name, or an unambiguous prefix (several prefixes of
+/// the same option, `--so` and `--q` for `-A`, are not ambiguous).
+fn find_long(name: &str) -> Result<(&'static str, bool, Code), LongError> {
+    if let Some(&option) = LONG_OPTIONS.iter().find(|(long, _, _)| *long == name) {
+        return Ok(option);
+    }
+    let candidates: Vec<(&'static str, bool, Code)> = LONG_OPTIONS
+        .iter()
+        .copied()
+        .filter(|(long, _, _)| !name.is_empty() && long.starts_with(name))
+        .collect();
+    match candidates.first() {
+        None => Err(LongError::Unrecognized),
+        Some(&first)
+            if candidates
+                .iter()
+                .all(|&(_, value, code)| (value, code) == (first.1, first.2)) =>
+        {
+            Ok(first)
+        }
+        Some(_) => Err(LongError::Ambiguous(
+            candidates.iter().map(|(long, _, _)| *long).collect(),
+        )),
+    }
+}
+
+/// The refusal for an option Windows cannot back.
+fn refusal(code: Code) -> Option<&'static str> {
+    Some(match code {
+        Code::Short('x') => "-x: Unix domain sockets cannot be listed on Windows",
+        Code::Short('w') => "-w: raw sockets are not listed by Windows' socket tables",
+        Code::Short('0') => "-0: packet sockets do not exist on Windows",
+        Code::Short('S') => "-S: SCTP is not available on Windows",
+        Code::Short('M') => "-M: MPTCP is not available on Windows",
+        Code::Short('e') => "-e: Windows has no socket uid or inode to show",
+        Code::Short('m') => "-m: Windows does not expose socket memory",
+        Code::Short('o') => "-o: Windows does not expose socket timers",
+        Code::Short('i') => "-i: TCP internals (RTT, cwnd) are not supported by cash's ss",
+        Code::Short('Z' | 'z') => "-Z: SELinux does not exist on Windows",
+        Code::Short('N') => "-N: network namespaces do not exist on Windows",
+        Code::Short('b') => "-b: BPF socket filters do not exist on Windows",
+        Code::Short('E') => "-E: socket events are not supported",
+        Code::Short('D') => "-D: dumping raw socket tables is not supported",
+        Code::Short('T') => "-T: thread information is not supported",
+        Code::Long("tipc") => "--tipc: TIPC is not available on Windows",
+        Code::Long("tipcinfo") => "--tipcinfo: TIPC is not available on Windows",
+        Code::Long("vsock") => "--vsock: vsock is not available on Windows",
+        Code::Long("xdp") => "--xdp: XDP sockets do not exist on Windows",
+        Code::Long("tos") => "--tos: Windows does not expose a socket's TOS or priority",
+        Code::Long("cgroup") => "--cgroup: control groups do not exist on Windows",
+        Code::Long("inet-sockopt") => {
+            "--inet-sockopt: Windows does not expose the socket options of other processes"
+        }
+        Code::Long("bpf-maps") => "--bpf-maps: BPF socket storage does not exist on Windows",
+        Code::Long("bpf-map-id") => "--bpf-map-id: BPF socket storage does not exist on Windows",
         _ => return None,
     })
 }
@@ -544,15 +788,24 @@ fn looks_like_netstat(flags: &str) -> bool {
     flags.contains('o') && flags.contains('n') && !flags.contains('t') && !flags.contains('u')
 }
 
-#[allow(
+/// Writes an option error and the usage, as getopt and iproute2's `usage()` do.
+fn usage_error(
+    message: &str,
+    context: &cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
+) -> Result<Parsed, cash_core::Error> {
+    writeln!(context.stderr(), "{message}\n{USAGE}")?;
+    Ok(Parsed::Exit(option_error()))
+}
+
+#[expect(
     clippy::too_many_lines,
-    reason = "iproute2's option set is one flat list"
+    reason = "getopt_long's long and short forms, with their errors, in one loop"
 )]
 fn parse(
     args: &[String],
     context: &cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
 ) -> Result<Parsed, cash_core::Error> {
-    let mut options = Options::default();
+    let mut options = Options::new();
     let mut args = args.iter();
 
     while let Some(arg) = args.next() {
@@ -564,34 +817,47 @@ fn parse(
             let (name, value) = long
                 .split_once('=')
                 .map_or((long, None), |(n, v)| (n, Some(v.to_owned())));
-            match name {
-                "help" => {
-                    writeln!(context.stdout(), "{USAGE}")?;
-                    return Ok(Parsed::Exit(ExecutionResult::success()));
+            let (full, takes_value, code) = match find_long(name) {
+                Ok(option) => option,
+                Err(LongError::Unrecognized) => {
+                    return usage_error(&format!("ss: unrecognized option '{arg}'"), context);
                 }
-                "version" => {
-                    writeln!(
-                        context.stdout(),
-                        "ss utility, cash {}",
-                        env!("CARGO_PKG_VERSION")
-                    )?;
-                    return Ok(Parsed::Exit(ExecutionResult::success()));
+                Err(LongError::Ambiguous(names)) => {
+                    let names: Vec<String> = names.iter().map(|n| format!("'--{n}'")).collect();
+                    return usage_error(
+                        &format!(
+                            "ss: option '{arg}' is ambiguous; possibilities: {}",
+                            names.join(" ")
+                        ),
+                        context,
+                    );
                 }
-                "vsock" | "tipc" | "xdp" => {
-                    writeln!(context.stderr(), "ss: --{name}: not available on Windows")?;
-                    return Ok(Parsed::Exit(ExecutionResult::general_error()));
-                }
-                _ => {}
-            }
-            let Some(short) = long_to_short(name) else {
-                writeln!(context.stderr(), "ss: unrecognized option '{arg}'\n{USAGE}")?;
-                return Ok(Parsed::Exit(option_error()));
             };
-            let value = match (short, value) {
-                ('f' | 'A' | 'F', None) => args.next().cloned(),
+            let value = match (takes_value, value) {
+                (false, Some(_)) => {
+                    return usage_error(
+                        &format!("ss: option '--{full}' doesn't allow an argument"),
+                        context,
+                    );
+                }
+                (true, None) => match args.next() {
+                    Some(value) => Some(value.clone()),
+                    None => {
+                        return usage_error(
+                            &format!("ss: option '--{full}' requires an argument"),
+                            context,
+                        );
+                    }
+                },
                 (_, value) => value,
             };
-            if let Some(result) = apply(short, value, &mut options, context)? {
+            if let Some(message) = refusal(code) {
+                writeln!(context.stderr(), "ss: {message}")?;
+                return Ok(Parsed::Exit(ExecutionResult::general_error()));
+            }
+            if let Code::Short(flag) = code
+                && let Some(result) = apply(flag, value, &mut options, context)?
+            {
                 return Ok(Parsed::Exit(result));
             }
             continue;
@@ -601,10 +867,16 @@ fn parse(
             continue;
         };
         // Refuse before applying anything, so a netstat habit gets one clear message.
-        if let Some(flag) = flags.chars().find(|&f| refusal(f).is_some()) {
-            let message = refusal(flag).unwrap_or_default();
+        // An option's argument (`-finet`) is not more flags.
+        let letters = flags
+            .char_indices()
+            .find(|&(_, f)| takes_argument(f))
+            .map_or(flags, |(at, f)| {
+                flags.get(..at + f.len_utf8()).unwrap_or(flags)
+            });
+        if let Some(message) = letters.chars().find_map(|f| refusal(Code::Short(f))) {
             writeln!(context.stderr(), "ss: {message}")?;
-            if looks_like_netstat(flags) {
+            if looks_like_netstat(letters) {
                 writeln!(
                     context.stderr(),
                     "ss: -{flags} looks like netstat's flags; the ss spelling is `ss -tuanp` (netstat.exe is still available)"
@@ -613,14 +885,25 @@ fn parse(
             return Ok(Parsed::Exit(ExecutionResult::general_error()));
         }
         for (index, flag) in flags.char_indices() {
-            if matches!(flag, 'f' | 'A' | 'F') {
-                let attached = flags.get(index + 1..).unwrap_or("");
+            if !SHORT_OPTIONS.contains(flag) {
+                return usage_error(&format!("ss: invalid option -- '{flag}'"), context);
+            }
+            if takes_argument(flag) {
+                let attached = flags.get(index + flag.len_utf8()..).unwrap_or("");
                 let value = if attached.is_empty() {
-                    args.next().cloned()
+                    match args.next() {
+                        Some(value) => value.clone(),
+                        None => {
+                            return usage_error(
+                                &format!("ss: option requires an argument -- '{flag}'"),
+                                context,
+                            );
+                        }
+                    }
                 } else {
-                    Some(attached.to_owned())
+                    attached.to_owned()
                 };
-                if let Some(result) = apply(flag, value, &mut options, context)? {
+                if let Some(result) = apply(flag, Some(value), &mut options, context)? {
                     return Ok(Parsed::Exit(result));
                 }
                 break;
@@ -640,74 +923,125 @@ fn apply(
     options: &mut Options,
     context: &cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
 ) -> Result<Option<ExecutionResult>, cash_core::Error> {
-    if let Some(message) = refusal(flag) {
-        writeln!(context.stderr(), "ss: {message}")?;
-        return Ok(Some(ExecutionResult::general_error()));
-    }
+    let value = value.unwrap_or_default();
     match flag {
         'h' => {
             writeln!(context.stdout(), "{USAGE}")?;
             return Ok(Some(ExecutionResult::success()));
         }
-        'V' => {
+        'v' | 'V' => {
             writeln!(
                 context.stdout(),
-                "ss utility, cash {}",
+                "ss utility, iproute2-{IPROUTE2_VERSION} (cash {})",
                 env!("CARGO_PKG_VERSION")
             )?;
             return Ok(Some(ExecutionResult::success()));
         }
         'n' => options.numeric = true,
-        'a' => options.all = true,
-        'l' => options.listening = true,
+        'r' => options.resolve = true,
         'p' => options.processes = true,
         's' => options.summary = true,
+        'K' => options.kill = true,
         'H' => options.no_header = true,
         'Q' => options.no_queues = true,
         // One line per socket is all this ss ever prints.
         'O' => {}
-        '4' => options.v4 = true,
-        '6' => options.v6 = true,
-        't' => options.tcp = true,
-        'u' => options.udp = true,
-        'f' => match value.as_deref() {
-            Some("inet") => options.v4 = true,
-            Some("inet6") => options.v6 = true,
-            Some(other) => {
+        'a' => options.state_filter = ALL,
+        'l' => options.state_filter = LISTENING,
+        'B' => options.state_filter = State::BoundInactive.bit(),
+        't' => options.set_tables(DB_TCP, true),
+        'u' => options.set_tables(DB_UDP, true),
+        '4' => options.set_family(FAMILY_V4),
+        '6' => options.set_family(FAMILY_V6),
+        'f' => match value.as_str() {
+            "inet" => options.set_family(FAMILY_V4),
+            "inet6" => options.set_family(FAMILY_V6),
+            "help" => {
+                writeln!(context.stdout(), "{USAGE}")?;
+                return Ok(Some(ExecutionResult::success()));
+            }
+            "link" | "unix" | "netlink" | "tipc" | "vsock" | "xdp" => {
                 writeln!(
                     context.stderr(),
-                    "ss: -f {other}: only inet and inet6 exist on Windows"
+                    "ss: -f {value}: only inet and inet6 exist on Windows"
                 )?;
                 return Ok(Some(ExecutionResult::general_error()));
             }
-            None => {
-                writeln!(context.stderr(), "ss: -f requires a family\n{USAGE}")?;
+            other => {
+                writeln!(
+                    context.stderr(),
+                    "ss: \"{other}\" is invalid family\n{USAGE}"
+                )?;
                 return Ok(Some(option_error()));
             }
         },
-        'A' => {
-            for query in value.unwrap_or_default().split(',') {
-                match query {
-                    "all" | "inet" => {
-                        options.tcp = true;
-                        options.udp = true;
-                    }
-                    "tcp" => options.tcp = true,
-                    "udp" => options.udp = true,
-                    other => {
-                        writeln!(context.stderr(), "ss: -A {other}: not available on Windows")?;
-                        return Ok(Some(ExecutionResult::general_error()));
-                    }
-                }
+        'A' => return query(&value, options, context),
+        'F' => {
+            if options.filter_text.is_some() {
+                writeln!(context.stderr(), "More than one filter file")?;
+                return Ok(Some(option_error()));
             }
+            let mut text = String::new();
+            let read = if value.starts_with('-') {
+                context.stdin().read_to_string(&mut text).map(|_| ())
+            } else {
+                std::fs::read_to_string(context.shell.absolute_path(&value)).map(|t| text = t)
+            };
+            if let Err(error) = read {
+                let error = cash_core::error::os_error_text(&error);
+                writeln!(context.stderr(), "fopen filter file: {error}")?;
+                return Ok(Some(option_error()));
+            }
+            options.filter_text = Some(text);
         }
-        'F' => options.filter_file = value,
         other => {
             writeln!(context.stderr(), "ss: invalid option -- '{other}'\n{USAGE}")?;
             return Ok(Some(option_error()));
         }
     }
     Ok(None)
+}
+
+/// `-A QUERY`: socket tables by name, `!` taking one away.
+fn query(
+    value: &str,
+    options: &mut Options,
+    context: &cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
+) -> Result<Option<ExecutionResult>, cash_core::Error> {
+    if !options.saw_query {
+        options.tables = 0;
+        if options.state_filter == 0 {
+            options.state_filter = CONN;
+        }
+        options.saw_query = true;
+        options.do_default = false;
+    }
+    for item in value.split(',') {
+        let (enable, name) = match item.strip_prefix('!') {
+            Some(name) => (false, name),
+            None => (true, item),
+        };
+        let Some(tables) = table_bits(name) else {
+            writeln!(
+                context.stderr(),
+                "ss: \"{item}\" is illegal socket table id\n{USAGE}"
+            )?;
+            return Ok(Some(option_error()));
+        };
+        if enable && tables & (DB_TCP | DB_UDP) == 0 {
+            writeln!(context.stderr(), "ss: -A {name}: not available on Windows")?;
+            return Ok(Some(ExecutionResult::general_error()));
+        }
+        options.set_tables(tables, enable);
+    }
+    Ok(None)
+}
+
+/// One selected socket and the state it is shown in.
+#[derive(Clone, Copy)]
+struct Entry<'a> {
+    socket: &'a Socket,
+    state: State,
 }
 
 /// One printed socket, its fields already rendered.
@@ -721,12 +1055,34 @@ struct Line {
     process: String,
 }
 
-/// A host for display: numeric, IPv6 in brackets with its scope, as ss prints them.
-fn host_text(ip: IpAddr, scope: u32) -> String {
-    match ip {
-        IpAddr::V4(v4) => v4.to_string(),
-        IpAddr::V6(v6) if scope != 0 => format!("[{v6}]%{scope}"),
-        IpAddr::V6(v6) => format!("[{v6}]"),
+/// Host and interface names for printing, each looked up once.
+struct Names {
+    /// Reverse-lookup answers (`-r`); empty without it.
+    hosts: HashMap<IpAddr, String>,
+    interfaces: HashMap<u32, String>,
+}
+
+impl Names {
+    /// An interface's name for an IPv6 scope id, `if<N>` when Windows has none, as
+    /// iproute2 falls back.
+    fn interface(&mut self, index: u32) -> &str {
+        self.interfaces
+            .entry(index)
+            .or_insert_with(|| net::interface_name(index).unwrap_or_else(|| format!("if{index}")))
+    }
+
+    /// A host as ss prints it: the looked-up name, or numeric with IPv6 in brackets;
+    /// a local address bound to a scope gets `%interface`. A peer never shows a scope.
+    fn host(&mut self, ip: IpAddr, scope: u32) -> String {
+        let base = self.hosts.get(&ip).cloned().unwrap_or_else(|| match ip {
+            IpAddr::V4(v4) => v4.to_string(),
+            IpAddr::V6(v6) => format!("[{v6}]"),
+        });
+        if scope == 0 {
+            base
+        } else {
+            format!("{base}%{}", self.interface(scope))
+        }
     }
 }
 
@@ -737,6 +1093,135 @@ const fn scope_of(addr: SocketAddr) -> u32 {
     }
 }
 
+/// What the state words, tables and families come to: iproute2's `main` after its
+/// option loop.
+struct Selection {
+    tables: u32,
+    families: u8,
+    states: u16,
+}
+
+/// Takes the leading `state`/`exclude` clauses off `tokens` and settles the selection,
+/// or says why there is nothing to show (`Err` with the status).
+fn select(
+    options: &Options,
+    tokens: &mut Vec<String>,
+    context: &cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
+) -> Result<Result<Selection, ExecutionResult>, cash_core::Error> {
+    let mut state_filter = options.state_filter;
+    let mut saw_states = false;
+    while let Some(keyword) = tokens.first().map(String::as_str) {
+        if !matches!(keyword, "state" | "exclude" | "excl") {
+            break;
+        }
+        let Some(name) = tokens.get(1).cloned() else {
+            writeln!(
+                context.stderr(),
+                "Command line is not complete. Try option \"help\""
+            )?;
+            return Ok(Err(option_error()));
+        };
+        let Some(bits) = state_bits(&name) else {
+            writeln!(context.stderr(), "ss: wrong state name: {name}")?;
+            return Ok(Err(option_error()));
+        };
+        if keyword == "state" {
+            if !saw_states {
+                state_filter = 0;
+            }
+            state_filter |= bits;
+        } else {
+            if !saw_states {
+                state_filter = ALL;
+            }
+            state_filter &= !bits;
+        }
+        saw_states = true;
+        tokens.drain(..2);
+    }
+
+    let mut tables = options.tables;
+    let mut families = options.families;
+    if options.do_default {
+        if state_filter == 0 {
+            state_filter = CONN;
+        }
+        tables = DB_ALL;
+    }
+    let states = if state_filter != 0 {
+        state_filter
+    } else {
+        options.default_states
+    };
+    // `filter_merge_defaults`: a table brings its families, a family its tables.
+    if tables & DB_INET != 0 && families == 0 {
+        families = FAMILY_V4 | FAMILY_V6;
+    }
+    if families != 0 && tables & DB_INET == 0 {
+        tables |= DB_INET;
+    }
+    if tables == 0 {
+        writeln!(
+            context.stderr(),
+            "ss: no socket tables to show with such filter."
+        )?;
+        return Ok(Err(ExecutionResult::success()));
+    }
+    if states == 0 {
+        writeln!(
+            context.stderr(),
+            "ss: no socket states to show with such filter."
+        )?;
+        return Ok(Err(ExecutionResult::success()));
+    }
+    Ok(Ok(Selection {
+        tables,
+        families,
+        states,
+    }))
+}
+
+/// `-K`: closes the selected TCP connections Windows can close, keeping those it closed.
+/// IPv6 connections are reported as not closable; listeners, UDP and bound sockets are
+/// skipped without a word, as iproute2 skips what the kernel cannot close.
+fn kill<'a>(
+    entries: Vec<Entry<'a>>,
+    context: &cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
+) -> Result<(Vec<Entry<'a>>, bool), cash_core::Error> {
+    let mut closed = Vec::new();
+    let mut all_closed = true;
+    for entry in entries {
+        let socket = entry.socket;
+        if socket.proto != Proto::Tcp || entry.state == State::Listen {
+            continue;
+        }
+        match (socket.local, socket.remote) {
+            (SocketAddr::V4(local), Some(SocketAddr::V4(remote))) => {
+                match net::close_tcp(local, remote) {
+                    Ok(()) => closed.push(entry),
+                    Err(error) => {
+                        let error = cash_core::error::os_error_text(&error);
+                        writeln!(
+                            context.stderr(),
+                            "ss: cannot close {local} -> {remote}: {error}"
+                        )?;
+                        all_closed = false;
+                    }
+                }
+            }
+            (local, Some(remote)) => {
+                writeln!(
+                    context.stderr(),
+                    "ss: cannot close {local} -> {remote}: Windows closes IPv4 connections only"
+                )?;
+                all_closed = false;
+            }
+            (_, None) => {}
+        }
+    }
+    Ok((closed, all_closed))
+}
+
 #[expect(
     clippy::too_many_lines,
     reason = "selecting and printing the table is one pipeline"
@@ -745,72 +1230,39 @@ fn run(
     options: &Options,
     context: &cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
 ) -> Result<ExecutionResult, cash_core::Error> {
+    if options.kill && cash_win32::process::current_process_is_elevated() != Some(true) {
+        writeln!(
+            context.stderr(),
+            "ss: -K: Windows lets only an elevated shell close connections (sudo ss -K ...)"
+        )?;
+        return Ok(ExecutionResult::general_error());
+    }
+    if options.summary {
+        let result = summary(context)?;
+        // As in iproute2: the summary alone, unless something was selected.
+        if !result.is_success() || (options.do_default && options.filter.is_empty()) {
+            return Ok(result);
+        }
+    }
+
     let services = Services::load();
+    let mut filter_args = options.filter.clone();
+    filter_args.extend(options.filter_text.iter().cloned());
+    let mut tokens = tokenize(&filter_args);
+    let selection = match select(options, &mut tokens, context)? {
+        Ok(selection) => selection,
+        Err(result) => return Ok(result),
+    };
+
     let mut protos = Vec::new();
-    // Without -t or -u, show both, as ss shows every family it has.
-    if options.udp || !options.tcp {
+    if selection.tables & DB_UDP != 0 {
         protos.push(Proto::Udp);
     }
-    if options.tcp || !options.udp {
+    if selection.tables & DB_TCP != 0 {
         protos.push(Proto::Tcp);
     }
-    let (v4, v6) = if options.v4 || options.v6 {
-        (options.v4, options.v6)
-    } else {
-        (true, true)
-    };
-
-    // The filter, from arguments or -F.
-    let mut filter_args = options.filter.clone();
-    if let Some(file) = &options.filter_file {
-        let mut text = String::new();
-        let read = if file == "-" {
-            context.stdin().read_to_string(&mut text).map(|_| ())
-        } else {
-            std::fs::read_to_string(context.shell.absolute_path(file)).map(|t| text = t)
-        };
-        if let Err(error) = read {
-            let error = cash_core::error::os_error_text(&error);
-            writeln!(
-                context.stderr(),
-                "ss: can't read filter file {file}: {error}"
-            )?;
-            return Ok(ExecutionResult::general_error());
-        }
-        filter_args.push(text);
-    }
-    let mut tokens = tokenize(&filter_args);
-
-    // `state`/`exclude` clauses lead the filter.
-    let mut states: Option<u16> = None;
-    let mut excluded: u16 = 0;
-    while let Some(keyword) = tokens.first().map(String::as_str) {
-        if keyword != "state" && keyword != "exclude" && keyword != "excl" {
-            break;
-        }
-        let Some(name) = tokens.get(1).cloned() else {
-            writeln!(context.stderr(), "ss: {keyword} requires a state name")?;
-            return Ok(option_error());
-        };
-        let Some(bits) = state_bits(&name) else {
-            writeln!(context.stderr(), "ss: wrong state name: {name}")?;
-            return Ok(option_error());
-        };
-        if keyword == "state" {
-            states = Some(states.unwrap_or(0) | bits);
-        } else {
-            excluded |= bits;
-        }
-        tokens.drain(..2);
-    }
-    let default_states = if options.all {
-        ALL
-    } else if options.listening {
-        LISTENING
-    } else {
-        CONNECTED
-    };
-    let states = states.unwrap_or(default_states) & !excluded;
+    let v4 = selection.families & FAMILY_V4 != 0;
+    let v6 = selection.families & FAMILY_V6 != 0;
 
     let expression = if tokens.is_empty() {
         None
@@ -821,13 +1273,13 @@ fn run(
             services: &services,
             protos: &protos,
         };
-        match parser.or() {
-            Ok(expression) if parser.position >= parser.tokens.len() => Some(expression),
-            Ok(_) => {
-                writeln!(context.stderr(), "ss: bad filter expression")?;
-                return Ok(ExecutionResult::general_error());
+        match parser.parse() {
+            Ok(expression) => Some(expression),
+            Err(FilterError::Syntax) => {
+                writeln!(context.stderr(), "{SYNTAX_ERROR}\n{USAGE}")?;
+                return Ok(option_error());
             }
-            Err(FilterError(message)) => {
+            Err(FilterError::Message(message)) => {
                 writeln!(context.stderr(), "{message}")?;
                 return Ok(ExecutionResult::general_error());
             }
@@ -850,27 +1302,70 @@ fn run(
             return Ok(ExecutionResult::general_error());
         }
     };
+    // The bound table is undocumented: if it cannot be read, there is nothing in it.
+    let bound =
+        if protos.contains(&Proto::Tcp) && selection.states & State::BoundInactive.bit() != 0 {
+            net::bound_tcp_sockets(v4, v6).unwrap_or_default()
+        } else {
+            Vec::new()
+        };
 
-    if options.summary {
-        return summary(&sockets, context);
+    // UDP first, then TCP, each IPv4 then IPv6, listeners first: iproute2's dump order.
+    let mut selected: Vec<Entry<'_>> = sockets
+        .iter()
+        .map(|socket| Entry {
+            socket,
+            state: State::of(socket),
+        })
+        .chain(bound.iter().map(|socket| Entry {
+            socket,
+            state: State::BoundInactive,
+        }))
+        .filter(|e| selection.states & e.state.bit() != 0)
+        .filter(|e| expression.as_ref().is_none_or(|x| x.matches(e.socket)))
+        .collect();
+    selected.sort_by_key(|e| {
+        (
+            e.socket.proto == Proto::Tcp,
+            e.socket.local.is_ipv6(),
+            e.state.rank(),
+        )
+    });
+
+    let mut status = ExecutionResult::success();
+    if options.kill {
+        let (closed, all_closed) = kill(selected, context)?;
+        selected = closed;
+        if !all_closed {
+            status = ExecutionResult::general_error();
+        }
     }
 
-    // UDP first, then TCP, as iproute2 dumps them.
-    let mut selected: Vec<&Socket> = sockets
-        .iter()
-        .filter(|s| states & State::of(s).bit() != 0)
-        .filter(|s| expression.as_ref().is_none_or(|e| e.matches(s)))
-        .collect();
-    selected.sort_by_key(|s| (s.proto == Proto::Tcp, s.local.is_ipv6()));
+    let mut names = Names {
+        hosts: HashMap::new(),
+        interfaces: HashMap::new(),
+    };
+    if options.resolve {
+        let addresses: Vec<IpAddr> = selected
+            .iter()
+            .flat_map(|e| [Some(e.socket.local), e.socket.remote])
+            .flatten()
+            .map(|a| a.ip())
+            .filter(|ip| !ip.is_unspecified())
+            .collect();
+        names.hosts = net::host_names(&addresses, RESOLVE_LIMIT);
+    }
 
-    let show_netid = protos.len() > 1;
-    let show_state = states.count_ones() > 1;
+    let show_netid = selection.tables.count_ones() > 1;
+    let show_state = selection.states.count_ones() > 1;
     let show_queues = !options.no_queues;
     let header = !options.no_header;
 
-    let mut processes = options.processes.then(ProcessNames::new);
+    let processes = options.processes.then(ProcessNames::new);
     let port_text = |port: u16, proto: Proto| -> String {
-        if options.numeric {
+        if port == 0 {
+            "*".to_owned()
+        } else if options.numeric {
             port.to_string()
         } else {
             services
@@ -881,20 +1376,12 @@ fn run(
 
     let lines: Vec<Line> = selected
         .iter()
-        .map(|s| {
-            let (peer_host, peer_port) = match s.remote {
-                Some(remote) => (
-                    host_text(remote.ip(), scope_of(remote)),
-                    port_text(remote.port(), s.proto),
-                ),
-                None => (
-                    if s.local.is_ipv6() { "[::]" } else { "0.0.0.0" }.to_owned(),
-                    "*".to_owned(),
-                ),
-            };
-            let process = match (&mut processes, s.pid) {
-                (Some(names), pid) if pid != 0 => {
-                    let name = names.name(pid).to_owned();
+        .map(|e| {
+            let s = e.socket;
+            let peer = peer_of(s);
+            let process = match (&processes, s.pid) {
+                (Some(processes), pid) if pid != 0 => {
+                    let name = processes.name(pid).to_owned();
                     let service = s
                         .owner
                         .as_ref()
@@ -910,11 +1397,11 @@ fn run(
             };
             Line {
                 netid: s.proto.name(),
-                state: State::of(s).label(),
-                local_host: host_text(s.local.ip(), scope_of(s.local)),
+                state: e.state.label(),
+                local_host: names.host(s.local.ip(), scope_of(s.local)),
                 local_port: port_text(s.local.port(), s.proto),
-                peer_host,
-                peer_port,
+                peer_host: names.host(peer.ip(), 0),
+                peer_port: port_text(peer.port(), s.proto),
                 process,
             }
         })
@@ -998,15 +1485,30 @@ fn run(
             )
         )?;
     }
-    Ok(ExecutionExitCode::Success.into())
+    if status.is_success() {
+        Ok(ExecutionExitCode::Success.into())
+    } else {
+        Ok(status)
+    }
 }
 
-/// `ss -s`, in iproute2's layout, counted from the socket tables. Windows has no raw or
-/// fragment counters here, so those rows are 0, like the queue columns.
+/// `ss -s`, in iproute2's layout, counted from the whole socket tables whatever else is
+/// selected, as iproute2 counts the whole system. Windows has no raw or fragment
+/// counters here, so those rows are 0, like the queue columns.
 fn summary(
-    sockets: &[Socket],
     context: &cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
 ) -> Result<ExecutionResult, cash_core::Error> {
+    let sockets = match net::sockets(&[Proto::Udp, Proto::Tcp], true, true) {
+        Ok(sockets) => sockets,
+        Err(error) => {
+            let error = cash_core::error::os_error_text(&error);
+            writeln!(
+                context.stderr(),
+                "ss: can't read the socket tables: {error}"
+            )?;
+            return Ok(ExecutionResult::general_error());
+        }
+    };
     let count = |proto: Proto, v6: Option<bool>| {
         sockets
             .iter()
@@ -1052,17 +1554,26 @@ fn summary(
 mod tests {
     use super::*;
 
-    fn filter(text: &str) -> Expr {
-        let services = Services::load();
+    fn parser_for(text: &str, services: &Services) -> Result<Expr, FilterError> {
         let mut parser = FilterParser {
             tokens: tokenize(&[text.to_owned()]),
             position: 0,
-            services: &services,
+            services,
             protos: &[Proto::Tcp],
         };
-        let expr = parser.or().ok().unwrap();
-        assert_eq!(parser.position, parser.tokens.len(), "{text}");
-        expr
+        parser.parse()
+    }
+
+    fn filter(text: &str) -> Expr {
+        let services = Services::load();
+        let parsed = parser_for(text, &services).ok();
+        assert!(parsed.is_some(), "{text} does not parse");
+        parsed.unwrap()
+    }
+
+    fn is_syntax_error(text: &str) -> bool {
+        let services = Services::load();
+        matches!(parser_for(text, &services), Err(FilterError::Syntax))
     }
 
     fn socket(local: &str, remote: Option<&str>) -> Socket {
@@ -1100,15 +1611,94 @@ mod tests {
         assert!(filter("dst 10.1.2.3:22").matches(&conn));
         assert!(!filter("dst 10.1.2.3:23").matches(&conn));
         assert!(filter("src 192.168.1.0/24").matches(&conn));
+        assert!(filter("dst == 10.1.2.3").matches(&conn));
+        assert!(filter("dst eq 10.1.2.3").matches(&conn));
         let v6 = socket("[::1]:8080", None);
         assert!(filter("src [::1]:8080").matches(&v6));
     }
 
     #[test]
+    fn a_socket_without_a_peer_has_peer_port_zero() {
+        let listen = socket("127.0.0.1:8080", None);
+        assert!(filter("dport = :0").matches(&listen));
+        assert!(filter("dport < :100").matches(&listen));
+        assert!(filter("dst 0.0.0.0").matches(&listen));
+        assert!(filter("dst *").matches(&listen));
+        let v6 = socket("[::1]:8080", None);
+        assert!(filter("dst [::]:0").matches(&v6));
+        assert!(!filter("dst 0.0.0.0").matches(&v6));
+    }
+
+    #[test]
+    fn operators_other_than_equal_after_an_address_are_syntax_errors() {
+        for text in [
+            "src != 127.0.0.1",
+            "dst > 1.2.3.4",
+            "dst < 1.2.3.4",
+            "dst",
+            "sport = :1 or",
+            "( sport = :1",
+            "sport = :1 )",
+            "0.0.0.0",
+            ":5355",
+        ] {
+            assert!(is_syntax_error(text), "{text}");
+        }
+        let services = Services::load();
+        assert!(matches!(
+            parser_for("bogus", &services),
+            Err(FilterError::Message(m)) if m.starts_with("Error: an inet prefix is expected rather than \"bogus\".")
+        ));
+    }
+
+    #[test]
     fn state_groups_follow_ss() {
-        assert_eq!(state_bits("listening"), Some(LISTENING));
-        assert_eq!(CONNECTED & State::Listen.bit(), 0);
+        // The default leaves out TIME-WAIT and SYN-RECV; `connected` keeps them.
+        assert_eq!(CONN & State::TimeWait.bit(), 0);
+        assert_eq!(CONN & State::SynRecv.bit(), 0);
         assert_ne!(CONNECTED & State::TimeWait.bit(), 0);
-        assert_eq!(state_bits("bogus"), None);
+        assert_eq!(CONNECTED & State::Listen.bit(), 0);
+        assert_eq!(state_bits("listening"), Some(State::Listen.bit()));
+        for (name, state) in [
+            ("unconnected", State::Close),
+            ("close", State::Close),
+            ("CLOSED", State::Close),
+            ("syn-rcv", State::SynRecv),
+            ("bound-inactive", State::BoundInactive),
+        ] {
+            assert_eq!(state_bits(name), Some(state.bit()), "{name}");
+        }
+        for name in ["listen", "new-syn-recv", "bogus"] {
+            assert_eq!(state_bits(name), None, "{name}");
+        }
+    }
+
+    #[test]
+    fn long_options_match_as_getopt_long_does() {
+        assert_eq!(find_long("num").ok().map(|o| o.2), Some(Code::Short('n')));
+        assert_eq!(find_long("so").ok().map(|o| o.2), Some(Code::Short('A')));
+        assert_eq!(
+            find_long("context").ok().map(|o| o.2),
+            Some(Code::Short('Z'))
+        );
+        assert!(
+            matches!(find_long("n"), Err(LongError::Ambiguous(names)) if names == ["numeric", "net", "no-header", "no-queues"])
+        );
+        assert!(matches!(find_long("bogus"), Err(LongError::Unrecognized)));
+    }
+
+    #[test]
+    fn a_scope_is_an_interface_name_and_a_peer_has_none() {
+        let mut names = Names {
+            hosts: HashMap::new(),
+            interfaces: HashMap::from([(17, "ethernet_32769".to_owned())]),
+        };
+        let link_local: IpAddr = "fe80::1".parse().unwrap();
+        assert_eq!(names.host(link_local, 17), "[fe80::1]%ethernet_32769");
+        assert_eq!(names.host(link_local, 0), "[fe80::1]");
+        // Windows' own name for the loopback pseudo-interface, index 1.
+        assert!(!names.host(link_local, 1).contains(' '));
+        names.hosts.insert(link_local, "router".to_owned());
+        assert_eq!(names.host(link_local, 17), "router%ethernet_32769");
     }
 }

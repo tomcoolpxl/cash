@@ -1,12 +1,21 @@
 //! The machine's TCP and UDP sockets and the processes that own them.
 //!
-//! One layer for `fuser PORT/tcp`, `lsof -i` and, later, `ss`, built on IP Helper's
+//! One layer for `fuser PORT/tcp`, `lsof -i` and `ss`, built on IP Helper's
 //! `GetExtendedTcpTable` and `GetExtendedUdpTable` with the owner-PID table classes. They
 //! are documented, need no elevation, and cover IPv4 and IPv6. See
 //! `research/ss-evaluation.md` for the design this follows.
+//!
+//! `ss` also needs what those tables leave out: bound but inactive TCP sockets
+//! ([`bound_tcp_sockets`](crate::net::bound_tcp_sockets), from an undocumented export),
+//! interface names for IPv6 scope ids ([`interface_name`](crate::net::interface_name)),
+//! host names ([`host_names`](crate::net::host_names)) and closing a connection
+//! ([`close_tcp`](crate::net::close_tcp)).
 
+use std::collections::{HashMap, HashSet};
 use std::io;
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV6};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
+use std::sync::{Arc, LazyLock, Mutex, PoisonError, mpsc};
+use std::time::{Duration, Instant};
 
 use windows_sys::Win32::Foundation::{ERROR_INSUFFICIENT_BUFFER, NO_ERROR};
 use windows_sys::Win32::NetworkManagement::IpHelper::{
@@ -483,6 +492,355 @@ pub fn sockets_with_owners(protos: &[Proto], v4: bool, v6: bool) -> io::Result<V
     Ok(all)
 }
 
+/// `InternalGetBoundTcpEndpointTable` and its IPv6 twin: they allocate a
+/// `MIB_TCPTABLE2` (`MIB_TCP6TABLE2`) from the heap passed and store its address.
+type BoundTableFn =
+    unsafe extern "system" fn(*mut *mut core::ffi::c_void, *mut core::ffi::c_void, u32) -> u32;
+
+/// The two bound-endpoint exports of `iphlpapi.dll`, looked up at run time: they are
+/// undocumented (netstat's `-q` and System Informer use them), so a Windows without them
+/// just has no bound sockets to show.
+fn bound_table_functions() -> (Option<BoundTableFn>, Option<BoundTableFn>) {
+    use windows_sys::Win32::System::LibraryLoader::{
+        GetProcAddress, LOAD_LIBRARY_SEARCH_SYSTEM32, LoadLibraryExA,
+    };
+
+    static FUNCTIONS: LazyLock<(Option<BoundTableFn>, Option<BoundTableFn>)> =
+        LazyLock::new(|| {
+            // SAFETY: the name is NUL terminated; the module stays loaded for the
+            // process's life, as the functions are kept.
+            let module = unsafe {
+                LoadLibraryExA(
+                    c"iphlpapi.dll".as_ptr().cast(),
+                    std::ptr::null_mut(),
+                    LOAD_LIBRARY_SEARCH_SYSTEM32,
+                )
+            };
+            if module.is_null() {
+                return (None, None);
+            }
+            let find = |name: &core::ffi::CStr| {
+                // SAFETY: the module handle is valid and the name is NUL terminated.
+                let found = unsafe { GetProcAddress(module, name.as_ptr().cast()) };
+                found.map(|function| {
+                    // SAFETY: the signature System Informer declares for both exports.
+                    unsafe { std::mem::transmute::<_, BoundTableFn>(function) }
+                })
+            };
+            (
+                find(c"InternalGetBoundTcpEndpointTable"),
+                find(c"InternalGetBoundTcp6EndpointTable"),
+            )
+        });
+    *FUNCTIONS
+}
+
+/// Calls one bound-endpoint export and copies its rows out of the table it allocated.
+fn bound_rows<T: Copy>(function: BoundTableFn) -> io::Result<Vec<T>> {
+    use windows_sys::Win32::System::Memory::{GetProcessHeap, HeapFree};
+
+    // SAFETY: GetProcessHeap has no preconditions.
+    let heap = unsafe { GetProcessHeap() };
+    let mut table: *mut core::ffi::c_void = std::ptr::null_mut();
+    // SAFETY: `table` is a writable out-param and `heap` this process's heap.
+    let code = unsafe { function(&raw mut table, heap, 0) };
+    if code != NO_ERROR {
+        return Err(io::Error::from_raw_os_error(code.cast_signed()));
+    }
+    if table.is_null() {
+        return Ok(Vec::new());
+    }
+    let base = table.cast::<u8>().cast_const();
+    // SAFETY: the table starts with its entry count.
+    let count = unsafe { base.cast::<u32>().read_unaligned() } as usize;
+    // The rows follow the count at their alignment, as in `rows`.
+    let offset = std::mem::align_of::<T>().max(4);
+    let found = (0..count)
+        .map(|i| {
+            // SAFETY: the table holds `count` rows after the count.
+            let row = unsafe { base.add(offset + i * std::mem::size_of::<T>()) };
+            // SAFETY: the rows are plain integer structs, valid for any bit pattern, and
+            // the read makes no alignment assumption.
+            unsafe { row.cast::<T>().read_unaligned() }
+        })
+        .collect();
+    // SAFETY: the export allocated the table from `heap`, and nothing points into it now.
+    unsafe { HeapFree(heap, 0, table) };
+    Ok(found)
+}
+
+/// TCP sockets that are bound but neither listening nor connected: `netstat -q`'s
+/// `BOUND`, and what Linux's `ss -B` calls bound-inactive.
+///
+/// Windows also lists the binding of a socket that went on to connect or listen; those
+/// are left out by their port and process matching a row of the connection table. Each
+/// socket has state `Closed`, no remote end and no owner module. The exports are
+/// undocumented, so where Windows lacks them the list is empty.
+///
+/// # Errors
+///
+/// Fails if a table cannot be read.
+pub fn bound_tcp_sockets(v4: bool, v6: bool) -> io::Result<Vec<Socket>> {
+    use windows_sys::Win32::NetworkManagement::IpHelper::{MIB_TCP6ROW2, MIB_TCPROW2};
+
+    let (function4, function6) = bound_table_functions();
+    let mut bound = Vec::new();
+    if v4 && let Some(function) = function4 {
+        bound.extend(bound_rows::<MIB_TCPROW2>(function)?.into_iter().map(|row| {
+            (
+                SocketAddr::new(IpAddr::V4(ipv4(row.dwLocalAddr)), port(row.dwLocalPort)),
+                row.dwOwningPid,
+            )
+        }));
+    }
+    if v6 && let Some(function) = function6 {
+        bound.extend(
+            bound_rows::<MIB_TCP6ROW2>(function)?
+                .into_iter()
+                .map(|row| {
+                    // SAFETY: both members of the address union are plain bytes.
+                    let bytes = unsafe { row.LocalAddr.u.Byte };
+                    (
+                        v6_addr(bytes, row.dwLocalPort, row.dwLocalScopeId),
+                        row.dwOwningPid,
+                    )
+                }),
+        );
+    }
+    if bound.is_empty() {
+        return Ok(Vec::new());
+    }
+    let active: HashSet<(u16, u32)> = sockets(&[Proto::Tcp], true, true)?
+        .iter()
+        .map(|s| (s.local.port(), s.pid))
+        .collect();
+    Ok(bound
+        .into_iter()
+        .filter(|(local, pid)| !active.contains(&(local.port(), *pid)))
+        .map(|(local, pid)| Socket {
+            proto: Proto::Tcp,
+            local,
+            remote: None,
+            state: Some(TcpState::Closed),
+            pid,
+            owner: None,
+        })
+        .collect())
+}
+
+/// The name of a network interface by index, as `if_indextoname` gives it.
+///
+/// Names such as `ethernet_32769` and `loopback_0` have no spaces, unlike the alias
+/// ("Wi-Fi", "vEthernet (WSL)") that Windows shows. `None` for an unknown index.
+#[must_use]
+pub fn interface_name(index: u32) -> Option<String> {
+    use windows_sys::Win32::NetworkManagement::IpHelper::{
+        ConvertInterfaceIndexToLuid, ConvertInterfaceLuidToNameW,
+    };
+    use windows_sys::Win32::NetworkManagement::Ndis::{IF_MAX_STRING_SIZE, NET_LUID_LH};
+
+    let mut luid = NET_LUID_LH { Value: 0 };
+    // SAFETY: `luid` is a writable out-param.
+    if unsafe { ConvertInterfaceIndexToLuid(index, &raw mut luid) } != NO_ERROR {
+        return None;
+    }
+    let mut name = [0u16; IF_MAX_STRING_SIZE as usize + 1];
+    // SAFETY: `luid` was filled in above, and `name` holds `name.len()` units.
+    if unsafe { ConvertInterfaceLuidToNameW(&raw const luid, name.as_mut_ptr(), name.len()) }
+        != NO_ERROR
+    {
+        return None;
+    }
+    let length = name
+        .iter()
+        .position(|&unit| unit == 0)
+        .unwrap_or(name.len());
+    let name = String::from_utf16_lossy(&name[..length]);
+    (!name.is_empty()).then_some(name)
+}
+
+/// Closes a TCP connection, as `ss -K` does: `SetTcpEntry` with `DELETE_TCB`, which
+/// sends a reset. Windows allows it only to an elevated process, and only for IPv4.
+///
+/// # Errors
+///
+/// Fails with Windows' error when the connection cannot be closed (access denied when
+/// not elevated, not found when it is already gone).
+pub fn close_tcp(local: SocketAddrV4, remote: SocketAddrV4) -> io::Result<()> {
+    use windows_sys::Win32::NetworkManagement::IpHelper::{
+        MIB_TCP_STATE_DELETE_TCB, MIB_TCPROW_LH, MIB_TCPROW_LH_0, SetTcpEntry,
+    };
+
+    let row = MIB_TCPROW_LH {
+        Anonymous: MIB_TCPROW_LH_0 {
+            State: MIB_TCP_STATE_DELETE_TCB,
+        },
+        dwLocalAddr: local.ip().to_bits().to_be(),
+        dwLocalPort: u32::from(local.port().to_be()),
+        dwRemoteAddr: remote.ip().to_bits().to_be(),
+        dwRemotePort: u32::from(remote.port().to_be()),
+    };
+    // SAFETY: `row` is a complete MIB_TCPROW.
+    match unsafe { SetTcpEntry(&raw const row) } {
+        NO_ERROR => Ok(()),
+        code => Err(io::Error::from_raw_os_error(code.cast_signed())),
+    }
+}
+
+/// Whether Winsock is started, which `GetNameInfoW` needs. Started once and left
+/// running, as the standard library does.
+fn winsock_started() -> bool {
+    use windows_sys::Win32::Networking::WinSock::{WSADATA, WSAStartup};
+
+    static STARTED: LazyLock<bool> = LazyLock::new(|| {
+        // SAFETY: WSADATA is plain data, valid zeroed.
+        let mut data: WSADATA = unsafe { std::mem::zeroed() };
+        // SAFETY: `data` is a writable WSADATA.
+        unsafe { WSAStartup(0x0202, &raw mut data) == 0 }
+    });
+    *STARTED
+}
+
+/// The host name of one address by reverse lookup (`GetNameInfoW` with `NI_NAMEREQD`),
+/// or `None` when there is none.
+fn host_name(address: IpAddr) -> Option<String> {
+    use windows_sys::Win32::Networking::WinSock::{
+        GetNameInfoW, IN_ADDR, IN_ADDR_0, IN6_ADDR, IN6_ADDR_0, NI_MAXHOST, NI_NAMEREQD, SOCKADDR,
+        SOCKADDR_IN, SOCKADDR_IN6, SOCKADDR_IN6_0,
+    };
+
+    if !winsock_started() {
+        return None;
+    }
+    let v4;
+    let v6;
+    let (pointer, length) = match address {
+        IpAddr::V4(ip) => {
+            v4 = SOCKADDR_IN {
+                sin_family: AF_INET,
+                sin_port: 0,
+                sin_addr: IN_ADDR {
+                    S_un: IN_ADDR_0 {
+                        S_addr: ip.to_bits().to_be(),
+                    },
+                },
+                sin_zero: [0; 8],
+            };
+            ((&raw const v4).cast::<SOCKADDR>(), size_of::<SOCKADDR_IN>())
+        }
+        IpAddr::V6(ip) => {
+            v6 = SOCKADDR_IN6 {
+                sin6_family: AF_INET6,
+                sin6_port: 0,
+                sin6_flowinfo: 0,
+                sin6_addr: IN6_ADDR {
+                    u: IN6_ADDR_0 { Byte: ip.octets() },
+                },
+                Anonymous: SOCKADDR_IN6_0 { sin6_scope_id: 0 },
+            };
+            (
+                (&raw const v6).cast::<SOCKADDR>(),
+                size_of::<SOCKADDR_IN6>(),
+            )
+        }
+    };
+    let mut host = [0u16; NI_MAXHOST as usize];
+    // SAFETY: `pointer` addresses a socket address of `length` bytes that lives until
+    // the call returns; `host` holds `host.len()` units, and no service is asked for.
+    let code = unsafe {
+        GetNameInfoW(
+            pointer,
+            i32::try_from(length).unwrap_or(i32::MAX),
+            host.as_mut_ptr(),
+            u32::try_from(host.len()).unwrap_or(u32::MAX),
+            std::ptr::null_mut(),
+            0,
+            NI_NAMEREQD.cast_signed(),
+        )
+    };
+    if code != 0 {
+        return None;
+    }
+    let length = host
+        .iter()
+        .position(|&unit| unit == 0)
+        .unwrap_or(host.len());
+    let name = String::from_utf16_lossy(&host[..length]);
+    (!name.is_empty()).then_some(name)
+}
+
+/// Reverse lookups already answered in this process, including those that found no
+/// name. A lookup that outlived its caller's wait still lands here, for the next call.
+static HOST_NAMES: LazyLock<Mutex<HashMap<IpAddr, Option<String>>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+/// How many reverse lookups run at once.
+const LOOKUP_THREADS: usize = 16;
+
+/// The host names of `addresses`, for `ss -r`, waiting at most `limit` in all.
+///
+/// The lookups run concurrently, so one slow DNS server cannot stall the caller.
+/// Addresses without a name, or whose lookup is still running when the time is up, are
+/// missing from the map; answers are cached for the process's life.
+#[must_use]
+pub fn host_names(addresses: &[IpAddr], limit: Duration) -> HashMap<IpAddr, String> {
+    let deadline = Instant::now() + limit;
+    let cache = || HOST_NAMES.lock().unwrap_or_else(PoisonError::into_inner);
+    let pending: Vec<IpAddr> = {
+        let known = cache();
+        let mut seen = HashSet::new();
+        addresses
+            .iter()
+            .copied()
+            .filter(|address| !known.contains_key(address) && seen.insert(*address))
+            .collect()
+    };
+    if !pending.is_empty() {
+        let total = pending.len();
+        let queue = Arc::new(Mutex::new(pending));
+        let (done, finished) = mpsc::channel();
+        for _ in 0..total.min(LOOKUP_THREADS) {
+            let queue = Arc::clone(&queue);
+            let done = done.clone();
+            // Detached: a lookup still running at the deadline finishes into the cache.
+            let _ = std::thread::Builder::new()
+                .name("ss-resolve".to_owned())
+                .spawn(move || {
+                    loop {
+                        let next = queue.lock().unwrap_or_else(PoisonError::into_inner).pop();
+                        let Some(address) = next else {
+                            break;
+                        };
+                        let name = host_name(address);
+                        HOST_NAMES
+                            .lock()
+                            .unwrap_or_else(PoisonError::into_inner)
+                            .insert(address, name);
+                        let _ = done.send(());
+                    }
+                });
+        }
+        drop(done);
+        for _ in 0..total {
+            let left = deadline.saturating_duration_since(Instant::now());
+            if finished.recv_timeout(left).is_err() {
+                break;
+            }
+        }
+    }
+    let known = cache();
+    addresses
+        .iter()
+        .filter_map(|address| {
+            known
+                .get(address)
+                .cloned()
+                .flatten()
+                .map(|name| (*address, name))
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -532,6 +890,133 @@ mod tests {
             Some(name)
         );
         assert_eq!(row.pid, std::process::id());
+    }
+
+    /// A TCP socket bound to 127.0.0.1 or `::1` on a free port, neither listening nor
+    /// connected, closed on drop. The standard library cannot make one.
+    struct BoundOnly(windows_sys::Win32::Networking::WinSock::SOCKET, u16);
+
+    impl BoundOnly {
+        fn new(v6: bool) -> Self {
+            use windows_sys::Win32::Networking::WinSock::{
+                IN6_ADDR, IN6_ADDR_0, INVALID_SOCKET, IPPROTO_TCP, SOCK_STREAM, SOCKADDR,
+                SOCKADDR_IN6, SOCKADDR_IN6_0, bind, getsockname, socket,
+            };
+            assert!(winsock_started());
+            let family = if v6 { AF_INET6 } else { AF_INET };
+            // SAFETY: plain socket creation.
+            let handle = unsafe { socket(family.into(), SOCK_STREAM, IPPROTO_TCP) };
+            assert_ne!(handle, INVALID_SOCKET);
+            // A SOCKADDR_IN6 has room for either family; a SOCKADDR_IN's address sits
+            // where sin6_flowinfo is.
+            let mut address = SOCKADDR_IN6 {
+                sin6_family: family,
+                sin6_port: 0,
+                sin6_flowinfo: if v6 {
+                    0
+                } else {
+                    Ipv4Addr::LOCALHOST.to_bits().to_be()
+                },
+                sin6_addr: IN6_ADDR {
+                    u: IN6_ADDR_0 {
+                        Byte: if v6 {
+                            Ipv6Addr::LOCALHOST.octets()
+                        } else {
+                            [0; 16]
+                        },
+                    },
+                },
+                Anonymous: SOCKADDR_IN6_0 { sin6_scope_id: 0 },
+            };
+            let full = i32::try_from(size_of::<SOCKADDR_IN6>()).unwrap();
+            let length = if v6 { full } else { 16 };
+            // SAFETY: `address` holds a socket address of `length` bytes.
+            let bound = unsafe { bind(handle, (&raw const address).cast::<SOCKADDR>(), length) };
+            assert_eq!(bound, 0);
+            let mut length = full;
+            // SAFETY: `address` has room for `length` bytes, and `length` is writable.
+            let named = unsafe {
+                getsockname(
+                    handle,
+                    (&raw mut address).cast::<SOCKADDR>(),
+                    &raw mut length,
+                )
+            };
+            assert_eq!(named, 0);
+            Self(handle, u16::from_be(address.sin6_port))
+        }
+    }
+
+    impl Drop for BoundOnly {
+        fn drop(&mut self) {
+            // SAFETY: the socket is ours and still open.
+            unsafe { windows_sys::Win32::Networking::WinSock::closesocket(self.0) };
+        }
+    }
+
+    #[test]
+    fn a_bound_socket_is_listed_and_active_ones_are_not() {
+        let bound = BoundOnly::new(false);
+        let bound6 = BoundOnly::new(true);
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let found = bound_tcp_sockets(true, true).unwrap();
+        for (port, ip) in [
+            (bound.1, IpAddr::V4(Ipv4Addr::LOCALHOST)),
+            (bound6.1, IpAddr::V6(Ipv6Addr::LOCALHOST)),
+        ] {
+            let row = found
+                .iter()
+                .find(|s| s.local.port() == port && s.local.is_ipv6() == ip.is_ipv6());
+            assert!(row.is_some(), "port {port} not in {found:?}");
+            let row = row.unwrap();
+            assert_eq!(row.local.ip(), ip);
+            assert_eq!(row.pid, std::process::id());
+            assert_eq!(row.state, Some(TcpState::Closed));
+        }
+        let listening = listener.local_addr().unwrap().port();
+        assert!(!found.iter().any(|s| s.local.port() == listening));
+        // Asking for one family leaves the other out.
+        let only4 = bound_tcp_sockets(true, false).unwrap();
+        assert!(only4.iter().all(|s| s.local.is_ipv4()));
+    }
+
+    #[test]
+    fn the_loopback_interface_has_a_name_without_spaces() {
+        // Index 1 is the loopback pseudo-interface on every Windows.
+        let name = interface_name(1).unwrap();
+        assert!(!name.is_empty() && !name.contains(' '), "{name:?}");
+        assert_eq!(interface_name(u32::MAX), None);
+    }
+
+    #[test]
+    fn host_names_wait_no_longer_than_the_limit() {
+        // TEST-NET-1 has no reverse name; with no time at all, nothing is waited for.
+        let address = IpAddr::V4(Ipv4Addr::new(192, 0, 2, 1));
+        let started = Instant::now();
+        let names = host_names(&[address], Duration::ZERO);
+        assert!(started.elapsed() < Duration::from_secs(1));
+        assert!(names.is_empty());
+    }
+
+    #[test]
+    fn closing_a_connection_needs_elevation() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let server = listener.local_addr().unwrap();
+        let client = std::net::TcpStream::connect(server).unwrap();
+        let (_accepted, _) = listener.accept().unwrap();
+        let ends = match (client.local_addr().unwrap(), server) {
+            (SocketAddr::V4(local), SocketAddr::V4(remote)) => Some((local, remote)),
+            _ => None,
+        };
+        let (local, remote) = ends.unwrap();
+        let closed = close_tcp(local, remote);
+        if crate::process::current_process_is_elevated() == Some(true) {
+            closed.unwrap();
+            let mut byte = [0u8; 1];
+            assert!(std::io::Read::read(&mut &client, &mut byte).is_err());
+        } else {
+            assert!(closed.is_err());
+        }
     }
 
     #[test]
