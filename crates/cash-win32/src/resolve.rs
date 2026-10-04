@@ -175,23 +175,43 @@ fn classify_if_exists(candidate: &Path, pathext: &[String]) -> Option<Dispatch> 
 /// better than a failed lookup.
 #[must_use]
 pub fn real_case(path: &Path) -> PathBuf {
-    let (Some(parent), Some(name)) = (path.parent(), path.file_name()) else {
+    use std::os::windows::ffi::{OsStrExt as _, OsStringExt as _};
+    use windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE;
+    use windows_sys::Win32::Storage::FileSystem::{FindClose, FindFirstFileW, WIN32_FIND_DATAW};
+
+    let (Some(parent), Some(_)) = (path.parent(), path.file_name()) else {
         return path.to_path_buf();
     };
 
-    let Ok(entries) = std::fs::read_dir(parent) else {
+    // The file's own entry, which holds its name as the disk spells it: it read the
+    // whole directory to find it (W32-16). A name cannot hold `*` or `?`, so the path is
+    // no pattern.
+    let wide: Vec<u16> = path
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    // SAFETY: an all-zero WIN32_FIND_DATAW is a valid value for the out-parameter.
+    let mut found: WIN32_FIND_DATAW = unsafe { std::mem::zeroed() };
+    // SAFETY: the path is NUL-terminated and `found` outlives the call.
+    let handle = unsafe { FindFirstFileW(wide.as_ptr(), &raw mut found) };
+    if handle == INVALID_HANDLE_VALUE {
         return path.to_path_buf();
-    };
-
-    let wanted = name.to_string_lossy();
-    for entry in entries.flatten() {
-        let actual = entry.file_name();
-        if actual.to_string_lossy().eq_ignore_ascii_case(&wanted) {
-            return parent.join(actual);
-        }
     }
+    // SAFETY: a search handle FindFirstFileW opened, closed once.
+    unsafe { FindClose(handle) };
 
-    path.to_path_buf()
+    let name = &found.cFileName;
+    let length = name
+        .iter()
+        .position(|&unit| unit == 0)
+        .unwrap_or(name.len());
+    name.get(..length)
+        .filter(|name| !name.is_empty())
+        .map_or_else(
+            || path.to_path_buf(),
+            |name| parent.join(std::ffi::OsString::from_wide(name)),
+        )
 }
 
 fn is_pe_file(path: &Path) -> bool {

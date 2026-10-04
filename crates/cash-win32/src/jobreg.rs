@@ -129,22 +129,19 @@ pub fn tree_pids(pid: u32) -> Vec<u32> {
 /// (D19): what `kill -STOP %1` and the keyboard's Ctrl-Z do to a job. Returns how many
 /// threads were suspended.
 pub fn suspend_tree(pid: u32) -> io::Result<usize> {
-    for_each_in_tree(pid, crate::console::suspend_process)
+    crate::console::suspend_processes(&tree_or_alone(pid))
 }
 
 /// Resume every process in the tree rooted at `pid`, or `pid` alone when it roots none
 /// (D19). Returns how many threads were resumed.
 pub fn resume_tree(pid: u32) -> io::Result<usize> {
-    for_each_in_tree(pid, crate::console::resume_process)
+    crate::console::resume_processes(&tree_or_alone(pid))
 }
 
-fn for_each_in_tree(pid: u32, action: fn(u32) -> io::Result<usize>) -> io::Result<usize> {
-    let mut pids = tree_pids(pid);
-    if pids.is_empty() {
-        pids.push(pid);
-    }
-    pids.into_iter()
-        .try_fold(0, |threads, member| Ok(threads + action(member)?))
+/// The processes of the tree rooted at `pid`, or `pid` alone when it roots none.
+fn tree_or_alone(pid: u32) -> Vec<u32> {
+    let pids = tree_pids(pid);
+    if pids.is_empty() { vec![pid] } else { pids }
 }
 
 /// The root pid of every process tree cash has spawned and still holds.

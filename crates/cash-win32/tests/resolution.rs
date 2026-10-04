@@ -20,7 +20,7 @@ use cash_win32::cmd::{
     CmdHazard, build_command_line, escape_for_cmd, is_safe_for_cmd, quote_argument,
 };
 use cash_win32::resolve::{
-    DEFAULT_PATHEXT, Dispatch, classify, parse_pathext, read_shebang, resolve,
+    DEFAULT_PATHEXT, Dispatch, classify, parse_pathext, read_shebang, real_case, resolve,
 };
 
 fn scratch(name: &str) -> PathBuf {
@@ -319,4 +319,17 @@ fn cmd_hazards_are_reported_rather_than_hidden() {
     assert_eq!(is_safe_for_cmd("%PATH%"), Err(CmdHazard::PercentExpansion));
     assert_eq!(is_safe_for_cmd("two\nlines"), Err(CmdHazard::Newline));
     assert_eq!(is_safe_for_cmd("nul\0byte"), Err(CmdHazard::Nul));
+}
+
+#[test]
+fn a_file_is_named_as_the_disk_spells_it() {
+    let dir = scratch("real-case");
+    fs::write(dir.join("Tool.Exe"), b"MZ").unwrap();
+    let real = real_case(&dir.join("TOOL.EXE"));
+    let missing = dir.join("NO-SUCH.EXE");
+    let unchanged = real_case(&missing);
+    let _ = fs::remove_dir_all(&dir);
+
+    assert_eq!(real, dir.join("Tool.Exe"));
+    assert_eq!(unchanged, missing);
 }

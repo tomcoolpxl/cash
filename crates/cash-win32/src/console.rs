@@ -532,19 +532,30 @@ pub fn request_redraw() {
 /// process is simply stopped (W32-05). What cash has stopped is known by pid and start
 /// time, so a pid handed out again is another process.
 pub fn suspend_process(pid: u32) -> io::Result<usize> {
-    let identity = (pid, crate::process::started(pid));
+    suspend_processes(&[pid])
+}
+
+/// [`suspend_process`] for each of `pids`, from one thread snapshot of the system: a job's
+/// tree took one per process (W32-16).
+pub fn suspend_processes(pids: &[u32]) -> io::Result<usize> {
     let mut stopped = STOPPED
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     stopped.retain(|&(other, _)| crate::process::is_pid_alive(other));
-    if stopped.contains(&identity) {
+    let identities: Vec<(u32, Option<u64>)> = pids
+        .iter()
+        .map(|&pid| (pid, crate::process::started(pid)))
+        .filter(|identity| !stopped.contains(identity))
+        .collect();
+    if identities.is_empty() {
         return Ok(0);
     }
-    let threads = for_each_thread(pid, |handle| {
+    let targets: Vec<u32> = identities.iter().map(|&(pid, _)| pid).collect();
+    let threads = for_each_thread(&targets, |handle| {
         // SAFETY: handle is a valid thread handle with THREAD_SUSPEND_RESUME.
         unsafe { SuspendThread(handle) };
     })?;
-    stopped.push(identity);
+    stopped.extend(identities);
     drop(stopped);
     Ok(threads)
 }
@@ -553,22 +564,37 @@ pub fn suspend_process(pid: u32) -> io::Result<usize> {
 /// stop is left running, or stopped by whoever stopped it, as `SIGCONT` leaves a running
 /// one.
 pub fn resume_process(pid: u32) -> io::Result<usize> {
-    let identity = (pid, crate::process::started(pid));
+    resume_processes(&[pid])
+}
+
+/// [`resume_process`] for each of `pids`, from one thread snapshot of the system.
+pub fn resume_processes(pids: &[u32]) -> io::Result<usize> {
     let mut stopped = STOPPED
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    let Some(at) = stopped.iter().position(|&known| known == identity) else {
-        return Ok(0);
-    };
-    stopped.swap_remove(at);
+    let targets: Vec<u32> = pids
+        .iter()
+        .copied()
+        .filter(|&pid| {
+            let identity = (pid, crate::process::started(pid));
+            let at = stopped.iter().position(|&known| known == identity);
+            at.map(|at| stopped.swap_remove(at)).is_some()
+        })
+        .collect();
     drop(stopped);
-    start_threads(pid)
+    if targets.is_empty() {
+        return Ok(0);
+    }
+    for_each_thread(&targets, |handle| {
+        // SAFETY: handle is a valid thread handle with THREAD_SUSPEND_RESUME.
+        unsafe { ResumeThread(handle) };
+    })
 }
 
 /// Resume every thread of a process once, whoever suspended it: for a process cash
 /// created suspended, which job control did not stop.
 pub fn start_threads(pid: u32) -> io::Result<usize> {
-    for_each_thread(pid, |handle| {
+    for_each_thread(&[pid], |handle| {
         // SAFETY: handle is a valid thread handle with THREAD_SUSPEND_RESUME.
         unsafe { ResumeThread(handle) };
     })
@@ -577,15 +603,21 @@ pub fn start_threads(pid: u32) -> io::Result<usize> {
 /// The processes cash has stopped, by pid and start time.
 static STOPPED: std::sync::Mutex<Vec<(u32, Option<u64>)>> = std::sync::Mutex::new(Vec::new());
 
-/// Apply an operation to every thread of a process, returning how many were affected.
-fn for_each_thread<F>(pid: u32, mut action: F) -> io::Result<usize>
+/// Apply an operation to every thread of the processes `pids`, returning how many were
+/// affected.
+fn for_each_thread<F>(pids: &[u32], mut action: F) -> io::Result<usize>
 where
     F: FnMut(windows_sys::Win32::Foundation::HANDLE),
 {
     // A process that has exited has nothing to suspend or resume, whatever the thread
     // snapshot still lists for it: on GitHub's runner an exited process kept reporting a
     // thread that the per-thread exit-code check below did not rule out.
-    if !crate::process::is_pid_alive(pid) {
+    let pids: Vec<u32> = pids
+        .iter()
+        .copied()
+        .filter(|&pid| crate::process::is_pid_alive(pid))
+        .collect();
+    if pids.is_empty() {
         return Ok(0);
     }
 
@@ -608,7 +640,7 @@ where
     // SAFETY: entry is correctly sized and the snapshot handle is valid.
     let mut ok = unsafe { Thread32First(snapshot, &raw mut entry) };
     while ok != 0 {
-        if entry.th32OwnerProcessID == pid {
+        if pids.contains(&entry.th32OwnerProcessID) {
             let access = THREAD_SUSPEND_RESUME | THREAD_QUERY_LIMITED_INFORMATION;
             // SAFETY: opening a thread by id; null is returned on failure.
             let handle = unsafe { OpenThread(access, FALSE, entry.th32ThreadID) };
@@ -643,6 +675,39 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A tree's processes stop and start together, from one snapshot (W32-16), and a
+    /// second stop or start of each does nothing, as for one process (W32-05).
+    #[test]
+    fn processes_stop_and_start_together() {
+        let mut children: Vec<std::process::Child> = (0..2)
+            .map(|_| {
+                std::process::Command::new("ping")
+                    .args(["-n", "30", "127.0.0.1"])
+                    .stdout(std::process::Stdio::null())
+                    .spawn()
+                    .unwrap()
+            })
+            .collect();
+        let pids: Vec<u32> = children.iter().map(std::process::Child::id).collect();
+        // A process still starting makes threads while it is stopped, a race D19
+        // accepts; so the threads started again are at least those stopped.
+        std::thread::sleep(std::time::Duration::from_millis(300));
+
+        let stopped = suspend_processes(&pids).unwrap();
+        let again = suspend_processes(&pids).unwrap();
+        let started = resume_processes(&pids).unwrap();
+        let after = resume_processes(&pids).unwrap();
+        for child in &mut children {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+
+        assert!(stopped >= 2, "{stopped} threads stopped");
+        assert_eq!(again, 0);
+        assert!(started >= stopped, "{started} started, {stopped} stopped");
+        assert_eq!(after, 0);
+    }
 
     /// Windows Terminal's console as cash starts: cooked, with mouse input, insert mode,
     /// quick edit and auto-position, and extended flags.
