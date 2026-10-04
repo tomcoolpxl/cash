@@ -71,6 +71,12 @@ fixed their leftovers; moved here so 1.3.14 could go out (the user, 2026-10-04).
 
 ## Decided, written down so it is not decided twice
 
+- **Uptime is Windows' figure** (the user, 2026-10-04): `coolfetch`, `uptime` and `top`
+  count from the last full kernel boot (`GetTickCount64`), as Task Manager and fastfetch
+  do, so with Fast Startup a power-on resumes the count rather than restarting it.
+  Counting from the last power-on (the Kernel-Boot event), or showing both, was turned
+  down.
+
 - **sed's errors read as GNU sed's, prefix and all** (the user, 2026-10-04):
   `sed: -e expression #1, char 5: unknown command: `x'`. Keeping cash's
   `<script argument 1>:1:5: error:` before GNU's words was turned down.
