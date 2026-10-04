@@ -103,8 +103,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 Each from `REVIEW_REPORT.md` §5, found in no commit on 2026-10-04; reproduce first, as
 some may have gone with other work.
 
-- BIN-03: `--remove-terminal-profile` cuts a whole `newTabMenu` folder that holds the
-  cash entry.
 - BIN-06: `cash doctor` always says "inside another job object", asking after cash made
   its own.
 - BIN-07: a path-rendering bundled tool runs twice if reading its output fails (a second

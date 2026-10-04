@@ -69,16 +69,12 @@ pub fn without_profile(text: &str, guid: &str) -> Option<String> {
         let Some(menu) = menu(&text, &tokens) else {
             break;
         };
+        // A profile entry for `guid` itself, by its own keys: a folder whose entries hold
+        // one named the GUID somewhere inside it too, and was cut whole (BIN-03).
         let names_guid = |&(start, end): &(usize, usize)| {
-            let span = tokens
-                .get(start)
-                .zip(end.checked_sub(1).and_then(|last| tokens.get(last)))
-                .and_then(|(first, last)| text.get(first.start..last.end));
-            span.is_some_and(|span| {
-                span.starts_with('{')
-                    && span.contains("\"profile\"")
-                    && span.to_ascii_lowercase().contains(&guid)
-            })
+            let value_of = |wanted: &str| top_level_value(&text, &tokens, start, end, wanted);
+            value_of("type").is_some_and(|kind| kind == "profile")
+                && value_of("profile").is_some_and(|profile| profile.to_ascii_lowercase() == guid)
         };
         let Some(index) = menu.elements.iter().position(names_guid) else {
             break;
@@ -98,6 +94,39 @@ pub fn without_profile(text: &str, guid: &str) -> Option<String> {
         changed = true;
     }
     changed.then_some(text)
+}
+
+/// The string value of `key` in the object whose tokens are `start..end`, at its own
+/// level: not a key of an object nested in it.
+fn top_level_value<'a>(
+    text: &'a str,
+    tokens: &[Token],
+    start: usize,
+    end: usize,
+    key: &str,
+) -> Option<&'a str> {
+    if tokens.get(start)?.kind != Kind::Punct(b'{') {
+        return None;
+    }
+    let mut i = start + 1;
+    while i + 2 < end {
+        let token = tokens.get(i)?;
+        match token.kind {
+            Kind::Punct(b',') => i += 1,
+            Kind::Str if tokens.get(i + 1)?.kind == Kind::Punct(b':') => {
+                let name = text.get(token.start + 1..token.end - 1)?;
+                let value = tokens.get(i + 2)?;
+                if name == key {
+                    return (value.kind == Kind::Str)
+                        .then(|| text.get(value.start + 1..value.end - 1))
+                        .flatten();
+                }
+                i = value_end(tokens, i + 2)?;
+            }
+            _ => return None,
+        }
+    }
+    None
 }
 
 /// The top-level `newTabMenu` array: the tokens of its brackets, and each entry's tokens
@@ -274,6 +303,27 @@ mod tests {
         assert_eq!(
             without_profile(&first, GUID).as_deref(),
             Some(r#"{ "newTabMenu": [ { "type": "profile", "profile": "{x}" } ] }"#)
+        );
+    }
+
+    /// A folder the user made, which holds cash's entry among its own, stays: it was cut
+    /// whole, as its text names the GUID (BIN-03). Only an entry of the menu's own level
+    /// that is cash's goes.
+    #[test]
+    fn a_folder_holding_the_profile_is_not_cut() {
+        let folder = format!(
+            r#"{{ "newTabMenu": [ {{ "type": "folder", "name": "Shells", "entries": [ {{ "type": "profile", "profile": "{GUID}" }}, {{ "type": "profile", "profile": "{{x}}" }} ] }} ] }}"#
+        );
+        assert_eq!(without_profile(&folder, GUID), None);
+
+        let both = format!(
+            r#"{{ "newTabMenu": [ {{ "type": "folder", "entries": [ {{ "type": "profile", "profile": "{GUID}" }} ] }}, {{ "type": "profile", "profile": "{GUID}" }} ] }}"#
+        );
+        assert_eq!(
+            without_profile(&both, GUID),
+            Some(format!(
+                r#"{{ "newTabMenu": [ {{ "type": "folder", "entries": [ {{ "type": "profile", "profile": "{GUID}" }} ] }} ] }}"#
+            ))
         );
     }
 
