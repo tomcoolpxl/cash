@@ -385,6 +385,19 @@ fn it_is_usable_as_a_pager_variable() {
     assert_eq!(out.stdout, "paged\n", "stderr: {}", out.stderr);
 }
 
+/// Not to a terminal, each line goes on as it comes, as `cat` passes it: the pager read
+/// all its input first, so `more <(tail -f log) > f` wrote nothing until the input ended.
+#[test]
+fn each_line_goes_on_as_it_comes() {
+    for name in NAMES {
+        let out = cash(&format!(
+            r#"f=$(mktemp); {name} <(echo first; sleep 6; echo last) > "$f" & sleep 2
+               printf '[%s]' "$(cat "$f")"; kill %1; wait 2>/dev/null; rm -f "$f""#
+        ));
+        assert_eq!(out.stdout, "[first]", "{name}: {}", out.stderr);
+    }
+}
+
 #[test]
 fn a_closed_pipe_does_not_produce_a_diagnostic() {
     // `less | head -1` closes the pipe early. That is normal and must be silent.

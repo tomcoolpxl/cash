@@ -119,6 +119,16 @@ impl LessCommand {
         context: &cash_core::ExecutionContext<'_, SE>,
         flavor: Flavor,
     ) -> Result<ExecutionResult, cash_core::Error> {
+        // The rule: a pager writing anywhere but a terminal is `cat`. Checked on the
+        // *shell's* stdout, which is what a redirection or a pipe actually replaces.
+        let interactive = std::io::stdout().is_terminal()
+            && context
+                .try_fd(cash_core::openfiles::OpenFiles::STDOUT_FD)
+                .is_some_and(|f| f.is_terminal());
+        if !interactive {
+            return self.pass_on(context);
+        }
+
         let mut text = String::new();
         let mut failed = false;
 
@@ -143,27 +153,85 @@ impl LessCommand {
 
         let lines = split_lines(&text);
         let rendered = self.render(&lines);
+        page(
+            context,
+            &rendered,
+            flavor,
+            self.quit_if_one_screen,
+            self.quit_at_eof,
+        )?;
 
-        // The rule: a pager writing anywhere but a terminal is `cat`. Checked on the
-        // *shell's* stdout, which is what a redirection or a pipe actually replaces.
-        let interactive = std::io::stdout().is_terminal()
-            && context
-                .try_fd(cash_core::openfiles::OpenFiles::STDOUT_FD)
-                .is_some_and(|f| f.is_terminal());
+        if failed {
+            return Ok(ExecutionResult::general_error());
+        }
+        Ok(ExecutionResult::success())
+    }
 
-        if interactive {
-            page(
-                context,
-                &rendered,
-                flavor,
-                self.quit_if_one_screen,
-                self.quit_at_eof,
-            )?;
-        } else {
-            let mut stdout = context.stdout();
-            for line in &rendered {
-                writeln!(stdout, "{line}")?;
+    /// Not to a terminal: each line passed on as it comes, as `cat` does. Read whole
+    /// first, `more <(tail -f log) > f` wrote nothing until its input ended. The lines
+    /// are as the pager shows them: `\r\n` ends one as `\n` does, `-N` numbers them, and
+    /// a file without a last newline runs into the next, as their text joined would.
+    fn pass_on<SE: cash_core::ShellExtensions>(
+        &self,
+        context: &cash_core::ExecutionContext<'_, SE>,
+    ) -> Result<ExecutionResult, cash_core::Error> {
+        let mut stdout = context.stdout();
+        let mut failed = false;
+        let mut pending: Vec<u8> = Vec::new();
+        let mut number = 0usize;
+        let mut emit = |line: &[u8], stdout: &mut dyn Write| -> std::io::Result<()> {
+            let line = line.strip_suffix(b"\r").unwrap_or(line);
+            let line = String::from_utf8_lossy(line);
+            number += 1;
+            if self.line_numbers {
+                writeln!(stdout, "{number:>7} {line}")
+            } else {
+                writeln!(stdout, "{line}")
             }
+        };
+
+        let sources: Vec<Option<&str>> = if self.files.is_empty() {
+            vec![None]
+        } else {
+            self.files.iter().map(|file| Some(file.as_str())).collect()
+        };
+        for source in sources {
+            let reader: Box<dyn Read> = match source {
+                None | Some("-") => Box::new(context.stdin()),
+                Some(file) => {
+                    let path = context.shell.absolute_path(std::path::Path::new(file));
+                    match std::fs::File::open(path) {
+                        Ok(opened) => Box::new(opened),
+                        Err(e) => {
+                            let e = cash_core::error::os_error_text(&e);
+                            writeln!(context.stderr(), "{}: {file}: {e}", context.command_name)?;
+                            failed = true;
+                            continue;
+                        }
+                    }
+                }
+            };
+            let mut reader = std::io::BufReader::new(reader);
+            loop {
+                let mut chunk = Vec::new();
+                match std::io::BufRead::read_until(&mut reader, b'\n', &mut chunk) {
+                    Ok(0) => break,
+                    Ok(_) => {
+                        pending.extend_from_slice(&chunk);
+                        if pending.ends_with(b"\n") {
+                            pending.pop();
+                            emit(&pending, &mut stdout)?;
+                            stdout.flush()?;
+                            pending.clear();
+                        }
+                    }
+                    Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+                    Err(_) => break,
+                }
+            }
+        }
+        if !pending.is_empty() {
+            emit(&pending, &mut stdout)?;
         }
 
         if failed {

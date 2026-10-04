@@ -70,13 +70,14 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 - `tests/corpus/results.json`, the corpus runner's last log, quotes sed's old message
   "extra characters at the end of the : command"; a run of `tests/corpus/run.ps1`
   rewrites it. Seen 2026-10-04.
-- cash's `more`, its output not a terminal, prints nothing until its input ends, where
-  `cat` and `head` pass each line on: `more <(echo x; sleep 8) > f` leaves `f` empty for
-  8 s. Seen 2026-10-04 measuring W32-02.
 
 ---
 
 ## Decided, written down so it is not decided twice
+
+- **awk's `system()` and pipes and sed's `e` run plain cash** (the user, 2026-10-04):
+  `cash -c`, `$0` `cash`, Bash's behaviour. Running them as `sh`, in POSIX mode, as
+  gawk and GNU sed run `/bin/sh`, was turned down.
 
 - **`exec -a NAME` is refused for a program other than cash** (the user, 2026-10-04): std's `Command` cannot
   set a program's `argv[0]`, and running it under its own name in silence was the
