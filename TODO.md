@@ -62,6 +62,11 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ## Decided, written down so it is not decided twice
 
+- **`elevate` stays, beside `sudo` and `su`** (the user, 2026-10-04): it starts a
+  program elevated in a new window without waiting and needs no tool; `sudo` and `su`
+  fall back to its UAC request when neither gsudo nor Windows' sudo is there. Removing
+  it, or keeping `sudo` refusing without a tool, was turned down.
+
 - **Bundled tools stay processes of their own** (the user, 2026-10-04): a call to
   `cut`, `sort`, `sed` or `awk` costs a process start, about 25 to 35 ms in a debug
   build against 0.5 ms for pure shell, and a tool that crashes or exits cannot take the
