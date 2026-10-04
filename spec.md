@@ -775,6 +775,14 @@ held the substitution open until the shell exited. The file of a `<(...)` for `d
 `cmp` is deleted then too; they were never deleted before, and the sweep takes the ones
 earlier versions left.
 
+**Known `cmd` quirk, accepted (W32-02, the user, 2026-10-04):** `cmd /c type <(echo x)`
+sometimes prints `x` and then "The pipe has been ended." — 11 runs in 2000 on a busy
+machine, none in 300 on a quieter one. `type` reports the pipe's end as an error when its
+read is already waiting as the pipe closes, which is the program's timing, not cash's: a
+pipe has no other end than closing it. Keeping the pipe open until `type` had read
+everything (`FlushFileBuffers`) made it more frequent, 49 in 2000. Other programs (`cat`,
+`grep`, `sort`, Git's tools) read the same pipe without a word.
+
 ### D18 — Reuse `brush-interactive` now, replace when it blocks
 
 Line editing, history and highlighting for free. Consistent with D9's velocity-first

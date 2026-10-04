@@ -290,6 +290,9 @@ fn pump_read_instance(pump: &ReadPump, index: usize, server_file: &mut File) {
             Err(_) => pump.ended.store(true, Ordering::SeqCst),
         }
     }
+    // Not `sync_all` (`FlushFileBuffers`), which keeps this end open until the program
+    // has read everything: `cmd /c type <(echo x)` then said "The pipe has been ended" in
+    // 49 runs of 2000, against 11 closing at once (W32-02, 2026-10-04; spec D17).
     if sent_any {
         let _ = server_file.flush();
     }

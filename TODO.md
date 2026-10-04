@@ -61,12 +61,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 14.6 Dead code, allows and dependencies
 
-- Left from phase 11: `cmd /c type <(echo x)` sometimes prints `x` and then "The pipe has been ended" (the
-  review saw 11 in 80 on a busy machine; on 2026-10-03, 1 in 450 on an idle one, with
-  1.3.10 and with the replay fix of phase 11 alike). The race the review suspected, between a pump's
-  look at the replay and its look at the end, was real and is closed, but it is not
-  this. Unexplained: `type` may take the pipe's end (ERROR_BROKEN_PIPE) for an error
-  depending on when the server closes. W32-02.
 - awk: `begin`, `end` and `foreach` are reserved in cash (`BEGIN{begin=1}` is a syntax
   error) but plain names in gawk; `delete=1` is accepted where gawk reports a syntax
   error. `%.0c` prints nothing; gawk ignores a precision for `%c`. `next` reached through
@@ -85,6 +79,9 @@ then the riskiest changes once the crashes and state bugs are out of the way.
   set, a test hook live in production as W32-18's were; and they find cash only when their
   exe is named `cash` (or `cash-…`), so in a linked `awk.exe` they take another shell.
   Seen 2026-10-04 fixing BIN-09.
+- cash's `more`, its output not a terminal, prints nothing until its input ends, where
+  `cat` and `head` pass each line on: `more <(echo x; sleep 8) > f` leaves `f` empty for
+  8 s. Seen 2026-10-04 measuring W32-02.
 
 ---
 

@@ -1791,6 +1791,13 @@ impl Execute for ast::FunctionDefinition {
     }
 }
 
+/// Programs a `<(...)` handed as a path is a temp file for, written before they start,
+/// where others get a named pipe (D17): `diff` and `cmp` seek in it, and Windows' own
+/// `findstr`, `fc.exe`, `comp` and `certutil` read nothing from a pipe or cannot open one
+/// (2026-10-04, seen measuring W32-02). A builtin of one of these names (Bash's `fc`) is
+/// cash's own and gets the pipe.
+const NEEDS_A_FILE: &[&str] = &["diff", "cmp", "findstr", "fc", "comp", "certutil"];
+
 #[async_trait::async_trait]
 #[expect(clippy::too_many_lines)]
 impl<SE: extensions::ShellExtensions> ExecuteInPipeline<SE> for ast::SimpleCommand {
@@ -1831,7 +1838,17 @@ impl<SE: extensions::ShellExtensions> ExecuteInPipeline<SE> for ast::SimpleComma
                 .file_stem()
                 .and_then(|stem| stem.to_str())
                 .unwrap_or(&s);
-            base.eq_ignore_ascii_case("diff") || base.eq_ignore_ascii_case("cmp")
+            // A builtin of that name is cash's own, which reads a pipe: `fc` is Bash's
+            // history editor, and a file is written whole before the command starts.
+            let builtin = context
+                .shell
+                .builtins()
+                .get(s.as_str())
+                .is_some_and(|builtin| !builtin.disabled);
+            !builtin
+                && NEEDS_A_FILE
+                    .iter()
+                    .any(|name| base.eq_ignore_ascii_case(name))
         });
 
         // Only this command's own redirections count here (D26); anything an enclosing
@@ -3036,7 +3053,9 @@ async fn setup_process_substitution_path(
                 .await;
             drop(child_params);
 
-            let rendered = cash_win32::path::render(&path);
+            // The spelling Windows' own tools take, as the pipe's is: `findstr` and
+            // `more` read `C:/Users/…` as a switch `/Users`.
+            let rendered = cash_win32::path::to_backslash(&path);
             Ok((rendered, Some(SubstitutionEnd::Remove(path))))
         }
         ast::ProcessSubstitutionKind::Read => {
@@ -3065,7 +3084,7 @@ async fn setup_process_substitution_path(
             let thread = spawn_substitution(subshell, child_params, subshell_cmd)?;
             keep_output_substitution(thread, None);
 
-            let rendered = cash_win32::path::render(&path);
+            let rendered = cash_win32::path::to_backslash(&path);
             Ok((rendered, Some(SubstitutionEnd::File(followed.done))))
         }
     }
