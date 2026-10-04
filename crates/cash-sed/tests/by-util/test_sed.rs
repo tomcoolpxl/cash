@@ -786,8 +786,8 @@ fn test_subst_e_flag_no_match_no_exec() {
 
 ////////////////////////////////////////////////////////////
 // e command (execute)
-// The with-argument form writes the shell's raw, unmodified output to the
-// stream, while sed's own pattern-space auto-print always uses LF.
+// The with-argument form writes the shell's output to the stream as it is, but for its
+// newlines, which end as the current line does (D49): CRLF in a CRLF stream.
 #[test]
 fn test_e_command_with_arg_basic() {
     // With an argument, the command runs immediately and its output is
@@ -4339,4 +4339,64 @@ fn test_text_ends_as_the_current_line() -> std::io::Result<()> {
         .succeeds()
         .stdout_is_bytes(b"a\r\na\r\nb\r\nb\r\nc\r\nc\r\n");
     Ok(())
+}
+
+/// `l`'s lines, the wrapped ones too, end as the listed line does (D49): CRLF in a CRLF
+/// stream, the CR itself not listed. They always ended in LF. D49's exceptions list the
+/// CR, and end in LF.
+#[test]
+fn test_list_lines_end_as_the_current_line() {
+    for (args, input, output) in [
+        (&["-n", "l"][..], &b"a\r\nb\r\n"[..], &b"a$\r\nb$\r\n"[..]),
+        (&["-n", "l 3"], b"abcdef\r\n", b"ab\\\r\ncd\\\r\nef$\r\n"),
+        (&["-n", "N;l"], b"a\r\nb\r\n", b"a\\nb$\r\n"),
+        (&["-n", "l"], b"\r\n", b"$\r\n"),
+        (&["-n", "l"], b"a\nb\n", b"a$\nb$\n"),
+        (&["-n", "-b", "l"], b"a\r\n", b"a\\r$\n"),
+        (&["-n", "l;s/\\r//"], b"a\r\n", b"a\\r$\n"),
+    ] {
+        check_output(args, input, output);
+    }
+}
+
+/// The output of `e` and of `s///e` ends its lines as the current line does (D49): each
+/// newline is CRLF in a CRLF stream, and a CRLF the command wrote stays one. They were
+/// LF. As in GNU sed, the output of `e` is written as it is, an end it lacks not supplied
+/// (`xa`); one was.
+#[test]
+fn test_command_output_ends_as_the_current_line() {
+    for (args, input, output) in [
+        (
+            &["1e printf 'x\\ny\\n'"][..],
+            &b"a\r\nb\r\n"[..],
+            &b"x\r\ny\r\na\r\nb\r\n"[..],
+        ),
+        (&["1e printf 'x\\r\\ny\\n'"], b"a\r\n", b"x\r\ny\r\na\r\n"),
+        (&["s/a/printf 'x\\ny'/e"], b"a\r\nb\r\n", b"x\r\ny\r\nb\r\n"),
+        (&["1e printf x"], b"a\nb\n", b"xa\nb\n"),
+        (&["1e printf 'x\\ny\\n'"], b"a\nb\n", b"x\ny\na\nb\n"),
+        (&["-b", "1e printf 'x\\ny\\n'"], b"a\r\n", b"x\ny\na\r\n"),
+    ] {
+        check_output(args, input, output);
+    }
+}
+
+/// With `-z`, `a` text and the output of `e` are written as they are, their newlines
+/// newlines, as GNU sed writes them, while `i`, `c`, `=` and `F` end with the delimiter;
+/// and `s///e` takes the delimiter, not a newline, off the end of the output. The
+/// newline that ended them became the delimiter, and a newline was taken off.
+#[test]
+fn test_null_data_text_and_command_output() {
+    for (args, output) in [
+        (&["-z", "a T"][..], &b"a\x00T\nb\x00T\n"[..]),
+        (&["-z", "a\\\nT\\\nU"], b"a\x00T\nU\nb\x00T\nU\n"),
+        (&["-z", "i T"], b"T\x00a\x00T\x00b\x00"),
+        (&["-z", "c T"], b"T\x00T\x00"),
+        (&["-z", "="], b"1\x00a\x002\x00b\x00"),
+        (&["-z", "F"], b"-\x00a\x00-\x00b\x00"),
+        (&["-z", "e echo x"], b"x\na\x00x\nb\x00"),
+        (&["-z", "s/a/echo y/e"], b"y\n\x00b\x00"),
+    ] {
+        check_output(args, b"a\x00b\x00", output);
+    }
 }

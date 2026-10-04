@@ -15,6 +15,7 @@ use crate::sed::command::{
 use crate::sed::error_handling::{runtime_err, runtime_error, strerror};
 use crate::sed::fast_io::{
     DEV_STDIN, IOChunk, LineReader, OutputBuffer, is_directory, is_pipe_path, read_dev_stdin,
+    with_crlf,
 };
 use crate::sed::fast_regex::Regex;
 use crate::sed::in_place::InPlace;
@@ -361,18 +362,39 @@ fn shell_stdout(cmd: &[u8]) -> UResult<Vec<u8>> {
 
 /// Execute the pattern space as a shell command, replacing its contents
 /// with the command's standard output, minus one trailing newline.
-fn execute_pattern_as_shell_command(pattern: &mut IOChunk) -> UResult<()> {
+///
+/// As in GNU sed, a delimiter that ends the output is taken off: with `-z` a NUL, so a
+/// newline stays; it was a newline in any mode.
+fn execute_pattern_as_shell_command(pattern: &mut IOChunk, delimiter: u8) -> UResult<()> {
     let mut shell_out = shell_stdout(pattern.as_bytes())?;
-    if shell_out.ends_with(b"\r\n") {
+    if delimiter == b'\n' && shell_out.ends_with(b"\r\n") {
         // On Windows a trailing \r\n is the line terminator. Strip both.
         shell_out.truncate(shell_out.len() - 2);
     }
     // Cash and some Windows tools end with a single \n. Strip it, as GNU sed does.
-    if shell_out.ends_with(b"\n") {
+    if shell_out.last() == Some(&delimiter) {
         shell_out.pop();
     }
     pattern.set_to_bytes(shell_out, pattern.is_newline_terminated());
     Ok(())
+}
+
+/// Write `a` text or `e` output as it is, as GNU sed does: with `-z` its newlines stay
+/// newlines, and an end it lacks is not supplied, so the next output follows it. Each
+/// newline is the current line's ending (D49), CRLF when `crlf`, but one the text has as
+/// CRLF already. The newline that ended it became the `-z` delimiter, and one was
+/// supplied where it had none.
+fn write_text(
+    output: &mut OutputBuffer,
+    text: &[u8],
+    crlf: bool,
+    context: &ProcessingContext,
+) -> UResult<()> {
+    if crlf && context.delimiter() == b'\n' {
+        output.write_raw(&with_crlf(text))
+    } else {
+        output.write_raw(text)
+    }
 }
 
 /// Perform the specified RE replacement in the provided pattern space.
@@ -495,7 +517,7 @@ fn substitute(
             write_chunk(output, context, pattern)?;
         }
         if sub.execute {
-            execute_pattern_as_shell_command(pattern)?;
+            execute_pattern_as_shell_command(pattern, context.delimiter())?;
         }
         if sub.print_flag && !sub.p_before_e {
             write_chunk(output, context, pattern)?;
@@ -653,7 +675,7 @@ fn flush_appends(output: &mut OutputBuffer, context: &mut ProcessingContext) -> 
     for elem in &context.append_elements {
         match elem {
             AppendElement::Text(text, crlf) => {
-                output.write_bytes_with(text.as_ref(), *crlf)?;
+                write_text(output, text, *crlf, context)?;
             }
             AppendElement::Path(path) => {
                 append_file(output, path, context.stdin_done)?;
@@ -701,6 +723,8 @@ struct ListLine {
     buffer: String,
     width: usize,
     max_width: usize,
+    /// Whether its lines end in CRLF, as the listed line's do (D49)
+    crlf: bool,
 }
 
 impl ListLine {
@@ -710,6 +734,7 @@ impl ListLine {
             buffer: String::new(),
             width: 0,
             max_width,
+            crlf: false,
         }
     }
 
@@ -719,7 +744,7 @@ impl ListLine {
         // A width of 0 (`l 0`, `-l 0`) never wraps, as in GNU sed.
         if self.max_width > 0 && self.width + out_len + 1 > self.max_width {
             self.buffer.push_str("\\\n");
-            output.write_str(std::mem::take(&mut self.buffer))?;
+            output.write_bytes_with(std::mem::take(&mut self.buffer).as_bytes(), self.crlf)?;
             self.width = 0;
         }
         self.buffer.push_str(out_str);
@@ -731,7 +756,7 @@ impl ListLine {
     fn finish(&mut self, output: &mut OutputBuffer) -> UResult<()> {
         if !self.buffer.is_empty() {
             self.buffer.push_str("$\n");
-            output.write_str(&self.buffer)?;
+            output.write_bytes_with(self.buffer.as_bytes(), self.crlf)?;
             self.buffer.clear();
             self.width = 0;
         }
@@ -749,12 +774,14 @@ fn list(
     // Special case for an empty pattern space
     if line.is_empty() {
         if line.is_newline_terminated() {
-            output.write_str("$\n")?;
+            output.write_bytes_with(b"$\n", line.has_crlf_lines())?;
         }
         return Ok(());
     }
 
+    // The listing's lines end as the listed line does (D49), the CR not listed.
     let mut list_line = ListLine::new(max_width);
+    list_line.crlf = line.has_crlf_lines();
 
     // A newline in the pattern space is `\n`, as in GNU sed; it ended the listed line
     // with `$`, as if it were two.
@@ -931,11 +958,13 @@ fn process_file(
                 }
                 'e' => match &command.data {
                     CommandData::None => {
-                        execute_pattern_as_shell_command(&mut pattern)?;
+                        execute_pattern_as_shell_command(&mut pattern, context.delimiter())?;
                     }
                     CommandData::Text(cmd_bytes) => {
+                        // The command's lines end as the current line does (D49), as
+                        // sed's own output would; a CRLF it wrote stays one.
                         let shell_out = shell_stdout(cmd_bytes)?;
-                        output.write_bytes(&shell_out)?;
+                        write_text(output, &shell_out, pattern.has_crlf_lines(), context)?;
                     }
                     _ => {
                         return runtime_error("INTERNAL ERROR: invalid 'e' command data");

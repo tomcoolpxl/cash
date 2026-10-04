@@ -1786,11 +1786,16 @@ Two exceptions give the CR back to the script, because there the script asked fo
    matches before it. For a single sed run, `-b`/`--binary` does the same; it is the
    option GNU sed's Windows builds use for this. `printf` in awk is always written verbatim.
 
-**Lines joined in sed stay CRLF (2026-10-04).** `N`, `G` and `H` put a newline between
-lines; the script sees `\n`, and a space holding CRLF lines writes every newline in it
-as CRLF, a newline the script made (`s/,/\n/`) too: which newline stood for which line
-end is not kept through an edit, and mixed endings are what this decision prevents.
-`printf 'a\r\nb\r\n' | sed N` gave `a\nb\r\n` until then.
+**Everything sed writes for a line ends as that line does (2026-10-04).** The script
+sees only `\n`. A CRLF line's pattern space, the newlines joining CRLF lines in it
+(`N`, `G`, `H`, and a newline the script made, `s/,/\n/`: which newline stood for which
+line end is not kept through an edit), the text of `a`, `i` and `c`, `=`'s number,
+`F`'s name, `l`'s listing lines, the output of `e` and `s///e`, and the lines of `w`
+files all end in CRLF. A CRLF the program wrote itself is kept, never doubled. A last
+line without an end takes the input's ending as far as it is known. `r` and `R` insert
+the other file's bytes untouched, with no end supplied after them, as GNU sed does. The
+exceptions above and `-z` leave everything as GNU sed writes it. `printf 'a\r\nb\r\n' |
+sed N` gave `a\nb\r\n` until then.
 
 Converting files between the two conventions is the job of the bundled `dos2unix` and
 `unix2dos`, not a side effect of editing.
