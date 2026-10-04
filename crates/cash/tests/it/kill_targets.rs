@@ -223,3 +223,55 @@ fn every_target_is_signalled() {
         out.stderr
     );
 }
+
+/// `kill -s 0`, `kill -l` of an exit status, and the wording and status of a bad signal,
+/// as in Git Bash 5.3 (BI-15).
+#[test]
+fn kill_signals_and_their_names_are_bashs() {
+    let out = cash(
+        r#"kill -s 0 $$; echo "s0 $?"
+           kill -l 137 9 KILL
+           kill -l 300; echo "l300 $?"
+           kill -s NOPE $$; echo "nope $?"
+           kill -n 99 $$; echo "n99 $?""#,
+    );
+    assert_eq!(
+        out.stdout, "s0 0\nKILL\nKILL\n9\nl300 1\nnope 1\nn99 1",
+        "{}",
+        out.stderr
+    );
+    let errors: Vec<&str> = out
+        .stderr
+        .lines()
+        .map(|line| line.split_once("kill: ").map_or(line, |(_, rest)| rest))
+        .collect();
+    assert_eq!(
+        errors,
+        [
+            "300: invalid signal specification",
+            "NOPE: invalid signal specification",
+            "99: invalid signal specification"
+        ]
+    );
+    assert!(
+        out.stderr.lines().all(|line| line.contains("line ")),
+        "{}",
+        out.stderr
+    );
+}
+
+/// `kill -l` and `trap -l` lay the signals out as Bash does, five to a line, each line
+/// ended (BI-15).
+#[test]
+fn the_signal_list_is_laid_out_as_bashs() {
+    let out = cash("kill -l; trap -l");
+    let list = " 1) SIGHUP\t 2) SIGINT\t 3) SIGQUIT\t 9) SIGKILL\t15) SIGTERM\n\
+                17) SIGCHLD\t18) SIGCONT\t19) SIGSTOP\t20) SIGTSTP\t";
+    // `run` trims what ends the output.
+    assert_eq!(
+        out.stdout,
+        format!("{list}\n{list}").trim_end(),
+        "{}",
+        out.stderr
+    );
+}

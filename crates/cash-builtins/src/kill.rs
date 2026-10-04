@@ -44,9 +44,13 @@ impl builtins::Command for KillCommand {
         // fell through to whatever external kill.exe happened to be on PATH.
         let mut trap_signal = TrapSignal::try_from("TERM")?;
 
-        // Try parsing the signal name (if specified).
+        // Try parsing the signal name (if specified): a name or a number, `0` included,
+        // as for `-n`. `kill -s 0` was an invalid signal, status 2 (BI-15); a bad one is
+        // status 1, as in Bash.
         if let Some(signal_name) = &self.signal_name {
-            if let Ok(parsed_trap_signal) = TrapSignal::try_from(signal_name.as_str()) {
+            if signal_name.parse::<i32>() == Ok(0) {
+                signal_zero = true;
+            } else if let Ok(parsed_trap_signal) = signal_name.parse::<TrapSignal>() {
                 trap_signal = parsed_trap_signal;
             } else {
                 writeln!(
@@ -55,7 +59,7 @@ impl builtins::Command for KillCommand {
                     context.command_name,
                     signal_name
                 )?;
-                return Ok(ExecutionExitCode::InvalidUsage.into());
+                return Ok(ExecutionResult::general_error());
             }
         }
 
@@ -71,11 +75,11 @@ impl builtins::Command for KillCommand {
                 } else {
                     writeln!(
                         context.error_stream(),
-                        "{}: invalid signal number: {}",
+                        "{}: {}: invalid signal specification",
                         context.command_name,
                         signal_number
                     )?;
-                    return Ok(ExecutionExitCode::InvalidUsage.into());
+                    return Ok(ExecutionResult::general_error());
                 }
             }
         }
@@ -324,6 +328,9 @@ fn print_signals(
             }
 
             let signal = if let Ok(n) = s.parse::<i32>() {
+                // A number above 128 is an exit status, `128 + n` for signal `n`, as in
+                // Bash: `kill -l 137` is `KILL` (BI-15).
+                let n = if n > 128 { n - 128 } else { n };
                 // bash compatibility. `SIGHUP` -> `HUP`
                 TrapSignal::try_from(n).map(|s| {
                     PrintSignal::Name(s.as_str().strip_prefix("SIG").unwrap_or(s.as_str()))
@@ -341,8 +348,12 @@ fn print_signals(
                 Ok(PrintSignal::Name(s)) => {
                     writeln!(context.stdout(), "{s}")?;
                 }
-                Err(e) => {
-                    writeln!(context.error_stream(), "{e}")?;
+                Err(_) => {
+                    writeln!(
+                        context.error_stream(),
+                        "{}: {s}: invalid signal specification",
+                        context.command_name
+                    )?;
                     exit_code = ExecutionResult::general_error();
                 }
             }

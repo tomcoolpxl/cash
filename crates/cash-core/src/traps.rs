@@ -84,11 +84,30 @@ pub fn format_signals(
     mut f: impl std::io::Write,
     it: impl Iterator<Item = TrapSignal>,
 ) -> Result<(), error::Error> {
-    let it = it
+    // Bash's `display_signal_list`: ` 1) SIGHUP`, a tab after each and a newline after
+    // every fifth, and the last line ended. It was `1) HUP` a line, with no newline at
+    // the end (BI-15).
+    // Signals only, from 1, named `SIGHUP`: `trap -l` listed `0) EXIT`.
+    let signals = it
         .filter_map(|s| i32::try_from(s).ok().map(|n| (s, n)))
-        .sorted_by(|a, b| Ord::cmp(&a.1, &b.1))
-        .format_with("\n", |s, f| f(&format_args!("{}) {}", s.1, s.0)));
-    write!(f, "{it}")?;
+        .filter(|&(_, number)| number > 0)
+        .sorted_by(|a, b| Ord::cmp(&a.1, &b.1));
+    let mut column = 0;
+    for (signal, number) in signals {
+        let name = signal.as_str();
+        let sig = if name.starts_with("SIG") { "" } else { "SIG" };
+        write!(f, "{number:2}) {sig}{name}")?;
+        column += 1;
+        if column < 5 {
+            write!(f, "\t")?;
+        } else {
+            writeln!(f)?;
+            column = 0;
+        }
+    }
+    if column != 0 {
+        writeln!(f)?;
+    }
     Ok(())
 }
 
