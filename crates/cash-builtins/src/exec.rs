@@ -42,23 +42,10 @@ impl builtins::Command for ExecCommand {
             return Ok(ExecutionResult::success());
         }
 
-        // If we know we're already running in a subshell, then `exec`ing is actually
-        // unsafe, since it would also replace the *parent* shell instance. We instead
-        // delegate to the `command` builtin to perform the execution, with an expectation
-        // of returning.
-        if context.shell.is_subshell() {
-            if self.empty_environment || self.exec_as_login || self.name_for_argv0.is_some() {
-                return cash_core::error::unimp("exec with options in subshell not yet supported");
-            }
-
-            let cmd_cmd = crate::command::CommandCommand {
-                command_and_args: self.args.clone(),
-                ..Default::default()
-            };
-
-            return cmd_cmd.execute(context).await;
-        }
-
+        // A subshell takes the same emulation below: the command runs, and the shell it
+        // ends is the subshell, which is in this process. It ran the command through
+        // `command`, which took no option and returned, so `(exec true; echo x)` printed
+        // `x`, and `$(exec cmd)` lost the command's status.
         let mut argv0 = Cow::Borrowed(self.name_for_argv0.as_ref().unwrap_or(&self.args[0]));
 
         if self.exec_as_login {
