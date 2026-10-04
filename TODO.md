@@ -58,6 +58,7 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 | 16 | 1.3.17 | sudo, su and `cash help` |
 | 17 | 1.3.18 | `lsof` lists everything |
 | 18 | 1.3.18 | `ss` as iproute2 7.2 has it |
+| 19 | 1.3.19 | `ss -i` and `dev`, and the vi fix |
 
 ---
 
@@ -91,13 +92,30 @@ Left as differences (spec D51, row 29): a dual-mode socket is two lines, not one
 `-K` closes IPv4 connections only and only elevated; `-K`'s elevated path has not run
 on the author's machine (the test runs it when elevated).
 
-Not chosen: `dev NAME`, `-i` and real queue sizes and `-m` (`GetPerTcpConnectionEStats`
+Not chosen then: `dev NAME` and `-i` (both taken up in phase 19), `-m` (`GetPerTcpConnectionEStats`
 needs an administrator to switch collection on per connection), `-E` (polling only).
+
+---
+
+## Phase 19. `ss -i` and `dev`, and the vi fix
+
+Asked for by the user on 2026-10-05, released with the vi-mode fix (reedline patch 8):
+
+- `ss -i`: per-connection TCP statistics from `GetPerTcpConnectionEStats`.
+- `ss ... dev NAME`: matches the IPv6 scope's interface; a socket without one has no
+  device, as a Linux socket without `SO_BINDTODEVICE`.
 
 ---
 
 ## Decided, written down so it is not decided twice
 
+- **An elevated `ss -i` switches statistics collection on** (the user, 2026-10-05):
+  Windows keeps per-connection TCP statistics (rtt, rto, cwnd, bytes, retransmits,
+  queues) only for connections an administrator switched collection on for; unelevated,
+  only the MSS is readable and the rest reads as zeros or garbage. So unelevated `-i`
+  prints the MSS with a note pointing to `sudo ss -i`, and elevated `-i` switches
+  collection on for the listed connections (on until each closes) and prints the rest,
+  counted from that moment.
 - **Files an elevated `sudo` makes are yours, and an approver who is not you is named**
   (the user, 2026-10-04): when you approve with your own account, the elevated side sets
   your account as the default owner of what it creates (Unix leaves root owning them, and

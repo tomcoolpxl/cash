@@ -8,8 +8,9 @@
 //! `ss` also needs what those tables leave out: bound but inactive TCP sockets
 //! ([`bound_tcp_sockets`](crate::net::bound_tcp_sockets), from an undocumented export),
 //! interface names for IPv6 scope ids ([`interface_name`](crate::net::interface_name)),
-//! host names ([`host_names`](crate::net::host_names)) and closing a connection
-//! ([`close_tcp`](crate::net::close_tcp)).
+//! host names ([`host_names`](crate::net::host_names)), closing a connection
+//! ([`close_tcp`](crate::net::close_tcp)) and a connection's extended statistics
+//! ([`tcp_stats`](crate::net::tcp_stats)).
 
 use std::collections::{HashMap, HashSet};
 use std::io;
@@ -75,6 +76,25 @@ pub enum TcpState {
 }
 
 impl TcpState {
+    /// The `MIB_TCP_STATE` a row for this state carries.
+    const fn to_mib(self) -> i32 {
+        use windows_sys::Win32::NetworkManagement::IpHelper::MIB_TCP_STATE_CLOSED;
+
+        match self {
+            Self::Closed => MIB_TCP_STATE_CLOSED,
+            Self::Listen => MIB_TCP_STATE_LISTEN,
+            Self::SynSent => MIB_TCP_STATE_SYN_SENT,
+            Self::SynReceived => MIB_TCP_STATE_SYN_RCVD,
+            Self::Established => MIB_TCP_STATE_ESTAB,
+            Self::FinWait1 => MIB_TCP_STATE_FIN_WAIT1,
+            Self::FinWait2 => MIB_TCP_STATE_FIN_WAIT2,
+            Self::CloseWait => MIB_TCP_STATE_CLOSE_WAIT,
+            Self::Closing => MIB_TCP_STATE_CLOSING,
+            Self::LastAck => MIB_TCP_STATE_LAST_ACK,
+            Self::TimeWait => MIB_TCP_STATE_TIME_WAIT,
+        }
+    }
+
     const fn from_mib(state: u32) -> Self {
         match state.cast_signed() {
             MIB_TCP_STATE_LISTEN => Self::Listen,
@@ -687,6 +707,271 @@ pub fn close_tcp(local: SocketAddrV4, remote: SocketAddrV4) -> io::Result<()> {
     }
 }
 
+/// An interface's index by name, for `ss`'s `dev NAME`.
+///
+/// The name is the one [`interface_name`] gives (`ethernet_32769`) or the alias Windows
+/// shows (`Ethernet`, `Wi-Fi`). `None` when no interface has it.
+#[must_use]
+pub fn interface_index(name: &str) -> Option<u32> {
+    use windows_sys::Win32::NetworkManagement::IpHelper::{
+        ConvertInterfaceAliasToLuid, ConvertInterfaceLuidToIndex, ConvertInterfaceNameToLuidW,
+    };
+    use windows_sys::Win32::NetworkManagement::Ndis::NET_LUID_LH;
+
+    if name.is_empty() || name.contains('\0') {
+        return None;
+    }
+    let wide: Vec<u16> = name.encode_utf16().chain(std::iter::once(0)).collect();
+    let mut luid = NET_LUID_LH { Value: 0 };
+    // SAFETY: `wide` is NUL terminated and `luid` a writable out-param.
+    let by_name = unsafe { ConvertInterfaceNameToLuidW(wide.as_ptr(), &raw mut luid) };
+    if by_name != NO_ERROR {
+        // SAFETY: as above.
+        let by_alias = unsafe { ConvertInterfaceAliasToLuid(wide.as_ptr(), &raw mut luid) };
+        if by_alias != NO_ERROR {
+            return None;
+        }
+    }
+    let mut index = 0u32;
+    // SAFETY: `luid` was filled in above, and `index` is a writable out-param.
+    let found = unsafe { ConvertInterfaceLuidToIndex(&raw const luid, &raw mut index) };
+    (found == NO_ERROR && index != 0).then_some(index)
+}
+
+/// Extended statistics of one TCP connection, for `ss -i`, from
+/// `GetPerTcpConnectionEStats`.
+///
+/// Windows keeps most of them only while collection is switched on for the connection,
+/// which only an elevated process may do. Each part is `None` while its collection is
+/// off, so nothing here is stale or garbage. Times are in milliseconds, windows and
+/// queues in bytes.
+#[derive(Clone, Copy, Default)]
+pub struct TcpStats {
+    /// The MSS the peer offered in its SYN (`MssRcvd`), kept for every connection.
+    pub mss_received: Option<u32>,
+    /// The MSS this end offered (`MssSent`), kept for every connection.
+    pub mss_sent: Option<u32>,
+    /// Bytes and segments sent and received.
+    pub data: Option<windows_sys::Win32::NetworkManagement::IpHelper::TCP_ESTATS_DATA_ROD_v0>,
+    /// The congestion window and slow-start threshold.
+    pub congestion:
+        Option<windows_sys::Win32::NetworkManagement::IpHelper::TCP_ESTATS_SND_CONG_ROD_v0>,
+    /// Round-trip times, timeouts, the current MSS and retransmissions.
+    pub path: Option<windows_sys::Win32::NetworkManagement::IpHelper::TCP_ESTATS_PATH_ROD_v0>,
+    /// Data sent and not yet acknowledged, and data not yet sent.
+    pub send_buffer:
+        Option<windows_sys::Win32::NetworkManagement::IpHelper::TCP_ESTATS_SEND_BUFF_ROD_v0>,
+    /// The window this end advertises, and data the application has not read.
+    pub receive: Option<windows_sys::Win32::NetworkManagement::IpHelper::TCP_ESTATS_REC_ROD_v0>,
+    /// The window the peer advertises.
+    pub observed:
+        Option<windows_sys::Win32::NetworkManagement::IpHelper::TCP_ESTATS_OBS_REC_ROD_v0>,
+    /// Whether some part's collection was off and could not be switched on.
+    pub incomplete: bool,
+    /// Whether this call switched collection on for some part.
+    pub switched_on: bool,
+}
+
+/// `TCP_ESTATS_SYN_OPTS_ROS_v0` with its `BOOLEAN` as a byte, which any value fits.
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+struct SynOpts {
+    active_open: u8,
+    mss_received: u32,
+    mss_sent: u32,
+}
+
+/// A connection as the `EStats` functions name it.
+enum EstatsRow {
+    V4(windows_sys::Win32::NetworkManagement::IpHelper::MIB_TCPROW_LH),
+    V6(windows_sys::Win32::NetworkManagement::IpHelper::MIB_TCP6ROW),
+}
+
+impl EstatsRow {
+    fn of(socket: &Socket) -> Option<Self> {
+        use windows_sys::Win32::NetworkManagement::IpHelper::{
+            MIB_TCP6ROW, MIB_TCPROW_LH, MIB_TCPROW_LH_0,
+        };
+        use windows_sys::Win32::Networking::WinSock::{IN6_ADDR, IN6_ADDR_0};
+
+        let remote = socket.remote?;
+        if socket.proto != Proto::Tcp {
+            return None;
+        }
+        let state = socket.state.map_or(MIB_TCP_STATE_ESTAB, TcpState::to_mib);
+        let v6 = |address: SocketAddrV6| IN6_ADDR {
+            u: IN6_ADDR_0 {
+                Byte: address.ip().octets(),
+            },
+        };
+        match (socket.local, remote) {
+            (SocketAddr::V4(local), SocketAddr::V4(remote)) => Some(Self::V4(MIB_TCPROW_LH {
+                Anonymous: MIB_TCPROW_LH_0 { State: state },
+                dwLocalAddr: local.ip().to_bits().to_be(),
+                dwLocalPort: u32::from(local.port().to_be()),
+                dwRemoteAddr: remote.ip().to_bits().to_be(),
+                dwRemotePort: u32::from(remote.port().to_be()),
+            })),
+            (SocketAddr::V6(local), SocketAddr::V6(remote)) => Some(Self::V6(MIB_TCP6ROW {
+                State: state,
+                LocalAddr: v6(local),
+                dwLocalScopeId: local.scope_id(),
+                dwLocalPort: u32::from(local.port().to_be()),
+                RemoteAddr: v6(remote),
+                dwRemoteScopeId: remote.scope_id(),
+                dwRemotePort: u32::from(remote.port().to_be()),
+            })),
+            _ => None,
+        }
+    }
+
+    /// `GetPerTcp(6)ConnectionEStats` into one of its three parts.
+    fn get(&self, kind: i32, part: Part, buffer: *mut u8, size: usize) -> bool {
+        use windows_sys::Win32::NetworkManagement::IpHelper::{
+            GetPerTcp6ConnectionEStats, GetPerTcpConnectionEStats,
+        };
+
+        let size = u32::try_from(size).unwrap_or(u32::MAX);
+        let null = std::ptr::null_mut();
+        let (rw, rw_size, ros, ros_size, rod, rod_size) = match part {
+            Part::Rw => (buffer, size, null, 0, null, 0),
+            Part::Ros => (null, 0, buffer, size, null, 0),
+            Part::Rod => (null, 0, null, 0, buffer, size),
+        };
+        let code = match self {
+            // SAFETY: `row` is a complete row, and the one non-null buffer holds `size`
+            // bytes of the structure `kind` and `part` name.
+            Self::V4(row) => unsafe {
+                GetPerTcpConnectionEStats(
+                    row, kind, rw, 0, rw_size, ros, 0, ros_size, rod, 0, rod_size,
+                )
+            },
+            // SAFETY: as above.
+            Self::V6(row) => unsafe {
+                GetPerTcp6ConnectionEStats(
+                    row, kind, rw, 0, rw_size, ros, 0, ros_size, rod, 0, rod_size,
+                )
+            },
+        };
+        code == NO_ERROR
+    }
+
+    /// A read-only structure of `kind`, read as plain bytes.
+    fn read<T: Copy + Default>(&self, kind: i32, part: Part) -> Option<T> {
+        let mut value = T::default();
+        self.get(kind, part, (&raw mut value).cast::<u8>(), size_of::<T>())
+            .then_some(value)
+    }
+
+    /// Whether collection of `kind` is on; `None` when Windows will not say.
+    fn collecting(&self, kind: i32) -> Option<bool> {
+        self.read::<u8>(kind, Part::Rw).map(|enabled| enabled != 0)
+    }
+
+    /// Switches collection of `kind` on; only an elevated process may.
+    fn switch_on(&self, kind: i32) -> bool {
+        use windows_sys::Win32::NetworkManagement::IpHelper::{
+            SetPerTcp6ConnectionEStats, SetPerTcpConnectionEStats,
+        };
+
+        let enable = 1u8;
+        let rw = (&raw const enable).cast::<u8>();
+        let code = match self {
+            // SAFETY: `row` is a complete row and `rw` a one-byte RW structure.
+            Self::V4(row) => unsafe { SetPerTcpConnectionEStats(row, kind, rw, 0, 1, 0) },
+            // SAFETY: as above.
+            Self::V6(row) => unsafe { SetPerTcp6ConnectionEStats(row, kind, rw, 0, 1, 0) },
+        };
+        code == NO_ERROR
+    }
+
+    /// The read-only data of `kind` if its collection is on (switching it on first when
+    /// `switch_on`), recording in `stats` what happened.
+    fn collected<T: Copy + Default>(
+        &self,
+        kind: i32,
+        switch_on: bool,
+        stats: &mut TcpStats,
+    ) -> Option<T> {
+        let mut on = self.collecting(kind)?;
+        if !on && switch_on && self.switch_on(kind) {
+            on = self.collecting(kind) == Some(true);
+            stats.switched_on |= on;
+        }
+        if !on {
+            stats.incomplete = true;
+            return None;
+        }
+        self.read(kind, Part::Rod)
+    }
+}
+
+/// Which of an `EStats` call's three structures is asked for.
+#[derive(Clone, Copy)]
+enum Part {
+    Rw,
+    Ros,
+    Rod,
+}
+
+/// The extended statistics of a TCP connection (`ss -i`), or `None` for a socket that
+/// has no peer or no statistics (a listener, a TIME-WAIT leftover).
+///
+/// With `switch_on`, collection is switched on where it is off, which Windows allows
+/// only to an elevated process and which lasts until the connection closes; counts then
+/// start from that moment.
+#[must_use]
+pub fn tcp_stats(socket: &Socket, switch_on: bool) -> Option<TcpStats> {
+    use windows_sys::Win32::NetworkManagement::IpHelper::{
+        TcpConnectionEstatsData, TcpConnectionEstatsObsRec, TcpConnectionEstatsPath,
+        TcpConnectionEstatsRec, TcpConnectionEstatsSendBuff, TcpConnectionEstatsSndCong,
+        TcpConnectionEstatsSynOpts,
+    };
+
+    let row = EstatsRow::of(socket)?;
+    let syn = row.read::<SynOpts>(TcpConnectionEstatsSynOpts, Part::Ros)?;
+    let mut stats = TcpStats {
+        mss_received: (syn.mss_received != 0).then_some(syn.mss_received),
+        mss_sent: (syn.mss_sent != 0).then_some(syn.mss_sent),
+        ..TcpStats::default()
+    };
+    stats.data = row.collected(TcpConnectionEstatsData, switch_on, &mut stats);
+    stats.congestion = row.collected(TcpConnectionEstatsSndCong, switch_on, &mut stats);
+    stats.path = row.collected(TcpConnectionEstatsPath, switch_on, &mut stats);
+    stats.send_buffer = row.collected(TcpConnectionEstatsSendBuff, switch_on, &mut stats);
+    stats.receive = row.collected(TcpConnectionEstatsRec, switch_on, &mut stats);
+    stats.observed = row.collected(TcpConnectionEstatsObsRec, switch_on, &mut stats);
+    Some(stats)
+}
+
+/// A TCP connection's Recv-Q and Send-Q, as `ss` shows them, when Windows collects
+/// them for it (an elevated `ss -i` switched collection on).
+///
+/// Recv-Q is the data received and not yet read by the application (`CurAppRQueue`);
+/// Send-Q, as in Linux, the data not yet acknowledged by the peer: sent and
+/// unacknowledged (`CurRetxQueue`) plus not yet sent (`CurAppWQueue`). Each is `None`
+/// while its collection is off.
+#[must_use]
+pub fn tcp_queues(socket: &Socket) -> (Option<usize>, Option<usize>) {
+    use windows_sys::Win32::NetworkManagement::IpHelper::{
+        TCP_ESTATS_REC_ROD_v0, TCP_ESTATS_SEND_BUFF_ROD_v0, TcpConnectionEstatsRec,
+        TcpConnectionEstatsSendBuff,
+    };
+
+    let Some(row) = EstatsRow::of(socket) else {
+        return (None, None);
+    };
+    let mut ignored = TcpStats::default();
+    let receive: Option<TCP_ESTATS_REC_ROD_v0> =
+        row.collected(TcpConnectionEstatsRec, false, &mut ignored);
+    let send: Option<TCP_ESTATS_SEND_BUFF_ROD_v0> =
+        row.collected(TcpConnectionEstatsSendBuff, false, &mut ignored);
+    (
+        receive.map(|r| r.CurAppRQueue),
+        send.map(|s| s.CurRetxQueue + s.CurAppWQueue),
+    )
+}
+
 /// Whether Winsock is started, which `GetNameInfoW` needs. Started once and left
 /// running, as the standard library does.
 fn winsock_started() -> bool {
@@ -986,6 +1271,79 @@ mod tests {
         let name = interface_name(1).unwrap();
         assert!(!name.is_empty() && !name.contains(' '), "{name:?}");
         assert_eq!(interface_name(u32::MAX), None);
+    }
+
+    #[test]
+    fn an_interface_is_found_by_its_name() {
+        let name = interface_name(1).unwrap();
+        assert_eq!(interface_index(&name), Some(1));
+        assert_eq!(interface_index("no-such-interface"), None);
+        assert_eq!(interface_index(""), None);
+    }
+
+    /// A loopback connection of this process, with `bytes` sent from the client to the
+    /// server and read there.
+    fn loopback_connection(bytes: usize) -> (std::net::TcpStream, std::net::TcpStream) {
+        use std::io::{Read, Write};
+
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let mut client = std::net::TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+        let (mut accepted, _) = listener.accept().unwrap();
+        client.write_all(&vec![b'x'; bytes]).unwrap();
+        let mut read = vec![0u8; bytes];
+        accepted.read_exact(&mut read).unwrap();
+        (client, accepted)
+    }
+
+    fn row_of(stream: &std::net::TcpStream) -> Socket {
+        let local = stream.local_addr().unwrap();
+        let found = sockets(&[Proto::Tcp], true, false).unwrap();
+        let row = found.into_iter().find(|s| s.local == local);
+        assert!(row.is_some(), "{local} not listed");
+        row.unwrap()
+    }
+
+    #[test]
+    fn syn_options_are_kept_and_collected_parts_only_when_on() {
+        let (client, _accepted) = loopback_connection(100_000);
+        let socket = row_of(&client);
+        let stats = tcp_stats(&socket, false).unwrap();
+        assert!(stats.mss_received.is_some_and(|mss| mss >= 536));
+        assert!(stats.mss_sent.is_some_and(|mss| mss >= 536));
+        assert!(!stats.switched_on);
+        // A new connection collects nothing until someone switches it on.
+        assert!(stats.incomplete);
+        assert!(stats.data.is_none() && stats.path.is_none());
+        assert_eq!(tcp_queues(&socket), (None, None));
+        // A listener has no statistics.
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let listening = sockets(&[Proto::Tcp], true, false)
+            .unwrap()
+            .into_iter()
+            .find(|s| s.local == address);
+        assert!(listening.is_some_and(|s| tcp_stats(&s, false).is_none()));
+    }
+
+    #[test]
+    fn switching_collection_on_needs_elevation() {
+        use std::io::Write;
+
+        let (mut client, _accepted) = loopback_connection(1000);
+        let socket = row_of(&client);
+        let first = tcp_stats(&socket, true).unwrap();
+        if crate::process::current_process_is_elevated() != Some(true) {
+            assert!(!first.switched_on && first.incomplete);
+            assert!(first.data.is_none());
+            return;
+        }
+        assert!(first.switched_on && !first.incomplete);
+        client.write_all(&[b'y'; 5000]).unwrap();
+        std::thread::sleep(Duration::from_millis(200));
+        let later = tcp_stats(&socket, false).unwrap();
+        assert!(!later.switched_on && !later.incomplete);
+        assert!(later.data.is_some_and(|d| d.DataBytesOut >= 5000));
+        assert!(tcp_queues(&socket).0.is_some());
     }
 
     #[test]

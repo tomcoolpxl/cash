@@ -320,7 +320,7 @@ fn errors_refusals_and_the_netstat_hint() {
     );
     for (script, needle) in [
         ("ss -x", "Unix domain sockets"),
-        ("ss -ti", "TCP internals"),
+        ("ss -tm", "socket memory"),
         ("ss -f unix", "only inet and inet6"),
     ] {
         let out = cash(script);
@@ -750,4 +750,114 @@ fn kill_refuses_unelevated_and_closes_only_ipv4_elevated() {
         refused.stderr
     );
     assert_eq!(rows(&refused), Vec::<&str>::new());
+}
+
+#[test]
+fn dev_filters_by_scope_and_ipv4_has_no_device() {
+    let sockets = Sockets::open();
+    let port = sockets.tcp_port();
+    let count = |filter: &str| {
+        let out = cash(&format!("ss -Htln src 127.0.0.1:{port} {filter}"));
+        assert_eq!(out.code, 0, "{filter}: {}", out.stderr);
+        out.stdout.lines().count()
+    };
+    // An IPv4 socket is bound to no device, like a Linux socket without one.
+    assert_eq!(count("dev 0"), 1);
+    assert_eq!(count("'dev = 1'"), 0);
+    assert_eq!(count("'dev != 1'"), 1);
+    assert_eq!(count("'not dev 1'"), 1);
+    assert_eq!(count(&format!("'( dev 1 or sport = :{port} )'")), 1);
+
+    let unknown = cash("ss -tln dev no-such-device");
+    assert_eq!(
+        (unknown.code, unknown.stderr.trim()),
+        (1, "Cannot parse device.")
+    );
+    for filter in ["dev", "'dev < 1'"] {
+        let out = cash(&format!("ss -tln {filter}"));
+        assert_eq!(out.code, 255, "{filter}");
+    }
+
+    // A link-local socket, where the machine has one, is on its scope's device.
+    let all = cash("ss -Huan6");
+    let scoped = regex::Regex::new(r"\]%([^ :]+):").unwrap();
+    if let Some(name) = scoped
+        .captures(&all.stdout)
+        .and_then(|c| c.get(1))
+        .map(|m| m.as_str().to_owned())
+    {
+        let on = cash(&format!("ss -Huan6 dev {name}"));
+        assert!(
+            !on.stdout.is_empty() && on.stdout.lines().all(|l| l.contains(&format!("]%{name}:"))),
+            "{name}: {}",
+            on.stdout
+        );
+        let off = cash(&format!("ss -Huan6 dev != {name}"));
+        assert!(
+            !off.stdout.contains(&format!("]%{name}:")),
+            "{}",
+            off.stdout
+        );
+    }
+}
+
+#[test]
+fn info_shows_what_windows_keeps_and_says_what_it_does_not() {
+    let elevated = cash_win32::process::current_process_is_elevated() == Some(true);
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let server = listener.local_addr().unwrap();
+    let mut client = TcpStream::connect(server).unwrap();
+    let (mut accepted, _) = listener.accept().unwrap();
+    client.write_all(&vec![b'x'; 100_000]).unwrap();
+    let mut read = vec![0u8; 100_000];
+    accepted.read_exact(&mut read).unwrap();
+    let filter = format!(
+        "src 127.0.0.1:{} dst 127.0.0.1:{}",
+        client.local_addr().unwrap().port(),
+        server.port()
+    );
+
+    let out = cash(&format!("ss -tni {filter}"));
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    let lines: Vec<&str> = out.stdout.lines().collect();
+    assert_eq!(lines.len(), 3, "{}", out.stdout);
+    assert!(lines[1].starts_with("ESTAB"), "{}", out.stdout);
+    let info = lines[2];
+    if !elevated {
+        // A new connection: only the SYN's MSS values, nothing uncollected.
+        let syn_only = regex::Regex::new(r"^\t mss:\d+ advmss:\d+$").unwrap();
+        assert!(syn_only.is_match(info), "{info:?}");
+        assert!(
+            out.stderr
+                .contains("ss: -i: Windows collects the other statistics only once an elevated shell switches them on"),
+            "{}",
+            out.stderr
+        );
+    } else {
+        assert!(
+            out.stderr
+                .contains("statistics collection switched on for 1 connection;"),
+            "{}",
+            out.stderr
+        );
+        client.write_all(&[b'y'; 5000]).unwrap();
+        accepted.read_exact(&mut read[..5000]).unwrap();
+        std::thread::sleep(Duration::from_millis(200));
+        let again = cash(&format!("ss -tni {filter}"));
+        let info = again.stdout.lines().nth(2).unwrap_or_default();
+        assert!(
+            info.contains(" bytes_sent:") && info.contains(" mss:"),
+            "{}",
+            again.stdout
+        );
+        assert!(!again.stderr.contains("switched on"), "{}", again.stderr);
+    }
+
+    // -O keeps it on the socket's line; a listener has nothing to add.
+    let oneline = cash(&format!("ss -tniO {filter}"));
+    assert_eq!(oneline.stdout.lines().count(), 2, "{}", oneline.stdout);
+    assert!(oneline.stdout.contains(" advmss:"), "{}", oneline.stdout);
+    let listening = cash(&format!("ss -tlni src 127.0.0.1:{}", server.port()));
+    assert_eq!(listening.stdout.lines().count(), 2, "{}", listening.stdout);
+    assert_eq!(listening.stderr, "");
 }

@@ -9,14 +9,17 @@
 //!
 //! Windows differences, decided in the evaluation:
 //!
-//! * Recv-Q and Send-Q are not exposed and print as `0`;
+//! * Recv-Q and Send-Q print as `0` unless Windows collects a connection's statistics,
+//!   which only an elevated `ss -i` switches on;
+//! * `-i` shows only what Windows collects: unelevated, the SYN's MSS values;
 //! * `-p` prints `fd=-` (Windows has no descriptor numbers) and, for services hosted
 //!   in `svchost.exe`, `service=NAME` from the socket's owning module;
 //! * UDP sockets carry no peer, so they are always `UNCONN`;
+//! * `dev` matches an IPv6 socket's scope; other sockets have no device;
 //! * `-K` closes IPv4 TCP connections only, and only from an elevated shell;
 //! * `-B` reads an undocumented table (netstat's `BOUND`);
-//! * options with no Windows backing (`-x`, `-e`, `-m`, `-o`, `-i`, other socket
-//!   families) are refused by name, and netstat-style flags get a hint.
+//! * options with no Windows backing (`-x`, `-e`, `-m`, `-o`, other socket families)
+//!   are refused by name, and netstat-style flags get a hint.
 
 use std::collections::HashMap;
 use std::io::{Read, Write};
@@ -29,7 +32,7 @@ use clap::Parser;
 
 use crate::fileuse::{ProcessNames, Services};
 
-const USAGE: &str = "Usage: ss [ OPTIONS ]\n       ss [ OPTIONS ] [ FILTER ]\n   -h, --help          this message\n   -V, --version       output version information\n   -n, --numeric       don't resolve service names\n   -r, --resolve       resolve host names\n   -a, --all           display all sockets\n   -l, --listening     display listening sockets\n   -B, --bound-inactive display TCP bound but inactive sockets\n   -p, --processes     show process using socket\n   -s, --summary       show socket usage summary\n\n   -4, --ipv4          display only IP version 4 sockets\n   -6, --ipv6          display only IP version 6 sockets\n   -t, --tcp           display only TCP sockets\n   -u, --udp           display only UDP sockets\n   -f, --family=FAMILY display sockets of type FAMILY\n       FAMILY := {inet|inet6|help}\n\n   -K, --kill          forcibly close sockets, display what was closed\n   -H, --no-header     Suppress header line\n   -Q, --no-queues     Suppress sending and receiving queue columns\n   -O, --oneline       socket's data printed on a single line\n\n   -A, --query=QUERY, --socket=QUERY\n       QUERY := {all|inet|tcp|udp}[,QUERY]\n\n   -F, --filter=FILE   read filter information from FILE\n       FILTER := [ state STATE-FILTER ] [ EXPRESSION ]\n\ncash's ss is the Windows subset described in ROADMAP item 9.";
+const USAGE: &str = "Usage: ss [ OPTIONS ]\n       ss [ OPTIONS ] [ FILTER ]\n   -h, --help          this message\n   -V, --version       output version information\n   -n, --numeric       don't resolve service names\n   -r, --resolve       resolve host names\n   -a, --all           display all sockets\n   -l, --listening     display listening sockets\n   -B, --bound-inactive display TCP bound but inactive sockets\n   -p, --processes     show process using socket\n   -i, --info          show internal TCP information\n   -s, --summary       show socket usage summary\n\n   -4, --ipv4          display only IP version 4 sockets\n   -6, --ipv6          display only IP version 6 sockets\n   -t, --tcp           display only TCP sockets\n   -u, --udp           display only UDP sockets\n   -f, --family=FAMILY display sockets of type FAMILY\n       FAMILY := {inet|inet6|help}\n\n   -K, --kill          forcibly close sockets, display what was closed\n   -H, --no-header     Suppress header line\n   -Q, --no-queues     Suppress sending and receiving queue columns\n   -O, --oneline       socket's data printed on a single line\n\n   -A, --query=QUERY, --socket=QUERY\n       QUERY := {all|inet|tcp|udp}[,QUERY]\n\n   -F, --filter=FILE   read filter information from FILE\n       FILTER := [ state STATE-FILTER ] [ EXPRESSION ]\n\ncash's ss is the Windows subset described in ROADMAP item 9.";
 
 /// The iproute2 release whose `ss` this one follows.
 const IPROUTE2_VERSION: &str = "7.2.0";
@@ -327,9 +330,45 @@ enum Expr {
     Dport(Compare, u16),
     Src(AddrMatch),
     Dst(AddrMatch),
+    /// `dev NAME`, by interface index; 0 is no device.
+    Dev(u32),
     Not(Box<Self>),
     And(Box<Self>, Box<Self>),
     Or(Box<Self>, Box<Self>),
+}
+
+/// The device a socket is bound to, as `dev` sees it: Linux matches the device a socket
+/// is bound to (`SO_BINDTODEVICE`, or the scope of a link-local address). Windows has no
+/// per-socket device, so an IPv6 socket's scope stands for it, and every other socket
+/// has none (0), as an unbound Linux socket has.
+const fn device_of(socket: &Socket) -> u32 {
+    scope_of(socket.local)
+}
+
+/// A `dev` operand: an interface name or alias, else a number as C's `strtoul` reads
+/// one (decimal, `0x` hexadecimal or `0` octal), as iproute2 takes them.
+fn device_index(name: &str) -> Option<u32> {
+    if let Some(index) = net::interface_index(name) {
+        return Some(index);
+    }
+    // iproute2 prints an unnamed index as `if<N>`, and ss here too.
+    if let Some(index) = name.strip_prefix("if").and_then(|n| n.parse().ok()) {
+        return Some(index);
+    }
+    let (digits, radix) =
+        if let Some(hex) = name.strip_prefix("0x").or_else(|| name.strip_prefix("0X")) {
+            (hex, 16)
+        } else if name.len() > 1
+            && let Some(octal) = name.strip_prefix('0')
+        {
+            (octal, 8)
+        } else {
+            (name, 10)
+        };
+    if digits.is_empty() || !digits.chars().all(|c| c.is_digit(radix)) {
+        return None;
+    }
+    u32::from_str_radix(digits, radix).ok()
 }
 
 impl Expr {
@@ -339,6 +378,7 @@ impl Expr {
             Self::Dport(op, port) => op.holds(peer_of(socket).port(), *port),
             Self::Src(addr) => addr.matches(socket.local),
             Self::Dst(addr) => addr.matches(peer_of(socket)),
+            Self::Dev(index) => device_of(socket) == *index,
             Self::Not(inner) => !inner.matches(socket),
             Self::And(a, b) => a.matches(socket) && b.matches(socket),
             Self::Or(a, b) => a.matches(socket) || b.matches(socket),
@@ -489,11 +529,33 @@ impl FilterParser<'_> {
                     Expr::Dst(addr)
                 })
             }
-            "dev" | "fwmark" | "cgroup" | "autobound" | "inet-sockopt" => {
-                Err(FilterError::Message(format!(
-                    "ss: \"{token}\" filters are not supported on Windows"
-                )))
+            "dev" => {
+                // `dev [= | == | eq] NAME` or `dev [!= | ne | neq] NAME`.
+                let negated = match self.peek().and_then(Compare::parse) {
+                    None => false,
+                    Some(Compare::Eq) => {
+                        self.next();
+                        false
+                    }
+                    Some(Compare::Ne) => {
+                        self.next();
+                        true
+                    }
+                    Some(_) => return Err(FilterError::Syntax),
+                };
+                let name = self.next().ok_or(FilterError::Syntax)?;
+                let index = device_index(&name)
+                    .ok_or_else(|| FilterError::Message("Cannot parse device.".to_owned()))?;
+                let dev = Expr::Dev(index);
+                Ok(if negated {
+                    Expr::Not(Box::new(dev))
+                } else {
+                    dev
+                })
             }
+            "fwmark" | "cgroup" | "autobound" | "inet-sockopt" => Err(FilterError::Message(
+                format!("ss: \"{token}\" filters are not supported on Windows"),
+            )),
             other if Compare::parse(other).is_some() => Err(FilterError::Syntax),
             ")" | "and" | "&&" | "&" | "or" | "||" | "|" => Err(FilterError::Syntax),
             other if looks_like_address(other) => Err(FilterError::Syntax),
@@ -556,6 +618,10 @@ fn tokenize(args: &[String]) -> Vec<String> {
 struct Options {
     numeric: bool,
     resolve: bool,
+    /// `-i`: extended TCP statistics.
+    info: bool,
+    /// `-O`: `-i`'s statistics on the socket's own line.
+    oneline: bool,
     processes: bool,
     summary: bool,
     kill: bool,
@@ -582,6 +648,8 @@ impl Options {
         Self {
             numeric: false,
             resolve: false,
+            info: false,
+            oneline: false,
             processes: false,
             summary: false,
             kill: false,
@@ -761,7 +829,6 @@ fn refusal(code: Code) -> Option<&'static str> {
         Code::Short('e') => "-e: Windows has no socket uid or inode to show",
         Code::Short('m') => "-m: Windows does not expose socket memory",
         Code::Short('o') => "-o: Windows does not expose socket timers",
-        Code::Short('i') => "-i: TCP internals (RTT, cwnd) are not supported by cash's ss",
         Code::Short('Z' | 'z') => "-Z: SELinux does not exist on Windows",
         Code::Short('N') => "-N: network namespaces do not exist on Windows",
         Code::Short('b') => "-b: BPF socket filters do not exist on Windows",
@@ -939,13 +1006,13 @@ fn apply(
         }
         'n' => options.numeric = true,
         'r' => options.resolve = true,
+        'i' => options.info = true,
         'p' => options.processes = true,
         's' => options.summary = true,
         'K' => options.kill = true,
         'H' => options.no_header = true,
         'Q' => options.no_queues = true,
-        // One line per socket is all this ss ever prints.
-        'O' => {}
+        'O' => options.oneline = true,
         'a' => options.state_filter = ALL,
         'l' => options.state_filter = LISTENING,
         'B' => options.state_filter = State::BoundInactive.bit(),
@@ -1053,6 +1120,197 @@ struct Line {
     peer_host: String,
     peer_port: String,
     process: String,
+    recv_q: String,
+    send_q: String,
+    /// `-i`'s statistics, each field with its leading space; empty for none.
+    info: String,
+}
+
+/// A row's `-i` statistics and its Recv-Q and Send-Q, each `None` where Windows does
+/// not collect it.
+type Collected = (Option<net::TcpStats>, (Option<usize>, Option<usize>));
+
+/// C's `printf("%g")`: six significant digits, trailing zeros dropped, an exponent
+/// below 1e-4 or from 1e6 on. iproute2 prints times in milliseconds this way.
+fn printf_g(value: f64) -> String {
+    if value == 0.0 || !value.is_finite() {
+        return if value == 0.0 {
+            "0".to_owned()
+        } else {
+            value.to_string()
+        };
+    }
+    let trim = |text: String| -> String {
+        if text.contains('.') {
+            text.trim_end_matches('0').trim_end_matches('.').to_owned()
+        } else {
+            text
+        }
+    };
+    // The exponent as `%e` would round it to six digits.
+    let scientific = format!("{value:.5e}");
+    let (mantissa, exponent) = scientific.split_once('e').unwrap_or((&scientific, "0"));
+    let exponent: i32 = exponent.parse().unwrap_or(0);
+    if (-4..6).contains(&exponent) {
+        let decimals = usize::try_from(5 - exponent).unwrap_or(0);
+        trim(format!("{value:.decimals$}"))
+    } else {
+        let sign = if exponent < 0 { '-' } else { '+' };
+        format!("{}e{sign}{:02}", trim(mantissa.to_owned()), exponent.abs())
+    }
+}
+
+/// iproute2's `sprint_bw`: a rate in bits per second, scaled unless `-n`.
+fn rate_text(bits: f64, numeric: bool) -> String {
+    let three = |value: f64, unit: &str| {
+        // `%.3g`: three significant digits.
+        let digits = if value >= 100.0 {
+            0
+        } else if value >= 10.0 {
+            1
+        } else {
+            2
+        };
+        let text = format!("{value:.digits$}");
+        let text = if text.contains('.') {
+            text.trim_end_matches('0').trim_end_matches('.').to_owned()
+        } else {
+            text
+        };
+        format!("{text}{unit}")
+    };
+    if numeric {
+        format!("{bits:.0}")
+    } else if bits >= 1e12 {
+        three(bits / 1e12, "T")
+    } else if bits >= 1e9 {
+        three(bits / 1e9, "G")
+    } else if bits >= 1e6 {
+        three(bits / 1e6, "M")
+    } else if bits >= 1e3 {
+        three(bits / 1e3, "k")
+    } else {
+        printf_g(bits)
+    }
+}
+
+/// `-i`'s fields for one connection, in iproute2's `tcp_stats_print` order, from what
+/// Windows collects: only values it has, under the name of the Linux value they are.
+/// Linux's congestion algorithm, `ato`, `pmtu`, `rcvmss`, `lastsnd` and the like have
+/// nothing behind them on Windows and are left out.
+#[expect(
+    clippy::too_many_lines,
+    reason = "iproute2's tcp_stats_print, one field after another"
+)]
+fn info_text(stats: &net::TcpStats, numeric: bool) -> String {
+    let mut out = String::new();
+    let path = stats.path.as_ref();
+    let mut field = |text: String| {
+        out.push(' ');
+        out.push_str(&text);
+    };
+    if let (Some(observed), Some(receive)) = (&stats.observed, &stats.receive)
+        && observed.WinScaleRcvd <= 14
+        && receive.WinScaleSent <= 14
+    {
+        field(format!(
+            "wscale:{},{}",
+            observed.WinScaleRcvd, receive.WinScaleSent
+        ));
+    }
+    if let Some(path) = path {
+        if path.CurRto != 0 {
+            field(format!("rto:{}", printf_g(f64::from(path.CurRto))));
+        }
+        if path.SmoothedRtt != 0 {
+            field(format!(
+                "rtt:{}/{}",
+                printf_g(f64::from(path.SmoothedRtt)),
+                printf_g(f64::from(path.RttVar))
+            ));
+        }
+    }
+    // The current MSS when collected; otherwise the most the peer will take.
+    let mss = path
+        .map(|p| p.CurMss)
+        .filter(|&mss| mss != 0)
+        .or(stats.mss_received);
+    if let Some(mss) = mss {
+        field(format!("mss:{mss}"));
+    }
+    if let Some(advmss) = stats.mss_sent {
+        field(format!("advmss:{advmss}"));
+    }
+    // Linux counts the congestion window and threshold in segments.
+    let segments = |bytes: u32| mss.filter(|&m| m != 0).map(|m| bytes / m);
+    if let Some(congestion) = &stats.congestion {
+        if let Some(cwnd) = segments(congestion.CurCwnd).filter(|&c| c != 0) {
+            field(format!("cwnd:{cwnd}"));
+        }
+        if congestion.CurSsthresh != u32::MAX
+            && let Some(ssthresh) = segments(congestion.CurSsthresh).filter(|&s| s < 0xFFFF)
+        {
+            field(format!("ssthresh:{ssthresh}"));
+        }
+    }
+    let mut counter = |name: &str, value: u64| {
+        if value != 0 {
+            field(format!("{name}:{value}"));
+        }
+    };
+    if let Some(data) = &stats.data {
+        counter("bytes_sent", data.DataBytesOut);
+    }
+    if let Some(path) = path {
+        counter("bytes_retrans", u64::from(path.BytesRetrans));
+    }
+    if let Some(data) = &stats.data {
+        counter("bytes_acked", data.ThruBytesAcked);
+        counter("bytes_received", data.ThruBytesReceived);
+        counter("segs_out", data.SegsOut);
+        counter("segs_in", data.SegsIn);
+        counter("data_segs_out", data.DataSegsOut);
+        counter("data_segs_in", data.DataSegsIn);
+    }
+    // iproute2's send rate: the congestion window over the smoothed round trip.
+    if let (Some(congestion), Some(path)) = (&stats.congestion, path)
+        && path.SmoothedRtt != 0
+        && congestion.CurCwnd != 0
+    {
+        let bits = f64::from(congestion.CurCwnd) * 8000.0 / f64::from(path.SmoothedRtt);
+        field(format!("send {}bps", rate_text(bits, numeric)));
+    }
+    if let Some(path) = path {
+        if path.DsackDups != 0 {
+            field(format!("dsack_dups:{}", path.DsackDups));
+        }
+        // The duplicate-ACK threshold for fast retransmit, Linux's `reordering`.
+        if path.RetranThresh != 0 && path.RetranThresh != 3 {
+            field(format!("reordering:{}", path.RetranThresh));
+        }
+    }
+    if let Some(send) = &stats.send_buffer
+        && send.CurAppWQueue != 0
+    {
+        field(format!("notsent:{}", send.CurAppWQueue));
+    }
+    if let Some(path) = path
+        && path.MinRtt != 0
+        && path.MinRtt != u32::MAX
+    {
+        field(format!("minrtt:{}", printf_g(f64::from(path.MinRtt))));
+    }
+    if let Some(observed) = &stats.observed
+        && observed.CurRwinRcvd != 0
+    {
+        field(format!("snd_wnd:{}", observed.CurRwinRcvd));
+    }
+    if let Some(receive) = &stats.receive
+        && receive.CurRwinSent != 0
+    {
+        field(format!("rcv_wnd:{}", receive.CurRwinSent));
+    }
+    out
 }
 
 /// Host and interface names for printing, each looked up once.
@@ -1356,6 +1614,35 @@ fn run(
         names.hosts = net::host_names(&addresses, RESOLVE_LIMIT);
     }
 
+    // -i's statistics, switched on first when elevated; without -i, only the queues of
+    // connections whose collection is already on.
+    let elevated = options.info && cash_win32::process::current_process_is_elevated() == Some(true);
+    let mut incomplete = false;
+    let mut switched = 0usize;
+    let collected: Vec<Collected> = selected
+        .iter()
+        .map(|e| {
+            if e.socket.proto != Proto::Tcp || e.socket.remote.is_none() {
+                return (None, (None, None));
+            }
+            if !options.info {
+                return (None, net::tcp_queues(e.socket));
+            }
+            let stats = net::tcp_stats(e.socket, elevated);
+            if let Some(stats) = &stats {
+                incomplete |= stats.incomplete;
+                switched += usize::from(stats.switched_on);
+            }
+            let queues = stats.map_or((None, None), |s| {
+                (
+                    s.receive.map(|r| r.CurAppRQueue),
+                    s.send_buffer.map(|b| b.CurRetxQueue + b.CurAppWQueue),
+                )
+            });
+            (stats, queues)
+        })
+        .collect();
+
     let show_netid = selection.tables.count_ones() > 1;
     let show_state = selection.states.count_ones() > 1;
     let show_queues = !options.no_queues;
@@ -1376,7 +1663,8 @@ fn run(
 
     let lines: Vec<Line> = selected
         .iter()
-        .map(|e| {
+        .zip(&collected)
+        .map(|(e, (stats, (recv_q, send_q)))| {
             let s = e.socket;
             let peer = peer_of(s);
             let process = match (&processes, s.pid) {
@@ -1403,6 +1691,12 @@ fn run(
                 peer_host: names.host(peer.ip(), 0),
                 peer_port: port_text(peer.port(), s.proto),
                 process,
+                recv_q: recv_q.unwrap_or(0).to_string(),
+                send_q: send_q.unwrap_or(0).to_string(),
+                info: stats
+                    .as_ref()
+                    .map(|stats| info_text(stats, options.numeric))
+                    .unwrap_or_default(),
             }
         })
         .collect();
@@ -1417,6 +1711,8 @@ fn run(
     };
     let netid_w = width(&mut lines.iter().map(|l| l.netid.len()), 5, true);
     let state_w = width(&mut lines.iter().map(|l| l.state.len()), 5, true);
+    let recv_w = width(&mut lines.iter().map(|l| l.recv_q.len()), 6, true);
+    let send_w = width(&mut lines.iter().map(|l| l.send_q.len()), 6, true);
     let lhost_w = width(&mut lines.iter().map(|l| l.local_host.len()), 13, false);
     let lport_w = width(&mut lines.iter().map(|l| l.local_port.len()), 4, false);
     let phost_w = width(&mut lines.iter().map(|l| l.peer_host.len()), 12, false);
@@ -1440,7 +1736,7 @@ fn run(
             let _ = write!(out, "{state:<state_w$} ");
         }
         if show_queues {
-            let _ = write!(out, "{:<6} {:<6} ", queues.0, queues.1);
+            let _ = write!(out, "{:<recv_w$} {:<send_w$} ", queues.0, queues.1);
         }
         let _ = write!(out, "{:>lhost_w$}:{:<lport_w$} ", local.0, local.1);
         let _ = write!(out, "{:>phost_w$}:{:<pport_w$}", peer.0, peer.1);
@@ -1471,18 +1767,40 @@ fn run(
         )?;
     }
     for line in &lines {
+        let text = render(
+            line.netid,
+            line.state,
+            (&line.recv_q, &line.send_q),
+            (&line.local_host, &line.local_port),
+            (&line.peer_host, &line.peer_port),
+            &line.process,
+            false,
+        );
+        // iproute2 puts -i's fields on a second line that starts with a tab, or with -O
+        // on the socket's own line.
+        let separator = if options.oneline { "" } else { "\n\t" };
+        if line.info.is_empty() {
+            writeln!(stdout, "{text}")?;
+        } else {
+            writeln!(stdout, "{text}{separator}{}", line.info)?;
+        }
+    }
+    drop(stdout);
+    if incomplete && !elevated {
         writeln!(
-            stdout,
-            "{}",
-            render(
-                line.netid,
-                line.state,
-                ("0", "0"),
-                (&line.local_host, &line.local_port),
-                (&line.peer_host, &line.peer_port),
-                &line.process,
-                false
-            )
+            context.stderr(),
+            "ss: -i: Windows collects the other statistics only once an elevated shell switches them on (sudo ss -i)"
+        )?;
+    }
+    if switched > 0 {
+        let noun = if switched == 1 {
+            "connection"
+        } else {
+            "connections"
+        };
+        writeln!(
+            context.stderr(),
+            "ss: -i: statistics collection switched on for {switched} {noun}; counts start now"
         )?;
     }
     if status.is_success() {
@@ -1700,5 +2018,120 @@ mod tests {
         assert!(!names.host(link_local, 1).contains(' '));
         names.hosts.insert(link_local, "router".to_owned());
         assert_eq!(names.host(link_local, 17), "router%ethernet_32769");
+    }
+
+    #[test]
+    fn dev_matches_the_ipv6_scope_and_no_device_otherwise() {
+        let v4 = socket("127.0.0.1:8080", None);
+        let mut scoped = socket("[fe80::1]:546", None);
+        if let SocketAddr::V6(local) = &mut scoped.local {
+            local.set_scope_id(3);
+        }
+        assert!(filter("dev 0").matches(&v4));
+        assert!(filter("dev = 0").matches(&v4));
+        assert!(!filter("dev 3").matches(&v4));
+        assert!(filter("dev != 3").matches(&v4));
+        assert!(filter("dev 3").matches(&scoped));
+        assert!(filter("dev == 3").matches(&scoped));
+        assert!(filter("dev eq 0x3").matches(&scoped));
+        assert!(!filter("dev ne 3").matches(&scoped));
+        assert!(filter("not dev 3 or sport = :546").matches(&scoped));
+        for text in ["dev", "dev < 3", "dev > 3"] {
+            assert!(is_syntax_error(text), "{text}");
+        }
+        let services = Services::load();
+        assert!(matches!(
+            parser_for("dev no-such-device", &services),
+            Err(FilterError::Message(m)) if m == "Cannot parse device."
+        ));
+    }
+
+    #[test]
+    fn device_operands_read_as_strtoul_does() {
+        for (text, index) in [("17", 17), ("0x10", 16), ("010", 8), ("0", 0), ("if5", 5)] {
+            assert_eq!(device_index(text), Some(index), "{text}");
+        }
+        for text in ["", "0x", "09", "1a", "-1", "99999999999"] {
+            assert_eq!(device_index(text), None, "{text}");
+        }
+        let loopback = net::interface_name(1).unwrap();
+        assert_eq!(device_index(&loopback), Some(1));
+    }
+
+    #[test]
+    fn numbers_print_as_printf_does() {
+        for (value, text) in [
+            (0.0, "0"),
+            (204.0, "204"),
+            (0.035, "0.035"),
+            (1.5, "1.5"),
+            (123_456.0, "123456"),
+            (1_000_000.0, "1e+06"),
+            (0.0001, "0.0001"),
+            (0.000_01, "1e-05"),
+        ] {
+            assert_eq!(printf_g(value), text, "{value}");
+        }
+        assert_eq!(rate_text(163_840_000_000.0, false), "164G");
+        assert_eq!(rate_text(163_840_000_000.0, true), "163840000000");
+        assert_eq!(rate_text(5_792_000.0, false), "5.79M");
+        assert_eq!(rate_text(500.0, false), "500");
+    }
+
+    #[test]
+    #[expect(
+        clippy::default_trait_access,
+        reason = "the statistics are windows-sys types, which this crate does not name"
+    )]
+    fn info_shows_only_what_windows_collected() {
+        let mut stats = net::TcpStats {
+            mss_received: Some(1460),
+            mss_sent: Some(1460),
+            ..net::TcpStats::default()
+        };
+        assert_eq!(info_text(&stats, false), " mss:1460 advmss:1460");
+
+        stats.path = Some(Default::default());
+        stats.congestion = Some(Default::default());
+        stats.data = Some(Default::default());
+        stats.receive = Some(Default::default());
+        stats.observed = Some(Default::default());
+        stats.send_buffer = Some(Default::default());
+        if let Some(path) = &mut stats.path {
+            path.CurRto = 204;
+            path.SmoothedRtt = 20;
+            path.RttVar = 5;
+            path.CurMss = 1448;
+            path.MinRtt = 15;
+            path.RetranThresh = 3;
+            path.BytesRetrans = 0;
+        }
+        if let Some(congestion) = &mut stats.congestion {
+            congestion.CurCwnd = 14_480;
+            congestion.CurSsthresh = u32::MAX;
+        }
+        if let Some(data) = &mut stats.data {
+            data.DataBytesOut = 1000;
+            data.ThruBytesAcked = 1000;
+            data.ThruBytesReceived = 300;
+            data.SegsOut = 4;
+            data.SegsIn = 5;
+            data.DataSegsOut = 1;
+            data.DataSegsIn = 2;
+        }
+        if let Some(receive) = &mut stats.receive {
+            receive.CurRwinSent = 65_535;
+            receive.WinScaleSent = 8;
+        }
+        if let Some(observed) = &mut stats.observed {
+            observed.CurRwinRcvd = 131_072;
+            observed.WinScaleRcvd = 7;
+        }
+        assert_eq!(
+            info_text(&stats, false),
+            " wscale:7,8 rto:204 rtt:20/5 mss:1448 advmss:1460 cwnd:10 bytes_sent:1000 \
+             bytes_acked:1000 bytes_received:300 segs_out:4 segs_in:5 data_segs_out:1 \
+             data_segs_in:2 send 5.79Mbps minrtt:15 snd_wnd:131072 rcv_wnd:65535"
+        );
     }
 }

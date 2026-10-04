@@ -1859,20 +1859,37 @@ expression language (with `and`, `or`, `not`, parentheses, prefixes and `-F FILE
 supported; a socket without a peer has peer `0.0.0.0:0`, and what iproute2's grammar
 rejects gets its `bison bellows` message.
 
-Where Windows differs (decided in research/ss-evaluation.md): Recv-Q and Send-Q are not
-exposed and print `0`, so column positions stay the same; `-p` prints `fd=-`, and for a
-service hosted in `svchost.exe` adds `service=NAME` from the socket's owning module; UDP
-sockets have no peer and are always `UNCONN`. `-K` closes connections with
-`SetTcpEntry`, which Windows allows only elevated and only for IPv4: unelevated it is
-refused before anything is done, and an IPv6 match is reported as not closable. `-B`
-(bound-inactive sockets, netstat's `BOUND`) comes from the undocumented
+Where Windows differs (decided in research/ss-evaluation.md): `-p` prints `fd=-`, and for
+a service hosted in `svchost.exe` adds `service=NAME` from the socket's owning module; UDP
+sockets have no peer and are always `UNCONN`. Recv-Q and Send-Q are `0`, so column
+positions stay the same, except for a connection whose extended statistics Windows
+collects (an elevated `ss -i` switched them on): there Recv-Q is the data received and
+not yet read (`CurAppRQueue`) and Send-Q, as in Linux, the data the peer has not yet
+acknowledged, sent or not (`CurRetxQueue` plus `CurAppWQueue`). `-i` prints, on the
+second line iproute2 uses (or the same line with `-O`), only what Windows has, under the
+name of the Linux value it is, in iproute2's order: unelevated, the MSS values of the SYN
+(`mss` is the one the peer offered, `advmss` this end's), with a note that the rest needs
+an elevated shell; elevated, it first switches `GetPerTcpConnectionEStats` collection on
+for each listed connection that lacks it (it stays on until the connection closes, and
+counts start then, which a note says), and adds `wscale`, `rto`, `rtt`, the current
+`mss`, `cwnd` and `ssthresh` in segments, the byte and segment counts, `send`,
+`dsack_dups`, `reordering`, `notsent`, `minrtt`, `snd_wnd` and `rcv_wnd`. The congestion
+algorithm, `pmtu`, `rcvmss`, `lastsnd` and the other timers have nothing behind them and
+are left out; listeners and UDP sockets get no `-i` line. `dev NAME` (a name such as
+`ethernet_32769`, an alias such as `Ethernet`, or an index) matches an IPv6 socket's
+scope, as Linux matches the device a socket is bound to; Windows has no per-socket device,
+so every IPv4 and unscoped IPv6 socket has none, as an unbound Linux socket has (`dev 0`
+matches them, `dev != NAME` keeps them). `-K` closes connections with `SetTcpEntry`,
+which Windows allows only elevated and only for IPv4: unelevated it is refused before
+anything is done, and an IPv6 match is reported as not closable. `-B` (bound-inactive
+sockets, netstat's `BOUND`) comes from the undocumented
 `InternalGetBoundTcpEndpointTable`, looked up at run time; Windows lists there the
 binding of every socket that went on to connect or listen, so those are left out. A
 dual-mode IPv6 socket shows as two lines (`0.0.0.0` and `[::]`) where Linux prints one
 `*`: the tables do not say whether a socket is dual-mode. Options with nothing behind
-them (`-x`, `-e`, `-m`, `-o`, `-i`, `--tos`, `--cgroup`, other socket families) are
-refused by name, and a netstat habit such as `ss -ano` gets a hint with the `ss`
-spelling. `netstat.exe` is not shadowed.
+them (`-x`, `-e`, `-m`, `-o`, `--tos`, `--cgroup`, other socket families) are refused by
+name, and a netstat habit such as `ss -ano` gets a hint with the `ss` spelling.
+`netstat.exe` is not shadowed.
 
 ### D52 — MSYS2 and Cygwin programs get their arguments in Cygwin's encoding
 
@@ -2580,7 +2597,7 @@ someone who expected bash, so additions need to earn their place.
 | 26 | Bundled `sed` and `awk` keep CRLF lines CRLF and match them without the CR | Windows files stay intact and `$` works on them; a program naming `\r`, or `CASH_EOL=lf`, gets Linux behaviour | D49 |
 | 27 | Arithmetic never executes `$(...)` found in an array subscript inside a variable's value | Bash runs it (`read n; echo $((n+1))` with input `a[$(cmd)]`), a well-known code-injection hole; Cash reports an error for indexed arrays and uses the text as a literal key for associative ones | — |
 | 28 | `fuser DIR` and `lsof DIR` report holders of the files below the directory, not processes using it as their working directory; lsof's DEVICE and NODE are `-`, and its FD a handle value, not a descriptor | Windows exposes no per-process descriptor or working-directory information through a documented API | D50 |
-| 29 | `ss` prints Recv-Q/Send-Q as `0`, `fd=-` for processes, every UDP socket as `UNCONN` and a dual-mode socket as two lines; `ss -K` closes only IPv4 connections, and only elevated | Windows' socket tables carry no queue sizes, descriptor numbers, UDP peers or dual-mode flag, and `SetTcpEntry` is IPv4-only and needs elevation | D51 |
+| 29 | `ss` prints Recv-Q/Send-Q as `0` unless an elevated `ss -i` switched statistics on for the connection, `fd=-` for processes, every UDP socket as `UNCONN` and a dual-mode socket as two lines; `ss -i` shows only the SYN's MSS unelevated; `ss -K` closes only IPv4 connections, and only elevated | Windows' socket tables carry no queue sizes, descriptor numbers, UDP peers or dual-mode flag; per-connection statistics are collected only once an elevated process switches them on, and `SetTcpEntry` is IPv4-only and needs elevation | D51 |
 | 30 | At the interactive prompt, an unquoted word starting `C:\` keeps its backslashes (`shopt winpaths`, off in scripts) | Pasted Windows paths are otherwise mangled to `C:Usersme` | D53 |
 | 31 | `TERM` terminates a console program at once, and gives a program with a window five seconds after `WM_CLOSE` | A console control event cannot be aimed at one process that leads no group | D21 |
 | 32 | `pgrep`, `pkill`, `pidof` and `killall` match names without case and with `.exe` optional; the kill family never signals the shell, system images or service accounts' processes | Windows image names are case-insensitive, and killing `csrss.exe` is a blue screen | D54 |
