@@ -310,6 +310,7 @@ fn build_context(matches: &ArgMatches) -> UResult<ProcessingContext> {
         read_ahead: fast_io::ReadAhead::default(),
         later_input: None,
         stdin_done: false,
+        input_crlf: false,
         stop_processing: false,
         saved_regex: None,
         input_action: None,

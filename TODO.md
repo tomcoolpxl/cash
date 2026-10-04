@@ -63,9 +63,8 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 What comparing cash's sed and awk with GNU sed 4.9 and gawk turned up while phase 14
 fixed their leftovers; moved here so 1.3.14 could go out (the user, 2026-10-04).
 
-- sed: `l` shows an embedded newline as `$` and a line break where GNU shows `\n`
-  (`N;l` on `a`,`b`: `a$`/`b$` for GNU's `a\nb$`); text from `a`, `i`, `c`, `=` and `F`
-  always ends in LF, so a CRLF file gets LF lines among its CRLF ones (D49).
+- sed: `l`'s lines and the output of `e` and `s///e` end in LF on CRLF input (D49 says
+  nothing of either); with `-z`, `a T` writes `T` and a NUL, not compared with GNU.
   `--follow-symlinks` is tested only where symbolic links can be made (CI), not here.
   Seen 2026-10-04.
 - awk, found matching gawk 5.4 (2026-10-04): `gsub(/a/, "b", (x))` is taken where gawk

@@ -70,6 +70,9 @@ pub struct ProcessingContext {
     pub later_input: Option<bool>,
     /// Whether standard input has been read to its end as an input file
     pub stdin_done: bool,
+    /// Whether the last line read with an end ended in CRLF: the input's line ending, as
+    /// far as known (D49)
+    pub input_crlf: bool,
     /// Stop processing further input.
     pub stop_processing: bool,
     /// Whether sed operates on bytes or UTF-8 characters
@@ -141,9 +144,10 @@ impl ProcessingContext {
 #[derive(Clone, Debug)]
 /// Elements that shall be appended at the end of each command processing cycle
 pub enum AppendElement {
-    Text(Rc<[u8]>), // The specified text bytes
-    Path(PathBuf),  // The contents of the specified file path
-    Line(Vec<u8>),  // A line `R` read, written as it is, its end included or not (GNU)
+    // The specified text bytes, and whether the line it goes with ended in CRLF (D49)
+    Text(Rc<[u8]>, bool),
+    Path(PathBuf), // The contents of the specified file path
+    Line(Vec<u8>), // A line `R` read, written as it is, its end included or not (GNU)
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]

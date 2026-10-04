@@ -652,8 +652,8 @@ fn write_to_file(
 fn flush_appends(output: &mut OutputBuffer, context: &mut ProcessingContext) -> UResult<()> {
     for elem in &context.append_elements {
         match elem {
-            AppendElement::Text(text) => {
-                output.write_bytes(text.as_ref())?;
+            AppendElement::Text(text, crlf) => {
+                output.write_bytes_with(text.as_ref(), *crlf)?;
             }
             AppendElement::Path(path) => {
                 append_file(output, path, context.stdin_done)?;
@@ -677,6 +677,7 @@ fn readable_ascii_byte(byte: u8) -> Cow<'static, str> {
         b'\\' => Cow::Borrowed(r"\\"),
         b'\r' => Cow::Borrowed(r"\r"),
         b'\t' => Cow::Borrowed(r"\t"),
+        b'\n' => Cow::Borrowed(r"\n"),
         b if b.is_ascii_control() => Cow::Owned(format!("\\{byte:03o}")),
         b if b == b' ' || b.is_ascii_graphic() => Cow::Owned(char::from(byte).to_string()),
         _ => Cow::Owned(format!("\\{byte:03o}")),
@@ -726,15 +727,6 @@ impl ListLine {
         Ok(())
     }
 
-    /// Write the current list line with an embedded newline marker.
-    fn write_embedded_newline(&mut self, output: &mut OutputBuffer) -> UResult<()> {
-        self.buffer.push_str("$\n");
-        output.write_str(&self.buffer)?;
-        self.buffer.clear();
-        self.width = 0;
-        Ok(())
-    }
-
     /// Finish the list line if it has buffered output.
     fn finish(&mut self, output: &mut OutputBuffer) -> UResult<()> {
         if !self.buffer.is_empty() {
@@ -764,13 +756,11 @@ fn list(
 
     let mut list_line = ListLine::new(max_width);
 
+    // A newline in the pattern space is `\n`, as in GNU sed; it ended the listed line
+    // with `$`, as if it were two.
     if !context.uutil_extensions || context.character_mode == CharacterMode::Byte {
         // List non-ASCII bytes in octal.
         for &byte in line.as_bytes() {
-            if byte == b'\n' {
-                list_line.write_embedded_newline(output)?;
-                continue;
-            }
             let out_str = readable_ascii_byte(byte);
             list_line.write_item(output, &out_str)?;
         }
@@ -779,10 +769,6 @@ fn list(
         // that are not UTF-8 are listed in octal; they were an error.
         for chunk in line.as_bytes().utf8_chunks() {
             for ch in chunk.valid().chars() {
-                if ch == '\n' {
-                    list_line.write_embedded_newline(output)?;
-                    continue;
-                }
                 let out_str = readable_char(ch);
                 list_line.write_item(output, &out_str)?;
             }
@@ -793,6 +779,17 @@ fn list(
     }
 
     list_line.finish(output)
+}
+
+/// Note the line ending of the line just read, the input's as far as known (D49); a last
+/// line without one takes it, so that text after it (`a`, `=`, ...) and the end it is
+/// given before more output end as the input's lines do.
+fn follow_input_crlf(line: &mut IOChunk, context: &mut ProcessingContext) {
+    if line.is_newline_terminated() {
+        context.input_crlf = line.has_crlf_lines();
+    } else {
+        line.set_crlf_lines(context.input_crlf);
+    }
 }
 
 /// Handle address 0 read at the beginning of each file.
@@ -839,6 +836,7 @@ fn process_file(
         .get_line()
         .map_err(|e| read_error(&context.input_name, &e))?
     {
+        follow_input_crlf(&mut pattern, context);
         context.line_number += 1;
         context.substitution_made = false;
         // Set the script command from which to start.
@@ -888,7 +886,7 @@ fn process_file(
                     let text = extract_variant!(command, Text);
                     context
                         .append_elements
-                        .push(AppendElement::Text(text.clone()));
+                        .push(AppendElement::Text(text.clone(), pattern.has_crlf_lines()));
                 }
                 'b' => {
                     // Branch to the specified label or end if none is given.
@@ -910,7 +908,7 @@ fn process_file(
                     pattern.clear();
                     if command.start_line.is_none() {
                         let text = extract_variant!(command, Text);
-                        output.write_bytes(text.as_ref())?;
+                        output.write_bytes_with(text.as_ref(), pattern.has_crlf_lines())?;
                     }
                     break;
                 }
@@ -947,7 +945,7 @@ fn process_file(
                     // Output current input file name.
                     let mut bytes = context.input_name.as_os_str().as_encoded_bytes().to_vec();
                     bytes.push(b'\n');
-                    output.write_bytes(&bytes)?;
+                    output.write_bytes_with(&bytes, pattern.has_crlf_lines())?;
                 }
                 'g' => {
                     // Replace pattern with the contents of the hold space.
@@ -984,7 +982,7 @@ fn process_file(
                 'i' => {
                     // Write text to standard output.
                     let text = extract_variant!(command, Text);
-                    output.write_bytes(text.as_ref())?;
+                    output.write_bytes_with(text.as_ref(), pattern.has_crlf_lines())?;
                 }
                 'l' => {
                     let width = *extract_variant!(command, Number);
@@ -1002,6 +1000,7 @@ fn process_file(
                         .map_err(|e| read_error(&context.input_name, &e))?
                     {
                         pattern = next_line;
+                        follow_input_crlf(&mut pattern, context);
                         context.line_number += 1;
                     } else {
                         context.stop_processing = true;
@@ -1169,7 +1168,10 @@ fn process_file(
                 }
                 '=' => {
                     // Output current line number.
-                    output.write_str(format!("{}\n", context.line_number))?;
+                    output.write_bytes_with(
+                        format!("{}\n", context.line_number).as_bytes(),
+                        pattern.has_crlf_lines(),
+                    )?;
                 }
                 // The compilation should supply only valid codes.
                 c => {
@@ -1493,7 +1495,7 @@ mod tests {
 
     #[test]
     fn test_readable_ascii_byte_named_escapes() {
-        assert_eq!(readable_ascii_byte(b'\n'), r"\012");
+        assert_eq!(readable_ascii_byte(b'\n'), r"\n");
         assert_eq!(readable_ascii_byte(b'\t'), r"\t");
         assert_eq!(readable_ascii_byte(b'\\'), r"\\");
     }

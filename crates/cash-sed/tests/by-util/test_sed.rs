@@ -4261,3 +4261,82 @@ fn test_w_upper_first_lines_follow_each_other() -> std::io::Result<()> {
     assert_eq!(fs::read_to_string(&out)?, "a\nc\n");
     Ok(())
 }
+
+/// `l` shows a newline in the pattern space as `\n`, as GNU sed does, wrapping it as one
+/// item of two characters; it ended the listed line with `$`, as if it were two lines.
+#[test]
+fn test_list_shows_embedded_newlines() {
+    for (args, input, output) in [
+        (&["-n", "N;l"][..], &b"a\nb\n"[..], &b"a\\nb$\n"[..]),
+        (&["-n", "$!N;l"], b"a\n\n", b"a\\n$\n"),
+        (
+            &["-n", "N;l 4"],
+            b"abcdef\nghijkl\n",
+            b"abc\\\ndef\\\n\\ng\\\nhij\\\nkl$\n",
+        ),
+        (&["-n", "-z", "l"], b"a\nb\x00", b"a\\nb$\x00"),
+        (&["-n", "-z", "N;l"], b"ab\x00cd\x00", b"ab\\000cd$\x00"),
+    ] {
+        check_output(args, input, output);
+    }
+}
+
+/// Text from `a`, `i` and `c`, the line number of `=` and the file name of `F` end as the
+/// current line does (D49): CRLF where the pattern space's lines are CRLF, and a last
+/// line without an end takes the input's as far as it is known. They always ended in LF,
+/// making a CRLF file one of mixed line ends. D49's exceptions, a script naming CR and
+/// `CASH_EOL=lf` (or `-b`), give LF, and the text `r` and `R` insert is the other file's,
+/// as it is, as in GNU sed.
+#[test]
+fn test_text_ends_as_the_current_line() -> std::io::Result<()> {
+    for (args, input, output) in [
+        (
+            &["a T"][..],
+            &b"a\r\nb\r\n"[..],
+            &b"a\r\nT\r\nb\r\nT\r\n"[..],
+        ),
+        (&["i T"], b"a\r\nb\r\n", b"T\r\na\r\nT\r\nb\r\n"),
+        (&["c T"], b"a\r\nb\r\n", b"T\r\nT\r\n"),
+        (&["2c\\\nT\\\nU"], b"a\r\nb\r\n", b"a\r\nT\r\nU\r\n"),
+        (&["a T\\nU"], b"a\r\n", b"a\r\nT\r\nU\r\n"),
+        (&["="], b"a\r\nb\r\n", b"1\r\na\r\n2\r\nb\r\n"),
+        (&["F"], b"a\r\n", b"-\r\na\r\n"),
+        (&["N;a T"], b"a\r\nb\r\n", b"a\r\nb\r\nT\r\n"),
+        // A last line without its end takes the input's.
+        (&["$a T"], b"a\r\nb", b"a\r\nb\r\nT\r\n"),
+        (&["p"], b"a\r\nb", b"a\r\na\r\nb\r\nb"),
+        // LF lines, and the exceptions, give LF.
+        (&["a T"], b"a\nb\n", b"a\nT\nb\nT\n"),
+        (&["="], b"a\n", b"1\na\n"),
+        (&["s/\\r//;a T"], b"a\r\n", b"a\nT\n"),
+        (&["-b", "a T"], b"a\r\n", b"a\r\nT\n"),
+    ] {
+        check_output(args, input, output);
+    }
+    new_ucmd!()
+        .env("CASH_EOL", "lf")
+        .args(&["a T"])
+        .pipe_in(b"a\r\n".to_vec())
+        .succeeds()
+        .stdout_is_bytes(b"a\r\nT\n");
+
+    // `r` writes the file as it is, with no end supplied, as GNU sed does.
+    let dir = tempfile::tempdir()?;
+    let file = dir.path().join("q");
+    fs::write(&file, "Q")?;
+    check_output(
+        &[&format!("r {}", file.to_string_lossy())],
+        b"a\r\nb\r\n",
+        b"a\r\nQb\r\nQ",
+    );
+    // A last line without its end, in `-s`, gets the input's before the next file's.
+    let last = dir.path().join("last");
+    fs::write(&last, "a\r\nb")?;
+    let next = dir.path().join("next");
+    fs::write(&next, "c\r\n")?;
+    new_ucmd!()
+        .args(&["-s", "p", &last.to_string_lossy(), &next.to_string_lossy()])
+        .succeeds()
+        .stdout_is_bytes(b"a\r\na\r\nb\r\nb\r\nc\r\nc\r\n");
+    Ok(())
+}

@@ -149,6 +149,10 @@ impl NamedWriter {
     pub fn line_bytes(&mut self, line: &[u8], newline: bool, delimiter: u8, crlf: bool) -> Vec<u8> {
         let mut bytes = Vec::with_capacity(line.len() + 2);
         if self.missing_newline {
+            // The line that lacked its end took the input's (D49), as the next one does.
+            if crlf && delimiter == b'\n' {
+                bytes.push(b'\r');
+            }
             bytes.push(delimiter);
         }
         if crlf && delimiter == b'\n' {
