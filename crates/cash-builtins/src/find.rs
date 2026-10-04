@@ -448,6 +448,20 @@ fn parse(args: &[String], here: &Path) -> Result<(Walk, Expr), String> {
                 walk.contents_first = true;
                 index += 1;
             }
+            // The command an action runs is its own, to its `;` or to a `+` after `{}`:
+            // `-exec find {} -maxdepth 0 ;` lost its `-maxdepth 0` to this walk.
+            "-exec" | "-execdir" | "-ok" | "-okdir" => {
+                rest.push(args[index].clone());
+                index += 1;
+                while let Some(word) = args.get(index) {
+                    rest.push(word.clone());
+                    index += 1;
+                    let after_braces = rest.len() >= 2 && rest[rest.len() - 2] == "{}";
+                    if word == ";" || (word == "+" && after_braces) {
+                        break;
+                    }
+                }
+            }
             _ => {
                 rest.push(args[index].clone());
                 index += 1;
