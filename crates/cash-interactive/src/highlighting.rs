@@ -485,7 +485,13 @@ impl<'a, SE: cash_core::ShellExtensions> Highlighter<'a, SE> {
         };
 
         if cash_core::sys::fs::contains_path_separator(&command) {
-            if self.shell.is_runnable_path(&command) {
+            // One look at a local file is cheap; on the network it can wait on a server,
+            // for seconds when it is offline, on every keystroke (PI-10, D59). Such a
+            // word stays neutral.
+            let absolute = self.shell.absolute_path(std::path::Path::new(&command));
+            if cash_win32::path::is_on_network(&absolute) {
+                CommandType::Unknown
+            } else if self.shell.is_runnable_path(&command) {
                 CommandType::External
             } else {
                 CommandType::NotFound
@@ -812,6 +818,20 @@ mod tests {
                 }),
             "{spans:?}"
         );
+    }
+
+    /// A command path on the network is not looked at on each keystroke: an offline
+    /// server stalled typing (PI-10). It stays neutral, as one waiting on an expansion.
+    #[tokio::test]
+    async fn a_command_path_on_the_network_stays_neutral() {
+        let shell = cash_core::Shell::builder().build().await.unwrap();
+        let tool = "//cash-no-such-server.invalid/share/tool.exe";
+        let started = std::time::Instant::now();
+        assert_eq!(
+            word_kind(&shell, &format!("{tool} x"), tool),
+            HighlightKind::UnknownCommand
+        );
+        assert!(started.elapsed() < std::time::Duration::from_secs(1));
     }
 
     #[tokio::test]

@@ -273,6 +273,29 @@ fn short_name(plain: &str) -> Option<String> {
     })
 }
 
+/// Whether an absolute path is on the network.
+///
+/// A UNC path (`//server/share`, not the `\\?\C:` and `\\.\` device forms), or one on a
+/// mapped network drive. Asking such a path anything can wait on a server, for a long
+/// time when it is offline.
+#[must_use]
+pub fn is_on_network(path: &Path) -> bool {
+    let text = path.to_string_lossy().replace('\\', "/");
+    if let Some(rest) = text.strip_prefix("//") {
+        return match rest.strip_prefix("?/").or_else(|| rest.strip_prefix("./")) {
+            Some(device) => device
+                .get(..4)
+                .is_some_and(|unc| unc.eq_ignore_ascii_case("UNC/")),
+            None => true,
+        };
+    }
+    let bytes = text.as_bytes();
+    bytes.len() >= 2
+        && bytes[0].is_ascii_alphabetic()
+        && bytes[1] == b':'
+        && crate::sysinfo::is_network_drive(Path::new(&format!("{}:\\", bytes[0] as char)))
+}
+
 /// Whether a path is absolute in the Windows sense cash cares about.
 ///
 /// `std::path::Path::is_absolute` agrees for drive paths and UNC, but we also accept the

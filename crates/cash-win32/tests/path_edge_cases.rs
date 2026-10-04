@@ -21,8 +21,8 @@
 use std::path::{Path, PathBuf};
 
 use cash_win32::path::{
-    MAX_PROCESS_DIRECTORY, Target, accept, accept_path, is_absolute, is_reserved_name,
-    process_directory, render, to_backslash, to_unix, unix_drive_spelling,
+    MAX_PROCESS_DIRECTORY, Target, accept, accept_path, is_absolute, is_on_network,
+    is_reserved_name, process_directory, render, to_backslash, to_unix, unix_drive_spelling,
 };
 
 // ---------------------------------------------------------------------------
@@ -374,4 +374,18 @@ fn a_folder_too_long_without_a_short_name_says_why() {
             .contains("too long for Windows to start a program in"),
         "{error}"
     );
+}
+
+#[test]
+fn network_paths_are_unc_and_mapped_drives_only() {
+    for unc in [
+        "//server/share/x",
+        r"\\server\share\x",
+        r"\\?\UNC\server\share\x",
+    ] {
+        assert!(is_on_network(Path::new(unc)), "{unc}");
+    }
+    for local in [r"\\?\C:\x", r"\\.\pipe\x", "C:/Windows", "/tmp", "rel/x"] {
+        assert!(!is_on_network(Path::new(local)), "{local}");
+    }
 }

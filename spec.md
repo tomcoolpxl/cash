@@ -2051,6 +2051,11 @@ The listing can lag a program installed a moment ago. That is acceptable for a c
 would not be for running a command, so nothing that executes consults it; command
 resolution still probes the disk as before.
 
+A command spelled as a path is looked at directly, one cheap question of a local disk,
+except on the network: a UNC path or a mapped network drive keeps the neutral colour, as
+asking it can wait on a server, for seconds when it is offline, on every keystroke
+(PI-10, 2026-10-04).
+
 Every command of a line is checked, not only the first: a control operator (`;`, `&`,
 `&&`, `||`, `|`, `|&`, `(`, newline) or a reserved word that precedes a command (`if`,
 `then`, `do`, `!`, …) starts another, so `ls | nosuch` marks `nosuch`.

@@ -90,8 +90,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 Each from `REVIEW_REPORT.md` §5, found in no commit on 2026-10-04; reproduce first, as
 some may have gone with other work.
 
-- PI-10: highlighting checks a command with a slash synchronously on every key; an
-  offline UNC path stalls typing.
 - BI-14: `ls | head -1` reports "pipe is being closed", exit 2; `ls -R` hides errors in
   subdirectories.
 - BI-15: `kill -s 0`, `kill -l 137` and the message for `kill abc` differ from Bash;
