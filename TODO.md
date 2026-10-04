@@ -61,12 +61,21 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 14.6 Dead code, allows and dependencies
 
-- sed: `R` is not supported; `s/a/b/pp` is accepted where GNU says "multiple `p'
-  options"; the `e` flag and command under `--posix`/`--sandbox` keep cash's own message;
-  the regex engine's error texts are not GNU's ("Unmatched ( or \("); some error columns
-  are one past GNU's (`1!!p`, `y/a`, `s/a/b`). Seen 2026-10-04 fixing the sed leftovers.
-- awk: gawk's `func` keyword is not taken; runtime error texts are not gawk's ("scalar
-  used in array context" for "attempt to use scalar … as an array"). Seen 2026-10-04.
+- sed, found matching GNU's errors (2026-10-04): `bfoo` exits 1 with a location, GNU 4
+  without; `{p` gives "unmatched `{'" with no location, GNU at `char 0`; `//p` with no
+  earlier regex fails at run time with 2, GNU at compile time with 1; `v4.a` and `v999`
+  say "invalid version of sed" where GNU (strverscmp) says "expected newer version";
+  `[\]]` takes the backslash as an escape, GNU as a literal; `[[.-.]]` and `[a-[.z.]]`
+  are not supported; under `--posix` `\w`, `\<` and the like stay operators; a written
+  `\A` is an anchor; `R /dev/stdin` is not special. Duplicate labels are an error, which
+  the crate's README keeps as BSD's behaviour.
+- awk, found matching gawk's errors (2026-10-04): division by zero gives inf/nan where
+  gawk is fatal (and `1/0` of constants a parse error; `/=` and `%=` have their own
+  words); `sprintf()` and `close()` without arguments are compile errors in other words;
+  gawk's arrays of arrays (`a[1][2]`) are not supported; `for (a in b)` with `a` an array
+  is fatal where gawk takes it for an empty `b`; an error outside the program's code
+  (`next` from BEGIN through a function, an unreadable input file) says `awk: fatal:`
+  without `cmd. line:N:`; the text for a failed write to stdout was not compared.
 - `tests/corpus/results.json`, the corpus runner's last log, quotes sed's old message
   "extra characters at the end of the : command"; a run of `tests/corpus/run.ps1`
   rewrites it. Seen 2026-10-04.

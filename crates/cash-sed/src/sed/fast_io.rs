@@ -368,6 +368,14 @@ impl OutputBuffer {
         )))
     }
 
+    /// Write `bytes` as they are, after the end of a line the last output left out: a
+    /// line `R` read, which GNU sed writes so, without an end when the file's last line
+    /// has none.
+    pub fn write_raw(&mut self, bytes: &[u8]) -> io::Result<()> {
+        self.flush_pending_newline()?;
+        self.out.write_all(bytes)
+    }
+
     /// Copy the specified file to the output.
     pub fn copy_file(&mut self, path: &PathBuf) -> io::Result<()> {
         let Ok(file) = File::open(path) else {
@@ -375,6 +383,9 @@ impl OutputBuffer {
             return Ok(());
         };
 
+        // A line the last output left without its end gets it first, as in GNU sed: the
+        // file's text was joined to it (`printf a | sed 'r f'`).
+        self.flush_pending_newline()?;
         let mut reader = BufReader::new(file);
         io::copy(&mut reader, &mut self.out)?;
         Ok(())

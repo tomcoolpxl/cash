@@ -18,9 +18,11 @@ use crate::sed::delimited_parser::{
     parse_transliteration_for_mode, push_script_char,
 };
 use crate::sed::error_handling::{
-    ScriptLocation, compilation_err, compilation_error, semantic_err, semantic_error,
+    ScriptLocation, compilation_err, compilation_err_at, compilation_error, semantic_err,
+    semantic_error,
 };
 use crate::sed::fast_regex::Regex;
+use crate::sed::gnu_regex;
 use crate::sed::named_writer::NamedWriter;
 use crate::sed::script_char_provider::ScriptCharProvider;
 use crate::sed::script_line_provider::{ScriptLineProvider, ScriptValue};
@@ -230,7 +232,11 @@ fn resolve_branch_targets(
                         .get(&label)
                         .cloned()
                         .ok_or_else(|| {
-                            semantic_err(&cmd.location, format!("undefined label `{label}'"))
+                            // GNU sed's words; cash's sed said "undefined label".
+                            semantic_err(
+                                &cmd.location,
+                                format!("can't find label for jump to `{label}'"),
+                            )
                         })?;
                     CommandData::BranchTarget(Some(target))
                 }
@@ -429,6 +435,7 @@ fn compile_address(
     context: &ProcessingContext,
 ) -> UResult<Address> {
     let mut icase = false;
+    let mut multiline = false;
 
     if line.eol() {
         return compilation_error(lines, line, "expected context address");
@@ -456,14 +463,26 @@ fn compile_address(
             // Skip over delimiter
             line.advance();
 
-            line.eat_spaces();
-            if !line.eol() && line.current() == 'I' {
-                icase = true;
+            // GNU sed's flags `I` and `M`, in any number and order, blanks around them;
+            // only one `I` was taken, and no `M` (`/a/Mp` was the unknown command `M`).
+            // POSIX mode has none.
+            loop {
+                line.eat_spaces();
+                if line.eol() || context.posix {
+                    break;
+                }
+                match line.current() {
+                    'I' => icase = true,
+                    'M' => multiline = true,
+                    _ => break,
+                }
                 line.advance();
             }
 
+            // GNU sed has read up to the command, and reports a bad expression there.
+            let column = line.get_pos();
             Ok(Address::Re(compile_regex(
-                lines, line, &re, context, icase, false,
+                lines, column, &re, context, icase, multiline,
             )?))
         }
         '$' => {
@@ -548,7 +567,9 @@ fn parse_command_ending(lines: &ScriptLineProvider, line: &mut ScriptCharProvide
         return Ok(());
     }
 
-    if !line.eol() && line.current() == '}' {
+    // A `}` or a comment may follow a command, as in GNU sed, which leaves them to be
+    // read next: `p#c` was refused.
+    if !line.eol() && matches!(line.current(), '}' | '#') {
         return Ok(());
     }
 
@@ -564,45 +585,55 @@ fn parse_command_ending(lines: &ScriptLineProvider, line: &mut ScriptCharProvide
 /// - Puts single-digit back-references in non-capturing groups..
 /// - Escapes ERE-only metacharacters: `+ ? { } | ( )`.
 /// - Leaves all other bytes as-is.
-fn bre_to_ere(pattern: &[u8]) -> Vec<u8> {
+///
+/// Where GNU sed's BRE has a character, not an operator, so does the result:
+/// - `*`, `\+` and `\?` where an expression starts: at the start, after `\(`, `\|` or
+///   an anchor (`*a`, `\(*a\)`, `^*a`). A leading `*` was a repetition of nothing, an
+///   error, and `^*` the `^` repeated.
+/// - `^` but at the start and after `\(` and `\|`, where it is an anchor, and `$` but
+///   at the end and before `\)` and `\|`. `\(^a\)` and `\(a$\)` matched `^` and `$`.
+/// - With `posix`, `\|`, `\+` and `\?`, which POSIX does not have.
+///
+/// A bracket expression is copied as it is.
+fn bre_to_ere(pattern: &[u8], posix: bool) -> Vec<u8> {
     let mut result = Vec::with_capacity(pattern.len());
     let mut pos = 0;
 
-    let mut at_beginning = true;
-    let mut previous: Option<u8> = None;
-    while pos < pattern.len() {
-        let c = pattern[pos];
+    // Whether an expression starts here, so that a repetition is a character.
+    let mut expression_start = true;
+    // Whether a `^` here is an anchor.
+    let mut caret_here = true;
+    while let Some(&c) = pattern.get(pos) {
         pos += 1;
-
-        if c == b'\\' {
-            match pattern.get(pos).copied() {
+        let (starts_expression, anchors_caret) = if c == b'\\' {
+            let next = pattern.get(pos).copied();
+            if next.is_some() {
+                pos += 1;
+            }
+            match next {
                 Some(b'(') => {
-                    pos += 1;
                     result.push(b'('); // Group start
+                    (true, true)
                 }
                 Some(b')') => {
-                    pos += 1;
                     result.push(b')'); // Group end
+                    (false, false)
                 }
-                Some(b'?') => {
-                    pos += 1;
-                    result.push(b'?'); // Quantifier 0 or 1
-                }
-                Some(b'+') => {
-                    pos += 1;
-                    result.push(b'+'); // Quantifier 1 or more
-                }
-                Some(b'|') => {
-                    pos += 1;
+                Some(b'|') if !posix => {
                     result.push(b'|'); // Alternation operator
+                    (true, true)
+                }
+                Some(op @ (b'?' | b'+')) if !posix && !expression_start => {
+                    result.push(op); // Quantifier 0 or 1, 1 or more
+                    (false, false)
                 }
                 Some(b'{') => {
-                    pos += 1;
                     result.push(b'{'); // Brace quantifier start
+                    (false, false)
                 }
                 Some(b'}') => {
-                    pos += 1;
                     result.push(b'}'); // Brace quantifier end
+                    (false, false)
                 }
                 Some(v) if v.is_ascii_digit() => {
                     // Back-reference.  In sed BREs these are single-digit
@@ -614,53 +645,129 @@ fn bre_to_ere(pattern: &[u8]) -> Vec<u8> {
                     result.extend_from_slice(b"(?:\\");
                     result.push(v);
                     result.push(b')');
-                    pos += 1;
+                    (false, false)
                 }
                 Some(next) => {
-                    // Preserve other escaped characters.
-                    pos += 1;
+                    // Preserve other escaped characters; an anchor among them (`\b`,
+                    // `\<`, and `\A` and `\z` for GNU's `` \` `` and `\'`) starts an
+                    // expression.
                     result.push(b'\\');
                     result.push(next);
+                    (
+                        matches!(next, b'b' | b'B' | b'<' | b'>' | b'A' | b'z'),
+                        false,
+                    )
                 }
                 None => {
                     // Trailing backslash; keep it.
                     result.push(b'\\');
+                    (false, false)
                 }
             }
         } else {
             match c {
+                b'[' => {
+                    pos = copy_bracket(pattern, pos, &mut result);
+                    (false, false)
+                }
+                b'*' if expression_start => {
+                    result.extend_from_slice(b"\\*");
+                    (false, false)
+                }
                 b'+' | b'?' | b'{' | b'}' | b'|' | b'(' | b')' => {
                     // Escape unsupported ERE metacharacters.
                     result.push(b'\\');
                     result.push(c);
+                    (false, false)
                 }
-                b'^' if !at_beginning && previous != Some(b'[') => {
-                    // In BREs ^ has special meaning at the beginning
-                    // and as bracket negation.  This heuristic escapes
-                    // all other uses, which per POSIX are valid in EREs.
-                    // "the ERE "a^b" is valid, but can never match because
-                    // the 'a' prevents the expression "^b" from matching
-                    // starting at the first character."
-                    // POSIX 9.4.9 ERE Expression Anchoring
-                    result.push(b'\\');
+                b'^' if caret_here => {
                     result.push(c);
+                    (true, false)
                 }
-                b'$' if pos < pattern.len() => {
+                b'^' => {
+                    // In BREs ^ has special meaning at the beginning, after `\(` and
+                    // `\|`, and as bracket negation. Other uses are literal, though
+                    // valid in EREs: "the ERE "a^b" is valid, but can never match
+                    // because the 'a' prevents the expression "^b" from matching
+                    // starting at the first character." POSIX 9.4.9 ERE Expression
+                    // Anchoring
+                    result.extend_from_slice(b"\\^");
+                    (false, false)
+                }
+                b'$' if !dollar_anchors(pattern, pos, posix) => {
                     // Similarly for $ appearing not at the end.
-                    result.push(b'\\');
-                    result.push(c);
+                    result.extend_from_slice(b"\\$");
+                    (false, false)
                 }
-                _ => result.push(c),
+                _ => {
+                    result.push(c);
+                    (false, false)
+                }
             }
-        }
-        at_beginning = false;
-        previous = Some(c);
+        };
+        expression_start = starts_expression;
+        caret_here = anchors_caret;
     }
 
     result
 }
 
-/// Whether a regular expression names a carriage return: a literal CR byte, or the
+/// Whether a `$` before `pos` is an anchor in a BRE: at the end, or before `\)` or `\|`.
+fn dollar_anchors(pattern: &[u8], pos: usize, posix: bool) -> bool {
+    match pattern.get(pos..) {
+        None | Some([]) => true,
+        Some([b'\\', b')', ..]) => true,
+        Some([b'\\', b'|', ..]) => !posix,
+        Some(_) => false,
+    }
+}
+
+/// Copy the bracket expression whose `[` is just before `pos` and return where it ends.
+/// It ends at a `]` that is not its first character (after a `^`), outside `[:`, `[.`
+/// and `[=` and their closing `:]`, `.]` and `=]`, and not escaped: sed's parser has
+/// left escapes such as `\]` for the engine.
+fn copy_bracket(pattern: &[u8], mut pos: usize, result: &mut Vec<u8>) -> usize {
+    result.push(b'[');
+    if pattern.get(pos) == Some(&b'^') {
+        result.push(b'^');
+        pos += 1;
+    }
+    if pattern.get(pos) == Some(&b']') {
+        result.push(b']');
+        pos += 1;
+    }
+    while let Some(&c) = pattern.get(pos) {
+        pos += 1;
+        result.push(c);
+        match c {
+            b']' => break,
+            b'\\' => {
+                if let Some(&next) = pattern.get(pos) {
+                    result.push(next);
+                    pos += 1;
+                }
+            }
+            b'[' if matches!(pattern.get(pos), Some(b':' | b'.' | b'=')) => {
+                let delimiter = pattern.get(pos).copied().unwrap_or_default();
+                result.push(delimiter);
+                pos += 1;
+                while let Some(&inner) = pattern.get(pos) {
+                    pos += 1;
+                    result.push(inner);
+                    if inner == delimiter && pattern.get(pos) == Some(&b']') {
+                        result.push(b']');
+                        pos += 1;
+                        break;
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    pos
+}
+
+// Whether a regular expression names a carriage return: a literal CR byte, or the
 /// escapes `\r` and `\x0D` (an escaped backslash does not count).
 fn mentions_carriage_return(pattern: &[u8]) -> bool {
     let mut i = 0;
@@ -694,9 +801,14 @@ fn mentions_carriage_return(pattern: &[u8]) -> bool {
 /// Compile the provided regular expression string into a corresponding engine.
 /// An empty pattern results in None, which means that the last RE employed
 /// at runtime will be used.
+///
+/// An error is reported at `column` of the current script line: GNU sed compiles an
+/// expression once it has read the command or address that holds it, flags and all,
+/// and says so where that ends. One `regcomp` refuses is in its words (`gnu_regex`);
+/// the engine's own words were reported, where the expression ended.
 fn compile_regex(
     lines: &ScriptLineProvider,
-    line: &ScriptCharProvider,
+    column: usize,
     pattern: impl AsRef<[u8]>,
     context: &ProcessingContext,
     icase: bool,
@@ -707,6 +819,15 @@ fn compile_regex(
         return Ok(None);
     }
 
+    let syntax = gnu_regex::Syntax {
+        extended: context.regex_extended,
+        posix: context.posix,
+        utf8: context.character_mode == CharacterMode::Utf8,
+    };
+    if let Some(error) = gnu_regex::syntax_error(pattern, syntax) {
+        return Err(compilation_err_at(lines, column, error));
+    }
+
     if mentions_carriage_return(pattern) {
         context.cr_in_script.set(true);
     }
@@ -715,7 +836,7 @@ fn compile_regex(
     let pattern = if context.regex_extended {
         pattern.to_vec()
     } else {
-        bre_to_ere(pattern)
+        bre_to_ere(pattern, context.posix)
     };
 
     // Add any required modifiers.
@@ -740,9 +861,9 @@ fn compile_regex(
 
     // Compile into engine.
     let compiled = Regex::new(&pattern, context.character_mode).map_err(|e| {
-        compilation_err(
+        compilation_err_at(
             lines,
-            line,
+            column,
             format!("invalid regex '{}': {e}", String::from_utf8_lossy(&pattern)),
         )
     })?;
@@ -919,18 +1040,26 @@ fn compile_subst_command(
     subst.replacement = compile_replacement(lines, line, context.character_mode, !context.posix)?;
     compile_subst_flags(lines, line, &mut subst, context.posix, context.sandbox)?;
 
+    // GNU sed reports what is wrong with the expression once it has read the flags, a
+    // `;` that ends them too, but not a `}` or `#`.
+    let column = if !line.eol() && line.current() == ';' {
+        line.get_pos() + 1
+    } else {
+        line.get_pos()
+    };
+
     if pattern.is_empty() && (subst.ignore_case || subst.multiline) {
-        return compilation_error(
+        return Err(compilation_err_at(
             lines,
-            line,
-            "cannot specify modifiers on an empty regular expression",
-        );
+            column,
+            "cannot specify modifiers on empty regexp",
+        ));
     }
 
     // Compile regex with now known modifier flags.
     subst.regex = compile_regex(
         lines,
-        line,
+        column,
         &pattern,
         context,
         subst.ignore_case,
@@ -941,14 +1070,14 @@ fn compile_subst_command(
     if let Some(regex) = &subst.regex
         && subst.replacement.max_group_number > regex.captures_len() - 1
     {
-        return compilation_error(
+        return Err(compilation_err_at(
             lines,
-            line,
+            column,
             format!(
                 "invalid reference \\{} on `s' command's RHS",
                 subst.replacement.max_group_number
             ),
-        );
+        ));
     }
     cmd.data = CommandData::Substitution(subst);
 
@@ -1048,6 +1177,10 @@ pub fn compile_subst_flags(
             }
 
             'p' => {
+                // GNU sed's error; a second `p` was taken, and printed twice.
+                if subst.print_flag {
+                    return compilation_error(lines, line, "multiple `p' options to `s' command");
+                }
                 subst.print_flag = true;
                 // 'p' is applied before 'e' iff 'e' has not been seen yet.
                 subst.p_before_e = !subst.execute;
@@ -1071,12 +1204,13 @@ pub fn compile_subst_flags(
             }
 
             'e' => {
-                if posix || sandbox {
-                    return compilation_error(
-                        lines,
-                        line,
-                        "the 'e' substitute flag is not allowed with --posix or --sandbox",
-                    );
+                // As in GNU sed: POSIX has no `e` flag, and the sandbox runs no
+                // command. Both had a message of cash's own.
+                if posix {
+                    return compilation_error(lines, line, ERR_UNKNOWN_OPTION_TO_S);
+                }
+                if sandbox {
+                    return compilation_error(lines, line, ERR_SANDBOX);
                 }
                 subst.execute = true;
                 line.advance();
@@ -1099,17 +1233,14 @@ pub fn compile_subst_flags(
                     );
                 }
 
+                // A number too big to hold is an occurrence no line has, as GNU sed
+                // takes it; it was an error of cash's own.
                 let mut number = 0usize;
                 while !line.eol() {
                     let Some(digit) = line.current().to_digit(10) else {
                         break;
                     };
-                    number = number
-                        .checked_mul(10)
-                        .and_then(|n| n.checked_add(digit as usize))
-                        .ok_or_else(|| {
-                            compilation_err(lines, line, "overflow in numeric substitute flag")
-                        })?;
+                    number = number.saturating_mul(10).saturating_add(digit as usize);
                     line.advance();
                 }
 
@@ -1127,7 +1258,9 @@ pub fn compile_subst_flags(
                 return Ok(()); // 'w' is the last flag allowed
             }
 
-            ';' | '\n' => break,
+            // A `}` or a comment ends the flags too, as in GNU sed: `{s/a/b/}` was
+            // refused as an unknown option.
+            ';' | '\n' | '}' | '#' => break,
 
             _ => {
                 return compilation_error(lines, line, ERR_UNKNOWN_OPTION_TO_S);
@@ -1162,11 +1295,12 @@ fn compile_negation_command(
     cmd: &mut Command,
     _context: &mut ProcessingContext,
 ) -> UResult<CommandHandling> {
-    line.advance();
-    line.eat_spaces();
+    // At the second `!`, which GNU sed has read: past it the column was one too many.
     if cmd.non_select {
         return compilation_error(lines, line, "multiple `!'s");
     }
+    line.advance();
+    line.eat_spaces();
     cmd.non_select = true;
     Ok(CommandHandling::GetNext)
 }
@@ -1198,6 +1332,32 @@ fn compile_read_file_command(
     }
     let path = read_file_path(lines, line)?;
     cmd.data = CommandData::Path(path);
+    Ok(CommandHandling::Continue)
+}
+
+// Handles R, a GNU extension: a line of the file at each run. As in GNU sed, the file is
+// opened as the script is read, one that cannot be opened is no error (`R` then reads
+// nothing), and every `R` that names it reads on from the same place.
+fn compile_read_line_command(
+    lines: &mut ScriptLineProvider,
+    line: &mut ScriptCharProvider,
+    cmd: &mut Command,
+    context: &mut ProcessingContext,
+) -> UResult<CommandHandling> {
+    if context.sandbox {
+        return compilation_error(lines, line, ERR_SANDBOX);
+    }
+    let path = read_file_path(lines, line)?;
+    let file = context
+        .line_files
+        .entry(path)
+        .or_insert_with_key(|path| {
+            Rc::new(RefCell::new(
+                std::fs::File::open(path).ok().map(std::io::BufReader::new),
+            ))
+        })
+        .clone();
+    cmd.data = CommandData::LineFile(file);
     Ok(CommandHandling::Continue)
 }
 
@@ -1255,7 +1415,13 @@ fn compile_label_command(
 
     if label.is_empty() {
         if cmd.code == ':' {
-            return compilation_error(lines, line, "empty label");
+            // GNU sed's words; cash's sed said "empty label". GNU sed has read up to
+            // what ends the label, not that.
+            return Err(compilation_err_at(
+                lines,
+                line.get_pos(),
+                "\":\" lacks a label",
+            ));
         }
         cmd.data = CommandData::Label(None);
     } else {
@@ -1515,12 +1681,10 @@ fn compile_execute_command(
     cmd: &mut Command,
     context: &mut ProcessingContext,
 ) -> UResult<CommandHandling> {
-    if context.posix || context.sandbox {
-        return compilation_error(
-            lines,
-            line,
-            "the 'e' command is not allowed with --posix or --sandbox",
-        );
+    // GNU sed's error, as for `r` and `w`; POSIX mode does not know the command at all
+    // (`get_cmd_spec`). Both had a message of cash's own.
+    if context.sandbox {
+        return compilation_error(lines, line, ERR_SANDBOX);
     }
 
     line.advance(); // Skip the command character.
@@ -1694,8 +1858,8 @@ fn get_cmd_spec(
             n_addr: 1,
             handler: compile_number_command,
         }),
-        // e is a GNU extension
-        'e' => Ok(CommandSpec {
+        // e and R are GNU extensions
+        'e' if !posix => Ok(CommandSpec {
             n_addr: 2,
             handler: compile_execute_command,
         }),
@@ -1706,6 +1870,10 @@ fn get_cmd_spec(
         'r' => Ok(CommandSpec {
             n_addr: if posix { 1 } else { 2 },
             handler: compile_read_file_command,
+        }),
+        'R' if !posix => Ok(CommandSpec {
+            n_addr: 2,
+            handler: compile_read_line_command,
         }),
         's' => Ok(CommandSpec {
             n_addr: 2,
@@ -1875,7 +2043,7 @@ mod tests {
 
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
-        assert!(msg.contains("test.sed:1:1: error: missing command"));
+        assert!(msg.contains("test.sed:1:0: error: missing command"));
     }
 
     #[test]
@@ -1955,8 +2123,8 @@ mod tests {
 
     #[test]
     fn test_compile_re_basic() {
-        let (lines, chars) = dummy_providers();
-        let regex = compile_regex(&lines, &chars, "abc", &ctx(), false, false)
+        let (lines, _) = dummy_providers();
+        let regex = compile_regex(&lines, 1, "abc", &ctx(), false, false)
             .unwrap()
             .expect("regex should be present");
         assert!(regex.is_match(&mut IOChunk::new_from_str("abc")).unwrap());
@@ -1965,10 +2133,10 @@ mod tests {
 
     #[test]
     fn test_compile_re_extended() {
-        let (lines, chars) = make_providers("acaa\nbbb\nccc");
+        let (lines, _) = make_providers("acaa\nbbb\nccc");
         let mut ctx = ctx();
         ctx.regex_extended = true;
-        let regex = compile_regex(&lines, &chars, "cc{0,}", &ctx, false, false)
+        let regex = compile_regex(&lines, 1, "cc{0,}", &ctx, false, false)
             .unwrap()
             .expect("regex should be present");
         assert!(
@@ -1980,8 +2148,8 @@ mod tests {
 
     #[test]
     fn test_compile_re_case_insensitive() {
-        let (lines, chars) = dummy_providers();
-        let regex = compile_regex(&lines, &chars, "abc", &ctx(), true, false)
+        let (lines, _) = dummy_providers();
+        let regex = compile_regex(&lines, 1, "abc", &ctx(), true, false)
             .unwrap()
             .expect("regex should be present");
         assert!(regex.is_match(&mut IOChunk::new_from_str("abc")).unwrap());
@@ -1991,15 +2159,15 @@ mod tests {
 
     #[test]
     fn test_compile_re_invalid() {
-        let (lines, chars) = dummy_providers();
-        let result = compile_regex(&lines, &chars, "a[d", &ctx(), false, false);
+        let (lines, _) = dummy_providers();
+        let result = compile_regex(&lines, 1, "a[d", &ctx(), false, false);
         assert!(result.is_err()); // Should fail due to open bracketed expression
     }
 
     #[test]
     fn test_compile_re_multiline_start() {
-        let (lines, chars) = dummy_providers();
-        let regex = compile_regex(&lines, &chars, "^bar", &ctx(), false, true)
+        let (lines, _) = dummy_providers();
+        let regex = compile_regex(&lines, 1, "^bar", &ctx(), false, true)
             .unwrap()
             .expect("regex should be present");
         assert!(
@@ -2011,8 +2179,8 @@ mod tests {
 
     #[test]
     fn test_compile_re_multiline_end() {
-        let (lines, chars) = dummy_providers();
-        let regex = compile_regex(&lines, &chars, "foo$", &ctx(), false, true)
+        let (lines, _) = dummy_providers();
+        let regex = compile_regex(&lines, 1, "foo$", &ctx(), false, true)
             .unwrap()
             .expect("regex should be present");
         assert!(
@@ -2815,10 +2983,7 @@ mod tests {
         let mut subst = Substitution::default();
 
         let err = compile_subst_flags(&lines, &mut chars, &mut subst, true, false).unwrap_err();
-        assert!(
-            err.to_string()
-                .contains("not allowed with --posix or --sandbox")
-        );
+        assert!(err.to_string().contains(ERR_UNKNOWN_OPTION_TO_S));
     }
 
     #[test]
@@ -2827,10 +2992,7 @@ mod tests {
         let mut subst = Substitution::default();
 
         let err = compile_subst_flags(&lines, &mut chars, &mut subst, false, true).unwrap_err();
-        assert!(
-            err.to_string()
-                .contains("not allowed with --posix or --sandbox")
-        );
+        assert!(err.to_string().contains(ERR_SANDBOX));
     }
 
     #[test]
@@ -2922,7 +3084,7 @@ mod tests {
             compile_subst_command(&mut lines, &mut chars, &mut cmd, &mut context).unwrap_err();
         assert!(
             err.to_string()
-                .contains("cannot specify modifiers on an empty regular expression")
+                .contains("cannot specify modifiers on empty regexp")
         );
     }
 
@@ -2948,7 +3110,7 @@ mod tests {
 
     // bre_to_ere
     fn bre_to_ere_string(pattern: &str) -> String {
-        String::from_utf8(bre_to_ere(pattern.as_bytes())).unwrap()
+        String::from_utf8(bre_to_ere(pattern.as_bytes(), false)).unwrap()
     }
 
     #[test]
@@ -3189,7 +3351,7 @@ mod tests {
         cmd.code = ':';
         let err =
             compile_label_command(&mut lines, &mut chars, &mut cmd, &mut context).unwrap_err();
-        assert!(err.to_string().contains("empty label"));
+        assert!(err.to_string().contains("\":\" lacks a label"));
     }
 
     #[test]
@@ -3442,7 +3604,7 @@ mod tests {
 
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
-        assert!(err.contains("undefined label `nope'"));
+        assert!(err.contains("can't find label for jump to `nope'"));
     }
 
     #[test]

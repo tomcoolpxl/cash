@@ -48,9 +48,30 @@ impl ScriptLocation {
 
 /// The compile error `msg` at the provider location, as a value for `map_err` and
 /// `ok_or_else`. Its exit code is 1 (compilation phase).
+///
+/// The column is GNU sed's count of the characters it has read: an error found at a
+/// character has read that character, and one found at the end of the line has read
+/// the line, no more. The end of the line counted one more, so `s/a/b` was refused at
+/// column 6 where GNU sed says char 5.
 pub fn compilation_err(
     lines: &ScriptLineProvider,
     line: &ScriptCharProvider,
+    msg: impl ToString,
+) -> Box<dyn UError> {
+    let column = if line.eol() {
+        line.get_pos()
+    } else {
+        line.get_pos() + 1
+    };
+    compilation_err_at(lines, column, msg)
+}
+
+/// The compile error `msg` at `column` of the current script line, for an error GNU
+/// sed reports after reading on: a regular expression's, once the command that holds
+/// it is read. Its exit code is 1 (compilation phase).
+pub fn compilation_err_at(
+    lines: &ScriptLineProvider,
+    column: usize,
     msg: impl ToString,
 ) -> Box<dyn UError> {
     USimpleError::new(
@@ -59,7 +80,7 @@ pub fn compilation_err(
             "{}:{}:{}: error: {}",
             lines.get_input_name(),
             lines.get_line_number(),
-            line.get_pos() + 1,
+            column,
             msg.to_string()
         ),
     )

@@ -343,10 +343,17 @@ impl Default for Record {
     }
 }
 
-pub(crate) fn is_valid_record_index(index: usize) -> Result<(), String> {
+/// The field the number `value` names. A negative one is gawk's error; it was taken for
+/// `$0`.
+pub(crate) fn record_index(value: f64) -> Result<usize, String> {
+    let value = value.trunc();
+    if value < 0.0 {
+        return Err(format!("attempt to access field {value}"));
+    }
+    let index = value as usize;
     if index > Record::MAX_FIELDS {
         Err("invalid field index".to_string())
     } else {
-        Ok(())
+        Ok(index)
     }
 }

@@ -9,8 +9,8 @@
 // file that was distributed with this source code.
 
 use crate::sed::command::{
-    Address, AppendElement, CharacterMode, Command, CommandData, InputAction, ProcessingContext,
-    Transliteration,
+    Address, AppendElement, CharacterMode, Command, CommandData, InputAction, LineFile,
+    ProcessingContext, Transliteration,
 };
 use crate::sed::delimited_parser::os_string_from_bytes;
 use crate::sed::error_handling::{
@@ -25,7 +25,7 @@ use memchr::memchr;
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::ffi::OsStr;
-use std::io::{self, IsTerminal, Read};
+use std::io::{self, BufRead, IsTerminal, Read, Seek, SeekFrom};
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::OnceLock;
@@ -517,6 +517,40 @@ fn transliterate(
     Ok(())
 }
 
+/// Queue the next line of a file `R` reads, its delimiter included when it has one, for
+/// the end of the cycle; nothing once the file is read to its end, or when it could not
+/// be opened. A last line without a newline is written without one, as in GNU sed.
+fn queue_line_of(
+    file: &LineFile,
+    location: &ScriptLocation,
+    context: &mut ProcessingContext,
+) -> UResult<()> {
+    let mut file = file.borrow_mut();
+    let Some(reader) = file.as_mut() else {
+        return Ok(());
+    };
+    let mut text = Vec::new();
+    match reader.read_until(context.delimiter(), &mut text) {
+        Ok(0) => Ok(()),
+        Ok(_) => {
+            context.append_elements.push(AppendElement::Line(text));
+            Ok(())
+        }
+        Err(e) => runtime_error(location, format!("read error: {e}")),
+    }
+}
+
+/// Start the files `R` reads over, for the next input file of `-s` or `-i`, as GNU sed
+/// does.
+fn rewind_line_files(context: &ProcessingContext) -> UResult<()> {
+    for file in context.line_files.values() {
+        if let Some(reader) = file.borrow_mut().as_mut() {
+            reader.seek(SeekFrom::Start(0))?;
+        }
+    }
+    Ok(())
+}
+
 /// Output any data queued for output at the end of the cycle.
 fn flush_appends(output: &mut OutputBuffer, context: &mut ProcessingContext) -> UResult<()> {
     for elem in &context.append_elements {
@@ -526,6 +560,9 @@ fn flush_appends(output: &mut OutputBuffer, context: &mut ProcessingContext) -> 
             }
             AppendElement::Path(path) => {
                 output.copy_file(path)?;
+            }
+            AppendElement::Line(line) => {
+                output.write_raw(line)?;
             }
         }
     }
@@ -708,7 +745,11 @@ fn process_file(
         // Set the script command from which to start.
         let mut current: Option<Rc<RefCell<Command>>> =
             if let Some(action) = context.input_action.take() {
-                // Continue processing the `N` command.
+                // Continue processing the `N` command. What the cycle queued (`a`, `r`,
+                // `R`) goes out now that `N` has its line, as in GNU sed; it went out
+                // before `N` looked, so at the end of the input it came before the
+                // pattern space `N` prints there.
+                flush_appends(output, context)?;
                 let mut combined_lines = action.prepend;
                 combined_lines.push(context.delimiter());
                 combined_lines.extend_from_slice(pattern.as_bytes());
@@ -842,10 +883,12 @@ fn process_file(
                     list(output, &pattern, width, &command.location, context)?;
                 }
                 'n' => {
-                    flush_appends(output, context)?;
+                    // The pattern space goes out before what the cycle queued, as at the
+                    // end of a cycle and in GNU sed; it went out after.
                     if !context.quiet {
                         write_chunk(output, context, &pattern)?;
                     }
+                    flush_appends(output, context)?;
                     if let Some(next_line) = reader.get_line()? {
                         pattern = next_line;
                         context.line_number += 1;
@@ -856,7 +899,6 @@ fn process_file(
                     }
                 }
                 'N' => {
-                    flush_appends(output, context)?;
                     // Append to pattern `\n` and the next line
                     // Rather than reading input here, which would result
                     // in a double borrow on reader, modify the action
@@ -901,6 +943,11 @@ fn process_file(
                     context
                         .append_elements
                         .push(AppendElement::Path(path.clone()));
+                }
+                'R' => {
+                    // Queue the file's next line, if it has one, for the end of the cycle.
+                    let file = extract_variant!(command, LineFile);
+                    queue_line_of(file, &command.location, context)?;
                 }
                 's' => {
                     substitute(&mut pattern, &command, context, output)?;
@@ -1015,12 +1062,14 @@ fn process_file(
 
     // Handle any N command remains.
     if context.separate
-        && !context.quiet
         && let Some(action) = context.input_action.take()
     {
-        let mut pending = action.prepend;
-        pending.push(b'\n');
-        output.write_bytes(&pending)?;
+        if !context.quiet {
+            let mut pending = action.prepend;
+            pending.push(b'\n');
+            output.write_bytes(&pending)?;
+        }
+        flush_appends(output, context)?;
         if context.unbuffered {
             output.flush()?;
         }
@@ -1077,6 +1126,9 @@ pub fn process_all_files(
         let output = in_place.begin(path)?;
         output.set_delimiter(context.delimiter());
 
+        if context.separate && index > 0 {
+            rewind_line_files(context)?;
+        }
         if context.separate || index == 0 {
             context.line_number = 0;
             reset_latched_address_ranges(&mut context.range_commands);
@@ -1092,12 +1144,14 @@ pub fn process_all_files(
         // Handle any N command remains.
         if context.last_file
             && !context.separate
-            && !context.quiet
             && let Some(action) = context.input_action.take()
         {
-            let mut pending = action.prepend;
-            pending.push(b'\n');
-            output.write_bytes(&pending)?;
+            if !context.quiet {
+                let mut pending = action.prepend;
+                pending.push(b'\n');
+                output.write_bytes(&pending)?;
+            }
+            flush_appends(output, context)?;
         }
 
         // The input is closed before an in-place edit replaces it: Windows does not move

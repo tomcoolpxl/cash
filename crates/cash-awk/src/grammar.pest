@@ -102,6 +102,7 @@ keyword = {
   | "else"
   | "exit"
   | "next"
+  | "func"
   | "print"
   | "for"
   | "if"
@@ -135,7 +136,8 @@ pattern_and_action = {
     normal_pattern ~ action
 }
 
-function_definition = { "function" ~ name ~ "(" ~ param_list? ~ ")" ~ opt_newline ~ action }
+// `func` is gawk's other spelling of `function`.
+function_definition = { ("function" | "func") ~ name ~ "(" ~ param_list? ~ ")" ~ opt_newline ~ action }
 
 param_list = { name ~ ("," ~ name)* }
 

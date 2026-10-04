@@ -86,7 +86,7 @@ impl StackValue {
                     let value: *mut AwkValue = arr.get_value(array_element_ref.key.clone())?;
                     Ok(value)
                 }
-                StackValue::Value(_) => Err("scalar used in array context".to_string()),
+                StackValue::Value(_) => Err(SCALAR_IN_ARRAY_CONTEXT.to_string()),
                 _ => Err("expected lvalue".to_string()),
             }
         }
@@ -174,6 +174,8 @@ pub(crate) struct CallFrame<'i> {
     pub(crate) function_name: Rc<str>,
     pub(crate) function_file: Rc<str>,
     pub(crate) source_locations: &'i [SourceLocation],
+    pub(crate) array_names: &'i [Option<Rc<str>>],
+    pub(crate) parameter_names: &'i [Rc<str>],
     pub(crate) bp: *mut StackValue,
     pub(crate) sp: *mut StackValue,
     pub(crate) ip: isize,
@@ -192,12 +194,25 @@ pub(crate) struct Stack<'i, 's> {
     pub(crate) ip: isize,
     pub(crate) instructions: &'i [OpCode],
     pub(crate) source_locations: &'i [SourceLocation],
+    /// The current code's `DebugInfo::array_names`.
+    pub(crate) array_names: &'i [Option<Rc<str>>],
+    /// The current function's parameters' names; none outside a function.
+    pub(crate) parameter_names: &'i [Rc<str>],
+    /// The variable that an error is about, when the error found it: an array read as a
+    /// scalar, or a scalar taken by reference as an array. `Interpreter::fatal_message`
+    /// names it.
+    pub(crate) error_variable: Option<*const AwkValue>,
     pub(crate) sp: *mut StackValue,
     pub(crate) bp: *mut StackValue,
     pub(crate) stack_end: *mut StackValue,
     pub(crate) call_frames: Vec<CallFrame<'i>>,
     pub(crate) _stack_lifetime: PhantomData<&'s ()>,
 }
+
+/// The error of an array read as a scalar, and of a scalar used as an array, before the
+/// interpreter puts them in gawk's words with the variable's name.
+pub(crate) const ARRAY_IN_SCALAR_CONTEXT: &str = "array used in scalar context";
+pub(crate) const SCALAR_IN_ARRAY_CONTEXT: &str = "scalar used in array context";
 
 /// Safe interface to work with the program stack.
 impl<'i, 's> Stack<'i, 's> {
@@ -242,9 +257,45 @@ impl<'i, 's> Stack<'i, 's> {
         let mut value = self.pop().ok_or_else(|| "empty stack".to_string())?;
         // SAFETY: a popped value's pointers stay valid until the value pushed before it is
         // popped (`push`), and that value is still on the stack.
-        unsafe { value.ensure_value_is_scalar()? };
+        if let Err(error) = unsafe { value.ensure_value_is_scalar() } {
+            // An array on the stack is a variable's, by reference (`from_var`).
+            if let StackValue::ValueRef(variable) = value {
+                self.error_variable = Some(variable);
+            }
+            return Err(error);
+        }
         // SAFETY: as above.
         unsafe { value.into_owned() }
+    }
+
+    /// The variable a reference on top of the stack refers to, popped, which must hold a
+    /// scalar: the target of an assignment, `++` or `getline var`.
+    pub(crate) fn pop_scalar_ref(&mut self) -> Result<&mut AwkValue, String> {
+        let val = self.pop().ok_or_else(|| "empty stack".to_string())?;
+        // SAFETY: as in `pop_value`.
+        let ptr = unsafe { val.unwrap_ptr()? };
+        // SAFETY: as in `pop_value`.
+        let value = unsafe { &mut *ptr };
+        if let Err(error) = value.ensure_value_is_scalar() {
+            self.error_variable = Some(ptr);
+            return Err(error);
+        }
+        Ok(value)
+    }
+
+    /// The array a reference on top of the stack refers to, popped: the operand of `in`,
+    /// `delete` and `split`.
+    pub(crate) fn pop_array(&mut self) -> Result<&mut super::array::Array, String> {
+        let val = self.pop().ok_or_else(|| "empty stack".to_string())?;
+        // SAFETY: as in `pop_value`.
+        let ptr = unsafe { val.unwrap_ptr()? };
+        // SAFETY: as in `pop_value`.
+        let value = unsafe { &mut *ptr };
+        if !value.can_be_array() {
+            self.error_variable = Some(ptr);
+            return Err(SCALAR_IN_ARRAY_CONTEXT.to_string());
+        }
+        value.as_array()
     }
 
     /// A local to write a scalar to: a parameter still linked to the caller's unused
@@ -294,19 +345,33 @@ impl<'i, 's> Stack<'i, 's> {
         }
     }
 
+    /// The local of the current frame that `variable` is, and whether the local refers to
+    /// it (a caller's variable passed in) rather than holding it, for an error's name.
+    pub(crate) fn local_holding(&self, variable: *const AwkValue) -> Option<(usize, bool)> {
+        (0..self.len()).find_map(|index| {
+            // SAFETY: the index is below `sp`, so the slot is in the stack.
+            let slot = unsafe { self.bp.add(index) };
+            // SAFETY: a slot below `sp` holds a value (`Stack`'s invariants).
+            let slot = unsafe { &*slot };
+            match slot {
+                StackValue::Value(cell) if cell.get().cast_const() == variable => {
+                    Some((index, false))
+                }
+                StackValue::ValueRef(ptr) | StackValue::UninitializedRef(ptr)
+                    if ptr.cast_const() == variable =>
+                {
+                    Some((index, true))
+                }
+                _ => None,
+            }
+        })
+    }
+
     pub(crate) fn pop_value(&mut self) -> Result<AwkValue, String> {
         let value = self.pop().ok_or_else(|| "empty stack".to_string())?;
         // SAFETY: a popped value's pointers stay valid until the value pushed before it is
         // popped (`push`), and that value is still on the stack.
         unsafe { value.into_owned() }
-    }
-
-    pub(crate) fn pop_ref(&mut self) -> Result<&mut AwkValue, String> {
-        let val = self.pop().ok_or_else(|| "empty stack".to_string())?;
-        // SAFETY: as in `pop_value`.
-        let ptr = unsafe { val.unwrap_ptr()? };
-        // SAFETY: as in `pop_value`.
-        Ok(unsafe { &mut *ptr })
     }
 
     pub(crate) fn push_value<V: Into<AwkValue>>(&mut self, value: V) -> Result<(), String> {
@@ -350,6 +415,8 @@ impl<'i, 's> Stack<'i, 's> {
             ip: self.ip,
             instructions: self.instructions,
             source_locations: self.source_locations,
+            array_names: self.array_names,
+            parameter_names: self.parameter_names,
             function_file: self.current_function_file.clone(),
             function_name: self.current_function_name.clone(),
         };
@@ -360,6 +427,8 @@ impl<'i, 's> Stack<'i, 's> {
         self.ip = 0;
         self.instructions = &function.instructions;
         self.source_locations = &function.debug_info.source_locations;
+        self.array_names = &function.debug_info.array_names;
+        self.parameter_names = &function.parameter_names;
         Ok(())
     }
 
@@ -374,6 +443,13 @@ impl<'i, 's> Stack<'i, 's> {
         self.sp = caller_frame.sp;
         self.instructions = caller_frame.instructions;
         self.ip = caller_frame.ip;
+        // The caller's debug information too: an error after the call was placed by the
+        // callee's source locations, and named in its function.
+        self.source_locations = caller_frame.source_locations;
+        self.array_names = caller_frame.array_names;
+        self.parameter_names = caller_frame.parameter_names;
+        self.current_function_file = caller_frame.function_file;
+        self.current_function_name = caller_frame.function_name;
         Ok(())
     }
 
@@ -387,6 +463,9 @@ impl<'i, 's> Stack<'i, 's> {
             current_function_name: "<start>".into(),
             instructions: &main.instructions,
             source_locations: &main.debug_info.source_locations,
+            array_names: &main.debug_info.array_names,
+            parameter_names: &[],
+            error_variable: None,
             ip: 0,
             bp,
             sp: bp,

@@ -12,6 +12,7 @@ use std::rc::Rc;
 
 use super::array::Array;
 use super::format::special_float_text;
+use super::stack::{ARRAY_IN_SCALAR_CONTEXT, SCALAR_IN_ARRAY_CONTEXT};
 use super::string::AwkString;
 use super::{bool_to_f64, is_integer, sprintf, strtod};
 use crate::program::SpecialVar;
@@ -115,19 +116,27 @@ impl AwkValue {
             AwkValueVariant::UninitializedScalar | AwkValueVariant::Uninitialized => {
                 Ok(AwkString::default())
             }
-            AwkValueVariant::Array(_) => Err("array used in scalar context".into()),
+            AwkValueVariant::Array(_) => Err(ARRAY_IN_SCALAR_CONTEXT.into()),
         }
     }
 
     pub(crate) fn ensure_value_is_scalar(&mut self) -> Result<(), String> {
         match &self.value {
             AwkValueVariant::Uninitialized => self.value = AwkValueVariant::UninitializedScalar,
-            AwkValueVariant::Array(_) => return Err("array used in scalar context".into()),
+            AwkValueVariant::Array(_) => return Err(ARRAY_IN_SCALAR_CONTEXT.into()),
             _ => {
                 //already a scalar
             }
         }
         Ok(())
+    }
+
+    /// Whether the value is an array or may become one, not yet used.
+    pub(crate) fn can_be_array(&self) -> bool {
+        matches!(
+            self.value,
+            AwkValueVariant::Array(_) | AwkValueVariant::Uninitialized
+        )
     }
 
     pub(crate) fn as_array(&mut self) -> Result<&mut Array, String> {
@@ -137,7 +146,7 @@ impl AwkValue {
         }
         match &mut self.value {
             AwkValueVariant::Array(array) => Ok(array),
-            _ => Err("scalar used in array context".to_string()),
+            _ => Err(SCALAR_IN_ARRAY_CONTEXT.to_string()),
         }
     }
 

@@ -15,7 +15,7 @@ use io::{
 };
 use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
-use record::{FieldSeparator, FieldsState, Record, ere_escape_char, is_valid_record_index};
+use record::{FieldSeparator, FieldsState, Record, ere_escape_char, record_index};
 use stack::{
     ArrayElementRef, ArrayIterator, ExecutionResult, Stack, StackValue, compare_op, numeric_op,
 };
@@ -212,6 +212,10 @@ impl GlobalEnv {
             }
             SpecialVar::Nr => self.nr = value.scalar_as_f64() as u32,
             SpecialVar::Fnr => self.fnr = value.scalar_as_f64() as u32,
+            // gawk's error; a negative NF was taken as 0.
+            SpecialVar::Nf if value.scalar_as_f64().trunc() < 0.0 => {
+                return Err("NF set to negative value".to_string());
+            }
             SpecialVar::Nf => self.nf = value.scalar_as_f64() as usize,
             _ => {
                 // not needed
@@ -274,6 +278,8 @@ impl GlobalEnv {
 
 struct Interpreter {
     globals: Vec<AwkValueRef>,
+    /// The globals' names, by index, for errors
+    global_names: Vec<Rc<str>>,
     constants: Vec<Constant>,
     write_files: WriteFiles,
     read_files: ReadFiles,
@@ -283,42 +289,109 @@ struct Interpreter {
     rng: SmallRng,
 }
 
-/// The error, and where each function on the call stack was when it happened.
-///
-/// An instruction pointer can be past the last instruction it has a location for (a
-/// `return` from inside a loop leaves it there), so a missing location is written as `?`
-/// rather than indexed for: the reporter panicked and hid the error it was reporting
-/// (`REVIEW_REPORT.md` TXT-24).
-fn stack_trace(error: String, stack: Stack) -> String {
-    fn place(locations: &[crate::program::SourceLocation], ip: isize) -> String {
-        usize::try_from(ip)
-            .ok()
-            .and_then(|ip| locations.get(ip))
-            .map_or_else(
-                || "?".to_string(),
-                |location| format!("{}:{}", location.line, location.column),
-            )
+impl Interpreter {
+    /// The error that stopped `stack`'s code, as gawk reports a fatal one:
+    /// `awk: cmd. line:3: (FILENAME=data FNR=7) fatal: attempt to use scalar `x' as an
+    /// array`, the program's file in place of `cmd. line` when it has one, and the input
+    /// place once a record has been read. cash wrote `runtime error:`, its own words for
+    /// some errors, and the call stack.
+    ///
+    /// An instruction pointer can be past the last instruction it has a location for (a
+    /// `return` from inside a loop leaves it there), so the last location stands in, and
+    /// none leaves the place out, rather than be indexed for: the reporter panicked and
+    /// hid the error it was reporting (`REVIEW_REPORT.md` TXT-24).
+    fn fatal_message(&self, error: String, stack: &Stack) -> String {
+        let ip = usize::try_from(stack.ip).ok();
+        let error = match error.as_str() {
+            stack::SCALAR_IN_ARRAY_CONTEXT => {
+                let name = stack
+                    .error_variable
+                    .and_then(|variable| self.scalar_name(variable, stack))
+                    .or_else(|| {
+                        ip.and_then(|ip| stack.array_names.get(ip))
+                            .and_then(|name| name.as_deref().map(str::to_string))
+                    });
+                match name {
+                    Some(name) => format!("attempt to use scalar {name} as an array"),
+                    None => "attempt to use a scalar value as array".to_string(),
+                }
+            }
+            stack::ARRAY_IN_SCALAR_CONTEXT => {
+                match stack
+                    .error_variable
+                    .and_then(|variable| self.array_name(variable, stack))
+                {
+                    Some(name) => format!("attempt to use array `{name}' in a scalar context"),
+                    None => "attempt to use array in a scalar context".to_string(),
+                }
+            }
+            _ => error,
+        };
+
+        let mut message = String::from("awk: ");
+        let location = ip
+            .and_then(|ip| stack.source_locations.get(ip))
+            .or(stack.source_locations.last());
+        if let Some(location) = location {
+            let file = if stack.current_function_file.is_empty() {
+                "cmd. line"
+            } else {
+                &stack.current_function_file
+            };
+            let _ = write!(message, "{file}:{}: ", location.line);
+        }
+        // SAFETY: a global's cell lives as long as the interpreter, and no reference to
+        // one is held between instructions, nor once the code has stopped.
+        let fnr = unsafe { &*self.globals[SpecialVar::Fnr as usize].get() }.clone();
+        if fnr.scalar_as_f64() > 0.0 {
+            // SAFETY: as above.
+            let filename = unsafe { &*self.globals[SpecialVar::Filename as usize].get() }
+                .clone()
+                .scalar_to_string("%.6g")
+                .unwrap_or_default();
+            let _ = write!(
+                message,
+                "(FILENAME={filename} FNR={}) ",
+                fnr.scalar_as_f64()
+            );
+        }
+        let _ = write!(message, "fatal: {error}");
+        message
     }
 
-    let mut result = format!("runtime error: {}\ncall trace:\n", error);
-    let _ = writeln!(
-        result,
-        "=> {} at {}:{}",
-        stack.current_function_name,
-        stack.current_function_file,
-        place(stack.source_locations, stack.ip)
-    );
-    for frame in stack.call_frames.iter().rev() {
-        let _ = writeln!(
-            result,
-            "=> {} at {}:{}",
-            frame.function_name,
-            frame.function_file,
-            place(frame.source_locations, frame.ip)
-        );
+    /// The global that `variable` is, if it is one.
+    fn global_name(&self, variable: *const AwkValue) -> Option<Rc<str>> {
+        let index = self
+            .globals
+            .iter()
+            .position(|global| global.get().cast_const() == variable)?;
+        self.global_names
+            .get(index)
+            .filter(|name| !name.is_empty())
+            .cloned()
     }
 
-    result
+    /// How gawk names the scalar `variable` used as an array: "`x'", or "parameter `p'".
+    fn scalar_name(&self, variable: *const AwkValue, stack: &Stack) -> Option<String> {
+        if let Some((index, _)) = stack.local_holding(variable) {
+            let name = stack.parameter_names.get(index)?;
+            return Some(format!("parameter `{name}'"));
+        }
+        Some(format!("`{}'", self.global_name(variable)?))
+    }
+
+    /// How gawk names the array `variable` read as a scalar: `a`, or `p (from a)` for a
+    /// parameter that is the caller's array.
+    fn array_name(&self, variable: *const AwkValue, stack: &Stack) -> Option<String> {
+        if let Some((index, refers)) = stack.local_holding(variable) {
+            let name = stack.parameter_names.get(index)?;
+            return Some(match self.global_name(variable).filter(|_| refers) {
+                Some(global) => format!("{name} (from {global})"),
+                None => name.to_string(),
+            });
+        }
+        self.global_name(variable).map(|name| name.to_string())
+    }
 }
 
 impl Interpreter {
@@ -453,7 +526,7 @@ impl Interpreter {
                 stack.push_value(if result { 0.0 } else { -1.0 })?;
             }
             BuiltinFunction::GetLine => {
-                let var = stack.pop_ref()?;
+                let var = stack.pop_scalar_ref()?;
                 if let Some((next_record, crlf)) =
                     input.next_record(&mut self.globals, global_env)?
                 {
@@ -470,7 +543,7 @@ impl Interpreter {
                 let filename = stack
                     .pop_scalar_value()?
                     .scalar_to_string(&global_env.convfmt)?;
-                let var = stack.pop_ref()?;
+                let var = stack.pop_scalar_ref()?;
                 let maybe_next_record = if function == BuiltinFunction::GetLineFromFile {
                     self.read_files
                         .read_next_record(filename, &global_env.rs, global_env.strip_cr)
@@ -533,7 +606,7 @@ impl Interpreter {
     ) -> Result<ExecutionResult, String> {
         let mut stack = Stack::new(action, stack);
         match self.run_internal(functions, record, &mut stack, global_env, input) {
-            Err(err) => Err(stack_trace(err, stack)),
+            Err(err) => Err(self.fatal_message(err, &stack)),
             Ok(result) => Ok(result),
         }
     }
@@ -615,7 +688,7 @@ impl Interpreter {
                     let key = stack
                         .pop_scalar_value()?
                         .scalar_to_string(&global_env.convfmt)?;
-                    let array = stack.pop_ref()?.as_array()?;
+                    let array = stack.pop_array()?;
                     let result = array.contains(&key);
                     stack.push_value(bool_to_f64(result))?;
                 }
@@ -628,36 +701,31 @@ impl Interpreter {
                     stack.push_value(bool_to_f64(!value))?;
                 }
                 OpCode::PostInc => {
-                    let lvalue = stack.pop_ref()?;
-                    lvalue.ensure_value_is_scalar()?;
+                    let lvalue = stack.pop_scalar_ref()?;
                     let expr_result = lvalue.scalar_as_f64();
                     fields_state = lvalue.assign(expr_result + 1.0, global_env)?;
                     stack.push_value(expr_result)?;
                 }
                 OpCode::PostDec => {
-                    let lvalue = stack.pop_ref()?;
-                    lvalue.ensure_value_is_scalar()?;
+                    let lvalue = stack.pop_scalar_ref()?;
                     let expr_result = lvalue.scalar_as_f64();
                     fields_state = lvalue.assign(expr_result - 1.0, global_env)?;
                     stack.push_value(expr_result)?;
                 }
                 OpCode::PreInc => {
-                    let lvalue = stack.pop_ref()?;
-                    lvalue.ensure_value_is_scalar()?;
+                    let lvalue = stack.pop_scalar_ref()?;
                     let expr_result = lvalue.scalar_as_f64() + 1.0;
                     fields_state = lvalue.assign(expr_result, global_env)?;
                     stack.push_value(expr_result)?;
                 }
                 OpCode::PreDec => {
-                    let lvalue = stack.pop_ref()?;
-                    lvalue.ensure_value_is_scalar()?;
+                    let lvalue = stack.pop_scalar_ref()?;
                     let expr_result = lvalue.scalar_as_f64() - 1.0;
                     fields_state = lvalue.assign(expr_result, global_env)?;
                     stack.push_value(expr_result)?;
                 }
                 OpCode::CreateGlobalIterator(index) => {
-                    let iter_var = stack.pop_ref()?;
-                    iter_var.ensure_value_is_scalar()?;
+                    let iter_var = stack.pop_scalar_ref()?;
                     let iter_var = iter_var as *mut AwkValue;
                     let array = self.globals[index as usize].get();
                     // SAFETY: a global's cell lives as long as the interpreter.
@@ -673,8 +741,7 @@ impl Interpreter {
                     };
                 }
                 OpCode::CreateLocalIterator(index) => {
-                    let iter_var = stack.pop_ref()?;
-                    iter_var.ensure_value_is_scalar()?;
+                    let iter_var = stack.pop_scalar_ref()?;
                     let iter_var = iter_var as *mut AwkValue;
                     let array = stack
                         .get_mut_value_ptr(index as usize)
@@ -733,15 +800,14 @@ impl Interpreter {
                     unsafe { stack.push(value)? };
                 }
                 OpCode::GetField => {
-                    let index = stack.pop_scalar_value()?.scalar_as_f64() as usize;
-                    is_valid_record_index(index)?;
+                    let index = record_index(stack.pop_scalar_value()?.scalar_as_f64())?;
                     stack.push_value(record.read_field(index))?;
                 }
                 OpCode::IndexArrayGetValue => {
                     let key = stack
                         .pop_scalar_value()?
                         .scalar_to_string(&global_env.convfmt)?;
-                    let array = stack.pop_ref()?.as_array()?;
+                    let array = stack.pop_array()?;
                     let element = array.get_value(key.into())?.clone();
                     stack.push_value(element)?
                 }
@@ -758,8 +824,7 @@ impl Interpreter {
                     unsafe { stack.push_ref(value)? };
                 }
                 OpCode::FieldRef => {
-                    let index = stack.pop_scalar_value()?.scalar_as_f64() as usize;
-                    is_valid_record_index(index)?;
+                    let index = record_index(stack.pop_scalar_value()?.scalar_as_f64())?;
                     // SAFETY: the boxed cell keeps this pointer valid across later field
                     // growth, and fields outlive the stack.
                     unsafe { stack.push_ref(record.field_ref_ptr(index))? };
@@ -785,8 +850,7 @@ impl Interpreter {
                 }
                 OpCode::Assign => {
                     let value = stack.pop_scalar_value()?;
-                    let lvalue = stack.pop_ref()?;
-                    lvalue.ensure_value_is_scalar()?;
+                    let lvalue = stack.pop_scalar_ref()?;
                     fields_state = lvalue.assign(value.clone(), global_env)?;
                     stack.push_value(value)?;
                 }
@@ -794,11 +858,11 @@ impl Interpreter {
                     let key = stack
                         .pop_scalar_value()?
                         .scalar_to_string(&global_env.convfmt)?;
-                    let array = stack.pop_ref()?.as_array()?;
+                    let array = stack.pop_array()?;
                     array.delete(&key);
                 }
                 OpCode::ClearArray => {
-                    let array = stack.pop_ref()?.as_array()?;
+                    let array = stack.pop_array()?;
                     array.clear();
                 }
                 OpCode::JumpIfFalse(offset) => {
@@ -946,6 +1010,7 @@ impl Interpreter {
 
         Self {
             globals,
+            global_names: Vec::new(),
             constants,
             write_files: WriteFiles::default(),
             read_files: ReadFiles::default(),
@@ -1147,6 +1212,12 @@ pub fn interpret_with_eol(
         .collect::<Vec<StackValue>>();
     let mut current_record = Record::default();
     let mut interpreter = Interpreter::new(args, env, program.constants, program.globals_count);
+    interpreter.global_names = vec![Rc::from(""); interpreter.globals.len()];
+    for (name, &index) in &program.globals {
+        if let Some(slot) = interpreter.global_names.get_mut(index as usize) {
+            *slot = Rc::from(name.as_str());
+        }
+    }
     let mut global_env = GlobalEnv {
         strip_cr: !cr_is_data,
         ..GlobalEnv::default()

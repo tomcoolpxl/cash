@@ -32,18 +32,37 @@ pub(crate) fn sprintf(
     while let Some(c) = next {
         match c {
             '%' => {
-                let (specifier, mut args) = parse_conversion_specifier_args(&mut iter)?;
+                let specifier_text = iter.as_str();
+                let Ok((specifier, mut args)) = parse_conversion_specifier_args(&mut iter) else {
+                    // The format ends inside the specifier, which is written out as it
+                    // is, as gawk does.
+                    result.push('%');
+                    result.push_str(specifier_text);
+                    break;
+                };
                 if specifier == '%' {
                     result.push('%');
                     next = iter.next();
                     continue;
                 }
+                let read = specifier_text.len() - iter.as_str().len();
+                if !"diouxXcseEfFgGaA".contains(specifier) {
+                    // No conversion: the specifier is written out as it is.
+                    result.push('%');
+                    result.push_str(specifier_text.get(..read).unwrap_or_default());
+                    next = iter.next();
+                    continue;
+                }
+                // Where the specifier starts in the format, for the error.
+                let start = format_string.len() - specifier_text.len() - 1;
+                let spec = specifier_text.get(..read).unwrap_or_default();
 
                 // A '*' field width or precision consumes the next argument(s),
                 // in order: width, then precision, then the conversion's value.
                 if args.needs_width_arg() {
                     if current_arg == 0 {
-                        return Err("not enough arguments for format string".to_string());
+                        let star = spec.find('*').unwrap_or_default();
+                        return Err(not_enough_arguments(format_string, start + 1 + star));
                     }
                     current_arg -= 1;
                     args.set_width(
@@ -52,7 +71,8 @@ pub(crate) fn sprintf(
                 }
                 if args.needs_precision_arg() {
                     if current_arg == 0 {
-                        return Err("not enough arguments for format string".to_string());
+                        let star = spec.rfind('*').unwrap_or_default();
+                        return Err(not_enough_arguments(format_string, start + 1 + star));
                     }
                     current_arg -= 1;
                     args.set_precision(
@@ -61,7 +81,7 @@ pub(crate) fn sprintf(
                 }
 
                 if current_arg == 0 {
-                    return Err("not enough arguments for format string".to_string());
+                    return Err(not_enough_arguments(format_string, start + read));
                 }
                 current_arg -= 1;
                 let value = swap_with_default(&mut values[current_arg]);
@@ -75,6 +95,16 @@ pub(crate) fn sprintf(
         }
     }
     Ok(result.into())
+}
+
+/// gawk's error for a format with more conversions than arguments: the format, and a
+/// caret under the character at byte `at` that found none left. cash said "not enough
+/// arguments for format string".
+fn not_enough_arguments(format_string: &str, at: usize) -> String {
+    format!(
+        "not enough arguments to satisfy format string\n\t`{format_string}'\n\t{}^ ran out for this one",
+        " ".repeat(at)
+    )
 }
 
 /// Format a single `%` conversion (`specifier` with `args`, using the
@@ -298,7 +328,14 @@ pub(crate) fn builtin_split(
     let s = stack
         .pop_scalar_value()?
         .scalar_to_string(&global_env.convfmt)?;
-    let array = stack.pop_ref()?.as_array()?;
+    // gawk's words for a second argument that is no array.
+    let array = stack.pop_array().map_err(|error| {
+        if error == super::stack::SCALAR_IN_ARRAY_CONTEXT {
+            "split: second argument is not an array".to_string()
+        } else {
+            error
+        }
+    })?;
     array.clear();
 
     if !s.is_empty() {
@@ -322,8 +359,7 @@ pub(crate) fn builtin_gsub(
         .pop_scalar_value()?
         .scalar_to_string(&global_env.convfmt)?;
     let ere = stack.pop_value()?.into_ere()?;
-    let in_str = stack.pop_ref()?;
-    in_str.ensure_value_is_scalar()?;
+    let in_str = stack.pop_scalar_ref()?;
     let (result, count) = gsub(
         &ere,
         &repl,

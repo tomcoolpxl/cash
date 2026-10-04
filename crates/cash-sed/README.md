@@ -117,6 +117,9 @@ cargo test
 * A `Q` command (optionally followed by an exit code) quits immediately.
 * The `q` command can be optionally followed by an exit code.
 * A `W` command writes to a file the pattern's first line.
+* An `R` command queues a line of a file for the end of the cycle, a further
+  line each time it runs.
+* `I` and `M` flags on an address regular expression.
 * The `l` command can be optionally followed by the output width.
 * The `--follow-symlinks` option for in-place editing.
 * The `--sandbox` option that limits potentially destructive commands.

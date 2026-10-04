@@ -246,55 +246,59 @@ impl FormatArgs {
 /// after the '%' character that starts the conversion specifier.
 /// # Returns
 /// A tuple containing the conversion specifier character and the parsed arguments.
+///
+/// The specifier is read as gawk reads it: flags, width and precision in any order, the
+/// size modifiers `h`, `l` and `L` and any letter that is no conversion passed over
+/// (`%hd` is `%d`), and a second `l` returned as the specifier, which the caller writes
+/// out as it is, as it does any other character that ends the specifier and is no
+/// conversion. The end of the format before a conversion is an error, for the caller to
+/// write the specifier out as it is too. Such a specifier was a fatal error.
 pub fn parse_conversion_specifier_args(iter: &mut Chars) -> Result<(char, FormatArgs), String> {
-    let iter_next = |iter: &mut Chars| iter.next().ok_or("invalid format string".to_string());
-
-    let parse_number = |next: &mut char, iter: &mut Chars| -> Result<usize, String> {
-        let mut number = 0;
-        while let Some(digit) = next.to_digit(10) {
-            number = number * 10 + digit as usize;
-            *next = iter_next(iter)?;
-        }
-        Ok(number)
-    };
+    /// The characters that end a specifier as a conversion.
+    const CONVERSIONS: &str = "diouxXcseEfFgGaA";
 
     let mut result = FormatArgs::default();
-    let mut next = iter_next(iter)?;
+    let mut in_precision = false;
+    let mut width_digits = false;
+    let mut seen_l = false;
     loop {
+        let next = iter
+            .next()
+            .ok_or_else(|| "invalid format string".to_string())?;
         match next {
             '-' => result.left_justified = true,
             '+' => result.signed = true,
             ' ' => result.prefix_space = true,
             '#' => result.alternative_form = true,
-            '0' => result.zero_padded = true,
-            _ => break,
+            '0' if !in_precision && !width_digits => result.zero_padded = true,
+            '0'..='9' => {
+                let digit = next.to_digit(10).unwrap_or_default() as usize;
+                if in_precision {
+                    let precision = result.precision.unwrap_or_default();
+                    result.precision = Some(precision.saturating_mul(10).saturating_add(digit));
+                } else {
+                    width_digits = true;
+                    result.width = result.width.saturating_mul(10).saturating_add(digit);
+                }
+            }
+            '.' => {
+                in_precision = true;
+                result.precision = Some(0);
+            }
+            '*' if in_precision => {
+                // Precision supplied by the next argument; resolved by the caller.
+                result.precision_star = true;
+                result.precision = None;
+            }
+            // Width supplied by the next argument; resolved by the caller.
+            '*' => result.width_star = true,
+            'l' if seen_l => return Ok((next, result)),
+            'l' => seen_l = true,
+            c if CONVERSIONS.contains(c) => return Ok((c, result)),
+            c if c.is_ascii_alphabetic() => {}
+            other => return Ok((other, result)),
         }
-        next = iter_next(iter)?;
     }
-
-    if next == '*' {
-        // Width supplied by the next argument; resolved by the caller.
-        result.width_star = true;
-        next = iter_next(iter)?;
-    } else {
-        result.width = parse_number(&mut next, iter)?;
-    }
-
-    result.precision = if next == '.' {
-        next = iter_next(iter)?;
-        if next == '*' {
-            // Precision supplied by the next argument; resolved by the caller.
-            result.precision_star = true;
-            next = iter_next(iter)?;
-            None
-        } else {
-            Some(parse_number(&mut next, iter)?)
-        }
-    } else {
-        None
-    };
-
-    Ok((next, result))
 }
 
 #[cfg_attr(test, derive(Debug))]
@@ -804,6 +808,27 @@ mod tests {
         assert!(args.zero_padded);
         assert_eq!(args.width, 123);
         assert_eq!(args.precision, Some(456));
+    }
+
+    // As gawk reads a specifier: size modifiers and other letters that are no conversion
+    // passed over, flags after them read, and a character that ends the specifier
+    // returned as it is.
+    #[test]
+    fn test_parse_conversion_specifier_args_as_gawk_does() {
+        for (format, specifier, width) in [
+            ("5hd", 'd', 5),
+            ("ld", 'd', 0),
+            ("Lf", 'f', 0),
+            ("lld", 'l', 0),
+            ("z %", '%', 0),
+            ("5z|", '|', 5),
+        ] {
+            let mut iter = format.chars();
+            let (parsed, args) = parse_conversion_specifier_args(&mut iter).unwrap();
+            assert_eq!((parsed, args.width), (specifier, width), "{format}");
+        }
+        assert!(parse_conversion_specifier_args(&mut "5.".chars()).is_err());
+        assert!(parse_conversion_specifier_args(&mut "q".chars()).is_err());
     }
 
     #[test]

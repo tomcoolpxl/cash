@@ -464,6 +464,16 @@ impl Expr {
     }
 }
 
+/// How gawk names the array `name` in an error: "`a'", or "parameter `p'" for a
+/// function's.
+fn array_description(name: &str, locals: &LocalMap) -> Rc<str> {
+    if locals.contains_key(name) {
+        format!("parameter `{name}'").into()
+    } else {
+        format!("`{name}'").into()
+    }
+}
+
 #[derive(Clone, Copy)]
 pub enum GlobalName {
     Variable(VarId),
@@ -479,6 +489,9 @@ type LocalMap = HashMap<String, VarId>;
 struct Instructions {
     opcodes: Vec<OpCode>,
     source_locations: Vec<SourceLocation>,
+    /// The instructions that use an array, by index, with the array's name for an error
+    /// (`DebugInfo::array_names`).
+    array_names: Vec<(usize, Rc<str>)>,
 }
 
 impl Instructions {
@@ -493,6 +506,7 @@ impl Instructions {
         Instructions {
             opcodes: instructions,
             source_locations,
+            array_names: Vec::new(),
         }
     }
 
@@ -504,18 +518,55 @@ impl Instructions {
         });
     }
 
+    /// Push an instruction that uses the array `name` names, local or global, for an
+    /// error that names it as gawk does.
+    fn push_using_array(
+        &mut self,
+        instruction: OpCode,
+        line_col: (usize, usize),
+        name: &str,
+        locals: &LocalMap,
+    ) {
+        self.array_names
+            .push((self.opcodes.len(), array_description(name, locals)));
+        self.push(instruction, line_col);
+    }
+
     fn extend(&mut self, instructions: Instructions) {
+        let offset = self.opcodes.len();
         self.opcodes.extend(instructions.opcodes);
         self.source_locations.extend(instructions.source_locations);
+        self.array_names.extend(
+            instructions
+                .array_names
+                .into_iter()
+                .map(|(index, name)| (index + offset, name)),
+        );
+    }
+
+    /// The opcodes and their debug information.
+    fn into_parts(self, file: Rc<str>) -> (Vec<OpCode>, DebugInfo) {
+        let mut array_names = vec![None; self.opcodes.len()];
+        for (index, name) in self.array_names {
+            if let Some(slot) = array_names.get_mut(index) {
+                *slot = Some(name);
+            }
+        }
+        (
+            self.opcodes,
+            DebugInfo {
+                source_locations: self.source_locations,
+                file,
+                array_names,
+            },
+        )
     }
 
     fn into_action(self, file: Rc<str>) -> Action {
+        let (instructions, debug_info) = self.into_parts(file);
         Action {
-            instructions: self.opcodes,
-            debug_info: DebugInfo {
-                source_locations: self.source_locations,
-                file,
-            },
+            instructions,
+            debug_info,
         }
     }
 
@@ -1033,7 +1084,12 @@ impl Compiler {
                     .map_err(|msg| pest_error_from_span(name.as_span(), msg))?;
                 instructions.push(get_instruction, line_col);
                 self.compile_array_index(inner, instructions, locals)?;
-                instructions.push(OpCode::IndexArrayGetValue, line_col)
+                instructions.push_using_array(
+                    OpCode::IndexArrayGetValue,
+                    line_col,
+                    name.as_str(),
+                    locals,
+                );
             }
             Rule::field_var => {
                 let expr = self.compile_field_var_expr(lvalue, locals)?;
@@ -1140,7 +1196,7 @@ impl Compiler {
                     .map_err(|msg| pest_error_from_span(name.as_span(), msg))?;
                 instructions.push(get_instruction, name.line_col());
                 self.compile_array_index(index.into_inner(), instructions, locals)?;
-                instructions.push(OpCode::In, name.line_col());
+                instructions.push_using_array(OpCode::In, name.line_col(), name.as_str(), locals);
             }
             _ => not_in_grammar(&expr, "binary expression"),
         }
@@ -1327,9 +1383,19 @@ impl Compiler {
                 instructions.push(get_instruction, stmt_line_col);
                 if let Some(index) = inner.next() {
                     self.compile_expr(index, instructions, locals)?;
-                    instructions.push(OpCode::DeleteElement, stmt_line_col);
+                    instructions.push_using_array(
+                        OpCode::DeleteElement,
+                        stmt_line_col,
+                        name.as_str(),
+                        locals,
+                    );
                 } else {
-                    instructions.push(OpCode::ClearArray, stmt_line_col);
+                    instructions.push_using_array(
+                        OpCode::ClearArray,
+                        stmt_line_col,
+                        name.as_str(),
+                        locals,
+                    );
                 }
             }
             Rule::expr => {
@@ -1476,19 +1542,16 @@ impl Compiler {
             next
         };
         let array_var_line_col = array_var.line_col();
+        let array_name = array_var.as_str();
         let array_var = self
-            .variable(array_var.as_str(), locals)
+            .variable(array_name, locals)
             .map_err(|msg| pest_error_from_span(array_var.as_span(), msg))?;
 
-        match array_var {
-            Variable::Global(global_index) => instructions.push(
-                OpCode::CreateGlobalIterator(global_index),
-                array_var_line_col,
-            ),
-            Variable::Local(local_index) => {
-                instructions.push(OpCode::CreateLocalIterator(local_index), array_var_line_col)
-            }
-        }
+        let create_iterator = match array_var {
+            Variable::Global(global_index) => OpCode::CreateGlobalIterator(global_index),
+            Variable::Local(local_index) => OpCode::CreateLocalIterator(local_index),
+        };
+        instructions.push_using_array(create_iterator, array_var_line_col, array_name, locals);
 
         let iter_deref_location = instructions.len();
         instructions.push(OpCode::Invalid, array_var_line_col);
@@ -1839,6 +1902,7 @@ impl Compiler {
         let mut inner = function.into_inner();
         let name = inner.child();
         let mut param_map = HashMap::new();
+        let mut parameter_names = Vec::new();
         let mut parameters_count = 0;
         let maybe_param_list = inner.child();
         let body = if maybe_param_list.as_rule() == Rule::param_list {
@@ -1854,6 +1918,7 @@ impl Compiler {
                     _ => {}
                 }
                 param_map.insert(param.as_str().to_string(), parameters_count as u32);
+                parameter_names.push(Rc::from(param.as_str()));
                 parameters_count += 1;
             }
             inner.child()
@@ -1872,14 +1937,13 @@ impl Compiler {
             instructions.push(OpCode::Return, name_line_col);
         }
 
+        let (instructions, debug_info) = instructions.into_parts(file);
         Ok(Function {
             name: name.as_str().into(),
             parameters_count,
-            instructions: instructions.opcodes,
-            debug_info: DebugInfo {
-                file,
-                source_locations: instructions.source_locations,
-            },
+            parameter_names,
+            instructions,
+            debug_info,
         })
     }
 

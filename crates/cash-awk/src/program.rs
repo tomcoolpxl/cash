@@ -146,6 +146,11 @@ pub struct SourceLocation {
 pub struct DebugInfo {
     pub file: Rc<str>,
     pub source_locations: Vec<SourceLocation>,
+    /// For each instruction that uses an array (`IndexArrayGetValue`, `In`, `split`, ...),
+    /// the array as gawk names it when it turns out to be a scalar: "`a'", or "parameter
+    /// `p'" for a function's. Indexed as the instructions are; empty for code made by
+    /// hand, as in tests.
+    pub array_names: Vec<Option<Rc<str>>>,
 }
 
 #[cfg_attr(test, derive(Debug))]
@@ -175,6 +180,8 @@ pub struct AwkRule {
 pub struct Function {
     pub name: Rc<str>,
     pub parameters_count: usize,
+    /// The parameters' names, for errors
+    pub parameter_names: Vec<Rc<str>>,
     pub instructions: Vec<OpCode>,
     pub debug_info: DebugInfo,
 }

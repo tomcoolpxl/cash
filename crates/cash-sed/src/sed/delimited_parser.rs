@@ -203,10 +203,13 @@ pub fn parse_char_escape(line: &mut ScriptCharProvider) -> Option<char> {
 /// This functionality is needed to avoid terminating delimited
 /// sequences when a delimiter appears within a character class.
 /// While at it, handle escaped characters for the sake of consistency.
+/// A class the line does not end is the error `unterminated`, as for the whole
+/// expression in GNU sed: `s/[a/b/` is an unterminated `s` command.
 fn parse_character_class(
     lines: &ScriptLineProvider,
     line: &mut ScriptCharProvider,
     character_mode: CharacterMode,
+    unterminated: &str,
 ) -> UResult<Vec<u8>> {
     let mut result = Vec::new();
 
@@ -277,11 +280,7 @@ fn parse_character_class(
                 }
 
                 if !terminated {
-                    return compilation_error(
-                        lines,
-                        line,
-                        "Unterminated POSIX character class, equivalence or collating symbol",
-                    );
+                    return compilation_error(lines, line, unterminated);
                 }
 
                 continue;
@@ -318,7 +317,7 @@ fn parse_character_class(
         }
     }
 
-    compilation_error(lines, line, "Unterminated bracket expression")
+    compilation_error(lines, line, unterminated)
 }
 
 /// Scan and return the opening delimiter of a delimited string
@@ -374,7 +373,7 @@ pub fn parse_regex_for_mode(
     while !line.eol() {
         match line.current() {
             '[' if delimiter != '[' => {
-                let cc = parse_character_class(lines, line, character_mode)?;
+                let cc = parse_character_class(lines, line, character_mode, unterminated)?;
                 result.extend_from_slice(&cc);
                 continue;
             }
@@ -390,11 +389,12 @@ pub fn parse_regex_for_mode(
                     continue;
                 }
                 if line.current() == '{' && matches!(regex_mode, RegexMode::Basic) {
-                    validate_quantifier_structure(lines, line, delimiter, RegexMode::Basic)?;
-                    let quantifier = validate_quantifier_numbers(lines, line)?;
                     result.push(b'\\');
                     result.push(b'{');
-                    result.extend_from_slice(quantifier.as_bytes());
+                    match read_interval(line, delimiter, RegexMode::Basic) {
+                        Some(interval) => result.extend_from_slice(interval.as_bytes()),
+                        None => line.advance(),
+                    }
                     continue;
                 }
                 if line.current() == '}' {
@@ -428,10 +428,11 @@ pub fn parse_regex_for_mode(
                 continue;
             }
             '{' if delimiter != '{' && matches!(regex_mode, RegexMode::Extended) => {
-                validate_quantifier_structure(lines, line, delimiter, RegexMode::Extended)?;
-                let quantifier = validate_quantifier_numbers(lines, line)?;
                 result.push(b'{');
-                result.extend_from_slice(quantifier.as_bytes());
+                match read_interval(line, delimiter, RegexMode::Extended) {
+                    Some(interval) => result.extend_from_slice(interval.as_bytes()),
+                    None => line.advance(),
+                }
                 continue;
             }
             '}' if delimiter != '}' => {
@@ -448,159 +449,83 @@ pub fn parse_regex_for_mode(
     compilation_error(lines, line, unterminated)
 }
 
-// Check for closing brace and the structure/content.
-fn validate_quantifier_structure(
-    lines: &ScriptLineProvider,
+/// Read the interval at the line's `{` (after its `\` in a basic expression) and return
+/// its content, an absent minimum written 0 (`{,n}` is `{0,n}`), with the line left on
+/// the closing `}` (its `\` in a basic expression). One that is not an interval sed
+/// takes, `None` with the line still at the `{`, is left as it is written: the check of
+/// the whole expression (`gnu_regex`) reports it in GNU sed's words, once the command is
+/// read, as GNU sed does. It was refused here, at the brace.
+fn read_interval(
     line: &mut ScriptCharProvider,
     delimiter: char,
     regex_mode: RegexMode,
-) -> UResult<()> {
-    let invalid_content_error_msg = "Invalid content of \\{\\}";
-    let mut found_closing_brace = false;
-    let mut seen_comma = false;
-    let mut invalid_content_detected = false;
-    let mut is_quantifier_empty = true;
-    let initial_pos = line.get_pos();
-    line.advance();
-
-    while !line.eol() && line.current() != delimiter {
-        match regex_mode {
-            RegexMode::Extended => {
-                // In ERE mode, look for }
-                if line.current() == '}' {
-                    // Empty quantifier {} is not valid
-                    if is_quantifier_empty {
-                        invalid_content_detected = true;
-                    }
-                    found_closing_brace = true;
-                    break;
-                }
-                // Entering means there is no } immediately after the {
-                is_quantifier_empty = false;
-                // Only digits and one comma allowed
-                if line.current() == ',' {
-                    if seen_comma {
-                        invalid_content_detected = true;
-                    }
-                    seen_comma = true;
-                } else if !line.current().is_ascii_digit() {
-                    invalid_content_detected = true;
-                }
-                line.advance();
-            }
-            RegexMode::Basic => {
-                // In BRE mode, look for \}
-                if line.current() == '\\' {
-                    line.advance();
-                    if !line.eol() && line.current() == '}' {
-                        if is_quantifier_empty {
-                            invalid_content_detected = true;
-                        }
-                        found_closing_brace = true;
-                    } else {
-                        invalid_content_detected = true;
-                    }
-                    break;
-                }
-                is_quantifier_empty = false;
-                if line.current() == ',' {
-                    if seen_comma {
-                        invalid_content_detected = true;
-                    }
-                    seen_comma = true;
-                } else if !line.current().is_ascii_digit() {
-                    invalid_content_detected = true;
-                }
-                line.advance();
-            }
-        }
+) -> Option<String> {
+    let start = line.get_pos();
+    let interval = read_interval_content(line, delimiter, regex_mode);
+    if interval.is_none() {
+        line.set_position(start);
     }
-
-    if !found_closing_brace {
-        return compilation_error(lines, line, "Unmatched \\{");
-    }
-
-    if invalid_content_detected {
-        return compilation_error(lines, line, invalid_content_error_msg);
-    }
-
-    line.set_position(initial_pos);
-    Ok(())
+    interval
 }
 
-// Parse an already-structure-validated run of digits into a quantifier bound.
-// `validate_quantifier_structure` guarantees the run contains only ASCII
-// digits, so the sole failure mode is a value exceeding what fits, which sed
-// reports as "Regular expression too big" (same as exceeding RE_DUP_MAX).
-fn parse_quantifier_bound(
-    lines: &ScriptLineProvider,
+fn read_interval_content(
     line: &mut ScriptCharProvider,
-    digits: &str,
-) -> UResult<usize> {
-    match digits.parse::<usize>() {
-        Ok(val) if val <= RE_DUP_MAX => Ok(val),
-        _ => compilation_error(lines, line, "Regular expression too big"),
-    }
-}
-
-// Performs validations on m and/or n values of the quantifier
-// and returns the valid content as a string (without braces).
-fn validate_quantifier_numbers(
-    lines: &ScriptLineProvider,
-    line: &mut ScriptCharProvider,
-) -> UResult<String> {
+    delimiter: char,
+    regex_mode: RegexMode,
+) -> Option<String> {
     line.advance(); // Skip the opening brace.
-
-    // Collect m. It may be empty for the {,n} and {,} forms, which mean {0,n}
-    // and {0,} respectively.
-    let mut m = String::new();
-    while line.current() != ',' && line.current() != '}' && line.current() != '\\' {
-        m.push(line.current());
-        line.advance();
-    }
-
-    // Collect n when a comma is present.
-    let has_comma = line.current() == ',';
-    let mut n = String::new();
-    if has_comma {
-        line.advance();
-        while line.current() != '}' && line.current() != '\\' {
-            n.push(line.current());
-            line.advance();
+    let mut content = String::new();
+    loop {
+        if line.eol() || line.current() == delimiter {
+            return None;
         }
+        match (line.current(), regex_mode) {
+            ('}', RegexMode::Extended) => break,
+            ('\\', RegexMode::Basic) => {
+                let backslash = line.get_pos();
+                line.advance();
+                if line.eol() || line.current() != '}' {
+                    return None;
+                }
+                line.set_position(backslash);
+                break;
+            }
+            (c @ ('0'..='9' | ','), _) => content.push(c),
+            _ => return None,
+        }
+        line.advance();
     }
 
-    // An absent m defaults to 0; both m and n are bounded by RE_DUP_MAX.
-    let m_val = if m.is_empty() {
-        0
-    } else {
-        parse_quantifier_bound(lines, line, &m)?
+    let (min, max) = match content.split_once(',') {
+        Some((min, max)) => (min, Some(max)),
+        None => (content.as_str(), None),
     };
-    let n_val = if n.is_empty() {
-        None
-    } else {
-        Some(parse_quantifier_bound(lines, line, &n)?)
+    let bound = |digits: &str| match digits.parse::<usize>() {
+        Ok(value) if value <= RE_DUP_MAX => Some(value),
+        _ => None,
     };
-
-    // Validate m <= n if both present.
-    if let Some(n_val) = n_val
-        && m_val > n_val
-    {
-        return compilation_error(lines, line, "Invalid content of \\{\\}");
+    let low = if min.is_empty() { 0 } else { bound(min)? };
+    match max {
+        // `{}` is not an interval, nor one whose maximum is below its minimum. A second
+        // comma makes the maximum no number.
+        None if min.is_empty() => return None,
+        Some(max) if !max.is_empty() && bound(max)? < low => return None,
+        _ => {}
     }
 
-    // Rebuild the validated content (without braces), defaulting an absent m
-    // to 0 so the emitted pattern stays well-formed.
-    let mut result = if m.is_empty() { "0".to_string() } else { m };
-    if has_comma {
+    let mut result = if min.is_empty() {
+        "0".to_string()
+    } else {
+        min.to_string()
+    };
+    if let Some(max) = max {
         result.push(',');
-        result.push_str(&n);
+        result.push_str(max);
     }
-
-    Ok(result)
+    Some(result)
 }
 
-/// Parse the transliteration string delimited by the current line
+// Parse the transliteration string delimited by the current line
 /// character and return it as a string.
 /// On return the line is on the closing delimiter.
 pub fn parse_transliteration(
@@ -944,7 +869,8 @@ mod tests {
     fn test_basic_character_class() {
         let mut line = char_provider_from("[qr]");
         let lines = test_lines();
-        let result = parse_character_class(&lines, &mut line, CharacterMode::Utf8).unwrap();
+        let result =
+            parse_character_class(&lines, &mut line, CharacterMode::Utf8, "unterminated").unwrap();
         assert_eq!(result, b"[qr]");
     }
 
@@ -952,7 +878,8 @@ mod tests {
     fn test_negated_class() {
         let mut line = char_provider_from("[^abc]");
         let lines = test_lines();
-        let result = parse_character_class(&lines, &mut line, CharacterMode::Utf8).unwrap();
+        let result =
+            parse_character_class(&lines, &mut line, CharacterMode::Utf8, "unterminated").unwrap();
         assert_eq!(result, b"[^abc]");
     }
 
@@ -960,7 +887,8 @@ mod tests {
     fn test_leading_close_bracket() {
         let mut line = char_provider_from("[]abc]");
         let lines = test_lines();
-        let result = parse_character_class(&lines, &mut line, CharacterMode::Utf8).unwrap();
+        let result =
+            parse_character_class(&lines, &mut line, CharacterMode::Utf8, "unterminated").unwrap();
         assert_eq!(result, b"[]abc]");
     }
 
@@ -968,7 +896,8 @@ mod tests {
     fn test_leading_negated_close_bracket() {
         let mut line = char_provider_from("[^]abc]");
         let lines = test_lines();
-        let result = parse_character_class(&lines, &mut line, CharacterMode::Utf8).unwrap();
+        let result =
+            parse_character_class(&lines, &mut line, CharacterMode::Utf8, "unterminated").unwrap();
         assert_eq!(result, b"[^]abc]");
     }
 
@@ -976,7 +905,8 @@ mod tests {
     fn test_escaped_character_begin() {
         let mut line = char_provider_from("[\\nabc]");
         let lines = test_lines();
-        let result = parse_character_class(&lines, &mut line, CharacterMode::Utf8).unwrap();
+        let result =
+            parse_character_class(&lines, &mut line, CharacterMode::Utf8, "unterminated").unwrap();
         assert_eq!(result, b"[\nabc]");
     }
 
@@ -984,7 +914,8 @@ mod tests {
     fn test_escaped_character_middle() {
         let mut line = char_provider_from("[a\\nbc]");
         let lines = test_lines();
-        let result = parse_character_class(&lines, &mut line, CharacterMode::Utf8).unwrap();
+        let result =
+            parse_character_class(&lines, &mut line, CharacterMode::Utf8, "unterminated").unwrap();
         assert_eq!(result, b"[a\nbc]");
     }
 
@@ -992,7 +923,8 @@ mod tests {
     fn test_escaped_character_end() {
         let mut line = char_provider_from("[abc\\n]");
         let lines = test_lines();
-        let result = parse_character_class(&lines, &mut line, CharacterMode::Utf8).unwrap();
+        let result =
+            parse_character_class(&lines, &mut line, CharacterMode::Utf8, "unterminated").unwrap();
         assert_eq!(result, b"[abc\n]");
     }
 
@@ -1000,7 +932,8 @@ mod tests {
     fn test_escaped_delimiter() {
         let mut line = char_provider_from("[a\\]bc]");
         let lines = test_lines();
-        let result = parse_character_class(&lines, &mut line, CharacterMode::Utf8).unwrap();
+        let result =
+            parse_character_class(&lines, &mut line, CharacterMode::Utf8, "unterminated").unwrap();
         assert_eq!(result, br"[a\]bc]");
     }
 
@@ -1008,7 +941,8 @@ mod tests {
     fn test_posix_class() {
         let mut line = char_provider_from("[[:digit:]]");
         let lines = test_lines();
-        let result = parse_character_class(&lines, &mut line, CharacterMode::Utf8).unwrap();
+        let result =
+            parse_character_class(&lines, &mut line, CharacterMode::Utf8, "unterminated").unwrap();
         assert_eq!(result, b"[[:digit:]]");
     }
 
@@ -1016,7 +950,8 @@ mod tests {
     fn test_colon_literal_character_class() {
         let mut line = char_provider_from("[:]");
         let lines = test_lines();
-        let result = parse_character_class(&lines, &mut line, CharacterMode::Utf8).unwrap();
+        let result =
+            parse_character_class(&lines, &mut line, CharacterMode::Utf8, "unterminated").unwrap();
         assert_eq!(result, b"[:]");
     }
 
@@ -1024,7 +959,8 @@ mod tests {
     fn test_equivalence_class() {
         let mut line = char_provider_from("[[=a=]]");
         let lines = test_lines();
-        let result = parse_character_class(&lines, &mut line, CharacterMode::Utf8).unwrap();
+        let result =
+            parse_character_class(&lines, &mut line, CharacterMode::Utf8, "unterminated").unwrap();
         assert_eq!(result, b"[[=a=]]");
     }
 
@@ -1032,7 +968,8 @@ mod tests {
     fn test_collating_symbol() {
         let mut line = char_provider_from("[[.ch.]]");
         let lines = test_lines();
-        let result = parse_character_class(&lines, &mut line, CharacterMode::Utf8).unwrap();
+        let result =
+            parse_character_class(&lines, &mut line, CharacterMode::Utf8, "unterminated").unwrap();
         assert_eq!(result, b"[[.ch.]]");
     }
 
@@ -1040,7 +977,7 @@ mod tests {
     fn test_unterminated_class_error() {
         let mut line = char_provider_from("[abc"); // missing closing ]
         let lines = test_lines();
-        let err = parse_character_class(&lines, &mut line, CharacterMode::Utf8);
+        let err = parse_character_class(&lines, &mut line, CharacterMode::Utf8, "unterminated");
         assert!(err.is_err());
     }
 
@@ -1048,15 +985,16 @@ mod tests {
     fn test_open_bracket_at_eol_errors() {
         let mut line = char_provider_from("[");
         let lines = test_lines();
-        let err = parse_character_class(&lines, &mut line, CharacterMode::Utf8).unwrap_err();
-        assert!(err.to_string().contains("Unterminated bracket expression"));
+        let err = parse_character_class(&lines, &mut line, CharacterMode::Utf8, "unterminated")
+            .unwrap_err();
+        assert!(err.to_string().contains("unterminated"));
     }
 
     #[test]
     fn test_unterminated_posix_class_error() {
         let mut line = char_provider_from("[[:digit:]");
         let lines = test_lines();
-        let err = parse_character_class(&lines, &mut line, CharacterMode::Utf8);
+        let err = parse_character_class(&lines, &mut line, CharacterMode::Utf8, "unterminated");
         assert!(err.is_err());
     }
 
@@ -1064,7 +1002,7 @@ mod tests {
     fn test_unterminated_escape_error() {
         let mut line = char_provider_from("[abc\\"); // missing closing ]
         let lines = test_lines();
-        let err = parse_character_class(&lines, &mut line, CharacterMode::Utf8);
+        let err = parse_character_class(&lines, &mut line, CharacterMode::Utf8, "unterminated");
         assert!(err.is_err());
     }
 
@@ -1072,7 +1010,8 @@ mod tests {
     fn test_malformed_posix_like_pattern_treated_as_literal() {
         let mut line = char_provider_from("[[x]yz]");
         let lines = test_lines();
-        let result = parse_character_class(&lines, &mut line, CharacterMode::Utf8).unwrap();
+        let result =
+            parse_character_class(&lines, &mut line, CharacterMode::Utf8, "unterminated").unwrap();
         assert_eq!(result, b"[[x]");
     }
 
@@ -1080,7 +1019,8 @@ mod tests {
     fn test_literal_open_bracket_in_character_class() {
         let mut line = char_provider_from("[a[b]");
         let lines = test_lines();
-        let result = parse_character_class(&lines, &mut line, CharacterMode::Utf8).unwrap();
+        let result =
+            parse_character_class(&lines, &mut line, CharacterMode::Utf8, "unterminated").unwrap();
         assert_eq!(result, b"[a[b]");
     }
 
@@ -1125,18 +1065,31 @@ mod tests {
         assert_eq!(line.current(), '/');
     }
 
+    // A brace that does not start an interval is left as it is written, for the check
+    // of the whole expression to report once the command is read, as GNU sed does.
     #[test]
-    fn test_basic_regex_with_unmatched_brace_quantifier() {
-        let (lines, mut line) = make_providers("/a\\{2,3/p");
-        let err = parse_regex(&lines, &mut line, RegexMode::Basic).unwrap_err();
-        assert!(err.to_string().contains("Unmatched \\{"));
+    fn test_regex_with_braces_that_are_not_intervals() {
+        for (input, mode, expected) in [
+            ("/a\\{2,3/p", RegexMode::Basic, &br"a\{2,3"[..]),
+            ("/a\\{2d,3\\}/p", RegexMode::Basic, br"a\{2d,3\}"),
+            ("/a{2,3/p", RegexMode::Extended, b"a{2,3"),
+            ("/a{}/p", RegexMode::Extended, b"a{}"),
+            ("/a{2d,3}/p", RegexMode::Extended, b"a{2d,3}"),
+            ("/a{2,-3}/p", RegexMode::Extended, b"a{2,-3}"),
+            ("/a{3,2}/p", RegexMode::Extended, b"a{3,2}"),
+        ] {
+            let (lines, mut line) = make_providers(input);
+            let parsed = parse_regex(&lines, &mut line, mode).unwrap();
+            assert_eq!(parsed, expected, "{input}");
+            assert_eq!(line.current(), '/');
+        }
     }
 
     #[test]
-    fn test_basic_regex_with_invalid_content() {
-        let (lines, mut line) = make_providers("/a\\{2d,3\\}/p");
-        let err = parse_regex(&lines, &mut line, RegexMode::Basic).unwrap_err();
-        assert!(err.to_string().contains("Invalid content of \\{\\}"));
+    fn test_regex_interval_without_minimum() {
+        let (lines, mut line) = make_providers("/a{,3}/p");
+        let parsed = parse_regex(&lines, &mut line, RegexMode::Extended).unwrap();
+        assert_eq!(parsed, b"a{0,3}");
     }
 
     #[test]
@@ -1145,48 +1098,6 @@ mod tests {
         let parsed = parse_regex(&lines, &mut line, RegexMode::Extended).unwrap();
         assert_eq!(parsed, b"a{2,3}");
         assert_eq!(line.current(), '/');
-    }
-
-    #[test]
-    fn test_extended_regex_with_unmatched_brace_quantifier() {
-        let (lines, mut line) = make_providers("/a{2,3/p");
-        let err = parse_regex(&lines, &mut line, RegexMode::Extended).unwrap_err();
-        assert!(err.to_string().contains("Unmatched \\{"));
-    }
-
-    #[test]
-    fn test_extended_regex_with_empty_quantifier() {
-        let (lines, mut line) = make_providers("/a{}/p");
-        let err = parse_regex(&lines, &mut line, RegexMode::Extended).unwrap_err();
-        assert!(err.to_string().contains("Invalid content of \\{\\}"));
-    }
-
-    #[test]
-    fn test_extended_regex_with_whitespace_quantifier() {
-        let (lines, mut line) = make_providers("/a{}/p");
-        let err = parse_regex(&lines, &mut line, RegexMode::Extended).unwrap_err();
-        assert!(err.to_string().contains("Invalid content of \\{\\}"));
-    }
-
-    #[test]
-    fn test_extended_regex_with_invalid_m() {
-        let (lines, mut line) = make_providers("/a{2d,3}/p");
-        let err = parse_regex(&lines, &mut line, RegexMode::Extended).unwrap_err();
-        assert!(err.to_string().contains("Invalid content of \\{\\}"));
-    }
-
-    #[test]
-    fn test_extended_regex_with_invalid_n() {
-        let (lines, mut line) = make_providers("/a{2,-3}/p");
-        let err = parse_regex(&lines, &mut line, RegexMode::Extended).unwrap_err();
-        assert!(err.to_string().contains("Invalid content of \\{\\}"));
-    }
-
-    #[test]
-    fn test_extended_regex_with_m_gt_n() {
-        let (lines, mut line) = make_providers("/a{3,2}/p");
-        let err = parse_regex(&lines, &mut line, RegexMode::Extended).unwrap_err();
-        assert!(err.to_string().contains("Invalid content of \\{\\}"));
     }
 
     #[test]
@@ -1261,156 +1172,63 @@ mod tests {
         assert_eq!(line.current(), '/');
     }
 
-    // validate_quantifier_structure
-    //BRE tests
+    // read_interval
     #[test]
-    fn test_validate_quantifier_structure_bre_valid() {
-        let (lines, mut line) = make_providers("{2,3\\}");
-        validate_quantifier_structure(&lines, &mut line, '/', RegexMode::Basic).unwrap();
-        assert_eq!(line.current(), '{'); // Line should be back on the opening brace
+    fn test_read_interval_bre() {
+        let (_, mut line) = make_providers("{2,3\\}");
+        assert_eq!(
+            read_interval(&mut line, '/', RegexMode::Basic).as_deref(),
+            Some("2,3")
+        );
+        assert_eq!(line.current(), '\\'); // On the closing `\}`
     }
 
     #[test]
-    fn test_validate_quantifier_structure_bre_with_unmatched_brace() {
-        let (lines, mut line) = make_providers("{2,3");
-        let err =
-            validate_quantifier_structure(&lines, &mut line, '/', RegexMode::Basic).unwrap_err();
-        assert!(err.to_string().contains("Unmatched \\{"));
-    }
-
-    #[test]
-    fn test_validate_quantifier_structure_bre_with_empty_content() {
-        let (lines, mut line) = make_providers("{\\}");
-        let err =
-            validate_quantifier_structure(&lines, &mut line, '/', RegexMode::Basic).unwrap_err();
-        assert!(err.to_string().contains("Invalid content of \\{\\}"));
-    }
-
-    #[test]
-    fn test_validate_quantifier_structure_bre_with_invalid_char() {
-        let (lines, mut line) = make_providers("{2d,3\\}");
-        let err =
-            validate_quantifier_structure(&lines, &mut line, '/', RegexMode::Basic).unwrap_err();
-        assert!(err.to_string().contains("Invalid content of \\{\\}"));
-    }
-
-    #[test]
-    fn test_validate_quantifier_structure_bre_with_double_comma() {
-        let (lines, mut line) = make_providers("{2,3,\\}");
-        let err =
-            validate_quantifier_structure(&lines, &mut line, '/', RegexMode::Basic).unwrap_err();
-        assert!(err.to_string().contains("Invalid content of \\{\\}"));
-    }
-
-    // ERE tests
-    #[test]
-    fn test_validate_quantifier_structure_ere_valid() {
-        let (lines, mut line) = make_providers("{2,3}");
-        validate_quantifier_structure(&lines, &mut line, '/', RegexMode::Extended).unwrap();
-        assert_eq!(line.current(), '{'); // Line should be back on the opening brace
-    }
-
-    #[test]
-    fn test_validate_quantifier_structure_ere_with_unmatched_brace() {
-        let (lines, mut line) = make_providers("{2,3");
-        let err =
-            validate_quantifier_structure(&lines, &mut line, '/', RegexMode::Extended).unwrap_err();
-        assert!(err.to_string().contains("Unmatched \\{"));
-    }
-
-    #[test]
-    fn test_validate_quantifier_structure_ere_with_empty_content() {
-        let (lines, mut line) = make_providers("{}");
-        let err =
-            validate_quantifier_structure(&lines, &mut line, '/', RegexMode::Extended).unwrap_err();
-        assert!(err.to_string().contains("Invalid content of \\{\\}"));
-    }
-
-    #[test]
-    fn test_validate_quantifier_structure_ere_with_invalid_char() {
-        let (lines, mut line) = make_providers("{2d,3}");
-        let err =
-            validate_quantifier_structure(&lines, &mut line, '/', RegexMode::Extended).unwrap_err();
-        assert!(err.to_string().contains("Invalid content of \\{\\}"));
-    }
-
-    #[test]
-    fn test_validate_quantifier_structure_ere_with_double_comma() {
-        let (lines, mut line) = make_providers("{2,3,}");
-        let err =
-            validate_quantifier_structure(&lines, &mut line, '/', RegexMode::Extended).unwrap_err();
-        assert!(err.to_string().contains("Invalid content of \\{\\}"));
-    }
-
-    // validate_quantifier_numbers
-    #[test]
-    fn test_validate_quantifier_numbers_with_m() {
-        let (lines, mut line) = make_providers("{2}");
-        let result = validate_quantifier_numbers(&lines, &mut line).unwrap();
-        assert_eq!(result, "2");
+    fn test_read_interval_ere() {
+        let (_, mut line) = make_providers("{2,3}");
+        assert_eq!(
+            read_interval(&mut line, '/', RegexMode::Extended).as_deref(),
+            Some("2,3")
+        );
         assert_eq!(line.current(), '}');
     }
 
     #[test]
-    fn test_validate_quantifier_numbers_with_single_comma() {
-        let (lines, mut line) = make_providers("{,}");
-        let result = validate_quantifier_numbers(&lines, &mut line).unwrap();
-        assert_eq!(result, "0,");
-        assert_eq!(line.current(), '}');
+    fn test_read_interval_writes_an_absent_minimum() {
+        for (input, expected) in [("{2}", "2"), ("{,}", "0,"), ("{,3}", "0,3"), ("{2,}", "2,")] {
+            let (_, mut line) = make_providers(input);
+            assert_eq!(
+                read_interval(&mut line, '/', RegexMode::Extended).as_deref(),
+                Some(expected),
+                "{input}"
+            );
+        }
     }
 
+    // What is not an interval is left where it is, for the check of the whole
+    // expression to report in GNU sed's words.
     #[test]
-    fn test_validate_quantifier_numbers_with_comma_n() {
-        let (lines, mut line) = make_providers("{,3}");
-        let result = validate_quantifier_numbers(&lines, &mut line).unwrap();
-        assert_eq!(result, "0,3");
-        assert_eq!(line.current(), '}');
-    }
-
-    #[test]
-    fn test_validate_quantifier_numbers_valid() {
-        let (lines, mut line) = make_providers("{2,3}");
-        let result = validate_quantifier_numbers(&lines, &mut line).unwrap();
-        assert_eq!(result, "2,3");
-        assert_eq!(line.current(), '}');
-    }
-
-    #[test]
-    fn test_validate_quantifier_numbers_with_m_too_big() {
-        let (lines, mut line) = make_providers("{32768}");
-        let err = validate_quantifier_numbers(&lines, &mut line).unwrap_err();
-        assert!(err.to_string().contains("Regular expression too big"));
-    }
-
-    #[test]
-    fn test_validate_quantifier_numbers_with_n_too_big() {
-        let (lines, mut line) = make_providers("{2,32768}");
-        let err = validate_quantifier_numbers(&lines, &mut line).unwrap_err();
-        assert!(err.to_string().contains("Regular expression too big"));
-    }
-
-    #[test]
-    fn test_validate_quantifier_numbers_with_m_gt_n() {
-        let (lines, mut line) = make_providers("{3,2}");
-        let err = validate_quantifier_numbers(&lines, &mut line).unwrap_err();
-        assert!(err.to_string().contains("Invalid content of \\{\\}"));
-    }
-
-    #[test]
-    fn test_validate_quantifier_numbers_with_leading_comma_n_too_big() {
-        // The {,n} form must bound n by RE_DUP_MAX just like {m,n}.
-        let (lines, mut line) = make_providers("{,32768}");
-        let err = validate_quantifier_numbers(&lines, &mut line).unwrap_err();
-        assert!(err.to_string().contains("Regular expression too big"));
-    }
-
-    #[test]
-    fn test_validate_quantifier_numbers_with_overflowing_m() {
-        // A digit run too large for usize is reported as too big, not as
-        // invalid content.
-        let (lines, mut line) = make_providers("{99999999999999999999999}");
-        let err = validate_quantifier_numbers(&lines, &mut line).unwrap_err();
-        assert!(err.to_string().contains("Regular expression too big"));
+    fn test_read_interval_leaves_what_is_not_one() {
+        for (input, mode) in [
+            ("{2,3", RegexMode::Basic),
+            ("{\\}", RegexMode::Basic),
+            ("{2d,3\\}", RegexMode::Basic),
+            ("{2,3,\\}", RegexMode::Basic),
+            ("{2,3/x\\}", RegexMode::Basic),
+            ("{2,3", RegexMode::Extended),
+            ("{}", RegexMode::Extended),
+            ("{2d,3}", RegexMode::Extended),
+            ("{2,3,}", RegexMode::Extended),
+            ("{3,2}", RegexMode::Extended),
+            ("{32768}", RegexMode::Extended),
+            ("{2,32768}", RegexMode::Extended),
+            ("{,32768}", RegexMode::Extended),
+            ("{99999999999999999999999}", RegexMode::Extended),
+        ] {
+            let (_, mut line) = make_providers(input);
+            assert_eq!(read_interval(&mut line, '/', mode), None, "{input}");
+            assert_eq!(line.get_pos(), 0, "{input}");
+        }
     }
 
     // parse_transliteration

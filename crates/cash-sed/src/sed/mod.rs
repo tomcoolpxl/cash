@@ -14,6 +14,7 @@ pub mod delimited_parser;
 pub mod error_handling;
 pub mod fast_io;
 pub mod fast_regex;
+pub mod gnu_regex;
 pub mod in_place;
 pub mod named_writer;
 pub mod processor;
@@ -285,7 +286,9 @@ fn build_context(matches: &ArgMatches) -> UResult<ProcessingContext> {
         length: matches.get_one::<u32>("length").map_or(70, |v| *v as usize),
         quiet: matches.get_flag("quiet"),
         posix: matches.get_flag("posix"),
-        separate: matches.get_flag("separate"),
+        // `-i` implies `-s`, as in GNU sed: each file has its own line numbers and last
+        // line, so `sed -i 1d a b` edits both. Only the first file's line 1 went.
+        separate: matches.get_flag("separate") || matches.contains_id("in-place"),
         sandbox: matches.get_flag("sandbox"),
         unbuffered: matches.get_flag("unbuffered"),
         null_data: matches.get_flag("null-data"),
@@ -314,6 +317,7 @@ fn build_context(matches: &ArgMatches) -> UResult<ProcessingContext> {
         range_commands: Vec::new(),
         substitution_made: false,
         append_elements: Vec::new(),
+        line_files: HashMap::new(),
     })
 }
 

@@ -307,9 +307,35 @@ pub struct FileStream {
     ere_byte_buffer: Vec<u8>,
 }
 
+/// What went wrong with a file, in the C library's words, as gawk reports it: "No such
+/// file or directory" where Windows says "The system cannot find the path specified.
+/// (os error 3)".
+pub(crate) fn strerror(error: &std::io::Error) -> String {
+    use std::io::ErrorKind;
+    match error.kind() {
+        ErrorKind::NotFound => "No such file or directory".to_string(),
+        ErrorKind::PermissionDenied => "Permission denied".to_string(),
+        ErrorKind::AlreadyExists => "File exists".to_string(),
+        ErrorKind::IsADirectory => "Is a directory".to_string(),
+        ErrorKind::NotADirectory => "Not a directory".to_string(),
+        ErrorKind::InvalidFilename | ErrorKind::InvalidInput => "Invalid argument".to_string(),
+        ErrorKind::BrokenPipe => "Broken pipe".to_string(),
+        ErrorKind::StorageFull => "No space left on device".to_string(),
+        _ => {
+            let text = error.to_string();
+            match text.find(" (os error ") {
+                Some(end) => text.get(..end).unwrap_or_default().to_string(),
+                None => text,
+            }
+        }
+    }
+}
+
 impl FileStream {
+    /// The file at `path`, to read; the error is gawk's for an input file.
     pub fn open(path: &str) -> Result<Self, String> {
-        let file = File::open(path).map_err(|e| e.to_string())?;
+        let file = File::open(path)
+            .map_err(|e| format!("cannot open file `{path}' for reading: {}", strerror(&e)))?;
         let reader = BufReader::new(file);
         Ok(Self {
             bytes: reader.bytes(),
@@ -438,7 +464,8 @@ impl WriteFiles {
                     .truncate(!append)
                     .append(append)
                     .open(filename)
-                    .map_err(|e| e.to_string())?;
+                    // gawk's words.
+                    .map_err(|e| format!("cannot redirect to `{filename}': {}", strerror(&e)))?;
                 file.write_all(contents.as_bytes())
                     .map_err(|e| e.to_string())?;
                 e.insert(file);

@@ -14,3 +14,4 @@ Native AWK implementation for Cash, absorbed and adapted from [posixutils-rs](ht
 3. **Library entry point:** Provides `pub fn run_awk(args: impl IntoIterator<Item = impl Into<std::ffi::OsString>>) -> i32` for Cash's process-backed bundled command dispatcher instead of calling `std::process::exit`.
 4. **Robustness:** Fixed array deletion bookkeeping bug where `swap_remove` at the end caused out-of-bounds panics, fixed function scalar-as-array panics, and prevented script errors from unwinding out of the process.
 5. **Windows only:** Cash builds for Windows only, so the Unix-only code paths were removed: the `sh -c` shell fallback and the signal-number exit status (`128 + signal`) in `system()`.
+6. **gawk's words:** A fatal error is reported as gawk reports it (``awk: cmd. line:1: (FILENAME=- FNR=2) fatal: attempt to use scalar `x' as an array``), where posixutils-rs wrote `runtime error:` and a call trace; and gawk's `func` spells `function`.

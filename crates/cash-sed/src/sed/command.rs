@@ -16,6 +16,8 @@ use crate::sed::script_line_provider::ScriptLineProvider;
 
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::fs::File;
+use std::io::BufReader;
 use std::path::PathBuf; // For file descriptors and equivalent
 use std::rc::Rc;
 use uucore::error::UResult;
@@ -79,7 +81,14 @@ pub struct ProcessingContext {
     pub substitution_made: bool,
     /// Elements to append at the end of each command processing cycle
     pub append_elements: Vec<AppendElement>,
+    /// The files `R` reads, by the name the script gives them
+    pub line_files: HashMap<PathBuf, LineFile>,
 }
+
+/// A file `R` reads a line of at a time, or `None` when it could not be opened: then
+/// `R` reads nothing, as in GNU sed. Every `R` naming the file shares it, and so its
+/// place in it.
+pub type LineFile = Rc<RefCell<Option<BufReader<File>>>>;
 
 impl ProcessingContext {
     /// The byte that ends a line: NUL with `-z`, newline otherwise. GNU sed uses it to
@@ -106,6 +115,7 @@ impl ProcessingContext {
 pub enum AppendElement {
     Text(Rc<[u8]>), // The specified text bytes
     Path(PathBuf),  // The contents of the specified file path
+    Line(Vec<u8>),  // A line `R` read, written as it is, its end included or not (GNU)
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -518,6 +528,7 @@ pub enum CommandData {
     BranchTarget(Option<Rc<RefCell<Command>>>), // Commands for 'b', 't', 'T', '{'
     Label(Option<String>),                      // Label name for 'b', 't', 'T', ':'
     Path(PathBuf),                              // File path for 'r'
+    LineFile(LineFile),                         // File input for 'R' (GNU)
     NamedWriter(Rc<RefCell<NamedWriter>>),      // File output for 'w'
     Number(usize),                              // Number for 'l', 'q', 'Q' (GNU)
     Substitution(Box<Substitution>),            // Substitute command 's'

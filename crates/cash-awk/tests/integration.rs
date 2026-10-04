@@ -1614,3 +1614,208 @@ fn test_awk_a_string_conversion_in_convfmt_or_ofmt() {
         0,
     ));
 }
+
+// `func` is gawk's other spelling of `function`, and so reserved (TODO.md 14.6).
+#[test]
+fn test_awk_func_defines_a_function() {
+    run_test(plan(
+        "func f(x) { return x * 2 }\nBEGIN { print f(21) }",
+        "",
+        "42\n",
+        0,
+    ));
+    run_test(plan(
+        "func f(x) { return x * 2 } BEGIN { func_x = f(2); print func_x }",
+        "",
+        "4\n",
+        0,
+    ));
+    let output = run_bounded("BEGIN { func = 1 }");
+    assert_eq!(output.status.code(), Some(1));
+}
+
+/// A plan that expects the fatal error `stderr`, exit status 2 and no output.
+fn fatal_plan(args: &[&str], stdin: &str, stderr: &str) -> TestPlan {
+    TestPlan {
+        cmd: String::from("awk"),
+        args: args.iter().map(|arg| (*arg).to_string()).collect(),
+        stdin_data: String::from(stdin),
+        expected_out: String::new(),
+        expected_err: format!("{stderr}\n"),
+        expected_exit_code: 2,
+    }
+}
+
+// A fatal error is reported as gawk reports it, in its words, with the variable's name:
+// cash wrote "runtime error: scalar used in array context" and its call stack (TODO.md
+// 14.6). Each was checked against gawk 5: the program, its input and the error.
+const FATAL_ERRORS: &[(&str, &str, &str)] = &[
+    (
+        "BEGIN { x = 1; x[1] = 2 }",
+        "",
+        "awk: cmd. line:1: fatal: attempt to use scalar `x' as an array",
+    ),
+    (
+        "BEGIN { x = 1; print x[1] }",
+        "",
+        "awk: cmd. line:1: fatal: attempt to use scalar `x' as an array",
+    ),
+    (
+        "BEGIN { x = 1; for (k in x) print k }",
+        "",
+        "awk: cmd. line:1: fatal: attempt to use scalar `x' as an array",
+    ),
+    (
+        "BEGIN { x = 1; delete x[1] }",
+        "",
+        "awk: cmd. line:1: fatal: attempt to use scalar `x' as an array",
+    ),
+    (
+        "BEGIN { x = 1; delete x }",
+        "",
+        "awk: cmd. line:1: fatal: attempt to use scalar `x' as an array",
+    ),
+    (
+        "BEGIN { x = 1; if (1 in x) print 1 }",
+        "",
+        "awk: cmd. line:1: fatal: attempt to use scalar `x' as an array",
+    ),
+    (
+        "BEGIN { SUBSEP[1] = 2 }",
+        "",
+        "awk: cmd. line:1: fatal: attempt to use scalar `SUBSEP' as an array",
+    ),
+    (
+        "function f(p) { p[1] = 1 } BEGIN { x = 1; f(x) }",
+        "",
+        "awk: cmd. line:1: fatal: attempt to use scalar parameter `p' as an array",
+    ),
+    (
+        "BEGIN { x = 1; split(\"a b\", x) }",
+        "",
+        "awk: cmd. line:1: fatal: split: second argument is not an array",
+    ),
+    (
+        "BEGIN { a[1] = 1; print a }",
+        "",
+        "awk: cmd. line:1: fatal: attempt to use array `a' in a scalar context",
+    ),
+    (
+        "BEGIN { a[1] = 1; a = 2 }",
+        "",
+        "awk: cmd. line:1: fatal: attempt to use array `a' in a scalar context",
+    ),
+    (
+        "BEGIN { a[1]; a++ }",
+        "",
+        "awk: cmd. line:1: fatal: attempt to use array `a' in a scalar context",
+    ),
+    (
+        "BEGIN { a[1]; getline a < \"/dev/null\" }",
+        "",
+        "awk: cmd. line:1: fatal: attempt to use array `a' in a scalar context",
+    ),
+    (
+        "function f(p) { return p + 1 } BEGIN { a[1]; f(a) }",
+        "",
+        "awk: cmd. line:1: fatal: attempt to use array `p (from a)' in a scalar context",
+    ),
+    // The line, and the input once a record is read.
+    (
+        "BEGIN { f(1); z = 1\n z[1] = 1 }\nfunction f(a) { return a }",
+        "",
+        "awk: cmd. line:2: fatal: attempt to use scalar `z' as an array",
+    ),
+    (
+        "NR == 2 { x = 1; x[1] = 2 }",
+        "a\nb\n",
+        "awk: cmd. line:1: (FILENAME=- FNR=2) fatal: attempt to use scalar `x' as an array",
+    ),
+    (
+        "BEGIN { print $-1 }",
+        "",
+        "awk: cmd. line:1: fatal: attempt to access field -1",
+    ),
+    (
+        "BEGIN { x = -2; $x = 1 }",
+        "",
+        "awk: cmd. line:1: fatal: attempt to access field -2",
+    ),
+    (
+        "{ NF = -1 }",
+        "a b\n",
+        "awk: cmd. line:1: (FILENAME=- FNR=1) fatal: NF set to negative value",
+    ),
+    (
+        "BEGIN { printf \"%d %d\\n\", 1 }",
+        "",
+        "awk: cmd. line:1: fatal: not enough arguments to satisfy format string\n\
+             \t`%d %d\n'\n\t    ^ ran out for this one",
+    ),
+    (
+        "BEGIN { printf \"%5.*d\", 3 }",
+        "",
+        "awk: cmd. line:1: fatal: not enough arguments to satisfy format string\n\
+             \t`%5.*d'\n\t    ^ ran out for this one",
+    ),
+    (
+        "BEGIN { printf \"%*d\" }",
+        "",
+        "awk: cmd. line:1: fatal: not enough arguments to satisfy format string\n\
+             \t`%*d'\n\t ^ ran out for this one",
+    ),
+    (
+        "BEGIN { print \"x\" > \"/nonexistent/dir/x\" }",
+        "",
+        "awk: cmd. line:1: fatal: cannot redirect to `/nonexistent/dir/x': \
+             No such file or directory",
+    ),
+];
+
+#[test]
+fn test_awk_fatal_errors_are_gawks() {
+    for (program, stdin, stderr) in FATAL_ERRORS {
+        run_test(fatal_plan(&[program], stdin, stderr));
+    }
+    run_test(fatal_plan(
+        &["{ print }", "/nonexistent/file"],
+        "",
+        "awk: fatal: cannot open file `/nonexistent/file' for reading: No such file or directory",
+    ));
+}
+
+// A program from a file is placed in it, as gawk places it.
+#[test]
+fn test_awk_fatal_error_in_a_program_file() {
+    let dir = std::env::temp_dir().join(format!("cash-awk-fatal-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("create a directory");
+    let program = dir.join("p.awk");
+    std::fs::write(
+        &program,
+        "function f(p) {\n  p[1] = 2\n}\nBEGIN {\n  x = 1\n  f(x)\n}\n",
+    )
+    .expect("write the program");
+    let program = program.to_string_lossy().into_owned();
+    let output = run_test_base(&["-f".to_string(), program.clone()], b"");
+    let _ = std::fs::remove_dir_all(&dir);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(
+        stderr.replace("\r\n", "\n"),
+        format!("awk: {program}:2: fatal: attempt to use scalar parameter `p' as an array\n")
+    );
+    assert_eq!(output.status.code(), Some(2));
+}
+
+// A format specifier that is no conversion is written out as it is, and size modifiers
+// are passed over, as gawk does: each was a fatal error (TODO.md 14.6).
+#[test]
+fn test_awk_format_specifiers_as_gawk_reads_them() {
+    run_test(plan(
+        r#"BEGIN { printf "%z %d|%5z|%d|%ld|%hd|%Lf|%lld|a%-", 1, 2, 3, 4, 5 }"#,
+        "",
+        "%d|%5z|1|2|3|4.000000|%lld|a%-",
+        0,
+    ));
+    run_test(plan(r#"BEGIN { printf "%q" }"#, "", "%q", 0));
+    run_test(plan(r#"BEGIN { printf "a%5." }"#, "", "a%5.", 0));
+}

@@ -208,7 +208,14 @@ fn finish(code: i32) -> i32 {
 /// returns 2, gawk's status for a fatal error; a syntax error is 1, in gawk as here.
 fn fatal(error: &str) -> i32 {
     finish(2);
-    eprintln!("{error}");
+    // An error from the program's code comes placed, as gawk places it (`awk: cmd.
+    // line:1: fatal: ...`); one from elsewhere, an input file that cannot be read, has
+    // gawk's `awk: fatal: ` before it. It was written bare.
+    if error.starts_with("awk: ") {
+        eprintln!("{error}");
+    } else {
+        eprintln!("awk: fatal: {error}");
+    }
     2
 }
 
