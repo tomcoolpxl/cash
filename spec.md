@@ -294,6 +294,8 @@ runs with `set -o posix`, every builtin still there, as Bash started as `sh` doe
 says `sh` for `$0`. A cash started as `bash` says `bash`. Windows gives a program no
 `argv[0]` of its own, so the cash that starts it says the name in `CASH_ARGV0`, which the
 started cash reads and removes; `exec -a NAME` reaches a cash the same way (EXE-12).
+Another program cannot be given one, so `exec -a` and `exec -l` refuse it rather than
+run it under its own name (the user, 2026-10-04).
 `exec bash` ran Git's bash, found on `PATH`, until then.
 
 **CRLF in script source is the one that earns its keep.** `core.autocrlf` is `true` by

@@ -60,6 +60,22 @@ impl builtins::Command for ExecCommand {
             self.empty_environment,
         )?;
 
+        // `-a` and `-l` only change the program's `argv[0]`, which std's `Command` cannot
+        // set on Windows: another program ran under its own name in silence (the user,
+        // 2026-10-04). A cash learns the name from `CASH_ARGV0` (EXE-12).
+        if (self.name_for_argv0.is_some() || self.exec_as_login)
+            && !commands::is_own_executable(cmd.get_program())
+        {
+            let option = if self.exec_as_login { "-l" } else { "-a" };
+            writeln!(
+                context.error_stream(),
+                "{}: {option}: not supported on Windows for a program other than cash, whose \
+                 argv[0] cannot be set",
+                context.command_name
+            )?;
+            return Ok(ExecutionExitCode::InvalidUsage.into());
+        }
+
         // cash: Windows has no `execve`, so the process image cannot be replaced.
         //
         // The standard emulation — run the command, then exit the shell with its

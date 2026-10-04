@@ -85,15 +85,22 @@ then the riskiest changes once the crashes and state bugs are out of the way.
   set, a test hook live in production as W32-18's were; and they find cash only when their
   exe is named `cash` (or `cash-…`), so in a linked `awk.exe` they take another shell.
   Seen 2026-10-04 fixing BIN-09.
-- `exec -a NAME` sets nothing: cash's `arg0` is a no-op on Windows, where std's `Command`
-  cannot set a program's `argv[0]`, so `exec -a foo bash -c 'echo $0'` prints bash's path
-  where Bash prints `foo`. It would take a `CreateProcessW` of cash's own whose command
-  line starts with NAME. Seen 2026-10-04 fixing `exec` in a subshell.
 - Bash's `printf '%(…)T'` uses the `TZ` variable; cash's uses Windows' time zone
   (chrono's `Local`), as its prompts' `\D{…}` do. Seen 2026-10-04 adding `%(…)T`.
 ---
 
 ## Decided, written down so it is not decided twice
+
+- **`exec -a NAME` is refused for a program other than cash** (the user, 2026-10-04): std's `Command` cannot
+  set a program's `argv[0]`, and running it under its own name in silence was the
+  alternative to an error. A spawn of cash's own to set it, and leaving it ignored, were
+  turned down. `exec -l`, which only puts `-` before `argv[0]`, goes with it.
+- **Times honour `TZ`, as in Bash** (the user, 2026-10-04): `printf '%(…)T'`, prompts and
+  `HISTTIMEFORMAT` format in the zone `TZ` names (`UTC`, a POSIX `EST5EDT`, an IANA name),
+  else Windows' own. Noting that cash ignores `TZ` was turned down.
+- **W32-02 gets one timed investigation** (the user, 2026-10-04): a reproduction rate,
+  then the server waiting for its reader before it closes, kept only if the rate drops;
+  else it is recorded as a `cmd` quirk and closed.
 
 - **A cash started as `sh` runs in POSIX mode, as Bash does** (the user, 2026-10-04):
   `sh -c`, `exec sh`, `#!/bin/sh` and `#!/usr/bin/env sh` turn on `set -o posix`, every

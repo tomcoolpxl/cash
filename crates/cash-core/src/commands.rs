@@ -661,8 +661,9 @@ fn names_this_link(name: &str) -> bool {
     }
 }
 
-/// Whether `program` is this cash's own executable.
-fn is_own_executable(program: &OsStr) -> bool {
+/// Whether `program` is this cash's own executable, which learns its `argv[0]` from
+/// [`ARGV0_VARIABLE`].
+pub fn is_own_executable(program: &OsStr) -> bool {
     let Ok(own) = std::env::current_exe() else {
         return false;
     };

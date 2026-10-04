@@ -855,6 +855,25 @@ fn exec_in_a_subshell_ends_it() {
     );
 }
 
+/// `exec -a NAME` and `exec -l` reach a cash, which learns its `argv[0]` from
+/// `CASH_ARGV0`; another program is refused, where it ran under its own name in silence
+/// (the user, 2026-10-04).
+#[test]
+fn exec_a_names_a_cash_and_is_refused_for_another_program() {
+    let out = cash(
+        r#"(exec -a foo bash -c 'echo "[$0]"')
+           exec -a foo cmd /d /c echo ran; echo "rc $?"
+           exec -l cmd /d /c echo ran; echo "rc $?""#,
+    );
+    assert_eq!(out.stdout, "[foo]\nrc 2\nrc 2", "{}", out.stderr);
+    assert!(
+        out.stderr.contains("exec: -a: not supported on Windows")
+            && out.stderr.contains("exec: -l: not supported on Windows"),
+        "{}",
+        out.stderr
+    );
+}
+
 #[test]
 fn echo_n_and_e_escape_processing() {
     let out_n = cash(r#"echo -n "no-newline""#);
