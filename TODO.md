@@ -110,8 +110,6 @@ some may have gone with other work.
 - XC-12, XC-14, XC-16: three process-creation paths and two environment-block builders;
   paths shown via `replace('\\','/')` past the D10 chokepoint; case folding mixes ASCII
   and Unicode.
-- XC-18: `TerminalInfo` has 48 bools, two read; D39 promises OSC 133 and 9;9, only 633
-  is emitted.
 - PI-20, LANG-25: char and byte offsets rebuilt in three consumers; two metacharacter
   tables disagree.
 

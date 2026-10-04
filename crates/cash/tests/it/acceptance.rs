@@ -852,7 +852,7 @@ fn kill_is_a_builtin_and_lists_real_signal_numbers() {
     assert!(cash("type kill").stdout.contains("builtin"));
 
     let listed = cash("kill -l").stdout;
-    for expected in ["1) HUP", "2) INT", "9) KILL", "15) TERM"] {
+    for expected in ["1) SIGHUP", "2) SIGINT", "9) SIGKILL", "15) SIGTERM"] {
         assert!(
             listed.contains(expected),
             "kill -l missing {expected}:\n{listed}"

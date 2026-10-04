@@ -1363,10 +1363,12 @@ this is partly inherited.
 
 Serves §1's "pleasant enough to replace your shell" bar for very little implementation.
 
-- OPEN: which path spelling OSC 9;9 reports. Windows Terminal needs something it can
-  reuse for "duplicate tab here", and `C:/...` may or may not be accepted where `C:\...`
-  is expected. `winpath` (D45) does the conversion if needed. Needs testing, not
-  reasoning.
+- OSC 9;9 reports the Windows spelling, `C:\...`: Windows Terminal reuses it for
+  "duplicate tab here", and Microsoft's own example for bash under WSL sends
+  `wslpath -w "$PWD"`. Windows Terminal is detected by `WT_SESSION` and gets OSC 133
+  marks with it; VS Code (`TERM_PROGRAM=vscode`) gets its own OSC 633, which carries the
+  command line too; iTerm2 and WezTerm get OSC 133 and OSC 7 (a `file://` URL). Until
+  2026-10-04 Windows Terminal got only 633 (XC-18).
 
 ### D40 — Completion is case-insensitive and auto-quotes
 

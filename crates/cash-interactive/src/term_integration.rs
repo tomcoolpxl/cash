@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use std::fmt::Write;
 use std::io::Write as _;
 
-use crate::term_detection;
+use crate::term_detection::{self, CwdReport, Marks};
 
 /// Utility for integrating with terminal emulators.
 pub(crate) struct TerminalIntegration {
@@ -10,7 +10,6 @@ pub(crate) struct TerminalIntegration {
     term: term_detection::TerminalInfo,
 }
 
-#[expect(dead_code)]
 impl TerminalIntegration {
     /// Starts terminal integration, emitting the sequence that announces it, and returns the
     /// utility the interactive loop reports events to.
@@ -68,11 +67,10 @@ impl TerminalIntegration {
 
     /// Returns the terminal escape sequence that should be emitted to initialize terminal
     /// integration.
-    pub fn initialize(&self) -> Cow<'_, str> {
-        if self.term.supports_osc_633 {
-            "\x1b]633;P;HasRichCommandDetection=True\x1b\\".into()
-        } else {
-            "".into()
+    fn initialize(&self) -> Cow<'_, str> {
+        match self.term.marks {
+            Some(Marks::Osc633) => "\x1b]633;P;HasRichCommandDetection=True\x1b\\".into(),
+            Some(Marks::Osc133) | None => "".into(),
         }
     }
 
@@ -86,35 +84,40 @@ impl TerminalIntegration {
     /// * `prompt` - The prompt as composed by the shell.
     /// * `working_dir` - The shell's current working directory.
     pub fn decorate_prompt(&self, prompt: String, working_dir: &std::path::Path) -> String {
-        if !self.term.supports_osc_633 {
+        if self.term.marks.is_none() && self.term.cwd_report.is_none() {
             return prompt;
         }
 
         [
-            self.pre_prompt().as_ref(),
+            self.mark('A').as_ref(),
             self.report_cwd(working_dir).as_ref(),
             prompt.as_str(),
-            self.post_prompt().as_ref(),
+            self.mark('B').as_ref(),
         ]
         .concat()
     }
 
-    /// Returns the terminal escape sequence that should be emitted before the prompt.
-    pub fn pre_prompt(&self) -> Cow<'_, str> {
-        if self.term.supports_osc_633 {
-            "\x1b]633;A\x1b\\".into()
-        } else {
-            "".into()
+    /// Returns a mark without arguments: `A` before the prompt, `B` after it, `C` before
+    /// the command's output.
+    fn mark(&self, mark: char) -> Cow<'_, str> {
+        match self.term.marks {
+            Some(Marks::Osc133) => format!("\x1b]133;{mark}\x1b\\").into(),
+            Some(Marks::Osc633) => format!("\x1b]633;{mark}\x1b\\").into(),
+            None => "".into(),
         }
     }
 
     /// Returns the terminal escape sequence to report the current working directory.
-    pub fn report_cwd(&self, cwd: &std::path::Path) -> Cow<'_, str> {
-        if self.term.supports_osc_633 {
-            let escaped_cwd_str = osc_633_escape(cwd.to_string_lossy().as_ref());
-            format!("\x1b]633;P;Cwd={escaped_cwd_str}\x1b\\").into()
-        } else {
-            "".into()
+    fn report_cwd(&self, cwd: &std::path::Path) -> Cow<'_, str> {
+        let cwd = cwd.to_string_lossy();
+        match self.term.cwd_report {
+            Some(CwdReport::Osc633) => {
+                format!("\x1b]633;P;Cwd={}\x1b\\", osc_633_escape(&cwd)).into()
+            }
+            // Windows Terminal opens a duplicated tab where this says: a Windows path.
+            Some(CwdReport::Osc9_9) => format!("\x1b]9;9;{}\x1b\\", cwd.replace('/', "\\")).into(),
+            Some(CwdReport::Osc7) => format!("\x1b]7;{}\x1b\\", file_url(&cwd)).into(),
+            None => "".into(),
         }
     }
 
@@ -124,78 +127,51 @@ impl TerminalIntegration {
     /// # Arguments
     ///
     /// * `command` - The command that is about to be executed.
-    pub fn pre_exec_command(&self, command: &str) -> Cow<'_, str> {
-        if self.term.supports_osc_633 {
-            let mut escaped_command = osc_633_escape(command);
-            escaped_command.insert_str(0, "\x1b]633;E;");
-
-            if let Some(session_nonce) = &self.term.session_nonce {
-                escaped_command.push(';');
-                escaped_command.push_str(session_nonce);
-            }
-
-            escaped_command.push_str("\x1b\\\x1b]633;C\x1b\\");
-
-            escaped_command.into()
-        } else {
-            "".into()
+    fn pre_exec_command(&self, command: &str) -> Cow<'_, str> {
+        if self.term.marks != Some(Marks::Osc633) {
+            return self.mark('C');
         }
+        let mut escaped_command = osc_633_escape(command);
+        escaped_command.insert_str(0, "\x1b]633;E;");
+
+        if let Some(session_nonce) = &self.term.session_nonce {
+            escaped_command.push(';');
+            escaped_command.push_str(session_nonce);
+        }
+
+        escaped_command.push_str("\x1b\\\x1b]633;C\x1b\\");
+
+        escaped_command.into()
     }
 
     /// Returns the terminal escape sequence that should be emitted after executing a command.
-    pub fn post_exec_command(&self, exit_code: i32) -> Cow<'_, str> {
-        if self.term.supports_osc_633 {
-            std::format!("\x1b]633;D;{exit_code}\x1b\\").into()
-        } else {
-            "".into()
+    fn post_exec_command(&self, exit_code: i32) -> Cow<'_, str> {
+        match self.term.marks {
+            Some(Marks::Osc133) => format!("\x1b]133;D;{exit_code}\x1b\\").into(),
+            Some(Marks::Osc633) => format!("\x1b]633;D;{exit_code}\x1b\\").into(),
+            None => "".into(),
         }
     }
+}
 
-    /// Returns the terminal escape sequence that should be emitted after the prompt.
-    pub fn post_prompt(&self) -> Cow<'_, str> {
-        if self.term.supports_osc_633 {
-            "\x1b]633;B\x1b\\".into()
-        } else {
-            "".into()
+/// A `file://` URL for a Windows path, as OSC 7 takes it: `C:\a b` is `file:///C:/a%20b`.
+fn file_url(path: &str) -> String {
+    let mut url = String::from("file://");
+    if !path.starts_with(['/', '\\']) {
+        url.push('/');
+    }
+    for byte in path.bytes() {
+        match byte {
+            b'\\' => url.push('/'),
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' | b'/' | b':' => {
+                url.push(char::from(byte));
+            }
+            _ => {
+                let _ = write!(url, "%{byte:02X}");
+            }
         }
     }
-
-    /// Returns the terminal escape sequence that should be emitted before the continuation prompt.
-    pub fn pre_input_line_continuation(&self) -> Cow<'_, str> {
-        if self.term.supports_osc_633 {
-            "\x1b]633;F\x1b\\".into()
-        } else {
-            "".into()
-        }
-    }
-
-    /// Returns the terminal escape sequence that should be emitted after the input line
-    /// continuation.
-    pub fn post_input_line_continuation(&self) -> Cow<'_, str> {
-        if self.term.supports_osc_633 {
-            "\x1b]633;G\x1b\\".into()
-        } else {
-            "".into()
-        }
-    }
-
-    /// Returns the terminal escape sequence that should be emitted before the right-side prompt.
-    pub fn pre_right_prompt(&self) -> Cow<'_, str> {
-        if self.term.supports_osc_633 {
-            "\x1b]633;H\x1b\\".into()
-        } else {
-            "".into()
-        }
-    }
-
-    /// Returns the terminal escape sequence that should be emitted after the right-side prompt.
-    pub fn post_right_prompt(&self) -> Cow<'_, str> {
-        if self.term.supports_osc_633 {
-            "\x1b]633;I\x1b\\".into()
-        } else {
-            "".into()
-        }
-    }
+    url
 }
 
 /// Escapes a string for safe inclusion in an OSC 633 escape sequence.
@@ -224,6 +200,65 @@ fn osc_633_escape(command: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::term_detection::TerminalInfo;
+
+    fn integration(marks: Option<Marks>, cwd_report: Option<CwdReport>) -> TerminalIntegration {
+        TerminalIntegration {
+            term: TerminalInfo {
+                marks,
+                cwd_report,
+                ..TerminalInfo::default()
+            },
+        }
+    }
+
+    /// Windows Terminal gets OSC 133 marks and OSC 9;9 with a Windows path, as D39 says;
+    /// it was sent VS Code's 633 alone (XC-18).
+    #[test]
+    fn windows_terminal_gets_osc_133_and_9_9() {
+        let wt = integration(Some(Marks::Osc133), Some(CwdReport::Osc9_9));
+        assert_eq!(wt.initialize(), "");
+        assert_eq!(
+            wt.decorate_prompt("$ ".into(), std::path::Path::new("C:/Users/me")),
+            "\x1b]133;A\x1b\\\x1b]9;9;C:\\Users\\me\x1b\\$ \x1b]133;B\x1b\\"
+        );
+        assert_eq!(wt.pre_exec_command("ls; pwd"), "\x1b]133;C\x1b\\");
+        assert_eq!(wt.post_exec_command(3), "\x1b]133;D;3\x1b\\");
+    }
+
+    #[test]
+    fn vs_code_gets_osc_633_with_the_command_line() {
+        let code = integration(Some(Marks::Osc633), Some(CwdReport::Osc633));
+        assert_eq!(
+            code.decorate_prompt("$ ".into(), std::path::Path::new("C:/a;b")),
+            "\x1b]633;A\x1b\\\x1b]633;P;Cwd=C:/a\\x3bb\x1b\\$ \x1b]633;B\x1b\\"
+        );
+        assert_eq!(
+            code.pre_exec_command("ls; pwd"),
+            "\x1b]633;E;ls\\x3b pwd\x1b\\\x1b]633;C\x1b\\"
+        );
+        assert_eq!(code.post_exec_command(0), "\x1b]633;D;0\x1b\\");
+    }
+
+    #[test]
+    fn osc_7_reports_a_file_url() {
+        let wez = integration(Some(Marks::Osc133), Some(CwdReport::Osc7));
+        assert_eq!(
+            wez.report_cwd(std::path::Path::new(r"C:\Program Files\x%")),
+            "\x1b]7;file:///C:/Program%20Files/x%25\x1b\\"
+        );
+    }
+
+    #[test]
+    fn an_unknown_terminal_gets_nothing() {
+        let none = integration(None, None);
+        assert_eq!(
+            none.decorate_prompt("$ ".into(), std::path::Path::new("C:/")),
+            "$ "
+        );
+        assert_eq!(none.pre_exec_command("ls"), "");
+        assert_eq!(none.post_exec_command(1), "");
+    }
 
     #[test]
     fn osc_633_escape_basic() {
