@@ -14,6 +14,7 @@ use std::io::{self, BufRead, BufReader};
 use std::path::PathBuf;
 
 use crate::sed::error_handling::strerror;
+use crate::sed::fast_io::is_directory;
 use uucore::error::{UResult, USimpleError};
 
 #[derive(Debug, PartialEq)]
@@ -286,6 +287,19 @@ impl ScriptLineProvider {
                         index: next_index,
                         reader: Box::new(BufReader::new(io::stdin())),
                         input_name: "<stdin>".to_string(),
+                        line_number: 0,
+                        expression: None,
+                        file_name,
+                        offset: 0,
+                    };
+                } else if is_directory(p) {
+                    // GNU sed opens a directory, and reading it gives no characters, which
+                    // it takes for the end of the script: an empty one. It was "couldn't
+                    // open file D: Permission denied", Windows refusing to open it.
+                    self.state = State::Active {
+                        index: next_index,
+                        reader: Box::new(io::empty()),
+                        input_name: file_name.clone(),
                         line_number: 0,
                         expression: None,
                         file_name,

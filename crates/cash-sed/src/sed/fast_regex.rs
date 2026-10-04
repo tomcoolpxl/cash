@@ -50,8 +50,10 @@ fn byte_regex_pattern(pattern: &[u8]) -> String {
     clippy::expect_used,
     reason = "a constant pattern, which the tests compile"
 )]
+// Lookarounds too, which the translation of GNU's word boundaries in UTF-8 mode makes
+// (`compiler::regex_to_engine`); nothing else makes `(?=`, `(?!`, `(?<=` or `(?<!`.
 static NEEDS_FANCY_RE: LazyLock<ByteRegex> =
-    LazyLock::new(|| ByteRegex::new(r"\\[1-9]").expect("the pattern is a valid regex"));
+    LazyLock::new(|| ByteRegex::new(r"\\[1-9]|\(\?<?[=!]").expect("the pattern is a valid regex"));
 
 /// All characters signifying that the match must be handled by an RE
 /// rather than by plain string pattern matching.
@@ -353,21 +355,32 @@ pub fn ensure_dotall(pattern: &str) -> String {
     format!("(?s){pattern}")
 }
 
-/// The first code point of the block that stands for the bytes of a pattern space that
-/// are not UTF-8, in UTF-8 mode, when a regex with back-references (the `fancy_regex`
-/// engine, which reads only text) is matched against it: byte `b` is `RAW_BYTE_BASE +
-/// b`, from U+F780 to U+F7FF, of the Private Use Area. The translation of such a regex
-/// keeps `.` and `[^...]` from matching them, as GNU sed matches such a byte with
-/// nothing but itself (`compiler::regex_to_engine`).
+/// The first code point of the block that stands for the bytes above 0x7F of a pattern
+/// space, when a regex with back-references or lookarounds (the `fancy_regex` engine,
+/// which reads only text) is matched against it: in byte mode every such byte, in UTF-8
+/// mode one that is not UTF-8. Byte `b` is `RAW_BYTE_BASE + b`, from U+F780 to U+F7FF,
+/// of the Private Use Area, which has no letters, digits, spaces or case: so in byte mode
+/// the engine's classes, word boundaries and `I` flag take only ASCII, as GNU sed's C
+/// locale does. In UTF-8 mode the translation of such a regex keeps `.` and `[^...]`
+/// from matching them, as GNU sed matches such a byte with nothing but itself
+/// (`compiler::regex_to_engine`).
 pub const RAW_BYTE_BASE: u32 = 0xF700;
 
-/// The text a regex with back-references is matched against: the pattern space itself,
-/// when the engine can read it as it is, or a transcoding of it with each of its bytes'
-/// offsets in the pattern space. In byte mode every byte is a character, the one of the
-/// same number (Latin-1); in UTF-8 mode a byte that is not UTF-8 is one of the block at
-/// [`RAW_BYTE_BASE`]. A regex with back-references was an error on a pattern space that
-/// was not UTF-8, as in byte mode on any byte above 0x7F, and in byte mode it read the
-/// UTF-8 it found as characters.
+/// The character that stands for `byte` (`RAW_BYTE_BASE`), or the byte's own if ASCII.
+fn raw_byte_char(byte: u8) -> char {
+    if byte.is_ascii() {
+        return char::from(byte);
+    }
+    char::from_u32(RAW_BYTE_BASE + u32::from(byte)).unwrap_or(char::REPLACEMENT_CHARACTER)
+}
+
+/// The text a regex with back-references or lookarounds is matched against: the pattern
+/// space itself, when the engine can read it as it is, or a transcoding of it with each
+/// of its bytes' offsets in the pattern space, its bytes above 0x7F the characters of
+/// the block at [`RAW_BYTE_BASE`]: all of them in byte mode, those that are not UTF-8 in
+/// UTF-8 mode. A regex with back-references was an error on a pattern space that was
+/// not UTF-8, as in byte mode on any byte above 0x7F, and in byte mode it read the UTF-8
+/// it found as characters; then they were Latin-1 letters, which the C locale has not.
 enum FancyText<'t> {
     Direct(&'t str),
     Transcoded {
@@ -394,7 +407,7 @@ impl<'t> FancyText<'t> {
         match mode {
             CharacterMode::Byte => {
                 for (at, &byte) in bytes.iter().enumerate() {
-                    push(char::from(byte), at);
+                    push(raw_byte_char(byte), at);
                 }
             }
             CharacterMode::Utf8 => {
@@ -405,9 +418,7 @@ impl<'t> FancyText<'t> {
                         at += c.len_utf8();
                     }
                     for &byte in chunk.invalid() {
-                        let raw = char::from_u32(RAW_BYTE_BASE + u32::from(byte))
-                            .unwrap_or(char::REPLACEMENT_CHARACTER);
-                        push(raw, at);
+                        push(raw_byte_char(byte), at);
                         at += 1;
                     }
                 }
@@ -443,11 +454,12 @@ impl<'t> FancyText<'t> {
     }
 }
 
-/// The pattern `pattern` reads in, as the text of a regex with back-references: in byte
-/// mode each byte the character of the same number, as [`FancyText`] reads the input.
+/// The pattern `pattern` reads in, as the text of a regex with back-references or
+/// lookarounds: in byte mode each byte above 0x7F its character of the block at
+/// [`RAW_BYTE_BASE`], as [`FancyText`] reads the input.
 fn fancy_pattern(pattern: &[u8], character_mode: CharacterMode) -> UResult<String> {
     match character_mode {
-        CharacterMode::Byte => Ok(pattern.iter().map(|&byte| char::from(byte)).collect()),
+        CharacterMode::Byte => Ok(pattern.iter().map(|&byte| raw_byte_char(byte)).collect()),
         CharacterMode::Utf8 => std::str::from_utf8(pattern)
             .map(str::to_string)
             .map_err(|e| {

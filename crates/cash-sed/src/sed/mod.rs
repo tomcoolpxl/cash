@@ -306,6 +306,8 @@ fn build_context(matches: &ArgMatches) -> UResult<ProcessingContext> {
         last_line: false,
         last_file: false,
         later_files: Vec::new(),
+        later_start: 0,
+        read_ahead: fast_io::ReadAhead::default(),
         later_input: None,
         stdin_done: false,
         stop_processing: false,

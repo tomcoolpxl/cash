@@ -3923,3 +3923,179 @@ fn test_invalid_utf8_for_y_and_l() {
         .succeeds()
         .stdout_is_bytes(b"a\\377$\n");
 }
+
+/// GNU's word boundaries in UTF-8 mode: a word character is a letter, a digit or `_`, as
+/// in GNU sed, so a combining mark or connector punctuation is no part of a word, and a
+/// byte that is not UTF-8 is one. The RE engine's own boundaries took in marks and
+/// connector punctuation, and took such a byte for none.
+#[test]
+fn test_word_boundaries_in_utf8_mode() {
+    for (script, input, output) in [
+        (
+            "s/\\b/[&]/g",
+            "e\u{301}e x\u{203f}y\n",
+            "[]e[]\u{301}[]e[] []x[]\u{203f}[]y[]\n",
+        ),
+        (
+            "s/\\B/[&]/g",
+            "e\u{301}e x\u{203f}y\n",
+            "e\u{301}e x\u{203f}y\n",
+        ),
+        (
+            "s/\\</[&]/g",
+            "e\u{301}e x\u{203f}y\n",
+            "[]e\u{301}[]e []x\u{203f}[]y\n",
+        ),
+        (
+            "s/\\>/[&]/g",
+            "e\u{301}e x\u{203f}y\n",
+            "e[]\u{301}e[] x[]\u{203f}y[]\n",
+        ),
+    ] {
+        new_ucmd!()
+            .env("LC_ALL", "C.UTF-8")
+            .arg(script)
+            .pipe_in(input)
+            .succeeds()
+            .stdout_only(output);
+    }
+    new_ucmd!()
+        .env("LC_ALL", "C.UTF-8")
+        .arg("s/\\b/[&]/g")
+        .pipe_in(b"ab \xfft\xff x\n".to_vec())
+        .succeeds()
+        .stdout_is_bytes(b"[]ab[] []\xfft\xff[] []x[]\n");
+}
+
+/// In byte mode a regex with back-references takes bytes above 0x7F for no letters, as
+/// GNU sed's C locale does, for its word boundaries and its `I` flag; they were Latin-1
+/// letters, so `\xe9` matched `\xc9` under `I`.
+#[test]
+fn test_back_references_in_byte_mode_take_ascii_letters() {
+    for (script, input, output) in [
+        (
+            "s/\\(\\xe9\\)\\1/[&]/Ig",
+            &b"\xe9\xc9 \xe9\xe9\n"[..],
+            &b"\xe9\xc9 [\xe9\xe9]\n"[..],
+        ),
+        (
+            "s/\\b\\(.\\)\\1/[&]/g",
+            b"\xe9\xe9 a\xe9\xe9 ee\n",
+            b"\xe9\xe9 a[\xe9\xe9] [ee]\n",
+        ),
+        ("s/\\(\\w\\)\\1/[&]/g", b"\xe9\xe9 ee\n", b"\xe9\xe9 [ee]\n"),
+    ] {
+        new_ucmd!()
+            .env("LC_ALL", "C")
+            .arg(script)
+            .pipe_in(input.to_vec())
+            .succeeds()
+            .stdout_is_bytes(output);
+    }
+}
+
+/// `$` looks into a later input that is a pipe, as GNU sed reads ahead, and keeps what it
+/// read for the pipe's turn: an empty one leaves the current line the last. The pipe was
+/// taken to have lines, and asking for its kind used up the one reader its writer waits
+/// for. The pipe is a named pipe Windows PowerShell serves.
+#[test]
+fn test_last_line_looks_into_a_later_pipe() -> std::io::Result<()> {
+    use std::io::{BufRead, BufReader};
+    use std::process::{Command, Stdio};
+
+    let dir = tempfile::tempdir()?;
+    let f1 = dir.path().join("f1");
+    fs::write(&f1, "x\ny\n")?;
+    for (index, (contents, output)) in [("", "y\n"), ("q", "q\n")].into_iter().enumerate() {
+        let name = format!("cash-sed-test-{}-{index}", std::process::id());
+        let server = format!(
+            "$s = New-Object System.IO.Pipes.NamedPipeServerStream('{name}', 'Out'); \
+             [Console]::Out.WriteLine('ready'); [Console]::Out.Flush(); \
+             if ($s.WaitForConnectionAsync().Wait(60000)) {{ \
+             $b = [Text.Encoding]::ASCII.GetBytes('{contents}'); \
+             if ($b.Length) {{ $s.Write($b, 0, $b.Length); $s.WriteByte(10) }}; \
+             $s.Flush() }}; $s.Dispose()"
+        );
+        let mut writer = Command::new("powershell.exe")
+            .args(["-NoProfile", "-NonInteractive", "-Command", &server])
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .spawn()?;
+        let mut ready = String::new();
+        BufReader::new(writer.stdout.take().expect("the server's output")).read_line(&mut ready)?;
+        assert_eq!(ready.trim(), "ready");
+        new_ucmd!()
+            .args(&[
+                "-n",
+                "$p",
+                &f1.to_string_lossy(),
+                &format!(r"\\.\pipe\{name}"),
+            ])
+            .succeeds()
+            .stdout_only(output);
+        writer.wait()?;
+    }
+    Ok(())
+}
+
+/// In `a`, `i` and `c` text `\c\\` is the control character of a backslash and takes
+/// both backslashes, and `\c` before another escape is GNU sed's error once the text is
+/// read; the second backslash was left to escape the line's end, and the error taken.
+#[test]
+fn test_control_escapes_in_text() {
+    check_output(&["a x\\c\\\\y"], b"L\n", b"L\nx\x1cy\n");
+    check_output(&["a x\\c\\\\\n"], b"L\n", b"L\nx\x1c\n");
+    check_output(&["a x\\c\\\\\\\nz"], b"L\n", b"L\nx\x1c\nz\n");
+    check_output(&["i\\\nx\\c\\\\y\\\nz"], b"L\n", b"x\x1cy\nz\nL\n");
+    check_script_error(
+        &["a x\\c\\dy"],
+        "-e expression #1, char 8: recursive escaping after \\c not allowed",
+    );
+    check_script_error(
+        &["c x\\c\\dy;p"],
+        "-e expression #1, char 10: recursive escaping after \\c not allowed",
+    );
+    check_script_error(
+        &["-e", "1a\\", "-e", "x\\c\\dy"],
+        "-e expression #2, char 6: recursive escaping after \\c not allowed",
+    );
+}
+
+/// A script file that is a directory is an empty script, as GNU sed reads it: it opens
+/// the directory, and reading it gives no characters. It was "couldn't open file D:
+/// Permission denied", Windows refusing to open it.
+#[test]
+fn test_script_file_that_is_a_directory() -> std::io::Result<()> {
+    let dir = tempfile::tempdir()?;
+    let path = dir.path().to_string_lossy().into_owned();
+    check_output(&["-f", &path], b"a\n", b"a\n");
+    check_output(&["-n", "-f", &path, "-e", "p"], b"a\n", b"a\n");
+    Ok(())
+}
+
+/// Standard output's reader going away ends sed in silence with 141, as SIGPIPE ends GNU
+/// sed and every tool of cash's own (spec D71); it said "sed: Broken pipe" with status 1.
+#[test]
+fn test_reader_gone_ends_sed_with_141() -> std::io::Result<()> {
+    use std::io::{BufRead, BufReader};
+    use std::process::{Command, Stdio};
+
+    let dir = tempfile::tempdir()?;
+    let path = dir.path().join("big");
+    fs::write(&path, "line\n".repeat(400_000))?;
+    let mut child = Command::new(crate::TESTS_BINARY)
+        .arg("p")
+        .arg(&path)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+    let mut first = String::new();
+    // The reader goes away at the end of the statement.
+    BufReader::new(child.stdout.take().expect("sed's output")).read_line(&mut first)?;
+    assert_eq!(first, "line\n");
+    let output = child.wait_with_output()?;
+    assert_eq!(output.status.code(), Some(141));
+    assert_eq!(String::from_utf8_lossy(&output.stderr), "");
+    Ok(())
+}

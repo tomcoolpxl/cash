@@ -22,7 +22,7 @@ use crate::sed::error_handling::{
     compilation_err, compilation_err_at, compilation_err_of_line, compilation_err_past_line,
     compilation_error,
 };
-use crate::sed::fast_io::{DEV_STDIN, stdin_file};
+use crate::sed::fast_io::{DEV_STDIN, is_directory, stdin_file};
 use crate::sed::fast_regex::{RAW_BYTE_BASE, Regex};
 use crate::sed::gnu_regex;
 use crate::sed::named_writer::NamedWriter;
@@ -607,14 +607,16 @@ fn parse_command_ending(lines: &ScriptLineProvider, line: &mut ScriptCharProvide
 ///   character is that character: `\A`, `\z`, `\d` and `\p` were the engine's own
 ///   anchors and classes, or an error.
 /// - A bracket expression is translated by [`bracket_to_engine`].
-/// - In UTF-8 mode, an expression with back-references keeps `.` and `[^...]` from the
-///   characters that stand for bytes that are not UTF-8 (`fast_regex::RAW_BYTE_BASE`),
-///   as GNU sed matches such a byte with nothing but itself.
+/// - In UTF-8 mode GNU's word boundaries are lookarounds over its word characters
+///   (`word_boundary`), and an expression with them or with back-references, which the
+///   engine matches as text, keeps `.` and `[^...]` from the characters that stand for
+///   bytes that are not UTF-8 (`fast_regex::RAW_BYTE_BASE`), as GNU sed matches such a
+///   byte with nothing but itself.
 fn regex_to_engine(pattern: &[u8], syntax: gnu_regex::Syntax) -> Vec<u8> {
     let gnu_regex::Syntax {
         extended, posix, ..
     } = syntax;
-    let raw_bytes = syntax.utf8 && has_back_reference(pattern, syntax);
+    let raw_bytes = syntax.utf8 && matched_as_text(pattern, syntax);
     let mut result = Vec::with_capacity(pattern.len());
     let mut pos = 0;
 
@@ -742,19 +744,22 @@ fn raw_byte_range() -> String {
     )
 }
 
-/// Whether the expression has a back-reference, outside its bracket expressions.
-fn has_back_reference(pattern: &[u8], syntax: gnu_regex::Syntax) -> bool {
+/// Whether the engine matches the expression as text (`fast_regex::FancyText`): whether
+/// it has a back-reference, or in UTF-8 mode a word boundary (`word_boundary`), outside
+/// its bracket expressions.
+fn matched_as_text(pattern: &[u8], syntax: gnu_regex::Syntax) -> bool {
     let mut pos = 0;
     let mut scratch = Vec::new();
     while let Some(&c) = pattern.get(pos) {
         pos += 1;
         match c {
             b'\\' => {
-                if pattern
-                    .get(pos)
-                    .is_some_and(|next| (b'1'..=b'9').contains(next))
-                {
-                    return true;
+                match pattern.get(pos) {
+                    Some(b'1'..=b'9') => return true,
+                    Some(b'b' | b'B' | b'<' | b'>') if syntax.utf8 && !syntax.posix => {
+                        return true;
+                    }
+                    _ => {}
                 }
                 pos += 1;
             }
@@ -790,7 +795,7 @@ fn escape_to_engine(
                 return false;
             }
             // In byte mode the classes are ASCII, as in GNU sed's C locale, also where
-            // the expression is matched as Latin-1 text (`fast_regex::FancyText`).
+            // the expression is matched as text (`fast_regex::FancyText`).
             b'w' => {
                 result.extend_from_slice(b"[0-9A-Za-z_]");
                 return false;
@@ -811,6 +816,10 @@ fn escape_to_engine(
                 result.extend_from_slice(&[b'\\', c]);
                 return false;
             }
+            b'b' | b'B' | b'<' | b'>' if syntax.utf8 => {
+                result.extend_from_slice(word_boundary(c).as_bytes());
+                return true;
+            }
             b'b' | b'B' | b'<' | b'>' => {
                 result.extend_from_slice(&[b'\\', c]);
                 return true;
@@ -828,6 +837,25 @@ fn escape_to_engine(
     }
     push_engine_literal(c, result);
     false
+}
+
+/// GNU's word boundary `\c` in UTF-8 mode, as lookarounds over its word characters,
+/// letters, digits and `_`: `\<` is a word character with none before it, `\>` one with
+/// none after it, `\b` either, and `\B` neither. The engine's own boundaries take in
+/// combining marks and connector punctuation, so `\be` matched within `e\u{301}e`. A byte
+/// that is not UTF-8 is a word character to GNU's boundaries, as it is here (the
+/// characters that stand for it, `fast_regex::RAW_BYTE_BASE`).
+fn word_boundary(c: u8) -> String {
+    let word = format!(r"[\p{{Alphabetic}}\p{{Nd}}_{}]", raw_byte_range());
+    let word = word.as_str();
+    let start = format!("(?<!{word})(?={word})");
+    let end = format!("(?<={word})(?!{word})");
+    match c {
+        b'<' => start,
+        b'>' => end,
+        b'b' => format!("(?:{start}|{end})"),
+        _ => format!("(?:(?<={word})(?={word})|(?<!{word})(?!{word}))"),
+    }
 }
 
 /// Push the byte `c` for the engine to match as itself, escaped if it is one of its
@@ -1588,7 +1616,7 @@ fn compile_read_line_command(
                 stdin_file().map_or(LineInput::Missing, |file| {
                     LineInput::Stdin(std::io::BufReader::new(file))
                 })
-            } else if path.is_dir() {
+            } else if is_directory(path) {
                 LineInput::Directory
             } else {
                 std::fs::File::open(path).map_or(LineInput::Missing, |file| {
@@ -1778,6 +1806,8 @@ fn compile_text_command_gnu(
 
     // Gather replacement text.  Stop on a non-escaped newline.
     let mut text = Vec::new();
+    // An error GNU sed reports once the text is read.
+    let mut error = None;
     'text_content: loop {
         if escaped_newline {
             let had_newline = lines.line_has_newline();
@@ -1829,7 +1859,20 @@ fn compile_text_command_gnu(
                     text.push(b'\n');
                     break 'text_content;
                 }
+                // `\c\\` is the control character of a backslash, as in a regex, and
+                // `\c` before another escape GNU sed's error; the first left the second
+                // backslash to escape what followed, and the second was taken.
                 line.retreat(1);
+                match parse_control_escape(line, None) {
+                    ControlEscape::Char(decoded) => {
+                        push_script_char(&mut text, decoded, context.character_mode);
+                    }
+                    ControlEscape::Bare => text.push(b'c'),
+                    ControlEscape::Recursive => {
+                        error.get_or_insert(ERR_RECURSIVE_ESCAPE_C);
+                    }
+                }
+                continue 'text_content;
             }
 
             if let Some(decoded) = parse_char_escape(line) {
@@ -1843,6 +1886,9 @@ fn compile_text_command_gnu(
             text.push(line.current_byte());
             line.advance();
         }
+    }
+    if let Some(error) = error {
+        return Err(compilation_err_past_line(lines, line, error));
     }
     cmd.data = CommandData::Text(Rc::from(text));
     Ok(CommandHandling::Continue)

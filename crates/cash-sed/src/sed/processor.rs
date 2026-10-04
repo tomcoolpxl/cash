@@ -13,7 +13,9 @@ use crate::sed::command::{
     ProcessingContext, Transliteration,
 };
 use crate::sed::error_handling::{runtime_err, runtime_error, strerror};
-use crate::sed::fast_io::{DEV_STDIN, IOChunk, LineReader, OutputBuffer, read_dev_stdin};
+use crate::sed::fast_io::{
+    DEV_STDIN, IOChunk, LineReader, OutputBuffer, is_directory, is_pipe_path, read_dev_stdin,
+};
 use crate::sed::fast_regex::Regex;
 use crate::sed::in_place::InPlace;
 use crate::sed::named_writer::{self, NamedWriter};
@@ -107,8 +109,10 @@ fn read_error(path: &Path, error: &io::Error) -> Box<dyn UError> {
 }
 
 /// Whether no input follows the current file's, for `$`. As GNU sed looks ahead, a file
-/// that is empty or cannot be read has none, and standard input is looked into; another
-/// file that is not a regular one is taken to have some.
+/// that is empty or cannot be read has none, and standard input is looked into. Another
+/// file that is not a regular one, a pipe, is opened and read into, and kept open for
+/// its turn (`ReadAhead`); it was taken to have input, and a named pipe asked for its
+/// kind was then busy when its turn came.
 fn no_later_input(context: &mut ProcessingContext) -> bool {
     if context.last_file {
         return true;
@@ -117,18 +121,37 @@ fn no_later_input(context: &mut ProcessingContext) -> bool {
         return !later;
     }
     let reading_stdin = context.input_name == Path::new("-");
-    let later = context.later_files.iter().any(|path| {
-        if path == Path::new("-") {
-            // Standard input read to its end already has nothing more.
-            !reading_stdin
-                && io::stdin()
-                    .lock()
-                    .fill_buf()
-                    .is_ok_and(|buffer| !buffer.is_empty())
-        } else {
-            std::fs::metadata(path).is_ok_and(|metadata| !metadata.is_file() || metadata.len() > 0)
-        }
-    });
+    let later = context
+        .later_files
+        .iter()
+        .enumerate()
+        .any(|(offset, path)| {
+            let index = context.later_start + offset;
+            if path == Path::new("-") {
+                // Standard input read to its end already has nothing more.
+                return !reading_stdin
+                    && io::stdin()
+                        .lock()
+                        .fill_buf()
+                        .is_ok_and(|buffer| !buffer.is_empty());
+            }
+            if !is_pipe_path(path) {
+                match std::fs::metadata(path) {
+                    Ok(metadata) if metadata.is_file() => return metadata.len() > 0,
+                    Ok(metadata) if metadata.is_dir() => return true,
+                    Ok(_) => {}
+                    Err(_) => return false,
+                }
+            }
+            if let Some(has_input) = context.read_ahead.has_input(index) {
+                return has_input;
+            }
+            let Ok(reader) = LineReader::open_with(path, context.treats_cr_as_data()) else {
+                return false;
+            };
+            context.read_ahead.keep(index, reader);
+            context.read_ahead.has_input(index).unwrap_or(false)
+        });
     context.later_input = Some(later);
     !later
 }
@@ -1188,9 +1211,17 @@ fn reset_latched_address_ranges(range_commands: &mut [Rc<RefCell<Command>>]) {
 ///
 /// With `--follow-symlinks` a file that is not there is GNU sed's "couldn't readlink F:
 /// ...", status 4, before it is opened.
-fn open_input(path: &PathBuf, context: &ProcessingContext) -> UResult<Option<LineReader>> {
+fn open_input(
+    path: &PathBuf,
+    index: usize,
+    context: &ProcessingContext,
+) -> UResult<Option<LineReader>> {
+    if let Some(reader) = context.read_ahead.take(index) {
+        return Ok(Some(reader));
+    }
     if context.follow_symlinks
         && path.as_os_str() != "-"
+        && !is_pipe_path(path)
         && let Err(error) = std::fs::symlink_metadata(path)
     {
         return runtime_error(format!(
@@ -1199,7 +1230,7 @@ fn open_input(path: &PathBuf, context: &ProcessingContext) -> UResult<Option<Lin
             strerror(&error)
         ));
     }
-    if path.as_os_str() != "-" && path.is_dir() {
+    if path.as_os_str() != "-" && is_directory(path) {
         return runtime_error(if context.in_place {
             format!("couldn't edit {}: not a regular file", path.display())
         } else {
@@ -1234,8 +1265,9 @@ pub fn process_all_files(
     for (index, path) in files.iter().enumerate() {
         context.last_file = index == last_file_index;
         context.later_files = files.get(index + 1..).unwrap_or_default().to_vec();
+        context.later_start = index + 1;
         context.later_input = None;
-        let Some(mut reader) = open_input(path, context)? else {
+        let Some(mut reader) = open_input(path, index, context)? else {
             unreadable = true;
             continue;
         };

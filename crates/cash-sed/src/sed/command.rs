@@ -9,6 +9,7 @@
 // file that was distributed with this source code.
 
 use crate::sed::error_handling::ScriptLocation;
+use crate::sed::fast_io::ReadAhead;
 use crate::sed::fast_regex::{Captures, Match, Regex};
 use crate::sed::named_writer::NamedWriter;
 use crate::sed::script_char_provider::ScriptCharProvider;
@@ -59,8 +60,12 @@ pub struct ProcessingContext {
     pub last_line: bool,
     /// True if the file is the last file of the ones specified
     pub last_file: bool,
-    /// The input files after the current one, whose input `$` looks ahead into
+    /// The input files after the current one, whose input `$` looks ahead into, and the
+    /// place of the first of them in the list of input files
     pub later_files: Vec<PathBuf>,
+    pub later_start: usize,
+    /// The input files `$` has opened ahead of their turn, by their place in the list
+    pub read_ahead: ReadAhead,
     /// Whether any of `later_files` has input, once `$` has looked
     pub later_input: Option<bool>,
     /// Whether standard input has been read to its end as an input file

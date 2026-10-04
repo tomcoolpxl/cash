@@ -128,6 +128,8 @@ pub fn strerror(error: &std::io::Error) -> String {
         ErrorKind::IsADirectory => "Is a directory".to_string(),
         ErrorKind::NotADirectory => "Not a directory".to_string(),
         ErrorKind::InvalidFilename | ErrorKind::InvalidInput => "Invalid argument".to_string(),
+        ErrorKind::StorageFull => "No space left on device".to_string(),
+        ErrorKind::BrokenPipe => "Broken pipe".to_string(),
         _ => {
             let text = error.to_string();
             match text.find(" (os error ") {

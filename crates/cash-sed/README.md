@@ -156,19 +156,9 @@ that aren't compatible with GNU sed or POSIX.
   and requires locale-specific processing (e.g. ignore/map case,
   character classes), consider converting it through UTF-8 to ensure
   the correct handling of locale-specific regular expressions.
-  In UTF-8 mode the character classes (`[[:alpha:]]`, `\w`) follow Unicode's
-  properties, which differ from GNU _sed_'s C library in a few characters.
-* The word boundaries `\b`, `\B`, `\<` and `\>` take the RE engine's word
-  characters, which include combining marks; GNU _sed_'s are letters, digits and
-  `_`. A regular expression with back-references, which the engine matches as text,
-  reads bytes above 0x7F as Latin-1 letters in byte mode (`LC_ALL=C`) for its word
-  boundaries and the `I` flag, where GNU _sed_'s C locale has no letters there.
-* The last line (`$`) looks ahead past the input files that are empty or cannot be
-  read, and into standard input, as GNU _sed_ does; another input that is not a
-  regular file, such as a named pipe, is taken to have lines, where GNU _sed_ reads
-  ahead into it.
-* In the text of `a`, `i` and `c`, `\c\\` is the control character of a backslash,
-  where GNU _sed_ also writes the second backslash.
+  In UTF-8 mode the character classes (`[[:alpha:]]`, `\w`) and word boundaries
+  follow Unicode's properties, which differ from GNU _sed_'s C library in a few
+  characters.
 
 ## GNU test suite compatibility
 

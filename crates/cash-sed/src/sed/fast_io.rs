@@ -15,13 +15,15 @@
 // For the full copyright and license information, please view the LICENSE
 // file that was distributed with this source code.
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, BufWriter, Read, Seek, Write};
+use std::rc::Rc;
 
 use std::str;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use uucore::error::{UError, UResult, USimpleError};
 
 use crate::sed::error_handling::strerror;
@@ -303,6 +305,53 @@ impl LineReader {
     }
 }
 
+/// Whether `path` names a Windows named pipe (`\\.\pipe\name`), such as cash's process
+/// substitution gives. Asking for such a file's kind opens it, as a reader of the pipe,
+/// and the one reader its writer waits for is then gone: so it is opened only to be read.
+pub fn is_pipe_path(path: &Path) -> bool {
+    let name = path.as_os_str().to_string_lossy();
+    let prefix = name.get(..9).unwrap_or_default();
+    prefix.eq_ignore_ascii_case(r"\\.\pipe\") || prefix.eq_ignore_ascii_case("//./pipe/")
+}
+
+/// Whether `path` is a directory, which a named pipe is not (`is_pipe_path`).
+pub fn is_directory(path: &Path) -> bool {
+    !is_pipe_path(path) && path.is_dir()
+}
+
+/// Input files `$` has opened and read ahead into before their turn, by their place in
+/// the list of input files, kept for it: a pipe read again would have lost what was
+/// read (`processor::no_later_input`).
+#[derive(Clone, Default)]
+pub struct ReadAhead(Rc<RefCell<HashMap<usize, LineReader>>>);
+
+impl ReadAhead {
+    /// Keep `reader`, the input file at `index`, for its turn.
+    pub fn keep(&self, index: usize, reader: LineReader) {
+        self.0.borrow_mut().insert(index, reader);
+    }
+
+    /// The input file at `index`, if it has been opened ahead of its turn.
+    pub fn take(&self, index: usize) -> Option<LineReader> {
+        self.0.borrow_mut().remove(&index)
+    }
+
+    /// Whether the input file at `index` has been opened ahead, and if so whether it has
+    /// input.
+    pub fn has_input(&self, index: usize) -> Option<bool> {
+        self.0
+            .borrow_mut()
+            .get_mut(&index)
+            .map(|reader| reader.last_line().map_or(true, |at_end| !at_end))
+    }
+}
+
+impl std::fmt::Debug for ReadAhead {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_list().entries(self.0.borrow().keys()).finish()
+    }
+}
+
 /// GNU sed's special file for standard input, which `r` and `R` read. Windows has no
 /// such file, so they read nothing from it.
 pub const DEV_STDIN: &str = "/dev/stdin";
@@ -462,7 +511,7 @@ impl OutputBuffer {
     /// read, a directory, is "read error on F: Is a directory" with status 4; nothing was
     /// written for a directory.
     pub fn copy_file(&mut self, path: &PathBuf) -> UResult<()> {
-        if path.is_dir() {
+        if is_directory(path) {
             return Err(USimpleError::new(
                 4,
                 format!("read error on {}: Is a directory", path.display()),
@@ -888,6 +937,41 @@ mod tests {
         let mut out = String::new();
         file.read_to_string(&mut out).unwrap();
         assert_eq!(out, "bar\n");
+    }
+
+    /// A writer whose device is full, as a full disk fails a write.
+    struct DiskFull;
+
+    impl Write for DiskFull {
+        fn write(&mut self, _: &[u8]) -> io::Result<usize> {
+            Err(io::Error::from(io::ErrorKind::StorageFull))
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    // A failed write is GNU sed's error, with its status 4: one the buffer puts off fails
+    // its flush, and one too big for the buffer fails as it is written.
+    #[test]
+    fn write_to_full_device() {
+        let mut out = OutputBuffer::new(Box::new(DiskFull)).with_name("out".to_string());
+        out.write_bytes(b"abc\n").unwrap();
+        let error = out.flush().unwrap_err();
+        assert_eq!(error.code(), 4);
+        assert_eq!(
+            error.to_string(),
+            "couldn't flush out: No space left on device"
+        );
+
+        let mut out = OutputBuffer::new(Box::new(DiskFull)).with_name("out".to_string());
+        let error = out.write_bytes(&vec![b'x'; 20_000]).unwrap_err();
+        assert_eq!(error.code(), 4);
+        assert_eq!(
+            error.to_string(),
+            "couldn't write 20000 items to out: No space left on device"
+        );
     }
 
     #[test]

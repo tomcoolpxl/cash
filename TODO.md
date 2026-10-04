@@ -63,12 +63,10 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 What comparing cash's sed and awk with GNU sed 4.9 and gawk turned up while phase 14
 fixed their leftovers; moved here so 1.3.14 could go out (the user, 2026-10-04).
 
-- sed, left by the comparison with GNU sed 4.9 (2026-10-04), as the crate's README lists
-  them: `\b`, `\<` and `\>` count combining marks as word characters; in byte mode a
-  regex with back-references takes bytes above 0x7F for Latin-1 letters for word bounds
-  and `I`; `$` assumes a later named pipe has lines; in `a`/`i`/`c` text `\c\\` drops
-  GNU's second backslash. `sed -f DIR` says "couldn't open file" where MSYS GNU reads
-  nothing.
+- sed, found matching GNU sed 4.9 (2026-10-04): a `w` file ends lines with `\n` when the
+  input line ended in `\r\n`, where sed's own output keeps `\r\n`; `--follow-symlinks`
+  without `-i` runs the readlink check on every input, not checked against GNU; an
+  in-place edit of a named pipe opens it to learn its type before refusing it.
 - awk, found matching gawk 5.4 (2026-10-04): `print > "/dev/null"` fails; `printf` with
   no arguments is read as `print f`; `asort()` is not there; `sub(/a/, "b", "x")` is a
   compile error where gawk takes a constant target; `getline getline` and `getline x y`
