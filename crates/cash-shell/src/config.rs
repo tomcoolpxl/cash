@@ -1,4 +1,4 @@
-//! Configuration file support for the brush shell.
+//! Configuration file support for cash.
 //!
 //! This module provides TOML-based configuration file loading with the following features:
 //! - Forward-compatible: unknown fields are ignored
@@ -14,7 +14,7 @@ use std::{
 
 use crate::args::CommandLineArgs;
 
-/// Root configuration structure for the brush shell.
+/// Root configuration structure for cash.
 ///
 /// All fields are optional to support forward compatibility and partial configuration.
 /// Unknown fields in the TOML file are silently ignored.

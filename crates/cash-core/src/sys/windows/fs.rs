@@ -286,16 +286,25 @@ fn default_system_paths() -> Vec<PathBuf> {
 ///
 /// On Windows, points to `%ProgramData%\cash\profile`. If the file exists, it is sourced
 /// for login shells; if not, it is ignored without error.
-pub fn get_system_profile_path() -> Option<&'static Path> {
-    Some(Path::new(r"C:\ProgramData\cash\profile"))
+pub fn get_system_profile_path() -> Option<PathBuf> {
+    Some(program_data().join("cash").join("profile"))
 }
 
 /// Returns the path to the system-wide shell rc script.
 ///
 /// On Windows, points to `%ProgramData%\cash\cashrc`. If the file exists, it is sourced
 /// for interactive non-login shells ahead of `~/.bashrc`; if not, it is ignored without error.
-pub fn get_system_rc_path() -> Option<&'static Path> {
-    Some(Path::new(r"C:\ProgramData\cash\cashrc"))
+pub fn get_system_rc_path() -> Option<PathBuf> {
+    Some(program_data().join("cash").join("cashrc"))
+}
+
+/// The machine's `ProgramData` folder, which was taken to be `C:\ProgramData`.
+fn program_data() -> PathBuf {
+    // ProgramData names one folder for the whole machine, read before any shell state exists.
+    // process state: the machine's ProgramData folder, the same in every process.
+    std::env::var_os("ProgramData")
+        .filter(|value| !value.is_empty())
+        .map_or_else(|| PathBuf::from(r"C:\ProgramData"), PathBuf::from)
 }
 
 /// Returns the platform default for case-insensitive pathname expansion.
