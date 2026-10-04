@@ -72,11 +72,9 @@ Found writing the help catalogue (2026-10-04); all fixed, released as 1.3.17.
 Chosen by the user on 2026-10-04, after 1.3.17:
 
 Bare `lsof` and the open files of `-p`/`-c`/`-u` come from the handle walk
-(`cash_win32::handles`, spec D50) since 2026-10-05. Left:
-
-- `lsof +D DIR` asks the Restart Manager once per file below DIR: `lsof -p $$ -a +D /tmp`
-  over 88,142 files in `TEMP` ran past two minutes. The walk could answer `+D`/`+d` (and
-  a FILE) for the processes it can open, with the Restart Manager kept for the others.
+(`cash_win32::handles`, spec D50) since 2026-10-05, and so do `+D`, `+d` and a folder
+named: `lsof +D /tmp` over `TEMP`'s 87,411 folders took over two minutes asking the
+Restart Manager file by file, and takes under two seconds. Done.
 
 ---
 
@@ -111,12 +109,16 @@ Wrong:
   (`0.0.0.0` and `[::]`) where Linux has one `*`; `-V` has no `iproute2-` string; the
   `-F /nonexistent` message differs.
 
-Missing, and Windows could give it (to be chosen):
+Missing, chosen by the user on 2026-10-05:
 
-- `-r` (names, `GetNameInfoW` with a cache), `dev NAME` (IPv6 scope only), `-B`
-  (undocumented `InternalGetBoundTcpEndpointTable`), `-K` (`SetTcpEntry` DELETE_TCB,
-  admin, IPv4), `-i` and real Recv-Q/Send-Q and `-m` (`GetPerTcpConnectionEStats`, which
-  an administrator must switch on per connection), `-E` (polling only).
+- `-r`: names through `GetNameInfoW`, with a cache and a time limit per address.
+- `-K`: closes the matching TCP connections with `SetTcpEntry` (`DELETE_TCB`); Windows
+  allows it elevated and for IPv4 only, and says so otherwise.
+- `-B`: bound, not listening TCP sockets, from the undocumented
+  `InternalGetBoundTcpEndpointTable` (netstat's BOUND).
+
+Not chosen: `dev NAME`, `-i` and real queue sizes and `-m` (`GetPerTcpConnectionEStats`
+needs an administrator to switch collection on per connection), `-E` (polling only).
 
 ---
 

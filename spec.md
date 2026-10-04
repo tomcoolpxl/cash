@@ -1832,9 +1832,11 @@ Output follows psmisc `fuser` 23.7 and lsof 4.99.7 (process ids alone on standar
 for `fuser` and `lsof -t`; lsof's nine columns). What Windows cannot say is shown as
 unknown rather than invented: lsof's FD is `txt`, `mem`, a handle's value with `r`, `w`
 or `u`, or `-`, and DEVICE and NODE are `-` (NODE is `TCP`/`UDP` for sockets). `lsof`
-with no selection lists every process. A directory argument means the files below it,
-since a process that only has a directory as its working directory is invisible to the
-Restart Manager. Refused, with a message: `fuser -m`/`-c`/`-M` (mount points), `-w`
+with no selection lists every process. A folder (`+D`, `+d`, or named) is answered from
+the walk, the executables and modules of every process, and for the processes the walk
+cannot open, the Restart Manager over the files below, asked in halves; past 20,000
+entries that last part is skipped with a warning. Refused, with a message: `fuser
+-m`/`-c`/`-M` (mount points), `-w`
 (write access is not reported), `lsof -U` (Unix sockets cannot be listed), and lsof's
 field output and repeat modes.
 

@@ -18,12 +18,13 @@
 //! Windows has no device or inode numbers, so DEVICE and NODE show `-` (NODE is
 //! `TCP`/`UDP` for sockets, as in lsof), and FD is `-` where no handle is known.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashSet};
 use std::io::Write;
 use std::net::{IpAddr, SocketAddr, ToSocketAddrs};
 use std::path::{Path, PathBuf};
 
 use cash_core::{ExecutionResult, builtins};
+use cash_win32::handles::{self, OpenFile, Walk};
 use cash_win32::{net, process};
 use clap::Parser;
 
@@ -452,9 +453,152 @@ fn file_row(pid: u32, path: &Path, display: String, access: Access) -> Row {
     }
 }
 
+/// Says what the walk could not look at: processes it could not open, and handles that
+/// did not answer.
+fn warn_about(walk: &Walk, stderr: &mut impl Write) -> std::io::Result<()> {
+    if !walk.unopened.is_empty() {
+        let advice = if process::current_process_is_elevated().unwrap_or(false) {
+            "they are protected"
+        } else {
+            "they are another account's or elevated; `sudo lsof` lists them"
+        };
+        writeln!(
+            stderr,
+            "lsof: WARNING: can't list the files of {} processes: {advice}",
+            walk.unopened.len()
+        )?;
+    }
+    if walk.abandoned > 0 {
+        writeln!(
+            stderr,
+            "lsof: WARNING: {} handles did not answer and are not listed",
+            walk.abandoned
+        )?;
+    }
+    Ok(())
+}
+
+/// Folders below this many files have the processes the walk could not open looked for
+/// with the Restart Manager; above it, which opens every file, a warning says so instead.
+const RESTART_MANAGER_FOLDER_LIMIT: usize = 20_000;
+
+/// What processes hold at or below the folder `root` (directly in it unless `recursive`),
+/// named in the user's spelling `shown`: open files from the handle walk, executables and
+/// modules from every process, and for the processes the walk could not open, the
+/// Restart Manager over the files below.
+fn rows_below(
+    root: &Path,
+    shown: &str,
+    recursive: bool,
+    walk: Option<&Walk>,
+    options: &Options,
+    stderr: &mut impl Write,
+) -> std::io::Result<Vec<Row>> {
+    let root_key = fileuse::path_key(root);
+    let root_key = root_key.trim_end_matches('\\');
+    let inside = |path: &Path| {
+        let key = fileuse::final_key(path);
+        key.strip_prefix(root_key).is_some_and(|rest| {
+            rest.is_empty()
+                || rest
+                    .strip_prefix('\\')
+                    .is_some_and(|rest| recursive || !rest.contains('\\'))
+        })
+    };
+    // Named as the user named the folder: `./held.txt` for `+D .`.
+    let canonical = std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
+    let canonical = canonical.to_string_lossy();
+    let depth = Path::new(canonical.strip_prefix(r"\\?\").unwrap_or(&canonical))
+        .components()
+        .count();
+    let display = |path: &Path| {
+        let relative: PathBuf = path.components().skip(depth).collect();
+        if relative.as_os_str().is_empty() {
+            shown.to_owned()
+        } else {
+            format!(
+                "{}/{}",
+                shown.trim_end_matches(['/', '\\']),
+                cash_win32::path::render(&relative)
+            )
+        }
+    };
+
+    let mut rows = Vec::new();
+    for file in walk.iter().flat_map(|w| &w.files) {
+        if inside(&file.path) {
+            let mut row = handle_row(file);
+            row.name = display(&file.path);
+            rows.push(row);
+        }
+    }
+    for listed in process::list() {
+        let image = process::image_path(listed.pid);
+        if let Some(image) = image.as_ref().filter(|image| inside(image)) {
+            rows.push(file_row(
+                listed.pid,
+                image,
+                display(image),
+                Access::Executable,
+            ));
+        }
+        for module in process::modules(listed.pid).unwrap_or_default() {
+            if inside(&module) && image.as_ref() != Some(&module) {
+                rows.push(file_row(
+                    listed.pid,
+                    &module,
+                    display(&module),
+                    Access::Mapped,
+                ));
+            }
+        }
+    }
+
+    // The processes the walk could not open; all of them when there was no walk.
+    let wanted: BTreeSet<u32> = walk.map_or_else(
+        || process::list().into_iter().map(|p| p.pid).collect(),
+        |w| w.unopened.clone(),
+    );
+    if wanted.is_empty() {
+        return Ok(rows);
+    }
+    let files: Option<Vec<PathBuf>> = if recursive {
+        fileuse::files_below_within(root, RESTART_MANAGER_FOLDER_LIMIT)
+    } else {
+        std::fs::read_dir(root).map_or(Some(Vec::new()), |entries| {
+            let entries: Vec<_> = entries
+                .flatten()
+                .take(RESTART_MANAGER_FOLDER_LIMIT + 1)
+                .collect();
+            (entries.len() <= RESTART_MANAGER_FOLDER_LIMIT).then(|| {
+                entries
+                    .iter()
+                    .filter(|e| e.file_type().is_ok_and(|t| t.is_file()))
+                    .map(std::fs::DirEntry::path)
+                    .collect()
+            })
+        })
+    };
+    let Some(files) = files else {
+        if !options.quiet {
+            writeln!(
+                stderr,
+                "lsof: WARNING: {shown} holds over {RESTART_MANAGER_FOLDER_LIMIT} entries; the {} processes lsof can't open are not looked for in it",
+                wanted.len()
+            )?;
+        }
+        return Ok(rows);
+    };
+    let refs: Vec<&Path> = files.iter().map(PathBuf::as_path).collect();
+    for (pid, file) in fileuse::wanted_holders(&refs, &wanted).unwrap_or_default() {
+        rows.push(file_row(pid, &file, display(&file), Access::Open));
+    }
+    Ok(rows)
+}
+
 /// A file the handle walk found open: FD is the handle's value with lsof's mode letter,
 /// `r`, `w` or `u` for both.
-fn handle_row(file: cash_win32::handles::OpenFile) -> Row {
+fn handle_row(file: &OpenFile) -> Row {
     let mode = match (file.read, file.write) {
         (true, true) => "u",
         (false, true) => "w",
@@ -469,7 +613,7 @@ fn handle_row(file: cash_win32::handles::OpenFile) -> Row {
         size: file.size.map_or_else(|| "-".to_owned(), |s| s.to_string()),
         node: "-".to_owned(),
         name: cash_win32::path::render(&file.path),
-        file: Some(fileuse::path_key(&file.path)),
+        file: Some(fileuse::final_key(&file.path)),
         socket: None,
     }
 }
@@ -513,9 +657,18 @@ fn run(
     let mut processes = ProcessNames::new();
     let mut stderr = context.stderr();
     let mut rows: Vec<Row> = Vec::new();
-    let mut file_keys: Vec<String> = Vec::new();
+    let mut file_keys: HashSet<String> = HashSet::new();
+    // With no selection at all, every process is selected, as in lsof.
+    let everything = options.files.is_empty()
+        && options.dirs.is_empty()
+        && options.inet.is_none()
+        && options.pids.is_none()
+        && options.commands.is_empty()
+        && options.users.is_none();
 
-    // Files and directories.
+    // Files, from the Restart Manager; folders, `+D` (all below), `+d` (directly in) and a
+    // folder named as a file (all below), from the handle walk.
+    let mut folders: Vec<(PathBuf, &str, bool)> = Vec::new();
     for name in &options.files {
         let path = context.shell.absolute_path(name);
         if !path.exists() {
@@ -527,21 +680,17 @@ fn run(
             }
             continue;
         }
-        file_keys.push(fileuse::path_key(&path));
-        let holders = if path.is_dir() {
-            fileuse::holders_below(&path)
-        } else {
-            fileuse::file_holders(&path)
-        };
-        match holders {
-            Ok(holders) => rows.extend(holders.into_iter().map(|h| {
-                let display = if h.path == path {
-                    name.clone()
-                } else {
-                    cash_win32::path::render(&h.path)
-                };
-                file_row(h.pid, &h.path, display, h.access)
-            })),
+        if path.is_dir() {
+            folders.push((path, name, true));
+            continue;
+        }
+        file_keys.insert(fileuse::path_key(&path));
+        match fileuse::file_holders(&path) {
+            Ok(holders) => rows.extend(
+                holders
+                    .into_iter()
+                    .map(|h| file_row(h.pid, &h.path, name.clone(), h.access)),
+            ),
             Err(error) => writeln!(
                 stderr,
                 "lsof: {name}: {}",
@@ -551,53 +700,37 @@ fn run(
     }
     for (dir, recursive) in &options.dirs {
         let path = context.shell.absolute_path(dir);
-        if !path.is_dir() {
+        if path.is_dir() {
+            folders.push((path, dir, *recursive));
+        } else {
             writeln!(
                 stderr,
                 "lsof: WARNING: can't stat({dir}): No such directory"
             )?;
-            continue;
-        }
-        let files: Vec<PathBuf> = if *recursive {
-            fileuse::files_below(&path)
-        } else {
-            std::fs::read_dir(&path)
-                .map(|entries| {
-                    entries
-                        .flatten()
-                        .filter(|e| e.file_type().is_ok_and(|t| t.is_file()))
-                        .map(|e| e.path())
-                        .collect()
-                })
-                .unwrap_or_default()
-        };
-        for file in files {
-            let Ok(holders) = fileuse::file_holders(&file) else {
-                continue;
-            };
-            let relative = file.strip_prefix(&path).unwrap_or(&file);
-            let display = format!(
-                "{}/{}",
-                dir.trim_end_matches(['/', '\\']),
-                cash_win32::path::render(relative)
-            );
-            file_keys.push(fileuse::path_key(&file));
-            rows.extend(
-                holders
-                    .into_iter()
-                    .map(|h| file_row(h.pid, &file, display.clone(), h.access)),
-            );
         }
     }
+    // Every process's handles, for folders and for `lsof` alone; otherwise only the
+    // selected processes' are walked, below.
+    let full_walk = (everything || !folders.is_empty()).then(|| handles::open_files(None));
+    if let Some(Err(error)) = &full_walk {
+        let error = cash_core::error::os_error_text(error);
+        writeln!(stderr, "lsof: can't list open files: {error}")?;
+    }
+    let full_walk = full_walk.and_then(Result::ok);
+    for (root, shown, recursive) in &folders {
+        let found = rows_below(
+            root,
+            shown,
+            *recursive,
+            full_walk.as_ref(),
+            options,
+            &mut stderr,
+        )?;
+        file_keys.extend(found.iter().filter_map(|row| row.file.clone()));
+        rows.extend(found);
+    }
 
-    // Sockets, needed for -i and for the processes -p/-c/-u select. With no selection at
-    // all, every process is selected, as in lsof.
-    let everything = options.files.is_empty()
-        && options.dirs.is_empty()
-        && options.inet.is_none()
-        && options.pids.is_none()
-        && options.commands.is_empty()
-        && options.users.is_none();
+    // Sockets, needed for -i and for the processes -p/-c/-u select.
     let selects_processes = everything
         || options.pids.is_some()
         || !options.commands.is_empty()
@@ -653,30 +786,25 @@ fn run(
                 everything || p || c || u
             })
             .collect();
-        // Their open files, from the handle walk; it walks every process for `lsof`
-        // alone, which also lists the processes started since `process::list`.
-        match cash_win32::handles::open_files((!everything).then_some(&candidates)) {
-            Ok(walk) => {
-                rows.extend(walk.files.into_iter().map(handle_row));
-                if !options.terse && !options.quiet {
-                    if walk.unopened > 0 {
-                        let advice = if process::current_process_is_elevated().unwrap_or(false) {
-                            "they are protected"
-                        } else {
-                            "they are another account's or elevated; `sudo lsof` lists them"
-                        };
-                        writeln!(
-                            stderr,
-                            "lsof: WARNING: can't list the files of {} processes: {advice}",
-                            walk.unopened
-                        )?;
-                    }
-                    if walk.abandoned > 0 {
-                        writeln!(
-                            stderr,
-                            "lsof: WARNING: {} handles did not answer and are not listed",
-                            walk.abandoned
-                        )?;
+        // Their open files, from the handle walk: the one already made for `lsof` alone
+        // or for a folder (which also has the processes started since `process::list`),
+        // else one of these processes only.
+        let walked = if full_walk.is_some() {
+            Ok(None)
+        } else {
+            handles::open_files(Some(&candidates)).map(Some)
+        };
+        match walked {
+            Ok(own) => {
+                if let Some(walk) = own.as_ref().or(full_walk.as_ref()) {
+                    rows.extend(
+                        walk.files
+                            .iter()
+                            .filter(|f| everything || candidates.contains(&f.pid))
+                            .map(handle_row),
+                    );
+                    if !options.terse && !options.quiet {
+                        warn_about(walk, &mut stderr)?;
                     }
                 }
             }

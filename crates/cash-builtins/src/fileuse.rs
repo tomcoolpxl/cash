@@ -1,12 +1,10 @@
 //! Shared queries for `fuser` and `lsof`: who holds a file, how, and what a process is.
 //!
-//! Everything here rests on documented APIs (ROADMAP item 8): the Restart Manager for
-//! files, IP Helper's socket tables for ports, and per-process image and module queries.
-//! Windows has no system-wide handle listing short of the undocumented
-//! `NtQuerySystemInformation` walk, so what those sources cannot answer is reported as
-//! unknown rather than guessed.
+//! The Restart Manager for files, IP Helper's socket tables for ports, and per-process
+//! image and module queries; `lsof` adds the handle walk (`cash_win32::handles`, spec D50)
+//! for what processes hold open.
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
 use cash_win32::{process, restart};
@@ -36,6 +34,42 @@ pub(crate) fn path_key(path: &Path) -> String {
     let resolved = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
     let text = resolved.to_string_lossy().replace('/', "\\");
     cash_win32::fold::name_key(text.strip_prefix(r"\\?\").unwrap_or(&text))
+}
+
+/// [`path_key`] for a path that is already final, as the handle walk and the module lists
+/// give them: without resolving it, which opens the file.
+pub(crate) fn final_key(path: &Path) -> String {
+    let text = path.to_string_lossy().replace('/', "\\");
+    cash_win32::fold::name_key(text.strip_prefix(r"\\?\").unwrap_or(&text))
+}
+
+/// The processes among `wanted` holding any of `files`, each with a file it holds.
+///
+/// The Restart Manager answers for a set of files at once, so the set is halved only
+/// where a wanted process holds something: a few holders in a large folder cost a few
+/// questions per holder, not one per file.
+pub(crate) fn wanted_holders(
+    files: &[&Path],
+    wanted: &BTreeSet<u32>,
+) -> std::io::Result<Vec<(u32, PathBuf)>> {
+    let holders: Vec<u32> = restart::holders(files)?
+        .into_iter()
+        .map(|h| h.pid)
+        .filter(|pid| wanted.contains(pid))
+        .collect();
+    match files {
+        _ if holders.is_empty() => Ok(Vec::new()),
+        [file] => Ok(holders
+            .into_iter()
+            .map(|pid| (pid, file.to_path_buf()))
+            .collect()),
+        _ => {
+            let (low, high) = files.split_at(files.len() / 2);
+            let mut found = wanted_holders(low, wanted)?;
+            found.extend(wanted_holders(high, wanted)?);
+            Ok(found)
+        }
+    }
 }
 
 /// The file a holder is asked about: its [`path_key`], and the names it may go by in a
@@ -134,13 +168,24 @@ fn module_holders(
 
 /// Every regular file below `dir`, not following directory links or junctions.
 pub(crate) fn files_below(dir: &Path) -> Vec<PathBuf> {
+    files_below_within(dir, usize::MAX).unwrap_or_default()
+}
+
+/// [`files_below`], or `None` once more than `limit` entries (files and folders) have
+/// been seen: a folder such as `TEMP` can hold tens of thousands of folders.
+pub(crate) fn files_below_within(dir: &Path, limit: usize) -> Option<Vec<PathBuf>> {
     let mut files = Vec::new();
     let mut pending = vec![dir.to_path_buf()];
+    let mut seen = 0usize;
     while let Some(next) = pending.pop() {
         let Ok(entries) = std::fs::read_dir(&next) else {
             continue;
         };
         for entry in entries.flatten() {
+            seen += 1;
+            if seen > limit {
+                return None;
+            }
             let Ok(kind) = entry.file_type() else {
                 continue;
             };
@@ -152,7 +197,7 @@ pub(crate) fn files_below(dir: &Path) -> Vec<PathBuf> {
         }
     }
     files.sort();
-    files
+    Some(files)
 }
 
 /// The holders of any file below `dir`, each attributed to the files it holds.

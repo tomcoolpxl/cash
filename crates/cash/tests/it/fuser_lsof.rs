@@ -415,6 +415,23 @@ fn lsof_refuses_what_windows_cannot_answer() {
 }
 
 #[test]
+fn lsof_plus_d_is_one_level_and_plus_capital_d_all_below() {
+    let dir = fixture("lsof-dirs");
+    std::fs::create_dir_all(dir.join("sub")).unwrap();
+    std::fs::write(dir.join("top.txt"), "t").unwrap();
+    std::fs::write(dir.join("sub").join("deep.txt"), "d").unwrap();
+    let _top = std::fs::File::open(dir.join("top.txt")).unwrap();
+    let _deep = std::fs::File::open(dir.join("sub").join("deep.txt")).unwrap();
+
+    let all = cash_in(dir.path(), "lsof +D .");
+    assert!(all.stdout.contains("./top.txt"), "{}", all.stdout);
+    assert!(all.stdout.contains("./sub/deep.txt"), "{}", all.stdout);
+    let one = cash_in(dir.path(), "lsof +d .");
+    assert!(one.stdout.contains("./top.txt"), "{}", one.stdout);
+    assert!(!one.stdout.contains("deep.txt"), "{}", one.stdout);
+}
+
+#[test]
 fn bare_lsof_lists_every_process_it_can_open() {
     let dir = fixture("lsof-all");
     let out = cash_in(dir.path(), "lsof -t");

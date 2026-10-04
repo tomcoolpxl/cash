@@ -83,7 +83,7 @@ pub struct Walk {
     pub files: Vec<OpenFile>,
     /// Processes holding files that could not be opened: another account's, unelevated,
     /// or protected ones.
-    pub unopened: usize,
+    pub unopened: BTreeSet<u32>,
     /// Handles left unanswered because a question to one of them never returned.
     pub abandoned: usize,
 }
@@ -267,7 +267,11 @@ fn walk(pids: Option<&BTreeSet<u32>>) -> io::Result<Walk> {
             });
         }
     }
-    let unopened = opened.values().filter(|p| p.is_none()).count();
+    let unopened: BTreeSet<u32> = opened
+        .iter()
+        .filter(|(_, process)| process.is_none())
+        .map(|(&pid, _)| pid)
+        .collect();
     let processes: Arc<HashMap<u32, OwnedHandle>> = Arc::new(
         opened
             .into_iter()
@@ -457,6 +461,6 @@ mod tests {
             "{:?} is not {path:?}",
             found.path
         );
-        assert_eq!(walk.unopened, 0);
+        assert!(walk.unopened.is_empty());
     }
 }
