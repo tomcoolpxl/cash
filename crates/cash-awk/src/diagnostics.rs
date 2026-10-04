@@ -251,7 +251,16 @@ pub(crate) fn lexical_error(source: &str) -> Option<(usize, Diagnostic)> {
                 at += 1;
                 operand = true;
             }
-            b'/' if !operand => {
+            // gawk's grammar has `/=` after a variable for an assignment, so after `)` it
+            // can only start a regex: `(x) /= 2/` is `x` and the regex `= 2`.
+            b'/' if !operand
+                || bytes.get(at) == Some(&b'=')
+                    && source
+                        .get(..start)
+                        .unwrap_or_default()
+                        .trim_end_matches([' ', '\t'])
+                        .ends_with(')') =>
+            {
                 match regex_end(bytes, at) {
                     Some(end) => at = end,
                     None => {
@@ -362,6 +371,22 @@ fn regex_end(bytes: &[u8], mut at: usize) -> Option<usize> {
 /// follows them.
 fn gawks_token(source: &str, error_at: usize) -> usize {
     let rest = source.get(error_at..).unwrap_or_default();
+    // pest takes the `+` of `(x) += 2` for an addition and fails at the `=`, where gawk's
+    // lexer has one assignment token, its error at the token's start.
+    if rest.starts_with('=') {
+        let before = source.get(..error_at).unwrap_or_default();
+        let operator = if before.ends_with("**") && !before.ends_with("***") {
+            2
+        } else if before.ends_with(['+', '-', '*', '/', '%', '^'])
+            && !before.ends_with("++")
+            && !before.ends_with("--")
+        {
+            1
+        } else {
+            0
+        };
+        return error_at - operator;
+    }
     let word: String = rest
         .chars()
         .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
@@ -390,10 +415,10 @@ fn gawks_token(source: &str, error_at: usize) -> usize {
 }
 
 /// The names of gawk's builtin functions, which a function cannot be named.
-pub(crate) const BUILTIN_NAMES: [&str; 25] = [
+pub(crate) const BUILTIN_NAMES: [&str; 26] = [
     "atan2", "cos", "sin", "exp", "log", "sqrt", "int", "rand", "srand", "gsub", "index", "length",
     "match", "split", "sprintf", "sub", "substr", "tolower", "toupper", "close", "fflush",
-    "system", "isarray", "asort", "asorti",
+    "system", "isarray", "asort", "asorti", "gensub",
 ];
 
 /// gawk's error for the program `source`, which does not parse: pest's attempt with a

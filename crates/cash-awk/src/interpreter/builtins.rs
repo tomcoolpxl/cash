@@ -345,6 +345,48 @@ pub(crate) fn gsub(
     Ok((result.into(), num_replacements))
 }
 
+/// gawk's `gensub`: `target` with every match of `ere` replaced (`only` none), or only
+/// its `only`th. In `repl`, `&` and `\0` are the match, `\1` to `\9` its groups (empty for
+/// a group that took no part), `\\` and `\&` a backslash and an ampersand, and a
+/// backslash before anything else is dropped; one at the end is kept.
+pub(crate) fn gensub(ere: &Regex, repl: &str, target: &str, only: Option<usize>) -> AwkString {
+    let mut result = String::with_capacity(target.len());
+    let mut last_match_end = 0;
+    for (number, m) in ere.match_locations(target).enumerate() {
+        if only.is_some_and(|only| number + 1 != only) {
+            continue;
+        }
+        result.push_str(target.get(last_match_end..m.start).unwrap_or_default());
+        // The groups are looked for only when the replacement names one.
+        let mut groups = None;
+        let mut chars = repl.chars();
+        while let Some(c) = chars.next() {
+            match c {
+                '&' => result.push_str(target.get(m.start..m.end).unwrap_or_default()),
+                '\\' => match chars.next() {
+                    Some('0') => result.push_str(target.get(m.start..m.end).unwrap_or_default()),
+                    Some(digit @ '1'..='9') => {
+                        let groups = groups.get_or_insert_with(|| ere.groups_of(target, &m));
+                        let group = digit as usize - '0' as usize;
+                        if let Some(Some(span)) = groups.get(group) {
+                            result.push_str(target.get(span.start..span.end).unwrap_or_default());
+                        }
+                    }
+                    Some(other) => result.push(other),
+                    None => result.push('\\'),
+                },
+                _ => result.push(c),
+            }
+        }
+        last_match_end = m.end;
+        if only.is_some() {
+            break;
+        }
+    }
+    result.push_str(target.get(last_match_end..).unwrap_or_default());
+    result.into()
+}
+
 /// `split(s, arr[, fs[, seps]])`: split `s` into `arr` on the field separator (the
 /// optional third argument, else `FS`) and return the number of fields. When the
 /// `fs` argument is a regex value it is used directly; otherwise it is

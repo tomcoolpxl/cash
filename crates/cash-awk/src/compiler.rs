@@ -239,6 +239,14 @@ static BUILTIN_FUNCTIONS: LazyLock<HashMap<Rule, BuiltinFunctionInfo>> = LazyLoc
                 max_args: 3,
             },
         ),
+        (
+            Rule::gensub,
+            BuiltinFunctionInfo {
+                function: BuiltinFunction::Gensub,
+                min_args: 3,
+                max_args: 4,
+            },
+        ),
     ])
 });
 
@@ -633,6 +641,15 @@ fn normalize_builtin_function_arguments(
             }
             (flatten(args), argc)
         }
+        BuiltinFunction::Gensub if argc == 3 => {
+            // The target is `$0` by default, read and not changed.
+            let mut instructions = flatten(args);
+            instructions.extend(Instructions::from_instructions_and_line_col(
+                vec![OpCode::PushZero, OpCode::GetField],
+                line_col,
+            ));
+            (instructions, 4)
+        }
         BuiltinFunction::Sub | BuiltinFunction::Gsub => {
             if argc == 2 {
                 let mut instructions = Instructions::from_instructions_and_line_col(
@@ -716,7 +733,7 @@ impl Expr {
     }
 }
 
-/// How gawk names the array `name` in an error: "`a'", or "parameter `p'" for a
+/// How gawk names the array `name` in an error: `` `a' ``, or `` parameter `p' `` for a
 /// function's.
 fn array_description(name: &str, locals: &LocalMap) -> Rc<str> {
     if locals.contains_key(name) {

@@ -369,8 +369,8 @@ struct Interpreter {
 
 impl Interpreter {
     /// The error that stopped `stack`'s code, as gawk reports a fatal one:
-    /// `awk: cmd. line:3: (FILENAME=data FNR=7) fatal: attempt to use scalar `x' as an
-    /// array`, the program's file in place of `cmd. line` when it has one, and the input
+    /// `` awk: cmd. line:3: (FILENAME=data FNR=7) fatal: attempt to use scalar `x' as an
+    /// array ``, the program's file in place of `cmd. line` when it has one, and the input
     /// place once a record has been read. cash wrote `runtime error:`, its own words for
     /// some errors, and the call stack.
     ///
@@ -511,7 +511,8 @@ impl Interpreter {
             .cloned()
     }
 
-    /// How gawk names the scalar `variable` used as an array: "`x'", or "parameter `p'".
+    /// How gawk names the scalar `variable` used as an array: `` `x' ``, or
+    /// `` parameter `p' ``.
     fn scalar_name(&self, variable: *const AwkValue, stack: &Stack) -> Option<String> {
         if let Some((index, _)) = stack.local_holding(variable) {
             let name = stack.parameter_names.get(index)?;
@@ -648,6 +649,33 @@ impl Interpreter {
                     input,
                 };
                 self.sort_array(function, argc, stack, global_env, &mut code)?;
+            }
+            BuiltinFunction::Gensub => {
+                let target = stack
+                    .pop_scalar_value()?
+                    .scalar_to_string(&global_env.convfmt)?;
+                let how = stack.pop_scalar_value()?;
+                let repl = stack
+                    .pop_scalar_value()?
+                    .scalar_to_string(&global_env.convfmt)?;
+                let ere = stack.pop_scalar_value()?.into_ere(&global_env.convfmt)?;
+                // gawk's: a `how` that starts with `g` or `G` replaces every match, a number
+                // the match it counts to, and one not above 0 is the first, with a warning.
+                let text = how.clone().scalar_to_string(&global_env.convfmt)?;
+                let only = if text.starts_with(['g', 'G']) {
+                    None
+                } else {
+                    let number = how.scalar_as_f64();
+                    if number <= 0.0 {
+                        self.warn(
+                            &format!("gensub: third argument `{text}' treated as 1"),
+                            stack,
+                        );
+                    }
+                    // A cast saturates: 1e300 counts to a match there is none of.
+                    Some((number as usize).max(1))
+                };
+                stack.push_value(builtins::gensub(&ere, &repl, &target, only))?;
             }
             BuiltinFunction::Match => {
                 let array = if argc == 3 {

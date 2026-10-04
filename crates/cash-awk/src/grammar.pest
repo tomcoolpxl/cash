@@ -80,6 +80,7 @@ builtin_func = _{
   | isarray
   | asorti
   | asort
+  | gensub
 }
 
 atan2    = { "atan2" ~ !(letter | "_" | digit) }
@@ -107,6 +108,7 @@ system   = { "system" ~ !(letter | "_" | digit) }
 isarray  = { "isarray" ~ !(letter | "_" | digit) }
 asort    = { "asort" ~ !(letter | "_" | digit) }
 asorti   = { "asorti" ~ !(letter | "_" | digit) }
+gensub   = { "gensub" ~ !(letter | "_" | digit) }
 
 // gawk's reserved words that cash knows. `begin`, `end` and `foreach` are plain names, as
 // in gawk. A choice does not back off to a later word when the end of a name fails to

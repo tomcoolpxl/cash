@@ -167,8 +167,8 @@ pub struct DebugInfo {
     pub file: Rc<str>,
     pub source_locations: Vec<SourceLocation>,
     /// For each instruction that uses an array (`IndexArrayGetValue`, `In`, `split`, ...),
-    /// the array as gawk names it when it turns out to be a scalar: "`a'", or "parameter
-    /// `p'" for a function's. Indexed as the instructions are; empty for code made by
+    /// the array as gawk names it when it turns out to be a scalar: `` `a' ``, or
+    /// `` parameter `p' `` for a function's. Indexed as the instructions are; empty for code made by
     /// hand, as in tests.
     pub array_names: Vec<Option<Rc<str>>>,
 }
@@ -215,7 +215,7 @@ pub struct Program {
     pub end_actions: Vec<Action>,
     pub functions: Vec<Function>,
     /// gawk's warnings about the program, as it writes them, for before it runs:
-    /// `warning: function `f' called with more arguments than declared`.
+    /// `` warning: function `f' called with more arguments than declared ``.
     pub warnings: Vec<u8>,
 }
 
@@ -352,6 +352,9 @@ pub enum BuiltinFunction {
     // gawk's sorts, of an array's values and of its indices
     Asort,
     Asorti,
+    /// gawk's `gensub(regexp, replacement, how [, target])`, its target a value: the
+    /// result is returned
+    Gensub,
 
     // I/O functions
     Close,

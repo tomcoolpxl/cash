@@ -8,8 +8,8 @@
 // SPDX-License-Identifier: MIT
 //
 
-use regex_automata::Input;
 use regex_automata::meta::Regex as MetaRegex;
+use regex_automata::{Anchored, Input};
 
 /// A regex wrapper for AWK. Text is a `&str`, so a NUL is an ordinary character: the
 /// wrapper took C strings, from posixutils' libc regex, and a NUL in a record was
@@ -612,6 +612,26 @@ impl Regex {
                 })
                 .collect(),
         )
+    }
+
+    /// The places of the groups of the match `whole` that `match_locations` found in
+    /// `string`, `None` for a group that took no part in it: what gawk's `gensub` puts
+    /// for `\1` to `\9`. The search starts at the match, the text before it still there
+    /// for the assertions that look back.
+    pub fn groups_of(&self, string: &str, whole: &RegexMatch) -> Vec<Option<RegexMatch>> {
+        let mut captures = self.engine().create_captures();
+        let input = Input::new(string)
+            .range(whole.start..)
+            .anchored(Anchored::Yes);
+        self.engine().search_captures(&input, &mut captures);
+        (0..captures.group_len())
+            .map(|group| {
+                captures.get_group(group).map(|span| RegexMatch {
+                    start: span.start,
+                    end: span.end,
+                })
+            })
+            .collect()
     }
 
     pub fn pattern(&self) -> &str {

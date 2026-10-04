@@ -3416,3 +3416,688 @@ fn test_awk_appending_to_a_string_in_place_keeps_its_value() {
         ),
     ]);
 }
+
+/// gawk's `gensub`: the result returned and the target left alone, and `&`, `\0` to
+/// `\9` and escapes in the replacement.
+#[test]
+fn test_awk_gensub_replaces_as_gawk() {
+    run_cases(&[
+        (
+            "BEGIN { s = \"hello world\"; print gensub(/o/, \"0\", \"g\", s), s }",
+            "",
+            "hell0 w0rld hello world\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { s = \"hello world\"; print gensub(/o/, \"0\", \"G\", s); print gensub(/o/, \"0\", 2, s); print gensub(/o/, \"0\", 1, s); print gensub(/o/, \"0\", 3, s) }",
+            "",
+            "hell0 w0rld\nhello w0rld\nhell0 world\nhello world\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { print gensub(/(a)(b)/, \"<\\\\2\\\\1>\", \"g\", \"abxab\") }",
+            "",
+            "<ba>x<ba>\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { print gensub(/b+/, \"[&]\", \"g\", \"abbcb\"), gensub(/b+/, \"[\\\\0]\", \"g\", \"abbcb\") }",
+            "",
+            "a[bb]c[b] a[bb]c[b]\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { print gensub(/b/, \"\\\\&\", \"g\", \"abc\"), gensub(/b/, \"\\\\\\\\&\", \"g\", \"abc\") }",
+            "",
+            "a&c a\\bc\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { print gensub(/b/, \"x\\\\qy\", \"g\", \"abc\") }",
+            "",
+            "axqyc\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { print gensub(/(b)/, \"\\\\3\", \"g\", \"abc\"), gensub(/(b)/, \"\\\\9\", \"g\", \"abc\") }",
+            "",
+            "ac ac\n",
+            "",
+            0,
+        ),
+        (
+            "{ print gensub(/o/, \"0\", \"g\") ; print }",
+            "foo boo\n",
+            "f00 b00\nfoo boo\n",
+            "",
+            0,
+        ),
+    ]);
+}
+
+/// `gensub`'s `how`: `g` or `G` first, else a number, one not above 0 the first match
+/// with gawk's warning; the empty matches are gsub's, and IGNORECASE is honoured.
+#[test]
+fn test_awk_gensub_takes_how_as_gawk() {
+    run_cases(&[
+        (
+            "BEGIN { print gensub(/o/, \"0\", \"x\", \"foo\") }",
+            "",
+            "f0o\n",
+            "awk: cmd. line:1: warning: gensub: third argument `x' treated as 1\n",
+            0,
+        ),
+        (
+            "BEGIN { print gensub(/o/, \"0\", \"\", \"foo\") }",
+            "",
+            "f0o\n",
+            "awk: cmd. line:1: warning: gensub: third argument `' treated as 1\n",
+            0,
+        ),
+        (
+            "BEGIN { print gensub(/o/, \"0\", 0, \"foo\") }",
+            "",
+            "f0o\n",
+            "awk: cmd. line:1: warning: gensub: third argument `0' treated as 1\n",
+            0,
+        ),
+        (
+            "BEGIN { print gensub(/o/, \"0\", -1, \"foo\") }",
+            "",
+            "f0o\n",
+            "awk: cmd. line:1: warning: gensub: third argument `-1' treated as 1\n",
+            0,
+        ),
+        (
+            "BEGIN { print gensub(/o/, \"0\", 1.7, \"foo\") }",
+            "",
+            "f0o\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { print gensub(/o/, \"0\", \"2\", \"foo\") }",
+            "",
+            "fo0\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { print gensub(/o/, \"0\", \"gx\", \"foo\") }",
+            "",
+            "f00\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { print gensub(/o/, \"0\", \"10\", \"foo\") }",
+            "",
+            "foo\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { print gensub(/x*/, \"-\", \"g\", \"abc\"), gensub(/x*/, \"-\", 2, \"abc\") }",
+            "",
+            "-a-b-c- a-bc\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { IGNORECASE = 1; print gensub(/O/, \"0\", \"g\", \"foO\") }",
+            "",
+            "f00\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { print gensub(\"o+\", \"0\", \"g\", \"foo\") }",
+            "",
+            "f0\n",
+            "",
+            0,
+        ),
+    ]);
+}
+
+/// gawk's errors for `gensub`'s arguments, and its result a string.
+#[test]
+fn test_awk_gensub_arguments_are_checked_as_gawk() {
+    run_cases(&[
+        (
+            "BEGIN { print gensub(/o/, \"0\") }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { print gensub(/o/, \"0\") }\nawk: cmd. line:1:                              ^ 2 is invalid as number of arguments for gensub\n",
+            1,
+        ),
+        (
+            "BEGIN { print gensub(/o/) }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { print gensub(/o/) }\nawk: cmd. line:1:                         ^ 1 is invalid as number of arguments for gensub\n",
+            1,
+        ),
+        (
+            "BEGIN { print gensub(/o/, \"0\", \"g\", \"x\", 5) }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { print gensub(/o/, \"0\", \"g\", \"x\", 5) }\nawk: cmd. line:1:                                           ^ 5 is invalid as number of arguments for gensub\n",
+            1,
+        ),
+        (
+            "BEGIN { print gensub() }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { print gensub() }\nawk: cmd. line:1:                      ^ 0 is invalid as number of arguments for gensub\n",
+            1,
+        ),
+        (
+            "BEGIN { n = gensub(/o/, \"0\", \"g\", 1000); print n, n + 1 }",
+            "",
+            "1000 1001\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { print gensub(/a/, \"\\\\\", \"g\", \"bab\") }",
+            "",
+            "b\\b\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { print gensub(/a/, \"z\\\\\\\\\\\\0\", \"g\", \"bab\") }",
+            "",
+            "bz\\ab\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { a[1] = \"x\"; print gensub(/x/, \"y\", \"g\", a) }",
+            "",
+            "",
+            "awk: cmd. line:1: fatal: attempt to use array `a' in a scalar context\n",
+            2,
+        ),
+        (
+            "function gensub() { }",
+            "",
+            "",
+            "awk: cmd. line:1: function gensub() { }\nawk: cmd. line:1:          ^ `gensub' is a built-in function, it cannot be redefined\n",
+            1,
+        ),
+        (
+            "BEGIN { print gensub(/é/, \"e\", \"g\", \"café é\") }",
+            "",
+            "cafe e\n",
+            "",
+            0,
+        ),
+    ]);
+}
+
+/// `how` as a string, a field or a fraction, and the warning's text for each.
+#[test]
+fn test_awk_gensub_takes_any_how_as_gawk() {
+    run_cases(&[
+        (
+            "BEGIN { print gensub(/o/, \"0\", 0.5, \"foo\") }",
+            "",
+            "f0o\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { print gensub(/o/, \"0\", \"0.5\", \"foo\") }",
+            "",
+            "f0o\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { print gensub(/o/, \"0\", u, \"foo\") }",
+            "",
+            "f0o\n",
+            "awk: cmd. line:1: warning: gensub: third argument `' treated as 1\n",
+            0,
+        ),
+        (
+            "BEGIN { print gensub(/o/, \"0\", -0.25, \"foo\") }",
+            "",
+            "f0o\n",
+            "awk: cmd. line:1: warning: gensub: third argument `-0.25' treated as 1\n",
+            0,
+        ),
+        (
+            "BEGIN { print gensub(/o/, \"0\", \" g\", \"foo\") }",
+            "",
+            "f0o\n",
+            "awk: cmd. line:1: warning: gensub: third argument ` g' treated as 1\n",
+            0,
+        ),
+        (
+            "BEGIN { print gensub(/o/, \"0\", \"2x\", \"foo\") }",
+            "",
+            "fo0\n",
+            "",
+            0,
+        ),
+        (
+            "{ print gensub(/o/, \"0\", $1, $2) }",
+            "g foo\n2 foo\n-3 foo\n",
+            "f00\nfo0\nf0o\n",
+            "awk: cmd. line:1: (FILENAME=- FNR=3) warning: gensub: third argument `-3' treated as 1\n",
+            0,
+        ),
+        (
+            "BEGIN { CONVFMT = \"%.2f\"; x = 0.123456; print gensub(/o/, \"0\", x, \"foo\") }",
+            "",
+            "f0o\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { print gensub(/o/, \"0\", 1e300, \"foo\") }",
+            "",
+            "foo\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { print gensub(/\\</, \"|\", \"g\", \"ab cd\") }",
+            "",
+            "|ab |cd\n",
+            "",
+            0,
+        ),
+    ]);
+}
+
+/// `gensub`'s empty matches, missing groups, default target and trailing backslashes.
+#[test]
+fn test_awk_gensub_matches_as_gawk() {
+    run_cases(&[
+        (
+            "BEGIN { print gensub(/b*/, \"<&>\", \"g\", \"abc\") }",
+            "",
+            "<>a<b>c<>\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { print gensub(/(x)?b/, \"[\\\\1]\", \"g\", \"abxb\") }",
+            "",
+            "a[][x]\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { print gensub(/o/, \"0\", \"g\", \"foo\") > \"/dev/stderr\" }",
+            "",
+            "",
+            "f00\n",
+            0,
+        ),
+        (
+            "BEGIN { $0 = \"aaa\"; print gensub(/a/, \"b\", 2); print }",
+            "",
+            "aba\naaa\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { print length(gensub(/a/, \"bb\", \"g\", \"aa\")) }",
+            "",
+            "4\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { print gensub(/a/, \"\\\\\\\\\", \"g\", \"bab\") }",
+            "",
+            "b\\b\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { print gensub(/(a)/, \"\\\\10\", \"g\", \"bab\") }",
+            "",
+            "ba0b\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { s = \"x\"; print gensub(/x/, \"y\", \"g\", s); print s }",
+            "",
+            "y\nx\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { print gensub(/o/, \"0\", 1, \"foo\", ) }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { print gensub(/o/, \"0\", 1, \"foo\", ) }\nawk: cmd. line:1:                                          ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { print gensub(/o/, \"0\" }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { print gensub(/o/, \"0\" }\nawk: cmd. line:1:                               ^ syntax error\n",
+            1,
+        ),
+    ]);
+}
+
+/// Each match has its own groups. Git for Windows' gawk 5.4.0 leaves them empty after
+/// the first match (the README's deliberate differences); these are the documented ones.
+#[test]
+fn test_awk_gensub_gives_each_match_its_groups() {
+    run_cases(&[
+        (
+            "BEGIN { print gensub(/(a)(b)/, \"<\\\\2\\\\1>\", \"g\", \"abab\") }",
+            "",
+            "<ba><ba>\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { print gensub(/(a)(b)/, \"<\\\\2\\\\1>\", \"g\", \"xabab\") }",
+            "",
+            "x<ba><ba>\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { print gensub(/(a)(b)/, \"<\\\\2\\\\1>\", 2, \"abxab\") }",
+            "",
+            "abx<ba>\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { print gensub(/([a-z])([0-9])/, \"<\\\\2\\\\1>\", \"g\", \"a1 b2 c3\") }",
+            "",
+            "<1a> <2b> <3c>\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { print gensub(/(.)(.)/, \"\\\\2\\\\1\", \"g\", \"abcdef\") }",
+            "",
+            "badcfe\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { print gensub(/([^ ]+) ([^ ]+)/, \"\\\\2 \\\\1\", \"g\", \"one two three four\") }",
+            "",
+            "two one four three\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { s = \"abxab\"; while (match(s, /(a)(b)/, m)) { print m[1], m[2]; s = substr(s, RSTART + RLENGTH) } }",
+            "",
+            "a b\na b\n",
+            "",
+            0,
+        ),
+    ]);
+}
+
+/// An assignment to what is no variable fails at the operator's start, as gawk's lexer
+/// has one token for `+=`.
+#[test]
+fn test_awk_compound_assignment_errors_are_placed_as_gawk() {
+    run_cases(&[
+        (
+            "BEGIN { print gensub(/(o)|(x)/, \"[\\\\1|\\\\2]\", \"g\", \"fox\") }",
+            "",
+            "f[o|][|x]\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { x = 1; (x) += 2; print x }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { x = 1; (x) += 2; print x }\nawk: cmd. line:1:                    ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1; (x) -= 2 }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { x = 1; (x) -= 2 }\nawk: cmd. line:1:                    ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1; (x) ^= 2 }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { x = 1; (x) ^= 2 }\nawk: cmd. line:1:                    ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1; (x) = 2 }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { x = 1; (x) = 2 }\nawk: cmd. line:1:                    ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1; (x)++ }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { x = 1; (x)++ }\nawk: cmd. line:1:                      ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1;  (x)   +=  2 }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { x = 1;  (x)   +=  2 }\nawk: cmd. line:1:                       ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { (x) **= 2 }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { (x) **= 2 }\nawk: cmd. line:1:             ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { (x) *= 2 }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { (x) *= 2 }\nawk: cmd. line:1:             ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { (x) %= 2 }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { (x) %= 2 }\nawk: cmd. line:1:             ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { 1 += 2 }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { 1 += 2 }\nawk: cmd. line:1:           ^ syntax error\n",
+            1,
+        ),
+    ]);
+}
+
+/// More assignments to values, `++=` and `==` among them, placed as gawk places them.
+#[test]
+fn test_awk_assignments_to_values_are_placed_as_gawk() {
+    run_cases(&[
+        (
+            "BEGIN { x+1 = 2 }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { x+1 = 2 }\nawk: cmd. line:1:             ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { \"a\" = 2 }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { \"a\" = 2 }\nawk: cmd. line:1:             ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { \"a\" -= 2 }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { \"a\" -= 2 }\nawk: cmd. line:1:             ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { x++ = 2 }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { x++ = 2 }\nawk: cmd. line:1:             ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { x++= 2 }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { x++= 2 }\nawk: cmd. line:1:            ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { x--= 2 }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { x--= 2 }\nawk: cmd. line:1:            ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { (x)^=2 }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { (x)^=2 }\nawk: cmd. line:1:            ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { a[1] = 1; (a[1]) += 2 }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { a[1] = 1; (a[1]) += 2 }\nawk: cmd. line:1:                          ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { ($1) *= 2 }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { ($1) *= 2 }\nawk: cmd. line:1:              ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { x = y == = 2 }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { x = y == = 2 }\nawk: cmd. line:1:                  ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { -x += 2 }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { -x += 2 }\nawk: cmd. line:1:            ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { !x **= 2 }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { !x **= 2 }\nawk: cmd. line:1:            ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { x = \"abc }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { x = \"abc }\nawk: cmd. line:1:             ^ unterminated string\n",
+            1,
+        ),
+    ]);
+}
+
+/// `/=` after `)` starts a regex, as in gawk, and one the line ends in is gawk's
+/// `unterminated regexp`.
+#[test]
+fn test_awk_slash_equals_after_a_parenthesis_starts_a_regex() {
+    run_cases(&[
+        (
+            "BEGIN { (x) /= 2 }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { (x) /= 2 }\nawk: cmd. line:1:              ^ unterminated regexp\n",
+            1,
+        ),
+        (
+            "BEGIN { x = /abc }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { x = /abc }\nawk: cmd. line:1:              ^ unterminated regexp\n",
+            1,
+        ),
+        (
+            "BEGIN { x = /abc \n}",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { x = /abc \nawk: cmd. line:1:              ^ unterminated regexp\n",
+            1,
+        ),
+        (
+            "BEGIN { (x) /= 2 \n}",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { (x) /= 2 \nawk: cmd. line:1:              ^ unterminated regexp\n",
+            1,
+        ),
+        ("BEGIN { x = 4; x /= 2; print x }", "", "2\n", "", 0),
+        (
+            "BEGIN { x = 4; (x) /= 2; print x }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { x = 4; (x) /= 2; print x }\nawk: cmd. line:1:                     ^ unterminated regexp\n",
+            1,
+        ),
+        (
+            "BEGIN { a[1] = 4; a[1] /= 2; print a[1] }",
+            "",
+            "2\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { x = 4; print x /=2/ }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { x = 4; print x /=2/ }\nawk: cmd. line:1:                             ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { x = /[a-z }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { x = /[a-z }\nawk: cmd. line:1:              ^ unterminated regexp\n",
+            1,
+        ),
+    ]);
+}
