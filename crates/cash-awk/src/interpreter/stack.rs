@@ -15,6 +15,9 @@ use super::array::{Key, KeyIterator};
 use super::value::{AwkRefType, AwkValue, AwkValueVariant};
 use crate::program::{Action, Function, OpCode, SourceLocation};
 
+/// The error for a slot taken as a value that holds none.
+const NOT_A_VALUE: &str = "expected a value";
+
 #[cfg_attr(test, derive(Debug))]
 #[derive(Clone, PartialEq)]
 pub(crate) struct ArrayIterator {
@@ -45,29 +48,27 @@ pub(crate) enum StackValue {
 }
 
 impl StackValue {
+    /// The value this is or refers to. An iterator, or a slot left empty, is no value:
+    /// one taken as a value would be malformed code, an error rather than a panic.
+    ///
     /// # Safety
     /// the caller has to ensure that the value is valid and dereferencable
-    pub(crate) unsafe fn value_ref(&mut self) -> &mut AwkValue {
+    pub(crate) unsafe fn value_ref(&mut self) -> Result<&mut AwkValue, String> {
         match self {
-            StackValue::Value(val) => val.get_mut(),
+            StackValue::Value(val) => Ok(val.get_mut()),
             // SAFETY: the caller ensures the pointer is valid (`# Safety`).
-            StackValue::ValueRef(val_ref) => unsafe { &mut **val_ref },
+            StackValue::ValueRef(val_ref) => Ok(unsafe { &mut **val_ref }),
             // SAFETY: the caller ensures the pointer is valid (`# Safety`).
-            StackValue::UninitializedRef(val_ref) => unsafe { &mut **val_ref },
-            #[expect(
-                clippy::expect_used,
-                reason = "an element reference is made from an array, and a variable that is \
-                          an array stays one; `get_value` inserts a key it does not find"
-            )]
+            StackValue::UninitializedRef(val_ref) => Ok(unsafe { &mut **val_ref }),
+            // An element reference is made from an array, and a variable that is an array
+            // stays one; `get_value` inserts a key it does not find.
             StackValue::ArrayElementRef(array_element_ref) => {
                 // SAFETY: the caller ensures the array pointer is valid (`# Safety`).
                 unsafe { &mut *array_element_ref.array }
-                    .as_array()
-                    .expect("expected array")
+                    .as_array()?
                     .get_value(array_element_ref.key.clone())
-                    .expect("array element")
             }
-            _ => unreachable!("invalid stack value"),
+            StackValue::Iterator(_) | StackValue::Invalid => Err(NOT_A_VALUE.to_string()),
         }
     }
 
@@ -100,28 +101,28 @@ impl StackValue {
         }
     }
 
+    /// The value this is or refers to, owned; an error for no value, as in `value_ref`.
+    ///
     /// # Safety
     /// pointers inside the `StackValue` have to be valid and dereferencable
-    pub(crate) unsafe fn into_owned(self) -> AwkValue {
+    pub(crate) unsafe fn into_owned(self) -> Result<AwkValue, String> {
         match self {
-            StackValue::Value(val) => val.into_inner(),
+            StackValue::Value(val) => Ok(val.into_inner()),
             StackValue::ValueRef(ref_val) => {
                 // SAFETY: the caller ensures the pointer is valid (`# Safety`).
-                unsafe { &*ref_val }.clone().into_ref(AwkRefType::None)
+                Ok(unsafe { &*ref_val }.clone().into_ref(AwkRefType::None))
             }
-            StackValue::UninitializedRef(_) => AwkValue::uninitialized_scalar(),
-            #[expect(clippy::expect_used, reason = "as in `value_ref`")]
+            StackValue::UninitializedRef(_) => Ok(AwkValue::uninitialized_scalar()),
+            // As in `value_ref`.
             StackValue::ArrayElementRef(array_element_ref) => {
                 // SAFETY: the caller ensures the array pointer is valid (`# Safety`).
-                unsafe { &mut *array_element_ref.array }
-                    .as_array()
-                    .expect("expected array")
-                    .get_value(array_element_ref.key.clone())
-                    .expect("array element")
+                Ok(unsafe { &mut *array_element_ref.array }
+                    .as_array()?
+                    .get_value(array_element_ref.key.clone())?
                     .clone()
-                    .into_ref(AwkRefType::None)
+                    .into_ref(AwkRefType::None))
             }
-            _ => unreachable!("invalid stack value"),
+            StackValue::Iterator(_) | StackValue::Invalid => Err(NOT_A_VALUE.to_string()),
         }
     }
 
@@ -129,7 +130,7 @@ impl StackValue {
     /// pointers inside the `StackValue` have to be valid and dereferencable
     pub(crate) unsafe fn ensure_value_is_scalar(&mut self) -> Result<(), String> {
         // SAFETY: the caller upholds this function's `# Safety` contract.
-        unsafe { self.value_ref().ensure_value_is_scalar() }
+        unsafe { self.value_ref()?.ensure_value_is_scalar() }
     }
 
     /// # Safety
@@ -243,7 +244,7 @@ impl<'i, 's> Stack<'i, 's> {
         // popped (`push`), and that value is still on the stack.
         unsafe { value.ensure_value_is_scalar()? };
         // SAFETY: as above.
-        Ok(unsafe { value.into_owned() })
+        unsafe { value.into_owned() }
     }
 
     /// A local to write a scalar to: a parameter still linked to the caller's unused
@@ -270,9 +271,10 @@ impl<'i, 's> Stack<'i, 's> {
         len.unsigned_abs()
     }
 
-    /// A pointer to local `index` of the current call frame, `None` past its values. A
-    /// local at `sp` itself, one past the last value, was taken for one (`>=` where `>`
-    /// belonged), reading a slot that holds no value (`REVIEW_REPORT.md` ARCH-01).
+    /// A pointer to local `index` of the current call frame, `None` past its values or
+    /// where the slot holds no variable, which would be malformed code. A local at `sp`
+    /// itself, one past the last value, was taken for one (`>=` where `>` belonged),
+    /// reading a slot that holds no value (`REVIEW_REPORT.md` ARCH-01).
     pub(crate) fn get_mut_value_ptr(&mut self, index: usize) -> Option<*mut AwkValue> {
         if index < self.len() {
             // SAFETY: the index is below `sp`, so the slot is in the stack.
@@ -283,7 +285,9 @@ impl<'i, 's> Stack<'i, 's> {
                 StackValue::Value(val) => Some(val.get()),
                 StackValue::ValueRef(val_ref) => Some(*val_ref),
                 StackValue::UninitializedRef(val_ref) => Some(*val_ref),
-                _ => unreachable!("invalid stack value"),
+                StackValue::ArrayElementRef(_) | StackValue::Iterator(_) | StackValue::Invalid => {
+                    None
+                }
             }
         } else {
             None
@@ -294,7 +298,7 @@ impl<'i, 's> Stack<'i, 's> {
         let value = self.pop().ok_or_else(|| "empty stack".to_string())?;
         // SAFETY: a popped value's pointers stay valid until the value pushed before it is
         // popped (`push`), and that value is still on the stack.
-        Ok(unsafe { value.into_owned() })
+        unsafe { value.into_owned() }
     }
 
     pub(crate) fn pop_ref(&mut self) -> Result<&mut AwkValue, String> {
@@ -324,8 +328,13 @@ impl<'i, 's> Stack<'i, 's> {
         self.instructions.get(self.ip as usize).copied()
     }
 
-    pub(crate) fn call_function(&mut self, function: &'i Function) {
-        assert!(self.len() >= function.parameters_count);
+    /// Enter `function`, whose parameters are the frame's last values. The compiler
+    /// pushes one for each parameter, the missing ones too; fewer would be malformed
+    /// code, an error rather than a panic.
+    pub(crate) fn call_function(&mut self, function: &'i Function) -> Result<(), String> {
+        if self.len() < function.parameters_count {
+            return Err("function called without its parameters".to_string());
+        }
         // A variable the caller has not used yet stays linked to the caller's: if the
         // function uses it as an array, the caller's variable becomes that array, as in
         // every awk. A scalar is passed by value instead, so the first scalar write
@@ -351,6 +360,7 @@ impl<'i, 's> Stack<'i, 's> {
         self.ip = 0;
         self.instructions = &function.instructions;
         self.source_locations = &function.debug_info.source_locations;
+        Ok(())
     }
 
     /// Return to the caller's frame. The compiler allows `return` only in a function,

@@ -10,7 +10,9 @@ use std::{
     collections::{HashMap, hash_map::Entry},
     fs::File,
     io::{BufReader, Bytes, Read, Write},
+    path::PathBuf,
     rc::Rc,
+    sync::OnceLock,
 };
 
 use super::string::AwkString;
@@ -502,39 +504,44 @@ impl ReadFiles {
     }
 }
 
+/// The cash that runs commands for awk run as a program of its own (`set_shell`).
+static SHELL: OnceLock<PathBuf> = OnceLock::new();
+
+/// Makes `system()` and pipes run commands with the cash at `path`. Only awk run as a
+/// program of its own, outside cash, calls it (`src/bin/awk.rs`, for testing): inside
+/// cash, this process's own exe is cash, as a bundled tool (`cash --invoke-bundled awk`)
+/// and as a link `cash --link-tools` made (`awk.exe`) alike.
+pub fn set_shell(path: PathBuf) {
+    // Set once, before awk runs; a second call would change nothing.
+    let _ = SHELL.set(path);
+}
+
+/// The variable through which a cash learns the name it was started by
+/// (`cash_core::commands::ARGV0_VARIABLE`). Set, it also tells a cash whose exe is a
+/// link `cash --link-tools` made that it was started as the shell, not as the tool.
+const ARGV0_VARIABLE: &str = "CASH_ARGV0";
+
+/// The command that runs `cmd_str` in the shell, for `system()` and pipes: cash with
+/// `-c`. awk runs inside cash, so that is this process's own exe, whatever its file is
+/// named. It was taken to be cash only when named `cash` (or `cash-…`), so in a linked
+/// `awk.exe` the commands ran in `cmd`; and a `CASH_BIN` variable, a test hook, chose
+/// any program in production.
 pub(crate) fn create_shell_command(cmd_str: &str) -> std::process::Command {
     // Another program writes where awk does, so what awk has printed goes first, as gawk,
     // mawk and BWK awk (and POSIX, for system()) have it (TXT-14). A failure here is the
     // write's to report, when it is tried again.
     let _ = flush_stdout();
 
-    if let Some(path) = std::env::var_os("CASH_BIN") {
-        let mut cmd = std::process::Command::new(path);
-        cmd.args(["--norc", "--noprofile", "-c", cmd_str]);
-        return cmd;
-    }
-    if let Ok(exe) = std::env::current_exe() {
-        let is_cash = exe.file_stem().and_then(|s| s.to_str()).map_or(false, |s| {
-            let lower = s.to_ascii_lowercase();
-            lower == "cash"
-                || (lower.starts_with("cash-")
-                    && !lower.starts_with("cash-awk")
-                    && !lower.starts_with("cash_awk"))
-        });
-        if is_cash {
-            let mut cmd = std::process::Command::new(exe);
-            cmd.args(["--norc", "--noprofile", "-c", cmd_str]);
-            return cmd;
-        }
-        let sibling_cash = exe.with_file_name(format!("cash{}", std::env::consts::EXE_SUFFIX));
-        if sibling_cash.is_file() {
-            let mut cmd = std::process::Command::new(sibling_cash);
-            cmd.args(["--norc", "--noprofile", "-c", cmd_str]);
-            return cmd;
-        }
-    }
-    let mut cmd = std::process::Command::new("cmd");
-    cmd.args(["/c", cmd_str]);
+    // Should Windows not say where this process's exe is, the cash on PATH is the next
+    // best.
+    let cash = SHELL
+        .get()
+        .cloned()
+        .or_else(|| std::env::current_exe().ok())
+        .unwrap_or_else(|| PathBuf::from("cash"));
+    let mut cmd = std::process::Command::new(cash);
+    cmd.env(ARGV0_VARIABLE, "cash")
+        .args(["--norc", "--noprofile", "-c", cmd_str]);
     cmd
 }
 

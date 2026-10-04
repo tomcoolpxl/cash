@@ -38,6 +38,7 @@ mod builtins;
 mod format;
 mod io;
 pub(crate) use io::flush_stdout;
+pub use io::set_shell;
 mod record;
 mod stack;
 mod string;
@@ -816,7 +817,7 @@ impl Interpreter {
                     ip_increment = offset as isize;
                 }
                 OpCode::Call(id) => {
-                    stack.call_function(&functions[id as usize]);
+                    stack.call_function(&functions[id as usize])?;
                     ip_increment = 0;
                 }
                 OpCode::CallBuiltin { function, argc } => {
@@ -900,6 +901,7 @@ impl Interpreter {
                 // SAFETY: the action has ended, and every pointer on the stack is to a
                 // global, a field or the stack's own values, which are all still alive.
                 .map(|sv| unsafe { sv.into_owned() })
+                .transpose()?
                 .unwrap_or_default(),
         ))
     }

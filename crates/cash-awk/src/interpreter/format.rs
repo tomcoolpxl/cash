@@ -86,40 +86,25 @@ fn write_inf_or_nan(target: &mut String, value: f64, lowercase_version: bool, si
     }
 }
 
-/// swaps the sign at `target[write_starting_index]` with the last space
-/// padding character before the number
-/// # Panics
-/// Panics if:
-/// - `sign` is neither an empty string nor a single ASCII character
-/// - `sign` is not the first character in the string
-/// - the character before the first digit in the substring starting at `write_starting_index`
-///   is not an ASCII character
+/// Moves the `sign` written at `target[write_starting_index]`, before the spaces the
+/// number was padded with, to stand in front of the number: `-  1.5` becomes `  -1.5`.
+/// The bytes were swapped in place, under asserts that what was written is ASCII; the
+/// text is rebuilt instead, which needs neither.
 fn swap_sign_in_front_of_number(target: &mut String, sign: &str, write_starting_index: usize) {
-    // sign is ASCII or empty string
-    assert!(sign.len() <= 1);
-    if !sign.is_empty() {
-        let written = target
-            .as_bytes()
-            .get(write_starting_index..)
-            .unwrap_or_default();
-        // sign is the first character in the string
-        assert_eq!(written.first(), sign.as_bytes().first());
-
-        let sign_index = write_starting_index;
-        // A finite number writes at least one digit; with none there is nothing to
-        // move the sign in front of.
-        let Some(first_digit_in_substring) = written.iter().position(u8::is_ascii_digit) else {
-            return;
-        };
-        let final_sign_index = write_starting_index + first_digit_in_substring - 1;
-
-        // the first byte before the start of the number is ASCII
-        assert!(target.as_bytes()[final_sign_index].is_ascii());
-
-        // SAFETY: the bytes at `sign_index` and `final_sign_index` are both one-byte ASCII
-        // characters, so swapping them keeps the string UTF-8.
-        unsafe { target.as_bytes_mut().swap(sign_index, final_sign_index) };
-    }
+    let Some(number) = target
+        .get(write_starting_index..)
+        .and_then(|written| written.strip_prefix(sign))
+        .filter(|_| !sign.is_empty())
+    else {
+        return;
+    };
+    let digits = number.trim_start_matches(' ');
+    let padding = number.len() - digits.len();
+    let digits = digits.to_owned();
+    target.truncate(write_starting_index);
+    pad_target(target, padding, b' ');
+    target.push_str(sign);
+    target.push_str(&digits);
 }
 
 /// Removes the exponent part of the number at the end of `target` and writes it to `exponent_buffer`.

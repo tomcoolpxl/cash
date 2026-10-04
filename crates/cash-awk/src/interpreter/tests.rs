@@ -1689,3 +1689,26 @@ fn test_srand_returns_the_previous_seed_value() {
     let result = Test::new(instructions, constants).run_correct();
     assert_eq!(result.execution_result.unwrap_expr(), AwkValue::from(42.0));
 }
+
+// Inside cash, `system()` and pipes run their commands in cash, this process's own exe,
+// whatever its file is named: this test's exe is not named `cash`, as a linked `awk.exe`
+// is not, and the commands went to `cmd` (TODO.md 14.6). `CASH_ARGV0` tells a cash whose
+// exe is such a link that it runs as the shell.
+#[test]
+fn shell_commands_run_in_this_process_exe() {
+    let command = io::create_shell_command("echo hi");
+    assert_eq!(
+        std::path::Path::new(command.get_program()),
+        std::env::current_exe().expect("this test's exe")
+    );
+    assert!(
+        command
+            .get_args()
+            .eq(["--norc", "--noprofile", "-c", "echo hi"])
+    );
+    assert!(
+        command
+            .get_envs()
+            .any(|(name, value)| name == "CASH_ARGV0" && value.is_some_and(|v| v == "cash"))
+    );
+}

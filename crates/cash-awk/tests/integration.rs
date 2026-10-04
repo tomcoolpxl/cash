@@ -1517,27 +1517,34 @@ fn test_awk_empty_statement_before_else() {
 // `next` and `nextfile` have no record to go on from in BEGIN or END: written there they
 // are compile errors, and run there by a function they are fatal, both in gawk's words.
 // `BEGIN` and `END` are not variables, so `END END END` is a syntax error. Each ran
-// silently with status 0 (TODO.md 14.6).
+// silently with status 0 (TODO.md 14.6). A compile error exits 1 and a fatal one 2, as in
+// gawk; the fatal ones exited 1.
 #[test]
 fn test_awk_next_in_begin_or_end_is_an_error() {
-    for (program, message) in [
-        ("BEGIN { next }", "`next' used in BEGIN action"),
-        ("END { nextfile }", "`nextfile' used in END action"),
-        ("BEGIN { if (1) { next } }", "`next' used in BEGIN action"),
+    for (program, message, status) in [
+        ("BEGIN { next }", "`next' used in BEGIN action", 1),
+        ("END { nextfile }", "`nextfile' used in END action", 1),
+        (
+            "BEGIN { if (1) { next } }",
+            "`next' used in BEGIN action",
+            1,
+        ),
         (
             "function f() { next } BEGIN { f() }",
             "`next' cannot be called from a `BEGIN' rule",
+            2,
         ),
         (
             "function f() { nextfile } END { f() }",
             "`nextfile' cannot be called from a `END' rule",
+            2,
         ),
-        ("END END END", "expected action"),
-        ("END", "expected action"),
-        ("BEGIN", "expected action"),
+        ("END END END", "expected action", 1),
+        ("END", "expected action", 1),
+        ("BEGIN", "expected action", 1),
     ] {
-        run_test_with_checker(plan(program, "", "", 1), |_, output| {
-            assert_eq!(output.status.code(), Some(1), "{program}");
+        run_test_with_checker(plan(program, "", "", status), |_, output| {
+            assert_eq!(output.status.code(), Some(status), "{program}");
             assert!(output.stdout.is_empty(), "{program}");
             let stderr = String::from_utf8_lossy(&output.stderr);
             assert!(stderr.contains(message), "{program}: {stderr}");
@@ -1548,6 +1555,62 @@ fn test_awk_next_in_begin_or_end_is_an_error() {
         "function f() { next } { f(); print }\nEND { print NR }",
         "a\nb\n",
         "2\n",
+        0,
+    ));
+}
+
+// `begin`, `end` and `foreach` are plain names, as in gawk, where cash reserved them;
+// `delete` and `nextfile` are reserved, where `delete=1` was taken (TODO.md 14.6).
+#[test]
+fn test_awk_reserved_words_are_gawks() {
+    run_test(plan(
+        "BEGIN { begin = 1; end = 2; foreach = 3; print begin, end, foreach }",
+        "",
+        "1 2 3\n",
+        0,
+    ));
+    for program in [
+        "BEGIN { delete = 1 }",
+        "BEGIN { x = delete }",
+        "BEGIN { nextfile = 1 }",
+        "BEGIN { x = nextfile }",
+    ] {
+        let output = run_bounded(program);
+        assert_eq!(output.status.code(), Some(1), "{program}");
+        assert!(output.stdout.is_empty(), "{program}");
+    }
+}
+
+// A precision does not cut `%c`'s one character, as in gawk: `%.0c` printed nothing
+// (TODO.md 14.6).
+#[test]
+fn test_awk_char_conversion_ignores_a_precision() {
+    run_test(plan(
+        r#"BEGIN { printf "[%.0c][%.3c][%5.0c][%-3.0c]\n", "abc", "xyz", 65, "q" }"#,
+        "",
+        "[a][x][    A][q  ]\n",
+        0,
+    ));
+}
+
+// A fatal error exits 2, as in gawk; it exited 1 (TODO.md 14.6).
+#[test]
+fn test_awk_a_fatal_error_exits_2() {
+    run_test_with_checker(plan("BEGIN { x = 1; x[1] = 2 }", "", "", 2), |_, output| {
+        assert_eq!(output.status.code(), Some(2));
+        assert!(!output.stderr.is_empty());
+    });
+}
+
+// A `%s` in CONVFMT or OFMT converts the number with `%.6g`: it was converted with the
+// format itself, which recursed until the stack overflowed (TODO.md 14.6, found looking
+// for panics). gawk prints 1.5 for OFMT and crashes for CONVFMT.
+#[test]
+fn test_awk_a_string_conversion_in_convfmt_or_ofmt() {
+    run_test(plan(
+        r#"BEGIN { OFMT = "%s"; print 1.5; CONVFMT = "%s"; x = 2.5 ""; print x; CONVFMT = "<%s>"; print 3.5 "" }"#,
+        "",
+        "1.5\n2.5\n<3.5>\n",
         0,
     ));
 }

@@ -59,7 +59,7 @@ use bc_util::{
 use clap::Parser;
 
 /// bc - arbitrary-precision arithmetic language
-#[derive(Parser)]
+#[derive(Parser, Clone)]
 #[command(
     name = "bc",
     version,
@@ -117,14 +117,24 @@ where
             return if err.use_stderr() { 2 } else { 0 };
         }
     };
-    let spawned = std::thread::Builder::new()
-        .stack_size(INTERPRETER_STACK_SIZE)
-        .spawn(move || run(parsed));
+    run_on_thread(parsed, INTERPRETER_STACK_SIZE)
+}
+
+/// Runs bc on a thread of its own with a stack of `stack_size`, or, where that is
+/// refused (a constrained address space can refuse the large stack), with the default
+/// stack, rather than not at all.
+///
+/// The fallback has the arguments parsed once: it parsed them again with clap's
+/// `parse_from`, which exits the process on an error, and bc runs inside the shell,
+/// whose process that is.
+fn run_on_thread(args: Args, stack_size: usize) -> i32 {
+    let spawned = std::thread::Builder::new().stack_size(stack_size).spawn({
+        let args = args.clone();
+        move || run(args)
+    });
     let handle = match spawned {
         Ok(handle) => handle,
-        // A constrained address space can refuse the large stack; run with less room
-        // rather than not at all.
-        Err(_) => match std::thread::Builder::new().spawn(move || run(Args::parse_from(&args))) {
+        Err(_) => match std::thread::Builder::new().spawn(move || run(args)) {
             Ok(handle) => handle,
             Err(e) => {
                 diag::error(&e.to_string());
@@ -289,4 +299,38 @@ fn run(args: Args) -> i32 {
         had_error |= report(e);
     }
     i32::from(had_error)
+}
+
+#[cfg(test)]
+#[expect(
+    clippy::expect_used,
+    reason = "a failed assumption in a test should abort it loudly"
+)]
+mod tests {
+    use super::{Args, run_on_thread};
+    use clap::Parser;
+
+    // A stack the system refuses leaves bc on the default stack, with the arguments
+    // already parsed; they were parsed again there with `parse_from`, which exits the
+    // process on an error, the shell's when bc runs in it (TODO.md 14.6).
+    #[test]
+    fn a_refused_stack_runs_bc_with_the_parsed_arguments() {
+        let script = std::env::temp_dir().join(format!("cash-bc-{}.bc", std::process::id()));
+        std::fs::write(&script, "quit\n").expect("write the script");
+        let args = Args::try_parse_from([std::ffi::OsString::from("bc"), script.clone().into()])
+            .expect("parse the arguments");
+        let refused = usize::MAX >> 1;
+        assert!(
+            std::thread::Builder::new()
+                .stack_size(refused)
+                .spawn(|| ())
+                .is_err()
+        );
+        assert_eq!(run_on_thread(args, refused), 0);
+        let missing = script.with_extension("missing");
+        let args = Args::try_parse_from([std::ffi::OsString::from("bc"), missing.into()])
+            .expect("parse the arguments");
+        assert_eq!(run_on_thread(args, refused), 1);
+        let _ = std::fs::remove_file(script);
+    }
 }

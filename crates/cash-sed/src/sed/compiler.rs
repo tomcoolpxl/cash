@@ -14,8 +14,8 @@ use crate::sed::command::{
     Transliteration,
 };
 use crate::sed::delimited_parser::{
-    os_string_from_bytes, parse_char_escape, parse_regex_for_mode, parse_transliteration_for_mode,
-    push_script_char,
+    ERR_UNTERMINATED_ADDRESS_REGEX, os_string_from_bytes, parse_char_escape, parse_regex_for_mode,
+    parse_transliteration_for_mode, push_script_char,
 };
 use crate::sed::error_handling::{
     ScriptLocation, compilation_err, compilation_error, semantic_err, semantic_error,
@@ -32,12 +32,16 @@ use std::rc::Rc;
 
 use uucore::error::{UResult, USimpleError};
 
-const ERR_ADDRESS_0_USAGE: &str =
-    "address 0 can only be used with ~step, a second regular expression, or a read command";
-const ERR_SANDBOX: &str = "command not allowed with --sandbox";
+const ERR_ADDRESS_0_USAGE: &str = "invalid usage of line address 0";
+// GNU sed's words for these errors, as for the others; cash's sed had its own for the
+// same errors.
+const ERR_UNTERMINATED_S: &str = "unterminated `s' command";
+const ERR_UNTERMINATED_Y: &str = "unterminated `y' command";
+const ERR_TEXT_EXPECTED: &str = "expected \\ after `a', `c' or `i'";
+const ERR_SANDBOX: &str = "e/r/w commands disabled in sandbox mode";
 
-const ERR_UNKNOWN_OPTION_TO_S: &str = "unknown option to 's'";
-const ERR_TRANSLITERATION_LENGTH: &str = "transliteration strings are not the same length";
+const ERR_UNKNOWN_OPTION_TO_S: &str = "unknown option to `s'";
+const ERR_TRANSLITERATION_LENGTH: &str = "strings for `y' command are different lengths";
 
 // Handling required after processing a command
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -326,6 +330,11 @@ fn is_address_char(c: char) -> bool {
 
 /// Compile a command's optional address range into cmd.
 /// Return the number of addresses encountered.
+///
+/// As GNU sed reads them: `first~step` is one address (`compile_address`), so it may
+/// start a range (`1~3,5p`), and a `~` after any other address is left to be the
+/// command (`$~2p` is an unknown command `~`). The step was taken as a second address
+/// after any first one, so `1~3,5p` was refused and `$~2p` taken.
 fn compile_address_range(
     lines: &ScriptLineProvider,
     line: &mut ScriptCharProvider,
@@ -335,81 +344,55 @@ fn compile_address_range(
     let mut n_addr = 0;
     let mut cmd = cmd.borrow_mut();
 
-    let mut is_line0 = false;
-
     line.eat_spaces();
+    if !line.eol() && matches!(line.current(), '+' | '~') && !context.posix {
+        // `+N` and `~N` end a range; they cannot start one.
+        line.advance();
+        return compilation_error(lines, line, "invalid usage of +N or ~N as first address");
+    }
     if !line.eol() && is_address_char(line.current()) {
-        let addr1 = compile_address(lines, line, context)?;
-        is_line0 = matches!(addr1, Address::Line(0));
-        cmd.addr1 = Some(addr1);
-        if is_line0 && context.posix {
-            // 0 starting address is a GNU extension.
-            return compilation_error(lines, line, "address 0 is invalid in POSIX mode");
-        }
+        cmd.addr1 = Some(compile_address(lines, line, context)?);
         n_addr += 1;
     }
 
     line.eat_spaces();
-    if n_addr == 1 && !line.eol() && matches!(line.current(), ',' | '~') {
-        let is_step_match = line.current() == '~'; // E.g. 0~2: Pick even-numbered lines
+    if n_addr == 1 && !line.eol() && line.current() == ',' {
         line.advance();
         line.eat_spaces();
-        // At the end of the script line (`1~`) there is no current character.
-        let is_step_end = if !is_step_match && !line.eol() && line.current() == '~' {
-            // E.g. /foo/,~10: Start at foo, include all lines until multiple of 10 is reached.
+        if !line.eol() && line.current() == '~' && !context.posix {
+            // E.g. /foo/,~10: Start at foo, include all lines until multiple of 10 is
+            // reached. GNU sed reads the step as a number that may be missing, which
+            // counts as 0, and leaves whatever follows to the command: `2,~p` is just
+            // line 2.
             line.advance();
             line.eat_spaces();
-            true
+            let step = parse_number(lines, line, false)?.unwrap_or(0);
+            cmd.addr2 = Some(Address::StepEnd(step));
         } else {
-            false
-        };
-
-        if (is_step_match || is_step_end) && context.posix {
-            // ~ steps are a GNU extension.
-            return compilation_error(lines, line, "~step is invalid in POSIX mode");
-        }
-
-        if is_step_match || is_step_end {
-            // GNU sed reads the step as a number that may be missing, which counts as 0,
-            // and leaves whatever follows to the command: `1~p` and `1~0p` are line 1,
-            // `2,~p` and `2,+p` just line 2, and `1~/x/` is an unknown command `/`.
-            let step_n = parse_number(lines, line, false)?.unwrap_or(0);
-            if is_step_match {
-                // `first~0` is the line `first` alone, a single address, as in GNU sed;
-                // so `0~0` is line 0, which only `r` may use (checked below).
-                if step_n != 0 {
-                    cmd.addr2 = Some(Address::StepMatch(step_n));
-                    n_addr += 1;
-                }
-            } else {
-                if is_line0 {
-                    return compilation_error(lines, line, ERR_ADDRESS_0_USAGE);
-                }
-                cmd.addr2 = Some(Address::StepEnd(step_n));
-                n_addr += 1;
-            }
-        } else if !line.eol() {
-            // Look for second address.
             // What follows a comma has to be an address, as GNU sed has it: `1,xp` is
-            // its "unexpected `,'".
-            if !is_address_char(line.current()) && line.current() != '+' {
+            // its "unexpected `,'", and so is `1,+2p` in POSIX mode.
+            if line.eol()
+                || !(is_address_char(line.current()) || (line.current() == '+' && !context.posix))
+            {
                 return compilation_error(lines, line, "unexpected `,'");
             }
-            let addr2 = compile_address(lines, line, context)?;
-            if is_line0 && !matches!(addr2, Address::Re(_)) {
-                return compilation_error(lines, line, ERR_ADDRESS_0_USAGE);
-            }
-            cmd.addr2 = Some(addr2);
-            n_addr += 1;
+            cmd.addr2 = Some(compile_address(lines, line, context)?);
         }
+        n_addr += 1;
     }
 
-    // Zero-address read command check
-    if is_line0 && n_addr == 1 {
-        // After retrieval of first address, subsequent spaces
-        // are consumed unconditionally. By now, the position
-        // must be in non-whitespace character or EOL.
-        if line.eol() || line.current() != 'r' {
+    // Line 0 starts a range that a regular expression ends, so that the expression can
+    // match the first line, a GNU extension; and `0r` reads its file before the first
+    // line. Anything else, and anything in POSIX mode, is GNU's error.
+    if matches!(cmd.addr1, Some(Address::Line(0))) {
+        line.eat_spaces();
+        let allowed = match &cmd.addr2 {
+            Some(Address::Re(_)) => true,
+            Some(_) => false,
+            // After the address, spaces are eaten: the command is at the position.
+            None => !line.eol() && line.current() == 'r',
+        };
+        if !allowed || context.posix {
             return compilation_error(lines, line, ERR_ADDRESS_0_USAGE);
         }
     }
@@ -430,7 +413,7 @@ fn read_file_path(lines: &ScriptLineProvider, line: &mut ScriptCharProvider) -> 
     }
 
     if path.is_empty() {
-        compilation_error(lines, line, "missing file path")
+        compilation_error(lines, line, "missing filename in r/R/w/W commands")
     } else {
         os_string_from_bytes(path)
             .map(PathBuf::from)
@@ -463,7 +446,13 @@ fn compile_address(
             } else {
                 RegexMode::Basic
             };
-            let re = parse_regex_for_mode(lines, line, regex_mode, context.character_mode)?;
+            let re = parse_regex_for_mode(
+                lines,
+                line,
+                regex_mode,
+                context.character_mode,
+                ERR_UNTERMINATED_ADDRESS_REGEX,
+            )?;
             // Skip over delimiter
             line.advance();
 
@@ -491,6 +480,23 @@ fn compile_address(
         }
         c if c.is_ascii_digit() => {
             let number = parse_required_number(lines, line)?;
+            // `first~step`, with blanks allowed around the `~`, a GNU extension: in POSIX
+            // mode the `~` is left to be the command, an unknown one, as in GNU sed. A
+            // missing step counts as 0, and `first~0` is the line `first` alone.
+            if !context.posix {
+                line.eat_spaces();
+                if !line.eol() && line.current() == '~' {
+                    line.advance();
+                    line.eat_spaces();
+                    let step = parse_number(lines, line, false)?.unwrap_or(0);
+                    if step != 0 {
+                        return Ok(Address::Step {
+                            first: number,
+                            step,
+                        });
+                    }
+                }
+            }
             Ok(Address::Line(number))
         }
         // compile_address_range() calls this only on what can start an address.
@@ -536,11 +542,7 @@ fn parse_number(
 }
 
 /// Parse the end of a command, failing with an error on extra characters.
-fn parse_command_ending(
-    lines: &ScriptLineProvider,
-    line: &mut ScriptCharProvider,
-    cmd: &mut Command,
-) -> UResult<()> {
+fn parse_command_ending(lines: &ScriptLineProvider, line: &mut ScriptCharProvider) -> UResult<()> {
     if !line.eol() && line.current() == ';' {
         line.advance();
         return Ok(());
@@ -551,11 +553,7 @@ fn parse_command_ending(
     }
 
     if !line.eol() {
-        return compilation_error(
-            lines,
-            line,
-            format!("extra characters at the end of the {} command", cmd.code),
-        );
+        return compilation_error(lines, line, "extra characters after command");
     }
 
     Ok(())
@@ -780,11 +778,7 @@ pub fn compile_replacement(
                             *line = ScriptCharProvider::new(next_line);
                             continue;
                         }
-                        return compilation_error(
-                            lines,
-                            line,
-                            "unterminated substitute replacement (unexpected EOF)",
-                        );
+                        return compilation_error(lines, line, ERR_UNTERMINATED_S);
                     }
 
                     match line.current() {
@@ -835,7 +829,10 @@ pub fn compile_replacement(
                             if let Some(decoded) = parse_char_escape(line) {
                                 push_script_char(&mut literal, decoded, character_mode);
                             } else {
-                                literal.push(b'\\');
+                                // A backslash before a character with no escape of its own
+                                // stands for the character, as in GNU sed: `s/a/\q/` gives
+                                // `q`, and `\U` under --posix is `U`. The backslash was
+                                // kept.
                                 literal.push(line.current_byte());
                                 line.advance();
                             }
@@ -878,7 +875,7 @@ pub fn compile_replacement(
         if let Some(next_line) = lines.next_line()? {
             *line = ScriptCharProvider::new(next_line);
         } else {
-            return compilation_error(lines, line, "unterminated substitute replacement");
+            return compilation_error(lines, line, ERR_UNTERMINATED_S);
         }
     }
 }
@@ -892,6 +889,10 @@ fn compile_subst_command(
 ) -> UResult<CommandHandling> {
     line.advance(); // move past 's'
 
+    // An `s` that ends the line has no pattern; reading its delimiter there panicked.
+    if line.eol() {
+        return compilation_error(lines, line, ERR_UNTERMINATED_S);
+    }
     let delimiter = line.current();
     if delimiter == '\0' || delimiter == '\\' {
         return compilation_error(
@@ -906,7 +907,13 @@ fn compile_subst_command(
     } else {
         RegexMode::Basic
     };
-    let pattern = parse_regex_for_mode(lines, line, regex_mode, context.character_mode)?;
+    let pattern = parse_regex_for_mode(
+        lines,
+        line,
+        regex_mode,
+        context.character_mode,
+        ERR_UNTERMINATED_S,
+    )?;
     let mut subst = Box::new(Substitution::default());
 
     subst.replacement = compile_replacement(lines, line, context.character_mode, !context.posix)?;
@@ -945,7 +952,7 @@ fn compile_subst_command(
     }
     cmd.data = CommandData::Substitution(subst);
 
-    parse_command_ending(lines, line, cmd)?;
+    parse_command_ending(lines, line)?;
     Ok(CommandHandling::Continue)
 }
 
@@ -958,6 +965,10 @@ fn compile_trans_command(
 ) -> UResult<CommandHandling> {
     line.advance(); // move past 'y'
 
+    // A `y` that ends the line has no strings; reading its delimiter there panicked.
+    if line.eol() {
+        return compilation_error(lines, line, ERR_UNTERMINATED_Y);
+    }
     let delimiter = line.current();
     if delimiter == '\0' || delimiter == '\\' {
         return compilation_error(
@@ -976,25 +987,27 @@ fn compile_trans_command(
     if source_has_cr {
         context.cr_in_script.set(true);
     }
+    // Both strings are read in the one character mode, so they are text together or
+    // bytes together; were they not, bytes would serve, as for byte mode.
     let transliteration = match (source, target) {
-        (ParsedTransliteration::Bytes(source), ParsedTransliteration::Bytes(target)) => {
-            if source.len() != target.len() {
-                return compilation_error(lines, line, ERR_TRANSLITERATION_LENGTH);
-            }
-            Box::new(Transliteration::from_bytes(&source, &target))
-        }
         (ParsedTransliteration::Text(source), ParsedTransliteration::Text(target)) => {
             if source.chars().count() != target.chars().count() {
                 return compilation_error(lines, line, ERR_TRANSLITERATION_LENGTH);
             }
             Box::new(Transliteration::from_strings(&source, &target))
         }
-        _ => unreachable!("transliteration parser returned mixed modes"),
+        (source, target) => {
+            let (source, target) = (source.into_bytes(), target.into_bytes());
+            if source.len() != target.len() {
+                return compilation_error(lines, line, ERR_TRANSLITERATION_LENGTH);
+            }
+            Box::new(Transliteration::from_bytes(&source, &target))
+        }
     };
     cmd.data = CommandData::Transliteration(transliteration);
 
     line.advance(); // move past last delimiter
-    parse_command_ending(lines, line, cmd)?;
+    parse_command_ending(lines, line)?;
     Ok(CommandHandling::Continue)
 }
 
@@ -1027,11 +1040,7 @@ pub fn compile_subst_flags(
         match line.current() {
             'g' => {
                 if seen_g {
-                    return compilation_error(
-                        lines,
-                        line,
-                        "multiple 'g' flags in substitute command",
-                    );
+                    return compilation_error(lines, line, "multiple `g' options to `s' command");
                 }
                 seen_g = true;
                 subst.global = true;
@@ -1073,12 +1082,20 @@ pub fn compile_subst_flags(
                 line.advance();
             }
 
+            '0' => {
+                return compilation_error(
+                    lines,
+                    line,
+                    "number option to `s' command may not be zero",
+                );
+            }
+
             _c @ '1'..='9' => {
                 if seen_number {
                     return compilation_error(
                         lines,
                         line,
-                        "multiple numeric flags in substitute command",
+                        "multiple number options to `s' command",
                     );
                 }
 
@@ -1112,12 +1129,8 @@ pub fn compile_subst_flags(
 
             ';' | '\n' => break,
 
-            other => {
-                return compilation_error(
-                    lines,
-                    line,
-                    format!("invalid substitute flag: '{other}'"),
-                );
+            _ => {
+                return compilation_error(lines, line, ERR_UNKNOWN_OPTION_TO_S);
             }
         }
     }
@@ -1129,7 +1142,7 @@ pub fn compile_subst_flags(
 fn compile_end_group_command(
     lines: &mut ScriptLineProvider,
     line: &mut ScriptCharProvider,
-    cmd: &mut Command,
+    _cmd: &mut Command,
     context: &mut ProcessingContext,
 ) -> UResult<CommandHandling> {
     if context.parsed_block_nesting == 0 {
@@ -1138,7 +1151,7 @@ fn compile_end_group_command(
     context.parsed_block_nesting -= 1;
     line.advance();
     line.eat_spaces();
-    parse_command_ending(lines, line, cmd)?;
+    parse_command_ending(lines, line)?;
     Ok(CommandHandling::Return)
 }
 
@@ -1152,7 +1165,7 @@ fn compile_negation_command(
     line.advance();
     line.eat_spaces();
     if cmd.non_select {
-        return compilation_error(lines, line, "negation already applied");
+        return compilation_error(lines, line, "multiple `!'s");
     }
     cmd.non_select = true;
     Ok(CommandHandling::GetNext)
@@ -1163,13 +1176,13 @@ fn compile_negation_command(
 fn compile_empty_command(
     lines: &mut ScriptLineProvider,
     line: &mut ScriptCharProvider,
-    cmd: &mut Command,
+    _cmd: &mut Command,
     _context: &mut ProcessingContext,
 ) -> UResult<CommandHandling> {
     line.advance(); // Skip the command character
     line.eat_spaces(); // Skip any trailing whitespace
 
-    parse_command_ending(lines, line, cmd)?;
+    parse_command_ending(lines, line)?;
     Ok(CommandHandling::Continue)
 }
 
@@ -1256,7 +1269,7 @@ fn compile_label_command(
     if ended_by_blank && !line.eol() && !matches!(line.current(), ';' | '}' | '#') {
         return Ok(CommandHandling::Continue);
     }
-    parse_command_ending(lines, line, cmd)?;
+    parse_command_ending(lines, line)?;
     Ok(CommandHandling::Continue)
 }
 
@@ -1281,7 +1294,7 @@ fn compile_number_command(
     cmd.data = CommandData::Number(n);
 
     line.eat_spaces(); // Skip any trailing whitespace
-    parse_command_ending(lines, line, cmd)?;
+    parse_command_ending(lines, line)?;
     Ok(CommandHandling::Continue)
 }
 
@@ -1320,11 +1333,7 @@ fn compile_text_command_gnu(
     let mut escaped_newline = false;
 
     if line.eol() {
-        return compilation_error(
-            lines,
-            line,
-            format!("command `{}' expects \\ followed by text", cmd.code),
-        );
+        return compilation_error(lines, line, ERR_TEXT_EXPECTED);
     }
 
     // Skip optional \.
@@ -1389,11 +1398,7 @@ fn compile_text_command_posix(
     _context: &mut ProcessingContext,
 ) -> UResult<CommandHandling> {
     if line.eol() || line.current() != '\\' {
-        return compilation_error(
-            lines,
-            line,
-            format!("command `{}' expects \\ followed by text", cmd.code),
-        );
+        return compilation_error(lines, line, ERR_TEXT_EXPECTED);
     }
 
     line.advance(); // Skip \.
@@ -1483,7 +1488,10 @@ fn compile_version_command(
         Ok(major_int) => match minor.parse::<u8>() {
             Ok(minor_int) => match patch.parse::<u8>() {
                 Ok(patch_int) => {
-                    if minor_int <= GNU_MINOR && major_int <= GNU_MAJOR && patch_int == GNU_PATCH {
+                    // Versions compare part by part, as in GNU sed: 4.8.1 and 3.99 are
+                    // older than 4.9, where the patch had to be 0 and the minor no more
+                    // than 9 whatever the major.
+                    if (major_int, minor_int, patch_int) <= (GNU_MAJOR, GNU_MINOR, GNU_PATCH) {
                         return Ok(CommandHandling::Continue);
                     }
                     compilation_error(lines, line, "expected newer version of sed")
@@ -1603,21 +1611,21 @@ fn get_verified_cmd_spec(
     posix: bool,
 ) -> UResult<CommandSpec> {
     if line.eol() {
-        return compilation_error(lines, line, "command expected");
+        return compilation_error(lines, line, "missing command");
     }
 
     let ch = line.current();
     let cmd_spec = get_cmd_spec(lines, line, ch, posix)?;
 
     if n_addr > cmd_spec.n_addr {
-        return compilation_error(
-            lines,
-            line,
-            format!(
-                "command {} expects up to {} address(es), found {}",
-                ch, cmd_spec.n_addr, n_addr
-            ),
-        );
+        // GNU sed's words.
+        let message = match ch {
+            ':' => ": doesn't want any addresses",
+            '}' => "`}' doesn't want any addresses",
+            'v' => "unknown command: `v'",
+            _ => "command only uses one address",
+        };
+        return compilation_error(lines, line, message);
     }
 
     Ok(cmd_spec)
@@ -1675,8 +1683,10 @@ fn get_cmd_spec(
             n_addr: 2,
             handler: compile_number_command,
         }),
+        // One address, also outside POSIX mode, as in GNU sed: `1,+0q` is its "command
+        // only uses one address".
         'q' => Ok(CommandSpec {
-            n_addr: if posix { 1 } else { 2 },
+            n_addr: 1,
             handler: compile_number_command,
         }),
         // Q is a GNU extension
@@ -1721,7 +1731,9 @@ fn get_cmd_spec(
             n_addr: 0,
             handler: compile_version_command,
         }),
-        _ => compilation_error(lines, line, format!("invalid command code `{cmd_code}'")),
+        // An address before a comment: comments are read before any address.
+        '#' => compilation_error(lines, line, "comments don't accept any addresses"),
+        _ => compilation_error(lines, line, format!("unknown command: `{cmd_code}'")),
     }
 }
 
@@ -1797,16 +1809,8 @@ mod tests {
     #[test]
     fn test_parse_command_ending_rejects_extra_characters() {
         let (lines, mut chars) = make_providers("extra");
-        let mut cmd = Command {
-            code: 'p',
-            ..Default::default()
-        };
-
-        let err = parse_command_ending(&lines, &mut chars, &mut cmd).unwrap_err();
-        assert!(
-            err.to_string()
-                .contains("extra characters at the end of the p command")
-        );
+        let err = parse_command_ending(&lines, &mut chars).unwrap_err();
+        assert!(err.to_string().contains("extra characters after command"));
     }
 
     #[test]
@@ -1871,7 +1875,7 @@ mod tests {
 
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
-        assert!(msg.contains("test.sed:1:1: error: command expected"));
+        assert!(msg.contains("test.sed:1:1: error: missing command"));
     }
 
     #[test]
@@ -1882,7 +1886,7 @@ mod tests {
 
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
-        assert!(msg.contains("script.sed:2:1: error: invalid command code `@'"));
+        assert!(msg.contains("script.sed:2:1: error: unknown command: `@'"));
     }
 
     #[test]
@@ -1893,9 +1897,7 @@ mod tests {
 
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
-        assert!(
-            msg.contains("input.sed:3:1: error: command q expects up to 1 address(es), found 2")
-        );
+        assert!(msg.contains("input.sed:3:1: error: command only uses one address"));
     }
 
     #[test]
@@ -1915,9 +1917,7 @@ mod tests {
         let result = get_verified_cmd_spec(&lines, &line, 2, true);
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
-        assert!(
-            msg.contains("input.sed:1:1: error: command i expects up to 1 address(es), found 2")
-        );
+        assert!(msg.contains("input.sed:1:1: error: command only uses one address"));
     }
 
     // parse_number
@@ -2138,9 +2138,29 @@ mod tests {
         let mut cmd = Rc::new(RefCell::new(Command::default()));
         let n_addr = compile_address_range(&lines, &mut chars, &mut cmd, &ctx()).unwrap();
 
+        assert_eq!(n_addr, 1);
+        assert!(matches!(
+            cmd.borrow().addr1,
+            Some(Address::Step { first: 0, step: 2 })
+        ));
+        assert!(cmd.borrow().addr2.is_none());
+    }
+
+    // `first~step` is one address, as in GNU sed, so it can start a range; it was read as
+    // a second address, and `1~3,5p` was refused (TODO.md 14.6).
+    #[test]
+    fn test_compile_step_match_starts_a_range() {
+        let (lines, mut chars) = make_providers("1 ~ 3,5p");
+        let mut cmd = Rc::new(RefCell::new(Command::default()));
+        let n_addr = compile_address_range(&lines, &mut chars, &mut cmd, &ctx()).unwrap();
+
         assert_eq!(n_addr, 2);
-        assert!(matches!(cmd.borrow().addr1, Some(Address::Line(0))));
-        assert!(matches!(cmd.borrow().addr2, Some(Address::StepMatch(2))));
+        assert!(matches!(
+            cmd.borrow().addr1,
+            Some(Address::Step { first: 1, step: 3 })
+        ));
+        assert!(matches!(cmd.borrow().addr2, Some(Address::Line(5))));
+        assert_eq!(chars.current(), 'p');
     }
 
     #[test]
@@ -2281,7 +2301,7 @@ mod tests {
 
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
-        assert!(msg.contains("unterminated regular expression"));
+        assert!(msg.contains(ERR_UNTERMINATED_ADDRESS_REGEX));
     }
 
     // compile_sequence
@@ -2601,12 +2621,12 @@ mod tests {
     }
 
     #[test]
-    fn test_compile_replacement_preserves_unknown_escape() {
+    fn test_compile_replacement_unknown_escape_is_the_character() {
         let (mut lines, mut chars) = make_providers(r"/a\q/");
         let template = compile_replacement_utf8(&mut lines, &mut chars).unwrap();
 
         assert_eq!(template.parts.len(), 1);
-        assert!(matches!(&template.parts[0], ReplacementPart::Literal(s) if s == br"a\q"));
+        assert!(matches!(&template.parts[0], ReplacementPart::Literal(s) if s == b"aq"));
     }
 
     #[test]
@@ -2614,10 +2634,7 @@ mod tests {
         let (mut lines, mut chars) = make_providers(r"/abc\");
         let err = compile_replacement_utf8(&mut lines, &mut chars).unwrap_err();
 
-        assert!(
-            err.to_string()
-                .contains("unterminated substitute replacement (unexpected EOF)")
-        );
+        assert!(err.to_string().contains(ERR_UNTERMINATED_S));
     }
 
     #[test]
@@ -2636,10 +2653,7 @@ mod tests {
         let (mut lines, mut chars) = make_providers("/abc");
         let err = compile_replacement_utf8(&mut lines, &mut chars).unwrap_err();
 
-        assert!(
-            err.to_string()
-                .contains("unterminated substitute replacement")
-        );
+        assert!(err.to_string().contains(ERR_UNTERMINATED_S));
     }
 
     // compile_subst_flags
@@ -2735,7 +2749,7 @@ mod tests {
         let err = compile_subst_flags(&lines, &mut chars, &mut subst, false, false).unwrap_err();
         assert!(
             err.to_string()
-                .contains("multiple 'g' flags in substitute command")
+                .contains("multiple `g' options to `s' command")
         );
     }
 
@@ -2747,7 +2761,7 @@ mod tests {
         let err = compile_subst_flags(&lines, &mut chars, &mut subst, false, false).unwrap_err();
         assert!(
             err.to_string()
-                .contains("multiple numeric flags in substitute command")
+                .contains("multiple number options to `s' command")
         );
     }
 
@@ -2757,7 +2771,10 @@ mod tests {
         let mut subst = Substitution::default();
 
         let err = compile_subst_flags(&lines, &mut chars, &mut subst, false, false).unwrap_err();
-        assert!(err.to_string().contains("missing file path"));
+        assert!(
+            err.to_string()
+                .contains("missing filename in r/R/w/W commands")
+        );
     }
 
     #[test]
@@ -2822,7 +2839,7 @@ mod tests {
         let mut subst = Substitution::default();
 
         let err = compile_subst_flags(&lines, &mut chars, &mut subst, false, false).unwrap_err();
-        assert!(err.to_string().contains("invalid substitute flag"));
+        assert!(err.to_string().contains(ERR_UNKNOWN_OPTION_TO_S));
     }
 
     // compile_subst_command
@@ -2848,7 +2865,7 @@ mod tests {
 
         let err =
             compile_subst_command(&mut lines, &mut chars, &mut cmd, &mut context).unwrap_err();
-        assert!(err.to_string().contains("invalid substitute flag"));
+        assert!(err.to_string().contains(ERR_UNKNOWN_OPTION_TO_S));
     }
 
     #[test]
@@ -3571,7 +3588,7 @@ mod tests {
         let result = compile_text_command(&mut lines, &mut chars, &mut cmd, &mut context);
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
-        assert!(err.contains("expects \\ followed by text"));
+        assert!(err.contains(ERR_TEXT_EXPECTED));
     }
 
     #[test]
@@ -3667,7 +3684,7 @@ mod tests {
         let result = compile_text_command(&mut lines, &mut chars, &mut cmd, &mut context);
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
-        assert!(err.contains("expects \\ followed by text"));
+        assert!(err.contains(ERR_TEXT_EXPECTED));
     }
 
     #[test]
@@ -3700,7 +3717,10 @@ mod tests {
         let (lines, mut chars) = make_providers("w ");
 
         let err = read_file_path(&lines, &mut chars).unwrap_err();
-        assert!(err.to_string().contains("missing file path"));
+        assert!(
+            err.to_string()
+                .contains("missing filename in r/R/w/W commands")
+        );
     }
 
     #[test]

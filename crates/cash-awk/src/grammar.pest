@@ -86,22 +86,24 @@ close    = { "close" ~ !(letter | "_" | digit) }
 fflush   = { "fflush" ~ !(letter | "_" | digit) }
 system   = { "system" ~ !(letter | "_" | digit) }
 
+// gawk's reserved words that cash knows. `begin`, `end` and `foreach` are plain names, as
+// in gawk. A choice does not back off to a later word when the end of a name fails to
+// follow, so a word comes before any shorter word it starts with (`nextfile`, `next`).
 keyword = {
-    ("foreach"
-  | "function"
+    ("function"
   | "continue"
+  | "nextfile"
   | "getline"
+  | "delete"
   | "printf"
   | "return"
   | "while"
   | "break"
-  | "begin"
   | "else"
   | "exit"
   | "next"
   | "print"
   | "for"
-  | "end"
   | "if"
   | "do"
   | "in") ~ !(letter | "_" | digit)

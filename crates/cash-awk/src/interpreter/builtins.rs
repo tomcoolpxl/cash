@@ -108,8 +108,7 @@ fn format_one_conversion(
                 'u' => IntegerFormat::Decimal,
                 'o' => IntegerFormat::Octal,
                 'x' => IntegerFormat::HexLower,
-                'X' => IntegerFormat::HexUpper,
-                _ => unreachable!(),
+                _ => IntegerFormat::HexUpper,
             };
             fmt_write_unsigned(result, value.cast_unsigned(), format, args);
         }
@@ -143,8 +142,11 @@ fn format_one_conversion(
                     char::from_u32(code).unwrap_or('\0')
                 }
             };
-            let ch_str = ch.to_string();
-            fmt_write_string(result, &ch_str, args);
+            // A precision cuts a string, and the character is the whole of this one, so
+            // gawk ignores it: `%.0c` writes the character, where it wrote nothing.
+            let mut args = args.clone();
+            args.set_precision(-1);
+            fmt_write_string(result, &ch.to_string(), &args);
         }
         's' => {
             let value = value.scalar_to_string(float_format)?;
@@ -445,7 +447,10 @@ pub(crate) fn call_simple_builtin(
         BuiltinFunction::Printf => {
             super::io::write_stdout(&builtin_sprintf(stack, argc, global_env)?)?;
         }
-        _ => unreachable!("call_simple_builtin was passed an invalid builtin function kind"),
+        // `call_builtin` takes the functions that need the interpreter's state before it
+        // passes the rest here; one of those would be malformed code, an error rather
+        // than a panic.
+        _ => return Err("a builtin function called out of place".to_string()),
     }
     Ok(FieldsState::Ok)
 }

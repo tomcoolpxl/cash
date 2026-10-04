@@ -61,24 +61,15 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 14.6 Dead code, allows and dependencies
 
-- awk: `begin`, `end` and `foreach` are reserved in cash (`BEGIN{begin=1}` is a syntax
-  error) but plain names in gawk; `delete=1` is accepted where gawk reports a syntax
-  error. `%.0c` prints nothing; gawk ignores a precision for `%c`. `next` reached through
-  a function in BEGIN exits 1, gawk 2. Seen 2026-10-04 fixing the awk leftovers.
-- sed: an unknown escape in a replacement keeps its backslash (`s/a/\q/` gives `\q`, GNU
-  `q`), so `--posix 's/a/\Uxy\E/'` gives `Uxy\E` where GNU gives `UxyE`. `1~3,5p` is
-  refused (GNU takes it) and `$~2p` taken (GNU refuses it); `1,+0q` and `1,~0q` are taken
-  where GNU says "command only uses one address". Several error wordings differ from GNU
-  ("invalid command code" for "unknown command:", address 0, `~step` in POSIX mode), and
-  `sua\uxu` reports the location `::0:8`. Seen 2026-10-04 fixing the sed leftovers.
-- `unreachable!()`s and `assert!`s the panic lints do not cover remain in awk's compiler
-  and VM and in sed; one of awk's was reachable (`sub(/a/,"b",length)`). bc's `run_bc`
-  parses its arguments a second time with `Args::parse_from`, which can exit the
-  process. Seen 2026-10-04 (ARCH-01).
-- awk's `system()` and pipes and sed's `e` start the shell through `CASH_BIN` when it is
-  set, a test hook live in production as W32-18's were; and they find cash only when their
-  exe is named `cash` (or `cash-…`), so in a linked `awk.exe` they take another shell.
-  Seen 2026-10-04 fixing BIN-09.
+- sed: `R` is not supported; `s/a/b/pp` is accepted where GNU says "multiple `p'
+  options"; the `e` flag and command under `--posix`/`--sandbox` keep cash's own message;
+  the regex engine's error texts are not GNU's ("Unmatched ( or \("); some error columns
+  are one past GNU's (`1!!p`, `y/a`, `s/a/b`). Seen 2026-10-04 fixing the sed leftovers.
+- awk: gawk's `func` keyword is not taken; runtime error texts are not gawk's ("scalar
+  used in array context" for "attempt to use scalar … as an array"). Seen 2026-10-04.
+- `tests/corpus/results.json`, the corpus runner's last log, quotes sed's old message
+  "extra characters at the end of the : command"; a run of `tests/corpus/run.ps1`
+  rewrites it. Seen 2026-10-04.
 - cash's `more`, its output not a terminal, prints nothing until its input ends, where
   `cat` and `head` pass each line on: `more <(echo x; sleep 8) > f` leaves `f` empty for
   8 s. Seen 2026-10-04 measuring W32-02.

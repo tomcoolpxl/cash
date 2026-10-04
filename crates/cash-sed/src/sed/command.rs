@@ -126,12 +126,12 @@ pub struct ByteSpace {
 #[derive(Debug)]
 /// Types of address specifications that precede commands
 pub enum Address {
-    Re(Option<Regex>), // Line that matches (optional) regex
-    Line(usize),       // Specific line
-    RelLine(usize),    // Relative line
-    Last,              // Last line
-    StepMatch(usize),  // Lines matching specified step from first
-    StepEnd(usize),    // Range ending at specified step from first
+    Re(Option<Regex>),                  // Line that matches (optional) regex
+    Line(usize),                        // Specific line
+    RelLine(usize),                     // Relative line
+    Last,                               // Last line
+    Step { first: usize, step: usize }, // `first~step`: every `step`th line from `first`
+    StepEnd(usize),                     // Range ending at specified step from first
 }
 
 #[derive(Debug)]
@@ -333,10 +333,9 @@ impl ReplacementTemplate {
 
     /// Apply the template to the given RE single match.
     ///
-    /// # Panics
-    ///
-    /// If the template refers to a group (`\1` to `\9`): a single match has none.
-    /// A template whose `max_group_number` is above 0 goes to `apply_captures`.
+    /// A template whose `max_group_number` is above 0 goes to `apply_captures`: a
+    /// single match has no groups (`\1` to `\9`). One here would be empty, as a group
+    /// that matched nothing is there; it panicked.
     pub fn apply_match(&self, m: &Match) -> Vec<u8> {
         let mut result = Vec::new();
 
@@ -350,13 +349,7 @@ impl ReplacementTemplate {
 
                 ReplacementPart::Case(conversion) => case.set(*conversion),
 
-                #[expect(
-                    clippy::panic,
-                    reason = "the caller only uses a single match for a template without groups"
-                )]
-                ReplacementPart::Group(_) => {
-                    panic!("unexpected Regex group replacement")
-                }
+                ReplacementPart::Group(_) => {}
             }
         }
         result
@@ -383,6 +376,16 @@ pub struct Substitution {
 pub enum ParsedTransliteration {
     Bytes(Vec<u8>),
     Text(String),
+}
+
+impl ParsedTransliteration {
+    /// The string's bytes, whichever mode it was read in.
+    pub fn into_bytes(self) -> Vec<u8> {
+        match self {
+            Self::Bytes(bytes) => bytes,
+            Self::Text(text) => text.into_bytes(),
+        }
+    }
 }
 
 /// The block of the first and most common Unicode characters:

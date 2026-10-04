@@ -102,7 +102,10 @@ impl AwkValue {
                     }
                     .into())
                 } else {
-                    sprintf(num_fmt, &mut [num.into()], num_fmt)
+                    // A `%s` in the format converts the number with `%.6g`, the default:
+                    // converted with the format itself it recursed until the stack
+                    // overflowed (`CONVFMT = "%s"`).
+                    sprintf(num_fmt, &mut [num.into()], "%.6g")
                 }
             }
             AwkValueVariant::String(s) => Ok(s),
@@ -128,16 +131,12 @@ impl AwkValue {
     }
 
     pub(crate) fn as_array(&mut self) -> Result<&mut Array, String> {
+        // A value not used yet becomes an array by being used as one.
+        if matches!(self.value, AwkValueVariant::Uninitialized) {
+            self.value = AwkValueVariant::Array(Array::default());
+        }
         match &mut self.value {
             AwkValueVariant::Array(array) => Ok(array),
-            value @ AwkValueVariant::Uninitialized => {
-                *value = AwkValueVariant::Array(Array::default());
-                if let AwkValueVariant::Array(array) = value {
-                    Ok(array)
-                } else {
-                    unreachable!()
-                }
-            }
             _ => Err("scalar used in array context".to_string()),
         }
     }

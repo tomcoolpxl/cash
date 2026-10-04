@@ -979,7 +979,7 @@ fn pattern_clear_with_z_is_non_posix() {
         .args(&["--posix", "z"])
         .fails()
         .code_is(1)
-        .stderr_is("sed: <script argument 1>:1:1: error: invalid command code `z'\n");
+        .stderr_is("sed: <script argument 1>:1:1: error: unknown command: `z'\n");
 }
 check_output!(trans_newline, ["-e", r"1N;2y/\n/X/", LINES1]);
 
@@ -1316,7 +1316,7 @@ fn test_branch_no_sub_non_posix() {
         .args(&["--posix", "T"])
         .fails()
         .code_is(1)
-        .stderr_contains("invalid command code");
+        .stderr_contains("unknown command: ");
 }
 
 ////////////////////////////////////////////////////////////
@@ -1505,7 +1505,7 @@ fn sandbox_rejects_read_command() {
     new_ucmd!()
         .args(&["--sandbox", &format!("1r {LINES2}"), LINES1])
         .fails()
-        .stderr_contains("command not allowed with --sandbox");
+        .stderr_contains("e/r/w commands disabled in sandbox mode");
 }
 
 #[test]
@@ -1516,7 +1516,7 @@ fn sandbox_rejects_subst_write_flag() -> std::io::Result<()> {
     new_ucmd!()
         .args(&["--sandbox", &cmd, LINES1])
         .fails()
-        .stderr_contains("command not allowed with --sandbox");
+        .stderr_contains("e/r/w commands disabled in sandbox mode");
 
     let mut actual = String::new();
     temp.reopen()?.read_to_string(&mut actual)?;
@@ -1533,7 +1533,7 @@ fn sandbox_rejects_write_command() -> std::io::Result<()> {
     new_ucmd!()
         .args(&["--sandbox", &cmd, LINES1])
         .fails()
-        .stderr_contains("command not allowed with --sandbox");
+        .stderr_contains("e/r/w commands disabled in sandbox mode");
 
     let mut actual = String::new();
     temp.reopen()?.read_to_string(&mut actual)?;
@@ -1550,7 +1550,7 @@ fn sandbox_rejects_first_line_write_command() -> std::io::Result<()> {
     new_ucmd!()
         .args(&["--sandbox", &cmd, LINES1])
         .fails()
-        .stderr_contains("command not allowed with --sandbox");
+        .stderr_contains("e/r/w commands disabled in sandbox mode");
 
     let mut actual = String::new();
     temp.reopen()?.read_to_string(&mut actual)?;
@@ -1659,7 +1659,7 @@ fn write_first_line_with_w_command_is_non_posix() {
         .args(&["--posix", "W /tmp/out"])
         .fails()
         .code_is(1)
-        .stderr_is("sed: <script argument 1>:1:1: error: invalid command code `W'\n");
+        .stderr_is("sed: <script argument 1>:1:1: error: unknown command: `W'\n");
 }
 
 ////////////////////////////////////////////////////////////
@@ -1691,7 +1691,7 @@ fn filename_non_posix() {
         .args(&["--posix", "F"])
         .fails()
         .code_is(1)
-        .stderr_contains("invalid command code");
+        .stderr_contains("unknown command: ");
 }
 
 /// List Unicode input under an explicit UTF-8 locale
@@ -1969,7 +1969,7 @@ fn test_incomplete_test_command_posix() {
         .args(&["--posix", "i\\"])
         .fails()
         .code_is(1)
-        .stderr_is("sed: :0:3: error: incomplete command\n");
+        .stderr_is("sed: <script argument 1>:1:3: error: incomplete command\n");
 }
 
 #[test]
@@ -1979,7 +1979,7 @@ fn test_empty_text_commands_fail() {
             .args(&["-e", command])
             .fails()
             .code_is(1)
-            .stderr_contains(format!("command `{command}' expects \\ followed by text"));
+            .stderr_contains("expected \\ after `a', `c' or `i'");
     }
 }
 
@@ -1989,7 +1989,7 @@ fn test_addr0_non_posix() {
         .args(&["--posix", "0,/foo/p"])
         .fails()
         .code_is(1)
-        .stderr_is("sed: <script argument 1>:1:2: error: address 0 is invalid in POSIX mode\n");
+        .stderr_is("sed: <script argument 1>:1:8: error: invalid usage of line address 0\n");
 }
 
 #[test]
@@ -1998,7 +1998,7 @@ fn test_addr0_second_required() {
         .args(&["0p"])
         .fails()
         .code_is(1)
-        .stderr_is("sed: <script argument 1>:1:2: error: address 0 can only be used with ~step, a second regular expression, or a read command\n");
+        .stderr_is("sed: <script argument 1>:1:2: error: invalid usage of line address 0\n");
 }
 
 #[test]
@@ -2007,7 +2007,7 @@ fn test_addr0_second_re_only() {
         .args(&["0,4p"])
         .fails()
         .code_is(1)
-        .stderr_is("sed: <script argument 1>:1:4: error: address 0 can only be used with ~step, a second regular expression, or a read command\n");
+        .stderr_is("sed: <script argument 1>:1:4: error: invalid usage of line address 0\n");
 }
 
 #[test]
@@ -2016,7 +2016,7 @@ fn test_step_match_non_posix() {
         .args(&["--posix", "3~2p"])
         .fails()
         .code_is(1)
-        .stderr_is("sed: <script argument 1>:1:3: error: ~step is invalid in POSIX mode\n");
+        .stderr_is("sed: <script argument 1>:1:2: error: unknown command: `~'\n");
 }
 
 #[test]
@@ -2025,7 +2025,7 @@ fn test_step_end_non_posix() {
         .args(&["--posix", "3,~2p"])
         .fails()
         .code_is(1)
-        .stderr_is("sed: <script argument 1>:1:4: error: ~step is invalid in POSIX mode\n");
+        .stderr_is("sed: <script argument 1>:1:3: error: unexpected `,'\n");
 }
 
 // The following test diverse ways in which regexes are matched.
@@ -2226,13 +2226,13 @@ fn test_posix_reject_flags() {
         .args(&["--posix", "s/a/b/i"])
         .fails()
         .code_is(1)
-        .stderr_is("sed: <script argument 1>:1:7: error: unknown option to 's'\n");
+        .stderr_is("sed: <script argument 1>:1:7: error: unknown option to `s'\n");
 
     new_ucmd!()
         .args(&["--posix", "s/a/b/m"])
         .fails()
         .code_is(1)
-        .stderr_is("sed: <script argument 1>:1:7: error: unknown option to 's'\n");
+        .stderr_is("sed: <script argument 1>:1:7: error: unknown option to `s'\n");
 }
 
 // `l` wraps at `-l N` (default 70) rather than the terminal width, and 0 never wraps, as
@@ -2454,7 +2454,6 @@ fn test_missing_step_or_count_is_zero() {
     for script in ["0~p", "0~0p", "0,~p"] {
         new_ucmd!()
             .args(&["-n", script])
-            .pipe_in("1\n")
             .fails()
             .code_is(1)
             .no_stdout();
@@ -2463,7 +2462,6 @@ fn test_missing_step_or_count_is_zero() {
     for script in ["1~/x/p", "1~"] {
         new_ucmd!()
             .args(&["-n", script])
-            .pipe_in("1\n")
             .fails()
             .code_is(1)
             .no_stdout();
@@ -2571,5 +2569,194 @@ fn test_escape_of_no_character_is_text() {
             .pipe_in("a\n")
             .succeeds()
             .stdout_is(expected);
+    }
+}
+
+/// A backslash before a character with no escape of its own in a replacement stands for
+/// the character, as in GNU sed; it was kept, so `s/a/\q/` gave `\q`, and `\U` under
+/// --posix gave `U` with its `\E` left as `\E` (TODO.md 14.6).
+#[test]
+fn test_unknown_escape_in_a_replacement_is_the_character() {
+    for (args, expected) in [
+        (&["s/a/\\q/"][..], "q1\n"),
+        (&["s/a/\\z\\%\\-/"][..], "z%-1\n"),
+        (&["--posix", "s/a/\\Uxy\\E/"][..], "UxyE1\n"),
+        (&["s/a/\\Uxy\\E/"][..], "XY1\n"),
+    ] {
+        new_ucmd!()
+            .args(args)
+            .pipe_in("a1\n")
+            .succeeds()
+            .stdout_only(expected);
+    }
+}
+
+/// `first~step` is one address, as in GNU sed: it starts a range (`1~3,5p`, refused),
+/// and is the end of one (`1,2~3p`); a `~` after any other address is the command, an
+/// unknown one (`$~2p` was taken as a step) (TODO.md 14.6).
+#[test]
+fn test_step_address_is_one_address() {
+    for (script, expected) in [
+        ("1~3,5p", "1\n2\n3\n4\n5\n7\n"),
+        ("1,2~3p", "1\n2\n"),
+        ("0~3,4p", "3\n4\n6\n"),
+        ("2~3p", "2\n5\n"),
+        ("1~0p", "1\n"),
+    ] {
+        new_ucmd!()
+            .args(&["-n", script])
+            .pipe_in("1\n2\n3\n4\n5\n6\n7\n")
+            .succeeds()
+            .stdout_only(expected);
+    }
+    for (script, error) in [
+        ("$~2p", "1:2: error: unknown command: `~'"),
+        ("/a/~2p", "1:4: error: unknown command: `~'"),
+        ("1~2~3p", "1:4: error: unknown command: `~'"),
+        (
+            "+1p",
+            "1:2: error: invalid usage of +N or ~N as first address",
+        ),
+        (
+            "~1p",
+            "1:2: error: invalid usage of +N or ~N as first address",
+        ),
+    ] {
+        new_ucmd!()
+            .args(&["-n", script])
+            .fails()
+            .code_is(1)
+            .stderr_is(format!("sed: <script argument 1>:{error}\n"));
+    }
+}
+
+/// `q` takes one address, as in GNU sed, also outside POSIX mode: `1,+0q` and `1,~0q`
+/// were taken; and the errors for addresses a command does not take are GNU's
+/// (TODO.md 14.6).
+#[test]
+fn test_one_address_commands_refuse_two() {
+    for (script, error) in [
+        ("1,+0q", "1:5: error: command only uses one address"),
+        ("1,~0q", "1:5: error: command only uses one address"),
+        ("1,2q", "1:4: error: command only uses one address"),
+        ("1,2Q", "1:4: error: command only uses one address"),
+        ("1:a", "1:2: error: : doesn't want any addresses"),
+        ("{p;1}", "1:5: error: `}' doesn't want any addresses"),
+        ("1#x", "1:2: error: comments don't accept any addresses"),
+    ] {
+        new_ucmd!()
+            .arg(script)
+            .fails()
+            .code_is(1)
+            .stderr_is(format!("sed: <script argument 1>:{error}\n"));
+    }
+}
+
+/// An unterminated `s` at the end of the script is reported where the script ended; the
+/// location was `::0:8`, no script and line 0. And in GNU sed's words (TODO.md 14.6).
+#[test]
+fn test_an_error_at_the_end_of_the_script_has_its_location() {
+    new_ucmd!()
+        .arg("sua\\uxu")
+        .fails()
+        .code_is(1)
+        .stderr_is("sed: <script argument 1>:1:8: error: unterminated `s' command\n");
+    new_ucmd!()
+        .args(&["-e", "p", "-e", "s/a/b"])
+        .fails()
+        .code_is(1)
+        .stderr_is("sed: <script argument 2>:1:6: error: unterminated `s' command\n");
+}
+
+/// Errors cash's sed worded its own way are in GNU sed's words (TODO.md 14.6).
+#[test]
+fn test_errors_are_in_gnu_seds_words() {
+    for (args, error) in [
+        (&["k"][..], "1:1: error: unknown command: `k'"),
+        (&["0p"][..], "1:2: error: invalid usage of line address 0"),
+        (&["--posix", "1~2p"][..], "1:2: error: unknown command: `~'"),
+        (&["--posix", "1,+2p"][..], "1:3: error: unexpected `,'"),
+        (&["1!!p"][..], "1:4: error: multiple `!'s"),
+        (&["p x"][..], "1:3: error: extra characters after command"),
+        (
+            &["y/ab/c/"][..],
+            "1:7: error: strings for `y' command are different lengths",
+        ),
+        (&["y/a/"][..], "1:5: error: unterminated `y' command"),
+        (&["s/a/b/q"][..], "1:7: error: unknown option to `s'"),
+        (&["1"][..], "1:2: error: missing command"),
+        (
+            &["--sandbox", "r x"][..],
+            "1:1: error: e/r/w commands disabled in sandbox mode",
+        ),
+    ] {
+        new_ucmd!()
+            .args(args)
+            .fails()
+            .code_is(1)
+            .stderr_is(format!("sed: <script argument 1>:{error}\n"));
+    }
+}
+
+/// An `s` or `y` that ends the script is unterminated, as in GNU sed; reading its
+/// delimiter past the end of the line panicked (TODO.md 14.6, found looking for panics).
+#[test]
+fn test_s_or_y_at_the_end_of_the_script_is_unterminated() {
+    for (script, error) in [
+        ("s", "1:2: error: unterminated `s' command"),
+        ("y", "1:2: error: unterminated `y' command"),
+        ("p;s", "1:4: error: unterminated `s' command"),
+    ] {
+        new_ucmd!()
+            .arg(script)
+            .fails()
+            .code_is(1)
+            .stderr_is(format!("sed: <script argument 1>:{error}\n"));
+    }
+}
+
+/// `v` does nothing at run time, as in GNU sed; it stopped the run as an internal error.
+/// A version compares part by part: 4.8.1 and 3.99 were refused (TODO.md 14.6).
+#[test]
+fn test_v_runs_and_takes_older_versions() {
+    for script in ["v", "v 4.2", "v 4.8.1", "v 3.99", "v 4.9"] {
+        new_ucmd!()
+            .arg(script)
+            .pipe_in("a\n")
+            .succeeds()
+            .stdout_only("a\n");
+    }
+    new_ucmd!()
+        .arg("v 4.10")
+        .fails()
+        .code_is(1)
+        .stderr_contains("expected newer version of sed");
+}
+
+/// More of the errors cash's sed worded its own way, in GNU sed's words (TODO.md 14.6).
+#[test]
+fn test_more_errors_are_in_gnu_seds_words() {
+    for (script, error) in [
+        ("s/a", "1:4: error: unterminated `s' command"),
+        ("\\%a%p;\\%a", "1:10: error: unterminated address regex"),
+        (
+            "s/a/b/gg",
+            "1:8: error: multiple `g' options to `s' command",
+        ),
+        (
+            "s/a/b/2g3",
+            "1:9: error: multiple number options to `s' command",
+        ),
+        (
+            "s/a/b/0",
+            "1:7: error: number option to `s' command may not be zero",
+        ),
+        ("c", "1:2: error: expected \\ after `a', `c' or `i'"),
+    ] {
+        new_ucmd!()
+            .arg(script)
+            .fails()
+            .code_is(1)
+            .stderr_is(format!("sed: <script argument 1>:{error}\n"));
     }
 }

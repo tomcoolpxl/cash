@@ -337,6 +337,9 @@ fn scan_delimiter(lines: &ScriptLineProvider, line: &mut ScriptCharProvider) -> 
     Ok(delimiter)
 }
 
+/// GNU sed's error for a regular expression an address does not end.
+pub const ERR_UNTERMINATED_ADDRESS_REGEX: &str = "unterminated address regex";
+
 /// Parse the regular expression delimited by the current line
 /// character and return it as a string.
 /// On return, the line is on the closing delimiter.
@@ -347,15 +350,24 @@ pub fn parse_regex(
     line: &mut ScriptCharProvider,
     regex_mode: RegexMode,
 ) -> UResult<Vec<u8>> {
-    parse_regex_for_mode(lines, line, regex_mode, CharacterMode::Utf8)
+    parse_regex_for_mode(
+        lines,
+        line,
+        regex_mode,
+        CharacterMode::Utf8,
+        ERR_UNTERMINATED_ADDRESS_REGEX,
+    )
 }
 
-/// Parse a regular expression according to the current character mode.
+/// Parse a regular expression according to the current character mode. One the line
+/// does not end is the error `unterminated`, which GNU sed words by where the
+/// expression is: an address's, or an `s` command's.
 pub fn parse_regex_for_mode(
     lines: &ScriptLineProvider,
     line: &mut ScriptCharProvider,
     regex_mode: RegexMode,
     character_mode: CharacterMode,
+    unterminated: &str,
 ) -> UResult<Vec<u8>> {
     let delimiter = scan_delimiter(lines, line)?;
     let mut result = Vec::new();
@@ -369,7 +381,7 @@ pub fn parse_regex_for_mode(
             '\\' => {
                 line.advance();
                 if line.eol() {
-                    return compilation_error(lines, line, "unterminated regular expression");
+                    return compilation_error(lines, line, unterminated);
                 }
                 if line.current() == delimiter {
                     // Push escaped delimiter
@@ -433,7 +445,7 @@ pub fn parse_regex_for_mode(
         }
         line.advance();
     }
-    compilation_error(lines, line, "unterminated regular expression")
+    compilation_error(lines, line, unterminated)
 }
 
 // Check for closing brace and the structure/content.
@@ -612,7 +624,7 @@ fn parse_transliteration_bytes(
             '\\' => {
                 line.advance();
                 if line.eol() {
-                    return compilation_error(lines, line, "unterminated transliteration string");
+                    return compilation_error(lines, line, "unterminated `y' command");
                 }
                 if line.current() == delimiter || line.current() == '\\' {
                     // Push only the escaped character
@@ -635,7 +647,7 @@ fn parse_transliteration_bytes(
         }
         line.advance();
     }
-    compilation_error(lines, line, "unterminated transliteration string")
+    compilation_error(lines, line, "unterminated `y' command")
 }
 
 /// Parse a transliteration string according to the current character mode.
@@ -1181,14 +1193,14 @@ mod tests {
     fn errors_on_unterminated_regex() {
         let (lines, mut line) = make_providers("/unterminated");
         let err = parse_regex(&lines, &mut line, RegexMode::Basic).unwrap_err();
-        assert!(err.to_string().contains("unterminated regular expression"));
+        assert!(err.to_string().contains(ERR_UNTERMINATED_ADDRESS_REGEX));
     }
 
     #[test]
     fn errors_on_esc_at_re_eol() {
         let (lines, mut line) = make_providers("/foo\\");
         let err = parse_regex(&lines, &mut line, RegexMode::Basic).unwrap_err();
-        assert!(err.to_string().contains("unterminated regular expression"));
+        assert!(err.to_string().contains(ERR_UNTERMINATED_ADDRESS_REGEX));
     }
 
     #[test]
@@ -1464,19 +1476,13 @@ mod tests {
     fn errors_on_unterminated_transliteration() {
         let (lines, mut line) = make_providers("/unterminated");
         let err = parse_transliteration(&lines, &mut line).unwrap_err();
-        assert!(
-            err.to_string()
-                .contains("unterminated transliteration string")
-        );
+        assert!(err.to_string().contains("unterminated `y' command"));
     }
 
     #[test]
     fn errors_on_esc_at_tr_eol() {
         let (lines, mut line) = make_providers("/foo\\");
         let err = parse_transliteration(&lines, &mut line).unwrap_err();
-        assert!(
-            err.to_string()
-                .contains("unterminated transliteration string")
-        );
+        assert!(err.to_string().contains("unterminated `y' command"));
     }
 }

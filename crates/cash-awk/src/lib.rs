@@ -79,6 +79,7 @@ use std::io::Read;
 use clap::Parser;
 use compiler::{SourceFile, compile_program};
 use interpreter::interpret_with_eol;
+pub use interpreter::set_shell;
 
 /// Returns true when the awk program text mentions a carriage return: an
 /// escape `\r`, an octal escape whose value is 13 (`\15`, `\015`), or a
@@ -203,6 +204,14 @@ fn finish(code: i32) -> i32 {
     }
 }
 
+/// Reports an error that ended the program while it ran, after what it printed, and
+/// returns 2, gawk's status for a fatal error; a syntax error is 1, in gawk as here.
+fn fatal(error: &str) -> i32 {
+    finish(2);
+    eprintln!("{error}");
+    2
+}
+
 /// Runs awk with the given command-line arguments and returns the exit status.
 pub fn run_awk<I, T>(args: I) -> i32
 where
@@ -262,11 +271,7 @@ where
             cr_is_data,
         ) {
             Ok(code) => finish(code as i32),
-            Err(e) => {
-                finish(1);
-                eprintln!("{e}");
-                1
-            }
+            Err(e) => fatal(&e),
         }
     } else if !parsed_args.arguments.is_empty() {
         let sources = [SourceFile::stdin(parsed_args.arguments[0].clone())];
@@ -286,11 +291,7 @@ where
             cr_is_data,
         ) {
             Ok(code) => finish(code as i32),
-            Err(e) => {
-                finish(1);
-                eprintln!("{e}");
-                1
-            }
+            Err(e) => fatal(&e),
         }
     } else {
         eprintln!("awk: missing program argument");

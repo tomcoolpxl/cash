@@ -28,6 +28,7 @@ use std::ffi::OsStr;
 use std::io::{self, IsTerminal, Read};
 use std::path::PathBuf;
 use std::rc::Rc;
+use std::sync::OnceLock;
 use uucore::display::Quotable;
 use uucore::error::{FromIo, UResult, set_exit_code};
 
@@ -72,6 +73,12 @@ fn match_address(
 
         Address::Line(lineno) => Ok(context.line_number == *lineno),
 
+        // `first~step` matches line `first` and every `step`th line after it.
+        Address::Step { first, step } => Ok(context
+            .line_number
+            .checked_sub(*first)
+            .is_some_and(|after| after.is_multiple_of(*step))),
+
         // Recognize "$" as the last line of last file. This is consistent
         // with the original 7th Research Edition implementation:
         // https://github.com/dspinellis/unix-history-repo/blob/Research-V7/usr/src/cmd/sed/sed1.c#L665
@@ -80,9 +87,11 @@ fn match_address(
         // and is probably an overkill.
         Address::Last => Ok(reader.last_line()? && (context.last_file || context.separate)),
 
-        // The step and relative forms are only ever second addresses, which `applies`
-        // decides itself.
-        _ => runtime_error(location, "INTERNAL ERROR: invalid address type"),
+        // The relative forms are only ever second addresses, which `applies` decides
+        // itself.
+        Address::RelLine(_) | Address::StepEnd(_) => {
+            runtime_error(location, "INTERNAL ERROR: invalid address type")
+        }
     }
 }
 
@@ -109,11 +118,11 @@ fn applies(
                 // refused without that check, so `/x/,+1p` missed a second `x` right after
                 // a range, and `2,3c T` never printed `T` (`REVIEW_REPORT.md` TXT-04,
                 // TXT-07).
-                Address::RelLine(_) | Address::Line(_) => {
-                    let end = match addr2 {
-                        Address::RelLine(n) => start + *n,
-                        Address::Line(n) => *n,
-                        _ => unreachable!(),
+                Address::RelLine(n) | Address::Line(n) => {
+                    let end = if matches!(addr2, Address::RelLine(_)) {
+                        start + *n
+                    } else {
+                        *n
                     };
                     if linenum < end {
                         latched = Some(true);
@@ -124,9 +133,6 @@ fn applies(
                             latched = Some(true);
                         }
                     }
-                }
-                Address::StepMatch(step) => {
-                    latched = Some((linenum - start).is_multiple_of(*step));
                 }
                 Address::StepEnd(step) => {
                     // Inclusive end on multiple of step
@@ -225,34 +231,39 @@ fn re_or_saved_re<'a>(
     }
 }
 
+/// The cash that runs commands for sed run as a program of its own (`set_shell`).
+static SHELL: OnceLock<PathBuf> = OnceLock::new();
+
+/// Makes the `e` command and the `e` flag of `s` run commands with the cash at `path`.
+/// Only sed run as a program of its own, outside cash, calls it (`src/bin/sed.rs`, for
+/// testing): inside cash, this process's own exe is cash, as a bundled tool
+/// (`cash --invoke-bundled sed`) and as a link `cash --link-tools` made (`sed.exe`) alike.
+pub fn set_shell(path: PathBuf) {
+    // Set once, before sed runs; a second call would change nothing.
+    let _ = SHELL.set(path);
+}
+
+/// The variable through which a cash learns the name it was started by
+/// (`cash_core::commands::ARGV0_VARIABLE`). Set, it also tells a cash whose exe is a
+/// link `cash --link-tools` made that it was started as the shell, not as the tool.
+const ARGV0_VARIABLE: &str = "CASH_ARGV0";
+
+/// The command that runs `cmd` in the shell: cash with `-c`. sed runs inside cash, so
+/// that is this process's own exe, whatever its file is named. It was taken to be cash
+/// only when named `cash` (or `cash-…`), so in a linked `sed.exe` the commands ran in
+/// `cmd`; and a `CASH_BIN` variable, a test hook, chose any program in production.
 fn shell_command(cmd: &OsStr) -> std::process::Command {
-    if let Some(path) = std::env::var_os("CASH_BIN") {
-        let mut c = std::process::Command::new(path);
-        c.args(["--norc", "--noprofile", "-c"]).arg(cmd);
-        return c;
-    }
-    if let Ok(exe) = std::env::current_exe() {
-        let is_cash = exe.file_stem().and_then(|s| s.to_str()).map_or(false, |s| {
-            let lower = s.to_ascii_lowercase();
-            lower == "cash"
-                || (lower.starts_with("cash-")
-                    && !lower.starts_with("cash-sed")
-                    && !lower.starts_with("cash_sed"))
-        });
-        if is_cash {
-            let mut c = std::process::Command::new(exe);
-            c.args(["--norc", "--noprofile", "-c"]).arg(cmd);
-            return c;
-        }
-        let sibling_cash = exe.with_file_name(format!("cash{}", std::env::consts::EXE_SUFFIX));
-        if sibling_cash.is_file() {
-            let mut c = std::process::Command::new(sibling_cash);
-            c.args(["--norc", "--noprofile", "-c"]).arg(cmd);
-            return c;
-        }
-    }
-    let mut c = std::process::Command::new("cmd.exe");
-    c.arg("/C").arg(cmd);
+    // Should Windows not say where this process's exe is, the cash on PATH is the next
+    // best.
+    let cash = SHELL
+        .get()
+        .cloned()
+        .or_else(|| std::env::current_exe().ok())
+        .unwrap_or_else(|| PathBuf::from("cash"));
+    let mut c = std::process::Command::new(cash);
+    c.env(ARGV0_VARIABLE, "cash")
+        .args(["--norc", "--noprofile", "-c"])
+        .arg(cmd);
     c
 }
 
@@ -970,6 +981,10 @@ fn process_file(
                 ':' => {
                     // Branch target; do nothing.
                 }
+                'v' => {
+                    // The version was checked when the script was compiled; it stopped
+                    // the run as an internal error.
+                }
                 '=' => {
                     // Output current line number.
                     output.write_str(format!("{}\n", context.line_number))?;
@@ -1106,6 +1121,29 @@ mod tests {
     use super::*;
     use std::io::{Read, Seek, SeekFrom};
     use tempfile::tempfile;
+
+    // Inside cash, `e` runs its command in cash, this process's own exe, whatever its
+    // file is named: this test's exe is not named `cash`, as a linked `sed.exe` is not,
+    // and the commands went to `cmd` (TODO.md 14.6). `CASH_ARGV0` tells a cash whose exe
+    // is such a link that it runs as the shell.
+    #[test]
+    fn test_shell_commands_run_in_this_process_exe() {
+        let command = shell_command(OsStr::new("echo hi"));
+        assert_eq!(
+            std::path::Path::new(command.get_program()),
+            std::env::current_exe().unwrap()
+        );
+        assert!(
+            command
+                .get_args()
+                .eq(["--norc", "--noprofile", "-c", "echo hi"])
+        );
+        assert!(
+            command
+                .get_envs()
+                .any(|(name, value)| name == "CASH_ARGV0" && value.is_some_and(|v| v == "cash"))
+        );
+    }
 
     #[test]
     fn test_readable_ascii_byte_named_escapes() {

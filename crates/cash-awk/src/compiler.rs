@@ -241,6 +241,37 @@ fn pest_error_from_span(span: pest::Span, message: String) -> PestError {
     PestError::new_from_span(pest::error::ErrorVariant::CustomError { message }, span)
 }
 
+/// The end of a match on a parse-tree node's rule that lists every alternative
+/// `grammar.pest` allows where the node is (and, for an operator, every one the Pratt
+/// parser was given): reaching it would mean the grammar and the compiler disagree, a
+/// bug in cash and nothing a program can do. A target the grammar allows and the
+/// compiler cannot use, as `sub(/a/, "b", length)` was, is an error the compiler reports.
+fn not_in_grammar(node: &Pair<Rule>, compiling: &str) -> ! {
+    unreachable!(
+        "encountered {:?} while compiling {compiling}",
+        node.as_rule()
+    )
+}
+
+/// The opcode of a comparison operator, the child of a `comp_op` node.
+fn comparison_opcode(op: &Pair<Rule>) -> OpCode {
+    match op.as_rule() {
+        Rule::lt => OpCode::Lt,
+        Rule::le => OpCode::Le,
+        Rule::gt => OpCode::Gt,
+        Rule::ge => OpCode::Ge,
+        Rule::eq => OpCode::Eq,
+        Rule::ne => OpCode::Ne,
+        _ => not_in_grammar(op, "comparison"),
+    }
+}
+
+/// Where a variable is: a local of the function being compiled, or a global.
+enum Variable {
+    Local(VarId),
+    Global(VarId),
+}
+
 /// Taking the children of a parse-tree node that its grammar rule requires.
 trait GrammarChildren<'i> {
     /// The next child, one the node's rule always has.
@@ -488,8 +519,9 @@ impl Instructions {
         }
     }
 
+    /// The number of opcodes. Each has its source location: the two grow together
+    /// (`push`, `extend`), and an opcode is otherwise only changed in place.
     fn len(&self) -> usize {
-        assert_eq!(self.opcodes.len(), self.source_locations.len());
         self.opcodes.len()
     }
 }
@@ -600,14 +632,22 @@ impl Compiler {
     }
 
     fn get_var(&self, name: &str, locals: &LocalMap) -> Result<OpCode, String> {
+        Ok(match self.variable(name, locals)? {
+            Variable::Local(id) => OpCode::GetLocal(id),
+            Variable::Global(id) => OpCode::GetGlobal(id),
+        })
+    }
+
+    /// The variable `name` is, a global made for it if it is new.
+    fn variable(&self, name: &str, locals: &LocalMap) -> Result<Variable, String> {
         if let Some(local_id) = locals.get(name) {
-            Ok(OpCode::GetLocal(*local_id))
+            Ok(Variable::Local(*local_id))
         } else {
             let entry = self.names.borrow().get(name).copied();
             if let Some(var) = entry {
                 match var {
-                    GlobalName::Variable(id) => Ok(OpCode::GetGlobal(id)),
-                    GlobalName::SpecialVar(id) => Ok(OpCode::GetGlobal(id)),
+                    GlobalName::Variable(id) => Ok(Variable::Global(id)),
+                    GlobalName::SpecialVar(id) => Ok(Variable::Global(id)),
                     GlobalName::Function { .. } => {
                         Err(format!("'{}' function used in variable context", name))
                     }
@@ -617,7 +657,7 @@ impl Compiler {
                 self.names
                     .borrow_mut()
                     .insert(name.to_string(), GlobalName::Variable(id));
-                Ok(OpCode::GetGlobal(id))
+                Ok(Variable::Global(id))
             }
         }
     }
@@ -787,10 +827,7 @@ impl Compiler {
                     ))
                 }
             }
-            _ => unreachable!(
-                "encountered {:?} while compiling primary",
-                primary.as_rule()
-            ),
+            _ => not_in_grammar(&primary, "primary"),
         }
     }
 
@@ -825,7 +862,7 @@ impl Compiler {
                 }
                 Ok(Expr::new(ExprKind::Number, instructions))
             }
-            _ => unreachable!(),
+            _ => not_in_grammar(&op, "prefix operator"),
         }
     }
 
@@ -928,18 +965,7 @@ impl Compiler {
                     ));
                 }
                 let op = first_child(op);
-                instructions.push(
-                    match op.as_rule() {
-                        Rule::lt => OpCode::Lt,
-                        Rule::gt => OpCode::Gt,
-                        Rule::le => OpCode::Le,
-                        Rule::ge => OpCode::Ge,
-                        Rule::eq => OpCode::Eq,
-                        Rule::ne => OpCode::Ne,
-                        _ => unreachable!(),
-                    },
-                    op.line_col(),
-                );
+                instructions.push(comparison_opcode(&op), op.line_col());
                 Ok(Expr::new(ExprKind::Comp, instructions))
             }
             Rule::match_op => {
@@ -955,7 +981,7 @@ impl Compiler {
                 instructions.push(OpCode::Concat, op.line_col());
                 Ok(Expr::new(ExprKind::String, instructions))
             }
-            _ => unreachable!(),
+            _ => not_in_grammar(&op, "infix operator"),
         }
     }
 
@@ -1014,7 +1040,7 @@ impl Compiler {
                 instructions.extend(expr.instructions);
                 instructions.push(OpCode::GetField, line_col);
             }
-            _ => unreachable!("encountered {:?} while compiling lvalue", lvalue.as_rule()),
+            _ => not_in_grammar(&lvalue, "lvalue"),
         }
         Ok(())
     }
@@ -1116,9 +1142,7 @@ impl Compiler {
                 self.compile_array_index(index.into_inner(), instructions, locals)?;
                 instructions.push(OpCode::In, name.line_col());
             }
-            other => {
-                unreachable!("encountered {:?} while compiling binary expression", other)
-            }
+            _ => not_in_grammar(&expr, "binary expression"),
         }
         Ok(())
     }
@@ -1175,16 +1199,7 @@ impl Compiler {
                 if is_cmp {
                     let comp = first_child(inner.child());
                     self.compile_expr(inner.child(), instructions, locals)?;
-                    let op = match comp.as_rule() {
-                        Rule::lt => OpCode::Lt,
-                        Rule::le => OpCode::Le,
-                        Rule::gt => OpCode::Gt,
-                        Rule::ge => OpCode::Ge,
-                        Rule::eq => OpCode::Eq,
-                        Rule::ne => OpCode::Ne,
-                        _ => unreachable!(),
-                    };
-                    instructions.push(op, comp.line_col());
+                    instructions.push(comparison_opcode(&comp), comp.line_col());
                 }
             }
             Rule::getline_from_pipe => {
@@ -1216,7 +1231,7 @@ impl Compiler {
                     );
                 }
             }
-            _ => unreachable!(),
+            _ => not_in_grammar(&input_function, "input function"),
         }
         Ok(())
     }
@@ -1255,7 +1270,7 @@ impl Compiler {
                         Rule::pow_assign => {
                             instructions.push(OpCode::Pow, assignment_op.line_col())
                         }
-                        _ => unreachable!(),
+                        _ => not_in_grammar(&assignment_op, "assignment"),
                     }
                 } else {
                     self.compile_expr(inner.child(), instructions, locals)?;
@@ -1288,10 +1303,7 @@ impl Compiler {
             Rule::input_function | Rule::unpiped_input_function => {
                 self.compile_input_function(expr, instructions, locals)?;
             }
-            _ => unreachable!(
-                "encountered {:?} while compiling expression",
-                expr.as_rule()
-            ),
+            _ => not_in_grammar(&expr, "expression"),
         }
         Ok(())
     }
@@ -1362,7 +1374,7 @@ impl Compiler {
                             }
                         }
                     }
-                    _ => unreachable!(),
+                    _ => not_in_grammar(&print, "print statement"),
                 }
                 if let Some(output_redirection) = inner.next() {
                     match output_redirection.as_rule() {
@@ -1387,7 +1399,7 @@ impl Compiler {
                                 print_function = BuiltinFunction::RedirectedPrintfPipe
                             }
                         }
-                        _ => unreachable!(),
+                        _ => not_in_grammar(&output_redirection, "output redirection"),
                     }
                     let expr = first_child(output_redirection);
                     self.compile_expr(expr, instructions, locals)?;
@@ -1401,10 +1413,7 @@ impl Compiler {
                     stmt_line_col,
                 );
             }
-            _ => unreachable!(
-                "encountered {:?} while compiling simple statement",
-                stmt.as_rule()
-            ),
+            _ => not_in_grammar(&stmt, "simple statement"),
         }
         Ok(())
     }
@@ -1467,19 +1476,18 @@ impl Compiler {
             next
         };
         let array_var_line_col = array_var.line_col();
-        let array_var_get_stmt = self
-            .get_var(array_var.as_str(), locals)
+        let array_var = self
+            .variable(array_var.as_str(), locals)
             .map_err(|msg| pest_error_from_span(array_var.as_span(), msg))?;
 
-        match array_var_get_stmt {
-            OpCode::GetGlobal(global_index) => instructions.push(
+        match array_var {
+            Variable::Global(global_index) => instructions.push(
                 OpCode::CreateGlobalIterator(global_index),
                 array_var_line_col,
             ),
-            OpCode::GetLocal(local_index) => {
+            Variable::Local(local_index) => {
                 instructions.push(OpCode::CreateLocalIterator(local_index), array_var_line_col)
             }
-            _ => unreachable!(),
         }
 
         let iter_deref_location = instructions.len();
@@ -1741,7 +1749,7 @@ impl Compiler {
                 Ok(())
             }
             Rule::do_while => self.compile_do_while(stmt, instructions, locals),
-            _ => unreachable!("encountered {:?} while compiling statement", stmt.as_rule()),
+            _ => not_in_grammar(&stmt, "statement"),
         }
     }
 
@@ -1773,10 +1781,7 @@ impl Compiler {
                     end: end_instructions.into_action(file),
                 })
             }
-            _ => unreachable!(
-                "encountered {:?} while compiling pattern",
-                pattern.as_rule()
-            ),
+            _ => not_in_grammar(&pattern, "pattern"),
         }
     }
 
@@ -1822,7 +1827,7 @@ impl Compiler {
                     action: instructions.into_action(file),
                 })
             }
-            _ => unreachable!("encountered {:?} while compiling rule", rule.as_rule()),
+            _ => not_in_grammar(&rule, "rule"),
         }
     }
 
@@ -2090,7 +2095,7 @@ pub fn compile_program(sources: &[SourceFile]) -> Result<Program, CompilerErrors
                     }
                 }
                 Rule::EOI => {}
-                _ => unreachable!("encontered {:?} while compiling program", item.as_rule()),
+                _ => not_in_grammar(&item, "program"),
             }
         }
     }

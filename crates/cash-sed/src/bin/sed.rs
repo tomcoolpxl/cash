@@ -19,6 +19,12 @@ fn main() {
 
     uucore::panic::mute_sigpipe_panic();
 
+    // Inside cash, `e` runs its commands in cash, this process's own exe; this program
+    // is not cash, so they run in the one cargo builds beside it.
+    if let Ok(exe) = std::env::current_exe() {
+        cash_sed::set_shell(exe.with_file_name(format!("cash{}", std::env::consts::EXE_SUFFIX)));
+    }
+
     let mut args = raw_args;
 
     // Strip .exe extension from binary name on Windows for consistent error messages

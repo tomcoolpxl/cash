@@ -41,4 +41,5 @@
 
 pub mod sed;
 
+pub use sed::processor::set_shell;
 pub use sed::uumain;
