@@ -13,8 +13,8 @@ use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use std::path::PathBuf;
 
-use uucore::display::Quotable;
-use uucore::error::{FromIo, UResult};
+use crate::sed::error_handling::strerror;
+use uucore::error::{UResult, USimpleError};
 
 #[derive(Debug, PartialEq)]
 /// The specification of a script: through a string or a file
@@ -29,6 +29,37 @@ pub enum ScriptValue {
 pub struct ScriptLineProvider {
     sources: Vec<ScriptValue>,
     state: State,
+    /// Where the current line is, as GNU sed places a compile error
+    place: ScriptPlace,
+}
+
+/// Where a script line is, as GNU sed places a compile error: the `-e` expression (a
+/// script given as an argument is the first) and the line's offset in it, or the script
+/// file and the line's number.
+#[derive(Debug, Clone)]
+struct ScriptPlace {
+    /// The expression's number, 1 for the first `-e`; `None` for a file
+    expression: Option<usize>,
+    /// The file's name as given (`-` for standard input)
+    file_name: String,
+    line_number: usize,
+    /// The bytes of the expression before the line
+    line_offset: usize,
+    /// Whether a newline ends the line
+    has_newline: bool,
+}
+
+impl Default for ScriptPlace {
+    /// The start of the first expression, before any line is read.
+    fn default() -> Self {
+        Self {
+            expression: Some(1),
+            file_name: String::new(),
+            line_number: 0,
+            line_offset: 0,
+            has_newline: false,
+        }
+    }
 }
 
 /// Encapsulation of the script line provider's state
@@ -39,6 +70,12 @@ enum State {
         reader: Box<dyn BufRead>, // Object on which read_line is called
         input_name: String,       // Input description (path or script string)
         line_number: usize,       // Current line number
+        /// The expression's number, or `None` for a file (`ScriptPlace`)
+        expression: Option<usize>,
+        /// The file's name as GNU sed gives it
+        file_name: String,
+        /// The bytes read before the next line
+        offset: usize,
     },
     /// All scripts have been processed. Where the last one ended stays, for an error
     /// found there: `sua\uxu` reported its unterminated `s` at `::0:8`, no script and
@@ -55,7 +92,46 @@ impl ScriptLineProvider {
         Self {
             sources,
             state: State::NotStarted,
+            place: ScriptPlace::default(),
         }
+    }
+
+    /// Where GNU sed places a compile error in the current line, having read `consumed`
+    /// bytes of it, and its newline too when `newline` is set: `-e expression #2, char
+    /// 7` (the bytes of the expression read), or `file x.sed line 3` (a newline read
+    /// moves to the next line).
+    pub fn gnu_place(&self, consumed: usize, newline: bool) -> String {
+        let place = &self.place;
+        let newline = usize::from(newline && place.has_newline);
+        match place.expression {
+            Some(number) => format!(
+                "-e expression #{number}, char {}",
+                place.line_offset + consumed + newline
+            ),
+            None => format!(
+                "file {} line {}",
+                place.file_name,
+                place.line_number + newline
+            ),
+        }
+    }
+
+    /// Where GNU sed places an error about the current line as a whole: an unmatched
+    /// `{` (`-e expression #1, char 0`, or the file's line).
+    pub fn gnu_line_place(&self) -> String {
+        match self.place.expression {
+            Some(number) => format!("-e expression #{number}, char 0"),
+            None => format!(
+                "file {} line {}",
+                self.place.file_name, self.place.line_number
+            ),
+        }
+    }
+
+    /// Whether a newline ends the current line, which GNU sed may read on an error at
+    /// the line's end.
+    pub fn line_has_newline(&self) -> bool {
+        self.place.has_newline
     }
 
     /// Return the currently processed script line number.
@@ -87,6 +163,9 @@ impl ScriptLineProvider {
                     index,
                     reader,
                     line_number,
+                    expression,
+                    file_name,
+                    offset,
                     ..
                 } => {
                     line.clear();
@@ -95,8 +174,17 @@ impl ScriptLineProvider {
                         Some(*index + 1) // finished reading this source
                     } else {
                         *line_number += 1;
+                        let has_newline = line.ends_with(b"\n");
+                        self.place = ScriptPlace {
+                            expression: *expression,
+                            file_name: file_name.clone(),
+                            line_number: *line_number,
+                            line_offset: *offset,
+                            has_newline,
+                        };
+                        *offset += bytes;
                         // Remove trailing newline
-                        if line.ends_with(b"\n") {
+                        if has_newline {
                             line.pop();
                         }
                         return Ok(Some(line));
@@ -132,6 +220,13 @@ impl ScriptLineProvider {
             return Ok(());
         }
 
+        // GNU sed numbers the `-e` expressions alone, a script argument among them.
+        let expression_number = self
+            .sources
+            .iter()
+            .take(next_index + 1)
+            .filter(|source| matches!(source, ScriptValue::StringVal(_)))
+            .count();
         match &self.sources[next_index] {
             ScriptValue::StringVal(s) => {
                 let cursor = std::io::Cursor::new(s.as_bytes().to_vec());
@@ -140,24 +235,40 @@ impl ScriptLineProvider {
                     reader: Box::new(BufReader::new(cursor)),
                     input_name: format!("<script argument {}>", next_index + 1),
                     line_number: 0,
+                    expression: Some(expression_number),
+                    file_name: String::new(),
+                    offset: 0,
                 };
             }
             ScriptValue::PathVal(p) => {
-                if p.to_string_lossy() == "-" {
+                let file_name = p.to_string_lossy().to_string();
+                if file_name == "-" {
                     self.state = State::Active {
                         index: next_index,
                         reader: Box::new(BufReader::new(io::stdin())),
                         input_name: "<stdin>".to_string(),
                         line_number: 0,
+                        expression: None,
+                        file_name,
+                        offset: 0,
                     };
                 } else {
-                    let file = File::open(p)
-                        .map_err_context(|| format!("error opening script file {}", p.quote()))?;
+                    // GNU sed's words and status 4; cash's sed said "error opening script
+                    // file".
+                    let file = File::open(p).map_err(|e| {
+                        USimpleError::new(
+                            4,
+                            format!("couldn't open file {file_name}: {}", strerror(&e)),
+                        )
+                    })?;
                     self.state = State::Active {
                         index: next_index,
                         reader: Box::new(BufReader::new(file)),
-                        input_name: p.to_string_lossy().to_string(),
+                        input_name: file_name.clone(),
                         line_number: 0,
+                        expression: None,
+                        file_name,
+                        offset: 0,
                     };
                 }
             }
@@ -197,6 +308,7 @@ impl fmt::Debug for State {
 
 #[cfg(test)]
 impl ScriptLineProvider {
+    /// A provider in the middle of script file `input_name`, at line `line_number`.
     pub fn with_active_state(input_name: &str, line_number: usize) -> Self {
         Self {
             sources: vec![],
@@ -205,6 +317,15 @@ impl ScriptLineProvider {
                 line_number,
                 index: 0,
                 reader: Box::new(BufReader::new(io::stdin())),
+                expression: None,
+                file_name: input_name.to_string(),
+                offset: 0,
+            },
+            place: ScriptPlace {
+                expression: None,
+                file_name: input_name.to_string(),
+                line_number,
+                ..ScriptPlace::default()
             },
         }
     }

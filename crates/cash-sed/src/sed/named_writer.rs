@@ -8,7 +8,7 @@
 // For the full copyright and license information, please view the LICENSE
 // file that was distributed with this source code.
 
-use crate::sed::error_handling::{ScriptLocation, runtime_err};
+use crate::sed::error_handling::{ScriptLocation, runtime_err, strerror};
 
 use std::cell::RefCell;
 use std::fs::{File, OpenOptions};
@@ -17,7 +17,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use uucore::display::Quotable;
-use uucore::error::UResult;
+use uucore::error::{UResult, USimpleError};
 
 thread_local! {
     /// Global list of all writers that should be flushed at shutdown
@@ -40,8 +40,13 @@ impl NamedWriter {
             .write(true)
             .truncate(true)
             .open(&path)
+            // GNU sed's words and status 4, without a place; cash's sed placed it at the
+            // command and wrote "creating file".
             .map_err(|e| {
-                runtime_err(&location, format!("creating file {}: {}", path.quote(), e))
+                USimpleError::new(
+                    4,
+                    format!("couldn't open file {}: {}", path.display(), strerror(&e)),
+                )
             })?;
 
         let writer = Rc::new(RefCell::new(NamedWriter {

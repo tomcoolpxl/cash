@@ -18,8 +18,8 @@ use crate::sed::delimited_parser::{
     parse_transliteration_for_mode, push_script_char,
 };
 use crate::sed::error_handling::{
-    ScriptLocation, compilation_err, compilation_err_at, compilation_error, semantic_err,
-    semantic_error,
+    ScriptLocation, compilation_err, compilation_err_at, compilation_err_of_line,
+    compilation_err_past_line, compilation_error, semantic_error,
 };
 use crate::sed::fast_regex::Regex;
 use crate::sed::gnu_regex;
@@ -232,11 +232,10 @@ fn resolve_branch_targets(
                         .get(&label)
                         .cloned()
                         .ok_or_else(|| {
-                            // GNU sed's words; cash's sed said "undefined label".
-                            semantic_err(
-                                &cmd.location,
-                                format!("can't find label for jump to `{label}'"),
-                            )
+                            // GNU sed's words, without a place and with its status 4
+                            // (it is found after the script is read); cash's sed said
+                            // "undefined label".
+                            USimpleError::new(4, format!("can't find label for jump to `{label}'"))
                         })?;
                     CommandData::BranchTarget(Some(target))
                 }
@@ -380,7 +379,7 @@ fn compile_address_range(
             if line.eol()
                 || !(is_address_char(line.current()) || (line.current() == '+' && !context.posix))
             {
-                return compilation_error(lines, line, "unexpected `,'");
+                return Err(compilation_err_past_line(lines, line, "unexpected `,'"));
             }
             cmd.addr2 = Some(compile_address(lines, line, context)?);
         }
@@ -419,7 +418,11 @@ fn read_file_path(lines: &ScriptLineProvider, line: &mut ScriptCharProvider) -> 
     }
 
     if path.is_empty() {
-        compilation_error(lines, line, "missing filename in r/R/w/W commands")
+        Err(compilation_err_past_line(
+            lines,
+            line,
+            "missing filename in r/R/w/W commands",
+        ))
     } else {
         os_string_from_bytes(path)
             .map(PathBuf::from)
@@ -482,7 +485,12 @@ fn compile_address(
             // GNU sed has read up to the command, and reports a bad expression there.
             let column = line.get_pos();
             Ok(Address::Re(compile_regex(
-                lines, column, &re, context, icase, multiline,
+                lines,
+                (column, false),
+                &re,
+                context,
+                icase,
+                multiline,
             )?))
         }
         '$' => {
@@ -802,13 +810,14 @@ fn mentions_carriage_return(pattern: &[u8]) -> bool {
 /// An empty pattern results in None, which means that the last RE employed
 /// at runtime will be used.
 ///
-/// An error is reported at `column` of the current script line: GNU sed compiles an
+/// An error is reported at `column` of the current script line, past its newline with
+/// the flag (`compilation_err_at`): GNU sed compiles an
 /// expression once it has read the command or address that holds it, flags and all,
 /// and says so where that ends. One `regcomp` refuses is in its words (`gnu_regex`);
 /// the engine's own words were reported, where the expression ended.
 fn compile_regex(
     lines: &ScriptLineProvider,
-    column: usize,
+    (column, newline): (usize, bool),
     pattern: impl AsRef<[u8]>,
     context: &ProcessingContext,
     icase: bool,
@@ -825,7 +834,7 @@ fn compile_regex(
         utf8: context.character_mode == CharacterMode::Utf8,
     };
     if let Some(error) = gnu_regex::syntax_error(pattern, syntax) {
-        return Err(compilation_err_at(lines, column, error));
+        return Err(compilation_err_at(lines, column, newline, error));
     }
 
     if mentions_carriage_return(pattern) {
@@ -864,6 +873,7 @@ fn compile_regex(
         compilation_err_at(
             lines,
             column,
+            newline,
             format!("invalid regex '{}': {e}", String::from_utf8_lossy(&pattern)),
         )
     })?;
@@ -1012,7 +1022,7 @@ fn compile_subst_command(
 
     // An `s` that ends the line has no pattern; reading its delimiter there panicked.
     if line.eol() {
-        return compilation_error(lines, line, ERR_UNTERMINATED_S);
+        return Err(compilation_err_past_line(lines, line, ERR_UNTERMINATED_S));
     }
     let delimiter = line.current();
     if delimiter == '\0' || delimiter == '\\' {
@@ -1041,17 +1051,19 @@ fn compile_subst_command(
     compile_subst_flags(lines, line, &mut subst, context.posix, context.sandbox)?;
 
     // GNU sed reports what is wrong with the expression once it has read the flags, a
-    // `;` that ends them too, but not a `}` or `#`.
+    // `;` or newline that ends them too, but not a `}` or `#`.
     let column = if !line.eol() && line.current() == ';' {
         line.get_pos() + 1
     } else {
         line.get_pos()
     };
+    let newline = line.eol();
 
     if pattern.is_empty() && (subst.ignore_case || subst.multiline) {
         return Err(compilation_err_at(
             lines,
             column,
+            newline,
             "cannot specify modifiers on empty regexp",
         ));
     }
@@ -1059,7 +1071,7 @@ fn compile_subst_command(
     // Compile regex with now known modifier flags.
     subst.regex = compile_regex(
         lines,
-        column,
+        (column, newline),
         &pattern,
         context,
         subst.ignore_case,
@@ -1073,6 +1085,7 @@ fn compile_subst_command(
         return Err(compilation_err_at(
             lines,
             column,
+            newline,
             format!(
                 "invalid reference \\{} on `s' command's RHS",
                 subst.replacement.max_group_number
@@ -1096,7 +1109,7 @@ fn compile_trans_command(
 
     // A `y` that ends the line has no strings; reading its delimiter there panicked.
     if line.eol() {
-        return compilation_error(lines, line, ERR_UNTERMINATED_Y);
+        return Err(compilation_err_past_line(lines, line, ERR_UNTERMINATED_Y));
     }
     let delimiter = line.current();
     if delimiter == '\0' || delimiter == '\\' {
@@ -1386,7 +1399,13 @@ fn compile_block_command(
 ) -> UResult<CommandHandling> {
     line.advance(); // move past '{'
     context.parsed_block_nesting += 1;
+    let nesting = context.parsed_block_nesting;
+    // GNU sed places a `{` that no `}` closes at its line, at no character of it.
+    let place = lines.gnu_line_place();
     let block_body = compile_sequence(lines, line, context)?;
+    if context.parsed_block_nesting == nesting {
+        return Err(compilation_err_of_line(&place, "unmatched `{'"));
+    }
     cmd.data = CommandData::BranchTarget(block_body);
     Ok(CommandHandling::Continue)
 }
@@ -1420,6 +1439,7 @@ fn compile_label_command(
             return Err(compilation_err_at(
                 lines,
                 line.get_pos(),
+                false,
                 "\":\" lacks a label",
             ));
         }
@@ -1498,7 +1518,14 @@ fn compile_text_command_gnu(
     // True after a \ at the end of a line
     let mut escaped_newline = false;
 
+    // A command that ends its line has an empty line of text, as in GNU sed (`a` alone on
+    // a line appends one); only at the script's very end is the text missing. Both were
+    // refused.
     if line.eol() {
+        if lines.line_has_newline() {
+            cmd.data = CommandData::Text(Rc::from(&b"\n"[..]));
+            return Ok(CommandHandling::Continue);
+        }
         return compilation_error(lines, line, ERR_TEXT_EXPECTED);
     }
 
@@ -1512,8 +1539,14 @@ fn compile_text_command_gnu(
     let mut text = Vec::new();
     'text_content: loop {
         if escaped_newline {
+            let had_newline = lines.line_has_newline();
             match lines.next_line()? {
                 None => {
+                    // `a\` and a newline that end the script are an empty line of
+                    // text, as in GNU sed; without the newline, no text.
+                    if had_newline && text.is_empty() {
+                        text.push(b'\n');
+                    }
                     break 'text_content;
                 }
                 Some(line_bytes) => {
@@ -1775,6 +1808,16 @@ fn get_verified_cmd_spec(
     posix: bool,
 ) -> UResult<CommandSpec> {
     if line.eol() {
+        // GNU sed reads the newline that ends the line as the command, an unknown one:
+        // `1` alone on a line is "unknown command: `\n'", the newline itself in the
+        // message. Only at the script's very end is the command missing.
+        if lines.line_has_newline() {
+            return Err(compilation_err_past_line(
+                lines,
+                line,
+                "unknown command: `\n'",
+            ));
+        }
         return compilation_error(lines, line, "missing command");
     }
 
@@ -2014,7 +2057,7 @@ mod tests {
         let err = result.unwrap_err();
         let msg = err.to_string();
 
-        assert!(msg.contains("test.sed:42:5: error: unexpected token"));
+        assert!(msg.contains("file test.sed line 42: unexpected token"));
     }
 
     #[test]
@@ -2031,7 +2074,7 @@ mod tests {
         let err = result.unwrap_err();
         let msg = err.to_string();
 
-        assert_eq!(msg, "input.txt:3:1: error: invalid command 'x'");
+        assert_eq!(msg, "file input.txt line 3: invalid command 'x'");
     }
 
     // get_verified_cmd_spec
@@ -2043,7 +2086,7 @@ mod tests {
 
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
-        assert!(msg.contains("test.sed:1:0: error: missing command"));
+        assert!(msg.contains("file test.sed line 1: missing command"));
     }
 
     #[test]
@@ -2054,7 +2097,7 @@ mod tests {
 
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
-        assert!(msg.contains("script.sed:2:1: error: unknown command: `@'"));
+        assert!(msg.contains("file script.sed line 2: unknown command: `@'"));
     }
 
     #[test]
@@ -2065,7 +2108,7 @@ mod tests {
 
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
-        assert!(msg.contains("input.sed:3:1: error: command only uses one address"));
+        assert!(msg.contains("file input.sed line 3: command only uses one address"));
     }
 
     #[test]
@@ -2085,7 +2128,7 @@ mod tests {
         let result = get_verified_cmd_spec(&lines, &line, 2, true);
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
-        assert!(msg.contains("input.sed:1:1: error: command only uses one address"));
+        assert!(msg.contains("file input.sed line 1: command only uses one address"));
     }
 
     // parse_number
@@ -2124,7 +2167,7 @@ mod tests {
     #[test]
     fn test_compile_re_basic() {
         let (lines, _) = dummy_providers();
-        let regex = compile_regex(&lines, 1, "abc", &ctx(), false, false)
+        let regex = compile_regex(&lines, (1, false), "abc", &ctx(), false, false)
             .unwrap()
             .expect("regex should be present");
         assert!(regex.is_match(&mut IOChunk::new_from_str("abc")).unwrap());
@@ -2136,7 +2179,7 @@ mod tests {
         let (lines, _) = make_providers("acaa\nbbb\nccc");
         let mut ctx = ctx();
         ctx.regex_extended = true;
-        let regex = compile_regex(&lines, 1, "cc{0,}", &ctx, false, false)
+        let regex = compile_regex(&lines, (1, false), "cc{0,}", &ctx, false, false)
             .unwrap()
             .expect("regex should be present");
         assert!(
@@ -2149,7 +2192,7 @@ mod tests {
     #[test]
     fn test_compile_re_case_insensitive() {
         let (lines, _) = dummy_providers();
-        let regex = compile_regex(&lines, 1, "abc", &ctx(), true, false)
+        let regex = compile_regex(&lines, (1, false), "abc", &ctx(), true, false)
             .unwrap()
             .expect("regex should be present");
         assert!(regex.is_match(&mut IOChunk::new_from_str("abc")).unwrap());
@@ -2160,14 +2203,14 @@ mod tests {
     #[test]
     fn test_compile_re_invalid() {
         let (lines, _) = dummy_providers();
-        let result = compile_regex(&lines, 1, "a[d", &ctx(), false, false);
+        let result = compile_regex(&lines, (1, false), "a[d", &ctx(), false, false);
         assert!(result.is_err()); // Should fail due to open bracketed expression
     }
 
     #[test]
     fn test_compile_re_multiline_start() {
         let (lines, _) = dummy_providers();
-        let regex = compile_regex(&lines, 1, "^bar", &ctx(), false, true)
+        let regex = compile_regex(&lines, (1, false), "^bar", &ctx(), false, true)
             .unwrap()
             .expect("regex should be present");
         assert!(
@@ -2180,7 +2223,7 @@ mod tests {
     #[test]
     fn test_compile_re_multiline_end() {
         let (lines, _) = dummy_providers();
-        let regex = compile_regex(&lines, 1, "foo$", &ctx(), false, true)
+        let regex = compile_regex(&lines, (1, false), "foo$", &ctx(), false, true)
             .unwrap()
             .expect("regex should be present");
         assert!(

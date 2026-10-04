@@ -70,7 +70,10 @@ fixed their leftovers; moved here so 1.3.14 could go out (the user, 2026-10-04).
   `[\]]` takes the backslash as an escape, GNU as a literal; `[[.-.]]` and `[a-[.z.]]`
   are not supported; under `--posix` `\w`, `\<` and the like stay operators; a written
   `\A` is an anchor; `R /dev/stdin` is not special. Duplicate labels are an error, which
-  the crate's README keeps as BSD's behaviour.
+  the crate's README keeps as BSD's behaviour. A backslash-newline in a `y` or `s`
+  pattern is "unterminated" where GNU reads it as a newline; `s/./X/;s//\1/` fails at
+  run time where GNU reports it at compile time; run-time errors keep cash's form
+  (`<script argument 1>:1:8: 'file':1 error: …`), not GNU's.
 - awk, found matching gawk's errors (2026-10-04): division by zero gives inf/nan where
   gawk is fatal (and `1/0` of constants a parse error; `/=` and `%=` have their own
   words); `sprintf()` and `close()` without arguments are compile errors in other words;

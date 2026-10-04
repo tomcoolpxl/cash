@@ -752,7 +752,7 @@ fn test_subst_e_flag_rejected_with_posix() {
     new_ucmd!()
         .args(&["--posix", "s/.*/echo hi/e"])
         .fails()
-        .stderr_is("sed: <script argument 1>:1:14: error: unknown option to `s'\n");
+        .stderr_is("sed: -e expression #1, char 14: unknown option to `s'\n");
 }
 
 #[test]
@@ -760,9 +760,7 @@ fn test_subst_e_flag_rejected_with_sandbox() {
     new_ucmd!()
         .args(&["--sandbox", "s/.*/echo hi/e"])
         .fails()
-        .stderr_is(
-            "sed: <script argument 1>:1:14: error: e/r/w commands disabled in sandbox mode\n",
-        );
+        .stderr_is("sed: -e expression #1, char 14: e/r/w commands disabled in sandbox mode\n");
 }
 
 #[test]
@@ -858,7 +856,7 @@ fn test_e_command_rejected_with_posix() {
     new_ucmd!()
         .args(&["--posix", "e echo hi"])
         .fails()
-        .stderr_is("sed: <script argument 1>:1:1: error: unknown command: `e'\n");
+        .stderr_is("sed: -e expression #1, char 1: unknown command: `e'\n");
 }
 
 #[test]
@@ -866,9 +864,7 @@ fn test_e_command_rejected_with_sandbox() {
     new_ucmd!()
         .args(&["--sandbox", "e echo hi"])
         .fails()
-        .stderr_is(
-            "sed: <script argument 1>:1:1: error: e/r/w commands disabled in sandbox mode\n",
-        );
+        .stderr_is("sed: -e expression #1, char 1: e/r/w commands disabled in sandbox mode\n");
 }
 
 #[test]
@@ -983,7 +979,7 @@ fn pattern_clear_with_z_is_non_posix() {
         .args(&["--posix", "z"])
         .fails()
         .code_is(1)
-        .stderr_is("sed: <script argument 1>:1:1: error: unknown command: `z'\n");
+        .stderr_is("sed: -e expression #1, char 1: unknown command: `z'\n");
 }
 check_output!(trans_newline, ["-e", r"1N;2y/\n/X/", LINES1]);
 
@@ -1663,7 +1659,7 @@ fn write_first_line_with_w_command_is_non_posix() {
         .args(&["--posix", "W /tmp/out"])
         .fails()
         .code_is(1)
-        .stderr_is("sed: <script argument 1>:1:1: error: unknown command: `W'\n");
+        .stderr_is("sed: -e expression #1, char 1: unknown command: `W'\n");
 }
 
 ////////////////////////////////////////////////////////////
@@ -1955,7 +1951,7 @@ fn test_duplicate_label() {
         .args(&[":foo;:foo"])
         .fails()
         .code_is(1)
-        .stderr_is("sed: <script argument 1>:1:6: error: duplicate label `foo'\n");
+        .stderr_is("sed: -e expression #1, char 6: duplicate label `foo'\n");
 }
 
 #[test]
@@ -1963,8 +1959,8 @@ fn test_undefined_label() {
     new_ucmd!()
         .args(&["b foo"])
         .fails()
-        .code_is(1)
-        .stderr_is("sed: <script argument 1>:1:1: error: can't find label for jump to `foo'\n");
+        .code_is(4)
+        .stderr_is("sed: can't find label for jump to `foo'\n");
 }
 
 #[test]
@@ -1973,7 +1969,7 @@ fn test_incomplete_test_command_posix() {
         .args(&["--posix", "i\\"])
         .fails()
         .code_is(1)
-        .stderr_is("sed: <script argument 1>:1:2: error: incomplete command\n");
+        .stderr_is("sed: -e expression #1, char 2: incomplete command\n");
 }
 
 #[test]
@@ -1993,7 +1989,7 @@ fn test_addr0_non_posix() {
         .args(&["--posix", "0,/foo/p"])
         .fails()
         .code_is(1)
-        .stderr_is("sed: <script argument 1>:1:8: error: invalid usage of line address 0\n");
+        .stderr_is("sed: -e expression #1, char 8: invalid usage of line address 0\n");
 }
 
 #[test]
@@ -2002,7 +1998,7 @@ fn test_addr0_second_required() {
         .args(&["0p"])
         .fails()
         .code_is(1)
-        .stderr_is("sed: <script argument 1>:1:2: error: invalid usage of line address 0\n");
+        .stderr_is("sed: -e expression #1, char 2: invalid usage of line address 0\n");
 }
 
 #[test]
@@ -2011,7 +2007,7 @@ fn test_addr0_second_re_only() {
         .args(&["0,4p"])
         .fails()
         .code_is(1)
-        .stderr_is("sed: <script argument 1>:1:4: error: invalid usage of line address 0\n");
+        .stderr_is("sed: -e expression #1, char 4: invalid usage of line address 0\n");
 }
 
 #[test]
@@ -2020,7 +2016,7 @@ fn test_step_match_non_posix() {
         .args(&["--posix", "3~2p"])
         .fails()
         .code_is(1)
-        .stderr_is("sed: <script argument 1>:1:2: error: unknown command: `~'\n");
+        .stderr_is("sed: -e expression #1, char 2: unknown command: `~'\n");
 }
 
 #[test]
@@ -2029,7 +2025,7 @@ fn test_step_end_non_posix() {
         .args(&["--posix", "3,~2p"])
         .fails()
         .code_is(1)
-        .stderr_is("sed: <script argument 1>:1:3: error: unexpected `,'\n");
+        .stderr_is("sed: -e expression #1, char 3: unexpected `,'\n");
 }
 
 // The following test diverse ways in which regexes are matched.
@@ -2079,8 +2075,8 @@ fn test_write_file_failure() {
     new_ucmd!()
         .args(&["w /xyzzy/xyzy", LINES1])
         .fails()
-        .code_is(2)
-        .stderr_contains("sed: <script argument 1>:1:1: error: creating file '/xyzzy/xyzy':");
+        .code_is(4)
+        .stderr_is("sed: couldn't open file /xyzzy/xyzy: No such file or directory\n");
 }
 
 #[test]
@@ -2186,7 +2182,7 @@ fn test_expected_newer_version() {
     new_ucmd!()
         .args(&["v4.10"])
         .fails()
-        .stderr_is("sed: <script argument 1>:1:5: error: expected newer version of sed\n");
+        .stderr_is("sed: -e expression #1, char 5: expected newer version of sed\n");
 }
 
 #[test]
@@ -2194,7 +2190,7 @@ fn test_invalid_version() {
     new_ucmd!()
         .args(&["v4.a"])
         .fails()
-        .stderr_is("sed: <script argument 1>:1:4: error: invalid version of sed\n");
+        .stderr_is("sed: -e expression #1, char 4: invalid version of sed\n");
 }
 
 #[test]
@@ -2214,7 +2210,7 @@ fn test_invalid_only_major_version() {
     new_ucmd!()
         .args(&["v999"])
         .fails()
-        .stderr_is("sed: <script argument 1>:1:4: error: invalid version of sed\n");
+        .stderr_is("sed: -e expression #1, char 4: invalid version of sed\n");
 }
 
 #[test]
@@ -2230,13 +2226,13 @@ fn test_posix_reject_flags() {
         .args(&["--posix", "s/a/b/i"])
         .fails()
         .code_is(1)
-        .stderr_is("sed: <script argument 1>:1:7: error: unknown option to `s'\n");
+        .stderr_is("sed: -e expression #1, char 7: unknown option to `s'\n");
 
     new_ucmd!()
         .args(&["--posix", "s/a/b/m"])
         .fails()
         .code_is(1)
-        .stderr_is("sed: <script argument 1>:1:7: error: unknown option to `s'\n");
+        .stderr_is("sed: -e expression #1, char 7: unknown option to `s'\n");
 }
 
 // `l` wraps at `-l N` (default 70) rather than the terminal width, and 0 never wraps, as
@@ -2414,7 +2410,7 @@ fn test_no_address_after_a_comma_is_an_error() {
             .fails()
             .code_is(1)
             .stderr_only(format!(
-                "sed: <script argument 1>:1:{col}: error: unexpected `,'\n"
+                "sed: -e expression #1, char {col}: unexpected `,'\n"
             ));
     }
 }
@@ -2614,23 +2610,17 @@ fn test_step_address_is_one_address() {
             .stdout_only(expected);
     }
     for (script, error) in [
-        ("$~2p", "1:2: error: unknown command: `~'"),
-        ("/a/~2p", "1:4: error: unknown command: `~'"),
-        ("1~2~3p", "1:4: error: unknown command: `~'"),
-        (
-            "+1p",
-            "1:2: error: invalid usage of +N or ~N as first address",
-        ),
-        (
-            "~1p",
-            "1:2: error: invalid usage of +N or ~N as first address",
-        ),
+        ("$~2p", "2: unknown command: `~'"),
+        ("/a/~2p", "4: unknown command: `~'"),
+        ("1~2~3p", "4: unknown command: `~'"),
+        ("+1p", "2: invalid usage of +N or ~N as first address"),
+        ("~1p", "2: invalid usage of +N or ~N as first address"),
     ] {
         new_ucmd!()
             .args(&["-n", script])
             .fails()
             .code_is(1)
-            .stderr_is(format!("sed: <script argument 1>:{error}\n"));
+            .stderr_is(format!("sed: -e expression #1, char {error}\n"));
     }
 }
 
@@ -2640,19 +2630,19 @@ fn test_step_address_is_one_address() {
 #[test]
 fn test_one_address_commands_refuse_two() {
     for (script, error) in [
-        ("1,+0q", "1:5: error: command only uses one address"),
-        ("1,~0q", "1:5: error: command only uses one address"),
-        ("1,2q", "1:4: error: command only uses one address"),
-        ("1,2Q", "1:4: error: command only uses one address"),
-        ("1:a", "1:2: error: : doesn't want any addresses"),
-        ("{p;1}", "1:5: error: `}' doesn't want any addresses"),
-        ("1#x", "1:2: error: comments don't accept any addresses"),
+        ("1,+0q", "5: command only uses one address"),
+        ("1,~0q", "5: command only uses one address"),
+        ("1,2q", "4: command only uses one address"),
+        ("1,2Q", "4: command only uses one address"),
+        ("1:a", "2: : doesn't want any addresses"),
+        ("{p;1}", "5: `}' doesn't want any addresses"),
+        ("1#x", "2: comments don't accept any addresses"),
     ] {
         new_ucmd!()
             .arg(script)
             .fails()
             .code_is(1)
-            .stderr_is(format!("sed: <script argument 1>:{error}\n"));
+            .stderr_is(format!("sed: -e expression #1, char {error}\n"));
     }
 }
 
@@ -2664,41 +2654,41 @@ fn test_an_error_at_the_end_of_the_script_has_its_location() {
         .arg("sua\\uxu")
         .fails()
         .code_is(1)
-        .stderr_is("sed: <script argument 1>:1:7: error: unterminated `s' command\n");
+        .stderr_is("sed: -e expression #1, char 7: unterminated `s' command\n");
     new_ucmd!()
         .args(&["-e", "p", "-e", "s/a/b"])
         .fails()
         .code_is(1)
-        .stderr_is("sed: <script argument 2>:1:5: error: unterminated `s' command\n");
+        .stderr_is("sed: -e expression #2, char 5: unterminated `s' command\n");
 }
 
 /// Errors cash's sed worded its own way are in GNU sed's words (TODO.md 14.6).
 #[test]
 fn test_errors_are_in_gnu_seds_words() {
     for (args, error) in [
-        (&["k"][..], "1:1: error: unknown command: `k'"),
-        (&["0p"][..], "1:2: error: invalid usage of line address 0"),
-        (&["--posix", "1~2p"][..], "1:2: error: unknown command: `~'"),
-        (&["--posix", "1,+2p"][..], "1:3: error: unexpected `,'"),
-        (&["1!!p"][..], "1:3: error: multiple `!'s"),
-        (&["p x"][..], "1:3: error: extra characters after command"),
+        (&["k"][..], "1: unknown command: `k'"),
+        (&["0p"][..], "2: invalid usage of line address 0"),
+        (&["--posix", "1~2p"][..], "2: unknown command: `~'"),
+        (&["--posix", "1,+2p"][..], "3: unexpected `,'"),
+        (&["1!!p"][..], "3: multiple `!'s"),
+        (&["p x"][..], "3: extra characters after command"),
         (
             &["y/ab/c/"][..],
-            "1:7: error: strings for `y' command are different lengths",
+            "7: strings for `y' command are different lengths",
         ),
-        (&["y/a/"][..], "1:4: error: unterminated `y' command"),
-        (&["s/a/b/q"][..], "1:7: error: unknown option to `s'"),
-        (&["1"][..], "1:1: error: missing command"),
+        (&["y/a/"][..], "4: unterminated `y' command"),
+        (&["s/a/b/q"][..], "7: unknown option to `s'"),
+        (&["1"][..], "1: missing command"),
         (
             &["--sandbox", "r x"][..],
-            "1:1: error: e/r/w commands disabled in sandbox mode",
+            "1: e/r/w commands disabled in sandbox mode",
         ),
     ] {
         new_ucmd!()
             .args(args)
             .fails()
             .code_is(1)
-            .stderr_is(format!("sed: <script argument 1>:{error}\n"));
+            .stderr_is(format!("sed: -e expression #1, char {error}\n"));
     }
 }
 
@@ -2707,15 +2697,15 @@ fn test_errors_are_in_gnu_seds_words() {
 #[test]
 fn test_s_or_y_at_the_end_of_the_script_is_unterminated() {
     for (script, error) in [
-        ("s", "1:1: error: unterminated `s' command"),
-        ("y", "1:1: error: unterminated `y' command"),
-        ("p;s", "1:3: error: unterminated `s' command"),
+        ("s", "1: unterminated `s' command"),
+        ("y", "1: unterminated `y' command"),
+        ("p;s", "3: unterminated `s' command"),
     ] {
         new_ucmd!()
             .arg(script)
             .fails()
             .code_is(1)
-            .stderr_is(format!("sed: <script argument 1>:{error}\n"));
+            .stderr_is(format!("sed: -e expression #1, char {error}\n"));
     }
 }
 
@@ -2741,27 +2731,18 @@ fn test_v_runs_and_takes_older_versions() {
 #[test]
 fn test_more_errors_are_in_gnu_seds_words() {
     for (script, error) in [
-        ("s/a", "1:3: error: unterminated `s' command"),
-        ("\\%a%p;\\%a", "1:9: error: unterminated address regex"),
-        (
-            "s/a/b/gg",
-            "1:8: error: multiple `g' options to `s' command",
-        ),
-        (
-            "s/a/b/2g3",
-            "1:9: error: multiple number options to `s' command",
-        ),
-        (
-            "s/a/b/0",
-            "1:7: error: number option to `s' command may not be zero",
-        ),
-        ("c", "1:1: error: expected \\ after `a', `c' or `i'"),
+        ("s/a", "3: unterminated `s' command"),
+        ("\\%a%p;\\%a", "9: unterminated address regex"),
+        ("s/a/b/gg", "8: multiple `g' options to `s' command"),
+        ("s/a/b/2g3", "9: multiple number options to `s' command"),
+        ("s/a/b/0", "7: number option to `s' command may not be zero"),
+        ("c", "1: expected \\ after `a', `c' or `i'"),
     ] {
         new_ucmd!()
             .arg(script)
             .fails()
             .code_is(1)
-            .stderr_is(format!("sed: <script argument 1>:{error}\n"));
+            .stderr_is(format!("sed: -e expression #1, char {error}\n"));
     }
 }
 
@@ -2870,21 +2851,18 @@ fn test_r_upper_in_the_cycle() -> std::io::Result<()> {
 #[test]
 fn test_r_upper_under_posix_and_sandbox() {
     for (args, error) in [
-        (&["--posix", "R x"][..], "1:1: error: unknown command: `R'"),
+        (&["--posix", "R x"][..], "1: unknown command: `R'"),
         (
             &["--sandbox", "R x"][..],
-            "1:1: error: e/r/w commands disabled in sandbox mode",
+            "1: e/r/w commands disabled in sandbox mode",
         ),
-        (
-            &["R"][..],
-            "1:1: error: missing filename in r/R/w/W commands",
-        ),
+        (&["R"][..], "1: missing filename in r/R/w/W commands"),
     ] {
         new_ucmd!()
             .args(args)
             .fails()
             .code_is(1)
-            .stderr_is(format!("sed: <script argument 1>:{error}\n"));
+            .stderr_is(format!("sed: -e expression #1, char {error}\n"));
     }
 }
 
@@ -2899,7 +2877,7 @@ fn test_s_takes_one_p_flag() {
             .fails()
             .code_is(1)
             .stderr_is(format!(
-                "sed: <script argument 1>:1:{column}: error: multiple `p' options to `s' command\n"
+                "sed: -e expression #1, char {column}: multiple `p' options to `s' command\n"
             ));
     }
 }
@@ -2910,79 +2888,55 @@ fn test_s_takes_one_p_flag() {
 #[test]
 fn test_regex_errors_are_gnu_seds() {
     for (args, error) in [
-        (&["s/\\(a/b/"][..], "1:8: error: Unmatched ( or \\("),
-        (&["-E", "s/(a/b/"][..], "1:7: error: Unmatched ( or \\("),
-        (&["s/a\\)/b/"][..], "1:8: error: Unmatched ) or \\)"),
-        (&["-E", "s/a)/b/"][..], "1:7: error: Unmatched ) or \\)"),
-        (&["s/a\\{1/b/"][..], "1:9: error: Unmatched \\{"),
-        (&["-E", "s/a{1/b/"][..], "1:8: error: Unmatched \\{"),
-        (
-            &["s/a\\{x\\}/b/"][..],
-            "1:11: error: Invalid content of \\{\\}",
-        ),
-        (
-            &["-E", "s/a{2,1}/b/"][..],
-            "1:11: error: Invalid content of \\{\\}",
-        ),
+        (&["s/\\(a/b/"][..], "8: Unmatched ( or \\("),
+        (&["-E", "s/(a/b/"][..], "7: Unmatched ( or \\("),
+        (&["s/a\\)/b/"][..], "8: Unmatched ) or \\)"),
+        (&["-E", "s/a)/b/"][..], "7: Unmatched ) or \\)"),
+        (&["s/a\\{1/b/"][..], "9: Unmatched \\{"),
+        (&["-E", "s/a{1/b/"][..], "8: Unmatched \\{"),
+        (&["s/a\\{x\\}/b/"][..], "11: Invalid content of \\{\\}"),
+        (&["-E", "s/a{2,1}/b/"][..], "11: Invalid content of \\{\\}"),
         (
             &["-E", "s/a{32768}/b/"][..],
-            "1:13: error: Regular expression too big",
+            "13: Regular expression too big",
         ),
         (
             &["-E", "s/*a/b/"][..],
-            "1:7: error: Invalid preceding regular expression",
+            "7: Invalid preceding regular expression",
         ),
         (
             &["s/a*\\{2\\}/b/"][..],
-            "1:12: error: Invalid preceding regular expression",
+            "12: Invalid preceding regular expression",
         ),
-        (
-            &["s/a**/b/"][..],
-            "1:8: error: Invalid preceding regular expression",
-        ),
-        (
-            &["s/\\(a\\)\\2/b/"][..],
-            "1:12: error: Invalid back reference",
-        ),
-        (
-            &["-E", "s/(a)\\2/b/"][..],
-            "1:10: error: Invalid back reference",
-        ),
-        (&["s/[b-a]/b/"][..], "1:10: error: Invalid range end"),
-        (
-            &["s/[[:foo:]]/b/"][..],
-            "1:14: error: Invalid character class name",
-        ),
-        (
-            &["s/[[.foo.]]/b/"][..],
-            "1:14: error: Invalid collation character",
-        ),
-        (&["s/\\x5c/b/"][..], "1:9: error: Trailing backslash"),
+        (&["s/a**/b/"][..], "8: Invalid preceding regular expression"),
+        (&["s/\\(a\\)\\2/b/"][..], "12: Invalid back reference"),
+        (&["-E", "s/(a)\\2/b/"][..], "10: Invalid back reference"),
+        (&["s/[b-a]/b/"][..], "10: Invalid range end"),
+        (&["s/[[:foo:]]/b/"][..], "14: Invalid character class name"),
+        (&["s/[[.foo.]]/b/"][..], "14: Invalid collation character"),
+        (&["s/\\x5c/b/"][..], "9: Trailing backslash"),
         // After the flags, a `;` that ends them included, a `}` or `#` not.
-        (&["s/\\(a/x/I"][..], "1:9: error: Unmatched ( or \\("),
-        (&["s/\\(a/x/ ;p"][..], "1:10: error: Unmatched ( or \\("),
-        (&["{s/\\(a/x/}"][..], "1:9: error: Unmatched ( or \\("),
-        (&["s/\\(a/x/#c"][..], "1:8: error: Unmatched ( or \\("),
-        (&["s/\\(a/x/w out"][..], "1:13: error: Unmatched ( or \\("),
-        (&["p;s/\\(a/b/"][..], "1:10: error: Unmatched ( or \\("),
+        (&["s/\\(a/x/I"][..], "9: Unmatched ( or \\("),
+        (&["s/\\(a/x/ ;p"][..], "10: Unmatched ( or \\("),
+        (&["{s/\\(a/x/}"][..], "9: Unmatched ( or \\("),
+        (&["s/\\(a/x/#c"][..], "8: Unmatched ( or \\("),
+        (&["s/\\(a/x/w out"][..], "13: Unmatched ( or \\("),
+        (&["p;s/\\(a/b/"][..], "10: Unmatched ( or \\("),
         // An address's, after its flags and the blanks before the command.
-        (&["/\\(a/p"][..], "1:5: error: Unmatched ( or \\("),
-        (&["/\\(a/I p"][..], "1:7: error: Unmatched ( or \\("),
-        (&["1,/\\(a/p"][..], "1:7: error: Unmatched ( or \\("),
+        (&["/\\(a/p"][..], "5: Unmatched ( or \\("),
+        (&["/\\(a/I p"][..], "7: Unmatched ( or \\("),
+        (&["1,/\\(a/p"][..], "7: Unmatched ( or \\("),
         // A bracket the line does not end leaves the command unterminated.
-        (&["s/[a/b/"][..], "1:7: error: unterminated `s' command"),
-        (
-            &["s/[[:alpha/x/"][..],
-            "1:13: error: unterminated `s' command",
-        ),
-        (&["/[a/p"][..], "1:5: error: unterminated address regex"),
+        (&["s/[a/b/"][..], "7: unterminated `s' command"),
+        (&["s/[[:alpha/x/"][..], "13: unterminated `s' command"),
+        (&["/[a/p"][..], "5: unterminated address regex"),
     ] {
         new_ucmd!()
             .args(args)
             .pipe_in("a\n")
             .fails()
             .code_is(1)
-            .stderr_is(format!("sed: <script argument 1>:{error}\n"));
+            .stderr_is(format!("sed: -e expression #1, char {error}\n"));
     }
 }
 
@@ -3044,7 +2998,7 @@ fn test_address_flags() {
         .args(&["--posix", "-n", "/a/Ip"])
         .fails()
         .code_is(1)
-        .stderr_is("sed: <script argument 1>:1:4: error: unknown command: `I'\n");
+        .stderr_is("sed: -e expression #1, char 4: unknown command: `I'\n");
 }
 
 /// A `}` or a comment may follow `s` and its flags, and any command, as in GNU sed:
@@ -3073,45 +3027,36 @@ fn test_brace_or_comment_after_a_command() {
         .arg("s/a/b/ }")
         .fails()
         .code_is(1)
-        .stderr_is("sed: <script argument 1>:1:8: error: unexpected `}'\n");
+        .stderr_is("sed: -e expression #1, char 8: unexpected `}'\n");
 }
 
 /// More errors at GNU sed's column and in its words (TODO.md 14.6).
 #[test]
 fn test_more_errors_at_gnu_seds_column() {
     for (script, error) in [
-        ("y/a", "1:3: error: unterminated `y' command"),
-        ("s/a/b", "1:5: error: unterminated `s' command"),
-        ("1 !  ! p", "1:6: error: multiple `!'s"),
-        ("a", "1:1: error: expected \\ after `a', `c' or `i'"),
-        ("r", "1:1: error: missing filename in r/R/w/W commands"),
-        (
-            "s/a/b/w",
-            "1:7: error: missing filename in r/R/w/W commands",
-        ),
-        (
-            "s/a/\\1/",
-            "1:7: error: invalid reference \\1 on `s' command's RHS",
-        ),
+        ("y/a", "3: unterminated `y' command"),
+        ("s/a/b", "5: unterminated `s' command"),
+        ("1 !  ! p", "6: multiple `!'s"),
+        ("a", "1: expected \\ after `a', `c' or `i'"),
+        ("r", "1: missing filename in r/R/w/W commands"),
+        ("s/a/b/w", "7: missing filename in r/R/w/W commands"),
+        ("s/a/\\1/", "7: invalid reference \\1 on `s' command's RHS"),
         (
             "{s/a/\\1/}",
-            "1:8: error: invalid reference \\1 on `s' command's RHS",
+            "8: invalid reference \\1 on `s' command's RHS",
         ),
-        (
-            "s//x/I",
-            "1:6: error: cannot specify modifiers on empty regexp",
-        ),
-        ("v 9.0", "1:5: error: expected newer version of sed"),
-        ("/a", "1:2: error: unterminated address regex"),
-        (":", "1:1: error: \":\" lacks a label"),
-        (": ;p", "1:2: error: \":\" lacks a label"),
-        ("y/a/\\n/;y/a/bc", "1:14: error: unterminated `y' command"),
+        ("s//x/I", "6: cannot specify modifiers on empty regexp"),
+        ("v 9.0", "5: expected newer version of sed"),
+        ("/a", "2: unterminated address regex"),
+        (":", "1: \":\" lacks a label"),
+        (": ;p", "2: \":\" lacks a label"),
+        ("y/a/\\n/;y/a/bc", "14: unterminated `y' command"),
     ] {
         new_ucmd!()
             .arg(script)
             .fails()
             .code_is(1)
-            .stderr_is(format!("sed: <script argument 1>:{error}\n"));
+            .stderr_is(format!("sed: -e expression #1, char {error}\n"));
     }
 }
 
@@ -3180,4 +3125,185 @@ fn test_in_place_files_are_separate() -> std::io::Result<()> {
     assert_eq!(fs::read_to_string(&first)?, "b\n");
     assert_eq!(fs::read_to_string(&second)?, "d\n");
     Ok(())
+}
+
+/// A compile error is placed as GNU sed places it: the `-e` expression, counted among
+/// the expressions alone, and the characters of it read, newlines and earlier lines
+/// included. cash's sed wrote `<script argument 1>:2:1: error:`. Where GNU sed reads the
+/// newline that ends a line before it stops, so does the count: the newline after `1` is
+/// an unknown command, and `s`, `1,`, `w` and the flags of `s` read it too.
+#[test]
+fn test_compile_errors_are_placed_as_gnu_sed_places_them() {
+    for (args, error) in [
+        (&["p\n1"][..], "-e expression #1, char 3: missing command"),
+        (
+            &["p\n1\n"][..],
+            "-e expression #1, char 4: unknown command: `\n'",
+        ),
+        (
+            &["1!\n"][..],
+            "-e expression #1, char 3: unknown command: `\n'",
+        ),
+        (
+            &["p\n\n  k"][..],
+            "-e expression #1, char 6: unknown command: `k'",
+        ),
+        (
+            &["p\ns/a/b\n"][..],
+            "-e expression #1, char 7: unterminated `s' command",
+        ),
+        (
+            &["s\n"][..],
+            "-e expression #1, char 2: unterminated `s' command",
+        ),
+        (
+            &["y\n"][..],
+            "-e expression #1, char 2: unterminated `y' command",
+        ),
+        (&["1,\n"][..], "-e expression #1, char 3: unexpected `,'"),
+        (
+            &["s/a/b/w\n"][..],
+            "-e expression #1, char 8: missing filename in r/R/w/W commands",
+        ),
+        (
+            &["p\nr\n"][..],
+            "-e expression #1, char 4: missing filename in r/R/w/W commands",
+        ),
+        (
+            &["p\ns/\\(a/b/\np"][..],
+            "-e expression #1, char 11: Unmatched ( or \\(",
+        ),
+        (
+            &["p\ns/\\(a/b/"][..],
+            "-e expression #1, char 10: Unmatched ( or \\(",
+        ),
+        (
+            &["p\n/\\(a/p"][..],
+            "-e expression #1, char 7: Unmatched ( or \\(",
+        ),
+        (
+            &["s//x/I\n"][..],
+            "-e expression #1, char 7: cannot specify modifiers on empty regexp",
+        ),
+        (
+            &["s/a/\\1/\n"][..],
+            "-e expression #1, char 8: invalid reference \\1 on `s' command's RHS",
+        ),
+        (
+            &["p\ny/a\n"][..],
+            "-e expression #1, char 5: unterminated `y' command",
+        ),
+        (
+            &["p\n:\n"][..],
+            "-e expression #1, char 3: \":\" lacks a label",
+        ),
+        (
+            &["--sandbox", "p\nw x\n"][..],
+            "-e expression #1, char 3: e/r/w commands disabled in sandbox mode",
+        ),
+        // The expressions are numbered, each counted from its start.
+        (
+            &["-e", "p", "-e", "k"][..],
+            "-e expression #2, char 1: unknown command: `k'",
+        ),
+        (
+            &["-e", "p", "-e", "p", "-e", "1!!p"][..],
+            "-e expression #3, char 3: multiple `!'s",
+        ),
+        (
+            &["-n", "-e", "p", "-e", "p\n1"][..],
+            "-e expression #2, char 3: missing command",
+        ),
+        // An unmatched `{` is placed at its expression, at no character of it.
+        (&["{\np"][..], "-e expression #1, char 0: unmatched `{'"),
+        (
+            &["-e", "p", "-e", "{p"][..],
+            "-e expression #2, char 0: unmatched `{'",
+        ),
+        (
+            &["-e", "{", "-e", "{p"][..],
+            "-e expression #2, char 0: unmatched `{'",
+        ),
+    ] {
+        new_ucmd!()
+            .args(args)
+            .pipe_in("a\n")
+            .fails()
+            .code_is(1)
+            .stderr_is(format!("sed: {error}\n"));
+    }
+}
+
+/// In a script file, a compile error is placed at the file's line, as GNU sed places it;
+/// a newline read moves it to the next line (TODO.md 14.6).
+#[test]
+fn test_compile_errors_in_a_script_file() -> std::io::Result<()> {
+    let dir = tempfile::tempdir()?;
+    for (script, error) in [
+        ("p\n1\n", "line 3: unknown command: `\n'"),
+        ("p\ns/a/b\n", "line 2: unterminated `s' command"),
+        ("p\ns/a/b", "line 2: unterminated `s' command"),
+        ("s/\\(a/b/\n", "line 2: Unmatched ( or \\("),
+        ("p\n\n  k\n", "line 3: unknown command: `k'"),
+        ("{\np\n", "line 1: unmatched `{'"),
+        ("{\n{\np\n", "line 2: unmatched `{'"),
+        ("1!!p\n", "line 1: multiple `!'s"),
+        ("p\n/a", "line 2: unterminated address regex"),
+    ] {
+        let path = dir.path().join("script.sed");
+        fs::write(&path, script)?;
+        let path = path.to_string_lossy().into_owned();
+        new_ucmd!()
+            .args(&["-f", &path])
+            .pipe_in("a\n")
+            .fails()
+            .code_is(1)
+            .stderr_is(format!("sed: file {path} {error}\n"));
+    }
+    // A script on standard input is the file `-`.
+    new_ucmd!()
+        .args(&["-f", "-"])
+        .pipe_in("1!!p\n")
+        .fails()
+        .code_is(1)
+        .stderr_is("sed: file - line 1: multiple `!'s\n");
+    Ok(())
+}
+
+/// A file sed cannot open, a script or one `w` writes, is GNU sed's error, with its
+/// status 4 (TODO.md 14.6).
+#[test]
+fn test_files_sed_cannot_open() {
+    new_ucmd!()
+        .args(&["-f", "/no/such/script.sed"])
+        .fails()
+        .code_is(4)
+        .stderr_is("sed: couldn't open file /no/such/script.sed: No such file or directory\n");
+    new_ucmd!()
+        .arg("s/a/b/w /no/such/dir/out")
+        .pipe_in("a\n")
+        .fails()
+        .code_is(4)
+        .stderr_is("sed: couldn't open file /no/such/dir/out: No such file or directory\n");
+}
+
+/// `a`, `i` or `c` that ends its line has an empty line of text, as in GNU sed, and so
+/// does `a\` and a newline that end the script; they were refused, or wrote nothing
+/// (TODO.md 14.6).
+#[test]
+fn test_text_commands_ending_their_line() {
+    for (script, output) in [
+        ("a\n", "a\n\n"),
+        ("i\n", "\na\n"),
+        ("p\nc\n", "a\n\n"),
+        ("a\np", "a\na\n\n"),
+        ("a\\\n", "a\n\n"),
+        ("a\\", "a\n"),
+    ] {
+        new_ucmd!()
+            .arg(script)
+            .pipe_in("a\n")
+            .succeeds()
+            .stdout_only(output);
+    }
 }
