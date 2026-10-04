@@ -156,7 +156,11 @@ Deliberate exceptions are enumerated in §4 — that list is meant to stay short
 **The canonical spelling is `C:/test/dir` — drive letter, forward slashes.** Never
 backslashes on output.
 
-- **Accept** `C:/src`, `/c/src`, `/tmp`, `/dev/null` as input — everywhere, always.
+- **Accept** `C:/src`, `/c/src`, `/tmp`, `/dev/null` as input wherever cash itself opens
+  the path (D10): redirections, `cd`, `source`, `test` and `[`, and cash's own builtins. An
+  argument to a program or a bundled tool (D48) reaches it as written (D4), and none of
+  them has `/c` or `/tmp`; when the `C:/` spelling names something that exists, cash warns
+  and gives it (`cat /c/Windows/win.ini`).
 - **Render** drive-letter + forward slash, always: after `cd /c/src/infra`, `pwd` prints
   `C:/src/infra`. One canonical form; no modes, no provenance tracking.
 - Rationale: rendered paths usually become arguments to native `.exe` files, where the

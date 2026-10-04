@@ -67,9 +67,6 @@ Found writing the help catalogue (2026-10-04):
 - From outside the shell, `cash help -x` still says `cash: line 1: help: …`: an invalid
   option is reported by the core's parse error, not by `help`, which now writes
   `cash help: …` for everything else.
-- D3 says Unix spellings are taken "everywhere, always"; an argument such as `cat /tmp/x`
-  or `rm /c/…` reaches a bundled tool or a program as written, with D4's warning. The
-  `paths` help topic says what happens; the spec does not.
 
 ---
 

@@ -362,7 +362,7 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         let path = path.as_ref();
 
         // cash (D3/D10): the second chokepoint. Every path the shell resolves funnels
-        // through here, so accepting the Unix spellings once means `cat /c/Users/x`,
+        // through here, so accepting the Unix spellings once means `ls /c/Users/x`,
         // `> /c/tmp/out` and `[ -f /c/Windows/win.ini` all work without each call site
         // knowing about it. Relative paths and ordinary Windows paths pass through
         // unchanged.
