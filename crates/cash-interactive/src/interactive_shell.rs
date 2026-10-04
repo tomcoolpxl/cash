@@ -124,25 +124,20 @@ impl<'a, IB: InputBackend, SE: cash_core::ShellExtensions> InteractiveShell<'a, 
         drop(shell);
 
         loop {
-            let result = match catch_future_panic(self.run_interactively_once()).await {
-                Ok(result) => result?,
-                Err(payload) => {
-                    // A panic in a parser, hook, builtin, prompt renderer, input backend, or
-                    // command must not take down the user's long-lived shell. Tokio's mutex is
-                    // not poisoned, so dropping the failed future releases any shell guard and
-                    // the next loop iteration can safely present a fresh prompt.
-                    let _ = self.terminal_integration.on_post_exec_command(1);
-                    let mut shell = self.shell.lock().await;
-                    shell.set_last_exit_status(1);
-                    let _ = writeln!(
-                        shell.stderr(),
-                        "cash: recovered from internal error: {}",
-                        panic_payload_message(payload.as_ref())
-                    );
-                    drop(shell);
-                    continue;
-                }
+            let Ok(result) = catch_future_panic(self.run_interactively_once()).await else {
+                // A panic in a parser, hook, builtin, prompt renderer, input backend, or
+                // command must not take down the user's long-lived shell. Tokio's mutex is
+                // not poisoned, so dropping the failed future releases any shell guard and
+                // the next loop iteration can safely present a fresh prompt. The panic hook
+                // has said what the error was.
+                let _ = self.terminal_integration.on_post_exec_command(1);
+                let mut shell = self.shell.lock().await;
+                shell.set_last_exit_status(1);
+                let _ = writeln!(shell.stderr(), "cash: recovered from the internal error");
+                drop(shell);
+                continue;
             };
+            let result = result?;
             match result {
                 InteractiveExecutionResult::Executed(result) if result.is_exit() => {
                     break;
@@ -526,14 +521,6 @@ impl<'a, IB: InputBackend, SE: cash_core::ShellExtensions> InteractiveShell<'a, 
 
 async fn catch_future_panic<F: Future>(future: F) -> Result<F::Output, Box<dyn Any + Send>> {
     AssertUnwindSafe(future).catch_unwind().await
-}
-
-fn panic_payload_message(payload: &(dyn Any + Send)) -> &str {
-    payload
-        .downcast_ref::<&str>()
-        .copied()
-        .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
-        .unwrap_or("unknown panic")
 }
 
 /// Represents the host environment; used for terminal detection in conjunction

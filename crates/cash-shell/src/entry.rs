@@ -223,19 +223,12 @@ fn run_shell(args: &[String], parsed_args: CommandLineArgs) -> std::convert::Inf
     // Keep startup, script, and `-c` panics from becoming Windows crash dialogs or
     // abnormal process termination. Interactive command panics are recovered inside the
     // prompt loop so that session can continue; this outer boundary covers everything else.
-    let result = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+    let Ok(result) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         runtime.block_on(run_async(args, parsed_args))
-    })) {
-        Ok(result) => result,
-        Err(payload) => {
-            let message = payload
-                .downcast_ref::<&str>()
-                .copied()
-                .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
-                .unwrap_or("unknown panic");
-            eprintln!("cash: stopped safely after an internal error: {message}");
-            std::process::exit(1);
-        }
+    })) else {
+        // The panic hook has said what the error was.
+        eprintln!("cash: stopped safely after the internal error");
+        std::process::exit(1);
     };
 
     let exit_code = match result {
@@ -256,34 +249,44 @@ fn run_shell(args: &[String], parsed_args: CommandLineArgs) -> std::convert::Inf
     std::process::exit(i32::from(exit_code));
 }
 
-/// Installs panic handlers to report our panic and cleanly exit on panic.
+/// Installs the panic hook: one line saying where the internal error happened.
+///
+/// Every panic of the shell's is caught, at the prompt or around the whole run, and
+/// the catcher says what happens next, so the hook does not call it a crash. It wrote
+/// "cash had a problem and crashed" and a report file to `%TEMP%` for each one through
+/// `human-panic`, the recovered ones too (BIN-14).
 fn install_panic_handlers() {
-    //
-    // Set up panic handler. On release builds, it will capture panic details to a
-    // temporary .toml file and report a human-readable message to the screen.
-    //
-    human_panic::setup_panic!(
-        human_panic::Metadata::new(productinfo::PRODUCT_NAME, productinfo::PRODUCT_VERSION)
-            .homepage(productinfo::PRODUCT_DISPLAY_URI)
-            .support("please post a GitHub issue at https://github.com/tomcoolpxl/cash/issues/new")
-    );
-
-    //
-    // If stdout is connected to a terminal, then register a new panic handler that
-    // resets the terminal and then invokes the previously registered handler. In
-    // dev/debug builds, the previously registered handler will be the default
-    // handler; in release builds, it will be the one registered by `human_panic`.
-    //
-    if std::io::stdout().is_terminal() {
-        let original_panic_handler = std::panic::take_hook();
-        std::panic::set_hook(Box::new(move |panic_info| {
+    let terminal = std::io::stdout().is_terminal();
+    std::panic::set_hook(Box::new(move |panic_info| {
+        if terminal {
             // Best-effort attempt to reset the terminal to defaults.
             let _ = try_reset_terminal_to_defaults();
+        }
+        let location = panic_info.location().map(|l| (l.file(), l.line()));
+        let message = panic_message(panic_info.payload());
+        eprintln!("{}", panic_report(message, location));
+        if std::env::var_os("RUST_BACKTRACE").is_some_and(|v| v != "0") {
+            eprintln!("{}", std::backtrace::Backtrace::force_capture());
+        }
+    }));
+}
 
-            // Invoke the original handler
-            original_panic_handler(panic_info);
-        }));
-    }
+/// A panic's message, as `panic!` gave it.
+fn panic_message(payload: &(dyn std::any::Any + Send)) -> &str {
+    payload
+        .downcast_ref::<&str>()
+        .copied()
+        .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
+        .unwrap_or("unknown panic")
+}
+
+/// The line the panic hook prints.
+fn panic_report(message: &str, location: Option<(&str, u32)>) -> String {
+    let at = location.map_or_else(String::new, |(file, line)| format!(" at {file}:{line}"));
+    format!(
+        "cash: internal error{at}: {message}\n\
+         cash: please report it at https://github.com/tomcoolpxl/cash/issues/new"
+    )
 }
 
 /// cash: syntax highlighting is on by default, where upstream kept it behind the
@@ -733,6 +736,23 @@ mod tests {
     use super::*;
     use anyhow::Result;
     use pretty_assertions::{assert_eq, assert_matches};
+
+    /// A panic is an internal error with its place, never a crash: each is caught (BIN-14).
+    #[test]
+    fn a_panic_is_reported_as_an_internal_error_with_its_place() {
+        let report = panic_report("index out of bounds", Some(("src/x.rs", 7)));
+        assert_eq!(
+            report.lines().next(),
+            Some("cash: internal error at src/x.rs:7: index out of bounds")
+        );
+        assert!(!report.contains("crash"), "{report}");
+        assert_eq!(
+            panic_report("boom", None).lines().next(),
+            Some("cash: internal error: boom")
+        );
+        let owned: Box<dyn std::any::Any + Send> = Box::new(String::from("owned"));
+        assert_eq!(panic_message(owned.as_ref()), "owned");
+    }
 
     fn args(strs: &[&str]) -> Vec<String> {
         strs.iter().map(|s| s.to_string()).collect()

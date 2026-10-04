@@ -105,8 +105,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 Each from `REVIEW_REPORT.md` §5, found in no commit on 2026-10-04; reproduce first, as
 some may have gone with other work.
 
-- BIN-14: a recovered panic still prints "cash had a problem and crashed" and writes a
-  crash report to `%TEMP%`.
 - W32-13, W32-14, XC-13: five RAII handle types and 15+ manual `CloseHandle`s, three
   leaking on error in `pipe.rs`; about 12 copies of the UTF-16 encoder.
 - XC-12, XC-14, XC-16: three process-creation paths and two environment-block builders;
@@ -118,8 +116,6 @@ some may have gone with other work.
   Tab would panic on a current-thread runtime.
 - PI-20, LANG-25: char and byte offsets rebuilt in three consumers; two metacharacter
   tables disagree.
-- ARCH-16: `human-panic` pulls `sysinfo` and `windows` 0.62 (the other duplicates went
-  with ARCH-17).
 
 ---
 

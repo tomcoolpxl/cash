@@ -26,7 +26,7 @@ fn assert_survived(out: &Output, last_line: &str) {
     assert!(
         !out.stderr.contains("overflowed its stack")
             && !out.stderr.contains("panicked")
-            && !out.stderr.contains("had a problem and crashed"),
+            && !out.stderr.contains("internal error"),
         "cash crashed: {}",
         out.stderr
     );
