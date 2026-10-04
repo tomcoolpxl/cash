@@ -817,15 +817,14 @@ pub fn terminate(pid: u32, status: u32) -> std::io::Result<()> {
 
     // SAFETY: handle is valid and carries PROCESS_TERMINATE.
     let ok = unsafe { TerminateProcess(handle, status) };
+    // Read before the close, which may set the last error itself (W32-15).
+    let error = (ok == 0).then(std::io::Error::last_os_error);
     // SAFETY: closing a handle we just opened, exactly once.
     unsafe {
         CloseHandle(handle);
     }
 
-    if ok == 0 {
-        return Err(std::io::Error::last_os_error());
-    }
-    Ok(())
+    error.map_or(Ok(()), Err)
 }
 
 /// Resume a process created suspended, resuming all its threads.
@@ -862,7 +861,11 @@ pub fn resume_process(process: windows_sys::Win32::Foundation::HANDLE) -> std::i
         if status >= 0 {
             Ok(())
         } else {
-            Err(std::io::Error::from_raw_os_error(status))
+            // An NTSTATUS is no Win32 error code: as one, its message was another error's
+            // or none (W32-15). Windows maps it to the one that says the same.
+            // SAFETY: a pure conversion of a status value.
+            let code = unsafe { windows_sys::Win32::Foundation::RtlNtStatusToDosError(status) };
+            Err(std::io::Error::from_raw_os_error(code.cast_signed()))
         }
     } else {
         Err(std::io::Error::new(

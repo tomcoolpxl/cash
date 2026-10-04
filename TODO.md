@@ -111,8 +111,6 @@ some may have gone with other work.
   crash report to `%TEMP%`.
 - W32-13, W32-14, XC-13: five RAII handle types and 15+ manual `CloseHandle`s, three
   leaking on error in `pipe.rs`; about 12 copies of the UTF-16 encoder.
-- W32-15: `GetLastError` read after other calls; HRESULT and NTSTATUS through
-  `from_raw_os_error`.
 - W32-16: suspend takes a system-wide thread snapshot per tree member; `real_case` reads
   a whole directory.
 - W32-18: `CASH_EXE` and `CARGO_BIN_EXE_cash` redirect every `#!/bin/sh` script in

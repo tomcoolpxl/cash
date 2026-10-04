@@ -121,11 +121,13 @@ impl ConPty {
         let ok_out =
             unsafe { CreatePipe(&raw mut out_read, &raw mut out_write, std::ptr::null(), 0) };
         if ok_out == 0 {
+            // Read before the clean-up, which may set the last error itself (W32-15).
+            let error = io::Error::last_os_error();
             // SAFETY: Clean up handle on error.
             unsafe { CloseHandle(in_read) };
             // SAFETY: Clean up handle on error.
             unsafe { CloseHandle(in_write) };
-            return Err(io::Error::last_os_error());
+            return Err(error);
         }
 
         let size = COORD { X: cols, Y: rows };
@@ -143,7 +145,13 @@ impl ConPty {
             unsafe { CloseHandle(out_read) };
             // SAFETY: Clean up handles on error.
             unsafe { CloseHandle(out_write) };
-            return Err(io::Error::from_raw_os_error(hr));
+            // An HRESULT is no Win32 error code; one that wraps a Win32 error carries it in
+            // its low 16 bits (FACILITY_WIN32), and any other is reported as itself.
+            return Err(if (hr.cast_unsigned() >> 16) == 0x8007 {
+                io::Error::from_raw_os_error(hr & 0xFFFF)
+            } else {
+                io::Error::other(format!("CreatePseudoConsole failed: HRESULT {hr:#010x}"))
+            });
         }
 
         // SAFETY: in_write is a valid open pipe handle.
@@ -210,9 +218,11 @@ impl ConPty {
         };
 
         if update_ok == 0 {
+            // Read before the clean-up, which may set the last error itself (W32-15).
+            let error = io::Error::last_os_error();
             // SAFETY: Clean up attribute list.
             unsafe { DeleteProcThreadAttributeList(attr_list) };
-            return Err(io::Error::last_os_error());
+            return Err(error);
         }
 
         // Prepare STARTUPINFOEXW
@@ -285,6 +295,8 @@ impl ConPty {
                 &raw mut pi,
             )
         };
+        // Read before the clean-up below, which may set the last error itself (W32-15).
+        let create_error = (create_ok == 0).then(io::Error::last_os_error);
 
         // SAFETY: Clean up attribute list after process creation.
         unsafe {
@@ -302,9 +314,7 @@ impl ConPty {
             unsafe { CloseHandle(out_w) };
         }
 
-        if create_ok == 0 {
-            return Err(io::Error::last_os_error());
-        }
+        create_error.map_or(Ok(()), Err)?;
 
         Ok(ConPtyChild {
             process: pi.hProcess,
