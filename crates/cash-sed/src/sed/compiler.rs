@@ -16,7 +16,9 @@ use crate::sed::delimited_parser::{
     os_string_from_bytes, parse_char_escape, parse_regex_for_mode, parse_transliteration_for_mode,
     push_script_char,
 };
-use crate::sed::error_handling::{ScriptLocation, compilation_error, semantic_error};
+use crate::sed::error_handling::{
+    ScriptLocation, compilation_err, compilation_error, semantic_err, semantic_error,
+};
 use crate::sed::fast_regex::Regex;
 use crate::sed::named_writer::NamedWriter;
 use crate::sed::script_char_provider::ScriptCharProvider;
@@ -223,11 +225,7 @@ fn resolve_branch_targets(
                         .get(&label)
                         .cloned()
                         .ok_or_else(|| {
-                            semantic_error::<()>(
-                                &cmd.location,
-                                format!("undefined label `{label}'"),
-                            )
-                            .unwrap_err()
+                            semantic_err(&cmd.location, format!("undefined label `{label}'"))
                         })?;
                     CommandData::BranchTarget(Some(target))
                 }
@@ -371,6 +369,15 @@ fn compile_address_range(
 
         // Look for second address.
         if !line.eol() {
+            // What follows a comma has to be an address, as GNU sed has it: `1,xp` is
+            // its "unexpected `,'".
+            if !is_step_match
+                && !is_step_end
+                && !is_address_char(line.current())
+                && line.current() != '+'
+            {
+                return compilation_error(lines, line, "unexpected `,'");
+            }
             let addr2 = compile_address(lines, line, context)?;
             // Set step_n to the number specified in the (required numeric) address.
             let step_n = if is_step_match || is_step_end {
@@ -432,10 +439,9 @@ fn read_file_path(lines: &ScriptLineProvider, line: &mut ScriptCharProvider) -> 
     if path.is_empty() {
         compilation_error(lines, line, "missing file path")
     } else {
-        os_string_from_bytes(path).map(PathBuf::from).map_err(|e| {
-            compilation_error::<PathBuf>(lines, line, format!("invalid characters file path: {e}"))
-                .unwrap_err()
-        })
+        os_string_from_bytes(path)
+            .map(PathBuf::from)
+            .map_err(|e| compilation_err(lines, line, format!("invalid characters file path: {e}")))
     }
 }
 
@@ -485,15 +491,24 @@ fn compile_address(
         }
         '+' => {
             line.advance();
-            let number = parse_number(lines, line, true)?.unwrap();
+            let number = parse_required_number(lines, line)?;
             Ok(Address::RelLine(number))
         }
         c if c.is_ascii_digit() => {
-            let number = parse_number(lines, line, true)?.unwrap();
+            let number = parse_required_number(lines, line)?;
             Ok(Address::Line(number))
         }
-        _ => panic!("invalid context address"),
+        // Reached after `,` or `~` by what cannot start an address: `1,xp`, `1~p`.
+        _ => compilation_error(lines, line, "expected context address"),
     }
+}
+
+/// Parse and return the decimal number that must be at the current line position.
+fn parse_required_number(
+    lines: &ScriptLineProvider,
+    line: &mut ScriptCharProvider,
+) -> UResult<usize> {
+    parse_number(lines, line, true)?.ok_or_else(|| compilation_err(lines, line, "number expected"))
 }
 
 /// Parse and return the decimal number at the current line position.
@@ -521,7 +536,7 @@ fn parse_number(
     num_str
         .parse::<usize>()
         .map_err(|_| format!("invalid number '{num_str}'"))
-        .map_err(|msg| compilation_error::<usize>(lines, line, msg).unwrap_err())
+        .map_err(|msg| compilation_err(lines, line, msg))
         .map(Some)
 }
 
@@ -732,12 +747,11 @@ fn compile_regex(
 
     // Compile into engine.
     let compiled = Regex::new(&pattern, context.character_mode).map_err(|e| {
-        compilation_error::<Regex>(
+        compilation_err(
             lines,
             line,
             format!("invalid regex '{}': {e}", String::from_utf8_lossy(&pattern)),
         )
-        .unwrap_err()
     })?;
 
     Ok(Some(compiled))
@@ -778,7 +792,7 @@ pub fn compile_replacement(
                     match line.current() {
                         // \0 - \9
                         c @ '0'..='9' => {
-                            let ref_num = c.to_digit(10).unwrap();
+                            let ref_num = u32::from(c) - u32::from('0');
 
                             if !literal.is_empty() {
                                 parts.push(ReplacementPart::Literal(std::mem::take(&mut literal)));
@@ -1056,17 +1070,15 @@ pub fn compile_subst_flags(
                 }
 
                 let mut number = 0usize;
-                while !line.eol() && line.current().is_ascii_digit() {
+                while !line.eol() {
+                    let Some(digit) = line.current().to_digit(10) else {
+                        break;
+                    };
                     number = number
                         .checked_mul(10)
-                        .and_then(|n| n.checked_add(line.current().to_digit(10).unwrap() as usize))
+                        .and_then(|n| n.checked_add(digit as usize))
                         .ok_or_else(|| {
-                            compilation_error::<()>(
-                                lines,
-                                line,
-                                "overflow in numeric substitute flag",
-                            )
-                            .unwrap_err()
+                            compilation_err(lines, line, "overflow in numeric substitute flag")
                         })?;
                     line.advance();
                 }
@@ -1246,22 +1258,14 @@ fn compile_number_command(
     line.advance(); // Skip the command character
     line.eat_spaces(); // Skip any leading whitespace
 
-    match parse_number(lines, line, false)? {
-        Some(n) => {
-            cmd.data = CommandData::Number(n);
-        }
-        None => match cmd.code {
-            'q' | 'Q' => {
-                cmd.data = CommandData::Number(0);
-            }
-            // As in GNU sed, a bare `l` wraps at `-l N` (default 70), not at the
-            // terminal's width.
-            'l' => {
-                cmd.data = CommandData::Number(context.length);
-            }
-            _ => panic!("invalid number-expecting command"),
-        },
-    }
+    // A bare `q` or `Q` exits with 0. As in GNU sed, a bare `l` wraps at `-l N`
+    // (default 70), not at the terminal's width.
+    let n = match parse_number(lines, line, false)? {
+        Some(n) => n,
+        None if cmd.code == 'l' => context.length,
+        None => 0,
+    };
+    cmd.data = CommandData::Number(n);
 
     line.eat_spaces(); // Skip any trailing whitespace
     parse_command_ending(lines, line, cmd)?;
@@ -1709,6 +1713,11 @@ fn get_cmd_spec(
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::expect_used,
+    clippy::panic,
+    reason = "a failed assumption in a test should abort it loudly"
+)]
 mod tests {
     use super::*;
     use crate::sed::fast_io::IOChunk;

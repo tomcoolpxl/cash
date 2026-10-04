@@ -48,16 +48,22 @@ pub(crate) struct AwkValue {
 
 pub(crate) type AwkValueRef = UnsafeCell<AwkValue>;
 
+// Reading an array as a number or a truth value cannot happen: the values read so come
+// off the stack through `pop_scalar_value` or `ensure_value_is_scalar`, which make an
+// array there an error.
 impl AwkValue {
     pub(crate) fn scalar_as_f64(&self) -> f64 {
         match &self.value {
             AwkValueVariant::Number(x) => *x,
             AwkValueVariant::String(s) => strtod(s.as_str()),
-            AwkValueVariant::UninitializedScalar => 0.0,
+            // A value not yet used as either scalar or array reads as the empty scalar.
+            AwkValueVariant::UninitializedScalar | AwkValueVariant::Uninitialized => 0.0,
             AwkValueVariant::Regex { matches_record, .. } => bool_to_f64(*matches_record),
-            AwkValueVariant::Array(_) | AwkValueVariant::Uninitialized => {
-                panic!("not a scalar")
-            }
+            #[expect(
+                clippy::panic,
+                reason = "callers read only values checked to be scalars"
+            )]
+            AwkValueVariant::Array(_) => panic!("not a scalar"),
         }
     }
 
@@ -72,10 +78,12 @@ impl AwkValue {
                 }
             }
             AwkValueVariant::Regex { matches_record, .. } => *matches_record,
-            AwkValueVariant::UninitializedScalar => false,
-            AwkValueVariant::Array(_) | AwkValueVariant::Uninitialized => {
-                panic!("not a scalar")
-            }
+            AwkValueVariant::UninitializedScalar | AwkValueVariant::Uninitialized => false,
+            #[expect(
+                clippy::panic,
+                reason = "callers read only values checked to be scalars"
+            )]
+            AwkValueVariant::Array(_) => panic!("not a scalar"),
         }
     }
 
@@ -101,10 +109,10 @@ impl AwkValue {
             AwkValueVariant::Regex { matches_record, .. } => {
                 Ok(if matches_record { "1" } else { "0" }.into())
             }
-            AwkValueVariant::UninitializedScalar => Ok(AwkString::default()),
-            AwkValueVariant::Array(_) | AwkValueVariant::Uninitialized => {
-                panic!("not a scalar")
+            AwkValueVariant::UninitializedScalar | AwkValueVariant::Uninitialized => {
+                Ok(AwkString::default())
             }
+            AwkValueVariant::Array(_) => Err("array used in scalar context".into()),
         }
     }
 

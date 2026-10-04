@@ -1313,3 +1313,101 @@ fn test_awk_bugfix_regex_literal_escapes() {
         });
     }
 }
+
+fn plan(program: &str, stdin: &str, expected_out: &str, expected_exit_code: i32) -> TestPlan {
+    TestPlan {
+        cmd: String::from("awk"),
+        args: vec![program.to_string()],
+        stdin_data: String::from(stdin),
+        expected_out: String::from(expected_out),
+        expected_err: String::new(),
+        expected_exit_code,
+    }
+}
+
+// A target that cannot be assigned to, for `sub`, `gsub` or the right side of `in`, is a
+// compile error (gawk's words for `sub`); it panicked (TODO.md 14.6).
+#[test]
+fn test_awk_unassignable_targets_are_errors() {
+    for (program, message) in [
+        (
+            r#"BEGIN { gsub(/a/, "b", length) }"#,
+            "gsub third parameter is not a changeable object",
+        ),
+        (
+            r#"BEGIN { sub(/a/, "b", "x") }"#,
+            "sub third parameter is not a changeable object",
+        ),
+        (
+            "BEGIN { print 1 in 2 }",
+            "the right side of 'in' should be an array",
+        ),
+        (
+            r#"BEGIN { print 1 in "x" }"#,
+            "the right side of 'in' should be an array",
+        ),
+    ] {
+        run_test_with_checker(plan(program, "", "", 1), |_, output| {
+            assert_eq!(output.status.code(), Some(1), "{program}");
+            assert!(output.stdout.is_empty(), "{program}");
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            assert!(stderr.contains(message), "{program}: {stderr}");
+        });
+    }
+}
+
+// An empty statement as the body of `if`, `for` or `do` runs as in gawk; each panicked
+// (TODO.md 14.6).
+#[test]
+fn test_awk_empty_statement_bodies() {
+    for (program, expected) in [
+        ("BEGIN { for (i = 0; i < 2; i++); print i }", "2\n"),
+        ("BEGIN { for (;;) break; print \"t\" }", "t\n"),
+        ("BEGIN { if (1); print \"x\" }", "x\n"),
+        ("BEGIN { if (1)\n; print \"x\" }", "x\n"),
+        ("BEGIN { do ; while (0); print \"z\" }", "z\n"),
+        ("BEGIN { i = 0; do ; while (i++ < 3); print i }", "4\n"),
+    ] {
+        run_test(plan(program, "", expected, 0));
+    }
+}
+
+// `exit`, `next` and `nextfile` in a function a pattern calls end the pattern as they
+// would an action, as in gawk; they panicked (TODO.md 14.6).
+#[test]
+fn test_awk_exit_and_next_from_a_pattern() {
+    for (program, expected, status) in [
+        ("function f() { exit 3 } f() { print }", "", 3),
+        (
+            "function f() { exit 3 } f() { print } END { print \"end\" }",
+            "end\n",
+            3,
+        ),
+        ("function f() { exit 3 } NR == 1, f() { print }", "", 3),
+        (
+            "function f() { next } f() { print \"no\" } { print \"rule 2\" }",
+            "",
+            0,
+        ),
+        (
+            "function f() { if ($0 == \"b\") next; return 1 } f() { print }",
+            "a\nc\n",
+            0,
+        ),
+        ("function f() { nextfile } f() { print }", "", 0),
+    ] {
+        run_test(plan(program, "a\nb\nc\n", expected, status));
+    }
+}
+
+// The precision of `%s` counts bytes; one that ends inside a character stops before it
+// rather than panicking (TODO.md 14.6).
+#[test]
+fn test_awk_string_precision_inside_a_character() {
+    run_test(plan(
+        r#"BEGIN { printf "[%.1s][%.2s][%.3s]\n", "é", "éa", "éa" }"#,
+        "",
+        "[][é][éa]\n",
+        0,
+    ));
+}

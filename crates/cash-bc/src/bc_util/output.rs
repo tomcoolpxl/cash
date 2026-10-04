@@ -56,10 +56,11 @@ impl<'a> OutputWriter<'a> {
                 Some((offset, _)) => offset,
                 None => text.len(),
             };
-            let chunk = &text[..end];
+            // `end` comes from `char_indices`, so it is on a character boundary.
+            let (chunk, rest) = text.split_at_checked(end).unwrap_or((text, ""));
             self.sink.write_all(chunk.as_bytes())?;
             self.column += chunk.chars().count();
-            text = &text[end..];
+            text = rest;
         }
         Ok(())
     }

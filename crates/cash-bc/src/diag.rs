@@ -63,8 +63,8 @@ pub fn io_error_text(e: &io::Error) -> String {
         return worded.to_owned();
     }
     let text = e.to_string();
-    match text.find(" (os error ") {
-        Some(at) => text[..at].to_owned(),
+    match text.split_once(" (os error ") {
+        Some((worded, _)) => worded.to_owned(),
         None => text,
     }
 }

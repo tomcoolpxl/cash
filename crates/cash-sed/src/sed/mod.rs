@@ -58,9 +58,11 @@ where
             continue;
         }
         if let Some(s) = arg.to_str() {
-            if s.starts_with("-i") && !s.starts_with("-i=") && s != "-i" {
-                normalized.push(format!("-i={}", &s[2..]).into());
-                continue;
+            if let Some(suffix) = s.strip_prefix("-i") {
+                if !suffix.is_empty() && !suffix.starts_with('=') {
+                    normalized.push(format!("-i={suffix}").into());
+                    continue;
+                }
             }
         }
         normalized.push(arg);
@@ -316,6 +318,10 @@ fn build_context(matches: &ArgMatches) -> UResult<ProcessingContext> {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::expect_used,
+    reason = "a failed assumption in a test should abort it loudly"
+)]
 mod tests {
     use super::*; // Allows access to private functions/items in this module
 

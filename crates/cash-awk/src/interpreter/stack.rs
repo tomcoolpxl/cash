@@ -54,6 +54,11 @@ impl StackValue {
             StackValue::ValueRef(val_ref) => unsafe { &mut **val_ref },
             // SAFETY: the caller ensures the pointer is valid (`# Safety`).
             StackValue::UninitializedRef(val_ref) => unsafe { &mut **val_ref },
+            #[expect(
+                clippy::expect_used,
+                reason = "an element reference is made from an array, and a variable that is \
+                          an array stays one; `get_value` inserts a key it does not find"
+            )]
             StackValue::ArrayElementRef(array_element_ref) => {
                 // SAFETY: the caller ensures the array pointer is valid (`# Safety`).
                 unsafe { &mut *array_element_ref.array }
@@ -86,10 +91,12 @@ impl StackValue {
         }
     }
 
-    pub(crate) fn unwrap_array_iterator(self) -> ArrayIterator {
+    /// The iterator a `for (k in a)` loop keeps on the stack; anything else there is
+    /// malformed code, an error rather than a panic.
+    pub(crate) fn unwrap_array_iterator(self) -> Result<ArrayIterator, String> {
         match self {
-            StackValue::Iterator(array_iterator) => array_iterator,
-            _ => unreachable!("expected iterator"),
+            StackValue::Iterator(array_iterator) => Ok(array_iterator),
+            _ => Err("expected an array iterator".to_string()),
         }
     }
 
@@ -103,6 +110,7 @@ impl StackValue {
                 unsafe { &*ref_val }.clone().into_ref(AwkRefType::None)
             }
             StackValue::UninitializedRef(_) => AwkValue::uninitialized_scalar(),
+            #[expect(clippy::expect_used, reason = "as in `value_ref`")]
             StackValue::ArrayElementRef(array_element_ref) => {
                 // SAFETY: the caller ensures the array pointer is valid (`# Safety`).
                 unsafe { &mut *array_element_ref.array }
@@ -230,7 +238,7 @@ impl<'i, 's> Stack<'i, 's> {
     }
 
     pub(crate) fn pop_scalar_value(&mut self) -> Result<AwkValue, String> {
-        let mut value = self.pop().expect("empty stack");
+        let mut value = self.pop().ok_or_else(|| "empty stack".to_string())?;
         // SAFETY: a popped value's pointers stay valid until the value pushed before it is
         // popped (`push`), and that value is still on the stack.
         unsafe { value.ensure_value_is_scalar()? };
@@ -282,11 +290,11 @@ impl<'i, 's> Stack<'i, 's> {
         }
     }
 
-    pub(crate) fn pop_value(&mut self) -> AwkValue {
-        let value = self.pop().expect("empty stack");
+    pub(crate) fn pop_value(&mut self) -> Result<AwkValue, String> {
+        let value = self.pop().ok_or_else(|| "empty stack".to_string())?;
         // SAFETY: a popped value's pointers stay valid until the value pushed before it is
         // popped (`push`), and that value is still on the stack.
-        unsafe { value.into_owned() }
+        Ok(unsafe { value.into_owned() })
     }
 
     pub(crate) fn pop_ref(&mut self) -> Result<&mut AwkValue, String> {
@@ -345,15 +353,18 @@ impl<'i, 's> Stack<'i, 's> {
         self.source_locations = &function.debug_info.source_locations;
     }
 
-    pub(crate) fn restore_caller(&mut self) {
+    /// Return to the caller's frame. The compiler allows `return` only in a function,
+    /// so there is always one; the error stands in for what was a panic.
+    pub(crate) fn restore_caller(&mut self) -> Result<(), String> {
         let caller_frame = self
             .call_frames
             .pop()
-            .expect("tried to restore caller when there is none");
+            .ok_or_else(|| "return outside of a function".to_string())?;
         self.bp = caller_frame.bp;
         self.sp = caller_frame.sp;
         self.instructions = caller_frame.instructions;
         self.ip = caller_frame.ip;
+        Ok(())
     }
 
     pub(crate) fn new(main: &'i Action, stack: &'s mut [StackValue]) -> Self {
@@ -384,10 +395,20 @@ pub(crate) enum ExecutionResult {
 }
 
 impl ExecutionResult {
-    pub(crate) fn expr_to_bool(self) -> bool {
-        self.unwrap_expr().scalar_as_bool()
+    /// The truth of a pattern's value, or, as the error, what a function the pattern
+    /// called did instead: `next`, `nextfile` or `exit`.
+    pub(crate) fn pattern_matches(self) -> Result<bool, Self> {
+        match self {
+            ExecutionResult::Expression(value) => Ok(value.scalar_as_bool()),
+            other => Err(other),
+        }
     }
 
+    #[cfg(test)]
+    #[expect(
+        clippy::panic,
+        reason = "a test that expects a value fails loudly without one"
+    )]
     pub(crate) fn unwrap_expr(self) -> AwkValue {
         match self {
             ExecutionResult::Expression(value) => value,

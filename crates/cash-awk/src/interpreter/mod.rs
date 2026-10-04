@@ -44,6 +44,11 @@ mod string;
 mod value;
 
 #[cfg(test)]
+#[expect(
+    clippy::expect_used,
+    clippy::panic,
+    reason = "a failed assumption in a test should abort it loudly"
+)]
 mod tests;
 
 const STACK_SIZE: usize = 2048;
@@ -85,7 +90,8 @@ fn is_c_space(byte: u8) -> bool {
 
 fn scan_number(text: &str) -> NumberText<'_> {
     let start = text.bytes().take_while(|&b| is_c_space(b)).count();
-    let text = &text[start..];
+    // Only ASCII white space is skipped, so `start` is a character boundary.
+    let text = text.get(start..).unwrap_or_default();
     let bytes = text.as_bytes();
     let core = text.trim_end_matches(|c: char| c.is_ascii() && is_c_space(c as u8));
     if let [sign @ (b'+' | b'-'), name @ ..] = core.as_bytes() {
@@ -125,7 +131,8 @@ fn scan_number(text: &str) -> NumberText<'_> {
         }
     }
     NumberText::Decimal {
-        number: &text[..at],
+        // Only ASCII is counted, so `at` is a character boundary.
+        number: text.get(..at).unwrap_or_default(),
         whole: at == core.len(),
     }
 }
@@ -258,10 +265,7 @@ impl GlobalEnv {
             }
         };
         match combined {
-            Some(fs) => {
-                self.paragraph_fs_cache = Some(fs);
-                Ok(self.paragraph_fs_cache.as_ref().unwrap())
-            }
+            Some(fs) => Ok(self.paragraph_fs_cache.insert(fs)),
             None => Ok(&self.fs),
         }
     }
@@ -505,7 +509,7 @@ impl Interpreter {
                 } else {
                     SystemTime::now()
                         .duration_since(SystemTime::UNIX_EPOCH)
-                        .expect("time went backwards")
+                        .unwrap_or_default()
                         .as_secs()
                 };
                 stack.push_value(self.rand_seed as f64)?;
@@ -589,7 +593,7 @@ impl Interpreter {
                     compare_op!(stack, &global_env.convfmt, !=);
                 }
                 OpCode::Match => {
-                    let ere = stack.pop_value().into_ere()?;
+                    let ere = stack.pop_value()?.into_ere()?;
                     let string = stack
                         .pop_scalar_value()?
                         .scalar_to_string(&global_env.convfmt)?;
@@ -673,7 +677,7 @@ impl Interpreter {
                     let iter_var = iter_var as *mut AwkValue;
                     let array = stack
                         .get_mut_value_ptr(index as usize)
-                        .expect("invalid local index");
+                        .ok_or_else(|| "invalid local index".to_string())?;
                     // SAFETY: a local is a value of the current frame, on the stack.
                     let key_iter = unsafe { &mut *array }.as_array()?.key_iter();
                     // SAFETY: `iter_var` and the local `array` stay valid while the values
@@ -689,7 +693,10 @@ impl Interpreter {
                 OpCode::AdvanceIterOrJump(offset) => {
                     // if the top of the stack is not an iterator
                     // the code is malformed
-                    let mut iter = stack.pop().expect("empty stack").unwrap_array_iterator();
+                    let mut iter = stack
+                        .pop()
+                        .ok_or_else(|| "empty stack".to_string())?
+                        .unwrap_array_iterator()?;
                     // SAFETY: the iterator's pointers stay valid while the values below
                     // it are on the stack (`push`), and it was just popped.
                     let array = unsafe { &mut *iter.array }.as_array()?;
@@ -717,7 +724,7 @@ impl Interpreter {
                 OpCode::GetLocal(index) => {
                     let value = stack
                         .get_mut_value_ptr(index as usize)
-                        .expect("invalid local index");
+                        .ok_or_else(|| "invalid local index".to_string())?;
                     // SAFETY: the local is valid until the value at `index` is popped, which
                     // is below the one pushed here.
                     let value = unsafe { StackValue::from_var(value) };
@@ -744,7 +751,7 @@ impl Interpreter {
                 OpCode::LocalScalarRef(index) => {
                     let value = stack
                         .local_scalar_ptr(index as usize)
-                        .expect("invalid local index");
+                        .ok_or_else(|| "invalid local index".to_string())?;
                     // SAFETY: the local is valid until the value at `index` is popped, which
                     // is below the one pushed here.
                     unsafe { stack.push_ref(value)? };
@@ -836,14 +843,10 @@ impl Interpreter {
                 }
                 OpCode::Dup => {
                     // there has to be a value, otherwise the code is malformed
-                    let mut val = stack.pop().unwrap();
+                    let mut val = stack.pop().ok_or_else(|| "empty stack".to_string())?;
                     // SAFETY: `val` is valid until the value pushed before it is popped
                     // (`push`), which is still on the stack below both copies.
-                    unsafe {
-                        stack
-                            .push(val.duplicate())
-                            .expect("failed to push a popped value");
-                    };
+                    unsafe { stack.push(val.duplicate())? };
                     // SAFETY: as above.
                     unsafe { stack.push(val)? };
                 }
@@ -858,10 +861,11 @@ impl Interpreter {
                 }
                 OpCode::Return => {
                     let return_value = stack.pop_scalar_value()?;
-                    stack.restore_caller();
+                    stack.restore_caller()?;
                     stack.push_value(return_value)?;
                 }
-                OpCode::Invalid => panic!("invalid opcode"),
+                // The compiler replaces every placeholder it emits.
+                OpCode::Invalid => return Err("invalid opcode".to_string()),
             }
             match fields_state {
                 FieldsState::Ok => {
@@ -1098,8 +1102,7 @@ fn set_globals_with_assignment_arguments(
             let value = escape_string_contents(value)?;
             interpreter.globals[global_index as usize]
                 .get_mut()
-                .assign(maybe_numeric_string(value), global_env)
-                .expect("failed to assign value");
+                .assign(maybe_numeric_string(value), global_env)?;
             Ok(())
         })
 }
@@ -1199,49 +1202,25 @@ pub fn interpret_with_eol(
         global_env.nf = current_record.get_last_field();
 
         for (i, rule) in program.rules.iter().enumerate() {
-            let should_execute = match &rule.pattern {
-                Pattern::All => true,
-                Pattern::Expr(expr) => interpreter
-                    .run(
-                        expr,
-                        &program.functions,
-                        &mut current_record,
-                        &mut stack,
-                        &mut global_env,
-                        &mut input,
-                    )?
-                    .expr_to_bool(),
-                Pattern::Range { start, end } => {
-                    if range_pattern_started[i] {
-                        let end_matches = interpreter
-                            .run(
-                                end,
-                                &program.functions,
-                                &mut current_record,
-                                &mut stack,
-                                &mut global_env,
-                                &mut input,
-                            )?
-                            .expr_to_bool();
-                        if end_matches {
-                            range_pattern_started[i] = false;
-                        }
-                        // range is inclusive
-                        true
-                    } else {
-                        let should_start = interpreter
-                            .run(
-                                start,
-                                &program.functions,
-                                &mut current_record,
-                                &mut stack,
-                                &mut global_env,
-                                &mut input,
-                            )?
-                            .expr_to_bool();
-                        if should_start {
-                            // Check if end also matches on the same line
-                            let end_matches = interpreter
+            // Whether the rule runs, or the `next`, `nextfile` or `exit` of a function its
+            // pattern called, which ends the pattern as it would the action. That used to
+            // panic: `function f() { exit 3 } f() { print }`.
+            let pattern: Result<bool, ExecutionResult> = 'pattern: {
+                match &rule.pattern {
+                    Pattern::All => Ok(true),
+                    Pattern::Expr(expr) => interpreter
+                        .run(
+                            expr,
+                            &program.functions,
+                            &mut current_record,
+                            &mut stack,
+                            &mut global_env,
+                            &mut input,
+                        )?
+                        .pattern_matches(),
+                    Pattern::Range { start, end } => {
+                        if range_pattern_started[i] {
+                            let end_matches = match interpreter
                                 .run(
                                     end,
                                     &program.functions,
@@ -1250,35 +1229,78 @@ pub fn interpret_with_eol(
                                     &mut global_env,
                                     &mut input,
                                 )?
-                                .expr_to_bool();
-                            // If end matches on the same line, don't keep range open
-                            range_pattern_started[i] = !end_matches;
+                                .pattern_matches()
+                            {
+                                Ok(matches) => matches,
+                                Err(other) => break 'pattern Err(other),
+                            };
+                            if end_matches {
+                                range_pattern_started[i] = false;
+                            }
+                            // range is inclusive
+                            Ok(true)
+                        } else {
+                            let should_start = match interpreter
+                                .run(
+                                    start,
+                                    &program.functions,
+                                    &mut current_record,
+                                    &mut stack,
+                                    &mut global_env,
+                                    &mut input,
+                                )?
+                                .pattern_matches()
+                            {
+                                Ok(matches) => matches,
+                                Err(other) => break 'pattern Err(other),
+                            };
+                            if should_start {
+                                // Check if end also matches on the same line
+                                let end_matches = match interpreter
+                                    .run(
+                                        end,
+                                        &program.functions,
+                                        &mut current_record,
+                                        &mut stack,
+                                        &mut global_env,
+                                        &mut input,
+                                    )?
+                                    .pattern_matches()
+                                {
+                                    Ok(matches) => matches,
+                                    Err(other) => break 'pattern Err(other),
+                                };
+                                // If end matches on the same line, don't keep range open
+                                range_pattern_started[i] = !end_matches;
+                            }
+                            Ok(should_start)
                         }
-                        should_start
                     }
                 }
             };
-            if should_execute {
-                let rule_result = interpreter.run(
+            let rule_result = match pattern {
+                Ok(false) => continue,
+                Ok(true) => interpreter.run(
                     &rule.action,
                     &program.functions,
                     &mut current_record,
                     &mut stack,
                     &mut global_env,
                     &mut input,
-                )?;
-                match rule_result {
-                    ExecutionResult::Next => break,
-                    ExecutionResult::NextFile => {
-                        input.skip_file();
-                        break;
-                    }
-                    ExecutionResult::Exit(val) => {
-                        return_value = val;
-                        break 'record_loop;
-                    }
-                    ExecutionResult::Expression(_) => {}
+                )?,
+                Err(other) => other,
+            };
+            match rule_result {
+                ExecutionResult::Next => break,
+                ExecutionResult::NextFile => {
+                    input.skip_file();
+                    break;
                 }
+                ExecutionResult::Exit(val) => {
+                    return_value = val;
+                    break 'record_loop;
+                }
+                ExecutionResult::Expression(_) => {}
             }
         }
     }

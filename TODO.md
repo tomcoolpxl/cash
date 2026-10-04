@@ -70,17 +70,30 @@ then the riskiest changes once the crashes and state bugs are out of the way.
   and `ShellInvocation::ExecScript` is `unimplemented!()`; `--show-output`,
   `--nocapture`, `--color` and `-Z` do nothing; a case with no expectation passes; the
   cases are in `tests/cases/brush/`.
-- awk, bc and sed allow the lints for code that can panic (`unwrap_used`, `expect_used`,
-  `panic`, `panic_in_result_fn`, `unwrap_in_result`, `string_slice`,
-  `missing_panics_doc`): 58 `unwrap` and 34 `expect` in awk, 37 `expect` and 8 `panic!`
-  in bc, 41 `panic!` and 24 `unwrap` in sed. Each is an input that can crash the tool
-  or an invariant to write down. Left from 10.3, ARCH-01.
 - Left from phase 11: `cmd /c type <(echo x)` sometimes prints `x` and then "The pipe has been ended" (the
   review saw 11 in 80 on a busy machine; on 2026-10-03, 1 in 450 on an idle one, with
   1.3.10 and with the replay fix of phase 11 alike). The race the review suspected, between a pump's
   look at the replay and its look at the end, was real and is closed, but it is not
   this. Unexplained: `type` may take the pipe's end (ERROR_BROKEN_PIPE) for an error
   depending on when the server closes. W32-02.
+- awk hangs, its memory growing without end, on some syntax errors:
+  `awk 'BEGIN { ( } BEGIN { ( }'`, `awk 'function ( function ('`. `gather_errors`'
+  recovery makes no progress when the rest begins with `BEGIN`, `END` or `function`.
+  Seen 2026-10-04 removing the panic allows (ARCH-01).
+- awk: `if (1); else print "y"` prints `y`: the empty body is a silent `empty_stmt` in
+  grammar.pest, so the `else` branch becomes the `if`'s body. `next` in `BEGIN` or `END`
+  (also through a function) is accepted where gawk reports it; `awk 'END END END'` exits
+  0 in silence. `printf "%3s"`'s width and precision count bytes where `length`,
+  `substr` and gawk count characters. Seen 2026-10-04 (ARCH-01).
+- sed: GNU sed takes `1~p`, `1,~p` and `1,+p` (a missing number as 0); cash's sed
+  reports an error. In a replacement GNU's `\u` and `\U` change case (`s/a/\uD800/`
+  gives `D800`); cash's read them as Unicode escapes. Seen 2026-10-04 (ARCH-01).
+- `unreachable!()`s and `assert!`s the panic lints do not cover remain in awk's compiler
+  and VM and in sed; one of awk's was reachable (`sub(/a/,"b",length)`). bc's `run_bc`
+  parses its arguments a second time with `Args::parse_from`, which can exit the
+  process. Seen 2026-10-04 (ARCH-01).
+- `printf '%(%s)T' -1`, Bash's time format, fails with "format-error-invalid-spec":
+  cash's `printf` lacks `%(…)T`. Seen 2026-10-04.
 - `exec` with an option (`-a NAME`, `-c`, `-l`) in a subshell fails with "exec with
   options in subshell not yet supported", where Bash runs it: a subshell is in cash's own
   process, so its `exec` runs the command through `command`, which takes none of them.

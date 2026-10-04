@@ -73,14 +73,12 @@ fn divide_exact(a: &BigDecimal, b: &BigDecimal, scale: u64) -> Result<BigDecimal
     Ok(BigDecimal::new(numerator / denominator, scale as i64))
 }
 
-/// Converts a character to a number
-/// # Panics
-/// panics if the character is not a valid hexadecimal digit
-fn to_digit(c: u8) -> u8 {
+/// The value of a bc digit, `0`-`9` or `A`-`F`; `None` for any other character.
+const fn to_digit(c: u8) -> Option<u8> {
     match c {
-        b'0'..=b'9' => c - b'0',
-        b'A'..=b'F' => c - b'A' + 10,
-        _ => panic!("number has invalid digit {}", c as char),
+        b'0'..=b'9' => Some(c - b'0'),
+        b'A'..=b'F' => Some(c - b'A' + 10),
+        _ => None,
     }
 }
 
@@ -221,20 +219,17 @@ impl Number {
 
     /// Parse a number from a string in the given base.
     /// # Returns
-    /// `None` if the string contains invalid characters for the given base.
-    /// # Panics
-    /// panics if:
-    /// - the string is empty
-    /// - `base` is not in the range 2..=16.
-    /// - `s` does not contain a valid number
-    ///
-    /// all the above should have been already checked by the parser
+    /// `None` if the string is empty, `base` is not in the range 2..=16, or the
+    /// string contains characters that are not digits of `base` (the lexer only
+    /// produces digits and one point, so for its numbers that means a digit too
+    /// large for `ibase`).
     pub fn parse(s: &str, base: u64) -> Option<Number> {
-        assert!(!s.is_empty(), "parsed number has no digits");
-        assert!((2..=16).contains(&base), "base must be in the range 2..=16");
+        if s.is_empty() || !(2..=16).contains(&base) {
+            return None;
+        }
 
         for c in s.bytes() {
-            if c != b'.' && to_digit(c) >= base as u8 {
+            if c != b'.' && to_digit(c)? >= base as u8 {
                 return None;
             }
         }
@@ -245,7 +240,7 @@ impl Number {
 
         if let Some((int, decimal)) = s.split_once('.') {
             if !int.is_empty() {
-                integer_part = BigInt::from_str_radix(int, base as u32).unwrap().into();
+                integer_part = BigInt::from_str_radix(int, base as u32).ok()?.into();
             }
             max_scale = decimal.len() as u32;
             let mut nominator = BigInt::zero();
@@ -254,7 +249,7 @@ impl Number {
             for c in decimal.bytes() {
                 nominator *= base;
                 denominator *= base;
-                let digit = to_digit(c);
+                let digit = to_digit(c)?;
                 if digit != 0 {
                     nominator += digit;
                 }
@@ -265,7 +260,7 @@ impl Number {
             let scaled = nominator * ten_pow(max_scale as u64)?;
             fractional_part = BigDecimal::new(scaled / denominator, max_scale as i64);
         } else {
-            integer_part = BigInt::from_str_radix(s, base as u32).unwrap().into();
+            integer_part = BigInt::from_str_radix(s, base as u32).ok()?.into();
         }
 
         // In regards to the scale of parsed values, the standard doesn't specify.
@@ -465,6 +460,10 @@ impl From<u64> for Number {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::expect_used,
+    reason = "a failed assumption in a test should abort it loudly"
+)]
 mod tests {
     use super::*;
 
@@ -499,6 +498,21 @@ mod tests {
             "279.989"
         );
         assert_eq!(&Number::parse(".1B3A", 12).unwrap().to_string(10), ".1619");
+    }
+
+    #[test]
+    fn parse_rejects_what_is_not_a_number_in_the_base() {
+        // Each of these used to panic rather than say no.
+        assert!(Number::parse("", 10).is_none());
+        assert!(Number::parse("G", 16).is_none());
+        assert!(Number::parse("1x", 10).is_none());
+        assert!(Number::parse("1", 1).is_none());
+        assert!(Number::parse("1", 17).is_none());
+        assert!(Number::parse("A", 10).is_none());
+        assert_eq!(
+            Number::parse("F.8", 16).map(|n| n.to_string(10)).as_deref(),
+            Some("15.5")
+        );
     }
 
     #[test]

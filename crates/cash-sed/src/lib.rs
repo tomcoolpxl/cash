@@ -9,7 +9,8 @@
 // The workspace lints apply here as everywhere, the unsafe ones and rustc's warnings
 // included (REVIEW_REPORT.md ARCH-01); this crate came from uutils written to
 // other rules, so the style lints it was not written to are allowed rather than
-// rewritten, and the lints for code that can panic wait on TODO.md 14.5.
+// rewritten. The lints for code that can panic apply in full: what input can reach
+// is an error sed reports, and what cannot fail says why where it is.
 #![allow(
     elided_lifetimes_in_paths,
     missing_docs,
@@ -36,16 +37,6 @@
     clippy::use_self,
     clippy::useless_let_if_seq,
     reason = "uutils code, not written to the workspace's style lints"
-)]
-#![expect(
-    clippy::expect_used,
-    clippy::missing_panics_doc,
-    clippy::panic,
-    clippy::panic_in_result_fn,
-    clippy::string_slice,
-    clippy::unwrap_in_result,
-    clippy::unwrap_used,
-    reason = "panicking code from uutils, to be reviewed (TODO.md 14.5)"
 )]
 
 pub mod sed;

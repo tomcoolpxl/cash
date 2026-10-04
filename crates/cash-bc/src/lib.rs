@@ -14,7 +14,8 @@
 // The workspace lints apply here as everywhere, the unsafe ones and rustc's warnings
 // included (REVIEW_REPORT.md ARCH-01); this crate came from posixutils-rs written to
 // other rules, so the style lints it was not written to are allowed rather than
-// rewritten, and the lints for code that can panic wait on TODO.md 14.5.
+// rewritten. The lints for code that can panic apply in full: what input can reach
+// is an error bc reports, and what cannot fail says why where it is.
 #![allow(
     elided_lifetimes_in_paths,
     clippy::assigning_clones,
@@ -41,15 +42,6 @@
     clippy::useless_let_if_seq,
     clippy::wildcard_imports,
     reason = "posixutils-rs code, not written to the workspace's style lints"
-)]
-#![allow(
-    clippy::expect_used,
-    clippy::panic,
-    clippy::panic_in_result_fn,
-    clippy::string_slice,
-    clippy::unwrap_in_result,
-    clippy::unwrap_used,
-    reason = "panicking code from posixutils-rs, to be reviewed (TODO.md 14.5)"
 )]
 
 mod bc_util;

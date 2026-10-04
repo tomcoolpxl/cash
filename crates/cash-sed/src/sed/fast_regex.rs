@@ -46,7 +46,12 @@ fn byte_regex_pattern(pattern: &[u8]) -> String {
 // For example, r"\\1" and r"[\1]" will match, whereas only a number
 // after an odd number of backslashes and outside a character class
 // should match.
-static NEEDS_FANCY_RE: LazyLock<ByteRegex> = LazyLock::new(|| ByteRegex::new(r"\\[1-9]").unwrap());
+#[expect(
+    clippy::expect_used,
+    reason = "a constant pattern, which the tests compile"
+)]
+static NEEDS_FANCY_RE: LazyLock<ByteRegex> =
+    LazyLock::new(|| ByteRegex::new(r"\\[1-9]").expect("the pattern is a valid regex"));
 
 /// All characters signifying that the match must be handled by an RE
 /// rather than by plain string pattern matching.
@@ -55,6 +60,10 @@ static NEEDS_FANCY_RE: LazyLock<ByteRegex> = LazyLock::new(|| ByteRegex::new(r"\
 // matching, because Regex always constructs an automaton and needs
 // to handle state transitions, whereas plain string matching can
 // use tailored CPU string or vectored instructions.
+#[expect(
+    clippy::expect_used,
+    reason = "a constant pattern, which the tests compile"
+)]
 pub(crate) static NEEDS_RE: LazyLock<ByteRegex> = LazyLock::new(|| {
     ByteRegex::new(
         r"(?x) # Turn on verbose mode
@@ -74,7 +83,7 @@ pub(crate) static NEEDS_RE: LazyLock<ByteRegex> = LazyLock::new(|| {
            )
         ",
     )
-    .unwrap()
+    .expect("the pattern is a valid regex")
 });
 
 #[derive(Clone, Debug)]
@@ -328,16 +337,15 @@ fn sort_alternations_in_pattern_for(pat: &str, unicode: bool) -> String {
 /// Ensure that a regex matches GNU sed's default semantics for `.`
 /// through the appropriate use of the s flag.
 pub fn ensure_dotall(pattern: &str) -> String {
-    if pattern.starts_with("(?") {
-        let Some(close) = pattern.find(')') else {
+    if let Some(flags) = pattern.strip_prefix("(?") {
+        let Some((inner, rest)) = flags.split_once(')') else {
             return pattern.to_owned();
         };
-        let inner = &pattern[2..close];
         if inner.chars().all(|c| "imsux-".contains(c)) {
             if inner.contains('m') || inner.contains('s') {
                 return pattern.to_owned();
             } else {
-                return format!("(?{inner}s){}", &pattern[close + 1..]);
+                return format!("(?{inner}s){rest}");
             }
         }
     }
@@ -617,6 +625,10 @@ impl<'t> Captures<'t> {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::expect_used,
+    reason = "a failed assumption in a test should abort it loudly"
+)]
 mod tests {
     use super::*;
 

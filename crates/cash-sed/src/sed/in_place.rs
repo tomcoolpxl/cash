@@ -8,6 +8,7 @@
 // For the full copyright and license information, please view the LICENSE
 // file that was distributed with this source code.
 
+use std::ffi::OsStr;
 use std::fs;
 use std::io::stdout;
 use std::path::{Path, PathBuf};
@@ -87,9 +88,10 @@ impl InPlace {
         let temp_file = NamedTempFile::new_in(dir)
             .map_err_context(|| format!("error creating temporary file in {}", dir.quote()))?;
 
-        let output = OutputBuffer::new(Box::new(
-            temp_file.reopen().expect("reopening NamedTempFile"),
-        ));
+        let reopened = temp_file.reopen().map_err_context(|| {
+            format!("couldn't open temporary file {}", temp_file.path().quote())
+        })?;
+        let output = OutputBuffer::new(Box::new(reopened));
         self.output = output;
         self.temp_file = Some(temp_file);
         self.original_path = Some(file_name.to_path_buf());
@@ -105,16 +107,21 @@ impl InPlace {
             return Ok(());
         }
 
-        let orig = self.original_path.take().expect("original_path unset");
-        let temp = self.temp_file.take().expect("temp_file unset");
+        // Both are set by `begin` of an in-place edit; without them no edit was begun,
+        // and there is nothing to finish.
+        let (Some(orig), Some(temp)) = (self.original_path.take(), self.temp_file.take()) else {
+            return Ok(());
+        };
 
         // Backup original if suffix is provided
         if let Some(ref suffix) = self.in_place_suffix {
             let mut backup_path = orig.clone();
-            let file_name = backup_path
-                .file_name()
-                .expect("Missing file name for backup")
-                .to_os_string();
+            let Some(file_name) = backup_path.file_name().map(OsStr::to_os_string) else {
+                return Err(USimpleError::new(
+                    4,
+                    format!("cannot back up {}: it has no file name", orig.quote()),
+                ));
+            };
             let mut backup_name = file_name;
             backup_name.push(suffix);
             backup_path.set_file_name(backup_name);

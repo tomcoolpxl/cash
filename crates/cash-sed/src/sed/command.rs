@@ -180,7 +180,7 @@ impl ReplacementTemplate {
 
         Self {
             parts,
-            max_group_number: max_group_number.try_into().unwrap(),
+            max_group_number: max_group_number as usize,
         }
     }
 
@@ -214,7 +214,7 @@ impl ReplacementTemplate {
                 }
 
                 ReplacementPart::Group(n) => {
-                    let i: usize = (*n).try_into().unwrap();
+                    let i = *n as usize;
                     result
                         .extend_from_slice(caps.get(i)?.map(|m| m.as_bytes()).unwrap_or_default());
                 }
@@ -225,6 +225,11 @@ impl ReplacementTemplate {
     }
 
     /// Apply the template to the given RE single match.
+    ///
+    /// # Panics
+    ///
+    /// If the template refers to a group (`\1` to `\9`): a single match has none.
+    /// A template whose `max_group_number` is above 0 goes to `apply_captures`.
     pub fn apply_match(&self, m: &Match) -> Vec<u8> {
         let mut result = Vec::new();
 
@@ -234,6 +239,10 @@ impl ReplacementTemplate {
 
                 ReplacementPart::WholeMatch => result.extend_from_slice(m.as_bytes()),
 
+                #[expect(
+                    clippy::panic,
+                    reason = "the caller only uses a single match for a template without groups"
+                )]
                 ReplacementPart::Group(_) => {
                     panic!("unexpected Regex group replacement")
                 }
@@ -419,6 +428,10 @@ pub struct InputAction {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::expect_used,
+    reason = "a failed assumption in a test should abort it loudly"
+)]
 mod tests {
     use super::*;
     use crate::sed::fast_io::IOChunk;

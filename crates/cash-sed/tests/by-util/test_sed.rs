@@ -2399,3 +2399,45 @@ fn test_gnu_label_ended_by_a_blank() {
         .succeeds()
         .stdout_is("a\n");
 }
+
+/// What follows a comma or a `~` that cannot start an address is a script error, as
+/// GNU sed has it; sed panicked on it (TODO.md 14.6).
+#[test]
+fn test_no_address_after_a_comma_is_an_error() {
+    for (script, col) in [("1,xp", 3), ("$,xp", 3), ("1,p", 3), ("1, p", 4)] {
+        new_ucmd!()
+            .args(&["-n", script])
+            .fails()
+            .code_is(1)
+            .stderr_only(format!(
+                "sed: <script argument 1>:1:{col}: error: unexpected `,'\n"
+            ));
+    }
+    for script in ["1~p", "1,~p"] {
+        new_ucmd!()
+            .args(&["-n", script])
+            .fails()
+            .code_is(1)
+            .no_stdout()
+            .stderr_contains("error: expected context address");
+    }
+}
+
+/// A `\u` or `\U` escape whose value is no character, a surrogate or a value past
+/// U+10FFFF, is read as text, as an escape with too few digits is; sed panicked on it
+/// (TODO.md 14.6).
+#[test]
+fn test_escape_of_no_character_is_text() {
+    for (script, expected) in [
+        (r"s/a/\uD800/", "uD800\n"),
+        (r"s/a/\U00110000/", "U00110000\n"),
+        (r"s/a/\UFFFFFFFF/", "UFFFFFFFF\n"),
+        (r"s/a/\u12/", "u12\n"),
+    ] {
+        new_ucmd!()
+            .arg(script)
+            .pipe_in("a\n")
+            .succeeds()
+            .stdout_is(expected);
+    }
+}

@@ -18,6 +18,12 @@ const BASE_16_DIGITS_UPPER: [char; 16] = [
     '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F',
 ];
 
+/// Append formatted text to `target`.
+fn push_fmt(target: &mut String, args: std::fmt::Arguments<'_>) {
+    // Writing to a `String` never fails.
+    let _ = target.write_fmt(args);
+}
+
 fn integer_hex_prefix_str(integer_format: IntegerFormat, args: &FormatArgs) -> &'static str {
     if args.alternative_form {
         if integer_format == IntegerFormat::HexLower {
@@ -92,17 +98,19 @@ fn swap_sign_in_front_of_number(target: &mut String, sign: &str, write_starting_
     // sign is ASCII or empty string
     assert!(sign.len() <= 1);
     if !sign.is_empty() {
+        let written = target
+            .as_bytes()
+            .get(write_starting_index..)
+            .unwrap_or_default();
         // sign is the first character in the string
-        assert_eq!(
-            target[write_starting_index..write_starting_index + 1],
-            *sign
-        );
+        assert_eq!(written.first(), sign.as_bytes().first());
 
         let sign_index = write_starting_index;
-        // we know that at least one digit is written, so we can safely unwrap
-        let first_digit_in_substring = target[write_starting_index..]
-            .find(|c: char| c.is_ascii_digit())
-            .unwrap();
+        // A finite number writes at least one digit; with none there is nothing to
+        // move the sign in front of.
+        let Some(first_digit_in_substring) = written.iter().position(u8::is_ascii_digit) else {
+            return;
+        };
         let final_sign_index = write_starting_index + first_digit_in_substring - 1;
 
         // the first byte before the start of the number is ASCII
@@ -121,8 +129,10 @@ fn gather_exponent(target: &mut String) -> ([u8; 5], usize) {
     // (4 = ceil(log10(2^11)), where 11 is the number of bits in the exponent of an f64)
     let mut exponent_buffer = [0u8; 5];
     let mut exponent_buffer_length = 0;
-    while matches!(target.as_bytes().last(), Some(c) if *c != b'e') {
-        exponent_buffer[exponent_buffer_length] = target.pop().unwrap() as u8;
+    // What follows the 'e' is ASCII, so each popped character is the byte looked at.
+    while let Some(&c) = target.as_bytes().last().filter(|c| **c != b'e') {
+        target.pop();
+        exponent_buffer[exponent_buffer_length] = c;
         exponent_buffer_length += 1;
     }
     // pop the 'e' character
@@ -184,11 +194,11 @@ fn base_scientific_float_format(
     let write_starting_index = target.len();
     target.push_str(sign);
     if args.left_justified {
-        write!(target, "{:.1$e}", value, precision).expect("error writing to string");
+        push_fmt(target, format_args!("{:.1$e}", value, precision));
     } else if args.zero_padded {
-        write!(target, "{:01$.2$e}", value, width, precision).expect("error writing to string")
+        push_fmt(target, format_args!("{:01$.2$e}", value, width, precision))
     } else {
-        write!(target, "{:1$.2$e}", value, width, precision).expect("error writing to string");
+        push_fmt(target, format_args!("{:1$.2$e}", value, width, precision));
         swap_sign_in_front_of_number(target, sign, write_starting_index);
     }
 }
@@ -256,13 +266,8 @@ pub fn parse_conversion_specifier_args(iter: &mut Chars) -> Result<(char, Format
 
     let parse_number = |next: &mut char, iter: &mut Chars| -> Result<usize, String> {
         let mut number = 0;
-        loop {
-            match *next {
-                c if c.is_ascii_digit() => {
-                    number = number * 10 + c.to_digit(10).unwrap() as usize;
-                }
-                _ => break,
-            }
+        while let Some(digit) = next.to_digit(10) {
+            number = number * 10 + digit as usize;
             *next = iter_next(iter)?;
         }
         Ok(number)
@@ -590,7 +595,7 @@ pub fn fmt_write_decimal_float(
 
     if args.left_justified {
         target.push_str(sign);
-        write!(target, "{:.1$}", value, precision).expect("error writing to string");
+        push_fmt(target, format_args!("{:.1$}", value, precision));
         if should_add_dot_after_number {
             target.push(decimal_point());
         }
@@ -599,10 +604,10 @@ pub fn fmt_write_decimal_float(
     } else {
         if args.zero_padded {
             target.push_str(sign);
-            write!(target, "{:01$.2$}", value, width, precision).expect("error writing to string");
+            push_fmt(target, format_args!("{:01$.2$}", value, width, precision));
         } else {
             target.push_str(sign);
-            write!(target, "{:1$.2$}", value, width, precision).expect("error writing to string");
+            push_fmt(target, format_args!("{:1$.2$}", value, width, precision));
             swap_sign_in_front_of_number(target, sign, write_starting_index);
         }
         if should_add_dot_after_number {
@@ -776,14 +781,17 @@ pub fn fmt_write_special_float(
 
 pub fn fmt_write_string(target: &mut String, value: &str, args: &FormatArgs) {
     let precision = args.precision.unwrap_or(usize::MAX);
-    let str_len = value.len().min(precision);
+    // Width and precision count bytes. A precision that ends inside a character stops
+    // before that character rather than cutting it (`%.1s` of "é" panicked).
+    let str_len = value.floor_char_boundary(value.len().min(precision));
+    let shown = value.get(..str_len).unwrap_or_default();
     let padding = args.width.saturating_sub(str_len);
     if args.left_justified {
-        target.push_str(&value[..str_len]);
+        target.push_str(shown);
         pad_target(target, padding, b' ');
     } else {
         pad_target(target, padding, b' ');
-        target.push_str(&value[..str_len]);
+        target.push_str(shown);
     }
 }
 

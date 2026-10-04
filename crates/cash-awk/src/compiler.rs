@@ -241,8 +241,27 @@ fn pest_error_from_span(span: pest::Span, message: String) -> PestError {
     PestError::new_from_span(pest::error::ErrorVariant::CustomError { message }, span)
 }
 
+/// Taking the children of a parse-tree node that its grammar rule requires.
+trait GrammarChildren<'i> {
+    /// The next child, one the node's rule always has.
+    fn child(&mut self) -> Pair<'i, Rule>;
+}
+
+impl<'i> GrammarChildren<'i> for Pairs<'i, Rule> {
+    #[expect(
+        clippy::expect_used,
+        reason = "callers take only the children their rule's grammar requires; optional \
+                  parts, and a statement that may be the silent `empty_stmt`, are taken \
+                  with `next`"
+    )]
+    fn child(&mut self) -> Pair<'i, Rule> {
+        self.next()
+            .expect("the grammar rule of a parsed node guarantees this child")
+    }
+}
+
 fn first_child(pair: Pair<Rule>) -> Pair<Rule> {
-    pair.into_inner().next().unwrap()
+    pair.into_inner().child()
 }
 
 fn distance(start: usize, end: usize) -> i32 {
@@ -272,15 +291,14 @@ pub fn escape_string_contents(s: &str) -> Result<Rc<str>, String> {
                     'v' => '\x0B',
                     '\\' => '\\',
                     n if is_octal_digit(n) => {
-                        let mut char_code = n.to_digit(8).unwrap();
+                        let mut char_code = u32::from(n) - u32::from('0');
                         for _ in 0..2 {
-                            if let Some(&c) = chars.peek() {
-                                if is_octal_digit(c) {
-                                    char_code = char_code * 8 + c.to_digit(8).unwrap();
+                            match chars.peek().and_then(|c| c.to_digit(8)) {
+                                Some(digit) => {
+                                    char_code = char_code * 8 + digit;
                                     chars.next();
-                                } else {
-                                    break;
                                 }
+                                None => break,
                             }
                         }
                         char::from_u32(char_code).ok_or("invalid character".to_string())?
@@ -306,33 +324,46 @@ fn post_increment(val: &Cell<u32>) -> u32 {
     result
 }
 
-fn parse_float(val: &str) -> f64 {
+/// The value of a number literal, or `None` if it does not start with one.
+fn parse_float(val: &str) -> Option<f64> {
     lexical::parse_partial_with_options::<f64, _, { lexical::format::C_LITERAL }>(
         val,
         &lexical::ParseFloatOptions::default(),
     )
-    .unwrap()
-    .0
+    .ok()
+    .map(|(value, _)| value)
 }
 
-fn lvalue_to_scalar_ref(instructions: &mut [OpCode]) {
-    let last_ref = instructions
-        .last_mut()
-        .expect("lvalue expression has no instructions");
-    match *last_ref {
-        OpCode::GetGlobal(ref id) => *last_ref = OpCode::GlobalScalarRef(*id),
-        OpCode::GetLocal(ref id) => *last_ref = OpCode::LocalScalarRef(*id),
-        OpCode::GetField => *last_ref = OpCode::FieldRef,
-        OpCode::IndexArrayGetValue => *last_ref = OpCode::IndexArrayGetRef,
-        _ => unreachable!(),
+/// Turn the instructions that read a variable, a field or an array element into those
+/// that take a reference to it. Fails with `message` at `span` for anything else,
+/// which cannot be assigned to: `sub(/a/, "b", length)` or `1 in 2`.
+fn lvalue_to_scalar_ref(
+    instructions: &mut [OpCode],
+    span: pest::Span,
+    message: &str,
+) -> Result<(), PestError> {
+    let reference = match instructions.last() {
+        Some(OpCode::GetGlobal(id)) => OpCode::GlobalScalarRef(*id),
+        Some(OpCode::GetLocal(id)) => OpCode::LocalScalarRef(*id),
+        Some(OpCode::GetField) => OpCode::FieldRef,
+        Some(OpCode::IndexArrayGetValue) => OpCode::IndexArrayGetRef,
+        _ => return Err(pest_error_from_span(span, message.to_string())),
+    };
+    if let Some(last) = instructions.last_mut() {
+        *last = reference;
     }
+    Ok(())
 }
+
+/// The message for an operand that should be an lvalue and is not.
+const NOT_AN_LVALUE: &str = "operand should be an lvalue";
 
 fn normalize_builtin_function_arguments(
     function: BuiltinFunction,
     mut args: Vec<Instructions>,
+    span: pest::Span,
     line_col: (usize, usize),
-) -> (Instructions, u16) {
+) -> Result<(Instructions, u16), PestError> {
     let flatten = |args: Vec<Instructions>| {
         args.into_iter()
             .fold(Instructions::default(), |mut acc, i| {
@@ -341,20 +372,17 @@ fn normalize_builtin_function_arguments(
             })
     };
     let argc = args.len() as u16;
-    match function {
-        BuiltinFunction::Length => {
-            if args.is_empty() {
-                (
-                    Instructions::from_instructions_and_line_col(
-                        vec![OpCode::PushZero, OpCode::GetField],
-                        line_col,
-                    ),
-                    1,
-                )
-            } else {
-                (args.into_iter().next().unwrap(), 1)
-            }
-        }
+    let normalized = match function {
+        BuiltinFunction::Length => match args.into_iter().next() {
+            Some(arg) => (arg, 1),
+            None => (
+                Instructions::from_instructions_and_line_col(
+                    vec![OpCode::PushZero, OpCode::GetField],
+                    line_col,
+                ),
+                1,
+            ),
+        },
         BuiltinFunction::Split => {
             // put the array as the first argument
             args[0..2].rotate_right(1);
@@ -370,12 +398,19 @@ fn normalize_builtin_function_arguments(
                 (instructions, 3)
             } else {
                 args.rotate_right(1);
-                lvalue_to_scalar_ref(&mut args[0].opcodes);
+                // gawk's words for a target that cannot be assigned to.
+                let message = if function == BuiltinFunction::Sub {
+                    "sub third parameter is not a changeable object"
+                } else {
+                    "gsub third parameter is not a changeable object"
+                };
+                lvalue_to_scalar_ref(&mut args[0].opcodes, span, message)?;
                 (flatten(args), 3)
             }
         }
         _ => (flatten(args), argc),
-    }
+    };
+    Ok(normalized)
 }
 
 #[cfg_attr(test, derive(Debug))]
@@ -626,7 +661,9 @@ impl Compiler {
                 ))
             }
             Rule::number => {
-                let num = parse_float(primary.as_str());
+                let num = parse_float(primary.as_str()).ok_or_else(|| {
+                    pest_error_from_span(primary.as_span(), "invalid number".to_string())
+                })?;
                 let index = self.push_constant(Constant::Number(num));
                 Ok(Expr::new(
                     ExprKind::Number,
@@ -659,7 +696,7 @@ impl Compiler {
                 let span = primary.as_span();
                 let line_col = primary.line_col();
                 let mut inner = primary.into_inner();
-                let name = inner.next().unwrap().as_str();
+                let name = inner.child().as_str();
                 let mut instructions = Instructions::default();
                 let argc = self.compile_function_args(inner, &mut instructions, span, locals)?;
                 match self.names.borrow().get(name) {
@@ -702,7 +739,7 @@ impl Compiler {
                 let span = primary.as_span();
                 let line_col = primary.line_col();
                 let mut inner = primary.into_inner();
-                let function = inner.next().unwrap();
+                let function = inner.child();
                 let mut args = Vec::new();
                 for arg in inner {
                     let mut arg_instructions = Instructions::default();
@@ -716,12 +753,19 @@ impl Compiler {
                     }
                 }
                 let argc = args.len() as u16;
-                let fn_info = BUILTIN_FUNCTIONS
-                    .get(&function.as_rule())
-                    .expect("missing builtin");
+                let fn_info = BUILTIN_FUNCTIONS.get(&function.as_rule()).ok_or_else(|| {
+                    pest_error_from_span(
+                        span,
+                        format!("unknown builtin function '{}'", function.as_str()),
+                    )
+                })?;
                 if (fn_info.min_args..=fn_info.max_args).contains(&argc) {
-                    let (mut instructions, argc) =
-                        normalize_builtin_function_arguments(fn_info.function, args, line_col);
+                    let (mut instructions, argc) = normalize_builtin_function_arguments(
+                        fn_info.function,
+                        args,
+                        span,
+                        line_col,
+                    )?;
                     instructions.push(
                         OpCode::CallBuiltin {
                             function: fn_info.function,
@@ -770,7 +814,7 @@ impl Compiler {
                         "operand should be an lvalue".to_string(),
                     ));
                 }
-                lvalue_to_scalar_ref(&mut instructions.opcodes);
+                lvalue_to_scalar_ref(&mut instructions.opcodes, op.as_span(), NOT_AN_LVALUE)?;
                 if op.as_rule() == Rule::pre_inc {
                     instructions.push(OpCode::PreInc, op.line_col());
                 } else {
@@ -783,7 +827,12 @@ impl Compiler {
     }
 
     fn map_postfix(&self, lhs: Expr, op: Pair<Rule>) -> Result<Expr, PestError> {
-        assert!(op.as_rule() == Rule::post_inc || op.as_rule() == Rule::post_dec);
+        // `post_inc` and `post_dec` are the grammar's only postfix operators.
+        let opcode = if op.as_rule() == Rule::post_inc {
+            OpCode::PostInc
+        } else {
+            OpCode::PostDec
+        };
         let kind = lhs.kind;
         let mut instructions = lhs.instructions;
         if kind != ExprKind::LValue {
@@ -792,12 +841,8 @@ impl Compiler {
                 "operand should be an lvalue".to_string(),
             ));
         }
-        lvalue_to_scalar_ref(&mut instructions.opcodes);
-        if op.as_rule() == Rule::post_inc {
-            instructions.push(OpCode::PostInc, op.line_col());
-        } else {
-            instructions.push(OpCode::PostDec, op.line_col());
-        }
+        lvalue_to_scalar_ref(&mut instructions.opcodes, op.as_span(), NOT_AN_LVALUE)?;
+        instructions.push(opcode, op.line_col());
         Ok(Expr::new(ExprKind::Number, instructions))
     }
 
@@ -830,7 +875,11 @@ impl Compiler {
             Rule::in_op => {
                 let lhs_instructions = instructions;
                 let mut instructions = rhs.instructions;
-                lvalue_to_scalar_ref(&mut instructions.opcodes);
+                lvalue_to_scalar_ref(
+                    &mut instructions.opcodes,
+                    op.as_span(),
+                    "the right side of 'in' should be an array",
+                )?;
                 instructions.extend(lhs_instructions);
                 instructions.push(OpCode::In, op.line_col());
                 return Ok(Expr::new(ExprKind::Number, instructions));
@@ -920,6 +969,18 @@ impl Compiler {
             .parse(expr)
     }
 
+    /// Compile an lvalue into the instructions that take a reference to it.
+    fn compile_lvalue_ref(
+        &self,
+        lvalue: Pair<Rule>,
+        instructions: &mut Instructions,
+        locals: &LocalMap,
+    ) -> Result<(), PestError> {
+        let span = lvalue.as_span();
+        self.compile_lvalue(lvalue, instructions, locals)?;
+        lvalue_to_scalar_ref(&mut instructions.opcodes, span, NOT_AN_LVALUE)
+    }
+
     fn compile_lvalue(
         &self,
         lvalue: Pair<Rule>,
@@ -937,7 +998,7 @@ impl Compiler {
             }
             Rule::array_element => {
                 let mut inner = lvalue.into_inner();
-                let name = inner.next().unwrap();
+                let name = inner.child();
                 let get_instruction = self
                     .get_var(name.as_str(), locals)
                     .map_err(|msg| pest_error_from_span(name.as_span(), msg))?;
@@ -963,6 +1024,7 @@ impl Compiler {
         let mut prefix_ops = Vec::new();
         let mut primary_pair = None;
         let mut postfix_ops = Vec::new();
+        let span = field_var.as_span();
 
         for child in field_var.into_inner() {
             match child.as_rule() {
@@ -980,7 +1042,9 @@ impl Compiler {
             }
         }
 
-        let primary = primary_pair.expect("field_var missing primary");
+        let primary = primary_pair.ok_or_else(|| {
+            pest_error_from_span(span, "expected an expression after `$`".to_string())
+        })?;
         let mut expr = self.map_primary(primary, locals)?;
 
         // Apply postfix ops first (they bind tighter to the primary)
@@ -1002,7 +1066,7 @@ impl Compiler {
         instructions: &mut Instructions,
         locals: &LocalMap,
     ) -> Result<(), PestError> {
-        let first_index = index.next().unwrap();
+        let first_index = index.child();
         self.compile_expr(first_index, instructions, locals)?;
         if let Some(second_index) = index.next() {
             let second_index_line_col = second_index.line_col();
@@ -1040,8 +1104,8 @@ impl Compiler {
             }
             Rule::multidimensional_in => {
                 let mut inner = expr.into_inner();
-                let index = inner.next().unwrap();
-                let name = inner.next().unwrap();
+                let index = inner.child();
+                let name = inner.child();
                 let get_instruction = self
                     .get_var(name.as_str(), locals)
                     .map_err(|msg| pest_error_from_span(name.as_span(), msg))?;
@@ -1067,8 +1131,7 @@ impl Compiler {
         match input_function.as_rule() {
             Rule::simple_getline => {
                 if let Some(lvalue) = input_function.into_inner().next() {
-                    self.compile_lvalue(lvalue, instructions, locals)?;
-                    lvalue_to_scalar_ref(&mut instructions.opcodes);
+                    self.compile_lvalue_ref(lvalue, instructions, locals)?;
                 } else {
                     instructions.extend(Instructions::from_instructions_and_line_col(
                         vec![OpCode::PushZero, OpCode::FieldRef],
@@ -1086,11 +1149,10 @@ impl Compiler {
             Rule::getline_from_file | Rule::getline_from_file_cmp => {
                 let is_cmp = input_function.as_rule() == Rule::getline_from_file_cmp;
                 let mut inner = input_function.into_inner();
-                let lvalue = inner.next().unwrap();
+                let lvalue = inner.child();
                 let file = if lvalue.as_rule() == Rule::lvalue {
-                    self.compile_lvalue(lvalue, instructions, locals)?;
-                    lvalue_to_scalar_ref(&mut instructions.opcodes);
-                    inner.next().unwrap()
+                    self.compile_lvalue_ref(lvalue, instructions, locals)?;
+                    inner.child()
                 } else {
                     instructions.extend(Instructions::from_instructions_and_line_col(
                         vec![OpCode::PushZero, OpCode::FieldRef],
@@ -1108,8 +1170,8 @@ impl Compiler {
                     line_col,
                 );
                 if is_cmp {
-                    let comp = first_child(inner.next().unwrap());
-                    self.compile_expr(inner.next().unwrap(), instructions, locals)?;
+                    let comp = first_child(inner.child());
+                    self.compile_expr(inner.child(), instructions, locals)?;
                     let op = match comp.as_rule() {
                         Rule::lt => OpCode::Lt,
                         Rule::le => OpCode::Le,
@@ -1124,7 +1186,7 @@ impl Compiler {
             }
             Rule::getline_from_pipe => {
                 let mut inner = input_function.into_inner();
-                let unpiped_expr = inner.next().unwrap();
+                let unpiped_expr = inner.child();
                 let mut lvalues = Vec::new();
                 for piped_getline in inner {
                     lvalues.push(piped_getline.into_inner().next());
@@ -1132,8 +1194,7 @@ impl Compiler {
                 let getline_count = lvalues.len();
                 for lvalue in lvalues.into_iter().rev() {
                     if let Some(lvalue) = lvalue {
-                        self.compile_lvalue(lvalue.clone(), instructions, locals)?;
-                        lvalue_to_scalar_ref(&mut instructions.opcodes);
+                        self.compile_lvalue_ref(lvalue.clone(), instructions, locals)?;
                     } else {
                         instructions.extend(Instructions::from_instructions_and_line_col(
                             vec![OpCode::PushZero, OpCode::FieldRef],
@@ -1167,12 +1228,11 @@ impl Compiler {
         match expr.as_rule() {
             Rule::assignment | Rule::print_assignment => {
                 let mut inner = expr.into_inner();
-                self.compile_lvalue(inner.next().unwrap(), instructions, locals)?;
-                lvalue_to_scalar_ref(&mut instructions.opcodes);
-                let assignment_op = first_child(inner.next().unwrap());
+                self.compile_lvalue_ref(inner.child(), instructions, locals)?;
+                let assignment_op = first_child(inner.child());
                 if assignment_op.as_rule() != Rule::assign {
                     instructions.push(OpCode::Dup, assignment_op.line_col());
-                    self.compile_expr(inner.next().unwrap(), instructions, locals)?;
+                    self.compile_expr(inner.child(), instructions, locals)?;
                     match assignment_op.as_rule() {
                         Rule::add_assign => {
                             instructions.push(OpCode::Add, assignment_op.line_col())
@@ -1195,7 +1255,7 @@ impl Compiler {
                         _ => unreachable!(),
                     }
                 } else {
-                    self.compile_expr(inner.next().unwrap(), instructions, locals)?;
+                    self.compile_expr(inner.child(), instructions, locals)?;
                 }
 
                 instructions.push(OpCode::Assign, assignment_op.line_col());
@@ -1203,16 +1263,16 @@ impl Compiler {
             Rule::ternary_expr | Rule::ternary_print_expr => {
                 let line_col = expr.line_col();
                 let mut inner = expr.into_inner();
-                self.compile_binary_expr(inner.next().unwrap(), instructions, locals)?;
+                self.compile_binary_expr(inner.child(), instructions, locals)?;
                 let mut true_expr_instructions = Instructions::default();
-                self.compile_expr(inner.next().unwrap(), &mut true_expr_instructions, locals)?;
+                self.compile_expr(inner.child(), &mut true_expr_instructions, locals)?;
                 instructions.push(
                     OpCode::JumpIfFalse(true_expr_instructions.len() as i32 + 2),
                     line_col,
                 );
                 instructions.extend(true_expr_instructions);
                 let mut false_expr_instructions = Instructions::default();
-                self.compile_expr(inner.next().unwrap(), &mut false_expr_instructions, locals)?;
+                self.compile_expr(inner.child(), &mut false_expr_instructions, locals)?;
                 instructions.push(
                     OpCode::Jump(false_expr_instructions.len() as i32 + 1),
                     line_col,
@@ -1241,10 +1301,11 @@ impl Compiler {
     ) -> Result<(), PestError> {
         let stmt = first_child(simple_stmt);
         let stmt_line_col = stmt.line_col();
+        let stmt_span = stmt.as_span();
         match stmt.as_rule() {
             Rule::array_delete => {
                 let mut inner = stmt.into_inner();
-                let name = inner.next().unwrap();
+                let name = inner.child();
                 let get_instruction = self
                     .get_var(name.as_str(), locals)
                     .map_err(|msg| pest_error_from_span(name.as_span(), msg))?;
@@ -1262,7 +1323,7 @@ impl Compiler {
             }
             Rule::print_stmt => {
                 let mut inner = stmt.into_inner();
-                let print = inner.next().unwrap();
+                let print = inner.child();
                 let mut print_function;
                 let mut argc;
                 match print.as_rule() {
@@ -1275,8 +1336,14 @@ impl Compiler {
                         let expressions = print.into_inner();
                         argc = expressions.len() as u16;
                         if expressions.is_empty() {
-                            // if it has no arguments it cannot be printf
-                            assert!(!is_printf);
+                            // The grammar gives printf at least its format; gawk's words
+                            // for one without.
+                            if is_printf {
+                                return Err(pest_error_from_span(
+                                    stmt_span,
+                                    "printf: no format".to_string(),
+                                ));
+                            }
                             print_function = BuiltinFunction::Print;
                             instructions.push(OpCode::PushZero, stmt_line_col);
                             instructions.push(OpCode::GetField, stmt_line_col);
@@ -1350,11 +1417,18 @@ impl Compiler {
 
         self.loop_stack.push(LoopStubs::default());
 
-        let body = inner.next().unwrap();
-        self.compile_stmt(body, instructions, locals)?;
+        // An empty body (`do ; while (c)`) is the silent `empty_stmt`, which leaves no
+        // node, so the condition is the last child rather than the second.
+        let first = inner.child();
+        let condition = match inner.next() {
+            Some(condition) => {
+                self.compile_stmt(first, instructions, locals)?;
+                condition
+            }
+            None => first,
+        };
 
         let condition_start = instructions.len();
-        let condition = inner.next().unwrap();
         let condition_line_col = condition.line_col();
         self.compile_expr(condition, instructions, locals)?;
         instructions.push(
@@ -1363,7 +1437,7 @@ impl Compiler {
         );
 
         // `continue` re-tests the condition, as in C.
-        let loop_stubs = self.loop_stack.pop().unwrap();
+        let loop_stubs = self.loop_stack.pop().unwrap_or_default();
         for stub in loop_stubs.break_stubs {
             instructions.opcodes[stub] = OpCode::Jump(distance(stub, instructions.len()));
         }
@@ -1382,17 +1456,17 @@ impl Compiler {
     ) -> Result<(), PestError> {
         let mut inner = for_each_stmt.into_inner();
 
-        let iter_var = inner.next().unwrap();
+        let iter_var = inner.child();
         let iter_var_get_stmt = self
             .get_var(iter_var.as_str(), locals)
             .map_err(|msg| pest_error_from_span(iter_var.as_span(), msg))?;
         instructions.push(iter_var_get_stmt, iter_var.line_col());
-        lvalue_to_scalar_ref(&mut instructions.opcodes);
+        lvalue_to_scalar_ref(&mut instructions.opcodes, iter_var.as_span(), NOT_AN_LVALUE)?;
 
         // skip in_op node from grammar
-        let next = inner.next().unwrap();
+        let next = inner.child();
         let array_var = if next.as_rule() == Rule::in_op {
-            inner.next().unwrap()
+            inner.child()
         } else {
             next
         };
@@ -1429,7 +1503,7 @@ impl Compiler {
         // The iterator stays on the stack while the body runs; `AdvanceIterOrJump` pops
         // it when the keys run out. A `break` leaves early, so it lands on a `Pop` of
         // its own, which the exhausted iterator jumps over.
-        let loop_stubs = self.loop_stack.pop().unwrap();
+        let loop_stubs = self.loop_stack.pop().unwrap_or_default();
         if !loop_stubs.break_stubs.is_empty() {
             let break_landing = instructions.len();
             instructions.push(OpCode::Pop, array_var_line_col);
@@ -1458,13 +1532,13 @@ impl Compiler {
         self.loop_stack.push(LoopStubs::default());
 
         // Any of the three clauses may be empty; an empty condition loops until `break`.
-        let init = inner.next().unwrap();
+        let init = inner.child();
         if let Some(init) = init.into_inner().next() {
             self.compile_simple_statement(init, instructions, locals)?;
         }
 
         let condition_start = instructions.len();
-        let condition = inner.next().unwrap();
+        let condition = inner.child();
         let condition_line_col = condition.line_col();
         let for_jump_index = match condition.into_inner().next() {
             Some(condition) => {
@@ -1476,9 +1550,11 @@ impl Compiler {
             None => None,
         };
 
-        let update = inner.next().unwrap();
-        let body = inner.next().unwrap();
-        self.compile_stmt(body, instructions, locals)?;
+        let update = inner.child();
+        // An empty body (`for (;;) ;`) is the silent `empty_stmt`, which leaves no node.
+        if let Some(body) = inner.next() {
+            self.compile_stmt(body, instructions, locals)?;
+        }
         let update_start = instructions.len();
         if let Some(update) = update.into_inner().next() {
             self.compile_simple_statement(update, instructions, locals)?;
@@ -1492,7 +1568,7 @@ impl Compiler {
                 OpCode::JumpIfFalse(distance(for_jump_index, instructions.len()));
         }
 
-        let loop_stubs = self.loop_stack.pop().unwrap();
+        let loop_stubs = self.loop_stack.pop().unwrap_or_default();
         for stub in loop_stubs.break_stubs {
             instructions.opcodes[stub] = OpCode::Jump(distance(stub, instructions.len()));
         }
@@ -1514,7 +1590,7 @@ impl Compiler {
         self.loop_stack.push(LoopStubs::default());
 
         let condition_start = instructions.len();
-        let condition = inner.next().unwrap();
+        let condition = inner.child();
         let condition_line_col = condition.line_col();
         self.compile_expr(condition, instructions, locals)?;
         let while_jump_index = instructions.len();
@@ -1531,7 +1607,7 @@ impl Compiler {
         instructions.opcodes[while_jump_index] =
             OpCode::JumpIfFalse(distance(while_jump_index, instructions.len()));
 
-        let loop_stubs = self.loop_stack.pop().unwrap();
+        let loop_stubs = self.loop_stack.pop().unwrap_or_default();
         for stub in loop_stubs.break_stubs {
             instructions.opcodes[stub] = OpCode::Jump(distance(stub, instructions.len()));
         }
@@ -1549,15 +1625,17 @@ impl Compiler {
     ) -> Result<(), PestError> {
         let mut inner = if_stmt.into_inner();
 
-        let condition = inner.next().unwrap();
+        let condition = inner.child();
         let condition_line_col = condition.line_col();
         self.compile_expr(condition, instructions, locals)?;
 
         let if_jump_index = instructions.len();
         instructions.push(OpCode::Invalid, condition_line_col);
 
-        let body = inner.next().unwrap();
-        self.compile_stmt(body, instructions, locals)?;
+        // An empty body (`if (c) ;`) is the silent `empty_stmt`, which leaves no node.
+        if let Some(body) = inner.next() {
+            self.compile_stmt(body, instructions, locals)?;
+        }
 
         if let Some(else_body) = inner.next() {
             let else_jump_index = instructions.len();
@@ -1682,11 +1760,11 @@ impl Compiler {
             Rule::range_pattern => {
                 let mut inner = pattern.into_inner();
 
-                let start = inner.next().unwrap();
+                let start = inner.child();
                 let mut start_instructions = Instructions::default();
                 self.compile_expr(start, &mut start_instructions, &HashMap::new())?;
 
-                let end = inner.next().unwrap();
+                let end = inner.child();
                 let mut end_instructions = Instructions::default();
                 self.compile_expr(end, &mut end_instructions, &HashMap::new())?;
 
@@ -1715,8 +1793,8 @@ impl Compiler {
             }
             Rule::pattern_and_action => {
                 let mut inner = rule.into_inner();
-                let pattern = self.compile_normal_pattern(inner.next().unwrap(), file.clone())?;
-                let action = inner.next().unwrap();
+                let pattern = self.compile_normal_pattern(inner.child(), file.clone())?;
+                let action = inner.child();
                 let mut instructions = Instructions::default();
                 let locals = HashMap::new();
                 self.compile_action(action, &mut instructions, &locals)?;
@@ -1754,10 +1832,10 @@ impl Compiler {
         file: Rc<str>,
     ) -> Result<Function, PestError> {
         let mut inner = function.into_inner();
-        let name = inner.next().unwrap();
+        let name = inner.child();
         let mut param_map = HashMap::new();
         let mut parameters_count = 0;
-        let maybe_param_list = inner.next().unwrap();
+        let maybe_param_list = inner.child();
         let body = if maybe_param_list.as_rule() == Rule::param_list {
             for param in maybe_param_list.into_inner() {
                 match self.names.get_mut().get(param.as_str()) {
@@ -1773,7 +1851,7 @@ impl Compiler {
                 param_map.insert(param.as_str().to_string(), parameters_count as u32);
                 parameters_count += 1;
             }
-            inner.next().unwrap()
+            inner.child()
         } else {
             maybe_param_list
         };
@@ -1809,8 +1887,8 @@ impl Compiler {
         for item in program {
             if item.as_rule() == Rule::function_definition {
                 let mut inner = item.into_inner();
-                let name = inner.next().unwrap();
-                let maybe_parameter_list = inner.next().unwrap();
+                let name = inner.child();
+                let maybe_parameter_list = inner.child();
                 let parameter_count = if maybe_parameter_list.as_rule() == Rule::param_list {
                     maybe_parameter_list.into_inner().count() as u32
                 } else {
@@ -1885,9 +1963,14 @@ fn gather_errors(first_error: PestError, source: &str, errors: &mut Vec<PestErro
     errors.push(improve_error(first_error, file));
     let mut parsing_start = first_error_end;
 
-    while let Some(checkpoint_offset) = next_checkpoint(&source[parsing_start..]) {
+    // Pest's error positions and the checkpoints are character boundaries, so `get`
+    // finds the rest of the source; it ends the search should one not be.
+    while let Some(checkpoint_offset) = source.get(parsing_start..).and_then(next_checkpoint) {
         parsing_start += checkpoint_offset;
-        match AwkParser::parse(Rule::program, &source[parsing_start..]) {
+        let Some(rest) = source.get(parsing_start..) else {
+            break;
+        };
+        match AwkParser::parse(Rule::program, rest) {
             Ok(_) => break,
             Err(err) => errors.push(improve_error(err, file)),
         }
@@ -1915,7 +1998,7 @@ pub fn compile_program(sources: &[SourceFile]) -> Result<Program, CompilerErrors
         let filename: Rc<str> = source_file.filename.clone().into();
         match AwkParser::parse(Rule::program, &source_file.contents) {
             Ok(mut program) => {
-                let program = program.next().unwrap();
+                let program = program.child();
                 parsed_sources.push((filename, program.into_inner()));
             }
             Err(err) => {
@@ -2042,6 +2125,10 @@ fn translate_ere_escapes(ere: &str) -> String {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::expect_used,
+    reason = "a failed assumption in a test should abort it loudly"
+)]
 mod test {
 
     use super::*;

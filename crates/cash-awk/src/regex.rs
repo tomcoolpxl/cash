@@ -179,7 +179,15 @@ impl PartialEq for Regex {
 }
 
 /// utility function for writing tests
+///
+/// # Panics
+///
+/// If `re` is not a valid regex: the test written with it is wrong.
 #[cfg(test)]
+#[expect(
+    clippy::expect_used,
+    reason = "a test helper: a bad pattern should fail the test loudly"
+)]
 pub fn regex_from_str(re: &str) -> Regex {
     Regex::new(re).expect("error compiling ere")
 }

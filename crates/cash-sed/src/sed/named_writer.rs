@@ -8,7 +8,7 @@
 // For the full copyright and license information, please view the LICENSE
 // file that was distributed with this source code.
 
-use crate::sed::error_handling::{ScriptLocation, runtime_error};
+use crate::sed::error_handling::{ScriptLocation, runtime_err};
 
 use std::cell::RefCell;
 use std::fs::{File, OpenOptions};
@@ -41,8 +41,7 @@ impl NamedWriter {
             .truncate(true)
             .open(&path)
             .map_err(|e| {
-                runtime_error::<()>(&location, format!("creating file {}: {}", path.quote(), e))
-                    .unwrap_err()
+                runtime_err(&location, format!("creating file {}: {}", path.quote(), e))
             })?;
 
         let writer = Rc::new(RefCell::new(NamedWriter {
@@ -72,22 +71,20 @@ impl NamedWriter {
                 }
             })
             .map_err(|e| {
-                runtime_error::<()>(
+                runtime_err(
                     &self.location,
                     format!("writing to file {}: {e}", self.path.quote()),
                 )
-                .unwrap_err()
             })
     }
 
     /// Flush the writer, returning a descriptive error.
     pub fn flush(&mut self) -> UResult<()> {
         self.writer.flush().map_err(|e| {
-            runtime_error::<()>(
+            runtime_err(
                 &self.location,
                 format!("writing to file {}: {}", self.path.quote(), e),
             )
-            .unwrap_err()
         })
     }
 }

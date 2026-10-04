@@ -15,7 +15,7 @@ use crate::sed::script_line_provider::ScriptLineProvider;
 use std::rc::Rc;
 
 use uucore::display::Quotable;
-use uucore::error::{UResult, USimpleError};
+use uucore::error::{UError, UResult, USimpleError};
 
 #[derive(Clone, Debug)]
 /// The location in a script where a command is defined
@@ -46,14 +46,14 @@ impl ScriptLocation {
     }
 }
 
-/// Fail with msg as a compile error at the provider location.
-/// The error's exit code is 1 (compilation phase).
-pub fn compilation_error<T>(
+/// The compile error `msg` at the provider location, as a value for `map_err` and
+/// `ok_or_else`. Its exit code is 1 (compilation phase).
+pub fn compilation_err(
     lines: &ScriptLineProvider,
     line: &ScriptCharProvider,
     msg: impl ToString,
-) -> UResult<T> {
-    Err(USimpleError::new(
+) -> Box<dyn UError> {
+    USimpleError::new(
         1,
         format!(
             "{}:{}:{}: error: {}",
@@ -62,13 +62,22 @@ pub fn compilation_error<T>(
             line.get_pos() + 1,
             msg.to_string()
         ),
-    ))
+    )
 }
 
-/// Fail with msg as a compilation error at the command's location.
-/// The error's exit code is as specified.
-fn location_error<T>(location: &ScriptLocation, msg: impl ToString, exit_code: i32) -> UResult<T> {
-    Err(USimpleError::new(
+/// Fail with msg as a compile error at the provider location.
+/// The error's exit code is 1 (compilation phase).
+pub fn compilation_error<T>(
+    lines: &ScriptLineProvider,
+    line: &ScriptCharProvider,
+    msg: impl ToString,
+) -> UResult<T> {
+    Err(compilation_err(lines, line, msg))
+}
+
+/// The error `msg` at the command's location, with the given exit code.
+fn location_err(location: &ScriptLocation, msg: impl ToString, exit_code: i32) -> Box<dyn UError> {
+    USimpleError::new(
         exit_code,
         format!(
             "{}:{}:{}: error: {}",
@@ -77,19 +86,52 @@ fn location_error<T>(location: &ScriptLocation, msg: impl ToString, exit_code: i
             location.column_number,
             msg.to_string()
         ),
-    ))
+    )
+}
+
+/// The compilation error `msg` at the command's location, as a value.
+/// Its exit code is 1 (compilation phase).
+pub fn semantic_err(location: &ScriptLocation, msg: impl ToString) -> Box<dyn UError> {
+    location_err(location, msg, 1)
 }
 
 /// Fail with msg as a compilation error at the command's location.
 /// The error's exit code is 1 (compilation phase).
 pub fn semantic_error<T>(location: &ScriptLocation, msg: impl ToString) -> UResult<T> {
-    location_error(location, msg, 1)
+    Err(semantic_err(location, msg))
+}
+
+/// The runtime error `msg` at the command's location, as a value.
+/// Its exit code is 2 (processing phase).
+pub fn runtime_err(location: &ScriptLocation, msg: impl ToString) -> Box<dyn UError> {
+    location_err(location, msg, 2)
 }
 
 /// Fail with msg as a runtime error at the command's location.
 /// The error's exit code is 2 (processing phase).
 pub fn runtime_error<T>(location: &ScriptLocation, msg: impl ToString) -> UResult<T> {
-    location_error(location, msg, 2)
+    Err(runtime_err(location, msg))
+}
+
+/// The runtime error `msg` at the command's and input's location, as a value.
+/// Its exit code is 2 (processing phase).
+pub fn input_runtime_err(
+    location: &ScriptLocation,
+    context: &ProcessingContext,
+    msg: impl ToString,
+) -> Box<dyn UError> {
+    USimpleError::new(
+        2,
+        format!(
+            "{}:{}:{}: {}:{} error: {}",
+            location.input_name,
+            location.line_number,
+            location.column_number,
+            context.input_name.quote(),
+            context.line_number,
+            msg.to_string()
+        ),
+    )
 }
 
 /// Fail with msg as a runtime error at the command's and input's location.
@@ -102,16 +144,5 @@ pub fn input_runtime_error<T>(
     context: &ProcessingContext,
     msg: impl ToString,
 ) -> UResult<T> {
-    Err(USimpleError::new(
-        2,
-        format!(
-            "{}:{}:{}: {}:{} error: {}",
-            location.input_name,
-            location.line_number,
-            location.column_number,
-            context.input_name.quote(),
-            context.line_number,
-            msg.to_string()
-        ),
-    ))
+    Err(input_runtime_err(location, context, msg))
 }

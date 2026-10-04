@@ -580,13 +580,15 @@ impl Interpreter {
                 // same as `obase = A`, so the grouping is looked through here.
                 // It is only the *statement's* main operator that grouping
                 // affects, which is `should_print`'s business, not this.
-                let value = match strip_parens(value) {
-                    ExprInstruction::Number(n) if n.len() == 1 => {
-                        // this cannot fail because the parser ensures that
-                        // the value is a valid hexadecimal number
-                        Number::parse(n, 16).unwrap()
-                    }
-                    _ => self.eval_expr(value, out)?,
+                let single_digit = match strip_parens(value) {
+                    // The lexer only makes numbers of the digits 0-9 and A-F, so a
+                    // one-character number always parses in base 16.
+                    ExprInstruction::Number(n) if n.len() == 1 => Number::parse(n, 16),
+                    _ => None,
+                };
+                let value = match single_digit {
+                    Some(value) => value,
+                    None => self.eval_expr(value, out)?,
                 };
 
                 self.set_register(*register, &value)?;
@@ -749,8 +751,10 @@ impl Interpreter {
                 }
             }
             StmtInstruction::DefineFunction { .. } => {
-                // the language grammar ensures that this is never reached
-                panic!("function definition outside of the global scope")
+                // The grammar allows `define` only at the top level, which `exec`
+                // handles itself, so this is never reached; if it were, it is an
+                // error in the program rather than a crash.
+                return Err("function definition outside of the global scope".into());
             }
         }
         self.instruction_counter = instruction_counter_start + stmt_instruction_count;
@@ -781,16 +785,18 @@ impl Interpreter {
                         program.file.clone(),
                     )
                 })?;
-                match control_flow {
-                    // both of these should have been handled earlier
-                    // by the parser
-                    ControlFlow::Return(_) => {
-                        panic!("return outside of function");
-                    }
-                    ControlFlow::Break => {
-                        panic!("break outside of loop");
-                    }
-                    _ => {}
+                // The parser rejects both of these, with these messages, before the
+                // program runs; should one get through, it is reported the same way.
+                let misplaced = match control_flow {
+                    ControlFlow::Return(_) => Some("return outside of function"),
+                    ControlFlow::Break => Some("break outside of loop"),
+                    _ => None,
+                };
+                if let Some(message) = misplaced {
+                    return Err(ExecutionError::from(message).global_source(
+                        program.source_locations[self.instruction_counter],
+                        program.file.clone(),
+                    ));
                 }
                 // we can't trust the return value of eval_stmt because
                 // unexecuted branches will not return ControlFlow::Quit,
@@ -812,6 +818,11 @@ impl Interpreter {
 #[cfg(test)]
 impl Interpreter {
     /// Run a program, collecting its output for tests that assert on it.
+    #[expect(
+        clippy::expect_used,
+        clippy::unwrap_in_result,
+        reason = "test helper: output that is not UTF-8 should fail the test loudly"
+    )]
     fn exec_to_string(&mut self, program: Program) -> ExecutionResult<String> {
         let mut buffer = Vec::new();
         {
@@ -823,6 +834,10 @@ impl Interpreter {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::expect_used,
+    reason = "a failed assumption in a test should abort it loudly"
+)]
 mod tests {
     use super::*;
 
@@ -1539,6 +1554,40 @@ mod tests {
             )
             .unwrap();
         assert_eq!(output, "10\n");
+    }
+
+    #[test]
+    fn misplaced_control_flow_is_an_error_not_a_crash() {
+        // The parser never produces these, so the interpreter is given them by hand:
+        // each used to panic.
+        let top_level = |stmt: StmtInstruction| {
+            Interpreter::default()
+                .exec_to_string(Program {
+                    instructions: vec![stmt],
+                    source_locations: vec![1, 1],
+                    file: "".into(),
+                })
+                .expect_err("expected an error")
+                .message
+        };
+        assert_eq!(
+            top_level(StmtInstruction::Return),
+            "return outside of function"
+        );
+        assert_eq!(top_level(StmtInstruction::Break), "break outside of loop");
+        let define = StmtInstruction::DefineFunction {
+            name: 'f',
+            function: Function::default(),
+        };
+        let nested = StmtInstruction::If {
+            condition: ConditionInstruction::Expr(ExprInstruction::Number("1".to_string())),
+            instruction_count: 1,
+            body: vec![define],
+        };
+        assert_eq!(
+            top_level(nested),
+            "function definition outside of the global scope"
+        );
     }
 
     #[test]

@@ -14,7 +14,8 @@
 // The workspace lints apply here as everywhere, the unsafe ones and rustc's warnings
 // included (REVIEW_REPORT.md ARCH-01); this crate came from posixutils-rs written to
 // other rules, so the style lints it was not written to are allowed rather than
-// rewritten, and the lints for code that can panic wait on TODO.md 14.5.
+// rewritten. The lints for code that can panic apply in full: what input can reach
+// is an error awk reports, and what cannot fail says why where it is.
 #![allow(
     elided_lifetimes_in_paths,
     missing_docs,
@@ -65,16 +66,6 @@
     clippy::use_self,
     clippy::useless_let_if_seq,
     reason = "posixutils-rs code, not written to the workspace's style lints"
-)]
-#![expect(
-    clippy::expect_used,
-    clippy::missing_panics_doc,
-    clippy::panic,
-    clippy::panic_in_result_fn,
-    clippy::string_slice,
-    clippy::unwrap_in_result,
-    clippy::unwrap_used,
-    reason = "panicking code from posixutils-rs, to be reviewed (TODO.md 14.5)"
 )]
 
 pub mod compiler;
@@ -186,9 +177,12 @@ fn normalize_awk_args(args: Vec<OsString>) -> Vec<OsString> {
             continue;
         }
         if let Some(s) = arg.to_str() {
-            if (s.starts_with("-F") || s.starts_with("-v") || s.starts_with("-f")) && s.len() > 2 {
-                normalized.push(OsString::from(&s[..2]));
-                normalized.push(OsString::from(&s[2..]));
+            let attached = ["-F", "-v", "-f"]
+                .into_iter()
+                .find_map(|option| Some((option, s.strip_prefix(option)?)));
+            if let Some((option, value)) = attached.filter(|(_, value)| !value.is_empty()) {
+                normalized.push(OsString::from(option));
+                normalized.push(OsString::from(value));
                 continue;
             }
         }

@@ -13,7 +13,9 @@ use crate::sed::command::{
     Transliteration,
 };
 use crate::sed::delimited_parser::os_string_from_bytes;
-use crate::sed::error_handling::{ScriptLocation, input_runtime_error};
+use crate::sed::error_handling::{
+    ScriptLocation, input_runtime_err, input_runtime_error, runtime_error,
+};
 use crate::sed::fast_io::{IOChunk, LineReader, OutputBuffer};
 use crate::sed::fast_regex::Regex;
 use crate::sed::in_place::InPlace;
@@ -29,13 +31,24 @@ use std::rc::Rc;
 use uucore::display::Quotable;
 use uucore::error::{FromIo, UResult, set_exit_code};
 
-/// Return the specified command variant or panic.
+/// Return the specified command variant, or return an error from the calling function.
+/// The compiler gives each command code its data, so the error is never reached; it
+/// stands in for what was a panic. GNU sed words its own as "INTERNAL ERROR".
 // Example: let path = extract_variant!(command, Path);
 macro_rules! extract_variant {
     ($cmd:expr, $variant:ident) => {
         match &$cmd.data {
             CommandData::$variant(inner) => inner,
-            _ => panic!(concat!("Expected ", stringify!($variant), " command data")),
+            _ => {
+                return runtime_error(
+                    &$cmd.location,
+                    concat!(
+                        "INTERNAL ERROR: expected ",
+                        stringify!($variant),
+                        " command data"
+                    ),
+                );
+            }
         }
     };
 }
@@ -67,7 +80,9 @@ fn match_address(
         // and is probably an overkill.
         Address::Last => Ok(reader.last_line()? && (context.last_file || context.separate)),
 
-        _ => panic!("invalid address type in match_address"),
+        // The step and relative forms are only ever second addresses, which `applies`
+        // decides itself.
+        _ => runtime_error(location, "INTERNAL ERROR: invalid address type"),
     }
 }
 
@@ -81,10 +96,7 @@ fn applies(
 ) -> UResult<bool> {
     let linenum = context.line_number;
 
-    let result = if command.addr1.is_none() && command.addr2.is_none() {
-        // No address
-        Ok(true)
-    } else if let Some(addr2) = &command.addr2 {
+    let result = if let Some(addr2) = &command.addr2 {
         // Two addresses. What a range already latched says about this line, or `None`
         // when the line is past a numbered end and the first address decides again.
         let mut latched = None;
@@ -166,8 +178,8 @@ fn applies(
             &command.location,
         )?)
     } else {
-        // All allowed cases have been covered by the above logic.
-        panic!("impossible address combination");
+        // No address
+        Ok(true)
     };
 
     if command.non_select {
@@ -200,10 +212,9 @@ fn re_or_saved_re<'a>(
     location: &ScriptLocation,
 ) -> UResult<&'a Regex> {
     if let Some(re) = regex {
-        // First time we see this regex: clone it *once* into the context.
-        context.saved_regex = Some(re.clone());
-        // Return a reference into context.saved_regex.
-        Ok(context.saved_regex.as_ref().unwrap())
+        // First time we see this regex: clone it *once* into the context, and return a
+        // reference into context.saved_regex.
+        Ok(context.saved_regex.insert(re.clone()))
     } else if let Some(ref saved_re) = context.saved_regex {
         // We already have one: just borrow it.
         Ok(saved_re)
@@ -253,30 +264,31 @@ fn shell_stdout(
     context: &mut ProcessingContext,
 ) -> UResult<Vec<u8>> {
     let os_cmd = os_string_from_bytes(cmd).map_err(|e| {
-        input_runtime_error::<()>(
+        input_runtime_err(
             &command.location,
             context,
             format!("failed to construct shell command from bytes: {e}"),
         )
-        .unwrap_err()
     })?;
     shell_command(&os_cmd)
         .stdout(std::process::Stdio::piped())
         .spawn()
         .and_then(|mut child| {
-            let mut stdout = child.stdout.take().expect("stdout should be piped");
+            let mut stdout = child
+                .stdout
+                .take()
+                .ok_or_else(|| io::Error::other("no pipe from its standard output"))?;
             let mut buf = Vec::new();
             stdout.read_to_end(&mut buf)?;
             child.wait()?;
             Ok(buf)
         })
         .map_err(|e| {
-            input_runtime_error::<()>(
+            input_runtime_err(
                 &command.location,
                 context,
                 format!("failed to execute shell command: {e}"),
             )
-            .unwrap_err()
         })
 }
 
@@ -343,7 +355,11 @@ fn substitute(
             match regex.captures(pattern) {
                 Err(e) => Err(e),
                 Ok(Some(caps)) => {
-                    let m = caps.get(0)?.unwrap();
+                    #[expect(
+                        clippy::expect_used,
+                        reason = "every match has group 0, the whole match"
+                    )]
+                    let m = caps.get(0)?.expect("a match has group 0");
                     result.extend_from_slice(&text[last_end..m.start()]);
 
                     let replacement = sub.replacement.apply_captures(command, &caps)?;
@@ -367,7 +383,11 @@ fn substitute(
                     };
                     count += 1;
 
-                    let m = caps.get(0)?.unwrap();
+                    #[expect(
+                        clippy::expect_used,
+                        reason = "every match has group 0, the whole match"
+                    )]
+                    let m = caps.get(0)?.expect("a match has group 0");
 
                     // Always write the unmatched text before this match.
                     result.extend_from_slice(&text[last_end..m.start()]);
@@ -458,12 +478,11 @@ fn transliterate(
     }
 
     let text = pattern.as_str().map_err(|e| {
-        input_runtime_error::<()>(
+        input_runtime_err(
             location,
             context,
             format!("failed to decode pattern space as UTF-8 for transliteration: {e}"),
         )
-        .unwrap_err()
     })?;
     let mut result = String::with_capacity(text.len());
     let mut replaced = false;
@@ -612,12 +631,11 @@ fn list(
     } else {
         // List non-ASCII 8-bit characters in octal; Unicode in hex \u or \U.
         let line = line.as_str().map_err(|e| {
-            input_runtime_error::<()>(
+            input_runtime_err(
                 location,
                 context,
                 format!("failed to decode pattern space as UTF-8 for list command: {e}"),
             )
-            .unwrap_err()
         })?;
         for ch in line.chars() {
             if ch == '\n' {
@@ -661,7 +679,6 @@ fn process_address_0(
     Ok(())
 }
 
-#[expect(clippy::cognitive_complexity)]
 /// Process a single input file
 fn process_file(
     commands: Option<Rc<RefCell<Command>>>,
@@ -766,7 +783,12 @@ fn process_file(
                         let shell_out = shell_stdout(cmd_bytes.to_vec(), &command, context)?;
                         output.write_bytes(&shell_out)?;
                     }
-                    _ => panic!("invalid 'e' command data"),
+                    _ => {
+                        return runtime_error(
+                            &command.location,
+                            "INTERNAL ERROR: invalid 'e' command data",
+                        );
+                    }
                 },
                 'F' => {
                     // Output current input file name.
@@ -951,7 +973,12 @@ fn process_file(
                     output.write_str(format!("{}\n", context.line_number))?;
                 }
                 // The compilation should supply only valid codes.
-                _ => panic!("invalid command code"),
+                c => {
+                    return runtime_error(
+                        &command.location,
+                        format!("INTERNAL ERROR: bad command '{c}'"),
+                    );
+                }
             } // match
             // Advance to next command.
             current.clone_from(&command.next);

@@ -9,7 +9,7 @@
 // file that was distributed with this source code.
 
 use crate::sed::command::{CharacterMode, ParsedTransliteration, RE_DUP_MAX, RegexMode};
-use crate::sed::error_handling::compilation_error;
+use crate::sed::error_handling::{compilation_err, compilation_error};
 use crate::sed::script_char_provider::ScriptCharProvider;
 use crate::sed::script_line_provider::ScriptLineProvider;
 
@@ -62,13 +62,16 @@ fn parse_numeric_escape(
     }
 
     let char_string: String = valid_chars.into_iter().collect();
-    match u32::from_str_radix(&char_string, radix)
+    let decoded = u32::from_str_radix(&char_string, radix)
         .ok()
-        .and_then(char::from_u32)
-    {
-        Some(decoded) => Some(decoded),
-        None => panic!("Unable to decode numeric character escape."),
+        .and_then(char::from_u32);
+    if decoded.is_none() {
+        // A value that is no character, a surrogate such as `\uD800` or one past
+        // U+10FFFF, is not an escape: its digits are read again as text, as for an
+        // escape with too few digits.
+        line.retreat(char_string.len());
     }
+    decoded
 }
 
 /// Transforms the specified character into the corresponding ASCII
@@ -106,10 +109,8 @@ fn parsed_bytes_to_utf8(
     bytes: Vec<u8>,
     description: &str,
 ) -> UResult<String> {
-    String::from_utf8(bytes).map_err(|e| {
-        compilation_error::<String>(lines, line, format!("invalid UTF-8 in {description}: {e}"))
-            .unwrap_err()
-    })
+    String::from_utf8(bytes)
+        .map_err(|e| compilation_err(lines, line, format!("invalid UTF-8 in {description}: {e}")))
 }
 
 /// Parse a character escape valid in all contexts (RE pattern, substitution,
@@ -219,10 +220,10 @@ fn parse_character_class(
 ) -> UResult<Vec<u8>> {
     let mut result = Vec::new();
 
-    assert!(
-        !line.eol() && line.current() == '[',
-        "Invalid character class."
-    );
+    // The caller comes here at a `[`; anything else is not a class.
+    if line.eol() || line.current() != '[' {
+        return compilation_error(lines, line, "expected `[' to start a character class");
+    }
 
     line.advance();
     result.push(b'[');

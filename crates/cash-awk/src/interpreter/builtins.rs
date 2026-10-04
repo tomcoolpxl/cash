@@ -7,8 +7,6 @@
 // SPDX-License-Identifier: MIT
 //
 
-use std::fmt::Write;
-
 use super::format::{
     FormatArgs, IntegerFormat, fmt_write_decimal_float, fmt_write_float_general,
     fmt_write_hex_float, fmt_write_scientific_float, fmt_write_signed_f64, fmt_write_special_float,
@@ -138,7 +136,8 @@ fn format_one_conversion(
                     let code = value.scalar_as_f64() as u32;
                     char::from_u32(code).unwrap_or('\0')
                 }
-                AwkValueVariant::String(s) if !s.is_empty() => s.chars().next().unwrap(),
+                // Not empty, so there is a first character.
+                AwkValueVariant::String(s) if !s.is_empty() => s.chars().next().unwrap_or('\0'),
                 _ => {
                     let code = value.scalar_as_f64() as u32;
                     char::from_u32(code).unwrap_or('\0')
@@ -197,7 +196,7 @@ pub(crate) fn builtin_match(
     stack: &mut Stack,
     global_env: &mut GlobalEnv,
 ) -> Result<(f64, f64), String> {
-    let ere = stack.pop_value().into_ere()?;
+    let ere = stack.pop_value()?.into_ere()?;
     let string = stack
         .pop_scalar_value()?
         .scalar_to_string(&global_env.convfmt)?;
@@ -255,9 +254,10 @@ pub(crate) fn gsub(
     repl_parts.push(current_repl_part);
 
     let mut num_replacements = 0;
+    // The regex engine reports matches at character boundaries, so `get` finds each.
     for m in ere.match_locations(in_str) {
-        result.push_str(&in_str[last_match_end..m.start]);
-        let replaced_string = &in_str[m.start..m.end];
+        result.push_str(in_str.get(last_match_end..m.start).unwrap_or_default());
+        let replaced_string = in_str.get(m.start..m.end).unwrap_or_default();
         result.push_str(&repl_parts[0]);
         for part in repl_parts.iter().skip(1) {
             result.push_str(replaced_string);
@@ -269,7 +269,7 @@ pub(crate) fn gsub(
             break;
         }
     }
-    result.push_str(&in_str[last_match_end..]);
+    result.push_str(in_str.get(last_match_end..).unwrap_or_default());
     Ok((result.into(), num_replacements))
 }
 
@@ -285,7 +285,7 @@ pub(crate) fn builtin_split(
     let separator = if argc == 2 {
         None
     } else {
-        let sep_val = stack.pop_value();
+        let sep_val = stack.pop_value()?;
         if matches!(&sep_val.value, AwkValueVariant::Regex { .. }) {
             Some(FieldSeparator::Ere(sep_val.into_ere()?))
         } else {
@@ -319,7 +319,7 @@ pub(crate) fn builtin_gsub(
     let repl = stack
         .pop_scalar_value()?
         .scalar_to_string(&global_env.convfmt)?;
-    let ere = stack.pop_value().into_ere()?;
+    let ere = stack.pop_value()?.into_ere()?;
     let in_str = stack.pop_ref()?;
     in_str.ensure_value_is_scalar()?;
     let (result, count) = gsub(
@@ -386,7 +386,7 @@ pub(crate) fn call_simple_builtin(
             stack.push_value(index)?;
         }
         BuiltinFunction::Length => {
-            let value = stack.pop_value();
+            let value = stack.pop_value()?;
             match &value.value {
                 AwkValueVariant::Array(array) => {
                     stack.push_value(array.len() as f64)?;
@@ -482,12 +482,16 @@ pub(crate) fn print_to_string(
         );
     }
     let mut output = String::new();
-    values.iter().skip(1).rev().fold(&mut output, |acc, elem| {
-        write!(acc, "{}{}", elem, global_env.ofs).expect("error writing to string");
-        acc
-    });
-    // there has to be at least an element
-    output.push_str(values.first().expect("called print without arguments"));
+    for elem in values.iter().skip(1).rev() {
+        output.push_str(elem);
+        output.push_str(&global_env.ofs);
+    }
+    // The compiler gives print at least one argument, `$0` when it has none.
+    output.push_str(
+        values
+            .first()
+            .ok_or_else(|| "print called without arguments".to_string())?,
+    );
     // Restore the CRLF of the most recent main-input record, but only for the
     // default ORS; an explicit ORS (and all printf output) is written verbatim.
     if global_env.last_record_crlf && global_env.ors.as_str() == "\n" {

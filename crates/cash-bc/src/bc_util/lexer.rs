@@ -334,7 +334,8 @@ impl<'a> Lexer<'a> {
                     });
                 }
                 Some(b'"') => {
-                    let s = self.text[start..self.pos].to_string();
+                    // Both ends are at a quote, an ASCII byte, so this is whole text.
+                    let s = String::from_utf8_lossy(&self.src[start..self.pos]).into_owned();
                     self.bump();
                     return Ok(Token::Str(s));
                 }
@@ -346,9 +347,9 @@ impl<'a> Lexer<'a> {
     /// A keyword if one matches here (maximal munch), otherwise a single
     /// LETTER. POSIX rule 10: a letter within a keyword is not a LETTER.
     fn lex_word(&mut self) -> Token {
-        let rest = &self.text[self.pos..];
+        let rest = &self.src[self.pos..];
         for (word, token) in KEYWORDS {
-            if rest.as_bytes().starts_with(word.as_bytes()) {
+            if rest.starts_with(word.as_bytes()) {
                 for _ in 0..word.len() {
                     self.bump();
                 }
@@ -473,7 +474,11 @@ impl<'a> Lexer<'a> {
                 Token::Semicolon
             }
             _ => {
-                let ch = self.text[self.pos..].chars().next().unwrap_or('\u{fffd}');
+                let ch = self
+                    .text
+                    .get(self.pos..)
+                    .and_then(|rest| rest.chars().next())
+                    .unwrap_or('\u{fffd}');
                 return Err(LexError {
                     message: format!("illegal character '{}'", ch.escape_default()),
                     line,
@@ -512,6 +517,10 @@ pub fn end_position(text: &str) -> (usize, usize) {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::expect_used,
+    reason = "a failed assumption in a test should abort it loudly"
+)]
 mod tests {
     use super::*;
 
@@ -663,6 +672,16 @@ mod tests {
         assert!(e.message.contains("illegal character"));
         let e = lex_err("!");
         assert!(!e.incomplete);
+    }
+
+    #[test]
+    fn non_ascii_text_is_lexed_by_character() {
+        // A string keeps its characters whole, and a stray non-ASCII character is
+        // named in the error, not cut in the middle.
+        assert_eq!(toks("\"é€\"\n")[0], Token::Str("é€".to_string()));
+        let e = lex_err("1 + é\n");
+        assert_eq!(e.message, "illegal character '\\u{e9}'");
+        assert_eq!((e.line, e.col), (1, 5));
     }
 
     #[test]

@@ -132,6 +132,10 @@ impl Array {
 }
 
 impl<S: Into<String>, A: Into<AwkValue>> FromIterator<(S, A)> for Array {
+    #[expect(
+        clippy::expect_used,
+        reason = "`set` cannot fail: `get_value_index` inserts a key it does not find"
+    )]
     fn from_iter<T: IntoIterator<Item = (S, A)>>(iter: T) -> Self {
         let mut result = Self::default();
         for (key, val) in iter {

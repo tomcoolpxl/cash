@@ -8,7 +8,6 @@
 //
 
 use std::cell::RefCell;
-use std::fmt::Write;
 use std::rc::Rc;
 
 use super::string::AwkString;
@@ -67,14 +66,23 @@ pub(crate) fn split_record<S: FnMut(usize, AwkString) -> Result<(), String>>(
             .enumerate()
             .try_for_each(|(i, s)| store_result(i, string(s))),
         FieldSeparator::Ere(re) => {
+            // The regex engine reports matches at character boundaries, so `get`
+            // finds each field.
             let mut split_start = 0;
             let mut index = 0;
             for separator_range in re.match_locations(&record) {
-                store_result(index, string(&record[split_start..separator_range.start]))?;
+                store_result(
+                    index,
+                    string(
+                        record
+                            .get(split_start..separator_range.start)
+                            .unwrap_or_default(),
+                    ),
+                )?;
                 split_start = separator_range.end;
                 index += 1;
             }
-            store_result(index, string(&record[split_start..]))
+            store_result(index, string(record.get(split_start..).unwrap_or_default()))
         }
         FieldSeparator::Null => record.chars().enumerate().try_for_each(|(i, c)| {
             let mut s = String::new();
@@ -94,8 +102,8 @@ impl TryFrom<AwkString> for FieldSeparator {
             Ok(FieldSeparator::Null)
         } else if value.as_str() == " " {
             Ok(FieldSeparator::Default)
-        } else if value.len() == 1 {
-            Ok(FieldSeparator::Char(*value.as_bytes().first().unwrap()))
+        } else if let &[byte] = value.as_bytes() {
+            Ok(FieldSeparator::Char(byte))
         } else {
             let ere = Regex::new(value.as_str())?;
             Ok(FieldSeparator::Ere(Rc::from(ere)))
@@ -273,14 +281,14 @@ impl Record {
                 let field_str = unsafe { &*cell.get() }
                     .clone()
                     .scalar_to_string(&global_env.convfmt)?;
-                write!(new_record, "{}{}", field_str, global_env.ofs)
-                    .expect("error writing to string");
+                new_record.push_str(&field_str);
+                new_record.push_str(&global_env.ofs);
             }
             // SAFETY: no reference to a field is held (`# Safety`).
             let last_field_str = unsafe { &*fields[last_field].get() }
                 .clone()
                 .scalar_to_string(&global_env.convfmt)?;
-            write!(new_record, "{}", last_field_str).expect("error writing to string");
+            new_record.push_str(&last_field_str);
         }
         // the spec doesn't specify if a recomputed record should be a numeric string.
         // Most other implementations don't really handle this case. Here we just
