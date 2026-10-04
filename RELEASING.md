@@ -128,8 +128,8 @@ git push origin v0.9.2
 When a tag matching `v*.*.*` is pushed, the [Release Workflow](.github/workflows/release.yml) automatically:
 1. Compiles the shipped binary with the fully optimized `dist` profile (`cargo build
    --profile dist --bin cash`: fat LTO, one codegen unit) and checks that it imports no C
-   runtime DLL. The `release` profile, which `scripts/install.ps1` builds for local use,
-   trades a little speed for a much quicker build.
+   runtime DLL. The `release` profile, for local builds, trades a little speed for a much
+   quicker build.
 2. Bundles `cash.exe`, `README.md`, `LICENSE`, `NOTICE`, `licenses/` and
    `THIRD-PARTY-LICENSES.html` (written by `cargo about` from
    [`.github/about`](.github/about)) into `cash-vX.Y.Z-x86_64-pc-windows-msvc.zip`.

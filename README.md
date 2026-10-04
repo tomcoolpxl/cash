@@ -175,7 +175,6 @@ Without Scoop, unpack a release zip anywhere and run `cash.exe`. `cash
 cargo build                                    # target\debug\cash.exe
 cargo xtask ci quick                           # format check, clippy, unit tests
 cargo xtask ci full                            # everything CI runs
-powershell -File scripts\install.ps1           # build and install the shell you use
 powershell -File scripts\tidy.ps1 -Report      # delete unused build output, show sizes
 ```
 
@@ -188,11 +187,8 @@ Build output is disposable, and each checkout and worktree has its own `target\`
 - **Profiles.** `dev` and `test` keep only line numbers as debug info (enough for panic
   backtraces), `--profile debugging` keeps all of it. `release` is thin LTO and builds
   quickly; `dist`, fat LTO with one codegen unit, is what the release workflow ships.
-- **The shell you use** comes from `scripts\install.ps1`, which builds `release` and
-  installs `%USERPROFILE%\.cash-dev\cash.exe`; point a Windows Terminal profile there.
-  Nothing runs from `target\`, so any of it can be deleted at any time. (Not under
-  `%LOCALAPPDATA%`: the Store's Windows Terminal sees a redirected AppData of its own and
-  cannot find a program installed there.)
+- **The shell you use** is a released one, installed by Scoop (above). Nothing runs from
+  `target\`, so any of it can be deleted at any time.
 - **Cleanup.** `scripts\tidy.ps1` deletes build folders not built for a week, what removed
   worktrees leave behind, and old installed copies, skipping anything in use; `-All`
   takes every build folder. Claude Code runs it when a session starts

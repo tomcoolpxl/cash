@@ -11,14 +11,14 @@ This script does, for this repository only. It deletes:
   --target-dir) that have not been built in -Days days, or all of them with -All;
 - folders under .claude\worktrees that git no longer knows as worktrees, when they hold
   nothing but build output (what a half-finished worktree removal leaves behind);
-- old copies of the installed shell that scripts\install.ps1 set aside (cash.exe.old-*),
-  once nothing runs them.
+- old copies of cash.exe set aside in target\release (cash.exe.old-*), once nothing runs
+  them.
 
 A folder is left alone while it is in use: while a program inside it runs, or while a
 cargo build holds its lock. Anything else is renamed with a .cash-trash- suffix, which
 is instant, and then deleted by a background process, so the script returns at once.
-The installed shell itself (%USERPROFILE%\.cash-dev\cash.exe) is never touched, which is
-what makes every target\ folder safe to delete.
+The shell in use is a released one Scoop installed, so every target\ folder is safe to
+delete.
 
 Claude Code runs this at the start of every session (.claude\settings.json), with -Hook.
 
@@ -51,7 +51,6 @@ $ErrorActionPreference = 'Stop'
 
 $trashMarker = '.cash-trash-'
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-$installDir = Join-Path $env:USERPROFILE '.cash-dev'
 
 # Folders renamed for deletion, and one line per deletion for the summary.
 $doomed = New-Object System.Collections.Generic.List[string]
@@ -194,11 +193,8 @@ function Invoke-Tidy {
         }
     }
 
-    # Installed copies set aside by install.ps1, and those of the swap by hand it replaced.
+    # Copies a swap by hand set aside in target\release.
     $oldCopies = @()
-    if (Test-Path -LiteralPath $installDir) {
-        $oldCopies += @(Get-ChildItem -LiteralPath $installDir -Filter 'cash.exe.old*' -File -Force)
-    }
     foreach ($checkout in $checkouts) {
         $release = Join-Path $checkout 'target\release'
         if (Test-Path -LiteralPath $release) {

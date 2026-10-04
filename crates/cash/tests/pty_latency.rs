@@ -11,7 +11,7 @@
 //!
 //! `dist` is the profile cash ships with; a debug build's numbers say little.
 //! `CASH_LATENCY_BIN` names a `cash.exe` to measure instead of the one cargo built, for
-//! instance an older build, or the installed shell (`%LOCALAPPDATA%\cash-dev\cash.exe`).
+//! instance an older build, or the released one Scoop installed.
 //!
 //! Run it on an idle machine. ConPTY draws its screen on its own schedule, and with the CPU
 //! busy (a `cargo test --workspace` alongside, say) it merges many keys into one late frame:

@@ -156,8 +156,8 @@ debug = true
 [profile.debugging.package."*"]
 debug = true
 
-# The everyday optimized build, which scripts/install.ps1 installs as the shell used
-# day to day: thin LTO over parallel codegen units builds in a fraction of the time.
+# The everyday optimized build for local use: thin LTO over parallel codegen units builds
+# in a fraction of the time `dist` takes.
 [profile.release]
 strip = true
 lto = "thin"
