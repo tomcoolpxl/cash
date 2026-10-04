@@ -524,6 +524,25 @@ async fn a_command_completes_from_a_prefix_in_the_other_case_outside_ascii() {
     );
 }
 
+/// After `sudo` and its options, the command completes as a command and its arguments as
+/// its own, as Bash's completion for `sudo` has them; they completed nothing.
+#[tokio::test]
+async fn the_command_after_sudo_completes_as_a_command() {
+    let mut fixture = Fixture::new("sudo").await;
+    fixture.touch("README.md");
+
+    let candidates = fixture.complete("sudo expor").await;
+    assert!(
+        candidates.iter().any(|c| c.trim_end() == "export"),
+        "{candidates:?}"
+    );
+    let candidates = fixture.complete("sudo -i FOO=1 cat READ").await;
+    assert!(
+        contains_ending_with(&candidates, "README.md"),
+        "{candidates:?}"
+    );
+}
+
 #[tokio::test]
 async fn a_command_in_first_position_completes_from_builtins() {
     let mut fixture = Fixture::new("command").await;

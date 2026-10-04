@@ -389,8 +389,15 @@ impl builtins::Command for SudoCommand {
             }
             words = rest;
         }
+        // `sudo NAME=value COMMAND`: the variables are the command's, as a Unix sudo passes
+        // them; they were taken for the command's name.
+        let assignment_count = words.iter().take_while(|word| is_assignment(word)).count();
+        let (assignments, words) = words.split_at(assignment_count);
         if words.is_empty() && !shell_wanted {
-            writeln!(context.stderr(), "usage: sudo [-i | -s] [COMMAND [ARG]...]")?;
+            writeln!(
+                context.stderr(),
+                "usage: sudo [-i | -s] [NAME=value]... [COMMAND [ARG]...]"
+            )?;
             return Ok(ExecutionResult::new(1));
         }
 
@@ -402,6 +409,10 @@ impl builtins::Command for SudoCommand {
             if words.is_empty() {
                 return run_program(&context, &cash, &cash, &[]);
             }
+            if !assignments.is_empty() {
+                let wrapped = with_assignments(&cash, assignments, words);
+                return run_program(&context, &cash, &cash, wrapped.get(1..).unwrap_or(&[]));
+            }
             let command = crate::command::CommandCommand {
                 command_and_args: words.to_vec(),
                 ..Default::default()
@@ -411,7 +422,7 @@ impl builtins::Command for SudoCommand {
 
         // What runs elevated, as the shell would run it.
         let target: Vec<String> = match words.split_first() {
-            None => vec![cash],
+            None => vec![cash.clone()],
             Some((name, args)) => {
                 let Some(target) = sudo_target(context.shell, name, args, &cash) else {
                     writeln!(context.stderr(), "sudo: {name}: command not found")?;
@@ -420,12 +431,20 @@ impl builtins::Command for SudoCommand {
                 target
             }
         };
+        let target = if assignments.is_empty() {
+            target
+        } else {
+            with_assignments(&cash, assignments, &target)
+        };
 
         // Who elevates it: gsudo keeps the command in this terminal; Windows' sudo does in
-        // its inline mode only.
+        // its inline mode only. `-d` keeps gsudo from looking at its parent, cash, to decide
+        // which shell should run the command: the command is a program, run as it is.
         if let Some(gsudo) = context.shell.resolve_command_in_path_using_cache("gsudo") {
             let gsudo = gsudo.to_string_lossy().into_owned();
-            return run_program(&context, &gsudo, "gsudo", &target);
+            let mut args = vec!["-d".to_owned()];
+            args.extend(target);
+            return run_program(&context, &gsudo, "gsudo", &args);
         }
         let windows_sudo = cash_win32::sysinfo::windows_sudo();
         let sudo_exe = context.shell.env_str("SystemRoot").map_or_else(
@@ -453,6 +472,28 @@ impl builtins::Command for SudoCommand {
         }
         run_program(&context, &sudo_exe, "sudo", &target)
     }
+}
+
+/// Whether `word` is a `NAME=value` that `sudo` passes on as a variable.
+fn is_assignment(word: &str) -> bool {
+    word.split_once('=').is_some_and(|(name, _)| {
+        name.starts_with(|c: char| c.is_ascii_alphabetic() || c == '_')
+            && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+    })
+}
+
+/// `command` run by a cash that exports `assignments` first, the command's words passed
+/// as they are.
+fn with_assignments(cash: &str, assignments: &[String], command: &[String]) -> Vec<String> {
+    let mut all = vec![
+        cash.to_owned(),
+        "-c".to_owned(),
+        "while [[ $1 == *=* ]]; do export -- \"$1\"; shift; done; \"$@\"".to_owned(),
+        "sudo".to_owned(),
+    ];
+    all.extend(assignments.iter().cloned());
+    all.extend(command.iter().cloned());
+    all
 }
 
 /// The program and arguments that run `name` with `args` elevated: cash for `bash`, `sh`

@@ -1106,6 +1106,18 @@ impl Config {
         // Make a best-effort attempt to tokenize.
         let tokens = Self::tokenize_input_for_completion(shell, input);
 
+        // `sudo CMD ARGS`: the words from CMD on complete as the line they would be
+        // without `sudo` and its options, as Bash's completion for `sudo` has them: CMD
+        // as a command, its arguments as CMD's.
+        if let Some(rest) = after_sudo(input, position)
+            && let Some(rest_input) = input.get(rest..)
+        {
+            let mut completions =
+                Box::pin(self.get_completions(shell, rest_input, position - rest)).await?;
+            completions.insertion_index += rest;
+            return Ok(completions);
+        }
+
         let cursor = position;
         let mut preceding_token = None;
         let mut completion_prefix = "";
@@ -1828,6 +1840,39 @@ fn is_drive_colon(input: &str, word_start: Option<usize>, index: usize) -> bool 
     word.len() == 1
         && word.bytes().all(|b| b.is_ascii_alphabetic())
         && (after.is_empty() || after.starts_with(['/', '\\']))
+}
+
+/// Where the command `sudo` runs starts in `input`, past `sudo`, its options and the
+/// `NAME=value` words it passes on, when the cursor at `position` is there or after it:
+/// `None` for a line that does not start with `sudo`, or a cursor still in `sudo`'s own
+/// words.
+fn after_sudo(input: &str, position: usize) -> Option<usize> {
+    let rest = input.trim_start();
+    let mut at = input.len() - rest.len();
+    let rest = rest.strip_prefix("sudo")?;
+    if !rest.starts_with(char::is_whitespace) {
+        return None;
+    }
+    at += "sudo".len();
+    loop {
+        let word_start = at + (input.get(at..)?.len() - input.get(at..)?.trim_start().len());
+        let word = input.get(word_start..)?;
+        let word_len = word.find(char::is_whitespace).unwrap_or(word.len());
+        let word = word.get(..word_len)?;
+        let is_assignment = word.split_once('=').is_some_and(|(name, _)| {
+            !name.is_empty()
+                && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+                && !name.starts_with(|c: char| c.is_ascii_digit())
+        });
+        if word.is_empty() || !(word.starts_with('-') || is_assignment) {
+            return (position >= word_start && word_start > 0).then_some(word_start);
+        }
+        // A cursor in one of sudo's own words completes it as it is.
+        if position <= word_start + word_len {
+            return None;
+        }
+        at = word_start + word_len;
+    }
 }
 
 /// Tokenizes input by splitting on delimiter characters. Words (non-delimiter sequences)

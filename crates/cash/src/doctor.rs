@@ -93,6 +93,7 @@ pub fn run() -> u8 {
     check_dos_shadowing(&mut findings, &builtins, &entries, &pathext, &cwd);
     check_deliberate_shadows(&mut findings, &builtins, &entries, &pathext, &cwd);
     check_carapace(&mut findings, &entries, &pathext, &cwd);
+    check_sudo(&mut findings, &entries, &pathext, &cwd);
     check_links(&mut findings, &entries);
 
     report(&findings)
@@ -198,6 +199,60 @@ fn check_shells(findings: &mut Vec<Finding>, entries: &[PathBuf], pathext: &[Str
             fix: None,
         });
     }
+}
+
+/// What cash's `sudo` elevates through: gsudo where it is installed, else Windows' own
+/// `sudo`, whose new-window mode keeps a command's output in another window.
+fn check_sudo(findings: &mut Vec<Finding>, entries: &[PathBuf], pathext: &[String], cwd: &Path) {
+    use cash_win32::sysinfo::WindowsSudo;
+
+    let finding = |level, detail: String, fix: Option<&str>| Finding {
+        level,
+        subject: "sudo".into(),
+        detail,
+        fix: fix.map(Into::into),
+    };
+    findings.push(
+        if let Some(gsudo) = resolve("gsudo", entries, pathext, cwd) {
+            finding(
+                Level::Ok,
+                format!(
+                    "through gsudo ({}), in this terminal",
+                    cash_win32::path::render(gsudo.target())
+                ),
+                None,
+            )
+        } else {
+            match cash_win32::sysinfo::windows_sudo() {
+                WindowsSudo::Inline => finding(
+                    Level::Ok,
+                    "through Windows' sudo, in this terminal".into(),
+                    None,
+                ),
+                WindowsSudo::InputClosed => finding(
+                    Level::Note,
+                    "through Windows' sudo, in this terminal with its input closed".into(),
+                    Some("sudo config --enable normal, in an elevated shell, gives it its input"),
+                ),
+                WindowsSudo::NewWindow => finding(
+                    Level::Note,
+                    "through Windows' sudo, which opens a new window: the output stays there"
+                        .into(),
+                    Some(
+                        "scoop install gsudo, or sudo config --enable normal in an elevated shell",
+                    ),
+                ),
+                WindowsSudo::Off => finding(
+                    Level::Note,
+                    "no elevation tool: `sudo` cannot run".into(),
+                    Some(
+                        "scoop install gsudo, or turn on sudo in Settings > System > For \
+                         developers",
+                    ),
+                ),
+            }
+        },
+    );
 }
 
 /// carapace gives Tab completion, with descriptions, for the commands that bring none of

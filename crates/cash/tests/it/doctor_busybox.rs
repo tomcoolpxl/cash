@@ -102,3 +102,10 @@ fn a_shim_for_something_else_is_not_busybox() {
     let report = doctor(&format!("{};C:\\Windows\\System32", shims.display()));
     assert!(!report.contains("BusyBox"), "{report}");
 }
+
+/// `doctor` says what `sudo` elevates through.
+#[test]
+fn doctor_says_how_sudo_elevates() {
+    let report = doctor(r"C:\Windows\System32");
+    assert!(report.contains("sudo"), "{report}");
+}

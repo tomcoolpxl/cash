@@ -864,14 +864,16 @@ fn sudo_finds_its_command_as_the_shell_would() {
     let out = cash(
         r#"sudo; echo "rc $?"
            sudo -u root ls; echo "rc $?"
+           sudo FOO=bar; echo "rc $?"
            if [[ $EUID == 0 ]]; then echo elevated; sudo echo here; echo "rc $?"
+             sudo FOO=bar printenv FOO
            else sudo no-such-command-anywhere; echo "rc $?"; fi"#,
     );
     let elevated = out.stdout.contains("elevated");
     let expected = if elevated {
-        "rc 1\nrc 1\nelevated\nhere\nrc 0"
+        "rc 1\nrc 1\nrc 1\nelevated\nhere\nrc 0\nbar"
     } else {
-        "rc 1\nrc 1\nrc 1"
+        "rc 1\nrc 1\nrc 1\nrc 1"
     };
     assert_eq!(out.stdout, expected, "{}", out.stderr);
     assert!(out.stderr.contains("usage: sudo"), "{}", out.stderr);
