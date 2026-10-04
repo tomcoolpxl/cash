@@ -1,20 +1,22 @@
-//! `lsof`, the documented subset Windows can answer (ROADMAP item 8).
+//! `lsof` (ROADMAP item 8; the handle walk since TODO phase 17, 2026-10-04).
 //!
 //! Output follows lsof 4.99.7: the COMMAND PID USER FD TYPE DEVICE SIZE/OFF NODE NAME
 //! columns, `-t` for bare process ids, and exit status 1 when nothing is listed.
 //!
-//! What Windows can answer without the undocumented system-wide handle walk:
+//! Where each answer comes from:
 //!
 //! * the processes holding given files, or files below a directory (`+D`, `+d`), from
 //!   the Restart Manager;
 //! * TCP and UDP sockets with their owners (`-i`), from IP Helper;
-//! * for selected processes (`-p`, `-c`, `-u`): the executable (`txt`), loaded modules
-//!   (`mem`) and sockets. Other open data files cannot be listed per process, and a note
-//!   on standard error says so.
+//! * for selected processes (`-p`, `-c`, `-u`), or every process with no selection: the
+//!   executable (`txt`), loaded modules (`mem`), sockets, and the files and folders it
+//!   holds open, from the handle walk in `cash_win32::handles` (FD is the handle value
+//!   with `r`, `w` or `u`). That walk is what handle.exe does; unelevated it sees the
+//!   processes the user may open, as Linux `lsof` without root, and a warning counts
+//!   the others.
 //!
-//! Windows has no descriptor, device or inode numbers, so FD shows the use where known
-//! (`txt`, `mem`) and `-` otherwise, and DEVICE and NODE show `-` (NODE is `TCP`/`UDP`
-//! for sockets, as in lsof). `lsof` with no selection is refused rather than faked.
+//! Windows has no device or inode numbers, so DEVICE and NODE show `-` (NODE is
+//! `TCP`/`UDP` for sockets, as in lsof), and FD is `-` where no handle is known.
 
 use std::collections::BTreeSet;
 use std::io::Write;
@@ -77,7 +79,10 @@ struct Options {
 /// One output row.
 struct Row {
     pid: u32,
-    fd: &'static str,
+    fd: String,
+    /// Where the row sorts within its process: the executable, modules, open handles by
+    /// value, then sockets, as lsof orders cwd, txt, mem and the descriptors.
+    rank: (u8, usize),
     kind: String,
     size: String,
     node: String,
@@ -363,18 +368,6 @@ fn parse(
         }
     }
 
-    let selects_processes =
-        options.pids.is_some() || !options.commands.is_empty() || options.users.is_some();
-    if options.files.is_empty()
-        && options.dirs.is_empty()
-        && options.inet.is_none()
-        && !selects_processes
-    {
-        return fail(
-            context,
-            "listing every open file needs a system-wide handle walk, which cash does not do; name files, or use +D, -i, -p, -c or -u",
-        );
-    }
     Ok(Parsed::Run(Box::new(options)))
 }
 
@@ -414,7 +407,8 @@ fn socket_row(socket: net::Socket, options: &Options, services: &Services) -> Ro
     }
     Row {
         pid: socket.pid,
-        fd: "-",
+        fd: "-".to_owned(),
+        rank: (3, 0),
         kind: if socket.local.is_ipv6() {
             "IPv6"
         } else {
@@ -435,13 +429,15 @@ fn socket_row(socket: net::Socket, options: &Options, services: &Services) -> Ro
 
 fn file_row(pid: u32, path: &Path, display: String, access: Access) -> Row {
     let metadata = std::fs::metadata(path).ok();
+    let (fd, rank) = match access {
+        Access::Executable => ("txt", 0),
+        Access::Mapped => ("mem", 1),
+        Access::Open => ("-", 2),
+    };
     Row {
         pid,
-        fd: match access {
-            Access::Executable => "txt",
-            Access::Mapped => "mem",
-            Access::Open => "-",
-        },
+        fd: fd.to_owned(),
+        rank: (rank, 0),
         kind: if metadata.as_ref().is_some_and(std::fs::Metadata::is_dir) {
             "DIR"
         } else {
@@ -452,6 +448,28 @@ fn file_row(pid: u32, path: &Path, display: String, access: Access) -> Row {
         node: "-".to_owned(),
         name: display,
         file: Some(fileuse::path_key(path)),
+        socket: None,
+    }
+}
+
+/// A file the handle walk found open: FD is the handle's value with lsof's mode letter,
+/// `r`, `w` or `u` for both.
+fn handle_row(file: cash_win32::handles::OpenFile) -> Row {
+    let mode = match (file.read, file.write) {
+        (true, true) => "u",
+        (false, true) => "w",
+        (true, false) => "r",
+        (false, false) => "",
+    };
+    Row {
+        pid: file.pid,
+        fd: format!("{}{mode}", file.handle),
+        rank: (2, file.handle),
+        kind: if file.directory { "DIR" } else { "REG" }.to_owned(),
+        size: file.size.map_or_else(|| "-".to_owned(), |s| s.to_string()),
+        node: "-".to_owned(),
+        name: cash_win32::path::render(&file.path),
+        file: Some(fileuse::path_key(&file.path)),
         socket: None,
     }
 }
@@ -572,9 +590,18 @@ fn run(
         }
     }
 
-    // Sockets, needed for -i and for the processes -p/-c/-u select.
-    let selects_processes =
-        options.pids.is_some() || !options.commands.is_empty() || options.users.is_some();
+    // Sockets, needed for -i and for the processes -p/-c/-u select. With no selection at
+    // all, every process is selected, as in lsof.
+    let everything = options.files.is_empty()
+        && options.dirs.is_empty()
+        && options.inet.is_none()
+        && options.pids.is_none()
+        && options.commands.is_empty()
+        && options.users.is_none();
+    let selects_processes = everything
+        || options.pids.is_some()
+        || !options.commands.is_empty()
+        || options.users.is_some();
     let sockets = if options.inet.is_some() || selects_processes {
         let (v4, v6) = options.inet.as_ref().map_or((true, true), |specs| {
             let any_v4 = specs.iter().any(|s| s.v4);
@@ -623,9 +650,41 @@ fn run(
             .map(|p| p.pid)
             .filter(|&pid| {
                 let (p, c, u) = pid_selected(pid, &mut processes);
-                p || c || u
+                everything || p || c || u
             })
             .collect();
+        // Their open files, from the handle walk; it walks every process for `lsof`
+        // alone, which also lists the processes started since `process::list`.
+        match cash_win32::handles::open_files((!everything).then_some(&candidates)) {
+            Ok(walk) => {
+                rows.extend(walk.files.into_iter().map(handle_row));
+                if !options.terse && !options.quiet {
+                    if walk.unopened > 0 {
+                        let advice = if process::current_process_is_elevated().unwrap_or(false) {
+                            "they are protected"
+                        } else {
+                            "they are another account's or elevated; `sudo lsof` lists them"
+                        };
+                        writeln!(
+                            stderr,
+                            "lsof: WARNING: can't list the files of {} processes: {advice}",
+                            walk.unopened
+                        )?;
+                    }
+                    if walk.abandoned > 0 {
+                        writeln!(
+                            stderr,
+                            "lsof: WARNING: {} handles did not answer and are not listed",
+                            walk.abandoned
+                        )?;
+                    }
+                }
+            }
+            Err(error) => {
+                let error = cash_core::error::os_error_text(&error);
+                writeln!(stderr, "lsof: can't list open files: {error}")?;
+            }
+        }
         for pid in candidates {
             if let Some(image) = process::image_path(pid) {
                 rows.push(file_row(
@@ -650,18 +709,15 @@ fn run(
                 }
             }
         }
-        if !options.terse && !options.quiet {
-            writeln!(
-                stderr,
-                "lsof: note: Windows does not list a process's open data files; showing its executable, modules and sockets"
-            )?;
-        }
     }
 
     // Selection: any given selection matches (OR), or all of them with -a.
     let selected: Vec<Row> = rows
         .into_iter()
         .filter(|row| {
+            if everything {
+                return true;
+            }
             let mut tests: Vec<bool> = Vec::new();
             if !options.files.is_empty() || !options.dirs.is_empty() {
                 tests.push(row.file.as_ref().is_some_and(|k| file_keys.contains(k)));
@@ -699,14 +755,7 @@ fn run(
     // Per process, the executable first, then modules, then everything else, as lsof
     // orders them.
     let mut selected = selected;
-    selected.sort_by_key(|row| {
-        let rank = match row.fd {
-            "txt" => 0,
-            "mem" => 1,
-            _ => 2,
-        };
-        (row.pid, rank)
-    });
+    selected.sort_by_key(|row| (row.pid, row.rank));
 
     let mut stdout = context.stdout();
     if options.terse {
@@ -732,7 +781,7 @@ fn run(
                 command,
                 row.pid.to_string(),
                 processes.user(row.pid),
-                row.fd.to_owned(),
+                row.fd,
                 row.kind,
                 "-".to_owned(),
                 row.size,

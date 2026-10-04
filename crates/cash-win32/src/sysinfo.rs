@@ -77,15 +77,15 @@ const PROCESSOR_PERFORMANCE_INFORMATION: i32 = 8;
     clippy::cast_possible_wrap,
     reason = "NTSTATUS error codes are negative i32 values written as hex"
 )]
-const INFO_LENGTH_MISMATCH: i32 = 0xC000_0004_u32 as i32;
+pub(crate) const INFO_LENGTH_MISMATCH: i32 = 0xC000_0004_u32 as i32;
 
-type NtQuerySystemInformationFn =
+pub(crate) type NtQuerySystemInformationFn =
     unsafe extern "system" fn(i32, *mut core::ffi::c_void, u32, *mut u32) -> i32;
 
 /// `NtQuerySystemInformation`, looked up at run time as Microsoft advises: it documents
 /// the function, and the members read here, as possibly changing or going in a future
 /// Windows, and a lookup that fails leaves the callers to do without.
-fn nt_query_system_information() -> Option<NtQuerySystemInformationFn> {
+pub(crate) fn nt_query_system_information() -> Option<NtQuerySystemInformationFn> {
     use std::sync::LazyLock;
     use windows_sys::Win32::System::LibraryLoader::{GetModuleHandleA, GetProcAddress};
 

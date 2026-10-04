@@ -57,12 +57,13 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 | 15 | 1.3.15 | GNU parity of the bundled sed and awk |
 | 16 | 1.3.17 | sudo, su and `cash help` |
 | 17 | 1.3.18 | `lsof` lists everything |
+| 18 | 1.3.18 | `ss` as iproute2 7.2 has it |
 
 ---
 
 ## Phase 16. sudo, su and `cash help`
 
-Found writing the help catalogue (2026-10-04); all fixed. Left: the gate and the release.
+Found writing the help catalogue (2026-10-04); all fixed, released as 1.3.17.
 
 ---
 
@@ -70,14 +71,52 @@ Found writing the help catalogue (2026-10-04); all fixed. Left: the gate and the
 
 Chosen by the user on 2026-10-04, after 1.3.17:
 
-- Bare `lsof` refuses ("needs a system-wide handle walk"), and `lsof -p` lists no data
-  files. Walk the handles as handle.exe and System Informer do:
-  `NtQuerySystemInformation(SystemExtendedHandleInformation)`, `DuplicateHandle` from
-  each process opened with `PROCESS_DUP_HANDLE`, `GetFinalPathNameByHandle` for the name.
-  Pipe handles are skipped by `GetFileType` or named on a worker thread with a timeout, so
-  no query hangs. Unelevated, only the processes the user can open are listed, as Linux
-  `lsof` without root; `sudo lsof` lists all. Drops ROADMAP item 8's refusal (4.) and the
-  `-p` note on standard error; `fuser` gains nothing it needs.
+Bare `lsof` and the open files of `-p`/`-c`/`-u` come from the handle walk
+(`cash_win32::handles`, spec D50) since 2026-10-05. Left:
+
+- `lsof +D DIR` asks the Restart Manager once per file below DIR: `lsof -p $$ -a +D /tmp`
+  over 88,142 files in `TEMP` ran past two minutes. The walk could answer `+D`/`+d` (and
+  a FILE) for the processes it can open, with the Restart Manager kept for the others.
+
+---
+
+## Phase 18. `ss` as iproute2 7.2 has it
+
+Compared with iproute2 7.2.0's `ss` in WSL on 2026-10-05 (the commands are those listed).
+
+Wrong:
+
+- The default view (no `-a`/`-l`) lists TIME-WAIT and SYN-RECV; iproute2's `SS_CONN`
+  leaves out LISTEN, CLOSE, TIME-WAIT and SYN-RECV (`ss -tn`). `state connected` keeps
+  TIME-WAIT, so `CONNECTED` in ss.rs cannot serve both.
+- `exclude STATE` without `state` subtracts from the default set, not from all states
+  (`ss -tn exclude established` shows no LISTEN).
+- `state listening` is LISTEN and CLOSED; iproute2's is LISTEN alone (`ss -uan state
+  listening` lists every UDP socket).
+- State names: `unconnected`, `close` and `syn-rcv` are refused; `listen` is taken, which
+  iproute2 refuses.
+- `src`/`dst` swallow a following operator: `ss -tln src != 127.0.0.1` is `src =`, and
+  `dst > 1.2.3.4` is taken; iproute2 calls both a syntax error.
+- `dport`/`dst` never match a socket without a peer; iproute2's peer is `0.0.0.0:0`
+  (`ss -tan 'dport = :0'` lists the listeners there).
+- `ss -st` narrows the summary's counts and prints no list; iproute2 prints the whole
+  summary, then the list.
+- IPv6 scope shows as `%17`, not an interface name (`ConvertInterfaceIndexToLuid` and
+  `ConvertInterfaceLuidToNameW` give one without spaces).
+- Long options are not getopt_long: `--num` (a prefix) is refused, `--listening=x` taken.
+- `-A 'all,!udp'`: `!` is refused.
+- `-B`, `--tos`, `--cgroup`, `--inet-sockopt`, `--tipcinfo` get "unrecognized option"
+  (255) where the other Linux-only options are refused by name (1).
+- Order: listeners do not come first in each family; a dual-mode socket is two lines
+  (`0.0.0.0` and `[::]`) where Linux has one `*`; `-V` has no `iproute2-` string; the
+  `-F /nonexistent` message differs.
+
+Missing, and Windows could give it (to be chosen):
+
+- `-r` (names, `GetNameInfoW` with a cache), `dev NAME` (IPv6 scope only), `-B`
+  (undocumented `InternalGetBoundTcpEndpointTable`), `-K` (`SetTcpEntry` DELETE_TCB,
+  admin, IPv4), `-i` and real Recv-Q/Send-Q and `-m` (`GetPerTcpConnectionEStats`, which
+  an administrator must switch on per connection), `-E` (polling only).
 
 ---
 

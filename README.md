@@ -356,7 +356,8 @@ cash's `kill`.
 
 `fuser` and `lsof` answer "who holds this file" and "who owns this port" from the
 Restart Manager and the socket tables: `fuser -k file.txt`, `kill $(lsof -t -i:8080)` and
-`lsof +D build/` work, with the Windows limits listed in spec D50. `ss -tulpn`, `ss -ltn` and
+`lsof +D build/` work, and `lsof` alone or `lsof -p PID` lists the files processes hold
+open, as Sysinternals' handle.exe does; the Windows limits are in spec D50. `ss -tulpn`, `ss -ltn` and
 `ss -tn state established` print iproute2's layout from the same socket tables (spec
 D51), so port-wait loops written for Linux work unchanged.
 

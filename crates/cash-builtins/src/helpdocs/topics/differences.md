@@ -89,8 +89,9 @@ and in the fewest places it can. The full table with its history is section 4 of
   calculation exits 1 (D56, row 34).
 - `ping` is Linux's, not `ping.exe` (D57, row 35); `find`, `sort`, `timeout`, `more`
   and others also hide Windows programs of the same name (`help` marks them).
-- `fuser`, `lsof` and `ss` show what Windows' documented tables hold: no descriptor
-  numbers, queue sizes or working folders (D50, D51, rows 28 and 29).
+- `fuser`, `lsof` and `ss` show what Windows' tables hold: no queue sizes or working
+  folders, and `lsof`'s FD is a handle value, not a descriptor (D50, D51, rows 28 and
+  29). Unelevated, `lsof` lists the files of your own processes; `sudo lsof` lists all.
 - `ls` colours when it writes to a terminal, with no alias needed (row 24). `stat` is
   cash's own, and `which` knows about builtins (rows 19 and 36).
 - `clear` and `reset` ignore terminfo; `getopt -s csh` is refused (D55, row 33).

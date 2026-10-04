@@ -218,6 +218,8 @@ Agreed scope: `fuser` in full, `lsof` as a documented subset.
    support, and `-v` listings;
 4. anything needing a system-wide handle walk (undocumented `NtQuerySystemInformation`
    handle enumeration) is refused with a clear message rather than approximated.
+   Superseded on 2026-10-04 (TODO phase 17): `lsof` walks the handles as handle.exe does,
+   for bare `lsof` and the open files of `-p`, `-c` and `-u` (spec D50).
 
 **Status: complete.** Decisions taken while building it: a directory argument means the
 files below it (the Restart Manager cannot see working directories); lsof keeps all nine

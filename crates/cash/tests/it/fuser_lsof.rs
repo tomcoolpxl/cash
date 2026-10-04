@@ -362,16 +362,29 @@ fn lsof_selects_sockets_by_address_state_and_process() {
 }
 
 #[test]
-fn lsof_p_shows_executable_modules_and_a_note() {
+fn lsof_p_shows_executable_modules_and_open_files() {
     let dir = fixture("lsof-p");
+    let held_path = dir.path().join("held-by-the-test.txt");
+    std::fs::write(&held_path, "x").unwrap();
+    let held = std::fs::OpenOptions::new()
+        .append(true)
+        .open(&held_path)
+        .unwrap();
     let out = cash_in(dir.path(), &format!("lsof -p {}", me()));
+    drop(held);
     assert_eq!(out.code, 0, "{}", out.stderr);
+    // The handle walk names the file, its handle as the descriptor with `w`, and its size.
+    let row = out
+        .stdout
+        .lines()
+        .find(|l| l.contains("held-by-the-test.txt"))
+        .unwrap_or_else(|| panic!("{}", out.stdout));
+    let columns: Vec<&str> = row.split_whitespace().collect();
     assert!(
-        out.stderr
-            .contains("does not list a process's open data files"),
-        "{}",
-        out.stderr
+        columns[3].ends_with('w') && columns[3].trim_end_matches('w').parse::<u64>().is_ok(),
+        "{row}"
     );
+    assert_eq!((columns[4], columns[6]), ("REG", "1"), "{row}");
     let first_row = out.stdout.lines().nth(1).unwrap();
     assert!(first_row.contains(" txt "), "{}", out.stdout);
     assert!(
@@ -379,7 +392,7 @@ fn lsof_p_shows_executable_modules_and_a_note() {
             .lines()
             .any(|l| l.contains(" mem ") && l.to_ascii_lowercase().contains("kernel32.dll"))
     );
-    // -t suppresses the note.
+    // -t prints the process alone.
     let terse = cash_in(dir.path(), &format!("lsof -t -p {}", me()));
     assert_eq!(
         (terse.stdout.trim(), terse.stderr.as_str()),
@@ -391,7 +404,6 @@ fn lsof_p_shows_executable_modules_and_a_note() {
 fn lsof_refuses_what_windows_cannot_answer() {
     let dir = fixture("lsof-refuse");
     for (script, needle) in [
-        ("lsof", "system-wide handle walk"),
         ("lsof -U", "Unix domain sockets"),
         ("lsof -Z", "illegal option character: Z"),
         ("lsof -F p -i", "not supported"),
@@ -400,6 +412,16 @@ fn lsof_refuses_what_windows_cannot_answer() {
         assert_eq!(out.code, 1, "{script}");
         assert!(out.stderr.contains(needle), "{script}: {}", out.stderr);
     }
+}
+
+#[test]
+fn bare_lsof_lists_every_process_it_can_open() {
+    let dir = fixture("lsof-all");
+    let out = cash_in(dir.path(), "lsof -t");
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    let pids: Vec<&str> = out.stdout.lines().collect();
+    assert!(pids.contains(&me().as_str()), "{}", out.stdout);
+    assert!(pids.len() > 10, "{}", out.stdout);
 }
 
 #[test]
