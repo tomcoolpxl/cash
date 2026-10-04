@@ -21,6 +21,7 @@ use pest::Parser;
 use pest::error::InputLocation;
 use pest::iterators::{Pair, Pairs};
 use pest::pratt_parser::{Assoc, Op, PrattParser};
+use std::borrow::Cow;
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::hash::Hash;
@@ -1026,6 +1027,12 @@ impl Compiler {
 
     fn map_primary(&self, primary: Pair<Rule>, locals: &LocalMap) -> Result<Expr, PestError> {
         match primary.as_rule() {
+            // An assignment after a comparison, a match, `&&` or `||`: `a || b = 1`.
+            Rule::assigned | Rule::print_assigned => {
+                let mut instructions = Instructions::default();
+                self.compile_expr(primary, &mut instructions, locals)?;
+                Ok(Expr::new(ExprKind::Number, instructions))
+            }
             Rule::expr => {
                 let line_col = primary.line_col();
                 let mut instructions = Instructions::default();
@@ -1050,7 +1057,8 @@ impl Compiler {
                 let text = primary.as_str();
                 let text = text.strip_prefix('/').unwrap_or(text);
                 let text = text.strip_suffix('/').unwrap_or(text);
-                let ere = translate_ere_escapes(text);
+                let text = join_continued_lines(text);
+                let ere = translate_ere_escapes(&text);
                 // What is wrong with the regex is gawk's error, after which it goes on
                 // parsing; an empty regex stands in for it meanwhile.
                 let made = Regex::new(&ere);
@@ -2627,7 +2635,10 @@ fn read_until_syntax_error(sources: &[SourceFile], failed: usize) -> CompilerErr
         },
         Ok(_) => source.len(),
     };
-    let syntax = syntax_error(source, error_at);
+    let from_file = sources
+        .get(failed)
+        .is_some_and(|source| !source.filename.is_empty());
+    let syntax = syntax_error(source, error_at, from_file);
     let mut read: Vec<SourceFile> = sources.iter().take(failed).cloned().collect();
     if let Some(prefix) = parsable_prefix(source, error_at.min(source.len())) {
         read.push(SourceFile {
@@ -2678,9 +2689,23 @@ pub fn compile_program(sources: &[SourceFile]) -> Result<Program, CompilerErrors
     let mut parsed_sources = Vec::new();
     // Each error with the index of its source.
     let mut errors: Vec<(usize, PestError)> = Vec::new();
+    // gawk's lexer ends a program given as an argument with a newline, so that a backslash
+    // last on it continues the line; a program file ends where it ends.
+    let texts: Vec<Cow<str>> = sources
+        .iter()
+        .map(|source| {
+            let contents = source.contents.as_str();
+            if source.filename.is_empty() && contents.ends_with('\\') {
+                Cow::Owned(format!("{contents}\n"))
+            } else {
+                Cow::Borrowed(contents)
+            }
+        })
+        .collect();
     for (index, source_file) in sources.iter().enumerate() {
         let filename: Rc<str> = source_file.filename.clone().into();
-        match AwkParser::parse(Rule::program, &source_file.contents) {
+        let text = texts.get(index).map_or("", |text| text.as_ref());
+        match AwkParser::parse(Rule::program, text) {
             Ok(mut program) => {
                 let program = program.child();
                 parsed_sources.push((index, filename, program.into_inner()));
@@ -2781,6 +2806,31 @@ pub fn compile_program(sources: &[SourceFile]) -> Result<Program, CompilerErrors
     } else {
         Err(CompilerErrors::new(diagnostics, &texts))
     }
+}
+
+/// The text of a regex literal with each backslash and newline taken out: gawk's lexer
+/// joins the lines there, as in a string. An escaped backslash before a newline is kept.
+fn join_continued_lines(text: &str) -> Cow<'_, str> {
+    if !text.contains("\\\n") {
+        return Cow::Borrowed(text);
+    }
+    let mut joined = String::with_capacity(text.len());
+    let mut chars = text.chars();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            joined.push(c);
+            continue;
+        }
+        match chars.next() {
+            Some('\n') => {}
+            Some(next) => {
+                joined.push('\\');
+                joined.push(next);
+            }
+            None => joined.push('\\'),
+        }
+    }
+    Cow::Owned(joined)
 }
 
 /// Rewrites the escapes POSIX awk defines in a regex literal into the syntax of the Rust

@@ -63,9 +63,10 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 What comparing cash's sed and awk with GNU sed 4.9 and gawk turned up while phase 14
 fixed their leftovers; moved here so 1.3.14 could go out (the user, 2026-10-04).
 
-- awk, found matching gawk 5.4 (2026-10-04): `print (x) /= 2/` is a syntax error where
-  gawk reads `/= 2/` after `)` as a regex; an unterminated regexp at the end of a `-f`
-  file without a last newline lacks gawk's "at end of file".
+- awk, found matching gawk 5.4 (2026-10-04): `BEGIN { do x++ while` at the end of a `-f`
+  file without a last newline is "syntax error" at `while`, gawk's `(END OF FILE)`;
+  `function f(a<newline>, b)` is "syntax error" at the function, gawk's "unexpected
+  newline or end of string" on line 2.
 
 ---
 

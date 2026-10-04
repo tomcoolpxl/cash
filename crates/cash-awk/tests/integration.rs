@@ -4101,3 +4101,1279 @@ fn test_awk_slash_equals_after_a_parenthesis_starts_a_regex() {
         ),
     ]);
 }
+
+/// Like `run_cases`, with each program written to a file as it is, with no newline added,
+/// and run with `-f`; `{file}` in the expected errors stands for the file's path.
+fn run_file_cases(cases: &[(&str, &str, &str, &str, i32)]) {
+    let dir = tempfile::tempdir().expect("a directory");
+    let path = dir.path().join("prog.awk");
+    let name = path.to_string_lossy().into_owned();
+    for (program, stdin, stdout, stderr, status) in cases {
+        std::fs::write(&path, program).expect("the program file");
+        let output = run_test_base(&["-f".to_string(), name.clone()], stdin.as_bytes());
+        assert_eq!(
+            String::from_utf8_lossy(&output.stdout).replace("\r\n", "\n"),
+            *stdout,
+            "{program:?}"
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&output.stderr).replace("\r\n", "\n"),
+            stderr.replace("{file}", &name),
+            "{program:?}"
+        );
+        assert_eq!(output.status.code(), Some(*status), "{program:?}");
+    }
+}
+
+/// `/=` after a variable that starts an expression is an assignment; after any other
+/// operand it starts a regex (`(x) /= 2/` is `x` joined to the regex `/= 2/`), and it
+/// divides nowhere, as in gawk's grammar. An assignment may follow a comparison, a match,
+/// `&&` or `||`. Each was a syntax error, or not one where gawk has one.
+#[test]
+fn test_awk_slash_equals_as_gawk_1() {
+    run_cases(&[
+        ("BEGIN { x = 1; print (x) /= 2/ }", "", "10\n", "", 0),
+        ("{ print 1 /=1/ }", "a=1\nb\n", "11\n10\n", "", 0),
+        ("{ print \"a\" /=1/ }", "a=1\nb\n", "a1\na0\n", "", 0),
+        (
+            "{ x = 5; print x++ /=1/; print x }",
+            "a=1\n",
+            "51\n6\n",
+            "",
+            0,
+        ),
+        ("{ x = 5; print x-- /=1/ }", "a=1\n", "51\n", "", 0),
+        ("{ x = 5; print -x /=1/ }", "a=1\n", "-51\n", "", 0),
+        ("{ x = 5; print !x /=1/ }", "a=1\n", "01\n", "", 0),
+        (
+            "{ print $1 /=1/ }",
+            "4 =1\n",
+            "",
+            "awk: cmd. line:1: { print $1 /=1/ }\nawk: cmd. line:1:                 ^ syntax error\n",
+            1,
+        ),
+        (
+            "{ a[1] = 4; print a[1] /=1/ }",
+            "a=1\n",
+            "",
+            "awk: cmd. line:1: { a[1] = 4; print a[1] /=1/ }\nawk: cmd. line:1:                             ^ syntax error\n",
+            1,
+        ),
+        (
+            "{ x = 4; print x /=1/ }",
+            "a=1\n",
+            "",
+            "awk: cmd. line:1: { x = 4; print x /=1/ }\nawk: cmd. line:1:                       ^ syntax error\n",
+            1,
+        ),
+    ]);
+}
+
+/// `/=` after a variable that starts an expression is an assignment; after any other
+/// operand it starts a regex (`(x) /= 2/` is `x` joined to the regex `/= 2/`), and it
+/// divides nowhere, as in gawk's grammar. An assignment may follow a comparison, a match,
+/// `&&` or `||`. Each was a syntax error, or not one where gawk has one.
+#[test]
+fn test_awk_slash_equals_as_gawk_2() {
+    run_cases(&[
+        ("{ y = (x) /=1/; print y }", "a=1\n", "1\n", "", 0),
+        ("{ print 1, /=1/ }", "a=1\n", "1 1\n", "", 0),
+        ("{ print !/=1/ }", "a=1\n", "0\n", "", 0),
+        ("{ print length /=1/ }", "a=1\n", "31\n", "", 0),
+        ("{ print $1/=2; print }", "4 x\n", "2\n2 x\n", "", 0),
+        ("{ print 2 /=1/ 3 }", "a=1\n", "213\n", "", 0),
+        (
+            "{ print NR /=1/ }",
+            "a=1\n",
+            "",
+            "awk: cmd. line:1: { print NR /=1/ }\nawk: cmd. line:1:                 ^ syntax error\n",
+            1,
+        ),
+        (
+            "function f() { return 7 } BEGIN { $0 = \"=1\"; print f() /=1/ }",
+            "",
+            "71\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { print 1 /= 2 }\n",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { print 1 /= 2 }\nawk: cmd. line:1:                  ^ unterminated regexp\n",
+            1,
+        ),
+        ("{ x = 4; print (x) /=1/ }\n", "a=1\n", "41\n", "", 0),
+    ]);
+}
+
+/// `/=` after a variable that starts an expression is an assignment; after any other
+/// operand it starts a regex (`(x) /= 2/` is `x` joined to the regex `/= 2/`), and it
+/// divides nowhere, as in gawk's grammar. An assignment may follow a comparison, a match,
+/// `&&` or `||`. Each was a syntax error, or not one where gawk has one.
+#[test]
+fn test_awk_slash_equals_as_gawk_3() {
+    run_cases(&[
+        (
+            "{ print $1 /=1/ }\n",
+            "a=1\n",
+            "",
+            "awk: cmd. line:1: { print $1 /=1/ }\nawk: cmd. line:1:                 ^ syntax error\n",
+            1,
+        ),
+        ("{ x = 4; print x++/=1/ }\n", "a=1\n", "41\n", "", 0),
+        ("{ if (1 /=1/) print \"y\" }", "a=1\n", "y\n", "", 0),
+        ("{ z = 1 /=1/; print z }", "a=1\n", "11\n", "", 0),
+        ("{ print 1 /=1/ ? \"y\" : \"n\" }", "a=1\n", "y\n", "", 0),
+        (
+            "{ print $(1) /=1/ }",
+            "8 =1\n",
+            "",
+            "awk: cmd. line:1: { print $(1) /=1/ }\nawk: cmd. line:1:                   ^ syntax error\n",
+            1,
+        ),
+        (
+            "{ print $NF /=2/ }",
+            "8 4\n",
+            "",
+            "awk: cmd. line:1: { print $NF /=2/ }\nawk: cmd. line:1:                  ^ syntax error\n",
+            1,
+        ),
+        ("{ print 1 /=/ }", "a=1\n", "11\n", "", 0),
+        ("{ x = 5; print 1 + x /=1/ }", "a=1\n", "61\n", "", 0),
+        (
+            "{ x = 5; y = x /=1/; print y }",
+            "a=1\n",
+            "",
+            "awk: cmd. line:1: { x = 5; y = x /=1/; print y }\nawk: cmd. line:1:                    ^ syntax error\n",
+            1,
+        ),
+    ]);
+}
+
+/// `/=` after a variable that starts an expression is an assignment; after any other
+/// operand it starts a regex (`(x) /= 2/` is `x` joined to the regex `/= 2/`), and it
+/// divides nowhere, as in gawk's grammar. An assignment may follow a comparison, a match,
+/// `&&` or `||`. Each was a syntax error, or not one where gawk has one.
+#[test]
+fn test_awk_slash_equals_as_gawk_4() {
+    run_cases(&[
+        (
+            "{ x = 5; print 1, x /=1/ }",
+            "a=1\n",
+            "",
+            "awk: cmd. line:1: { x = 5; print 1, x /=1/ }\nawk: cmd. line:1:                          ^ syntax error\n",
+            1,
+        ),
+        ("{ a = 5; b = 6; print a b /=1/ }", "a=1\n", "561\n", "", 0),
+        (
+            "{ x = 5; print 1 < x /=1/ }",
+            "a=1\n",
+            "",
+            "awk: cmd. line:1: { x = 5; print 1 < x /=1/ }\nawk: cmd. line:1:                           ^ syntax error\n",
+            1,
+        ),
+        (
+            "{ x = 5; print x ~ x /=1/ }",
+            "a=1\n",
+            "",
+            "awk: cmd. line:1: { x = 5; print x ~ x /=1/ }\nawk: cmd. line:1:                           ^ syntax error\n",
+            1,
+        ),
+        (
+            "{ x = 5; print (x /=1/) }",
+            "a=1\n",
+            "",
+            "awk: cmd. line:1: { x = 5; print (x /=1/) }\nawk: cmd. line:1:                       ^ syntax error\n",
+            1,
+        ),
+        (
+            "{ x = 5; print f(x /=1/) } function f(v) { return v }",
+            "a=1\n",
+            "",
+            "awk: cmd. line:1: { x = 5; print f(x /=1/) } function f(v) { return v }\nawk: cmd. line:1:                        ^ syntax error\n",
+            1,
+        ),
+        (
+            "{ x = 5; print 1 ? x /=1/ : 2 }",
+            "a=1\n",
+            "",
+            "awk: cmd. line:1: { x = 5; print 1 ? x /=1/ : 2 }\nawk: cmd. line:1:                           ^ syntax error\n",
+            1,
+        ),
+        (
+            "{ x = 5; print x && x /=1/ }",
+            "a=1\n",
+            "",
+            "awk: cmd. line:1: { x = 5; print x && x /=1/ }\nawk: cmd. line:1:                            ^ syntax error\n",
+            1,
+        ),
+        ("{ x = 5; print x ^ x /=1/ }", "a=1\n", "31251\n", "", 0),
+        ("{ x = 4; print x * x /=1/ }", "a=1\n", "161\n", "", 0),
+    ]);
+}
+
+/// `/=` after a variable that starts an expression is an assignment; after any other
+/// operand it starts a regex (`(x) /= 2/` is `x` joined to the regex `/= 2/`), and it
+/// divides nowhere, as in gawk's grammar. An assignment may follow a comparison, a match,
+/// `&&` or `||`. Each was a syntax error, or not one where gawk has one.
+#[test]
+fn test_awk_slash_equals_as_gawk_5() {
+    run_cases(&[
+        (
+            "{ x = 4; print $x /=1/ }",
+            "a=1\n",
+            "",
+            "awk: cmd. line:1: { x = 4; print $x /=1/ }\nawk: cmd. line:1:                        ^ syntax error\n",
+            1,
+        ),
+        (
+            "{ x = 4; print x[1] }",
+            "a=1\n",
+            "",
+            "awk: cmd. line:1: (FILENAME=- FNR=1) fatal: attempt to use scalar `x' as an array\n",
+            2,
+        ),
+        ("{ x = 4; print x /=2; print x }", "a=1\n", "2\n2\n", "", 0),
+        ("{ x = 4; print 1 + (x /=2) }", "a=1\n", "3\n", "", 0),
+        ("{ x = 5; print 1 - x /=1/ }", "a=1\n", "-41\n", "", 0),
+        (
+            "{ x = 4; print (1 < x /= 2); print x }",
+            "a=1\n",
+            "1\n2\n",
+            "",
+            0,
+        ),
+        ("{ x = 4; if (0 || x = 2) print x }", "a=1\n", "2\n", "", 0),
+        (
+            "{ x = 4; print x ~ y = 4; print y }",
+            "a=1\n",
+            "1\n4\n",
+            "",
+            0,
+        ),
+        (
+            "{ x = 4; print 1 + x = 2 }",
+            "a=1\n",
+            "",
+            "awk: cmd. line:1: { x = 4; print 1 + x = 2 }\nawk: cmd. line:1:                      ^ syntax error\n",
+            1,
+        ),
+    ]);
+}
+
+/// A backslash and a newline join a regex's lines, and a newline may follow a
+/// parameter's comma, as in gawk; both were syntax errors.
+#[test]
+fn test_awk_backslash_newline_joins_regex_and_parameter_lines() {
+    run_cases(&[
+        (
+            "BEGIN { print match(\"xab\", /a\\\nb/), RSTART, RLENGTH }",
+            "",
+            "2 2 2\n",
+            "",
+            0,
+        ),
+        ("BEGIN { print (\"a\\nb\" ~ /a\\\nb/) }", "", "0\n", "", 0),
+        (
+            "BEGIN { s = \"a\\\nb\"; print s, length(s) }",
+            "",
+            "ab 2\n",
+            "",
+            0,
+        ),
+        ("BEGIN { print \"ab\" ~ /[a\\\n]b/ }", "", "1\n", "", 0),
+        (
+            "function f(a,\n b) { return a + b } BEGIN { print f(1,\n 2) }",
+            "",
+            "3\n",
+            "",
+            0,
+        ),
+        (
+            "function f(\na) { return a } BEGIN { print f(1) }",
+            "",
+            "",
+            "awk: cmd. line:2: function f(\nawk: cmd. line:2:            ^ unexpected newline or end of string\n",
+            1,
+        ),
+    ]);
+}
+
+/// gawk's errors where a program file ends, with a newline last and without: a rule
+/// left incomplete is `(END OF FILE)`, a regex `unterminated regexp at end of file`.
+#[test]
+fn test_awk_errors_at_the_end_of_a_program_file_1() {
+    run_file_cases(&[
+        (
+            "BEGIN {",
+            "",
+            "",
+            "awk: {file}:1: (END OF FILE)\nawk: {file}:1:       ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "BEGIN {\n",
+            "",
+            "",
+            "awk: {file}:1: (END OF FILE)\nawk: {file}:1: ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "BEGIN {\n",
+            "",
+            "",
+            "awk: {file}:1: (END OF FILE)\nawk: {file}:1: ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1",
+            "",
+            "",
+            "awk: {file}:1: (END OF FILE)\nawk: {file}:1:             ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1\n",
+            "",
+            "",
+            "awk: {file}:1: (END OF FILE)\nawk: {file}:1: ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 +",
+            "",
+            "",
+            "awk: {file}:2: (END OF FILE)\nawk: {file}:2:               ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 +\n",
+            "",
+            "",
+            "awk: {file}:2: BEGIN { x = 1 +\nawk: {file}:2:                ^ unexpected newline or end of string\n",
+            1,
+        ),
+        (
+            "BEGIN {\n  x = 1 +",
+            "",
+            "",
+            "awk: {file}:3: (END OF FILE)\nawk: {file}:3:         ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "BEGIN {\n  x = 1 +\n",
+            "",
+            "",
+            "awk: {file}:3:   x = 1 +\nawk: {file}:3:          ^ unexpected newline or end of string\n",
+            1,
+        ),
+        (
+            "BEGIN {\n  x = 1\n",
+            "",
+            "",
+            "awk: {file}:2: (END OF FILE)\nawk: {file}:2: ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "BEGIN {\n\tx = 1 +",
+            "",
+            "",
+            "awk: {file}:3: (END OF FILE)\nawk: {file}:3: \t      ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+    ]);
+}
+
+/// gawk's errors where a program file ends, with a newline last and without: a rule
+/// left incomplete is `(END OF FILE)`, a regex `unterminated regexp at end of file`.
+#[test]
+fn test_awk_errors_at_the_end_of_a_program_file_2() {
+    run_file_cases(&[
+        (
+            "BEGIN {\n\tx = 1 +\n",
+            "",
+            "",
+            "awk: {file}:3: \tx = 1 +\nawk: {file}:3: \t       ^ unexpected newline or end of string\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 &&",
+            "",
+            "",
+            "awk: {file}:2: (END OF FILE)\nawk: {file}:2:               ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 &&\n",
+            "",
+            "",
+            "awk: {file}:3: (END OF FILE)\nawk: {file}:3:               ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 &&\n",
+            "",
+            "",
+            "awk: {file}:3: (END OF FILE)\nawk: {file}:3:               ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 ? 2 :",
+            "",
+            "",
+            "awk: {file}:2: (END OF FILE)\nawk: {file}:2:                   ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 ? 2 :\n",
+            "",
+            "",
+            "awk: {file}:3: (END OF FILE)\nawk: {file}:3:                   ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1,",
+            "",
+            "",
+            "awk: {file}:1: BEGIN { x = 1,\nawk: {file}:1:              ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1,\n",
+            "",
+            "",
+            "awk: {file}:1: BEGIN { x = 1,\nawk: {file}:1:              ^ syntax error\n",
+            1,
+        ),
+        (
+            "function f(a,",
+            "",
+            "",
+            "awk: {file}:1: (END OF FILE)\nawk: {file}:1:             ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "function f(a,\n",
+            "",
+            "",
+            "awk: {file}:1: (END OF FILE)\nawk: {file}:1: ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "function f(a)\n",
+            "",
+            "",
+            "awk: {file}:1: (END OF FILE)\nawk: {file}:1: ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+    ]);
+}
+
+/// gawk's errors where a program file ends, with a newline last and without: a rule
+/// left incomplete is `(END OF FILE)`, a regex `unterminated regexp at end of file`.
+#[test]
+fn test_awk_errors_at_the_end_of_a_program_file_3() {
+    run_file_cases(&[
+        (
+            "BEGIN { x = 1 # c",
+            "",
+            "",
+            "awk: {file}:1: (END OF FILE)\nawk: {file}:1:               ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 # c\n",
+            "",
+            "",
+            "awk: {file}:1: (END OF FILE)\nawk: {file}:1:               ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 # c\n",
+            "",
+            "",
+            "awk: {file}:1: (END OF FILE)\nawk: {file}:1:               ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        ("# only", "", "", "", 0),
+        ("# only\n", "", "", "", 0),
+        (
+            "BEGIN { x = /a/",
+            "",
+            "",
+            "awk: {file}:1: (END OF FILE)\nawk: {file}:1:              ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "BEGIN { x = /a/\n",
+            "",
+            "",
+            "awk: {file}:1: (END OF FILE)\nawk: {file}:1: ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 } }",
+            "",
+            "",
+            "awk: {file}:1: BEGIN { x = 1 } }\nawk: {file}:1:                 ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 } }\n",
+            "",
+            "",
+            "awk: {file}:1: BEGIN { x = 1 } }\nawk: {file}:1:                 ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { delete",
+            "",
+            "",
+            "awk: {file}:2: (END OF FILE)\nawk: {file}:2:         ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "BEGIN { delete\n",
+            "",
+            "",
+            "awk: {file}:2: BEGIN { delete\nawk: {file}:2:               ^ unexpected newline or end of string\n",
+            1,
+        ),
+    ]);
+}
+
+/// gawk's errors where a program file ends, with a newline last and without: a rule
+/// left incomplete is `(END OF FILE)`, a regex `unterminated regexp at end of file`.
+#[test]
+fn test_awk_errors_at_the_end_of_a_program_file_4() {
+    run_file_cases(&[
+        (
+            "BEGIN { x = 1 } BEGIN",
+            "",
+            "",
+            "awk: {file}:1: BEGIN blocks must have an action part\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 } BEGIN\n",
+            "",
+            "",
+            "awk: {file}:1: BEGIN blocks must have an action part\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 } END",
+            "",
+            "",
+            "awk: {file}:1: END blocks must have an action part\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 } END\n",
+            "",
+            "",
+            "awk: {file}:1: END blocks must have an action part\n",
+            1,
+        ),
+        (
+            "{ x = 1 +   ",
+            "",
+            "",
+            "awk: {file}:2: (END OF FILE)\nawk: {file}:2:            ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "{ x = 1 +   \n",
+            "",
+            "",
+            "awk: {file}:2: { x = 1 +   \nawk: {file}:2:             ^ unexpected newline or end of string\n",
+            1,
+        ),
+        (
+            "BEGIN   {   ",
+            "",
+            "",
+            "awk: {file}:1: (END OF FILE)\nawk: {file}:1:            ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "BEGIN   {   \n",
+            "",
+            "",
+            "awk: {file}:1: (END OF FILE)\nawk: {file}:1: ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "BEGIN {\n x = 1   ",
+            "",
+            "",
+            "awk: {file}:2: (END OF FILE)\nawk: {file}:2:         ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "BEGIN {\n x = 1   \n",
+            "",
+            "",
+            "awk: {file}:2: (END OF FILE)\nawk: {file}:2: ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 + # c",
+            "",
+            "",
+            "awk: {file}:2: (END OF FILE)\nawk: {file}:2:                 ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+    ]);
+}
+
+/// gawk's errors where a program file ends, with a newline last and without: a rule
+/// left incomplete is `(END OF FILE)`, a regex `unterminated regexp at end of file`.
+#[test]
+fn test_awk_errors_at_the_end_of_a_program_file_5() {
+    run_file_cases(&[
+        (
+            "BEGIN { x = 1 + # c\n",
+            "",
+            "",
+            "awk: {file}:2: BEGIN { x = 1 + # c\nawk: {file}:2:                 ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN {\n x = 1 # c\n # d",
+            "",
+            "",
+            "awk: {file}:2: (END OF FILE)\nawk: {file}:2:  ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "BEGIN {\n x = 1 # c\n # d\n",
+            "",
+            "",
+            "awk: {file}:3: (END OF FILE)\nawk: {file}:3:  ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "BEGIN {\n # d",
+            "",
+            "",
+            "awk: {file}:1: (END OF FILE)\nawk: {file}:1:  ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "BEGIN {\n # d\n",
+            "",
+            "",
+            "awk: {file}:2: (END OF FILE)\nawk: {file}:2:  ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 +\n # d",
+            "",
+            "",
+            "awk: {file}:2: BEGIN { x = 1 +\nawk: {file}:2:                ^ unexpected newline or end of string\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 +\n # d\n",
+            "",
+            "",
+            "awk: {file}:2: BEGIN { x = 1 +\nawk: {file}:2:                ^ unexpected newline or end of string\n",
+            1,
+        ),
+        (
+            "{ x = \"#\"",
+            "",
+            "",
+            "awk: {file}:1: (END OF FILE)\nawk: {file}:1:       ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "{ x = \"#\"\n",
+            "",
+            "",
+            "awk: {file}:1: (END OF FILE)\nawk: {file}:1: ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "BEGIN { next",
+            "",
+            "",
+            "awk: {file}:1: error: `next' used in BEGIN action\nawk: {file}:1: (END OF FILE)\nawk: {file}:1:         ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "BEGIN { next\n",
+            "",
+            "",
+            "awk: {file}:1: error: `next' used in BEGIN action\nawk: {file}:1: (END OF FILE)\nawk: {file}:1: ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+    ]);
+}
+
+/// gawk's errors where a program file ends, with a newline last and without: a rule
+/// left incomplete is `(END OF FILE)`, a regex `unterminated regexp at end of file`.
+#[test]
+fn test_awk_errors_at_the_end_of_a_program_file_6() {
+    run_file_cases(&[
+        (
+            "@",
+            "",
+            "",
+            "awk: {file}:2: (END OF FILE)\nawk: {file}:2: ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "@\n",
+            "",
+            "",
+            "awk: {file}:2: @\nawk: {file}:2:  ^ unexpected newline or end of string\n",
+            1,
+        ),
+        (
+            "BEGIN { x = /abc }",
+            "",
+            "",
+            "awk: {file}:1: BEGIN { x = /abc }\nawk: {file}:1:              ^ unterminated regexp at end of file\n",
+            1,
+        ),
+        (
+            "BEGIN { x = /abc }\n",
+            "",
+            "",
+            "awk: {file}:1: BEGIN { x = /abc }\nawk: {file}:1:              ^ unterminated regexp\n",
+            1,
+        ),
+        (
+            "BEGIN { x = /abc",
+            "",
+            "",
+            "awk: {file}:1: BEGIN { x = /abc\nawk: {file}:1:              ^ unterminated regexp at end of file\n",
+            1,
+        ),
+        (
+            "BEGIN { x = /abc\n",
+            "",
+            "",
+            "awk: {file}:1: BEGIN { x = /abc\nawk: {file}:1:              ^ unterminated regexp\n",
+            1,
+        ),
+        (
+            "BEGIN { x = \"abc",
+            "",
+            "",
+            "awk: {file}:1: BEGIN { x = \"abc\nawk: {file}:1:             ^ unterminated string\n",
+            1,
+        ),
+        (
+            "BEGIN { x = \"abc\n",
+            "",
+            "",
+            "awk: {file}:1: BEGIN { x = \"abc\nawk: {file}:1:             ^ unterminated string\n",
+            1,
+        ),
+        (
+            "BEGIN { print 1 /= 2 }",
+            "",
+            "",
+            "awk: {file}:1: BEGIN { print 1 /= 2 }\nawk: {file}:1:                  ^ unterminated regexp at end of file\n",
+            1,
+        ),
+        (
+            "BEGIN { print 1 /= 2 }\n",
+            "",
+            "",
+            "awk: {file}:1: BEGIN { print 1 /= 2 }\nawk: {file}:1:                  ^ unterminated regexp\n",
+            1,
+        ),
+        (
+            "BEGIN { (x) /= 2 }",
+            "",
+            "",
+            "awk: {file}:1: BEGIN { (x) /= 2 }\nawk: {file}:1:              ^ unterminated regexp at end of file\n",
+            1,
+        ),
+    ]);
+}
+
+/// gawk's errors where a program file ends, with a newline last and without: a rule
+/// left incomplete is `(END OF FILE)`, a regex `unterminated regexp at end of file`.
+#[test]
+fn test_awk_errors_at_the_end_of_a_program_file_7() {
+    run_file_cases(&[
+        (
+            "BEGIN { (x) /= 2 }\n",
+            "",
+            "",
+            "awk: {file}:1: BEGIN { (x) /= 2 }\nawk: {file}:1:              ^ unterminated regexp\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 \\",
+            "",
+            "",
+            "awk: {file}:1: BEGIN { x = 1 \\\nawk: {file}:1:               ^ backslash not last character on line\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 \\\n",
+            "",
+            "",
+            "awk: {file}:2: BEGIN { x = 1 \\\nawk: {file}:2:                ^ unexpected newline or end of string\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 } \\",
+            "",
+            "",
+            "awk: {file}:1: BEGIN { x = 1 } \\\nawk: {file}:1:                 ^ backslash not last character on line\n",
+            1,
+        ),
+        ("BEGIN { x = 1 } \\\n", "", "", "", 0),
+        (
+            "BEGIN { x = 1 }\n\\",
+            "",
+            "",
+            "awk: {file}:2: \\\nawk: {file}:2: ^ backslash not last character on line\n",
+            1,
+        ),
+        ("BEGIN { x = 1 }\n\\\n", "", "", "", 0),
+        (
+            "BEGIN { x = 1 \\\n",
+            "",
+            "",
+            "awk: {file}:2: BEGIN { x = 1 \\\nawk: {file}:2:                ^ unexpected newline or end of string\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 \\\n  + 2",
+            "",
+            "",
+            "awk: {file}:2: (END OF FILE)\nawk: {file}:2:     ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 \\\n  + 2\n",
+            "",
+            "",
+            "awk: {file}:2: (END OF FILE)\nawk: {file}:2: ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 &&\\",
+            "",
+            "",
+            "awk: {file}:1: BEGIN { x = 1 &&\\\nawk: {file}:1:                 ^ backslash not last character on line\n",
+            1,
+        ),
+    ]);
+}
+
+/// gawk's errors where a program file ends, with a newline last and without: a rule
+/// left incomplete is `(END OF FILE)`, a regex `unterminated regexp at end of file`.
+#[test]
+fn test_awk_errors_at_the_end_of_a_program_file_8() {
+    run_file_cases(&[
+        (
+            "BEGIN { x = 1 &&\\\n",
+            "",
+            "",
+            "awk: {file}:3: BEGIN { x = 1 &&\\\nawk: {file}:3:                  ^ unexpected newline or end of string\n",
+            1,
+        ),
+        (
+            "BEGIN { x = /a\\",
+            "",
+            "",
+            "awk: {file}:1: BEGIN { x = /a\\\nawk: {file}:1:              ^ unterminated regexp ends with `\\' at end of file\n",
+            1,
+        ),
+        (
+            "BEGIN { x = /a\\\n",
+            "",
+            "",
+            "awk: {file}:2: BEGIN { x = /a\\\nawk: {file}:2:              ^ unterminated regexp at end of file\n",
+            1,
+        ),
+        (
+            "BEGIN { x = \"a\\",
+            "",
+            "",
+            "awk: {file}:1: BEGIN { x = \"a\\\nawk: {file}:1:             ^ unterminated string\n",
+            1,
+        ),
+        (
+            "BEGIN { x = \"a\\\n",
+            "",
+            "",
+            "awk: {file}:2: BEGIN { x = \"a\\\nawk: {file}:2:             ^ unterminated string\n",
+            1,
+        ),
+        (
+            "BEGIN { x = \"a\\\nb",
+            "",
+            "",
+            "awk: {file}:2: BEGIN { x = \"a\\\nawk: {file}:2:             ^ unterminated string\n",
+            1,
+        ),
+        (
+            "BEGIN { x = \"a\\\nb\n",
+            "",
+            "",
+            "awk: {file}:2: BEGIN { x = \"a\\\nawk: {file}:2:             ^ unterminated string\n",
+            1,
+        ),
+        (
+            "BEGIN { x = /a\\\nb",
+            "",
+            "",
+            "awk: {file}:2: BEGIN { x = /a\\\nawk: {file}:2:              ^ unterminated regexp at end of file\n",
+            1,
+        ),
+        (
+            "BEGIN { x = /a\\\nb\n",
+            "",
+            "",
+            "awk: {file}:2: BEGIN { x = /a\\\nawk: {file}:2:              ^ unterminated regexp\n",
+            1,
+        ),
+    ]);
+}
+
+/// gawk's errors where a program given as an argument ends: gawk adds a newline, so a
+/// backslash last continues the line, and `&&` or a comment last reads to the end.
+#[test]
+fn test_awk_errors_at_the_end_of_a_program_argument_1() {
+    run_cases(&[
+        (
+            "BEGIN {",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN {\nawk: cmd. line:1:        ^ unexpected newline or end of string\n",
+            1,
+        ),
+        (
+            "BEGIN {\n",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN {\nawk: cmd. line:1:        ^ unexpected newline or end of string\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { x = 1\nawk: cmd. line:1:              ^ unexpected newline or end of string\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 +",
+            "",
+            "",
+            "awk: cmd. line:2: BEGIN { x = 1 +\nawk: cmd. line:2:                ^ unexpected newline or end of string\n",
+            1,
+        ),
+        (
+            "BEGIN {\n  x = 1 +",
+            "",
+            "",
+            "awk: cmd. line:3:   x = 1 +\nawk: cmd. line:3:          ^ unexpected newline or end of string\n",
+            1,
+        ),
+        (
+            "BEGIN {\n  x = 1\n",
+            "",
+            "",
+            "awk: cmd. line:2:   x = 1\nawk: cmd. line:2:        ^ unexpected newline or end of string\n",
+            1,
+        ),
+        (
+            "BEGIN {\n\tx = 1 +",
+            "",
+            "",
+            "awk: cmd. line:3: \tx = 1 +\nawk: cmd. line:3: \t       ^ unexpected newline or end of string\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 &&",
+            "",
+            "",
+            "awk: cmd. line:3: (END OF FILE)\nawk: cmd. line:3:               ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 &&\n",
+            "",
+            "",
+            "awk: cmd. line:3: (END OF FILE)\nawk: cmd. line:3:               ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 ? 2 :",
+            "",
+            "",
+            "awk: cmd. line:3: (END OF FILE)\nawk: cmd. line:3:                   ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1,",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { x = 1,\nawk: cmd. line:1:              ^ syntax error\n",
+            1,
+        ),
+        (
+            "function f(a,",
+            "",
+            "",
+            "awk: cmd. line:1: function f(a,\nawk: cmd. line:1:              ^ unexpected newline or end of string\n",
+            1,
+        ),
+    ]);
+}
+
+/// gawk's errors where a program given as an argument ends: gawk adds a newline, so a
+/// backslash last continues the line, and `&&` or a comment last reads to the end.
+#[test]
+fn test_awk_errors_at_the_end_of_a_program_argument_2() {
+    run_cases(&[
+        (
+            "function f(a)\n",
+            "",
+            "",
+            "awk: cmd. line:1: function f(a)\nawk: cmd. line:1:              ^ unexpected newline or end of string\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 # c",
+            "",
+            "",
+            "awk: cmd. line:1: (END OF FILE)\nawk: cmd. line:1:               ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 # c\n",
+            "",
+            "",
+            "awk: cmd. line:1: (END OF FILE)\nawk: cmd. line:1:               ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        ("# only", "", "", "", 0),
+        (
+            "BEGIN { x = /a/",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { x = /a/\nawk: cmd. line:1:                ^ unexpected newline or end of string\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 } }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { x = 1 } }\nawk: cmd. line:1:                 ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { delete",
+            "",
+            "",
+            "awk: cmd. line:2: BEGIN { delete\nawk: cmd. line:2:               ^ unexpected newline or end of string\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 } BEGIN",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN blocks must have an action part\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 } END",
+            "",
+            "",
+            "awk: cmd. line:1: END blocks must have an action part\n",
+            1,
+        ),
+        (
+            "{ x = 1 +   ",
+            "",
+            "",
+            "awk: cmd. line:2: { x = 1 +   \nawk: cmd. line:2:             ^ unexpected newline or end of string\n",
+            1,
+        ),
+        (
+            "BEGIN   {   ",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN   {   \nawk: cmd. line:1:             ^ unexpected newline or end of string\n",
+            1,
+        ),
+        (
+            "BEGIN {\n x = 1   ",
+            "",
+            "",
+            "awk: cmd. line:2:  x = 1   \nawk: cmd. line:2:          ^ unexpected newline or end of string\n",
+            1,
+        ),
+    ]);
+}
+
+/// gawk's errors where a program given as an argument ends: gawk adds a newline, so a
+/// backslash last continues the line, and `&&` or a comment last reads to the end.
+#[test]
+fn test_awk_errors_at_the_end_of_a_program_argument_3() {
+    run_cases(&[
+        (
+            "BEGIN { x = 1 + # c",
+            "",
+            "",
+            "awk: cmd. line:2: BEGIN { x = 1 + # c\nawk: cmd. line:2:                 ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN {\n x = 1 # c\n # d",
+            "",
+            "",
+            "awk: cmd. line:3: (END OF FILE)\nawk: cmd. line:3:  ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "BEGIN {\n # d",
+            "",
+            "",
+            "awk: cmd. line:2: (END OF FILE)\nawk: cmd. line:2:  ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 +\n # d",
+            "",
+            "",
+            "awk: cmd. line:2: BEGIN { x = 1 +\nawk: cmd. line:2:                ^ unexpected newline or end of string\n",
+            1,
+        ),
+        (
+            "{ x = \"#\"",
+            "",
+            "",
+            "awk: cmd. line:1: { x = \"#\"\nawk: cmd. line:1:          ^ unexpected newline or end of string\n",
+            1,
+        ),
+        (
+            "BEGIN { next",
+            "",
+            "",
+            "awk: cmd. line:1: error: `next' used in BEGIN action\nawk: cmd. line:1: BEGIN { next\nawk: cmd. line:1:             ^ unexpected newline or end of string\n",
+            1,
+        ),
+        (
+            "@",
+            "",
+            "",
+            "awk: cmd. line:2: @\nawk: cmd. line:2:  ^ unexpected newline or end of string\n",
+            1,
+        ),
+        (
+            "BEGIN { x = /abc }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { x = /abc }\nawk: cmd. line:1:              ^ unterminated regexp\n",
+            1,
+        ),
+        (
+            "BEGIN { x = /abc",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { x = /abc\nawk: cmd. line:1:              ^ unterminated regexp\n",
+            1,
+        ),
+        (
+            "BEGIN { x = \"abc",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { x = \"abc\nawk: cmd. line:1:             ^ unterminated string\n",
+            1,
+        ),
+        (
+            "BEGIN { print 1 /= 2 }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { print 1 /= 2 }\nawk: cmd. line:1:                  ^ unterminated regexp\n",
+            1,
+        ),
+        (
+            "BEGIN { (x) /= 2 }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { (x) /= 2 }\nawk: cmd. line:1:              ^ unterminated regexp\n",
+            1,
+        ),
+    ]);
+}
+
+/// gawk's errors where a program given as an argument ends: gawk adds a newline, so a
+/// backslash last continues the line, and `&&` or a comment last reads to the end.
+#[test]
+fn test_awk_errors_at_the_end_of_a_program_argument_4() {
+    run_cases(&[
+        (
+            "BEGIN { x = 1 \\",
+            "",
+            "",
+            "awk: cmd. line:2: BEGIN { x = 1 \\\nawk: cmd. line:2:                ^ unexpected newline or end of string\n",
+            1,
+        ),
+        ("BEGIN { x = 1 } \\", "", "", "", 0),
+        ("BEGIN { x = 1 }\n\\", "", "", "", 0),
+        (
+            "BEGIN { x = 1 \\\n",
+            "",
+            "",
+            "awk: cmd. line:2: BEGIN { x = 1 \\\nawk: cmd. line:2:                ^ unexpected newline or end of string\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 \\\n  + 2",
+            "",
+            "",
+            "awk: cmd. line:2:   + 2\nawk: cmd. line:2:      ^ unexpected newline or end of string\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 &&\\",
+            "",
+            "",
+            "awk: cmd. line:3: BEGIN { x = 1 &&\\\nawk: cmd. line:3:                  ^ unexpected newline or end of string\n",
+            1,
+        ),
+        (
+            "BEGIN { x = /a\\",
+            "",
+            "",
+            "awk: cmd. line:2: BEGIN { x = /a\\\nawk: cmd. line:2:              ^ unterminated regexp at end of file\n",
+            1,
+        ),
+        (
+            "BEGIN { x = \"a\\",
+            "",
+            "",
+            "awk: cmd. line:2: BEGIN { x = \"a\\\nawk: cmd. line:2:             ^ unterminated string\n",
+            1,
+        ),
+        (
+            "BEGIN { x = \"a\\\nb",
+            "",
+            "",
+            "awk: cmd. line:2: BEGIN { x = \"a\\\nawk: cmd. line:2:             ^ unterminated string\n",
+            1,
+        ),
+        (
+            "BEGIN { x = /a\\\nb",
+            "",
+            "",
+            "awk: cmd. line:2: BEGIN { x = /a\\\nawk: cmd. line:2:              ^ unterminated regexp\n",
+            1,
+        ),
+    ]);
+}

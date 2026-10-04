@@ -22,8 +22,9 @@ string_char     =  {
   | "\\" ~ ANY
 }
 // A `/` in a bracket expression does not end the regex, as gawk's lexer reads one
-// (`/[/]/`); nor is a `#` in it a comment, nor white space skipped.
-ere             = ${ "/" ~ (ere_bracket | ("\\" ~ !"\n" ~ ANY) | (!("/" | "\n" | "[") ~ ANY))* ~ "/" }
+// (`/[/]/`); nor is a `#` in it a comment, nor white space skipped. A backslash before a
+// newline joins the lines, as in a string.
+ere             = ${ "/" ~ (ere_bracket | ("\\" ~ ANY) | (!("/" | "\n" | "[") ~ ANY))* ~ "/" }
 ere_class       = _{
     "[:" ~ (!(":]" | "\n") ~ ANY)* ~ ":]"
   | "[." ~ (!(".]" | "\n") ~ ANY)* ~ ".]"
@@ -32,7 +33,7 @@ ere_class       = _{
 ere_bracket     = _{
     "[" ~ "^"? ~ "]"? ~ (
         ere_class
-      | ("\\" ~ !"\n" ~ ANY)
+      | ("\\" ~ ANY)
       | (!("]" | "\n") ~ ANY)
     )* ~ "]"
 }
@@ -163,7 +164,8 @@ pattern_and_action = {
 // `func` is gawk's other spelling of `function`.
 function_definition = { (function_word | func_word) ~ name ~ "(" ~ param_list? ~ ")" ~ opt_newline ~ action }
 
-param_list = { name ~ ("," ~ name)* }
+// A newline may follow a comma, as in gawk.
+param_list = { name ~ ("," ~ opt_newline ~ name)* }
 
 normal_pattern = { range_pattern | expr }
 range_pattern  = { expr ~ "," ~ opt_newline ~ expr }
@@ -306,26 +308,33 @@ postfix_op = _{
 post_inc = { "++" }
 post_dec = { "--" }
 
-infix_op = _{
+// gawk's grammar has an expression, which may be an assignment, after a comparison, a
+// match, `&&` and `||`, and a simpler operand after the others: `a || b = 1` is `a || (b =
+// 1)`, and `1 + x /=2/` is `1 + x` joined to the regex `/=2/`.
+low_infix_op = _{
+    comp_op
+  | match_op
+  | not_match
+  | and
+  | or
+}
+high_infix_op = _{
     pow
   | mul
   | div
   | modulus
   | add
   | binary_sub
-  | comp_op
-  | match_op
-  | not_match
   | in_op
-  | and
-  | or
   | concat
 }
 
 // `**` is gawk's other spelling of `^`.
 pow        = { "^" | "**" }
 mul        = { "*" }
-div        = { "/" }
+// `/=` divides nowhere in gawk: after a variable it is an assignment, elsewhere the start
+// of a regex.
+div        = { "/" ~ !"=" }
 modulus    = { "%" }
 add        = { "+" }
 binary_sub = { "-" }
@@ -359,7 +368,13 @@ binary_expr = {
 
 multidimensional_in    = { "(" ~ multidimensional_index ~ ")" ~ in_word ~ array_ref }
 // Prefix operators may follow one another, as `- -x` and `!-x` in gawk.
-simple_binary_expr     = { prefix_op* ~ primary ~ postfix_op? ~ (infix_op ~ prefix_op* ~ primary ~ postfix_op?)* }
+simple_binary_expr     = { expr_operand ~ (low_infix_op ~ low_operand | high_infix_op ~ operand)* }
+operand                = _{ prefix_op* ~ primary ~ postfix_op? }
+// An operand that starts an expression: a variable followed by `/=` is the target of an
+// assignment, so `/=` cannot start a regex after it, as in gawk (`x /=2/` is an error).
+expr_operand           = _{ !(lvalue ~ "/=") ~ operand }
+low_operand            = _{ assigned | expr_operand }
+assigned               =  { assignment }
 multidimensional_index = { multiple_expr_list }
 
 ternary_expr = { binary_expr ~ "?" ~ expr ~ ":" ~ expr }
@@ -444,20 +459,12 @@ getline_infix_op         = _{
 }
 // In `print`, a `>` that is not in parentheses is a redirection; the other comparisons
 // are comparisons, as in gawk (`print a == b`), which rejected them.
-print_infix_op           = _{
-    pow
-  | mul
-  | div
-  | modulus
-  | add
-  | binary_sub
-  | print_comp_op
+print_low_infix_op       = _{
+    print_comp_op
   | match_op
   | not_match
-  | in_op
   | and
   | or
-  | concat
 }
 print_comp_op            =  {
     le
@@ -467,8 +474,10 @@ print_comp_op            =  {
   | eq
 }
 simple_binary_print_expr =  {
-    prefix_op* ~ primary ~ postfix_op? ~ (print_infix_op ~ prefix_op* ~ primary ~ postfix_op?)*
+    expr_operand ~ (print_low_infix_op ~ print_low_operand | high_infix_op ~ operand)*
 }
+print_low_operand        = _{ print_assigned | expr_operand }
+print_assigned           =  { print_assignment }
 binary_print_expr        =  {
     multidimensional_in
   | simple_binary_print_expr
