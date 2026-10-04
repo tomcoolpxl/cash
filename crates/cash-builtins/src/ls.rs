@@ -296,6 +296,7 @@ impl builtins::Command for LsCommand {
         }
 
         let mut had_error = false;
+        let mut had_minor_error = false;
         let multiple_paths = paths.len() > 1;
 
         // Separate inputs into existing files, existing dirs, and non-existing paths.
@@ -370,23 +371,57 @@ impl builtins::Command for LsCommand {
                 writeln!(context.stdout(), "{dir_str}:")?;
             }
 
-            if let Err(e) = self.list_directory(&context, dir_path, dir_str, &look, is_tty, 1) {
-                let e = cash_core::error::os_error_text(&e);
-                writeln!(
-                    context.stderr(),
-                    "{}: cannot open directory '{}': {e}",
-                    context.command_name,
-                    dir_str
-                )?;
-                had_error = true;
+            match self.list_operand(&context, dir_path, dir_str, &look, is_tty)? {
+                Some(unreadable) => had_minor_error |= unreadable,
+                None => had_error = true,
             }
         }
 
-        if had_error {
-            Ok(ExecutionResult::new(2))
-        } else {
-            Ok(ExecutionResult::success())
+        Ok(gnu_status(had_error, had_minor_error))
+    }
+}
+
+impl LsCommand {
+    /// Lists a directory named on the command line: `Some` with whether one below it
+    /// could not be read, `None` when it could not be read itself, which is reported.
+    ///
+    /// A write that fails goes up, so a reader that went away ends `ls` with 141 (D71).
+    /// Both were "cannot open directory", status 2: `ls -1 C:/Windows/System32 | head -1`
+    /// (BI-14).
+    fn list_operand<SE: cash_core::ShellExtensions>(
+        &self,
+        context: &cash_core::ExecutionContext<'_, SE>,
+        dir_path: &Path,
+        dir_str: &str,
+        look: &Look,
+        is_tty: bool,
+    ) -> Result<Option<bool>, std::io::Error> {
+        match self.read_entries(dir_path, true) {
+            Ok(items) => self
+                .show_directory(context, &items, dir_str, look, is_tty, 1)
+                .map(Some),
+            Err(e) => {
+                writeln!(
+                    context.stderr(),
+                    "{}: cannot open directory '{dir_str}': {}",
+                    context.command_name,
+                    cash_core::error::os_error_text(&e)
+                )?;
+                Ok(None)
+            }
         }
+    }
+}
+
+/// GNU `ls`'s status: 2 for an operand it could not read, 1 for a directory below one
+/// (a "minor problem"), else 0.
+fn gnu_status(had_error: bool, had_minor_error: bool) -> ExecutionResult {
+    if had_error {
+        ExecutionResult::new(2)
+    } else if had_minor_error {
+        ExecutionResult::new(1)
+    } else {
+        ExecutionResult::success()
     }
 }
 
@@ -542,39 +577,62 @@ impl LsCommand {
         Ok(items)
     }
 
-    fn list_directory<SE: cash_core::ShellExtensions>(
+    /// Lists a directory's `items`, read already, and under `-R` the directories below
+    /// it. `Ok(true)` when one of those could not be read, which GNU `ls` reports and
+    /// counts a minor problem, status 1: it said nothing, and printed the directory's
+    /// header with nothing under it (BI-14). The header comes only once a directory is
+    /// open, as in GNU `ls`.
+    fn show_directory<SE: cash_core::ShellExtensions>(
         &self,
         context: &cash_core::ExecutionContext<'_, SE>,
-        dir_path: &Path,
+        items: &[ItemInfo],
         dir_str: &str,
         look: &Look,
         is_tty: bool,
         level: usize,
-    ) -> Result<(), std::io::Error> {
-        let items = self.read_entries(dir_path, true)?;
-
+    ) -> Result<bool, std::io::Error> {
         // In long format, print total blocks at top of directory listing.
         if self.long {
             let total_kb: u64 = items.iter().map(|item| item.size.div_ceil(1024)).sum();
             writeln!(context.stdout(), "total {total_kb}")?;
         }
 
-        self.render_items(context, &items, look, is_tty)?;
+        self.render_items(context, items, look, is_tty)?;
 
         // Recursive descent if -R, as deep as --depth allows.
+        let mut unreadable = false;
         if self.recursive && self.depth.is_none_or(|depth| level < depth) {
-            for item in &items {
+            for item in items {
                 if item.kind == EntryKind::Dir && item.name != "." && item.name != ".." {
                     let sub_str = format!("{dir_str}/{}", item.name);
-                    writeln!(context.stdout())?;
-                    writeln!(context.stdout(), "{sub_str}:")?;
-                    let _ =
-                        self.list_directory(context, &item.path, &sub_str, look, is_tty, level + 1);
+                    match self.read_entries(&item.path, true) {
+                        Ok(sub_items) => {
+                            writeln!(context.stdout())?;
+                            writeln!(context.stdout(), "{sub_str}:")?;
+                            unreadable |= self.show_directory(
+                                context,
+                                &sub_items,
+                                &sub_str,
+                                look,
+                                is_tty,
+                                level + 1,
+                            )?;
+                        }
+                        Err(e) => {
+                            writeln!(
+                                context.stderr(),
+                                "{}: cannot open directory '{sub_str}': {}",
+                                context.command_name,
+                                cash_core::error::os_error_text(&e)
+                            )?;
+                            unreadable = true;
+                        }
+                    }
                 }
             }
         }
 
-        Ok(())
+        Ok(unreadable)
     }
 
     /// `--tree`: the directory, then everything below it with the branches drawn, as

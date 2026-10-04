@@ -575,3 +575,49 @@ fn ls_long_colours_every_column_when_colour_is_on() {
     let out = cash(&format!("ls -l '{dir}/f.txt' | cat"));
     assert!(!out.stdout.contains('\x1b'), "{:?}", out.stdout);
 }
+
+/// `ls` whose reader went away ends in silence with 141, as SIGPIPE would end it (D71).
+/// It said "cannot open directory '…': The pipe is being closed." and ended with 2
+/// (BI-14).
+#[test]
+fn ls_ends_with_141_when_its_reader_goes() {
+    let out = cash(r#"ls -1 C:/Windows/System32 | head -1 >/dev/null; echo "${PIPESTATUS[*]}""#);
+    assert_eq!(out.stdout, "141 0", "{}", out.stderr);
+    assert!(out.stderr.is_empty(), "{}", out.stderr);
+}
+
+/// `ls -R` reports a directory below it that it cannot open, prints no header for it and
+/// exits 1, as GNU `ls` does. It printed the header with nothing under it, said
+/// nothing, and exited 0 (BI-14).
+#[test]
+fn ls_r_reports_a_directory_it_cannot_open() {
+    let scratch = Scratch::new("ls-r-shut");
+    for dir in ["open", "shut"] {
+        std::fs::create_dir(scratch.join(dir)).unwrap();
+        std::fs::write(scratch.join(dir).join("f"), "").unwrap();
+    }
+    let user = std::env::var("USERNAME").unwrap();
+    let icacls = |args: &[&str]| {
+        let status = Command::new("icacls")
+            .arg(scratch.join("shut"))
+            .args(args)
+            .stdout(std::process::Stdio::null())
+            .status()
+            .unwrap();
+        assert!(status.success(), "icacls {args:?}");
+    };
+    icacls(&["/deny", &format!("{user}:(RX)")]);
+    let out = output_of(
+        cash_command()
+            .args(["-c", "ls -R ."])
+            .current_dir(scratch.path()),
+    );
+    icacls(&["/remove:d", &user]);
+
+    assert_eq!(out.stdout, ".:\nopen\nshut\n\n./open:\nf");
+    assert_eq!(
+        out.stderr,
+        "ls: cannot open directory './shut': Permission denied"
+    );
+    assert_eq!(out.code, 1);
+}
