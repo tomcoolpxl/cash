@@ -54,12 +54,14 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 | 12 | 1.3.12 | Language |
 | 13 | 1.3.13 | Builtins and error output |
 | 14 | 1.3.14 | Tests, records and leftovers |
+| 15 | 1.3.15 | GNU parity of the bundled sed and awk |
 
 ---
 
-## Phase 14. Tests, records and leftovers (R10, R11)
+## Phase 15. GNU parity of the bundled sed and awk
 
-### 14.6 Dead code, allows and dependencies
+What comparing cash's sed and awk with GNU sed 4.9 and gawk turned up while phase 14
+fixed their leftovers; moved here so 1.3.14 could go out (the user, 2026-10-04).
 
 - sed, found matching GNU's errors (2026-10-04): `bfoo` exits 1 with a location, GNU 4
   without; `{p` gives "unmatched `{'" with no location, GNU at `char 0`; `//p` with no
@@ -76,13 +78,17 @@ then the riskiest changes once the crashes and state bugs are out of the way.
   is fatal where gawk takes it for an empty `b`; an error outside the program's code
   (`next` from BEGIN through a function, an unreadable input file) says `awk: fatal:`
   without `cmd. line:N:`; the text for a failed write to stdout was not compared.
-- `tests/corpus/results.json`, the corpus runner's last log, quotes sed's old message
-  "extra characters at the end of the : command"; a run of `tests/corpus/run.ps1`
-  rewrites it. Seen 2026-10-04.
 
 ---
 
 ## Decided, written down so it is not decided twice
+
+- **sed's errors read as GNU sed's, prefix and all** (the user, 2026-10-04):
+  `sed: -e expression #1, char 5: unknown command: `x'`. Keeping cash's
+  `<script argument 1>:1:5: error:` before GNU's words was turned down.
+- **1.3.14 goes out with phase 14's list done; the GNU gaps found on the way are phase
+  15** (the user, 2026-10-04). Another round before the release was turned down: each
+  round of comparing had found more.
 
 - **awk's `system()` and pipes and sed's `e` run plain cash** (the user, 2026-10-04):
   `cash -c`, `$0` `cash`, Bash's behaviour. Running them as `sh`, in POSIX mode, as

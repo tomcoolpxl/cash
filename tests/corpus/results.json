@@ -1,13 +1,13 @@
 {
-  "generated": "2026-10-03T23:51:16.0736580+02:00",
+  "generated": "2026-10-04T11:39:11.6691024+02:00",
   "oracle": "C:/Program Files/Git/bin/bash.exe",
   "cash": "C:\\Users\\thraa\\github\\cash\\target\\debug\\cash.exe",
   "summary": [
     {
       "group": "sed",
       "cases": 129,
-      "pass": 126,
-      "fail": 3
+      "pass": 128,
+      "fail": 1
     },
     {
       "group": "awk",
@@ -17,8 +17,8 @@
     },
     {
       "group": "bash",
-      "cases": 50,
-      "pass": 49,
+      "cases": 51,
+      "pass": 50,
       "fail": 1
     }
   ],
@@ -39,44 +39,6 @@
       "cash": {
         "stdout": "C:/Users/thraa/github/cash/target/debug/cash.exe: line 4: $(echo injection >&2): arithmetic syntax error: operand expected (error token is \")\")\n",
         "stderr": "",
-        "status": 1
-      }
-    },
-    {
-      "name": "sed/gnu-doubled-words.sh",
-      "source": "https://www.gnu.org/software/sed/manual/html_node/Text-search-across-multiple-lines.html",
-      "desc": "find doubled words on one line and across lines with \\b \\w \\s",
-      "tags": "gnu-ext (\\b, \\w, \\s)",
-      "script": "# source: https://www.gnu.org/software/sed/manual/html_node/Text-search-across-multiple-lines.html\n# desc: find doubled words on one line and across lines with \\b \\w \\s\n# tags: gnu-ext (\\b, \\w, \\s)\nprintf 'It was the best of times,\\nit was the worst of times,\\nit was the the age of wisdom,\\n' > dup1.txt\nsed -En '/\\b(\\w+)\\s+\\1\\b/{=;p}' dup1.txt\nprintf 'It was the best of times, it was the\\nworst of times, it was the\\nthe age of wisdom,\\nit was the age of foolishness,\\n' > dup2.txt\nsed -En '{N; /\\b(\\w+)\\s+\\1\\b/{=;p} ; D}' dup2.txt\n",
-      "stdoutMatch": false,
-      "statusMatch": true,
-      "bash": {
-        "stdout": "3\nit was the the age of wisdom,\n3\nworst of times, it was the\nthe age of wisdom,\n",
-        "stderr": "",
-        "status": 0
-      },
-      "cash": {
-        "stdout": "",
-        "stderr": "",
-        "status": 0
-      }
-    },
-    {
-      "name": "sed/gnu-join-backslash.sh",
-      "source": "https://www.gnu.org/software/sed/manual/html_node/Joining-lines.html",
-      "desc": "join backslash-continued lines (manual notes it requires GNU sed)",
-      "tags": "gnu-ext (label and branch terminated without newline)",
-      "script": "# source: https://www.gnu.org/software/sed/manual/html_node/Joining-lines.html\n# desc: join backslash-continued lines (manual notes it requires GNU sed)\n# tags: gnu-ext (label and branch terminated without newline)\nprintf 'this \\\\\\nis \\\\\\na \\\\\\nlong \\\\\\nline\\nand another \\\\\\nline\\n' | sed -e ':x /\\\\$/ { N; s/\\\\\\n//g ; bx }'\n",
-      "stdoutMatch": false,
-      "statusMatch": false,
-      "bash": {
-        "stdout": "this is a long line\nand another line\n",
-        "stderr": "",
-        "status": 0
-      },
-      "cash": {
-        "stdout": "",
-        "stderr": "sed: <script argument 1>:1:4: error: extra characters at the end of the : command\n",
         "status": 1
       }
     },
