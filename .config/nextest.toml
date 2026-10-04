@@ -118,3 +118,9 @@ success-output = "final"
 [[profile.default.overrides]]
 filter = 'package(cash-sed) and test(=test_sed::pi)'
 slow-timeout = { period = "15s", terminate-after = 3 }
+
+# Each compares dozens of cases with GNU sed, one sed process after another: 9 to 14 s
+# in the full suite on an idle machine (2026-10-04), where 15 s ended them.
+[[profile.default.overrides]]
+filter = 'package(cash-sed) and test(/^test_sed::(test_compile_errors_are_placed_as_gnu_sed_places_them|test_joined_crlf_lines_stay_crlf|test_missing_step_or_count_is_zero|test_posix_mode_takes_gnu_operators_for_characters|test_regex_errors_are_gnu_seds|test_replacement_case_conversions)$/)'
+slow-timeout = { period = "15s", terminate-after = 3 }
