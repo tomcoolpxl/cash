@@ -22,16 +22,15 @@ async fn run_cash_tests(mut options: TestOptions) -> Result<bool> {
         ));
     }
 
-    // Resolve test cases directory (in cases/brush/).
+    // Resolve test cases directory (tests/cases/).
     let test_cases_dir = options.test_cases_path.as_deref().map_or_else(
-        || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/cases/brush"),
+        || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/cases"),
         |p| p.to_owned(),
     );
 
-    let test_shell = options.create_test_shell_config()?;
+    let test_shell = options.create_test_shell_config();
 
-    let config =
-        RunnerConfig::new(test_shell, test_cases_dir).with_platform_tags(options.platform_tags());
+    let config = RunnerConfig::new(test_shell, test_cases_dir);
 
     let runner = TestRunner::new(config, options);
     runner.run().await

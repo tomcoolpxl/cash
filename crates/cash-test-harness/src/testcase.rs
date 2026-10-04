@@ -1,4 +1,8 @@
 //! Test case definitions and YAML schema.
+//!
+//! A field the schema does not know is an error, so that a case written for brush's
+//! Unix harness (`pty`, `incompatible_os`, `incompatible_platforms`, `invocation`) is
+//! refused rather than run without what it asked for.
 
 use serde::{Deserialize, Serialize};
 use std::{
@@ -6,18 +10,9 @@ use std::{
     path::PathBuf,
 };
 
-/// How to invoke the shell for a test case.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub enum ShellInvocation {
-    /// Execute the shell binary directly.
-    #[default]
-    ExecShellBinary,
-    /// Execute a script file.
-    ExecScript(String),
-}
-
 /// A file to create in the test's temporary directory.
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct TestFile {
     /// Relative path to test file within the temp directory.
     pub path: PathBuf,
@@ -34,13 +29,10 @@ pub struct TestFile {
 
 /// A single test case.
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct TestCase {
     /// Name of the test case.
     pub name: Option<String>,
-
-    /// How to invoke the shell.
-    #[serde(default)]
-    pub invocation: ShellInvocation,
 
     /// Command-line arguments to the shell.
     #[serde(default)]
@@ -62,10 +54,6 @@ pub struct TestCase {
     #[serde(default)]
     pub skip: bool,
 
-    /// Whether this test requires a PTY.
-    #[serde(default)]
-    pub pty: bool,
-
     /// Input to provide via stdin.
     #[serde(default)]
     pub stdin: Option<String>,
@@ -81,16 +69,6 @@ pub struct TestCase {
     /// Whether this test is a known failure.
     #[serde(default)]
     pub known_failure: bool,
-
-    /// Operating systems that are incompatible with this test.
-    #[serde(default)]
-    pub incompatible_os: HashSet<String>,
-
-    /// Runtime platform tags (e.g., "wasi", "wasm") that are incompatible
-    /// with this test. The test is skipped when any of these tags is present
-    /// in the runner's active platform tag set.
-    #[serde(default)]
-    pub incompatible_platforms: HashSet<String>,
 
     /// Timeout for this test in seconds.
     #[serde(default)]
@@ -114,8 +92,19 @@ pub struct TestCase {
     pub snapshot: bool,
 }
 
+impl TestCase {
+    /// Whether the case says what to expect: one that does not passed whatever cash did.
+    pub const fn has_expectation(&self) -> bool {
+        self.expected_stdout.is_some()
+            || self.expected_stderr.is_some()
+            || self.expected_exit_code.is_some()
+            || self.snapshot
+    }
+}
+
 /// A set of test cases loaded from a single YAML file.
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct TestCaseSet {
     /// Name of the test case set.
     pub name: Option<String>,
@@ -126,11 +115,6 @@ pub struct TestCaseSet {
     /// Common test files applicable to all children test cases.
     #[serde(default)]
     pub common_test_files: Vec<TestFile>,
-
-    /// Runtime platform tags (e.g., "wasi", "wasm") that are incompatible
-    /// with this entire test set.
-    #[serde(default)]
-    pub incompatible_platforms: HashSet<String>,
 
     /// Directory containing the YAML file (computed at runtime).
     #[serde(skip)]

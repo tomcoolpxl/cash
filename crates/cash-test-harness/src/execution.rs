@@ -1,7 +1,7 @@
 //! Execution logic for running shell commands.
 
 use crate::config::ShellConfig;
-use crate::testcase::{ShellInvocation, TestCase, TestCaseSet, TestFile};
+use crate::testcase::{TestCase, TestCaseSet, TestFile};
 use anyhow::{Context, Result};
 use assert_fs::fixture::{FileWriteStr, PathChild};
 use std::{path::PathBuf, process::ExitStatus};
@@ -28,14 +28,7 @@ impl TestCase {
         working_dir: &assert_fs::TempDir,
     ) -> Result<RunResult> {
         let test_cmd = self.create_command_for_shell(shell_config, working_dir);
-
-        let result = if self.pty {
-            self.run_command_with_pty(test_cmd)?
-        } else {
-            self.run_command_with_stdin(test_cmd)?
-        };
-
-        Ok(result)
+        self.run_command_with_stdin(test_cmd)
     }
 
     /// Creates the test files in the given temporary directory.
@@ -90,35 +83,12 @@ impl TestCase {
         Ok(())
     }
 
-    /// Constructs a `Command` to invoke the given shell binary, optionally
-    /// prepending a launcher (e.g., `["wasmtime", "run", "--"]`). When a
-    /// launcher is provided, the first element becomes the program to execute
-    /// and the rest are passed as leading arguments before the shell binary path.
-    fn new_shell_command(
-        shell_path: &std::path::Path,
-        launcher: Option<&[String]>,
-    ) -> std::process::Command {
-        if let Some([program, leading_args @ ..]) = launcher {
-            let mut cmd = std::process::Command::new(program);
-            cmd.args(leading_args);
-            cmd.arg(shell_path);
-            cmd
-        } else {
-            std::process::Command::new(shell_path)
-        }
-    }
-
     fn create_command_for_shell(
         &self,
         shell_config: &ShellConfig,
         working_dir: &assert_fs::TempDir,
     ) -> std::process::Command {
-        let mut test_cmd = match self.invocation {
-            ShellInvocation::ExecShellBinary => {
-                Self::new_shell_command(&shell_config.path, shell_config.launcher.as_deref())
-            }
-            ShellInvocation::ExecScript(_) => unimplemented!("exec script test"),
-        };
+        let mut test_cmd = std::process::Command::new(&shell_config.path);
 
         for arg in &shell_config.default_args {
             if !self.removed_default_args.contains(arg) {
@@ -151,9 +121,10 @@ impl TestCase {
         // Individual history/home tests override this below through `home_dir` or `env`.
         test_cmd.env("HOME", working_dir.to_string_lossy().to_string());
 
-        // Set up any env vars needed for collecting coverage data.
-        let cli_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let default_target_dir = || cli_dir.parent().unwrap().join("target");
+        // Set up any env vars needed for collecting coverage data: the workspace's target
+        // folder, two above this crate's; one above was `crates/target`.
+        let harness_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let default_target_dir = || harness_dir.join("..").join("..").join("target");
         let coverage_target_dir = std::env::var("CARGO_TARGET_DIR")
             .ok()
             .map_or_else(default_target_dir, PathBuf::from);
@@ -180,16 +151,6 @@ impl TestCase {
         test_cmd.current_dir(working_dir.to_string_lossy().to_string());
 
         test_cmd
-    }
-
-    // The pty runner drove a Unix pseudo-terminal through expectrl; cash is Windows-only,
-    // so a case that asks for one is refused rather than silently run without it.
-    #[expect(
-        clippy::unused_self,
-        reason = "a method alongside `run_command_with_stdin`"
-    )]
-    fn run_command_with_pty(&self, _cmd: std::process::Command) -> Result<RunResult> {
-        Err(anyhow::anyhow!("pty tests are not supported on Windows"))
     }
 
     fn run_command_with_stdin(&self, cmd: std::process::Command) -> Result<RunResult> {

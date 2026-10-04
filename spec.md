@@ -1521,7 +1521,7 @@ bash already runs natively on Linux, so a Linux cash would add nothing, and brus
 code was removed together with the Linux CI job. brush's differential suite (2,588
 cases) went with it: it needed a Unix PTY, so it never ran on Windows, and the Linux job
 had only been running the 13 probes in `tests/bash52-differential.sh`. Language
-conformance now rests on the inline-expectation cases in `crates/cash/tests/cases/brush`,
+conformance now rests on the inline-expectation cases in `crates/cash/tests/cases`,
 the Windows acceptance corpus, and the targeted Bash 5.2/5.3 probes recorded under
 `research/bash-reference/`. The original decision follows.
 

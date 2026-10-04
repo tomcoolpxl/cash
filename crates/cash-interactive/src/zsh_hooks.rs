@@ -332,7 +332,7 @@ mod tests {
     /// A shell the hooks won't dispatch for is left completely alone -- the readonly state
     /// that would otherwise fail the assignments proves nothing was written. (A shell that
     /// never reads commands interactively is the caller's business, and the `-c` and script
-    /// cases are covered end to end by `tests/cases/brush/zsh_hooks.yaml`.)
+    /// cases are covered end to end by `crates/cash/tests/cases/zsh_hooks.yaml`.)
     #[tokio::test]
     async fn init_is_inert_when_hooks_are_off() -> Result<(), ShellError> {
         // Enabled, but the shell isn't interactive in the `$-` sense.

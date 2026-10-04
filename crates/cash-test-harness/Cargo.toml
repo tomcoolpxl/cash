@@ -32,7 +32,6 @@ diff = { workspace = true }
 glob = { workspace = true }
 insta = { workspace = true, features = ["yaml"], optional = true }
 junit-report = "0.9.0"
-os-release = "0.1.0"
 regex = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_yaml = { workspace = true }

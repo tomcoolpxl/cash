@@ -1,7 +1,7 @@
 //! Configuration types for the test harness.
 
 use clap::Parser;
-use std::{collections::HashSet, ffi::OsString, path::PathBuf};
+use std::{ffi::OsString, path::PathBuf};
 
 /// Configuration for the shell under test (cash).
 #[derive(Clone, Debug)]
@@ -12,43 +12,14 @@ pub struct ShellConfig {
     pub default_args: Vec<String>,
     /// Default PATH variable for this shell.
     pub default_path_var: Option<String>,
-    /// Optional launcher command to prepend (e.g., `["wasmtime", "run", "--"]` for wasm
-    /// targets). The first element is the program to execute; the rest are leading arguments
-    /// inserted before the shell binary path.
-    pub launcher: Option<Vec<String>>,
 }
 
 impl ShellConfig {
-    /// Computes the PATH variable to use for tests.
+    /// The PATH the cases run with: the one given, else none. The cases use what cash
+    /// carries; brush's Unix folders (`/usr/bin`, …) and the folders of the host's PATH
+    /// that hold a file named `sh` added nothing on Windows, where there are none.
     pub fn compute_test_path_var(&self) -> OsString {
-        let mut dirs = vec![];
-
-        // Start with any default we were provided.
-        if let Some(default_path_var) = &self.default_path_var {
-            dirs.extend(std::env::split_paths(default_path_var));
-        }
-
-        // Add hard-coded paths that will work on *most* Unix-like systems.
-        dirs.extend([
-            "/usr/local/sbin".into(),
-            "/usr/local/bin".into(),
-            "/usr/sbin".into(),
-            "/usr/bin".into(),
-            "/sbin".into(),
-            "/bin".into(),
-        ]);
-
-        // Handle systems that store their standard POSIX binaries elsewhere.
-        // For example, NixOS has an interesting set of paths that must be consulted.
-        if let Some(host_path) = std::env::var_os("PATH") {
-            for path in std::env::split_paths(&host_path) {
-                if !dirs.contains(&path) && path.join("sh").is_file() {
-                    dirs.push(path);
-                }
-            }
-        }
-
-        std::env::join_paths(dirs).unwrap_or_else(|_| PathBuf::from("").into())
+        self.default_path_var.clone().unwrap_or_default().into()
     }
 }
 
@@ -61,11 +32,6 @@ pub struct RunnerConfig {
     pub test_cases_dir: PathBuf,
     /// Directory for storing snapshots (relative to test case YAML files).
     pub snapshot_dir_name: String,
-    /// Host OS ID (for filtering incompatible tests).
-    pub host_os_id: Option<String>,
-    /// Active runtime platform tags (e.g., "wasi", "wasm"). Tests that
-    /// declare any of these in `incompatible_platforms` will be skipped.
-    pub platform_tags: HashSet<String>,
 }
 
 impl RunnerConfig {
@@ -79,16 +45,7 @@ impl RunnerConfig {
             test_shell,
             test_cases_dir,
             snapshot_dir_name: String::from("snaps"),
-            host_os_id: crate::util::get_host_os_id(),
-            platform_tags: HashSet::new(),
         }
-    }
-
-    /// Sets the active runtime platform tags.
-    #[must_use]
-    pub fn with_platform_tags(mut self, tags: HashSet<String>) -> Self {
-        self.platform_tags = tags;
-        self
     }
 
     /// Sets the snapshot directory name.
@@ -154,30 +111,6 @@ pub struct TestOptions {
     #[clap(long = "cash-args", default_value = "", env = "CASH_TEST_SHELL_ARGS")]
     pub cash_args: String,
 
-    /// Optionally specify a launcher command to prepend when invoking cash
-    /// (e.g., "wasmtime run --" to execute a wasm build under wasmtime).
-    /// The string is split on whitespace; the first token becomes the program
-    /// to execute and the remainder are passed as leading arguments before
-    /// the cash binary path.
-    #[clap(
-        long = "cash-launcher",
-        default_value = "",
-        env = "CASH_TEST_SHELL_LAUNCHER"
-    )]
-    pub cash_launcher: String,
-
-    /// Runtime platform tags (e.g., "wasi", "wasm") describing the
-    /// environment in which cash is being executed. Test cases that
-    /// declare any of these tags in `incompatible_platforms` will be
-    /// skipped. May be specified multiple times on the CLI or as a
-    /// space-separated value in the environment variable.
-    #[clap(
-        long = "cash-platform-tags",
-        value_delimiter = ' ',
-        env = "CASH_TEST_PLATFORM_TAGS"
-    )]
-    pub cash_platform_tags: Vec<String>,
-
     /// Optionally specify path to test cases.
     #[clap(long = "test-cases-path", env = "CASH_TEST_CASES")]
     pub test_cases_path: Option<PathBuf>,
@@ -186,15 +119,17 @@ pub struct TestOptions {
     #[clap(long = "test-path-var", env = "CASH_TEST_PATH_VAR")]
     pub test_path_var: Option<String>,
 
-    /// Show output from test cases (for compatibility only, has no effect).
+    // The four below are taken and ignored: the binary is a test target without
+    // libtest's harness, and `cargo test` and nextest pass it libtest's options.
+    /// Show output from test cases (libtest's option; no effect).
     #[clap(long = "show-output")]
     pub show_output: bool,
 
-    /// Capture output? (for compatibility only, has no effect).
+    /// Capture output? (libtest's option; no effect).
     #[clap(long = "nocapture")]
     pub no_capture: bool,
 
-    /// Colorize output? (for compatibility only, has no effect).
+    /// Colorize output? (libtest's option; no effect).
     #[clap(long = "color", default_value_t = clap::ColorChoice::Auto)]
     pub color: clap::ColorChoice,
 
@@ -202,7 +137,7 @@ pub struct TestOptions {
     #[clap(long = "ignored")]
     pub skipped_tests_only: bool,
 
-    /// Unstable flags (for compatibility only, has no effect).
+    /// Unstable flags (libtest's option; no effect).
     #[clap(short = 'Z')]
     pub unstable_flag: Vec<String>,
 
@@ -215,57 +150,28 @@ pub struct TestOptions {
 }
 
 impl TestOptions {
-    /// Returns the configured platform tags as a set.
-    pub fn platform_tags(&self) -> HashSet<String> {
-        self.cash_platform_tags.iter().cloned().collect()
-    }
-
     /// Builds the `ShellConfig` for the shell under test based on
-    /// the common options (path, launcher, platform tags, extra args).
-    ///
-    /// Resolves the launcher binary to an absolute path (if one is
-    /// configured) because the test harness clears env vars — including
-    /// `PATH` — before spawning child processes.
-    pub fn create_test_shell_config(&self) -> anyhow::Result<ShellConfig> {
+    /// the common options (path, extra args).
+    pub fn create_test_shell_config(&self) -> ShellConfig {
         let mut default_args: Vec<String> = vec![
             "--norc".into(),
             "--noprofile".into(),
             "--no-config".into(),
             "--disable-bracketed-paste".into(),
             "--disable-color".into(),
+            "--input-backend=basic".into(),
         ];
-
-        // Use the basic input backend for native builds. WASI builds are
-        // compiled with `--features minimal` which doesn't include the basic
-        // backend, so passing this flag would cause a startup error. Omitting
-        // it lets the shell pick its own default (Minimal on wasm targets).
-        if !self.platform_tags().contains("wasi") {
-            default_args.push("--input-backend=basic".into());
-        }
 
         // Append any additional shell args specified by the caller.
         self.cash_args.split_whitespace().for_each(|arg| {
             default_args.push(arg.into());
         });
 
-        let launcher = if self.cash_launcher.is_empty() {
-            None
-        } else {
-            let mut tokens: Vec<String> = self
-                .cash_launcher
-                .split_whitespace()
-                .map(Into::into)
-                .collect();
-            crate::util::resolve_launcher_path(&mut tokens)?;
-            Some(tokens)
-        };
-
-        Ok(ShellConfig {
+        ShellConfig {
             path: PathBuf::from(&self.cash_path),
             default_args,
             default_path_var: self.test_path_var.clone(),
-            launcher,
-        })
+        }
     }
 
     /// Returns whether a test should run based on include/exclude filters.

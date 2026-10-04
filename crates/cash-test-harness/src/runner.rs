@@ -134,23 +134,6 @@ impl TestRunner {
     }
 
     fn should_skip_test(&self, test_case_set: &TestCaseSet, test_case: &TestCase) -> bool {
-        // Check incompatible OS
-        if let Some(host_os_id) = &self.config.host_os_id {
-            if test_case.incompatible_os.contains(host_os_id) {
-                return true;
-            }
-        }
-
-        // Check incompatible runtime platforms (set-level and per-case).
-        if test_case_set
-            .incompatible_platforms
-            .iter()
-            .chain(test_case.incompatible_platforms.iter())
-            .any(|p| self.config.platform_tags.contains(p))
-        {
-            return true;
-        }
-
         // Check filters
         let test_case_set_name = test_case_set.name.as_deref().unwrap_or("");
         let test_case_name = test_case.name.as_deref().unwrap_or("");
@@ -229,6 +212,16 @@ fn run_single_test(
     config: &RunnerConfig,
 ) -> Result<TestCaseResult> {
     let start_time = std::time::Instant::now();
+
+    // A case with nothing to compare passed whatever cash did.
+    if !test_case.has_expectation() {
+        anyhow::bail!(
+            "{}: case {:?} expects nothing: give it an expected_stdout, expected_stderr, \
+             expected_exit_code or snapshot",
+            test_case_set.source_file.display(),
+            test_case.name.as_deref().unwrap_or_default()
+        );
+    }
 
     let test_temp_dir = assert_fs::TempDir::new()?;
     test_case.create_test_files_in(&test_temp_dir, test_case_set)?;

@@ -21,4 +21,4 @@ pub use comparison::{
 pub use config::{OutputFormat, RunnerConfig, ShellConfig, TestOptions};
 pub use execution::RunResult;
 pub use runner::TestRunner;
-pub use testcase::{ShellInvocation, TestCase, TestCaseSet, TestFile};
+pub use testcase::{TestCase, TestCaseSet, TestFile};
