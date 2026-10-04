@@ -59,6 +59,22 @@ pub fn cpu_time() -> Option<(u64, u64)> {
     SESSION_JOB.get()?.cpu_time().ok()
 }
 
+/// Whether cash started inside another job: 0 not asked yet, 1 no, 2 yes.
+static NESTED: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
+
+/// Whether cash was inside someone else's job object when it started.
+///
+/// As [`install`] found it before making cash's own; `None` before that. Asked after, the
+/// answer is always yes, cash's own job being one: `cash doctor` said "running inside
+/// another job object" everywhere (BIN-06).
+#[must_use]
+pub fn started_nested() -> Option<bool> {
+    match NESTED.load(Ordering::Relaxed) {
+        0 => None,
+        answer => Some(answer == 2),
+    }
+}
+
 /// Whether GUI applications cash started outlive it. On unless the session says not.
 static GUI_APPS_OUTLIVE: AtomicBool = AtomicBool::new(true);
 
@@ -73,6 +89,7 @@ static GUI_APPS_OUTLIVE: AtomicBool = AtomicBool::new(true);
 /// honest about which it is.
 pub fn install() -> (Option<JobObject>, SessionState) {
     let nested = crate::spawn::in_any_job();
+    NESTED.store(u8::from(nested) + 1, Ordering::Relaxed);
 
     // Breakaway is permitted on the *session* job because `detach` (D45) needs it.
     // Per-pipeline jobs do not permit it, per D45's recorded cost.

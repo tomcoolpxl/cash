@@ -103,8 +103,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 Each from `REVIEW_REPORT.md` §5, found in no commit on 2026-10-04; reproduce first, as
 some may have gone with other work.
 
-- BIN-06: `cash doctor` always says "inside another job object", asking after cash made
-  its own.
 - BIN-07: a path-rendering bundled tool runs twice if reading its output fails (a second
   `mktemp` file).
 - BIN-09: `CASH_LINKED_TOOL_EXE` is inherited by every descendant.

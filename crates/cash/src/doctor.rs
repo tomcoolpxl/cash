@@ -99,7 +99,10 @@ pub fn run() -> u8 {
 }
 
 fn check_session(findings: &mut Vec<Finding>) {
-    let nested = cash_win32::spawn::in_any_job();
+    // As the session found it before making cash's own job, which every process is in
+    // once it exists.
+    let nested =
+        cash_win32::session::started_nested().unwrap_or_else(cash_win32::spawn::in_any_job);
     findings.push(Finding {
         level: Level::Ok,
         subject: "process containment".into(),
