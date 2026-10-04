@@ -62,6 +62,13 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ## Decided, written down so it is not decided twice
 
+- **Bundled tools stay processes of their own** (the user, 2026-10-04): a call to
+  `cut`, `sort`, `sed` or `awk` costs a process start, about 25 to 35 ms in a debug
+  build against 0.5 ms for pure shell, and a tool that crashes or exits cannot take the
+  shell with it. Running them inside the shell's process was turned down. A bundled
+  `grep` likewise: Git for Windows' GNU grep is always there (D35), costs the same per
+  call, and handles CRLF.
+
 - **Uptime is Windows' figure** (the user, 2026-10-04): `coolfetch`, `uptime` and `top`
   count from the last full kernel boot (`GetTickCount64`), as Task Manager and fastfetch
   do, so with Fast Startup a power-on resumes the count rather than restarting it.
