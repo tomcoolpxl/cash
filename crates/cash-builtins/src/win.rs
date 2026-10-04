@@ -1,6 +1,6 @@
 //! Windows-specific builtins — **D45**.
 //!
-//! Four, each justified by a decision rather than invented:
+//! Five, each justified by a decision rather than invented:
 //!
 //! | Builtin | Why it exists |
 //! |---|---|
@@ -8,6 +8,7 @@
 //! | `detach` | D6's escape hatch: start something meant to outlive the shell |
 //! | `elevate` | So cash sees a UAC elevation rather than having it happen behind its back, and can register it for D42's tracking |
 //! | `start` | The Windows `xdg-open` |
+//! | `sudo` | A command elevated in this terminal, through gsudo or Windows' `sudo`, with cash choosing what runs |
 
 use std::io::Write;
 use std::path::Path;
@@ -341,6 +342,203 @@ impl builtins::Command for DetachCommand {
                 writeln!(context.stderr(), "detach: {program}: {e}")?;
                 Ok(ExecutionResult::new(126))
             }
+        }
+    }
+}
+
+/// Run a command elevated in this terminal, as a Unix `sudo` does.
+///
+/// cash elevates nothing itself: gsudo does it where it is installed, else Windows' own
+/// `sudo`. What cash does is choose what runs, as the shell would: `sudo bash` is cash,
+/// where `sudo.exe` looked `bash` up itself and found WSL's; `sudo ls` is cash's `ls`,
+/// run by an elevated cash, where there is no `ls.exe` to run; a batch file or a script
+/// goes through cash too. A function is not run, as a Unix `sudo` runs none. In a shell
+/// already elevated, the command runs here.
+#[derive(Parser)]
+pub(crate) struct SudoCommand {
+    /// The command and its arguments; `-i` or `-s` alone is an elevated shell.
+    #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+    command: Vec<String>,
+}
+
+impl builtins::Command for SudoCommand {
+    type Error = cash_core::Error;
+
+    async fn execute<SE: cash_core::ShellExtensions>(
+        &self,
+        context: cash_core::ExecutionContext<'_, SE>,
+    ) -> Result<ExecutionResult, Self::Error> {
+        let mut words = self.command.as_slice();
+        let mut shell_wanted = false;
+        while let Some((first, rest)) = words.split_first() {
+            match first.as_str() {
+                "--" => {
+                    words = rest;
+                    break;
+                }
+                "-i" | "-s" => shell_wanted = true,
+                option if option.starts_with('-') => {
+                    writeln!(
+                        context.stderr(),
+                        "sudo: {option}: not supported on Windows; usage: sudo [-i | -s] \
+                         [COMMAND [ARG]...]"
+                    )?;
+                    return Ok(ExecutionResult::new(1));
+                }
+                _ => break,
+            }
+            words = rest;
+        }
+        if words.is_empty() && !shell_wanted {
+            writeln!(context.stderr(), "usage: sudo [-i | -s] [COMMAND [ARG]...]")?;
+            return Ok(ExecutionResult::new(1));
+        }
+
+        let cash = std::env::current_exe().map_or_else(
+            |_| "cash.exe".to_owned(),
+            |exe| exe.to_string_lossy().into_owned(),
+        );
+        if cash_win32::process::current_process_is_elevated() == Some(true) {
+            if words.is_empty() {
+                return run_program(&context, &cash, &cash, &[]);
+            }
+            let command = crate::command::CommandCommand {
+                command_and_args: words.to_vec(),
+                ..Default::default()
+            };
+            return command.execute(context).await;
+        }
+
+        // What runs elevated, as the shell would run it.
+        let target: Vec<String> = match words.split_first() {
+            None => vec![cash],
+            Some((name, args)) => {
+                let Some(target) = sudo_target(context.shell, name, args, &cash) else {
+                    writeln!(context.stderr(), "sudo: {name}: command not found")?;
+                    return Ok(ExecutionResult::new(1));
+                };
+                target
+            }
+        };
+
+        // Who elevates it: gsudo keeps the command in this terminal; Windows' sudo does in
+        // its inline mode only.
+        if let Some(gsudo) = context.shell.resolve_command_in_path_using_cache("gsudo") {
+            let gsudo = gsudo.to_string_lossy().into_owned();
+            return run_program(&context, &gsudo, "gsudo", &target);
+        }
+        let windows_sudo = cash_win32::sysinfo::windows_sudo();
+        let sudo_exe = context.shell.env_str("SystemRoot").map_or_else(
+            || r"C:\Windows\System32\sudo.exe".to_owned(),
+            |root| format!(r"{root}\System32\sudo.exe"),
+        );
+        match windows_sudo {
+            cash_win32::sysinfo::WindowsSudo::Off => {
+                writeln!(
+                    context.stderr(),
+                    "sudo: no elevation tool: install gsudo (`scoop install gsudo`), or turn \
+                     on sudo in Settings > System > For developers"
+                )?;
+                return Ok(ExecutionResult::new(1));
+            }
+            cash_win32::sysinfo::WindowsSudo::NewWindow => {
+                writeln!(
+                    context.stderr(),
+                    "sudo: Windows' sudo is set to open a new window, where the output stays; \
+                     `sudo config --enable normal` in an elevated shell keeps it here"
+                )?;
+            }
+            cash_win32::sysinfo::WindowsSudo::InputClosed
+            | cash_win32::sysinfo::WindowsSudo::Inline => {}
+        }
+        run_program(&context, &sudo_exe, "sudo", &target)
+    }
+}
+
+/// The program and arguments that run `name` with `args` elevated: cash for `bash`, `sh`
+/// and `cash` (`sh` in POSIX mode, D7), for a builtin and for anything that is not a
+/// program of its own; the program itself otherwise. `None` for a name found nowhere.
+fn sudo_target(
+    shell: &cash_core::Shell<impl cash_core::ShellExtensions>,
+    name: &str,
+    args: &[String],
+    cash: &str,
+) -> Option<Vec<String>> {
+    let through_cash = |word: &str| {
+        let mut all = vec![
+            cash.to_owned(),
+            "-c".to_owned(),
+            "\"$0\" \"$@\"".to_owned(),
+            word.to_owned(),
+        ];
+        all.extend(args.iter().cloned());
+        all
+    };
+    let stem = Path::new(name)
+        .file_stem()
+        .map(|stem| stem.to_string_lossy().to_ascii_lowercase());
+    if !cash_core::sys::fs::contains_path_separator(name)
+        && matches!(stem.as_deref(), Some("bash" | "sh" | "cash"))
+    {
+        let mut all = vec![cash.to_owned()];
+        if stem.as_deref() == Some("sh") {
+            all.push("--posix".to_owned());
+        }
+        all.extend(args.iter().cloned());
+        return Some(all);
+    }
+    if !cash_core::sys::fs::contains_path_separator(name)
+        && shell
+            .builtins()
+            .get(name)
+            .is_some_and(|builtin| !builtin.disabled)
+    {
+        return Some(through_cash(name));
+    }
+    let resolved = if cash_core::sys::fs::contains_path_separator(name) {
+        Some(shell.absolute_path(Path::new(name)))
+    } else {
+        shell.resolve_command_in_path(name)
+    }
+    .filter(|path| path.is_file())?;
+    let program = cash_win32::path::to_backslash(&resolved);
+    match cash_win32::resolve::classify(&resolved) {
+        cash_win32::resolve::Dispatch::Native(_) => {
+            let mut all = vec![program];
+            all.extend(args.iter().cloned());
+            Some(all)
+        }
+        _ => Some(through_cash(&program)),
+    }
+}
+
+/// Run `program` with `args` as the shell runs a command (its folder, environment and
+/// redirections), and give its status.
+fn run_program<SE: cash_core::ShellExtensions>(
+    context: &cash_core::ExecutionContext<'_, SE>,
+    program: &str,
+    name: &str,
+    args: &[String],
+) -> Result<ExecutionResult, cash_core::Error> {
+    let mut command =
+        cash_core::commands::compose_std_command(context, program, name, args, false)?;
+    match command.status() {
+        Ok(status) => {
+            let code = status.code().unwrap_or(1);
+            #[expect(
+                clippy::cast_sign_loss,
+                reason = "a Windows exit code is a DWORD, which `code` holds as its bits"
+            )]
+            let code = cash_win32::exit::from_windows(code as u32);
+            Ok(ExecutionResult::new(code))
+        }
+        Err(e) => {
+            writeln!(
+                context.stderr(),
+                "sudo: {name}: {}",
+                cash_core::error::os_error_text(&e)
+            )?;
+            Ok(ExecutionResult::new(1))
         }
     }
 }

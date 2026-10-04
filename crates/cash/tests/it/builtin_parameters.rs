@@ -855,6 +855,41 @@ fn times_honour_an_exported_tz() {
     );
 }
 
+/// `sudo` says how it is used, refuses the options it has no Windows meaning for, and
+/// finds its command before anything elevates, as the shell would; in a shell already
+/// elevated (CI's), it runs the command here. A real elevation needs UAC, so it is not
+/// tested.
+#[test]
+fn sudo_finds_its_command_as_the_shell_would() {
+    let out = cash(
+        r#"sudo; echo "rc $?"
+           sudo -u root ls; echo "rc $?"
+           if [[ $EUID == 0 ]]; then echo elevated; sudo echo here; echo "rc $?"
+           else sudo no-such-command-anywhere; echo "rc $?"; fi"#,
+    );
+    let elevated = out.stdout.contains("elevated");
+    let expected = if elevated {
+        "rc 1\nrc 1\nelevated\nhere\nrc 0"
+    } else {
+        "rc 1\nrc 1\nrc 1"
+    };
+    assert_eq!(out.stdout, expected, "{}", out.stderr);
+    assert!(out.stderr.contains("usage: sudo"), "{}", out.stderr);
+    assert!(
+        out.stderr.contains("sudo: -u: not supported"),
+        "{}",
+        out.stderr
+    );
+    if !elevated {
+        assert!(
+            out.stderr
+                .contains("sudo: no-such-command-anywhere: command not found"),
+            "{}",
+            out.stderr
+        );
+    }
+}
+
 /// `exec` in a subshell ends the subshell with the command's status and takes its
 /// options, as in Bash: it ran the command through `command` and went on, and refused
 /// `-a`, `-c` and `-l` as "not yet supported".

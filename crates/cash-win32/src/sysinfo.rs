@@ -672,6 +672,31 @@ fn registry_string(subkey: &str, value: &str) -> Option<String> {
     Some(String::from_utf16_lossy(&buffer[..chars.min(buffer.len())]))
 }
 
+/// How Windows' own `sudo` (Windows 11 24H2 and later) runs a command, as Settings > System
+/// > For developers sets it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WindowsSudo {
+    /// Turned off, or not on this Windows.
+    Off,
+    /// In a new console window: the output stays there.
+    NewWindow,
+    /// In this console, with its input closed.
+    InputClosed,
+    /// In this console, as a Unix sudo runs it.
+    Inline,
+}
+
+/// The mode of Windows' own `sudo`, from the value its `sudo config` reads.
+#[must_use]
+pub fn windows_sudo() -> WindowsSudo {
+    match registry_dword(r"SOFTWARE\Microsoft\Windows\CurrentVersion\Sudo", "Enabled") {
+        Some(1) => WindowsSudo::NewWindow,
+        Some(2) => WindowsSudo::InputClosed,
+        Some(3) => WindowsSudo::Inline,
+        _ => WindowsSudo::Off,
+    }
+}
+
 /// A `REG_DWORD` under `HKEY_LOCAL_MACHINE`.
 fn registry_dword(subkey: &str, value: &str) -> Option<u32> {
     use windows_sys::Win32::System::Registry::{

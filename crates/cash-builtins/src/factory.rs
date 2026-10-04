@@ -262,6 +262,10 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
         "detach".into(),
         builtin::<win::DetachCommand, SE>().with_substitution_files(),
     );
+    m.insert(
+        "sudo".into(),
+        builtin::<win::SudoCommand, SE>().with_substitution_files(),
+    );
     m.insert("ps".into(), builtin::<ps::PsCommand, SE>());
     m.insert("pgrep".into(), builtin::<pgrep::PgrepCommand, SE>());
     m.insert("pkill".into(), builtin::<killfam::PkillCommand, SE>());
