@@ -645,6 +645,22 @@ pub fn exported_environment(
 /// goes no further.
 pub const ARGV0_VARIABLE: &str = "CASH_ARGV0";
 
+/// Whether `name` asks for the link this process runs as, by its own name: `find.exe`
+/// starting `C:/links/find.exe` again. Never so for `cash.exe` itself.
+fn names_this_link(name: &str) -> bool {
+    let Ok(own) = std::env::current_exe() else {
+        return false;
+    };
+    let stem = |path: &Path| {
+        path.file_stem()
+            .map(|stem| stem.to_string_lossy().to_lowercase())
+    };
+    match (stem(&own), stem(Path::new(name))) {
+        (Some(own), Some(asked)) => own != "cash" && own == asked,
+        _ => false,
+    }
+}
+
 /// Whether `program` is this cash's own executable.
 fn is_own_executable(program: &OsStr) -> bool {
     let Ok(own) = std::env::current_exe() else {
@@ -727,9 +743,12 @@ pub fn compose_std_command<S: AsRef<OsStr>, SE: extensions::ShellExtensions>(
     }
 
     // A cash this shell starts for `bash`, `sh` or `exec -a NAME` learns the name, which
-    // Windows cannot put in its `argv[0]` (EXE-12).
+    // Windows cannot put in its `argv[0]` (EXE-12). It also tells a cash running as a
+    // linked tool (`ls.exe`, D65), whose exe is the link, that it was re-entered rather
+    // than run as the tool; so a link asked for by its own name is not told (BIN-09).
     if is_own_executable(cmd.get_program())
         && cmd.get_args().next() != Some(OsStr::new("--invoke-bundled"))
+        && !names_this_link(command_name)
     {
         cmd.env(ARGV0_VARIABLE, argv0);
     }

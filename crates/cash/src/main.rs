@@ -41,8 +41,12 @@ fn main() {
     }
 
     // Started as a link `cash --link-tools` made (`ls.exe`), cash runs as that tool (D65):
-    // `cash -c '"$0" "$@"' ls ARGS`, the re-entry its virtual paths use (D58).
-    if let Some(tool) = link_tools::linked_tool() {
+    // `cash -c '"$0" "$@"' ls ARGS`, the re-entry its virtual paths use (D58). Unless a
+    // cash started it, as it starts its own exe, which in a tool's process is the link:
+    // it names itself (`CASH_ARGV0`), or dispatches a bundled tool.
+    let reentered =
+        invoked_as.is_some() || std::env::args().nth(1).as_deref() == Some("--invoke-bundled");
+    if !reentered && let Some(tool) = link_tools::linked_tool() {
         let mut args = std::env::args();
         let exe = args.next().unwrap_or_default();
         let mut command = vec![exe, "-c".to_owned(), "\"$0\" \"$@\"".to_owned(), tool];

@@ -319,7 +319,18 @@ impl builtins::Command for DetachCommand {
         // Started in the shell's working directory, with its exported environment (D5),
         // out of the session job, with no console and holding no handle of cash's.
         let command_line = detached_command_line(&context, &resolved, args);
-        let env = cash_core::commands::exported_environment(context.shell);
+        let mut env = cash_core::commands::exported_environment(context.shell);
+        // A script runs in a cash this starts, which says so: in a linked tool's process
+        // cash's exe is the link, and the child would take itself for the tool (BIN-09).
+        let (program, _) = launch_parts(context.shell, &resolved, args);
+        if std::env::current_exe()
+            .is_ok_and(|own| own.to_string_lossy().eq_ignore_ascii_case(&program))
+        {
+            env.push((
+                cash_core::commands::ARGV0_VARIABLE.to_owned(),
+                "cash".to_owned(),
+            ));
+        }
         match cash_win32::spawn::spawn_detached(&command_line, context.shell.working_dir(), &env) {
             Ok(pid) => {
                 // cash keeps no handle to it: it neither waits for the program nor ends it.

@@ -128,38 +128,26 @@ fn write_manifest(dir: &Path, names: &BTreeSet<String>) -> Result<(), String> {
         .map_err(|e| format!("{}: {e}", render(&dir.join(MANIFEST))))
 }
 
-/// The variable a linked tool's process sets to its own exe's path. cash re-enters its own
-/// exe for bundled tools (`--invoke-bundled`), for `sh`, `bash` and `cash`, and for its
-/// virtual paths; in a tool's process that exe is the link, so a child started that way
-/// would take itself for the tool again, without end. A child that finds its own path
-/// here is such a re-entry and runs as cash; another link started from inside (`xargs.exe`
-/// running `sort.exe`) has a path of its own, and runs as its tool.
-const SELF_VAR: &str = "CASH_LINKED_TOOL_EXE";
-
 /// If this process is a link `cash --link-tools` made, the tool it stands for: the file's
-/// name, when the manifest in its folder lists it. `cash.exe` itself, a copy under another
-/// name nobody linked, and cash re-entering a link it runs as ([`SELF_VAR`]) are the shell.
+/// name, when the manifest in its folder lists it. `cash.exe` itself, and a copy under
+/// another name nobody linked, are the shell.
+///
+/// cash re-enters its own exe for bundled tools (`--invoke-bundled`), for `sh`, `bash` and
+/// `cash`, and for its virtual paths; in a tool's process that exe is the link. Such a
+/// child says so (`CASH_ARGV0`, or the dispatch flag), and `main` asks before this. It was
+/// told by a variable holding the link's path, which every descendant inherited, so a
+/// tool that started the same link again (`find.exe -exec find.exe`) got the shell
+/// (BIN-09).
 pub fn linked_tool() -> Option<String> {
     let exe = std::env::current_exe().ok()?;
     let stem = exe.file_stem()?.to_str()?;
     if stem.eq_ignore_ascii_case("cash") {
         return None;
     }
-    let reentered = std::env::var_os(SELF_VAR).is_some_and(|own| {
-        own.to_string_lossy()
-            .eq_ignore_ascii_case(&exe.to_string_lossy())
-    });
-    if reentered {
-        return None;
-    }
     let manifest = read_manifest(exe.parent()?);
-    let tool = manifest
+    manifest
         .into_iter()
-        .find(|name| name.eq_ignore_ascii_case(stem))?;
-    // SAFETY: called from `main` before cash starts any thread, so nothing reads the
-    // environment concurrently.
-    unsafe { std::env::set_var(SELF_VAR, &exe) };
-    Some(tool)
+        .find(|name| name.eq_ignore_ascii_case(stem))
 }
 
 /// The links a folder's manifest lists that are no longer this `cash.exe`: made by an

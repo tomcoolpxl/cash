@@ -147,6 +147,39 @@ fn links_every_tool_and_writes_the_manifest() {
     }
 }
 
+/// A link's process leaves nothing in its children's environment: it set
+/// `CASH_LINKED_TOOL_EXE` to its own path, which every descendant inherited, so a tool
+/// that started the same link again got the shell in its place (BIN-09).
+#[test]
+fn a_link_leaves_its_children_nothing_and_runs_itself_again() {
+    let dir = folder("descendants");
+    assert!(link_tools(&dir).status.success());
+
+    let env = run(&dir.join("env.exe"), &[], "");
+    let env = text(&env.stdout);
+    assert!(!env.contains("CASH_LINKED_TOOL_EXE"), "{env}");
+    assert!(!env.contains("CASH_ARGV0"), "{env}");
+
+    // `find` running the same link again: the inner one is `find` too.
+    let find = dir.join("find.exe").to_string_lossy().replace('\\', "/");
+    let out = run(
+        &dir.join("find.exe"),
+        &[
+            ".",
+            "-maxdepth",
+            "0",
+            "-exec",
+            &find,
+            ".",
+            "-maxdepth",
+            "0",
+            ";",
+        ],
+        "",
+    );
+    assert_eq!(text(&out.stdout), ".\n", "{}", text(&out.stderr));
+}
+
 #[test]
 fn a_link_runs_as_its_tool_outside_cash() {
     let dir = folder("runs");
