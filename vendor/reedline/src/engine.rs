@@ -168,6 +168,10 @@ pub struct Reedline {
     // command, left for the next read.
     pending_input: Vec<Event>,
 
+    // cash (CASH-PATCHES.md, patch 8): a batch's edits are running under the mode they
+    // were parsed in, which `run_edit_commands` must not replace with the current one.
+    edit_mode_pinned: bool,
+
     // Edit Mode: Vi, Emacs
     edit_mode: Box<dyn EditMode>,
 
@@ -388,6 +392,7 @@ impl Reedline {
             painter,
             transient_prompt: None,
             pending_input: Vec::new(),
+            edit_mode_pinned: false,
             edit_mode,
             completer,
             quick_completions: false,
@@ -1261,25 +1266,45 @@ impl Reedline {
         // Convert `Event` into `ReedlineEvent`. Also, fuse consecutive
         // `ReedlineEvent::EditCommand` into one. Also, if there're multiple
         // `ReedlineEvent::Resize`, only keep the last one.
-        let mut reedline_events: Vec<ReedlineEvent> = vec![];
+        // cash (CASH-PATCHES.md, patch 8): each event keeps the edit mode it was parsed
+        // under. The whole batch is parsed before any of it runs, so text typed ahead of
+        // an Esc in one batch ran under vi normal mode: every insert after the first
+        // landed before it (`abc` Esc became `bca`).
+        let mut reedline_events: Vec<(ReedlineEvent, PromptEditMode)> = vec![];
         let mut edits = vec![];
+        // The mode the fused `edits` were parsed under: a run of edits is cut where
+        // the mode changes.
+        let mut edits_mode = self.edit_mode.edit_mode();
         let mut resize = None;
         let mut events = events.into_iter();
         while let Some(event) = events.next() {
             if let Ok(event) = ReedlineRawEvent::try_from(event) {
                 match self.edit_mode.parse_event(event) {
-                    ReedlineEvent::Edit(edit) => edits.extend(edit),
+                    ReedlineEvent::Edit(edit) => {
+                        let mode = self.edit_mode.edit_mode();
+                        if mode != edits_mode && !edits.is_empty() {
+                            reedline_events.push((
+                                ReedlineEvent::Edit(std::mem::take(&mut edits)),
+                                edits_mode.clone(),
+                            ));
+                        }
+                        edits_mode = mode;
+                        edits.extend(edit);
+                    }
                     ReedlineEvent::Resize(x, y) => resize = Some((x, y)),
                     event => {
                         if !edits.is_empty() {
-                            reedline_events.push(ReedlineEvent::Edit(std::mem::take(&mut edits)));
+                            reedline_events.push((
+                                ReedlineEvent::Edit(std::mem::take(&mut edits)),
+                                edits_mode.clone(),
+                            ));
                         }
                         // cash (CASH-PATCHES.md, patch 5): a host command ends this read,
                         // and the rest of the batch was dropped with it: keys typed while a
                         // `bind -x` command started were lost. Keep them, unparsed, for the
                         // next read; the command may change the bindings they meet.
                         let ends_the_read = matches!(event, ReedlineEvent::ExecuteHostCommand(_));
-                        reedline_events.push(event);
+                        reedline_events.push((event, self.edit_mode.edit_mode()));
                         if ends_the_read {
                             self.pending_input.extend(&mut events);
                             break;
@@ -1288,28 +1313,31 @@ impl Reedline {
                 }
             }
         }
+        let mode_now = self.edit_mode.edit_mode();
         if !edits.is_empty() {
-            reedline_events.push(ReedlineEvent::Edit(edits));
+            reedline_events.push((ReedlineEvent::Edit(edits), edits_mode));
         }
         if let Some((x, y)) = resize {
-            reedline_events.push(ReedlineEvent::Resize(x, y));
+            reedline_events.push((ReedlineEvent::Resize(x, y), mode_now.clone()));
         }
         if self.immediately_accept {
-            reedline_events.push(ReedlineEvent::Submit);
+            reedline_events.push((ReedlineEvent::Submit, mode_now));
         }
-
-        // The mode machine has parsed this batch, so the rest policy it
-        // declares is now final. Relay it to the editor before running the
-        // emitted commands so a command a mode transition issued (e.g. the
-        // Esc→normal grapheme step-back) resolves under the new policy. This
-        // does not commit the cursor — the commands settle it, and the
-        // pre-paint `set_edit_mode` below still clamps no-command switches.
-        self.editor.sync_edit_mode(self.edit_mode.edit_mode());
 
         // Handle reedline events.
         let mut need_repaint = false;
-        for event in reedline_events {
-            match self.handle_event(prompt, event)? {
+        for (event, mode) in reedline_events {
+            // The mode machine had parsed up to this event, so the rest policy it
+            // declared then is the one to run it under. Relay it to the editor before
+            // running the event so a command a mode transition issued (e.g. the
+            // Esc→normal grapheme step-back) resolves under the new policy. This does
+            // not commit the cursor — the commands settle it, and the pre-paint
+            // `set_edit_mode` below still clamps no-command switches.
+            self.editor.sync_edit_mode(mode);
+            self.edit_mode_pinned = matches!(event, ReedlineEvent::Edit(_));
+            let handled = self.handle_event(prompt, event);
+            self.edit_mode_pinned = false;
+            match handled? {
                 EventStatus::Exits(signal) => {
                     // Check if we are merely suspended (to process an ExecuteHostCommand event)
                     // or if we're about to quit the editor.
@@ -2139,8 +2167,11 @@ impl Reedline {
         // resting rule (e.g. `OnGrapheme` pulling an at-end point back) before
         // the commands run, double-stepping a mode-transition backstep like the
         // vi `Esc`→normal `MoveLeft`. The commands settle the cursor themselves,
-        // and the pre-paint `set_edit_mode` makes the final commit.
-        self.editor.sync_edit_mode(self.edit_mode.edit_mode());
+        // and the pre-paint `set_edit_mode` makes the final commit. A batch's edits run
+        // under the mode they were parsed in, which `process_input_batch` has set.
+        if !self.edit_mode_pinned {
+            self.editor.sync_edit_mode(self.edit_mode.edit_mode());
+        }
 
         // Run the commands over the edit buffer
         for command in commands {
@@ -2913,6 +2944,18 @@ mod tests {
             .edit_buffer(|b| b.set_insertion_point(2), UndoBehavior::MoveCursor); // at len, legal under Between
         drive(&mut rl, &[ch('x')]); // flipts to OnGrapheme, emits nothing
         assert_eq!(rl.current_insertion_point(), 1);
+    }
+
+    #[test]
+    fn text_and_esc_in_one_batch_insert_in_order() {
+        // cash (CASH-PATCHES.md, patch 8): the inserts ran under the normal mode the
+        // Esc switched to, so each landed before the first: "bca".
+        let mut rl = seam_engine(Box::<crate::Vi>::default());
+        drive(&mut rl, &[ch('a'), ch('b'), ch('c'), key(KeyCode::Esc)]);
+        assert_eq!(rl.editor.get_buffer(), "abc");
+        assert_eq!(rl.current_insertion_point(), 2);
+        drive(&mut rl, &[ch('x')]);
+        assert_eq!(rl.editor.get_buffer(), "ab");
     }
 
     #[test]

@@ -764,6 +764,32 @@ fn conpty_alt_dot_yanks_the_last_argument() {
     assert_eq!(session.wait().expect("process did not exit"), 0);
 }
 
+/// `set -o vi` edits the next line with vi keys: Esc leaves insert mode, `x` deletes the
+/// character under the cursor, and Enter runs the line from normal mode.
+#[test]
+fn conpty_set_o_vi_edits_with_vi_keys() {
+    let mut session = start_reedline_cash();
+    session
+        .expect("PROMPT$", Duration::from_secs(10))
+        .expect("prompt displayed");
+
+    session.send("set -o vi\r").unwrap();
+    session
+        .expect("PROMPT$", Duration::from_secs(10))
+        .expect("prompt after set -o vi");
+    // Esc puts the cursor on the `X`, which `x` deletes; the output joins the words with
+    // `-`, which the typed line never contains.
+    session.send("printf '%s-%s\\n' A BX\x1b").unwrap();
+    std::thread::sleep(Duration::from_millis(300));
+    session.send("x\r").unwrap();
+    session
+        .expect("A-B", Duration::from_secs(10))
+        .expect("Esc then x did not delete the last character");
+
+    session.send("exit 0\r").unwrap();
+    assert_eq!(session.wait().expect("process did not exit"), 0);
+}
+
 /// Readline's `edit-and-execute-command`: Ctrl-X Ctrl-E opens the line in `$VISUAL` and
 /// runs what the editor saves. The "editor" here is cash's `sed -i`.
 #[test]

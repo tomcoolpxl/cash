@@ -91,3 +91,13 @@ It sits outside the workspace, so cash's lints do not apply to it. Its own tests
    - `decide_menu_completion` now returns what the caller does next (`MenuOpening`), so
      the `Menu` event and a late answer in `settle_completions` still decide alike.
    - Off by default, so Reedline's own behaviour and tests stay as they were.
+
+8. **Text typed ahead of an Esc keeps its order in vi mode** (`src/engine.rs`,
+   2026-10-05). `process_input_batch` parsed a whole batch of keys, then ran the events
+   under the mode the parsing ended in. Text and an Esc read together (fast typing, a
+   paste, a slow link) were inserted under vi normal mode, whose cursor rests on a
+   character, so each insert after the first landed before it: `abc` Esc became `bca`.
+   Each event now carries the mode it was parsed under, the editor takes that mode
+   before running it, and a run of fused edits is cut where the mode changes;
+   `run_edit_commands` keeps re-syncing to the current mode when a host calls it.
+   Test: `engine::tests::text_and_esc_in_one_batch_insert_in_order`.
