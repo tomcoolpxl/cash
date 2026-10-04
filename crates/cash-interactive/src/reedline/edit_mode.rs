@@ -94,6 +94,8 @@ impl reedline::EditMode for MutableEditMode {
 pub(crate) struct UpdatableBindings {
     bindings: reedline::Keybindings,
     edit_mode: Box<dyn reedline::EditMode>,
+    /// `set -o vi` is on: `edit_mode` is Reedline's vi editor rather than its emacs one.
+    vi: bool,
     /// Trie for raw byte sequences. Supports both exact lookups and prefix matching
     /// during macro resolution.
     raw_mappings: Trie<Vec<u8>, interfaces::KeyAction>,
@@ -147,11 +149,12 @@ impl NumericArgument {
 impl UpdatableBindings {
     pub fn new(bindings: reedline::Keybindings) -> Self {
         // Clone the bindings so we can keep a copy for later updates.
-        let edit_mode = Self::rebuild_edit_mode(&bindings);
+        let edit_mode = Self::rebuild_edit_mode(&bindings, false);
 
         Self {
             bindings,
             edit_mode,
+            vi: false,
             raw_mappings: Trie::new(),
             macros: HashMap::new(),
             numeric_argument: None,
@@ -165,11 +168,42 @@ impl UpdatableBindings {
     pub fn update(&mut self, f: impl Fn(&mut reedline::Keybindings)) {
         f(&mut self.bindings);
         self.try_update_bindings_for_all_macros();
-        self.edit_mode = Self::rebuild_edit_mode(&self.bindings);
+        self.edit_mode = Self::rebuild_edit_mode(&self.bindings, self.vi);
     }
 
-    fn rebuild_edit_mode(bindings: &reedline::Keybindings) -> Box<dyn reedline::EditMode> {
-        Box::new(reedline::Emacs::new(bindings.clone()))
+    /// Follows `set -o vi` and `set -o emacs`; the editor is rebuilt only when the mode
+    /// changes, so a line being edited keeps its vi state.
+    pub fn set_vi(&mut self, vi: bool) {
+        if self.vi != vi {
+            self.vi = vi;
+            self.edit_mode = Self::rebuild_edit_mode(&self.bindings, vi);
+        }
+    }
+
+    fn rebuild_edit_mode(
+        bindings: &reedline::Keybindings,
+        vi: bool,
+    ) -> Box<dyn reedline::EditMode> {
+        if !vi {
+            return Box::new(reedline::Emacs::new(bindings.clone()));
+        }
+        // Readline's vi keymaps, plus every key cash and `bind` added to the emacs ones
+        // (Tab completion, `bind -x` keys), in insert mode, where Bash's vi-insert has them.
+        let defaults = reedline::default_emacs_keybindings();
+        let mut insert = reedline::default_vi_insert_keybindings();
+        for (combination, event) in bindings.get_keybindings() {
+            if defaults
+                .find_binding(combination.modifier, combination.key_code)
+                .as_ref()
+                != Some(event)
+            {
+                insert.add_binding(combination.modifier, combination.key_code, event.clone());
+            }
+        }
+        Box::new(reedline::Vi::new(
+            insert,
+            reedline::default_vi_normal_keybindings(),
+        ))
     }
 }
 
@@ -943,6 +977,36 @@ mod tests {
 
     fn key(code: KeyCode, modifiers: KeyModifiers) -> reedline::ReedlineRawEvent {
         reedline::ReedlineRawEvent::try_from(Event::Key(KeyEvent::new(code, modifiers))).unwrap()
+    }
+
+    #[test]
+    fn set_o_vi_switches_to_vi_keys_and_keeps_bound_ones() {
+        let mut emacs = reedline::default_emacs_keybindings();
+        emacs.add_binding(
+            KeyModifiers::CONTROL,
+            KeyCode::Char('t'),
+            reedline::ReedlineEvent::ExecuteHostCommand("echo bound".into()),
+        );
+        let mut bindings = UpdatableBindings::new(emacs);
+        assert_eq!(bindings.edit_mode(), reedline::PromptEditMode::Emacs);
+
+        bindings.set_vi(true);
+        assert_eq!(
+            bindings.edit_mode(),
+            reedline::PromptEditMode::Vi(reedline::PromptViMode::Insert)
+        );
+        assert!(matches!(
+            bindings.parse_event(key(KeyCode::Char('t'), KeyModifiers::CONTROL)),
+            reedline::ReedlineEvent::ExecuteHostCommand(command) if command == "echo bound"
+        ));
+        let _ = bindings.parse_event(key(KeyCode::Esc, KeyModifiers::NONE));
+        assert_eq!(
+            bindings.edit_mode(),
+            reedline::PromptEditMode::Vi(reedline::PromptViMode::Normal)
+        );
+
+        bindings.set_vi(false);
+        assert_eq!(bindings.edit_mode(), reedline::PromptEditMode::Emacs);
     }
 
     #[test]

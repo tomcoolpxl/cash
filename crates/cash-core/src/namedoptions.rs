@@ -289,7 +289,13 @@ static SET_O_OPTIONS: LazyLock<HashMap<&'static str, ShellOptionDef>> = LazyLock
             "emacs",
             ShellOptionDef::new(
                 |options| options.emacs_mode,
-                |options, value| options.emacs_mode = value,
+                // As in Bash, choosing one editing mode turns the other off.
+                |options, value| {
+                    options.emacs_mode = value;
+                    if value {
+                        options.vi_mode = false;
+                    }
+                },
             ),
         ),
         (
@@ -443,7 +449,12 @@ static SET_O_OPTIONS: LazyLock<HashMap<&'static str, ShellOptionDef>> = LazyLock
             "vi",
             ShellOptionDef::new(
                 |options| options.vi_mode,
-                |options, value| options.vi_mode = value,
+                |options, value| {
+                    options.vi_mode = value;
+                    if value {
+                        options.emacs_mode = false;
+                    }
+                },
             ),
         ),
         (

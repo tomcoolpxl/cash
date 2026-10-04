@@ -180,16 +180,22 @@ impl InputBackend for ReedlineInputBackend {
         // Hand Reedline the abbreviations as they stand (D60). Its table can only be added
         // to, and an entry overwritten by name; one `abbr -e` removed stays in it, and the
         // highlighter's `should_expand_abbr` refuses it.
-        let abbreviations: std::collections::HashMap<String, String> = {
+        let (abbreviations, vi): (std::collections::HashMap<String, String>, bool) = {
             let shell = tokio::task::block_in_place(|| {
                 tokio::runtime::Handle::current().block_on(shell.lock())
             });
-            shell
+            let abbreviations = shell
                 .abbreviations()
                 .iter()
                 .map(|a| (a.name.clone(), a.expansion.clone()))
-                .collect()
+                .collect();
+            (abbreviations, shell.options().vi_mode)
         };
+        // `set -o vi` and `set -o emacs` take effect at the next prompt, as in Bash.
+        tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(self.bindings.lock())
+        })
+        .set_vi(vi);
         if !abbreviations.is_empty() {
             self.reedline = self
                 .reedline

@@ -6,8 +6,10 @@ spec: D40 D59 D60 D61 D62
 ---
 ## The editor
 
-The prompt is reedline in Emacs mode, with Readline's keys where cash adds them. There
-is no vi mode: `set -o vi` is accepted and changes nothing. `bind` shows and changes
+The prompt is reedline in Emacs mode, with Readline's keys where cash adds them.
+`set -o vi` switches to vi keys at the next prompt (insert mode first, Esc for normal
+mode), and `set -o emacs` back; Tab completion and the keys `bind` adds work in vi's
+insert mode too. `bind` shows and changes
 bindings, `bind -x` runs a command on a key, and `READLINE_LINE` and `READLINE_POINT`
 work as in Bash.
 
