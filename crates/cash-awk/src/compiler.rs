@@ -149,7 +149,8 @@ static BUILTIN_FUNCTIONS: LazyLock<HashMap<Rule, BuiltinFunctionInfo>> = LazyLoc
             Rule::sprintf,
             BuiltinFunctionInfo {
                 function: BuiltinFunction::Sprintf,
-                min_args: 1,
+                // gawk takes `sprintf()`, and fails when it runs it.
+                min_args: 0,
                 max_args: u16::MAX,
             },
         ),
@@ -209,6 +210,14 @@ static BUILTIN_FUNCTIONS: LazyLock<HashMap<Rule, BuiltinFunctionInfo>> = LazyLoc
                 max_args: 1,
             },
         ),
+        (
+            Rule::isarray,
+            BuiltinFunctionInfo {
+                function: BuiltinFunction::IsArray,
+                min_args: 1,
+                max_args: 1,
+            },
+        ),
     ])
 });
 
@@ -239,6 +248,54 @@ type PestError = pest::error::Error<Rule>;
 
 fn pest_error_from_span(span: pest::Span, message: String) -> PestError {
     PestError::new_from_span(pest::error::ErrorVariant::CustomError { message }, span)
+}
+
+/// The mark at the start of an error's message that has it shown as gawk shows an error
+/// it goes on parsing after, with the place and no source: `awk: cmd. line:1: error:
+/// division by zero attempted`.
+const GAWK_ERROR: &str = "\0gawk error\0";
+/// The mark of an error shown as gawk shows one of the grammar's, the source line and a
+/// caret under the place: `awk: cmd. line:1:               ^ 0 is invalid as number of
+/// arguments for close` below the line.
+const GAWK_CARET: &str = "\0gawk caret\0";
+
+/// An error at `pos` that is shown in gawk's form, `mark` saying which.
+fn gawk_error(mark: &str, pos: pest::Position, message: &str) -> PestError {
+    PestError::new_from_pos(
+        pest::error::ErrorVariant::CustomError {
+            message: format!("{mark}{message}"),
+        },
+        pos,
+    )
+}
+
+/// The error in gawk's form, if it is one of those: the program's file, or `cmd. line`,
+/// and the line, as gawk places one.
+fn gawk_form(error: &PestError) -> Option<String> {
+    let pest::error::ErrorVariant::CustomError { message } = &error.variant else {
+        return None;
+    };
+    let (line, column) = match error.line_col {
+        pest::error::LineColLocation::Pos(place) | pest::error::LineColLocation::Span(place, _) => {
+            place
+        }
+    };
+    let place = format!("awk: {}:{line}:", error.path().unwrap_or("cmd. line"));
+    if let Some(message) = message.strip_prefix(GAWK_ERROR) {
+        return Some(format!("{place} error: {message}"));
+    }
+    let message = message.strip_prefix(GAWK_CARET)?;
+    let source = error.line();
+    // gawk counts the caret's place in bytes; the column is in characters.
+    let before: usize = source
+        .chars()
+        .take(column.saturating_sub(1))
+        .map(char::len_utf8)
+        .sum();
+    Some(format!(
+        "{place} {source}\n{place} {}^ {message}",
+        " ".repeat(before)
+    ))
 }
 
 /// The end of a match on a parse-tree node's rule that lists every alternative
@@ -308,7 +365,12 @@ pub fn escape_string_contents(s: &str) -> Result<Rc<str>, String> {
     while let Some(c) = chars.next() {
         match c {
             '\\' => {
-                let next_char = chars.next().ok_or("invalid escape sequence".to_string())?;
+                // A backslash at the end (`-v 'x=a\'`) stands for itself, as in gawk; it
+                // was a fatal error. A string in the program cannot end in one.
+                let Some(next_char) = chars.next() else {
+                    result.push('\\');
+                    break;
+                };
                 let escaped_char = match next_char {
                     '"' => '"',
                     '/' => '/',
@@ -414,6 +476,12 @@ fn normalize_builtin_function_arguments(
             ),
         },
         BuiltinFunction::Split => {
+            // A subarray (`split(s, a[1])`) is referred to, not read.
+            if let Some(last) = args[1].opcodes.last_mut()
+                && *last == OpCode::IndexArrayGetValue
+            {
+                *last = OpCode::IndexArraySubarray;
+            }
             // put the array as the first argument
             args[0..2].rotate_right(1);
             (flatten(args), argc)
@@ -456,11 +524,27 @@ enum ExprKind {
 struct Expr {
     kind: ExprKind,
     instructions: Instructions,
+    /// The value of a numeric constant, as gawk folds one at parse time: a number, or
+    /// `-`, `!` or `^` of constants (`!` of a string too), not in parentheses. A divisor
+    /// that is a zero constant is an error before the program runs.
+    constant: Option<f64>,
+    /// A plain variable's name as gawk gives it in an error about an array, for the right
+    /// side of `in`.
+    array_name: Option<Rc<str>>,
 }
 
 impl Expr {
     fn new(kind: ExprKind, instructions: Instructions) -> Self {
-        Expr { kind, instructions }
+        Expr {
+            kind,
+            instructions,
+            constant: None,
+            array_name: None,
+        }
+    }
+
+    fn with_constant(self, constant: Option<f64>) -> Self {
+        Self { constant, ..self }
     }
 }
 
@@ -527,8 +611,12 @@ impl Instructions {
         name: &str,
         locals: &LocalMap,
     ) {
-        self.array_names
-            .push((self.opcodes.len(), array_description(name, locals)));
+        self.push_named(instruction, line_col, array_description(name, locals));
+    }
+
+    /// Push an instruction that uses the array gawk names `description` in an error.
+    fn push_named(&mut self, instruction: OpCode, line_col: (usize, usize), description: Rc<str>) {
+        self.array_names.push((self.opcodes.len(), description));
         self.push(instruction, line_col);
     }
 
@@ -593,6 +681,9 @@ struct Compiler {
     /// `nextfile` are errors.
     special_action: Option<&'static str>,
     loop_stack: Vec<LoopStubs>,
+    /// Errors that do not stop the compiling, as gawk goes on parsing after them: a
+    /// division by a zero constant. They are reported with the others.
+    deferred_errors: RefCell<Vec<PestError>>,
 }
 
 impl Default for Compiler {
@@ -671,6 +762,7 @@ impl Default for Compiler {
             loop_stack: Vec::new(),
             in_function: false,
             special_action: None,
+            deferred_errors: RefCell::default(),
         }
     }
 }
@@ -722,7 +814,15 @@ impl Compiler {
     ) -> Result<u16, PestError> {
         let mut argc: u32 = 0;
         for arg in args {
-            self.compile_expr(arg, instructions, locals)?;
+            let mut arg_instructions = Instructions::default();
+            self.compile_expr(arg, &mut arg_instructions, locals)?;
+            // An element may be a subarray, or become one in the function.
+            if let Some(last) = arg_instructions.opcodes.last_mut()
+                && *last == OpCode::IndexArrayGetValue
+            {
+                *last = OpCode::IndexArrayGetArgument;
+            }
+            instructions.extend(arg_instructions);
             argc += 1;
             if argc > u16::MAX as u32 {
                 return Err(pest_error_from_span(
@@ -765,7 +865,8 @@ impl Compiler {
                         vec![OpCode::PushConstant(index)],
                         primary.line_col(),
                     ),
-                ))
+                )
+                .with_constant(Some(num)))
             }
             Rule::string => {
                 let span = primary.as_span();
@@ -782,9 +883,15 @@ impl Compiler {
                 ))
             }
             Rule::lvalue => {
+                let variable = first_child(primary.clone());
+                let array_name = (variable.as_rule() == Rule::name)
+                    .then(|| array_description(variable.as_str(), locals));
                 let mut instructions = Instructions::default();
                 self.compile_lvalue(primary, &mut instructions, locals)?;
-                Ok(Expr::new(ExprKind::LValue, instructions))
+                Ok(Expr {
+                    array_name,
+                    ..Expr::new(ExprKind::LValue, instructions)
+                })
             }
             Rule::function_call => {
                 let span = primary.as_span();
@@ -868,12 +975,20 @@ impl Compiler {
                         line_col,
                     );
                     Ok(Expr::new(ExprKind::Number, instructions))
+                } else if !span.as_str().trim_end().ends_with(')') {
+                    // Only `length` goes without parentheses; gawk's caret is under what
+                    // follows the name.
+                    Err(gawk_error(GAWK_CARET, span.end_pos(), "syntax error"))
                 } else {
-                    Err(pest_error_from_span(
-                        span,
-                        format!(
-                            "incorrect number of arguments for builtin function '{}'",
-                            function.as_str()
+                    // gawk's words, with its caret under the call's closing parenthesis.
+                    let close = pest::Position::new(span.get_input(), span.end() - 1)
+                        .unwrap_or_else(|| span.start_pos());
+                    Err(gawk_error(
+                        GAWK_CARET,
+                        close,
+                        &format!(
+                            "{argc} is invalid as number of arguments for {}",
+                            function.as_str().trim_end()
                         ),
                     ))
                 }
@@ -882,17 +997,33 @@ impl Compiler {
         }
     }
 
+    /// The text of a string constant that `instructions` push and do nothing else with.
+    fn string_constant(&self, instructions: &Instructions) -> Option<Rc<str>> {
+        let [OpCode::PushConstant(index)] = instructions.opcodes.as_slice() else {
+            return None;
+        };
+        match self.constants.borrow().get(*index as usize) {
+            Some(Constant::String(text)) => Some(text.clone()),
+            _ => None,
+        }
+    }
+
     fn map_prefix(&self, op: Pair<Rule>, rhs: Expr) -> Result<Expr, PestError> {
         let kind = rhs.kind;
+        let constant = rhs.constant;
         let mut instructions = rhs.instructions;
         match op.as_rule() {
             Rule::negate => {
                 instructions.push(OpCode::Negate, op.line_col());
-                Ok(Expr::new(ExprKind::Number, instructions))
+                Ok(Expr::new(ExprKind::Number, instructions).with_constant(constant.map(|n| -n)))
             }
             Rule::not => {
+                let constant = constant
+                    .map(|n| n == 0.0)
+                    .or_else(|| self.string_constant(&instructions).map(|s| s.is_empty()))
+                    .map(|truth| if truth { 1.0 } else { 0.0 });
                 instructions.push(OpCode::Not, op.line_col());
-                Ok(Expr::new(ExprKind::Number, instructions))
+                Ok(Expr::new(ExprKind::Number, instructions).with_constant(constant))
             }
             Rule::unary_plus => {
                 instructions.push(OpCode::AsNumber, op.line_col());
@@ -940,7 +1071,23 @@ impl Compiler {
     fn map_infix(&self, lhs: Expr, op: Pair<Rule>, rhs: Expr) -> Result<Expr, PestError> {
         let lhs_kind = lhs.kind;
         let rhs_kind = rhs.kind;
+        let lhs_constant = lhs.constant;
+        let rhs_constant = rhs.constant;
         let mut instructions = lhs.instructions;
+        // gawk divides by a constant at parse time, and a zero one is an error it goes on
+        // parsing after, where a zero that is computed is a fatal error when it is met.
+        if matches!(op.as_rule(), Rule::div | Rule::modulus) && rhs_constant == Some(0.0) {
+            let message = if op.as_rule() == Rule::div {
+                "division by zero attempted"
+            } else {
+                "division by zero attempted in `%'"
+            };
+            self.deferred_errors.borrow_mut().push(gawk_error(
+                GAWK_ERROR,
+                op.as_span().start_pos(),
+                message,
+            ));
+        }
 
         match op.as_rule() {
             Rule::and => {
@@ -966,13 +1113,23 @@ impl Compiler {
             Rule::in_op => {
                 let lhs_instructions = instructions;
                 let mut instructions = rhs.instructions;
-                lvalue_to_scalar_ref(
-                    &mut instructions.opcodes,
-                    op.as_span(),
-                    "the right side of 'in' should be an array",
-                )?;
+                // A variable is taken as it is, which leaves a parameter linked to its
+                // caller's variable; a subarray (`k in a[1]`) is referred to, not read.
+                match instructions.opcodes.last_mut() {
+                    Some(OpCode::GetGlobal(_) | OpCode::GetLocal(_)) => {}
+                    Some(last @ OpCode::IndexArrayGetValue) => *last = OpCode::IndexArraySubarray,
+                    _ => {
+                        return Err(pest_error_from_span(
+                            op.as_span(),
+                            "the right side of 'in' should be an array".to_string(),
+                        ));
+                    }
+                }
                 instructions.extend(lhs_instructions);
-                instructions.push(OpCode::In, op.line_col());
+                match rhs.array_name {
+                    Some(name) => instructions.push_named(OpCode::In, op.line_col(), name),
+                    None => instructions.push(OpCode::In, op.line_col()),
+                }
                 return Ok(Expr::new(ExprKind::Number, instructions));
             }
             _ => {}
@@ -1002,7 +1159,8 @@ impl Compiler {
             }
             Rule::pow => {
                 instructions.push(OpCode::Pow, op.line_col());
-                Ok(Expr::new(ExprKind::Number, instructions))
+                let constant = lhs_constant.zip(rhs_constant).map(|(a, b)| a.powf(b));
+                Ok(Expr::new(ExprKind::Number, instructions).with_constant(constant))
             }
             Rule::le => {
                 instructions.push(OpCode::Le, op.line_col());
@@ -1077,19 +1235,13 @@ impl Compiler {
                 instructions.push(get_instruction, line_col);
             }
             Rule::array_element => {
-                let mut inner = lvalue.into_inner();
-                let name = inner.child();
-                let get_instruction = self
-                    .get_var(name.as_str(), locals)
-                    .map_err(|msg| pest_error_from_span(name.as_span(), msg))?;
-                instructions.push(get_instruction, line_col);
-                self.compile_array_index(inner, instructions, locals)?;
-                instructions.push_using_array(
+                self.compile_subscripted(
+                    lvalue.into_inner(),
                     OpCode::IndexArrayGetValue,
                     line_col,
-                    name.as_str(),
+                    instructions,
                     locals,
-                );
+                )?;
             }
             Rule::field_var => {
                 let expr = self.compile_field_var_expr(lvalue, locals)?;
@@ -1145,6 +1297,44 @@ impl Compiler {
         Ok(expr)
     }
 
+    /// Compile a name and its subscripts (`array_element`, `array_ref`): the variable,
+    /// each subarray on the way, and `last` with the last subscript; with none, the
+    /// variable alone. The first use of the variable carries its name for an error; a
+    /// subarray's error names it from what the interpreter finds.
+    fn compile_subscripted(
+        &self,
+        mut inner: Pairs<Rule>,
+        last: OpCode,
+        line_col: (usize, usize),
+        instructions: &mut Instructions,
+        locals: &LocalMap,
+    ) -> Result<(), PestError> {
+        let name = inner.child();
+        let get_instruction = self
+            .get_var(name.as_str(), locals)
+            .map_err(|msg| pest_error_from_span(name.as_span(), msg))?;
+        instructions.push(get_instruction, line_col);
+        let subscripts: Vec<Pair<Rule>> = inner.collect();
+        let count = subscripts.len();
+        if count == 0 {
+            return Ok(());
+        }
+        for (index, subscript) in subscripts.into_iter().enumerate() {
+            self.compile_array_index(subscript.into_inner(), instructions, locals)?;
+            let opcode = if index + 1 == count {
+                last
+            } else {
+                OpCode::IndexArraySubarray
+            };
+            if index == 0 {
+                instructions.push_using_array(opcode, line_col, name.as_str(), locals);
+            } else {
+                instructions.push(opcode, line_col);
+            }
+        }
+        Ok(())
+    }
+
     fn compile_array_index(
         &self,
         mut index: Pairs<Rule>,
@@ -1190,13 +1380,26 @@ impl Compiler {
             Rule::multidimensional_in => {
                 let mut inner = expr.into_inner();
                 let index = inner.child();
-                let name = inner.child();
-                let get_instruction = self
-                    .get_var(name.as_str(), locals)
-                    .map_err(|msg| pest_error_from_span(name.as_span(), msg))?;
-                instructions.push(get_instruction, name.line_col());
+                let array = inner.child();
+                let line_col = array.line_col();
+                let array = array.into_inner();
+                let mut parts = array.clone();
+                let name = parts.child();
+                let is_subarray = parts.next().is_some();
+                self.compile_subscripted(
+                    array,
+                    OpCode::IndexArraySubarray,
+                    line_col,
+                    instructions,
+                    locals,
+                )?;
                 self.compile_array_index(index.into_inner(), instructions, locals)?;
-                instructions.push_using_array(OpCode::In, name.line_col(), name.as_str(), locals);
+                // gawk does not name a subarray that is a scalar here.
+                if is_subarray {
+                    instructions.push(OpCode::In, line_col);
+                } else {
+                    instructions.push_using_array(OpCode::In, line_col, name.as_str(), locals);
+                }
             }
             _ => not_in_grammar(&expr, "binary expression"),
         }
@@ -1318,10 +1521,10 @@ impl Compiler {
                             instructions.push(OpCode::Mul, assignment_op.line_col())
                         }
                         Rule::div_assign => {
-                            instructions.push(OpCode::Div, assignment_op.line_col())
+                            instructions.push(OpCode::DivAssign, assignment_op.line_col())
                         }
                         Rule::mod_assign => {
-                            instructions.push(OpCode::Mod, assignment_op.line_col())
+                            instructions.push(OpCode::ModAssign, assignment_op.line_col())
                         }
                         Rule::pow_assign => {
                             instructions.push(OpCode::Pow, assignment_op.line_col())
@@ -1376,20 +1579,20 @@ impl Compiler {
         match stmt.as_rule() {
             Rule::array_delete => {
                 let mut inner = stmt.into_inner();
-                let name = inner.child();
-                let get_instruction = self
-                    .get_var(name.as_str(), locals)
-                    .map_err(|msg| pest_error_from_span(name.as_span(), msg))?;
-                instructions.push(get_instruction, stmt_line_col);
-                if let Some(index) = inner.next() {
-                    self.compile_expr(index, instructions, locals)?;
-                    instructions.push_using_array(
+                if inner.clone().nth(1).is_some() {
+                    self.compile_subscripted(
+                        inner,
                         OpCode::DeleteElement,
                         stmt_line_col,
-                        name.as_str(),
+                        instructions,
                         locals,
-                    );
+                    )?;
                 } else {
+                    let name = inner.child();
+                    let get_instruction = self
+                        .get_var(name.as_str(), locals)
+                        .map_err(|msg| pest_error_from_span(name.as_span(), msg))?;
+                    instructions.push(get_instruction, stmt_line_col);
                     instructions.push_using_array(
                         OpCode::ClearArray,
                         stmt_line_col,
@@ -1542,16 +1745,28 @@ impl Compiler {
             next
         };
         let array_var_line_col = array_var.line_col();
-        let array_name = array_var.as_str();
-        let array_var = self
-            .variable(array_name, locals)
-            .map_err(|msg| pest_error_from_span(array_var.as_span(), msg))?;
-
-        let create_iterator = match array_var {
-            Variable::Global(global_index) => OpCode::CreateGlobalIterator(global_index),
-            Variable::Local(local_index) => OpCode::CreateLocalIterator(local_index),
-        };
-        instructions.push_using_array(create_iterator, array_var_line_col, array_name, locals);
+        let array_ref = array_var.into_inner();
+        let mut parts = array_ref.clone();
+        let name = parts.child();
+        let is_subarray = parts.next().is_some();
+        self.compile_subscripted(
+            array_ref,
+            OpCode::IndexArraySubarray,
+            array_var_line_col,
+            instructions,
+            locals,
+        )?;
+        // gawk does not name a subarray that is a scalar here.
+        if is_subarray {
+            instructions.push(OpCode::CreateIterator, array_var_line_col);
+        } else {
+            instructions.push_using_array(
+                OpCode::CreateIterator,
+                array_var_line_col,
+                name.as_str(),
+                locals,
+            );
+        }
 
         let iter_deref_location = instructions.len();
         instructions.push(OpCode::Invalid, array_var_line_col);
@@ -1999,10 +2214,25 @@ pub struct CompilerErrors {
     errors: Vec<PestError>,
 }
 
+/// Each error on its own line or lines, gawk's form or pest's; the pest form ends with a
+/// blank line, which the gawk form, as gawk writes it, does not.
 impl std::fmt::Display for CompilerErrors {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let mut blank_line = false;
         for error in &self.errors {
-            writeln!(f, "{}", error)?;
+            match gawk_form(error) {
+                Some(text) => {
+                    writeln!(f, "{text}")?;
+                    blank_line = false;
+                }
+                None => {
+                    writeln!(f, "{error}")?;
+                    blank_line = true;
+                }
+            }
+        }
+        if blank_line {
+            writeln!(f)?;
         }
         Ok(())
     }
@@ -2128,6 +2358,7 @@ pub fn compile_program(sources: &[SourceFile]) -> Result<Program, CompilerErrors
     let mut functions = Vec::new();
     for (filename, program_iter) in parsed_sources {
         for item in program_iter {
+            let errors_before = errors.len();
             match item.as_rule() {
                 Rule::begin_action | Rule::end_action => {
                     let is_begin_action = item.as_rule() == Rule::begin_action;
@@ -2161,6 +2392,12 @@ pub fn compile_program(sources: &[SourceFile]) -> Result<Program, CompilerErrors
                 Rule::EOI => {}
                 _ => not_in_grammar(&item, "program"),
             }
+            // The item's errors that did not stop it came before the one that did.
+            let deferred = compiler.deferred_errors.get_mut().drain(..);
+            let deferred: Vec<PestError> = deferred
+                .map(|error| improve_error(error, &filename))
+                .collect();
+            errors.splice(errors_before..errors_before, deferred);
         }
     }
 
@@ -2802,7 +3039,7 @@ mod test {
         assert_eq!(
             instructions,
             vec![
-                OpCode::GlobalScalarRef(FIRST_GLOBAL_VAR),
+                OpCode::GetGlobal(FIRST_GLOBAL_VAR),
                 OpCode::PushConstant(0),
                 OpCode::In
             ]
@@ -3116,7 +3353,7 @@ mod test {
                 OpCode::GlobalScalarRef(FIRST_GLOBAL_VAR),
                 OpCode::Dup,
                 OpCode::PushConstant(0),
-                OpCode::Div,
+                OpCode::DivAssign,
                 OpCode::Assign,
             ]
         );
@@ -3129,7 +3366,7 @@ mod test {
                 OpCode::GlobalScalarRef(FIRST_GLOBAL_VAR),
                 OpCode::Dup,
                 OpCode::PushConstant(0),
-                OpCode::Mod,
+                OpCode::ModAssign,
                 OpCode::Assign,
             ]
         );
@@ -4544,7 +4781,8 @@ mod test {
             program,
             vec![
                 OpCode::GlobalScalarRef(FIRST_GLOBAL_VAR),
-                OpCode::CreateGlobalIterator(FIRST_GLOBAL_VAR + 1),
+                OpCode::GetGlobal(FIRST_GLOBAL_VAR + 1),
+                OpCode::CreateIterator,
                 OpCode::AdvanceIterOrJump(4),
                 OpCode::PushConstant(0),
                 OpCode::Pop,

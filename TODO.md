@@ -74,13 +74,14 @@ fixed their leftovers; moved here so 1.3.14 could go out (the user, 2026-10-04).
   pattern is "unterminated" where GNU reads it as a newline; `s/./X/;s//\1/` fails at
   run time where GNU reports it at compile time; run-time errors keep cash's form
   (`<script argument 1>:1:8: 'file':1 error: …`), not GNU's.
-- awk, found matching gawk's errors (2026-10-04): division by zero gives inf/nan where
-  gawk is fatal (and `1/0` of constants a parse error; `/=` and `%=` have their own
-  words); `sprintf()` and `close()` without arguments are compile errors in other words;
-  gawk's arrays of arrays (`a[1][2]`) are not supported; `for (a in b)` with `a` an array
-  is fatal where gawk takes it for an empty `b`; an error outside the program's code
-  (`next` from BEGIN through a function, an unreadable input file) says `awk: fatal:`
-  without `cmd. line:N:`; the text for a failed write to stdout was not compared.
+- awk, found matching gawk 5.4 (2026-10-04): a `for (k in a)` loop skips keys deleted
+  during it, where gawk visits its snapshot (and a comment calls cash's way gawk's); a
+  function that deletes the subarray it was given and then writes its parameter makes
+  the element again, where gawk keeps the parameter detached; a bad regex says "error
+  parsing pattern 0" where gawk says "invalid regexp: unbalanced (: /(/"; syntax errors
+  are pest's, so `BEGIN{print 1/0} {` reports one error, gawk two; `- -0`, `**` and
+  `print a == b` are not parsed; `match(s, r, arr)`, `split`'s 4th and `close`'s 2nd
+  arguments are not taken; `log(-1)` gives no "received negative argument" warning.
 
 ---
 

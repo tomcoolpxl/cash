@@ -1819,3 +1819,446 @@ fn test_awk_format_specifiers_as_gawk_reads_them() {
     run_test(plan(r#"BEGIN { printf "%q" }"#, "", "%q", 0));
     run_test(plan(r#"BEGIN { printf "a%5." }"#, "", "a%5.", 0));
 }
+
+/// Runs each `(program, stdin, stdout, stderr, status)` and checks all three outcomes.
+fn run_cases(cases: &[(&str, &str, &str, &str, i32)]) {
+    for (program, stdin, stdout, stderr, status) in cases {
+        let output = run_test_base(&[(*program).to_string()], stdin.as_bytes());
+        assert_eq!(
+            String::from_utf8_lossy(&output.stdout).replace("\r\n", "\n"),
+            *stdout,
+            "{program}"
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&output.stderr).replace("\r\n", "\n"),
+            *stderr,
+            "{program}"
+        );
+        assert_eq!(output.status.code(), Some(*status), "{program}");
+    }
+}
+
+// A division by zero is gawk's fatal error, in its words for each operator; the quotient
+// was infinite or not a number, `+inf` or `-nan` (TODO.md phase 15). Each was checked
+// against gawk 5.4.
+#[test]
+fn test_awk_division_by_zero_is_a_fatal_error() {
+    run_cases(&[
+        (
+            "BEGIN { x = 0; print 1/x }",
+            "",
+            "",
+            "awk: cmd. line:1: fatal: division by zero attempted\n",
+            2,
+        ),
+        (
+            "BEGIN { x = 0; print 1%x }",
+            "",
+            "",
+            "awk: cmd. line:1: fatal: division by zero attempted in `%'\n",
+            2,
+        ),
+        (
+            "BEGIN { y = 1; y /= 0 }",
+            "",
+            "",
+            "awk: cmd. line:1: fatal: division by zero attempted in `/='\n",
+            2,
+        ),
+        (
+            "BEGIN { x[1] = 3; x[1] %= 0 }",
+            "",
+            "",
+            "awk: cmd. line:1: fatal: division by zero attempted in `%='\n",
+            2,
+        ),
+        (
+            "{ print 1/$1 }",
+            "2\n0\n",
+            "0.5\n",
+            "awk: cmd. line:1: (FILENAME=- FNR=2) fatal: division by zero attempted\n",
+            2,
+        ),
+        // Parenthesized, the zero is not a constant to gawk either.
+        (
+            "BEGIN { print 1/(0) }",
+            "",
+            "",
+            "awk: cmd. line:1: fatal: division by zero attempted\n",
+            2,
+        ),
+    ]);
+}
+
+// A divisor that is a zero constant is an error before the program runs, as gawk folds
+// constants: exit status 1, every one reported, nothing run (TODO.md phase 15).
+#[test]
+fn test_awk_division_by_a_zero_constant_is_a_compile_error() {
+    run_cases(&[
+        (
+            "BEGIN { print \"ran\"; print 1/0 }",
+            "",
+            "",
+            "awk: cmd. line:1: error: division by zero attempted\n",
+            1,
+        ),
+        (
+            "BEGIN { print 1%0.0\n x = y / -0; z = 2 / 0^1 }",
+            "",
+            "",
+            "awk: cmd. line:1: error: division by zero attempted in `%'\n\
+             awk: cmd. line:2: error: division by zero attempted\n\
+             awk: cmd. line:2: error: division by zero attempted\n",
+            1,
+        ),
+        (
+            "function f() { return 1/!1 }\nBEGIN { print 2 }",
+            "",
+            "",
+            "awk: cmd. line:1: error: division by zero attempted\n",
+            1,
+        ),
+    ]);
+}
+
+// A builtin given too few or too many arguments is gawk's error, with the source line
+// and a caret under the call's closing parenthesis; `sprintf()` is its fatal error when
+// it runs (TODO.md phase 15). cash said "incorrect number of arguments for builtin
+// function" in pest's form.
+#[test]
+fn test_awk_builtin_argument_counts_are_gawks_errors() {
+    run_cases(&[
+        (
+            "BEGIN { close() }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { close() }\n\
+             awk: cmd. line:1:               ^ 0 is invalid as number of arguments for close\n",
+            1,
+        ),
+        (
+            "BEGIN {\n  x = substr(\"a\")\n}",
+            "",
+            "",
+            "awk: cmd. line:2:   x = substr(\"a\")\n\
+             awk: cmd. line:2:                 ^ 1 is invalid as number of arguments for \
+             substr\n",
+            1,
+        ),
+        (
+            "BEGIN { cos(1, 2) }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { cos(1, 2) }\n\
+             awk: cmd. line:1:                 ^ 2 is invalid as number of arguments for cos\n",
+            1,
+        ),
+        (
+            "BEGIN { isarray() }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { isarray() }\n\
+             awk: cmd. line:1:                 ^ 0 is invalid as number of arguments for \
+             isarray\n",
+            1,
+        ),
+        (
+            "BEGIN { print \"a\"; x = sprintf() }",
+            "",
+            "a\n",
+            "awk: cmd. line:1: fatal: sprintf: no arguments\n",
+            2,
+        ),
+        (
+            "function f() { sprintf() } BEGIN { print \"a\" }",
+            "",
+            "a\n",
+            "",
+            0,
+        ),
+    ]);
+}
+
+// gawk's arrays of arrays, against gawk 5.4's output (TODO.md phase 15): they were not
+// supported.
+#[test]
+fn test_awk_arrays_of_arrays() {
+    test_awk!(arrays_of_arrays);
+}
+
+// What is wrong with a subarray is gawk's error, the element named as gawk names it.
+#[test]
+fn test_awk_subarray_errors_are_gawks() {
+    for (program, stderr) in [
+        (
+            "BEGIN { a[1][2] = 3; print a[1] }",
+            "awk: cmd. line:1: fatal: attempt to use array `a[\"1\"]' in a scalar context",
+        ),
+        (
+            "BEGIN { a[1] = 1; a[1][2] = 3 }",
+            "awk: cmd. line:1: fatal: attempt to use scalar `a[\"1\"]' as an array",
+        ),
+        (
+            "BEGIN { a[1][2] = 1; x = a[1][2][3] }",
+            "awk: cmd. line:1: fatal: attempt to use scalar `a[\"1\"][\"2\"]' as an array",
+        ),
+        (
+            "BEGIN { a[1] = 3; for (k in a[1]) print k }",
+            "awk: cmd. line:1: fatal: attempt to use a scalar value as array",
+        ),
+        (
+            "BEGIN { a[1] = 3; print (2 in a[1]) }",
+            "awk: cmd. line:1: fatal: attempt to use a scalar value as array",
+        ),
+        (
+            "BEGIN { a[1] = 1; split(\"a b\", a[1]) }",
+            "awk: cmd. line:1: fatal: split: second argument is not an array",
+        ),
+        (
+            "function f(s) { return s } BEGIN { a[1][2] = 3; f(a[1]) }",
+            "awk: cmd. line:1: fatal: attempt to use array `s (from a[\"1\"])' in a scalar \
+             context",
+        ),
+        (
+            "function f(s) { g(s) } function g(t) { return t + 1 } \
+             BEGIN { a[1][1] = 5; f(a[1]) }",
+            "awk: cmd. line:1: fatal: attempt to use array `t (from s, from a[\"1\"])' in a \
+             scalar context",
+        ),
+        (
+            "function f(s) { s[1] = 5; s[1][2] = 3 } BEGIN { f(a[0]) }",
+            "awk: cmd. line:1: fatal: attempt to use scalar `a[\"0\"][\"1\"]' as an array",
+        ),
+        (
+            "function f(s, l) { l[1][2] = 3; x = l[1] } BEGIN { f() }",
+            "awk: cmd. line:1: fatal: attempt to use array `l[\"1\"]' in a scalar context",
+        ),
+        (
+            "function f(s) { s[2] = 1 } BEGIN { a[1] = 5; f(a[1]) }",
+            "awk: cmd. line:1: fatal: attempt to use scalar parameter `s' as an array",
+        ),
+        // A scalar assigned to a parameter linked to the caller's variable makes the
+        // caller's a scalar, as in gawk.
+        (
+            "function f(s) { s = 4 } BEGIN { f(x); x[1] = 3 }",
+            "awk: cmd. line:1: fatal: attempt to use scalar `x' as an array",
+        ),
+    ] {
+        run_test(fatal_plan(&[program], "", stderr));
+    }
+    // An array where a pattern's truth value belongs; its copy was taken for one, which
+    // panicked.
+    run_test(fatal_plan(
+        &["BEGIN { a[1] = 1 } a"],
+        "x\n",
+        "awk: cmd. line:1: (FILENAME=- FNR=1) fatal: attempt to use array `a' in a scalar \
+         context",
+    ));
+}
+
+// `for (a in b)` gives `a` a key only when `b` has one, so `a` may be an array for an
+// empty `b`, as in gawk; it was always an error (TODO.md phase 15).
+#[test]
+fn test_awk_for_in_assigns_its_variable_only_for_a_key() {
+    run_cases(&[
+        (
+            "BEGIN { a[1]; for (a in b) print \"x\"; print length(a) }",
+            "",
+            "1\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { for (b in b) print \"x\"; print \"done\" }",
+            "",
+            "done\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { a[1]; b[1]; for (a in b) print \"x\" }",
+            "",
+            "",
+            "awk: cmd. line:1: fatal: attempt to use array `a' in a scalar context\n",
+            2,
+        ),
+        (
+            "function f(p) { for (p in b) print \"x\"; print \"done\" } BEGIN { a[1]; f(a) }",
+            "",
+            "done\n",
+            "",
+            0,
+        ),
+        // A variable with no type yet becomes a scalar all the same.
+        (
+            "BEGIN { for (a in b) ; a[2] = 1 }",
+            "",
+            "",
+            "awk: cmd. line:1: fatal: attempt to use scalar `a' as an array\n",
+            2,
+        ),
+    ]);
+}
+
+// An error met outside the program's code is placed at the code that ran last, as gawk
+// places it, and bare only before any has run; it was always bare (TODO.md phase 15).
+#[test]
+fn test_awk_errors_outside_the_code_are_placed_as_gawk_places_them() {
+    run_cases(&[
+        (
+            "function f() {\n next\n}\nBEGIN {\n f()\n}",
+            "",
+            "",
+            "awk: cmd. line:2: fatal: `next' cannot be called from a `BEGIN' rule\n",
+            2,
+        ),
+        (
+            "function f() { nextfile } END { f() }",
+            "",
+            "",
+            "awk: cmd. line:1: fatal: `nextfile' cannot be called from a `END' rule\n",
+            2,
+        ),
+        (
+            "BEGIN { print \"\" > \"\" }",
+            "",
+            "",
+            "awk: cmd. line:1: fatal: expression for `>' redirection has null string value\n",
+            2,
+        ),
+        (
+            "BEGIN { \"\" | getline }",
+            "",
+            "",
+            "awk: cmd. line:1: fatal: expression for `|' redirection has null string value\n",
+            2,
+        ),
+    ]);
+    let cases: &[(&[&str], &str, &str, &str, i32)] = &[
+        (
+            &["BEGIN { x = 1\n y = 2 } { print }", "/nonexistent/file"],
+            "",
+            "",
+            "awk: cmd. line:2: fatal: cannot open file `/nonexistent/file' for reading: No \
+             such file or directory\n",
+            2,
+        ),
+        // Without the last file's place: FNR starts over before the next file is opened.
+        (
+            &["{ print }", "-", "/nonexistent/file"],
+            "a\n",
+            "a\n",
+            "awk: cmd. line:1: fatal: cannot open file `/nonexistent/file' for reading: No \
+             such file or directory\n",
+            2,
+        ),
+        // gawk passes over a directory; reading it was a fatal error.
+        (
+            &["BEGIN { x = 1 } { print }", ".", "-"],
+            "a\n",
+            "a\n",
+            "awk: cmd. line:1: warning: command line argument `.' is a directory: skipped\n",
+            0,
+        ),
+        (
+            &["{ print }", "."],
+            "a\n",
+            "",
+            "awk: warning: command line argument `.' is a directory: skipped\n",
+            0,
+        ),
+        // A backslash at the end of an assignment's value stands for itself.
+        (&["-v", "x=a\\", "BEGIN { print x }"], "", "a\\\n", "", 0),
+        (&["{ print x }", "x=a\\", "-"], "l\n", "a\\\n", "", 0),
+        (
+            &["-f", "/nonexistent.awk"],
+            "",
+            "",
+            "awk: fatal: cannot open source file `/nonexistent.awk' for reading: No such file \
+             or directory\n",
+            2,
+        ),
+        (
+            &["-f", "."],
+            "",
+            "",
+            "awk: .:1: error: cannot read source file `.': Is a directory\n",
+            1,
+        ),
+    ];
+    for (args, stdin, stdout, stderr, status) in cases {
+        let args: Vec<String> = args.iter().map(|arg| (*arg).to_string()).collect();
+        let output = run_test_base(&args, stdin.as_bytes());
+        let text = |bytes: &[u8]| String::from_utf8_lossy(bytes).replace("\r\n", "\n");
+        assert_eq!(text(&output.stdout), *stdout, "{args:?}");
+        assert_eq!(text(&output.stderr), *stderr, "{args:?}");
+        assert_eq!(output.status.code(), Some(*status), "{args:?}");
+    }
+}
+
+// When the reader of awk's output goes away, awk ends there in silence with 141, as
+// SIGPIPE ends gawk and as cash's own tools end (spec D71); it said "write error: Broken
+// pipe" and ended with 2 (TODO.md phase 15).
+#[test]
+fn test_awk_ends_with_141_in_silence_when_its_reader_goes() {
+    use std::io::Read;
+    let mut child = Command::new(env!("CARGO_BIN_EXE_awk"))
+        .arg("BEGIN { while (1) print \"y\" }")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("failed to spawn awk");
+    let mut stdout = child.stdout.take().expect("awk's output");
+    let mut first = [0_u8; 2];
+    stdout.read_exact(&mut first).expect("awk's first line");
+    drop(stdout);
+    let output = child.wait_with_output().expect("failed to wait on awk");
+    assert_eq!(&first, b"y\n");
+    assert_eq!(String::from_utf8_lossy(&output.stderr), "");
+    assert_eq!(output.status.code(), Some(141));
+}
+
+// Output that cannot be written for another reason is gawk's warning when awk ends, and
+// a status of 1; while it runs, gawk's fatal error (TODO.md phase 15).
+#[test]
+fn test_awk_unwritable_output_is_gawks_warning_or_error() {
+    let dir = tempfile::tempdir().expect("a directory");
+    let path = dir.path().join("read-only");
+    std::fs::write(&path, "").expect("a file");
+    for (program, stderr, status) in [
+        (
+            "BEGIN { print \"x\" }",
+            "awk: warning: error writing standard output: ",
+            1,
+        ),
+        (
+            "BEGIN { print \"x\"; exit 3 }",
+            "awk: warning: error writing standard output: ",
+            3,
+        ),
+        (
+            "BEGIN { print \"x\"; fflush() }",
+            "awk: cmd. line:1: fatal: fflush: cannot flush standard output: ",
+            2,
+        ),
+        (
+            "BEGIN { while (1) print \"xxxxxxxxxx\" }",
+            "awk: cmd. line:1: fatal: print to \"standard output\" failed: ",
+            2,
+        ),
+    ] {
+        let file = std::fs::File::open(&path).expect("the file, to read");
+        let output = Command::new(env!("CARGO_BIN_EXE_awk"))
+            .arg(program)
+            .stdin(Stdio::null())
+            .stdout(Stdio::from(file))
+            .stderr(Stdio::piped())
+            .output()
+            .expect("failed to run awk");
+        let text = String::from_utf8_lossy(&output.stderr);
+        assert!(text.starts_with(stderr), "{program}: {text}");
+        assert_eq!(text.lines().count(), 1, "{program}: {text}");
+        assert_eq!(output.status.code(), Some(status), "{program}");
+    }
+}

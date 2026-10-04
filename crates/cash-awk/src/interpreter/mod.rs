@@ -14,11 +14,9 @@ use io::{
     StdinRecordReader, WriteFiles, WritePipes,
 };
 use rand::rngs::SmallRng;
-use rand::{Rng, SeedableRng};
+use rand::{RngExt as _, SeedableRng};
 use record::{FieldSeparator, FieldsState, Record, ere_escape_char, record_index};
-use stack::{
-    ArrayElementRef, ArrayIterator, ExecutionResult, Stack, StackValue, compare_op, numeric_op,
-};
+use stack::{ArrayIterator, ExecutionResult, Place, Stack, StackValue, compare_op, numeric_op};
 use string::AwkString;
 use value::{AwkRefType, AwkValue, AwkValueRef, AwkValueVariant};
 
@@ -37,8 +35,8 @@ mod array;
 mod builtins;
 mod format;
 mod io;
-pub(crate) use io::flush_stdout;
 pub use io::set_shell;
+pub(crate) use io::{flush_stdout, strerror};
 mod record;
 mod stack;
 mod string;
@@ -287,6 +285,9 @@ struct Interpreter {
     read_pipes: ReadPipes,
     rand_seed: u64,
     rng: SmallRng,
+    /// The program's file and the line of the instruction that ran last, for an error
+    /// met outside the program's code; none before any has run.
+    last_location: Option<(Rc<str>, u32)>,
 }
 
 impl Interpreter {
@@ -304,23 +305,35 @@ impl Interpreter {
         let ip = usize::try_from(stack.ip).ok();
         let error = match error.as_str() {
             stack::SCALAR_IN_ARRAY_CONTEXT => {
-                let name = stack
-                    .error_variable
-                    .and_then(|variable| self.scalar_name(variable, stack))
-                    .or_else(|| {
-                        ip.and_then(|ip| stack.array_names.get(ip))
-                            .and_then(|name| name.as_deref().map(str::to_string))
-                    });
+                let name = match &stack.error_place {
+                    Some(Place::Variable(variable)) => self.scalar_name(*variable, stack),
+                    Some(Place::Element(element)) => self
+                        .element_name(element, stack)
+                        .map(|name| format!("`{name}'")),
+                    None => None,
+                }
+                .or_else(|| {
+                    ip.and_then(|ip| stack.array_names.get(ip))
+                        .and_then(|name| name.as_deref().map(str::to_string))
+                });
                 match name {
                     Some(name) => format!("attempt to use scalar {name} as an array"),
                     None => "attempt to use a scalar value as array".to_string(),
                 }
             }
             stack::ARRAY_IN_SCALAR_CONTEXT => {
-                match stack
-                    .error_variable
-                    .and_then(|variable| self.array_name(variable, stack))
-                {
+                let name = match &stack.error_place {
+                    Some(Place::Variable(variable)) => self.array_name(*variable, stack),
+                    Some(Place::Element(element)) => {
+                        self.element_name(element, stack).map(|root| {
+                            passed_name(stack, root, |slot| {
+                                matches!(slot, StackValue::ArrayElementRef(e) if e == element)
+                            })
+                        })
+                    }
+                    None => None,
+                };
+                match name {
                     Some(name) => format!("attempt to use array `{name}' in a scalar context"),
                     None => "attempt to use array in a scalar context".to_string(),
                 }
@@ -328,17 +341,27 @@ impl Interpreter {
             _ => error,
         };
 
-        let mut message = String::from("awk: ");
         let location = ip
             .and_then(|ip| stack.source_locations.get(ip))
-            .or(stack.source_locations.last());
-        if let Some(location) = location {
-            let file = if stack.current_function_file.is_empty() {
-                "cmd. line"
-            } else {
-                &stack.current_function_file
-            };
-            let _ = write!(message, "{file}:{}: ", location.line);
+            .or(stack.source_locations.last())
+            .map(|location| (stack.current_function_file.clone(), location.line));
+        self.placed(&error, location.as_ref())
+    }
+
+    /// An error that stopped awk outside the program's code, as gawk reports one: placed
+    /// at the code that ran last, when some has (`awk: cmd. line:2: fatal: cannot open
+    /// file ...`), else bare (`awk: fatal: ...`). It was always bare.
+    fn outside_error(&self, error: &str) -> String {
+        self.placed(error, self.last_location.as_ref())
+    }
+
+    /// `error` as gawk reports a fatal one: `awk: `, the program's file (or `cmd. line`)
+    /// and the line of `location`, the input place once a record has been read, `fatal: `.
+    fn placed(&self, error: &str, location: Option<&(Rc<str>, u32)>) -> String {
+        let mut message = String::from("awk: ");
+        if let Some((file, line)) = location {
+            let file = if file.is_empty() { "cmd. line" } else { file };
+            let _ = write!(message, "{file}:{line}: ");
         }
         // SAFETY: a global's cell lives as long as the interpreter, and no reference to
         // one is held between instructions, nor once the code has stopped.
@@ -381,16 +404,57 @@ impl Interpreter {
     }
 
     /// How gawk names the array `variable` read as a scalar: `a`, or `p (from a)` for a
-    /// parameter that is the caller's array.
-    fn array_name(&self, variable: *const AwkValue, stack: &Stack) -> Option<String> {
-        if let Some((index, refers)) = stack.local_holding(variable) {
-            let name = stack.parameter_names.get(index)?;
-            return Some(match self.global_name(variable).filter(|_| refers) {
-                Some(global) => format!("{name} (from {global})"),
-                None => name.to_string(),
-            });
+    /// parameter that is the caller's array, `t (from s, from a)` when it was passed on.
+    fn array_name(&self, variable: *mut AwkValue, stack: &Stack) -> Option<String> {
+        let root = self
+            .global_name(variable)
+            .or_else(|| local_name(variable, stack))?;
+        Some(passed_name(
+            stack,
+            root.to_string(),
+            |slot| matches!(slot, StackValue::ValueRef(p) | StackValue::UninitializedRef(p) if *p == variable),
+        ))
+    }
+
+    /// How gawk names an element: its variable's name and its keys, `a["1"]["x"]`.
+    fn element_name(&self, element: &stack::ArrayElementRef, stack: &Stack) -> Option<String> {
+        let mut name = self
+            .global_name(element.array)
+            .or_else(|| local_name(element.array, stack))?
+            .to_string();
+        for key in element.keys() {
+            let _ = write!(name, "[\"{key}\"]");
         }
-        self.global_name(variable).map(|name| name.to_string())
+        Some(name)
+    }
+}
+
+/// The local array `variable` is, in the current function or a caller, by name.
+fn local_name(variable: *mut AwkValue, stack: &Stack) -> Option<Rc<str>> {
+    stack.frames().find_map(|frame| {
+        stack.parameter_where(
+            frame,
+            |slot| matches!(slot, StackValue::Value(cell) if cell.get() == variable),
+        )
+    })
+}
+
+/// `root`, an array's name, as gawk gives it when the array reached the current function
+/// through parameters, which `refers` is true of: `t (from s, from a)`, innermost first.
+fn passed_name(stack: &Stack, root: String, refers: impl Fn(&StackValue) -> bool) -> String {
+    let names: Vec<Rc<str>> = stack
+        .frames()
+        .map_while(|frame| stack.parameter_where(frame, &refers))
+        .collect();
+    match names.split_first() {
+        None => root,
+        Some((first, rest)) => {
+            let rest = rest.iter().fold(String::new(), |mut rest, name| {
+                let _ = write!(rest, "{name}, from ");
+                rest
+            });
+            format!("{first} (from {rest}{root})")
+        }
     }
 }
 
@@ -475,6 +539,12 @@ impl Interpreter {
                 let filename = stack
                     .pop_scalar_value()?
                     .scalar_to_string(&global_env.convfmt)?;
+                let is_append = matches!(
+                    function,
+                    BuiltinFunction::RedirectedPrintfAppend
+                        | BuiltinFunction::RedirectedPrintAppend
+                );
+                no_null_redirection(&filename, if is_append { ">>" } else { ">" })?;
                 let is_printf = matches!(
                     function,
                     BuiltinFunction::RedirectedPrintfTruncate
@@ -485,17 +555,13 @@ impl Interpreter {
                 } else {
                     print_to_string(stack, argc - 1, global_env)?
                 };
-                let is_append = matches!(
-                    function,
-                    BuiltinFunction::RedirectedPrintfAppend
-                        | BuiltinFunction::RedirectedPrintAppend
-                );
                 self.write_files.write(&filename, &str, is_append)?;
             }
             BuiltinFunction::RedirectedPrintPipe | BuiltinFunction::RedirectedPrintfPipe => {
                 let command = stack
                     .pop_scalar_value()?
                     .scalar_to_string(&global_env.convfmt)?;
+                no_null_redirection(&command, "|")?;
                 let str = if function == BuiltinFunction::RedirectedPrintPipe {
                     print_to_string(stack, argc - 1, global_env)?
                 } else {
@@ -517,18 +583,23 @@ impl Interpreter {
                 } else {
                     AwkString::default()
                 };
+                // Standard output that cannot be written is fatal, as in gawk.
                 let result = if expr_str.is_empty() {
-                    let stdout_ok = io::flush_stdout().is_ok();
-                    stdout_ok && self.write_files.flush_all() && self.write_pipes.flush_all()
+                    io::flush_stdout_for_fflush()?;
+                    self.write_files.flush_all() && self.write_pipes.flush_all()
+                } else if expr_str.as_str() == "/dev/stdout" {
+                    io::flush_stdout_for_fflush()?;
+                    true
                 } else {
                     self.write_files.flush_file(&expr_str) && self.write_pipes.flush_file(&expr_str)
                 };
                 stack.push_value(if result { 0.0 } else { -1.0 })?;
             }
             BuiltinFunction::GetLine => {
+                let place = stack.location();
                 let var = stack.pop_scalar_ref()?;
                 if let Some((next_record, crlf)) =
-                    input.next_record(&mut self.globals, global_env)?
+                    input.next_record(&mut self.globals, global_env, place.as_ref())?
                 {
                     // Main input: this record now decides how `print` ends lines.
                     global_env.last_record_crlf = crlf;
@@ -543,8 +614,10 @@ impl Interpreter {
                 let filename = stack
                     .pop_scalar_value()?
                     .scalar_to_string(&global_env.convfmt)?;
+                let is_file = function == BuiltinFunction::GetLineFromFile;
+                no_null_redirection(&filename, if is_file { "<" } else { "|" })?;
                 let var = stack.pop_scalar_ref()?;
-                let maybe_next_record = if function == BuiltinFunction::GetLineFromFile {
+                let maybe_next_record = if is_file {
                     self.read_files
                         .read_next_record(filename, &global_env.rs, global_env.strip_cr)
                 } else {
@@ -574,7 +647,7 @@ impl Interpreter {
                 }
             }
             BuiltinFunction::Rand => {
-                let rand = self.rng.gen_range(0.0..1.0);
+                let rand = self.rng.random_range(0.0..1.0);
                 stack.push_value(rand)?;
             }
             BuiltinFunction::Srand => {
@@ -605,10 +678,14 @@ impl Interpreter {
         input: &mut MainInput,
     ) -> Result<ExecutionResult, String> {
         let mut stack = Stack::new(action, stack);
-        match self.run_internal(functions, record, &mut stack, global_env, input) {
-            Err(err) => Err(self.fatal_message(err, &stack)),
-            Ok(result) => Ok(result),
+        let result = self.run_internal(functions, record, &mut stack, global_env, input);
+        if let Some(location) = usize::try_from(stack.last_ip)
+            .ok()
+            .and_then(|ip| stack.source_locations.get(ip))
+        {
+            self.last_location = Some((stack.current_function_file.clone(), location.line));
         }
+        result.map_err(|err| self.fatal_message(err, &stack))
     }
 
     fn run_internal<'a>(
@@ -626,6 +703,7 @@ impl Interpreter {
         // to global values in the stack would be unsound.
         let mut fields_state = FieldsState::Ok;
         while let Some(instruction) = stack.next_instruction() {
+            stack.last_ip = stack.ip;
             let mut ip_increment: isize = 1;
             match instruction {
                 OpCode::Add => {
@@ -637,11 +715,21 @@ impl Interpreter {
                 OpCode::Mul => {
                     numeric_op!(stack,  *);
                 }
-                OpCode::Div => {
-                    numeric_op!(stack,  /);
+                OpCode::Div | OpCode::DivAssign => {
+                    let rhs = stack.pop_scalar_value()?.scalar_as_f64();
+                    let lhs = stack.pop_scalar_value()?.scalar_as_f64();
+                    if rhs == 0.0 {
+                        return Err(division_by_zero(instruction));
+                    }
+                    stack.push_value(lhs / rhs)?;
                 }
-                OpCode::Mod => {
-                    numeric_op!(stack,  %);
+                OpCode::Mod | OpCode::ModAssign => {
+                    let rhs = stack.pop_scalar_value()?.scalar_as_f64();
+                    let lhs = stack.pop_scalar_value()?.scalar_as_f64();
+                    if rhs == 0.0 {
+                        return Err(division_by_zero(instruction));
+                    }
+                    stack.push_value(lhs % rhs)?;
                 }
                 OpCode::Pow => {
                     let rhs = stack.pop_scalar_value()?.scalar_as_f64();
@@ -667,7 +755,7 @@ impl Interpreter {
                     compare_op!(stack, &global_env.convfmt, !=);
                 }
                 OpCode::Match => {
-                    let ere = stack.pop_value()?.into_ere()?;
+                    let ere = stack.pop_scalar_value()?.into_ere()?;
                     let string = stack
                         .pop_scalar_value()?
                         .scalar_to_string(&global_env.convfmt)?;
@@ -688,7 +776,8 @@ impl Interpreter {
                     let key = stack
                         .pop_scalar_value()?
                         .scalar_to_string(&global_env.convfmt)?;
-                    let array = stack.pop_array()?;
+                    // gawk does not name a subarray that is a scalar here.
+                    let array = stack.pop_array(false)?;
                     let result = array.contains(&key);
                     stack.push_value(bool_to_f64(result))?;
                 }
@@ -724,32 +813,54 @@ impl Interpreter {
                     fields_state = lvalue.assign(expr_result, global_env)?;
                     stack.push_value(expr_result)?;
                 }
-                OpCode::CreateGlobalIterator(index) => {
-                    let iter_var = stack.pop_scalar_ref()?;
-                    let iter_var = iter_var as *mut AwkValue;
-                    let array = self.globals[index as usize].get();
-                    // SAFETY: a global's cell lives as long as the interpreter.
-                    let key_iter = unsafe { &mut *array }.as_array()?.key_iter();
-                    // SAFETY: `iter_var` stays valid while the values below it are on the
-                    // stack (`push`), and `array` is a global, which outlives the stack.
-                    unsafe {
-                        stack.push(StackValue::Iterator(ArrayIterator {
-                            iter_var,
-                            array,
-                            key_iter,
-                        }))?
+                OpCode::CreateIterator => {
+                    // The array, then the loop's variable, which is not given a type until
+                    // a key is assigned to it: `for (a in b)` with `a` an array is an
+                    // error only when `b` has a key, as in gawk; it was always one.
+                    let array = match stack.pop().ok_or_else(|| "empty stack".to_string())? {
+                        StackValue::ValueRef(array) | StackValue::UninitializedRef(array) => {
+                            // SAFETY: a variable outlives the loop that goes through it.
+                            unsafe { &mut *array }.as_array()?;
+                            Place::Variable(array)
+                        }
+                        StackValue::ArrayElementRef(element) => {
+                            // gawk does not name a subarray that is a scalar here.
+                            let ptr = stack.element_ptr(&element)?;
+                            // SAFETY: the element is in its variable's array.
+                            unsafe { &mut *ptr }.as_array().inspect_err(|_| {
+                                stack.error_place = None;
+                            })?;
+                            Place::Element(element)
+                        }
+                        // A variable that holds a scalar, named from the code.
+                        _ => return Err(stack::SCALAR_IN_ARRAY_CONTEXT.to_string()),
                     };
-                }
-                OpCode::CreateLocalIterator(index) => {
-                    let iter_var = stack.pop_scalar_ref()?;
-                    let iter_var = iter_var as *mut AwkValue;
-                    let array = stack
-                        .get_mut_value_ptr(index as usize)
-                        .ok_or_else(|| "invalid local index".to_string())?;
-                    // SAFETY: a local is a value of the current frame, on the stack.
-                    let key_iter = unsafe { &mut *array }.as_array()?.key_iter();
-                    // SAFETY: `iter_var` and the local `array` stay valid while the values
-                    // below the iterator are on the stack (`push`).
+                    let iter_var = match stack.pop().ok_or_else(|| "empty stack".to_string())? {
+                        StackValue::ValueRef(variable) => {
+                            // One with no type yet becomes a scalar, as in gawk; an array
+                            // stays one, `for (b in b)` included.
+                            // SAFETY: a variable outlives the loop that assigns to it.
+                            let value = unsafe { &mut *variable };
+                            if matches!(value.value, AwkValueVariant::Uninitialized) {
+                                value.value = AwkValueVariant::UninitializedScalar;
+                            }
+                            Place::Variable(variable)
+                        }
+                        StackValue::ArrayElementRef(element) => Place::Element(element),
+                        _ => return Err("expected lvalue".to_string()),
+                    };
+                    let key_iter = match &array {
+                        // SAFETY: as above.
+                        Place::Variable(array) => unsafe { &mut **array }.as_array()?.key_iter(),
+                        Place::Element(element) => {
+                            let ptr = stack.element_ptr(element)?;
+                            // SAFETY: as above.
+                            unsafe { &mut *ptr }.as_array()?.key_iter()
+                        }
+                    };
+                    // SAFETY: the variables and elements the iterator refers to are of
+                    // variables that stay valid while the values below it are on the stack
+                    // (`push`).
                     unsafe {
                         stack.push(StackValue::Iterator(ArrayIterator {
                             iter_var,
@@ -765,12 +876,43 @@ impl Interpreter {
                         .pop()
                         .ok_or_else(|| "empty stack".to_string())?
                         .unwrap_array_iterator()?;
-                    // SAFETY: the iterator's pointers stay valid while the values below
-                    // it are on the stack (`push`), and it was just popped.
-                    let array = unsafe { &mut *iter.array }.as_array()?;
-                    if let Some(key) = array.key_iter_next(&mut iter.key_iter) {
+                    // A subarray that has gone since the loop began ends it; it is not
+                    // made again.
+                    let array = match &iter.array {
+                        // SAFETY: the iterator's variables stay valid while the values
+                        // below it are on the stack (`push`), and it was just popped.
+                        Place::Variable(array) => Some(unsafe { &mut **array }.as_array()?),
                         // SAFETY: as above.
-                        unsafe { *iter.iter_var = key.to_string().into() };
+                        Place::Element(element) => match unsafe { element.existing_element() } {
+                            // SAFETY: as above.
+                            Ok(Some(ptr)) => match &mut unsafe { &mut *ptr }.value {
+                                AwkValueVariant::Array(array) => Some(array),
+                                _ => None,
+                            },
+                            _ => None,
+                        },
+                    };
+                    if let Some(key) =
+                        array.and_then(|array| array.key_iter_next(&mut iter.key_iter))
+                    {
+                        let variable = match &iter.iter_var {
+                            Place::Variable(variable) => {
+                                // SAFETY: as above.
+                                let value = unsafe { &mut **variable };
+                                if let Err(error) = value.ensure_value_is_scalar() {
+                                    stack.error_place = Some(Place::Variable(*variable));
+                                    return Err(error);
+                                }
+                                value
+                            }
+                            // A parameter that is a caller's subarray.
+                            Place::Element(element) => {
+                                stack.error_place = Some(Place::Element(element.clone()));
+                                return Err(stack::ARRAY_IN_SCALAR_CONTEXT.to_string());
+                            }
+                        };
+                        fields_state =
+                            variable.assign(AwkValue::from(key.to_string()), global_env)?;
                         // SAFETY: only the key iterator changed, so the pointers are as
                         // valid as when the iterator was pushed.
                         unsafe { stack.push(StackValue::Iterator(iter))? };
@@ -789,6 +931,13 @@ impl Interpreter {
                     // SAFETY: as above.
                     unsafe { stack.push(value)? };
                 }
+                OpCode::GetLocal(index) if stack.local_element(index as usize).is_some() => {
+                    // A parameter that is a caller's element is that element.
+                    if let Some(element) = stack.local_element(index as usize) {
+                        // SAFETY: the element's variable outlives the call.
+                        unsafe { stack.push(StackValue::ArrayElementRef(element))? };
+                    }
+                }
                 OpCode::GetLocal(index) => {
                     let value = stack
                         .get_mut_value_ptr(index as usize)
@@ -803,13 +952,37 @@ impl Interpreter {
                     let index = record_index(stack.pop_scalar_value()?.scalar_as_f64())?;
                     stack.push_value(record.read_field(index))?;
                 }
-                OpCode::IndexArrayGetValue => {
+                OpCode::IndexArrayGetValue | OpCode::IndexArrayGetArgument => {
                     let key = stack
                         .pop_scalar_value()?
                         .scalar_to_string(&global_env.convfmt)?;
-                    let array = stack.pop_array()?;
-                    let element = array.get_value(key.into())?.clone();
-                    stack.push_value(element)?
+                    let element = stack.pop_element_ref(key.into())?;
+                    let ptr = stack.element_ptr(&element)?;
+                    // SAFETY: the element is in its variable's array.
+                    let value = unsafe { &*ptr };
+                    // A subarray is referred to, so that using it as a scalar names it; an
+                    // argument with no type yet too, as the function may make it one.
+                    let by_reference = match value.value {
+                        AwkValueVariant::Array(_) => true,
+                        AwkValueVariant::Uninitialized => {
+                            instruction == OpCode::IndexArrayGetArgument
+                        }
+                        _ => false,
+                    };
+                    if by_reference {
+                        // SAFETY: the element's variable outlives the reference.
+                        unsafe { stack.push(StackValue::ArrayElementRef(element))? };
+                    } else {
+                        stack.push_value(value.clone().into_ref(AwkRefType::None))?;
+                    }
+                }
+                OpCode::IndexArraySubarray => {
+                    let key = stack
+                        .pop_scalar_value()?
+                        .scalar_to_string(&global_env.convfmt)?;
+                    let element = stack.pop_element_ref(key.into())?;
+                    // SAFETY: the element's variable outlives the reference.
+                    unsafe { stack.push(StackValue::ArrayElementRef(element))? };
                 }
                 OpCode::GlobalScalarRef(index) => {
                     // SAFETY: a global's cell outlives the stack.
@@ -817,11 +990,11 @@ impl Interpreter {
                 }
                 OpCode::LocalScalarRef(index) => {
                     let value = stack
-                        .local_scalar_ptr(index as usize)
+                        .local_scalar_ref(index as usize)
                         .ok_or_else(|| "invalid local index".to_string())?;
-                    // SAFETY: the local is valid until the value at `index` is popped, which
-                    // is below the one pushed here.
-                    unsafe { stack.push_ref(value)? };
+                    // SAFETY: the local, or the caller's element it is, is valid until the
+                    // value at `index` is popped, which is below the one pushed here.
+                    unsafe { stack.push(value)? };
                 }
                 OpCode::FieldRef => {
                     let index = record_index(stack.pop_scalar_value()?.scalar_as_f64())?;
@@ -833,20 +1006,12 @@ impl Interpreter {
                     let key = stack
                         .pop_scalar_value()?
                         .scalar_to_string(&global_env.convfmt)?;
-                    let array = stack.pop().ok_or_else(|| "empty stack".to_string())?;
-                    // SAFETY: a popped value's pointers stay valid until the value pushed
-                    // before it is popped (`push`), and that value is still on the stack.
-                    let array = unsafe { array.unwrap_ptr()? };
+                    let element = stack.pop_element_ref(key.into())?;
                     // Referring to an element makes it, as in every awk.
-                    let key: array::Key = key.into();
-                    // SAFETY: as above.
-                    unsafe { &mut *array }
-                        .as_array()?
-                        .get_value_index(key.clone())?;
-                    // SAFETY: as above; the reference is pushed where the array's was.
-                    unsafe {
-                        stack.push(StackValue::ArrayElementRef(ArrayElementRef { array, key }))?
-                    };
+                    stack.element_ptr(&element)?;
+                    // SAFETY: the element's variable outlives the reference, which is
+                    // pushed where the array's was.
+                    unsafe { stack.push(StackValue::ArrayElementRef(element))? };
                 }
                 OpCode::Assign => {
                     let value = stack.pop_scalar_value()?;
@@ -858,11 +1023,24 @@ impl Interpreter {
                     let key = stack
                         .pop_scalar_value()?
                         .scalar_to_string(&global_env.convfmt)?;
-                    let array = stack.pop_array()?;
-                    array.delete(&key);
+                    let element = stack.pop_element_ref(key.into())?;
+                    // No subarray is made: `delete a[1][2]` leaves `a` empty, as in gawk,
+                    // and an element with no type yet has nothing to delete. A variable with
+                    // none becomes an array, as in gawk.
+                    let make = element.path.is_none();
+                    // SAFETY: the element's variable outlives the reference.
+                    match unsafe { element.container(make) } {
+                        // SAFETY: the array is in the element's variable's.
+                        Ok(Some(array)) => unsafe { &mut *array }.delete(&element.key),
+                        Ok(None) => {}
+                        Err(error) => {
+                            stack.error_place = Some(error.place);
+                            return Err(error.error);
+                        }
+                    }
                 }
                 OpCode::ClearArray => {
-                    let array = stack.pop_array()?;
+                    let array = stack.pop_array(true)?;
                     array.clear();
                 }
                 OpCode::JumpIfFalse(offset) => {
@@ -927,6 +1105,8 @@ impl Interpreter {
                 OpCode::Return => {
                     let return_value = stack.pop_scalar_value()?;
                     stack.restore_caller()?;
+                    // The call is the caller's code that ran last.
+                    stack.last_ip = stack.ip;
                     stack.push_value(return_value)?;
                 }
                 // The compiler replaces every placeholder it emits.
@@ -959,15 +1139,13 @@ impl Interpreter {
             fields_state = FieldsState::Ok;
             stack.ip += ip_increment;
         }
-        Ok(ExecutionResult::Expression(
-            stack
-                .pop()
-                // SAFETY: the action has ended, and every pointer on the stack is to a
-                // global, a field or the stack's own values, which are all still alive.
-                .map(|sv| unsafe { sv.into_owned() })
-                .transpose()?
-                .unwrap_or_default(),
-        ))
+        // A pattern's value, a scalar: an array there is gawk's error, where its copy was
+        // taken for a truth value and panicked.
+        Ok(ExecutionResult::Expression(if stack.is_empty() {
+            AwkValue::default()
+        } else {
+            stack.pop_scalar_value()?
+        }))
     }
 
     fn new(args: Array, env: Array, constants: Vec<Constant>, program_globals: usize) -> Self {
@@ -1018,6 +1196,7 @@ impl Interpreter {
             read_pipes: ReadPipes::default(),
             rand_seed: 0,
             rng: SmallRng::seed_from_u64(0),
+            last_location: None,
         }
     }
 }
@@ -1069,10 +1248,12 @@ impl MainInput {
 
     /// The next record of the main input, opening the files ARGV names as each runs out.
     /// Counting it in NR and FNR is the caller's, through `Interpreter::count_record`.
+    /// `place` is the code that ran last, for a warning.
     fn next_record(
         &mut self,
         globals: &mut [AwkValueRef],
         global_env: &mut GlobalEnv,
+        place: Option<&(Rc<str>, u32)>,
     ) -> Result<Option<(String, bool)>, String> {
         while !self.exhausted {
             if let Some(record) = self
@@ -1081,7 +1262,7 @@ impl MainInput {
             {
                 return Ok(Some(record));
             }
-            self.open_next(globals, global_env)?;
+            self.open_next(globals, global_env, place)?;
         }
         Ok(None)
     }
@@ -1097,6 +1278,7 @@ impl MainInput {
         &mut self,
         globals: &mut [AwkValueRef],
         global_env: &mut GlobalEnv,
+        place: Option<&(Rc<str>, u32)>,
     ) -> Result<(), String> {
         loop {
             let argc = globals[SpecialVar::Argc as usize].get_mut().scalar_as_f64() as usize;
@@ -1130,17 +1312,35 @@ impl MainInput {
                 continue;
             }
 
+            // gawk passes over a directory with a warning, placed as an error is; reading
+            // one failed. It still counts as a file, so standard input is not read.
+            if arg.as_str() != "-" && std::path::Path::new(arg.as_str()).is_dir() {
+                let _ = io::flush_stdout();
+                let place = place
+                    .map(|(file, line)| {
+                        let file = if file.is_empty() { "cmd. line" } else { file };
+                        format!("{file}:{line}: ")
+                    })
+                    .unwrap_or_default();
+                eprintln!(
+                    "awk: {place}warning: command line argument `{arg}' is a directory: skipped"
+                );
+                self.opened = true;
+                continue;
+            }
             globals[SpecialVar::Filename as usize].get_mut().value =
                 AwkValueVariant::String(maybe_numeric_string(arg.clone()));
+            // FNR starts over before the file is opened, so that a file that cannot be
+            // opened is reported without the last one's place, as gawk reports it.
+            globals[SpecialVar::Fnr as usize]
+                .get_mut()
+                .assign(0.0, global_env)?;
             self.reader = if arg.as_str() == "-" {
                 Box::new(StdinRecordReader::default())
             } else {
                 Box::new(FileStream::open(&arg)?)
             };
             self.opened = true;
-            globals[SpecialVar::Fnr as usize]
-                .get_mut()
-                .assign(0.0, global_env)?;
             return Ok(());
         }
     }
@@ -1258,7 +1458,8 @@ pub fn interpret_with_eol(
                 return_value = val;
                 break;
             }
-            other => no_next_in_special_action(&other, "BEGIN")?,
+            other => no_next_in_special_action(&other, "BEGIN")
+                .map_err(|e| interpreter.outside_error(&e))?,
         }
     }
 
@@ -1266,13 +1467,24 @@ pub fn interpret_with_eol(
         return Ok(return_value);
     }
 
-    'record_loop: while let Some((record, crlf)) =
-        input.next_record(&mut interpreter.globals, &mut global_env)?
+    'record_loop: while let Some((record, crlf)) = input
+        .next_record(
+            &mut interpreter.globals,
+            &mut global_env,
+            interpreter.last_location.as_ref(),
+        )
+        .map_err(|e| interpreter.outside_error(&e))?
     {
-        interpreter.count_record(&mut global_env)?;
+        interpreter
+            .count_record(&mut global_env)
+            .map_err(|e| interpreter.outside_error(&e))?;
         global_env.last_record_crlf = crlf;
-        let fs = global_env.effective_fs()?;
-        current_record.reset(record, fs)?;
+        let fs = global_env
+            .effective_fs()
+            .map_err(|e| interpreter.outside_error(&e))?;
+        current_record
+            .reset(record, fs)
+            .map_err(|e| interpreter.outside_error(&e))?;
         interpreter.globals[SpecialVar::Nf as usize].get_mut().value =
             AwkValue::from(current_record.get_last_field() as f64).value;
         global_env.nf = current_record.get_last_field();
@@ -1395,11 +1607,35 @@ pub fn interpret_with_eol(
                 return_value = val;
                 break;
             }
-            other => no_next_in_special_action(&other, "END")?,
+            other => no_next_in_special_action(&other, "END")
+                .map_err(|e| interpreter.outside_error(&e))?,
         }
     }
 
     Ok(return_value)
+}
+
+/// gawk's fatal error for a redirection (`operator`) to or from an empty name; the name
+/// was opened, and failed or did nothing.
+fn no_null_redirection(name: &str, operator: &str) -> Result<(), String> {
+    if name.is_empty() {
+        return Err(format!(
+            "expression for `{operator}' redirection has null string value"
+        ));
+    }
+    Ok(())
+}
+
+/// gawk's fatal error for a division by zero, which names the operator unless it is a
+/// plain `/`. The quotient was infinite or not a number, and printed as `+inf` or `-nan`.
+fn division_by_zero(operator: OpCode) -> String {
+    let operator = match operator {
+        OpCode::Mod => " in `%'",
+        OpCode::DivAssign => " in `/='",
+        OpCode::ModAssign => " in `%='",
+        _ => "",
+    };
+    format!("division by zero attempted{operator}")
 }
 
 /// The error of a `next` or `nextfile` that a function called from a BEGIN or END action

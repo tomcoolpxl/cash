@@ -192,22 +192,27 @@ fn normalize_awk_args(args: Vec<OsString>) -> Vec<OsString> {
     normalized
 }
 
-/// Writes out what awk printed and has not written yet, and returns `code`, or 2 when the
-/// output cannot be written.
+/// Writes out what awk printed and has not written yet, and returns `code`. Output that
+/// cannot be written is gawk's warning, and makes a status of 0 into 1, as in gawk; it
+/// was an error and 2.
 fn finish(code: i32) -> i32 {
     match interpreter::flush_stdout() {
         Ok(()) => code,
         Err(e) => {
-            eprintln!("awk: {e}");
-            2
+            eprintln!(
+                "awk: warning: error writing standard output: {}",
+                interpreter::strerror(&e)
+            );
+            if code == 0 { 1 } else { code }
         }
     }
 }
 
 /// Reports an error that ended the program while it ran, after what it printed, and
 /// returns 2, gawk's status for a fatal error; a syntax error is 1, in gawk as here.
+/// Output that cannot be written is not reported as well, as gawk does not.
 fn fatal(error: &str) -> i32 {
-    finish(2);
+    let _ = interpreter::flush_stdout();
     // An error from the program's code comes placed, as gawk places it (`awk: cmd.
     // line:1: fatal: ...`); one from elsewhere, an input file that cannot be read, has
     // gawk's `awk: fatal: ` before it. It was written bare.
@@ -243,17 +248,31 @@ where
                     eprintln!("awk: could not read standard input: {e}");
                     return 1;
                 }
+            } else if std::path::Path::new(source_file).is_dir() {
+                // gawk's words and status for each; Windows does not open a directory.
+                eprintln!(
+                    "awk: {source_file}:1: error: cannot read source file `{source_file}': \
+                     Is a directory"
+                );
+                return 1;
             } else {
                 match std::fs::File::open(source_file) {
                     Ok(mut file) => {
                         if let Err(e) = file.read_to_string(&mut contents) {
-                            eprintln!("awk: could not read file '{source_file}': {e}");
+                            eprintln!(
+                                "awk: {source_file}:1: error: cannot read source file \
+                                 `{source_file}': {}",
+                                interpreter::strerror(&e)
+                            );
                             return 1;
                         }
                     }
                     Err(e) => {
-                        eprintln!("awk: could not open file '{source_file}': {e}");
-                        return 1;
+                        eprintln!(
+                            "awk: fatal: cannot open source file `{source_file}' for reading: {}",
+                            interpreter::strerror(&e)
+                        );
+                        return 2;
                     }
                 }
             }
@@ -266,7 +285,7 @@ where
         let program = match compile_program(&sources) {
             Ok(p) => p,
             Err(e) => {
-                eprintln!("{e}");
+                eprint!("{e}");
                 return 1;
             }
         };
@@ -286,7 +305,7 @@ where
         let program = match compile_program(&sources) {
             Ok(p) => p,
             Err(e) => {
-                eprintln!("{e}");
+                eprint!("{e}");
                 return 1;
             }
         };

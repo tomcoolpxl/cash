@@ -81,14 +81,15 @@ impl Array {
         None
     }
 
-    /// Get the `ValueIndex` of the key in the array. If the key does not exist, it will be inserted.
+    /// Get the `ValueIndex` of the key in the array. If the key does not exist, it will be
+    /// inserted, with no type yet: as in gawk, an element that is only read can still
+    /// become a subarray (`x = a[1]; a[1][2] = 3`).
     pub fn get_value_index(&mut self, key: Key) -> Result<ValueIndex, String> {
         match self.key_map.entry(key.clone()) {
             Entry::Occupied(e) => Ok(ValueIndex { index: *e.get() }),
             Entry::Vacant(e) => {
                 let pair_index = self.pairs.len();
-                self.pairs
-                    .push(Some((key, AwkValue::uninitialized_scalar())));
+                self.pairs.push(Some((key, AwkValue::uninitialized())));
                 e.insert(pair_index);
                 Ok(ValueIndex { index: pair_index })
             }
@@ -115,6 +116,15 @@ impl Array {
             *slot = value.into();
         }
         Ok(index)
+    }
+
+    /// The element with the given key, if there is one; none is made.
+    pub fn existing_value(&mut self, key: &str) -> Option<&mut AwkValue> {
+        let index = *self.key_map.get(key)?;
+        self.pairs
+            .get_mut(index)
+            .and_then(Option::as_mut)
+            .map(|(_, value)| value)
     }
 
     pub fn contains(&self, key: &str) -> bool {
@@ -179,7 +189,7 @@ mod tests {
         assert_eq!(array.len(), 0);
         assert_eq!(
             array.get_value("a".into()).cloned(),
-            Ok(AwkValue::uninitialized_scalar())
+            Ok(AwkValue::uninitialized())
         );
     }
 

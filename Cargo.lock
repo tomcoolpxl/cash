@@ -469,7 +469,7 @@ dependencies = [
  "lexical",
  "pest",
  "pest_derive",
- "rand 0.8.8",
+ "rand 0.10.3",
  "regex",
  "regex-automata",
  "regex-syntax",

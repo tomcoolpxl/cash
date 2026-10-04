@@ -16,7 +16,7 @@ clap = { workspace = true, features = ["derive"] }
 pest = "2.9.2"
 pest_derive = "2.9.2"
 lexical = { version = "7", features = ["format"] }
-rand = { version = "0.8.5", default-features = false, features = ["small_rng"] }
+rand = { version = "0.10.0", default-features = false }
 regex = { workspace = true }
 regex-automata = { version = "0.4.18", default-features = false, features = ["std", "syntax", "meta"] }
 regex-syntax = { workspace = true }

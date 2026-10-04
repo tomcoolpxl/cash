@@ -61,6 +61,7 @@ builtin_func = _{
   | close
   | fflush
   | system
+  | isarray
 }
 
 atan2    = { "atan2" ~ !(letter | "_" | digit) }
@@ -85,6 +86,7 @@ toupper  = { "toupper" ~ !(letter | "_" | digit) }
 close    = { "close" ~ !(letter | "_" | digit) }
 fflush   = { "fflush" ~ !(letter | "_" | digit) }
 system   = { "system" ~ !(letter | "_" | digit) }
+isarray  = { "isarray" ~ !(letter | "_" | digit) }
 
 // gawk's reserved words that cash knows. `begin`, `end` and `foreach` are plain names, as
 // in gawk. A choice does not back off to a later word when the end of a name fails to
@@ -168,7 +170,7 @@ t_for      =  { "for" ~ "(" ~ for_init ~ ";" ~ for_condition ~ ";" ~ for_update 
 for_init      = { simple_statement? }
 for_condition = { expr? }
 for_update    = { simple_statement? }
-t_foreach  =  { "for" ~ "(" ~ name ~ in_op ~ name ~ ")" ~ opt_newline ~ terminated_statement }
+t_foreach  =  { "for" ~ "(" ~ name ~ in_op ~ array_ref ~ ")" ~ opt_newline ~ terminated_statement }
 // A node of its own, so that an empty body keeps its place: in `if (c); else s` the
 // `else` branch is not the `if`'s body.
 empty_stmt =  { ";" ~ opt_newline }
@@ -184,7 +186,7 @@ unterminated_statement = _{
 ut_if      = { "if" ~ "(" ~ expr ~ ")" ~ opt_newline ~ (terminated_statement ~ "else" ~ opt_newline ~ unterminated_statement | unterminated_statement) }
 ut_while   = { "while" ~ "(" ~ expr ~ ")" ~ opt_newline ~ unterminated_statement }
 ut_for     = { "for" ~ "(" ~ for_init ~ ";" ~ for_condition ~ ";" ~ for_update ~ ")" ~ opt_newline ~ unterminated_statement }
-ut_foreach = { "for" ~ "(" ~ name ~ in_op ~ name ~ ")" ~ opt_newline ~ unterminated_statement }
+ut_foreach = { "for" ~ "(" ~ name ~ in_op ~ array_ref ~ ")" ~ opt_newline ~ unterminated_statement }
 
 terminatable_statement = _{
     nextfile
@@ -213,7 +215,7 @@ simple_statement = {
 }
 
 array_delete = {
-    "delete" ~ name ~ ("[" ~ expr ~ "]")?
+    "delete" ~ name ~ subscript*
 }
 
 print_stmt = {
@@ -248,7 +250,11 @@ primary = _{
   | lvalue
 }
 
-array_element         = { name ~ "[" ~ expr_list ~ "]" }
+// gawk's arrays of arrays: `a[1][2]` is the element 2 of the subarray `a[1]`.
+array_element         = { name ~ subscript+ }
+subscript             = { "[" ~ expr_list ~ "]" }
+// An array, a variable's or a subarray, where only an array can be: `for (k in a[1])`.
+array_ref             = { name ~ subscript* }
 function_call         = { func_name ~ "(" ~ expr_list? ~ ")" }
 builtin_function_call = { builtin_func ~ ("(" ~ expr_list? ~ ")")? }
 
@@ -324,7 +330,7 @@ binary_expr = {
   | simple_binary_expr
 }
 
-multidimensional_in    = { "(" ~ multidimensional_index ~ ")" ~ "in" ~ name }
+multidimensional_in    = { "(" ~ multidimensional_index ~ ")" ~ "in" ~ array_ref }
 simple_binary_expr     = { prefix_op? ~ primary ~ postfix_op? ~ (infix_op ~ prefix_op? ~ primary ~ postfix_op?)* }
 multidimensional_index = { multiple_expr_list }
 

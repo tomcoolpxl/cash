@@ -186,7 +186,9 @@ impl AwkValue {
         match self.value {
             AwkValueVariant::Regex { ere, .. } => Ok(ere),
             AwkValueVariant::String(s) => cached_dynamic_ere(s),
-            AwkValueVariant::UninitializedScalar => Ok(Rc::new(Regex::new("")?)),
+            AwkValueVariant::UninitializedScalar | AwkValueVariant::Uninitialized => {
+                Ok(Rc::new(Regex::new("")?))
+            }
             _ => Err("expected extended regular expression".to_string()),
         }
     }

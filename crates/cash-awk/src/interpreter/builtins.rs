@@ -228,7 +228,7 @@ pub(crate) fn builtin_match(
     stack: &mut Stack,
     global_env: &mut GlobalEnv,
 ) -> Result<(f64, f64), String> {
-    let ere = stack.pop_value()?.into_ere()?;
+    let ere = stack.pop_scalar_value()?.into_ere()?;
     let string = stack
         .pop_scalar_value()?
         .scalar_to_string(&global_env.convfmt)?;
@@ -317,7 +317,7 @@ pub(crate) fn builtin_split(
     let separator = if argc == 2 {
         None
     } else {
-        let sep_val = stack.pop_value()?;
+        let sep_val = stack.pop_scalar_value()?;
         if matches!(&sep_val.value, AwkValueVariant::Regex { .. }) {
             Some(FieldSeparator::Ere(sep_val.into_ere()?))
         } else {
@@ -329,7 +329,7 @@ pub(crate) fn builtin_split(
         .pop_scalar_value()?
         .scalar_to_string(&global_env.convfmt)?;
     // gawk's words for a second argument that is no array.
-    let array = stack.pop_array().map_err(|error| {
+    let array = stack.pop_array(true).map_err(|error| {
         if error == super::stack::SCALAR_IN_ARRAY_CONTEXT {
             "split: second argument is not an array".to_string()
         } else {
@@ -358,7 +358,7 @@ pub(crate) fn builtin_gsub(
     let repl = stack
         .pop_scalar_value()?
         .scalar_to_string(&global_env.convfmt)?;
-    let ere = stack.pop_value()?.into_ere()?;
+    let ere = stack.pop_scalar_value()?.into_ere()?;
     let in_str = stack.pop_scalar_ref()?;
     let (result, count) = gsub(
         &ere,
@@ -423,21 +423,24 @@ pub(crate) fn call_simple_builtin(
                 .unwrap_or(0.0);
             stack.push_value(index)?;
         }
-        BuiltinFunction::Length => {
-            let value = stack.pop_value()?;
-            match &value.value {
-                AwkValueVariant::Array(array) => {
-                    stack.push_value(array.len() as f64)?;
-                }
-                _ => {
-                    // length() counts characters, not bytes.
-                    let value_str = value.scalar_to_string(&global_env.convfmt)?;
-                    stack.push_value(value_str.chars().count() as f64)?;
-                }
+        BuiltinFunction::Length => match stack.pop_array_or_scalar(true)? {
+            Ok(len) => stack.push_value(len as f64)?,
+            Err(value) => {
+                // length() counts characters, not bytes.
+                let value_str = value.scalar_to_string(&global_env.convfmt)?;
+                stack.push_value(value_str.chars().count() as f64)?;
             }
+        },
+        BuiltinFunction::IsArray => {
+            let is_array = stack.pop_array_or_scalar(false)?.is_ok();
+            stack.push_value(if is_array { 1.0 } else { 0.0 })?;
         }
         BuiltinFunction::Split => return builtin_split(stack, global_env, argc),
         BuiltinFunction::Sprintf => {
+            // gawk's fatal error, met when the call runs.
+            if argc == 0 {
+                return Err("sprintf: no arguments".to_string());
+            }
             let str = builtin_sprintf(stack, argc, global_env)?;
             stack.push_value(str)?;
         }
@@ -475,13 +478,13 @@ pub(crate) fn call_simple_builtin(
             let command = stack
                 .pop_scalar_value()?
                 .scalar_to_string(&global_env.convfmt)?;
-            stack.push_value(run_system(&command) as f64)?;
+            stack.push_value(run_system(&command)? as f64)?;
         }
         BuiltinFunction::Print => {
-            super::io::write_stdout(&print_to_string(stack, argc, global_env)?)?;
+            super::io::write_stdout(&print_to_string(stack, argc, global_env)?, "print")?;
         }
         BuiltinFunction::Printf => {
-            super::io::write_stdout(&builtin_sprintf(stack, argc, global_env)?)?;
+            super::io::write_stdout(&builtin_sprintf(stack, argc, global_env)?, "printf")?;
         }
         // `call_builtin` takes the functions that need the interpreter's state before it
         // passes the rest here; one of those would be malformed code, an error rather
@@ -492,13 +495,13 @@ pub(crate) fn call_simple_builtin(
 }
 
 /// Run `command` via shell process and translate its status into awk's `system()` return code.
-fn run_system(command: &str) -> i32 {
-    let mut command_proc = super::io::create_shell_command(command);
+fn run_system(command: &str) -> Result<i32, String> {
+    let mut command_proc = super::io::create_shell_command(command)?;
 
-    match command_proc.status() {
+    Ok(match command_proc.status() {
         Ok(status) => status.code().unwrap_or(-1),
         Err(_) => -1,
-    }
+    })
 }
 
 pub(crate) fn gather_values(stack: &mut Stack, count: u16) -> Result<Vec<AwkValue>, String> {

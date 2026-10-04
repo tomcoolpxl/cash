@@ -427,6 +427,8 @@ fn test_delete_global_array_element_after_insertion_through_local_ref() {
         OpCode::GetLocal(0),
         OpCode::PushConstant(0),
         OpCode::DeleteElement,
+        // The local, an array, is not left as the value: an array is none.
+        OpCode::Pop,
     ];
     let constant = vec![Constant::from("key"), Constant::Number(123.0)];
     assert_eq!(test_global(instructions, constant), Array::default().into());
@@ -1199,7 +1201,8 @@ fn test_builtin_gsub_on_record() {
 fn test_iterate_through_empty_global_array() {
     let instructions = vec![
         OpCode::GlobalScalarRef(FIRST_GLOBAL_VAR + 1),
-        OpCode::CreateGlobalIterator(FIRST_GLOBAL_VAR),
+        OpCode::GlobalScalarRef(FIRST_GLOBAL_VAR),
+        OpCode::CreateIterator,
         OpCode::AdvanceIterOrJump(2),
         OpCode::Jump(-1),
     ];
@@ -1242,7 +1245,8 @@ fn test_iterate_through_global_array() {
         OpCode::Assign,
         OpCode::Pop,
         OpCode::GlobalScalarRef(FIRST_GLOBAL_VAR + 1),
-        OpCode::CreateGlobalIterator(FIRST_GLOBAL_VAR),
+        OpCode::GlobalScalarRef(FIRST_GLOBAL_VAR),
+        OpCode::CreateIterator,
         OpCode::AdvanceIterOrJump(2),
         OpCode::Jump(-1),
     ];
@@ -1265,15 +1269,14 @@ fn test_iterate_through_empty_local_array() {
     let instructions = vec![
         OpCode::PushUninitialized,
         OpCode::GlobalScalarRef(FIRST_GLOBAL_VAR),
-        OpCode::CreateLocalIterator(0),
+        OpCode::GetLocal(0),
+        OpCode::CreateIterator,
         OpCode::AdvanceIterOrJump(2),
         OpCode::Jump(-1),
+        // The local, an array, is not left as the value: an array is none.
+        OpCode::Pop,
     ];
     let result = Test::new(instructions, vec![]).run_correct();
-    assert_eq!(
-        result.execution_result.unwrap_expr(),
-        Array::default().into()
-    );
     assert_eq!(
         result.globals[FIRST_GLOBAL_VAR as usize],
         AwkValue::uninitialized_scalar()
@@ -1309,9 +1312,12 @@ fn test_iterate_through_local_array() {
         OpCode::Assign,
         OpCode::Pop,
         OpCode::GlobalScalarRef(FIRST_GLOBAL_VAR),
-        OpCode::CreateLocalIterator(0),
+        OpCode::GetLocal(0),
+        OpCode::CreateIterator,
         OpCode::AdvanceIterOrJump(2),
         OpCode::Jump(-1),
+        // The local, an array, is not left as the value: an array is none.
+        OpCode::Pop,
     ];
     let constants = vec![
         Constant::from("value"),
@@ -1320,10 +1326,6 @@ fn test_iterate_through_local_array() {
         Constant::from("key3"),
     ];
     let result = Test::new(instructions, constants).run_correct();
-    assert_eq!(
-        result.execution_result.unwrap_expr(),
-        Array::from_iter([("key1", "value"), ("key2", "value"), ("key3", "value")]).into()
-    );
     assert_eq!(result.globals[FIRST_GLOBAL_VAR as usize], "key3".into());
 }
 
@@ -1696,7 +1698,7 @@ fn test_srand_returns_the_previous_seed_value() {
 // exe is such a link that it runs as the shell.
 #[test]
 fn shell_commands_run_in_this_process_exe() {
-    let command = io::create_shell_command("echo hi");
+    let command = io::create_shell_command("echo hi").expect("a command");
     assert_eq!(
         std::path::Path::new(command.get_program()),
         std::env::current_exe().expect("this test's exe")

@@ -10,7 +10,7 @@ use std::{
     collections::{HashMap, hash_map::Entry},
     fs::File,
     io::{BufReader, Bytes, Read, Write},
-    path::PathBuf,
+    path::{Path, PathBuf},
     rc::Rc,
     sync::OnceLock,
 };
@@ -53,30 +53,32 @@ thread_local! {
     static STDOUT: std::cell::RefCell<StdoutWriter> = std::cell::RefCell::new(StdoutWriter::new());
 }
 
-/// Writes `text` to standard output.
-pub(crate) fn write_stdout(text: &str) -> Result<(), String> {
+/// Writes `text` to standard output for `print` or `printf` (`what`); a failure is gawk's
+/// fatal error.
+pub(crate) fn write_stdout(text: &str, what: &str) -> Result<(), String> {
     STDOUT
         .with_borrow_mut(|stdout| stdout.writer().write_all(text.as_bytes()))
-        .map_err(stdout_failed)
+        .map_err(reader_gone)
+        .map_err(|error| format!("{what} to \"standard output\" failed: {}", strerror(&error)))
 }
 
 /// Writes out what standard output holds: before another program runs (`system()`, a
 /// pipe), which writes to the same place and must not overtake it, and when awk ends.
-pub(crate) fn flush_stdout() -> Result<(), String> {
+/// What a failure means is the caller's to say, as gawk words each differently.
+pub(crate) fn flush_stdout() -> Result<(), std::io::Error> {
     STDOUT
         .with_borrow_mut(|stdout| stdout.writer().flush())
-        .map_err(stdout_failed)
+        .map_err(reader_gone)
 }
 
-/// What a failed write to standard output means. When the reader has gone, awk stops as
-/// the other bundled tools do on Windows, which has no `SIGPIPE` (spec §4 row 22), and as
-/// gawk does with the signal ignored: with a message and status 2.
-fn stdout_failed(error: std::io::Error) -> String {
+/// A failed write to standard output, unless its reader has gone: then awk ends there in
+/// silence with 141, as `SIGPIPE` ends gawk (Git's gawk too) and every tool of cash's
+/// own (spec D71). It said `write error: Broken pipe` and ended with 2.
+fn reader_gone(error: std::io::Error) -> std::io::Error {
     if error.kind() == std::io::ErrorKind::BrokenPipe {
-        eprintln!("awk: write error: Broken pipe");
-        std::process::exit(2);
+        std::process::exit(141);
     }
-    format!("write error: {error}")
+    error
 }
 
 pub enum RecordSeparator {
@@ -449,7 +451,7 @@ impl WriteFiles {
     pub fn write(&mut self, filename: &str, contents: &str, append: bool) -> Result<(), String> {
         // The same stream as `print`, so the two keep their order.
         if filename == "/dev/stdout" {
-            return write_stdout(contents);
+            return write_stdout(contents, "print");
         }
         match self.files.entry(filename.to_string()) {
             Entry::Occupied(mut e) => {
@@ -464,8 +466,15 @@ impl WriteFiles {
                     .truncate(!append)
                     .append(append)
                     .open(filename)
-                    // gawk's words.
-                    .map_err(|e| format!("cannot redirect to `{filename}': {}", strerror(&e)))?;
+                    // gawk's words; Windows does not say that a directory is one.
+                    .map_err(|e| {
+                        let reason = if Path::new(filename).is_dir() {
+                            "Is a directory".to_string()
+                        } else {
+                            strerror(&e)
+                        };
+                        format!("cannot redirect to `{filename}': {reason}")
+                    })?;
                 file.write_all(contents.as_bytes())
                     .map_err(|e| e.to_string())?;
                 e.insert(file);
@@ -553,11 +562,10 @@ const ARGV0_VARIABLE: &str = "CASH_ARGV0";
 /// named. It was taken to be cash only when named `cash` (or `cash-…`), so in a linked
 /// `awk.exe` the commands ran in `cmd`; and a `CASH_BIN` variable, a test hook, chose
 /// any program in production.
-pub(crate) fn create_shell_command(cmd_str: &str) -> std::process::Command {
+pub(crate) fn create_shell_command(cmd_str: &str) -> Result<std::process::Command, String> {
     // Another program writes where awk does, so what awk has printed goes first, as gawk,
-    // mawk and BWK awk (and POSIX, for system()) have it (TXT-14). A failure here is the
-    // write's to report, when it is tried again.
-    let _ = flush_stdout();
+    // mawk and BWK awk (and POSIX, for system()) have it (TXT-14).
+    flush_stdout_for_fflush()?;
 
     // Should Windows not say where this process's exe is, the cash on PATH is the next
     // best.
@@ -569,7 +577,14 @@ pub(crate) fn create_shell_command(cmd_str: &str) -> std::process::Command {
     let mut cmd = std::process::Command::new(cash);
     cmd.env(ARGV0_VARIABLE, "cash")
         .args(["--norc", "--noprofile", "-c", cmd_str]);
-    cmd
+    Ok(cmd)
+}
+
+/// Writes out what standard output holds, for `fflush()` or before another program runs;
+/// a failure is gawk's fatal error for those.
+pub(crate) fn flush_stdout_for_fflush() -> Result<(), String> {
+    flush_stdout()
+        .map_err(|error| format!("fflush: cannot flush standard output: {}", strerror(&error)))
 }
 
 #[derive(Default)]
@@ -584,7 +599,7 @@ impl WritePipes {
             Entry::Occupied(e) => e.into_mut(),
             Entry::Vacant(e) => {
                 let command_str = command.as_str().to_string();
-                let mut cmd = create_shell_command(&command_str);
+                let mut cmd = create_shell_command(&command_str)?;
                 cmd.stdin(std::process::Stdio::piped());
                 let child = cmd.spawn().map_err(|e| e.to_string())?;
                 e.insert(child)
@@ -657,7 +672,7 @@ pub struct PipeRecordReader {
 
 impl PipeRecordReader {
     pub fn open(command: &str) -> Result<Self, String> {
-        let mut cmd = create_shell_command(command);
+        let mut cmd = create_shell_command(command)?;
         cmd.stdout(std::process::Stdio::piped());
         let mut child = cmd.spawn().map_err(|e| e.to_string())?;
         let stdout = child

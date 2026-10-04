@@ -21,6 +21,9 @@ pub enum OpCode {
     Mul,
     Div,
     Mod,
+    // `/` and `%` of `/=` and `%=`, which gawk names when the divisor is zero
+    DivAssign,
+    ModAssign,
     Pow,
     Le,
     Lt,
@@ -43,8 +46,9 @@ pub enum OpCode {
     PreInc,
     PreDec,
 
-    CreateGlobalIterator(u32),
-    CreateLocalIterator(u32),
+    // starts a `for (k in a)` loop over the array on top of the stack, assigning to the
+    // variable referred to below it
+    CreateIterator,
     AdvanceIterOrJump(i32),
 
     AsNumber,
@@ -58,8 +62,16 @@ pub enum OpCode {
     GetLocal(u32),
     GetField,
     // uses the key on top of the stack to index the array preceding it. Pushes the value
-    // of the indexed element (adding it to the array if its not present)
+    // of the indexed element (adding it to the array if its not present), or a reference
+    // to it if it is a subarray
     IndexArrayGetValue,
+    // as IndexArrayGetValue, for an argument of a function: an element with no type yet
+    // is passed by reference too, as it may become a subarray in the function
+    IndexArrayGetArgument,
+    // pushes a reference to the element the key on top of the stack names in the array
+    // preceding it, as a subarray: `a[1]` of `a[1][2]`. Nothing is looked up until the
+    // reference is used
+    IndexArraySubarray,
 
     GlobalScalarRef(u32),
     LocalScalarRef(u32),
@@ -323,6 +335,7 @@ pub enum BuiltinFunction {
     Substr,
     ToLower,
     ToUpper,
+    IsArray,
 
     // I/O functions
     Close,
