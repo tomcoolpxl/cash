@@ -194,22 +194,34 @@ fn remove_profile() -> Result<(), String> {
     let local = local_app_data()?;
     let dir = folder(&local);
     let mut out = std::io::stdout().lock();
-    if dir.exists() {
-        std::fs::remove_dir_all(&dir).map_err(|e| format!("{}: {e}", render(&dir)))?;
-        let _ = writeln!(
-            out,
-            "cash --remove-terminal-profile: {} removed",
-            render(&dir)
-        );
+    // The menu entry goes whether or not the folder does: a folder that would not go
+    // returned before the menus were looked at, and left the entry (BIN-11).
+    let removed = if dir.exists() {
+        std::fs::remove_dir_all(&dir)
+            .map(|()| true)
+            .map_err(|e| format!("{}: {e}", render(&dir)))
     } else {
-        let _ = writeln!(out, "cash --remove-terminal-profile: no profile to remove");
+        Ok(false)
+    };
+    match removed {
+        Ok(true) => {
+            let _ = writeln!(
+                out,
+                "cash --remove-terminal-profile: {} removed",
+                render(&dir)
+            );
+        }
+        Ok(false) => {
+            let _ = writeln!(out, "cash --remove-terminal-profile: no profile to remove");
+        }
+        Err(_) => {}
     }
     for settings in edit_menus(&local, |text| {
         crate::terminal_menu::without_profile(text, PROFILE_GUID)
     }) {
         let _ = writeln!(out, "  taken out of the + menu in {}", render(&settings));
     }
-    Ok(())
+    removed.map(|_| ())
 }
 
 /// Apply `edit` to each Terminal install's `settings.json`, writing back those it
@@ -234,6 +246,14 @@ fn edit_menus(local: &Path, edit: impl Fn(&str) -> Option<String>) -> Vec<PathBu
 /// Write `path` whole or not at all: a file beside it, renamed over it, so Terminal,
 /// which rereads the file as it changes, never sees half of it.
 fn replace_file(path: &Path, text: &str) -> std::io::Result<()> {
+    // The file a symbolic link names, as dotfile managers link settings.json: the rename
+    // put a file where the link was (BIN-10).
+    let target = if std::fs::symlink_metadata(path)?.file_type().is_symlink() {
+        std::fs::canonicalize(path)?
+    } else {
+        path.to_path_buf()
+    };
+    let path = target.as_path();
     let temporary = path.with_extension("json.cash-new");
     std::fs::write(&temporary, text)?;
     std::fs::rename(&temporary, path).inspect_err(|_| {

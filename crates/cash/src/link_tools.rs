@@ -232,29 +232,13 @@ fn link_all(dir: Option<&str>) -> Result<(PathBuf, Outcome), String> {
     let mut outcome = Outcome::default();
     let mut now_owned = BTreeSet::new();
 
-    for tool in &tools {
-        let link = dir.join(format!("{tool}.exe"));
-        if link.exists() {
-            if cash_win32::fs::same_file(&link, &exe) {
-                outcome.current.push(tool.clone());
-                now_owned.insert(tool.clone());
-                continue;
-            }
-            if !owned.contains(tool) {
-                outcome.skipped.push(tool.clone());
-                continue;
-            }
-            // A link cash made to an older cash.exe: replace it with one to this one.
-            if remove_or_set_aside(&link).map_err(|e| format!("{}: {e}", render(&link)))? {
-                outcome.set_aside.push(tool.clone());
-            }
-            make_link(&exe, &link, &dir)?;
-            outcome.refreshed.push(tool.clone());
-        } else {
-            make_link(&exe, &link, &dir)?;
-            outcome.linked.push(tool.clone());
-        }
-        now_owned.insert(tool.clone());
+    // A link that fails stops the run, but what was made before it is listed, with what
+    // was cash's already: it was not, so a later run took them for someone else's and
+    // --unlink-tools left them (BIN-12).
+    if let Err(error) = link_each(&tools, &exe, &dir, &owned, &mut outcome, &mut now_owned) {
+        let listed: BTreeSet<String> = now_owned.union(&owned).cloned().collect();
+        let _ = write_manifest(&dir, &listed);
+        return Err(error);
     }
 
     // Links cash made for tools it no longer carries.
@@ -279,6 +263,43 @@ fn link_all(dir: Option<&str>) -> Result<(PathBuf, Outcome), String> {
 
     write_manifest(&dir, &now_owned)?;
     Ok((dir, outcome))
+}
+
+/// Links `tools` in `dir` to `exe`, adding each to `now_owned` as it is cash's, and to
+/// `outcome` as what happened to it.
+fn link_each(
+    tools: &[String],
+    exe: &Path,
+    dir: &Path,
+    owned: &BTreeSet<String>,
+    outcome: &mut Outcome,
+    now_owned: &mut BTreeSet<String>,
+) -> Result<(), String> {
+    for tool in tools {
+        let link = dir.join(format!("{tool}.exe"));
+        if link.exists() {
+            if cash_win32::fs::same_file(&link, exe) {
+                outcome.current.push(tool.clone());
+                now_owned.insert(tool.clone());
+                continue;
+            }
+            if !owned.contains(tool) {
+                outcome.skipped.push(tool.clone());
+                continue;
+            }
+            // A link cash made to an older cash.exe: replace it with one to this one.
+            if remove_or_set_aside(&link).map_err(|e| format!("{}: {e}", render(&link)))? {
+                outcome.set_aside.push(tool.clone());
+            }
+            make_link(exe, &link, dir)?;
+            outcome.refreshed.push(tool.clone());
+        } else {
+            make_link(exe, &link, dir)?;
+            outcome.linked.push(tool.clone());
+        }
+        now_owned.insert(tool.clone());
+    }
+    Ok(())
 }
 
 /// Delete a link or, when Windows refuses, rename it aside: `Ok(true)` then. Windows

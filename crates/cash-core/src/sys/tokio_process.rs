@@ -105,6 +105,7 @@ mod tests {
 
     /// `cmd /c ping` that waits: a program with a child of its own.
     fn sleeper() -> std::process::Command {
+        // process state: a test's child, with no shell whose state it should take.
         let mut command = std::process::Command::new("cmd");
         command.args(["/c", "ping -n 30 127.0.0.1 >nul"]);
         command

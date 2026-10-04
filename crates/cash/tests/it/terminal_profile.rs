@@ -241,6 +241,40 @@ const GUID: &str = "{43e4cdd3-eb67-5e13-bd17-fa0d7f8cf3ff}";
 /// one, in which a profile from a fragment shows nowhere.
 const LISTED_MENU: &str = "{\r\n    \"$schema\": \"https://aka.ms/terminal-profiles-schema\",\r\n    \"defaultProfile\": \"{465d1d2d-478a-4eee-8c87-cd7cafd28372}\",\r\n    // the menu, as the user laid it out\r\n    \"newTabMenu\": \r\n    [\r\n        {\r\n            \"icon\": null,\r\n            \"profile\": \"{465d1d2d-478a-4eee-8c87-cd7cafd28372}\",\r\n            \"type\": \"profile\"\r\n        }\r\n    ],\r\n    \"profiles\": { \"list\": [] }\r\n}\r\n";
 
+/// A settings.json that is a symbolic link, as a dotfile manager makes it, stays one, and
+/// the file it names gets the entry: the link was replaced by a file (BIN-10).
+#[test]
+fn a_linked_settings_file_stays_a_link() {
+    let local = local_app_data("menu-link");
+    let settings = store_settings(local.path(), LISTED_MENU);
+    let real = local.join("dotfiles-settings.json");
+    std::fs::rename(&settings, &real).unwrap();
+    if let Err(e) = std::os::windows::fs::symlink_file(&real, &settings) {
+        // Without Developer Mode or elevation Windows makes no symbolic link; CI has it.
+        eprintln!("skipped: no symbolic link could be made: {e}");
+        return;
+    }
+
+    assert!(cash(local.path(), "--terminal-profile").status.success());
+    let is_link = |path: &Path| {
+        std::fs::symlink_metadata(path)
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    };
+    assert!(is_link(&settings), "settings.json is no longer a link");
+    let text = std::fs::read_to_string(&real).unwrap();
+    assert!(text.contains(&format!("\"profile\": \"{GUID}\"")), "{text}");
+
+    assert!(
+        cash(local.path(), "--remove-terminal-profile")
+            .status
+            .success()
+    );
+    assert!(is_link(&settings), "settings.json is no longer a link");
+    assert_eq!(std::fs::read_to_string(&real).unwrap(), LISTED_MENU);
+}
+
 #[test]
 fn a_menu_listed_profile_by_profile_gets_cash_and_loses_it_on_removal() {
     let local = local_app_data("menu");
@@ -291,6 +325,31 @@ fn a_menu_listed_profile_by_profile_gets_cash_and_loses_it_on_removal() {
     );
     assert_eq!(std::fs::read_to_string(&settings).unwrap(), LISTED_MENU);
     assert_eq!(std::fs::read_to_string(&unpackaged).unwrap(), LISTED_MENU);
+}
+
+/// A fragment folder that will not go, held open by Terminal or a scanner, still lets
+/// the menu entry go; the removal fails and names the folder (BIN-11).
+#[test]
+fn a_folder_that_will_not_go_still_takes_the_menu_entry_out() {
+    use std::os::windows::fs::OpenOptionsExt;
+
+    let local = local_app_data("menu-held");
+    let settings = store_settings(local.path(), LISTED_MENU);
+    assert!(cash(local.path(), "--terminal-profile").status.success());
+    assert_ne!(std::fs::read_to_string(&settings).unwrap(), LISTED_MENU);
+
+    // No sharing at all: the file can be neither deleted nor renamed while it is open.
+    let held = std::fs::OpenOptions::new()
+        .read(true)
+        .share_mode(0)
+        .open(fragments(local.path()).join("cash.json"))
+        .unwrap();
+    let out = cash(local.path(), "--remove-terminal-profile");
+    drop(held);
+    assert!(!out.status.success());
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("Fragments"), "{stderr}");
+    assert_eq!(std::fs::read_to_string(&settings).unwrap(), LISTED_MENU);
 }
 
 #[test]

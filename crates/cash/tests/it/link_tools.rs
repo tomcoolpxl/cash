@@ -147,6 +147,45 @@ fn links_every_tool_and_writes_the_manifest() {
     }
 }
 
+/// A run that stops at a link it cannot replace still lists the links it made before:
+/// it wrote no manifest, so a later run took them for someone else's and
+/// `--unlink-tools` left them (BIN-12).
+#[test]
+fn links_made_before_an_error_are_listed() {
+    use std::os::windows::fs::OpenOptionsExt;
+
+    let dir = folder("stopped");
+    // A link of cash's that nothing may delete or rename: the run stops there.
+    std::fs::write(dir.join(".cash-links"), "xargs\n").unwrap();
+    let held_path = dir.join("xargs.exe");
+    std::fs::write(&held_path, "old link").unwrap();
+    let held = std::fs::OpenOptions::new()
+        .read(true)
+        .share_mode(0)
+        .open(&held_path)
+        .unwrap();
+    let out = link_tools(&dir);
+    drop(held);
+    assert!(!out.status.success(), "{}", text(&out.stdout));
+
+    let manifest = std::fs::read_to_string(dir.join(".cash-links")).unwrap();
+    let names: Vec<&str> = manifest.lines().collect();
+    assert!(names.contains(&"xargs"), "{manifest}");
+    let made: Vec<String> = std::fs::read_dir(&*dir)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .filter_map(|name| name.strip_suffix(".exe").map(str::to_owned))
+        .filter(|tool| tool != "xargs")
+        .collect();
+    assert!(!made.is_empty(), "no link made before xargs");
+    for tool in &made {
+        assert!(
+            names.contains(&tool.as_str()),
+            "{tool} missing from {manifest}"
+        );
+    }
+}
+
 /// A link's process leaves nothing in its children's environment: it set
 /// `CASH_LINKED_TOOL_EXE` to its own path, which every descendant inherited, so a tool
 /// that started the same link again got the shell in its place (BIN-09).
