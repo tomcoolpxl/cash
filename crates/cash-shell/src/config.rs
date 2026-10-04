@@ -59,36 +59,26 @@ impl Config {
     /// Converts the configuration to [`UIOptions`], merging with CLI arguments.
     ///
     /// Settings are applied with the following priority (highest to lowest):
-    /// 1. CLI arguments (if explicitly set, i.e., different from default)
+    /// 1. CLI arguments, when given
     /// 2. Config file values
     /// 3. Default values
-    ///
-    /// CLI defaults are automatically inferred from clap's parsed defaults.
     ///
     /// # Arguments
     ///
     /// * `args` - The parsed command-line arguments
     #[must_use]
     pub fn to_ui_options(&self, args: &CommandLineArgs) -> UIOptions {
-        // Get clap's defaults by parsing an empty argument list.
-        // This lets us detect which CLI values were explicitly set vs. defaulted.
-        let defaults = CommandLineArgs::default_values();
-
-        let enable_highlighting = merge_bool_setting(
-            args.enable_highlighting,
-            defaults.enable_highlighting,
-            self.ui.syntax_highlighting,
-        );
-        let terminal_shell_integration = merge_bool_setting(
-            args.terminal_shell_integration,
-            defaults.terminal_shell_integration,
-            self.experimental.terminal_shell_integration,
-        );
-        let zsh_style_hooks = merge_bool_setting(
-            args.zsh_style_hooks,
-            defaults.zsh_style_hooks,
-            self.experimental.zsh_hooks,
-        );
+        let enable_highlighting = args
+            .enable_highlighting
+            .or(self.ui.syntax_highlighting)
+            .unwrap_or(crate::entry::DEFAULT_ENABLE_HIGHLIGHTING);
+        // cash (D39): on by default.
+        let terminal_shell_integration = args
+            .terminal_shell_integration
+            .or(self.experimental.terminal_shell_integration)
+            .unwrap_or(true);
+        // `--enable-zsh-hooks` has no value to turn the hooks off with: given, they are on.
+        let zsh_style_hooks = args.zsh_style_hooks || self.experimental.zsh_hooks == Some(true);
 
         UIOptions::builder()
             .disable_bracketed_paste(args.disable_bracketed_paste)
@@ -97,31 +87,6 @@ impl Config {
             .terminal_shell_integration(terminal_shell_integration)
             .zsh_style_hooks(zsh_style_hooks)
             .build()
-    }
-}
-
-/// Merges a boolean setting from CLI args, config file, and defaults.
-///
-/// Priority: CLI (if explicitly set) > config file > default.
-///
-/// Since boolean CLI flags can't distinguish between "explicitly set to false" and
-/// "not provided" (both result in `false`), we use a heuristic:
-/// - If the CLI value differs from the default, the user explicitly provided it
-/// - Otherwise, use the config value if present, or fall back to the default
-const fn merge_bool_setting(
-    cli_value: bool,
-    cli_default: bool,
-    config_value: Option<bool>,
-) -> bool {
-    if cli_value != cli_default {
-        // CLI was explicitly set to a non-default value
-        cli_value
-    } else if let Some(config) = config_value {
-        // Use config file value
-        config
-    } else {
-        // Fall back to default
-        cli_default
     }
 }
 
@@ -414,8 +379,6 @@ mod tests {
         ";
         let config: Config = toml::from_str(toml).unwrap();
 
-        // Simulate CLI explicitly setting values different from defaults. Highlighting is
-        // on by default, so only turning it off is distinguishable from not passing it.
         let args = CommandLineArgs::try_parse_from(
             ["cash", "--enable-highlighting=false", "--enable-zsh-hooks"].map(String::from),
         )
@@ -425,6 +388,41 @@ mod tests {
 
         assert!(ui.disable_highlighting); // CLI disabled highlighting
         assert!(ui.zsh_style_hooks); // CLI enabled
+    }
+
+    /// A flag given as the default still beats the config: `--enable-highlighting` lost
+    /// to `syntax-highlighting = false`, being indistinguishable from no flag (BIN-13).
+    #[test]
+    fn a_flag_that_says_the_default_overrides_the_config() {
+        let toml = r"
+            [ui]
+            syntax-highlighting = false
+
+            [experimental]
+            terminal-shell-integration = false
+        ";
+        let config: Config = toml::from_str(toml).unwrap();
+        let ui = config.to_ui_options(&CommandLineArgs::default_values());
+        assert!(ui.disable_highlighting);
+        assert!(!ui.terminal_shell_integration);
+
+        for flags in [
+            [
+                "cash",
+                "--enable-highlighting",
+                "--enable-terminal-integration",
+            ],
+            [
+                "cash",
+                "--enable-highlighting=true",
+                "--enable-terminal-integration=true",
+            ],
+        ] {
+            let args = CommandLineArgs::try_parse_from(flags.map(String::from)).unwrap();
+            let ui = config.to_ui_options(&args);
+            assert!(!ui.disable_highlighting, "{flags:?}");
+            assert!(ui.terminal_shell_integration, "{flags:?}");
+        }
     }
 
     #[test]

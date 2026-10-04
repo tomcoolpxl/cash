@@ -105,8 +105,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 Each from `REVIEW_REPORT.md` §5, found in no commit on 2026-10-04; reproduce first, as
 some may have gone with other work.
 
-- BIN-13: `--enable-highlighting` cannot override `false` in config.toml, and its test
-  asserts the default.
 - BIN-14: a recovered panic still prints "cash had a problem and crashed" and writes a
   crash report to `%TEMP%`.
 - W32-13, W32-14, XC-13: five RAII handle types and 15+ manual `CloseHandle`s, three

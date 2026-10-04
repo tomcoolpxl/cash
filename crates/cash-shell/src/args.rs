@@ -184,33 +184,39 @@ pub struct CommandLineArgs {
 
     /// Syntax highlighting in input; on by default, `--enable-highlighting=false` turns
     /// it off.
+    ///
+    /// `None` when not given, so that config.toml decides then; a `bool` defaulting to
+    /// `true` could not tell `--enable-highlighting` from nothing, and the flag lost to
+    /// `syntax-highlighting = false` (BIN-13).
     #[clap(
         long = "enable-highlighting",
         help_heading = HEADING_UI_OPTIONS,
-        default_value_t = crate::entry::DEFAULT_ENABLE_HIGHLIGHTING,
+        value_name = "BOOL",
         num_args = 0..=1,
         require_equals = true,
         default_missing_value = "true",
         action = clap::ArgAction::Set
     )]
-    pub enable_highlighting: bool,
+    pub enable_highlighting: Option<bool>,
 
     /// Terminal shell integration: OSC 133 prompt/command marks and OSC 9;9 working
-    /// directory reporting.
+    /// directory reporting; on by default.
     ///
     /// cash (D39): on by default. Windows Terminal and VS Code use these for clickable
     /// command blocks, jump-to-previous-command, exit-code decorations and cwd-aware new
     /// tabs — a disproportionate improvement in daily feel for a few escape sequences,
     /// and §1 holds cash to being pleasant enough to replace the user's shell.
+    ///
+    /// `None` when not given, so that config.toml decides then.
     #[clap(
         long = "enable-terminal-integration",
-        default_value_t = true,
+        value_name = "BOOL",
         num_args = 0..=1,
         require_equals = true,
         default_missing_value = "true",
         action = clap::ArgAction::Set
     )]
-    pub terminal_shell_integration: bool,
+    pub terminal_shell_integration: Option<bool>,
 
     /// Enable zsh-style preexec/precmd hooks (**experimental**).
     #[clap(long = "enable-zsh-hooks", help_heading = HEADING_EXPERIMENTAL_OPTIONS)]
