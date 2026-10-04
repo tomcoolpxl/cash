@@ -70,16 +70,22 @@ impl Array {
         }
     }
 
+    /// The keys in the order `for (k in a)` goes through them, as near gawk's as it is
+    /// simple to be: gawk keeps the indices that are integers from 1 to 2^31 - 1 apart and
+    /// goes through them last, in ascending order, which this does; the others come
+    /// first, here in the order they were made, where gawk's order is a hash table's.
     pub fn key_iter(&mut self) -> KeyIterator {
-        KeyIterator {
-            keys: self
-                .pairs
-                .iter()
-                .flatten()
-                .map(|(key, _)| key.clone())
-                .collect(),
-            index: 0,
+        let mut keys = Vec::with_capacity(self.len());
+        let mut integers = Vec::new();
+        for (key, _) in self.pairs.iter().flatten() {
+            match positive_integer(key) {
+                Some(number) => integers.push((number, key.clone())),
+                None => keys.push(key.clone()),
+            }
         }
+        integers.sort_unstable_by_key(|(number, _)| *number);
+        keys.extend(integers.into_iter().map(|(_, key)| key));
+        KeyIterator { keys, index: 0 }
     }
 
     /// Get the `ValueIndex` of the key in the array. If the key does not exist, it will be
@@ -142,6 +148,17 @@ impl Array {
     }
 }
 
+/// The value of `key` if it is an integer from 1 to 2^31 - 1 written as gawk writes one.
+fn positive_integer(key: &str) -> Option<u32> {
+    let bytes = key.as_bytes();
+    if bytes.first().is_none_or(|&first| first == b'0') || !bytes.iter().all(u8::is_ascii_digit) {
+        return None;
+    }
+    key.parse::<u32>()
+        .ok()
+        .filter(|&number| number <= i32::MAX.unsigned_abs())
+}
+
 impl<S: Into<String>, A: Into<AwkValue>> FromIterator<(S, A)> for Array {
     #[expect(
         clippy::expect_used,
@@ -167,6 +184,18 @@ mod tests {
         let mut array = Array::default();
         let mut iter = array.key_iter();
         assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn positive_integers_come_last_and_in_order() {
+        // As in gawk; they came in the order they were made.
+        let mut array = Array::default();
+        for key in ["10", "x", "5", "07", "1", "-1", "2147483648", "3"] {
+            array.set(key.to_string(), 1.0).unwrap();
+        }
+        let keys: Vec<Key> = array.key_iter().collect();
+        let keys: Vec<&str> = keys.iter().map(|key| &**key).collect();
+        assert_eq!(keys, ["x", "07", "-1", "2147483648", "1", "3", "5", "10"]);
     }
 
     #[test]

@@ -339,6 +339,9 @@ pub enum BuiltinFunction {
     ToLower,
     ToUpper,
     IsArray,
+    // gawk's sorts, of an array's values and of its indices
+    Asort,
+    Asorti,
 
     // I/O functions
     Close,

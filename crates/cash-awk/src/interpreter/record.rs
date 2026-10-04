@@ -70,7 +70,11 @@ pub(crate) fn split_record<S: FnMut(usize, AwkString) -> Result<(), String>>(
             // finds each field.
             let mut split_start = 0;
             let mut index = 0;
-            for separator_range in re.match_locations(&record) {
+            // An empty match separates nothing, as in gawk: `split("abc", p, /x*/)` is 1.
+            for separator_range in re
+                .match_locations(&record)
+                .filter(|found| found.end > found.start)
+            {
                 store_result(
                     index,
                     string(
@@ -124,7 +128,8 @@ pub(crate) fn field_separators(
             separators.extend((1..count).map(|index| (index, (*c as char).to_string())));
         }
         FieldSeparator::Ere(re) => {
-            separators.extend(re.match_locations(record).enumerate().map(|(index, m)| {
+            let found = re.match_locations(record).filter(|m| m.end > m.start);
+            separators.extend(found.enumerate().map(|(index, m)| {
                 (
                     index + 1,
                     record.get(m.start..m.end).unwrap_or_default().to_string(),

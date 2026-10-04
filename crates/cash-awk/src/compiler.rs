@@ -223,6 +223,22 @@ static BUILTIN_FUNCTIONS: LazyLock<HashMap<Rule, BuiltinFunctionInfo>> = LazyLoc
                 max_args: 1,
             },
         ),
+        (
+            Rule::asort,
+            BuiltinFunctionInfo {
+                function: BuiltinFunction::Asort,
+                min_args: 1,
+                max_args: 3,
+            },
+        ),
+        (
+            Rule::asorti,
+            BuiltinFunctionInfo {
+                function: BuiltinFunction::Asorti,
+                min_args: 1,
+                max_args: 3,
+            },
+        ),
     ])
 });
 
@@ -263,6 +279,8 @@ fn pest_error_from_span(span: pest::Span, message: String) -> PestError {
 const GAWK_ERROR: &str = "\0gawk error\0";
 const GAWK_TWICE: &str = "\0gawk twice\0";
 const GAWK_WARNING: &str = "\0gawk warning\0";
+const GAWK_LATE_WARNING: &str = "\0gawk late warning\0";
+const GAWK_ERROR_THEN_STOP: &str = "\0gawk error then stop\0";
 const GAWK_CARET: &str = "\0gawk caret\0";
 const GAWK_FATAL: &str = "\0gawk fatal\0";
 
@@ -298,6 +316,8 @@ fn diagnostic(error: &PestError) -> Diagnostic {
         (GAWK_ERROR, Kind::Error),
         (GAWK_TWICE, Kind::Twice),
         (GAWK_WARNING, Kind::Warning),
+        (GAWK_LATE_WARNING, Kind::LateWarning),
+        (GAWK_ERROR_THEN_STOP, Kind::ErrorThenStop),
         (GAWK_CARET, Kind::Caret),
         (GAWK_FATAL, Kind::Fatal),
     ] {
@@ -369,6 +389,26 @@ fn is_octal_digit(c: char) -> bool {
     ('0'..='7').contains(&c)
 }
 
+thread_local! {
+    /// The escapes gawk has no meaning for in a string that it has warned about: once each.
+    static WARNED_ESCAPES: RefCell<std::collections::HashSet<char>> = RefCell::default();
+    /// gawk's warnings about strings since they were last taken (`take_escape_warnings`).
+    static ESCAPE_WARNINGS: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+}
+
+/// gawk's warnings about the escapes of the strings since the last call, for the caller to
+/// write where the string is.
+pub fn take_escape_warnings() -> Vec<String> {
+    ESCAPE_WARNINGS.with_borrow_mut(std::mem::take)
+}
+
+fn escape_warning(warning: String) {
+    ESCAPE_WARNINGS.with_borrow_mut(|warnings| warnings.push(warning));
+}
+
+/// The text of a string with its escapes made into what they stand for, as gawk makes
+/// them, with gawk's warnings (`take_escape_warnings`): an escape it has no meaning for is
+/// the character, and `\x` takes at most two hexadecimal digits.
 pub fn escape_string_contents(s: &str) -> Result<Rc<str>, String> {
     let mut result = String::new();
     let mut chars = s.chars().peekable();
@@ -383,7 +423,6 @@ pub fn escape_string_contents(s: &str) -> Result<Rc<str>, String> {
                 };
                 let escaped_char = match next_char {
                     '"' => '"',
-                    '/' => '/',
                     'a' => '\x07',
                     'b' => '\x08',
                     'f' => '\x0C',
@@ -405,12 +444,41 @@ pub fn escape_string_contents(s: &str) -> Result<Rc<str>, String> {
                         }
                         char::from_u32(char_code).ok_or("invalid character".to_string())?
                     }
+                    'x' => {
+                        let mut code = None;
+                        for _ in 0..2 {
+                            match chars.peek().and_then(|c| c.to_digit(16)) {
+                                Some(digit) => {
+                                    code = Some(code.unwrap_or(0) * 16 + digit);
+                                    chars.next();
+                                }
+                                None => break,
+                            }
+                        }
+                        match code {
+                            Some(code) => {
+                                char::from_u32(code).ok_or("invalid character".to_string())?
+                            }
+                            None => {
+                                escape_warning("no hex digits in `\\x' escape sequence".into());
+                                'x'
+                            }
+                        }
+                    }
                     // A backslash before a newline continues the line, as in gawk.
                     '\n' => continue,
                     // An escape awk does not define stands for the character itself, as
-                    // gawk has it (`"\."` is `.`, `"\&"` is `&`); it was a parse error, so
-                    // `split(s, parts, "\.")` stopped the whole program (TXT-05).
-                    other => other,
+                    // gawk has it (`"\."` is `.`, `"\&"` is `&`), with its warning, once for
+                    // each character; it was a parse error, so `split(s, parts, "\.")`
+                    // stopped the whole program (TXT-05).
+                    other => {
+                        if WARNED_ESCAPES.with_borrow_mut(|warned| warned.insert(other)) {
+                            escape_warning(format!(
+                                "escape sequence `\\{other}' treated as plain `{other}'"
+                            ));
+                        }
+                        other
+                    }
                 };
                 result.push(escaped_char);
             }
@@ -511,6 +579,12 @@ fn normalize_builtin_function_arguments(
             }
             (flatten(args), argc)
         }
+        BuiltinFunction::Asort | BuiltinFunction::Asorti => {
+            for array in args.iter_mut().take(2) {
+                refer_to_subarray(array);
+            }
+            (flatten(args), argc)
+        }
         BuiltinFunction::Sub | BuiltinFunction::Gsub => {
             if argc == 2 {
                 let mut instructions = Instructions::from_instructions_and_line_col(
@@ -527,7 +601,24 @@ fn normalize_builtin_function_arguments(
                 } else {
                     "gsub third parameter is not a changeable object"
                 };
-                if lvalue_to_scalar_ref(&mut args[0].opcodes, span, message).is_err() {
+                // A constant (gawk folds `1 + 1` into one) is replaced in a copy that
+                // is then dropped, as in gawk; anything else is its error.
+                let constant = args[0].opcodes.iter().all(|opcode| {
+                    matches!(
+                        opcode,
+                        OpCode::PushConstant(_)
+                            | OpCode::Add
+                            | OpCode::Sub
+                            | OpCode::Mul
+                            | OpCode::Div
+                            | OpCode::Mod
+                            | OpCode::Pow
+                            | OpCode::Negate
+                            | OpCode::Not
+                            | OpCode::AsNumber
+                    )
+                });
+                if !constant && lvalue_to_scalar_ref(&mut args[0].opcodes, span, message).is_err() {
                     let close = pest::Position::new(span.get_input(), span.end() - 1)
                         .unwrap_or_else(|| span.start_pos());
                     return Err(gawk_error(GAWK_CARET, close, message));
@@ -879,7 +970,16 @@ impl Compiler {
                 let ere = translate_ere_escapes(text);
                 // What is wrong with the regex is gawk's error, after which it goes on
                 // parsing; an empty regex stands in for it meanwhile.
-                let regex = match Regex::new(&ere) {
+                let made = Regex::new(&ere);
+                // gawk's warnings, for an escape it has no meaning for.
+                for warning in crate::regex::take_warnings() {
+                    self.deferred_errors.borrow_mut().push(gawk_error(
+                        GAWK_WARNING,
+                        primary.as_span().start_pos(),
+                        &warning,
+                    ));
+                }
+                let regex = match made {
                     Ok(regex) => regex,
                     Err(error) => {
                         self.deferred_errors.borrow_mut().push(gawk_error(
@@ -918,6 +1018,13 @@ impl Compiler {
                 let string_line_col = primary.line_col();
                 let str = escape_string_contents(first_child(primary).as_str())
                     .map_err(|e| pest_error_from_span(span, e))?;
+                for warning in take_escape_warnings() {
+                    self.deferred_errors.borrow_mut().push(gawk_error(
+                        GAWK_WARNING,
+                        span.start_pos(),
+                        &warning,
+                    ));
+                }
                 let index = self.push_constant(Constant::String(str));
                 Ok(Expr::new(
                     ExprKind::String,
@@ -926,6 +1033,11 @@ impl Compiler {
                         string_line_col,
                     ),
                 ))
+            }
+            Rule::simple_getline => {
+                let mut instructions = Instructions::default();
+                self.compile_simple_getline(primary, &mut instructions, locals)?;
+                Ok(Expr::new(ExprKind::Number, instructions))
             }
             Rule::lvalue => {
                 let variable = first_child(primary.clone());
@@ -956,7 +1068,7 @@ impl Compiler {
                             // gawk's warning, and the arguments the function has no
                             // parameters for are evaluated and dropped; it was an error.
                             self.deferred_errors.borrow_mut().push(gawk_error(
-                                GAWK_WARNING,
+                                GAWK_LATE_WARNING,
                                 span.start_pos(),
                                 &format!(
                                     "function `{name}' called with more arguments than declared"
@@ -1474,6 +1586,32 @@ impl Compiler {
         Ok(())
     }
 
+    /// `getline` or `getline var`, from the main input.
+    fn compile_simple_getline(
+        &self,
+        getline: Pair<Rule>,
+        instructions: &mut Instructions,
+        locals: &LocalMap,
+    ) -> Result<(), PestError> {
+        let line_col = getline.line_col();
+        if let Some(lvalue) = getline.into_inner().next() {
+            self.compile_lvalue_ref(lvalue, instructions, locals)?;
+        } else {
+            instructions.extend(Instructions::from_instructions_and_line_col(
+                vec![OpCode::PushZero, OpCode::FieldRef],
+                line_col,
+            ));
+        }
+        instructions.push(
+            OpCode::CallBuiltin {
+                function: BuiltinFunction::GetLine,
+                argc: 1,
+            },
+            line_col,
+        );
+        Ok(())
+    }
+
     fn compile_input_function(
         &self,
         expr: Pair<Rule>,
@@ -1484,21 +1622,7 @@ impl Compiler {
         let line_col = input_function.line_col();
         match input_function.as_rule() {
             Rule::simple_getline => {
-                if let Some(lvalue) = input_function.into_inner().next() {
-                    self.compile_lvalue_ref(lvalue, instructions, locals)?;
-                } else {
-                    instructions.extend(Instructions::from_instructions_and_line_col(
-                        vec![OpCode::PushZero, OpCode::FieldRef],
-                        line_col,
-                    ));
-                }
-                instructions.push(
-                    OpCode::CallBuiltin {
-                        function: BuiltinFunction::GetLine,
-                        argc: 1,
-                    },
-                    line_col,
-                );
+                self.compile_simple_getline(input_function, instructions, locals)?;
             }
             Rule::getline_from_file | Rule::getline_from_file_cmp => {
                 let is_cmp = input_function.as_rule() == Rule::getline_from_file_cmp;
@@ -1643,7 +1767,6 @@ impl Compiler {
     ) -> Result<(), PestError> {
         let stmt = first_child(simple_stmt);
         let stmt_line_col = stmt.line_col();
-        let stmt_span = stmt.as_span();
         match stmt.as_rule() {
             Rule::array_delete => {
                 let mut inner = stmt.into_inner();
@@ -1687,15 +1810,11 @@ impl Compiler {
                             matches!(print.as_rule(), Rule::printf_call | Rule::simple_printf);
                         let expressions = print.into_inner();
                         argc = expressions.len() as u16;
-                        if expressions.is_empty() {
-                            // The grammar gives printf at least its format; gawk's words
-                            // for one without.
-                            if is_printf {
-                                return Err(pest_error_from_span(
-                                    stmt_span,
-                                    "printf: no format".to_string(),
-                                ));
-                            }
+                        if expressions.is_empty() && is_printf {
+                            // gawk's fatal error, when it runs (`builtin_sprintf`).
+                            print_function = BuiltinFunction::Printf;
+                            argc = 0;
+                        } else if expressions.is_empty() {
                             print_function = BuiltinFunction::Print;
                             instructions.push(OpCode::PushZero, stmt_line_col);
                             instructions.push(OpCode::GetField, stmt_line_col);
@@ -1738,8 +1857,9 @@ impl Compiler {
                         }
                         _ => not_in_grammar(&output_redirection, "output redirection"),
                     }
-                    let expr = first_child(output_redirection);
-                    self.compile_expr(expr, instructions, locals)?;
+                    let target = first_child(output_redirection);
+                    let target = self.compile_simple_binary_expr(target.into_inner(), locals)?;
+                    instructions.extend(target.instructions);
                     argc += 1;
                 }
                 instructions.push(
@@ -2281,8 +2401,9 @@ impl Compiler {
                     },
                 );
                 if previous_value.is_some() {
+                    // gawk reports nothing after it.
                     errors.push(gawk_error(
-                        GAWK_ERROR,
+                        GAWK_ERROR_THEN_STOP,
                         name.as_span().start_pos(),
                         &format!("function name `{name}' previously defined"),
                     ));
@@ -2348,7 +2469,7 @@ fn read_until_syntax_error(sources: &[SourceFile], failed: usize) -> CompilerErr
             .diagnostics
             .into_iter()
             // A function defined after the error is not declared yet.
-            .filter(|(_, diagnostic)| !matches!(diagnostic.kind, Kind::Fatal | Kind::Warning))
+            .filter(|(_, diagnostic)| !matches!(diagnostic.kind, Kind::Fatal | Kind::LateWarning))
             .collect(),
     };
     diagnostics.push((failed, syntax));
@@ -2464,8 +2585,10 @@ pub fn compile_program(sources: &[SourceFile]) -> Result<Program, CompilerErrors
         .map(|(index, error)| (*index, diagnostic(error)))
         .collect();
     let texts = source_texts(sources);
-    if diagnostics.iter().all(|(_, d)| d.kind == Kind::Warning) {
+    if diagnostics.iter().all(|(_, d)| d.kind.is_warning()) {
         let mut warnings = Vec::new();
+        let mut diagnostics = diagnostics;
+        diagnostics.sort_by_key(|(index, warning)| (*index, warning.offset));
         for (index, warning) in diagnostics {
             let (file, text) = texts.get(index).copied().unwrap_or_default();
             warnings.extend(warning.render(text, file));
@@ -2487,7 +2610,7 @@ pub fn compile_program(sources: &[SourceFile]) -> Result<Program, CompilerErrors
 
 /// Rewrites the escapes POSIX awk defines in a regex literal into the syntax of the Rust
 /// regex engine: `\ddd` (one to three octal digits) and `\b`, which is a backspace in
-/// awk but a word boundary in Rust, become `\x{..}`; `\"` becomes `"`. Everything else,
+/// awk but a word boundary in Rust, become `\x{..}`. Everything else,
 /// including `\\` and `\/`, is passed through.
 fn translate_ere_escapes(ere: &str) -> String {
     let mut out = String::with_capacity(ere.len());
@@ -2515,10 +2638,6 @@ fn translate_ere_escapes(ere: &str) -> String {
             Some('b') => {
                 chars.next();
                 out.push_str("\\x{8}");
-            }
-            Some('"') => {
-                chars.next();
-                out.push('"');
             }
             Some(other) => {
                 chars.next();

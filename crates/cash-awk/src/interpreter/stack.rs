@@ -273,6 +273,21 @@ impl StackValue {
         }
     }
 
+    /// A copy of what this refers to, for a second look at the same array.
+    pub(crate) fn duplicate_place(&self) -> Self {
+        match self {
+            StackValue::ValueRef(ptr) => StackValue::ValueRef(*ptr),
+            StackValue::UninitializedRef(ptr) => StackValue::UninitializedRef(*ptr),
+            StackValue::ArrayElementRef(element) => StackValue::ArrayElementRef(element.clone()),
+            StackValue::Value(value) => {
+                // SAFETY: the cell is this value's own, and nothing else refers to it.
+                StackValue::Value(UnsafeCell::new(unsafe { &*value.get() }.clone()))
+            }
+            StackValue::Iterator(iterator) => StackValue::Iterator(iterator.clone()),
+            StackValue::Invalid => StackValue::Invalid,
+        }
+    }
+
     pub(crate) fn duplicate(&mut self) -> Self {
         match self {
             StackValue::Value(val) => val.get_mut().clone().into(),
@@ -329,6 +344,9 @@ pub(crate) struct Stack<'i, 's> {
     pub(crate) error_place: Option<Place>,
     /// The instruction that ran last, in the current code; -1 before one has run.
     pub(crate) last_ip: isize,
+    /// The number of call frames under a function that a builtin calls (`asort`'s
+    /// comparison), whose return ends the code run for it.
+    pub(crate) stop_depth: Option<usize>,
     pub(crate) sp: *mut StackValue,
     pub(crate) bp: *mut StackValue,
     pub(crate) stack_end: *mut StackValue,
@@ -700,6 +718,18 @@ impl<'i, 's> Stack<'i, 's> {
         self.get_mut_value_ptr(index)
     }
 
+    /// Whether the value on top of the stack is a value of its own, not a reference.
+    pub(crate) fn top_is_value(&self) -> bool {
+        // SAFETY: a slot below `sp` holds a value (`Stack`'s invariants).
+        if self.sp == self.bp {
+            return false;
+        }
+        // SAFETY: `sp` is above `bp`, so the slot below it is in the stack.
+        let top = unsafe { self.sp.sub(1) };
+        // SAFETY: a slot below `sp` holds a value (`Stack`'s invariants).
+        matches!(unsafe { &*top }, StackValue::Value(_))
+    }
+
     /// Whether the current call frame has no values on the stack.
     pub(crate) fn is_empty(&self) -> bool {
         self.len() == 0
@@ -858,6 +888,7 @@ impl<'i, 's> Stack<'i, 's> {
             parameter_names: &[],
             error_place: None,
             last_ip: -1,
+            stop_depth: None,
             ip: 0,
             bp,
             sp: bp,

@@ -67,15 +67,12 @@ fixed their leftovers; moved here so 1.3.14 could go out (the user, 2026-10-04).
   `a\nb\r\n`, mixed endings where D49 keeps a CRLF file CRLF; `W` after `N` writes `a\n`.
   `--follow-symlinks` is tested only where symbolic links can be made (CI), not here.
   Seen 2026-10-04.
-- awk, found matching gawk 5.4 (2026-10-04): `print > "/dev/null"` fails; `printf` with
-  no arguments is read as `print f`; `asort()` is not there; `sub(/a/, "b", "x")` is a
-  compile error where gawk takes a constant target; `getline getline` and `getline x y`
-  are refused and `print > "x" > "y"` taken, the other way round from gawk; a control
-  character in the source is a syntax error, not gawk's "invalid character"; a number
-  as a dynamic regex is fatal; gawk's escape warnings are not given, and `\y` and `\1`
-  are regex errors; `ARGV[0]` is `awk`, gawk's `gawk`; "attempt to use non-function" is
-  reported beside "previously defined", where gawk reports one; for-in over a
-  `match()` array runs in insertion order, gawk's in hash order.
+- awk, found matching gawk 5.4 (2026-10-04): `gsub(/a/, "b", (x))` is taken where gawk
+  says "not a changeable object"; `IGNORECASE` is not supported; a user sort function
+  gets a copy of a subarray where gawk passes the array; `s = s ...` in a loop is
+  quadratic (`test_awk_records_of_more_than_65535_fields_split` takes 7.5 s in a debug
+  build); `split()` into the parent array while a parameter is bound to `a[0]` differs
+  from gawk, whose result looks like a freed node reused.
 
 ---
 

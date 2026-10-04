@@ -20,7 +20,21 @@ use stack::{ArrayIterator, ExecutionResult, Place, Stack, StackValue, compare_op
 use string::AwkString;
 use value::{AwkRefType, AwkValue, AwkValueRef, AwkValueVariant};
 
-use crate::compiler::escape_string_contents;
+use crate::compiler::take_escape_warnings;
+
+/// A value given on the command line (`-v`, an operand, `-F`) with its escapes made, and
+/// gawk's warnings about them written, unplaced, as gawk writes them.
+fn escape_string_contents(value: &str) -> Result<Rc<str>, String> {
+    let escaped = crate::compiler::escape_string_contents(value)?;
+    let warnings = take_escape_warnings();
+    if !warnings.is_empty() {
+        let _ = io::flush_stdout();
+        for warning in warnings {
+            eprintln!("awk: warning: {warning}");
+        }
+    }
+    Ok(escaped)
+}
 use crate::program::{
     Action, BuiltinFunction, Constant, Function, OpCode, Pattern, Program, SpecialVar,
 };
@@ -272,6 +286,13 @@ impl GlobalEnv {
             None => Ok(&self.fs),
         }
     }
+}
+
+/// What running code needs besides the stack, for a builtin that runs a function.
+struct CodeToRun<'a, 'r> {
+    functions: &'a [Function],
+    record: &'r Record,
+    input: &'r mut MainInput,
 }
 
 struct Interpreter {
@@ -548,6 +569,10 @@ impl Interpreter {
     /// recompute `$0`/fields when a getline assignment changed them; builtins
     /// that don't touch fields return [`FieldsState::Ok`]. Builtins that need
     /// none of this state are delegated to [`call_simple_builtin`].
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "a builtin may run code: `asort`'s comparison function"
+    )]
     fn call_builtin<'a>(
         &mut self,
         function: BuiltinFunction,
@@ -555,9 +580,19 @@ impl Interpreter {
         stack: &mut Stack<'a, 'a>,
         global_env: &mut GlobalEnv,
         input: &mut MainInput,
+        functions: &'a [Function],
+        record: &Record,
     ) -> Result<FieldsState, String> {
         let mut fields_state = FieldsState::Ok;
         match function {
+            BuiltinFunction::Asort | BuiltinFunction::Asorti => {
+                let mut code = CodeToRun {
+                    functions,
+                    record,
+                    input,
+                };
+                self.sort_array(function, argc, stack, global_env, &mut code)?;
+            }
             BuiltinFunction::Match => {
                 let array = if argc == 3 {
                     Some(stack.pop().ok_or_else(|| "empty stack".to_string())?)
@@ -657,15 +692,28 @@ impl Interpreter {
                 } else {
                     AwkString::default()
                 };
-                // Standard output that cannot be written is fatal, as in gawk.
+                // Standard output that cannot be written is fatal, as in gawk. A file is
+                // flushed if it is open, or a pipe; a name that is neither is gawk's
+                // warning. It needed to be both a file and a pipe, so `fflush(file)`
+                // failed.
                 let result = if expr_str.is_empty() {
                     io::flush_stdout_for_fflush()?;
                     self.write_files.flush_all() && self.write_pipes.flush_all()
-                } else if expr_str.as_str() == "/dev/stdout" {
+                } else if io::SpecialFile::named(&expr_str) == Some(io::SpecialFile::Stdout) {
                     io::flush_stdout_for_fflush()?;
                     true
+                } else if io::SpecialFile::named(&expr_str) == Some(io::SpecialFile::Stderr) {
+                    true
+                } else if self.write_files.is_open(&expr_str) {
+                    self.write_files.flush_file(&expr_str)
+                } else if self.write_pipes.is_open(&expr_str) {
+                    self.write_pipes.flush_file(&expr_str)
                 } else {
-                    self.write_files.flush_file(&expr_str) && self.write_pipes.flush_file(&expr_str)
+                    self.warn(
+                        &format!("fflush: `{expr_str}' is not an open file, pipe or co-process"),
+                        stack,
+                    );
+                    false
                 };
                 stack.push_value(if result { 0.0 } else { -1.0 })?;
             }
@@ -765,6 +813,150 @@ impl Interpreter {
         result.map_err(|err| self.fatal_message(err, &stack))
     }
 
+    /// The value the function `function` returns for `arguments`, run from a builtin.
+    fn call_from_builtin<'a>(
+        &mut self,
+        function: &'a Function,
+        arguments: Vec<AwkValue>,
+        stack: &mut Stack<'a, 'a>,
+        global_env: &mut GlobalEnv,
+        code: &mut CodeToRun<'a, '_>,
+    ) -> Result<AwkValue, String> {
+        let depth = stack.call_frames.len();
+        let parameters = function.parameters_count;
+        let given = arguments.len();
+        for argument in arguments.into_iter().take(parameters) {
+            stack.push_value(argument)?;
+        }
+        for _ in given..parameters {
+            stack.push_value(AwkValue::uninitialized())?;
+        }
+        stack.call_function(function)?;
+        let outer = stack.stop_depth.replace(depth);
+        let result = self.run_internal(code.functions, code.record, stack, global_env, code.input);
+        stack.stop_depth = outer;
+        match result? {
+            ExecutionResult::Expression(value) => Ok(value),
+            _ => Err("a sort comparison function ended the program".to_string()),
+        }
+    }
+
+    /// gawk's `asort(src [, dest [, how]])` and `asorti`: `dest` (or `src`) becomes the
+    /// values (or the indices) of `src` sorted as `how` says, at indices 1 to n; n is
+    /// pushed. `how` is one of gawk's orders (`@val_type_asc` for `asort`, `@ind_str_asc`
+    /// for `asorti`, by default) or a function of the program's that compares two
+    /// elements.
+    fn sort_array<'a>(
+        &mut self,
+        function: BuiltinFunction,
+        argc: u16,
+        stack: &mut Stack<'a, 'a>,
+        global_env: &mut GlobalEnv,
+        code: &mut CodeToRun<'a, '_>,
+    ) -> Result<(), String> {
+        let name = if function == BuiltinFunction::Asort {
+            "asort"
+        } else {
+            "asorti"
+        };
+        let how = if argc == 3 {
+            Some(
+                stack
+                    .pop_scalar_value()?
+                    .scalar_to_string(&global_env.convfmt)?,
+            )
+        } else {
+            None
+        };
+        let dest = if argc >= 2 {
+            Some(stack.pop().ok_or_else(|| "empty stack".to_string())?)
+        } else {
+            None
+        };
+        let source = stack.pop().ok_or_else(|| "empty stack".to_string())?;
+        let first = |error| builtins::not_an_array(error, &format!("{name}: first argument"));
+        let second = |error| builtins::not_an_array(error, &format!("{name}: second argument"));
+        let mut elements: Vec<(array::Key, AwkValue)> = {
+            let array = stack
+                .resolve_array(source.duplicate_place(), true)
+                .map_err(first)?;
+            array
+                .key_iter()
+                .map(|key| {
+                    let value = array.get_value(key.clone()).map(|value| value.clone());
+                    value.map(|value| (key, value))
+                })
+                .collect::<Result<_, _>>()?
+        };
+        if let Some(dest) = &dest
+            && how.is_none()
+            && stack::array_place(&source).is_some()
+            && stack::array_place(&source) == stack::array_place(dest)
+        {
+            self.warn(
+                "asort/asorti: using the same array as source and destination without a \
+                 third argument is silly.",
+                stack,
+            );
+        }
+        let default = if function == BuiltinFunction::Asort {
+            "@val_type_asc"
+        } else {
+            "@ind_str_asc"
+        };
+        let how = how.as_ref().map_or(default, |how| how.as_str());
+        match builtins::SortOrder::named(how) {
+            Some(order) => order.sort(&mut elements, &global_env.convfmt),
+            None => {
+                let compare = code
+                    .functions
+                    .iter()
+                    .find(|candidate| &*candidate.name == how)
+                    .ok_or_else(|| format!("sort comparison function `{how}' is not defined"))?;
+                // Each element goes after those it does not come before, found by halves,
+                // as the function says; a comparison can fail, which `sort_by` has no room
+                // for. Equal elements keep their order.
+                let mut sorted: Vec<(array::Key, AwkValue)> = Vec::with_capacity(elements.len());
+                for element in elements {
+                    let (mut low, mut high) = (0, sorted.len());
+                    while low < high {
+                        let middle = usize::midpoint(low, high);
+                        let (index, value) = &sorted[middle];
+                        let arguments = vec![
+                            AwkValue::from(index.to_string()),
+                            value.clone(),
+                            AwkValue::from(element.0.to_string()),
+                            element.1.clone(),
+                        ];
+                        let order = self
+                            .call_from_builtin(compare, arguments, stack, global_env, code)?
+                            .scalar_as_f64();
+                        if order > 0.0 {
+                            high = middle;
+                        } else {
+                            low = middle + 1;
+                        }
+                    }
+                    sorted.insert(low, element);
+                }
+                elements = sorted;
+            }
+        }
+        let count = elements.len();
+        let target = dest.unwrap_or(source);
+        let target = stack.resolve_array_to_empty(target, true).map_err(second)?;
+        target.clear();
+        for (index, (key, value)) in elements.into_iter().enumerate() {
+            let value = if function == BuiltinFunction::Asort {
+                value
+            } else {
+                AwkValue::from(key.to_string())
+            };
+            target.set((index + 1).to_string(), value)?;
+        }
+        stack.push_value(count as f64)
+    }
+
     fn run_internal<'a>(
         &mut self,
         functions: &'a [Function],
@@ -832,7 +1024,7 @@ impl Interpreter {
                     compare_op!(stack, &global_env.convfmt, !=);
                 }
                 OpCode::Match => {
-                    let ere = stack.pop_scalar_value()?.into_ere()?;
+                    let ere = stack.pop_scalar_value()?.into_ere(&global_env.convfmt)?;
                     let string = stack
                         .pop_scalar_value()?
                         .scalar_to_string(&global_env.convfmt)?;
@@ -1124,7 +1316,9 @@ impl Interpreter {
                     ip_increment = 0;
                 }
                 OpCode::CallBuiltin { function, argc } => {
-                    fields_state = self.call_builtin(function, argc, stack, global_env, input)?;
+                    fields_state = self.call_builtin(
+                        function, argc, stack, global_env, input, functions, record,
+                    )?;
                 }
                 OpCode::PushConstant(index) => match self.constants[index as usize].clone() {
                     Constant::Number(num) => stack.push_value(num)?,
@@ -1166,12 +1360,22 @@ impl Interpreter {
                 OpCode::Return => {
                     let return_value = stack.pop_scalar_value()?;
                     stack.restore_caller()?;
+                    // A function a builtin called returns to the builtin.
+                    if stack.stop_depth == Some(stack.call_frames.len()) {
+                        return Ok(ExecutionResult::Expression(return_value));
+                    }
                     // The call is the caller's code that ran last.
                     stack.last_ip = stack.ip;
                     stack.push_value(return_value)?;
                 }
                 // The compiler replaces every placeholder it emits.
                 OpCode::Invalid => return Err("invalid opcode".to_string()),
+            }
+            // gawk's warnings about a regex the instruction made, placed at it.
+            if crate::regex::has_warnings() {
+                for warning in crate::regex::take_warnings() {
+                    self.warn(&warning, stack);
+                }
             }
             match fields_state {
                 FieldsState::Ok => {
@@ -1396,7 +1600,9 @@ impl MainInput {
             globals[SpecialVar::Fnr as usize]
                 .get_mut()
                 .assign(0.0, global_env)?;
-            self.reader = if arg.as_str() == "-" {
+            self.reader = if arg.as_str() == "-"
+                || io::SpecialFile::named(&arg) == Some(io::SpecialFile::Stdin)
+            {
                 Box::new(StdinRecordReader::default())
             } else {
                 Box::new(FileStream::open(&arg)?)

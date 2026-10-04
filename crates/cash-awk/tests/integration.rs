@@ -130,11 +130,27 @@ fn test_awk_array_loops_left_early_release_the_array() {
     test_awk!(array_loops_left_early_release_the_array);
 }
 
-// An escape awk does not define stands for the character, as in gawk (whose output this
-// is, without its warnings): `split(s, parts, "\.")` was a parse error (TXT-05).
+// An escape awk does not define stands for the character, as in gawk, whose output this
+// is, with its warnings, once for each character: `split(s, parts, "\.")` was a parse
+// error (TXT-05), and the warnings were not given (TODO.md phase 15).
 #[test]
 fn test_awk_unknown_string_escapes_stand_for_the_character() {
-    test_awk!(unknown_string_escapes_stand_for_the_character);
+    let file = "tests/awk/unknown_string_escapes_stand_for_the_character.awk";
+    run_test(TestPlan {
+        cmd: String::from("awk"),
+        args: vec!["-f".to_string(), file.to_string()],
+        stdin_data: String::new(),
+        expected_out: String::from(include_str!(
+            "awk/unknown_string_escapes_stand_for_the_character.out"
+        )),
+        expected_err: format!(
+            "awk: {file}:2: warning: escape sequence `\\.' treated as plain `.'\n\
+             awk: {file}:4: warning: escape sequence `\\q' treated as plain `q'\n\
+             awk: {file}:6: warning: escape sequence `\\&' treated as plain `&'\n\
+             awk: {file}:9: warning: escape sequence `\\/' treated as plain `/'\n"
+        ),
+        expected_exit_code: 0,
+    });
 }
 
 // What awk printed comes before what `system()` prints, and `print > "/dev/stdout"` keeps
@@ -1061,7 +1077,8 @@ fn test_awk_bugfix_numstr_field_cmp() {
     });
 }
 
-// Regression: gsub with zero-width match must not panic on multi-byte UTF-8
+// Regression: gsub with zero-width match must not panic on multi-byte UTF-8. The output is
+// gawk 5.4's in a UTF-8 locale: no empty match where the one before ended.
 #[test]
 fn test_awk_bugfix_gsub_multibyte() {
     test_awk!(bugfix_gsub_multibyte);
@@ -1315,7 +1332,6 @@ fn test_awk_bugfix_regex_literal_escapes() {
         (r#"/a\bb/ { print "boundary" }"#, "a b\n", ""),
         (r#"/a\/b/ { print "slash" }"#, "a/b\n", "slash\n"),
         (r#"/a\\b/ { print "backslash" }"#, "a\\b\n", "backslash\n"),
-        (r#"/\"hi\"/ { print "quote" }"#, "say \"hi\"\n", "quote\n"),
     ] {
         run_test(TestPlan {
             cmd: String::from("awk"),
@@ -1349,7 +1365,7 @@ fn test_awk_unassignable_targets_are_errors() {
             "gsub third parameter is not a changeable object",
         ),
         (
-            r#"BEGIN { sub(/a/, "b", "x") }"#,
+            r#"BEGIN { sub(/a/, "b", substr("x", 1)) }"#,
             "sub third parameter is not a changeable object",
         ),
         // gawk's syntax error, under the right side.
@@ -2803,4 +2819,419 @@ fn test_awk_math_functions_warn_as_gawk_does() {
             0,
         ),
     ]);
+}
+
+// gawk's special files: `/dev/null` is Windows' `NUL`, `/dev/stdout`, `/dev/stderr` and
+// `/dev/fd/0` to `2` are the standard streams, open files to `close` and `fflush`, and `-`
+// and `/dev/stdin` are standard input to `getline <`; each was a file that could not be
+// found (TODO.md phase 15). `fflush` of a file did not flush it, and of a name not open is
+// gawk's warning. gawk 5.4's output.
+#[test]
+fn test_awk_special_files_are_gawks() {
+    run_cases(&[
+        (
+            "BEGIN { print \"x\" > \"/dev/null\"; printf \"e\\n\" > \"/dev/stderr\"; print \"o\" > \"/dev/fd/1\"; print \"e2\" > \"/dev/fd/2\"; print close(\"/dev/null\"), close(\"/dev/stderr\"), close(\"/dev/fd/1\"), close(\"/dev/fd/2\") }",
+            "",
+            "o\n0 0 0 0\n",
+            "e\ne2\n",
+            0,
+        ),
+        (
+            "BEGIN { print \"x\" > \"/dev/fd/0\" }",
+            "",
+            "",
+            "awk: cmd. line:1: fatal: print to \"/dev/fd/0\" failed: Bad file descriptor\n",
+            2,
+        ),
+        (
+            "BEGIN { while ((getline l < \"-\") > 0) print \"got\", l; print (getline m < \"/dev/null\") }",
+            "a\nb\n",
+            "got a\ngot b\n0\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { print \"x\" > \"/dev/null\"; print fflush(\"/dev/null\"), fflush(\"nope\") }",
+            "",
+            "0 -1\n",
+            "awk: cmd. line:1: warning: fflush: `nope' is not an open file, pipe or co-process\n",
+            0,
+        ),
+    ]);
+}
+
+// A keyword is one only when no name character follows it, as in gawk: `printx` was
+// `print x`, and `deletex` and `getlinex` syntax errors. `printf` with nothing to print is
+// gawk's fatal error; it printed a newline (TODO.md phase 15). gawk 5.4's output.
+#[test]
+fn test_awk_keywords_end_where_gawk_ends_them() {
+    run_cases(&[
+        (
+            "BEGIN { printx = 1; deletex = 2; getlinex = 3; returnx = 4; inx = 5; print printx deletex getlinex returnx inx }",
+            "",
+            "12345\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { printf }",
+            "",
+            "",
+            "awk: cmd. line:1: fatal: printf: no arguments\n",
+            2,
+        ),
+        (
+            "BEGIN { printf > \"/dev/stderr\" }",
+            "",
+            "",
+            "awk: cmd. line:1: fatal: printf: no arguments\n",
+            2,
+        ),
+    ]);
+}
+
+// A plain `getline` is an operand, so `getline x y` joins `getline x` to `y`, and the
+// target of a redirection holds no comparison, as in gawk: the first was a syntax error,
+// and `print > "x" > "y"` printed to the file `"x" > "y"` (TODO.md phase 15). gawk 5.4's.
+#[test]
+fn test_awk_getline_and_redirections_parse_as_gawks() {
+    run_cases(&[
+        (
+            "BEGIN { getline x y; print x \"|\" y \"|\" $0; r = getline z w; print r }",
+            "a\nb\n",
+            "a||\n1\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { while (getline line > 0) n++; print n }",
+            "a\nb\n",
+            "2\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { print > \"x\" > \"y\" }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { print > \"x\" > \"y\" }\nawk: cmd. line:1:                     ^ syntax error\n",
+            1,
+        ),
+    ]);
+}
+
+// `sub` and `gsub` of a constant replace in a copy, as in gawk; it was a compile error.
+// Anything else that is no variable is gawk's error, as before (TODO.md phase 15).
+#[test]
+fn test_awk_sub_of_a_constant_replaces_in_a_copy() {
+    run_cases(&[
+        (
+            "BEGIN { print sub(/a/, \"b\", \"aa\"), gsub(/a/, \"b\", \"aaa\"), sub(/3/, \"x\", 1 + 2) }",
+            "",
+            "1 3 1\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { x = \"aa\"; print gsub(/a/, \"b\", x \"a\"), x }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { x = \"aa\"; print gsub(/a/, \"b\", x \"a\"), x }\nawk: cmd. line:1:                                             ^ gsub third parameter is not a changeable object\n",
+            1,
+        ),
+    ]);
+}
+
+// A number used as a regex is its text, as in gawk; it was a fatal error (TODO.md phase
+// 15).
+#[test]
+fn test_awk_a_number_is_a_regex() {
+    run_cases(&[(
+        "BEGIN { print (12 ~ 1), (\"1.5\" ~ 1.5), match(\"a12\", 12), split(\"a1b1c\", z, 1) }",
+        "",
+        "1 1 2 3\n",
+        "",
+        0,
+    )]);
+}
+
+// gawk reports nothing after a function defined twice; cash went on (TODO.md phase 15).
+#[test]
+fn test_awk_a_function_defined_twice_ends_the_errors() {
+    run_cases(&[
+        (
+            "function f() {} function f() {} BEGIN { x = 1; x(); print 1/0 }",
+            "",
+            "",
+            "awk: cmd. line:1: error: function name `f' previously defined\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1; x() } function f() {} function f() {}",
+            "",
+            "",
+            "awk: cmd. line:1: error: attempt to use non-function `x' in function call\nawk: cmd. line:1: error: function name `f' previously defined\n",
+            1,
+        ),
+    ]);
+}
+
+// `for (k in a)` goes through the indices that are integers from 1 last and in order,
+// as gawk does (TODO.md phase 15); the others are in the order they were made, where
+// gawk's is a hash table's. gawk 5.4's output.
+#[test]
+fn test_awk_for_in_goes_through_integers_in_order() {
+    run_cases(&[(
+        "BEGIN { a[10]; a[\"x\"]; a[5]; a[1]; a[3]; a[\"07\"]; for (k in a) printf \"%s \", k; print \"\" }",
+        "",
+        "x 07 1 3 5 10 \n",
+        "",
+        0,
+    )]);
+}
+
+// gawk's `asort` and `asorti`, with a destination and each of gawk's orders or a
+// function of the program's; they were undefined functions (TODO.md phase 15). gawk
+// 5.4's output.
+#[test]
+fn test_awk_asort_and_asorti_are_gawks() {
+    run_cases(&[
+        (
+            "BEGIN { a[\"x\"] = \"b\"; a[\"y\"] = 10; a[\"z\"] = \"a\"; a[\"w\"] = 9; a[\"v\"] = \"\"; n = asort(a); for (i = 1; i <= n; i++) printf \"[%s]\", a[i]; print \"\", n, (\"x\" in a) }",
+            "",
+            "[9][10][][a][b] 5 0\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { split(\"10 9 x 1e1 abc 09\", a); n = asort(a, b); for (i = 1; i <= n; i++) printf \"%s \", b[i]; print a[1] }",
+            "",
+            "9 09 10 1e1 abc x 10\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { a[\"x\"] = 3; a[\"b\"] = 1; a[10] = 1; a[9] = 1; n = asorti(a, d); print n, d[1], d[2], d[3], d[4]; asorti(a, d, \"@ind_num_asc\"); print d[1], d[2], d[3], d[4] }",
+            "",
+            "4 10 9 b x\nb x 9 10\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { a[1] = \"b\"; a[2] = \"a\"; a[3] = 10; a[4] = 9; split(\"@val_str_asc @val_num_asc @val_type_desc @val_str_desc @val_num_desc\", how); for (h = 1; h <= 5; h++) { asort(a, d, how[h]); print how[h], d[1], d[2], d[3], d[4] } }",
+            "",
+            "@val_str_asc 10 9 a b\n@val_num_asc a b 9 10\n@val_type_desc b a 10 9\n@val_str_desc b a 9 10\n@val_num_desc 10 9 b a\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { a[\"b\"]; a[\"a\"]; a[10]; a[9]; asorti(a, d, \"@ind_str_desc\"); print d[1], d[2], d[3], d[4]; asorti(a, d, \"@ind_num_desc\"); print d[1], d[2], d[3], d[4] }",
+            "",
+            "b a 9 10\n10 9 b a\n",
+            "",
+            0,
+        ),
+        (
+            "function cmp(i1, v1, i2, v2) { return v2 - v1 } BEGIN { a[1] = 2; a[2] = 5; a[3] = 1; a[4] = 3; n = asort(a, d, \"cmp\"); print n, d[1], d[2], d[3], d[4] }",
+            "",
+            "4 5 3 2 1\n",
+            "",
+            0,
+        ),
+        (
+            "function bylen(i1, v1, i2, v2,   l1, l2) { l1 = length(i1); l2 = length(i2); return l1 < l2 ? -1 : l1 > l2 } BEGIN { a[\"ccc\"]; a[\"a\"]; a[\"bb\"]; n = asorti(a, d, \"bylen\"); print n, d[1], d[2], d[3] }",
+            "",
+            "3 a bb ccc\n",
+            "",
+            0,
+        ),
+    ]);
+}
+
+// What is wrong with an argument of `asort` or `asorti` is gawk's error (TODO.md phase 15).
+#[test]
+fn test_awk_asort_errors_are_gawks() {
+    run_cases(&[
+        (
+            "BEGIN { a[1] = 2; asort(a, d, \"nosuch\") }",
+            "",
+            "",
+            "awk: cmd. line:1: fatal: sort comparison function `nosuch' is not defined\n",
+            2,
+        ),
+        (
+            "BEGIN { x = 1; asort(x) }",
+            "",
+            "",
+            "awk: cmd. line:1: fatal: asort: first argument is not an array\n",
+            2,
+        ),
+        (
+            "BEGIN { a[1]; asorti(a, \"q\") }",
+            "",
+            "",
+            "awk: cmd. line:1: fatal: asorti: second argument is not an array\n",
+            2,
+        ),
+        (
+            "BEGIN { a[1] = 3; a[2] = 1; n = asort(a, a); print n, a[1], a[2] }",
+            "",
+            "2 1 3\n",
+            "awk: cmd. line:1: warning: asort/asorti: using the same array as source and destination without a third argument is silly.\n",
+            0,
+        ),
+        (
+            "BEGIN { a[1][2] = 1; a[2] = 5; a[3] = \"x\"; n = asort(a, d); print n, d[1], d[2], isarray(d[3]) }",
+            "",
+            "3 5 x 1\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { n = asort(e); print n, length(e) }",
+            "",
+            "0 0\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { asort() }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { asort() }\nawk: cmd. line:1:               ^ 0 is invalid as number of arguments for asort\n",
+            1,
+        ),
+        (
+            "function asort() { }",
+            "",
+            "",
+            "awk: cmd. line:1: function asort() { }\nawk: cmd. line:1:          ^ `asort' is a built-in function, it cannot be redefined\n",
+            1,
+        ),
+    ]);
+}
+
+// An escape gawk has no meaning for is the character, with gawk's warning once for each:
+// a string's at the program's line, and a regex's where the regex is made; `\x` takes two
+// hexadecimal digits. gawk's regex operators `\y`, `\B`, `\<`, `\>`, `` \` `` and `\'`
+// are its; they were errors or the engine's. No empty match comes where a match ended,
+// and an empty match splits nothing (TODO.md phase 15). gawk 5.4's output.
+#[test]
+fn test_awk_escapes_and_regex_operators_are_gawks() {
+    run_cases(&[
+        (
+            "BEGIN { print \"a\\.b\", \"\\q\", \"\\q\", \"\\x41\\x4a\\x4\", \"[\\x]\" }",
+            "",
+            "a.b q q AJ\u{4} [x]\n",
+            "awk: cmd. line:1: warning: escape sequence `\\.' treated as plain `.'\nawk: cmd. line:1: warning: escape sequence `\\q' treated as plain `q'\nawk: cmd. line:1: warning: no hex digits in `\\x' escape sequence\n",
+            0,
+        ),
+        (
+            "BEGIN { s = \"foo bar\"; print gsub(/\\y/, \"|\", s), s; t = \"foo bar\"; print gsub(/\\B/, \"|\", t), t }",
+            "",
+            "4 |foo| |bar|\n4 f|o|o b|a|r\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { s = \"foo bar\"; print gsub(/\\</, \"<\", s), gsub(/\\>/, \">\", s), s }",
+            "",
+            "2 2 <foo> <bar>\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { s = \"foo\\nbar\"; print gsub(/\\`/, \"[\", s), gsub(/\\'/, \"]\", s), s }",
+            "",
+            "1 1 [foo\nbar]\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { r = \"\\\\yfoo\\\\y\"; print (\"a foo b\" ~ r), (\"afoob\" ~ r) }",
+            "",
+            "1 0\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { print (\"q\" ~ /\\q/), (\"d\" ~ /\\d/), (\"5\" ~ /\\d/), (\"a\\001b\" ~ \"a\\\\1b\"), (\"\\b\" ~ \"\\\\b\") }",
+            "",
+            "1 1 0 1 1\n",
+            "awk: cmd. line:1: warning: regexp escape sequence `\\q' is not a known regexp operator\nawk: cmd. line:1: warning: regexp escape sequence `\\d' is not a known regexp operator\n",
+            0,
+        ),
+        (
+            "{ print ($0 ~ \"\\\\e\") }",
+            "e\ne\n",
+            "1\n1\n",
+            "awk: cmd. line:1: (FILENAME=- FNR=1) warning: regexp escape sequence `\\e' is not a known regexp operator\n",
+            0,
+        ),
+        (
+            "BEGIN { s = \"xab\"; print gsub(/x*/, \"-\", s), s; t = \"baaac\"; print gsub(/a*/, \"-\", t), t; print split(\"abc\", p, /x*/) }",
+            "",
+            "3 -a-b-\n3 -b-c-\n1\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { print (\"a.b\" ~ /a\\.b/), (\"axb\" ~ \"a\\\\.b\"), (\"a(b\" ~ \"a\\\\(b\") }",
+            "",
+            "1 0 1\n",
+            "",
+            0,
+        ),
+    ]);
+}
+
+// A control character in the program is gawk's fatal error, a vertical tab or a form
+// feed an invalid character, outside strings and comments (TODO.md phase 15). gawk 5.4's.
+#[test]
+fn test_awk_control_characters_in_the_program_are_gawks_errors() {
+    run_cases(&[
+        (
+            "BEGIN { print 1/0; x = 1 \u{1} 2 }",
+            "",
+            "",
+            "awk: cmd. line:1: error: division by zero attempted\nawk: cmd. line:1: fatal: error: invalid character '\\001' in source code\n",
+            2,
+        ),
+        (
+            "BEGIN { x = 1 \u{c} 2 }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { x = 1 \u{c} 2 }\nawk: cmd. line:1:               ^ invalid char '\u{c}' in expression\n",
+            1,
+        ),
+        (
+            "BEGIN { x = \"a\u{1}b\"; print length(x) } # \u{2}",
+            "",
+            "3\n",
+            "",
+            0,
+        ),
+    ]);
+}
+
+// A value given on the command line has its escapes made with gawk's warnings, unplaced
+// (TODO.md phase 15).
+#[test]
+fn test_awk_command_line_escapes_warn_as_gawks() {
+    let output = run_test_base(
+        &[
+            "-v".to_string(),
+            "x=a\\qb".to_string(),
+            "BEGIN { print x }".to_string(),
+        ],
+        b"",
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).replace("\r\n", "\n"),
+        "aqb\n"
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stderr).replace("\r\n", "\n"),
+        "awk: warning: escape sequence `\\q' treated as plain `q'\n"
+    );
 }

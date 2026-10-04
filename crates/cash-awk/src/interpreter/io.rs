@@ -333,10 +333,43 @@ pub(crate) fn strerror(error: &std::io::Error) -> String {
     }
 }
 
+/// The files gawk gives meaning of its own, whatever the system has: `/dev/stdin` and
+/// the others, and `/dev/fd/N` for the first three. Windows has none of them; each was
+/// a file that could not be found.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SpecialFile {
+    Stdin,
+    Stdout,
+    Stderr,
+    /// `/dev/null`, Windows' `NUL`.
+    Null,
+}
+
+impl SpecialFile {
+    pub(crate) fn named(name: &str) -> Option<Self> {
+        match name {
+            "/dev/stdin" | "/dev/fd/0" => Some(Self::Stdin),
+            "/dev/stdout" | "/dev/fd/1" => Some(Self::Stdout),
+            "/dev/stderr" | "/dev/fd/2" => Some(Self::Stderr),
+            "/dev/null" => Some(Self::Null),
+            _ => None,
+        }
+    }
+}
+
+/// The path to open for the file `name` names: Windows' `NUL` for `/dev/null`.
+fn system_path(name: &str) -> &str {
+    if SpecialFile::named(name) == Some(SpecialFile::Null) {
+        "NUL"
+    } else {
+        name
+    }
+}
+
 impl FileStream {
     /// The file at `path`, to read; the error is gawk's for an input file.
     pub fn open(path: &str) -> Result<Self, String> {
-        let file = File::open(path)
+        let file = File::open(system_path(path))
             .map_err(|e| format!("cannot open file `{path}' for reading: {}", strerror(&e)))?;
         let reader = BufReader::new(file);
         Ok(Self {
@@ -445,13 +478,36 @@ impl RecordReader for EmptyRecordReader {
 #[derive(Default)]
 pub struct WriteFiles {
     files: HashMap<String, File>,
+    /// Standard output and error as gawk names them, written to since last closed: open
+    /// files to `close` and `fflush`.
+    standard: HashMap<String, SpecialFile>,
 }
 
 impl WriteFiles {
     pub fn write(&mut self, filename: &str, contents: &str, append: bool) -> Result<(), String> {
-        // The same stream as `print`, so the two keep their order.
-        if filename == "/dev/stdout" {
-            return write_stdout(contents, "print");
+        match SpecialFile::named(filename) {
+            // The same stream as `print`, so the two keep their order.
+            Some(SpecialFile::Stdout) => {
+                self.standard
+                    .insert(filename.to_string(), SpecialFile::Stdout);
+                return write_stdout(contents, "print");
+            }
+            Some(SpecialFile::Stderr) => {
+                self.standard
+                    .insert(filename.to_string(), SpecialFile::Stderr);
+                let _ = flush_stdout();
+                return std::io::stderr()
+                    .write_all(contents.as_bytes())
+                    .map_err(|e| format!("print to \"{filename}\" failed: {}", strerror(&e)));
+            }
+            // gawk's error: standard input is not open for writing. gawk opens
+            // `/dev/stdin` as a file, which there is none of here, as on Windows.
+            Some(SpecialFile::Stdin) if filename == "/dev/fd/0" => {
+                return Err(format!(
+                    "print to \"{filename}\" failed: Bad file descriptor"
+                ));
+            }
+            Some(SpecialFile::Null | SpecialFile::Stdin) | None => {}
         }
         match self.files.entry(filename.to_string()) {
             Entry::Occupied(mut e) => {
@@ -465,7 +521,7 @@ impl WriteFiles {
                     .create(true)
                     .truncate(!append)
                     .append(append)
-                    .open(filename)
+                    .open(system_path(filename))
                     // gawk's words; Windows does not say that a directory is one.
                     .map_err(|e| {
                         let reason = if Path::new(filename).is_dir() {
@@ -487,8 +543,17 @@ impl WriteFiles {
         if let Some(file) = self.files.get_mut(filename) {
             file.flush().is_ok()
         } else {
-            false
+            match self.standard.get(filename) {
+                Some(SpecialFile::Stdout) => flush_stdout().is_ok(),
+                Some(_) => std::io::stderr().flush().is_ok(),
+                None => false,
+            }
         }
+    }
+
+    /// Whether `filename` is open for writing.
+    pub fn is_open(&self, filename: &str) -> bool {
+        self.files.contains_key(filename) || self.standard.contains_key(filename)
     }
 
     pub fn flush_all(&mut self) -> bool {
@@ -503,6 +568,13 @@ impl WriteFiles {
     /// successful flush+close, `Some(-1)` if flushing failed, or `None` if no
     /// file was open under this name.
     pub fn close_file(&mut self, filename: &str) -> Option<i32> {
+        if let Some(special) = self.standard.remove(filename) {
+            let flushed = match special {
+                SpecialFile::Stdout => flush_stdout().is_ok(),
+                _ => std::io::stderr().flush().is_ok(),
+            };
+            return Some(if flushed { 0 } else { -1 });
+        }
         self.files
             .remove(filename)
             .map(|mut file| if file.flush().is_ok() { 0 } else { -1 })
@@ -511,7 +583,7 @@ impl WriteFiles {
 
 #[derive(Default)]
 pub struct ReadFiles {
-    files: HashMap<Rc<str>, FileStream>,
+    files: HashMap<Rc<str>, Box<dyn RecordReader>>,
 }
 
 impl ReadFiles {
@@ -525,7 +597,14 @@ impl ReadFiles {
         match self.files.entry(filename.clone()) {
             Entry::Occupied(mut e) => e.get_mut().read_next_record(separator, strip_cr),
             Entry::Vacant(e) => {
-                let mut file = FileStream::open(&filename)?;
+                // `-` and gawk's names for standard input read it, as in gawk.
+                let mut file: Box<dyn RecordReader> = if &*filename == "-"
+                    || SpecialFile::named(&filename) == Some(SpecialFile::Stdin)
+                {
+                    Box::new(StdinRecordReader::default())
+                } else {
+                    Box::new(FileStream::open(&filename)?)
+                };
                 let result = file.read_next_record(separator, strip_cr);
                 e.insert(file);
                 result
@@ -614,6 +693,11 @@ impl WritePipes {
         } else {
             Err("failed to write to pipe: stdin unavailable".to_string())
         }
+    }
+
+    /// Whether a pipe to `command` is open.
+    pub fn is_open(&self, command: &str) -> bool {
+        self.pipes.contains_key(command)
     }
 
     pub fn flush_file(&mut self, filename: &str) -> bool {

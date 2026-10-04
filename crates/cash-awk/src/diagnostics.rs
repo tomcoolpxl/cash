@@ -18,8 +18,14 @@ pub(crate) enum Kind {
     Error,
     /// An `Error` that gawk writes twice: `break` and `continue` outside a loop.
     Twice,
-    /// `awk: cmd. line:3: warning: text`, and the program runs.
+    /// An `Error` after which gawk reports nothing more: a function defined twice.
+    ErrorThenStop,
+    /// `awk: cmd. line:3: warning: text`, met reading the program: written in its place
+    /// among the errors.
     Warning,
+    /// A `Warning` gawk gives once the whole program is read, written only when there is no
+    /// error: a function called with more arguments than it has.
+    LateWarning,
     /// The source line, and below it a caret under the place and the text: a syntax error
     /// and the like, after which gawk stops reading.
     Caret,
@@ -33,12 +39,23 @@ pub(crate) enum Kind {
     /// `awk: cmd. line:1: fatal: text`, found once the whole program is read: a function
     /// called and not defined. The status is 2.
     Fatal,
+    /// `awk: cmd. line:1: fatal: text`, met reading: a control character in the source.
+    /// gawk stops there, with status 2.
+    ReadingFatal,
 }
 
 impl Kind {
+    /// Whether this is a warning, with which the program runs.
+    pub(crate) fn is_warning(self) -> bool {
+        matches!(self, Kind::Warning | Kind::LateWarning)
+    }
+
     /// Whether gawk stops reading the program after an error of this kind.
     fn stops(self) -> bool {
-        matches!(self, Kind::Caret | Kind::Newline | Kind::Bare)
+        matches!(
+            self,
+            Kind::Caret | Kind::Newline | Kind::Bare | Kind::ReadingFatal | Kind::ErrorThenStop
+        )
     }
 }
 
@@ -78,13 +95,13 @@ impl Diagnostic {
             out.push(b'\n');
         };
         match self.kind {
-            Kind::Error => write_line("error: ", number, &self.text),
+            Kind::Error | Kind::ErrorThenStop => write_line("error: ", number, &self.text),
             Kind::Twice => {
                 write_line("error: ", number, &self.text);
                 write_line("error: ", number, &self.text);
             }
-            Kind::Warning => write_line("warning: ", number, &self.text),
-            Kind::Fatal => write_line("fatal: ", number, &self.text),
+            Kind::Warning | Kind::LateWarning => write_line("warning: ", number, &self.text),
+            Kind::Fatal | Kind::ReadingFatal => write_line("fatal: ", number, &self.text),
             Kind::Bare => write_line("", number, &self.text),
             Kind::Caret | Kind::Newline => {
                 let (number, end) = if self.kind == Kind::Newline {
@@ -137,11 +154,12 @@ impl CompilerErrors {
         diagnostics.sort_by_key(|(source, diagnostic)| (*source, diagnostic.offset));
         let errors_of_reading = diagnostics
             .iter()
-            .any(|(_, d)| !matches!(d.kind, Kind::Fatal | Kind::Warning));
+            .any(|(_, d)| !d.kind.is_warning() && d.kind != Kind::Fatal);
         let mut text = Vec::new();
+        let mut status = if errors_of_reading { 1 } else { 2 };
         for (source, diagnostic) in &diagnostics {
             let keep = match diagnostic.kind {
-                Kind::Warning => false,
+                Kind::LateWarning => false,
                 Kind::Fatal => !errors_of_reading,
                 _ => true,
             };
@@ -150,6 +168,9 @@ impl CompilerErrors {
             }
             let (file, source_text) = sources.get(*source).copied().unwrap_or_default();
             text.extend(diagnostic.render(source_text, file));
+            if diagnostic.kind == Kind::ReadingFatal {
+                status = 2;
+            }
             if diagnostic.kind.stops() || diagnostic.kind == Kind::Fatal {
                 break;
             }
@@ -157,7 +178,7 @@ impl CompilerErrors {
         Self {
             diagnostics,
             text,
-            status: if errors_of_reading { 1 } else { 2 },
+            status,
         }
     }
 
@@ -199,7 +220,7 @@ pub(crate) fn lexical_error(source: &str) -> Option<(usize, Diagnostic)> {
         let start = at;
         at += 1;
         match byte {
-            b' ' | b'\t' | b'\r' | 0x0b | 0x0c => {}
+            b' ' | b'\t' | b'\r' => {}
             b'\n' => operand = false,
             b'#' => {
                 while bytes.get(at).is_some_and(|&b| b != b'\n') {
@@ -270,6 +291,18 @@ pub(crate) fn lexical_error(source: &str) -> Option<(usize, Diagnostic)> {
             b'`' => {
                 let text = "invalid char '`' in expression";
                 return Some((start, Diagnostic::new(Kind::Caret, start, text)));
+            }
+            // gawk names a vertical tab or a form feed as it names any character it has
+            // no use for, and stops at any other control character, fatally.
+            0x0b | 0x0c => {
+                let mut text = b"invalid char '".to_vec();
+                text.push(byte);
+                text.extend_from_slice(b"' in expression");
+                return Some((start, Diagnostic::new(Kind::Caret, start, text)));
+            }
+            0x00..=0x1f | 0x7f => {
+                let text = format!("error: invalid character '\\{byte:03o}' in source code");
+                return Some((start, Diagnostic::new(Kind::ReadingFatal, start, text)));
             }
             0x80.. => {
                 let mut text = b"invalid char '".to_vec();
@@ -357,10 +390,10 @@ fn gawks_token(source: &str, error_at: usize) -> usize {
 }
 
 /// The names of gawk's builtin functions, which a function cannot be named.
-pub(crate) const BUILTIN_NAMES: [&str; 23] = [
+pub(crate) const BUILTIN_NAMES: [&str; 25] = [
     "atan2", "cos", "sin", "exp", "log", "sqrt", "int", "rand", "srand", "gsub", "index", "length",
     "match", "split", "sprintf", "sub", "substr", "tolower", "toupper", "close", "fflush",
-    "system", "isarray",
+    "system", "isarray", "asort", "asorti",
 ];
 
 /// gawk's error for the program `source`, which does not parse: pest's attempt with a

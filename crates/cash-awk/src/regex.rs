@@ -33,36 +33,49 @@ pub struct MatchIter<'re, 's> {
     string: &'s str,
     next_start: usize,
     regex: &'re Regex,
+    /// Where the match before ended.
+    last_end: Option<usize>,
+}
+
+impl MatchIter<'_, '_> {
+    /// The first character boundary after `at`.
+    fn after(&self, at: usize) -> usize {
+        let mut next = at + 1;
+        while next < self.string.len() && !self.string.is_char_boundary(next) {
+            next += 1;
+        }
+        next
+    }
 }
 
 impl Iterator for MatchIter<'_, '_> {
     type Item = RegexMatch;
     fn next(&mut self) -> Option<Self::Item> {
-        if self.next_start > self.string.len() {
-            return None;
-        }
-
-        let input = Input::new(self.string).range(self.next_start..);
-        let m = self.regex.inner.find(input)?;
-
-        let result = RegexMatch {
-            start: m.start(),
-            end: m.end(),
-        };
-
-        // Move past this match for next iteration
-        // Ensure we make progress even on zero-width matches
-        self.next_start = if result.end > self.next_start {
-            result.end
-        } else {
-            let mut next = self.next_start + 1;
-            while next < self.string.len() && !self.string.is_char_boundary(next) {
-                next += 1;
+        loop {
+            if self.next_start > self.string.len() {
+                return None;
             }
-            next
-        };
-
-        Some(result)
+            let input = Input::new(self.string).range(self.next_start..);
+            let m = self.regex.inner.find(input)?;
+            let result = RegexMatch {
+                start: m.start(),
+                end: m.end(),
+            };
+            // An empty match where the one before ended is none, as in gawk: `gsub(/x*/,
+            // "-")` of `xab` is `-a-b-`. A match at an empty match's end was found twice,
+            // so `gsub(/\</, "|")` doubled each mark after the first.
+            if result.start == result.end && self.last_end == Some(result.start) {
+                self.next_start = self.after(result.start);
+                continue;
+            }
+            self.last_end = Some(result.end);
+            self.next_start = if result.end > result.start {
+                result.end
+            } else {
+                self.after(result.end)
+            };
+            return Some(result);
+        }
     }
 }
 
@@ -116,6 +129,36 @@ fn sort_alternations(hir: regex_syntax::hir::Hir) -> regex_syntax::hir::Hir {
     }
 }
 
+thread_local! {
+    /// The escapes gawk has no meaning for in a regex that it has warned about: once each.
+    static WARNED_ESCAPES: std::cell::RefCell<std::collections::HashSet<char>> =
+        std::cell::RefCell::default();
+    /// gawk's warnings about regexes made since they were last taken (`take_warnings`).
+    static WARNINGS: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Notes gawk's warning for the regex escape `\c` it has no meaning for, once.
+fn unknown_escape(c: char) {
+    if WARNED_ESCAPES.with_borrow_mut(|warned| warned.insert(c)) {
+        WARNINGS.with_borrow_mut(|warnings| {
+            warnings.push(format!(
+                "regexp escape sequence `\\{c}' is not a known regexp operator"
+            ));
+        });
+    }
+}
+
+/// gawk's warnings about the regexes made since the last call, for the caller to write
+/// where the regex is.
+pub fn take_warnings() -> Vec<String> {
+    WARNINGS.with_borrow_mut(std::mem::take)
+}
+
+/// Whether there are warnings to take.
+pub fn has_warnings() -> bool {
+    WARNINGS.with_borrow(|warnings| !warnings.is_empty())
+}
+
 /// gawk's error for `*`, `+`, `?` or an interval with nothing before it to repeat.
 const NOTHING_TO_REPEAT: &str = "? * + or {interval} not preceded by valid subpattern";
 /// gawk's error for an interval it cannot read or that is out of its range.
@@ -146,8 +189,33 @@ fn translate_ere(pattern: &str) -> Result<String, &'static str> {
             '\\' => {
                 let next = *chars.get(at).ok_or("invalid trailing backslash")?;
                 at += 1;
-                out.push('\\');
-                out.push(next);
+                match next {
+                    // gawk's operators: a word's edge and none, its start and end, and the
+                    // start and end of the text.
+                    'y' => out.push_str("\\b"),
+                    'B' => out.push_str("\\B"),
+                    '<' => out.push_str(concat!("\\b", "{start}")),
+                    '>' => out.push_str(concat!("\\b", "{end}")),
+                    '`' => out.push_str("\\A"),
+                    '\'' => out.push_str("\\z"),
+                    's' | 'S' | 'w' | 'W' => {
+                        out.push('\\');
+                        out.push(next);
+                    }
+                    _ => {
+                        let (character, after) = escaped_character(&chars, at - 2);
+                        at = after;
+                        // An escape gawk has no meaning for is the character, with its
+                        // warning: the engine's `\d` was a digit.
+                        if character == next
+                            && !next.is_ascii_digit()
+                            && !".[]()*+?{}|^$\\/-".contains(next)
+                        {
+                            unknown_escape(next);
+                        }
+                        push_literal(character, &mut out);
+                    }
+                }
                 can_repeat = true;
             }
             '(' => {
@@ -320,6 +388,57 @@ fn bracket_expression(
     }
 }
 
+/// Writes `c` to `out` as a literal character of the engine's syntax.
+fn push_literal(c: char, out: &mut String) {
+    if c.is_ascii_alphanumeric() || c == ' ' || !c.is_ascii() {
+        out.push(c);
+    } else {
+        out.push_str(&format!("\\x{{{:x}}}", c as u32));
+    }
+}
+
+/// The character the escape whose backslash is at `at` stands for, and where the escape
+/// ends: `\t` and the like, octal and hexadecimal ones (and `\x{8}` that octal escapes were
+/// turned into by `translate_ere_escapes`), else the character after the backslash.
+fn escaped_character(chars: &[char], at: usize) -> (char, usize) {
+    let escaped = chars.get(at + 1).copied().unwrap_or_default();
+    match escaped {
+        'b' => return ('\x08', at + 2),
+        '0'..='7' => {
+            let digits: String = chars
+                .get(at + 1..)
+                .unwrap_or_default()
+                .iter()
+                .take(3)
+                .take_while(|c| c.is_digit(8))
+                .collect();
+            let value = u32::from_str_radix(&digits, 8).unwrap_or_default();
+            return (
+                char::from_u32(value).unwrap_or_default(),
+                at + 1 + digits.len(),
+            );
+        }
+        'x' if chars.get(at + 2) != Some(&'{') => {
+            let digits: String = chars
+                .get(at + 2..)
+                .unwrap_or_default()
+                .iter()
+                .take(2)
+                .take_while(|c| c.is_ascii_hexdigit())
+                .collect();
+            return match u32::from_str_radix(&digits, 16)
+                .ok()
+                .and_then(char::from_u32)
+            {
+                Some(c) => (c, at + 2 + digits.len()),
+                None => ('x', at + 2),
+            };
+        }
+        _ => {}
+    }
+    escape_in_bracket(chars, at)
+}
+
 /// The character the escape whose backslash is at `at` in a bracket expression stands
 /// for, and where the escape ends: `\t` and the like, `\x{8}` that octal escapes were
 /// turned into (`translate_ere_escapes`), else the character after the backslash, as gawk
@@ -337,6 +456,10 @@ fn escape_in_bracket(chars: &[char], at: usize) -> (char, usize) {
     };
     if let Some(c) = simple {
         return (c, at + 2);
+    }
+    if escaped.is_digit(8) || escaped == 'b' || (escaped == 'x' && chars.get(at + 2) != Some(&'{'))
+    {
+        return escaped_character(chars, at);
     }
     if escaped == 'x' && chars.get(at + 2) == Some(&'{') {
         let digits_start = at + 3;
@@ -433,6 +556,7 @@ impl Regex {
             next_start: 0,
             regex: self,
             string,
+            last_end: None,
         }
     }
 

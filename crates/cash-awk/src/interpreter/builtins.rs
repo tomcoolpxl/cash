@@ -16,9 +16,11 @@ use super::record::{FieldSeparator, FieldsState, field_separators, split_record}
 use super::stack::{Stack, array_place};
 use super::string::AwkString;
 use super::value::{AwkValue, AwkValueVariant};
-use super::{GlobalEnv, maybe_numeric_string, swap_with_default};
+use super::{GlobalEnv, maybe_numeric_string, strtod, swap_with_default};
 use crate::program::BuiltinFunction;
 use crate::regex::Regex;
+use std::cmp::Ordering;
+use std::rc::Rc;
 
 pub(crate) fn sprintf(
     format_string: &str,
@@ -192,6 +194,10 @@ pub(crate) fn builtin_sprintf(
     argc: u16,
     global_env: &mut GlobalEnv,
 ) -> Result<AwkString, String> {
+    // `printf` with nothing to print, gawk's fatal error.
+    if argc == 0 {
+        return Err("printf: no arguments".to_string());
+    }
     let mut values = gather_values(stack, argc - 1)?;
     let format_string = stack
         .pop_scalar_value()?
@@ -240,7 +246,7 @@ pub(crate) fn builtin_match(
     global_env: &mut GlobalEnv,
     groups: bool,
 ) -> Result<(f64, f64, Vec<MatchedGroup>), String> {
-    let ere = stack.pop_scalar_value()?.into_ere()?;
+    let ere = stack.pop_scalar_value()?.into_ere(&global_env.convfmt)?;
     let string = stack
         .pop_scalar_value()?
         .scalar_to_string(&global_env.convfmt)?;
@@ -359,7 +365,7 @@ pub(crate) fn builtin_split(
     } else {
         let sep_val = stack.pop_scalar_value()?;
         if matches!(&sep_val.value, AwkValueVariant::Regex { .. }) {
-            Some(FieldSeparator::Ere(sep_val.into_ere()?))
+            Some(FieldSeparator::Ere(sep_val.into_ere(&global_env.convfmt)?))
         } else {
             let sep_str = sep_val.scalar_to_string(&global_env.convfmt)?;
             Some(FieldSeparator::try_from(sep_str)?)
@@ -409,6 +415,161 @@ pub(crate) fn builtin_split(
     Ok(FieldsState::Ok)
 }
 
+/// What gawk's `asort` and `asorti` sort by, `how` names it: `@val_type_asc` and the
+/// others.
+#[derive(Clone, Copy)]
+pub(crate) struct SortOrder {
+    by: SortBy,
+    descending: bool,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SortBy {
+    IndexString,
+    IndexNumber,
+    ValueType,
+    ValueString,
+    ValueNumber,
+    /// The order of `for (k in a)`.
+    Unsorted,
+}
+
+impl SortOrder {
+    /// The order gawk names `how`, if it is one of gawk's own.
+    pub(crate) fn named(how: &str) -> Option<Self> {
+        if how == "@unsorted" {
+            return Some(Self {
+                by: SortBy::Unsorted,
+                descending: false,
+            });
+        }
+        let (by, direction) = how.strip_prefix('@')?.rsplit_once('_')?;
+        let by = match by {
+            "ind_str" => SortBy::IndexString,
+            "ind_num" => SortBy::IndexNumber,
+            "val_type" => SortBy::ValueType,
+            "val_str" => SortBy::ValueString,
+            "val_num" => SortBy::ValueNumber,
+            _ => return None,
+        };
+        let descending = match direction {
+            "asc" => false,
+            "desc" => true,
+            _ => return None,
+        };
+        Some(Self { by, descending })
+    }
+
+    /// Sorts `elements`, each an index and its value. Elements that compare equal are
+    /// in the order of their indices as strings, as in gawk, and a descending order is
+    /// the ascending one turned round.
+    pub(crate) fn sort(self, elements: &mut [(Rc<str>, AwkValue)], convfmt: &str) {
+        if self.by == SortBy::Unsorted {
+            return;
+        }
+        elements.sort_by(|a, b| {
+            let order = self.compare(a, b, convfmt);
+            if self.descending {
+                order.reverse()
+            } else {
+                order
+            }
+        });
+    }
+
+    fn compare(
+        self,
+        (a_index, a): &(Rc<str>, AwkValue),
+        (b_index, b): &(Rc<str>, AwkValue),
+        convfmt: &str,
+    ) -> Ordering {
+        let by_index = || a_index.cmp(b_index);
+        match self.by {
+            SortBy::IndexString | SortBy::Unsorted => by_index(),
+            SortBy::IndexNumber => strtod(a_index)
+                .total_cmp(&strtod(b_index))
+                .then_with(by_index),
+            SortBy::ValueType => {
+                let (a, b) = (Sorted::of(a, convfmt), Sorted::of(b, convfmt));
+                a.rank()
+                    .cmp(&b.rank())
+                    .then_with(|| match (&a, &b) {
+                        (Sorted::Number(x, _), Sorted::Number(y, _)) => x.total_cmp(y),
+                        (Sorted::String(x), Sorted::String(y)) => x.cmp(y),
+                        (Sorted::Array(x), Sorted::Array(y)) => x.cmp(y),
+                        _ => Ordering::Equal,
+                    })
+                    .then_with(by_index)
+            }
+            SortBy::ValueString => {
+                let (a, b) = (Sorted::of(a, convfmt), Sorted::of(b, convfmt));
+                let arrays = matches!(a, Sorted::Array(_)).cmp(&matches!(b, Sorted::Array(_)));
+                arrays
+                    .then_with(|| a.text().cmp(b.text()))
+                    .then_with(by_index)
+            }
+            SortBy::ValueNumber => {
+                let (a, b) = (Sorted::of(a, convfmt), Sorted::of(b, convfmt));
+                let arrays = matches!(a, Sorted::Array(_)).cmp(&matches!(b, Sorted::Array(_)));
+                arrays
+                    .then_with(|| a.number().total_cmp(&b.number()))
+                    .then_with(|| a.text().cmp(b.text()))
+                    .then_with(by_index)
+            }
+        }
+    }
+}
+
+/// A value as `asort` compares it: a number (a numeric string too) with its text, a
+/// string, or an array, by its size.
+enum Sorted {
+    Number(f64, String),
+    String(String),
+    Array(usize),
+}
+
+impl Sorted {
+    fn of(value: &AwkValue, convfmt: &str) -> Self {
+        match &value.value {
+            AwkValueVariant::Array(array) => Sorted::Array(array.len()),
+            AwkValueVariant::String(text) if !text.is_numeric => {
+                Sorted::String(text.as_str().to_string())
+            }
+            _ => Sorted::Number(
+                value.scalar_as_f64(),
+                value
+                    .clone()
+                    .scalar_to_string(convfmt)
+                    .map(|text| text.to_string())
+                    .unwrap_or_default(),
+            ),
+        }
+    }
+
+    fn rank(&self) -> u8 {
+        match self {
+            Sorted::Number(..) => 0,
+            Sorted::String(_) => 1,
+            Sorted::Array(_) => 2,
+        }
+    }
+
+    fn text(&self) -> &str {
+        match self {
+            Sorted::Number(_, text) | Sorted::String(text) => text,
+            Sorted::Array(_) => "",
+        }
+    }
+
+    fn number(&self) -> f64 {
+        match self {
+            Sorted::Number(number, _) => *number,
+            Sorted::String(text) => strtod(text),
+            Sorted::Array(_) => 0.0,
+        }
+    }
+}
+
 /// gawk's words for an argument that should be an array and is a scalar: `what` is not
 /// an array.
 pub(crate) fn not_an_array(error: String, what: &str) -> String {
@@ -427,7 +588,16 @@ pub(crate) fn builtin_gsub(
     let repl = stack
         .pop_scalar_value()?
         .scalar_to_string(&global_env.convfmt)?;
-    let ere = stack.pop_scalar_value()?.into_ere()?;
+    let ere = stack.pop_scalar_value()?.into_ere(&global_env.convfmt)?;
+    // A constant target is a value, replaced in a copy that is dropped.
+    if stack.top_is_value() {
+        let text = stack
+            .pop_scalar_value()?
+            .scalar_to_string(&global_env.convfmt)?;
+        let (_, count) = gsub(&ere, &repl, &text, is_sub)?;
+        stack.push_value(count as f64)?;
+        return Ok(FieldsState::Ok);
+    }
     let in_str = stack.pop_scalar_ref()?;
     let (result, count) = gsub(
         &ere,

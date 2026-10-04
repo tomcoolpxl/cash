@@ -182,10 +182,13 @@ impl AwkValue {
         Self { ref_type, ..self }
     }
 
-    pub(crate) fn into_ere(self) -> Result<Rc<Regex>, String> {
+    /// The value as a regex: a regex literal's, or the text of a scalar, a number's as
+    /// CONVFMT (`num_fmt`) gives it, as in gawk; a number was an error.
+    pub(crate) fn into_ere(self, num_fmt: &str) -> Result<Rc<Regex>, String> {
         match self.value {
             AwkValueVariant::Regex { ere, .. } => Ok(ere),
             AwkValueVariant::String(s) => cached_dynamic_ere(s),
+            AwkValueVariant::Number(_) => cached_dynamic_ere(self.scalar_to_string(num_fmt)?),
             AwkValueVariant::UninitializedScalar | AwkValueVariant::Uninitialized => {
                 Ok(Rc::new(Regex::new("")?))
             }
