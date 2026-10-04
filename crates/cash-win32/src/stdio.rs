@@ -174,7 +174,7 @@ pub fn write_stdout(bytes: &[u8]) -> std::io::Result<()> {
 ///
 /// Returns an error if the temporary file cannot be created or read, or if the standard
 /// handle cannot be replaced. In that case `body` is not run.
-pub fn with_captured_stdout<T>(body: impl FnOnce() -> T) -> std::io::Result<(T, Vec<u8>)> {
+pub fn with_captured_stdout<T>(body: impl FnOnce() -> T) -> Result<(T, Vec<u8>), CaptureError<T>> {
     use std::os::windows::fs::OpenOptionsExt as _;
 
     let path = capture_file_path();
@@ -184,7 +184,8 @@ pub fn with_captured_stdout<T>(body: impl FnOnce() -> T) -> std::io::Result<(T, 
         .read(true)
         .write(true)
         .custom_flags(FILE_FLAG_DELETE_ON_CLOSE)
-        .open(&path)?;
+        .open(&path)
+        .map_err(CaptureError::NotRun)?;
 
     // Whatever is already buffered belongs to the real standard output, not to the
     // capture.
@@ -197,7 +198,7 @@ pub fn with_captured_stdout<T>(body: impl FnOnce() -> T) -> std::io::Result<(T, 
     // after `RestoreStdout` has put `saved` back. `SetStdHandle` stores the value and
     // does not take ownership of it.
     if unsafe { SetStdHandle(STD_OUTPUT_HANDLE, file.as_raw_handle() as HANDLE) } == 0 {
-        return Err(std::io::Error::last_os_error());
+        return Err(CaptureError::NotRun(std::io::Error::last_os_error()));
     }
 
     let value = {
@@ -209,11 +210,24 @@ pub fn with_captured_stdout<T>(body: impl FnOnce() -> T) -> std::io::Result<(T, 
         value
     };
 
-    file.rewind()?;
     let mut captured = Vec::new();
-    file.read_to_end(&mut captured)?;
-
+    if let Err(error) = file.rewind().and_then(|()| file.read_to_end(&mut captured)) {
+        return Err(CaptureError::Lost(value, error));
+    }
     Ok((value, captured))
+}
+
+/// Why [`with_captured_stdout`] gives no output.
+///
+/// Whether the body ran tells the caller whether it may run it another way. A tool that
+/// had run was run again when its output could not be read back, so `mktemp` made a
+/// second file (BIN-07).
+#[derive(Debug)]
+pub enum CaptureError<T> {
+    /// The capture could not be set up, and the body did not run.
+    NotRun(std::io::Error),
+    /// The body ran, giving this value, but what it wrote could not be read back.
+    Lost(T, std::io::Error),
 }
 
 /// Runs `body` so that when the reader of this process's standard output goes away, the

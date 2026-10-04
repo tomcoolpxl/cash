@@ -36,6 +36,7 @@ use cash_core::ExecutionExitCode;
 use cash_core::builtins::{BoxFuture, ContentOptions, ContentType, Registration};
 use cash_core::commands::{self, CommandArg, ExecutionContext};
 use cash_core::extensions::ShellExtensions;
+use cash_win32::stdio::CaptureError;
 
 /// The leading flag that signals a bundled-command dispatch.
 ///
@@ -315,18 +316,34 @@ fn asks_for_help(args: &[OsString]) -> bool {
 /// runs, just without the rendering. A wrong separator is a nuisance; refusing to run
 /// `mktemp` is a broken shell.
 fn run_rendering_paths(func: BundledFn, argv: Vec<OsString>) -> i32 {
+    let name = tool_name(&argv);
     match cash_win32::stdio::with_captured_stdout(|| func(argv.clone())) {
         Ok((code, captured)) => {
             let rendered = cash_win32::stdio::render_paths(&captured);
             let _ = cash_win32::stdio::write_stdout(&rendered);
             code
         }
-        Err(_) => func(argv),
+        Err(CaptureError::NotRun(_)) => func(argv),
+        Err(CaptureError::Lost(_, error)) => output_lost(&name, &error),
     }
+}
+
+/// The tool's name, for a message about it.
+fn tool_name(argv: &[OsString]) -> String {
+    argv.first()
+        .map_or_else(String::new, |name| name.to_string_lossy().into_owned())
+}
+
+/// A tool ran, and its output could not be read back to pass on: said, and not run again
+/// (BIN-07), status 1.
+fn output_lost(name: &str, error: &std::io::Error) -> i32 {
+    eprintln!("{name}: could not pass its output on: {error}");
+    1
 }
 
 /// Run a bundled `uname` with its nodename unified to cash's canonical hostname spelling.
 fn run_unified_uname(func: BundledFn, argv: Vec<OsString>) -> i32 {
+    let name = tool_name(&argv);
     match cash_win32::stdio::with_captured_stdout(|| func(argv.clone())) {
         Ok((code, captured)) => {
             if let Some(target) = cash_win32::process::computer_name() {
@@ -342,7 +359,8 @@ fn run_unified_uname(func: BundledFn, argv: Vec<OsString>) -> i32 {
             }
             code
         }
-        Err(_) => func(argv),
+        Err(CaptureError::NotRun(_)) => func(argv),
+        Err(CaptureError::Lost(_, error)) => output_lost(&name, &error),
     }
 }
 
