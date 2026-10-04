@@ -114,13 +114,9 @@ slow-timeout = { period = "60s", terminate-after = 3 }
 filter = 'binary(it) and test(/^(acceptance::starship_initialises_and_renders_a_prompt|ping::an_interrupt_prints_the_statistics|link_tools::a_folder_on_another_drive_is_an_error|kill_term::a_program_(with_a_window_is_asked_to_close|that_will_not_close_is_terminated_after_the_grace_period)|ping::an_unanswered_ping_reports_total_loss)$/)'
 success-output = "final"
 
-# math.sed computing pi: 9 s with every core busy.
+# sed's tests run sed processes one after another, many of them dozens each to compare
+# with GNU sed: 9 to 15 s in the full suite on an idle machine (2026-10-04), where 15 s
+# ended them; math.sed computing pi took 9 s with every core busy.
 [[profile.default.overrides]]
-filter = 'package(cash-sed) and test(=test_sed::pi)'
-slow-timeout = { period = "15s", terminate-after = 3 }
-
-# Each compares dozens of cases with GNU sed, one sed process after another: 9 to 14 s
-# in the full suite on an idle machine (2026-10-04), where 15 s ended them.
-[[profile.default.overrides]]
-filter = 'package(cash-sed) and test(/^test_sed::(test_compile_errors_are_placed_as_gnu_sed_places_them|test_joined_crlf_lines_stay_crlf|test_missing_step_or_count_is_zero|test_posix_mode_takes_gnu_operators_for_characters|test_regex_errors_are_gnu_seds|test_replacement_case_conversions)$/)'
+filter = 'package(cash-sed)'
 slow-timeout = { period = "15s", terminate-after = 3 }
