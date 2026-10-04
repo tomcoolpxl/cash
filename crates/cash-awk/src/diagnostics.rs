@@ -563,6 +563,9 @@ fn regex_end(bytes: &[u8], mut at: usize) -> Result<usize, OpenRegex> {
 /// follows them.
 fn gawks_token(source: &str, error_at: usize) -> usize {
     let rest = source.get(error_at..).unwrap_or_default();
+    if let Some(at) = function_header_error(rest) {
+        return error_at + at;
+    }
     // pest takes the `+` of `(x) += 2` for an addition and fails at the `=`, where gawk's
     // lexer has one assignment token, its error at the token's start.
     if rest.starts_with('=') {
@@ -603,6 +606,73 @@ fn gawks_token(source: &str, error_at: usize) -> usize {
         error_at + skip + blanks
     } else {
         error_at
+    }
+}
+
+/// Where the function definition that `text` starts with goes wrong in its header, as
+/// gawk's parser meets it: the token that is not a name, `(`, `,` or `)` where one
+/// belongs, or a newline anywhere but after a comma. pest fails such a definition as a
+/// whole, at its `function`. `None` for a header that is right, or no definition.
+fn function_header_error(text: &str) -> Option<usize> {
+    let bytes = text.as_bytes();
+    let keyword = ["function", "func"]
+        .into_iter()
+        .find(|word| {
+            text.starts_with(word)
+                && !bytes
+                    .get(word.len())
+                    .is_some_and(|b| b.is_ascii_alphanumeric() || *b == b'_')
+        })?
+        .len();
+    // Past blanks and joined lines; past newlines and comments too after a comma.
+    let skip = |mut at: usize, newlines: bool| loop {
+        match bytes.get(at) {
+            Some(b' ' | b'\t' | b'\r') => at += 1,
+            Some(b'\\') if bytes.get(at + 1) == Some(&b'\n') => at += 2,
+            Some(b'\n') if newlines => at += 1,
+            Some(b'#') if newlines => {
+                while bytes.get(at).is_some_and(|&b| b != b'\n') {
+                    at += 1;
+                }
+            }
+            _ => break at,
+        }
+    };
+    let name = |at: usize| {
+        let mut end = at;
+        while bytes
+            .get(end)
+            .is_some_and(|b| b.is_ascii_alphanumeric() || *b == b'_')
+        {
+            end += 1;
+        }
+        let starts = bytes
+            .get(at)
+            .is_some_and(|b| b.is_ascii_alphabetic() || *b == b'_');
+        starts.then_some(end)
+    };
+    let mut at = skip(keyword, false);
+    let Some(end) = name(at) else {
+        return Some(at);
+    };
+    at = skip(end, false);
+    if bytes.get(at) != Some(&b'(') {
+        return Some(at);
+    }
+    at = skip(at + 1, false);
+    if bytes.get(at) == Some(&b')') {
+        return None;
+    }
+    loop {
+        let Some(end) = name(at) else {
+            return Some(at);
+        };
+        at = skip(end, false);
+        match bytes.get(at) {
+            Some(b',') => at = skip(at + 1, true),
+            Some(b')') => return None,
+            _ => return Some(at),
+        }
     }
 }
 
@@ -697,6 +767,20 @@ pub(crate) fn syntax_error(source: &str, error_at: usize, from_file: bool) -> Di
             return diagnostic;
         }
         return Diagnostic::new(Kind::Newline, error_at, unexpected);
+    }
+    // gawk's lexer looks a character past most tokens (`while`, `+`, `]`), and one last in a
+    // file meets its end there: the error at it is gawk's `(END OF FILE)` one.
+    if from_file
+        && scanned.tokens.iter().any(|token| {
+            token.start == error_at
+                && token.end == source.len()
+                && token.kind == TokenKind::Other
+                && !source.get(token.start..token.end).is_some_and(|text| {
+                    text.ends_with(['(', ')', '$', '{', '}', ';', ',', '[', '~', '"'])
+                })
+        })
+    {
+        return Diagnostic::new(Kind::EndOfFile, error_at, INCOMPLETE);
     }
     Diagnostic::new(Kind::Caret, error_at, "syntax error")
 }

@@ -5377,3 +5377,574 @@ fn test_awk_errors_at_the_end_of_a_program_argument_4() {
         ),
     ]);
 }
+
+/// gawk's lexer looks a character past most tokens, so one last in a file meets its
+/// end: a syntax error there is `(END OF FILE)`, as in gawk (`do x++ while`); a `}` or a
+/// `)` is not looked past. A function's header fails at the token gawk's parser meets,
+/// a newline but after a comma `unexpected newline`; it failed at `function`.
+#[test]
+fn test_awk_errors_at_the_last_token_of_a_program_file_1() {
+    run_file_cases(&[
+        (
+            "BEGIN { do x++ while",
+            "",
+            "",
+            "awk: {file}:1: (END OF FILE)\nawk: {file}:1:                ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "BEGIN { do x++ while\n",
+            "",
+            "",
+            "awk: {file}:1: BEGIN { do x++ while\nawk: {file}:1:                ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { do x++ while   ",
+            "",
+            "",
+            "awk: {file}:1: BEGIN { do x++ while   \nawk: {file}:1:                ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { do x++ while   \n",
+            "",
+            "",
+            "awk: {file}:1: BEGIN { do x++ while   \nawk: {file}:1:                ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 } }",
+            "",
+            "",
+            "awk: {file}:1: BEGIN { x = 1 } }\nawk: {file}:1:                 ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 } }\n",
+            "",
+            "",
+            "awk: {file}:1: BEGIN { x = 1 } }\nawk: {file}:1:                 ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 } )",
+            "",
+            "",
+            "awk: {file}:1: BEGIN { x = 1 } )\nawk: {file}:1:                 ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 } )\n",
+            "",
+            "",
+            "awk: {file}:1: BEGIN { x = 1 } )\nawk: {file}:1:                 ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 } ]",
+            "",
+            "",
+            "awk: {file}:1: (END OF FILE)\nawk: {file}:1:                 ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 } ]\n",
+            "",
+            "",
+            "awk: {file}:1: BEGIN { x = 1 } ]\nawk: {file}:1:                 ^ syntax error\n",
+            1,
+        ),
+    ]);
+}
+
+/// gawk's lexer looks a character past most tokens, so one last in a file meets its
+/// end: a syntax error there is `(END OF FILE)`, as in gawk (`do x++ while`); a `}` or a
+/// `)` is not looked past. A function's header fails at the token gawk's parser meets,
+/// a newline but after a comma `unexpected newline`; it failed at `function`.
+#[test]
+fn test_awk_errors_at_the_last_token_of_a_program_file_2() {
+    run_file_cases(&[
+        (
+            "BEGIN { x = 1 } else",
+            "",
+            "",
+            "awk: {file}:1: (END OF FILE)\nawk: {file}:1:                 ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 } else\n",
+            "",
+            "",
+            "awk: {file}:1: BEGIN { x = 1 } else\nawk: {file}:1:                 ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 } ,",
+            "",
+            "",
+            "awk: {file}:1: BEGIN { x = 1 } ,\nawk: {file}:1:                 ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 } ,\n",
+            "",
+            "",
+            "awk: {file}:1: BEGIN { x = 1 } ,\nawk: {file}:1:                 ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 } in",
+            "",
+            "",
+            "awk: {file}:1: (END OF FILE)\nawk: {file}:1:                 ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 } in\n",
+            "",
+            "",
+            "awk: {file}:1: BEGIN { x = 1 } in\nawk: {file}:1:                 ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 } *",
+            "",
+            "",
+            "awk: {file}:1: (END OF FILE)\nawk: {file}:1:                 ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 } *\n",
+            "",
+            "",
+            "awk: {file}:1: BEGIN { x = 1 } *\nawk: {file}:1:                 ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 } =",
+            "",
+            "",
+            "awk: {file}:1: (END OF FILE)\nawk: {file}:1:                 ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 } =\n",
+            "",
+            "",
+            "awk: {file}:1: BEGIN { x = 1 } =\nawk: {file}:1:                 ^ syntax error\n",
+            1,
+        ),
+    ]);
+}
+
+/// gawk's lexer looks a character past most tokens, so one last in a file meets its
+/// end: a syntax error there is `(END OF FILE)`, as in gawk (`do x++ while`); a `}` or a
+/// `)` is not looked past. A function's header fails at the token gawk's parser meets,
+/// a newline but after a comma `unexpected newline`; it failed at `function`.
+#[test]
+fn test_awk_errors_at_the_last_token_of_a_program_file_3() {
+    run_file_cases(&[
+        (
+            "BEGIN { if (x) else",
+            "",
+            "",
+            "awk: {file}:1: (END OF FILE)\nawk: {file}:1:                ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "BEGIN { if (x) else\n",
+            "",
+            "",
+            "awk: {file}:1: BEGIN { if (x) else\nawk: {file}:1:                ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 } ~",
+            "",
+            "",
+            "awk: {file}:1: BEGIN { x = 1 } ~\nawk: {file}:1:                 ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 } ~\n",
+            "",
+            "",
+            "awk: {file}:1: BEGIN { x = 1 } ~\nawk: {file}:1:                 ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 } $",
+            "",
+            "",
+            "awk: {file}:2: (END OF FILE)\nawk: {file}:2:                 ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 } $\n",
+            "",
+            "",
+            "awk: {file}:2: BEGIN { x = 1 } $\nawk: {file}:2:                  ^ unexpected newline or end of string\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 } {",
+            "",
+            "",
+            "awk: {file}:1: (END OF FILE)\nawk: {file}:1:                 ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 } {\n",
+            "",
+            "",
+            "awk: {file}:1: (END OF FILE)\nawk: {file}:1: ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        ("BEGIN { x = 1 } ;", "", "", "", 0),
+        ("BEGIN { x = 1 } ;\n", "", "", "", 0),
+    ]);
+}
+
+/// gawk's lexer looks a character past most tokens, so one last in a file meets its
+/// end: a syntax error there is `(END OF FILE)`, as in gawk (`do x++ while`); a `}` or a
+/// `)` is not looked past. A function's header fails at the token gawk's parser meets,
+/// a newline but after a comma `unexpected newline`; it failed at `function`.
+#[test]
+fn test_awk_errors_at_the_last_token_of_a_program_file_4() {
+    run_file_cases(&[
+        (
+            "BEGIN { x = 1 } [\n",
+            "",
+            "",
+            "awk: {file}:1: BEGIN { x = 1 } [\nawk: {file}:1:                 ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 } BEGIN BEGIN",
+            "",
+            "",
+            "awk: {file}:1: (END OF FILE)\nawk: {file}:1:                       ^ source files / command-line arguments must contain complete functions or rules\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 } BEGIN BEGIN\n",
+            "",
+            "",
+            "awk: {file}:1: BEGIN { x = 1 } BEGIN BEGIN\nawk: {file}:1:                       ^ syntax error\n",
+            1,
+        ),
+        (
+            "function f(a\n, b) { }",
+            "",
+            "",
+            "awk: {file}:2: function f(a\nawk: {file}:2:             ^ unexpected newline or end of string\n",
+            1,
+        ),
+        (
+            "function f(a\n, b) { }\n",
+            "",
+            "",
+            "awk: {file}:2: function f(a\nawk: {file}:2:             ^ unexpected newline or end of string\n",
+            1,
+        ),
+        (
+            "function f(a b) { }",
+            "",
+            "",
+            "awk: {file}:1: function f(a b) { }\nawk: {file}:1:              ^ syntax error\n",
+            1,
+        ),
+        (
+            "function f(a b) { }\n",
+            "",
+            "",
+            "awk: {file}:1: function f(a b) { }\nawk: {file}:1:              ^ syntax error\n",
+            1,
+        ),
+        (
+            "function f a) { }",
+            "",
+            "",
+            "awk: {file}:1: function f a) { }\nawk: {file}:1:            ^ syntax error\n",
+            1,
+        ),
+        (
+            "function f a) { }\n",
+            "",
+            "",
+            "awk: {file}:1: function f a) { }\nawk: {file}:1:            ^ syntax error\n",
+            1,
+        ),
+        (
+            "function f\n(a) { }",
+            "",
+            "",
+            "awk: {file}:2: function f\nawk: {file}:2:           ^ unexpected newline or end of string\n",
+            1,
+        ),
+    ]);
+}
+
+/// gawk's lexer looks a character past most tokens, so one last in a file meets its
+/// end: a syntax error there is `(END OF FILE)`, as in gawk (`do x++ while`); a `}` or a
+/// `)` is not looked past. A function's header fails at the token gawk's parser meets,
+/// a newline but after a comma `unexpected newline`; it failed at `function`.
+#[test]
+fn test_awk_errors_at_the_last_token_of_a_program_file_5() {
+    run_file_cases(&[
+        (
+            "function f\n(a) { }\n",
+            "",
+            "",
+            "awk: {file}:2: function f\nawk: {file}:2:           ^ unexpected newline or end of string\n",
+            1,
+        ),
+        (
+            "func f(a;) { }",
+            "",
+            "",
+            "awk: {file}:1: func f(a;) { }\nawk: {file}:1:         ^ syntax error\n",
+            1,
+        ),
+        (
+            "func f(a;) { }\n",
+            "",
+            "",
+            "awk: {file}:1: func f(a;) { }\nawk: {file}:1:         ^ syntax error\n",
+            1,
+        ),
+        (
+            "function f(a, \n\n b, \n c\n) { }",
+            "",
+            "",
+            "awk: {file}:5:  c\nawk: {file}:5:   ^ unexpected newline or end of string\n",
+            1,
+        ),
+        (
+            "function f(a, \n\n b, \n c\n) { }\n",
+            "",
+            "",
+            "awk: {file}:5:  c\nawk: {file}:5:   ^ unexpected newline or end of string\n",
+            1,
+        ),
+        (
+            "function f(a, # c\n b) { return b } BEGIN { print f(1, 2) }",
+            "",
+            "2\n",
+            "",
+            0,
+        ),
+        (
+            "function f(a, # c\n b) { return b } BEGIN { print f(1, 2) }\n",
+            "",
+            "2\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { }\nfunction g(x y) { }",
+            "",
+            "",
+            "awk: {file}:2: function g(x y) { }\nawk: {file}:2:              ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { }\nfunction g(x y) { }\n",
+            "",
+            "",
+            "awk: {file}:2: function g(x y) { }\nawk: {file}:2:              ^ syntax error\n",
+            1,
+        ),
+    ]);
+}
+
+/// The same programs given as an argument, which gawk ends with a newline.
+#[test]
+fn test_awk_errors_in_a_function_header_and_last_tokens_1() {
+    run_cases(&[
+        (
+            "BEGIN { do x++ while",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { do x++ while\nawk: cmd. line:1:                ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { do x++ while   ",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { do x++ while   \nawk: cmd. line:1:                ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 } }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { x = 1 } }\nawk: cmd. line:1:                 ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 } )",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { x = 1 } )\nawk: cmd. line:1:                 ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 } ]",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { x = 1 } ]\nawk: cmd. line:1:                 ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 } else",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { x = 1 } else\nawk: cmd. line:1:                 ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 } ,",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { x = 1 } ,\nawk: cmd. line:1:                 ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 } in",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { x = 1 } in\nawk: cmd. line:1:                 ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 } *",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { x = 1 } *\nawk: cmd. line:1:                 ^ syntax error\n",
+            1,
+        ),
+    ]);
+}
+
+/// The same programs given as an argument, which gawk ends with a newline.
+#[test]
+fn test_awk_errors_in_a_function_header_and_last_tokens_2() {
+    run_cases(&[
+        (
+            "BEGIN { x = 1 } =",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { x = 1 } =\nawk: cmd. line:1:                 ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { if (x) else",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { if (x) else\nawk: cmd. line:1:                ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 } ~",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { x = 1 } ~\nawk: cmd. line:1:                 ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 } $",
+            "",
+            "",
+            "awk: cmd. line:2: BEGIN { x = 1 } $\nawk: cmd. line:2:                  ^ unexpected newline or end of string\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 } {",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { x = 1 } {\nawk: cmd. line:1:                  ^ unexpected newline or end of string\n",
+            1,
+        ),
+        ("BEGIN { x = 1 } ;", "", "", "", 0),
+        (
+            "BEGIN { x = 1 } [\n",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { x = 1 } [\nawk: cmd. line:1:                 ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 } BEGIN BEGIN",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { x = 1 } BEGIN BEGIN\nawk: cmd. line:1:                       ^ syntax error\n",
+            1,
+        ),
+        (
+            "function f(a\n, b) { }",
+            "",
+            "",
+            "awk: cmd. line:2: function f(a\nawk: cmd. line:2:             ^ unexpected newline or end of string\n",
+            1,
+        ),
+    ]);
+}
+
+/// The same programs given as an argument, which gawk ends with a newline.
+#[test]
+fn test_awk_errors_in_a_function_header_and_last_tokens_3() {
+    run_cases(&[
+        (
+            "function f(a b) { }",
+            "",
+            "",
+            "awk: cmd. line:1: function f(a b) { }\nawk: cmd. line:1:              ^ syntax error\n",
+            1,
+        ),
+        (
+            "function f a) { }",
+            "",
+            "",
+            "awk: cmd. line:1: function f a) { }\nawk: cmd. line:1:            ^ syntax error\n",
+            1,
+        ),
+        (
+            "function f\n(a) { }",
+            "",
+            "",
+            "awk: cmd. line:2: function f\nawk: cmd. line:2:           ^ unexpected newline or end of string\n",
+            1,
+        ),
+        (
+            "func f(a;) { }",
+            "",
+            "",
+            "awk: cmd. line:1: func f(a;) { }\nawk: cmd. line:1:         ^ syntax error\n",
+            1,
+        ),
+        (
+            "function f(a, \n\n b, \n c\n) { }",
+            "",
+            "",
+            "awk: cmd. line:5:  c\nawk: cmd. line:5:   ^ unexpected newline or end of string\n",
+            1,
+        ),
+        (
+            "function f(a, # c\n b) { return b } BEGIN { print f(1, 2) }",
+            "",
+            "2\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { }\nfunction g(x y) { }",
+            "",
+            "",
+            "awk: cmd. line:2: function g(x y) { }\nawk: cmd. line:2:              ^ syntax error\n",
+            1,
+        ),
+    ]);
+}

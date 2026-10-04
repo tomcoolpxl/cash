@@ -63,10 +63,9 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 What comparing cash's sed and awk with GNU sed 4.9 and gawk turned up while phase 14
 fixed their leftovers; moved here so 1.3.14 could go out (the user, 2026-10-04).
 
-- awk, found matching gawk 5.4 (2026-10-04): `BEGIN { do x++ while` at the end of a `-f`
-  file without a last newline is "syntax error" at `while`, gawk's `(END OF FILE)`;
-  `function f(a<newline>, b)` is "syntax error" at the function, gawk's "unexpected
-  newline or end of string" on line 2.
+- Rust 1.99 (Dependabot's PR #1, which the user took): fix what its clippy flags (the
+  `double_must_use` that `async_recursion` expands to in cash-core, and whatever follows
+  once that builds) and raise `rust-version` with `rust-toolchain.toml`.
 
 ---
 
