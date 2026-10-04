@@ -67,6 +67,20 @@ impl builtins::Command for CdCommand {
             }
         };
 
+        // CDPATH, as Bash searches it: a relative name not starting with `.` or `..` is
+        // looked for in each entry first, an empty entry being the current folder; the
+        // folder found through a non-empty entry is printed. It was not searched at all.
+        if self
+            .target_dir
+            .as_ref()
+            .is_some_and(|dir| dir.as_os_str() != "-")
+        {
+            if let Some(found) = search_cdpath(&context, &target_dir) {
+                should_print = found.1;
+                target_dir = found.0;
+            }
+        }
+
         if self.use_physical_dir
             || context
                 .shell
@@ -94,11 +108,51 @@ impl builtins::Command for CdCommand {
         // the directory change is successful, the absolute pathname of the new working
         // directory is written to the standard output.
         if should_print {
-            writeln!(context.stdout(), "{}", target_dir.display())?;
+            writeln!(
+                context.stdout(),
+                "{}",
+                cash_win32::path::render(&target_dir)
+            )?;
         }
 
         Ok(ExecutionResult::success())
     }
+}
+
+/// The folder `target` names through `CDPATH`, and whether a non-empty entry gave it (so
+/// `cd` prints it); `None` when `target` is absolute, starts with `.` or `..`, `CDPATH`
+/// is unset or empty, or no entry holds it.
+fn search_cdpath(
+    context: &cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
+    target: &std::path::Path,
+) -> Option<(PathBuf, bool)> {
+    if target.has_root() || target.is_absolute() {
+        return None;
+    }
+    let first = target.components().next()?;
+    if matches!(
+        first,
+        std::path::Component::CurDir
+            | std::path::Component::ParentDir
+            | std::path::Component::Prefix(_)
+    ) {
+        return None;
+    }
+    let cdpath = context.shell.env_str("CDPATH")?;
+    if cdpath.is_empty() {
+        return None;
+    }
+    cash_win32::env::split_path_preserving_empty(&cdpath).find_map(|entry| {
+        let base = if entry.is_empty() {
+            context.shell.working_dir().to_path_buf()
+        } else {
+            context
+                .shell
+                .absolute_path(cash_win32::path::accept_path(entry))
+        };
+        let candidate = base.join(target);
+        candidate.is_dir().then_some((candidate, !entry.is_empty()))
+    })
 }
 
 /// Reports a failed change of directory as bash does, `cd: DIR: No such file or

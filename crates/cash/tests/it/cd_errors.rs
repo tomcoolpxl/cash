@@ -69,6 +69,31 @@ fn a_path_that_lost_its_backslashes_gets_a_hint() {
     assert_eq!(status, 1);
 }
 
+/// `CDPATH` is searched as Bash searches it: a non-empty entry's folder is printed, an
+/// empty entry is the current folder, and `./name` is not looked up; it was ignored.
+#[test]
+fn cdpath_is_searched_as_bash_searches_it() {
+    let scratch = crate::common::Scratch::new("cdpath");
+    std::fs::create_dir_all(scratch.join("a").join("sub")).unwrap();
+    std::fs::create_dir_all(scratch.join("here")).unwrap();
+    let out = cash_command()
+        .current_dir(scratch.path())
+        .args([
+            "-c",
+            r#"CDPATH="$PWD/a"; cd sub; echo "[$PWD]"
+               cd "$OLDPWD"; CDPATH=":$PWD/a"; cd here; echo "[${PWD##*/}]"
+               cd ..; cd ./sub 2>/dev/null; echo "rc $?""#,
+        ])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let lines: Vec<&str> = stdout.lines().collect();
+    assert_eq!(lines.len(), 4, "{stdout}");
+    assert!(lines[0].ends_with("/a/sub"), "{stdout}");
+    assert_eq!(lines[1], format!("[{}]", lines[0]), "{stdout}");
+    assert_eq!(lines[2..], ["[here]", "rc 1"], "{stdout}");
+}
+
 #[test]
 fn an_ordinary_failure_gets_no_hint() {
     for script in [
