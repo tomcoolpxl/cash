@@ -179,22 +179,12 @@ pub fn parse_char_escape(line: &mut ScriptCharProvider) -> Option<char> {
             }
         }
 
-        'u' => {
-            // Short Unicode escape \uXXXX (exactly four hex digits)
-            line.advance(); // move past 'x'
-            match parse_numeric_escape(line, |c| c.is_ascii_hexdigit(), 4, 16) {
-                Some(decoded) => Some(decoded),
-                None => Some('u'),
-            }
-        }
-
-        'U' => {
-            // Short Unicode escape \UXXXXXXXX (exactly eight hex digits)
-            line.advance(); // move past 'x'
-            match parse_numeric_escape(line, |c| c.is_ascii_hexdigit(), 8, 16) {
-                Some(decoded) => Some(decoded),
-                None => Some('U'),
-            }
+        // GNU sed has no Unicode escapes: `\u` and `\U` are the letters themselves in a
+        // regex, in `y` and in `a`, `i` and `c` text, while a replacement reads them as
+        // case conversions before it gets here.
+        c @ ('u' | 'U') => {
+            line.advance();
+            Some(c)
         }
 
         'x' => {
@@ -309,7 +299,13 @@ fn parse_character_class(
             if line.eol() {
                 break;
             }
-            if let Some(decoded) = parse_char_escape(line) {
+            if matches!(line.current(), 'u' | 'U') {
+                // In a bracket expression GNU sed takes `\u` as the backslash and the
+                // letter, both in the set; the RE engine would read a Unicode escape.
+                result.extend_from_slice(b"\\\\");
+                result.push(line.current_byte());
+                line.advance();
+            } else if let Some(decoded) = parse_char_escape(line) {
                 push_script_char(&mut result, decoded, character_mode);
             } else {
                 result.push(b'\\');
@@ -888,16 +884,18 @@ mod tests {
         assert_eq!(bytes, "é".as_bytes());
     }
 
+    // GNU sed has no Unicode escapes: an escaped `u` or `U` is the letter, and the hex
+    // digits after it stay where they are.
     #[test]
-    fn test_short_unicode_escape_valid() {
-        assert_eq!(escape_result_with_current("u2665;"), (Some('♥'), Some(';')));
+    fn test_short_unicode_escape_is_the_letter() {
+        assert_eq!(escape_result_with_current("u2665;"), (Some('u'), Some('2')));
     }
 
     #[test]
-    fn test_long_unicode_escape_valid() {
+    fn test_long_unicode_escape_is_the_letter() {
         assert_eq!(
             escape_result_with_current("U0001F600;"),
-            (Some('😀'), Some(';'))
+            (Some('U'), Some('0'))
         );
     }
 

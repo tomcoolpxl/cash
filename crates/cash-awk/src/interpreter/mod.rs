@@ -1180,9 +1180,12 @@ pub fn interpret_with_eol(
             &mut global_env,
             &mut input,
         )?;
-        if let ExecutionResult::Exit(val) = begin_result {
-            return_value = val;
-            break;
+        match begin_result {
+            ExecutionResult::Exit(val) => {
+                return_value = val;
+                break;
+            }
+            other => no_next_in_special_action(&other, "BEGIN")?,
         }
     }
 
@@ -1314,11 +1317,27 @@ pub fn interpret_with_eol(
             &mut global_env,
             &mut input,
         )?;
-        if let ExecutionResult::Exit(val) = end_result {
-            return_value = val;
-            break;
+        match end_result {
+            ExecutionResult::Exit(val) => {
+                return_value = val;
+                break;
+            }
+            other => no_next_in_special_action(&other, "END")?,
         }
     }
 
     Ok(return_value)
+}
+
+/// The error of a `next` or `nextfile` that a function called from a BEGIN or END action
+/// ran, in gawk's words; the compiler rejects one written in the action itself.
+fn no_next_in_special_action(result: &ExecutionResult, action: &str) -> Result<(), String> {
+    let keyword = match result {
+        ExecutionResult::Next => "next",
+        ExecutionResult::NextFile => "nextfile",
+        _ => return Ok(()),
+    };
+    Err(format!(
+        "`{keyword}' cannot be called from a `{action}' rule"
+    ))
 }

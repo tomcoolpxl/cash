@@ -9,8 +9,9 @@
 // file that was distributed with this source code.
 
 use crate::sed::command::{
-    Address, CharacterMode, Command, CommandData, ParsedTransliteration, ProcessingContext,
-    RegexMode, ReplacementPart, ReplacementTemplate, Substitution, Transliteration,
+    Address, CaseConversion, CharacterMode, Command, CommandData, ParsedTransliteration,
+    ProcessingContext, RegexMode, ReplacementPart, ReplacementTemplate, Substitution,
+    Transliteration,
 };
 use crate::sed::delimited_parser::{
     os_string_from_bytes, parse_char_escape, parse_regex_for_mode, parse_transliteration_for_mode,
@@ -353,7 +354,8 @@ fn compile_address_range(
         let is_step_match = line.current() == '~'; // E.g. 0~2: Pick even-numbered lines
         line.advance();
         line.eat_spaces();
-        let is_step_end = if line.current() == '~' {
+        // At the end of the script line (`1~`) there is no current character.
+        let is_step_end = if !is_step_match && !line.eol() && line.current() == '~' {
             // E.g. /foo/,~10: Start at foo, include all lines until multiple of 10 is reached.
             line.advance();
             line.eat_spaces();
@@ -367,46 +369,37 @@ fn compile_address_range(
             return compilation_error(lines, line, "~step is invalid in POSIX mode");
         }
 
-        // Look for second address.
-        if !line.eol() {
+        if is_step_match || is_step_end {
+            // GNU sed reads the step as a number that may be missing, which counts as 0,
+            // and leaves whatever follows to the command: `1~p` and `1~0p` are line 1,
+            // `2,~p` and `2,+p` just line 2, and `1~/x/` is an unknown command `/`.
+            let step_n = parse_number(lines, line, false)?.unwrap_or(0);
+            if is_step_match {
+                // `first~0` is the line `first` alone, a single address, as in GNU sed;
+                // so `0~0` is line 0, which only `r` may use (checked below).
+                if step_n != 0 {
+                    cmd.addr2 = Some(Address::StepMatch(step_n));
+                    n_addr += 1;
+                }
+            } else {
+                if is_line0 {
+                    return compilation_error(lines, line, ERR_ADDRESS_0_USAGE);
+                }
+                cmd.addr2 = Some(Address::StepEnd(step_n));
+                n_addr += 1;
+            }
+        } else if !line.eol() {
+            // Look for second address.
             // What follows a comma has to be an address, as GNU sed has it: `1,xp` is
             // its "unexpected `,'".
-            if !is_step_match
-                && !is_step_end
-                && !is_address_char(line.current())
-                && line.current() != '+'
-            {
+            if !is_address_char(line.current()) && line.current() != '+' {
                 return compilation_error(lines, line, "unexpected `,'");
             }
             let addr2 = compile_address(lines, line, context)?;
-            // Set step_n to the number specified in the (required numeric) address.
-            let step_n = if is_step_match || is_step_end {
-                match addr2 {
-                    Address::Line(n) => n,
-                    _ => {
-                        return compilation_error(
-                            lines,
-                            line,
-                            "~step can only be specified through numeric values",
-                        );
-                    }
-                }
-            } else {
-                0 // dummy, not used
-            };
-
-            if is_line0 && !matches!(addr2, Address::Re(_)) && !is_step_match {
+            if is_line0 && !matches!(addr2, Address::Re(_)) {
                 return compilation_error(lines, line, ERR_ADDRESS_0_USAGE);
             }
-
-            // If needed, transform Address::Line into Address::Step*.
-            cmd.addr2 = if is_step_match {
-                Some(Address::StepMatch(step_n))
-            } else if is_step_end {
-                Some(Address::StepEnd(step_n))
-            } else {
-                Some(addr2)
-            };
+            cmd.addr2 = Some(addr2);
             n_addr += 1;
         }
     }
@@ -446,8 +439,7 @@ fn read_file_path(lines: &ScriptLineProvider, line: &mut ScriptCharProvider) -> 
 }
 
 /// Compile and return a single range address specification.
-// Due to their irregular syntax ~ addresses are returned as Line() and adjusted
-// in compile_address_range().
+// The `~` forms are read by compile_address_range() itself.
 fn compile_address(
     lines: &ScriptLineProvider,
     line: &mut ScriptCharProvider,
@@ -490,15 +482,18 @@ fn compile_address(
             Ok(Address::Last)
         }
         '+' => {
+            // As in GNU sed, blanks may follow the `+`, and a missing number counts as
+            // 0: `2,+p` is line 2 alone.
             line.advance();
-            let number = parse_required_number(lines, line)?;
+            line.eat_spaces();
+            let number = parse_number(lines, line, false)?.unwrap_or(0);
             Ok(Address::RelLine(number))
         }
         c if c.is_ascii_digit() => {
             let number = parse_required_number(lines, line)?;
             Ok(Address::Line(number))
         }
-        // Reached after `,` or `~` by what cannot start an address: `1,xp`, `1~p`.
+        // compile_address_range() calls this only on what can start an address.
         _ => compilation_error(lines, line, "expected context address"),
     }
 }
@@ -758,10 +753,13 @@ fn compile_regex(
 }
 
 /// Compile a regular expression replacement string according to character mode.
+/// With `case_conversion` (GNU, not --posix), `\U`, `\L`, `\E`, `\u` and `\l` convert
+/// the case of what follows.
 pub fn compile_replacement(
     lines: &mut ScriptLineProvider,
     line: &mut ScriptCharProvider,
     character_mode: CharacterMode,
+    case_conversion: bool,
 ) -> UResult<ReplacementTemplate> {
     let mut parts = Vec::new();
     let mut literal = Vec::new();
@@ -817,6 +815,21 @@ pub fn compile_replacement(
                             line.advance();
                         }
 
+                        // GNU's case conversions, which --posix leaves out.
+                        c @ ('U' | 'L' | 'E' | 'u' | 'l') if case_conversion => {
+                            if !literal.is_empty() {
+                                parts.push(ReplacementPart::Literal(std::mem::take(&mut literal)));
+                            }
+                            parts.push(ReplacementPart::Case(match c {
+                                'U' => CaseConversion::Upper,
+                                'L' => CaseConversion::Lower,
+                                'u' => CaseConversion::UpperNext,
+                                'l' => CaseConversion::LowerNext,
+                                _ => CaseConversion::End,
+                            }));
+                            line.advance();
+                        }
+
                         // other escape sequences
                         _ => {
                             if let Some(decoded) = parse_char_escape(line) {
@@ -851,7 +864,7 @@ pub fn compile_replacement(
                     if !literal.is_empty() {
                         parts.push(ReplacementPart::Literal(literal));
                     }
-                    return Ok(ReplacementTemplate::new(parts));
+                    return Ok(ReplacementTemplate::new(parts).with_character_mode(character_mode));
                 }
 
                 _ => {
@@ -896,7 +909,7 @@ fn compile_subst_command(
     let pattern = parse_regex_for_mode(lines, line, regex_mode, context.character_mode)?;
     let mut subst = Box::new(Substitution::default());
 
-    subst.replacement = compile_replacement(lines, line, context.character_mode)?;
+    subst.replacement = compile_replacement(lines, line, context.character_mode, !context.posix)?;
     compile_subst_flags(lines, line, &mut subst, context.posix, context.sandbox)?;
 
     if pattern.is_empty() && (subst.ignore_case || subst.multiline) {
@@ -2141,15 +2154,42 @@ mod tests {
         assert!(matches!(cmd.borrow().addr2, Some(Address::StepEnd(10))));
     }
 
+    // As in GNU sed, a step that is not a number is a step of 0, so `1~` is line 1 and
+    // what follows is left to the command: `1~/x/` is the command `/`.
     #[test]
-    fn test_compile_step_re_address_rejected() {
+    fn test_compile_step_without_a_number_is_zero() {
         let (lines, mut chars) = make_providers("1~/x/");
         let mut cmd = Rc::new(RefCell::new(Command::default()));
-        let err = compile_address_range(&lines, &mut chars, &mut cmd, &ctx()).unwrap_err();
+        let n_addr = compile_address_range(&lines, &mut chars, &mut cmd, &ctx()).unwrap();
+        assert_eq!(n_addr, 1);
+        assert!(matches!(cmd.borrow().addr1, Some(Address::Line(1))));
+        assert!(cmd.borrow().addr2.is_none());
+        assert_eq!(chars.current(), '/');
 
-        assert!(
-            err.to_string()
-                .contains("~step can only be specified through numeric values")
+        for (script, step) in [("2,~p", 0), ("2,~ 3p", 3)] {
+            let (lines, mut chars) = make_providers(script);
+            let mut cmd = Rc::new(RefCell::new(Command::default()));
+            let n_addr = compile_address_range(&lines, &mut chars, &mut cmd, &ctx()).unwrap();
+            assert_eq!(n_addr, 2, "{script}");
+            assert!(matches!(cmd.borrow().addr2, Some(Address::StepEnd(s)) if s == step));
+            assert_eq!(chars.current(), 'p');
+        }
+
+        for (script, count) in [("2,+p", 0), ("2,+ 1p", 1)] {
+            let (lines, mut chars) = make_providers(script);
+            let mut cmd = Rc::new(RefCell::new(Command::default()));
+            let n_addr = compile_address_range(&lines, &mut chars, &mut cmd, &ctx()).unwrap();
+            assert_eq!(n_addr, 2, "{script}");
+            assert!(matches!(cmd.borrow().addr2, Some(Address::RelLine(n)) if n == count));
+            assert_eq!(chars.current(), 'p');
+        }
+
+        // At the end of the line, where there was no current character to look at.
+        let (lines, mut chars) = make_providers("1~");
+        let mut cmd = Rc::new(RefCell::new(Command::default()));
+        assert_eq!(
+            compile_address_range(&lines, &mut chars, &mut cmd, &ctx()).unwrap(),
+            1
         );
     }
 
@@ -2428,7 +2468,7 @@ mod tests {
         lines: &mut ScriptLineProvider,
         line: &mut ScriptCharProvider,
     ) -> UResult<ReplacementTemplate> {
-        compile_replacement(lines, line, CharacterMode::Utf8)
+        compile_replacement(lines, line, CharacterMode::Utf8, true)
     }
 
     #[test]
@@ -2511,7 +2551,8 @@ mod tests {
     #[test]
     fn test_compile_replacement_escape_byte_mode() {
         let (mut lines, mut chars) = make_providers("/\\xE9/");
-        let template = compile_replacement(&mut lines, &mut chars, CharacterMode::Byte).unwrap();
+        let template =
+            compile_replacement(&mut lines, &mut chars, CharacterMode::Byte, true).unwrap();
 
         assert_eq!(template.parts.len(), 1);
         assert!(matches!(&template.parts[0], ReplacementPart::Literal(s) if s == b"\xE9"));
@@ -2520,7 +2561,8 @@ mod tests {
     #[test]
     fn test_compile_replacement_escape_utf8_mode() {
         let (mut lines, mut chars) = make_providers("/\\xE9/");
-        let template = compile_replacement(&mut lines, &mut chars, CharacterMode::Utf8).unwrap();
+        let template =
+            compile_replacement(&mut lines, &mut chars, CharacterMode::Utf8, true).unwrap();
 
         assert_eq!(template.parts.len(), 1);
         assert!(matches!(

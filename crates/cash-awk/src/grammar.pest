@@ -30,7 +30,12 @@ sign            =  { "+" | "-" }
 float_suffix    =  { "f" | "l" | "F" | "L" }
 
 letter    =  { ('a'..'z') | ('A'..'Z') }
-name      = @{ !(keyword | builtin_func) ~ (letter | "_") ~ (letter | "_" | digit)* }
+name      = @{ !(keyword | builtin_func | special_pattern) ~ (letter | "_") ~ (letter | "_" | digit)* }
+
+// `BEGIN` and `END` are reserved, as in gawk: not variables, so `END END END` is a
+// syntax error rather than a pattern.
+special_pattern = _{ ("BEGIN" | "END") ~ !(letter | "_" | digit) }
+
 func_name = @{ name ~ &"(" }
 
 builtin_func = _{
@@ -160,7 +165,9 @@ for_init      = { simple_statement? }
 for_condition = { expr? }
 for_update    = { simple_statement? }
 t_foreach  =  { "for" ~ "(" ~ name ~ in_op ~ name ~ ")" ~ opt_newline ~ terminated_statement }
-empty_stmt = _{ ";" ~ opt_newline }
+// A node of its own, so that an empty body keeps its place: in `if (c); else s` the
+// `else` branch is not the `if`'s body.
+empty_stmt =  { ";" ~ opt_newline }
 
 unterminated_statement = _{
     terminatable_statement

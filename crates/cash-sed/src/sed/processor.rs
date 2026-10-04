@@ -154,7 +154,9 @@ fn applies(
                     Address::Line(n) if linenum >= *n => {
                         context.last_address = true;
                     }
-                    Address::RelLine(n) if *n == 0 => {
+                    // `addr1,+0` and `addr1,~0` are the first line alone, as in GNU sed;
+                    // `~0` would otherwise wait for a multiple of 0, which never comes.
+                    Address::RelLine(0) | Address::StepEnd(0) => {
                         context.last_address = true;
                     }
                     _ => {

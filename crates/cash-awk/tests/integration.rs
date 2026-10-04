@@ -1400,14 +1400,154 @@ fn test_awk_exit_and_next_from_a_pattern() {
     }
 }
 
-// The precision of `%s` counts bytes; one that ends inside a character stops before it
-// rather than panicking (TODO.md 14.6).
+// The width and precision of `%s` and `%c` count characters, as `length` and `substr`
+// do and as gawk does in a UTF-8 locale; they counted bytes, so `%.1s` of "é" printed
+// nothing and `%3s` of "é" one space (TODO.md 14.6).
 #[test]
-fn test_awk_string_precision_inside_a_character() {
+fn test_awk_string_width_and_precision_count_characters() {
+    for (program, expected) in [
+        (
+            r#"BEGIN { printf "[%.1s][%.2s][%.3s]\n", "é", "éa", "éa" }"#,
+            "[é][éa][éa]\n",
+        ),
+        (
+            r#"BEGIN { printf "[%3s][%.1s]\n", "é", "éa" }"#,
+            "[  é][é]\n",
+        ),
+        (
+            r#"BEGIN { printf "[%-4s][%5.1s][%-3.2s]\n", "éé", "éa", "aéb" }"#,
+            "[éé  ][    é][aé ]\n",
+        ),
+        (
+            r#"BEGIN { printf "[%3c][%-3c][%c]\n", "é", "éa", "€x" }"#,
+            "[  é][é  ][€]\n",
+        ),
+        (
+            r#"BEGIN { s = sprintf("%3s", "é"); print length(s) }"#,
+            "3\n",
+        ),
+    ] {
+        run_test(plan(program, "", expected, 0));
+    }
+}
+
+/// Runs awk on `program` with no input, killing it should it run past a bound, so that a
+/// hang fails the test rather than stalling the run.
+fn run_bounded(program: &str) -> Output {
+    use std::time::{Duration, Instant};
+    let mut child = Command::new(env!("CARGO_BIN_EXE_awk"))
+        .arg(program)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .env("LC_ALL", "C")
+        .spawn()
+        .expect("failed to spawn awk");
+    // Under nextest's own bound for a test (15 seconds), so that this one reports first.
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        if child.try_wait().expect("failed to poll awk").is_some() {
+            return child.wait_with_output().expect("failed to wait on awk");
+        }
+        if Instant::now() > deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("awk did not finish {program:?} in time");
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+// A syntax error where the rest of the program starts with `BEGIN`, `END` or `function`
+// is reported and ends the run: the search for further errors made no progress there,
+// and ran with memory growing without end. Each further error is placed in the program
+// as a whole, with its own line (TODO.md 14.6).
+#[test]
+fn test_awk_syntax_errors_before_begin_end_or_function_end_the_run() {
+    for (program, places) in [
+        ("BEGIN { ( } BEGIN { ( }", &["1:11", "1:23"][..]),
+        ("function ( function (", &["1:10", "1:21"][..]),
+        (
+            "BEGIN { x = ( }\nBEGIN { y = 1 }\nEND { z = ( }",
+            &["1:15", "3:13"][..],
+        ),
+        ("BEGIN { ( } END { ( } function ( BEGIN", &["1:11"][..]),
+        ("END END END", &["1:5"][..]),
+        ("BEGINé{ ( }", &["1:6"][..]),
+    ] {
+        let output = run_bounded(program);
+        assert_eq!(output.status.code(), Some(1), "{program}");
+        assert!(output.stdout.is_empty(), "{program}");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        for place in places {
+            assert!(stderr.contains(place), "{program}: {place} in {stderr}");
+        }
+    }
+}
+
+// An empty statement is a body of its own: in `if (c); else s` the `else` branch is not
+// the `if`'s body, which ran `s` when `c` was true (TODO.md 14.6). The expected output is
+// gawk 5.4's.
+#[test]
+fn test_awk_empty_statement_before_else() {
+    for (program, expected) in [
+        (r#"BEGIN { if (1); else print "y" }"#, ""),
+        (r#"BEGIN { if (0); else print "n" }"#, "n\n"),
+        (
+            r#"BEGIN { if (1) ; else print "y"; print "after" }"#,
+            "after\n",
+        ),
+        ("BEGIN { if (1)\n;\nelse\nprint \"y\"\nprint \"z\" }", "z\n"),
+        (
+            r#"BEGIN { if (1) if (0); else print "inner else" }"#,
+            "inner else\n",
+        ),
+        (
+            r#"BEGIN { if (0) if (1); else print "x"; print "a" }"#,
+            "a\n",
+        ),
+        (r#"BEGIN { if (0); else { print "b" } }"#, "b\n"),
+        ("BEGIN { while (i++ < 3); print i }", "4\n"),
+        ("BEGIN { a[1]; for (k in a); print k }", "1\n"),
+    ] {
+        run_test(plan(program, "", expected, 0));
+    }
+}
+
+// `next` and `nextfile` have no record to go on from in BEGIN or END: written there they
+// are compile errors, and run there by a function they are fatal, both in gawk's words.
+// `BEGIN` and `END` are not variables, so `END END END` is a syntax error. Each ran
+// silently with status 0 (TODO.md 14.6).
+#[test]
+fn test_awk_next_in_begin_or_end_is_an_error() {
+    for (program, message) in [
+        ("BEGIN { next }", "`next' used in BEGIN action"),
+        ("END { nextfile }", "`nextfile' used in END action"),
+        ("BEGIN { if (1) { next } }", "`next' used in BEGIN action"),
+        (
+            "function f() { next } BEGIN { f() }",
+            "`next' cannot be called from a `BEGIN' rule",
+        ),
+        (
+            "function f() { nextfile } END { f() }",
+            "`nextfile' cannot be called from a `END' rule",
+        ),
+        ("END END END", "expected action"),
+        ("END", "expected action"),
+        ("BEGIN", "expected action"),
+    ] {
+        run_test_with_checker(plan(program, "", "", 1), |_, output| {
+            assert_eq!(output.status.code(), Some(1), "{program}");
+            assert!(output.stdout.is_empty(), "{program}");
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            assert!(stderr.contains(message), "{program}: {stderr}");
+        });
+    }
+    // In a function that a rule calls, or in a rule, they are as before.
     run_test(plan(
-        r#"BEGIN { printf "[%.1s][%.2s][%.3s]\n", "é", "éa", "éa" }"#,
-        "",
-        "[][é][éa]\n",
+        "function f() { next } { f(); print }\nEND { print NR }",
+        "a\nb\n",
+        "2\n",
         0,
     ));
 }

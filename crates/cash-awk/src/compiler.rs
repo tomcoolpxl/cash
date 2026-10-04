@@ -251,8 +251,7 @@ impl<'i> GrammarChildren<'i> for Pairs<'i, Rule> {
     #[expect(
         clippy::expect_used,
         reason = "callers take only the children their rule's grammar requires; optional \
-                  parts, and a statement that may be the silent `empty_stmt`, are taken \
-                  with `next`"
+                  parts are taken with `next`"
     )]
     fn child(&mut self) -> Pair<'i, Rule> {
         self.next()
@@ -507,6 +506,9 @@ struct Compiler {
     last_global_var_id: Cell<u32>,
     last_global_function_id: Cell<u32>,
     in_function: bool,
+    /// `"BEGIN"` or `"END"` while compiling one of those actions, where `next` and
+    /// `nextfile` are errors.
+    special_action: Option<&'static str>,
     loop_stack: Vec<LoopStubs>,
 }
 
@@ -585,6 +587,7 @@ impl Default for Compiler {
             last_global_function_id: Cell::new(0),
             loop_stack: Vec::new(),
             in_function: false,
+            special_action: None,
         }
     }
 }
@@ -1417,16 +1420,9 @@ impl Compiler {
 
         self.loop_stack.push(LoopStubs::default());
 
-        // An empty body (`do ; while (c)`) is the silent `empty_stmt`, which leaves no
-        // node, so the condition is the last child rather than the second.
-        let first = inner.child();
-        let condition = match inner.next() {
-            Some(condition) => {
-                self.compile_stmt(first, instructions, locals)?;
-                condition
-            }
-            None => first,
-        };
+        // An empty body (`do ; while (c)`) is an `empty_stmt` node.
+        self.compile_stmt(inner.child(), instructions, locals)?;
+        let condition = inner.child();
 
         let condition_start = instructions.len();
         let condition_line_col = condition.line_col();
@@ -1491,9 +1487,7 @@ impl Compiler {
 
         self.loop_stack.push(LoopStubs::default());
 
-        if let Some(body) = inner.next() {
-            self.compile_stmt(body, instructions, locals)?;
-        }
+        self.compile_stmt(inner.child(), instructions, locals)?;
 
         instructions.push(
             OpCode::Jump(distance(instructions.len(), iter_deref_location)),
@@ -1551,10 +1545,8 @@ impl Compiler {
         };
 
         let update = inner.child();
-        // An empty body (`for (;;) ;`) is the silent `empty_stmt`, which leaves no node.
-        if let Some(body) = inner.next() {
-            self.compile_stmt(body, instructions, locals)?;
-        }
+        // An empty body (`for (;;) ;`) is an `empty_stmt` node.
+        self.compile_stmt(inner.child(), instructions, locals)?;
         let update_start = instructions.len();
         if let Some(update) = update.into_inner().next() {
             self.compile_simple_statement(update, instructions, locals)?;
@@ -1596,9 +1588,7 @@ impl Compiler {
         let while_jump_index = instructions.len();
         instructions.push(OpCode::Invalid, condition_line_col);
 
-        if let Some(body) = inner.next() {
-            self.compile_stmt(body, instructions, locals)?;
-        }
+        self.compile_stmt(inner.child(), instructions, locals)?;
         instructions.push(
             OpCode::Jump(distance(instructions.len(), condition_start)),
             condition_line_col,
@@ -1632,10 +1622,9 @@ impl Compiler {
         let if_jump_index = instructions.len();
         instructions.push(OpCode::Invalid, condition_line_col);
 
-        // An empty body (`if (c) ;`) is the silent `empty_stmt`, which leaves no node.
-        if let Some(body) = inner.next() {
-            self.compile_stmt(body, instructions, locals)?;
-        }
+        // An empty body (`if (c) ;`) is an `empty_stmt` node, so an `else` that follows
+        // it is the third child, never the body.
+        self.compile_stmt(inner.child(), instructions, locals)?;
 
         if let Some(else_body) = inner.next() {
             let else_jump_index = instructions.len();
@@ -1682,12 +1671,23 @@ impl Compiler {
             Rule::ut_for => self.compile_for(stmt, instructions, locals),
             Rule::ut_foreach => self.compile_for_each(stmt, instructions, locals),
             Rule::simple_statement => self.compile_simple_statement(stmt, instructions, locals),
-            Rule::nextfile => {
-                instructions.push(OpCode::NextFile, stmt.line_col());
-                Ok(())
-            }
-            Rule::next => {
-                instructions.push(OpCode::Next, stmt.line_col());
+            Rule::empty_stmt => Ok(()),
+            Rule::next | Rule::nextfile => {
+                let is_next = stmt.as_rule() == Rule::next;
+                // gawk's words: there is no record to go on from in BEGIN or END.
+                if let Some(action) = self.special_action {
+                    let keyword = if is_next { "next" } else { "nextfile" };
+                    return Err(pest_error_from_span(
+                        stmt.as_span(),
+                        format!("`{keyword}' used in {action} action"),
+                    ));
+                }
+                let opcode = if is_next {
+                    OpCode::Next
+                } else {
+                    OpCode::NextFile
+                };
+                instructions.push(opcode, stmt.line_col());
                 Ok(())
             }
             Rule::break_stmt => {
@@ -1957,22 +1957,63 @@ fn improve_error(error: PestError, file: &str) -> PestError {
     }
 }
 
+/// An error found parsing the source from byte `offset` on, placed in the whole source,
+/// so that its line, column and quoted line are the source's own.
+fn rebase_error(error: PestError, source: &str, offset: usize) -> PestError {
+    let PestError {
+        variant, location, ..
+    } = error;
+    match location {
+        InputLocation::Pos(p) => match pest::Position::new(source, offset + p) {
+            Some(pos) => PestError::new_from_pos(variant, pos),
+            None => PestError::new_from_pos(variant, pest::Position::from_start(source)),
+        },
+        InputLocation::Span((start, end)) => {
+            match pest::Span::new(source, offset + start, offset + end) {
+                Some(span) => PestError::new_from_span(variant, span),
+                None => PestError::new_from_pos(variant, pest::Position::from_start(source)),
+            }
+        }
+    }
+}
+
+/// The first character boundary of `source` after `position`.
+fn next_char_boundary(source: &str, position: usize) -> usize {
+    position
+        + source
+            .get(position..)
+            .and_then(|rest| rest.chars().next())
+            .map_or(1, char::len_utf8)
+}
+
 fn gather_errors(first_error: PestError, source: &str, errors: &mut Vec<PestError>, file: &str) {
-    let first_error_end = location_end(&first_error.location);
-
+    let mut resume_at = location_end(&first_error.location);
     errors.push(improve_error(first_error, file));
-    let mut parsing_start = first_error_end;
 
+    // Each round parses the source from the next checkpoint after the last error on,
+    // and the next round starts past that round's error, so that the search always moves
+    // on, even when the rest begins with a checkpoint (`BEGIN`, `END`, `function`).
     // Pest's error positions and the checkpoints are character boundaries, so `get`
     // finds the rest of the source; it ends the search should one not be.
-    while let Some(checkpoint_offset) = source.get(parsing_start..).and_then(next_checkpoint) {
-        parsing_start += checkpoint_offset;
+    while let Some(checkpoint_offset) = source.get(resume_at..).and_then(next_checkpoint) {
+        let parsing_start = resume_at + checkpoint_offset;
         let Some(rest) = source.get(parsing_start..) else {
             break;
         };
         match AwkParser::parse(Rule::program, rest) {
             Ok(_) => break,
-            Err(err) => errors.push(improve_error(err, file)),
+            Err(err) => {
+                let error_end = parsing_start + location_end(&err.location);
+                errors.push(improve_error(
+                    rebase_error(err, source, parsing_start),
+                    file,
+                ));
+                resume_at = if error_end > parsing_start {
+                    error_end
+                } else {
+                    next_char_boundary(source, parsing_start)
+                };
+            }
         }
     }
 }
@@ -2022,11 +2063,13 @@ pub fn compile_program(sources: &[SourceFile]) -> Result<Program, CompilerErrors
                 Rule::begin_action | Rule::end_action => {
                     let is_begin_action = item.as_rule() == Rule::begin_action;
                     let mut instructions = Instructions::default();
+                    compiler.special_action = Some(if is_begin_action { "BEGIN" } else { "END" });
                     let result = compiler.compile_action(
                         first_child(item),
                         &mut instructions,
                         &HashMap::new(),
                     );
+                    compiler.special_action = None;
                     if let Err(err) = result {
                         errors.push(improve_error(err, &filename));
                     }
@@ -3435,14 +3478,23 @@ mod test {
 
     #[test]
     fn test_compile_next() {
-        let (instructions, _) = compile_stmt("next;");
-        assert_eq!(instructions, vec![OpCode::Next]);
+        let program = compile_correct_program("{ next; }");
+        assert_eq!(program.rules[0].action.instructions, vec![OpCode::Next]);
     }
 
     #[test]
     fn test_compile_nextfile() {
-        let (instructions, _) = compile_stmt("nextfile;");
-        assert_eq!(instructions, vec![OpCode::NextFile]);
+        let program = compile_correct_program("{ nextfile; }");
+        assert_eq!(program.rules[0].action.instructions, vec![OpCode::NextFile]);
+    }
+
+    #[test]
+    fn test_next_and_nextfile_in_begin_or_end_do_not_compile() {
+        does_not_compile("BEGIN { next }");
+        does_not_compile("BEGIN { nextfile }");
+        does_not_compile("END { while (1) next }");
+        does_not_compile("END { nextfile }");
+        compile_correct_program("function f() { next } BEGIN { f() }");
     }
 
     #[test]

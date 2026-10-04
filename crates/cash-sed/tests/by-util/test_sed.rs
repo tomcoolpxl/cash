@@ -2413,26 +2413,158 @@ fn test_no_address_after_a_comma_is_an_error() {
                 "sed: <script argument 1>:1:{col}: error: unexpected `,'\n"
             ));
     }
-    for script in ["1~p", "1,~p"] {
+}
+
+/// A step or count left out after `~`, `,~` or `,+` is 0, as in GNU sed: `1~p` and
+/// `2,~p` are the first line alone, as `1~0p` and `2,+0p` are. Each was "expected context
+/// address" or "number expected", and `addr1,~0` never ended (TODO.md 14.6). The expected
+/// output is GNU sed 4.9's.
+#[test]
+fn test_missing_step_or_count_is_zero() {
+    for (script, expected) in [
+        ("1~p", "1\n"),
+        ("2~p", "2\n"),
+        ("2~ p", "2\n"),
+        ("1~0p", "1\n"),
+        ("1,~p", "1\n"),
+        ("2,~p", "2\n"),
+        ("2,~0p", "2\n"),
+        ("2,~ 3p", "2\n3\n"),
+        ("1,+p", "1\n"),
+        ("2,+p", "2\n"),
+        ("2,+ 1p", "2\n3\n"),
+        ("$,+p", "5\n"),
+        ("/3/,~p", "3\n"),
+        ("/3/,+p", "3\n"),
+        ("2,~0!p", "1\n3\n4\n5\n"),
+    ] {
         new_ucmd!()
             .args(&["-n", script])
+            .pipe_in("1\n2\n3\n4\n5\n")
+            .succeeds()
+            .stdout_only(expected);
+    }
+    // `c` prints its text at the end of a range, which `,~0` makes the first line.
+    new_ucmd!()
+        .args(&["2,~0c\\\nT"])
+        .pipe_in("1\n2\n3\n")
+        .succeeds()
+        .stdout_only("1\nT\n3\n");
+    // `0~` with no step is line 0, which only `r` may use.
+    for script in ["0~p", "0~0p", "0,~p"] {
+        new_ucmd!()
+            .args(&["-n", script])
+            .pipe_in("1\n")
             .fails()
             .code_is(1)
-            .no_stdout()
-            .stderr_contains("error: expected context address");
+            .no_stdout();
+    }
+    // What follows a missing step is the command, as in GNU sed, and `1~` has none.
+    for script in ["1~/x/p", "1~"] {
+        new_ucmd!()
+            .args(&["-n", script])
+            .pipe_in("1\n")
+            .fails()
+            .code_is(1)
+            .no_stdout();
     }
 }
 
-/// A `\u` or `\U` escape whose value is no character, a surrogate or a value past
-/// U+10FFFF, is read as text, as an escape with too few digits is; sed panicked on it
-/// (TODO.md 14.6).
+/// In a replacement, GNU sed's `\U` and `\L` turn what follows to upper or lower case,
+/// until `\E`, and `\u` and `\l` the next character only; sed read `\u` and `\U` as
+/// Unicode escapes and the others as text (TODO.md 14.6). The expected output is GNU sed
+/// 4.9's in a UTF-8 locale.
+#[test]
+fn test_replacement_case_conversions() {
+    for (script, input, expected) in [
+        (r"s/a/\uxyz/", "a", "Xyz"),
+        (r"s/a/\Uxyz/", "a", "XYZ"),
+        (r"s/a/\Ux\Eyz/", "a", "Xyz"),
+        (r"s/a/\lXYZ/", "a", "xYZ"),
+        (r"s/a/\LXYZ\Eabc/", "a", "xyzabc"),
+        (r"s/\(a\)\(b\)/\U\1\E\2/", "abc ÀbC", "Abc ÀbC"),
+        (r"s/.*/\U&-x\E-y/", "abc ÀbC", "ABC ÀBC-X-y"),
+        (r"s/\(.*\)/\L\u\1/", "abc ÀbC", "Abc àbc"),
+        (r"s/\(.*\)/\U\l\1/", "abc ÀbC", "aBC ÀBC"),
+        // `\L` cancels a `\u` still waiting.
+        (r"s/.*/\u\L&/", "abc ÀbC", "abc àbc"),
+        (r"s/a/\u\Ex/", "abc", "xbc"),
+        // A `\u` waits past an empty group for the next text.
+        (r"s/\(x*\)a/\u\1b/", "abc", "Bbc"),
+        (r"s/a/\U\ux/", "abc", "Xbc"),
+        (r"s/\(b\)/\u&\1/", "abc", "aBbc"),
+        (r"s/a/\l\UXY/", "abc", "XYbc"),
+        // A character whose capital is two stays as it is.
+        (r"s/a/\uß/", "abc", "ßbc"),
+        (r"s/c/\Ué\E/", "abc", "abÉ"),
+        (r"s/\w\+/\u&/g", "foo bar", "Foo Bar"),
+        (r"s/\w\+/\U&/2", "foo bar", "foo BAR"),
+        // Escapes that make characters are converted too.
+        (r"s/.*/\U\x61b/", "z", "AB"),
+        (r"s/.*/\u\d097/", "z", "A"),
+        (r"s/a/\t|\x41|\d066|\o103|\cA/", "a", "\t|A|B|C|\u{1}"),
+    ] {
+        new_ucmd!()
+            .arg(script)
+            .env("LC_ALL", "en_US.UTF-8")
+            .pipe_in(format!("{input}\n"))
+            .succeeds()
+            .stdout_only(format!("{expected}\n"));
+    }
+    // In the C locale only ASCII letters change, as with GNU sed there.
+    new_ucmd!()
+        .arg(r"s/.*/\U&/")
+        .env("LC_ALL", "C")
+        .pipe_in("aé\n")
+        .succeeds()
+        .stdout_only("Aé\n");
+    // --posix leaves them out: an unknown escape is the character.
+    new_ucmd!()
+        .args(&["--posix", r"s/a/\uxy/"])
+        .pipe_in("abc\n")
+        .succeeds()
+        .stdout_only("uxybc\n");
+}
+
+/// GNU sed has no Unicode escapes anywhere: in a regex, in `y` and in `a` text `\u`
+/// and `\U` are the letters, and in a bracket expression the backslash and the letter;
+/// sed read them as Unicode escapes (TODO.md 14.6). The expected output is GNU sed 4.9's.
+#[test]
+fn test_no_unicode_escapes() {
+    // Spelled in two pieces, so that no escape reader on the way makes them characters.
+    let u0061 = concat!(r"\", "u0061");
+    for (script, input, expected) in [
+        (format!("s/{u0061}/X/"), "abc", "abc"),
+        (format!("s/{u0061}/X/"), "u0061", "X"),
+        (r"s/\U/X/g".to_string(), r"a\uU", r"a\uX"),
+        (r"s/[\u]/X/g".to_string(), r"a\uU", "aXXU"),
+        (r"y/\u/X/".to_string(), "uU", "XU"),
+    ] {
+        new_ucmd!()
+            .arg(&script)
+            .pipe_in(format!("{input}\n"))
+            .succeeds()
+            .stdout_only(format!("{expected}\n"));
+    }
+    new_ucmd!()
+        .arg(format!("a x{u0061}y"))
+        .pipe_in("a\n")
+        .succeeds()
+        .stdout_only("a\nxu0061y\n");
+}
+
+/// GNU sed has no Unicode escapes: in a replacement `\u` and `\U` are case conversions,
+/// so hex digits after them are text, whatever value they would spell; sed panicked on
+/// a surrogate or a value past U+10FFFF (TODO.md 14.6). The expected output is GNU
+/// sed 4.9's.
 #[test]
 fn test_escape_of_no_character_is_text() {
     for (script, expected) in [
-        (r"s/a/\uD800/", "uD800\n"),
-        (r"s/a/\U00110000/", "U00110000\n"),
-        (r"s/a/\UFFFFFFFF/", "UFFFFFFFF\n"),
-        (r"s/a/\u12/", "u12\n"),
+        (r"s/a/\uD800/", "D800\n"),
+        (r"s/a/\U00110000/", "00110000\n"),
+        (r"s/a/\UFFFFFFFF/", "FFFFFFFF\n"),
+        (r"s/a/\u12/", "12\n"),
+        (r"s/a/\Udead\Ebeef/", "DEADbeef\n"),
     ] {
         new_ucmd!()
             .arg(script)

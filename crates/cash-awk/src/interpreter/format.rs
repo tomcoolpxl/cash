@@ -781,11 +781,19 @@ pub fn fmt_write_special_float(
 
 pub fn fmt_write_string(target: &mut String, value: &str, args: &FormatArgs) {
     let precision = args.precision.unwrap_or(usize::MAX);
-    // Width and precision count bytes. A precision that ends inside a character stops
-    // before that character rather than cutting it (`%.1s` of "é" panicked).
-    let str_len = value.floor_char_boundary(value.len().min(precision));
-    let shown = value.get(..str_len).unwrap_or_default();
-    let padding = args.width.saturating_sub(str_len);
+    // Width and precision count characters, as `length` and `substr` do and as gawk does
+    // in a UTF-8 locale: `%3s` of "é" pads it with two spaces, `%.1s` of "éa" is "é".
+    let mut shown_chars = 0;
+    let mut shown_len = value.len();
+    for (index, _) in value.char_indices() {
+        if shown_chars == precision {
+            shown_len = index;
+            break;
+        }
+        shown_chars += 1;
+    }
+    let shown = value.get(..shown_len).unwrap_or_default();
+    let padding = args.width.saturating_sub(shown_chars);
     if args.left_justified {
         target.push_str(shown);
         pad_target(target, padding, b' ');

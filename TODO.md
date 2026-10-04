@@ -76,22 +76,24 @@ then the riskiest changes once the crashes and state bugs are out of the way.
   look at the replay and its look at the end, was real and is closed, but it is not
   this. Unexplained: `type` may take the pipe's end (ERROR_BROKEN_PIPE) for an error
   depending on when the server closes. W32-02.
-- awk hangs, its memory growing without end, on some syntax errors:
-  `awk 'BEGIN { ( } BEGIN { ( }'`, `awk 'function ( function ('`. `gather_errors`'
-  recovery makes no progress when the rest begins with `BEGIN`, `END` or `function`.
-  Seen 2026-10-04 removing the panic allows (ARCH-01).
-- awk: `if (1); else print "y"` prints `y`: the empty body is a silent `empty_stmt` in
-  grammar.pest, so the `else` branch becomes the `if`'s body. `next` in `BEGIN` or `END`
-  (also through a function) is accepted where gawk reports it; `awk 'END END END'` exits
-  0 in silence. `printf "%3s"`'s width and precision count bytes where `length`,
-  `substr` and gawk count characters. Seen 2026-10-04 (ARCH-01).
-- sed: GNU sed takes `1~p`, `1,~p` and `1,+p` (a missing number as 0); cash's sed
-  reports an error. In a replacement GNU's `\u` and `\U` change case (`s/a/\uD800/`
-  gives `D800`); cash's read them as Unicode escapes. Seen 2026-10-04 (ARCH-01).
+- awk: `begin`, `end` and `foreach` are reserved in cash (`BEGIN{begin=1}` is a syntax
+  error) but plain names in gawk; `delete=1` is accepted where gawk reports a syntax
+  error. `%.0c` prints nothing; gawk ignores a precision for `%c`. `next` reached through
+  a function in BEGIN exits 1, gawk 2. Seen 2026-10-04 fixing the awk leftovers.
+- sed: an unknown escape in a replacement keeps its backslash (`s/a/\q/` gives `\q`, GNU
+  `q`), so `--posix 's/a/\Uxy\E/'` gives `Uxy\E` where GNU gives `UxyE`. `1~3,5p` is
+  refused (GNU takes it) and `$~2p` taken (GNU refuses it); `1,+0q` and `1,~0q` are taken
+  where GNU says "command only uses one address". Several error wordings differ from GNU
+  ("invalid command code" for "unknown command:", address 0, `~step` in POSIX mode), and
+  `sua\uxu` reports the location `::0:8`. Seen 2026-10-04 fixing the sed leftovers.
 - `unreachable!()`s and `assert!`s the panic lints do not cover remain in awk's compiler
   and VM and in sed; one of awk's was reachable (`sub(/a/,"b",length)`). bc's `run_bc`
   parses its arguments a second time with `Args::parse_from`, which can exit the
   process. Seen 2026-10-04 (ARCH-01).
+- awk's `system()` and pipes and sed's `e` start the shell through `CASH_BIN` when it is
+  set, a test hook live in production as W32-18's were; and they find cash only when their
+  exe is named `cash` (or `cash-…`), so in a linked `awk.exe` they take another shell.
+  Seen 2026-10-04 fixing BIN-09.
 - `printf '%(%s)T' -1`, Bash's time format, fails with "format-error-invalid-spec":
   cash's `printf` lacks `%(…)T`. Seen 2026-10-04.
 - `exec` with an option (`-a NAME`, `-c`, `-l`) in a subshell fails with "exec with
@@ -103,8 +105,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 Each from `REVIEW_REPORT.md` §5, found in no commit on 2026-10-04; reproduce first, as
 some may have gone with other work.
 
-- BIN-10, BIN-11, BIN-12: a symlinked settings.json becomes a file; a failed folder
-  delete leaves the menu entry; links made before an error are not recorded.
 - BIN-13: `--enable-highlighting` cannot override `false` in config.toml, and its test
   asserts the default.
 - BIN-14: a recovered panic still prints "cash had a problem and crashed" and writes a

@@ -137,9 +137,102 @@ pub enum Address {
 #[derive(Debug)]
 /// A single part of an RE replacement
 pub enum ReplacementPart {
-    Literal(Vec<u8>), // Normal text
-    WholeMatch,       // &
-    Group(u32),       // \1 to \9
+    Literal(Vec<u8>),     // Normal text
+    WholeMatch,           // &
+    Group(u32),           // \1 to \9
+    Case(CaseConversion), // \U, \L, \E, \u, \l (GNU)
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+/// A GNU case conversion in a replacement: `\U` and `\L` turn what follows to upper or
+/// lower case until `\E` or another of them; `\u` and `\l` turn only the next character.
+pub enum CaseConversion {
+    Upper,
+    Lower,
+    End,
+    UpperNext,
+    LowerNext,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum Case {
+    Upper,
+    Lower,
+}
+
+/// The case conversions in force while a replacement is put together, as GNU sed has
+/// them: `\U`, `\L` and `\E` also cancel a `\u` or `\l` still waiting, and one of those
+/// waits past an empty part (`s/\(x*\)a/\u\1b/` gives `B`).
+#[derive(Default)]
+struct CaseState {
+    all: Option<Case>,
+    next: Option<Case>,
+}
+
+impl CaseState {
+    fn set(&mut self, conversion: CaseConversion) {
+        match conversion {
+            CaseConversion::Upper => (self.all, self.next) = (Some(Case::Upper), None),
+            CaseConversion::Lower => (self.all, self.next) = (Some(Case::Lower), None),
+            CaseConversion::End => (self.all, self.next) = (None, None),
+            CaseConversion::UpperNext => self.next = Some(Case::Upper),
+            CaseConversion::LowerNext => self.next = Some(Case::Lower),
+        }
+    }
+
+    /// Append `text` to `result`, converted. In UTF-8 mode a character whose other case
+    /// is more than one character (`ß`) stays as it is, as with GNU's `towupper`, and a
+    /// byte that is not UTF-8 is copied; in byte mode only ASCII letters change.
+    fn append(&mut self, result: &mut Vec<u8>, text: &[u8], mode: CharacterMode) {
+        if text.is_empty() {
+            return;
+        }
+        if self.all.is_none() && self.next.is_none() {
+            result.extend_from_slice(text);
+            return;
+        }
+        let mut case = self.next.take().or(self.all);
+        match mode {
+            CharacterMode::Byte => {
+                for &byte in text {
+                    result.push(match case {
+                        Some(Case::Upper) => byte.to_ascii_uppercase(),
+                        Some(Case::Lower) => byte.to_ascii_lowercase(),
+                        None => byte,
+                    });
+                    case = self.all;
+                }
+            }
+            CharacterMode::Utf8 => {
+                for chunk in text.utf8_chunks() {
+                    for c in chunk.valid().chars() {
+                        let converted = match case {
+                            Some(Case::Upper) => single_char(c.to_uppercase()),
+                            Some(Case::Lower) => single_char(c.to_lowercase()),
+                            None => None,
+                        };
+                        let mut buf = [0u8; 4];
+                        result.extend_from_slice(
+                            converted.unwrap_or(c).encode_utf8(&mut buf).as_bytes(),
+                        );
+                        case = self.all;
+                    }
+                    if !chunk.invalid().is_empty() {
+                        result.extend_from_slice(chunk.invalid());
+                        case = self.all;
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// The one character a case mapping gives, or `None` when it gives more.
+fn single_char(mut mapped: impl Iterator<Item = char>) -> Option<char> {
+    match (mapped.next(), mapped.next()) {
+        (Some(c), None) => Some(c),
+        _ => None,
+    }
 }
 
 // The maximum value allowed in regex quantifier
@@ -157,6 +250,8 @@ pub enum RegexMode {
 pub struct ReplacementTemplate {
     pub parts: Vec<ReplacementPart>,
     pub max_group_number: usize, // Highest used group number (e.g. 8 for \8)
+    /// How case conversions (`\U`, `\u`, ...) read the text: as characters or bytes.
+    pub character_mode: CharacterMode,
 }
 
 impl Default for ReplacementTemplate {
@@ -181,7 +276,15 @@ impl ReplacementTemplate {
         Self {
             parts,
             max_group_number: max_group_number as usize,
+            character_mode: CharacterMode::default(),
         }
+    }
+
+    /// The template with case conversions reading the text in `character_mode`.
+    #[must_use]
+    pub fn with_character_mode(mut self, character_mode: CharacterMode) -> Self {
+        self.character_mode = character_mode;
+        self
     }
 
     /// Apply the template to the given RE captures.
@@ -204,20 +307,24 @@ impl ReplacementTemplate {
             );
         }
 
+        let mode = self.character_mode;
+        let mut case = CaseState::default();
         for part in &self.parts {
             match part {
-                ReplacementPart::Literal(s) => result.extend_from_slice(s),
+                ReplacementPart::Literal(s) => case.append(&mut result, s, mode),
 
                 ReplacementPart::WholeMatch => {
-                    result
-                        .extend_from_slice(caps.get(0)?.map(|m| m.as_bytes()).unwrap_or_default());
+                    let text = caps.get(0)?.map(|m| m.as_bytes()).unwrap_or_default();
+                    case.append(&mut result, text, mode);
                 }
 
                 ReplacementPart::Group(n) => {
                     let i = *n as usize;
-                    result
-                        .extend_from_slice(caps.get(i)?.map(|m| m.as_bytes()).unwrap_or_default());
+                    let text = caps.get(i)?.map(|m| m.as_bytes()).unwrap_or_default();
+                    case.append(&mut result, text, mode);
                 }
+
+                ReplacementPart::Case(conversion) => case.set(*conversion),
             }
         }
 
@@ -233,11 +340,15 @@ impl ReplacementTemplate {
     pub fn apply_match(&self, m: &Match) -> Vec<u8> {
         let mut result = Vec::new();
 
+        let mode = self.character_mode;
+        let mut case = CaseState::default();
         for part in &self.parts {
             match part {
-                ReplacementPart::Literal(s) => result.extend_from_slice(s),
+                ReplacementPart::Literal(s) => case.append(&mut result, s, mode),
 
-                ReplacementPart::WholeMatch => result.extend_from_slice(m.as_bytes()),
+                ReplacementPart::WholeMatch => case.append(&mut result, m.as_bytes(), mode),
+
+                ReplacementPart::Case(conversion) => case.set(*conversion),
 
                 #[expect(
                     clippy::panic,
