@@ -480,6 +480,16 @@ impl builtins::Command for KillallCommand {
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, Self::Error> {
+        // `help killall` shows this; it was an unrecognized option.
+        if self
+            .args
+            .iter()
+            .take_while(|arg| arg.as_str() != "--")
+            .any(|arg| arg == "--help")
+        {
+            writeln!(context.stdout(), "{KILLALL_USAGE}")?;
+            return Ok(ExecutionResult::success());
+        }
         let options = match parse_killall(&self.args) {
             Ok(options) => options,
             Err(message) => {

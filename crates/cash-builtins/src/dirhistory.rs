@@ -76,6 +76,10 @@ fn step<SE: cash_core::ShellExtensions>(
     let mut count: isize = 1;
     for arg in args {
         match arg.as_str() {
+            "--help" => {
+                writeln!(context.stdout(), "Usage: {name} [-l] [N]")?;
+                return Ok(ExecutionResult::success());
+            }
             "-l" | "--list" => list = true,
             number => match number.parse::<isize>() {
                 Ok(n) if n > 0 => count = n,
@@ -132,6 +136,11 @@ impl builtins::Command for CdhCommand {
     ) -> Result<ExecutionResult, Self::Error> {
         match self.args.as_slice() {
             [] => {}
+            // Taken for a folder named `--help` until `help`'s pages asked for it.
+            [help] if help == "--help" => {
+                writeln!(context.stdout(), "Usage: cdh [FOLDER]")?;
+                return Ok(ExecutionResult::success());
+            }
             [dir] => return go(&mut context, Path::new(dir), "cdh"),
             _ => {
                 writeln!(context.stderr(), "cdh: usage: cdh [FOLDER]")?;
