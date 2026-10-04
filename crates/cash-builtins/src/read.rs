@@ -1069,9 +1069,10 @@ fn apply_editor_completion(
         .char_indices()
         .nth(*cursor)
         .map_or(input.len(), |(index, _)| index);
-    let completions = tokio::task::block_in_place(|| {
-        tokio::runtime::Handle::current().block_on(shell.complete(&input, cursor_byte))
-    })?;
+    // A current-thread runtime, a process substitution's among them, has no
+    // `block_in_place`: it panicked there (XC-19).
+    let completions =
+        cash_core::runtime::block_on_from_sync(|| shell.complete(&input, cursor_byte))??;
     if completions.candidates.is_empty() {
         return Ok(());
     }

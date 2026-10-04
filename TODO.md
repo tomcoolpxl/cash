@@ -112,8 +112,6 @@ some may have gone with other work.
   and Unicode.
 - XC-18: `TerminalInfo` has 48 bools, two read; D39 promises OSC 133 and 9;9, only 633
   is emitted.
-- XC-19: each process substitution builds a tokio runtime; `block_in_place` in `read -e`'s
-  Tab would panic on a current-thread runtime.
 - PI-20, LANG-25: char and byte offsets rebuilt in three consumers; two metacharacter
   tables disagree.
 

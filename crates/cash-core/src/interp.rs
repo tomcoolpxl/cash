@@ -2934,23 +2934,23 @@ fn takes_substitution_pipes(
         .is_some_and(|builtin| !builtin.disabled && builtin.substitution_pipes)
 }
 
-/// Runs a process substitution's commands on a thread of their own.
+/// Runs a process substitution's commands on a thread of their own, on the shell's
+/// runtime: each built one of its own (XC-19), which it still does under a
+/// current-thread runtime, whose handle no other thread can drive.
 fn spawn_substitution(
     mut subshell: Shell<impl extensions::ShellExtensions>,
     params: ExecutionParameters,
     subshell_cmd: &ast::SubshellCommand,
 ) -> std::io::Result<std::thread::JoinHandle<()>> {
     let subshell_cmd = subshell_cmd.to_owned();
+    let handle = crate::runtime::shareable_handle();
     std::thread::Builder::new()
         .name("cash-procsub".into())
         .stack_size(crate::SHELL_THREAD_STACK_SIZE)
         .spawn(move || {
-            let rt = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build();
-            if let Ok(rt) = rt {
-                let _ = rt.block_on(subshell_cmd.list.execute(&mut subshell, &params));
-            }
+            let _ = crate::runtime::block_on_this_thread(handle.as_ref(), || {
+                subshell_cmd.list.execute(&mut subshell, &params)
+            });
         })
 }
 
