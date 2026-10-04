@@ -162,6 +162,18 @@ pub fn maybe_dispatch() -> Option<i32> {
         ));
     }
 
+    if name_str == SUDO_OWNER {
+        let [sid, program, rest @ ..] = args else {
+            eprintln!("cash: {DISPATCH_FLAG} {SUDO_OWNER} requires a SID and a program");
+            return Some(exit_code(ExecutionExitCode::InvalidUsage));
+        };
+        return Some(cash_win32::account::run_owned_by(
+            &sid.to_string_lossy(),
+            program,
+            rest,
+        ));
+    }
+
     let Some(func) = REGISTRY.get().and_then(|r| r.get(name_str)) else {
         eprintln!("cash: unknown bundled command: {name_str}");
         return Some(exit_code(ExecutionExitCode::NotFound));
@@ -202,6 +214,11 @@ pub fn maybe_dispatch() -> Option<i32> {
 /// --msys-relay TOOL PROGRAM [ARGS...]`. Not a utility, so never a builtin; the leading
 /// dashes keep it from colliding with one.
 const MSYS_RELAY: &str = "--msys-relay";
+
+/// The bundled-dispatch name of [`cash_win32::account::run_owned_by`], the elevated side
+/// of `sudo`: `cash --invoke-bundled --sudo-owner SID PROGRAM [ARGS...]`. Not a utility
+/// either; `cash_builtins` builds the command line.
+const SUDO_OWNER: &str = "--sudo-owner";
 
 /// `argv` for a bundled `env` or `timeout` whose command is a bare `sh`, `bash` or
 /// `cash`, with cash itself in its place, as every other way of running those names
@@ -391,15 +408,37 @@ fn shim_content(
         // Ended by a newline, as every other builtin's is: `help -d cd cat` printed
         // `cat - bundled command` with the next prompt or line glued on.
         ContentType::ShortDescription => Ok(format!("{name} - bundled command\n")),
-        // It named the internal dispatch, as `brush --invoke-bundled cat` (ARCH-09).
-        ContentType::DetailedHelp => Ok(format!(
-            "{name} - bundled command: cash carries it, and `{name} --help` describes it\n"
-        )),
-        // A bundled command never contributes its own short-usage or man page
-        // through this path; detailed help comes from the bundled utility
-        // itself (`<name> --help`).
-        ContentType::ShortUsage | ContentType::ManPage => Ok(String::new()),
+        // The tool's own `--help`, so that `help cat` lists its options without cash
+        // copying them. It named the internal dispatch once, as `brush --invoke-bundled
+        // cat` (ARCH-09), and then only pointed at `cat --help`.
+        ContentType::DetailedHelp | ContentType::ManPage => {
+            Ok(own_help(name).unwrap_or_else(|| {
+                format!(
+                    "{name} - bundled command: cash carries it, and `{name} --help` describes it\n"
+                )
+            }))
+        }
+        // `help -s` takes the usage line from the help above.
+        ContentType::ShortUsage => Ok(String::new()),
     }
+}
+
+/// What the bundled tool `name` prints for `--help`, or for `-h` when it takes no long
+/// options (`ping`), run as `cash --invoke-bundled NAME --help` runs it.
+fn own_help(name: &str) -> Option<String> {
+    let exe = self_exe()?;
+    ["--help", "-h"].iter().find_map(|flag| {
+        // The help text depends on nothing of the shell's; the process's environment is
+        // as good as any.
+        let output = std::process::Command::new(exe)
+            .args([DISPATCH_FLAG, name, flag])
+            .stdin(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .output()
+            .ok()?;
+        let text = String::from_utf8_lossy(&output.stdout).into_owned();
+        (output.status.success() && !text.trim().is_empty()).then_some(text)
+    })
 }
 
 /// Builtin execute function shared by all bundled commands. Looks up the

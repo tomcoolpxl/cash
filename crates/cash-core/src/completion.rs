@@ -1106,15 +1106,7 @@ impl Config {
         // Make a best-effort attempt to tokenize.
         let tokens = Self::tokenize_input_for_completion(shell, input);
 
-        // `sudo CMD ARGS`: the words from CMD on complete as the line they would be
-        // without `sudo` and its options, as Bash's completion for `sudo` has them: CMD
-        // as a command, its arguments as CMD's.
-        if let Some(rest) = after_sudo(input, position)
-            && let Some(rest_input) = input.get(rest..)
-        {
-            let mut completions =
-                Box::pin(self.get_completions(shell, rest_input, position - rest)).await?;
-            completions.insertion_index += rest;
+        if let Some(completions) = self.sudo_completions(shell, input, position).await? {
             return Ok(completions);
         }
 
@@ -1246,6 +1238,45 @@ impl Config {
                 options: ProcessingOptions::default(),
             }),
         }
+    }
+
+    /// Completions for `sudo` and `su`'s own words, or `None` for a line that is not theirs.
+    ///
+    /// `su USER` and `sudo -u USER` complete the local accounts. In `sudo CMD ARGS`, the
+    /// words from CMD on complete as the line they would be without `sudo` and its
+    /// options, as Bash's completion for `sudo` has them: CMD as a command, its arguments
+    /// as CMD's.
+    async fn sudo_completions(
+        &self,
+        shell: &mut Shell<impl extensions::ShellExtensions>,
+        input: &str,
+        position: usize,
+    ) -> Result<Option<Completions>, error::Error> {
+        if let Some((start, prefix)) = user_word(input, position) {
+            let prefix = prefix.to_lowercase();
+            let candidates = cash_win32::account::local_user_names()
+                .into_iter()
+                .filter(|name| name.to_lowercase().starts_with(&prefix))
+                .collect();
+            return Ok(Some(Completions {
+                insertion_index: start,
+                delete_count: position - start,
+                candidates,
+                options: ProcessingOptions {
+                    treat_as_filenames: false,
+                    ..ProcessingOptions::default()
+                },
+            }));
+        }
+        if let Some(rest) = after_sudo(input, position)
+            && let Some(rest_input) = input.get(rest..)
+        {
+            let mut completions =
+                Box::pin(self.get_completions(shell, rest_input, position - rest)).await?;
+            completions.insertion_index += rest;
+            return Ok(Some(completions));
+        }
+        Ok(None)
     }
 
     fn tokenize_input_for_completion<'a>(
@@ -1872,7 +1903,85 @@ fn after_sudo(input: &str, position: usize) -> Option<usize> {
             return None;
         }
         at = word_start + word_len;
+        // `-u USER`: the user is sudo's word too, not the command.
+        if matches!(word, "-u" | "--user") {
+            let rest = input.get(at..)?;
+            let user_start = at + (rest.len() - rest.trim_start().len());
+            let user_len = input
+                .get(user_start..)?
+                .find(char::is_whitespace)
+                .unwrap_or(input.len() - user_start);
+            if position <= user_start + user_len {
+                return None;
+            }
+            at = user_start + user_len;
+        }
     }
+}
+
+/// The words of `input` with where each starts, split at whitespace.
+fn plain_words(input: &str) -> Vec<(usize, &str)> {
+    let mut words = Vec::new();
+    let mut start = None;
+    for (index, c) in input.char_indices() {
+        if c.is_whitespace() {
+            if let Some(from) = start.take() {
+                words.push((from, input.get(from..index).unwrap_or_default()));
+            }
+        } else if start.is_none() {
+            start = Some(index);
+        }
+    }
+    if let Some(from) = start {
+        words.push((from, input.get(from..).unwrap_or_default()));
+    }
+    words
+}
+
+/// Where a user name being completed at `position` starts in `input`, and what of it is
+/// typed: the word after `sudo -u` or `sudoedit -u`, or `su`'s first word that is neither
+/// an option nor an option's value (`su -c CMD USER`). `None` anywhere else.
+fn user_word(input: &str, position: usize) -> Option<(usize, &str)> {
+    let before = input.get(..position)?;
+    let mut words = plain_words(before);
+    // The word the cursor is in, or an empty one where it stands after a space.
+    let current = match words.last() {
+        Some((start, word)) if start + word.len() == position => words.pop()?,
+        _ => (position, ""),
+    };
+    if current.1.starts_with('-') {
+        return None;
+    }
+    let (command, rest) = words.split_first()?;
+    let mut index = 0;
+    let slot = match command.1 {
+        "sudo" | "sudoedit" => loop {
+            let Some((_, word)) = rest.get(index) else {
+                break false;
+            };
+            match *word {
+                "--" => break false,
+                "-u" | "--user" if index + 1 == rest.len() => break true,
+                "-u" | "--user" => index += 2,
+                option if option.starts_with('-') => index += 1,
+                _ => break false,
+            }
+        },
+        "su" => loop {
+            let Some((_, word)) = rest.get(index) else {
+                // Past the options, unless the last one is still waiting for its value.
+                break index == rest.len();
+            };
+            match *word {
+                "--" => break index + 1 == rest.len(),
+                "-c" | "-s" | "--command" | "--shell" => index += 2,
+                option if option.starts_with('-') => index += 1,
+                _ => break false,
+            }
+        },
+        _ => false,
+    };
+    slot.then_some(current)
 }
 
 /// Tokenizes input by splitting on delimiter characters. Words (non-delimiter sequences)
@@ -2017,6 +2126,31 @@ fn replace_unescaped_ampersands<'a>(pattern: &'a str, replacement: &str) -> Cow<
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_user_completes_after_su_and_sudo_u() {
+        fn at_end(input: &str) -> Option<(usize, &str)> {
+            user_word(input, input.len())
+        }
+        assert_eq!(at_end("su "), Some((3, "")));
+        assert_eq!(at_end("su al"), Some((3, "al")));
+        assert_eq!(at_end("su - -c 'whoami' al"), Some((17, "al")));
+        assert_eq!(at_end("su -l -c whoami al"), Some((16, "al")));
+        assert_eq!(at_end("su -c "), None, "-c's value is a command");
+        assert_eq!(at_end("su alice "), None, "past the user");
+        assert_eq!(at_end("su -"), None, "an option");
+        assert_eq!(at_end("sudo -n -u b"), Some((11, "b")));
+        assert_eq!(at_end("sudoedit -u "), Some((12, "")));
+        assert_eq!(at_end("sudo -u bob "), None, "the command");
+        assert_eq!(at_end("sudo ls -u "), None, "the command's own -u");
+    }
+
+    #[test]
+    fn the_command_after_sudo_u_user_starts_past_the_user() {
+        let input = "sudo -u bob ca";
+        assert_eq!(after_sudo(input, input.len()), Some(12));
+        assert_eq!(after_sudo("sudo -u bo", 10), None);
+    }
 
     #[test]
     fn a_drive_letter_colon_is_not_a_word_break() {

@@ -212,47 +212,115 @@ fn check_sudo(findings: &mut Vec<Finding>, entries: &[PathBuf], pathext: &[Strin
         detail,
         fix: fix.map(Into::into),
     };
-    findings.push(
-        if let Some(gsudo) = resolve("gsudo", entries, pathext, cwd) {
-            finding(
+    let gsudo = resolve("gsudo", entries, pathext, cwd);
+    findings.push(if let Some(gsudo) = &gsudo {
+        finding(
+            Level::Ok,
+            format!(
+                "through gsudo ({}), in this terminal",
+                cash_win32::path::render(gsudo.target())
+            ),
+            None,
+        )
+    } else {
+        match cash_win32::sysinfo::windows_sudo() {
+            WindowsSudo::Inline => finding(
                 Level::Ok,
-                format!(
-                    "through gsudo ({}), in this terminal",
-                    cash_win32::path::render(gsudo.target())
-                ),
+                "through Windows' sudo, in this terminal".into(),
                 None,
-            )
-        } else {
-            match cash_win32::sysinfo::windows_sudo() {
-                WindowsSudo::Inline => finding(
-                    Level::Ok,
-                    "through Windows' sudo, in this terminal".into(),
-                    None,
-                ),
-                WindowsSudo::InputClosed => finding(
-                    Level::Note,
-                    "through Windows' sudo, in this terminal with its input closed".into(),
-                    Some("sudo config --enable normal, in an elevated shell, gives it its input"),
-                ),
-                WindowsSudo::NewWindow => finding(
-                    Level::Note,
-                    "through Windows' sudo, which opens a new window: the output stays there"
-                        .into(),
-                    Some(
-                        "scoop install gsudo, or sudo config --enable normal in an elevated shell",
-                    ),
-                ),
-                WindowsSudo::Off => finding(
-                    Level::Note,
-                    "no elevation tool: `sudo` cannot run".into(),
-                    Some(
-                        "scoop install gsudo, or turn on sudo in Settings > System > For \
+            ),
+            WindowsSudo::InputClosed => finding(
+                Level::Note,
+                "through Windows' sudo, in this terminal with its input closed".into(),
+                Some("sudo config --enable normal, in an elevated shell, gives it its input"),
+            ),
+            WindowsSudo::NewWindow => finding(
+                Level::Note,
+                "through Windows' sudo, which opens a new window: the output stays there".into(),
+                Some("scoop install gsudo, or sudo config --enable normal in an elevated shell"),
+            ),
+            WindowsSudo::Off => finding(
+                Level::Note,
+                "no gsudo or Windows sudo: `sudo` asks UAC, which opens a new window and \
+                     does not wait"
+                    .into(),
+                Some(
+                    "scoop install gsudo, or turn on sudo in Settings > System > For \
                          developers",
-                    ),
                 ),
-            }
-        },
-    );
+            ),
+        }
+    });
+    check_sudo_accounts(findings, gsudo.as_ref().map(|gsudo| gsudo.target()));
+}
+
+/// What `sudo` and `su` depend on beyond the tool: gsudo's cache, whether this account is
+/// an administrator, and whether other accounts can start this cash.
+fn check_sudo_accounts(findings: &mut Vec<Finding>, gsudo: Option<&Path>) {
+    let finding = |level, detail: String, fix: Option<&str>| Finding {
+        level,
+        subject: "sudo".into(),
+        detail,
+        fix: fix.map(Into::into),
+    };
+
+    // gsudo's credentials cache: while a session is open, what it elevates runs without
+    // asking. The cache belongs to the shell that opened it, so `cash doctor`, a process
+    // of its own, counts the sessions rather than asking whether it may use one.
+    if let Some(gsudo) = gsudo {
+        let sessions = cash_win32::gsudo::status(gsudo, "CacheSessionsCount")
+            .and_then(|count| count.parse::<u32>().ok());
+        findings.push(match sessions {
+            Some(0) => finding(
+                Level::Ok,
+                "gsudo's credentials cache is closed: each `sudo` asks".into(),
+                None,
+            ),
+            Some(count) => finding(
+                Level::Note,
+                format!(
+                    "gsudo's credentials cache is open ({count} session{}): `sudo` runs \
+                     without asking in the shell that opened it",
+                    if count == 1 { "" } else { "s" }
+                ),
+                Some("sudo -k closes it"),
+            ),
+            None => finding(
+                Level::Note,
+                "gsudo's credentials cache: gsudo did not say".into(),
+                None,
+            ),
+        });
+    }
+
+    // A standard account elevates as the administrator who approves.
+    if cash_win32::account::is_administrator() == Some(false) {
+        findings.push(finding(
+            Level::Note,
+            "this account is not an administrator: UAC asks an administrator to approve, \
+             and an elevated command runs as that administrator, with their files and ~"
+                .into(),
+            None,
+        ));
+    }
+
+    // `su USER` and `sudo -u USER` start cash as that account, which needs to read it.
+    if let Ok(exe) = std::env::current_exe()
+        && cash_win32::account::may_execute(&exe, None) == Some(false)
+    {
+        findings.push(finding(
+            Level::Note,
+            format!(
+                "{} is readable by your account and administrators only: `su USER` and \
+                 `sudo -u USER` cannot start it as another account",
+                cash_win32::path::render(&exe)
+            ),
+            Some(
+                "scoop install -g cash, or an install under Program Files, makes it readable \
+                 to all accounts",
+            ),
+        ));
+    }
 }
 
 /// carapace gives Tab completion, with descriptions, for the commands that bring none of

@@ -14,6 +14,8 @@
 #[cfg(not(windows))]
 compile_error!("cash builds only on Windows (spec D43)");
 
+/// Accounts and their rights, for `sudo`, `su` and `cash doctor`.
+pub mod account;
 pub mod children;
 pub mod cmd;
 pub mod cmdline;
@@ -30,6 +32,8 @@ pub mod env;
 pub mod exit;
 pub mod fold;
 pub mod fs;
+/// What gsudo reports of itself: its credentials cache.
+pub mod gsudo;
 mod handle;
 /// ICMP echo through the IP Helper API, for `ping`.
 pub mod icmp;

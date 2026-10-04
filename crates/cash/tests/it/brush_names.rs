@@ -14,13 +14,17 @@ use crate::common::{CASH, output_of, run};
 #[test]
 fn help_for_a_bundled_tool_names_cash_and_ends_its_line() {
     // It said "executes via `brush --invoke-bundled cat`", and `help -d` ran into
-    // whatever came next.
+    // whatever came next. The page is now the catalogue's, ending in the tool's own
+    // `--help`.
     let out = run("help cat; help -d cat; echo next");
-    assert_eq!(
-        out.stdout,
-        "cat - bundled command: cash carries it, and `cat --help` describes it\n\
-         cat - bundled command\n\
-         next"
+    assert!(!out.stdout.contains("brush"), "{}", out.stdout);
+    assert!(!out.stdout.contains("invoke-bundled"), "{}", out.stdout);
+    assert!(out.stdout.contains("Usage: cat"), "{}", out.stdout);
+    assert!(
+        out.stdout
+            .ends_with("\ncat - Concatenate files to standard output.\nnext"),
+        "{}",
+        out.stdout
     );
 }
 

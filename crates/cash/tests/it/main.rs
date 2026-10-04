@@ -89,6 +89,9 @@ mod git_prompt;
 mod git_prompt_goldens;
 mod gui_apps_outlive;
 mod held_descriptors;
+// `help` and `cash help`: the catalogue covers every builtin, and its pages, topics and
+// search.
+mod help_catalogue;
 // Here-documents as Bash reads and writes them.
 mod here_documents;
 // D22/§4 #20: $UID agreeing with `id`, and `jobs -l`.
@@ -147,6 +150,8 @@ mod ss;
 mod stat_builtin;
 // $BASH_SUBSHELL and the `set -x` prefix count what Bash counts.
 mod subshell_levels;
+// `sudo`, `su` and `sudoedit`, as far as they go without a UAC prompt or a password.
+mod sudo;
 mod terminal_profile;
 // D48/D49/D56: the bundled awk, sed and bc in a pipeline.
 mod text_tools;

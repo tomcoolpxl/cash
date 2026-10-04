@@ -55,12 +55,34 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 | 13 | 1.3.13 | Builtins and error output |
 | 14 | 1.3.14 | Tests, records and leftovers |
 | 15 | 1.3.15 | GNU parity of the bundled sed and awk |
+| 16 | 1.3.17 | sudo, su and `cash help` |
 
 ---
+
+## Phase 16. sudo, su and `cash help`
+
+Found writing the help catalogue (2026-10-04):
+
+- `set -o vi` is taken and does nothing: there is no vi editing mode. `vi` and `emacs` do
+  not turn each other off, as Bash's do.
+- The help catalogue's differences topic lists `CDPATH` as missing; `cd` searches it since
+  2026-10-04.
+- From outside the shell, `cash help NOSUCH` says `cash: line 1: help: no help topics
+  match …`, the `-c` script's prefix.
+- D3 says Unix spellings are taken "everywhere, always"; an argument such as `cat /tmp/x`
+  or `rm /c/…` reaches a bundled tool or a program as written, with D4's warning. The
+  `paths` help topic says what happens; the spec does not.
 
 ---
 
 ## Decided, written down so it is not decided twice
+
+- **Files an elevated `sudo` makes are yours, and an approver who is not you is named**
+  (the user, 2026-10-04): when you approve with your own account, the elevated side sets
+  your account as the default owner of what it creates (Unix leaves root owning them, and
+  Windows `Administrators`); when another account approves (a standard user), cash says
+  `running as ADMIN, not you`. Leaving Windows' default, and a system-wide policy, were
+  turned down.
 
 - **`elevate` stays, beside `sudo` and `su`** (the user, 2026-10-04): it starts a
   program elevated in a new window without waiting and needs no tool; `sudo` and `su`

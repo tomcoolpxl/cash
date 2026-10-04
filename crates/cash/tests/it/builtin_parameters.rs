@@ -855,7 +855,7 @@ fn times_honour_an_exported_tz() {
     );
 }
 
-/// `sudo` says how it is used, refuses the options it has no Windows meaning for, and
+/// `sudo` says how it is used, refuses the options it does not know, and
 /// finds its command before anything elevates, as the shell would; in a shell already
 /// elevated (CI's), it runs the command here. A real elevation needs UAC, so it is not
 /// tested.
@@ -863,7 +863,7 @@ fn times_honour_an_exported_tz() {
 fn sudo_finds_its_command_as_the_shell_would() {
     let out = cash(
         r#"sudo; echo "rc $?"
-           sudo -k ls; echo "rc $?"
+           sudo -x ls; echo "rc $?"
            sudo FOO=bar; echo "rc $?"
            sudo -u; echo "rc $?"
            su -x; echo "rc $?"
@@ -882,7 +882,7 @@ fn sudo_finds_its_command_as_the_shell_would() {
     assert_eq!(out.stdout, expected, "{}", out.stderr);
     assert!(out.stderr.contains("usage: sudo"), "{}", out.stderr);
     assert!(
-        out.stderr.contains("sudo: -k: not supported"),
+        out.stderr.contains("sudo: -x: unknown option"),
         "{}",
         out.stderr
     );

@@ -78,6 +78,27 @@ fn main() {
         std::process::exit(i32::from(doctor::run()));
     }
 
+    // `cash help [ARGS]` is the `help` builtin, from PowerShell or cmd, run by a shell
+    // that reads no startup file: it says the same outside cash as inside, from the same
+    // catalogue and the builtins this cash registers. A file named `help` in the working
+    // directory wins, as for `doctor`.
+    let mut args = std::env::args();
+    let is_help = args.nth(1).as_deref() == Some("help");
+    if is_help && !std::path::Path::new("help").exists() {
+        let exe = std::env::args().next().unwrap_or_default();
+        let mut command = vec![
+            exe,
+            "--norc".to_owned(),
+            "--noprofile".to_owned(),
+            "-c".to_owned(),
+            "builtin help \"$@\"".to_owned(),
+            "cash".to_owned(),
+        ];
+        command.extend(args);
+        cash_shell::entry::run_with_args(command);
+        return;
+    }
+
     let mut args: Vec<String> = std::env::args().collect();
     if let Some(name) = invoked_as {
         // Bash started as `sh` runs in POSIX mode, every builtin still there.

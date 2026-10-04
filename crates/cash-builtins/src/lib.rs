@@ -144,6 +144,9 @@ mod getopts;
 mod hash;
 #[cfg(feature = "builtin.help")]
 mod help;
+// cash: what `help` says, one entry for every builtin, with pages and topics. Public so
+// the tests can hold it against the builtins the shell registers.
+pub mod helpdocs;
 #[cfg(feature = "builtin.history")]
 mod history;
 #[cfg(feature = "builtin.jobs")]

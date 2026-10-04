@@ -296,6 +296,70 @@ pub fn is_on_network(path: &Path) -> bool {
         && crate::sysinfo::is_network_drive(Path::new(&format!("{}:\\", bytes[0] as char)))
 }
 
+/// The UNC form (`\\server\share\dir`) of a path on a mapped network drive.
+///
+/// An elevated process can reach that one: drive letters are mapped per logon, and the
+/// elevated one has none of the user's. `None` for a path not on a mapped drive.
+#[must_use]
+pub fn universal_name(path: &Path) -> Option<String> {
+    use windows_sys::Win32::Foundation::{ERROR_MORE_DATA, NO_ERROR};
+    use windows_sys::Win32::NetworkManagement::WNet::{
+        UNIVERSAL_NAME_INFO_LEVEL, UNIVERSAL_NAME_INFOW, WNetGetConnectionW, WNetGetUniversalNameW,
+    };
+
+    let local = to_backslash(path);
+    let wide = crate::wide::to_wide_nul(&local);
+    // The structure points into the buffer after it, so the buffer is aligned for a
+    // pointer.
+    let mut buffer = vec![0u64; 256];
+    for _ in 0..2 {
+        let mut size = u32::try_from(buffer.len() * 8).unwrap_or(0);
+        // SAFETY: the path is NUL-terminated and the buffer holds `size` bytes.
+        let status = unsafe {
+            WNetGetUniversalNameW(
+                wide.as_ptr(),
+                UNIVERSAL_NAME_INFO_LEVEL,
+                buffer.as_mut_ptr().cast(),
+                &raw mut size,
+            )
+        };
+        if status == NO_ERROR {
+            // SAFETY: on success the buffer starts with a UNIVERSAL_NAME_INFOW whose
+            // string lies in the buffer, NUL-terminated.
+            let name = unsafe { (*buffer.as_ptr().cast::<UNIVERSAL_NAME_INFOW>()).lpUniversalName };
+            if name.is_null() {
+                break;
+            }
+            // SAFETY: as above.
+            return Some(unsafe { crate::net::widestring_at(name) });
+        }
+        if status != ERROR_MORE_DATA {
+            break;
+        }
+        buffer = vec![0u64; (size as usize).div_ceil(8)];
+    }
+
+    // Some network providers answer only for the drive: its share, and the rest of the
+    // path after it.
+    let drive = local.get(..2).filter(|drive| drive.ends_with(':'))?;
+    let rest = local.get(2..).unwrap_or_default();
+    let drive_wide = crate::wide::to_wide_nul(drive);
+    let mut remote = [0u16; 1024];
+    let mut length = u32::try_from(remote.len()).unwrap_or(0);
+    // SAFETY: the drive is NUL-terminated and `remote` holds `length` characters.
+    let status =
+        unsafe { WNetGetConnectionW(drive_wide.as_ptr(), remote.as_mut_ptr(), &raw mut length) };
+    if status != NO_ERROR {
+        return None;
+    }
+    let end = remote
+        .iter()
+        .position(|&unit| unit == 0)
+        .unwrap_or(remote.len());
+    let share = String::from_utf16_lossy(remote.get(..end)?);
+    Some(format!("{}{rest}", share.trim_end_matches('\\')))
+}
+
 /// Whether a path is absolute in the Windows sense cash cares about.
 ///
 /// `std::path::Path::is_absolute` agrees for drive paths and UNC, but we also accept the

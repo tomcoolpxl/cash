@@ -541,6 +541,21 @@ async fn the_command_after_sudo_completes_as_a_command() {
         contains_ending_with(&candidates, "README.md"),
         "{candidates:?}"
     );
+    // `-u USER` is sudo's, and the command comes after it.
+    let candidates = fixture.complete("sudo -u nobody expor").await;
+    assert!(
+        candidates.iter().any(|c| c.trim_end() == "export"),
+        "{candidates:?}"
+    );
+    // The user itself completes from the local accounts.
+    let candidates = fixture.complete("su ").await;
+    assert_eq!(
+        candidates
+            .iter()
+            .map(|c| c.trim_end().to_owned())
+            .collect::<Vec<_>>(),
+        cash_win32::account::local_user_names()
+    );
 }
 
 #[tokio::test]

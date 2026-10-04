@@ -267,6 +267,7 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
         builtin::<win::SudoCommand, SE>().with_substitution_files(),
     );
     m.insert("su".into(), builtin::<win::SuCommand, SE>());
+    m.insert("sudoedit".into(), builtin::<win::SudoeditCommand, SE>());
     m.insert("ps".into(), builtin::<ps::PsCommand, SE>());
     m.insert("pgrep".into(), builtin::<pgrep::PgrepCommand, SE>());
     m.insert("pkill".into(), builtin::<killfam::PkillCommand, SE>());

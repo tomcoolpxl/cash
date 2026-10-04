@@ -1575,9 +1575,10 @@ Four, all justified by decisions made above rather than invented:
 |---|---|
 | `winpath` | Explicit conversion between `C:/foo`, `C:\foo` and `/c/foo`. D4 forbids cash rewriting arguments automatically, so this is the deliberate escape hatch when a tool genuinely needs backslashes. |
 | `detach` | Deliberate job-object breakaway — start something meant to outlive the shell. |
-| `elevate` | UAC elevation as a first-class verb, so cash can warn that the child escapes D6 and will outlive it (D42). |
-| `sudo` | A command elevated in this terminal (2026-10-04). cash elevates nothing itself: gsudo does it where it is installed, else Windows' own `sudo`, in whose new-window mode cash says the output stays in that window. cash chooses what runs, as the shell would: `sudo bash` is cash (`sudo.exe` found WSL's `bash.exe`), `sudo ls` cash's `ls` through an elevated cash, a batch file or a script through cash; a function is not run, as a Unix `sudo` runs none. `-i` and `-s` are an elevated cash; other options are refused; `sudo NAME=value COMMAND` passes the variables on. gsudo gets `-d`, so it runs the program as it is rather than through the shell it would guess from its parent. Already elevated, it runs the command here. Tab completes the command after `sudo` as a command and its arguments as its own, and `cash doctor` says which tool elevates. `-u USER` runs it as that account at its usual level (gsudo's `-u USER -i Medium`, which asks the password; without gsudo, `runas` in a new window); `-u root` is elevation. With neither gsudo nor Windows' sudo, `elevate`'s UAC request is the last resort: a new window, not waited for. `elevate`, `sudo`, `su` and `detach` find what runs in one place. |
-| `su` | Unix's `su`: `su`, `su -` and `su root` are this account elevated (Windows has no root account), `su USER` that account, `-`/`-l`/`--login` a login shell in the account's home, `-c COMMAND` a command, through what `sudo` uses. The shell is a new cash: Windows raises no process already running. |
+| `elevate` | UAC elevation as a first-class verb, so cash can warn that the child escapes D6 and will outlive it (D42). It does not wait for the command; its status says only that it started, and it says so. |
+| `sudo` | A command elevated in this terminal (2026-10-04). cash elevates nothing itself: gsudo does it where it is installed, else Windows' own `sudo`, else `elevate`'s UAC request (a new window, not waited for). cash chooses what runs, as the shell would: `sudo bash` is cash (`sudo.exe` found WSL's `bash.exe`), `sudo ls` cash's `ls` through an elevated cash, a batch file or a script through cash; a function is not run, as a Unix `sudo` runs none. `sudo NAME=value COMMAND` passes the variables on. `-i` is a login shell in the account's home (or COMMAND run by one), `-s` a shell in this folder; `-u USER` that account at its usual level (gsudo's `-u USER -i Medium`, which asks the password; without gsudo, `runas` in a new window; `-u root` is elevation), refused before any password when USER cannot read the program (cash under `~/scoop` is its owner's and the administrators' only: `scoop install -g cash` or Program Files makes it readable; cash never copies itself somewhere shared); `-E` passes the exported variables; `-n` fails with `sudo: a password is required` unless already elevated or gsudo's cache is open; `-v` opens gsudo's cache, `-k` and `-K` close it; `-l` says who you are, whether you are an administrator, what elevates, the cache, and whether other accounts can run cash.exe; `-e FILE...` is `sudoedit`; `-h`/`--help` shows the usage, as `help sudo` does; other options are refused. gsudo gets `-d`, so it runs the program as it is rather than through the shell it would guess from its parent, and `--copyns` in a folder on a mapped drive; Windows' sudo gets `--chdir` with the shell's folder (its new-window mode starts in System32), on a mapped drive by its UNC path. Elevated, the command runs under `cash --invoke-bundled --sudo-owner SID`, which makes the user who asked the default owner of what it creates, not Administrators (the user, 2026-10-04; Windows allows it when that user approved with their own account); when another account approved, it prints `sudo: running as DOMAIN\ADMIN, not you; files and ~ are theirs` once. Where the command is started but not waited for (Windows' sudo's new-window mode, UAC), the status says only that it started, and cash says so. Already elevated, it runs the command here. Tab completes the command after `sudo` and its options as a command and its arguments as its own, and the user after `-u` from the local accounts; `cash doctor` says which tool elevates, gsudo's cache, a note for a standard account, and whether other accounts can read cash.exe. `elevate`, `sudo`, `su` and `detach` find what runs in one place. |
+| `su` | Unix's `su`: `su`, `su -` and `su root` are this account elevated (Windows has no root account), `su USER` that account; `-`/`-l`/`--login` a login shell in the account's home, `-c COMMAND` a command, `-s SHELL` that shell (found as the shell would run it) instead of cash, `-m`/`-p`/`--preserve-environment` the exported variables as `sudo -E` passes them, `-h`/`--help` the usage. It goes through what `sudo` uses, with its checks and its ownership of created files. Tab completes the user from the local accounts. The shell is a new cash: Windows raises no process already running. |
+| `sudoedit` | Unix's `sudoedit`, also `sudo -e` (2026-10-04): each FILE copied to `$TEMP` under its own name, `$SUDO_EDITOR`, `$VISUAL` or `$EDITOR` (the first set; Notepad without one) run unelevated on the copies and waited for; each copy that changed is written into its file by an elevated cash (`cat -- COPY > FILE`), so the file keeps its access list and owner; a file that did not exist is created; an unchanged file is left alone. `-u USER` and `-n` as for `sudo`. |
 | `start` | Open a file or URL with its default handler — the Windows `xdg-open`. |
 | `abbr` | fish's abbreviations, which the prompt expands in place (D60). Added later, and not Windows-specific. |
 | `prevd`, `nextd`, `cdh` | fish's folder history, also on Alt-← and Alt-→ (D62). Added later, and not Windows-specific. |
@@ -2273,8 +2274,10 @@ the user, 2026-09-27:
 
 A linked tool runs as `cash -c '"$0" "$@"' NAME ARGS`, the re-entry D58's paths use. Two
 things follow from the exe being the link. cash re-enters its own exe for a bundled tool
-and for `sh`; the child would take itself for the tool again, so the tool's process sets
-`CASH_LINKED_TOOL_EXE` to its path and a child at that path is the shell. And Windows
+and for `sh`; the child would take itself for the tool again, so the cash that starts it
+says the name it is to run under in `CASH_ARGV0`, which the child reads and removes, and a
+link asked for by its own name is not told (BIN-09; `CASH_LINKED_TOOL_EXE` did this until
+2026-10-04, and every descendant inherited it). And Windows
 looks for a program started by a bare name in the folder of the exe that starts it: cash
 starts the Windows programs it uses (`whoami`, `quser`) by their System32 path, or in a
 links folder `whoami.exe` would be cash, starting `whoami.exe` again as it came up.
@@ -2448,6 +2451,17 @@ overwritten. Decided with the user on 2026-09-29:
 
 The Scoop bucket's manifest takes the `post_install` line only with the first release
 that has `--init-rc`: an older `cash.exe` would take the flag for a shell option.
+
+### D72 — `help` from one catalogue
+
+Every builtin has an entry: a kind and a one-line summary, in
+`crates/cash-builtins/src/helpdocs/builtins.md`. A test fails when one is missing, or when
+an entry names no builtin. Pages and topics are markdown embedded at build time. A page
+never copies options: it ends with the builtin's own `--help`, and for a bundled tool that
+is the tool's real text. `help` marks the builtins that hide a Windows program in
+System32, checked at run time. `cash help ...` is that builtin, run from outside the shell,
+and gives way to a file named `help` in the working directory, as `cash doctor` does
+(2026-10-04).
 
 ### D71 — A program whose reader went away ends as SIGPIPE ends it, if it is cash's
 

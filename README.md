@@ -111,6 +111,23 @@ The prompt borrows what fish does well, without giving up Bash's language:
   installed (`scoop install extras/carapace-bin`). A completion script you source for a
   command always wins (D63).
 
+## Help
+
+`help` lists every builtin by kind, each with a line about it, and marks the ones that
+hide a Windows program of the same name (`find`, `sort`, `more`, `timeout`, ...).
+`cash help` says the same from PowerShell or cmd.
+
+```bash
+cash help sed               # a builtin's page: Windows notes, then its own options
+cash help topics            # paths, crlf, elevation, job-control, keys, config, vars, ...
+cash help differences       # where cash knowingly differs from Bash, and why
+cash help search CRLF       # every page and topic that mentions it
+```
+
+Bash's `help -d`, `-s` and `-m` work as before. The pages and topics are markdown in
+`crates/cash-builtins/src/helpdocs`, with one entry for every builtin in `builtins.md`;
+a test fails when a builtin has none.
+
 ## Layout
 
 ```
