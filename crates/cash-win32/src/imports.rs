@@ -183,11 +183,8 @@ mod tests {
         // Every program built with the standard library opens files through it.
         let slots = import_slots(image, "CreateFileW").unwrap();
         assert!(!slots.is_empty(), "CreateFileW is not imported");
-        assert!(
-            import_slots(image, "NoSuchFunctionAnywhere")
-                .unwrap()
-                .is_empty()
-        );
+        let none = import_slots(image, "NoSuchFunctionAnywhere").unwrap();
+        assert!(none.is_empty(), "{none:?}");
         assert_eq!(import_slots(&image[..64], "CreateFileW"), None);
     }
 }

@@ -42,7 +42,8 @@ fn pathext_is_parsed_and_normalised() {
 
     // Tolerate missing dots and lowercase, both of which occur in the wild.
     assert_eq!(parse_pathext("exe;.bat"), vec![".EXE", ".BAT"]);
-    assert!(parse_pathext("").is_empty());
+    let parsed = parse_pathext("");
+    assert!(parsed.is_empty(), "{parsed:?}");
 }
 
 #[test]
@@ -109,7 +110,7 @@ fn shebang_scripts_name_their_interpreter() {
         panic!("expected a shebang dispatch");
     };
     assert_eq!(interpreter, "/bin/bash");
-    assert!(args.is_empty());
+    assert!(args.is_empty(), "{args:?}");
     assert_eq!(script, dir.join("deploy"));
 }
 
@@ -144,7 +145,7 @@ fn shebang_resolves_all_common_interpreters() {
     )
     .expect("/bin/sh resolves");
     assert!(matches!(d, Dispatch::Native(_)));
-    assert!(args.is_empty());
+    assert!(args.is_empty(), "{args:?}");
 
     // 2. /bin/bash -> current_exe
     let (d, args) = cash_win32::resolve::resolve_interpreter(

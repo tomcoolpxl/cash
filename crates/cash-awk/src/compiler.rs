@@ -2940,33 +2940,49 @@ mod test {
     #[test]
     fn test_compile_empty_program() {
         let program = compile_correct_program("");
-        assert!(program.constants.is_empty());
-        assert!(program.begin_actions.is_empty());
-        assert!(program.rules.is_empty());
-        assert!(program.end_actions.is_empty());
-        assert!(program.functions.is_empty());
+        assert!(program.constants.is_empty(), "{:?}", program.constants);
+        assert!(
+            program.begin_actions.is_empty(),
+            "{:?}",
+            program.begin_actions
+        );
+        assert!(program.rules.is_empty(), "{:?}", program.rules);
+        assert!(program.end_actions.is_empty(), "{:?}", program.end_actions);
+        assert!(program.functions.is_empty(), "{:?}", program.functions);
     }
 
     #[test]
     fn test_compile_empty_begin() {
         let program = compile_correct_program("BEGIN {}");
-        assert!(program.constants.is_empty());
+        assert!(program.constants.is_empty(), "{:?}", program.constants);
         assert_eq!(program.begin_actions.len(), 1);
-        assert!(program.begin_actions[0].instructions.is_empty());
-        assert!(program.rules.is_empty());
-        assert!(program.end_actions.is_empty());
-        assert!(program.functions.is_empty());
+        assert!(
+            program.begin_actions[0].instructions.is_empty(),
+            "{:?}",
+            program.begin_actions[0].instructions
+        );
+        assert!(program.rules.is_empty(), "{:?}", program.rules);
+        assert!(program.end_actions.is_empty(), "{:?}", program.end_actions);
+        assert!(program.functions.is_empty(), "{:?}", program.functions);
     }
 
     #[test]
     fn test_compile_empty_end() {
         let program = compile_correct_program("END {}");
-        assert!(program.constants.is_empty());
-        assert!(program.begin_actions.is_empty());
-        assert!(program.rules.is_empty());
+        assert!(program.constants.is_empty(), "{:?}", program.constants);
+        assert!(
+            program.begin_actions.is_empty(),
+            "{:?}",
+            program.begin_actions
+        );
+        assert!(program.rules.is_empty(), "{:?}", program.rules);
         assert_eq!(program.end_actions.len(), 1);
-        assert!(program.end_actions[0].instructions.is_empty());
-        assert!(program.functions.is_empty());
+        assert!(
+            program.end_actions[0].instructions.is_empty(),
+            "{:?}",
+            program.end_actions[0].instructions
+        );
+        assert!(program.functions.is_empty(), "{:?}", program.functions);
     }
 
     #[test]

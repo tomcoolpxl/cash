@@ -339,7 +339,7 @@ mod tests {
         assert!(!args.interactive);
         assert!(!args.login);
         assert!(args.command.is_none());
-        assert!(args.script_args.is_empty());
+        assert!(args.script_args.is_empty(), "{:?}", args.script_args);
     }
 
     #[test]

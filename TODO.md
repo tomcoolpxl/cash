@@ -58,15 +58,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ---
 
-## Phase 15. GNU parity of the bundled sed and awk
-
-What comparing cash's sed and awk with GNU sed 4.9 and gawk turned up while phase 14
-fixed their leftovers; moved here so 1.3.14 could go out (the user, 2026-10-04).
-
-- Rust 1.99 (Dependabot's PR #1, which the user took): fix what its clippy flags (the
-  `double_must_use` that `async_recursion` expands to in cash-core, and whatever follows
-  once that builds) and raise `rust-version` with `rust-toolchain.toml`.
-
 ---
 
 ## Decided, written down so it is not decided twice

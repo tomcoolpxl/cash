@@ -11,6 +11,10 @@ use crate::{
     variables::{self, ArrayLiteral},
 };
 
+#[expect(
+    clippy::double_must_use,
+    reason = "async_recursion's expansion marks the boxed future it returns #[must_use]"
+)]
 #[async_recursion::async_recursion]
 pub(crate) async fn eval_extended_test_expr(
     expr: &ast::ExtendedTestExpr,

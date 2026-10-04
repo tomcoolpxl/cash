@@ -157,7 +157,7 @@ fn the_real_process_environment_has_a_usable_path() {
     let path = env
         .get("PATH")
         .expect("PATH must resolve regardless of Windows' spelling");
-    assert!(!path.is_empty());
+    assert!(!path.is_empty(), "{path:?}");
 
     let for_script = env.get_for_script("PATH").unwrap();
     assert!(

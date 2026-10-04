@@ -333,7 +333,7 @@ mod tests {
         let mut shell = shell_with(&[]).await;
         shell.options_mut().enable_command_history = false;
         shell.add_to_history("ls").unwrap();
-        assert!(lines(&shell).is_empty());
+        assert!(lines(&shell).is_empty(), "{:?}", lines(&shell));
     }
 
     #[test]

@@ -1690,7 +1690,7 @@ mod tests {
     #[test]
     fn test_build_array_fields_none_input() {
         let result = build_array_fields(None, " ", false);
-        assert!(result.is_empty());
+        assert!(result.is_empty(), "{result:?}");
     }
 
     // ==================== build_variable_fields tests ====================

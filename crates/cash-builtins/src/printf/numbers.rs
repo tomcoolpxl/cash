@@ -456,6 +456,6 @@ mod tests {
         assert_eq!(complaints, [(1, "x: invalid number".to_owned())]);
         // After a `\c` in `%b` nothing more is read.
         let (_, complaints) = prepare("%b %d", &["a\\c".into(), "x".into()]);
-        assert!(complaints.is_empty());
+        assert!(complaints.is_empty(), "{complaints:?}");
     }
 }

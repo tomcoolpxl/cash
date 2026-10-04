@@ -742,7 +742,7 @@ mod tests {
         replay.data.extend_from_slice(b"de");
         replay.close(0);
         assert_eq!(replay.take(1).as_deref(), Some(&b"de"[..]));
-        assert!(replay.data.is_empty());
+        assert!(replay.data.is_empty(), "{:?}", replay.data);
 
         // Past the limit, nothing more is kept for an instance never opened (W32-04).
         let mut replay = Replay {
@@ -905,6 +905,6 @@ mod tests {
         followed.done.store(true, Ordering::SeqCst);
         let mut rest = Vec::new();
         reader.read_to_end(&mut rest).unwrap();
-        assert!(rest.is_empty());
+        assert!(rest.is_empty(), "{rest:?}");
     }
 }

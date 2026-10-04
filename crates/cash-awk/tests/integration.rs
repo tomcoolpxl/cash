@@ -1656,7 +1656,7 @@ fn test_awk_char_conversion_ignores_a_precision() {
 fn test_awk_a_fatal_error_exits_2() {
     run_test_with_checker(plan("BEGIN { x = 1; x[1] = 2 }", "", "", 2), |_, output| {
         assert_eq!(output.status.code(), Some(2));
-        assert!(!output.stderr.is_empty());
+        assert!(!output.stderr.is_empty(), "{:?}", output.stderr);
     });
 }
 

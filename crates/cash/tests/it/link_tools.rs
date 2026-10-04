@@ -246,7 +246,11 @@ fn a_link_runs_as_its_tool_outside_cash() {
     // `whoami.exe` beside it for the user's SID, or each start starts another.
     let whoami = run(&dir.join("whoami.exe"), &[], "");
     assert!(whoami.status.success(), "{}", text(&whoami.stderr));
-    assert!(!text(&whoami.stdout).trim().is_empty());
+    assert!(
+        !text(&whoami.stdout).trim().is_empty(),
+        "{:?}",
+        text(&whoami.stdout).trim()
+    );
 }
 
 #[test]

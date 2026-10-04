@@ -193,6 +193,6 @@ mod tests {
         )
         .unwrap();
 
-        assert!(prompts.is_empty());
+        assert!(prompts.is_empty(), "{prompts:?}");
     }
 }

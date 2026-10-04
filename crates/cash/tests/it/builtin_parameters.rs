@@ -79,7 +79,7 @@ fn hostname_conflicting_flags_fail() {
 fn hostname_fqdn_and_domain() {
     let fqdn = cash("hostname -f");
     assert_eq!(fqdn.code, 0);
-    assert!(!fqdn.stdout.is_empty());
+    assert!(!fqdn.stdout.is_empty(), "{:?}", fqdn.stdout);
 
     let domain = cash("hostname -d");
     assert_eq!(domain.code, 0);
@@ -143,20 +143,20 @@ fn which_finds_builtins_by_default() {
 fn which_path_only_flag_skips_builtins() {
     let out = cash("which -p cd");
     assert_ne!(out.code, 0, "cd is not an executable on path");
-    assert!(out.stdout.is_empty());
+    assert!(out.stdout.is_empty(), "{:?}", out.stdout);
 }
 
 #[test]
 fn which_silent_flag_reports_only_exit_code() {
     let success = cash("which -s echo");
     assert_eq!(success.code, 0);
-    assert!(success.stdout.is_empty());
-    assert!(success.stderr.is_empty());
+    assert!(success.stdout.is_empty(), "{:?}", success.stdout);
+    assert!(success.stderr.is_empty(), "{:?}", success.stderr);
 
     let failure = cash("which -s non_existent_command_xyz_12345");
     assert_ne!(failure.code, 0);
-    assert!(failure.stdout.is_empty());
-    assert!(failure.stderr.is_empty());
+    assert!(failure.stdout.is_empty(), "{:?}", failure.stdout);
+    assert!(failure.stderr.is_empty(), "{:?}", failure.stderr);
 }
 
 #[test]
@@ -210,7 +210,7 @@ fn id_flags_individual_and_combined() {
 
     let id_un = cash("id -un");
     assert_eq!(id_un.code, 0);
-    assert!(!id_un.stdout.is_empty());
+    assert!(!id_un.stdout.is_empty(), "{:?}", id_un.stdout);
 
     let id_g = cash("id -g");
     assert_eq!(id_g.code, 0);
@@ -229,7 +229,7 @@ fn id_flags_individual_and_combined() {
 fn groups_reports_current_user_groups() {
     let out = cash("groups");
     assert_eq!(out.code, 0);
-    assert!(!out.stdout.is_empty());
+    assert!(!out.stdout.is_empty(), "{:?}", out.stdout);
 }
 
 // ===========================================================================
@@ -293,7 +293,7 @@ fn find_depth_limits() {
     assert_eq!(out_max0.stdout, ".");
 
     let out_max1 = sb.run("find . -maxdepth 1 -name 'deep.txt'");
-    assert!(out_max1.stdout.is_empty());
+    assert!(out_max1.stdout.is_empty(), "{:?}", out_max1.stdout);
 }
 
 #[test]
@@ -334,7 +334,7 @@ fn xargs_no_run_if_empty_flag() {
     assert_eq!(without_r.stdout, "RAN");
 
     let with_r = cash("printf '' | xargs -r echo RAN");
-    assert!(with_r.stdout.is_empty());
+    assert!(with_r.stdout.is_empty(), "{:?}", with_r.stdout);
 }
 
 #[test]
@@ -673,7 +673,7 @@ fn chmod_execute_warning_and_silence_flag() {
     );
 
     let out_silent = sb.run("chmod -f -x script.sh");
-    assert!(out_silent.stderr.is_empty());
+    assert!(out_silent.stderr.is_empty(), "{:?}", out_silent.stderr);
 }
 
 // ===========================================================================

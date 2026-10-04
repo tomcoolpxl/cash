@@ -179,7 +179,7 @@ powershell -File scripts\install.ps1           # build and install the shell you
 powershell -File scripts\tidy.ps1 -Report      # delete unused build output, show sizes
 ```
 
-Windows 11 (or Windows 10 1809+, for ConPTY). Rust 1.98, which `rust-toolchain.toml` pins
+Windows 11 (or Windows 10 1809+, for ConPTY). Rust 1.99, which `rust-toolchain.toml` pins
 and rustup installs on the first build; it is also the oldest Rust that builds cash. The tests run through cargo-nextest (`cargo binstall
 cargo-nextest`), which gives each test a process of its own.
 

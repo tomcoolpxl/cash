@@ -920,7 +920,11 @@ mod tests {
 
     #[test]
     fn split_empty_file() {
-        assert!(split_records("", RecordSeparator::Null).is_empty());
+        assert!(
+            split_records("", RecordSeparator::Null).is_empty(),
+            "{:?}",
+            split_records("", RecordSeparator::Null)
+        );
     }
 
     #[test]
