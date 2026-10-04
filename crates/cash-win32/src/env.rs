@@ -56,6 +56,30 @@ const POSIX_NAMES: &[&str] = &[
     "HOMEPATH",
 ];
 
+/// The environment block `CreateProcessW` takes with `CREATE_UNICODE_ENVIRONMENT`:
+/// `NAME=value` strings in UTF-16, each ending in a null, sorted by name without regard
+/// to case as Windows keeps them (some programs rely on it), and a null after the last.
+///
+/// `detach`'s spawn and the test pseudo console's each built one (XC-12); the console's
+/// left an empty environment with one null where Windows wants two.
+pub(crate) fn environment_block<N: AsRef<str>, V: AsRef<str>>(vars: &[(N, V)]) -> Vec<u16> {
+    let mut sorted: Vec<&(N, V)> = vars.iter().collect();
+    sorted.sort_by_key(|(name, _)| crate::fold::name_key(name.as_ref()));
+
+    let mut block = Vec::new();
+    for (name, value) in sorted {
+        block.extend(name.as_ref().encode_utf16());
+        block.push(u16::from(b'='));
+        block.extend(value.as_ref().encode_utf16());
+        block.push(0);
+    }
+    if block.is_empty() {
+        block.push(0);
+    }
+    block.push(0);
+    block
+}
+
 /// Canonicalise a variable name for storage (D31).
 ///
 /// Well-known POSIX names become uppercase; everything else keeps the spelling it
@@ -97,7 +121,7 @@ impl Environment {
     /// Set a variable. Lookup is case-insensitive, so this overwrites any spelling.
     pub fn set(&mut self, name: &str, value: &str) {
         let display = canonical_name(name).into_owned();
-        let key = display.to_ascii_uppercase();
+        let key = crate::fold::name_key(&display);
         self.vars.insert(key, (display, value.to_string()));
     }
 
@@ -108,19 +132,21 @@ impl Environment {
     #[must_use]
     pub fn get(&self, name: &str) -> Option<&str> {
         self.vars
-            .get(&name.to_ascii_uppercase())
+            .get(&crate::fold::name_key(name))
             .map(|(_, v)| v.as_str())
     }
 
     /// Remove a variable, ignoring case.
     pub fn remove(&mut self, name: &str) -> Option<String> {
-        self.vars.remove(&name.to_ascii_uppercase()).map(|(_, v)| v)
+        self.vars
+            .remove(&crate::fold::name_key(name))
+            .map(|(_, v)| v)
     }
 
     /// Whether a variable exists, ignoring case.
     #[must_use]
     pub fn contains(&self, name: &str) -> bool {
-        self.vars.contains_key(&name.to_ascii_uppercase())
+        self.vars.contains_key(&crate::fold::name_key(name))
     }
 
     /// Iterate over `(display name, value)` pairs.
@@ -237,5 +263,19 @@ fn split_path_entries(value: &str) -> Vec<&str> {
             }
         }
         merged
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::environment_block;
+
+    /// Sorted without regard to case, each string ended, and two nulls for none (XC-12).
+    #[test]
+    fn an_environment_block_is_sorted_and_ends_in_two_nulls() {
+        let block = environment_block(&[("b", "2"), ("A", "1")]);
+        assert_eq!(String::from_utf16_lossy(&block), "A=1\0b=2\0\0");
+        let none: &[(&str, &str)] = &[];
+        assert_eq!(environment_block(none), [0, 0]);
     }
 }

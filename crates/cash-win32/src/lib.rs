@@ -28,6 +28,7 @@ pub mod devices;
 pub mod endless;
 pub mod env;
 pub mod exit;
+pub mod fold;
 pub mod fs;
 mod handle;
 /// ICMP echo through the IP Helper API, for `ping`.

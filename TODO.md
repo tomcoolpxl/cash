@@ -91,15 +91,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
   line starts with NAME. Seen 2026-10-04 fixing `exec` in a subshell.
 - Bash's `printf '%(…)T'` uses the `TZ` variable; cash's uses Windows' time zone
   (chrono's `Local`), as its prompts' `\D{…}` do. Seen 2026-10-04 adding `%(…)T`.
-### 14.7 The review's §5 findings no phase took up
-
-Each from `REVIEW_REPORT.md` §5, found in no commit on 2026-10-04; reproduce first, as
-some may have gone with other work.
-
-- XC-12, XC-14, XC-16: three process-creation paths and two environment-block builders;
-  paths shown via `replace('\\','/')` past the D10 chokepoint; case folding mixes ASCII
-  and Unicode.
-
 ---
 
 ## Decided, written down so it is not decided twice

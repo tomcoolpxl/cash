@@ -216,15 +216,7 @@ impl ConPty {
         let mut cmd_line_wide = crate::wide::to_wide_nul(&cmd_line);
 
         // Prepare environment block if given
-        let env_block: Option<Vec<u16>> = env.map(|vars| {
-            let mut block = Vec::new();
-            for (k, v) in vars {
-                block.extend(format!("{k}={v}").encode_utf16());
-                block.push(0);
-            }
-            block.push(0);
-            block
-        });
+        let env_block: Option<Vec<u16>> = env.map(crate::env::environment_block);
 
         let env_ptr = env_block
             .as_ref()

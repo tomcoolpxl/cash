@@ -233,9 +233,10 @@ impl Listing {
     }
 }
 
-/// Folds a file name for comparison: Windows file names are case-insensitive.
+/// Folds a file name for comparison: Windows file names are case-insensitive, by its own
+/// rule (`cash_win32::fold`, which the search that runs a command uses too).
 fn fold(name: &str) -> String {
-    name.to_lowercase()
+    cash_win32::fold::name_key(name)
 }
 
 fn has_listed_extension(folded_name: &str, extensions: &[String]) -> bool {

@@ -561,7 +561,7 @@ fn run(
             let display = format!(
                 "{}/{}",
                 dir.trim_end_matches(['/', '\\']),
-                relative.to_string_lossy().replace('\\', "/")
+                cash_win32::path::render(relative)
             );
             file_keys.push(fileuse::path_key(&file));
             rows.extend(

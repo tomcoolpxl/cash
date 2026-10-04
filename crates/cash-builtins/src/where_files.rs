@@ -269,9 +269,7 @@ fn folders<SE: cash_core::ShellExtensions>(
     let mut out = Vec::new();
     for folder in listed {
         let path = absolute(shell, &folder);
-        let key = cash_win32::path::render(&path)
-            .trim_end_matches('/')
-            .to_lowercase();
+        let key = cash_win32::fold::name_key(cash_win32::path::render(&path).trim_end_matches('/'));
         if !seen.contains(&key) {
             seen.push(key);
             out.push(path);
@@ -299,8 +297,8 @@ fn name_patterns(name: &str, pathext: &[String]) -> Vec<String> {
 /// Whether a file name matches a pattern as Windows matches it: `*` and `?`, any case,
 /// a trailing `.` meaning no extension, and `NAME.*` matching `NAME` too.
 fn matches(pattern: &str, name: &str) -> bool {
-    let pattern = pattern.to_lowercase();
-    let name = name.to_lowercase();
+    let pattern = cash_win32::fold::name_key(pattern);
+    let name = cash_win32::fold::name_key(name);
     let trimmed = pattern.trim_end_matches('.');
     let trimmed = if trimmed.is_empty() {
         pattern.as_str()
@@ -362,7 +360,7 @@ fn list(folder: &Path) -> (Vec<PathBuf>, Vec<PathBuf>) {
     }
     let order = |path: &PathBuf| {
         path.file_name()
-            .map(|name| name.to_string_lossy().to_uppercase())
+            .map(|name| cash_win32::fold::name_key(&name.to_string_lossy()))
             .unwrap_or_default()
     };
     files.sort_by_key(order);

@@ -75,7 +75,7 @@ where
                 for entry in readdir.flatten() {
                     if let Ok(mut filename) = entry.file_name().into_string() {
                         if self.case_insensitive {
-                            filename = filename.to_ascii_lowercase();
+                            filename = cash_win32::fold::name_key(&filename);
                         }
 
                         if !filename.starts_with(&self.filename_prefix) {
@@ -214,7 +214,7 @@ where
     PI: AsRef<Path>,
 {
     let stored_prefix = if case_insensitive {
-        filename_prefix.to_ascii_lowercase()
+        cash_win32::fold::name_key(filename_prefix)
     } else {
         filename_prefix.into()
     };

@@ -201,9 +201,8 @@ fn format_current_working_directory(
         working_dir_str = filename.to_string_lossy().to_string();
     }
 
-    working_dir_str = working_dir_str.replace('\\', "/");
-
-    working_dir_str
+    // D10's rendering, by its chokepoint (XC-14).
+    cash_win32::path::render(Path::new(&working_dir_str))
 }
 
 fn format_time<Tz: chrono::TimeZone>(

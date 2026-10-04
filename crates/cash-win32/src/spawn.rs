@@ -20,23 +20,6 @@ use windows_sys::Win32::System::Threading::{
 
 use crate::wide::to_wide_nul;
 
-/// Build the double-null-terminated UTF-16 environment block `CreateProcessW` expects.
-///
-/// Windows conventionally sorts these case-insensitively; some programs rely on it.
-fn build_environment_block(vars: &[(String, String)]) -> Vec<u16> {
-    let mut sorted: Vec<&(String, String)> = vars.iter().collect();
-    sorted.sort_by_key(|entry| entry.0.to_ascii_uppercase());
-
-    let mut block = Vec::new();
-    for (name, value) in sorted {
-        block.extend(format!("{name}={value}").encode_utf16());
-        block.push(0);
-    }
-    // An empty environment still needs the terminating pair.
-    block.push(0);
-    block
-}
-
 /// Whether the current process is inside a job object.
 ///
 /// Relevant to D6: cash running inside Windows Terminal's or VS Code's own job is fine,
@@ -76,7 +59,7 @@ pub fn spawn_detached(command_line: &str, cwd: &Path, env: &[(String, String)]) 
 
     let mut command = to_wide_nul(command_line);
     let cwd = to_wide_nul(crate::path::process_directory(cwd)?);
-    let environment = build_environment_block(env);
+    let environment = crate::env::environment_block(env);
 
     // SAFETY: `STARTUPINFOW` is plain old data — integers, pointers and a handle triple —
     // for which all-zero is the documented "use the defaults" value. `cb` is set below,

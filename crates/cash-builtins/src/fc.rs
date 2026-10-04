@@ -100,7 +100,7 @@ impl FcCommand {
         if editor != "-" {
             let edit_command = format!(
                 "{editor} {}",
-                escape::single_quote(&edit_path.to_string_lossy().replace('\\', "/"))
+                escape::single_quote(&cash_win32::path::render(&edit_path))
             );
             let editor_result = context
                 .shell

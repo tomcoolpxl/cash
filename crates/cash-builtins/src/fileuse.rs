@@ -35,16 +35,14 @@ pub(crate) struct FileHolder {
 pub(crate) fn path_key(path: &Path) -> String {
     let resolved = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
     let text = resolved.to_string_lossy().replace('/', "\\");
-    text.strip_prefix(r"\\?\")
-        .unwrap_or(&text)
-        .to_ascii_lowercase()
+    cash_win32::fold::name_key(text.strip_prefix(r"\\?\").unwrap_or(&text))
 }
 
 /// The file a holder is asked about: its [`path_key`], and the names it may go by in a
 /// process's image or module list.
 struct Target {
     key: String,
-    /// Its file name as given and as resolved, lowercase: `kernel32.dll`.
+    /// Its file name as given and as resolved, folded (`cash_win32::fold`): `KERNEL32.DLL`.
     names: Vec<String>,
 }
 
@@ -55,7 +53,7 @@ impl Target {
             .into_iter()
             .flatten()
             .filter_map(|path| path.file_name())
-            .map(|name| name.to_string_lossy().to_ascii_lowercase())
+            .map(|name| cash_win32::fold::name_key(&name.to_string_lossy()))
             .collect();
         names.dedup();
         Self { key, names }
@@ -69,8 +67,8 @@ impl Target {
     /// tens of seconds beside a build (2026-09-30).
     fn is(&self, path: &Path) -> bool {
         let named = path.file_name().is_some_and(|name| {
-            let name = name.to_string_lossy().to_ascii_lowercase();
-            self.names.contains(&name)
+            self.names
+                .contains(&cash_win32::fold::name_key(&name.to_string_lossy()))
         });
         named && path_key(path) == self.key
     }

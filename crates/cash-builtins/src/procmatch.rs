@@ -69,7 +69,7 @@ impl NameMatcher {
 
     /// One name, compared whole and case-insensitively.
     pub(crate) fn exact(name: &str) -> Self {
-        Self::Exact(without_exe(name).to_lowercase())
+        Self::Exact(cash_win32::fold::name_key(without_exe(name)))
     }
 
     /// Whether this names the image `name`.
@@ -77,7 +77,7 @@ impl NameMatcher {
         let stem = without_exe(name);
         match self {
             Self::Pattern(regex) => regex.is_match(stem).unwrap_or(false),
-            Self::Exact(wanted) => stem.to_lowercase() == *wanted,
+            Self::Exact(wanted) => cash_win32::fold::name_key(stem) == *wanted,
         }
     }
 }

@@ -653,10 +653,10 @@ fn names_this_link(name: &str) -> bool {
     };
     let stem = |path: &Path| {
         path.file_stem()
-            .map(|stem| stem.to_string_lossy().to_lowercase())
+            .map(|stem| cash_win32::fold::name_key(&stem.to_string_lossy()))
     };
     match (stem(&own), stem(Path::new(name))) {
-        (Some(own), Some(asked)) => own != "cash" && own == asked,
+        (Some(own), Some(asked)) => own != "CASH" && own == asked,
         _ => false,
     }
 }
@@ -668,10 +668,10 @@ fn is_own_executable(program: &OsStr) -> bool {
     };
     let program = Path::new(program);
     program == own
-        || program
-            .to_string_lossy()
-            .replace('/', "\\")
-            .eq_ignore_ascii_case(&own.to_string_lossy())
+        || cash_win32::fold::same_name(
+            &program.to_string_lossy().replace('/', "\\"),
+            &own.to_string_lossy(),
+        )
 }
 
 /// Composes a `std::process::Command` to execute the given command. Appropriately

@@ -507,6 +507,23 @@ async fn globstar_completion_obeys_shopt_and_skips_hidden_directories() {
     );
 }
 
+/// A command on `PATH` completes from a prefix in the other case outside ASCII too, as
+/// Windows matches the name: the search folded ASCII only, so `är` missed `Ärger.exe`
+/// while the PATH index that colours it found it (XC-16).
+#[tokio::test]
+async fn a_command_completes_from_a_prefix_in_the_other_case_outside_ascii() {
+    let mut fixture = Fixture::new("command-case").await;
+    fixture.touch("bin/Ärger.exe");
+    let bin = cash_win32::path::render(&fixture.path().join("bin"));
+    fixture.define(&format!("PATH='{bin}'")).await;
+
+    let candidates = fixture.complete("ärg").await;
+    assert!(
+        candidates.iter().any(|c| c.contains("rger")),
+        "ärg did not complete Ärger.exe: {candidates:?}"
+    );
+}
+
 #[tokio::test]
 async fn a_command_in_first_position_completes_from_builtins() {
     let mut fixture = Fixture::new("command").await;

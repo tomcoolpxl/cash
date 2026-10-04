@@ -755,7 +755,7 @@ impl ShellVariableMap {
     /// with `Foo` and `FOO` both set the answer depended on the order of the hash map
     /// (LANG-15).
     pub fn get_ignoring_case(&self, name: &str) -> Option<&ShellVariable> {
-        let names = self.by_folded_name.get(&name.to_ascii_lowercase())?;
+        let names = self.by_folded_name.get(&cash_win32::fold::name_key(name))?;
         self.variables.get(names.iter().min()?)
     }
 
@@ -798,7 +798,7 @@ impl ShellVariableMap {
     /// * `name` - The name of the variable to unset.
     pub fn unset(&mut self, name: &str) -> Option<ShellVariable> {
         let removed = self.variables.remove(name)?;
-        let folded = name.to_ascii_lowercase();
+        let folded = cash_win32::fold::name_key(name);
         if let Some(names) = self.by_folded_name.get_mut(&folded) {
             names.retain(|candidate| candidate != name);
             if names.is_empty() {
@@ -818,7 +818,7 @@ impl ShellVariableMap {
         let name = name.into();
         if !self.variables.contains_key(&name) {
             self.by_folded_name
-                .entry(name.to_ascii_lowercase())
+                .entry(cash_win32::fold::name_key(&name))
                 .or_default()
                 .push(name.clone());
         }
