@@ -3235,3 +3235,184 @@ fn test_awk_command_line_escapes_warn_as_gawks() {
         "awk: warning: escape sequence `\\q' treated as plain `q'\n"
     );
 }
+
+// A variable in parentheses is its value, as in gawk: no lvalue for `sub` or `gsub`, no
+// array for `split`, `length`, `match` or a function, nor the right side of `in`; each took
+// the variable (TODO.md phase 15). gawk 5.4's output.
+#[test]
+fn test_awk_a_parenthesized_variable_is_a_value() {
+    run_cases(&[
+        (
+            "BEGIN { x = \"aa\"; print gsub(/a/, \"b\", (x)), x }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { x = \"aa\"; print gsub(/a/, \"b\", (x)), x }\nawk: cmd. line:1:                                           ^ gsub third parameter is not a changeable object\n",
+            1,
+        ),
+        (
+            "BEGIN { $0 = \"aa\"; print sub(/a/, \"b\", ($1)), $0 }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { $0 = \"aa\"; print sub(/a/, \"b\", ($1)), $0 }\nawk: cmd. line:1:                                            ^ sub third parameter is not a changeable object\n",
+            1,
+        ),
+        (
+            "BEGIN { n = split(\"a b\", (arr)); print n }",
+            "",
+            "",
+            "awk: cmd. line:1: fatal: split: second argument is not an array\n",
+            2,
+        ),
+        (
+            "BEGIN { a[1]; print length((a)) }",
+            "",
+            "",
+            "awk: cmd. line:1: fatal: attempt to use array `a' in a scalar context\n",
+            2,
+        ),
+        (
+            "function f(p) { p[1] = 1 } BEGIN { f((a)); print length(a) }",
+            "",
+            "",
+            "awk: cmd. line:1: fatal: attempt to use scalar parameter `p' as an array\n",
+            2,
+        ),
+        (
+            "BEGIN { n = match(\"ab\", /(b)/, (m)) }",
+            "",
+            "",
+            "awk: cmd. line:1: fatal: match: third argument is not an array\n",
+            2,
+        ),
+        (
+            "BEGIN { a[1]; x = 1 in (a) }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { a[1]; x = 1 in (a) }\nawk: cmd. line:1:                        ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { x = \"aa\"; print length((x)), (x) \"b\" }",
+            "",
+            "2 aab\n",
+            "",
+            0,
+        ),
+    ]);
+}
+
+// gawk's IGNORECASE: regexes, `index`, the comparison of strings and `asort` ignore case;
+// a separator of one character, `in` and subscripts do not (TODO.md phase 15). A regex of
+// one character in `split` is that character, as in gawk. gawk 5.4's output.
+#[test]
+fn test_awk_ignorecase_is_gawks() {
+    run_cases(&[
+        (
+            "BEGIN { IGNORECASE = 1; print (\"ABC\" ~ /b/), (\"ABC\" ~ \"b\"), match(\"xABC\", /bc/), RSTART, RLENGTH; s = \"ABAB\"; print gsub(/b/, \"x\", s), s }",
+            "",
+            "1 1 3 3 2\n2 AxAx\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { IGNORECASE = 1; print split(\"aXXbxxc\", p, \"xx\"), split(\"aXbxc\", q, \"x\"), split(\"aXbxc\", r, /x/), index(\"ABC\", \"b\") }",
+            "",
+            "3 2 2 2\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { IGNORECASE = 1; print (\"ABC\" == \"abc\"), (\"_\" < \"A\"); a[\"A\"]; print (\"a\" in a); b[1] = \"B\"; b[2] = \"a\"; asort(b); print b[1], b[2] }",
+            "",
+            "1 1\n0\na B\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { r = \"b\"; print (\"B\" ~ r); IGNORECASE = 1; print (\"B\" ~ r); IGNORECASE = 0; print (\"B\" ~ r); IGNORECASE = \"0\"; print (\"B\" ~ r); IGNORECASE = \"\"; print (\"B\" ~ r) }",
+            "",
+            "0\n1\n0\n1\n0\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { IGNORECASE = 1; FS = \"xx\"; RS = \"yy\" } { print NR, NF, $1 }",
+            "aXXbYYcxxd",
+            "1 2 a\n2 2 c\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { IGNORECASE = 1 } /abc/ { print \"m\" }",
+            "xABCx\n",
+            "m\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { print split(\"a.b\", p, /./), split(\" a  b \", q, / /), split(\"a^b\", t, /^/), p[1] }",
+            "",
+            "2 5 2 a\n",
+            "",
+            0,
+        ),
+    ]);
+}
+
+// A sort comparison function gets a subarray as itself, named as the element in an error,
+// as in gawk; it got a copy (TODO.md phase 15). gawk 5.4's output.
+#[test]
+fn test_awk_a_sort_function_gets_a_subarray_itself() {
+    run_cases(&[
+        (
+            "function cmp(i1, v1, i2, v2) { return v1 - v2 } BEGIN { a[1][1]; a[2] = 1; asort(a, d, \"cmp\") }",
+            "",
+            "",
+            "awk: cmd. line:1: fatal: attempt to use array `v1 (from a[\"1\"])' in a scalar context\n",
+            2,
+        ),
+        (
+            "function cmp(i1, v1, i2, v2) { return length(v1) - length(v2) } BEGIN { a[\"p\"][1]; a[\"p\"][2]; a[\"q\"][1]; n = asorti(a, d, \"cmp\"); print n, d[1], d[2] }",
+            "",
+            "2 q p\n",
+            "",
+            0,
+        ),
+    ]);
+}
+
+// `s = s x` appends in place (TODO.md phase 15); the value is what the assignment of the
+// whole would give, whatever `s` held. gawk 5.4's output.
+#[test]
+fn test_awk_appending_to_a_string_in_place_keeps_its_value() {
+    run_cases(&[
+        (
+            "BEGIN { s = \"ab\"; s = s s; print s; x = 5; x = x 1; print x, x + 1; x = x 2 + 3; print x }",
+            "",
+            "abab\n51 52\n515\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { a[\"k\"] = \"p\"; for (i = 0; i < 3; i++) a[\"k\"] = a[\"k\"] i; print a[\"k\"]; b[1][2] = \"q\"; b[1][2] = b[1][2] \"r\"; print b[1][2] }",
+            "",
+            "p012\nqr\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { s = \"a\"; y = (s = s \"b\"); print y, s; s = 1; s = s (s = 5); print s; CONVFMT = \"%.2f\"; z = 3.14159; z = z z; print z }",
+            "",
+            "ab ab\n15\n3.143.14\n",
+            "",
+            0,
+        ),
+        (
+            "{ line = line $0 }\nEND { print line, length(line) }",
+            "a\nb\nc\n",
+            "abc 3\n",
+            "",
+            0,
+        ),
+    ]);
+}

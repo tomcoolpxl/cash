@@ -18,7 +18,41 @@ use regex_automata::meta::Regex as MetaRegex;
 /// for POSIX ERE support.
 pub struct Regex {
     inner: MetaRegex,
+    /// The regex in the engine's syntax, for `folded`.
+    translated: String,
+    /// The regex that ignores case, made when IGNORECASE first asks for it.
+    folded: std::cell::OnceCell<MetaRegex>,
     pattern_string: String,
+}
+
+thread_local! {
+    /// gawk's IGNORECASE, which every regex follows when it matches.
+    static IGNORE_CASE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Makes every regex ignore case, or heed it, as IGNORECASE says.
+pub fn set_ignore_case(ignore: bool) {
+    IGNORE_CASE.set(ignore);
+}
+
+/// The engine of `translated`, ignoring case when `fold`.
+fn engine(translated: &str, fold: bool) -> Result<MetaRegex, String> {
+    match regex_syntax::ParserBuilder::new()
+        .case_insensitive(fold)
+        .build()
+        .parse(translated)
+    {
+        Ok(hir) => {
+            let hir = sort_alternations(hir);
+            MetaRegex::builder()
+                .build_from_hir(&hir)
+                .or_else(|_| MetaRegex::new(translated))
+                .map_err(|e| e.to_string())
+        }
+        Err(regex_syntax::Error::Parse(error)) => Err(error.kind().to_string()),
+        Err(regex_syntax::Error::Translate(error)) => Err(error.kind().to_string()),
+        Err(error) => Err(error.to_string()),
+    }
 }
 
 #[cfg_attr(test, derive(Debug))]
@@ -56,7 +90,7 @@ impl Iterator for MatchIter<'_, '_> {
                 return None;
             }
             let input = Input::new(self.string).range(self.next_start..);
-            let m = self.regex.inner.find(input)?;
+            let m = self.regex.engine().find(input)?;
             let result = RegexMatch {
                 start: m.start(),
                 end: m.end(),
@@ -508,26 +542,24 @@ impl Regex {
     /// The regex for `pattern`, or gawk's words for what is wrong with it.
     pub fn new(pattern: &str) -> Result<Self, String> {
         let translated = translate_ere(pattern)?;
-        let inner = match regex_syntax::ParserBuilder::new()
-            .build()
-            .parse(&translated)
-        {
-            Ok(hir) => {
-                let hir = sort_alternations(hir);
-                MetaRegex::builder()
-                    .build_from_hir(&hir)
-                    .or_else(|_| MetaRegex::new(&translated))
-                    .map_err(|e| e.to_string())?
-            }
-            Err(regex_syntax::Error::Parse(error)) => return Err(error.kind().to_string()),
-            Err(regex_syntax::Error::Translate(error)) => return Err(error.kind().to_string()),
-            Err(error) => return Err(error.to_string()),
-        };
-
+        let inner = engine(&translated, false)?;
         Ok(Self {
             inner,
+            translated,
+            folded: std::cell::OnceCell::new(),
             pattern_string: pattern.to_string(),
         })
+    }
+
+    /// The engine to match with: the one that ignores case under IGNORECASE.
+    fn engine(&self) -> &MetaRegex {
+        if IGNORE_CASE.get() {
+            self.folded.get_or_init(|| {
+                engine(&self.translated, true).unwrap_or_else(|_| self.inner.clone())
+            })
+        } else {
+            &self.inner
+        }
     }
 
     /// The regex for `pattern`, made while the program runs: a dynamic regular expression,
@@ -541,7 +573,7 @@ impl Regex {
     /// character: where a record ends when this is RS. An empty match ends no record, as
     /// it would end one at every position and never move on.
     pub fn find_separator(&self, bytes: &[u8]) -> Option<RegexMatch> {
-        self.inner
+        self.engine()
             .find_iter(bytes)
             .find(|m| !m.is_empty())
             .map(|m| RegexMatch {
@@ -564,8 +596,8 @@ impl Regex {
     /// `None` for a group that took no part in it: what gawk's `match(s, r, arr)` puts in
     /// `arr`.
     pub fn captures(&self, string: &str) -> Option<Vec<Option<RegexMatch>>> {
-        let mut captures = self.inner.create_captures();
-        self.inner
+        let mut captures = self.engine().create_captures();
+        self.engine()
             .search_captures(&Input::new(string), &mut captures);
         if !captures.is_match() {
             return None;
@@ -587,7 +619,7 @@ impl Regex {
     }
 
     pub fn matches(&self, string: &str) -> bool {
-        self.inner.is_match(string)
+        self.engine().is_match(string)
     }
 }
 

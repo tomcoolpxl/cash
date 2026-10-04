@@ -39,6 +39,7 @@ use crate::program::{
     Action, BuiltinFunction, Constant, Function, OpCode, Pattern, Program, SpecialVar,
 };
 use crate::regex::Regex;
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fmt::Write;
 use std::iter;
@@ -150,6 +151,34 @@ fn scan_number(text: &str) -> NumberText<'_> {
     }
 }
 
+/// `text` with its letters made small, as IGNORECASE compares it: one character for one,
+/// so that places in it are those of `text`.
+pub(crate) fn fold_case(text: &str) -> std::borrow::Cow<'_, str> {
+    if !text.chars().any(char::is_uppercase) {
+        return std::borrow::Cow::Borrowed(text);
+    }
+    std::borrow::Cow::Owned(
+        text.chars()
+            .map(|c| {
+                let mut lower = c.to_lowercase();
+                match (lower.next(), lower.next()) {
+                    (Some(small), None) => small,
+                    _ => c,
+                }
+            })
+            .collect(),
+    )
+}
+
+/// The order of `a` and `b`, with case ignored when `fold`.
+pub(crate) fn compare_text(a: &str, b: &str, fold: bool) -> std::cmp::Ordering {
+    if fold {
+        fold_case(a).cmp(&fold_case(b))
+    } else {
+        a.cmp(b)
+    }
+}
+
 pub(crate) fn is_integer(num: f64) -> bool {
     num.is_finite() && num.fract() == 0.0
 }
@@ -204,6 +233,8 @@ struct GlobalEnv {
     /// the last one read) ended in CRLF. `print` then writes a default ORS
     /// ("\n") as "\r\n" so CRLF files round-trip unchanged.
     last_record_crlf: bool,
+    /// gawk's IGNORECASE: regexes, `index` and the comparison of strings ignore case.
+    ignore_case: bool,
 }
 
 impl GlobalEnv {
@@ -229,6 +260,11 @@ impl GlobalEnv {
                 return Err("NF set to negative value".to_string());
             }
             SpecialVar::Nf => self.nf = value.scalar_as_f64() as usize,
+            // gawk's: on when the value is true, `"0"` too, as a string is.
+            SpecialVar::IgnoreCase => {
+                self.ignore_case = value.scalar_as_bool();
+                crate::regex::set_ignore_case(self.ignore_case);
+            }
             _ => {
                 // not needed
             }
@@ -253,6 +289,7 @@ impl Default for GlobalEnv {
             paragraph_fs_cache: None,
             strip_cr: true,
             last_record_crlf: false,
+            ignore_case: false,
         }
     }
 }
@@ -285,6 +322,25 @@ impl GlobalEnv {
             Some(fs) => Ok(self.paragraph_fs_cache.insert(fs)),
             None => Ok(&self.fs),
         }
+    }
+}
+
+/// The argument for a value `value` of the element `index` of the array at `place`, to
+/// a sort comparison function: the element itself when it is a subarray, else the value.
+fn sort_argument(
+    place: Option<&(*mut AwkValue, Vec<array::Key>)>,
+    index: &array::Key,
+    value: &AwkValue,
+) -> StackValue {
+    match (place, &value.value) {
+        (Some((root, keys)), AwkValueVariant::Array(_)) => {
+            StackValue::ArrayElementRef(stack::ArrayElementRef {
+                array: *root,
+                path: (!keys.is_empty()).then(|| keys.as_slice().into()),
+                key: index.clone(),
+            })
+        }
+        _ => StackValue::from(value.clone()),
     }
 }
 
@@ -817,7 +873,7 @@ impl Interpreter {
     fn call_from_builtin<'a>(
         &mut self,
         function: &'a Function,
-        arguments: Vec<AwkValue>,
+        arguments: Vec<StackValue>,
         stack: &mut Stack<'a, 'a>,
         global_env: &mut GlobalEnv,
         code: &mut CodeToRun<'a, '_>,
@@ -826,7 +882,9 @@ impl Interpreter {
         let parameters = function.parameters_count;
         let given = arguments.len();
         for argument in arguments.into_iter().take(parameters) {
-            stack.push_value(argument)?;
+            // SAFETY: an argument is a value, or an element of the array being sorted,
+            // whose variable outlives the call.
+            unsafe { stack.push(argument)? };
         }
         for _ in given..parameters {
             stack.push_value(AwkValue::uninitialized())?;
@@ -876,6 +934,9 @@ impl Interpreter {
         let source = stack.pop().ok_or_else(|| "empty stack".to_string())?;
         let first = |error| builtins::not_an_array(error, &format!("{name}: first argument"));
         let second = |error| builtins::not_an_array(error, &format!("{name}: second argument"));
+        // A subarray goes to a comparison function as itself, the element of the array
+        // being sorted, as in gawk; it went as a copy.
+        let source_place = stack::array_place(&source);
         let mut elements: Vec<(array::Key, AwkValue)> = {
             let array = stack
                 .resolve_array(source.duplicate_place(), true)
@@ -906,7 +967,7 @@ impl Interpreter {
         };
         let how = how.as_ref().map_or(default, |how| how.as_str());
         match builtins::SortOrder::named(how) {
-            Some(order) => order.sort(&mut elements, &global_env.convfmt),
+            Some(order) => order.sort(&mut elements, &global_env.convfmt, global_env.ignore_case),
             None => {
                 let compare = code
                     .functions
@@ -923,10 +984,10 @@ impl Interpreter {
                         let middle = usize::midpoint(low, high);
                         let (index, value) = &sorted[middle];
                         let arguments = vec![
-                            AwkValue::from(index.to_string()),
-                            value.clone(),
-                            AwkValue::from(element.0.to_string()),
-                            element.1.clone(),
+                            StackValue::from(AwkValue::from(index.to_string())),
+                            sort_argument(source_place.as_ref(), index, value),
+                            StackValue::from(AwkValue::from(element.0.to_string())),
+                            sort_argument(source_place.as_ref(), &element.0, &element.1),
                         ];
                         let order = self
                             .call_from_builtin(compare, arguments, stack, global_env, code)?
@@ -1006,22 +1067,22 @@ impl Interpreter {
                     stack.push_value(lhs.powf(rhs))?;
                 }
                 OpCode::Le => {
-                    compare_op!(stack, &global_env.convfmt, <=);
+                    compare_op!(stack, &global_env.convfmt, global_env.ignore_case, <=);
                 }
                 OpCode::Lt => {
-                    compare_op!(stack, &global_env.convfmt, <);
+                    compare_op!(stack, &global_env.convfmt, global_env.ignore_case, <);
                 }
                 OpCode::Ge => {
-                    compare_op!(stack, &global_env.convfmt, >=);
+                    compare_op!(stack, &global_env.convfmt, global_env.ignore_case, >=);
                 }
                 OpCode::Gt => {
-                    compare_op!(stack, &global_env.convfmt, >);
+                    compare_op!(stack, &global_env.convfmt, global_env.ignore_case, >);
                 }
                 OpCode::Eq => {
-                    compare_op!(stack, &global_env.convfmt, ==);
+                    compare_op!(stack, &global_env.convfmt, global_env.ignore_case, ==);
                 }
                 OpCode::Ne => {
-                    compare_op!(stack, &global_env.convfmt, !=);
+                    compare_op!(stack, &global_env.convfmt, global_env.ignore_case, !=);
                 }
                 OpCode::Match => {
                     let ere = stack.pop_scalar_value()?.into_ere(&global_env.convfmt)?;
@@ -1174,6 +1235,30 @@ impl Interpreter {
                 OpCode::AsNumber => {
                     let val = stack.pop_scalar_value()?;
                     stack.push_value(val.scalar_as_f64())?;
+                }
+                OpCode::AppendAssign | OpCode::AppendAssignDiscard => {
+                    let tail = stack
+                        .pop_scalar_value()?
+                        .scalar_to_string(&global_env.convfmt)?;
+                    let target = stack.pop_scalar_ref()?;
+                    // In place: the string grows, where `s = s x` made a new one of the
+                    // whole each time, and copied it twice besides, so that building a
+                    // string a piece at a time took time in its square.
+                    if let AwkValueVariant::String(text) = &mut target.value {
+                        text.concat(&tail);
+                    } else {
+                        let mut text = target.clone().scalar_to_string(&global_env.convfmt)?;
+                        text.concat(&tail);
+                        target.value = AwkValueVariant::String(text);
+                    }
+                    if instruction == OpCode::AppendAssign {
+                        let value = target.clone().into_ref(AwkRefType::None);
+                        stack.push_value(value)?;
+                    }
+                }
+                OpCode::AsValue => {
+                    let val = stack.pop_scalar_value()?;
+                    stack.push_value(val)?;
                 }
                 OpCode::GetGlobal(index) => {
                     let global = self.globals[index as usize].get();
@@ -1450,6 +1535,8 @@ impl Interpreter {
             AwkValue::from(0.0).into_ref(AwkRefType::SpecialGlobalVar(SpecialVar::Rstart));
         *globals[SpecialVar::Subsep as usize].get_mut() = AwkValue::from("\x1c".to_string())
             .into_ref(AwkRefType::SpecialGlobalVar(SpecialVar::Subsep));
+        *globals[SpecialVar::IgnoreCase as usize].get_mut() =
+            AwkValue::from(0.0).into_ref(AwkRefType::SpecialGlobalVar(SpecialVar::IgnoreCase));
 
         Self {
             globals,
@@ -1685,6 +1772,8 @@ pub fn interpret_with_eol(
             *slot = Rc::from(name.as_str());
         }
     }
+    // IGNORECASE starts off, whatever a run before on this thread left.
+    crate::regex::set_ignore_case(false);
     let mut global_env = GlobalEnv {
         strip_cr: !cr_is_data,
         ..GlobalEnv::default()

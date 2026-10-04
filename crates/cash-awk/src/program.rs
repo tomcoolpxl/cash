@@ -52,6 +52,9 @@ pub enum OpCode {
     AdvanceIterOrJump(i32),
 
     AsNumber,
+    // the value on top of the stack, a scalar, as a value of its own: a parenthesized
+    // variable, which is no lvalue and no array in gawk
+    AsValue,
     // push the value on top of the stack
     Dup,
     // pop the value from the stack
@@ -82,6 +85,11 @@ pub enum OpCode {
     // assign the value on top of the stack to the reference
     // preceding it. Leaves the assigned value on top of the stack
     Assign,
+    // append the value on top of the stack, as a string, to the scalar the reference
+    // preceding it refers to, in place: `s = s x`. Leaves the result on top of the stack
+    AppendAssign,
+    // as AppendAssign, leaving nothing: the statement `s = s x`
+    AppendAssignDiscard,
 
     // deletes the key on top of the stack from the array preceding it
     DeleteElement,
@@ -296,6 +304,8 @@ pub enum SpecialVar {
     Rs,
     Rstart,
     Subsep,
+    /// gawk's IGNORECASE
+    IgnoreCase,
 
     /// the total number of special variables
     Count,

@@ -67,12 +67,8 @@ fixed their leftovers; moved here so 1.3.14 could go out (the user, 2026-10-04).
   nothing of either); with `-z`, `a T` writes `T` and a NUL, not compared with GNU.
   `--follow-symlinks` is tested only where symbolic links can be made (CI), not here.
   Seen 2026-10-04.
-- awk, found matching gawk 5.4 (2026-10-04): `gsub(/a/, "b", (x))` is taken where gawk
-  says "not a changeable object"; `IGNORECASE` is not supported; a user sort function
-  gets a copy of a subarray where gawk passes the array; `s = s ...` in a loop is
-  quadratic (`test_awk_records_of_more_than_65535_fields_split` takes 7.5 s in a debug
-  build); `split()` into the parent array while a parameter is bound to `a[0]` differs
-  from gawk, whose result looks like a freed node reused.
+- awk, found matching gawk 5.4 (2026-10-04): `gensub()` is not there; for `(x) += 2`
+  gawk's caret is one column left of cash's.
 
 ---
 

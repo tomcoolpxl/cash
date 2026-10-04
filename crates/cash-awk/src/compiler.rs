@@ -525,6 +525,54 @@ fn lvalue_to_scalar_ref(
     Ok(())
 }
 
+/// Whether running `opcode` changes nothing a program can see but the stack: what may be
+/// joined to a string that is appended to in place (`Compiler::appended`).
+fn changes_nothing(opcode: &OpCode) -> bool {
+    use BuiltinFunction as B;
+    matches!(
+        opcode,
+        OpCode::PushConstant(_)
+            | OpCode::PushZero
+            | OpCode::PushOne
+            | OpCode::PushUninitializedScalar
+            | OpCode::GetGlobal(_)
+            | OpCode::GetLocal(_)
+            | OpCode::GetField
+            | OpCode::IndexArrayGetValue
+            | OpCode::IndexArraySubarray
+            | OpCode::AsValue
+            | OpCode::AsNumber
+            | OpCode::Concat
+            | OpCode::Add
+            | OpCode::Sub
+            | OpCode::Mul
+            | OpCode::Div
+            | OpCode::Mod
+            | OpCode::Pow
+            | OpCode::Negate
+            | OpCode::Not
+            | OpCode::Le
+            | OpCode::Lt
+            | OpCode::Ge
+            | OpCode::Gt
+            | OpCode::Eq
+            | OpCode::Ne
+            | OpCode::Jump(_)
+            | OpCode::JumpIfFalse(_)
+            | OpCode::JumpIfTrue(_)
+            | OpCode::CallBuiltin {
+                function: B::Length
+                    | B::Substr
+                    | B::Sprintf
+                    | B::ToLower
+                    | B::ToUpper
+                    | B::Index
+                    | B::Int,
+                ..
+            }
+    )
+}
+
 /// The message for an operand that should be an lvalue and is not.
 const NOT_AN_LVALUE: &str = "operand should be an lvalue";
 
@@ -873,6 +921,10 @@ impl Default for Compiler {
                 "SUBSEP".to_string(),
                 GlobalName::SpecialVar(SpecialVar::Subsep as u32),
             ),
+            (
+                "IGNORECASE".to_string(),
+                GlobalName::SpecialVar(SpecialVar::IgnoreCase as u32),
+            ),
         ]);
         Compiler {
             constants: RefCell::new(Vec::new()),
@@ -958,8 +1010,22 @@ impl Compiler {
     fn map_primary(&self, primary: Pair<Rule>, locals: &LocalMap) -> Result<Expr, PestError> {
         match primary.as_rule() {
             Rule::expr => {
+                let line_col = primary.line_col();
                 let mut instructions = Instructions::default();
                 self.compile_expr(primary, &mut instructions, locals)?;
+                // A variable in parentheses is its value, as in gawk: no lvalue for `sub`,
+                // no array for `split`, `length` or a function; it was the variable.
+                if matches!(
+                    instructions.opcodes.last(),
+                    Some(
+                        OpCode::GetGlobal(_)
+                            | OpCode::GetLocal(_)
+                            | OpCode::GetField
+                            | OpCode::IndexArrayGetValue
+                    )
+                ) {
+                    instructions.push(OpCode::AsValue, line_col);
+                }
                 Ok(Expr::new(ExprKind::Number, instructions))
             }
             Rule::ere => {
@@ -1374,9 +1440,9 @@ impl Compiler {
         }
     }
 
-    fn compile_simple_binary_expr(
+    fn compile_simple_binary_expr<'i>(
         &self,
-        expr: Pairs<Rule>,
+        expr: impl Iterator<Item = Pair<'i, Rule>>,
         locals: &LocalMap,
     ) -> Result<Expr, PestError> {
         PRATT_PARSER
@@ -1397,6 +1463,80 @@ impl Compiler {
         let span = lvalue.as_span();
         self.compile_lvalue(lvalue, instructions, locals)?;
         lvalue_to_scalar_ref(&mut instructions.opcodes, span, NOT_AN_LVALUE)
+    }
+
+    /// The instructions of what `target = target a b ...` joins to `target`, when the
+    /// assignment can append to it in place (`OpCode::AppendAssign`): `target` is a
+    /// variable that is no special one, or an element of an array, and the value is the
+    /// same text joined to operands whose evaluation changes nothing, so that appending
+    /// after it is what assigning the whole would be.
+    fn appended(
+        &self,
+        target: &Pair<Rule>,
+        value: &Pair<Rule>,
+        locals: &LocalMap,
+    ) -> Result<Option<(Instructions, Instructions)>, PestError> {
+        let variable = first_child(target.clone());
+        let plain = match variable.as_rule() {
+            Rule::name => {
+                locals.contains_key(variable.as_str())
+                    || !matches!(
+                        self.names.borrow().get(variable.as_str()),
+                        Some(GlobalName::SpecialVar(_))
+                    )
+            }
+            Rule::array_element => true,
+            _ => false,
+        };
+        let binary = first_child(value.clone());
+        if !plain || binary.as_rule() != Rule::binary_expr {
+            return Ok(None);
+        }
+        let joined = first_child(binary);
+        if joined.as_rule() != Rule::simple_binary_expr {
+            return Ok(None);
+        }
+        let parts: Vec<Pair<Rule>> = joined.into_inner().collect();
+        let [first, join, ..] = parts.as_slice() else {
+            return Ok(None);
+        };
+        // Only arithmetic binds tighter than the joining, so a comparison, a match, `in`,
+        // `&&` or `||` would take the joined string as its operand.
+        let lower = parts.iter().any(|part| {
+            matches!(
+                part.as_rule(),
+                Rule::comp_op
+                    | Rule::print_comp_op
+                    | Rule::match_op
+                    | Rule::not_match
+                    | Rule::in_op
+                    | Rule::and
+                    | Rule::or
+            )
+        });
+        if lower
+            || first.as_rule() != Rule::lvalue
+            || first.as_str() != target.as_str()
+            || join.as_rule() != Rule::concat
+        {
+            return Ok(None);
+        }
+        // What is compiled here is used, or compiled again as a whole, with its errors.
+        let errors_before = self.deferred_errors.borrow().len();
+        let mut reference = Instructions::default();
+        self.compile_lvalue_ref(target.clone(), &mut reference, locals)?;
+        let (_, key) = reference
+            .opcodes
+            .split_last()
+            .unwrap_or((&OpCode::Invalid, &[]));
+        let key_changes_nothing = key.iter().all(changes_nothing);
+        let tail = self.compile_simple_binary_expr(parts.into_iter().skip(2), locals)?;
+        if key_changes_nothing && tail.instructions.opcodes.iter().all(changes_nothing) {
+            Ok(Some((reference, tail.instructions)))
+        } else {
+            self.deferred_errors.borrow_mut().truncate(errors_before);
+            Ok(None)
+        }
     }
 
     fn compile_lvalue(
@@ -1697,11 +1837,21 @@ impl Compiler {
         match expr.as_rule() {
             Rule::assignment | Rule::print_assignment => {
                 let mut inner = expr.into_inner();
-                self.compile_lvalue_ref(inner.child(), instructions, locals)?;
+                let target = inner.child();
                 let assignment_op = first_child(inner.child());
+                let value = inner.child();
+                if assignment_op.as_rule() == Rule::assign
+                    && let Some((reference, tail)) = self.appended(&target, &value, locals)?
+                {
+                    instructions.extend(reference);
+                    instructions.extend(tail);
+                    instructions.push(OpCode::AppendAssign, assignment_op.line_col());
+                    return Ok(());
+                }
+                self.compile_lvalue_ref(target, instructions, locals)?;
                 if assignment_op.as_rule() != Rule::assign {
                     instructions.push(OpCode::Dup, assignment_op.line_col());
-                    self.compile_expr(inner.child(), instructions, locals)?;
+                    self.compile_expr(value, instructions, locals)?;
                     match assignment_op.as_rule() {
                         Rule::add_assign => {
                             instructions.push(OpCode::Add, assignment_op.line_col())
@@ -1724,7 +1874,7 @@ impl Compiler {
                         _ => not_in_grammar(&assignment_op, "assignment"),
                     }
                 } else {
-                    self.compile_expr(inner.child(), instructions, locals)?;
+                    self.compile_expr(value, instructions, locals)?;
                 }
 
                 instructions.push(OpCode::Assign, assignment_op.line_col());
@@ -1794,7 +1944,15 @@ impl Compiler {
             }
             Rule::expr => {
                 self.compile_expr(stmt, instructions, locals)?;
-                instructions.push(OpCode::Pop, stmt_line_col);
+                // A statement `s = s x` leaves nothing, so the string is not copied for a
+                // value that would be thrown away.
+                if let Some(last) = instructions.opcodes.last_mut()
+                    && *last == OpCode::AppendAssign
+                {
+                    *last = OpCode::AppendAssignDiscard;
+                } else {
+                    instructions.push(OpCode::Pop, stmt_line_col);
+                }
             }
             Rule::print_stmt => {
                 let mut inner = stmt.into_inner();
@@ -2689,6 +2847,27 @@ mod test {
     fn does_not_compile(text: &str) {
         compile_program(&[SourceFile::stdin(text.to_string())])
             .expect_err("expected error compiling program");
+    }
+
+    #[test]
+    fn appending_to_a_variable_is_done_in_place() {
+        // `s = s x` appends to `s`; it read `s`, copied it into a new string with `x` and
+        // copied that again into `s`, so a string built a piece at a time took time in its
+        // square (TODO.md phase 15).
+        let (instructions, _) = compile_stmt("s = s \" w\" i");
+        assert_eq!(
+            instructions,
+            vec![
+                OpCode::GlobalScalarRef(FIRST_GLOBAL_VAR),
+                OpCode::PushConstant(0),
+                OpCode::GetGlobal(FIRST_GLOBAL_VAR + 1),
+                OpCode::Concat,
+                OpCode::AppendAssignDiscard,
+            ]
+        );
+        // Not when what is appended could change `s` first.
+        let (instructions, _) = compile_stmt("s = s (x = 1)");
+        assert!(!instructions.contains(&OpCode::AppendAssignDiscard));
     }
 
     #[test]

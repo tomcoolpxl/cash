@@ -16,7 +16,7 @@ use super::record::{FieldSeparator, FieldsState, field_separators, split_record}
 use super::stack::{Stack, array_place};
 use super::string::AwkString;
 use super::value::{AwkValue, AwkValueVariant};
-use super::{GlobalEnv, maybe_numeric_string, strtod, swap_with_default};
+use super::{GlobalEnv, compare_text, fold_case, maybe_numeric_string, strtod, swap_with_default};
 use crate::program::BuiltinFunction;
 use crate::regex::Regex;
 use std::cmp::Ordering;
@@ -365,7 +365,13 @@ pub(crate) fn builtin_split(
     } else {
         let sep_val = stack.pop_scalar_value()?;
         if matches!(&sep_val.value, AwkValueVariant::Regex { .. }) {
-            Some(FieldSeparator::Ere(sep_val.into_ere(&global_env.convfmt)?))
+            let ere = sep_val.into_ere(&global_env.convfmt)?;
+            // A regex of one character is that character, as in gawk: `/./` splits at
+            // dots, `/ /` at each space, and IGNORECASE leaves it be; it was the regex.
+            match ere.pattern().as_bytes() {
+                [byte] => Some(FieldSeparator::Char(*byte)),
+                _ => Some(FieldSeparator::Ere(ere)),
+            }
         } else {
             let sep_str = sep_val.scalar_to_string(&global_env.convfmt)?;
             Some(FieldSeparator::try_from(sep_str)?)
@@ -463,12 +469,12 @@ impl SortOrder {
     /// Sorts `elements`, each an index and its value. Elements that compare equal are
     /// in the order of their indices as strings, as in gawk, and a descending order is
     /// the ascending one turned round.
-    pub(crate) fn sort(self, elements: &mut [(Rc<str>, AwkValue)], convfmt: &str) {
+    pub(crate) fn sort(self, elements: &mut [(Rc<str>, AwkValue)], convfmt: &str, fold: bool) {
         if self.by == SortBy::Unsorted {
             return;
         }
         elements.sort_by(|a, b| {
-            let order = self.compare(a, b, convfmt);
+            let order = self.compare(a, b, convfmt, fold);
             if self.descending {
                 order.reverse()
             } else {
@@ -482,8 +488,11 @@ impl SortOrder {
         (a_index, a): &(Rc<str>, AwkValue),
         (b_index, b): &(Rc<str>, AwkValue),
         convfmt: &str,
+        fold: bool,
     ) -> Ordering {
-        let by_index = || a_index.cmp(b_index);
+        // Text, with case ignored under IGNORECASE, as in gawk.
+        let text = |a: &str, b: &str| compare_text(a, b, fold);
+        let by_index = || text(a_index, b_index);
         match self.by {
             SortBy::IndexString | SortBy::Unsorted => by_index(),
             SortBy::IndexNumber => strtod(a_index)
@@ -495,7 +504,7 @@ impl SortOrder {
                     .cmp(&b.rank())
                     .then_with(|| match (&a, &b) {
                         (Sorted::Number(x, _), Sorted::Number(y, _)) => x.total_cmp(y),
-                        (Sorted::String(x), Sorted::String(y)) => x.cmp(y),
+                        (Sorted::String(x), Sorted::String(y)) => text(x, y),
                         (Sorted::Array(x), Sorted::Array(y)) => x.cmp(y),
                         _ => Ordering::Equal,
                     })
@@ -505,7 +514,7 @@ impl SortOrder {
                 let (a, b) = (Sorted::of(a, convfmt), Sorted::of(b, convfmt));
                 let arrays = matches!(a, Sorted::Array(_)).cmp(&matches!(b, Sorted::Array(_)));
                 arrays
-                    .then_with(|| a.text().cmp(b.text()))
+                    .then_with(|| text(a.text(), b.text()))
                     .then_with(by_index)
             }
             SortBy::ValueNumber => {
@@ -513,7 +522,7 @@ impl SortOrder {
                 let arrays = matches!(a, Sorted::Array(_)).cmp(&matches!(b, Sorted::Array(_)));
                 arrays
                     .then_with(|| a.number().total_cmp(&b.number()))
-                    .then_with(|| a.text().cmp(b.text()))
+                    .then_with(|| text(a.text(), b.text()))
                     .then_with(by_index)
             }
         }
@@ -643,10 +652,16 @@ pub(crate) fn call_simple_builtin(
                 .scalar_to_string(&global_env.convfmt)?;
             // index() returns a character position, numbering from 1; str::find
             // reports a byte offset, so convert it to a character count.
+            // With IGNORECASE, in the text with case folded, which has the same characters
+            // in the same places.
+            let (s, t) = if global_env.ignore_case {
+                (fold_case(&s).into_owned(), fold_case(&t).into_owned())
+            } else {
+                (s.to_string(), t.to_string())
+            };
             let index = s
-                .as_str()
-                .find(t.as_str())
-                .map(|i| byte_offset_to_char_count(s.as_str(), i) as f64 + 1.0)
+                .find(&t)
+                .map(|i| byte_offset_to_char_count(&s, i) as f64 + 1.0)
                 .unwrap_or(0.0);
             stack.push_value(index)?;
         }

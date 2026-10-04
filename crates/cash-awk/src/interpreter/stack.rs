@@ -938,7 +938,7 @@ macro_rules! numeric_op {
 }
 
 macro_rules! compare_op {
-    ($stack:expr, $convfmt:expr, $op:tt) => {
+    ($stack:expr, $convfmt:expr, $fold:expr, $op:tt) => {
         let rhs = $stack.pop_scalar_value()?;
         let lhs = $stack.pop_scalar_value()?;
         match (&lhs.value, &rhs.value) {
@@ -949,7 +949,7 @@ macro_rules! compare_op {
               	if lhs.is_numeric && rhs.is_numeric {
 									$stack.push_value(bool_to_f64(strtod(lhs) $op strtod(rhs)))?;
               	} else {
-                	$stack.push_value(bool_to_f64(lhs.as_str() $op rhs.as_str()))?;
+                	$stack.push_value(bool_to_f64(compare_text(lhs.as_str(), rhs.as_str(), $fold) $op Ordering::Equal))?;
               	}
             }
             (AwkValueVariant::UninitializedScalar, AwkValueVariant::UninitializedScalar) => {
@@ -970,7 +970,7 @@ macro_rules! compare_op {
                 $stack.push_value(bool_to_f64(*x $op rhs.scalar_as_f64()))?;
             }
             (_, _) => {
-                $stack.push_value(bool_to_f64(lhs.scalar_to_string($convfmt)?.as_str() $op rhs.scalar_to_string($convfmt)?.as_str()))?;
+                $stack.push_value(bool_to_f64(compare_text(lhs.scalar_to_string($convfmt)?.as_str(), rhs.scalar_to_string($convfmt)?.as_str(), $fold) $op Ordering::Equal))?;
             }
         }
     };

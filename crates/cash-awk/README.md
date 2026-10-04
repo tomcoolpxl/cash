@@ -19,3 +19,20 @@ Native AWK implementation for Cash, absorbed and adapted from [posixutils-rs](ht
 8. **A reader that goes away:** awk ends in silence with status 141, as `SIGPIPE` ends gawk, where it said `write error: Broken pipe` and ended with 2.
 9. **gawk's grammar and arguments:** `**` and `**=`, prefix operators one after another (`- -x`), comparisons in `print` other than `>`, `match(s, r, arr)`, `split(s, a, fs, seps)` and `close(cmd, "to"|"from")`; `for (k in a)` goes through the keys `a` had when it began, as in gawk.
 10. **gawk's extensions, files and escapes:** `asort()` and `asorti()` with a destination and gawk's orders or a comparison function; `/dev/null`, `/dev/stdin`, `/dev/stdout`, `/dev/stderr` and `/dev/fd/0` to `2` as gawk takes them; the regex operators `\y`, `\B`, `\<`, `\>`, `` \` `` and `\'`, `\x` escapes, and gawk's warnings for an escape it has no meaning for. A keyword ends where gawk ends one (`printx` is a name), a plain `getline` is an operand, `sub` of a constant replaces in a copy, and `for (k in a)` goes through the indices that are positive integers last, in order, as gawk does; the others keep the order they were made in, where gawk's is a hash table's.
+11. **IGNORECASE, parentheses and long strings:** gawk's `IGNORECASE` is honoured where gawk honours it: every regex (`~`, `match`, `sub`, `gsub`, `split`, FS and RS of more than one character), `index`, the comparison of strings, and `asort`/`asorti`; a separator of one character, `in` and subscripts are not affected. A variable in parentheses is a value, as in gawk: no lvalue for `sub`, no array for `split` or a function. `s = s x` appends to `s` in place, where it copied the whole string twice, so building a string a piece at a time took time in its square.
+
+## Deliberate differences from gawk
+
+- **`split()` into an array whose element a parameter is bound to.** In
+  `function f(s) { split("x y", a); s[1] = 1 } BEGIN { a[0][1] = 7; f(a[0]) }`, gawk 5.4
+  stops with "attempt to use scalar parameter `s' as an array": `split()` frees the
+  subarray `a[0]` and gawk reuses the freed node, now a scalar, for `s`. cash detaches the
+  parameter when its element is removed, as gawk does for `delete`, and `s` stays an array
+  of its own. Copying the outcome of a freed node's reuse would not be a rule anyone could
+  rely on.
+- **IGNORECASE folds case as Unicode does.** cash reads text as UTF-8 whatever the locale,
+  so `"É" ~ /é/` is true under IGNORECASE, as in gawk in a UTF-8 locale; gawk in the C
+  locale compares bytes and does not fold `É`.
+- **The order of `for (k in a)` for indices that are not positive integers.** gawk goes
+  through them in the order of its hash table; cash goes through them in the order they
+  were made. The positive integers come after them, in order, in both.
