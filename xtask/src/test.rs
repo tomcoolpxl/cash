@@ -225,12 +225,16 @@ pub fn run_vendored_tests(verbose: bool) -> Result<()> {
         eprintln!("Running the tests of vendor/{name}...");
         if verbose {
             eprintln!(
-                "Running: cargo test --manifest-path {manifest} --lib --target-dir {target_dir}"
+                "Running: cargo test --manifest-path {manifest} --lib --target-dir {target_dir} \
+                 -- --test-threads=1"
             );
         }
+        // One thread: crossterm's `test_no_color` sets `NO_COLOR` for the whole process,
+        // which its colour tests read through a memoised `Once`, and run beside them it
+        // made `test_format_reset_bg_color` fail on CI (2026-10-04).
         let result = cmd!(
             sh,
-            "cargo test --manifest-path {manifest} --lib --target-dir {target_dir}"
+            "cargo test --manifest-path {manifest} --lib --target-dir {target_dir} -- --test-threads=1"
         )
         .env_remove("NO_COLOR")
         .run()
