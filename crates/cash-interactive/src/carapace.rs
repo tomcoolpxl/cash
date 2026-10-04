@@ -288,12 +288,8 @@ pub(crate) fn command_words(line: &str, pos: usize) -> Option<(Vec<String>, usiz
     let tokens = cash_parser::tokenize_str(before).ok()?;
 
     // Token locations count characters; the insertion point is a byte offset.
-    let byte_offsets: Vec<usize> = before
-        .char_indices()
-        .map(|(byte, _)| byte)
-        .chain(std::iter::once(before.len()))
-        .collect();
-    let byte = |index: usize| byte_offsets.get(index).copied().unwrap_or(before.len());
+    let offsets = cash_parser::CharByteOffsets::new(before);
+    let byte = |index: usize| offsets.byte(index);
 
     let mut words: Vec<(String, usize)> = Vec::new();
     for token in tokens {

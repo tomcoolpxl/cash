@@ -27,7 +27,7 @@ pub use error::miette::PrettyError;
 
 pub use parser::{Parser, ParserBuilder, ParserOptions, SourceInfo, parse_tokens};
 
-pub use source::{SourcePosition, SourcePositionOffset, SourceSpan};
+pub use source::{CharByteOffsets, SourcePosition, SourcePositionOffset, SourceSpan};
 pub use tokenizer::{
     Token, TokenLocation, TokenizerError, TokenizerOptions, tokenize_str,
     tokenize_str_with_options, uncached_tokenize_str, unquote_str,

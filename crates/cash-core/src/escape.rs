@@ -449,7 +449,9 @@ fn ansi_c_quote(s: &str) -> String {
 }
 
 // Returns whether or not the given character needs to be escaped (or quoted) if outside
-// quotes.
+// quotes: Bash's `sh_backslash_quote` table, for `printf %q` and `${x@Q}`, pinned by
+// `tests/corpus/bash/printf-q-punctuation.sh`. Completion quotes with readline's table
+// instead (`completion::needs_backslash`), as Bash does (LANG-25).
 const fn needs_escaping(c: char) -> bool {
     matches!(
         c,

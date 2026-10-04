@@ -1445,6 +1445,11 @@ fn backslash_escaped(body: &str) -> String {
 }
 
 /// Whether `c` must be escaped in a bare word; `~` and `#` only at its start.
+///
+/// readline's filename quoting, not `printf %q`'s table (`escape::needs_escaping`): Bash
+/// keeps the two apart, and so does cash (LANG-25). This one quotes `=`, which would make
+/// a word an assignment, and every blank; that one quotes `^` and `,` and is pinned to
+/// Bash's output by `tests/corpus/bash/printf-q-punctuation.sh`.
 const fn needs_backslash(c: char, at_start: bool) -> bool {
     c.is_whitespace()
         || (at_start && matches!(c, '~' | '#'))

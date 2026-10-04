@@ -89,3 +89,51 @@ impl SourceSpan {
         }
     }
 }
+
+/// The byte offset of each character of a text: a [`SourcePosition`]'s `index` counts
+/// characters, and slicing the text takes bytes.
+///
+/// The highlighter, carapace's word split and history's word split each built this table
+/// themselves (PI-20).
+pub struct CharByteOffsets {
+    /// The byte offset of each character, then the text's length.
+    offsets: Vec<usize>,
+}
+
+impl CharByteOffsets {
+    /// The table for `text`, made in one pass.
+    pub fn new(text: &str) -> Self {
+        Self {
+            offsets: text
+                .char_indices()
+                .map(|(byte, _)| byte)
+                .chain(std::iter::once(text.len()))
+                .collect(),
+        }
+    }
+
+    /// The byte offset of the character at `char_index`; the text's length at or past
+    /// its end.
+    pub fn byte(&self, char_index: usize) -> usize {
+        self.offsets
+            .get(char_index)
+            .or_else(|| self.offsets.last())
+            .copied()
+            .unwrap_or(0)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::CharByteOffsets;
+
+    #[test]
+    fn character_indices_become_byte_offsets() {
+        let offsets = CharByteOffsets::new("a爸b");
+        assert_eq!(
+            (0..5).map(|i| offsets.byte(i)).collect::<Vec<_>>(),
+            [0, 1, 4, 5, 5]
+        );
+        assert_eq!(CharByteOffsets::new("").byte(3), 0);
+    }
+}

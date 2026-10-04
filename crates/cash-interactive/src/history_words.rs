@@ -25,12 +25,8 @@ fn split(line: &str) -> Vec<&str> {
     };
 
     // Token locations count characters; slicing needs bytes.
-    let byte_offsets: Vec<usize> = line
-        .char_indices()
-        .map(|(byte, _)| byte)
-        .chain(std::iter::once(line.len()))
-        .collect();
-    let byte = |char_index: usize| byte_offsets.get(char_index).copied().unwrap_or(line.len());
+    let offsets = cash_parser::CharByteOffsets::new(line);
+    let byte = |char_index: usize| offsets.byte(char_index);
 
     tokens
         .iter()

@@ -233,19 +233,8 @@ impl<'a, SE: cash_core::ShellExtensions> Highlighter<'a, SE> {
             let mut saw_command_token = false;
 
             // Tokenizer offsets are *character* indices into `line`; slicing needs bytes.
-            // `char_indices()` gives the byte offset of each char, plus a sentinel for the
-            // end, so a lookup is O(1) and the whole line costs one pass (not O(n²)).
-            let char_byte_offsets: Vec<usize> = line
-                .char_indices()
-                .map(|(byte_idx, _)| byte_idx)
-                .chain(std::iter::once(line.len()))
-                .collect();
-            let byte_offset = |char_offset: usize| {
-                char_byte_offsets
-                    .get(char_offset)
-                    .copied()
-                    .unwrap_or(line.len())
-            };
+            let offsets = cash_parser::CharByteOffsets::new(line);
+            let byte_offset = |char_offset: usize| offsets.byte(char_offset);
 
             for token in tokens {
                 match token {

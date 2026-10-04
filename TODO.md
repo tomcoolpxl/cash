@@ -99,8 +99,6 @@ some may have gone with other work.
 - XC-12, XC-14, XC-16: three process-creation paths and two environment-block builders;
   paths shown via `replace('\\','/')` past the D10 chokepoint; case folding mixes ASCII
   and Unicode.
-- PI-20, LANG-25: char and byte offsets rebuilt in three consumers; two metacharacter
-  tables disagree.
 
 ---
 

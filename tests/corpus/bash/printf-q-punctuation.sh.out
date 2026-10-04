@@ -1,0 +1,37 @@
+  => a\ b \ a a\ 
+! => a\!b \!a a\!
+" => a\"b \"a a\"
+# => a#b \#a a#
+$ => a\$b \$a a\$
+% => a%b %a a%
+& => a\&b \&a a\&
+' => a\'b \'a a\'
+( => a\(b \(a a\(
+) => a\)b \)a a\)
+* => a\*b \*a a\*
++ => a+b +a a+
+, => a\,b \,a a\,
+- => a-b -a a-
+. => a.b .a a.
+/ => a/b /a a/
+: => a:b :a a:
+; => a\;b \;a a\;
+< => a\<b \<a a\<
+= => a=b =a a=
+> => a\>b \>a a\>
+? => a\?b \?a a\?
+@ => a@b @a a@
+[ => a\[b \[a a\[
+\ => a\\b \\a a\\
+] => a\]b \]a a\]
+^ => a\^b \^a a\^
+_ => a_b _a a_
+` => a\`b \`a a\`
+{ => a\{b \{a a\{
+| => a\|b \|a a\|
+} => a\}b \}a a\}
+~ => a~b \~a a~
+'a b'
+a=\~b
+a:\~b
+a~b
