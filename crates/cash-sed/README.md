@@ -128,14 +128,14 @@ cargo test
 * Address steps can be specified in the form of start~step and start,~step
   ranges.
 * Address 0 can be used in the `r` command to prepend a file.
+* The special file names of GNU _sed_: `/dev/stdin` for `r` and `R` reads standard
+  input, and `/dev/stdout` and `/dev/stderr` for `w`, `W` and the `w` flag of `s`
+  write to standard output and error, except in `--posix` mode, as in GNU _sed_.
+  `/dev/null` is Windows' `NUL`.
 
 ### Supported BSD and GNU extensions
 * The second address in a range can be specified as a relative address with +N.
 * In-place editing of file with the `-i` flag.
-
-### New extensions
-* Unicode characters can be specified in regular expression pattern, replacement
-  and transliteration sequences using `\uXXXX` or `\UXXXXXXXX` sequences.
 
 ### Incompatible extensions
 The `-U` or `--uutil-extensions` option enables useful extensions or bug fixes
@@ -156,20 +156,19 @@ that aren't compatible with GNU sed or POSIX.
   and requires locale-specific processing (e.g. ignore/map case,
   character classes), consider converting it through UTF-8 to ensure
   the correct handling of locale-specific regular expressions.
-  This _sed_ program can also handle arbitrary byte sequences
-  if no part of the input requires treating it as a Rust String.
-* Back-references aren't supported when input is processed as bytes
-  (`LC_ALL=C`).
-* The command will report an error and fail if duplicate labels are found
-  in the script.
-  This matches the BSD behavior. The GNU version accepts duplicate labels.
-* The last line (`$`) address is interpreted as the last non-empty line of
-  the last file.  If files specified in subsequent arguments until the last
-  one are empty, then the last line condition will never be triggered.
-  This behavior is consistent with the
-  [original implementation](https://github.com/dspinellis/unix-history-repo/blob/Research-V7/usr/src/cmd/sed/sed1.c#L665).
-* Labels are parsed for alphanumeric characters. The BSD version parses them
-  until the end of the line, preventing ; to be used as a separator.
+  In UTF-8 mode the character classes (`[[:alpha:]]`, `\w`) follow Unicode's
+  properties, which differ from GNU _sed_'s C library in a few characters.
+* The word boundaries `\b`, `\B`, `\<` and `\>` take the RE engine's word
+  characters, which include combining marks; GNU _sed_'s are letters, digits and
+  `_`. A regular expression with back-references, which the engine matches as text,
+  reads bytes above 0x7F as Latin-1 letters in byte mode (`LC_ALL=C`) for its word
+  boundaries and the `I` flag, where GNU _sed_'s C locale has no letters there.
+* The last line (`$`) looks ahead past the input files that are empty or cannot be
+  read, and into standard input, as GNU _sed_ does; another input that is not a
+  regular file, such as a named pipe, is taken to have lines, where GNU _sed_ reads
+  ahead into it.
+* In the text of `a`, `i` and `c`, `\c\\` is the control character of a backslash,
+  where GNU _sed_ also writes the second backslash.
 
 ## GNU test suite compatibility
 

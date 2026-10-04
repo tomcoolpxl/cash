@@ -201,6 +201,45 @@ impl ScriptLineProvider {
         }
     }
 
+    /// Return the next line of the current script source, or `None` at its end without
+    /// moving on to the next one: a string a backslash continues onto the next line goes
+    /// on within its `-e` expression or file, as in GNU sed, never into the next.
+    pub fn next_line_in_source(&mut self) -> UResult<Option<Vec<u8>>> {
+        if let State::Active { reader, .. } = &mut self.state
+            && reader.fill_buf()?.is_empty()
+        {
+            return Ok(None);
+        }
+        self.next_line()
+    }
+
+    /// Where GNU sed places an error found once the script is read, such as an empty
+    /// regular expression with none before it: where it stopped reading. That is the last
+    /// `-e` expression at `char 0`, counted among the `-e` expressions, or the last script
+    /// file at the line after its last newline.
+    pub fn gnu_end_place(&self) -> String {
+        match self.sources.last() {
+            None | Some(ScriptValue::StringVal(_)) => {
+                let expressions = self
+                    .sources
+                    .iter()
+                    .filter(|source| matches!(source, ScriptValue::StringVal(_)))
+                    .count();
+                format!("-e expression #{}, char 0", expressions.max(1))
+            }
+            Some(ScriptValue::PathVal(path)) => {
+                let file_name = path.to_string_lossy();
+                let place = &self.place;
+                let line = if place.expression.is_none() && place.file_name == file_name {
+                    place.line_number + usize::from(place.has_newline)
+                } else {
+                    1
+                };
+                format!("file {file_name} line {line}")
+            }
+        }
+    }
+
     // Move to the next available script source.
     fn advance_source(&mut self, next_index: usize) -> UResult<()> {
         if next_index >= self.sources.len() {

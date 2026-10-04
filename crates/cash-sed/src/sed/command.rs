@@ -8,7 +8,7 @@
 // For the full copyright and license information, please view the LICENSE
 // file that was distributed with this source code.
 
-use crate::sed::error_handling::{ScriptLocation, runtime_error};
+use crate::sed::error_handling::ScriptLocation;
 use crate::sed::fast_regex::{Captures, Match, Regex};
 use crate::sed::named_writer::NamedWriter;
 use crate::sed::script_char_provider::ScriptCharProvider;
@@ -59,6 +59,12 @@ pub struct ProcessingContext {
     pub last_line: bool,
     /// True if the file is the last file of the ones specified
     pub last_file: bool,
+    /// The input files after the current one, whose input `$` looks ahead into
+    pub later_files: Vec<PathBuf>,
+    /// Whether any of `later_files` has input, once `$` has looked
+    pub later_input: Option<bool>,
+    /// Whether standard input has been read to its end as an input file
+    pub stdin_done: bool,
     /// Stop processing further input.
     pub stop_processing: bool,
     /// Whether sed operates on bytes or UTF-8 characters
@@ -83,12 +89,29 @@ pub struct ProcessingContext {
     pub append_elements: Vec<AppendElement>,
     /// The files `R` reads, by the name the script gives them
     pub line_files: HashMap<PathBuf, LineFile>,
+    /// Where GNU sed places an error found once the script is read, such as an empty
+    /// regular expression with none before it (`ScriptLineProvider::gnu_end_place`)
+    pub script_end_place: String,
 }
 
-/// A file `R` reads a line of at a time, or `None` when it could not be opened: then
-/// `R` reads nothing, as in GNU sed. Every `R` naming the file shares it, and so its
+/// A file `R` reads a line of at a time. Every `R` naming the file shares it, and so its
 /// place in it.
-pub type LineFile = Rc<RefCell<Option<BufReader<File>>>>;
+pub type LineFile = Rc<RefCell<LineInput>>;
+
+/// What `R` reads its lines from.
+#[derive(Debug)]
+pub enum LineInput {
+    /// A file that could not be opened, which `R` reads nothing from, as in GNU sed.
+    Missing,
+    /// A directory, which GNU sed opens and then fails to read: "read error on F: Is a
+    /// directory". It read nothing.
+    Directory,
+    /// An open file, started over for each input file of `-s` or `-i`.
+    File(BufReader<File>),
+    /// GNU sed's special file `/dev/stdin`, standard input, through a handle of its own;
+    /// never started over. Windows has no such file, so `R` read nothing from it.
+    Stdin(BufReader<File>),
+}
 
 impl ProcessingContext {
     /// The byte that ends a line: NUL with `-z`, newline otherwise. GNU sed uses it to
@@ -300,22 +323,13 @@ impl ReplacementTemplate {
     /// Apply the template to the given RE captures.
     /// Example:
     /// let result = regex.replace_all(input, |caps: &Captures| {
-    ///    template.apply_captures(&command, caps) });
-    /// Returns an error if a backreference in the template was not matched by the RE.
-    pub fn apply_captures(&self, command: &Command, caps: &Captures) -> UResult<Vec<u8>> {
+    ///    template.apply_captures(caps) });
+    ///
+    /// A group the RE does not have is empty, as in GNU sed. Only an empty RE, which
+    /// reuses the last one, gets here with one (`s/./X/;s//\1/`); GNU sed checks the
+    /// groups of any other when it reads the script. It was a run-time error.
+    pub fn apply_captures(&self, caps: &Captures) -> UResult<Vec<u8>> {
         let mut result = Vec::new();
-
-        // Invalid group numbers may end here through (unkown at compile time)
-        // reused REs.
-        if self.max_group_number > caps.len() - 1 {
-            return runtime_error(
-                &command.location,
-                format!(
-                    "invalid reference \\{} on command's RHS",
-                    self.max_group_number
-                ),
-            );
-        }
 
         let mode = self.character_mode;
         let mut case = CaseState::default();
@@ -576,9 +590,8 @@ mod tests {
         let template = ReplacementTemplate::default();
         let input = &mut IOChunk::new_from_str("foo");
         let caps = caps_for("foo", input);
-        let cmd = Command::default();
 
-        let result = template.apply_captures(&cmd, &caps).unwrap();
+        let result = template.apply_captures(&caps).unwrap();
         assert_eq!(result, b"");
     }
 
@@ -588,9 +601,8 @@ mod tests {
         let template = ReplacementTemplate::new(vec![ReplacementPart::Literal(b"hello".to_vec())]);
         let input = &mut IOChunk::new_from_str("abc");
         let caps = caps_for("abc", input);
-        let cmd = Command::default();
 
-        let result = template.apply_captures(&cmd, &caps).unwrap();
+        let result = template.apply_captures(&caps).unwrap();
         assert_eq!(result, b"hello");
     }
 
@@ -603,9 +615,8 @@ mod tests {
         ]);
         let input = &mut IOChunk::new_from_str("foo42");
         let caps = caps_for(r"foo\d+", input);
-        let cmd = Command::default();
 
-        let result = template.apply_captures(&cmd, &caps).unwrap();
+        let result = template.apply_captures(&caps).unwrap();
         assert_eq!(result, b"got: foo42");
     }
 
@@ -630,9 +641,8 @@ mod tests {
         ]);
         let input = &mut IOChunk::new_from_str("foo42");
         let caps = caps_for(r"foo(\d+)", input);
-        let cmd = Command::default();
 
-        let result = template.apply_captures(&cmd, &caps).unwrap();
+        let result = template.apply_captures(&caps).unwrap();
         assert_eq!(result, b"number: 42");
     }
 
@@ -647,15 +657,16 @@ mod tests {
         ]);
         let input = &mut IOChunk::new_from_str("x:123");
         let caps = caps_for(r"(\w+):(\d+)", input);
-        let cmd = Command::default();
 
-        let result = template.apply_captures(&cmd, &caps).unwrap();
+        let result = template.apply_captures(&caps).unwrap();
         assert_eq!(result, b"key: x, value: 123");
     }
 
+    // A group the RE does not have is empty, as in GNU sed, where an empty RE reuses one
+    // with fewer groups than the replacement names (`s/./X/;s//\1/`). It was an error.
     #[test]
     // s/(\w+):(\d+)/key: \1, value: \3/
-    fn test_invalid_group() {
+    fn test_missing_group_is_empty() {
         let template = ReplacementTemplate::new(vec![
             ReplacementPart::Literal(b"key: ".to_vec()),
             ReplacementPart::Group(1),
@@ -664,13 +675,9 @@ mod tests {
         ]);
         let input = &mut IOChunk::new_from_str("x:123");
         let caps = caps_for(r"(\w+):(\d+)", input);
-        let cmd = Command::default();
 
-        let result = template.apply_captures(&cmd, &caps);
-        assert!(result.is_err());
-
-        let msg = result.unwrap_err().to_string();
-        assert!(msg.contains("invalid reference \\3"));
+        let result = template.apply_captures(&caps).unwrap();
+        assert_eq!(result, b"key: x, value: ");
     }
 
     // max_group_number

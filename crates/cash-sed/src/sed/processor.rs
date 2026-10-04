@@ -9,28 +9,24 @@
 // file that was distributed with this source code.
 
 use crate::sed::command::{
-    Address, AppendElement, CharacterMode, Command, CommandData, InputAction, LineFile,
+    Address, AppendElement, CharacterMode, Command, CommandData, InputAction, LineFile, LineInput,
     ProcessingContext, Transliteration,
 };
-use crate::sed::delimited_parser::os_string_from_bytes;
-use crate::sed::error_handling::{
-    ScriptLocation, input_runtime_err, input_runtime_error, runtime_error,
-};
-use crate::sed::fast_io::{IOChunk, LineReader, OutputBuffer};
+use crate::sed::error_handling::{runtime_err, runtime_error, strerror};
+use crate::sed::fast_io::{DEV_STDIN, IOChunk, LineReader, OutputBuffer, read_dev_stdin};
 use crate::sed::fast_regex::Regex;
 use crate::sed::in_place::InPlace;
-use crate::sed::named_writer;
+use crate::sed::named_writer::{self, NamedWriter};
 
 use memchr::memchr;
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::ffi::OsStr;
 use std::io::{self, BufRead, IsTerminal, Read, Seek, SeekFrom};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::OnceLock;
-use uucore::display::Quotable;
-use uucore::error::{FromIo, UResult, set_exit_code};
+use uucore::error::{UError, UResult, USimpleError, set_exit_code};
 
 /// Return the specified command variant, or return an error from the calling function.
 /// The compiler gives each command code its data, so the error is never reached; it
@@ -41,14 +37,11 @@ macro_rules! extract_variant {
         match &$cmd.data {
             CommandData::$variant(inner) => inner,
             _ => {
-                return runtime_error(
-                    &$cmd.location,
-                    concat!(
-                        "INTERNAL ERROR: expected ",
-                        stringify!($variant),
-                        " command data"
-                    ),
-                );
+                return runtime_error(concat!(
+                    "INTERNAL ERROR: expected ",
+                    stringify!($variant),
+                    " command data"
+                ));
             }
         }
     };
@@ -60,15 +53,13 @@ fn match_address(
     reader: &mut LineReader,
     pattern: &mut IOChunk,
     context: &mut ProcessingContext,
-    location: &ScriptLocation,
 ) -> UResult<bool> {
     match addr {
         Address::Re(re) => {
-            let regex = re_or_saved_re(re.as_ref(), context, location)?;
-            match regex.is_match(pattern) {
-                Ok(result) => Ok(result),
-                Err(e) => input_runtime_error(location, context, e.to_string()),
-            }
+            let regex = re_or_saved_re(re.as_ref(), context)?;
+            regex
+                .is_match(pattern)
+                .map_err(|e| runtime_err(e.to_string()))
         }
 
         Address::Line(lineno) => Ok(context.line_number == *lineno),
@@ -79,20 +70,67 @@ fn match_address(
             .checked_sub(*first)
             .is_some_and(|after| after.is_multiple_of(*step))),
 
-        // Recognize "$" as the last line of last file. This is consistent
-        // with the original 7th Research Edition implementation:
-        // https://github.com/dspinellis/unix-history-repo/blob/Research-V7/usr/src/cmd/sed/sed1.c#L665
-        // The FreeBSD version checked for subsequent empty files, but this
-        // can lead to destructive reads (e.g. from named pipes),
-        // and is probably an overkill.
-        Address::Last => Ok(reader.last_line()? && (context.last_file || context.separate)),
+        // "$" is the last line of the input: of the current file with `-s` and `-i`, and
+        // else of the last file with any, as GNU sed looks ahead past files that are
+        // empty or cannot be read (`no_later_input`). Only empty regular files were
+        // looked past.
+        Address::Last => Ok(reader
+            .last_line()
+            .map_err(|e| read_error(&context.input_name, &e))?
+            && (context.separate || no_later_input(context))),
 
         // The relative forms are only ever second addresses, which `applies` decides
         // itself.
         Address::RelLine(_) | Address::StepEnd(_) => {
-            runtime_error(location, "INTERNAL ERROR: invalid address type")
+            runtime_error("INTERNAL ERROR: invalid address type")
         }
     }
+}
+
+/// GNU sed's name for an input in an error: `stdin` for `-`, else its name.
+fn input_display_name(path: &Path) -> String {
+    if path == Path::new("-") {
+        "stdin".to_string()
+    } else {
+        path.display().to_string()
+    }
+}
+
+/// GNU sed's error for an input it could not read, with its status 4: `read error on
+/// stdin: ...`.
+fn read_error(path: &Path, error: &io::Error) -> Box<dyn UError> {
+    runtime_err(format!(
+        "read error on {}: {}",
+        input_display_name(path),
+        strerror(error)
+    ))
+}
+
+/// Whether no input follows the current file's, for `$`. As GNU sed looks ahead, a file
+/// that is empty or cannot be read has none, and standard input is looked into; another
+/// file that is not a regular one is taken to have some.
+fn no_later_input(context: &mut ProcessingContext) -> bool {
+    if context.last_file {
+        return true;
+    }
+    if let Some(later) = context.later_input {
+        return !later;
+    }
+    let reading_stdin = context.input_name == Path::new("-");
+    let later = context.later_files.iter().any(|path| {
+        if path == Path::new("-") {
+            // Standard input read to its end already has nothing more.
+            !reading_stdin
+                && io::stdin()
+                    .lock()
+                    .fill_buf()
+                    .is_ok_and(|buffer| !buffer.is_empty())
+        } else {
+            std::fs::metadata(path).is_ok_and(|metadata| !metadata.is_file() || metadata.len() > 0)
+        }
+    });
+    context.later_input = Some(later);
+    !later
 }
 
 #[allow(dead_code)]
@@ -142,7 +180,7 @@ fn applies(
                     latched = Some(true);
                 }
                 _ => {
-                    if match_address(addr2, reader, pattern, context, &command.location)? {
+                    if match_address(addr2, reader, pattern, context)? {
                         command.start_line = None;
                         context.last_address = true;
                     }
@@ -155,7 +193,7 @@ fn applies(
             Ok(latched)
         } else if let Some(addr1) = &command.addr1 {
             // See if latch must start.
-            if match_address(addr1, reader, pattern, context, &command.location)? {
+            if match_address(addr1, reader, pattern, context)? {
                 match addr2 {
                     Address::Line(n) if linenum >= *n => {
                         context.last_address = true;
@@ -178,13 +216,7 @@ fn applies(
         }
     } else if let Some(addr1) = &command.addr1 {
         // Single address
-        Ok(match_address(
-            addr1,
-            reader,
-            pattern,
-            context,
-            &command.location,
-        )?)
+        Ok(match_address(addr1, reader, pattern, context)?)
     } else {
         // No address
         Ok(true)
@@ -202,7 +234,7 @@ fn write_chunk(
     output: &mut OutputBuffer,
     context: &ProcessingContext,
     chunk: &IOChunk,
-) -> std::io::Result<()> {
+) -> UResult<()> {
     output.write_chunk(chunk)?;
 
     if context.unbuffered {
@@ -214,10 +246,14 @@ fn write_chunk(
 
 /// Return a reference to the current or the saved RE if the RE is None.
 /// Update the saved RE to RE.
+///
+/// An empty RE before any other is GNU sed's error, found when it is first matched but
+/// worded and placed as one in the script, where its reading ended (`-e expression #1,
+/// char 0`), with the script's exit status 1. It was a run-time error of cash's own form
+/// with status 2.
 fn re_or_saved_re<'a>(
     regex: Option<&Regex>,
     context: &'a mut ProcessingContext,
-    location: &ScriptLocation,
 ) -> UResult<&'a Regex> {
     if let Some(re) = regex {
         // First time we see this regex: clone it *once* into the context, and return a
@@ -227,7 +263,13 @@ fn re_or_saved_re<'a>(
         // We already have one: just borrow it.
         Ok(saved_re)
     } else {
-        input_runtime_error(location, context, "no previous regular expression")
+        Err(USimpleError::new(
+            1,
+            format!(
+                "{}: no previous regular expression",
+                context.script_end_place
+            ),
+        ))
     }
 }
 
@@ -271,18 +313,13 @@ fn shell_command(cmd: &OsStr) -> std::process::Command {
 /// output. The child's standard error is left connected to this process's
 /// own, matching GNU sed's behavior where shell errors surface directly
 /// rather than being silently captured.
-fn shell_stdout(
-    cmd: Vec<u8>,
-    command: &Command,
-    context: &mut ProcessingContext,
-) -> UResult<Vec<u8>> {
-    let os_cmd = os_string_from_bytes(cmd).map_err(|e| {
-        input_runtime_err(
-            &command.location,
-            context,
-            format!("failed to construct shell command from bytes: {e}"),
-        )
-    })?;
+///
+/// A command that cannot be started is GNU sed's "error in subprocess", status 4; cash's
+/// sed said why, in its own form. Bytes of the command that are not UTF-8, which a
+/// Windows command line cannot hold, are replaced, so that the shell runs it and says
+/// what is wrong with it, as GNU sed's shell does; it was refused.
+fn shell_stdout(cmd: &[u8]) -> UResult<Vec<u8>> {
+    let os_cmd = std::ffi::OsString::from(String::from_utf8_lossy(cmd).into_owned());
     shell_command(&os_cmd)
         .stdout(std::process::Stdio::piped())
         .spawn()
@@ -296,23 +333,13 @@ fn shell_stdout(
             child.wait()?;
             Ok(buf)
         })
-        .map_err(|e| {
-            input_runtime_err(
-                &command.location,
-                context,
-                format!("failed to execute shell command: {e}"),
-            )
-        })
+        .map_err(|_| runtime_err("error in subprocess"))
 }
 
 /// Execute the pattern space as a shell command, replacing its contents
 /// with the command's standard output, minus one trailing newline.
-fn execute_pattern_as_shell_command(
-    pattern: &mut IOChunk,
-    command: &Command,
-    context: &mut ProcessingContext,
-) -> UResult<()> {
-    let mut shell_out = shell_stdout(pattern.as_bytes().to_vec(), command, context)?;
+fn execute_pattern_as_shell_command(pattern: &mut IOChunk) -> UResult<()> {
+    let mut shell_out = shell_stdout(pattern.as_bytes())?;
     if shell_out.ends_with(b"\r\n") {
         // On Windows a trailing \r\n is the line terminator. Strip both.
         shell_out.truncate(shell_out.len() - 2);
@@ -340,7 +367,7 @@ fn substitute(
     let mut replaced = false;
     let text = pattern.as_bytes();
 
-    let regex = re_or_saved_re(sub.regex.as_ref(), context, &command.location)?;
+    let regex = re_or_saved_re(sub.regex.as_ref(), context)?;
 
     // The following let block allows a common input_runtime_error to be
     // called once in all cases, and most importantly, to finish the regex
@@ -375,7 +402,7 @@ fn substitute(
                     let m = caps.get(0)?.expect("a match has group 0");
                     result.extend_from_slice(&text[last_end..m.start()]);
 
-                    let replacement = sub.replacement.apply_captures(command, &caps)?;
+                    let replacement = sub.replacement.apply_captures(&caps)?;
                     result.extend_from_slice(&replacement);
                     replaced = true;
                     last_end = m.end();
@@ -406,7 +433,7 @@ fn substitute(
                     result.extend_from_slice(&text[last_end..m.start()]);
 
                     if (sub.global && count >= sub.occurrence) || count == sub.occurrence {
-                        let replacement = sub.replacement.apply_captures(command, &caps)?;
+                        let replacement = sub.replacement.apply_captures(&caps)?;
                         result.extend_from_slice(&replacement);
                         replaced = true;
                     } else {
@@ -429,7 +456,7 @@ fn substitute(
 
     // Handle errors.
     if let Err(e) = subst_result {
-        return input_runtime_error(&command.location, context, e.to_string());
+        return runtime_error(e.to_string());
     }
 
     // Handle substitution success.
@@ -445,7 +472,7 @@ fn substitute(
             write_chunk(output, context, pattern)?;
         }
         if sub.execute {
-            execute_pattern_as_shell_command(pattern, command, context)?;
+            execute_pattern_as_shell_command(pattern)?;
         }
         if sub.print_flag && !sub.p_before_e {
             write_chunk(output, context, pattern)?;
@@ -453,9 +480,13 @@ fn substitute(
 
         // Write to file if needed.
         if let Some(ref writer) = sub.write_file {
-            writer
-                .borrow_mut()
-                .write_line_bytes(pattern.as_bytes(), pattern.is_newline_terminated())?;
+            write_to_file(
+                writer,
+                pattern.as_bytes(),
+                pattern.is_newline_terminated(),
+                output,
+                context,
+            )?;
         }
         context.substitution_made = true;
     }
@@ -464,12 +495,7 @@ fn substitute(
 }
 
 /// Apply the specified transliteration in the provided pattern space.
-fn transliterate(
-    pattern: &mut IOChunk,
-    trans: &Transliteration,
-    location: &ScriptLocation,
-    context: &ProcessingContext,
-) -> UResult<()> {
+fn transliterate(pattern: &mut IOChunk, trans: &Transliteration, context: &ProcessingContext) {
     if context.character_mode == CharacterMode::Byte || trans.is_byte_identity {
         let text = pattern.as_bytes();
         let mut result = Vec::with_capacity(text.len());
@@ -487,47 +513,47 @@ fn transliterate(
             pattern.set_to_bytes(result, pattern.is_newline_terminated());
         }
 
-        return Ok(());
+        return;
     }
 
-    let text = pattern.as_str().map_err(|e| {
-        input_runtime_err(
-            location,
-            context,
-            format!("failed to decode pattern space as UTF-8 for transliteration: {e}"),
-        )
-    })?;
-    let mut result = String::with_capacity(text.len());
+    // Bytes that are not UTF-8 stay as they are, as in GNU sed; they were an error.
+    let text = pattern.as_bytes();
+    let mut result = Vec::with_capacity(text.len());
     let mut replaced = false;
 
     // Perform the transliteration.
-    for ch in text.chars() {
-        let mapped = trans.lookup_char(ch);
-        if mapped != ch {
-            replaced = true;
+    for chunk in text.utf8_chunks() {
+        for ch in chunk.valid().chars() {
+            let mapped = trans.lookup_char(ch);
+            if mapped != ch {
+                replaced = true;
+            }
+            let mut buffer = [0; 4];
+            result.extend_from_slice(mapped.encode_utf8(&mut buffer).as_bytes());
         }
-        result.push(mapped);
+        result.extend_from_slice(chunk.invalid());
     }
 
     // Lazy replace.
     if replaced {
-        pattern.set_to_string(result, pattern.is_newline_terminated());
+        pattern.set_to_bytes(result, pattern.is_newline_terminated());
     }
-
-    Ok(())
 }
 
 /// Queue the next line of a file `R` reads, its delimiter included when it has one, for
 /// the end of the cycle; nothing once the file is read to its end, or when it could not
 /// be opened. A last line without a newline is written without one, as in GNU sed.
-fn queue_line_of(
-    file: &LineFile,
-    location: &ScriptLocation,
-    context: &mut ProcessingContext,
-) -> UResult<()> {
+///
+/// A file that cannot be read is GNU sed's "read error on F: ...", status 4: a
+/// directory, which it opens and cannot read.
+fn queue_line_of(file: &LineFile, path: &Path, context: &mut ProcessingContext) -> UResult<()> {
     let mut file = file.borrow_mut();
-    let Some(reader) = file.as_mut() else {
-        return Ok(());
+    let reader = match &mut *file {
+        LineInput::Missing => return Ok(()),
+        LineInput::Directory => {
+            return runtime_error(format!("read error on {}: Is a directory", path.display()));
+        }
+        LineInput::File(reader) | LineInput::Stdin(reader) => reader,
     };
     let mut text = Vec::new();
     match reader.read_until(context.delimiter(), &mut text) {
@@ -536,19 +562,64 @@ fn queue_line_of(
             context.append_elements.push(AppendElement::Line(text));
             Ok(())
         }
-        Err(e) => runtime_error(location, format!("read error: {e}")),
+        Err(e) => Err(read_error(path, &e)),
     }
 }
 
 /// Start the files `R` reads over, for the next input file of `-s` or `-i`, as GNU sed
-/// does.
+/// does; but standard input, which GNU sed does not start over.
 fn rewind_line_files(context: &ProcessingContext) -> UResult<()> {
-    for file in context.line_files.values() {
-        if let Some(reader) = file.borrow_mut().as_mut() {
-            reader.seek(SeekFrom::Start(0))?;
+    for (path, file) in &context.line_files {
+        if let LineInput::File(reader) = &mut *file.borrow_mut() {
+            reader
+                .seek(SeekFrom::Start(0))
+                .map_err(|e| read_error(path, &e))?;
         }
     }
     Ok(())
+}
+
+/// Write the file `r` reads to the output: GNU sed's special file `/dev/stdin` is what is
+/// left of standard input, or all of it when it is a file, as opening `/dev/stdin` gives
+/// it on GNU's systems; Windows has no such file, and nothing was written. Once sed has
+/// read standard input as an input file (`stdin_done`), GNU sed has closed it, and the
+/// file has nothing.
+fn append_file(output: &mut OutputBuffer, path: &PathBuf, stdin_done: bool) -> UResult<()> {
+    if path.as_os_str() == DEV_STDIN {
+        if stdin_done {
+            return Ok(());
+        }
+        let contents = read_dev_stdin().map_err(|e| read_error(Path::new("-"), &e))?;
+        if contents.is_empty() {
+            return Ok(());
+        }
+        return output.write_raw(&contents);
+    }
+    output.copy_file(path)
+}
+
+/// Write a line to the file of `w`, `W` or the `w` flag of `s`. GNU sed's `/dev/stdout`
+/// is sed's own output, written in order with the rest of it, but in an in-place edit,
+/// whose output is the file.
+fn write_to_file(
+    writer: &Rc<RefCell<NamedWriter>>,
+    line: &[u8],
+    newline: bool,
+    output: &mut OutputBuffer,
+    context: &ProcessingContext,
+) -> UResult<()> {
+    let mut writer = writer.borrow_mut();
+    let bytes = writer.line_bytes(line, newline, context.delimiter());
+    if writer.is_stdout() && !context.in_place {
+        // GNU sed's `/dev/stdout` keeps its own count of a missing line end, apart
+        // from sed's output, though both are written to standard output.
+        output.write_apart(&bytes)?;
+        if context.unbuffered {
+            output.flush()?;
+        }
+        return Ok(());
+    }
+    writer.write_bytes(&bytes)
 }
 
 /// Output any data queued for output at the end of the cycle.
@@ -559,7 +630,7 @@ fn flush_appends(output: &mut OutputBuffer, context: &mut ProcessingContext) -> 
                 output.write_bytes(text.as_ref())?;
             }
             AppendElement::Path(path) => {
-                output.copy_file(path)?;
+                append_file(output, path, context.stdin_done)?;
             }
             AppendElement::Line(line) => {
                 output.write_raw(line)?;
@@ -655,7 +726,6 @@ fn list(
     output: &mut OutputBuffer,
     line: &IOChunk,
     max_width: usize,
-    location: &ScriptLocation,
     context: &ProcessingContext,
 ) -> UResult<()> {
     // Special case for an empty pattern space
@@ -679,21 +749,20 @@ fn list(
             list_line.write_item(output, &out_str)?;
         }
     } else {
-        // List non-ASCII 8-bit characters in octal; Unicode in hex \u or \U.
-        let line = line.as_str().map_err(|e| {
-            input_runtime_err(
-                location,
-                context,
-                format!("failed to decode pattern space as UTF-8 for list command: {e}"),
-            )
-        })?;
-        for ch in line.chars() {
-            if ch == '\n' {
-                list_line.write_embedded_newline(output)?;
-                continue;
+        // List non-ASCII 8-bit characters in octal; Unicode in hex \u or \U. Bytes
+        // that are not UTF-8 are listed in octal; they were an error.
+        for chunk in line.as_bytes().utf8_chunks() {
+            for ch in chunk.valid().chars() {
+                if ch == '\n' {
+                    list_line.write_embedded_newline(output)?;
+                    continue;
+                }
+                let out_str = readable_char(ch);
+                list_line.write_item(output, &out_str)?;
             }
-            let out_str = readable_char(ch);
-            list_line.write_item(output, &out_str)?;
+            for &byte in chunk.invalid() {
+                list_line.write_item(output, &readable_ascii_byte(byte))?;
+            }
         }
     }
 
@@ -704,6 +773,7 @@ fn list(
 fn process_address_0(
     commands: Option<Rc<RefCell<Command>>>,
     output: &mut OutputBuffer,
+    stdin_done: bool,
 ) -> UResult<()> {
     // Prescan for zero-address which must produce output
     // before any input line is read.
@@ -718,7 +788,7 @@ fn process_address_0(
                     && cmd.addr2.is_none()
                 {
                     let path = extract_variant!(cmd, Path);
-                    output.copy_file(path)?;
+                    append_file(output, path, stdin_done)?;
                 }
 
                 cmd.next.clone()
@@ -736,10 +806,13 @@ fn process_file(
     output: &mut OutputBuffer,
     context: &mut ProcessingContext,
 ) -> UResult<()> {
-    process_address_0(commands.clone(), output)?;
+    process_address_0(commands.clone(), output, context.stdin_done)?;
 
     // Loop over the input lines as pattern space.
-    'lines: while let Some(mut pattern) = reader.get_line()? {
+    'lines: while let Some(mut pattern) = reader
+        .get_line()
+        .map_err(|e| read_error(&context.input_name, &e))?
+    {
         context.line_number += 1;
         context.substitution_made = false;
         // Set the script command from which to start.
@@ -831,17 +904,14 @@ fn process_file(
                 }
                 'e' => match &command.data {
                     CommandData::None => {
-                        execute_pattern_as_shell_command(&mut pattern, &command, context)?;
+                        execute_pattern_as_shell_command(&mut pattern)?;
                     }
                     CommandData::Text(cmd_bytes) => {
-                        let shell_out = shell_stdout(cmd_bytes.to_vec(), &command, context)?;
+                        let shell_out = shell_stdout(cmd_bytes)?;
                         output.write_bytes(&shell_out)?;
                     }
                     _ => {
-                        return runtime_error(
-                            &command.location,
-                            "INTERNAL ERROR: invalid 'e' command data",
-                        );
+                        return runtime_error("INTERNAL ERROR: invalid 'e' command data");
                     }
                 },
                 'F' => {
@@ -880,7 +950,7 @@ fn process_file(
                 }
                 'l' => {
                     let width = *extract_variant!(command, Number);
-                    list(output, &pattern, width, &command.location, context)?;
+                    list(output, &pattern, width, context)?;
                 }
                 'n' => {
                     // The pattern space goes out before what the cycle queued, as at the
@@ -889,7 +959,10 @@ fn process_file(
                         write_chunk(output, context, &pattern)?;
                     }
                     flush_appends(output, context)?;
-                    if let Some(next_line) = reader.get_line()? {
+                    if let Some(next_line) = reader
+                        .get_line()
+                        .map_err(|e| read_error(&context.input_name, &e))?
+                    {
                         pattern = next_line;
                         context.line_number += 1;
                     } else {
@@ -946,8 +1019,16 @@ fn process_file(
                 }
                 'R' => {
                     // Queue the file's next line, if it has one, for the end of the cycle.
-                    let file = extract_variant!(command, LineFile);
-                    queue_line_of(file, &command.location, context)?;
+                    let CommandData::LineFile(file) = &command.data else {
+                        return runtime_error("INTERNAL ERROR: expected LineFile command data");
+                    };
+                    let path = context
+                        .line_files
+                        .iter()
+                        .find(|(_, shared)| Rc::ptr_eq(shared, file))
+                        .map(|(path, _)| path.clone())
+                        .unwrap_or_default();
+                    queue_line_of(file, &path, context)?;
                 }
                 's' => {
                     substitute(&mut pattern, &command, context, output)?;
@@ -986,9 +1067,13 @@ fn process_file(
                 'w' => {
                     // Append the pattern space to the specified file.
                     let writer = extract_variant!(command, NamedWriter);
-                    writer
-                        .borrow_mut()
-                        .write_line_bytes(pattern.as_bytes(), pattern.is_newline_terminated())?;
+                    write_to_file(
+                        writer,
+                        pattern.as_bytes(),
+                        pattern.is_newline_terminated(),
+                        output,
+                        context,
+                    )?;
                 }
                 'W' => {
                     // Append only the first line of the pattern space.
@@ -1000,9 +1085,12 @@ fn process_file(
                             Some(pos) => (&pattern_bytes[..=pos], true),
                             None => (pattern_bytes, false),
                         };
-                    writer.borrow_mut().write_line_bytes(
+                    write_to_file(
+                        writer,
                         first_line,
                         !found_newline && pattern.is_newline_terminated(),
+                        output,
+                        context,
                     )?;
                 }
                 'x' => {
@@ -1017,7 +1105,7 @@ fn process_file(
                 }
                 'y' => {
                     let trans = extract_variant!(command, Transliteration);
-                    transliterate(&mut pattern, trans, &command.location, context)?;
+                    transliterate(&mut pattern, trans, context);
                 }
                 'z' => {
                     // Clear the pattern contents, but preserve newline state
@@ -1038,10 +1126,7 @@ fn process_file(
                 }
                 // The compilation should supply only valid codes.
                 c => {
-                    return runtime_error(
-                        &command.location,
-                        format!("INTERNAL ERROR: bad command '{c}'"),
-                    );
+                    return runtime_error(format!("INTERNAL ERROR: bad command '{c}'"));
                 }
             } // match
             // Advance to next command.
@@ -1093,17 +1178,41 @@ fn reset_latched_address_ranges(range_commands: &mut [Rc<RefCell<Command>>]) {
     }
 }
 
-fn remaining_files_are_empty(remaining: &[PathBuf]) -> bool {
-    for path in remaining {
-        if path == std::path::Path::new("-") {
-            return false;
-        }
-        match std::fs::metadata(path) {
-            Ok(meta) if meta.is_file() && meta.len() == 0 => continue,
-            _ => return false,
+/// Open the input file `path`, as GNU sed opens one.
+///
+/// One that cannot be opened is reported, `can't read F: No such file or directory`,
+/// and passed over, and sed ends with status 2: `None`. A directory, which GNU sed opens
+/// and then fails to read, is its "read error on F: Is a directory", and one an
+/// in-place edit refuses, "couldn't edit F: not a regular file", status 4. cash's sed
+/// ended at the first file it could not open, with its own words and status 1.
+///
+/// With `--follow-symlinks` a file that is not there is GNU sed's "couldn't readlink F:
+/// ...", status 4, before it is opened.
+fn open_input(path: &PathBuf, context: &ProcessingContext) -> UResult<Option<LineReader>> {
+    if context.follow_symlinks
+        && path.as_os_str() != "-"
+        && let Err(error) = std::fs::symlink_metadata(path)
+    {
+        return runtime_error(format!(
+            "couldn't readlink {}: {}",
+            path.display(),
+            strerror(&error)
+        ));
+    }
+    if path.as_os_str() != "-" && path.is_dir() {
+        return runtime_error(if context.in_place {
+            format!("couldn't edit {}: not a regular file", path.display())
+        } else {
+            format!("read error on {}: Is a directory", path.display())
+        });
+    }
+    match LineReader::open_with(path, context.treats_cr_as_data()) {
+        Ok(reader) => Ok(Some(reader)),
+        Err(error) => {
+            uucore::show_error!("can't read {}: {}", path.display(), strerror(&error));
+            Ok(None)
         }
     }
-    true
 }
 
 /// Process all input files
@@ -1116,20 +1225,28 @@ pub fn process_all_files(
 
     let mut in_place = InPlace::new(context.clone());
     let last_file_index = files.len() - 1;
+    // Whether a file has been read, so that one that could not be is passed over.
+    let mut read_one = false;
+    // Whether a file could not be read: sed then ends with status 2, as GNU sed does,
+    // whatever status `q` gave.
+    let mut unreadable = false;
 
     for (index, path) in files.iter().enumerate() {
-        context.last_file =
-            index == last_file_index || remaining_files_are_empty(&files[index + 1..]);
-        let mut reader = LineReader::open_with(path, context.treats_cr_as_data())
-            .map_err_context(|| format!("error opening input file {}", path.quote()))?;
+        context.last_file = index == last_file_index;
+        context.later_files = files.get(index + 1..).unwrap_or_default().to_vec();
+        context.later_input = None;
+        let Some(mut reader) = open_input(path, context)? else {
+            unreadable = true;
+            continue;
+        };
         reader.set_delimiter(context.delimiter());
         let output = in_place.begin(path)?;
         output.set_delimiter(context.delimiter());
 
-        if context.separate && index > 0 {
+        if context.separate && read_one {
             rewind_line_files(context)?;
         }
-        if context.separate || index == 0 {
+        if context.separate || !read_one {
             context.line_number = 0;
             reset_latched_address_ranges(&mut context.range_commands);
 
@@ -1137,21 +1254,12 @@ pub fn process_all_files(
             context.hold.content.clear();
             context.hold.has_newline = true;
         }
+        read_one = true;
 
         context.input_name = path.clone();
         process_file(commands.clone(), &mut reader, output, context)?;
-
-        // Handle any N command remains.
-        if context.last_file
-            && !context.separate
-            && let Some(action) = context.input_action.take()
-        {
-            if !context.quiet {
-                let mut pending = action.prepend;
-                pending.push(b'\n');
-                output.write_bytes(&pending)?;
-            }
-            flush_appends(output, context)?;
+        if path.as_os_str() == "-" {
+            context.stdin_done = true;
         }
 
         // The input is closed before an in-place edit replaces it: Windows does not move
@@ -1164,9 +1272,28 @@ pub fn process_all_files(
         }
     }
 
+    // An `N` on the last line of the input has no line to append: its pattern space is
+    // printed, as in GNU sed. It is found here, past the files that follow and have no
+    // lines, not on the last file with lines alone.
+    if !context.separate
+        && let Some(action) = context.input_action.take()
+    {
+        let output = &mut in_place.output;
+        if !context.quiet {
+            let mut pending = action.prepend;
+            pending.push(b'\n');
+            output.write_bytes(&pending)?;
+        }
+        flush_appends(output, context)?;
+        output.flush()?;
+    }
+
     // Flush all output files
     named_writer::flush_all()?;
 
+    if unreadable {
+        set_exit_code(2);
+    }
     Ok(())
 }
 

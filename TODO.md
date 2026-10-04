@@ -63,17 +63,12 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 What comparing cash's sed and awk with GNU sed 4.9 and gawk turned up while phase 14
 fixed their leftovers; moved here so 1.3.14 could go out (the user, 2026-10-04).
 
-- sed, found matching GNU's errors (2026-10-04): `bfoo` exits 1 with a location, GNU 4
-  without; `{p` gives "unmatched `{'" with no location, GNU at `char 0`; `//p` with no
-  earlier regex fails at run time with 2, GNU at compile time with 1; `v4.a` and `v999`
-  say "invalid version of sed" where GNU (strverscmp) says "expected newer version";
-  `[\]]` takes the backslash as an escape, GNU as a literal; `[[.-.]]` and `[a-[.z.]]`
-  are not supported; under `--posix` `\w`, `\<` and the like stay operators; a written
-  `\A` is an anchor; `R /dev/stdin` is not special. Duplicate labels are an error, which
-  the crate's README keeps as BSD's behaviour. A backslash-newline in a `y` or `s`
-  pattern is "unterminated" where GNU reads it as a newline; `s/./X/;s//\1/` fails at
-  run time where GNU reports it at compile time; run-time errors keep cash's form
-  (`<script argument 1>:1:8: 'file':1 error: …`), not GNU's.
+- sed, left by the comparison with GNU sed 4.9 (2026-10-04), as the crate's README lists
+  them: `\b`, `\<` and `\>` count combining marks as word characters; in byte mode a
+  regex with back-references takes bytes above 0x7F for Latin-1 letters for word bounds
+  and `I`; `$` assumes a later named pipe has lines; in `a`/`i`/`c` text `\c\\` drops
+  GNU's second backslash. `sed -f DIR` says "couldn't open file" where MSYS GNU reads
+  nothing.
 - awk, found matching gawk 5.4 (2026-10-04): a `for (k in a)` loop skips keys deleted
   during it, where gawk visits its snapshot (and a comment calls cash's way gawk's); a
   function that deletes the subarray it was given and then writes its parameter makes

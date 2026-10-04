@@ -17,14 +17,14 @@
 
 use std::cell::Cell;
 use std::fs::File;
-use std::io::{self, BufRead, BufReader, BufWriter, Read, Write};
+use std::io::{self, BufRead, BufReader, BufWriter, Read, Seek, Write};
 
 use std::str;
 
 use std::path::PathBuf;
-use uucore::error::UError;
+use uucore::error::{UError, UResult, USimpleError};
 
-use uucore::error::USimpleError;
+use crate::sed::error_handling::strerror;
 
 /// Buffered line reader from any BufRead input.
 pub struct ReadLineCursor {
@@ -303,11 +303,51 @@ impl LineReader {
     }
 }
 
+/// GNU sed's special file for standard input, which `r` and `R` read. Windows has no
+/// such file, so they read nothing from it.
+pub const DEV_STDIN: &str = "/dev/stdin";
+
+/// Standard input through a handle of its own, as reading `/dev/stdin` gives it in GNU
+/// sed: apart from any buffering of standard input as sed's input. `None` when there is
+/// no standard input.
+pub fn stdin_file() -> Option<File> {
+    use std::os::windows::io::AsHandle;
+    io::stdin()
+        .as_handle()
+        .try_clone_to_owned()
+        .ok()
+        .map(File::from)
+}
+
+/// What `r /dev/stdin` reads, as opening `/dev/stdin` anew reads it on GNU sed's systems:
+/// the rest of a pipe, and the whole of a file, whatever has been read of it.
+pub fn read_dev_stdin() -> io::Result<Vec<u8>> {
+    let mut contents = Vec::new();
+    let Some(mut file) = stdin_file() else {
+        return Ok(contents);
+    };
+    if file.metadata().is_ok_and(|metadata| metadata.is_file()) {
+        // The handle shares its place with standard input's, which is left where it was.
+        let place = file.stream_position()?;
+        file.seek(io::SeekFrom::Start(0))?;
+        file.read_to_end(&mut contents)?;
+        file.seek(io::SeekFrom::Start(place))?;
+    } else {
+        file.read_to_end(&mut contents)?;
+    }
+    Ok(contents)
+}
+
 pub trait OutputWrite: Write {}
 impl<T: Write> OutputWrite for T {}
 
 /// Abstraction for outputting data.
 /// All output is buffered and written via BufWriter.
+///
+/// A failed write is GNU sed's error, with its status 4: `couldn't write 5 items to
+/// stdout: No space left on device`, or `couldn't flush stdout: ...`. Standard output's
+/// reader having gone ends sed in silence with 141, as SIGPIPE ends GNU sed and every
+/// tool of cash's own (spec D71). They were the system's words, with status 1.
 pub struct OutputBuffer {
     out: BufWriter<Box<dyn OutputWrite + 'static>>, // Where to write
     // True when the last write didn't end with \n; the \n is deferred so
@@ -316,6 +356,8 @@ pub struct OutputBuffer {
     pending_crlf: bool,
     /// The byte that ends a line (`ProcessingContext::delimiter`).
     delimiter: u8,
+    /// The output's name in an error: `stdout`, or the file an in-place edit writes.
+    name: String,
 }
 
 impl OutputBuffer {
@@ -325,7 +367,15 @@ impl OutputBuffer {
             pending_newline: false,
             pending_crlf: false,
             delimiter: b'\n',
+            name: "stdout".to_string(),
         }
+    }
+
+    /// The buffer, named `name` in its errors.
+    #[must_use]
+    pub fn with_name(mut self, name: String) -> Self {
+        self.name = name;
+        self
     }
 
     /// Set the byte that ends a line (`ProcessingContext::delimiter`).
@@ -333,17 +383,41 @@ impl OutputBuffer {
         self.delimiter = delimiter;
     }
 
+    /// GNU sed's error for `items` bytes it could not write.
+    fn write_failed(&self, error: &io::Error, items: usize) -> Box<dyn UError> {
+        if error.kind() == io::ErrorKind::BrokenPipe && self.name == "stdout" {
+            std::process::exit(141);
+        }
+        let plural = if items == 1 { "item" } else { "items" };
+        USimpleError::new(
+            4,
+            format!(
+                "couldn't write {items} {plural} to {}: {}",
+                self.name,
+                strerror(error)
+            ),
+        )
+    }
+
+    /// Write `bytes` as they are.
+    fn put(&mut self, bytes: &[u8]) -> UResult<()> {
+        self.out
+            .write_all(bytes)
+            .map_err(|e| self.write_failed(&e, bytes.len()))
+    }
+
     /// Write the end of a line: CRLF for a CRLF line (D49), else the delimiter.
-    fn write_line_end(&mut self, crlf: bool) -> io::Result<()> {
+    fn write_line_end(&mut self, crlf: bool) -> UResult<()> {
         if crlf && self.delimiter == b'\n' {
-            self.out.write_all(b"\r\n")
+            self.put(b"\r\n")
         } else {
-            self.out.write_all(&[self.delimiter])
+            let delimiter = [self.delimiter];
+            self.put(&delimiter)
         }
     }
 
     /// Schedule the specified String or &str for eventual output
-    pub fn write_str<S: Into<String>>(&mut self, s: S) -> io::Result<()> {
+    pub fn write_str<S: Into<String>>(&mut self, s: S) -> UResult<()> {
         let mut s = s.into();
         let has_newline = s.ends_with('\n');
         if has_newline {
@@ -356,7 +430,7 @@ impl OutputBuffer {
     }
 
     /// Schedule the specified bytes for eventual output.
-    pub fn write_bytes(&mut self, bytes: &[u8]) -> io::Result<()> {
+    pub fn write_bytes(&mut self, bytes: &[u8]) -> UResult<()> {
         let (content, has_newline) = if bytes.ends_with(b"\n") {
             (&bytes[..bytes.len() - 1], true)
         } else {
@@ -368,16 +442,32 @@ impl OutputBuffer {
         )))
     }
 
+    /// Write `bytes` as they are, leaving a line end the last output left out to come
+    /// before the next output: what GNU sed's `/dev/stdout` writes into sed's output.
+    pub fn write_apart(&mut self, bytes: &[u8]) -> UResult<()> {
+        self.put(bytes)
+    }
+
     /// Write `bytes` as they are, after the end of a line the last output left out: a
     /// line `R` read, which GNU sed writes so, without an end when the file's last line
     /// has none.
-    pub fn write_raw(&mut self, bytes: &[u8]) -> io::Result<()> {
+    pub fn write_raw(&mut self, bytes: &[u8]) -> UResult<()> {
         self.flush_pending_newline()?;
-        self.out.write_all(bytes)
+        self.put(bytes)
     }
 
     /// Copy the specified file to the output.
-    pub fn copy_file(&mut self, path: &PathBuf) -> io::Result<()> {
+    ///
+    /// As in GNU sed, a file that cannot be opened is no error, and one that cannot be
+    /// read, a directory, is "read error on F: Is a directory" with status 4; nothing was
+    /// written for a directory.
+    pub fn copy_file(&mut self, path: &PathBuf) -> UResult<()> {
+        if path.is_dir() {
+            return Err(USimpleError::new(
+                4,
+                format!("read error on {}: Is a directory", path.display()),
+            ));
+        }
         let Ok(file) = File::open(path) else {
             // Per POSIX, if the file can't be read treat it as empty.
             return Ok(());
@@ -387,26 +477,39 @@ impl OutputBuffer {
         // file's text was joined to it (`printf a | sed 'r f'`).
         self.flush_pending_newline()?;
         let mut reader = BufReader::new(file);
-        io::copy(&mut reader, &mut self.out)?;
-        Ok(())
+        loop {
+            let buffer = reader.fill_buf().map_err(|e| {
+                USimpleError::new(
+                    4,
+                    format!("read error on {}: {}", path.display(), strerror(&e)),
+                )
+            })?;
+            if buffer.is_empty() {
+                return Ok(());
+            }
+            let len = buffer.len();
+            self.put(buffer)?;
+            reader.consume(len);
+        }
     }
 }
 
 /// Implementation of the std::io::Write trait
 impl Write for OutputBuffer {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.write_bytes(buf)?;
+        self.write_bytes(buf)
+            .map_err(|e| io::Error::other(e.to_string()))?;
         Ok(buf.len())
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        self.flush()
+        self.flush().map_err(|e| io::Error::other(e.to_string()))
     }
 }
 
 impl OutputBuffer {
     /// Schedule the specified output chunk for eventual output
-    pub fn write_chunk(&mut self, chunk: &IOChunk) -> io::Result<()> {
+    pub fn write_chunk(&mut self, chunk: &IOChunk) -> UResult<()> {
         if chunk.is_empty() && !chunk.is_newline_terminated() {
             return Ok(());
         }
@@ -424,7 +527,7 @@ impl OutputBuffer {
                 has_crlf,
                 ..
             } => {
-                self.out.write_all(content)?;
+                self.put(content)?;
                 if *has_newline {
                     self.write_line_end(*has_crlf)?;
                 }
@@ -436,7 +539,7 @@ impl OutputBuffer {
     }
 
     /// Write a deferred newline if the last output didn't end with one.
-    pub fn flush_pending_newline(&mut self) -> io::Result<()> {
+    pub fn flush_pending_newline(&mut self) -> UResult<()> {
         if self.pending_newline {
             self.write_line_end(self.pending_crlf)?;
             self.pending_newline = false;
@@ -446,11 +549,21 @@ impl OutputBuffer {
     }
 
     /// Flush the buffered data.
-    pub fn flush(&mut self) -> io::Result<()> {
-        self.out.flush()
+    pub fn flush(&mut self) -> UResult<()> {
+        let Err(error) = self.out.flush() else {
+            return Ok(());
+        };
+        // A write the buffer put off failed: it is a failed write to GNU sed, which
+        // flushes as it writes.
+        if error.kind() == io::ErrorKind::BrokenPipe && self.name == "stdout" {
+            std::process::exit(141);
+        }
+        Err(USimpleError::new(
+            4,
+            format!("couldn't flush {}: {}", self.name, strerror(&error)),
+        ))
     }
 }
-
 // Usage example (never compiled)
 #[cfg(any())]
 pub fn main() -> io::Result<()> {
@@ -489,9 +602,9 @@ mod tests {
         {
             let file = tmp.reopen()?;
             let mut out = OutputBuffer::new(Box::new(file));
-            out.write_str("foo\n")?;
-            out.write_str("bar\n")?;
-            out.flush()?;
+            out.write_str("foo\n").unwrap();
+            out.write_str("bar\n").unwrap();
+            out.flush().unwrap();
         } // File closes here as it leaves the scope
 
         let contents = fs::read(tmp.path())?;
@@ -519,12 +632,12 @@ mod tests {
         let mut out = OutputBuffer::new(Box::new(out_file));
         let mut nline = 0;
         while let Some(chunk) = reader.get_line()? {
-            out.write_chunk(&chunk)?;
+            out.write_chunk(&chunk).unwrap();
             nline += 1;
         }
         assert_eq!(nline, 3);
 
-        out.flush()?;
+        out.flush().unwrap();
 
         // Verify that files match:
         let expected = fs::read(&input_path)?;
@@ -553,12 +666,12 @@ mod tests {
         let mut out = OutputBuffer::new(Box::new(out_file));
         let mut nline = 0;
         while let Some(chunk) = reader.get_line()? {
-            out.write_chunk(&chunk)?;
+            out.write_chunk(&chunk).unwrap();
             nline += 1;
         }
         assert_eq!(nline, 3);
 
-        out.flush()?;
+        out.flush().unwrap();
 
         // Verify that files match:
         let expected = fs::read(&input_path)?;
@@ -692,6 +805,7 @@ mod tests {
             pending_newline: false,
             pending_crlf: false,
             delimiter: b'\n',
+            name: "stdout".to_string(),
         };
         (buf, file)
     }

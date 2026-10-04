@@ -118,15 +118,15 @@ fn parsed_bytes_to_utf8(
 /// At entry line.current() must have advanced after the `\\`.
 /// Advance line to the first character not part of the escape.
 /// Return `None` if an invalid escape has been specified.
+///
+/// GNU sed has no backspace escape: `\b` is a word boundary in a regular expression and
+/// the letter `b` everywhere else. It was a backspace in a replacement, in `y` and in
+/// `a`, `i` and `c` text.
 pub fn parse_char_escape(line: &mut ScriptCharProvider) -> Option<char> {
     match line.current() {
         'a' => {
             line.advance();
             Some('\x07')
-        }
-        'b' => {
-            line.advance();
-            Some('\x08')
         }
         'f' => {
             line.advance();
@@ -150,8 +150,12 @@ pub fn parse_char_escape(line: &mut ScriptCharProvider) -> Option<char> {
         }
 
         'c' => {
-            // Control character escape: \cC
+            // Control character escape: \cC. One that ends the line is the letter; reading
+            // past the line's end panicked.
             line.advance(); // move past 'c'
+            if line.eol() {
+                return Some('c');
+            }
             match create_control_char(line.current()) {
                 Some(decoded) => {
                     line.advance();
@@ -199,17 +203,83 @@ pub fn parse_char_escape(line: &mut ScriptCharProvider) -> Option<char> {
     }
 }
 
+/// What GNU sed makes of a `\c` escape and what follows it.
+#[derive(Debug, PartialEq, Eq)]
+pub enum ControlEscape {
+    /// The control character `\cX` stands for; `\c\\` is the one of a backslash.
+    Char(char),
+    /// A `\c` before the string's delimiter or the line's end, which has nothing to
+    /// stand for.
+    Bare,
+    /// A `\c` before a backslash that does not start `\\`, GNU sed's error
+    /// [`ERR_RECURSIVE_ESCAPE_C`].
+    Recursive,
+}
+
+/// GNU sed's error for `\c` followed by another escape (`\c\d`).
+pub const ERR_RECURSIVE_ESCAPE_C: &str = "recursive escaping after \\c not allowed";
+
+/// Read a `\c` escape, the line at its `c`, as GNU sed reads one in a regular
+/// expression, a replacement and the strings of `y`: `\cX` is X's control character,
+/// `\c\\` that of a backslash and `\c\/` that of the delimiter, and `\c` before another
+/// escape is an error. Before the delimiter or the line's end only the `c` is read.
+/// `\c\\` was read as the control character of one backslash, which left the other to
+/// escape what came next, and `\c` before the delimiter took the delimiter.
+pub fn parse_control_escape(
+    line: &mut ScriptCharProvider,
+    delimiter: Option<char>,
+) -> ControlEscape {
+    line.advance(); // Skip the `c`.
+    if line.eol() || Some(line.current()) == delimiter {
+        return ControlEscape::Bare;
+    }
+    if line.current() == '\\' {
+        let backslash = line.get_pos();
+        line.advance();
+        if !line.eol() && (line.current() == '\\' || Some(line.current()) == delimiter) {
+            let escaped = line.current();
+            line.advance();
+            return ControlEscape::Char(create_control_char(escaped).unwrap_or('c'));
+        }
+        // The backslash is left to be read as the escape it starts.
+        line.set_position(backslash);
+        return ControlEscape::Recursive;
+    }
+    match create_control_char(line.current()) {
+        Some(decoded) => {
+            line.advance();
+            ControlEscape::Char(decoded)
+        }
+        None => ControlEscape::Char('c'),
+    }
+}
+
+/// The escapes GNU sed decodes in a bracket expression (outside POSIX mode): `[\n]` is
+/// a newline and `[\t]` a tab, while `[\w]` and `[\]]` are a backslash and what follows
+/// it.
+fn is_bracket_escape(c: char) -> bool {
+    matches!(c, 'a' | 'f' | 'n' | 'r' | 't' | 'v' | 'd' | 'o' | 'x')
+}
+
 /// Parse a POSIX RE character class returning it as bytes.
 /// This functionality is needed to avoid terminating delimited
 /// sequences when a delimiter appears within a character class.
-/// While at it, handle escaped characters for the sake of consistency.
 /// A class the line does not end is the error `unterminated`, as for the whole
 /// expression in GNU sed: `s/[a/b/` is an unterminated `s` command.
+///
+/// The class is returned as GNU sed's regex library reads it, where a backslash is an
+/// ordinary character: `[\]]` is a backslash followed by `]`, and `[a\]` ends at its
+/// `]`. Only the escapes GNU sed decodes before it compiles the expression are
+/// decoded, `\n`, `\t`, `\cX`, `\x41` and the like, and none in POSIX mode. The
+/// backslash was taken as an escape, so `[\]]` was a `]` alone, `[a\]` was unterminated
+/// and `[\.]` left the backslash out. An `\c` before another escape sets `error`.
 fn parse_character_class(
     lines: &ScriptLineProvider,
     line: &mut ScriptCharProvider,
     character_mode: CharacterMode,
+    posix: bool,
     unterminated: &str,
+    error: &mut Option<&'static str>,
 ) -> UResult<Vec<u8>> {
     let mut result = Vec::new();
 
@@ -244,16 +314,14 @@ fn parse_character_class(
 
         if ch == '[' {
             line.advance();
+            result.push(b'[');
             if line.eol() {
-                result.push(b'[');
                 continue;
             }
             let marker = line.current();
             // POSIX character class, collating symbol, or equivalence
             if marker == ':' || marker == '.' || marker == '=' {
                 line.advance();
-
-                result.push(b'[');
                 result.push(marker as u8);
 
                 let mut inner = Vec::new();
@@ -282,39 +350,51 @@ fn parse_character_class(
                 if !terminated {
                     return compilation_error(lines, line, unterminated);
                 }
-
-                continue;
             }
-            // Not a POSIX construct — treat as literal
-            result.push(b'[');
-            result.push(line.current_byte());
-            line.advance();
+            // A `[` that starts none of them is itself, and what follows it is read as
+            // usual: `[[]` is a `[`. The character after it was taken with it, so that
+            // class never ended.
             continue;
         }
 
         if ch == '\\' {
-            // Handle escape sequence
             line.advance();
             if line.eol() {
                 break;
             }
-            if matches!(line.current(), 'u' | 'U') {
-                // In a bracket expression GNU sed takes `\u` as the backslash and the
-                // letter, both in the set; the RE engine would read a Unicode escape.
+            let escaped = line.current();
+            if escaped == '\\' {
+                // Two backslashes, each one itself.
                 result.extend_from_slice(b"\\\\");
-                result.push(line.current_byte());
                 line.advance();
-            } else if let Some(decoded) = parse_char_escape(line) {
-                push_script_char(&mut result, decoded, character_mode);
-            } else {
-                result.push(b'\\');
-                result.push(line.current_byte());
-                line.advance();
+                continue;
             }
-        } else {
-            result.push(line.current_byte());
-            line.advance();
+            if !posix && escaped == 'c' {
+                match parse_control_escape(line, None) {
+                    ControlEscape::Char(decoded) => {
+                        push_script_char(&mut result, decoded, character_mode);
+                    }
+                    ControlEscape::Bare => result.extend_from_slice(b"\\c"),
+                    ControlEscape::Recursive => {
+                        error.get_or_insert(ERR_RECURSIVE_ESCAPE_C);
+                    }
+                }
+                continue;
+            }
+            if !posix
+                && is_bracket_escape(escaped)
+                && let Some(decoded) = parse_char_escape(line)
+            {
+                push_script_char(&mut result, decoded, character_mode);
+                continue;
+            }
+            // The backslash is itself; the character after it is read as usual.
+            result.push(b'\\');
+            continue;
         }
+
+        result.push(line.current_byte());
+        line.advance();
     }
 
     compilation_error(lines, line, unterminated)
@@ -336,8 +416,38 @@ fn scan_delimiter(lines: &ScriptLineProvider, line: &mut ScriptCharProvider) -> 
     Ok(delimiter)
 }
 
+/// Move `line` to the next line of the script when a backslash ends the current one and
+/// a newline follows it there, and return whether it did. GNU sed reads the backslash
+/// and newline as a newline in a regular expression, a replacement and the strings of
+/// `y`; at the end of a `-e` expression or of the script there is no newline, and the
+/// string is unterminated. It was unterminated at every line's end, and a replacement
+/// went on into the next `-e` expression.
+pub fn continue_on_next_line(
+    lines: &mut ScriptLineProvider,
+    line: &mut ScriptCharProvider,
+) -> UResult<bool> {
+    if !lines.line_has_newline() {
+        return Ok(false);
+    }
+    match lines.next_line_in_source()? {
+        Some(next) => {
+            *line = ScriptCharProvider::new(next);
+            Ok(true)
+        }
+        None => Ok(false),
+    }
+}
+
 /// GNU sed's error for a regular expression an address does not end.
 pub const ERR_UNTERMINATED_ADDRESS_REGEX: &str = "unterminated address regex";
+
+/// A regular expression as read from the script: its text, for GNU sed's regex library
+/// to read, and an error GNU sed reports once the expression is read.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct RegexText {
+    pub pattern: Vec<u8>,
+    pub error: Option<&'static str>,
+}
 
 /// Parse the regular expression delimited by the current line
 /// character and return it as a string.
@@ -345,7 +455,7 @@ pub const ERR_UNTERMINATED_ADDRESS_REGEX: &str = "unterminated address regex";
 /// In Basic mode, quantifiers like {m,n} must be escaped (\{m,n\}).
 /// In Extended mode, quantifiers like {m,n} don't require escaping.
 pub fn parse_regex(
-    lines: &ScriptLineProvider,
+    lines: &mut ScriptLineProvider,
     line: &mut ScriptCharProvider,
     regex_mode: RegexMode,
 ) -> UResult<Vec<u8>> {
@@ -354,32 +464,52 @@ pub fn parse_regex(
         line,
         regex_mode,
         CharacterMode::Utf8,
+        false,
         ERR_UNTERMINATED_ADDRESS_REGEX,
     )
+    .map(|text| text.pattern)
 }
 
 /// Parse a regular expression according to the current character mode. One the line
 /// does not end is the error `unterminated`, which GNU sed words by where the
 /// expression is: an address's, or an `s` command's.
+///
+/// The text returned is the expression GNU sed's regex library reads: the escapes GNU
+/// sed decodes first (`\n`, `\t`, `\x41`, ...) decoded, an escaped delimiter made the
+/// delimiter, and every other escape, `\w`, `` \` ``, `\A`, left as it is written for
+/// the translation into the engine's syntax (`compiler::regex_to_engine`).
 pub fn parse_regex_for_mode(
-    lines: &ScriptLineProvider,
+    lines: &mut ScriptLineProvider,
     line: &mut ScriptCharProvider,
     regex_mode: RegexMode,
     character_mode: CharacterMode,
+    posix: bool,
     unterminated: &str,
-) -> UResult<Vec<u8>> {
+) -> UResult<RegexText> {
     let delimiter = scan_delimiter(lines, line)?;
     let mut result = Vec::new();
+    let mut error = None;
     while !line.eol() {
         match line.current() {
             '[' if delimiter != '[' => {
-                let cc = parse_character_class(lines, line, character_mode, unterminated)?;
+                let cc = parse_character_class(
+                    lines,
+                    line,
+                    character_mode,
+                    posix,
+                    unterminated,
+                    &mut error,
+                )?;
                 result.extend_from_slice(&cc);
                 continue;
             }
             '\\' => {
                 line.advance();
                 if line.eol() {
+                    if continue_on_next_line(lines, line)? {
+                        result.push(b'\n');
+                        continue;
+                    }
                     return compilation_error(lines, line, unterminated);
                 }
                 if line.current() == delimiter {
@@ -403,24 +533,27 @@ pub fn parse_regex_for_mode(
                     line.advance();
                     continue;
                 }
-                // GNU sed's anchors: \` and \' are the start and end of the pattern
-                // space, whatever `M` says, which the RE engine spells \A and \z. And
-                // in a regex \b is a word boundary, not a backspace: GNU sed's manual
-                // leaves backspace out of the escapes for that reason.
-                let anchor = match line.current() {
-                    '`' => Some(b'A'),
-                    '\'' => Some(b'z'),
-                    'b' => Some(b'b'),
-                    _ => None,
-                };
-                if let Some(anchor) = anchor {
-                    result.push(b'\\');
-                    result.push(anchor);
-                    line.advance();
-                } else if let Some(decoded) = parse_char_escape(line) {
+                if line.current() == 'c' {
+                    match parse_control_escape(line, Some(delimiter)) {
+                        ControlEscape::Char(decoded) => {
+                            push_script_char(&mut result, decoded, character_mode);
+                        }
+                        // Before the delimiter a `\c` leaves a trailing backslash, which
+                        // GNU sed's regex library refuses.
+                        ControlEscape::Bare => result.push(b'\\'),
+                        ControlEscape::Recursive => {
+                            error.get_or_insert(ERR_RECURSIVE_ESCAPE_C);
+                        }
+                    }
+                    continue;
+                }
+                // In a regex \b is a word boundary, which the engine spells the same, and
+                // GNU's other operators (\w, \<, \`, ...) are left for the translation.
+                if line.current() != 'b'
+                    && let Some(decoded) = parse_char_escape(line)
+                {
                     push_script_char(&mut result, decoded, character_mode);
                 } else {
-                    // Pass through \<any> to RE engine for further treatment
                     result.push(b'\\');
                     result.push(line.current_byte());
                     line.advance();
@@ -441,7 +574,12 @@ pub fn parse_regex_for_mode(
                 continue;
             }
 
-            c if c == delimiter => return Ok(result),
+            c if c == delimiter => {
+                return Ok(RegexText {
+                    pattern: result,
+                    error,
+                });
+            }
             _ => result.push(line.current_byte()),
         }
         line.advance();
@@ -529,17 +667,23 @@ fn read_interval_content(
 /// character and return it as a string.
 /// On return the line is on the closing delimiter.
 pub fn parse_transliteration(
-    lines: &ScriptLineProvider,
+    lines: &mut ScriptLineProvider,
     line: &mut ScriptCharProvider,
 ) -> UResult<Vec<u8>> {
-    parse_transliteration_bytes(lines, line, CharacterMode::Utf8)
+    parse_transliteration_bytes(lines, line, CharacterMode::Utf8, &mut None)
 }
 
 /// Parse transliteration bytes according to the current character mode.
+///
+/// As in GNU sed, a backslash before a character with no escape of its own stands for
+/// the character (`y/\q/x/` maps `q`), and a backslash ending a line that has a newline
+/// is a newline. Both were kept, the first as two characters and the second as an
+/// unterminated `y`. An `\c` before another escape sets `error`.
 fn parse_transliteration_bytes(
-    lines: &ScriptLineProvider,
+    lines: &mut ScriptLineProvider,
     line: &mut ScriptCharProvider,
     character_mode: CharacterMode,
+    error: &mut Option<&'static str>,
 ) -> UResult<Vec<u8>> {
     let delimiter = scan_delimiter(lines, line)?;
     let mut result = Vec::new();
@@ -549,6 +693,10 @@ fn parse_transliteration_bytes(
             '\\' => {
                 line.advance();
                 if line.eol() {
+                    if continue_on_next_line(lines, line)? {
+                        result.push(b'\n');
+                        continue;
+                    }
                     return compilation_error(lines, line, "unterminated `y' command");
                 }
                 if line.current() == delimiter || line.current() == '\\' {
@@ -557,11 +705,21 @@ fn parse_transliteration_bytes(
                     line.advance();
                     continue;
                 }
+                if line.current() == 'c' {
+                    match parse_control_escape(line, Some(delimiter)) {
+                        ControlEscape::Char(decoded) => {
+                            push_script_char(&mut result, decoded, character_mode);
+                        }
+                        ControlEscape::Bare => {}
+                        ControlEscape::Recursive => {
+                            error.get_or_insert(ERR_RECURSIVE_ESCAPE_C);
+                        }
+                    }
+                    continue;
+                }
                 if let Some(decoded) = parse_char_escape(line) {
                     push_script_char(&mut result, decoded, character_mode);
                 } else {
-                    // Pass through \<any> to tr for literal use
-                    result.push(b'\\');
                     result.push(line.current_byte());
                     line.advance();
                 }
@@ -575,13 +733,19 @@ fn parse_transliteration_bytes(
     compilation_error(lines, line, "unterminated `y' command")
 }
 
-/// Parse a transliteration string according to the current character mode.
+/// Parse a transliteration string according to the current character mode. The line is
+/// left on its closing delimiter, where GNU sed reports an `\c` before another escape:
+/// that error is returned at it.
 pub fn parse_transliteration_for_mode(
-    lines: &ScriptLineProvider,
+    lines: &mut ScriptLineProvider,
     line: &mut ScriptCharProvider,
     character_mode: CharacterMode,
 ) -> UResult<ParsedTransliteration> {
-    let bytes = parse_transliteration_bytes(lines, line, character_mode)?;
+    let mut error = None;
+    let bytes = parse_transliteration_bytes(lines, line, character_mode, &mut error)?;
+    if let Some(error) = error {
+        return compilation_error(lines, line, error);
+    }
     match character_mode {
         CharacterMode::Byte => Ok(ParsedTransliteration::Bytes(bytes)),
         CharacterMode::Utf8 => parsed_bytes_to_utf8(lines, line, bytes, "transliteration string")
@@ -869,8 +1033,15 @@ mod tests {
     fn test_basic_character_class() {
         let mut line = char_provider_from("[qr]");
         let lines = test_lines();
-        let result =
-            parse_character_class(&lines, &mut line, CharacterMode::Utf8, "unterminated").unwrap();
+        let result = parse_character_class(
+            &lines,
+            &mut line,
+            CharacterMode::Utf8,
+            false,
+            "unterminated",
+            &mut None,
+        )
+        .unwrap();
         assert_eq!(result, b"[qr]");
     }
 
@@ -878,8 +1049,15 @@ mod tests {
     fn test_negated_class() {
         let mut line = char_provider_from("[^abc]");
         let lines = test_lines();
-        let result =
-            parse_character_class(&lines, &mut line, CharacterMode::Utf8, "unterminated").unwrap();
+        let result = parse_character_class(
+            &lines,
+            &mut line,
+            CharacterMode::Utf8,
+            false,
+            "unterminated",
+            &mut None,
+        )
+        .unwrap();
         assert_eq!(result, b"[^abc]");
     }
 
@@ -887,8 +1065,15 @@ mod tests {
     fn test_leading_close_bracket() {
         let mut line = char_provider_from("[]abc]");
         let lines = test_lines();
-        let result =
-            parse_character_class(&lines, &mut line, CharacterMode::Utf8, "unterminated").unwrap();
+        let result = parse_character_class(
+            &lines,
+            &mut line,
+            CharacterMode::Utf8,
+            false,
+            "unterminated",
+            &mut None,
+        )
+        .unwrap();
         assert_eq!(result, b"[]abc]");
     }
 
@@ -896,8 +1081,15 @@ mod tests {
     fn test_leading_negated_close_bracket() {
         let mut line = char_provider_from("[^]abc]");
         let lines = test_lines();
-        let result =
-            parse_character_class(&lines, &mut line, CharacterMode::Utf8, "unterminated").unwrap();
+        let result = parse_character_class(
+            &lines,
+            &mut line,
+            CharacterMode::Utf8,
+            false,
+            "unterminated",
+            &mut None,
+        )
+        .unwrap();
         assert_eq!(result, b"[^]abc]");
     }
 
@@ -905,8 +1097,15 @@ mod tests {
     fn test_escaped_character_begin() {
         let mut line = char_provider_from("[\\nabc]");
         let lines = test_lines();
-        let result =
-            parse_character_class(&lines, &mut line, CharacterMode::Utf8, "unterminated").unwrap();
+        let result = parse_character_class(
+            &lines,
+            &mut line,
+            CharacterMode::Utf8,
+            false,
+            "unterminated",
+            &mut None,
+        )
+        .unwrap();
         assert_eq!(result, b"[\nabc]");
     }
 
@@ -914,8 +1113,15 @@ mod tests {
     fn test_escaped_character_middle() {
         let mut line = char_provider_from("[a\\nbc]");
         let lines = test_lines();
-        let result =
-            parse_character_class(&lines, &mut line, CharacterMode::Utf8, "unterminated").unwrap();
+        let result = parse_character_class(
+            &lines,
+            &mut line,
+            CharacterMode::Utf8,
+            false,
+            "unterminated",
+            &mut None,
+        )
+        .unwrap();
         assert_eq!(result, b"[a\nbc]");
     }
 
@@ -923,26 +1129,78 @@ mod tests {
     fn test_escaped_character_end() {
         let mut line = char_provider_from("[abc\\n]");
         let lines = test_lines();
-        let result =
-            parse_character_class(&lines, &mut line, CharacterMode::Utf8, "unterminated").unwrap();
+        let result = parse_character_class(
+            &lines,
+            &mut line,
+            CharacterMode::Utf8,
+            false,
+            "unterminated",
+            &mut None,
+        )
+        .unwrap();
         assert_eq!(result, b"[abc\n]");
     }
 
+    // A backslash is an ordinary character in a bracket expression, as in GNU sed, so
+    // the `]` after it ends the class.
     #[test]
-    fn test_escaped_delimiter() {
+    fn test_backslash_before_close_bracket() {
         let mut line = char_provider_from("[a\\]bc]");
         let lines = test_lines();
-        let result =
-            parse_character_class(&lines, &mut line, CharacterMode::Utf8, "unterminated").unwrap();
-        assert_eq!(result, br"[a\]bc]");
+        let result = parse_character_class(
+            &lines,
+            &mut line,
+            CharacterMode::Utf8,
+            false,
+            "unterminated",
+            &mut None,
+        )
+        .unwrap();
+        assert_eq!(result, br"[a\]");
+        assert_eq!(line.current(), 'b');
+    }
+
+    // GNU sed decodes `\n`, `\t` and the like in a bracket expression, but in POSIX mode;
+    // any other backslash is itself, two of them two.
+    #[test]
+    fn test_escapes_in_character_class() {
+        for (input, posix, expected) in [
+            ("[\\n]", false, &b"[\n]"[..]),
+            ("[\\n]", true, br"[\n]"),
+            ("[\\t\\x41]", false, b"[\tA]"),
+            ("[\\w]", false, br"[\w]"),
+            ("[\\b]", false, br"[\b]"),
+            ("[\\\\n]", false, br"[\\n]"),
+            ("[\\c]]", false, b"[\x1d]"),
+        ] {
+            let mut line = char_provider_from(input);
+            let lines = test_lines();
+            let result = parse_character_class(
+                &lines,
+                &mut line,
+                CharacterMode::Utf8,
+                posix,
+                "unterminated",
+                &mut None,
+            )
+            .unwrap();
+            assert_eq!(result, expected, "{input} posix={posix}");
+        }
     }
 
     #[test]
     fn test_posix_class() {
         let mut line = char_provider_from("[[:digit:]]");
         let lines = test_lines();
-        let result =
-            parse_character_class(&lines, &mut line, CharacterMode::Utf8, "unterminated").unwrap();
+        let result = parse_character_class(
+            &lines,
+            &mut line,
+            CharacterMode::Utf8,
+            false,
+            "unterminated",
+            &mut None,
+        )
+        .unwrap();
         assert_eq!(result, b"[[:digit:]]");
     }
 
@@ -950,8 +1208,15 @@ mod tests {
     fn test_colon_literal_character_class() {
         let mut line = char_provider_from("[:]");
         let lines = test_lines();
-        let result =
-            parse_character_class(&lines, &mut line, CharacterMode::Utf8, "unterminated").unwrap();
+        let result = parse_character_class(
+            &lines,
+            &mut line,
+            CharacterMode::Utf8,
+            false,
+            "unterminated",
+            &mut None,
+        )
+        .unwrap();
         assert_eq!(result, b"[:]");
     }
 
@@ -959,8 +1224,15 @@ mod tests {
     fn test_equivalence_class() {
         let mut line = char_provider_from("[[=a=]]");
         let lines = test_lines();
-        let result =
-            parse_character_class(&lines, &mut line, CharacterMode::Utf8, "unterminated").unwrap();
+        let result = parse_character_class(
+            &lines,
+            &mut line,
+            CharacterMode::Utf8,
+            false,
+            "unterminated",
+            &mut None,
+        )
+        .unwrap();
         assert_eq!(result, b"[[=a=]]");
     }
 
@@ -968,8 +1240,15 @@ mod tests {
     fn test_collating_symbol() {
         let mut line = char_provider_from("[[.ch.]]");
         let lines = test_lines();
-        let result =
-            parse_character_class(&lines, &mut line, CharacterMode::Utf8, "unterminated").unwrap();
+        let result = parse_character_class(
+            &lines,
+            &mut line,
+            CharacterMode::Utf8,
+            false,
+            "unterminated",
+            &mut None,
+        )
+        .unwrap();
         assert_eq!(result, b"[[.ch.]]");
     }
 
@@ -977,7 +1256,14 @@ mod tests {
     fn test_unterminated_class_error() {
         let mut line = char_provider_from("[abc"); // missing closing ]
         let lines = test_lines();
-        let err = parse_character_class(&lines, &mut line, CharacterMode::Utf8, "unterminated");
+        let err = parse_character_class(
+            &lines,
+            &mut line,
+            CharacterMode::Utf8,
+            false,
+            "unterminated",
+            &mut None,
+        );
         assert!(err.is_err());
     }
 
@@ -985,8 +1271,15 @@ mod tests {
     fn test_open_bracket_at_eol_errors() {
         let mut line = char_provider_from("[");
         let lines = test_lines();
-        let err = parse_character_class(&lines, &mut line, CharacterMode::Utf8, "unterminated")
-            .unwrap_err();
+        let err = parse_character_class(
+            &lines,
+            &mut line,
+            CharacterMode::Utf8,
+            false,
+            "unterminated",
+            &mut None,
+        )
+        .unwrap_err();
         assert!(err.to_string().contains("unterminated"));
     }
 
@@ -994,7 +1287,14 @@ mod tests {
     fn test_unterminated_posix_class_error() {
         let mut line = char_provider_from("[[:digit:]");
         let lines = test_lines();
-        let err = parse_character_class(&lines, &mut line, CharacterMode::Utf8, "unterminated");
+        let err = parse_character_class(
+            &lines,
+            &mut line,
+            CharacterMode::Utf8,
+            false,
+            "unterminated",
+            &mut None,
+        );
         assert!(err.is_err());
     }
 
@@ -1002,7 +1302,14 @@ mod tests {
     fn test_unterminated_escape_error() {
         let mut line = char_provider_from("[abc\\"); // missing closing ]
         let lines = test_lines();
-        let err = parse_character_class(&lines, &mut line, CharacterMode::Utf8, "unterminated");
+        let err = parse_character_class(
+            &lines,
+            &mut line,
+            CharacterMode::Utf8,
+            false,
+            "unterminated",
+            &mut None,
+        );
         assert!(err.is_err());
     }
 
@@ -1010,8 +1317,15 @@ mod tests {
     fn test_malformed_posix_like_pattern_treated_as_literal() {
         let mut line = char_provider_from("[[x]yz]");
         let lines = test_lines();
-        let result =
-            parse_character_class(&lines, &mut line, CharacterMode::Utf8, "unterminated").unwrap();
+        let result = parse_character_class(
+            &lines,
+            &mut line,
+            CharacterMode::Utf8,
+            false,
+            "unterminated",
+            &mut None,
+        )
+        .unwrap();
         assert_eq!(result, b"[[x]");
     }
 
@@ -1019,48 +1333,55 @@ mod tests {
     fn test_literal_open_bracket_in_character_class() {
         let mut line = char_provider_from("[a[b]");
         let lines = test_lines();
-        let result =
-            parse_character_class(&lines, &mut line, CharacterMode::Utf8, "unterminated").unwrap();
+        let result = parse_character_class(
+            &lines,
+            &mut line,
+            CharacterMode::Utf8,
+            false,
+            "unterminated",
+            &mut None,
+        )
+        .unwrap();
         assert_eq!(result, b"[a[b]");
     }
 
     // parse_regex
     #[test]
     fn test_simple_regex() {
-        let (lines, mut line) = make_providers("/abc/");
-        let parsed = parse_regex(&lines, &mut line, RegexMode::Basic).unwrap();
+        let (mut lines, mut line) = make_providers("/abc/");
+        let parsed = parse_regex(&mut lines, &mut line, RegexMode::Basic).unwrap();
         assert_eq!(parsed, b"abc");
         assert_eq!(line.current(), '/');
     }
 
     #[test]
     fn test_regex_with_escaped_delimiter() {
-        let (lines, mut line) = make_providers("/ab\\/c/");
-        let parsed = parse_regex(&lines, &mut line, RegexMode::Basic).unwrap();
+        let (mut lines, mut line) = make_providers("/ab\\/c/");
+        let parsed = parse_regex(&mut lines, &mut line, RegexMode::Basic).unwrap();
         assert_eq!(parsed, b"ab/c");
         assert_eq!(line.current(), '/');
     }
 
     #[test]
     fn test_regex_with_capture() {
-        let (lines, mut line) = make_providers(r"/\(.\)/c/");
-        let parsed = parse_regex(&lines, &mut line, RegexMode::Basic).unwrap();
+        let (mut lines, mut line) = make_providers(r"/\(.\)/c/");
+        let parsed = parse_regex(&mut lines, &mut line, RegexMode::Basic).unwrap();
         assert_eq!(parsed, br"\(.\)");
         assert_eq!(line.current(), '/');
     }
 
     #[test]
     fn test_regex_with_escape_sequence() {
-        let (lines, mut line) = make_providers("/ab\\n/");
-        let parsed = parse_regex(&lines, &mut line, RegexMode::Basic).unwrap();
+        let (mut lines, mut line) = make_providers("/ab\\n/");
+        let parsed = parse_regex(&mut lines, &mut line, RegexMode::Basic).unwrap();
         assert_eq!(parsed, b"ab\n");
         assert_eq!(line.current(), '/');
     }
 
     #[test]
     fn test_basic_regex_quantifier() {
-        let (lines, mut line) = make_providers("/a\\{2,3\\}/p");
-        let parsed = parse_regex(&lines, &mut line, RegexMode::Basic).unwrap();
+        let (mut lines, mut line) = make_providers("/a\\{2,3\\}/p");
+        let parsed = parse_regex(&mut lines, &mut line, RegexMode::Basic).unwrap();
         assert_eq!(parsed, br"a\{2,3\}");
         assert_eq!(line.current(), '/');
     }
@@ -1078,8 +1399,8 @@ mod tests {
             ("/a{2,-3}/p", RegexMode::Extended, b"a{2,-3}"),
             ("/a{3,2}/p", RegexMode::Extended, b"a{3,2}"),
         ] {
-            let (lines, mut line) = make_providers(input);
-            let parsed = parse_regex(&lines, &mut line, mode).unwrap();
+            let (mut lines, mut line) = make_providers(input);
+            let parsed = parse_regex(&mut lines, &mut line, mode).unwrap();
             assert_eq!(parsed, expected, "{input}");
             assert_eq!(line.current(), '/');
         }
@@ -1087,37 +1408,37 @@ mod tests {
 
     #[test]
     fn test_regex_interval_without_minimum() {
-        let (lines, mut line) = make_providers("/a{,3}/p");
-        let parsed = parse_regex(&lines, &mut line, RegexMode::Extended).unwrap();
+        let (mut lines, mut line) = make_providers("/a{,3}/p");
+        let parsed = parse_regex(&mut lines, &mut line, RegexMode::Extended).unwrap();
         assert_eq!(parsed, b"a{0,3}");
     }
 
     #[test]
     fn test_extended_regex_quantifier() {
-        let (lines, mut line) = make_providers("/a{2,3}/p");
-        let parsed = parse_regex(&lines, &mut line, RegexMode::Extended).unwrap();
+        let (mut lines, mut line) = make_providers("/a{2,3}/p");
+        let parsed = parse_regex(&mut lines, &mut line, RegexMode::Extended).unwrap();
         assert_eq!(parsed, b"a{2,3}");
         assert_eq!(line.current(), '/');
     }
 
     #[test]
     fn errors_on_unterminated_regex() {
-        let (lines, mut line) = make_providers("/unterminated");
-        let err = parse_regex(&lines, &mut line, RegexMode::Basic).unwrap_err();
+        let (mut lines, mut line) = make_providers("/unterminated");
+        let err = parse_regex(&mut lines, &mut line, RegexMode::Basic).unwrap_err();
         assert!(err.to_string().contains(ERR_UNTERMINATED_ADDRESS_REGEX));
     }
 
     #[test]
     fn errors_on_esc_at_re_eol() {
-        let (lines, mut line) = make_providers("/foo\\");
-        let err = parse_regex(&lines, &mut line, RegexMode::Basic).unwrap_err();
+        let (mut lines, mut line) = make_providers("/foo\\");
+        let err = parse_regex(&mut lines, &mut line, RegexMode::Basic).unwrap_err();
         assert!(err.to_string().contains(ERR_UNTERMINATED_ADDRESS_REGEX));
     }
 
     #[test]
     fn errors_on_backslash_delimiter() {
-        let (lines, mut line) = make_providers("\\bad");
-        let err = parse_regex(&lines, &mut line, RegexMode::Basic).unwrap_err();
+        let (mut lines, mut line) = make_providers("\\bad");
+        let err = parse_regex(&mut lines, &mut line, RegexMode::Basic).unwrap_err();
         assert!(
             err.to_string()
                 .contains("\\ cannot be used as a string delimiter")
@@ -1126,48 +1447,48 @@ mod tests {
 
     #[test]
     fn test_regex_with_character_class() {
-        let (lines, mut line) = make_providers("/[a-z]/");
-        let parsed = parse_regex(&lines, &mut line, RegexMode::Basic).unwrap();
+        let (mut lines, mut line) = make_providers("/[a-z]/");
+        let parsed = parse_regex(&mut lines, &mut line, RegexMode::Basic).unwrap();
         assert_eq!(parsed, b"[a-z]");
         assert_eq!(line.current(), '/');
     }
 
     #[test]
     fn test_regex_with_bracket_delimiter() {
-        let (lines, mut line) = make_providers("[abc[");
-        let parsed = parse_regex(&lines, &mut line, RegexMode::Basic).unwrap();
+        let (mut lines, mut line) = make_providers("[abc[");
+        let parsed = parse_regex(&mut lines, &mut line, RegexMode::Basic).unwrap();
         assert_eq!(parsed, b"abc");
         assert_eq!(line.current(), '[');
     }
 
     #[test]
     fn test_bracket_regex_with_bracket_delimiter() {
-        let (lines, mut line) = make_providers("[a\\[0-9]bc[");
-        let parsed = parse_regex(&lines, &mut line, RegexMode::Basic).unwrap();
+        let (mut lines, mut line) = make_providers("[a\\[0-9]bc[");
+        let parsed = parse_regex(&mut lines, &mut line, RegexMode::Basic).unwrap();
         assert_eq!(parsed, b"a[0-9]bc");
         assert_eq!(line.current(), '[');
     }
 
     #[test]
     fn test_regex_with_escaped_bracket_in_character_class() {
-        let (lines, mut line) = make_providers("/[a\\]z]/");
-        let parsed = parse_regex(&lines, &mut line, RegexMode::Basic).unwrap();
+        let (mut lines, mut line) = make_providers("/[a\\]z]/");
+        let parsed = parse_regex(&mut lines, &mut line, RegexMode::Basic).unwrap();
         assert_eq!(parsed, br"[a\]z]");
         assert_eq!(line.current(), '/');
     }
 
     #[test]
     fn test_regex_with_delimiter_inside_character_class() {
-        let (lines, mut line) = make_providers("/[a/c]/");
-        let parsed = parse_regex(&lines, &mut line, RegexMode::Basic).unwrap();
+        let (mut lines, mut line) = make_providers("/[a/c]/");
+        let parsed = parse_regex(&mut lines, &mut line, RegexMode::Basic).unwrap();
         assert_eq!(parsed, b"[a/c]");
         assert_eq!(line.current(), '/');
     }
 
     #[test]
     fn test_regex_with_escaped_paren_and_backslash() {
-        let (lines, mut line) = make_providers("/\\(\\\\/");
-        let parsed = parse_regex(&lines, &mut line, RegexMode::Basic).unwrap();
+        let (mut lines, mut line) = make_providers("/\\(\\\\/");
+        let parsed = parse_regex(&mut lines, &mut line, RegexMode::Basic).unwrap();
         assert_eq!(parsed, br"\(\\");
         assert_eq!(line.current(), '/');
     }
@@ -1234,73 +1555,75 @@ mod tests {
     // parse_transliteration
     #[test]
     fn test_simple_transliteration() {
-        let (lines, mut line) = make_providers("/abc/");
-        let parsed = parse_transliteration(&lines, &mut line).unwrap();
+        let (mut lines, mut line) = make_providers("/abc/");
+        let parsed = parse_transliteration(&mut lines, &mut line).unwrap();
         assert_eq!(parsed, b"abc");
         assert_eq!(line.current(), '/');
     }
 
     #[test]
     fn test_transliteration_with_escaped_delimiter() {
-        let (lines, mut line) = make_providers("/ab\\/c/");
-        let parsed = parse_transliteration(&lines, &mut line).unwrap();
+        let (mut lines, mut line) = make_providers("/ab\\/c/");
+        let parsed = parse_transliteration(&mut lines, &mut line).unwrap();
         assert_eq!(parsed, b"ab/c");
         assert_eq!(line.current(), '/');
     }
 
     #[test]
     fn test_transliteration_with_escaped_backslash() {
-        let (lines, mut line) = make_providers("/ab\\\\c/");
-        let parsed = parse_transliteration(&lines, &mut line).unwrap();
+        let (mut lines, mut line) = make_providers("/ab\\\\c/");
+        let parsed = parse_transliteration(&mut lines, &mut line).unwrap();
         assert_eq!(parsed, br"ab\c");
         assert_eq!(line.current(), '/');
     }
 
     #[test]
     fn test_transliteration_backslash_character() {
-        let (lines, mut line) = make_providers("/\\\\/");
-        let parsed = parse_transliteration_bytes(&lines, &mut line, CharacterMode::Utf8).unwrap();
+        let (mut lines, mut line) = make_providers("/\\\\/");
+        let parsed =
+            parse_transliteration_bytes(&mut lines, &mut line, CharacterMode::Utf8, &mut None)
+                .unwrap();
         assert_eq!(parsed, br"\");
         assert_eq!(line.current(), '/');
     }
 
     #[test]
     fn test_transliteration_with_escape_sequence() {
-        let (lines, mut line) = make_providers("/ab\\n/");
-        let parsed = parse_transliteration(&lines, &mut line).unwrap();
+        let (mut lines, mut line) = make_providers("/ab\\n/");
+        let parsed = parse_transliteration(&mut lines, &mut line).unwrap();
         assert_eq!(parsed, b"ab\n");
         assert_eq!(line.current(), '/');
     }
 
     #[test]
     fn test_parse_transliteration_for_mode_bytes() {
-        let (lines, mut line) = make_providers("/a\\xE9/");
+        let (mut lines, mut line) = make_providers("/a\\xE9/");
         let parsed =
-            parse_transliteration_for_mode(&lines, &mut line, CharacterMode::Byte).unwrap();
+            parse_transliteration_for_mode(&mut lines, &mut line, CharacterMode::Byte).unwrap();
         assert_eq!(parsed, ParsedTransliteration::Bytes(b"a\xE9".to_vec()));
         assert_eq!(line.current(), '/');
     }
 
     #[test]
     fn test_parse_transliteration_for_mode_utf8() {
-        let (lines, mut line) = make_providers("/a\\xE9/");
+        let (mut lines, mut line) = make_providers("/a\\xE9/");
         let parsed =
-            parse_transliteration_for_mode(&lines, &mut line, CharacterMode::Utf8).unwrap();
+            parse_transliteration_for_mode(&mut lines, &mut line, CharacterMode::Utf8).unwrap();
         assert_eq!(parsed, ParsedTransliteration::Text("aé".to_string()));
         assert_eq!(line.current(), '/');
     }
 
     #[test]
     fn errors_on_unterminated_transliteration() {
-        let (lines, mut line) = make_providers("/unterminated");
-        let err = parse_transliteration(&lines, &mut line).unwrap_err();
+        let (mut lines, mut line) = make_providers("/unterminated");
+        let err = parse_transliteration(&mut lines, &mut line).unwrap_err();
         assert!(err.to_string().contains("unterminated `y' command"));
     }
 
     #[test]
     fn errors_on_esc_at_tr_eol() {
-        let (lines, mut line) = make_providers("/foo\\");
-        let err = parse_transliteration(&lines, &mut line).unwrap_err();
+        let (mut lines, mut line) = make_providers("/foo\\");
+        let err = parse_transliteration(&mut lines, &mut line).unwrap_err();
         assert!(err.to_string().contains("unterminated `y' command"));
     }
 }

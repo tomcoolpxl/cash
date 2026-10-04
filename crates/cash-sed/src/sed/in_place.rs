@@ -15,9 +15,10 @@ use std::path::{Path, PathBuf};
 
 use tempfile::NamedTempFile;
 use uucore::display::Quotable;
-use uucore::error::{FromIo, UIoError, UResult, USimpleError};
+use uucore::error::{UResult, USimpleError};
 
 use crate::sed::command::ProcessingContext;
+use crate::sed::error_handling::{runtime_err, strerror};
 use crate::sed::fast_io::OutputBuffer;
 
 /// Context for in-place editing
@@ -48,10 +49,20 @@ impl InPlace {
     /// Return an OutputBuffer for outputting the edits to the specified file.
     /// The file may be a symbolic link, which will be processed according
     /// to the context specification.
+    ///
+    /// Its errors are GNU sed's, with its status 4: `couldn't readlink F: ...`, `couldn't
+    /// edit F: not a regular file`, `couldn't open temporary file D/sedXXXXXX: ...`, and
+    /// `cannot rename F: ...` when the edit cannot be put in place. They were cash's own,
+    /// with statuses 1 and 2.
     pub fn begin(&mut self, file_name: &Path) -> UResult<&mut OutputBuffer> {
         let resolved = if self.follow_symlinks {
-            fs::canonicalize(file_name)
-                .map_err_context(|| format!("resolving symlink {}", file_name.quote()))?
+            fs::canonicalize(file_name).map_err(|e| {
+                runtime_err(format!(
+                    "couldn't readlink {}: {}",
+                    file_name.display(),
+                    strerror(&e)
+                ))
+            })?
         } else {
             file_name.to_path_buf()
         };
@@ -62,36 +73,49 @@ impl InPlace {
     /// The passed file name should have resolved symbolic links according
     /// to the context settings.
     fn begin_resolved(&mut self, file_name: &Path) -> UResult<&mut OutputBuffer> {
+        // Standard output is one output for all the files, as in GNU sed, so that a last
+        // line without its end gets it before the next file's first (`sed p a b`); a new
+        // buffer for each file forgot it, and joined the two lines.
         if !self.in_place {
-            self.output = OutputBuffer::new(Box::new(stdout()));
             return Ok(&mut self.output);
         }
 
-        let metadata = fs::metadata(file_name).map_err_context(|| {
-            format!(
-                "error Reading metadata of {} for in-place edit",
-                file_name.quote()
-            )
+        let metadata = fs::metadata(file_name).map_err(|e| {
+            runtime_err(format!(
+                "couldn't edit {}: {}",
+                file_name.display(),
+                strerror(&e)
+            ))
         })?;
 
         if !metadata.is_file() {
-            return Err(USimpleError::new(
-                2,
-                format!(
-                    "cannot in-place edit non-regular file {}",
-                    file_name.quote()
-                ),
-            ));
+            return Err(runtime_err(format!(
+                "couldn't edit {}: not a regular file",
+                file_name.display()
+            )));
         }
 
-        let dir = file_name.parent().unwrap_or_else(|| Path::new("."));
-        let temp_file = NamedTempFile::new_in(dir)
-            .map_err_context(|| format!("error creating temporary file in {}", dir.quote()))?;
-
-        let reopened = temp_file.reopen().map_err_context(|| {
-            format!("couldn't open temporary file {}", temp_file.path().quote())
+        let dir = match file_name.parent() {
+            Some(parent) if !parent.as_os_str().is_empty() => parent,
+            _ => Path::new("."),
+        };
+        let temp_file = NamedTempFile::with_prefix_in("sed", dir).map_err(|e| {
+            runtime_err(format!(
+                "couldn't open temporary file {}: {}",
+                dir.join("sedXXXXXX").display(),
+                strerror(&e)
+            ))
         })?;
-        let output = OutputBuffer::new(Box::new(reopened));
+
+        let reopened = temp_file.reopen().map_err(|e| {
+            runtime_err(format!(
+                "couldn't open temporary file {}: {}",
+                temp_file.path().display(),
+                strerror(&e)
+            ))
+        })?;
+        let output =
+            OutputBuffer::new(Box::new(reopened)).with_name(temp_file.path().display().to_string());
         self.output = output;
         self.temp_file = Some(temp_file);
         self.original_path = Some(file_name.to_path_buf());
@@ -129,12 +153,12 @@ impl InPlace {
             // Try to remove to ensure the rename won't fail on Windows.
             let _ = fs::remove_file(&backup_path);
 
-            fs::rename(&orig, &backup_path).map_err_context(|| {
-                format!(
-                    "error backing up {} to {}",
-                    orig.quote(),
-                    backup_path.quote()
-                )
+            fs::rename(&orig, &backup_path).map_err(|e| {
+                runtime_err(format!(
+                    "cannot rename {}: {}",
+                    orig.display(),
+                    strerror(&e)
+                ))
             })?;
         }
 
@@ -158,19 +182,17 @@ impl InPlace {
                 if read_only {
                     set_read_only(&orig, true);
                 }
-                // Keep the edit rather than drop it with the error, and say where it is.
+                // Keep the edit rather than drop it with the error: the error names it,
+                // as GNU sed names the file it could not rename.
                 let kept = e
                     .file
                     .keep()
                     .map_or_else(|_| PathBuf::new(), |(_, kept)| kept);
-                return Err(UIoError::new(
-                    e.error.kind(),
-                    format!(
-                        "error replacing {} with the edited file, which is kept at {}",
-                        orig.quote(),
-                        kept.quote()
-                    ),
-                ));
+                return Err(runtime_err(format!(
+                    "cannot rename {}: {}",
+                    kept.display(),
+                    strerror(&e.error)
+                )));
             }
         }
 

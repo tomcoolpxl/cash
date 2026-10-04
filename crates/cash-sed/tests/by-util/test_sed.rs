@@ -1936,22 +1936,31 @@ fn test_mandelbrod() {
 
 ////////////////////////////////////////////////////////////
 // Error handling
+/// A group the reused regex does not have is empty, as in GNU sed, which checks the
+/// groups of an empty regex nowhere; it was a run-time error (TODO.md phase 15).
 #[test]
 fn test_invalid_backreference() {
     new_ucmd!()
-        .args(&["-n", "-e", r"s/./X/;s//\1/", LINES1])
-        .fails()
-        .code_is(2)
-        .stderr_is("sed: <script argument 1>:1:8: error: invalid reference \\1 on command's RHS\n");
+        .args(&["-e", r"s/./X/;s//\1/"])
+        .pipe_in("ab\ncd\n")
+        .succeeds()
+        .stdout_only("b\nd\n");
 }
 
+/// A label defined twice is no error, as in GNU sed, where a branch goes to the last
+/// definition; it was an error, as in BSD sed (TODO.md phase 15).
 #[test]
 fn test_duplicate_label() {
     new_ucmd!()
         .args(&[":foo;:foo"])
-        .fails()
-        .code_is(1)
-        .stderr_is("sed: -e expression #1, char 6: duplicate label `foo'\n");
+        .pipe_in("a\n")
+        .succeeds()
+        .stdout_only("a\n");
+    new_ucmd!()
+        .args(&["-n", "s/^/0/;tfoo;:foo;s/^/1/p;:foo;s/^/2/p"])
+        .pipe_in("a\n")
+        .succeeds()
+        .stdout_only("20a\n");
 }
 
 #[test]
@@ -2029,15 +2038,18 @@ fn test_step_end_non_posix() {
 }
 
 // The following test diverse ways in which regexes are matched.
-// Search for 'regex\.' to find them in the code.
+// Search for 'regex\.' to find them in the code. An error of the engine at run time,
+// which GNU sed's has none of, is in the form of GNU sed's run-time errors, with their
+// status 4; it was placed at the command and the input line, with status 2 (TODO.md
+// phase 15).
 #[test]
 fn test_fancy_regex_is_match_error() {
     new_ucmd!()
         .env("LC_ALL", "C.UTF-8")
         .args(&["-E", r"/(\.+)+\1b$/p", "input/dots-4k.txt"])
         .fails()
-        .code_is(2)
-        .stderr_is("sed: <script argument 1>:1:1: 'input/dots-4k.txt':1 error: Error executing regex: Max limit for backtracking count exceeded\n");
+        .code_is(4)
+        .stderr_is("sed: Error executing regex: Max limit for backtracking count exceeded\n");
 }
 
 #[test]
@@ -2046,8 +2058,8 @@ fn test_fancy_regex_find_error() {
         .env("LC_ALL", "C.UTF-8")
         .args(&["-E", r"p;s/(\.+)+\1b$/X/", "input/dots-4k.txt"])
         .fails()
-        .code_is(2)
-        .stderr_is("sed: <script argument 1>:1:3: 'input/dots-4k.txt':1 error: Error executing regex: Max limit for backtracking count exceeded\n");
+        .code_is(4)
+        .stderr_is("sed: Error executing regex: Max limit for backtracking count exceeded\n");
 }
 
 #[test]
@@ -2056,8 +2068,8 @@ fn test_fancy_regex_captures_error() {
         .env("LC_ALL", "C.UTF-8")
         .args(&["-E", r"p;s/(\.+)+\1b$/\1/", "input/dots-4k.txt"])
         .fails()
-        .code_is(2)
-        .stderr_is("sed: <script argument 1>:1:3: 'input/dots-4k.txt':1 error: Error executing regex: Max limit for backtracking count exceeded\n");
+        .code_is(4)
+        .stderr_is("sed: Error executing regex: Max limit for backtracking count exceeded\n");
 }
 
 #[test]
@@ -2066,8 +2078,8 @@ fn test_fancy_regex_captures_iter_error() {
         .env("LC_ALL", "C.UTF-8")
         .args(&["-E", r"p;s/(\.+)+\1b$/\1/3", "input/dots-4k.txt"])
         .fails()
-        .code_is(2)
-        .stderr_is("sed: <script argument 1>:1:3: 'input/dots-4k.txt':1 error: error retrieving RE captures: Error executing regex: Max limit for backtracking count exceeded\n");
+        .code_is(4)
+        .stderr_is("sed: error retrieving RE captures: Error executing regex: Max limit for backtracking count exceeded\n");
 }
 
 #[test]
@@ -2079,13 +2091,16 @@ fn test_write_file_failure() {
         .stderr_is("sed: couldn't open file /xyzzy/xyzy: No such file or directory\n");
 }
 
+/// An empty regex with none before it is GNU sed's script error, placed where the
+/// script's reading ended, with status 1; it was a run-time error of cash's own form
+/// with status 2 (TODO.md phase 15).
 #[test]
 fn test_missing_substitute_re() {
     new_ucmd!()
         .args(&["l;s//foo/", LINES1])
         .fails()
-        .code_is(2)
-        .stderr_is("sed: <script argument 1>:1:3: 'input/lines1':1 error: no previous regular expression\n");
+        .code_is(1)
+        .stderr_is("sed: -e expression #1, char 0: no previous regular expression\n");
 }
 
 #[test]
@@ -2093,8 +2108,8 @@ fn test_missing_address_re() {
     new_ucmd!()
         .args(&["l\np;//s/foo/bar/", LINES1])
         .fails()
-        .code_is(2)
-        .stderr_is("sed: <script argument 1>:2:3: 'input/lines1':1 error: no previous regular expression\n");
+        .code_is(1)
+        .stderr_is("sed: -e expression #1, char 0: no previous regular expression\n");
 }
 
 ////////////////////////////////////////////////////////////
@@ -2185,12 +2200,15 @@ fn test_expected_newer_version() {
         .stderr_is("sed: -e expression #1, char 5: expected newer version of sed\n");
 }
 
+/// GNU sed compares versions with `strverscmp`, so `4.a` is newer than 4.9; it was
+/// "invalid version of sed" (TODO.md phase 15).
 #[test]
 fn test_invalid_version() {
     new_ucmd!()
         .args(&["v4.a"])
         .fails()
-        .stderr_is("sed: -e expression #1, char 4: invalid version of sed\n");
+        .code_is(1)
+        .stderr_is("sed: -e expression #1, char 4: expected newer version of sed\n");
 }
 
 #[test]
@@ -2210,7 +2228,8 @@ fn test_invalid_only_major_version() {
     new_ucmd!()
         .args(&["v999"])
         .fails()
-        .stderr_is("sed: -e expression #1, char 4: invalid version of sed\n");
+        .code_is(1)
+        .stderr_is("sed: -e expression #1, char 4: expected newer version of sed\n");
 }
 
 #[test]
@@ -3301,4 +3320,606 @@ fn test_text_commands_ending_their_line() {
             .succeeds()
             .stdout_only(output);
     }
+}
+
+////////////////////////////////////////////////////////////
+// GNU sed 4.9 parity, as compared with it (TODO.md phase 15)
+
+/// Run `sed` with `args` on `input` and check that it writes `output`.
+fn check_output(args: &[&str], input: &[u8], output: &[u8]) {
+    new_ucmd!()
+        .args(args)
+        .pipe_in(input.to_vec())
+        .succeeds()
+        .stdout_is_bytes(output);
+}
+
+/// Check that `sed` with `args`, given no input, fails reading its script with `error`.
+fn check_script_error(args: &[&str], error: &str) {
+    new_ucmd!()
+        .args(args)
+        .fails()
+        .code_is(1)
+        .stderr_is(format!("sed: {error}\n"));
+}
+
+/// An empty regex with none before it is found when it is first matched, so a script
+/// that never matches it runs, and what was written before stays. The error is placed
+/// where the reading of the script ended: the last `-e` expression at char 0, or the
+/// last script file at the line after its last newline.
+#[test]
+fn test_missing_regex_found_at_its_first_match() -> std::io::Result<()> {
+    check_output(&["1d;//p"], b"a\n", b"");
+    new_ucmd!()
+        .args(&["-n", "-e", "p", "-e", "//p", "-e", "p", LINES1])
+        .fails()
+        .code_is(1)
+        .stdout_is("l1_1\n")
+        .stderr_is("sed: -e expression #3, char 0: no previous regular expression\n");
+
+    let dir = tempfile::tempdir()?;
+    let path = dir.path().join("script.sed");
+    fs::write(&path, "p\n//p\n")?;
+    let path = path.to_string_lossy().into_owned();
+    new_ucmd!()
+        .args(&["-n", "-f", &path, LINES1])
+        .fails()
+        .code_is(1)
+        .stdout_is("l1_1\n")
+        .stderr_is(format!(
+            "sed: file {path} line 3: no previous regular expression\n"
+        ));
+    Ok(())
+}
+
+/// `v` reads its version as a label is read and compares it with 4.9 as GNU sed's
+/// `strverscmp` does; it takes addresses, which it ignores. Versions were split at their
+/// dots and read as numbers, a letter in them refused as "invalid version of sed".
+#[test]
+fn test_version_compared_as_gnu_sed_does() {
+    for script in [
+        "v 4.2a", "v 4.8.99", "v 4.09", "v 04.9", "v 4.", "v", "1v", "1,2v", "/a/v", "{v 4.2}",
+        "v 4.2#c",
+    ] {
+        check_output(&[script], b"a\n", b"a\n");
+    }
+    check_output(&["v 4.2 p"], b"a\n", b"a\na\n");
+    check_output(&["v;p"], b"a\n", b"a\na\n");
+    for (script, error) in [
+        ("v 4.9.0", "char 7"),
+        ("v 4.9a;p", "char 6"),
+        ("v4.10", "char 5"),
+        ("v abc", "char 5"),
+        ("v 4.9-1", "char 7"),
+    ] {
+        check_script_error(
+            &[script],
+            &format!("-e expression #1, {error}: expected newer version of sed"),
+        );
+    }
+}
+
+/// A label runs to white space, `;`, `}`, `#` or the line's end, whatever its
+/// characters, as in GNU sed; only letters, digits, `.`, `_` and `-` were taken.
+#[test]
+fn test_labels_read_as_gnu_sed_reads_them() {
+    check_output(&["-n", "bx@y;p;:x@y;s/^/>/p"], b"a\n", b">a\n");
+    check_output(&["-n", "bé;p;:é;s/^/>/p"], b"a\n", b">a\n");
+    check_output(&["-n", "$!{N;bx@y};:x@y;p"], b"a\nb\n", b"a\nb\n");
+    check_output(&["-n", "bx#c\np\n:x#c\ns/^/>/p"], b"a\n", b">a\n");
+    check_script_error(&["ba}"], "-e expression #1, char 3: unexpected `}'");
+}
+
+/// A backslash in a bracket expression is an ordinary character, as in GNU sed: `[\]]`
+/// is a backslash then `]`, and `[a\]` ends at its `]`. GNU decodes `\n`, `\t`, `\cX`,
+/// `\x41` and the like there, but in POSIX mode. The backslash was an escape.
+#[test]
+fn test_backslash_in_bracket_expression() {
+    for (args, input, output) in [
+        (&["s/[\\]]/X/g"][..], &b"a]b\\]c\n"[..], &b"a]bXc\n"[..]),
+        (&["s/[a\\]/X/g"], b"a]b\\c\n", b"X]bXc\n"),
+        (&["s/[\\.]/X/g"], b"a.b\\c\n", b"aXbXc\n"),
+        (&["s/[\\w]/X/g"], b"aw\\\n", b"aXX\n"),
+        (&["s/[\\b]/X/g"], b"ab\\c\n", b"aXXc\n"),
+        (&["s/[\\n]/X/g"], b"anb\\\n", b"anb\\\n"),
+        (&["N;s/[\\n]/X/g"], b"a\nb\n", b"aXb\n"),
+        (&["s/[\\t]/X/g"], b"t\tx\n", b"tXx\n"),
+        (&["s/[\\\\n]/X/g"], b"a\\nb\n", b"aXXb\n"),
+        (&["s/[\\x5c]/X/g"], b"a\\b\n", b"aXb\n"),
+        (&["s/[\\c]]/X/g"], b"\x1d]\n", b"X]\n"),
+        (&["--posix", "s/[\\n]/X/g"], b"a\\nb\n", b"aXXb\n"),
+        (&["-E", "s/[\\]]/X/g"], b"a]b\\]c\n", b"a]bXc\n"),
+        (&["s/[[]/X/g"], b"a[b\n", b"aXb\n"),
+        (&["s/[a[]/X/g"], b"a[b\n", b"XXb\n"),
+        (&["s/[a&&b]/X/g"], b"a&b-\n", b"XXX-\n"),
+    ] {
+        check_output(args, input, output);
+    }
+}
+
+/// Collating elements and equivalence classes of one character, as GNU sed has them in
+/// the C and UTF-8 locales: `[.-.]` is `-` and `[=a=]` is `a`. They were not supported.
+#[test]
+fn test_collating_elements_and_equivalence_classes() {
+    for (script, input, output) in [
+        ("s/[[.-.]]/X/g", "a-b.c\n", "aXb.c\n"),
+        ("s/[a-[.c.]]/X/g", "abcd\n", "XXXd\n"),
+        ("s/[[.a.]-c]/X/g", "a-bcd\n", "X-XXd\n"),
+        ("s/[[=a=]]/X/g", "a=b\n", "X=b\n"),
+        ("s/[[=a=]b]/X/g", "a=b\n", "X=X\n"),
+        ("s/[[.].]]/X/g", "a]b\n", "aXb\n"),
+        ("s/[^[.-.]]/X/g", "a-b\n", "X-X\n"),
+        ("s/[[.-.]-0]/X/g", "-./01\n", "XXXX1\n"),
+        ("s/[]-a]/X/g", "]^_a-\n", "XXXX-\n"),
+    ] {
+        check_output(&[script], input.as_bytes(), output.as_bytes());
+    }
+}
+
+/// In POSIX mode GNU's operators `\w`, `\W`, `\s`, `\S`, `\b`, `\B`, `\<`, `\>`, `` \` ``
+/// and `\'` are the characters after their backslash, as in GNU sed; they stayed
+/// operators.
+#[test]
+fn test_posix_mode_takes_gnu_operators_for_characters() {
+    for (script, input, output) in [
+        ("s/\\w/X/g", "aw\n", "aX\n"),
+        ("s/\\W/X/g", "a-W\n", "a-X\n"),
+        ("s/\\s/X/g", "a sb\n", "a Xb\n"),
+        ("s/\\S/X/g", "aS\n", "aX\n"),
+        ("s/\\b/X/g", "abc\n", "aXc\n"),
+        ("s/\\B/X/g", "aBc\n", "aXc\n"),
+        ("s/\\</X/g", "a<b\n", "aXb\n"),
+        ("s/\\>/X/g", "a>b\n", "aXb\n"),
+        ("s/\\`/X/g", "a`b\n", "aXb\n"),
+        ("s/\\'/X/g", "a'b\n", "aXb\n"),
+    ] {
+        check_output(&["--posix", script], input.as_bytes(), output.as_bytes());
+        check_output(
+            &["--posix", "-E", script],
+            input.as_bytes(),
+            output.as_bytes(),
+        );
+    }
+    // Outside POSIX mode they are operators.
+    check_output(&["s/\\w/X/g"], b"a-b\n", b"X-X\n");
+    check_output(&["s/\\`a/X/g"], b"aa\n", b"Xa\n");
+    check_output(&["s/a\\'/X/g"], b"aa\n", b"aX\n");
+}
+
+/// A written `\A`, `\z`, `\D` or `\p` is the letter, as in GNU sed: they were the RE
+/// engine's anchors and classes, or an error.
+#[test]
+fn test_escapes_gnu_sed_takes_for_letters() {
+    for extended in [false, true] {
+        for (script, input, output) in [
+            ("s/\\A/X/g", "bAz\n", "bXz\n"),
+            ("s/\\z/X/g", "bzA\n", "bXA\n"),
+            ("s/\\D/X/g", "aD1\n", "aX1\n"),
+            ("s/\\p/X/g", "ap\n", "aX\n"),
+            ("s/\\d/X/g", "ad1\n", "aX1\n"),
+        ] {
+            let args: &[&str] = if extended { &["-E", script] } else { &[script] };
+            check_output(args, input.as_bytes(), output.as_bytes());
+        }
+    }
+}
+
+/// GNU sed's character classes in UTF-8 mode take in what the locale classes so:
+/// `[[:alpha:]]` matches `é`. The RE engine's are ASCII. In byte mode they stay ASCII.
+#[test]
+fn test_character_classes_in_utf8_mode() {
+    for (script, input, output) in [
+        ("s/[[:alpha:]]/X/g", "aé1中\n", "XX1X\n"),
+        ("s/[[:upper:]]/X/g", "éÉ\n", "éX\n"),
+        ("s/[[:lower:]]/X/g", "éÉ\n", "XÉ\n"),
+        ("s/[[:alnum:]]/X/g", "é٣-\n", "XX-\n"),
+        ("s/[[:space:]]/X/g", "a\u{a0}b\u{2003}\n", "aXbX\n"),
+        ("s/[[:blank:]]/X/g", "a\u{a0}b\n", "aXb\n"),
+        ("s/[[:punct:]]/X/g", "a§!_\n", "aXXX\n"),
+        ("s/[^[:alpha:]]/X/g", "é-\n", "éX\n"),
+        ("s/\\w/X/g", "e\u{301}_\n", "X\u{301}X\n"),
+    ] {
+        new_ucmd!()
+            .env("LC_ALL", "C.UTF-8")
+            .arg(script)
+            .pipe_in(input)
+            .succeeds()
+            .stdout_only(output);
+    }
+    new_ucmd!()
+        .env("LC_ALL", "C")
+        .arg("s/[[:alpha:]]/X/g")
+        .pipe_in(b"a\xe9\n".to_vec())
+        .succeeds()
+        .stdout_is_bytes(b"X\xe9\n");
+}
+
+/// A backslash and newline in a `y` string or in an `s` or address regex is a newline,
+/// as in GNU sed, where they were "unterminated". A backslash that ends a `-e`
+/// expression has no newline after it, and a line that ends a replacement without one
+/// leaves it unterminated, as there: the replacement went on in the next expression or
+/// line.
+#[test]
+fn test_backslash_newline_in_patterns() {
+    for (args, input, output) in [
+        (&["N;y/\\\n/X/"][..], &b"a\nb\n"[..], &b"aXb\n"[..]),
+        (&["N;y/a\\\nb/XYZ/"], b"a\nb\n", b"XYZ\n"),
+        (&["N;y/ab/X\\\n/"], b"a\nb\n", b"X\n\n\n"),
+        (&["N;s/a\\\nb/X/"], b"a\nb\n", b"X\n"),
+        (&["-E", "N;s/a\\\nb/X/"], b"a\nb\n", b"X\n"),
+        (&["N;/a\\\nb/s/^/>/"], b"a\nb\n", b">a\nb\n"),
+        (&["N;\\,a\\\nb,s/^/>/"], b"a\nb\n", b">a\nb\n"),
+        (&["s/a/x\\\ny/"], b"a\n", b"x\ny\n"),
+    ] {
+        check_output(args, input, output);
+    }
+    check_script_error(
+        &["-e", "s/a/b\\", "-e", "/"],
+        "-e expression #1, char 6: unterminated `s' command",
+    );
+    check_script_error(
+        &["-e", "y/a\\", "-e", "/b/"],
+        "-e expression #1, char 4: unterminated `y' command",
+    );
+    check_script_error(
+        &["s/a/b\n/"],
+        "-e expression #1, char 5: unterminated `s' command",
+    );
+}
+
+/// `\cX` as GNU sed reads it: `\c\\` is the control character of a backslash, `\c`
+/// before another escape is an error once the string is read, and `\c` before the
+/// delimiter has nothing to stand for. `\c\\` left a backslash to escape the delimiter.
+#[test]
+fn test_control_character_escapes() {
+    for (args, input, output) in [
+        (&["s/\\c\\\\/X/"][..], &b"a\x1c\n"[..], &b"aX\n"[..]),
+        (&["s/[\\c\\\\]/X/"], b"a\x1c\n", b"aX\n"),
+        (&["s/b/\\c\\\\/"], b"ab\n", b"a\x1c\n"),
+        (&["y/b\\c\\\\/xy/"], b"ab\x1c\n", b"axy\n"),
+        (&["s/a/x\\c/"], b"ab\n", b"x\\b\n"),
+        (&["s/\\c]/X/"], b"\x1d\n", b"X\n"),
+    ] {
+        check_output(args, input, output);
+    }
+    for (script, error) in [
+        (
+            "s/\\c\\d/X/",
+            "char 9: recursive escaping after \\c not allowed",
+        ),
+        (
+            "s/b\\c\\d/X/g;p",
+            "char 12: recursive escaping after \\c not allowed",
+        ),
+        (
+            "s/b/\\c\\d/g;p",
+            "char 9: recursive escaping after \\c not allowed",
+        ),
+        (
+            "y/b/\\c\\d/",
+            "char 9: recursive escaping after \\c not allowed",
+        ),
+        (
+            "/\\c\\d/p",
+            "char 6: recursive escaping after \\c not allowed",
+        ),
+        ("s/\\c/X/", "char 7: Trailing backslash"),
+        (
+            "y/a/\\c/",
+            "char 7: strings for `y' command are different lengths",
+        ),
+    ] {
+        check_script_error(&[script], &format!("-e expression #1, {error}"));
+    }
+}
+
+/// GNU sed has no backspace escape: `\b` is the letter in a replacement, in `y` and in
+/// text, and so is any other character without an escape of its own in `y`.
+#[test]
+fn test_backslash_b_and_unknown_escapes() {
+    check_output(&["s/a/\\b/"], b"ab\n", b"bb\n");
+    check_output(&["y/\\b/X/"], b"b\x08\n", b"X\x08\n");
+    check_output(&["a x\\by"], b"q\n", b"q\nxby\n");
+    check_output(&["y/a\\q/XY/"], b"aq\\\n", b"XY\\\n");
+    check_output(&["y/\\&/X/"], b"&\n", b"X\n");
+}
+
+/// Text that ends in `\c` ends there, with GNU sed's control character of the newline,
+/// `J`, and no newline; it panicked. Text whose last line ends in a backslash and a
+/// newline, at the end of the script, ends with an empty line, as in GNU sed.
+#[test]
+fn test_text_ending_in_escapes() {
+    check_output(&["a x\\c"], b"a\n", b"a\nxJ");
+    check_output(&["a x\\c\np"], b"a\n", b"a\na\nxJ");
+    check_output(&["i\\\nx\\c\np"], b"a\n", b"x\na\na\n");
+    check_output(&["a x\\qy\\\n"], b"a\n", b"a\nxqy\n\n");
+}
+
+/// Files for the run-time tests: `f1` and `f2` with lines, `last` whose last line has no
+/// end, `empty`, and the directory `dir`, in a directory of their own; with the path of
+/// a name in it.
+fn run_time_files() -> std::io::Result<(tempfile::TempDir, impl Fn(&str) -> String)> {
+    let dir = tempfile::tempdir()?;
+    fs::write(dir.path().join("f1"), "x\ny\nz\n")?;
+    fs::write(dir.path().join("f2"), "1\n2\n")?;
+    fs::write(dir.path().join("last"), "a\nb")?;
+    fs::write(dir.path().join("empty"), "")?;
+    fs::create_dir(dir.path().join("dir"))?;
+    let root = dir.path().to_path_buf();
+    let path = move |name: &str| root.join(name).to_string_lossy().into_owned();
+    Ok((dir, path))
+}
+
+/// An input file that cannot be read is GNU sed's "can't read F: ...", and passed over:
+/// the others are read, and sed ends with status 2, whatever `q` says. It ended sed at
+/// once, in cash's words, with status 1.
+#[test]
+fn test_unreadable_input_files_are_passed_over() -> std::io::Result<()> {
+    let (_dir, path) = run_time_files()?;
+    let (nosuch, f1, f2) = (path("nosuch"), path("f1"), path("f2"));
+    let cant_read = format!("sed: can't read {nosuch}: No such file or directory\n");
+    new_ucmd!()
+        .args(&["p", &nosuch, &f1])
+        .fails()
+        .code_is(2)
+        .stdout_is("x\nx\ny\ny\nz\nz\n")
+        .stderr_is(&cant_read);
+    new_ucmd!()
+        .args(&["=", &f2, &nosuch, &f2])
+        .fails()
+        .code_is(2)
+        .stdout_is("1\n1\n2\n2\n3\n1\n4\n2\n")
+        .stderr_is(&cant_read);
+    new_ucmd!()
+        .args(&["2q5", &nosuch, &f1])
+        .fails()
+        .code_is(2)
+        .stdout_is("x\ny\n");
+    // `$` looks past it, as past an empty file.
+    new_ucmd!()
+        .args(&["-n", "$p", &f1, &nosuch, &path("empty")])
+        .fails()
+        .code_is(2)
+        .stdout_is("z\n");
+    new_ucmd!()
+        .args(&["-i", "s/x/X/", &nosuch, &f1])
+        .fails()
+        .code_is(2)
+        .stderr_is(&cant_read);
+    assert_eq!(fs::read_to_string(&f1)?, "X\ny\nz\n");
+    Ok(())
+}
+
+/// A directory as input is GNU sed's "read error on D: Is a directory", status 4, after
+/// the files before it, and to an in-place edit "couldn't edit D: not a regular file";
+/// they said "error opening input file 'D': Permission denied" with status 1. `r` and
+/// `R` of a directory fail the same way, where they read nothing.
+#[test]
+fn test_directory_as_input() -> std::io::Result<()> {
+    let (_dir, path) = run_time_files()?;
+    let (dir, f1, f2) = (path("dir"), path("f1"), path("f2"));
+    new_ucmd!()
+        .args(&["p", &f2, &dir, &f1])
+        .fails()
+        .code_is(4)
+        .stdout_is("1\n1\n2\n2\n")
+        .stderr_is(format!("sed: read error on {dir}: Is a directory\n"));
+    new_ucmd!()
+        .args(&["-i", "s/1/one/", &f2, &dir, &f1])
+        .fails()
+        .code_is(4)
+        .stderr_is(format!("sed: couldn't edit {dir}: not a regular file\n"));
+    assert_eq!(fs::read_to_string(&f2)?, "one\n2\n");
+    assert_eq!(fs::read_to_string(&f1)?, "x\ny\nz\n");
+    new_ucmd!()
+        .args(&[&format!("r {dir}"), &f1])
+        .fails()
+        .code_is(4)
+        .stdout_is("x\n")
+        .stderr_is(format!("sed: read error on {dir}: Is a directory\n"));
+    new_ucmd!()
+        .args(&[&format!("R {dir}"), &f1])
+        .fails()
+        .code_is(4)
+        .stdout_is("")
+        .stderr_is(format!("sed: read error on {dir}: Is a directory\n"));
+    Ok(())
+}
+
+/// `--follow-symlinks` with a file that is not there is GNU sed's "couldn't readlink F:
+/// ...", status 4.
+#[test]
+fn test_follow_symlinks_of_a_missing_file() -> std::io::Result<()> {
+    let (_dir, path) = run_time_files()?;
+    let nosuch = path("nosuch");
+    new_ucmd!()
+        .args(&["-i", "--follow-symlinks", "p", &nosuch])
+        .fails()
+        .code_is(4)
+        .stderr_is(format!(
+            "sed: couldn't readlink {nosuch}: No such file or directory\n"
+        ));
+    Ok(())
+}
+
+/// GNU sed's special files: `/dev/stdin` for `r` and `R` is standard input, and
+/// `/dev/stdout` and `/dev/stderr` for `w`, `W` and the `w` flag of `s` are sed's
+/// output and error, but in POSIX mode, where they are file names. Windows has none of
+/// them: `r` and `R` read nothing, and `w` failed to open them.
+#[test]
+fn test_special_files() -> std::io::Result<()> {
+    let (_dir, path) = run_time_files()?;
+    let f1 = path("f1");
+    new_ucmd!()
+        .args(&["R /dev/stdin", &f1])
+        .pipe_in("A\nB\n")
+        .succeeds()
+        .stdout_only("x\nA\ny\nB\nz\n");
+    new_ucmd!()
+        .args(&["1r /dev/stdin", &f1])
+        .pipe_in("A\nB\n")
+        .succeeds()
+        .stdout_only("x\nA\nB\ny\nz\n");
+    new_ucmd!()
+        .args(&["w /dev/stdout", &f1])
+        .succeeds()
+        .stdout_only("x\nx\ny\ny\nz\nz\n");
+    new_ucmd!()
+        .args(&["-n", "s/x/X/w /dev/stderr", &f1])
+        .succeeds()
+        .stdout_is("")
+        .stderr_is("X\n");
+    new_ucmd!()
+        .args(&["-n", "w /dev/null", &f1])
+        .succeeds()
+        .no_output();
+    new_ucmd!()
+        .args(&["--posix", "-n", "w /dev/stdout", &f1])
+        .fails()
+        .code_is(4)
+        .stderr_is("sed: couldn't open file /dev/stdout: No such file or directory\n");
+    // In an in-place edit `/dev/stdout` is still standard output.
+    new_ucmd!()
+        .args(&["-i", "s/y/Y/w /dev/stdout", &f1])
+        .succeeds()
+        .stdout_only("Y\n");
+    assert_eq!(fs::read_to_string(&f1)?, "x\nY\nz\n");
+    // `/dev/stdout` keeps its own count of a line without its end.
+    let (last, f2) = (path("last"), path("f2"));
+    new_ucmd!()
+        .args(&["-s", "W /dev/stdout", &last, &f2])
+        .succeeds()
+        .stdout_only("a\na\nbb\n1\n\n1\n2\n2\n");
+    Ok(())
+}
+
+/// The commands that name one file share it, as in GNU sed; each truncated it, and they
+/// overwrote each other's lines. A line written without its end gets it before the next.
+#[test]
+fn test_commands_writing_one_file() -> std::io::Result<()> {
+    let (_dir, path) = run_time_files()?;
+    let (f1, out) = (path("f1"), path("out"));
+    new_ucmd!()
+        .args(&[
+            "-e",
+            &format!("w {out}"),
+            "-e",
+            &format!("s/x/X/w {out}"),
+            &f1,
+        ])
+        .succeeds()
+        .stdout_only("X\ny\nz\n");
+    assert_eq!(fs::read_to_string(&out)?, "x\nX\ny\nz\n");
+    new_ucmd!()
+        .args(&["-s", "-n", &format!("w {out}"), &path("last"), &path("f2")])
+        .succeeds();
+    assert_eq!(fs::read_to_string(&out)?, "a\nb\n1\n2\n");
+    Ok(())
+}
+
+/// A last line without its end gets one before the next file's first line, as in GNU
+/// sed; the two were joined.
+#[test]
+fn test_last_line_without_end_before_next_file() -> std::io::Result<()> {
+    let (_dir, path) = run_time_files()?;
+    new_ucmd!()
+        .args(&["p", &path("last"), &path("f2")])
+        .succeeds()
+        .stdout_only("a\na\nb\nb\n1\n1\n2\n2\n");
+    Ok(())
+}
+
+/// `$` is the last line of the last input with lines: GNU sed looks past files that are
+/// empty or cannot be read, and into standard input. `N` on that line prints what it
+/// has.
+#[test]
+fn test_last_line_looks_ahead() -> std::io::Result<()> {
+    let (_dir, path) = run_time_files()?;
+    let (f1, f2, empty) = (path("f1"), path("f2"), path("empty"));
+    new_ucmd!()
+        .args(&["-n", "$p", &f1, "-"])
+        .pipe_in("")
+        .succeeds()
+        .stdout_only("z\n");
+    new_ucmd!()
+        .args(&["-n", "$p", &f1, "-"])
+        .pipe_in("q\n")
+        .succeeds()
+        .stdout_only("q\n");
+    new_ucmd!()
+        .args(&["$!N;s/\\n/-/", &f2, &empty, &f1])
+        .succeeds()
+        .stdout_only("1-2\nx-y\nz\n");
+    new_ucmd!()
+        .args(&["N", &f1, &empty])
+        .succeeds()
+        .stdout_only("x\ny\nz\n");
+    Ok(())
+}
+
+/// Back-references in a pattern space that is not UTF-8: in byte mode every byte is a
+/// character, and in UTF-8 mode a byte that is not UTF-8 matches nothing but itself, as
+/// in GNU sed. They were an error, as was any byte above 0x7F in byte mode.
+#[test]
+fn test_back_references_on_bytes() {
+    for (locale, script, input, output) in [
+        ("C", "s/\\(.\\)\\1/X/g", &b"\xe9\xe9aa\n"[..], &b"XX\n"[..]),
+        ("C", "s/\\(a\\)\\1/X/", b"aa\xff\n", b"X\xff\n"),
+        (
+            "C",
+            "s/\\(.\\)\\1/<&>/g",
+            b"\xc3\xa9\xc3\xa9\n",
+            b"\xc3\xa9\xc3\xa9\n",
+        ),
+        (
+            "C.UTF-8",
+            "s/\\(.\\)\\1/X/g",
+            b"\xff\xffaa\n",
+            b"\xff\xffX\n",
+        ),
+        ("C.UTF-8", "s/\\(a\\)\\1/X/", b"aa\xff\n", b"X\xff\n"),
+        (
+            "C.UTF-8",
+            "s/\\(.\\)\\1/X/g",
+            b"\xc3\xa9\xc3\xa9\xff\n",
+            b"X\xff\n",
+        ),
+        (
+            "C.UTF-8",
+            "s/\\([^a]\\)\\1/X/g",
+            b"\xff\xffbb\n",
+            b"\xff\xffX\n",
+        ),
+    ] {
+        new_ucmd!()
+            .env("LC_ALL", locale)
+            .arg(script)
+            .pipe_in(input.to_vec())
+            .succeeds()
+            .stdout_is_bytes(output);
+    }
+    new_ucmd!()
+        .env("LC_ALL", "C")
+        .args(&["-E", "s/(.)\\1/X/g"])
+        .pipe_in(b"\xe9\xe9aa\n".to_vec())
+        .succeeds()
+        .stdout_is_bytes(b"XX\n");
+}
+
+/// What is not UTF-8 in UTF-8 mode stays as it is for `y` and `l`, as in GNU sed; it was
+/// an error.
+#[test]
+fn test_invalid_utf8_for_y_and_l() {
+    new_ucmd!()
+        .env("LC_ALL", "C.UTF-8")
+        .arg("y/aé/éa/")
+        .pipe_in(b"a\xff\xc3\xa9\n".to_vec())
+        .succeeds()
+        .stdout_is_bytes(b"\xc3\xa9\xffa\n");
+    new_ucmd!()
+        .env("LC_ALL", "C.UTF-8")
+        .args(&["-n", "-U", "l"])
+        .pipe_in(b"a\xff\n".to_vec())
+        .succeeds()
+        .stdout_is_bytes(b"a\\377$\n");
 }
