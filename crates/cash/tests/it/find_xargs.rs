@@ -557,3 +557,56 @@ fn xargs_runs_in_the_shells_working_directory() {
     let out = sandbox.run(r#"cd sub; find . -name "b.txt" | xargs -n 1 echo GOT"#);
     assert_eq!(out.stdout.trim(), "GOT ./b.txt", "stderr: {}", out.stderr);
 }
+
+/// xargs runs a full command line before reading more: the writer here gives `b` only
+/// once the command for `a` has run. It read all its input first, and with `-n 1` read
+/// the next item before running, so this waited out the writer's timeout (BI-18).
+#[test]
+fn xargs_runs_each_line_as_it_is_read() {
+    let sandbox = Sandbox::new("xargs-stream");
+    let out = sandbox.run(
+        r#"{ echo a; n=0; while [ ! -e ran-a ] && [ $n -lt 100 ]; do sleep 0.1; n=$((n+1)); done; echo b; } |
+           xargs -n 1 sh -c 'touch "ran-$0"; echo "$0"'
+           [ -e ran-a ] && echo "a ran while the writer waited""#,
+    );
+    assert_eq!(
+        out.stdout, "a\nb\na ran while the writer waited",
+        "{}",
+        out.stderr
+    );
+}
+
+/// A quote left open ends the input: what came before runs, GNU's message, status 1. It
+/// ran the quote across the line as one item (BI-18).
+#[test]
+fn xargs_reports_an_unmatched_quote() {
+    let sandbox = Sandbox::new("xargs-quote");
+    let out = sandbox.run(r#"printf "a 'b c\nd\n" | xargs echo; echo "status $?""#);
+    assert_eq!(out.stdout, "a\nstatus 1", "{}", out.stderr);
+    assert!(
+        out.stderr.ends_with(
+            "xargs: unmatched single quote; by default quotes are special to xargs unless \
+             you use the -0 option"
+        ),
+        "{}",
+        out.stderr
+    );
+}
+
+/// The default budget counts an argument as Windows' command line holds it, quotes
+/// included: 5,000 `a b` items fit one line counted as bytes, and Windows' limit only
+/// two (BI-18).
+#[test]
+fn xargs_budgets_for_the_quotes_windows_adds() {
+    let sandbox = Sandbox::new("xargs-budget");
+    let out = sandbox.run(
+        r#"for i in $(seq 5000); do echo '"a b"'; done | xargs printf '%s\n' | wc -l
+           for i in $(seq 5000); do echo '"a b"'; done | xargs sh -c 'echo $#' | wc -l"#,
+    );
+    assert_eq!(
+        out.stdout.split_whitespace().collect::<Vec<_>>(),
+        ["5000", "2"],
+        "{}",
+        out.stderr
+    );
+}

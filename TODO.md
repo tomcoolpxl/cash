@@ -90,8 +90,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 Each from `REVIEW_REPORT.md` §5, found in no commit on 2026-10-04; reproduce first, as
 some may have gone with other work.
 
-- BI-18: xargs' budget counts unquoted bytes; it reads all of stdin before starting, and
-  accepts an unmatched quote.
 - BIN-03: `--remove-terminal-profile` cuts a whole `newTabMenu` folder that holds the
   cash entry.
 - BIN-06: `cash doctor` always says "inside another job object", asking after cash made
