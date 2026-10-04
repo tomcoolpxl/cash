@@ -558,6 +558,22 @@ fn xargs_runs_in_the_shells_working_directory() {
     assert_eq!(out.stdout.trim(), "GOT ./b.txt", "stderr: {}", out.stderr);
 }
 
+/// The words of an `-exec` command are its own, to its `;`: `-maxdepth 0` there was taken
+/// for find's own option and the command never saw it (as GNU find does, it gets them).
+#[test]
+fn exec_keeps_find_options_in_its_command() {
+    let sandbox = Sandbox::new("exec-words");
+    let out = sandbox.run(
+        r"find . -maxdepth 0 -exec echo X {} -maxdepth 0 -name y \;
+          find . -maxdepth 0 -exec echo Y -depth {} +",
+    );
+    assert_eq!(
+        out.stdout, "X . -maxdepth 0 -name y\nY -depth .",
+        "{}",
+        out.stderr
+    );
+}
+
 /// xargs runs a full command line before reading more: the writer here gives `b` only
 /// once the command for `a` has run. It read all its input first, and with `-n 1` read
 /// the next item before running, so this waited out the writer's timeout (BI-18).
