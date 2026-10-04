@@ -220,8 +220,8 @@ fn display_history(
         if let Some(timestamp) = item.timestamp {
             let local_timestamp = timestamp.with_timezone(&chrono::Local);
             if let Some(time_format) = &config.time_format {
-                let fmt_items = chrono::format::StrftimeItems::new(time_format);
-                formatted_timestamp = local_timestamp.format_with_items(fmt_items).to_string();
+                // A specifier chrono does not know panicked here.
+                formatted_timestamp = cash_core::timefmt::strftime(&local_timestamp, time_format);
             }
         }
 

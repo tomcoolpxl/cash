@@ -243,6 +243,8 @@ pub struct CreateOptions<SE: extensions::ShellExtensions = extensions::DefaultSh
 
 impl<SE: extensions::ShellExtensions> Default for Shell<SE> {
     fn default() -> Self {
+        // The first shell's start is the shell's, `printf '%(…)T' -2`'s time.
+        let _ = crate::timefmt::shell_started();
         Self {
             error_formatter: SE::ErrorFormatter::default(),
             traps: traps::TrapHandlerConfig::default(),

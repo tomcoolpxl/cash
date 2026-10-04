@@ -116,6 +116,15 @@ fn steps(format: &str) -> Vec<Step> {
                         }
                     }
                 }
+                // `%(FMT)T` reads a number of seconds, as `%d` reads it; FMT reads nothing.
+                if bytes.get(at) == Some(&b'(') {
+                    let Some(end) = super::time_format_end(bytes, at) else {
+                        return steps;
+                    };
+                    steps.push(Step::Read(value_position, Use::Signed));
+                    at = end;
+                    continue;
+                }
                 while bytes.get(at).is_some_and(|b| b"hlLqjzt".contains(b)) {
                     at += 1;
                 }

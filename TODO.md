@@ -61,15 +61,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ### 14.6 Dead code, allows and dependencies
 
-- What is left of brush's Unix and wasi set-up in `cash-test-harness`, seen removing its
-  oracle mode (2026-10-04): 13 YAML cases say `incompatible_platforms: ["wasi"]` and the
-  harness keeps a launcher and platform tags for it; `incompatible_os` reads
-  `/etc/os-release`, so it never applies (and `os-release` is a dependency for it);
-  `compute_test_path_var` adds `/usr/bin` and looks for a file named `sh`, never
-  `sh.exe`; the coverage directory defaults to `crates/target`; `pty: true` always errors
-  and `ShellInvocation::ExecScript` is `unimplemented!()`; `--show-output`,
-  `--nocapture`, `--color` and `-Z` do nothing; a case with no expectation passes; the
-  cases are in `tests/cases/brush/`.
 - Left from phase 11: `cmd /c type <(echo x)` sometimes prints `x` and then "The pipe has been ended" (the
   review saw 11 in 80 on a busy machine; on 2026-10-03, 1 in 450 on an idle one, with
   1.3.10 and with the replay fix of phase 11 alike). The race the review suspected, between a pump's
@@ -94,12 +85,12 @@ then the riskiest changes once the crashes and state bugs are out of the way.
   set, a test hook live in production as W32-18's were; and they find cash only when their
   exe is named `cash` (or `cash-…`), so in a linked `awk.exe` they take another shell.
   Seen 2026-10-04 fixing BIN-09.
-- `printf '%(%s)T' -1`, Bash's time format, fails with "format-error-invalid-spec":
-  cash's `printf` lacks `%(…)T`. Seen 2026-10-04.
-- `exec` with an option (`-a NAME`, `-c`, `-l`) in a subshell fails with "exec with
-  options in subshell not yet supported", where Bash runs it: a subshell is in cash's own
-  process, so its `exec` runs the command through `command`, which takes none of them.
-  `(exec -a foo bash -c 'echo $0')` prints `foo` in Bash. Seen 2026-10-04 fixing EXE-12.
+- `exec -a NAME` sets nothing: cash's `arg0` is a no-op on Windows, where std's `Command`
+  cannot set a program's `argv[0]`, so `exec -a foo bash -c 'echo $0'` prints bash's path
+  where Bash prints `foo`. It would take a `CreateProcessW` of cash's own whose command
+  line starts with NAME. Seen 2026-10-04 fixing `exec` in a subshell.
+- Bash's `printf '%(…)T'` uses the `TZ` variable; cash's uses Windows' time zone
+  (chrono's `Local`), as its prompts' `\D{…}` do. Seen 2026-10-04 adding `%(…)T`.
 ### 14.7 The review's §5 findings no phase took up
 
 Each from `REVIEW_REPORT.md` §5, found in no commit on 2026-10-04; reproduce first, as

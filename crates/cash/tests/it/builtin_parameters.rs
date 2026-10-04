@@ -808,6 +808,53 @@ fn printf_stops_all_output_at_backslash_c() {
     assert_eq!(out.stdout, "a\nx y");
 }
 
+/// Bash's `%(FMT)T` formats a time; it failed with "format-error-invalid-spec". Noon on
+/// 1971-01-01 UTC is 1971 in every time zone, and `%s` is the same in all of them.
+#[test]
+fn printf_formats_times() {
+    let out = cash(
+        r#"printf '[%(%Y)T|%8(%Y)T|%-6(%Y)T|%.2(%Y)T]\n' 31579200 31579200 31579200 31579200
+           printf '%(%s)T %(%%)T [%(%Q)T]\n' 1700000000 0 0
+           printf '%(%Y)T\n' 31579200 31579200
+           printf '%(%s)T\n' abc; echo "rc $?"
+           now=$(printf '%(%s)T') minus1=$(printf '%(%s)T' -1) start=$(printf '%(%s)T' -2)
+           (( now - EPOCHSECONDS <= 1 && EPOCHSECONDS - now <= 1 && minus1 >= now && start <= now && start > now - 600 )) && echo times"#,
+    );
+    assert_eq!(
+        out.stdout, "[1971|    1971|1971  |19]\n1700000000 % []\n1971\n1971\n0\nrc 1\ntimes",
+        "{}",
+        out.stderr
+    );
+    assert!(
+        out.stderr.ends_with("printf: abc: invalid number"),
+        "{}",
+        out.stderr
+    );
+}
+
+/// `exec` in a subshell ends the subshell with the command's status and takes its
+/// options, as in Bash: it ran the command through `command` and went on, and refused
+/// `-a`, `-c` and `-l` as "not yet supported".
+#[test]
+fn exec_in_a_subshell_ends_it() {
+    let out = cash(
+        r#"(exec true; echo after); echo "rc $?"
+           (exec nosuch-cmd; echo after); echo "rc $?"
+           x=$(exec cmd /d /c "exit 4"; echo after); echo "rc $? [$x]"
+           (exec -c cmd /d /c "echo [%PATH%]"; echo after); echo "rc $?""#,
+    );
+    assert_eq!(
+        out.stdout, "rc 0\nrc 127\nrc 4 []\n[%PATH%]\r\nrc 0",
+        "{}",
+        out.stderr
+    );
+    assert!(
+        out.stderr.ends_with("exec: nosuch-cmd: not found"),
+        "{}",
+        out.stderr
+    );
+}
+
 #[test]
 fn echo_n_and_e_escape_processing() {
     let out_n = cash(r#"echo -n "no-newline""#);

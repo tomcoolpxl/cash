@@ -44,6 +44,7 @@ pub mod sourceinfo;
 pub mod sys;
 pub mod terminal;
 pub mod tests;
+pub mod timefmt;
 pub mod timing;
 
 /// The numeric identity `$UID`, `$EUID` and the `id` builtin share.

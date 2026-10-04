@@ -188,7 +188,7 @@ fn format_via_uucore_with_counts(
         before_pass(pass)?;
         pass += 1;
         // Process all format items, in order. We'll bail when we're told to stop.
-        for (item, backslash_quote, quoted_format) in &format_items {
+        for (item, backslash_quote, custom) in &format_items {
             if item.is_none() {
                 let mut string_spec = b"s".as_slice();
                 let format::Spec::String { position, .. } =
@@ -205,14 +205,17 @@ fn format_via_uucore_with_counts(
                 continue;
             }
             let Some(item) = item else { continue };
-            if let Some(quoted_format) = quoted_format {
+            if let Some(custom) = custom {
                 let format::FormatItem::Spec(format::Spec::QuotedString { position }) = item else {
                     return Err(
                         ErrorKind::PrintfInvalidUsage("invalid quoted format".into()).into(),
                     );
                 };
                 let arg = format_args_wrapper.next_string(*position).to_string_lossy();
-                let rendered = quoted_format.render(&arg);
+                let rendered = match custom {
+                    Custom::Quoted(quoted_format) => quoted_format.render(&arg),
+                    Custom::Time(time_format) => time_format.render(&arg),
+                };
                 write!(writer, "{rendered}")?;
                 written += rendered.len();
                 continue;
@@ -294,8 +297,145 @@ fn quote_printf_q(s: &str) -> String {
 type ParsedFormatItem = (
     Option<format::FormatItem<format::EscapedChar>>,
     bool,
-    Option<QuotedFormat>,
+    Option<Custom>,
 );
+
+/// A spec uucore does not format, rendered here from the argument it reads.
+enum Custom {
+    Quoted(QuotedFormat),
+    Time(TimeFormat),
+}
+
+/// Bash's `%(FMT)T`: the argument, a number of seconds since 1970, as strftime formats it
+/// by FMT; `-1`, or no argument, is now, and `-2` when the shell started. A width, `-`
+/// and a precision apply to the text, as to `%s`.
+struct TimeFormat {
+    format: String,
+    left_align: bool,
+    width: Option<usize>,
+    precision: Option<usize>,
+}
+
+impl TimeFormat {
+    /// The spec between `%` and `(`: an optional `N$`, flags, a width and a precision.
+    fn parse(spec: &[u8], format: &str) -> Option<(Self, Option<usize>)> {
+        let text = std::str::from_utf8(spec).ok()?;
+        let (position, text) = match text.split_once('$') {
+            Some((digits, rest)) => (Some(digits.parse().ok()?), rest),
+            None => (None, text),
+        };
+        let rest = text.trim_start_matches(['-', '+', ' ', '#', '0']);
+        let left_align = text
+            .strip_suffix(rest)
+            .is_some_and(|flags| flags.contains('-'));
+        let (width, precision) = match rest.split_once('.') {
+            Some((width, precision)) => (width, Some(precision)),
+            None => (rest, None),
+        };
+        let number = |digits: &str| -> Option<Option<usize>> {
+            if digits.is_empty() {
+                Some(None)
+            } else {
+                digits.parse().ok().map(Some)
+            }
+        };
+        let width = number(width)?;
+        let precision = match precision {
+            Some(digits) => Some(number(digits)?.unwrap_or(0)),
+            None => None,
+        };
+        Some((
+            Self {
+                format: format.to_owned(),
+                left_align,
+                width,
+                precision,
+            },
+            position,
+        ))
+    }
+
+    /// `argument` is a clean decimal (see `numbers`), or empty when there was none.
+    fn render(&self, argument: &str) -> String {
+        let when = match argument.parse::<i64>().unwrap_or(0) {
+            _ if argument.is_empty() => Some(chrono::Local::now()),
+            -1 => Some(chrono::Local::now()),
+            -2 => Some(chrono::DateTime::<chrono::Local>::from(
+                cash_core::timefmt::shell_started(),
+            )),
+            seconds => chrono::DateTime::from_timestamp(seconds, 0)
+                .map(|utc| utc.with_timezone(&chrono::Local)),
+        };
+        // An empty format is the locale's time, as in Bash.
+        let format = if self.format.is_empty() {
+            "%X"
+        } else {
+            &self.format
+        };
+        let mut text = truncate_chars(
+            &when.map_or_else(String::new, |when| {
+                cash_core::timefmt::strftime(&when, format)
+            }),
+            self.precision,
+        );
+        let padding = self.width.unwrap_or(0).saturating_sub(text.chars().count());
+        if self.left_align {
+            text.push_str(&" ".repeat(padding));
+        } else {
+            text.insert_str(0, &" ".repeat(padding));
+        }
+        text
+    }
+}
+
+/// Where a `%(FMT)T` that opens at `open`, the `(`, ends: past its `T`. `None` when its
+/// `)` is missing or not followed by `T`.
+fn time_format_end(bytes: &[u8], open: usize) -> Option<usize> {
+    let close = open + bytes.get(open..)?.iter().position(|&b| b == b')')?;
+    (bytes.get(close + 1) == Some(&b'T')).then_some(close + 2)
+}
+
+/// The first `%(FMT)T` in `format`: what is before it, the spec between `%` and `(`, FMT,
+/// and what is after it. `Err` names a time spec that does not end.
+fn split_time_spec(format: &str) -> Result<Option<(&str, &str, &str, &str)>, String> {
+    let bytes = format.as_bytes();
+    let mut at = 0;
+    while let Some(&byte) = bytes.get(at) {
+        match byte {
+            b'\\' => at += 2,
+            b'%' if bytes.get(at + 1) == Some(&b'%') => at += 2,
+            b'%' => {
+                let start = at;
+                at += 1;
+                while bytes
+                    .get(at)
+                    .is_some_and(|b| b.is_ascii_digit() || b"$-+ #0.".contains(b))
+                {
+                    at += 1;
+                }
+                if bytes.get(at) == Some(&b'(') {
+                    let open = at;
+                    let pieces = time_format_end(bytes, open).and_then(|end| {
+                        Some((
+                            format.get(..start)?,
+                            format.get(start + 1..open)?,
+                            format.get(open + 1..end - 2)?,
+                            format.get(end..)?,
+                        ))
+                    });
+                    return pieces.map(Some).ok_or_else(|| {
+                        format!(
+                            "`{}': invalid time format specification",
+                            format.get(start..).unwrap_or(format)
+                        )
+                    });
+                }
+            }
+            _ => at += 1,
+        }
+    }
+    Ok(None)
+}
 
 /// A `%q`/`%Q` spec with fixed modifiers, or a `%s` with the `0` flag, which uucore
 /// rejects but Bash accepts: `%05s` pads the string with zeros, and `-` overrides `0`.
@@ -433,7 +573,34 @@ impl<W: Write> Write for CountWriter<'_, W> {
     }
 }
 
+/// The format's items: a `%(FMT)T` is cut out of it here, as uucore knows no such spec,
+/// and the text around it is uucore's to parse.
 fn parse_format_string(format_string: &str) -> Result<Vec<ParsedFormatItem>, cash_core::Error> {
+    let mut items = Vec::new();
+    let mut rest = format_string;
+    while let Some((before, spec, time_format, after)) =
+        split_time_spec(rest).map_err(ErrorKind::PrintfInvalidUsage)?
+    {
+        items.extend(parse_plain_format(before)?);
+        let invalid =
+            || ErrorKind::PrintfInvalidUsage(format!("`{spec}({time_format})T': invalid format"));
+        let (time, position) =
+            TimeFormat::parse(spec.as_bytes(), time_format).ok_or_else(invalid)?;
+        let bare_q = match position {
+            Some(position) => format!("{position}$q"),
+            None => "q".to_owned(),
+        };
+        let item = format::Spec::parse(&mut bare_q.as_bytes())
+            .map(format::FormatItem::Spec)
+            .map_err(|_| invalid())?;
+        items.push((Some(item), false, Some(Custom::Time(time))));
+        rest = after;
+    }
+    items.extend(parse_plain_format(rest)?);
+    Ok(items)
+}
+
+fn parse_plain_format(format_string: &str) -> Result<Vec<ParsedFormatItem>, cash_core::Error> {
     let format_items: Result<Vec<_>, _> = format::parse_spec_and_escape(format_string.as_bytes())
         .map(|result| match result {
             Ok(item @ format::FormatItem::Spec(format::Spec::QuotedString { .. })) => {
@@ -460,7 +627,7 @@ fn parse_format_string(format_string: &str) -> Result<Vec<ParsedFormatItem>, cas
                 let item = format::Spec::parse(&mut bare_q)
                     .map(format::FormatItem::Spec)
                     .map_err(|spec| format::FormatError::SpecError(spec.to_vec(), span))?;
-                Ok((Some(item), false, Some(quoted_format)))
+                Ok((Some(item), false, Some(Custom::Quoted(quoted_format))))
             }
             Err(error) => Err(error),
         })

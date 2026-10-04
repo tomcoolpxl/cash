@@ -3,7 +3,6 @@ use crate::{
     shell::Shell,
     sys::{self, users},
 };
-use std::fmt::Write as _;
 use std::path::Path;
 
 const VERSION_MAJOR: &str = env!("CARGO_PKG_VERSION_MAJOR");
@@ -235,16 +234,10 @@ where
         cash_parser::prompt::PromptDateFormat::WeekdayMonthDate => {
             datetime.format("%a %b %d").to_string()
         }
-        // An empty format is the locale's time, as in Bash. A specifier chrono does not
-        // know gives nothing, as Git Bash's strftime does, where `to_string` would panic.
+        // An empty format is the locale's time, as in Bash.
         cash_parser::prompt::PromptDateFormat::Custom(fmt) => {
             let fmt = if fmt.is_empty() { "%X" } else { fmt.as_str() };
-            let fmt_items = chrono::format::StrftimeItems::new(fmt);
-            let mut formatted = String::new();
-            if write!(formatted, "{}", datetime.format_with_items(fmt_items)).is_err() {
-                formatted.clear();
-            }
-            formatted
+            crate::timefmt::strftime(datetime, fmt)
         }
     }
 }
