@@ -14,12 +14,28 @@ string          = ${ "\"" ~ string_contents ~ "\"" }
 string_contents = @{ string_char* }
 // Any character may follow a backslash: one awk does not define stands for itself, as gawk
 // has it (`split(s, parts, "\.")`); see `escape_string_contents`.
+// A newline ends a string, which is then unterminated, as in gawk; a backslash before one
+// continues the string on the next line.
 string_char     =  {
-    !("\"" | "\\") ~ ANY
+    !("\"" | "\\" | "\n") ~ ANY
   | "\\" ~ ASCII_DIGIT{1, 3}
   | "\\" ~ ANY
 }
-ere             =  { "/" ~ (("\\" ~ ANY) | (!("/" | "\n") ~ ANY))* ~ "/" }
+// A `/` in a bracket expression does not end the regex, as gawk's lexer reads one
+// (`/[/]/`); nor is a `#` in it a comment, nor white space skipped.
+ere             = ${ "/" ~ (ere_bracket | ("\\" ~ !"\n" ~ ANY) | (!("/" | "\n" | "[") ~ ANY))* ~ "/" }
+ere_class       = _{
+    "[:" ~ (!(":]" | "\n") ~ ANY)* ~ ":]"
+  | "[." ~ (!(".]" | "\n") ~ ANY)* ~ ".]"
+  | "[=" ~ (!("=]" | "\n") ~ ANY)* ~ "=]"
+}
+ere_bracket     = _{
+    "[" ~ "^"? ~ "]"? ~ (
+        ere_class
+      | ("\\" ~ !"\n" ~ ANY)
+      | (!("]" | "\n") ~ ANY)
+    )* ~ "]"
+}
 number          = @{ decimal_float | integer }
 digit           =  { ('0'..'9') }
 integer         = @{ digit+ }
@@ -296,7 +312,8 @@ infix_op = _{
   | concat
 }
 
-pow        = { "^" }
+// `**` is gawk's other spelling of `^`.
+pow        = { "^" | "**" }
 mul        = { "*" }
 div        = { "/" }
 modulus    = { "%" }
@@ -331,7 +348,8 @@ binary_expr = {
 }
 
 multidimensional_in    = { "(" ~ multidimensional_index ~ ")" ~ "in" ~ array_ref }
-simple_binary_expr     = { prefix_op? ~ primary ~ postfix_op? ~ (infix_op ~ prefix_op? ~ primary ~ postfix_op?)* }
+// Prefix operators may follow one another, as `- -x` and `!-x` in gawk.
+simple_binary_expr     = { prefix_op* ~ primary ~ postfix_op? ~ (infix_op ~ prefix_op* ~ primary ~ postfix_op?)* }
 multidimensional_index = { multiple_expr_list }
 
 ternary_expr = { binary_expr ~ "?" ~ expr ~ ":" ~ expr }
@@ -354,7 +372,7 @@ sub_assign = { "-=" }
 mul_assign = { "*=" }
 div_assign = { "/=" }
 mod_assign = { "%=" }
-pow_assign = { "^=" }
+pow_assign = { "^=" | "**=" }
 
 expr = {
     input_function
@@ -383,7 +401,7 @@ getline_from_file_cmp = { "getline" ~ lvalue? ~ "<" ~ simple_getline_file_expr ~
 simple_getline    = { "getline" ~ lvalue? }
 getline_from_file = { "getline" ~ lvalue? ~ "<" ~ simple_getline_file_expr }
 
-simple_getline_file_expr = { prefix_op? ~ primary ~ postfix_op? ~ (print_infix_op ~ prefix_op? ~ primary ~ postfix_op?)* }
+simple_getline_file_expr = { prefix_op* ~ primary ~ postfix_op? ~ (getline_infix_op ~ prefix_op* ~ primary ~ postfix_op?)* }
 getline_from_pipe = { unpiped_expr ~ (piped_getline)+ }
 piped_getline     = { "|" ~ "getline" ~ lvalue? }
 
@@ -398,7 +416,8 @@ unpiped_input_function = {
   | simple_getline
 }
 
-print_infix_op           = _{
+// The file of `getline <`, where a comparison ends it, as in every awk.
+getline_infix_op         = _{
     pow
   | mul
   | div
@@ -412,8 +431,32 @@ print_infix_op           = _{
   | or
   | concat
 }
+// In `print`, a `>` that is not in parentheses is a redirection; the other comparisons
+// are comparisons, as in gawk (`print a == b`), which rejected them.
+print_infix_op           = _{
+    pow
+  | mul
+  | div
+  | modulus
+  | add
+  | binary_sub
+  | print_comp_op
+  | match_op
+  | not_match
+  | in_op
+  | and
+  | or
+  | concat
+}
+print_comp_op            =  {
+    le
+  | lt
+  | ge
+  | ne
+  | eq
+}
 simple_binary_print_expr =  {
-    prefix_op? ~ primary ~ postfix_op? ~ (print_infix_op ~ prefix_op? ~ primary ~ postfix_op?)*
+    prefix_op* ~ primary ~ postfix_op? ~ (print_infix_op ~ prefix_op* ~ primary ~ postfix_op?)*
 }
 binary_print_expr        =  {
     multidimensional_in

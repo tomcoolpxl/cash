@@ -96,7 +96,7 @@ impl TryFrom<AwkString> for RecordSeparator {
         } else if value.len() == 1 {
             Ok(RecordSeparator::Char(value.as_bytes()[0]))
         } else {
-            let ere = Regex::new(value.as_str())?;
+            let ere = Regex::dynamic(value.as_str())?;
             Ok(RecordSeparator::Ere(ere))
         }
     }

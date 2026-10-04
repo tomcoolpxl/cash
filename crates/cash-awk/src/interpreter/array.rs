@@ -18,7 +18,8 @@ use super::AwkValue;
 ///
 /// The loop owns its keys, so the array stays free to change under it, as in gawk: an
 /// element added during the loop is not visited, and one deleted before its turn is
-/// skipped. A loop left early by `break` or `return` holds nothing of the array's. The
+/// visited all the same, as gawk goes through a copy of the keys (`delete a` in the loop
+/// ended it). A loop left early by `break` or `return` holds nothing of the array's. The
 /// array used to count its live loops and refuse insertions while any was live, and a
 /// loop left early never gave its count back, so the array stayed locked for the rest of
 /// the run (`REVIEW_REPORT.md` TXT-03).
@@ -30,6 +31,16 @@ pub struct KeyIterator {
 }
 
 pub type Key = Rc<str>;
+
+impl Iterator for KeyIterator {
+    type Item = Key;
+
+    fn next(&mut self) -> Option<Key> {
+        let key = self.keys.get(self.index).cloned();
+        self.index += 1;
+        key
+    }
+}
 
 #[cfg_attr(test, derive(Debug))]
 #[derive(Clone, Copy, PartialEq)]
@@ -69,16 +80,6 @@ impl Array {
                 .collect(),
             index: 0,
         }
-    }
-
-    pub fn key_iter_next(&mut self, iter: &mut KeyIterator) -> Option<Key> {
-        while let Some(key) = iter.keys.get(iter.index) {
-            iter.index += 1;
-            if self.key_map.contains_key(key) {
-                return Some(key.clone());
-            }
-        }
-        None
     }
 
     /// Get the `ValueIndex` of the key in the array. If the key does not exist, it will be
@@ -165,7 +166,7 @@ mod tests {
     fn iterate_through_empty_array() {
         let mut array = Array::default();
         let mut iter = array.key_iter();
-        assert_eq!(array.key_iter_next(&mut iter), None);
+        assert_eq!(iter.next(), None);
     }
 
     #[test]
@@ -175,10 +176,10 @@ mod tests {
         array.set("b".to_string(), 2.0).unwrap();
         array.set("c".to_string(), 3.0).unwrap();
         let mut iter = array.key_iter();
-        assert_eq!(array.key_iter_next(&mut iter), Some(Rc::from("a")));
-        assert_eq!(array.key_iter_next(&mut iter), Some(Rc::from("b")));
-        assert_eq!(array.key_iter_next(&mut iter), Some(Rc::from("c")));
-        assert_eq!(array.key_iter_next(&mut iter), None);
+        assert_eq!(iter.next(), Some(Rc::from("a")));
+        assert_eq!(iter.next(), Some(Rc::from("b")));
+        assert_eq!(iter.next(), Some(Rc::from("c")));
+        assert_eq!(iter.next(), None);
     }
 
     #[test]
@@ -217,18 +218,18 @@ mod tests {
     }
 
     #[test]
-    fn delete_element_with_active_iterator() {
+    fn a_key_deleted_during_iteration_is_still_visited() {
+        // As in gawk, which goes through a copy of the keys; the deleted ones were skipped.
         let mut array = Array::default();
         array.set("a".to_string(), 1.0).unwrap();
         array.set("b".to_string(), 1.0).unwrap();
         array.set("c".to_string(), 1.0).unwrap();
-        array.set("d".to_string(), 1.0).unwrap();
         let mut iter = array.key_iter();
         array.delete("b");
-        array.delete("d");
-        assert_eq!(array.key_iter_next(&mut iter), Some(Rc::from("a")));
-        assert_eq!(array.key_iter_next(&mut iter), Some(Rc::from("c")));
-        assert_eq!(array.key_iter_next(&mut iter), None);
+        assert_eq!(iter.next(), Some(Rc::from("a")));
+        assert_eq!(iter.next(), Some(Rc::from("b")));
+        assert_eq!(iter.next(), Some(Rc::from("c")));
+        assert_eq!(iter.next(), None);
     }
 
     #[test]
@@ -237,8 +238,8 @@ mod tests {
         array.set("a".to_string(), 1.0).unwrap();
         let mut iter = array.key_iter();
         assert!(array.set("b".to_string(), 2.0).is_ok());
-        assert_eq!(array.key_iter_next(&mut iter), Some(Rc::from("a")));
-        assert_eq!(array.key_iter_next(&mut iter), None);
+        assert_eq!(iter.next(), Some(Rc::from("a")));
+        assert_eq!(iter.next(), None);
         assert_eq!(array.len(), 2);
     }
 
@@ -250,21 +251,23 @@ mod tests {
         array.set("a".to_string(), 1.0).unwrap();
         array.set("b".to_string(), 1.0).unwrap();
         let mut iter = array.key_iter();
-        assert!(array.key_iter_next(&mut iter).is_some());
+        assert!(iter.next().is_some());
         drop(iter);
         assert!(array.set("c".to_string(), 1.0).is_ok());
     }
 
     #[test]
-    fn clearing_during_iteration_ends_it() {
-        // `for (k in a) delete a` sliced past the end of the emptied storage.
+    fn clearing_during_iteration_keeps_the_keys() {
+        // `for (k in a) delete a` sliced past the end of the emptied storage, and then
+        // ended the loop; gawk goes on through the keys it had.
         let mut array = Array::default();
         array.set("a".to_string(), 1.0).unwrap();
         array.set("b".to_string(), 1.0).unwrap();
         let mut iter = array.key_iter();
-        assert!(array.key_iter_next(&mut iter).is_some());
+        assert!(iter.next().is_some());
         array.clear();
-        assert_eq!(array.key_iter_next(&mut iter), None);
+        assert_eq!(iter.next(), Some(Rc::from("b")));
+        assert_eq!(iter.next(), None);
     }
 
     #[test]
@@ -272,8 +275,8 @@ mod tests {
         let mut array = Array::default();
         array.set("a".to_string(), 1.0).unwrap();
         let mut iter = array.key_iter();
-        assert_eq!(array.key_iter_next(&mut iter), Some(Rc::from("a")));
-        assert_eq!(array.key_iter_next(&mut iter), None);
+        assert_eq!(iter.next(), Some(Rc::from("a")));
+        assert_eq!(iter.next(), None);
         assert!(array.set("e".to_string(), 2.0).is_ok());
         assert_eq!(array.len(), 2);
         assert_eq!(
@@ -291,10 +294,11 @@ mod tests {
 
         // Start iterator, delete "b" during iteration
         let mut iter = array.key_iter();
-        assert_eq!(array.key_iter_next(&mut iter), Some(Rc::from("a")));
+        assert_eq!(iter.next(), Some(Rc::from("a")));
         array.delete("b");
-        assert_eq!(array.key_iter_next(&mut iter), Some(Rc::from("c")));
-        assert_eq!(array.key_iter_next(&mut iter), None);
+        assert_eq!(iter.next(), Some(Rc::from("b")));
+        assert_eq!(iter.next(), Some(Rc::from("c")));
+        assert_eq!(iter.next(), None);
 
         // Now insert a new element
         array.set("d".to_string(), 4.0).unwrap();
@@ -324,13 +328,15 @@ mod tests {
         array.set("c".to_string(), 3.0).unwrap();
         let mut iter1 = array.key_iter();
         let mut iter2 = array.key_iter();
-        assert_eq!(array.key_iter_next(&mut iter1), Some(Rc::from("a")));
+        assert_eq!(iter1.next(), Some(Rc::from("a")));
         array.delete("a");
-        assert_eq!(array.key_iter_next(&mut iter2), Some(Rc::from("b")));
+        assert_eq!(iter2.next(), Some(Rc::from("a")));
         array.delete("b");
-        assert_eq!(array.key_iter_next(&mut iter1), Some(Rc::from("c")));
-        assert_eq!(array.key_iter_next(&mut iter2), Some(Rc::from("c")));
-        assert_eq!(array.key_iter_next(&mut iter1), None);
-        assert_eq!(array.key_iter_next(&mut iter2), None);
+        assert_eq!(iter1.next(), Some(Rc::from("b")));
+        assert_eq!(iter2.next(), Some(Rc::from("b")));
+        assert_eq!(iter1.next(), Some(Rc::from("c")));
+        assert_eq!(iter2.next(), Some(Rc::from("c")));
+        assert_eq!(iter1.next(), None);
+        assert_eq!(iter2.next(), None);
     }
 }

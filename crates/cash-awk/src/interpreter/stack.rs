@@ -30,7 +30,6 @@ pub(crate) enum Place {
 #[cfg_attr(test, derive(Debug))]
 #[derive(Clone, PartialEq)]
 pub(crate) struct ArrayIterator {
-    pub(crate) array: Place,
     pub(crate) iter_var: Place,
     pub(crate) key_iter: KeyIterator,
 }
@@ -342,6 +341,20 @@ pub(crate) struct Stack<'i, 's> {
 pub(crate) const ARRAY_IN_SCALAR_CONTEXT: &str = "array used in scalar context";
 pub(crate) const SCALAR_IN_ARRAY_CONTEXT: &str = "scalar used in array context";
 
+/// The variable and the keys of the array `value` is or refers to, if it is a variable's
+/// or an element: the same pair is the same array.
+pub(crate) fn array_place(value: &StackValue) -> Option<(*mut AwkValue, Vec<Key>)> {
+    match value {
+        StackValue::ValueRef(root) | StackValue::UninitializedRef(root) => {
+            Some((*root, Vec::new()))
+        }
+        StackValue::ArrayElementRef(element) => {
+            Some((element.array, element.keys().cloned().collect()))
+        }
+        _ => None,
+    }
+}
+
 /// Safe interface to work with the program stack.
 impl<'i, 's> Stack<'i, 's> {
     /// pops the `StackValue` on top of the stack.
@@ -450,6 +463,15 @@ impl<'i, 's> Stack<'i, 's> {
     /// `name_element`: gawk names it for some uses and not for others.
     pub(crate) fn pop_array(&mut self, name_element: bool) -> Result<&mut Array, String> {
         let val = self.pop().ok_or_else(|| "empty stack".to_string())?;
+        self.resolve_array(val, name_element)
+    }
+
+    /// The array `val`, popped earlier, is or refers to, as `pop_array` finds it.
+    pub(crate) fn resolve_array(
+        &mut self,
+        val: StackValue,
+        name_element: bool,
+    ) -> Result<&mut Array, String> {
         let (ptr, place) = match val {
             StackValue::ArrayElementRef(element) => {
                 let ptr = self.element_ptr(&element)?;
@@ -553,6 +575,64 @@ impl<'i, 's> Stack<'i, 's> {
                 .rev()
                 .map(|frame| (frame.bp, frame.sp, frame.parameter_names)),
         )
+    }
+
+    /// Detaches every parameter that is an element of the variable `root`'s array with
+    /// `keys` (`inclusive`) or under them, before they go: `delete a`, `delete a[k]`, or
+    /// `split` into the array. As in gawk, the parameter keeps an array of its own, empty,
+    /// or stays without a type; the element was made again in its variable's array when
+    /// the parameter was next used, so `function f(s) { delete a; s[1] = 1 }` with
+    /// `f(a[0])` left `a[0]` behind.
+    pub(crate) fn detach_elements(&mut self, root: *mut AwkValue, keys: &[Key], inclusive: bool) {
+        let mut detached = Vec::new();
+        for (bp, sp, names) in self.frames() {
+            for index in 0..names.len() {
+                let Some(StackValue::ArrayElementRef(element)) = self.slot(bp, sp, index) else {
+                    continue;
+                };
+                let under = element.array == root
+                    && element.keys().count() >= keys.len() + usize::from(!inclusive)
+                    && element.keys().zip(keys).all(|(a, b)| a == b);
+                if under {
+                    // SAFETY: an element's variable outlives the parameter.
+                    let is_array = matches!(
+                        unsafe { element.existing_element() },
+                        // SAFETY: as above.
+                        Ok(Some(ptr)) if matches!(unsafe { &*ptr }.value, AwkValueVariant::Array(_))
+                    );
+                    // SAFETY: the index is below the frame's `sp`, as `slot` found it.
+                    detached.push((unsafe { bp.add(index) }, is_array));
+                }
+            }
+        }
+        for (slot, is_array) in detached {
+            let value = if is_array {
+                AwkValue::from(Array::default())
+            } else {
+                AwkValue::uninitialized()
+            };
+            // SAFETY: the slot is a parameter's, below `sp`, which holds a value.
+            unsafe { *slot = StackValue::Value(UnsafeCell::new(value)) };
+        }
+    }
+
+    /// The array on top of the stack, popped, as `pop_array`, to be emptied: the
+    /// parameters that are its elements are detached first (`detach_elements`).
+    pub(crate) fn pop_array_to_empty(&mut self, name_element: bool) -> Result<&mut Array, String> {
+        let val = self.pop().ok_or_else(|| "empty stack".to_string())?;
+        self.resolve_array_to_empty(val, name_element)
+    }
+
+    /// The array `val`, popped earlier, is or refers to, as `pop_array_to_empty` finds it.
+    pub(crate) fn resolve_array_to_empty(
+        &mut self,
+        val: StackValue,
+        name_element: bool,
+    ) -> Result<&mut Array, String> {
+        if let Some((root, keys)) = array_place(&val) {
+            self.detach_elements(root, &keys, false);
+        }
+        self.resolve_array(val, name_element)
     }
 
     /// The parameter of the frame at [`bp`, `sp`) that `holds` is true of, by name.

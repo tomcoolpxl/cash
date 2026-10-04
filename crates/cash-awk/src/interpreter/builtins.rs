@@ -12,11 +12,11 @@ use super::format::{
     fmt_write_hex_float, fmt_write_scientific_float, fmt_write_signed_f64, fmt_write_special_float,
     fmt_write_string, fmt_write_unsigned, parse_conversion_specifier_args,
 };
-use super::record::{FieldSeparator, FieldsState, split_record};
-use super::stack::Stack;
+use super::record::{FieldSeparator, FieldsState, field_separators, split_record};
+use super::stack::{Stack, array_place};
 use super::string::AwkString;
 use super::value::{AwkValue, AwkValueVariant};
-use super::{GlobalEnv, swap_with_default};
+use super::{GlobalEnv, maybe_numeric_string, swap_with_default};
 use crate::program::BuiltinFunction;
 use crate::regex::Regex;
 
@@ -224,30 +224,64 @@ pub(crate) fn substr(s: &str, m: i64, n: Option<i64>) -> String {
     s.chars().skip(skip).take(count).collect()
 }
 
+/// What gawk's `match(s, r, arr)` puts in `arr` for a group: its number, its text, and
+/// where it starts and how long it is, in characters.
+pub(crate) struct MatchedGroup {
+    pub(crate) number: usize,
+    pub(crate) text: String,
+    pub(crate) start: f64,
+    pub(crate) length: f64,
+}
+
+/// `match(s, r)`: pushes RSTART and returns RSTART and RLENGTH, and with `groups` the
+/// match and its groups that took part in it, for gawk's third argument.
 pub(crate) fn builtin_match(
     stack: &mut Stack,
     global_env: &mut GlobalEnv,
-) -> Result<(f64, f64), String> {
+    groups: bool,
+) -> Result<(f64, f64, Vec<MatchedGroup>), String> {
     let ere = stack.pop_scalar_value()?.into_ere()?;
     let string = stack
         .pop_scalar_value()?
         .scalar_to_string(&global_env.convfmt)?;
     let text = string.as_str().to_owned();
-    let mut locations = ere.match_locations(&text);
-    let start;
-    let len;
-    if let Some(first_match) = locations.next() {
-        // RSTART/RLENGTH are measured in characters, not bytes.
-        let cstart = byte_offset_to_char_count(&text, first_match.start);
-        let cend = byte_offset_to_char_count(&text, first_match.end);
-        start = cstart as i64 + 1;
-        len = (cend - cstart) as i64;
+    // RSTART/RLENGTH are measured in characters, not bytes.
+    let place = |found: &crate::regex::RegexMatch| {
+        let cstart = byte_offset_to_char_count(&text, found.start);
+        let cend = byte_offset_to_char_count(&text, found.end);
+        (cstart as f64 + 1.0, (cend - cstart) as f64)
+    };
+    let mut matched = Vec::new();
+    let (start, len) = if groups {
+        match ere.captures(&text) {
+            Some(captures) => {
+                for (number, found) in captures.iter().enumerate() {
+                    if let Some(found) = found {
+                        let (start, length) = place(found);
+                        matched.push(MatchedGroup {
+                            number,
+                            text: text
+                                .get(found.start..found.end)
+                                .unwrap_or_default()
+                                .to_string(),
+                            start,
+                            length,
+                        });
+                    }
+                }
+                matched
+                    .first()
+                    .map_or((0.0, -1.0), |whole| (whole.start, whole.length))
+            }
+            None => (0.0, -1.0),
+        }
     } else {
-        start = 0;
-        len = -1;
-    }
-    stack.push_value(start as f64)?;
-    Ok((start as f64, len as f64))
+        ere.match_locations(&text)
+            .next()
+            .map_or((0.0, -1.0), |found| place(&found))
+    };
+    stack.push_value(start)?;
+    Ok((start, len, matched))
 }
 
 pub(crate) fn gsub(
@@ -305,15 +339,21 @@ pub(crate) fn gsub(
     Ok((result.into(), num_replacements))
 }
 
-/// `split(s, arr[, fs])`: split `s` into `arr` on the field separator (the
+/// `split(s, arr[, fs[, seps]])`: split `s` into `arr` on the field separator (the
 /// optional third argument, else `FS`) and return the number of fields. When the
 /// `fs` argument is a regex value it is used directly; otherwise it is
-/// interpreted like `FS` (e.g. `" "` means whitespace).
+/// interpreted like `FS` (e.g. `" "` means whitespace). gawk's `seps` gets the
+/// separators (`field_separators`); it was an error.
 pub(crate) fn builtin_split(
     stack: &mut Stack,
     global_env: &mut GlobalEnv,
     argc: u16,
 ) -> Result<FieldsState, String> {
+    let seps = if argc == 4 {
+        Some(stack.pop().ok_or_else(|| "empty stack".to_string())?)
+    } else {
+        None
+    };
     let separator = if argc == 2 {
         None
     } else {
@@ -328,26 +368,55 @@ pub(crate) fn builtin_split(
     let s = stack
         .pop_scalar_value()?
         .scalar_to_string(&global_env.convfmt)?;
-    // gawk's words for a second argument that is no array.
-    let array = stack.pop_array(true).map_err(|error| {
-        if error == super::stack::SCALAR_IN_ARRAY_CONTEXT {
-            "split: second argument is not an array".to_string()
-        } else {
-            error
-        }
-    })?;
-    array.clear();
-
-    if !s.is_empty() {
-        split_record(
-            s,
-            separator.iter().next().unwrap_or(&global_env.fs),
-            |i, s| array.set((i + 1).to_string(), s).map(|_| ()),
-        )?;
+    let array_value = stack.pop().ok_or_else(|| "empty stack".to_string())?;
+    if let Some(seps) = &seps
+        && array_place(&array_value).is_some()
+        && array_place(&array_value) == array_place(seps)
+    {
+        return Err("split: cannot use the same array for second and fourth args".to_string());
     }
-    let n = array.len();
+    let field_separator = separator.as_ref().unwrap_or(&global_env.fs);
+    let mut fields = Vec::new();
+    let mut separators = Vec::new();
+    if !s.is_empty() {
+        if seps.is_some() {
+            separators = field_separators(&s, field_separator);
+        }
+        split_record(s, field_separator, |_, field| {
+            fields.push(field);
+            Ok(())
+        })?;
+    }
+    let n = fields.len();
+    // Each array is found when it is filled, so that making one does not move the other.
+    let array = stack
+        .resolve_array_to_empty(array_value, true)
+        .map_err(|error| not_an_array(error, "split: second argument"))?;
+    array.clear();
+    for (index, field) in fields.into_iter().enumerate() {
+        array.set((index + 1).to_string(), field)?;
+    }
+    if let Some(seps) = seps {
+        let seps = stack
+            .resolve_array_to_empty(seps, true)
+            .map_err(|error| not_an_array(error, "split: fourth argument"))?;
+        seps.clear();
+        for (index, separator) in separators {
+            seps.set(index.to_string(), maybe_numeric_string(separator))?;
+        }
+    }
     stack.push_value(n as f64)?;
     Ok(FieldsState::Ok)
+}
+
+/// gawk's words for an argument that should be an array and is a scalar: `what` is not
+/// an array.
+pub(crate) fn not_an_array(error: String, what: &str) -> String {
+    if error == super::stack::SCALAR_IN_ARRAY_CONTEXT {
+        format!("{what} is not an array")
+    } else {
+        error
+    }
 }
 
 pub(crate) fn builtin_gsub(
@@ -390,18 +459,6 @@ pub(crate) fn call_simple_builtin(
         BuiltinFunction::Sin => {
             let value = stack.pop_scalar_value()?.scalar_as_f64();
             stack.push_value(value.sin())?;
-        }
-        BuiltinFunction::Exp => {
-            let value = stack.pop_scalar_value()?.scalar_as_f64();
-            stack.push_value(value.exp())?;
-        }
-        BuiltinFunction::Log => {
-            let value = stack.pop_scalar_value()?.scalar_as_f64();
-            stack.push_value(value.ln())?;
-        }
-        BuiltinFunction::Sqrt => {
-            let value = stack.pop_scalar_value()?.scalar_as_f64();
-            stack.push_value(value.sqrt())?;
         }
         BuiltinFunction::Int => {
             let value = stack.pop_scalar_value()?.scalar_as_f64();

@@ -9,6 +9,8 @@
 
 #![allow(clippy::result_large_err)]
 
+pub use crate::diagnostics::CompilerErrors;
+use crate::diagnostics::{Diagnostic, Kind, syntax_error};
 use crate::program::{
     Action, AwkRule, BuiltinFunction, Constant, DebugInfo, Function, OpCode, Pattern, Program,
     SourceLocation, SpecialVar, VarId,
@@ -134,7 +136,8 @@ static BUILTIN_FUNCTIONS: LazyLock<HashMap<Rule, BuiltinFunctionInfo>> = LazyLoc
             BuiltinFunctionInfo {
                 function: BuiltinFunction::Match,
                 min_args: 2,
-                max_args: 2,
+                // gawk's third argument, the array of the match and its groups.
+                max_args: 3,
             },
         ),
         (
@@ -142,7 +145,8 @@ static BUILTIN_FUNCTIONS: LazyLock<HashMap<Rule, BuiltinFunctionInfo>> = LazyLoc
             BuiltinFunctionInfo {
                 function: BuiltinFunction::Split,
                 min_args: 2,
-                max_args: 3,
+                // gawk's fourth argument, the array of the separators.
+                max_args: 4,
             },
         ),
         (
@@ -191,7 +195,8 @@ static BUILTIN_FUNCTIONS: LazyLock<HashMap<Rule, BuiltinFunctionInfo>> = LazyLoc
             BuiltinFunctionInfo {
                 function: BuiltinFunction::Close,
                 min_args: 1,
-                max_args: 1,
+                // gawk's `"to"` or `"from"`, the end of a two-way pipe to close.
+                max_args: 2,
             },
         ),
         (
@@ -228,7 +233,7 @@ static PRATT_PARSER: LazyLock<PrattParser<Rule>> = LazyLock::new(|| {
         .op(Op::infix(Rule::and, Assoc::Left))
         .op(Op::infix(Rule::in_op, Assoc::Left))
         .op(Op::infix(Rule::match_op, Assoc::Left) | Op::infix(Rule::not_match, Assoc::Left))
-        .op(Op::infix(Rule::comp_op, Assoc::Left))
+        .op(Op::infix(Rule::comp_op, Assoc::Left) | Op::infix(Rule::print_comp_op, Assoc::Left))
         .op(Op::infix(Rule::concat, Assoc::Left))
         .op(Op::infix(Rule::add, Assoc::Left) | Op::infix(Rule::binary_sub, Assoc::Left))
         .op(Op::infix(Rule::mul, Assoc::Left)
@@ -250,14 +255,16 @@ fn pest_error_from_span(span: pest::Span, message: String) -> PestError {
     PestError::new_from_span(pest::error::ErrorVariant::CustomError { message }, span)
 }
 
-/// The mark at the start of an error's message that has it shown as gawk shows an error
-/// it goes on parsing after, with the place and no source: `awk: cmd. line:1: error:
-/// division by zero attempted`.
+/// The marks at the start of an error's message that say how gawk reports it
+/// (`diagnostics::Kind`): an error it goes on reading after (`awk: cmd. line:1: error:
+/// division by zero attempted`), one it writes twice, a warning, the source line and a
+/// caret under the place (`^ 0 is invalid as number of arguments for close`), and a fatal
+/// error found once the program is read. An error without a mark is a syntax error.
 const GAWK_ERROR: &str = "\0gawk error\0";
-/// The mark of an error shown as gawk shows one of the grammar's, the source line and a
-/// caret under the place: `awk: cmd. line:1:               ^ 0 is invalid as number of
-/// arguments for close` below the line.
+const GAWK_TWICE: &str = "\0gawk twice\0";
+const GAWK_WARNING: &str = "\0gawk warning\0";
 const GAWK_CARET: &str = "\0gawk caret\0";
+const GAWK_FATAL: &str = "\0gawk fatal\0";
 
 /// An error at `pos` that is shown in gawk's form, `mark` saying which.
 fn gawk_error(mark: &str, pos: pest::Position, message: &str) -> PestError {
@@ -269,33 +276,36 @@ fn gawk_error(mark: &str, pos: pest::Position, message: &str) -> PestError {
     )
 }
 
-/// The error in gawk's form, if it is one of those: the program's file, or `cmd. line`,
-/// and the line, as gawk places one.
-fn gawk_form(error: &PestError) -> Option<String> {
-    let pest::error::ErrorVariant::CustomError { message } = &error.variant else {
-        return None;
+/// The place of the token after `span`, past blanks, where gawk's parser meets it: the
+/// caret of a syntax error found on reading the operator in `span`.
+fn next_token(span: pest::Span) -> pest::Position {
+    let input = span.get_input();
+    let rest = input.get(span.end()..).unwrap_or_default();
+    let blanks = rest.len() - rest.trim_start_matches([' ', '\t']).len();
+    pest::Position::new(input, span.end() + blanks).unwrap_or_else(|| span.end_pos())
+}
+
+/// `error` as gawk reports it, by its mark.
+fn diagnostic(error: &PestError) -> Diagnostic {
+    let offset = match error.location {
+        InputLocation::Pos(offset) | InputLocation::Span((offset, _)) => offset,
     };
-    let (line, column) = match error.line_col {
-        pest::error::LineColLocation::Pos(place) | pest::error::LineColLocation::Span(place, _) => {
-            place
+    let message = match &error.variant {
+        pest::error::ErrorVariant::CustomError { message } => message.as_str(),
+        pest::error::ErrorVariant::ParsingError { .. } => "",
+    };
+    for (mark, kind) in [
+        (GAWK_ERROR, Kind::Error),
+        (GAWK_TWICE, Kind::Twice),
+        (GAWK_WARNING, Kind::Warning),
+        (GAWK_CARET, Kind::Caret),
+        (GAWK_FATAL, Kind::Fatal),
+    ] {
+        if let Some(text) = message.strip_prefix(mark) {
+            return Diagnostic::new(kind, offset, text);
         }
-    };
-    let place = format!("awk: {}:{line}:", error.path().unwrap_or("cmd. line"));
-    if let Some(message) = message.strip_prefix(GAWK_ERROR) {
-        return Some(format!("{place} error: {message}"));
     }
-    let message = message.strip_prefix(GAWK_CARET)?;
-    let source = error.line();
-    // gawk counts the caret's place in bytes; the column is in characters.
-    let before: usize = source
-        .chars()
-        .take(column.saturating_sub(1))
-        .map(char::len_utf8)
-        .sum();
-    Some(format!(
-        "{place} {source}\n{place} {}^ {message}",
-        " ".repeat(before)
-    ))
+    Diagnostic::new(Kind::Caret, offset, "syntax error")
 }
 
 /// The end of a match on a parse-tree node's rule that lists every alternative
@@ -450,6 +460,16 @@ fn lvalue_to_scalar_ref(
 /// The message for an operand that should be an lvalue and is not.
 const NOT_AN_LVALUE: &str = "operand should be an lvalue";
 
+/// Makes an argument that reads an element refer to it as a subarray, for a builtin that
+/// fills it: `split(s, a[1])`.
+fn refer_to_subarray(argument: &mut Instructions) {
+    if let Some(last) = argument.opcodes.last_mut()
+        && *last == OpCode::IndexArrayGetValue
+    {
+        *last = OpCode::IndexArraySubarray;
+    }
+}
+
 fn normalize_builtin_function_arguments(
     function: BuiltinFunction,
     mut args: Vec<Instructions>,
@@ -477,13 +497,18 @@ fn normalize_builtin_function_arguments(
         },
         BuiltinFunction::Split => {
             // A subarray (`split(s, a[1])`) is referred to, not read.
-            if let Some(last) = args[1].opcodes.last_mut()
-                && *last == OpCode::IndexArrayGetValue
-            {
-                *last = OpCode::IndexArraySubarray;
+            refer_to_subarray(&mut args[1]);
+            if let Some(seps) = args.get_mut(3) {
+                refer_to_subarray(seps);
             }
             // put the array as the first argument
             args[0..2].rotate_right(1);
+            (flatten(args), argc)
+        }
+        BuiltinFunction::Match => {
+            if let Some(array) = args.get_mut(2) {
+                refer_to_subarray(array);
+            }
             (flatten(args), argc)
         }
         BuiltinFunction::Sub | BuiltinFunction::Gsub => {
@@ -502,7 +527,11 @@ fn normalize_builtin_function_arguments(
                 } else {
                     "gsub third parameter is not a changeable object"
                 };
-                lvalue_to_scalar_ref(&mut args[0].opcodes, span, message)?;
+                if lvalue_to_scalar_ref(&mut args[0].opcodes, span, message).is_err() {
+                    let close = pest::Position::new(span.get_input(), span.end() - 1)
+                        .unwrap_or_else(|| span.start_pos());
+                    return Err(gawk_error(GAWK_CARET, close, message));
+                }
                 (flatten(args), 3)
             }
         }
@@ -791,9 +820,10 @@ impl Compiler {
                 match var {
                     GlobalName::Variable(id) => Ok(Variable::Global(id)),
                     GlobalName::SpecialVar(id) => Ok(Variable::Global(id)),
-                    GlobalName::Function { .. } => {
-                        Err(format!("'{}' function used in variable context", name))
-                    }
+                    GlobalName::Function { .. } => Err(format!(
+                        "{GAWK_ERROR}function `{name}' called with space between name and \
+                             `(',\nor used as a variable or an array"
+                    )),
                 }
             } else {
                 let id = post_increment(&self.last_global_var_id);
@@ -842,9 +872,24 @@ impl Compiler {
                 Ok(Expr::new(ExprKind::Number, instructions))
             }
             Rule::ere => {
-                let ere = translate_ere_escapes(primary.as_str().trim_matches('/'));
-                let regex =
-                    Regex::new(&ere).map_err(|e| pest_error_from_span(primary.as_span(), e))?;
+                // One slash off each end: `/a\//` ends in an escaped one.
+                let text = primary.as_str();
+                let text = text.strip_prefix('/').unwrap_or(text);
+                let text = text.strip_suffix('/').unwrap_or(text);
+                let ere = translate_ere_escapes(text);
+                // What is wrong with the regex is gawk's error, after which it goes on
+                // parsing; an empty regex stands in for it meanwhile.
+                let regex = match Regex::new(&ere) {
+                    Ok(regex) => regex,
+                    Err(error) => {
+                        self.deferred_errors.borrow_mut().push(gawk_error(
+                            GAWK_ERROR,
+                            primary.as_span().start_pos(),
+                            &format!("{error}: /{text}/"),
+                        ));
+                        Regex::new("").map_err(|e| pest_error_from_span(primary.as_span(), e))?
+                    }
+                };
                 let index = self.push_constant(Constant::Regex(Rc::new(regex)));
                 Ok(Expr::new(
                     ExprKind::Regex,
@@ -908,12 +953,18 @@ impl Compiler {
                         // I think this is a better way to structure the code
                         #[allow(clippy::comparison_chain)]
                         if argc > *parameter_count as u16 {
-                            // other implementations issue a warning here
-                            // but I think it's better to error out
-                            return Err(pest_error_from_span(
-                                span,
-                                format!("function '{}' called with too many arguments", name),
+                            // gawk's warning, and the arguments the function has no
+                            // parameters for are evaluated and dropped; it was an error.
+                            self.deferred_errors.borrow_mut().push(gawk_error(
+                                GAWK_WARNING,
+                                span.start_pos(),
+                                &format!(
+                                    "function `{name}' called with more arguments than declared"
+                                ),
                             ));
+                            for _ in *parameter_count as u16..argc {
+                                instructions.push(OpCode::Pop, line_col);
+                            }
                         } else if argc < *parameter_count as u16 {
                             for _ in argc..*parameter_count as u16 {
                                 instructions.push(OpCode::PushUninitialized, line_col);
@@ -921,16 +972,25 @@ impl Compiler {
                         }
                         instructions.push(OpCode::Call(*id), line_col);
                     }
+                    // gawk's error, after which it goes on; the arguments are dropped and
+                    // nothing called, as the program will not run.
                     Some(_) => {
-                        return Err(pest_error_from_span(
-                            span,
-                            format!("'{}' is not a function", name),
+                        self.deferred_errors.borrow_mut().push(gawk_error(
+                            GAWK_ERROR,
+                            span.start_pos(),
+                            &format!("attempt to use non-function `{name}' in function call"),
                         ));
+                        for _ in 0..argc {
+                            instructions.push(OpCode::Pop, line_col);
+                        }
+                        instructions.push(OpCode::PushUninitializedScalar, line_col);
                     }
+                    // gawk finds it once the whole program is read.
                     None => {
-                        return Err(pest_error_from_span(
-                            span,
-                            format!("call to undefined function '{}'", name),
+                        return Err(gawk_error(
+                            GAWK_FATAL,
+                            span.start_pos(),
+                            &format!("function `{name}' not defined"),
                         ));
                     }
                 }
@@ -1030,10 +1090,12 @@ impl Compiler {
                 Ok(Expr::new(ExprKind::Number, instructions))
             }
             Rule::pre_inc | Rule::pre_dec => {
+                // gawk's syntax error, under the operand.
                 if kind != ExprKind::LValue {
-                    return Err(pest_error_from_span(
-                        op.as_span(),
-                        "operand should be an lvalue".to_string(),
+                    return Err(gawk_error(
+                        GAWK_CARET,
+                        next_token(op.as_span()),
+                        "syntax error",
                     ));
                 }
                 lvalue_to_scalar_ref(&mut instructions.opcodes, op.as_span(), NOT_AN_LVALUE)?;
@@ -1057,10 +1119,12 @@ impl Compiler {
         };
         let kind = lhs.kind;
         let mut instructions = lhs.instructions;
+        // gawk's syntax error, under what follows the operator.
         if kind != ExprKind::LValue {
-            return Err(pest_error_from_span(
-                op.as_span(),
-                "operand should be an lvalue".to_string(),
+            return Err(gawk_error(
+                GAWK_CARET,
+                next_token(op.as_span()),
+                "syntax error",
             ));
         }
         lvalue_to_scalar_ref(&mut instructions.opcodes, op.as_span(), NOT_AN_LVALUE)?;
@@ -1118,10 +1182,12 @@ impl Compiler {
                 match instructions.opcodes.last_mut() {
                     Some(OpCode::GetGlobal(_) | OpCode::GetLocal(_)) => {}
                     Some(last @ OpCode::IndexArrayGetValue) => *last = OpCode::IndexArraySubarray,
+                    // gawk's syntax error, under the right side.
                     _ => {
-                        return Err(pest_error_from_span(
-                            op.as_span(),
-                            "the right side of 'in' should be an array".to_string(),
+                        return Err(gawk_error(
+                            GAWK_CARET,
+                            next_token(op.as_span()),
+                            "syntax error",
                         ));
                     }
                 }
@@ -1166,11 +1232,13 @@ impl Compiler {
                 instructions.push(OpCode::Le, op.line_col());
                 Ok(Expr::new(ExprKind::Number, instructions))
             }
-            Rule::comp_op => {
+            Rule::comp_op | Rule::print_comp_op => {
+                // gawk's syntax error, under the second comparison.
                 if lhs_kind == ExprKind::Comp || rhs_kind == ExprKind::Comp {
-                    return Err(pest_error_from_span(
-                        op.as_span(),
-                        "cannot chain comparisons".to_string(),
+                    return Err(gawk_error(
+                        GAWK_CARET,
+                        op.as_span().start_pos(),
+                        "syntax error",
                     ));
                 }
                 let op = first_child(op);
@@ -1963,10 +2031,12 @@ impl Compiler {
                 // gawk's words: there is no record to go on from in BEGIN or END.
                 if let Some(action) = self.special_action {
                     let keyword = if is_next { "next" } else { "nextfile" };
-                    return Err(pest_error_from_span(
-                        stmt.as_span(),
-                        format!("`{keyword}' used in {action} action"),
+                    self.deferred_errors.borrow_mut().push(gawk_error(
+                        GAWK_ERROR,
+                        stmt.as_span().start_pos(),
+                        &format!("`{keyword}' used in {action} action"),
                     ));
+                    return Ok(());
                 }
                 let opcode = if is_next {
                     OpCode::Next
@@ -1982,10 +2052,13 @@ impl Compiler {
                     instructions.push(OpCode::Invalid, stmt.line_col());
                     Ok(())
                 } else {
-                    Err(pest_error_from_span(
-                        stmt.as_span(),
-                        "break statement outside of loop".to_string(),
-                    ))
+                    // gawk's error, which it writes twice and goes on after.
+                    self.deferred_errors.borrow_mut().push(gawk_error(
+                        GAWK_TWICE,
+                        stmt.as_span().start_pos(),
+                        "`break' is not allowed outside a loop or switch",
+                    ));
+                    Ok(())
                 }
             }
             Rule::continue_stmt => {
@@ -1994,10 +2067,12 @@ impl Compiler {
                     instructions.push(OpCode::Invalid, stmt.line_col());
                     Ok(())
                 } else {
-                    Err(pest_error_from_span(
-                        stmt.as_span(),
-                        "continue statement outside of loop".to_string(),
-                    ))
+                    self.deferred_errors.borrow_mut().push(gawk_error(
+                        GAWK_TWICE,
+                        stmt.as_span().start_pos(),
+                        "`continue' is not allowed outside a loop",
+                    ));
+                    Ok(())
                 }
             }
             Rule::exit_stmt => {
@@ -2012,9 +2087,10 @@ impl Compiler {
             }
             Rule::return_stmt => {
                 if !self.in_function {
-                    return Err(pest_error_from_span(
-                        stmt.as_span(),
-                        "return statement outside of function".to_string(),
+                    return Err(gawk_error(
+                        GAWK_CARET,
+                        stmt.as_span().start_pos(),
+                        "`return' used outside function context",
                     ));
                 }
                 let stmt_line_col = stmt.line_col();
@@ -2122,15 +2198,38 @@ impl Compiler {
         let maybe_param_list = inner.child();
         let body = if maybe_param_list.as_rule() == Rule::param_list {
             for param in maybe_param_list.into_inner() {
-                match self.names.get_mut().get(param.as_str()) {
-                    Some(GlobalName::Function { .. }) | Some(GlobalName::SpecialVar(_)) => {
-                        return Err(pest_error_from_span(
-                            param.as_span(),
-                            "cannot use function name or special variable as a parameter"
-                                .to_string(),
-                        ));
-                    }
-                    _ => {}
+                // gawk's errors, after which it goes on; another function's name is a
+                // parameter like any other, as in gawk.
+                let function_name = name.as_str();
+                let param_name = param.as_str();
+                let problem = if matches!(
+                    self.names.get_mut().get(param_name),
+                    Some(GlobalName::SpecialVar(_))
+                ) {
+                    Some(format!(
+                        "parameter `{param_name}': POSIX disallows using a special variable \
+                         as a function parameter"
+                    ))
+                } else if param_name == function_name {
+                    Some("cannot use function name as parameter name".to_string())
+                } else {
+                    parameter_names
+                        .iter()
+                        .position(|earlier: &Rc<str>| **earlier == *param_name)
+                        .map(|earlier| {
+                            format!(
+                                "parameter #{}, `{param_name}', duplicates parameter #{}",
+                                parameters_count + 1,
+                                earlier + 1
+                            )
+                        })
+                };
+                if let Some(problem) = problem {
+                    self.deferred_errors.borrow_mut().push(gawk_error(
+                        GAWK_ERROR,
+                        param.as_span().start_pos(),
+                        &format!("function `{function_name}': {problem}"),
+                    ));
                 }
                 param_map.insert(param.as_str().to_string(), parameters_count as u32);
                 parameter_names.push(Rc::from(param.as_str()));
@@ -2162,12 +2261,7 @@ impl Compiler {
         })
     }
 
-    fn declare_program_functions(
-        &mut self,
-        program: Pairs<Rule>,
-        filename: &str,
-        errors: &mut Vec<PestError>,
-    ) {
+    fn declare_program_functions(&mut self, program: Pairs<Rule>, errors: &mut Vec<PestError>) {
         for item in program {
             if item.as_rule() == Rule::function_definition {
                 let mut inner = item.into_inner();
@@ -2187,136 +2281,89 @@ impl Compiler {
                     },
                 );
                 if previous_value.is_some() {
-                    let error = improve_error(
-                        pest_error_from_span(
-                            name.as_span(),
-                            format!("function '{}' is defined multiple times", name),
-                        ),
-                        filename,
-                    );
-                    errors.push(error);
+                    errors.push(gawk_error(
+                        GAWK_ERROR,
+                        name.as_span().start_pos(),
+                        &format!("function name `{name}' previously defined"),
+                    ));
                 }
             }
         }
     }
 }
 
-fn location_end(loc: &InputLocation) -> usize {
-    match loc {
-        InputLocation::Pos(p) => *p,
-        InputLocation::Span((_, end)) => *end,
-    }
+/// The program `source`, cut where a statement may end before byte `error_at` of a syntax
+/// error, with the blocks it opened closed, so that it parses: the code gawk has read when
+/// it meets the error, for the errors it reports there first (`BEGIN { print 1/0; x( }`).
+fn parsable_prefix(source: &str, error_at: usize) -> Option<String> {
+    let head = source.get(..error_at)?;
+    let ends = head
+        .char_indices()
+        .rev()
+        .filter(|(_, c)| matches!(c, ';' | '\n' | '}'))
+        .map(|(at, _)| at + 1);
+    std::iter::once(error_at)
+        .chain(ends)
+        .take(32)
+        .flat_map(|cut| (0..=4).map(move |closers| (cut, closers)))
+        .map(|(cut, closers)| {
+            format!(
+                "{}\n{}",
+                source.get(..cut).unwrap_or_default(),
+                "}".repeat(closers)
+            )
+        })
+        .find(|text| AwkParser::parse(Rule::program, text).is_ok())
 }
 
-#[cfg_attr(test, derive(Debug))]
-#[derive(Clone)]
-pub struct CompilerErrors {
-    errors: Vec<PestError>,
-}
-
-/// Each error on its own line or lines, gawk's form or pest's; the pest form ends with a
-/// blank line, which the gawk form, as gawk writes it, does not.
-impl std::fmt::Display for CompilerErrors {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let mut blank_line = false;
-        for error in &self.errors {
-            match gawk_form(error) {
-                Some(text) => {
-                    writeln!(f, "{text}")?;
-                    blank_line = false;
-                }
-                None => {
-                    writeln!(f, "{error}")?;
-                    blank_line = true;
-                }
-            }
-        }
-        if blank_line {
-            writeln!(f)?;
-        }
-        Ok(())
-    }
-}
-
-fn next_checkpoint(text: &str) -> Option<usize> {
-    text.find('}')
-        .map(|p| text.len().min(p + 1))
-        .into_iter()
-        .chain(text.find("BEGIN"))
-        .chain(text.find("END"))
-        .chain(text.find("function"))
-        .min()
-}
-
-fn improve_error(error: PestError, file: &str) -> PestError {
-    if !file.is_empty() {
-        error.with_path(file)
-    } else {
-        error
-    }
-}
-
-/// An error found parsing the source from byte `offset` on, placed in the whole source,
-/// so that its line, column and quoted line are the source's own.
-fn rebase_error(error: PestError, source: &str, offset: usize) -> PestError {
-    let PestError {
-        variant, location, ..
-    } = error;
-    match location {
-        InputLocation::Pos(p) => match pest::Position::new(source, offset + p) {
-            Some(pos) => PestError::new_from_pos(variant, pos),
-            None => PestError::new_from_pos(variant, pest::Position::from_start(source)),
+/// gawk's errors for `sources`, the one of index `failed` not parsing: those in the code
+/// before its syntax error, which gawk reports as it reads, then the syntax error, after
+/// which gawk reads no further.
+fn read_until_syntax_error(sources: &[SourceFile], failed: usize) -> CompilerErrors {
+    let source = sources
+        .get(failed)
+        .map(|source| source.contents.as_str())
+        .unwrap_or_default();
+    // gawk's lexer ends the program with a newline.
+    let error_at = match AwkParser::parse(Rule::program, &format!("{source}\n")) {
+        Err(error) => match error.location {
+            InputLocation::Pos(at) | InputLocation::Span((at, _)) => at,
         },
-        InputLocation::Span((start, end)) => {
-            match pest::Span::new(source, offset + start, offset + end) {
-                Some(span) => PestError::new_from_span(variant, span),
-                None => PestError::new_from_pos(variant, pest::Position::from_start(source)),
-            }
-        }
+        Ok(_) => source.len(),
+    };
+    let syntax = syntax_error(source, error_at);
+    let mut read: Vec<SourceFile> = sources.iter().take(failed).cloned().collect();
+    if let Some(prefix) = parsable_prefix(source, error_at.min(source.len())) {
+        read.push(SourceFile {
+            filename: sources
+                .get(failed)
+                .map(|source| source.filename.clone())
+                .unwrap_or_default(),
+            contents: prefix,
+        });
     }
+    let mut diagnostics: Vec<(usize, Diagnostic)> = match compile_program(&read) {
+        Ok(_) => Vec::new(),
+        Err(errors) => errors
+            .diagnostics
+            .into_iter()
+            // A function defined after the error is not declared yet.
+            .filter(|(_, diagnostic)| !matches!(diagnostic.kind, Kind::Fatal | Kind::Warning))
+            .collect(),
+    };
+    diagnostics.push((failed, syntax));
+    CompilerErrors::new(diagnostics, &source_texts(sources))
 }
 
-/// The first character boundary of `source` after `position`.
-fn next_char_boundary(source: &str, position: usize) -> usize {
-    position
-        + source
-            .get(position..)
-            .and_then(|rest| rest.chars().next())
-            .map_or(1, char::len_utf8)
+/// Each source's file name and text, for `CompilerErrors`.
+fn source_texts(sources: &[SourceFile]) -> Vec<(&str, &str)> {
+    sources
+        .iter()
+        .map(|source| (source.filename.as_str(), source.contents.as_str()))
+        .collect()
 }
 
-fn gather_errors(first_error: PestError, source: &str, errors: &mut Vec<PestError>, file: &str) {
-    let mut resume_at = location_end(&first_error.location);
-    errors.push(improve_error(first_error, file));
-
-    // Each round parses the source from the next checkpoint after the last error on,
-    // and the next round starts past that round's error, so that the search always moves
-    // on, even when the rest begins with a checkpoint (`BEGIN`, `END`, `function`).
-    // Pest's error positions and the checkpoints are character boundaries, so `get`
-    // finds the rest of the source; it ends the search should one not be.
-    while let Some(checkpoint_offset) = source.get(resume_at..).and_then(next_checkpoint) {
-        let parsing_start = resume_at + checkpoint_offset;
-        let Some(rest) = source.get(parsing_start..) else {
-            break;
-        };
-        match AwkParser::parse(Rule::program, rest) {
-            Ok(_) => break,
-            Err(err) => {
-                let error_end = parsing_start + location_end(&err.location);
-                errors.push(improve_error(
-                    rebase_error(err, source, parsing_start),
-                    file,
-                ));
-                resume_at = if error_end > parsing_start {
-                    error_end
-                } else {
-                    next_char_boundary(source, parsing_start)
-                };
-            }
-        }
-    }
-}
-
+#[derive(Clone)]
 pub struct SourceFile {
     pub filename: String,
     pub contents: String,
@@ -2333,30 +2380,32 @@ impl SourceFile {
 
 pub fn compile_program(sources: &[SourceFile]) -> Result<Program, CompilerErrors> {
     let mut parsed_sources = Vec::new();
-    let mut errors = Vec::new();
-    for source_file in sources {
+    // Each error with the index of its source.
+    let mut errors: Vec<(usize, PestError)> = Vec::new();
+    for (index, source_file) in sources.iter().enumerate() {
         let filename: Rc<str> = source_file.filename.clone().into();
         match AwkParser::parse(Rule::program, &source_file.contents) {
             Ok(mut program) => {
                 let program = program.child();
-                parsed_sources.push((filename, program.into_inner()));
+                parsed_sources.push((index, filename, program.into_inner()));
             }
-            Err(err) => {
-                gather_errors(err, &source_file.contents, &mut errors, &filename);
-            }
+            // gawk reads no further than its first syntax error.
+            Err(_) => return Err(read_until_syntax_error(sources, index)),
         };
     }
 
     let mut compiler = Compiler::default();
-    for (filename, program_iter) in &parsed_sources {
-        compiler.declare_program_functions(program_iter.clone(), filename, &mut errors);
+    for (index, _, program_iter) in &parsed_sources {
+        let mut declared = Vec::new();
+        compiler.declare_program_functions(program_iter.clone(), &mut declared);
+        errors.extend(declared.into_iter().map(|error| (*index, error)));
     }
 
     let mut begin_actions = Vec::new();
     let mut rules = Vec::new();
     let mut end_actions = Vec::new();
     let mut functions = Vec::new();
-    for (filename, program_iter) in parsed_sources {
+    for (index, filename, program_iter) in parsed_sources {
         for item in program_iter {
             let errors_before = errors.len();
             match item.as_rule() {
@@ -2371,7 +2420,7 @@ pub fn compile_program(sources: &[SourceFile]) -> Result<Program, CompilerErrors
                     );
                     compiler.special_action = None;
                     if let Err(err) = result {
-                        errors.push(improve_error(err, &filename));
+                        errors.push((index, err));
                     }
                     if is_begin_action {
                         begin_actions.push(instructions.into_action(filename.clone()));
@@ -2381,12 +2430,12 @@ pub fn compile_program(sources: &[SourceFile]) -> Result<Program, CompilerErrors
                 }
                 Rule::rule => match compiler.compile_rule(item, filename.clone()) {
                     Ok(rule) => rules.push(rule),
-                    Err(err) => errors.push(improve_error(err, &filename)),
+                    Err(err) => errors.push((index, err)),
                 },
                 Rule::function_definition => {
                     match compiler.compile_function_definition(item, filename.clone()) {
                         Ok(function) => functions.push(function),
-                        Err(err) => errors.push(improve_error(err, &filename)),
+                        Err(err) => errors.push((index, err)),
                     }
                 }
                 Rule::EOI => {}
@@ -2394,9 +2443,7 @@ pub fn compile_program(sources: &[SourceFile]) -> Result<Program, CompilerErrors
             }
             // The item's errors that did not stop it came before the one that did.
             let deferred = compiler.deferred_errors.get_mut().drain(..);
-            let deferred: Vec<PestError> = deferred
-                .map(|error| improve_error(error, &filename))
-                .collect();
+            let deferred: Vec<(usize, PestError)> = deferred.map(|error| (index, error)).collect();
             errors.splice(errors_before..errors_before, deferred);
         }
     }
@@ -2412,7 +2459,17 @@ pub fn compile_program(sources: &[SourceFile]) -> Result<Program, CompilerErrors
         })
         .collect();
 
-    if errors.is_empty() {
+    let diagnostics: Vec<(usize, Diagnostic)> = errors
+        .iter()
+        .map(|(index, error)| (*index, diagnostic(error)))
+        .collect();
+    let texts = source_texts(sources);
+    if diagnostics.iter().all(|(_, d)| d.kind == Kind::Warning) {
+        let mut warnings = Vec::new();
+        for (index, warning) in diagnostics {
+            let (file, text) = texts.get(index).copied().unwrap_or_default();
+            warnings.extend(warning.render(text, file));
+        }
         Ok(Program {
             constants: compiler.constants.into_inner(),
             begin_actions,
@@ -2421,9 +2478,10 @@ pub fn compile_program(sources: &[SourceFile]) -> Result<Program, CompilerErrors
             functions,
             globals_count: compiler.last_global_var_id.get() as usize,
             globals,
+            warnings,
         })
     } else {
-        Err(CompilerErrors { errors })
+        Err(CompilerErrors::new(diagnostics, &texts))
     }
 }
 

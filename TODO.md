@@ -69,14 +69,15 @@ fixed their leftovers; moved here so 1.3.14 could go out (the user, 2026-10-04).
   and `I`; `$` assumes a later named pipe has lines; in `a`/`i`/`c` text `\c\\` drops
   GNU's second backslash. `sed -f DIR` says "couldn't open file" where MSYS GNU reads
   nothing.
-- awk, found matching gawk 5.4 (2026-10-04): a `for (k in a)` loop skips keys deleted
-  during it, where gawk visits its snapshot (and a comment calls cash's way gawk's); a
-  function that deletes the subarray it was given and then writes its parameter makes
-  the element again, where gawk keeps the parameter detached; a bad regex says "error
-  parsing pattern 0" where gawk says "invalid regexp: unbalanced (: /(/"; syntax errors
-  are pest's, so `BEGIN{print 1/0} {` reports one error, gawk two; `- -0`, `**` and
-  `print a == b` are not parsed; `match(s, r, arr)`, `split`'s 4th and `close`'s 2nd
-  arguments are not taken; `log(-1)` gives no "received negative argument" warning.
+- awk, found matching gawk 5.4 (2026-10-04): `print > "/dev/null"` fails; `printf` with
+  no arguments is read as `print f`; `asort()` is not there; `sub(/a/, "b", "x")` is a
+  compile error where gawk takes a constant target; `getline getline` and `getline x y`
+  are refused and `print > "x" > "y"` taken, the other way round from gawk; a control
+  character in the source is a syntax error, not gawk's "invalid character"; a number
+  as a dynamic regex is fatal; gawk's escape warnings are not given, and `\y` and `\1`
+  are regex errors; `ARGV[0]` is `awk`, gawk's `gawk`; "attempt to use non-function" is
+  reported beside "previously defined", where gawk reports one; for-in over a
+  `match()` array runs in insertion order, gawk's in hash order.
 
 ---
 

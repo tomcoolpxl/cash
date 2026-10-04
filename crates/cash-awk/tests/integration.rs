@@ -218,7 +218,21 @@ fn test_awk_records_of_more_than_65535_fields_split() {
 // `inf`, `%d` 9223372036854775807, `"inf" + 0` was infinite and `".5e" + 0` was 0.
 #[test]
 fn test_awk_infinite_and_nan_numbers_match_gawk() {
-    test_awk!(infinite_and_nan_numbers_match_gawk);
+    // With gawk's warning for the log of a negative number.
+    run_test(TestPlan {
+        cmd: String::from("awk"),
+        args: vec![
+            "-f".to_string(),
+            "tests/awk/infinite_and_nan_numbers_match_gawk.awk".to_string(),
+        ],
+        stdin_data: String::new(),
+        expected_out: String::from(include_str!("awk/infinite_and_nan_numbers_match_gawk.out")),
+        expected_err: String::from(
+            "awk: tests/awk/infinite_and_nan_numbers_match_gawk.awk:4: warning: log: received \
+             negative argument -1\n",
+        ),
+        expected_exit_code: 0,
+    });
 }
 
 // An RS that matches empty text looped forever on empty records (TXT-12). gawk 5.4 ends
@@ -1338,13 +1352,15 @@ fn test_awk_unassignable_targets_are_errors() {
             r#"BEGIN { sub(/a/, "b", "x") }"#,
             "sub third parameter is not a changeable object",
         ),
+        // gawk's syntax error, under the right side.
         (
             "BEGIN { print 1 in 2 }",
-            "the right side of 'in' should be an array",
+            "awk: cmd. line:1: BEGIN { print 1 in 2 }\n\
+             awk: cmd. line:1:                    ^ syntax error",
         ),
         (
             r#"BEGIN { print 1 in "x" }"#,
-            "the right side of 'in' should be an array",
+            "awk: cmd. line:1:                    ^ syntax error",
         ),
     ] {
         run_test_with_checker(plan(program, "", "", 1), |_, output| {
@@ -1458,30 +1474,44 @@ fn run_bounded(program: &str) -> Output {
     }
 }
 
-// A syntax error where the rest of the program starts with `BEGIN`, `END` or `function`
-// is reported and ends the run: the search for further errors made no progress there,
-// and ran with memory growing without end. Each further error is placed in the program
-// as a whole, with its own line (TODO.md 14.6).
+// A syntax error is reported as gawk reports it, the first only, and ends the run: the
+// search for further errors made no progress where the rest of the program started with
+// `BEGIN`, `END` or `function`, and ran with memory growing without end (TODO.md 14.6).
+// Each was checked against gawk 5.4.
 #[test]
 fn test_awk_syntax_errors_before_begin_end_or_function_end_the_run() {
-    for (program, places) in [
-        ("BEGIN { ( } BEGIN { ( }", &["1:11", "1:23"][..]),
-        ("function ( function (", &["1:10", "1:21"][..]),
+    for (program, stderr) in [
+        (
+            "BEGIN { ( } BEGIN { ( }",
+            "awk: cmd. line:1: BEGIN { ( } BEGIN { ( }\n\
+             awk: cmd. line:1:           ^ syntax error\n",
+        ),
+        (
+            "function ( function (",
+            "awk: cmd. line:1: function ( function (\n\
+             awk: cmd. line:1:          ^ syntax error\n",
+        ),
         (
             "BEGIN { x = ( }\nBEGIN { y = 1 }\nEND { z = ( }",
-            &["1:15", "3:13"][..],
+            "awk: cmd. line:1: BEGIN { x = ( }\n\
+             awk: cmd. line:1:               ^ syntax error\n",
         ),
-        ("BEGIN { ( } END { ( } function ( BEGIN", &["1:11"][..]),
-        ("END END END", &["1:5"][..]),
-        ("BEGINé{ ( }", &["1:6"][..]),
+        (
+            "BEGIN { ( } END { ( } function ( BEGIN",
+            "awk: cmd. line:1: BEGIN { ( } END { ( } function ( BEGIN\n\
+             awk: cmd. line:1:           ^ syntax error\n",
+        ),
+        // gawk names the character by its first byte alone, which is no UTF-8.
+        (
+            "BEGINé{ ( }",
+            "awk: cmd. line:1: BEGINé{ ( }\n\
+             awk: cmd. line:1:      ^ invalid char '\u{FFFD}' in expression\n",
+        ),
     ] {
         let output = run_bounded(program);
         assert_eq!(output.status.code(), Some(1), "{program}");
         assert!(output.stdout.is_empty(), "{program}");
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        for place in places {
-            assert!(stderr.contains(place), "{program}: {place} in {stderr}");
-        }
+        assert_eq!(String::from_utf8_lossy(&output.stderr), stderr, "{program}");
     }
 }
 
@@ -1539,9 +1569,21 @@ fn test_awk_next_in_begin_or_end_is_an_error() {
             "`nextfile' cannot be called from a `END' rule",
             2,
         ),
-        ("END END END", "expected action", 1),
-        ("END", "expected action", 1),
-        ("BEGIN", "expected action", 1),
+        (
+            "END END END",
+            "awk: cmd. line:1: END END END\nawk: cmd. line:1:     ^ syntax error",
+            1,
+        ),
+        (
+            "END",
+            "awk: cmd. line:1: END blocks must have an action part",
+            1,
+        ),
+        (
+            "BEGIN",
+            "awk: cmd. line:1: BEGIN blocks must have an action part",
+            1,
+        ),
     ] {
         run_test_with_checker(plan(program, "", "", status), |_, output| {
             assert_eq!(output.status.code(), Some(status), "{program}");
@@ -2261,4 +2303,504 @@ fn test_awk_unwritable_output_is_gawks_warning_or_error() {
         assert_eq!(text.lines().count(), 1, "{program}: {text}");
         assert_eq!(output.status.code(), Some(status), "{program}");
     }
+}
+
+// `for (k in a)` goes through the keys `a` had when the loop began, as gawk does: a key
+// deleted in the loop is still visited; `delete a` in the loop ended it (TODO.md phase
+// 15). gawk 5.4's output.
+#[test]
+fn test_awk_for_in_visits_the_keys_it_began_with() {
+    run_cases(&[
+        (
+            "BEGIN { a[1]; a[2]; a[3]; for (k in a) { delete a; n++ }; print n, length(a) }",
+            "",
+            "3 0\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { a[1][2]; a[1][3]; for (k in a[1]) { delete a[1]; n++ }; print n, length(a) }",
+            "",
+            "2 0\n",
+            "",
+            0,
+        ),
+    ]);
+}
+
+// A parameter given a subarray that is then deleted keeps an array of its own, as in
+// gawk: writing to it made the subarray again in the caller's array (TODO.md phase 15).
+// gawk 5.4's output.
+#[test]
+fn test_awk_a_parameter_keeps_a_subarray_deleted_under_it() {
+    run_cases(&[
+        (
+            "function f(s) { delete a; s[1] = 1 } BEGIN { a[0][1] = 7; f(a[0]); print length(a) }",
+            "",
+            "0\n",
+            "",
+            0,
+        ),
+        (
+            "function f(s) { delete a[0]; print length(s); s[1] = 1; print length(s) } \
+             BEGIN { a[0][1] = 7; a[0][2] = 8; f(a[0]); print length(a), (0 in a) }",
+            "",
+            "0\n1\n0 0\n",
+            "",
+            0,
+        ),
+        (
+            "function f(s) { delete a; s[5] = 1; a[0][9] = 2; print length(s), length(a[0]) } \
+             BEGIN { a[0][1] = 7; f(a[0]); print length(a[0]) }",
+            "",
+            "1 1\n1\n",
+            "",
+            0,
+        ),
+        (
+            "function f(s) { delete a; s = 3 } BEGIN { a[0][1] = 7; f(a[0]) }",
+            "",
+            "",
+            "awk: cmd. line:1: fatal: attempt to use array `s' in a scalar context\n",
+            2,
+        ),
+    ]);
+}
+
+// What is wrong with a regex is gawk's error, in its words, fatal for a dynamic one and
+// an error before the program runs for a literal one; cash said "error parsing pattern
+// 0", in pest's form for a literal (TODO.md phase 15). A `)` with no `(` and a `{` that
+// starts no interval are characters, as in gawk; each was an error.
+#[test]
+fn test_awk_regex_errors_are_gawks() {
+    let dynamic = |pattern: &str| format!("BEGIN {{ r = \"{pattern}\"; print (\"a\" ~ r) }}");
+    let literal = |pattern: &str| format!("BEGIN {{ print (\"a\" ~ /{pattern}/) }}");
+    for (pattern, message) in [
+        ("(", "unbalanced ("),
+        ("[a", "unbalanced ["),
+        ("a{1", "unbalanced {"),
+        ("a{1,", "invalid contents of {}"),
+        ("a{2,1}", "invalid contents of {}"),
+        ("a{256}", "invalid contents of {}"),
+        ("*a", "? * + or {interval} not preceded by valid subpattern"),
+        (
+            "a|+b",
+            "? * + or {interval} not preceded by valid subpattern",
+        ),
+        ("[z-a]", "invalid range endpoint"),
+        ("[[:foo:]]", "invalid character class name"),
+        ("[[.ab.]]", "invalid collating element"),
+    ] {
+        run_cases(&[(
+            dynamic(pattern).as_str(),
+            "",
+            "",
+            format!("awk: cmd. line:1: fatal: invalid regexp: {message}: /{pattern}/\n").as_str(),
+            2,
+        )]);
+        // An unclosed bracket in a literal is unterminated, as below.
+        if pattern != "[a" {
+            run_cases(&[(
+                literal(pattern).as_str(),
+                "",
+                "",
+                format!("awk: cmd. line:1: error: {message}: /{pattern}/\n").as_str(),
+                1,
+            )]);
+        }
+    }
+    run_cases(&[
+        (
+            dynamic("a\\\\").as_str(),
+            "",
+            "",
+            "awk: cmd. line:1: fatal: invalid regexp: invalid trailing backslash: /a\\/\n",
+            2,
+        ),
+        // An unclosed bracket expression goes on to the end of the line, as in gawk's lexer.
+        (
+            "BEGIN { x = /[/ }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { x = /[/ }\n\
+             awk: cmd. line:1:              ^ unterminated regexp\n",
+            1,
+        ),
+        (
+            "BEGIN { print (\"a)\" ~ /a)/), (\"a{\" ~ /a{/), (\"{,2}\" ~ \"{,2}\") }",
+            "",
+            "1 1 1\n",
+            "",
+            0,
+        ),
+        // An escape in a bracket expression is the character it stands for.
+        (
+            "BEGIN { print (\"a\\tb\" ~ /a[\\t]b/), (\"atb\" ~ /a[\\t]b/), (\"a\\tb\" ~ /a[\\11]b/) }",
+            "",
+            "1 0 1\n",
+            "",
+            0,
+        ),
+        // A `/` in a bracket expression is part of it; a regex can end in `\/`.
+        (
+            "BEGIN { print (\"a/b\" ~ /[/]/), (\"a/\" ~ /a\\//) }",
+            "",
+            "1 1\n",
+            "",
+            0,
+        ),
+        (
+            "{ FS = \"((\"; print $1 }",
+            "a\n",
+            "",
+            "awk: cmd. line:1: (FILENAME=- FNR=1) fatal: invalid regexp: unbalanced (: /((/\n",
+            2,
+        ),
+    ]);
+}
+
+// A syntax error is gawk's, worded and placed as gawk places it, after the errors gawk
+// meets before it, and the rest is not read (TODO.md phase 15). It was pest's, ` --> 1:9`
+// and the rules it expected, with every further error. Each was checked against gawk 5.4.
+#[test]
+fn test_awk_syntax_errors_are_gawks() {
+    run_cases(&[
+        (
+            "BEGIN { print 1/0 } {",
+            "",
+            "",
+            "awk: cmd. line:1: error: division by zero attempted\n\
+             awk: cmd. line:1: BEGIN { print 1/0 } {\n\
+             awk: cmd. line:1:                      ^ unexpected newline or end of string\n",
+            1,
+        ),
+        (
+            "BEGIN { print 1 / 0; x( }",
+            "",
+            "",
+            "awk: cmd. line:1: error: division by zero attempted\n\
+             awk: cmd. line:1: BEGIN { print 1 / 0; x( }\n\
+             awk: cmd. line:1:                         ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 +\n }",
+            "",
+            "",
+            "awk: cmd. line:2: BEGIN { x = 1 +\n\
+             awk: cmd. line:2:                ^ unexpected newline or end of string\n",
+            1,
+        ),
+        (
+            "BEGIN {\n\tx = (\n}",
+            "",
+            "",
+            "awk: cmd. line:3: \tx = (\nawk: cmd. line:3: \t     ^ unexpected newline or end of string\n",
+            1,
+        ),
+        (
+            "BEGIN { if x }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { if x }\nawk: cmd. line:1:            ^ syntax error\n",
+            1,
+        ),
+    ]);
+}
+
+// What gawk's lexer finds wrong is its error, at the start of the token: a string or a
+// regex the line ends first, a character awk has no use for, a backslash with more on its
+// line (TODO.md phase 15). Each was checked against gawk 5.4.
+#[test]
+fn test_awk_lexical_errors_are_gawks() {
+    run_cases(&[
+        (
+            "BEGIN { print \"abc }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { print \"abc }\n\
+             awk: cmd. line:1:               ^ unterminated string\n",
+            1,
+        ),
+        (
+            "BEGIN { x = /abc }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { x = /abc }\n\
+             awk: cmd. line:1:              ^ unterminated regexp\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 ` 2 }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { x = 1 ` 2 }\n\
+             awk: cmd. line:1:               ^ invalid char '`' in expression\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 \\ 2 }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { x = 1 \\ 2 }\n\
+             awk: cmd. line:1:               ^ backslash not last character on line\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 } BEGIN\n{ y }",
+            "",
+            "",
+            "awk: cmd. line:2: BEGIN blocks must have an action part\n",
+            1,
+        ),
+        (
+            "function f(a) { } function length(b) { }",
+            "",
+            "",
+            "awk: cmd. line:1: function f(a) { } function length(b) { }\n\
+             awk: cmd. line:1:                            ^ `length' is a built-in function, \
+             it cannot be redefined\n",
+            1,
+        ),
+        (
+            "BEGIN { return; x( }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { return; x( }\n\
+             awk: cmd. line:1:         ^ `return' used outside function context\n",
+            1,
+        ),
+        (
+            "BEGIN { (1)++ }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { (1)++ }\nawk: cmd. line:1:               ^ syntax error\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1 < 2 < 3 }",
+            "",
+            "",
+            "awk: cmd. line:1: BEGIN { x = 1 < 2 < 3 }\n\
+             awk: cmd. line:1:                   ^ syntax error\n",
+            1,
+        ),
+    ]);
+}
+
+// The other errors of reading a program are gawk's too, in its words: cash wrote its own,
+// in pest's form, and stopped at the first of them (TODO.md phase 15). Each was checked
+// against gawk 5.4.
+#[test]
+fn test_awk_program_errors_are_gawks() {
+    run_cases(&[
+        // gawk goes on after these, and writes the first two twice.
+        (
+            "BEGIN { if (x) break; else continue; next }",
+            "",
+            "",
+            "awk: cmd. line:1: error: `break' is not allowed outside a loop or switch\n\
+             awk: cmd. line:1: error: `break' is not allowed outside a loop or switch\n\
+             awk: cmd. line:1: error: `continue' is not allowed outside a loop\n\
+             awk: cmd. line:1: error: `continue' is not allowed outside a loop\n\
+             awk: cmd. line:1: error: `next' used in BEGIN action\n",
+            1,
+        ),
+        (
+            "function f(a, b, a, NR, f) { } function f() { }",
+            "",
+            "",
+            "awk: cmd. line:1: error: function `f': parameter #3, `a', duplicates parameter #1\n\
+             awk: cmd. line:1: error: function `f': parameter `NR': POSIX disallows using a \
+             special variable as a function parameter\n\
+             awk: cmd. line:1: error: function `f': cannot use function name as parameter name\n\
+             awk: cmd. line:1: error: function name `f' previously defined\n",
+            1,
+        ),
+        (
+            "BEGIN { x = 1; x(); print 1/0 }",
+            "",
+            "",
+            "awk: cmd. line:1: error: attempt to use non-function `x' in function call\n\
+             awk: cmd. line:1: error: division by zero attempted\n",
+            1,
+        ),
+        (
+            "function f() { } BEGIN { f = 1 }",
+            "",
+            "",
+            "awk: cmd. line:1: error: function `f' called with space between name and `(',\n\
+             or used as a variable or an array\n",
+            1,
+        ),
+        // A function not defined is found once the program is read, fatal, with status 2.
+        (
+            "BEGIN { g(); h() }",
+            "",
+            "",
+            "awk: cmd. line:1: fatal: function `g' not defined\n",
+            2,
+        ),
+        // More arguments than parameters is gawk's warning, and the program runs.
+        (
+            "function f(a) { return a }\nBEGIN { print f(1, 2) }",
+            "",
+            "1\n",
+            "awk: cmd. line:2: warning: function `f' called with more arguments than declared\n",
+            0,
+        ),
+        // Another function's name is a parameter like any other.
+        (
+            "function g() { } function f(g) { return g } BEGIN { print f(4) }",
+            "",
+            "4\n",
+            "",
+            0,
+        ),
+    ]);
+}
+
+// gawk's grammar: `- -x`, `**` and `**=`, and a comparison in `print` other than `>`,
+// which is a redirection; each was a syntax error (TODO.md phase 15). gawk 5.4's output.
+#[test]
+fn test_awk_operators_as_gawk_parses_them() {
+    run_cases(&[
+        (
+            "BEGIN { print - -3, - - 3, !-1, -!0 }",
+            "",
+            "3 3 0 -1\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { print 2 ** 3, 2 ** 3 ** 2, -2 ** 2; x = 3; x **= 2; print x }",
+            "",
+            "8 512 -4\n9\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { a = 1; b = 2; print a == b, a != b, a < b, a <= b, a >= b; \
+             print a == b ? \"y\" : \"n\"; print 1 == 1 1 }",
+            "",
+            "0 1 1 1 0\nn\n0\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { a = 1; print a == 1 > \"/dev/stdout\" }",
+            "",
+            "1\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { print 1/- -0 }",
+            "",
+            "",
+            "awk: cmd. line:1: error: division by zero attempted\n",
+            1,
+        ),
+    ]);
+}
+
+// gawk's third argument of `match`, fourth of `split` and second of `close`; each was an
+// error (TODO.md phase 15). gawk 5.4's output.
+#[test]
+fn test_awk_match_split_and_close_take_gawks_arguments() {
+    run_cases(&[
+        (
+            "BEGIN { n = match(\"foobar\", /o+(b)(x)?/, m); \
+             print n, length(m), m[0], m[0, \"start\"], m[0, \"length\"], \
+             m[1], m[1, \"start\"], m[1, \"length\"], (2 in m) }",
+            "",
+            "2 6 oob 2 3 b 4 1 0\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { m[9] = 1; print match(\"a\", /z/, m), length(m) }",
+            "",
+            "0 0\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { x = 1; match(\"a\", /a/, x) }",
+            "",
+            "",
+            "awk: cmd. line:1: fatal: match: third argument is not an array\n",
+            2,
+        ),
+        (
+            "BEGIN { n = split(\" a  b \", f, \" \", s); \
+             print n, length(s), \"[\" s[0] \"]\", \"[\" s[1] \"]\", \"[\" s[2] \"]\" }",
+            "",
+            "2 3 [ ] [  ] [ ]\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { n = split(\"a1b22c\", f, /[0-9]+/, s); print n, length(s), s[1], s[2] }",
+            "",
+            "3 2 1 22\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { split(\"a b\", a, \" \", a) }",
+            "",
+            "",
+            "awk: cmd. line:1: fatal: split: cannot use the same array for second and fourth \
+             args\n",
+            2,
+        ),
+        (
+            "BEGIN { split(\"a b\", a, \" \", \"q\") }",
+            "",
+            "",
+            "awk: cmd. line:1: fatal: split: fourth argument is not an array\n",
+            2,
+        ),
+        (
+            "BEGIN { print \"x\" | \"cat\"; print close(\"cat\", \"TO\"), close(\"none\", \"from\") }",
+            "",
+            "x\n0 -1\n",
+            "",
+            0,
+        ),
+        (
+            "BEGIN { close(\"cat\", \"bogus\") }",
+            "",
+            "",
+            "awk: cmd. line:1: fatal: close: second argument must be `to' or `from'\n",
+            2,
+        ),
+    ]);
+}
+
+// gawk's warnings for an argument out of a math function's range: the result was given
+// in silence (TODO.md phase 15). gawk 5.4's.
+#[test]
+fn test_awk_math_functions_warn_as_gawk_does() {
+    run_cases(&[
+        (
+            "BEGIN { print log(-1), sqrt(-2.5), exp(1000), exp(-1000), log(0), (exp(-745) > 0) }",
+            "",
+            "-nan -nan +inf 0 -inf 1\n",
+            "awk: cmd. line:1: warning: log: received negative argument -1\n\
+             awk: cmd. line:1: warning: sqrt: received negative argument -2.5\n\
+             awk: cmd. line:1: warning: exp: argument 1000 is out of range\n\
+             awk: cmd. line:1: warning: exp: argument -1000 is out of range\n",
+            0,
+        ),
+        (
+            "{ print log($1) }",
+            "-1e10\n",
+            "-nan\n",
+            "awk: cmd. line:1: (FILENAME=- FNR=1) warning: log: received negative argument \
+             -1e+10\n",
+            0,
+        ),
+    ]);
 }

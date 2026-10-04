@@ -92,6 +92,53 @@ pub(crate) fn split_record<S: FnMut(usize, AwkString) -> Result<(), String>>(
     }
 }
 
+/// The separators `split_record` found between the fields of `record`, by gawk's index
+/// for `split`'s fourth argument: `i` is the one after field `i`. With the default field
+/// separator, white space before the first field is index 0 and after the last field the
+/// field count, each only when there is some.
+pub(crate) fn field_separators(
+    record: &str,
+    field_separator: &FieldSeparator,
+) -> Vec<(usize, String)> {
+    let mut separators = Vec::new();
+    match field_separator {
+        FieldSeparator::Default => {
+            let blank = |c: char| matches!(c, ' ' | '\t' | '\n');
+            let mut index = 0;
+            let mut rest = record;
+            while !rest.is_empty() {
+                let field_start = rest.find(|c: char| !blank(c)).unwrap_or(rest.len());
+                let (space, after) = rest.split_at(field_start);
+                if !space.is_empty() {
+                    separators.push((index, space.to_string()));
+                }
+                let field_end = after.find(blank).unwrap_or(after.len());
+                if field_end > 0 {
+                    index += 1;
+                }
+                rest = after.get(field_end..).unwrap_or_default();
+            }
+        }
+        FieldSeparator::Char(c) => {
+            let count = record.split(*c as char).count();
+            separators.extend((1..count).map(|index| (index, (*c as char).to_string())));
+        }
+        FieldSeparator::Ere(re) => {
+            separators.extend(re.match_locations(record).enumerate().map(|(index, m)| {
+                (
+                    index + 1,
+                    record.get(m.start..m.end).unwrap_or_default().to_string(),
+                )
+            }));
+        }
+        FieldSeparator::Null => {
+            let count = record.chars().count();
+            separators.extend((1..count).map(|index| (index, String::new())));
+        }
+    }
+    separators
+}
+
 impl TryFrom<AwkString> for FieldSeparator {
     type Error = String;
 
@@ -105,7 +152,7 @@ impl TryFrom<AwkString> for FieldSeparator {
         } else if let &[byte] = value.as_bytes() {
             Ok(FieldSeparator::Char(byte))
         } else {
-            let ere = Regex::new(value.as_str())?;
+            let ere = Regex::dynamic(value.as_str())?;
             Ok(FieldSeparator::Ere(Rc::from(ere)))
         }
     }

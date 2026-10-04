@@ -69,6 +69,7 @@
 )]
 
 pub mod compiler;
+mod diagnostics;
 pub mod interpreter;
 pub mod program;
 pub mod regex;
@@ -224,6 +225,22 @@ fn fatal(error: &str) -> i32 {
     2
 }
 
+/// The program in `sources`, its warnings written, or the exit status after its errors are
+/// written, as gawk writes them.
+fn compile(sources: &[SourceFile]) -> Result<program::Program, i32> {
+    use std::io::Write as _;
+    match compile_program(sources) {
+        Ok(program) => {
+            let _ = std::io::stderr().write_all(&program.warnings);
+            Ok(program)
+        }
+        Err(errors) => {
+            let _ = std::io::stderr().write_all(errors.text());
+            Err(errors.status())
+        }
+    }
+}
+
 /// Runs awk with the given command-line arguments and returns the exit status.
 pub fn run_awk<I, T>(args: I) -> i32
 where
@@ -282,12 +299,9 @@ where
             });
         }
         let cr_is_data = cr_is_data(&sources);
-        let program = match compile_program(&sources) {
+        let program = match compile(&sources) {
             Ok(p) => p,
-            Err(e) => {
-                eprint!("{e}");
-                return 1;
-            }
+            Err(status) => return status,
         };
         match interpret_with_eol(
             program,
@@ -302,12 +316,9 @@ where
     } else if !parsed_args.arguments.is_empty() {
         let sources = [SourceFile::stdin(parsed_args.arguments[0].clone())];
         let cr_is_data = cr_is_data(&sources);
-        let program = match compile_program(&sources) {
+        let program = match compile(&sources) {
             Ok(p) => p,
-            Err(e) => {
-                eprint!("{e}");
-                return 1;
-            }
+            Err(status) => return status,
         };
         match interpret_with_eol(
             program,

@@ -206,6 +206,9 @@ pub struct Program {
     pub rules: Vec<AwkRule>,
     pub end_actions: Vec<Action>,
     pub functions: Vec<Function>,
+    /// gawk's warnings about the program, as it writes them, for before it runs:
+    /// `warning: function `f' called with more arguments than declared`.
+    pub warnings: Vec<u8>,
 }
 
 #[cfg(test)]

@@ -287,7 +287,7 @@ fn cached_dynamic_ere(pattern: AwkString) -> Result<Rc<Regex>, String> {
     if let Some(ere) = DYNAMIC_ERES.with_borrow(|cache| cache.get(&key).cloned()) {
         return Ok(ere);
     }
-    let ere = Rc::new(Regex::new(pattern.as_str())?);
+    let ere = Rc::new(Regex::dynamic(pattern.as_str())?);
     DYNAMIC_ERES.with_borrow_mut(|cache| {
         if cache.len() >= DYNAMIC_ERE_CACHE_SIZE {
             cache.clear();

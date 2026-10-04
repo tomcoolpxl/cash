@@ -116,22 +116,302 @@ fn sort_alternations(hir: regex_syntax::hir::Hir) -> regex_syntax::hir::Hir {
     }
 }
 
-impl Regex {
-    pub fn new(pattern: &str) -> Result<Self, String> {
-        let inner = if let Ok(hir) = regex_syntax::ParserBuilder::new().build().parse(pattern) {
-            let hir = sort_alternations(hir);
-            MetaRegex::builder()
-                .build_from_hir(&hir)
-                .or_else(|_| MetaRegex::new(pattern))
-        } else {
-            MetaRegex::new(pattern)
+/// gawk's error for `*`, `+`, `?` or an interval with nothing before it to repeat.
+const NOTHING_TO_REPEAT: &str = "? * + or {interval} not preceded by valid subpattern";
+/// gawk's error for an interval it cannot read or that is out of its range.
+const BAD_INTERVAL: &str = "invalid contents of {}";
+/// The most an interval may repeat in gawk.
+const MOST_REPEATS: u32 = 255;
+/// The character classes gawk knows, `[:alpha:]` and the rest.
+const CLASS_NAMES: [&str; 12] = [
+    "alpha", "digit", "alnum", "upper", "lower", "space", "blank", "punct", "print", "graph",
+    "cntrl", "xdigit",
+];
+
+/// `pattern`, a POSIX extended regular expression as gawk reads one, in the regex engine's
+/// syntax, or gawk's words for what is wrong with it. A `)` with no `(` and a `{` that
+/// starts no interval are literal characters, as in gawk; a bracket expression's
+/// characters that the engine reads as operators (`[`, `&&`, `--`, `~~`) are made
+/// literal. The engine's own error, in its own words, stood for every one of gawk's.
+fn translate_ere(pattern: &str) -> Result<String, &'static str> {
+    let chars: Vec<char> = pattern.chars().collect();
+    let mut out = String::with_capacity(pattern.len());
+    let mut at = 0;
+    let mut depth = 0_usize;
+    // Whether what came last can be repeated: not at the start, nor after `(` or `|`.
+    let mut can_repeat = false;
+    while let Some(&c) = chars.get(at) {
+        at += 1;
+        match c {
+            '\\' => {
+                let next = *chars.get(at).ok_or("invalid trailing backslash")?;
+                at += 1;
+                out.push('\\');
+                out.push(next);
+                can_repeat = true;
+            }
+            '(' => {
+                depth += 1;
+                out.push(c);
+                can_repeat = false;
+            }
+            ')' if depth == 0 => {
+                out.push_str("\\)");
+                can_repeat = true;
+            }
+            ')' => {
+                depth -= 1;
+                out.push(c);
+                can_repeat = true;
+            }
+            '|' => {
+                out.push(c);
+                can_repeat = false;
+            }
+            '*' | '+' | '?' if !can_repeat => return Err(NOTHING_TO_REPEAT),
+            '{' if chars.get(at).is_some_and(char::is_ascii_digit) => {
+                let end = interval_end(&chars, at)?;
+                if !can_repeat {
+                    return Err(NOTHING_TO_REPEAT);
+                }
+                out.push('{');
+                out.extend(chars.get(at..end).unwrap_or_default());
+                at = end;
+            }
+            '{' => {
+                out.push_str("\\{");
+                can_repeat = true;
+            }
+            '[' => {
+                at = bracket_expression(&chars, at, &mut out)?;
+                can_repeat = true;
+            }
+            _ => {
+                out.push(c);
+                can_repeat = true;
+            }
         }
-        .map_err(|e| e.to_string())?;
+    }
+    if depth > 0 {
+        return Err("unbalanced (");
+    }
+    Ok(out)
+}
+
+/// Where the interval whose digits start at `at` ends, past its `}`, checked as gawk
+/// checks it: `{n}`, `{n,}` or `{n,m}`, with `n` no more than `m` and both at most 255.
+fn interval_end(chars: &[char], mut at: usize) -> Result<usize, &'static str> {
+    let number = |at: &mut usize| {
+        let start = *at;
+        while chars.get(*at).is_some_and(char::is_ascii_digit) {
+            *at += 1;
+        }
+        let digits: String = chars.get(start..*at).unwrap_or_default().iter().collect();
+        (!digits.is_empty()).then(|| digits.parse::<u32>().unwrap_or(u32::MAX))
+    };
+    let least = number(&mut at).unwrap_or_default();
+    let mut most = Some(least);
+    match chars.get(at) {
+        None => return Err("unbalanced {"),
+        Some(',') => {
+            at += 1;
+            if at == chars.len() {
+                return Err(BAD_INTERVAL);
+            }
+            most = number(&mut at);
+            if at == chars.len() {
+                return Err("unbalanced {");
+            }
+        }
+        Some(_) => {}
+    }
+    if chars.get(at) != Some(&'}')
+        || least > MOST_REPEATS
+        || most.is_some_and(|most| most > MOST_REPEATS || most < least)
+    {
+        return Err(BAD_INTERVAL);
+    }
+    Ok(at + 1)
+}
+
+/// Writes the bracket expression whose `[` is just before `at` to `out`, each character
+/// literal for the engine, and returns where it ends, past its `]`.
+fn bracket_expression(
+    chars: &[char],
+    mut at: usize,
+    out: &mut String,
+) -> Result<usize, &'static str> {
+    // A character the engine reads as an operator in a class, escaped.
+    let literal = |c: char, out: &mut String| {
+        if matches!(c, '\\' | '[' | ']' | '^' | '-' | '&' | '~') {
+            out.push('\\');
+        }
+        out.push(c);
+    };
+    out.push('[');
+    if chars.get(at) == Some(&'^') {
+        out.push('^');
+        at += 1;
+    }
+    // The last single character, which a `-` makes the start of a range.
+    let mut last = None;
+    if chars.get(at) == Some(&']') {
+        literal(']', out);
+        last = Some(']');
+        at += 1;
+    }
+    loop {
+        let c = *chars.get(at).ok_or("unbalanced [")?;
+        match c {
+            ']' => {
+                out.push(']');
+                return Ok(at + 1);
+            }
+            '[' if matches!(chars.get(at + 1), Some(':' | '.' | '=')) => {
+                let (inner, end) = bracketed(chars, at)?;
+                if chars.get(at + 1) == Some(&':') {
+                    let name: String = inner.iter().collect();
+                    if !CLASS_NAMES.contains(&name.as_str()) {
+                        return Err("invalid character class name");
+                    }
+                    out.push_str(&format!("[:{name}:]"));
+                    last = None;
+                } else {
+                    let element = single(inner)?;
+                    literal(element, out);
+                    last = Some(element);
+                }
+                at = end;
+            }
+            '-' if last.is_some() && chars.get(at + 1).is_some_and(|&next| next != ']') => {
+                let start = last.unwrap_or_default();
+                let (end, after) = match chars.get(at + 1..at + 3) {
+                    Some(['[', ':']) => return Err("invalid range endpoint"),
+                    Some(['[', '.' | '=']) => {
+                        let (inner, after) = bracketed(chars, at + 1)?;
+                        (single(inner)?, after)
+                    }
+                    Some(['\\', _]) => escape_in_bracket(chars, at + 1),
+                    _ => (chars.get(at + 1).copied().unwrap_or_default(), at + 2),
+                };
+                if end < start {
+                    return Err("invalid range endpoint");
+                }
+                out.push('-');
+                literal(end, out);
+                last = None;
+                at = after;
+            }
+            '\\' => {
+                if chars.get(at + 1).is_none() {
+                    return Err("unbalanced [");
+                }
+                let (escaped, after) = escape_in_bracket(chars, at);
+                literal(escaped, out);
+                last = Some(escaped);
+                at = after;
+            }
+            _ => {
+                literal(c, out);
+                last = Some(c);
+                at += 1;
+            }
+        }
+    }
+}
+
+/// The character the escape whose backslash is at `at` in a bracket expression stands
+/// for, and where the escape ends: `\t` and the like, `\x{8}` that octal escapes were
+/// turned into (`translate_ere_escapes`), else the character after the backslash, as gawk
+/// reads one. `[ \t]` was a space or a `t`.
+fn escape_in_bracket(chars: &[char], at: usize) -> (char, usize) {
+    let escaped = chars.get(at + 1).copied().unwrap_or_default();
+    let simple = match escaped {
+        'n' => Some('\n'),
+        't' => Some('\t'),
+        'r' => Some('\r'),
+        'f' => Some('\x0c'),
+        'v' => Some('\x0b'),
+        'a' => Some('\x07'),
+        _ => None,
+    };
+    if let Some(c) = simple {
+        return (c, at + 2);
+    }
+    if escaped == 'x' && chars.get(at + 2) == Some(&'{') {
+        let digits_start = at + 3;
+        if let Some(close) = (digits_start..chars.len()).find(|&i| chars.get(i) == Some(&'}')) {
+            let digits: String = chars
+                .get(digits_start..close)
+                .unwrap_or_default()
+                .iter()
+                .collect();
+            if let Some(c) = u32::from_str_radix(&digits, 16)
+                .ok()
+                .and_then(char::from_u32)
+            {
+                return (c, close + 1);
+            }
+        }
+    }
+    (escaped, at + 2)
+}
+
+/// The inside of the `[:name:]`, `[.c.]` or `[=c=]` that starts at `at`, and where it
+/// ends; gawk's error when it does not.
+fn bracketed(chars: &[char], at: usize) -> Result<(&[char], usize), &'static str> {
+    let kind = chars.get(at + 1).copied().unwrap_or_default();
+    let error = if kind == ':' {
+        "invalid character class name"
+    } else {
+        "invalid collating element"
+    };
+    let start = at + 2;
+    let close = (start..chars.len())
+        .find(|&i| chars.get(i) == Some(&kind) && chars.get(i + 1) == Some(&']'))
+        .ok_or(error)?;
+    Ok((chars.get(start..close).unwrap_or_default(), close + 2))
+}
+
+/// The one character of a collating element, `[.c.]` or `[=c=]`.
+fn single(inner: &[char]) -> Result<char, &'static str> {
+    match inner {
+        [c] => Ok(*c),
+        _ => Err("invalid collating element"),
+    }
+}
+
+impl Regex {
+    /// The regex for `pattern`, or gawk's words for what is wrong with it.
+    pub fn new(pattern: &str) -> Result<Self, String> {
+        let translated = translate_ere(pattern)?;
+        let inner = match regex_syntax::ParserBuilder::new()
+            .build()
+            .parse(&translated)
+        {
+            Ok(hir) => {
+                let hir = sort_alternations(hir);
+                MetaRegex::builder()
+                    .build_from_hir(&hir)
+                    .or_else(|_| MetaRegex::new(&translated))
+                    .map_err(|e| e.to_string())?
+            }
+            Err(regex_syntax::Error::Parse(error)) => return Err(error.kind().to_string()),
+            Err(regex_syntax::Error::Translate(error)) => return Err(error.kind().to_string()),
+            Err(error) => return Err(error.to_string()),
+        };
 
         Ok(Self {
             inner,
             pattern_string: pattern.to_string(),
         })
+    }
+
+    /// The regex for `pattern`, made while the program runs: a dynamic regular expression,
+    /// FS or RS. Something wrong with it is gawk's fatal error, `invalid regexp: unbalanced
+    /// (: /(/`.
+    pub fn dynamic(pattern: &str) -> Result<Self, String> {
+        Self::new(pattern).map_err(|error| format!("invalid regexp: {error}: /{pattern}/"))
     }
 
     /// The first match that is not empty, in bytes that need not be UTF-8 nor end on a
@@ -154,6 +434,28 @@ impl Regex {
             regex: self,
             string,
         }
+    }
+
+    /// The first match in `string` and the places of its groups, the whole match first,
+    /// `None` for a group that took no part in it: what gawk's `match(s, r, arr)` puts in
+    /// `arr`.
+    pub fn captures(&self, string: &str) -> Option<Vec<Option<RegexMatch>>> {
+        let mut captures = self.inner.create_captures();
+        self.inner
+            .search_captures(&Input::new(string), &mut captures);
+        if !captures.is_match() {
+            return None;
+        }
+        Some(
+            (0..captures.group_len())
+                .map(|group| {
+                    captures.get_group(group).map(|span| RegexMatch {
+                        start: span.start,
+                        end: span.end,
+                    })
+                })
+                .collect(),
+        )
     }
 
     pub fn pattern(&self) -> &str {
