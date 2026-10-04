@@ -85,8 +85,7 @@ then the riskiest changes once the crashes and state bugs are out of the way.
   set, a test hook live in production as W32-18's were; and they find cash only when their
   exe is named `cash` (or `cash-…`), so in a linked `awk.exe` they take another shell.
   Seen 2026-10-04 fixing BIN-09.
-- Bash's `printf '%(…)T'` uses the `TZ` variable; cash's uses Windows' time zone
-  (chrono's `Local`), as its prompts' `\D{…}` do. Seen 2026-10-04 adding `%(…)T`.
+
 ---
 
 ## Decided, written down so it is not decided twice

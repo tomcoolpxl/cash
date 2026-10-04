@@ -104,9 +104,7 @@ fn format_prompt_piece(
             tilde_replaced,
             basename,
         } => format_current_working_directory(shell, tilde_replaced, basename),
-        cash_parser::prompt::PromptPiece::Date(format) => {
-            format_date(&chrono::Local::now(), &format)
-        }
+        cash_parser::prompt::PromptPiece::Date(format) => now(shell, date_format(&format)),
         cash_parser::prompt::PromptPiece::DollarOrPound => {
             if users::is_root() {
                 "#".to_owned()
@@ -178,9 +176,7 @@ fn format_prompt_piece(
                 .and_then(|p| p.file_name().map(|s| s.to_string_lossy().to_string()))
                 .unwrap_or_default()
         }
-        cash_parser::prompt::PromptPiece::Time(time_fmt) => {
-            format_time(&chrono::Local::now(), &time_fmt)
-        }
+        cash_parser::prompt::PromptPiece::Time(time_fmt) => now(shell, time_format(&time_fmt)),
     };
 
     Ok(formatted)
@@ -205,45 +201,48 @@ fn format_current_working_directory(
     cash_win32::path::render(Path::new(&working_dir_str))
 }
 
-fn format_time<Tz: chrono::TimeZone>(
-    datetime: &chrono::DateTime<Tz>,
-    format: &cash_parser::prompt::PromptTimeFormat,
-) -> String
-where
-    Tz::Offset: std::fmt::Display,
-{
-    let formatted = match format {
-        cash_parser::prompt::PromptTimeFormat::TwelveHourAM => datetime.format("%I:%M %p"),
-        cash_parser::prompt::PromptTimeFormat::TwelveHourHHMMSS => datetime.format("%I:%M:%S"),
-        cash_parser::prompt::PromptTimeFormat::TwentyFourHourHHMM => datetime.format("%H:%M"),
-        cash_parser::prompt::PromptTimeFormat::TwentyFourHourHHMMSS => datetime.format("%H:%M:%S"),
-    };
-
-    formatted.to_string()
+/// `\t`, `\T`, `\@` and `\A` as strftime's specifiers.
+const fn time_format(format: &cash_parser::prompt::PromptTimeFormat) -> &'static str {
+    match format {
+        cash_parser::prompt::PromptTimeFormat::TwelveHourAM => "%I:%M %p",
+        cash_parser::prompt::PromptTimeFormat::TwelveHourHHMMSS => "%I:%M:%S",
+        cash_parser::prompt::PromptTimeFormat::TwentyFourHourHHMM => "%H:%M",
+        cash_parser::prompt::PromptTimeFormat::TwentyFourHourHHMMSS => "%H:%M:%S",
+    }
 }
 
-fn format_date<Tz: chrono::TimeZone>(
-    datetime: &chrono::DateTime<Tz>,
-    format: &cash_parser::prompt::PromptDateFormat,
-) -> String
-where
-    Tz::Offset: std::fmt::Display,
-{
+/// `\d` and `\D{…}` as strftime's specifiers.
+fn date_format(format: &cash_parser::prompt::PromptDateFormat) -> &str {
     match format {
-        cash_parser::prompt::PromptDateFormat::WeekdayMonthDate => {
-            datetime.format("%a %b %d").to_string()
-        }
+        cash_parser::prompt::PromptDateFormat::WeekdayMonthDate => "%a %b %d",
         // An empty format is the locale's time, as in Bash.
-        cash_parser::prompt::PromptDateFormat::Custom(fmt) => {
-            let fmt = if fmt.is_empty() { "%X" } else { fmt.as_str() };
-            crate::timefmt::strftime(datetime, fmt)
-        }
+        cash_parser::prompt::PromptDateFormat::Custom(fmt) if fmt.is_empty() => "%X",
+        cash_parser::prompt::PromptDateFormat::Custom(fmt) => fmt,
     }
+}
+
+/// Now, in the zone the shell's `TZ` names, as Bash shows it (the user, 2026-10-04).
+fn now(shell: &Shell<impl extensions::ShellExtensions>, format: &str) -> String {
+    crate::timefmt::Zone::of_shell(shell).format(chrono::Utc::now(), format)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn format_time(
+        datetime: &chrono::DateTime<chrono::FixedOffset>,
+        format: &cash_parser::prompt::PromptTimeFormat,
+    ) -> String {
+        crate::timefmt::strftime(datetime, time_format(format))
+    }
+
+    fn format_date(
+        datetime: &chrono::DateTime<chrono::FixedOffset>,
+        format: &cash_parser::prompt::PromptDateFormat,
+    ) -> String {
+        crate::timefmt::strftime(datetime, date_format(format))
+    }
 
     #[test]
     fn test_format_time() {

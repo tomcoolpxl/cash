@@ -28,6 +28,7 @@ cash-parser = { workspace = true }
 bon = { workspace = true }
 cached = { workspace = true }
 chrono = { workspace = true }
+chrono-tz = { workspace = true }
 clap = { workspace = true, features = ["derive", "wrap_help"] }
 color-print = { workspace = true }
 fancy-regex = { workspace = true }

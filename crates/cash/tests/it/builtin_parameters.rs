@@ -832,6 +832,29 @@ fn printf_formats_times() {
     );
 }
 
+/// Times are shown in the zone an exported `TZ` names, as in Bash: an IANA name, a POSIX
+/// offset, or UTC for one it does not know (the user, 2026-10-04). An unexported `TZ` is
+/// not looked at.
+#[test]
+fn times_honour_an_exported_tz() {
+    let out = cash(
+        r#"unset TZ; f='%Y-%m-%d %H:%M %Z'
+           TZ=UTC; printf "[%($f)T]\n" 1700000000 | grep -c UTC
+           export TZ=UTC; printf "%($f)T\n" 1700000000
+           TZ=JST-9 printf "%($f)T\n" 1700000000
+           TZ=Asia/Tokyo; printf "%($f)T\n" 1700000000
+           TZ=Nowhere/Land; printf "%($f)T\n" 1700000000
+           TZ=XYZ+3:30; PS1='\D{%Z}'; echo "${PS1@P}""#,
+    );
+    assert_eq!(
+        out.stdout,
+        "0\n2023-11-14 22:13 UTC\n2023-11-15 07:13 JST\n2023-11-15 07:13 JST\n\
+         2023-11-14 22:13 UTC\nXYZ",
+        "{}",
+        out.stderr
+    );
+}
+
 /// `exec` in a subshell ends the subshell with the command's status and takes its
 /// options, as in Bash: it ran the command through `command` and went on, and refused
 /// `-a`, `-c` and `-l` as "not yet supported".

@@ -1,3 +1,4 @@
+use cash_core::timefmt::Zone;
 use clap::Parser;
 use std::{ffi::OsString, io::Write, ops::ControlFlow};
 use uucore::format;
@@ -53,11 +54,15 @@ impl builtins::Command for PrintfCommand {
             ExecutionResult::general_error()
         };
 
+        // `%(…)T` shows times in the zone `TZ` names (the user, 2026-10-04).
+        let zone = cash_core::timefmt::Zone::of_shell(context.shell);
+
         if has_count_spec(fmt) {
             let mut output = Vec::new();
             let mut counts = Vec::new();
             format_via_uucore_with_counts(
                 fmt,
+                &zone,
                 args.iter().cloned(),
                 &mut output,
                 &mut counts,
@@ -95,7 +100,7 @@ impl builtins::Command for PrintfCommand {
         if let Some(variable_name) = &self.output_variable {
             // Format to a u8 vector.
             let mut result: Vec<u8> = vec![];
-            format_via_uucore(fmt, args.iter().cloned(), &mut result, &mut say)?;
+            format_via_uucore(fmt, &zone, args.iter().cloned(), &mut result, &mut say)?;
 
             // Convert to a string.
             let result_str = String::from_utf8(result).map_err(|_| {
@@ -111,7 +116,7 @@ impl builtins::Command for PrintfCommand {
             )
             .await?;
         } else {
-            format_via_uucore(fmt, args.iter().cloned(), context.stdout(), &mut say)?;
+            format_via_uucore(fmt, &zone, args.iter().cloned(), context.stdout(), &mut say)?;
             context.stdout().flush()?;
         }
 
@@ -144,15 +149,24 @@ fn has_count_spec(fmt: &str) -> bool {
 /// `before_pass` is told the number of each pass over the format before it starts.
 fn format_via_uucore(
     format_string: &str,
+    zone: &Zone,
     args: impl Iterator<Item = impl Into<OsString>>,
     writer: impl Write,
     before_pass: &mut dyn FnMut(usize) -> Result<(), Error>,
 ) -> Result<(), cash_core::Error> {
-    format_via_uucore_with_counts(format_string, args, writer, &mut Vec::new(), before_pass)
+    format_via_uucore_with_counts(
+        format_string,
+        zone,
+        args,
+        writer,
+        &mut Vec::new(),
+        before_pass,
+    )
 }
 
 fn format_via_uucore_with_counts(
     format_string: &str,
+    zone: &Zone,
     args: impl Iterator<Item = impl Into<OsString>>,
     mut writer: impl Write,
     counts: &mut Vec<(String, usize)>,
@@ -214,7 +228,7 @@ fn format_via_uucore_with_counts(
                 let arg = format_args_wrapper.next_string(*position).to_string_lossy();
                 let rendered = match custom {
                     Custom::Quoted(quoted_format) => quoted_format.render(&arg),
-                    Custom::Time(time_format) => time_format.render(&arg),
+                    Custom::Time(time_format) => time_format.render(&arg, zone),
                 };
                 write!(writer, "{rendered}")?;
                 written += rendered.len();
@@ -356,15 +370,14 @@ impl TimeFormat {
     }
 
     /// `argument` is a clean decimal (see `numbers`), or empty when there was none.
-    fn render(&self, argument: &str) -> String {
+    fn render(&self, argument: &str, zone: &Zone) -> String {
         let when = match argument.parse::<i64>().unwrap_or(0) {
-            _ if argument.is_empty() => Some(chrono::Local::now()),
-            -1 => Some(chrono::Local::now()),
-            -2 => Some(chrono::DateTime::<chrono::Local>::from(
+            _ if argument.is_empty() => Some(chrono::Utc::now()),
+            -1 => Some(chrono::Utc::now()),
+            -2 => Some(chrono::DateTime::<chrono::Utc>::from(
                 cash_core::timefmt::shell_started(),
             )),
-            seconds => chrono::DateTime::from_timestamp(seconds, 0)
-                .map(|utc| utc.with_timezone(&chrono::Local)),
+            seconds => chrono::DateTime::from_timestamp(seconds, 0),
         };
         // An empty format is the locale's time, as in Bash.
         let format = if self.format.is_empty() {
@@ -373,9 +386,7 @@ impl TimeFormat {
             &self.format
         };
         let mut text = truncate_chars(
-            &when.map_or_else(String::new, |when| {
-                cash_core::timefmt::strftime(&when, format)
-            }),
+            &when.map_or_else(String::new, |when| zone.format(when, format)),
             self.precision,
         );
         let padding = self.width.unwrap_or(0).saturating_sub(text.chars().count());
@@ -651,7 +662,9 @@ mod tests {
         args: impl Iterator<Item = impl Into<OsString>>,
     ) -> Result<String> {
         let mut result = vec![];
-        format_via_uucore(format_string, args, &mut result, &mut |_| Ok(()))?;
+        format_via_uucore(format_string, &Zone::Local, args, &mut result, &mut |_| {
+            Ok(())
+        })?;
 
         Ok(String::from_utf8(result)?)
     }

@@ -51,6 +51,8 @@ pub(crate) struct HistoryCommand {
 struct HistoryConfig {
     default_history_file_path: Option<PathBuf>,
     time_format: Option<String>,
+    /// The zone `TZ` names, which the times are shown in.
+    zone: cash_core::timefmt::Zone,
 }
 
 impl builtins::Command for HistoryCommand {
@@ -64,6 +66,7 @@ impl builtins::Command for HistoryCommand {
         let config = HistoryConfig {
             default_history_file_path: context.shell.history_file_path(),
             time_format: context.shell.history_time_format(),
+            zone: cash_core::timefmt::Zone::of_shell(context.shell),
         };
 
         let stdout = context.stdout();
@@ -215,15 +218,13 @@ fn display_history(
     let skip_count = item_count - max_entries.unwrap_or(item_count);
 
     for (i, item) in history.iter().skip(skip_count).enumerate() {
-        let mut formatted_timestamp = String::new();
-
-        if let Some(timestamp) = item.timestamp {
-            let local_timestamp = timestamp.with_timezone(&chrono::Local);
-            if let Some(time_format) = &config.time_format {
-                // A specifier chrono does not know panicked here.
-                formatted_timestamp = cash_core::timefmt::strftime(&local_timestamp, time_format);
-            }
-        }
+        // A specifier chrono does not know panicked here.
+        let formatted_timestamp = match (item.timestamp, &config.time_format) {
+            (Some(timestamp), Some(time_format)) => config
+                .zone
+                .format(timestamp.with_timezone(&chrono::Utc), time_format),
+            _ => String::new(),
+        };
 
         // Output format is something like:
         //     1  echo hello world
