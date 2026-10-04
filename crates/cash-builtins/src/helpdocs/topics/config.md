@@ -29,10 +29,10 @@ zsh-hooks = false                     # zsh-style preexec and precmd functions
 
 ## Startup files
 
-- An interactive shell reads `C:\ProgramData\cash\cashrc` for every user, then
+- An interactive shell reads `%ProgramData%\cash\cashrc` for every user, then
   `~/.bashrc`, then `~/.cashrc`, so cash-only lines can go in the last without breaking
   Git Bash (D24). `--norc` reads none of them; `--rcfile FILE` reads FILE instead.
-- A login shell (`cash -l`) reads `C:\ProgramData\cash\profile`, then the first of
+- A login shell (`cash -l`) reads `%ProgramData%\cash\profile`, then the first of
   `~/.bash_profile`, `~/.bash_login` and `~/.profile`; `--noprofile` skips them.
 - A script reads `$BASH_ENV` if it is set, as Bash does.
 - `cash --init-rc` writes a starter `~/.bashrc` when you have neither file (D69).

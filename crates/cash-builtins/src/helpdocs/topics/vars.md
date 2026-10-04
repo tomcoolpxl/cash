@@ -44,14 +44,15 @@ The cost: `$Foo` and `$FOO` cannot be two variables.
 
 ## Bash's, as cash reads them
 
-`PS0`, `PS1`, `PS2`, `PS3`, `PS4`, `PROMPT_COMMAND` (a string or an array),
+`PS0`, `PS1`, `PS2`, `PS3`, `PS4`, `PROMPT_COMMAND` (a string or an array), `CDPATH`
+(for `cd`; entries may be spelled `C:/x` or `/c/x`, separated by `:` or `;`),
 `HISTSIZE`, `HISTFILESIZE`, `HISTCONTROL`, `HISTIGNORE`, `HISTTIMEFORMAT`, `TIMEFORMAT`,
 `TMOUT`, `FUNCNEST`, `GLOBSORT`, `BASH_ENV` (for scripts), `ENV` (for `sh`), `FCEDIT`
 and `EDITOR` (for `fc`), `VISUAL` and `EDITOR` (for `Ctrl-X Ctrl-E`), `TZ` (exported),
 `LS_COLORS` (for `ls`), `NO_COLOR` (no colour in errors and `top`), `IFS`, `OPTIND`,
 `OPTARG`, `REPLY`.
 
-Not read: `CDPATH`, `MSYSTEM`, `INPUTRC`, `MAIL`, `FIGNORE`, `EXECIGNORE`,
+Not read: `MSYSTEM`, `INPUTRC`, `MAIL`, `FIGNORE`, `EXECIGNORE`,
 `PROMPT_DIRTRIM`, `BASH_COMPAT`.
 
 ## Windows', as cash reads them

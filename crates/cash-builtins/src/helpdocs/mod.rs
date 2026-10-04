@@ -37,6 +37,11 @@ const TOPIC_ORDER: [&str; 8] = [
     "differences",
 ];
 
+/// The hidden long option, without its dashes, that `cash help ...` passes the `help`
+/// builtin from outside the shell, so its errors say `cash help:` rather than name the
+/// `-c` script and line that run it.
+pub const CASH_SUBCOMMAND_OPTION: &str = "cash-subcommand";
+
 /// Words `help` takes as a request rather than a name.
 pub const COMMANDS: [&str; 2] = ["topics", "search"];
 

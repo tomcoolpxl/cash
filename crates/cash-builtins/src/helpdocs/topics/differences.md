@@ -62,6 +62,10 @@ and in the fewest places it can. The full table with its history is section 4 of
 - Elevated and `detach`ed programs, and GUI programs on an orderly exit, outlive cash;
   everything else it started does not (D6, D42, D45, row 12). `disown` forgets a job
   but cannot take it out of cash's job object (row 23).
+- `sudo`, `su` and `sudoedit` are cash's own, over gsudo, Windows' `sudo` or UAC: there
+  is no root account, `root` means this account elevated, and an elevated or other
+  user's shell is always a new cash, as Windows raises no running process (D45; `help
+  elevation`).
 - `kill -STOP` and Ctrl-Z suspend a program's threads; Windows has no `SIGSTOP` (D19,
   row 9).
 - `kill -TERM` ends a console program at once, and gives a program with a window five
@@ -111,5 +115,5 @@ and in the fewest places it can. The full table with its history is section 4 of
 
 ## Not there
 
-- `CDPATH` is not read by `cd`.
-- There is no vi editing mode; `set -o vi` changes nothing.
+- vi editing mode is reedline's: Readline's vi keymaps, without its `vi-insert`/
+  `vi-command` names for `bind -m`.

@@ -56,6 +56,7 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 | 14 | 1.3.14 | Tests, records and leftovers |
 | 15 | 1.3.15 | GNU parity of the bundled sed and awk |
 | 16 | 1.3.17 | sudo, su and `cash help` |
+| 17 | 1.3.18 | `lsof` lists everything |
 
 ---
 
@@ -63,15 +64,27 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 Found writing the help catalogue (2026-10-04):
 
-- `set -o vi` is taken and does nothing: there is no vi editing mode. `vi` and `emacs` do
-  not turn each other off, as Bash's do.
-- The help catalogue's differences topic lists `CDPATH` as missing; `cd` searches it since
-  2026-10-04.
-- From outside the shell, `cash help NOSUCH` says `cash: line 1: help: no help topics
-  match …`, the `-c` script's prefix.
+- From outside the shell, `cash help -x` still says `cash: line 1: help: …`: an invalid
+  option is reported by the core's parse error, not by `help`, which now writes
+  `cash help: …` for everything else.
 - D3 says Unix spellings are taken "everywhere, always"; an argument such as `cat /tmp/x`
   or `rm /c/…` reaches a bundled tool or a program as written, with D4's warning. The
   `paths` help topic says what happens; the spec does not.
+
+---
+
+## Phase 17. `lsof` lists everything
+
+Chosen by the user on 2026-10-04, after 1.3.17:
+
+- Bare `lsof` refuses ("needs a system-wide handle walk"), and `lsof -p` lists no data
+  files. Walk the handles as handle.exe and System Informer do:
+  `NtQuerySystemInformation(SystemExtendedHandleInformation)`, `DuplicateHandle` from
+  each process opened with `PROCESS_DUP_HANDLE`, `GetFinalPathNameByHandle` for the name.
+  Pipe handles are skipped by `GetFileType` or named on a worker thread with a timeout, so
+  no query hangs. Unelevated, only the processes the user can open are listed, as Linux
+  `lsof` without root; `sudo lsof` lists all. Drops ROADMAP item 8's refusal (4.) and the
+  `-p` note on standard error; `fuser` gains nothing it needs.
 
 ---
 

@@ -197,12 +197,46 @@ fn cash_help_works_from_outside_the_shell() {
     assert_eq!(out.code, 0, "{}", out.stderr);
     assert!(out.stdout.starts_with("sed - "), "{}", out.stdout);
 
+    // Its errors name `cash help`, not the `-c` script that runs the builtin.
     let unknown = output_of(isolate(Command::new(CASH).args(["help", "sedd"])));
     assert_eq!(unknown.code, 1);
+    assert_eq!(
+        unknown.stderr,
+        "cash help: no help topics match `sedd'.\n\
+         Did you mean: sed?\n\
+         Try `cash help search sedd', `cash help topics', or `cash help' for every builtin."
+    );
+
+    let nothing = output_of(isolate(Command::new(CASH).args([
+        "help",
+        "search",
+        "zzqqxx-nothing",
+    ])));
+    assert_eq!(nothing.code, 1);
     assert!(
-        unknown.stderr.contains("Did you mean: sed"),
+        nothing
+            .stderr
+            .starts_with("cash help: nothing mentions `zzqqxx-nothing'."),
         "{}",
-        unknown.stderr
+        nothing.stderr
+    );
+}
+
+#[test]
+fn help_inside_the_shell_reports_as_bash_does() {
+    // `$0: line 1: help: ...`, where `$0` is the path the test ran cash by.
+    let out = run("help sedd");
+    assert!(
+        out.stderr
+            .contains(": line 1: help: no help topics match `sedd'."),
+        "{}",
+        out.stderr
+    );
+    assert!(!out.stderr.contains("cash help:"), "{}", out.stderr);
+    assert!(
+        out.stderr.contains("Try `help search sedd'"),
+        "{}",
+        out.stderr
     );
 }
 

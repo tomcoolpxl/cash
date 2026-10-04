@@ -27,6 +27,11 @@ pub(crate) struct HelpCommand {
     #[arg(short = 's')]
     short_usage: bool,
 
+    /// Speak as `cash help`, the subcommand run from outside the shell: its errors name
+    /// `cash help` rather than the `-c` script and line that runs it.
+    #[arg(long = helpdocs::CASH_SUBCOMMAND_OPTION, hide = true)]
+    cash_subcommand: bool,
+
     /// Patterns of builtins, or names of topics, to display help for; `topics` lists
     /// the topics, and `search WORD` searches every page.
     topic_patterns: Vec<String>,
@@ -57,13 +62,43 @@ impl builtins::Command for HelpCommand {
                 write_out(&context, &topic_list(style))?;
                 Ok(ExecutionResult::success())
             }
-            Some((first, words)) if first == "search" => search(&context, words, style),
+            Some((first, words)) if first == "search" => self.search(&context, words, style),
             Some(_) => self.show_patterns(&context, style),
         }
     }
 }
 
 impl HelpCommand {
+    /// How the user runs `help`, for the advice in a message: `help`, or `cash help`
+    /// outside the shell.
+    const fn invocation(&self) -> &'static str {
+        if self.cash_subcommand {
+            "cash help"
+        } else {
+            "help"
+        }
+    }
+
+    /// Reports an error: as Bash reports a builtin's inside the shell (`script: line 3:
+    /// help: ...`), and as `cash help: ...` outside it, where the `-c` script and its
+    /// line are cash's own doing and mean nothing to the user.
+    fn complain(
+        &self,
+        context: &cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
+        message: &str,
+    ) -> Result<(), cash_core::Error> {
+        if self.cash_subcommand {
+            writeln!(context.stderr(), "cash help: {message}")?;
+        } else {
+            writeln!(
+                context.error_stream(),
+                "{}: {message}",
+                context.command_name
+            )?;
+        }
+        Ok(())
+    }
+
     /// Shows each requested builtin or topic; fails only when none of them matched, as
     /// Bash does.
     fn show_patterns<SE: cash_core::ShellExtensions>(
@@ -89,7 +124,7 @@ impl HelpCommand {
                 texts.push(self.topic_text(topic, style));
             }
             if texts.is_empty() {
-                no_match(context, pattern)?;
+                self.no_match(context, pattern)?;
                 continue;
             }
             any_matched = true;
@@ -541,31 +576,69 @@ fn topic_list(style: Style) -> String {
 /// How many matching lines of one page a search shows.
 const LINES_PER_HIT: usize = 3;
 
-/// `help search WORD`.
-fn search(
-    context: &cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
-    words: &[String],
-    style: Style,
-) -> Result<ExecutionResult, cash_core::Error> {
-    let word = words.join(" ");
-    if word.trim().is_empty() {
-        writeln!(
-            context.error_stream(),
-            "{}: search: say what to search for: `help search WORD'",
-            context.command_name
-        )?;
-        return Ok(ExecutionResult::general_error());
+impl HelpCommand {
+    /// `help search WORD`.
+    fn search(
+        &self,
+        context: &cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
+        words: &[String],
+        style: Style,
+    ) -> Result<ExecutionResult, cash_core::Error> {
+        let help = self.invocation();
+        let word = words.join(" ");
+        if word.trim().is_empty() {
+            self.complain(
+                context,
+                &format!("search: say what to search for: `{help} search WORD'"),
+            )?;
+            return Ok(ExecutionResult::general_error());
+        }
+        let hits = helpdocs::search(&word);
+        if hits.is_empty() {
+            self.complain(
+                context,
+                &format!(
+                    "nothing mentions `{word}'. `{help}' lists the builtins, `{help} topics' \
+                     the topics."
+                ),
+            )?;
+            return Ok(ExecutionResult::general_error());
+        }
+        write_out(context, &search_results(hits, style))?;
+        Ok(ExecutionResult::success())
     }
-    let hits = helpdocs::search(&word);
-    if hits.is_empty() {
+
+    /// Says that `pattern` matched nothing, and what was meant, if a name is close.
+    fn no_match(
+        &self,
+        context: &cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
+        pattern: &str,
+    ) -> Result<(), cash_core::Error> {
+        let help = self.invocation();
+        self.complain(context, &format!("no help topics match `{pattern}'."))?;
+        // The advice follows on lines of its own, without the script and line the error
+        // above names.
+        let mut stderr = context.stderr();
+        let builtins: Vec<&str> = context
+            .shell
+            .builtins()
+            .keys()
+            .map(String::as_str)
+            .collect();
+        let close = helpdocs::suggestions(pattern, &builtins);
+        if !close.is_empty() {
+            writeln!(stderr, "Did you mean: {}?", close.join(", "))?;
+        }
         writeln!(
-            context.error_stream(),
-            "{}: nothing mentions `{word}'. `help' lists the builtins, `help topics' the \
-             topics.",
-            context.command_name
+            stderr,
+            "Try `{help} search {pattern}', `{help} topics', or `{help}' for every builtin."
         )?;
-        return Ok(ExecutionResult::general_error());
+        Ok(())
     }
+}
+
+/// What `help search` prints for `hits`.
+fn search_results(hits: Vec<helpdocs::Hit>, style: Style) -> String {
     let mut out = String::new();
     for hit in hits {
         let what = if hit.topic { "topic" } else { "builtin" };
@@ -587,36 +660,5 @@ fn search(
             let _ = writeln!(out, "{}", render::inline(&text, style.colour));
         }
     }
-    write_out(context, &out)?;
-    Ok(ExecutionResult::success())
-}
-
-/// Says that `pattern` matched nothing, and what was meant, if a name is close.
-fn no_match(
-    context: &cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
-    pattern: &str,
-) -> Result<(), cash_core::Error> {
-    writeln!(
-        context.error_stream(),
-        "{}: no help topics match `{pattern}'.",
-        context.command_name
-    )?;
-    // The advice follows on lines of its own, without the script and line the error
-    // above names.
-    let mut stderr = context.stderr();
-    let builtins: Vec<&str> = context
-        .shell
-        .builtins()
-        .keys()
-        .map(String::as_str)
-        .collect();
-    let close = helpdocs::suggestions(pattern, &builtins);
-    if !close.is_empty() {
-        writeln!(stderr, "Did you mean: {}?", close.join(", "))?;
-    }
-    writeln!(
-        stderr,
-        "Try `help search {pattern}', `help topics', or `help' for every builtin."
-    )?;
-    Ok(())
+    out
 }

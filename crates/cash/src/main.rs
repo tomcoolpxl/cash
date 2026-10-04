@@ -81,17 +81,22 @@ fn main() {
     // `cash help [ARGS]` is the `help` builtin, from PowerShell or cmd, run by a shell
     // that reads no startup file: it says the same outside cash as inside, from the same
     // catalogue and the builtins this cash registers. A file named `help` in the working
-    // directory wins, as for `doctor`.
+    // directory wins, as for `doctor`. The hidden option makes its errors say `cash help:`
+    // rather than name the `-c` script and its line.
     let mut args = std::env::args();
     let is_help = args.nth(1).as_deref() == Some("help");
     if is_help && !std::path::Path::new("help").exists() {
         let exe = std::env::args().next().unwrap_or_default();
+        let script = format!(
+            "builtin help --{} \"$@\"",
+            cash_builtins::helpdocs::CASH_SUBCOMMAND_OPTION
+        );
         let mut command = vec![
             exe,
             "--norc".to_owned(),
             "--noprofile".to_owned(),
             "-c".to_owned(),
-            "builtin help \"$@\"".to_owned(),
+            script,
             "cash".to_owned(),
         ];
         command.extend(args);
