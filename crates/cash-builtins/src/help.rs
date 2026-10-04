@@ -32,6 +32,11 @@ pub(crate) struct HelpCommand {
     #[arg(long = helpdocs::CASH_SUBCOMMAND_OPTION, hide = true)]
     cash_subcommand: bool,
 
+    /// An option `cash help` was given and `help` has not: reported by `help` itself,
+    /// since the shell's report would name the `-c` script and its line.
+    #[arg(skip)]
+    invalid_option: Option<String>,
+
     /// Patterns of builtins, or names of topics, to display help for; `topics` lists
     /// the topics, and `search WORD` searches every page.
     topic_patterns: Vec<String>,
@@ -47,10 +52,47 @@ const SPEC_URL: &str = "https://github.com/tomcoolpxl/cash/blob/main/spec.md";
 impl builtins::Command for HelpCommand {
     type Error = cash_core::Error;
 
+    fn new<I>(args: I) -> Result<Self, clap::Error>
+    where
+        I: IntoIterator<Item = String>,
+    {
+        let args: Vec<String> = args.into_iter().collect();
+        let marker = format!("--{}", helpdocs::CASH_SUBCOMMAND_OPTION);
+        let cash_subcommand = args.contains(&marker);
+        match Self::try_parse_from(&args) {
+            Err(error)
+                if cash_subcommand && error.kind() == clap::error::ErrorKind::UnknownArgument =>
+            {
+                let option = match error.get(clap::error::ContextKind::InvalidArg) {
+                    Some(clap::error::ContextValue::String(argument)) => argument
+                        .split_whitespace()
+                        .next()
+                        .unwrap_or_default()
+                        .to_owned(),
+                    _ => String::new(),
+                };
+                Ok(Self {
+                    short_description: false,
+                    man_page_style: false,
+                    short_usage: false,
+                    cash_subcommand,
+                    invalid_option: Some(option),
+                    topic_patterns: Vec::new(),
+                })
+            }
+            parsed => parsed,
+        }
+    }
+
     async fn execute<SE: cash_core::ShellExtensions>(
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<cash_core::ExecutionResult, Self::Error> {
+        if let Some(option) = &self.invalid_option {
+            self.complain(&context, &format!("{option}: invalid option"))?;
+            self.complain(&context, "usage: cash help [-dms] [pattern ...]")?;
+            return Ok(cash_core::ExecutionExitCode::InvalidUsage.into());
+        }
         let style = style(&context);
         match self.topic_patterns.split_first() {
             None => {

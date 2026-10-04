@@ -220,6 +220,15 @@ fn cash_help_works_from_outside_the_shell() {
         "{}",
         nothing.stderr
     );
+
+    let option = output_of(isolate(Command::new(CASH).args(["help", "-x"])));
+    assert_eq!(
+        (option.code, option.stderr.as_str()),
+        (
+            2,
+            "cash help: -x: invalid option\ncash help: usage: cash help [-dms] [pattern ...]"
+        )
+    );
 }
 
 #[test]

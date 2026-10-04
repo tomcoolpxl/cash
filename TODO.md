@@ -62,11 +62,7 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 
 ## Phase 16. sudo, su and `cash help`
 
-Found writing the help catalogue (2026-10-04):
-
-- From outside the shell, `cash help -x` still says `cash: line 1: help: …`: an invalid
-  option is reported by the core's parse error, not by `help`, which now writes
-  `cash help: …` for everything else.
+Found writing the help catalogue (2026-10-04); all fixed. Left: the gate and the release.
 
 ---
 
