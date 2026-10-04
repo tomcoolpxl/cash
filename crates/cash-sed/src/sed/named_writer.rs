@@ -9,6 +9,7 @@
 // file that was distributed with this source code.
 
 use crate::sed::error_handling::strerror;
+use crate::sed::fast_io::with_crlf;
 
 use std::cell::RefCell;
 use std::fs::{File, OpenOptions};
@@ -150,7 +151,11 @@ impl NamedWriter {
         if self.missing_newline {
             bytes.push(delimiter);
         }
-        bytes.extend_from_slice(line);
+        if crlf && delimiter == b'\n' {
+            bytes.extend_from_slice(&with_crlf(line));
+        } else {
+            bytes.extend_from_slice(line);
+        }
         if newline {
             if crlf && delimiter == b'\n' {
                 bytes.push(b'\r');

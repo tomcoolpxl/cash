@@ -15,6 +15,7 @@
 // For the full copyright and license information, please view the LICENSE
 // file that was distributed with this source code.
 
+use std::borrow::Cow;
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::fs::File;
@@ -167,14 +168,19 @@ impl IOChunk {
         }
     }
 
-    /// Return true if the content ends with a CRLF, which sed's output keeps (D49).
-    pub fn is_crlf_terminated(&self) -> bool {
+    /// Return true if the lines of the content ended in CRLF, which sed's output keeps
+    /// (D49): its end, and the newlines that join lines in it (`N`, `G`, `H`), are written
+    /// as CRLF, while the script sees newlines.
+    pub fn has_crlf_lines(&self) -> bool {
         match &self.content {
-            IOChunkContent::Owned {
-                has_newline,
-                has_crlf,
-                ..
-            } => *has_newline && *has_crlf,
+            IOChunkContent::Owned { has_crlf, .. } => *has_crlf,
+        }
+    }
+
+    /// Set whether the lines of the content ended in CRLF (`has_crlf_lines`).
+    pub fn set_crlf_lines(&mut self, crlf: bool) {
+        match &mut self.content {
+            IOChunkContent::Owned { has_crlf, .. } => *has_crlf = crlf,
         }
     }
 
@@ -502,6 +508,21 @@ impl OutputBuffer {
         )))
     }
 
+    /// Schedule the specified bytes for eventual output, as lines that ended in CRLF
+    /// when `crlf` is set (`IOChunk::has_crlf_lines`).
+    pub fn write_bytes_with(&mut self, bytes: &[u8], crlf: bool) -> UResult<()> {
+        let (content, has_newline) = if bytes.ends_with(b"\n") {
+            (&bytes[..bytes.len() - 1], true)
+        } else {
+            (bytes, false)
+        };
+        self.write_chunk(&IOChunk::from_content(IOChunkContent::new_owned_with_crlf(
+            content.to_vec(),
+            has_newline,
+            crlf,
+        )))
+    }
+
     /// Write `bytes` as they are, leaving a line end the last output left out to come
     /// before the next output: what GNU sed's `/dev/stdout` writes into sed's output.
     pub fn write_apart(&mut self, bytes: &[u8]) -> UResult<()> {
@@ -554,6 +575,24 @@ impl OutputBuffer {
     }
 }
 
+/// `bytes` with each newline that has no CR before it made a CRLF: the newlines that join
+/// lines that ended in CRLF, written as they were read (D49).
+pub fn with_crlf(bytes: &[u8]) -> Cow<'_, [u8]> {
+    if !bytes.contains(&b'\n') {
+        return Cow::Borrowed(bytes);
+    }
+    let mut result = Vec::with_capacity(bytes.len() + 8);
+    let mut previous = 0;
+    for &byte in bytes {
+        if byte == b'\n' && previous != b'\r' {
+            result.push(b'\r');
+        }
+        result.push(byte);
+        previous = byte;
+    }
+    Cow::Owned(result)
+}
+
 /// Implementation of the std::io::Write trait
 impl Write for OutputBuffer {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
@@ -587,7 +626,13 @@ impl OutputBuffer {
                 has_crlf,
                 ..
             } => {
-                self.put(content)?;
+                if *has_crlf && self.delimiter == b'\n' {
+                    // The newlines that join CRLF lines are CRLF again (D49).
+                    let content = with_crlf(content);
+                    self.put(&content)?;
+                } else {
+                    self.put(content)?;
+                }
                 if *has_newline {
                     self.write_line_end(*has_crlf)?;
                 }

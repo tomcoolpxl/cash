@@ -1786,6 +1786,12 @@ Two exceptions give the CR back to the script, because there the script asked fo
    matches before it. For a single sed run, `-b`/`--binary` does the same; it is the
    option GNU sed's Windows builds use for this. `printf` in awk is always written verbatim.
 
+**Lines joined in sed stay CRLF (2026-10-04).** `N`, `G` and `H` put a newline between
+lines; the script sees `\n`, and a space holding CRLF lines writes every newline in it
+as CRLF, a newline the script made (`s/,/\n/`) too: which newline stood for which line
+end is not kept through an edit, and mixed endings are what this decision prevents.
+`printf 'a\r\nb\r\n' | sed N` gave `a\nb\r\n` until then.
+
 Converting files between the two conventions is the job of the bundled `dos2unix` and
 `unix2dos`, not a side effect of editing.
 

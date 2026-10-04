@@ -506,10 +506,7 @@ fn substitute(
             write_to_file(
                 writer,
                 pattern.as_bytes(),
-                (
-                    pattern.is_newline_terminated(),
-                    pattern.is_crlf_terminated(),
-                ),
+                (pattern.is_newline_terminated(), pattern.has_crlf_lines()),
                 output,
                 context,
             )?;
@@ -856,7 +853,10 @@ fn process_file(
                 combined_lines.push(context.delimiter());
                 combined_lines.extend_from_slice(pattern.as_bytes());
 
+                // The newline that joins a CRLF line is written as CRLF again (D49).
+                let crlf = action.crlf || pattern.has_crlf_lines();
                 pattern.set_to_bytes(combined_lines, pattern.is_newline_terminated());
+                pattern.set_crlf_lines(crlf);
                 action.next_command
             } else {
                 // Start from the script top.
@@ -951,19 +951,27 @@ fn process_file(
                 }
                 'g' => {
                     // Replace pattern with the contents of the hold space.
+                    // An empty hold space has no line end of its own: its empty line ends as
+                    // the pattern space's did.
+                    let crlf = context.hold.has_crlf
+                        || (context.hold.content.is_empty() && pattern.has_crlf_lines());
                     pattern.set_to_bytes(context.hold.content.clone(), context.hold.has_newline);
+                    pattern.set_crlf_lines(crlf);
                 }
                 'G' => {
                     // Append to pattern \n followed by hold space contents.
+                    let crlf = pattern.has_crlf_lines() || context.hold.has_crlf;
                     let (pat_content, pat_has_newline) = pattern.fields_mut()?;
                     pat_content.push(context.delimiter());
                     pat_content.extend_from_slice(&context.hold.content);
                     *pat_has_newline = context.hold.has_newline;
+                    pattern.set_crlf_lines(crlf);
                 }
                 'h' => {
                     // Replace hold with the contents of the pattern space.
                     context.hold.content = pattern.as_bytes().to_vec();
                     context.hold.has_newline = pattern.is_newline_terminated();
+                    context.hold.has_crlf = pattern.has_crlf_lines();
                 }
                 'H' => {
                     // Append to hold \n followed by pattern space contents.
@@ -971,6 +979,7 @@ fn process_file(
                     context.hold.content.push(delimiter);
                     context.hold.content.extend_from_slice(pattern.as_bytes());
                     context.hold.has_newline = pattern.is_newline_terminated();
+                    context.hold.has_crlf |= pattern.has_crlf_lines();
                 }
                 'i' => {
                     // Write text to standard output.
@@ -1008,6 +1017,7 @@ fn process_file(
                     context.input_action = Some(InputAction {
                         next_command: command.next.clone(),
                         prepend: pattern.as_bytes().to_vec(),
+                        crlf: pattern.has_crlf_lines(),
                     });
                     continue 'lines;
                 }
@@ -1017,7 +1027,7 @@ fn process_file(
                 'P' => {
                     let line = pattern.as_bytes();
                     if let Some(pos) = memchr(context.delimiter(), line) {
-                        output.write_bytes(&line[..=pos])?;
+                        output.write_bytes_with(&line[..=pos], pattern.has_crlf_lines())?;
                     } else {
                         write_chunk(output, context, &pattern)?;
                     }
@@ -1099,10 +1109,7 @@ fn process_file(
                     write_to_file(
                         writer,
                         pattern.as_bytes(),
-                        (
-                            pattern.is_newline_terminated(),
-                            pattern.is_crlf_terminated(),
-                        ),
+                        (pattern.is_newline_terminated(), pattern.has_crlf_lines()),
                         output,
                         context,
                     )?;
@@ -1111,25 +1118,28 @@ fn process_file(
                     // Append only the first line of the pattern space.
                     let writer = extract_variant!(command, NamedWriter);
                     let pattern_bytes = pattern.as_bytes();
-                    let (first_line, found_newline) =
+                    // The first line is written with its end, which was counted as
+                    // missing, so that the next line written came after an empty one.
+                    let (first_line, newline) =
                         match pattern_bytes.iter().position(|&b| b == context.delimiter()) {
-                            // A slice including the newline
-                            Some(pos) => (&pattern_bytes[..=pos], true),
-                            None => (pattern_bytes, false),
+                            Some(pos) => (&pattern_bytes[..pos], true),
+                            None => (pattern_bytes, pattern.is_newline_terminated()),
                         };
                     write_to_file(
                         writer,
                         first_line,
-                        (
-                            !found_newline && pattern.is_newline_terminated(),
-                            !found_newline && pattern.is_crlf_terminated(),
-                        ),
+                        (newline, pattern.has_crlf_lines()),
                         output,
                         context,
                     )?;
                 }
                 'x' => {
                     // Exchange the contents of the pattern and hold spaces.
+                    let crlf = pattern.has_crlf_lines();
+                    // An empty hold space has no line end of its own: its empty line ends
+                    // as the pattern space's did.
+                    let hold_crlf =
+                        context.hold.has_crlf || (context.hold.content.is_empty() && crlf);
                     let (pat_content, pat_has_newline) = pattern.fields_mut()?;
 
                     // Swap newline if hold space is logically non-empty.
@@ -1137,6 +1147,8 @@ fn process_file(
                         std::mem::swap(pat_has_newline, &mut context.hold.has_newline);
                     }
                     std::mem::swap(pat_content, &mut context.hold.content);
+                    pattern.set_crlf_lines(hold_crlf);
+                    context.hold.has_crlf = crlf;
                 }
                 'y' => {
                     let trans = extract_variant!(command, Transliteration);
@@ -1187,7 +1199,7 @@ fn process_file(
         if !context.quiet {
             let mut pending = action.prepend;
             pending.push(b'\n');
-            output.write_bytes(&pending)?;
+            output.write_bytes_with(&pending, action.crlf)?;
         }
         flush_appends(output, context)?;
         if context.unbuffered {
@@ -1354,6 +1366,7 @@ pub fn process_all_files(
             // Reset hold space for separate file processing
             context.hold.content.clear();
             context.hold.has_newline = true;
+            context.hold.has_crlf = false;
         }
         read_one = true;
 
@@ -1383,7 +1396,7 @@ pub fn process_all_files(
         if !context.quiet {
             let mut pending = action.prepend;
             pending.push(b'\n');
-            output.write_bytes(&pending)?;
+            output.write_bytes_with(&pending, action.crlf)?;
         }
         flush_appends(output, context)?;
         output.flush()?;

@@ -159,6 +159,8 @@ pub enum CharacterMode {
 pub struct ByteSpace {
     pub content: Vec<u8>,  // Line content without newline
     pub has_newline: bool, // True if \n-terminated
+    /// Whether its lines ended in CRLF (`IOChunk::has_crlf_lines`)
+    pub has_crlf: bool,
 }
 
 #[derive(Debug)]
@@ -569,6 +571,8 @@ pub struct InputAction {
     pub next_command: Option<Rc<RefCell<Command>>>,
     /// Data to prepend to the read contents
     pub prepend: Vec<u8>,
+    /// Whether the lines of that data ended in CRLF (`IOChunk::has_crlf_lines`)
+    pub crlf: bool,
 }
 
 #[cfg(test)]

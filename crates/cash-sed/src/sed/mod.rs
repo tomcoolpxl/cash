@@ -316,6 +316,7 @@ fn build_context(matches: &ArgMatches) -> UResult<ProcessingContext> {
         hold: ByteSpace {
             content: Vec::new(),
             has_newline: true,
+            has_crlf: false,
         },
         parsed_block_nesting: 0,
         label_to_command_map: HashMap::new(),

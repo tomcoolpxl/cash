@@ -4191,3 +4191,73 @@ fn test_in_place_edit_refuses_a_named_pipe() -> std::io::Result<()> {
     writer.wait()?;
     Ok(())
 }
+
+/// Lines that ended in CRLF and are joined in the pattern or hold space, by `N`, `G`,
+/// `H` and what moves them about, are written with CRLF again, as each line alone is
+/// (D49), while the script sees a newline: a CRLF file stays a CRLF file. The joining
+/// newline was written as LF, so `sed N` made a file of mixed line ends. An empty hold
+/// space takes the ending of the line it is put with. LF lines stay LF, and the
+/// exceptions of D49, a script naming CR and `CASH_EOL=lf` (or `-b`), see the CR as data.
+#[test]
+fn test_joined_crlf_lines_stay_crlf() -> std::io::Result<()> {
+    for (args, input, output) in [
+        (&["N"][..], &b"a\r\nb\r\n"[..], &b"a\r\nb\r\n"[..]),
+        (&["N"], b"a\r\n", b"a\r\n"),
+        (&["N"], b"a\r\nb", b"a\r\nb"),
+        (&["-n", "1!G;h;$p"], b"a\r\nb\r\nc\r\n", b"c\r\nb\r\na\r\n"),
+        (&["-n", "H;${x;p}"], b"a\r\nb\r\n", b"\r\na\r\nb\r\n"),
+        (&["-n", "H;${g;p}"], b"a\r\nb\r\n", b"\r\na\r\nb\r\n"),
+        (&["G"], b"a\r\nb\r\n", b"a\r\n\r\nb\r\n\r\n"),
+        (&["-n", "x;p"], b"a\r\nb\r\n", b"\r\na\r\n"),
+        (&["-n", "N;P"], b"a\r\nb\r\n", b"a\r\n"),
+        (&["$!N;P;D"], b"a\r\nb\r\nc\r\n", b"a\r\nb\r\nc\r\n"),
+        // The script sees a newline, and no CR before it.
+        (&["N;s/\\n/,/"], b"a\r\nb\r\n", b"a,b\r\n"),
+        (&["-n", "N;/a\\nb$/p"], b"a\r\nb\r\n", b"a\r\nb\r\n"),
+        (&["-n", "N;s/.$/X/p"], b"a\r\nb\r\n", b"a\r\nX\r\n"),
+        // LF lines stay LF.
+        (&["N"], b"a\nb\n", b"a\nb\n"),
+        (&["-n", "1!G;h;$p"], b"a\nb\n", b"b\na\n"),
+        // The exceptions: the CR is data.
+        (&["N;s/\\r//"], b"a\r\nb\r\n", b"a\nb\r\n"),
+        (&["-b", "N;s/\\n/,/"], b"a\r\nb\r\n", b"a\r,b\r\n"),
+    ] {
+        check_output(args, input, output);
+    }
+    new_ucmd!()
+        .env("CASH_EOL", "lf")
+        .arg("N;s/\\n/,/")
+        .pipe_in(b"a\r\nb\r\n".to_vec())
+        .succeeds()
+        .stdout_is_bytes(b"a\r,b\r\n");
+
+    // `w` and `W` write the joined lines so too.
+    let dir = tempfile::tempdir()?;
+    let out = dir.path().join("out").to_string_lossy().into_owned();
+    for (script, written) in [
+        (format!("N;w {out}"), "a\r\nb\r\n"),
+        (format!("N;W {out}"), "a\r\n"),
+    ] {
+        new_ucmd!()
+            .args(&["-n", &script])
+            .pipe_in("a\r\nb\r\n")
+            .succeeds();
+        assert_eq!(fs::read_to_string(&out)?, written, "{script}");
+    }
+    Ok(())
+}
+
+/// `W` writes the first line of the pattern space with its end, and the next line it
+/// writes follows it directly, as in GNU sed; that end was counted as missing, so an
+/// empty line came between.
+#[test]
+fn test_w_upper_first_lines_follow_each_other() -> std::io::Result<()> {
+    let dir = tempfile::tempdir()?;
+    let out = dir.path().join("out").to_string_lossy().into_owned();
+    new_ucmd!()
+        .args(&["-n", &format!("$!N;W {out}")])
+        .pipe_in("a\nb\nc\nd\n")
+        .succeeds();
+    assert_eq!(fs::read_to_string(&out)?, "a\nc\n");
+    Ok(())
+}
