@@ -7,6 +7,7 @@
 use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
+use cash_win32::handles::{OpenFile, Walk};
 use cash_win32::{process, restart};
 
 /// How a process uses a file, as far as Windows lets us tell.
@@ -166,13 +167,9 @@ fn module_holders(
         .collect()
 }
 
-/// Every regular file below `dir`, not following directory links or junctions.
-pub(crate) fn files_below(dir: &Path) -> Vec<PathBuf> {
-    files_below_within(dir, usize::MAX).unwrap_or_default()
-}
-
-/// [`files_below`], or `None` once more than `limit` entries (files and folders) have
-/// been seen: a folder such as `TEMP` can hold tens of thousands of folders.
+/// Every regular file below `dir`, not following directory links or junctions; `None`
+/// once more than `limit` entries (files and folders) have been seen: a folder such as
+/// `TEMP` can hold tens of thousands of folders.
 pub(crate) fn files_below_within(dir: &Path, limit: usize) -> Option<Vec<PathBuf>> {
     let mut files = Vec::new();
     let mut pending = vec![dir.to_path_buf()];
@@ -200,22 +197,116 @@ pub(crate) fn files_below_within(dir: &Path, limit: usize) -> Option<Vec<PathBuf
     Some(files)
 }
 
-/// The holders of any file below `dir`, each attributed to the files it holds.
-///
-/// The Restart Manager reports the union over all registered files, so this asks once
-/// for the whole tree and, only when someone holds something, once per file to
-/// attribute it.
-pub(crate) fn holders_below(dir: &Path) -> std::io::Result<Vec<FileHolder>> {
-    let files = files_below(dir);
+/// Folders of up to this many entries have the processes the handle walk could not open
+/// looked for with the Restart Manager; it opens every file, so a larger one is not.
+pub(crate) const RESTART_MANAGER_FOLDER_LIMIT: usize = 20_000;
+
+/// One thing held at or below a folder.
+pub(crate) enum Held<'w> {
+    /// An open handle, from the handle walk.
+    Handle(&'w OpenFile),
+    /// An executable, a loaded module, or a file the Restart Manager found held.
+    File(FileHolder),
+}
+
+/// What [`held_below`] found.
+pub(crate) struct HeldBelow<'w> {
+    pub held: Vec<Held<'w>>,
+    /// Processes not looked for, because the folder is too large for the Restart Manager.
+    pub unasked: usize,
+}
+
+/// What processes hold at or below the folder `root` (directly in it unless `recursive`):
+/// open files from the handle walk, executables and modules from every process, and for
+/// the processes the walk could not open (every process without a walk), the Restart
+/// Manager over the files below, asked in halves.
+pub(crate) fn held_below<'w>(
+    root: &Path,
+    recursive: bool,
+    walk: Option<&'w Walk>,
+) -> HeldBelow<'w> {
+    let root_key = path_key(root);
+    let root_key = root_key.trim_end_matches('\\');
+    let inside = |path: &Path| {
+        final_key(path).strip_prefix(root_key).is_some_and(|rest| {
+            rest.is_empty()
+                || rest
+                    .strip_prefix('\\')
+                    .is_some_and(|rest| recursive || !rest.contains('\\'))
+        })
+    };
+
+    let mut held: Vec<Held<'w>> = walk
+        .iter()
+        .flat_map(|w| &w.files)
+        .filter(|file| inside(&file.path))
+        .map(Held::Handle)
+        .collect();
+    let listed = process::list();
+    for pid in listed.iter().map(|p| p.pid) {
+        let image = process::image_path(pid);
+        if let Some(image) = image.as_ref().filter(|image| inside(image)) {
+            held.push(Held::File(FileHolder {
+                pid,
+                path: image.clone(),
+                access: Access::Executable,
+            }));
+        }
+        for module in process::modules(pid).unwrap_or_default() {
+            if inside(&module) && image.as_ref() != Some(&module) {
+                held.push(Held::File(FileHolder {
+                    pid,
+                    path: module,
+                    access: Access::Mapped,
+                }));
+            }
+        }
+    }
+
+    let wanted: BTreeSet<u32> = walk.map_or_else(
+        || listed.iter().map(|p| p.pid).collect(),
+        |w| w.unopened.clone(),
+    );
+    if wanted.is_empty() {
+        return HeldBelow { held, unasked: 0 };
+    }
+    let files: Option<Vec<PathBuf>> = if recursive {
+        files_below_within(root, RESTART_MANAGER_FOLDER_LIMIT)
+    } else {
+        std::fs::read_dir(root).map_or(Some(Vec::new()), |entries| {
+            let entries: Vec<_> = entries
+                .flatten()
+                .take(RESTART_MANAGER_FOLDER_LIMIT + 1)
+                .collect();
+            (entries.len() <= RESTART_MANAGER_FOLDER_LIMIT).then(|| {
+                entries
+                    .iter()
+                    .filter(|e| e.file_type().is_ok_and(|t| t.is_file()))
+                    .map(std::fs::DirEntry::path)
+                    .collect()
+            })
+        })
+    };
+    let Some(files) = files else {
+        return HeldBelow {
+            held,
+            unasked: wanted.len(),
+        };
+    };
     let refs: Vec<&Path> = files.iter().map(PathBuf::as_path).collect();
-    if restart::holders(&refs)?.is_empty() {
-        return Ok(Vec::new());
-    }
-    let mut found = Vec::new();
-    for file in &files {
-        found.extend(file_holders(file)?);
-    }
-    Ok(found)
+    held.extend(
+        wanted_holders(&refs, &wanted)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(pid, path)| {
+                Held::File(FileHolder {
+                    pid,
+                    path,
+                    access: Access::Open,
+                })
+            }),
+    );
+    HeldBelow { held, unasked: 0 }
 }
 
 /// Process names and users, looked up once per command.

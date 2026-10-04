@@ -6,8 +6,9 @@
 //!
 //! Windows differences, all documented in ROADMAP item 8:
 //!
-//! * files come from the Restart Manager, which cannot see a directory used only as a
-//!   working directory — `fuser DIR` reports the holders of the files below it;
+//! * files come from the Restart Manager; a directory from the handle walk and the
+//!   module lists (`fileuse::held_below`): `fuser DIR` reports the holders of the files
+//!   below it, as a folder that is only a working directory cannot be told apart;
 //! * whether a file is open for writing is not reported, so `f` is never `F` for files
 //!   and `-w` is refused; `-m`/`-c`/`-M` (mount points) are refused too;
 //! * `e` (executable) and `m` (loaded module) come from each process's image and module
@@ -22,7 +23,7 @@ use cash_core::{ExecutionResult, builtins, sys};
 use cash_win32::net;
 use clap::Parser;
 
-use crate::fileuse::{self, Access, ProcessNames, Services};
+use crate::fileuse::{self, Access, FileHolder, Held, ProcessNames, Services};
 
 /// Width of the name column, as in psmisc.
 const NAME_FIELD: usize = 20;
@@ -237,10 +238,25 @@ fn parse(
     Ok(Parsed::Run(options, names))
 }
 
-/// The processes using one file or directory.
-fn file_uses(path: &std::path::Path) -> std::io::Result<Vec<Use>> {
+/// The processes using one file, or the files below a directory ([`fileuse::held_below`],
+/// with `walk`).
+fn file_uses(
+    path: &std::path::Path,
+    walk: Option<&cash_win32::handles::Walk>,
+) -> std::io::Result<Vec<Use>> {
     let holders = if path.is_dir() {
-        fileuse::holders_below(path)?
+        fileuse::held_below(path, true, walk)
+            .held
+            .into_iter()
+            .map(|held| match held {
+                Held::Handle(file) => FileHolder {
+                    pid: file.pid,
+                    path: file.path.clone(),
+                    access: Access::Open,
+                },
+                Held::File(holder) => holder,
+            })
+            .collect()
     } else {
         fileuse::file_holders(path)?
     };
@@ -358,6 +374,8 @@ fn run(
     let mut header_written = false;
     let mut stdout = context.stdout();
     let mut stderr = context.stderr();
+    // The handle walk, made once, for the first directory named.
+    let mut walk: Option<Option<cash_win32::handles::Walk>> = None;
 
     for (raw, space) in names {
         // `NAME/tcp` selects a socket space as psmisc's short form of `-n tcp NAME`.
@@ -375,7 +393,10 @@ fn run(
                     continue;
                 }
                 let display = cash_win32::path::render(&path);
-                match file_uses(&path) {
+                if path.is_dir() && walk.is_none() {
+                    walk = Some(cash_win32::handles::open_files(None).ok());
+                }
+                match file_uses(&path, walk.as_ref().and_then(Option::as_ref)) {
                     Ok(uses) => (display, uses),
                     Err(error) => {
                         let error = cash_core::error::os_error_text(&error);

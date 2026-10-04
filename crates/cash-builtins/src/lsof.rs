@@ -28,7 +28,7 @@ use cash_win32::handles::{self, OpenFile, Walk};
 use cash_win32::{net, process};
 use clap::Parser;
 
-use crate::fileuse::{self, Access, ProcessNames, Services};
+use crate::fileuse::{self, Access, Held, ProcessNames, Services};
 
 /// lsof's default COMMAND width.
 const DEFAULT_COMMAND_WIDTH: usize = 9;
@@ -478,14 +478,8 @@ fn warn_about(walk: &Walk, stderr: &mut impl Write) -> std::io::Result<()> {
     Ok(())
 }
 
-/// Folders below this many files have the processes the walk could not open looked for
-/// with the Restart Manager; above it, which opens every file, a warning says so instead.
-const RESTART_MANAGER_FOLDER_LIMIT: usize = 20_000;
-
-/// What processes hold at or below the folder `root` (directly in it unless `recursive`),
-/// named in the user's spelling `shown`: open files from the handle walk, executables and
-/// modules from every process, and for the processes the walk could not open, the
-/// Restart Manager over the files below.
+/// The rows for what processes hold at or below the folder `root` ([`fileuse::held_below`]),
+/// named in the user's spelling `shown`: `./held.txt` for `+D .`.
 fn rows_below(
     root: &Path,
     shown: &str,
@@ -494,18 +488,6 @@ fn rows_below(
     options: &Options,
     stderr: &mut impl Write,
 ) -> std::io::Result<Vec<Row>> {
-    let root_key = fileuse::path_key(root);
-    let root_key = root_key.trim_end_matches('\\');
-    let inside = |path: &Path| {
-        let key = fileuse::final_key(path);
-        key.strip_prefix(root_key).is_some_and(|rest| {
-            rest.is_empty()
-                || rest
-                    .strip_prefix('\\')
-                    .is_some_and(|rest| recursive || !rest.contains('\\'))
-        })
-    };
-    // Named as the user named the folder: `./held.txt` for `+D .`.
     let canonical = std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
     let canonical = canonical.to_string_lossy();
     let depth = Path::new(canonical.strip_prefix(r"\\?\").unwrap_or(&canonical))
@@ -524,76 +506,27 @@ fn rows_below(
         }
     };
 
-    let mut rows = Vec::new();
-    for file in walk.iter().flat_map(|w| &w.files) {
-        if inside(&file.path) {
-            let mut row = handle_row(file);
-            row.name = display(&file.path);
-            rows.push(row);
-        }
+    let below = fileuse::held_below(root, recursive, walk);
+    if below.unasked > 0 && !options.quiet {
+        writeln!(
+            stderr,
+            "lsof: WARNING: {shown} holds over {} entries; the {} processes lsof can't open are not looked for in it",
+            fileuse::RESTART_MANAGER_FOLDER_LIMIT,
+            below.unasked
+        )?;
     }
-    for listed in process::list() {
-        let image = process::image_path(listed.pid);
-        if let Some(image) = image.as_ref().filter(|image| inside(image)) {
-            rows.push(file_row(
-                listed.pid,
-                image,
-                display(image),
-                Access::Executable,
-            ));
-        }
-        for module in process::modules(listed.pid).unwrap_or_default() {
-            if inside(&module) && image.as_ref() != Some(&module) {
-                rows.push(file_row(
-                    listed.pid,
-                    &module,
-                    display(&module),
-                    Access::Mapped,
-                ));
+    Ok(below
+        .held
+        .into_iter()
+        .map(|held| match held {
+            Held::Handle(file) => {
+                let mut row = handle_row(file);
+                row.name = display(&file.path);
+                row
             }
-        }
-    }
-
-    // The processes the walk could not open; all of them when there was no walk.
-    let wanted: BTreeSet<u32> = walk.map_or_else(
-        || process::list().into_iter().map(|p| p.pid).collect(),
-        |w| w.unopened.clone(),
-    );
-    if wanted.is_empty() {
-        return Ok(rows);
-    }
-    let files: Option<Vec<PathBuf>> = if recursive {
-        fileuse::files_below_within(root, RESTART_MANAGER_FOLDER_LIMIT)
-    } else {
-        std::fs::read_dir(root).map_or(Some(Vec::new()), |entries| {
-            let entries: Vec<_> = entries
-                .flatten()
-                .take(RESTART_MANAGER_FOLDER_LIMIT + 1)
-                .collect();
-            (entries.len() <= RESTART_MANAGER_FOLDER_LIMIT).then(|| {
-                entries
-                    .iter()
-                    .filter(|e| e.file_type().is_ok_and(|t| t.is_file()))
-                    .map(std::fs::DirEntry::path)
-                    .collect()
-            })
+            Held::File(h) => file_row(h.pid, &h.path, display(&h.path), h.access),
         })
-    };
-    let Some(files) = files else {
-        if !options.quiet {
-            writeln!(
-                stderr,
-                "lsof: WARNING: {shown} holds over {RESTART_MANAGER_FOLDER_LIMIT} entries; the {} processes lsof can't open are not looked for in it",
-                wanted.len()
-            )?;
-        }
-        return Ok(rows);
-    };
-    let refs: Vec<&Path> = files.iter().map(PathBuf::as_path).collect();
-    for (pid, file) in fileuse::wanted_holders(&refs, &wanted).unwrap_or_default() {
-        rows.push(file_row(pid, &file, display(&file), Access::Open));
-    }
-    Ok(rows)
+        .collect())
 }
 
 /// A file the handle walk found open: FD is the handle's value with lsof's mode letter,
