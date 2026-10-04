@@ -330,13 +330,9 @@ fn resolve_named_interpreter(
     if name.eq_ignore_ascii_case("true") {
         return Some(Dispatch::Exit(0));
     }
+    // `CARGO_BIN_EXE_cash` and `CASH_EXE`, test hooks nothing set, sent every `#!/bin/sh`
+    // to whatever a user's variable of that name held (W32-18).
     if name.eq_ignore_ascii_case("sh") || name.eq_ignore_ascii_case("bash") {
-        if let Ok(cash_exe) = std::env::var("CARGO_BIN_EXE_cash") {
-            return Some(Dispatch::Native(PathBuf::from(cash_exe)));
-        }
-        if let Ok(cash_exe) = std::env::var("CASH_EXE") {
-            return Some(Dispatch::Native(PathBuf::from(cash_exe)));
-        }
         if let Ok(own) = std::env::current_exe() {
             if own
                 .file_stem()

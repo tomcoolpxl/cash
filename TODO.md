@@ -109,8 +109,6 @@ some may have gone with other work.
   crash report to `%TEMP%`.
 - W32-13, W32-14, XC-13: five RAII handle types and 15+ manual `CloseHandle`s, three
   leaking on error in `pipe.rs`; about 12 copies of the UTF-16 encoder.
-- W32-18: `CASH_EXE` and `CARGO_BIN_EXE_cash` redirect every `#!/bin/sh` script in
-  production.
 - XC-12, XC-14, XC-16: three process-creation paths and two environment-block builders;
   paths shown via `replace('\\','/')` past the D10 chokepoint; case folding mixes ASCII
   and Unicode.

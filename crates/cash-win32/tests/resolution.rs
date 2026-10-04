@@ -21,6 +21,7 @@ use cash_win32::cmd::{
 };
 use cash_win32::resolve::{
     DEFAULT_PATHEXT, Dispatch, classify, parse_pathext, read_shebang, real_case, resolve,
+    resolve_interpreter,
 };
 
 fn scratch(name: &str) -> PathBuf {
@@ -319,6 +320,24 @@ fn cmd_hazards_are_reported_rather_than_hidden() {
     assert_eq!(is_safe_for_cmd("%PATH%"), Err(CmdHazard::PercentExpansion));
     assert_eq!(is_safe_for_cmd("two\nlines"), Err(CmdHazard::Newline));
     assert_eq!(is_safe_for_cmd("nul\0byte"), Err(CmdHazard::Nul));
+}
+
+/// `#!/bin/sh` goes to cash, not to whatever a variable named `CASH_EXE` or
+/// `CARGO_BIN_EXE_cash` holds: test hooks nothing set, live in every cash (W32-18).
+#[test]
+fn a_sh_shebang_ignores_stray_test_hooks() {
+    let elsewhere = r"C:\elsewhere\not-cash.exe";
+    for name in ["CASH_EXE", "CARGO_BIN_EXE_cash"] {
+        // SAFETY: nextest runs each test in a process of its own, with no other thread
+        // reading the environment.
+        unsafe { std::env::set_var(name, elsewhere) };
+    }
+    let resolved = resolve_interpreter("/bin/sh", &[], &[], &[], &std::env::temp_dir());
+    let target = match resolved {
+        Some((Dispatch::Native(target), _)) => target,
+        other => panic!("{other:?}"),
+    };
+    assert_ne!(target, PathBuf::from(elsewhere));
 }
 
 #[test]
