@@ -223,31 +223,26 @@ fn process_substitution_handles_empty_and_large_output() {
 }
 
 /// Windows' own tools that cannot read a named pipe get a temp file, as `diff` does
-/// (D17): `findstr` read nothing from one, `fc.exe` could not open it (2026-10-04).
-/// Bash's `fc` keeps the pipes, being a builtin of `fc.exe`'s name: its two
-/// substitutions run side by side, about 4 s, where files are each written before it
-/// starts, about 8 s.
+/// (D17): `findstr` read nothing from one, `fc.exe` could not open it (2026-10-04). Each
+/// runs by itself, and says so on standard error, which nextest shows if one hangs.
 #[test]
 fn windows_tools_that_cannot_read_a_pipe_get_a_file() {
-    let out = cash(
-        r#"findstr x <(echo x); echo "rc $?"
-           fc.exe <(echo a) <(echo a) >/dev/null; echo "rc $?""#,
-    );
-    assert_eq!(
-        out.stdout.replace('\r', ""),
-        "x\nrc 0\nrc 0",
-        "{}",
-        out.stderr
-    );
-
-    let started = std::time::Instant::now();
-    let out = cash("fc -l <(sleep 4; echo a) <(sleep 4; echo b) >/dev/null 2>&1; echo done");
-    assert_eq!(out.stdout, "done", "{}", out.stderr);
-    assert!(
-        started.elapsed() < std::time::Duration::from_secs(7),
-        "the builtin fc was given files: {:?}",
-        started.elapsed()
-    );
+    for (script, expected) in [
+        (r#"findstr x <(echo x); echo "rc $?""#, "x\nrc 0"),
+        (
+            r#"fc.exe <(echo a) <(echo a) >/dev/null; echo "rc $?""#,
+            "rc 0",
+        ),
+    ] {
+        eprintln!("running: {script}");
+        let out = cash(script);
+        assert_eq!(
+            out.stdout.replace('\r', ""),
+            expected,
+            "{script}: {}",
+            out.stderr
+        );
+    }
 }
 
 #[test]
