@@ -4099,3 +4099,95 @@ fn test_reader_gone_ends_sed_with_141() -> std::io::Result<()> {
     assert_eq!(String::from_utf8_lossy(&output.stderr), "");
     Ok(())
 }
+
+/// The lines `w`, `W` and the `w` flag of `s` write keep a CRLF ending, as sed's output
+/// does (D49) and as GNU sed, for which the CR is data, writes them; the CR was lost.
+#[test]
+fn test_written_lines_keep_crlf() -> std::io::Result<()> {
+    let dir = tempfile::tempdir()?;
+    let input = dir.path().join("crlf");
+    fs::write(&input, "a\r\nb\r\n")?;
+    let input = input.to_string_lossy().into_owned();
+    let out = dir.path().join("out").to_string_lossy().into_owned();
+    for (script, stdout, written) in [
+        (format!("w {out}"), "a\r\nb\r\n", "a\r\nb\r\n"),
+        (format!("W {out}"), "a\r\nb\r\n", "a\r\nb\r\n"),
+        (format!("s/a/X/w {out}"), "X\r\nb\r\n", "X\r\n"),
+    ] {
+        new_ucmd!()
+            .args(&[&script, &input])
+            .succeeds()
+            .stdout_only(stdout);
+        assert_eq!(fs::read_to_string(&out)?, written, "{script}");
+    }
+    new_ucmd!()
+        .args(&["-n", "w /dev/stdout", &input])
+        .succeeds()
+        .stdout_only("a\r\nb\r\n");
+    Ok(())
+}
+
+/// With `--follow-symlinks`, with `-i` or without, sed reads and names (`F`) the file a
+/// symbolic link leads to, and an in-place edit replaces that file and leaves the link,
+/// as in GNU sed. `F` named the link, and without `-i` the link was not followed. Making
+/// a symbolic link takes a privilege Windows may not give: then there is nothing to test.
+#[test]
+fn test_follow_symlinks() -> std::io::Result<()> {
+    let dir = tempfile::tempdir()?;
+    fs::write(dir.path().join("target"), "x\n")?;
+    let link = dir.path().join("link");
+    if let Err(error) = std::os::windows::fs::symlink_file("target", &link) {
+        eprintln!("no symbolic link could be made ({error}); nothing to test");
+        return Ok(());
+    }
+    let link = link.to_string_lossy().into_owned();
+    let target = dir.path().join("target").to_string_lossy().into_owned();
+    new_ucmd!()
+        .args(&["--follow-symlinks", "F", &link])
+        .succeeds()
+        .stdout_only(format!("{target}\nx\n"));
+    new_ucmd!()
+        .args(&["F", &link])
+        .succeeds()
+        .stdout_only(format!("{link}\nx\n"));
+    new_ucmd!()
+        .args(&["-i", "--follow-symlinks", "s/x/y/", &link])
+        .succeeds();
+    assert_eq!(fs::read_to_string(&target)?, "y\n");
+    assert!(fs::symlink_metadata(&link)?.file_type().is_symlink());
+    Ok(())
+}
+
+/// An in-place edit refuses a named pipe as no regular file, GNU sed's "couldn't edit
+/// F: not a regular file", without opening it: opening it, or asking for its kind, used
+/// up the one reader its writer waits for. The pipe is a named pipe Windows PowerShell
+/// serves, which says whether anyone opened it.
+#[test]
+fn test_in_place_edit_refuses_a_named_pipe() -> std::io::Result<()> {
+    use std::io::{BufRead, BufReader};
+    use std::process::{Command, Stdio};
+
+    let name = format!("cash-sed-test-{}-in-place", std::process::id());
+    let server = format!(
+        "$s = New-Object System.IO.Pipes.NamedPipeServerStream('{name}', 'Out'); \
+         [Console]::Out.WriteLine('ready'); [Console]::Out.Flush(); \
+         if ($s.WaitForConnectionAsync().Wait(3000)) {{ 'opened' }} else {{ 'unopened' }}; \
+         $s.Dispose()"
+    );
+    let mut writer = Command::new("powershell.exe")
+        .args(["-NoProfile", "-NonInteractive", "-Command", &server])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .spawn()?;
+    let mut lines = BufReader::new(writer.stdout.take().expect("the server's output")).lines();
+    assert_eq!(lines.next().transpose()?.as_deref(), Some("ready"));
+    let pipe = format!(r"\\.\pipe\{name}");
+    new_ucmd!()
+        .args(&["-i", "p", &pipe])
+        .fails()
+        .code_is(4)
+        .stderr_is(format!("sed: couldn't edit {pipe}: not a regular file\n"));
+    assert_eq!(lines.next().transpose()?.as_deref(), Some("unopened"));
+    writer.wait()?;
+    Ok(())
+}

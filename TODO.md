@@ -63,10 +63,10 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 What comparing cash's sed and awk with GNU sed 4.9 and gawk turned up while phase 14
 fixed their leftovers; moved here so 1.3.14 could go out (the user, 2026-10-04).
 
-- sed, found matching GNU sed 4.9 (2026-10-04): a `w` file ends lines with `\n` when the
-  input line ended in `\r\n`, where sed's own output keeps `\r\n`; `--follow-symlinks`
-  without `-i` runs the readlink check on every input, not checked against GNU; an
-  in-place edit of a named pipe opens it to learn its type before refusing it.
+- sed: `N` on CRLF input drops the first line's CR, so `a\r\nb\r\n` comes out as
+  `a\nb\r\n`, mixed endings where D49 keeps a CRLF file CRLF; `W` after `N` writes `a\n`.
+  `--follow-symlinks` is tested only where symbolic links can be made (CI), not here.
+  Seen 2026-10-04.
 - awk, found matching gawk 5.4 (2026-10-04): `print > "/dev/null"` fails; `printf` with
   no arguments is read as `print f`; `asort()` is not there; `sub(/a/, "b", "x")` is a
   compile error where gawk takes a constant target; `getline getline` and `getline x y`

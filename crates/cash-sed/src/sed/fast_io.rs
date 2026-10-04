@@ -167,6 +167,17 @@ impl IOChunk {
         }
     }
 
+    /// Return true if the content ends with a CRLF, which sed's output keeps (D49).
+    pub fn is_crlf_terminated(&self) -> bool {
+        match &self.content {
+            IOChunkContent::Owned {
+                has_newline,
+                has_crlf,
+                ..
+            } => *has_newline && *has_crlf,
+        }
+    }
+
     /// Return the raw byte content (always safe).
     pub fn as_bytes(&self) -> &[u8] {
         match &self.content {

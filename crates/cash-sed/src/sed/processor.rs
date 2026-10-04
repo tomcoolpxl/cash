@@ -506,7 +506,10 @@ fn substitute(
             write_to_file(
                 writer,
                 pattern.as_bytes(),
-                pattern.is_newline_terminated(),
+                (
+                    pattern.is_newline_terminated(),
+                    pattern.is_crlf_terminated(),
+                ),
                 output,
                 context,
             )?;
@@ -624,15 +627,18 @@ fn append_file(output: &mut OutputBuffer, path: &PathBuf, stdin_done: bool) -> U
 /// Write a line to the file of `w`, `W` or the `w` flag of `s`. GNU sed's `/dev/stdout`
 /// is sed's own output, written in order with the rest of it, but in an in-place edit,
 /// whose output is the file.
+///
+/// A line that ended in CRLF is written with it, as sed's output writes it (D49); its CR
+/// was lost.
 fn write_to_file(
     writer: &Rc<RefCell<NamedWriter>>,
     line: &[u8],
-    newline: bool,
+    (newline, crlf): (bool, bool),
     output: &mut OutputBuffer,
     context: &ProcessingContext,
 ) -> UResult<()> {
     let mut writer = writer.borrow_mut();
-    let bytes = writer.line_bytes(line, newline, context.delimiter());
+    let bytes = writer.line_bytes(line, newline, context.delimiter(), crlf);
     if writer.is_stdout() && !context.in_place {
         // GNU sed's `/dev/stdout` keeps its own count of a missing line end, apart
         // from sed's output, though both are written to standard output.
@@ -1093,7 +1099,10 @@ fn process_file(
                     write_to_file(
                         writer,
                         pattern.as_bytes(),
-                        pattern.is_newline_terminated(),
+                        (
+                            pattern.is_newline_terminated(),
+                            pattern.is_crlf_terminated(),
+                        ),
                         output,
                         context,
                     )?;
@@ -1111,7 +1120,10 @@ fn process_file(
                     write_to_file(
                         writer,
                         first_line,
-                        !found_newline && pattern.is_newline_terminated(),
+                        (
+                            !found_newline && pattern.is_newline_terminated(),
+                            !found_newline && pattern.is_crlf_terminated(),
+                        ),
                         output,
                         context,
                     )?;
@@ -1219,15 +1231,13 @@ fn open_input(
     if let Some(reader) = context.read_ahead.take(index) {
         return Ok(Some(reader));
     }
-    if context.follow_symlinks
-        && path.as_os_str() != "-"
-        && !is_pipe_path(path)
-        && let Err(error) = std::fs::symlink_metadata(path)
-    {
+    // A named pipe is no regular file, which an in-place edit refuses before it opens it,
+    // as asking for its kind would: the one reader the pipe's writer waits for would be
+    // used up. GNU sed opens the file first, which on its systems leaves a pipe as it is.
+    if context.in_place && is_pipe_path(path) {
         return runtime_error(format!(
-            "couldn't readlink {}: {}",
-            path.display(),
-            strerror(&error)
+            "couldn't edit {}: not a regular file",
+            path.display()
         ));
     }
     if path.as_os_str() != "-" && is_directory(path) {
@@ -1244,6 +1254,56 @@ fn open_input(
             Ok(None)
         }
     }
+}
+
+/// The target of the symbolic link `path`, `None` when it is no link, failing as
+/// `lstat` fails.
+fn read_symlink(path: &Path) -> io::Result<Option<PathBuf>> {
+    if std::fs::symlink_metadata(path)?.file_type().is_symlink() {
+        std::fs::read_link(path).map(Some)
+    } else {
+        Ok(None)
+    }
+}
+
+/// The file the symbolic link `name` leads to, as GNU sed's `follow_symlink` finds it:
+/// the target of each link in turn, a relative one taken in its link's directory as the
+/// link's name gives it (`d/l` to `f` is `d/f`), and `name` itself when it is no link.
+/// One that cannot be looked at is "couldn't readlink F: ...", status 4. The edit went to
+/// the target's absolute name, in the `\\?\` form, and `F` named the link; without `-i`
+/// the link was not followed.
+fn follow_symlink(
+    name: &Path,
+    read_link: impl Fn(&Path) -> io::Result<Option<PathBuf>>,
+) -> UResult<PathBuf> {
+    // Windows' limit on the links a path may go through, as Linux's ELOOP is 40.
+    const MAX_LINKS: usize = 63;
+    let mut name = name.to_path_buf();
+    for _ in 0..MAX_LINKS {
+        let target = read_link(&name).map_err(|e| {
+            runtime_err(format!(
+                "couldn't readlink {}: {}",
+                name.display(),
+                strerror(&e)
+            ))
+        })?;
+        let Some(target) = target else {
+            return Ok(name);
+        };
+        let written = name.as_os_str().to_string_lossy().into_owned();
+        name = match written.rfind(['/', '\\']) {
+            Some(slash) if target.is_relative() => PathBuf::from(format!(
+                "{}{}",
+                written.get(..=slash).unwrap_or_default(),
+                target.display()
+            )),
+            _ => target,
+        };
+    }
+    runtime_error(format!(
+        "couldn't readlink {}: Too many levels of symbolic links",
+        name.display()
+    ))
 }
 
 /// Process all input files
@@ -1267,6 +1327,15 @@ pub fn process_all_files(
         context.later_files = files.get(index + 1..).unwrap_or_default().to_vec();
         context.later_start = index + 1;
         context.later_input = None;
+        // With `--follow-symlinks`, with `-i` or without, sed reads, edits and names
+        // (`F`) the file a symbolic link leads to, as GNU sed does.
+        let resolved;
+        let path = if context.follow_symlinks && path.as_os_str() != "-" && !is_pipe_path(path) {
+            resolved = follow_symlink(path, read_symlink)?;
+            &resolved
+        } else {
+            path
+        };
         let Some(mut reader) = open_input(path, index, context)? else {
             unreadable = true;
             continue;
@@ -1334,6 +1403,57 @@ mod tests {
     use super::*;
     use std::io::{Read, Seek, SeekFrom};
     use tempfile::tempfile;
+
+    /// A `read_link` over the links `links` names, (link, target), for `follow_symlink`;
+    /// `missing` is no file at all.
+    fn links<'a>(
+        links: &'a [(&'a str, &'a str)],
+    ) -> impl Fn(&Path) -> io::Result<Option<PathBuf>> + 'a {
+        move |path| {
+            if path == Path::new("missing") || path == Path::new("d/missing") {
+                return Err(io::Error::from(io::ErrorKind::NotFound));
+            }
+            Ok(links
+                .iter()
+                .find(|(link, _)| path == Path::new(link))
+                .map(|(_, target)| PathBuf::from(target)))
+        }
+    }
+
+    // GNU sed's `follow_symlink`: each link's target in turn, a relative one in its link's
+    // directory as written, and the name itself when it is no link.
+    #[test]
+    fn test_follow_symlink() {
+        let table = [
+            ("l", "f"),
+            ("d/l", "f"),
+            ("d\\w", "f"),
+            ("d/abs", "C:/x/f"),
+            ("d/chain", "l2"),
+            ("d/l2", "../g"),
+            ("loop", "loop"),
+            ("d/gone", "missing"),
+        ];
+        let follow = |name: &str| follow_symlink(Path::new(name), links(&table));
+        assert_eq!(follow("f").unwrap(), PathBuf::from("f"));
+        assert_eq!(follow("l").unwrap(), PathBuf::from("f"));
+        assert_eq!(follow("d/l").unwrap(), PathBuf::from("d/f"));
+        assert_eq!(follow("d\\w").unwrap(), PathBuf::from("d\\f"));
+        assert_eq!(follow("d/abs").unwrap(), PathBuf::from("C:/x/f"));
+        assert_eq!(follow("d/chain").unwrap(), PathBuf::from("d/../g"));
+        assert_eq!(
+            follow("missing").unwrap_err().to_string(),
+            "couldn't readlink missing: No such file or directory"
+        );
+        assert_eq!(
+            follow("d/gone").unwrap_err().to_string(),
+            "couldn't readlink d/missing: No such file or directory"
+        );
+        assert_eq!(
+            follow("loop").unwrap_err().to_string(),
+            "couldn't readlink loop: Too many levels of symbolic links"
+        );
+    }
 
     // Inside cash, `e` runs its command in cash, this process's own exe, whatever its
     // file is named: this test's exe is not named `cash`, as a linked `sed.exe` is not,

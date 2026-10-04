@@ -26,7 +26,6 @@ pub struct InPlace {
     pub output: OutputBuffer,
     pub in_place: bool,
     pub in_place_suffix: Option<String>,
-    pub follow_symlinks: bool,
     pub temp_file: Option<NamedTempFile>,
     pub original_path: Option<PathBuf>,
 }
@@ -34,39 +33,25 @@ pub struct InPlace {
 impl InPlace {
     /// Create an in-place editing engine based on ProcessingContext.
     /// Depending on its settings it may or may not perform in-place
-    /// editing, backup the original file, or follow symlinks.
+    /// editing, or backup the original file.
     pub fn new(context: ProcessingContext) -> Self {
         Self {
             output: OutputBuffer::new(Box::new(stdout())),
             in_place: context.in_place,
             in_place_suffix: context.in_place_suffix,
-            follow_symlinks: context.follow_symlinks,
             temp_file: None,
             original_path: None,
         }
     }
 
-    /// Return an OutputBuffer for outputting the edits to the specified file.
-    /// The file may be a symbolic link, which will be processed according
-    /// to the context specification.
+    /// Return an OutputBuffer for outputting the edits to the specified file, which
+    /// `--follow-symlinks` has made a link's target (`processor::follow_symlink`).
     ///
-    /// Its errors are GNU sed's, with its status 4: `couldn't readlink F: ...`, `couldn't
-    /// edit F: not a regular file`, `couldn't open temporary file D/sedXXXXXX: ...`, and
+    /// Its errors are GNU sed's, with its status 4: `couldn't edit F: not a regular file`, `couldn't open temporary file D/sedXXXXXX: ...`, and
     /// `cannot rename F: ...` when the edit cannot be put in place. They were cash's own,
     /// with statuses 1 and 2.
     pub fn begin(&mut self, file_name: &Path) -> UResult<&mut OutputBuffer> {
-        let resolved = if self.follow_symlinks {
-            fs::canonicalize(file_name).map_err(|e| {
-                runtime_err(format!(
-                    "couldn't readlink {}: {}",
-                    file_name.display(),
-                    strerror(&e)
-                ))
-            })?
-        } else {
-            file_name.to_path_buf()
-        };
-        self.begin_resolved(&resolved)
+        self.begin_resolved(file_name)
     }
 
     /// Return an OutputBuffer for outputting the edits to the specified file.

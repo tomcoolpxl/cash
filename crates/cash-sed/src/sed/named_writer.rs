@@ -141,16 +141,20 @@ impl NamedWriter {
     }
 
     /// The bytes that write `line`, as GNU sed writes one: after the end the last line
-    /// lacked, and ended by `delimiter` (a newline, or NUL with `-z`) when `newline`.
-    /// The end was always a newline, and a line that lacked it was joined to the next
-    /// one (`-s` and two files whose last lines have none).
-    pub fn line_bytes(&mut self, line: &[u8], newline: bool, delimiter: u8) -> Vec<u8> {
+    /// lacked, and ended by `delimiter` (a newline, or NUL with `-z`) when `newline`, a
+    /// CRLF for a line that had one (`crlf`), as sed's output keeps it (D49). The end
+    /// was always a newline, a line that lacked it was joined to the next one (`-s` and
+    /// two files whose last lines have none), and a CRLF line lost its CR.
+    pub fn line_bytes(&mut self, line: &[u8], newline: bool, delimiter: u8, crlf: bool) -> Vec<u8> {
         let mut bytes = Vec::with_capacity(line.len() + 2);
         if self.missing_newline {
             bytes.push(delimiter);
         }
         bytes.extend_from_slice(line);
         if newline {
+            if crlf && delimiter == b'\n' {
+                bytes.push(b'\r');
+            }
             bytes.push(delimiter);
         }
         self.missing_newline = !newline;
@@ -164,7 +168,7 @@ impl NamedWriter {
 
     /// Write `line` (`line_bytes`) to the file, returning errors.
     pub fn write_line_bytes(&mut self, line: &[u8], newline: bool, delimiter: u8) -> UResult<()> {
-        let bytes = self.line_bytes(line, newline, delimiter);
+        let bytes = self.line_bytes(line, newline, delimiter, false);
         self.put(&bytes)
     }
 
