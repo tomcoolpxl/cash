@@ -25,13 +25,11 @@
 
 use std::fs::File;
 use std::io::{self, PipeReader, PipeWriter, Read, Write};
-use std::os::windows::io::FromRawHandle;
+use std::os::windows::io::{AsRawHandle as _, OwnedHandle};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
-use windows_sys::Win32::Foundation::{
-    CloseHandle, ERROR_PIPE_CONNECTED, GetLastError, INVALID_HANDLE_VALUE,
-};
+use windows_sys::Win32::Foundation::{ERROR_PIPE_CONNECTED, GetLastError};
 use windows_sys::Win32::Security::SECURITY_ATTRIBUTES;
 use windows_sys::Win32::Storage::FileSystem::{
     FILE_FLAG_FIRST_PIPE_INSTANCE, PIPE_ACCESS_INBOUND, PIPE_ACCESS_OUTBOUND,
@@ -50,25 +48,17 @@ const PIPE_BUFFER_SIZE: u32 = 65536;
 fn generate_pipe_path() -> (String, Vec<u16>) {
     let id = COUNTER.fetch_add(1, Ordering::Relaxed);
     let path = format!(r"\\.\pipe\cash-procsub-{}-{}", std::process::id(), id);
-    let wide: Vec<u16> = path.encode_utf16().chain(std::iter::once(0)).collect();
+    let wide = crate::wide::to_wide_nul(&path);
     (path, wide)
 }
 
-/// Helper that waits for a client to connect to an overlapped named pipe server handle.
+/// Waits for a client to connect to the named pipe server `server`.
 ///
-/// Returns `true` if a client connected successfully, or `false` if the timeout elapsed,
-/// an error occurred, or the operation was cancelled.
-///
-/// Helper that waits for a client to connect to a named pipe server handle.
-///
-/// # Safety
-///
-/// `server_handle` must be an open, valid named pipe server handle.
-unsafe fn wait_for_client_connection(
-    server_handle: windows_sys::Win32::Foundation::HANDLE,
-) -> bool {
-    // SAFETY: caller guarantees `server_handle` is an open, valid named pipe server handle.
-    let connected = unsafe { ConnectNamedPipe(server_handle, std::ptr::null_mut()) };
+/// Returns `true` if a client connected, or `false` if an error occurred or the operation
+/// was cancelled.
+fn wait_for_client_connection(server: &OwnedHandle) -> bool {
+    // SAFETY: `server` is an open named pipe server handle, opened for blocking use.
+    let connected = unsafe { ConnectNamedPipe(server.as_raw_handle(), std::ptr::null_mut()) };
     if connected != 0 {
         return true;
     }
@@ -89,10 +79,7 @@ fn user_only_descriptor() -> Option<usize> {
     static DESCRIPTOR: OnceLock<Option<usize>> = OnceLock::new();
     *DESCRIPTOR.get_or_init(|| {
         let sid = crate::process::current_user_sid_string()?;
-        let sddl: Vec<u16> = format!("D:P(A;;GA;;;{sid})(A;;GA;;;SY)")
-            .encode_utf16()
-            .chain(std::iter::once(0))
-            .collect();
+        let sddl = crate::wide::to_wide_nul(format!("D:P(A;;GA;;;{sid})(A;;GA;;;SY)"));
         let mut descriptor = std::ptr::null_mut();
         // SAFETY: `sddl` is null-terminated and `descriptor` a valid out-param. The
         // descriptor is kept for the life of the process.
@@ -110,13 +97,17 @@ fn user_only_descriptor() -> Option<usize> {
 
 /// Helper that creates a named pipe server instance.
 ///
-/// Remote clients are refused: the pipe is for programs of this machine.
-unsafe fn create_pipe_instance(
+/// Remote clients are refused: the pipe is for programs of this machine. `wide_path` is
+/// null-terminated, or refused.
+fn create_pipe_instance(
     wide_path: &[u16],
     access: u32,
     is_first: bool,
     max_instances: u32,
-) -> io::Result<windows_sys::Win32::Foundation::HANDLE> {
+) -> io::Result<OwnedHandle> {
+    if wide_path.last() != Some(&0) {
+        return Err(io::ErrorKind::InvalidInput.into());
+    }
     let mut flags = access;
     if is_first {
         flags |= FILE_FLAG_FIRST_PIPE_INSTANCE;
@@ -145,12 +136,8 @@ unsafe fn create_pipe_instance(
             attributes,
         )
     };
-
-    if handle == INVALID_HANDLE_VALUE {
-        Err(io::Error::last_os_error())
-    } else {
-        Ok(handle)
-    }
+    // SAFETY: just returned, and nothing has run since.
+    unsafe { crate::handle::from_invalid(handle) }
 }
 
 /// How much of a read substitution's output is kept for an instance of its pipe that no
@@ -228,29 +215,26 @@ impl Replay {
 }
 
 /// Spawns a background pump thread for instance `index` of a read substitution.
+///
+/// The handle is the thread's, and closed when it ends; if the thread cannot be started,
+/// it is closed then.
 fn spawn_read_instance(
-    handle: windows_sys::Win32::Foundation::HANDLE,
+    handle: OwnedHandle,
     pump: Arc<ReadPump>,
     index: usize,
     name: &'static str,
 ) -> io::Result<()> {
-    let handle_val = handle as usize;
     std::thread::Builder::new()
         .name(name.into())
         .spawn(move || {
-            let handle = handle_val as windows_sys::Win32::Foundation::HANDLE;
-            // SAFETY: `handle` is an open named pipe server handle transferred to this thread.
-            let connected = unsafe { wait_for_client_connection(handle) };
-            if !connected {
-                // SAFETY: Client never connected; close handle.
-                unsafe { CloseHandle(handle) };
+            if !wait_for_client_connection(&handle) {
+                drop(handle);
                 if let Ok(mut replay) = pump.replay.lock() {
                     replay.close(index);
                 }
                 return;
             }
-            // SAFETY: `handle` is owned and connected.
-            let mut server_file = unsafe { File::from_raw_handle(handle.cast()) };
+            let mut server_file = File::from(handle);
             if let Ok(mut replay) = pump.replay.lock() {
                 replay.open(index);
             }
@@ -312,21 +296,18 @@ fn pump_read_instance(pump: &ReadPump, index: usize, server_file: &mut File) {
 }
 
 /// Spawns a background pump thread for a write substitution instance.
+///
+/// The handle is the thread's, as in [`spawn_read_instance`].
 fn spawn_write_instance(
-    handle: windows_sys::Win32::Foundation::HANDLE,
+    handle: OwnedHandle,
     mut writer: PipeWriter,
     name: &'static str,
 ) -> io::Result<()> {
-    let handle_val = handle as usize;
     std::thread::Builder::new()
         .name(name.into())
         .spawn(move || {
-            let handle = handle_val as windows_sys::Win32::Foundation::HANDLE;
-            // SAFETY: `handle` is an open named pipe server handle transferred to this thread.
-            let connected = unsafe { wait_for_client_connection(handle) };
-            if connected {
-                // SAFETY: `handle` is owned and connected.
-                let mut server_file = unsafe { File::from_raw_handle(handle.cast()) };
+            if wait_for_client_connection(&handle) {
+                let mut server_file = File::from(handle);
                 let mut buf = [0u8; 8192];
                 loop {
                     match server_file.read(&mut buf) {
@@ -342,8 +323,8 @@ fn spawn_write_instance(
                 }
                 let _ = writer.flush();
             } else {
-                // SAFETY: Client never connected; close handle.
-                unsafe { CloseHandle(handle) };
+                // No program connected.
+                drop(handle);
             }
             // `writer` drops here, closing the pipe so subshell receives EOF immediately.
         })?;
@@ -369,20 +350,23 @@ pub struct ReadSubstitution {
 /// Returns an error if the named pipe server or anonymous pipe cannot be created.
 pub fn create_read_substitution() -> io::Result<ReadSubstitution> {
     let (path, wide_path) = generate_pipe_path();
+    read_substitution_at(path, &wide_path, io::pipe)
+}
 
-    // SAFETY: Creating named pipe server instance 1.
-    let h1 = unsafe { create_pipe_instance(&wide_path, PIPE_ACCESS_OUTBOUND, true, 2)? };
-    // SAFETY: Creating named pipe server instance 2.
-    let h2 = match unsafe { create_pipe_instance(&wide_path, PIPE_ACCESS_OUTBOUND, false, 2) } {
-        Ok(h) => h,
-        Err(e) => {
-            // SAFETY: Clean up h1 on failure.
-            unsafe { CloseHandle(h1) };
-            return Err(e);
-        }
-    };
+/// [`create_read_substitution`] at `path`, with the anonymous pipe from `make_pipe`.
+///
+/// The server handles are owned from the moment they are made, so an error after them,
+/// of `make_pipe` or of starting a thread, closes them: they were left open, the pipe's
+/// name with them (`REVIEW_REPORT.md` W32-14).
+fn read_substitution_at(
+    path: String,
+    wide_path: &[u16],
+    make_pipe: impl FnOnce() -> io::Result<(PipeReader, PipeWriter)>,
+) -> io::Result<ReadSubstitution> {
+    let h1 = create_pipe_instance(wide_path, PIPE_ACCESS_OUTBOUND, true, 2)?;
+    let h2 = create_pipe_instance(wide_path, PIPE_ACCESS_OUTBOUND, false, 2)?;
 
-    let (pipe_reader, pipe_writer) = io::pipe()?;
+    let (pipe_reader, pipe_writer) = make_pipe()?;
 
     let pump = Arc::new(ReadPump {
         reader: Mutex::new(pipe_reader),
@@ -654,11 +638,20 @@ pub struct WriteSubstitution {
 /// Returns an error if the named pipe server or anonymous pipe cannot be created.
 pub fn create_write_substitution() -> io::Result<WriteSubstitution> {
     let (path, wide_path) = generate_pipe_path();
+    write_substitution_at(path, &wide_path, io::pipe)
+}
 
-    // SAFETY: Creating named pipe server instance (1 instance for write substitution).
-    let h = unsafe { create_pipe_instance(&wide_path, PIPE_ACCESS_INBOUND, true, 1)? };
+/// [`create_write_substitution`] at `path`, with the anonymous pipe from `make_pipe`; an
+/// error closes the server handle, as in [`read_substitution_at`].
+fn write_substitution_at(
+    path: String,
+    wide_path: &[u16],
+    make_pipe: impl FnOnce() -> io::Result<(PipeReader, PipeWriter)>,
+) -> io::Result<WriteSubstitution> {
+    // One instance for a write substitution.
+    let h = create_pipe_instance(wide_path, PIPE_ACCESS_INBOUND, true, 1)?;
 
-    let (pipe_reader, pipe_writer) = io::pipe()?;
+    let (pipe_reader, pipe_writer) = make_pipe()?;
 
     spawn_write_instance(h, pipe_writer, "cash-psub-write")?;
 
@@ -670,7 +663,6 @@ pub fn create_write_substitution() -> io::Result<WriteSubstitution> {
 
 #[cfg(test)]
 mod tests {
-    use std::os::windows::ffi::OsStrExt;
     use std::path::Path;
     use std::time::{Duration, Instant};
 
@@ -771,13 +763,12 @@ mod tests {
         use windows_sys::Win32::Security::DACL_SECURITY_INFORMATION;
 
         let (_, wide) = generate_pipe_path();
-        // SAFETY: `wide` is a null-terminated pipe name.
-        let handle = unsafe { create_pipe_instance(&wide, PIPE_ACCESS_OUTBOUND, true, 1) }.unwrap();
+        let handle = create_pipe_instance(&wide, PIPE_ACCESS_OUTBOUND, true, 1).unwrap();
         let mut descriptor = std::ptr::null_mut();
         // SAFETY: `handle` is open; the out-params are valid.
         let got = unsafe {
             GetSecurityInfo(
-                handle,
+                handle.as_raw_handle(),
                 SE_KERNEL_OBJECT,
                 DACL_SECURITY_INFORMATION,
                 std::ptr::null_mut(),
@@ -806,8 +797,7 @@ mod tests {
         unsafe { LocalFree(text.cast()) };
         // SAFETY: allocated by GetSecurityInfo, with LocalAlloc.
         unsafe { LocalFree(descriptor) };
-        // SAFETY: the handle is ours, and closed once.
-        unsafe { CloseHandle(handle) };
+        drop(handle);
 
         // The built-in Administrator (RID 500), as CI's runner is, is written `LA`.
         let user = crate::process::current_user_sid_string().unwrap();
@@ -820,15 +810,35 @@ mod tests {
         assert!(!sddl.contains(";WD)") && !sddl.contains(";AN)"), "{sddl}");
     }
 
+    #[test]
+    fn a_substitution_that_fails_after_its_pipe_is_made_closes_the_pipe() {
+        // An error after the server handles were made, here of the anonymous pipe, left
+        // them open (W32-14). A first instance of a pipe name can be made only while no
+        // instance of it is open, so making one says the failed substitution's are closed.
+        fn refused() -> io::Result<(PipeReader, PipeWriter)> {
+            Err(io::Error::other("no pipe"))
+        }
+        for read in [true, false] {
+            let (path, wide) = generate_pipe_path();
+            let made = if read {
+                read_substitution_at(path, &wide, refused).map(drop)
+            } else {
+                write_substitution_at(path, &wide, refused).map(drop)
+            };
+            assert_eq!(made.unwrap_err().to_string(), "no pipe");
+            let again = create_pipe_instance(&wide, PIPE_ACCESS_OUTBOUND, true, 1);
+            assert!(
+                again.is_ok(),
+                "read {read}: the pipe was left open: {again:?}"
+            );
+        }
+    }
+
     /// How much of the disk the file at `path` takes.
     fn allocated(path: &Path) -> u64 {
         use windows_sys::Win32::Storage::FileSystem::GetCompressedFileSizeW;
 
-        let wide: Vec<u16> = path
-            .as_os_str()
-            .encode_wide()
-            .chain(std::iter::once(0))
-            .collect();
+        let wide = crate::wide::to_wide_nul(path);
         let mut high = 0u32;
         // SAFETY: `wide` is null-terminated and `high` a valid out-param.
         let low = unsafe { GetCompressedFileSizeW(wide.as_ptr(), &raw mut high) };

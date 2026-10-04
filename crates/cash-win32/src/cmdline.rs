@@ -32,7 +32,7 @@ pub fn present(argv: &[OsString]) -> bool {
         .map(|arg| quoted(&arg.to_string_lossy()))
         .collect::<Vec<_>>()
         .join(" ");
-    let wide = line.encode_utf16().chain(std::iter::once(0)).collect();
+    let wide = crate::wide::to_wide_nul(&line);
     if COMMAND_LINE.set(wide).is_err() {
         return false;
     }

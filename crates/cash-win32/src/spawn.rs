@@ -10,17 +10,15 @@
 //! start a program suspended; nothing ran it but its tests (W32-11).
 
 use std::io;
+use std::os::windows::io::{FromRawHandle as _, OwnedHandle};
 use std::path::Path;
 
-use windows_sys::Win32::Foundation::{CloseHandle, FALSE};
+use windows_sys::Win32::Foundation::FALSE;
 use windows_sys::Win32::System::Threading::{
     CREATE_UNICODE_ENVIRONMENT, CreateProcessW, PROCESS_INFORMATION, STARTUPINFOW,
 };
 
-/// Encode a string as a null-terminated UTF-16 buffer.
-fn to_wide(text: &str) -> Vec<u16> {
-    text.encode_utf16().chain(std::iter::once(0)).collect()
-}
+use crate::wide::to_wide_nul;
 
 /// Build the double-null-terminated UTF-16 environment block `CreateProcessW` expects.
 ///
@@ -76,8 +74,8 @@ pub fn in_any_job() -> bool {
 pub fn spawn_detached(command_line: &str, cwd: &Path, env: &[(String, String)]) -> io::Result<u32> {
     use windows_sys::Win32::System::Threading::{CREATE_BREAKAWAY_FROM_JOB, DETACHED_PROCESS};
 
-    let mut command = to_wide(command_line);
-    let cwd = to_wide(&crate::path::process_directory(cwd)?.to_string_lossy());
+    let mut command = to_wide_nul(command_line);
+    let cwd = to_wide_nul(crate::path::process_directory(cwd)?);
     let environment = build_environment_block(env);
 
     // SAFETY: `STARTUPINFOW` is plain old data — integers, pointers and a handle triple —
@@ -114,10 +112,11 @@ pub fn spawn_detached(command_line: &str, cwd: &Path, env: &[(String, String)]) 
         return Err(io::Error::last_os_error());
     }
 
-    // cash neither waits for the program nor ends it, so it keeps no handle to it.
-    // SAFETY: the thread handle came from CreateProcessW above and is closed exactly once.
-    unsafe { CloseHandle(info.hThread) };
-    // SAFETY: likewise for the process handle.
-    unsafe { CloseHandle(info.hProcess) };
+    // cash neither waits for the program nor ends it, so it keeps no handle to it: both
+    // are closed here.
+    // SAFETY: the process was made, so both are open handles that are ours.
+    drop(unsafe { OwnedHandle::from_raw_handle(info.hThread) });
+    // SAFETY: as above.
+    drop(unsafe { OwnedHandle::from_raw_handle(info.hProcess) });
     Ok(info.dwProcessId)
 }

@@ -27,9 +27,10 @@
 //! timeout would either guillotine a valid apply or be long enough to feel broken.
 
 use std::io;
+use std::os::windows::io::AsRawHandle as _;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
-use windows_sys::Win32::Foundation::{CloseHandle, FALSE, STILL_ACTIVE};
+use windows_sys::Win32::Foundation::{FALSE, STILL_ACTIVE};
 use windows_sys::Win32::System::Console::{
     CTRL_BREAK_EVENT, CTRL_C_EVENT, GenerateConsoleCtrlEvent, SetConsoleCP, SetConsoleCtrlHandler,
     SetConsoleOutputCP,
@@ -623,9 +624,9 @@ where
 
     // SAFETY: TH32CS_SNAPTHREAD ignores the pid argument and snapshots all threads.
     let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0) };
-    if snapshot == windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE {
-        return Err(io::Error::last_os_error());
-    }
+    // SAFETY: just returned, and nothing has run since.
+    let owned = unsafe { crate::handle::from_invalid(snapshot)? };
+    let snapshot = owned.as_raw_handle();
 
     // SAFETY: `THREADENTRY32` is a plain-old-data Win32 struct of integers, for which an
     // all-zero bit pattern is valid; `dwSize` is filled in immediately below, which is the
@@ -644,7 +645,9 @@ where
             let access = THREAD_SUSPEND_RESUME | THREAD_QUERY_LIMITED_INFORMATION;
             // SAFETY: opening a thread by id; null is returned on failure.
             let handle = unsafe { OpenThread(access, FALSE, entry.th32ThreadID) };
-            if !handle.is_null() {
+            // SAFETY: just returned, and nothing has run since.
+            if let Ok(thread) = unsafe { crate::handle::from_null(handle) } {
+                let handle = thread.as_raw_handle();
                 // A thread that has finished stays in the snapshot for as long as anyone
                 // holds a handle to it (an antivirus scanner, say), and suspending it
                 // "succeeds". It is not running, so it is not counted or touched.
@@ -658,17 +661,13 @@ where
                     action(handle);
                     affected += 1;
                 }
-                // SAFETY: closing a handle we just opened, exactly once.
-                unsafe { CloseHandle(handle) };
             }
         }
         // SAFETY: as above.
         ok = unsafe { Thread32Next(snapshot, &raw mut entry) };
     }
 
-    // SAFETY: closing the snapshot handle, exactly once.
-    unsafe { CloseHandle(snapshot) };
-
+    drop(owned);
     Ok(affected)
 }
 

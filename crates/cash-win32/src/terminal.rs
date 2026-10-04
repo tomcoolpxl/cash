@@ -220,7 +220,7 @@ fn measured_cell(face: &str) -> Option<(f64, f64)> {
     if name.is_empty() || name.len() > 31 {
         return None;
     }
-    let wide: Vec<u16> = name.iter().copied().chain(std::iter::once(0)).collect();
+    let wide = crate::wide::to_wide_nul(face);
     // SAFETY: a memory device context, which needs no screen; deleted below.
     let dc = unsafe { CreateCompatibleDC(std::ptr::null_mut()) };
     if dc.is_null() {
@@ -544,7 +544,7 @@ pub fn installed_fonts() -> Vec<String> {
 
 /// The names of the values in a registry key; none when it cannot be read.
 fn value_names(root: HKEY, subkey: &str) -> Vec<String> {
-    let subkey: Vec<u16> = subkey.encode_utf16().chain(std::iter::once(0)).collect();
+    let subkey = crate::wide::to_wide_nul(subkey);
     let mut key: HKEY = std::ptr::null_mut();
     // SAFETY: the subkey is NUL-terminated and `key` receives the handle, closed below.
     let status = unsafe { RegOpenKeyExW(root, subkey.as_ptr(), 0, KEY_QUERY_VALUE, &raw mut key) };

@@ -8,6 +8,8 @@
 
 use windows_sys::Win32::Foundation::{ERROR_SUCCESS, MAX_PATH};
 
+use crate::wide::to_wide_nul;
+
 /// Cumulative processor counters returned by Windows, in 100-nanosecond units.
 ///
 /// `kernel` includes `idle`, matching the contract of `GetSystemTimes`.
@@ -584,7 +586,7 @@ pub fn fixed_drives() -> Vec<String> {
     let mut drives = Vec::new();
     for drive in logical_drives() {
         let root = std::format!("{drive}\\");
-        let wide = wide(root.as_str());
+        let wide = to_wide_nul(&root);
 
         // SAFETY: the root path is NUL-terminated.
         if unsafe { GetDriveTypeW(wide.as_ptr()) } == DRIVE_FIXED {
@@ -601,7 +603,7 @@ pub fn is_network_drive(root: &std::path::Path) -> bool {
     use windows_sys::Win32::Storage::FileSystem::GetDriveTypeW;
 
     const DRIVE_REMOTE: u32 = 4;
-    let root = wide(root.to_string_lossy().as_ref());
+    let root = to_wide_nul(root);
     // SAFETY: the drive root is NUL-terminated and valid for the call.
     unsafe { GetDriveTypeW(root.as_ptr()) == DRIVE_REMOTE }
 }
@@ -611,7 +613,7 @@ pub fn is_network_drive(root: &std::path::Path) -> bool {
 pub fn disk_usage(path: &std::path::Path) -> Option<(u64, u64)> {
     use windows_sys::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
 
-    let wide = wide(path.to_string_lossy().as_ref());
+    let wide = to_wide_nul(path);
 
     let mut available: u64 = 0;
     let mut total: u64 = 0;
@@ -641,8 +643,8 @@ pub fn disk_usage(path: &std::path::Path) -> Option<(u64, u64)> {
 fn registry_string(subkey: &str, value: &str) -> Option<String> {
     use windows_sys::Win32::System::Registry::{HKEY_LOCAL_MACHINE, RRF_RT_REG_SZ, RegGetValueW};
 
-    let subkey = wide(subkey);
-    let value = wide(value);
+    let subkey = to_wide_nul(subkey);
+    let value = to_wide_nul(value);
 
     let mut buffer = [0u16; MAX_PATH as usize];
     let mut size = u32::try_from(std::mem::size_of_val(&buffer)).unwrap_or(u32::MAX);
@@ -676,8 +678,8 @@ fn registry_dword(subkey: &str, value: &str) -> Option<u32> {
         HKEY_LOCAL_MACHINE, RRF_RT_REG_DWORD, RegGetValueW,
     };
 
-    let subkey = wide(subkey);
-    let value = wide(value);
+    let subkey = to_wide_nul(subkey);
+    let value = to_wide_nul(value);
     let mut data = 0u32;
     let mut size = u32::try_from(std::mem::size_of::<u32>()).unwrap_or(4);
 
@@ -694,11 +696,6 @@ fn registry_dword(subkey: &str, value: &str) -> Option<u32> {
         )
     };
     (status == ERROR_SUCCESS).then_some(data)
-}
-
-/// A NUL-terminated UTF-16 copy, as every `W` entry point wants.
-fn wide(value: &str) -> Vec<u16> {
-    value.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
 #[cfg(test)]

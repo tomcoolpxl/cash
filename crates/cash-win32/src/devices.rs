@@ -55,6 +55,7 @@ use windows_sys::Win32::System::Threading::GetCurrentProcess;
 use windows_sys::core::{BOOL, PCWSTR};
 
 use crate::endless::Endless;
+use crate::wide::to_wide_nul;
 
 type CreateFileW = unsafe extern "system" fn(
     PCWSTR,
@@ -331,11 +332,6 @@ fn original_attributes() -> GetFileAttributesW {
     unsafe { original(&GET_FILE_ATTRIBUTES) }
 }
 
-/// A wide, null-terminated copy of `text`.
-fn wide(text: &str) -> Vec<u16> {
-    text.encode_utf16().chain(std::iter::once(0)).collect()
-}
-
 /// `CreateFileW`, with the `/dev` names answered.
 unsafe extern "system" fn create_file(
     name: PCWSTR,
@@ -360,7 +356,7 @@ unsafe extern "system" fn create_file(
             INVALID_HANDLE_VALUE
         }
         Device::Null => {
-            let null = wide(r"\\.\NUL");
+            let null = to_wide_nul(r"\\.\NUL");
             // SAFETY: `null` is null-terminated; the rest are the caller's arguments.
             unsafe {
                 open(
@@ -376,7 +372,7 @@ unsafe extern "system" fn create_file(
         }
         Device::Tty => {
             let writes = access & (GENERIC_WRITE | FILE_WRITE_DATA | FILE_APPEND_DATA) != 0;
-            let console = wide(if writes { "CONOUT$" } else { "CONIN$" });
+            let console = to_wide_nul(if writes { "CONOUT$" } else { "CONIN$" });
             // SAFETY: `console` is null-terminated; a console is opened, never created.
             unsafe {
                 open(
@@ -394,7 +390,7 @@ unsafe extern "system" fn create_file(
         Device::Endless(_)
             if access & (GENERIC_WRITE | FILE_WRITE_DATA | FILE_APPEND_DATA) != 0 =>
         {
-            let null = wide(r"\\.\NUL");
+            let null = to_wide_nul(r"\\.\NUL");
             // SAFETY: `null` is null-terminated; the rest are the caller's arguments.
             unsafe {
                 open(

@@ -25,10 +25,10 @@
 
 use std::collections::HashMap;
 use std::io;
+use std::os::windows::io::AsRawHandle as _;
 use std::sync::{Mutex, OnceLock};
 
-use windows_sys::Win32::Foundation::FALSE;
-use windows_sys::Win32::System::Threading::{OpenProcess, PROCESS_SET_QUOTA, PROCESS_TERMINATE};
+use windows_sys::Win32::System::Threading::{PROCESS_SET_QUOTA, PROCESS_TERMINATE};
 
 use crate::job::{JobConfig, JobObject};
 use crate::process::Held;
@@ -69,19 +69,16 @@ pub fn contain(pid: u32) {
         return;
     };
 
-    // SAFETY: OpenProcess returns null rather than a bad handle on failure.
-    let handle = unsafe { OpenProcess(PROCESS_SET_QUOTA | PROCESS_TERMINATE, FALSE, pid) };
-    if handle.is_null() {
+    let Ok(process) = crate::handle::open_process(pid, PROCESS_SET_QUOTA | PROCESS_TERMINATE)
+    else {
         return;
-    }
+    };
 
-    let assigned = job.assign_process(handle.cast()).is_ok();
+    let assigned = job.assign_process(process.as_raw_handle()).is_ok();
 
-    // SAFETY: closing a handle we just opened, exactly once. The job holds its own
-    // reference to the process, so closing this does not undo the assignment.
-    unsafe {
-        windows_sys::Win32::Foundation::CloseHandle(handle);
-    }
+    // The job holds its own reference to the process, so closing this does not undo the
+    // assignment.
+    drop(process);
 
     if assigned && let Ok(mut registry) = registry().lock() {
         // The caller has just started `pid` and still holds it, so this opens that

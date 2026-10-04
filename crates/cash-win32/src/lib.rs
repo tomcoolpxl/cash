@@ -29,6 +29,7 @@ pub mod endless;
 pub mod env;
 pub mod exit;
 pub mod fs;
+mod handle;
 /// ICMP echo through the IP Helper API, for `ping`.
 pub mod icmp;
 mod imports;
@@ -59,5 +60,6 @@ pub mod text;
 pub mod userpath;
 #[cfg(any(test, feature = "pseudo-console"))]
 pub mod vtscreen;
+pub mod wide;
 
 pub use job::{JobConfig, JobObject};

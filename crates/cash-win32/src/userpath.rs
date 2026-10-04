@@ -22,6 +22,8 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
     HWND_BROADCAST, SMTO_ABORTIFHUNG, SendMessageTimeoutW, WM_SETTINGCHANGE,
 };
 
+use crate::wide::to_wide_nul;
+
 /// A key under `HKEY_CURRENT_USER` to use in place of `Environment`. Tests set it, so no
 /// test run touches the user's real `Path`; nothing is announced to other programs then.
 pub const KEY_VAR: &str = "CASH_USER_ENVIRONMENT_KEY";
@@ -152,8 +154,8 @@ fn os_error(status: WIN32_ERROR) -> io::Error {
 /// The user `Path` as stored, `%VAR%` entries unexpanded, and its type. A user with no
 /// `Path` of their own has `None`, and a new one is `REG_EXPAND_SZ`, as Windows makes it.
 fn read() -> io::Result<(Option<String>, REG_VALUE_TYPE)> {
-    let key = wide(&key_name());
-    let name = wide(VALUE);
+    let key = to_wide_nul(key_name());
+    let name = to_wide_nul(VALUE);
     let flags = RRF_RT_REG_SZ | RRF_RT_REG_EXPAND_SZ | RRF_NOEXPAND;
     let mut buffer: Vec<u16> = vec![0; 1024];
     loop {
@@ -200,7 +202,7 @@ impl Drop for Key {
 /// Store `value` as the user `Path`, with the type it had; an empty one is removed, as a
 /// user who never had a `Path` of their own had none.
 fn write(value: &str, kind: REG_VALUE_TYPE) -> io::Result<()> {
-    let subkey = wide(&key_name());
+    let subkey = to_wide_nul(key_name());
     let mut handle: HKEY = std::ptr::null_mut();
     // SAFETY: the subkey is NUL-terminated; the class and security attributes may be
     // null; `handle` receives the key, which `Key` closes.
@@ -221,13 +223,13 @@ fn write(value: &str, kind: REG_VALUE_TYPE) -> io::Result<()> {
         return Err(os_error(status));
     }
     let key = Key(handle);
-    let name = wide(VALUE);
+    let name = to_wide_nul(VALUE);
 
     let status = if value.is_empty() {
         // SAFETY: the key is open for setting values, and the name is NUL-terminated.
         unsafe { RegDeleteValueW(key.0, name.as_ptr()) }
     } else {
-        let data = wide(value);
+        let data = to_wide_nul(value);
         let bytes = u32::try_from(data.len() * 2).map_err(|_| io::Error::other("Path too long"))?;
         // SAFETY: the key is open for setting values; `data` is NUL-terminated UTF-16 of
         // `bytes` bytes, as a string value is stored.
@@ -246,7 +248,7 @@ fn announce() {
     if std::env::var_os(KEY_VAR).is_some() {
         return;
     }
-    let what = wide(ENVIRONMENT);
+    let what = to_wide_nul(ENVIRONMENT);
     let mut result = 0usize;
     // SAFETY: `what` is a NUL-terminated string that outlives the call, which returns
     // within five seconds even when a window does not answer.
@@ -261,11 +263,6 @@ fn announce() {
             &raw mut result,
         );
     }
-}
-
-/// A NUL-terminated UTF-16 copy, as every `W` entry point wants.
-fn wide(value: &str) -> Vec<u16> {
-    value.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
 #[cfg(test)]

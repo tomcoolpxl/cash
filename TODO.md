@@ -96,8 +96,6 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 Each from `REVIEW_REPORT.md` §5, found in no commit on 2026-10-04; reproduce first, as
 some may have gone with other work.
 
-- W32-13, W32-14, XC-13: five RAII handle types and 15+ manual `CloseHandle`s, three
-  leaking on error in `pipe.rs`; about 12 copies of the UTF-16 encoder.
 - XC-12, XC-14, XC-16: three process-creation paths and two environment-block builders;
   paths shown via `replace('\\','/')` past the D10 chokepoint; case folding mixes ASCII
   and Unicode.

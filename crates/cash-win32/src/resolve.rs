@@ -175,7 +175,7 @@ fn classify_if_exists(candidate: &Path, pathext: &[String]) -> Option<Dispatch> 
 /// better than a failed lookup.
 #[must_use]
 pub fn real_case(path: &Path) -> PathBuf {
-    use std::os::windows::ffi::{OsStrExt as _, OsStringExt as _};
+    use std::os::windows::ffi::OsStringExt as _;
     use windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE;
     use windows_sys::Win32::Storage::FileSystem::{FindClose, FindFirstFileW, WIN32_FIND_DATAW};
 
@@ -186,11 +186,7 @@ pub fn real_case(path: &Path) -> PathBuf {
     // The file's own entry, which holds its name as the disk spells it: it read the
     // whole directory to find it (W32-16). A name cannot hold `*` or `?`, so the path is
     // no pattern.
-    let wide: Vec<u16> = path
-        .as_os_str()
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect();
+    let wide = crate::wide::to_wide_nul(path);
     // SAFETY: an all-zero WIN32_FIND_DATAW is a valid value for the out-parameter.
     let mut found: WIN32_FIND_DATAW = unsafe { std::mem::zeroed() };
     // SAFETY: the path is NUL-terminated and `found` outlives the call.

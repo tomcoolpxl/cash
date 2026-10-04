@@ -1,14 +1,17 @@
 //! Process queries that the job-object layer and D42's elevated-child tracking need.
 
 use std::os::windows::ffi::OsStringExt as _;
+use std::os::windows::io::{AsRawHandle as _, FromRawHandle as _, OwnedHandle};
 
 use windows_sys::Win32::Foundation::{
-    CloseHandle, FALSE, FILETIME, GetLastError, HANDLE, INVALID_HANDLE_VALUE, WAIT_TIMEOUT,
+    FILETIME, GetLastError, HANDLE, INVALID_HANDLE_VALUE, WAIT_TIMEOUT,
 };
 use windows_sys::Win32::System::Threading::{
-    GetCurrentProcess, GetExitCodeProcess, GetProcessTimes, INFINITE, OpenProcess,
+    GetCurrentProcess, GetExitCodeProcess, GetProcessTimes, INFINITE,
     PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE, WaitForSingleObject,
 };
+
+use crate::handle::open_process;
 
 /// `GetExitCodeProcess` reports this while a process is still running.
 const STILL_ACTIVE: u32 = 259;
@@ -26,16 +29,9 @@ const STILL_ACTIVE: u32 = 259;
 /// its executable is not kept open: it can be replaced or deleted (checked 2026-09-30).
 #[derive(Debug)]
 pub struct Held {
-    handle: HANDLE,
+    handle: OwnedHandle,
     pid: u32,
 }
-
-// SAFETY: the handle is an index into a process-wide table with no thread affinity, the
-// calls made through it (`WaitForSingleObject`, `GetProcessTimes`, `CloseHandle`) are
-// thread-safe, and `Drop` closes it exactly once because `Held` is not `Clone`.
-unsafe impl Send for Held {}
-// SAFETY: as above; shared references only ever reach thread-safe Win32 calls.
-unsafe impl Sync for Held {}
 
 impl Held {
     /// Holds the process that has `pid` now, or `None` if there is none or it may not be
@@ -46,9 +42,8 @@ impl Held {
     #[must_use]
     pub fn open(pid: u32) -> Option<Self> {
         let access = PROCESS_SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION;
-        // SAFETY: OpenProcess returns null rather than a bad handle on failure.
-        let handle = unsafe { OpenProcess(access, FALSE, pid) };
-        (!handle.is_null()).then_some(Self { handle, pid })
+        let handle = open_process(pid, access).ok()?;
+        Some(Self { handle, pid })
     }
 
     /// The process's id.
@@ -62,19 +57,19 @@ impl Held {
     #[must_use]
     pub fn is_running(&self) -> bool {
         // SAFETY: the handle is valid and was opened with SYNCHRONIZE.
-        unsafe { WaitForSingleObject(self.handle, 0) == WAIT_TIMEOUT }
+        unsafe { WaitForSingleObject(self.handle.as_raw_handle(), 0) == WAIT_TIMEOUT }
     }
 
     /// Waits until the process has ended.
     pub fn wait(&self) {
         // SAFETY: the handle is valid and was opened with SYNCHRONIZE.
-        unsafe { WaitForSingleObject(self.handle, INFINITE) };
+        unsafe { WaitForSingleObject(self.handle.as_raw_handle(), INFINITE) };
     }
 
     /// When the process started, as a `FILETIME` count.
     #[must_use]
     pub fn started(&self) -> Option<u64> {
-        creation_time(self.handle)
+        creation_time(self.handle.as_raw_handle())
     }
 
     /// Whether the process had started by `seen`, a [`now_filetime`] count: whether it
@@ -86,13 +81,6 @@ impl Held {
     #[must_use]
     pub fn started_by(&self, seen: u64) -> bool {
         self.started().is_none_or(|at| at <= seen)
-    }
-}
-
-impl Drop for Held {
-    fn drop(&mut self) {
-        // SAFETY: the handle is valid and closed exactly once.
-        unsafe { CloseHandle(self.handle) };
     }
 }
 
@@ -134,19 +122,13 @@ pub fn is_pid_alive(pid: u32) -> bool {
     }
 
     // A process that may be queried but not waited on: its exit status is all there is.
-    // SAFETY: OpenProcess returns null rather than a bad handle on failure.
-    let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid) };
-    if handle.is_null() {
+    let Ok(process) = open_process(pid, PROCESS_QUERY_LIMITED_INFORMATION) else {
         return false;
-    }
+    };
 
     let mut code: u32 = 0;
-    // SAFETY: handle is valid here, and `code` is a valid out-param.
-    let ok = unsafe { GetExitCodeProcess(handle, &raw mut code) };
-    // SAFETY: closing a handle we just opened, exactly once.
-    unsafe {
-        CloseHandle(handle);
-    }
+    // SAFETY: the handle is valid here, and `code` is a valid out-param.
+    let ok = unsafe { GetExitCodeProcess(process.as_raw_handle(), &raw mut code) };
 
     ok != 0 && code == STILL_ACTIVE
 }
@@ -160,11 +142,7 @@ pub fn is_pid_alive(pid: u32) -> bool {
 /// Returns `None` if the process cannot be opened, which usually means it has exited.
 #[must_use]
 pub fn cpu_time(pid: u32) -> Option<u64> {
-    // SAFETY: OpenProcess returns null rather than a bad handle on failure.
-    let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid) };
-    if handle.is_null() {
-        return None;
-    }
+    let process = open_process(pid, PROCESS_QUERY_LIMITED_INFORMATION).ok()?;
 
     let mut creation = FILETIME {
         dwLowDateTime: 0,
@@ -183,20 +161,16 @@ pub fn cpu_time(pid: u32) -> Option<u64> {
         dwHighDateTime: 0,
     };
 
-    // SAFETY: handle is valid and all four out-params are valid FILETIMEs.
+    // SAFETY: the handle is valid and all four out-params are valid FILETIMEs.
     let ok = unsafe {
         GetProcessTimes(
-            handle,
+            process.as_raw_handle(),
             &raw mut creation,
             &raw mut exit,
             &raw mut kernel,
             &raw mut user,
         )
     };
-    // SAFETY: closing a handle we just opened, exactly once.
-    unsafe {
-        CloseHandle(handle);
-    }
 
     if ok == 0 {
         return None;
@@ -236,8 +210,8 @@ pub fn own_cpu_time() -> (u64, u64) {
 /// When a process started, as a `FILETIME` count, or `None` if it cannot be opened.
 #[must_use]
 pub fn started(pid: u32) -> Option<u64> {
-    let process = ProcessHandle::open(pid, PROCESS_QUERY_LIMITED_INFORMATION)?;
-    creation_time(process.0)
+    let process = open_process(pid, PROCESS_QUERY_LIMITED_INFORMATION).ok()?;
+    creation_time(process.as_raw_handle())
 }
 
 /// Whether `child` can really be a child of the process `parent_pid`, which started at
@@ -295,9 +269,11 @@ pub fn list() -> Vec<ProcessInfo> {
 
     // SAFETY: TH32CS_SNAPPROCESS ignores the pid argument and snapshots every process.
     let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) };
-    if snapshot == windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE {
+    // SAFETY: just returned, and nothing has run since.
+    let Ok(owned) = (unsafe { crate::handle::from_invalid(snapshot) }) else {
         return Vec::new();
-    }
+    };
+    let snapshot = owned.as_raw_handle();
 
     // SAFETY: `PROCESSENTRY32W` is plain old data — integers and a fixed-size UTF-16
     // buffer — for which an all-zero bit pattern is valid. `dwSize` is set immediately
@@ -322,8 +298,7 @@ pub fn list() -> Vec<ProcessInfo> {
         ok = unsafe { Process32NextW(snapshot, &raw mut entry) };
     }
 
-    // SAFETY: closing the snapshot handle, exactly once.
-    unsafe { CloseHandle(snapshot) };
+    drop(owned);
 
     processes.sort_by_key(|p| p.pid);
     processes
@@ -418,8 +393,8 @@ pub fn usage(pid: u32) -> ProcessDetails {
 /// The account a process runs as, without its domain: `ps`'s `USER`.
 #[must_use]
 pub fn owner(pid: u32) -> Option<String> {
-    let process = ProcessHandle::open(pid, PROCESS_QUERY_LIMITED_INFORMATION)?;
-    token_user(process.0)
+    let process = open_process(pid, PROCESS_QUERY_LIMITED_INFORMATION).ok()?;
+    token_user(process.as_raw_handle())
 }
 
 fn details_of(pid: u32, with_user: bool) -> ProcessDetails {
@@ -429,11 +404,10 @@ fn details_of(pid: u32, with_user: bool) -> ProcessDetails {
 
     let mut details = ProcessDetails::default();
 
-    // SAFETY: OpenProcess returns null rather than a bad handle on failure.
-    let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid) };
-    if handle.is_null() {
+    let Ok(process) = open_process(pid, PROCESS_QUERY_LIMITED_INFORMATION) else {
         return details;
-    }
+    };
+    let handle = process.as_raw_handle();
 
     let zero = FILETIME {
         dwLowDateTime: 0,
@@ -496,11 +470,6 @@ fn details_of(pid: u32, with_user: bool) -> ProcessDetails {
         details.user = token_user(handle);
     }
 
-    // SAFETY: closing a handle we just opened, exactly once.
-    unsafe {
-        CloseHandle(handle);
-    }
-
     details
 }
 
@@ -544,23 +513,21 @@ pub fn current_process_is_elevated() -> Option<bool> {
     if unsafe { OpenProcessToken(current, TOKEN_QUERY, &raw mut token) } == 0 {
         return None;
     }
+    // SAFETY: the call succeeded, so `token` is an open handle that is ours.
+    let token = unsafe { OwnedHandle::from_raw_handle(token) };
     let mut elevation = TOKEN_ELEVATION { TokenIsElevated: 0 };
     let size = u32::try_from(size_of::<TOKEN_ELEVATION>()).ok()?;
     let mut needed: u32 = 0;
     // SAFETY: the buffer is a TOKEN_ELEVATION of the size passed.
     let ok = unsafe {
         GetTokenInformation(
-            token,
+            token.as_raw_handle(),
             TokenElevation,
             (&raw mut elevation).cast(),
             size,
             &raw mut needed,
         )
     };
-    // SAFETY: closing a handle we just opened, exactly once.
-    unsafe {
-        CloseHandle(token);
-    }
     (ok != 0).then_some(elevation.TokenIsElevated != 0)
 }
 
@@ -632,12 +599,20 @@ fn with_token_user<T>(
     if unsafe { OpenProcessToken(process, TOKEN_QUERY, &raw mut token) } == 0 {
         return None;
     }
+    // SAFETY: the call succeeded, so `token` is an open handle that is ours.
+    let token = unsafe { OwnedHandle::from_raw_handle(token) };
 
     // Ask for the size first: a TOKEN_USER carries a variable-length SID after it.
     let mut needed: u32 = 0;
     // SAFETY: a null buffer with a zero length is the documented way to ask for the size.
     unsafe {
-        GetTokenInformation(token, TokenUser, std::ptr::null_mut(), 0, &raw mut needed);
+        GetTokenInformation(
+            token.as_raw_handle(),
+            TokenUser,
+            std::ptr::null_mut(),
+            0,
+            &raw mut needed,
+        );
     }
 
     // A `TOKEN_USER` starts with a pointer, so the buffer it is read into has to be
@@ -648,17 +623,14 @@ fn with_token_user<T>(
     // SAFETY: the buffer is at least the size the call above asked for.
     let ok = unsafe {
         GetTokenInformation(
-            token,
+            token.as_raw_handle(),
             TokenUser,
             buffer.as_mut_ptr().cast(),
             needed,
             &raw mut needed,
         )
     };
-    // SAFETY: closing a handle we just opened, exactly once.
-    unsafe {
-        CloseHandle(token);
-    }
+    drop(token);
 
     if ok == 0 || words * size_of::<u64>() < size_of::<TOKEN_USER>() {
         return None;
@@ -809,20 +781,13 @@ pub fn now_filetime() -> u64 {
 pub fn terminate(pid: u32, status: u32) -> std::io::Result<()> {
     use windows_sys::Win32::System::Threading::{PROCESS_TERMINATE, TerminateProcess};
 
-    // SAFETY: OpenProcess returns null rather than a bad handle on failure.
-    let handle = unsafe { OpenProcess(PROCESS_TERMINATE, FALSE, pid) };
-    if handle.is_null() {
-        return Err(std::io::Error::last_os_error());
-    }
+    let process = open_process(pid, PROCESS_TERMINATE)?;
 
-    // SAFETY: handle is valid and carries PROCESS_TERMINATE.
-    let ok = unsafe { TerminateProcess(handle, status) };
+    // SAFETY: the handle is valid and carries PROCESS_TERMINATE.
+    let ok = unsafe { TerminateProcess(process.as_raw_handle(), status) };
     // Read before the close, which may set the last error itself (W32-15).
     let error = (ok == 0).then(std::io::Error::last_os_error);
-    // SAFETY: closing a handle we just opened, exactly once.
-    unsafe {
-        CloseHandle(handle);
-    }
+    drop(process);
 
     error.map_or(Ok(()), Err)
 }
@@ -875,24 +840,6 @@ pub fn resume_process(process: windows_sys::Win32::Foundation::HANDLE) -> std::i
     }
 }
 
-/// Opens a process with `access`, closing the handle when dropped.
-struct ProcessHandle(windows_sys::Win32::Foundation::HANDLE);
-
-impl ProcessHandle {
-    fn open(pid: u32, access: u32) -> Option<Self> {
-        // SAFETY: OpenProcess returns null rather than a bad handle on failure.
-        let handle = unsafe { OpenProcess(access, FALSE, pid) };
-        (!handle.is_null()).then_some(Self(handle))
-    }
-}
-
-impl Drop for ProcessHandle {
-    fn drop(&mut self) {
-        // SAFETY: the handle is valid and closed exactly once.
-        unsafe { CloseHandle(self.0) };
-    }
-}
-
 /// The full path of a process's executable, if this user may query it.
 ///
 /// Uses `QueryFullProcessImageNameW`, which needs only limited query rights, so it works
@@ -902,13 +849,13 @@ pub fn image_path(pid: u32) -> Option<std::path::PathBuf> {
     use std::os::windows::ffi::OsStringExt;
     use windows_sys::Win32::System::Threading::{PROCESS_NAME_WIN32, QueryFullProcessImageNameW};
 
-    let process = ProcessHandle::open(pid, PROCESS_QUERY_LIMITED_INFORMATION)?;
+    let process = open_process(pid, PROCESS_QUERY_LIMITED_INFORMATION).ok()?;
     let mut buffer = vec![0u16; 32_768];
     let mut size = u32::try_from(buffer.len()).unwrap_or(u32::MAX);
     // SAFETY: the handle is valid, and `buffer` has `size` writable UTF-16 units.
     let ok = unsafe {
         QueryFullProcessImageNameW(
-            process.0,
+            process.as_raw_handle(),
             PROCESS_NAME_WIN32,
             buffer.as_mut_ptr(),
             &raw mut size,
@@ -982,10 +929,8 @@ pub fn modules(pid: u32) -> Option<Vec<std::path::PathBuf>> {
             break;
         }
     }
-    if snapshot == INVALID_HANDLE_VALUE {
-        return None;
-    }
-    let snapshot = ProcessHandle(snapshot);
+    // SAFETY: just returned; the last error, read since, is not wanted.
+    let snapshot = unsafe { crate::handle::from_invalid(snapshot) }.ok()?;
 
     // SAFETY: an all-zero `MODULEENTRY32W` is valid; its size is set below.
     let mut entry: MODULEENTRY32W = unsafe { std::mem::zeroed() };
@@ -993,7 +938,7 @@ pub fn modules(pid: u32) -> Option<Vec<std::path::PathBuf>> {
     let mut paths = Vec::new();
     let mut full_paths = None;
     // SAFETY: the snapshot is open and `entry` is a valid out-param of the size it says.
-    let mut more = unsafe { Module32FirstW(snapshot.0, &raw mut entry) } != 0;
+    let mut more = unsafe { Module32FirstW(snapshot.as_raw_handle(), &raw mut entry) } != 0;
     while more {
         let length = entry
             .szExePath
@@ -1003,7 +948,7 @@ pub fn modules(pid: u32) -> Option<Vec<std::path::PathBuf>> {
         let path = if length + 1 >= entry.szExePath.len() {
             // Possibly cut short: asked of the process in full.
             let process =
-                full_paths.get_or_insert_with(|| ProcessHandle::open(pid, MODULE_QUERY_ACCESS));
+                full_paths.get_or_insert_with(|| open_process(pid, MODULE_QUERY_ACCESS).ok());
             process
                 .as_ref()
                 .and_then(|process| module_path(process, entry.hModule))
@@ -1015,7 +960,7 @@ pub fn modules(pid: u32) -> Option<Vec<std::path::PathBuf>> {
         };
         paths.extend(path.map(std::path::PathBuf::from));
         // SAFETY: as above.
-        more = unsafe { Module32NextW(snapshot.0, &raw mut entry) } != 0;
+        more = unsafe { Module32NextW(snapshot.as_raw_handle(), &raw mut entry) } != 0;
     }
     Some(paths)
 }
@@ -1026,7 +971,7 @@ const MODULE_QUERY_ACCESS: u32 = windows_sys::Win32::System::Threading::PROCESS_
 
 /// The full path of the module `module` in `process`.
 fn module_path(
-    process: &ProcessHandle,
+    process: &OwnedHandle,
     module: windows_sys::Win32::Foundation::HMODULE,
 ) -> Option<std::ffi::OsString> {
     use windows_sys::Win32::System::ProcessStatus::K32GetModuleFileNameExW;
@@ -1035,7 +980,9 @@ fn module_path(
     let size = u32::try_from(name.len()).unwrap_or(u32::MAX);
     // SAFETY: the handle is open with the access the call needs, `module` is one of the
     // process's, and `name` has `size` writable units.
-    let length = unsafe { K32GetModuleFileNameExW(process.0, module, name.as_mut_ptr(), size) };
+    let length = unsafe {
+        K32GetModuleFileNameExW(process.as_raw_handle(), module, name.as_mut_ptr(), size)
+    };
     let length = usize::try_from(length).ok().filter(|&length| length > 0)?;
     name.get(..length).map(std::ffi::OsString::from_wide)
 }

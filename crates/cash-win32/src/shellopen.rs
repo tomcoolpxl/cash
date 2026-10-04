@@ -10,7 +10,6 @@
 //! `runas` verb, which `CreateProcessW` has no equivalent of.
 
 use std::io;
-use std::os::windows::ffi::OsStrExt;
 use std::path::Path;
 
 use windows_sys::Win32::System::Com::{
@@ -20,6 +19,8 @@ use windows_sys::Win32::UI::Shell::{
     SEE_MASK_FLAG_NO_UI, SEE_MASK_NOASYNC, SHELLEXECUTEINFOW, ShellExecuteExW,
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+
+use crate::wide::to_wide_nul;
 
 /// Opens `target` with its default handler, the default verb of `ShellExecuteExW`, with
 /// `directory` as the working directory of whatever it starts.
@@ -55,12 +56,10 @@ fn execute(
     parameters: Option<&str>,
     directory: &Path,
 ) -> io::Result<()> {
-    let wide = |text: &str| -> Vec<u16> { text.encode_utf16().chain(Some(0)).collect() };
-    let verb = verb.map(wide);
-    let target = wide(target);
-    let parameters = parameters.map(wide);
-    let directory = crate::path::process_directory(directory)?;
-    let directory: Vec<u16> = directory.as_os_str().encode_wide().chain(Some(0)).collect();
+    let verb = verb.map(to_wide_nul);
+    let target = to_wide_nul(target);
+    let parameters = parameters.map(to_wide_nul);
+    let directory = to_wide_nul(crate::path::process_directory(directory)?);
     std::thread::Builder::new()
         .name("cash-shell-open".into())
         .spawn(move || {

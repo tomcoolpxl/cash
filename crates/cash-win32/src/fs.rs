@@ -4,8 +4,7 @@
 //! with in-memory caching, accurate hard link counts, and directory link counts.
 
 use std::collections::HashMap;
-use std::os::windows::ffi::OsStrExt;
-use std::os::windows::io::AsRawHandle as _;
+use std::os::windows::io::{AsRawHandle as _, FromRawHandle as _};
 use std::path::Path;
 use std::sync::Mutex;
 
@@ -105,7 +104,7 @@ pub fn file_security(path: &Path) -> FileSecurity {
 
 /// A file's security descriptor, with the parts `info` names.
 fn security_descriptor(path: &Path, info: OBJECT_SECURITY_INFORMATION) -> Option<Vec<u8>> {
-    let wide: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+    let wide = crate::wide::to_wide_nul(path);
 
     let mut needed: u32 = 0;
     // SAFETY: querying required buffer size with a null pointer and length 0.
@@ -153,11 +152,17 @@ fn impersonation_token() -> Option<windows_sys::Win32::Foundation::HANDLE> {
         {
             return None;
         }
+        // SAFETY: the call succeeded, so `primary` is an open handle that is ours.
+        let primary = unsafe { std::os::windows::io::OwnedHandle::from_raw_handle(primary) };
         let mut duplicate = std::ptr::null_mut();
         // SAFETY: `primary` was opened with TOKEN_DUPLICATE above.
-        let ok = unsafe { DuplicateToken(primary, SecurityImpersonation, &raw mut duplicate) };
-        // SAFETY: `primary` is a handle this function opened and no longer needs.
-        unsafe { windows_sys::Win32::Foundation::CloseHandle(primary) };
+        let ok = unsafe {
+            DuplicateToken(
+                primary.as_raw_handle(),
+                SecurityImpersonation,
+                &raw mut duplicate,
+            )
+        };
         (ok != 0).then_some(duplicate as usize)
     });
     token.map(|handle| handle as windows_sys::Win32::Foundation::HANDLE)

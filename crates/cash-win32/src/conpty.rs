@@ -7,11 +7,11 @@
 use std::cell::Cell;
 use std::fs::File;
 use std::io::{self, Read, Write};
-use std::os::windows::io::FromRawHandle;
+use std::os::windows::io::{AsRawHandle as _, FromRawHandle as _, OwnedHandle};
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use windows_sys::Win32::Foundation::{CloseHandle, FALSE, HANDLE, INVALID_HANDLE_VALUE, S_OK};
+use windows_sys::Win32::Foundation::{FALSE, HANDLE, S_OK};
 use windows_sys::Win32::System::Console::{COORD, ClosePseudoConsole, CreatePseudoConsole, HPCON};
 use windows_sys::Win32::System::Pipes::{CreatePipe, PeekNamedPipe};
 use windows_sys::Win32::System::Threading::{
@@ -29,15 +29,12 @@ const STILL_ACTIVE: u32 = 259;
 
 /// A child process spawned attached to a pseudo console.
 pub struct ConPtyChild {
-    process: HANDLE,
-    thread: HANDLE,
+    process: OwnedHandle,
+    /// Its first thread's handle, which `CreateProcessW` hands over too; held only to be
+    /// closed with the process's.
+    _thread: OwnedHandle,
     pid: u32,
 }
-
-// SAFETY: Kernel handles are process-wide, carry no thread affinity, and are thread-safe.
-unsafe impl Send for ConPtyChild {}
-// SAFETY: Kernel handles are thread-safe Win32 synchronization objects.
-unsafe impl Sync for ConPtyChild {}
 
 impl ConPtyChild {
     /// Return the process ID.
@@ -49,10 +46,10 @@ impl ConPtyChild {
     /// Block until the process exits, returning its exit code.
     pub fn wait(&self) -> io::Result<u32> {
         // SAFETY: process handle is valid.
-        unsafe { WaitForSingleObject(self.process, INFINITE) };
+        unsafe { WaitForSingleObject(self.process.as_raw_handle(), INFINITE) };
         let mut code: u32 = 0;
         // SAFETY: handle is valid and code is valid out-param.
-        let ok = unsafe { GetExitCodeProcess(self.process, &raw mut code) };
+        let ok = unsafe { GetExitCodeProcess(self.process.as_raw_handle(), &raw mut code) };
         if ok == 0 {
             return Err(io::Error::last_os_error());
         }
@@ -63,7 +60,7 @@ impl ConPtyChild {
     pub fn try_wait(&self) -> io::Result<Option<u32>> {
         let mut code: u32 = 0;
         // SAFETY: handle is valid and code is valid out-param.
-        let ok = unsafe { GetExitCodeProcess(self.process, &raw mut code) };
+        let ok = unsafe { GetExitCodeProcess(self.process.as_raw_handle(), &raw mut code) };
         if ok == 0 {
             return Err(io::Error::last_os_error());
         }
@@ -75,76 +72,52 @@ impl ConPtyChild {
     }
 }
 
-impl Drop for ConPtyChild {
-    fn drop(&mut self) {
-        if self.process != INVALID_HANDLE_VALUE && !self.process.is_null() {
-            // SAFETY: Valid open process handle being closed.
-            unsafe {
-                CloseHandle(self.process);
-            }
-        }
-        if self.thread != INVALID_HANDLE_VALUE && !self.thread.is_null() {
-            // SAFETY: Valid open thread handle being closed.
-            unsafe {
-                CloseHandle(self.thread);
-            }
-        }
-    }
-}
-
 /// A native Win32 Pseudo Console (ConPTY).
 pub struct ConPty {
     hpcon: HPCON,
     input_write: File,
     output_read: File,
-    in_read: Cell<Option<HANDLE>>,
-    out_write: Cell<Option<HANDLE>>,
+    in_read: Cell<Option<OwnedHandle>>,
+    out_write: Cell<Option<OwnedHandle>>,
+}
+
+/// An anonymous pipe's two ends, read and write.
+fn anonymous_pipe() -> io::Result<(OwnedHandle, OwnedHandle)> {
+    let mut read: HANDLE = std::ptr::null_mut();
+    let mut write: HANDLE = std::ptr::null_mut();
+    // SAFETY: standard CreatePipe call with valid out params.
+    if unsafe { CreatePipe(&raw mut read, &raw mut write, std::ptr::null(), 0) } == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    // SAFETY: the call succeeded, so both are open handles that are ours.
+    let read = unsafe { OwnedHandle::from_raw_handle(read) };
+    // SAFETY: as above.
+    let write = unsafe { OwnedHandle::from_raw_handle(write) };
+    Ok((read, write))
 }
 
 impl ConPty {
     /// Creates a new ConPTY with the specified dimensions (columns and rows).
     pub fn new(cols: i16, rows: i16) -> io::Result<Self> {
-        let mut in_read: HANDLE = std::ptr::null_mut();
-        let mut in_write: HANDLE = std::ptr::null_mut();
-        let mut out_read: HANDLE = std::ptr::null_mut();
-        let mut out_write: HANDLE = std::ptr::null_mut();
-
-        // Create pipe for sending input to ConPTY.
-        // SAFETY: standard CreatePipe call with valid out params.
-        let ok_in = unsafe { CreatePipe(&raw mut in_read, &raw mut in_write, std::ptr::null(), 0) };
-        if ok_in == 0 {
-            return Err(io::Error::last_os_error());
-        }
-
-        // Create pipe for receiving output from ConPTY.
-        // SAFETY: standard CreatePipe call with valid out params.
-        let ok_out =
-            unsafe { CreatePipe(&raw mut out_read, &raw mut out_write, std::ptr::null(), 0) };
-        if ok_out == 0 {
-            // Read before the clean-up, which may set the last error itself (W32-15).
-            let error = io::Error::last_os_error();
-            // SAFETY: Clean up handle on error.
-            unsafe { CloseHandle(in_read) };
-            // SAFETY: Clean up handle on error.
-            unsafe { CloseHandle(in_write) };
-            return Err(error);
-        }
+        // A pipe for sending input to ConPTY, and one for receiving output from it.
+        let (in_read, in_write) = anonymous_pipe()?;
+        let (out_read, out_write) = anonymous_pipe()?;
 
         let size = COORD { X: cols, Y: rows };
         let mut hpcon: HPCON = 0;
 
-        // SAFETY: CreatePseudoConsole takes in_read and out_write.
-        let hr = unsafe { CreatePseudoConsole(size, in_read, out_write, 0, &raw mut hpcon) };
+        // SAFETY: CreatePseudoConsole takes in_read and out_write, which are open.
+        let hr = unsafe {
+            CreatePseudoConsole(
+                size,
+                in_read.as_raw_handle(),
+                out_write.as_raw_handle(),
+                0,
+                &raw mut hpcon,
+            )
+        };
 
         if hr != S_OK {
-            // SAFETY: Clean up handles on error.
-            unsafe { CloseHandle(in_read) };
-            // SAFETY: Clean up handles on error.
-            unsafe { CloseHandle(in_write) };
-            // SAFETY: Clean up handles on error.
-            unsafe { CloseHandle(out_read) };
-            // SAFETY: Clean up handles on error.
-            unsafe { CloseHandle(out_write) };
             // An HRESULT is no Win32 error code; one that wraps a Win32 error carries it in
             // its low 16 bits (FACILITY_WIN32), and any other is reported as itself.
             return Err(if (hr.cast_unsigned() >> 16) == 0x8007 {
@@ -154,15 +127,10 @@ impl ConPty {
             });
         }
 
-        // SAFETY: in_write is a valid open pipe handle.
-        let input_write = unsafe { File::from_raw_handle(in_write.cast()) };
-        // SAFETY: out_read is a valid open pipe handle.
-        let output_read = unsafe { File::from_raw_handle(out_read.cast()) };
-
         Ok(Self {
             hpcon,
-            input_write,
-            output_read,
+            input_write: File::from(in_write),
+            output_read: File::from(out_read),
             in_read: Cell::new(Some(in_read)),
             out_write: Cell::new(Some(out_write)),
         })
@@ -245,8 +213,7 @@ impl ConPty {
             }
         }
 
-        let mut cmd_line_wide: Vec<u16> =
-            cmd_line.encode_utf16().chain(std::iter::once(0)).collect();
+        let mut cmd_line_wide = crate::wide::to_wide_nul(&cmd_line);
 
         // Prepare environment block if given
         let env_block: Option<Vec<u16>> = env.map(|vars| {
@@ -263,13 +230,7 @@ impl ConPty {
             .as_ref()
             .map_or(std::ptr::null(), |b| b.as_ptr().cast());
 
-        let cwd_wide: Option<Vec<u16>> = cwd.map(|dir| {
-            dir.as_os_str()
-                .to_string_lossy()
-                .encode_utf16()
-                .chain(std::iter::once(0))
-                .collect()
-        });
+        let cwd_wide = cwd.map(crate::wide::to_wide_nul);
         let cwd_ptr = cwd_wide.as_ref().map_or(std::ptr::null(), |w| w.as_ptr());
 
         let mut creation_flags = EXTENDED_STARTUPINFO_PRESENT;
@@ -305,20 +266,18 @@ impl ConPty {
 
         // Now that the child process has been created attached to the pseudoconsole,
         // close the pseudoconsole pipe ends held by the parent.
-        if let Some(in_r) = self.in_read.take() {
-            // SAFETY: Close redundant in_read handle.
-            unsafe { CloseHandle(in_r) };
-        }
-        if let Some(out_w) = self.out_write.take() {
-            // SAFETY: Close redundant out_write handle.
-            unsafe { CloseHandle(out_w) };
-        }
+        drop(self.in_read.take());
+        drop(self.out_write.take());
 
         create_error.map_or(Ok(()), Err)?;
 
+        // SAFETY: the process was made, so both are open handles that are ours.
+        let process = unsafe { OwnedHandle::from_raw_handle(pi.hProcess) };
+        // SAFETY: as above.
+        let thread = unsafe { OwnedHandle::from_raw_handle(pi.hThread) };
         Ok(ConPtyChild {
-            process: pi.hProcess,
-            thread: pi.hThread,
+            process,
+            _thread: thread,
             pid: pi.dwProcessId,
         })
     }
@@ -336,14 +295,9 @@ impl ConPty {
 
 impl Drop for ConPty {
     fn drop(&mut self) {
-        if let Some(in_r) = self.in_read.take() {
-            // SAFETY: Close redundant in_read handle.
-            unsafe { CloseHandle(in_r) };
-        }
-        if let Some(out_w) = self.out_write.take() {
-            // SAFETY: Close redundant out_write handle.
-            unsafe { CloseHandle(out_w) };
-        }
+        // The pseudo console's own ends go before it, as after a spawn.
+        drop(self.in_read.take());
+        drop(self.out_write.take());
         if self.hpcon != 0 {
             // SAFETY: ClosePseudoConsole shuts down the terminal host.
             unsafe {

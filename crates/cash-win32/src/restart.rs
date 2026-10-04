@@ -13,7 +13,6 @@
 //!   file means one query per file.
 
 use std::io;
-use std::os::windows::ffi::OsStrExt;
 use std::path::Path;
 
 use windows_sys::Win32::Foundation::{ERROR_MORE_DATA, ERROR_SUCCESS, WIN32_ERROR};
@@ -82,15 +81,7 @@ pub fn holders(paths: &[&Path]) -> io::Result<Vec<Holder>> {
     let session = Session(handle);
 
     for batch in paths.chunks(REGISTER_BATCH) {
-        let wide: Vec<Vec<u16>> = batch
-            .iter()
-            .map(|path| {
-                path.as_os_str()
-                    .encode_wide()
-                    .chain(std::iter::once(0))
-                    .collect()
-            })
-            .collect();
+        let wide: Vec<Vec<u16>> = batch.iter().map(crate::wide::to_wide_nul).collect();
         let pointers: Vec<*const u16> = wide.iter().map(|w| w.as_ptr()).collect();
         let count = u32::try_from(pointers.len()).unwrap_or(u32::MAX);
         // SAFETY: `pointers` holds `count` NUL-terminated UTF-16 strings that outlive the

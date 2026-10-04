@@ -8,10 +8,11 @@
 
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::os::windows::io::{AsRawHandle as _, OwnedHandle};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
-use windows_sys::Win32::Foundation::{CloseHandle, ERROR_IO_PENDING, HANDLE, WAIT_OBJECT_0};
+use windows_sys::Win32::Foundation::{ERROR_IO_PENDING, HANDLE, WAIT_OBJECT_0};
 use windows_sys::Win32::NetworkManagement::IpHelper::{
     ICMP_ECHO_REPLY, ICMPV6_ECHO_REPLY_LH, IP_DEST_HOST_UNREACHABLE, IP_DEST_NET_UNREACHABLE,
     IP_DEST_PORT_UNREACHABLE, IP_OPTION_INFORMATION, IP_REQ_TIMED_OUT, IP_SUCCESS,
@@ -56,6 +57,9 @@ pub enum Outcome {
 }
 
 /// An open ICMP handle for one address family.
+///
+/// Not an [`OwnedHandle`]: an ICMP handle is closed with `IcmpCloseHandle`, which
+/// `CloseHandle` is not documented to stand in for.
 pub struct Pinger {
     handle: HANDLE,
     v6: bool,
@@ -67,7 +71,7 @@ unsafe impl Send for Pinger {}
 /// One request in flight: its reply buffer and completion event.
 struct Request {
     reply: Box<[u8]>,
-    event: HANDLE,
+    event: OwnedHandle,
 }
 
 impl Pinger {
@@ -101,13 +105,14 @@ impl Pinger {
         if !wait(&request, cancelled) {
             // The request may still complete into the buffer, which must stay valid.
             // The process is about to report and exit, so leaking it costs nothing.
-            close(request.event);
-            Box::leak(request.reply);
+            let Request { reply, event } = request;
+            drop(event);
+            Box::leak(reply);
             return Ok(Outcome::Cancelled);
         }
         let time = started.elapsed();
-        close(request.event);
-        let mut reply = request.reply;
+        let Request { mut reply, event } = request;
+        drop(event);
         Ok(self.parse(&mut reply, size, time))
     }
 
@@ -133,9 +138,8 @@ impl Pinger {
 
         // SAFETY: a manual-reset, initially unsignalled, unnamed event.
         let event = unsafe { CreateEventW(std::ptr::null(), 1, 0, std::ptr::null()) };
-        if event.is_null() {
-            return Err(io::Error::last_os_error());
-        }
+        // SAFETY: just returned, and nothing has run since.
+        let event = unsafe { crate::handle::from_null(event)? };
 
         let sent = match (self.v6, dest) {
             (true, IpAddr::V6(target)) => {
@@ -146,7 +150,7 @@ impl Pinger {
                 unsafe {
                     Icmp6SendEcho2(
                         self.handle,
-                        event,
+                        event.as_raw_handle(),
                         None,
                         std::ptr::null(),
                         &raw const source,
@@ -167,7 +171,7 @@ impl Pinger {
                 unsafe {
                     IcmpSendEcho2(
                         self.handle,
-                        event,
+                        event.as_raw_handle(),
                         None,
                         std::ptr::null(),
                         address,
@@ -181,7 +185,6 @@ impl Pinger {
                 }
             }
             _ => {
-                close(event);
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidInput,
                     "address family does not match the handle",
@@ -191,7 +194,6 @@ impl Pinger {
         if sent == 0 {
             let error = io::Error::last_os_error();
             if error.raw_os_error() != i32::try_from(ERROR_IO_PENDING).ok() {
-                close(event);
                 return Err(error);
             }
         }
@@ -240,7 +242,9 @@ impl Drop for Pinger {
 fn wait(request: &Request, cancelled: &AtomicBool) -> bool {
     loop {
         // SAFETY: waiting on the event the request owns.
-        if unsafe { WaitForSingleObject(request.event, CANCEL_POLL_MS) } == WAIT_OBJECT_0 {
+        if unsafe { WaitForSingleObject(request.event.as_raw_handle(), CANCEL_POLL_MS) }
+            == WAIT_OBJECT_0
+        {
             return true;
         }
         if cancelled.load(Ordering::SeqCst) {
@@ -356,9 +360,4 @@ pub fn catch_interrupts() -> &'static AtomicBool {
     // SAFETY: registering a handler that only stores to an atomic.
     unsafe { SetConsoleCtrlHandler(Some(handler), 1) };
     &INTERRUPTED
-}
-
-fn close(handle: HANDLE) {
-    // SAFETY: closing a handle this module opened, once.
-    unsafe { CloseHandle(handle) };
 }

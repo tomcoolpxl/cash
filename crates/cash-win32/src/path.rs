@@ -253,7 +253,7 @@ fn short_name(plain: &str) -> Option<String> {
     } else {
         format!(r"\\?\{plain}")
     };
-    let wide: Vec<u16> = long.encode_utf16().chain(std::iter::once(0)).collect();
+    let wide = crate::wide::to_wide_nul(&long);
     // SAFETY: a null buffer of length 0 asks for the length needed, NUL included.
     let needed = unsafe { GetShortPathNameW(wide.as_ptr(), std::ptr::null_mut(), 0) };
     if needed == 0 {

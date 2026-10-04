@@ -17,9 +17,9 @@
 //! guarantee for everyone. That is why it is opt-in per job rather than blanket.
 
 use std::io;
-use std::os::windows::io::{AsRawHandle, RawHandle};
+use std::os::windows::io::{AsRawHandle, OwnedHandle, RawHandle};
 
-use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
+use windows_sys::Win32::Foundation::HANDLE;
 use windows_sys::Win32::System::JobObjects::{
     AssignProcessToJobObject, CreateJobObjectW, IsProcessInJob, JOB_OBJECT_LIMIT_BREAKAWAY_OK,
     JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE, JOBOBJECT_BASIC_ACCOUNTING_INFORMATION,
@@ -72,17 +72,8 @@ impl JobConfig {
 /// job is terminated by the kernel.
 #[derive(Debug)]
 pub struct JobObject {
-    handle: HANDLE,
+    handle: OwnedHandle,
 }
-
-// SAFETY: the only field is a kernel handle, which carries no thread affinity — it is an
-// index into a process-wide table, valid from any thread until it is closed. Every Win32
-// call made through it (`AssignProcessToJobObject`, `QueryInformationJobObject`,
-// `TerminateJobObject`, `CloseHandle`) is documented as thread-safe, and `Drop` closes it
-// exactly once because `JobObject` is not `Clone`.
-unsafe impl Send for JobObject {}
-// SAFETY: as above — shared references only ever reach thread-safe Win32 calls.
-unsafe impl Sync for JobObject {}
 
 impl JobObject {
     /// Create a job object with the given configuration.
@@ -93,9 +84,8 @@ impl JobObject {
         // SAFETY: both arguments are optional and we pass null for each, which
         // CreateJobObjectW documents as "default security, unnamed".
         let handle = unsafe { CreateJobObjectW(std::ptr::null(), std::ptr::null()) };
-        if handle.is_null() {
-            return Err(io::Error::last_os_error());
-        }
+        // SAFETY: just returned, and nothing has run since.
+        let handle = unsafe { crate::handle::from_null(handle)? };
 
         let job = Self { handle };
         job.apply(config)?;
@@ -129,7 +119,7 @@ impl JobObject {
         // that JobObjectExtendedLimitInformation expects.
         let ok = unsafe {
             SetInformationJobObject(
-                self.handle,
+                self.as_raw(),
                 JobObjectExtendedLimitInformation,
                 std::ptr::from_ref(&limits).cast(),
                 // The structure is a fixed ~112 bytes and the parameter is a `u32` by
@@ -157,7 +147,7 @@ impl JobObject {
     pub fn assign_process(&self, process: RawHandle) -> io::Result<()> {
         // SAFETY: caller supplies a valid process handle with PROCESS_SET_QUOTA and
         // PROCESS_TERMINATE rights, which std's Child handles carry.
-        let ok = unsafe { AssignProcessToJobObject(self.handle, process as HANDLE) };
+        let ok = unsafe { AssignProcessToJobObject(self.as_raw(), process as HANDLE) };
         if ok == 0 {
             return Err(io::Error::last_os_error());
         }
@@ -177,7 +167,7 @@ impl JobObject {
     pub fn contains(&self, process: RawHandle) -> io::Result<bool> {
         let mut result: i32 = 0;
         // SAFETY: `result` is a valid BOOL out-param.
-        let ok = unsafe { IsProcessInJob(process as HANDLE, self.handle, &raw mut result) };
+        let ok = unsafe { IsProcessInJob(process as HANDLE, self.as_raw(), &raw mut result) };
         if ok == 0 {
             return Err(io::Error::last_os_error());
         }
@@ -192,7 +182,7 @@ impl JobObject {
         // the one passed.
         let ok = unsafe {
             QueryInformationJobObject(
-                self.handle,
+                self.as_raw(),
                 JobObjectBasicAccountingInformation,
                 (&raw mut info).cast(),
                 u32::try_from(size_of::<JOBOBJECT_BASIC_ACCOUNTING_INFORMATION>())
@@ -232,7 +222,7 @@ impl JobObject {
             // the structure, and the API is told its true length in bytes.
             let ok = unsafe {
                 QueryInformationJobObject(
-                    self.handle,
+                    self.as_raw(),
                     JobObjectBasicProcessIdList,
                     buffer.as_mut_ptr().cast(),
                     // The buffer never exceeds a few hundred kilobytes (capacity is
@@ -278,7 +268,7 @@ impl JobObject {
     /// first response to an interrupt: see D13's rationale about Terraform state locks.
     pub fn terminate(&self, exit_code: u32) -> io::Result<()> {
         // SAFETY: self.handle is a valid job handle for the lifetime of self.
-        let ok = unsafe { TerminateJobObject(self.handle, exit_code) };
+        let ok = unsafe { TerminateJobObject(self.as_raw(), exit_code) };
         if ok == 0 {
             return Err(io::Error::last_os_error());
         }
@@ -311,16 +301,7 @@ impl JobObject {
 
     /// The raw job handle, for callers that need it during process creation.
     #[must_use]
-    pub const fn as_raw(&self) -> HANDLE {
-        self.handle
-    }
-}
-
-impl Drop for JobObject {
-    fn drop(&mut self) {
-        // SAFETY: handle came from CreateJobObjectW and is closed exactly once.
-        unsafe {
-            CloseHandle(self.handle);
-        }
+    pub fn as_raw(&self) -> HANDLE {
+        self.handle.as_raw_handle()
     }
 }

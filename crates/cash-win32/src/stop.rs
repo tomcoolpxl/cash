@@ -16,19 +16,20 @@
 
 use std::collections::HashMap;
 use std::io;
+use std::os::windows::io::{AsRawHandle as _, OwnedHandle};
 use std::sync::{Mutex, PoisonError};
 use std::time::Duration;
 
-use windows_sys::Win32::Foundation::{
-    CloseHandle, FALSE, HANDLE, HWND, LPARAM, TRUE, WAIT_TIMEOUT, WPARAM,
-};
+use windows_sys::Win32::Foundation::{HWND, LPARAM, TRUE, WAIT_TIMEOUT, WPARAM};
 use windows_sys::Win32::System::Threading::{
-    OpenProcess, PROCESS_SYNCHRONIZE, PROCESS_TERMINATE, TerminateProcess, WaitForSingleObject,
+    PROCESS_SYNCHRONIZE, PROCESS_TERMINATE, TerminateProcess, WaitForSingleObject,
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     EnumWindows, GW_OWNER, GetWindow, GetWindowThreadProcessId, IsWindowVisible, PostMessageW,
     WM_CLOSE,
 };
+
+use crate::handle::open_process;
 
 /// How long an asked program has to exit before it is terminated.
 pub const GRACE: Duration = Duration::from_secs(5);
@@ -84,32 +85,23 @@ unsafe extern "system" fn ask(hwnd: HWND, lparam: LPARAM) -> i32 {
 /// A process terminated exits with `status`, which the caller sets to POSIX's 128 + the
 /// signal's number, so `wait` reports what Bash reports.
 pub fn request_stop(pid: u32, grace: Duration, status: u32) -> io::Result<()> {
-    // SAFETY: OpenProcess returns null rather than a bad handle on failure.
-    let handle = unsafe { OpenProcess(PROCESS_SYNCHRONIZE | PROCESS_TERMINATE, FALSE, pid) };
-    if handle.is_null() {
-        return Err(io::Error::last_os_error());
-    }
+    let handle = open_process(pid, PROCESS_SYNCHRONIZE | PROCESS_TERMINATE)?;
 
     // A process cash started in a group of its own (a background job at the prompt) can
     // be sent a Ctrl-Break, which console programs handle as an interrupt. It is asked
     // that way as well as through any windows, and terminated if it outlasts the grace.
     let broke = interrupt_group(pid);
     if close_windows(pid) == 0 && !broke {
-        let result = terminate_handle(handle, status);
-        close(handle);
-        return result;
+        return terminate_handle(&handle, status);
     }
 
-    // A HANDLE is a pointer, which is not Send; the thread owns it from here on.
-    let raw = handle as usize;
+    // The thread owns the handle from here on, and closes it when it ends.
     let millis = u32::try_from(grace.as_millis()).unwrap_or(u32::MAX);
     std::thread::spawn(move || {
-        let handle = raw as HANDLE;
         // SAFETY: `handle` was opened with SYNCHRONIZE and is owned by this thread.
-        if unsafe { WaitForSingleObject(handle, millis) } == WAIT_TIMEOUT {
-            let _ = terminate_handle(handle, status);
+        if unsafe { WaitForSingleObject(handle.as_raw_handle(), millis) } == WAIT_TIMEOUT {
+            let _ = terminate_handle(&handle, status);
         }
-        close(handle);
     });
     Ok(())
 }
@@ -120,30 +112,20 @@ pub fn request_stop(pid: u32, grace: Duration, status: u32) -> io::Result<()> {
 /// while a handle to its process is open, so the pid still names the group leader cash
 /// started, and not some later process that leads no group, at which a console control
 /// event would reach every process on the console (D21).
-static LEADERS: Mutex<Option<HashMap<u32, usize>>> = Mutex::new(None);
+static LEADERS: Mutex<Option<HashMap<u32, OwnedHandle>>> = Mutex::new(None);
 
 /// Records that cash started `pid` with `CREATE_NEW_PROCESS_GROUP` (D13).
 pub fn register_group_leader(pid: u32) {
-    // SAFETY: OpenProcess returns null rather than a bad handle on failure.
-    let handle = unsafe { OpenProcess(PROCESS_SYNCHRONIZE, FALSE, pid) };
-    if handle.is_null() {
+    let Ok(handle) = open_process(pid, PROCESS_SYNCHRONIZE) else {
         return;
-    }
+    };
     let mut guard = LEADERS.lock().unwrap_or_else(PoisonError::into_inner);
     let leaders = guard.get_or_insert_with(HashMap::new);
     // Closing the handles of leaders that have exited keeps the table small.
-    leaders.retain(|_, held| {
-        let running = still_running(*held as HANDLE);
-        if !running {
-            close(*held as HANDLE);
-        }
-        running
-    });
-    let replaced = leaders.insert(pid, handle as usize);
+    leaders.retain(|_, held| still_running(held));
+    let replaced = leaders.insert(pid, handle);
     drop(guard);
-    if let Some(old) = replaced {
-        close(old as HANDLE);
-    }
+    drop(replaced);
 }
 
 /// Whether `pid` is a running process cash started as the leader of its own group.
@@ -152,7 +134,7 @@ pub fn leads_group(pid: u32) -> bool {
     leaders
         .as_ref()
         .and_then(|l| l.get(&pid))
-        .is_some_and(|held| still_running(*held as HANDLE))
+        .is_some_and(still_running)
 }
 
 /// Sends a Ctrl-Break to `pid`'s group if cash started it as a group leader.
@@ -163,23 +145,16 @@ pub fn interrupt_group(pid: u32) -> bool {
     leads_group(pid) && crate::console::interrupt_process_group(pid).is_ok()
 }
 
-fn still_running(handle: HANDLE) -> bool {
+fn still_running(handle: &OwnedHandle) -> bool {
     // SAFETY: `handle` is a process handle held open by the registry.
-    let waited = unsafe { WaitForSingleObject(handle, 0) };
+    let waited = unsafe { WaitForSingleObject(handle.as_raw_handle(), 0) };
     waited == WAIT_TIMEOUT
 }
 
-fn terminate_handle(handle: HANDLE, status: u32) -> io::Result<()> {
+fn terminate_handle(handle: &OwnedHandle, status: u32) -> io::Result<()> {
     // SAFETY: `handle` is valid and carries PROCESS_TERMINATE.
-    if unsafe { TerminateProcess(handle, status) } == 0 {
+    if unsafe { TerminateProcess(handle.as_raw_handle(), status) } == 0 {
         return Err(io::Error::last_os_error());
     }
     Ok(())
-}
-
-fn close(handle: HANDLE) {
-    // SAFETY: each caller closes a handle it opened, exactly once.
-    unsafe {
-        CloseHandle(handle);
-    }
 }

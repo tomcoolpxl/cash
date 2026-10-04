@@ -53,7 +53,7 @@ pub fn short_date_and_time(time: SystemTime) -> Option<(String, String)> {
     };
     let date = wide_to_string(&buffer, written)?;
 
-    let format: Vec<u16> = "HH':'mm':'ss\0".encode_utf16().collect();
+    let format = crate::wide::to_wide_nul("HH':'mm':'ss");
     // SAFETY: as above, with a NUL-terminated format picture.
     let written = unsafe {
         GetTimeFormatEx(
