@@ -2873,7 +2873,6 @@ fn test_s_takes_one_p_flag() {
     for (script, column) in [("s/a/b/pp", 8), ("s/a/b/pgp", 9), ("s/a/b/ ; s/c/d/pp", 17)] {
         new_ucmd!()
             .arg(script)
-            .pipe_in("a\n")
             .fails()
             .code_is(1)
             .stderr_is(format!(
@@ -2933,7 +2932,6 @@ fn test_regex_errors_are_gnu_seds() {
     ] {
         new_ucmd!()
             .args(args)
-            .pipe_in("a\n")
             .fails()
             .code_is(1)
             .stderr_is(format!("sed: -e expression #1, char {error}\n"));
@@ -3227,7 +3225,6 @@ fn test_compile_errors_are_placed_as_gnu_sed_places_them() {
     ] {
         new_ucmd!()
             .args(args)
-            .pipe_in("a\n")
             .fails()
             .code_is(1)
             .stderr_is(format!("sed: {error}\n"));
@@ -3255,7 +3252,6 @@ fn test_compile_errors_in_a_script_file() -> std::io::Result<()> {
         let path = path.to_string_lossy().into_owned();
         new_ucmd!()
             .args(&["-f", &path])
-            .pipe_in("a\n")
             .fails()
             .code_is(1)
             .stderr_is(format!("sed: file {path} {error}\n"));
@@ -3281,7 +3277,6 @@ fn test_files_sed_cannot_open() {
         .stderr_is("sed: couldn't open file /no/such/script.sed: No such file or directory\n");
     new_ucmd!()
         .arg("s/a/b/w /no/such/dir/out")
-        .pipe_in("a\n")
         .fails()
         .code_is(4)
         .stderr_is("sed: couldn't open file /no/such/dir/out: No such file or directory\n");
