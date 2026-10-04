@@ -52,9 +52,10 @@ pub struct Keys {
     saved: u32,
     /// The first half of a character that takes two UTF-16 units, until the second comes.
     high: Option<u16>,
-    /// A character whose record says it was typed more than once, as a key held down is,
-    /// and how many of them are still to hand over.
-    held: Option<(char, u16)>,
+    /// Characters read and not yet handed over, each with how many times: a record says a
+    /// key held down was typed more than once, and one record can complete two characters
+    /// (a lone half of a pair, then a character of its own).
+    held: std::collections::VecDeque<(char, u16)>,
 }
 
 impl Keys {
@@ -97,7 +98,7 @@ impl Keys {
             input,
             saved,
             high: None,
-            held: None,
+            held: std::collections::VecDeque::new(),
         })
     }
 
@@ -113,8 +114,13 @@ impl Keys {
     /// Returns an error if the console's queue can no longer be read or waited on.
     pub fn next(&mut self, deadline: Option<Instant>) -> io::Result<Option<char>> {
         loop {
-            if let Some((character, left)) = self.held {
-                self.held = (left > 1).then(|| (character, left - 1));
+            if let Some((character, left)) = self.held.front_mut() {
+                let character = *character;
+                if *left > 1 {
+                    *left -= 1;
+                } else {
+                    self.held.pop_front();
+                }
                 return Ok(Some(character));
             }
             if !self.wait(deadline)? {
@@ -144,8 +150,14 @@ impl Keys {
             let Some((unit, times)) = typed(&record) else {
                 continue;
             };
-            if let Some(character) = complete(&mut self.high, unit) {
-                self.held = Some((character, times));
+            // The record's count is the key's: a lone half before it was typed once.
+            match complete(&mut self.high, unit) {
+                (Some(lone), Some(character)) => {
+                    self.held.push_back((lone, 1));
+                    self.held.push_back((character, times));
+                }
+                (Some(character), None) => self.held.push_back((character, times)),
+                _ => {}
             }
         }
     }
@@ -475,23 +487,27 @@ fn typed(record: &INPUT_RECORD) -> Option<(u16, u16)> {
     Some((unit, key.wRepeatCount.max(1)))
 }
 
-/// The character `unit` completes, if it completes one. A character outside the basic
+/// The characters `unit` completes, none, one or two. A character outside the basic
 /// plane arrives as two records, one UTF-16 unit each: `high` holds the first until the
-/// second comes. Half a pair on its own is U+FFFD.
-fn complete(high: &mut Option<u16>, unit: u16) -> Option<char> {
+/// second comes. Half a pair on its own is U+FFFD, and a unit after a lone high half is
+/// still read: it was taken as the pair's second and lost (W32-20).
+fn complete(high: &mut Option<u16>, unit: u16) -> (Option<char>, Option<char>) {
     if let Some(first) = high.take() {
-        return Some(
-            char::decode_utf16([first, unit])
+        if (0xDC00..0xE000).contains(&unit) {
+            let pair = char::decode_utf16([first, unit])
                 .next()
                 .and_then(Result::ok)
-                .unwrap_or(char::REPLACEMENT_CHARACTER),
-        );
+                .unwrap_or(char::REPLACEMENT_CHARACTER);
+            return (Some(pair), None);
+        }
+        return (Some(char::REPLACEMENT_CHARACTER), complete(high, unit).0);
     }
     if (0xD800..0xDC00).contains(&unit) {
         *high = Some(unit);
-        return None;
+        return (None, None);
     }
-    Some(char::from_u32(u32::from(unit)).unwrap_or(char::REPLACEMENT_CHARACTER))
+    let character = char::from_u32(u32::from(unit)).unwrap_or(char::REPLACEMENT_CHARACTER);
+    (Some(character), None)
 }
 
 #[cfg(test)]
@@ -553,25 +569,28 @@ mod tests {
     #[test]
     fn two_units_make_one_character_outside_the_basic_plane() {
         let mut high = None;
-        assert_eq!(complete(&mut high, u16::from(b'a')), Some('a'));
-        assert_eq!(complete(&mut high, 0x20AC), Some('€'));
+        assert_eq!(complete(&mut high, u16::from(b'a')), (Some('a'), None));
+        assert_eq!(complete(&mut high, 0x20AC), (Some('€'), None));
         // U+1F600 is D83D DE00 in UTF-16.
-        assert_eq!(complete(&mut high, 0xD83D), None);
-        assert_eq!(complete(&mut high, 0xDE00), Some('\u{1F600}'));
+        assert_eq!(complete(&mut high, 0xD83D), (None, None));
+        assert_eq!(complete(&mut high, 0xDE00), (Some('\u{1F600}'), None));
         assert_eq!(high, None);
     }
 
+    /// Half a pair is U+FFFD, and what follows a lone high half is read too: the `a` was
+    /// lost (W32-20). A high half after a high half waits for its own second.
     #[test]
     fn half_a_pair_is_the_replacement_character() {
+        const FFFD: char = char::REPLACEMENT_CHARACTER;
         let mut high = None;
-        assert_eq!(
-            complete(&mut high, 0xDE00),
-            Some(char::REPLACEMENT_CHARACTER)
-        );
-        assert_eq!(complete(&mut high, 0xD83D), None);
+        assert_eq!(complete(&mut high, 0xDE00), (Some(FFFD), None));
+        assert_eq!(complete(&mut high, 0xD83D), (None, None));
         assert_eq!(
             complete(&mut high, u16::from(b'a')),
-            Some(char::REPLACEMENT_CHARACTER)
+            (Some(FFFD), Some('a'))
         );
+        assert_eq!(complete(&mut high, 0xD83D), (None, None));
+        assert_eq!(complete(&mut high, 0xD83D), (Some(FFFD), None));
+        assert_eq!(complete(&mut high, 0xDE00), (Some('\u{1F600}'), None));
     }
 }

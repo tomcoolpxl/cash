@@ -10,7 +10,7 @@
 
 use std::path::{Path, PathBuf};
 
-use windows_sys::Win32::Foundation::{ERROR_NO_MORE_ITEMS, ERROR_SUCCESS};
+use windows_sys::Win32::Foundation::{ERROR_MORE_DATA, ERROR_SUCCESS};
 use windows_sys::Win32::System::Registry::{
     HKEY, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_QUERY_VALUE, RegCloseKey, RegEnumValueW,
     RegOpenKeyExW,
@@ -569,13 +569,17 @@ fn value_names(root: HKEY, subkey: &str) -> Vec<String> {
                 std::ptr::null_mut(),
             )
         };
-        if status == ERROR_NO_MORE_ITEMS {
-            break;
-        }
-        if status == ERROR_SUCCESS {
-            let length = usize::try_from(length).unwrap_or_default();
-            let name = buffer.get(..length).unwrap_or_default();
-            names.push(String::from_utf16_lossy(name));
+        match status {
+            ERROR_SUCCESS => {
+                let length = usize::try_from(length).unwrap_or_default();
+                let name = buffer.get(..length).unwrap_or_default();
+                names.push(String::from_utf16_lossy(name));
+            }
+            // A name longer than the buffer is no font's; the next value is asked for.
+            ERROR_MORE_DATA => {}
+            // The end, or an error that the next index would meet again: it went on,
+            // through every index a `u32` holds (W32-19).
+            _ => break,
         }
     }
     // SAFETY: the key was opened above and is closed once.

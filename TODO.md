@@ -117,8 +117,6 @@ some may have gone with other work.
   a whole directory.
 - W32-18: `CASH_EXE` and `CARGO_BIN_EXE_cash` redirect every `#!/bin/sh` script in
   production.
-- W32-19, W32-20: a registry enumeration spins on persistent errors; a lone surrogate
-  drops the next unit.
 - XC-12, XC-14, XC-16: three process-creation paths and two environment-block builders;
   paths shown via `replace('\\','/')` past the D10 chokepoint; case folding mixes ASCII
   and Unicode.
