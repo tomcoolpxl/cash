@@ -59,6 +59,7 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 | 17 | 1.3.18 | `lsof` lists everything |
 | 18 | 1.3.18 | `ss` as iproute2 7.2 has it |
 | 19 | 1.3.19 | `ss -i` and `dev`, and the vi fix |
+| 20 | 1.4.0 | `croot`: a built-in file and folder picker on Alt-E |
 
 ---
 
@@ -105,6 +106,49 @@ patch 8):
 - `ss -i`: per-connection TCP statistics from `GetPerTcpConnectionEStats`.
 - `ss ... dev NAME`: matches the IPv6 scope's interface; a socket without one has no
   device, as a Linux socket without `SO_BINDTODEVICE`.
+
+---
+
+## Phase 20. `croot`: a built-in file and folder picker on Alt-E
+
+The user used broot on Alt-E for two weeks (set up 2026-09-27 in `~/.bashrc` and broot's
+`cash-cd.hjson`) and wants it built in, as a picker only: no search language, no
+editor integration, no verbs. Broot takes up to two seconds to open, being a separate
+program; built in, the first frame comes from one folder read. Chosen on 2026-10-05:
+
+- **Inline, below the prompt** (as fzf's `--height`): 40% of the window, at least 8
+  rows, `CASH_PICKER_HEIGHT=50%` or `=15`; the scrollback above stays visible, the
+  screen scrolls up when the prompt is near the bottom, a tiny window gets full screen.
+- **Broot's tree**: several levels open, trimmed to fit with `… N more`; Right makes the
+  selected folder the root, Left goes to the parent; at a drive's root, Left shows the
+  drives (C:, D:, mapped drives, `~`).
+- **Typing is a fuzzy filter that also searches deeper**, in the background, best
+  matches first, capped in time and entries; Esc clears it, then closes.
+- **Context from the command line**:
+  - folders only for an empty line, `cd`, `pushd`, `rmdir`, `mkdir -p`; folders and
+    files for any other command; Alt-F switches;
+  - the word at the cursor, when it is part of a path, sets the start (`cd ~/src/fo`
+    starts in `~/src` filtered by `fo`) and is replaced by the pick;
+  - an empty line, `cd` or `pushd`: the pick goes in and runs at once; any other
+    command: the pick is inserted with a space after it and nothing runs;
+  - a command that takes several paths (`cp`, `mv`, `diff`, …) keeps the picker open
+    for the next argument; one known to take one closes it; unknown commands stay open.
+    Esc, or picking with Ctrl-Enter, closes.
+- **Path form**: relative below the current folder, `~/…` under home, else `C:/…`;
+  quoted only when needed; folders end in `/`.
+- **Extras in v1**: drives above `C:/`; a folder-history view (Alt-H) from cash's own
+  folder history (`cdh`); hidden entries (dotfiles, the hidden attribute) and
+  .gitignored ones left out by default, Alt-. and Alt-I show them.
+- **Colours**: entries as `ls` colours them (`LS_COLORS`); the picker's parts from
+  `CASH_PICKER_COLORS` (`sel=…:match=…:frame=…`).
+- **Keys**: Alt-E, as a Readline function (`cash-picker`) that `bind` can move; it
+  replaces the broot binding in `~/.bashrc`. No mouse in v1.
+- **Also a builtin, `croot [-f|-d] [DIR]`**: the same picker, printing the pick(s) on
+  standard output for scripts (`cd "$(croot)"`, `vim $(croot -f)`).
+
+Before building: a spec entry (the next D-number) for the user to approve; fuzzy
+matching and .gitignore from established crates (e.g. `nucleo-matcher`, `ignore`),
+not hand-written.
 
 ---
 
