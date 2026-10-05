@@ -13,6 +13,7 @@ members = [
     "crates/cash-awk",
     "crates/cash-bc",
     "crates/cash-sed",
+    "crates/cash-picker",
     "xtask",
 ]
 default-members = ["crates/cash"]
@@ -39,6 +40,7 @@ cash-core = { version = "1.3.13", path = "crates/cash-core" }
 cash-coreutils-builtins = { version = "1.3.13", path = "crates/cash-coreutils-builtins" }
 cash-interactive = { version = "1.3.13", path = "crates/cash-interactive" }
 cash-parser = { version = "1.3.13", path = "crates/cash-parser" }
+cash-picker = { version = "1.3.13", path = "crates/cash-picker" }
 cash-sed = { version = "1.3.13", path = "crates/cash-sed" }
 cash-shell = { version = "1.3.13", path = "crates/cash-shell" }
 cash-test-harness = { version = "1.3.13", path = "crates/cash-test-harness" }

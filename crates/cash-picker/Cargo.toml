@@ -1,0 +1,25 @@
+[package]
+name = "cash-picker"
+description = "croot: the file and folder picker cash opens on Alt-E (spec D73)"
+version.workspace = true
+authors.workspace = true
+categories.workspace = true
+edition.workspace = true
+keywords.workspace = true
+license.workspace = true
+readme.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+cash-win32 = { workspace = true }
+# .gitignore rules as git applies them (ripgrep's crate).
+ignore = "0.4"
+# Fuzzy matching, Helix's matcher.
+nucleo-matcher = "0.3"
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true
