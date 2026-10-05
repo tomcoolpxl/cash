@@ -99,7 +99,8 @@ needs an administrator to switch collection on per connection), `-E` (polling on
 
 ## Phase 19. `ss -i` and `dev`, and the vi fix
 
-Asked for by the user on 2026-10-05, released with the vi-mode fix (reedline patch 8):
+Asked for by the user on 2026-10-05; released as 1.3.19 with the vi-mode fix (reedline
+patch 8):
 
 - `ss -i`: per-connection TCP statistics from `GetPerTcpConnectionEStats`.
 - `ss ... dev NAME`: matches the IPv6 scope's interface; a socket without one has no
