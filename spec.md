@@ -1586,6 +1586,7 @@ Four, all justified by decisions made above rather than invented:
 | `start` | Open a file or URL with its default handler — the Windows `xdg-open`. |
 | `abbr` | fish's abbreviations, which the prompt expands in place (D60). Added later, and not Windows-specific. |
 | `prevd`, `nextd`, `cdh` | fish's folder history, also on Alt-← and Alt-→ (D62). Added later, and not Windows-specific. |
+| `croot` | A file and folder picker, inline below the command line on Alt-E, and as a command that prints the pick (D73, 2026-10-05). |
 
 **`detach` has a cost, listed as an exception in D6.** For a child to leave the session
 job, that job must be created with `JOB_OBJECT_LIMIT_BREAKAWAY_OK`, which means *any*
@@ -2500,6 +2501,79 @@ overwritten. Decided with the user on 2026-09-29:
 
 The Scoop bucket's manifest takes the `post_install` line only with the first release
 that has `--init-rc`: an older `cash.exe` would take the flag for a shell option.
+
+### D73 — `croot`: a file and folder picker on Alt-E
+
+**Status: approved by the user on 2026-10-05.**
+
+From 2026-09-27 the user ran broot on Alt-E as a "quick cd" (a `bind -x` in `~/.bashrc`
+and a broot config of its own). After two weeks they want it in cash, as a picker
+only: broot takes up to two seconds to open, being a separate program that loads its
+config and builds its tree, and it does far more than pick a path. Built in, the picker
+is drawn by the shell that is already running, from one folder read. Every choice
+below is the user's, made by pick lists on 2026-10-05 (TODO.md phase 20).
+
+**Where and how it draws.** Inline, below the command line, which stays visible with
+the scrollback above it, as fzf's `--height` does: 40% of the window, at least 8 rows,
+`CASH_PICKER_HEIGHT` as a percentage or a row count. Near the bottom of the window the
+screen scrolls up to make room; a window too small for 8 rows gets the picker full
+screen. Closing it erases its rows and leaves the prompt where it was. Keyboard only.
+
+**What it shows.** broot's tree: the root on the first line, several levels open at
+once, trimmed to fit with `… N more` lines, folders before files. Right makes the
+selected folder the root, Left makes the root's parent the root; Left at a drive's
+root shows the drives (each local and mapped drive, and `~`). Hidden entries (a name
+starting with `.`, or the hidden attribute) and entries a `.gitignore` excludes are left
+out unless Alt-. or Alt-I shows them. Alt-H swaps the tree for the folder history
+(`cdh`'s list, most recent first). Entries take `ls`'s colours
+(`LS_COLORS`); the picker's own parts (selection, matched letters, frame, status line)
+take `CASH_PICKER_COLORS`, `name=SGR` pairs as `LS_COLORS` has them
+(`sel=1;37;44:match=1;33:frame=2`).
+
+**Typing** is a fuzzy filter on names (`crt` matches `crates`), best matches first. It
+covers the open levels at once, and the levels below them in the background, capped in
+time and entries so a large folder never slows the keys; a status line says when a
+search is still running or was cut short. Backspace edits the filter, Esc clears it,
+and Esc on an empty filter closes the picker without changing the line.
+
+**Context from the command line.** The picker reads the line it was opened from:
+
+- the command: folders only for an empty line, `cd`, `pushd`, `rmdir` and `mkdir`;
+  folders and files for any other command and for an unknown one; Alt-F switches;
+- the word under the cursor, when it is a path or part of one: the picker starts in
+  its folder with its last part in the filter (`cd ~/src/fo` starts in `~/src`,
+  filtered by `fo`), and the pick replaces that word; otherwise it starts in the
+  current folder and the pick is inserted at the cursor.
+
+**Picking** (Enter):
+
+- an empty line, `cd` or `pushd`: the pick goes on the line and the line runs at once;
+  an empty line becomes `cd PICK`;
+- any other command: the pick is inserted with a space after it, and nothing runs;
+- a command that takes several paths (`cp`, `mv`, `diff`, `ln`, `tar`, … and any
+  command cash does not know) keeps the picker open for the next one, with the line
+  above showing what was picked so far; a command known to take one (`source`, `.`,
+  `cd`, `pushd`) closes it. Esc closes it; Ctrl-Enter picks and closes.
+
+A pick is written in the shortest sensible form: relative to the current folder when
+it is below it (`src/lib/`), `~/…` under the home folder, else in cash's `C:/…`
+spelling (D3). It is quoted only when it needs quoting, and a folder ends in `/`.
+
+**Keys.** Alt-E runs the Readline function `cash-picker`, which `bind` can move or
+copy; cash's default bindings give it Alt-E, which replaces the user's broot binding.
+
+**The builtin.** `croot [-d|-f] [DIR]` opens the same picker on the terminal, starting
+in DIR, folders only with `-d` or files and folders with `-f`, and prints the
+pick(s), one per line, on standard output: `cd "$(croot)"`, `vim $(croot -f)`. It exits
+1 when closed without a pick, and 2 without a terminal.
+
+**Speed.** The first frame comes from one read of the starting folder and must appear
+within 30 ms of the key on a warm cache; deeper levels and the background search never
+hold up drawing or keys. Fuzzy matching and `.gitignore` rules come from established
+crates (`nucleo-matcher` and `ignore`, or equivalents), not hand-written code.
+
+Not in it: a search language, file previews, file operations, editor integration,
+mouse input.
 
 ### D72 — `help` from one catalogue
 

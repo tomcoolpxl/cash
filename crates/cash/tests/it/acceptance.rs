@@ -400,7 +400,7 @@ fn a_unix_drive_argument_to_a_command_is_explained() {
     // command gets it verbatim and fails with an error that explains nothing.
     let out = cash(r#"enable -n cat 2>/dev/null; cat /c/Windows/win.ini >/dev/null"#);
     assert!(
-        out.stderr.contains("winpath") && out.stderr.contains("D4"),
+        out.stderr.contains("winpath") && !out.stderr.contains("(D4)"),
         "no hint given; stderr was: {}",
         out.stderr
     );

@@ -146,7 +146,7 @@ program; built in, the first frame comes from one folder read. Chosen on 2026-10
 - **Also a builtin, `croot [-f|-d] [DIR]`**: the same picker, printing the pick(s) on
   standard output for scripts (`cd "$(croot)"`, `vim $(croot -f)`).
 
-Before building: a spec entry (the next D-number) for the user to approve; fuzzy
+Spec D73, approved by the user on 2026-10-05, is the full description. Fuzzy
 matching and .gitignore from established crates (e.g. `nucleo-matcher`, `ignore`),
 not hand-written.
 
