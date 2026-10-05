@@ -57,22 +57,42 @@ struct Entry {
     reserved: u32,
 }
 
-/// A file or folder a process holds open.
+/// What a handle is open on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Kind {
+    /// A file on a disk.
+    File,
+    /// A folder on a disk.
+    Directory,
+    /// A pipe, named or anonymous.
+    Pipe,
+    /// A console (`\Device\ConDrv`).
+    Console,
+    /// The null device, `NUL`.
+    Null,
+    /// Another device.
+    Device,
+}
+
+/// A file or folder a process holds open, or a standard handle on whatever it is.
 #[derive(Debug)]
 pub struct OpenFile {
     /// The process holding it.
     pub pid: u32,
     /// The handle's value in its process, which `lsof` shows as the descriptor.
     pub handle: usize,
+    /// Which standard handle it is, 0 to 2, as the process's parameters record them.
+    pub std: Option<u8>,
     /// What it is open on.
+    pub kind: Kind,
+    /// The file or folder; empty for a pipe or a device, which are not named (asking
+    /// their name can wait for as long as a read on them lasts).
     pub path: PathBuf,
     /// Opened to read (or, for a folder, to list).
     pub read: bool,
     /// Opened to write or append.
     pub write: bool,
-    /// A folder rather than a file.
-    pub directory: bool,
-    /// The file's size; `None` for a folder or where Windows would not say.
+    /// The file's size; `None` for a folder, a device or where Windows would not say.
     pub size: Option<u64>,
 }
 
@@ -225,6 +245,155 @@ struct Job {
     pid: u32,
     handle: usize,
     access: u32,
+    /// Which standard handle of its process this is.
+    std: Option<u8>,
+}
+
+/// Looks up an export of `ntdll.dll`, loaded in every process.
+fn ntdll(name: &core::ffi::CStr) -> Option<unsafe extern "system" fn() -> isize> {
+    use windows_sys::Win32::System::LibraryLoader::{GetModuleHandleA, GetProcAddress};
+
+    // SAFETY: ntdll is loaded into every Windows process.
+    let module = unsafe { GetModuleHandleA(c"ntdll.dll".as_ptr().cast()) };
+    if module.is_null() {
+        return None;
+    }
+    // SAFETY: the module handle is valid and the name is NUL terminated.
+    unsafe { GetProcAddress(module, name.as_ptr().cast()) }
+}
+
+/// The values of a process's standard input, output and error handles, from its process
+/// parameters (`RTL_USER_PROCESS_PARAMETERS`, which `SetStdHandle` writes). The layout is
+/// undocumented and has not changed since Windows XP: the parameters at offset 0x20 of the
+/// PEB, the three handles at 0x20, 0x28 and 0x30 of the parameters, on 64-bit Windows.
+#[cfg(target_pointer_width = "64")]
+fn standard_handles(pid: u32) -> Option<[usize; 3]> {
+    use windows_sys::Win32::System::Diagnostics::ToolHelp::Toolhelp32ReadProcessMemory;
+    use windows_sys::Win32::System::Threading::PROCESS_QUERY_LIMITED_INFORMATION;
+
+    /// `PROCESS_BASIC_INFORMATION`, which windows-sys gates behind its kernel feature.
+    #[repr(C)]
+    #[derive(Default)]
+    #[expect(non_snake_case, reason = "the Windows structure's own field names")]
+    struct PROCESS_BASIC_INFORMATION {
+        ExitStatus: i32,
+        PebBaseAddress: usize,
+        AffinityMask: usize,
+        BasePriority: i32,
+        UniqueProcessId: usize,
+        InheritedFromUniqueProcessId: usize,
+    }
+
+    type QueryInformationProcess =
+        unsafe extern "system" fn(HANDLE, i32, *mut core::ffi::c_void, u32, *mut u32) -> i32;
+    let query = ntdll(c"NtQueryInformationProcess")?;
+    // SAFETY: the documented signature of NtQueryInformationProcess.
+    let query = unsafe {
+        std::mem::transmute::<unsafe extern "system" fn() -> isize, QueryInformationProcess>(query)
+    };
+
+    let process = open_process(pid, PROCESS_QUERY_LIMITED_INFORMATION).ok()?;
+    let mut basic = PROCESS_BASIC_INFORMATION::default();
+    // SAFETY: `ProcessBasicInformation` (0) fills a PROCESS_BASIC_INFORMATION of the size
+    // given; the process was opened for the query.
+    let status = unsafe {
+        query(
+            process.as_raw_handle(),
+            0,
+            (&raw mut basic).cast(),
+            u32::try_from(size_of::<PROCESS_BASIC_INFORMATION>()).ok()?,
+            std::ptr::null_mut(),
+        )
+    };
+    if status < 0 || basic.PebBaseAddress == 0 {
+        return None;
+    }
+    let read = |address: usize| -> Option<usize> {
+        let mut value = 0usize;
+        let mut done = 0usize;
+        // SAFETY: reads one pointer-sized value of the other process into `value`.
+        let ok = unsafe {
+            Toolhelp32ReadProcessMemory(
+                pid,
+                address as *const core::ffi::c_void,
+                (&raw mut value).cast(),
+                size_of::<usize>(),
+                &raw mut done,
+            )
+        };
+        (ok != 0 && done == size_of::<usize>()).then_some(value)
+    };
+    let parameters = read(basic.PebBaseAddress + 0x20)?;
+    if parameters == 0 {
+        return None;
+    }
+    Some([
+        read(parameters + 0x20)?,
+        read(parameters + 0x28)?,
+        read(parameters + 0x30)?,
+    ])
+}
+
+#[cfg(not(target_pointer_width = "64"))]
+fn standard_handles(_pid: u32) -> Option<[usize; 3]> {
+    None
+}
+
+/// What device a handle that is not on a disk is open on, by its device type:
+/// `FileFsDeviceInformation`, which the I/O manager answers without taking the file
+/// object's lock, so it does not wait on a read in progress as a name query would.
+fn device_kind(handle: HANDLE) -> Kind {
+    use windows_sys::Win32::System::IO::IO_STATUS_BLOCK;
+    use windows_sys::Win32::System::Ioctl::{
+        FILE_DEVICE_CONSOLE, FILE_DEVICE_NAMED_PIPE, FILE_DEVICE_NULL,
+    };
+
+    /// `FILE_FS_DEVICE_INFORMATION`.
+    #[repr(C)]
+    #[derive(Default)]
+    struct DeviceInformation {
+        device_type: u32,
+        characteristics: u32,
+    }
+    type QueryVolumeInformationFile = unsafe extern "system" fn(
+        HANDLE,
+        *mut IO_STATUS_BLOCK,
+        *mut core::ffi::c_void,
+        u32,
+        i32,
+    ) -> i32;
+
+    let Some(query) = ntdll(c"NtQueryVolumeInformationFile") else {
+        return Kind::Device;
+    };
+    // SAFETY: the documented signature of NtQueryVolumeInformationFile.
+    let query = unsafe {
+        std::mem::transmute::<unsafe extern "system" fn() -> isize, QueryVolumeInformationFile>(
+            query,
+        )
+    };
+    let mut status = IO_STATUS_BLOCK::default();
+    let mut information = DeviceInformation::default();
+    // SAFETY: a valid handle, an IO_STATUS_BLOCK and a buffer of the size given;
+    // `FileFsDeviceInformation` is class 4.
+    let code = unsafe {
+        query(
+            handle,
+            &raw mut status,
+            (&raw mut information).cast(),
+            u32::try_from(size_of::<DeviceInformation>()).unwrap_or(0),
+            4,
+        )
+    };
+    if code < 0 {
+        return Kind::Device;
+    }
+    match information.device_type {
+        FILE_DEVICE_NAMED_PIPE => Kind::Pipe,
+        FILE_DEVICE_CONSOLE => Kind::Console,
+        FILE_DEVICE_NULL => Kind::Null,
+        _ => Kind::Device,
+    }
 }
 
 enum Message {
@@ -248,6 +417,7 @@ fn walk(pids: Option<&BTreeSet<u32>>) -> io::Result<Walk> {
     drop(probe);
 
     let mut opened: HashMap<u32, Option<OwnedHandle>> = HashMap::new();
+    let mut standard: HashMap<u32, Option<[usize; 3]>> = HashMap::new();
     let mut jobs = Vec::new();
     for entry in entries.iter().filter(|e| e.object_type_index == file_type) {
         let Ok(pid) = u32::try_from(entry.process_id) else {
@@ -260,10 +430,16 @@ fn walk(pids: Option<&BTreeSet<u32>>) -> io::Result<Walk> {
             .entry(pid)
             .or_insert_with(|| open_process(pid, PROCESS_DUP_HANDLE).ok());
         if process.is_some() {
+            let std = standard
+                .entry(pid)
+                .or_insert_with(|| standard_handles(pid))
+                .and_then(|handles| handles.iter().position(|&h| h == entry.handle_value))
+                .and_then(|index| u8::try_from(index).ok());
             jobs.push(Job {
                 pid,
                 handle: entry.handle_value,
                 access: entry.granted_access,
+                std,
             });
         }
     }
@@ -362,10 +538,22 @@ fn ask(process: &OwnedHandle, job: &Job) -> Option<OpenFile> {
     // SAFETY: just duplicated into this process, and closed nowhere else.
     let copy = unsafe { OwnedHandle::from_raw_handle(copy) };
     let raw = copy.as_raw_handle();
-    // Pipes, consoles and other devices have no path to give.
+    let read = job.access & FILE_READ_DATA != 0;
+    let write = job.access & (FILE_WRITE_DATA | FILE_APPEND_DATA) != 0;
+    // Pipes, consoles and other devices have no path to give; a standard handle on one
+    // is listed by its kind.
     // SAFETY: a valid handle.
     if unsafe { GetFileType(raw) } != FILE_TYPE_DISK {
-        return None;
+        return job.std.map(|std| OpenFile {
+            pid: job.pid,
+            handle: job.handle,
+            std: Some(std),
+            kind: device_kind(raw),
+            path: PathBuf::new(),
+            read,
+            write,
+            size: None,
+        });
     }
     let path = final_path(raw)?;
     let mut info = FILE_STANDARD_INFO::default();
@@ -382,10 +570,15 @@ fn ask(process: &OwnedHandle, job: &Job) -> Option<OpenFile> {
     Some(OpenFile {
         pid: job.pid,
         handle: job.handle,
+        std: job.std,
+        kind: if directory {
+            Kind::Directory
+        } else {
+            Kind::File
+        },
         path,
-        read: job.access & FILE_READ_DATA != 0,
-        write: job.access & (FILE_WRITE_DATA | FILE_APPEND_DATA) != 0,
-        directory,
+        read,
+        write,
         size: (standard && !directory)
             .then(|| u64::try_from(info.EndOfFile).ok())
             .flatten(),
@@ -445,10 +638,11 @@ mod tests {
                 found.pid,
                 found.read,
                 found.write,
-                found.directory,
+                found.kind,
+                found.std,
                 found.size
             ),
-            (std::process::id(), true, false, false, Some(5))
+            (std::process::id(), true, false, Kind::File, None, Some(5))
         );
         assert!(
             crate::fold::same_name(
@@ -462,5 +656,34 @@ mod tests {
             found.path
         );
         assert!(walk.unopened.is_empty());
+    }
+
+    #[test]
+    fn the_standard_handles_are_marked_whatever_they_are_on() {
+        use windows_sys::Win32::System::Console::{
+            GetStdHandle, STD_ERROR_HANDLE, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE,
+        };
+
+        let me = BTreeSet::from([std::process::id()]);
+        let walk = open_files(Some(&me)).unwrap();
+        for (index, which) in [STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, STD_ERROR_HANDLE]
+            .into_iter()
+            .enumerate()
+        {
+            // SAFETY: no pointers; returns this process's handle or null.
+            let value = unsafe { GetStdHandle(which) } as usize;
+            if value == 0 || value == usize::MAX {
+                continue;
+            }
+            let marked = walk
+                .files
+                .iter()
+                .find(|f| f.std == u8::try_from(index).ok());
+            assert!(
+                marked.is_some_and(|f| f.handle == value),
+                "standard handle {index} ({value:#x}) not marked among {:?}",
+                walk.files
+            );
+        }
     }
 }

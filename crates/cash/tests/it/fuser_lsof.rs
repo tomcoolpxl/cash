@@ -432,6 +432,42 @@ fn lsof_plus_d_is_one_level_and_plus_capital_d_all_below() {
 }
 
 #[test]
+fn lsof_shows_the_standard_handles_as_0_1_and_2() {
+    let dir = fixture("lsof-std");
+    // Standard input is NUL here, and the output and errors are pipes the test reads.
+    let out = cash_in(dir.path(), "lsof -p $$");
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    let fd = |n: &str| {
+        out.stdout
+            .lines()
+            .map(|l| l.split_whitespace().collect::<Vec<_>>())
+            .find(|c| {
+                c.get(3)
+                    .is_some_and(|fd| fd.trim_end_matches(['r', 'w', 'u']) == n)
+            })
+            .map(|c| (c[4].to_owned(), c[8].to_owned()))
+    };
+    assert_eq!(
+        fd("0"),
+        Some(("CHR".into(), "/dev/null".into())),
+        "{}",
+        out.stdout
+    );
+    assert_eq!(
+        fd("1"),
+        Some(("FIFO".into(), "pipe".into())),
+        "{}",
+        out.stdout
+    );
+    assert_eq!(
+        fd("2"),
+        Some(("FIFO".into(), "pipe".into())),
+        "{}",
+        out.stdout
+    );
+}
+
+#[test]
 fn bare_lsof_lists_every_process_it_can_open() {
     let dir = fixture("lsof-all");
     let out = cash_in(dir.path(), "lsof -t");

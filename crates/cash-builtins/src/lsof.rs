@@ -10,10 +10,11 @@
 //! * TCP and UDP sockets with their owners (`-i`), from IP Helper;
 //! * for selected processes (`-p`, `-c`, `-u`), or every process with no selection: the
 //!   executable (`txt`), loaded modules (`mem`), sockets, and the files and folders it
-//!   holds open, from the handle walk in `cash_win32::handles` (FD is the handle value
-//!   with `r`, `w` or `u`). That walk is what handle.exe does; unelevated it sees the
-//!   processes the user may open, as Linux `lsof` without root, and a warning counts
-//!   the others.
+//!   holds open, from the handle walk in `cash_win32::handles` (FD is 0 to 2 for the
+//!   standard handles, which are listed on pipes and devices too, and the handle value
+//!   otherwise, each with `r`, `w` or `u`). That walk is what handle.exe does; unelevated
+//!   it sees the processes the user may open, as Linux `lsof` without root, and a
+//!   warning counts the others.
 //!
 //! Windows has no device or inode numbers, so DEVICE and NODE show `-` (NODE is
 //! `TCP`/`UDP` for sockets, as in lsof), and FD is `-` where no handle is known.
@@ -24,7 +25,7 @@ use std::net::{IpAddr, SocketAddr, ToSocketAddrs};
 use std::path::{Path, PathBuf};
 
 use cash_core::{ExecutionResult, builtins};
-use cash_win32::handles::{self, OpenFile, Walk};
+use cash_win32::handles::{self, Kind, OpenFile, Walk};
 use cash_win32::{net, process};
 use clap::Parser;
 
@@ -529,8 +530,10 @@ fn rows_below(
         .collect())
 }
 
-/// A file the handle walk found open: FD is the handle's value with lsof's mode letter,
-/// `r`, `w` or `u` for both.
+/// A file the handle walk found open: FD is lsof's 0, 1 or 2 for a standard handle and
+/// the handle's value otherwise, with lsof's mode letter, `r`, `w` or `u` for both. A
+/// standard handle on a pipe or a device is a `FIFO` or `CHR` row, named as cash names
+/// the console and `NUL` (`/dev/tty`, `/dev/null`).
 fn handle_row(file: &OpenFile) -> Row {
     let mode = match (file.read, file.write) {
         (true, true) => "u",
@@ -538,15 +541,29 @@ fn handle_row(file: &OpenFile) -> Row {
         (true, false) => "r",
         (false, false) => "",
     };
+    let (kind, device) = match file.kind {
+        Kind::File => ("REG", None),
+        Kind::Directory => ("DIR", None),
+        Kind::Pipe => ("FIFO", Some("pipe")),
+        Kind::Console => ("CHR", Some("/dev/tty")),
+        Kind::Null => ("CHR", Some("/dev/null")),
+        Kind::Device => ("CHR", Some("-")),
+    };
+    let (fd, order) = match file.std {
+        Some(std) => (std.to_string(), usize::from(std)),
+        None => (file.handle.to_string(), file.handle),
+    };
     Row {
         pid: file.pid,
-        fd: format!("{}{mode}", file.handle),
-        rank: (2, file.handle),
-        kind: if file.directory { "DIR" } else { "REG" }.to_owned(),
+        fd: format!("{fd}{mode}"),
+        // Standard handles first, as lsof lists descriptors 0 to 2 before the rest;
+        // other handles' values are 4 or more.
+        rank: (2, order),
+        kind: kind.to_owned(),
         size: file.size.map_or_else(|| "-".to_owned(), |s| s.to_string()),
         node: "-".to_owned(),
-        name: cash_win32::path::render(&file.path),
-        file: Some(fileuse::final_key(&file.path)),
+        name: device.map_or_else(|| cash_win32::path::render(&file.path), str::to_owned),
+        file: device.is_none().then(|| fileuse::final_key(&file.path)),
         socket: None,
     }
 }

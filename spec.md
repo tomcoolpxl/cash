@@ -1830,8 +1830,11 @@ turns `SeDebugPrivilege` on, and only protected processes stay closed.
 
 Output follows psmisc `fuser` 23.7 and lsof 4.99.7 (process ids alone on standard output
 for `fuser` and `lsof -t`; lsof's nine columns). What Windows cannot say is shown as
-unknown rather than invented: lsof's FD is `txt`, `mem`, a handle's value with `r`, `w`
-or `u`, or `-`, and DEVICE and NODE are `-` (NODE is `TCP`/`UDP` for sockets). `lsof`
+unknown rather than invented: lsof's FD is `txt`, `mem`, `0` to `2` for the standard
+handles (2026-10-05: their values, read from each process's parameters, mark them, and on
+a pipe or device they are `FIFO pipe`, `CHR /dev/tty` or `CHR /dev/null`, told apart by
+device type, which never waits on a read), another handle's value, or `-`, each with
+`r`, `w` or `u`; DEVICE and NODE are `-` (NODE is `TCP`/`UDP` for sockets). `lsof`
 with no selection lists every process. A folder (`lsof +D`, `+d` or a folder named, and
 `fuser DIR`) is answered from the walk, the executables and modules of every process,
 and for the processes the walk cannot open, the Restart Manager over the files below,
@@ -2596,7 +2599,7 @@ someone who expected bash, so additions need to earn their place.
 | 25 | `uname -s` is `Windows_NT`, `$OSTYPE` is `windows` | cash is native Win32, not MSYS or Cygwin; scripts testing only `MINGW*|MSYS*` will miss their Windows branch | D48 |
 | 26 | Bundled `sed` and `awk` keep CRLF lines CRLF and match them without the CR | Windows files stay intact and `$` works on them; a program naming `\r`, or `CASH_EOL=lf`, gets Linux behaviour | D49 |
 | 27 | Arithmetic never executes `$(...)` found in an array subscript inside a variable's value | Bash runs it (`read n; echo $((n+1))` with input `a[$(cmd)]`), a well-known code-injection hole; Cash reports an error for indexed arrays and uses the text as a literal key for associative ones | — |
-| 28 | `fuser DIR` and `lsof DIR` report holders of the files below the directory, not processes using it as their working directory; lsof's DEVICE and NODE are `-`, and its FD a handle value, not a descriptor | Windows exposes no per-process descriptor or working-directory information through a documented API | D50 |
+| 28 | `fuser DIR` and `lsof DIR` report holders of the files below the directory, not processes using it as their working directory; lsof's DEVICE and NODE are `-`, and its FD is 0 to 2 for the standard handles and a handle value, not a descriptor, for the rest | Windows exposes no per-process descriptor or working-directory information through a documented API | D50 |
 | 29 | `ss` prints Recv-Q/Send-Q as `0` unless an elevated `ss -i` switched statistics on for the connection, `fd=-` for processes, every UDP socket as `UNCONN` and a dual-mode socket as two lines; `ss -i` shows only the SYN's MSS unelevated; `ss -K` closes only IPv4 connections, and only elevated | Windows' socket tables carry no queue sizes, descriptor numbers, UDP peers or dual-mode flag; per-connection statistics are collected only once an elevated process switches them on, and `SetTcpEntry` is IPv4-only and needs elevation | D51 |
 | 30 | At the interactive prompt, an unquoted word starting `C:\` keeps its backslashes (`shopt winpaths`, off in scripts) | Pasted Windows paths are otherwise mangled to `C:Usersme` | D53 |
 | 31 | `TERM` terminates a console program at once, and gives a program with a window five seconds after `WM_CLOSE` | A console control event cannot be aimed at one process that leads no group | D21 |
