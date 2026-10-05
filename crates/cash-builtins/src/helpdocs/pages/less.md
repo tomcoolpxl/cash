@@ -1,7 +1,6 @@
 ---
 names: less more
 see: cat head tail
-spec: D48 D35
 ---
 ## Description
 

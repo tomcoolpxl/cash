@@ -1,6 +1,5 @@
 ---
 see: getopts
-spec: D55 D52
 ---
 ## Description
 

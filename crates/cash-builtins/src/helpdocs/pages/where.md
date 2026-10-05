@@ -1,6 +1,5 @@
 ---
 see: which type find paths
-spec: D66 D3
 ---
 ## Description
 
@@ -13,7 +12,7 @@ wildcards, in any case. `-r DIR` searches a folder tree instead, and `$VAR:PATTE
 
 - Options take dashes: `-r`, `-q`, `-f`, `-t`, bundled as `-qf`, and `--help`. A `/q`
   is a pattern, so a path is never taken for an option.
-- Paths print as `pwd` prints them: `C:/Windows/notepad.exe` (D3).
+- Paths print as `pwd` prints them: `C:/Windows/notepad.exe`.
 - Search order, matching, messages and exit statuses (0 found, 1 not found, 2 for a bad
   command line) are `where.exe`'s.
 

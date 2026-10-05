@@ -1,7 +1,6 @@
 ---
 names: id groups
 see: whoami logname su elevation
-spec: D48
 ---
 ## Description
 

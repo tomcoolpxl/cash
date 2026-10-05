@@ -1,6 +1,5 @@
 ---
 see: detach disown job-control
-spec: D6 D45
 ---
 ## Description
 
@@ -10,6 +9,6 @@ replaced by an empty one, output to a terminal goes to `nohup.out` in the curren
 
 ## Windows notes
 
-On Windows a hangup is the console closing, and what cash started ends with it (D6), so
+On Windows a hangup is the console closing, and what cash started ends with it, so
 `nohup cmd &` does not keep a program running after you close the window. Start such a
 program with `detach` instead.

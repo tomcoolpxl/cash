@@ -154,6 +154,12 @@ not hand-written.
 
 ## Decided, written down so it is not decided twice
 
+- **What cash prints never cites its own documents** (the user, 2026-10-05): no
+  decision numbers, §4 rows, `spec.md`, ROADMAP items or research files, in help pages,
+  `--help`, version lines, warnings or `cash doctor`. `ss --help` ended with "cash's ss
+  is the Windows subset described in ROADMAP item 9"; help pages had 122 such
+  references. Point to a `help` page instead.
+
 - **An elevated `ss -i` switches statistics collection on** (the user, 2026-10-05):
   Windows keeps per-connection TCP statistics (rtt, rto, cwnd, bytes, retransmits,
   queues) only for connections an administrator switched collection on for; unelevated,

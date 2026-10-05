@@ -1,7 +1,6 @@
 ---
 names: test [
 see: chmod ln paths
-spec: D23 D27 D46
 ---
 ## Description
 
@@ -15,9 +14,9 @@ own keyword, with patterns and `=~`.
 - `-x FILE` is true when the access list lets you run the file **and** it is an
   executable kind: an extension in `PATHEXT` (`.exe`, `.cmd`, ...) or a `#!` line.
   Windows grants execute on every file you own, so the access list alone would call
-  `README.md` executable (D23).
+  `README.md` executable.
 - `-L FILE` is true for symbolic links and junctions, not for App Execution Aliases or
-  `.lnk` shortcuts (D27).
+  `.lnk` shortcuts.
 - `-s FILE` is false for App Execution Aliases (`python.exe` from the Store), which are
-  empty files that run anyway (D46).
+  empty files that run anyway.
 - Paths may be spelled `C:/x`, `/c/x` or a quoted `"C:\x"`.

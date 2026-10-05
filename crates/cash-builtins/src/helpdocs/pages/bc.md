@@ -1,6 +1,5 @@
 ---
 see: let expr
-spec: D56
 ---
 ## Description
 

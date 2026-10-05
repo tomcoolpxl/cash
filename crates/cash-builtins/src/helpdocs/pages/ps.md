@@ -1,6 +1,5 @@
 ---
 see: pstree top pgrep kill job-control
-spec: D48
 ---
 ## Description
 

@@ -2,11 +2,10 @@
 title: Variables cash reads and sets
 summary: The `CASH_*` variables, the Bash variables cash sets, and how Windows' variables are seen.
 see: export paths crlf keys config
-spec: D3 D5 D24 D31 D49 D61 D70
 ---
 ## Names ignore case
 
-Windows variable names ignore case, and so do cash's (D31): `$Path`, `$path` and `$PATH`
+Windows variable names ignore case, and so do cash's: `$Path`, `$path` and `$PATH`
 are one variable, and an exact match wins over a near one. The usual names (`PATH`,
 `HOME`, `TEMP`, `USERNAME`, `SYSTEMROOT`, `APPDATA`, ...) are upper-cased as cash starts.
 The cost: `$Foo` and `$FOO` cannot be two variables.
@@ -16,21 +15,21 @@ The cost: `$Foo` and `$FOO` cannot be two variables.
 - `CASH_VERSION`: cash's version. Test it to tell cash from Git Bash in a shared
   `.bashrc`: `if [ -n "$CASH_VERSION" ]; then ...`.
 - `CASH_EOL`: exported as `lf`, the bundled `sed` and `awk` treat CR as data, as on
-  Linux; unset, CRLF files stay CRLF (D49, `help crlf`).
+  Linux; unset, CRLF files stay CRLF (see `help crlf`).
 - `CASH_TRANSIENT_PS1`: when set, a finished command's prompt is redrawn as this; it
-  takes what `PS1` takes (D61).
+  takes what `PS1` takes.
 - `CASH_PS_ALT`: a prompt on the right side of the line.
 - `CASH_MAX_SUBSHELLS`: how many background jobs and subshells may run at once, read at
-  startup; default 256 (D70).
+  startup; default 256.
 - `CASH_DEBUG_SESSION`: when set, cash says at startup whether its session job object
   and UTF-8 console are in place.
 - `PID`: cash's process id, read-only; the same as `BASHPID`.
 
 ## Bash's, as cash sets them
 
-- `PATH`: reads Unix-style, `/c/Windows:/c/tools`; programs get the Windows form (D5,
+- `PATH`: reads Unix-style, `/c/Windows:/c/tools`; programs get the Windows form (see
   `help paths`).
-- `HOME`: from `USERPROFILE` when not set, spelled `C:/Users/me` (D3).
+- `HOME`: from `USERPROFILE` when not set, spelled `C:/Users/me`.
 - `TMPDIR`: from `TEMP` when not set. `/tmp` is that folder.
 - `SHELL` and `BASH`: cash's own path. `BASH_VERSION` is `5.3.15(1)-release`, the Bash
   cash follows.

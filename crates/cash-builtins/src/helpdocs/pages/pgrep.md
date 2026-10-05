@@ -1,7 +1,6 @@
 ---
 names: pgrep pkill pidof killall
 see: kill ps job-control
-spec: D54 D21 D22 D19
 ---
 ## Description
 

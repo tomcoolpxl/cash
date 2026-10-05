@@ -2512,6 +2512,10 @@ System32, checked at run time. `cash help ...` is that builtin, run from outside
 and gives way to a file named `help` in the working directory, as `cash doctor` does
 (2026-10-04).
 
+Help, and everything else cash prints, speaks to the user, never about cash's own
+documents: no decision numbers, §4 rows, `spec.md`, ROADMAP items or research files
+(the user, 2026-10-05). Where more reading helps, it names another `help` page.
+
 ### D71 — A program whose reader went away ends as SIGPIPE ends it, if it is cash's
 
 On Unix, a program that writes to a pipe whose reader has gone is killed by SIGPIPE: it

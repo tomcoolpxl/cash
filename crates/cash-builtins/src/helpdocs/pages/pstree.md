@@ -1,6 +1,5 @@
 ---
 see: ps top kill
-spec: D48
 ---
 ## Description
 

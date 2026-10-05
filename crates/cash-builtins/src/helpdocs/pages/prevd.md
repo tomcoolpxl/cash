@@ -1,7 +1,6 @@
 ---
 names: prevd nextd cdh
 see: cd pushd dirs keys
-spec: D62 D45
 ---
 ## Description
 

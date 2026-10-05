@@ -120,7 +120,7 @@ fn check_platform(findings: &mut Vec<Finding>) {
     findings.push(Finding {
             level: Level::Note,
             subject: "platform identity".into(),
-            detail: "`uname -s` is `Windows_NT`, `$OSTYPE` is `windows` (§4 #25)".into(),
+            detail: "`uname -s` is `Windows_NT`, `$OSTYPE` is `windows`".into(),
             fix: Some(
                 "scripts matching only `MINGW*|MSYS*` should also match `Windows_NT*` for their Windows branch".into(),
             ),
@@ -693,17 +693,14 @@ fn check_dos_shadowing(
 
 /// System32 tools cash shadows on purpose, and how its own one differs.
 const DELIBERATE_SHADOWS: &[(&str, &str)] = &[
-    (
-        "ping",
-        "Linux flags: -c is the count, -n is numeric output (D57)",
-    ),
+    ("ping", "Linux flags: -c is the count, -n is numeric output"),
     (
         "reset",
-        "the terminal reset; System32's is the Remote Desktop `reset session` (D55)",
+        "the terminal reset; System32's is the Remote Desktop `reset session`",
     ),
     (
         "where",
-        "where.exe's search with dashes for options (-q, not /q) and C:/ paths (D66)",
+        "where.exe's search with dashes for options (-q, not /q) and C:/ paths",
     ),
 ];
 
@@ -793,7 +790,7 @@ fn report(findings: &[Finding]) -> u8 {
         println!("No problems found.");
         0
     } else {
-        println!("{warnings} warning(s). cash works regardless — D35 keeps it userland-agnostic —");
+        println!("{warnings} warning(s). cash works regardless,");
         println!("but scripts may get quietly wrong answers from the tools above.");
         1
     }

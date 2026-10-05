@@ -1,6 +1,5 @@
 ---
 see: alias keys
-spec: D60 D45
 ---
 ## Description
 

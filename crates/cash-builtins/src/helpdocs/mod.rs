@@ -5,10 +5,10 @@
 //!
 //! - `builtins.md`: every builtin, under the heading of its kind, as `` - `NAME`: summary ``.
 //! - `pages/NAME.md`: a builtin's page. Front matter may say `names:` (the builtins it
-//!   covers, when not just the file's name), `see:` (builtins and topics to read next)
-//!   and `spec:` (the decisions in `spec.md` behind it).
+//!   covers, when not just the file's name) and `see:` (builtins and topics to read
+//!   next).
 //! - `topics/NAME.md`: a topic, with `title:` and `summary:` in its front matter, and
-//!   `see:` and `spec:` as a page has them.
+//!   `see:` as a page has it.
 //!
 //! The options of a builtin are not copied here: its page ends with its own `--help`.
 //! `crates/cash/tests/it/help_catalogue.rs` fails when a builtin has no entry, or an
@@ -65,8 +65,6 @@ pub struct Page {
     pub names: Vec<&'static str>,
     /// Builtins and topics to read next.
     pub see: Vec<&'static str>,
-    /// The decisions in `spec.md` behind it (`D49`).
-    pub spec: Vec<&'static str>,
     /// The markdown, front matter removed.
     pub body: &'static str,
 }
@@ -82,8 +80,6 @@ pub struct Topic {
     pub summary: &'static str,
     /// Builtins and topics to read next.
     pub see: Vec<&'static str>,
-    /// The decisions in `spec.md` behind it.
-    pub spec: Vec<&'static str>,
     /// The markdown, front matter removed.
     pub body: &'static str,
 }
@@ -142,7 +138,6 @@ fn read_catalogue() -> Catalogue {
                 file,
                 names: if names.is_empty() { vec![*file] } else { names },
                 see: front.words("see"),
-                spec: front.words("spec"),
                 body,
             }
         })
@@ -156,7 +151,6 @@ fn read_catalogue() -> Catalogue {
                 title: front.value("title").unwrap_or(name),
                 summary: front.value("summary").unwrap_or_default(),
                 see: front.words("see"),
-                spec: front.words("spec"),
                 body,
             }
         })

@@ -160,7 +160,7 @@ fn parse(
             "-V" | "--version" => {
                 writeln!(
                     context.stdout(),
-                    "fuser (cash) {}\nRestart Manager and IP Helper backed; see ROADMAP item 8.",
+                    "fuser (cash) {}\n`help fuser` says how it differs on Windows.",
                     env!("CARGO_PKG_VERSION")
                 )?;
                 return Ok(Parsed::Exit(ExecutionResult::success()));

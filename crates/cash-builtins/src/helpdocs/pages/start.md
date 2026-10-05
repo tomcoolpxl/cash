@@ -1,6 +1,5 @@
 ---
 see: detach elevate
-spec: D45
 ---
 ## Description
 

@@ -1,6 +1,5 @@
 ---
 see: sleep kill
-spec: D48 D52
 ---
 ## Description
 
@@ -12,5 +11,4 @@ out.
 
 Windows' `timeout.exe` is another command, which pauses a batch file (`timeout /t 5`);
 inside cash, `timeout` is this one, and `sleep 5` is the pause. `timeout sh -c ...` and
-`timeout bash ...` run cash, and an MSYS2 program gets its arguments as it splits them
-(D52).
+`timeout bash ...` run cash, and an MSYS2 program gets its arguments as it splits them.

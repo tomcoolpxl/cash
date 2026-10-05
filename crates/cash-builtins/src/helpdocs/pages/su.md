@@ -1,6 +1,5 @@
 ---
 see: sudo elevation id
-spec: D42 D45
 ---
 ## Description
 
@@ -25,7 +24,7 @@ elevated; `su USER` gives that account, at its usual level, after its password.
   with the same checks: files created elevated are yours when you approve with your own
   account, and `su USER` is refused at once when USER cannot read `cash.exe`
   (`scoop install -g cash` installs it where every account can).
-- The new shell is outside cash's job object and outlives this one (D42).
+- The new shell is outside cash's job object and outlives this one.
 - Tab completes the user from the local accounts.
 
 ## Examples

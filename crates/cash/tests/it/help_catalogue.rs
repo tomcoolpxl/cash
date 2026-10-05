@@ -105,7 +105,11 @@ fn help_sed_is_a_page_with_its_windows_notes_and_its_own_options() {
     assert!(text.contains("\nUSAGE AND OPTIONS\n"), "{text}");
     assert!(text.contains("--in-place"), "{text}");
     assert!(text.contains("help crlf"), "{text}");
-    assert!(text.contains("D49"), "{text}");
+    // Help speaks to the user: no spec decision numbers, rows or section signs
+    // (the user, 2026-10-05).
+    for developer_note in ["D49", "(row", "§", "spec.md", "ROADMAP", "WHY\n"] {
+        assert!(!text.contains(developer_note), "{developer_note} in {text}");
+    }
     // Not a terminal, so no colour.
     assert!(!text.contains('\x1b'), "{text}");
 }

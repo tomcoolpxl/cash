@@ -1,6 +1,5 @@
 ---
 see: uname coolfetch vars
-spec: D48
 ---
 ## Description
 

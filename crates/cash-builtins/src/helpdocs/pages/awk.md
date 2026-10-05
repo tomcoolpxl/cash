@@ -1,6 +1,5 @@
 ---
 see: sed crlf
-spec: D49 D20 D48
 ---
 ## Description
 
@@ -12,7 +11,7 @@ grown towards gawk: arrays of arrays, `gensub`, `asort` and `asorti`, `IGNORECAS
 ## Line endings
 
 By default awk reads a CRLF line without its CR and writes it back with it, so
-`$NF == "x"` works on a Windows file and an edited CRLF file stays CRLF (D49). A program
+`$NF == "x"` works on a Windows file and an edited CRLF file stays CRLF. A program
 that names `\r` (`sub(/\r$/, "")`), or `CASH_EOL=lf` exported, makes the CR ordinary data,
 as on Linux. `printf` writes exactly what it is given.
 

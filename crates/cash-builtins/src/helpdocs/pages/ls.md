@@ -1,6 +1,5 @@
 ---
 see: dir vdir tree stat dircolors
-spec: D48 D67
 ---
 ## Description
 

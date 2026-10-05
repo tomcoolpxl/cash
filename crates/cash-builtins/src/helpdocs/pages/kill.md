@@ -1,6 +1,5 @@
 ---
 see: jobs wait pgrep job-control
-spec: D19 D21 D22 D70
 ---
 ## Description
 
@@ -12,12 +11,12 @@ lists the signals. Without a signal it sends `TERM`, as Bash does.
 Windows has no signals; cash delivers each one as the nearest thing Windows has.
 
 - `kill %1` reaches the job's whole process tree, through its job object; `kill 1234`
-  reaches that process alone (D22).
+  reaches that process alone.
 - `TERM`, `HUP`, `INT` and `QUIT` ask: a program with a window gets `WM_CLOSE`, as from
   its close button, and is terminated if it still runs five seconds later; a background
-  job gets a Ctrl-Break; any other console program is terminated at once (D21).
+  job gets a Ctrl-Break; any other console program is terminated at once.
 - `KILL` (`-9`) terminates at once.
-- `STOP` and `CONT` suspend and resume the program's threads (D19).
+- `STOP` and `CONT` suspend and resume the program's threads.
 - A program a signal ended exits with 128 plus the signal's number: 143 for `TERM`, 137
   for `KILL`.
 - A pid from `$!` keeps naming its job after it ended, so `kill "$pid"` answers "No such

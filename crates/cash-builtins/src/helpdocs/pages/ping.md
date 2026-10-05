@@ -1,6 +1,5 @@
 ---
 see: ss
-spec: D57
 ---
 ## Description
 

@@ -1,6 +1,5 @@
 ---
 see: test ls stat differences
-spec: D23 D34
 ---
 ## Description
 
@@ -15,9 +14,9 @@ make it writable again.
 - `chmod +x` and the execute bits of a number change nothing and return 0, silently, so
   `chmod +x deploy.sh && ./deploy.sh` works: whether a file can run is decided by its
   access list and its kind (an extension in `PATHEXT`, or a `#!` line), as `test -x`
-  decides it (D23).
+  decides it.
 - `chmod -x`, `-r`, setuid, setgid and the sticky bit warn and return 0: revoking them
-  would take deny entries that can lock you out of your own file (D34). `-f` keeps quiet.
+  would take deny entries that can lock you out of your own file. `-f` keeps quiet.
 - Group and other bits (`chmod go-w ~/.ssh`) change nothing and say nothing: Windows has
   no such bits per file.
 

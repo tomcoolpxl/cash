@@ -1,6 +1,5 @@
 ---
 see: ps pstree kill uptime
-spec: D48
 ---
 ## Description
 

@@ -244,7 +244,7 @@ fn parse(
             "-v" | "--version" => {
                 writeln!(
                     context.stdout(),
-                    "lsof (cash) {}: the Windows subset, see ROADMAP item 8",
+                    "lsof (cash) {}\n`help lsof` says how it differs on Windows.",
                     env!("CARGO_PKG_VERSION")
                 )?;
                 return Ok(Parsed::Exit(ExecutionResult::success()));

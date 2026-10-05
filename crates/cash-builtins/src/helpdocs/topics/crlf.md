@@ -2,7 +2,6 @@
 title: Line endings: CRLF and LF
 summary: Why `sed` and `awk` keep CRLF files CRLF, and how `$(...)` and `read` treat CR.
 see: sed awk dos2unix unix2dos read mapfile
-spec: D20 D49 D41
 ---
 ## The problem
 
@@ -12,7 +11,7 @@ treats the CR as data fails in ways you cannot see: `version=$(python v.py)` hol
 
 ## Where cash decides where a line ends
 
-Wherever cash itself splits text into lines, `\r\n` ends a line just as `\n` does (D20):
+Wherever cash itself splits text into lines, `\r\n` ends a line just as `\n` does:
 `$(...)` and backticks, `read` and `while read`, `mapfile` and `readarray`,
 here-documents and here-strings. Bytes in a pipe between two programs are never
 touched: `a.exe | b.exe` stays byte for byte. cash's own builtins write LF.
@@ -20,7 +19,7 @@ touched: `a.exe | b.exe` stays byte for byte. cash's own builtins write LF.
 ## The bundled sed and awk
 
 By default the bundled `sed` and `awk` read a CRLF line without its CR and write it back
-with it (D49): `s/foo$/bar/` and `$NF == "x"` work on Windows files, an edited CRLF file
+with it: `s/foo$/bar/` and `$NF == "x"` work on Windows files, an edited CRLF file
 stays CRLF, and an LF file stays LF.
 
 The CR becomes ordinary data, as on Linux, when:
@@ -38,4 +37,4 @@ repository, `.gitattributes` (`* text eol=lf`) fixes the source instead.
 ## Other encodings
 
 cash strips a UTF-8 byte order mark when it reads a script, and sets the console to
-UTF-8 (D41).
+UTF-8.

@@ -1,7 +1,6 @@
 ---
 names: dos2unix unix2dos
 see: sed awk crlf
-spec: D49 D20
 ---
 ## Description
 

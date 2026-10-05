@@ -1,6 +1,5 @@
 ---
 see: tac crlf
-spec: D55 D20
 ---
 ## Description
 
@@ -9,7 +8,7 @@ lines. Invalid UTF-8 is kept byte by byte.
 
 ## Difference from util-linux
 
-A CRLF line keeps its CR at the end (D20); util-linux's moves it to the front, where it
+A CRLF line keeps its CR at the end; util-linux's moves it to the front, where it
 returns the cursor and hides the line.
 
 ## Examples

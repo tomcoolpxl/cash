@@ -1,6 +1,5 @@
 ---
 see: fc keys vars
-spec: D44
 ---
 ## Description
 
@@ -13,7 +12,7 @@ N` deletes an entry, `-w` writes the file, `-s LINE` adds a line.
   with Git Bash's `.bash_history`.
 - Each command is appended to the file as it runs, not when the shell exits: a cash
   killed from Task Manager loses nothing, and several Windows Terminal tabs append to
-  one file safely (D44).
+  one file safely.
 - While `HISTSIZE` and `HISTFILESIZE` are unset, nothing is cut: Bash would cut both to
   500.
 - To clear it: `history -c; history -w`.

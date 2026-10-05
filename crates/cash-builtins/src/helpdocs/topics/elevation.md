@@ -2,7 +2,6 @@
 title: Elevation: sudo, su, elevate and UAC
 summary: Running commands as Administrator or as another user, which tool does it, and what escapes cash's job.
 see: sudo su sudoedit elevate detach id job-control
-spec: D6 D42 D45
 ---
 ## Windows has no root
 
@@ -66,9 +65,9 @@ given the folder's network path (`\\server\share\...`).
 
 ## What escapes cash's job
 
-Everything cash starts lives in its job object and ends with it (D6). An elevated
+Everything cash starts lives in its job object and ends with it. An elevated
 program cannot: Windows will not let a normal process put an elevated one in its job or
-end it (D42). So an elevated program, or a shell as another user, outlives cash, and is
+end it. So an elevated program, or a shell as another user, outlives cash, and is
 not stopped by Ctrl-C to the job or by `kill %1` as a job of yours would be. `elevate`
 warns about it; `-q` drops the warning.
 

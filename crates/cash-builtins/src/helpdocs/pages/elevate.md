@@ -1,6 +1,5 @@
 ---
 see: sudo su detach elevation
-spec: D42 D45 D6
 ---
 ## Description
 
@@ -17,7 +16,7 @@ to there. For output in this terminal, use `sudo`.
 - It is not waited for, so `elevate`'s status says only that the command started, not
   how it ended.
 - An elevated program cannot be put in cash's job object, so it outlives cash and cash
-  cannot end it (D42). `elevate` says so on standard error; `-q` keeps quiet.
+  cannot end it. `elevate` says so on standard error; `-q` keeps quiet.
 
 ## Example
 

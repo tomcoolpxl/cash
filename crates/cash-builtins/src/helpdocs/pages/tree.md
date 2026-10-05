@@ -1,6 +1,5 @@
 ---
 see: ls find
-spec: D48
 ---
 ## Description
 

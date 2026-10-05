@@ -1,7 +1,6 @@
 ---
 names: clear reset
 see: keys
-spec: D55 D41 D68
 ---
 ## Description
 

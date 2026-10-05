@@ -1,6 +1,5 @@
 ---
 see: ls chmod test
-spec: D48
 ---
 ## Description
 

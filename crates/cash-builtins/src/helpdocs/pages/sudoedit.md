@@ -1,6 +1,5 @@
 ---
 see: sudo elevation
-spec: D45
 ---
 ## Description
 

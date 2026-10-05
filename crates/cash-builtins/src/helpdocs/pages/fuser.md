@@ -1,7 +1,6 @@
 ---
 names: fuser lsof
 see: ss ps kill
-spec: D50
 ---
 ## Description
 

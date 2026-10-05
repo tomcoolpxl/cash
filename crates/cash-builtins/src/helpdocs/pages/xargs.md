@@ -1,6 +1,5 @@
 ---
 see: find
-spec: D48 D32 D52
 ---
 ## Description
 
@@ -17,7 +16,7 @@ machines have.
 - The command is looked up as cash looks it up: builtins (`echo`, `rm`, `sed`) first,
   each run in its own copy of the shell, then `PATH`. A path runs that program.
 - A Windows program gets its arguments quoted as it will split them, and an MSYS2
-  program as Cygwin splits them (D32, D52).
+  program as Cygwin splits them.
 - As in GNU xargs, a backslash in the input escapes the next character, so feed it
   paths spelled `C:/src`, as cash's tools print them, not `C:\src`.
 - `-P` is accepted and the commands run one at a time.

@@ -46,9 +46,6 @@ pub(crate) struct HelpCommand {
 /// hard to read.
 const MAX_WIDTH: usize = 100;
 
-/// Where the decisions a page cites are written down.
-const SPEC_URL: &str = "https://github.com/tomcoolpxl/cash/blob/main/spec.md";
-
 impl builtins::Command for HelpCommand {
     type Error = cash_core::Error;
 
@@ -406,7 +403,7 @@ fn builtin_page<SE: cash_core::ShellExtensions>(
     }
 
     if let Some(page) = page {
-        see_also_and_spec(&mut out, &page.see, &page.spec, style);
+        see_also(&mut out, &page.see, style);
     }
     Ok(out)
 }
@@ -423,11 +420,11 @@ fn topic_page(topic: &helpdocs::Topic, style: Style) -> String {
     ));
     out.push('\n');
     out.push_str(&render::markdown(topic.body, style));
-    see_also_and_spec(&mut out, &topic.see, &topic.spec, style);
+    see_also(&mut out, &topic.see, style);
     out
 }
 
-fn see_also_and_spec(out: &mut String, see: &[&str], spec: &[&str], style: Style) {
+fn see_also(out: &mut String, see: &[&str], style: Style) {
     let indent = " ".repeat(render::INDENT);
     if !see.is_empty() {
         out.push('\n');
@@ -439,15 +436,6 @@ fn see_also_and_spec(out: &mut String, see: &[&str], spec: &[&str], style: Style
             &indent,
             render::INDENT,
         ));
-    }
-    if !spec.is_empty() {
-        out.push('\n');
-        out.push_str(&render::heading("Why", style));
-        let text = format!(
-            "The decisions {} in cash's specification, {SPEC_URL}",
-            spec.join(", ")
-        );
-        out.push_str(&render::wrap(&text, style.width, &indent, render::INDENT));
     }
 }
 

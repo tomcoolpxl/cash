@@ -1,6 +1,5 @@
 ---
 see: su sudoedit elevate elevation id
-spec: D42 D45
 ---
 ## Description
 
@@ -49,6 +48,6 @@ that is already elevated, the command simply runs here.
   the program: cash installed under `~/scoop` is readable only by you and the
   administrators. `scoop install -g cash`, or an install under Program Files, fixes it.
 - Windows' own `sudo.exe` is in System32; inside cash, `sudo` is this builtin, which may
-  use it. An elevated program is outside cash's job object and outlives cash (D42).
+  use it. An elevated program is outside cash's job object and outlives cash.
 - Tab completes the command after `sudo` and its arguments, and the user after `-u`.
   `cash doctor` says which tool elevates.

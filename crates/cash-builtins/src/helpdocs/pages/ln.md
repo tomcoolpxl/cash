@@ -1,6 +1,5 @@
 ---
 see: test link paths
-spec: D27
 ---
 ## Description
 

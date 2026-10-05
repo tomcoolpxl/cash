@@ -1,7 +1,6 @@
 ---
 names: mktemp realpath readlink
 see: paths
-spec: D3 D48
 ---
 ## Description
 
@@ -14,7 +13,7 @@ spec: D3 D48
 These three build paths themselves, and Windows answers in backslashes, so cash writes
 their output in its own spelling, `C:/Users/me/AppData/Local/Temp/tmp.AbCdEf`: a
 `d=$(mktemp -d)` that held backslashes would lose them to the first `xargs` or unquoted
-`echo -e` downstream (D3). `/tmp` is your `TEMP` folder.
+`echo -e` downstream. `/tmp` is your `TEMP` folder.
 
 ## Examples
 

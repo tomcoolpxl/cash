@@ -1,6 +1,5 @@
 ---
 see: uniq crlf
-spec: D48
 ---
 ## Description
 

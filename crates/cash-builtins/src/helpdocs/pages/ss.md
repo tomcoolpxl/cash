@@ -1,6 +1,5 @@
 ---
 see: fuser ping
-spec: D51
 ---
 ## Description
 

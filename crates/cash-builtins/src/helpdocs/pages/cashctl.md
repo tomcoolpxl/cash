@@ -1,7 +1,6 @@
 ---
 names: cashctl cashinfo
 see: job-control config
-spec: D6
 ---
 ## Description
 
@@ -9,7 +8,7 @@ spec: D6
 
 - `cashctl gui-apps`: whether GUI programs started from cash (`code .`) keep running
   after cash exits. `outlive`, the default, keeps them, as PowerShell does; `close`
-  closes them with cash, for this session (D6).
+  closes them with cash, for this session.
 - `cashctl events status`, `enable EVENT`, `disable EVENT`: cash's debug logging, as
   `--debug EVENT` sets it at startup.
 - `cashctl call stack`, `cashctl complete line LINE`, `cashctl process pid`: what the

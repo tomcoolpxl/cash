@@ -1394,7 +1394,7 @@ fn warn_about_unix_drive_spellings(
             // this binary to dispatch, so `command_name` there is cash's own path rather
             // than the `cat` the user typed, which would mislead.
             "cash: {}: a command receives this path as written; cash does not \
-             translate Unix path spellings in arguments (D4). Try {} or \
+             translate Unix path spellings in arguments. Try {} or \
              \"$(winpath {})\"",
             arg,
             cash_win32::path::render(&translated),

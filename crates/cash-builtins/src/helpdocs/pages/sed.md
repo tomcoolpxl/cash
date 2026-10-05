@@ -1,6 +1,5 @@
 ---
 see: awk dos2unix unix2dos crlf
-spec: D49 D20 D48
 ---
 ## Description
 

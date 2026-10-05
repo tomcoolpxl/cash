@@ -2,7 +2,6 @@
 title: Paths: C:/ vs /c/ vs C:\
 summary: How cash spells paths, which spellings it accepts, and why `$PATH` is different.
 see: winpath cd pwd ln vars
-spec: D3 D4 D5 D10 D16 D27 D28 D29 D31 D53
 ---
 ## The short version
 
@@ -16,17 +15,17 @@ works where cash itself opens the path, but not as an argument to other commands
 A path cash prints usually becomes an argument to a Windows program, where the wrong
 spelling is fatal: `terraform -chdir="$(pwd)/modules"` must work, and `/c/src` means
 nothing to a native `.exe`. Windows' file APIs take `/` as a separator, so `C:/src` works
-everywhere `C:\src` does (D3). The cost: `case $PWD in /c/*)` no longer matches.
+everywhere `C:\src` does. The cost: `case $PWD in /c/*)` no longer matches.
 
 ## Unix spellings
 
 `/c/src`, `/tmp` (your `TEMP` folder), `/dev/null`, `/dev/tty`, `/dev/stdin` and the
-other `/dev` names work wherever cash itself opens the path (D10): in redirections
+other `/dev` names work wherever cash itself opens the path: in redirections
 (`> /tmp/out`, `2> /dev/null`), `cd`, `source`, `test` and `[`, and cash's own builtins
 such as `ls`. An argument to any other command reaches it as written, and a Windows
-program, or a bundled tool such as `cat` or `rm`, has no `/c` or `/tmp` (D4); cash
+program, or a bundled tool such as `cat` or `rm`, has no `/c` or `/tmp`; cash
 warns when it sees one and names the `C:/` spelling. `/dev/null` is the null device; a
-bare `nul` is the device too, as every Windows program sees it (D28).
+bare `nul` is the device too, as every Windows program sees it.
 
 ## Backslashes
 
@@ -42,12 +41,12 @@ cd "$dir"
 
 At the interactive prompt, `shopt winpaths` (on by default there, off in scripts) lets
 a word that starts with a drive and a backslash keep its backslashes, so a path pasted
-from Explorer works unquoted (D53). `shopt -u winpaths` turns it off.
+from Explorer works unquoted. `shopt -u winpaths` turns it off.
 
 ## Arguments are never rewritten
 
 cash never guesses which arguments are paths and rewrites them, the guessing MSYS2
-needs `MSYS2_ARG_CONV_EXCL` to escape (D4). When an old tool needs backslashes, convert
+needs `MSYS2_ARG_CONV_EXCL` to escape. When an old tool needs backslashes, convert
 on purpose: `old-tool.exe "$(winpath -w "$dir")"`. `winpath -u` gives `/c/...`, and
 `winpath -c` cash's own `C:/...`.
 
@@ -56,15 +55,15 @@ on purpose: `old-tool.exe "$(winpath -w "$dir")"`. `winpath -u` gives `/c/...`, 
 `$PATH` reads Unix-style, `/c/tools:/c/Windows`, because `:` separates its entries and a
 drive letter has one too. So `PATH=/c/tools:$PATH` and `IFS=: read -ra dirs <<< "$PATH"`
 work. Programs cash starts get the Windows form, with semicolons. No other variable is
-translated: `GOPATH` or `PYTHONPATH` pass through as you wrote them (D5). Variable names
-are case-insensitive, as in Windows: `$Path` is `$PATH` (D31).
+translated: `GOPATH` or `PYTHONPATH` pass through as you wrote them. Variable names
+are case-insensitive, as in Windows: `$Path` is `$PATH`.
 
 ## Long paths, globbing, links
 
 - Paths of any length work in cash's own file operations, whatever the long-path
-  setting (D29). Windows starts no program in a folder over 258 characters; cash starts
+  setting. Windows starts no program in a folder over 258 characters; cash starts
   it in the folder's 8.3 short name instead.
 - Globbing ignores case, as the file system does: `*.sh` matches `Setup.SH`.
-  `shopt -u nocaseglob` makes it case-sensitive (D16).
+  `shopt -u nocaseglob` makes it case-sensitive.
 - `ln -s` makes a real symbolic link when Windows allows it (Developer Mode or an
-  elevated shell), a junction for a folder otherwise, and fails for a file (D27).
+  elevated shell), a junction for a folder otherwise, and fails for a file.
