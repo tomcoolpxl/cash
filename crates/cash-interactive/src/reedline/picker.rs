@@ -108,11 +108,24 @@ fn open(
     let written = |path: &Path, folder: bool| {
         pick::written(path, folder, &from_shell.cwd, from_shell.home.as_deref())
     };
+    // While the picker stays open, each pick shows on the line: drawn from the start of
+    // the word it replaces, which is this many columns before the cursor.
+    let echo_from: usize = line
+        .get(context.word.start..cursor)
+        .unwrap_or_default()
+        .chars()
+        .filter_map(unicode_width::UnicodeWidthChar::width)
+        .sum();
+    let rest = line.get(context.word.end..).unwrap_or_default();
     let ran = term::run(
         &mut picker,
         &mut std::io::stdout().lock(),
         from_shell.height.as_deref(),
-        |path, folder, _close| picks.push(written(path, folder)),
+        Some(echo_from),
+        |path, folder, _close| {
+            picks.push(written(path, folder));
+            Some(format!("{} {rest}", picks.join(" ")))
+        },
     );
     if let Err(error) = ran {
         tracing::warn!("croot: {error}");

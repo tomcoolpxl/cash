@@ -28,7 +28,8 @@ What is on the line decides what the picker shows and what a pick does:
 - an empty line, `cd` or `pushd`: folders only, and the pick runs at once (`cd PICK`);
 - `rmdir` or `mkdir`: folders only;
 - any other command: files and folders. The pick is inserted with a space after it, and
-  the picker stays open for the next one; `source` and `.` close it after one.
+  the picker stays open for the next one, with each pick showing on the command line
+  as you make it; `source` and `.` close it after one.
 - a path already typed under the cursor: the picker starts in its folder, filtered by
   its last part (`cd ~/src/fo` starts in `~/src`, filtered by `fo`), and the pick
   replaces it.

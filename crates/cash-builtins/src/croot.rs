@@ -88,8 +88,10 @@ impl builtins::Command for CrootCommand {
             &mut picker,
             &mut console,
             height.as_deref(),
+            None,
             |path, _, _| {
                 picks.push(path.to_path_buf());
+                None
             },
         ) {
             writeln!(context.stderr(), "croot: {error}")?;

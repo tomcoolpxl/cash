@@ -34,8 +34,13 @@ pub fn rows_for(setting: Option<&str>, total: usize) -> usize {
     wanted.max(MIN_ROWS).min(total.saturating_sub(1))
 }
 
-/// Runs `picker` until it closes, drawing on `out`. `pick` gets each pick (its path,
-/// whether it is a folder, whether the picker closes after it).
+/// Runs `picker` until it closes, drawing on `out`.
+///
+/// `pick` gets each pick (its path, whether it is a folder, whether the picker closes
+/// after it), and may return the command line as it now reads from the word being
+/// replaced on, which is drawn on the line while the picker stays open; `echo_from` is
+/// how many columns before the cursor that word starts, `None` where the line is not to
+/// be drawn.
 ///
 /// # Errors
 ///
@@ -44,13 +49,14 @@ pub fn run<W: Write>(
     picker: &mut Picker,
     out: &mut W,
     height: Option<&str>,
-    mut pick: impl FnMut(&Path, bool, bool),
+    echo_from: Option<usize>,
+    mut pick: impl FnMut(&Path, bool, bool) -> Option<String>,
 ) -> io::Result<()> {
     let was_raw = terminal::is_raw_mode_enabled().unwrap_or(false);
     if !was_raw {
         terminal::enable_raw_mode()?;
     }
-    let result = run_raw(picker, out, height, &mut pick);
+    let result = run_raw(picker, out, height, echo_from, &mut pick);
     if !was_raw {
         let _ = terminal::disable_raw_mode();
     }
@@ -61,7 +67,8 @@ fn run_raw<W: Write>(
     picker: &mut Picker,
     out: &mut W,
     height: Option<&str>,
-    pick: &mut dyn FnMut(&Path, bool, bool),
+    echo_from: Option<usize>,
+    pick: &mut dyn FnMut(&Path, bool, bool) -> Option<String>,
 ) -> io::Result<()> {
     let (columns, total) = terminal::size()?;
     let (columns, total) = (usize::from(columns), usize::from(total));
@@ -103,9 +110,12 @@ fn run_raw<W: Write>(
                             folder,
                             close,
                         } => {
-                            pick(&path, folder, close);
+                            let line = pick(&path, folder, close);
                             if close {
                                 return Ok(());
+                            }
+                            if let (Some(line), Some(from)) = (line, echo_from) {
+                                area.echo(out, from, &line)?;
                             }
                             picker.picked();
                         }
@@ -164,6 +174,37 @@ impl Area {
             )?;
             write!(out, "{line}")?;
         }
+        out.flush()
+    }
+
+    /// Draws `line` on the command line's row, from `from` columns before the cursor,
+    /// so that a pick shows there while the picker stays open. The line editor draws
+    /// the line again once the picker closes.
+    fn echo<W: Write>(&self, out: &mut W, from: usize, line: &str) -> io::Result<()> {
+        let Some((column, row)) = self.back else {
+            return Ok(());
+        };
+        let Some(start) = usize::from(column).checked_sub(from) else {
+            return Ok(());
+        };
+        // What fits on the row; a longer line would run into the picker's rows.
+        let room = self.columns.saturating_sub(start + 1);
+        let mut shown = String::new();
+        let mut used = 0;
+        for c in line.chars() {
+            let width = unicode_width::UnicodeWidthChar::width(c).unwrap_or(0);
+            if used + width > room {
+                break;
+            }
+            shown.push(c);
+            used += width;
+        }
+        queue!(
+            out,
+            cursor::MoveTo(u16::try_from(start).unwrap_or(0), row),
+            terminal::Clear(terminal::ClearType::UntilNewLine)
+        )?;
+        write!(out, "{shown}")?;
         out.flush()
     }
 

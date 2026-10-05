@@ -835,13 +835,23 @@ fn conpty_alt_e_inserts_a_file_and_stays_open_for_other_commands() {
     session
         .expect("1 picked", Duration::from_secs(10))
         .expect("the picker stayed open after the pick");
+    // A second pick, the folder at the top: the line shows both while the picker is open.
+    session.send("\x1b[H").unwrap();
+    std::thread::sleep(Duration::from_millis(300));
+    session.send("\r").unwrap();
+    session
+        .expect("file_croot.txt alpha_croot/", Duration::from_secs(10))
+        .expect("the picks showed on the command line while picking");
     session.send("\x1b").unwrap();
     std::thread::sleep(Duration::from_millis(500));
-    // The line, now `printf '%s+\n' file_croot.txt `, runs on Enter.
+    // The line, now `printf '%s+\n' file_croot.txt alpha_croot/ `, runs on Enter.
     session.send("\r").unwrap();
     session
         .expect("file_croot.txt+", Duration::from_secs(10))
         .expect("the pick was inserted as an argument");
+    session
+        .expect("alpha_croot/+", Duration::from_secs(10))
+        .expect("the second pick was inserted too");
 
     session.send("exit 0\r").unwrap();
     assert_eq!(session.wait().expect("process did not exit"), 0);

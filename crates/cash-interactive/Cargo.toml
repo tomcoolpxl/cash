@@ -24,6 +24,7 @@ reedline = [
     "dep:nu-ansi-term",
     "dep:crossterm",
     "dep:unicode-segmentation",
+    "dep:unicode-width",
     "dep:serde_json",
     "dep:cash-picker",
     "completion",
@@ -49,6 +50,7 @@ tokio = { workspace = true, features = ["rt", "sync"] }
 tracing = { workspace = true }
 futures-util = "0.3.34"
 unicode-segmentation = { version = "1.13.3", optional = true }
+unicode-width = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 # cash: reads a Scoop shim's target, to start carapace itself (D63).
 cash-win32 = { workspace = true }
