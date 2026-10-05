@@ -150,13 +150,12 @@ Spec D73, approved by the user on 2026-10-05, is the full description. Fuzzy
 matching and .gitignore from established crates (e.g. `nucleo-matcher`, `ignore`),
 not hand-written.
 
-Built so far (2026-10-05): the `cash-picker` crate (line context, picks, tree, filter,
+Released in 1.4.0 (2026-10-05): the `cash-picker` crate (line context, picks, tree, filter,
 deep search, colours, the picker's keys and frames, the terminal runner), Alt-E in the
 line editor (`cash-picker`), the `croot` builtin, `help croot`; ConPTY tests for a `cd`
-pick and an inserted file. Left:
+pick and an inserted file. The broot block is out of the user's `~/.bashrc`, at their
+request (backup `~/.bashrc.before-croot`). Left:
 
-- the user's `~/.bashrc` binds Alt-E to broot (`bind -x '"\ee": __cash_broot_cd'`),
-  which overrides cash's Alt-E; it goes, with the user's agreement;
 - the 30 ms first-frame budget is not measured yet;
 - a resize while the picker is open keeps its height.
 
