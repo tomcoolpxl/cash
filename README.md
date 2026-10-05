@@ -106,6 +106,10 @@ The prompt borrows what fish does well, without giving up Bash's language:
   `CASH_TRANSIENT_PS1='$(starship module character --status="$STARSHIP_CMD_STATUS")'`.
 - **Folder history**: on an empty line, Alt-← and Alt-→ step back and forward through the
   folders you have been in; `prevd`, `nextd` and `cdh` do it by name (D62).
+- **croot, a file and folder picker**: Alt-E opens a tree below the command line. Typing
+  filters it, the arrows walk it, and Enter picks: on an empty line or after `cd` it
+  goes there, after any other command it inserts the path. `croot` does the same from
+  scripts (`cd "$(croot)"`); `help croot` says more (D73).
 - **Completions with descriptions** for 700+ commands — git, winget, docker, kubectl,
   terraform, cargo, npm — when [carapace](https://github.com/carapace-sh/carapace-bin) is
   installed (`scoop install extras/carapace-bin`). A completion script you source for a

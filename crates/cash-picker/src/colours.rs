@@ -80,15 +80,26 @@ impl Colours {
             })
         };
         style.map_or_else(String::new, |style| {
-            let prefix = style.to_nu_ansi_term_style().prefix().to_string();
-            // `\x1b[1;34m` to `1;34`.
-            prefix
-                .strip_prefix("\x1b[")
-                .and_then(|rest| rest.strip_suffix('m'))
-                .unwrap_or_default()
-                .to_owned()
+            sgr_of(&style.to_nu_ansi_term_style().prefix().to_string())
         })
     }
+}
+
+/// The SGR parameters in a style's escape sequences: `\x1b[1;34m` gives `1;34`. With
+/// `nu-ansi-term`'s GNU-compatible mode, which another crate in the build may switch on,
+/// the prefix is `\x1b[0m\x1b[01;34m`: the reset is left out and `01` read as `1`.
+fn sgr_of(prefix: &str) -> String {
+    prefix
+        .split("\x1b[")
+        .filter_map(|part| part.strip_suffix('m'))
+        .flat_map(|params| params.split(';'))
+        .map(|param| {
+            let trimmed = param.trim_start_matches('0');
+            if trimmed.is_empty() { "0" } else { trimmed }
+        })
+        .skip_while(|param| *param == "0")
+        .collect::<Vec<_>>()
+        .join(";")
 }
 
 /// Whether Windows runs a file of this name as a program, as `ls` colours them.
@@ -120,6 +131,14 @@ mod tests {
         assert_eq!(colours.entry("x.zip", false), "1;31");
         assert_eq!(colours.entry("run.exe", false), "1;32");
         assert_eq!(colours.entry("notes.txt", false), "");
+    }
+
+    #[test]
+    fn either_form_of_a_style_prefix_reads_the_same() {
+        assert_eq!(sgr_of("\x1b[1;34m"), "1;34");
+        assert_eq!(sgr_of("\x1b[0m\x1b[01;34m"), "1;34");
+        assert_eq!(sgr_of("\x1b[38;5;208m"), "38;5;208");
+        assert_eq!(sgr_of(""), "");
     }
 
     #[test]
