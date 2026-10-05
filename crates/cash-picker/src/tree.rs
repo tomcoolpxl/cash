@@ -177,10 +177,11 @@ struct Node {
 
 /// broot's layout of `top`, the root's entries, in `rows` rows.
 ///
-/// While rows remain, the entries of each shown folder are added, level by level, as many
-/// as fit, the rest counted in a `… N more` line. `rows` is the room below the root's own
-/// line. `children` reads a folder (cached by the caller), so a deeper level costs a read
-/// only when there is room to show it.
+/// The root's own entries are all listed, however many, and the list scrolls through
+/// them. While rows remain, the entries of each shown folder are added, level by level,
+/// as many as fit, the rest counted in a `… N more` line. `rows` is the room below the
+/// root's own line. `children` reads a folder (cached by the caller), so a deeper level
+/// costs a read only when there is room to show it.
 pub fn layout(
     top: Vec<Entry>,
     rows: usize,
@@ -188,8 +189,7 @@ pub fn layout(
 ) -> Vec<Line> {
     let mut nodes: Vec<Node> = Vec::new();
     let top_total = top.len();
-    let mut used = fit(top, rows, &mut nodes);
-    let top_more = top_total - nodes.len();
+    let mut used = fit(top, top_total, &mut nodes);
     // `frontier`: index paths of the shown folders at the level being opened.
     let mut frontier: Vec<Vec<usize>> = nodes
         .iter()
@@ -230,13 +230,6 @@ pub fn layout(
     }
     let mut lines = Vec::new();
     draw(&nodes, 0, &mut Vec::new(), &mut lines);
-    if top_more > 0 {
-        lines.push(Line::More {
-            count: top_more,
-            depth: 1,
-            rails: Vec::new(),
-        });
-    }
     lines
 }
 
@@ -350,8 +343,9 @@ mod tests {
         // 3 rows for the top level, 2 left: a's three files become a1 and "+2".
         let lines = layout(top(), 5, &mut sample);
         assert_eq!(names(&lines), ["1:a", "2:a1", "2:+2", "1:b", "1:c.txt"]);
+        // The root's own entries are never cut short: the list scrolls instead.
         let lines = layout(top(), 2, &mut sample);
-        assert_eq!(names(&lines), ["1:a", "1:+2"]);
+        assert_eq!(names(&lines), ["1:a", "1:b", "1:c.txt"]);
     }
 
     #[test]

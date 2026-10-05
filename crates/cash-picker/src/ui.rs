@@ -814,6 +814,35 @@ mod tests {
     }
 
     #[test]
+    fn a_long_folder_scrolls_down_to_its_last_entry() {
+        let dir = tempfile::tempdir().unwrap();
+        for i in 0..30 {
+            std::fs::create_dir(dir.path().join(format!("f{i:02}"))).unwrap();
+        }
+        let mut picker = picker(dir.path(), Shows::Folders, Then::Run);
+        // Six rows of list: Down past the bottom scrolls rather than stopping.
+        picker.frame(60, 8);
+        for _ in 0..7 {
+            picker.key(Key::Down);
+        }
+        let frame = plain(&mut picker, 8);
+        assert!(frame.iter().any(|l| l == "f07/"), "{frame:#?}");
+        assert!(frame.iter().all(|l| !l.contains("more")), "{frame:#?}");
+        picker.key(Key::PageDown);
+        picker.key(Key::End);
+        let frame = plain(&mut picker, 8);
+        assert_eq!(frame[6], "f29/", "{frame:#?}");
+        assert_eq!(
+            picker.key(Key::Enter),
+            Outcome::Picked {
+                path: dir.path().join("f29"),
+                folder: true,
+                close: true,
+            }
+        );
+    }
+
+    #[test]
     fn long_lines_are_cut_with_an_ellipsis() {
         assert_eq!(fit("abcdef", 4), "abc\u{2026}");
         assert_eq!(fit("abc", 4), "abc");
