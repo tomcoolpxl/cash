@@ -132,6 +132,7 @@ workspace = true
 futures = { workspace = true }
 cash-core = { workspace = true }
 cash-parser = { workspace = true }
+cash-picker = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true, features = ["derive", "wrap_help"] }
 fancy-regex = { workspace = true }

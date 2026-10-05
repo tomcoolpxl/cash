@@ -75,6 +75,7 @@ an entry or page names no builtin.
 - `cashctl`: Inspect and configure the running shell.
 - `cashinfo`: Inspect and configure the running shell (the same as `cashctl`).
 - `cdh`: Choose a recent folder to go to.
+- `croot`: Pick a file or folder in a tree, and print it (Alt-E opens it on the command line).
 - `clear`: Clear the terminal screen and its scrollback.
 - `coolfetch`: Show a banner about this machine and cash.
 - `nextd`: Go forward through the folder history.

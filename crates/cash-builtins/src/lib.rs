@@ -19,6 +19,7 @@ mod dirhistory;
 
 // cash (D48): `ps`, which uutils does not carry and whose PATH stand-in reports MSYS
 // pids that `kill` cannot use.
+mod croot;
 mod fileuse;
 mod fuser;
 mod getopt;

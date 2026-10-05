@@ -4,6 +4,7 @@ mod highlighter;
 mod history;
 mod input_backend;
 mod menu;
+mod picker;
 mod prompt;
 mod validator;
 

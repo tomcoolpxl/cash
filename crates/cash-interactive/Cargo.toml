@@ -25,6 +25,7 @@ reedline = [
     "dep:crossterm",
     "dep:unicode-segmentation",
     "dep:serde_json",
+    "dep:cash-picker",
     "completion",
     "highlighting",
 ]
@@ -42,6 +43,7 @@ indexmap = "2.13.0"
 nu-ansi-term = { workspace = true, optional = true }
 radix_trie = "0.3.0"
 reedline = { version = "0.51.0", optional = true }
+cash-picker = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["rt", "sync"] }
 tracing = { workspace = true }

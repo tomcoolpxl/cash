@@ -830,6 +830,12 @@ impl Reedline {
         self
     }
 
+    /// cash (CASH-PATCHES.md, patch 9): as [`Self::with_immediately_accept`], on a
+    /// `Reedline` in use: the next `read_line` paints the buffer and accepts it.
+    pub fn set_immediately_accept(&mut self, immediately_accept: bool) {
+        self.immediately_accept = immediately_accept;
+    }
+
     /// A builder that configures an external break signal.
     ///
     /// When the [`AtomicBool`] is set to `true` by an external thread,

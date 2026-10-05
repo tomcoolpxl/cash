@@ -10,11 +10,13 @@
 //! - [`search`]: the background search that finds entries below the shown levels.
 //! - [`colours`]: `LS_COLORS` for entries, `CASH_PICKER_COLORS` for the rest.
 //! - [`ui`]: the picker's state, its keys, and the lines of each frame.
+//! - [`term`]: the picker on the terminal, below the command line.
 
 pub mod colours;
 pub mod context;
 pub mod filter;
 pub mod pick;
 pub mod search;
+pub mod term;
 pub mod tree;
 pub mod ui;

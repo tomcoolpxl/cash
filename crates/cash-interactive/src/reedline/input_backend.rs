@@ -219,7 +219,11 @@ impl InputBackend for ReedlineInputBackend {
         let mut attempt: u32 = 1;
         loop {
             match reedline.read_line(&prompt) {
-                Ok(reedline::Signal::Success(s)) => return Ok(ReadResult::Input(s)),
+                Ok(reedline::Signal::Success(s)) => {
+                    // A line croot set to run (D73) was accepted; the next is read again.
+                    reedline.set_immediately_accept(false);
+                    return Ok(ReadResult::Input(s));
+                }
                 Ok(reedline::Signal::CtrlC) => return Ok(ReadResult::Interrupted),
                 Ok(reedline::Signal::CtrlD) => return Ok(ReadResult::Eof),
                 Ok(reedline::Signal::ExternalBreak(_)) => {
@@ -229,6 +233,13 @@ impl InputBackend for ReedlineInputBackend {
                     // Alt-← and Alt-→ (D62): on an empty line they change folder, and the
                     // prompt is drawn afresh in the new one; on any other they move a word,
                     // and reading simply resumes, without recomposing the prompt.
+                    // Alt-E (D73): croot below the line, which stays on screen; its pick
+                    // goes back on the line, and a `cd` runs at once.
+                    if command == edit_mode::PICKER {
+                        super::picker::on_key(reedline, shell);
+                        continue;
+                    }
+
                     let mut command = command;
                     if let Some((folder_command, word_move)) =
                         edit_mode::folder_history_key(&command)
@@ -335,6 +346,12 @@ fn compose_key_bindings(completion_menu_name: &str) -> reedline::Keybindings {
             reedline::ReedlineEvent::MenuNext,
             reedline::ReedlineEvent::Edit(vec![reedline::EditCommand::Complete]),
         ]),
+    );
+    // Alt-E: croot, the file and folder picker (D73), as `cash-picker`.
+    key_bindings.add_binding(
+        reedline::KeyModifiers::ALT,
+        reedline::KeyCode::Char('e'),
+        reedline::ReedlineEvent::ExecuteHostCommand(edit_mode::PICKER.to_owned()),
     );
     // Wire up shift-tab for completion.
     key_bindings.add_binding(

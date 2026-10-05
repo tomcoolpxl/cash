@@ -10,6 +10,10 @@ use tokio::sync::Mutex;
 /// an edit of the line. The NUL keeps it from equalling any real `bind -x` command.
 pub(crate) const YANK_LAST_ARG: &str = "\0cash:yank-last-arg";
 
+/// What `cash-picker` (Alt-E) carries: the input backend opens croot, the file and folder
+/// picker, below the line it was pressed on (spec D73).
+pub(crate) const PICKER: &str = "\0cash:picker";
+
 /// What `edit-and-execute-command` runs, as Bash's own does (bashline.c): the line goes into
 /// history, then `fc` opens it in `$VISUAL` or `$EDITOR` and runs what is saved. The `fc`
 /// entry added after it stands for the `fc` invocation itself, which `fc` skips and removes.
@@ -721,6 +725,7 @@ fn translate_input_function_to_reedline_event(
         InputFunction::Complete => Some(ReedlineEvent::Edit(vec![EditCommand::Complete])),
         InputFunction::CashAcceptHint => Some(ReedlineEvent::HistoryHintComplete),
         InputFunction::CashAcceptHintWord => Some(ReedlineEvent::HistoryHintWordComplete),
+        InputFunction::CashPicker => Some(ReedlineEvent::ExecuteHostCommand(PICKER.to_owned())),
         _ => None,
     }
 }
@@ -952,6 +957,9 @@ fn translate_reedline_event_to_action(event: &reedline::ReedlineEvent) -> Option
         }
         reedline::ReedlineEvent::ExecuteHostCommand(cmd) if cmd == YANK_LAST_ARG => {
             Some(KeyAction::DoInputFunction(InputFunction::YankLastArg))
+        }
+        reedline::ReedlineEvent::ExecuteHostCommand(cmd) if cmd == PICKER => {
+            Some(KeyAction::DoInputFunction(InputFunction::CashPicker))
         }
         reedline::ReedlineEvent::ExecuteHostCommand(cmd) if cmd == EDIT_AND_EXECUTE_COMMAND => {
             Some(KeyAction::DoInputFunction(

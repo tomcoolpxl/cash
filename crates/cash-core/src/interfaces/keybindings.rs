@@ -68,6 +68,8 @@ pub enum InputFunction {
     CapitalizeWord,
     CashAcceptHint,
     CashAcceptHintWord,
+    /// cash: the file and folder picker, croot (spec D73).
+    CashPicker,
     CharacterSearch,
     CharacterSearchBackward,
     ClearDisplay,

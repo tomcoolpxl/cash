@@ -491,6 +491,7 @@ dependencies = [
  "anyhow",
  "cash-core",
  "cash-parser",
+ "cash-picker",
  "cash-win32",
  "chrono",
  "clap",
@@ -644,6 +645,7 @@ dependencies = [
  "bon",
  "cash-core",
  "cash-parser",
+ "cash-picker",
  "cash-win32",
  "crossterm",
  "futures-util",
@@ -687,6 +689,7 @@ name = "cash-picker"
 version = "1.3.21"
 dependencies = [
  "cash-win32",
+ "crossterm",
  "ignore",
  "lscolors",
  "nucleo-matcher",

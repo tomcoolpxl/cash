@@ -44,6 +44,10 @@ work as in Bash.
 
 ## Folders
 
+`Alt-E` opens croot, a file and folder picker, below the line: on an empty line or after
+`cd` it goes to the folder you pick, after any other command it inserts the path (see
+`help croot`).
+
 On an empty line, `Alt-Left` runs `prevd` and `Alt-Right` runs `nextd`: back and
 forward through the folders you were in, and the prompt redraws. On a line with
 text they move a word. Windows Terminal uses Alt-arrows for split panes, so they reach

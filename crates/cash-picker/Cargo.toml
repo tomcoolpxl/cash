@@ -20,6 +20,7 @@ lscolors = "0.21.0"
 # Fuzzy matching, Helix's matcher.
 nucleo-matcher = "0.3"
 unicode-width = { workspace = true }
+crossterm = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

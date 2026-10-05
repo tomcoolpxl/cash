@@ -764,6 +764,89 @@ fn conpty_alt_dot_yanks_the_last_argument() {
     assert_eq!(session.wait().expect("process did not exit"), 0);
 }
 
+/// Alt-E opens croot below the line (D73): after `cd `, folders only; Enter picks the
+/// selected one and the `cd` runs at once.
+#[test]
+fn conpty_alt_e_picks_a_folder_and_cd_runs() {
+    let dir = tempfile::tempdir().unwrap();
+    for folder in ["alpha_croot", "beta_croot"] {
+        std::fs::create_dir(dir.path().join(folder)).unwrap();
+    }
+    std::fs::write(dir.path().join("file_croot.txt"), "").unwrap();
+    let mut session = start_reedline_cash();
+    session
+        .expect("PROMPT$", Duration::from_secs(10))
+        .expect("prompt displayed");
+    let place = cash_win32::path::render(dir.path());
+    session.send(&format!("cd '{place}'\r")).unwrap();
+    session
+        .expect("PROMPT$", Duration::from_secs(10))
+        .expect("prompt after cd");
+
+    session.send("cd \x1be").unwrap();
+    session
+        .expect("[folders]", Duration::from_secs(10))
+        .expect("the picker opened");
+    session
+        .expect("beta_croot/", Duration::from_secs(10))
+        .expect("the picker lists the folders");
+    // Down to beta, then Enter: the line becomes `cd beta_croot/` and runs.
+    session.send("\x1b[B").unwrap();
+    std::thread::sleep(Duration::from_millis(300));
+    session.send("\r").unwrap();
+    std::thread::sleep(Duration::from_millis(500));
+    session.send("pwd | tr a-z A-Z\r").unwrap();
+    session
+        .expect("BETA_CROOT", Duration::from_secs(10))
+        .expect("cd ran into the picked folder");
+
+    session.send("exit 0\r").unwrap();
+    assert_eq!(session.wait().expect("process did not exit"), 0);
+}
+
+/// After another command, croot lists files too, inserts a pick without running the
+/// line, and stays open for the next until Esc (D73).
+#[test]
+fn conpty_alt_e_inserts_a_file_and_stays_open_for_other_commands() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir(dir.path().join("alpha_croot")).unwrap();
+    std::fs::write(dir.path().join("file_croot.txt"), "").unwrap();
+    let mut session = start_reedline_cash();
+    session
+        .expect("PROMPT$", Duration::from_secs(10))
+        .expect("prompt displayed");
+    let place = cash_win32::path::render(dir.path());
+    session.send(&format!("cd '{place}'\r")).unwrap();
+    session
+        .expect("PROMPT$", Duration::from_secs(10))
+        .expect("prompt after cd");
+
+    session.send("printf '%s+\\n' \x1be").unwrap();
+    session
+        .expect("[all]", Duration::from_secs(10))
+        .expect("the picker opened with files");
+    session
+        .expect("file_croot.txt", Duration::from_secs(10))
+        .expect("the picker lists the file");
+    // The file is the last entry; Enter inserts it and the picker stays open.
+    session.send("\x1b[F").unwrap();
+    std::thread::sleep(Duration::from_millis(300));
+    session.send("\r").unwrap();
+    session
+        .expect("1 picked", Duration::from_secs(10))
+        .expect("the picker stayed open after the pick");
+    session.send("\x1b").unwrap();
+    std::thread::sleep(Duration::from_millis(500));
+    // The line, now `printf '%s+\n' file_croot.txt `, runs on Enter.
+    session.send("\r").unwrap();
+    session
+        .expect("file_croot.txt+", Duration::from_secs(10))
+        .expect("the pick was inserted as an argument");
+
+    session.send("exit 0\r").unwrap();
+    assert_eq!(session.wait().expect("process did not exit"), 0);
+}
+
 /// `set -o vi` edits the next line with vi keys: Esc leaves insert mode, `x` deletes the
 /// character under the cursor, and Enter runs the line from normal mode.
 #[test]

@@ -35,9 +35,9 @@ impl Colours {
     /// Colours from `ls_colors` (`LS_COLORS`, or dircolors' defaults when it is unset)
     /// and `picker` (`CASH_PICKER_COLORS`: `sel=…:match=…:frame=…:status=…:dim=…`).
     #[must_use]
-    pub fn new(ls_colors: &str, picker: Option<&str>) -> Self {
+    pub fn new(ls_colors: Option<&str>, picker: Option<&str>) -> Self {
         let mut colours = Self {
-            ls: Some(LsColors::from_string(ls_colors)),
+            ls: Some(ls_colors.map_or_else(LsColors::default, LsColors::from_string)),
             selected: "7".to_owned(),
             matched: "1;33".to_owned(),
             frame: "1".to_owned(),
@@ -115,7 +115,7 @@ mod tests {
 
     #[test]
     fn folders_and_files_take_ls_colours() {
-        let colours = Colours::new("di=01;34:*.zip=01;31:ex=01;32", None);
+        let colours = Colours::new(Some("di=01;34:*.zip=01;31:ex=01;32"), None);
         assert_eq!(colours.entry("src", true), "1;34");
         assert_eq!(colours.entry("x.zip", false), "1;31");
         assert_eq!(colours.entry("run.exe", false), "1;32");
@@ -124,7 +124,7 @@ mod tests {
 
     #[test]
     fn the_picker_variable_sets_its_own_parts() {
-        let colours = Colours::new("", Some("sel=1;37;44:match=4:bogus=1:frame=x"));
+        let colours = Colours::new(Some(""), Some("sel=1;37;44:match=4:bogus=1:frame=x"));
         assert_eq!(
             (
                 colours.selected.as_str(),

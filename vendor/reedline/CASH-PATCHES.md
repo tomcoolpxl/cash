@@ -101,3 +101,9 @@ It sits outside the workspace, so cash's lints do not apply to it. Its own tests
    before running it, and a run of fused edits is cut where the mode changes;
    `run_edit_commands` keeps re-syncing to the current mode when a host calls it.
    Test: `engine::tests::text_and_esc_in_one_batch_insert_in_order`.
+
+9. **Accepting the next line can be set on a `Reedline` in use** (`src/engine.rs`,
+   2026-10-05). `with_immediately_accept` is a builder, which takes the `Reedline` by
+   value; cash's croot picker (spec D73) sets a line like `cd src/` and has it accepted
+   by the next `read_line`, which paints it first, on the `Reedline` the input backend
+   holds. `set_immediately_accept` does that by reference.
