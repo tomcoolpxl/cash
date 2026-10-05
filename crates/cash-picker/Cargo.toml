@@ -15,8 +15,11 @@ rust-version.workspace = true
 cash-win32 = { workspace = true }
 # .gitignore rules as git applies them (ripgrep's crate).
 ignore = "0.4"
+# Entries in `ls`'s colours, through the crate `ls` uses.
+lscolors = "0.21.0"
 # Fuzzy matching, Helix's matcher.
 nucleo-matcher = "0.3"
+unicode-width = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

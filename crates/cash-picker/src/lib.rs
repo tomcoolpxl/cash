@@ -7,8 +7,14 @@
 //! - [`tree`]: a folder's entries, hidden and `.gitignore`d ones left out, and broot's
 //!   layout of several levels trimmed to fit.
 //! - [`filter`]: the fuzzy filter typing sets.
+//! - [`search`]: the background search that finds entries below the shown levels.
+//! - [`colours`]: `LS_COLORS` for entries, `CASH_PICKER_COLORS` for the rest.
+//! - [`ui`]: the picker's state, its keys, and the lines of each frame.
 
+pub mod colours;
 pub mod context;
 pub mod filter;
 pub mod pick;
+pub mod search;
 pub mod tree;
+pub mod ui;
