@@ -80,6 +80,7 @@ fn run_raw<W: Write>(
             rows: total,
             columns,
             back: None,
+            shown: Vec::new(),
         }
     } else {
         Area::below(out, rows_for(height, total), columns, total)?
@@ -121,7 +122,10 @@ fn run_raw<W: Write>(
                         }
                     }
                 }
-                Event::Resize(new_columns, _) => area.columns = usize::from(new_columns),
+                Event::Resize(new_columns, _) => {
+                    area.columns = usize::from(new_columns);
+                    area.shown.clear();
+                }
                 _ => {}
             }
         }
@@ -143,6 +147,8 @@ struct Area {
     columns: usize,
     /// Where the cursor goes back to on closing, for an inline picker.
     back: Option<(u16, u16)>,
+    /// The lines on screen, so that a frame redraws only those that changed.
+    shown: Vec<String>,
 }
 
 impl Area {
@@ -159,21 +165,33 @@ impl Area {
             rows,
             columns,
             back: Some((column, line)),
+            shown: Vec::new(),
         })
     }
 
-    fn draw<W: Write>(&self, out: &mut W, picker: &mut Picker) -> io::Result<()> {
+    /// Draws a frame: only the lines that differ from those on screen, each written
+    /// over the old one and the rest of its row erased after it, never cleared first,
+    /// and all of it as one synchronized update (mode 2026), which the terminal shows
+    /// at once. Clearing every row and writing it again, several times a second while
+    /// a search ran, made the picker flicker (the user, 2026-10-06).
+    fn draw<W: Write>(&mut self, out: &mut W, picker: &mut Picker) -> io::Result<()> {
         let lines = picker.frame(self.columns.saturating_sub(1).max(1), self.rows);
+        if lines == self.shown {
+            return Ok(());
+        }
+        write!(out, "\x1b[?2026h")?;
         queue!(out, cursor::Hide)?;
         for (i, line) in lines.iter().enumerate() {
+            if self.shown.get(i) == Some(line) {
+                continue;
+            }
             let row = self.top + u16::try_from(i).unwrap_or(u16::MAX);
-            queue!(
-                out,
-                cursor::MoveTo(0, row),
-                terminal::Clear(terminal::ClearType::CurrentLine)
-            )?;
+            queue!(out, cursor::MoveTo(0, row))?;
             write!(out, "{line}")?;
+            queue!(out, terminal::Clear(terminal::ClearType::UntilNewLine))?;
         }
+        write!(out, "\x1b[?2026l")?;
+        self.shown = lines;
         out.flush()
     }
 
@@ -261,6 +279,46 @@ mod tests {
         assert_eq!(rows_for(Some("2"), 50), MIN_ROWS);
         assert_eq!(rows_for(Some("100%"), 50), 49);
         assert_eq!(rows_for(Some("junk"), 50), 20);
+    }
+
+    #[test]
+    fn a_frame_draws_only_what_changed_and_never_clears_a_row_first() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join("one")).unwrap();
+        let mut picker = Picker::new(crate::ui::Setup {
+            root: dir.path().to_path_buf(),
+            typed: String::new(),
+            shows: crate::context::Shows::Folders,
+            then: crate::context::Then::Run,
+            history: Vec::new(),
+            home: None,
+            colours: crate::colours::Colours::none(),
+        });
+        let mut area = Area {
+            top: 1,
+            rows: 8,
+            columns: 60,
+            back: None,
+            shown: Vec::new(),
+        };
+        let mut first = Vec::new();
+        area.draw(&mut first, &mut picker).unwrap();
+        let first = String::from_utf8(first).unwrap();
+        assert!(first.contains("one/"), "{first:?}");
+        // A whole-line clear (ESC [ 2 K) blanks a row before it is written again.
+        assert!(!first.contains("\x1b[2K"), "{first:?}");
+        assert!(first.starts_with("\x1b[?2026h") && first.ends_with("\x1b[?2026l"));
+
+        let mut again = Vec::new();
+        area.draw(&mut again, &mut picker).unwrap();
+        assert!(again.is_empty(), "{:?}", String::from_utf8_lossy(&again));
+
+        picker.key(Key::Char('o'));
+        let mut changed = Vec::new();
+        area.draw(&mut changed, &mut picker).unwrap();
+        let changed = String::from_utf8(changed).unwrap();
+        assert!(changed.contains("> o"), "{changed:?}");
+        assert!(changed.len() < first.len(), "{changed:?}");
     }
 
     #[test]
