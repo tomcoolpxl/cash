@@ -368,9 +368,12 @@ the quiet notes (its default branch is `master`; a first push to `main` was take
 the first start after the real update measured (see "Found along the way"), items 11
 (doctor's `path` line, `--add-to-path`) and 12 (F1) built, and 1.6.0 tagged by the user
 on commit 252f6354. The release workflow now installs, runs and uninstalls the setup on
-the runner every release (the clean-machine run item 6 asked for). Left: the winget
-submission once the 1.6.0 setup has been seen on the releases page and on a clean
-machine, and a look at the F1 screen in the user's own Terminal profile.
+the runner every release (the clean-machine run item 6 asked for). Item 6 done: the
+first winget submission, `tomcoolpxl.cash` 1.7.0 from the installer, is
+[microsoft/winget-pkgs#447760](https://github.com/microsoft/winget-pkgs/pull/447760)
+(2026-10-06, `wingetcreate submit`); once merged, later versions can go through
+`winget-releaser` in the release workflow. Left: a look at the F1 screen in the user's
+own Terminal profile.
 
 ---
 
@@ -499,6 +502,9 @@ script-visible Bash behaviour or a kinder refusal.
   hook. **To do at the 1.5.0 release:** copy the notes and hooks to
   `tomcoolpxl/scoop-bucket`'s `bucket/cash.json` by hand (RELEASING step 7); the
   Excavator only bumps the version and hash.
+- **`ls` prints two blank lines before a folder's `name:` heading** when files and a
+  folder are listed together (`ls s*` with a `sub` folder); GNU prints one. Found by the
+  gzip oracle on 2026-10-06, which renamed its folder to dodge it.
 - **cash never runs a user's `command_not_found_handle`** (found building the install
   hint, 2026-10-06). Bash calls that function, when defined, with the command and its
   arguments instead of printing `command not found`, and its status becomes the
