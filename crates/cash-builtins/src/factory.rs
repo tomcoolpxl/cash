@@ -257,6 +257,10 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
         "start".into(),
         builtin::<win::StartCommand, SE>().with_substitution_files(),
     );
+        "xdg-open".into(),
+        builtin::<xdg_open::XdgOpenCommand, SE>().with_substitution_files(),
+    m.insert("pbcopy".into(), builtin::<pbcopy::PbcopyCommand, SE>());
+    m.insert("pbpaste".into(), builtin::<pbcopy::PbpasteCommand, SE>());
     m.insert(
         "elevate".into(),
         builtin::<win::ElevateCommand, SE>().with_substitution_files(),
@@ -290,6 +294,7 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
         "find".into(),
         builtin::<find::FindCommand, SE>().with_substitution_files(),
     );
+    m.insert("uuidgen".into(), builtin::<uuidgen::UuidgenCommand, SE>());
     m.insert(
         "xargs".into(),
         builtin::<xargs::XargsCommand, SE>().with_substitution_files(),

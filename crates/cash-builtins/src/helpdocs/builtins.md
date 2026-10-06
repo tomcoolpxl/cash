@@ -84,6 +84,8 @@ an entry or page names no builtin.
 ## Terminal and clipboard
 
 - `clear`: Clear the terminal screen and its scrollback.
+- `pbcopy`: Copy standard input to the clipboard, as text.
+- `pbpaste`: Write the clipboard's text to standard output.
 - `reset`: Reset the terminal and the console modes cash relies on.
 - `stty`: Print or change the terminal's settings, in GNU's words, on the console's modes.
 - `tput`: Write a terminal capability as the VT sequence xterm-256color uses.
@@ -99,6 +101,7 @@ an entry or page names no builtin.
 - `winpath`: Convert a path between Windows and Unix spellings.
 
 ## Processes and network
+- `xdg-open`: Open a file, folder or URL with its default program (`start`, under the name scripts try first).
 
 - `fuser`: Show the processes using files or sockets.
 - `killall`: Signal every process with a given name.
@@ -136,6 +139,7 @@ an entry or page names no builtin.
 - `iconv`: Convert text between character sets, through Windows' code pages.
 - `groups`: Print the groups a user belongs to.
 - `hostid`: Print the numeric identifier of this host.
+- `uuidgen`: Print a new UUID: random, time-based, or a hash of a name.
 - `hostname`: Show the machine's name.
 - `id`: Print the user's and groups' identities.
 - `install`: Copy files and set their attributes.

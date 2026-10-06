@@ -82,7 +82,7 @@ cash-test-harness = { workspace = true, features = ["insta"] }
 cash-win32 = { workspace = true, features = ["pseudo-console"] }
 assert_cmd = { workspace = true }
 # Checks the Windows Terminal profile GUID against Terminal's own derivation (UUIDv5).
-uuid = { version = "1.26.1", features = ["v5"] }
+uuid = { workspace = true, features = ["v5"] }
 diff = { workspace = true }
 glob = { workspace = true }
 indent = { workspace = true }

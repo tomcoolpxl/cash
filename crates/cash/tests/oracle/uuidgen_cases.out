@@ -1,0 +1,313 @@
+== the default is a version 4 UUID
+1
+== -r
+1
+== -t is version 1
+1
+== -6
+1
+== -7
+1
+== two random ones differ
+different
+== -C 3
+3
+== -C 3 -t: three different ones, one node
+3
+3
+1
+== -C 0
+0
+== --count=2, -rC 2, -C2, -C +2
+2
+2
+2
+2
+== -x alone is ignored
+1
+2
+== extra words are ignored
+1
+== -- ends the options
+1
+== -m -n @dns -N www.example.com
+5df41881-3aed-3515-88a7-2f4a814cf09e
+rc=0
+== -s -n @dns -N www.example.com
+2ed6657d-e927-568b-95e1-2665a8aea6a2
+rc=0
+== -m -n @url -N http://example.com/
+773536a8-4b7b-383d-9106-697d4d366254
+rc=0
+== -s -n @oid -N 1.3.6.1
+1447fa61-5277-5fef-a9b3-fbc6e44f4af3
+rc=0
+== -m -n @x500 -N cn=x
+dcc2172c-a229-3944-aa35-482747f1711b
+rc=0
+== -m -n 6ba7b810-9dad-11d1-80b4-00c04fd430c8 -N www.example.com
+5df41881-3aed-3515-88a7-2f4a814cf09e
+rc=0
+== -s -n 6BA7B810-9DAD-11D1-80B4-00C04FD430C8 -N www.example.com
+2ed6657d-e927-568b-95e1-2665a8aea6a2
+rc=0
+== --md5 --namespace @dns --name www.example.com
+5df41881-3aed-3515-88a7-2f4a814cf09e
+rc=0
+== --sha1 --namespace=@dns --name=www.example.com
+2ed6657d-e927-568b-95e1-2665a8aea6a2
+rc=0
+== --md --namesp @dns --nam www.example.com
+uuidgen: option '--nam' is ambiguous; possibilities: '--namespace' '--name'
+Try 'uuidgen --help' for more information.
+rc=1
+== -mn @dns -N a
+4c104dd0-4821-30d5-9ce3-0e7a1f8b7c0d
+rc=0
+== -m -n @dns -N 
+c87ee674-4ddc-3efe-a74e-dfe25da5d7b3
+rc=0
+== -m -n @dns -N a -N b
+c4f8d206-80ca-33ae-a830-f58835b1b131
+rc=0
+== -m -n @url -n @dns -N a
+4c104dd0-4821-30d5-9ce3-0e7a1f8b7c0d
+rc=0
+== -m -n @dns -N aé
+2d1f2599-c55a-3980-9c1d-c6f1a30a7539
+rc=0
+== -m -x -n @dns -N 7777
+77761fed-d3fd-32b2-b263-f99be21115a7
+rc=0
+== -s -x -n @dns -N 0A0b
+41018e56-8a95-5310-a9b7-8387e998f0bd
+rc=0
+== -m -x -n @dns -N 
+c87ee674-4ddc-3efe-a74e-dfe25da5d7b3
+rc=0
+== -m -n @dns -N 7777 -x
+77761fed-d3fd-32b2-b263-f99be21115a7
+rc=0
+== --hex -m -n @dns -N 7777
+77761fed-d3fd-32b2-b263-f99be21115a7
+rc=0
+== bad hex
+== -m -x -n @dns -N 777
+uuidgen: not a valid hex string
+Try 'uuidgen --help' for more information.
+rc=1
+== -m -x -n @dns -N zz
+uuidgen: not a valid hex string
+Try 'uuidgen --help' for more information.
+rc=1
+== -m -x -n nonsense -N zz
+uuidgen: not a valid hex string
+Try 'uuidgen --help' for more information.
+rc=1
+== bad options
+== -Z
+uuidgen: invalid option -- 'Z'
+Try 'uuidgen --help' for more information.
+rc=1
+== --bogus
+uuidgen: unrecognized option '--bogus'
+Try 'uuidgen --help' for more information.
+rc=1
+== --bogus=1
+uuidgen: unrecognized option '--bogus=1'
+Try 'uuidgen --help' for more information.
+rc=1
+== -Z -h
+uuidgen: invalid option -- 'Z'
+Try 'uuidgen --help' for more information.
+rc=1
+== --na @dns
+uuidgen: option '--na' is ambiguous; possibilities: '--namespace' '--name'
+Try 'uuidgen --help' for more information.
+rc=1
+== --t
+uuidgen: option '--t' is ambiguous; possibilities: '--time' '--time-v6' '--time-v7'
+Try 'uuidgen --help' for more information.
+rc=1
+== --count
+uuidgen: option '--count' requires an argument
+Try 'uuidgen --help' for more information.
+rc=1
+== -C
+uuidgen: option requires an argument -- 'C'
+Try 'uuidgen --help' for more information.
+rc=1
+== -n
+uuidgen: option requires an argument -- 'n'
+Try 'uuidgen --help' for more information.
+rc=1
+== -N
+uuidgen: option requires an argument -- 'N'
+Try 'uuidgen --help' for more information.
+rc=1
+== --hex=1
+uuidgen: option '--hex' doesn't allow an argument
+Try 'uuidgen --help' for more information.
+rc=1
+== --random=1
+uuidgen: option '--random' doesn't allow an argument
+Try 'uuidgen --help' for more information.
+rc=1
+== missing partners
+== -n @dns
+uuidgen: --namespace requires --name argument
+Try 'uuidgen --help' for more information.
+rc=1
+== -N a
+uuidgen: --name requires --namespace argument
+Try 'uuidgen --help' for more information.
+rc=1
+== -m
+uuidgen: --md5 or --sha1 requires --namespace argument
+Try 'uuidgen --help' for more information.
+rc=1
+== -s
+uuidgen: --md5 or --sha1 requires --namespace argument
+Try 'uuidgen --help' for more information.
+rc=1
+== -m -N a
+uuidgen: --name requires --namespace argument
+Try 'uuidgen --help' for more information.
+rc=1
+== -m -n @dns
+uuidgen: --namespace requires --name argument
+Try 'uuidgen --help' for more information.
+rc=1
+== -n @dns -N a
+uuidgen: --namespace requires --md5 or --sha1
+Try 'uuidgen --help' for more information.
+rc=1
+== -x -n @dns -N zz
+uuidgen: --namespace requires --md5 or --sha1
+Try 'uuidgen --help' for more information.
+rc=1
+== -C 2 -n @dns -N a
+uuidgen: --namespace requires --md5 or --sha1
+Try 'uuidgen --help' for more information.
+rc=1
+== -C 2 -N a
+uuidgen: --name requires --namespace argument
+Try 'uuidgen --help' for more information.
+rc=1
+== -6 -n @dns -N a
+uuidgen: --namespace requires --md5 or --sha1
+Try 'uuidgen --help' for more information.
+rc=1
+== -7 -n @dns
+uuidgen: --namespace requires --name argument
+Try 'uuidgen --help' for more information.
+rc=1
+== -n nonsense
+uuidgen: --namespace requires --name argument
+Try 'uuidgen --help' for more information.
+rc=1
+== namespaces
+== -m -n nonsense -N x
+uuidgen: invalid uuid for namespace: 'nonsense'
+Try 'uuidgen --help' for more information.
+rc=1
+== -m -n @DNS -N x
+uuidgen: unknown namespace alias: '@DNS'
+Try 'uuidgen --help' for more information.
+rc=1
+== -m -n @bogus -N x
+uuidgen: unknown namespace alias: '@bogus'
+Try 'uuidgen --help' for more information.
+rc=1
+== -m -n  -N x
+uuidgen: invalid uuid for namespace: ''
+Try 'uuidgen --help' for more information.
+rc=1
+== -m -n 6ba7b8109dad11d180b400c04fd430c8 -N x
+uuidgen: invalid uuid for namespace: '6ba7b8109dad11d180b400c04fd430c8'
+Try 'uuidgen --help' for more information.
+rc=1
+== -m -n {6ba7b810-9dad-11d1-80b4-00c04fd430c8} -N x
+uuidgen: invalid uuid for namespace: '{6ba7b810-9dad-11d1-80b4-00c04fd430c8}'
+Try 'uuidgen --help' for more information.
+rc=1
+== combinations
+== -r -m
+uuidgen: options --random and --md5 cannot be combined
+rc=1
+== -m -s -n @dns -N a
+uuidgen: options --md5 and --sha1 cannot be combined
+rc=1
+== -s -m -n @dns -N a
+uuidgen: options --sha1 and --md5 cannot be combined
+rc=1
+== -r -t
+uuidgen: options --random and --time cannot be combined
+rc=1
+== -t -r
+uuidgen: options --time and --random cannot be combined
+rc=1
+== -m -t
+uuidgen: options --md5 and --time cannot be combined
+rc=1
+== -t -n @dns -N a
+uuidgen: options --time and --namespace cannot be combined
+rc=1
+== -t -N a
+uuidgen: options --time and --name cannot be combined
+rc=1
+== -r -N a
+uuidgen: options --random and --name cannot be combined
+rc=1
+== -r -n @dns
+uuidgen: options --random and --namespace cannot be combined
+rc=1
+== -C 2 -m -n @dns -N a
+uuidgen: options --count and --md5 cannot be combined
+rc=1
+== -m -n @dns -N a -C 2
+uuidgen: options --md5 and --count cannot be combined
+rc=1
+== -C 2 -s
+uuidgen: options --count and --sha1 cannot be combined
+rc=1
+== -6 -7
+uuidgen: options --time-v6 and --time-v7 cannot be combined
+rc=1
+== -t -6
+uuidgen: options --time and --time-v6 cannot be combined
+rc=1
+== -7 -m
+uuidgen: options --time-v7 and --md5 cannot be combined
+rc=1
+== -6 -m -n @dns -N a
+uuidgen: options --time-v6 and --md5 cannot be combined
+rc=1
+== -r -m -Z
+uuidgen: options --random and --md5 cannot be combined
+rc=1
+== -C 2 -t -r
+uuidgen: options --time and --random cannot be combined
+rc=1
+== counts
+== -C x
+uuidgen: invalid count: 'x'
+rc=1
+== -C -1
+uuidgen: invalid count: '-1': Numerical result out of range
+rc=1
+== -C 99999999999999999999
+uuidgen: invalid count: '99999999999999999999': Numerical result out of range
+rc=1
+== -C 4294967296
+uuidgen: invalid count: '4294967296': Numerical result out of range
+rc=1
+== -C 2x
+uuidgen: invalid count: '2x'
+rc=1
+== -C 
+uuidgen: invalid count: ''
+rc=1
+== -C 0x2
+uuidgen: invalid count: '0x2'
+rc=1

@@ -111,6 +111,25 @@ pub(crate) struct StartCommand {
     target: String,
 }
 
+/// Opens `target` with its default program, as `start` and `xdg-open` do.
+///
+/// A file or folder that exists is resolved against the shell's working directory, not
+/// the process's (cash never changes its own), in every spelling D3 accepts. Anything
+/// else — a URL, `mailto:`, `ms-settings:`, a program's name — goes to the handler as
+/// written. No command processor sees it, so `&` and `%` mean nothing.
+pub(crate) fn open_with_default_program(
+    shell: &cash_core::Shell<impl cash_core::ShellExtensions>,
+    target: &str,
+) -> std::io::Result<()> {
+    let path = shell.absolute_path(Path::new(target));
+    let target = if path.exists() {
+        cash_win32::path::to_backslash(&path)
+    } else {
+        target.to_owned()
+    };
+    cash_win32::shellopen::open(&target, shell.working_dir())
+}
+
 impl builtins::Command for StartCommand {
     type Error = cash_core::Error;
 
@@ -118,18 +137,7 @@ impl builtins::Command for StartCommand {
         &self,
         context: cash_core::ExecutionContext<'_, SE>,
     ) -> Result<ExecutionResult, Self::Error> {
-        // A file or folder that exists is resolved against the shell's working directory,
-        // not the process's (cash never changes its own), in every spelling D3 accepts.
-        // Anything else — a URL, `mailto:`, `ms-settings:`, a program's name — goes to the
-        // handler as written. No command processor sees it, so `&` and `%` mean nothing.
-        let path = context.shell.absolute_path(Path::new(&self.target));
-        let target = if path.exists() {
-            cash_win32::path::to_backslash(&path)
-        } else {
-            self.target.clone()
-        };
-
-        match cash_win32::shellopen::open(&target, context.shell.working_dir()) {
+        match open_with_default_program(context.shell, &self.target) {
             Ok(()) => Ok(ExecutionResult::success()),
             Err(e) => {
                 writeln!(context.stderr(), "start: {}: {e}", self.target)?;

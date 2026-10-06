@@ -11,6 +11,12 @@
 
 // cash (D45): Windows-specific builtins — winpath, start, elevate, detach.
 mod win;
+// cash: `xdg-open`, `start` under the name cross-platform scripts try first.
+mod xdg_open;
+// cash: `pbcopy` and `pbpaste`, macOS's names for the clipboard, on Windows'.
+mod pbcopy;
+// cash: `uuidgen`, util-linux's, checked against 2.42.3 case by case.
+mod uuidgen;
 
 // cash (D60): fish's abbreviations.
 mod abbr;
