@@ -2726,20 +2726,33 @@ most common failure on a bare machine and `diff` the second.
   Microsoft Coreutils and Git for Windows copies behind the builtins, as for every
   shadowed tool; `enable -n grep` reaches them.
 
-### D78 — `tar`, with its compressions in pure Rust
+### D78 — Archive and compression tools, on shared parts
 
-**Status: chosen by the user on 2026-10-07**, by pick list (TODO.md phase 26). Reopens
-D77's "xz and bzip2 stay with Windows' `tar.exe`".
+**Status: chosen by the user on 2026-10-07**, by pick lists (TODO.md phases 26 to 30;
+the design is `research/archive-tools-design.md`). Reopens D77's "xz and bzip2 stay with
+Windows' `tar.exe`". Asked for first as `tar` alone; the user then asked for "a common
+thing" for tar, zip and the rest, designed before anything is built.
 
-- **cash's own `tar`** with GNU tar 1.35's interface, messages and exit codes, on the
-  `tar` crate (the one cargo uses), oracle-tested against GNU tar in WSL. It understands
-  `/c/` and `~` operands as every cash command does, which Windows' `tar.exe` (bsdtar
-  3.8.8) does not, and has GNU's options (`--transform`, `--exclude-vcs`, …) and words.
-  `tar.exe` stays reachable by its path and by `enable -n tar`; doctor names it.
-- **Every common compression in cash**: gzip (`flate2`), bzip2 (`bzip2` on
+- **The family**: `bzip2`, `xz` and `zstd` with their aliases, `tar` (GNU tar 1.35), and
+  `zip`, `unzip`, `zipinfo` (Info-ZIP), each with its original's interface, messages and
+  exit codes, oracle-tested in WSL. `tar` shadows Windows' `tar.exe` (bsdtar 3.8.8),
+  which stays reachable by its path and by `enable -n tar`; doctor names it. Not now: the
+  z-tools, `cpio`, `lzip`.
+- **Two new library crates that know no shell and print nothing**: `cash-archive`
+  (codecs, the archive member, walking the disk, names both ways, safe extraction,
+  matching, listings, and the tar, zip formats) and `cash-getopt` (GNU option parsing,
+  once). Front ends in cash-builtins turn their facts and typed problems into each
+  tool's words. cash-win32 gains one Unix face for a Windows file and the link, time,
+  attribute and name helpers it lacked; cash-core's `Pattern` gains path flags;
+  cash-sed gains one public `s///`.
+- **Moved onto the shared parts, under their own tests**: gzip; `ls` and `stat` (one
+  rule for a file's mode, so `stat`'s answers change for some files, and the group is
+  read rather than the owner repeated); `dos2unix`; the eleven hand-written option
+  parsers and diffutils' own.
+- **Every compression in pure Rust**: gzip (`flate2`), bzip2 (`bzip2` on
   `libbz2-rs-sys`, Trifecta Tech's port, under the bzip2-1.0.6 license, accepted for
   it), xz, lzma and lzip (`lzma-rust2`, a port of XZ for Java), zstd (`ruzstd`, which
-  writes only at its fast level). No C.
+  writes only at its fast level). The `zip` crate is built on the same four.
 - Passed over: uutils/tar, at 0.0.1 less than `tar.exe` already does; `libzstd-rs-sys`,
   a prerelease without a Rust API, to replace `ruzstd` once it has one; `xz2` and
   `liblzma`, which build liblzma's C.

@@ -1,0 +1,290 @@
+# Archive and compression tools: one design
+
+Status: **decided by the user on 2026-10-07** (section 7), nothing built yet; TODO.md
+phases 26 to 30 and spec D78. It replaced a tar-only plan with one design for the whole
+family, as the user asked: "try to make a common thing … think about this properly."
+
+## 1. The family
+
+Every tool below reads or writes the same few things: compressed streams, archive
+members, files on a Windows disk. Built one by one, each would grow its own copy of the
+same code. `gzip` already shows it: of its 2,357 lines, the option parser, the in-place
+file replacement and the message plumbing are not gzip's at all.
+
+| Tool | Interface copied | On Windows today | Git for Windows | Oracle in WSL |
+| --- | --- | --- | --- | --- |
+| `gzip` `gunzip` `zcat` | GNU gzip 1.14 | cash's own (phase 24) | gzip 1.14 | gzip 1.14 |
+| `bzip2` `bunzip2` `bzcat` | bzip2 1.0.8 | nothing (`tar.exe` reads a `.tar.bz2` only) | 1.0.8 | 1.0.8 |
+| `xz` `unxz` `xzcat` `lzma` `unlzma` `lzcat` | XZ Utils 5.8 | nothing | none | 5.8.3 |
+| `zstd` `unzstd` `zstdcat` | zstd 1.5.7 | nothing | none | 1.5.7 |
+| `tar` | GNU tar 1.35 | `tar.exe` = bsdtar 3.8.8 | GNU tar 1.35 | GNU tar 1.35 |
+| `zip` `unzip` `zipinfo` | Info-ZIP zip 3.0, UnZip 6.00 | nothing (`tar.exe` reads zips; PowerShell's `Expand-Archive`) | `unzip` only | all three |
+| `zgrep` `zdiff` `zcmp` `zless` `zmore` (and `bz*`, `xz*`, `zstd*`) | gzip's, bzip2's, xz's scripts | nothing | gzip's | yes |
+| `cpio` | GNU cpio 2.15 | nothing | none | yes |
+| `lzip` | lzip 1.24 | nothing | none | none |
+
+## 2. What cash already has, and what it lacks
+
+From a survey of the code on 2026-10-07 (file references as of `17d79882`).
+
+| Need | Today | Verdict |
+| --- | --- | --- |
+| GNU option parsing (`getopt_long`: clusters, `--name=value`, unique prefixes, ambiguity) | **eleven private copies** of one shape in cash-builtins: gzip, grep, column, hexdump, ss, uuidgen, flock, iconv, watch, free, nc; the `getopt` builtin's own, the most complete (optional values, three orders, long-only); and a clean table-driven `cash-diffutils::getopt`, which cash-builtins cannot reach | one shared parser |
+| Replacing a file in place (temporary name beside it, rename, times and read-only kept) | three copies: gzip's `Target`, `dos2unix`'s `write_replacing`, sed `-i` | one helper |
+| A file's Unix face: mode bits, owner and group, ids, times, link count, identity | `ls` and `stat` each compute a mode, and **disagree** (`ls` asks the access list for `w`; `stat` looks at read-only and the extension); no group is ever read, `ls` shows the owner twice; `id` maps the process to its RID (0 when elevated); `cash-win32::fs` has owner, RID, access check, link count, file identity | one place, which `ls`, `stat` and the archives share |
+| Applying one `s/re/repl/flags` (`tar --transform`) | cash-sed compiles it (`compile`), but the input type has no public constructor, the apply loop is private, and tar's own flags (`r` `s` `h` `x` and capitals) are refused | a small public API in cash-sed |
+| Name patterns with GNU's flags | cash-core's `Pattern` (Bash's matching) has case folding, but `*` always crosses `/`, and there is no leading-folder rule; grep and diff use the `glob` crate instead | flags added to `Pattern` |
+| Making links, setting times and attributes, checking names | none in cash-win32: no symbolic-link maker, no hard-link wrapper (the binary crate has one), no time or attribute setter beyond std, reserved names (`CON` …) known but used only in tests, nothing for `<>:"|?*` or a trailing dot or space | added to cash-win32 |
+| A buffered pull reader for streaming codecs | gzip's `Input` | moves with gzip's codec |
+| Registration, help, doctor | the gzip trio is one module with three names (`command!`); pages are found by `build.rs`; `builtins.md`, `CARRIED`, `DELIBERATE_SHADOWS` are hand lists; `cash --link-tools` links every new builtin by itself; `help tools` has GnuWin32 rows for `zip` and `unzip`, to go when cash carries them | the same for every new tool |
+
+Crates today: `cash-win32` and `cash-parser` are leaves; the tool libraries (`cash-sed`,
+`cash-awk`, `cash-bc`, `cash-diffutils`) depend on no other cash crate; `cash-picker`
+depends on `cash-win32` alone; cash-builtins uses `cash-sed` and `cash-picker` in
+process.
+
+## 3. Layers
+
+```
+cash-builtins: front ends; each tool's options, words and exit codes, the shell's streams
+┌───────────────────────┬──────────────┬─────────────────────┬────────────────────┐
+│ compressors            │ tar          │ zip unzip zipinfo   │ z-tools            │
+│ one driver,            │ GNU tar 1.35 │ Info-ZIP            │ a codec in front   │
+│ a profile per tool     │              │                     │ of grep, diff, less│
+└──────────┬────────────┴──────┬───────┴─────────┬───────────┴─────────┬──────────┘
+           │                   │                 │                     │
+cash-getopt: getopt_long once, with GNU tar's old-style keys; for every GNU-style tool
+cash-archive: a library; knows no shell, prints nothing
+  codec    gzip bzip2 xz lzma lzip zstd: recognise, decode, encode, describe
+  member   an archive entry: name, kind, mode, times, owner, link target
+  walk     files on disk → members (operands, -C, recursion, excludes, hard links)
+  names    member names ↔ Windows paths, both ways, safely
+  extract  members → files (overwrite rules, links, times, read-only)
+  select   which members an operand or a pattern names
+  listing  mode strings, dates, quoted names
+  formats  tar · zip · cpio, each reading and writing members
+cash-win32: the Unix face of a Windows file; replace in place; links, times, attributes,
+            names Windows cannot hold
+cash-core: Pattern with path flags        cash-sed: one s/// compiled and applied
+```
+
+**The rule that does the most work: libraries return facts and typed problems; a front
+end turns them into its tool's words.** GNU tar says `tar: x: Cannot open: Permission
+denied`, UnZip says `error:  cannot create x`; both receive the same
+`Problem::Open { name, error }`.
+
+### 3.1 `cash-getopt` (new leaf crate)
+
+`cash-diffutils::getopt` lifted out and grown to what the `getopt` builtin can do:
+
+```rust
+pub enum Arg { No, Required, Optional }
+pub struct Short { pub letter: char, pub arg: Arg, pub id: &'static str }
+pub struct Long  { pub name: &'static str, pub arg: Arg, pub id: &'static str }
+pub enum Order { Permute, StopAtOperand, InPlace }
+pub enum Item { Option { id: &'static str, value: Option<OsString> }, Operand(OsString) }
+pub enum Problem { Unknown(String), Ambiguous { given: String, candidates: Vec<&'static str> },
+                   MissingValue(String), UnwantedValue(String) }
+pub fn parse(args: &[OsString], shorts: &[Short], longs: &[Long], order: Order)
+    -> Result<Vec<Item>, Problem>;
+pub fn tar_old_style(args: &[OsString], shorts: &[Short]) -> Vec<OsString>; // tar xzf a.tgz
+```
+
+Items come back in order, so `tar -C dir file` keeps its meaning; problems are typed, so
+each tool words them (`gzip:` with its backtick hint, `tar:` with GNU tar's). The
+diffutils copy and the new tools use it at once; the eleven copies move over one by one
+later, each under its own oracle (a TODO item, not this phase).
+
+### 3.2 `codec` (in cash-archive)
+
+```rust
+pub enum Codec { Gzip, Bzip2, Xz, Lzma, Lzip, Zstd }
+impl Codec {
+    pub fn sniff(first: &[u8]) -> Option<Codec>;                    // magic bytes
+    pub fn by_suffix(name: &str) -> Option<(Codec, &'static str)>;  // .tgz → (Gzip, ".tar")
+    pub fn levels(self) -> RangeInclusive<u32>;  pub fn default_level(self) -> u32;
+}
+pub fn decoder(codec: Codec, from: Box<dyn Read>) -> Box<dyn Read>;      // concatenated streams too
+pub fn encoder(codec: Codec, to: Box<dyn Write>, level: u32) -> Box<dyn Finish>;
+pub fn describe(codec: Codec, from: impl Read) -> Result<StreamInfo, CodecError>; // -l
+pub enum CodecError { Format, Checksum, Truncated, Unsupported(&'static str), Io(io::Error) }
+```
+
+Backends, all Rust: `flate2` (deflate), `bzip2` on `libbz2-rs-sys`, `lzma-rust2` (xz,
+lzma, lzip), `ruzstd` (zstd; writes at its fast level only, until `libzstd-rs-sys` has a
+Rust API). The `zip` crate is built on the same four, so zip members come out of the
+same code. gzip's member reader and writer (header, trailer, the `-N` name and time,
+multiple members, `-l`'s numbers) and its `Input` reader move here as `codec::gzip`.
+
+### 3.3 `member`
+
+```rust
+pub struct Member {
+    pub name: MemberName,            // bytes, '/'-separated, as the archive has them
+    pub kind: Kind,                  // File, Dir, Symlink, HardLink, Char, Block, Fifo
+    pub size: u64,
+    pub mode: u32,                   // Unix bits
+    pub mtime: Timestamp,            // seconds and nanoseconds; atime, ctime when known
+    pub owner: Owner,                // uid, gid, user name, group name
+    pub link: Option<MemberName>,
+    pub device: Option<(u32, u32)>,
+    pub windows: Option<Attributes>, // read-only, hidden, system: zip keeps them
+}
+```
+
+tar, zip and cpio read into it and write from it; `walk` makes it; `extract` and
+`listing` take it. What only one format has (a tar member's PAX records, a zip entry's
+method and comment) travels beside it.
+
+### 3.4 `walk`
+
+Operands in order, with `-C`-style folder changes as steps; recursion; an exclusion
+predicate the front end supplies (`--exclude*`, zip's `-x`); dereferencing rules; hard
+links found by file identity (`cash-win32::fs::file_info`), so a second name is stored as
+a link; sort orders; "changed as we read it" by size and time before and after. Mode,
+owner and times from cash-win32's Unix face (3.8), the same that `ls` and `stat` show.
+
+### 3.5 `names`
+
+Storing: `\` to `/`; a drive letter or a leading `/` removed in the words GNU's DOS
+builds use (`Removing leading 'C:/' from member names`); `..` as the tool says.
+Extracting: `..` that would leave the target refused; absolute names made relative;
+names Windows cannot hold reported, never silently changed (3.8); long paths through
+`\\?\`; `--strip-components`; a rename hook the front end fills (`--transform` with
+cash-sed, 3.10).
+
+### 3.6 `extract`
+
+One safe writer: folders, files streamed from the member, hard links to what was already
+extracted, symbolic links when Windows allows them (Developer Mode or an elevated shell)
+and a typed refusal otherwise; an overwrite policy (keep, skip, keep newer, overwrite,
+unlink first, ask); times; read-only; folder times set after their contents. It never
+writes through a link that leads out of the target. `tar -O` and `unzip -p` are the same
+writer aimed at standard output.
+
+### 3.7 `select`, `listing`, `formats`
+
+- **select**: an operand or pattern against member names with the flags the tools
+  differ on: literal or wildcards, anchored, case, whether `*` crosses `/`, a folder
+  naming what is under it (tried by `select` itself, folder by folder). The matching is
+  a trait the front end fills with cash-core's `Pattern` (3.9), so cash-archive needs
+  no shell crate.
+- **listing**: mode strings, dates in the shell's `TZ` (the front end passes the zone),
+  sizes, name quoting (GNU's escape style, UnZip's raw).
+- **tar**: its own block loop, for GNU's behaviour on damaged archives (`Skipping to
+  next header`, a lone zero block, a bad checksum), on the `tar` crate's `Header` (the
+  octal and base-256 fields, the GNU and ustar layouts) and its PAX parser; the crate's
+  own iterator stops at the first bad header. Writing builds the 512-byte headers here,
+  so a deterministic archive is GNU's byte for byte (the checksum field's format, padding
+  to the 10,240-byte record).
+- **zip**: the `zip` crate (zip-rs, MIT, 8.6, the same codecs), with Info-ZIP's extra
+  fields (extended times, Unix modes), so archives round-trip with Info-ZIP, Explorer and
+  `tar.exe`.
+- **cpio**: newc and odc, small enough to write here.
+
+### 3.8 cash-win32: one Unix face for a Windows file
+
+```rust
+pub struct UnixView { pub mode: u32, pub owner: Account, pub group: Account,
+                      pub links: u32, pub times: Times, pub identity: FileInfo }
+pub struct Account { pub name: String, pub id: u32 }        // id: the RID, as `id` and `stat` use it
+pub fn unix_view(path: &Path, follow: bool) -> io::Result<UnixView>;
+pub fn replace(target: &Path) -> io::Result<Replacement>;   // gzip's Target, for everyone
+pub fn symlink(target: &Path, link: &Path, kind: LinkKind) -> io::Result<()>;
+pub fn hard_link(existing: &Path, new: &Path) -> io::Result<()>;
+pub fn set_times(path: &Path, times: &Times) -> io::Result<()>;   // folders too
+pub fn set_attributes(path: &Path, attributes: Attributes) -> io::Result<()>;
+pub fn check_name(component: &OsStr) -> Result<(), NameProblem>; // reserved, <>:"|?*, trailing . or space
+```
+
+`ls`'s rule for the mode (the access list decides `w`) is the one kept; `stat` moves to
+it, which changes what `stat` prints for some files, and the group is read for the first
+time instead of repeating the owner.
+
+### 3.9 cash-core: `Pattern` with path flags
+
+`Pattern` gains `set_pathname` (`*` and `?` do not cross `/`) and `set_period` (a
+leading dot only by name), the two FNM flags GNU tar and UnZip need; Bash's own matching
+is unchanged, since both default off.
+
+### 3.10 cash-sed: one `s///`
+
+```rust
+pub fn compile_substitution(expr: &[u8], extra_flags: &dyn Fn(u8) -> bool)
+    -> Result<Substitution, String>;
+pub fn substitute(s: &Substitution, input: &[u8]) -> Option<Vec<u8>>;
+```
+
+`extra_flags` lets tar accept its `r` `s` `h` `x` flags; nothing about `sed` itself
+changes.
+
+### 3.11 The compressor driver (cash-builtins)
+
+`gzip`, `bzip2`, `xz`, `zstd` and their aliases have one shape: compress or decompress
+files in place by suffix, `-c`, `-d`, `-k`, `-f`, `-t`, `-q`, `-v`, levels, standard
+input and output, a refusal to write compressed data to a terminal. One driver does the
+shape; a `Profile` per tool says what differs: names and their presets (`bzcat` =
+`bzip2 -dc`), the option table, defaults (`zstd` keeps its input, the others delete
+it), suffixes, messages, exit statuses (gzip 0/1/2, bzip2 0/1/2/3, zstd 0/1), the `-l`
+table. gzip moves onto it first, with its oracle unchanged as the proof.
+
+## 4. Rules every part keeps
+
+- **No C.** Every backend is Rust; `cargo deny` and the release's license list stay the
+  gate (bzip2-1.0.6 accepted on 2026-10-07).
+- **Libraries know no shell**: no current folder (front ends resolve operands with the
+  shell's), no terminal, no printing. They take `Read`/`Write` streams, a probe for
+  Ctrl-C (the front end passes the shell's pending-interrupt flag, as `watch` and
+  `flock` poll it), and an observer for `-v` lines, so they interleave with errors in
+  GNU's order.
+- **Words belong to front ends**, copied exactly from their tool; the oracles check them.
+- **Security**: `..`, absolute names and links out of the target refused on extraction;
+  control characters escaped in listings; no size limits, as the originals have none.
+- **Windows facts in one place**: modes, owners, times, links, names, long paths, all in
+  cash-win32, used by `walk`, `names`, `extract`, and by `ls` and `stat`.
+- **Built-ins, in process**, registered like the gzip trio (one module, several names),
+  each with `.with_substitution_files()`.
+
+## 5. Tests
+
+- Libraries: round trips for every codec and format; a shared corpus of damaged inputs;
+  `cash-getopt` against the `getopt` builtin's oracle.
+- Each tool: an oracle script under the original in WSL (`tests/oracle/*_cases.sh`), as
+  gzip has, every message and status.
+- Across tools: what cash makes, read by the originals (GNU tar, UnZip, Explorer,
+  `tar.exe`), and the originals' archives read by cash.
+- The moved code keeps its tests: gzip's oracle, `ls`'s and `stat`'s, `dos2unix`'s,
+  diff's and cmp's.
+
+## 6. Order of work
+
+1. **The groundwork**: `cash-getopt`; cash-win32's Unix face and helpers, with `ls`,
+   `stat` and `dos2unix` moved onto them; cash-archive with `codec`; the compressor
+   driver with gzip moved onto it. Nothing new for the user yet, and every move has a
+   test that already passes.
+2. **`bzip2`, `xz`, `zstd`** with their aliases: a bare `.bz2`, `.xz` or `.zst` has no
+   reader on Windows today.
+3. **`member`, `names`, `walk`, `extract`, `select`, `listing`, and `tar`**, with
+   cash-core's flags and cash-sed's `s///`.
+4. **`zip`, `unzip`, `zipinfo`** on the same layers; the GnuWin32 rows leave `help tools`.
+5. Not wanted now: the z-tools, `cpio`, `lzip`.
+
+## 7. Decided by the user (2026-10-07, by pick lists)
+
+1. **The family**: the `bzip2`, `xz` and `zstd` commands with their aliases, `tar`, and
+   `zip`, `unzip`, `zipinfo`. Not now: the z-tools, `cpio`, `lzip`.
+2. **The crates**: `cash-archive` and `cash-getopt`, both new.
+3. **Moved onto the shared parts**: gzip; `ls` and `stat`; `dos2unix`; and all eleven
+   option parsers, not later but in the groundwork.
+4. **The order**: the groundwork (phases 26 and 27), the compressors (28), tar (29),
+   zip (30).
+
+## 8. Open, decided later in their phases
+
+- One deflate backend for all: `miniz_oxide` (gzip's today) or `zlib-rs` (the `zip`
+  crate's default, faster, the same output as zlib).
+- A file's numeric owner in an archive: the RID (`id`'s and `stat`'s number today), or
+  MSYS's mapping, which Git Bash's tar writes.
+- What a zip made in cash says it was made on (MS-DOS or Unix), which decides how
+  Linux's UnZip restores its modes.
+- `zstd` levels above `ruzstd`'s fast one.

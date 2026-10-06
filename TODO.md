@@ -474,14 +474,59 @@ script-visible Bash behaviour or a kinder refusal.
    `C`, `POSIX`, `C.UTF-8` and the Windows locales as `en_US.UTF-8` names; bare `locale`
    printing `LANG`, `LC_*`), the values Windows has, GNU's output shapes.
 
-## Phase 26. `tar`
+## Phases 26 to 30. Archive and compression tools, on shared parts
 
-Chosen by the user on 2026-10-07, by pick list: cash's own `tar`, GNU tar 1.35's interface,
-messages and exit codes, on the `tar` crate (composefs/tar-rs, MIT or Apache-2.0), with
-every common compression in pure Rust; reopens D77's "xz and bzip2 stay with `tar.exe`".
-Windows' own `tar.exe` (bsdtar 3.8.8) stays reachable by its path and by `enable -n tar`.
-uutils/tar (0.0.1: `-c -x -t -f -z --zstd -v -P` only) and `libzstd-rs-sys` (a
-prerelease without a Rust API) were looked at and passed over; `xz2` and `liblzma` are C.
+Chosen by the user on 2026-10-07, by pick lists, after asking for "a common thing"
+rather than tar alone: the design is `research/archive-tools-design.md` (D78). The
+family: the `bzip2`, `xz` and `zstd` commands with their aliases, `tar`, and `zip`,
+`unzip`, `zipinfo`; the z-tools, `cpio` and `lzip` are not wanted now. Two new library
+crates, `cash-archive` and `cash-getopt`. Everything in pure Rust; the bzip2-1.0.6
+license accepted for `libbz2-rs-sys`. Order: the groundwork, the compressors, tar, zip.
+Passed over: uutils/tar (0.0.1, less than `tar.exe` does), `libzstd-rs-sys` (a
+prerelease without a Rust API), `xz2` and `liblzma` (C).
+
+## Phase 26. `cash-getopt`, and every option parser on it
+
+1. **The crate**: `cash-diffutils::getopt` lifted into a leaf crate and grown to the
+   `getopt` builtin's reach: optional values, the three orders (permute, stop at the
+   first operand, in place), long-only, items returned in order, typed problems that
+   each tool words; GNU tar's old-style keys (`tar xzf a.tgz`) as a helper.
+2. **Onto it, each under its own tests and oracle**: diff and cmp; gzip; grep (with its
+   `-NUM`); column; hexdump; ss; uuidgen; flock (stops at the first operand); iconv;
+   watch (POSIX order); free (which takes no prefixes today, though procps's does);
+   nc; and the `getopt` builtin itself where its canonical output allows.
+
+## Phase 27. One Unix face for a Windows file
+
+1. **cash-win32**: `unix_view` (mode, owner and group with their RIDs, link count,
+   times to the nanosecond, identity), with `ls`'s rule for the mode (the access list
+   decides `w`); `replace` (gzip's `Target`); `symlink` (Developer Mode or elevated, a
+   typed refusal otherwise), `hard_link`, `set_times` (folders too), `set_attributes`;
+   `check_name` (reserved names, `<>:"|?*`, a trailing dot or space).
+2. **Onto it**: `ls` (the group read for the first time, not the owner again), `stat`
+   (its mode follows `ls`'s rule, so it changes for some files), `dos2unix` (gains the
+   read-only handling it lacks), gzip's in-place replacement.
+
+## Phase 28. `cash-archive`'s codecs, the compressor driver, `bzip2`, `xz`, `zstd`
+
+1. **`codec`**: gzip (flate2), bzip2 (`bzip2` on `libbz2-rs-sys`), xz, lzma and lzip
+   (`lzma-rust2`), zstd (`ruzstd`, writing at its fast level); recognised by magic and by
+   suffix, concatenated streams, `-l`'s facts, typed errors; gzip's member code and its
+   `Input` reader moved in. TODO, later: `libzstd-rs-sys` once it has a Rust API.
+2. **The driver**: one in-place compress/decompress engine with a `Profile` per tool
+   (names and presets, options, defaults, suffixes, messages, exit statuses, `-l`); gzip
+   moved onto it first, its oracle unchanged.
+3. **`bzip2` `bunzip2` `bzcat`** (bzip2 1.0.8), **`xz` `unxz` `xzcat` `lzma` `unlzma`
+   `lzcat`** (XZ Utils 5.8), **`zstd` `unzstd` `zstdcat`** (zstd 1.5.7): options,
+   messages and statuses from WSL oracles; pages, `builtins.md`, `CARRIED`.
+
+## Phase 29. `tar`
+
+cash's own `tar`, GNU tar 1.35's interface, messages and exit codes, on cash-archive's
+`member`, `names`, `walk`, `extract`, `select` and `listing`, built in this phase, and on
+the `tar` crate's `Header` and PAX parser with a block loop of cash's own. Windows' own
+`tar.exe` (bsdtar 3.8.8) stays reachable by its path and by `enable -n tar`. Needs
+cash-core's `Pattern` path flags and cash-sed's one-`s///` entry point (design 3.9, 3.10).
 
 1. **Reading: `-t` and `-x`**: ustar, GNU (long names and links, sparse members read)
    and PAX headers; `-f FILE` and `-` (default `-`, or `TAPE`), refusing a terminal as GNU
@@ -499,21 +544,31 @@ prerelease without a Rust API) were looked at and passed over; `xz2` and `liblzm
    `--mode`, `--mtime`, `--numeric-owner`, `--sort=name|none|inode`, `--remove-files`,
    `-a`; "Removing leading `/'", and a drive letter removed as GNU's DOS builds remove it;
    byte for byte GNU tar's archive where GNU's is deterministic.
-3. **Compression**: `-z` (`flate2`, already in), `-j` (`bzip2` on `libbz2-rs-sys`, the
-   license `bzip2-1.0.6` accepted for it), `-J`, `--lzma`, `--lzip` (`lzma-rust2`),
-   `--zstd` (`ruzstd`: complete reading, writing at its fast level, about zstd's level
-   1, so archives somewhat larger than GNU's level 3); `-Z`, `--lzop` and
-   `-I PROGRAM` said plainly. TODO: move `--zstd` to `libzstd-rs-sys` once it has a Rust
-   API and a release.
+3. **Compression** from phase 28's codecs: `-z`, `-j`, `-J`, `--lzma`, `--lzip`,
+   `--zstd` (archives somewhat larger than GNU's, whose zstd writes at level 3), `-a`;
+   `-Z`, `--lzop` and `-I PROGRAM` said plainly.
 4. **Changing archives**: `-r`, `-u`, `-A`, `-d` (`--compare`), `--delete`, on
    uncompressed archives as GNU allows them.
-5. **Windows**: modes from `ls`'s answer, owner and group names and ids from `id`'s,
-   read-only kept, times through `filetime`; symbolic links made when Windows allows it
-   (Developer Mode), else GNU's "Cannot create symlink" and status 2; names Windows cannot
-   hold reported, not mangled; long paths.
-6. The page, `builtins.md`, `help tools`, `CARRIED`, `DELIBERATE_SHADOWS` (System32's
-   `tar.exe`), the README's tool list, and an oracle: `tests/oracle/tar_cases.sh` under
-   GNU tar 1.35 in WSL, with GNU gzip, bzip2, xz and zstd beside it.
+5. **Windows**, from phase 27's Unix face: modes, owners and their ids, read-only,
+   times; symbolic links made when Windows allows it, else GNU's "Cannot create symlink"
+   and status 2; names Windows cannot hold reported, not mangled; long paths.
+6. The page, `builtins.md`, `CARRIED`, `DELIBERATE_SHADOWS` (System32's `tar.exe`), the
+   README's tool list, and an oracle: `tests/oracle/tar_cases.sh` under GNU tar 1.35 in
+   WSL, with GNU gzip, bzip2, xz and zstd beside it; archives cash makes read by GNU tar
+   and `tar.exe`, and theirs by cash.
+
+## Phase 30. `zip`, `unzip`, `zipinfo`
+
+1. **On the `zip` crate** (zip-rs, MIT, 8.6) with phase 28's codecs (deflate, deflate64,
+   bzip2, lzma, xz; zstd and PPMd as they allow without C), and on phase 29's `walk`,
+   `names`, `extract`, `select`, `listing`: Info-ZIP zip 3.0's and UnZip 6.00's options,
+   messages and exit statuses, `zipinfo`'s listings; Info-ZIP's extra fields (extended
+   times, Unix modes) so archives round-trip with Info-ZIP, Explorer and `tar.exe`;
+   writing to standard output streamed; traditional encryption read (`-P`).
+2. The pages, `builtins.md`, `CARRIED`; the GnuWin32 `zip` and `unzip` rows leave
+   `help tools` and `tests/fixtures/tools-ids.txt`; oracles under Info-ZIP in WSL.
+3. Decided in the phase: one deflate backend for all (`miniz_oxide` or `zlib-rs`), the
+   numeric owner (RID or MSYS's mapping), and what host a zip says it was made on.
 
 ---
 
