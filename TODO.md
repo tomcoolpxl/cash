@@ -303,6 +303,21 @@ later").
    message and status 127 only. `cash doctor` names the same two commands for what it
    finds missing.
 
+Built on 2026-10-06 (items 1–5, 8 and 9; 6 and 7 follow the first release that carries
+the installer): `packaging/inno/cash.iss` and its step in the release workflow;
+`cash --install-finish`, `--install-remove` and `--update [--check]`
+(`crates/cash/src/installer.rs`, junctions in `cash-win32/src/junction.rs`); the
+`installing` and `tools` help topics; the hint in the shell's error formatter; doctor's
+`install` line. Two details differ from the plan above: Windows renames a folder whose
+exe is running (only the delete fails), so a version folder is judged in use by a
+write-open of its `cash.exe` before anything is touched; and `ln -s DIR` makes a real
+symbolic link, which needs a privilege, so the `current` junction is set by
+`FSCTL_SET_REPARSE_POINT` in place, never half-moved. The installer compiles here (Inno
+Setup 6.7.3 from Scoop, 10.7 MB from the 1.4.4 files); an end-to-end silent install is
+exercised with HOME, LOCALAPPDATA and the registry key for the user PATH pointed at a
+scratch folder, since this machine's cash is Scoop's and the installer refuses to run
+beside one.
+
 ---
 
 ## Found along the way
@@ -325,6 +340,12 @@ later").
   hook. **To do at the 1.5.0 release:** copy the notes and hooks to
   `tomcoolpxl/scoop-bucket`'s `bucket/cash.json` by hand (RELEASING step 7); the
   Excavator only bumps the version and hash.
+- **cash never runs a user's `command_not_found_handle`** (found building the install
+  hint, 2026-10-06). Bash calls that function, when defined, with the command and its
+  arguments instead of printing `command not found`, and its status becomes the
+  command's. cash prints the message regardless; the hint is suppressed when the function
+  is defined, as decided, but the function itself does not run. Implement Bash's
+  behaviour, with the hint only when no function is defined.
 - A test in the full suite leaves `x.lnk` in the repository root: a 0-byte named pipe as
   MSYS2 makes them (its `mkfifo` writes a FIFO as a special `.lnk` file), timestamped
   during the 1.4.3 gate on 2026-10-06. No test names `x` with `mkfifo`; one of them runs
