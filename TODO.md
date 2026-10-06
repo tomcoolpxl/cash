@@ -501,6 +501,12 @@ script-visible Bash behaviour or a kinder refusal.
   are cash's. They now say the listed cash is that window. **Waits for the user's yes:**
   push the synced notes, a local commit in `C:\Users\thraa\github\scoop-bucket`, to
   `tomcoolpxl/scoop-bucket`.
+- **CI's annotations show four `ENOENT ... opendir 'D:\a\cash\cash\target\doc\cash_core\tests\trybuild'`**
+  (and `...\tests\target`) errors on every green run, 1.8.0's and 1.8.1's included
+  (seen 2026-10-06). The job passes; the cleanup of the Rust Cache step
+  (`Swatinem/rust-cache`, `.github/workflows/ci.yml`) walks `target\doc` and trips on
+  folders that are gone. Find what makes `target\doc\cash_core\tests` and keep it out of
+  the documentation, or exclude `target\doc` from the cache.
 - **`ls` prints two blank lines before a folder's `name:` heading** when files and a
   folder are listed together (`ls s*` with a `sub` folder); GNU prints one. Found by the
   gzip oracle on 2026-10-06, which renamed its folder to dodge it.
