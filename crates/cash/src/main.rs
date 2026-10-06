@@ -58,9 +58,9 @@ fn main() {
     }
 
     // `cash --link-tools` and `--unlink-tools` (D65), `--terminal-profile` (D38),
-    // `--init-rc` (D69) and the installer's `--install-finish`, `--install-remove` and
-    // `--update` (D75), like `cash doctor`, act on the installation rather than running
-    // anything in a shell.
+    // `--init-rc` (D69), the installer's `--install-finish`, `--install-remove` and
+    // `--update` (D75) and `--add-to-path`/`--remove-from-path` for cash's own folder,
+    // like `cash doctor`, act on the installation rather than running anything in a shell.
     let args: Vec<String> = std::env::args().collect();
     if let Some(status) = link_tools::command(&args)
         .or_else(|| terminal_profile::command(&args))

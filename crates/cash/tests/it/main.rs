@@ -137,6 +137,8 @@ mod long_folders;
 mod ls_builtin;
 mod msys_args;
 mod namerefs;
+// `cash --add-to-path`, `--remove-from-path` and doctor's `path` line: the folder that
+// stands for this cash.exe on the user PATH, per layout.
 mod own_path;
 // `nc`, OpenBSD netcat's: connecting, scanning, listening and the data between the two.
 mod nc_builtin;

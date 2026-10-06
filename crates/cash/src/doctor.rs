@@ -245,8 +245,23 @@ fn check_shells(findings: &mut Vec<Finding>, entries: &[PathBuf], pathext: &[Str
     }
 }
 
+/// Whether a new window finds `cash`: the `cash` line above reports in-shell resolution,
+/// which is always cash, so a portable cash whose folder is on no PATH still reads `ok`
+/// there. This line asks whether the folder that stands for this `cash.exe` (`current`
+/// for an installed one, Scoop's shims for Scoop's, its own for a portable one) is on the
+/// user or the machine PATH.
 fn check_own_path(findings: &mut Vec<Finding>) {
     let Some(report) = crate::own_path::doctor_report() else {
+        return;
+    };
+    findings.push(Finding {
+        level: if report.ok { Level::Ok } else { Level::Note },
+        subject: "path".into(),
+        detail: report.detail,
+        fix: report.fix,
+    });
+}
+
 /// What cash's `sudo` elevates through: gsudo where it is installed, else Windows' own
 /// `sudo`, whose new-window mode keeps a command's output in another window.
 fn check_sudo(findings: &mut Vec<Finding>, entries: &[PathBuf], pathext: &[String], cwd: &Path) {
