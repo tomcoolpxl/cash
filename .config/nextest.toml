@@ -120,3 +120,5 @@ success-output = "final"
 [[profile.default.overrides]]
 filter = 'package(cash-sed)'
 slow-timeout = { period = "15s", terminate-after = 3 }
+# Runs the tput oracle script, some 450 `tput | od | sed` pipelines of builtins, one after
+filter = 'binary(it) and test(=tput_builtin::tput_matches_ncurses)'

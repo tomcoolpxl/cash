@@ -1,0 +1,881 @@
+== every string capability xterm-256color has, without parameters
+acsc= ` ` a a f f g g i i j j k k l l
+ m m n n o o p p q q r r s s t t
+ u u v v w w x x y y z z { { | |
+ } } ~ ~
+bel= \a
+blink= 033 [ 5 m
+bold= 033 [ 1 m
+cbt= 033 [ Z
+civis= 033 [ ? 2 5 l
+clear= 033 [ H 033 [ 2 J 033 [ 3 J
+cnorm= 033 [ ? 1 2 l 033 [ ? 2 5 h
+cr= \r
+csr= 033 [ % i % p 1 % d ; % p 2 % d r
+cub= 033 [ % p 1 % d D
+cub1= \b
+cud= 033 [ % p 1 % d B
+cud1= \n
+cuf= 033 [ % p 1 % d C
+cuf1= 033 [ C
+cup= 033 [ % i % p 1 % d ; % p 2 % d H
+cuu= 033 [ % p 1 % d A
+cuu1= 033 [ A
+cvvis= 033 [ ? 1 2 ; 2 5 h
+dch= 033 [ % p 1 % d P
+dch1= 033 [ P
+dim= 033 [ 2 m
+dl= 033 [ % p 1 % d M
+dl1= 033 [ M
+ech= 033 [ % p 1 % d X
+ed= 033 [ J
+el= 033 [ K
+el1= 033 [ 1 K
+flash= 033 [ ? 5 h 033 [ ? 5 l
+home= 033 [ H
+hpa= 033 [ % i % p 1 % d G
+ht= \t
+hts= 033 H
+ich= 033 [ % p 1 % d @
+il= 033 [ % p 1 % d L
+il1= 033 [ L
+ind= \n
+indn= 033 [ % p 1 % d S
+initc= 033 ] 4 ; % p 1 % d ; r g b : % p
+ 2 % { 2 5 5 } % * % { 1 0 0 0 }
+ % / % 2 . 2 X / % p 3 % { 2 5 5
+ } % * % { 1 0 0 0 } % / % 2 . 2
+ X / % p 4 % { 2 5 5 } % * % { 1
+ 0 0 0 } % / % 2 . 2 X 033 \
+invis= 033 [ 8 m
+is2= 033 [ ! p 033 [ ? 3 ; 4 l 033 [ 4 l 033
+ >
+kDC= 033 [ 3 ; 2 ~
+kEND= 033 [ 1 ; 2 F
+kHOM= 033 [ 1 ; 2 H
+kIC= 033 [ 2 ; 2 ~
+kLFT= 033 [ 1 ; 2 D
+kNXT= 033 [ 6 ; 2 ~
+kPRV= 033 [ 5 ; 2 ~
+kRIT= 033 [ 1 ; 2 C
+ka1= 033 O w
+ka3= 033 O y
+kb2= 033 O u
+kbeg= 033 O E
+kbs= 177
+kc1= 033 O q
+kc3= 033 O s
+kcbt= 033 [ Z
+kcub1= 033 O D
+kcud1= 033 O B
+kcuf1= 033 O C
+kcuu1= 033 O A
+kdch1= 033 [ 3 ~
+kend= 033 O F
+kent= 033 O M
+kf1= 033 O P
+kf2= 033 O Q
+kf3= 033 O R
+kf4= 033 O S
+kf5= 033 [ 1 5 ~
+kf6= 033 [ 1 7 ~
+kf7= 033 [ 1 8 ~
+kf8= 033 [ 1 9 ~
+kf9= 033 [ 2 0 ~
+kf10= 033 [ 2 1 ~
+kf11= 033 [ 2 3 ~
+kf12= 033 [ 2 4 ~
+khome= 033 O H
+kich1= 033 [ 2 ~
+kind= 033 [ 1 ; 2 B
+kmous= 033 [ <
+knp= 033 [ 6 ~
+kpp= 033 [ 5 ~
+kri= 033 [ 1 ; 2 A
+mc0= 033 [ i
+mc4= 033 [ 4 i
+mc5= 033 [ 5 i
+meml= 033 l
+memu= 033 m
+mgc= 033 [ ? 6 9 l
+nel= 033 E
+oc= 033 ] 1 0 4 \a
+op= 033 [ 3 9 ; 4 9 m
+rc= 033 8
+rep= % p 1 % c 033 [ % p 2 % { 1 } % -
+ % d b
+rev= 033 [ 7 m
+ri= 033 M
+rin= 033 [ % p 1 % d T
+ritm= 033 [ 2 3 m
+rmacs= 033 ( B
+rmam= 033 [ ? 7 l
+rmcup= 033 [ ? 1 0 4 9 l 033 [ 2 3 ; 0 ; 0
+ t
+rmir= 033 [ 4 l
+rmkx= 033 [ ? 1 l 033 >
+rmm= 033 [ ? 1 0 3 4 l
+rmso= 033 [ 2 7 m
+rmul= 033 [ 2 4 m
+rs1= 033 c 033 ] 1 0 4 \a
+rs2= 033 [ ! p 033 [ ? 3 ; 4 l 033 [ 4 l 033
+ >
+sc= 033 7
+setab= 033 [ % ? % p 1 % { 8 } % < % t 4
+ % p 1 % d % e % p 1 % { 1 6 } %
+ < % t 1 0 % p 1 % { 8 } % - % d
+ % e 4 8 ; 5 ; % p 1 % d % ; m
+setaf= 033 [ % ? % p 1 % { 8 } % < % t 3
+ % p 1 % d % e % p 1 % { 1 6 } %
+ < % t 9 % p 1 % { 8 } % - % d %
+ e 3 8 ; 5 ; % p 1 % d % ; m
+sgr= % ? % p 9 % t 033 ( 0 % e 033 ( B %
+ ; 033 [ 0 % ? % p 6 % t ; 1 % ; %
+ ? % p 5 % t ; 2 % ; % ? % p 2 %
+ t ; 4 % ; % ? % p 1 % p 3 % | %
+ t ; 7 % ; % ? % p 4 % t ; 5 % ;
+ % ? % p 7 % t ; 8 % ; m
+sgr0= 033 ( B 033 [ m
+sitm= 033 [ 3 m
+smacs= 033 ( 0
+smam= 033 [ ? 7 h
+smcup= 033 [ ? 1 0 4 9 h 033 [ 2 2 ; 0 ; 0
+ t
+smglp= 033 [ ? 6 9 h 033 [ % i % p 1 % d s
+smglr= 033 [ ? 6 9 h 033 [ % i % p 1 % d ;
+ % p 2 % d s
+smgrp= 033 [ ? 6 9 h 033 [ % i ; % p 1 % d
+ s
+smir= 033 [ 4 h
+smkx= 033 [ ? 1 h 033 =
+smm= 033 [ ? 1 0 3 4 h
+smso= 033 [ 7 m
+smul= 033 [ 4 m
+tbc= 033 [ 3 g
+u6= 033 [ % i % d ; % d R
+u7= 033 [ 6 n
+u8= 033 [ ? % [ ; 0 1 2 3 4 5 6 7 8 9
+ ] c
+u9= 033 [ c
+vpa= 033 [ % i % p 1 % d d
+BD= 033 [ ? 2 0 0 4 l
+BE= 033 [ ? 2 0 0 4 h
+Cr= 033 ] 1 1 2 \a
+Cs= 033 ] 1 2 ; % p 1 % s \a
+E3= 033 [ 3 J
+Ms= 033 ] 5 2 ; % p 1 % s ; % p 2 % s
+ \a
+PE= 033 [ 2 0 1 ~
+PS= 033 [ 2 0 0 ~
+RV= 033 [ > c
+Se= 033 [ 2 q
+Ss= 033 [ % p 1 % d q
+XM= 033 [ ? 1 0 0 6 ; 1 0 0 0 % ? % p
+ 1 % { 1 } % = % t h % e l % ;
+XR= 033 [ > 0 q
+fd= 033 [ ? 1 0 0 4 l
+fe= 033 [ ? 1 0 0 4 h
+ka2= 033 O x
+kb1= 033 O t
+kb3= 033 O v
+kc2= 033 O r
+kp5= 033 O E
+kpADD= 033 O k
+kpCMA= 033 O l
+kpDIV= 033 O o
+kpDOT= 033 O n
+kpMUL= 033 O j
+kpSUB= 033 O m
+kpZRO= 033 O p
+kxIN= 033 [ I
+kxOUT= 033 [ O
+rmxx= 033 [ 2 9 m
+rv= 033 \ [ > 4 1 ; [ 1 - 6 ] [ 0 - 9
+ ] [ 0 - 9 ] ; 0 c
+smxx= 033 [ 9 m
+xm= 033 [ < % i % p 3 % d ; % p 1 % d
+ ; % p 2 % d ; % ? % p 4 % t M %
+ e m % ;
+xr= 033 P > \ | X T e r m \ ( ( [ 1 -
+ 9 ] [ 0 - 9 ] + ) \ ) 033 \ \
+== function keys with modifiers
+kf13= 033 [ 1 ; 2 P
+kf14= 033 [ 1 ; 2 Q
+kf15= 033 [ 1 ; 2 R
+kf16= 033 [ 1 ; 2 S
+kf17= 033 [ 1 5 ; 2 ~
+kf18= 033 [ 1 7 ; 2 ~
+kf19= 033 [ 1 8 ; 2 ~
+kf20= 033 [ 1 9 ; 2 ~
+kf21= 033 [ 2 0 ; 2 ~
+kf22= 033 [ 2 1 ; 2 ~
+kf23= 033 [ 2 3 ; 2 ~
+kf24= 033 [ 2 4 ; 2 ~
+kf25= 033 [ 1 ; 5 P
+kf26= 033 [ 1 ; 5 Q
+kf27= 033 [ 1 ; 5 R
+kf28= 033 [ 1 ; 5 S
+kf29= 033 [ 1 5 ; 5 ~
+kf30= 033 [ 1 7 ; 5 ~
+kf31= 033 [ 1 8 ; 5 ~
+kf32= 033 [ 1 9 ; 5 ~
+kf33= 033 [ 2 0 ; 5 ~
+kf34= 033 [ 2 1 ; 5 ~
+kf35= 033 [ 2 3 ; 5 ~
+kf36= 033 [ 2 4 ; 5 ~
+kf37= 033 [ 1 ; 6 P
+kf38= 033 [ 1 ; 6 Q
+kf39= 033 [ 1 ; 6 R
+kf40= 033 [ 1 ; 6 S
+kf41= 033 [ 1 5 ; 6 ~
+kf42= 033 [ 1 7 ; 6 ~
+kf43= 033 [ 1 8 ; 6 ~
+kf44= 033 [ 1 9 ; 6 ~
+kf45= 033 [ 2 0 ; 6 ~
+kf46= 033 [ 2 1 ; 6 ~
+kf47= 033 [ 2 3 ; 6 ~
+kf48= 033 [ 2 4 ; 6 ~
+kf49= 033 [ 1 ; 3 P
+kf50= 033 [ 1 ; 3 Q
+kf51= 033 [ 1 ; 3 R
+kf52= 033 [ 1 ; 3 S
+kf53= 033 [ 1 5 ; 3 ~
+kf54= 033 [ 1 7 ; 3 ~
+kf55= 033 [ 1 8 ; 3 ~
+kf56= 033 [ 1 9 ; 3 ~
+kf57= 033 [ 2 0 ; 3 ~
+kf58= 033 [ 2 1 ; 3 ~
+kf59= 033 [ 2 3 ; 3 ~
+kf60= 033 [ 2 4 ; 3 ~
+kf61= 033 [ 1 ; 4 P
+kf62= 033 [ 1 ; 4 Q
+kf63= 033 [ 1 ; 4 R
+== cursor and editing keys with modifiers
+kDC3= 033 [ 3 ; 3 ~
+kDC4= 033 [ 3 ; 4 ~
+kDC5= 033 [ 3 ; 5 ~
+kDC6= 033 [ 3 ; 6 ~
+kDC7= 033 [ 3 ; 7 ~
+kDN3= 033 [ 1 ; 3 B
+kDN4= 033 [ 1 ; 4 B
+kDN5= 033 [ 1 ; 5 B
+kDN6= 033 [ 1 ; 6 B
+kDN7= 033 [ 1 ; 7 B
+kEND3= 033 [ 1 ; 3 F
+kEND4= 033 [ 1 ; 4 F
+kEND5= 033 [ 1 ; 5 F
+kEND6= 033 [ 1 ; 6 F
+kEND7= 033 [ 1 ; 7 F
+kHOM3= 033 [ 1 ; 3 H
+kHOM4= 033 [ 1 ; 4 H
+kHOM5= 033 [ 1 ; 5 H
+kHOM6= 033 [ 1 ; 6 H
+kHOM7= 033 [ 1 ; 7 H
+kIC3= 033 [ 2 ; 3 ~
+kIC4= 033 [ 2 ; 4 ~
+kIC5= 033 [ 2 ; 5 ~
+kIC6= 033 [ 2 ; 6 ~
+kIC7= 033 [ 2 ; 7 ~
+kLFT3= 033 [ 1 ; 3 D
+kLFT4= 033 [ 1 ; 4 D
+kLFT5= 033 [ 1 ; 5 D
+kLFT6= 033 [ 1 ; 6 D
+kLFT7= 033 [ 1 ; 7 D
+kNXT3= 033 [ 6 ; 3 ~
+kNXT4= 033 [ 6 ; 4 ~
+kNXT5= 033 [ 6 ; 5 ~
+kNXT6= 033 [ 6 ; 6 ~
+kNXT7= 033 [ 6 ; 7 ~
+kPRV3= 033 [ 5 ; 3 ~
+kPRV4= 033 [ 5 ; 4 ~
+kPRV5= 033 [ 5 ; 5 ~
+kPRV6= 033 [ 5 ; 6 ~
+kPRV7= 033 [ 5 ; 7 ~
+kRIT3= 033 [ 1 ; 3 C
+kRIT4= 033 [ 1 ; 4 C
+kRIT5= 033 [ 1 ; 5 C
+kRIT6= 033 [ 1 ; 6 C
+kRIT7= 033 [ 1 ; 7 C
+kUP3= 033 [ 1 ; 3 A
+kUP4= 033 [ 1 ; 4 A
+kUP5= 033 [ 1 ; 5 A
+kUP6= 033 [ 1 ; 6 A
+kUP7= 033 [ 1 ; 7 A
+kDN:  033 [ 1 ; 2 B
+rc=0
+kUP:  033 [ 1 ; 2 A
+rc=0
+== colours
+setaf 0:  033 [ 3 0 m
+rc=0
+setaf 7:  033 [ 3 7 m
+rc=0
+setaf 8:  033 [ 9 0 m
+rc=0
+setaf 15:  033 [ 9 7 m
+rc=0
+setaf 16:  033 [ 3 8 ; 5 ; 1 6 m
+rc=0
+setaf 200:  033 [ 3 8 ; 5 ; 2 0 0 m
+rc=0
+setaf 255:  033 [ 3 8 ; 5 ; 2 5 5 m
+rc=0
+setaf 256:  033 [ 3 8 ; 5 ; 2 5 6 m
+rc=0
+setaf 2147483647:  033 [ 3 8 ; 5 ; 2 1 4 7 4 8 3 6 4
+ 7 m
+rc=0
+setab 0:  033 [ 4 0 m
+rc=0
+setab 7:  033 [ 4 7 m
+rc=0
+setab 8:  033 [ 1 0 0 m
+rc=0
+setab 15:  033 [ 1 0 7 m
+rc=0
+setab 16:  033 [ 4 8 ; 5 ; 1 6 m
+rc=0
+setab 42:  033 [ 4 8 ; 5 ; 4 2 m
+rc=0
+setab 255:  033 [ 4 8 ; 5 ; 2 5 5 m
+rc=0
+setaf:  033 [ % ? % p 1 % { 8 } % < % t 3
+ % p 1 % d % e % p 1 % { 1 6 } %
+ < % t 9 % p 1 % { 8 } % - % d %
+ e 3 8 ; 5 ; % p 1 % d % ; m
+rc=0
+setaf abc: tput: unknown terminfo capability 'abc'
+ 033 [ 3 0 m
+rc=4
+setaf 7 8:  033 [ 3 7 m
+rc=0
+setaf -0: tput: invalid option -- '0'
+Usage: tput [options] [command]
+
+Options:
+  -S <<       read commands from standard input
+  -T TERM     use this instead of $TERM
+  -V          print curses-version
+  -v          verbose, show warnings
+  -x          do not try to clear scrollback
+
+Commands:
+  clear       clear the screen
+  init        initialize the terminal
+  reset       reinitialize the terminal
+  capname     unlike clear/init/reset, print value for capability "capname"
+rc=2
+== cursor movement
+cup 5 10:  033 [ 6 ; 1 1 H
+rc=0
+cup 5:  033 [ 6 ; 1 H
+rc=0
+cup 0 0:  033 [ 1 ; 1 H
+rc=0
+cup 0x10 010:  033 [ 1 7 ; 9 H
+rc=0
+cup +5 3:  033 [ 6 ; 4 H
+rc=0
+cup  5 3:  033 [ 6 ; 4 H
+rc=0
+cup 5.5 3: tput: unknown terminfo capability '5.5'
+ 033 [ 1 ; 4 H
+rc=4
+cup 08 3: tput: unknown terminfo capability '08'
+ 033 [ 1 ; 4 H
+rc=4
+cup 99999999999 3:  033 [ 1 2 1 5 7 5 2 1 9 2 ; 4 H
+rc=0
+cup 2147483647 1:  033 [ - 2 1 4 7 4 8 3 6 4 8 ; 2 H
+rc=0
+cup 4294967295 1:  033 [ 0 ; 2 H
+rc=0
+cup 1 2 3 4 5 6 7 8 9 10 11:  033 [ 2 ; 3 H
+rc=0
+cup x y: tput: unknown terminfo capability 'x'
+ 033 [ 1 ; 1 H
+rc=4
+cup:  033 [ % i % p 1 % d ; % p 2 % d H
+rc=0
+hpa 4:  033 [ 5 G
+rc=0
+vpa 4:  033 [ 5 d
+rc=0
+hpa:  033 [ % i % p 1 % d G
+rc=0
+cuu:  033 [ % p 1 % d A
+rc=0
+cuu 0:  033 [ 0 A
+rc=0
+cuu 3:  033 [ 3 A
+rc=0
+cuu 10:  033 [ 1 0 A
+rc=0
+cud 2:  033 [ 2 B
+rc=0
+cuf 2:  033 [ 2 C
+rc=0
+cub 2:  033 [ 2 D
+rc=0
+csr 2 20:  033 [ 3 ; 2 1 r
+rc=0
+csr 5:  033 [ 6 ; 1 r
+rc=0
+csr 0 0:  033 [ 1 ; 1 r
+rc=0
+indn 3:  033 [ 3 S
+rc=0
+rin 3:  033 [ 3 T
+rc=0
+il 2:  033 [ 2 L
+rc=0
+dl 2:  033 [ 2 M
+rc=0
+ich 2:  033 [ 2 @
+rc=0
+dch 2:  033 [ 2 P
+rc=0
+ech 3:  033 [ 3 X
+rc=0
+smglp 3:  033 [ ? 6 9 h 033 [ 4 s
+rc=0
+smgrp 3:  033 [ ? 6 9 h 033 [ ; 4 s
+rc=0
+smglr 1 10:  033 [ ? 6 9 h 033 [ 2 ; 1 1 s
+rc=0
+bold 1:  033 [ 1 m
+rc=0
+el 1:  033 [ K
+rc=0
+kbs 1:  177
+rc=0
+E3 1:  033 [ 3 J
+rc=0
+== sgr, rep, initc, the termcap-style u6, the texts of Cs and Ms
+sgr 0 0 0 0 0 0 0 0 0:  033 ( B 033 [ 0 m
+rc=0
+sgr 1 1 1 1 1 1 1 1 1:  033 ( 0 033 [ 0 ; 1 ; 2 ; 4 ; 7 ; 5
+ ; 8 m
+rc=0
+sgr 0 1:  033 ( B 033 [ 0 ; 4 m
+rc=0
+sgr 1 1:  033 ( B 033 [ 0 ; 4 ; 7 m
+rc=0
+sgr 0 0 1:  033 ( B 033 [ 0 ; 7 m
+rc=0
+sgr 0 0 0 1:  033 ( B 033 [ 0 ; 5 m
+rc=0
+sgr 0 0 0 0 1:  033 ( B 033 [ 0 ; 2 m
+rc=0
+sgr 0 0 0 0 0 1:  033 ( B 033 [ 0 ; 1 m
+rc=0
+sgr 0 0 0 0 0 0 1:  033 ( B 033 [ 0 ; 8 m
+rc=0
+sgr 0 0 0 0 0 0 0 1:  033 ( B 033 [ 0 m
+rc=0
+sgr 0 0 0 0 0 0 0 0 1:  033 ( 0 033 [ 0 m
+rc=0
+sgr 2 0 3:  033 ( B 033 [ 0 ; 7 m
+rc=0
+sgr 1 0 0 0 0 0 0 0 1:  033 ( 0 033 [ 0 ; 7 m
+rc=0
+sgr 0 0 0 0 0 0 0 0 0 1:  033 ( B 033 [ 0 m
+rc=0
+rep 65 3:  A 033 [ 2 b
+rc=0
+rep 65 1:  A 033 [ 0 b
+rc=0
+rep 65 0:  A 033 [ - 1 b
+rc=0
+rep 65:  A 033 [ - 1 b
+rc=0
+rep 300 2:  , 033 [ 1 b
+rc=0
+rep 0 2:  200 033 [ 1 b
+rc=0
+rep a 3: tput: unknown terminfo capability 'a'
+ 200 033 [ 2 b
+rc=4
+rep 65 2147483647:  A 033 [ 2 1 4 7 4 8 3 6 4 6 b
+rc=0
+rep 65 2147483648:  A 033 [ 2 1 4 7 4 8 3 6 4 7 b
+rc=0
+initc 1 1000 500 0:  033 ] 4 ; 1 ; r g b : F F / 7 F /
+ 0 0 033 \
+rc=0
+initc 0 0 0 0:  033 ] 4 ; 0 ; r g b : 0 0 / 0 0 /
+ 0 0 033 \
+rc=0
+initc 7 1000 1000 1000:  033 ] 4 ; 7 ; r g b : F F / F F /
+ F F 033 \
+rc=0
+initc 1 0x10 1 1:  033 ] 4 ; 1 ; r g b : 0 4 / 0 0 /
+ 0 0 033 \
+rc=0
+initc 1 1001 2000 999:  033 ] 4 ; 1 ; r g b : F F / 1 F E
+ / F E 033 \
+rc=0
+u6 1 2:  033 [ 3 ; 2 R
+rc=0
+u6 1:  033 [ 1 ; 2 R
+rc=0
+u6 1 2 3:  033 [ 3 ; 2 R
+rc=0
+u8 1:  033 [ ? ; 0 1 2 3 4 5 6 7 8 9 ] c
+rc=0
+xm 1 2 3 4:  033 [ < 3 ; 2 ; 3 ; M
+rc=0
+Cs red:  033 ] 1 2 ; r e d \a
+rc=0
+Cs red bold:  033 ] 1 2 ; r e d \a 033 [ 1 m
+rc=0
+Ms a b:  033 ] 5 2 ; a ; b \a
+rc=0
+Ss 2:  033 [ 2 q
+rc=0
+== several capabilities on one command line
+cup 5 10 bold:  033 [ 6 ; 1 1 H 033 [ 1 m
+rc=0
+bold setaf 2:  033 [ 1 m 033 [ 3 2 m
+rc=0
+bold 1 setaf 2:  033 [ 1 m 033 [ 3 2 m
+rc=0
+setaf 2 x: tput: unknown terminfo capability 'x'
+ 033 [ 3 2 m
+rc=4
+cup 1 2 3 4 5 6 7 8 9 10 11 bold:  033 [ 2 ; 3 H 033 [ 1 m
+rc=0
+sgr 1 bold:  033 ( B 033 [ 0 ; 7 m 033 [ 1 m
+rc=0
+am bold:  033 [ 1 m
+rc=0
+xon bold: rc=1
+setf 1 bold: rc=1
+kf0 bold: rc=1
+longname bold:  x t e r m w i t h 2 5 6 c
+ o l o r s 033 [ 1 m
+rc=0
+clear bold:  033 [ H 033 [ 2 J 033 [ 3 J 033 [ 1 m
+rc=0
+init bold:  033 [ ! p 033 [ ? 3 ; 4 l 033 [ 4 l 033
+ > 033 [ ? 6 9 l 033 [ 1 m
+rc=0
+bold nosuch sgr0: tput: unknown terminfo capability 'nosuch'
+ 033 [ 1 m
+rc=4
+nosuch bold: tput: unknown terminfo capability 'nosuch'
+rc=4
+bold : tput: unknown terminfo capability ''
+ 033 [ 1 m
+rc=4
+bold -- -1: tput: unknown terminfo capability '-1'
+ 033 [ 1 m
+rc=4
+-- bold:  033 [ 1 m
+rc=0
+: tput: unknown terminfo capability ''
+rc=4
+0: tput: unknown terminfo capability '0'
+rc=4
+Clear: tput: unknown terminfo capability 'Clear'
+rc=4
+md: tput: unknown terminfo capability 'md'
+rc=4
+== commands
+longname:  x t e r m w i t h 2 5 6 c
+ o l o r s
+rc=0
+clear:  033 [ H 033 [ 2 J 033 [ 3 J
+rc=0
+-x clear:  033 [ H 033 [ 2 J
+rc=0
+-xT xterm clear:  033 [ H 033 [ 2 J
+rc=0
+-vx clear:  033 [ H 033 [ 2 J
+rc=0
+clear 1: tput: unknown terminfo capability '1'
+ 033 [ H 033 [ 2 J 033 [ 3 J
+rc=4
+init:  033 [ ! p 033 [ ? 3 ; 4 l 033 [ 4 l 033
+ > 033 [ ? 6 9 l
+rc=0
+-x init:  033 [ ! p 033 [ ? 3 ; 4 l 033 [ 4 l 033
+ > 033 [ ? 6 9 l
+rc=0
+reset:  033 c 033 ] 1 0 4 \a 033 [ ! p 033 [ ? 3
+ ; 4 l 033 [ 4 l 033 > 033 [ ? 6 9 l
+rc=0
+reset 1: tput: unknown terminfo capability '1'
+ 033 c 033 ] 1 0 4 \a 033 [ ! p 033 [ ? 3
+ ; 4 l 033 [ 4 l 033 > 033 [ ? 6 9 l
+rc=4
+== booleans
+am rc=0
+bce rc=0
+ccc rc=0
+km rc=0
+mc5i rc=0
+mir rc=0
+msgr rc=0
+npc rc=0
+xenl rc=0
+AX rc=0
+XF rc=0
+XT rc=0
+OTbs rc=0
+xon rc=1
+hs rc=1
+eo rc=1
+gn rc=1
+bw rc=1
+da rc=1
+chts rc=1
+am 1: tput: unknown terminfo capability '1'
+rc=4
+xon 1: rc=1
+== numbers
+colors:  2 5 6 \n
+rc=0
+pairs:  6 5 5 3 6 \n
+rc=0
+it:  8 \n
+rc=0
+xmc:  - 1 \n
+rc=0
+ncv:  - 1 \n
+rc=0
+lm:  - 1 \n
+rc=0
+wsl:  - 1 \n
+rc=0
+btns:  - 1 \n
+rc=0
+U8: tput: unknown terminfo capability 'U8'
+rc=4
+it 1: tput: unknown terminfo capability '1'
+ 8 \n
+rc=4
+cols and lines are positive numbers:
+cols positive
+lines positive
+2
+133
+9
+exported COLUMNS wins:
+131
+== strings xterm-256color lacks
+setf rc=1
+setb rc=1
+smgl rc=1
+kf0 rc=1
+rs3 rc=1
+ 033 [ ? 1 2 ; 2 5 h
+cvvis rc=0
+== -S
+-S [bold]:  033 [ 1 m
+rc=0
+-S [cup 5 10 20]:  033 [ 6 ; 1 1 H
+rc=0
+-S [cup 5 10 bold]:  033 [ 6 ; 1 1 H 033 [ 1 m
+rc=0
+-S [setaf x]: tput: unknown terminfo capability 'x'
+ 033 [ 3 0 m
+rc=4
+-S [bold x]: tput: unknown terminfo capability 'x'
+ 033 [ 1 m
+rc=4
+-S [bold -1]: tput: unknown terminfo capability '-1'
+ 033 [ 1 m
+rc=4
+-S [bold -x]: tput: unknown terminfo capability '-x'
+ 033 [ 1 m
+rc=4
+-S [bold - 1]: tput: unknown terminfo capability '-'
+ 033 [ 1 m
+rc=4
+-S [bold 5 -1]: tput: unknown terminfo capability '-1'
+ 033 [ 1 m
+rc=4
+-S [bold +5]:  033 [ 1 m
+rc=0
+-S [bold 0x1f]:  033 [ 1 m
+rc=0
+-S [bold 077]:  033 [ 1 m
+rc=0
+-S [bold 08]: tput: unknown terminfo capability '08'
+ 033 [ 1 m
+rc=4
+-S [bold 1e3]: tput: unknown terminfo capability '1e3'
+ 033 [ 1 m
+rc=4
+-S [cup -1 3]: tput: unknown terminfo capability '-1'
+ 033 [ 0 ; 4 H
+rc=4
+-S [cup +5 +3]:  033 [ 6 ; 4 H
+rc=0
+-S [clear]:  033 [ H 033 [ 2 J 033 [ 3 J
+rc=0
+-S [init]:  033 [ ! p 033 [ ? 3 ; 4 l 033 [ 4 l 033
+ > 033 [ ? 6 9 l
+rc=0
+-S [reset]:  033 c 033 ] 1 0 4 \a 033 [ ! p 033 [ ? 3
+ ; 4 l 033 [ 4 l 033 > 033 [ ? 6 9 l
+rc=0
+-S [longname]:  x t e r m w i t h 2 5 6 c
+ o l o r s
+rc=0
+-S [E3]:  033 [ 3 J
+rc=0
+-S [colors]:  2 5 6 \n
+rc=0
+-S [am]: rc=0
+-S [xon]: rc=5
+-S [xon bold]:  033 [ 1 m
+rc=5
+-S [xon kf0]: rc=6
+-S [xon xon xon]: rc=7
+-S [bold xon]:  033 [ 1 m
+rc=5
+-S [setf 1 bold]: tput: unknown terminfo capability '1'
+rc=4
+-S [kf0 bold]:  033 [ 1 m
+rc=5
+-S [a b c]: tput: unknown terminfo capability 'a'
+rc=4
+-S [am 1]: tput: unknown terminfo capability '1'
+rc=4
+-S [it 1]: tput: unknown terminfo capability '1'
+ 8 \n
+rc=4
+-S several lines: tput: unknown terminfo capability 'nosuch'
+ 033 [ 1 m 033 [ 3 2 m
+rc=4
+-S blank lines:  033 [ 1 m
+rc=0
+-S no final newline:  033 [ 1 m 033 [ 3 3 m
+rc=0
+-S spaces and tabs:  033 [ 1 m 033 [ 3 2 m
+rc=0
+-S CRLF:  033 [ 1 m 033 [ 3 2 m
+rc=0
+-S after an unknown name: tput: unknown terminfo capability 'nosuch'
+rc=4
+-S numbers and a string:  2 5 6 \n 033 [ 1 m
+rc=0
+-S two failing lines: rc=8
+-S empty input: rc=0
+-S with an argument:  033 [ 1 m
+rc=0
+-S -x clear:  033 [ H 033 [ 2 J
+rc=0
+-S -S:  033 [ 1 m
+rc=0
+== options
+-T xterm bold:  033 [ 1 m
+rc=0
+-Txterm bold:  033 [ 1 m
+rc=0
+-T vt100 bold:  033 [ 1 m
+rc=0
+-T ms-terminal bold:  033 [ 1 m
+rc=0
+tput: unknown terminal "foo"
+rc=3
+tput: unknown terminal "foo"
+rc=3
+tput: No value for $TERM and no -T specified
+rc=2
+tput: unknown terminal "=xterm"
+rc=3
+-T foo -V rc=0
+-V rc=0
+-V bold rc=0
+Usage: tput [options] [command]
+
+Options:
+  -S <<       read commands from standard input
+  -T TERM     use this instead of $TERM
+  -V          print curses-version
+  -v          verbose, show warnings
+  -x          do not try to clear scrollback
+
+Commands:
+  clear       clear the screen
+  init        initialize the terminal
+  reset       reinitialize the terminal
+  capname     unlike clear/init/reset, print value for capability "capname"
+rc=2
+tput: option requires an argument -- 'T'
+Usage: tput [options] [command]
+
+Options:
+  -S <<       read commands from standard input
+  -T TERM     use this instead of $TERM
+  -V          print curses-version
+  -v          verbose, show warnings
+  -x          do not try to clear scrollback
+
+Commands:
+  clear       clear the screen
+  init        initialize the terminal
+  reset       reinitialize the terminal
+  capname     unlike clear/init/reset, print value for capability "capname"
+rc=2
+tput: invalid option -- 'Z'
+Usage: tput [options] [command]
+
+Options:
+  -S <<       read commands from standard input
+  -T TERM     use this instead of $TERM
+  -V          print curses-version
+  -v          verbose, show warnings
+  -x          do not try to clear scrollback
+
+Commands:
+  clear       clear the screen
+  init        initialize the terminal
+  reset       reinitialize the terminal
+  capname     unlike clear/init/reset, print value for capability "capname"
+rc=2
+tput: invalid option -- 'b'
+Usage: tput [options] [command]
+
+Options:
+  -S <<       read commands from standard input
+  -T TERM     use this instead of $TERM
+  -V          print curses-version
+  -v          verbose, show warnings
+  -x          do not try to clear scrollback
+
+Commands:
+  clear       clear the screen
+  init        initialize the terminal
+  reset       reinitialize the terminal
+  capname     unlike clear/init/reset, print value for capability "capname"
+rc=2
+tput: invalid option -- '3'
+Usage: tput [options] [command]
+
+Options:
+  -S <<       read commands from standard input
+  -T TERM     use this instead of $TERM
+  -V          print curses-version
+  -v          verbose, show warnings
+  -x          do not try to clear scrollback
+
+Commands:
+  clear       clear the screen
+  init        initialize the terminal
+  reset       reinitialize the terminal
+  capname     unlike clear/init/reset, print value for capability "capname"
+rc=2
+tput: unknown terminfo capability '-x'
+rc=4
+tput: unknown terminfo capability 'nosuch'
+rc=4
+== the version
+ncurses 6.6.20251230
+== TERM unset or not VT: ignored by cash, whose terminal is VT
+tput: No value for $TERM and no -T specified
+rc=2
+rc=1

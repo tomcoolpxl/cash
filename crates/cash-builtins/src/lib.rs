@@ -53,6 +53,10 @@ mod coolfetch;
 mod top;
 
 // cash (D48): one pager behind both `less` and `more`. `less` is not coreutils, and the
+// cash: `tput`, ncurses' for xterm-256color without terminfo: the terminal is VT.
+mod tput;
+// cash: `stty`, GNU's words on the console's four modes; the rest is remembered.
+mod stty;
 // bundled `more` corrupted a pipe.
 mod pager;
 

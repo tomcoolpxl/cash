@@ -76,13 +76,17 @@ an entry or page names no builtin.
 - `cashinfo`: Inspect and configure the running shell (the same as `cashctl`).
 - `cdh`: Choose a recent folder to go to.
 - `croot`: Pick a file or folder in a tree, and print it (Alt-E opens it on the command line).
-- `clear`: Clear the terminal screen and its scrollback.
 - `coolfetch`: Show a banner about this machine and cash.
 - `nextd`: Go forward through the folder history.
 - `prevd`: Go back through the folder history.
-- `reset`: Reset the terminal and the console modes cash relies on.
 - `which`: Say what cash would run for a name, as a runnable path.
 
+## Terminal and clipboard
+
+- `clear`: Clear the terminal screen and its scrollback.
+- `reset`: Reset the terminal and the console modes cash relies on.
+- `stty`: Print or change the terminal's settings, in GNU's words, on the console's modes.
+- `tput`: Write a terminal capability as the VT sequence xterm-256color uses.
 ## Windows commands
 
 - `detach`: Start a command that outlives the shell.

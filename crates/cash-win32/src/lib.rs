@@ -69,3 +69,5 @@ pub mod vtscreen;
 pub mod wide;
 
 pub use job::{JobConfig, JobObject};
+// A terminal's settings as `stty` sees them, over the console's four modes.
+pub mod termios;

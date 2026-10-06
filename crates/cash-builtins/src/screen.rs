@@ -19,10 +19,10 @@ use std::io::Write;
 use cash_core::{ExecutionResult, builtins};
 use clap::Parser;
 
-/// Home, erase the display, erase the scrollback.
-const CLEAR: &[u8] = b"\x1b[H\x1b[2J\x1b[3J";
-/// Home and erase the display, keeping the scrollback (`clear -x`).
-const CLEAR_KEEP_SCROLLBACK: &[u8] = b"\x1b[H\x1b[2J";
+/// Home, erase the display, erase the scrollback (`tput clear` writes the same).
+pub(crate) const CLEAR: &[u8] = b"\x1b[H\x1b[2J\x1b[3J";
+/// Home and erase the display, keeping the scrollback (`clear -x`, `tput -x clear`).
+pub(crate) const CLEAR_KEEP_SCROLLBACK: &[u8] = b"\x1b[H\x1b[2J";
 /// ncurses' `reset` for xterm: full reset, palette, soft reset, then the modes it clears.
 const RESET: &[u8] = b"\x1bc\x1b]104\x07\x1b[!p\x1b[?3;4l\x1b[4l\x1b>\x1b[?69l\r";
 
@@ -43,8 +43,8 @@ pub(crate) struct ClearCommand {
     version: bool,
 }
 
-/// Whether `term` names a terminal these sequences are right for.
-fn is_vt(term: &str) -> bool {
+/// Whether `term` names a terminal these sequences are right for; `tput -T` asks too.
+pub(crate) fn is_vt(term: &str) -> bool {
     term.starts_with("xterm") || term.starts_with("vt") || term.starts_with("ms-terminal")
 }
 

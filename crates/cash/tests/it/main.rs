@@ -163,3 +163,7 @@ mod winpaths;
 
 // The upstream bc suite (see bc.rs) reaches its test library as `crate::plib`.
 use bc::plib;
+// `stty`: GNU's words on the console's modes, and `stty -echo` hiding what `read` reads.
+mod stty_builtin;
+// `tput` against ncurses 6.6's frozen output for xterm-256color, and the console's size.
+mod tput_builtin;

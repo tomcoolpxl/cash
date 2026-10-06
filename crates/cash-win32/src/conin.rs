@@ -102,6 +102,13 @@ impl Keys {
         })
     }
 
+    /// Whether the console was showing what is typed when it was taken over: `stty -echo`
+    /// turns that off, and a reader that shows the keys itself should then not.
+    #[must_use]
+    pub const fn was_echoing(&self) -> bool {
+        self.saved & ENABLE_ECHO_INPUT != 0
+    }
+
     /// The next character typed, waiting for it until `deadline`, or for as long as it
     /// takes when there is none. `None` when the deadline passed first.
     ///
@@ -281,6 +288,10 @@ impl Terminal {
         // to a terminal query starts with `\e`. In a line they are left out, as the
         // console leaves them out of the lines it collects.
         let keys = Keys::open(input, !collects_lines)?;
+        // A script that turned echo off (`stty -echo; read -r password; stty echo`) has
+        // its keys hidden here as a terminal driver would hide them, since the console
+        // shows nothing while the keys are read this way.
+        let shows_keys = shows_keys && keys.was_echoing();
         // Opened to be read as well: the console tells the cursor's column only through
         // a handle that may read the screen, and a tab is shown up to the next tab stop.
         let screen = shows_keys
