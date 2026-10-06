@@ -20,6 +20,17 @@ the user, by pick list:
 
 Not asked, so left as it is: x64 only; an ARM64 build waits for a machine to test it on.
 
+**Second round, 2026-10-06** (spec D75, TODO.md phase 22), chosen by the user by pick
+list, with Velopack and a per-user MSI as the alternatives weighed:
+
+| Question | Decision |
+|---|---|
+| A second channel beside Scoop | **Yes: a per-user installer on the releases page**, and winget made from it. The aim: install cash and have a complete native Bash with its tools, no Scoop needed |
+| Installer technology | **Inno Setup, per-user**, as this document proposed; Scoop's versioned folders and `current` junction so a running `cash.exe` is never overwritten |
+| Upgrades | **`cash --update` on request** (releases API, `.sha256`, new folder, junction), plus re-running the installer or winget; nothing automatic |
+| Defaults | **The tool links on PATH on by default**, with a task to opt out |
+| Signing | **Still unsigned**: no paid certificate, SignPath Foundation not wanted; the SmartScreen prompt on a browser download is documented |
+
 **Implemented 2026-09-28**, items 1 to 5 of [What follows](#what-follows-from-the-decisions):
 the static C runtime and its release check, the icon and version resource, `--add-to-path`
 and `--unlink-tools`, `--terminal-profile` and its removal, the licence notices in the

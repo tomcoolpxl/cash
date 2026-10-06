@@ -60,6 +60,8 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 | 18 | 1.3.18 | `ss` as iproute2 7.2 has it |
 | 19 | 1.3.19 | `ss -i` and `dev`, and the vi fix |
 | 20 | 1.4.0 | `croot`: a built-in file and folder picker on Alt-E |
+| 21 | 1.5.0 | Console, clipboard and the remaining small tools |
+| 22 | 1.6.0 | A per-user installer, `cash --update`, and winget |
 
 ---
 
@@ -164,8 +166,165 @@ sorts newest first with each entry's age. Nothing left open.
 
 ---
 
+## Phase 21. Console, clipboard and the remaining small tools
+
+Asked by the user on 2026-10-06, after a second look at what a bare Windows machine with
+cash still lacks (`research/busybox-gap-analysis.md` has the first look). Every name
+below resolves to nothing on a clean Windows install; several resolve to Git for Windows'
+`usr/bin` or a Scoop shim when those are on `PATH`, and those stay reachable by path,
+as `type -a` shows. No Windows program in System32 has any of these names, so none of
+them hides one. The tools, in the order they are built:
+
+1. **`tput`** (ncurses 6.6's for `xterm-256color`): the string, numeric and boolean
+   capabilities scripts use (`setaf`, `setab`, `bold`, `sgr0`, `smul`, `rev`, `cup`,
+   `civis`, `cnorm`, `sc`, `rc`, `el`, `ed`, `clear`, `smcup`, `rmcup`, `cols`,
+   `lines`, `colors`, …), written as VT sequences without terminfo, as `clear` and
+   `reset` already are; `cols` and `lines` from the console, also when standard output
+   is a pipe; `-S` from standard input; `-T` accepts xterm- and VT-like names only;
+   ncurses' exit codes (an unknown capability is 4, a false boolean 1).
+2. **`stty`** (GNU coreutils 9.11's words): `-echo`/`echo`, `raw`/`cooked`/`sane`,
+   `-icanon`, `isig`, `size`, `-a`, `-g` and restoring from its string, `rows`/`cols`;
+   each setting mapped to the console modes cash owns (echo, line input, processed
+   input); settings Windows has no counterpart for (`erase`, `intr`, `ixon`, speeds)
+   are accepted so scripts run; `-F FILE` refused. Cash puts the console back before each
+   prompt, so a change lasts for the current command or script.
+3. **`iconv`** (glibc's options): `-f`, `-t`, `-l`, `-c`, `-s`, `-o`, `//TRANSLIT` and
+   `//IGNORE`; every code page Windows has (`CP437`, `CP850`, `CP1252`, `LATIN1`,
+   `ISO-8859-*`, `KOI8-R`, `SHIFT_JIS`, `GBK`, `BIG5`, `EUC-KR`, …) through
+   `MultiByteToWideChar`, plus UTF-8, UTF-16LE/BE and UTF-32LE/BE with BOM handling;
+   glibc's "illegal input sequence at position N" and status 1; the default charset
+   is UTF-8.
+4. **`column`** (util-linux 2.42.3): `-t`, `-s`, `-o`, `-c`, `-x`, `-n`, `-L`, `-N`,
+   `-R`, `-H`, `-J`; widths in display cells; a CRLF line stays CRLF. `-T`, `-W` and
+   `-E` are refused by name.
+5. **`xxd`** (vim's): `-p`, `-r`, `-i`, `-l`, `-s`, `-c`, `-g`, `-u`, `-b`, `-e`, `-o`,
+   `-C`, `-n`, `-d`, `-a`, `-R`; no colour unless `-R always`; `-E` refused.
+6. **`hexdump`** (util-linux 2.42.3): `-C`, `-c`, `-d`, `-o`, `-x`, `-b`, `-n`, `-s`,
+   `-v`, and `-e FORMAT` with the format language (`_a`, `_A`, `_c`, `_p`, `_u`).
+7. **`uuidgen`** (util-linux): `-r` (the default), `-t`, `-m`/`-s` with `-n` and `-N`
+   (`@dns`, `@url`, `@oid`, `@x500`), `-x`, `-C`.
+8. **`xdg-open`**: `start` under the name cross-platform scripts try first; xdg-open's
+   exit codes (1 syntax, 2 no such file, 4 the handler failed).
+9. **`pbcopy`** and **`pbpaste`**: the clipboard as Unicode text. `pbcopy` reads UTF-8
+   and turns lone LF into CRLF, so Windows programs paste it right; `pbpaste` writes UTF-8
+   with CRLF turned into LF, so `pbcopy < f; pbpaste | diff f -` is quiet. A clipboard
+   holding no text gives nothing, status 0. `clip.exe` stays as it is: it writes the
+   console code page, and Windows has no paste command.
+10. **`watch`** (procps-ng 4.0.7): `-n`, `-t`, `-d[=permanent]`, `-e`, `-g`, `-c`,
+    `-x`, `-b`, `-p`, `-r`, `-w`; the command runs through cash each time (procps runs
+    `sh -c`, which is cash anyway), on the alternate screen; `q` and Ctrl-C end it;
+    procps' exit codes.
+11. **`free`** (procps-ng 4.0.7): `-b -k -m -g -h --si -t -w -s N -c N -l`; `Mem:` from
+    the same call `top` uses; `Swap:` is the page file (used and total from the system's
+    page-file information). A `Commit:` row is not added: scripts parse `free` by `Mem:`
+    and `Swap:`.
+12. **`nice`** and **`renice`** (coreutils, util-linux): niceness to a priority class:
+    `-20…-11` HIGH, `-10…-1` ABOVE_NORMAL, `0` NORMAL, `1…10` BELOW_NORMAL, `11…19` IDLE;
+    REALTIME is never set. Bare `nice` prints the niceness that maps back from the
+    shell's own class. `renice -n N -p PID…` and `-u USER`; `-g` refused (no process
+    groups).
+13. **`flock`** (util-linux 2.42.3): `-s`, `-x`, `-n`, `-w`, `-u`, `-o`, `-E`, `-c`,
+    `FILE CMD…` and the `FD` form through cash's own descriptor table (`exec 9>lock;
+    flock -n 9`), with `LockFileEx` on one byte far past the end of the file, so
+    readers of the lock file are not blocked. The lock lives on the shell's handle and
+    is released when the file descriptor closes or the command ends. A directory is
+    refused: Windows cannot lock one.
+14. **`nc`** (OpenBSD netcat's flags, Debian's default): connect and pump standard input
+    and output, `-z`, `-v`, `-w`, `-n`, `-u`, `-l`, `-p`, `-k`, `-N`, `-q`, `-4`, `-6`,
+    port ranges; `-e` and `-c` refused, as OpenBSD refuses them.
+
+Each tool: a module in `cash-builtins` (Win32 calls in `cash-win32`), an entry in
+`builtins.md` under its kind, a help page where its `--help` is not enough, its names in
+doctor's `CARRIED` list, unit tests, and an integration test in `crates/cash/tests/it`;
+where a Linux original exists it is the oracle, run in WSL (archlinux: util-linux
+2.42.3, procps-ng 4.0.7, coreutils 9.11, ncurses 6.6, glibc 2.44, vim's xxd), with cash's
+deliberate differences replaced in the test, as `small_tools.rs` does. Help pages and
+messages name no spec items. Spec D74 records the decisions; ROADMAP gets item 19.
+
+Decided while building (2026-10-06, by Claude, open to the user): the `free` Swap row,
+the `nice` mapping, `flock`'s byte and its refusal of directories, and `nc` without
+`-e`, each as written above; the gap analysis asked these as Q5–Q8.
+
+---
+
+## Phase 22. A per-user installer, `cash --update`, and winget
+
+Chosen by the user on 2026-10-06, by pick list (spec D75). The goal: install cash and
+have a complete native Bash with the tools scripts need, without Scoop. Scoop stays a
+channel; the installer is the second, on the releases page, and winget takes it from
+there. The research is in `research/packaging-evaluation.md` ("The installer, for winget
+later").
+
+1. **Inno Setup, per-user** (`PrivilegesRequired=lowest`, no UAC), built on the GitHub
+   Windows runner where it is preinstalled, attached to each release as
+   `cash-vX.Y.Z-setup.exe` beside the zip. Silent for scripts and winget:
+   `/VERYSILENT /SUPPRESSMSGBOXES /NORESTART`, `/DIR=` and `/TASKS=`.
+2. **Layout as Scoop's**: `%LOCALAPPDATA%\Programs\cash\<version>\cash.exe` and a
+   `current` junction, so an upgrade never overwrites a running `cash.exe`; open windows
+   keep the old file and new tabs get the new one. Inno copies into the version folder
+   and runs `cash --install-finish` (new), which moves the junction, writes the Terminal
+   profile, refreshes the tool links, runs `--init-rc --once`, and sweeps old version
+   folders nothing runs. `CloseApplications=no`: never Ctrl-C the user's shells.
+3. **Tool links on PATH by default**: the install task "Make the tools programs on PATH"
+   is on, so `ls.exe`, `sed.exe`, `awk.exe`, … are on the user PATH ahead of Git's;
+   a checkbox and `/TASKS=` turn it off. `cash.exe` itself goes on the user PATH always.
+   PATH is written by cash (`--link-tools --add-to-path`), never by Inno's `[Registry]`.
+4. **Uninstall** (Apps & features entry, per-user): `cash --unlink-tools`,
+   `--remove-terminal-profile`, the PATH entries, the folder; the user's `~/.bashrc`,
+   history and config stay.
+5. **`cash --update`**: asks GitHub's releases API for the latest version, downloads the
+   zip, verifies its `.sha256`, unpacks into a new version folder, moves the junction and
+   runs the same finish step; `--check` only reports. A cash installed by Scoop says
+   `scoop update cash` instead (its exe lives under `scoop\apps`). No background polling
+   and nothing automatic: a shell that changes itself overnight surprises script authors.
+6. **winget** from the installer (`InstallerType: inno`, `Scope: user`, the silent
+   switches above): the first manifest by hand, later versions by `winget-releaser`.
+   The installer type cannot change later, so this waits until items 1–5 have shipped
+   in a release and been installed on a clean machine.
+7. **Unsigned**: a browser download of the setup gets SmartScreen's "unknown publisher"
+   once; winget and Scoop downloads do not. Documented in `help installing` and the
+   README. Signing stays postponed (the user, 2026-10-06: no paid certificate; SignPath
+   not wanted).
+8. **An optional Scoop task, off by default** (the user, 2026-10-06): the setup offers
+   "Also install Scoop, a package manager for command-line tools" (`/TASKS=scoop`); when
+   chosen it runs Scoop's own installer (`irm get.scoop.sh | iex`, in a PowerShell with
+   `-ExecutionPolicy Bypass`) as the last step, and says what it did. Installing Scoop by
+   default was turned down: it changes the machine beyond what installing a shell
+   implies. The installer refuses to run beside a cash that Scoop installed (its exe
+   under `scoop\apps`), pointing at `scoop update cash`.
+9. **A hint for a missing command, at an interactive prompt only** (the user,
+   2026-10-06): after Bash's `jq: command not found`, one line `install it: winget install
+   jqlang.jq, or scoop install jq`, from a curated table of about 50 common tools (jq,
+   rg, fd, fzf, bat, delta, gh, git, node, python, go, rustup, docker, kubectl, helm,
+   terraform, aws, az, make, cmake, ninja, 7z, curl's friends wget and aria2, nano, vim,
+   neovim, starship, zoxide, direnv, shellcheck, shfmt, …) with both ids; the table is
+   markdown in the help docs (`help tools`), and a test checks each id against
+   `winget show` and `scoop info` output recorded once. Scripts and `-c` get Bash's
+   message and status 127 only. `cash doctor` names the same two commands for what it
+   finds missing.
+
+---
+
 ## Found along the way
 
+- **The first cash window after a Scoop update is blank for 1 to 3 seconds** (the user,
+  2026-10-06); after that every start is fast. Measured here: a copy of `cash.exe` with
+  a changed hash takes 1.2 to 2.3 s on its first run and about 50 ms after, which is
+  Defender's cloud check of an unknown unsigned binary, cached by hash; 130 hard links
+  to it, and a start in a new console, do not bring the check back. A forced reinstall
+  of the same version (same hash) shows no delay. So the check is the likely cost, but
+  the install's own three runs of the new exe (`--terminal-profile`, `--link-tools`,
+  `--init-rc --once`) should already pay it, and cash keeps nothing per version (no
+  cache on disk; checked). To settle: at the 1.5.0 update, time the first `cash -c true`
+  and the first `cash -ic true` right after `scoop update cash`, then bisect. The
+  lasting fix is code signing (ROADMAP 18, SignPath); a Defender exclusion needs admin.
+- **The Scoop update output** (the user, 2026-10-06): the manifest's notes were nine
+  lines shown on every update, with their indentation lost, and the post-install commands
+  silenced only standard output. `packaging/scoop/cash.json` now has two notes lines
+  pointing at `cash doctor` and the new `help installing` topic, and `*> $null` on every
+  hook. **To do at the 1.5.0 release:** copy the notes and hooks to
+  `tomcoolpxl/scoop-bucket`'s `bucket/cash.json` by hand (RELEASING step 7); the
+  Excavator only bumps the version and hash.
 - A test in the full suite leaves `x.lnk` in the repository root: a 0-byte named pipe as
   MSYS2 makes them (its `mkfifo` writes a FIFO as a special `.lnk` file), timestamped
   during the 1.4.3 gate on 2026-10-06. No test names `x` with `mkfifo`; one of them runs

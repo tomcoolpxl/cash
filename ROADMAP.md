@@ -29,6 +29,7 @@ Feature work follows the sequence below.
 | 16 | `cash --link-tools`: hard links so programs outside cash can run its tools | **Complete** | Section 16 below; spec D65 |
 | 17 | What fish has at the prompt: highlighting, bash's Alt-. and Ctrl-X Ctrl-E, `abbr`, a collapsing prompt, folder history, carapace completions | **Complete** | Section 17 below; spec D59–D63 |
 | 18 | Installing cash: a Scoop bucket now, winget with an Inno Setup installer later; the tool links on the user PATH on request | **Active** (Scoop live since 1.1.0; winget to come) | [Packaging evaluation and decisions](research/packaging-evaluation.md); section 18 below; spec D38, D65 |
+| 19 | Console, clipboard and the remaining small tools: `tput`, `stty`, `iconv`, `column`, `xxd`, `hexdump`, `uuidgen`, `xdg-open`, `pbcopy`/`pbpaste`, `watch`, `free`, `nice`/`renice`, `flock`, `nc` | **Active** (started 2026-10-06) | Section 19 below; spec D74; TODO.md phase 21 |
 | — | Found on the way (not planned items) | **Complete** | MSYS2 argument encoding (spec D52); `shopt winpaths` and bash-worded `cd` errors (D53); a `TERM` that no longer reaches the whole console (D21) |
 
 The authoritative feature order is therefore:
@@ -40,6 +41,7 @@ Bash 5.2 completion (done)  ->  native awk (done)  ->  native sed (done)  ->  bu
   ->  graceful signals for own jobs (done)  ->  exec path for bundled tools (done)
   ->  bc against GNU bc (done)  ->  Bash 5.3 remainder (no terminal) (done)  ->  ConPTY harness + 5.3 interactive (done)  ->  tool links
   +  fish's prompt conveniences (done)  ->  installing cash: Scoop, then winget (active)
+  ->  console, clipboard and the remaining small tools (active)
 ```
 
 ## 1. Finish Bash 5.2
@@ -475,7 +477,11 @@ Work, in order:
    made from Scoop's bucket template, carries `bucket/cash.json` at 1.1.0, and its
    Excavator workflow updates it from new releases. `scoop bucket add tomcoolpxl
    https://github.com/tomcoolpxl/scoop-bucket` then `scoop install cash` installs it.
-7. Later: the Inno Setup installer and the winget submission.
+7. **Decided 2026-10-06, next** (TODO.md phase 22, spec D75): the Inno Setup per-user
+   installer on the releases page, with Scoop's versioned layout and `current` junction,
+   the tool links on PATH by default, `cash --update` for upgrades on request, and the
+   winget submission from that installer. Unsigned; signing is postponed (no paid
+   certificate, SignPath not wanted).
 
 Found at the release: GitHub's Windows runners run elevated, so `$EUID` is 0 there and
 new files belong to Administrators; two tests that assumed a normal user failed there
@@ -485,6 +491,24 @@ Found on the way: Windows deletes a name of a running program while the file has
 and refuses only the last; the tests had been leaving 126 links per folder behind, until
 `cash.exe` reached NTFS's 1023 names; and Scoop's `suggest` now offers carapace at install
 time, the gap left open in item 17.
+
+## 19. Console, clipboard and the remaining small tools
+
+A second look (2026-10-06) at what a clean Windows machine with cash still lacks, after
+the [BusyBox gap analysis](research/busybox-gap-analysis.md) adopted its tier 1 (item
+10). Every name below resolves to nothing on a bare Windows install, none belongs to a
+program in System32, and each either has to agree with something cash owns (the console
+modes, encoding, the clipboard, the descriptor table, process ids, command resolution)
+or is cheap and collides with nothing. Chosen by the user on 2026-10-06; the decisions
+are spec D74 and the plan TODO.md phase 21.
+
+1. `tput` and `stty`: the console, with ncurses' sequences and GNU's words;
+2. `iconv`: every Windows code page, glibc's options and messages;
+3. `column`, `xxd`, `hexdump`: text and bytes, oracle-tested against util-linux and vim;
+4. `uuidgen`, `xdg-open`, `pbcopy`/`pbpaste`: small, and the clipboard as UTF-8;
+5. `watch`, `free`, `nice`/`renice`, `flock`, `nc`: processes, memory, locks and ports.
+
+Not adopted, again: `grep`, `diff`, `cmp`, the compressors, `patch`, `strings`.
 
 ## Keeping the roadmap current
 

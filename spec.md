@@ -1587,6 +1587,8 @@ Four, all justified by decisions made above rather than invented:
 | `abbr` | fish's abbreviations, which the prompt expands in place (D60). Added later, and not Windows-specific. |
 | `prevd`, `nextd`, `cdh` | fish's folder history, also on Alt-← and Alt-→ (D62). Added later, and not Windows-specific. |
 | `croot` | A file and folder picker, inline below the command line on Alt-E, and as a command that prints the pick (D73, 2026-10-05). |
+| `xdg-open` | `start` under the name cross-platform scripts try first, with xdg-open's exit codes (D74, 2026-10-06). |
+| `pbcopy`, `pbpaste` | The clipboard as Unicode text, with LF turned into CRLF on the way in and back on the way out; `clip.exe` writes the console code page and Windows has no paste command (D74, 2026-10-06). |
 
 **`detach` has a cost, listed as an exception in D6.** For a child to leave the session
 job, that job must be created with `JOB_OBJECT_LIMIT_BREAKAWAY_OK`, which means *any*
@@ -2582,6 +2584,112 @@ crates (`nucleo-matcher` and `ignore`, or equivalents), not hand-written code.
 
 Not in it: a search language, file previews, file operations, editor integration,
 mouse input.
+
+### D74 — Console, clipboard and the remaining small tools
+
+**Status: asked for by the user on 2026-10-06** (TODO.md phase 21), after a second look at
+what a clean Windows machine with cash still lacks. The first look
+([the BusyBox gap analysis](research/busybox-gap-analysis.md), 2026-09-25) adopted the
+process tools, `getopt`, `rev`, `clear`, `reset`, `bc` and `ping`, and left its tier 2
+open. Of that tier, the tools below were chosen by two tests: nothing answers the name on
+a bare Windows install with cash, and the tool has to agree with something cash owns, or
+is cheap and collides with nothing. None of these names belongs to a program in
+System32, so none hides one. Several (`tput`, `stty`, `iconv`, `column`, `xxd`, `nice`)
+are also in Git for Windows' `usr/bin` and in Scoop shims; `type -a` lists those behind
+the builtin, and the path still runs them.
+
+**What cash owns, and the tool that has to agree with it.**
+
+- **Console modes**: `tput` writes the VT sequences ncurses 6.6 writes for
+  `xterm-256color`, as `clear` and `reset` already do, and takes `cols` and `lines` from
+  the console even when standard output is a pipe. `stty` reads and sets the console's
+  input and output modes with GNU coreutils' words (`-echo`, `raw`, `sane`, `size`, `-a`,
+  `-g`); settings the console has no counterpart for are accepted and remembered so a
+  script written for a tty runs; `-F` is refused. Cash puts the console back before each
+  prompt (D68), so a change lasts for the current command or script.
+- **Encoding**: `iconv` with glibc's options over every code page Windows has
+  (`MultiByteToWideChar`), plus UTF-8, UTF-16 and UTF-32 with glibc's BOM rules and its
+  "illegal input sequence at position N". `//TRANSLIT` uses Windows' best-fit mappings,
+  which are not glibc's.
+- **The clipboard**: `pbcopy` and `pbpaste`, macOS's names, which collide with nothing.
+  `clip.exe` writes the console code page, so UTF-8 through it becomes mojibake, and
+  Windows has no paste command. `pbcopy` stores Unicode text and turns lone LF into CRLF,
+  so Windows programs paste it right; `pbpaste` writes UTF-8 and turns CRLF into LF, so
+  `pbcopy < f; pbpaste | diff f -` is quiet for an LF file. A clipboard without text
+  gives nothing, status 0.
+- **File descriptors**: `flock`'s `FD` form (`exec 9>lock; flock -n 9`) only works
+  through the shell's own descriptor table (D26), which no external program can see. The
+  lock is `LockFileEx` on one byte far past the end of the file, so readers of the lock
+  file are not blocked; it lives on the shell's handle and ends when the descriptor
+  closes or the command ends. A directory is refused: Windows cannot lock one.
+- **Process ids and command resolution**: `nice` and `renice` map niceness to the six
+  priority classes (`-20…-11` HIGH, `-10…-1` ABOVE_NORMAL, `0` NORMAL, `1…10`
+  BELOW_NORMAL, `11…19` IDLE; REALTIME is never set) and read the mapping back for bare
+  `nice`; `renice -g` is refused, there being no process groups. `watch` runs its
+  command through cash each time (procps runs `sh -c`, which is cash anyway).
+
+**Cheap and colliding with nothing.** `column` (util-linux), `xxd` (vim's), `hexdump`
+(util-linux, with its format language), `uuidgen` (util-linux), `free` (procps; `Mem:`
+from the call `top` uses, `Swap:` the page file; no `Commit:` row, since scripts parse
+`free` by its two row names), `xdg-open` (`start` under the name cross-platform scripts
+try first, with xdg-open's exit codes), and `nc` (OpenBSD netcat's flags, Debian's
+default; `-e` and `-c` refused, as OpenBSD refuses them).
+
+**Oracles.** Where a Linux original exists it is the oracle: scripts in
+`crates/cash/tests/oracle` run under the real tool in WSL (util-linux 2.42.3, procps-ng
+4.0.7, coreutils 9.11, ncurses 6.6, glibc 2.44, vim's xxd) to make the golden files, and
+under cash in the tests, with each deliberate difference replaced in the test beside its
+reason, as `rev` and `getopt` are checked. The deliberate differences are the CRLF rule
+(a CRLF line stays CRLF, D20) and the Windows mappings named above.
+
+Not in it: `grep`, `diff`, `cmp` (the standing rule, README), the compressors, `patch`,
+`strings` (Sysinternals' has the name and other flags), and the BusyBox applets the gap
+analysis lists as not applicable.
+
+### D75 — A per-user installer, `cash --update`, and winget
+
+**Status: chosen by the user on 2026-10-06**, by pick list (TODO.md phase 22). The aim is
+that installing cash gives a complete native Bash with the tools scripts need, without
+Scoop. Scoop remains a channel (D38, D65, the packaging evaluation); the installer is the
+second, on the releases page; winget is made from the installer.
+
+- **Inno Setup, per-user**, no UAC (`PrivilegesRequired=lowest`), built on the GitHub
+  Windows runner, attached to every release beside the zip. Silent switches for scripts
+  and winget: `/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR= /TASKS=`. Chosen over
+  Velopack (its own update agent and layout, a .NET packaging tool) and a per-user MSI
+  (Restart Manager against a running shell, ICE warnings, the most authoring).
+- **Scoop's layout**: `%LOCALAPPDATA%\Programs\cash\<version>\` with a `current` junction,
+  so an upgrade never overwrites a running `cash.exe` (D6 keeps the shell alive as long as
+  its windows): open windows keep the old file, new tabs get the new one. Inno never
+  closes applications. Every step after the copy is cash's own command
+  (`--install-finish`: the junction, the Terminal profile, the tool links, `--init-rc
+  --once`, sweeping old folders), so the Scoop and installer channels share one tested
+  implementation, as D65 asked for PATH.
+- **Tool links on PATH by default**, with a task to turn them off: `ls.exe`, `sed.exe`,
+  `awk.exe` and the rest become programs on the user PATH, ahead of Git for Windows'.
+  That is the "no Scoop needed" promise; the consequence, that PowerShell and editors get
+  cash's tools too, is the point. cash writes PATH itself, as D65 has it.
+- **Upgrades on request, never automatic**: `cash --update` fetches the latest release,
+  verifies its `.sha256`, unpacks into a new version folder and moves the junction;
+  `--check` only reports. A Scoop-installed cash points at `scoop update cash`. Background
+  polling and silent self-replacement were turned down: a shell that changes itself
+  overnight surprises script authors.
+- **Uninstall** from Apps & features: links, Terminal profile, PATH entries and the folder
+  go; `~/.bashrc`, history and config stay.
+- **winget** from the installer (`InstallerType: inno`, `Scope: user`), the first version
+  by hand, later ones by `winget-releaser`; after the installer has shipped in a release,
+  since the installer type cannot change later.
+- **Unsigned** (the user, 2026-10-06: no paid certificate, SignPath not wanted): a
+  browser download of the setup gets SmartScreen's "unknown publisher" prompt once;
+  winget and Scoop downloads do not. Said in `help installing` and the README.
+- **Scoop offered, never imposed** (the user, 2026-10-06): the setup has an unticked
+  task that runs Scoop's own installer as its last step, for the people who want the
+  rest of their command-line tools the easy way; cash itself never bundles or runs a
+  package manager otherwise. The installer refuses to run beside a Scoop-installed cash.
+- **A hint when a command is missing**, at an interactive prompt only: Bash's message,
+  then one line naming `winget install ID` and `scoop install NAME` from a curated table
+  of common tools (`help tools`). Scripts get Bash's message and 127, nothing more, so
+  no output changes for them.
 
 ### D72 — `help` from one catalogue
 

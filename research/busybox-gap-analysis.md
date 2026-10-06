@@ -21,6 +21,24 @@ The tier-1 questions were put to the user; the rest of this document is the evid
 
 Q3, Q5–Q8 concern tools that were not adopted in this round and stay open.
 
+## Decisions, second round (2026-10-06)
+
+A second look at this machine, with Git for Windows' `usr/bin` off the Windows `PATH`
+and BusyBox uninstalled, resolved about 90 candidate names under cash. The user chose to
+build the tier-2 tools below (TODO.md phase 21, spec D74, ROADMAP item 19), plus four
+names this analysis did not measure: `tput` (`tput setaf` 130k shell-script hits on
+GitHub, `tput cols` 27k), `column` (`column -t` 27k), `xdg-open` (79k) and `pbcopy` (39k).
+
+| Question | Decision |
+|---|---|
+| Tier 2 | Adopt `tput`, `stty`, `iconv`, `column`, `xxd`, `hexdump`, `uuidgen`, `free`, `watch`, `nice`/`renice`, `flock`, `nc`; add `xdg-open` (as `start`) and `pbcopy`/`pbpaste` |
+| Q5 `flock` | One byte far past the end of the file, so readers of the lock file are not blocked; the lock lives on the shell's handle, for the command's lifetime or until the descriptor closes; directories refused; `flock FD` through cash's table only |
+| Q6 `nice` | `-20…-11` HIGH, `-10…-1` ABOVE_NORMAL, `0` NORMAL, `1…10` BELOW_NORMAL, `11…19` IDLE; never REALTIME; bare `nice` maps the class back |
+| Q7 `free` | `Swap:` is the page file; no `Commit:` row, since scripts parse `free` by `Mem:` and `Swap:` |
+| Q8 `nc` | OpenBSD's flags; `-e`/`-c` refused |
+| Q3 compressors | Still not adopted; to be discussed next. On this machine `gunzip` and `zcat` resolve to nothing even with Scoop's gzip installed, and `tar.exe` reads only archives |
+| `grep`, `diff`, `cmp`, `patch`, `strings` | Still not adopted |
+
 ## Method
 
 1. **BusyBox applet set.** The union of three lists, 390 names in total:

@@ -57,6 +57,11 @@ with every script-observable item probed against a real Bash 5.3 in the
 The selected source candidates and release gates are recorded in the
 [`posixutils-rs` AWK evaluation](research/posixutils-rs-evaluation.md) and
 [`uutils/sed` evaluation](research/uutils-sed-evaluation.md).
+Since 1.5.0 the console, clipboard and the small tools a bare Windows machine lacks are
+built in too: `tput`, `stty`, `iconv`, `column`, `xxd`, `hexdump`, `uuidgen`, `xdg-open`,
+`pbcopy`/`pbpaste`, `watch`, `free`, `nice`/`renice`, `flock` and `nc`, each checked
+against its Linux original where one exists (ROADMAP item 19). `help` lists them under
+their kinds, and `help installing` covers the install and its optional steps.
 
 History and job-control scripts can use `history -n`/`-r`/`-p`, `fc` editor mode,
 and `jobs -n`. `BASH_COMMAND` preserves the command text before expansion, assigning
