@@ -118,6 +118,9 @@ pub struct ExecutionParameters {
 
 impl ExecutionParameters {
     /// Returns the standard input file; usable with `write!` et al.
+    /// not to interrupt: a builtin that waits (`flock`) leaves a pending interrupt to the
+    pub const fn is_asynchronous(&self) -> bool {
+        self.asynchronous
     ///
     /// # Arguments
     ///

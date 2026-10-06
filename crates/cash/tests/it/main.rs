@@ -86,6 +86,8 @@ mod extglob;
 mod find_xargs;
 mod finished_command_orphans;
 mod folder_history;
+// `flock`, util-linux's, against its golden output; the lock across processes and
+mod flock_builtin;
 mod fuser_lsof;
 // Git for Windows' git-prompt.sh (`__git_ps1`), sourced from the Git install.
 mod git_prompt;

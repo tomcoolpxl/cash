@@ -105,6 +105,7 @@ an entry or page names no builtin.
 ## Processes and network
 - `xdg-open`: Open a file, folder or URL with its default program (`start`, under the name scripts try first).
 
+- `flock`: Run a command, or hold a descriptor, under a lock on a file, so scripts take turns.
 - `free`: Show the machine's memory: used, free, cache and the page files, as procps' `free` does.
 - `fuser`: Show the processes using files or sockets.
 - `killall`: Signal every process with a given name.

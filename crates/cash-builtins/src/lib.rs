@@ -27,8 +27,8 @@ mod dirhistory;
 // pids that `kill` cannot use.
 mod croot;
 mod fileuse;
-mod fuser;
-mod getopt;
+// cash: `flock`, util-linux's, on LockFileEx; the lock is one byte far past the content.
+mod flock;
 // cash: `free`, procps-ng's, on Windows' memory counters; Windows has no `free`.
 mod free;
 mod killfam;

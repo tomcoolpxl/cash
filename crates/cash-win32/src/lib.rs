@@ -36,6 +36,8 @@ pub mod env;
 pub mod exit;
 pub mod fold;
 pub mod fs;
+// Byte-range locks on an open file, for `flock`.
+pub mod filelock;
 /// What gsudo reports of itself: its credentials cache.
 pub mod gsudo;
 mod handle;

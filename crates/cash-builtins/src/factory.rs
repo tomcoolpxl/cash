@@ -289,6 +289,8 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
     m.insert("clear".into(), builtin::<screen::ClearCommand, SE>());
     m.insert("reset".into(), builtin::<screen::ResetCommand, SE>());
     m.insert("fuser".into(), builtin::<fuser::FuserCommand, SE>());
+        "flock".into(),
+        builtin::<flock::FlockCommand, SE>().with_substitution_files(),
     m.insert("lsof".into(), builtin::<lsof::LsofCommand, SE>());
     m.insert("ss".into(), builtin::<ss::SsCommand, SE>());
     m.insert("pstree".into(), builtin::<pstree::PsTreeCommand, SE>());

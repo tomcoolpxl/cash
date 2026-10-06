@@ -1,0 +1,154 @@
+== -h first lines
+
+Usage:
+ flock [options] <file>|<directory> <command> [<argument>...]
+ flock [options] <file>|<directory> -c <command>
+ flock [options] <file descriptor number>
+== -V
+flock from util-linux 2.42.3
+== no arguments
+flock: not enough arguments
+Try 'flock --help' for more information.
+rc=64
+== one argument that is no descriptor
+flock: bad file descriptor: 'f'
+rc=64
+== descriptor not open
+flock: 99: Bad file descriptor
+rc=65
+flock: 99: Bad file descriptor
+rc=65
+== bad option
+flock: invalid option -- 'Z'
+Try 'flock --help' for more information.
+rc=64
+== -c is not an option
+flock: invalid option -- 'c'
+Try 'flock --help' for more information.
+rc=64
+== unrecognized long option
+flock: unrecognized option '--zzz'
+Try 'flock --help' for more information.
+rc=64
+== ambiguous long option
+flock: option '--no' is ambiguous; possibilities: '--nonblocking' '--no-fork'
+Try 'flock --help' for more information.
+rc=64
+== long option with an argument it does not take
+flock: option '--shared' doesn't allow an argument
+Try 'flock --help' for more information.
+rc=64
+== long option missing its argument
+flock: option '--timeout' requires an argument
+Try 'flock --help' for more information.
+rc=64
+== short option missing its argument
+flock: option requires an argument -- 'w'
+Try 'flock --help' for more information.
+rc=64
+== bad timeout
+flock: invalid timeout: 'abc'
+rc=64
+flock: cannot set up timer: Invalid argument
+rc=71
+== bad exit code
+flock: invalid exit code: 'abc'
+rc=64
+flock: exit code out of range (expected 0 to 255)
+rc=64
+== bad range
+flock: invalid as start offset: 'x': Invalid argument
+rc=64
+flock: invalid as length of lock range: '-1': Invalid argument
+rc=64
+== -c wants exactly one argument
+flock: -c requires exactly one command argument
+rc=64
+== missing folder
+flock: cannot open lock file nosuch/dir/f: No such file or directory
+rc=66
+== command not found
+flock: failed to execute nosuchcmd-xyz: No such file or directory
+rc=69
+== the command's status
+rc=5
+== the command keeps its options
+hi
+rc=0
+== -c
+hi
+rc=3
+== --command after the file
+via long
+rc=0
+== -E leaves the command's status alone
+rc=1
+== the lock file is created
+created
+== options end at the file
+flock: failed to execute -n: No such file or directory
+rc=69
+== --
+dashes
+rc=0
+== -u with a command runs it
+ran
+rc=0
+== -o and -F are accepted
+closed
+rc=0
+forked
+rc=0
+== but not together
+flock: the --no-fork and --close options are incompatible
+rc=64
+flock: the --no-fork and --close options are incompatible
+rc=64
+== --verbose
+hi
+flock: getting lock took N seconds
+flock: executing echo
+== --verbose -c
+hi
+flock: getting lock took N seconds
+flock: executing /usr/bin/bash
+== --verbose -w 1 free lock
+flock: getting lock took N seconds
+flock: executing true
+rc=0
+== against a held lock
+rc=1
+rc=7
+flock: failed to get lock
+rc=1
+rc=1
+rc=1
+flock: timeout while waiting to get lock
+rc=9
+rc=1
+== shared locks coexist
+rc=0
+rc=1
+== a reader is not kept out
+content
+== the lock goes when its holder ends
+waited
+rc=0
+== the descriptor form
+rc=0
+again rc=0
+convert rc=0
+unlock rc=0
+unlock again rc=0
+== a descriptor's lock is seen by another flock
+rc=1
+rc=0
+== the lock lives as long as the subshell's descriptor
+inside rc=1
+rc=0
+free
+rc=0
+== a descriptor that is a pipe
+rc=0
+== a directory
+rc=0
