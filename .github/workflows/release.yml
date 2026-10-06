@@ -181,6 +181,27 @@ jobs:
           Write-Host "Archive: $archiveName"
           Write-Host "SHA256:  $hash"
 
+      # The per-user installer (packaging/inno/cash.iss): the same files, in Scoop's
+      # layout under %LOCALAPPDATA%\Programs\cash, finished by `cash --install-finish`.
+      # Inno Setup is preinstalled on the Windows runner; ISCC takes the version and the
+      # dist folder as defines. Unsigned, so a browser download shows SmartScreen once.
+      - name: Build the installer
+        shell: pwsh
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          $version = $env:TAG -replace '^v', ''
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { $iscc = "iscc" }
+          & $iscc /Q "/DAppVersion=$version" "/DSourceDir=$PWD\dist" "/O$PWD" packaging\inno\cash.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $setup = "cash-$env:TAG-setup.exe"
+          if (-not (Test-Path $setup)) { Write-Error "no $setup was written"; exit 1 }
+          $hash = (Get-FileHash -Path $setup -Algorithm SHA256).Hash.ToLower()
+          "$hash  $setup" | Out-File -FilePath "$setup.sha256" -Encoding ascii
+          Write-Host "Installer: $setup"
+          Write-Host "SHA256:    $hash"
+
       # GitHub's generated notes list merged pull requests, and most work here is
       # committed straight to main, so they would be empty. Write the commit subjects
       # since the previous tag instead, grouped by Conventional Commits type; the
@@ -204,3 +225,5 @@ jobs:
           files: |
             cash-*-x86_64-pc-windows-msvc.zip
             cash-*-x86_64-pc-windows-msvc.zip.sha256
+            cash-*-setup.exe
+            cash-*-setup.exe.sha256
