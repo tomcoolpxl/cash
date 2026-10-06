@@ -411,6 +411,7 @@ fn screen(program: &str, args: &[&str], case: &Case) -> String {
     let home = dir.to_string_lossy().replace('\\', "/");
     let overrides = [
         ("PS1", "$ "),
+        ("CASH_NO_OFFER", "1"),
         ("PS2", "> "),
         ("HISTFILE", ""),
         ("TERM", "xterm-256color"),

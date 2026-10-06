@@ -43,7 +43,7 @@ fn start_interactive_cash() -> ConPtySession {
             "--input-backend=basic",
             "-i",
         ],
-        Some(&[("HISTFILE", "")]),
+        Some(&[("HISTFILE", ""), ("CASH_NO_OFFER", "1")]),
     )
     .expect("failed to start cash.exe attached to Win32 ConPTY")
 }
@@ -65,7 +65,12 @@ fn start_reedline_cash() -> ConPtySession {
             "--input-backend=reedline",
             "-i",
         ],
-        Some(&[("HISTFILE", ""), ("PS1", "PROMPT$ "), ("TEMP", &temp)]),
+        Some(&[
+            ("HISTFILE", ""),
+            ("PS1", "PROMPT$ "),
+            ("CASH_NO_OFFER", "1"),
+            ("TEMP", &temp),
+        ]),
     )
     .expect("failed to start cash.exe attached to Win32 ConPTY")
 }
@@ -177,6 +182,7 @@ impl ConsoleStateSession {
             Some(&[
                 ("HISTFILE", ""),
                 ("PS1", "PROMPT$ "),
+                ("CASH_NO_OFFER", "1"),
                 ("TEMP", &temp),
                 ("TMP", &temp),
                 ("SystemRoot", &system_root),
@@ -1171,6 +1177,7 @@ fn start_job_cash() -> ConPtySession {
         Some(&[
             ("HISTFILE", ""),
             ("PS1", "PROMPT$ "),
+            ("CASH_NO_OFFER", "1"),
             ("TEMP", &temp),
             ("TMP", &temp),
             ("SystemRoot", &system_root),
