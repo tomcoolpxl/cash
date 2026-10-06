@@ -45,6 +45,19 @@ Version folders no window runs any more are removed. A cash installed by Scoop s
 `scoop update cash` instead; a cash unpacked from the zip by hand says where to download
 the new one.
 
+## Portable: the zip
+
+The release zip holds `cash.exe` and the licence notices, nothing else is needed: the C
+runtime is linked in, every tool and this help are inside the one file. Unpack it
+anywhere and run it. At its first interactive prompt a portable cash asks, once, whether
+to add the Windows Terminal profile and whether to put its tools on PATH for other
+programs; Enter means no, and the answer is kept in `%LOCALAPPDATA%\cash\portable-offer`
+(delete that file to be asked again; `CASH_NO_OFFER=1` never asks). Nothing changes
+without a yes, and the same things stay commands at any time: `cash --terminal-profile`
+and `cash --link-tools --add-to-path`, with `--remove-terminal-profile` and
+`--unlink-tools` to undo them. `cash --update --check` says when a newer zip is on the
+releases page; a portable cash does not replace itself.
+
 ## What the Scoop install does
 
 `scoop install cash` puts `cash.exe` in place and runs three things, each quietly:
