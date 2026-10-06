@@ -29,10 +29,14 @@ mod croot;
 mod fileuse;
 mod fuser;
 mod getopt;
+// cash: `free`, procps-ng's, on Windows' memory counters; Windows has no `free`.
+mod free;
 mod killfam;
 mod lsof;
-// cash: `column`, util-linux's, checked against 2.42.3 case by case.
-mod column;
+// cash: `nc`, OpenBSD netcat's, on Windows sockets; a clean Windows machine has none.
+mod nc;
+// cash: `nice` and `renice` on Windows' six priority classes; Windows has neither.
+mod nice;
 mod pgrep;
 pub mod ping;
 mod procmatch;

@@ -50,12 +50,16 @@ pub mod msys;
 /// The machine's TCP/UDP sockets and their owning processes.
 pub mod net;
 pub mod path;
+// Physical memory, the commit charge and the page files, for `free`.
+pub mod memory;
 pub mod pipe;
 pub mod poll;
 pub mod process;
 pub mod resolve;
 /// Which processes hold a file open, through the Restart Manager.
 pub mod restart;
+// A process's priority class, and the niceness it stands for, for `nice` and `renice`.
+pub mod priority;
 pub mod scoop;
 pub mod session;
 pub mod shellopen;

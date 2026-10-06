@@ -4,24 +4,29 @@ pub(crate) type ProcessId = i32;
 pub(crate) use tokio::process::Child;
 
 // `kill_on_drop`: see `CreateOptions::kill_external_commands_on_drop` (false for ordinary shells).
-// `new_group`: on Windows, start the process as the leader of a process group of its own
-// (D13): the keyboard's Ctrl-C then passes it by, and a Ctrl-Break can be aimed at it.
+// `params.background`: on Windows, start the process as the leader of a process group of
+// its own (D13): the keyboard's Ctrl-C then passes it by, and a Ctrl-Break can be aimed
+// at it. `params.priority_class`: the class to create the process in, as `nice` asks;
+// `None` leaves Windows' default.
 pub(crate) fn spawn(
     command: std::process::Command,
     kill_on_drop: bool,
-    new_group: bool,
+    params: &crate::interp::ExecutionParameters,
 ) -> std::io::Result<Child> {
     let mut command = {
         use std::os::windows::process::CommandExt;
         const CREATE_SUSPENDED: u32 = 0x0000_0004;
         const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
         let mut cmd = command;
-        let group = if new_group {
+        let group = if params.background {
             CREATE_NEW_PROCESS_GROUP
         } else {
             0
         };
-        cmd.creation_flags(CREATE_SUSPENDED | group);
+        let class = params
+            .priority_class
+            .map_or(0, cash_win32::priority::PriorityClass::raw);
+        cmd.creation_flags(CREATE_SUSPENDED | group | class);
         let mut tokio_cmd = tokio::process::Command::from(cmd);
         tokio_cmd.kill_on_drop(kill_on_drop);
         tokio_cmd
@@ -122,7 +127,8 @@ mod tests {
     /// `cash_win32::spawn::spawn`, which nothing ran (W32-11).
     #[tokio::test]
     async fn a_program_is_in_its_job_when_spawn_returns_and_so_are_its_children() {
-        let mut child = spawn(sleeper(), true, false).unwrap();
+        let params = crate::interp::ExecutionParameters::default();
+        let mut child = spawn(sleeper(), true, &params).unwrap();
         let pid = child.id().unwrap();
         assert!(
             cash_win32::jobreg::tree_pids(pid).contains(&pid),

@@ -90,6 +90,8 @@ mod fuser_lsof;
 // Git for Windows' git-prompt.sh (`__git_ps1`), sourced from the Git install.
 mod git_prompt;
 // BIN-05: Git's prompt scripts against Git Bash's frozen output.
+// `free`, `nice` and `renice`: procps' layout on Windows' counters, and the priority classes.
+mod free_nice;
 mod git_prompt_goldens;
 mod gui_apps_outlive;
 mod held_descriptors;

@@ -1549,7 +1549,7 @@ pub(crate) fn execute_external_command(
     );
 
     let kill_on_drop = context.shell.options().kill_external_commands_on_drop;
-    match sys::process::spawn(cmd, kill_on_drop, context.params.background) {
+    match sys::process::spawn(cmd, kill_on_drop, &context.params) {
         Ok(child) => {
             register_background_leader(&child, context.params.background);
 

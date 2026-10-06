@@ -278,6 +278,10 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
     m.insert("ps".into(), builtin::<ps::PsCommand, SE>());
     m.insert("pgrep".into(), builtin::<pgrep::PgrepCommand, SE>());
     m.insert("pkill".into(), builtin::<killfam::PkillCommand, SE>());
+    m.insert("free".into(), builtin::<free::FreeCommand, SE>());
+        "nice".into(),
+        builtin::<nice::NiceCommand, SE>().with_substitution_files(),
+    m.insert("renice".into(), builtin::<nice::ReniceCommand, SE>());
     m.insert("pidof".into(), builtin::<killfam::PidofCommand, SE>());
     m.insert("killall".into(), builtin::<killfam::KillallCommand, SE>());
     m.insert("getopt".into(), builtin::<getopt::GetoptCommand, SE>());

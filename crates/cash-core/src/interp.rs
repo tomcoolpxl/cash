@@ -75,6 +75,11 @@ pub struct ExecutionParameters {
     /// job's never does on Unix, and `kill -TERM %1` can send them a Ctrl-Break.
     pub(crate) background: bool,
 
+    /// The priority class the programs started under these parameters are created in,
+    /// which `nice` sets. `None` is Windows' default: normal, unless the shell itself is
+    /// inherited, so `nice -n -5` has to say so when the program is created.
+    pub priority_class: Option<cash_win32::priority::PriorityClass>,
+
     /// Descriptors above 2 that the current simple command's own redirections set.
     ///
     /// cash (D26): a native exe cannot see fd 3 and up, so only these make its spawn

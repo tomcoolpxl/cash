@@ -105,10 +105,12 @@ an entry or page names no builtin.
 ## Processes and network
 - `xdg-open`: Open a file, folder or URL with its default program (`start`, under the name scripts try first).
 
+- `free`: Show the machine's memory: used, free, cache and the page files, as procps' `free` does.
 - `fuser`: Show the processes using files or sockets.
 - `killall`: Signal every process with a given name.
 - `lsof`: List the files and sockets processes have open.
 - `nohup`: Run a command immune to hangups, its output to `nohup.out`.
+- `nice`: Run a command at a lower (or higher) priority, or print the current niceness.
 - `pgrep`: Find processes by name and other attributes.
 - `pidof`: Print the process ids of programs by name.
 - `ping`: Send ICMP echo requests to a host, with Linux's options.
@@ -117,6 +119,7 @@ an entry or page names no builtin.
 - `pstree`: Show processes as a tree of parents and children.
 - `ss`: Show sockets, as iproute2's `ss` does.
 - `top`: Show the processes using the machine, updated live.
+- `renice`: Change the priority of running processes, by pid or by user.
 
 ## Text and file tools
 
