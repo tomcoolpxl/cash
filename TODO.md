@@ -361,9 +361,14 @@ untrusted mount point"); the uninstaller therefore runs `--install-remove` from 
 folder it finds itself. Windows Terminal, the shell and every ordinary process cross the
 junction as before. For item 6, `packaging/winget` holds the three manifest templates and
 RELEASING step 8 the procedure; `scripts/sync-bucket.py` copies the Scoop manifest's notes
-and hooks into the bucket (step 7). Left for after the 1.5.0 release: push the bucket's
-notes (they name `help installing`, which 1.4.4 lacks), measure the first start after
-the real `scoop update cash`, then release 1.6.0 with the installer and submit winget.
+and hooks into the bucket (step 7). Later the same day: the bucket pushed at 1.5.0 with
+the quiet notes (its default branch is `master`; a first push to `main` was taken back),
+the first start after the real update measured (see "Found along the way"), items 11
+(doctor's `path` line, `--add-to-path`) and 12 (F1) built, and 1.6.0 tagged by the user
+on commit 252f6354. The release workflow now installs, runs and uninstalls the setup on
+the runner every release (the clean-machine run item 6 asked for). Left: the winget
+submission once the 1.6.0 setup has been seen on the releases page and on a clean
+machine, and a look at the F1 screen in the user's own Terminal profile.
 
 ---
 
