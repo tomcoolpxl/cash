@@ -1,0 +1,1188 @@
+== default is -x
+0000000 6568 6c6c 206f 6f77 6c72 2164 0021     
+000000d
+== default, partial
+0000000 6568 6c6c 0a6f                         
+0000006
+== -x
+0000000    6568    6c6c    206f    6f77    6c72    2164    0021        
+000000d
+== -b
+0000000 150 145 154 154 157 040 167 157 162 154 144 041 041            
+000000d
+== -c
+0000000   h   e   l   l   o       w   o   r   l   d   !   !            
+000000d
+== -C
+00000000  68 65 6c 6c 6f 20 77 6f  72 6c 64 21 21           |hello world!!|
+0000000d
+== -d
+0000000   25960   27756   08303   28535   27762   08548   00033        
+000000d
+== -o
+0000000  062550  066154  020157  067567  066162  020544  000041        
+000000d
+== -X
+0000000  68  65  6c  6c  6f  20  77  6f  72  6c  64  21  21            
+000000d
+== -c control characters
+0000000  \0 001  \a  \b  \t  \n  \v  \f  \r 033 037       ~ 177 200 377
+0000010
+== -c every control character
+0000000  \0 001 002 003 004 005 006  \a  \b  \t  \n  \v  \f  \r 016 017
+0000010 020 021 022 023 024 025 026 027 030 031 032 033 034 035 036 037
+0000020 177                                                            
+0000021
+== -C control characters
+00000000  00 01 07 08 09 0a 0b 0c  0d 1b 1f 20 7e 7f 80 ff  |........... ~...|
+00000010
+== -C one byte
+00000000  61                                                |a|
+00000001
+== -C 16 bytes
+00000000  61 61 61 61 61 61 61 61  61 61 61 61 61 61 61 61  |aaaaaaaaaaaaaaaa|
+00000010
+== -C 17 bytes
+00000000  61 61 61 61 61 61 61 61  61 61 61 61 61 61 61 61  |aaaaaaaaaaaaaaaa|
+00000010  62                                                |b|
+00000011
+== -b partial
+0000000 150 145 154 154 157 012                                        
+0000006
+== -d partial
+0000000   25960   27756   02671                                        
+0000006
+== -o partial
+0000000  062550  066154  005157                                        
+0000006
+== -X partial
+0000000  68  65  6c  6c  6f  0a                                        
+0000006
+== -b then -C
+0000000 150 145 154 154 157 012                                        
+00000000  68 65 6c 6c 6f 0a                                 |hello.|
+00000006
+== -C then -b
+00000000  68 65 6c 6c 6f 0a                                 |hello.|
+0000000 150 145 154 154 157 012                                        
+0000006
+== -c -x
+0000000   h   e   l   l   o  \n                                        
+0000000    6568    6c6c    0a6f                                        
+0000006
+== -C with -e
+00000000  68 65 6c 6c 6f 0a                                 |hello.|
+68 65 6c 6c
+00000006
+== -e then -C
+68 65 6c 6c
+00000000  68 65 6c 6c 6f 0a                                 |hello.|
+00000006
+== long options
+00000001  65 6c 6c 6f                                       |ello|
+00000005
+== --canon abbreviated
+00000000  68 65 6c 6c 6f 0a                                 |hello.|
+00000006
+== --format=
+68 65 6c 6c
+6f 0a      
+== --format with a value
+68 65 6c 6c
+6f 0a      
+== -e attached
+68 65 6c 6c
+6f 0a      
+== -n5 attached
+00000000  68 65 6c 6c 6f                                    |hello|
+00000005
+== -s3 attached
+00000003  6c 6f 20 77 6f 72 6c 64  21 21                    |lo world!!|
+0000000d
+== -vC cluster
+00000000  61 62 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |ab..............|
+00000010  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
+00000020  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
+00000030  00 00 63 64                                       |..cd|
+00000034
+== -Cn 3 cluster
+00000000  68 65 6c                                          |hel|
+00000003
+== -n3C is not a length
+hexdump: failed to parse length: '3C': Invalid argument
+rc=1
+== -- ends the options
+00000000  68 65 6c 6c 6f 0a                                 |hello.|
+00000006
+== an option after the file
+0000000 6568                                   
+0000002
+== empty
+rc=0
+== empty -C
+rc=0
+== empty -c
+rc=0
+== empty stdin
+rc=0
+== -n 0
+rc=0
+== -n 5
+00000000  68 65 6c 6c 6f                                    |hello|
+00000005
+== -n 0x5
+00000000  68 65 6c 6c 6f                                    |hello|
+00000005
+== -n 1k
+00000120  61 61 61 61 61 61 61 61  61 61 61 61              |aaaaaaaaaaaa|
+0000012c
+== -n 1KB
+000003e8
+== -n 0.5k
+00000200
+== -n abc
+hexdump: failed to parse length: 'abc': Invalid argument
+rc=1
+== -n -1
+hexdump: failed to parse length: '-1': Invalid argument
+rc=1
+== -n too large
+hexdump: failed to parse length: '99999999999999999999': Numerical result out of range
+rc=1
+== -s 3
+00000003  6c 6f 20 77 6f 72 6c 64  21 21                    |lo world!!|
+0000000d
+== -s 0x3
+00000003  6c 6f 20 77 6f 72 6c 64  21 21                    |lo world!!|
+0000000d
+== -s 010 is octal
+00000008  72 6c 64 21 21                                    |rld!!|
+0000000d
+== -s +3
+00000003  6c 6f 20 77 6f 72 6c 64  21 21                    |lo world!!|
+0000000d
+== -s ' 3'
+00000003  6c 6f 20 77 6f 72 6c 64  21 21                    |lo world!!|
+0000000d
+== -s 13 at the end
+0000000d
+rc=0
+== -s 100 beyond the end
+0000000d
+rc=0
+== -s 1T beyond the end
+00000bb8
+rc=0
+== -s 1k
+00000400  61 61 61 61 61 61 61 61  61 61 61 61 61 61 61 61  |aaaaaaaaaaaaaaaa|
+*
+== -s 1K
+00000400  61 61 61 61 61 61 61 61  61 61 61 61 61 61 61 61  |aaaaaaaaaaaaaaaa|
+== -s 1KiB
+00000400  61 61 61 61 61 61 61 61  61 61 61 61 61 61 61 61  |aaaaaaaaaaaaaaaa|
+== -s 1kib
+00000400  61 61 61 61 61 61 61 61  61 61 61 61 61 61 61 61  |aaaaaaaaaaaaaaaa|
+== -s 1KB is 1000
+000003e8  61 61 61 61 61 61 61 61  61 61 61 61 61 61 61 61  |aaaaaaaaaaaaaaaa|
+== -s 1kb
+000003e8  61 61 61 61 61 61 61 61  61 61 61 61 61 61 61 61  |aaaaaaaaaaaaaaaa|
+== -s 2.5k
+00000a00  61 61 61 61 61 61 61 61  61 61 61 61 61 61 61 61  |aaaaaaaaaaaaaaaa|
+== -s 1m
+0000012c
+rc=0
+== -s 1b
+hexdump: failed to parse offset: '1b': Invalid argument
+rc=1
+== -s 1KIB
+hexdump: failed to parse offset: '1KIB': Invalid argument
+rc=1
+== -s 1Ki
+hexdump: failed to parse offset: '1Ki': Invalid argument
+rc=1
+== -s 1,5k
+hexdump: failed to parse offset: '1,5k': Invalid argument
+rc=1
+== -s abc
+hexdump: failed to parse offset: 'abc': Invalid argument
+rc=1
+== -s -3
+hexdump: failed to parse offset: '-3': Invalid argument
+rc=1
+== -s ''
+hexdump: failed to parse offset: '': Invalid argument
+rc=1
+== -s '3 '
+hexdump: failed to parse offset: '3 ': Invalid argument
+rc=1
+== -s 0x
+hexdump: failed to parse offset: '0x': Invalid argument
+rc=1
+== -s 3 -n 4
+00000003  6c 6f 20 77                                       |lo w|
+00000007
+== -s 2 -n 0
+rc=0
+== -s on stdin
+hexdump: stdin: Illegal seek
+rc=1
+== -n on stdin
+00000000  68 65 6c                                          |hel|
+00000003
+== squeeze
+00000000  61 62 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |ab..............|
+00000010  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
+*
+00000030  00 00 63 64                                       |..cd|
+00000034
+== squeeze -v
+00000000  61 62 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |ab..............|
+00000010  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
+00000020  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
+00000030  00 00 63 64                                       |..cd|
+00000034
+== squeeze --no-squeezing
+00000000  61 62 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |ab..............|
+00000010  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
+00000020  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
+00000030  00 00 63 64                                       |..cd|
+00000034
+== squeeze -x
+0000000 6261 0000 0000 0000 0000 0000 0000 0000
+0000010 0000 0000 0000 0000 0000 0000 0000 0000
+*
+0000030 0000 6463                              
+0000034
+== squeeze -c
+0000000   a   b  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0
+0000010  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0
+*
+0000030  \0  \0   c   d                                                
+0000034
+== squeeze 300 bytes
+00000000  61 61 61 61 61 61 61 61  61 61 61 61 61 61 61 61  |aaaaaaaaaaaaaaaa|
+*
+00000120  61 61 61 61 61 61 61 61  61 61 61 61              |aaaaaaaaaaaa|
+0000012c
+== squeeze -b 300 bytes
+0000000 141 141 141 141 141 141 141 141 141 141 141 141 141 141 141 141
+*
+0000120 141 141 141 141 141 141 141 141 141 141 141 141                
+000012c
+== squeeze to the end
+00000000  61 61 61 61 61 61 61 61  61 61 61 61 61 61 61 61  |aaaaaaaaaaaaaaaa|
+*
+00000020
+== squeeze three blocks
+00000000  61 61 61 61 61 61 61 61  61 61 61 61 61 61 61 61  |aaaaaaaaaaaaaaaa|
+*
+00000030
+== a partial block is never squeezed
+00000000  61 61 61 61 61 61 61 61  61 61 61 61 61 61 61 61  |aaaaaaaaaaaaaaaa|
+00000010  61 61 61 61 61 61 61 61                           |aaaaaaaa|
+00000018
+== squeeze runs
+61616161
+62626262
+*
+61616161
+*
+== squeeze -x 33 bytes
+0000000    6161    6161    6161    6161    6161    6161    6161    6161
+*
+0000020    0062                                                        
+0000021
+== squeeze with -e
+61 62 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+*
+00 00 63 64                                    
+== squeeze with -e -v
+61 62 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 63 64                                    
+== squeeze one-byte blocks
+h
+e
+l
+*
+o
+ 
+w
+o
+r
+l
+d
+!
+*
+== squeeze with _A
+6161
+*
+8
+== squeeze through repeats
+6161
+6262
+6161
+*
+8
+== two files
+00000000  68 65 6c 6c 6f 20 77 6f  72 6c 64 21 21 68 65 6c  |hello world!!hel|
+00000010  6c 6f 0a                                          |lo.|
+00000013
+== two files squeeze across
+00000000  61 61 61 61 61 61 61 61  61 61 61 61 61 61 61 61  |aaaaaaaaaaaaaaaa|
+*
+00000030
+== -s across files
+0000000a  64 21 21 68 65 6c 6c 6f  0a                       |d!!hello.|
+00000013
+== -s past the first file
+0000000e  65 6c 6c 6f 0a                                    |ello.|
+00000013
+== -s the first file's length
+0000000d  68 65 6c 6c 6f 0a                                 |hello.|
+00000013
+== -n across files
+00000000  68 65 6c 6c 6f 20 77 6f  72 6c 64 21 21 68 65     |hello world!!he|
+0000000f
+== -n with two files, squeezed
+00000000  68 65 6c                                          |hel|
+00000003
+== missing file
+hexdump: nosuch: No such file or directory
+hexdump: all input file arguments failed
+rc=1
+== missing file in the middle
+hexdump: nosuch: No such file or directory
+00000000  68 65 6c 6c 6f 20 77 6f  72 6c 64 21 21 68 65 6c  |hello world!!hel|
+00000010  6c 6f 0a                                          |lo.|
+00000013
+rc=1
+== dash is a file name
+hexdump: -: No such file or directory
+hexdump: all input file arguments failed
+rc=1
+== bad option
+hexdump: invalid option -- 'Z'
+Try 'hexdump --help' for more information.
+rc=1
+== bad long option
+hexdump: unrecognized option '--zzz'
+Try 'hexdump --help' for more information.
+rc=1
+== -n without a value
+hexdump: option requires an argument -- 'n'
+Try 'hexdump --help' for more information.
+rc=1
+== -e without a value
+hexdump: option requires an argument -- 'e'
+Try 'hexdump --help' for more information.
+rc=1
+== --format without a value
+hexdump: option '--format' requires an argument
+Try 'hexdump --help' for more information.
+rc=1
+== --canonical=5
+hexdump: option '--canonical' doesn't allow an argument
+Try 'hexdump --help' for more information.
+rc=1
+== -h
+
+Usage:
+ hexdump [options] <file>...
+rc=0
+== -V
+hexdump from util-linux 2.42.3
+rc=0
+== --version
+hexdump from util-linux 2.42.3
+rc=0
+== -L=never
+00000000  68 65 6c 6c 6f 20 77 6f  72 6c 64 21 21           |hello world!!|
+0000000d
+rc=0
+== -Lnever
+00000000  68 65 6c 6c 6f 0a                                 |hello.|
+00000006
+rc=0
+== --color=never
+00000000  68 65 6c 6c 6f 0a                                 |hello.|
+00000006
+rc=0
+== --color never takes no separate value
+hexdump: never: No such file or directory
+00000000  68 65 6c 6c 6f 0a                                 |hello.|
+00000006
+rc=1
+== -L=auto on a pipe
+00000000  68 65 6c 6c 6f 0a                                 |hello.|
+00000006
+rc=0
+== -L=sometimes
+hexdump: unsupported color mode: sometimes
+rc=1
+== -L= empty
+hexdump: unsupported color mode: 
+rc=1
+== _L[red] without -L
+68 65 6c 6c
+6f 0a      
+rc=0
+== _L[red] with -L=never
+68 65 6c 6c
+6f 0a      
+rc=0
+== _L without brackets
+hexdump: bad conversion character %_L
+rc=1
+== _L unterminated
+hexdump: bad conversion character %_L
+rc=1
+== _L on text is text
+68656c6cx_L[red]
+6f0a    x_L[red]
+rc=0
+== _L on a position
+0 68 65 6c 6c
+4 6f 0a      
+rc=0
+== -e 16 bytes
+68 65 6c 6c 6f 20 77 6f 72 6c 64 21 21         
+== -e the canonical format
+00000000  68 65 6c 6c 6f 20 77 6f  72 6c 64 21 21           |hello world!!|
+== -e the canonical format, squeezed
+00000000  61 62 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |ab..............|
+00000010  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
+*
+00000030  00 00 63 64                                       |..cd|
+== -e %_ax and %_Ax
+00000000 68 65 6c 6c
+00000004 6f 20 77 6f
+00000008 72 6c 64 21
+0000000c 21         
+0000000d
+== -e %_ad and %_Ad
+0 68 65 6c 6c
+4 6f 20 77 6f
+8 72 6c 64 21
+12 21         
+13
+== -e %_ao and %_Ao
+0 68 65 6c 6c
+4 6f 20 77 6f
+10 72 6c 64 21
+14 21         
+15
+== -e %5_ax
+    0: 68 65 6c 6c
+    4: 6f 20 77 6f
+    8: 72 6c 64 21
+    c: 21         
+== -e %08.3_ax
+     000 68 65 6c 6c
+     004 6f 20 77 6f
+     008 72 6c 64 21
+     00c 21         
+== -e %-8_ax
+0       |68 65 6c 6c
+4       |6f 20 77 6f
+8       |72 6c 64 21
+c       |21         
+== -e %-5_ax
+0    |68656c6c
+4    |6f0a    
+== -e %_ax with -s
+5: 20 77 6f 72
+9: 6c 64 21 21
+d
+== -e %08_Ax with -n
+68 65 6c 6c
+6f 20      
+00000006
+== -e %5_Ad
+68 65 6c 6c
+6f 20 77 6f
+72 6c 64 21
+21         
+   13|
+== -e _A text around it
+6865
+6c6c
+6f0a
+total 6 bytes
+== -e two _A, the last wins
+68 65 6c 6c
+6f 20 77 6f
+72 6c 64 21
+21         
+13
+== -e _A given first
+68 65 6c 6c
+6f 20 77 6f
+72 6c 64 21
+21         
+d
+== -e _A in a unit with data
+ 6
+== -e _A alone
+rc=0
+== -e _A alone with -s
+2
+== -e _A on empty input
+rc=0
+== -e _A at an exact block end
+6162
+6364
+4
+== -e %_a without a base
+hexdump: bad conversion character %_a 
+rc=1
+== -e %_ap
+hexdump: bad conversion character %_ap
+rc=1
+== -e %d of 1 byte
+104 101 108 108 111 32 119 111
+114 108 100 33 33   
+== -e %d of 2 bytes
+25960 27756 8303 28535
+27762 8548 33 
+== -e %d of 4 bytes
+1819043176 1870078063
+560229490 33
+== -e %d of 8 bytes
+8031924123371070824 142294150258
+== -e %d of 3 bytes
+hexdump: bad byte count for conversion character d
+rc=1
+== -e %d signed
+0 1 7 8 9 10 11 12
+13 27 31 32 126 127 -128 -1
+== -e %d of 2 bytes signed
+hexdump: byte count with multiple conversion characters
+-1|-32768|65535|32768|ffff|8000|177777|100000|-1|-32768|
+== -e %d of 4 bytes signed
+-1|-2147483648|4294967295|2147483648|ffffffff|80000000|-1|-2147483648|
+== -e %d of 8 bytes signed
+-1|-9223372036854775808|18446744073709551615|9223372036854775808|FFFFFFFFFFFFFFFF|8000000000000000|1777777777777777777777|1000000000000000000000|
+== -e %u
+0 1 7 8 9 10 11 12
+13 27 31 32 126 127 128 255
+== -e %i
+0 1 7 8 9 10 11 12
+13 27 31 32 126 127 -128 -1
+== -e %o
+0 1 7 10 11 12 13 14
+15 33 37 40 176 177 200 377
+== -e %X
+0 1 7 8 9 A B C
+D 1B 1F 20 7E 7F 80 FF
+== -e %04x of 2 bytes
+6568 6c6c 206f 6f77 6c72 2164 0021     
+== -e %016x of 8 bytes
+0807060504030201
+== -e %x of 16 bytes
+hexdump: bad byte count for conversion character x
+rc=1
+== -e %x of 5 bytes
+hexdump: bad byte count for conversion character x
+rc=1
+== -e %+d
++0 +1 +7 +8 +9 +10 +11 +12
++13 +27 +31 +32 +126 +127 -128 -1
+== -e % d
+ 0  1  7  8  9  10  11  12
+ 13  27  31  32  126  127 -128 -1
+== -e %#x
+0x68 0x65 0x6c 0x6c 0x6f 0x20 0x77 0x6f
+0x72 0x6c 0x64 0x21 0x21   
+== -e %#o
+0150 0145 0154 0154 0157 040 0167 0157
+0162 0154 0144 041 041   
+== -e %5.2d
+  104|  101|  108|  108|  111|   32|  119|  111|
+  114|  108|  100|   33|   33|     |     |     |
+== -e %-5d
+104  |101  |108  |108  |111  |32   |119  |111  |
+114  |108  |100  |33   |33   |     |     |     |
+== -e %05x
+00068|00065|0006c|0006c|0006f|00020|00077|0006f|
+00072|0006c|00064|00021|00021|     |     |     |
+== -e integer flags
+   41|   00|65|| 0101|    0|0x41 |0    |+0065|+0000|+65  |+0   |  065|  000| 0065| 0000|0101|0|0x41|0|41||
+== -e %#x of zero, 8 bytes
+0|0|0|0|
+== -e %o of one byte
+377|0377|377|
+== -e %ld
+hexdump: bad conversion character %l
+rc=1
+== -e %hd
+hexdump: bad conversion character %h
+rc=1
+== -e %*d
+hexdump: bad conversion character %*
+rc=1
+== -e %n
+hexdump: bad conversion character %n
+rc=1
+== -e %e of 4 bytes
+1.000000e+00 2.000000e+00
+== -e %f of 4 bytes
+1.000000 2.000000
+== -e %g of 4 bytes
+1 2
+== -e %G of 4 bytes
+1 2
+== -e %E of 4 bytes
+1.000000E+00 2.000000E+00
+== -e %f of 8 bytes
+1.000000 
+0.100000 
+== -e %f default is 8 bytes
+1.000000 
+0.100000 
+== -e %f of 2 bytes
+hexdump: bad byte count for conversion character f
+rc=1
+== -e %f of 1 byte
+hexdump: bad byte count for conversion character f
+rc=1
+== -e %10.3f
+     1.000|     2.000|
+== -e %e and %g
+1.000000e+00|1.000000e-01|
+1|0.1|
+== -e %g large
+100000|1e+06|
+== -e %g small
+0.0001|1.58946e-09|
+== -e %g 1e-5
+1e-05|1E-05|1.000000e-05|1e-05|1e-05|
+== -e %g 123456789
+1.23457e+08|123456789|123456789.000000|1.234568e+08|
+== -e %g 0.00001234
+1.23386e-05|1.2e-05|
+== -e zero and minus zero
+0|-0|
+0.000000e+00|-0.000000e+00|
+0.000000|-0.000000|
+== -e precision 0
+1e+00|1|1|1.|1.e+00|
+1e-01|0|0.1|0.|1.e-01|
+== -e float flags
++1.000000| 1.000000|00000001.000|1.000       |+1.00e+00|001.00e+00|
+== -e %g flags
+1|         1|1         |0000000001|+1|1.00|1.00000|
+0.1|       0.1|0.1       |00000000.1|+0.1|0.100|0.100000|
+== -e infinities and nans
+inf|nan|-inf|-nan|
+inf|nan|-inf|-nan|
+inf|nan|-inf|-nan|
+       inf|       nan|      -inf|      -nan|
+inf       |nan       |-inf      |-nan      |
++inf|+nan|-inf|-nan|
+       inf|       nan|      -inf|      -nan|
+INF|NAN|-INF|-NAN|
+INF|NAN|-INF|-NAN|
+== -e %f of a partial block
+16777999408082104352768.000000|0.000000|
+== -e %10f of a partial block
+16777999408082104352768.000000|  0.000000|
+== -e %s
+hello worl| worl|
+d!!||
+== -e %s needs a count
+hexdump: %s requires a precision or a byte count
+rc=1
+== -e %-8s
+hello worl| worl   |
+d!!     |        |
+== -e %8s
+hello worl|    worl|
+     d!!|        |
+== -e %.3s
+hel| wo|
+d!!||
+== -e %.3s without a count
+hel|
+lo |
+wor|
+ld!|
+!|
+== -e %.3s with a count of 5
+hel|
+ wo|
+d!!|
+== -e %.8s with a count of 5
+hello|
+ worl|
+d!!|
+== -e %s stops at a nul
+ | \n \n \v \f \r 033 | \n 037 ~ 177 200 | \n
+ 377 | \n
+== -e %s runs to the block's end
+[abcdefg][efg]
+== -e %s of a full block
+[abcdefgh][efgh]
+== -e %5s of a partial block
+[abcdefg][  efg]
+== -e %s width and precision
+[abcd][ab    ][  abcd]
+[efgh][ef    ][  efgh]
+== -e %5.3s
+[  abc][    c]
+== -e %s with -s
+[orld]
+[!!]
+== -e %s with -n
+[hell]
+[o w]
+== -e %c
+hello world!!
+== -e %c of 2 bytes
+hexdump: bad byte count for conversion character c
+rc=1
+== -e %c raw bytes
+ \0 | 001 | \a | \b | \t | \n | \v | \f |
+ \r | 033 | 037 | | ~ | 177 | 200 | 377 |
+ \n
+== -e %c width
+ 001 | a | 001 | a
+ | 001 | a | \n
+== -e %c and %c
+ab
+== -e %_c
+\0|001|\a|\b|\t|\n|\v|\f|\r|033|037| |~|177|200|377|
+== -e %_c every control character
+\0 001 002 003 004 005 006 \a \b \t \n \v \f \r 016 017 020 021 022 023 024 025 026 027 030 031 032 033 034 035 036 037 177
+== -e %_c high bytes
+200|240|351|377|
+== -e %_c quote, backslash, apostrophe
+"|\|'|
+== -e %3_c
+ \0|001| \a| \b| \t| \n| \v| \f|
+ \r|033|037|   |  ~|177|200|377|
+== -e %.1_c
+\|0|\|\|\|\|\|\|
+\|0|0| |~|1|2|3|
+== -e %_c flags
+\|    \|\    |   \n|
+== -e %_c of 2 bytes
+hexdump: bad byte count for conversion character _c
+rc=1
+== -e %_p
+........... ~...
+== -e %_p high bytes
+.... ~
+== -e %3_p
+  .|  .|  .|  .|  .|  .|  .|  .|
+  .|  .|  .|   |  ~|  .|  .|  .|
+== -e %_p flags
+   .|   a|.   |a   |   .|   a|
+== -e %_p of 2 bytes
+hexdump: bad byte count for conversion character _p
+rc=1
+== -e %_u
+nul soh bel bs ht lf vt ff cr esc us   ~ del 80 ff
+== -e %_u every control character
+nul soh stx etx eot enq ack bel bs ht lf vt ff cr so si dle dc1 dc2 dc3 dc4 nak syn etb can em sub esc fs gs rs us del
+== -e %_u high bytes
+80|a0|e9|ff|
+== -e %3_u
+nul|soh|bel| bs| ht| lf| vt| ff|
+ cr|esc| us|   |  ~|del| 80| ff|
+== -e %-3_u
+nul|soh|bel|bs |ht |lf |vt |ff |
+cr |esc|us |   |~  |del|80 |ff |
+== -e %.1_u
+n|s|b|b|h|l|v|f|
+c|e|u| |~|d|80|ff|
+== -e %_u flags
+ soh| del|  80|   a|soh |del |80  |a   | soh| del|0080|   a| soh| del|0x80|   a|s|d|80|a|
+== -e %_u of 2 bytes
+hexdump: bad byte count for conversion character _u
+rc=1
+== -e %_y
+hexdump: bad conversion character %_y
+rc=1
+== -e %_
+hexdump: bad conversion character %_
+rc=1
+== -e %y
+hexdump: bad conversion character %y
+rc=1
+== -e %%
+hexdump: bad conversion character %%
+rc=1
+== -e escapes
+ 6 8 \t 6 5 \t 6 c \t 6 c \ \n 6 f \t
+ 2 0 \t 7 7 \t 6 f \ \n 7 2 \t 6 c \t
+ 6 4 \t 2 1 \ \n 2 1 \t \t \t
+ \ \n
+== -e more escapes
+ 6 8 \a \b \f \r \v 0 6 5 \a \b \f \r \v 0
+ 6 c \a \b \f \r \v 0 6 c \a \b \f \r \v 0
+ \n 6 f \a \b \f \r \v 0 0 a \a \b \f \r \v
+ 0 \a \b \f \r \v 0 \a \b \f \r \v
+ 0 \n
+== -e \0 is a zero digit
+ 6 8 0 6 5 0 \n 6 c 0 6 c 0 \n 6 f
+ 0 0 a 0 \n
+== -e octal escapes are not
+ 6 8 1 1 0 0 \ 0 1 6 5 1 1 0 0 \
+ 0 1 6 c 1 1 0 0 \ 0 1 6 c 1 1 0
+ 0 \ 0 1 \n 6 f 1 1 0 0 \ 0 1 0 a
+ 1 1 0 0 \ 0 1 1 1 0 0 \ 0 1
+ 1 1 0 0 \ 0 1 \n
+== -e hex escapes are not
+ 6 8 x x 4 6 5 x x 4 6 c x x 4 6
+ c x x 4 \n 6 f x x 4 0 a x x 4
+ x x 4 x x 4 \n
+== -e unknown escape
+ 6 8 q 6 5 q 6 c q 6 c q \n 6 f q
+ 0 a q q q \n
+== -e escaped backslash
+ 6 8 \ 6 5 \ \n 6 c \ 6 c \ \n 6 f
+ \ 0 a \ \n
+== -e an escape before the conversion
+ \t t x 6 8 \t t x 6 5 \n \t t x 6 c
+ \t t x 6 c \n \t t x 6 f \t t x 0 a
+ \n
+== -e an escape inside text before the conversion
+ a \t t b c 6 8 a \t t b c 6 5 \n a
+ \t t b c 6 c a \t t b c 6 c \n a \t
+ t b c 6 f a \t t b c 0 a \n
+== -e no newline
+68 65 6c 6c6f 0a      |rc=0
+== -e partial block
+68 65 6c 6c 6f 20 77 6f
+72 6c 64 21 21         
+== -e partial block with %_p
+68 65 6c 6c 6f 20 77 6f  rld!!|
+== -e partial block with %_c
+68 65 6c 6c 6f 20 77 6f  rld!!|
+== -e partial block with %_u
+68 65 6c 6c 6f 20 77 6f  rld!!|
+== -e partial block with %c
+68 65 6c 6c 6f 20 77 6f  rld!!|
+== -e partial block with %3d
+104 101 108 108 111  32 119 111|
+114 108 100  33  33            |
+== -e partial block with %s
+hello wo|llo wo|o wo|wo|
+rld!!|d!!|!||
+== -e partial block, two-byte words
+6568 6c6c 206f 6f77 6c72 2164 0021     
+== -e partial block, four-byte words
+1819043176 1870078063 560229490 33
+== -e partial block, %08x
+6c6c6568 6f77206f 21646c72 00000021
+== -e partial block, %-6d
+1819043176|1870078063|560229490|33    |
+== -e partial block, %6d
+1819043176|1870078063|560229490|    33|
+== -e partial block, %c
+a|b|c||
+== -e partial block, %2c
+ a| b| c|  |
+== -e partial block, %d
+97|98|99||
+== -e partial block, %04x of 2 bytes
+6261|0063|
+== -e partial block, %x of 2 bytes
+6261|63|
+== -e partial block, %-4x of 2 bytes
+6261|63  |
+== -e partial block, %4s
+ abc|   c|
+== -e partial block, %2_p
+ a| b| c|  |
+== -e partial block, %4_u
+   a|   b|   c|    |
+== -e partial block, positions
+0 6261 0063
+3
+== -e partial block, %_ax past the end
+0|68|65|2|6c|6c|
+4|6f|20|6|77|6f|
+8|72|6c|a|64|21|
+c|21|  ||  |  |
+== -e partial block, %_c
+ab|c|
+== -e block larger than the input
+68 65 6c 6c 6f 20 77 6f 72 6c 64 21 21                                                         
+== -e repeat to fill
+6c6c6568 
+6f77206f 
+21646c72 
+21 
+== -e repeat to fill, 2 bytes
+6568 
+6c6c 
+206f 
+6f77 
+6c72 
+2164 
+0021 
+== -e repeat to fill, 3 bytes
+hexdump: bad byte count for conversion character x
+rc=1
+== -e repeat to fill with a smaller format
+68 
+65 
+6c 
+*
+6f 
+0a 
+== -e repeat to fill, then text
+68 |
+65 |
+6c |
+*
+6f |
+0a |
+== -e repeat only the last unit
+68 el
+6c o.
+== -e last unit is text, no fill
+6c6c6568
+hello.
+== -e last unit with a count, no fill
+68 65
+hello.
+== -e fill after a position
+0: 68 65 6c 6c 6f 20 77 6f 72 6c 64 21 21         hello world!!
+== -e %c fill
+h
+hello.
+== -e trailing space dropped on the last repeat
+68  65  6c  6c 6f  0a         |
+== -e trailing newline dropped on the last repeat
+ 6 8 \n 6 5 \n 6 c \n 6 c 6 f \n 0 a
+ \n \n
+== -e trailing tab dropped
+ 6 8 \t 6 5 \t 6 c \t 6 c \n 6 f \t 0
+ a \t \t \n
+== -e trailing space of a text unit
+ 6 8 6 5 6 c 6 c \n 6 f 0 a
+ \n
+== -e multiple units
+68 656c 6c
+6f 2077 6f
+72 6c64 21
+21        
+== -e three units with positions
+0|68|65|2|6c|6c|
+4|6f|0a||  |  |
+== -e a position in the middle
+68 652
+6c 6c4
+6f 206
+77 6f8
+72 6ca
+64 21c
+21   
+== -e count without a byte count
+6c6c6568 6f77206f 21646c72 21
+== -e count and slash
+6c6c6568 6f77206f 21646c72 21
+== -e slash alone
+6c6c6568a6f|rc=0
+== -e spaces around the slash
+68 65 6c 6c6f 0a      |rc=0
+== -e tabs between units
+68 65 6c 6c 6f 20 77 6f 72 6c 64 21 21         
+== -e white space around
+68 65 6c 6c 6f 20 77 6f 72 6c 64 21 21         
+== -e two strings touching
+6c6c6568
+a6f
+== -e count 0
+rc=0
+== -e byte count 0
+6c6c6568 6f77206f
+21646c72 21
+rc=0
+== -e %c with byte count 0
+h
+e
+l
+*
+o
+ 
+w
+o
+r
+l
+d
+!
+*
+rc=0
+== -e two formats, unequal blocks
+68 65 6c 6c
+68 65
+6f 20 77 6f
+6f 20
+72 6c 64 21
+72 6c
+21         
+21   
+== -e two formats, same blocks
+68 65 6c 6c
+6568 6c6c
+6f 20 77 6f
+206f 6f77
+72 6c 64 21
+6c72 2164
+21         
+0021     
+== -e two formats, 4 and 3
+68 65 6c 6c
+68 65 6c
+6f 20 77 6f
+6f 20 77
+72 6c 64 21
+72 6c 64
+21         
+21      
+== -e text alone
+rc=0
+== -e text alone with -n
+rc=0
+== -e text with a count
+xxxxxxxxxxxxxxxx|rc=0
+== -e text with a count and a newline
+ababab
+ababab
+ababab
+ababab
+ababab
+== -e text around the conversion
+68656c6c   -   
+6f0a       -   
+== -e a conversion alone
+6c6c6568a6f|rc=0
+== -e a newline alone
+|rc=0
+== -e %x and %c without a count
+6c6c6568 o|
+726f7720 l|
+212164 |
+== -e %x and %c with a count
+hexdump: byte count with multiple conversion characters
+rc=1
+== -e %_ax and %x with a count
+0 68|1 65|
+2 6c|3 6c|
+4 6f|5 20|
+6 77|7 6f|
+8 72|9 6c|
+a 64|b 21|
+c 21| |
+== -e %_ax with a two-byte count
+0 6568 2 6c6c
+4 0a6f      
+== -e %_ax and %_ad alone
+rc=0
+== -e %5.2d without a count
+1819043176|
+1870078063|
+560229490|
+   33|
+== -e %+d without a count
++1819043176|
++1870078063|
++560229490|
++33|
+== -e %#x without a count
+0x6c6c6568|
+0x6f77206f|
+0x21646c72|
+0x21|
+== -e %08x without a count
+6c6c6568|
+6f77206f|
+21646c72|
+00000021|
+== -e %.4s without a count
+[abcd]
+[efgh]
+== -e %5.3_ax
+  000|68656c6c
+  004|6f20776f
+  008|726c6421
+  00c|21      
+== -e missing quote
+hexdump: bad format {4/1 %02x}
+rc=1
+== -e unterminated quote
+hexdump: bad format {4/1 "%02x}
+rc=1
+== -e no space before the quote
+hexdump: bad format {16/1"%02x ""\n"}
+rc=1
+== -e text after the quote
+hexdump: bad format {"%02x"x}
+rc=1
+== -e count then a letter
+hexdump: bad format {4x "%02x"}
+rc=1
+== -e byte count then a letter
+hexdump: bad format {4/1x "%02x"}
+rc=1
+== -e unit without a string
+hexdump: bad format {4/1}
+rc=1
+== -e count alone
+hexdump: bad format {4}
+rc=1
+== -e empty
+rc=0
+== -e escaped quote ends the string
+hexdump: bad format {2/1 "%02x\"" "\n"}
+rc=1
+== -f
+00000000  68 65 6c 6c 6f 20 77 6f  72 6c 64 21 21           |hello world!!|
+== -f with comments and blank lines
+0 68 65 6c 6c
+4 6f 20 77 6f
+8 72 6c 64 21
+c 21         
+d
+== -f with CRLF
+0 68 65 6c 6c
+4 6f 20 77 6f
+8 72 6c 64 21
+c 21         
+== -f with leading spaces
+68 65 6c 6c
+6f 0a      
+== -f with a hash in a string
+68#65#6c#6c#
+6f#0a#  #  #
+== -f comment after a format
+hexdump: bad format {"%_ax " 4/1 "%02x " "\n" # comment
+}
+rc=1
+== -f empty file
+0000000 6568 6c6c 206f 6f77 6c72 2164 0021     
+000000d
+rc=0
+== -f only comments
+0000000 6568 6c6c 206f 6f77 6c72 2164 0021     
+000000d
+rc=0
+== -f and -e
+0 68 65 6c 6c
+END
+4 6f 20 77 6f
+END
+8 72 6c 64 21
+END
+c 21         
+END
+d
+== -f missing
+hexdump: can't read nosuchfmt: No such file or directory
+rc=1

@@ -127,9 +127,11 @@ an entry or page names no builtin.
 - `tree`: Show a folder hierarchy as a tree.
 - `unix2dos`: Convert LF line endings to CRLF.
 - `xargs`: Build and run command lines from standard input.
+- `column`: Lay a list out in columns, or align a table on a separator.
 
 ## Coreutils written for Windows
 
+- `hexdump`: Dump bytes in hex, octal, decimal or text, or in a format of your own.
 - `chmod`: Change a file's permissions, as far as Windows can express them.
 - `iconv`: Convert text between character sets, through Windows' code pages.
 - `groups`: Print the groups a user belongs to.
@@ -139,6 +141,7 @@ an entry or page names no builtin.
 - `install`: Copy files and set their attributes.
 - `logname`: Print the user's login name.
 - `ls`: List folder contents, with colours, icons and a tree.
+- `xxd`: Dump bytes in hex, or turn a hex dump back into bytes.
 - `pinky`: Show brief information about users.
 - `stat`: Show a file's status: size, times, links, attributes.
 - `tty`: Print the name of the terminal on standard input.

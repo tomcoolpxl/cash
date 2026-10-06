@@ -122,3 +122,5 @@ filter = 'package(cash-sed)'
 slow-timeout = { period = "15s", terminate-after = 3 }
 # Runs the tput oracle script, some 450 `tput | od | sed` pipelines of builtins, one after
 filter = 'binary(it) and test(=tput_builtin::tput_matches_ncurses)'
+# Run the xxd and hexdump oracle scripts, some 290 and 350 cases of builtins in `| od | sed`
+filter = 'binary(it) and test(/^(xxd_builtin::xxd_matches_vims|hexdump_builtin::hexdump_matches_util_linux)$/)'

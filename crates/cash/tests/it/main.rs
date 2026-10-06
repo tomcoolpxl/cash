@@ -50,6 +50,8 @@ mod completion_windows;
 // coolfetch system banner.
 mod coolfetch;
 // EXE-04: `coproc` ends when its input does, and is a job with a pid.
+// `column`, util-linux's, against its golden output and on its own.
+mod column_builtin;
 mod coprocesses;
 // Inputs that used to take the whole shell down: deep recursion, and panics.
 mod crash_safety;
@@ -102,6 +104,8 @@ mod init_rc;
 mod injection;
 mod job_groups;
 mod kill_family;
+// `hexdump`, util-linux's, against its golden output: the format language in full.
+mod hexdump_builtin;
 // A job a signal ended is told of by the signal, in `jobs` and in a script's notice.
 mod killed_jobs;
 // `iconv`: glibc's options on Windows' code pages, against glibc's own output.
@@ -169,3 +173,5 @@ use bc::plib;
 mod stty_builtin;
 // `tput` against ncurses 6.6's frozen output for xterm-256color, and the console's size.
 mod tput_builtin;
+// `xxd`, vim's, against its golden output: the dump, `-i`, `-p`, `-a`, colour and `-r`.
+mod xxd_builtin;

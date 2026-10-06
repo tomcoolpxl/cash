@@ -25,6 +25,8 @@ mod fuser;
 mod getopt;
 mod killfam;
 mod lsof;
+// cash: `column`, util-linux's, checked against 2.42.3 case by case.
+mod column;
 mod pgrep;
 pub mod ping;
 mod procmatch;
@@ -33,6 +35,8 @@ mod pstree;
 mod rev;
 mod screen;
 mod ss;
+// cash: `hexdump`, util-linux's, with its format language; a clean Windows machine has none.
+mod hexdump;
 mod tree;
 
 // cash: `iconv`, glibc's, on Windows' code pages; a clean Windows machine has none.
@@ -54,6 +58,8 @@ mod coolfetch;
 // ported, and the Cygwin build reports pids `kill` cannot use.
 mod top;
 
+// cash: `xxd`, vim's, dump and reverse; Windows has no hex dump a script can read back.
+mod xxd;
 // cash (D48): one pager behind both `less` and `more`. `less` is not coreutils, and the
 // cash: `tput`, ncurses' for xterm-256color without terminfo: the terminal is VT.
 mod tput;

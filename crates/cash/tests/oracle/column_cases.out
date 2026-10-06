@@ -1,0 +1,547 @@
+== fill: columns first, 80 wide
+ a \t b b \t c c c \t d d d d \t e e
+ e e e \t f f f f f f \n
+== fill: -c 20
+ a \t d d d d \n b b \t e e e e e \n
+ c c c \t f f f f f f \n
+== fill: -x fills rows first
+ a \t b b \n c c c \t d d d d \n e e
+ e e e \t f f f f f f \n
+== fill: 30 numbers in 40 columns
+ 1 \t 7 \t 1 3 \t 1 9 \t 2 5 \n 2 \t 8
+ \t 1 4 \t 2 0 \t 2 6 \n 3 \t 9 \t 1 5
+ \t 2 1 \t 2 7 \n 4 \t 1 0 \t 1 6 \t 2
+ 2 \t 2 8 \n 5 \t 1 1 \t 1 7 \t 2 3 \t
+ 2 9 \n 6 \t 1 2 \t 1 8 \t 2 4 \t 3 0
+ \n
+== fill: 30 numbers in 40 columns, -x
+ 1 \t 2 \t 3 \t 4 \t 5 \n 6 \t 7 \t 8 \t
+ 9 \t 1 0 \n 1 1 \t 1 2 \t 1 3 \t 1 4
+ \t 1 5 \n 1 6 \t 1 7 \t 1 8 \t 1 9 \t
+ 2 0 \n 2 1 \t 2 2 \t 2 3 \t 2 4 \t 2
+ 5 \n 2 6 \t 2 7 \t 2 8 \t 2 9 \t 3 0
+ \n
+== fill: an item of 8 rounds the tab stop up
+ a a a a a a a a \t c \n b \n
+== fill: items wider than the width go one per line
+ a a a a a a a a a a a a \n b \n c
+ \n
+== fill: -c 0 is unlimited, one per line
+ a \n b \n
+== fill: COLUMNS decides the width
+ a a a a \t c c c c \n b b b b \t d
+ d d d \n
+== fill: an unusable COLUMNS means 80
+ a \t b \n
+== fill: -S uses spaces, not tabs
+ a _ _ _ b b _ _ c c c \n
+== fill: -S 2 in 10 columns
+ a _ _ c _ _ e _ _ g \n b _ _ d _
+ _ f \n
+== fill: -S 2, -x
+ a a a _ _ b b b _ _ c c c \n d d
+ d _ _ e e e \n
+== fill: -S lets the gap fit the remainder
+ a a a a _ _ b b b b \n
+== fill: empty lines are dropped
+ a \t b \n
+== fill: -L keeps empty lines
+ a \t b \n \n
+== fill: a line of spaces is empty
+ a \t b \n
+== fill: leading spaces stay in the item
+ _ _ a _ _ d \n _ b _ _ _ e \n c _
+ _ _ _ f \n
+== fill: CJK items count two cells
+ 346 227 245 346 234 254 \t c \n a b \t d \n
+== fill: CJK items, -S
+ 346 227 245 346 234 254 _ _ c \n a b _ _ _ _
+ d \n
+== fill: an escape sequence has no width
+ a 033 [ 1 m b _ _ c _ _ _ d _ _ _
+ e \n
+== fill: no final newline
+ a \t b \n
+== fill: CRLF lines
+ a \r \t b b \r \n
+== fill: a tab inside an item
+ a \t b \t e \n c \t f \n d \n
+== fill: -o and -s have no effect
+ a , b \t c \n
+== fill: empty input
+rc=0
+== table: whitespace separates
+ a _ _ _ _ _ b b _ _ c c c \n d d
+ d d _ _ e _ _ _ f \n
+== table: runs of blanks are one separator
+ a _ _ _ _ _ b b _ _ c c c \n d d
+ d d _ _ e _ _ _ f \n
+== table: ragged rows
+ a _ _ b b _ _ c c c \n d _ _ _ _
+ _ _ \n
+== table: a short first row
+ a _ _ _ _ _ _ \n d _ _ e e _ _ f
+ f f \n
+== table: -s ,
+ a _ _ _ _ _ b b _ _ c c c \n d d
+ d d _ _ e _ _ _ f \n
+== table: -s keeps empty cells
+ a _ _ _ _ _ c c c \n _ _ _ e _ _
+ \n
+== table: -s and a trailing separator
+ a _ _ _ b _ _ _ \n c c _ _ d d _
+ _ e e \n
+== table: -s with several characters
+ a _ _ b _ _ c \n d _ _ e _ _ f \n
+== table: -s tab
+ a _ _ b b _ _ c c c \n d _ _ e _
+ _ _ f \n
+== table: -s a space splits every space
+ a _ _ _ _ _ b \n c _ _ d _ _ \n
+== table: -s a multibyte character
+ a _ _ b _ _ c \n d _ _ e _ _ f \n
+== table: the last -s wins
+ a _ _ b ; c \n
+== table: -o
+ a _ _ _ | _ b b \n c c c _ | _ d
+ \n
+== table: -o empty
+ a _ _ b b \n c c c d \n
+== table: -N names the columns
+ X _ _ _ _ Y Y \n a _ _ _ _ b b \n
+ c c c _ _ d \n
+== table: -N with fewer names than columns
+ X _ _ _ _ Y Y _ _ \n a _ _ _ _ b
+ b _ _ c \n c c c _ _ d _ _ _ e \n
+== table: -N with more names than columns
+ X _ _ _ _ Y Y _ _ Z Z Z \n a _ _
+ _ _ b b _ _ \n c c c _ _ d _ _ _
+ \n
+== table: a header wider than its data
+ L O N G N A M E _ _ Y \n a _ _ _
+ _ _ _ _ _ _ b \n
+== table: -N drops empty names
+ y _ _ \n a _ _ b \n
+== table: -d hides the header
+ a _ _ _ _ b b \n c c c _ _ d \n
+== table: -R right-aligns a column
+ a _ _ _ _ b b \n c c c _ _ _ d \n
+== table: -R on the first column
+ _ _ a _ _ b b \n c c c _ _ d \n
+== table: -R by name, header too
+ _ _ X _ _ Y \n a a a _ _ b \n
+== table: -R on the last column pads it
+ X _ _ _ _ Y \n a _ _ b b b \n
+== table: -R 0 is every column
+ _ _ a _ _ b b \n c c c _ _ _ d \n
+== table: -R -1 is the last column
+ a _ _ _ _ b b \n c c c _ _ _ d \n
+== table: -R 2-3 is a range
+ a _ _ _ _ b b _ _ c \n c c c _ _
+ _ d _ _ e \n
+== table: -R with a ragged last column
+ a _ _ _ _ b b _ _ c \n d d d _ _
+ e _ _ _ \n
+== table: -R with CJK
+ 346 227 245 346 234 254 _ _ a \n _ _ _ b _ _
+ c \n
+== table: -H hides a column
+ a _ _ _ _ c \n c c c _ _ e \n
+== table: -H by name
+ X _ _ _ _ Z \n a _ _ _ _ c \n c c
+ c _ _ e \n
+== table: -H - hides unnamed columns
+ x \n a \n c c c \n
+== table: -O orders columns
+ c _ _ a _ _ _ _ b b \n e _ _ c c
+ c _ _ d \n
+== table: -O by name
+ Z _ _ X _ _ _ _ Y \n c _ _ a _ _
+ _ _ b b \n e _ _ c c c _ _ d \n
+== table: -l limits the columns
+ a _ _ b b _ _ c c c _ d d \n e _
+ _ f _ g _ h \n
+== table: -l with -s keeps the rest verbatim
+ a _ _ b b , c c c , d d \n e _ _
+ f , g , h \n
+== table: -L keeps empty lines
+ a _ _ _ _ b b \n _ _ _ _ _ \n c c
+ c _ _ d \n
+== table: empty lines dropped without -L
+ a _ _ _ _ b b \n c c c _ _ d \n
+== table: -K takes the first row as header
+ N A M E _ _ S I Z E \n a _ _ _ _
+ _ 1 \n b b _ _ _ _ 2 2 \n
+== table: -K with -R by name
+ X _ _ _ _ Y \n a _ _ b b b \n
+== table: -K with -d
+ a _ _ 1 \n
+== table: -m fills the width
+ a _ _ _ _ _ _ _ _ b _ _ _ _ _ c
+ _ _ _ _ \n c c c _ _ _ _ _ _ d _
+ _ _ _ _ e _ _ _ _ \n
+== table: -m with -N
+ X _ _ _ _ _ _ _ _ _ _ _ Y _ _ _
+ _ _ _ _ \n a _ _ _ _ _ _ _ _ _ _
+ _ b _ _ _ _ _ _ _ \n c c c _ _ _
+ _ _ _ _ _ _ d _ _ _ _ _ _ _ \n
+== table: CJK aligned by cells
+ 346 227 245 346 234 254 _ _ a \n b _ _ _ _ _
+ c \n
+== table: accents
+ 303 251 _ _ _ a \n b b _ _ c \n
+== table: a combining mark has no width
+ e 314 201 _ _ _ a \n b b _ _ c \n
+== table: an emoji sequence
+ 360 237 221 250 342 200 215 360 237 221 251 _ _ c \n d
+ d d _ _ _ e \n
+== table: control characters have no width
+ a 001 b _ _ _ c \n d d d _ _ e \n
+== table: an escape sequence has no width
+ a 033 [ 1 m b _ _ _ _ _ c \n d d d
+ d d _ _ e \n
+== table: invalid UTF-8
+ a \ x f f b _ _ c \n d _ _ _ _ _
+ _ _ e \n
+== table: CRLF lines
+ a _ _ _ _ b b \r \n c c c _ _ d \r
+ \n
+== table: CRLF lines with -s
+ a _ _ _ _ b b \r \n c c c _ _ d \r
+ \n
+== table: no final newline
+ a _ _ b \n c _ _ d \n
+== table: one cell
+ a b c \n
+== table: a tab inside a cell with -s
+ a \t b _ _ c \n d _ _ _ e \n
+== table: wider than the width
+ a a a a a a a a a a a a _ _ b \n
+ c c _ _ _ _ _ _ _ _ _ _ _ _ d d
+ \n
+== table: empty input
+rc=0
+== table: only empty lines
+== table: only empty lines with -L
+== table: -s with a line of separators
+ a _ _ b _ _ \n _ _ _ _ _ _ \n c _
+ _ d _ _ \n
+== table: -t -x cannot combine
+column: options --table and --fillrows cannot be combined
+rc=1
+== table: -J -x cannot combine
+column: options --json and --fillrows cannot be combined
+rc=1
+== table: -K -N cannot combine
+column: options --table-header-as-columns and --table-columns cannot be combined
+rc=1
+== table: -R needs -t
+column: option --table required for all --table-*
+rc=1
+== table: -N needs -t
+column: option --table required for all --table-*
+rc=1
+== table: -n needs -t
+column: option --table required for all --table-*
+rc=1
+== table: -R of an unknown column
+column: undefined column name '5'
+rc=1
+== table: -R of an unknown name
+column: undefined column name 'z'
+rc=1
+== table: -H of an unknown column
+column: undefined column name 'z'
+rc=1
+== table: -O of an unknown column
+column: undefined column name '3'
+rc=1
+== table: -l 0
+column: columns limit must be greater than zero
+rc=1
+== table: -l x
+column: invalid columns limit argument: 'x'
+rc=1
+== json: -J -n table -N a,b
+{
+   "tbl": [
+      {
+         "a": "a",
+         "b": "bb"
+      },{
+         "a": "ccc",
+         "b": "d"
+      }
+   ]
+}
+== json: the default table name
+{
+   "table": [
+      {
+         "a": "a",
+         "b": "bb"
+      },{
+         "a": "ccc",
+         "b": "d"
+      }
+   ]
+}
+== json: -J needs -N
+column: option --table-columns or --table-column required for --json
+rc=1
+== json: quotes and backslashes
+{
+   "table": [
+      {
+         "a": "x\"y",
+         "b": "a\\b"
+      }
+   ]
+}
+== json: control characters
+{
+   "table": [
+      {
+         "a": "a\u0001b",
+         "b": "c"
+      }
+   ]
+}
+== json: UTF-8
+{
+   "table": [
+      {
+         "a": "é",
+         "b": "日"
+      }
+   ]
+}
+== json: keys are lowercased
+{
+   "tbl": [
+      {
+         "name": "a",
+         "size": "b"
+      }
+   ]
+}
+== json: ragged rows give null
+{
+   "table": [
+      {
+         "a": "a",
+         "b": "bb",
+         "c": "c"
+      },{
+         "a": "d",
+         "b": null,
+         "c": null
+      }
+   ]
+}
+== json: more names than cells
+{
+   "table": [
+      {
+         "a": "a",
+         "b": null,
+         "c": null
+      }
+   ]
+}
+== json: an empty cell is null
+{
+   "table": [
+      {
+         "a": "a",
+         "b": null,
+         "c": "c"
+      }
+   ]
+}
+== json: -L gives a row of nulls
+{
+   "table": [
+      {
+         "a": "a",
+         "b": "b"
+      },{
+         "a": null,
+         "b": null
+      },{
+         "a": "c",
+         "b": "d"
+      }
+   ]
+}
+== json: -H
+{
+   "table": [
+      {
+         "a": "a",
+         "c": "c"
+      }
+   ]
+}
+== json: -O
+{
+   "table": [
+      {
+         "c": "c",
+         "a": "a",
+         "b": "bb"
+      }
+   ]
+}
+== json: -K
+{
+   "table": [
+      {
+         "a": "1",
+         "b": "2"
+      },{
+         "a": "3",
+         "b": null
+      }
+   ]
+}
+== json: -K with -n
+{
+   "t": [
+      {
+         "a": "1",
+         "b": "2"
+      }
+   ]
+}
+== json: an unnamed column is an error
+column: line 2: for JSON the name of the column 3 is required
+rc=1
+== json: -H - hides the unnamed columns
+{
+   "table": [
+      {
+         "x": "a"
+      },{
+         "x": "ccc"
+      }
+   ]
+}
+== json: CRLF lines
+{
+   "table": [
+      {
+         "a": "a",
+         "b": "b\r"
+      }
+   ]
+}
+== json: empty input
+rc=0
+== files
+ a _ _ _ _ b \n c c c _ _ d \n
+== files: -K applies to the first only
+ A _ _ B \n 1 _ _ 2 \n C _ _ D \n 3
+ _ _ 4 \n
+== files: a missing file is reported, the rest shown
+column: nosuch: No such file or directory
+a    b
+ccc  d
+rc=0
+== files: a missing file in fill mode
+column: nosuch: No such file or directory
+a b
+rc=1
+== files: only a missing file
+column: nosuch: No such file or directory
+rc=1
+== files: dash is a file name
+column: -: No such file or directory
+rc=1
+== files: options after the file
+ a _ _ b \n
+== files: -- ends the options
+column: -t: No such file or directory
+rc=1
+== files: an empty file
+rc=0
+== options: a bad option
+column: invalid option -- 'Z'
+Try 'column --help' for more information.
+rc=1
+== options: a bad long option
+column: unrecognized option '--nope'
+Try 'column --help' for more information.
+rc=1
+== options: an ambiguous long option
+column: option '--table-c=x' is ambiguous; possibilities: '--table-colorscheme' '--table-columns' '--table-column' '--table-columns-limit'
+rc=1
+== options: a long option prefix
+column: option '--tabl' is ambiguous; possibilities: '--table' '--table-colorscheme' '--table-columns' '--table-column' '--table-columns-limit' '--table-hide' '--table-name' '--table-maxout' '--table-noextreme' '--table-noheadings' '--table-order' '--table-right' '--table-truncate' '--table-wrap' '--table-empty-lines' '--table-header-repeat' '--table-header-as-columns'
+Try 'column --help' for more information.
+== options: --output-width=20
+ a \t b b \n
+== options: --json, --table-columns, --table-name
+{
+   "n": [
+      {
+         "a": "a",
+         "b": "b"
+      }
+   ]
+}
+== options: --keep-empty-lines
+ a \t b \n \n
+== options: --table-empty-lines
+ a \t b \n \n
+== options: --fillrows
+ a \t b \n c \n
+== options: --use-spaces
+ a _ _ _ _ b b \n
+== options: clustered -ts,
+ a _ _ b \n
+== options: --json=x takes no argument
+column: option '--json' doesn't allow an argument
+Try 'column --help' for more information.
+rc=1
+== options: --table-columns needs an argument
+column: option '--table-columns' requires an argument
+Try 'column --help' for more information.
+rc=1
+== options: -c needs an argument
+column: option requires an argument -- 'c'
+Try 'column --help' for more information.
+rc=1
+== options: -c abc
+column: invalid columns argument: 'abc'
+rc=1
+== options: -c -5
+column: invalid columns argument: '-5': Numerical result out of range
+rc=1
+== options: -c 5x
+column: invalid columns argument: '5x'
+rc=1
+== options: -c unlimited
+ a \n b \n c \n
+== options: -S x
+column: invalid spaces argument: 'x'
+rc=1
+== options: --color is accepted
+ a _ _ b \n
+ a _ _ b \n
+== options: --color=nope
+column: unsupported color mode: nope
+rc=1
+== options: -h
+
+Usage:
+ column [options] [<file>...]
+rc=0
+== options: -h before a bad option
+
+Usage:
+ column [options] [<file>...]
+rc=0
+== options: -V
+column from util-linux 2.42.3
+rc=0

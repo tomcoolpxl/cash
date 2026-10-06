@@ -1,0 +1,937 @@
+== plain
+00000000: 6865 6c6c 6f0a                           hello.
+== 17 bytes wrap
+00000000: 6162 6364 6566 6768 696a 6b6c 6d6e 6f70  abcdefghijklmnop
+00000010: 71                                       q
+== non-printables
+00000000: 0001 1f20 7e7f 80ff 0a09 0d              ... ~......
+== empty
+rc=0
+== stdin
+00000000: 6869 0a                                  hi.
+== dash is stdin
+00000000: 6869 0a                                  hi.
+== -c 4
+00000000: 6865 6c6c  hell
+00000004: 6f20 776f  o wo
+00000008: 726c 6421  rld!
+0000000c: 21         !
+== -c4 attached
+00000000: 6865 6c6c  hell
+00000004: 6f20 776f  o wo
+00000008: 726c 6421  rld!
+0000000c: 21         !
+== -cols 4
+00000000: 6865 6c6c  hell
+00000004: 6f20 776f  o wo
+00000008: 726c 6421  rld!
+0000000c: 21         !
+== -c 0 is the default
+00000000: 6865 6c6c 6f20 776f 726c 6421 21         hello world!!
+== -c 1
+00000000: 68  h
+00000001: 69  i
+== -c 32
+00000000: 6161 6161 6161 6161 6161 6161 6161 6161 6161 6161 6161 6161 6161 6161 6161 6161  aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+00000020: 6161 6161 6161 6161                                                              aaaaaaaa
+== -c 257
+xxd: invalid number of columns (max. 256).
+rc=1
+== -c -3
+xxd: invalid number of columns (max. 256).
+rc=1
+== -g 0
+00000000: 68656c6c6f20776f726c642121        hello world!!
+== -g 1
+00000000: 68 65 6c 6c 6f 20 77 6f 72 6c 64 21 21           hello world!!
+== -g 3
+00000000: 68656c 6c6f20 776f72 6c6421 21         hello world!!
+== -g 4
+00000000: 68656c6c 6f20776f 726c6421 21        hello world!!
+== -g 5
+00000000: 68656c6c6f 20776f726c 642121         hello world!!
+== -g 8
+00000000: 68656c6c6f20776f 726c642121        hello world!!
+== -g 16
+00000000: 68656c6c6f20776f726c642121        hello world!!
+== -g 32 is cols
+00000000: 68656c6c6f20776f726c642121        hello world!!
+== -g -1 is the default
+00000000: 6865 6c6c 6f20 776f 726c 6421 21         hello world!!
+== -c 10 -g 4
+00000000: 68656c6c 6f20776f 726c  hello worl
+0000000a: 642121                  d!!
+== -c 7 -g 4
+00000000: 68656c6c 6f2077  hello w
+00000007: 6f726c64 2121    orld!!
+== -c 7 -g 3
+00000000: 616263 646566 67  abcdefg
+00000007: 68696a 6b6c       hijkl
+== -u
+00000000: DEAD BEEF                                ....
+== -d
+00000256: 6161 6161 6161 6161 6161 6161 6161 6161  aaaaaaaaaaaaaaaa
+00000272: 6161 6161 6161 6161 6161 6161 6161 6161  aaaaaaaaaaaaaaaa
+00000288: 6161 6161 6161 6161 6161 6161            aaaaaaaaaaaa
+== -d -o
+1000000000: 6865 6c6c 6f0a                           hello.
+== -o 10
+0000000a: 6865 6c6c 6f20 776f 726c 6421 21         hello world!!
+== -o 0x100
+00000100: 6865 6c6c 6f20 776f 726c 6421 21         hello world!!
+== -o -5
+fffffffffffffffb: 6865 6c6c 6f20 776f 726c 6421 21         hello world!!
+== -o-5 attached
+fffffffffffffffb: 6865 6c6c 6f0a                           hello.
+== -o +5
+00000005: 6865 6c6c 6f0a                           hello.
+== -o 0X10
+00000010: 6865 6c6c 6f20 776f 726c 6421 21         hello world!!
+== -o 2 -o 3
+00000003: 6865 6c6c 6f0a                           hello.
+== -o huge
+ffffffffffffffff: 0000 0000 00                             .....
+== -s 3
+00000003: 6c6f 2077 6f72 6c64 2121                 lo world!!
+== -s3 attached
+00000003: 6c6f 2077 6f72 6c64 2121                 lo world!!
+== -s +3
+00000003: 6c6f 2077 6f72 6c64 2121                 lo world!!
+== -s 0x3
+00000003: 6c6f 2077 6f72 6c64 2121                 lo world!!
+== -s 010 is octal
+00000008: 726c 6421 21                             rld!!
+== -s -3 from the end
+0000000a: 6421 21                                  d!!
+== -s -13 from the end
+00000000: 6865 6c6c 6f20 776f 726c 6421 21         hello world!!
+== -s -100 before the start
+xxd: Sorry, cannot seek.
+rc=4
+== -s +-3
+xxd: Sorry, cannot seek.
+rc=4
+== -s 100 beyond the end
+rc=0
+== -s 13 at the end
+rc=0
+== -s 3 -o 3
+00000006: 6c6f 2077 6f72 6c64 2121                 lo world!!
+== -s 3 -o -3
+00000000: 6c6f 2077 6f72 6c64 2121                 lo world!!
+== -s 2 -s 3
+00000003: 6c6f 2077 6f72 6c64 2121                 lo world!!
+== -s 3 on stdin
+00000003: 6c6f 2077 6f72 6c64 2121                 lo world!!
+== -s 5 on stdin, exactly its length
+rc=0
+== -s 6 on stdin, past its length
+xxd: Sorry, cannot seek.
+rc=4
+== -s -3 on stdin
+xxd: Sorry, cannot seek.
+rc=4
+== -s +-3 on stdin
+xxd: Sorry, cannot seek.
+rc=4
+== -l 5
+00000000: 6865 6c6c 6f                             hello
+== -l5 attached
+00000000: 6865 6c6c 6f                             hello
+== -len 5
+00000000: 6865 6c6c 6f                             hello
+== -l 0x5
+00000000: 6865 6c6c 6f                             hello
+== -l 0
+rc=0
+== -l -1 is unlimited
+00000000: 6865 6c6c 6f0a                           hello.
+== -s 3 -l 4
+00000003: 6c6f 2077                                lo w
+== -l 1k reads 1
+00000000: 68                                       h
+== -e
+00000000: 6c6c6568 6f77206f 21646c72 21212121  hello world!!!!!
+00000010:     7821                             !x
+== -e -g 2
+00000000: 6568 6c6c 206f 6f77 6c72 2164 2121 2121  hello world!!!!!
+00000010: 7821                                     !x
+== -e -g 8
+00000000: 6f77206f6c6c6568 2121212121646c72  hello world!!!!!
+00000010:             7821                   !x
+== -e -g 1
+00000000: 68 65 6c 6c 6f 20 77 6f 72 6c 64 21 21 21 21 21  hello world!!!!!
+00000010: 21 78                                            !x
+== -e -g 0
+00000000: 2121212121646c726f77206f6c6c6568  hello world!!!!!
+00000010:                             7821  !x
+== -e -g 3
+xxd: number of octets per group must be a power of 2 with -e.
+rc=1
+== -e -g 16
+00000000:           6b6a696867666564636261  abcdefghijk
+== -e -c 5
+00000000: 6c6c6568       6f  hello
+00000005: 726f7720       6c   worl
+0000000a: 21212164       21  d!!!!
+0000000f:   782121           !!x
+== -e -c 3 -g 4
+00000000: 63  61 62bc
+00000003: 66  64 65ef
+00000006: 69  67 68hi
+00000009:     6a 6bk
+== -e -c 7 -g 4
+00000000: 64636261   676665  abcdefg
+00000007: 6b6a6968           hijk
+== -e -c 9
+00000000: 64636261 68676665       69  abcdefghi
+00000009:   6c6b6a                    jkl
+== -e -c 5 -g 2
+00000000: 6261 6463   65  abcde
+00000005: 6766 6968   6a  fghij
+0000000a: 6c6b            kl
+== -e -c 5 -g 8
+00000000: 65      61 626cde
+00000005: 6a      66 676hij
+0000000a:         6b 6cl
+== -e 3 bytes
+00000000:   636261                             abc
+== -e 5 bytes
+00000000: 64636261       65                    abcde
+== -e -g 2 partial
+00000000: 6261 6463   65                           abcde
+== -e -g 8 partial
+00000000: 6867666564636261           6b6a69  abcdefghijk
+== -e -u
+00000000: EFBEADDE                             ....
+== -e -o 0x10
+00000010: 6c6c6568 6f77206f 21646c72 21212121  hello world!!!!!
+00000020:     7821                             !x
+== -b
+00000000: 01101000 01100101 01101100 01101100 01101111 00100000  hello 
+00000006: 01110111 01101111 01110010 01101100 01100100 00100001  world!
+0000000c: 00100001                                               !
+== -b -c 3
+00000000: 01101000 01100101 01101100  hel
+00000003: 01101100 01101111 00100000  lo 
+00000006: 01110111 01101111 01110010  wor
+00000009: 01101100 01100100 00100001  ld!
+0000000c: 00100001                    !
+== -b -c 8
+00000000: 01101000 01100101 01101100 01101100 01101111 00100000 01110111 01101111  hello wo
+00000008: 01110010 01101100 01100100 00100001 00100001                             rld!!
+== -b -g 0
+00000000: 011010000110010101101100011011000110111100100000  hello 
+00000006: 011101110110111101110010011011000110010000100001  world!
+0000000c: 00100001                                          !
+== -b -g 2
+00000000: 0110100001100101 0110110001101100 0110111100100000  hello 
+00000006: 0111011101101111 0111001001101100 0110010000100001  world!
+0000000c: 00100001                                            !
+== -b -g 3
+00000000: 011010000110010101101100 011011000110111100100000  hello 
+00000006: 011101110110111101110010 011011000110010000100001  world!
+0000000c: 00100001                                           !
+== -b -g 4
+00000000: 01101000011001010110110001101100 0110111100100000  hello 
+00000006: 01110111011011110111001001101100 0110010000100001  world!
+0000000c: 00100001                                           !
+== -b -c 5 -g 2
+00000000: 0110100001100101 0110110001101100 01101111  hello
+00000005: 0010000001110111 0110111101110010 01101100   worl
+0000000a: 0110010000100001 00100001                   d!!
+== -b -c 7 -g 3
+00000000: 011010000110010101101100 011011000110111100100000 01110111  hello w
+00000007: 011011110111001001101100 011001000010000100100001           orld!!
+== -b -c 7 -g 5
+00000000: 0110000101100010011000110110010001100101 0110011001100111  abcdefg
+00000007: 0110100001101001011010100110101101101100                   hijkl
+== -b -c 1
+00000000: 01101000  h
+00000001: 01101001  i
+== -b -d -o 100
+00000100: 01101000 01100101 01101100 01101100 01101111 00100000  hello 
+00000106: 01110111 01101111 01110010 01101100 01100100 00100001  world!
+00000112: 00100001 00100001 00100001 00100001 00100001 01111000  !!!!!x
+== -b 17 bytes
+00000000: 01101000 01100101 01101100 01101100 01101111 00100000  hello 
+00000006: 01110111 01101111 01110010 01101100 01100100 00100001  world!
+0000000c: 00100001 00100001 00100001 00100001 00100001 01111000  !!!!!x
+== -a -b
+00000000: 01100001 01100010 00000000 00000000 00000000 00000000  ab....
+00000006: 00000000 00000000 00000000 00000000 00000000 00000000  ......
+*
+0000001e: 00000000 00000000 01100011 01100100                    ..cd
+== -ab is -a
+00000000: 6865 6c6c 6f0a                           hello.
+== -p
+616161616161616161616161616161616161616161616161616161616161
+616161616161616161616161616161616161616161616161616161616161
+61616161616161616161
+== -ps
+68656c6c6f0a
+== -postscript
+68656c6c6f0a
+== -plain
+68656c6c6f0a
+== -p -c 5
+68656c6c6f
+20776f726c
+642121
+== -p -c 0 is one line
+61616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161
+== -p -u
+DEADBEEF
+== -pu is -p
+de
+== -p empty
+rc=0
+== -p -c 0 empty
+ \n
+== -p -c 256
+512
+== -p -l 3
+68656c
+== -p -s 10
+642121
+== -a
+00000000: 6162 0000 0000 0000 0000 0000 0000 0000  ab..............
+00000010: 0000 0000 0000 0000 0000 0000 0000 0000  ................
+00000020: 0000 0000 0000 0000 0000 0000 0000 0000  ................
+00000030: 6364                                     cd
+== -a two zero lines
+00000000: 6162 0000 0000 0000 0000 0000 0000 0000  ab..............
+00000010: 0000 0000 0000 0000 0000 0000 0000 0000  ................
+00000020: 6364                                     cd
+== -a all zero
+00000000: 0000 0000 0000 0000 0000 0000 0000 0000  ................
+*
+00000030: 0000 0000 0000 0000 0000 0000 0000 0000  ................
+== -a trailing zero lines
+00000000: 6162 0000 0000 0000 0000 0000 0000 0000  ab..............
+00000010: 0000 0000 0000 0000 0000 0000 0000 0000  ................
+00000020: 0000 0000 0000 0000 0000 0000 0000 0000  ................
+== -a leading zero lines
+00000000: 0000 0000 0000 0000 0000 0000 0000 0000  ................
+*
+00000030: 6364                                     cd
+== -a zero then partial
+00000000: 6162 0000 0000 0000 0000 0000 0000 0000  ab..............
+00000010: 0000 0000 00                             .....
+== -a zero, zero, partial zero
+00000000: 6162 0000 0000 0000 0000 0000 0000 0000  ab..............
+00000010: 0000 0000 0000 0000 0000 0000 0000 0000  ................
+00000020: 0000 0000 00                             .....
+== -a three zero, partial zero
+00000000: 6162 0000 0000 0000 0000 0000 0000 0000  ab..............
+00000010: 0000 0000 0000 0000 0000 0000 0000 0000  ................
+00000020: 0000 0000 0000 0000 0000 0000 0000 0000  ................
+00000030: 0000 0000 00                             .....
+== -a one leading zero line
+00000000: 0000 0000 0000 0000 0000 0000 0000 0000  ................
+00000010: 6364                                     cd
+== -a two leading zero lines
+00000000: 0000 0000 0000 0000 0000 0000 0000 0000  ................
+00000010: 0000 0000 0000 0000 0000 0000 0000 0000  ................
+00000020: 6364                                     cd
+== -a -a is off
+00000000: 6162 0000 0000 0000 0000 0000 0000 0000  ab..............
+00000010: 0000 0000 0000 0000 0000 0000 0000 0000  ................
+00000020: 0000 0000 0000 0000 0000 0000 0000 0000  ................
+00000030: 6364                                     cd
+== -autoskip
+00000000: 6162 0000 0000 0000 0000 0000 0000 0000  ab..............
+00000010: 0000 0000 0000 0000 0000 0000 0000 0000  ................
+00000020: 0000 0000 0000 0000 0000 0000 0000 0000  ................
+00000030: 6364                                     cd
+== -a -c 4
+00000000: 6162 0000  ab..
+00000004: 0000 0000  ....
+*
+00000010: 6364       cd
+== -a -e
+00000000: 00006261 00000000 00000000 00000000  ab..............
+00000010: 00000000 00000000 00000000 00000000  ................
+00000020: 00000000 00000000 00000000 00000000  ................
+00000030:     6463                             cd
+== -a -d
+00000000: 6162 0000 0000 0000 0000 0000 0000 0000  ab..............
+00000016: 0000 0000 0000 0000 0000 0000 0000 0000  ................
+00000032: 0000 0000 0000 0000 0000 0000 0000 0000  ................
+00000048: 6364                                     cd
+== -a -s 16
+00000010: 0000 0000 0000 0000 0000 0000 0000 0000  ................
+00000020: 0000 0000 0000 0000 0000 0000 0000 0000  ................
+00000030: 6364                                     cd
+== -a -o 16
+00000010: 6162 0000 0000 0000 0000 0000 0000 0000  ab..............
+00000020: 0000 0000 0000 0000 0000 0000 0000 0000  ................
+00000030: 0000 0000 0000 0000 0000 0000 0000 0000  ................
+00000040: 6364                                     cd
+== -a -p ignores it
+616200000000000000000000000000000000000000000000000000000000
+0000000000000000000000000000000000006364
+== -a -i ignores it
+unsigned char z2[] = {
+  0x61, 0x62, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x63, 0x64
+};
+unsigned int z2_len = 34;
+== -a -r round trip
+ a b \0 \0 \0 \0 \0 \0 \0 \0 \0 \0 \0 \0 \0 \0
+ \0 \0 \0 \0 \0 \0 \0 \0 \0 \0 \0 \0 \0 \0 \0 \0
+*
+ c d
+== -a -r round trip, trailing zeros
+48
+== -a -r round trip, all zero
+64
+== -i stdin
+  0x68, 0x65, 0x6c, 0x6c, 0x6f
+== -i file
+unsigned char f[] = {
+  0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x20, 0x77, 0x6f, 0x72, 0x6c, 0x64, 0x21,
+  0x21
+};
+unsigned int f_len = 13;
+== -i 12 bytes
+  0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x6a, 0x6b, 0x6c
+== -i 25 bytes
+  0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x6a, 0x6b, 0x6c,
+  0x6d, 0x6e, 0x6f, 0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78,
+  0x79
+== -i -n
+unsigned char myname[] = {
+  0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x20, 0x77, 0x6f, 0x72, 0x6c, 0x64, 0x21,
+  0x21
+};
+unsigned int myname_len = 13;
+== -i -name
+unsigned char nm[] = {
+  0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x0a
+};
+unsigned int nm_len = 6;
+== -i -nfoo attached
+unsigned char foo[] = {
+  0x68, 0x65, 0x6c, 0x6c, 0x6f
+};
+unsigned int foo_len = 5;
+== -i -n on stdin
+unsigned char myname[] = {
+  0x68, 0x65, 0x6c, 0x6c, 0x6f
+};
+unsigned int myname_len = 5;
+== -i -n with a space
+unsigned char my_name[] = {
+  0x78
+};
+unsigned int my_name_len = 1;
+== -i -C
+unsigned char F[] = {
+  0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x20, 0x77, 0x6f, 0x72, 0x6c, 0x64, 0x21,
+  0x21
+};
+unsigned int F_LEN = 13;
+== -i -capitalize
+unsigned char H[] = {
+  0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x0a
+};
+unsigned int H_LEN = 6;
+== -i -C on stdin
+  0x78
+== -i -C -n lower
+unsigned char ABC_DEF[] = {
+  0x78
+};
+unsigned int ABC_DEF_LEN = 1;
+== -i -t
+unsigned char f[] = {
+  0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x20, 0x77, 0x6f, 0x72, 0x6c, 0x64, 0x21,
+  0x21, 0x00
+};
+unsigned int f_len = 13;
+== -i -t -C -n x
+unsigned char X[] = {
+  0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x00
+};
+unsigned int X_LEN = 5;
+== -i -t -c 3 exact
+  0x61, 0x62, 0x63,
+  0x64, 0x65, 0x66,
+  0x00
+== -i -t empty
+  0x00|
+== -i -t -n n empty
+unsigned char n[] = {
+  0x00};
+unsigned int n_len = 0;
+== -i -t -l 3 stops before the zero
+  0x61, 0x62, 0x63
+== -i path becomes an identifier
+unsigned char sub_my_file_bin[] = {
+  0x68, 0x69
+};
+unsigned int sub_my_file_bin_len = 2;
+== -i leading digit
+unsigned char __1x_bin[] = {
+  0x68, 0x69
+};
+unsigned int __1x_bin_len = 2;
+== -i dots, dashes and spaces
+unsigned char a_b_c_d_txt[] = {
+  0x78
+};
+unsigned int a_b_c_d_txt_len = 1;
+== -i -C path
+unsigned char SUB_MY_FILE_BIN[] = {
+  0x68, 0x69
+};
+unsigned int SUB_MY_FILE_BIN_LEN = 2;
+== -i -C leading digit
+unsigned char __9LIVES[] = {
+  0x78
+};
+unsigned int __9LIVES_LEN = 1;
+== -i -c 4
+unsigned char f[] = {
+  0x68, 0x65, 0x6c, 0x6c,
+  0x6f, 0x20, 0x77, 0x6f,
+  0x72, 0x6c, 0x64, 0x21,
+  0x21
+};
+unsigned int f_len = 13;
+== -i -c 0 is 12
+  0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x6a, 0x6b, 0x6c,
+  0x6d, 0x6e, 0x6f, 0x70
+== -i -u
+unsigned char f[] = {
+  0X68, 0X65, 0X6C, 0X6C, 0X6F, 0X20, 0X77, 0X6F, 0X72, 0X6C, 0X64, 0X21,
+  0X21
+};
+unsigned int f_len = 13;
+== -i empty
+unsigned char empty[] = {
+};
+unsigned int empty_len = 0;
+== -i empty stdin
+rc=0
+== -i -s 3
+unsigned char f[] = {
+  0x6c, 0x6f, 0x20, 0x77, 0x6f, 0x72, 0x6c, 0x64, 0x21, 0x21
+};
+unsigned int f_len = 10;
+== -i -s 2 on stdin
+  0x6c, 0x6c, 0x6f
+== -i -l 0
+rc=0
+== -i -o is ignored
+unsigned char h[] = {
+  0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x0a
+};
+unsigned int h_len = 6;
+== -i -d is ignored
+  0x68, 0x65, 0x6c, 0x6c, 0x6f
+== -i -b
+  0b01101000, 0b01101001
+== -i -b file
+unsigned char f[] = {
+  0b01101000, 0b01100101, 0b01101100, 0b01101100, 0b01101111, 0b00100000,
+  0b01110111, 0b01101111, 0b01110010, 0b01101100, 0b01100100, 0b00100001,
+  0b00100001
+};
+unsigned int f_len = 13;
+== -i -b -t
+  0b01101000, 0b01101001, 0b00000000
+== -i dash
+  0x78
+== outfile
+00000000: 6865 6c6c 6f20 776f 726c 6421 21         hello world!!
+== outfile truncates
+00000000: 6865 6c6c 6f0a                           hello.
+== outfile dash is stdout
+00000000: 6865 6c6c 6f0a                           hello.
+== outfile in a missing folder
+xxd: nodir/out: No such file or directory
+rc=3
+== missing infile
+xxd: nosuch: No such file or directory
+rc=2
+== -- ends the options
+00000000: 6865 6c6c 6f0a                           hello.
+== three file arguments
+Usage:
+rc=1
+== bad option
+Usage:
+       xxd [options] [infile [outfile]]
+rc=1
+== -h
+Usage:
+       xxd [options] [infile [outfile]]
+    or
+       xxd -r [-s [-]offset] [-c cols] [-ps] [infile [outfile]]
+rc=1
+== -c without a value
+Usage:
+rc=1
+== -c abc is the default
+00000000: 6865 6c6c 6f0a                           hello.
+== -c 4x is 4
+00000000: 6865 6c6c  hell
+00000004: 6f0a       o.
+== -b -e together
+xxd: only one of -b, -e, -u, -p, -i can be used
+rc=1
+== -e -i together
+xxd: only one of -b, -e, -u, -p, -i can be used
+rc=1
+== -b -ps together
+xxd: only one of -b, -e, -u, -p, -i can be used
+rc=1
+== -n without -i
+00000000: 6865 6c6c 6f0a                           hello.
+== -C without -i
+00000000: 6865 6c6c 6f0a                           hello.
+== -t without -i
+00000000: 6865 6c6c 6f0a                           hello.
+== -r
+ h e l l o \n
+== -r binary round trip
+ \0 001 037 ~ 177 200 377 \n \t \r
+== -r -b round trip
+ h e l l o w o r l d ! !
+== -r -e -g 2 round trip, pairs swapped
+ e h l l o o w l r ! d ! ! ! !
+ x !
+== -r decimal positions read as hex
+ h e l l o w o r l d ! !
+== -r -p
+ h e l l o w o r l d ! !
+== -r -p spaces
+ h i j k
+== -r -p garbage
+ h i
+== -r -p mixed garbage
+ h i
+== -r -p odd digit
+ h
+== -r -p odd digits
+ h i j
+== -r -p -c 2 ignores cols
+ h i j k l
+== -r -p with a position
+ \0 \0 \0 \0 h i
+== -r -ps
+ h i
+== -r -p -r
+ h i
+== -r -p -s 3
+ \0 \0 \0 h i
+== -r -p -s -3
+xxd: Sorry, cannot seek backwards.
+rc=5
+== -r gap is zero-filled
+ h i \0 \0 j k
+== -r backwards on a pipe
+ \0 \0 \0 \0 h i
+xxd: Sorry, cannot seek backwards.
+rc=5
+== -r backwards into a redirected file
+rc=0
+   j   k  \0  \0   h   i
+== -r garbage first line
+ \0 \0 \0 \0 \0 \0 \0 \0 \0 \0 272
+xxd: Sorry, cannot seek backwards.
+rc=5
+== -r no position
+rc=0
+== -r -s 2
+ \0 \0 h i
+== -r -s -2
+ \0 \0 h i
+== -r -s +2
+ \0 \0 h i
+== -r -s +-2
+ \0 \0 h i
+== -r -c 2
+ h i
+== -r -c 4
+ h i j k
+== -r -c 1
+ h
+== -r -c 1 two lines
+ h i
+== -r -c 0 is 16
+ h i
+== -r -c 300
+xxd: invalid number of columns (max. 256).
+rc=1
+== -r text column ignored after a full line
+ h i j k l m n o p q r s t u v w
+== -r text column after a partial line
+ h i j k l m
+== -r text column of hex-like letters
+ a b c d
+== -r one space before hex-like text
+ a b 253 315
+== -r two garbage characters end the line
+ h
+== -r one garbage character does not
+ h
+== -r upper case
+ j k
+== -r odd digits
+ h 226
+== -r CRLF
+ h i j k
+== -r CR only
+ h i \0 \0 \0 002
+== -r tab after the position
+ h i
+== -r no space after the colon
+ h i
+== -r no final newline
+ h i
+== -r empty
+rc=0
+== -r empty lines
+ a b c d
+== -r star line
+ a b c d
+== -r position only
+ \0 \0 c d
+== -r short position
+ \0 \0 \0 \0 \0 \0 \0 \0 \0 \0 \0 \0 \0 \0 \0 \0
+ h i
+== -r 16-digit position
+ \0 \0 h i
+== -r position then garbage
+11259377
+== -r -l is ignored
+ h i j k
+== -r -b
+ h i
+== -r -b -c 2
+ h i
+== -r -b bad digit
+ h
+== -r -b position
+ \0 \0 h
+== -r -b -s 1
+ \0 \0 \0 h
+== -r -b two lines
+ h i
+== -r -e refused
+xxd: Sorry, cannot revert this type of hexdump
+rc=255
+== -r -i refused
+xxd: Sorry, cannot revert this type of hexdump
+rc=255
+== -r -b -p refused
+xxd: only one of -b, -e, -u, -p, -i can be used
+rc=1
+== -r into a new file
+  \0  \0  \0  \0   h   i
+== -r patches a file in place
+   A   B   x   x   E   F   G   H   I   J
+== -r seeks backwards in a file
+   j  \0  \0  \0   h   i
+rc=0
+== -r -s -4 into a file
+   x   x   C   D   E   F   G   H   I   J
+== -r -s -10 into a file
+xxd: Sorry, cannot seek backwards.
+rc=5
+   A   B   C   D   E   F   G   H   I   J
+== -r from a file
+ h e l l o w o r l d ! !
+== -r from a file into a file
+same
+== -r large position
+257
+== -r -a round trip
+same
+== -R never
+00000000: 6865 6c6c 6f0a                           hello.
+== -R auto on a pipe
+00000000: 6865 6c6c 6f0a                           hello.
+== -R always
+ 0 0 0 0 0 0 0 0 : 033 [ 1 ; 3 7
+ m 0 0 033 [ 0 m 033 [ 1 ; 3 1 m 0 1
+ 033 [ 0 m 033 [ 1 ; 3 1 m 1 f 033 [
+ 0 m 033 [ 1 ; 3 2 m 2 0 033 [ 0 m
+ 033 [ 1 ; 3 2 m 7 e 033 [ 0 m 033 [ 1
+ ; 3 1 m 7 f 033 [ 0 m 033 [ 1 ; 3
+ 1 m 8 0 033 [ 0 m 033 [ 1 ; 3 4 m f
+ f 033 [ 0 m 033 [ 1 ; 3 3 m 0 a 0
+ 9 033 [ 0 m 033 [ 1 ; 3 3 m 0 d 033
+ [ 0 m 033 [ 1 ; 3 1
+ m 033 [ 0 m 033 [ 1 ;
+ 3 7 m . 033 [ 0 m 033 [ 1 ; 3 1 m .
+ . 033 [ 0 m 033 [ 1 ; 3 2 m ~ 033 [
+ 0 m 033 [ 1 ; 3 1 m . . 033 [ 0 m 033
+ [ 1 ; 3 4 m . 033 [ 0 m 033 [ 1 ; 3
+ 3 m . . . 033 [ 0 m \n
+== -Ralways attached
+ 0 0 0 0 0 0 0 0 : 033 [ 1 ; 3 2
+ m 6 8 6 5 033 [ 0 m
+ 033
+ [ 1 ; 3 1 m
+ 033 [ 0 m 033 [ 1 ; 3 2 m
+ h e 033 [ 0 m \n
+== -R always partial line
+ 0 0 0 0 0 0 0 0 : 033 [ 1 ; 3 2
+ m 6 8 6 5 033 [ 0 m
+ 033
+ [ 1 ; 3 1 m
+ 033 [ 0 m 033 [ 1 ; 3 2 m
+ h e 033 [ 0 m \n
+== -R always -c 3 -g 1
+ 0 0 0 0 0 0 0 0 : 033 [ 1 ; 3 2
+ m 6 8 033 [ 0 m 033 [ 1 ; 3 2 m 6
+ 5 033 [ 0 m 033 [ 1 ; 3 2 m 6 c 033
+ [ 0 m 033 [ 1 ; 3 2 m h e l 033
+ [ 0 m \n 0 0 0 0 0 0 0 3 : 033 [
+ 1 ; 3 2 m 6 c 033 [ 0 m 033 [ 1 ;
+ 3 2 m 6 f 033 [ 0 m 033 [ 1 ;
+ 3 1 m 033 [ 0 m 033 [ 1 ; 3 2 m
+ l o 033 [ 0 m \n
+== -R always -g 0
+ 0 0 0 0 0 0 0 0 : 033 [ 1 ; 3 2
+ m 6 8 6 5 033 [ 0 m 033 [ 1 ; 3 4 m
+ f f 033 [ 0 m 033 [ 1 ; 3 2 m 6 c 033
+ [ 0 m 033
+ [ 1 ; 3 1 m
+ 033 [ 0 m 033 [ 1 ; 3 2 m h
+ e 033 [ 0 m 033 [ 1 ; 3 4 m . 033 [ 0
+ m 033 [ 1 ; 3 2 m l 033 [ 0 m \n
+== -R always -u
+ 0 0 0 0 0 0 0 0 : 033 [ 1 ; 3 2
+ m 6 8 6 5 033 [ 0 m 033 [ 1 ; 3 4
+ m F F 033 [ 0 m
+ 033 [ 1 ; 3 1
+ m 033 [
+ 0 m 033 [ 1 ; 3 2 m h e 033 [ 0
+ m 033 [ 1 ; 3 4 m . 033 [ 0 m \n
+== -R always -b
+ 0 0 0 0 0 0 0 0 : 033 [ 1 ; 3 2
+ m 0 1 1 0 1 0 0 0 033 [ 0 m 033 [
+ 1 ; 3 2 m 0 1 1 0 0 1 0 1 033 [ 0
+ m 033 [ 1 ; 3 7 m 0 0 0 0 0 0 0
+ 0 033 [ 0 m 033 [ 1 ; 3 4 m 1 1 1
+ 1 1 1 1 1 033 [ 0 m
+ 033 [ 1
+ ; 3 2 m h e 033 [ 0 m 033 [ 1 ; 3 7
+ m . 033 [ 0 m 033 [ 1 ; 3 4 m . 033 [
+ 0 m \n
+== -R always -b partial
+ 0 0 0 0 0 0 0 0 : 033 [ 1 ; 3 2
+ m 0 1 1 0 1 0 0 0 033 [ 0 m 033 [
+ 1 ; 3 2 m 0 1 1 0 0 1 0 1 033 [ 0
+ m
+
+ 033 [ 1 ; 3 2 m h e
+ 033 [ 0 m \n
+== -R always -e
+ 0 0 0 0 0 0 0 0 : 033 [ 1 ; 3 2
+ m 6 c 6 c 6 5 6 8 033 [ 0 m 033 [
+ 1 ; 3 1 m 033 [ 0 m 033 [ 1 ; 3
+ 4 m f f 033 [ 0 m 033 [ 1 ; 3 7 m 0
+ 0 033 [ 0 m 033 [ 1 ; 3 2 m 6 f 033 [
+ 0 m 033 [ 1
+ ; 3 1 m 033 [ 0 m
+ 033 [ 1 ; 3 2 m h e l l o 033 [ 0
+ m 033 [ 1 ; 3 7 m . 033 [ 0 m 033 [ 1
+ ; 3 4 m . 033 [ 0 m \n
+== -R always -e -g 2
+ 0 0 0 0 0 0 0 0 : 033 [ 1 ; 3 2
+ m 6 5 6 8 033 [ 0 m 033 [ 1 ; 3 2
+ m 6 c 6 c 033 [ 0 m 033 [ 1 ; 3 7
+ m 0 0 033 [ 0 m 033 [ 1 ; 3 2 m 6 f
+ 033 [ 0 m 033 [ 1 ; 3 1 m 033 [ 0
+ m 033 [ 1 ; 3 4 m f f 033 [ 0 m
+ 033 [ 1 ;
+ 3 1 m 033 [ 0 m
+ 033 [ 1 ; 3 2 m h e l l o 033 [ 0 m
+ 033 [ 1 ; 3 7 m . 033 [ 0 m 033 [ 1 ;
+ 3 4 m . 033 [ 0 m \n
+== -R always -e one byte
+ 0 0 0 0 0 0 0 0 : 033 [ 1 ; 3 1
+ m 033 [ 0 m 033 [ 1 ; 3
+ 2 m 6 8 033 [ 0 m
+ 033 [ 1 ; 3 1 m
+ 033 [ 0 m
+ 033 [ 1 ; 3 2 m h 033 [ 0 m \n
+== -R always -e -c 6
+ 0 0 0 0 0 0 0 0 : 033 [ 1 ; 3 2
+ m 6 c 6 c 6 5 6 8 033 [ 0 m 033 [
+ 1 ; 3 1 m 033 [ 0 m 033
+ [ 1 ; 3 2 m 6 f 033 [ 0 m 033 [
+ 1 ; 3 2 m h e l l o 033 [ 0 m \n
+== -R always line ends
+ 0 0 0 0 0 0 0 0 : 033 [ 1 ; 3 3
+ m 0 d 0 9 033 [ 0 m 033 [ 1 ; 3 3
+ m 0 a 033 [ 0 m
+ 033 [ 1 ; 3 1
+ m 033 [
+ 0 m 033 [ 1 ; 3 3 m . . . 033 [
+ 0 m \n
+== -R always -a
+ 0 0 0 0 0 0 0 0 : 033 [ 1 ; 3 2
+ m 6 1 6 2 033 [ 0 m 033 [ 1 ; 3 7
+ m 0 0 0 0 033 [ 0 m 033 [ 1 ; 3 7
+*
+ m 0 0 0 0 033 [ 0 m 033 [ 1 ; 3
+ 2 m a b 033 [ 0 m 033 [ 1 ; 3 7 m .
+ . . . . . . . . . . . . . 033 [ 0
+ m \n 0 0 0 0 0 0 1 0 : 033 [ 1 ;
+ 3 7 m 0 0 0 0 033 [ 0 m 033 [ 1 ;
+*
+ 3 7 m 0 0 0 0 033 [ 0 m 033 [ 1
+ ; 3 7 m . . . . . . . . . . . .
+ . . . . 033 [ 0 m \n 0 0 0 0 0 0 2
+ 0 : 033 [ 1 ; 3 2 m 6 3 6 4 033 [
+ 0 m
+ 033 [ 1 ; 3 1 m
+ 033 [ 0
+ m 033 [ 1 ; 3 2 m c d 033 [ 0 m \n
+== -R always -a all zero
+ 0 0 0 0 0 0 0 0 : 033 [ 1 ; 3 7
+ m 0 0 0 0 033 [ 0 m 033 [ 1 ; 3 7
+*
+ m 0 0 0 0 033 [ 0 m 033 [ 1 ; 3
+ 7 m . . . . . . . . . . . . . .
+ . . 033 [ 0 m \n 0 0 0 0 0 0 1 0 :
+ 0 0 0 0 0 0 0 0 0 0 0 0
+ 0 0 0 0 0 0 0 0 0 0 0 0 0
+ 0 0 0 0 0 0 0 . . . . . .
+ . . . . . . . . . . \n
+== -R always -p has none
+ 6 8 6 5 0 0 \n
+== -R always -i has none
+ 0 x 6 8 , 0 x 6 5 , 0 x
+ 0 0 \n
+== -R always into a file
+   0   0   0   0   0   0   0   0   :     033   [   1   ;   3   2
+   m   6   8   6   5 033   [   0   m                            
+== -R auto into a file
+   0   0   0   0   0   0   0   0   :       6   8   6   5        
+== -R always with NO_COLOR
+ 0 0 0 0 0 0 0 0 : 033 [ 1 ; 3 2
+ m 6 8 6 5 033 [ 0 m
+ 033
+ [ 1 ; 3 1 m
+ 033 [ 0 m 033 [ 1 ; 3 2 m
+ h e 033 [ 0 m \n
+== -R bad
+Usage:
+rc=1
+== -R without a value
+Usage:
+rc=0
+== -v
+xxd
+rc=0
+== -version
+xxd
