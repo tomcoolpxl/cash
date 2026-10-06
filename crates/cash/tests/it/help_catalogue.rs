@@ -138,6 +138,8 @@ fn help_topics_lists_every_topic_and_each_one_opens() {
         "job-control",
         "keys",
         "config",
+        "installing",
+        "tools",
         "vars",
         "differences",
     ] {

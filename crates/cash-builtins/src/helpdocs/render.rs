@@ -2,7 +2,8 @@
 //! terminal, headings in capitals, and bold in place of code spans when colour is on.
 //!
 //! Only the markdown the pages use is understood: `##` and `###` headings, paragraphs,
-//! `- ` list items, fenced code blocks and code spans. Anything else is a paragraph.
+//! `- ` list items, fenced code blocks, tables and code spans. Anything else is a
+//! paragraph.
 
 use std::fmt::Write as _;
 
@@ -121,6 +122,20 @@ enum Block {
     Paragraph(String),
     Item(String),
     Code(Vec<String>),
+    /// The rows of a table, the header first; the `|---|` line is not one.
+    Table(Vec<Vec<String>>),
+}
+
+/// The cells of a markdown table row, `| a | b |`, or none when `line` is not one or is
+/// the `|---|---|` line under the header.
+pub fn table_row(line: &str) -> Option<Vec<&str>> {
+    let inner = line.trim().strip_prefix('|')?;
+    let inner = inner.strip_suffix('|').unwrap_or(inner);
+    let cells: Vec<&str> = inner.split('|').map(str::trim).collect();
+    let separator = cells
+        .iter()
+        .all(|cell| !cell.is_empty() && cell.trim_matches([':', '-']).is_empty());
+    (!separator).then_some(cells)
 }
 
 /// The blocks of `body`, in order.
@@ -151,6 +166,17 @@ fn blocks(body: &str) -> Vec<Block> {
         } else if let Some(text) = trimmed.strip_prefix("- ") {
             blocks.extend(open.take());
             open = Some(Block::Item(text.to_owned()));
+        } else if trimmed.starts_with('|') {
+            let row: Option<Vec<String>> =
+                table_row(trimmed).map(|cells| cells.into_iter().map(str::to_owned).collect());
+            match (&mut open, row) {
+                (Some(Block::Table(rows)), Some(row)) => rows.push(row),
+                (Some(Block::Table(_)), None) => {}
+                (_, row) => {
+                    blocks.extend(open.take());
+                    open = Some(Block::Table(row.into_iter().collect()));
+                }
+            }
         } else {
             match &mut open {
                 Some(Block::Paragraph(text) | Block::Item(text)) => {
@@ -209,8 +235,46 @@ pub fn markdown(body: &str, style: Style) -> String {
                 ));
             }
             Block::Code(lines) => out.push_str(&indented(&lines.join("\n"), INDENT + 4)),
+            Block::Table(rows) => out.push_str(&table(&rows, style)),
         }
         previous_was_item = is_item;
+    }
+    out
+}
+
+/// A table as aligned columns, two spaces apart, the header bold when colour is on.
+fn table(rows: &[Vec<String>], style: Style) -> String {
+    let columns = rows.iter().map(Vec::len).max().unwrap_or_default();
+    let cells: Vec<Vec<String>> = rows
+        .iter()
+        .map(|row| {
+            (0..columns)
+                .map(|index| plain(row.get(index).map_or("", String::as_str)))
+                .collect()
+        })
+        .collect();
+    let widths: Vec<usize> = (0..columns)
+        .map(|index| {
+            cells
+                .iter()
+                .map(|row| row.get(index).map_or(0, |cell| cell.width()))
+                .max()
+                .unwrap_or_default()
+        })
+        .collect();
+    let mut out = String::new();
+    for (number, row) in cells.iter().enumerate() {
+        let mut line = " ".repeat(INDENT);
+        for (cell, width) in row.iter().zip(&widths) {
+            line.push_str(cell);
+            line.push_str(&" ".repeat(width.saturating_sub(cell.width()) + 2));
+        }
+        let line = line.trim_end();
+        if number == 0 && style.colour {
+            let _ = writeln!(out, "{BOLD}{line}{RESET}");
+        } else {
+            let _ = writeln!(out, "{line}");
+        }
     }
     out
 }
@@ -242,6 +306,8 @@ pub fn search_texts(body: &str) -> Vec<String> {
                     .filter(|line| !line.trim().is_empty())
                     .map(|line| line.trim().to_owned()),
             ),
+            // A row is one line: a search for `jq` shows its row whole.
+            Block::Table(rows) => texts.extend(rows.into_iter().map(|row| plain(&row.join("  ")))),
         }
     }
     texts
@@ -279,6 +345,25 @@ mod tests {
         assert_eq!(
             out,
             "WINDOWS NOTES\n    Some code here.\n\n    - one\n    - two more\n\n        x  y\n"
+        );
+    }
+
+    #[test]
+    fn a_table_is_drawn_as_aligned_columns_without_its_separator_line() {
+        let out = markdown(
+            "## Tools\n\n| command | id | what |\n|---|:--|---|\n| `jq` | jqlang.jq | JSON |\n| rg | - | search |\n",
+            PLAIN,
+        );
+        assert_eq!(
+            out,
+            "TOOLS\n    command  id         what\n    jq       jqlang.jq  JSON\n    rg       -          search\n"
+        );
+        assert_eq!(table_row("|---|---|"), None);
+        assert_eq!(table_row("not a row"), None);
+        assert_eq!(table_row("| a | b"), Some(vec!["a", "b"]));
+        assert_eq!(
+            search_texts("| command | id |\n|---|---|\n| `jq` | jqlang.jq |\n"),
+            ["command  id", "jq  jqlang.jq"]
         );
     }
 
