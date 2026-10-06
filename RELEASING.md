@@ -134,9 +134,14 @@ When a tag matching `v*.*.*` is pushed, the [Release Workflow](.github/workflows
    `THIRD-PARTY-LICENSES.html` (written by `cargo about` from
    [`.github/about`](.github/about)) into `cash-vX.Y.Z-x86_64-pc-windows-msvc.zip`.
 3. Computes the SHA-256 checksum file.
-4. Creates a new GitHub Release whose notes are the commits since the previous tag,
+4. Compiles the per-user installer, `cash-vX.Y.Z-setup.exe`, from the same files with
+   Inno Setup ([`packaging/inno/cash.iss`](packaging/inno/cash.iss)), with its own
+   `.sha256`. It installs under `%LOCALAPPDATA%\Programs\cash\X.Y.Z` and runs
+   `cash --install-finish`; `cash --update` on an installed cash fetches the next
+   release's zip from the same page, so the zip's name must stay as it is.
+5. Creates a new GitHub Release whose notes are the commits since the previous tag,
    grouped by type ([`.github/scripts/release-notes.ps1`](.github/scripts/release-notes.ps1)),
-   and attaches the zip archive and checksum.
+   and attaches the zip, the installer and both checksums.
 
 ### 7. Scoop
 Nothing to do. The bucket, [`tomcoolpxl/scoop-bucket`](https://github.com/tomcoolpxl/scoop-bucket),
@@ -144,4 +149,16 @@ runs Scoop's Excavator action every few hours: `checkver` finds the new release,
 `autoupdate` points `bucket/cash.json` at its zip and `.sha256`. So the zip's name must stay
 `cash-vX.Y.Z-x86_64-pc-windows-msvc.zip`. The manifest's source is
 [`packaging/scoop/cash.json`](packaging/scoop/cash.json); a change to its hooks or notes
-is copied to the bucket by hand.
+is copied to the bucket by hand (`python scripts/sync-bucket.py PATH\to\bucket\cash.json`
+copies every field but the version, url and hash).
+
+### 8. winget
+From the installer (`InstallerType: inno`, `Scope: user`), package
+`tomcoolpxl.cash`. The templates are in [`packaging/winget`](packaging/winget): fill in
+the version, the installer URL and its SHA-256 (from the `.sha256` asset), validate with
+`winget validate --manifest packaging\winget\out`, test with `winget install --manifest
+packaging\winget\out`, and open the pull request on `microsoft/winget-pkgs` by hand for
+the first version (`wingetcreate submit`, or a fork and PR). Later versions can go through
+`vedantmgoyal9/winget-releaser` in the release workflow. The installer type cannot change
+once published, so the first submission waits until the installer has shipped in a
+release and been installed on a clean machine.
