@@ -209,11 +209,12 @@ gets SmartScreen's "unknown publisher" prompt once (winget and Scoop downloads d
 **Portable**: unpack the release zip anywhere and run `cash.exe`. That one file is the
 whole shell: the C runtime is linked in, and every tool and help page is inside it; the
 licence notices travel beside it in the zip. At its first interactive prompt a portable
-cash offers once to add the Windows Terminal profile and to put its tools on PATH for
-other programs, and remembers your answer; Enter means no. The same things stay explicit
-commands at any time: `cash --terminal-profile` (`--remove-terminal-profile` undoes it)
-and `cash --link-tools --add-to-path` (`--unlink-tools`). `cash --update --check` tells a
-portable cash when a newer zip is on the releases page.
+cash offers once to put itself on your PATH, to add the Windows Terminal profile and to
+put its tools on PATH for other programs, and remembers your answers; Enter means no. The
+same things stay explicit commands at any time: `cash --terminal-profile`
+(`--remove-terminal-profile` undoes it) and `cash --link-tools --add-to-path`
+(`--unlink-tools`). `cash --update --check` tells a portable cash when a newer zip is on
+the releases page.
 
 ## Build
 

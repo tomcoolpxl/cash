@@ -50,8 +50,9 @@ the new one.
 The release zip holds `cash.exe` and the licence notices, nothing else is needed: the C
 runtime is linked in, every tool and this help are inside the one file. Unpack it
 anywhere and run it. At its first interactive prompt a portable cash asks, once, whether
-to add the Windows Terminal profile and whether to put its tools on PATH for other
-programs; Enter means no, and the answer is kept in `%LOCALAPPDATA%\cash\portable-offer`
+to put itself on your PATH (so `cash` is a command in any window), whether to add the
+Windows Terminal profile and whether to put its tools on PATH for other programs; Enter
+means no, and the answers are kept in `%LOCALAPPDATA%\cash\portable-offer`
 (delete that file to be asked again; `CASH_NO_OFFER=1` never asks). Nothing changes
 without a yes, and the same things stay commands at any time: `cash --terminal-profile`
 and `cash --link-tools --add-to-path`, with `--remove-terminal-profile` and

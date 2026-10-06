@@ -305,8 +305,9 @@ later").
 10. **The zip is the third channel, portable** (the user, 2026-10-06): the release zip's
     `cash.exe` runs from anywhere on its own, and README, the release notes and `help
     installing` say so ("Portable"). A portable cash (one that is neither Scoop's nor the
-    installer's) **offers once, at its first interactive prompt**, to add the Windows
-    Terminal profile and to put its tools on PATH for other programs; the answer is
+    installer's) **offers once, at its first interactive prompt**, to put itself on the
+    user PATH (so `cash` is a command in any window; the user, 2026-10-06), to add the
+    Windows Terminal profile and to put its tools on PATH for other programs; the answer is
     remembered in `%LOCALAPPDATA%\cash\portable-offer`, Enter means no, and nothing on
     the machine changes without a yes. Only at a console, never for `-c`, a script or a
     non-interactive shell; `CASH_NO_OFFER=1` skips it. The alternative, changing nothing

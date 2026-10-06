@@ -81,5 +81,18 @@ foreach ($name in $entries.Keys) {
 }
 if ($body.Count -eq 2) { $body += @('- No changes recorded.', '') }
 
+# The three ways to install, under every release's notes.
+$version = $Tag -replace '^v', ''
+$body += @(
+    '## Install',
+    '',
+    "- **Portable**: unpack ``cash-$Tag-x86_64-pc-windows-msvc.zip`` anywhere and run ``cash.exe``. That one file is the whole shell; the licence notices are beside it.",
+    "- **Installer**, per user, no admin: ``cash-$Tag-setup.exe``. Silent: ``/VERYSILENT /SUPPRESSMSGBOXES /NORESTART``. Unsigned, so a browser download shows SmartScreen once. Upgrade later with ``cash --update``.",
+    '- **Scoop**: `scoop bucket add tomcoolpxl https://github.com/tomcoolpxl/scoop-bucket` then `scoop install cash`.',
+    '',
+    "Each ``.sha256`` file holds the asset's checksum. ``cash help installing`` has the details.",
+    ''
+)
+
 $body | Set-Content -Path $Out -Encoding utf8
 Get-Content $Out

@@ -2692,8 +2692,9 @@ second, on the releases page; winget is made from the installer.
   no output changes for them.
 - **The zip is the third channel, portable** (the user, 2026-10-06): one executable,
   unpacked anywhere, is a complete shell; the notices travel in the zip beside it. A
-  portable cash offers once, at its first interactive prompt, the Terminal profile and
-  the tool links, remembers the answer, and changes nothing without a yes; never for
+  portable cash offers once, at its first interactive prompt, to put itself on the user
+  PATH, to add the Terminal profile and to put its tools on PATH, remembers the answers,
+  and changes nothing without a yes; never for
   `-c`, scripts or a non-interactive shell. The user chose the offer over silence,
   knowing a shell started interactively by a script sees the question once.
 
