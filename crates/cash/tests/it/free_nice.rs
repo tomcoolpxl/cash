@@ -19,7 +19,7 @@
 use std::os::windows::process::CommandExt as _;
 use std::process::{Child, Command, Stdio};
 
-use cash_win32::priority::{PriorityClass, of_process};
+use cash_win32::priority::{PriorityClass, of_process, set_process};
 
 use crate::common::{Output, cash_command, output_of, run as cash};
 
@@ -441,6 +441,9 @@ impl Target {
             .stderr(Stdio::null())
             .spawn()
             .expect("start ping.exe");
+        // A runner may start its jobs below normal, and the child inherits that; the
+        // tests count from Normal, as util-linux's do from 0.
+        set_process(child.id(), PriorityClass::Normal).expect("set the target to Normal");
         Self(child)
     }
 
