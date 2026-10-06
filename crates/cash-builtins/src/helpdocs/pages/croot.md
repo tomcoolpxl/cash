@@ -19,6 +19,7 @@ It shows a tree of the folder it starts in, several levels deep, trimmed to fit 
 - `Enter`: pick. `Ctrl-Enter`: pick and close.
 - `Esc`: clear the filter; on an empty filter, close without a pick.
 - `Alt-F`: folders only, or files too. `Alt-H`: the folders you were in recently.
+- `Alt-S`: newest first, with each entry's age (`3h`, `2d`), or back to names.
 - `Alt-.`: show hidden entries. `Alt-I`: show entries a `.gitignore` leaves out.
 
 ## On the command line

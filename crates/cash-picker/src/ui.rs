@@ -53,6 +53,8 @@ pub enum Key {
     Hidden,
     /// Alt-I: `.gitignore`d entries.
     Ignored,
+    /// Alt-S: newest first, or by name.
+    Sort,
 }
 
 /// What a key led to.
@@ -109,6 +111,8 @@ struct Item {
     text: String,
     /// The characters of `text` a filter matched.
     positions: Vec<usize>,
+    /// How old it is (`3h`), shown after it when sorting by date.
+    age: Option<String>,
 }
 
 /// The picker.
@@ -148,6 +152,7 @@ impl Picker {
                 shows: setup.shows,
                 hidden: false,
                 ignored: false,
+                by_date: false,
             },
             then: setup.then,
             typed: setup.typed,
@@ -231,6 +236,10 @@ impl Picker {
             }
             Key::Ignored => {
                 self.filter.ignored = !self.filter.ignored;
+                self.refilter();
+            }
+            Key::Sort => {
+                self.filter.by_date = !self.filter.by_date;
                 self.refilter();
             }
             Key::History => {
@@ -353,7 +362,7 @@ impl Picker {
             }));
         }
         let footer = format!(
-            "> {}\u{2588}   Enter pick  \u{2192} open  \u{2190} up  Alt-F files  Alt-H history  Esc",
+            "> {}\u{2588}   Enter pick  \u{2192} open  \u{2190} up  Alt-F files  Alt-H history  Alt-S date  Esc",
             self.typed
         );
         lines.push(paint(&self.colours.status, &fit(&footer, width)));
@@ -378,6 +387,9 @@ impl Picker {
         }
         if self.filter.ignored {
             header.push_str(" +ignored");
+        }
+        if self.filter.by_date {
+            header.push_str(" [by date]");
         }
         if self.picks > 0 {
             let _ = write!(header, "   {} picked", self.picks);
@@ -415,7 +427,11 @@ impl Picker {
     }
 
     fn draw_item(&self, item: &Item, selected: bool, width: usize) -> String {
-        let plain = format!("{}{}", item.prefix, item.text);
+        let age = item
+            .age
+            .as_ref()
+            .map_or_else(String::new, |age| format!("  {age}"));
+        let plain = format!("{}{}{age}", item.prefix, item.text);
         if selected {
             let mut line = fit(&plain, width);
             let used: usize = line.chars().filter_map(char::width).sum();
@@ -455,6 +471,8 @@ impl Picker {
             };
             out.push_str(&paint(sgr, &run));
         }
+        let room = room.saturating_sub(text.chars().filter_map(char::width).sum());
+        out.push_str(&paint(&self.colours.dim, &fit(&age, room)));
         out
     }
 
@@ -504,6 +522,7 @@ impl Picker {
                     } else {
                         entry.name
                     },
+                    age: filter.by_date.then(|| entry.modified.map(age)).flatten(),
                     path: Some(entry.path),
                     folder: entry.folder,
                     positions: Vec::new(),
@@ -518,6 +537,7 @@ impl Picker {
                     path: None,
                     folder: false,
                     positions: Vec::new(),
+                    age: None,
                 },
             })
             .collect()
@@ -557,6 +577,7 @@ impl Picker {
                             entry.relative.clone()
                         },
                         positions: m.positions,
+                        age: None,
                     })
                 })
                 .collect()
@@ -600,6 +621,7 @@ impl Picker {
                     prefix: String::new(),
                     text,
                     positions: Vec::new(),
+                    age: None,
                 })
                 .collect();
         }
@@ -616,6 +638,7 @@ impl Picker {
                     prefix: String::new(),
                     text: text.clone(),
                     positions: m.positions,
+                    age: None,
                 })
             })
             .collect()
@@ -639,6 +662,24 @@ fn branches(rails: &[bool], depth: usize, last: Option<bool>) -> String {
         Some(true) | None => "\u{2514}\u{2500} ",
     });
     prefix
+}
+
+/// How long ago `modified` was, in one short unit: `now`, `5m`, `3h`, `2d`, `6w`, `4mo`,
+/// `2y`.
+fn age(modified: std::time::SystemTime) -> String {
+    let seconds = std::time::SystemTime::now()
+        .duration_since(modified)
+        .map_or(0, |since| since.as_secs());
+    let (minute, hour, day) = (60, 60 * 60, 24 * 60 * 60);
+    match seconds {
+        s if s < minute => "now".to_owned(),
+        s if s < hour => format!("{}m", s / minute),
+        s if s < day => format!("{}h", s / hour),
+        s if s < 14 * day => format!("{}d", s / day),
+        s if s < 60 * day => format!("{}w", s / (7 * day)),
+        s if s < 730 * day => format!("{}mo", s / (30 * day)),
+        s => format!("{}y", s / (365 * day)),
+    }
 }
 
 /// `text` cut to `width` columns, with `…` where it was cut.
@@ -840,6 +881,33 @@ mod tests {
                 close: true,
             }
         );
+    }
+
+    #[test]
+    fn alt_s_sorts_newest_first_and_shows_each_age() {
+        let dir = tempfile::tempdir().unwrap();
+        let now = std::time::SystemTime::now();
+        let day = std::time::Duration::from_hours(24);
+        for (name, ago) in [("a.txt", 30), ("b.txt", 0), ("c.txt", 3)] {
+            let file = std::fs::File::create(dir.path().join(name)).unwrap();
+            file.set_modified(now - day * ago).unwrap();
+        }
+        let mut picker = picker(dir.path(), Shows::Everything, Then::Run);
+        let frame = plain(&mut picker, 8);
+        assert_eq!(&frame[1..4], ["a.txt", "b.txt", "c.txt"], "{frame:#?}");
+
+        picker.key(Key::Sort);
+        let frame = plain(&mut picker, 8);
+        let header = strip(&picker.frame(200, 8)[0]);
+        assert!(header.contains("[by date]"), "{header}");
+        assert_eq!(
+            &frame[1..4],
+            ["b.txt  now", "c.txt  3d", "a.txt  4w"],
+            "{frame:#?}"
+        );
+        picker.key(Key::Sort);
+        let frame = plain(&mut picker, 8);
+        assert_eq!(&frame[1..4], ["a.txt", "b.txt", "c.txt"], "{frame:#?}");
     }
 
     #[test]

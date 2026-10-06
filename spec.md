@@ -2525,7 +2525,11 @@ selected folder the root, Left makes the root's parent the root; Left at a drive
 root shows the drives (each local and mapped drive, and `~`). Hidden entries (a name
 starting with `.`, or the hidden attribute) and entries a `.gitignore` excludes are left
 out unless Alt-. or Alt-I shows them. Alt-H swaps the tree for the folder history
-(`cdh`'s list, most recent first). Entries take `ls`'s colours
+(`cdh`'s list, most recent first). Alt-S orders each folder's entries newest first,
+folders still before files, each with its age after it (`3h`, `2d`), and again by name
+(the user, 2026-10-06). The root's own entries are always all listed and the list
+scrolls through them; only deeper levels are trimmed (2026-10-05). A resized window gets
+the picker's height worked out again. Entries take `ls`'s colours
 (`LS_COLORS`); the picker's own parts (selection, matched letters, frame, status line)
 take `CASH_PICKER_COLORS`, `name=SGR` pairs as `LS_COLORS` has them
 (`sel=1;37;44:match=1;33:frame=2`).
@@ -2569,7 +2573,11 @@ pick(s), one per line, on standard output: `cd "$(croot)"`, `vim $(croot -f)`. I
 
 **Speed.** The first frame comes from one read of the starting folder and must appear
 within 30 ms of the key on a warm cache; deeper levels and the background search never
-hold up drawing or keys. Fuzzy matching and `.gitignore` rules come from established
+hold up drawing or keys. Measured on 2026-10-06 with `crates/cash/tests/croot_latency.rs`
+(the dist build, a ConPTY, from writing Alt-E until the header came back): a median of
+18.6 ms (worst 24.7 ms) in a folder of 44 folders and 16.9 ms (worst 21.5 ms) in one of
+2,000 entries, against 1.6 ms for a plain key. A frame writes only the lines that
+changed, as one synchronized update. Fuzzy matching and `.gitignore` rules come from established
 crates (`nucleo-matcher` and `ignore`, or equivalents), not hand-written code.
 
 Not in it: a search language, file previews, file operations, editor integration,

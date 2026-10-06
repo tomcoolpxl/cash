@@ -175,6 +175,7 @@ mod tests {
             shows: Shows::Everything,
             hidden: false,
             ignored: false,
+            by_date: false,
         };
         let search = Search::start(dir.path(), filter);
         let deadline = Instant::now() + Duration::from_secs(10);

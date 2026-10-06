@@ -17,6 +17,8 @@ pub struct Entry {
     pub folder: bool,
     /// A name starting with `.`, or the hidden attribute.
     pub hidden: bool,
+    /// When it was last changed, where Windows says.
+    pub modified: Option<std::time::SystemTime>,
 }
 
 /// Which entries are listed.
@@ -28,10 +30,12 @@ pub struct Filter {
     pub hidden: bool,
     /// Entries a `.gitignore` excludes too (Alt-I).
     pub ignored: bool,
+    /// Newest first rather than by name (Alt-S).
+    pub by_date: bool,
 }
 
 /// The entries of a folder that `filter` lists, folders first, then by name as Windows
-/// orders them (case aside). An unreadable folder has none.
+/// orders them (case aside), or newest first. An unreadable folder has none.
 #[must_use]
 pub fn read(folder: &Path, filter: Filter, ignores: &mut Ignores) -> Vec<Entry> {
     let Ok(listing) = std::fs::read_dir(folder) else {
@@ -51,6 +55,7 @@ pub fn read(folder: &Path, filter: Filter, ignores: &mut Ignores) -> Vec<Entry> 
                 name,
                 folder,
                 hidden,
+                modified: metadata.modified().ok(),
             };
             let listed = (folder || filter.shows == Shows::Everything)
                 && (filter.hidden || !entry.hidden)
@@ -59,9 +64,13 @@ pub fn read(folder: &Path, filter: Filter, ignores: &mut Ignores) -> Vec<Entry> 
         })
         .collect();
     entries.sort_by(|a, b| {
-        b.folder
-            .cmp(&a.folder)
-            .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+        let by_name = || a.name.to_lowercase().cmp(&b.name.to_lowercase());
+        let order = if filter.by_date {
+            b.modified.cmp(&a.modified).then_with(by_name)
+        } else {
+            by_name()
+        };
+        b.folder.cmp(&a.folder).then(order)
     });
     entries
 }
@@ -295,6 +304,7 @@ mod tests {
             path,
             folder,
             hidden: false,
+            modified: None,
         }
     }
 
@@ -375,6 +385,7 @@ mod tests {
             shows: Shows::Everything,
             hidden: false,
             ignored: false,
+            by_date: false,
         };
         let listed = |filter: Filter| -> Vec<String> {
             read(root, filter, &mut Ignores::default())
