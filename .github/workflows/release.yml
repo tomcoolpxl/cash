@@ -202,6 +202,40 @@ jobs:
           Write-Host "Installer: $setup"
           Write-Host "SHA256:    $hash"
 
+      # The installer on a machine that never had cash: a silent install into the
+      # runner's temp folder, a command through the installed cash, doctor, the update
+      # check against the real releases page, then a silent uninstall that leaves
+      # nothing. What the winget submission needs to have seen once per release.
+      - name: Install, run and uninstall the installer on this runner
+        shell: pwsh
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          $setup = "cash-$env:TAG-setup.exe"
+          $root = Join-Path $env:RUNNER_TEMP 'cash-smoke'
+          $log = Join-Path $env:RUNNER_TEMP 'cash-smoke-setup.log'
+          $p = Start-Process -FilePath (Resolve-Path $setup) -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR=`"$root`" /LOG=`"$log`"" -Wait -PassThru
+          Get-Content $log | Select-Object -Last 12
+          if ($p.ExitCode -ne 0) { Write-Error "setup exited $($p.ExitCode)"; exit 1 }
+          $cash = Join-Path $root 'current\cash.exe'
+          if (-not (Test-Path $cash)) { Write-Error "no $cash after the install"; exit 1 }
+          $out = & $cash -c 'echo installed $BASH_VERSION; ls bin | head -3'
+          Write-Host $out
+          if ($out -notmatch 'installed') { Write-Error "the installed cash did not run"; exit 1 }
+          if (-not (Test-Path (Join-Path $root 'bin\ls.exe'))) { Write-Error 'the tool links were not made'; exit 1 }
+          & $cash doctor
+          & $cash --update --check
+          if ($LASTEXITCODE -ne 0) { Write-Error "--update --check exited $LASTEXITCODE"; exit 1 }
+          $unins = Get-ChildItem (Join-Path $root 'unins*.exe') | Select-Object -First 1
+          $u = Start-Process -FilePath $unins.FullName -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART' -Wait -PassThru
+          if ($u.ExitCode -ne 0) { Write-Error "uninstall exited $($u.ExitCode)"; exit 1 }
+          Start-Sleep -Seconds 3
+          if (Test-Path (Join-Path $root 'current')) { Write-Error 'the junction survived the uninstall'; exit 1 }
+          if (Test-Path (Join-Path $root 'bin')) { Write-Error 'the links survived the uninstall'; exit 1 }
+          $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+          if ($userPath -like "*cash-smoke*") { Write-Error "the user PATH still holds the install: $userPath"; exit 1 }
+          Write-Host 'installer smoke test passed'
+
       # GitHub's generated notes list merged pull requests, and most work here is
       # committed straight to main, so they would be empty. Write the commit subjects
       # since the previous tag instead, grouped by Conventional Commits type; the
