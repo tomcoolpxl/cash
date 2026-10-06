@@ -71,8 +71,10 @@ fn a_full_copy_later_on_path_is_pointed_at() {
     let full = root.path().join("gnu");
     std::fs::create_dir(&shims).unwrap();
     std::fs::create_dir(&full).unwrap();
-    shim(&shims, "nc", r"C:\scoop\apps\busybox\current\busybox.exe");
-    std::fs::write(full.join("nc.exe"), b"MZ").unwrap();
+    // `nc` was the example here until cash carried its own, which doctor then has no
+    // reason to look for on PATH.
+    shim(&shims, "tar", r"C:\scoop\apps\busybox\current\busybox.exe");
+    std::fs::write(full.join("tar.exe"), b"MZ").unwrap();
 
     let report = doctor(&format!(
         "{};{};C:\\Windows\\System32",
@@ -80,10 +82,7 @@ fn a_full_copy_later_on_path_is_pointed_at() {
         full.display()
     ));
     let shown_full = full.to_string_lossy().replace('\\', "/");
-    assert!(
-        report.contains("no -z, so `nc -z host port` port checks fail"),
-        "{report}"
-    );
+    assert!(report.contains("no --transform"), "{report}");
     assert!(
         report.contains(&format!(
             "is the full tool, later on PATH: put {shown_full} before"

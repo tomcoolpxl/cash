@@ -144,6 +144,7 @@ utf8-chars = { workspace = true }
 tokio = { workspace = true, features = [
     "io-util",
     "macros",
+    "net",
     "process",
     "rt",
     "rt-multi-thread",

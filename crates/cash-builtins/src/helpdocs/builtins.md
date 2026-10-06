@@ -110,7 +110,7 @@ an entry or page names no builtin.
 - `fuser`: Show the processes using files or sockets.
 - `killall`: Signal every process with a given name.
 - `lsof`: List the files and sockets processes have open.
-- `nohup`: Run a command immune to hangups, its output to `nohup.out`.
+- `nc`: Connect to, listen on or scan TCP and UDP ports, as OpenBSD's netcat does.
 - `nice`: Run a command at a lower (or higher) priority, or print the current niceness.
 - `pgrep`: Find processes by name and other attributes.
 - `pidof`: Print the process ids of programs by name.

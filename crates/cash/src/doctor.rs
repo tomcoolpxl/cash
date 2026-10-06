@@ -63,7 +63,8 @@ const CARRIED: &[&str] = &[
     "ps", "top", "find", "xargs", "less", "more", "which", "kill", "cat", "mktemp", "hostname",
     "chmod", "id", "groups", "awk", "sed", "stat", "tty", "nohup", "who", "users", "pinky",
     "logname", "hostid", "pathchk", "install", "dos2unix", "unix2dos", "fuser", "lsof", "ss",
-    "ping",
+    "ping", "stty", "tput", "iconv", "column", "xxd", "hexdump", "uuidgen", "xdg-open", "pbcopy",
+    "pbpaste", "flock", "watch", "free", "nice", "renice", "nc",
 ];
 
 /// Shells whose name must resolve to cash itself (D7).
@@ -498,11 +499,8 @@ const BUSYBOX_BREAKS: &[(&str, &str, &str)] = &[
         "decompresses only; `xz FILE` cannot compress",
         "scoop install xz",
     ),
-    (
-        "nc",
-        "no -z, so `nc -z host port` port checks fail",
-        "scoop install nmap (for ncat)",
-    ),
+    // BusyBox's `nc` has no -z, so `nc -z host port` port checks failed; cash carries
+    // its own `nc` now, so the shim is never reached.
     ("wget", "-T (timeout) crashes it", "scoop install wget"),
 ];
 

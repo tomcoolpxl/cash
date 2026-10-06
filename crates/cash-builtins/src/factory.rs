@@ -305,6 +305,7 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
         "xargs".into(),
         builtin::<xargs::XargsCommand, SE>().with_substitution_files(),
     );
+    m.insert("nc".into(), builtin::<nc::NcCommand, SE>());
     m.insert("xxd".into(), builtin::<xxd::XxdCommand, SE>());
     m.insert("hexdump".into(), builtin::<hexdump::HexdumpCommand, SE>());
     m.insert("column".into(), builtin::<column::ColumnCommand, SE>());

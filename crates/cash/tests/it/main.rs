@@ -129,6 +129,8 @@ mod msys_args;
 mod namerefs;
 // D48: one pager behind `less` and `more`.
 mod pager;
+// `nc`, OpenBSD netcat's: connecting, scanning, listening and the data between the two.
+mod nc_builtin;
 mod ping;
 // D11/D26: pipelines that actually overlap, and `read -t`.
 mod pipeline_concurrency;

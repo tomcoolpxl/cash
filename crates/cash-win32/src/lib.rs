@@ -23,6 +23,8 @@ pub mod cmd;
 pub mod cmdline;
 pub mod conin;
 // A pseudo console and a screen to read it into, for the tests of programs on a terminal;
+/// Waking a thread that waits for a line at the console, for `nc`.
+pub mod conwake;
 // Windows' code pages, converted through, for `iconv`.
 pub mod codepage;
 // not part of cash (W32-12).
