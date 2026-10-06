@@ -1,5 +1,6 @@
 mod completer;
 mod edit_mode;
+mod help;
 mod highlighter;
 mod history;
 mod input_backend;

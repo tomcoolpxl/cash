@@ -129,6 +129,13 @@ impl builtins::Command for BindCommand {
         if let Some(key_bindings) = context.shell.key_bindings() {
             Ok(self.execute_impl(key_bindings, &context).await?)
         } else {
+            // The functions exist without an editor to bind them to: `bind -l` lists
+            // them in a script, as Bash's does.
+            if self.list_funcs {
+                for func in interfaces::InputFunction::iter() {
+                    writeln!(context.stdout(), "{func}")?;
+                }
+            }
             tracing::debug!(target: trace_categories::INPUT,
                  "bind: key bindings not supported in this config");
 

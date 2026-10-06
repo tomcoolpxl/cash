@@ -34,6 +34,11 @@ const KEY_SEQUENCES: &[(&[u8], Key)] = &[
     (b"\x1bOQ", Key::F(2)),
     (b"\x1bOR", Key::F(3)),
     (b"\x1bOS", Key::F(4)),
+    // F1 to F4 as a VT220 and Linux console spell them, which an `.inputrc` may use.
+    (b"\x1b[11~", Key::F(1)),
+    (b"\x1b[12~", Key::F(2)),
+    (b"\x1b[13~", Key::F(3)),
+    (b"\x1b[14~", Key::F(4)),
     (b"\x1b[15~", Key::F(5)),
     (b"\x1b[17~", Key::F(6)),
     (b"\x1b[18~", Key::F(7)),
@@ -70,6 +75,8 @@ mod tests {
         assert_eq!(try_get_key_from_key_code(b"\x1bOH"), Some(Key::Home));
         assert_eq!(try_get_key_from_key_code(b"\x1b[A"), Some(Key::Up));
         assert_eq!(try_get_key_from_key_code(b"\x1b[3~"), Some(Key::Delete));
+        assert_eq!(try_get_key_from_key_code(b"\x1bOP"), Some(Key::F(1)));
+        assert_eq!(try_get_key_from_key_code(b"\x1b[11~"), Some(Key::F(1)));
         assert_eq!(try_get_key_from_key_code(b"a"), Some(Key::Character('a')));
         assert_eq!(try_get_key_from_key_code(b"\x1b[99~"), None);
     }

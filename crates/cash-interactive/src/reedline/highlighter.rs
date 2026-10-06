@@ -1,7 +1,7 @@
 use crate::{highlighting, refs};
 use nu_ansi_term::{Color, Style};
 
-mod styles {
+pub(super) mod styles {
     use super::{Color, Style};
 
     pub fn default() -> Style {

@@ -83,6 +83,8 @@ mod expansions;
 // Extended patterns, `!(…)` above all.
 mod extensionless_lookup;
 mod extglob;
+// D75: F1 at the prompt, the one-screen help on the alternate screen, and `cash-help`.
+mod f1_help;
 // find and xargs parity.
 mod find_xargs;
 mod finished_command_orphans;

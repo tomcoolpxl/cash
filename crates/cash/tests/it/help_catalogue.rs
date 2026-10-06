@@ -114,6 +114,30 @@ fn help_sed_is_a_page_with_its_windows_notes_and_its_own_options() {
     assert!(!text.contains('\x1b'), "{text}");
 }
 
+/// The F1 screen's text is beside the topics but not one of them: `help topics` does not
+/// list it, and it speaks to the user as the rest of help does, with no decision
+/// numbers or file names of the project's own.
+#[test]
+fn the_f1_screen_is_not_a_topic_and_cites_no_developer_notes() {
+    assert!(helpdocs::catalogue().topic("f1").is_none());
+    let out = run("help f1");
+    assert_eq!(out.code, 1);
+
+    let lines = helpdocs::f1::render("9.9.9", 208, 80, &helpdocs::f1::Palette::none());
+    let text = lines.join("\n");
+    assert!(text.starts_with(" cash 9.9.9  ·  help"), "{text}");
+    for developer_note in ["D7", "(row", "§", "spec.md", "ROADMAP", "research", "TODO"] {
+        assert!(
+            !text.contains(developer_note),
+            "{developer_note} in:\n{text}"
+        );
+    }
+    assert!(!text.contains('\x1b'), "{text:?}");
+    for line in &lines {
+        assert!(line.chars().count() < 80, "{line}");
+    }
+}
+
 #[test]
 fn help_topics_lists_every_topic_and_each_one_opens() {
     let out = run("help topics");

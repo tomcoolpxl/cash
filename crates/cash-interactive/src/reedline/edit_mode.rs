@@ -14,6 +14,10 @@ pub(crate) const YANK_LAST_ARG: &str = "\0cash:yank-last-arg";
 /// picker, below the line it was pressed on (spec D73).
 pub(crate) const PICKER: &str = "\0cash:picker";
 
+/// What `cash-help` (F1) carries: the input backend shows the one-screen help on the
+/// alternate screen, and the line goes on as it was (spec D75).
+pub(crate) const HELP: &str = "\0cash:help";
+
 /// What `edit-and-execute-command` runs, as Bash's own does (bashline.c): the line goes into
 /// history, then `fc` opens it in `$VISUAL` or `$EDITOR` and runs what is saved. The `fc`
 /// entry added after it stands for the `fc` invocation itself, which `fc` skips and removes.
@@ -726,6 +730,7 @@ fn translate_input_function_to_reedline_event(
         InputFunction::CashAcceptHint => Some(ReedlineEvent::HistoryHintComplete),
         InputFunction::CashAcceptHintWord => Some(ReedlineEvent::HistoryHintWordComplete),
         InputFunction::CashPicker => Some(ReedlineEvent::ExecuteHostCommand(PICKER.to_owned())),
+        InputFunction::CashHelp => Some(ReedlineEvent::ExecuteHostCommand(HELP.to_owned())),
         _ => None,
     }
 }
@@ -960,6 +965,9 @@ fn translate_reedline_event_to_action(event: &reedline::ReedlineEvent) -> Option
         }
         reedline::ReedlineEvent::ExecuteHostCommand(cmd) if cmd == PICKER => {
             Some(KeyAction::DoInputFunction(InputFunction::CashPicker))
+        }
+        reedline::ReedlineEvent::ExecuteHostCommand(cmd) if cmd == HELP => {
+            Some(KeyAction::DoInputFunction(InputFunction::CashHelp))
         }
         reedline::ReedlineEvent::ExecuteHostCommand(cmd) if cmd == EDIT_AND_EXECUTE_COMMAND => {
             Some(KeyAction::DoInputFunction(

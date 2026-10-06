@@ -13,7 +13,11 @@
 //! The options of a builtin are not copied here: its page ends with its own `--help`.
 //! `crates/cash/tests/it/help_catalogue.rs` fails when a builtin has no entry, or an
 //! entry or page names no builtin.
+//!
+//! Beside the catalogue, `f1.md` is the one screen F1 shows at the prompt: not a topic,
+//! so `help topics` does not list it, but markdown here for the same reasons.
 
+pub mod f1;
 pub mod render;
 
 use std::sync::LazyLock;

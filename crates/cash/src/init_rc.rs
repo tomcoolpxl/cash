@@ -238,4 +238,24 @@ mod tests {
         assert!(!STARTER.contains('\r'), "the starter has CRLF line endings");
         assert!(STARTER.starts_with("# ~/.bashrc"), "not the starter bashrc");
     }
+
+    /// `cash: F1 for help` follows the banner, under the same once-per-window condition,
+    /// in the section Git Bash skips.
+    #[test]
+    fn the_starter_says_where_help_is_after_the_banner() {
+        let cash_only = STARTER
+            .split("if [[ -n $CASH_VERSION ]]; then")
+            .last()
+            .unwrap();
+        let banner = cash_only.find("coolfetch\n").unwrap();
+        let help = cash_only.find("echo 'cash: F1 for help'\n").unwrap();
+        assert!(banner < help, "{cash_only}");
+        assert_eq!(cash_only.matches("fi\n").count(), 2, "{cash_only}");
+        assert!(
+            cash_only.contains(
+                "<= 1)); then\n        coolfetch\n        echo 'cash: F1 for help'\n    fi\n"
+            ),
+            "{cash_only}"
+        );
+    }
 }

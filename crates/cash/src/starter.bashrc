@@ -121,8 +121,10 @@ else
 fi
 
 if [[ -n $CASH_VERSION ]]; then
-    # The banner, once per window: not again in a shell started from this one.
+    # The banner, and where help is, once per window: not again in a shell started from
+    # this one.
     if ((${SHLVL:-1} <= 1)); then
         coolfetch
+        echo 'cash: F1 for help'
     fi
 fi

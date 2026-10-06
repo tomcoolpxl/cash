@@ -12,6 +12,8 @@ use crate::{InputBackend, ReadResult, ShellError, input_backend::InteractiveProm
 pub struct ReedlineInputBackend {
     reedline: Option<reedline::Reedline>,
     bindings: Arc<Mutex<edit_mode::UpdatableBindings>>,
+    /// Colour is on: the F1 help is drawn in the prompt's colours.
+    colour: bool,
 }
 
 const COMPLETION_MENU_NAME: &str = "completion_menu";
@@ -145,6 +147,7 @@ impl ReedlineInputBackend {
         Ok(Self {
             reedline: Some(reedline),
             bindings: updatable_bindings,
+            colour: !options.disable_color,
         })
     }
 }
@@ -237,6 +240,12 @@ impl InputBackend for ReedlineInputBackend {
                     // goes back on the line, and a `cd` runs at once.
                     if command == edit_mode::PICKER {
                         super::picker::on_key(reedline, shell);
+                        continue;
+                    }
+                    // F1 (D75): the help on the alternate screen; the main screen comes
+                    // back as it was, and the next read redraws the line in place.
+                    if command == edit_mode::HELP {
+                        super::help::on_key(shell, self.colour);
                         continue;
                     }
 
@@ -352,6 +361,12 @@ fn compose_key_bindings(completion_menu_name: &str) -> reedline::Keybindings {
         reedline::KeyModifiers::ALT,
         reedline::KeyCode::Char('e'),
         reedline::ReedlineEvent::ExecuteHostCommand(edit_mode::PICKER.to_owned()),
+    );
+    // F1: the one-screen help (D75), as `cash-help`.
+    key_bindings.add_binding(
+        reedline::KeyModifiers::NONE,
+        reedline::KeyCode::F(1),
+        reedline::ReedlineEvent::ExecuteHostCommand(edit_mode::HELP.to_owned()),
     );
     // Wire up shift-tab for completion.
     key_bindings.add_binding(

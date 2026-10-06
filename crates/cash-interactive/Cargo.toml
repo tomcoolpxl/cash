@@ -27,6 +27,7 @@ reedline = [
     "dep:unicode-width",
     "dep:serde_json",
     "dep:cash-picker",
+    "dep:cash-builtins",
     "completion",
     "highlighting",
 ]
@@ -45,6 +46,8 @@ nu-ansi-term = { workspace = true, optional = true }
 radix_trie = "0.3.0"
 reedline = { version = "0.51.0", optional = true }
 cash-picker = { workspace = true, optional = true }
+# The F1 help screen, whose text lives beside the help topics (spec D75).
+cash-builtins = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["rt", "sync"] }
 tracing = { workspace = true }

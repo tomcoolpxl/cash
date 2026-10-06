@@ -60,6 +60,8 @@ cash only in a tab that is not split.
 - `Ctrl-D`: on an empty line, exit cash; otherwise delete the character under the cursor.
 - `Ctrl-L`: clear the screen.
 - `Ctrl-Z` while a program runs: suspend it (see `help job-control`).
+- `F1`: one screen of help on paths and keys for someone who knows Bash; `F1`, `Esc` or
+  `q` closes it. It is the Readline function `cash-help`, which `bind` can move.
 
 ## Display
 
