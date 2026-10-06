@@ -47,6 +47,8 @@ pub mod handles;
 /// ICMP echo through the IP Helper API, for `ping`.
 pub mod icmp;
 mod imports;
+/// Scoop's, the installer's or a portable `cash.exe`, told by its path.
+pub mod install_layout;
 pub mod job;
 pub mod jobreg;
 /// Directory junctions, for the installer's `current` folder.

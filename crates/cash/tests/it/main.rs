@@ -140,6 +140,9 @@ mod nc_builtin;
 // D48: one pager behind `less` and `more`.
 mod pager;
 mod ping;
+// The offer a portable cash makes once at its first prompt: PATH, the Terminal profile,
+// the tool links.
+mod portable_offer;
 // D11/D26: pipelines that actually overlap, and `read -t`.
 mod pipeline_concurrency;
 // EXE-02: an error, `exit` or `break` in a pipeline stage ends only the stage.

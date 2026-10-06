@@ -108,7 +108,8 @@ fn check_install(findings: &mut Vec<Finding>) {
     let Ok(exe) = std::env::current_exe().and_then(std::fs::canonicalize) else {
         return;
     };
-    let Some(layout) = crate::installer::layout(&exe, cash_win32::junction::is_junction) else {
+    let Some(layout) = cash_win32::install_layout::layout(&exe, cash_win32::junction::is_junction)
+    else {
         return;
     };
     let shown = cash_win32::path::to_backslash(&layout.current);

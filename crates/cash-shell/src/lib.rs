@@ -7,4 +7,6 @@ pub mod config;
 pub mod entry;
 mod error_formatter;
 pub mod events;
+// The one-time offer a portable cash makes at its first interactive prompt.
+mod portable_offer;
 mod productinfo;

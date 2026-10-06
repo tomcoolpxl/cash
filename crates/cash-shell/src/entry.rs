@@ -415,6 +415,9 @@ async fn run_in_shell(
     // Otherwise read commands interactively: -s was given (positional args become parameters;
     // a script named among them is *not* run), or nothing to run was specified.
     } else if read_commands_from_stdin {
+        // A portable cash offers its setup once, after the startup files and before the
+        // first prompt.
+        crate::portable_offer::run(&*shell_ref.lock().await);
         cash_interactive::InteractiveShell::new(shell_ref, input_backend, &interactive_options)?
             .run_interactively()
             .await?;

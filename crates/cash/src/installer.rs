@@ -23,6 +23,7 @@ use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+use cash_win32::install_layout::{Layout, installed_by_scoop, layout};
 use cash_win32::userpath::Added;
 
 const FINISH_USAGE: &str = "usage: cash --install-finish ROOT [--links] [--scoop] [--quiet]\n\
@@ -92,39 +93,6 @@ fn own_exe() -> Result<PathBuf, String> {
     std::env::current_exe()
         .and_then(std::fs::canonicalize)
         .map_err(|e| format!("cannot find cash.exe: {e}"))
-}
-
-/// Whether `exe` is under a `scoop\apps\` folder: Scoop's install, which only Scoop
-/// should upgrade or remove.
-fn installed_by_scoop(exe: &Path) -> bool {
-    exe.to_string_lossy()
-        .replace('/', "\\")
-        .to_lowercase()
-        .contains("\\scoop\\apps\\")
-}
-
-/// The installer's layout around `exe`: `<root>\<version>\cash.exe` with a `current`
-/// junction beside the version folder.
-pub(crate) struct Layout {
-    /// The install folder.
-    pub root: PathBuf,
-    /// The folder `exe` is in.
-    pub version_dir: PathBuf,
-    /// The `current` junction.
-    pub current: PathBuf,
-}
-
-/// The layout `exe` is in, if it is in one; `is_junction` says whether a path is a
-/// junction, so the tests can decide.
-pub(crate) fn layout(exe: &Path, is_junction: impl Fn(&Path) -> bool) -> Option<Layout> {
-    let version_dir = exe.parent()?;
-    let root = version_dir.parent()?;
-    let current = root.join("current");
-    (version_dir.file_name().is_some() && is_junction(&current)).then(|| Layout {
-        root: root.to_path_buf(),
-        version_dir: version_dir.to_path_buf(),
-        current,
-    })
 }
 
 // ---- --install-finish ---------------------------------------------------------------
@@ -713,39 +681,6 @@ mod tests {
             "{\n  \"url\": \"x\",\n  \"tag_name\" : \"v1.6.0\",\n  \"name\": \"cash 1.6.0\"\n}";
         assert_eq!(tag_name(json).as_deref(), Some("v1.6.0"));
         assert_eq!(tag_name("{\"message\":\"Not Found\"}"), None);
-    }
-
-    #[test]
-    fn the_layout_needs_a_current_junction_beside_the_version_folder() {
-        let junction = Path::new(r"C:\Users\me\AppData\Local\Programs\cash\current");
-        let is_junction = |path: &Path| path == junction;
-        let found = layout(
-            Path::new(r"C:\Users\me\AppData\Local\Programs\cash\1.5.0\cash.exe"),
-            is_junction,
-        )
-        .unwrap();
-        assert_eq!(
-            found.root,
-            Path::new(r"C:\Users\me\AppData\Local\Programs\cash")
-        );
-        assert_eq!(name_of(&found.version_dir), "1.5.0");
-        assert_eq!(found.current, junction);
-        // A plain zip, or a cargo build: no junction beside it.
-        assert!(layout(Path::new(r"C:\tools\cash\cash.exe"), is_junction).is_none());
-        assert!(layout(Path::new(r"D:\src\cash\target\debug\cash.exe"), is_junction).is_none());
-    }
-
-    #[test]
-    fn scoops_install_is_told_by_its_path() {
-        assert!(installed_by_scoop(Path::new(
-            r"C:\Users\me\scoop\apps\cash\1.5.0\cash.exe"
-        )));
-        assert!(installed_by_scoop(Path::new(
-            "C:/ProgramData/scoop/apps/cash/current/cash.exe"
-        )));
-        assert!(!installed_by_scoop(Path::new(
-            r"C:\Users\me\AppData\Local\Programs\cash\1.5.0\cash.exe"
-        )));
     }
 
     #[test]

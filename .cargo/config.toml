@@ -12,3 +12,11 @@ rustflags = ["-C", "target-feature=+crt-static"]
 
 [target.aarch64-pc-windows-msvc]
 rustflags = ["-C", "target-feature=+crt-static"]
+
+# A cash built here is "portable" (neither Scoop's nor the installer's), so at its first
+# interactive prompt it would offer to set up PATH, the Terminal profile and the tool
+# links, and every pseudo-console test would wait on that question. Test binaries and
+# `cargo run` get this in their environment, and the cash they start inherits it; the
+# offer's own tests remove it again.
+[env]
+CASH_NO_OFFER = "1"
