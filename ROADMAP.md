@@ -28,8 +28,9 @@ Feature work follows the sequence below.
 | 15 | ConPTY probe harness, then the interactive and Readline 5.3 items | **Complete** (cash reports `BASH_VERSION=5.3.15`) | Section 15 below |
 | 16 | `cash --link-tools`: hard links so programs outside cash can run its tools | **Complete** | Section 16 below; spec D65 |
 | 17 | What fish has at the prompt: highlighting, bash's Alt-. and Ctrl-X Ctrl-E, `abbr`, a collapsing prompt, folder history, carapace completions | **Complete** | Section 17 below; spec D59–D63 |
-| 18 | Installing cash: a Scoop bucket now, winget with an Inno Setup installer later; the tool links on the user PATH on request | **Active** (Scoop live since 1.1.0; winget to come) | [Packaging evaluation and decisions](research/packaging-evaluation.md); section 18 below; spec D38, D65 |
-| 19 | Console, clipboard and the remaining small tools: `tput`, `stty`, `iconv`, `column`, `xxd`, `hexdump`, `uuidgen`, `xdg-open`, `pbcopy`/`pbpaste`, `watch`, `free`, `nice`/`renice`, `flock`, `nc` | **Active** (started 2026-10-06) | Section 19 below; spec D74; TODO.md phase 21 |
+| 18 | Installing cash: a Scoop bucket now, winget with an Inno Setup installer later; the tool links on the user PATH on request | **Active** (Scoop since 1.1.0; the per-user installer, the portable zip's first-prompt offer and `cash --update` since 1.6.0; winget manifests validated, submission to come) | [Packaging evaluation and decisions](research/packaging-evaluation.md); section 18 below; spec D38, D65 |
+| 19 | Console, clipboard and the remaining small tools: `tput`, `stty`, `iconv`, `column`, `xxd`, `hexdump`, `uuidgen`, `xdg-open`, `pbcopy`/`pbpaste`, `watch`, `free`, `nice`/`renice`, `flock`, `nc` | **Complete** (1.5.0, 2026-10-06) | Section 19 below; spec D74; TODO.md phase 21 |
+| 20 | `grep`, `diff` and `cmp`: the standing rule reversed under "install cash, have everything" | **Active** (built 2026-10-06, for 1.7.0) | TODO.md phase 23; spec D76 |
 | — | Found on the way (not planned items) | **Complete** | MSYS2 argument encoding (spec D52); `shopt winpaths` and bash-worded `cd` errors (D53); a `TERM` that no longer reaches the whole console (D21) |
 
 The authoritative feature order is therefore:

@@ -404,6 +404,21 @@ the single most common failure on a bare machine and `diff` the second.
    reversal; the gap analysis records it; `type -a grep` shows Git's and Microsoft's
    behind the builtin, as for every shadowed tool.
 
+Built on 2026-10-06, for 1.7.0. `grep` reads its patterns through the bundled sed's
+translator (`cash_sed::sed::compiler::translate_posix`, made public) with sed's GNU error
+wording, so the two tools accept one dialect; what GNU grep reads differently from GNU
+sed (a repetition at the start of an ERE, an unmatched `)`, a `{` that opens no
+interval) is added around it, and a test holds eleven patterns to the same translation
+through both. Backreferences, `\<`/`\>`/`\b` and `-z` run on fancy-regex behind
+ripgrep's matcher trait; the rest on grep-regex's prefilters. 714 oracle invocations
+against GNU grep 3.12 in `C.UTF-8`; the deliberate differences are the CRLF rule and
+name-ordered directory walks. `diff`/`cmp` are a vendored `cash-diffutils` (uutils
+0.6.0; CASH-PATCHES.md): GNU's option parser, a change-script engine with `similar`'s
+linear-space Myers where upstream's never finished a 100k-line pair, the five printers,
+`-r`/`-N`/`-x`, `--strip-trailing-cr`, colour; 102 oracle sections byte for byte against
+GNU diffutils 3.12. Doctor's `EXPECTED` list is empty now; the install-hint table lost
+its grep and diff rows; README's paragraph says the three are built in.
+
 ---
 
 ## Found along the way
