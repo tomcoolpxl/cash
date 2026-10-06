@@ -321,7 +321,11 @@ Windows' redirection-trust mitigation, inherited by what it starts, so no proces
 may cross the `current` junction ("the path cannot be traversed because it contains an
 untrusted mount point"); the uninstaller therefore runs `--install-remove` from a version
 folder it finds itself. Windows Terminal, the shell and every ordinary process cross the
-junction as before.
+junction as before. For item 6, `packaging/winget` holds the three manifest templates and
+RELEASING step 8 the procedure; `scripts/sync-bucket.py` copies the Scoop manifest's notes
+and hooks into the bucket (step 7). Left for after the 1.5.0 release: push the bucket's
+notes (they name `help installing`, which 1.4.4 lacks), measure the first start after
+the real `scoop update cash`, then release 1.6.0 with the installer and submit winget.
 
 ---
 
