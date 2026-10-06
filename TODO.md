@@ -474,6 +474,47 @@ script-visible Bash behaviour or a kinder refusal.
    `C`, `POSIX`, `C.UTF-8` and the Windows locales as `en_US.UTF-8` names; bare `locale`
    printing `LANG`, `LC_*`), the values Windows has, GNU's output shapes.
 
+## Phase 26. `tar`
+
+Chosen by the user on 2026-10-07, by pick list: cash's own `tar`, GNU tar 1.35's interface,
+messages and exit codes, on the `tar` crate (composefs/tar-rs, MIT or Apache-2.0), with
+every common compression in pure Rust; reopens D77's "xz and bzip2 stay with `tar.exe`".
+Windows' own `tar.exe` (bsdtar 3.8.8) stays reachable by its path and by `enable -n tar`.
+uutils/tar (0.0.1: `-c -x -t -f -z --zstd -v -P` only) and `libzstd-rs-sys` (a
+prerelease without a Rust API) were looked at and passed over; `xz2` and `liblzma` are C.
+
+1. **Reading: `-t` and `-x`**: ustar, GNU (long names and links, sparse members read)
+   and PAX headers; `-f FILE` and `-` (default `-`, or `TAPE`), refusing a terminal as GNU
+   does; compression found by its magic when reading a file; `-C` in order, member
+   operands with GNU's matching (`--wildcards`, `--anchored`, `--ignore-case`,
+   `--wildcards-match-slash`, `--occurrence`), `--exclude`, `-X`, `--strip-components`,
+   `--transform` (cash-sed's `s` compiler), `-O`, `-k`, `--skip-old-files`,
+   `--keep-newer-files`, `--overwrite`, `--overwrite-dir`, `-U`, `-m`, `-p`,
+   `--delay-directory-restore`, `-K`, `-N`; `-v` and `-vv` listings and `--totals`
+   column for column, names quoted in GNU's escape style; `..` and absolute names as GNU
+   refuses and strips them.
+2. **Writing: `-c`**: GNU format by default, `--format=gnu|oldgnu|ustar|pax|posix|v7`;
+   `-T`, `--null`, `--no-recursion`, `-h`, `--hard-dereference`, hard links as links,
+   `-P`, `--exclude-vcs`, `--exclude-backups`, `--exclude-caches*`, `--owner`, `--group`,
+   `--mode`, `--mtime`, `--numeric-owner`, `--sort=name|none|inode`, `--remove-files`,
+   `-a`; "Removing leading `/'", and a drive letter removed as GNU's DOS builds remove it;
+   byte for byte GNU tar's archive where GNU's is deterministic.
+3. **Compression**: `-z` (`flate2`, already in), `-j` (`bzip2` on `libbz2-rs-sys`, the
+   license `bzip2-1.0.6` accepted for it), `-J`, `--lzma`, `--lzip` (`lzma-rust2`),
+   `--zstd` (`ruzstd`: complete reading, writing at its fast level, about zstd's level
+   1, so archives somewhat larger than GNU's level 3); `-Z`, `--lzop` and
+   `-I PROGRAM` said plainly. TODO: move `--zstd` to `libzstd-rs-sys` once it has a Rust
+   API and a release.
+4. **Changing archives**: `-r`, `-u`, `-A`, `-d` (`--compare`), `--delete`, on
+   uncompressed archives as GNU allows them.
+5. **Windows**: modes from `ls`'s answer, owner and group names and ids from `id`'s,
+   read-only kept, times through `filetime`; symbolic links made when Windows allows it
+   (Developer Mode), else GNU's "Cannot create symlink" and status 2; names Windows cannot
+   hold reported, not mangled; long paths.
+6. The page, `builtins.md`, `help tools`, `CARRIED`, `DELIBERATE_SHADOWS` (System32's
+   `tar.exe`), the README's tool list, and an oracle: `tests/oracle/tar_cases.sh` under
+   GNU tar 1.35 in WSL, with GNU gzip, bzip2, xz and zstd beside it.
+
 ---
 
 ## Found along the way

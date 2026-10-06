@@ -2726,6 +2726,24 @@ most common failure on a bare machine and `diff` the second.
   Microsoft Coreutils and Git for Windows copies behind the builtins, as for every
   shadowed tool; `enable -n grep` reaches them.
 
+### D78 — `tar`, with its compressions in pure Rust
+
+**Status: chosen by the user on 2026-10-07**, by pick list (TODO.md phase 26). Reopens
+D77's "xz and bzip2 stay with Windows' `tar.exe`".
+
+- **cash's own `tar`** with GNU tar 1.35's interface, messages and exit codes, on the
+  `tar` crate (the one cargo uses), oracle-tested against GNU tar in WSL. It understands
+  `/c/` and `~` operands as every cash command does, which Windows' `tar.exe` (bsdtar
+  3.8.8) does not, and has GNU's options (`--transform`, `--exclude-vcs`, …) and words.
+  `tar.exe` stays reachable by its path and by `enable -n tar`; doctor names it.
+- **Every common compression in cash**: gzip (`flate2`), bzip2 (`bzip2` on
+  `libbz2-rs-sys`, Trifecta Tech's port, under the bzip2-1.0.6 license, accepted for
+  it), xz, lzma and lzip (`lzma-rust2`, a port of XZ for Java), zstd (`ruzstd`, which
+  writes only at its fast level). No C.
+- Passed over: uutils/tar, at 0.0.1 less than `tar.exe` already does; `libzstd-rs-sys`,
+  a prerelease without a Rust API, to replace `ruzstd` once it has one; `xz2` and
+  `liblzma`, which build liblzma's C.
+
 ### D77 — `gzip`, `gunzip` and `zcat`, and the compatibility corners
 
 **Status: chosen by the user on 2026-10-06**, by pick list (TODO.md phases 24 and 25).
