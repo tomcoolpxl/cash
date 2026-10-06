@@ -110,7 +110,7 @@ enum Outcome {
 }
 
 /// The folder `~` names: `$HOME`, else `%USERPROFILE%`, as cash expands it.
-fn home() -> Option<PathBuf> {
+pub(crate) fn home() -> Option<PathBuf> {
     ["HOME", "USERPROFILE"]
         .into_iter()
         .filter_map(std::env::var_os)

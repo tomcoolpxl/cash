@@ -505,12 +505,13 @@ fn doctor_does_not_advise_installing_a_builtin() {
 fn doctor_confirms_the_shells_resolve_to_cash() {
     let out = run(Command::new(CASH).arg("doctor").env("PATH", BARE_PATH));
     assert!(
-        out.stdout.contains("resolves to cash"),
+        out.stdout
+            .contains("  ok    sh, bash and cash start this cash"),
         "doctor did not report the shell rule:\n{}",
         out.stdout
     );
     assert!(
-        out.stdout.contains("WSL launcher"),
+        out.stdout.contains(", ahead of WSL's bash.exe"),
         "doctor did not name what the rule takes precedence over:\n{}",
         out.stdout
     );
@@ -530,7 +531,7 @@ fn doctor_misses_nothing_on_a_bare_path_now_that_grep_and_diff_are_its_own() {
         );
     }
     assert!(
-        out.stdout.contains("bundled userland"),
+        out.stdout.contains(" commands built in"),
         "doctor did not count the bundled userland:\n{}",
         out.stdout
     );
@@ -542,7 +543,7 @@ fn doctor_does_not_warn_about_a_dos_tool_a_builtin_shadows() {
     // builtin. Warning about it was exactly backwards.
     let out = run(Command::new(CASH).arg("doctor"));
     assert!(
-        !out.stdout.contains("more (shadowing)"),
+        !out.stdout.contains("more is ") && !out.stdout.contains("the DOS tool"),
         "doctor warned that a builtin was shadowed:\n{}",
         out.stdout
     );

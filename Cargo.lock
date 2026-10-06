@@ -481,6 +481,7 @@ dependencies = [
  "sha2",
  "tempfile",
  "tokio",
+ "unicode-width 0.2.2",
  "uuid",
  "which",
  "winresource",

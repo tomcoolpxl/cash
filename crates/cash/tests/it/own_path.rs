@@ -1,4 +1,4 @@
-//! `cash --add-to-path`, `cash --remove-from-path` and `cash doctor`'s `path` line: the
+//! `cash --add-to-path`, `cash --remove-from-path` and `cash doctor`'s line about PATH: the
 //! folder that stands for this `cash.exe` on the user PATH, per layout. The test's
 //! `cash.exe` is copied into a scratch folder laid out as a portable copy, as Scoop's
 //! install or as the installer's. Each test has a home, a `LOCALAPPDATA` and a user `Path`
@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use crate::common::CASH;
+use crate::common::{CASH, DoctorFinding, doctor_findings};
 
 /// `name` with this process's id and a count after it, so that no two folders, in this
 /// run or another one at the same time, share a name.
@@ -104,21 +104,18 @@ impl Copy {
             .unwrap()
     }
 
-    /// `cash doctor`'s `path` line and the fix line under it, if any.
-    fn doctor_path_line(&self) -> (String, Option<String>) {
+    /// What `cash doctor` says about PATH.
+    fn doctor_path_line(&self) -> DoctorFinding {
         let out = self.cash(&["doctor"]);
         let report = text(&out.stdout);
-        let mut lines = report.lines();
-        let line = lines
-            .by_ref()
-            .find(|line| line.split_whitespace().nth(1) == Some("path"))
-            .unwrap_or_else(|| panic!("no path line in:\n{report}"))
-            .to_owned();
-        let fix = lines
-            .next()
-            .filter(|next| next.trim_start().starts_with("-> "))
-            .map(|next| next.trim_start().trim_start_matches("-> ").to_owned());
-        (line, fix)
+        doctor_findings(&report)
+            .into_iter()
+            .find(|finding| {
+                [" on your user PATH", " on the system PATH", " on no PATH"]
+                    .iter()
+                    .any(|said| finding.text.contains(said))
+            })
+            .unwrap_or_else(|| panic!("no line about PATH in:\n{report}"))
     }
 
     /// Stores `value` as this copy's user `Path`, as a user's own entries would be.
@@ -191,6 +188,11 @@ fn shown(folder: &Path) -> String {
         .to_owned()
 }
 
+/// A folder [`shown`] as `cash doctor` writes it: with forward slashes.
+fn in_doctor(shown: &str) -> String {
+    shown.replace('\\', "/")
+}
+
 /// The report: a portable cash is noted by doctor with the fix; `--add-to-path` puts its
 /// folder first on the user PATH and doctor says `ok`; a second add changes nothing;
 /// `--remove-from-path` takes it off, and doctor notes it again.
@@ -201,15 +203,16 @@ fn a_portable_cash_is_noted_added_first_and_removed() {
     // A user with entries of their own: cash's goes before them, and they stay.
     copy.seed_user_path(r"C:\users-own\bin;%USERPROFILE%\go\bin");
 
-    let (line, fix) = copy.doctor_path_line();
-    assert!(line.starts_with("  note  path"), "{line}");
-    assert!(
-        line.ends_with(&format!(
-            "{folder}\\cash.exe is on no PATH: new windows will not find cash"
-        )),
-        "{line}"
+    let line = copy.doctor_path_line();
+    assert_eq!(line.level, "note", "{line:?}");
+    assert_eq!(
+        line.text,
+        format!(
+            "{} is on no PATH, so new windows will not find cash",
+            in_doctor(&folder)
+        )
     );
-    assert_eq!(fix.as_deref(), Some("cash --add-to-path"));
+    assert_eq!(line.fix.as_deref(), Some("cash --add-to-path"));
 
     let out = copy.cash(&["--add-to-path"]);
     assert!(out.status.success(), "{}", text(&out.stderr));
@@ -227,13 +230,13 @@ fn a_portable_cash_is_noted_added_first_and_removed() {
         ]
     );
 
-    let (line, fix) = copy.doctor_path_line();
-    assert!(line.starts_with("  ok    path"), "{line}");
-    assert!(
-        line.ends_with(&format!("{folder} is on your user PATH")),
-        "{line}"
+    let line = copy.doctor_path_line();
+    assert_eq!(line.level, "ok", "{line:?}");
+    assert_eq!(
+        line.text,
+        format!("{} is on your user PATH", in_doctor(&folder))
     );
-    assert_eq!(fix, None);
+    assert_eq!(line.fix, None);
 
     // Again: there already, left where it is.
     let out = copy.cash(&["--add-to-path"]);
@@ -257,9 +260,9 @@ fn a_portable_cash_is_noted_added_first_and_removed() {
             r"%userprofile%\go\bin".to_owned()
         ]
     );
-    let (line, fix) = copy.doctor_path_line();
-    assert!(line.starts_with("  note  path"), "{line}");
-    assert_eq!(fix.as_deref(), Some("cash --add-to-path"));
+    let line = copy.doctor_path_line();
+    assert_eq!(line.level, "note", "{line:?}");
+    assert_eq!(line.fix.as_deref(), Some("cash --add-to-path"));
 
     // Again: nothing to take off is no failure.
     let out = copy.cash(&["--remove-from-path"]);
@@ -278,15 +281,16 @@ fn scoops_copy_names_its_shims_folder_and_leaves_it_to_scoop() {
     let shims = copy.dir.join("scoop").join("shims");
     let shown = format!("{}\\shims", shown(&copy.dir.join("scoop")));
 
-    let (line, fix) = copy.doctor_path_line();
-    assert!(line.starts_with("  note  path"), "{line}");
-    assert!(
-        line.ends_with(&format!(
-            "{shown}\\cash.exe is on no PATH: new windows will not find cash"
-        )),
-        "{line}"
+    let line = copy.doctor_path_line();
+    assert_eq!(line.level, "note", "{line:?}");
+    assert_eq!(
+        line.text,
+        format!(
+            "{} is on no PATH, so new windows will not find cash",
+            in_doctor(&shown)
+        )
     );
-    assert_eq!(fix.as_deref(), Some("scoop reset cash"));
+    assert_eq!(line.fix.as_deref(), Some("scoop reset cash"));
 
     let out = copy.cash(&["--add-to-path"]);
     assert_eq!(out.status.code(), Some(1));
@@ -304,13 +308,13 @@ fn scoops_copy_names_its_shims_folder_and_leaves_it_to_scoop() {
         text(&out.stdout),
         "cash: installed by Scoop: its shims folder is already on PATH\n"
     );
-    let (line, fix) = copy.doctor_path_line();
-    assert!(line.starts_with("  ok    path"), "{line}");
-    assert!(
-        line.ends_with(&format!("{shown} is on your user PATH")),
-        "{line}"
+    let line = copy.doctor_path_line();
+    assert_eq!(line.level, "ok", "{line:?}");
+    assert_eq!(
+        line.text,
+        format!("{} is on your user PATH", in_doctor(&shown))
     );
-    assert_eq!(fix, None);
+    assert_eq!(line.fix, None);
 
     let out = copy.cash(&["--remove-from-path"]);
     assert_eq!(out.status.code(), Some(2));
@@ -332,15 +336,16 @@ fn an_installed_cash_adds_current_not_its_version_folder() {
     cash_win32::junction::point(&current, &root.join("9.9.9")).unwrap();
     let shown_current = format!("{}\\current", shown(&root));
 
-    let (line, fix) = copy.doctor_path_line();
-    assert!(line.starts_with("  note  path"), "{line}");
-    assert!(
-        line.ends_with(&format!(
-            "{shown_current}\\cash.exe is on no PATH: new windows will not find cash"
-        )),
-        "{line}"
+    let line = copy.doctor_path_line();
+    assert_eq!(line.level, "note", "{line:?}");
+    assert_eq!(
+        line.text,
+        format!(
+            "{} is on no PATH, so new windows will not find cash",
+            in_doctor(&shown_current)
+        )
     );
-    assert_eq!(fix.as_deref(), Some("cash --add-to-path"));
+    assert_eq!(line.fix.as_deref(), Some("cash --add-to-path"));
 
     let out = copy.cash(&["--add-to-path"]);
     assert!(out.status.success(), "{}", text(&out.stderr));
@@ -353,10 +358,11 @@ fn an_installed_cash_adds_current_not_its_version_folder() {
     assert_eq!(copy.path_entries(), [entry(&current)]);
     assert!(!copy.user_path().unwrap().contains("9.9.9"));
 
-    let (line, _) = copy.doctor_path_line();
-    assert!(
-        line.starts_with("  ok    path") && line.ends_with("current is on your user PATH"),
-        "{line}"
+    let line = copy.doctor_path_line();
+    assert_eq!(line.level, "ok", "{line:?}");
+    assert_eq!(
+        line.text,
+        format!("{} is on your user PATH", in_doctor(&shown_current))
     );
 
     let out = copy.cash(&["--remove-from-path"]);

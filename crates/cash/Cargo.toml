@@ -27,6 +27,8 @@ cash-core = { workspace = true }
 cash-win32 = { workspace = true }
 # `cash --update` checks a release zip against its `.sha256` (D75).
 sha2 = { workspace = true }
+# `cash doctor` wraps its report to the window.
+unicode-width = { workspace = true }
 
 [features]
 # D48: uutils coreutils as in-process builtins. On by default — measured at

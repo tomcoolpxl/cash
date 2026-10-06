@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use crate::common::CASH;
+use crate::common::{CASH, doctor_finding, doctor_header};
 
 /// Registry key naming the installed fonts for a test: one that does not exist, so no
 /// font is installed, whatever this machine has.
@@ -234,12 +234,15 @@ fn finish_points_current_puts_it_on_path_and_writes_the_profile_and_the_starter(
         .output()
         .unwrap();
     let report = text(&doctor.stdout);
-    let line = report
-        .lines()
-        .find(|line| line.split_whitespace().nth(1) == Some("install"))
-        .unwrap_or_default();
-    assert!(line.starts_with("  ok  "), "{report}");
-    assert!(line.contains("current -> 9.9.9"), "{report}");
+    let header = doctor_header(&report);
+    assert!(
+        header.starts_with("cash doctor · cash ") && header.ends_with("/Programs/cash/current"),
+        "{report}"
+    );
+    assert!(
+        doctor_finding(&report, "this window's cash").is_none(),
+        "{report}"
+    );
 }
 
 #[test]
@@ -305,14 +308,18 @@ fn links_make_the_tools_first_on_path_and_an_upgrade_refreshes_and_sweeps() {
         .output()
         .unwrap();
     let report = text(&doctor.stdout);
-    let line = report
-        .lines()
-        .find(|line| line.split_whitespace().nth(1) == Some("install"))
-        .unwrap_or_default();
-    assert!(line.starts_with("  note"), "{report}");
     assert!(
-        line.contains("current -> 9.9.10") && line.contains("9.9.9"),
+        doctor_header(&report).ends_with("/Programs/cash/9.9.9"),
         "{report}"
+    );
+    let note = doctor_finding(&report, "this window's cash is 9.9.9");
+    assert!(note.is_some(), "no note of the old window in:\n{report}");
+    let note = note.unwrap();
+    assert_eq!(note.level, "note");
+    assert!(note.text.ends_with("/current is 9.9.10"), "{note:?}");
+    assert_eq!(
+        note.fix.as_deref(),
+        Some("windows opened from now on start 9.9.10")
     );
 }
 

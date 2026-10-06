@@ -16,7 +16,7 @@
 use std::path::Path;
 use std::process::Command;
 
-use crate::common::CASH;
+use crate::common::{CASH, doctor_finding};
 
 /// A fake Scoop shim for `name`, pointing at `target`.
 fn shim(dir: &Path, name: &str, target: &str) {
@@ -49,19 +49,20 @@ fn a_breaking_busybox_applet_is_flagged_with_the_reason() {
     shim(&shims, "cal", r"C:\scoop\apps\busybox\current\busybox.exe");
 
     let report = doctor(&format!("{};C:\\Windows\\System32", shims.display()));
-    let line = report
-        .lines()
-        .find(|line| line.contains(" wget "))
-        .unwrap_or_default();
+    let wget = doctor_finding(&report, "wget is ");
+    assert!(wget.is_some(), "{report}");
+    let wget = wget.unwrap();
+    assert_eq!(wget.level, "WARN", "{report}");
     assert!(
-        line.contains("WARN") && line.contains("BusyBox applet: -T (timeout) crashes it"),
+        wget.text
+            .ends_with("wget.exe, a BusyBox applet: -T (timeout) crashes it"),
         "{report}"
     );
-    assert!(
-        report.contains("install the full tool: scoop install wget"),
-        "{report}"
+    assert_eq!(
+        wget.fix.as_deref(),
+        Some("install the full tool: scoop install wget")
     );
-    assert!(!report.contains(" cal "), "{report}");
+    assert!(doctor_finding(&report, "cal is ").is_none(), "{report}");
 }
 
 #[test]
@@ -82,11 +83,13 @@ fn a_full_copy_later_on_path_is_pointed_at() {
         full.display()
     ));
     let shown_full = full.to_string_lossy().replace('\\', "/");
-    assert!(report.contains("no --transform"), "{report}");
+    let tar = doctor_finding(&report, "no --transform");
+    assert!(tar.is_some(), "{report}");
+    // A fix's paths are written out in full, to be pasted.
     assert!(
-        report.contains(&format!(
+        tar.unwrap().fix.is_some_and(|fix| fix.contains(&format!(
             "is the full tool, later on PATH: put {shown_full} before"
-        )),
+        ))),
         "{report}"
     );
 }

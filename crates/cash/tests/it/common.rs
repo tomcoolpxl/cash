@@ -173,3 +173,76 @@ impl Drop for Scratch {
         let _ = std::fs::remove_dir_all(&self.0);
     }
 }
+
+/// One finding of a `cash doctor` report, its wrapped lines joined.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DoctorFinding {
+    /// `ok`, `note` or `WARN`.
+    pub level: String,
+    /// What was found, with the rows under it.
+    pub text: String,
+    /// What to do about it: the text after the arrow.
+    pub fix: Option<String>,
+}
+
+/// The findings of a `cash doctor` report. A finding starts with its marker two columns
+/// in; its text, its rows and its fix go on in the lines indented under it.
+pub fn doctor_findings(report: &str) -> Vec<DoctorFinding> {
+    let mut findings: Vec<DoctorFinding> = Vec::new();
+    let mut in_fix = false;
+    for line in report.lines() {
+        let marker = ["ok", "note", "WARN"].into_iter().find_map(|level| {
+            let rest = line.strip_prefix("  ")?.strip_prefix(level)?;
+            rest.starts_with("  ").then(|| (level, rest.trim()))
+        });
+        if let Some((level, text)) = marker {
+            findings.push(DoctorFinding {
+                level: level.to_owned(),
+                text: text.to_owned(),
+                fix: None,
+            });
+            in_fix = false;
+            continue;
+        }
+        // A blank line, the header or the verdict: no finding goes on.
+        if !line.starts_with("        ") {
+            in_fix = false;
+            continue;
+        }
+        let Some(finding) = findings.last_mut() else {
+            continue;
+        };
+        if let Some(fix) = line.trim_start().strip_prefix("→ ") {
+            finding.fix = Some(fix.to_owned());
+            in_fix = true;
+        } else {
+            let part = if in_fix {
+                finding.fix.get_or_insert_with(String::new)
+            } else {
+                &mut finding.text
+            };
+            part.push(' ');
+            part.push_str(line.trim());
+        }
+    }
+    findings
+}
+
+/// The first line of a `cash doctor` report, `cash doctor · cash VERSION in FOLDER`, with
+/// a wrapped folder joined back on.
+pub fn doctor_header(report: &str) -> String {
+    report
+        .split("\n\n")
+        .next()
+        .unwrap_or_default()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// The first finding of `report` whose text contains `text`.
+pub fn doctor_finding(report: &str, text: &str) -> Option<DoctorFinding> {
+    doctor_findings(report)
+        .into_iter()
+        .find(|finding| finding.text.contains(text))
+}

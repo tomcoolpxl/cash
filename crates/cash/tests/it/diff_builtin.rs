@@ -180,7 +180,7 @@ fn doctor_counts_diff_and_cmp_as_carried() {
     assert!(!out.stdout.contains("WARN  diff"), "{}", out.stdout);
     assert!(!out.stdout.contains("diffutils"), "{}", out.stdout);
     assert!(
-        out.stdout.contains("commands answered by cash itself"),
+        out.stdout.contains("  ok    ") && out.stdout.contains(" commands built in"),
         "{}",
         out.stdout
     );

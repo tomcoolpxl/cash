@@ -15,7 +15,7 @@ use std::process::{Command, Output, Stdio};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
-use crate::common::{CASH, cash_command};
+use crate::common::{CASH, cash_command, doctor_finding, doctor_findings};
 
 /// NTFS gives a file at most 1023 names, and each links folder gives the test's
 /// `cash.exe` 126 more. So the tests take turns: a test holds the turn while a folder of
@@ -303,13 +303,27 @@ fn a_replaced_link_is_refreshed_and_doctor_reports_it_first() {
         .output()
         .unwrap();
     let report = text(&doctor.stdout);
+    // This folder's, not the developer's own links, which can be an older cash's.
+    let name = dir.file_name().unwrap().to_string_lossy().into_owned();
+    let stale_here = |report: &str| {
+        doctor_findings(report).into_iter().find(|finding| {
+            finding.text.contains("are not this cash.exe") && finding.text.contains(&name)
+        })
+    };
+    let stale = stale_here(&report);
+    assert!(stale.is_some(), "{report}");
+    let stale = stale.unwrap();
+    assert_eq!(stale.level, "WARN", "{report}");
     assert!(
-        report.contains("1 of")
-            && report.contains("are not this cash.exe")
-            && report.contains("wc"),
+        stale.text.starts_with("1 of ") && stale.text.ends_with(": wc"),
         "{report}"
     );
-    assert!(report.contains("cash --link-tools"), "{report}");
+    assert!(
+        stale
+            .fix
+            .is_some_and(|fix| fix.starts_with("cash --link-tools '")),
+        "{report}"
+    );
 
     let refresh = text(&link_tools(&dir).stdout);
     assert!(refresh.contains("1 refreshed"), "{refresh}");
@@ -321,7 +335,14 @@ fn a_replaced_link_is_refreshed_and_doctor_reports_it_first() {
         .output()
         .unwrap();
     let report = text(&doctor.stdout);
-    assert!(report.contains("links to this cash.exe"), "{report}");
+    let built_in = doctor_finding(&report, " commands built in");
+    assert!(
+        built_in.is_some_and(|line| line.level == "ok"
+            && line.text.contains(" tool links in ")
+            && line.text.contains(&name)),
+        "{report}"
+    );
+    assert!(stale_here(&report).is_none(), "{report}");
 }
 
 #[test]

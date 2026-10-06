@@ -12,7 +12,7 @@
 //! portable offer's first question runs `cash --add-to-path`, so it says what the command
 //! says.
 //!
-//! `cash doctor`'s `path` line asks the same question read-only: whether that folder is
+//! `cash doctor`'s line about PATH asks the same question read-only: whether that folder is
 //! on the user PATH, on the machine's (which an administrator set up), or on neither, in
 //! which case new windows will not find `cash` and the fix is named.
 
@@ -203,7 +203,7 @@ fn remove(place: &Place) -> u8 {
     }
 }
 
-/// What `cash doctor` says on its `path` line.
+/// What `cash doctor` says about PATH.
 pub struct Report {
     /// Whether all is well; otherwise a note.
     pub ok: bool,
@@ -213,15 +213,16 @@ pub struct Report {
     pub fix: Option<String>,
 }
 
-/// The `path` line for the running `cash.exe`, or `None` when it cannot be found.
+/// The line about PATH for the running `cash.exe`, or `None` when it cannot be found.
 pub fn doctor_report() -> Option<Report> {
     let place = own_place().ok()?;
     Some(report(&place, listed(place.folder())))
 }
 
-/// The `path` line for a cash at `place` whose folder is `listed` as said.
+/// The line about PATH for a cash at `place` whose folder is `listed` as said; the
+/// folder as `cash doctor` writes paths.
 fn report(place: &Place, listed: Listed) -> Report {
-    let shown = place.shown();
+    let shown = crate::doctor::shown(place.folder());
     match listed {
         Listed::User => Report {
             ok: true,
@@ -235,7 +236,7 @@ fn report(place: &Place, listed: Listed) -> Report {
         },
         Listed::Nowhere => Report {
             ok: false,
-            detail: format!("{shown}\\cash.exe is on no PATH: new windows will not find cash"),
+            detail: format!("{shown} is on no PATH, so new windows will not find cash"),
             fix: Some(match place {
                 Place::Scoop(_) => "scoop reset cash".to_owned(),
                 Place::Installed(_) | Place::Portable(_) => "cash --add-to-path".to_owned(),
@@ -301,31 +302,31 @@ mod tests {
 
         let line = report(&portable, Listed::User);
         assert!(line.ok);
-        assert_eq!(line.detail, r"D:\tools\unpacked is on your user PATH");
+        assert_eq!(line.detail, "D:/tools/unpacked is on your user PATH");
         assert_eq!(line.fix, None);
 
         let line = report(&installed, Listed::Machine);
         assert!(line.ok);
         assert_eq!(
             line.detail,
-            r"C:\Programs\cash\current is on the system PATH"
+            "C:/Programs/cash/current is on the system PATH"
         );
 
         let line = report(&scoop, Listed::User);
-        assert_eq!(line.detail, r"C:\Users\me\scoop\shims is on your user PATH");
+        assert_eq!(line.detail, "C:/Users/me/scoop/shims is on your user PATH");
 
         let line = report(&portable, Listed::Nowhere);
         assert!(!line.ok);
         assert_eq!(
             line.detail,
-            r"D:\tools\unpacked\cash.exe is on no PATH: new windows will not find cash"
+            "D:/tools/unpacked is on no PATH, so new windows will not find cash"
         );
         assert_eq!(line.fix.as_deref(), Some("cash --add-to-path"));
 
         let line = report(&installed, Listed::Nowhere);
         assert_eq!(
             line.detail,
-            r"C:\Programs\cash\current\cash.exe is on no PATH: new windows will not find cash"
+            "C:/Programs/cash/current is on no PATH, so new windows will not find cash"
         );
         assert_eq!(line.fix.as_deref(), Some("cash --add-to-path"));
 
