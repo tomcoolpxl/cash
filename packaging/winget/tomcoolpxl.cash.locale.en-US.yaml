@@ -1,7 +1,7 @@
-# winget locale manifest for cash. Replace VERSION; ReleaseNotesUrl follows the tag.
-# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.9.0.schema.json
+# winget locale manifest for cash. Replace @VERSION@; ReleaseNotesUrl follows the tag.
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
 PackageIdentifier: tomcoolpxl.cash
-PackageVersion: VERSION
+PackageVersion: @VERSION@
 PackageLocale: en-US
 Publisher: Tom Cool
 PublisherUrl: https://github.com/tomcoolpxl
@@ -24,9 +24,9 @@ Tags:
 - coreutils
 - terminal
 - unix
-ReleaseNotesUrl: https://github.com/tomcoolpxl/cash/releases/tag/vVERSION
+ReleaseNotesUrl: https://github.com/tomcoolpxl/cash/releases/tag/v@VERSION@
 Documentations:
 - DocumentLabel: README
   DocumentUrl: https://github.com/tomcoolpxl/cash#readme
 ManifestType: defaultLocale
-ManifestVersion: 1.9.0
+ManifestVersion: 1.6.0

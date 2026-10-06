@@ -16,3 +16,6 @@ desktop.ini
 
 # Scratch
 /scratch/
+
+# winget manifests filled in for a release (RELEASING step 8); the templates beside them are the source.
+packaging/winget/out/

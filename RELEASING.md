@@ -154,11 +154,15 @@ copies every field but the version, url and hash).
 
 ### 8. winget
 From the installer (`InstallerType: inno`, `Scope: user`), package
-`tomcoolpxl.cash`. The templates are in [`packaging/winget`](packaging/winget): fill in
-the version, the installer URL and its SHA-256 (from the `.sha256` asset), validate with
-`winget validate --manifest packaging\winget\out`, test with `winget install --manifest
-packaging\winget\out`, and open the pull request on `microsoft/winget-pkgs` by hand for
-the first version (`wingetcreate submit`, or a fork and PR). Later versions can go through
+`tomcoolpxl.cash`. The templates are in [`packaging/winget`](packaging/winget), with
+`@VERSION@` and `@SHA256@` to replace (the hash from the setup's `.sha256` asset; the
+tokens are deliberately not bare words, since `ManifestVersion` and `InstallerSha256`
+contain them). Write the three filled files to `packaging/winget/out` (ignored by git),
+validate with `winget validate --manifest packaging\winget\out` (schema 1.6.0, which
+every winget accepts), test with `winget install --manifest packaging\winget\out` on a
+machine without a Scoop cash (the setup refuses to run beside one), and open the pull
+request on `microsoft/winget-pkgs` by hand for the first version (`wingetcreate
+submit`, or a fork and PR), under `manifests/t/tomcoolpxl/cash/X.Y.Z/`. Later versions can go through
 `vedantmgoyal9/winget-releaser` in the release workflow. The installer type cannot change
 once published, so the first submission waits until the installer has shipped in a
 release and been installed on a clean machine.

@@ -1,8 +1,8 @@
-# winget version manifest for cash (RELEASING.md, step 8). Replace VERSION; the two
+# winget version manifest for cash (RELEASING.md, step 8). Replace @VERSION@; the two
 # companion files are tomcoolpxl.cash.installer.yaml and tomcoolpxl.cash.locale.en-US.yaml.
-# yaml-language-server: $schema=https://aka.ms/winget-manifest.version.1.9.0.schema.json
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.version.1.6.0.schema.json
 PackageIdentifier: tomcoolpxl.cash
-PackageVersion: VERSION
+PackageVersion: @VERSION@
 DefaultLocale: en-US
 ManifestType: version
-ManifestVersion: 1.9.0
+ManifestVersion: 1.6.0
