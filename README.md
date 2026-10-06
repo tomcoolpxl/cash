@@ -188,8 +188,10 @@ starter `~/.bashrc`, read by cash and by Git Bash: a prompt with the folder and 
 branch, a large shared history, the usual aliases and `ls` with icons. `cash --init-rc`
 writes it later, when there is still neither file. `cash.exe` carries its own C runtime, so nothing else needs installing. Scoop will
 not upgrade an app while it runs: close the cash windows first, or run `scoop config
-ignore_running_processes true`. Each version gets a folder of its own, so a running
-`cash.exe` is never overwritten.
+ignore_running_processes true`. With that set, Scoop still lists the running cash, your
+own window among them, before it goes on. Each version gets a folder of its own, so a
+running `cash.exe` is never overwritten: an open window keeps the old version until it
+closes.
 
 Without Scoop, from 1.6.0 on, the setup on the [releases
 page](https://github.com/tomcoolpxl/cash/releases) (`cash-vX.Y.Z-setup.exe`) installs

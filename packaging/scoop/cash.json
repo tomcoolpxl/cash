@@ -7,8 +7,8 @@
         "url": "https://github.com/tomcoolpxl/cash/blob/main/LICENSE"
     },
     "notes": [
-        "Windows Terminal has a \"cash\" profile; restart Terminal if it does not show.",
-        "cash doctor checks the install; cash help installing lists the optional steps."
+        "If Scoop listed a running cash above, that is this window: it keeps the old version until you close it. New tabs start the new one.",
+        "Windows Terminal has a \"cash\" profile. cash doctor checks the install."
     ],
     "suggest": {
         "carapace": "extras/carapace-bin",

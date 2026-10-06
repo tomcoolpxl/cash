@@ -495,13 +495,12 @@ script-visible Bash behaviour or a kinder refusal.
   cash's: it is Windows Terminal's first launch of a profile whose fragment was just
   rewritten, or Defender in Terminal's launch context. Left as is (the user: "we live
   with it"); if it is ever pursued, time a Terminal tab, not the shell.
-- **The Scoop update output** (the user, 2026-10-06): the manifest's notes were nine
-  lines shown on every update, with their indentation lost, and the post-install commands
-  silenced only standard output. `packaging/scoop/cash.json` now has two notes lines
-  pointing at `cash doctor` and the new `help installing` topic, and `*> $null` on every
-  hook. **To do at the 1.5.0 release:** copy the notes and hooks to
-  `tomcoolpxl/scoop-bucket`'s `bucket/cash.json` by hand (RELEASING step 7); the
-  Excavator only bumps the version and hash.
+- **The Scoop update output** (the user, 2026-10-06): the warning and the process table
+  are Scoop's own (`test_running_process`, printed whenever a cash runs from
+  `scoop\apps\cash`, which the window typing `scoop update` always does); only the notes
+  are cash's. They now say the listed cash is that window. **Waits for the user's yes:**
+  push the synced notes, a local commit in `C:\Users\thraa\github\scoop-bucket`, to
+  `tomcoolpxl/scoop-bucket`.
 - **`ls` prints two blank lines before a folder's `name:` heading** when files and a
   folder are listed together (`ls s*` with a `sub` folder); GNU prints one. Found by the
   gzip oracle on 2026-10-06, which renamed its folder to dodge it.

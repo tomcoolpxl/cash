@@ -57,7 +57,7 @@ means no, and the answers are kept in `%LOCALAPPDATA%\cash\portable-offer`
 without a yes, and the same things stay commands at any time: `cash --add-to-path`,
 `cash --terminal-profile` and `cash --link-tools --add-to-path`, with
 `--remove-from-path`, `--remove-terminal-profile` and `--unlink-tools` to undo them.
-`cash doctor`'s `path` line says whether new windows will find cash. `cash --update --check` says when a newer zip is on the
+`cash doctor` says whether new windows will find cash. `cash --update --check` says when a newer zip is on the
 releases page; a portable cash does not replace itself.
 
 ## What the Scoop install does
@@ -97,5 +97,7 @@ window open, either close it or let Scoop go ahead, once:
 scoop config ignore_running_processes true
 ```
 
-The open windows keep running the old `cash.exe` until they close; new tabs get the new
-one. Scoop keeps the old versions on disk; `scoop cleanup cash` removes them.
+With that set, Scoop still prints a warning and a table of the cash processes it found
+before it goes on: the window you typed `scoop update` in is one of them. The open windows
+keep running the old `cash.exe` until they close; new tabs get the new one. Scoop keeps
+the old versions on disk; `scoop cleanup cash` removes them.
