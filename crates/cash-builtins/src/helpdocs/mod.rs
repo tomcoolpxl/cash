@@ -26,13 +26,14 @@ mod embedded {
 const INDEX: &str = include_str!("builtins.md");
 
 /// The order `help topics` lists the topics in; any other topic follows, by name.
-const TOPIC_ORDER: [&str; 8] = [
+const TOPIC_ORDER: [&str; 9] = [
     "paths",
     "crlf",
     "elevation",
     "job-control",
     "keys",
     "config",
+    "installing",
     "vars",
     "differences",
 ];
