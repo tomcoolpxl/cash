@@ -31,6 +31,8 @@ Feature work follows the sequence below.
 | 18 | Installing cash: a Scoop bucket now, winget with an Inno Setup installer later; the tool links on the user PATH on request | **Active** (Scoop since 1.1.0; the per-user installer, the portable zip's first-prompt offer and `cash --update` since 1.6.0; winget manifests validated, submission to come) | [Packaging evaluation and decisions](research/packaging-evaluation.md); section 18 below; spec D38, D65 |
 | 19 | Console, clipboard and the remaining small tools: `tput`, `stty`, `iconv`, `column`, `xxd`, `hexdump`, `uuidgen`, `xdg-open`, `pbcopy`/`pbpaste`, `watch`, `free`, `nice`/`renice`, `flock`, `nc` | **Complete** (1.5.0, 2026-10-06) | Section 19 below; spec D74; TODO.md phase 21 |
 | 20 | `grep`, `diff` and `cmp`: the standing rule reversed under "install cash, have everything" | **Active** (built 2026-10-06, for 1.7.0) | TODO.md phase 23; spec D76 |
+| 21 | `gzip`, `gunzip` and `zcat` in pure Rust | **Active** (built 2026-10-06, for 1.8.0) | TODO.md phase 24; spec D77 |
+| 22 | Compatibility corners: `/dev/tcp`, `command_not_found_handle`, kept `abbr`, kinder refusals, `getconf`, `locale` | **Active** (built 2026-10-06, for 1.8.0) | TODO.md phase 25; spec D77 |
 | — | Found on the way (not planned items) | **Complete** | MSYS2 argument encoding (spec D52); `shopt winpaths` and bash-worded `cd` errors (D53); a `TERM` that no longer reaches the whole console (D21) |
 
 The authoritative feature order is therefore:
