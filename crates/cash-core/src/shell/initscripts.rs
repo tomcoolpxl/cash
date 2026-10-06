@@ -57,6 +57,13 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
         self.load_config_files(profile_behavior, rc_behavior)
             .await?;
 
+        // cash: the abbreviations kept across sessions, after the rc files so that a
+        // `~/.bashrc` definition wins over the file's for the same name. Only an
+        // interactive shell reads them, since only its line editor expands them.
+        if self.options.interactive {
+            self.load_kept_abbreviations();
+        }
+
         // As bash does, skip the file if startup files already added entries (e.g. via
         // `history -s`). Do NOT fail if we can't load history.
         if self.options.enable_command_history
@@ -83,6 +90,31 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
         }
 
         Ok(())
+    }
+
+    /// Adds the abbreviations of `%APPDATA%\cash\abbreviations` that the rc files did
+    /// not define (`crate::abbreviations::store`). A file that cannot be read or does
+    /// not parse is said once, on standard error, and ignored.
+    fn load_kept_abbreviations(&mut self) {
+        use crate::abbreviations::store;
+
+        match store::load() {
+            Ok(entries) => {
+                for entry in entries {
+                    if self.abbreviations.get(&entry.name).is_none() {
+                        self.abbreviations.set(entry);
+                    }
+                }
+            }
+            Err(store::StoreError::NoPlace) => {}
+            Err(error) => {
+                use std::io::Write as _;
+                let _ = writeln!(
+                    self.stderr(),
+                    "cash: the saved abbreviations are ignored: {error}"
+                );
+            }
+        }
     }
 
     /// Define the `bash-completion` helper functions that generated completion scripts

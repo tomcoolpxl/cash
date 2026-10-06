@@ -972,9 +972,9 @@ pub fn tcp_queues(socket: &Socket) -> (Option<usize>, Option<usize>) {
     )
 }
 
-/// Whether Winsock is started, which `GetNameInfoW` needs. Started once and left
-/// running, as the standard library does.
-fn winsock_started() -> bool {
+/// Whether Winsock is started, which `GetNameInfoW` and `crate::sockets` need. Started
+/// once and left running, as the standard library does.
+pub(crate) fn winsock_started() -> bool {
     use windows_sys::Win32::Networking::WinSock::{WSADATA, WSAStartup};
 
     static STARTED: LazyLock<bool> = LazyLock::new(|| {

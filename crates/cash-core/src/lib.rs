@@ -26,6 +26,9 @@ mod ioutils;
 pub mod jobs;
 mod keywords;
 pub mod namedoptions;
+// cash: the service table, the sockets `/dev/tcp` and `/dev/udp` redirections open, and
+// the C library's words for what went wrong, shared with `nc`.
+pub mod net;
 pub mod openfiles;
 pub mod options;
 pub mod pathcache;

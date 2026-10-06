@@ -636,6 +636,30 @@ pub fn disk_usage(path: &std::path::Path) -> Option<(u64, u64)> {
     Some((total, free))
 }
 
+/// The size of a page of memory, as `GetSystemInfo` reports it: 4096 on every Windows
+/// that runs cash; `getconf PAGESIZE` prints it.
+#[must_use]
+pub fn page_size() -> u32 {
+    use windows_sys::Win32::System::SystemInformation::{GetSystemInfo, SYSTEM_INFO};
+
+    // SAFETY: a zeroed SYSTEM_INFO is a valid out-parameter, which the call fills.
+    let mut info: SYSTEM_INFO = unsafe { std::mem::zeroed() };
+    // SAFETY: `info` is writable and outlives the call.
+    unsafe { GetSystemInfo(&raw mut info) };
+    info.dwPageSize
+}
+
+/// Whether long paths are on (`LongPathsEnabled` under `Control\FileSystem`), which
+/// lifts the 260-character limit on a path for programs that opt in; `getconf
+/// PATH_MAX` answers 32767 then, and 260 otherwise.
+#[must_use]
+pub fn long_paths_enabled() -> bool {
+    registry_dword(
+        r"SYSTEM\CurrentControlSet\Control\FileSystem",
+        "LongPathsEnabled",
+    ) == Some(1)
+}
+
 /// Reads one string value from `HKEY_LOCAL_MACHINE`.
 ///
 /// `RegGetValueW` is the one call that opens, reads, and expands in one step, and it

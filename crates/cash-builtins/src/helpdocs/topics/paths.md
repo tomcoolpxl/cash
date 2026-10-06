@@ -27,6 +27,13 @@ program, or a bundled tool such as `cat` or `rm`, has no `/c` or `/tmp`; cash
 warns when it sees one and names the `C:/` spelling. `/dev/null` is the null device; a
 bare `nul` is the device too, as every Windows program sees it.
 
+`/dev/tcp/HOST/PORT` and `/dev/udp/HOST/PORT` open a socket, as in Bash, in a
+redirection only: `exec 3<>/dev/tcp/example.com/80` makes descriptor 3 a connection to
+write to (`>&3`) and read from (`<&3`), `cat </dev/tcp/host/port` reads one, and `exec
+3>&-` closes it. `PORT` may be a service name (`http`, `https`, `ssh`). A connection that
+fails is reported in Bash's two lines, `connect: Connection refused` and the
+redirection's own; as an argument to a program the name is a file that does not exist.
+
 ## Backslashes
 
 Backslash is Bash's escape character, so an unquoted `cd C:\Users\me` reaches `cd` as

@@ -7,12 +7,17 @@
 //! default with no arguments), `-l`/`--list`, `-q`/`--query`, `-r`/`--rename`, and
 //! `--position command|anywhere`. `-g` and `-U`, fish's old scope flags, are accepted and
 //! ignored, as current fish does. `--regex`, `--function` and `--set-cursor` are refused.
+//!
+//! Abbreviations are kept across sessions, as fish keeps its: `-a`, `-e` and `-r` also
+//! write `%APPDATA%\cash\abbreviations` (`cash_core::abbreviations::store`), which an
+//! interactive shell reads after its rc files. A change that cannot be written is said,
+//! and the abbreviation still stands for the session.
 
 use std::io::Write;
 
 use cash_core::{
     ExecutionResult,
-    abbreviations::{self, Abbreviation, Position, RenameError},
+    abbreviations::{self, Abbreviation, Abbreviations, Position, RenameError, store},
     builtins,
 };
 
@@ -194,12 +199,32 @@ fn add<SE: cash_core::ShellExtensions>(
         )?;
         return Ok(ExecutionResult::new(2));
     }
-    context.shell.abbreviations_mut().set(Abbreviation {
+    let abbreviation = Abbreviation {
         name: (*name).to_owned(),
         expansion: expansion.join(" "),
         position,
-    });
+    };
+    context.shell.abbreviations_mut().set(abbreviation.clone());
+    save(context, |kept| kept.set(abbreviation))?;
     Ok(ExecutionResult::success())
+}
+
+/// Applies `change` to the file of kept abbreviations as well; a file that cannot be
+/// written is said, and the session's change stands.
+fn save<SE: cash_core::ShellExtensions>(
+    context: &cash_core::ExecutionContext<'_, SE>,
+    change: impl FnOnce(&mut Abbreviations),
+) -> Result<(), cash_core::Error> {
+    match store::save_change(change) {
+        Ok(()) | Err(store::StoreError::NoPlace) => Ok(()),
+        Err(error) => {
+            writeln!(
+                context.stderr(),
+                "abbr: not kept for later sessions: {error}"
+            )?;
+            Ok(())
+        }
+    }
 }
 
 fn erase<SE: cash_core::ShellExtensions>(
@@ -216,6 +241,11 @@ fn erase<SE: cash_core::ShellExtensions>(
             status = ExecutionResult::general_error();
         }
     }
+    save(context, |kept| {
+        for name in operands {
+            kept.remove(name);
+        }
+    })?;
     Ok(status)
 }
 
@@ -234,7 +264,12 @@ fn rename<SE: cash_core::ShellExtensions>(
         return Ok(ExecutionResult::new(2));
     }
     match context.shell.abbreviations_mut().rename(old, new) {
-        Ok(()) => Ok(ExecutionResult::success()),
+        Ok(()) => {
+            save(context, |kept| {
+                let _ = kept.rename(old, new);
+            })?;
+            Ok(ExecutionResult::success())
+        }
         Err(RenameError::OldMissing) => {
             writeln!(context.stderr(), "abbr: no such abbreviation '{old}'")?;
             Ok(ExecutionResult::general_error())

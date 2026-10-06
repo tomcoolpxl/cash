@@ -71,6 +71,8 @@ pub mod restart;
 pub mod scoop;
 pub mod session;
 pub mod shellopen;
+/// Synchronous sockets, for the `/dev/tcp` and `/dev/udp` descriptors a child can use.
+pub mod sockets;
 pub mod spawn;
 pub mod stdio;
 /// Asking one process to stop, then making it: D21's `TERM`.

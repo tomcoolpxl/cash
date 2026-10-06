@@ -340,6 +340,7 @@ fn dev_info<SE: cash_core::ShellExtensions>(
             FileStatInfo::special(written, "fifo", mode)
         }
         FileKind::File(metadata) => FileStatInfo::from_path_and_meta(written, written, &metadata),
+        FileKind::Socket => FileStatInfo::special(written, "socket", 0o140_777),
         FileKind::Device | FileKind::Other => {
             FileStatInfo::special(written, "character special file", 0o020_666)
         }

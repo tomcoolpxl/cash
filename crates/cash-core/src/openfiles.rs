@@ -42,6 +42,9 @@ pub enum OpenFile {
     PipeReader(Arc<std::io::PipeReader>),
     /// A write end of a pipe.
     PipeWriter(Arc<std::io::PipeWriter>),
+    /// A socket a `/dev/tcp` or `/dev/udp` redirection opened, read and written both
+    /// ways (`crate::net`).
+    Socket(Arc<crate::net::Socket>),
     /// A custom stream.
     Stream(Box<dyn Stream>),
 }
@@ -59,6 +62,7 @@ impl serde::Serialize for OpenFile {
             Self::File(_) => serializer.serialize_str("file"),
             Self::PipeReader(_) => serializer.serialize_str("pipe_reader"),
             Self::PipeWriter(_) => serializer.serialize_str("pipe_writer"),
+            Self::Socket(_) => serializer.serialize_str("socket"),
             Self::Stream(_) => serializer.serialize_str("stream"),
         }
     }
@@ -77,6 +81,7 @@ impl<'de> serde::Deserialize<'de> for OpenFile {
             "file" => (),
             "pipe_reader" => (),
             "pipe_writer" => (),
+            "socket" => (),
             "stream" => (),
             _ => return Err(serde::de::Error::custom("invalid open file")),
         }
@@ -103,6 +108,7 @@ impl Clone for OpenFile {
             Self::File(f) => Self::File(Arc::clone(f)),
             Self::PipeReader(r) => Self::PipeReader(Arc::clone(r)),
             Self::PipeWriter(w) => Self::PipeWriter(Arc::clone(w)),
+            Self::Socket(s) => Self::Socket(Arc::clone(s)),
             Self::Stream(s) => Self::Stream(s.clone_box()),
         }
     }
@@ -117,6 +123,7 @@ impl std::fmt::Display for OpenFile {
             Self::File(_) => write!(f, "file"),
             Self::PipeReader(_) => write!(f, "pipe reader"),
             Self::PipeWriter(_) => write!(f, "pipe writer"),
+            Self::Socket(_) => write!(f, "socket"),
             Self::Stream(_) => write!(f, "stream"),
         }
     }
@@ -135,6 +142,8 @@ pub enum FileKind {
     Device,
     /// A file or folder on a disk.
     File(std::fs::Metadata),
+    /// A socket, as `/dev/tcp` and `/dev/udp` open one.
+    Socket,
     /// Anything else.
     Other,
 }
@@ -152,6 +161,7 @@ impl OpenFile {
             Self::File(file) => (file.as_handle(), true, true),
             Self::PipeReader(reader) => (reader.as_handle(), true, false),
             Self::PipeWriter(writer) => (writer.as_handle(), false, true),
+            Self::Socket(_) => return FileKind::Socket,
             Self::Stream(_) => return FileKind::Other,
         };
         match cash_win32::fs::handle_kind(handle) {
@@ -170,7 +180,7 @@ impl OpenFile {
         match self {
             Self::Stdin(_) | Self::Stdout(_) | Self::Stderr(_) => false,
             Self::File(file) => file.metadata().is_ok_and(|m| m.is_dir()),
-            Self::PipeReader(_) | Self::PipeWriter(_) | Self::Stream(_) => false,
+            Self::PipeReader(_) | Self::PipeWriter(_) | Self::Socket(_) | Self::Stream(_) => false,
         }
     }
 
@@ -181,7 +191,7 @@ impl OpenFile {
             Self::Stdout(f) => f.is_terminal(),
             Self::Stderr(f) => f.is_terminal(),
             Self::File(f) => f.is_terminal(),
-            Self::PipeReader(_) | Self::PipeWriter(_) | Self::Stream(_) => false,
+            Self::PipeReader(_) | Self::PipeWriter(_) | Self::Socket(_) | Self::Stream(_) => false,
         }
     }
 
@@ -247,6 +257,12 @@ impl From<std::io::PipeWriter> for OpenFile {
     }
 }
 
+impl From<crate::net::Socket> for OpenFile {
+    fn from(socket: crate::net::Socket) -> Self {
+        Self::Socket(Arc::new(socket))
+    }
+}
+
 impl TryFrom<OpenFile> for Stdio {
     type Error = error::Error;
 
@@ -265,10 +281,28 @@ impl TryFrom<OpenFile> for Stdio {
             OpenFile::File(f) => Ok(f.try_clone()?.into()),
             OpenFile::PipeReader(r) => Ok(r.try_clone()?.into()),
             OpenFile::PipeWriter(w) => Ok(w.try_clone()?.into()),
+            // A socket is a handle Windows lets a child inherit; it is duplicated so
+            // the child's copy is its own. A program that reads it with `ReadFile`
+            // gets the bytes; one that asks what kind of file it has may be surprised.
+            OpenFile::Socket(socket) => Ok(duplicate_socket_handle(&socket)?.into()),
             // Custom streams have no descriptor to hand to a child process.
             OpenFile::Stream(_) => Ok(Self::null()),
         }
     }
+}
+
+/// A handle of its own to `socket`, for a child process's standard stream.
+fn duplicate_socket_handle(
+    socket: &crate::net::Socket,
+) -> std::io::Result<std::os::windows::io::OwnedHandle> {
+    use std::os::windows::io::{AsHandle, BorrowedHandle, RawHandle};
+
+    let raw: RawHandle = socket.as_raw_socket() as RawHandle;
+    // SAFETY: a Windows socket is a kernel handle, open for as long as `socket` is, which
+    // outlives this borrow; `DuplicateHandle` through `try_clone_to_owned` makes a handle
+    // the child owns.
+    let borrowed = unsafe { BorrowedHandle::borrow_raw(raw) };
+    borrowed.as_handle().try_clone_to_owned()
 }
 
 impl std::io::Read for OpenFile {
@@ -291,6 +325,7 @@ impl std::io::Read for OpenFile {
             Self::PipeWriter(_) => Err(std::io::Error::other(
                 error::ErrorKind::OpenFileNotReadable("pipe writer"),
             )),
+            Self::Socket(socket) => socket.as_ref().read(buf),
             Self::Stream(s) => s.read(buf),
         }
     }
@@ -311,6 +346,7 @@ impl std::io::Write for OpenFile {
                 error::ErrorKind::OpenFileNotWritable("pipe reader"),
             )),
             Self::PipeWriter(writer) => writer.as_ref().write(buf),
+            Self::Socket(socket) => socket.as_ref().write(buf),
             Self::Stream(s) => s.write(buf),
         }
     }
@@ -321,7 +357,7 @@ impl std::io::Write for OpenFile {
             Self::Stdout(f) => f.flush(),
             Self::Stderr(f) => f.flush(),
             Self::File(f) => f.as_ref().flush(),
-            Self::PipeReader(_) => Ok(()),
+            Self::PipeReader(_) | Self::Socket(_) => Ok(()),
             Self::PipeWriter(writer) => writer.as_ref().flush(),
             Self::Stream(s) => s.flush(),
         }

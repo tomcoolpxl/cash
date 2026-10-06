@@ -18,6 +18,8 @@
 //! the ConPTY suites `conpty_interactive_tests.rs`, `pty_oracle.rs` and `pty_latency.rs`.
 
 mod abbr;
+// Abbreviations kept across sessions in `%APPDATA%\cash\abbreviations`.
+mod abbr_store;
 // cash's own acceptance corpus — §4's divergences and every decision wired into the
 // shell, asserted against the real cash.exe.
 mod acceptance;
@@ -43,6 +45,8 @@ mod cd_errors;
 // `pbcopy`, `pbpaste`, `uuidgen` and `xdg-open`: the clipboard round trip, util-linux's
 // golden output, and `start` under the name scripts try first.
 mod clipboard_and_small_tools;
+// `command_not_found_handle`, run as Bash runs it: the command and its arguments, in a
+mod command_not_found_handle;
 // The binary, a run of it isolated from the user's settings, and a scratch folder.
 mod common;
 // D40: `docker completion bash` and friends, which need bash-completion's helpers.
@@ -68,6 +72,7 @@ mod ctrl_c;
 // D7: `/dev/stdin`, `/dev/stdout`, `/dev/stderr` and `/dev/fd/N` as the shell's descriptors.
 mod dev_descriptors;
 // `diff` and `cmp`, uutils diffutils' behind GNU's interface, against GNU diffutils' output.
+mod dev_sockets;
 mod diff_builtin;
 mod directory_stack;
 mod disown;
@@ -100,6 +105,8 @@ mod fuser_lsof;
 // Git for Windows' git-prompt.sh (`__git_ps1`), sourced from the Git install.
 mod git_prompt;
 // BIN-05: Git's prompt scripts against Git Bash's frozen output.
+// `getconf` and `locale`: glibc's interfaces with the values Windows has.
+mod getconf_locale;
 mod git_prompt_goldens;
 // `grep`, `egrep` and `fgrep`: GNU grep 3.12's golden output, and the CRLF rule.
 mod grep_builtin;
@@ -171,6 +178,8 @@ mod resolution_honesty;
 // EXE-07: a script that does not parse runs a complete command at a time, up to the error.
 mod run_by_command;
 // `select`, a bash construct cash could not parse at all.
+// `suspend`, `mkfifo` and `stdbuf`: builtins that refuse in Bash's and coreutils' words.
+mod refusals;
 mod select_clause;
 mod shebang_dispatch;
 // D10: the working directory, environment and PATH are the shell's, not the process's.

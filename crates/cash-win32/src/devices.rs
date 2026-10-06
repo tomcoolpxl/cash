@@ -241,6 +241,66 @@ pub fn dev_name(path: &std::path::Path) -> Option<DevName> {
     descriptor_number(number).map(DevName::Descriptor)
 }
 
+/// The protocol of a `/dev/tcp/HOST/PORT` or `/dev/udp/HOST/PORT` name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SocketProtocol {
+    /// `/dev/tcp`: a connection.
+    Tcp,
+    /// `/dev/udp`: datagrams to one peer.
+    Udp,
+}
+
+/// `/dev/tcp/HOST/PORT` or `/dev/udp/HOST/PORT`, as Bash's redirections take it: a socket
+/// to open, not a file. See [`socket_name`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SocketName {
+    /// TCP or UDP.
+    pub protocol: SocketProtocol,
+    /// The host, as written: a name or an address.
+    pub host: String,
+    /// The port, as written: a number, a service name, or empty (`/dev/tcp/host/`).
+    pub port: String,
+}
+
+/// The socket `path` names, if it names one: `/dev/tcp/HOST/PORT` or `/dev/udp/HOST/PORT`.
+///
+/// The prefixes are the ones [`dev_name`] takes (`C:/dev/tcp/...` after resolving against
+/// a folder). Only a redirection asks, as in Bash: handed to a program as an argument the
+/// name is a file that does not exist. `/dev/tcp/HOST` alone, with no port, is no socket
+/// either, and `/dev/tcp/HOST/` names port `0`, as Bash passes the empty port on.
+#[must_use]
+pub fn socket_name(path: &std::path::Path) -> Option<SocketName> {
+    use std::path::Component;
+
+    let text = path.as_os_str().to_string_lossy();
+    let empty_port = text.ends_with(['/', '\\']);
+    let mut components = path.components().peekable();
+    components.next_if(|component| matches!(component, Component::Prefix(_)));
+    match (components.next(), components.next()) {
+        (Some(Component::RootDir), Some(Component::Normal(dev))) if dev == "dev" => {}
+        _ => return None,
+    }
+    let protocol = match normal(components.next())? {
+        "tcp" => SocketProtocol::Tcp,
+        "udp" => SocketProtocol::Udp,
+        _ => return None,
+    };
+    let host = normal(components.next())?.to_owned();
+    let port = match components.next() {
+        None if empty_port => String::new(),
+        None => return None,
+        component => normal(component)?.to_owned(),
+    };
+    if components.next().is_some() {
+        return None;
+    }
+    Some(SocketName {
+        protocol,
+        host,
+        port,
+    })
+}
+
 /// The name `component` is, if it is a plain one.
 fn normal(component: Option<std::path::Component<'_>>) -> Option<&str> {
     match component {
@@ -277,8 +337,13 @@ enum Device {
     Endless(Endless),
 }
 
-/// The device `name`, a path as `CreateFileW` is given it, is, if it is one.
+/// The device `name`, a path as `CreateFileW` is given it, is, if it is one. A socket
+/// name (`/dev/tcp/HOST/PORT`) is one only to a redirection; to a tool it is a file
+/// that does not exist, as in Bash, whether or not the machine has a `\dev` folder.
 fn device(name: &str) -> Option<Device> {
+    if socket_name(std::path::Path::new(name)).is_some() {
+        return Some(Device::Missing);
+    }
     Some(match dev_name(std::path::Path::new(name))? {
         DevName::Null => Device::Null,
         DevName::Tty => Device::Tty,
@@ -762,5 +827,41 @@ mod tests {
         assert_eq!(device("/DEV/NULL"), None);
         assert_eq!(device(r"\\.\NUL"), None);
         assert_eq!(device("CONIN$"), None);
+    }
+
+    #[test]
+    fn a_socket_name_is_a_host_and_a_port_under_dev_tcp_or_dev_udp() {
+        let name = |text: &str| socket_name(std::path::Path::new(text));
+        assert_eq!(
+            name("/dev/tcp/example.com/80"),
+            Some(SocketName {
+                protocol: SocketProtocol::Tcp,
+                host: "example.com".into(),
+                port: "80".into(),
+            })
+        );
+        assert_eq!(
+            name("C:/dev/udp/127.0.0.1/syslog"),
+            Some(SocketName {
+                protocol: SocketProtocol::Udp,
+                host: "127.0.0.1".into(),
+                port: "syslog".into(),
+            })
+        );
+        assert_eq!(
+            name(r"\\?\C:\dev\tcp\localhost\22").map(|n| n.port),
+            Some("22".into())
+        );
+        // Bash passes an empty port on; no port at all is no socket name.
+        assert_eq!(name("/dev/tcp/host/").map(|n| n.port), Some(String::new()));
+        assert_eq!(name("/dev/tcp/host"), None);
+        assert_eq!(name("/dev/tcp"), None);
+        assert_eq!(name("/dev/tcp/host/80/more"), None);
+        assert_eq!(name("/dev/sctp/host/80"), None);
+        assert_eq!(name("C:/src/dev/tcp/host/80"), None);
+        // The device names stay what they were; to a tool a socket name is no file.
+        assert_eq!(name("/dev/null"), None);
+        assert_eq!(device("/dev/tcp/host/80"), Some(Device::Missing));
+        assert_eq!(device("/dev/tcp/host"), None);
     }
 }

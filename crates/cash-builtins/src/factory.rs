@@ -302,6 +302,13 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
     m.insert("reset".into(), builtin::<screen::ResetCommand, SE>());
     m.insert("tput".into(), builtin::<tput::TputCommand, SE>());
     m.insert("stty".into(), builtin::<stty::SttyCommand, SE>());
+    // cash: the compatibility corners: refusals in Bash's and coreutils' words, and the
+    m.insert("suspend".into(), builtin::<suspend::SuspendCommand, SE>());
+    m.insert("mkfifo".into(), builtin::<mkfifo::MkfifoCommand, SE>());
+        "stdbuf".into(),
+        builtin::<stdbuf::StdbufCommand, SE>().with_substitution_files(),
+    m.insert("getconf".into(), builtin::<getconf::GetconfCommand, SE>());
+    m.insert("locale".into(), builtin::<locale::LocaleCommand, SE>());
     m.insert("fuser".into(), builtin::<fuser::FuserCommand, SE>());
     m.insert("lsof".into(), builtin::<lsof::LsofCommand, SE>());
     m.insert("ss".into(), builtin::<ss::SsCommand, SE>());

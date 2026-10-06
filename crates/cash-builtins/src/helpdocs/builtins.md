@@ -57,6 +57,7 @@ an entry or page names no builtin.
 - `shift`: Shift the positional parameters to the left.
 - `shopt`: Set or show the shell's optional behaviours.
 - `source`: Run a file's commands in the current shell.
+- `suspend`: Suspend the shell; refused, since Windows has no stop signal.
 - `test`: Evaluate a conditional expression.
 - `times`: Show the time used by the shell and its children.
 - `trap`: Run a command when the shell receives a signal or event.
@@ -154,15 +155,19 @@ an entry or page names no builtin.
 - `groups`: Print the groups a user belongs to.
 - `hostid`: Print the numeric identifier of this host.
 - `hostname`: Show the machine's name.
+- `getconf`: Print a configuration value by its POSIX name, with the value Windows has.
 - `id`: Print the user's and groups' identities.
 - `install`: Copy files and set their attributes.
 - `logname`: Print the user's login name.
 - `ls`: List folder contents, with colours, icons and a tree.
 - `pinky`: Show brief information about users.
+- `locale`: Show the locale: the `LANG` and `LC_*` view, and the locales by name.
 - `stat`: Show a file's status: size, times, links, attributes.
 - `tty`: Print the name of the terminal on standard input.
+- `mkfifo`: Make a named pipe; refused, with the way to a pipe in cash.
 - `users`: Print the names of the users logged on.
 - `who`: Show who is logged on.
+- `stdbuf`: Run a command with changed buffering; on Windows, as it is.
 
 ## Bundled coreutils, from uutils
 

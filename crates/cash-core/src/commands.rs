@@ -645,6 +645,9 @@ pub fn exported_environment(
 /// goes no further.
 pub const ARGV0_VARIABLE: &str = "CASH_ARGV0";
 
+/// The function Bash runs, when it is defined, in place of `command not found`.
+pub const NOT_FOUND_HANDLE: &str = "command_not_found_handle";
+
 /// Whether `name` asks for the link this process runs as, by its own name: `find.exe`
 /// starting `C:/links/find.exe` again. Never so for `cash.exe` itself.
 fn names_this_link(name: &str) -> bool {
@@ -1030,6 +1033,12 @@ impl<'a, SE: extensions::ShellExtensions> SimpleCommand<'a, SE> {
                     let _ = post_execute(&mut self.shell);
                 }
 
+                // cash: a `command_not_found_handle` function speaks instead of the
+                // shell, as in Bash 4 and later, and its status is the command's.
+                if let Some(handler) = self.shell.funcs().get(NOT_FOUND_HANDLE).cloned() {
+                    return self.run_not_found_handle(handler).await;
+                }
+
                 Err(ErrorKind::CommandNotFound(self.command_name).into())
             }
         } else {
@@ -1054,6 +1063,45 @@ impl<'a, SE: extensions::ShellExtensions> SimpleCommand<'a, SE> {
     /// command, suitable for recording into `$_`.
     fn take_last_arg(args: &[CommandArg]) -> Option<String> {
         args.last().map(ToString::to_string)
+    }
+
+    /// Runs the user's `command_not_found_handle` as Bash runs it: in a subshell, with
+    /// the command name and its arguments as the function's own, and its status as the
+    /// command's. Checked against Git Bash 5.3: `exit 3` inside it ends the subshell
+    /// alone, so the shell goes on and the command's status is 3; a variable it sets
+    /// stays in the subshell; a handler that returns 127 is the last word, the shell
+    /// prints nothing more.
+    async fn run_not_found_handle(
+        mut self,
+        handler: functions::Registration,
+    ) -> Result<ExecutionSpawnResult, error::Error> {
+        let mut subshell = self.shell.subshell_that_catches_errors();
+        let stderr_params = self.params.clone();
+        let context = ExecutionContext {
+            shell: &mut subshell,
+            command_name: NOT_FOUND_HANDLE.to_owned(),
+            params: self.params,
+        };
+        // The positional parameters are the command name and its arguments: all of
+        // `args`, whose first is the command name.
+        let outcome = match invoke_shell_function(handler, context, &self.args).await {
+            Ok(spawned) => spawned.wait().await.map(ExecutionResult::from),
+            Err(error) => Err(error),
+        };
+        let result = match outcome {
+            Ok(result) => result,
+            // An interrupt ends the shell the subshell is a part of, too.
+            Err(error) if error.is_silent_interrupt() => return Err(error),
+            Err(error) => {
+                let mut stderr = stderr_params.stderr(&subshell);
+                let _ = subshell.display_error(&mut stderr, &error);
+                error.into_result(&subshell)
+            }
+        };
+        // The subshell's status, without its requests to exit or leave a loop.
+        Ok(ExecutionSpawnResult::Completed(ExecutionResult::from(
+            result.exit_code,
+        )))
     }
 
     async fn execute_via_builtin(

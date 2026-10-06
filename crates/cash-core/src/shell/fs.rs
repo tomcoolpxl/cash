@@ -401,6 +401,34 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         path: impl AsRef<Path>,
         params: &ExecutionParameters,
     ) -> Result<openfiles::OpenFile, std::io::Error> {
+        // cash: `/dev/tcp/HOST/PORT` and `/dev/udp/HOST/PORT` open a socket, as Bash's
+        // redirections do (`crate::net`). Bash says what failed on a line of its own
+        // before the redirection's: `connect: Connection refused`, or `HOST: Name or
+        // service not known`, and the second line then says `Invalid argument`.
+        if let Some(name) = cash_win32::devices::socket_name(path.as_ref()) {
+            return crate::net::connect(&name)
+                .map(openfiles::OpenFile::from)
+                .map_err(|failure| {
+                    use std::io::Write as _;
+                    let mut stderr = params.stderr(self);
+                    let first = match &failure {
+                        crate::net::SocketFailure::Lookup { name, reason } => {
+                            format!("{}{name}: {reason}", self.error_prefix())
+                        }
+                        crate::net::SocketFailure::Connect(reason) => {
+                            let shell = if self.options.interactive {
+                                self.name_for_interactive_errors()
+                            } else {
+                                self.name_for_errors()
+                            };
+                            format!("{shell}: connect: {reason}")
+                        }
+                    };
+                    let _ = writeln!(stderr, "{first}");
+                    std::io::Error::other(failure.redirection_reason().to_owned())
+                });
+        }
+
         // Give platform-specific code a chance to handle special files
         // (e.g. /dev/null on Windows, which needs to open NUL instead, and /dev/tty,
         // which is the console's input or its output). This is checked before

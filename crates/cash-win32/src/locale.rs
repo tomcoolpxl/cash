@@ -74,3 +74,79 @@ fn wide_to_string(buffer: &[u16], written: i32) -> Option<String> {
     let length = usize::try_from(written).ok()?.checked_sub(1)?;
     Some(String::from_utf16_lossy(buffer.get(..length)?))
 }
+
+/// The user's regional format locale (`GetUserDefaultLocaleName`), as Windows names
+/// it: `en-US`, `nl-BE`, `sr-Latn-RS`.
+#[must_use]
+pub fn user_locale_name() -> Option<String> {
+    use windows_sys::Win32::Globalization::GetUserDefaultLocaleName;
+    let mut buffer = [0u16; LOCALE_NAME_MAX_LENGTH];
+    // SAFETY: `buffer` holds `buffer.len()` units, which is the capacity passed.
+    let written = unsafe { GetUserDefaultLocaleName(buffer.as_mut_ptr(), name_capacity()) };
+    wide_to_string(&buffer, written)
+}
+
+/// The system's locale (`GetSystemDefaultLocaleName`), the one programs that are not
+/// Unicode-aware run under.
+#[must_use]
+pub fn system_locale_name() -> Option<String> {
+    use windows_sys::Win32::Globalization::GetSystemDefaultLocaleName;
+    let mut buffer = [0u16; LOCALE_NAME_MAX_LENGTH];
+    // SAFETY: as in `user_locale_name`.
+    let written = unsafe { GetSystemDefaultLocaleName(buffer.as_mut_ptr(), name_capacity()) };
+    wide_to_string(&buffer, written)
+}
+
+/// The user's display language (`GetUserDefaultUILanguage`), as a locale name.
+#[must_use]
+pub fn user_ui_locale_name() -> Option<String> {
+    use windows_sys::Win32::Globalization::GetUserDefaultUILanguage;
+    // SAFETY: reads a language id; no memory of ours is touched.
+    locale_name_of(u32::from(unsafe { GetUserDefaultUILanguage() }))
+}
+
+/// The system's display language (`GetSystemDefaultUILanguage`), as a locale name.
+#[must_use]
+pub fn system_ui_locale_name() -> Option<String> {
+    use windows_sys::Win32::Globalization::GetSystemDefaultUILanguage;
+    // SAFETY: as above.
+    locale_name_of(u32::from(unsafe { GetSystemDefaultUILanguage() }))
+}
+
+/// `LOCALE_NAME_MAX_LENGTH`: the longest locale name, its NUL counted.
+const LOCALE_NAME_MAX_LENGTH: usize = 85;
+
+/// The capacity of a locale-name buffer, as the calls take it.
+fn name_capacity() -> i32 {
+    i32::try_from(LOCALE_NAME_MAX_LENGTH).unwrap_or(i32::MAX)
+}
+
+/// The locale name of a language id (`LCIDToLocaleName`).
+fn locale_name_of(language: u32) -> Option<String> {
+    use windows_sys::Win32::Globalization::LCIDToLocaleName;
+    let mut buffer = [0u16; LOCALE_NAME_MAX_LENGTH];
+    // SAFETY: `buffer` holds the capacity passed; no flags.
+    let written = unsafe { LCIDToLocaleName(language, buffer.as_mut_ptr(), name_capacity(), 0) };
+    wide_to_string(&buffer, written)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_locale_names_are_windows_tags() {
+        for name in [
+            user_locale_name(),
+            system_locale_name(),
+            user_ui_locale_name(),
+            system_ui_locale_name(),
+        ] {
+            let name = name.unwrap_or_default();
+            assert!(
+                name.len() >= 2 && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-'),
+                "{name}"
+            );
+        }
+    }
+}

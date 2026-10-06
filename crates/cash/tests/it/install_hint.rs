@@ -97,7 +97,7 @@ fn interactive_in(dir: &Scratch) -> ConPtySession {
     session
 }
 
-/// The report: typed at the prompt, `jq` is followed by the hint; `gzip`, which winget
+/// The report: typed at the prompt, `jq` is followed by the hint; `gradle`, which winget
 /// has no package for, names Scoop alone; a name outside the table gets Bash's line only.
 #[test]
 fn at_the_prompt_the_hint_follows_bashs_line() {
@@ -116,10 +116,10 @@ fn at_the_prompt_the_hint_follows_bashs_line() {
     session.send("echo rc=$?\r").unwrap();
     session.expect("rc=127", STUCK).expect("the status");
 
-    session.send("gzip\r").unwrap();
+    session.send("gradle\r").unwrap();
     session
-        .expect("install it: scoop install gzip", STUCK)
-        .expect("the hint for gzip");
+        .expect("install it: scoop install gradle", STUCK)
+        .expect("the hint for gradle");
 
     session.send("nosuchtool-zz\r").unwrap();
     session.send("echo MARK_$((1 + 1))\r").unwrap();
@@ -139,8 +139,8 @@ fn at_the_prompt_the_hint_follows_bashs_line() {
     assert_eq!(session.wait().expect("cash exits"), 0);
 }
 
-/// A user's `command_not_found_handle` is theirs to speak: no hint while it is defined,
-/// and the hint again once it is gone.
+/// A user's `command_not_found_handle` is theirs to speak: it runs in place of Bash's
+/// line, no hint while it is defined, and the hint again once it is gone.
 #[test]
 fn a_defined_command_not_found_handle_suppresses_the_hint() {
     let dir = Scratch::new("install-hint-handle");
@@ -153,10 +153,10 @@ fn a_defined_command_not_found_handle_suppresses_the_hint() {
     session.send("echo MARK_$((2 + 2))\r").unwrap();
     session.expect("MARK_4", STUCK).expect("the marker");
     let screen = session.screen().text();
-    assert!(screen.contains("jq: command not found"), "{screen}");
+    assert!(screen.contains("handled jq"), "{screen}");
     assert!(
-        !screen.contains("install it"),
-        "the hint was shown beside a command_not_found_handle:\n{screen}"
+        !screen.contains("jq: command not found") && !screen.contains("install it"),
+        "the shell spoke beside a command_not_found_handle:\n{screen}"
     );
 
     session

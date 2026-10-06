@@ -103,6 +103,230 @@ pub fn is_valid_name(name: &str) -> bool {
     !name.is_empty() && !name.chars().any(char::is_whitespace)
 }
 
+/// The file abbreviations are kept in across sessions, `%APPDATA%\cash\abbreviations`.
+///
+/// One `NAME=EXPANSION` per line, `anywhere NAME=EXPANSION` for one that expands
+/// anywhere on the line, LF-separated, written whole on every change. `abbr -a` and
+/// `abbr -e` write it; an interactive shell reads it after the rc files, so a
+/// definition in `~/.bashrc` wins over the file's for the same name. It is state, not
+/// configuration: `--no-config` leaves it alone, and the folder is made when needed.
+pub mod store {
+    use std::path::PathBuf;
+
+    use super::{Abbreviation, Abbreviations, Position};
+
+    /// The file's name under `%APPDATA%\cash`.
+    const FILE_NAME: &str = "abbreviations";
+
+    /// Where the file goes: `%APPDATA%\cash\abbreviations`, or `None` when `APPDATA` is
+    /// not set, in which case nothing is kept.
+    #[must_use]
+    pub fn path() -> Option<PathBuf> {
+        let appdata = std::env::var_os("APPDATA")?;
+        if appdata.is_empty() {
+            return None;
+        }
+        Some(PathBuf::from(appdata).join("cash").join(FILE_NAME))
+    }
+
+    /// A line of the file that is not `NAME=EXPANSION`.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct ParseError {
+        /// The line's number, from 1.
+        pub line: usize,
+    }
+
+    impl std::fmt::Display for ParseError {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "line {}: not NAME=EXPANSION", self.line)
+        }
+    }
+
+    /// The abbreviations `text` holds, in the file's order.
+    ///
+    /// # Errors
+    ///
+    /// The first line that is not `NAME=EXPANSION` (blank lines are skipped).
+    pub fn parse(text: &str) -> Result<Vec<Abbreviation>, ParseError> {
+        let mut entries = Vec::new();
+        for (index, line) in text.lines().enumerate() {
+            let line = line.strip_suffix('\r').unwrap_or(line);
+            if line.is_empty() {
+                continue;
+            }
+            let error = || ParseError { line: index + 1 };
+            let (name, expansion) = line.split_once('=').ok_or_else(error)?;
+            let (position, name) = match name.split_once(' ') {
+                None => (Position::Command, name),
+                Some(("anywhere", name)) => (Position::Anywhere, name),
+                Some(_) => return Err(error()),
+            };
+            if !super::is_valid_name(name) {
+                return Err(error());
+            }
+            entries.push(Abbreviation {
+                name: name.to_owned(),
+                expansion: expansion.to_owned(),
+                position,
+            });
+        }
+        Ok(entries)
+    }
+
+    /// Whether `abbreviation` can be a line of the file: a name without `=` or a space,
+    /// and no newline in either part. One that cannot is kept for the session alone.
+    #[must_use]
+    pub fn representable(abbreviation: &Abbreviation) -> bool {
+        !abbreviation.name.contains(['=', ' ', '\n', '\r'])
+            && !abbreviation.expansion.contains(['\n', '\r'])
+    }
+
+    /// The file's text for `entries`, the ones [`representable`] left out.
+    #[must_use]
+    pub fn render<'a>(entries: impl IntoIterator<Item = &'a Abbreviation>) -> String {
+        let mut text = String::new();
+        for entry in entries.into_iter().filter(|entry| representable(entry)) {
+            if entry.position == Position::Anywhere {
+                text.push_str("anywhere ");
+            }
+            text.push_str(&entry.name);
+            text.push('=');
+            text.push_str(&entry.expansion);
+            text.push('\n');
+        }
+        text
+    }
+
+    /// Why the file could not be read or written.
+    #[derive(Debug)]
+    pub enum StoreError {
+        /// `APPDATA` is not set, so there is nowhere to keep them.
+        NoPlace,
+        /// The file or its folder could not be read or written.
+        Io(PathBuf, std::io::Error),
+        /// The file does not parse.
+        Parse(PathBuf, ParseError),
+    }
+
+    impl std::fmt::Display for StoreError {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            match self {
+                Self::NoPlace => write!(f, "APPDATA is not set, so they cannot be kept"),
+                Self::Io(path, error) => write!(
+                    f,
+                    "{}: {}",
+                    cash_win32::path::render(path),
+                    crate::error::os_error_text(error)
+                ),
+                Self::Parse(path, error) => {
+                    write!(f, "{}: {error}", cash_win32::path::render(path))
+                }
+            }
+        }
+    }
+
+    /// The abbreviations the file holds; none when there is no file yet.
+    ///
+    /// # Errors
+    ///
+    /// [`StoreError`] when the file cannot be read or does not parse.
+    pub fn load() -> Result<Vec<Abbreviation>, StoreError> {
+        let path = path().ok_or(StoreError::NoPlace)?;
+        let text = match std::fs::read_to_string(&path) {
+            Ok(text) => text,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(error) => return Err(StoreError::Io(path, error)),
+        };
+        parse(&text).map_err(|error| StoreError::Parse(path, error))
+    }
+
+    /// Applies `change` to what the file holds and writes it back whole.
+    ///
+    /// So a shell that has not read the file (one running its rc file) loses nothing of
+    /// it. A file that does not parse is written over: its lines were already refused
+    /// once.
+    ///
+    /// # Errors
+    ///
+    /// [`StoreError`] when the file cannot be read or written.
+    pub fn save_change(change: impl FnOnce(&mut Abbreviations)) -> Result<(), StoreError> {
+        let path = path().ok_or(StoreError::NoPlace)?;
+        let mut kept = Abbreviations::default();
+        match load() {
+            Ok(entries) => kept.entries = entries,
+            Err(StoreError::Parse(..)) => {}
+            Err(error) => return Err(error),
+        }
+        change(&mut kept);
+        if let Some(folder) = path.parent() {
+            std::fs::create_dir_all(folder).map_err(|error| StoreError::Io(path.clone(), error))?;
+        }
+        std::fs::write(&path, render(kept.iter())).map_err(|error| StoreError::Io(path, error))
+    }
+
+    #[cfg(test)]
+    #[allow(clippy::unwrap_used, reason = "tests assert loudly on failure")]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn the_file_is_one_name_and_expansion_per_line() {
+            let text = "gco=git checkout\n\nanywhere L=| less\neq=a=b\n";
+            let entries = parse(text).unwrap();
+            assert_eq!(
+                entries,
+                vec![
+                    Abbreviation {
+                        name: "gco".into(),
+                        expansion: "git checkout".into(),
+                        position: Position::Command,
+                    },
+                    Abbreviation {
+                        name: "L".into(),
+                        expansion: "| less".into(),
+                        position: Position::Anywhere,
+                    },
+                    Abbreviation {
+                        name: "eq".into(),
+                        expansion: "a=b".into(),
+                        position: Position::Command,
+                    },
+                ]
+            );
+            assert_eq!(render(&entries), text.replace("\n\n", "\n"));
+            // A CRLF file reads the same.
+            assert_eq!(parse(&text.replace('\n', "\r\n")).unwrap(), entries);
+        }
+
+        #[test]
+        fn a_line_that_is_not_a_definition_names_its_number() {
+            assert_eq!(
+                parse("gco=git checkout\nnonsense\n"),
+                Err(ParseError { line: 2 })
+            );
+            assert_eq!(parse("elsewhere x=y\n"), Err(ParseError { line: 1 }));
+            assert_eq!(parse("=y\n"), Err(ParseError { line: 1 }));
+        }
+
+        #[test]
+        fn what_cannot_be_a_line_is_left_out() {
+            let odd = Abbreviation {
+                name: "a=b".into(),
+                expansion: "x".into(),
+                position: Position::Command,
+            };
+            let multi = Abbreviation {
+                name: "m".into(),
+                expansion: "two\nlines".into(),
+                position: Position::Command,
+            };
+            assert!(!representable(&odd));
+            assert!(!representable(&multi));
+            assert_eq!(render([&odd, &multi]), "");
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

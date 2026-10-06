@@ -297,14 +297,15 @@ fn dev_test(
         P::FileExistsAndIsNotZeroLength => {
             matches!(&kind, FileKind::File(metadata) if metadata.len() > 0)
         }
+        P::FileExistsAndIsSocket => matches!(kind, FileKind::Socket),
         P::FileExistsAndIsReadable => match kind {
             FileKind::Pipe { reads, .. } => reads,
-            FileKind::Device | FileKind::File(_) => true,
+            FileKind::Device | FileKind::File(_) | FileKind::Socket => true,
             FileKind::Other => false,
         },
         P::FileExistsAndIsWritable => match &kind {
             FileKind::Pipe { writes, .. } => *writes,
-            FileKind::Device => true,
+            FileKind::Device | FileKind::Socket => true,
             FileKind::File(metadata) => !metadata.permissions().readonly(),
             FileKind::Other => false,
         },

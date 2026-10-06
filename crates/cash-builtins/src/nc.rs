@@ -472,74 +472,9 @@ fn parse(args: &[String]) -> Result<Parsed, Refusal> {
     Ok(Parsed::Run(Box::new(options)))
 }
 
-/// The service names a port is reported under, and that stand for a port on the command
-/// line: the common ones from `/etc/services`, since Windows' own table is not read.
-const SERVICES: &[(&str, u16)] = &[
-    ("ftp-data", 20),
-    ("ftp", 21),
-    ("ssh", 22),
-    ("telnet", 23),
-    ("smtp", 25),
-    ("domain", 53),
-    ("bootps", 67),
-    ("bootpc", 68),
-    ("tftp", 69),
-    ("gopher", 70),
-    ("finger", 79),
-    ("http", 80),
-    ("kerberos", 88),
-    ("pop3", 110),
-    ("sunrpc", 111),
-    ("nntp", 119),
-    ("ntp", 123),
-    ("netbios-ns", 137),
-    ("netbios-dgm", 138),
-    ("netbios-ssn", 139),
-    ("imap", 143),
-    ("snmp", 161),
-    ("snmp-trap", 162),
-    ("ldap", 389),
-    ("https", 443),
-    ("microsoft-ds", 445),
-    ("smtps", 465),
-    ("syslog", 514),
-    ("submission", 587),
-    ("ldaps", 636),
-    ("rsync", 873),
-    ("imaps", 993),
-    ("pop3s", 995),
-    ("socks", 1080),
-    ("ms-sql-s", 1433),
-    ("nfs", 2049),
-    ("mysql", 3306),
-    ("ms-wbt-server", 3389),
-    ("svn", 3690),
-    ("sip", 5060),
-    ("postgresql", 5432),
-    ("rfb", 5900),
-    ("x11", 6000),
-    ("redis", 6379),
-    ("irc", 6667),
-    ("http-alt", 8080),
-    ("memcache", 11211),
-    ("mongodb", 27017),
-];
-
-/// The port a service name stands for.
-fn service_port(name: &str) -> Option<u16> {
-    SERVICES
-        .iter()
-        .find(|(service, _)| *service == name)
-        .map(|(_, port)| *port)
-}
-
-/// The name a port is reported under in `[tcp/NAME]`; `*` for one without.
-fn service_name(port: u16) -> &'static str {
-    SERVICES
-        .iter()
-        .find(|(_, known)| *known == port)
-        .map_or("*", |(name, _)| name)
-}
+/// The service names (`cash_core::net::SERVICES`), shared with the shell's own
+/// `/dev/tcp/HOST/SERVICE` redirections, and the two lookups on them.
+use cash_core::net::{service_name, service_port};
 
 /// netcat's `build_ports`: a service name, a range `lo-hi` (in random order with `-r`),
 /// or one number, each between 1 and 65535.
@@ -594,31 +529,12 @@ fn single_port(text: &str, numeric: bool) -> Result<u16, Refusal> {
 /// A socket error in glibc's words, which netcat's messages are read in; the kinds
 /// Windows reports under other names mapped, the rest as the shell reports them.
 fn reason(error: &std::io::Error) -> String {
-    use std::io::ErrorKind;
-    match error.kind() {
-        ErrorKind::ConnectionRefused => "Connection refused".to_owned(),
-        ErrorKind::TimedOut => "Connection timed out".to_owned(),
-        ErrorKind::ConnectionReset => "Connection reset by peer".to_owned(),
-        ErrorKind::ConnectionAborted => "Software caused connection abort".to_owned(),
-        ErrorKind::NetworkUnreachable => "Network is unreachable".to_owned(),
-        ErrorKind::HostUnreachable => "No route to host".to_owned(),
-        ErrorKind::AddrInUse => "Address already in use".to_owned(),
-        ErrorKind::AddrNotAvailable => "Cannot assign requested address".to_owned(),
-        ErrorKind::PermissionDenied => "Permission denied".to_owned(),
-        _ => cash_core::error::os_error_text(error),
-    }
+    cash_core::net::connect_failure(error)
 }
 
-/// A name lookup's failure in `gai_strerror`'s words: Windows' codes for the ones glibc
-/// scripts know.
+/// A name lookup's failure in `gai_strerror`'s words (`cash_core::net`).
 fn lookup_failure(error: &std::io::Error) -> String {
-    match error.raw_os_error() {
-        Some(11001) => "Name or service not known".to_owned(),
-        Some(11002) => "Temporary failure in name resolution".to_owned(),
-        Some(11003) => "Non-recoverable failure in name resolution".to_owned(),
-        Some(11004) => "No address associated with hostname".to_owned(),
-        _ => cash_core::error::os_error_text(error),
-    }
+    cash_core::net::lookup_failure(error)
 }
 
 /// The addresses `host` names, in the order they are tried; the message (after `nc: `)
@@ -1536,6 +1452,8 @@ impl builtins::Command for NcCommand {
 mod tests {
     use std::time::Duration;
 
+    use cash_core::net::SERVICES;
+
     use super::{
         Family, Options, Parsed, Refusal, build_ports, option_kind, parse, service_name,
         service_port, single_port, strtonum, succeeded, telnet_answers, valid_tos, with_crlf,
@@ -1779,10 +1697,10 @@ mod tests {
         assert_eq!(service_name(53), "domain");
         assert_eq!(service_name(49152), "*");
         // Every entry names one port, and no name twice.
-        let mut names: Vec<&str> = super::SERVICES.iter().map(|(name, _)| *name).collect();
+        let mut names: Vec<&str> = SERVICES.iter().map(|(name, _)| *name).collect();
         names.sort_unstable();
         names.dedup();
-        assert_eq!(names.len(), super::SERVICES.len());
+        assert_eq!(names.len(), SERVICES.len());
     }
 
     #[test]

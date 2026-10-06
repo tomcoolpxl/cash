@@ -61,6 +61,16 @@ mod tput;
 // cash: `stty`, GNU's words on the console's four modes; the rest is remembered.
 mod stty;
 mod tree;
+// cash: `getconf`, glibc's names with the values Windows has.
+mod getconf;
+// cash: `locale`, glibc's view of the environment, and the Windows locales by POSIX name.
+mod locale;
+// cash: `mkfifo`, refused with the way to a pipe in cash: a named pipe is no file here.
+mod mkfifo;
+// cash: `stdbuf`, which runs the command as it is: no preload on Windows.
+mod stdbuf;
+// cash: `suspend`, Bash's, refused in its own words: Windows has no stop signal.
+mod suspend;
 // cash: `xxd`, vim's, dump and reverse; Windows has no hex dump a script can read back.
 mod xxd;
 
