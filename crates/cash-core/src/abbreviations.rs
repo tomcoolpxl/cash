@@ -121,8 +121,8 @@ pub mod store {
     /// Where the file goes: `%APPDATA%\cash\abbreviations`, or `None` when `APPDATA` is
     /// not set, in which case nothing is kept.
     #[must_use]
-    pub fn path() -> Option<PathBuf> {
-        let appdata = std::env::var_os("APPDATA")?;
+    pub fn path(appdata: Option<&str>) -> Option<PathBuf> {
+        let appdata = appdata?;
         if appdata.is_empty() {
             return None;
         }
@@ -230,8 +230,8 @@ pub mod store {
     /// # Errors
     ///
     /// [`StoreError`] when the file cannot be read or does not parse.
-    pub fn load() -> Result<Vec<Abbreviation>, StoreError> {
-        let path = path().ok_or(StoreError::NoPlace)?;
+    pub fn load(appdata: Option<&str>) -> Result<Vec<Abbreviation>, StoreError> {
+        let path = path(appdata).ok_or(StoreError::NoPlace)?;
         let text = match std::fs::read_to_string(&path) {
             Ok(text) => text,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
@@ -249,10 +249,13 @@ pub mod store {
     /// # Errors
     ///
     /// [`StoreError`] when the file cannot be read or written.
-    pub fn save_change(change: impl FnOnce(&mut Abbreviations)) -> Result<(), StoreError> {
-        let path = path().ok_or(StoreError::NoPlace)?;
+    pub fn save_change(
+        appdata: Option<&str>,
+        change: impl FnOnce(&mut Abbreviations),
+    ) -> Result<(), StoreError> {
+        let path = path(appdata).ok_or(StoreError::NoPlace)?;
         let mut kept = Abbreviations::default();
-        match load() {
+        match load(appdata) {
             Ok(entries) => kept.entries = entries,
             Err(StoreError::Parse(..)) => {}
             Err(error) => return Err(error),

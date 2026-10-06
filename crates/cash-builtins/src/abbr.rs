@@ -215,7 +215,11 @@ fn save<SE: cash_core::ShellExtensions>(
     context: &cash_core::ExecutionContext<'_, SE>,
     change: impl FnOnce(&mut Abbreviations),
 ) -> Result<(), cash_core::Error> {
-    match store::save_change(change) {
+    let appdata = context
+        .shell
+        .env_str("APPDATA")
+        .map(|value| value.into_owned());
+    match store::save_change(appdata.as_deref(), change) {
         Ok(()) | Err(store::StoreError::NoPlace) => Ok(()),
         Err(error) => {
             writeln!(

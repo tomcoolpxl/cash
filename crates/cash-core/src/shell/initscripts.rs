@@ -98,7 +98,8 @@ impl<SE: extensions::ShellExtensions> Shell<SE> {
     fn load_kept_abbreviations(&mut self) {
         use crate::abbreviations::store;
 
-        match store::load() {
+        let appdata = self.env_str("APPDATA").map(|value| value.into_owned());
+        match store::load(appdata.as_deref()) {
             Ok(entries) => {
                 for entry in entries {
                     if self.abbreviations.get(&entry.name).is_none() {
