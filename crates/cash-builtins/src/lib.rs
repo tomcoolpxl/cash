@@ -35,6 +35,8 @@ mod screen;
 mod ss;
 mod tree;
 
+// cash: `iconv`, glibc's, on Windows' code pages; a clean Windows machine has none.
+mod iconv;
 // cash (D48, §4 #20): `hostname`, so the machine has one name inside the shell rather
 // than the DNS API's and Windows' own.
 mod hostname;

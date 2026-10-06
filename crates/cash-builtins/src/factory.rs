@@ -338,3 +338,5 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
 
     m
 }
+        "iconv".into(),
+        builtin::<iconv::IconvCommand, SE>().with_substitution_files(),

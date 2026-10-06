@@ -104,6 +104,8 @@ mod job_groups;
 mod kill_family;
 // A job a signal ended is told of by the signal, in `jobs` and in a script's notice.
 mod killed_jobs;
+// `iconv`: glibc's options on Windows' code pages, against glibc's own output.
+mod iconv_builtin;
 // D21/D22: what a kill target means, including the `kill 0` that used to signal the
 // whole console.
 mod kill_targets;

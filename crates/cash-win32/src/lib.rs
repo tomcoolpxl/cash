@@ -21,6 +21,8 @@ pub mod cmd;
 pub mod cmdline;
 pub mod conin;
 // A pseudo console and a screen to read it into, for the tests of programs on a terminal;
+// Windows' code pages, converted through, for `iconv`.
+pub mod codepage;
 // not part of cash (W32-12).
 #[cfg(any(test, feature = "pseudo-console"))]
 pub mod conpty;

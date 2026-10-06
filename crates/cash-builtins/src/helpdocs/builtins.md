@@ -131,6 +131,7 @@ an entry or page names no builtin.
 ## Coreutils written for Windows
 
 - `chmod`: Change a file's permissions, as far as Windows can express them.
+- `iconv`: Convert text between character sets, through Windows' code pages.
 - `groups`: Print the groups a user belongs to.
 - `hostid`: Print the numeric identifier of this host.
 - `hostname`: Show the machine's name.

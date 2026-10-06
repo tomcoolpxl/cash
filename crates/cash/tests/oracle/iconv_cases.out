@@ -1,0 +1,193 @@
+== UTF-8 to CP1252
+ 63 61 66 e9 20 80 0a
+== CP1252 to UTF-8
+ 63 61 66 c3 a9 20 e2 82 ac 0a
+== LATIN1 both ways
+ e9 0a
+== ISO-8859-15 euro
+ a4
+ e2 82 ac
+== CP437 and CP850
+ c3 87 c3 9f
+ c3 87 c4 b1
+== KOI8-R
+ d0 b0 d0 b1
+== SHIFT_JIS
+ e3 81 82 e3 81 84
+ 82 a0
+== GBK
+ e4 bd a0 e5 a5 bd
+ c4 e3
+== ASCII
+ 61 62 63
+ 61 62 63
+== defaults are UTF-8
+ 61 c3 a9
+ c3 a9
+ e9
+== names in any case
+ c3 a9
+ c3 a9
+== long options
+ c3 a9
+ c3 a9
+ c3 a9
+== UTF-16 out: BOM then little-endian
+ ff fe 61 00 62 00
+== UTF-16 in: BOM read and consumed
+ 61 62
+ 61 62
+== UTF-16 in without BOM is little-endian
+ 61 62
+== UTF-16LE/BE: no BOM written, a BOM read stays
+ 61 00
+ 00 61
+ ef bb bf 61
+== UTF-32
+ ff fe 00 00 61 00 00 00
+ 61 00 00 00
+ 00 00 00 61
+ 61
+ 61
+== UCS-2 and UCS-4
+ 61 00
+ 00 00 00 61
+ ef bb bf 61
+== surrogate pairs
+ 3d d8 00 de
+ f0 9f 98 80
+== UCS-2 has no pairs
+iconv: illegal input sequence at position 1
+rc=1
+ 61 00
+== UTF-8 BOM is a character
+ ff fe 61 00
+ ef bb bf 61
+iconv: illegal input sequence at position 0
+rc=1
+== UTF-16 to UTF-16 renews the BOM
+ ff fe 61 00
+== CRLF passes through
+ 61 00 0d 00 0a 00 62 00 0d 00 0a 00
+== empty input
+rc=0
+== invalid UTF-8: output so far, position, status
+iconv: illegal input sequence at position 2
+rc=1
+ 61 62
+== unconvertible: the same message
+iconv: illegal input sequence at position 2
+rc=1
+ 61 62
+== position is the character's first byte
+iconv: illegal input sequence at position 4
+rc=1
+ 61 62
+iconv: illegal input sequence at position 0
+rc=1
+== incomplete at the end
+iconv: incomplete character or shift sequence at end of buffer
+rc=1
+ 61 62
+iconv: incomplete character or shift sequence at end of buffer
+rc=1
+ 61
+iconv: incomplete character or shift sequence at end of buffer
+rc=1
+ 61 62
+== bad CP932 trail byte
+iconv: illegal input sequence at position 2
+rc=1
+ 61 62
+== -c drops, status 1
+rc=1
+ 61 62 63 64
+rc=1
+ 61 62 63 64
+rc=0
+ 61 62 20 63 64
+== -c keeps an incomplete end an error
+iconv: incomplete character or shift sequence at end of buffer
+rc=1
+ 61 62
+== -c with nothing to drop
+rc=0
+ 61 62 63
+== -s changes nothing
+rc=1
+ 61 62 63 64
+== //IGNORE
+iconv: illegal input sequence at position 7
+rc=1
+ 61 62 63 64
+== files
+ 61 62 63 c3 a9 0a
+== dash is standard input
+ 78 79 61 62 63
+== -o
+rc=0
+ 61 62 63 c3 a9 0a
+ 61 62 63
+== -o keeps the output up to an error
+iconv: illegal input sequence at position 2
+rc=1
+ 61 62
+== missing file: reported, the rest converted
+iconv: cannot open input file `nosuch': No such file or directory
+rc=1
+ 61 62 63
+== an error stops at that file
+iconv: illegal input sequence at position 2
+rc=1
+ 61 62
+== position counts from each file's start
+iconv: illegal input sequence at position 2
+rc=1
+ 61 62 63 61 62
+== --verbose names each file
+a:
+b:
+ 61 62 63 c3 a9 0a
+== -l lists names with //
+CP1252//
+LATIN1//
+SHIFT_JIS//
+UTF-16//
+rc=0
+== unsupported names
+iconv: conversion from `NOSUCH' is not supported
+Try `iconv --help' or `iconv --usage' for more information.
+rc=1
+iconv: conversion to `NOSUCH' is not supported
+Try `iconv --help' or `iconv --usage' for more information.
+rc=1
+iconv: conversions from `NOSUCH' and to `NOSUCH2' are not supported
+Try `iconv --help' or `iconv --usage' for more information.
+rc=1
+== bad options
+iconv: invalid option -- 'Z'
+Try `iconv --help' or `iconv --usage' for more information.
+rc=64
+iconv: unrecognized option '--bogus'
+Try `iconv --help' or `iconv --usage' for more information.
+rc=64
+iconv: option requires an argument -- 'f'
+Try `iconv --help' or `iconv --usage' for more information.
+rc=64
+== --usage
+Usage: iconv [-lcs?V] [-f NAME] [-t NAME] [-o FILE] [--from-code=NAME]
+            [--to-code=NAME] [--list] [--output=FILE] [--silent] [--verbose]
+            [--help] [--usage] [--version] [FILE...]
+rc=0
+== --help's first line
+Usage: iconv [OPTION...] [FILE...]
+Usage: iconv [OPTION...] [FILE...]
+== TRANSLIT (Windows' approximations differ from glibc's)
+rc=0
+ 61 62 45 55 52 63 65 64 22
+rc=0
+ 61 3f 62
+rc=0
+ 80 20 9c
+rc=1
+ 61 62 45 55 52 63 64
