@@ -77,6 +77,7 @@ pub struct ExecutionParameters {
 
     /// The priority class the programs started under these parameters are created in,
     /// which `nice` sets. `None` is Windows' default: normal, unless the shell itself is
+    /// idle or below normal, which a child inherits. A class above normal is never
     /// inherited, so `nice -n -5` has to say so when the program is created.
     pub priority_class: Option<cash_win32::priority::PriorityClass>,
 
@@ -117,10 +118,15 @@ pub struct ExecutionParameters {
 }
 
 impl ExecutionParameters {
-    /// Returns the standard input file; usable with `write!` et al.
+    /// Whether this runs in a command started with `&`, which the keyboard's Ctrl-C is
     /// not to interrupt: a builtin that waits (`flock`) leaves a pending interrupt to the
+    /// foreground, as the interpreter does between commands.
+    #[must_use]
     pub const fn is_asynchronous(&self) -> bool {
         self.asynchronous
+    }
+
+    /// Returns the standard input file; usable with `write!` et al.
     ///
     /// # Arguments
     ///

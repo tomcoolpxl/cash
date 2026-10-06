@@ -21,12 +21,12 @@ pub mod children;
 pub mod clipboard;
 pub mod cmd;
 pub mod cmdline;
-pub mod conin;
-// A pseudo console and a screen to read it into, for the tests of programs on a terminal;
-/// Waking a thread that waits for a line at the console, for `nc`.
-pub mod conwake;
 // Windows' code pages, converted through, for `iconv`.
 pub mod codepage;
+pub mod conin;
+/// Waking a thread that waits for a line at the console, for `nc`.
+pub mod conwake;
+// A pseudo console and a screen to read it into, for the tests of programs on a terminal;
 // not part of cash (W32-12).
 #[cfg(any(test, feature = "pseudo-console"))]
 pub mod conpty;
@@ -36,10 +36,10 @@ pub mod devices;
 pub mod endless;
 pub mod env;
 pub mod exit;
-pub mod fold;
-pub mod fs;
 // Byte-range locks on an open file, for `flock`.
 pub mod filelock;
+pub mod fold;
+pub mod fs;
 /// What gsudo reports of itself: its credentials cache.
 pub mod gsudo;
 mod handle;
@@ -50,20 +50,20 @@ mod imports;
 pub mod job;
 pub mod jobreg;
 pub mod locale;
+// Physical memory, the commit charge and the page files, for `free`.
+pub mod memory;
 pub mod msys;
 /// The machine's TCP/UDP sockets and their owning processes.
 pub mod net;
 pub mod path;
-// Physical memory, the commit charge and the page files, for `free`.
-pub mod memory;
 pub mod pipe;
 pub mod poll;
+// A process's priority class, and the niceness it stands for, for `nice` and `renice`.
+pub mod priority;
 pub mod process;
 pub mod resolve;
 /// Which processes hold a file open, through the Restart Manager.
 pub mod restart;
-// A process's priority class, and the niceness it stands for, for `nice` and `renice`.
-pub mod priority;
 pub mod scoop;
 pub mod session;
 pub mod shellopen;
@@ -74,6 +74,8 @@ pub mod stop;
 /// What the machine is, asked directly — the numbers `coolfetch` prints.
 pub mod sysinfo;
 pub mod terminal;
+// A terminal's settings as `stty` sees them, over the console's four modes.
+pub mod termios;
 pub mod text;
 pub mod userpath;
 #[cfg(any(test, feature = "pseudo-console"))]
@@ -81,5 +83,3 @@ pub mod vtscreen;
 pub mod wide;
 
 pub use job::{JobConfig, JobObject};
-// A terminal's settings as `stty` sees them, over the console's four modes.
-pub mod termios;

@@ -101,9 +101,9 @@ an entry or page names no builtin.
 - `sudoedit`: Edit files you may not write: your editor on copies, written back elevated.
 - `where`: Find files by pattern on `PATH` or in folders, as Windows' `where.exe` does.
 - `winpath`: Convert a path between Windows and Unix spellings.
+- `xdg-open`: Open a file, folder or URL with its default program (`start`, under the name scripts try first).
 
 ## Processes and network
-- `xdg-open`: Open a file, folder or URL with its default program (`start`, under the name scripts try first).
 
 - `flock`: Run a command, or hold a descriptor, under a lock on a file, so scripts take turns.
 - `free`: Show the machine's memory: used, free, cache and the page files, as procps' `free` does.
@@ -112,46 +112,47 @@ an entry or page names no builtin.
 - `lsof`: List the files and sockets processes have open.
 - `nc`: Connect to, listen on or scan TCP and UDP ports, as OpenBSD's netcat does.
 - `nice`: Run a command at a lower (or higher) priority, or print the current niceness.
+- `nohup`: Run a command immune to hangups, its output to `nohup.out`.
 - `pgrep`: Find processes by name and other attributes.
 - `pidof`: Print the process ids of programs by name.
 - `ping`: Send ICMP echo requests to a host, with Linux's options.
 - `pkill`: Signal processes by name and other attributes.
 - `ps`: Show a snapshot of the running processes.
 - `pstree`: Show processes as a tree of parents and children.
+- `renice`: Change the priority of running processes, by pid or by user.
 - `ss`: Show sockets, as iproute2's `ss` does.
 - `top`: Show the processes using the machine, updated live.
-- `renice`: Change the priority of running processes, by pid or by user.
 
 ## Text and file tools
 
 - `awk`: Scan and process text with the AWK language.
 - `bc`: Calculate with arbitrary precision, in POSIX bc's language.
+- `column`: Lay a list out in columns, or align a table on a separator.
 - `dos2unix`: Convert CRLF line endings to LF.
 - `find`: Search a folder tree for files that match an expression.
 - `getopt`: Parse command options for a script, util-linux style.
+- `hexdump`: Dump bytes in hex, octal, decimal or text, or in a format of your own.
+- `iconv`: Convert text between character sets, through Windows' code pages.
 - `less`: Page through text.
 - `more`: Page through text, with `more`'s defaults.
 - `rev`: Reverse the characters of each line.
 - `sed`: Edit a stream of text with a script: substitute, delete, insert.
 - `tree`: Show a folder hierarchy as a tree.
 - `unix2dos`: Convert LF line endings to CRLF.
+- `uuidgen`: Print a new UUID: random, time-based, or a hash of a name.
 - `xargs`: Build and run command lines from standard input.
-- `column`: Lay a list out in columns, or align a table on a separator.
+- `xxd`: Dump bytes in hex, or turn a hex dump back into bytes.
 
 ## Coreutils written for Windows
 
-- `hexdump`: Dump bytes in hex, octal, decimal or text, or in a format of your own.
 - `chmod`: Change a file's permissions, as far as Windows can express them.
-- `iconv`: Convert text between character sets, through Windows' code pages.
 - `groups`: Print the groups a user belongs to.
 - `hostid`: Print the numeric identifier of this host.
-- `uuidgen`: Print a new UUID: random, time-based, or a hash of a name.
 - `hostname`: Show the machine's name.
 - `id`: Print the user's and groups' identities.
 - `install`: Copy files and set their attributes.
 - `logname`: Print the user's login name.
 - `ls`: List folder contents, with colours, icons and a tree.
-- `xxd`: Dump bytes in hex, or turn a hex dump back into bytes.
 - `pinky`: Show brief information about users.
 - `stat`: Show a file's status: size, times, links, attributes.
 - `tty`: Print the name of the terminal on standard input.

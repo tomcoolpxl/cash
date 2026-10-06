@@ -25,12 +25,20 @@ mod dirhistory;
 
 // cash (D48): `ps`, which uutils does not carry and whose PATH stand-in reports MSYS
 // pids that `kill` cannot use.
+// cash: `column`, util-linux's, checked against 2.42.3 case by case.
+mod column;
 mod croot;
 mod fileuse;
 // cash: `flock`, util-linux's, on LockFileEx; the lock is one byte far past the content.
 mod flock;
 // cash: `free`, procps-ng's, on Windows' memory counters; Windows has no `free`.
 mod free;
+mod fuser;
+mod getopt;
+// cash: `hexdump`, util-linux's, with its format language; a clean Windows machine has none.
+mod hexdump;
+// cash: `iconv`, glibc's, on Windows' code pages; a clean Windows machine has none.
+mod iconv;
 mod killfam;
 mod lsof;
 // cash: `nc`, OpenBSD netcat's, on Windows sockets; a clean Windows machine has none.
@@ -45,12 +53,14 @@ mod pstree;
 mod rev;
 mod screen;
 mod ss;
-// cash: `hexdump`, util-linux's, with its format language; a clean Windows machine has none.
-mod hexdump;
+// cash: `tput`, ncurses' for xterm-256color without terminfo: the terminal is VT.
+mod tput;
+// cash: `stty`, GNU's words on the console's four modes; the rest is remembered.
+mod stty;
 mod tree;
+// cash: `xxd`, vim's, dump and reverse; Windows has no hex dump a script can read back.
+mod xxd;
 
-// cash: `iconv`, glibc's, on Windows' code pages; a clean Windows machine has none.
-mod iconv;
 // cash (D48, §4 #20): `hostname`, so the machine has one name inside the shell rather
 // than the DNS API's and Windows' own.
 mod hostname;
@@ -67,22 +77,16 @@ mod coolfetch;
 // cash (D48): `top`, which Windows has no equivalent of at all — procps was never
 // ported, and the Cygwin build reports pids `kill` cannot use.
 mod top;
+// cash: `watch`, procps-ng's, which Windows and Git for Windows both lack.
+mod watch;
 
-// cash: `xxd`, vim's, dump and reverse; Windows has no hex dump a script can read back.
-mod xxd;
 // cash (D48): one pager behind both `less` and `more`. `less` is not coreutils, and the
-// cash: `tput`, ncurses' for xterm-256color without terminfo: the terminal is VT.
-mod tput;
-// cash: `stty`, GNU's words on the console's four modes; the rest is remembered.
-mod stty;
 // bundled `more` corrupted a pipe.
 mod pager;
 
 // cash (D8): `which` must answer about cash's resolution, not about PATH.
 mod which;
 
-// cash: `watch`, procps-ng's, which Windows and Git for Windows both lack.
-mod watch;
 // cash (D66): `where`, Windows' where.exe with dashes for options and cash's paths.
 mod where_files;
 

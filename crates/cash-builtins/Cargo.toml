@@ -166,9 +166,9 @@ crossterm = { workspace = true }
 lscolors = "0.21.0"
 nu-ansi-term = { workspace = true }
 unicode-width = { workspace = true }
-
 # `uuidgen`: every version util-linux's makes (v1, v3, v4, v5, v6, v7).
 uuid = { workspace = true, features = ["v1", "v3", "v4", "v5", "v6", "v7"] }
+
 [dev-dependencies]
 anyhow = { workspace = true }
 pretty_assertions = { workspace = true, features = ["unstable"] }

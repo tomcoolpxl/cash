@@ -120,7 +120,15 @@ success-output = "final"
 [[profile.default.overrides]]
 filter = 'package(cash-sed)'
 slow-timeout = { period = "15s", terminate-after = 3 }
+
 # Runs the tput oracle script, some 450 `tput | od | sed` pipelines of builtins, one after
+# another: 20 s alone on an idle machine (2026-10-06).
+[[profile.default.overrides]]
 filter = 'binary(it) and test(=tput_builtin::tput_matches_ncurses)'
+slow-timeout = { period = "30s", terminate-after = 3 }
+
 # Run the xxd and hexdump oracle scripts, some 290 and 350 cases of builtins in `| od | sed`
+# pipelines, one after another: 13 s and 4 s alone on an idle machine (2026-10-06).
+[[profile.default.overrides]]
 filter = 'binary(it) and test(/^(xxd_builtin::xxd_matches_vims|hexdump_builtin::hexdump_matches_util_linux)$/)'
+slow-timeout = { period = "30s", terminate-after = 3 }

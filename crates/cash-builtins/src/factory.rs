@@ -257,8 +257,10 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
         "start".into(),
         builtin::<win::StartCommand, SE>().with_substitution_files(),
     );
+    m.insert(
         "xdg-open".into(),
         builtin::<xdg_open::XdgOpenCommand, SE>().with_substitution_files(),
+    );
     m.insert("pbcopy".into(), builtin::<pbcopy::PbcopyCommand, SE>());
     m.insert("pbpaste".into(), builtin::<pbcopy::PbpasteCommand, SE>());
     m.insert(
@@ -276,48 +278,52 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
     m.insert("su".into(), builtin::<win::SuCommand, SE>());
     m.insert("sudoedit".into(), builtin::<win::SudoeditCommand, SE>());
     m.insert("ps".into(), builtin::<ps::PsCommand, SE>());
-    m.insert("pgrep".into(), builtin::<pgrep::PgrepCommand, SE>());
-    m.insert("pkill".into(), builtin::<killfam::PkillCommand, SE>());
     m.insert("free".into(), builtin::<free::FreeCommand, SE>());
+    m.insert(
         "nice".into(),
         builtin::<nice::NiceCommand, SE>().with_substitution_files(),
+    );
     m.insert("renice".into(), builtin::<nice::ReniceCommand, SE>());
+    m.insert("pgrep".into(), builtin::<pgrep::PgrepCommand, SE>());
+    m.insert("pkill".into(), builtin::<killfam::PkillCommand, SE>());
     m.insert("pidof".into(), builtin::<killfam::PidofCommand, SE>());
     m.insert("killall".into(), builtin::<killfam::KillallCommand, SE>());
     m.insert("getopt".into(), builtin::<getopt::GetoptCommand, SE>());
-    m.insert("rev".into(), builtin::<rev::RevCommand, SE>());
-    m.insert("clear".into(), builtin::<screen::ClearCommand, SE>());
-    m.insert("reset".into(), builtin::<screen::ResetCommand, SE>());
-    m.insert("fuser".into(), builtin::<fuser::FuserCommand, SE>());
+    m.insert(
         "flock".into(),
         builtin::<flock::FlockCommand, SE>().with_substitution_files(),
+    );
+    m.insert("rev".into(), builtin::<rev::RevCommand, SE>());
+    m.insert("uuidgen".into(), builtin::<uuidgen::UuidgenCommand, SE>());
+    m.insert("xxd".into(), builtin::<xxd::XxdCommand, SE>());
+    m.insert("hexdump".into(), builtin::<hexdump::HexdumpCommand, SE>());
+    m.insert("column".into(), builtin::<column::ColumnCommand, SE>());
+    m.insert("clear".into(), builtin::<screen::ClearCommand, SE>());
+    m.insert("reset".into(), builtin::<screen::ResetCommand, SE>());
+    m.insert("tput".into(), builtin::<tput::TputCommand, SE>());
+    m.insert("stty".into(), builtin::<stty::SttyCommand, SE>());
+    m.insert("fuser".into(), builtin::<fuser::FuserCommand, SE>());
     m.insert("lsof".into(), builtin::<lsof::LsofCommand, SE>());
     m.insert("ss".into(), builtin::<ss::SsCommand, SE>());
+    m.insert("nc".into(), builtin::<nc::NcCommand, SE>());
     m.insert("pstree".into(), builtin::<pstree::PsTreeCommand, SE>());
     m.insert("tree".into(), builtin::<tree::TreeCommand, SE>());
     m.insert("top".into(), builtin::<top::TopCommand, SE>());
+    m.insert("watch".into(), builtin::<watch::WatchCommand, SE>());
     m.insert(
         "find".into(),
         builtin::<find::FindCommand, SE>().with_substitution_files(),
     );
-    m.insert("uuidgen".into(), builtin::<uuidgen::UuidgenCommand, SE>());
     m.insert(
         "xargs".into(),
         builtin::<xargs::XargsCommand, SE>().with_substitution_files(),
     );
-    m.insert("nc".into(), builtin::<nc::NcCommand, SE>());
-    m.insert("xxd".into(), builtin::<xxd::XxdCommand, SE>());
-    m.insert("hexdump".into(), builtin::<hexdump::HexdumpCommand, SE>());
-    m.insert("column".into(), builtin::<column::ColumnCommand, SE>());
     m.insert(
         "coolfetch".into(),
         builtin::<coolfetch::CoolfetchCommand, SE>(),
     );
     m.insert(
         "hostname".into(),
-    m.insert("tput".into(), builtin::<tput::TputCommand, SE>());
-    m.insert("watch".into(), builtin::<watch::WatchCommand, SE>());
-    m.insert("stty".into(), builtin::<stty::SttyCommand, SE>());
         builtin::<hostname::HostnameCommand, SE>(),
     );
     m.insert("less".into(), builtin::<pager::LessCommand, SE>());
@@ -351,8 +357,10 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
         "unix2dos".into(),
         builtin::<dos2unix::Unix2DosCommand, SE>().with_substitution_files(),
     );
+    m.insert(
+        "iconv".into(),
+        builtin::<iconv::IconvCommand, SE>().with_substitution_files(),
+    );
 
     m
 }
-        "iconv".into(),
-        builtin::<iconv::IconvCommand, SE>().with_substitution_files(),

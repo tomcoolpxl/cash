@@ -41,6 +41,7 @@ mod builtin_parameters;
 mod bundled_paths;
 mod cd_errors;
 // `pbcopy`, `pbpaste`, `uuidgen` and `xdg-open`: the clipboard round trip, util-linux's
+// golden output, and `start` under the name scripts try first.
 mod clipboard_and_small_tools;
 // The binary, a run of it isolated from the user's settings, and a scratch folder.
 mod common;
@@ -49,11 +50,11 @@ mod completion_scripts;
 // D40: completion is the one part of the shell with no command-line surface, so these
 // drive a `Shell` directly.
 mod completion_windows;
+// `column`, util-linux's, against its golden output and on its own.
+mod column_builtin;
 // coolfetch system banner.
 mod coolfetch;
 // EXE-04: `coproc` ends when its input does, and is a job with a pid.
-// `column`, util-linux's, against its golden output and on its own.
-mod column_builtin;
 mod coprocesses;
 // Inputs that used to take the whole shell down: deep recursion, and panics.
 mod crash_safety;
@@ -85,15 +86,16 @@ mod extglob;
 // find and xargs parity.
 mod find_xargs;
 mod finished_command_orphans;
-mod folder_history;
 // `flock`, util-linux's, against its golden output; the lock across processes and
+// descriptors.
 mod flock_builtin;
+mod folder_history;
+// `free`, `nice` and `renice`: procps' layout on Windows' counters, and the priority classes.
+mod free_nice;
 mod fuser_lsof;
 // Git for Windows' git-prompt.sh (`__git_ps1`), sourced from the Git install.
 mod git_prompt;
 // BIN-05: Git's prompt scripts against Git Bash's frozen output.
-// `free`, `nice` and `renice`: procps' layout on Windows' counters, and the priority classes.
-mod free_nice;
 mod git_prompt_goldens;
 mod gui_apps_outlive;
 mod held_descriptors;
@@ -102,6 +104,10 @@ mod held_descriptors;
 mod help_catalogue;
 // Here-documents as Bash reads and writes them.
 mod here_documents;
+// `hexdump`, util-linux's, against its golden output: the format language in full.
+mod hexdump_builtin;
+// `iconv`: glibc's options on Windows' code pages, against glibc's own output.
+mod iconv_builtin;
 // D22/§4 #20: $UID agreeing with `id`, and `jobs -l`.
 mod identity_and_jobs;
 // D69: `cash --init-rc`, the starter ~/.bashrc Scoop writes for a user with none.
@@ -110,12 +116,8 @@ mod init_rc;
 mod injection;
 mod job_groups;
 mod kill_family;
-// `hexdump`, util-linux's, against its golden output: the format language in full.
-mod hexdump_builtin;
 // A job a signal ended is told of by the signal, in `jobs` and in a script's notice.
 mod killed_jobs;
-// `iconv`: glibc's options on Windows' code pages, against glibc's own output.
-mod iconv_builtin;
 // D21/D22: what a kill target means, including the `kill 0` that used to signal the
 // whole console.
 mod kill_targets;
@@ -127,10 +129,10 @@ mod long_folders;
 mod ls_builtin;
 mod msys_args;
 mod namerefs;
-// D48: one pager behind `less` and `more`.
-mod pager;
 // `nc`, OpenBSD netcat's: connecting, scanning, listening and the data between the two.
 mod nc_builtin;
+// D48: one pager behind `less` and `more`.
+mod pager;
 mod ping;
 // D11/D26: pipelines that actually overlap, and `read -t`.
 mod pipeline_concurrency;
@@ -162,6 +164,8 @@ mod small_tools;
 mod special_variables;
 mod ss;
 mod stat_builtin;
+// `stty`: GNU's words on the console's modes, and `stty -echo` hiding what `read` reads.
+mod stty_builtin;
 // $BASH_SUBSHELL and the `set -x` prefix count what Bash counts.
 mod subshell_levels;
 // `sudo`, `su` and `sudoedit`, as far as they go without a UAC prompt or a password.
@@ -171,17 +175,15 @@ mod terminal_profile;
 mod text_tools;
 // top builtin batch mode and monitoring.
 mod top_builtin;
+// `tput` against ncurses 6.6's frozen output for xterm-256color, and the console's size.
+mod tput_builtin;
 mod tree_builtin;
+// `watch`: procps's options and exits, and the live screen on a pseudo console.
+mod watch_builtin;
 mod where_command;
 mod winpaths;
+// `xxd`, vim's, against its golden output: the dump, `-i`, `-p`, `-a`, colour and `-r`.
+mod xxd_builtin;
 
 // The upstream bc suite (see bc.rs) reaches its test library as `crate::plib`.
 use bc::plib;
-// `stty`: GNU's words on the console's modes, and `stty -echo` hiding what `read` reads.
-mod stty_builtin;
-// `tput` against ncurses 6.6's frozen output for xterm-256color, and the console's size.
-mod tput_builtin;
-// `xxd`, vim's, against its golden output: the dump, `-i`, `-p`, `-a`, colour and `-r`.
-mod xxd_builtin;
-// `watch`: procps's options and exits, and the live screen on a pseudo console.
-mod watch_builtin;
