@@ -148,17 +148,17 @@ fn a_short_window_scrolls_on_down_and_end() {
         .settle(Duration::from_millis(200), Duration::from_secs(5))
         .unwrap();
     assert!(
-        !session.output().contains("Ctrl-R"),
+        !session.output().contains("press again for a menu"),
         "fifteen rows show the whole text:\n{}",
         session.output()
     );
     session.send(DOWN).unwrap();
     session
-        .expect("Ctrl-R", WAIT)
+        .expect("press again for a menu", WAIT)
         .expect("Down brought the next line into view");
     session.send(END).unwrap();
     session
-        .expect("elevates", WAIT)
+        .expect("run a command elevated", WAIT)
         .expect("End brought the last line into view");
     session.send(ESC).unwrap();
     pause();

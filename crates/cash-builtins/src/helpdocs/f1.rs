@@ -2,11 +2,11 @@
 //! screen as `less` draws, and closed by F1, Esc or `q`.
 //!
 //! The text is `f1.md`, beside the help topics, so that it reviews as text and the test
-//! that keeps developer notes out of help covers it. A `## NAME` line starts a section,
-//! with any prose after two or more spaces; a line with columns separated by two or more
-//! spaces is an example, or a key, and what it does, in turn; a line without them is
-//! prose, whose code spans are commands. `{tools}` stands for the number of commands the
-//! running cash answers itself.
+//! that keeps developer notes out of help covers it. A `## NAME` line starts a section; a
+//! line with two columns separated by two or more spaces is an example, or a key, and what
+//! it does; a line without them is prose, whose code spans are commands. One item to a
+//! line, and the second columns lined up across the sections. `{tools}` stands for the
+//! number of commands the running cash answers itself.
 //!
 //! The title line stays; the rest scrolls when the window is shorter than the text.
 
@@ -67,12 +67,8 @@ pub fn render(version: &str, tools: usize, width: usize, palette: &Palette) -> V
         // title does.
         let line = fit(&line, width - 2).trim_end();
         lines.push(if let Some(heading) = line.strip_prefix("## ") {
-            heading
-                .split_whitespace()
-                .next()
-                .unwrap_or_default()
-                .clone_into(&mut section);
-            heading_line(heading, palette)
+            heading.trim().clone_into(&mut section);
+            format!(" {}", palette.accent.paint(section.as_str()))
         } else if line.is_empty() {
             String::new()
         } else {
@@ -112,17 +108,6 @@ fn rule(width: usize, palette: &Palette) -> String {
     format!(" {}", palette.note.paint("─".repeat(width - 2)))
 }
 
-/// A section's name in the accent, and its prose, if any, as a note.
-fn heading_line(heading: &str, palette: &Palette) -> String {
-    let name_end = heading.find("  ").unwrap_or(heading.len());
-    let (name, rest) = heading.split_at(name_end);
-    format!(
-        " {}{}",
-        palette.accent.paint(name),
-        palette.note.paint(rest)
-    )
-}
-
 /// A line of `section`: its columns in turn as the example or key and the note, with the
 /// spacing as written; a line without columns as prose.
 fn body_line(line: &str, section: &str, palette: &Palette) -> String {
@@ -148,8 +133,7 @@ fn body_line(line: &str, section: &str, palette: &Palette) -> String {
     out
 }
 
-/// `text` at each run of two or more spaces: each piece with the run after it. A `·`
-/// between two pieces joins them, as in `cd /c/Users/me  ·  cd ~/src`.
+/// `text` at each run of two or more spaces: each piece with the run after it.
 fn columns(text: &str) -> Vec<(String, String)> {
     let mut pieces: Vec<(String, String)> = Vec::new();
     let mut piece = String::new();
@@ -168,19 +152,7 @@ fn columns(text: &str) -> Vec<(String, String)> {
         piece.push(c);
     }
     pieces.push((piece, gap));
-
-    let mut joined: Vec<(String, String)> = Vec::new();
-    for (piece, gap) in pieces {
-        match joined.last_mut() {
-            Some(last) if piece == "·" || last.0.ends_with(" ·") => {
-                last.0.push_str(&last.1);
-                last.0.push_str(&piece);
-                last.1 = gap;
-            }
-            _ => joined.push((piece, gap)),
-        }
-    }
-    joined
+    pieces
 }
 
 /// `text` in `base`, its code spans in `code`.
@@ -390,16 +362,44 @@ mod tests {
         }
         let text = lines.join("\n");
         for wanted in [
-            "\n PATHS   cash prints paths as C:/Users/me",
-            "\n   cd C:/Users/me/src             forward slashes, no quotes needed",
-            "\n   cd /c/Users/me  ·  cd ~/src    cash itself understands /c/ and ~",
-            "\n\n KEYS\n   Alt-E        pick a file or folder",
-            "   Ctrl-X Ctrl-E  edit in $EDITOR",
+            "\n PATHS\n   cash prints paths as C:/Users/me, and every program understands them.",
+            "\n   cd C:/Users/me/src             forward slashes need no quotes",
+            "\n   cd /c/Users/me                 the /c/ form works too\n",
+            "\n\n KEYS\n   Alt-E                          pick a file or folder",
+            "\n   Ctrl-X Ctrl-E                  edit the line in $EDITOR\n",
             "\n\n MORE\n   Bash scripts run as they are; ls, awk, sed, find and 200 tools are built in.",
-            "\n   help NAME · help topics · cash doctor · start FILE · sudo CMD elevates",
+            "\n   help NAME                      help for one command\n",
+            "\n   sudo CMD                       run a command elevated",
         ] {
             assert!(text.contains(wanted), "no {wanted:?} in:\n{text}");
         }
+    }
+
+    /// One item to a line, and every note in one column: no line carries two examples,
+    /// two keys or a list of commands.
+    #[test]
+    fn each_line_holds_one_item_and_the_notes_line_up() {
+        let lines = plain();
+        let mut columns = Vec::new();
+        for line in &lines[2..] {
+            let pieces: Vec<&str> = line
+                .trim()
+                .split("  ")
+                .map(str::trim)
+                .filter(|piece| !piece.is_empty())
+                .collect();
+            assert!(pieces.len() <= 2, "more than one item: {line}");
+            assert!(!line.contains('·'), "{line}");
+            if let [_, note] = pieces[..] {
+                let at = line.rfind(note).unwrap();
+                columns.push(visible_width(line.get(..at).unwrap()));
+            }
+        }
+        assert!(columns.len() > 15, "{lines:#?}");
+        assert!(
+            columns.iter().all(|&at| at == columns[0]),
+            "{columns:?}\n{lines:#?}"
+        );
     }
 
     #[test]
@@ -414,24 +414,24 @@ mod tests {
         )));
         assert!(lines[0].ends_with(&paint(palette.note, CLOSES)));
         for wanted in [
-            paint(palette.accent, "PATHS"),
+            format!(" {}", paint(palette.accent, "PATHS")),
             paint(
                 palette.note,
-                "   cash prints paths as C:/Users/me; every program understands them",
+                "cash prints paths as C:/Users/me, and every program understands them.",
             ),
             paint(palette.example, "cd C:/Users/me/src"),
-            paint(palette.note, "forward slashes, no quotes needed"),
-            paint(palette.example, "cd /c/Users/me  ·  cd ~/src"),
+            paint(palette.note, "forward slashes need no quotes"),
+            paint(palette.example, "cd /c/Users/me"),
             paint(palette.example, r#"tool.exe "$(winpath -w "$d")""#),
             paint(palette.accent, "KEYS"),
             paint(palette.key, "Alt-E"),
             paint(palette.key, "Ctrl-X Ctrl-E"),
-            paint(palette.note, "edit in $EDITOR"),
+            paint(palette.note, "edit the line in $EDITOR"),
             paint(palette.accent, "MORE"),
             paint(palette.note, "Bash scripts run as they are; "),
             paint(palette.example, "ls"),
             paint(palette.example, "help NAME"),
-            paint(palette.note, " elevates"),
+            paint(palette.note, "run a command elevated"),
         ] {
             assert!(text.contains(&wanted), "no {wanted:?} in:\n{text}");
         }
@@ -457,10 +457,11 @@ mod tests {
         for line in &lines {
             assert!(visible_width(line) < 30, "{line}");
         }
+        assert!(lines.iter().any(|line| line == " PATHS"));
         assert!(
             lines
                 .iter()
-                .any(|line| line.starts_with(" PATHS   cash prints"))
+                .any(|line| line.starts_with("   cash prints paths"))
         );
         // At forty columns the hint still fits.
         let lines = render("1.2.3", 208, 40, &Palette::none());
@@ -469,7 +470,7 @@ mod tests {
     }
 
     #[test]
-    fn columns_split_at_two_spaces_and_a_dot_joins_its_neighbours() {
+    fn columns_split_at_two_spaces() {
         assert_eq!(
             columns("cd a  what it does"),
             [
@@ -478,10 +479,10 @@ mod tests {
             ]
         );
         assert_eq!(
-            columns("cd a  ·  cd b    note"),
+            columns("Ctrl-X Ctrl-E    edit"),
             [
-                ("cd a  ·  cd b".to_owned(), "    ".to_owned()),
-                ("note".to_owned(), String::new())
+                ("Ctrl-X Ctrl-E".to_owned(), "    ".to_owned()),
+                ("edit".to_owned(), String::new())
             ]
         );
         assert_eq!(
