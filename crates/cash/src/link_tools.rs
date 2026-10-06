@@ -69,11 +69,51 @@ pub fn command(args: &[String]) -> Option<u8> {
             }
         }
     }
+    let dir = dir.map(Path::new);
     Some(if linking {
         run(dir, add_to_path)
     } else {
         unlink(dir)
     })
+}
+
+/// Whether `dir` holds a manifest: links cash made, to refresh on an upgrade.
+pub fn has_manifest(dir: &Path) -> bool {
+    dir.join(MANIFEST).is_file()
+}
+
+/// For the installer: the links in `dir` to this `cash.exe`, made or refreshed, and the
+/// folder first on the user PATH. How many links there are, and what PATH did.
+///
+/// # Errors
+///
+/// A link that could not be made, or the PATH that could not be written, named.
+pub fn link_for_installer(dir: &Path) -> Result<(usize, Added), String> {
+    let (dir, outcome) = link_all(Some(dir))?;
+    let total = outcome.linked.len() + outcome.refreshed.len() + outcome.current.len();
+    let added = cash_win32::userpath::add_first(&dir)
+        .map_err(|e| format!("cannot change the user PATH: {e}"))?;
+    Ok((total, added))
+}
+
+/// For the installer's uninstall: the links in `dir`, its PATH entry and the folder.
+/// The links removed; an error names what is still there.
+///
+/// # Errors
+///
+/// A link that could not be removed or renamed aside, or the PATH that could not be
+/// written.
+pub fn unlink_for_installer(dir: &Path) -> Result<usize, String> {
+    let done = unlink_all(dir);
+    if let Some(name) = done.failed.iter().next() {
+        return Err(format!(
+            "{} could not be removed",
+            render(&dir.join(format!("{name}.exe")))
+        ));
+    }
+    done.off_path
+        .map_err(|e| format!("cannot change the user PATH: {e}"))?;
+    Ok(done.removed)
 }
 
 /// The tools to link: every command cash answers for itself that is not one of Bash's own
@@ -180,7 +220,7 @@ struct Outcome {
 }
 
 /// `cash --link-tools [--add-to-path] [DIR]`. Returns the process exit status.
-fn run(dir: Option<&str>, add_to_path: bool) -> u8 {
+fn run(dir: Option<&Path>, add_to_path: bool) -> u8 {
     let (dir, outcome) = match link_all(dir) {
         Ok(done) => done,
         Err(message) => {
@@ -213,14 +253,14 @@ fn own_exe() -> Result<PathBuf, String> {
 }
 
 /// The links folder: DIR, or `bin` next to `cash.exe`.
-fn links_folder(dir: Option<&str>, exe: &Path) -> Result<PathBuf, String> {
+fn links_folder(dir: Option<&Path>, exe: &Path) -> Result<PathBuf, String> {
     Ok(match dir {
-        Some(dir) => PathBuf::from(dir),
+        Some(dir) => dir.to_path_buf(),
         None => exe.parent().ok_or("cash.exe has no folder")?.join("bin"),
     })
 }
 
-fn link_all(dir: Option<&str>) -> Result<(PathBuf, Outcome), String> {
+fn link_all(dir: Option<&Path>) -> Result<(PathBuf, Outcome), String> {
     let exe = own_exe()?;
     let dir = links_folder(dir, &exe)?;
     std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", render(&dir)))?;
@@ -461,18 +501,25 @@ fn report(dir: &Path, outcome: &Outcome, added: Option<Added>) {
     }
 }
 
-/// `cash --unlink-tools [DIR]`: the links cash made there, the folder's entry on the user
-/// PATH, and the folder when nothing else is in it. Returns the process exit status.
-fn unlink(dir: Option<&str>) -> u8 {
-    let dir = match own_exe().and_then(|exe| links_folder(dir, &exe)) {
-        Ok(dir) => dir,
-        Err(message) => {
-            eprintln!("cash --unlink-tools: {message}");
-            return 1;
-        }
-    };
+/// What unlinking a folder did.
+struct Unlinked {
+    /// The folder, as a real path.
+    dir: PathBuf,
+    removed: usize,
+    /// Links Windows would not delete, renamed aside for a later run to delete.
+    set_aside: Vec<String>,
+    /// Links that could not be removed or renamed, still listed for the next run.
+    failed: BTreeSet<String>,
+    /// Whether the folder was on the user PATH, or why it could not be taken off.
+    off_path: std::io::Result<bool>,
+    folder_gone: bool,
+}
+
+/// The links cash made in `dir`, the folder's entry on the user PATH, and the folder when
+/// nothing else is in it.
+fn unlink_all(dir: &Path) -> Unlinked {
     // A folder already gone can still be on PATH.
-    let dir = std::fs::canonicalize(&dir).unwrap_or(dir);
+    let dir = std::fs::canonicalize(dir).unwrap_or_else(|_| dir.to_path_buf());
     sweep_set_aside(&dir);
 
     let mut removed = 0;
@@ -505,19 +552,40 @@ fn unlink(dir: Option<&str>) -> u8 {
 
     let off_path = cash_win32::userpath::remove(&dir);
     let folder_gone = std::fs::remove_dir(&dir).is_ok() || !dir.exists();
+    Unlinked {
+        dir,
+        removed,
+        set_aside,
+        failed,
+        off_path,
+        folder_gone,
+    }
+}
+
+/// `cash --unlink-tools [DIR]`: the links cash made there, the folder's entry on the user
+/// PATH, and the folder when nothing else is in it. Returns the process exit status.
+fn unlink(dir: Option<&Path>) -> u8 {
+    let dir = match own_exe().and_then(|exe| links_folder(dir, &exe)) {
+        Ok(dir) => dir,
+        Err(message) => {
+            eprintln!("cash --unlink-tools: {message}");
+            return 1;
+        }
+    };
+    let done = unlink_all(&dir);
 
     let mut out = std::io::stdout().lock();
-    let _ = writeln!(out, "cash --unlink-tools: {}", render(&dir));
-    let _ = writeln!(out, "  {removed} links removed");
-    if !set_aside.is_empty() {
+    let _ = writeln!(out, "cash --unlink-tools: {}", render(&done.dir));
+    let _ = writeln!(out, "  {} links removed", done.removed);
+    if !done.set_aside.is_empty() {
         let _ = writeln!(
             out,
             "  still in use, renamed aside: {}; run this again once the programs using them \
              exit",
-            set_aside.join(" ")
+            done.set_aside.join(" ")
         );
     }
-    match &off_path {
+    match &done.off_path {
         Ok(true) => {
             let _ = writeln!(out, "  taken off your user PATH");
         }
@@ -529,14 +597,14 @@ fn unlink(dir: Option<&str>) -> u8 {
     let _ = writeln!(
         out,
         "  {}",
-        if folder_gone {
+        if done.folder_gone {
             "the folder is removed"
         } else {
             "the folder is kept: other files are in it"
         }
     );
 
-    u8::from(!failed.is_empty() || off_path.is_err())
+    u8::from(!done.failed.is_empty() || done.off_path.is_err())
 }
 
 #[cfg(test)]

@@ -49,6 +49,8 @@ pub mod icmp;
 mod imports;
 pub mod job;
 pub mod jobreg;
+/// Directory junctions, for the installer's `current` folder.
+pub mod junction;
 pub mod locale;
 // Physical memory, the commit charge and the page files, for `free`.
 pub mod memory;

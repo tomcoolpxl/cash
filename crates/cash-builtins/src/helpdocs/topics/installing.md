@@ -1,9 +1,51 @@
 ---
-title: Installing and upgrading: Scoop, the Terminal profile, tool links, fonts
-summary: What the Scoop install sets up, the optional steps, and how to upgrade while a cash window is open.
+title: Installing and upgrading: the installer, Scoop, the Terminal profile, tool links, fonts
+summary: What the installer and the Scoop install set up, the optional steps, and how to upgrade while a cash window is open.
 see: config keys ls which
 ---
-## What the install does
+## The installer
+
+`cash-vX.Y.Z-setup.exe`, on the releases page (https://github.com/tomcoolpxl/cash/releases),
+installs cash for your account alone: no administrator, no UAC prompt. It puts the files
+in `%LOCALAPPDATA%\Programs\cash\X.Y.Z\`, points the `current` folder beside them at that
+version, puts `current` on your PATH so `cash` is a command everywhere, adds the Windows
+Terminal profile and writes the starter `~/.bashrc` the first time. Two options:
+
+- **Make the tools programs on PATH**, on by default: `ls.exe`, `sed.exe`, `awk.exe` and
+  the rest in `%LOCALAPPDATA%\Programs\cash\bin`, first on your user PATH, so editors,
+  `make`, `npm`, PowerShell and scripts outside cash get cash's tools ahead of Git's.
+- **Also install Scoop**, off by default: runs Scoop's own installer last, for the rest of
+  your command-line tools (`scoop install jq`).
+
+For scripts and winget, the setup runs silently:
+
+```
+cash-v1.5.0-setup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /TASKS=links,scoop
+```
+
+`/DIR=` names another folder; `/TASKS=` lists the options to turn on (`links`, `scoop`),
+none when empty. Uninstall from Settings > Apps > Installed apps: the tool links, the
+Terminal profile, the PATH entries and the files go; your `~/.bashrc`, history and
+config stay.
+
+The setup is not signed. Downloaded with a browser, Windows shows SmartScreen's
+"unknown publisher" prompt once; "More info", then "Run anyway". A download by winget or
+Scoop gets no such prompt.
+
+### Upgrading an installed cash
+
+```
+cash --update --check    # says whether a newer release is out
+cash --update            # fetches it, checks its SHA-256 and installs it
+```
+
+The new version goes into a folder of its own and `current` moves to it: the windows
+you have open keep running the version they started with, new windows get the new one.
+Version folders no window runs any more are removed. A cash installed by Scoop says
+`scoop update cash` instead; a cash unpacked from the zip by hand says where to download
+the new one.
+
+## What the Scoop install does
 
 `scoop install cash` puts `cash.exe` in place and runs three things, each quietly:
 

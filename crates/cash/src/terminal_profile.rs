@@ -145,9 +145,25 @@ fn folder(local: &Path) -> PathBuf {
         .join(APP)
 }
 
-fn write_profile() -> Result<(), String> {
-    let exe = std::env::current_exe().map_err(|e| format!("cannot find cash.exe: {e}"))?;
-    let exe = cash_win32::path::to_backslash(&exe);
+/// What writing the profile did, for the caller to report.
+pub struct Written {
+    /// The fragment file.
+    pub fragment: PathBuf,
+    /// The Nerd Font the profile asks for, when this machine has one.
+    pub font: Option<String>,
+    /// The Terminal settings files whose + menu got the profile.
+    pub menus: Vec<PathBuf>,
+}
+
+/// Write the profile, running `exe`, and add it to Terminal's + menu where that is laid
+/// out profile by profile. The installer gives the `current\cash.exe` that follows its
+/// upgrades, not the version folder's exe this runs as.
+///
+/// # Errors
+///
+/// `LOCALAPPDATA` unset, or a file that could not be written, named.
+pub fn write_for(exe: &Path) -> Result<Written, String> {
+    let exe = cash_win32::path::to_backslash(exe);
     let local = local_app_data()?;
     let dir = folder(&local);
     std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", render(&dir)))?;
@@ -158,6 +174,24 @@ fn write_profile() -> Result<(), String> {
     let fragment = dir.join("cash.json");
     std::fs::write(&fragment, fragment_json(&exe, font.as_deref()))
         .map_err(|e| format!("{}: {e}", render(&fragment)))?;
+    let menus = edit_menus(&local, |text| {
+        crate::terminal_menu::with_profile(text, PROFILE_GUID)
+    });
+    Ok(Written {
+        fragment,
+        font,
+        menus,
+    })
+}
+
+fn write_profile() -> Result<(), String> {
+    let exe = std::env::current_exe().map_err(|e| format!("cannot find cash.exe: {e}"))?;
+    let Written {
+        fragment,
+        font,
+        menus,
+    } = write_for(&exe)?;
+    let exe = cash_win32::path::to_backslash(&exe);
 
     let mut out = std::io::stdout().lock();
     let _ = writeln!(out, "cash --terminal-profile: {}", render(&fragment));
@@ -174,9 +208,6 @@ fn write_profile() -> Result<(), String> {
              (scoop install nerd-fonts/CascadiaMono-NF) and run this again"
         );
     }
-    let menus = edit_menus(&local, |text| {
-        crate::terminal_menu::with_profile(text, PROFILE_GUID)
-    });
     for settings in &menus {
         let _ = writeln!(
             out,
@@ -190,12 +221,13 @@ fn write_profile() -> Result<(), String> {
     Ok(())
 }
 
-fn remove_profile() -> Result<(), String> {
+/// Remove the profile and its + menu entries: whether there was a profile, and the
+/// settings files changed. The menu entry goes whether or not the folder does: a folder
+/// that would not go returned before the menus were looked at, and left the entry
+/// (BIN-11).
+fn remove() -> Result<(Result<bool, String>, Vec<PathBuf>), String> {
     let local = local_app_data()?;
     let dir = folder(&local);
-    let mut out = std::io::stdout().lock();
-    // The menu entry goes whether or not the folder does: a folder that would not go
-    // returned before the menus were looked at, and left the entry (BIN-11).
     let removed = if dir.exists() {
         std::fs::remove_dir_all(&dir)
             .map(|()| true)
@@ -203,12 +235,31 @@ fn remove_profile() -> Result<(), String> {
     } else {
         Ok(false)
     };
+    let menus = edit_menus(&local, |text| {
+        crate::terminal_menu::without_profile(text, PROFILE_GUID)
+    });
+    Ok((removed, menus))
+}
+
+/// Remove the profile without a word: whether there was one. For the installer's
+/// uninstall step.
+///
+/// # Errors
+///
+/// `LOCALAPPDATA` unset, or the fragment folder would not go.
+pub fn remove_quietly() -> Result<bool, String> {
+    remove()?.0
+}
+
+fn remove_profile() -> Result<(), String> {
+    let (removed, menus) = remove()?;
+    let mut out = std::io::stdout().lock();
     match removed {
         Ok(true) => {
             let _ = writeln!(
                 out,
                 "cash --remove-terminal-profile: {} removed",
-                render(&dir)
+                render(&folder(&local_app_data()?))
             );
         }
         Ok(false) => {
@@ -216,9 +267,7 @@ fn remove_profile() -> Result<(), String> {
         }
         Err(_) => {}
     }
-    for settings in edit_menus(&local, |text| {
-        crate::terminal_menu::without_profile(text, PROFILE_GUID)
-    }) {
+    for settings in menus {
         let _ = writeln!(out, "  taken out of the + menu in {}", render(&settings));
     }
     removed.map(|_| ())

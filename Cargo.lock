@@ -478,6 +478,7 @@ dependencies = [
  "glob",
  "indent",
  "regex",
+ "sha2",
  "tempfile",
  "tokio",
  "uuid",

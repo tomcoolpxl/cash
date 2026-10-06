@@ -96,8 +96,49 @@ pub fn run() -> u8 {
     check_carapace(&mut findings, &entries, &pathext, &cwd);
     check_sudo(&mut findings, &entries, &pathext, &cwd);
     check_links(&mut findings, &entries);
+    check_install(&mut findings);
 
     report(&findings)
+}
+
+/// The installer's layout, when this cash is in one: `<root>\current` and the version it
+/// names, which should be this one's. An open window keeps running the version it
+/// started with after an upgrade, so its `cash doctor` names the newer one.
+fn check_install(findings: &mut Vec<Finding>) {
+    let Ok(exe) = std::env::current_exe().and_then(std::fs::canonicalize) else {
+        return;
+    };
+    let Some(layout) = crate::installer::layout(&exe, cash_win32::junction::is_junction) else {
+        return;
+    };
+    let shown = cash_win32::path::to_backslash(&layout.current);
+    let named = cash_win32::junction::target(&layout.current)
+        .and_then(|target| Some(target.file_name()?.to_string_lossy().into_owned()))
+        .unwrap_or_default();
+    let own = layout
+        .version_dir
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    if cash_win32::junction::points_at(&layout.current, &layout.version_dir) {
+        findings.push(Finding {
+            level: Level::Ok,
+            subject: "install".into(),
+            detail: format!("{shown} -> {named}"),
+            fix: None,
+        });
+    } else {
+        findings.push(Finding {
+            level: Level::Note,
+            subject: "install".into(),
+            detail: format!("{shown} -> {named}, while this cash is {own}"),
+            fix: Some(
+                "a window open since before an upgrade keeps its version; new windows get the \
+                 one current names"
+                    .into(),
+            ),
+        });
+    }
 }
 
 fn check_session(findings: &mut Vec<Finding>) {
@@ -755,14 +796,17 @@ fn shim_target(path: &Path) -> Option<PathBuf> {
     cash_win32::scoop::shim_target(path)
 }
 
+/// How to install `command`: the table of `help tools`, which the prompt's hint for a
+/// missing command reads too, so the two cannot disagree; a name it lacks falls back to
+/// what the bundled tools' sources are.
 fn suggest_install(command: &str) -> String {
-    match command {
+    cash_builtins::helpdocs::install_hint(command).unwrap_or_else(|| match command {
         "awk" => "scoop install gawk".into(),
         "sed" => "scoop install sed".into(),
         // Everything else in EXPECTED is coreutils, findutils or grep, all of which
         // Microsoft bundles together.
         _ => "winget install Microsoft.Coreutils".into(),
-    }
+    })
 }
 
 fn report(findings: &[Finding]) -> u8 {

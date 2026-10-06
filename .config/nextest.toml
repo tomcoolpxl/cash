@@ -127,6 +127,13 @@ slow-timeout = { period = "15s", terminate-after = 3 }
 filter = 'binary(it) and test(=tput_builtin::tput_matches_ncurses)'
 slow-timeout = { period = "30s", terminate-after = 3 }
 
+# Copies the test's cash.exe three times, zips it with tar, hashes the zip twice, unpacks
+# it and runs the new copy's finish step with its 146 hard links: 8 s alone on an idle
+# machine (2026-10-06).
+[[profile.default.overrides]]
+filter = 'binary(it) and test(=installer::update_fetches_verifies_unpacks_and_finishes_a_release)'
+slow-timeout = { period = "30s", terminate-after = 3 }
+
 # Run the xxd and hexdump oracle scripts, some 290 and 350 cases of builtins in `| od | sed`
 # pipelines, one after another: 13 s and 4 s alone on an idle machine (2026-10-06).
 [[profile.default.overrides]]

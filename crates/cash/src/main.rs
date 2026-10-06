@@ -10,6 +10,7 @@
 
 mod doctor;
 mod init_rc;
+mod installer;
 mod link_tools;
 mod terminal_menu;
 mod terminal_profile;
@@ -55,13 +56,15 @@ fn main() {
         return;
     }
 
-    // `cash --link-tools` and `--unlink-tools` (D65), `--terminal-profile` (D38) and
-    // `--init-rc` (D69), like `cash doctor`, act on the installation rather than running
+    // `cash --link-tools` and `--unlink-tools` (D65), `--terminal-profile` (D38),
+    // `--init-rc` (D69) and the installer's `--install-finish`, `--install-remove` and
+    // `--update` (D75), like `cash doctor`, act on the installation rather than running
     // anything in a shell.
     let args: Vec<String> = std::env::args().collect();
     if let Some(status) = link_tools::command(&args)
         .or_else(|| terminal_profile::command(&args))
         .or_else(|| init_rc::command(&args))
+        .or_else(|| installer::command(&args))
     {
         std::process::exit(i32::from(status));
     }

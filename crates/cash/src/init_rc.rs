@@ -81,6 +81,23 @@ pub fn command(args: &[String]) -> Option<u8> {
     })
 }
 
+/// `cash --init-rc --once` without a word, for the installer: the starter's path when
+/// one was written.
+///
+/// # Errors
+///
+/// No home folder, or the starter could not be written.
+pub fn run_once() -> Result<Option<PathBuf>, String> {
+    let home = home().ok_or_else(|| "neither HOME nor USERPROFILE is set".to_owned())?;
+    let marker = std::env::var_os("LOCALAPPDATA")
+        .filter(|dir| !dir.is_empty())
+        .map(|dir| PathBuf::from(dir).join("cash").join("init-rc"));
+    Ok(match init(&home, marker.as_deref(), true)? {
+        Outcome::Written(path) => Some(path),
+        Outcome::Exists(_) | Outcome::DoneBefore => None,
+    })
+}
+
 /// What `--init-rc` found.
 #[derive(Debug, PartialEq, Eq)]
 enum Outcome {
