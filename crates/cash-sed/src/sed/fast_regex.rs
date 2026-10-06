@@ -51,7 +51,7 @@ fn byte_regex_pattern(pattern: &[u8]) -> String {
     reason = "a constant pattern, which the tests compile"
 )]
 // Lookarounds too, which the translation of GNU's word boundaries in UTF-8 mode makes
-// (`compiler::regex_to_engine`); nothing else makes `(?=`, `(?!`, `(?<=` or `(?<!`.
+// (`compiler::translate_posix`); nothing else makes `(?=`, `(?!`, `(?<=` or `(?<!`.
 static NEEDS_FANCY_RE: LazyLock<ByteRegex> =
     LazyLock::new(|| ByteRegex::new(r"\\[1-9]|\(\?<?[=!]").expect("the pattern is a valid regex"));
 
@@ -363,7 +363,7 @@ pub fn ensure_dotall(pattern: &str) -> String {
 /// the engine's classes, word boundaries and `I` flag take only ASCII, as GNU sed's C
 /// locale does. In UTF-8 mode the translation of such a regex keeps `.` and `[^...]`
 /// from matching them, as GNU sed matches such a byte with nothing but itself
-/// (`compiler::regex_to_engine`).
+/// (`compiler::translate_posix`).
 pub const RAW_BYTE_BASE: u32 = 0xF700;
 
 /// The character that stands for `byte` (`RAW_BYTE_BASE`), or the byte's own if ASCII.

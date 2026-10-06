@@ -211,15 +211,16 @@ fn help_tools_opens_and_lists_jq_with_both_names() {
     assert!(out.stdout.contains("tools (topic) - "), "{}", out.stdout);
 }
 
-/// `cash doctor` names the same package for `grep` as the hint does; `diff` is cash's
-/// own, so the table has no row for it.
+/// `grep` and `diff` are cash's own, so the table has no row for either, and `cash
+/// doctor` has nothing to name for them; `jq` is the hint's.
 #[test]
 fn doctor_and_the_hint_agree() {
-    assert_eq!(
-        helpdocs::install_hint("grep").as_deref(),
-        Some("winget install Microsoft.Coreutils, or scoop install grep")
-    );
+    assert_eq!(helpdocs::install_hint("grep"), None);
     assert_eq!(helpdocs::install_hint("diff"), None);
+    assert_eq!(
+        helpdocs::install_hint("jq").as_deref(),
+        Some("winget install jqlang.jq, or scoop install jq")
+    );
 }
 
 /// The table holds every id that was checked, and nothing else.

@@ -1,6 +1,6 @@
 ---
 names: diff cmp
-see: comm crlf
+see: comm grep crlf
 ---
 ## Description
 

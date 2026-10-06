@@ -136,6 +136,22 @@ cash-picker = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true, features = ["derive", "wrap_help"] }
 fancy-regex = { workspace = true }
+# `grep`: ripgrep's library crates for the matcher and the line-oriented searcher; the
+# printing is GNU grep's, done here. A pattern the regex crate cannot take (a
+# backreference) runs through fancy-regex behind the same matcher trait.
+grep-matcher = { workspace = true }
+grep-regex = { workspace = true }
+grep-searcher = { workspace = true }
+# `grep`'s patterns are sed's: the bundled sed's reading of GNU's basic and extended
+# syntaxes, its error wording and its longest-alternative ordering.
+cash-sed = { workspace = true }
+# `grep -o` and `--color`: where an alternative can match nothing (`x*\|b`), the regex
+# crate takes the empty match and GNU grep the longest; a second regex with "all" match
+# semantics, anchored at the match's start, gives the end GNU would. Already in the tree
+# through `regex`.
+regex-automata = { workspace = true }
+# `grep --include`, `--exclude`, `--exclude-dir`: GNU's file name globs.
+glob = { workspace = true }
 itertools = { workspace = true }
 strum = { workspace = true }
 thiserror = { workspace = true }

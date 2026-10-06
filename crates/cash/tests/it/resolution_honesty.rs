@@ -517,18 +517,22 @@ fn doctor_confirms_the_shells_resolve_to_cash() {
 }
 
 #[test]
-fn doctor_still_names_what_is_genuinely_missing() {
-    // The fix must not turn the diagnostic into a rubber stamp.
+fn doctor_misses_nothing_on_a_bare_path_now_that_grep_and_diff_are_its_own() {
+    // `grep`, `diff` and `cmp` were the last tools doctor expected from PATH; with them
+    // built in, a machine with no userland at all is a complete one, and doctor must
+    // neither warn about them nor send the user to install them.
     let out = run(Command::new(CASH).arg("doctor").env("PATH", BARE_PATH));
-    // `grep` is the one left: `diff` and `cmp` are cash's own now.
+    for tool in ["grep", "diff", "cmp"] {
+        assert!(
+            !out.stdout.contains(&format!("WARN  {tool}")),
+            "doctor reported {tool} as missing although cash carries it:\n{}",
+            out.stdout
+        );
+    }
     assert!(
-        out.stdout.contains("WARN  grep"),
-        "doctor did not report grep as missing:\n{}",
+        out.stdout.contains("bundled userland"),
+        "doctor did not count the bundled userland:\n{}",
         out.stdout
-    );
-    assert_ne!(
-        out.code, 0,
-        "doctor reported success on a machine with no userland"
     );
 }
 

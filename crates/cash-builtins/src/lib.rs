@@ -35,6 +35,9 @@ mod flock;
 mod free;
 mod fuser;
 mod getopt;
+// cash: `grep`, `egrep` and `fgrep`, GNU grep 3.12's interface on ripgrep's engine; the
+// most common failure of a script on a bare Windows machine.
+mod grep;
 // cash: `hexdump`, util-linux's, with its format language; a clean Windows machine has none.
 mod hexdump;
 // cash: `iconv`, glibc's, on Windows' code pages; a clean Windows machine has none.

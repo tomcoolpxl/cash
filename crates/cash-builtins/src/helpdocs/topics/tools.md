@@ -96,5 +96,4 @@ manager has no package for it.
 | gpg | GnuPG.GnuPG | gnupg | GnuPG |
 | just | Casey.Just | just | a command runner |
 | pwsh | Microsoft.PowerShell | pwsh | PowerShell 7 |
-| grep | Microsoft.Coreutils | grep | GNU grep; Microsoft's Coreutils for Windows include one |
 | patch | - | patch | GNU patch |

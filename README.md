@@ -401,15 +401,11 @@ without external dependencies). They keep Windows files intact: a CRLF line is m
 without its CR, so `$` works, and is written back as CRLF. A program that names `\r`
 (`sed 's/\r$//'`) sees the real line, and `CASH_EOL=lf` (or `sed -b`) gives Linux behaviour
 everywhere. `dos2unix` and `unix2dos` convert files between the two.
-**It does not carry `grep` or `diff`** — they have good Windows builds and do not have
-to agree with the shell:
-
-```bash
-winget install Microsoft.Coreutils   # coreutils + grep
-```
-
-Git for Windows supplies all of them too, and most people running bash scripts on Windows
-already have it.
+**`grep`, `diff` and `cmp` are built in too** (since 1.7.0): `grep` with GNU grep's
+options, messages and exit codes on ripgrep's engine, its patterns read by the same
+translator as the bundled `sed`, so the two agree; `diff` and `cmp` from uutils
+diffutils, checked byte for byte against GNU's. A Git for Windows or Microsoft
+Coreutils copy on `PATH` stays reachable by its path, and `type -a grep` lists it.
 
 Run `cash doctor` to see what this machine has. It reports what **cash** would run, not
 what is on `PATH` — a builtin is never reported as missing, and a DOS tool in System32 is

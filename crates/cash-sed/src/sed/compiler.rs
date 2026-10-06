@@ -590,6 +590,10 @@ fn parse_command_ending(lines: &ScriptLineProvider, line: &mut ScriptCharProvide
 /// Translate a regular expression as GNU sed's regex library reads it (`gnu_regex`) into
 /// the RE engine's syntax.
 ///
+/// Public because cash's `grep` reads its patterns through this same translation, so
+/// the two tools take one dialect with the same quirks; the expression must have been
+/// checked with [`gnu_regex::syntax_error`] first, as `compile_regex` does.
+///
 /// In a basic expression (BRE):
 /// - `\(`, `\)`, `\?`, `\+`, `\|`, `\{` and `\}` become `(`, `)`, `?`, `+`, `|`, `{` and
 ///   `}`, and the ERE metacharacters `+ ? { } | ( )` are escaped.
@@ -606,13 +610,13 @@ fn parse_command_ending(lines: &ScriptLineProvider, line: &mut ScriptCharProvide
 ///   where GNU sed takes each for the character after the backslash. Any other escaped
 ///   character is that character: `\A`, `\z`, `\d` and `\p` were the engine's own
 ///   anchors and classes, or an error.
-/// - A bracket expression is translated by [`bracket_to_engine`].
+/// - A bracket expression is translated by `bracket_to_engine`.
 /// - In UTF-8 mode GNU's word boundaries are lookarounds over its word characters
 ///   (`word_boundary`), and an expression with them or with back-references, which the
 ///   engine matches as text, keeps `.` and `[^...]` from the characters that stand for
 ///   bytes that are not UTF-8 (`fast_regex::RAW_BYTE_BASE`), as GNU sed matches such a
 ///   byte with nothing but itself.
-fn regex_to_engine(pattern: &[u8], syntax: gnu_regex::Syntax) -> Vec<u8> {
+pub fn translate_posix(pattern: &[u8], syntax: gnu_regex::Syntax) -> Vec<u8> {
     let gnu_regex::Syntax {
         extended, posix, ..
     } = syntax;
@@ -771,7 +775,7 @@ fn matched_as_text(pattern: &[u8], syntax: gnu_regex::Syntax) -> bool {
 }
 
 /// Push the engine's form of the escape `\c` that is no BRE operator, and return whether
-/// it is an anchor. See [`regex_to_engine`].
+/// it is an anchor. See [`translate_posix`].
 fn escape_to_engine(
     c: u8,
     syntax: gnu_regex::Syntax,
@@ -1087,7 +1091,7 @@ fn compile_regex(
     }
 
     // Translate into the engine's syntax.
-    let pattern = regex_to_engine(pattern, syntax);
+    let pattern = translate_posix(pattern, syntax);
 
     // Add any required modifiers.
     let mut modifiers = Vec::new();
@@ -3519,13 +3523,13 @@ mod tests {
         }
     }
 
-    // regex_to_engine
+    // translate_posix
     fn bre_to_ere_string(pattern: &str) -> String {
         let syntax = gnu_regex::Syntax {
             utf8: true,
             ..gnu_regex::Syntax::default()
         };
-        String::from_utf8(regex_to_engine(pattern.as_bytes(), syntax)).unwrap()
+        String::from_utf8(translate_posix(pattern.as_bytes(), syntax)).unwrap()
     }
 
     #[test]

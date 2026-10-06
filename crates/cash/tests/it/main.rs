@@ -101,6 +101,8 @@ mod fuser_lsof;
 mod git_prompt;
 // BIN-05: Git's prompt scripts against Git Bash's frozen output.
 mod git_prompt_goldens;
+// `grep`, `egrep` and `fgrep`: GNU grep 3.12's golden output, and the CRLF rule.
+mod grep_builtin;
 mod gui_apps_outlive;
 mod held_descriptors;
 // `help` and `cash help`: the catalogue covers every builtin, and its pages, topics and

@@ -75,5 +75,4 @@ openssl	FireDaemon.OpenSSL	openssl
 gpg	GnuPG.GnuPG	gnupg
 just	Casey.Just	just
 pwsh	Microsoft.PowerShell	pwsh
-grep	Microsoft.Coreutils	grep
 patch	-	patch

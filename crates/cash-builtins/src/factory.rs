@@ -318,6 +318,13 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
         "xargs".into(),
         builtin::<xargs::XargsCommand, SE>().with_substitution_files(),
     );
+    // `grep PATTERN <(cmd)` is common, so the three names take substitution files.
+    for name in ["grep", "egrep", "fgrep"] {
+        m.insert(
+            name.into(),
+            builtin::<grep::GrepCommand, SE>().with_substitution_files(),
+        );
+    }
     m.insert(
         "coolfetch".into(),
         builtin::<coolfetch::CoolfetchCommand, SE>(),

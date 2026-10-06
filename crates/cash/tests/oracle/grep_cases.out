@@ -1,0 +1,1747 @@
+== plain
+foo
+foo bar
+rc=0
+== no match
+rc=1
+== stdin
+bar
+rc=0
+== -c
+2
+0
+rc=1
+== -v
+bar
+baz
+-- -vc
+2
+== -n
+1:foo
+4:foo bar
+-- -nv
+2:bar
+3:baz
+== -i
+3
+ÉCOLE
+école
+École
+Σ
+σ
+ς
+K
+k
+K
+-- --no-ignore-case
+foo
+-- -i class
+FOO
+foo
+rc=1
+-- -i backref
+aA
+-- -i -F
+FOO
+foo
+ÉCOLE
+== -w
+1:foo foobar
+5:foo-bar
+6:-foo-
+-- -ow
+foo
+foo
+-- -w empty
+2:
+rc=0
+-- -w nonword
+rc=1
+-
+-- -w inside
+foo
+-- -w -x
+foo
+-- -w unicode
+foo é
+-- -w alternation
+abc
+rc=1
+abc d
+-- -w empty match
+0
+1
+rc=1
+fooo
+foo
+== -x
+1:foo
+3:foo
+-- -xo
+foo
+-- -x empty
+1:
+-- -x alternation
+foo
+bar
+foo
+bar
+ab
+== -o
+foo
+foo
+-- -o multiple patterns
+foo
+bar
+foo
+bar
+-- -o longest
+ab
+ab
+ab
+3.14
+xyz
+ab
+aa
+a
+abc
+-- -o empty matches
+b
+rc=0
+rc=0
+1:b
+2:b
+bcbc
+c
+-- -o anchors
+a
+c
+a
+b
+c
+a
+b
+c
+-- -ov
+rc=0
+1
+-- -o -i
+FOO
+foo
+== -b
+3:foo
+1:foo
+5:foo
+2:3:foo
+2:7:foo
+3:foo
+1-0-ab
+2:3:foo
+3-7-cd
+== -H -h
+p:foo
+foo
+foo bar
+foo
+t:foo
+t:foo bar
+p:foo
+foo
+foo bar
+foo
+t:foo
+t:foo bar
+p:foo
+p:1:foo
+p:1:0:foo
+p:1
+t:2
+p:1
+2
+1
+== -l -L
+t
+p
+bin
+d/x
+rc=0
+rc=1
+rc=0
+t
+rc=1
+p
+rc=0
+p
+rc=0
+p
+rc=0
+t
+p
+t
+-- -l with -o -n -b
+t
+t
+t
+== -q -s
+rc=0
+rc=1
+grep: nosuch: No such file or directory
+rc=2
+grep: nosuch: No such file or directory
+rc=0
+rc=0
+rc=2
+grep: Unmatched ( or \(
+rc=2
+rc=0
+rc=0
+-- -s
+t:foo
+t:foo bar
+rc=2
+rc=2
+grep: Unmatched ( or \(
+rc=2
+grep: nosuch: No such file or directory
+rc=2
+grep: d: Is a directory
+rc=2
+grep: d: Is a directory
+0
+rc=2
+grep: d: Is a directory
+d:0
+p:1
+rc=2
+grep: d: Is a directory
+d
+rc=2
+grep: nosuch: No such file or directory
+p:1
+rc=2
+== -m
+foo
+rc=1
+foo
+foo bar
+1
+1
+foo
+bar
+1:foo
+2-foo
+1
+foo
+foo
+x
+y
+rc=1
+foo
+foo bar
+foo
+foo
+== context
+foo
+4
+--
+foo
+8
+--
+foo
+-- -B1
+2
+foo
+--
+6
+foo
+--
+10
+foo
+-- -C1
+2
+foo
+4
+--
+6
+foo
+8
+--
+10
+foo
+-- -2
+1
+2
+foo
+4
+5
+6
+foo
+8
+9
+10
+foo
+-- -nC1
+2-2
+3:foo
+4-4
+--
+6-6
+7:foo
+8-8
+--
+10-10
+11:foo
+-- -nbC1
+2-2-2
+3:4:foo
+4-8-4
+--
+6-12-6
+7:14:foo
+8-18-8
+--
+10-22-10
+11:25:foo
+-- -HC1
+ctx-2
+ctx:foo
+ctx-4
+--
+ctx-6
+ctx:foo
+ctx-8
+--
+ctx-10
+ctx:foo
+-- separator
+foo
+4
+XX
+foo
+8
+XX
+foo
+foo
+4
+foo
+8
+foo
+foo
+4
+
+foo
+8
+
+foo
+foo
+4
+XX
+-- -A0
+foo
+--
+foo
+--
+foo
+-- -C0
+foo
+--
+foo
+--
+foo
+-- -c -o -v with context
+3
+foo
+--
+foo
+--
+foo
+1
+2
+foo
+4
+5
+6
+foo
+8
+9
+10
+foo
+-- overlap
+foo
+x
+foo
+y
+--
+foo
+-- explicit wins
+1
+2
+foo
+--
+5
+6
+foo
+--
+9
+10
+foo
+1
+2
+foo
+--
+5
+6
+foo
+--
+9
+10
+foo
+2
+foo
+4
+5
+6
+foo
+8
+9
+10
+foo
+foo
+--
+foo
+--
+foo
+foo
+--
+foo
+--
+foo
+-- -12
+foo
+1
+2
+foo
+4
+5
+6
+foo
+8
+9
+10
+foo
+-- edges
+foo
+2:foo
+3-b
+--
+5:foo
+1:foo
+2:foo
+3:foo
+1:foo
+2-a
+3-b
+4:foo
+1:foo
+2-a
+--
+4-c
+5:foo
+2-b
+3:foo
+4:c
+5:d
+-- across files
+c1:foo
+c1-x
+--
+c2:foo
+--
+c1:foo
+--
+c2-y
+c2:foo
+--
+c2-y
+c2:foo
+--
+c1:foo
+c1-x
+--
+c2-y
+c2:foo
+--
+c1:1
+c2:1
+--
+c1:1:foo
+c1-2-x
+--
+c2-1-y
+c2:2:foo
+--
+c1:1:foo
+c1-2-x
+-- -A invalid
+grep: x: invalid context length argument
+rc=2
+grep: -1: invalid context length argument
+rc=2
+grep: foo: invalid context length argument
+rc=2
+grep: 1k: invalid context length argument
+rc=2
+foo
+bar
+baz
+foo bar
+rc=0
+== -e -f
+foo
+bar
+foo bar
+foo
+bar
+foo bar
+rc=1
+0
+foo
+4
+foo
+foo bar
+foo
+foo bar
+foo
+foo bar
+foo
+bar
+foo bar
+foo
+bar
+a
+b
+foo
+bar
+foo bar
+f*o
+foo
+rc=0
+1
+a
+b
+grep: nosuch: No such file or directory
+rc=2
+grep: option requires an argument -- 'e'
+Usage: grep [OPTION]... PATTERNS [FILE]...
+Try 'grep --help' for more information.
+rc=2
+grep: option requires an argument -- 'e'
+Usage: grep [OPTION]... PATTERNS [FILE]...
+Try 'grep --help' for more information.
+rc=2
+== -F
+a.b
+a[b
+a\b
+a^b
+$a
+.
+6
+rc=1
+fo o
+a b
+aa
+ t a b \t h e r e \n
+rc=1
+== BRE
+abab
+ab
+abb
+abb
+a
+ab
+ab
+abb
+a
+b
+(a)
+a{1}
+a|b
+a?
+a+
+*a
+1
+*
+ab
+a^b
+a$b
+1
+a
+b
+a.b
+a\b
+grep: warning: stray \ before /
+a/b
+grep: warning: stray \ before X
+aXb
+rc=0
+aa
+aaa
+a
+aXb
+ab
+ab
+ab
+ab
+a}
+grep: warning: stray \ before {
+0
+foo
+foo
+== backreferences
+abcabc
+abba
+aa
+aa
+ab
+ab
+abab
+aa
+abab
+1
+1
+== ERE
+abab
+a{1,2}
+a{
+a{1
+a{1,
+a{x}
+a{1x}
+aaa
+aa
+a
+a
+a
+a}
+(
+a
+a
+ab
+a
+aa
+aa
+ab
+ab
+rc=1
+0
+1
+0
+1
+1
+)
+grep: warning: * at start of expression
+bar
+grep: warning: + at start of expression
+bar
+grep: warning: ? at start of expression
+bar
+grep: warning: {...} at start of expression
+foo
+bar
+grep: warning: * at start of expression
+2
+foo
+bar
+x
+== classes
+bar
+foo
+bar
+ob
+a_1
+b
+2
+ 
+-
+ \n \t \n
+a
+b
+éa
+a
+bar
+a
+.
+B
+3
+]
+b
+a
+-
+\
+\
+.
+a
+a
+a
+^
+a
+é
+rc=1
+w
+3
+3
+aé
+b
+aé1
+ \t \n \n
+ \t \n
+ab
+1
+ab 1
+b
+9f
+ \n
+== dot and multibyte
+é
+ab
+aéb
+é
+b
+0:a
+1:é
+== bad patterns
+pat=\(
+grep: Unmatched ( or \(
+rc=2
+pat=a\{1
+grep: Unmatched \{
+rc=2
+pat=[a
+grep: Unmatched [, [^, [:, [., or [=
+rc=2
+pat=\1
+grep: Invalid back reference
+rc=2
+pat=a\{2,1\}
+grep: Invalid content of \{\}
+rc=2
+pat=\)
+grep: Unmatched ) or \)
+rc=2
+pat=[[:foo:]]
+grep: Invalid character class name
+rc=2
+pat=[b-a]
+grep: Invalid range end
+rc=2
+pat=a\{99999\}
+grep: Regular expression too big
+rc=2
+pat=\(a\)\2
+grep: Invalid back reference
+rc=2
+pat=a\{1,2
+grep: Unmatched \{
+rc=2
+pat=a\{\}
+grep: Invalid content of \{\}
+rc=2
+pat=[
+grep: Invalid regular expression
+rc=2
+pat=[^
+grep: Invalid regular expression
+rc=2
+pat=a\
+grep: Trailing backslash
+rc=2
+pat=[[:space:]-a]
+grep: Invalid range end
+rc=2
+pat=[[.hyphen.]]
+grep: Invalid collation character
+rc=2
+pat=a\{ 1\}
+grep: Invalid content of \{\}
+rc=2
+pat=-E (
+grep: Unmatched ( or \(
+rc=2
+pat=-E [a
+grep: Unmatched [, [^, [:, [., or [=
+rc=2
+pat=-E (a)\2
+grep: Invalid back reference
+rc=2
+pat=-E a{2,1}
+grep: Invalid content of \{\}
+rc=2
+pat=-E \
+grep: Trailing backslash
+rc=2
+pat=-E a{}
+grep: Invalid content of \{\}
+rc=2
+pat=-E a{1,2,3}
+grep: Invalid content of \{\}
+rc=2
+pat=-E a{32768}
+grep: Regular expression too big
+rc=2
+== warnings
+grep: warning: stray \ before /
+1
+grep: warning: stray \ before -
+1
+grep: warning: stray \ before white space
+1
+grep: warning: stray \ before 0
+1
+grep: warning: stray \ before {
+0
+0
+1
+1
+== usage
+Usage: grep [OPTION]... PATTERNS [FILE]...
+Try 'grep --help' for more information.
+rc=2
+Usage: grep [OPTION]... PATTERNS [FILE]...
+Try 'grep --help' for more information.
+rc=2
+foo
+foo bar
+rc=0
+grep: unrecognized option '--foo'
+Usage: grep [OPTION]... PATTERNS [FILE]...
+Try 'grep --help' for more information.
+rc=2
+grep: option '--co' is ambiguous; possibilities: '--context' '--color' '--colour' '--count'
+Usage: grep [OPTION]... PATTERNS [FILE]...
+Try 'grep --help' for more information.
+rc=2
+foo
+foo bar
+rc=0
+grep: option '--lin' is ambiguous; possibilities: '--line-buffered' '--line-number' '--line-regexp'
+Usage: grep [OPTION]... PATTERNS [FILE]...
+Try 'grep --help' for more information.
+rc=2
+1:foo
+4:foo bar
+grep: invalid max count
+rc=2
+grep: unknown binary-files type
+rc=2
+grep: invalid argument ‘foo’ for ‘--directories’
+Valid arguments are:
+  - ‘read’
+  - ‘recurse’
+  - ‘skip’
+Usage: grep [OPTION]... PATTERNS [FILE]...
+Try 'grep --help' for more information.
+rc=1
+d/x:foo
+grep: unknown devices method
+rc=2
+foo
+foo bar
+foo
+foo bar
+grep: invalid matcher foo
+rc=2
+grep: invalid matcher t
+rc=2
+foo
+foo bar
+grep: option '--help' doesn't allow an argument
+Usage: grep [OPTION]... PATTERNS [FILE]...
+Try 'grep --help' for more information.
+rc=2
+grep: option '--regexp' requires an argument
+Usage: grep [OPTION]... PATTERNS [FILE]...
+Try 'grep --help' for more information.
+rc=2
+grep: conflicting matchers specified
+rc=2
+grep: conflicting matchers specified
+rc=2
+grep: conflicting matchers specified
+rc=2
+grep: -t: No such file or directory
+rc=2
+foo
+foo bar
+-x
+-x
+grep: invalid option -- 'k'
+Usage: grep [OPTION]... PATTERNS [FILE]...
+Try 'grep --help' for more information.
+rc=2
+grep: nosuch: No such file or directory
+rc=2
+Usage: grep [OPTION]... PATTERNS [FILE]...
+Try 'grep --help' for more information.
+rc=2
+Usage: grep [OPTION]... PATTERNS [FILE]...
+Search for PATTERNS in each FILE.
+rc=0
+grep (GNU grep) 3.12-modified
+grep (GNU grep) 3.12-modified
+Usage: grep [OPTION]... PATTERNS [FILE]...
+Search for PATTERNS in each FILE.
+Example: grep -i 'hello world' menu.h main.c
+== long options
+foo
+foo bar
+foo
+foo bar
+foo
+foo bar
+foo
+foo bar
+bar
+baz
+foo
+foo bar
+foo
+2
+t
+rc=0
+foo
+fo
+fo
+rc=0
+rc=0
+rc=2
+0:foo
+12:foo bar
+t:foo
+t:foo bar
+foo
+foo bar
+foo
+1:foo
+4:foo bar
+ 1 : \t f o o \n 4 : \t f o o
+ b a r \n
+ t \0
+foo
+bar
+--
+foo bar
+foo
+bar
+baz
+foo bar
+bar
+baz
+foo bar
+ f o o \n
+d/x:foo
+d/x:foo
+ f o o \n b a r \n \0
+foo
+bar
+foo bar
+foo
+foo bar
+foo
+foo
+bar
+--
+foo bar
+X:foo
+X:foo bar
+foo
+foo bar
+rc=1
+foo
+foo bar
+foo
+foo bar
+grep: unrecognized option '--unix-byte-offsets'
+Usage: grep [OPTION]... PATTERNS [FILE]...
+Try 'grep --help' for more information.
+d/x:foo
+foo
+foo bar
+== clusters
+2
+grep: oo: No such file or directory
+rc=2
+foo
+foo
+1:foo
+4:foo bar
+grep: 1n: invalid context length argument
+3:foo
+4-4
+grep: invalid max count
+2-2
+3:foo
+2-2
+3:foo
+foo
+bar
+foo bar
+grep: foo: No such file or directory
+rc=2
+foo
+bar
+foo
+foo bar
+2
+foo
+--
+foo bar
+3
+foo
+bar
+foo
+4
+5
+--
+rc=0
+2
+t
+rc=0
+p:foo
+p:1:foo
+bar
+baz
+foo bar
+bar
+baz
+bar
+baz
+bar
+grep: invalid max count
+baz
+rc=0
+rc=1
+foo
+bar
+baz
+foo bar
+rc=1
+== -T
+ f o o \n
+
+ 1 : \t f o o \n
+ ( s t a n d a r d i n p u t )
+ : \t f o o \n
+ ( s t a n d a r d i n p u t )
+ :
+ 1 : \t f o o \n
+ ( s t a n d a r d i n p u t )
+ :
+ 1 :
+ 0 : \t f o o \n
+
+ 0 : \t f o o \n
+ 1 \n
+ ( s t a n d a r d i n p u t )
+ \n
+ f o o \n
+
+ 1 : \t f o o \n
+
+ 1 : \t f o o \n
+ 2 - \t b a
+ r \n
+ ( s t a n d a r d i n p u t )
+ : \t f o o \n ( s t a n d a r d
+ i n p u t ) - \t b a r \n
+
+ 1 : \t 1 \n
+ 1 0 : \t 1 0 \n
+
+ 1 1 : \t 1 1 \n
+ 1 2 : \t 1 2 \n
+
+ 1 : \n
+ ( s t a n d a r d i n p u t )
+ \0
+ 1 : \t f o o \n
+ ( s t a n d a r d i n p u t )
+ \0
+ ( s t a n d a r d i n p u t )
+ : 1 \n
+
+ 0 : \t f o o \n
+== -Z
+ t \0 d / x \0
+ p \0 f o o \n d / x \0 f o o \n
+ p \0 1 \n d / x \0 1 \n
+ t \0
+ p \0 1 : f o o \n d / x \0 1 : f o
+ o \n
+== -z
+ f o o \0 b a z f o o \0
+ f o o \0 f o o \0
+2
+1
+1
+1
+1
+0
+grep: warning: stray \ before n
+ 0 : x \n f o o \n \0
+ 1 : f o o \n \0
+1
+== --label and stdin
+LBL:foo
+t:2
+LBL:1
+(standard input)
+(standard input):foo
+t:foo
+t:foo bar
+(standard input)
+t:2
+(standard input):1
+(standard input):foo
+0
+rc=1
+(standard input)
+rc=1
+== no final newline
+ f o o \n
+1
+ 2 : f o o \n
+ o \n o \n
+ f o o \n
+rc=1
+1
+rc=1
+== empty lines
+2:
+3
+rc=0
+== binary
+grep: bin: binary file matches
+rc=0
+1
+bin
+grep: bin: binary file matches
+grep: bin: binary file matches
+rc=0
+grep: bin: binary file matches
+rc=0
+grep: bin: binary file matches
+rc=0
+rc=0
+rc=1
+-- without-match
+rc=1
+p:foo
+rc=0
+bin:0
+p:1
+rc=0
+p
+rc=0
+bin
+rc=0
+-- text
+ f o o \n
+ f o o \n
+1
+grep: bin: binary file matches
+rc=0
+ a \0 b \n
+0
+1
+-- NUL splits lines
+2
+1
+1
+2
+0
+3
+2
+2
+2
+grep: (standard input): binary file matches
+rc=0
+(standard input)
+grep: (standard input): binary file matches
+rc=0
+grep: (standard input): binary file matches
+rc=0
+1
+1
+0
+rc=1
+-- encoding errors
+foo
+grep: (standard input): binary file matches
+rc=0
+2:foo
+grep: (standard input): binary file matches
+foo
+2
+ f o o 377 \n f o o \n
+foo
+foo
+oo
+oo
+foo
+grep: (standard input): binary file matches
+foo
+grep: (standard input): binary file matches
+foo
+grep: (standard input): binary file matches
+0
+rc=1
+rc=1
+ a \n b \n
+ 0 : a \n 2 : b \n
+0
+1
+1
+1
+ a 377 \n
+0
+a
+1
+grep: (standard input): binary file matches
+rc=0
+== color
+ 033 [ 0 1 ; 3 1 m 033 [ K f o o 033 [
+ m 033 [ K b a r 033 [ 0 1 ; 3 1
+ m 033 [ K f o o 033 [ m 033 [ K \n
+ 033 [ 3 2 m 033 [ K 1 033 [ m 033 [ K 033
+ [ 3 6 m 033 [ K : 033 [ m 033 [ K 033 [
+ 0 1 ; 3 1 m 033 [ K f o o 033 [ m 033
+ [ K \n
+ 033 [ 3 5 m 033 [ K ( s t a n d a r
+ d i n p u t ) 033 [ m 033 [ K 033 [
+ 3 6 m 033 [ K : 033 [ m 033 [ K 033 [ 0
+ 1 ; 3 1 m 033 [ K f o o 033 [ m 033 [
+ K \n
+ 033 [ 3 5 m 033 [ K ( s t a n d a r
+ d i n p u t ) 033 [ m 033 [ K 033 [
+ 3 6 m 033 [ K : 033 [ m 033 [ K 033 [ 3
+ 2 m 033 [ K 1 033 [ m 033 [ K 033 [ 3 6
+ m 033 [ K : 033 [ m 033 [ K 033 [ 3 2 m
+ 033 [ K 0 033 [ m 033 [ K 033 [ 3 6 m 033
+ [ K : 033 [ m 033 [ K 033 [ 0 1 ; 3 1
+ m 033 [ K f o o 033 [ m 033 [ K \n
+ 033 [ 0 1 ; 3 1 m 033 [ K f o o 033 [
+ m 033 [ K \n
+ 033 [ 0 1 ; 3 1 m 033 [ K f o o 033 [
+ m 033 [ K \n
+ f o o \n
+ b a r \n
+ 033 [ 0 1 ; 3 1 m 033 [ K f o o 033 [
+ m 033 [ K \n b a r \n
+ 033 [ 3 2 m 033 [ K 1 033 [ m 033 [ K 033
+ [ 3 6 m 033 [ K : 033 [ m 033 [ K 033 [
+ 0 1 ; 3 1 m 033 [ K f o o 033 [ m 033
+ [ K \n 033 [ 3 2 m 033 [ K 2 033 [ m 033
+ [ K 033 [ 3 6 m 033 [ K - 033 [ m 033 [
+ K b a r \n
+ 033 [ 3 5 m 033 [ K ( s t a n d a r
+ d i n p u t ) 033 [ m 033 [ K 033 [
+ 3 6 m 033 [ K : 033 [ m 033 [ K 033 [ 3
+ 2 m 033 [ K 1 033 [ m 033 [ K 033 [ 3 6
+ m 033 [ K : 033 [ m 033 [ K 033 [ 0 1 ;
+ 3 1 m 033 [ K f o o 033 [ m 033 [ K \n
+ 033 [ 3 5 m 033 [ K ( s t a n d a r
+ d i n p u t ) 033 [ m 033 [ K 033 [
+ 3 6 m 033 [ K - 033 [ m 033 [ K 033 [ 3
+ 2 m 033 [ K 2 033 [ m 033 [ K 033 [ 3 6
+ m 033 [ K - 033 [ m 033 [ K b a r \n
+ 1 \n
+ 033 [ 3 5 m 033 [ K p 033 [ m 033 [ K 033
+ [ 3 6 m 033 [ K : 033 [ m 033 [ K 1 \n
+ 033 [ 3 5 m 033 [ K b i n 033 [ m 033 [
+ K 033 [ 3 6 m 033 [ K : 033 [ m 033 [ K
+ 1 \n
+ 033 [ 3 5 m 033 [ K t 033 [ m 033 [ K \n
+ 033 [ 3 5 m 033 [ K t 033 [ m 033 [ K \n
+ 033 [ 3 5 m 033 [ K t 033 [ m 033 [ K \0
+ 033 [ 0 1 ; 3 1 m 033 [ K f o o 033 [
+ m 033 [ K \n b a r \n 033 [ 3 6 m 033 [
+ K - - 033 [ m 033 [ K \n 033 [ 0 1 ; 3
+ 1 m 033 [ K f o o 033 [ m 033 [ K \n
+ 033 [ 0 1 ; 3 1 m 033 [ K f o o 033 [
+ m 033 [ K \n b a r \n 033 [ 3 6 m 033 [
+ K X X 033 [ m 033 [ K \n 033 [ 0 1 ; 3
+ 1 m 033 [ K f o o 033 [ m 033 [ K \n
+ 033 [ 0 1 ; 3 1 m 033 [ K f o o 033 [
+ m 033 [ K \n
+ f 033 [ 0 1 ; 3 1 m 033 [ K o o 033 [
+ m 033 [ K \n
+ f o o \n
+ 033 [ 0 1 ; 3 1 m 033 [ K f o o 033 [
+ m 033 [ K \n
+ 033 [ 0 1 ; 3 1 m 033 [ K f 033 [ m 033
+ [ K 033 [ 0 1 ; 3 1 m 033 [ K o 033 [
+ m 033 [ K 033 [ 0 1 ; 3 1 m 033 [ K o
+ 033 [ m 033 [ K \n
+ 033 [ 0 1 ; 3 1 m 033 [ K f o o 033 [
+ m 033 [ K \n
+ f 033 [ 0 1 ; 3 1 m 033 [ K o o 033 [
+ m 033 [ K \n
+ 033 [ 3 2 m 033 [ K
+ 1 033 [ m 033 [
+ K 033 [ 3 6 m 033 [ K : 033 [ m 033 [ K
+ \t 033 [ 0 1 ; 3 1 m 033 [ K f o o 033
+ [ m 033 [ K \n
+ b a r \n
+ 033 [ 3 2 m 033 [ K 1 033 [ m 033 [ K 033
+ [ 3 6 m 033 [ K : 033 [ m 033 [ K 033 [
+ 0 1 ; 3 1 m 033 [ K f o o 033 [ m 033
+ [ K \n \0
+ 033 [ 0 1 ; 3 1 m 033 [ K f o o 033 [
+ m 033 [ K \n
+ f o o \n
+ f o o \n
+ f o o \n
+ 033 [ 0 1 ; 3 1 m 033 [ K a b 033 [ m
+ 033 [ K \n
+ 033 [ 0 1 ; 3 1 m 033 [ K a 033 [ m 033
+ [ K 033 [ 0 1 ; 3 1 m 033 [ K a 033 [
+ m 033 [ K 033 [ 0 1 ; 3 1 m 033 [ K a
+ 033 [ m 033 [ K \n
+ 033 [ 3 2 m 033 [ K 0 033 [ m 033 [ K 033
+ [ 3 6 m 033 [ K : 033 [ m 033 [ K x 033
+ [ 0 1 ; 3 1 m 033 [ K f o o 033 [ m
+ 033 [ K x \n
+ 033 [ 3 2 m 033 [ K 1 033 [ m 033 [ K 033
+ [ 3 6 m 033 [ K : 033 [ m 033 [ K 033 [
+ 0 1 ; 3 1 m 033 [ K f o o 033 [ m 033
+ [ K \n
+ 033 [ 3 2 m 033 [ K 0 033 [ m 033 [ K 033
+ [ 3 6 m 033 [ K : 033 [ m 033 [ K 033 [
+ 0 1 ; 3 1 m 033 [ K x 033 [ m 033 [ K
+ \n 033 [ 3 2 m 033 [ K 4 033 [ m 033 [ K
+ 033 [ 3 6 m 033 [ K : 033 [ m 033 [ K 033
+ [ 0 1 ; 3 1 m 033 [ K x 033 [ m 033 [
+ K \n
+ 033 [ 0 1 ; 3 1 m 033 [ K f o o 033 [
+ m 033 [ K \n
+ 033 [ 0 1 ; 3 1 m 033 [ K f o 033 [ m
+ 033 [ K 033 [ 0 1 ; 3 1 m 033 [ K o 033
+ [ m 033 [ K \n
+ f o o b a r 033 [ 0 1 ; 3 1 m 033
+ [ K f o o 033 [ m 033 [ K \n
+ 033 [ 3 5 m 033 [ K d / x 033 [ m 033 [
+ K 033 [ 3 6 m 033 [ K : 033 [ m 033 [ K
+ 033 [ 0 1 ; 3 1 m 033 [ K f o o 033 [
+ m 033 [ K \n
+ 033 [ 3 5 m 033 [ K L 033 [ m 033 [ K 033
+ [ 3 6 m 033 [ K : 033 [ m 033 [ K 033 [
+ 0 1 ; 3 1 m 033 [ K f o o 033 [ m 033
+ [ K \n
+ 033 [ 3 5 m 033 [ K ( s t a n d a r
+ d i n p u t ) 033 [ m 033 [ K 033 [
+ 3 6 m 033 [ K : 033 [ m 033 [ K 033 [ 3
+ 2 m 033 [ K
+ 1 033 [ m 033 [ K 033 [
+ 3 6 m 033 [ K : 033 [ m 033 [ K 033 [ 3
+ 2 m 033 [ K
+ 0 033 [ m 033 [ K 033 [
+ 3 6 m 033 [ K : 033 [ m 033 [ K \t 033 [
+ 0 1 ; 3 1 m 033 [ K f o o 033 [ m 033
+ [ K \n
+ a \n
+grep: (standard input): binary file matches
+grep: (standard input): binary file matches
+== GREP_COLORS
+ 033 [ 1 ; 3 2 m 033 [ K f o o 033 [ m
+ 033 [ K \n
+ 033 [ 1 ; 3 2 m f o o 033 [ m \n
+ 033 [ 1 m 033 [ K 033 [ 0 1 ; 3 1 m 033
+ [ K f o o 033 [ m 033 [ K \n 033 [ 2 m
+ 033 [ K b a r 033 [ m 033 [ K \n
+ 033 [ 2 m 033 [ K b a r 033 [ m 033 [ K
+ \n
+ 033 [ 1 m 033 [ K b a r 033 [ m 033 [ K
+ \n
+ 033 [ 4 m 033 [ K f o o 033 [ m 033 [ K
+ \n b a r \n
+ f o o \n
+ f o o \n
+ 033 [ 1 m 033 [ K ( s t a n d a r d
+ i n p u t ) 033 [ m 033 [ K 033 [ 2
+ m 033 [ K : 033 [ m 033 [ K 033 [ 0 1 ;
+ 3 1 m 033 [ K f o o 033 [ m 033 [ K \n
+ ( s t a n d a r d i n p u t )
+ : 033 [ 0 1 ; 3 1 m 033 [ K f o o 033
+ [ m 033 [ K \n
+ f o o \n
+ 033 [ 0 1 ; 3 1 m 033 [ K f o o 033 [
+ m 033 [ K \n
+ 033 [ 1 ; m 033 [ K f o o 033 [ m 033 [
+ K \n
+ 033 [ 3 m 033 [ K 1 033 [ m 033 [ K 033 [
+ 3 6 m 033 [ K : 033 [ m 033 [ K 033 [ 1
+ m 033 [ K f o o 033 [ m 033 [ K \n
+ 033 [ 0 1 ; 3 1 m 033 [ K f o o 033 [
+ m 033 [ K \n
+ 033 [ 0 1 ; 3 1 m 033 [ K f o o 033 [
+ m 033 [ K \n
+ 1 \n
+ 033 [ 1 m 033 [ K x 033 [ 0 1 ; 3 1 m
+ 033 [ K f o o 033 [ m 033 [ K 033 [ 1 m
+ 033 [ K x 033 [ m 033 [ K \n
+ 033 [ 1 m 033 [ K x f o o x 033 [ m 033
+ [ K \n
+ 033 [ 1 m 033 [ K x 033 [ 0 1 ; 3 1 m
+ 033 [ K f o o 033 [ m 033 [ K 033 [ 1 m
+ 033 [ K x 033 [ 0 1 ; 3 1 m 033 [ K f
+ o o 033 [ m 033 [ K 033 [ 1 m 033 [ K x
+ 033 [ m 033 [ K \n
+ 033 [ 0 1 ; 3 1 m 033 [ K o 033 [ m 033
+ [ K \n 033 [ 0 1 ; 3 1 m 033 [ K o 033
+ [ m 033 [ K \n
+ 033 [ 1 m 033 [ K f o o 033 [ m 033 [ K
+ \n
+ 033 [ 1 m 033 [ K f 033 [ 0 1 ; 3 1 m
+ 033 [ K o 033 [ m 033 [ K 033 [ 1 m 033 [
+ K 033 [ 0 1 ; 3 1 m 033 [ K o 033 [ m
+ 033 [ K \n
+ 033 [ 3 2 m 033 [ K 1 033 [ m 033 [ K 033
+ [ 3 6 m 033 [ K : 033 [ m 033 [ K 033 [
+ 1 m 033 [ K 033 [ 0 1 ; 3 1 m 033 [ K
+ f o o 033 [ m 033 [ K \n
+ 1 : 033 [ 1 m 033 [ K 033 [ 0 1 ; 3 1
+ m 033 [ K f o o 033 [ m 033 [ K \n
+ 033 [ 3 2 m 1 033 [ m 033 [ 3 6 m : 033
+ [ m 033 [ 1 m f o o 033 [ m \n
+ 033 [ 3 2 m 1 033 [ m 033 [ 3 6 m : 033
+ [ m 033 [ 1 m 033 [ 0 1 ; 3 1 m f o
+ o 033 [ m \n 033 [ 3 2 m 2 033 [ m 033 [
+ 3 6 m - 033 [ m 033 [ 2 m b a r 033 [
+ m \n
+ 033 [ 2 m 033 [ K b a r 033 [ m 033 [ K
+ \n
+ 033 [ 1 m 033 [ K b a r 033 [ m 033 [ K
+ \n
+ 033 [ 1 m 033 [ K b a r 033 [ m 033 [ K
+ \n
+ 033 [ 1 ; ; 2 m 033 [ K b a r 033 [ m
+ 033 [ K \n
+ 033 [ 2 m 033 [ K b a r 033 [ m 033 [ K
+ \n
+ 033 [ 1 m 033 [ K b a r 033 [ m 033 [ K
+ \n
+ 033 [ 3 5 m 033 [ K ( s t a n d a r
+ d i n p u t ) 033 [ m 033 [ K 033 [
+ 3 6 m 033 [ K : 033 [ m 033 [ K 033 [ 3
+ 2 m 033 [ K 2 033 [ m 033 [ K 033 [ 3 6
+ m 033 [ K : 033 [ m 033 [ K 033 [ 1 m 033
+ [ K b a r 033 [ m 033 [ K \n
+ 033 [ 3 2 m 033 [ K
+ 2 033 [ m 033 [
+ K 033 [ 3 6 m 033 [ K : 033 [ m 033 [ K
+ \t 033 [ 1 m 033 [ K b a r 033 [ m 033 [
+ K \n
+ 033 [ 3 2 m 033 [ K 1 033 [ m 033 [ K 033
+ [ 3 m 033 [ K : 033 [ m 033 [ K 033 [ 1
+ m 033 [ K f o o 033 [ m 033 [ K \n
+ 033 [ 3 5 m 033 [ K ( s t a n d a r
+ d i n p u t ) 033 [ m 033 [ K 033 [
+ 3 m 033 [ K : 033 [ m 033 [ K 033 [ 3 2
+ m 033 [ K 1 033 [ m 033 [ K 033 [ 3 m 033
+ [ K : 033 [ m 033 [ K 033 [ 3 2 m 033 [
+ K 0 033 [ m 033 [ K 033 [ 3 m 033 [ K :
+ 033 [ m 033 [ K 033 [ 1 m 033 [ K 033 [ 1
+ m 033 [ K f o o 033 [ m 033 [ K \n 033 [
+ 3 5 m 033 [ K ( s t a n d a r d
+ i n p u t ) 033 [ m 033 [ K 033 [ 3 m
+ 033 [ K - 033 [ m 033 [ K 033 [ 3 2 m 033
+ [ K 2 033 [ m 033 [ K 033 [ 3 m 033 [ K
+ - 033 [ m 033 [ K 033 [ 3 2 m 033 [ K 4
+ 033 [ m 033 [ K 033 [ 3 m 033 [ K - 033 [
+ m 033 [ K 033 [ 2 m 033 [ K b a r 033 [
+ m 033 [ K \n
+ 033 [ 1 m 033 [ K 033 [ 1 m 033 [ K f o
+ o 033 [ m 033 [ K \n 033 [ 2 m 033 [ K b
+ a r 033 [ m 033 [ K \n 033 [ 3 m 033 [ K
+ - - 033 [ m 033 [ K \n 033 [ 1 m 033 [ K
+ 033 [ 1 m 033 [ K f o o 033 [ m 033 [ K
+ \n
+ 033 [ 1 m 033 [ K 033 [ 1 m 033 [ K f o
+ o 033 [ m 033 [ K \n 033 [ 2 m 033 [ K b
+ a r 033 [ m 033 [ K \n - - \n 033 [ 1 m
+ 033 [ K 033 [ 1 m 033 [ K f o o 033 [ m
+ 033 [ K \n
+ 033 [ 1 m 033 [ K ( s t a n d a r d
+ i n p u t ) 033 [ m 033 [ K \0
+ 033 [ 1 m 033 [ K ( s t a n d a r d
+ i n p u t ) 033 [ m 033 [ K \0 033 [
+ 0 1 ; 3 1 m 033 [ K f o o 033 [ m 033
+ [ K \n
+ 033 [ 1 m 033 [ K ( s t a n d a r d
+ i n p u t ) 033 [ m 033 [ K \0 033 [
+ 3 2 m 033 [ K 1 033 [ m 033 [ K 033 [ 2
+ m 033 [ K : 033 [ m 033 [ K 033 [ 0 1 ;
+ 3 1 m 033 [ K f o o 033 [ m 033 [ K \n
+ 033 [ 1 m 033 [ K ( s t a n d a r d
+ i n p u t ) 033 [ m 033 [ K \0 1 \n
+ 033 [ 1 m 033 [ K ( s t a n d a r d
+ i n p u t ) 033 [ m 033 [ K 033 [ 2
+ m 033 [ K : 033 [ m 033 [ K 1 \n
+ 033 [ 1 m 033 [ K ( s t a n d a r d
+ i n p u t ) 033 [ m 033 [ K \n
+ 033 [ 1 m 033 [ K ( s t a n d a r d
+ i n p u t ) 033 [ m 033 [ K \0
+-- GREP_COLOR
+ 033 [ 0 1 ; 3 1 m 033 [ K f o o 033 [
+ m 033 [ K \n
+grep: warning: GREP_COLOR='1;32' is deprecated; use GREP_COLORS='mt=1;32'
+ 033 [ 4 m 033 [ K f o o 033 [ m 033 [ K
+ \n
+grep: warning: GREP_COLOR='1;32' is deprecated; use GREP_COLORS='mt=1;32'
+ 033 [ 4 m 033 [ K 033 [ 1 ; 3 2 m 033 [
+ K f o o 033 [ m 033 [ K \n
+ 033 [ 0 1 ; 3 1 m 033 [ K f o o 033 [
+ m 033 [ K \n
+foo
+== -r
+r/.f:foo
+r/.hid/e.txt:foo
+r/a.txt:foo
+r/b.c:foo
+r/sub/c.txt:foo
+r/sub/deep/d.txt:foo
+--
+r/.f:foo
+r/.hid/e.txt:foo
+r/a.txt:foo
+r/b.c:foo
+r/sub/c.txt:foo
+r/sub/deep/d.txt:foo
+--
+r/a.txt:foo
+r/sub/c.txt:foo
+r/sub/deep/d.txt:foo
+--
+r//sub/c.txt:foo
+r//sub/deep/d.txt:foo
+-- -r file
+foo
+r/a.txt:foo
+r/a.txt:foo
+r/a.txt:foo
+-- -rh -rl -rc -rL -rn
+foo
+foo
+r/sub/c.txt
+r/sub/deep/d.txt
+r/sub/c.txt:1
+r/sub/deep/d.txt:1
+r/sub/c.txt
+r/sub/deep/d.txt
+r/sub/c.txt:1:foo
+r/sub/deep/d.txt:1:foo
+-- -r stdin
+(standard input):foo
+r/sub/deep/d.txt:foo
+-- -d
+r/sub/deep/d.txt:foo
+d/x:foo
+rc=0
+rc=1
+grep: r/sub: Is a directory
+rc=2
+rc=1
+rc=1
+r/sub/deep/d.txt:foo
+-- -R
+r/sub/deep/d.txt:foo
+-- dot
+./c.txt:foo
+./deep/d.txt:foo
+c.txt:foo
+deep/d.txt:foo
+./c.txt:foo
+./deep/d.txt:foo
+deep/d.txt:foo
+../sub/c.txt:foo
+../sub/deep/d.txt:foo
+c.txt:1
+deep/d.txt:1
+-- missing
+grep: r/nosuch: No such file or directory
+rc=2
+grep: nosuch: No such file or directory
+r/sub/deep/d.txt:foo
+rc=2
+rc=2
+-- empty dir
+rc=1
+rc=1
+-- -r -c on a file and dir
+grep: d: Is a directory
+0
+rc=2
+d/x:1
+-- -rz
+ r / s u b / d e e p / d . t x t
+ : f o o \n \0
+-- -r with -q
+rc=0
+rc=1
+-- -r -l -m
+r/sub/c.txt
+r/sub/deep/d.txt
+== include exclude
+r/.hid/e.txt:foo
+r/a.txt:foo
+r/sub/c.txt:foo
+r/sub/deep/d.txt:foo
+--
+r/.hid/e.txt:foo
+r/a.txt:foo
+r/b.c:foo
+r/sub/c.txt:foo
+r/sub/deep/d.txt:foo
+--
+r/.f:foo
+r/b.c:foo
+--
+r/.f:foo
+r/.hid/e.txt:foo
+r/a.txt:foo
+r/sub/deep/d.txt:foo
+-- exclude-dir
+r/.f:foo
+r/.hid/e.txt:foo
+r/a.txt:foo
+r/b.c:foo
+--
+r/.f:foo
+r/a.txt:foo
+r/b.c:foo
+r/sub/c.txt:foo
+r/sub/deep/d.txt:foo
+--
+r/.f:foo
+r/.hid/e.txt:foo
+r/a.txt:foo
+r/b.c:foo
+--
+r/.f:foo
+r/.hid/e.txt:foo
+r/a.txt:foo
+r/b.c:foo
+r/sub/c.txt:foo
+--
+rc=0
+foo
+rc=1
+r/.f:foo
+r/.hid/e.txt:foo
+r/a.txt:foo
+r/b.c:foo
+r/sub/c.txt:foo
+r/sub/deep/d.txt:foo
+r/.f:foo
+r/.hid/e.txt:foo
+r/a.txt:foo
+r/b.c:foo
+r/sub/c.txt:foo
+r/sub/deep/d.txt:foo
+rc=1
+.f:foo
+.hid/e.txt:foo
+a.txt:foo
+b.c:foo
+sub/c.txt:foo
+sub/deep/d.txt:foo
+.f:foo
+a.txt:foo
+b.c:foo
+-- include+exclude order
+r/.hid/e.txt:foo
+r/a.txt:foo
+r/sub/deep/d.txt:foo
+--
+r/.f:foo
+r/.hid/e.txt:foo
+r/a.txt:foo
+r/b.c:foo
+r/sub/c.txt:foo
+r/sub/deep/d.txt:foo
+--
+rc=0
+r/.f:foo
+r/.hid/e.txt:foo
+r/a.txt:foo
+r/b.c:foo
+r/sub/c.txt:foo
+r/sub/deep/d.txt:foo
+--
+rc=0
+r/a.txt:foo
+-- on command line files
+r/b.c:foo
+rc=0
+r/a.txt:foo
+rc=0
+rc=1
+rc=1
+rc=1
+r/.f:foo
+r/.hid/e.txt:foo
+r/a.txt:foo
+r/b.c:foo
+r/sub/c.txt:foo
+r/sub/deep/d.txt:foo
+rc=1
+rc=1
+r/a.txt:foo
+r/b.c:foo
+r/b.c:foo
+rc=1
+foo
+rc=0
+foo
+rc=0
+foo
+rc=1
+rc=0
+-- exclude-from
+r/.f:foo
+rc=0
+r/.f:foo
+r/.hid/e.txt:foo
+r/a.txt:foo
+r/b.c:foo
+r/sub/c.txt:foo
+r/sub/deep/d.txt:foo
+-- walk uses base names
+r/sub/c.txt:foo
+r/sub/deep/d.txt:foo
+r/sub/c.txt:foo
+r/sub/deep/d.txt:foo
+rc=0
+== CRLF
+0
+ f o o \r \n
+ f o o \n
+ f o o \r \n
+1
+rc=1
+4:foo
+5:oo
+ 033 [ 0 1 ; 3 1 m 033 [ K f o o 033 [
+ m 033 [ K \r \n
+ 033 [ 1 m 033 [ K 033 [ 0 1 ; 3 1 m 033
+ [ K f o o 033 [ m 033 [ K \r \n
+ 033 [ 1 m 033 [ K f o o 033 [ m 033 [ K
+ \r \n
+1
+0
+ f o o \n
+ f o o \r \n
+ a \r b \n
+ b a r \n
+== end

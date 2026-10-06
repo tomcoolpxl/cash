@@ -131,8 +131,11 @@ an entry or page names no builtin.
 - `column`: Lay a list out in columns, or align a table on a separator.
 - `diff`: Compare two files line by line, or two folders file by file.
 - `dos2unix`: Convert CRLF line endings to LF.
+- `egrep`: Print the lines that match an extended regular expression: `grep -E`.
+- `fgrep`: Print the lines that contain a fixed string: `grep -F`.
 - `find`: Search a folder tree for files that match an expression.
 - `getopt`: Parse command options for a script, util-linux style.
+- `grep`: Print the lines of files that match a pattern, with GNU grep's options.
 - `hexdump`: Dump bytes in hex, octal, decimal or text, or in a format of your own.
 - `iconv`: Convert text between character sets, through Windows' code pages.
 - `less`: Page through text.

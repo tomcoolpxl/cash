@@ -477,7 +477,7 @@ pub fn parse_regex(
 /// The text returned is the expression GNU sed's regex library reads: the escapes GNU
 /// sed decodes first (`\n`, `\t`, `\x41`, ...) decoded, an escaped delimiter made the
 /// delimiter, and every other escape, `\w`, `` \` ``, `\A`, left as it is written for
-/// the translation into the engine's syntax (`compiler::regex_to_engine`).
+/// the translation into the engine's syntax (`compiler::translate_posix`).
 pub fn parse_regex_for_mode(
     lines: &mut ScriptLineProvider,
     line: &mut ScriptCharProvider,
