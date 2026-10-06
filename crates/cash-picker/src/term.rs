@@ -122,9 +122,8 @@ fn run_raw<W: Write>(
                         }
                     }
                 }
-                Event::Resize(new_columns, _) => {
-                    area.columns = usize::from(new_columns);
-                    area.shown.clear();
+                Event::Resize(new_columns, new_rows) => {
+                    area.resize(out, usize::from(new_columns), usize::from(new_rows), height)?;
                 }
                 _ => {}
             }
@@ -167,6 +166,47 @@ impl Area {
             back: Some((column, line)),
             shown: Vec::new(),
         })
+    }
+
+    /// Fits the area to a window now `columns` by `total`: its height worked out again from
+    /// `height`, and, inline, the screen scrolled up when it no longer fits below the
+    /// command line. What was drawn is erased, and the next frame draws everything.
+    fn resize<W: Write>(
+        &mut self,
+        out: &mut W,
+        columns: usize,
+        total: usize,
+        height: Option<&str>,
+    ) -> io::Result<()> {
+        self.columns = columns;
+        self.shown.clear();
+        let Some((column, line)) = self.back else {
+            // Full screen: all of it.
+            self.rows = total;
+            return queue!(out, terminal::Clear(terminal::ClearType::All));
+        };
+        queue!(
+            out,
+            cursor::MoveTo(0, self.top),
+            terminal::Clear(terminal::ClearType::FromCursorDown)
+        )?;
+        let rows = rows_for(height, total);
+        let bottom = total.saturating_sub(1);
+        let last = usize::from(self.top) + rows.saturating_sub(1);
+        if last > bottom {
+            // Line feeds on the bottom row scroll; the command line moves up with them.
+            let scroll = last - bottom;
+            queue!(
+                out,
+                cursor::MoveTo(0, u16::try_from(bottom).unwrap_or(u16::MAX))
+            )?;
+            write!(out, "{}", "\n".repeat(scroll))?;
+            let scroll = u16::try_from(scroll).unwrap_or(u16::MAX);
+            self.top = self.top.saturating_sub(scroll);
+            self.back = Some((column, line.saturating_sub(scroll)));
+        }
+        self.rows = rows;
+        Ok(())
     }
 
     /// Draws a frame: only the lines that differ from those on screen, each written
@@ -261,6 +301,7 @@ const fn translate(key: KeyEvent) -> Option<Key> {
         KeyCode::Char('h') if alt => Key::History,
         KeyCode::Char('.') if alt => Key::Hidden,
         KeyCode::Char('i') if alt => Key::Ignored,
+        KeyCode::Char('s') if alt => Key::Sort,
         KeyCode::Char(c) if !control && !alt => Key::Char(c),
         _ => return None,
     })
@@ -319,6 +360,31 @@ mod tests {
         let changed = String::from_utf8(changed).unwrap();
         assert!(changed.contains("> o"), "{changed:?}");
         assert!(changed.len() < first.len(), "{changed:?}");
+    }
+
+    #[test]
+    fn a_resize_works_out_the_height_again_and_makes_room() {
+        let mut area = Area {
+            top: 21,
+            rows: 16,
+            columns: 80,
+            back: Some((4, 20)),
+            shown: vec!["old".to_owned()],
+        };
+        // From 40 rows to 30: 40% is 12 rows, from row 21 down to 32, past row 29.
+        let mut out = Vec::new();
+        area.resize(&mut out, 100, 30, None).unwrap();
+        assert_eq!((area.rows, area.columns), (12, 100));
+        assert_eq!((area.top, area.back), (18, Some((4, 17))));
+        assert!(area.shown.is_empty(), "the next frame draws every line");
+        let out = String::from_utf8(out).unwrap();
+        assert!(out.ends_with("\n\n\n"), "{out:?}");
+
+        // Taller again: room below, nothing scrolls.
+        let mut out = Vec::new();
+        area.resize(&mut out, 100, 50, Some("15")).unwrap();
+        assert_eq!((area.rows, area.top), (15, 18));
+        assert!(!String::from_utf8(out).unwrap().contains('\n'));
     }
 
     #[test]

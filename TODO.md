@@ -154,10 +154,22 @@ Released in 1.4.0 (2026-10-05): the `cash-picker` crate (line context, picks, tr
 deep search, colours, the picker's keys and frames, the terminal runner), Alt-E in the
 line editor (`cash-picker`), the `croot` builtin, `help croot`; ConPTY tests for a `cd`
 pick and an inserted file. The broot block is out of the user's `~/.bashrc`, at their
-request (backup `~/.bashrc.before-croot`). Left:
+request (backup `~/.bashrc.before-croot`).
 
-- the 30 ms first-frame budget is not measured yet;
-- a resize while the picker is open keeps its height.
+After the user's first use: 1.4.1 lets Down and PgDn scroll through a long folder,
+1.4.2 shows each pick on the command line while picking, 1.4.3 stops the flicker while a
+search runs. Then (2026-10-06): the first frame measured at a median of 17-19 ms
+(`tests/croot_latency.rs`, spec D73), a resize works the height out again, and Alt-S
+sorts newest first with each entry's age. Nothing left open.
+
+---
+
+## Found along the way
+
+- A test in the full suite leaves `x.lnk` in the repository root: a 0-byte named pipe as
+  MSYS2 makes them (its `mkfifo` writes a FIFO as a special `.lnk` file), timestamped
+  during the 1.4.3 gate on 2026-10-06. No test names `x` with `mkfifo`; one of them runs
+  with the repository as its folder. Find it and give it a temporary folder.
 
 ---
 

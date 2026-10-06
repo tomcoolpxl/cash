@@ -63,6 +63,11 @@ path = "tests/pty_oracle.rs"
 name = "pty-latency"
 path = "tests/pty_latency.rs"
 
+# How fast croot (Alt-E) shows its first frame (spec D73), run by hand.
+[[test]]
+name = "croot-latency"
+path = "tests/croot_latency.rs"
+
 [dev-dependencies]
 anyhow = { workspace = true }
 # The YAML case runner parses its own CLI options and the completion tests drive an
