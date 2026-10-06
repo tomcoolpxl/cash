@@ -313,10 +313,15 @@ exe is running (only the delete fails), so a version folder is judged in use by 
 write-open of its `cash.exe` before anything is touched; and `ln -s DIR` makes a real
 symbolic link, which needs a privilege, so the `current` junction is set by
 `FSCTL_SET_REPARSE_POINT` in place, never half-moved. The installer compiles here (Inno
-Setup 6.7.3 from Scoop, 10.7 MB from the 1.4.4 files); an end-to-end silent install is
-exercised with HOME, LOCALAPPDATA and the registry key for the user PATH pointed at a
-scratch folder, since this machine's cash is Scoop's and the installer refuses to run
-beside one.
+Setup 6.7.3 from Scoop, 11.7 MB from the 1.5.0 files); an end-to-end silent install,
+`--update --check` and uninstall were exercised with HOME, LOCALAPPDATA and the registry
+key for the user PATH pointed at a scratch folder, since this machine's cash is Scoop's
+and the installer refuses to run beside one. Found there: Inno's uninstaller runs with
+Windows' redirection-trust mitigation, inherited by what it starts, so no process of its
+may cross the `current` junction ("the path cannot be traversed because it contains an
+untrusted mount point"); the uninstaller therefore runs `--install-remove` from a version
+folder it finds itself. Windows Terminal, the shell and every ordinary process cross the
+junction as before.
 
 ---
 
