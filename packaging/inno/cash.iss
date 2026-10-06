@@ -80,18 +80,57 @@ Source: "{#SourceDir}\licenses\*"; DestDir: "{app}\{#AppVersion}\licenses"; Flag
 Filename: "{app}\{#AppVersion}\cash.exe"; Parameters: "--install-finish ""{app}"" --links"; Tasks: links; Flags: runhidden waituntilterminated; StatusMsg: "Finishing the install..."
 Filename: "{app}\{#AppVersion}\cash.exe"; Parameters: "--install-finish ""{app}"""; Tasks: not links; Flags: runhidden waituntilterminated; StatusMsg: "Finishing the install..."
 Filename: "{app}\{#AppVersion}\cash.exe"; Parameters: "--install-finish ""{app}"" --scoop"; Tasks: scoop; Flags: waituntilterminated; StatusMsg: "Installing Scoop..."
-Filename: "{app}\current\cash.exe"; Description: "Open cash"; Flags: postinstall nowait skipifsilent
+Filename: "{app}\{#AppVersion}\cash.exe"; Description: "Open cash"; Flags: postinstall nowait skipifsilent
 
 [UninstallRun]
 ; Before the files go: the links and their PATH entry, current's PATH entry, the Terminal
-; profile, the junction. ~/.bashrc, history and config stay.
-Filename: "{app}\current\cash.exe"; Parameters: "--install-remove ""{app}"""; Flags: runhidden waituntilterminated; RunOnceId: "remove"
+; profile, the junction. ~/.bashrc, history and config stay. The uninstaller runs with
+; Windows' redirection-trust mitigation, which its children inherit, so nothing it starts
+; may cross the `current` junction ("the path cannot be traversed because it contains an
+; untrusted mount point"); RemoverExe finds a cash.exe in a version folder directly,
+; whichever version `cash --update` has left there.
+Filename: "{code:RemoverExe}"; Parameters: "--install-remove ""{app}"""; Flags: runhidden waituntilterminated; RunOnceId: "remove"
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\bin"
 Type: filesandordirs; Name: "{app}"
 
 [Code]
+// A cash.exe in a version folder under {app}, for the uninstaller: not through the
+// `current` junction, which the uninstaller's processes may not cross. Any version
+// serves for --install-remove; the newest-named folder is preferred.
+function RemoverExe(Param: String): String;
+var
+  App, Found: String;
+  Rec: TFindRec;
+begin
+  App := ExpandConstant('{app}');
+  Found := '';
+  if FindFirst(App + '\*', Rec) then
+  begin
+    try
+      repeat
+        if (Rec.Attributes and FILE_ATTRIBUTE_DIRECTORY <> 0) and
+           (Rec.Attributes and FILE_ATTRIBUTE_REPARSE_POINT = 0) and
+           (Rec.Name <> '.') and (Rec.Name <> '..') and (Rec.Name <> 'bin') and
+           FileExists(App + '\' + Rec.Name + '\cash.exe') then
+          if (Found = '') or (CompareText(Rec.Name, Found) > 0) then
+            Found := Rec.Name;
+      until not FindNext(Rec);
+    finally
+      FindClose(Rec);
+    end;
+  end;
+  if Found = '' then
+  begin
+    Log('No version folder with cash.exe under ' + App + '; nothing to run');
+    Result := App + '\current\cash.exe';
+  end
+  else
+    Result := App + '\' + Found + '\cash.exe';
+  Log('Remover: ' + Result);
+end;
+
 // A cash that Scoop installed is Scoop's to upgrade: refuse, pointing there.
 function InitializeSetup(): Boolean;
 var
