@@ -309,6 +309,7 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
     m.insert(
         "hostname".into(),
     m.insert("tput".into(), builtin::<tput::TputCommand, SE>());
+    m.insert("watch".into(), builtin::<watch::WatchCommand, SE>());
     m.insert("stty".into(), builtin::<stty::SttyCommand, SE>());
         builtin::<hostname::HostnameCommand, SE>(),
     );

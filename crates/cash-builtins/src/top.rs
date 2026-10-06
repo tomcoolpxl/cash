@@ -631,19 +631,19 @@ fn act(
     Ok(())
 }
 
-/// The alternate screen, with the cursor hidden, until dropped.
-struct FullScreen<W: Write> {
+/// The alternate screen, with the cursor hidden, until dropped. `watch` draws on it too.
+pub(crate) struct FullScreen<W: Write> {
     out: W,
 }
 
 impl<W: Write> FullScreen<W> {
-    fn enter(mut out: W) -> std::io::Result<Self> {
+    pub(crate) fn enter(mut out: W) -> std::io::Result<Self> {
         out.write_all(b"\x1b[?1049h\x1b[?25l")?;
         out.flush()?;
         Ok(Self { out })
     }
 
-    const fn out(&mut self) -> &mut W {
+    pub(crate) const fn out(&mut self) -> &mut W {
         &mut self.out
     }
 }
@@ -657,10 +657,10 @@ impl<W: Write> Drop for FullScreen<W> {
 
 /// Raw keyboard input for as long as it lives: keys arrive one at a time, and a key
 /// pressed during a redraw is not echoed onto the screen.
-struct RawMode(bool);
+pub(crate) struct RawMode(bool);
 
 impl RawMode {
-    fn enter() -> Self {
+    pub(crate) fn enter() -> Self {
         Self(crossterm::terminal::enable_raw_mode().is_ok())
     }
 }
@@ -673,7 +673,8 @@ impl Drop for RawMode {
     }
 }
 
-fn terminal_size() -> (usize, usize) {
+/// The console window's columns and rows; 80 by 24 without a console.
+pub(crate) fn terminal_size() -> (usize, usize) {
     crossterm::terminal::size().map_or((80, 24), |(width, height)| {
         (usize::from(width).max(1), usize::from(height).max(1))
     })

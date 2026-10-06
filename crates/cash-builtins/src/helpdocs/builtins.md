@@ -89,6 +89,8 @@ an entry or page names no builtin.
 - `reset`: Reset the terminal and the console modes cash relies on.
 - `stty`: Print or change the terminal's settings, in GNU's words, on the console's modes.
 - `tput`: Write a terminal capability as the VT sequence xterm-256color uses.
+- `watch`: Run a command every few seconds and show its output full screen.
+
 ## Windows commands
 
 - `detach`: Start a command that outlives the shell.

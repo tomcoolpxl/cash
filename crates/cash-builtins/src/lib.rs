@@ -77,6 +77,8 @@ mod pager;
 // cash (D8): `which` must answer about cash's resolution, not about PATH.
 mod which;
 
+// cash: `watch`, procps-ng's, which Windows and Git for Windows both lack.
+mod watch;
 // cash (D66): `where`, Windows' where.exe with dashes for options and cash's paths.
 mod where_files;
 
