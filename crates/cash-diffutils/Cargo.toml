@@ -1,0 +1,35 @@
+[package]
+name = "cash-diffutils"
+description = "Native diff and cmp for cash-shell (absorbed and hardened from uutils diffutils)"
+version.workspace = true
+authors.workspace = true
+categories.workspace = true
+edition.workspace = true
+keywords.workspace = true
+# Upstream's terms; cash takes it under the MIT one.
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+repository.workspace = true
+rust-version.workspace = true
+
+# Upstream's multi-call program, for running the tools outside the shell.
+[[bin]]
+name = "diffutils"
+path = "src/bin/diffutils.rs"
+
+[dependencies]
+chrono = { workspace = true }
+chrono-tz = { workspace = true }
+glob = { workspace = true }
+itoa = "1.0.11"
+regex = { workspace = true }
+same-file = "1.0.6"
+# Myers in linear space, as GNU diff has it; upstream's `diff` crate kept every step.
+similar = "2.7.0"
+unicode-width = { workspace = true }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+
+[lints]
+workspace = true

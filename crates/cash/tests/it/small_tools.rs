@@ -21,7 +21,7 @@ use crate::common::cash_command;
 /// A console of its own, without a window, for `reset` to restore.
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
-fn oracle_dir() -> PathBuf {
+pub(crate) fn oracle_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join("oracle")
@@ -29,7 +29,7 @@ fn oracle_dir() -> PathBuf {
 
 /// Runs an oracle script under cash; standard output and error together, as the golden
 /// files were made.
-fn run_oracle_script(name: &str) -> String {
+pub(crate) fn run_oracle_script(name: &str) -> String {
     let out = cash_command()
         .arg(format!("{name}.sh"))
         .current_dir(oracle_dir())
@@ -39,14 +39,14 @@ fn run_oracle_script(name: &str) -> String {
     String::from_utf8_lossy(&out.stdout).into_owned() + &String::from_utf8_lossy(&out.stderr)
 }
 
-fn golden(name: &str) -> String {
+pub(crate) fn golden(name: &str) -> String {
     std::fs::read_to_string(oracle_dir().join(format!("{name}.out")))
         .expect("read golden output")
         .replace("\r\n", "\n")
 }
 
 /// `golden` with `from` replaced by `to`, which must occur exactly once.
-fn with_divergence(golden: &str, from: &str, to: &str) -> String {
+pub(crate) fn with_divergence(golden: &str, from: &str, to: &str) -> String {
     assert_eq!(golden.matches(from).count(), 1, "golden text moved: {from}");
     golden.replacen(from, to, 1)
 }

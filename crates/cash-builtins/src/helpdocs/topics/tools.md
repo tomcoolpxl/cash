@@ -97,5 +97,4 @@ manager has no package for it.
 | just | Casey.Just | just | a command runner |
 | pwsh | Microsoft.PowerShell | pwsh | PowerShell 7 |
 | grep | Microsoft.Coreutils | grep | GNU grep; Microsoft's Coreutils for Windows include one |
-| diff | - | diffutils | GNU diffutils |
 | patch | - | patch | GNU patch |

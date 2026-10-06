@@ -50,10 +50,7 @@ struct Finding {
 /// `tr`, `sort`, `head`, `tail`, `wc` and `mktemp` — all builtins — then told the user to
 /// `winget install` something they already had. Checking cash's own resolution rather
 /// than `PATH` is what stops that class of advice.
-const EXPECTED: &[(&str, &str)] = &[
-    ("grep", "not bundled with cash; in the MS Coreutils bundle"),
-    ("diff", "not bundled with cash; diffutils"),
-];
+const EXPECTED: &[(&str, &str)] = &[("grep", "not bundled with cash; in the MS Coreutils bundle")];
 
 /// Commands cash answers for itself, checked to confirm it still does.
 ///
@@ -64,7 +61,7 @@ const CARRIED: &[&str] = &[
     "chmod", "id", "groups", "awk", "sed", "stat", "tty", "nohup", "who", "users", "pinky",
     "logname", "hostid", "pathchk", "install", "dos2unix", "unix2dos", "fuser", "lsof", "ss",
     "ping", "stty", "tput", "iconv", "column", "xxd", "hexdump", "uuidgen", "xdg-open", "pbcopy",
-    "pbpaste", "flock", "watch", "free", "nice", "renice", "nc",
+    "pbpaste", "flock", "watch", "free", "nice", "renice", "nc", "diff", "cmp",
 ];
 
 /// Shells whose name must resolve to cash itself (D7).
@@ -543,7 +540,6 @@ const BUSYBOX_BREAKS: &[(&str, &str, &str)] = &[
         "no --include (it is BusyBox grep)",
         "winget install Microsoft.Coreutils",
     ),
-    ("diff", "no -y, no --color", "scoop install diffutils"),
     (
         "make",
         "$(shell ...) expands to nothing, so GNU makefiles misbuild",

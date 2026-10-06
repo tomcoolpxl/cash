@@ -520,13 +520,12 @@ fn doctor_confirms_the_shells_resolve_to_cash() {
 fn doctor_still_names_what_is_genuinely_missing() {
     // The fix must not turn the diagnostic into a rubber stamp.
     let out = run(Command::new(CASH).arg("doctor").env("PATH", BARE_PATH));
-    for absent in ["grep", "diff"] {
-        assert!(
-            out.stdout.contains(&format!("WARN  {absent}")),
-            "doctor did not report {absent} as missing:\n{}",
-            out.stdout
-        );
-    }
+    // `grep` is the one left: `diff` and `cmp` are cash's own now.
+    assert!(
+        out.stdout.contains("WARN  grep"),
+        "doctor did not report grep as missing:\n{}",
+        out.stdout
+    );
     assert_ne!(
         out.code, 0,
         "doctor reported success on a machine with no userland"

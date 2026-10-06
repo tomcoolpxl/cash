@@ -127,7 +127,9 @@ an entry or page names no builtin.
 
 - `awk`: Scan and process text with the AWK language.
 - `bc`: Calculate with arbitrary precision, in POSIX bc's language.
+- `cmp`: Compare two files byte by byte, and say where they first differ.
 - `column`: Lay a list out in columns, or align a table on a separator.
+- `diff`: Compare two files line by line, or two folders file by file.
 - `dos2unix`: Convert CRLF line endings to LF.
 - `find`: Search a folder tree for files that match an expression.
 - `getopt`: Parse command options for a script, util-linux style.

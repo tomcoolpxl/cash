@@ -47,6 +47,7 @@ workspace = true
 cash-awk = { workspace = true }
 cash-bc = { workspace = true }
 cash-sed = { workspace = true }
+cash-diffutils = { workspace = true }
 cash-core = { workspace = true }
 cash-builtins = { workspace = true }
 cash-coreutils-builtins = { workspace = true, optional = true }

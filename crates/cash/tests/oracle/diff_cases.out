@@ -1,0 +1,765 @@
+== normal
+2c2
+< b
+---
+> B
+3a4
+> d
+rc=1
+== identical
+rc=0
+== identical -s
+Files a and same are identical
+rc=0
+== -q
+Files a and b differ
+rc=1
+rc=0
+== -q -s
+Files a and same are identical
+Files a and b differ
+== normal several
+2d1
+< b
+3a3
+> x
+5a6
+> f
+10c10
+< 10
+---
+> ten
+15c15
+< 15
+---
+> fifteen
+== -u
+--- a [T]
++++ b [T]
+@@ -1,3 +1,4 @@
+ a
+-b
++B
+ c
++d
+rc=0
+== -U 1 and -U0
+--- q1 [T]
++++ q2 [T]
+@@ -9,3 +9,3 @@
+ 9
+-10
++ten
+ 11
+@@ -14,3 +14,3 @@
+ 14
+-15
++fifteen
+ 16
+--- e1 [T]
++++ e2 [T]
+@@ -2 +1,0 @@
+-b
+@@ -3,0 +3 @@
++x
+@@ -5,0 +6 @@
++f
+--- a [T]
++++ b [T]
+@@ -2 +2 @@
+-b
++B
+@@ -3,0 +4 @@
++d
+== -u far apart
+--- q1 [T]
++++ q2 [T]
+@@ -7,12 +7,12 @@
+ 7
+ 8
+ 9
+-10
++ten
+ 11
+ 12
+ 13
+ 14
+-15
++fifteen
+ 16
+ 17
+ 18
+== -c
+*** a [T]
+--- b [T]
+***************
+*** 1,3 ****
+  a
+! b
+  c
+--- 1,4 ----
+  a
+! B
+  c
++ d
+rc=0
+== -C 1 and -c0
+*** a [T]
+--- b [T]
+***************
+*** 1,3 ****
+  a
+! b
+  c
+--- 1,4 ----
+  a
+! B
+  c
++ d
+*** e1 [T]
+--- e2 [T]
+***************
+*** 2 ****
+- b
+--- 1 ----
+***************
+*** 3 ****
+--- 3 ----
++ x
+***************
+*** 5 ****
+--- 6 ----
++ f
+*** q1 [T]
+--- q2 [T]
+***************
+*** 9,11 ****
+  9
+! 10
+  11
+--- 9,11 ----
+  9
+! ten
+  11
+***************
+*** 14,16 ****
+  14
+! 15
+  16
+--- 14,16 ----
+  14
+! fifteen
+  16
+== -e
+3a
+d
+.
+2c
+B
+.
+5a
+f
+.
+3a
+x
+.
+2d
+== -L
+--- left
++++ b [T]
+@@ -1,3 +1,4 @@
+ a
+-b
++B
+ c
++d
+--- left
++++ right
+@@ -1,3 +1,4 @@
+ a
+-b
++B
+ c
++d
+*** L1
+--- L2
+***************
+*** 1,3 ****
+  a
+! b
+  c
+--- 1,4 ----
+  a
+! B
+  c
++ d
+Files X and Y differ
+Files X and same are identical
+== -y
+ a \t \t \t \t \t \t \t \t a \n b \t \t \t \t
+ \t \t \t | \t B \n c \t \t
+ \t \t \t \t \t \t c \n \t \t \t \t \t \t \t
+ > \t d \n
+rc=0
+== -y -W 40 and 20
+ a \t \t \t a \n b \t \t | \t B \n
+ c \t \t \t c \n \t \t > \t d \n
+ a \t a \n b < \n c \t c \n
+ > \t x \n d \t d \n e \t
+ e \n > \t f \n
+== -y --suppress-common-lines --left-column
+ b \t < \n \t
+ > \t x \n \t > \t f \n
+ a \t ( \n b \t
+ | \t B \n c \t ( \n
+ \t > \t d \n
+== -y -t
+ a
+ a \n b
+ | B \n c
+ c \n
+ > d \n
+== -y long lines
+ a b c d e f g h i j k l m | \t
+ a b c d e f g h i j k l m \n
+== -y tabs in the text
+ a \t b | \t a \t c \n
+== -y colour
+ a \t \t a \n b \t | \t B
+ \n c \t \t c \n 033 [ 3 2 m \t
+ > \t d \n 033 [ 0 m
+== -i
+2c2
+< x
+---
+> y
+rc=1
+rc=1
+== -w
+rc=0
+1,2c1,2
+< a b
+< c
+---
+> ab
+>  c 
+rc=1
+== -b
+rc=0
+rc=0
+1c1
+<  b
+---
+> b
+rc=1
+1c1
+< a b
+---
+> ab
+rc=1
+rc=0
+== -B
+4a4
+> w
+rc=1
+rc=0
+--- bl1 [T]
++++ bl2 [T]
+@@ -1,4 +1,4 @@
+ x
+-
+ y
+ z
++w
+*** bl1 [T]
+--- bl2 [T]
+***************
+*** 1,4 ****
+  x
+- 
+  y
+  z
+--- 1,4 ----
+  x
+  y
+  z
++ w
+== -B whitespace-only line
+2d1
+<   
+rc=1
+rc=0
+== -B near a real change
+--- bl7 [T]
++++ bl6 [T]
+@@ -2,9 +2,10 @@
+ 2
+ 3
+ 4
++
+ 5
+ 6
+ 7
+ 8
+-9
++9x
+ 10
+--- bl7 [T]
++++ bl6 [T]
+@@ -8,3 +9,3 @@
+ 8
+-9
++9x
+ 10
+== -I
+2,3c2,3
+< # c1
+< # d1
+---
+> # c2
+> # d2
+rc=1
+rc=0
+== -E
+rc=0
+1c1
+< 	a
+---
+>     a
+rc=1
+rc=0
+1c1
+< a	b
+---
+> a       b
+rc=1
+== -a and -t
+1c1
+< a       b
+---
+> a       b
+1c1
+<     a
+---
+>     a
+rc=1
+== -T
+ 2 c 2 \n < \t b \n - - - \n > \t B \n
+ 3 a 4 \n > \t d \n
+ - - - a [ T ] \n + + + b
+ [ T ] \n @ @ - 1 , 3 + 1 , 4
+ @ @ \n \t a \n - \t b \n + \t B \n \t
+ c \n + \t d \n
+ * * * a [ T ] \n - - - b
+ [ T ] \n * * * * * * * * * * * *
+ * * * \n * * * 1 , 3 * * * *
+ \n \t a \n ! \t b \n \t c \n - - -
+ 1 , 4 - - - - \n \t a \n ! \t
+ B \n \t c \n + \t d \n
+== CRLF both
+ 2 c 2 \n < b \r \n - - - \n > c
+ \r \n
+rc=0
+== CRLF against LF
+ 1 , 2 c 1 , 2 \n < a \r \n < b
+ \r \n - - - \n > a \n > b \n
+rc=0
+== CRLF against LF with --strip-trailing-cr, -w, -b
+rc=0
+rc=0
+rc=0
+== --strip-trailing-cr output is stripped
+ 2 c 2 \n < c \n - - - \n > b \n
+ - - - c r l f 2 [ T ] \n + +
+ + l f 1 [ T ] \n @ @ - 1 ,
+ 2 + 1 , 2 @ @ \n a \n - c \n
+ + b \n
+== a lone CR at the end stays
+ 1 c 1 \n < a \r \n \ N o n e
+ w l i n e a t e n d o f
+ f i l e \n - - - \n > a \n \ N
+ o n e w l i n e a t e n d
+ o f f i l e \n
+rc=0
+== no newline at end
+2c2
+< b
+\ No newline at end of file
+---
+> b
+--- n1 [T]
++++ n2 [T]
+@@ -1,2 +1,2 @@
+ a
+-b
+\ No newline at end of file
++b
+*** n1 [T]
+--- n2 [T]
+***************
+*** 1,2 ****
+  a
+! b
+\ No newline at end of file
+--- 1,2 ----
+  a
+! b
+2c2
+< b
+\ No newline at end of file
+---
+> c
+\ No newline at end of file
+ a \t \t a \n b \t \ \t b
+ \n
+ a \t \t a \n b \t / \t c
+ \n
+== no newline, -w and -b
+rc=0
+rc=0
+== empty files
+rc=0
+0a1,3
+> a
+> b
+> c
+rc=1
+--- z1 [T]
++++ a [T]
+@@ -0,0 +1,3 @@
++a
++b
++c
+--- a [T]
++++ z1 [T]
+@@ -1,3 +0,0 @@
+-a
+-b
+-c
+Files z1 and z2 are identical
+== colour normal
+ 033 [ 3 6 m 2 c 2 033 [ 0 m \n 033 [ 3
+ 1 m < b 033 [ 0 m \n - - - \n 033 [
+ 3 2 m > B 033 [ 0 m \n 033 [ 3 6 m
+ 3 a 4 033 [ 0 m \n 033 [ 3 2 m > d
+ 033 [ 0 m \n
+== colour unified
+ 033 [ 1 m - - - a 033 [ 0 m \n 033 [
+ 1 m + + + b 033 [ 0 m \n 033 [ 3 6
+ m @ @ - 1 , 3 + 1 , 4 @ @
+ 033 [ 0 m \n a \n 033 [ 3 1 m - b 033
+ [ 0 m \n 033 [ 3 2 m + B 033 [ 0 m \n
+ c \n 033 [ 3 2 m + d 033 [ 0 m \n
+== colour context
+ 033 [ 1 m * * * a 033 [ 0 m \n 033 [
+ 1 m - - - b 033 [ 0 m \n * * * *
+ * * * * * * * * * * * \n 033 [ 3 6
+ m * * * 1 , 3 * * * * 033 [ 0
+ m \n 033 [ 3 1 m a 033 [ 0 m \n 033
+ [ 3 1 m ! b 033 [ 0 m \n 033 [ 3 1
+ m c 033 [ 0 m \n 033 [ 3 6 m - -
+ - 1 , 4 - - - - 033 [ 0 m \n 033
+ [ 3 2 m a 033 [ 0 m \n 033 [ 3 2
+ m ! B 033 [ 0 m \n 033 [ 3 2 m
+ c 033 [ 0 m \n 033 [ 3 2 m + d 033 [
+ 0 m \n
+== colour with no newline
+ 033 [ 3 6 m 2 c 2 033 [ 0 m \n 033 [ 3
+ 1 m < b 033 [ 0 m \n \ N o n
+ e w l i n e a t e n d o f
+ f i l e \n - - - \n 033 [ 3 2 m >
+ b 033 [ 0 m \n
+== --color=never and --color on a pipe
+ 2 c 2 \n < b \n - - - \n > B \n
+ 3 a 4 \n > d \n
+ 2 c 2 \n < b \n - - - \n > B \n
+ 3 a 4 \n > d \n
+== colour identical
+rc=0
+== binary
+Binary files bin1 and bin2 differ
+rc=1
+rc=0
+Files bin1 and bin2 differ
+rc=1
+Files bin1 and bin3 are identical
+rc=0
+Binary files bin1 and a differ
+rc=1
+== binary with -a
+ 1 c 1 \n < a \0 b \n - - - \n >
+ a \0 c \n
+rc=0
+== stdin
+2a3
+> c
+rc=1
+--- a [T]
++++ - [T]
+@@ -1,3 +1,2 @@
+ a
+ b
+-c
+rc=0
+rc=0
+== missing
+diff: nosuch: No such file or directory
+rc=2
+diff: nosuch: No such file or directory
+rc=2
+diff: nosuch: No such file or directory
+diff: nosuch2: No such file or directory
+rc=2
+== missing with -N
+0a1,3
+> a
+> b
+> c
+rc=1
+--- a [T]
++++ nosuch [T]
+@@ -1,3 +0,0 @@
+-a
+-b
+-c
+rc=0
+*** nosuch [T]
+--- a [T]
+***************
+*** 0 ****
+--- 1,3 ----
++ a
++ b
++ c
+== directories without -r
+diff d1/f d2/f
+1c1
+< one
+---
+> two
+Only in d1: only1
+Only in d2: only2
+Only in d1: onlydir
+Common subdirectories: d1/sub and d2/sub
+rc=1
+== -r
+diff -r d1/f d2/f
+1c1
+< one
+---
+> two
+Only in d1: only1
+Only in d2: only2
+Only in d1: onlydir
+rc=1
+== -r with a trailing slash
+diff -r d1/f d2/f
+1c1
+< one
+---
+> two
+Only in d1/: only1
+Only in d2/: only2
+Only in d1/: onlydir
+rc=1
+== -ru and -r -u
+diff -ru d1/f d2/f
+--- d1/f [T]
++++ d2/f [T]
+@@ -1 +1 @@
+-one
++two
+Only in d1: only1
+Only in d2: only2
+Only in d1: onlydir
+diff -r -u d1/f d2/f
+--- d1/f [T]
++++ d2/f [T]
+@@ -1 +1 @@
+-one
++two
+Only in d1: only1
+Only in d2: only2
+Only in d1: onlydir
+diff -r -U 1 d1/f d2/f
+--- d1/f [T]
++++ d2/f [T]
+@@ -1 +1 @@
+-one
++two
+Only in d1: only1
+Only in d2: only2
+Only in d1: onlydir
+== -rq and -rs
+Files d1/f and d2/f differ
+Only in d1: only1
+Only in d2: only2
+Only in d1: onlydir
+rc=1
+diff -rs d1/f d2/f
+1c1
+< one
+---
+> two
+Only in d1: only1
+Only in d2: only2
+Only in d1: onlydir
+Files d1/sub/s and d2/sub/s are identical
+rc=1
+== -rN
+diff -rN d1/f d2/f
+1c1
+< one
+---
+> two
+diff -rN d1/only1 d2/only1
+1d0
+< x
+rc=1
+diff -rNu d1/f d2/f
+--- d1/f [T]
++++ d2/f [T]
+@@ -1 +1 @@
+-one
++two
+diff -rNu d1/only1 d2/only1
+--- d1/only1 [T]
++++ d2/only1 [T]
+@@ -1 +0,0 @@
+-x
+== -N without -r keeps a lone directory
+diff -N d1/f d2/f
+1c1
+< one
+---
+> two
+diff -N d1/only1 d2/only1
+1d0
+< x
+Common subdirectories: d1/only2 and d2/only2
+Common subdirectories: d1/onlydir and d2/onlydir
+Common subdirectories: d1/sub and d2/sub
+== identical directories
+rc=0
+Files d1/sub/s and d2/sub/s are identical
+rc=0
+== dir vs file
+rc=0
+1c1
+< one
+---
+> zz
+rc=1
+1c1
+< zz
+---
+> one
+rc=1
+== dir vs stdin
+diff: cannot compare '-' to a directory
+rc=2
+== dir vs missing file
+diff: nosuchfile: No such file or directory
+rc=2
+== file on one side, directory on the other
+File fd1/f is a regular file while file fd2/f is a directory
+rc=1
+File fd1/f is a regular file while file fd2/f is a directory
+rc=1
+== -rN with a subdirectory missing
+diff -rN md1/sub/z md2/sub/z
+1d0
+< z
+rc=1
+Only in md1: sub
+rc=1
+== -r binary
+Binary files rb1/bin and rb2/bin differ
+rc=1
+Files rb1/bin and rb2/bin differ
+== -x
+diff -r -x '*.o' x1/keep.c x2/keep.c
+1c1
+< 1
+---
+> 2
+rc=1
+diff -r '--exclude=*.o' x1/keep.c x2/keep.c
+== sorted by bytes
+Only in o1: B
+Only in o1: C
+Only in o1: a
+Only in o1: d
+== nested only
+Only in q3: d
+== bad option
+diff: unrecognized option '--foo'
+diff: Try 'diff --help' for more information.
+rc=2
+2c2
+< b
+---
+> B
+3a4
+> d
+rc=1
+diff: invalid option -- 'z'
+diff: Try 'diff --help' for more information.
+rc=2
+== missing operand
+diff: missing operand after ‘a’
+diff: Try 'diff --help' for more information.
+rc=2
+diff: missing operand after ‘diff’
+diff: Try 'diff --help' for more information.
+rc=2
+== extra operand
+diff: extra operand ‘a’
+diff: Try 'diff --help' for more information.
+rc=2
+== bad context, width, tabsize, colour
+diff: invalid context length ‘x’
+diff: Try 'diff --help' for more information.
+rc=2
+diff: invalid width ‘x’
+diff: Try 'diff --help' for more information.
+rc=2
+diff: invalid tabsize ‘0’
+diff: Try 'diff --help' for more information.
+rc=2
+diff: invalid color ‘foo’
+diff: Try 'diff --help' for more information.
+rc=2
+== conflicting formats
+diff: conflicting output style options
+diff: Try 'diff --help' for more information.
+rc=2
+diff: conflicting output style options
+diff: Try 'diff --help' for more information.
+rc=2
+== too many labels
+diff: too many file label options
+rc=2
+== an option needing an argument
+diff: option requires an argument -- 'L'
+diff: Try 'diff --help' for more information.
+rc=2
+diff: option '--label' requires an argument
+diff: Try 'diff --help' for more information.
+rc=2
+diff: option '--brief' doesn't allow an argument
+diff: Try 'diff --help' for more information.
+rc=2
+== -NUM
+--- q1 [T]
++++ q2 [T]
+@@ -9,3 +9,3 @@
+--- q1 [T]
++++ q2 [T]
+@@ -9,3 +9,3 @@
+== --help head
+Usage: diff [OPTION]... FILES
+Compare FILES line by line.
+== --version
+diff (GNU diffutils) 3.12
+diff (GNU diffutils) 3.12

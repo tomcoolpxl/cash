@@ -11,6 +11,6 @@ the last command with a substitution. The editor is `-e EDITOR`, else `$FCEDIT`,
 ## Windows notes
 
 Windows' `fc.exe` compares files; inside cash, `fc` is this builtin. To compare files,
-use `diff` or `cmp` from Git for Windows, or `"$SYSTEMROOT/System32/fc.exe"`.
+use cash's `diff` or `cmp`, or `"$SYSTEMROOT/System32/fc.exe"`.
 
 Ctrl-X Ctrl-E at the prompt edits the current line the same way, with `$VISUAL` first.

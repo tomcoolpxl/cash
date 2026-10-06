@@ -1,0 +1,161 @@
+== differing
+c1 c2 differ: byte 6, line 2
+rc=1
+== identical
+rc=0
+rc=0
+== -b
+c1 c2 differ: byte 6, line 2 is 145 e 130 X
+rc=1
+c1 c2 differ: byte 6, line 2 is 145 e 130 X
+== -l
+6 145 130
+rc=1
+6 145 130
+== -lb and -bl
+6 145 e    130 X
+6 145 e    130 X
+6 145 e    130 X
+== -s
+rc=1
+rc=0
+rc=1
+rc=1
+== EOF
+cmp: EOF on ‘c3’ after byte 4, line 1
+rc=1
+cmp: EOF on ‘c3’ after byte 4, line 1
+rc=1
+== EOF on an empty file
+cmp: EOF on ‘c4’ which is empty
+rc=1
+cmp: EOF on ‘c4’ which is empty
+rc=1
+rc=0
+== EOF in a line
+cmp: EOF on ‘l2’ after byte 4, in line 2
+rc=1
+cmp: EOF on ‘l2’ after byte 4
+rc=1
+rc=1
+== -l with EOF
+cmp: EOF on ‘c3’ after byte 4
+rc=1
+cmp: EOF on ‘c3’ after byte 4
+rc=1
+== -i N
+c1 c2 differ: byte 2, line 1
+rc=1
+c1 c2 differ: byte 2, line 1
+c1 c2 differ: byte 2, line 1
+== -i N:M
+c1 c2 differ: byte 1, line 1
+rc=1
+c1 c2 differ: byte 6, line 2
+c1 c2 differ: byte 2, line 1
+rc=1
+== positional skips
+c1 c2 differ: byte 1, line 1
+rc=1
+c1 c2 differ: byte 1, line 1
+rc=1
+c1 c2 differ: byte 1, line 1
+rc=1
+== -n N
+rc=0
+c1 c2 differ: byte 6, line 2
+rc=1
+c1 c2 differ: byte 6, line 2
+rc=1
+cmp: EOF on ‘c3’ after byte 4, line 1
+rc=1
+== -n with EOF
+cmp: EOF on ‘c3’ after byte 4, line 1
+rc=1
+rc=0
+== suffixes
+rc=0
+w1 w2 differ: byte 16, line 1
+rc=1
+rc=0
+== -l widths
+16 141 142
+cmp: EOF on ‘w3’ after byte 10
+10 141 142
+rc=1
+cmp: EOF on ‘w3’ after byte 10
+10 142 141
+== -b high bytes
+h1 h2 differ: byte 1, line 1 is 377 M-^? 177 ^?
+1 377 M-^? 177 ^?
+h3 h4 differ: byte 1, line 1 is   1 ^A  40  
+1   1 ^A    40  
+== differing lengths, long
+big1 big2 differ: byte 13884, line 2999
+rc=1
+cmp: EOF on ‘big2’ after byte 13890
+13884  62 170
+13885  71  12
+13886  71  63
+13887  71  60
+13888  12  60
+13889  63  60
+13890  60  12
+cmp: EOF on ‘big3’ after byte 5000, in line 1222
+rc=1
+== stdin
+rc=0
+c3 - differ: byte 3, line 1
+rc=1
+c3 - differ: byte 3, line 1
+rc=1
+rc=0
+== missing
+cmp: nosuch: No such file or directory
+rc=2
+cmp: nosuch: No such file or directory
+rc=2
+rc=2
+== directory
+cmp: d: Is a directory
+rc=2
+cmp: d: Is a directory
+rc=2
+== bad usage
+cmp: missing operand after ‘cmp’
+cmp: Try 'cmp --help' for more information.
+rc=2
+cmp: unrecognized option '--foo'
+cmp: Try 'cmp --help' for more information.
+rc=2
+cmp: invalid option -- 'z'
+cmp: Try 'cmp --help' for more information.
+rc=2
+cmp: options -l and -s are incompatible
+cmp: Try 'cmp --help' for more information.
+rc=2
+cmp: options -l and -s are incompatible
+cmp: Try 'cmp --help' for more information.
+rc=2
+== bad values
+cmp: invalid --ignore-initial value ‘x’
+cmp: Try 'cmp --help' for more information.
+rc=2
+cmp: invalid --bytes value ‘x’
+cmp: Try 'cmp --help' for more information.
+rc=2
+cmp: invalid --bytes value ‘’
+cmp: Try 'cmp --help' for more information.
+rc=2
+cmp: extra operand ‘3’
+cmp: Try 'cmp --help' for more information.
+rc=2
+cmp: option requires an argument -- 'i'
+cmp: Try 'cmp --help' for more information.
+rc=2
+== --help head
+Usage: cmp [OPTION]... FILE1 [FILE2 [SKIP1 [SKIP2]]]
+Compare two files byte by byte.
+== --version
+cmp (GNU diffutils) 3.12
+cmp (GNU diffutils) 3.12

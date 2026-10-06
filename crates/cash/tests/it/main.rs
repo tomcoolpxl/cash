@@ -67,6 +67,8 @@ mod crlf_scripts;
 mod ctrl_c;
 // D7: `/dev/stdin`, `/dev/stdout`, `/dev/stderr` and `/dev/fd/N` as the shell's descriptors.
 mod dev_descriptors;
+// `diff` and `cmp`, uutils diffutils' behind GNU's interface, against GNU diffutils' output.
+mod diff_builtin;
 mod directory_stack;
 mod disown;
 mod doctor_busybox;

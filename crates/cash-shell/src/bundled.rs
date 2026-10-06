@@ -82,6 +82,14 @@ fn run_sed_bundled(args: Vec<OsString>) -> i32 {
     cash_sed::uumain(args.into_iter())
 }
 
+fn run_diff_bundled(args: Vec<OsString>) -> i32 {
+    cash_diffutils::run_diff(args)
+}
+
+fn run_cmp_bundled(args: Vec<OsString>) -> i32 {
+    cash_diffutils::run_cmp(args)
+}
+
 /// Installs the registry from all compiled-in providers.
 ///
 /// Providers are controlled by Cargo features. Binaries should call this
@@ -96,6 +104,9 @@ pub fn install_default_providers() {
 
     commands.insert("awk".to_string(), run_awk_bundled);
     commands.insert("sed".to_string(), run_sed_bundled);
+    // `diff` and `cmp` from uutils diffutils, with GNU diffutils' interface (D76).
+    commands.insert("diff".to_string(), run_diff_bundled);
+    commands.insert("cmp".to_string(), run_cmp_bundled);
     commands.insert("bc".to_string(), run_bc_bundled);
     commands.insert("ping".to_string(), run_ping_bundled);
 
