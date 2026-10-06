@@ -189,11 +189,25 @@ branch, a large shared history, the usual aliases and `ls` with icons. `cash --i
 writes it later, when there is still neither file. `cash.exe` carries its own C runtime, so nothing else needs installing. Scoop will
 not upgrade an app while it runs: close the cash windows first, or run `scoop config
 ignore_running_processes true`. Each version gets a folder of its own, so a running
-`cash.exe` is never overwritten. A winget package is planned (ROADMAP item 18).
+`cash.exe` is never overwritten.
 
-Without Scoop, unpack a release zip anywhere and run `cash.exe`. `cash
---terminal-profile` adds the Windows Terminal profile, and `cash
---remove-terminal-profile` takes it away.
+Without Scoop, from 1.6.0 on, the setup on the [releases
+page](https://github.com/tomcoolpxl/cash/releases) (`cash-vX.Y.Z-setup.exe`) installs
+cash for your account alone, without admin: under `%LOCALAPPDATA%\Programs\cash`, in the
+same versioned layout, with the Terminal profile, `cash` on PATH, and, ticked by default,
+the bundled tools as programs on PATH too (`ls.exe`, `sed.exe`, `awk.exe`, ...), so
+editors, `make` and scripts outside cash find them. An unticked task runs Scoop's own
+installer for those who want the rest of their tools the easy way. For scripts and
+winget: `cash-vX.Y.Z-setup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART`, with
+`/DIR=` and `/TASKS=links,scoop`. Upgrade with `cash --update` (`--check` only looks);
+open windows keep their version, new ones get the new one. Uninstall from Settings, Apps:
+your `~/.bashrc`, history and config stay. The setup is unsigned: a browser download
+gets SmartScreen's "unknown publisher" prompt once (winget and Scoop downloads do not).
+`help installing` has the details, and a winget package follows from this installer
+(ROADMAP item 18).
+
+Or unpack a release zip anywhere and run `cash.exe`. `cash --terminal-profile` adds the
+Windows Terminal profile, and `cash --remove-terminal-profile` takes it away.
 
 ## Build
 
