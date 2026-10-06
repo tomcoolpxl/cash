@@ -507,9 +507,6 @@ script-visible Bash behaviour or a kinder refusal.
   (`Swatinem/rust-cache`, `.github/workflows/ci.yml`) walks `target\doc` and trips on
   folders that are gone. Find what makes `target\doc\cash_core\tests` and keep it out of
   the documentation, or exclude `target\doc` from the cache.
-- **`ls` prints two blank lines before a folder's `name:` heading** when files and a
-  folder are listed together (`ls s*` with a `sub` folder); GNU prints one. Found by the
-  gzip oracle on 2026-10-06, which renamed its folder to dodge it.
 - **cash never runs a user's `command_not_found_handle`** (found building the install
   hint, 2026-10-06). Bash calls that function, when defined, with the command and its
   arguments instead of printing `command not found`, and its status becomes the

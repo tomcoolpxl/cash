@@ -349,12 +349,9 @@ impl builtins::Command for LsCommand {
         if !file_items.is_empty() {
             self.sort_items(&mut file_items);
             self.render_items(&context, &file_items, &look, is_tty)?;
-            if !dir_paths.is_empty() {
-                writeln!(context.stdout())?;
-            }
         }
 
-        // Print directories.
+        // Print directories, each after one blank line when something came before it.
         for (i, (dir_path, dir_str)) in dir_paths.iter().enumerate() {
             if self.tree {
                 if i > 0 || !file_items.is_empty() {

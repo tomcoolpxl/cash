@@ -586,6 +586,41 @@ fn ls_ends_with_141_when_its_reader_goes() {
     assert!(out.stderr.is_empty(), "{}", out.stderr);
 }
 
+/// Files named beside a folder are listed first, then one blank line and the folder's
+/// heading, as GNU `ls` does. cash printed two blank lines there, with `-l`, `-R` and
+/// `--tree` too, and after an operand that does not exist.
+#[test]
+fn files_and_then_a_folder_are_one_blank_line_apart() {
+    let scratch = Scratch::new("ls-files-then-folder");
+    std::fs::write(scratch.join("s1"), "").unwrap();
+    std::fs::create_dir(scratch.join("sub")).unwrap();
+    std::fs::write(scratch.join("sub").join("inner"), "").unwrap();
+    let ls = |args: &str| {
+        output_of(
+            cash_command()
+                .args(["-c", &format!("ls {args}")])
+                .current_dir(scratch.path()),
+        )
+    };
+
+    assert_eq!(ls("s1 sub").stdout, "s1\n\nsub:\ninner");
+    assert_eq!(ls("-R s1 sub").stdout, "s1\n\nsub:\ninner");
+    assert_eq!(ls("--tree s1 sub").stdout, "s1\n\nsub\n└── inner");
+    let missing = ls("nope s1 sub");
+    assert_eq!(missing.stdout, "s1\n\nsub:\ninner");
+    assert_eq!(missing.code, 2);
+    let long = ls("-l s1 sub").stdout;
+    let lines: Vec<&str> = long.lines().collect();
+    assert_eq!(
+        lines.get(1..4),
+        Some(&["", "sub:", "total 0"][..]),
+        "{long}"
+    );
+    // Folders alone were right already: one blank line between them.
+    std::fs::create_dir(scratch.join("sub2")).unwrap();
+    assert_eq!(ls("sub sub2").stdout, "sub:\ninner\n\nsub2:");
+}
+
 /// `ls -R` reports a directory below it that it cannot open, prints no header for it and
 /// exits 1, as GNU `ls` does. It printed the header with nothing under it, said
 /// nothing, and exited 0 (BI-14).
