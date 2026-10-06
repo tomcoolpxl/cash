@@ -672,6 +672,7 @@ dependencies = [
  "cash-core",
  "cash-parser",
  "cash-picker",
+ "cash-builtins",
  "cash-win32",
  "crossterm",
  "futures-util",
