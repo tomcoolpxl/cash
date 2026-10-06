@@ -37,7 +37,8 @@ GitHub, `tput cols` 27k), `column` (`column -t` 27k), `xdg-open` (79k) and `pbco
 | Q7 `free` | `Swap:` is the page file; no `Commit:` row, since scripts parse `free` by `Mem:` and `Swap:` |
 | Q8 `nc` | OpenBSD's flags; `-e`/`-c` refused |
 | Q3 compressors | Still not adopted; to be discussed next. On this machine `gunzip` and `zcat` resolve to nothing even with Scoop's gzip installed, and `tar.exe` reads only archives |
-| `grep`, `diff`, `cmp`, `patch`, `strings` | Still not adopted |
+| `grep`, `diff`, `cmp` | **Adopted after all, 2026-10-06** (spec D76, TODO phase 23): the rule was made for a cash beside Git Bash, and under the "install cash, have everything" aim `grep` is the commonest failure on a bare machine. `grep` on ripgrep's library crates with GNU's interface, `fancy-regex` for backreferences; `diff`/`cmp` from uutils diffutils |
+| `patch`, `strings` | Still not adopted |
 
 ## Method
 

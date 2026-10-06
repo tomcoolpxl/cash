@@ -62,6 +62,7 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 | 20 | 1.4.0 | `croot`: a built-in file and folder picker on Alt-E |
 | 21 | 1.5.0 | Console, clipboard and the remaining small tools |
 | 22 | 1.6.0 | A per-user installer, `cash --update`, and winget |
+| 23 | 1.7.0 | `grep`, `diff` and `cmp`: the standing rule reversed |
 
 ---
 
@@ -313,6 +314,32 @@ later").
     non-interactive shell; `CASH_NO_OFFER=1` skips it. The alternative, changing nothing
     unless asked, was turned down for friendliness, with the noted risk that a shell
     started interactively by a script sees the question once.
+11. **`cash doctor` says when cash itself is not on PATH** (the user, 2026-10-06): its
+    `cash` line only reports in-shell resolution, which is always cash, so a portable
+    cash whose folder is on no PATH still reads `ok`. Add a `path` line: `ok` when the
+    folder of the running `cash.exe` (`current` for an installed one, Scoop's shims for
+    Scoop's) is on the user or machine PATH, else `note  path  C:\…\cash.exe is not on
+    your PATH: new windows will not find cash` with the fix `cash --add-to-path`. That
+    command (and `--remove-from-path`) adds or removes the exe's own folder on the user
+    PATH, the same writer the offer and the installer use, and the offer's first
+    question calls it.
+12. **F1: a one-screen help** (the user, 2026-10-06, by pick list). For Windows users
+    who know Bash. The title line is `cash <version>  ·  help`, the version read from the
+    running binary, with `F1 or Esc closes` at the right. Layout "Paths, Keys, More" — a line of prose and six path examples
+    with a reason beside each (`C:/Users/me/src`; `"C:\Users\me\src"` quoted;
+    `'C:\Program Files\Git'`; `/c/Users/me` and `~/src`, which cash reads but other
+    programs do not; `tool.exe "$(winpath -w "$d")"`; `$PATH` as the one colon-separated
+    variable); seven keys (Alt-E, Alt-←/→, Tab, →, Ctrl-R, Alt-., Ctrl-X Ctrl-E); and one
+    block on scripts running unchanged, the built-in tools, `help NAME`, `help topics`,
+    `cash doctor`, `start FILE`, `sudo CMD`. Styled in the prompt's colours (section
+    names in the accent, keys and examples in the highlighter's yellow and green, notes
+    dim; plain under `NO_COLOR`). Drawn on the alternate screen like `less`; F1, Esc or
+    `q` brings the prompt back as it was; a short window scrolls with the arrows. F1 is
+    a Readline function (`cash-help`) that `bind` can move. The starter `~/.bashrc`
+    prints `cash: F1 for help` once per window after the banner. The screen is its
+    own, kept to one page; `help` stays the catalogue. Its text lives as markdown
+    beside the help topics so it reviews as text and the no-spec-references test covers
+    it.
 
 Built on 2026-10-06 (items 1–5, 8 and 9; 6 and 7 follow the first release that carries
 the installer): `packaging/inno/cash.iss` and its step in the release workflow;
@@ -340,6 +367,40 @@ the real `scoop update cash`, then release 1.6.0 with the installer and submit w
 
 ---
 
+## Phase 23. `grep`, `diff` and `cmp`: the standing rule reversed
+
+Chosen by the user on 2026-10-06, by pick list, reversing the 2026-09-25 decision
+("cash does not carry grep or diff"). That rule was made when cash lived beside Git
+Bash; under the vision of 2026-10-06 (install cash, have everything, no Scoop) `grep` is
+the single most common failure on a bare machine and `diff` the second.
+
+1. **`grep`, `egrep`, `fgrep`** with GNU grep 3.x's options, messages and exit codes
+   (0 match, 1 none, 2 trouble): `-E -F -G -P`? (`-P` refused, naming `-E`), `-i -v -c
+   -l -L -n -h -H -o -q -s -w -x -r -R -a -b -A -B -C -m -e -f --include --exclude
+   --exclude-dir --color --null -z`, BRE as the default (`\( \) \{ \} \| \? \+` translated
+   to the regex crate's syntax), ERE with `-E`, fixed strings with `-F`. Built on
+   ripgrep's library crates `grep-regex`, `grep-searcher`, `grep-printer` and
+   `grep-matcher` (BurntSushi, MIT or Unlicense) as dependencies, not copied source:
+   ripgrep's engine, GNU grep's interface. A pattern the regex crate cannot take, a
+   backreference above all, runs through `fancy-regex` (already a dependency) behind the
+   same `Matcher` trait, so the fast path is the common one and nothing is refused. CRLF:
+   a line's `\r` is not part of the line (D20), so `grep 'x$'` matches on a CRLF file and
+   `-o` never prints a CR; `--binary-files` as GNU. Oracle: GNU grep 3.12 in WSL, case by
+   case (`grep_cases`), with `--color` sequences compared too.
+2. **`diff`** (unified, context, normal, `-q`, `-s`, `-r`, `-N`, `-i`, `-w`, `-b`, `-B`,
+   `--color`, `--strip-trailing-cr`, `-u0`, `-L`) and **`cmp`** (`-s`, `-l`, `-b`, `-i`,
+   `-n`) from uutils diffutils (MIT), bundled like `sed`: imported, hardened, exit codes
+   0/1/2, oracle-tested against GNU diffutils 3.12 in WSL (`diff_cases`, `cmp_cases`).
+   `diff` output is what test scripts compare byte for byte, so the golden file is the
+   gate.
+3. **The rest follows the decision**: doctor's `EXPECTED` entries for grep and diff
+   become `CARRIED`; the `tools` table loses its grep and diff rows; README's "It does not
+   carry grep or diff" paragraph goes; `help differences` and spec D48/D35 get the
+   reversal; the gap analysis records it; `type -a grep` shows Git's and Microsoft's
+   behind the builtin, as for every shadowed tool.
+
+---
+
 ## Found along the way
 
 - **The first cash window after a Scoop update is blank for 1 to 3 seconds** (the user,
@@ -353,6 +414,12 @@ the real `scoop update cash`, then release 1.6.0 with the installer and submit w
   cache on disk; checked). To settle: at the 1.5.0 update, time the first `cash -c true`
   and the first `cash -ic true` right after `scoop update cash`, then bisect. The
   lasting fix is code signing (ROADMAP 18, SignPath); a Defender exclusion needs admin.
+  **Measured at the real 1.4.4 → 1.5.0 update (2026-10-06, idle machine):** first
+  `cash -c true` 51 ms, first `cash -ic true` 76 ms, the second 69 ms. The shell's own
+  first start after an update is as fast as any other, so the blank first tab is not
+  cash's: it is Windows Terminal's first launch of a profile whose fragment was just
+  rewritten, or Defender in Terminal's launch context. Left as is (the user: "we live
+  with it"); if it is ever pursued, time a Terminal tab, not the shell.
 - **The Scoop update output** (the user, 2026-10-06): the manifest's notes were nine
   lines shown on every update, with their indentation lost, and the post-install commands
   silenced only standard output. `packaging/scoop/cash.json` now has two notes lines

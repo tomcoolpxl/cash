@@ -2697,6 +2697,34 @@ second, on the releases page; winget is made from the installer.
   and changes nothing without a yes; never for
   `-c`, scripts or a non-interactive shell. The user chose the offer over silence,
   knowing a shell started interactively by a script sees the question once.
+- **`cash doctor` reports when cash itself is on no PATH**, with `cash --add-to-path`
+  (and `--remove-from-path`) for the exe's own folder, the writer the offer shares.
+- **F1, a one-screen help** for Windows users who know Bash (the user, 2026-10-06, by
+  pick list): paths (six examples, a reason each), keys (seven), and one block on
+  scripts, the built-in tools, `help`, `cash doctor`, `start` and `sudo`; in the prompt's
+  colours, on the alternate screen like `less`, closed by F1, Esc or `q`; a Readline
+  function `bind` can move. The starter `~/.bashrc` says `cash: F1 for help` once per
+  window after the banner.
+
+### D76 — `grep`, `diff` and `cmp` are carried after all
+
+**Status: chosen by the user on 2026-10-06**, by pick list, reversing D35's and the gap
+analysis's rule that cash carries no `grep` or `diff`. That rule was made for a cash
+beside Git Bash; under D75's aim, install cash and have everything, `grep` is the single
+most common failure on a bare machine and `diff` the second.
+
+- **`grep`, `egrep`, `fgrep`** with GNU grep's interface, messages and exit codes, built on
+  ripgrep's library crates (`grep-regex`, `grep-searcher`, `grep-printer`,
+  `grep-matcher`; BurntSushi, MIT or Unlicense) as dependencies: ripgrep's engine behind
+  GNU's options. BRE is the default and is translated to the regex crate's syntax; ERE
+  with `-E`, fixed strings with `-F`; a backreference, which that engine lacks, runs the
+  pattern through `fancy-regex` behind the same matcher trait, so nothing is refused.
+  `-P` is refused by name. A CRLF line's `\r` is not part of the line (D20).
+- **`diff` and `cmp`** from uutils diffutils (MIT), bundled like `sed` (D48), checked
+  byte for byte against GNU diffutils, since `diff` output is what test scripts compare.
+- Doctor's expectations for grep and diff become carried tools; `type -a` lists the
+  Microsoft Coreutils and Git for Windows copies behind the builtins, as for every
+  shadowed tool; `enable -n grep` reaches them.
 
 ### D72 — `help` from one catalogue
 
