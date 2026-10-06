@@ -2726,6 +2726,22 @@ most common failure on a bare machine and `diff` the second.
   Microsoft Coreutils and Git for Windows copies behind the builtins, as for every
   shadowed tool; `enable -n grep` reaches them.
 
+### D77 — `gzip`, `gunzip` and `zcat`, and the compatibility corners
+
+**Status: chosen by the user on 2026-10-06**, by pick list (TODO.md phases 24 and 25).
+
+- **The gzip family only**, pure Rust (`flate2`/`miniz_oxide`), with GNU gzip's
+  interface and messages, oracle-tested; `xz` and `bzip2` stay with Windows' `tar.exe`,
+  which reads their archives. Reopens the gap analysis's Q3 for gzip alone: a bare `.gz`
+  has no reader on a bare machine, and even this tooled one has no `gunzip` or `zcat`.
+- **Compatibility corners next**: `/dev/tcp` and `/dev/udp` redirections as Bash has
+  them; `command_not_found_handle` run as Bash runs it, the install hint only without
+  one; abbreviations kept across sessions in `%APPDATA%\cash\abbreviations`, as fish
+  keeps its; kinder refusals for `suspend`, `mkfifo` and `stdbuf`; `getconf` and `locale`
+  with the values Windows has. Chosen ahead of a signing key for `--update`, the
+  adoption work (GIFs, a docs site, issue templates, `doctor --report`) and an ARM64
+  build, which stay on the list.
+
 ### D72 — `help` from one catalogue
 
 Every builtin has an entry: a kind and a one-line summary, in

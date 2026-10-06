@@ -63,6 +63,8 @@ then the riskiest changes once the crashes and state bugs are out of the way.
 | 21 | 1.5.0 | Console, clipboard and the remaining small tools |
 | 22 | 1.6.0 | A per-user installer, `cash --update`, and winget |
 | 23 | 1.7.0 | `grep`, `diff` and `cmp`: the standing rule reversed |
+| 24 | 1.8.0 | `gzip`, `gunzip` and `zcat` |
+| 25 | 1.8.0 | Compatibility corners: `/dev/tcp`, `command_not_found_handle`, persistent `abbr`, kinder refusals, `getconf`, `locale` |
 
 ---
 
@@ -417,7 +419,57 @@ name-ordered directory walks. `diff`/`cmp` are a vendored `cash-diffutils` (uuti
 linear-space Myers where upstream's never finished a 100k-line pair, the five printers,
 `-r`/`-N`/`-x`, `--strip-trailing-cr`, colour; 102 oracle sections byte for byte against
 GNU diffutils 3.12. Doctor's `EXPECTED` list is empty now; the install-hint table lost
-its grep and diff rows; README's paragraph says the three are built in.
+its grep and diff rows; README's paragraph says the three are built in. The winget
+submission (phase 22 item 6) waits for 1.7.0, so the first winget version carries these
+three (the user, 2026-10-06).
+
+---
+
+## Phase 24. `gzip`, `gunzip` and `zcat`
+
+Chosen by the user on 2026-10-06, by pick list (the gap analysis's Q3, reopened): the gzip
+family only; `xz` and `bzip2` stay with `tar.exe`. On this tooled machine `gunzip` and
+`zcat` resolve to nothing, and `tar.exe` reads archives, not a bare `.gz`.
+
+1. **`gzip`, `gunzip`, `zcat`** with GNU gzip 1.14's options, messages and exit codes
+   (0, 1 error, 2 warning): `-c -d -f -k -l -n -N -q -r -S -t -v -1..-9 --fast --best
+   --rsyncable`(accepted), `--help`, `--version`; `gunzip` = `gzip -d`, `zcat` = `gzip -dc`;
+   files replaced in place with the `.gz` suffix added or removed, times and modes kept
+   where Windows has them, the original name and time in the header (`-N`), `-l`'s
+   table, `-t`, stdin and stdout, a refusal to write compressed data to a terminal
+   without `-f`, `-r` over folders, the `.tgz`/`.taz` suffix rules, `GZIP` environment
+   variable accepted with GNU's warning. Pure Rust: `flate2` with `miniz_oxide` (already
+   in the dependency tree). CRLF: bytes are bytes. Oracle: GNU gzip 1.14 in WSL
+   (`gzip_cases`), byte-for-byte on the compressed output where gzip's output is
+   deterministic (`-n`, fixed mtime) and on the decompressed side everywhere.
+2. The entries in `builtins.md`, a page, `CARRIED`, the gap analysis's Q3 row.
+
+## Phase 25. Compatibility corners
+
+Chosen by the user on 2026-10-06, by pick list, as the block after gzip; each item is
+script-visible Bash behaviour or a kinder refusal.
+
+1. **`/dev/tcp/HOST/PORT` and `/dev/udp/HOST/PORT`** in redirections (`exec 3<>
+   /dev/tcp/host/80`, `cat < /dev/tcp/…`, `echo > /dev/tcp/…`), as Bash's: a socket in
+   the descriptor table, both directions, Bash's messages on failure
+   (`bash: connect: Connection refused`, `bash: /dev/tcp/h/p: Connection refused`).
+2. **`command_not_found_handle`** run as Bash runs it: with the command and its
+   arguments, its status the command's, the hint only when no function is defined
+   (found 2026-10-06).
+3. **Persistent `abbr`**: fish keeps abbreviations across sessions; cash keeps them in
+   `%APPDATA%\cash\abbreviations` (one `name=expansion` per line), written by `abbr -a`
+   and `abbr -e`, read at startup after the rc files, so `abbr -a gco git checkout` once
+   is enough; `abbr --no-save`? No: fish has no such flag; a `~/.bashrc` that sets them
+   keeps working and wins.
+4. **Kinder refusals**: `suspend` (no stop signal on Windows; Bash's words for a login
+   shell as the model), `mkfifo` (named pipes are not files on Windows; point at process
+   substitution), `stdbuf` (no preload on Windows; `-o0`/`-oL` accepted as a no-op with
+   a note when the program is cash's own, refused otherwise) — each a builtin with a
+   one-line message and Bash's status, not "command not found".
+5. **`getconf`** (`_NPROCESSORS_ONLN`, `_NPROCESSORS_CONF`, `PAGESIZE`, `LONG_BIT`,
+   `PATH`, `ARG_MAX`, `NAME_MAX`, `PATH_MAX`, `-a`) and **`locale`** (`-a` listing
+   `C`, `POSIX`, `C.UTF-8` and the Windows locales as `en_US.UTF-8` names; bare `locale`
+   printing `LANG`, `LC_*`), the values Windows has, GNU's output shapes.
 
 ---
 
