@@ -464,7 +464,7 @@ dependencies = [
 
 [[package]]
 name = "cash"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -488,7 +488,7 @@ dependencies = [
 
 [[package]]
 name = "cash-awk"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "clap",
  "lexical",
@@ -503,7 +503,7 @@ dependencies = [
 
 [[package]]
 name = "cash-bc"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "bigdecimal",
  "clap",
@@ -511,7 +511,7 @@ dependencies = [
 
 [[package]]
 name = "cash-builtins"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "anyhow",
  "cash-core",
@@ -539,7 +539,7 @@ dependencies = [
 
 [[package]]
 name = "cash-core"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -574,7 +574,7 @@ dependencies = [
 
 [[package]]
 name = "cash-coreutils-builtins"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "uu_arch",
  "uu_b2sum",
@@ -666,7 +666,7 @@ dependencies = [
 
 [[package]]
 name = "cash-interactive"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "bon",
  "cash-core",
@@ -691,7 +691,7 @@ dependencies = [
 
 [[package]]
 name = "cash-parser"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "anyhow",
  "bon",
@@ -713,7 +713,7 @@ dependencies = [
 
 [[package]]
 name = "cash-picker"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "cash-win32",
  "crossterm",
@@ -726,7 +726,7 @@ dependencies = [
 
 [[package]]
 name = "cash-sed"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "assert_fs",
  "clap",
@@ -744,7 +744,7 @@ dependencies = [
 
 [[package]]
 name = "cash-shell"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "anyhow",
  "cash-awk",
@@ -780,7 +780,7 @@ dependencies = [
 
 [[package]]
 name = "cash-test-harness"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -800,7 +800,7 @@ dependencies = [
 
 [[package]]
 name = "cash-win32"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "proptest",
  "tempfile",
@@ -6310,7 +6310,7 @@ checksum = "32ac00cd3f8ec9c1d33fb3e7958a82df6989c42d747bd326c822b1d625283547"
 
 [[package]]
 name = "xtask"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "anyhow",
  "clap",
