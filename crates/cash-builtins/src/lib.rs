@@ -38,6 +38,9 @@ mod getopt;
 // cash: `grep`, `egrep` and `fgrep`, GNU grep 3.12's interface on ripgrep's engine; the
 // most common failure of a script on a bare Windows machine.
 mod grep;
+// cash: `gzip`, `gunzip` and `zcat`, GNU gzip 1.14's interface on miniz_oxide's deflate; a
+// clean Windows machine has none, and `tar.exe` reads archives, not a bare `.gz`.
+mod gzip;
 // cash: `hexdump`, util-linux's, with its format language; a clean Windows machine has none.
 mod hexdump;
 // cash: `iconv`, glibc's, on Windows' code pages; a clean Windows machine has none.
@@ -58,9 +61,6 @@ mod screen;
 mod ss;
 // cash: `tput`, ncurses' for xterm-256color without terminfo: the terminal is VT.
 mod tput;
-// cash: `stty`, GNU's words on the console's four modes; the rest is remembered.
-mod stty;
-mod tree;
 // cash: `getconf`, glibc's names with the values Windows has.
 mod getconf;
 // cash: `locale`, glibc's view of the environment, and the Windows locales by POSIX name.
@@ -71,6 +71,9 @@ mod mkfifo;
 mod stdbuf;
 // cash: `suspend`, Bash's, refused in its own words: Windows has no stop signal.
 mod suspend;
+// cash: `stty`, GNU's words on the console's four modes; the rest is remembered.
+mod stty;
+mod tree;
 // cash: `xxd`, vim's, dump and reverse; Windows has no hex dump a script can read back.
 mod xxd;
 

@@ -61,7 +61,8 @@ const CARRIED: &[&str] = &[
     "chmod", "id", "groups", "awk", "sed", "stat", "tty", "nohup", "who", "users", "pinky",
     "logname", "hostid", "pathchk", "install", "dos2unix", "unix2dos", "fuser", "lsof", "ss",
     "ping", "stty", "tput", "iconv", "column", "xxd", "hexdump", "uuidgen", "xdg-open", "pbcopy",
-    "pbpaste", "flock", "watch", "free", "nice", "renice", "nc", "diff", "cmp", "grep",
+    "pbpaste", "flock", "watch", "free", "nice", "renice", "nc", "diff", "cmp", "grep", "suspend",
+    "mkfifo", "stdbuf", "getconf", "locale", "gzip", "gunzip", "zcat",
 ];
 
 /// Shells whose name must resolve to cash itself (D7).

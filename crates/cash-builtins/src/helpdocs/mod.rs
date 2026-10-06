@@ -533,7 +533,7 @@ mod tests {
             install_hint("Rg").as_deref(),
             Some("winget install BurntSushi.ripgrep.MSVC, or scoop install ripgrep")
         );
-        assert_eq!(install_hint("gzip").as_deref(), Some("scoop install gzip"));
+        assert_eq!(install_hint("gzip"), None, "gzip is cash's own now");
         assert_eq!(install_hint("mvn").as_deref(), Some("scoop install maven"));
         assert_eq!(
             install_hint("code").as_deref(),

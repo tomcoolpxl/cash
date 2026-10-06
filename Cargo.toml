@@ -60,9 +60,14 @@ chrono-tz = "0.10.4"
 clap = "4.6.0"
 color-print = "0.3.7"
 criterion = "0.8.2"
+# `gzip`: the CRC-32 of the trailer; already in the tree through flate2.
+crc32fast = "1.5.2"
 crossterm = "0.29.0"
 diff = "0.1.13"
 fancy-regex = "0.19.2"
+# `gzip`: deflate on the pure-Rust backend (miniz_oxide); a member asks for the
+# backend itself, so no C zlib is ever built.
+flate2 = { version = "1.1.10", default-features = false }
 futures = "0.3.32"
 glob = "0.3.3"
 # `grep`: ripgrep's engine (BurntSushi, MIT or Unlicense) behind GNU grep's interface.

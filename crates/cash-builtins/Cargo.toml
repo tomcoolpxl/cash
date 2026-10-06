@@ -184,6 +184,10 @@ nu-ansi-term = { workspace = true }
 unicode-width = { workspace = true }
 # `uuidgen`: every version util-linux's makes (v1, v3, v4, v5, v6, v7).
 uuid = { workspace = true, features = ["v1", "v3", "v4", "v5", "v6", "v7"] }
+# `gzip`, `gunzip`, `zcat`: deflate from miniz_oxide (pure Rust, no C), the header,
+# the trailer and GNU gzip's interface done here; crc32fast for the trailer's CRC-32.
+flate2 = { workspace = true, features = ["rust_backend"] }
+crc32fast = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }

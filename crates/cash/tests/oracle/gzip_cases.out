@@ -1,0 +1,918 @@
+== --help
+Usage: gzip [OPTION]... [FILE]...
+Compress or uncompress FILEs (by default, compress FILES in-place).
+
+Mandatory arguments to long options are mandatory for short options too.
+
+  -c, --stdout      write on standard output, keep original files unchanged
+  -d, --decompress  decompress
+  -f, --force       force overwrite of output file and compress links
+  -h, --help        give this help
+  -k, --keep        keep (don't delete) input files
+  -l, --list        list compressed file contents
+  -L, --license     display software license
+  -n, --no-name     do not save or restore the original name and timestamp
+  -N, --name        save or restore the original name and timestamp
+  -q, --quiet       suppress all warnings
+  -r, --recursive   operate recursively on directories
+      --rsyncable   make rsync-friendly archive
+  -S, --suffix=SUF  use suffix SUF on compressed files
+      --synchronous synchronous output (safer if system crashes, but slower)
+  -t, --test        test compressed file integrity
+  -v, --verbose     verbose mode
+  -V, --version     display version number
+  -1, --fast        compress faster
+  -9, --best        compress better
+
+With no FILE, or when FILE is -, read standard input.
+rc=0
+Usage: /usr/sbin/gunzip [OPTION]... [FILE]...
+Usage: gzip [OPTION]... [FILE]...
+== bad options
+gzip: invalid option -- 'Y'
+Try `gzip --help' for more information.
+rc=1
+gzip: unrecognized option '--foo'
+Try `gzip --help' for more information.
+rc=1
+gzip: option '--s' is ambiguous; possibilities: '--stdout' '--silent' '--synchronous' '--suffix'
+Try `gzip --help' for more information.
+rc=1
+gzip: option '--b' is ambiguous; possibilities: '--best' '--bits'
+Try `gzip --help' for more information.
+rc=1
+gzip: option requires an argument -- 'S'
+Try `gzip --help' for more information.
+rc=1
+gzip: option '--suffix' requires an argument
+Try `gzip --help' for more information.
+rc=1
+gzip: option '--best' doesn't allow an argument
+Try `gzip --help' for more information.
+rc=1
+gzip: -Z not supported in this version
+Try `gzip --help' for more information.
+rc=1
+gzip: -b operand is not an integer
+Try `gzip --help' for more information.
+rc=1
+gzip: invalid suffix ''
+rc=1
+gzip: invalid suffix '.abcdefghijklmnopqrstuvwxyz0123'
+rc=1
+== header and trailer
+ 1f 8b 08 08 a5 5d 0d 5e 00 03 68 00 cb 48 cd c9
+ c9 e7 02 00 20 30 3a 36 06 00 00 00
+ 1f 8b 08 00 00 00 00 00 00 03 cb 48 cd c9 c9 e7
+ 02 00 20 30 3a 36 06 00 00 00
+ 1f 8b 08 00 00 00 00 00 04 03 cb 48 cd c9 c9 e7
+ 02 00 20 30 3a 36 06 00 00 00
+ 1f 8b 08 00 00 00 00 00 02 03 cb 48 cd c9 c9 e7
+ 02 00 20 30 3a 36 06 00 00 00
+ 1f 8b 08 00 00 00 00 00 04 03 cb 48 cd c9 c9 e7
+ 02 00 20 30 3a 36 06 00 00 00
+ 1f 8b 08 00 00 00 00 00 02 03 cb 48 cd c9 c9 e7
+ 02 00 20 30 3a 36 06 00 00 00
+ 1f 8b 08 00 00 00 00 00 00 03 cb 48 cd c9 c9 e7
+ 02 00 20 30 3a 36 06 00 00 00
+ 1f 8b 08 08 a5 5d 0d 5e 00 03 65 00 03 00 00 00
+ 00 00 00 00 00 00
+ 1f 8b 08 00 a5 5d 0d 5e 00 03 cb 48 cd c9 c9 e7
+ 02 00 20 30 3a 36 06 00 00 00
+ 1f 8b 08 00 00 00 00 00 00 03 cb 48 cd c9 c9 e7
+ 02 00 20 30 3a 36 06 00 00 00
+ 1f 8b 08 00 a5 5d 0d 5e 00 03 cb 48 cd c9 c9 e7
+ 02 00 20 30 3a 36 06 00 00 00
+== round trips
+level 1 ok
+level 5 ok
+level 9 ok
+y ok
+y same
+hello
+== replace in place
+rc=0
+r.gz
+rnd
+1577934245 r.gz
+hello
+rc=0
+r
+rnd
+1577934245 r
+hello
+== -v
+ v : \t - 3 3 . 3 % - - r e p
+ l a c e d w i t h v . g z \n
+ v . g z : \t - 3 3 . 3 % - -
+ r e p l a c e d w i t h v \n
+ h : \t - 3 3 . 3 % - - r e p
+ l a c e d w i t h s t d o u
+ t \n
+ - 3 3 . 3 % \n
+ t . g z : \t O K \n
+rc=0
+ O K \n
+ h e l l o \n
+ h : \t - 3 3 . 3 % - - c r e
+ a t e d h . g z \n
+ h : \t - 3 3 . 3 % - - c r e
+ a t e d h . g z \n
+ g z i p : h a l r e a d y
+ e x i s t s ; \t n o t o v e r
+ w r i t t e n \n
+ h . g z : \t - 3 3 . 3 % - -
+ c r e a t e d h \n
+h
+h.gz
+ e v : \t 0 . 0 % - - r e
+ p l a c e d w i t h e v . g
+ z \n
+ e v . g z : \t 0 . 0 % - -
+ r e p l a c e d w i t h e
+ v \n
+ h : \t - 3 3 . 3 % - - r e p
+ l a c e d w i t h s t d o u
+ t \n
+== -k and -c
+k
+k.gz
+gzip: k already exists;	not overwritten
+rc=2
+rc=0
+k
+k.gz
+k
+k.gz
+kc.gz
+hello
+kc.gz
+== gunzip and zcat
+hello
+rc=0
+z.gz
+rc=0
+z2
+         compressed        uncompressed  ratio uncompressed_name
+                 28                   6 -33.3% z
+hello
+rc=0
+
+gzip: h: not in gzip format
+rc=1
+gzip: h: unknown suffix -- ignored
+rc=2
+gzip: nosuch.gz: No such file or directory
+rc=1
+gzip: invalid option -- 'Y'
+Try `gzip --help' for more information.
+rc=1
+z
+z.gz
+z2
+hello
+hello
+
+gzip: h: not in gzip format
+hello
+rc=1
+== -f and overwrite
+gzip: o.gz already exists;	not overwritten
+rc=2
+gzip: o.gz already exists;	not overwritten
+rc=2
+o
+o.gz
+rc=0
+o.gz
+gzip: o already exists;	not overwritten
+rc=2
+rc=0
+o
+rc=0
+
+gzip: o2.gz: not in gzip format
+rc=1
+== -t on good and corrupt
+rc=0
+ g o o d . g z : \t O K \n
+
+gzip: trunc.gz: unexpected end of file
+rc=1
+ t r u n c . g z : \t \n g z i p :
+ t r u n c . g z : u n e x p
+ e c t e d e n d o f f i l
+ e \n
+
+gzip: trunc.gz: unexpected end of file
+rc=1
+trunc.gz
+
+gzip: trunc.gz: unexpected end of file
+ 68 65 6c 6c
+
+gzip: bad.gz: invalid compressed data--format violated
+rc=1
+ b a d . g z : \t \n g z i p : b
+ a d . g z : i n v a l i d c
+ o m p r e s s e d d a t a - -
+ f o r m a t v i o l a t e d \n
+
+gzip: bad.gz: invalid compressed data--format violated
+rc=1
+bad.gz
+
+gzip: crc.gz: invalid compressed data--crc error
+rc=1
+ c r c . g z : \t \n g z i p : c
+ r c . g z : i n v a l i d c
+ o m p r e s s e d d a t a - -
+ c r c e r r o r \n
+
+gzip: crc.gz: invalid compressed data--crc error
+ 68 65 6c 6c 6f 0a
+
+gzip: len.gz: invalid compressed data--length error
+rc=1
+
+gzip: len.gz: invalid compressed data--length error
+ 68 65 6c 6c 6f 0a
+
+gzip: n.gz: not in gzip format
+rc=1
+
+gzip: n.gz: not in gzip format
+rc=1
+n.gz
+ \n g z i p : n . g z : n o t
+ i n g z i p f o r m a t \n
+
+gzip: n.gz: not in gzip format
+rc=1
+
+gzip: n.gz: not in gzip format
+rc=1
+ g o o d . g z : \t O K \n \n g z
+ i p : n . g z : n o t i n
+ g z i p f o r m a t \n g o o
+ d . g z : \t O K \n
+
+gzip: bad.gz: invalid compressed data--format violated
+rc=1
+
+gzip: trunc.gz: unexpected end of file
+rc=1
+
+gzip: crc.gz: invalid compressed data--crc error
+rc=1
+gzip: nosuch.gz: No such file or directory
+rc=1
+
+gzip: empty.gz: unexpected end of file
+rc=1
+
+gzip: hdr.gz: unexpected end of file
+rc=1
+
+gzip: stdin: unexpected end of file
+rc=1
+
+gzip: stdin: unexpected end of file
+rc=1
+gzip: m.gz: unknown method 9 -- not supported
+rc=1
+gzip: enc.gz is encrypted -- not supported
+rc=1
+gzip: res.gz has flags 0x40 -- not supported
+rc=1
+gzip: hc.gz: header checksum 0x0000 != computed checksum 0x77a7
+rc=1
+
+gzip: pk.gz: not a valid zip file
+rc=1
+== extra field and comment
+rc=0
+ g z i p : x f . g z : e x t
+ r a f i e l d o f 2 b y
+ t e s i g n o r e d \n x f . g
+ z : \t O K \n
+hello
+         compressed        uncompressed  ratio uncompressed_name
+                 30                   6 -33.3% xf
+ c m . g z : \t O K \n
+hello
+== trailing
+
+gzip: tg.gz: decompression OK, trailing garbage ignored
+rc=2
+ t g . g z : \t \n g z i p : t g
+ . g z : d e c o m p r e s s i
+ o n O K , t r a i l i n g
+ g a r b a g e i g n o r e d \n
+ O K \n
+hello
+
+gzip: tg.gz: decompression OK, trailing garbage ignored
+rc=2
+rc=2
+tg
+rc=0
+ t z . g z : \t \n g z i p : t z
+ . g z : d e c o m p r e s s i
+ o n O K , t r a i l i n g
+ z e r o b y t e s i g n o r
+ e d \n O K \n
+rc=0
+tz
+
+gzip: tzx.gz: decompression OK, trailing garbage ignored
+rc=2
+
+gzip: t1.gz: unexpected end of file
+rc=1
+
+gzip: tj.gz: unexpected end of file
+rc=1
+
+gzip: t2.gz: unexpected end of file
+rc=1
+== -l
+         compressed        uncompressed  ratio uncompressed_name
+                 28                   6 -33.3% l
+rc=0
+method  crc     date  time           compressed        uncompressed  ratio uncompressed_name
+defla 363a3020 May  6 07:08                  28                   6 -33.3% l
+         compressed        uncompressed  ratio uncompressed_name
+                 28                   6 -33.3% h
+method  crc     date  time           compressed        uncompressed  ratio uncompressed_name
+defla 363a3020 Jan  2 03:04                  28                   6 -33.3% h
+method  crc     date  time           compressed        uncompressed  ratio uncompressed_name
+defla 363a3020 May  6 07:08                  26                   6 -33.3% ln
+method  crc     date  time           compressed        uncompressed  ratio uncompressed_name
+defla 363a3020 May  6 07:08                  26                   6 -33.3% ln
+         compressed        uncompressed  ratio uncompressed_name
+                 28                   6 -33.3% l
+                 26                   6 -33.3% ln
+                 54                  12 -200.0% (totals)
+rc=0
+                 28                   6 -33.3% l
+                 26                   6 -33.3% ln
+rc=0
+method  crc     date  time           compressed        uncompressed  ratio uncompressed_name
+defla 363a3020 May  6 07:08                  28                   6 -33.3% l
+defla 363a3020 May  6 07:08                  26                   6 -33.3% ln
+                                             54                  12 -200.0% (totals)
+         compressed        uncompressed  ratio uncompressed_name
+                 28                   6 -33.3% stdout
+         compressed        uncompressed  ratio uncompressed_name
+                 28                   6 -33.3% stdout
+method  crc     date  time           compressed        uncompressed  ratio uncompressed_name
+defla 363a3020 Jan  1 00:00                  28                   6 -33.3% stdout
+
+gzip: h: not in gzip format
+         compressed        uncompressed  ratio uncompressed_name
+                 28                   6 -33.3% l
+                 28                   6 -366.7% (totals)
+rc=1
+
+gzip: h: not in gzip format
+rc=1
+gzip: nosuch.gz: No such file or directory
+rc=1
+gzip: nosuch.gz: No such file or directory
+         compressed        uncompressed  ratio uncompressed_name
+                 28                   6 -33.3% l
+                 28                   6 -33.3% (totals)
+rc=1
+
+gzip: e: unexpected end of file
+rc=1
+
+gzip: bad.gz: invalid compressed data--format violated
+         compressed        uncompressed  ratio uncompressed_name
+                 28                   6 -33.3% l
+rc=1
+
+gzip: trunc.gz: unexpected end of file
+         compressed        uncompressed  ratio uncompressed_name
+                 28                   6 -33.3% l
+rc=1
+         compressed        uncompressed  ratio uncompressed_name
+                 22                   0   0.0% em
+method  crc     date  time           compressed        uncompressed  ratio uncompressed_name
+defla 00000000 May  6 07:08                  22                   0   0.0% em
+         compressed        uncompressed  ratio uncompressed_name
+                 28                   6 -33.3% nest/deep
+         compressed        uncompressed  ratio uncompressed_name
+                 28                   6 -33.3% nest/h
+         compressed        uncompressed  ratio uncompressed_name
+                 28                   6 -33.3% l
+         compressed        uncompressed  ratio uncompressed_name
+                 28                   6 -33.3% l
+method  crc     date  time           compressed        uncompressed  ratio uncompressed_name
+defla 363a3020 May  6 07:08                  28                   6 -33.3% l
+rc=0
+== -l multi
+         compressed        uncompressed  ratio uncompressed_name
+                 54                  12 -350.0% two
+method  crc     date  time           compressed        uncompressed  ratio uncompressed_name
+defla 363a3020 May  6 07:08                  54                  12 -350.0% two
+hello
+hello
+ t w o . g z : \t - 3 5 0 . 0 %
+ - - r e p l a c e d w i t h
+ t w o \n
+two
+method  crc     date  time           compressed        uncompressed  ratio uncompressed_name
+defla 363a3020 May  6 07:08                  54                  12 -350.0% two2
+         compressed        uncompressed  ratio uncompressed_name
+                 54                  12 -350.0% h
+gzip: h already exists;	not overwritten
+rc=2
+h
+two2.gz
+hello
+== -n and -N
+method  crc     date  time           compressed        uncompressed  ratio uncompressed_name
+defla 363a3020 Jan  1 00:00                  26                   6 -33.3% stdout
+method  crc     date  time           compressed        uncompressed  ratio uncompressed_name
+defla 363a3020 Jan  2 03:04                  28                   6 -33.3% h
+method  crc     date  time           compressed        uncompressed  ratio uncompressed_name
+defla 363a3020 Jan  2 03:04                  28                   6 -33.3% h
+method  crc     date  time           compressed        uncompressed  ratio uncompressed_name
+defla 363a3020 Jan  1 00:00                  26                   6 -33.3% stdout
+1620284889 nn
+rc=0
+ls: cannot access 'nn2*': No such file or directory
+h
+1577934245 h
+ g z i p : h a l r e a d y
+ e x i s t s ; \t n o t o v e r
+ w r i t t e n \n
+rc=0
+h
+nn3.gz
+ls: cannot access 'nn3*': No such file or directory
+h
+1577934245 h
+1620284889 nn4
+1620284889 nn5
+deep.gz
+h
+hello
+ 68 65 6c 6c 6f 0a
+h
+         compressed        uncompressed  ratio uncompressed_name
+                 28                   6 -33.3% h
+         compressed        uncompressed  ratio uncompressed_name
+                 35                   6 -33.3% evil
+rc=0
+ev
+evil
+evil
+1577934245 ts.gz
+1577934245 ts
+gzip: old: warning: file timestamp out of range for gzip format
+ 1f 8b 08 08 00 00 00 00 00 03 6f 6c 64 00 cb 48
+ cd c9 c9 e7 02 00 20 30 3a 36 06 00 00 00
+rc=0
+ 1f 8b 08 08 00 00 00 00 00 03 6f 6c 64 00 cb 48
+ cd c9 c9 e7 02 00 20 30 3a 36 06 00 00 00
+rc=0
+ o l d : \t g z i p : o l d :
+ w a r n i n g : f i l e t i
+ m e s t a m p o u t o f r
+ a n g e f o r g z i p f o
+ r m a t \n - 3 3 . 3 % - - r
+ e p l a c e d w i t h s t d
+ o u t \n
+ 1f 8b 08 00 00 00 00 00 00 03 cb 48 cd c9 c9 e7
+ 02 00 20 30 3a 36 06 00 00 00
+rc=0
+ 1f 8b 08 08 ff ff ff ff 00 03 65 64 67 65 00 cb
+ 48 cd c9 c9 e7 02 00 20 30 3a 36 06 00 00 00
+rc=0
+== -S
+rc=0
+s.suf
+gzip: s.suf: unknown suffix -- ignored
+rc=2
+rc=0
+s
+ssuf
+s
+s.z
+s
+s.q
+s
+gzip: sg.gz already has .gz suffix -- unchanged
+rc=0
+rc=0
+sg.gz.suf
+         compressed        uncompressed  ratio uncompressed_name
+                 28                   6 -33.3% s14.suf
+rc=0
+         compressed        uncompressed  ratio uncompressed_name
+                 28                   6 -33.3% s14
+hello
+gzip: suffix contains '/'
+rc=1
+s2
+== suffix rules
+rc=0
+rc=0
+rc=0
+rc=0
+rc=0
+rc=0
+rc=0
+rc=0
+rc=0
+rc=0
+bad.gz
+cm.gz
+crc.gz
+dash
+dz
+e
+edge
+em.gz
+empty.gz
+enc.gz
+ev
+evil
+g
+good.gz
+h
+hc.gz
+hdr.gz
+k
+k.gz
+kc.gz
+l.gz
+len.gz
+ln.gz
+m.gz
+mc1
+mc2
+n.gz
+nest
+nn
+nn4
+nn5
+o
+o2
+o2.gz
+old
+pk.gz
+r
+res.gz
+rnd
+s.suf
+s14.suf
+s2
+sg.gz.suf
+t.gz
+t1.gz
+t2.gz
+ta.tar
+tg
+tj.gz
+trunc.gz
+ts
+tt1.tar
+tt2.tar
+two
+two2.gz
+tz
+tzx.gz
+under
+v
+x.tar
+xf.gz
+y
+y.gz
+z
+z.gz
+z0
+z2
+
+gzip: y.gz: not in gzip format
+rc=1
+rc=0
+sp
+gzip: .gz: unknown suffix -- ignored
+rc=2
+gzip: nest/.gz: unknown suffix -- ignored
+rc=2
+.
+..
+.gz
+deep.gz
+h
+tar.gz
+gzip: u.txt: unknown suffix -- ignored
+rc=2
+rc=0
+gzip: u.txt: unknown suffix -- ignored
+rc=2
+
+gzip: u.txt: not in gzip format
+rc=1
+
+gzip: u.txt: not in gzip format
+rc=1
+
+gzip: u.txt: not in gzip format
+rc=1
+== already has suffix
+gzip: a.gz already has .gz suffix -- unchanged
+rc=0
+rc=0
+gzip: a.gz already has .gz suffix -- unchanged
+rc=0
+gzip: a.gz already has .gz suffix -- unchanged
+rc=0
+gzip: b.GZ already has .GZ suffix -- unchanged
+rc=0
+gzip: a.tgz already has .tgz suffix -- unchanged
+rc=0
+rc=0
+a.gz
+a.tgz
+b.GZ.gz
+bad.gz
+compressed twice
+== missing and directory
+gzip: nosuch: No such file or directory
+rc=1
+gzip: nosuch: No such file or directory
+rc=1
+gzip: nosuch.gz: No such file or directory
+rc=1
+gzip: nosuch.gz: No such file or directory
+rc=1
+gzip: nosuch: No such file or directory
+rc=1
+ g z i p : n o s u c h : N o
+ s u c h f i l e o r d i
+ r e c t o r y \n
+gzip: nosuch: No such file or directory
+rc=1
+h.gz
+hc.gz
+hdr.gz
+gzip: d is a directory -- ignored
+rc=2
+rc=2
+gzip: d is a directory -- ignored
+rc=2
+gzip: d is a directory -- ignored
+rc=2
+gzip: d is a directory -- ignored
+rc=2
+ g z i p : d i s a d i r
+ e c t o r y - - i g n o r e
+ d \n
+gzip: d is a directory -- ignored
+rc=2
+h.gz
+hc.gz
+hdr.gz
+== gunzip finds the suffix
+rc=0
+find
+rc=0
+find2
+gzip: find3.gz: No such file or directory
+rc=1
+find3.tgz
+== hard links
+gzip: l1 has 1 other link -- file ignored
+rc=2
+gzip: l1 has 2 other links -- file ignored
+rc=2
+rc=2
+hello
+gzip: l1 has 2 other links -- file ignored
+rc=2
+rc=0
+l1.gz
+l2
+l3
+gzip: lg.gz has 1 other link -- file ignored
+rc=2
+hello
+rc=0
+lg
+lg2.gz
+== -r
+rc=0
+tree
+tree/a.gz
+tree/c.gz
+tree/d.txt.gz
+tree/sub
+tree/sub/b.gz
+rc=0
+tree
+tree/a
+tree/c
+tree/d.txt
+tree/sub
+tree/sub/b
+tree/a:	-100.0% -- replaced with tree/a.gz
+tree/c:	-33.3% -- replaced with tree/c.gz
+tree/d.txt:	-33.3% -- replaced with tree/d.txt.gz
+tree/sub/b:	-100.0% -- replaced with tree/sub/b.gz
+rc=0
+tree/a.gz:	-100.0% -- replaced with tree/a
+tree/c.gz:	-33.3% -- replaced with tree/c
+tree/d.txt.gz:	-33.3% -- replaced with tree/d.txt
+tree/sub/b.gz:	-100.0% -- replaced with tree/sub/b
+                 24                   2 -100.0% tree/a
+                 24                   2 -100.0% tree/sub/b
+                 28                   6 -33.3% tree/c
+                 32                   6 -33.3% tree/d.txt
+         compressed        uncompressed  ratio uncompressed_name
+rc=0
+rc=0
+tree/a.gz:	 OK
+tree/c.gz:	 OK
+tree/d.txt.gz:	 OK
+tree/sub/b.gz:	 OK
+tree
+tree/a.gz
+tree/c
+tree/d.txt
+tree/sub
+tree/sub/b.gz
+gzip: nosuch: No such file or directory
+rc=1
+a
+b
+hello
+hello
+tree
+tree/a
+tree/a.gz
+tree/c
+tree/c.gz
+tree/d.txt
+tree/d.txt.gz
+tree/sub
+tree/sub/b
+tree/sub/b.gz
+gzip: tree/a.gz already exists;	not overwritten
+gzip: tree/c.gz already exists;	not overwritten
+gzip: tree/d.txt.gz already exists;	not overwritten
+gzip: tree/sub/b.gz already exists;	not overwritten
+rc=2
+gzip: tree/a.gz already exists;	not overwritten
+gzip: tree/a.gz already has .gz suffix -- unchanged
+gzip: tree/c.gz already exists;	not overwritten
+gzip: tree/c.gz already has .gz suffix -- unchanged
+gzip: tree/d.txt.gz already exists;	not overwritten
+gzip: tree/d.txt.gz already has .gz suffix -- unchanged
+gzip: tree/sub/b.gz already exists;	not overwritten
+gzip: tree/sub/b.gz already has .gz suffix -- unchanged
+rc=0
+gzip: tree/a already exists;	not overwritten
+gzip: tree/c already exists;	not overwritten
+gzip: tree/d.txt already exists;	not overwritten
+gzip: tree/sub/b already exists;	not overwritten
+gzip: tree/a already exists;	not overwritten
+gzip: tree/c already exists;	not overwritten
+gzip: tree/d.txt already exists;	not overwritten
+gzip: tree/sub/b already exists;	not overwritten
+rc=2
+gzip: tree/a already exists;	not overwritten
+gzip: tree/a: unknown suffix -- ignored
+gzip: tree/c already exists;	not overwritten
+gzip: tree/c: unknown suffix -- ignored
+gzip: tree/d.txt already exists;	not overwritten
+gzip: tree/d.txt: unknown suffix -- ignored
+gzip: tree/sub/b already exists;	not overwritten
+gzip: tree/sub/b: unknown suffix -- ignored
+rc=0
+gzip: tree/a: unknown suffix -- ignored
+gzip: tree/c: unknown suffix -- ignored
+gzip: tree/d.txt: unknown suffix -- ignored
+gzip: tree/sub/b: unknown suffix -- ignored
+tree/a.gz:	 OK
+tree/c.gz:	 OK
+tree/d.txt.gz:	 OK
+tree/sub/b.gz:	 OK
+rc=0
+                 24                   2 -100.0% tree/a
+                 24                   2 -100.0% tree/sub/b
+                 28                   6 -33.3% tree/c
+                 32                   6 -33.3% tree/d.txt
+         compressed        uncompressed  ratio uncompressed_name
+rc=0
+tree
+tree/a.suf
+tree/c.suf
+tree/d.txt.suf
+tree/sub
+tree/sub/b.suf
+tree
+tree/a
+tree/c
+tree/d.txt
+tree/sub
+tree/sub/b
+
+
+
+
+gzip: tree/a: not in gzip format
+gzip: tree/c: not in gzip format
+gzip: tree/d.txt: not in gzip format
+gzip: tree/sub/b: not in gzip format
+== stdin and dash
+hi
+hi
+hi
+hello
+ - 6 6 . 7 % \n
+
+gzip: stdin: not in gzip format
+rc=1
+hi
+hello
+goodbye world
+hello
+rc=0
+hello
+rc=0
+ 1f
+rc=0
+gzip: pt: unknown suffix -- ignored
+rc=2
+pt
+ 1f 8b 08 00 00 00 00 00 00 03 03 00 00 00 00 00
+ 00 00 00 00
+ 037 213 \b \0 \0 \0 \0 \0 \0 003 003 \0 \0 \0 \0 \0
+ \0 \0 \0 \0 0 . 0 % \n
+== -q and warnings
+gzip: nosuch: No such file or directory
+rc=1
+
+gzip: n.gz: not in gzip format
+rc=1
+gzip: tg.gz: No such file or directory
+rc=1
+== GZIP environment
+ 1f 8b 08 00 00 00 00 00 02 03 cb 48 cd c9 c9 e7
+ 02 00 20 30 3a 36 06 00 00 00
+rc=0
+ 1f 8b 08 00 00 00 00 00 04 03 cb 48 cd c9 c9 e7
+ 02 00 20 30 3a 36 06 00 00 00
+ 1f 8b 08 00 00 00 00 00 04 03 cb 48 cd c9 c9 e7
+ 02 00 20 30 3a 36 06 00 00 00
+rc=0
+ 1f 8b 08 00 00 00 00 00 00 03 cb 48 cd c9 c9 e7
+ 02 00 20 30 3a 36 06 00 00 00
+rc=0
+ 1f 8b 08 00 00 00 00 00 00 03 cb 48 cd c9 c9 e7
+ 02 00 20 30 3a 36 06 00 00 00
+rc=0
+ 1f 8b 08 00 00 00 00 00 00 03 cb 48 cd c9 c9 e7
+ 02 00 20 30 3a 36 06 00 00 00
+rc=0
+ 1f 8b 08 00 00 00 00 00 02 03 cb 48 cd c9 c9 e7
+ 02 00 20 30 3a 36 06 00 00 00
+ 1f 8b 08 00 00 00 00 00 02 03 cb 48 cd c9 c9 e7
+ 02 00 20 30 3a 36 06 00 00 00
+== --ascii and -b
+gzip: option --ascii ignored on this system
+ 1f 8b 08 00 00 00 00 00 00 03 cb 48 cd c9 c9 e7
+ 02 00 20 30 3a 36 06 00 00 00
+rc=0
+gzip: option --ascii ignored on this system
+ 1f 8b 08 00 00 00 00 00 00 03 cb 48 cd c9 c9 e7
+ 02 00 20 30 3a 36 06 00 00 00
+rc=0
+ 1f 8b 08 00 00 00 00 00 00 03 cb 48 cd c9 c9 e7
+ 02 00 20 30 3a 36 06 00 00 00
+rc=0
+ 1f 8b 08 00 00 00 00 00 00 03 cb 48 cd c9 c9 e7
+ 02 00 20 30 3a 36 06 00 00 00
+rc=0
+== --version
+gzip 1.14-modified
+gzip 1.14-modified
+gunzip (gzip) 1.14-modified
+zcat (gzip) 1.14-modified
+== -c to a file already there
+rc=0
+         compressed        uncompressed  ratio uncompressed_name
+                 28                   6 -33.3% cc
+hello
+== read-only input
+rc=0
+read-only
+rc=0
+read-only
+ro

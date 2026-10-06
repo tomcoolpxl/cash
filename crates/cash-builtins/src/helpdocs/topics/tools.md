@@ -71,7 +71,6 @@ manager has no package for it.
 | 7z | 7zip.7zip | 7zip | 7-Zip |
 | zip | GnuWin32.Zip | zip | Info-ZIP's zip |
 | unzip | GnuWin32.UnZip | unzip | Info-ZIP's unzip |
-| gzip | - | gzip | GNU gzip |
 | wget | JernejSimoncic.Wget | wget | GNU wget |
 | aria2c | aria2.aria2 | aria2 | aria2 download utility |
 | rclone | Rclone.Rclone | rclone | rsync for cloud storage |

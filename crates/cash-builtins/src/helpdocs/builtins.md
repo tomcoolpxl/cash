@@ -137,6 +137,8 @@ an entry or page names no builtin.
 - `find`: Search a folder tree for files that match an expression.
 - `getopt`: Parse command options for a script, util-linux style.
 - `grep`: Print the lines of files that match a pattern, with GNU grep's options.
+- `gunzip`: Uncompress `.gz` files in place: `gzip -d`.
+- `gzip`: Compress files to `.gz` in place, or uncompress them, with GNU gzip's options.
 - `hexdump`: Dump bytes in hex, octal, decimal or text, or in a format of your own.
 - `iconv`: Convert text between character sets, through Windows' code pages.
 - `less`: Page through text.
@@ -148,26 +150,27 @@ an entry or page names no builtin.
 - `uuidgen`: Print a new UUID: random, time-based, or a hash of a name.
 - `xargs`: Build and run command lines from standard input.
 - `xxd`: Dump bytes in hex, or turn a hex dump back into bytes.
+- `zcat`: Print `.gz` files uncompressed to standard output: `gzip -dc`.
 
 ## Coreutils written for Windows
 
 - `chmod`: Change a file's permissions, as far as Windows can express them.
+- `getconf`: Print a configuration value by its POSIX name, with the value Windows has.
 - `groups`: Print the groups a user belongs to.
 - `hostid`: Print the numeric identifier of this host.
 - `hostname`: Show the machine's name.
-- `getconf`: Print a configuration value by its POSIX name, with the value Windows has.
 - `id`: Print the user's and groups' identities.
 - `install`: Copy files and set their attributes.
+- `locale`: Show the locale: the `LANG` and `LC_*` view, and the locales by name.
 - `logname`: Print the user's login name.
 - `ls`: List folder contents, with colours, icons and a tree.
-- `pinky`: Show brief information about users.
-- `locale`: Show the locale: the `LANG` and `LC_*` view, and the locales by name.
-- `stat`: Show a file's status: size, times, links, attributes.
-- `tty`: Print the name of the terminal on standard input.
 - `mkfifo`: Make a named pipe; refused, with the way to a pipe in cash.
+- `pinky`: Show brief information about users.
+- `stat`: Show a file's status: size, times, links, attributes.
+- `stdbuf`: Run a command with changed buffering; on Windows, as it is.
+- `tty`: Print the name of the terminal on standard input.
 - `users`: Print the names of the users logged on.
 - `who`: Show who is logged on.
-- `stdbuf`: Run a command with changed buffering; on Windows, as it is.
 
 ## Bundled coreutils, from uutils
 

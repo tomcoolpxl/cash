@@ -303,10 +303,13 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
     m.insert("tput".into(), builtin::<tput::TputCommand, SE>());
     m.insert("stty".into(), builtin::<stty::SttyCommand, SE>());
     // cash: the compatibility corners: refusals in Bash's and coreutils' words, and the
+    // values Windows has.
     m.insert("suspend".into(), builtin::<suspend::SuspendCommand, SE>());
     m.insert("mkfifo".into(), builtin::<mkfifo::MkfifoCommand, SE>());
+    m.insert(
         "stdbuf".into(),
         builtin::<stdbuf::StdbufCommand, SE>().with_substitution_files(),
+    );
     m.insert("getconf".into(), builtin::<getconf::GetconfCommand, SE>());
     m.insert("locale".into(), builtin::<locale::LocaleCommand, SE>());
     m.insert("fuser".into(), builtin::<fuser::FuserCommand, SE>());
@@ -332,6 +335,20 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
             builtin::<grep::GrepCommand, SE>().with_substitution_files(),
         );
     }
+    // `zcat <(cmd)` and `gzip -c <(cmd)` are idioms, so the three names take
+    // substitution files.
+    m.insert(
+        "gzip".into(),
+        builtin::<gzip::GzipCommand, SE>().with_substitution_files(),
+    );
+    m.insert(
+        "gunzip".into(),
+        builtin::<gzip::GunzipCommand, SE>().with_substitution_files(),
+    );
+    m.insert(
+        "zcat".into(),
+        builtin::<gzip::ZcatCommand, SE>().with_substitution_files(),
+    );
     m.insert(
         "coolfetch".into(),
         builtin::<coolfetch::CoolfetchCommand, SE>(),

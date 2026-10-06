@@ -50,7 +50,6 @@ clang	LLVM.LLVM	llvm
 7z	7zip.7zip	7zip
 zip	GnuWin32.Zip	zip
 unzip	GnuWin32.UnZip	unzip
-gzip	-	gzip
 wget	JernejSimoncic.Wget	wget
 aria2c	aria2.aria2	aria2
 rclone	Rclone.Rclone	rclone
