@@ -135,6 +135,7 @@ mod long_folders;
 mod ls_builtin;
 mod msys_args;
 mod namerefs;
+mod own_path;
 // `nc`, OpenBSD netcat's: connecting, scanning, listening and the data between the two.
 mod nc_builtin;
 // D48: one pager behind `less` and `more`.

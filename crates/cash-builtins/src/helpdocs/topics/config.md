@@ -46,6 +46,9 @@ cash's own:
 
 - `cash doctor`: check the tools on `PATH` and what cash will run.
 - `cash help [NAME]`: this help, from PowerShell or cmd.
+- `cash --add-to-path`: put the folder of this `cash.exe` on your user PATH, so `cash`
+  works from any window; `--remove-from-path` takes it off. `cash doctor`'s `path` line
+  says whether it is there.
 - `cash --terminal-profile`: add a cash profile to Windows Terminal;
   `--remove-terminal-profile` takes it away.
 - `cash --link-tools [--add-to-path] [DIR]`: hard links (`ls.exe`, `sed.exe`, ...) that

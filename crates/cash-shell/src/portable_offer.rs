@@ -15,8 +15,9 @@
 //!
 //! The questions are read with the console reader the `read` builtin uses, so Ctrl-C at a
 //! question means no to the rest and the prompt follows. A yes runs the command the help
-//! names for doing it by hand, `cash --terminal-profile` or `cash --link-tools
-//! --add-to-path`, as this `cash.exe` run again, so what it prints is the command's own.
+//! names for doing it by hand, `cash --add-to-path`, `cash --terminal-profile` or `cash
+//! --link-tools --add-to-path`, as this `cash.exe` run again, so what it prints is the
+//! command's own, and there is one implementation of each.
 
 use std::io::{IsTerminal as _, Write as _};
 use std::path::{Path, PathBuf};
@@ -217,29 +218,10 @@ fn ask(terminal: &mut Terminal, exe: &Path) -> Answers {
 /// Does what a yes to the question `key` asked for.
 fn act(key: &str, exe: &Path) {
     match key {
-        "path" => add_to_path(exe),
+        "path" => run_own(exe, &["--add-to-path"]),
         "profile" => run_own(exe, &["--terminal-profile"]),
         "links" => run_own(exe, &["--link-tools", "--add-to-path"]),
         _ => {}
-    }
-}
-
-/// The folder holding `exe`, first on the user PATH, as the installer puts its `current`
-/// folder there.
-fn add_to_path(exe: &Path) {
-    let Some(folder) = exe.parent() else {
-        return;
-    };
-    let shown = cash_win32::path::to_backslash(folder);
-    match cash_win32::userpath::add_first(folder) {
-        Ok(cash_win32::userpath::Added::Added) => say(&format!(
-            "cash: {shown} added to the front of your user PATH: windows opened from now on \
-             have `cash`"
-        )),
-        Ok(cash_win32::userpath::Added::AlreadyThere) => {
-            say(&format!("cash: {shown} is on your user PATH already"));
-        }
-        Err(e) => eprintln!("cash: cannot change the user PATH: {e}"),
     }
 }
 

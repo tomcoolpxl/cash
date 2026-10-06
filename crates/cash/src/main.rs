@@ -12,6 +12,7 @@ mod doctor;
 mod init_rc;
 mod installer;
 mod link_tools;
+mod own_path;
 mod terminal_menu;
 mod terminal_profile;
 
@@ -65,6 +66,7 @@ fn main() {
         .or_else(|| terminal_profile::command(&args))
         .or_else(|| init_rc::command(&args))
         .or_else(|| installer::command(&args))
+        .or_else(|| own_path::command(&args))
     {
         std::process::exit(i32::from(status));
     }

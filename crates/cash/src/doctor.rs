@@ -89,6 +89,7 @@ pub fn run() -> u8 {
     check_platform(&mut findings);
     check_carried(&mut findings, &builtins);
     check_shells(&mut findings, &entries, &pathext, &cwd);
+    check_own_path(&mut findings);
     check_commands(&mut findings, &builtins, &entries, &pathext, &cwd);
     check_busybox(&mut findings, &builtins, &entries, &pathext, &cwd);
     check_dos_shadowing(&mut findings, &builtins, &entries, &pathext, &cwd);
@@ -244,6 +245,8 @@ fn check_shells(findings: &mut Vec<Finding>, entries: &[PathBuf], pathext: &[Str
     }
 }
 
+fn check_own_path(findings: &mut Vec<Finding>) {
+    let Some(report) = crate::own_path::doctor_report() else {
 /// What cash's `sudo` elevates through: gsudo where it is installed, else Windows' own
 /// `sudo`, whose new-window mode keeps a command's output in another window.
 fn check_sudo(findings: &mut Vec<Finding>, entries: &[PathBuf], pathext: &[String], cwd: &Path) {

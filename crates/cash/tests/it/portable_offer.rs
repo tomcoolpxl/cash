@@ -295,8 +295,9 @@ fn yes_puts_cash_on_path_writes_the_profile_and_links_the_tools() {
         session.send("y\r").unwrap();
     }
     let output = exit_at_prompt(session);
+    // The first yes runs `cash --add-to-path`, so its line is that command's.
     assert!(
-        output.contains("added to the front of your user PATH"),
+        output.contains("added to your user PATH: windows opened from now on have cash"),
         "{output}"
     );
     assert!(output.contains("cash --terminal-profile: "), "{output}");

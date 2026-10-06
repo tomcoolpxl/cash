@@ -14,9 +14,9 @@ use windows_sys::Win32::Foundation::{
     ERROR_FILE_NOT_FOUND, ERROR_MORE_DATA, ERROR_SUCCESS, LPARAM, WIN32_ERROR,
 };
 use windows_sys::Win32::System::Registry::{
-    HKEY, HKEY_CURRENT_USER, KEY_SET_VALUE, REG_EXPAND_SZ, REG_OPTION_NON_VOLATILE, REG_VALUE_TYPE,
-    RRF_NOEXPAND, RRF_RT_REG_EXPAND_SZ, RRF_RT_REG_SZ, RegCloseKey, RegCreateKeyExW,
-    RegDeleteValueW, RegGetValueW, RegSetValueExW,
+    HKEY, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_SET_VALUE, REG_EXPAND_SZ,
+    REG_OPTION_NON_VOLATILE, REG_VALUE_TYPE, RRF_NOEXPAND, RRF_RT_REG_EXPAND_SZ, RRF_RT_REG_SZ,
+    RegCloseKey, RegCreateKeyExW, RegDeleteValueW, RegGetValueW, RegSetValueExW,
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     HWND_BROADCAST, SMTO_ABORTIFHUNG, SendMessageTimeoutW, WM_SETTINGCHANGE,
@@ -30,6 +30,10 @@ pub const KEY_VAR: &str = "CASH_USER_ENVIRONMENT_KEY";
 
 const ENVIRONMENT: &str = "Environment";
 const VALUE: &str = "Path";
+
+/// The machine's `Path`, under `HKEY_LOCAL_MACHINE`: Windows puts it before the user's.
+/// Only ever read here; changing it takes an administrator.
+const MACHINE_ENVIRONMENT: &str = r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment";
 
 /// Whether [`add_first`] changed the user `Path`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -73,10 +77,22 @@ pub fn remove(dir: &Path) -> io::Result<bool> {
 
 /// Whether an entry of the user `Path` names `dir`.
 pub fn contains(dir: &Path) -> bool {
+    read().is_ok_and(|(value, _)| value.is_some_and(|value| lists(&value, dir)))
+}
+
+/// Whether an entry of the machine's `Path` names `dir`. The machine's is read as it is
+/// stored, never written: it is every account's, and an administrator's to change.
+pub fn machine_contains(dir: &Path) -> bool {
+    read_value(HKEY_LOCAL_MACHINE, MACHINE_ENVIRONMENT)
+        .is_ok_and(|(value, _)| value.is_some_and(|value| lists(&value, dir)))
+}
+
+/// Whether an entry of a `Path` value names `dir`: `%VAR%` expanded, quotes, case, slash
+/// direction and a trailing separator aside.
+#[must_use]
+pub fn lists(value: &str, dir: &Path) -> bool {
     let entry = crate::path::to_backslash(dir);
-    read().is_ok_and(|(value, _)| {
-        value.is_some_and(|value| value.split(';').any(|each| same_entry(each, &entry)))
-    })
+    value.split(';').any(|each| same_entry(each, &entry))
 }
 
 /// `value` with `entry` first, or `None` when an entry already names the same folder.
@@ -154,7 +170,13 @@ fn os_error(status: WIN32_ERROR) -> io::Error {
 /// The user `Path` as stored, `%VAR%` entries unexpanded, and its type. A user with no
 /// `Path` of their own has `None`, and a new one is `REG_EXPAND_SZ`, as Windows makes it.
 fn read() -> io::Result<(Option<String>, REG_VALUE_TYPE)> {
-    let key = to_wide_nul(key_name());
+    read_value(HKEY_CURRENT_USER, &key_name())
+}
+
+/// The `Path` value of `key` under `root`, as stored, and its type; `None` when there is
+/// no such value.
+fn read_value(root: HKEY, key: &str) -> io::Result<(Option<String>, REG_VALUE_TYPE)> {
+    let key = to_wide_nul(key);
     let name = to_wide_nul(VALUE);
     let flags = RRF_RT_REG_SZ | RRF_RT_REG_EXPAND_SZ | RRF_NOEXPAND;
     let mut buffer: Vec<u16> = vec![0; 1024];
@@ -165,7 +187,7 @@ fn read() -> io::Result<(Option<String>, REG_VALUE_TYPE)> {
         // bytes, as this call expects.
         let status = unsafe {
             RegGetValueW(
-                HKEY_CURRENT_USER,
+                root,
                 key.as_ptr(),
                 name.as_ptr(),
                 flags,
@@ -309,6 +331,30 @@ mod tests {
         );
         assert_eq!(without_entry(r"C:\x;C:\y", r"C:\links"), None);
         assert_eq!(without_entry(r"C:\links", r"C:\links"), Some(String::new()));
+    }
+
+    #[test]
+    fn a_value_lists_a_folder_whatever_its_case_slashes_or_trailing_separator() {
+        let dir = Path::new(r"C:\Tools\cash");
+        assert!(lists(r"C:\x;c:\tools\CASH;C:\y", dir));
+        assert!(lists(r"C:\x;C:\Tools\cash\", dir));
+        assert!(lists("C:/Tools/cash/;C:/x", dir));
+        assert!(lists(r#""C:\Tools\cash""#, dir));
+        assert!(lists(r"C:\Tools\cash", Path::new("C:/Tools/cash/")));
+        assert!(!lists(r"C:\Tools\cashew;C:\Tools", dir));
+        assert!(!lists(r"C:\Tools\cash\bin", dir));
+        assert!(!lists("", dir));
+        assert!(!lists(";;", Path::new("")));
+        if let Ok(profile) = std::env::var("USERPROFILE") {
+            assert!(lists(
+                r"%USERPROFILE%\cash;C:\x",
+                Path::new(&format!(r"{profile}\cash"))
+            ));
+        }
+        assert!(!lists(
+            r"%CASH_NO_SUCH_VARIABLE%\cash",
+            Path::new(r"C:\cash")
+        ));
     }
 
     #[test]

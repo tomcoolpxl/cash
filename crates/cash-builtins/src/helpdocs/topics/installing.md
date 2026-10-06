@@ -54,9 +54,10 @@ to put itself on your PATH (so `cash` is a command in any window), whether to ad
 Windows Terminal profile and whether to put its tools on PATH for other programs; Enter
 means no, and the answers are kept in `%LOCALAPPDATA%\cash\portable-offer`
 (delete that file to be asked again; `CASH_NO_OFFER=1` never asks). Nothing changes
-without a yes, and the same things stay commands at any time: `cash --terminal-profile`
-and `cash --link-tools --add-to-path`, with `--remove-terminal-profile` and
-`--unlink-tools` to undo them. `cash --update --check` says when a newer zip is on the
+without a yes, and the same things stay commands at any time: `cash --add-to-path`,
+`cash --terminal-profile` and `cash --link-tools --add-to-path`, with
+`--remove-from-path`, `--remove-terminal-profile` and `--unlink-tools` to undo them.
+`cash doctor`'s `path` line says whether new windows will find cash. `cash --update --check` says when a newer zip is on the
 releases page; a portable cash does not replace itself.
 
 ## What the Scoop install does
