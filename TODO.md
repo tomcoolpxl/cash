@@ -628,10 +628,10 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
 
 1. **`7z l`, `t`, `x`, `e` on `.rar`**, as 7-Zip 26.03's `Rar5Handler.cpp` and
    `RarHandler.cpp` do (their sources in the scratchpad's `7zsrc`, fetched with the
-   user's leave on 2026-10-07). `l` on RAR 5 and 7 is in (`sevenzip/rar7`: the headers,
-   volumes by `RarVol.h`'s naming, encrypted headers and comments, every `-slt`
-   property; `7z_rar.sh` checks it against 7-Zip on 69 of rars' fixtures). Left:
-   RAR 1.5 to 4's listing; `t`, `x` and `e` (the data through rar's decoders, solid
+   user's leave on 2026-10-07). `l` is in, RAR 1.5 to 7 (`sevenzip/rar7`: the
+   headers, volumes by `RarVol.h`'s namings, encrypted headers and comments, every
+   `-slt` property; `7z_rar.sh` and `7z_rar4.sh` check it against 7-Zip on 160 of rars'
+   fixtures). Left: `t`, `x` and `e` (the data through rar's decoders, solid
    streams, split items, encryption and the checks 7-Zip makes, copy links); alternate
    streams (`STM`) and ACLs, whose `NT Security` 7-Zip shows as the descriptor's SDDL
    text; an SFX's archive inside its `.exe` (7-Zip opens an `.exe` as PE first, which

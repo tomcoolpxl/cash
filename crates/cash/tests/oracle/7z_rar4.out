@@ -1,0 +1,10953 @@
+== l -slt rar15_40/empty_compressed_payload_rar30.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 61 bytes (1 KiB)
+
+Listing archive: rar15_40/empty_compressed_payload_rar30.rar
+
+--
+Path = rar15_40/empty_compressed_payload_rar30.rar
+Type = Rar
+Physical Size = 61
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = empty.bin
+Folder = -
+Size = 0
+Packed Size = 0
+Modified = 2026-09-12 02:56:44.0000000
+Created = 
+Accessed = 
+Attributes =  -rw-rw-r--
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = 00000000
+Host OS = Unix
+Method = m3:17
+Version = 29
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/encrypted/per_file_rar300_password.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 124 bytes (1 KiB)
+
+Listing archive: rar15_40/encrypted/per_file_rar300_password.rar
+
+--
+Path = rar15_40/encrypted/per_file_rar300_password.rar
+Type = Rar
+Physical Size = 124
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = hello.txt
+Folder = -
+Size = 30
+Packed Size = 48
+Modified = 2026-04-27 06:54:18.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = +
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = A538535E
+Host OS = Win32
+Method = m3:17
+Version = 29
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/encrypted/per_file_rar4_libarchive_mixed.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 311 bytes (1 KiB)
+
+Listing archive: rar15_40/encrypted/per_file_rar4_libarchive_mixed.rar
+
+--
+Path = rar15_40/encrypted/per_file_rar4_libarchive_mixed.rar
+Type = Rar
+Physical Size = 311
+Solid = -
+Blocks = 4
+Multivolume = -
+Volumes = 1
+
+----------
+Path = a.txt
+Folder = -
+Size = 18
+Packed Size = 18
+Modified = 2024-03-22 10:59:09.1789180
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = EE5A6E55
+Host OS = Win32
+Method = m0:17
+Version = 29
+Volume Index = 
+
+Path = b.txt
+Folder = -
+Size = 18
+Packed Size = 32
+Modified = 2024-03-22 10:59:14.3448946
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = +
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = A9FA1485
+Host OS = Win32
+Method = m3:17
+Version = 29
+Volume Index = 
+
+Path = c.txt
+Folder = -
+Size = 18
+Packed Size = 18
+Modified = 2024-03-22 10:59:28.2967614
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = 949A3D35
+Host OS = Win32
+Method = m0:17
+Version = 29
+Volume Index = 
+
+Path = d.txt
+Folder = -
+Size = 18
+Packed Size = 32
+Modified = 2024-03-22 12:34:27.9396731
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = +
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = 26BAE125
+Host OS = Win32
+Method = m3:17
+Version = 29
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/encrypted/rar4_junrar_password.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 110 bytes (1 KiB)
+
+Listing archive: rar15_40/encrypted/rar4_junrar_password.rar
+
+--
+Path = rar15_40/encrypted/rar4_junrar_password.rar
+Type = Rar
+Physical Size = 110
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = file1.txt
+Folder = -
+Size = 6
+Packed Size = 32
+Modified = 2020-07-19 21:23:47.0000000
+Created = 
+Accessed = 
+Attributes =  -rw-r--r--
+Encrypted = +
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = E229F704
+Host OS = Unix
+Method = m3:17
+Version = 29
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/ppmd/farmanager170.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 996166 bytes (973 KiB)
+
+Listing archive: rar15_40/ppmd/farmanager170.rar
+
+--
+Path = rar15_40/ppmd/farmanager170.rar
+Type = Rar
+Physical Size = 996166
+Characteristics = Lock Solid
+Solid = +
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = File_id.diz
+Folder = -
+Size = 657
+Packed Size = 334
+Modified = 2006-03-29 16:11:52.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = F24EC0B8
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/XLat/Descript.ion
+Folder = -
+Size = 61
+Packed Size = 37
+Modified = 2003-02-25 15:48:36.0000000
+Created = 
+Accessed = 
+Attributes = HA
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = D29E4469
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Tables/Hebrew/Descript.ion
+Folder = -
+Size = 81
+Packed Size = 42
+Modified = 2005-07-02 01:02:56.0000000
+Created = 
+Accessed = 
+Attributes = HA
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = F7698D76
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Shell/Descript.ion
+Folder = -
+Size = 105
+Packed Size = 56
+Modified = 2005-07-02 01:03:08.0000000
+Created = 
+Accessed = 
+Attributes = HA
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 115ACBCF
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/Editor/Descript.ion
+Folder = -
+Size = 151
+Packed Size = 78
+Modified = 2005-07-31 07:23:32.0000000
+Created = 
+Accessed = 
+Attributes = HA
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 642FF38E
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Tables/Descript.ion
+Folder = -
+Size = 252
+Packed Size = 85
+Modified = 2003-02-25 15:48:24.0000000
+Created = 
+Accessed = 
+Attributes = HA
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = A581BA06
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Tables/Western European/Descript.ion
+Folder = -
+Size = 285
+Packed Size = 92
+Modified = 2005-07-04 15:05:38.0000000
+Created = 
+Accessed = 
+Attributes = HA
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = BC7D35B9
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Colors/Descript.ion
+Folder = -
+Size = 295
+Packed Size = 99
+Modified = 2005-07-02 01:03:36.0000000
+Created = 
+Accessed = 
+Attributes = HA
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 4DCDFDAD
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/SetUp/Descript.ion
+Folder = -
+Size = 312
+Packed Size = 130
+Modified = 2005-07-01 00:52:38.0000000
+Created = 
+Accessed = 
+Attributes = HA
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 4E379D68
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/XLat/Russian/Descript.ion
+Folder = -
+Size = 316
+Packed Size = 112
+Modified = 2005-07-04 15:05:24.0000000
+Created = 
+Accessed = 
+Attributes = HA
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 325C3F64
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Descript.ion
+Folder = -
+Size = 319
+Packed Size = 118
+Modified = 2005-07-02 03:14:08.0000000
+Created = 
+Accessed = 
+Attributes = HA
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = CF2507F2
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Tables/Central European/Descript.ion
+Folder = -
+Size = 345
+Packed Size = 101
+Modified = 2005-07-02 01:02:36.0000000
+Created = 
+Accessed = 
+Attributes = HA
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = F3200422
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/Descript.ion
+Folder = -
+Size = 350
+Packed Size = 143
+Modified = 2005-07-31 07:23:32.0000000
+Created = 
+Accessed = 
+Attributes = HA
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = B72480CE
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Tables/Cyrillic/E-Mail Double Conversion/Descript.ion
+Folder = -
+Size = 394
+Packed Size = 101
+Modified = 2005-07-04 15:06:06.0000000
+Created = 
+Accessed = 
+Attributes = HA
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 29EC2B13
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Documentation/eng/Descript.ion
+Folder = -
+Size = 461
+Packed Size = 159
+Modified = 2006-02-28 12:50:06.0000000
+Created = 
+Accessed = 
+Attributes = HA
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = C0517398
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Documentation/rus/Descript.ion
+Folder = -
+Size = 461
+Packed Size = 19
+Modified = 2006-02-28 12:50:14.0000000
+Created = 
+Accessed = 
+Attributes = HA
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = C0517398
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Archivers/Descript.ion
+Folder = -
+Size = 555
+Packed Size = 206
+Modified = 2005-07-04 15:05:08.0000000
+Created = 
+Accessed = 
+Attributes = HA
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 647DC610
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Tables/Cyrillic/Descript.ion
+Folder = -
+Size = 723
+Packed Size = 145
+Modified = 2005-07-04 15:05:54.0000000
+Created = 
+Accessed = 
+Attributes = HA
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 0DF14F21
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Descript.ion
+Folder = -
+Size = 1067
+Packed Size = 359
+Modified = 2006-02-28 12:49:12.0000000
+Created = 
+Accessed = 
+Attributes = HA
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 9161E619
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Colors/Custom Highlighting/Descript.ion
+Folder = -
+Size = 1534
+Packed Size = 549
+Modified = 2005-07-02 01:03:24.0000000
+Created = 
+Accessed = 
+Attributes = HA
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = BB773451
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Colors/Default Highlighting/Descript.ion
+Folder = -
+Size = 1534
+Packed Size = 20
+Modified = 2005-07-02 01:03:30.0000000
+Created = 
+Accessed = 
+Attributes = HA
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = BB773451
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Macros/Descript.ion
+Folder = -
+Size = 2212
+Packed Size = 788
+Modified = 2006-02-12 23:02:28.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = AE83DDB7
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Documentation/rus/Arc.Support.txt
+Folder = -
+Size = 5834
+Packed Size = 2128
+Modified = 2005-06-30 15:50:44.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 1559E3E4
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Documentation/eng/Arc.Support.txt
+Folder = -
+Size = 5883
+Packed Size = 1336
+Modified = 2005-07-04 15:03:12.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 7EB2F50C
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Documentation/eng/Bug.Report.txt
+Folder = -
+Size = 5035
+Packed Size = 1461
+Modified = 2006-02-12 22:33:26.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 0265F02A
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Documentation/rus/Bug.Report.txt
+Folder = -
+Size = 5211
+Packed Size = 1695
+Modified = 2006-02-12 22:33:46.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 5BF4F997
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/FTP/BugReport_rus.txt
+Folder = -
+Size = 5033
+Packed Size = 1441
+Modified = 2006-03-29 16:32:52.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 0EE19DEF
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/FTP/dirlist_rus.txt
+Folder = -
+Size = 7016
+Packed Size = 1967
+Modified = 2006-03-29 16:31:48.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = BF31AB12
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Documentation/eng/Far.FAQ.txt
+Folder = -
+Size = 8853
+Packed Size = 2420
+Modified = 2006-03-01 23:08:48.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = E4CB2873
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Documentation/rus/Far.FAQ.txt
+Folder = -
+Size = 35385
+Packed Size = 11061
+Modified = 2006-03-17 23:57:58.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 993AD463
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Far.Site.txt
+Folder = -
+Size = 190
+Packed Size = 62
+Modified = 2006-03-19 13:20:20.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 7D071EBF
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/FTP/FtpCmds.txt
+Folder = -
+Size = 7499
+Packed Size = 962
+Modified = 2006-03-29 16:34:58.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 81D44938
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/FTP/FtpCmds_rus.txt
+Folder = -
+Size = 8792
+Packed Size = 851
+Modified = 2006-03-29 16:30:24.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 7A3D6CDD
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = License.txt
+Folder = -
+Size = 3025
+Packed Size = 973
+Modified = 2005-06-30 15:52:24.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = F70272FD
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = License.xUSSR.txt
+Folder = -
+Size = 3302
+Packed Size = 1071
+Modified = 2005-06-30 15:52:24.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 8959154E
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/FTP/Notes.txt
+Folder = -
+Size = 15099
+Packed Size = 3877
+Modified = 2005-04-15 02:53:52.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 3E178D8B
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/FTP/Notes_rus.txt
+Folder = -
+Size = 20121
+Packed Size = 5194
+Modified = 2006-03-29 16:30:36.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 3B555772
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Documentation/rus/Plugins.Install.txt
+Folder = -
+Size = 5224
+Packed Size = 1216
+Modified = 2005-06-30 15:50:44.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 6BF5297D
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Documentation/eng/Plugins.Install.txt
+Folder = -
+Size = 5777
+Packed Size = 1169
+Modified = 2005-06-30 15:52:22.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = B57E2C6A
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Documentation/eng/Plugins.Review.txt
+Folder = -
+Size = 3114
+Packed Size = 827
+Modified = 2005-07-02 00:16:42.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 03364173
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Documentation/rus/Plugins.Review.txt
+Folder = -
+Size = 3426
+Packed Size = 815
+Modified = 2006-03-16 18:17:36.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 6E518B9E
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Readme.txt
+Folder = -
+Size = 820
+Packed Size = 197
+Modified = 2005-07-01 00:57:54.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = AD781169
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Readme.txt
+Folder = -
+Size = 2154
+Packed Size = 494
+Modified = 2005-06-30 15:52:24.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 41E3EF27
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Tables/Cyrillic/E-Mail Double Conversion/readme.txt
+Folder = -
+Size = 2840
+Packed Size = 894
+Modified = 2005-07-04 15:04:30.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 238AB1AF
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Tables/README.TXT
+Folder = -
+Size = 3054
+Packed Size = 1006
+Modified = 2002-11-01 23:42:18.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 00C5696B
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/FTP/lib/ReadMe_eng.txt
+Folder = -
+Size = 2977
+Packed Size = 813
+Modified = 2004-06-17 16:29:20.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 1298D9BF
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/FTP/ReadMe_eng.txt
+Folder = -
+Size = 3566
+Packed Size = 773
+Modified = 2006-03-29 16:34:22.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 19E4756F
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Register.txt
+Folder = -
+Size = 2747
+Packed Size = 581
+Modified = 2005-06-30 15:52:24.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = BD7BEB5B
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Documentation/eng/TechInfo.txt
+Folder = -
+Size = 44799
+Packed Size = 9004
+Modified = 2006-03-22 23:09:02.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = EAF48B0C
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Documentation/rus/TechInfo.txt
+Folder = -
+Size = 47349
+Packed Size = 8216
+Modified = 2006-03-22 23:07:42.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 6F17D018
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Documentation/rus/WhatsNew.Api.txt
+Folder = -
+Size = 34050
+Packed Size = 9002
+Modified = 2006-03-29 16:12:34.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 650DC589
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Documentation/eng/WhatsNew.Api.txt
+Folder = -
+Size = 34824
+Packed Size = 6730
+Modified = 2006-03-29 16:13:06.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 165E8BDB
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Documentation/eng/WhatsNew.Plugins.txt
+Folder = -
+Size = 65198
+Packed Size = 14343
+Modified = 2006-03-29 16:12:56.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 975580B9
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Documentation/rus/WhatsNew.Plugins.txt
+Folder = -
+Size = 67995
+Packed Size = 14681
+Modified = 2006-03-29 16:12:22.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = D73FC5B0
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Documentation/eng/WhatsNew.txt
+Folder = -
+Size = 96288
+Packed Size = 19295
+Modified = 2006-03-29 16:17:16.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = B1E9A2E4
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Documentation/rus/WhatsNew.txt
+Folder = -
+Size = 98247
+Packed Size = 19628
+Modified = 2006-03-29 16:20:02.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 446A85A6
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/MultiArc/Formats/Custom.ini
+Folder = -
+Size = 16737
+Packed Size = 4186
+Modified = 2006-03-26 16:36:16.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 52B4EC0D
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = ClearPluginsCache.bat
+Folder = -
+Size = 254
+Packed Size = 97
+Modified = 2005-06-30 15:52:24.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 73171264
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Colors/export_colors.bat
+Folder = -
+Size = 222
+Packed Size = 85
+Modified = 2005-07-01 00:54:20.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = B0F75A49
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Colors/Custom Highlighting/import_colors.bat
+Folder = -
+Size = 26
+Packed Size = 21
+Modified = 2005-07-01 00:53:38.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = E696B161
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Colors/Default Highlighting/import_colors.bat
+Folder = -
+Size = 26
+Packed Size = 15
+Modified = 2005-07-01 00:54:20.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = E696B161
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Colors/import_colors.bat
+Folder = -
+Size = 1682
+Packed Size = 377
+Modified = 2005-07-01 00:54:20.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = DF390245
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = RestoreSettings.bat
+Folder = -
+Size = 672
+Packed Size = 95
+Modified = 2005-06-30 15:52:24.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 96760542
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = SaveSettings.bat
+Folder = -
+Size = 236
+Packed Size = 43
+Modified = 2005-06-30 15:52:24.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 37EE664D
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Shell/FARHere.inf
+Folder = -
+Size = 3572
+Packed Size = 750
+Modified = 2005-07-01 00:56:34.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = E1817A5C
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Far.exe
+Folder = -
+Size = 724992
+Packed Size = 342317
+Modified = 2006-03-29 18:29:10.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = A3E47782
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/Editor/Align/Align.dll
+Folder = -
+Size = 8192
+Packed Size = 3468
+Modified = 2006-03-29 15:46:06.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 7B9CA80A
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/Editor/AutoWrap/AutoWrap.dll
+Folder = -
+Size = 7680
+Packed Size = 1756
+Modified = 2006-03-29 15:46:36.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 775F36FE
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/Editor/Brackets/Brackets.dll
+Folder = -
+Size = 9216
+Packed Size = 2570
+Modified = 2006-03-29 15:46:58.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 43220D7A
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/Compare/Compare.dll
+Folder = -
+Size = 14336
+Packed Size = 5416
+Modified = 2006-03-29 15:47:52.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 948337F7
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/Editor/DrawLine/DrawLine.dll
+Folder = -
+Size = 7168
+Packed Size = 1604
+Modified = 2006-03-29 15:48:40.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 01CEC793
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/Editor/EditCase/EditCase.dll
+Folder = -
+Size = 7680
+Packed Size = 1709
+Modified = 2006-03-29 15:49:00.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = C166FFD1
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/EMenu/EMenu.dll
+Folder = -
+Size = 23552
+Packed Size = 10544
+Modified = 2003-09-17 02:45:02.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 240A06F3
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/FARCmds/FARCmds.dll
+Folder = -
+Size = 17920
+Packed Size = 6110
+Modified = 2006-03-29 15:49:48.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = DBEC075D
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/FTP/FarFtp.dll
+Folder = -
+Size = 262656
+Packed Size = 103701
+Modified = 2005-12-27 04:15:42.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = EA30F4AC
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/FileCase/FileCase.dll
+Folder = -
+Size = 8704
+Packed Size = 2032
+Modified = 2006-03-29 15:53:18.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = C0BD482D
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/HlfViewer/HlfViewer.dll
+Folder = -
+Size = 10240
+Packed Size = 2536
+Modified = 2006-03-29 15:54:00.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = CC2268B2
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/MultiArc/MultiArc.dll
+Folder = -
+Size = 46592
+Packed Size = 18438
+Modified = 2006-03-29 15:55:24.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 6066F200
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/Network/Network.dll
+Folder = -
+Size = 34304
+Packed Size = 13647
+Modified = 2006-03-29 16:01:02.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 11455F2D
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/PrintMan/PrintMan.dll
+Folder = -
+Size = 70144
+Packed Size = 30873
+Modified = 2006-03-26 16:47:06.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = FC2DCA18
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/ProcList/Proclist.dll
+Folder = -
+Size = 53248
+Packed Size = 22420
+Modified = 2006-03-29 16:02:36.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = D11E3382
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/TmpPanel/TmpPanel.dll
+Folder = -
+Size = 17408
+Packed Size = 7313
+Modified = 2006-03-29 16:03:16.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 5E056964
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Archivers
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2006-03-19 04:31:46.0000000
+Created = 
+Accessed = 
+Attributes = D
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 00000000
+Host OS = Win32
+Method = m0
+Version = 20
+Volume Index = 
+
+Path = Addons/Tables/Central European
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2006-03-19 04:31:46.0000000
+Created = 
+Accessed = 
+Attributes = D
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 00000000
+Host OS = Win32
+Method = m0
+Version = 20
+Volume Index = 
+
+Path = Addons/Colors/Custom Highlighting
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2006-03-19 04:31:36.0000000
+Created = 
+Accessed = 
+Attributes = D
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 00000000
+Host OS = Win32
+Method = m0
+Version = 20
+Volume Index = 
+
+Path = Addons/Colors/Default Highlighting
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2006-03-19 04:31:36.0000000
+Created = 
+Accessed = 
+Attributes = D
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 00000000
+Host OS = Win32
+Method = m0
+Version = 20
+Volume Index = 
+
+Path = Addons/Colors
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2006-03-19 04:31:36.0000000
+Created = 
+Accessed = 
+Attributes = D
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 00000000
+Host OS = Win32
+Method = m0
+Version = 20
+Volume Index = 
+
+Path = Addons/Tables/Cyrillic/E-Mail Double Conversion
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2006-03-19 04:31:46.0000000
+Created = 
+Accessed = 
+Attributes = D
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 00000000
+Host OS = Win32
+Method = m0
+Version = 20
+Volume Index = 
+
+Path = Addons/Tables/Cyrillic
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2006-03-19 04:31:46.0000000
+Created = 
+Accessed = 
+Attributes = D
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 00000000
+Host OS = Win32
+Method = m0
+Version = 20
+Volume Index = 
+
+Path = Addons/Tables/Hebrew
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2006-03-19 04:31:46.0000000
+Created = 
+Accessed = 
+Attributes = D
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 00000000
+Host OS = Win32
+Method = m0
+Version = 20
+Volume Index = 
+
+Path = Addons/XLat/Russian
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2006-03-19 04:31:46.0000000
+Created = 
+Accessed = 
+Attributes = D
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 00000000
+Host OS = Win32
+Method = m0
+Version = 20
+Volume Index = 
+
+Path = Addons/SetUp
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2006-03-19 04:31:46.0000000
+Created = 
+Accessed = 
+Attributes = D
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 00000000
+Host OS = Win32
+Method = m0
+Version = 20
+Volume Index = 
+
+Path = Addons/Shell
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2006-03-19 04:31:46.0000000
+Created = 
+Accessed = 
+Attributes = D
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 00000000
+Host OS = Win32
+Method = m0
+Version = 20
+Volume Index = 
+
+Path = Addons/XLat
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2006-03-19 04:31:46.0000000
+Created = 
+Accessed = 
+Attributes = D
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 00000000
+Host OS = Win32
+Method = m0
+Version = 20
+Volume Index = 
+
+Path = Addons/Macros/AltBS.reg
+Folder = -
+Size = 243
+Packed Size = 64
+Modified = 2006-02-12 23:02:46.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = EEA0588C
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Macros/AltDown.reg
+Folder = -
+Size = 257
+Packed Size = 41
+Modified = 2006-02-12 23:03:04.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 1C129172
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Macros/AltMenu.reg
+Folder = -
+Size = 1284
+Packed Size = 122
+Modified = 2006-02-12 23:03:26.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 5B61E2F4
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/XLat/Russian/AltR.reg
+Folder = -
+Size = 229
+Packed Size = 49
+Modified = 2005-07-01 00:56:58.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 7599FFAF
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Macros/AltScreens.reg
+Folder = -
+Size = 8390
+Packed Size = 349
+Modified = 2006-02-12 23:05:14.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 791C32D2
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Macros/AltSearch.reg
+Folder = -
+Size = 1332
+Packed Size = 73
+Modified = 2006-02-12 23:05:22.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 9338578F
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Macros/AltX.reg
+Folder = -
+Size = 780
+Packed Size = 55
+Modified = 2006-02-12 23:05:34.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 926C7303
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/XLat/Russian/Apps.reg
+Folder = -
+Size = 134
+Packed Size = 25
+Modified = 2005-07-01 00:56:58.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 1D16DB75
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Macros/Apps.reg
+Folder = -
+Size = 241
+Packed Size = 33
+Modified = 2006-02-12 23:05:38.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = CDBA0DFC
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Archivers/Arj.reg
+Folder = -
+Size = 902
+Packed Size = 208
+Modified = 2005-07-04 15:04:28.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 896ED034
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Colors/Default Highlighting/black_from_Fonarev.reg
+Folder = -
+Size = 2897
+Packed Size = 559
+Modified = 2005-07-01 00:54:20.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = C5198D6E
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Colors/Custom Highlighting/black_from_Fonarev.reg
+Folder = -
+Size = 3540
+Packed Size = 156
+Modified = 2005-07-01 00:53:38.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 016B7A42
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Colors/Default Highlighting/black_from_july.reg
+Folder = -
+Size = 2594
+Packed Size = 135
+Modified = 2005-07-01 00:54:20.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = FAED30E1
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Colors/Custom Highlighting/black_from_july.reg
+Folder = -
+Size = 4230
+Packed Size = 347
+Modified = 2005-07-01 00:53:38.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = A099F605
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Colors/Default Highlighting/black_from_Myodov.reg
+Folder = -
+Size = 3190
+Packed Size = 157
+Modified = 2005-07-01 00:54:20.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 7552756F
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Colors/Custom Highlighting/black_from_Myodov.reg
+Folder = -
+Size = 4740
+Packed Size = 217
+Modified = 2005-07-01 00:53:38.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 211A73BF
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Macros/BS.reg
+Folder = -
+Size = 294
+Packed Size = 37
+Modified = 2006-02-12 23:05:44.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = AF6E152C
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Colors/Default Highlighting/Colors_from_admin_essp_ru.reg
+Folder = -
+Size = 2594
+Packed Size = 235
+Modified = 2005-07-01 00:54:20.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 3DA74465
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Colors/Custom Highlighting/Colors_from_admin_essp_ru.reg
+Folder = -
+Size = 5598
+Packed Size = 536
+Modified = 2005-07-01 00:53:38.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = B5478A3F
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Colors/Default Highlighting/Colors_from_Gernichenko.reg
+Folder = -
+Size = 3506
+Packed Size = 172
+Modified = 2005-07-01 00:54:20.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 808628DE
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Colors/Custom Highlighting/Colors_from_Gernichenko.reg
+Folder = -
+Size = 5645
+Packed Size = 244
+Modified = 2005-07-01 00:53:38.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 8ED16A75
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Colors/Default Highlighting/Colors_from_Sadovoj.reg
+Folder = -
+Size = 1988
+Packed Size = 139
+Modified = 2005-07-01 00:54:20.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 8CE2E514
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Colors/Custom Highlighting/Colors_from_Sadovoj.reg
+Folder = -
+Size = 3765
+Packed Size = 170
+Modified = 2005-07-01 00:53:38.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 210DF7EF
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Macros/CtrlDel.reg
+Folder = -
+Size = 267
+Packed Size = 38
+Modified = 2006-02-12 23:05:58.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 163C15E6
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Macros/CtrlF10.reg
+Folder = -
+Size = 502
+Packed Size = 49
+Modified = 2006-02-12 23:06:04.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = BC88D607
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Macros/CtrlIns...reg
+Folder = -
+Size = 479
+Packed Size = 85
+Modified = 2006-02-12 23:06:06.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = C14B2244
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Macros/CtrlLeft.reg
+Folder = -
+Size = 352
+Packed Size = 36
+Modified = 2006-02-12 23:06:10.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = B8AB23A9
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Macros/CtrlQ.reg
+Folder = -
+Size = 385
+Packed Size = 86
+Modified = 2006-02-12 23:06:12.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = E0A0AFC8
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/XLat/Russian/CtrlR.reg
+Folder = -
+Size = 138
+Packed Size = 24
+Modified = 2005-07-01 00:56:58.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = BD4BF5C8
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Macros/CtrlRight.reg
+Folder = -
+Size = 353
+Packed Size = 34
+Modified = 2006-02-12 23:06:14.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 9DB68593
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Macros/CtrlS.reg
+Folder = -
+Size = 211
+Packed Size = 27
+Modified = 2006-02-12 23:06:18.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = F0A3CBEF
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Macros/CtrlShiftBackSlash.reg
+Folder = -
+Size = 312
+Packed Size = 39
+Modified = 2006-02-12 23:06:22.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 721624C4
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Macros/CtrlShiftPgUpDn.reg
+Folder = -
+Size = 674
+Packed Size = 80
+Modified = 2006-02-12 23:06:28.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 7DF64212
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Macros
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2006-03-19 04:31:46.0000000
+Created = 
+Accessed = 
+Attributes = D
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 00000000
+Host OS = Win32
+Method = m0
+Version = 20
+Volume Index = 
+
+Path = Addons/XLat/Russian/CtrlShiftX.reg
+Folder = -
+Size = 158
+Packed Size = 24
+Modified = 2005-07-01 00:56:58.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = E664D021
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Macros/CtrlUpDown.reg
+Folder = -
+Size = 456
+Packed Size = 46
+Modified = 2006-02-12 23:06:34.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 50527E60
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Macros/CtrlW.reg
+Folder = -
+Size = 218
+Packed Size = 29
+Modified = 2006-02-12 23:06:36.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = D8B7D058
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Tables/Central European/Czech - CP-895 (Kamenicti).reg
+Folder = -
+Size = 2080
+Packed Size = 1258
+Modified = 2005-07-01 00:57:20.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = A4E1EBF5
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/SetUp/Default165.reg
+Folder = -
+Size = 377
+Packed Size = 62
+Modified = 2005-07-01 00:52:38.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = D964AF3C
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Macros/Del.reg
+Folder = -
+Size = 867
+Packed Size = 49
+Modified = 2006-02-12 23:06:42.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 2A432913
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Tables/Western European/Dist.Ger.reg
+Folder = -
+Size = 1111
+Packed Size = 97
+Modified = 2006-02-12 22:59:16.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 36A74C53
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Tables/Western European
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2006-03-19 04:31:46.0000000
+Created = 
+Accessed = 
+Attributes = D
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 00000000
+Host OS = Win32
+Method = m0
+Version = 20
+Volume Index = 
+
+Path = Addons/Tables/Cyrillic/Dist.Rus.reg
+Folder = -
+Size = 1111
+Packed Size = 169
+Modified = 2006-02-12 22:58:10.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = B217973E
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Tables/Cyrillic/Dist.Ukr.reg
+Folder = -
+Size = 1153
+Packed Size = 146
+Modified = 2006-02-12 22:58:42.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 88746E8D
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Tables/Cyrillic/DKOI8 (Mainframe).reg
+Folder = -
+Size = 1079
+Packed Size = 330
+Modified = 2005-07-04 15:04:30.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 7C9CA727
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Tables/Cyrillic/DM (Amiga).reg
+Folder = -
+Size = 1063
+Packed Size = 266
+Modified = 2005-07-01 00:57:52.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 22F6DBCB
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Colors/Default Highlighting/dn_like.reg
+Folder = -
+Size = 2594
+Packed Size = 163
+Modified = 2005-07-01 00:54:20.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 319D6292
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Colors/Custom Highlighting/dn_like.reg
+Folder = -
+Size = 4280
+Packed Size = 332
+Modified = 2005-07-01 00:53:38.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 963C100B
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Tables/Cyrillic/E-Mail Double Conversion/Email DKWD.reg
+Folder = -
+Size = 968
+Packed Size = 314
+Modified = 2005-07-01 00:57:34.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = CF7C43EC
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Tables/Cyrillic/E-Mail Double Conversion/Email DWKD.reg
+Folder = -
+Size = 968
+Packed Size = 161
+Modified = 2005-07-01 00:57:34.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 76F7E9E6
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Tables/Cyrillic/E-Mail Double Conversion/Email KWKD.reg
+Folder = -
+Size = 968
+Packed Size = 145
+Modified = 2005-07-01 00:57:34.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = B94DE176
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Tables/Cyrillic/E-Mail Double Conversion/Email WK.reg
+Folder = -
+Size = 964
+Packed Size = 184
+Modified = 2005-07-01 00:57:34.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 83AA985B
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Tables/Cyrillic/E-Mail Double Conversion/Email WKWD.reg
+Folder = -
+Size = 968
+Packed Size = 103
+Modified = 2005-07-01 00:57:34.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = A7D7ADE3
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Macros/Esc.reg
+Folder = -
+Size = 1146
+Packed Size = 73
+Modified = 2006-02-12 23:06:50.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = CCCCA6D3
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/SetUp/Executor.4NT.reg
+Folder = -
+Size = 660
+Packed Size = 345
+Modified = 2005-07-01 00:52:38.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 9D43FCF0
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/SetUp/Executor.CMD.reg
+Folder = -
+Size = 386
+Packed Size = 184
+Modified = 2005-07-01 00:52:38.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 520324B5
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/SetUp/Executor.COMMAND.reg
+Folder = -
+Size = 368
+Packed Size = 73
+Modified = 2005-07-01 00:52:38.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = D65F8EFB
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Macros/F3.reg
+Folder = -
+Size = 349
+Packed Size = 58
+Modified = 2006-02-12 23:06:52.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = C4853878
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Macros/F9DeactivateMenu.reg
+Folder = -
+Size = 223
+Packed Size = 23
+Modified = 2006-02-12 23:06:54.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 40C1950E
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Macros/F9Table.reg
+Folder = -
+Size = 646
+Packed Size = 42
+Modified = 2006-02-12 23:06:58.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 54556C66
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Colors/Default Highlighting/FARColors242.reg
+Folder = -
+Size = 2588
+Packed Size = 176
+Modified = 2005-07-01 00:54:20.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 79AFD786
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Colors/Custom Highlighting/FARColors242.reg
+Folder = -
+Size = 100423
+Packed Size = 3668
+Modified = 2005-07-01 00:53:38.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 44457820
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Archivers/FarUC2.reg
+Folder = -
+Size = 556
+Packed Size = 94
+Modified = 2005-07-04 15:04:28.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 61133F87
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Colors/Default Highlighting/GreenMile.reg
+Folder = -
+Size = 2594
+Packed Size = 140
+Modified = 2005-07-01 00:54:20.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 137AA321
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Colors/Custom Highlighting/GreenMile.reg
+Folder = -
+Size = 3572
+Packed Size = 81
+Modified = 2005-07-01 00:53:38.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = B4B3CE91
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Colors/Default Highlighting/hell.reg
+Folder = -
+Size = 2897
+Packed Size = 156
+Modified = 2005-07-01 00:54:20.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 047014A7
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Colors/Custom Highlighting/hell.reg
+Folder = -
+Size = 7427
+Packed Size = 329
+Modified = 2005-07-01 00:53:38.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = C6C22B39
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Tables/Central European/Hungarian - CWI.reg
+Folder = -
+Size = 1071
+Packed Size = 197
+Modified = 2005-07-01 00:57:20.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = BCD81A93
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Archivers/InfoZIP.reg
+Folder = -
+Size = 662
+Packed Size = 138
+Modified = 2005-07-01 00:56:34.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = F6D19883
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Tables/Western European/ISO-8859-1 (Latin I).reg
+Folder = -
+Size = 981
+Packed Size = 299
+Modified = 2005-07-04 15:04:30.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 5FBD44C0
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Tables/Central European/ISO-8859-2 (Latin II).reg
+Folder = -
+Size = 1049
+Packed Size = 149
+Modified = 2005-07-01 00:57:20.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = EE012030
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Tables/Cyrillic/ISO-8859-5.reg
+Folder = -
+Size = 1108
+Packed Size = 133
+Modified = 2006-03-23 12:44:38.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = AD0779A0
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Tables/Cyrillic/KOI8-R.reg
+Folder = -
+Size = 1084
+Packed Size = 203
+Modified = 2006-03-23 12:44:06.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 94D41F37
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Tables/Cyrillic/KOI8-U.reg
+Folder = -
+Size = 1016
+Packed Size = 193
+Modified = 2006-03-23 12:44:14.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = E15C437B
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Archivers/LGHA.reg
+Folder = -
+Size = 474
+Packed Size = 104
+Modified = 2005-07-01 00:56:34.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 03026D2E
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Archivers/Lha32.reg
+Folder = -
+Size = 618
+Packed Size = 114
+Modified = 2005-07-01 00:56:34.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 180F6483
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Archivers/Lha32a.reg
+Folder = -
+Size = 723
+Packed Size = 96
+Modified = 2005-07-01 00:56:34.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = ECB2F796
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Archivers/Lha32b.reg
+Folder = -
+Size = 783
+Packed Size = 89
+Modified = 2005-07-01 00:56:34.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 8AD52CE0
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Archivers/LhArk.reg
+Folder = -
+Size = 839
+Packed Size = 155
+Modified = 2005-07-04 15:04:28.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 605B72D4
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Macros/Lynx-mot.reg
+Folder = -
+Size = 676
+Packed Size = 90
+Modified = 2006-02-12 23:07:02.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 6B815C16
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Tables/Western European/Macintosh Standard.reg
+Folder = -
+Size = 1177
+Packed Size = 347
+Modified = 2005-07-01 00:57:06.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 11E921D2
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Tables/Cyrillic/Macintosh Standard.reg
+Folder = -
+Size = 1186
+Packed Size = 136
+Modified = 2006-03-23 12:44:18.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 141E3B24
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Colors/Default Highlighting/nc5pal2.reg
+Folder = -
+Size = 3196
+Packed Size = 213
+Modified = 2005-07-01 00:54:20.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 41E9CB55
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Colors/Custom Highlighting/nc5pal2.reg
+Folder = -
+Size = 4137
+Packed Size = 83
+Modified = 2005-07-01 00:53:38.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 97717853
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Macros/Notepad.reg
+Folder = -
+Size = 2065
+Packed Size = 188
+Modified = 2006-02-12 23:07:18.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 47789982
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Macros/Numpad.reg
+Folder = -
+Size = 1160
+Packed Size = 84
+Modified = 2006-02-12 23:07:24.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = ABDE1497
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Macros/OpeningLastFile.reg
+Folder = -
+Size = 695
+Packed Size = 52
+Modified = 2006-02-12 23:07:48.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 0EDBBBBD
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Archivers/PkZip25.reg
+Folder = -
+Size = 953
+Packed Size = 164
+Modified = 2005-07-01 00:56:34.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 2F683E43
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Archivers/PkZip25Dos.reg
+Folder = -
+Size = 720
+Packed Size = 110
+Modified = 2005-07-04 15:04:28.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = D5BAAD97
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Tables/Central European/Polish - CP-896 (Mazovia).reg
+Folder = -
+Size = 1108
+Packed Size = 105
+Modified = 2005-07-01 00:57:20.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 9BC622E6
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/XLat/Russian/Qwerty.reg
+Folder = -
+Size = 3485
+Packed Size = 955
+Modified = 2005-07-04 15:04:28.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = D95D5B44
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Archivers/Rar20.reg
+Folder = -
+Size = 788
+Packed Size = 125
+Modified = 2005-07-01 00:56:34.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 23095954
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Colors/Default Highlighting/Rodion_Doroshkevich.reg
+Folder = -
+Size = 2291
+Packed Size = 153
+Modified = 2005-07-01 00:54:20.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 4756E6C7
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Colors/Custom Highlighting/Rodion_Doroshkevich.reg
+Folder = -
+Size = 4830
+Packed Size = 255
+Modified = 2005-07-01 00:53:38.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = C642E995
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Tables/Cyrillic/RUSCII (GOST Ukrainian).reg
+Folder = -
+Size = 1104
+Packed Size = 110
+Modified = 2005-07-01 00:57:52.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 6BCB91E2
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Macros/ShiftBS.reg
+Folder = -
+Size = 844
+Packed Size = 56
+Modified = 2006-03-22 22:49:12.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 790E95E1
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Macros/ShiftF1.reg
+Folder = -
+Size = 248
+Packed Size = 33
+Modified = 2006-02-12 23:08:34.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 61032D5D
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Macros/ShiftInsSearch.reg
+Folder = -
+Size = 277
+Packed Size = 30
+Modified = 2006-02-12 23:08:38.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 325A01B3
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Macros/ShiftTab.reg
+Folder = -
+Size = 635
+Packed Size = 48
+Modified = 2006-02-12 23:08:46.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = AF63D9EC
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Macros/Space.reg
+Folder = -
+Size = 291
+Packed Size = 30
+Modified = 2006-02-12 23:08:50.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 85E0B53E
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Macros/SwitchMainLanguage.reg
+Folder = -
+Size = 292
+Packed Size = 35
+Modified = 2006-02-12 23:09:00.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = FB955811
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Colors/Default Highlighting/VaxColors.reg
+Folder = -
+Size = 2594
+Packed Size = 185
+Modified = 2005-07-01 00:54:20.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 9C0D6FE2
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Colors/Custom Highlighting/VaxColors.reg
+Folder = -
+Size = 4280
+Packed Size = 45
+Modified = 2005-07-01 00:53:38.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = FFA0ECE6
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Macros/View.PgDn.reg
+Folder = -
+Size = 290
+Packed Size = 41
+Modified = 2006-02-12 23:09:10.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 7B077A48
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Macros/View.Space.reg
+Folder = -
+Size = 347
+Packed Size = 41
+Modified = 2006-02-12 23:09:14.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = DBEAFCFD
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Macros/ViewerAddSubstract.reg
+Folder = -
+Size = 505
+Packed Size = 53
+Modified = 2006-02-12 23:09:18.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 983FC8F6
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Macros/WheelScreenSwitch.reg
+Folder = -
+Size = 1554
+Packed Size = 80
+Modified = 2006-02-12 23:09:30.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 54F9D655
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Tables/Central European/Windows-1250.reg
+Folder = -
+Size = 1041
+Packed Size = 170
+Modified = 2005-07-01 00:57:20.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 88449C66
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Tables/Cyrillic/Windows-1251.reg
+Folder = -
+Size = 1073
+Packed Size = 172
+Modified = 2006-03-23 12:44:26.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 4CB2C2AF
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Tables/Western European/Windows-1252.reg
+Folder = -
+Size = 973
+Packed Size = 111
+Modified = 2005-07-04 15:04:30.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = E784BBC3
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Tables/Hebrew/Windows-1255.reg
+Folder = -
+Size = 1036
+Packed Size = 78
+Modified = 2005-07-01 00:57:52.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = AA22AEC5
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Tables
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2006-03-19 04:31:46.0000000
+Created = 
+Accessed = 
+Attributes = D
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 00000000
+Host OS = Win32
+Method = m0
+Version = 20
+Volume Index = 
+
+Path = Addons/SetUp/WindowsGUI.reg
+Folder = -
+Size = 1897
+Packed Size = 186
+Modified = 2005-07-01 00:52:38.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = FCBA6CE8
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons/Archivers/WinZipCL.reg
+Folder = -
+Size = 700
+Packed Size = 77
+Modified = 2005-07-04 15:04:28.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 2C3443B9
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Addons
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2006-03-19 04:31:36.0000000
+Created = 
+Accessed = 
+Attributes = D
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 00000000
+Host OS = Win32
+Method = m0
+Version = 20
+Volume Index = 
+
+Path = Plugins/Editor/Align
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2006-03-19 02:08:52.0000000
+Created = 
+Accessed = 
+Attributes = D
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 00000000
+Host OS = Win32
+Method = m0
+Version = 20
+Volume Index = 
+
+Path = Plugins/Editor/AutoWrap
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2006-03-19 04:31:40.0000000
+Created = 
+Accessed = 
+Attributes = D
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 00000000
+Host OS = Win32
+Method = m0
+Version = 20
+Volume Index = 
+
+Path = Plugins/Editor/Brackets
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2006-03-19 04:31:40.0000000
+Created = 
+Accessed = 
+Attributes = D
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 00000000
+Host OS = Win32
+Method = m0
+Version = 20
+Volume Index = 
+
+Path = Documentation
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2006-03-19 04:31:46.0000000
+Created = 
+Accessed = 
+Attributes = D
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 00000000
+Host OS = Win32
+Method = m0
+Version = 20
+Volume Index = 
+
+Path = Plugins/Editor/DrawLine
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2006-03-19 04:31:40.0000000
+Created = 
+Accessed = 
+Attributes = D
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 00000000
+Host OS = Win32
+Method = m0
+Version = 20
+Volume Index = 
+
+Path = Plugins/Editor/EditCase
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2006-03-19 04:31:40.0000000
+Created = 
+Accessed = 
+Attributes = D
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 00000000
+Host OS = Win32
+Method = m0
+Version = 20
+Volume Index = 
+
+Path = Plugins/Editor
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2006-03-19 04:31:36.0000000
+Created = 
+Accessed = 
+Attributes = D
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 00000000
+Host OS = Win32
+Method = m0
+Version = 20
+Volume Index = 
+
+Path = Plugins/EMenu
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2006-03-19 04:31:40.0000000
+Created = 
+Accessed = 
+Attributes = D
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 00000000
+Host OS = Win32
+Method = m0
+Version = 20
+Volume Index = 
+
+Path = Documentation/eng
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2006-03-19 04:31:46.0000000
+Created = 
+Accessed = 
+Attributes = D
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 00000000
+Host OS = Win32
+Method = m0
+Version = 20
+Volume Index = 
+
+Path = Plugins/FARCmds
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2006-03-19 04:31:40.0000000
+Created = 
+Accessed = 
+Attributes = D
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 00000000
+Host OS = Win32
+Method = m0
+Version = 20
+Volume Index = 
+
+Path = Plugins/FileCase
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2006-03-19 04:31:42.0000000
+Created = 
+Accessed = 
+Attributes = D
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 00000000
+Host OS = Win32
+Method = m0
+Version = 20
+Volume Index = 
+
+Path = Plugins/MultiArc/Formats
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2006-03-19 04:31:42.0000000
+Created = 
+Accessed = 
+Attributes = D
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 00000000
+Host OS = Win32
+Method = m0
+Version = 20
+Volume Index = 
+
+Path = Plugins/HlfViewer
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2006-03-19 04:31:42.0000000
+Created = 
+Accessed = 
+Attributes = D
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 00000000
+Host OS = Win32
+Method = m0
+Version = 20
+Volume Index = 
+
+Path = Plugins/FTP/lib
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2006-03-19 04:31:42.0000000
+Created = 
+Accessed = 
+Attributes = D
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 00000000
+Host OS = Win32
+Method = m0
+Version = 20
+Volume Index = 
+
+Path = Plugins/FTP
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2006-03-19 04:31:40.0000000
+Created = 
+Accessed = 
+Attributes = D
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 00000000
+Host OS = Win32
+Method = m0
+Version = 20
+Volume Index = 
+
+Path = Plugins/MultiArc
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2006-03-19 04:31:42.0000000
+Created = 
+Accessed = 
+Attributes = D
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 00000000
+Host OS = Win32
+Method = m0
+Version = 20
+Volume Index = 
+
+Path = Plugins/Network
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2006-03-19 04:31:42.0000000
+Created = 
+Accessed = 
+Attributes = D
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 00000000
+Host OS = Win32
+Method = m0
+Version = 20
+Volume Index = 
+
+Path = Plugins/PrintMan
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2006-03-19 04:31:42.0000000
+Created = 
+Accessed = 
+Attributes = D
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 00000000
+Host OS = Win32
+Method = m0
+Version = 20
+Volume Index = 
+
+Path = Plugins/ProcList
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2006-03-19 04:31:42.0000000
+Created = 
+Accessed = 
+Attributes = D
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 00000000
+Host OS = Win32
+Method = m0
+Version = 20
+Volume Index = 
+
+Path = Documentation/rus
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2006-03-19 04:31:46.0000000
+Created = 
+Accessed = 
+Attributes = D
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 00000000
+Host OS = Win32
+Method = m0
+Version = 20
+Volume Index = 
+
+Path = Plugins/TmpPanel
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2006-03-19 04:31:42.0000000
+Created = 
+Accessed = 
+Attributes = D
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 00000000
+Host OS = Win32
+Method = m0
+Version = 20
+Volume Index = 
+
+Path = Plugins/FTP/lib/ftpDirList.fll
+Folder = -
+Size = 69120
+Packed Size = 14052
+Modified = 2005-12-27 04:14:40.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 84D13C76
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/FTP/lib/ftpProgress.fll
+Folder = -
+Size = 65024
+Packed Size = 11245
+Modified = 2005-12-27 04:10:30.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = D5743EBD
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/MultiArc/Formats/Ace.fmt
+Folder = -
+Size = 6656
+Packed Size = 1517
+Modified = 2006-03-29 15:55:56.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 777B1BCE
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/MultiArc/Formats/Arc.fmt
+Folder = -
+Size = 5632
+Packed Size = 825
+Modified = 2006-03-29 15:56:10.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 099554E0
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/MultiArc/Formats/Arj.fmt
+Folder = -
+Size = 7168
+Packed Size = 1276
+Modified = 2006-03-29 15:56:24.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 08775D8D
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/MultiArc/Formats/Cab.fmt
+Folder = -
+Size = 6144
+Packed Size = 1161
+Modified = 2006-03-29 15:56:38.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 487BC618
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/MultiArc/Formats/Custom.fmt
+Folder = -
+Size = 50688
+Packed Size = 20375
+Modified = 2006-03-29 15:55:40.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 35FF919C
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/MultiArc/Formats/Ha.fmt
+Folder = -
+Size = 5632
+Packed Size = 739
+Modified = 2006-03-29 15:56:52.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 79515EB6
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/MultiArc/Formats/Lzh.fmt
+Folder = -
+Size = 6656
+Packed Size = 1522
+Modified = 2006-03-29 15:57:06.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 084E5E69
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/MultiArc/Formats/Rar.fmt
+Folder = -
+Size = 8704
+Packed Size = 2536
+Modified = 2006-03-29 15:57:22.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 61AA1992
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/MultiArc/Formats/TarGz.fmt
+Folder = -
+Size = 9728
+Packed Size = 2732
+Modified = 2006-03-29 15:57:36.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 33B144F9
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/MultiArc/Formats/Zip.fmt
+Folder = -
+Size = 7680
+Packed Size = 1621
+Modified = 2006-03-29 15:57:52.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = FB501814
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = REGISTER.FRM
+Folder = -
+Size = 2921
+Packed Size = 732
+Modified = 2005-06-30 15:52:24.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 717F7617
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/MultiArc/ArcEng.hlf
+Folder = -
+Size = 10874
+Packed Size = 2136
+Modified = 2006-03-26 16:36:16.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = CA5D7A68
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/MultiArc/ArcRus.hlf
+Folder = -
+Size = 11097
+Packed Size = 3700
+Modified = 2006-03-26 16:36:18.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 700D002C
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/Editor/Brackets/BrackEng.hlf
+Folder = -
+Size = 5091
+Packed Size = 956
+Modified = 2002-10-25 01:21:08.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 9BEDD21D
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/Editor/Brackets/BrackRus.hlf
+Folder = -
+Size = 4181
+Packed Size = 1098
+Modified = 2002-10-25 01:21:08.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 6C993588
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/FileCase/CaseEng.hlf
+Folder = -
+Size = 1568
+Packed Size = 290
+Modified = 2005-07-08 19:52:36.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = DE97D077
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/FileCase/CaseRus.hlf
+Folder = -
+Size = 1685
+Packed Size = 419
+Modified = 2005-05-02 12:36:22.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 2BA467E4
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/Compare/CmpEng.hlf
+Folder = -
+Size = 2137
+Packed Size = 434
+Modified = 2006-03-01 02:22:20.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = C22C8018
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/Compare/CmpRus.hlf
+Folder = -
+Size = 2448
+Packed Size = 581
+Modified = 2006-03-04 18:10:52.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 3AB09530
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/Compare
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2006-03-19 04:31:40.0000000
+Created = 
+Accessed = 
+Attributes = D
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 00000000
+Host OS = Win32
+Method = m0
+Version = 20
+Volume Index = 
+
+Path = Plugins/Editor/DrawLine/DrawEng.hlf
+Folder = -
+Size = 563
+Packed Size = 146
+Modified = 2004-05-31 21:06:54.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = F5DF2F46
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/Editor/DrawLine/DrawRus.hlf
+Folder = -
+Size = 577
+Packed Size = 168
+Modified = 2002-10-25 01:33:38.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = B24AED07
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/Editor/EditCase/ECaseEng.hlf
+Folder = -
+Size = 206
+Packed Size = 37
+Modified = 2002-10-25 01:34:50.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 5BCD1E3F
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/Editor/EditCase/ECaseRus.hlf
+Folder = -
+Size = 254
+Packed Size = 51
+Modified = 2002-10-25 01:34:50.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 0F8F3C25
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/EMenu/EMenuEng.hlf
+Folder = -
+Size = 5784
+Packed Size = 1333
+Modified = 2003-09-19 23:35:26.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 1A6FEB44
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/EMenu/EMenuRus.hlf
+Folder = -
+Size = 6514
+Packed Size = 1578
+Modified = 2003-09-17 02:47:38.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = CDA0E177
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/FARCmds/FARCmdsEng.hlf
+Folder = -
+Size = 14278
+Packed Size = 2929
+Modified = 2003-10-13 11:33:26.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 5B515FDD
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/FARCmds/FARCmdsRus.hlf
+Folder = -
+Size = 15125
+Packed Size = 2978
+Modified = 2003-09-19 12:35:02.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 9C24EB0E
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = FarEng.hlf
+Folder = -
+Size = 161220
+Packed Size = 29040
+Modified = 2006-03-29 18:29:12.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 309F46F5
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = FarRus.hlf
+Folder = -
+Size = 170154
+Packed Size = 32470
+Modified = 2006-03-29 18:29:12.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 0F94A652
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/FTP/FtpEng.hlf
+Folder = -
+Size = 78922
+Packed Size = 15755
+Modified = 2005-10-28 19:10:58.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = A098A842
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/FTP/FtpRus.hlf
+Folder = -
+Size = 86351
+Packed Size = 15655
+Modified = 2005-10-28 19:11:00.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 5D3528D4
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/HlfViewer/HlfViewerEng.hlf
+Folder = -
+Size = 2110
+Packed Size = 784
+Modified = 2002-12-14 21:41:08.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = D7AD0646
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/HlfViewer/HlfViewerRus.hlf
+Folder = -
+Size = 2141
+Packed Size = 822
+Modified = 2002-10-25 01:43:22.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 137DBC6E
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/Network/NetEng.hlf
+Folder = -
+Size = 3001
+Packed Size = 864
+Modified = 2006-03-14 16:13:24.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 69D71D99
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/Network/NetRus.hlf
+Folder = -
+Size = 3213
+Packed Size = 968
+Modified = 2006-03-14 16:13:32.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = D87BBAC8
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/PrintMan/PrnManEn.hlf
+Folder = -
+Size = 4848
+Packed Size = 1373
+Modified = 2006-03-26 16:47:06.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 04B72C89
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/PrintMan/PrnManRu.hlf
+Folder = -
+Size = 5330
+Packed Size = 1250
+Modified = 2006-03-26 16:47:06.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 0267605A
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/ProcList/ProcEng.hlf
+Folder = -
+Size = 15127
+Packed Size = 3542
+Modified = 2005-07-08 19:50:16.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = F047A11F
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/ProcList/ProcRus.hlf
+Folder = -
+Size = 17957
+Packed Size = 3900
+Modified = 2005-07-08 19:50:16.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = E7EE5807
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/TmpPanel/TmpEng.hlf
+Folder = -
+Size = 9701
+Packed Size = 2518
+Modified = 2005-07-08 19:50:24.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = F5113D30
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/TmpPanel/TmpRus.hlf
+Folder = -
+Size = 9951
+Packed Size = 2259
+Modified = 2005-07-08 19:50:24.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 01072D2E
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Far.ico
+Folder = -
+Size = 4710
+Packed Size = 92
+Modified = 2003-02-28 18:31:34.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 3C7D7A66
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/Editor/Align/AlignEng.lng
+Folder = -
+Size = 161
+Packed Size = 84
+Modified = 2002-10-25 01:19:08.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 0FE27349
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/Editor/Align/AlignRus.lng
+Folder = -
+Size = 203
+Packed Size = 79
+Modified = 2002-10-25 01:19:08.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 187E1A52
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/MultiArc/ArcEng.lng
+Folder = -
+Size = 2695
+Packed Size = 783
+Modified = 2006-03-26 16:36:18.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = BF491873
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/MultiArc/ArcRus.lng
+Folder = -
+Size = 3040
+Packed Size = 888
+Modified = 2006-03-26 16:36:18.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = ED60133D
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/Editor/Brackets/BrackEng.lng
+Folder = -
+Size = 414
+Packed Size = 126
+Modified = 2002-10-25 01:21:08.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 6BBC2945
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/Editor/Brackets/BrackRus.lng
+Folder = -
+Size = 455
+Packed Size = 151
+Modified = 2002-10-25 01:21:08.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = A21C5FA5
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/FileCase/CaseEng.lng
+Folder = -
+Size = 428
+Packed Size = 141
+Modified = 2005-05-03 12:57:26.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = F046D351
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/FileCase/CaseRus.lng
+Folder = -
+Size = 570
+Packed Size = 159
+Modified = 2005-05-02 11:53:34.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = D512221A
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/Compare/CompEng.lng
+Folder = -
+Size = 797
+Packed Size = 248
+Modified = 2006-03-01 02:04:34.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = D290261C
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/Compare/CompRus.lng
+Folder = -
+Size = 888
+Packed Size = 267
+Modified = 2006-03-01 02:05:24.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 5CC97705
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/Editor/DrawLine/DrawEng.lng
+Folder = -
+Size = 125
+Packed Size = 62
+Modified = 2003-04-02 11:09:28.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 80382CB2
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/Editor/DrawLine/DrawRus.lng
+Folder = -
+Size = 142
+Packed Size = 40
+Modified = 2003-06-03 16:29:22.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 255A7CE0
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/Editor/EditCase/ECaseEng.lng
+Folder = -
+Size = 143
+Packed Size = 50
+Modified = 2002-10-25 01:34:50.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = C117DD7E
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/Editor/EditCase/ECaseRus.lng
+Folder = -
+Size = 184
+Packed Size = 63
+Modified = 2002-10-25 01:34:50.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 3F965ADE
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/EMenu/EMenuEng.lng
+Folder = -
+Size = 663
+Packed Size = 211
+Modified = 2003-02-26 13:34:22.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = F36DB5D7
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/EMenu/EMenuRus.lng
+Folder = -
+Size = 736
+Packed Size = 207
+Modified = 2003-02-26 13:34:34.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = AB884EB5
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/FARCmds/FARCmdsEng.lng
+Folder = -
+Size = 588
+Packed Size = 182
+Modified = 2003-02-20 21:20:52.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = DAC710BC
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/FARCmds/FARCmdsRus.lng
+Folder = -
+Size = 667
+Packed Size = 158
+Modified = 2002-10-25 01:36:48.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 4C7E3D7B
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = FarEng.lng
+Folder = -
+Size = 30277
+Packed Size = 6673
+Modified = 2006-03-24 16:50:50.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 6B69206E
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = FarRus.lng
+Folder = -
+Size = 33243
+Packed Size = 6842
+Modified = 2006-03-24 16:50:48.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = A0A82BE3
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/FTP/FtpEng.lng
+Folder = -
+Size = 10375
+Packed Size = 2827
+Modified = 2005-10-28 19:01:02.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = E58B94BB
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/FTP/FtpRus.lng
+Folder = -
+Size = 11169
+Packed Size = 1980
+Modified = 2005-10-28 19:01:20.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = D39E7712
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/HlfViewer/HlfViewerEng.lng
+Folder = -
+Size = 319
+Packed Size = 67
+Modified = 2002-10-25 01:43:22.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 4B94AE79
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/HlfViewer/HlfViewerRus.lng
+Folder = -
+Size = 386
+Packed Size = 73
+Modified = 2002-10-25 01:43:22.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 0A3CBFFF
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/Network/NetEng.lng
+Folder = -
+Size = 1352
+Packed Size = 270
+Modified = 2004-11-05 15:15:52.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 97F9446A
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/Network/NetRus.lng
+Folder = -
+Size = 1523
+Packed Size = 320
+Modified = 2004-11-05 15:26:08.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 355C6827
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/PrintMan/PrnManEn.lng
+Folder = -
+Size = 3519
+Packed Size = 771
+Modified = 2006-03-26 16:47:06.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 9F531D8C
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/PrintMan/PrnManRu.lng
+Folder = -
+Size = 3787
+Packed Size = 744
+Modified = 2006-03-26 16:47:06.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 3011BCCC
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/ProcList/ProcEng.lng
+Folder = -
+Size = 2802
+Packed Size = 595
+Modified = 2005-07-08 19:50:16.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 5E369D71
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/ProcList/ProcRus.lng
+Folder = -
+Size = 3119
+Packed Size = 652
+Modified = 2005-07-08 19:50:16.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 317DE4CD
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/TmpPanel/TmpEng.lng
+Folder = -
+Size = 888
+Packed Size = 156
+Modified = 2003-09-02 14:15:46.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 04F8D82B
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/TmpPanel/TmpRus.lng
+Folder = -
+Size = 989
+Packed Size = 155
+Modified = 2003-09-02 14:16:04.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 7B171251
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/Editor/AutoWrap/WrapEng.lng
+Folder = -
+Size = 231
+Packed Size = 48
+Modified = 2002-10-25 01:20:00.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 2776BF35
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/Editor/AutoWrap/WrapRus.lng
+Folder = -
+Size = 253
+Packed Size = 53
+Modified = 2002-10-25 01:20:00.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 7A795FB5
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/Editor/Brackets/BrackDel.reg
+Folder = -
+Size = 150
+Packed Size = 56
+Modified = 2002-10-25 01:21:08.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 4594C480
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/Editor/Brackets/BrackEng.reg
+Folder = -
+Size = 435
+Packed Size = 98
+Modified = 2002-10-25 01:21:08.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 56D33631
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/Editor/Brackets/BrackRus.reg
+Folder = -
+Size = 435
+Packed Size = 23
+Modified = 2002-10-25 01:21:08.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = EB3F15BA
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/EMenu/EMenuDel.reg
+Folder = -
+Size = 134
+Packed Size = 33
+Modified = 2001-04-22 15:18:16.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = BA2D3E52
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/EMenu/Hotkey Clipboard.reg
+Folder = -
+Size = 915
+Packed Size = 134
+Modified = 2002-02-02 21:25:38.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 1E54F40D
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/EMenu/Hotkey Properties.reg
+Folder = -
+Size = 455
+Packed Size = 76
+Modified = 2002-02-02 21:26:10.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 76BF6D45
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/EMenu/Hotkey.reg
+Folder = -
+Size = 955
+Packed Size = 112
+Modified = 2002-02-02 21:25:32.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 714C9436
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/FTP/lib/Progress_FarCopy.reg
+Folder = -
+Size = 1009
+Packed Size = 232
+Modified = 2002-12-20 21:31:04.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 6E573ECC
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/FTP/lib/Progress_JM.reg
+Folder = -
+Size = 1457
+Packed Size = 253
+Modified = 2002-12-02 00:45:18.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 01490BE9
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/FTP/lib/Progress_Wesha.reg
+Folder = -
+Size = 1410
+Packed Size = 148
+Modified = 2002-12-02 00:45:36.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 25D5159F
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/FTP/lib/Progress_ZeMA.reg
+Folder = -
+Size = 1308
+Packed Size = 237
+Modified = 2002-12-03 07:44:36.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 54FD7E87
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/TmpPanel/shortcuts.eng.reg
+Folder = -
+Size = 269
+Packed Size = 76
+Modified = 2006-02-13 23:41:46.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 6A316737
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/TmpPanel/shortcuts.rus.reg
+Folder = -
+Size = 269
+Packed Size = 24
+Modified = 2006-02-13 23:43:22.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 7B5B22C9
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/FTP/TechInfo.reg
+Folder = -
+Size = 8700
+Packed Size = 1956
+Modified = 2005-01-11 04:23:54.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 52B0CF0E
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/FTP/TechInfo_rus.reg
+Folder = -
+Size = 11598
+Packed Size = 2378
+Modified = 2005-10-28 18:35:32.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 9A314EF2
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/TmpPanel/disks.eng.temp
+Folder = -
+Size = 199
+Packed Size = 57
+Modified = 2006-02-13 23:47:08.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 3B4EEA05
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/TmpPanel/disks.rus.temp
+Folder = -
+Size = 198
+Packed Size = 33
+Modified = 2006-02-13 23:47:18.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 8043A016
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/TmpPanel/shortcuts.eng.temp
+Folder = -
+Size = 305
+Packed Size = 107
+Modified = 2004-01-10 22:48:04.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 10078350
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins/TmpPanel/shortcuts.rus.temp
+Folder = -
+Size = 326
+Packed Size = 71
+Modified = 2005-06-09 12:57:58.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = B54F4B8D
+Host OS = Win32
+Method = m5:22
+Version = 29
+Volume Index = 
+
+Path = Plugins
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2006-03-19 04:31:36.0000000
+Created = 
+Accessed = 
+Attributes = D
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 00000000
+Host OS = Win32
+Method = m0
+Version = 20
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/ppmd/ppmd_escape_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 408 bytes (1 KiB)
+
+Listing archive: rar15_40/ppmd/ppmd_escape_rar300.rar
+
+--
+Path = rar15_40/ppmd/ppmd_escape_rar300.rar
+Type = Rar
+Physical Size = 408
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = escape_64k.bin
+Folder = -
+Size = 65536
+Packed Size = 335
+Modified = 2026-04-29 08:06:08.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = 9A945756
+Host OS = Win32
+Method = m5:17
+Version = 29
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/ppmd/ppmd_lorem_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 13349 bytes (14 KiB)
+
+Listing archive: rar15_40/ppmd/ppmd_lorem_rar300.rar
+
+--
+Path = rar15_40/ppmd/ppmd_lorem_rar300.rar
+Type = Rar
+Physical Size = 13349
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = lorem_127k.txt
+Folder = -
+Size = 130048
+Packed Size = 13276
+Modified = 2026-04-27 06:35:04.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = C119B4E5
+Host OS = Win32
+Method = m5:17
+Version = 29
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/ppmd/ppmd_lz_match_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 275 bytes (1 KiB)
+
+Listing archive: rar15_40/ppmd/ppmd_lz_match_rar300.rar
+
+--
+Path = rar15_40/ppmd/ppmd_lz_match_rar300.rar
+Type = Rar
+Physical Size = 275
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = repeated_phrase_64k.txt
+Folder = -
+Size = 44544
+Packed Size = 193
+Modified = 2026-04-29 19:23:06.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = 884FAB33
+Host OS = Win32
+Method = m5:17
+Version = 29
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/ppmd/ppmd_lz_repeat_rar3.cbr
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 381 bytes (1 KiB)
+
+Listing archive: rar15_40/ppmd/ppmd_lz_repeat_rar3.cbr
+
+--
+Path = rar15_40/ppmd/ppmd_lz_repeat_rar3.cbr
+Type = Rar
+Physical Size = 381
+Solid = -
+Blocks = 2
+Multivolume = -
+Volumes = 1
+
+----------
+Path = testfile.jpg
+Folder = -
+Size = 220
+Packed Size = 182
+Modified = 2001-01-01 00:00:00.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = DA70B16C
+Host OS = MS DOS
+Method = m5:17
+Version = 29
+Volume Index = 
+
+Path = testfile.png
+Folder = -
+Size = 87
+Packed Size = 84
+Modified = 2001-01-01 00:00:00.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = AFB0AC62
+Host OS = MS DOS
+Method = m5:17
+Version = 29
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/ppmd/ppmd_mixed_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 78931 bytes (78 KiB)
+
+Listing archive: rar15_40/ppmd/ppmd_mixed_rar300.rar
+
+--
+Path = rar15_40/ppmd/ppmd_mixed_rar300.rar
+Type = Rar
+Physical Size = 78931
+Solid = -
+Blocks = 2
+Multivolume = -
+Volumes = 1
+
+----------
+Path = lorem_127k.txt
+Folder = -
+Size = 130048
+Packed Size = 13276
+Modified = 2026-04-29 08:06:08.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = C119B4E5
+Host OS = Win32
+Method = m5:17
+Version = 29
+Volume Index = 
+
+Path = binary_64k.bin
+Folder = -
+Size = 65536
+Packed Size = 65536
+Modified = 2026-04-29 08:06:08.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = 9D672ACD
+Host OS = Win32
+Method = m0:17
+Version = 29
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/ppmd/ppmd_solid_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 19925 bytes (20 KiB)
+
+Listing archive: rar15_40/ppmd/ppmd_solid_rar300.rar
+
+--
+Path = rar15_40/ppmd/ppmd_solid_rar300.rar
+Type = Rar
+Physical Size = 19925
+Characteristics = Solid
+Solid = +
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = solid_lorem_a.txt
+Folder = -
+Size = 98304
+Packed Size = 10062
+Modified = 2026-04-29 08:06:08.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = 14284201
+Host OS = Win32
+Method = m5:20
+Version = 29
+Volume Index = 
+
+Path = solid_lorem_b.txt
+Folder = -
+Size = 98304
+Packed Size = 9738
+Modified = 2026-04-29 08:06:08.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = CA4CAC47
+Host OS = Win32
+Method = m5:20
+Version = 29
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar154/audio_dos_names_unpack15.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 42948 bytes (42 KiB)
+
+Listing archive: rar15_40/rar154/audio_dos_names_unpack15.rar
+
+--
+Path = rar15_40/rar154/audio_dos_names_unpack15.rar
+Type = Rar
+Physical Size = 42948
+Solid = -
+Blocks = 2
+Multivolume = -
+Volumes = 1
+
+----------
+Path = BOATMO~1.WAV
+Folder = -
+Size = 56464
+Packed Size = 42742
+Modified = 2022-03-10 02:02:20.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = 82D2ED89
+Host OS = MS DOS
+Method = m5:16
+Version = 15
+Volume Index = 
+
+Path = LICENSE.TXT
+Folder = -
+Size = 107
+Packed Size = 99
+Modified = 2022-03-10 02:05:10.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = 8EAF20C4
+Host OS = MS DOS
+Method = m5:16
+Version = 15
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar154/audio_win_names_unpack15.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 42964 bytes (42 KiB)
+
+Listing archive: rar15_40/rar154/audio_win_names_unpack15.rar
+
+--
+Path = rar15_40/rar154/audio_win_names_unpack15.rar
+Type = Rar
+Physical Size = 42964
+Solid = -
+Blocks = 2
+Multivolume = -
+Volumes = 1
+
+----------
+Path = BoatModernEnglish.wav
+Folder = -
+Size = 56464
+Packed Size = 42742
+Modified = 2022-03-10 02:02:20.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = 82D2ED89
+Host OS = Win32
+Method = m5:16
+Version = 15
+Volume Index = 
+
+Path = LICENSE.txt
+Folder = -
+Size = 107
+Packed Size = 99
+Modified = 2022-03-10 02:05:10.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = 8EAF20C4
+Host OS = Win32
+Method = m5:16
+Version = 15
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar154/doc_154_best.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 189390 bytes (185 KiB)
+
+Listing archive: rar15_40/rar154/doc_154_best.rar
+
+--
+Path = rar15_40/rar154/doc_154_best.rar
+Type = Rar
+Physical Size = 189390
+Solid = -
+Blocks = 17
+Multivolume = -
+Volumes = 1
+
+----------
+Path = ARCH~Y3X.MD
+Folder = -
+Size = 53262
+Packed Size = 19401
+Modified = 2026-04-25 07:36:32.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = 5AB9A7DA
+Host OS = MS DOS
+Method = m3:16
+Version = 15
+Volume Index = 
+
+Path = CRC3~F4U.MD
+Folder = -
+Size = 5271
+Packed Size = 2827
+Modified = 2026-04-24 04:35:52.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = AD7E2A11
+Host OS = MS DOS
+Method = m3:16
+Version = 15
+Volume Index = 
+
+Path = ENCR~BXO.MD
+Folder = -
+Size = 30796
+Packed Size = 12090
+Modified = 2026-04-25 07:17:52.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = C5D3DA4F
+Host OS = MS DOS
+Method = m3:16
+Version = 15
+Volume Index = 
+
+Path = FILT~XX0.MD
+Folder = -
+Size = 27069
+Packed Size = 10286
+Modified = 2026-04-25 09:04:40.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = 89E63874
+Host OS = MS DOS
+Method = m3:16
+Version = 15
+Volume Index = 
+
+Path = HUFF~BID.MD
+Folder = -
+Size = 11958
+Packed Size = 5063
+Modified = 2026-04-25 04:39:12.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = C4B23356
+Host OS = MS DOS
+Method = m3:16
+Version = 15
+Volume Index = 
+
+Path = IMPL~KS0.MD
+Folder = -
+Size = 8846
+Packed Size = 4067
+Modified = 2026-04-25 09:04:38.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = 0DEF58B4
+Host OS = MS DOS
+Method = m3:16
+Version = 15
+Volume Index = 
+
+Path = INTE~BSL.MD
+Folder = -
+Size = 32722
+Packed Size = 12862
+Modified = 2026-04-25 07:17:54.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = CB567947
+Host OS = MS DOS
+Method = m3:16
+Version = 15
+Volume Index = 
+
+Path = LZ_M~HYW.MD
+Folder = -
+Size = 14181
+Packed Size = 6336
+Modified = 2026-04-24 04:35:52.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = F5E64896
+Host OS = MS DOS
+Method = m3:16
+Version = 15
+Volume Index = 
+
+Path = PATH~EJS.MD
+Folder = -
+Size = 13819
+Packed Size = 5891
+Modified = 2026-04-24 04:35:52.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = 3C0D6E22
+Host OS = MS DOS
+Method = m3:16
+Version = 15
+Volume Index = 
+
+Path = PPMD~D4Q.MD
+Folder = -
+Size = 38140
+Packed Size = 12856
+Modified = 2026-04-24 04:35:52.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = FFD9B31F
+Host OS = MS DOS
+Method = m3:16
+Version = 15
+Volume Index = 
+
+Path = RAR1~FHU.MD
+Folder = -
+Size = 40371
+Packed Size = 14234
+Modified = 2026-04-24 04:35:52.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = AAC191A8
+Host OS = MS DOS
+Method = m3:16
+Version = 15
+Volume Index = 
+
+Path = RAR1~OEK.MD
+Folder = -
+Size = 101788
+Packed Size = 35606
+Modified = 2026-04-25 07:35:44.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = 292F35D1
+Host OS = MS DOS
+Method = m3:16
+Version = 15
+Volume Index = 
+
+Path = RAR5~YP0.MD
+Folder = -
+Size = 71276
+Packed Size = 24722
+Modified = 2026-04-25 07:36:34.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = E52CF5EC
+Host OS = MS DOS
+Method = m3:16
+Version = 15
+Volume Index = 
+
+Path = RARV~0F3.MD
+Folder = -
+Size = 12429
+Packed Size = 4646
+Modified = 2026-04-25 07:37:02.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = AB07A4A6
+Host OS = MS DOS
+Method = m3:16
+Version = 15
+Volume Index = 
+
+Path = README.md
+Folder = -
+Size = 4198
+Packed Size = 2068
+Modified = 2026-04-25 07:35:44.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = 509E5E3C
+Host OS = MS DOS
+Method = m3:16
+Version = 15
+Volume Index = 
+
+Path = READ~0WB.MD
+Folder = -
+Size = 22024
+Packed Size = 9089
+Modified = 2026-04-25 07:37:20.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = D9875535
+Host OS = MS DOS
+Method = m3:16
+Version = 15
+Volume Index = 
+
+Path = TEST~FAD.MD
+Folder = -
+Size = 14811
+Packed Size = 6597
+Modified = 2026-04-25 09:04:40.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = B55BA84A
+Host OS = MS DOS
+Method = m3:16
+Version = 15
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar154/random.r00
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 730112 bytes (713 KiB)
+
+Listing archive: rar15_40/rar154/random.r00
+
+--
+Path = rar15_40/rar154/random.r00
+Type = Rar
+Physical Size = 730112
+Total Physical Size = 1369280
+Characteristics = Volume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 2
+
+----------
+Path = random.bin
+Folder = -
+Size = 2097152
+Packed Size = 1369156
+Modified = 2026-04-25 10:21:58.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = +
+Split After = -
+CRC = 1C9EB697
+Host OS = MS DOS
+Method = m3:16
+Version = 15
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar154/random.r01
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 639168 bytes (625 KiB)
+
+Listing archive: rar15_40/rar154/random.r01
+
+--
+Path = rar15_40/rar154/random.r01
+Type = Rar
+Physical Size = 639168
+Characteristics = Volume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 1
+
+----------
+Path = random.bin
+Folder = -
+Size = 2097152
+Packed Size = 639106
+Modified = 2026-04-25 10:21:58.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = +
+Split After = -
+CRC = 1C9EB697
+Host OS = MS DOS
+Method = m3:16
+Version = 15
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar154/random.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 730112 bytes (713 KiB)
+
+Listing archive: rar15_40/rar154/random.rar
+
+--
+Path = rar15_40/rar154/random.rar
+Type = Rar
+Physical Size = 730112
+Total Physical Size = 2099392
+Characteristics = Volume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 3
+
+----------
+Path = random.bin
+Folder = -
+Size = 2097152
+Packed Size = 2099206
+Modified = 2026-04-25 10:21:58.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = 1C9EB697
+Host OS = MS DOS
+Method = m3:16
+Version = 15
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar154/readme_154_normal.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2129 bytes (3 KiB)
+
+Listing archive: rar15_40/rar154/readme_154_normal.rar
+
+--
+Path = rar15_40/rar154/readme_154_normal.rar
+Type = Rar
+Physical Size = 2129
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = README.md
+Folder = -
+Size = 4198
+Packed Size = 2068
+Modified = 2026-04-25 07:35:44.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = 509E5E3C
+Host OS = MS DOS
+Method = m3:16
+Version = 15
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar154/readme_154_password.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2129 bytes (3 KiB)
+
+Listing archive: rar15_40/rar154/readme_154_password.rar
+
+--
+Path = rar15_40/rar154/readme_154_password.rar
+Type = Rar
+Physical Size = 2129
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = README.md
+Folder = -
+Size = 4198
+Packed Size = 2068
+Modified = 2026-04-25 07:35:44.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = +
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = 509E5E3C
+Host OS = MS DOS
+Method = m3:16
+Version = 15
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar154/readme_154_store_solid.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2129 bytes (3 KiB)
+
+Listing archive: rar15_40/rar154/readme_154_store_solid.rar
+
+--
+Path = rar15_40/rar154/readme_154_store_solid.rar
+Type = Rar
+Physical Size = 2129
+Characteristics = Solid
+Solid = +
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = README.md
+Folder = -
+Size = 4198
+Packed Size = 2068
+Modified = 2026-04-25 07:35:44.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = 509E5E3C
+Host OS = MS DOS
+Method = m3:16
+Version = 15
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar202/comment_nopsw.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 204 bytes (1 KiB)
+
+Listing archive: rar15_40/rar202/comment_nopsw.rar
+
+--
+Path = rar15_40/rar202/comment_nopsw.rar
+Type = Rar
+Physical Size = 204
+Characteristics = Comment
+Solid = -
+Blocks = 2
+Multivolume = -
+Volumes = 1
+
+----------
+Path = FILE1.TXT
+Folder = -
+Size = 7
+Packed Size = 7
+Modified = 2010-11-03 00:27:28.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = +
+Split Before = -
+Split After = -
+CRC = 7A197DBA
+Host OS = MS DOS
+Method = m0:16
+Version = 20
+Volume Index = 
+
+Path = FILE2.TXT
+Folder = -
+Size = 7
+Packed Size = 7
+Modified = 2010-11-03 00:27:34.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = +
+Split Before = -
+Split After = -
+CRC = 785FC3E3
+Host OS = MS DOS
+Method = m0:16
+Version = 20
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar202/comment_psw.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 254 bytes (1 KiB)
+
+Listing archive: rar15_40/rar202/comment_psw.rar
+
+--
+Path = rar15_40/rar202/comment_psw.rar
+Type = Rar
+Physical Size = 254
+Characteristics = Comment
+Solid = -
+Blocks = 2
+Multivolume = -
+Volumes = 1
+
+----------
+Path = FILE1.TXT
+Folder = -
+Size = 7
+Packed Size = 32
+Modified = 2010-11-03 00:27:28.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = +
+Solid = -
+Commented = +
+Split Before = -
+Split After = -
+CRC = 7A197DBA
+Host OS = MS DOS
+Method = m3:16
+Version = 20
+Volume Index = 
+
+Path = FILE2.TXT
+Folder = -
+Size = 7
+Packed Size = 32
+Modified = 2010-11-03 00:27:34.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = +
+Solid = -
+Commented = +
+Split Before = -
+Split After = -
+CRC = 785FC3E3
+Host OS = MS DOS
+Method = m3:16
+Version = 20
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar250/AUDIO.RAR
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2000 bytes (2 KiB)
+
+Listing archive: rar15_40/rar250/AUDIO.RAR
+
+--
+Path = rar15_40/rar250/AUDIO.RAR
+Type = Rar
+Physical Size = 2000
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = PCM_LR.WAV
+Folder = -
+Size = 32768
+Packed Size = 1938
+Modified = 2026-04-27 07:09:20.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = 713EF34B
+Host OS = MS DOS
+Method = m5:16
+Version = 20
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar250/AUTOREJ.RAR
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 115 bytes (1 KiB)
+
+Listing archive: rar15_40/rar250/AUTOREJ.RAR
+
+--
+Path = rar15_40/rar250/AUTOREJ.RAR
+Type = Rar
+Physical Size = 115
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = PLAIN.TXT
+Folder = -
+Size = 2300
+Packed Size = 54
+Modified = 2026-04-27 07:09:20.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = AFC0DB74
+Host OS = MS DOS
+Method = m5:16
+Version = 20
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar250/BIGLZ.RAR
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 4459 bytes (5 KiB)
+
+Listing archive: rar15_40/rar250/BIGLZ.RAR
+
+--
+Path = rar15_40/rar250/BIGLZ.RAR
+Type = Rar
+Physical Size = 4459
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = BIGLZ.BIN
+Folder = -
+Size = 167936
+Packed Size = 4398
+Modified = 2026-04-29 07:53:10.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = 46CE9077
+Host OS = MS DOS
+Method = m5:16
+Version = 20
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar250/SOLID.RAR
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 281 bytes (1 KiB)
+
+Listing archive: rar15_40/rar250/SOLID.RAR
+
+--
+Path = rar15_40/rar250/SOLID.RAR
+Type = Rar
+Physical Size = 281
+Characteristics = Solid
+Solid = +
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = SOLID1.TXT
+Folder = -
+Size = 15840
+Packed Size = 127
+Modified = 2026-04-29 07:53:10.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = 97668CF2
+Host OS = MS DOS
+Method = m5:16
+Version = 20
+Volume Index = 
+
+Path = SOLID2.TXT
+Folder = -
+Size = 13800
+Packed Size = 50
+Modified = 2026-04-29 07:53:10.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 28833332
+Host OS = MS DOS
+Method = m5:16
+Version = 20
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar250/unpack20_audio_text.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 28125 bytes (28 KiB)
+
+Listing archive: rar15_40/rar250/unpack20_audio_text.rar
+
+--
+Path = rar15_40/rar250/unpack20_audio_text.rar
+Type = Rar
+Physical Size = 28125
+Solid = -
+Blocks = 2
+Multivolume = -
+Volumes = 1
+
+----------
+Path = BoatModernEnglish.wav
+Folder = -
+Size = 56464
+Packed Size = 27902
+Modified = 2022-03-10 11:02:20.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = 82D2ED89
+Host OS = Win32
+Method = m5:18
+Version = 20
+Volume Index = 
+
+Path = LICENSE.txt
+Folder = -
+Size = 107
+Packed Size = 107
+Modified = 2022-03-10 11:05:10.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = 8EAF20C4
+Host OS = Win32
+Method = m0:18
+Version = 20
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar250/unpack20_keep_tables.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 25262 bytes (25 KiB)
+
+Listing archive: rar15_40/rar250/unpack20_keep_tables.rar
+
+--
+Path = rar15_40/rar250/unpack20_keep_tables.rar
+Type = Rar
+Physical Size = 25262
+Solid = -
+Blocks = 2
+Multivolume = -
+Volumes = 1
+
+----------
+Path = unrar
+Folder = -
+Size = 54212
+Packed Size = 25077
+Modified = 1999-08-20 19:51:02.0000000
+Created = 
+Accessed = 
+Attributes =  -rwxr-xr-x
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = BF94BA22
+Host OS = Unix
+Method = m3:18
+Version = 20
+Volume Index = 
+
+Path = file_id.diz
+Folder = -
+Size = 76
+Packed Size = 85
+Modified = 1999-08-20 19:51:46.0000000
+Created = 
+Accessed = 
+Attributes =  -rw-r--r--
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = 497A718F
+Host OS = Unix
+Method = m3:18
+Version = 20
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar250/unpack20_multiblock.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 4827 bytes (5 KiB)
+
+Listing archive: rar15_40/rar250/unpack20_multiblock.rar
+
+--
+Path = rar15_40/rar250/unpack20_multiblock.rar
+Type = Rar
+Physical Size = 4827
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = multiblock.bin
+Folder = -
+Size = 16384
+Packed Size = 4761
+Modified = 2026-04-29 13:00:00.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = A24DA8F8
+Host OS = Win32
+Method = m5:20
+Version = 20
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar250_protect_head_rr1.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 651 bytes (1 KiB)
+
+Listing archive: rar15_40/rar250_protect_head_rr1.rar
+
+--
+Path = rar15_40/rar250_protect_head_rr1.rar
+Type = Rar
+Physical Size = 651
+Characteristics = Recovery
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = TEST.TXT
+Folder = -
+Size = 51
+Packed Size = 51
+Modified = 2026-04-28 00:01:06.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = B9C3A441
+Host OS = MS DOS
+Method = m0:16
+Version = 20
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar250_protect_head_rr5.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 105447 bytes (103 KiB)
+
+Listing archive: rar15_40/rar250_protect_head_rr5.rar
+
+--
+Path = rar15_40/rar250_protect_head_rr5.rar
+Type = Rar
+Physical Size = 105447
+Characteristics = Recovery
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = BIG.BIN
+Folder = -
+Size = 102400
+Packed Size = 102400
+Modified = 2026-04-28 01:05:00.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = 9A0E0C8C
+Host OS = MS DOS
+Method = m0:16
+Version = 20
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar300/compressed_multivol_prng_rar300.r00
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1000 bytes (1 KiB)
+
+Listing archive: rar15_40/rar300/compressed_multivol_prng_rar300.r00
+
+--
+Path = rar15_40/rar300/compressed_multivol_prng_rar300.r00
+Type = Rar
+Physical Size = 1000
+Total Physical Size = 3502
+Characteristics = Volume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 4
+
+----------
+Path = cvolume.bin
+Folder = -
+Size = 4096
+Packed Size = 3222
+Modified = 2026-04-29 04:08:26.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = +
+Split After = -
+CRC = 96DE2BEF
+Host OS = Win32
+Method = m3:17
+Version = 29
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar300/compressed_multivol_prng_rar300.r01
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1000 bytes (1 KiB)
+
+Listing archive: rar15_40/rar300/compressed_multivol_prng_rar300.r01
+
+--
+Path = rar15_40/rar300/compressed_multivol_prng_rar300.r01
+Type = Rar
+Physical Size = 1000
+Total Physical Size = 2502
+Characteristics = Volume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 3
+
+----------
+Path = cvolume.bin
+Folder = -
+Size = 4096
+Packed Size = 2292
+Modified = 2026-04-29 04:08:26.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = +
+Split After = -
+CRC = 96DE2BEF
+Host OS = Win32
+Method = m3:17
+Version = 29
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar300/compressed_multivol_prng_rar300.r02
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1000 bytes (1 KiB)
+
+Listing archive: rar15_40/rar300/compressed_multivol_prng_rar300.r02
+
+--
+Path = rar15_40/rar300/compressed_multivol_prng_rar300.r02
+Type = Rar
+ERROR = Missing volume : compressed_multivol_prng_rar300.r02.r00
+Physical Size = 1000
+Characteristics = Volume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 1
+
+----------
+Path = cvolume.bin
+Folder = -
+Size = 4096
+Packed Size = 930
+Modified = 2026-04-29 04:08:26.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = +
+Split After = +
+CRC = DA8FC871
+Host OS = Win32
+Method = m3:17
+Version = 29
+Volume Index = 
+
+
+Errors: 1
+rc=2
+== l -slt rar15_40/rar300/compressed_multivol_prng_rar300.r03
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 502 bytes (1 KiB)
+
+Listing archive: rar15_40/rar300/compressed_multivol_prng_rar300.r03
+
+--
+Path = rar15_40/rar300/compressed_multivol_prng_rar300.r03
+Type = Rar
+Physical Size = 502
+Characteristics = Volume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 1
+
+----------
+Path = cvolume.bin
+Folder = -
+Size = 4096
+Packed Size = 432
+Modified = 2026-04-29 04:08:26.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = +
+Split After = -
+CRC = 96DE2BEF
+Host OS = Win32
+Method = m3:17
+Version = 29
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar300/compressed_multivol_prng_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1000 bytes (1 KiB)
+
+Listing archive: rar15_40/rar300/compressed_multivol_prng_rar300.rar
+
+--
+Path = rar15_40/rar300/compressed_multivol_prng_rar300.rar
+Type = Rar
+Physical Size = 1000
+Total Physical Size = 4502
+Characteristics = Volume FirstVolume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 5
+
+----------
+Path = cvolume.bin
+Folder = -
+Size = 4096
+Packed Size = 4152
+Modified = 2026-04-29 04:08:26.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = 96DE2BEF
+Host OS = Win32
+Method = m3:17
+Version = 29
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar300/compressed_text_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 125 bytes (1 KiB)
+
+Listing archive: rar15_40/rar300/compressed_text_rar300.rar
+
+--
+Path = rar15_40/rar300/compressed_text_rar300.rar
+Type = Rar
+Physical Size = 125
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = text.txt
+Folder = -
+Size = 2400
+Packed Size = 58
+Modified = 2026-04-29 03:45:56.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = 6A0D746D
+Host OS = Win32
+Method = m3:17
+Version = 29
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar300/encrypted_multivol_rar300.r00
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1732 bytes (2 KiB)
+
+Listing archive: rar15_40/rar300/encrypted_multivol_rar300.r00
+
+--
+Path = rar15_40/rar300/encrypted_multivol_rar300.r00
+Type = Rar
+Physical Size = 1732
+Characteristics = Volume FirstVolume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 1
+
+----------
+Path = bigtext_64k.bin
+Folder = -
+Size = 65536
+Packed Size = 1650
+Modified = 2026-05-03 09:48:06.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = +
+Solid = -
+Commented = -
+Split Before = +
+Split After = -
+CRC = DDC95682
+Host OS = Win32
+Method = m3:17
+Version = 29
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar300/encrypted_multivol_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 8192 bytes (8 KiB)
+
+Listing archive: rar15_40/rar300/encrypted_multivol_rar300.rar
+
+--
+Path = rar15_40/rar300/encrypted_multivol_rar300.rar
+Type = Rar
+Physical Size = 8192
+Total Physical Size = 9924
+Characteristics = Volume FirstVolume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 2
+
+----------
+Path = bigtext_64k.bin
+Folder = -
+Size = 65536
+Packed Size = 9760
+Modified = 2026-05-03 09:48:06.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = +
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = DDC95682
+Host OS = Win32
+Method = m3:17
+Version = 29
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar300/encrypted_newnaming_rar300.part01.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 8192 bytes (8 KiB)
+
+Listing archive: rar15_40/rar300/encrypted_newnaming_rar300.part01.rar
+
+--
+Path = rar15_40/rar300/encrypted_newnaming_rar300.part01.rar
+Type = Rar
+Physical Size = 8192
+Total Physical Size = 9924
+Characteristics = Volume NewVolName FirstVolume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 2
+
+----------
+Path = bigtext_64k.bin
+Folder = -
+Size = 65536
+Packed Size = 9760
+Modified = 2026-05-03 10:02:44.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = +
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = DDC95682
+Host OS = Win32
+Method = m3:17
+Version = 29
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar300/encrypted_newnaming_rar300.part02.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1732 bytes (2 KiB)
+
+Listing archive: rar15_40/rar300/encrypted_newnaming_rar300.part02.rar
+
+--
+Path = rar15_40/rar300/encrypted_newnaming_rar300.part02.rar
+Type = Rar
+Physical Size = 1732
+Characteristics = Volume NewVolName FirstVolume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 1
+
+----------
+Path = bigtext_64k.bin
+Folder = -
+Size = 65536
+Packed Size = 1650
+Modified = 2026-05-03 10:02:44.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = +
+Solid = -
+Commented = -
+Split Before = +
+Split After = -
+CRC = DDC95682
+Host OS = Win32
+Method = m3:17
+Version = 29
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar300/multivol_newnaming_rar300.part01.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 8192 bytes (8 KiB)
+
+Listing archive: rar15_40/rar300/multivol_newnaming_rar300.part01.rar
+
+--
+Path = rar15_40/rar300/multivol_newnaming_rar300.part01.rar
+Type = Rar
+Physical Size = 8192
+Total Physical Size = 9900
+Characteristics = Volume NewVolName FirstVolume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 2
+
+----------
+Path = bigtext_64k.bin
+Folder = -
+Size = 65536
+Packed Size = 9752
+Modified = 2026-04-27 06:54:36.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = DDC95682
+Host OS = Win32
+Method = m3:17
+Version = 29
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar300/multivol_newnaming_rar300.part02.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1708 bytes (2 KiB)
+
+Listing archive: rar15_40/rar300/multivol_newnaming_rar300.part02.rar
+
+--
+Path = rar15_40/rar300/multivol_newnaming_rar300.part02.rar
+Type = Rar
+Physical Size = 1708
+Characteristics = Volume NewVolName FirstVolume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 1
+
+----------
+Path = bigtext_64k.bin
+Folder = -
+Size = 65536
+Packed Size = 1634
+Modified = 2026-04-27 06:54:36.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = +
+Split After = -
+CRC = DDC95682
+Host OS = Win32
+Method = m3:17
+Version = 29
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar300/multivol_oldnaming_rar300.r00
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1708 bytes (2 KiB)
+
+Listing archive: rar15_40/rar300/multivol_oldnaming_rar300.r00
+
+--
+Path = rar15_40/rar300/multivol_oldnaming_rar300.r00
+Type = Rar
+Physical Size = 1708
+Characteristics = Volume FirstVolume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 1
+
+----------
+Path = bigtext_64k.bin
+Folder = -
+Size = 65536
+Packed Size = 1634
+Modified = 2026-04-27 06:54:32.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = +
+Split After = -
+CRC = DDC95682
+Host OS = Win32
+Method = m3:17
+Version = 29
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar300/multivol_oldnaming_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 8192 bytes (8 KiB)
+
+Listing archive: rar15_40/rar300/multivol_oldnaming_rar300.rar
+
+--
+Path = rar15_40/rar300/multivol_oldnaming_rar300.rar
+Type = Rar
+Physical Size = 8192
+Total Physical Size = 9900
+Characteristics = Volume FirstVolume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 2
+
+----------
+Path = bigtext_64k.bin
+Folder = -
+Size = 65536
+Packed Size = 9752
+Modified = 2026-04-27 06:54:32.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = DDC95682
+Host OS = Win32
+Method = m3:17
+Version = 29
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar300/rarvm_audio_stereo_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 15767 bytes (16 KiB)
+
+Listing archive: rar15_40/rar300/rarvm_audio_stereo_rar300.rar
+
+--
+Path = rar15_40/rar300/rarvm_audio_stereo_rar300.rar
+Type = Rar
+Physical Size = 15767
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = audio_stereo_pcm.wav
+Folder = -
+Size = 705644
+Packed Size = 15688
+Modified = 2026-04-25 12:55:24.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = 8AD44141
+Host OS = Win32
+Method = m5:20
+Version = 29
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar300/rarvm_delta_4ch_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 795 bytes (1 KiB)
+
+Listing archive: rar15_40/rar300/rarvm_delta_4ch_rar300.rar
+
+--
+Path = rar15_40/rar300/rarvm_delta_4ch_rar300.rar
+Type = Rar
+Physical Size = 795
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = delta_4ch_ramp.bin
+Folder = -
+Size = 262144
+Packed Size = 718
+Modified = 2026-04-25 12:55:24.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = A303B91F
+Host OS = Win32
+Method = m5:19
+Version = 29
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar300/rarvm_itanium_synthetic_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 3064 bytes (3 KiB)
+
+Listing archive: rar15_40/rar300/rarvm_itanium_synthetic_rar300.rar
+
+--
+Path = rar15_40/rar300/rarvm_itanium_synthetic_rar300.rar
+Type = Rar
+Physical Size = 3064
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = itanium_synthetic_bundles.bin
+Folder = -
+Size = 1048576
+Packed Size = 2976
+Modified = 2026-04-25 12:55:24.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = 39086451
+Host OS = Win32
+Method = m5:21
+Version = 29
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar300/rarvm_rgb_gradient_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 896 bytes (1 KiB)
+
+Listing archive: rar15_40/rar300/rarvm_rgb_gradient_rar300.rar
+
+--
+Path = rar15_40/rar300/rarvm_rgb_gradient_rar300.rar
+Type = Rar
+Physical Size = 896
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = rgb_gradient_24bit.bmp
+Folder = -
+Size = 196662
+Packed Size = 815
+Modified = 2026-04-25 12:55:24.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = BF03AA49
+Host OS = Win32
+Method = m5:18
+Version = 29
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar300/rarvm_x86_e8_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 543 bytes (1 KiB)
+
+Listing archive: rar15_40/rar300/rarvm_x86_e8_rar300.rar
+
+--
+Path = rar15_40/rar300/rarvm_x86_e8_rar300.rar
+Type = Rar
+Physical Size = 543
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = x86_e8_stream.bin
+Folder = -
+Size = 196608
+Packed Size = 467
+Modified = 2026-04-25 13:00:06.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = E0F3971F
+Host OS = Win32
+Method = m5:18
+Version = 29
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar300/rarvm_x86_e8e9_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 584 bytes (1 KiB)
+
+Listing archive: rar15_40/rar300/rarvm_x86_e8e9_rar300.rar
+
+--
+Path = rar15_40/rar300/rarvm_x86_e8e9_rar300.rar
+Type = Rar
+Physical Size = 584
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = x86_e8e9_stream.bin
+Folder = -
+Size = 196608
+Packed Size = 506
+Modified = 2026-04-25 12:55:24.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = DC573E1B
+Host OS = Win32
+Method = m5:18
+Version = 29
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar300/rev_newstyle.part1.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2048 bytes (2 KiB)
+
+Listing archive: rar15_40/rar300/rev_newstyle.part1.rar
+
+--
+Path = rar15_40/rar300/rev_newstyle.part1.rar
+Type = Rar
+Physical Size = 2048
+Total Physical Size = 6440
+Characteristics = Volume NewVolName FirstVolume VolCRC
+Solid = -
+Blocks = 1
+Multivolume = +
+Volume Index = 0
+Volumes = 4
+
+----------
+Path = tmp/rars-rar4-rev-gen/payload.bin
+Folder = -
+Size = 6000
+Packed Size = 6000
+Modified = 2026-05-05 05:17:28.6171508
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = 442C5489
+Host OS = Win32
+Method = m0:17
+Version = 20
+Volume Index = 0
+
+rc=0
+== l -slt rar15_40/rar300/rev_newstyle.part2.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2048 bytes (2 KiB)
+
+Listing archive: rar15_40/rar300/rev_newstyle.part2.rar
+
+--
+Path = rar15_40/rar300/rev_newstyle.part2.rar
+Type = Rar
+Physical Size = 2048
+Total Physical Size = 4392
+Characteristics = Volume NewVolName VolCRC
+Solid = -
+Blocks = 1
+Multivolume = +
+Volume Index = 1
+Volumes = 3
+
+----------
+Path = tmp/rars-rar4-rev-gen/payload.bin
+Folder = -
+Size = 6000
+Packed Size = 4062
+Modified = 2026-05-05 05:17:28.6171508
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = +
+Split After = -
+CRC = 442C5489
+Host OS = Win32
+Method = m0:17
+Version = 20
+Volume Index = 1
+
+rc=0
+== l -slt rar15_40/rar300/rev_newstyle.part3.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2048 bytes (2 KiB)
+
+Listing archive: rar15_40/rar300/rev_newstyle.part3.rar
+
+--
+Path = rar15_40/rar300/rev_newstyle.part3.rar
+Type = Rar
+Physical Size = 2048
+Total Physical Size = 2344
+Characteristics = Volume NewVolName VolCRC
+Solid = -
+Blocks = 1
+Multivolume = +
+Volume Index = 2
+Volumes = 2
+
+----------
+Path = tmp/rars-rar4-rev-gen/payload.bin
+Folder = -
+Size = 6000
+Packed Size = 2124
+Modified = 2026-05-05 05:17:28.6171508
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = +
+Split After = -
+CRC = 442C5489
+Host OS = Win32
+Method = m0:17
+Version = 20
+Volume Index = 2
+
+rc=0
+== l -slt rar15_40/rar300/rev_newstyle.part4.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 296 bytes (1 KiB)
+
+Listing archive: rar15_40/rar300/rev_newstyle.part4.rar
+
+--
+Path = rar15_40/rar300/rev_newstyle.part4.rar
+Type = Rar
+Physical Size = 296
+Characteristics = Volume NewVolName VolCRC
+Solid = -
+Blocks = 1
+Multivolume = +
+Volume Index = 3
+Volumes = 1
+
+----------
+Path = tmp/rars-rar4-rev-gen/payload.bin
+Folder = -
+Size = 6000
+Packed Size = 186
+Modified = 2026-05-05 05:17:28.6171508
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = +
+Split After = -
+CRC = 442C5489
+Host OS = Win32
+Method = m0:17
+Version = 20
+Volume Index = 3
+
+rc=0
+== l -slt rar15_40/rar300/rev_oldstyle.part1.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2048 bytes (2 KiB)
+
+Listing archive: rar15_40/rar300/rev_oldstyle.part1.rar
+
+--
+Path = rar15_40/rar300/rev_oldstyle.part1.rar
+Type = Rar
+Physical Size = 2048
+Total Physical Size = 6368
+Characteristics = Volume NewVolName FirstVolume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 4
+
+----------
+Path = tmp/rars-rar3-rev-gen/payload.bin
+Folder = -
+Size = 6000
+Packed Size = 6000
+Modified = 2026-05-05 05:11:46.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = F3A82E44
+Host OS = Win32
+Method = m0:17
+Version = 20
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar300/rev_oldstyle.part2.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2048 bytes (2 KiB)
+
+Listing archive: rar15_40/rar300/rev_oldstyle.part2.rar
+
+--
+Path = rar15_40/rar300/rev_oldstyle.part2.rar
+Type = Rar
+Physical Size = 2048
+Total Physical Size = 4320
+Characteristics = Volume NewVolName
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 3
+
+----------
+Path = tmp/rars-rar3-rev-gen/payload.bin
+Folder = -
+Size = 6000
+Packed Size = 4044
+Modified = 2026-05-05 05:11:46.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = +
+Split After = -
+CRC = F3A82E44
+Host OS = Win32
+Method = m0:17
+Version = 20
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar300/rev_oldstyle.part3.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2048 bytes (2 KiB)
+
+Listing archive: rar15_40/rar300/rev_oldstyle.part3.rar
+
+--
+Path = rar15_40/rar300/rev_oldstyle.part3.rar
+Type = Rar
+Physical Size = 2048
+Total Physical Size = 2272
+Characteristics = Volume NewVolName
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 2
+
+----------
+Path = tmp/rars-rar3-rev-gen/payload.bin
+Folder = -
+Size = 6000
+Packed Size = 2088
+Modified = 2026-05-05 05:11:46.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = +
+Split After = -
+CRC = F3A82E44
+Host OS = Win32
+Method = m0:17
+Version = 20
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar300/rev_oldstyle.part4.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 224 bytes (1 KiB)
+
+Listing archive: rar15_40/rar300/rev_oldstyle.part4.rar
+
+--
+Path = rar15_40/rar300/rev_oldstyle.part4.rar
+Type = Rar
+Physical Size = 224
+Characteristics = Volume NewVolName
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 1
+
+----------
+Path = tmp/rars-rar3-rev-gen/payload.bin
+Folder = -
+Size = 6000
+Packed Size = 132
+Modified = 2026-05-05 05:11:46.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = +
+Split After = -
+CRC = F3A82E44
+Host OS = Win32
+Method = m0:17
+Version = 20
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar300/solid_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 9956 bytes (10 KiB)
+
+Listing archive: rar15_40/rar300/solid_rar300.rar
+
+--
+Path = rar15_40/rar300/solid_rar300.rar
+Type = Rar
+Physical Size = 9956
+Characteristics = Solid
+Solid = +
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = hello.txt
+Folder = -
+Size = 30
+Packed Size = 45
+Modified = 2026-04-27 06:54:38.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = A538535E
+Host OS = Win32
+Method = m3:20
+Version = 29
+Volume Index = 
+
+Path = tiny.txt
+Folder = -
+Size = 9
+Packed Size = 3
+Modified = 2026-04-27 06:54:38.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = D27B5891
+Host OS = Win32
+Method = m3:20
+Version = 29
+Volume Index = 
+
+Path = bigtext_64k.bin
+Folder = -
+Size = 65536
+Packed Size = 9753
+Modified = 2026-04-27 06:54:38.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = DDC95682
+Host OS = Win32
+Method = m3:20
+Version = 29
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar300/solid_simple_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 153 bytes (1 KiB)
+
+Listing archive: rar15_40/rar300/solid_simple_rar300.rar
+
+--
+Path = rar15_40/rar300/solid_simple_rar300.rar
+Type = Rar
+Physical Size = 153
+Characteristics = Solid
+Solid = +
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = one.txt
+Folder = -
+Size = 48
+Packed Size = 42
+Modified = 2026-04-29 04:05:38.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = 11CC9FBB
+Host OS = Win32
+Method = m3:20
+Version = 29
+Volume Index = 
+
+Path = two.txt
+Folder = -
+Size = 47
+Packed Size = 6
+Modified = 2026-04-29 04:05:42.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = F4FD09E8
+Host OS = Win32
+Method = m3:20
+Version = 29
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar300/stored_multivol_rar300.r00
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1000 bytes (1 KiB)
+
+Listing archive: rar15_40/rar300/stored_multivol_rar300.r00
+
+--
+Path = rar15_40/rar300/stored_multivol_rar300.r00
+Type = Rar
+Physical Size = 1000
+Total Physical Size = 2664
+Characteristics = Volume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 3
+
+----------
+Path = stored-volume.txt
+Folder = -
+Size = 3360
+Packed Size = 2436
+Modified = 2026-04-29 03:33:06.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = +
+Split After = -
+CRC = 4A832EBD
+Host OS = Win32
+Method = m0:17
+Version = 20
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar300/stored_multivol_rar300.r01
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1000 bytes (1 KiB)
+
+Listing archive: rar15_40/rar300/stored_multivol_rar300.r01
+
+--
+Path = rar15_40/rar300/stored_multivol_rar300.r01
+Type = Rar
+Physical Size = 1000
+Total Physical Size = 1664
+Characteristics = Volume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 2
+
+----------
+Path = stored-volume.txt
+Folder = -
+Size = 3360
+Packed Size = 1512
+Modified = 2026-04-29 03:33:06.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = +
+Split After = -
+CRC = 4A832EBD
+Host OS = Win32
+Method = m0:17
+Version = 20
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar300/stored_multivol_rar300.r02
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 664 bytes (1 KiB)
+
+Listing archive: rar15_40/rar300/stored_multivol_rar300.r02
+
+--
+Path = rar15_40/rar300/stored_multivol_rar300.r02
+Type = Rar
+Physical Size = 664
+Characteristics = Volume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 1
+
+----------
+Path = stored-volume.txt
+Folder = -
+Size = 3360
+Packed Size = 588
+Modified = 2026-04-29 03:33:06.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = +
+Split After = -
+CRC = 4A832EBD
+Host OS = Win32
+Method = m0:17
+Version = 20
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar300/stored_multivol_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1000 bytes (1 KiB)
+
+Listing archive: rar15_40/rar300/stored_multivol_rar300.rar
+
+--
+Path = rar15_40/rar300/stored_multivol_rar300.rar
+Type = Rar
+Physical Size = 1000
+Total Physical Size = 3664
+Characteristics = Volume FirstVolume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 4
+
+----------
+Path = stored-volume.txt
+Folder = -
+Size = 3360
+Packed Size = 3360
+Modified = 2026-04-29 03:33:06.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = 4A832EBD
+Host OS = Win32
+Method = m0:17
+Version = 20
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar300/with_comment_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 175 bytes (1 KiB)
+
+Listing archive: rar15_40/rar300/with_comment_rar300.rar
+
+--
+Path = rar15_40/rar300/with_comment_rar300.rar
+Type = Rar
+Physical Size = 175
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = hello.txt
+Folder = -
+Size = 30
+Packed Size = 30
+Modified = 2026-04-27 06:54:24.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = A538535E
+Host OS = Win32
+Method = m0:17
+Version = 29
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar300/with_compressed_recovery_header_synthetic.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 15552 bytes (16 KiB)
+
+Listing archive: rar15_40/rar300/with_compressed_recovery_header_synthetic.rar
+
+--
+Path = rar15_40/rar300/with_compressed_recovery_header_synthetic.rar
+Type = Rar
+Physical Size = 15552
+Characteristics = Recovery
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = bigtext_64k.bin
+Folder = -
+Size = 65536
+Packed Size = 9752
+Modified = 2026-04-27 06:54:28.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = DDC95682
+Host OS = Win32
+Method = m3:17
+Version = 29
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar300/with_compressed_recovery_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 16324 bytes (16 KiB)
+
+Listing archive: rar15_40/rar300/with_compressed_recovery_rar300.rar
+
+--
+Path = rar15_40/rar300/with_compressed_recovery_rar300.rar
+Type = Rar
+Physical Size = 16324
+Characteristics = Recovery
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = bigtext_64k.bin
+Folder = -
+Size = 65536
+Packed Size = 9752
+Modified = 2026-04-27 06:54:28.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = DDC95682
+Host OS = Win32
+Method = m3:17
+Version = 29
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar300/with_recovery_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 15552 bytes (16 KiB)
+
+Listing archive: rar15_40/rar300/with_recovery_rar300.rar
+
+--
+Path = rar15_40/rar300/with_recovery_rar300.rar
+Type = Rar
+Physical Size = 15552
+Characteristics = Recovery
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = bigtext_64k.bin
+Folder = -
+Size = 65536
+Packed Size = 9752
+Modified = 2026-04-27 06:54:28.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = DDC95682
+Host OS = Win32
+Method = m3:17
+Version = 29
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rar420/ext_time_rar420.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 103 bytes (1 KiB)
+
+Listing archive: rar15_40/rar420/ext_time_rar420.rar
+
+--
+Path = rar15_40/rar420/ext_time_rar420.rar
+Type = Rar
+Physical Size = 103
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = hello.txt
+Folder = -
+Size = 30
+Packed Size = 30
+Modified = 2026-04-27 06:54:43.7040883
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = A538535E
+Host OS = Win32
+Method = m0:17
+Version = 29
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rars_generated/comments.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 133 bytes (1 KiB)
+
+Listing archive: rar15_40/rars_generated/comments.rar
+
+--
+Path = rar15_40/rars_generated/comments.rar
+Type = Rar
+Physical Size = 133
+Characteristics = Comment
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = payload.txt
+Folder = -
+Size = 21
+Packed Size = 24
+Modified = 
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = +
+Split Before = -
+Split After = -
+CRC = C945A8B6
+Host OS = MS DOS
+Method = m3:16
+Version = 15
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rars_generated/compressed.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 87 bytes (1 KiB)
+
+Listing archive: rar15_40/rars_generated/compressed.rar
+
+--
+Path = rar15_40/rars_generated/compressed.rar
+Type = Rar
+Physical Size = 87
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = payload.txt
+Folder = -
+Size = 21
+Packed Size = 24
+Modified = 
+Created = 
+Accessed = 
+Attributes = V 00200000 0---r-----
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = C945A8B6
+Host OS = Unix
+Method = m3:16
+Version = 15
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rars_generated/encrypted.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 87 bytes (1 KiB)
+
+Listing archive: rar15_40/rars_generated/encrypted.rar
+
+--
+Path = rar15_40/rars_generated/encrypted.rar
+Type = Rar
+Physical Size = 87
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = payload.txt
+Folder = -
+Size = 21
+Packed Size = 24
+Modified = 
+Created = 
+Accessed = 
+Attributes = V 00200000 0---r-----
+Encrypted = +
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = C945A8B6
+Host OS = Unix
+Method = m3:16
+Version = 15
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rars_generated/solid.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 153 bytes (1 KiB)
+
+Listing archive: rar15_40/rars_generated/solid.rar
+
+--
+Path = rar15_40/rars_generated/solid.rar
+Type = Rar
+Physical Size = 153
+Characteristics = Solid
+Solid = +
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = payload.txt
+Folder = -
+Size = 21
+Packed Size = 24
+Modified = 
+Created = 
+Accessed = 
+Attributes = V 00200000 0---r-----
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = C945A8B6
+Host OS = Unix
+Method = m3:16
+Version = 15
+Volume Index = 
+
+Path = second.txt
+Folder = -
+Size = 25
+Packed Size = 24
+Modified = 
+Created = 
+Accessed = 
+Attributes = V 00200000 0---r-----
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = C6E38E7E
+Host OS = Unix
+Method = m3:16
+Version = 15
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rars_generated/split-encrypted.r00
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 73 bytes (1 KiB)
+
+Listing archive: rar15_40/rars_generated/split-encrypted.r00
+
+--
+Path = rar15_40/rars_generated/split-encrypted.r00
+Type = Rar
+Physical Size = 73
+Total Physical Size = 140
+Characteristics = Volume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 2
+
+----------
+Path = payload.txt
+Folder = -
+Size = 21
+Packed Size = 14
+Modified = 
+Created = 
+Accessed = 
+Attributes = V 00200000 0---r-----
+Encrypted = +
+Solid = -
+Commented = -
+Split Before = +
+Split After = -
+CRC = C945A8B6
+Host OS = Unix
+Method = m3:16
+Version = 15
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rars_generated/split-encrypted.r01
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 67 bytes (1 KiB)
+
+Listing archive: rar15_40/rars_generated/split-encrypted.r01
+
+--
+Path = rar15_40/rars_generated/split-encrypted.r01
+Type = Rar
+Physical Size = 67
+Characteristics = Volume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 1
+
+----------
+Path = payload.txt
+Folder = -
+Size = 21
+Packed Size = 4
+Modified = 
+Created = 
+Accessed = 
+Attributes = V 00200000 0---r-----
+Encrypted = +
+Solid = -
+Commented = -
+Split Before = +
+Split After = -
+CRC = C945A8B6
+Host OS = Unix
+Method = m3:16
+Version = 15
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rars_generated/split-encrypted.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 73 bytes (1 KiB)
+
+Listing archive: rar15_40/rars_generated/split-encrypted.rar
+
+--
+Path = rar15_40/rars_generated/split-encrypted.rar
+Type = Rar
+Physical Size = 73
+Total Physical Size = 213
+Characteristics = Volume FirstVolume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 3
+
+----------
+Path = payload.txt
+Folder = -
+Size = 21
+Packed Size = 24
+Modified = 
+Created = 
+Accessed = 
+Attributes = V 00200000 0---r-----
+Encrypted = +
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = C945A8B6
+Host OS = Unix
+Method = m3:16
+Version = 15
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rars_generated/split-store.r00
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 73 bytes (1 KiB)
+
+Listing archive: rar15_40/rars_generated/split-store.r00
+
+--
+Path = rar15_40/rars_generated/split-store.r00
+Type = Rar
+Physical Size = 73
+Total Physical Size = 137
+Characteristics = Volume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 2
+
+----------
+Path = payload.txt
+Folder = -
+Size = 21
+Packed Size = 11
+Modified = 
+Created = 
+Accessed = 
+Attributes = V 00200000 0---r-----
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = +
+Split After = -
+CRC = C945A8B6
+Host OS = Unix
+Method = m0:16
+Version = 15
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rars_generated/split-store.r01
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 64 bytes (1 KiB)
+
+Listing archive: rar15_40/rars_generated/split-store.r01
+
+--
+Path = rar15_40/rars_generated/split-store.r01
+Type = Rar
+Physical Size = 64
+Characteristics = Volume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 1
+
+----------
+Path = payload.txt
+Folder = -
+Size = 21
+Packed Size = 1
+Modified = 
+Created = 
+Accessed = 
+Attributes = V 00200000 0---r-----
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = +
+Split After = -
+CRC = C945A8B6
+Host OS = Unix
+Method = m0:16
+Version = 15
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rars_generated/split-store.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 73 bytes (1 KiB)
+
+Listing archive: rar15_40/rars_generated/split-store.rar
+
+--
+Path = rar15_40/rars_generated/split-store.rar
+Type = Rar
+Physical Size = 73
+Total Physical Size = 210
+Characteristics = Volume FirstVolume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 3
+
+----------
+Path = payload.txt
+Folder = -
+Size = 21
+Packed Size = 21
+Modified = 
+Created = 
+Accessed = 
+Attributes = V 00200000 0---r-----
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = C945A8B6
+Host OS = Unix
+Method = m0:16
+Version = 15
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rars_generated/stored.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 84 bytes (1 KiB)
+
+Listing archive: rar15_40/rars_generated/stored.rar
+
+--
+Path = rar15_40/rars_generated/stored.rar
+Type = Rar
+Physical Size = 84
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = payload.txt
+Folder = -
+Size = 21
+Packed Size = 21
+Modified = 
+Created = 
+Accessed = 
+Attributes = V 00200000 0---r-----
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = C945A8B6
+Host OS = Unix
+Method = m0:16
+Version = 15
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rarvm/delta_64_channels.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 424 bytes (1 KiB)
+
+Listing archive: rar15_40/rarvm/delta_64_channels.rar
+
+--
+Path = rar15_40/rarvm/delta_64_channels.rar
+Type = Rar
+Physical Size = 424
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = delta64.bin
+Folder = -
+Size = 25600
+Packed Size = 361
+Modified = 2026-08-21 01:32:02.0000000
+Created = 
+Accessed = 
+Attributes =  -rw-rw-r--
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = F623174F
+Host OS = Unix
+Method = m3:17
+Version = 29
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rarvm/filter_bsdcat_exe.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 94301 bytes (93 KiB)
+
+Listing archive: rar15_40/rarvm/filter_bsdcat_exe.rar
+
+--
+Path = rar15_40/rarvm/filter_bsdcat_exe.rar
+Type = Rar
+Physical Size = 94301
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = bsdcat.exe
+Folder = -
+Size = 204288
+Packed Size = 94232
+Modified = 2022-02-09 13:33:04.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = 4DB10349
+Host OS = Win32
+Method = m3:18
+Version = 29
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rarvm/generic_delta_padding_mutation.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 3064 bytes (3 KiB)
+
+Listing archive: rar15_40/rarvm/generic_delta_padding_mutation.rar
+
+--
+Path = rar15_40/rarvm/generic_delta_padding_mutation.rar
+Type = Rar
+Physical Size = 3064
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = itanium_synthetic_bundles.bin
+Folder = -
+Size = 1048576
+Packed Size = 2976
+Modified = 2026-04-25 12:55:24.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = 39086451
+Host OS = Win32
+Method = m5:21
+Version = 29
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rarvm/ppmd_embedded_vm_filter.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 3429 bytes (4 KiB)
+
+Listing archive: rar15_40/rarvm/ppmd_embedded_vm_filter.rar
+
+--
+Path = rar15_40/rarvm/ppmd_embedded_vm_filter.rar
+Type = Rar
+Physical Size = 3429
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = ppmd_branch_mix.bin
+Folder = -
+Size = 710400
+Packed Size = 3351
+Modified = 2026-04-30 07:16:58.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = A0FAAD59
+Host OS = Win32
+Method = m5:20
+Version = 29
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rarvm/solid_e8_filter_member_offset.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 483 bytes (1 KiB)
+
+Listing archive: rar15_40/rarvm/solid_e8_filter_member_offset.rar
+
+--
+Path = rar15_40/rarvm/solid_e8_filter_member_offset.rar
+Type = Rar
+Physical Size = 483
+Characteristics = Solid
+Solid = +
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = lead.txt
+Folder = -
+Size = 800
+Packed Size = 76
+Modified = 2026-04-29 19:32:58.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = 93B37D98
+Host OS = Win32
+Method = m5:20
+Version = 29
+Volume Index = 
+
+Path = tiny_e8e9.exe
+Folder = -
+Size = 5884
+Packed Size = 295
+Modified = 2026-04-29 19:32:58.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 64C1D570
+Host OS = Win32
+Method = m5:20
+Version = 29
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/rarvm/vm_encoded_u32_filter.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 94301 bytes (93 KiB)
+
+Listing archive: rar15_40/rarvm/vm_encoded_u32_filter.rar
+
+--
+Path = rar15_40/rarvm/vm_encoded_u32_filter.rar
+Type = Rar
+Physical Size = 94301
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = bsdcat.exe
+Folder = -
+Size = 204288
+Packed Size = 94232
+Modified = 2022-02-09 13:33:04.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = 4DB10349
+Host OS = Win32
+Method = m3:18
+Version = 29
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/solid_flag_cleared_rar15.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 197 bytes (1 KiB)
+
+Listing archive: rar15_40/solid_flag_cleared_rar15.rar
+
+--
+Path = rar15_40/solid_flag_cleared_rar15.rar
+Type = Rar
+Physical Size = 197
+Characteristics = Solid
+Solid = +
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = a.txt
+Folder = -
+Size = 2700
+Packed Size = 57
+Modified = 2026-08-21 16:59:48.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = 7763F4E4
+Host OS = MS DOS
+Method = m3:16
+Version = 15
+Volume Index = 
+
+Path = b.txt
+Folder = -
+Size = 2700
+Packed Size = 46
+Modified = 2026-08-21 16:59:48.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Solid = +
+Commented = -
+Split Before = -
+Split After = -
+CRC = 7763F4E4
+Host OS = MS DOS
+Method = m3:16
+Version = 15
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/zero_fill/rar20.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 114 bytes (1 KiB)
+
+Listing archive: rar15_40/zero_fill/rar20.rar
+
+--
+Path = rar15_40/zero_fill/rar20.rar
+Type = Rar
+Physical Size = 114
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = zerofill.bin
+Folder = -
+Size = 240
+Packed Size = 50
+Modified = 2026-08-21 00:17:44.0000000
+Created = 
+Accessed = 
+Attributes =  -rw-rw-r--
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = FF5921F9
+Host OS = Unix
+Method = m3:17
+Version = 20
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/zero_fill/rar29.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 116 bytes (1 KiB)
+
+Listing archive: rar15_40/zero_fill/rar29.rar
+
+--
+Path = rar15_40/zero_fill/rar29.rar
+Type = Rar
+Physical Size = 116
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = zerofill.bin
+Folder = -
+Size = 240
+Packed Size = 52
+Modified = 2026-08-21 00:17:44.0000000
+Created = 
+Accessed = 
+Attributes =  -rw-rw-r--
+Encrypted = -
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = FF5921F9
+Host OS = Unix
+Method = m3:17
+Version = 29
+Volume Index = 
+
+rc=0
+== l -slt rar15_40/zero_head_size.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 197 bytes (1 KiB)
+
+Listing archive: rar15_40/zero_head_size.rar
+
+--
+Path = rar15_40/zero_head_size.rar
+Type = Rar
+ERRORS:
+Headers Error
+WARNINGS:
+There are data after the end of archive
+Physical Size = 20
+Tail Size = 177
+Characteristics = Solid
+Solid = +
+Blocks = 0
+Multivolume = -
+Volumes = 1
+
+----------
+
+Warnings: 1
+
+Errors: 1
+rc=2
+== l rar15_40/rar300/multivol_oldnaming_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 8192 bytes (8 KiB)
+
+Listing archive: rar15_40/rar300/multivol_oldnaming_rar300.rar
+
+--
+Path = rar15_40/rar300/multivol_oldnaming_rar300.rar
+Type = Rar
+Physical Size = 8192
+Total Physical Size = 9900
+Characteristics = Volume FirstVolume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 2
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+2026-04-27 06:54:32 ....A        65536         9752  bigtext_64k.bin
+------------------- ----- ------------ ------------  ------------------------
+2026-04-27 06:54:32              65536         9752  1 files
+
+------------------- ----- ------------ ------------  ------------------------
+2026-04-27 06:54:32              65536         9752  1 files
+
+Archives: 1
+Volumes: 2
+Total archives size: 9900
+rc=0
+== l rar15_40/rar300/multivol_oldnaming_rar300.r00
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1708 bytes (2 KiB)
+
+Listing archive: rar15_40/rar300/multivol_oldnaming_rar300.r00
+
+--
+Path = rar15_40/rar300/multivol_oldnaming_rar300.r00
+Type = Rar
+Physical Size = 1708
+Characteristics = Volume FirstVolume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 1
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+2026-04-27 06:54:32 ....A        65536         1634  bigtext_64k.bin
+------------------- ----- ------------ ------------  ------------------------
+2026-04-27 06:54:32              65536         1634  1 files
+rc=0
+== l rar15_40/rar300/multivol_newnaming_rar300.part01.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 8192 bytes (8 KiB)
+
+Listing archive: rar15_40/rar300/multivol_newnaming_rar300.part01.rar
+
+--
+Path = rar15_40/rar300/multivol_newnaming_rar300.part01.rar
+Type = Rar
+Physical Size = 8192
+Total Physical Size = 9900
+Characteristics = Volume NewVolName FirstVolume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 2
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+2026-04-27 06:54:36 ....A        65536         9752  bigtext_64k.bin
+------------------- ----- ------------ ------------  ------------------------
+2026-04-27 06:54:36              65536         9752  1 files
+
+------------------- ----- ------------ ------------  ------------------------
+2026-04-27 06:54:36              65536         9752  1 files
+
+Archives: 1
+Volumes: 2
+Total archives size: 9900
+rc=0
+== l rar15_40/rar300/multivol_newnaming_rar300.part02.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1708 bytes (2 KiB)
+
+Listing archive: rar15_40/rar300/multivol_newnaming_rar300.part02.rar
+
+--
+Path = rar15_40/rar300/multivol_newnaming_rar300.part02.rar
+Type = Rar
+Physical Size = 1708
+Characteristics = Volume NewVolName FirstVolume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 1
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+2026-04-27 06:54:36 ....A        65536         1634  bigtext_64k.bin
+------------------- ----- ------------ ------------  ------------------------
+2026-04-27 06:54:36              65536         1634  1 files
+rc=0
+== l rar15_40/rar300/compressed_multivol_prng_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1000 bytes (1 KiB)
+
+Listing archive: rar15_40/rar300/compressed_multivol_prng_rar300.rar
+
+--
+Path = rar15_40/rar300/compressed_multivol_prng_rar300.rar
+Type = Rar
+Physical Size = 1000
+Total Physical Size = 4502
+Characteristics = Volume FirstVolume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 5
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+2026-04-29 04:08:26 ....A         4096         4152  cvolume.bin
+------------------- ----- ------------ ------------  ------------------------
+2026-04-29 04:08:26               4096         4152  1 files
+
+------------------- ----- ------------ ------------  ------------------------
+2026-04-29 04:08:26               4096         4152  1 files
+
+Archives: 1
+Volumes: 5
+Total archives size: 4502
+rc=0
+== encrypted headers, with the password
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 356 bytes (1 KiB)
+
+Listing archive: rar15_40/encrypted/header_enc_1234.rar
+
+--
+Path = rar15_40/encrypted/header_enc_1234.rar
+Type = Rar
+Physical Size = 356
+Characteristics = BlockEncryption
+Solid = -
+Blocks = 2
+Multivolume = -
+Volumes = 1
+
+----------
+Path = 2__.txt
+Folder = -
+Size = 15
+Packed Size = 32
+Modified = 2017-04-03 20:09:19.1577510
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = +
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = 9CD8035B
+Host OS = Win32
+Method = m3:17
+Version = 29
+Volume Index = 
+
+Path = 1File.txt
+Folder = -
+Size = 5
+Packed Size = 32
+Modified = 2017-04-03 20:08:45.0321680
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = +
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = 578A2019
+Host OS = Win32
+Method = m3:17
+Version = 29
+Volume Index = 
+
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 164 bytes (1 KiB)
+
+Listing archive: rar15_40/encrypted/header_rar300_password.rar
+
+--
+Path = rar15_40/encrypted/header_rar300_password.rar
+Type = Rar
+Physical Size = 164
+Characteristics = BlockEncryption
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = hello.txt
+Folder = -
+Size = 30
+Packed Size = 48
+Modified = 2026-04-27 06:54:20.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = +
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = A538535E
+Host OS = Win32
+Method = m3:17
+Version = 29
+Volume Index = 
+
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 164 bytes (1 KiB)
+
+Listing archive: rar15_40/encrypted/header_rar420_password.rar
+
+--
+Path = rar15_40/encrypted/header_rar420_password.rar
+Type = Rar
+Physical Size = 164
+Characteristics = BlockEncryption
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = hello.txt
+Folder = -
+Size = 30
+Packed Size = 48
+Modified = 2026-04-27 06:54:48.1860752
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = +
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = A538535E
+Host OS = Win32
+Method = m3:17
+Version = 29
+Volume Index = 
+
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 148 bytes (1 KiB)
+
+Listing archive: rar15_40/encrypted/rar4_junrar_header_encrypted.rar
+
+--
+Path = rar15_40/encrypted/rar4_junrar_header_encrypted.rar
+Type = Rar
+Physical Size = 148
+Characteristics = BlockEncryption
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = file1.txt
+Folder = -
+Size = 6
+Packed Size = 32
+Modified = 2020-07-19 21:23:47.0000000
+Created = 
+Accessed = 
+Attributes =  -rw-r--r--
+Encrypted = +
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = E229F704
+Host OS = Unix
+Method = m3:17
+Version = 29
+Volume Index = 
+
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 8192 bytes (8 KiB)
+
+Listing archive: rar15_40/rar300/header_encrypted_multivol_rar300.rar
+
+--
+Path = rar15_40/rar300/header_encrypted_multivol_rar300.rar
+Type = Rar
+Physical Size = 8192
+Total Physical Size = 9992
+Characteristics = Volume BlockEncryption FirstVolume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 2
+
+----------
+Path = bigtext_64k.bin
+Folder = -
+Size = 65536
+Packed Size = 9760
+Modified = 2026-05-03 09:55:36.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = +
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = DDC95682
+Host OS = Win32
+Method = m3:17
+Version = 29
+Volume Index = 
+
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 8192 bytes (8 KiB)
+
+Listing archive: rar15_40/rar300/header_encrypted_newnaming_rar300.part01.rar
+
+--
+Path = rar15_40/rar300/header_encrypted_newnaming_rar300.part01.rar
+Type = Rar
+Physical Size = 8192
+Total Physical Size = 9992
+Characteristics = Volume NewVolName BlockEncryption FirstVolume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 2
+
+----------
+Path = bigtext_64k.bin
+Folder = -
+Size = 65536
+Packed Size = 9760
+Modified = 2026-05-03 10:06:34.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = +
+Solid = -
+Commented = -
+Split Before = -
+Split After = -
+CRC = DDC95682
+Host OS = Win32
+Method = m3:17
+Version = 29
+Volume Index = 
+
+rc=0
+== a wrong password
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 164 bytes (1 KiB)
+
+Listing archive: rar15_40/encrypted/header_rar300_password.rar
+
+
+Errors: 1
+
+ERROR: rar15_40/encrypted/header_rar300_password.rar : Cannot open encrypted archive. Wrong password?
+
+
+rc=2
+== none, and none to type
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 164 bytes (1 KiB)
+
+Listing archive: rar15_40/encrypted/header_rar300_password.rar
+
+
+Enter password (will not be echoed):
+
+
+Break signaled
+rc=255

@@ -165,10 +165,11 @@ filter = 'binary(it) and test(/^(xxd_builtin::xxd_matches_vims|hexdump_builtin::
 slow-timeout = { period = "30s", terminate-after = 3 }
 
 # Run the 7z oracle scripts, some 160 7z commands, many of them writing archives, some
-# 190 reading and writing the other formats, and 86 listing RAR archives, one after
-# another: 12 s, 11 s and 5 s alone on an idle machine in a debug build (2026-10-07).
+# 190 reading and writing the other formats, and 86 and 104 listing RAR archives, one
+# after another: 12 s, 11 s, 5 s and 5 s alone on an idle machine in a debug build
+# (2026-10-07).
 [[profile.default.overrides]]
-filter = 'binary(it) and test(/^sevenzip_builtin::seven_z_(matches_7_zip_26_03|reads_and_writes_the_other_formats_as_7_zip_26_03_does|lists_rar_as_7_zip_26_03_does)$/)'
+filter = 'binary(it) and test(/^sevenzip_builtin::seven_z_(matches_7_zip_26_03|reads_and_writes_the_other_formats_as_7_zip_26_03_does|lists_rar_as_7_zip_26_03_does|lists_rar_1_5_to_4_as_7_zip_26_03_does)$/)'
 slow-timeout = { period = "30s", terminate-after = 3 }
 
 # Runs the grep oracle script, some 900 grep cases, many in `| od | sed` pipelines of

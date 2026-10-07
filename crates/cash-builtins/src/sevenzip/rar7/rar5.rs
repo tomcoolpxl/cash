@@ -1160,6 +1160,7 @@ impl Rar5 {
                             .file_name()
                             .map(|n| n.to_string_lossy().into_owned())
                             .unwrap_or_default(),
+                        true,
                     )
                 });
                 let name = names.next_name();

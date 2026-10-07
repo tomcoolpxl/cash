@@ -3,6 +3,7 @@
 //! read into items, and each property as 7-Zip shows it. The data is decoded by
 //! cash-archive's `rar`.
 
+mod rar4;
 mod rar5;
 mod volname;
 
@@ -18,6 +19,7 @@ pub(super) struct Opening {
     pub(super) item_props: Vec<Prop>,
     pub(super) items: Vec<Item>,
     pub(super) error_flags: Vec<&'static str>,
+    pub(super) warning_flags: Vec<&'static str>,
     /// `kpidError`: a volume the set needed that was not there.
     pub(super) error_message: Option<String>,
     /// Every volume read, the one named first among them.
@@ -26,8 +28,10 @@ pub(super) struct Opening {
 }
 
 /// A RAR archive, open, for reading its items' data.
+#[expect(dead_code, reason = "read by extraction, the next step")]
 pub(super) enum Rar {
-    Five(#[expect(dead_code, reason = "read by extraction, the next step")] Box<rar5::Rar5>),
+    Four(Box<rar4::Rar4>),
+    Five(Box<rar5::Rar5>),
 }
 
 /// Opens a RAR 5 archive and the volumes after it.
@@ -62,12 +66,47 @@ pub(super) fn open5(
         item_props: rar5::ITEM_PROPS.to_vec(),
         items: rar.listed(),
         error_flags: rar.error_flags(),
+        warning_flags: Vec::new(),
         error_message: rar
             .missing_volume
             .as_ref()
             .map(|name| format!("Missing volume : {name}")),
         volumes: rar.volumes.clone(),
         rar: Rar::Five(Box::new(rar)),
+    })
+}
+
+/// Opens a RAR 1.5 to 4 archive and the volumes after it.
+pub(super) fn open4(
+    path: &Path,
+    password: Option<&str>,
+    zone: &cash_core::timefmt::Zone,
+) -> Result<Opening, OpenFailure> {
+    let rar = match rar4::Rar4::open(path, password).map_err(OpenFailure::Io)? {
+        Ok(rar) => rar,
+        Err(rar4::Failure::PasswordNeeded) => return Err(OpenFailure::PasswordNeeded),
+        Err(rar4::Failure::WrongPassword) => return Err(OpenFailure::WrongPassword),
+        Err(rar4::Failure::NotArchive) => {
+            return Err(OpenFailure::NotArchive {
+                tried: Some(super::archive::Kind::Rar),
+                flags: vec!["Is not archive"],
+                in_split: false,
+            });
+        }
+    };
+    Ok(Opening {
+        physical_size: rar.info.phy_size(),
+        props: rar.archive_props(),
+        item_props: rar4::ITEM_PROPS.to_vec(),
+        items: rar.listed(zone),
+        error_flags: rar.error_flags(),
+        warning_flags: rar.warning_flags(),
+        error_message: rar
+            .missing_volume
+            .as_ref()
+            .map(|name| format!("Missing volume : {name}")),
+        volumes: rar.volumes.clone(),
+        rar: Rar::Four(Box::new(rar)),
     })
 }
 

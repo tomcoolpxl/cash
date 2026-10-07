@@ -150,6 +150,7 @@ impl Kind {
                 | Self::Xz
                 | Self::Zstd
                 | Self::Lzma
+                | Self::Rar
                 | Self::Rar5
         )
     }
@@ -181,6 +182,7 @@ pub(super) enum Prop {
     HardLink,
     Characteristics,
     Comment,
+    Commented,
     AltStream,
     Solid,
     SplitBefore,
@@ -221,6 +223,7 @@ impl Prop {
             Self::HardLink => "Hard Link",
             Self::Characteristics => "Characteristics",
             Self::Comment => "Comment",
+            Self::Commented => "Commented",
             Self::AltStream => "Alternate Stream",
             Self::Solid => "Solid",
             Self::SplitBefore => "Split Before",
@@ -590,9 +593,13 @@ fn open_at(
     };
     let mut opened = if kind == Kind::SevenZ {
         open_7z(file, password)?
-    } else if kind == Kind::Rar5 {
+    } else if kind == Kind::Rar || kind == Kind::Rar5 {
         drop(file);
-        let opening = super::rar7::open5(path, password, zone)?;
+        let opening = if kind == Kind::Rar {
+            super::rar7::open4(path, password, zone)?
+        } else {
+            super::rar7::open5(path, password, zone)?
+        };
         let sizes: Vec<u64> = opening
             .volumes
             .iter()
@@ -612,7 +619,7 @@ fn open_at(
                 len.saturating_sub(opening.physical_size)
             },
             error_flags: opening.error_flags,
-            warning_flags: Vec::new(),
+            warning_flags: opening.warning_flags,
             error_message: opening.error_message,
             volumes: Some(Split {
                 first_size: len,

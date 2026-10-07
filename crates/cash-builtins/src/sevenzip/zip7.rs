@@ -243,7 +243,7 @@ fn name_of(entry: &Entry) -> String {
 }
 
 /// A byte of code page 437, as Windows' OEM code page in Western Europe and the US.
-fn cp437(b: u8) -> char {
+pub(super) fn cp437(b: u8) -> char {
     const HIGH: &str = "ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜ¢£¥₧ƒáíóúñÑªº¿⌐¬½¼¡«»░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀αßΓπΣσµτΦΘΩδ∞φε∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■\u{a0}";
     if b < 0x80 {
         char::from(b)
