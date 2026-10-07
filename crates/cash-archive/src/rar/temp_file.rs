@@ -42,6 +42,15 @@ pub(crate) fn create_with_sequence<C>(
         path.push(name);
         let mut options = File::options();
         options.read(true).write(true).create_new(true);
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::OpenOptionsExt;
+            // Windows deletes the file when this handle and every other one is
+            // closed, the process's own end included, so no exit leaves one. Other
+            // opens share deletion, as std's do by default.
+            const FILE_FLAG_DELETE_ON_CLOSE: u32 = 0x0400_0000;
+            options.custom_flags(FILE_FLAG_DELETE_ON_CLOSE);
+        }
         #[cfg(unix)]
         {
             use std::os::unix::fs::OpenOptionsExt;
@@ -107,6 +116,7 @@ impl Seek for TemporaryFile {
 }
 impl Drop for TemporaryFile {
     fn drop(&mut self) {
+        // On Windows closing the handle has deleted the file already.
         self.file = None;
         let _ = std::fs::remove_file(&self.path);
     }

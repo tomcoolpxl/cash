@@ -650,11 +650,10 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
    code (what of `rar`'s switches, which RAR generation by default, the oracle: WinRAR's
    `rar.exe`/`unrar.exe` if the user has them).
 3. Pages, `builtins.md`, doctor's shadows (`rar`, `unrar`, `7z`'s RAR).
-4. **rar's spool files outlive a killed process**: its writer spools to
-   `.rars-spool-<pid>-<n>` in `WriterResources`' temp folder, the working folder when none
-   is named, and removes them on drop; three were left in `crates/cash-archive` by tests
-   that timed out on 2026-10-07. cash's callers are to name a temp folder, and the files
-   to be opened delete-on-close, so that no exit leaves one.
+4. **rar's spool files outlive a killed process**: done 2026-10-08. Spools and reader
+   scratch files are opened delete-on-close, a spool keeping that handle while it lives,
+   and a writer with no temp folder named spools in the system's, not the process's
+   working folder. `rar a` passes `-w`'s folder when given.
 5. **rar's AES key schedules are not wiped**: rars cleared them through the `aes`
    crate's `zeroize` feature; the passwords, keys and IVs are cleared by `crypto::wipe`,
    the `Aes128`/`Aes256` round keys are not. Wipe them, or say why not.

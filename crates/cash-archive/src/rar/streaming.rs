@@ -432,16 +432,20 @@ impl WriterResources {
         self
     }
 
-    /// Place temporary spools in this existing directory (default: the current
-    /// directory). Use a directory whose contents untrusted users cannot replace:
-    /// idle spools are closed and later reopened by path.
+    /// Place temporary spools in this existing directory (default: the system's
+    /// temporary directory, never the process's current one, which in a shell is
+    /// not the user's). Use a directory whose contents untrusted users cannot
+    /// replace: idle spools are closed and later reopened by path.
     ///
     /// Spools may contain unencrypted compressed data even for encrypted output.
     /// Files are created exclusively, with owner-only access on Unix (0600 before
     /// applying the umask); other platforms use inherited directory permissions.
-    /// Dropping a spool closes its handle before attempting removal, including on
-    /// errors and unwind. Removal is best-effort, not secure erasure, and process
-    /// termination can leave files behind. Bare WASM ignores this setting.
+    /// On Windows a spool holds one handle opened delete-on-close for its whole
+    /// life, so the system deletes the file however the process ends. Elsewhere,
+    /// dropping a spool closes its handle before attempting removal, including on
+    /// errors and unwind; there removal is best-effort, and process termination
+    /// can leave files behind. Neither is secure erasure. Bare WASM ignores this
+    /// setting.
     pub fn with_temp_dir(mut self, path: impl Into<PathBuf>) -> Self {
         self.temp_dir = Some(Arc::new(path.into()));
         self
@@ -778,6 +782,10 @@ pub(crate) struct Spool {
     path: PathBuf,
     #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
     _path_charge: Option<CapacityCharge>,
+    /// The handle opened delete-on-close, kept while the spool lives: parking
+    /// closes the working handle, and the file goes with this one.
+    #[cfg(windows)]
+    _keeper: File,
     file: Option<SpoolStore>,
     len: u64,
     pos: u64,
@@ -795,7 +803,14 @@ impl Spool {
         resources: &WriterResources,
         next_sequence: impl FnMut() -> u64,
     ) -> Result<Self> {
-        let directory = resources.temp_dir().unwrap_or_else(|| Path::new("."));
+        let system;
+        let directory = match resources.temp_dir() {
+            Some(directory) => directory,
+            None => {
+                system = std::env::temp_dir();
+                &system
+            }
+        };
         let (path, file, path_charge) = crate::rar::temp_file::create_with_sequence(
             directory,
             |capacity| {
@@ -807,9 +822,16 @@ impl Spool {
             },
             next_sequence,
         )?;
+        #[cfg(windows)]
+        let (keeper, file) = {
+            let working = file.try_clone()?;
+            (file, working)
+        };
         Ok(Self {
             path,
             _path_charge: path_charge,
+            #[cfg(windows)]
+            _keeper: keeper,
             file: Some(file),
             len: 0,
             pos: 0,
@@ -1002,7 +1024,9 @@ impl Seek for Spool {
 impl Drop for Spool {
     fn drop(&mut self) {
         self.file = None;
-        #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+        // On Windows the keeper, closed after this, deletes the file wherever it
+        // now is.
+        #[cfg(not(any(windows, all(target_arch = "wasm32", target_os = "unknown"))))]
         if let Err(error) = std::fs::remove_file(&self.path) {
             if error.kind() != std::io::ErrorKind::NotFound {
                 // The backing file may still occupy storage. Keep that debt in
@@ -1374,7 +1398,40 @@ mod tests {
         assert_eq!(spool_used(&resources), 0);
     }
 
-    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+    #[cfg(windows)]
+    #[test]
+    fn a_spool_file_goes_with_its_spool_wherever_it_was_moved() {
+        let root = crate::rar::scratch::case("spool-delete-on-close");
+        let resources = WriterResources::default()
+            .with_temp_dir(&*root)
+            .with_max_spool_bytes(3);
+        let mut spool = Spool::create(&resources).unwrap();
+        spool.write_all(b"abc").unwrap();
+        spool.park();
+        let original = spool.path.clone();
+        // Removal by name would miss it: only the handle can delete it now.
+        std::fs::rename(&original, root.join("moved")).unwrap();
+        std::fs::create_dir(&original).unwrap();
+        spool.rewind().unwrap_err();
+        drop(spool);
+        assert!(!root.join("moved").exists());
+        assert_eq!(spool_used(&resources), 0);
+        let mut another = Spool::create(&resources).unwrap();
+        another.write_all(b"xyz").unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn spools_without_a_named_folder_are_in_the_system_temp_folder() {
+        let spool = Spool::create(&WriterResources::default()).unwrap();
+        assert_eq!(spool.path.parent(), Some(std::env::temp_dir().as_path()));
+        let path = spool.path.clone();
+        assert!(path.is_file());
+        drop(spool);
+        assert!(!path.exists());
+    }
+
+    #[cfg(not(any(windows, all(target_arch = "wasm32", target_os = "unknown"))))]
     #[test]
     fn spool_cleanup_failure_retains_debt_in_the_quota_group() {
         let root = crate::rar::scratch::case("spool-quota-cleanup");
@@ -1394,7 +1451,7 @@ mod tests {
         assert!(another.write_all(b"x").is_err());
     }
 
-    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+    #[cfg(not(any(windows, all(target_arch = "wasm32", target_os = "unknown"))))]
     #[test]
     fn spool_cleanup_failure_without_quota_does_not_panic() {
         let root = crate::rar::scratch::case("spool-unlimited-cleanup");
