@@ -8,10 +8,10 @@ use std::path::PathBuf;
 /// Bare WebAssembly rejects this disk policy; it never substitutes RAM storage.
 ///
 /// ```no_run
-/// # fn extract(archive: &rars::Archive) -> rars::Result<()> {
-/// let scratch = rars::Rar50Scratch::new("/path/to/private/scratch", 4 * 1024 * 1024 * 1024)
+/// # fn extract(archive: &cash_archive::rar::Archive) -> cash_archive::rar::Result<()> {
+/// let scratch = cash_archive::rar::Rar50Scratch::new("/path/to/private/scratch", 4 * 1024 * 1024 * 1024)
 ///     .with_filter_memory_limit(8 * 1024 * 1024);
-/// let options = rars::ArchiveReadOptions::new()
+/// let options = cash_archive::rar::ArchiveReadOptions::new()
 ///     .with_rar50_buffered_decode_limit(1024 * 1024)
 ///     .with_rar50_scratch(&scratch);
 /// archive.extract_to_with_options(options, |_| Ok(Box::new(std::io::sink())))?;

@@ -744,8 +744,8 @@ impl Archive {
     /// members still requires the existing multivolume extraction API.
     ///
     /// ```
-    /// # fn scan(archive: &rars::Archive) -> rars::Result<()> {
-    /// use rars::{ArchiveReadOptions, ExtractionDecision};
+    /// # fn scan(archive: &cash_archive::rar::Archive) -> cash_archive::rar::Result<()> {
+    /// use cash_archive::rar::{ArchiveReadOptions, ExtractionDecision};
     /// archive.extract_with_control(ArchiveReadOptions::new(), |member| {
     ///     if member.meta.is_encrypted || member.meta.unpacked_size > 1024 * 1024 {
     ///         Ok(ExtractionDecision::Skip)
@@ -983,8 +983,8 @@ impl Archive {
     /// comments are refused when either output ceiling is configured.
     ///
     /// ```no_run
-    /// # fn example(archive: &rars::Archive) -> rars::Result<()> {
-    /// let options = rars::ArchiveReadOptions::new()
+    /// # fn example(archive: &cash_archive::rar::Archive) -> cash_archive::rar::Result<()> {
+    /// let options = cash_archive::rar::ArchiveReadOptions::new()
     ///     .with_max_member_output_bytes(64 * 1024)
     ///     .with_rar50_dictionary_size_limit(8 * 1024 * 1024);
     /// let comment = archive.comment_with_options(options)?;
@@ -1336,9 +1336,9 @@ impl ArchiveReader {
     /// may buffer payloads. Cancellation cannot interrupt a blocked source call.
     ///
     /// ```no_run
-    /// # fn example() -> rars::Result<()> {
+    /// # fn example() -> cash_archive::rar::Result<()> {
     /// let file = std::fs::File::open("archive.rar")?;
-    /// let archive = rars::ArchiveReader::read_reader(file)?;
+    /// let archive = cash_archive::rar::ArchiveReader::read_reader(file)?;
     /// archive.extract_to(None, |_| Ok(Box::new(std::io::sink())))?;
     /// # Ok(())
     /// # }

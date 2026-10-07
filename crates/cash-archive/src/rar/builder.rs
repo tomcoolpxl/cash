@@ -162,8 +162,8 @@ impl BuilderEntry {
 /// written more than once and to more than one format.
 ///
 /// ```no_run
-/// # fn main() -> rars::Result<()> {
-/// let mut builder = rars::Builder::new(rars::ArchiveVersion::Rar50);
+/// # fn main() -> cash_archive::rar::Result<()> {
+/// let mut builder = cash_archive::rar::Builder::new(cash_archive::rar::ArchiveVersion::Rar50);
 /// builder.add_bytes(b"hello.txt".to_vec(), b"hello".to_vec(), None, None)?;
 /// let archive = builder.to_bytes()?;
 /// # let _ = archive;
