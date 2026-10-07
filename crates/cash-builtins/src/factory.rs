@@ -424,6 +424,14 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
         builtin::<sevenzip::SevenZaCommand, SE>().with_substitution_files(),
     );
     m.insert(
+        "rar".into(),
+        builtin::<rar::RarCommand, SE>().with_substitution_files(),
+    );
+    m.insert(
+        "unrar".into(),
+        builtin::<rar::UnrarCommand, SE>().with_substitution_files(),
+    );
+    m.insert(
         "coolfetch".into(),
         builtin::<coolfetch::CoolfetchCommand, SE>(),
     );

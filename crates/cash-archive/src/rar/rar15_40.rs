@@ -2199,7 +2199,7 @@ fn decrypt_encrypted_header_at(
         // length adds at most 65544, which fits usize on both supported widths.
         let encrypted_end = offset + 8 + encrypted_header_size;
         if encrypted_end > archive.len() {
-            return Err(Error::TooShort);
+            return Err(short_or_wrong_key(&first_block));
         }
         budget.admit(head_size, offset)?;
         // The first 24 bytes and the rounded header end were admitted above.
@@ -2213,7 +2213,7 @@ fn decrypt_encrypted_header_at(
         }
         header.truncate(head_size);
 
-        let mut block = parse_block_header(&header, 0)?;
+        let mut block = parse_block_header(&header, 0).map_err(wrong_key_on_crc)?;
         block.offset = offset;
         // Parsed add_size is a widened wire u32 and fits both supported widths.
         let payload_size = block.add_size.unwrap_or(0) as usize;
@@ -2281,7 +2281,7 @@ fn read_encrypted_header_at(
             .checked_add(8)
             .ok_or(Error::InvalidHeader("RAR 1.5 block offset overflows usize"))?;
         if encrypted_header_size as u64 > remaining - 8 {
-            return Err(Error::TooShort);
+            return Err(short_or_wrong_key(&first_block));
         }
         budget.admit(head_size, offset)?;
         let encrypted_rest_start = encrypted_start
@@ -2297,7 +2297,7 @@ fn read_encrypted_header_at(
         }
         header.truncate(head_size);
 
-        let mut block = parse_block_header(&header, 0)?;
+        let mut block = parse_block_header(&header, 0).map_err(wrong_key_on_crc)?;
         block.offset = offset;
         // Parsed add_size is a widened wire u32 and fits both supported widths.
         let payload_size = block.add_size.unwrap_or(0) as usize;
@@ -2310,6 +2310,27 @@ fn read_encrypted_header_at(
             header,
             total_size,
         })
+    }
+}
+
+/// A decrypted header that runs past the end: the archive is cut short if its type is
+/// one RAR 1.5 to 4 has, else the key is wrong and its size, like its type, is noise.
+#[cfg(feature = "encryption")]
+fn short_or_wrong_key(first_block: &[u8; 16]) -> Error {
+    if (MARK_HEAD..=ENDARC_HEAD).contains(&first_block[2]) {
+        Error::TooShort
+    } else {
+        Error::WrongPasswordOrCorruptData
+    }
+}
+
+/// An encrypted header whose CRC does not check was decrypted with the wrong key, or
+/// is damaged: rar says both.
+#[cfg(feature = "encryption")]
+fn wrong_key_on_crc(error: Error) -> Error {
+    match error {
+        Error::CrcMismatch { .. } => Error::WrongPasswordOrCorruptData,
+        other => other,
     }
 }
 
@@ -3025,7 +3046,12 @@ mod tests {
                         options,
                     ),
                 ] {
-                    if corrupt {
+                    if corrupt && encrypted {
+                        assert!(
+                            matches!(result, Err(Error::WrongPasswordOrCorruptData)),
+                            "{result:?}"
+                        );
+                    } else if corrupt {
                         assert!(
                             matches!(result, Err(Error::CrcMismatch { .. })),
                             "{result:?}"
@@ -4786,8 +4812,9 @@ mod tests {
     #[test]
     fn encrypted_header_readers_reject_short_prefixes_and_declared_headers() {
         let mut cache = EncryptedHeaderCipherCache::default();
-        for size in [0u16, 6, 17, 65] {
+        for (size, kind) in [(0u16, 0), (6, 0), (17, FILE_HEAD), (65, FILE_HEAD), (65, 0)] {
             let mut plain = [0; 16];
+            plain[2] = kind;
             plain[5..7].copy_from_slice(&size.to_le_bytes());
             cache
                 .cipher(b"pw", [0; 8])
@@ -4826,6 +4853,9 @@ mod tests {
                     seekable,
                     Error::InvalidHeader("RAR 1.5 block header is too short")
                 ));
+            } else if kind == 0 {
+                assert!(matches!(memory, Error::WrongPasswordOrCorruptData));
+                assert!(matches!(seekable, Error::WrongPasswordOrCorruptData));
             } else {
                 assert!(matches!(memory, Error::TooShort));
                 assert!(matches!(seekable, Error::TooShort));

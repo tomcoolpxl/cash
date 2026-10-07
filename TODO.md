@@ -646,9 +646,21 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
    - An SFX's archive inside its `.exe` (7-Zip opens an `.exe` as PE first, which
      cash's 7z does not read).
 2. **`rar` and `unrar` builtins** with RARLAB's console interface, reading and writing:
-   a family of their own, so a shared design in `research/` and a pick list before any
-   code (what of `rar`'s switches, which RAR generation by default, the oracle: WinRAR's
-   `rar.exe`/`unrar.exe` if the user has them).
+   designed in `research/archive-tools-design.md` 3.15 and picked by the user on
+   2026-10-07/08 (the fuller set, RAR 5, Scoop's WinRAR 7.23 as the oracle, built by
+   observation only). Done: the command line (`RARINISWITCHES`, `rar.ini`, every switch
+   read), the banner and `-?`, and the listings `l`/`lt`/`lta`/`lb`/`v…` with `-v`
+   (`rar_list.sh`, 12,470 lines like WinRAR's). Left, in order:
+   - `t`, `x`, `e`, `p`: overwrite questions, passwords, paths (`-ep*`, `-ap`, `-ad`,
+     `-op`), `-kb`, links, times, volumes, `-mes`, `-ver`; their oracle.
+   - `a`, `u`, `f`, `m`, `mf`, `d`, with the archiving switches; their oracle. Before
+     it, a question for the user: rar 7.23 refuses `-ma4` ("Unknown option"), so
+     writing RAR 4 is cash's own extension or none.
+   - `c`, `cw`, `rn`, `k`, `rr`, `ch`, `r`, `rc`, `i`; `s` and `rv` refused.
+   - A lenient read in rars, so a damaged archive lists the files before its damage, as
+     rar does; today rars stops at the first bad header and rar's two "Corrupt header"
+     lines come with no files.
+   - The `expect(dead_code)` at the top of `rar/mod.rs` goes when every part is used.
 3. Pages, `builtins.md`, doctor's shadows (`rar`, `unrar`, `7z`'s RAR).
 4. **rar's spool files outlive a killed process**: done 2026-10-08. Spools and reader
    scratch files are opened delete-on-close, a spool keeping that handle while it lives,

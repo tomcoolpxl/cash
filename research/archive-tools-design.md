@@ -389,16 +389,20 @@ are in section 7: the fuller set, RAR 5 by default, WinRAR as the oracle.
   as UnRAR does.
 - **Face**: rar's words, listings (`l`, `lt`, `lta`, `lb`, `v`, `vt`, `vta`, `vb`),
   progress lines, questions (`[Y]es, [N]o, [A]ll, n[E]ver, [R]ename, [Q]uit`) and exit
-  codes (0 to 12, and 255 on Ctrl-C), with LF and `/` as tar, zip and 7z print. The
+  codes (0 to 13, and 255 on Ctrl-C), with LF and `/` as tar, zip and 7z print. The
   banner's place holds `RAR (cash)` and `UNRAR (cash)`, as 7z's holds `7-Zip (cash)`;
   `-idc` and `-inul` leave it out. All of it is learned by watching the tools and
   reading `Rar.txt`, never from UnRAR's source (section 7); the help screen is cash's
   own text. Switches start with `-` (rar on Windows takes `/` too,
-  which in cash is a path) and stand anywhere until `--`. The `RAR` variable and
-  `rar.ini` supply default switches as rar reads them, and `-cfg-` ignores both.
-- **What is written**: RAR 5 by default, `-ma4` for RAR 4 (RAR 2.9's format, which
-  WinRAR writes for `-ma4`). rars' compressor is not WinRAR's, so compressed sizes differ;
-  stored archives (`-m0`) are compared byte for byte, as 7z's `-mx0` are.
+  which in cash is a path) and stand anywhere until `--`. `RARINISWITCHES` and
+  `%APPDATA%\WinRAR\rar.ini` (`switches=`, `switches_<command>=`) supply default
+  switches as rar reads them, and `-cfg-` ignores both. Names and messages are UTF-8
+  everywhere; rar writes the ANSI code page into files and pipes unless `-scfr`.
+- **What is written**: RAR 5. rar 7.23 has no `-ma4` any more ("Unknown option: ma4",
+  observed 2026-10-08), though the user's pick assumed it had: writing RAR 4 through
+  rars stays a question for the user before `a` is built. rars' compressor is not
+  WinRAR's, so compressed sizes differ; stored archives (`-m0`) are compared byte for
+  byte, as 7z's `-mx0` are.
 - **Windows facts**: attributes and times as WinRAR stores them on Windows (`-ts` for the
   three times). `-ol` stores symbolic links and junctions as links and `-oh` hard links,
   as 7z's `-snl` and `-snh` do. NTFS streams and security (`-os`, `-ow`) get "not
