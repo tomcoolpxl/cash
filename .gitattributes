@@ -28,3 +28,6 @@ tests/git-prompt/** -text
 *.exe binary
 *.dll binary
 *.pdb binary
+
+# Archives are bytes.
+*.zip binary

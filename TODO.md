@@ -476,13 +476,33 @@ script-visible Bash behaviour or a kinder refusal.
 
 ---
 
+## Phase 31. `7z` and `7za`
+
+Chosen by the user on 2026-10-07, by pick list, after 1.9.0: a builtin under both names
+(as 7-Zip ships `7z`, `7za` and `7zr`), shadowing Scoop's 7-Zip inside cash, which stays
+reachable by its path and `enable -n 7z`; doctor lists it as a deliberate shadow.
+
+1. **On `sevenz-rust2`** (Apache-2.0, pure Rust, on the same `lzma-rust2` and
+   `ppmd-rust` as xz and zip): 7-Zip's command line, `a`, `x`, `e`, `l`, `t`, `d`, `u`,
+   `rn`, with `-o`, `-p`, `-t7z`, `-mx`, `-r`, `-y`, `-so`, `-si`; reading and writing
+   `.7z` with LZMA, LZMA2, bzip2, PPMd and COPY, the BCJ and delta filters, AES-256 and
+   solid blocks. Its `zstd` feature builds C and is left out.
+2. A short design note in `research/archive-tools-design.md` first (the family rule):
+   which of 7-Zip's messages and listings are matched, and how `7z` relates to cash's
+   own zip, tar and compressors (7-Zip's `-tzip`, `-ttar`, `-tgzip` and the rest).
+3. The page, `builtins.md`, `CARRIED`, `DELIBERATE_SHADOWS`, and an oracle against the
+   real 7-Zip on this machine (`7z` from Scoop).
+
+---
+
 ## Found along the way
 
-- **Archive tools: what is left out on purpose** (phases 29 and 30, 2026-10-07). zip
-  refuses `-l`/`-ll` (line ends), `-R`, `-F`/`-FF`, `-s` (splits), `-U`, `-A`, `-J`,
-  `-DF`, `-AC`/`-AS` and the logs; unzip skips shrunk, reduced, imploded and `PPMd`
-  members and WinZip's AES, and does not expand a wildcard in the archive's own name
-  (`unzip '*.zip'`). Each can be added when someone needs it.
+- **Archive tools: what is left out on purpose** (phases 29 and 30, 2026-10-07; zip's
+  repair, splits and line ends, unzip's other methods, AES and wildcard archives added
+  the same day). zip refuses `-R`, `-U`, `-A`, `-J`, `-DF`, `-sp`, `-AC`/`-AS` and the
+  logs; unzip skips tokenized, PKWARE DCL, Terse, LZ77 and WavPack members. zip's `-sv`
+  names the parts after writing, not as Info-ZIP does while it writes. Each can be added
+  when someone needs it.
 - **Three zip choices made without a pick list** (phase 30, 2026-10-07, under "do not
   stop"): deflate on `miniz_oxide`, the RID as the numeric owner, and "made on Unix" (design
   3.13). **Yours** to confirm or change.

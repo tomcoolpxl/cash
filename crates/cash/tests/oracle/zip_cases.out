@@ -301,6 +301,132 @@ rc=0
   adding: src/big.txt 	(in=3000) (out=3000) (stored 0%)
 total bytes=3006, compressed=3006 -> 0% savings
 rc=0
+== line ends
+  adding: lf.txt (stored 0%)
+  adding: crlf.txt (deflated 7%)
+  adding: src/bin.dat
+	zip warning: has binary so -l ignored
+ (stored 0%)
+rc=0
+   o   n   e  \r  \n   t   w   o  \r  \n
+   d   o   s  \r  \r  \n   l   i   n   e   s  \r  \r  \n
+      10  Stored       10   0% 2020-01-02 03:04 e3ca44a0  
+      14  Defl:N       13   7% 2020-01-02 03:04 4bb64814  
+       9  Stored        9   0% 2020-01-02 03:04 ca1e4dbf  
+  adding: lf.txt (stored 0%)
+  adding: crlf.txt (stored 0%)
+rc=0
+   d   o   s  \n   l   i   n   e   s  \n
+  adding: lf.txt (stored 0%)
+      10  Stored       10   0% 2020-01-02 03:04 e3ca44a0  
+== splits
+  adding: s1.txt (stored 0%)
+  adding: s2.txt (stored 0%)
+  adding: s3.txt (stored 0%)
+rc=0
+sp.z01 65536 06a487cb60675163
+sp.z02 65536 3a569ffa652c4c4a
+sp.zip 38112 afbe2a534d60eb2f
+ copying: s1.txt
+ copying: s2.txt
+ copying: s3.txt
+rc=0
+s1.txt
+s2.txt
+s3.txt
+ copying: s1.txt
+ copying: s2.txt
+ copying: s3.txt
+rc=0
+re.z01
+re.zip
+	zip warning: cannot update a split archive (use --out option)
+
+zip error: Invalid command arguments (sp.zip)
+rc=16
+
+zip error: Invalid command arguments (archive name must end in .zip for splits)
+rc=16
+
+zip error: Invalid command arguments (minimum split size is 64 KB:  '1k')
+rc=16
+
+zip error: Invalid command arguments (archive name must end in .zip for splits)
+rc=16
+  adding: src/a.txt (stored 0%)
+rc=0
+one.zip
+   P   K  \a  \b   P   K 003 004  \n  \0  \0  \0  \0  \0 203 030
+== copying with --out
+ copying: src/a.txt
+ copying: src/sub/b.txt
+rc=0
+src/a.txt
+src/sub/b.txt
+same
+== fix
+Fix archive (-F) - assume mostly intact archive
+	zip warning: bad archive - missing end signature
+	zip warning: (If downloaded, was binary mode used?  If not, the
+	zip warning:  archive may be scrambled and not recoverable)
+	zip warning: Can't use -F to fix (try -FF)
+
+zip error: Zip file structure invalid (cut.zip)
+rc=3
+	zip warning: fix options -F and -FF require --out:
+                     zip -F indamagedarchive --out outfixedarchive
+
+zip error: Invalid command arguments (fix options require --out)
+rc=16
+Fix archive (-F) - assume mostly intact archive
+Zip entry offsets do not need adjusting
+ copying: src/a.txt
+ copying: src/big.txt
+ copying: src/bin.dat
+rc=0
+No errors detected in compressed data of f2.zip.
+Fix archive (-FF) - salvage what can
+	zip warning: Missing end (EOCDR) signature - either this archive
+                     is not readable or the end is damaged
+Is this a single-disk archive?  (y/n):   Assuming single-disk archive
+Scanning for entries...
+ copying: src/a.txt  (6 bytes)
+ copying: src/big.txt  (21 bytes)
+ copying: src/bin.dat  (9 bytes)
+Central Directory found...
+	zip warning: error reading entry:  Invalid argument
+	zip warning: skipping this entry...
+rc=0
+No errors detected in compressed data of f3.zip.
+src/a.txt
+src/big.txt
+src/bin.dat
+Fix archive (-FF) - salvage what can
+ Found end record (EOCDR) - says expect single disk archive
+Scanning for entries...
+ copying: src/a.txt  (6 bytes)
+ copying: src/big.txt  (21 bytes)
+ copying: src/bin.dat  (9 bytes)
+Central Directory found...
+EOCDR found ( 1    326)...
+rc=0
+Fix archive (-F) - assume mostly intact archive
+Zip entry offsets appear off by 8 bytes - correcting...
+ copying: src/a.txt
+ copying: src/big.txt
+ copying: src/bin.dat
+rc=0
+No errors detected in compressed data of f5.zip.
+Fix archive (-FF) - salvage what can
+ Found end record (EOCDR) - says expect single disk archive
+Scanning for entries...
+ copying: src/a.txt  (6 bytes)
+ copying: src/big.txt  (21 bytes)
+ copying: src/bin.dat  (9 bytes)
+Central Directory found...
+EOCDR found ( 1    334)...
+rc=0
+No errors detected in compressed data of f6.zip.
 == help
   -e   encrypt                      -n   don't compress these suffixes
   -h2  show more help

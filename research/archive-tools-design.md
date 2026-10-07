@@ -300,6 +300,12 @@ Built against GNU tar 1.35's oracle, the plan moved in four places:
   `id`, `stat` and tar give it; a zip says it was made on Unix (3.0), so Linux's UnZip
   restores the modes from the Unix face, and MS-DOS's directory and read-only bits are
   set beside them for Windows' readers.
+- **Beyond Info-ZIP's unzip**, added on the user's word the same day: `WinZip`'s AES on
+  RustCrypto's `aes`, `hmac`, `pbkdf2` and `sha1`; PPMd on `ppmd-rust`; PKZIP 1's
+  shrunk, reduced and imploded members through the `zip` crate's own decoders, its only
+  use (the crate with its legacy feature alone); split archives read from all their
+  parts. zip's `-s` writes split archives byte for byte as zip 3.0 does, and its `-F`
+  and `-FF` repair as it does.
 - **Not moved into cash-archive**: tar's walk and extraction stay in tar's front end,
   as zip's do in zip's. The two walks share less than 3.4 planned: tar sorts, follows
   `-h`, counts hard links; zip filters by date and suffix and never stores links unless

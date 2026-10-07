@@ -4,6 +4,7 @@
 //! The library reads and writes records and data; what a tool says about them, and how
 //! it names a file on disk, is the front end's.
 
+pub mod aes;
 pub mod crypt;
 pub mod read;
 pub mod write;

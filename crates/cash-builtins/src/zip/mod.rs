@@ -12,8 +12,9 @@
 //!   in.
 //! - A name with characters beyond ASCII is stored as UTF-8 and marked so, as Windows'
 //!   own tools and 7-Zip read it.
-//! - unzip also reads LZMA, xz and zstd members; it refuses shrunk, reduced, imploded
-//!   and `PPMd` ones, as it refuses `WinZip`'s AES.
+//! - unzip also reads LZMA, xz, zstd and `PPMd` members, reduced ones, `WinZip`'s AES and
+//!   split archives from all their parts, none of which `UnZip` 6.00 reads.
+//! - zip's `-sv` names the parts it closed once the archive is written.
 //! - A member's name Windows cannot hold is refused by name; a symbolic link is made where
 //!   Windows allows one, and written as a file holding its target where it does not.
 
@@ -22,10 +23,13 @@ mod unzip;
 mod zipcmd;
 mod zipinfo;
 
-use std::io::{self, Read, Write};
+use std::fmt::Write as _;
+use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
 use cash_archive::select::{self, Flags};
+use cash_archive::zip::read::{self, Archive, Concat};
+use cash_archive::zip::write::part_path;
 use cash_archive::zip::{Civil, Entry, flag, host};
 use cash_core::openfiles::OpenFiles;
 use cash_core::timefmt::Zone;
@@ -257,11 +261,155 @@ fn is_pipe(path: &Path) -> bool {
         .starts_with(r"\\.\pipe\")
 }
 
+/// What an archive is read from: its file, or all the parts of a split archive.
+enum Source {
+    File(std::fs::File),
+    Parts(Concat<std::fs::File>),
+}
+
+impl Read for Source {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        match self {
+            Self::File(f) => f.read(buf),
+            Self::Parts(p) => p.read(buf),
+        }
+    }
+}
+
+impl Seek for Source {
+    fn seek(&mut self, to: SeekFrom) -> io::Result<u64> {
+        match self {
+            Self::File(f) => f.seek(to),
+            Self::Parts(p) => p.seek(to),
+        }
+    }
+}
+
 /// An archive opened to be read: the file itself, or for a pipe a copy of what it held,
 /// since a zip archive is read from its end.
 struct Opened {
-    file: std::fs::File,
+    file: Source,
     spool: Option<PathBuf>,
+}
+
+/// The parts of a split archive, `NAME.z01` and on, read before its last: the archive
+/// read from all of them, or `None` when one is missing.
+fn load_parts(opened: &mut Opened, path: &Path, archive: &Archive) -> Option<Archive> {
+    let (source, whole) = parts_source(path, archive)?;
+    opened.file = source;
+    Some(whole)
+}
+
+/// A split archive's parts read as one, with the archive read from them; `None` when it
+/// is not split or a part is missing.
+fn parts_source(path: &Path, archive: &Archive) -> Option<(Source, Archive)> {
+    if archive.end.disk == 0 {
+        return None;
+    }
+    let stem = path.with_extension("");
+    let mut files = Vec::new();
+    for n in 1..=archive.end.disk {
+        files.push(std::fs::File::open(part_path(&stem, usize::try_from(n).ok()?)).ok()?);
+    }
+    files.push(std::fs::File::open(path).ok()?);
+    let mut parts = Concat::new(files).ok()?;
+    let bases = parts.bases();
+    let whole = read::open_parts(&mut parts, &bases).ok()?;
+    Some((Source::Parts(parts), whole))
+}
+
+/// `UnZip`'s words for a split archive whose other parts are not there.
+const MISSING_PARTS: &str = "zipfile claims to be last disk of a multi-part archive;
+  attempting to process anyway, assuming all parts have been concatenated
+  together in order.  Expect \"errors\" and warnings...true multi-part support
+  doesn't exist yet (coming soon).
+";
+
+/// The archives a name with wildcards names, in the order its folder lists them:
+/// `UnZip`'s own expansion, for a name the shell did not expand.
+fn expand_archives<SE: cash_core::ShellExtensions>(
+    context: &cash_core::ExecutionContext<'_, SE>,
+    pattern: &str,
+) -> Vec<String> {
+    let (dir, name) = match pattern.rfind(['/', '\\']) {
+        Some(at) => (
+            pattern.get(..=at).unwrap_or_default(),
+            pattern.get(at + 1..).unwrap_or_default(),
+        ),
+        None => ("", pattern),
+    };
+    let folder = context
+        .shell
+        .absolute_path(if dir.is_empty() { "." } else { dir });
+    let Ok(entries) = std::fs::read_dir(folder) else {
+        return Vec::new();
+    };
+    entries
+        .filter_map(Result::ok)
+        .filter(|e| e.file_type().is_ok_and(|t| t.is_file()))
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|n| matches(name, n, false, true))
+        .map(|n| format!("{dir}{n}"))
+        .collect()
+}
+
+/// The tally `UnZip` keeps over the archives a wildcard named.
+#[derive(Debug, Default)]
+struct Tally {
+    good: u32,
+    warned: u32,
+    failed: u32,
+    no_directory: u32,
+    worst: u8,
+}
+
+impl Tally {
+    fn count(&mut self, code: u8, no_directory: bool) {
+        self.worst = self.worst.max(code);
+        if no_directory {
+            self.no_directory += 1;
+        } else if code == 0 {
+            self.good += 1;
+        } else if code == status::WARN {
+            self.warned += 1;
+        } else {
+            self.failed += 1;
+        }
+    }
+
+    /// `UnZip`'s closing words.
+    fn summary(&self) -> String {
+        let mut out = String::from("\n");
+        let others = self.warned + self.failed + self.no_directory;
+        if self.good > 1 || (self.good == 1 && others > 0) {
+            let verb = if self.good == 1 { " was" } else { "s were" };
+            let _ = writeln!(out, "{} archive{verb} successfully processed.", self.good);
+        }
+        if self.warned > 0 {
+            let s = if self.warned == 1 { "" } else { "s" };
+            let _ = writeln!(
+                out,
+                "{} archive{s} had warnings but no fatal errors.",
+                self.warned
+            );
+        }
+        if self.failed > 0 {
+            let s = if self.failed == 1 { "" } else { "s" };
+            let _ = writeln!(out, "{} archive{s} had fatal errors.", self.failed);
+        }
+        if self.good + others == 0 {
+            out.push_str("No zipfiles found.\n");
+        }
+        if self.no_directory > 0 {
+            let s = if self.no_directory == 1 { "" } else { "s" };
+            let _ = writeln!(
+                out,
+                "{} file{s} had no zipfile directory.",
+                self.no_directory
+            );
+        }
+        if out.len() > 1 { out } else { String::new() }
+    }
 }
 
 impl Drop for Opened {
@@ -276,7 +424,7 @@ impl Drop for Opened {
 fn open_archive(path: &Path) -> io::Result<Opened> {
     if !is_pipe(path) {
         return Ok(Opened {
-            file: std::fs::File::open(path)?,
+            file: Source::File(std::fs::File::open(path)?),
             spool: None,
         });
     }
@@ -297,7 +445,7 @@ fn open_archive(path: &Path) -> io::Result<Opened> {
         }
     };
     let opened = Opened {
-        file: file.try_clone()?,
+        file: Source::File(file.try_clone()?),
         spool: Some(spool),
     };
     io::copy(&mut pipe, &mut file)?;
@@ -370,8 +518,11 @@ impl<SE: cash_core::ShellExtensions> Say<'_, SE> {
 }
 
 /// The compressed size a listing shows: the data's, without the encryption header.
-const fn shown_compressed(entry: &Entry) -> u64 {
-    if entry.is_encrypted() {
+fn shown_compressed(entry: &Entry) -> u64 {
+    if entry.method == cash_archive::zip::method::AES {
+        let overhead = cash_archive::zip::aes::aes_info(&entry.extra).map_or(0, |i| i.overhead());
+        entry.compressed_size.saturating_sub(overhead)
+    } else if entry.is_encrypted() {
         entry.compressed_size.saturating_sub(12)
     } else {
         entry.compressed_size

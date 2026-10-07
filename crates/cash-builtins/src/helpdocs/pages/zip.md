@@ -14,8 +14,10 @@ input.
 The options, messages and exit statuses are Info-ZIP zip 3.0's. That takes in `-0` to
 `-9`, `-j`, `-D`, `-X`, `-y`, `-m`, `-q`, `-v`, `-x` and `-i` patterns, `-@`, `-t` and
 `-tt` dates, `-n` suffixes, `-Z store|deflate|bzip2`, `-P` and `-e`, `-z` and `-c`
-comments, `-o`, `-T`, `-sf`, `-MM` and `-O`. Stored archives without extra fields (`-0
--X`) are zip's byte for byte.
+comments, `-l` and `-ll` line ends, `-o`, `-T`, `-sf`, `-MM` and `--out`. `-s SIZE` writes
+a split archive (`NAME.z01`, `NAME.z02`, … `NAME.zip`), `-s 0 SPLIT.zip --out ONE.zip`
+makes one archive of it again, and `-F` or `-FF` with `--out` salvages a damaged one.
+Stored archives without extra fields (`-0 -X`) are zip's byte for byte, split ones too.
 
 It is all in Rust, in cash. What cash writes, Windows' Explorer, `tar.exe`, 7-Zip and
 Info-ZIP's unzip read, with Unix modes and times.
@@ -30,8 +32,9 @@ Info-ZIP's unzip read, with Unix modes and times.
 - Deflate is miniz_oxide's, so a compressed member's bytes, and sometimes its size, are
   not zip's own. Text is told from binary over the whole file.
 - A name with characters beyond ASCII is stored as UTF-8 and marked so.
-- `-F`, `-FF`, `-s`, `-U`, `-A`, `-J`, `-l`, `-ll`, `-R`, `-DF`, the archive-bit options
-  and the logs are refused.
+- `-sv` names the parts once the archive is written, not while it is, and `-sp` (a
+  pause to change disks) is refused.
+- `-U`, `-A`, `-J`, `-R`, `-DF`, the archive-bit options and the logs are refused.
 
 ## Examples
 

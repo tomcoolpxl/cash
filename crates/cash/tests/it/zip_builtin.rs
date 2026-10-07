@@ -231,3 +231,107 @@ fn zip_asks_for_a_password_twice() {
     .finish();
     assert_eq!(left.out, "rc=0\nx");
 }
+
+/// What 7-Zip writes and Info-ZIP's unzip cannot read: `WinZip`'s AES (128 and 256, stored
+/// and deflated), `PPMd` and Deflate64; and PKZIP 1's shrunk and reduced members.
+#[test]
+fn unzip_reads_aes_ppmd_deflate64_and_pkzip_1s_methods() {
+    let scratch = Scratch::new("unzip-methods");
+    for (name, bytes) in [
+        (
+            "aes256.zip",
+            &include_bytes!("../../../cash-archive/tests/fixtures/aes256.zip")[..],
+        ),
+        (
+            "aes128.zip",
+            &include_bytes!("../../../cash-archive/tests/fixtures/aes128.zip")[..],
+        ),
+        (
+            "aesdef.zip",
+            &include_bytes!("../../../cash-archive/tests/fixtures/aesdef.zip")[..],
+        ),
+        (
+            "ppmd.zip",
+            &include_bytes!("../../../cash-archive/tests/fixtures/ppmd.zip")[..],
+        ),
+        (
+            "d64.zip",
+            &include_bytes!("../../../cash-archive/tests/fixtures/d64.zip")[..],
+        ),
+        (
+            "shrunk.zip",
+            &include_bytes!("../../../cash-archive/tests/fixtures/shrunk.zip")[..],
+        ),
+        (
+            "reduced.zip",
+            &include_bytes!("../../../cash-archive/tests/fixtures/reduced.zip")[..],
+        ),
+    ] {
+        std::fs::write(scratch.join(name), bytes).expect("a fixture");
+    }
+    let out = run_in(
+        scratch.path(),
+        "for f in aes256 aes128 ppmd d64; do unzip -P pw -p $f.zip a.txt; done; \
+         unzip -P pw -p aesdef.zip | wc -c; unzip -p shrunk.zip; echo; unzip -p reduced.zip; echo; \
+         unzip -P wrong -t aes256.zip; echo \"rc=$?\"; unzip -P pw -tq aes256.zip; \
+         unzip -v aes256.zip | sed -n 4p | cut -c1-30",
+    );
+    assert_eq!(
+        out.stdout,
+        "hello hello hello\nhello hello hello\nhello hello hello\nhello hello hello\n11893\nhello\nhello\n\
+         Archive:  aes256.zip\nCaution:  zero files tested in aes256.zip.\n\
+         1 file skipped because of incorrect password.\nrc=82\n\
+         No errors detected in compressed data of aes256.zip.\n      18  Unk:099       18   0"
+    );
+}
+
+/// A split archive cash writes is read back by cash from all its parts, and made one
+/// archive again with `-s 0`; `-sv` names the parts it closes.
+#[test]
+fn a_split_archive_is_read_from_its_parts() {
+    let scratch = Scratch::new("zip-split");
+    let out = run_in(
+        scratch.path(),
+        "seq 1 30000 > n.txt; zip -q -0 -s 64k sp.zip n.txt; ls; unzip -tq sp.zip; \
+         unzip -p sp.zip n.txt | tail -1; zipinfo -1 sp.zip; zip -q -s 0 sp.zip --out one.zip; \
+         unzip -tq one.zip; zip -0 -s 64k -sv sv.zip n.txt | sed -n '1p;$p'",
+    );
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert_eq!(
+        out.stdout,
+        "n.txt\nsp.z01\nsp.z02\nsp.zip\nNo errors detected in compressed data of sp.zip.\n30000\nn.txt\n\
+         No errors detected in compressed data of one.zip.\nsplitsize = 65536\n\tClosing split sv.z02"
+    );
+}
+
+/// A wildcard in the archive's name names several archives: each processed in the
+/// folder's order, `UnZip`'s tally after them, and the last one that is no archive reported
+/// in full.
+#[test]
+fn a_wildcard_names_several_archives() {
+    let scratch = Scratch::new("unzip-wildcard");
+    let out = run_in(
+        scratch.path(),
+        "printf 'x\\n' > f; zip -q a.zip f; zip -q b.zip f; printf junk > c.zip; \
+         unzip -tq '*.zip'; echo \"rc=$?\"; unzip -l '[ab].zip' | grep -c Archive; zipinfo -1 '[ab].zip'",
+    );
+    assert_eq!(
+        out.stdout,
+        "No errors detected in compressed data of a.zip.\n\
+         No errors detected in compressed data of b.zip.\nrc=9\n2\nf\n\nf"
+    );
+    assert!(
+        out.stderr
+            .starts_with("[c.zip]\n  End-of-central-directory signature not found."),
+        "{}",
+        out.stderr
+    );
+    assert!(
+        out.stderr.contains(
+            "unzip:  cannot find zipfile directory in one of *.zip or\n        *.zip.zip, and cannot find c.zip.ZIP, period.\n\n\
+             2 archives were successfully processed."
+        ),
+        "{}",
+        out.stderr
+    );
+}

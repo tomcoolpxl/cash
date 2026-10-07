@@ -13,11 +13,14 @@ another; names after the archive choose members, `-x` names leave some out. `-l`
 The options, messages, listings and exit statuses are Info-ZIP UnZip 6.00's and ZipInfo
 3.00's. That takes in `-o`, `-n`, `-f`, `-u`, `-j`, `-C`, `-L`, `-W`, `-q`, `-qq`, `-c`,
 `-D`, `-P`, `-T`, the overwrite question, `UNZIP` and `ZIPINFO`, and zipinfo's `-s`, `-m`,
-`-l`, `-h`, `-t`, `-T` and `-z`.
+`-l`, `-h`, `-t`, `-T` and `-z`. A wildcard in the archive's name (`unzip '*.zip'`) names
+every archive it matches, with UnZip's tally after them.
 
-It is all in Rust, in cash: stored, deflated, Deflate64, bzip2, LZMA, xz and zstd
-members, Zip64 archives and the traditional encryption are read; what Windows'
-Explorer, `tar.exe`, 7-Zip and Info-ZIP's zip write, cash reads.
+It is all in Rust, in cash: stored, deflated, Deflate64, bzip2, LZMA, xz, zstd and PPMd
+members, PKZIP 1's shrunk, reduced and imploded ones, Zip64 archives, split archives
+(read from all their parts), and both the traditional encryption and WinZip's AES are
+read; what Windows' Explorer, `tar.exe`, 7-Zip, WinZip and Info-ZIP's zip write, cash
+reads. Info-ZIP's own unzip reads fewer of these.
 
 ## Windows notes
 
@@ -30,8 +33,8 @@ Explorer, `tar.exe`, 7-Zip and Info-ZIP's zip write, cash reads.
   `/` are removed with UnZip's warning, and `../` parts too, unless `-:`.
 - A symbolic link is made where Windows allows one (Developer Mode, or an elevated
   shell), and written as a file holding its target where it does not.
-- Shrunk, reduced, imploded and PPMd members, and WinZip's AES, are skipped as UnZip
-  skips a method it lacks.
+- Tokenized, PKWARE DCL, Terse, LZ77 and WavPack members are skipped as UnZip skips a
+  method it lacks.
 - A password is asked for at the console when none is given with `-P`.
 
 ## Examples

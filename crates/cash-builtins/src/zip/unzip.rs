@@ -13,8 +13,8 @@ use cash_win32::unix::{self, Replacement};
 
 use super::help::{UNZIP_USAGE, UNZIP_VERSION};
 use super::{
-    Clock, Say, find_archive, join, matches, name_text, pad, read_line, shown_compressed, status,
-    zipinfo,
+    Clock, Say, Source, Tally, expand_archives, find_archive, join, matches, name_text, pad,
+    read_line, shown_compressed, status, zipinfo,
 };
 use crate::compress::{is_terminal, strerror};
 
@@ -217,6 +217,15 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
         say.err(UNZIP_USAGE)?;
         return Ok(ExecutionResult::new(status::PARAM));
     };
+    let mut options = options;
+    if options.never && options.overwrite {
+        say.err("caution:  both -n and -o specified; ignoring -o\n")?;
+        options.overwrite = false;
+    }
+    let listing = options.list || options.verbose || options.test || options.comment;
+    if listing && options.exdir.is_some() {
+        say.err("caution:  not extracting; -d ignored\n")?;
+    }
     let mut unzip = Unzip {
         say,
         context,
@@ -226,8 +235,40 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
         shown: zipfile.clone(),
         remembered_password: None,
         prompt_answers: Answers::Ask,
+        multi: false,
+        first: true,
+        last: true,
+        pattern: zipfile.clone(),
+        no_directory: false,
     };
-    unzip.run(&zipfile)
+    if find_archive(context, &zipfile).is_none() && zipfile.contains(['*', '?', '[']) {
+        let names = expand_archives(context, &zipfile);
+        if names.is_empty() {
+            unzip.say.err(&format!(
+                "unzip:  cannot find or open {zipfile}, {zipfile}.zip or {zipfile}.ZIP.\n\nNo zipfiles found.\n"
+            ))?;
+            return Ok(ExecutionResult::new(status::NOZIP));
+        }
+        unzip.multi = true;
+        let mut tally = Tally::default();
+        for (i, name) in names.iter().enumerate() {
+            unzip.first = i == 0;
+            unzip.last = i + 1 == names.len();
+            unzip.status = 0;
+            unzip.no_directory = false;
+            let code = unzip.run(name)?;
+            // UnZip's last chance: the last archive without a directory is reported in
+            // full and left out of the count.
+            if unzip.last && code == status::NOZIP && !unzip.no_directory {
+                tally.worst = tally.worst.max(code);
+            } else {
+                tally.count(code, unzip.no_directory);
+            }
+        }
+        unzip.say.err(&tally.summary())?;
+        return Ok(ExecutionResult::new(tally.worst));
+    }
+    Ok(ExecutionResult::new(unzip.run(&zipfile)?))
 }
 
 /// The answer to the overwrite question that holds for the rest of the run.
@@ -256,6 +297,14 @@ struct Unzip<'a, SE: cash_core::ShellExtensions> {
     shown: String,
     remembered_password: Option<Vec<u8>>,
     prompt_answers: Answers,
+    /// A wildcard named several archives: their "Archive:" lines are set apart.
+    multi: bool,
+    first: bool,
+    last: bool,
+    /// The name as given, wildcards and all.
+    pattern: String,
+    /// The archive had no zipfile directory, as `UnZip` counts it over several.
+    no_directory: bool,
 }
 
 /// The message `UnZip` gives for a file that is not a zip archive.
@@ -280,36 +329,47 @@ impl<SE: cash_core::ShellExtensions> Unzip<'_, SE> {
         self.status = self.status.max(code);
     }
 
-    fn run(&mut self, zipfile: &str) -> Result<ExecutionResult, cash_core::Error> {
+    #[expect(
+        clippy::too_many_lines,
+        reason = "UnZip's do_seekable: the archive found, opened, said and processed"
+    )]
+    fn run(&mut self, zipfile: &str) -> Result<u8, cash_core::Error> {
         let Some((shown, path)) = find_archive(self.context, zipfile) else {
             self.say.err(&format!(
                 "unzip:  cannot find or open {zipfile}, {zipfile}.zip or {zipfile}.ZIP.\n"
             ))?;
-            return Ok(ExecutionResult::new(status::NOZIP));
+            return Ok(status::NOZIP);
         };
         self.shown = shown;
-        if self.options.never && self.options.overwrite {
-            self.say
-                .err("caution:  both -n and -o specified; ignoring -o\n")?;
-            self.options.overwrite = false;
-        }
-        let listing =
-            self.options.list || self.options.verbose || self.options.test || self.options.comment;
-        if listing && self.options.exdir.is_some() {
-            self.say.err("caution:  not extracting; -d ignored\n")?;
-        }
         let Ok(mut opened) = super::open_archive(&path) else {
             self.say.err(&format!(
                 "unzip:  cannot find or open {zipfile}, {zipfile}.zip or {zipfile}.ZIP.\n"
             ))?;
-            return Ok(ExecutionResult::new(status::NOZIP));
+            return Ok(status::NOZIP);
         };
-        let file = &mut opened.file;
         let quiet_archive_line = self.options.pipe
             || (self.options.quiet > 0 && !self.options.comment)
             || (self.options.timestamp && self.options.quiet > 0);
-        let archive = match read::open(file) {
+        let archive = match read::open(&mut opened.file) {
             Ok(archive) => archive,
+            Err(OpenError::NoEnd) if self.multi => {
+                if quiet_archive_line {
+                    self.say.err(&format!("[{}]\n", self.shown))?;
+                } else {
+                    self.archive_line()?;
+                }
+                self.say.err(NO_END)?;
+                if self.last {
+                    let pattern = &self.pattern;
+                    self.say.err(&format!(
+                        "unzip:  cannot find zipfile directory in one of {pattern} or\n        {pattern}.zip, and cannot find {}.ZIP, period.\n",
+                        self.shown
+                    ))?;
+                } else {
+                    self.no_directory = true;
+                }
+                return Ok(status::NOZIP);
+            }
             Err(OpenError::NoEnd) => {
                 if !self.options.pipe {
                     self.say.out(&format!("Archive:  {}\n", self.shown))?;
@@ -318,41 +378,58 @@ impl<SE: cash_core::ShellExtensions> Unzip<'_, SE> {
                 self.say.err(&format!(
                     "unzip:  cannot find zipfile directory in one of {zipfile} or\n        {zipfile}.zip, and cannot find {zipfile}.ZIP, period.\n"
                 ))?;
-                return Ok(ExecutionResult::new(status::NOZIP));
+                return Ok(status::NOZIP);
             }
-            Err(OpenError::BadCentral(number)) => {
+            Err(OpenError::BadCentral(number, _)) => {
                 if !quiet_archive_line {
-                    self.say.out(&format!("Archive:  {}\n", self.shown))?;
+                    self.archive_line()?;
                 }
                 self.say.err(&format!(
                     "error [{}]:  expected central file header signature not found (file #{number}).\n  (please check that you have transferred or created the zipfile in the\n  appropriate BINARY mode and that you have compiled UnZip properly)\n",
                     self.shown
                 ))?;
-                return Ok(ExecutionResult::new(status::BADERR));
+                return Ok(status::BADERR);
             }
             Err(OpenError::Io(e)) => return Err(e.into()),
         };
+        let mut archive = archive;
+        let mut missing_parts = false;
+        if archive.end.disk > 0 {
+            match super::load_parts(&mut opened, &path, &archive) {
+                Some(whole) => archive = whole,
+                None => missing_parts = true,
+            }
+        }
+        let file = &mut opened.file;
         if self.options.timestamp {
             return self.timestamp(&path, &archive);
         }
         if !quiet_archive_line {
-            self.say.out(&format!("Archive:  {}\n", self.shown))?;
+            self.archive_line()?;
             if !archive.end.comment.is_empty() && !self.options.comment {
                 self.show_comment(&archive.end.comment)?;
             }
+        }
+        if missing_parts {
+            self.say.err(&format!(
+                "warning [{}]:  {}",
+                self.shown,
+                super::MISSING_PARTS
+            ))?;
+            self.raise(status::WARN);
         }
         self.extra_bytes_warning(&archive)?;
         if self.options.comment {
             if !archive.end.comment.is_empty() {
                 self.show_comment(&archive.end.comment)?;
             }
-            return Ok(ExecutionResult::new(self.status));
+            return Ok(self.status);
         }
         if archive.entries.is_empty() {
             self.say
                 .err(&format!("warning [{}]:  zipfile is empty\n", self.shown))?;
             self.raise(status::WARN);
-            return Ok(ExecutionResult::new(self.status));
+            return Ok(self.status);
         }
         let (selected, unmatched, unexcluded) = self.select(&archive);
         if self.options.list || self.options.verbose {
@@ -360,7 +437,7 @@ impl<SE: cash_core::ShellExtensions> Unzip<'_, SE> {
             if !self.options.names.is_empty() && selected.is_empty() {
                 self.raise(status::FIND);
             }
-            return Ok(ExecutionResult::new(self.status));
+            return Ok(self.status);
         }
         if self.options.test {
             self.test(file, &archive, &selected, &unmatched, &unexcluded)?;
@@ -368,7 +445,14 @@ impl<SE: cash_core::ShellExtensions> Unzip<'_, SE> {
             self.extract(file, &archive, &selected)?;
             self.cautions(&unmatched, &unexcluded)?;
         }
-        Ok(ExecutionResult::new(self.status))
+        Ok(self.status)
+    }
+
+    /// "Archive:  NAME", set apart from the archive before it when a wildcard named
+    /// several.
+    fn archive_line(&self) -> io::Result<()> {
+        let gap = if self.multi && !self.first { "\n" } else { "" };
+        self.say.out(&format!("{gap}Archive:  {}\n", self.shown))
     }
 
     /// The names and exclusions that matched nothing.
@@ -563,8 +647,9 @@ impl<SE: cash_core::ShellExtensions> Unzip<'_, SE> {
     /// data can be read.
     fn data(
         &mut self,
-        file: &mut fs::File,
+        file: &mut Source,
         archive: &Archive,
+        index: usize,
         entry: &Entry,
         sink: &mut dyn Write,
         line: Option<&str>,
@@ -586,9 +671,20 @@ impl<SE: cash_core::ShellExtensions> Unzip<'_, SE> {
             } else {
                 None
             };
-            file.seek(SeekFrom::Start(local.data_offset))?;
-            let raw = (&mut *file).take(entry.compressed_size);
-            let reader = match read::data(raw, entry, password.as_deref()) {
+            let opened: Result<Box<dyn Read + '_>, DataError> =
+                if read::is_legacy(read::real_method(entry)) {
+                    // PKZIP 1's methods go through the zip crate, whole.
+                    read::legacy(&mut *file, index, password.as_deref())
+                        .map(|bytes| Box::new(io::Cursor::new(bytes)) as Box<dyn Read>)
+                } else {
+                    file.seek(SeekFrom::Start(local.data_offset))?;
+                    read::data(
+                        (&mut *file).take(entry.compressed_size),
+                        entry,
+                        password.as_deref(),
+                    )
+                };
+            let reader = match opened {
                 Ok(reader) => reader,
                 Err(DataError::BadPassword) => {
                     attempt += 1;
@@ -625,7 +721,7 @@ impl<SE: cash_core::ShellExtensions> Unzip<'_, SE> {
                 sink.write_all(chunk)?;
             }
             let crc = crc.finalize();
-            return Ok(if crc == entry.crc {
+            return Ok(if crc == entry.crc || !read::crc_checked(entry) {
                 Outcome::Ok
             } else {
                 Outcome::BadCrc(crc)
@@ -655,9 +751,13 @@ impl<SE: cash_core::ShellExtensions> Unzip<'_, SE> {
     }
 
     /// `-t`.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "UnZip's test pass: each member, then the summary UnZip gives"
+    )]
     fn test(
         &mut self,
-        file: &mut fs::File,
+        file: &mut Source,
         archive: &Archive,
         selected: &[usize],
         unmatched: &[String],
@@ -680,7 +780,7 @@ impl<SE: cash_core::ShellExtensions> Unzip<'_, SE> {
                 continue;
             }
             let shown_line = (self.options.quiet == 0).then_some(line.as_str());
-            let outcome = self.data(file, archive, &entry, &mut io::sink(), shown_line)?;
+            let outcome = self.data(file, archive, index, &entry, &mut io::sink(), shown_line)?;
             match outcome {
                 Outcome::Ok => {
                     tested += 1;
@@ -741,10 +841,16 @@ impl<SE: cash_core::ShellExtensions> Unzip<'_, SE> {
                     "At least one error was detected in {}.\n",
                     self.shown
                 ))?;
-            } else {
+            } else if self.options.names.is_empty() {
                 self.say.out(&format!(
                     "No errors detected in compressed data of {}.\n",
                     self.shown
+                ))?;
+            } else {
+                self.say.out(&format!(
+                    "No errors detected in {} for the {tested} file{} tested.\n",
+                    self.shown,
+                    if tested == 1 { "" } else { "s" }
                 ))?;
             }
             if bad_passwords > 0 {
@@ -858,7 +964,7 @@ impl<SE: cash_core::ShellExtensions> Unzip<'_, SE> {
     )]
     fn extract(
         &mut self,
-        file: &mut fs::File,
+        file: &mut Source,
         archive: &Archive,
         selected: &[usize],
     ) -> io::Result<()> {
@@ -900,9 +1006,13 @@ impl<SE: cash_core::ShellExtensions> Unzip<'_, SE> {
                     continue;
                 }
                 let mut data = Vec::new();
-                let line = format!("{}: {}  \n", verb(entry.method), pad(&raw_name, 22));
+                let line = format!(
+                    "{}: {}  \n",
+                    verb(read::real_method(&entry)),
+                    pad(&raw_name, 22)
+                );
                 let shown_line = (self.options.cat && !quiet).then_some(line.as_str());
-                let outcome = self.data(file, archive, &entry, &mut data, shown_line)?;
+                let outcome = self.data(file, archive, index, &entry, &mut data, shown_line)?;
                 {
                     let mut out = self.context.stdout();
                     out.write_all(&data)?;
@@ -986,7 +1096,7 @@ impl<SE: cash_core::ShellExtensions> Unzip<'_, SE> {
             }
             if entry.is_symlink() {
                 let mut target = Vec::new();
-                let outcome = self.data(file, archive, &entry, &mut target, None)?;
+                let outcome = self.data(file, archive, index, &entry, &mut target, None)?;
                 if !matches!(outcome, Outcome::Ok) {
                     self.report(
                         index,
@@ -1012,7 +1122,7 @@ impl<SE: cash_core::ShellExtensions> Unzip<'_, SE> {
                 done += 1;
                 continue;
             }
-            let line = format!("{}: {}  ", verb(entry.method), pad(&shown, 22));
+            let line = format!("{}: {}  ", verb(read::real_method(&entry)), pad(&shown, 22));
             let mut output = match Replacement::create(path.clone()) {
                 Ok(output) => output,
                 Err(e) => {
@@ -1025,7 +1135,7 @@ impl<SE: cash_core::ShellExtensions> Unzip<'_, SE> {
                 }
             };
             let shown_line = (!quiet).then_some(line.as_str());
-            let outcome = self.data(file, archive, &entry, &mut output, shown_line)?;
+            let outcome = self.data(file, archive, index, &entry, &mut output, shown_line)?;
             let keep = matches!(outcome, Outcome::Ok | Outcome::BadCrc(_) | Outcome::Broken);
             if keep {
                 let times = Self::file_times(file, archive, &entry, time);
@@ -1142,12 +1252,7 @@ impl<SE: cash_core::ShellExtensions> Unzip<'_, SE> {
     }
 
     /// The times to give an extracted file: the local `UT` field's when it has them.
-    fn file_times(
-        file: &mut fs::File,
-        archive: &Archive,
-        entry: &Entry,
-        time: i64,
-    ) -> fs::FileTimes {
+    fn file_times(file: &mut Source, archive: &Archive, entry: &Entry, time: i64) -> fs::FileTimes {
         let local_times = read::local(file, archive, entry)
             .ok()
             .and_then(|local| cash_archive::zip::times(&local.extra));
@@ -1159,11 +1264,7 @@ impl<SE: cash_core::ShellExtensions> Unzip<'_, SE> {
     }
 
     /// `-T`: the archive's time made its newest member's.
-    fn timestamp(
-        &self,
-        path: &Path,
-        archive: &Archive,
-    ) -> Result<ExecutionResult, cash_core::Error> {
+    fn timestamp(&self, path: &Path, archive: &Archive) -> Result<u8, cash_core::Error> {
         let newest = archive
             .entries
             .iter()
@@ -1181,7 +1282,7 @@ impl<SE: cash_core::ShellExtensions> Unzip<'_, SE> {
         );
         self.say
             .out(&format!("Updated time stamp for {}.\n", self.shown))?;
-        Ok(ExecutionResult::new(self.status))
+        Ok(self.status)
     }
 }
 

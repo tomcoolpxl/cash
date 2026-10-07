@@ -133,15 +133,54 @@ pub(super) fn run_as<SE: cash_core::ShellExtensions>(
         say.out(ZIPINFO_USAGE)?;
         return Ok(ExecutionResult::success());
     };
-    let Some((shown, path)) = find_archive(context, &zipfile) else {
+    if find_archive(context, &zipfile).is_none() && zipfile.contains(['*', '?', '[']) {
+        let names = super::expand_archives(context, &zipfile);
+        if names.is_empty() {
+            say.err(&format!(
+                "{program}:  cannot find or open {zipfile}, {zipfile}.zip or {zipfile}.ZIP.\n\nNo zipfiles found.\n"
+            ))?;
+            return Ok(ExecutionResult::new(status::NOZIP));
+        }
+        let mut tally = super::Tally::default();
+        let options = std::rc::Rc::new(options);
+        for (i, name) in names.iter().enumerate() {
+            if i > 0 {
+                say.out("\n")?;
+            }
+            let (code, no_directory) = one(&say, context, &options, name, program, true)?;
+            tally.count(code, no_directory);
+        }
+        say.err(&tally.summary())?;
+        return Ok(ExecutionResult::new(tally.worst));
+    }
+    let options = std::rc::Rc::new(options);
+    let (code, _) = one(&say, context, &options, &zipfile, program, false)?;
+    Ok(ExecutionResult::new(code))
+}
+
+/// One archive listed: its status, and whether it had no zipfile directory.
+fn one<SE: cash_core::ShellExtensions>(
+    say: &Say<'_, SE>,
+    context: &cash_core::ExecutionContext<'_, SE>,
+    options: &std::rc::Rc<Options>,
+    zipfile: &str,
+    program: &str,
+    multi: bool,
+) -> Result<(u8, bool), cash_core::Error> {
+    let Some((shown, path)) = find_archive(context, zipfile) else {
         say.err(&format!(
             "{program}:  cannot find or open {zipfile}, {zipfile}.zip or {zipfile}.ZIP.\n"
         ))?;
-        return Ok(ExecutionResult::new(status::NOZIP));
+        return Ok((status::NOZIP, false));
     };
     let mut opened = super::open_archive(&path)?;
     let archive = match read::open(&mut opened.file) {
         Ok(archive) => archive,
+        Err(OpenError::NoEnd) if multi => {
+            say.err(&format!("[{shown}]\n"))?;
+            say.err(NO_END)?;
+            return Ok((status::NOZIP, true));
+        }
         Err(OpenError::NoEnd) => {
             say.out(&format!("Archive:  {shown}\n"))?;
             say.err(&format!("[{shown}]\n"))?;
@@ -150,29 +189,32 @@ pub(super) fn run_as<SE: cash_core::ShellExtensions>(
             say.err(&format!(
                 "{program}:  cannot find zipfile directory in one of {zipfile} or\n{indent}{zipfile}.zip, and cannot find {zipfile}.ZIP, period.\n"
             ))?;
-            return Ok(ExecutionResult::new(status::NOZIP));
+            return Ok((status::NOZIP, false));
         }
-        Err(OpenError::BadCentral(number)) => {
+        Err(OpenError::BadCentral(number, _)) => {
             say.err(&format!(
                 "error [{shown}]:  expected central file header signature not found (file #{number}).\n  (please check that you have transferred or created the zipfile in the\n  appropriate BINARY mode and that you have compiled UnZip properly)\n"
             ))?;
-            return Ok(ExecutionResult::new(status::BADERR));
+            return Ok((status::BADERR, false));
         }
         Err(OpenError::Io(e)) => return Err(e.into()),
     };
+    let archive = super::load_parts(&mut opened, &path, &archive).unwrap_or(archive);
     let info = Info {
-        say,
+        say: Say {
+            context: say.context,
+        },
         clock: Clock::of(context),
-        options,
+        options: std::rc::Rc::clone(options),
         shown,
     };
-    info.list(&archive)
+    Ok((info.list(&archive)?, false))
 }
 
 struct Info<'a, SE: cash_core::ShellExtensions> {
     say: Say<'a, SE>,
     clock: Clock,
-    options: Options,
+    options: std::rc::Rc<Options>,
     shown: String,
 }
 
@@ -330,7 +372,7 @@ impl<SE: cash_core::ShellExtensions> Info<'_, SE> {
         clippy::too_many_lines,
         reason = "zipinfo's zi_short and friends, one loop for every format"
     )]
-    fn list(&self, archive: &Archive) -> Result<ExecutionResult, cash_core::Error> {
+    fn list(&self, archive: &Archive) -> Result<u8, cash_core::Error> {
         let mut code = 0;
         let explicit = self.options.format;
         let format = explicit.unwrap_or_default();
@@ -368,7 +410,7 @@ impl<SE: cash_core::ShellExtensions> Info<'_, SE> {
             if header {
                 self.say.out("Empty zipfile.\n")?;
             }
-            return Ok(ExecutionResult::new(status::WARN));
+            return Ok(status::WARN);
         }
         let mut hits = vec![false; self.options.names.len()];
         let mut count = 0_u64;
@@ -460,7 +502,7 @@ impl<SE: cash_core::ShellExtensions> Info<'_, SE> {
                 code = status::FIND;
             }
         }
-        Ok(ExecutionResult::new(code))
+        Ok(code)
     }
 
     fn date(&self, entry: &Entry) -> String {
@@ -490,7 +532,7 @@ impl<SE: cash_core::ShellExtensions> Info<'_, SE> {
         clippy::too_many_lines,
         reason = "zipinfo's zi_long: every field of the end record and of each entry"
     )]
-    fn verbose(&self, archive: &Archive) -> Result<ExecutionResult, cash_core::Error> {
+    fn verbose(&self, archive: &Archive) -> Result<u8, cash_core::Error> {
         let mut out = format!("Archive:  {}\n", self.shown);
         let comment = &archive.end.comment;
         if comment.is_empty() {
@@ -775,7 +817,7 @@ impl<SE: cash_core::ShellExtensions> Info<'_, SE> {
                 code = status::FIND;
             }
         }
-        Ok(ExecutionResult::new(code))
+        Ok(code)
     }
 }
 

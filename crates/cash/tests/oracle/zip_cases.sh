@@ -62,6 +62,22 @@ zip -o o2.zip src/a.txt; rc; stat -c %Y o2.zip
 echo "== show files"; zip -sf a2.zip src/a.txt; rc; zip -q a2.zip src/a.txt src/sub/b.txt; zip -sf a2.zip; rc; zip -sf a2.zip src/a.txt src/big.txt; rc
 echo "== dates and names from input"; zip -t 01012021 tt.zip src/a.txt; rc; zip -tt 2021-01-01 tt.zip src/a.txt; rc; printf 'src/a.txt\nsrc/sub/b.txt\n' | zip at.zip -@; rc
 echo "== verbose"; zip -v -0 v.zip src/a.txt src/big.txt; rc
+echo "== line ends"; printf 'one\ntwo\n' > lf.txt; printf 'dos\r\nlines\r\n' > crlf.txt; stamp lf.txt crlf.txt
+zip -l le.zip lf.txt crlf.txt src/bin.dat; rc; unzip -p le.zip lf.txt | od -An -c; unzip -p le.zip crlf.txt | od -An -c; unzip -v le.zip | sed -n 4,6p | cut -c1-58
+zip -ll ll.zip lf.txt crlf.txt; rc; unzip -p ll.zip crlf.txt | od -An -c; zip -l -0 l0.zip lf.txt; unzip -v l0.zip | sed -n 4p | cut -c1-58
+# Info-ZIP's unzip reads no split archive, and its zip's -s 0 copy fails that unzip's
+# test, so a split archive's reading is left to the integration test; so is -sv, whose
+# words zip says while it still writes.
+echo "== splits"; seq 1 12000 > s1.txt; seq 12001 24000 > s2.txt; seq 24001 30000 > s3.txt; stamp s1.txt s2.txt s3.txt
+zip -0 -X -s 64k sp.zip s1.txt s2.txt s3.txt; rc; for f in sp.*; do echo "$f $(wc -c < $f) $(sha256sum < $f | cut -c1-16)"; done
+zip -s 0 sp.zip --out whole.zip; rc; unzip -Z1 whole.zip; zip -s 96k sp.zip --out re.zip; rc; ls re.*
+zip sp.zip src/a.txt; rc; zip -s 64k - src/a.txt > /dev/null; rc; zip -s 1k x3.zip src/a.txt; rc; zip -s 64k nosuffix.tgz src/a.txt; rc
+zip -0 -X -s 64k one.zip src/a.txt; rc; ls one.*; od -An -c one.zip | head -1
+echo "== copying with --out"; zip -q cp.zip src/a.txt src/sub/b.txt; zip cp.zip --out cp2.zip; rc; unzip -Z1 cp2.zip; cmp cp.zip cp2.zip && echo same
+echo "== fix"; zip -q -X fx.zip src/a.txt src/big.txt src/bin.dat; head -c $(( $(wc -c < fx.zip) - 30 )) fx.zip > cut.zip
+zip -F cut.zip --out f1.zip; rc; zip -F fx.zip; rc; zip -F fx.zip --out f2.zip; rc; unzip -tq f2.zip
+printf 'y\n' | zip -FF cut.zip --out f3.zip; rc; unzip -tq f3.zip; unzip -Z1 f3.zip; printf 'y\n' | zip -FF fx.zip --out f4.zip; rc
+{ printf 'JUNKJUNK'; cat fx.zip; } > junk8.zip; zip -F junk8.zip --out f5.zip; rc; unzip -tq f5.zip; printf 'y\n' | zip -FF junk8.zip --out f6.zip; rc; unzip -tq f6.zip
 echo "== help"; zip -h | tail -3; rc
 
 cd / && rm -rf "$dir"

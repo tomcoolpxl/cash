@@ -648,6 +648,43 @@ Jello
 Jello
 src/a.txt               bad CRC 7c5e941d  (should be 363a3020)
 rc=2
+== wildcard archives
+Archive:  a.zip
+a comment
+  Length      Date    Time    Name
+---------  ---------- -----   ----
+        0  2020-01-02 03:04   src/
+        6  2020-01-02 03:04   src/a.txt
+     3000  2020-01-02 03:04   src/big.txt
+        9  2020-01-02 03:04   src/bin.dat
+        0  2020-01-02 03:04   src/sub/
+        6  2020-01-02 03:04   src/sub/b.txt
+---------                     -------
+     3021                     6 files
+rc=0
+[junk.zip]
+  End-of-central-directory signature not found.  Either this file is not
+  a zipfile, or it constitutes one disk of a multi-part archive.  In the
+  latter case the central directory and zipfile comment will be found on
+  the last disk(s) of this archive.
+unzip:  cannot find zipfile directory in one of jun*.zip or
+        jun*.zip.zip, and cannot find junk.zip.ZIP, period.
+
+No zipfiles found.
+rc=9
+unzip:  cannot find or open nosuch*.zip, nosuch*.zip.zip or nosuch*.zip.ZIP.
+
+No zipfiles found.
+rc=9
+src/big.txt
+rc=0
+Archive:  a.zip
+a comment
+    testing: src/a.txt                OK
+No errors detected in a.zip for the 1 file tested.
+rc=0
+No errors detected in a.zip for the 3 files tested.
+rc=0
 == options
 UnZip 6.00 of 20 April 2009, by Info-ZIP.  Maintained by C. Spieler.  Send
 bug reports using http://www.info-zip.org/zip-bug.html; see README for details.

@@ -24,6 +24,17 @@ lzma-rust2 = "0.21.0"
 ruzstd = "0.9.0"
 # zip: Deflate64, which Windows' Explorer writes for large files; pure Rust.
 deflate64 = "0.1.12"
+# zip: WinZip's AES encryption, as 7-Zip and WinZip write it (PBKDF2 with HMAC-SHA1 for
+# the keys, AES in counter mode, an HMAC-SHA1 check); RustCrypto's pure-Rust crates.
+aes = "0.9"
+hmac = "0.13"
+pbkdf2 = "0.13"
+sha1 = "0.11"
+# zip: PPMd members (variant I, revision 1, as WinZip and 7-Zip write them).
+ppmd-rust = "1.4"
+# zip: shrunk, reduced and imploded members, PKZIP 1's methods, through the zip crate's
+# decoders; nothing else of the crate is used.
+zip = { version = "8.6", default-features = false, features = ["legacy-zip"] }
 
 [dev-dependencies]
 tempfile = { workspace = true }

@@ -7,7 +7,7 @@ use std::io::{self, Read, Seek, SeekFrom};
 use std::path::PathBuf;
 
 use cash_archive::zip::read::{self, Archive, OpenError};
-use cash_archive::zip::write::{Input, NewMember, Stream, Writer};
+use cash_archive::zip::write::{Input, NewMember, SplitOutput, Stream, Writer};
 use cash_archive::zip::{
     DOS_DIRECTORY, DOS_READ_ONLY, DosTime, Entry, S_IFDIR, S_IFIFO, S_IFLNK, S_IFREG, extra_id,
     field, method, percent,
@@ -17,8 +17,10 @@ use cash_core::openfiles::OpenFiles;
 use cash_win32::unix::{self, Replacement, UnixView};
 
 use super::help::{ZIP_USAGE, ZIP_VERSION};
-use super::{Clock, Say, matches, name_text, read_line};
+use super::{Clock, Say, Source as ArchiveSource, matches, name_text, read_line};
 use crate::compress::{is_terminal, strerror};
+
+mod fix;
 
 /// zip's exit statuses.
 mod code {
@@ -76,14 +78,21 @@ struct Options {
     output: Option<String>,
     stop_at_slash: bool,
     help: bool,
+    /// `-l` (LF to CR LF, `true`) or `-ll` (CR LF to LF, `false`).
+    eol: Option<bool>,
+    /// `-s`: the size of each part; 0 makes one archive of a split one.
+    split: Option<u64>,
+    split_verbose: bool,
+    /// `-F` (1) or `-FF` (2).
+    fix: u8,
     zipfile: Option<String>,
     files: Vec<String>,
 }
 
 /// zip's options of two letters, tried before one.
-const TWO_LETTERS: [&str; 30] = [
+const TWO_LETTERS: [&str; 31] = [
     "tt", "ws", "MM", "FS", "DF", "sf", "nw", "h2", "AC", "AS", "FF", "ll", "UN", "dd", "db", "dc",
-    "dg", "ds", "du", "dv", "lf", "la", "li", "so", "sc", "sd", "sp", "sv", "fz", "ic",
+    "dg", "ds", "du", "dv", "lf", "la", "li", "so", "sc", "sd", "sp", "sv", "sb", "fz", "ic",
 ];
 
 /// The options that take a value, with what zip calls the value.
@@ -131,7 +140,7 @@ fn long_option(name: &str) -> Option<&'static str> {
         "password" => "P",
         "suffixes" => "n",
         "temp-path" => "b",
-        "output-file" => "O",
+        "output-file" | "out" => "O",
         "compression-method" => "Z",
         "wild-stop-dirs" => "ws",
         "no-wild" => "nw",
@@ -188,6 +197,31 @@ fn parse_date(text: &str, clock: &Clock) -> Option<i64> {
         day,
         ..cash_archive::zip::Civil::default()
     }))
+}
+
+/// `-s`'s size: a number with `k`, `m`, `g` or `t` after it, megabytes without; at
+/// least 64 KiB, or 0.
+fn split_size(text: &str) -> Result<u64, String> {
+    let digits: String = text.chars().take_while(char::is_ascii_digit).collect();
+    let unit = text
+        .get(digits.len()..)
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    let number: u64 = digits
+        .parse()
+        .map_err(|_| format!("invalid size for -s:  '{text}'"))?;
+    let scale: u64 = match unit.as_str() {
+        "" | "m" => 1 << 20,
+        "k" => 1 << 10,
+        "g" => 1 << 30,
+        "t" => 1 << 40,
+        _ => return Err(format!("invalid size for -s:  '{text}'")),
+    };
+    let size = number.saturating_mul(scale);
+    if size != 0 && size < 64 * 1024 {
+        return Err(format!("minimum split size is 64 KB:  '{text}'"));
+    }
+    Ok(size)
 }
 
 /// Reads the command line as zip's `get_option` does: options anywhere, letters run
@@ -366,10 +400,16 @@ fn parse(args: &[String], clock: &Clock) -> Result<Options, String> {
                     }
                 }
                 "h" | "?" | "h2" => o.help = true,
+                "l" => o.eol = on.then_some(true),
+                "ll" => o.eol = on.then_some(false),
+                "s" => o.split = Some(split_size(&value)?),
+                "sv" => o.split_verbose = on,
+                "F" => o.fix = 1,
+                "FF" => o.fix = 2,
                 "b" | "S" | "k" | "g" | "UN" | "nw" | "dd" | "db" | "dc" | "dg" | "ds" | "du"
-                | "dv" | "fz" | "ic" | "so" | "sc" | "sd" | "sv" | "p" => {}
-                "R" | "F" | "FF" | "s" | "sp" | "U" | "A" | "J" | "l" | "ll" | "L" | "DF"
-                | "AC" | "AS" | "lf" | "la" | "li" | "w" | "$" | "!" => {
+                | "dv" | "fz" | "ic" | "so" | "sc" | "sd" | "sb" | "p" => {}
+                "R" | "sp" | "U" | "A" | "J" | "L" | "DF" | "AC" | "AS" | "lf" | "la" | "li"
+                | "w" | "$" | "!" => {
                     return Err(format!("option -{id} not supported by cash's zip"));
                 }
                 other => return Err(format!("short option '{other}' not supported")),
@@ -471,6 +511,8 @@ struct Zip<'a, SE: cash_core::ShellExtensions> {
     status: u8,
     skipped: (u64, u64),
     read: (u64, u64),
+    /// `--out` with no names: the old archive's members are copied, and said so.
+    copying: bool,
 }
 
 /// The command, run.
@@ -521,6 +563,7 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
         status: 0,
         skipped: (0, 0),
         read: (0, 0),
+        copying: false,
     };
     zip.run()
 }
@@ -558,14 +601,42 @@ impl<SE: cash_core::ShellExtensions> Zip<'_, SE> {
             }
         }
         let path = (zipfile != "-").then(|| self.context.shell.absolute_path(&zipfile));
-        let mut old: Option<(fs::File, Archive)> = None;
+        if self.options.split.is_some_and(|s| s > 0)
+            && (zipfile == "-" || !zipfile.to_ascii_lowercase().ends_with(".zip"))
+        {
+            return self.fail(
+                "Invalid command arguments (archive name must end in .zip for splits)",
+                code::PARAM,
+            );
+        }
+        if self.options.fix > 0 {
+            if let Some(path) = &path {
+                return self.fix(&zipfile, path);
+            }
+        }
+        let mut old: Option<(ArchiveSource, Archive)> = None;
         if let Some(path) = &path {
             // An empty file, a `>(...)` among them, is an archive not yet written.
             if fs::metadata(path).is_ok_and(|m| m.is_file() && m.len() > 0) {
                 let mut file = fs::File::open(path)?;
                 match read::open(&mut file) {
-                    Ok(archive) => old = Some((file, archive)),
-                    Err(OpenError::NoEnd | OpenError::BadCentral(_)) => {
+                    Ok(archive) if archive.end.disk > 0 => {
+                        if self.options.output.is_none() {
+                            self.say.err(
+                                "\tzip warning: cannot update a split archive (use --out option)\n",
+                            )?;
+                            return self.fail(
+                                &format!("Invalid command arguments ({zipfile})"),
+                                code::PARAM,
+                            );
+                        }
+                        old = Some(
+                            super::parts_source(path, &archive)
+                                .unwrap_or((ArchiveSource::File(file), archive)),
+                        );
+                    }
+                    Ok(archive) => old = Some((ArchiveSource::File(file), archive)),
+                    Err(OpenError::NoEnd | OpenError::BadCentral(..)) => {
                         self.say.err("\tzip warning: missing end signature--probably not a zip file (did you\n\tzip warning: remember to use binary mode when you transferred it?)\n\tzip warning: (if you are trying to read a damaged archive try -F)\n")?;
                         return self.fail(
                             &format!("Zip file structure invalid ({zipfile})"),
@@ -723,6 +794,15 @@ impl<SE: cash_core::ShellExtensions> Zip<'_, SE> {
                 changes += deleted.len();
             }
         }
+        // `--out` with no names copies the archive: to one file, or into parts with `-s`.
+        if self.options.output.is_some()
+            && self.options.files.is_empty()
+            && self.options.mode == Mode::Add
+            && old.is_some()
+        {
+            self.copying = true;
+            changes += items.len();
+        }
         let comment_change = self.options.archive_comment;
         if changes == 0 && !comment_change {
             if old.is_some()
@@ -779,6 +859,52 @@ impl<SE: cash_core::ShellExtensions> Zip<'_, SE> {
                 comment = self.read_comment(&comment)?;
             }
             writer.finish(&comment)?;
+        } else if let (Some(target), Some(size)) =
+            (&target, self.options.split.filter(|size| *size > 0))
+        {
+            if self.options.split_verbose {
+                self.note(&format!("splitsize = {size}\n"))?;
+            }
+            let output = match SplitOutput::create(target, size) {
+                Ok(output) => output,
+                Err(e) => {
+                    self.say.err(&format!("zip I/O error: {}", strerror(&e)))?;
+                    return self.fail(
+                        &format!("Could not create output file ({zipfile})"),
+                        code::CREATE,
+                    );
+                }
+            };
+            let mut writer = Writer::new(output);
+            self.write_items(&mut writer, items, &mut old, &mut written)?;
+            entries = writer.entries().to_vec();
+            let comments = self.entry_comments(&entries)?;
+            writer.set_comments(&comments);
+            if self.options.archive_comment {
+                comment = self.read_comment(&comment)?;
+            }
+            let output = writer.finish(&comment)?;
+            drop(old.take());
+            match output.finish(target) {
+                Ok(parts) => {
+                    if self.options.split_verbose {
+                        for part in parts {
+                            let name = part
+                                .file_name()
+                                .map(|n| n.to_string_lossy().into_owned())
+                                .unwrap_or_default();
+                            self.note(&format!("\tClosing split {name}\n"))?;
+                        }
+                    }
+                }
+                Err(e) => {
+                    self.say.err(&format!("zip I/O error: {}", strerror(&e)))?;
+                    return self.fail(
+                        &format!("Could not create output file ({zipfile})"),
+                        code::CREATE,
+                    );
+                }
+            }
         } else if let Some(target) = &target {
             let mut replacement = match Replacement::create(target.clone()) {
                 Ok(replacement) => replacement,
@@ -972,7 +1098,7 @@ impl<SE: cash_core::ShellExtensions> Zip<'_, SE> {
         &mut self,
         writer: &mut Writer<O>,
         items: Vec<Item>,
-        old: &mut Option<(fs::File, Archive)>,
+        old: &mut Option<(ArchiveSource, Archive)>,
         written: &mut Vec<(String, PathBuf)>,
     ) -> io::Result<()> {
         for item in items {
@@ -980,6 +1106,9 @@ impl<SE: cash_core::ShellExtensions> Zip<'_, SE> {
                 Item::Copy(index) => {
                     if let Some((file, archive)) = old.as_mut() {
                         if let Some(entry) = archive.entries.get(index).cloned() {
+                            if self.copying && !self.options.quiet {
+                                self.note(&format!(" copying: {}\n", name_text(&entry)))?;
+                            }
                             let _ = writer.copy(file, archive, &entry);
                         }
                     }
@@ -1122,7 +1251,26 @@ impl<SE: cash_core::ShellExtensions> Zip<'_, SE> {
             )?
         } else if let Some(path) = &source.path {
             match fs::File::open(path) {
-                Ok(mut file) => writer.add(&member, Input::File(&mut file))?,
+                Ok(mut file) => match self.options.eol {
+                    Some(to_crlf) => {
+                        let mut head = Vec::new();
+                        (&mut file).take(64 * 1024).read_to_end(&mut head)?;
+                        file.seek(SeekFrom::Start(0))?;
+                        if head.is_empty() || is_text(&head) {
+                            let mut converted = Eol::new(file, to_crlf);
+                            writer.add(&member, Input::File(&mut converted))?
+                        } else {
+                            if speak {
+                                self.note("\n")?;
+                            }
+                            let flag = if to_crlf { "-l" } else { "-ll" };
+                            self.say
+                                .err(&format!("\tzip warning: has binary so {flag} ignored\n"))?;
+                            writer.add(&member, Input::File(&mut file))?
+                        }
+                    }
+                    None => writer.add(&member, Input::File(&mut file))?,
+                },
                 Err(e) => {
                     if speak {
                         self.note("\n")?;
@@ -1288,6 +1436,117 @@ impl<SE: cash_core::ShellExtensions> Zip<'_, SE> {
             return Ok(Err("password verification failed".to_owned()));
         }
         Ok(Ok(first.into_bytes()))
+    }
+}
+
+/// Info-ZIP's `is_text_buf`: no byte it black-lists, and one it white-lists.
+fn is_text(bytes: &[u8]) -> bool {
+    let mut white = false;
+    for b in bytes {
+        match b {
+            0..=6 | 14..=25 | 28..=31 => return false,
+            9 | 10 | 13 | 32.. => white = true,
+            _ => {}
+        }
+    }
+    white
+}
+
+/// A file read with its line ends changed: `-l`'s LF to CR LF, or `-ll`'s CR LF to LF.
+struct Eol<R> {
+    inner: R,
+    to_crlf: bool,
+    /// A CR at the end of the last chunk, which a LF may follow.
+    pending_cr: bool,
+    out: Vec<u8>,
+    at: usize,
+    done: bool,
+}
+
+impl<R: Read + Seek> Eol<R> {
+    const fn new(inner: R, to_crlf: bool) -> Self {
+        Self {
+            inner,
+            to_crlf,
+            pending_cr: false,
+            out: Vec::new(),
+            at: 0,
+            done: false,
+        }
+    }
+
+    fn fill(&mut self) -> io::Result<()> {
+        let mut chunk = vec![0_u8; 32 * 1024];
+        let n = self.inner.read(&mut chunk)?;
+        self.out.clear();
+        self.at = 0;
+        if n == 0 {
+            if self.pending_cr {
+                self.out.push(b'\r');
+                self.pending_cr = false;
+            }
+            self.done = true;
+            return Ok(());
+        }
+        for &b in chunk.get(..n).unwrap_or_default() {
+            if self.to_crlf {
+                if b == b'\n' {
+                    self.out.push(b'\r');
+                }
+                self.out.push(b);
+            } else if self.pending_cr {
+                self.pending_cr = false;
+                if b != b'\n' {
+                    self.out.push(b'\r');
+                }
+                if b == b'\r' {
+                    self.pending_cr = true;
+                } else {
+                    self.out.push(b);
+                }
+            } else if b == b'\r' {
+                self.pending_cr = true;
+            } else {
+                self.out.push(b);
+            }
+        }
+        Ok(())
+    }
+}
+
+impl<R: Read + Seek> Read for Eol<R> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        while self.at >= self.out.len() {
+            if self.done {
+                return Ok(0);
+            }
+            self.fill()?;
+        }
+        let left = self.out.get(self.at..).unwrap_or_default();
+        let n = left.len().min(buf.len());
+        buf.get_mut(..n)
+            .unwrap_or_default()
+            .copy_from_slice(left.get(..n).unwrap_or_default());
+        self.at += n;
+        Ok(n)
+    }
+}
+
+impl<R: Read + Seek> Seek for Eol<R> {
+    /// Only back to the start, which the retry as stored needs.
+    fn seek(&mut self, to: SeekFrom) -> io::Result<u64> {
+        if to != SeekFrom::Start(0) {
+            return Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "only back to the start",
+            ));
+        }
+        self.inner.seek(SeekFrom::Start(0))?;
+        self.pending_cr = false;
+        self.out.clear();
+        self.at = 0;
+        self.done = false;
+        Ok(0)
     }
 }
 
