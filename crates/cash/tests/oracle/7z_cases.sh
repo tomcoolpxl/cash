@@ -4,9 +4,12 @@
 # -mhe=on). What is listed, tested, extracted and said is checked line for line.
 # 7z_cases.out is 7-Zip's output.
 #
-# The links section makes hard links and a junction with PowerShell; danger.tgz holds a
-# tar of links, symbolic ones only of the kind 7-Zip refuses to make, since making one
-# takes a right some machines give and others do not.
+# The links section makes hard links with PowerShell and junctions with `mklink /J`,
+# whose target is resolved against the folder as the shell names it (PowerShell's
+# `Resolve-Path` would expand a short name such as CI's RUNNER~1, and the link's target
+# would no longer be relative); danger.tgz holds a tar of links, symbolic ones only of
+# the kind 7-Zip refuses to make, since making one takes a right some machines give and
+# others do not.
 #
 # 7-Zip on Windows ends lines with CRLF and shows `\` in names; cash's 7z writes LF and
 # `/` (the user's choice, 2026-10-07), so `z` turns 7-Zip's into those. 7-Zip shows
@@ -399,7 +402,8 @@ mkdir -p ld/d/sub
 cd ld || exit 1
 printf 'alpha\n' > d/a.txt
 printf 'beta\n' > d/sub/b.txt
-powershell -NoProfile -Command "New-Item -ItemType HardLink -Path d\\h.txt -Target d\\a.txt | Out-Null; New-Item -ItemType HardLink -Path d\\sub\\h2.txt -Target d\\a.txt | Out-Null; New-Item -ItemType Junction -Path d\\jn -Target (Resolve-Path d\\sub) | Out-Null"
+powershell -NoProfile -Command "New-Item -ItemType HardLink -Path d\\h.txt -Target d\\a.txt | Out-Null; New-Item -ItemType HardLink -Path d\\sub\\h2.txt -Target d\\a.txt | Out-Null"
+cmd /c "mklink /J d\\jn d\\sub" > /dev/null
 links() { grep -E '^(Path|Size|Mode|Attributes|Symbolic Link|Hard Link) = |^rc='; }
 zd() { z "$@" | sed "s#$dir#DIR#g"; }
 z a -snh -bb3 h.tar d
@@ -439,7 +443,7 @@ z x -y -ox6 danger.tar d/hok
 z x -aos -ox6 danger.tar d/hok
 stat -c '%h %n' x6/d/a.txt x6/d/hok
 mkdir -p x7/real
-powershell -NoProfile -Command "New-Item -ItemType Junction -Path x7\\d -Target (Resolve-Path x7\\real) | Out-Null"
+cmd /c "mklink /J x7\\d x7\\real" > /dev/null
 z x -ox7 danger.tar d/a.txt d/hok
 z x -snld10 -y -ox7 danger.tar d/a.txt d/hok
 ls x7/real
