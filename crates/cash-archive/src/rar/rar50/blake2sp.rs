@@ -123,14 +123,14 @@ impl Blake2s {
     }
 }
 
-pub(crate) struct Hasher {
+pub struct Hasher {
     leaves: [Blake2s; PARALLELISM],
     buffer: [u8; BUFFER_BYTES],
     buffer_len: usize,
 }
 
 impl Hasher {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             leaves: [
                 Blake2s::new(0, 0, false),
@@ -147,7 +147,7 @@ impl Hasher {
         }
     }
 
-    pub(crate) fn update(&mut self, mut input: &[u8]) {
+    pub fn update(&mut self, mut input: &[u8]) {
         if input.is_empty() {
             return;
         }
@@ -176,7 +176,7 @@ impl Hasher {
         self.buffer_len = tail.len();
     }
 
-    pub(crate) fn finalize(mut self) -> [u8; OUT_BYTES] {
+    pub fn finalize(mut self) -> [u8; OUT_BYTES] {
         if self.buffer_len > 0 {
             let tail = &self.buffer[..self.buffer_len];
             for (leaf_index, leaf) in self.leaves.iter_mut().enumerate() {
@@ -202,7 +202,7 @@ impl Hasher {
     }
 }
 
-pub(crate) fn hash(input: &[u8]) -> [u8; OUT_BYTES] {
+pub fn hash(input: &[u8]) -> [u8; OUT_BYTES] {
     let mut hasher = Hasher::new();
     hasher.update(input);
     hasher.finalize()

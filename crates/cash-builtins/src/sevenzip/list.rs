@@ -129,12 +129,16 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
         if !opened.warnings().is_empty() || opened.type_warning.is_some() {
             warnings += 1;
         }
+        // The flags and the message are an error each.
         if !opened.error_flags.is_empty() {
+            errors += 1;
+        }
+        if opened.error_message.is_some() {
             errors += 1;
         }
         archives += 1;
         volumes += 1;
-        if let Some(split) = &opened.split {
+        if let Some(split) = opened.split.as_ref().or(opened.volumes.as_ref()) {
             volumes += split.parts.len() as u64 - 1;
             total_size += split.total - archive.size;
             used.extend(split.parts.iter().skip(1).cloned());
@@ -175,7 +179,13 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
             stat.packed = if stat.files + stat.dirs == 0 {
                 Some(0)
             } else {
-                (!archive.stdin).then(|| opened.split.as_ref().map_or(archive.size, |s| s.total))
+                (!archive.stdin).then(|| {
+                    opened
+                        .split
+                        .as_ref()
+                        .or(opened.volumes.as_ref())
+                        .map_or(archive.size, |s| s.total)
+                })
             };
         }
         if stat.files == 0 {

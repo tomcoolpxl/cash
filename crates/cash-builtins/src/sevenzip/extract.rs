@@ -248,6 +248,9 @@ pub(super) fn archive_props(found: &Found, opened: &Opened) -> String {
     if !opened.error_flags.is_empty() {
         let _ = writeln!(text, "ERRORS:\n{}", opened.error_flags.join("\n"));
     }
+    if let Some(message) = &opened.error_message {
+        let _ = writeln!(text, "ERROR = {message}");
+    }
     let warnings = opened.warnings();
     if !warnings.is_empty() {
         let _ = writeln!(text, "WARNINGS:\n{}", warnings.join("\n"));

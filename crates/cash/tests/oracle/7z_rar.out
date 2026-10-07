@@ -1,0 +1,4585 @@
+== l -slt golden/stored_comment.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1165 bytes (2 KiB)
+
+Listing archive: golden/stored_comment.rar
+
+--
+Path = golden/stored_comment.rar
+Type = Rar5
+Physical Size = 1165
+Characteristics = Comment
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+Comment = golden archive comment
+
+----------
+Path = payload.bin
+Folder = -
+Size = 1024
+Packed Size = 1024
+Modified = 2012-07-13 11:01:20
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 469191DC
+Host OS = Windows
+Method = v6:m0:128K
+Characteristics = UnixTime CRC Hash
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 6c0b0d2954964ad6cab3131d4de770c1cbb81697c663cd88794ccd50dd55d8b1
+NT Security = 
+
+rc=0
+== l -slt golden/stored_comment_metadata.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1192 bytes (2 KiB)
+
+Listing archive: golden/stored_comment_metadata.rar
+
+--
+Path = golden/stored_comment_metadata.rar
+Type = Rar5
+Physical Size = 1192
+Characteristics = Metadata arc-name ctime-win Locator QuickOpen:0 Comment
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+Name = golden.rar
+Created = 2022-11-24 12:26:38.4140288
+Comment = golden archive comment
+
+----------
+Path = payload.bin
+Folder = -
+Size = 1024
+Packed Size = 1024
+Modified = 2012-07-13 11:01:20
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 469191DC
+Host OS = Windows
+Method = v6:m0:128K
+Characteristics = UnixTime CRC Hash
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 6c0b0d2954964ad6cab3131d4de770c1cbb81697c663cd88794ccd50dd55d8b1
+NT Security = 
+
+rc=0
+== l -slt golden/stored_quick_open.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 3056 bytes (3 KiB)
+
+Listing archive: golden/stored_quick_open.rar
+
+--
+Path = golden/stored_quick_open.rar
+Type = Rar5
+Physical Size = 3056
+Characteristics = Locator QuickOpen:2785
+Encrypted = -
+Solid = -
+Blocks = 3
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+
+----------
+Path = alpha.bin
+Folder = -
+Size = 2048
+Packed Size = 2048
+Modified = 2012-07-13 11:01:20
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = CB278A56
+Host OS = Windows
+Method = v6:m0:128K
+Characteristics = UnixTime CRC Hash
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 3addff9634b8bc1ab8c86e42e666a87bc18cbe6caad0dc1ff2f840e74dc9f733
+NT Security = 
+
+Path = beta.bin
+Folder = -
+Size = 512
+Packed Size = 512
+Modified = 2012-07-13 11:01:20
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = A921FD5C
+Host OS = Windows
+Method = v6:m0:128K
+Characteristics = UnixTime CRC Hash
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 14e8462eddfccb365ebedfe53d938ea04134220b210cfdd6cd3c323e91eecc57
+NT Security = 
+
+Path = gamma.bin
+Folder = -
+Size = 7
+Packed Size = 7
+Modified = 2012-07-13 11:01:20
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 0854F766
+Host OS = Windows
+Method = v6:m0:128K
+Characteristics = UnixTime CRC Hash
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 05eb0e43d2a07ee3ca5eb87d9447d4c140c67282a930b6edf3cd620a17560359
+NT Security = 
+
+rc=0
+== l -slt golden/stored_rar50.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 4294 bytes (5 KiB)
+
+Listing archive: golden/stored_rar50.rar
+
+--
+Path = golden/stored_rar50.rar
+Type = Rar5
+Physical Size = 4294
+Encrypted = -
+Solid = -
+Blocks = 2
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+
+----------
+Path = first.bin
+Folder = -
+Size = 4096
+Packed Size = 4096
+Modified = 2012-07-13 11:01:20
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = FD220F3E
+Host OS = Windows
+Method = v6:m0:128K
+Characteristics = UnixTime CRC Hash
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = bf4fba3d6dfbc9854f316735d67a4a8d166b26aea2650b8fd0c95b2d6dd523f0
+NT Security = 
+
+Path = second.bin
+Folder = -
+Size = 37
+Packed Size = 37
+Modified = 2012-07-13 11:01:20
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 35E04409
+Host OS = Windows
+Method = v6:m0:128K
+Characteristics = UnixTime CRC Hash
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 4f1a3d416fe8f6640d2c69ee33ac1391b434f9afb701fa1cd90a778689c9fd5f
+NT Security = 
+
+rc=0
+== l -slt golden/stored_rar70.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 4294 bytes (5 KiB)
+
+Listing archive: golden/stored_rar70.rar
+
+--
+Path = golden/stored_rar70.rar
+Type = Rar5
+Physical Size = 4294
+Encrypted = -
+Solid = -
+Blocks = 2
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+
+----------
+Path = first.bin
+Folder = -
+Size = 4096
+Packed Size = 4096
+Modified = 2012-07-13 11:01:20
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = FD220F3E
+Host OS = Windows
+Method = v6:m0:128K
+Characteristics = UnixTime CRC Hash
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = bf4fba3d6dfbc9854f316735d67a4a8d166b26aea2650b8fd0c95b2d6dd523f0
+NT Security = 
+
+Path = second.bin
+Folder = -
+Size = 37
+Packed Size = 37
+Modified = 2012-07-13 11:01:20
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 35E04409
+Host OS = Windows
+Method = v6:m0:128K
+Characteristics = UnixTime CRC Hash
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 4f1a3d416fe8f6640d2c69ee33ac1391b434f9afb701fa1cd90a778689c9fd5f
+NT Security = 
+
+rc=0
+== l -slt golden/stored_recovery_1.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 9387 bytes (10 KiB)
+
+Listing archive: golden/stored_recovery_1.rar
+
+--
+Path = golden/stored_recovery_1.rar
+Type = Rar5
+Physical Size = 9387
+Characteristics = Recovery Locator Recovery:8279
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+
+----------
+Path = protected.bin
+Folder = -
+Size = 8192
+Packed Size = 8192
+Modified = 2012-07-13 11:01:20
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 7416441A
+Host OS = Windows
+Method = v6:m0:128K
+Characteristics = UnixTime CRC Hash
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = e448004918cae369c124761dc4342ad5e3654445438860cc4c151a8d08e6095b
+NT Security = 
+
+rc=0
+== l -slt golden/stored_recovery_10.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 9387 bytes (10 KiB)
+
+Listing archive: golden/stored_recovery_10.rar
+
+--
+Path = golden/stored_recovery_10.rar
+Type = Rar5
+Physical Size = 9387
+Characteristics = Recovery Locator Recovery:8279
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+
+----------
+Path = protected.bin
+Folder = -
+Size = 8192
+Packed Size = 8192
+Modified = 2012-07-13 11:01:20
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 7416441A
+Host OS = Windows
+Method = v6:m0:128K
+Characteristics = UnixTime CRC Hash
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = e448004918cae369c124761dc4342ad5e3654445438860cc4c151a8d08e6095b
+NT Security = 
+
+rc=0
+== l -slt golden/stored_recovery_5.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 9387 bytes (10 KiB)
+
+Listing archive: golden/stored_recovery_5.rar
+
+--
+Path = golden/stored_recovery_5.rar
+Type = Rar5
+Physical Size = 9387
+Characteristics = Recovery Locator Recovery:8279
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+
+----------
+Path = protected.bin
+Folder = -
+Size = 8192
+Packed Size = 8192
+Modified = 2012-07-13 11:01:20
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 7416441A
+Host OS = Windows
+Method = v6:m0:128K
+Characteristics = UnixTime CRC Hash
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = e448004918cae369c124761dc4342ad5e3654445438860cc4c151a8d08e6095b
+NT Security = 
+
+rc=0
+== l -slt golden/stored_recovery_50.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 12585 bytes (13 KiB)
+
+Listing archive: golden/stored_recovery_50.rar
+
+--
+Path = golden/stored_recovery_50.rar
+Type = Rar5
+Physical Size = 12585
+Characteristics = Recovery Locator Recovery:8279
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+
+----------
+Path = protected.bin
+Folder = -
+Size = 8192
+Packed Size = 8192
+Modified = 2012-07-13 11:01:20
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 7416441A
+Host OS = Windows
+Method = v6:m0:128K
+Characteristics = UnixTime CRC Hash
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = e448004918cae369c124761dc4342ad5e3654445438860cc4c151a8d08e6095b
+NT Security = 
+
+rc=0
+== l -slt golden/stored_volume_0.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1594 bytes (2 KiB)
+
+Listing archive: golden/stored_volume_0.rar
+
+--
+Path = golden/stored_volume_0.rar
+Type = Rar5
+Physical Size = 1594
+Total Physical Size = 5376
+Characteristics = Volume VolumeField
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = +
+Volume Index = 0
+Volumes = 4
+
+----------
+Path = split.bin
+Folder = -
+Size = 5000
+Packed Size = 5000
+Modified = 2012-07-13 11:01:20
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = DAF3F90B
+Host OS = Windows
+Method = v6:m0:128K
+Characteristics = UnixTime CRC Hash
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 0
+Checksum = 431aa88a73838a02db25c803d3e7c4f6ae2afddfbe310f6fef2897f83fb24504
+NT Security = 
+
+rc=0
+== l -slt golden/stored_volume_1.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1594 bytes (2 KiB)
+
+Listing archive: golden/stored_volume_1.rar
+
+--
+Path = golden/stored_volume_1.rar
+Type = Rar5
+ERRORS:
+Headers Error
+Physical Size = 1594
+Total Physical Size = 3782
+Characteristics = Volume VolumeField
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = +
+Volume Index = 1
+Volumes = 3
+
+----------
+Path = split.bin
+Folder = -
+Size = 5000
+Packed Size = 3500
+Modified = 2012-07-13 11:01:20
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = +
+Split After = -
+CRC = DAF3F90B
+Host OS = Windows
+Method = v6:m0:128K
+Characteristics = UnixTime CRC Hash
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 1
+Checksum = 1b43650fbf22df7bb5559843457b80b5180612402b318bf02f283c419ba81f3d
+NT Security = 
+
+
+Errors: 1
+rc=2
+== l -slt golden/stored_volume_2.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1594 bytes (2 KiB)
+
+Listing archive: golden/stored_volume_2.rar
+
+--
+Path = golden/stored_volume_2.rar
+Type = Rar5
+ERRORS:
+Headers Error
+Physical Size = 1594
+Total Physical Size = 2188
+Characteristics = Volume VolumeField
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = +
+Volume Index = 2
+Volumes = 2
+
+----------
+Path = split.bin
+Folder = -
+Size = 5000
+Packed Size = 2000
+Modified = 2012-07-13 11:01:20
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = +
+Split After = -
+CRC = DAF3F90B
+Host OS = Windows
+Method = v6:m0:128K
+Characteristics = UnixTime CRC Hash
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 2
+Checksum = 52e59bcd76c0a12a9deeb8e39cc6d827073ee250f5ea305999b1aeb98ef60c14
+NT Security = 
+
+
+Errors: 1
+rc=2
+== l -slt golden/stored_volume_3.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 594 bytes (1 KiB)
+
+Listing archive: golden/stored_volume_3.rar
+
+--
+Path = golden/stored_volume_3.rar
+Type = Rar5
+ERRORS:
+Headers Error
+Physical Size = 594
+Characteristics = Volume VolumeField
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = +
+Volume Index = 3
+Volumes = 1
+
+----------
+Path = split.bin
+Folder = -
+Size = 5000
+Packed Size = 500
+Modified = 2012-07-13 11:01:20
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = +
+Split After = -
+CRC = DAF3F90B
+Host OS = Windows
+Method = v6:m0:128K
+Characteristics = UnixTime CRC Hash
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 3
+Checksum = 1e34b07aa7e664043fa491127729cc7dc8572051d0731ba72e07f359d27006f2
+NT Security = 
+
+
+Errors: 1
+rc=2
+== l -slt rar50/algorithm_version_2.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2943 bytes (3 KiB)
+
+Listing archive: rar50/algorithm_version_2.rar
+
+--
+Path = rar50/algorithm_version_2.rar
+Type = Rar5
+Physical Size = 2943
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v8
+Multivolume = -
+Volumes = 1
+
+----------
+Path = mid.txt
+Folder = -
+Size = 23009
+Packed Size = 2875
+Modified = 2026-08-21 17:08:28.625242931
+Created = 
+Accessed = 
+Attributes =  -rw-rw-r--
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = A3FB5262
+Host OS = Unix
+Method = v8:m3:128K
+Characteristics = CRC Time:uMn
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 
+NT Security = 
+
+rc=0
+== l -slt rar50/algorithm_version_2_stored.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 103 bytes (1 KiB)
+
+Listing archive: rar50/algorithm_version_2_stored.rar
+
+--
+Path = rar50/algorithm_version_2_stored.rar
+Type = Rar5
+Physical Size = 103
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v8
+Multivolume = -
+Volumes = 1
+
+----------
+Path = hello.txt
+Folder = -
+Size = 30
+Packed Size = 30
+Modified = 2026-04-27 05:22:29.6327904
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 83B27227
+Host OS = Windows
+Method = v8:m0:128K
+Characteristics = CRC Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 
+NT Security = 
+
+rc=0
+== l -slt rar50/ams_archive_name_rar721.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 175 bytes (1 KiB)
+
+Listing archive: rar50/ams_archive_name_rar721.rar
+
+--
+Path = rar50/ams_archive_name_rar721.rar
+Type = Rar5
+Physical Size = 175
+Characteristics = Metadata arc-name ctime-win Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+Name = ams_archive_name_rar721.rar
+Created = 2026-04-27 06:23:44.6414898
+
+----------
+Path = hello7.txt
+Folder = -
+Size = 31
+Packed Size = 31
+Modified = 2026-04-27 06:23:43.8089474
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m0:128K
+Characteristics = Hash Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 83d2d69e99d023ad21d98881f2cbfb56dd804fe7f4014fb00a3e6a2a96c204f5
+NT Security = 
+
+rc=0
+== l -slt rar50/crc32_wrong_beside_blake2sp.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 138 bytes (1 KiB)
+
+Listing archive: rar50/crc32_wrong_beside_blake2sp.rar
+
+--
+Path = rar50/crc32_wrong_beside_blake2sp.rar
+Type = Rar5
+Physical Size = 138
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+
+----------
+Path = hello.txt
+Folder = -
+Size = 30
+Packed Size = 30
+Modified = 2026-04-27 05:22:31.9062559
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 83B27226
+Host OS = Windows
+Method = v6:m0:128K
+Characteristics = CRC Hash Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 2c897ab5816d5d1334595840d6ce5729076c0be247b2202dbab1b8957b919c52
+NT Security = 
+
+rc=0
+== l -slt rar50/empty_file.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 104 bytes (1 KiB)
+
+Listing archive: rar50/empty_file.rar
+
+--
+Path = rar50/empty_file.rar
+Type = Rar5
+Physical Size = 104
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+
+----------
+Path = empty.bin
+Folder = -
+Size = 0
+Packed Size = 0
+Modified = 2026-04-27 05:23:16.2287543
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m0:128K
+Characteristics = Hash Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = dd0e891776933f43c7d032b08a917e25741f8aa9a12c12e1cac8801500f2ca4f
+NT Security = 
+
+rc=0
+== l -slt rar50/encrypted_multivol.part1.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2048 bytes (2 KiB)
+
+Listing archive: rar50/encrypted_multivol.part1.rar
+
+--
+Path = rar50/encrypted_multivol.part1.rar
+Type = Rar5
+Physical Size = 2048
+Total Physical Size = 4962
+Characteristics = Volume Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m3
+Multivolume = +
+Volume Index = 0
+Volumes = 3
+
+----------
+Path = random_4k.bin
+Folder = -
+Size = 4096
+Packed Size = 4160
+Modified = 2026-05-04 02:51:51.3161322
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = +
+Solid = -
+Split Before = -
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m3:128K AES:15:1
+Characteristics = Crypto Hash Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 0
+Checksum = eb6d1d87f7489bf088c3b9c576a5907bcf5f6a7c578132c9a9d6675c05c144c9
+NT Security = 
+
+rc=0
+== l -slt rar50/encrypted_multivol.part2.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2048 bytes (2 KiB)
+
+Listing archive: rar50/encrypted_multivol.part2.rar
+
+--
+Path = rar50/encrypted_multivol.part2.rar
+Type = Rar5
+ERRORS:
+Headers Error
+Physical Size = 2048
+Total Physical Size = 2914
+Characteristics = Volume VolumeField Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m3
+Multivolume = +
+Volume Index = 1
+Volumes = 2
+
+----------
+Path = random_4k.bin
+Folder = -
+Size = 4096
+Packed Size = 2433
+Modified = 2026-05-04 02:51:51.3161322
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = +
+Solid = -
+Split Before = +
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m3:128K AES:15:1
+Characteristics = Crypto Hash Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 1
+Checksum = 206967321724018b399ca2e013a70fed12c3d57612d5446ff3085ae445a90100
+NT Security = 
+
+
+Errors: 1
+rc=2
+== l -slt rar50/encrypted_multivol.part3.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 866 bytes (1 KiB)
+
+Listing archive: rar50/encrypted_multivol.part3.rar
+
+--
+Path = rar50/encrypted_multivol.part3.rar
+Type = Rar5
+ERRORS:
+Headers Error
+Physical Size = 866
+Characteristics = Volume VolumeField Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m3
+Multivolume = +
+Volume Index = 2
+Volumes = 1
+
+----------
+Path = random_4k.bin
+Folder = -
+Size = 4096
+Packed Size = 707
+Modified = 2026-05-04 02:51:51.3161322
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = +
+Solid = -
+Split Before = +
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m3:128K AES:15:3
+Characteristics = Crypto Hash Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 2
+Checksum = ad51c3d7f8cd95c69d0c41c21a3db21e163888c9a4255eb28d6db6e785ca532c
+NT Security = 
+
+
+Errors: 1
+rc=2
+== l -slt rar50/filter_arm.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 3639 bytes (4 KiB)
+
+Listing archive: rar50/filter_arm.rar
+
+--
+Path = rar50/filter_arm.rar
+Type = Rar5
+Physical Size = 3639
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m5
+Multivolume = -
+Volumes = 1
+
+----------
+Path = arm_synthetic.bin
+Folder = -
+Size = 4096
+Packed Size = 3526
+Modified = 2026-04-27 05:23:07.5360488
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m5:128K
+Characteristics = Hash Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 323d3e11293bc7764dce6686f11312eda7505e9397046f2345db820557a323be
+NT Security = 
+
+rc=0
+== l -slt rar50/filter_delta.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 717 bytes (1 KiB)
+
+Listing archive: rar50/filter_delta.rar
+
+--
+Path = rar50/filter_delta.rar
+Type = Rar5
+Physical Size = 717
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:512K:m5
+Multivolume = -
+Volumes = 1
+
+----------
+Path = delta_4ch_ramp.bin
+Folder = -
+Size = 262144
+Packed Size = 600
+Modified = 2026-04-27 05:23:13.9189173
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m5:512K
+Characteristics = Hash Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 86e1bcb46b3c36d9f301571d02c4a90f81f2c3ebc5b407ec8966b74a7e5c0c57
+NT Security = 
+
+rc=0
+== l -slt rar50/filter_e8.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 891 bytes (1 KiB)
+
+Listing archive: rar50/filter_e8.rar
+
+--
+Path = rar50/filter_e8.rar
+Type = Rar5
+Physical Size = 891
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:256K:m5
+Multivolume = -
+Volumes = 1
+
+----------
+Path = x86_e8_stream.bin
+Folder = -
+Size = 196608
+Packed Size = 775
+Modified = 2026-04-27 05:23:09.7776642
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m5:256K
+Characteristics = Hash Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 4886e2eb902d222389bb6f50d5f180c164ff7009b453b93f4609be20060fbb03
+NT Security = 
+
+rc=0
+== l -slt rar50/filter_e8e9.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 899 bytes (1 KiB)
+
+Listing archive: rar50/filter_e8e9.rar
+
+--
+Path = rar50/filter_e8e9.rar
+Type = Rar5
+Physical Size = 899
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:256K:m5
+Multivolume = -
+Volumes = 1
+
+----------
+Path = x86_e8e9_stream.bin
+Folder = -
+Size = 196608
+Packed Size = 781
+Modified = 2026-04-27 05:23:11.9061267
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m5:256K
+Characteristics = Hash Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = c0c52faeb914338eb45546a0d3a542faf05a3aab632bf1b2396b50acefe49552
+NT Security = 
+
+rc=0
+== l -slt rar50/first_block_without_tables.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2943 bytes (3 KiB)
+
+Listing archive: rar50/first_block_without_tables.rar
+
+--
+Path = rar50/first_block_without_tables.rar
+Type = Rar5
+Physical Size = 2943
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m3
+Multivolume = -
+Volumes = 1
+
+----------
+Path = mid.txt
+Folder = -
+Size = 23009
+Packed Size = 2875
+Modified = 2026-08-21 17:08:28.625242931
+Created = 
+Accessed = 
+Attributes =  -rw-rw-r--
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = A3FB5262
+Host OS = Unix
+Method = v6:m3:128K
+Characteristics = CRC Time:uMn
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 
+NT Security = 
+
+rc=0
+== l -slt rar50/m1_fastest.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 12582 bytes (13 KiB)
+
+Listing archive: rar50/m1_fastest.rar
+
+--
+Path = rar50/m1_fastest.rar
+Type = Rar5
+Physical Size = 12582
+Characteristics = Locator QuickOpen:12457
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m1
+Multivolume = -
+Volumes = 1
+
+----------
+Path = bigtext_64k.bin
+Folder = -
+Size = 65536
+Packed Size = 12359
+Modified = 2026-04-27 05:22:34.4031440
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m1:128K
+Characteristics = Hash Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = c882ccda2c7386ab17fccce38f8a579748a154868efd710552a81d05e4e9c127
+NT Security = 
+
+rc=0
+== l -slt rar50/m3_default.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 10007 bytes (10 KiB)
+
+Listing archive: rar50/m3_default.rar
+
+--
+Path = rar50/m3_default.rar
+Type = Rar5
+Physical Size = 10007
+Characteristics = Locator QuickOpen:9882
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m3
+Multivolume = -
+Volumes = 1
+
+----------
+Path = bigtext_64k.bin
+Folder = -
+Size = 65536
+Packed Size = 9784
+Modified = 2026-04-27 05:22:36.7912567
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m3:128K
+Characteristics = Hash Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = c882ccda2c7386ab17fccce38f8a579748a154868efd710552a81d05e4e9c127
+NT Security = 
+
+rc=0
+== l -slt rar50/m5_max.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 9922 bytes (10 KiB)
+
+Listing archive: rar50/m5_max.rar
+
+--
+Path = rar50/m5_max.rar
+Type = Rar5
+Physical Size = 9922
+Characteristics = Locator QuickOpen:9797
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m5
+Multivolume = -
+Volumes = 1
+
+----------
+Path = bigtext_64k.bin
+Folder = -
+Size = 65536
+Packed Size = 9699
+Modified = 2026-04-27 05:22:39.0087809
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m5:128K
+Characteristics = Hash Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = c882ccda2c7386ab17fccce38f8a579748a154868efd710552a81d05e4e9c127
+NT Security = 
+
+rc=0
+== l -slt rar50/multifile.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 4389 bytes (5 KiB)
+
+Listing archive: rar50/multifile.rar
+
+--
+Path = rar50/multifile.rar
+Type = Rar5
+Physical Size = 4389
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 3
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+
+----------
+Path = hello.txt
+Folder = -
+Size = 30
+Packed Size = 30
+Modified = 2026-04-27 05:23:01.2943162
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m0:128K
+Characteristics = Hash Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 2c897ab5816d5d1334595840d6ce5729076c0be247b2202dbab1b8957b919c52
+NT Security = 
+
+Path = tiny.txt
+Folder = -
+Size = 9
+Packed Size = 9
+Modified = 2026-04-27 05:23:01.2945445
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m0:128K
+Characteristics = Hash Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 920c1484c2197c1fe8549aef4289b993c88f5d0133bd20d4d6595def26d338b6
+NT Security = 
+
+Path = random_4k.bin
+Folder = -
+Size = 4096
+Packed Size = 4096
+Modified = 2026-04-27 05:23:01.2947708
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m0:128K
+Characteristics = Hash Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = e7fa8cfde49e0c97e800a8bf7c1b1866327d4f011779e2776252a8242084b958
+NT Security = 
+
+rc=0
+== l -slt rar50/multivol.part1.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2048 bytes (2 KiB)
+
+Listing archive: rar50/multivol.part1.rar
+
+--
+Path = rar50/multivol.part1.rar
+Type = Rar5
+Physical Size = 2048
+Total Physical Size = 4705
+Characteristics = Volume Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m3
+Multivolume = +
+Volume Index = 0
+Volumes = 3
+
+----------
+Path = random_4k.bin
+Folder = -
+Size = 4096
+Packed Size = 4148
+Modified = 2026-04-27 05:23:05.4384751
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m3:128K
+Characteristics = Hash Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 0
+Checksum = b44a27c8b0ecb579b31530eb210596ccadc9b6d58b69819d66742ad5804ea67e
+NT Security = 
+
+rc=0
+== l -slt rar50/multivol.part2.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2048 bytes (2 KiB)
+
+Listing archive: rar50/multivol.part2.rar
+
+--
+Path = rar50/multivol.part2.rar
+Type = Rar5
+ERRORS:
+Headers Error
+Physical Size = 2048
+Total Physical Size = 2657
+Characteristics = Volume VolumeField Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m3
+Multivolume = +
+Volume Index = 1
+Volumes = 2
+
+----------
+Path = random_4k.bin
+Folder = -
+Size = 4096
+Packed Size = 2323
+Modified = 2026-04-27 05:23:05.4384751
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = +
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m3:128K
+Characteristics = Hash Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 1
+Checksum = e7dcf3e7490fd944bcb49572fa626365123bb3c5173fb27717f943deb031a59b
+NT Security = 
+
+
+Errors: 1
+rc=2
+== l -slt rar50/multivol.part3.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 609 bytes (1 KiB)
+
+Listing archive: rar50/multivol.part3.rar
+
+--
+Path = rar50/multivol.part3.rar
+Type = Rar5
+ERRORS:
+Headers Error
+Physical Size = 609
+Characteristics = Volume VolumeField Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m3
+Multivolume = +
+Volume Index = 2
+Volumes = 1
+
+----------
+Path = random_4k.bin
+Folder = -
+Size = 4096
+Packed Size = 499
+Modified = 2026-04-27 05:23:05.4384751
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = +
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m3:128K
+Characteristics = Hash Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 2
+Checksum = e7fa8cfde49e0c97e800a8bf7c1b1866327d4f011779e2776252a8242084b958
+NT Security = 
+
+
+Errors: 1
+rc=2
+== l -slt rar50/multivol_rev.part1.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 4096 bytes (4 KiB)
+
+Listing archive: rar50/multivol_rev.part1.rar
+
+--
+Path = rar50/multivol_rev.part1.rar
+Type = Rar5
+Physical Size = 4096
+Total Physical Size = 17416
+Characteristics = Volume Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = +
+Volume Index = 0
+Volumes = 5
+
+----------
+Path = random_16k.bin
+Folder = -
+Size = 16384
+Packed Size = 16384
+Modified = 2026-04-27 05:38:48.8977302
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m0:128K
+Characteristics = Hash Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 0
+Checksum = 9df92bc9d4ed119a4dd771242a7b9a5897d4b4d1f5b322a8495912b3c14a38df
+NT Security = 
+
+rc=0
+== l -slt rar50/multivol_rev.part2.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 4096 bytes (4 KiB)
+
+Listing archive: rar50/multivol_rev.part2.rar
+
+--
+Path = rar50/multivol_rev.part2.rar
+Type = Rar5
+ERRORS:
+Headers Error
+Physical Size = 4096
+Total Physical Size = 13320
+Characteristics = Volume VolumeField Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = +
+Volume Index = 1
+Volumes = 4
+
+----------
+Path = random_16k.bin
+Folder = -
+Size = 16384
+Packed Size = 12517
+Modified = 2026-04-27 05:38:48.8977302
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = +
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m0:128K
+Characteristics = Hash Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 1
+Checksum = 9e2dd9aa81befd139e6674c6b76fdc51091f4c9278145e330f4b7e0b1e13ccc7
+NT Security = 
+
+
+Errors: 1
+rc=2
+== l -slt rar50/multivol_rev.part3.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 4096 bytes (4 KiB)
+
+Listing archive: rar50/multivol_rev.part3.rar
+
+--
+Path = rar50/multivol_rev.part3.rar
+Type = Rar5
+ERRORS:
+Headers Error
+Physical Size = 4096
+Total Physical Size = 9224
+Characteristics = Volume VolumeField Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = +
+Volume Index = 2
+Volumes = 3
+
+----------
+Path = random_16k.bin
+Folder = -
+Size = 16384
+Packed Size = 8651
+Modified = 2026-04-27 05:38:48.8977302
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = +
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m0:128K
+Characteristics = Hash Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 2
+Checksum = 7543f52e0218d09a0400fe35bfdec76bf6e44523be18d0c8dda8ac91c1dc0b10
+NT Security = 
+
+
+Errors: 1
+rc=2
+== l -slt rar50/multivol_rev.part4.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 4096 bytes (4 KiB)
+
+Listing archive: rar50/multivol_rev.part4.rar
+
+--
+Path = rar50/multivol_rev.part4.rar
+Type = Rar5
+ERRORS:
+Headers Error
+Physical Size = 4096
+Total Physical Size = 5128
+Characteristics = Volume VolumeField Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = +
+Volume Index = 3
+Volumes = 2
+
+----------
+Path = random_16k.bin
+Folder = -
+Size = 16384
+Packed Size = 4785
+Modified = 2026-04-27 05:38:48.8977302
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = +
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m0:128K
+Characteristics = Hash Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 3
+Checksum = 892e255bb90333538decb3ad4f9a738130701365d7831890210711e99de09c02
+NT Security = 
+
+
+Errors: 1
+rc=2
+== l -slt rar50/multivol_rev.part5.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1032 bytes (2 KiB)
+
+Listing archive: rar50/multivol_rev.part5.rar
+
+--
+Path = rar50/multivol_rev.part5.rar
+Type = Rar5
+ERRORS:
+Headers Error
+Physical Size = 1032
+Characteristics = Volume VolumeField Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = +
+Volume Index = 4
+Volumes = 1
+
+----------
+Path = random_16k.bin
+Folder = -
+Size = 16384
+Packed Size = 919
+Modified = 2026-04-27 05:38:48.8977302
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = +
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m0:128K
+Characteristics = Hash Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 4
+Checksum = 87cf5de0cda529a3e196031ef59f3d5658075a6fe49c3d9736950a19b3e1a881
+NT Security = 
+
+
+Errors: 1
+rc=2
+== l -slt rar50/password_aes.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 201 bytes (1 KiB)
+
+Listing archive: rar50/password_aes.rar
+
+--
+Path = rar50/password_aes.rar
+Type = Rar5
+Physical Size = 201
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m3
+Multivolume = -
+Volumes = 1
+
+----------
+Path = hello.txt
+Folder = -
+Size = 30
+Packed Size = 48
+Modified = 2026-04-27 05:22:45.6532583
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = +
+Solid = -
+Split Before = -
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m3:128K AES:15:3
+Characteristics = Crypto Hash Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 1f7c1e9ab2560a0492d3eb0860e7190c2f646a692dfa098d41dc64a0efd2df90
+NT Security = 
+
+rc=0
+== l -slt rar50/password_crc32.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 170 bytes (1 KiB)
+
+Listing archive: rar50/password_crc32.rar
+
+--
+Path = rar50/password_crc32.rar
+Type = Rar5
+Physical Size = 170
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m3
+Multivolume = -
+Volumes = 1
+
+----------
+Path = hello.txt
+Folder = -
+Size = 30
+Packed Size = 48
+Modified = 2026-04-27 05:22:47.8905377
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = +
+Solid = -
+Split Before = -
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m3:128K AES:15:3
+Characteristics = CRC Crypto Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 
+NT Security = 
+
+rc=0
+== l -slt rar50/plaintext_stored_multivol.part2.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2048 bytes (2 KiB)
+
+Listing archive: rar50/plaintext_stored_multivol.part2.rar
+
+--
+Path = rar50/plaintext_stored_multivol.part2.rar
+Type = Rar5
+ERRORS:
+Headers Error
+ERROR = Missing volume : plaintext_stored_multivol.part3.rar
+Physical Size = 2048
+Characteristics = Volume VolumeField Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = +
+Volume Index = 1
+Volumes = 1
+
+----------
+Path = stored_4k.bin
+Folder = -
+Size = 4096
+Packed Size = 1882
+Modified = 2026-08-21 18:34:13.309225880
+Created = 
+Accessed = 
+Attributes =  -rw-rw-r--
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = +
+Split After = +
+CRC = E4A4F478
+Host OS = Unix
+Method = v6:m0:128K
+Characteristics = CRC Time:uMn
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 1
+Checksum = 
+NT Security = 
+
+
+Errors: 2
+rc=2
+== l -slt rar50/solid.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 228 bytes (1 KiB)
+
+Listing archive: rar50/solid.rar
+
+--
+Path = rar50/solid.rar
+Type = Rar5
+Physical Size = 228
+Characteristics = Solid Locator QuickOpen:0
+Encrypted = -
+Solid = +
+Blocks = 1
+Method = v6:1M:m3
+Multivolume = -
+Volumes = 1
+
+----------
+Path = hello.txt
+Folder = -
+Size = 30
+Packed Size = 47
+Modified = 2026-04-27 05:23:03.4887220
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m3:1M
+Characteristics = Hash Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 2c897ab5816d5d1334595840d6ce5729076c0be247b2202dbab1b8957b919c52
+NT Security = 
+
+Path = tiny.txt
+Folder = -
+Size = 9
+Packed Size = 5
+Modified = 2026-04-27 05:23:03.4889680
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = +
+Split Before = -
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m3:1M
+Characteristics = Hash Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 920c1484c2197c1fe8549aef4289b993c88f5d0133bd20d4d6595def26d338b6
+NT Security = 
+
+rc=0
+== l -slt rar50/solid_multivol.part01.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2048 bytes (2 KiB)
+
+Listing archive: rar50/solid_multivol.part01.rar
+
+--
+Path = rar50/solid_multivol.part01.rar
+Type = Rar5
+Physical Size = 2048
+Total Physical Size = 11150
+Characteristics = Volume Solid Locator QuickOpen:0
+Encrypted = -
+Solid = +
+Blocks = 1
+Method = v6:1M:m3
+Multivolume = +
+Volume Index = 0
+Volumes = 6
+
+----------
+Path = tiny.txt
+Folder = -
+Size = 9
+Packed Size = 15
+Modified = 2026-05-04 07:33:46.3343566
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m3:1M
+Characteristics = Hash Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 0
+Checksum = 920c1484c2197c1fe8549aef4289b993c88f5d0133bd20d4d6595def26d338b6
+NT Security = 
+
+Path = bigtext_64k.bin
+Folder = -
+Size = 65536
+Packed Size = 9784
+Modified = 2026-05-04 07:33:46.3103567
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = +
+Split Before = -
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m3:1M
+Characteristics = Hash Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 0
+Checksum = 595fb1e43ccd3144f989d51c227b4ede2eea4d8e67a75b642e136dbc37ecca6e
+NT Security = 
+
+rc=0
+== l -slt rar50/solid_multivol.part02.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2048 bytes (2 KiB)
+
+Listing archive: rar50/solid_multivol.part02.rar
+
+--
+Path = rar50/solid_multivol.part02.rar
+Type = Rar5
+ERRORS:
+Headers Error
+Physical Size = 2048
+Total Physical Size = 9102
+Characteristics = Volume VolumeField Solid Locator QuickOpen:0
+Encrypted = -
+Solid = +
+Blocks = 0
+Method = v6:1M:m3
+Multivolume = +
+Volume Index = 1
+Volumes = 5
+
+----------
+Path = bigtext_64k.bin
+Folder = -
+Size = 65536
+Packed Size = 8055
+Modified = 2026-05-04 07:33:46.3103567
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = +
+Split Before = +
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m3:1M
+Characteristics = Hash Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 1
+Checksum = 0fa5a1a99dfaddc755c5d09fa6c49af786bae4d4c3ca1a8d32e4bbabc2480a24
+NT Security = 
+
+
+Errors: 1
+rc=2
+== l -slt rar50/solid_multivol.part03.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2048 bytes (2 KiB)
+
+Listing archive: rar50/solid_multivol.part03.rar
+
+--
+Path = rar50/solid_multivol.part03.rar
+Type = Rar5
+ERRORS:
+Headers Error
+Physical Size = 2048
+Total Physical Size = 7054
+Characteristics = Volume VolumeField Solid Locator QuickOpen:0
+Encrypted = -
+Solid = +
+Blocks = 0
+Method = v6:1M:m3
+Multivolume = +
+Volume Index = 2
+Volumes = 4
+
+----------
+Path = bigtext_64k.bin
+Folder = -
+Size = 65536
+Packed Size = 6240
+Modified = 2026-05-04 07:33:46.3103567
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = +
+Split Before = +
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m3:1M
+Characteristics = Hash Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 2
+Checksum = 41e0cdfeff890a4eab7e297f4bb483beda9ac2c2a036ddcfe06f62e0b310795c
+NT Security = 
+
+
+Errors: 1
+rc=2
+== l -slt rar50/solid_multivol.part04.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2048 bytes (2 KiB)
+
+Listing archive: rar50/solid_multivol.part04.rar
+
+--
+Path = rar50/solid_multivol.part04.rar
+Type = Rar5
+ERRORS:
+Headers Error
+Physical Size = 2048
+Total Physical Size = 5006
+Characteristics = Volume VolumeField Solid Locator QuickOpen:0
+Encrypted = -
+Solid = +
+Blocks = 0
+Method = v6:1M:m3
+Multivolume = +
+Volume Index = 3
+Volumes = 3
+
+----------
+Path = bigtext_64k.bin
+Folder = -
+Size = 65536
+Packed Size = 4425
+Modified = 2026-05-04 07:33:46.3103567
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = +
+Split Before = +
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m3:1M
+Characteristics = Hash Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 3
+Checksum = 6cdca346ccd4a6e286ac3ee850ea68789a0b605b73bfe31a3c40726d0e07283f
+NT Security = 
+
+
+Errors: 1
+rc=2
+== l -slt rar50/solid_multivol.part05.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2048 bytes (2 KiB)
+
+Listing archive: rar50/solid_multivol.part05.rar
+
+--
+Path = rar50/solid_multivol.part05.rar
+Type = Rar5
+ERRORS:
+Headers Error
+Physical Size = 2048
+Total Physical Size = 2958
+Characteristics = Volume VolumeField Solid Locator QuickOpen:0
+Encrypted = -
+Solid = +
+Blocks = 0
+Method = v6:1M:m3
+Multivolume = +
+Volume Index = 4
+Volumes = 2
+
+----------
+Path = bigtext_64k.bin
+Folder = -
+Size = 65536
+Packed Size = 2610
+Modified = 2026-05-04 07:33:46.3103567
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = +
+Split Before = +
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m3:1M
+Characteristics = Hash Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 4
+Checksum = 78f15f75d0745e49a6a6c3d46b2177c0b6c6d443996f0d30dc9cc531e82bdc13
+NT Security = 
+
+
+Errors: 1
+rc=2
+== l -slt rar50/solid_multivol.part06.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 910 bytes (1 KiB)
+
+Listing archive: rar50/solid_multivol.part06.rar
+
+--
+Path = rar50/solid_multivol.part06.rar
+Type = Rar5
+ERRORS:
+Headers Error
+Physical Size = 910
+Characteristics = Volume VolumeField Solid Locator QuickOpen:0
+Encrypted = -
+Solid = +
+Blocks = 0
+Method = v6:1M:m3
+Multivolume = +
+Volume Index = 5
+Volumes = 1
+
+----------
+Path = bigtext_64k.bin
+Folder = -
+Size = 65536
+Packed Size = 795
+Modified = 2026-05-04 07:33:46.3103567
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = +
+Split Before = +
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m3:1M
+Characteristics = Hash Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 5
+Checksum = c882ccda2c7386ab17fccce38f8a579748a154868efd710552a81d05e4e9c127
+NT Security = 
+
+
+Errors: 1
+rc=2
+== l -slt rar50/stored.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 103 bytes (1 KiB)
+
+Listing archive: rar50/stored.rar
+
+--
+Path = rar50/stored.rar
+Type = Rar5
+Physical Size = 103
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+
+----------
+Path = hello.txt
+Folder = -
+Size = 30
+Packed Size = 30
+Modified = 2026-04-27 05:22:29.6327904
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 83B27227
+Host OS = Windows
+Method = v6:m0:128K
+Characteristics = CRC Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 
+NT Security = 
+
+rc=0
+== l -slt rar50/stored_blake2.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 134 bytes (1 KiB)
+
+Listing archive: rar50/stored_blake2.rar
+
+--
+Path = rar50/stored_blake2.rar
+Type = Rar5
+Physical Size = 134
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+
+----------
+Path = hello.txt
+Folder = -
+Size = 30
+Packed Size = 30
+Modified = 2026-04-27 05:22:31.9062559
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m0:128K
+Characteristics = Hash Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 2c897ab5816d5d1334595840d6ce5729076c0be247b2202dbab1b8957b919c52
+NT Security = 
+
+rc=0
+== l -slt rar50/stored_multivol.part1.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2048 bytes (2 KiB)
+
+Listing archive: rar50/stored_multivol.part1.rar
+
+--
+Path = rar50/stored_multivol.part1.rar
+Type = Rar5
+Physical Size = 2048
+Total Physical Size = 4653
+Characteristics = Volume Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = +
+Volume Index = 0
+Volumes = 3
+
+----------
+Path = random_4k.bin
+Folder = -
+Size = 4096
+Packed Size = 4096
+Modified = 2026-05-04 07:33:46.2833568
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m0:128K
+Characteristics = Hash Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 0
+Checksum = 7fbc6c1da8b80e5466a6d3841510a487471b1ce0ff994beb01f98963643ff494
+NT Security = 
+
+rc=0
+== l -slt rar50/stored_multivol.part2.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2048 bytes (2 KiB)
+
+Listing archive: rar50/stored_multivol.part2.rar
+
+--
+Path = rar50/stored_multivol.part2.rar
+Type = Rar5
+ERRORS:
+Headers Error
+Physical Size = 2048
+Total Physical Size = 2605
+Characteristics = Volume VolumeField Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = +
+Volume Index = 1
+Volumes = 2
+
+----------
+Path = random_4k.bin
+Folder = -
+Size = 4096
+Packed Size = 2271
+Modified = 2026-05-04 07:33:46.2833568
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = +
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m0:128K
+Characteristics = Hash Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 1
+Checksum = defc4dbff01216023e57ddc89e2b01446b9b56ee9b61ca530ce74349ce78d822
+NT Security = 
+
+
+Errors: 1
+rc=2
+== l -slt rar50/stored_multivol.part3.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 557 bytes (1 KiB)
+
+Listing archive: rar50/stored_multivol.part3.rar
+
+--
+Path = rar50/stored_multivol.part3.rar
+Type = Rar5
+ERRORS:
+Headers Error
+Physical Size = 557
+Characteristics = Volume VolumeField Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = +
+Volume Index = 2
+Volumes = 1
+
+----------
+Path = random_4k.bin
+Folder = -
+Size = 4096
+Packed Size = 447
+Modified = 2026-05-04 07:33:46.2833568
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = +
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m0:128K
+Characteristics = Hash Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 2
+Checksum = e7fa8cfde49e0c97e800a8bf7c1b1866327d4f011779e2776252a8242084b958
+NT Security = 
+
+
+Errors: 1
+rc=2
+== l -slt rar50/subdata_size_underflow.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 370 bytes (1 KiB)
+
+Listing archive: rar50/subdata_size_underflow.rar
+
+--
+Path = rar50/subdata_size_underflow.rar
+Type = Rar5
+Physical Size = 370
+Characteristics = Recovery Locator QuickOpen:0 Recovery:121
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+
+----------
+Path = hello.txt
+Folder = -
+Size = 30
+Packed Size = 30
+Modified = 2026-04-27 05:22:54.7965676
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m0:128K
+Characteristics = Hash Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 2c897ab5816d5d1334595840d6ce5729076c0be247b2202dbab1b8957b919c52
+NT Security = 
+
+rc=0
+== l -slt rar50/wild/hardlink.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 122 bytes (1 KiB)
+
+Listing archive: rar50/wild/hardlink.rar
+
+--
+Path = rar50/wild/hardlink.rar
+Type = Rar5
+Physical Size = 122
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 2
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+
+----------
+Path = file.txt
+Folder = -
+Size = 5
+Packed Size = 5
+Modified = 2019-04-17 20:31:52
+Created = 
+Accessed = 
+Attributes =  -rw-r--r--
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 7D931721
+Host OS = Unix
+Method = v6:m0:128K
+Characteristics = UnixTime CRC
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 
+NT Security = 
+
+Path = hardlink.txt
+Folder = -
+Size = 5
+Packed Size = 0
+Modified = 2019-04-17 20:31:52
+Created = 
+Accessed = 
+Attributes =  -rw-r--r--
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 00000000
+Host OS = Unix
+Method = v6:m0:128K
+Characteristics = UnixTime CRC Link:HardLink
+Symbolic Link = 
+Hard Link = file.txt
+Copy Link = 
+Volume Index = 
+Checksum = 
+NT Security = 
+
+rc=0
+== l -slt rar50/wild/invalid_hash_valid_htime_exfld.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 120 bytes (1 KiB)
+
+Listing archive: rar50/wild/invalid_hash_valid_htime_exfld.rar
+
+--
+Path = rar50/wild/invalid_hash_valid_htime_exfld.rar
+Type = Rar5
+ERRORS:
+Headers Error
+Physical Size = 120
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+
+----------
+Path = file.txt
+Folder = -
+Size = 49
+Packed Size = 49
+Modified = 
+Created = 
+Accessed = 
+Attributes =  -rwxr-xr-x
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 98421446
+Host OS = Unix
+Method = v6:m0:128K
+Characteristics = CRC Hash Time:
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 
+NT Security = 
+
+
+Errors: 1
+rc=2
+== l -slt rar50/wild/libarchive_loop_bug.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 8346 bytes (9 KiB)
+
+Listing archive: rar50/wild/libarchive_loop_bug.rar
+
+--
+Path = rar50/wild/libarchive_loop_bug.rar
+Type = Rar5
+ERRORS:
+Headers Error
+Physical Size = 8346
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m3
+Multivolume = -
+Volumes = 1
+
+----------
+Path = a
+Folder = -
+Size = 196608
+Packed Size = 8304
+Modified = 
+Created = 
+Accessed = 
+Attributes = 
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m3:128K
+Characteristics = 
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 
+NT Security = 
+
+
+Errors: 1
+rc=2
+== l -slt rar50/wild/libarchive_multiple_files_solid.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 677 bytes (1 KiB)
+
+Listing archive: rar50/wild/libarchive_multiple_files_solid.rar
+
+--
+Path = rar50/wild/libarchive_multiple_files_solid.rar
+Type = Rar5
+Physical Size = 677
+Characteristics = Solid Locator QuickOpen:0
+Encrypted = -
+Solid = +
+Blocks = 1
+Method = v6:1M:m5
+Multivolume = -
+Volumes = 1
+
+----------
+Path = test1.bin
+Folder = -
+Size = 4096
+Packed Size = 377
+Modified = 2018-09-27 04:41:11.278813210
+Created = 
+Accessed = 
+Attributes =  -rw-r--r--
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 7E13B2C6
+Host OS = Unix
+Method = v6:m5:1M
+Characteristics = CRC Time:uMn
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 
+NT Security = 
+
+Path = test2.bin
+Folder = -
+Size = 4096
+Packed Size = 25
+Modified = 2018-09-27 04:41:30.393434157
+Created = 
+Accessed = 
+Attributes =  -rw-r--r--
+Alternate Stream = -
+Encrypted = -
+Solid = +
+Split Before = -
+Split After = -
+CRC = F166AFCB
+Host OS = Unix
+Method = v6:m5:1M
+Characteristics = CRC Time:uMn
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 
+NT Security = 
+
+Path = test3.bin
+Folder = -
+Size = 4096
+Packed Size = 42
+Modified = 2018-09-27 04:41:34.050347472
+Created = 
+Accessed = 
+Attributes =  -rw-r--r--
+Alternate Stream = -
+Encrypted = -
+Solid = +
+Split Before = -
+Split After = -
+CRC = 9FB123D9
+Host OS = Unix
+Method = v6:m5:1M
+Characteristics = CRC Time:uMn
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 
+NT Security = 
+
+Path = test4.bin
+Folder = -
+Size = 4096
+Packed Size = 25
+Modified = 2018-09-27 04:41:37.303900321
+Created = 
+Accessed = 
+Attributes =  -rw-r--r--
+Alternate Stream = -
+Encrypted = -
+Solid = +
+Split Before = -
+Split After = -
+CRC = 10C43ED4
+Host OS = Unix
+Method = v6:m5:1M
+Characteristics = CRC Time:uMn
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 
+NT Security = 
+
+rc=0
+== l -slt rar50/wild/libarchive_solid.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1050 bytes (2 KiB)
+
+Listing archive: rar50/wild/libarchive_solid.rar
+
+--
+Path = rar50/wild/libarchive_solid.rar
+Type = Rar5
+Physical Size = 1050
+Characteristics = Solid Locator QuickOpen:0
+Encrypted = -
+Solid = +
+Blocks = 1
+Method = v6:1M:m5
+Multivolume = -
+Volumes = 1
+
+----------
+Path = test.bin
+Folder = -
+Size = 1200
+Packed Size = 423
+Modified = 2018-09-27 04:07:39.514660600
+Created = 
+Accessed = 
+Attributes =  -rw-r--r--
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 7CCA70CD
+Host OS = Unix
+Method = v6:m5:1M
+Characteristics = CRC Time:uMn
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 
+NT Security = 
+
+Path = test1.bin
+Folder = -
+Size = 4096
+Packed Size = 129
+Modified = 2018-09-27 04:41:11.278813210
+Created = 
+Accessed = 
+Attributes =  -rw-r--r--
+Alternate Stream = -
+Encrypted = -
+Solid = +
+Split Before = -
+Split After = -
+CRC = 7E13B2C6
+Host OS = Unix
+Method = v6:m5:1M
+Characteristics = CRC Time:uMn
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 
+NT Security = 
+
+Path = test2.bin
+Folder = -
+Size = 4096
+Packed Size = 24
+Modified = 2018-09-27 04:41:30.393434157
+Created = 
+Accessed = 
+Attributes =  -rw-r--r--
+Alternate Stream = -
+Encrypted = -
+Solid = +
+Split Before = -
+Split After = -
+CRC = F166AFCB
+Host OS = Unix
+Method = v6:m5:1M
+Characteristics = CRC Time:uMn
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 
+NT Security = 
+
+Path = test3.bin
+Folder = -
+Size = 4096
+Packed Size = 41
+Modified = 2018-09-27 04:41:34.050347472
+Created = 
+Accessed = 
+Attributes =  -rw-r--r--
+Alternate Stream = -
+Encrypted = -
+Solid = +
+Split Before = -
+Split After = -
+CRC = 9FB123D9
+Host OS = Unix
+Method = v6:m5:1M
+Characteristics = CRC Time:uMn
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 
+NT Security = 
+
+Path = test4.bin
+Folder = -
+Size = 4096
+Packed Size = 24
+Modified = 2018-09-27 04:41:37.303900321
+Created = 
+Accessed = 
+Attributes =  -rw-r--r--
+Alternate Stream = -
+Encrypted = -
+Solid = +
+Split Before = -
+Split After = -
+CRC = 10C43ED4
+Host OS = Unix
+Method = v6:m5:1M
+Characteristics = CRC Time:uMn
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 
+NT Security = 
+
+Path = test5.bin
+Folder = -
+Size = 4096
+Packed Size = 46
+Modified = 2018-09-27 05:15:08.273011739
+Created = 
+Accessed = 
+Attributes =  -rw-r--r--
+Alternate Stream = -
+Encrypted = -
+Solid = +
+Split Before = -
+Split After = -
+CRC = B9D155F2
+Host OS = Unix
+Method = v6:m5:1M
+Characteristics = CRC Time:uMn
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 
+NT Security = 
+
+Path = test6.bin
+Folder = -
+Size = 4096
+Packed Size = 24
+Modified = 2018-09-27 05:15:11.399806267
+Created = 
+Accessed = 
+Attributes =  -rw-r--r--
+Alternate Stream = -
+Encrypted = -
+Solid = +
+Split Before = -
+Split After = -
+CRC = 36A448FF
+Host OS = Unix
+Method = v6:m5:1M
+Characteristics = CRC Time:uMn
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 
+NT Security = 
+
+rc=0
+== l -slt rar50/wild/rarfile_hlink.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 230 bytes (1 KiB)
+
+Listing archive: rar50/wild/rarfile_hlink.rar
+
+--
+Path = rar50/wild/rarfile_hlink.rar
+Type = Rar5
+Physical Size = 230
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 3
+Method = v6:128K:m0:m3
+Multivolume = -
+Volumes = 1
+
+----------
+Path = stest1.txt
+Folder = -
+Size = 2048
+Packed Size = 55
+Modified = 2011-06-12 09:53:33
+Created = 
+Accessed = 
+Attributes =  -rw-rw-r--
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = C5B7E6A2
+Host OS = Unix
+Method = v6:m3:128K
+Characteristics = UnixTime CRC
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 
+NT Security = 
+
+Path = stest2.txt
+Folder = -
+Size = 2048
+Packed Size = 0
+Modified = 2011-06-12 09:53:33
+Created = 
+Accessed = 
+Attributes =  -rw-rw-r--
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 00000000
+Host OS = Unix
+Method = v6:m0:128K
+Characteristics = UnixTime CRC Link:HardLink
+Symbolic Link = 
+Hard Link = stest1.txt
+Copy Link = 
+Volume Index = 
+Checksum = 
+NT Security = 
+
+Path = stest3.txt
+Folder = -
+Size = 2048
+Packed Size = 0
+Modified = 2011-06-12 09:53:33
+Created = 
+Accessed = 
+Attributes =  -rw-rw-r--
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 00000000
+Host OS = Unix
+Method = v6:m0:128K
+Characteristics = UnixTime CRC Link:HardLink
+Symbolic Link = 
+Hard Link = stest1.txt
+Copy Link = 
+Volume Index = 
+Checksum = 
+NT Security = 
+
+rc=0
+== l -slt rar50/wild/rarfile_solid.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 169 bytes (1 KiB)
+
+Listing archive: rar50/wild/rarfile_solid.rar
+
+--
+Path = rar50/wild/rarfile_solid.rar
+Type = Rar5
+Physical Size = 169
+Characteristics = Solid Locator QuickOpen:0
+Encrypted = -
+Solid = +
+Blocks = 1
+Method = v6:1M:m3
+Multivolume = -
+Volumes = 1
+
+----------
+Path = stest1.txt
+Folder = -
+Size = 2048
+Packed Size = 58
+Modified = 
+Created = 
+Accessed = 
+Attributes =  -rw-rw-rw-
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = C5B7E6A2
+Host OS = Unix
+Method = v6:m3:1M
+Characteristics = CRC
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 
+NT Security = 
+
+Path = stest2.txt
+Folder = -
+Size = 2048
+Packed Size = 13
+Modified = 
+Created = 
+Accessed = 
+Attributes =  -rw-rw-rw-
+Alternate Stream = -
+Encrypted = -
+Solid = +
+Split Before = -
+Split After = -
+CRC = C5B7E6A2
+Host OS = Unix
+Method = v6:m3:1M
+Characteristics = CRC
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 
+NT Security = 
+
+rc=0
+== l -slt rar50/wild/rarfile_solid_qo.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 508 bytes (1 KiB)
+
+Listing archive: rar50/wild/rarfile_solid_qo.rar
+
+--
+Path = rar50/wild/rarfile_solid_qo.rar
+Type = Rar5
+Physical Size = 508
+Characteristics = Solid Locator QuickOpen:275
+Encrypted = -
+Solid = +
+Blocks = 1
+Method = v6:1M:m3
+Multivolume = -
+Volumes = 1
+
+----------
+Path = somedir/stest1.txt
+Folder = -
+Size = 2048
+Packed Size = 59
+Modified = 2016-05-22 09:48:36
+Created = 
+Accessed = 
+Attributes =  -rw-r--r--
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = C5B7E6A2
+Host OS = Unix
+Method = v6:m3:1M
+Characteristics = UnixTime CRC
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 
+NT Security = 
+
+Path = stest1.txt
+Folder = -
+Size = 2048
+Packed Size = 12
+Modified = 2011-06-12 09:53:33
+Created = 
+Accessed = 
+Attributes =  -rw-r--r--
+Alternate Stream = -
+Encrypted = -
+Solid = +
+Split Before = -
+Split After = -
+CRC = C5B7E6A2
+Host OS = Unix
+Method = v6:m3:1M
+Characteristics = UnixTime CRC
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 
+NT Security = 
+
+Path = somedir/stest2.txt
+Folder = -
+Size = 2048
+Packed Size = 12
+Modified = 2016-05-22 09:48:36
+Created = 
+Accessed = 
+Attributes =  -rw-r--r--
+Alternate Stream = -
+Encrypted = -
+Solid = +
+Split Before = -
+Split After = -
+CRC = C5B7E6A2
+Host OS = Unix
+Method = v6:m3:1M
+Characteristics = UnixTime CRC
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 
+NT Security = 
+
+Path = stest2.txt
+Folder = -
+Size = 2048
+Packed Size = 12
+Modified = 2011-06-12 09:53:33
+Created = 
+Accessed = 
+Attributes =  -rw-r--r--
+Alternate Stream = -
+Encrypted = -
+Solid = +
+Split Before = -
+Split After = -
+CRC = C5B7E6A2
+Host OS = Unix
+Method = v6:m3:1M
+Characteristics = UnixTime CRC
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 
+NT Security = 
+
+rc=0
+== l -slt rar50/wild/symlink.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 190 bytes (1 KiB)
+
+Listing archive: rar50/wild/symlink.rar
+
+--
+Path = rar50/wild/symlink.rar
+Type = Rar5
+Physical Size = 190
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 4
+Method = v6:32M:m0
+Multivolume = -
+Volumes = 1
+
+----------
+Path = file.txt
+Folder = -
+Size = 5
+Packed Size = 5
+Modified = 2019-04-17 20:31:52
+Created = 
+Accessed = 
+Attributes =  -rw-r--r--
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 7D931721
+Host OS = Unix
+Method = v6:m0:32M
+Characteristics = UnixTime CRC
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 
+NT Security = 
+
+Path = symlink.txt
+Folder = -
+Size = 8
+Packed Size = 0
+Modified = 2019-04-17 20:32:23
+Created = 
+Accessed = 
+Attributes =  lrwxr-xr-x
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 00000000
+Host OS = Unix
+Method = v6:m0:32M
+Characteristics = UnixTime CRC Link:UnixSymLink
+Symbolic Link = file.txt
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 
+NT Security = 
+
+Path = dirlink
+Folder = -
+Size = 3
+Packed Size = 0
+Modified = 2019-04-17 21:10:33
+Created = 
+Accessed = 
+Attributes =  lrwxr-xr-x
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 00000000
+Host OS = Unix
+Method = v6:m0:32M
+Characteristics = UnixTime CRC Link:UnixSymLink:D
+Symbolic Link = dir
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 
+NT Security = 
+
+Path = dir
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2019-04-17 21:10:30
+Created = 
+Accessed = 
+Attributes = D drwxr-xr-x
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 00000000
+Host OS = Unix
+Method = v6:m0
+Characteristics = Dir UnixTime CRC
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 
+NT Security = 
+
+rc=0
+== l -slt rar50/with_all_services.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1002 bytes (1 KiB)
+
+Listing archive: rar50/with_all_services.rar
+
+--
+Path = rar50/with_all_services.rar
+Type = Rar5
+Physical Size = 1002
+Characteristics = Recovery Locator QuickOpen:256 Recovery:437 Comment
+Encrypted = -
+Solid = -
+Blocks = 2
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+Comment = 
+{
+This is the archive comment.
+}
+
+----------
+Path = hello.txt
+Folder = -
+Size = 30
+Packed Size = 30
+Modified = 2026-04-27 05:22:59.0321825
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m0:128K
+Characteristics = Hash Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 2c897ab5816d5d1334595840d6ce5729076c0be247b2202dbab1b8957b919c52
+NT Security = 
+
+Path = tiny.txt
+Folder = -
+Size = 9
+Packed Size = 9
+Modified = 2026-04-27 05:22:59.0323705
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m0:128K
+Characteristics = Hash Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 920c1484c2197c1fe8549aef4289b993c88f5d0133bd20d4d6595def26d338b6
+NT Security = 
+
+rc=0
+== l -slt rar50/with_comment.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 188 bytes (1 KiB)
+
+Listing archive: rar50/with_comment.rar
+
+--
+Path = rar50/with_comment.rar
+Type = Rar5
+Physical Size = 188
+Characteristics = Locator QuickOpen:0 Comment
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+Comment = 
+{
+This is the archive comment.
+}
+
+----------
+Path = hello.txt
+Folder = -
+Size = 30
+Packed Size = 30
+Modified = 2026-04-27 05:22:52.5693428
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m0:128K
+Characteristics = Hash Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 2c897ab5816d5d1334595840d6ce5729076c0be247b2202dbab1b8957b919c52
+NT Security = 
+
+rc=0
+== l -slt rar50/with_quickopen.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 396 bytes (1 KiB)
+
+Listing archive: rar50/with_quickopen.rar
+
+--
+Path = rar50/with_quickopen.rar
+Type = Rar5
+Physical Size = 396
+Characteristics = Locator QuickOpen:199
+Encrypted = -
+Solid = -
+Blocks = 2
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+
+----------
+Path = hello.txt
+Folder = -
+Size = 30
+Packed Size = 30
+Modified = 2026-04-27 05:22:56.9964180
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m0:128K
+Characteristics = Hash Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 2c897ab5816d5d1334595840d6ce5729076c0be247b2202dbab1b8957b919c52
+NT Security = 
+
+Path = tiny.txt
+Folder = -
+Size = 9
+Packed Size = 9
+Modified = 2026-04-27 05:22:56.9967701
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m0:128K
+Characteristics = Hash Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 920c1484c2197c1fe8549aef4289b993c88f5d0133bd20d4d6595def26d338b6
+NT Security = 
+
+rc=0
+== l -slt rar50/with_recovery.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 370 bytes (1 KiB)
+
+Listing archive: rar50/with_recovery.rar
+
+--
+Path = rar50/with_recovery.rar
+Type = Rar5
+Physical Size = 370
+Characteristics = Recovery Locator QuickOpen:0 Recovery:121
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+
+----------
+Path = hello.txt
+Folder = -
+Size = 30
+Packed Size = 30
+Modified = 2026-04-27 05:22:54.7965676
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m0:128K
+Characteristics = Hash Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 2c897ab5816d5d1334595840d6ce5729076c0be247b2202dbab1b8957b919c52
+NT Security = 
+
+rc=0
+== l -slt rar50/zero_fill_out_of_window.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 148 bytes (1 KiB)
+
+Listing archive: rar50/zero_fill_out_of_window.rar
+
+--
+Path = rar50/zero_fill_out_of_window.rar
+Type = Rar5
+Physical Size = 148
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m3
+Multivolume = -
+Volumes = 1
+
+----------
+Path = zerofill.bin
+Folder = -
+Size = 240
+Packed Size = 50
+Modified = 2026-08-21 00:17:44
+Created = 
+Accessed = 
+Attributes =  -rw-rw-r--
+Alternate Stream = -
+Encrypted = -
+Solid = -
+Split Before = -
+Split After = -
+CRC = FF5921F9
+Host OS = Unix
+Method = v6:m3:128K
+Characteristics = UnixTime CRC Hash
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = f453200be9fda9e39a805ea1ce5579e1f3847bc86625c83d3ce919b2d14cadb1
+NT Security = 
+
+rc=0
+== l -slt rar50/zeroed_password_check.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 211 bytes (1 KiB)
+
+Listing archive: rar50/zeroed_password_check.rar
+
+--
+Path = rar50/zeroed_password_check.rar
+Type = Rar5
+Physical Size = 211
+Characteristics = Locator QuickOpen:0 Comment
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+Comment = 
+{
+an archive comment
+}
+
+----------
+Path = s.txt
+Folder = -
+Size = 34
+Packed Size = 48
+Modified = 2026-08-21 18:22:59.435455017
+Created = 
+Accessed = 
+Attributes =  -rw-rw-r--
+Alternate Stream = -
+Encrypted = +
+Solid = -
+Split Before = -
+Split After = -
+CRC = 
+Host OS = Unix
+Method = v6:m0:128K AES:15:3
+Characteristics = CRC Crypto Time:uMn
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 
+NT Security = 
+
+rc=0
+== l rar50/multivol.part1.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2048 bytes (2 KiB)
+
+Listing archive: rar50/multivol.part1.rar
+
+--
+Path = rar50/multivol.part1.rar
+Type = Rar5
+Physical Size = 2048
+Total Physical Size = 4705
+Characteristics = Volume Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m3
+Multivolume = +
+Volume Index = 0
+Volumes = 3
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+2026-04-27 05:23:05 ....A         4096         4148  random_4k.bin
+------------------- ----- ------------ ------------  ------------------------
+2026-04-27 05:23:05               4096         4148  1 files
+
+------------------- ----- ------------ ------------  ------------------------
+2026-04-27 05:23:05               4096         4148  1 files
+
+Archives: 1
+Volumes: 3
+Total archives size: 4705
+rc=0
+== l rar50/multivol.part2.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2048 bytes (2 KiB)
+
+Listing archive: rar50/multivol.part2.rar
+
+--
+Path = rar50/multivol.part2.rar
+Type = Rar5
+ERRORS:
+Headers Error
+Physical Size = 2048
+Total Physical Size = 2657
+Characteristics = Volume VolumeField Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m3
+Multivolume = +
+Volume Index = 1
+Volumes = 2
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+2026-04-27 05:23:05 ....A         4096         2323  random_4k.bin
+------------------- ----- ------------ ------------  ------------------------
+2026-04-27 05:23:05               4096         2323  1 files
+
+------------------- ----- ------------ ------------  ------------------------
+2026-04-27 05:23:05               4096         2323  1 files
+
+Archives: 1
+Volumes: 2
+Total archives size: 2657
+
+Errors: 1
+rc=2
+== l rar50/solid_multivol.part01.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2048 bytes (2 KiB)
+
+Listing archive: rar50/solid_multivol.part01.rar
+
+--
+Path = rar50/solid_multivol.part01.rar
+Type = Rar5
+Physical Size = 2048
+Total Physical Size = 11150
+Characteristics = Volume Solid Locator QuickOpen:0
+Encrypted = -
+Solid = +
+Blocks = 1
+Method = v6:1M:m3
+Multivolume = +
+Volume Index = 0
+Volumes = 6
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+2026-05-04 07:33:46 ....A            9           15  tiny.txt
+2026-05-04 07:33:46 ....A        65536         9784  bigtext_64k.bin
+------------------- ----- ------------ ------------  ------------------------
+2026-05-04 07:33:46              65545         9799  2 files
+
+------------------- ----- ------------ ------------  ------------------------
+2026-05-04 07:33:46              65545         9799  2 files
+
+Archives: 1
+Volumes: 6
+Total archives size: 11150
+rc=0
+== l rar50/plaintext_stored_multivol.part2.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2048 bytes (2 KiB)
+
+Listing archive: rar50/plaintext_stored_multivol.part2.rar
+
+--
+Path = rar50/plaintext_stored_multivol.part2.rar
+Type = Rar5
+ERRORS:
+Headers Error
+ERROR = Missing volume : plaintext_stored_multivol.part3.rar
+Physical Size = 2048
+Characteristics = Volume VolumeField Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = +
+Volume Index = 1
+Volumes = 1
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+2026-08-21 18:34:13 .....         4096         1882  stored_4k.bin
+------------------- ----- ------------ ------------  ------------------------
+2026-08-21 18:34:13               4096         1882  1 files
+
+Errors: 2
+rc=2
+== l golden/stored_volume_0.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1594 bytes (2 KiB)
+
+Listing archive: golden/stored_volume_0.rar
+
+--
+Path = golden/stored_volume_0.rar
+Type = Rar5
+Physical Size = 1594
+Total Physical Size = 5376
+Characteristics = Volume VolumeField
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = +
+Volume Index = 0
+Volumes = 4
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+2012-07-13 11:01:20 ....A         5000         5000  split.bin
+------------------- ----- ------------ ------------  ------------------------
+2012-07-13 11:01:20               5000         5000  1 files
+
+------------------- ----- ------------ ------------  ------------------------
+2012-07-13 11:01:20               5000         5000  1 files
+
+Archives: 1
+Volumes: 4
+Total archives size: 5376
+rc=0
+== l rar50/with_comment.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 188 bytes (1 KiB)
+
+Listing archive: rar50/with_comment.rar
+
+--
+Path = rar50/with_comment.rar
+Type = Rar5
+Physical Size = 188
+Characteristics = Locator QuickOpen:0 Comment
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+Comment = 
+{
+This is the archive comment.
+}
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+2026-04-27 05:22:52 ....A           30           30  hello.txt
+------------------- ----- ------------ ------------  ------------------------
+2026-04-27 05:22:52                 30           30  1 files
+rc=0
+== l, a set's volumes named together: the later ones are read with the first
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+3 files, 4705 bytes (5 KiB)
+
+Listing archive: rar50/multivol.part1.rar
+
+--
+Path = rar50/multivol.part1.rar
+Type = Rar5
+Physical Size = 2048
+Total Physical Size = 4705
+Characteristics = Volume Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m3
+Multivolume = +
+Volume Index = 0
+Volumes = 3
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+2026-04-27 05:23:05 ....A         4096         4148  random_4k.bin
+------------------- ----- ------------ ------------  ------------------------
+2026-04-27 05:23:05               4096         4148  1 files
+
+------------------- ----- ------------ ------------  ------------------------
+2026-04-27 05:23:05               4096         4148  1 files
+
+Archives: 1
+Volumes: 3
+Total archives size: 4705
+rc=0
+== encrypted headers, with the password
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 302 bytes (1 KiB)
+
+Listing archive: rar50/header_encrypted.rar
+
+--
+Path = rar50/header_encrypted.rar
+Type = Rar5
+Physical Size = 302
+Characteristics = Locator QuickOpen:0
+Encrypted = +
+Solid = -
+Blocks = 1
+Method = v6:128K:m3
+Multivolume = -
+Volumes = 1
+
+----------
+Path = hello.txt
+Folder = -
+Size = 30
+Packed Size = 48
+Modified = 2026-04-27 05:22:50.1264952
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = +
+Solid = -
+Split Before = -
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m3:128K AES:15:1
+Characteristics = Crypto Hash Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 2c897ab5816d5d1334595840d6ce5729076c0be247b2202dbab1b8957b919c52
+NT Security = 
+
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 462 bytes (1 KiB)
+
+Listing archive: rar50/header_encrypted_comment.rar
+
+--
+Path = rar50/header_encrypted_comment.rar
+Type = Rar5
+Physical Size = 462
+Characteristics = Locator QuickOpen:0 Comment
+Encrypted = +
+Solid = -
+Blocks = 1
+Method = v6:128K:m3
+Multivolume = -
+Volumes = 1
+Comment = 
+{
+Encrypted archive comment fixture.
+}
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+2026-05-04 07:56:00 ....A           40           64  hello.txt
+------------------- ----- ------------ ------------  ------------------------
+2026-05-04 07:56:00                 40           64  1 files
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2048 bytes (2 KiB)
+
+Listing archive: rar50/header_encrypted_stored_multivol.part1.rar
+
+--
+Path = rar50/header_encrypted_stored_multivol.part1.rar
+Type = Rar5
+Physical Size = 2048
+Total Physical Size = 5358
+Characteristics = Volume Locator QuickOpen:0
+Encrypted = +
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = +
+Volume Index = 0
+Volumes = 3
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+2026-08-21 18:34:13 .....         4096         4096  stored_4k.bin
+------------------- ----- ------------ ------------  ------------------------
+2026-08-21 18:34:13               4096         4096  1 files
+
+------------------- ----- ------------ ------------  ------------------------
+2026-08-21 18:34:13               4096         4096  1 files
+
+Archives: 1
+Volumes: 3
+Total archives size: 5358
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 8702 bytes (9 KiB)
+
+Listing archive: rar50/winrar721_header_encrypted_quickopen.rar
+
+--
+Path = rar50/winrar721_header_encrypted_quickopen.rar
+Type = Rar5
+Physical Size = 8702
+Characteristics = Locator QuickOpen:8368
+Encrypted = +
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+
+----------
+Path = tmp/rars-threshold2-8191/random.bin
+Folder = -
+Size = 8191
+Packed Size = 8192
+Modified = 2026-06-30 09:50:10.5834730
+Created = 
+Accessed = 
+Attributes = A
+Alternate Stream = -
+Encrypted = +
+Solid = -
+Split Before = -
+Split After = -
+CRC = 
+Host OS = Windows
+Method = v6:m0:128K AES:15:1
+Characteristics = CRC Crypto Time:M
+Symbolic Link = 
+Hard Link = 
+Copy Link = 
+Volume Index = 
+Checksum = 
+NT Security = 
+
+rc=0
+== a wrong password
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 302 bytes (1 KiB)
+
+Listing archive: rar50/header_encrypted.rar
+
+
+Errors: 1
+
+ERROR: rar50/header_encrypted.rar : Cannot open encrypted archive. Wrong password?
+
+
+rc=2
+== none, and none to type
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 302 bytes (1 KiB)
+
+Listing archive: rar50/header_encrypted.rar
+
+
+Enter password (will not be echoed):
+
+
+Break signaled
+rc=255
+== l x.rar, which is not one
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 15 bytes (1 KiB)
+
+Listing archive: x.rar
+
+
+Errors: 1
+
+ERROR: x.rar : Cannot open the file as archive
+
+
+rc=2
+== l x.r00, which is not one
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 15 bytes (1 KiB)
+
+Listing archive: x.r00
+
+
+Errors: 1
+
+ERROR: x.r00 : Cannot open the file as archive
+
+
+rc=2
+== l x.r01, which is not one
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 15 bytes (1 KiB)
+
+Listing archive: x.r01
+
+
+Errors: 1
+
+ERROR: x.r01 : x.r01
+Open ERROR: Cannot open the file as [Rar] archive
+
+
+ERRORS:
+Is not archive
+
+rc=2
+== l x.part1.rar, which is not one
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 15 bytes (1 KiB)
+
+Listing archive: x.part1.rar
+
+
+Errors: 1
+
+ERROR: x.part1.rar : Cannot open the file as archive
+
+
+rc=2

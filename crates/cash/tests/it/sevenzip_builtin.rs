@@ -43,6 +43,18 @@ fn seven_z_reads_and_writes_the_other_formats_as_7_zip_26_03_does() {
 }
 
 #[test]
+fn seven_z_lists_rar_as_7_zip_26_03_does() {
+    // cash's own banner, in 7-Zip's place.
+    let expected = with_divergence(
+        &golden("7z_rar"),
+        "7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03\n",
+        "7-Zip (cash) : 7-Zip 26.03's options, in pure Rust\n",
+        86,
+    );
+    assert_eq!(run_oracle_script("7z_rar"), expected);
+}
+
+#[test]
 fn seven_za_is_the_same_command_under_its_own_name() {
     let out = run("7za | sed -n 4p; 7z | sed -n 4p");
     assert_eq!(

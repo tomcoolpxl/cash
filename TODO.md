@@ -626,12 +626,16 @@ not used.
 
 rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
 
-1. **`7z l`, `t`, `x`, `e` on `.rar`**: 7-Zip's listing properties and words for RAR,
-   solid archives, volumes (`.part1.rar`, `.r00`: a naming function in cash-archive's
-   `volumes` beside `numbered`, the files read through its `Spanned` where rars takes
-   one stream), encrypted headers and data, checked
-   against Scoop's 7-Zip with an oracle as for 7z. `7z a` on a `.rar` name refuses as
-   7-Zip does.
+1. **`7z l`, `t`, `x`, `e` on `.rar`**, as 7-Zip 26.03's `Rar5Handler.cpp` and
+   `RarHandler.cpp` do (their sources in the scratchpad's `7zsrc`, fetched with the
+   user's leave on 2026-10-07). `l` on RAR 5 and 7 is in (`sevenzip/rar7`: the headers,
+   volumes by `RarVol.h`'s naming, encrypted headers and comments, every `-slt`
+   property; `7z_rar.sh` checks it against 7-Zip on 69 of rars' fixtures). Left:
+   RAR 1.5 to 4's listing; `t`, `x` and `e` (the data through rar's decoders, solid
+   streams, split items, encryption and the checks 7-Zip makes, copy links); alternate
+   streams (`STM`) and ACLs, whose `NT Security` 7-Zip shows as the descriptor's SDDL
+   text; an SFX's archive inside its `.exe` (7-Zip opens an `.exe` as PE first, which
+   cash's 7z does not read). `7z a` on a `.rar` name refuses as 7-Zip does.
 2. **`rar` and `unrar` builtins** with RARLAB's console interface, reading and writing:
    a family of their own, so a shared design in `research/` and a pick list before any
    code (what of `rar`'s switches, which RAR generation by default, the oracle: WinRAR's
@@ -650,6 +654,12 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
 
 ## Found along the way
 
+- **7z's times and 7-Zip's differ by an hour across daylight saving** (found on
+  2026-10-07 with a RAR's November creation time): 7-Zip turns every UTC time into local
+  time with `FileTimeToLocalFileTime`, the offset of the day it runs, where cash's 7z
+  uses the zone's rules for the time's own date. Written down in the page's notes; the
+  oracles run cash in UTC and take 7-Zip's times back by the day's offset. Whether 7z
+  should follow 7-Zip here is **yours**.
 - **A benchmark of 1.10.0's compressors** (the user asked, 2026-10-07; best of two runs,
   one tool at a time, a 19 MB tar of the sources and the 51 MB `cash.exe`, against
   Scoop's programs and WSL2's). Ahead: gzip (0.09 s against 0.4–0.5 s, 0.3 s against

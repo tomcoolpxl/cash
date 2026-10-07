@@ -22,6 +22,7 @@ mod links;
 mod list;
 mod methods;
 mod percent;
+mod rar7;
 mod scan;
 mod streams;
 mod tar7;

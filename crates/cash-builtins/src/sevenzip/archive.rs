@@ -20,6 +20,10 @@ pub(super) enum Kind {
     Xz,
     Zstd,
     Lzma,
+    /// RAR 1.5 to 4.
+    Rar,
+    /// RAR 5 and 7.
+    Rar5,
 }
 
 impl Kind {
@@ -34,6 +38,8 @@ impl Kind {
             "xz" => Self::Xz,
             "zstd" | "zst" => Self::Zstd,
             "lzma" => Self::Lzma,
+            "rar" => Self::Rar,
+            "rar5" => Self::Rar5,
             _ => return None,
         })
     }
@@ -49,6 +55,8 @@ impl Kind {
             Self::Xz => "xz",
             Self::Zstd => "zstd",
             Self::Lzma => "lzma",
+            Self::Rar => "Rar",
+            Self::Rar5 => "Rar5",
         }
     }
 
@@ -63,12 +71,13 @@ impl Kind {
             Self::Xz => "xz",
             Self::Zstd => "zst",
             Self::Lzma => "lzma",
+            Self::Rar | Self::Rar5 => "rar",
         }
     }
 
     /// Whether 7-Zip writes the format (`UpdateEnabled`).
     pub(super) const fn writable(self) -> bool {
-        !matches!(self, Self::Zstd | Self::Lzma)
+        !matches!(self, Self::Zstd | Self::Lzma | Self::Rar | Self::Rar5)
     }
 
     /// The format a name's suffix suggests.
@@ -83,14 +92,37 @@ impl Kind {
             "xz" | "txz" => Self::Xz,
             "zst" | "tzst" => Self::Zstd,
             "lzma" => Self::Lzma,
+            // `.rar` and `.r00` are both RAR handlers', so they name neither; a later
+            // volume's `.r01` to `.r99` names RAR 1.5 to 4's.
+            e if e != "r00"
+                && e.strip_prefix('r')
+                    .is_some_and(|n| n.len() == 2 && n.bytes().all(|b| b.is_ascii_digit())) =>
+            {
+                Self::Rar
+            }
             _ => return None,
         })
+    }
+
+    /// Whether a name's suffix names this format: RAR's two handlers share `.rar`.
+    pub(super) fn named_by(self, by_name: Self) -> bool {
+        self == by_name
+            || matches!(
+                (self, by_name),
+                (Self::Rar | Self::Rar5, Self::Rar | Self::Rar5)
+            )
     }
 
     /// The format the first bytes say, of those with a signature.
     fn sniff(head: &[u8]) -> Option<Self> {
         if head.starts_with(&[b'7', b'z', 0xBC, 0xAF, 0x27, 0x1C]) {
             return Some(Self::SevenZ);
+        }
+        if head.starts_with(b"Rar!\x1a\x07\x01\x00") {
+            return Some(Self::Rar5);
+        }
+        if head.starts_with(b"Rar!\x1a\x07\x00") {
+            return Some(Self::Rar);
         }
         if head.get(257..262) == Some(b"ustar") {
             return Some(Self::Tar);
@@ -118,6 +150,7 @@ impl Kind {
                 | Self::Xz
                 | Self::Zstd
                 | Self::Lzma
+                | Self::Rar5
         )
     }
 }
@@ -148,6 +181,13 @@ pub(super) enum Prop {
     HardLink,
     Characteristics,
     Comment,
+    AltStream,
+    Solid,
+    SplitBefore,
+    SplitAfter,
+    CopyLink,
+    Checksum,
+    NtSecurity,
     DeviceMajor,
     DeviceMinor,
     Version,
@@ -181,6 +221,13 @@ impl Prop {
             Self::HardLink => "Hard Link",
             Self::Characteristics => "Characteristics",
             Self::Comment => "Comment",
+            Self::AltStream => "Alternate Stream",
+            Self::Solid => "Solid",
+            Self::SplitBefore => "Split Before",
+            Self::SplitAfter => "Split After",
+            Self::CopyLink => "Copy Link",
+            Self::Checksum => "Checksum",
+            Self::NtSecurity => "NT Security",
             Self::DeviceMajor => "Device Major",
             Self::DeviceMinor => "Device Minor",
             Self::Version => "Version",
@@ -404,6 +451,10 @@ pub(super) struct Opened {
     pub(super) error_flags: Vec<&'static str>,
     /// What looked wrong ("Headers Error").
     pub(super) warning_flags: Vec<&'static str>,
+    /// `kpidError`: what went wrong, in words (a RAR set's missing volume).
+    pub(super) error_message: Option<String>,
+    /// The volumes of a RAR set read with it, the one named first among them.
+    pub(super) volumes: Option<Split>,
     /// A tar read in one pass from standard input: its headers' bytes, which 7-Zip
     /// counts as what it read when it copies the data it extracts uncounted.
     pub(super) seq_headers: Option<u64>,
@@ -426,6 +477,7 @@ enum Backend {
     Stream(super::streams::Stream),
     Tar(super::tar7::Tar),
     Zip(Box<super::zip7::Zip>),
+    Rar(#[expect(dead_code, reason = "read by extraction, the next step")] Box<super::rar7::Rar>),
 }
 
 /// An item's data as extraction reads it: read it, then `finish` says whether all of
@@ -523,10 +575,10 @@ fn open_at(
             (forced, None)
         }
         Some(forced) if forced == Kind::Tar && super::tar7::looks_like_tar(head) => (forced, None),
-        Some(forced) if sniffed == Some(forced) => (forced, None),
+        Some(forced) if sniffed.is_some_and(|s| s.named_by(forced)) => (forced, None),
         Some(forced) => return Err(not_archive(Some(forced))),
         None => match (by_name, sniffed) {
-            (_, Some(sniffed)) => (sniffed, by_name.filter(|&n| n != sniffed)),
+            (_, Some(sniffed)) => (sniffed, by_name.filter(|&n| !sniffed.named_by(n))),
             (by_name, None) if super::tar7::looks_like_tar(head) => {
                 (Kind::Tar, by_name.filter(|&n| n != Kind::Tar))
             }
@@ -538,6 +590,39 @@ fn open_at(
     };
     let mut opened = if kind == Kind::SevenZ {
         open_7z(file, password)?
+    } else if kind == Kind::Rar5 {
+        drop(file);
+        let opening = super::rar7::open5(path, password, zone)?;
+        let sizes: Vec<u64> = opening
+            .volumes
+            .iter()
+            .map(|p| p.metadata().map_or(0, |m| m.len()))
+            .collect();
+        let len = sizes.first().copied().unwrap_or(0);
+        Opened {
+            kind,
+            physical_size: Some(opening.physical_size),
+            type_warning: None,
+            props: opening.props,
+            item_props: opening.item_props,
+            items: opening.items,
+            tail: if opening.volumes.len() > 1 {
+                0
+            } else {
+                len.saturating_sub(opening.physical_size)
+            },
+            error_flags: opening.error_flags,
+            warning_flags: Vec::new(),
+            error_message: opening.error_message,
+            volumes: Some(Split {
+                first_size: len,
+                total: sizes.iter().sum(),
+                parts: opening.volumes,
+            }),
+            seq_headers: None,
+            split: None,
+            backend: Backend::Rar(Box::new(opening.rar)),
+        }
     } else if kind == Kind::Zip {
         let len = file.seek(SeekFrom::End(0)).map_err(OpenFailure::Io)?;
         drop(file);
@@ -557,6 +642,8 @@ fn open_at(
             tail: len.saturating_sub(opening.physical_size),
             error_flags: Vec::new(),
             warning_flags: Vec::new(),
+            error_message: None,
+            volumes: None,
             seq_headers: None,
             split: None,
             backend: Backend::Zip(Box::new(opening.zip)),
@@ -577,6 +664,8 @@ fn open_at(
             tail: len.saturating_sub(opening.physical_size),
             error_flags: opening.error_flags,
             warning_flags: opening.warning_flags,
+            error_message: None,
+            volumes: None,
             seq_headers: None,
             split: None,
             backend: Backend::Tar(opening.tar),
@@ -598,6 +687,8 @@ fn open_at(
             tail: 0,
             error_flags: Vec::new(),
             warning_flags: Vec::new(),
+            error_message: None,
+            volumes: None,
             seq_headers: None,
             split: None,
             backend: Backend::Stream(opening.stream),
@@ -700,6 +791,8 @@ fn open_7z(mut file: Source, password: Option<&str>) -> Result<Opened, OpenFailu
         tail: len.saturating_sub(physical_size),
         error_flags: Vec::new(),
         warning_flags: Vec::new(),
+        error_message: None,
+        volumes: None,
         seq_headers: None,
         split: None,
         backend: Backend::SevenZ(Box::new(reader)),
@@ -928,7 +1021,7 @@ impl Opened {
         match &mut self.backend {
             Backend::SevenZ(reader) => reader.set_password(Password::from(password)),
             Backend::Zip(zip) => zip.set_password(password),
-            Backend::Stream(_) | Backend::Tar(_) => {}
+            Backend::Stream(_) | Backend::Tar(_) | Backend::Rar(_) => {}
         }
     }
 
@@ -936,7 +1029,7 @@ impl Opened {
     pub(super) fn reader(&mut self) -> Option<&mut ArchiveReader<Source>> {
         match &mut self.backend {
             Backend::SevenZ(reader) => Some(reader),
-            Backend::Stream(_) | Backend::Tar(_) | Backend::Zip(_) => None,
+            Backend::Stream(_) | Backend::Tar(_) | Backend::Zip(_) | Backend::Rar(_) => None,
         }
     }
 
@@ -944,7 +1037,7 @@ impl Opened {
     pub(super) fn archive(&self) -> Option<&sevenz::Archive> {
         match &self.backend {
             Backend::SevenZ(reader) => Some(reader.archive()),
-            Backend::Stream(_) | Backend::Tar(_) | Backend::Zip(_) => None,
+            Backend::Stream(_) | Backend::Tar(_) | Backend::Zip(_) | Backend::Rar(_) => None,
         }
     }
 
@@ -1013,6 +1106,7 @@ impl Opened {
                 }
                 Ok(())
             }
+            Backend::Rar(_) => Err(super::rar7::unsupported().into()),
         }
     }
 }

@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 pub use crate::rar::filter::{FilterKind, FilterPolicy, FilterSpec};
 
-mod blake2sp;
+pub mod blake2sp;
 mod extract;
 #[cfg(any(feature = "write", feature = "recovery"))]
 mod framing;
