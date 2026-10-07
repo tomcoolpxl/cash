@@ -58,6 +58,9 @@ pub struct Archive {
     pub is_solid: bool,
     /// Where the archive ends: past its header, as its start header says.
     pub physical_size: u64,
+    /// The start header, the header, and the header's own packed stream: 7-Zip's
+    /// "Headers Size".
+    pub header_size: u64,
     /// The length of what it was read from, more than `physical_size` when data follows.
     pub stream_len: u64,
     /// The coders the header itself is packed with (LZMA, and AES when it is encrypted);
@@ -71,12 +74,6 @@ impl Archive {
     /// The packed size of the entries' data, all blocks together.
     pub fn packed_size(&self) -> u64 {
         self.pack_sizes.iter().take(self.data_pack_streams()).sum()
-    }
-
-    /// What is not the entries' packed data: the start header, the header, and the
-    /// header's own packed stream, as 7-Zip's "Headers Size".
-    pub fn headers_size(&self) -> u64 {
-        self.physical_size.saturating_sub(self.packed_size())
     }
 
     /// Whether the header is encrypted (`-mhe`).

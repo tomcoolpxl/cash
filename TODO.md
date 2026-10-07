@@ -491,8 +491,12 @@ same day: 7z and the formats cash has, Windows 7-Zip's words with LF and `/`,
    the license in `licenses/` and `NOTICE`; brotli, lz4, wasm and the C zstd out; the
    codecs shared; raw block copies; 7-Zip's archive facts and method names; entries in
    order; typed errors, no panics on the two hostile inputs found.
-2. **`7z` and `7za` reading**: the parser, `l` (with `-slt`, `-ba`), `t`, `x`, `e`, the
-   overwrite question and `-ao`, `-o`, `-p`, `-so`, `-i`/`-x`, `-r`; the oracle.
+2. **`7z` and `7za` reading** (done 2026-10-07): the parser, `l` (with `-slt`, `-ba`),
+   `t`, `x`, `e`, the overwrite question and `-ao`, `-o`, `-p`, `-so`, `-i`/`-x`, `-r`;
+   the oracle (`7z_cases.sh`, 7-Zip 26.03 from Scoop). Left for later in the phase: the
+   progress line on a console (`-bsp`, `-bd`), `-si` reading (stream formats, step 4),
+   `-bt`, `-spe`, `-snz`, `-ai`/`-ax` beyond names, and `i`'s listing is cash's own
+   short one.
 3. **Writing 7z**: `a`, `u`, `d`, `rn`, the `-u` matrix, `-m` (levels, methods, filters,
    solid, `-mhe`, `-mhc`, times), `-si`, `-sdel`, `-stl`.
 4. **The other formats** through cash-archive: zip (7-Zip's records), tar, gzip, bzip2,

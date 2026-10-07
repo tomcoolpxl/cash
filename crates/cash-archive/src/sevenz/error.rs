@@ -51,6 +51,8 @@ pub enum Error {
     MaybeBadPassword(std::io::Error),
     /// File not found.
     FileNotFound,
+    /// The archive ends before its header does: it was cut short.
+    Truncated,
 }
 
 impl From<std::io::Error> for Error {

@@ -100,7 +100,7 @@ const CARRIED: &[&str] = &[
     "pbpaste", "flock", "watch", "free", "nice", "renice", "nc", "diff", "cmp", "grep", "suspend",
     "mkfifo", "stdbuf", "getconf", "locale", "gzip", "gunzip", "zcat", "bzip2", "bunzip2", "bzcat",
     "xz", "unxz", "xzcat", "lzma", "unlzma", "lzcat", "zstd", "unzstd", "zstdcat", "tar", "zip",
-    "unzip", "zipinfo",
+    "unzip", "zipinfo", "7z", "7za",
 ];
 
 /// Run the diagnostic. Returns a process exit code.

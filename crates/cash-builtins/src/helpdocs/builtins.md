@@ -126,6 +126,8 @@ an entry or page names no builtin.
 
 ## Text and file tools
 
+- `7z`: List, test or extract a 7z archive, with 7-Zip's options.
+- `7za`: 7-Zip's standalone name for `7z`: the same command.
 - `awk`: Scan and process text with the AWK language.
 - `bc`: Calculate with arbitrary precision, in POSIX bc's language.
 - `bunzip2`: Uncompress `.bz2` files in place: `bzip2 -d`.

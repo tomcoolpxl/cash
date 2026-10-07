@@ -416,6 +416,14 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
         builtin::<zip::ZipinfoCommand, SE>().with_substitution_files(),
     );
     m.insert(
+        "7z".into(),
+        builtin::<sevenzip::SevenZipCommand, SE>().with_substitution_files(),
+    );
+    m.insert(
+        "7za".into(),
+        builtin::<sevenzip::SevenZaCommand, SE>().with_substitution_files(),
+    );
+    m.insert(
         "coolfetch".into(),
         builtin::<coolfetch::CoolfetchCommand, SE>(),
     );

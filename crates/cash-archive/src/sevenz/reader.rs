@@ -355,19 +355,31 @@ impl Archive {
     ) -> Result<Self, Error> {
         // Bound the declared next-header size against the actual file length before allocating.
         let reader_len = reader.seek(SeekFrom::End(0))?;
-        if start_header.next_header_size > usize::MAX as u64
-            || start_header.next_header_size > reader_len
-        {
-            return Err(Error::other(format!(
-                "Cannot handle next_header_size {}",
-                start_header.next_header_size
-            )));
+        // A header that ends past the end of what is there: the archive was cut short.
+        let header_end = SIGNATURE_HEADER_SIZE
+            .checked_add(start_header.next_header_offset)
+            .and_then(|pos| pos.checked_add(start_header.next_header_size));
+        match header_end {
+            Some(end) if end <= reader_len => {}
+            Some(_)
+                if start_header.next_header_offset < 1 << 62
+                    && start_header.next_header_size <= 1 << 48 =>
+            {
+                return Err(Error::Truncated);
+            }
+            _ => {
+                return Err(Error::other(format!(
+                    "Cannot handle next_header_size {}",
+                    start_header.next_header_size
+                )));
+            }
         }
 
         let next_header_size_int = start_header.next_header_size as usize;
         if next_header_size_int == 0 {
             return Ok(Self {
                 physical_size: SIGNATURE_HEADER_SIZE + start_header.next_header_offset,
+                header_size: SIGNATURE_HEADER_SIZE,
                 stream_len: reader_len,
                 ..Self::default()
             });
@@ -389,6 +401,7 @@ impl Archive {
         }
 
         let mut archive = Self::default();
+        let mut header_packed = 0u64;
         let mut buf_reader = buf.as_slice();
         let mut nid = buf_reader.read_u8()?;
         let mut header = if nid == K_ENCODED_HEADER {
@@ -416,6 +429,7 @@ impl Archive {
                     !password.is_empty(),
                 ));
             }
+            header_packed = archive.pack_sizes.iter().sum();
             let header_blocks = std::mem::take(&mut archive.blocks);
             archive = Self {
                 header_blocks,
@@ -444,6 +458,7 @@ impl Archive {
             .iter()
             .any(|block| block.num_unpack_sub_streams > 1);
         archive.physical_size = header_pos + start_header.next_header_size;
+        archive.header_size = SIGNATURE_HEADER_SIZE + start_header.next_header_size + header_packed;
         archive.stream_len = reader_len;
 
         Ok(archive)
@@ -1279,6 +1294,11 @@ impl<R: Read + Seek> ArchiveReader<R> {
         self.thread_count = thread_count.clamp(1, 256);
     }
 
+    /// The password encrypted blocks are read with from now on.
+    pub fn set_password(&mut self, password: Password) {
+        self.password = password;
+    }
+
     /// Returns a reference to the underlying [`Archive`] structure.
     #[inline]
     pub const fn archive(&self) -> &Archive {
@@ -1611,9 +1631,10 @@ impl<R: Read + Seek> ArchiveReader<R> {
     /// Reads the entries in the archive's order, handing `each` those `wanted` says,
     /// each with its data; returns early when `each` says `false`.
     ///
-    /// A block is decoded only when it holds a wanted entry, and from its start: the
-    /// entries before a wanted one in a solid block are decoded and passed over. What goes
-    /// wrong with an entry's data is the entry's [`Problem`], not an error here.
+    /// A block is decoded only when it holds a wanted entry, from its start and up to its
+    /// last wanted entry: the entries before a wanted one in a solid block are decoded and
+    /// passed over, those after the last are not decoded. What goes wrong with an
+    /// entry's data is the entry's [`Problem`], not an error here.
     pub fn for_each_entries<E>(
         &mut self,
         wanted: &dyn Fn(usize) -> bool,
@@ -1626,12 +1647,13 @@ impl<R: Read + Seek> ArchiveReader<R> {
             thread_count,
         } = self;
         let archive: &Archive = archive;
-        let mut block_wanted = vec![false; archive.blocks.len()];
+        // Each block's last wanted entry: what comes after it is not decoded.
+        let mut last_wanted: Vec<Option<usize>> = vec![None; archive.blocks.len()];
         for (index, block) in archive.stream_map.file_block_index.iter().enumerate() {
             if let Some(block) = block
                 && wanted(index)
             {
-                block_wanted[*block] = true;
+                last_wanted[*block] = Some(index);
             }
         }
         let files = &archive.files;
@@ -1644,10 +1666,10 @@ impl<R: Read + Seek> ArchiveReader<R> {
                 index += 1;
                 continue;
             };
-            if !block_wanted[block_index] {
+            let Some(last) = last_wanted[block_index] else {
                 index += 1;
                 continue;
-            }
+            };
             let encrypted = archive.blocks[block_index].is_encrypted();
             let mut state =
                 Self::build_decode_stack(source, archive, block_index, password, *thread_count)
@@ -1662,6 +1684,7 @@ impl<R: Read + Seek> ArchiveReader<R> {
                             return Ok(());
                         }
                     }
+                    Some(b) if b == block_index && index > last => {}
                     Some(b) if b == block_index => {
                         let crc = entry.has_crc.then_some(entry.crc as u32);
                         let mut reader = match &mut state {

@@ -90,7 +90,7 @@ fn the_facts_7_zip_lists() {
     assert_eq!(names, ["d", "d/sub", "d/empty", "d/a.txt", "d/sub/b.txt"]);
     assert_eq!(archive.physical_size, fixture!("stored.7z").len() as u64);
     assert_eq!(archive.packed_size(), 17);
-    assert_eq!(archive.headers_size(), archive.physical_size - 17);
+    assert_eq!(archive.header_size, archive.physical_size - 17);
     assert!(archive.header_blocks.is_empty());
     assert_eq!(archive.version, (0, 4));
     assert!(archive.files[0].is_directory);

@@ -66,6 +66,7 @@ mod screen;
 mod ss;
 // cash: `tar`, GNU tar 1.35's interface on cash-archive; Windows' own `tar.exe` is bsdtar,
 // with other options and other words.
+mod sevenzip;
 mod tar;
 // cash: `zip`, `unzip` and `zipinfo`, Info-ZIP's interfaces on cash-archive: Windows has
 // none of them, and Explorer's zip folders are not scriptable.
