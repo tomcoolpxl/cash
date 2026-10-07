@@ -6,6 +6,9 @@
 
 # Windows
 *.exe
+# rars' tests read two DOS executables as data.
+!crates/cash-archive/tests/fixtures/rar/**/*.exe
+!crates/cash-archive/tests/fixtures/rar/**/*.EXE
 Thumbs.db
 desktop.ini
 
