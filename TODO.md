@@ -482,16 +482,23 @@ Chosen by the user on 2026-10-07, by pick list, after 1.9.0: a builtin under bot
 (as 7-Zip ships `7z`, `7za` and `7zr`), shadowing Scoop's 7-Zip inside cash, which stays
 reachable by its path and `enable -n 7z`; doctor lists it as a deliberate shadow.
 
-1. **On `sevenz-rust2`** (Apache-2.0, pure Rust, on the same `lzma-rust2` and
-   `ppmd-rust` as xz and zip): 7-Zip's command line, `a`, `x`, `e`, `l`, `t`, `d`, `u`,
-   `rn`, with `-o`, `-p`, `-t7z`, `-mx`, `-r`, `-y`, `-so`, `-si`; reading and writing
-   `.7z` with LZMA, LZMA2, bzip2, PPMd and COPY, the BCJ and delta filters, AES-256 and
-   solid blocks. Its `zstd` feature builds C and is left out.
-2. A short design note in `research/archive-tools-design.md` first (the family rule):
-   which of 7-Zip's messages and listings are matched, and how `7z` relates to cash's
-   own zip, tar and compressors (7-Zip's `-tzip`, `-ttar`, `-tgzip` and the rest).
-3. The page, `builtins.md`, `CARRIED`, `DELIBERATE_SHADOWS`, and an oracle against the
-   real 7-Zip on this machine (`7z` from Scoop).
+The design is `research/archive-tools-design.md` 3.14, set by a second pick list the
+same day: 7z and the formats cash has, Windows 7-Zip's words with LF and `/`,
+`sevenz-rust2` taken in as cash's own code, volumes, `h`, links, and `-sns`/`-sni` as
+7-Zip has them (WIM only, so "Not implemented"). For 1.10.0. Each step ends in a commit.
+
+1. **`cash-archive::sevenz`**: `sevenz-rust2` 0.23.0's source taken in, with its tests;
+   the license in `licenses/` and `NOTICE`; brotli, lz4, wasm and the C zstd out; the
+   codecs shared; raw block copies; 7-Zip's archive facts and method names; entries in
+   order; typed errors, no panics on the two hostile inputs found.
+2. **`7z` and `7za` reading**: the parser, `l` (with `-slt`, `-ba`), `t`, `x`, `e`, the
+   overwrite question and `-ao`, `-o`, `-p`, `-so`, `-i`/`-x`, `-r`; the oracle.
+3. **Writing 7z**: `a`, `u`, `d`, `rn`, the `-u` matrix, `-m` (levels, methods, filters,
+   solid, `-mhe`, `-mhc`, times), `-si`, `-sdel`, `-stl`.
+4. **The other formats** through cash-archive: zip (7-Zip's records), tar, gzip, bzip2,
+   xz both ways; zstd and lzma read.
+5. **Volumes, `h` and `-scrc`, links, `-sns`/`-sni`**.
+6. The page, `builtins.md`, `CARRIED`, `DELIBERATE_SHADOWS`, doctor; release 1.10.0.
 
 ---
 

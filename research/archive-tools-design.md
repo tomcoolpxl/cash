@@ -311,6 +311,62 @@ Built against GNU tar 1.35's oracle, the plan moved in four places:
   `-h`, counts hard links; zip filters by date and suffix and never stores links unless
   `-y`. A shared walker would be two walkers behind one name.
 
+### 3.14 7z and 7za (phase 31, decided 2026-10-07)
+
+7-Zip 26.03's command line, under both names, on the formats cash already has and on
+7z itself. The user's picks are in section 7; what follows is the plan they set.
+
+- **The 7z format is cash's own, from `sevenz-rust2`** 0.23.0 (Apache-2.0), taken into
+  `cash-archive/src/sevenz` as source, "our own version from here", neither a
+  dependency nor a vendored copy with patches. Its license goes to `licenses/` and
+  `NOTICE`, and each file it came from says so. What changes:
+  - packed blocks copied raw, so `d`, `u` and `rn` leave the blocks they do not touch,
+    and their encryption, as they were (7-Zip does; the crate can only recompress);
+  - the facts 7-Zip lists: physical and headers size, the coder chain by 7-Zip's names
+    (`LZMA2:24 BCJ`, `7zAES:19`), encrypted headers, entries in archive order, raw NT
+    times, attributes with the Unix-mode extension read;
+  - 7-Zip's `-mx` table (dictionary, word and solid block sizes), `-mhc`, `-mhe`, `-ms`,
+    `-mf`, `-mtm`/`-mtc`/`-mta`, AES with 2^19 rounds; the LZMA2 dictionary property's
+    rounding fixed; one thread unless `-mmt`;
+  - typed errors: a wrong password told from a CRC failure, truncated data noticed, no
+    panic on a header without file records or a time past 2^63;
+  - the codecs shared with the rest of cash-archive (deflate on `flate2`, Deflate64, zstd
+    on `ruzstd` read); brotli, lz4 and the wasm parts left out.
+- **Formats**: 7z read and written; zip, tar, gzip, bzip2 and xz read and written
+  through cash-archive; zstd and lzma read, as 7-Zip has them. The type comes from `-t`,
+  then the archive's first bytes, then the name's suffix when creating; any other
+  (rar, iso, cab, wim …) gets 7-Zip's "Cannot open the file as archive". A zip that 7z
+  writes is 7-Zip's (made on Windows, its NTFS time field), not zip's Info-ZIP records.
+- **Face**: Windows 7-Zip's words, listings, attributes (no Unix modes stored) and exit
+  codes, with LF line ends and `/` in names, as cash's tar and zip print. The banner's
+  place holds `7-Zip (cash)` and what it copies, as the other tools' version lines do;
+  `-ba` leaves it out. Switches start with `-` only (7-Zip on Windows takes `/` too,
+  which in cash is a path).
+- **Volumes** (`-v`): `NAME.001`, `NAME.002` … for every type, as 7-Zip's byte splits;
+  `NAME.001` read back from all its parts, 7-Zip's Split handler.
+- **`h`** and `-scrc`: CRC32, CRC64, XXH64, MD5, SHA-1, SHA-256, SHA-384, SHA-512,
+  SHA3-256 and BLAKE2sp, `*` for all, with 7-Zip's tables; on `crc`, `twox-hash`,
+  `md-5`, `sha1`, `sha2`, `sha3` (in the tree already) and `blake2s_simd` (new).
+- **Links**: `-snl` stores a symbolic link as a link (in 7z, its reparse data with the
+  reparse attribute, as 7-Zip on Windows; in tar, a link member); `-snh` stores hard
+  links as links in tar, while 7z, which has no record for one, gets the file, as 7-Zip
+  does. Links are made on extraction where Windows allows them.
+- **NTFS extras**, as 7-Zip does: `-sns` and `-sni` writing 7z, zip or tar end in
+  "System ERROR: Not implemented"; extracting writes `file:stream` items as alternate
+  streams, unless `-sns-`.
+- **Refused**: `b`, `-sfx`, `-seml`, `-slp`, `-stm`, `-ad`, with 7-Zip's words for an
+  unsupported switch.
+- **Front end** `cash-builtins/src/sevenzip`: 7-Zip's parser (switches anywhere,
+  `--`, `@listfile`, `-i`/`-x`/`-ai`/`-ax` with `r`, `m`, `w` and `!`), its update
+  matrix (`-u` with `p` `q` `r` `x` `y` `z` `w` and `!newArchive`), the overwrite
+  question and `-ao`, `-o`, `-p` (asked at the console when needed), `-r`, `-y`, `-so`,
+  `-si`, `-sdel`, `-stl`, `-spf`, `-spe`, `-ssc`, `-w`, `-bb`, `-bs`, `-bd`, `-bt`, the
+  progress line on a console, `-slt`.
+- **Oracle**: `tests/oracle/7z_cases.sh`, made by Scoop's 7-Zip 26.03 under a cash that
+  has no `7z` builtin, CRLF and `\` turned to LF and `/`. Archives made with `-mx0
+  -mhc=off` are 7-Zip's byte for byte; compressed sizes are compared apart, since the
+  LZMA encoder is not 7-Zip's.
+
 ## 4. Rules every part keeps
 
 - **No C.** Every backend is Rust; `cargo deny` and the release's license list stay the
@@ -361,6 +417,10 @@ Built against GNU tar 1.35's oracle, the plan moved in four places:
    option parsers, not later but in the groundwork.
 4. **The order**: the groundwork (phases 26 and 27), the compressors (28), tar (29),
    zip (30).
+5. **7z** (phase 31, for 1.10.0; 3.14): a builtin named `7z` and `7za`, reading and
+   writing; 7z and the formats cash already has; Windows 7-Zip's words with LF and `/`;
+   `sevenz-rust2` internalized; volumes, `h`, links, and `-sns`/`-sni` as 7-Zip has
+   them.
 
 ## 8. Open, decided later in their phases
 
