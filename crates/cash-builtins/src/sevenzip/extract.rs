@@ -165,33 +165,26 @@ pub(super) fn forced_kind(options: &Options) -> Option<Kind> {
 /// encrypted and none was given: "Enter password (will not be echoed):".
 pub(super) fn open_asking<SE: cash_core::ShellExtensions>(
     found: &Found,
-    options: &Options,
+    forced: Option<Kind>,
     env: &Env<'_, SE>,
     password: &mut Option<String>,
     prompt: &dyn Fn(&str),
     asked: &mut bool,
 ) -> Result<Result<Opened, OpenFailure>, Stop> {
-    let opened = archive::open(
-        &found.path,
-        forced_kind(options),
-        password.as_deref(),
-        &env.zone,
-    );
+    let opened = archive::open(&found.path, forced, password.as_deref(), &env.zone);
     if !matches!(opened, Err(OpenFailure::PasswordNeeded)) {
         return Ok(opened);
     }
     *password = Some(ask_password(env, prompt)?);
     *asked = true;
-    Ok(archive::open(
-        &found.path,
-        forced_kind(options),
-        password.as_deref(),
-        &env.zone,
+    Ok(
+        archive::open(&found.path, forced, password.as_deref(), &env.zone).map_err(|failure| {
+            match failure {
+                OpenFailure::PasswordNeeded => OpenFailure::WrongPassword,
+                other => other,
+            }
+        }),
     )
-    .map_err(|failure| match failure {
-        OpenFailure::PasswordNeeded => OpenFailure::WrongPassword,
-        other => other,
-    }))
 }
 
 /// `GetPassword`: the question, a line read without echo, a new line; the end of the
@@ -423,7 +416,7 @@ fn extract_archive<SE: cash_core::ShellExtensions>(
     let mut asked = false;
     let opened = open_asking(
         archive,
-        options,
+        forced_kind(options),
         env,
         password,
         &|t| console.so(t),

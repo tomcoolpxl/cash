@@ -92,6 +92,16 @@ impl Zone {
         self.format(DateTime::<Utc>::from(when), format)
     }
 
+    /// `when` as this zone's wall time.
+    #[must_use]
+    pub fn to_local(&self, when: DateTime<Utc>) -> chrono::NaiveDateTime {
+        match self {
+            Self::Local => when.with_timezone(&chrono::Local).naive_local(),
+            Self::Named(zone) => when.with_timezone(zone).naive_local(),
+            Self::Fixed { offset, .. } => when.with_timezone(offset).naive_local(),
+        }
+    }
+
     /// A wall time in this zone as Unix seconds: the earlier of two in the hour the
     /// clocks go back, none in the hour they skip.
     #[must_use]

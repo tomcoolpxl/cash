@@ -117,6 +117,9 @@ impl Filter {
     }
 }
 
+/// A handler's one method: its name, when named, and its parameters.
+pub(super) type SingleMethod<'a> = (Option<&'a str>, &'a [(String, String)]);
+
 /// The settings a 7z archive is written with.
 #[derive(Debug, Clone)]
 pub(super) struct Settings {
@@ -139,6 +142,8 @@ pub(super) struct Settings {
     pub(super) threads: u32,
     /// `-mqs`: new files sorted by their kind.
     pub(super) sort_by_type: bool,
+    /// `-mcrc`: the bytes of an xz block's check (4, CRC32, unless given).
+    pub(super) crc_size: u32,
 }
 
 /// `on`, `off`, `+`, `-`, or nothing (on).
@@ -151,7 +156,7 @@ fn boolean(value: Option<&str>) -> Result<bool, MethodError> {
 }
 
 /// A size: a number of bytes, with `b`, `k`, `m`, `g` or `t`, or a bare power of two.
-fn size(text: &str, bare_is_power: bool) -> Option<u64> {
+pub(super) fn size(text: &str, bare_is_power: bool) -> Option<u64> {
     let digits = text.bytes().take_while(u8::is_ascii_digit).count();
     let n: u64 = text.get(..digits)?.parse().ok()?;
     let shift = match text.get(digits..)?.to_ascii_lowercase().as_str() {
@@ -193,6 +198,7 @@ impl Settings {
             attributes: None,
             threads,
             sort_by_type: false,
+            crc_size: 4,
         };
         for (name, value) in properties {
             settings.set(&name.to_ascii_lowercase(), value.as_deref())?;
@@ -220,6 +226,8 @@ impl Settings {
             };
             return Ok(());
         }
+        // `-mm=METHOD` is `-m0=METHOD` (`ParseMethodFromPROPVARIANT`).
+        let name = if name == "m" { "0" } else { name };
         let digits = name.bytes().take_while(u8::is_ascii_digit).count();
         let rest = name.get(digits..).unwrap_or_default();
         if digits == 0 {
@@ -246,6 +254,14 @@ impl Settings {
                     boolean(value)?;
                 }
                 "tp" => {}
+                _ if name.starts_with("crc") => {
+                    let rest = name.get(3..).unwrap_or_default();
+                    self.crc_size = match (rest, value) {
+                        ("", None) => self.crc_size,
+                        ("", Some(v)) | (v, None) => number(v)?,
+                        _ => return Err(MethodError::Invalid),
+                    };
+                }
                 _ if name.starts_with("mt") => {
                     let rest = name.get(2..).unwrap_or_default();
                     self.threads = match (rest, value.map(str::to_ascii_lowercase).as_deref()) {
@@ -428,6 +444,55 @@ impl Settings {
         (self.solid_files, if need_solid { 1 << 32 } else { 0 })
     }
 
+    /// The one method a handler of one method takes (`DeleteFrontal(GetNumEmptyMethods())`,
+    /// more than one refused): its name, when named, and its parameters.
+    pub(super) fn single_method(&self) -> Result<SingleMethod<'_>, MethodError> {
+        let named: Vec<&Spec> = self
+            .methods
+            .iter()
+            .skip_while(|m| m.name.as_deref().is_none_or(str::is_empty) && m.params.is_empty())
+            .collect();
+        if named.len() > 1 {
+            return Err(MethodError::Invalid);
+        }
+        Ok(named.first().map_or((None, &[][..]), |m| {
+            (
+                m.name.as_deref().filter(|n| !n.is_empty()),
+                m.params.as_slice(),
+            )
+        }))
+    }
+
+    /// The level of a method with these parameters: its own `x`, else the global one.
+    pub(super) fn level_for(&self, params: &[(String, String)]) -> u32 {
+        self.method_level(params)
+    }
+
+    /// Whether a filter is named (`-mf=NAME`), which the handlers of one method do not
+    /// write.
+    pub(super) const fn filter_named(&self) -> bool {
+        matches!(self.filter, FilterSetting::Fixed(_))
+    }
+
+    /// The xz handler's LZMA2 (`CHandler::SetProperties`, `UpdateItems`): one method,
+    /// LZMA2 or `xz` by name, at its level, the dictionary no larger than `reduce`.
+    /// A filter named is not written here.
+    pub(super) fn xz_lzma(&self, reduce: u64) -> Result<LzmaParams, MethodError> {
+        let (name, params) = self.single_method()?;
+        if name.is_some_and(|n| n != "lzma2" && n != "xz") {
+            return Err(MethodError::Invalid);
+        }
+        if self.filter_named() {
+            return Err(MethodError::NotImplemented);
+        }
+        Ok(lzma_params(self.method_level(params), params, reduce))
+    }
+
+    /// `-ms`'s bytes, an xz block's size when given.
+    pub(super) const fn solid_bytes(&self) -> Option<u64> {
+        self.solid_bytes
+    }
+
     /// A method's level: its own `x`, else the global one.
     fn method_level(&self, params: &[(String, String)]) -> u32 {
         param(params, "x")
@@ -566,7 +631,7 @@ fn split_param(part: &str) -> (String, String) {
     (key.to_ascii_lowercase(), value)
 }
 
-fn param<'a>(params: &'a [(String, String)], key: &str) -> Option<&'a str> {
+pub(super) fn param<'a>(params: &'a [(String, String)], key: &str) -> Option<&'a str> {
     params
         .iter()
         .rev()
@@ -576,7 +641,7 @@ fn param<'a>(params: &'a [(String, String)], key: &str) -> Option<&'a str> {
 
 /// `LzmaEncProps_Normalize`: the level's dictionary, fast bytes, match finder and mode,
 /// what `-m` changes, the dictionary no larger than `reduce` (and at least 4 KiB).
-fn lzma_params(level: u32, params: &[(String, String)], reduce: u64) -> LzmaParams {
+pub(super) fn lzma_params(level: u32, params: &[(String, String)], reduce: u64) -> LzmaParams {
     let mut p = LzmaParams::with_preset(6);
     p.dict_size = match level {
         0..=4 => 1 << (level * 2 + 16),
@@ -655,7 +720,7 @@ fn ppmd_settings(level: u32, params: &[(String, String)], reduce: u64) -> (u32, 
 }
 
 /// bzip2's block size in 100 kB: 9 from level 5, `2·level − 1` below, or `d`'s.
-fn bzip2_block(level: u32, params: &[(String, String)]) -> u32 {
+pub(super) fn bzip2_block(level: u32, params: &[(String, String)]) -> u32 {
     if let Some(d) = param(params, "d").and_then(|d| size(d, false)) {
         return u32::try_from(d.div_ceil(100_000)).unwrap_or(9).clamp(1, 9);
     }

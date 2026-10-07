@@ -25,19 +25,19 @@ fn seven_z_matches_7_zip_26_03() {
         &golden("7z_cases"),
         "7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03\n",
         "7-Zip (cash) : 7-Zip 26.03's options, in pure Rust\n",
-        100,
+        102,
     );
     assert_eq!(run_oracle_script("7z_cases"), expected);
 }
 
 #[test]
-fn seven_z_reads_the_stream_formats_as_7_zip_26_03_does() {
+fn seven_z_reads_and_writes_the_other_formats_as_7_zip_26_03_does() {
     // cash's own banner, in 7-Zip's place.
     let expected = with_divergence(
         &golden("7z_formats"),
         "7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03\n",
         "7-Zip (cash) : 7-Zip 26.03's options, in pure Rust\n",
-        81,
+        132,
     );
     assert_eq!(run_oracle_script("7z_formats"), expected);
 }
@@ -105,6 +105,33 @@ fn every_method_writes_what_reads_back() {
     assert_eq!(
         out.stdout,
         "LZMA ok\nLZMA2 ok\nPPMd ok\nBZip2 ok\nDeflate ok\nCopy ok\nDelta:4 ok\nmt ok\n2",
+        "{}",
+        out.stderr
+    );
+}
+
+#[test]
+fn every_format_and_zip_method_writes_what_reads_back() {
+    let dir = Scratch::new("7z-formats-write");
+    let out = run_in(
+        dir.path(),
+        "seq 1 30000 > n.txt; sum=$(sha256sum < n.txt); \
+         for f in n.tar n.gz n.bz2 n.xz; do \
+           7z a $f n.txt -bso0 && 7z t $f -bso0 \
+             && [ \"$(7z e -so $f | sha256sum)\" = \"$sum\" ] && echo \"$f ok\"; \
+         done; \
+         for m in Store Deflate BZip2 LZMA xz PPMd; do \
+           7z a -mm=$m -pab x.zip n.txt -bso0 && 7z t -pab x.zip -bso0 \
+             && [ \"$(7z e -so -pab x.zip n.txt | sha256sum)\" = \"$sum\" ] && echo \"$m ok\"; \
+           rm x.zip; \
+         done; \
+         7z a -mem=AES256 -pab a.zip n.txt -bso0 \
+           && [ \"$(7z e -so -pab a.zip | sha256sum)\" = \"$sum\" ] && echo aes ok",
+    );
+    assert_eq!(
+        out.stdout,
+        "n.tar ok\nn.gz ok\nn.bz2 ok\nn.xz ok\n\
+         Store ok\nDeflate ok\nBZip2 ok\nLZMA ok\nxz ok\nPPMd ok\naes ok",
         "{}",
         out.stderr
     );

@@ -494,26 +494,40 @@ same day: 7z and the formats cash has, Windows 7-Zip's words with LF and `/`,
 2. **`7z` and `7za` reading** (done 2026-10-07): the parser, `l` (with `-slt`, `-ba`),
    `t`, `x`, `e`, the overwrite question and `-ao`, `-o`, `-p`, `-so`, `-i`/`-x`, `-r`;
    the oracle (`7z_cases.sh`, 7-Zip 26.03 from Scoop). Left for later in the phase: the
-   progress line on a console (`-bsp`, `-bd`), `-si` reading (stream formats, step 4),
+   progress line on a console (`-bsp`, `-bd`), `-si` reading (7-Zip opens tar and the
+   stream formats from standard input as it reads them; cash cannot open them so yet),
    `-bt`, `-spe`, `-snz`, `-ai`/`-ax` beyond names, and `i`'s listing is cash's own
    short one.
 3. **Writing 7z** (done 2026-10-07): `a`, `u`, `d`, `rn`, the `-u` matrix and `-u!name`,
    `-m` (levels, methods, solid limits, filters chosen by a file's head as 7-Zip's
    analysis does, `-mhe`, `-mhc`, times, `-mqs`), `-p` typed or given, `-sdel`, `-stl`,
    `-w`, `-sa`; old blocks copied as they are or repacked; the oracle's update sections
-   match 7-Zip 26.03 line for line and its stored archives byte for byte. Left: `-si`
-   (step 4, with the stream formats), `-spf` for update, 7-Zip's BCJ2 (it filters x86
+   match 7-Zip 26.03 line for line and its stored archives byte for byte. `-si` came
+   with step 4. Left: `-spf` for update, 7-Zip's BCJ2 (it filters x86
    executables with BCJ2 from `-mx8`; cash has no BCJ2 encoder and uses BCJ), analysis
    levels other than the default (`-myx`), memory limits (`-mmemuse` is taken, not
    applied). Compressed archives are not 7-Zip's bytes (other LZMA, PPMd and bzip2
    encoders), so the oracle compares their listings without sizes.
-4. **The other formats** through cash-archive: zip (7-Zip's records), tar, gzip, bzip2,
-   xz both ways; zstd and lzma read. Reading gzip, bzip2, xz, zstd, lzma, tar and zip
-   done 2026-10-07 (`7z_formats.sh`, line for line); left: writing gzip, bzip2, xz, tar
-   and zip, and `-si`. Not yet checked against 7-Zip: tar names that are not ASCII
-   (7-Zip prints its UTF-8 check's status after "UTF8"); zips 7-Zip reads by their
-   local headers (no central directory, "Local" in Characteristics), split zips, SFX
-   stubs, Unix-made zips' names and modes.
+4. **The other formats** (done 2026-10-07): reading gzip, bzip2, xz, zstd, lzma, tar
+   and zip; writing tar (GNU and pax headers, long names), zip (7-Zip's records: NTFS
+   times, OEM names with the UTF-8 one beside, Store when compressing does not help;
+   Deflate, BZip2, LZMA, PPMd, xz; ZipCrypto and AES; kept items copied, renamed ones
+   under a new local header), gzip, bzip2 and xz (one file); the format by extension or
+   `-t`, an archive there opened as that format only; times compared at the precision
+   the format keeps; `-si` for every format, `-so` for tar and the streams; `-mm=` and
+   `-mNAME-` as 7-Zip takes them (the 7z path too). `7z_formats.sh` matches line for
+   line, its tars and stored zips by `cksum`; 7-Zip tests every archive cash writes.
+   Left, where cash differs:
+   - zip with Deflate64 says "Not implemented" (no encoder); 7-Zip writes it.
+   - xz is one block; 7-Zip on several threads cuts blocks of four dictionaries
+     (phase 32). xz's `-mf` filters say "Not implemented".
+   - Zip names in code page 437 where 7-Zip uses Windows' OEM code page (850 in
+     Belgium); `-mcp` other than 65001 is taken as 437. tar's `-mcp` is not applied.
+   - A zip's self-extractor stub is kept but not checked against 7-Zip; Zip64 headers
+     follow 7-Zip's one-thread path (its threads decide a file near 4 GiB otherwise).
+   Not yet checked against 7-Zip: tar names that are not ASCII (7-Zip prints its UTF-8
+   check's status after "UTF8"); zips 7-Zip reads by their local headers (no central
+   directory, "Local" in Characteristics), split zips, Unix-made zips' names and modes.
 5. **Volumes, `h` and `-scrc`, links, `-sns`/`-sni`**.
 6. The page, `builtins.md`, `CARRIED`, `DELIBERATE_SHADOWS`, doctor.
 

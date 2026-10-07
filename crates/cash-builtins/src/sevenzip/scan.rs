@@ -42,6 +42,39 @@ pub(super) struct DirItem {
     pub(super) accessed: u64,
 }
 
+/// The size of an item whose size is not known: standard input from a pipe.
+pub(super) const UNKNOWN_SIZE: u64 = u64::MAX;
+
+/// `-si`'s item (`SetAs_StdInFile`): standard input under `name`, with the size, times
+/// and attributes of the file it is, else no size and the time now.
+pub(super) fn stdin_item(name: &str, meta: Option<&fs::Metadata>) -> DirItem {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| {
+            d.as_secs() * 10_000_000 + u64::from(d.subsec_nanos() / 100)
+        })
+        + 116_444_736_000_000_000;
+    let mut item = DirItem {
+        name: name.to_owned(),
+        shown: name.to_owned(),
+        path: PathBuf::new(),
+        is_dir: false,
+        size: UNKNOWN_SIZE,
+        attrib: 0,
+        modified: now,
+        created: now,
+        accessed: now,
+    };
+    if let Some(m) = meta {
+        item.size = m.file_size();
+        item.attrib = m.file_attributes();
+        item.modified = m.last_write_time();
+        item.created = m.creation_time();
+        item.accessed = m.last_access_time();
+    }
+    item
+}
+
 /// What the scan counted (`CDirItemsStat`).
 #[derive(Debug, Default, Clone, Copy)]
 pub(super) struct Stat {
@@ -58,7 +91,7 @@ impl Stat {
                 stat.dirs += 1;
             } else {
                 stat.files += 1;
-                stat.size += item.size;
+                stat.size = stat.size.wrapping_add(item.size);
             }
         }
         stat

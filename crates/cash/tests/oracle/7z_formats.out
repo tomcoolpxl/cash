@@ -2458,3 +2458,1072 @@ Files: 3
 Size:       46
 Compressed: 1465
 rc=0
+== write: tar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+1 folder, 4 files, 49 bytes (1 KiB)
+
+Creating archive: x.tar
+
+Add new data to archive: 1 folder, 4 files, 49 bytes (1 KiB)
+
++ d/a.txt
++ d/empty
++ d/ro.txt
++ d/sub/
++ d/sub/b.txt
+
+Files read from disk: 5
+Archive size: 5120 bytes (5 KiB)
+Everything is Ok
+rc=0
+456529617 5120
+Path = x.tar
+Characteristics = GNU ASCII
+Path = d/a.txt
+Folder = -
+Size = 36
+Modified = 2026-10-07 08:00:00
+Mode = -rwxrwxrwx
+Characteristics = 0 GNU ASCII
+Path = d/empty
+Folder = -
+Size = 0
+Modified = 2026-10-07 08:00:00
+Mode = -rwxrwxrwx
+Characteristics = 0 GNU ASCII
+Path = d/ro.txt
+Folder = -
+Size = 3
+Modified = 2026-10-07 08:00:00
+Mode = -r-xr-xr-x
+Characteristics = 0 GNU ASCII
+Path = d/sub
+Folder = +
+Size = 0
+Modified = 2026-10-07 08:00:00
+Mode = drwxrwxrwx
+Characteristics = 5 GNU ASCII
+Path = d/sub/b.txt
+Folder = -
+Size = 10
+Modified = 2026-10-07 08:00:00
+Mode = -rwxrwxrwx
+Characteristics = 0 GNU ASCII
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+1 folder, 2 files, 15 bytes (1 KiB)
+
+Creating archive: p.tar
+
+Add new data to archive: 1 folder, 2 files, 15 bytes (1 KiB)
+
+
+Files read from disk: 3
+Archive size: 3584 bytes (4 KiB)
+Everything is Ok
+rc=0
+2317058912 3584
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+1 file, 5 bytes (1 KiB)
+
+Creating archive: g.tar
+
+Add new data to archive: 1 file, 5 bytes (1 KiB)
+
+
+Files read from disk: 1
+Archive size: 3072 bytes (3 KiB)
+Everything is Ok
+rc=0
+567231365 3072
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Open archive: x.tar
+--
+Path = x.tar
+Type = tar
+Physical Size = 5120
+Headers Size = 3584
+Code Page = UTF-8
+Characteristics = GNU ASCII
+
+Scanning the drive:
+1 folder, 4 files, 49 bytes (1 KiB)
+
+Updating archive: x.tar
+
+Keep old data in archive: 1 folder, 4 files, 49 bytes (1 KiB)
+Add new data to archive: 0 files, 0 bytes
+
+
+Files read from disk: 0
+Archive size: 5120 bytes (5 KiB)
+Everything is Ok
+rc=0
+456529617 5120
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Open archive: x.tar
+--
+Path = x.tar
+Type = tar
+Physical Size = 5120
+Headers Size = 3584
+Code Page = UTF-8
+Characteristics = GNU ASCII
+
+Updating archive: x.tar
+
+
+Delete data from archive: 1 file, 36 bytes (1 KiB)
+Keep old data in archive: 1 folder, 3 files, 13 bytes (1 KiB)
+Add new data to archive: 0 files, 0 bytes
+
+
+Files read from disk: 0
+Archive size: 4096 bytes (4 KiB)
+Everything is Ok
+rc=0
+1988678574 4096
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Open archive: x.tar
+--
+Path = x.tar
+Type = tar
+Physical Size = 4096
+Headers Size = 3072
+Code Page = UTF-8
+Characteristics = GNU ASCII
+
+Updating archive: x.tar
+
+Keep old data in archive: 1 folder, 3 files, 13 bytes (1 KiB)
+Add new data to archive: 0 files, 0 bytes
+
+
+Files read from disk: 0
+Archive size: 4096 bytes (4 KiB)
+Everything is Ok
+rc=0
+172021547 4096
+2026-10-07 08:00:00 .....            0            0  d/empty
+2026-10-07 08:00:00 .....            3          512  d/ro.txt
+2026-10-07 08:00:00 D....            0            0  d/moved
+2026-10-07 08:00:00 .....           10          512  d/moved/b.txt
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Open archive: x.tar
+--
+Path = x.tar
+Type = tar
+Physical Size = 4096
+Headers Size = 3072
+Code Page = UTF-8
+Characteristics = GNU ASCII
+
+Scanning the drive:
+1 folder, 1 file, 10 bytes (1 KiB)
+
+Updating archive: x.tar
+
+Keep old data in archive: 1 folder, 3 files, 13 bytes (1 KiB)
+Add new data to archive: 1 folder, 1 file, 10 bytes (1 KiB)
+
++ d/sub/
++ d/sub/b.txt
+
+Files read from disk: 2
+Archive size: 5632 bytes (6 KiB)
+Everything is Ok
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+1 file, 36 bytes (1 KiB)
+
+Creating archive: t0.tar
+
+Add new data to archive: 1 file, 36 bytes (1 KiB)
+
+
+Files read from disk: 1
+Archive size: 2048 bytes (2 KiB)
+Everything is Ok
+rc=0
+3654884038 2048
+rc=0
+2714518910 2560
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+1 file, 36 bytes (1 KiB)
+
+Creating archive: bad.tar
+
+
+
+System ERROR:
+The parameter is incorrect.
+rc=2
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+1 file, 36 bytes (1 KiB)
+
+Creating archive: bad2.tar
+
+
+
+System ERROR:
+The parameter is incorrect.
+rc=2
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Open archive: t1.tar
+ERROR: t1.tar
+Cannot open the file as archive
+
+
+
+System ERROR:
+The parameter is incorrect.
+rc=2
+== write: gzip, bzip2, xz
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+1 file, 36 bytes (1 KiB)
+
+Creating archive: x.gz
+
+Add new data to archive: 1 file, 36 bytes (1 KiB)
+
+
+Files read from disk: 1
+Everything is Ok
+rc=0
+ 1f 8b 08 08 00 fc c5 6a 04 00 61 2e 74 78 74 00
+Path = x.gz
+Path = a.txt
+Size = 36
+Modified = 2026-10-07 08:00:00
+Host OS = FAT
+CRC = E0AC0FD0
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+3 folders, 7 files, 58 bytes (1 KiB)
+
+Creating archive: y.gz
+
+Add new data to archive: 3 folders, 7 files, 58 bytes (1 KiB)
+
+
+
+System ERROR:
+The parameter is incorrect.
+rc=2
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Open archive: x.gz
+--
+Path = x.gz
+Type = gzip
+
+Scanning the drive:
+1 file, 36 bytes (1 KiB)
+
+Updating archive: x.gz
+
+Keep old data in archive: 1 file, 36 bytes (1 KiB)
+Add new data to archive: 1 file, 36 bytes (1 KiB)
+
+
+
+System ERROR:
+The parameter is incorrect.
+rc=2
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Open archive: x.gz
+--
+Path = x.gz
+Type = gzip
+
+Updating archive: x.gz
+
+Keep old data in archive: 1 file, 36 bytes (1 KiB)
+Add new data to archive: 0 files, 0 bytes
+
+= a.txt
+
+Files read from disk: 0
+Everything is Ok
+rc=0
+ 1f 8b 08 08 00 fc c5 6a 04 00 62 2e 74 78 74 00
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+1 file, 36 bytes (1 KiB)
+
+Creating archive: x9.gz
+
+Add new data to archive: 1 file, 36 bytes (1 KiB)
+
+
+Files read from disk: 1
+Everything is Ok
+rc=0
+ 1f 8b 08 08 00 fc c5 6a 02 00
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+1 file, 36 bytes (1 KiB)
+
+Creating archive: t0.gz
+
+Add new data to archive: 1 file, 36 bytes (1 KiB)
+
+
+Files read from disk: 1
+Everything is Ok
+rc=0
+ 1f 8b 08 08 00 00 00 00 04 00
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+1 file, 36 bytes (1 KiB)
+
+Creating archive: t1.gz
+
+
+
+System ERROR:
+The parameter is incorrect.
+rc=2
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+1 file, 36 bytes (1 KiB)
+
+Creating archive: noext.gz
+
+Add new data to archive: 1 file, 36 bytes (1 KiB)
+
+
+Files read from disk: 1
+Everything is Ok
+rc=0
+noext.gz
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+1 file, 36 bytes (1 KiB)
+
+Creating archive: x.bz2
+
+Add new data to archive: 1 file, 36 bytes (1 KiB)
+
+
+Files read from disk: 1
+Everything is Ok
+rc=0
+Everything is Ok
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+1 file, 13893 bytes (14 KiB)
+
+Creating archive: x.xz
+
+Add new data to archive: 1 file, 13893 bytes (14 KiB)
+
+
+Files read from disk: 1
+Everything is Ok
+rc=0
+Method = LZMA2:14 CRC32
+Streams = 1
+Blocks = 1
+Method = LZMA2:14 CRC32
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+1 file, 36 bytes (1 KiB)
+
+Creating archive: x64.xz
+
+Add new data to archive: 1 file, 36 bytes (1 KiB)
+
+
+Files read from disk: 1
+Everything is Ok
+rc=0
+Method = LZMA2:12 CRC64
+Method = LZMA2:12 CRC64
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Open archive: x.xz
+--
+Path = x.xz
+Type = xz
+Method = LZMA2:14 CRC32
+Streams = 1
+Blocks = 1
+
+Updating archive: x.xz
+
+
+Delete data from archive: 1 file, 13893 bytes (14 KiB)
+Add new data to archive: 0 files, 0 bytes
+
+
+Files read from disk: 0
+Everything is Ok
+rc=0
+1259753497 32
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+
+
+System ERROR:
+Not implemented
+rc=2
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Open archive: q.tar
+ERROR: q.tar
+q.tar
+Open ERROR: Cannot open the file as [tar] archive
+
+
+ERRORS:
+Is not archive
+
+
+System ERROR:
+Incorrect function.
+rc=2
+== write: zip
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+1 folder, 4 files, 49 bytes (1 KiB)
+
+Creating archive: s.zip
+
+Add new data to archive: 1 folder, 4 files, 49 bytes (1 KiB)
+
++ d/a.txt
++ d/empty
++ d/ro.txt
++ d/sub/b.txt
+
+Files read from disk: 4
+Archive size: 529 bytes (1 KiB)
+Everything is Ok
+rc=0
+1212907442 529
+Path = s.zip
+Path = d/a.txt
+Folder = -
+Size = 36
+Modified = 1980-01-01 00:00:00
+Attributes = A
+Encrypted = -
+CRC = E0AC0FD0
+Method = Store
+Characteristics = 
+Host OS = FAT
+Version = 10
+Path = d/empty
+Folder = -
+Size = 0
+Modified = 1980-01-01 00:00:00
+Attributes = A
+Encrypted = -
+CRC = 00000000
+Method = Store
+Characteristics = 
+Host OS = FAT
+Version = 10
+Path = d/ro.txt
+Folder = -
+Size = 3
+Modified = 1980-01-01 00:00:00
+Attributes = RA
+Encrypted = -
+CRC = AA84FB5A
+Method = Store
+Characteristics = 
+Host OS = FAT
+Version = 10
+Path = d/sub
+Folder = +
+Size = 0
+Modified = 1980-01-01 00:00:00
+Attributes = D
+Encrypted = -
+CRC = 
+Method = Store
+Characteristics = 
+Host OS = FAT
+Version = 20
+Path = d/sub/b.txt
+Folder = -
+Size = 10
+Modified = 1980-01-01 00:00:00
+Attributes = A
+Encrypted = -
+CRC = 02DAF5B5
+Method = Store
+Characteristics = 
+Host OS = FAT
+Version = 10
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+2 files, 4 bytes (1 KiB)
+
+Creating archive: n.zip
+
+Add new data to archive: 2 files, 4 bytes (1 KiB)
+
+
+Files read from disk: 2
+Archive size: 242 bytes (1 KiB)
+Everything is Ok
+rc=0
+486774546 242
+Size = 2
+Method = Store
+Characteristics = up
+Size = 2
+Method = Store
+Characteristics = UTF8
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Open archive: r.zip
+--
+Path = r.zip
+Type = zip
+Physical Size = 529
+
+Updating archive: r.zip
+
+Keep old data in archive: 1 folder, 4 files, 49 bytes (1 KiB)
+Add new data to archive: 0 files, 0 bytes
+
+= d/a.txt
+= d/empty
+= d/ro.txt
+= d/sub/
+= d/sub/b.txt
+
+Files read from disk: 0
+Archive size: 529 bytes (1 KiB)
+Everything is Ok
+rc=0
+3318526701 529
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Open archive: x.zip
+--
+Path = x.zip
+Type = zip
+Physical Size = 529
+
+Updating archive: x.zip
+
+
+Delete data from archive: 1 file, 0 bytes
+Keep old data in archive: 1 folder, 3 files, 49 bytes (1 KiB)
+Add new data to archive: 0 files, 0 bytes
+
+= d/a.txt
+= d/ro.txt
+= d/sub/
+= d/sub/b.txt
+
+Files read from disk: 0
+Archive size: 439 bytes (1 KiB)
+Everything is Ok
+rc=0
+2696595113 439
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Open archive: x.zip
+--
+Path = x.zip
+Type = zip
+Physical Size = 439
+
+Scanning the drive:
+2 files, 36 bytes (1 KiB)
+
+Updating archive: x.zip
+
+Keep old data in archive: 1 folder, 2 files, 13 bytes (1 KiB)
+Add new data to archive: 2 files, 36 bytes (1 KiB)
+
+U d/a.txt
++ d/empty
+= d/ro.txt
+= d/sub/
+= d/sub/b.txt
+
+Files read from disk: 2
+Archive size: 529 bytes (1 KiB)
+Everything is Ok
+rc=0
+1212907442 529
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+1 folder, 3 files, 46 bytes (1 KiB)
+
+Creating archive: f.zip
+
+Add new data to archive: 1 folder, 3 files, 46 bytes (1 KiB)
+
+
+Files read from disk: 3
+Everything is Ok
+rc=0
+Path = f.zip
+Path = d/a.txt
+Folder = -
+Size = 36
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = A
+Encrypted = -
+Method = Deflate
+Characteristics = NTFS
+Host OS = FAT
+Version = 20
+Path = d/empty
+Folder = -
+Size = 0
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = A
+Encrypted = -
+Method = Store
+Characteristics = NTFS
+Host OS = FAT
+Version = 10
+Path = d/sub
+Folder = +
+Size = 0
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = D
+Encrypted = -
+Method = Store
+Characteristics = NTFS
+Host OS = FAT
+Version = 20
+Path = d/sub/b.txt
+Folder = -
+Size = 10
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = A
+Encrypted = -
+Method = Store
+Characteristics = NTFS
+Host OS = FAT
+Version = 10
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+2 files, 13929 bytes (14 KiB)
+
+Creating archive: l.zip
+
+Add new data to archive: 2 files, 13929 bytes (14 KiB)
+
+
+Files read from disk: 2
+Everything is Ok
+rc=0
+Everything is Ok
+rc=0
+Path = l.zip
+Path = big.txt
+Method = LZMA:eos
+Version = 63
+Path = d/a.txt
+Method = LZMA:eos
+Version = 63
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+2 files, 13929 bytes (14 KiB)
+
+Creating archive: pp.zip
+
+Add new data to archive: 2 files, 13929 bytes (14 KiB)
+
+
+Files read from disk: 2
+Everything is Ok
+rc=0
+Everything is Ok
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+1 file, 13893 bytes (14 KiB)
+
+Creating archive: b.zip
+
+Add new data to archive: 1 file, 13893 bytes (14 KiB)
+
+
+Files read from disk: 1
+Everything is Ok
+rc=0
+Everything is Ok
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+1 file, 13893 bytes (14 KiB)
+
+Creating archive: xz.zip
+
+Add new data to archive: 1 file, 13893 bytes (14 KiB)
+
+
+Files read from disk: 1
+Everything is Ok
+rc=0
+Everything is Ok
+rc=0
+Method = xz
+Version = 20
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+1 file, 36 bytes (1 KiB)
+
+Creating archive: c.zip
+
+Add new data to archive: 1 file, 36 bytes (1 KiB)
+
+
+Files read from disk: 1
+Everything is Ok
+rc=0
+Everything is Ok
+rc=0
+Path = c.zip
+Path = d/a.txt
+Encrypted = +
+Method = ZipCrypto Store
+Version = 20
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+2 files, 13929 bytes (14 KiB)
+
+Creating archive: e.zip
+
+Add new data to archive: 2 files, 13929 bytes (14 KiB)
+
+
+Files read from disk: 2
+Everything is Ok
+rc=0
+Everything is Ok
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Open archive: e.zip
+--
+Path = e.zip
+Type = zip
+
+Scanning the drive:
+1 file, 10 bytes (1 KiB)
+
+Updating archive: e.zip
+
+Keep old data in archive: 2 files, 13929 bytes (14 KiB)
+Add new data to archive: 1 file, 10 bytes (1 KiB)
+
+
+Files read from disk: 1
+Everything is Ok
+rc=0
+Path = e.zip
+Path = big.txt
+CRC = 
+Method = AES-256 Deflate
+Version = 51
+Path = d/a.txt
+CRC = 
+Method = AES-256 Deflate
+Version = 51
+Path = d/sub/b.txt
+CRC = 
+Method = AES-256 Store
+Version = 51
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+1 file, 36 bytes (1 KiB)
+
+Creating archive: zs.zip
+
+Add new data to archive: 1 file, 36 bytes (1 KiB)
+
+
+
+System ERROR:
+Not implemented
+rc=2
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+1 file, 36 bytes (1 KiB)
+
+Creating archive: d64.zip
+
+Add new data to archive: 1 file, 36 bytes (1 KiB)
+
+
+
+System ERROR:
+Not implemented
+rc=2
+
+
+System ERROR:
+Not implemented
+rc=2
+== write: -si
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Creating archive: s.gz
+
+Add new data to archive: 1 file, 36 bytes (1 KiB)
+
+
+Files read from disk: 1
+Everything is Ok
+rc=0
+Path = s.gz
+Path = s
+Size = 36
+Modified = 2026-10-07 08:00:00
+Host OS = FAT
+CRC = E0AC0FD0
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Creating archive: s2.gz
+
+Add new data to archive: 1 file, 36 bytes (1 KiB)
+
+
+Files read from disk: 1
+Everything is Ok
+rc=0
+2026-10-07 08:00:00 .....           36 named.txt
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Creating archive: p.gz
+
+Add new data to archive: 1 file
+
+
+Files read from disk: 1
+Everything is Ok
+rc=0
+Path = p.gz
+Path = p
+Size = 6
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Creating archive: s.tar
+
+Add new data to archive: 1 file, 36 bytes (1 KiB)
+
+
+Files read from disk: 1
+Archive size: 2048 bytes (2 KiB)
+Everything is Ok
+rc=0
+135502475 2048
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Open archive: p.tar
+--
+Path = p.tar
+Type = tar
+Physical Size = 3584
+Headers Size = 2560
+Code Page = UTF-8
+Characteristics = POSIX PREFIX ASCII
+
+Updating archive: p.tar
+
+Keep old data in archive: 1 folder, 2 files, 15 bytes (1 KiB)
+Add new data to archive: 1 file
+
+
+
+System ERROR:
+The parameter is incorrect.
+rc=2
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Creating archive: s.7z
+
+Add new data to archive: 1 file, 36 bytes (1 KiB)
+
+
+Files read from disk: 1
+Everything is Ok
+rc=0
+Path = s.7z
+Path = named.txt
+Size = 36
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = A
+CRC = E0AC0FD0
+Encrypted = -
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Creating archive: p.7z
+
+Add new data to archive: 1 file
+
+
+Files read from disk: 1
+Everything is Ok
+rc=0
+Path = p.7z
+Path = p
+Size = 6
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Open archive: s.zip
+--
+Path = s.zip
+Type = zip
+Physical Size = 529
+
+Updating archive: s.zip
+
+Keep old data in archive: 1 folder, 4 files, 49 bytes (1 KiB)
+Add new data to archive: 1 file, 36 bytes (1 KiB)
+
+
+Files read from disk: 1
+Archive size: 641 bytes (1 KiB)
+Everything is Ok
+rc=0
+32467791 641
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Creating archive: p.zip
+
+Add new data to archive: 1 file
+
+
+Files read from disk: 1
+Everything is Ok
+rc=0
+Path = p.zip
+Path = p
+Size = 6
+Method = Store
+Characteristics = NTFS
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Creating archive: sc.zip
+
+Add new data to archive: 1 file, 36 bytes (1 KiB)
+
+
+
+System ERROR:
+Not implemented
+rc=2
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Creating archive: sa.zip
+
+Add new data to archive: 1 file, 36 bytes (1 KiB)
+
+
+Files read from disk: 1
+Everything is Ok
+rc=0
+Everything is Ok
+rc=0

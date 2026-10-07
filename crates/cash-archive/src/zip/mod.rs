@@ -6,6 +6,7 @@
 
 pub mod aes;
 pub mod crypt;
+pub mod encode;
 pub mod read;
 pub mod write;
 

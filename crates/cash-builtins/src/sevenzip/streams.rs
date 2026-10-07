@@ -11,17 +11,19 @@ use std::path::{Path, PathBuf};
 use cash_archive::codec::{self, Codec, CodecError};
 use cash_archive::sevenz::Problem;
 
-use super::archive::{Data, Item, Kind, Prop};
+use super::archive::{Data, Item, Kind, Prop, TimePrec};
 
 /// FILETIME ticks at the Unix epoch.
 const UNIX_EPOCH_TICKS: u64 = 116_444_736_000_000_000;
 
 /// A stream archive's data, for decoding.
 pub(super) struct Stream {
-    path: PathBuf,
+    pub(super) path: PathBuf,
     codec: Codec,
     /// Whether the handler gives the size it decoded (all but lzma's).
     reports_size: bool,
+    /// A gzip stream's header: its size and its extra flags, which a renaming keeps.
+    pub(super) gzip_header: Option<(u64, u8)>,
 }
 
 /// What opening found: the archive's facts and its one item.
@@ -170,12 +172,14 @@ pub(super) fn open(
         path: path.to_path_buf(),
         codec,
         reports_size: true,
+        gzip_header: None,
     };
     let (physical_size, props, item_props) = match kind {
         Kind::Gzip => {
             let Some(header) = gzip_header(file)? else {
                 return Ok(None);
             };
+            stream.gzip_header = Some((header.size, header.xfl));
             if let Some(name) = header.name {
                 item.path = name;
             }
@@ -189,6 +193,7 @@ pub(super) fn open(
             item.packed = Some(len);
             item.modified =
                 (header.mtime != 0).then(|| header.mtime * 10_000_000 + UNIX_EPOCH_TICKS);
+            item.mtime_prec = TimePrec::Unix;
             item.host_os = Some(host_os(header.os));
             (
                 None,
@@ -303,6 +308,7 @@ struct GzipHeader {
     size: u64,
     name: Option<String>,
     mtime: u64,
+    xfl: u8,
     os: u8,
 }
 
@@ -353,6 +359,7 @@ fn gzip_header(file: &mut File) -> io::Result<Option<GzipHeader>> {
         size: pos as u64,
         name,
         mtime,
+        xfl: bytes[8],
         os,
     }))
 }

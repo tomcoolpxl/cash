@@ -2,7 +2,7 @@
 
 use super::archive::{Item, Prop};
 use super::cmdline::Options;
-use super::extract::{Found, archive_props, open_asking, open_error};
+use super::extract::{Found, archive_props, forced_kind, open_asking, open_error};
 use super::{Console, Env, Stop, code, text};
 use std::fmt::Write as _;
 
@@ -78,7 +78,7 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
         let mut asked = false;
         let opened = open_asking(
             archive,
-            options,
+            forced_kind(options),
             env,
             &mut password,
             &|t| console.stdout(t),

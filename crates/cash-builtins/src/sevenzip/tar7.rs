@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 
 use cash_archive::sevenz::Problem;
 
-use super::archive::{Data, Item, Prop};
+use super::archive::{Data, Item, Prop, TimePrec};
 
 const RECORD: u64 = 512;
 
@@ -21,37 +21,37 @@ const UNIX_EPOCH_TICKS: i128 = 116_444_736_000_000_000;
 
 /// A time from a pax record: seconds, nanoseconds, and how many digits it had.
 #[derive(Clone, Copy, Debug, Default)]
-struct PaxTime {
-    sec: i64,
-    ns: u32,
-    digits: Option<usize>,
+pub(super) struct PaxTime {
+    pub(super) sec: i64,
+    pub(super) ns: u32,
+    pub(super) digits: Option<usize>,
 }
 
 /// One item as 7-Zip's `CItemEx` holds it.
 #[derive(Clone, Debug, Default)]
 #[expect(clippy::struct_excessive_bools, reason = "7-Zip's flags for an item")]
-struct TarItem {
-    pack_size: u64,
-    size: u64,
-    mtime: i64,
+pub(super) struct TarItem {
+    pub(super) pack_size: u64,
+    pub(super) size: u64,
+    pub(super) mtime: i64,
     mtime_is_bin: bool,
     pack_size_is_bin: bool,
     size_is_bin: bool,
-    link_flag: u8,
-    dev_major: Option<u32>,
-    dev_minor: Option<u32>,
-    mode: u32,
-    uid: u32,
-    gid: u32,
-    name: Vec<u8>,
-    link_name: Vec<u8>,
-    user: Vec<u8>,
-    group: Vec<u8>,
-    magic: [u8; 8],
-    mtime_pax: Option<PaxTime>,
-    atime_pax: Option<PaxTime>,
-    ctime_pax: Option<PaxTime>,
-    sparse: Vec<(u64, u64)>,
+    pub(super) link_flag: u8,
+    pub(super) dev_major: Option<u32>,
+    pub(super) dev_minor: Option<u32>,
+    pub(super) mode: u32,
+    pub(super) uid: u32,
+    pub(super) gid: u32,
+    pub(super) name: Vec<u8>,
+    pub(super) link_name: Vec<u8>,
+    pub(super) user: Vec<u8>,
+    pub(super) group: Vec<u8>,
+    pub(super) magic: [u8; 8],
+    pub(super) mtime_pax: Option<PaxTime>,
+    pub(super) atime_pax: Option<PaxTime>,
+    pub(super) ctime_pax: Option<PaxTime>,
+    pub(super) sparse: Vec<(u64, u64)>,
     header_error: bool,
     method_error: bool,
     signed_checksum: bool,
@@ -65,8 +65,8 @@ struct TarItem {
     long_name_2: bool,
     long_link: bool,
     long_link_2: bool,
-    header_pos: u64,
-    header_size: u64,
+    pub(super) header_pos: u64,
+    pub(super) header_size: u64,
     pax_records: u64,
     pax_record_path: Vec<u8>,
     pax_raw_lines: Vec<u8>,
@@ -74,7 +74,7 @@ struct TarItem {
 }
 
 impl TarItem {
-    const fn is_symlink(&self) -> bool {
+    pub(super) const fn is_symlink(&self) -> bool {
         self.link_flag == b'2' && self.size == 0
     }
 
@@ -82,7 +82,7 @@ impl TarItem {
         self.link_flag == b'1'
     }
 
-    const fn is_sparse(&self) -> bool {
+    pub(super) const fn is_sparse(&self) -> bool {
         self.link_flag == b'S'
     }
 
@@ -94,11 +94,11 @@ impl TarItem {
         }
     }
 
-    const fn pack_size_aligned(&self) -> u64 {
+    pub(super) const fn pack_size_aligned(&self) -> u64 {
         (self.pack_size + 0x1FF) & !0x1FF
     }
 
-    fn is_dir(&self) -> bool {
+    pub(super) fn is_dir(&self) -> bool {
         match self.link_flag {
             b'5' | b'D' => true,
             0 | b'0' | b'2' => self.name.last() == Some(&b'/'),
@@ -106,7 +106,7 @@ impl TarItem {
         }
     }
 
-    fn combined_mode(&self) -> u32 {
+    pub(super) fn combined_mode(&self) -> u32 {
         let kind = match self.link_flag {
             b'2' => 0o120_000,
             b'4' => 0o060_000,
@@ -134,7 +134,7 @@ impl TarItem {
         self.pack_size < self.size && self.link_flag == b'5'
     }
 
-    const fn data_pos(&self) -> u64 {
+    pub(super) const fn data_pos(&self) -> u64 {
         self.header_pos + self.header_size
     }
 }
@@ -192,8 +192,12 @@ pub(super) struct Opening {
 
 /// A tar archive's items, for reading their data.
 pub(super) struct Tar {
-    path: PathBuf,
-    items: Vec<TarItem>,
+    pub(super) path: PathBuf,
+    pub(super) items: Vec<TarItem>,
+    /// Whether pax headers stood as items of their own (`_are_Pax_Items`).
+    pub(super) pax_items: bool,
+    /// Whether reading met an error or a warning, which updating refuses.
+    pub(super) faulty: bool,
 }
 
 /// `IsArc_Tar`: a first header whose mode, size, time and checksum read as numbers.
@@ -1158,6 +1162,8 @@ pub(super) fn open(path: &Path) -> io::Result<Option<Opening>> {
         tar: Tar {
             path: path.to_path_buf(),
             items,
+            pax_items: flags.pax_items,
+            faulty: last_fault.is_some() || flags.warning,
         },
     }))
 }
@@ -1176,9 +1182,12 @@ fn listed_item(item: &TarItem) -> Item {
             listed.modified = Some(ticks);
             listed.time_digits[0] = pt.digits.unwrap_or(0);
             listed.time_extra[0] = extra;
+            listed.mtime_prec =
+                TimePrec::Digits(u32::try_from(pt.digits.unwrap_or(0)).unwrap_or(0));
         }
     } else if let Some((ticks, _)) = ticks_of(item.mtime, 0) {
         listed.modified = Some(ticks);
+        listed.mtime_prec = TimePrec::Unix;
     }
     for (slot, pax) in [(1usize, item.ctime_pax), (2, item.atime_pax)] {
         if let Some(pt) = pax

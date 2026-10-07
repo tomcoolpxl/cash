@@ -7,25 +7,31 @@
 //! command's set says: copied, compressed anew, or left out. The new archive is
 //! written beside the old one, then takes its place: items without data first, then
 //! for each filter group the old blocks (copied as they are when all their items stay,
-//! else decoded and compressed again) and the new files in solid blocks.
+//! else decoded and compressed again) and the new files in solid blocks. tar, gzip,
+//! bzip2 and xz are written by their own handlers' rules (`tar`, `stream`).
 
 use std::cmp::Ordering;
 use std::fmt::Write as _;
 use std::fs::{self, File, OpenOptions};
-use std::io::{self, Read, Seek};
+use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::os::windows::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use cash_archive::sevenz::{self, ArchiveEntry, ArchiveWriter, NtTime, TimesKept};
+use cash_core::timefmt::Zone;
 
-use super::archive::{Kind, OpenFailure, Opened};
+use super::archive::{self, Kind, OpenFailure, Opened, TimePrec};
 use super::censor::compare_file_names;
 use super::cmdline::{Action, ActionSet, CmdLineError, Command, NameMode, Options};
 use super::extract::{Found, archive_props, ask_password, forced_kind, open_asking, open_error};
 use super::methods::{Filter, MethodError, Settings};
-use super::scan::{self, DirItem, Stat};
+use super::scan::{self, DirItem, Stat, UNKNOWN_SIZE};
 use super::{Console, Env, Stop, text};
+
+mod stream;
+mod tar;
+mod zip;
 
 /// Windows' codes for the errors 7-Zip's update reports.
 mod win {
@@ -97,6 +103,8 @@ struct ArcItem {
     is_dir: bool,
     size: u64,
     modified: Option<u64>,
+    /// How finely `modified` was kept.
+    prec: TimePrec,
     censored: bool,
 }
 
@@ -184,7 +192,7 @@ impl Stat2 {
             (true, true) => self.anti_dirs += 1,
             (false, false) => {
                 self.files += 1;
-                self.size += size;
+                self.size = self.size.wrapping_add(size);
             }
             (false, true) => self.anti_files += 1,
         }
@@ -216,8 +224,11 @@ fn stat_text(dirs: u64, files: u64, size: u64) -> String {
         s.push_str(", ");
     }
     s.push_str(&text::count(files, "file", "files"));
-    s.push_str(", ");
-    s.push_str(&text::size_smart(size));
+    // PrintSize_bytes_Smart_comma: no size when it is not known (-si from a pipe).
+    if size != UNKNOWN_SIZE {
+        s.push_str(", ");
+        s.push_str(&text::size_smart(size));
+    }
     s
 }
 
@@ -282,6 +293,7 @@ fn update_pairs(
     dir_items: &[DirItem],
     arc_items: &[ArcItem],
     case: bool,
+    zone: &Zone,
 ) -> Result<Vec<Pair>, Stop> {
     let mut arc_order: Vec<usize> = (0..arc_items.len()).collect();
     let arc_cmp = |a: &ArcItem, b: &ArcItem| {
@@ -362,7 +374,10 @@ fn update_pairs(
                         di.name, ai.name
                     )));
                 }
-                let state = match ai.modified.map(|m| di.modified.cmp(&m)) {
+                let state = match ai
+                    .modified
+                    .map(|m| compare_time(ai.prec, di.modified, m, zone))
+                {
                     Some(Ordering::Less) => State::NewInArchive,
                     Some(Ordering::Greater) => State::OldInArchive,
                     _ if di.size == ai.size => State::SameFiles,
@@ -380,6 +395,32 @@ fn update_pairs(
         }
     }
     Ok(pairs)
+}
+
+/// `MyCompareTime`: the disk's time against the archive's, at the precision the archive
+/// kept it in: MS-DOS's two seconds in the local zone, Unix seconds (those saturated to
+/// 32 bits compared so), a pax time's digits, else to the 100 ns.
+fn compare_time(prec: TimePrec, disk: u64, arc: u64, zone: &Zone) -> Ordering {
+    const TICKS: u64 = 10_000_000;
+    const EPOCH: i64 = 11_644_473_600;
+    let unix64 = |t: u64| i64::try_from(t / TICKS).unwrap_or(i64::MAX) - EPOCH;
+    let unix32 = |t: u64| u32::try_from(unix64(t).max(0)).unwrap_or(u32::MAX);
+    match prec {
+        TimePrec::Dos => text::dos_time(zone, disk).cmp(&text::dos_time(zone, arc)),
+        TimePrec::Unix => {
+            let u2 = unix64(arc);
+            if u2 == 0 || u2 == 0xFFFF_FFFF {
+                unix32(disk).cmp(&unix32(arc))
+            } else {
+                unix64(disk).cmp(&u2)
+            }
+        }
+        TimePrec::Digits(digits) if digits < 7 => {
+            let d = 10u64.pow(7 - digits);
+            (disk / d * d).cmp(&(arc / d * d))
+        }
+        TimePrec::Digits(_) | TimePrec::Exact => disk.cmp(&arc),
+    }
 }
 
 /// `UpdateProduce`: each pair's action; what is left out of an archive updated in
@@ -496,28 +537,43 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
         }
     }
     let given = options.archive_name.clone().unwrap_or_default();
-    let kind = forced_kind(options).or_else(|| {
+    // The format -t names, else the one the name's extension names (`InitFormatIndex`);
+    // an archive there opens as that one only.
+    let named = forced_kind(options).or_else(|| {
         (update.name_mode != NameMode::Add)
             .then(|| Kind::by_extension(Path::new(&given)))
             .flatten()
     });
-    if kind.is_some_and(|k| k != Kind::SevenZ) || update.sfx {
+    if named.is_some_and(|k| !k.writable()) || update.sfx {
         return Err(Stop::System(win_error(win::E_NOTIMPL)));
     }
-    let arc_name = final_name(&given, update.name_mode, "7z");
+    let arc_name = final_name(
+        &given,
+        update.name_mode,
+        named.unwrap_or(Kind::SevenZ).main_ext(),
+    );
     let arc_path = env.path(&arc_name);
     let rename = options.command == Command::Rename;
     let mut warnings = Warnings::default();
 
-    let source = open_source(options, env, console, &arc_name, &arc_path, rename)?;
+    let source = open_source(options, env, console, &arc_name, &arc_path, rename, named)?;
     let source = match source {
         Ok(source) => source,
         Err(info) => return Err(report_error(console, &warnings, &info)),
     };
+    // Else the archive there gives the format, which 7-Zip must write.
+    let kind = named
+        .or_else(|| source.as_ref().map(|s| s.opened.kind))
+        .unwrap_or(Kind::SevenZ);
+    if !kind.writable() {
+        return Err(Stop::System(win_error(win::E_NOTIMPL)));
+    }
 
-    let commands = commands(options, update.itself, &update.others);
+    let commands = commands(options, update.itself, &update.others, kind.main_ext());
     let mut dir_items = Vec::new();
-    if !rename
+    if let Some(name) = options.stdin.as_deref().filter(|_| !rename) {
+        dir_items.push(scan::stdin_item(name, stdin_metadata(env).as_ref()));
+    } else if !rename
         && commands
             .iter()
             .any(|(_, actions, _)| need_scanning(*actions))
@@ -560,6 +616,11 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
                 is_dir: item.is_dir,
                 size: item.size.unwrap_or(0),
                 modified: item.modified.or(s.mtime),
+                prec: if item.modified.is_some() {
+                    item.mtime_prec
+                } else {
+                    TimePrec::Exact
+                },
                 censored: options.censor.takes(&item.path, item.is_dir),
             })
             .collect()
@@ -567,7 +628,7 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
     let pairs = if rename {
         Vec::new()
     } else {
-        update_pairs(&dir_items, &arc_items, case)?
+        update_pairs(&dir_items, &arc_items, case, &env.zone)?
     };
 
     let mut processed = vec![false; dir_items.len()];
@@ -593,6 +654,7 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
             options,
             env,
             console,
+            kind,
             dir_items: &dir_items,
             arc_items: &arc_items,
             pairs: &pairs,
@@ -610,11 +672,13 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
                 ));
             }
             Err(stop) => {
-                let _ = fs::remove_file(&out_path);
+                if !options.stdout {
+                    let _ = fs::remove_file(&out_path);
+                }
                 return Err(stop);
             }
         }
-        if update.set_arc_mtime {
+        if update.set_arc_mtime && !options.stdout {
             set_latest_mtime(&out_path, &dir_items, &arc_items, &pairs);
         }
     }
@@ -636,6 +700,20 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
     Ok(warnings_check(console, &warnings))
 }
 
+/// What standard input is, when it is a file: `GetFileInformationByHandle` on it.
+fn stdin_metadata<SE: cash_core::ShellExtensions>(env: &Env<'_, SE>) -> Option<fs::Metadata> {
+    use cash_core::openfiles::{OpenFile, OpenFiles};
+    use std::os::windows::io::AsHandle;
+    match env.context.try_fd(OpenFiles::STDIN_FD)? {
+        OpenFile::File(file) => file.metadata().ok(),
+        OpenFile::Stdin(stdin) => {
+            let handle = stdin.as_handle().try_clone_to_owned().ok()?;
+            File::from(handle).metadata().ok()
+        }
+        _ => None,
+    }
+}
+
 /// A copy of an error, for keeping one that is also reported.
 fn copy_error(error: &io::Error) -> io::Error {
     error.raw_os_error().map_or_else(
@@ -649,6 +727,7 @@ fn commands(
     options: &Options,
     itself: Option<ActionSet>,
     others: &[(String, ActionSet)],
+    ext: &str,
 ) -> Vec<(String, ActionSet, bool)> {
     let mode = options
         .update
@@ -657,10 +736,10 @@ fn commands(
     let given = options.archive_name.clone().unwrap_or_default();
     let mut list = Vec::new();
     if let Some(actions) = itself {
-        list.push((final_name(&given, mode, "7z"), actions, true));
+        list.push((final_name(&given, mode, ext), actions, true));
     }
     for (name, actions) in others {
-        list.push((final_name(name, mode, "7z"), *actions, false));
+        list.push((final_name(name, mode, ext), *actions, false));
     }
     list
 }
@@ -674,6 +753,7 @@ fn open_source<SE: cash_core::ShellExtensions>(
     arc_name: &str,
     arc_path: &Path,
     rename: bool,
+    named: Option<Kind>,
 ) -> Result<Result<Option<Source>, ErrorInfo>, Stop> {
     let Ok(meta) = fs::metadata(arc_path) else {
         if rename {
@@ -713,7 +793,7 @@ fn open_source<SE: cash_core::ShellExtensions>(
         size: meta.len(),
     };
     // The handler takes -m before it opens the archive: a bad one fails the opening.
-    if let Err(error) = Settings::parse(&options.properties) {
+    if let Err(error) = check_properties(named.unwrap_or(Kind::SevenZ), &options.properties) {
         let failure = OpenFailure::NotArchive {
             tried: None,
             flags: Vec::new(),
@@ -724,7 +804,7 @@ fn open_source<SE: cash_core::ShellExtensions>(
             open_error(&found, &failure, false)
         ));
         console.flush_se();
-        return Err(Stop::from(error));
+        return Err(error);
     }
     let mut password = options.password.clone().filter(|p| !p.is_empty());
     let mut asked = false;
@@ -732,7 +812,7 @@ fn open_source<SE: cash_core::ShellExtensions>(
         console.so(t);
         console.flush_so();
     };
-    match open_asking(&found, options, env, &mut password, &prompt, &mut asked)? {
+    match open_asking(&found, named, env, &mut password, &prompt, &mut asked)? {
         Ok(opened) => {
             console.so(&archive_props(&found, &opened));
             console.so("\n");
@@ -743,11 +823,9 @@ fn open_source<SE: cash_core::ShellExtensions>(
                     code: win::E_NOTIMPL,
                 }));
             }
-            // Updating other formats comes later in the phase.
-            let Some(archive) = opened.archive() else {
-                return Err(Stop::System(win_error(win::E_NOTIMPL)));
-            };
-            let header_encrypted = archive.header_encrypted();
+            let header_encrypted = opened
+                .archive()
+                .is_some_and(sevenz::Archive::header_encrypted);
             Ok(Ok(Some(Source {
                 opened,
                 mtime: Some(meta.last_write_time()),
@@ -939,6 +1017,7 @@ struct Job<'a, 'c, SE: cash_core::ShellExtensions> {
     options: &'a Options,
     env: &'a Env<'c, SE>,
     console: &'a Console<'c, SE>,
+    kind: Kind,
     dir_items: &'a [DirItem],
     arc_items: &'a [ArcItem],
     pairs: &'a [Pair],
@@ -982,12 +1061,8 @@ impl Groups {
 }
 
 impl<SE: cash_core::ShellExtensions> Job<'_, '_, SE> {
-    /// `Compress` and the 7z handler's update: the actions, the counts, then the
-    /// archive; returns the files read and the archive's size.
-    #[expect(
-        clippy::too_many_lines,
-        reason = "7-Zip's Compress and Update, step by step"
-    )]
+    /// `Compress`: the handler's properties, the actions, the counts, then the archive
+    /// as its format writes it; returns the files read and the archive's size.
     fn compress(
         &self,
         source: &mut Option<Source>,
@@ -996,7 +1071,7 @@ impl<SE: cash_core::ShellExtensions> Job<'_, '_, SE> {
         processed: &mut [bool],
     ) -> Result<(u64, u64), Stop> {
         let console = self.console;
-        let settings = Settings::parse(&self.options.properties)?;
+        check_properties(self.kind, &self.options.properties)?;
         let mut deleted = Stat2::default();
         let ups = if self.rename {
             self.rename_ups()
@@ -1033,9 +1108,31 @@ impl<SE: cash_core::ShellExtensions> Job<'_, '_, SE> {
         let _ = writeln!(s, "Add new data to archive: {}\n", new.text());
         console.so(&s);
 
+        if self.kind != Kind::SevenZ {
+            return self.write_other(source.as_ref(), &ups, out_path, warnings, processed);
+        }
         if self.options.stdout {
             return Err(Stop::System(win_error(win::E_NOTIMPL)));
         }
+        self.write_7z(source, &ups, out_path, warnings, processed)
+    }
+
+    /// The 7z handler's update: items without data, then each filter group's old blocks
+    /// and new files, then the header.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "7-Zip's 7z UpdateItems and Update, step by step"
+    )]
+    fn write_7z(
+        &self,
+        source: &mut Option<Source>,
+        ups: &[Up],
+        out_path: &Path,
+        warnings: &mut Warnings,
+        processed: &mut [bool],
+    ) -> Result<(u64, u64), Stop> {
+        let console = self.console;
+        let settings = Settings::parse(&self.options.properties)?;
 
         // The 7z handler's items, and which times and attributes it keeps.
         let db = source.as_ref().and_then(|s| s.opened.archive().cloned());
@@ -1163,7 +1260,7 @@ impl<SE: cash_core::ShellExtensions> Job<'_, '_, SE> {
         let mut reduce = 0u64;
         for item in items.iter().filter(|i| i.up.new_data) {
             if solid {
-                reduce += item.size;
+                reduce = reduce.saturating_add(item.size);
             } else {
                 reduce = reduce.max(item.size);
             }
@@ -1255,6 +1352,114 @@ impl<SE: cash_core::ShellExtensions> Job<'_, '_, SE> {
             }
         }
         Ok((files_read, size))
+    }
+
+    /// tar, gzip, bzip2 and xz: the items from the disk and the old archive's listing,
+    /// written by the format's handler to the file or to standard output.
+    fn write_other(
+        &self,
+        source: Option<&Source>,
+        ups: &[Up],
+        out_path: &Path,
+        warnings: &mut Warnings,
+        processed: &mut [bool],
+    ) -> Result<(u64, u64), Stop> {
+        let opened = source.map(|s| &s.opened);
+        let listed = opened.map_or(&[][..], |o| o.items.as_slice());
+        let items: Vec<Item> = ups.iter().map(|up| self.listed_item(up, listed)).collect();
+        let console = self.console;
+        let to_stdout = |bytes: &[u8]| console.data(bytes);
+        let mut out = if self.options.stdout {
+            Out::new(Sink::Stdout(&to_stdout))
+        } else {
+            Out::new(Sink::File(File::create(out_path).map_err(Stop::System)?))
+        };
+        let files_read = match self.kind {
+            Kind::Tar => tar::write(self, opened, &items, &mut out, warnings, processed)?,
+            Kind::Zip => zip::write(self, opened, &items, &mut out, warnings, processed)?,
+            Kind::Gzip | Kind::Bzip2 | Kind::Xz => stream::write(
+                self, self.kind, opened, &items, &mut out, warnings, processed,
+            )?,
+            _ => return Err(Stop::System(win_error(win::E_NOTIMPL))),
+        };
+        let size = out.finish().map_err(Stop::System)?;
+        Ok((files_read, size))
+    }
+
+    /// An item of the new archive for a pair's outcome, from the disk or from the old
+    /// archive's listing (the formats besides 7z).
+    fn listed_item(&self, up: &Up, listed: &[archive::Item]) -> Item {
+        let mut item = Item {
+            up: up.clone(),
+            ..Item::default()
+        };
+        if let Some(old) = up.arc.and_then(|a| listed.get(a)) {
+            item.name.clone_from(&old.path);
+            item.is_dir = old.is_dir;
+            item.size = old.size.unwrap_or(0);
+            item.modified = old.modified;
+            item.created = old.created;
+            item.accessed = old.accessed;
+            item.attrib = old.attrib;
+        }
+        if up.new_props {
+            if let Some(di) = up.dir.map(|d| &self.dir_items[d]) {
+                item.name.clone_from(&di.name);
+                item.is_dir = di.is_dir;
+                item.attrib = Some(di.attrib);
+                item.modified = Some(di.modified);
+                item.created = Some(di.created);
+                item.accessed = Some(di.accessed);
+            }
+            if let Some(new_name) = &up.new_name {
+                item.name.clone_from(new_name);
+            }
+            item.name = item.name.replace('\\', "/");
+            item.is_anti = up.is_anti;
+        }
+        if up.new_data {
+            item.size = match up.dir {
+                Some(d) if !item.is_dir => self.dir_items[d].size,
+                _ => 0,
+            };
+        }
+        item
+    }
+
+    /// `GetStream`'s line for a new item at `-bb1`: "+ name", or "U name" for one the
+    /// archive had; none when the archive goes to standard output.
+    fn announce(&self, item: &Item) {
+        if self.options.stdout {
+            return;
+        }
+        if let Some(d) = item.up.dir {
+            let di = &self.dir_items[d];
+            let mark = if item.up.arc.is_some() { "U" } else { "+" };
+            let mut name = di.name.clone();
+            if name.is_empty() {
+                name.push_str("[Content]");
+            } else if di.is_dir && !name.ends_with('/') {
+                name.push('/');
+            }
+            progress(self.console, self.options, 1, mark, &name);
+        }
+    }
+
+    /// A new file, open, or standard input for `-si`; or the warning that it would not
+    /// open, kept for the end (`OpenFileError`), and `None`.
+    fn open_new(&self, d: usize, warnings: &mut Warnings) -> Option<Input> {
+        let di = &self.dir_items[d];
+        if di.path.as_os_str().is_empty() {
+            return Some(Input::Stdin(Box::new(self.env.context.stdin())));
+        }
+        match File::open(&di.path) {
+            Ok(file) => Some(Input::File(file)),
+            Err(error) => {
+                common_error(self.console, &di.shown, &error, true);
+                warnings.failed.push((di.shown.clone(), copy_error(&error)));
+                None
+            }
+        }
     }
 
     /// `rn`: every item kept, those a pair names under their new names.
@@ -1514,7 +1719,7 @@ impl<SE: cash_core::ShellExtensions> Job<'_, '_, SE> {
             let mut first_ext: Option<String> = None;
             while i + count < order.len() && (count as u64) < solid_files {
                 let item = &items[order[i + count]];
-                total += item.size;
+                total = total.saturating_add(item.size);
                 if total > solid_bytes {
                     break;
                 }
@@ -1539,15 +1744,9 @@ impl<SE: cash_core::ShellExtensions> Job<'_, '_, SE> {
                         continue;
                     };
                     let di = &self.dir_items[d];
-                    let mark = if item.up.arc.is_some() { "U" } else { "+" };
-                    progress(console, self.options, 1, mark, &di.name);
-                    let file = match File::open(&di.path) {
-                        Ok(file) => file,
-                        Err(error) => {
-                            common_error(console, &di.shown, &error, true);
-                            warnings.failed.push((di.shown.clone(), copy_error(&error)));
-                            continue;
-                        }
+                    self.announce(item);
+                    let Some(file) = self.open_new(d, warnings) else {
+                        continue;
                     };
                     let mut watched = Watched { file, error: None };
                     if let Err(error) = sink.add(item.entry(), &mut watched) {
@@ -1589,9 +1788,149 @@ impl<SE: cash_core::ShellExtensions> Job<'_, '_, SE> {
     }
 }
 
+/// The format's handler takes `-m`'s properties (`SetProperties`): the 7z handler's, the
+/// tar handler's, or a stream format's.
+fn check_properties(kind: Kind, properties: &[(String, Option<String>)]) -> Result<(), Stop> {
+    match kind {
+        Kind::Tar => tar::check(properties)?,
+        Kind::Zip => zip::check(properties)?,
+        Kind::Gzip | Kind::Bzip2 | Kind::Xz => {
+            stream::Settings::parse(kind, properties)?;
+        }
+        _ => {
+            Settings::parse(properties)?;
+        }
+    }
+    Ok(())
+}
+
+/// Where an archive of the other formats goes: its file, or standard output (`-so`).
+enum Sink<'a> {
+    File(File),
+    Stdout(&'a dyn Fn(&[u8]) -> io::Result<()>),
+}
+
+/// The archive being written: held in a buffer, its position counted, a header written
+/// again in place when the file allows it.
+struct Out<'a> {
+    sink: Sink<'a>,
+    buf: Vec<u8>,
+    pos: u64,
+}
+
+impl<'a> Out<'a> {
+    const HELD: usize = 1 << 20;
+
+    const fn new(sink: Sink<'a>) -> Self {
+        Self {
+            sink,
+            buf: Vec::new(),
+            pos: 0,
+        }
+    }
+
+    const fn position(&self) -> u64 {
+        self.pos
+    }
+
+    fn drain(&mut self) -> io::Result<()> {
+        if self.buf.is_empty() {
+            return Ok(());
+        }
+        match &mut self.sink {
+            Sink::File(file) => file.write_all(&self.buf)?,
+            Sink::Stdout(write) => write(&self.buf)?,
+        }
+        self.buf.clear();
+        Ok(())
+    }
+
+    /// Drops what was written from `at` on, to write it again; false when the archive
+    /// goes to standard output.
+    fn truncate_to(&mut self, at: u64) -> io::Result<bool> {
+        self.drain()?;
+        let Sink::File(file) = &mut self.sink else {
+            return Ok(false);
+        };
+        file.set_len(at)?;
+        file.seek(SeekFrom::Start(at))?;
+        self.pos = at;
+        Ok(true)
+    }
+
+    /// Writes `bytes` again at `at`; false when the archive goes to standard output.
+    fn rewrite_at(&mut self, at: u64, bytes: &[u8]) -> io::Result<bool> {
+        self.drain()?;
+        let Sink::File(file) = &mut self.sink else {
+            return Ok(false);
+        };
+        file.seek(SeekFrom::Start(at))?;
+        file.write_all(bytes)?;
+        file.seek(SeekFrom::End(0))?;
+        Ok(true)
+    }
+
+    /// Writes what is held; returns the archive's size.
+    fn finish(mut self) -> io::Result<u64> {
+        self.drain()?;
+        if let Sink::File(file) = &mut self.sink {
+            file.flush()?;
+            file.set_len(self.pos)?;
+        }
+        Ok(self.pos)
+    }
+}
+
+impl Write for Out<'_> {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        self.buf.extend_from_slice(bytes);
+        self.pos += bytes.len() as u64;
+        if self.buf.len() >= Self::HELD {
+            self.drain()?;
+        }
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.drain()
+    }
+}
+
+/// A new item's data: its file, or standard input (`-si`).
+enum Input {
+    File(File),
+    Stdin(Box<dyn Read>),
+}
+
+impl Input {
+    /// The file, which can be read again and asked its size; not standard input.
+    const fn file(&mut self) -> Option<&mut File> {
+        match self {
+            Self::File(file) => Some(file),
+            Self::Stdin(_) => None,
+        }
+    }
+
+    /// The size the file has now, else `fallback`.
+    fn size_or(&mut self, fallback: u64) -> u64 {
+        self.file()
+            .and_then(|f| f.metadata().ok())
+            .map_or(fallback, |m| m.len())
+    }
+}
+
+impl Read for Input {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        match self {
+            Self::File(file) => file.read(buf),
+            Self::Stdin(stdin) => stdin.read(buf),
+        }
+    }
+}
+
 /// A file being read into a block, its read error kept for the message.
 struct Watched {
-    file: File,
+    file: Input,
     error: Option<io::Error>,
 }
 

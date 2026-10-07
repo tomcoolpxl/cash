@@ -670,7 +670,14 @@ pub(super) fn parse_command(parsed: &Parsed) -> Result<Options, CmdLineError> {
         .iter()
         .map(|s| match s.split_once('=') {
             Some((name, value)) => (name.to_owned(), Some(value.to_owned())),
-            None => (s.clone(), None),
+            // A name ending in `-` or `+` is off or on (`SetProperties`): `-mtm-`.
+            None => match s.strip_suffix(['-', '+']) {
+                Some(name) => (
+                    name.to_owned(),
+                    Some(s.get(name.len()..).unwrap_or_default().to_owned()),
+                ),
+                None => (s.clone(), None),
+            },
         })
         .collect();
 

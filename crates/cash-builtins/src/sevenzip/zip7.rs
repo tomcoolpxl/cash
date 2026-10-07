@@ -13,7 +13,7 @@ use cash_archive::sevenz::Problem;
 use cash_archive::zip::read::{self as zread, DataError};
 use cash_archive::zip::{Entry, method};
 
-use super::archive::{Data, Item, Prop};
+use super::archive::{Data, Item, Prop, TimePrec};
 
 /// FILETIME ticks at the Unix epoch.
 const UNIX_EPOCH_TICKS: u64 = 116_444_736_000_000_000;
@@ -28,8 +28,8 @@ pub(super) struct Opening {
 
 /// A zip archive, open, for reading its items' data.
 pub(super) struct Zip {
-    path: PathBuf,
-    archive: zread::Archive,
+    pub(super) path: PathBuf,
+    pub(super) archive: zread::Archive,
     password: Option<String>,
 }
 
@@ -422,19 +422,27 @@ fn listed_item(entry: &Entry, zone: &cash_core::timefmt::Zone, base: i64) -> Ite
     for (slot, ntfs_index) in times {
         let value = ntfs
             .and_then(|d| ntfs_time(d, ntfs_index))
-            .map(|t| (t, 7))
+            .map(|t| (t, 7, TimePrec::Exact))
             .or_else(|| {
-                ut.and_then(|d| unix_time_central(d, slot))
-                    .map(|u| (u64::from(u) * 10_000_000 + UNIX_EPOCH_TICKS, 0))
+                ut.and_then(|d| unix_time_central(d, slot)).map(|u| {
+                    (
+                        u64::from(u) * 10_000_000 + UNIX_EPOCH_TICKS,
+                        0,
+                        TimePrec::Unix,
+                    )
+                })
             });
         let value = if slot == 0 {
-            value.or_else(|| dos_ticks(entry, zone).map(|t| (t, 0)))
+            value.or_else(|| dos_ticks(entry, zone).map(|t| (t, 0, TimePrec::Dos)))
         } else {
             value
         };
-        if let Some((ticks, digits)) = value {
+        if let Some((ticks, digits, prec)) = value {
             match slot {
-                0 => item.modified = Some(ticks),
+                0 => {
+                    item.modified = Some(ticks);
+                    item.mtime_prec = prec;
+                }
                 1 => item.created = Some(ticks),
                 _ => item.accessed = Some(ticks),
             }

@@ -51,6 +51,25 @@ impl Kind {
         }
     }
 
+    /// The extension an archive of the format is named with (`GetMainExt`).
+    pub(super) const fn main_ext(self) -> &'static str {
+        match self {
+            Self::SevenZ => "7z",
+            Self::Zip => "zip",
+            Self::Tar => "tar",
+            Self::Gzip => "gz",
+            Self::Bzip2 => "bz2",
+            Self::Xz => "xz",
+            Self::Zstd => "zst",
+            Self::Lzma => "lzma",
+        }
+    }
+
+    /// Whether 7-Zip writes the format (`UpdateEnabled`).
+    pub(super) const fn writable(self) -> bool {
+        !matches!(self, Self::Zstd | Self::Lzma)
+    }
+
     /// The format a name's suffix suggests.
     pub(super) fn by_extension(path: &Path) -> Option<Self> {
         let ext = path.extension()?.to_string_lossy().to_ascii_lowercase();
@@ -170,6 +189,20 @@ impl Prop {
     }
 }
 
+/// How finely an item's modified time was kept (`k_PropVar_TimePrec_*`), which `u`
+/// compares the disk's time at: to the 100 ns unless the format says.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) enum TimePrec {
+    #[default]
+    Exact,
+    /// Seconds since 1970 (tar, gzip, zip's UT field).
+    Unix,
+    /// MS-DOS's local time in two seconds (zip).
+    Dos,
+    /// Digits of a second (a pax time).
+    Digits(u32),
+}
+
 /// An item as 7-Zip lists it.
 #[derive(Clone, Debug, Default)]
 pub(super) struct Item {
@@ -193,6 +226,8 @@ pub(super) struct Item {
     pub(super) time_digits: [usize; 3],
     /// The nanoseconds past each time's ticks, for 8 and 9 digits.
     pub(super) time_extra: [u8; 3],
+    /// How finely the modified time was kept.
+    pub(super) mtime_prec: TimePrec,
     pub(super) host_os: Option<String>,
     /// The format's other properties, by name.
     pub(super) extra: Vec<(Prop, String)>,
@@ -270,6 +305,10 @@ impl Data for sevenz::EntryReader<'_> {
 
 /// Opens `path` as `forced`, or as its first bytes say; a format its name suggests is
 /// the one an error names.
+#[expect(
+    clippy::too_many_lines,
+    reason = "each format's opening, in 7-Zip's order"
+)]
 pub(super) fn open(
     path: &Path,
     forced: Option<Kind>,
@@ -373,6 +412,16 @@ pub(super) fn open(
         }
     };
     opened.type_warning = type_warning;
+    // GetItem_DefaultPath: a file without a name takes the archive's, less its extension.
+    let file_name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    for item in &mut opened.items {
+        if item.path.is_empty() && !item.is_dir {
+            item.path = super::streams::default_name(&file_name, opened.kind);
+        }
+    }
     Ok(opened)
 }
 
@@ -495,6 +544,7 @@ fn items_of(archive: &sevenz::Archive) -> Vec<Item> {
                 block: block.map(|b| b as u64),
                 time_digits: [7; 3],
                 time_extra: [0; 3],
+                mtime_prec: TimePrec::Exact,
                 host_os: None,
                 extra: Vec::new(),
             }
@@ -697,6 +747,30 @@ impl Opened {
         match &self.backend {
             Backend::SevenZ(reader) => Some(reader.archive()),
             Backend::Stream(_) | Backend::Tar(_) | Backend::Zip(_) => None,
+        }
+    }
+
+    /// The tar archive's items as read, for updating.
+    pub(super) const fn tar(&self) -> Option<&super::tar7::Tar> {
+        match &self.backend {
+            Backend::Tar(tar) => Some(tar),
+            _ => None,
+        }
+    }
+
+    /// The zip archive's records as read, for updating.
+    pub(super) fn zip(&self) -> Option<&super::zip7::Zip> {
+        match &self.backend {
+            Backend::Zip(zip) => Some(zip),
+            _ => None,
+        }
+    }
+
+    /// The stream's file and header, for updating.
+    pub(super) const fn stream(&self) -> Option<&super::streams::Stream> {
+        match &self.backend {
+            Backend::Stream(stream) => Some(stream),
+            _ => None,
         }
     }
 

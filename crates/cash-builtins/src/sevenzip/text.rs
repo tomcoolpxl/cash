@@ -46,6 +46,35 @@ fn unix_of(ticks: u64) -> (i64, u32) {
     (seconds, rest)
 }
 
+/// `UtcFileTime_To_LocalDosTime`: FILETIME ticks as an MS-DOS time in `zone`, rounded up
+/// to the two seconds it counts in, within its years, 1980 to 2107.
+pub(super) fn dos_time(zone: &Zone, ticks: u64) -> u32 {
+    use chrono::{Datelike, Timelike};
+    const LOW: u32 = 0x0021_0000;
+    const HIGH: u32 = 0xFF9F_BF7D;
+    let (seconds, rest) = unix_of(ticks);
+    let mut seconds = seconds + i64::from(rest != 0);
+    seconds += seconds.rem_euclid(2);
+    let Some(utc) = DateTime::<Utc>::from_timestamp(seconds, 0) else {
+        return LOW;
+    };
+    let local = zone.to_local(utc);
+    let year = local.year();
+    if year < 1980 {
+        return LOW;
+    }
+    if year > 2107 {
+        return HIGH;
+    }
+    let year = u32::try_from(year - 1980).unwrap_or(0);
+    (year << 25)
+        | (local.month() << 21)
+        | (local.day() << 16)
+        | (local.hour() << 11)
+        | (local.minute() << 5)
+        | (local.second() / 2)
+}
+
 /// A time as 7-Zip lists it: `YYYY-MM-DD HH:MM:SS` in the shell's zone, with `digits`
 /// of the fraction (7 in a technical listing); empty for the zero time.
 pub(super) fn time(zone: &Zone, ticks: u64, digits: usize) -> String {

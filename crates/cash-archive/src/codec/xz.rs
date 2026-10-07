@@ -422,6 +422,28 @@ pub fn compressor<'a>(
     })
 }
 
+/// A .xz writer whose LZMA2 is as `lzma_options` say, `check` on each block and a new
+/// block every `block_size` bytes of input (one block without): 7-Zip's xz handler
+/// chooses its own options.
+///
+/// # Errors
+///
+/// When the stream's header cannot be written.
+pub fn xz_writer<'a>(
+    lzma_options: LzmaOptions,
+    check: Check,
+    block_size: Option<NonZeroU64>,
+    inner: impl Write + 'a,
+) -> io::Result<Box<dyn Encoder + 'a>> {
+    let mut options = XzOptions {
+        lzma_options,
+        ..XzOptions::default()
+    };
+    options.set_check_sum_type(check.check_type());
+    options.set_block_size(block_size);
+    Ok(Box::new(XzWriter::new(inner, options)?))
+}
+
 /// What `xz --list` found wrong with a file.
 #[derive(Debug)]
 pub enum InfoProblem {

@@ -162,3 +162,140 @@ z l -ba i.dat
 cp i.zip crc.zip
 printf 'Z' | dd of=crc.zip bs=1 seek=300 conv=notrunc 2>/dev/null
 z t crc.zip
+
+# Writing. Archives 7-Zip compresses differ from cash's in their bytes, so `zs` leaves
+# out the sizes and `cksum` checks only what is stored: tars, and zips with -mtm- (whose
+# MS-DOS time is then 1980's in any zone).
+zs() { z "$@" | grep -vE '^(Archive size: |Physical Size = |Headers Size = )'; }
+zp() { z l -slt "$@" | grep -E '^(Path|Folder|Size|Modified|Attributes|Mode|Method|Characteristics|Version|Host OS|Encrypted|CRC) = |^rc='; }
+zt() { z t "$@" | grep -E '^(Everything is Ok|ERROR|Sub items Errors|Archives with Errors|rc=)'; }
+mkdir -p wd/d/sub
+cd wd || exit 1
+printf 'alpha alpha alpha alpha alpha alpha\n' > d/a.txt
+printf 'beta beta\n' > d/sub/b.txt
+: > d/empty
+printf 'ro\n' > d/ro.txt
+printf 'e\n' > "d/caf$(printf '\303\251')"
+printf 's\n' > "d/smile$(printf '\342\230\272')"
+seq 1 3000 > big.txt
+L=d/0123456789012345678901234567890123456789012345678901234567890123456789/abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnop
+mkdir -p "${L%/*}"
+printf 'long\n' > "$L"
+touch -d '2026-10-07 08:00:00' d/a.txt d/sub/b.txt d/empty d/ro.txt d/caf* d/smile* big.txt "$L" "${L%/*}" d/sub d
+chmod a-w d/ro.txt
+
+echo "== write: tar"
+z a -bb1 x.tar d/a.txt d/sub d/empty d/ro.txt
+cksum < x.tar
+zp x.tar
+z a -mm=pax p.tar d/sub "$L"
+cksum < p.tar
+z a g.tar "$L"
+cksum < g.tar
+z u -bb3 x.tar d/a.txt d/sub d/empty d/ro.txt
+cksum < x.tar
+z d -bb3 x.tar d/a.txt
+cksum < x.tar
+z rn x.tar d/sub d/moved
+cksum < x.tar
+z l -ba x.tar
+touch -d '2026-10-07 09:00:00' d/sub/b.txt
+z u -bb1 x.tar d/sub
+touch -d '2026-10-07 08:00:00' d/sub/b.txt
+z a -mtm- t0.tar d/a.txt
+cksum < t0.tar
+7z a -so -ttar sox d/sub > so.tar
+echo "rc=$?"
+cksum < so.tar
+z a bad.tar d/a.txt -mx=x
+z a bad2.tar d/a.txt -md=24
+cp t0.tar t1.tar
+z a t1.tar d/a.txt -md=24
+
+echo "== write: gzip, bzip2, xz"
+zs a x.gz d/a.txt
+od -A n -t x1 -N 16 x.gz
+zp x.gz | grep -v '^Packed'
+zs a y.gz d
+zs u x.gz d/a.txt
+zs rn -bb3 x.gz a.txt b.txt
+od -A n -t x1 -N 16 x.gz
+zs a -mx9 x9.gz d/a.txt
+od -A n -t x1 -N 10 x9.gz
+zs a -mtm- t0.gz d/a.txt
+od -A n -t x1 -N 10 t0.gz
+zs a -mtc t1.gz d/a.txt
+zs a -tgzip noext d/a.txt
+ls noext*
+zs a x.bz2 d/a.txt
+zt x.bz2
+zs a x.xz big.txt
+z l -slt x.xz | grep -E '^(Method|Streams|Blocks) ='
+zs a -mcrc=8 x64.xz d/a.txt
+z l -slt x64.xz | grep -E '^Method ='
+zs d x.xz x
+cksum < x.xz
+z a x.zst d/a.txt
+cp x.gz q.tar
+z a q.tar d/a.txt
+
+echo "== write: zip"
+z a -mx0 -mtm- -bb3 s.zip d/a.txt d/sub d/empty d/ro.txt
+cksum < s.zip
+zp s.zip
+z a -mx0 -mtm- n.zip d/caf* d/smile*
+cksum < n.zip
+z l -slt n.zip | grep -E '^(Size|Method|Characteristics) ='
+cp s.zip r.zip
+z rn -mtm- -bb3 r.zip d/a.txt d/x.txt
+cksum < r.zip
+cp s.zip x.zip
+z d -bb3 x.zip d/empty
+cksum < x.zip
+z u -mx0 -mtm- -bb3 x.zip d/a.txt d/empty
+cksum < x.zip
+zs a f.zip d/a.txt d/sub d/empty
+zp f.zip | grep -v '^CRC'
+zs a -mm=LZMA l.zip d/a.txt big.txt
+zt l.zip
+zp l.zip | grep -E '^(Path|Method|Version) ='
+zs a -mm=PPMd pp.zip d/a.txt big.txt
+zt pp.zip
+zs a -mm=BZip2 b.zip big.txt
+zt b.zip
+zs a -mm=xz xz.zip big.txt
+zt xz.zip
+zp xz.zip | grep -E '^(Method|Version) ='
+zs a -mx0 -pab c.zip d/a.txt
+zt -pab c.zip
+zp -pab c.zip | grep -E '^(Path|Method|Version|Encrypted) ='
+zs a -pab -mem=AES256 e.zip d/a.txt big.txt
+zt -pab e.zip
+zs a -pab e.zip d/sub/b.txt
+zp -pab e.zip | grep -E '^(Path|Method|Version|CRC) ='
+z a -mm=zstd zs.zip d/a.txt
+z a -mm=Deflate64x d64.zip d/a.txt
+7z a -so -tzip -mx0 sox d/a.txt > so.zip
+echo "rc=$?"
+
+echo "== write: -si"
+zs a -si s.gz < d/a.txt
+zp s.gz | grep -v '^Packed'
+zs a -sinamed.txt s2.gz < d/a.txt
+z l -ba s2.gz | sed 's/  *[0-9]*  named/ named/'
+printf 'piped\n' | zs a -si p.gz
+z l -slt p.gz | grep -E '^(Path|Size) ='
+z a -sinamed.txt s.tar < d/a.txt
+cksum < s.tar
+printf 'piped\n' | z a -sinamed.txt p.tar
+zs a -sinamed.txt s.7z < d/a.txt
+zp s.7z | grep -v '^Method'
+printf 'piped\n' | zs a -si p.7z
+z l -slt p.7z | grep -E '^(Path|Size) ='
+z a -si -mx0 -mtm- s.zip < d/a.txt
+cksum < s.zip
+printf 'piped\n' | zs a -si -mx0 p.zip
+z l -slt p.zip | grep -E '^(Path|Size|Method|Characteristics) ='
+z a -si -mx0 -pab sc.zip < d/a.txt
+zs a -si -mx0 -pab -mem=AES128 sa.zip < d/a.txt
+zt -pab sa.zip

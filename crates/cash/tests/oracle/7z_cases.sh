@@ -304,3 +304,15 @@ zl ../f2.7z | grep -E '^(Path|Block|Blocks) '
 printf 'pw\n' | z a -p -mx0 ../pw.7z t.txt
 z l -slt -ppw ../pw.7z | grep -E '^(Path|Encrypted|Method) = '
 cd ..
+
+echo "== named formats"
+printf 'n\n' > n1.txt
+printf 'm\n' > n2.txt
+touch -d '2026-10-07 08:00:00' n1.txt n2.txt
+z a -tzip -mx0 -bso0 nz.zip n1.txt
+cp nz.zip nz.7z
+z a nz.7z n2.txt
+zs a -mm=PPMd mm.7z n1.txt -bso0
+zl mm.7z
+zs a -mhc- -mtc- -mx0 hc.7z n1.txt n2.txt
+od -A n -t x1 -N 8 hc.7z
