@@ -72,10 +72,10 @@ fn a_full_copy_later_on_path_is_pointed_at() {
     let full = root.path().join("gnu");
     std::fs::create_dir(&shims).unwrap();
     std::fs::create_dir(&full).unwrap();
-    // `nc` was the example here until cash carried its own, which doctor then has no
-    // reason to look for on PATH.
-    shim(&shims, "tar", r"C:\scoop\apps\busybox\current\busybox.exe");
-    std::fs::write(full.join("tar.exe"), b"MZ").unwrap();
+    // `nc`, then `tar`, were the example here until cash carried its own, which
+    // doctor then has no reason to look for on PATH.
+    shim(&shims, "make", r"C:\scoop\apps\busybox\current\busybox.exe");
+    std::fs::write(full.join("make.exe"), b"MZ").unwrap();
 
     let report = doctor(&format!(
         "{};{};C:\\Windows\\System32",
@@ -83,11 +83,11 @@ fn a_full_copy_later_on_path_is_pointed_at() {
         full.display()
     ));
     let shown_full = full.to_string_lossy().replace('\\', "/");
-    let tar = doctor_finding(&report, "no --transform");
-    assert!(tar.is_some(), "{report}");
+    let make = doctor_finding(&report, "$(shell ...) expands to nothing");
+    assert!(make.is_some(), "{report}");
     // A fix's paths are written out in full, to be pasted.
     assert!(
-        tar.unwrap().fix.is_some_and(|fix| fix.contains(&format!(
+        make.unwrap().fix.is_some_and(|fix| fix.contains(&format!(
             "is the full tool, later on PATH: put {shown_full} before"
         ))),
         "{report}"

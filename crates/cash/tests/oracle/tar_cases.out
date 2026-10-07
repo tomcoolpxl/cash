@@ -1,0 +1,617 @@
+== no operation
+tar: You must specify one of the '-Acdtrux', '--delete' or '--test-label' options
+Try 'tar --help' or 'tar --usage' for more information.
+rc=2
+tar: You must specify one of the '-Acdtrux', '--delete' or '--test-label' options
+Try 'tar --help' or 'tar --usage' for more information.
+rc=2
+tar: You may not specify more than one '-Acdtrux', '--delete' or  '--test-label' option
+Try 'tar --help' or 'tar --usage' for more information.
+rc=2
+tar: You may not specify more than one '-Acdtrux', '--delete' or  '--test-label' option
+Try 'tar --help' or 'tar --usage' for more information.
+rc=2
+tar: unrecognized option '--foo'
+Try 'tar --help' or 'tar --usage' for more information.
+rc=64
+tar: option '--owner' requires an argument
+Try 'tar --help' or 'tar --usage' for more information.
+rc=64
+== empty
+tar: Cowardly refusing to create an empty archive
+Try 'tar --help' or 'tar --usage' for more information.
+rc=2
+ls: cannot access 'x.tar': No such file or directory
+rc=0
+10240
+rc=0
+== create and list
+rc=0
+src/
+src/a.txt
+src/empty
+src/hard
+src/sub/
+src/sub/b.txt
+src/sub/deep/
+src/sub/deep/c.txt
+src/
+src/a.txt
+src/empty
+src/hard
+src/sub/
+src/sub/b.txt
+src/sub/deep/
+src/sub/deep/c.txt
+rc=0
+d7c8e115c1c26c90b83c63058d68d4ec1f055a5e51bc18e7c27df622f0d00b11  -
+10240
+== the bytes
+0000000   s   r   c   /  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0
+0000016  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0
+*
+0000096  \0  \0  \0  \0   0   0   0   0   7   5   5  \0   0   0   0   0
+0000112   0   0   0  \0   0   0   0   0   0   0   0  \0   0   0   0   0
+0000128   0   0   0   0   0   0   0  \0   1   3   6   0   3   2   5   6
+0000144   6   4   5  \0   0   0   6   5   4   5  \0       5  \0  \0  \0
+0000160  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0
+*
+0000256  \0   u   s   t   a   r          \0  \0  \0  \0  \0  \0  \0  \0
+0000272  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0
+*
+0000512   s   r   c   /   a   .   t   x   t  \0  \0  \0  \0  \0  \0  \0
+0000528  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0
+*
+0000608  \0  \0  \0  \0   0   0   0   0   6   4   4  \0   0   0   0   0
+0000624   0   0   0  \0   0   0   0   0   0   0   0  \0   0   0   0   0
+0000640   0   0   0   0   0   0   6  \0   1   3   6   0   3   2   5   6
+0000656   6   4   5  \0   0   0   7   5   2   2  \0       0  \0  \0  \0
+0000672  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0
+*
+0000768  \0   u   s   t   a   r          \0  \0  \0  \0  \0  \0  \0  \0
+0000784  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0
+*
+0001024   h   e   l   l   o  \n  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0
+0001040  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0
+*
+0001536   s   r   c   /   e   m   p   t   y  \0  \0  \0  \0  \0  \0  \0
+0001552  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0
+*
+0001632  \0  \0  \0  \0   0   0   0   0   6   4   4  \0   0   0   0   0
+0001648   0   0   0  \0   0   0   0   0   0   0   0  \0   0   0   0   0
+0001664   0   0   0   0   0   0   0  \0   1   3   6   0   3   2   5   6
+0001680   6   4   5  \0   0   0   7   6   1   4  \0       0  \0  \0  \0
+0001696  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0
+*
+0001792  \0   u   s   t   a   r          \0  \0  \0  \0  \0  \0  \0  \0
+0001808  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0
+*
+0002048   s   r   c   /   h   a   r   d  \0  \0  \0  \0  \0  \0  \0  \0
+== -tv
+drwxr-xr-x 0/0               0 2020-01-02 03:04 src/
+-rw-r--r-- 0/0               6 2020-01-02 03:04 src/a.txt
+-rw-r--r-- 0/0               0 2020-01-02 03:04 src/empty
+hrw-r--r-- 0/0               0 2020-01-02 03:04 src/hard link to src/a.txt
+drwxr-xr-x 0/0               0 2020-01-02 03:04 src/sub/
+-rw-r--r-- 0/0               6 2020-01-02 03:04 src/sub/b.txt
+drwxr-xr-x 0/0               0 2020-01-02 03:04 src/sub/deep/
+-rw-r--r-- 0/0               5 2020-01-02 03:04 src/sub/deep/c.txt
+drwxr-xr-x 0/0               0 2020-01-02 03:04 src/
+-rw-r--r-- 0/0               6 2020-01-02 03:04 src/a.txt
+-rw-r--r-- 0/0               0 2020-01-02 03:04 src/empty
+-rw-r--r-- 0/0               6 2020-01-02 03:04 src/a.txt
+hrw-r--r-- 0/0               0 2020-01-02 03:04 src/hard link to src/a.txt
+== old style
+rc=0
+src/a.txt
+-rw-r--r-- 0/0               6 2020-01-02 03:04 src/a.txt
+-rw-r--r-- 0/0               0 2020-01-02 03:04 src/empty
+world
+== extract
+rc=0
+.
+./src
+./src/a.txt
+./src/empty
+./src/hard
+./src/sub
+./src/sub/b.txt
+./src/sub/deep
+./src/sub/deep/c.txt
+hello
+deep
+1577934245 6 x/src/a.txt
+1577934245 0 x/src/empty
+1577934245 x/src/sub
+1577934245 x/src
+2
+== verbose extract
+src/
+src/a.txt
+src/empty
+src/hard
+src/sub/
+src/sub/b.txt
+src/sub/deep/
+src/sub/deep/c.txt
+rc=0
+-rw-r--r-- 0/0               6 2020-01-02 03:04 src/a.txt
+rc=0
+== to stdout
+hello
+world
+rc=0
+rc=0
+src/a.txt
+hello
+== members
+src/sub/
+src/sub/b.txt
+src/sub/deep/
+src/sub/deep/c.txt
+rc=0
+.
+./src
+./src/a.txt
+src/empty
+tar: nosuch: Not found in archive
+tar: Exiting with failure status due to previous errors
+rc=2
+tar: Pattern matching characters used in file names
+tar: Use --wildcards to enable pattern matching, or --no-wildcards to suppress this warning
+tar: src/*.txt: Not found in archive
+tar: Exiting with failure status due to previous errors
+rc=2
+src/a.txt
+src/sub/b.txt
+src/sub/deep/c.txt
+rc=0
+src/a.txt
+src/sub/b.txt
+src/sub/deep/c.txt
+tar: *.txt: Not found in archive
+tar: Exiting with failure status due to previous errors
+rc=2
+tar: sub/*: Not found in archive
+tar: Exiting with failure status due to previous errors
+rc=2
+src/sub/b.txt
+rc=0
+src/a.txt
+rc=0
+== occurrence
+src/a.txt
+src/a.txt
+src/a.txt
+rc=0
+== exclude
+src/
+src/empty
+src/hard
+src/sub/
+src/sub/deep/
+src/
+src/a.txt
+src/empty
+src/hard
+src/
+src/a.txt
+src/empty
+src/hard
+src/sub/
+src/
+src/a.txt
+src/empty
+src/hard
+src/sub/
+src/sub/b.txt
+src/
+src/a.txt
+src/sub/
+src/sub/b.txt
+src/sub/deep/
+src/sub/deep/c.txt
+== strip
+.
+./a.txt
+./empty
+./hard
+./sub
+./sub/b.txt
+./sub/deep
+./sub/deep/c.txt
+src/sub/b.txt
+src/sub/deep/
+src/sub/deep/c.txt
+.
+./b.txt
+./deep
+./deep/c.txt
+== keep and overwrite
+tar: src/a.txt: Cannot open: File exists
+tar: src/empty: Cannot open: File exists
+tar: src/sub/b.txt: Cannot open: File exists
+tar: src/sub/deep/c.txt: Cannot open: File exists
+tar: Exiting with failure status due to previous errors
+rc=2
+rc=0
+tar: Current 'src/a.txt' is newer or same age
+rc=0
+changed
+tar: Current 'src/a.txt' is newer or same age
+rc=0
+changed
+rc=0
+hello
+== compression
+rc=0
+src/
+src/a.txt
+src/
+d7c8e115c1c26c90b83c63058d68d4ec1f055a5e51bc18e7c27df622f0d00b11  -
+src/
+d7c8e115c1c26c90b83c63058d68d4ec1f055a5e51bc18e7c27df622f0d00b11  -
+src/
+src/
+d7c8e115c1c26c90b83c63058d68d4ec1f055a5e51bc18e7c27df622f0d00b11  -
+hello
+hello
+== errors
+tar: nosuch: Cannot stat: No such file or directory
+tar: Exiting with failure status due to previous errors
+rc=2
+src/a.txt
+tar: nosuch.tar: Cannot open: No such file or directory
+tar: Error is not recoverable: exiting now
+rc=2
+tar: This does not look like a tar archive
+tar: Exiting with failure status due to previous errors
+rc=2
+src/
+rc=0
+src/
+rc=0
+== damage
+src/
+src/a.txt
+tar: Skipping to next header
+src/hard
+src/sub/
+src/sub/b.txt
+src/sub/deep/
+src/sub/deep/c.txt
+tar: Exiting with failure status due to previous errors
+rc=2
+rc=0
+src/
+src/a.txt
+tar: A lone zero block at 4
+rc=0
+src/
+src/a.txt
+src/hard
+src/sub/
+src/sub/b.txt
+src/sub/deep/
+src/sub/deep/c.txt
+rc=0
+== -T and --null
+src/a.txt
+src/sub/
+src/sub/b.txt
+src/sub/deep/
+src/sub/deep/c.txt
+src/empty
+src/hard
+tar: nosuch: Cannot stat: No such file or directory
+tar: Exiting with failure status due to previous errors
+rc=2
+src/a.txt
+== -C
+a.txt
+b.txt
+.
+./a.txt
+./b.txt
+== append, update, concatenate, delete
+rc=0
+src/sub/deep/c.txt
+h
+rc=0
+h
+src/a.txt
+rc=0
+h
+src/a.txt
+rc=0
+src/sub/
+src/sub/deep/
+rc=0
+src/
+src/a.txt
+src/hard
+src/sub/
+src/sub/b.txt
+h
+src/a.txt
+src/
+src/hard
+src/sub/
+tar: nosuch: Not found in archive
+tar: Exiting with failure status due to previous errors
+rc=2
+tar: Cannot update compressed archives
+tar: Error is not recoverable: exiting now
+rc=2
+== compare
+src/a.txt: Uid differs
+src/a.txt: Gid differs
+src/empty: Uid differs
+src/empty: Gid differs
+src/sub/b.txt: Uid differs
+src/sub/b.txt: Gid differs
+src/sub/deep/c.txt: Uid differs
+src/sub/deep/c.txt: Gid differs
+rc=1
+src/a.txt: Uid differs
+src/a.txt: Gid differs
+src/a.txt: Mod time differs
+src/a.txt: Size differs
+src/empty: Uid differs
+src/empty: Gid differs
+src/sub/b.txt: Uid differs
+src/sub/b.txt: Gid differs
+src/sub/deep/c.txt: Uid differs
+src/sub/deep/c.txt: Gid differs
+rc=1
+tar: src/empty: Warning: Cannot stat: No such file or directory
+rc=1
+== transform
+dst/a.txt
+dst/sub/
+dst/sub/b.txt
+dst/sub/deep/
+dst/sub/deep/c.txt
+out/a.txt
+.
+./moved
+./moved/b.txt
+./moved/deep
+./moved/deep/c.txt
+./src
+./src/a.txt
+./src/empty
+./src/hard
+src/A.txt
+src/
+src/a.txt
+src/empty
+src/hard
+src/sub/
+src/sub/b.txt
+src/sub/deep/
+src/sub/deep/c.txt
+rc=0
+== long names
+dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd/
+dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd/dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd/
+dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd/dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd/file
+dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd/dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd/ggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg
+dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd/dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd/ggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg
+288e7da9bf4e9165edaa9bdd7d54611434e3918b618c45f764366807dbeebdaf  -
+0000512   .   /   .   /   @   L   o   n   g   L   i   n   k  \0  \0  \0
+0000528  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0
+*
+0000608  \0  \0  \0  \0   0   0   0   0   6   4   4  \0   0   0   0   0
+0000624   0   0   0  \0   0   0   0   0   0   0   0  \0   0   0   0   0
+0000640   0   0   0   0   1   7   3  \0   0   0   0   0   0   0   0   0
+0000656   0   0   0  \0   0   0   7   7   7   4  \0       L  \0  \0  \0
+0000672  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0
+*
+0000768  \0   u   s   t   a   r          \0  \0  \0  \0  \0  \0  \0  \0
+0000784  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0
+*
+0001024   d   d   d   d   d   d   d   d   d   d   d   d   d   d   d   d
+tar: dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd/dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd/ggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg: file name is too long (cannot be split); not dumped
+tar: Exiting with failure status due to previous errors
+rc=2
+dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd/
+dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd/dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd/
+dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd/dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd/file
+dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd/dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd/ggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg
+6f2694b8237bfcd14c7de876908edb4cdc44f4d1c299bed093342b5a7894d2b6  -
+x
+y
+== owners and modes
+-rw------- alice/staff       6 2021-02-03 04:05 src/a.txt
+-rw------- 1001/50           6 2021-02-03 04:05 src/a.txt
+-rwxr-xr-x root/root         0 1970-01-01 00:00 src/empty
+drwxr-xr-x root/root         0 1970-01-01 00:00 src/sub/deep/
+-rwxr-xr-x root/root         5 1970-01-01 00:00 src/sub/deep/c.txt
+== formats
+rc=0
+src/a.txt
+src/sub/b.txt
+hello
+rc=0
+src/a.txt
+src/sub/b.txt
+hello
+rc=0
+src/a.txt
+src/sub/b.txt
+hello
+rc=0
+src/a.txt
+src/sub/b.txt
+hello
+-rw-r--r-- 0/0      
+-rw-r--r-- 0/0      
+0255807f546fa47bd7c25c5a9a8a46dfdcf2cbceef55a88180435a7d36639d28  -
+517294f83f5c070762f130d8f050ead515714734204ea7809c4f22b93495537a  -
+51aff1191595e98cee277d5c116d324430b92a44c9d0597acb4c36ab5a153bc4  -
+tar: foo: Invalid archive format
+Try 'tar --help' or 'tar --usage' for more information.
+rc=2
+== totals
+Total bytes written: 10240 (...)
+Total bytes read: 10240 (...)
+Total bytes read: 10240 (...)
+== stdin and stdout
+src/a.txt
+hello
+src/
+src/
+== TAR_OPTIONS
+same
+tar: unrecognized option '--foo'
+Try 'tar --help' or 'tar --usage' for more information.
+tar: error parsing TAR_OPTIONS
+rc=64
+== sparse
+-rw-r--r-- 0/0           70000 2020-01-02 03:04 s
+rc=0
+s
+220996854 70000
+ s t a r t \0 \0 \0 \0 \0 \0 \0 \0 \0 \0 \0
+*
+ \0 \0 \0 \0 \0 \0 \0 \0 m i d d l e \0 \0
+*
+ \0 \0 \0 \0 \0 \0 \0 \0 \0 \0 \0 \0 \0 e n d
+-rw-r--r-- 0/0           70000 2020-01-02 03:04 s
+rc=0
+s
+220996854 70000
+ s t a r t \0 \0 \0 \0 \0 \0 \0 \0 \0 \0 \0
+*
+ \0 \0 \0 \0 \0 \0 \0 \0 m i d d l e \0 \0
+*
+ \0 \0 \0 \0 \0 \0 \0 \0 \0 \0 \0 \0 \0 e n d
+-rw-r--r-- 0/0           70000 2020-01-02 03:04 s
+rc=0
+s
+220996854 70000
+ s t a r t \0 \0 \0 \0 \0 \0 \0 \0 \0 \0 \0
+*
+ \0 \0 \0 \0 \0 \0 \0 \0 m i d d l e \0 \0
+*
+ \0 \0 \0 \0 \0 \0 \0 \0 \0 \0 \0 \0 \0 e n d
+-rw-r--r-- 0/0           70000 2020-01-02 03:04 s
+rc=0
+s
+220996854 70000
+ s t a r t \0 \0 \0 \0 \0 \0 \0 \0 \0 \0 \0
+*
+ \0 \0 \0 \0 \0 \0 \0 \0 m i d d l e \0 \0
+*
+ \0 \0 \0 \0 \0 \0 \0 \0 \0 \0 \0 \0 \0 e n d
+rc=0
+s
+220996854 70000
+== cache and tag exclusions
+cd/
+cd/c/
+tar: cd/c/: contains a cache directory tag CACHEDIR.TAG; contents not dumped
+cd/c/CACHEDIR.TAG
+cd/d/
+cd/d/CACHEDIR.TAG
+cd/d/z
+rc=0
+cd/
+cd/c/
+cd/c/CACHEDIR.TAG
+cd/d/
+cd/d/CACHEDIR.TAG
+cd/d/z
+cd/
+cd/c/
+tar: cd/c/: contains a cache directory tag CACHEDIR.TAG; contents not dumped
+cd/d/
+cd/d/CACHEDIR.TAG
+cd/d/z
+rc=0
+cd/
+cd/c/
+cd/d/
+cd/d/CACHEDIR.TAG
+cd/d/z
+cd/
+tar: cd/c/: contains a cache directory tag CACHEDIR.TAG; directory not dumped
+cd/d/
+cd/d/CACHEDIR.TAG
+cd/d/z
+rc=0
+cd/
+cd/d/
+cd/d/CACHEDIR.TAG
+cd/d/z
+cd/
+cd/c/
+tar: cd/c/: contains a cache directory tag x; contents not dumped
+cd/c/x
+cd/d/
+cd/d/CACHEDIR.TAG
+cd/d/z
+cd/
+cd/c/
+cd/d/
+cd/d/CACHEDIR.TAG
+cd/d/z
+cd/
+cd/c/
+tar: cd/c/: contains a cache directory tag x; contents not dumped
+cd/c/x
+tar: cd/d/: contains a cache directory tag z; directory not dumped
+cd/
+cd/c/
+cd/c/x
+cd/c/x
+cd/c/
+tar: cd/c/: contains a cache directory tag CACHEDIR.TAG; contents not dumped
+cd/c/CACHEDIR.TAG
+cd/c/x
+cd/c/
+cd/c/CACHEDIR.TAG
+== one top level
+src/a.txt
+h
+rc=0
+pack
+pack/h
+pack/src
+pack/src/a.txt
+src
+src/a.txt
+src/h
+src/a.txt
+h
+tar: Cannot deduce top-level directory name; please set it explicitly with --one-top-level=DIR
+Try 'tar --help' or 'tar --usage' for more information.
+rc=2
+tar: '--one-top-level' cannot be used with '--absolute-names'
+Try 'tar --help' or 'tar --usage' for more information.
+rc=2
+== colons
+src/a.txt
+tar: a\:b: Not found in archive
+tar: Exiting with failure status due to previous errors
+rc=2
+== help
+Usage: tar [OPTION...] [FILE]...
+GNU 'tar' saves many files together into a single tape or disk archive, and can
+restore individual files from the archive.
+
+Examples:
+  tar -cf archive.tar foo bar  # Create archive.tar from files foo and bar.
+  tar -tvf archive.tar         # List all files in archive.tar verbosely.
+  tar -xf archive.tar          # Extract all files from archive.tar.
+
+ Main operation mode:
+  -A, --catenate, --concatenate   append tar files to an archive
+  -c, --create               create a new archive
+Usage: tar [-AcdrtuxGnSkUWOmpsMBiajJzZhPlRvwo?] [-g FILE] [-C DIR] [-T FILE]
+            [-X FILE] [-f ARCHIVE] [-F NAME] [-L NUMBER] [-b BLOCKS]
+            [-H FORMAT] [-V TEXT] [-I PROG] [-K MEMBER-NAME] [-N DATE-OR-FILE]
+tar (GNU tar) 1.35
+Usage: tar [OPTION...] [FILE]...
+GNU 'tar' saves many files together into a single tape or disk archive, and can

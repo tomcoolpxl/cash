@@ -172,11 +172,10 @@ writer aimed at standard output.
 - **listing**: mode strings, dates in the shell's `TZ` (the front end passes the zone),
   sizes, name quoting (GNU's escape style, UnZip's raw).
 - **tar**: its own block loop, for GNU's behaviour on damaged archives (`Skipping to
-  next header`, a lone zero block, a bad checksum), on the `tar` crate's `Header` (the
-  octal and base-256 fields, the GNU and ustar layouts) and its PAX parser; the crate's
-  own iterator stops at the first bad header. Writing builds the 512-byte headers here,
-  so a deterministic archive is GNU's byte for byte (the checksum field's format, padding
-  to the 10,240-byte record).
+  next header`, a lone zero block, a bad checksum), and its own headers, read and
+  written (see 3.12 for why not the `tar` crate's). Writing builds the 512-byte headers
+  here, so a deterministic archive is GNU's byte for byte (the checksum field's format,
+  padding to the 10,240-byte record).
 - **zip**: the `zip` crate (zip-rs, MIT, 8.6, the same codecs), with Info-ZIP's extra
   fields (extended times, Unix modes), so archives round-trip with Info-ZIP, Explorer and
   `tar.exe`.
@@ -252,6 +251,33 @@ after its original's functions (bzip2's `compress`/`uncompress`/`testf`, xz's
 - cash-win32's `Replacement` (written beside the target, renamed over it) and the Unix
   face (read-only and times carried over).
 - tests/it/common.rs: the oracle helpers, with divergences stated where cash differs.
+
+### 3.12 tar, as built (phase 29, 2026-10-07)
+
+Built against GNU tar 1.35's oracle, the plan moved in four places:
+
+- **The headers are cash's own** (`cash-archive/src/tar`: `header`, `read`, `write`),
+  not the `tar` crate's. Byte-for-byte archives need GNU's field formats (`%0*o` with a
+  NUL, the checksum's `%06o`, a NUL and a space, base-256 past the octal range, the
+  `././@LongLink` headers with their own mode, owner and time, the ustar prefix split,
+  no device numbers for a file, the type bits in the old GNU mode). Reading needed the
+  block loop anyway, and the crate's PAX parser is twenty lines. Nothing of the crate
+  was left to use. Sparse members are read whole in GNU's four forms (the old `S` header
+  with its extension blocks, pax 0.0, 0.1 and 1.0); none are written, as Windows'
+  sparse files are rare: `-S` stores holes as zeros, as GNU does without it.
+- **`walk`, `names` and `extract` live in the tar front end** (`cash-builtins/src/tar`:
+  `create`, `list`), not in cash-archive. GNU tar's walk and extraction say things
+  between their steps: the `-v` line before a tag's warning, "Removing leading" once
+  for each prefix, a hard link known on first sight, "file is the archive". A library
+  for them would have one user and an interface shaped by tar's messages. Phase 30 moves
+  into cash-archive what zip shares with them, when there are two users to shape it.
+- **`select` has its own `fnmatch`** (glibc's, with GNU tar's leading-folder, case and
+  unanchored retry), not cash-core's `Pattern` with new flags (3.9 is not done): the
+  retry after each `/` and the leading-folder rule live in the same function as the
+  wildcards.
+- **`--transform`** (`tar/transform.rs`) reads its regular expressions through
+  cash-sed's translation of GNU's syntax, with tar's own `s///` parser and flags (`r`,
+  `s`, `h`, `x`, `g`, a number), not a new cash-sed entry point (3.10 is not done).
 
 ## 4. Rules every part keeps
 

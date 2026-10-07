@@ -150,6 +150,7 @@ an entry or page names no builtin.
 - `more`: Page through text, with `more`'s defaults.
 - `rev`: Reverse the characters of each line.
 - `sed`: Edit a stream of text with a script: substitute, delete, insert.
+- `tar`: Pack files into an archive, or list or unpack one, with GNU tar's options.
 - `tree`: Show a folder hierarchy as a tree.
 - `unix2dos`: Convert LF line endings to CRLF.
 - `unlzma`: Uncompress `.lzma` files in place: `xz --format=lzma -d`.

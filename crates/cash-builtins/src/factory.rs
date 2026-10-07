@@ -390,6 +390,11 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
         "zstd".into(),
         builtin::<zstd::ZstdCommand, SE>().with_substitution_files(),
     );
+    // `tar -xf <(curl ...)` and `tar -cf >(...)` are idioms too.
+    m.insert(
+        "tar".into(),
+        builtin::<tar::TarCommand, SE>().with_substitution_files(),
+    );
     m.insert(
         "unzstd".into(),
         builtin::<zstd::UnzstdCommand, SE>().with_substitution_files(),

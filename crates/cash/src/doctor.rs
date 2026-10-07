@@ -99,7 +99,7 @@ const CARRIED: &[&str] = &[
     "ping", "stty", "tput", "iconv", "column", "xxd", "hexdump", "uuidgen", "xdg-open", "pbcopy",
     "pbpaste", "flock", "watch", "free", "nice", "renice", "nc", "diff", "cmp", "grep", "suspend",
     "mkfifo", "stdbuf", "getconf", "locale", "gzip", "gunzip", "zcat", "bzip2", "bunzip2", "bzcat",
-    "xz", "unxz", "xzcat", "lzma", "unlzma", "lzcat", "zstd", "unzstd", "zstdcat",
+    "xz", "unxz", "xzcat", "lzma", "unlzma", "lzcat", "zstd", "unzstd", "zstdcat", "tar",
 ];
 
 /// Run the diagnostic. Returns a process exit code.
@@ -736,18 +736,9 @@ const BUSYBOX_BREAKS: &[(&str, &str, &str)] = &[
         "$(shell ...) expands to nothing, so GNU makefiles misbuild",
         "scoop install make",
     ),
-    (
-        "tar",
-        "no --transform",
-        "use Windows' own tar.exe, or scoop install tar",
-    ),
-    (
-        "xz",
-        "decompresses only; `xz FILE` cannot compress",
-        "scoop install xz",
-    ),
     // BusyBox's `nc` has no -z, so `nc -z host port` port checks failed; cash carries
-    // its own `nc` now, so the shim is never reached.
+    // its own `nc` now, so the shim is never reached. The same for `tar` (no
+    // --transform) and `xz` (decompressing only), which cash carries itself now.
     ("wget", "-T (timeout) crashes it", "scoop install wget"),
 ];
 
@@ -887,6 +878,7 @@ fn check_dos_shadowing(
 /// System32 tools cash shadows on purpose, and how its own one differs.
 const DELIBERATE_SHADOWS: &[(&str, &str)] = &[
     ("ping", "Linux flags: -c is the count, -n is numeric output"),
+    ("tar", "GNU tar's options and messages, not bsdtar's"),
     ("reset", "resets the terminal, not a Remote Desktop session"),
     ("where", "options with -, not /, and C:/ paths"),
 ];

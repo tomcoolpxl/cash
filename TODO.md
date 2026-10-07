@@ -485,48 +485,12 @@ license accepted for `libbz2-rs-sys`. Order: the groundwork, the compressors, ta
 Passed over: uutils/tar (0.0.1, less than `tar.exe` does), `libzstd-rs-sys` (a
 prerelease without a Rust API), `xz2` and `liblzma` (C).
 
-## Phase 29. `tar`
-
-cash's own `tar`, GNU tar 1.35's interface, messages and exit codes, on cash-archive's
-`member`, `names`, `walk`, `extract`, `select` and `listing`, built in this phase, and on
-the `tar` crate's `Header` and PAX parser with a block loop of cash's own. Windows' own
-`tar.exe` (bsdtar 3.8.8) stays reachable by its path and by `enable -n tar`. Needs
-cash-core's `Pattern` path flags and cash-sed's one-`s///` entry point (design 3.9, 3.10).
-
-1. **Reading: `-t` and `-x`**: ustar, GNU (long names and links, sparse members read)
-   and PAX headers; `-f FILE` and `-` (default `-`, or `TAPE`), refusing a terminal as GNU
-   does; compression found by its magic when reading a file; `-C` in order, member
-   operands with GNU's matching (`--wildcards`, `--anchored`, `--ignore-case`,
-   `--wildcards-match-slash`, `--occurrence`), `--exclude`, `-X`, `--strip-components`,
-   `--transform` (cash-sed's `s` compiler), `-O`, `-k`, `--skip-old-files`,
-   `--keep-newer-files`, `--overwrite`, `--overwrite-dir`, `-U`, `-m`, `-p`,
-   `--delay-directory-restore`, `-K`, `-N`; `-v` and `-vv` listings and `--totals`
-   column for column, names quoted in GNU's escape style; `..` and absolute names as GNU
-   refuses and strips them.
-2. **Writing: `-c`**: GNU format by default, `--format=gnu|oldgnu|ustar|pax|posix|v7`;
-   `-T`, `--null`, `--no-recursion`, `-h`, `--hard-dereference`, hard links as links,
-   `-P`, `--exclude-vcs`, `--exclude-backups`, `--exclude-caches*`, `--owner`, `--group`,
-   `--mode`, `--mtime`, `--numeric-owner`, `--sort=name|none|inode`, `--remove-files`,
-   `-a`; "Removing leading `/'", and a drive letter removed as GNU's DOS builds remove it;
-   byte for byte GNU tar's archive where GNU's is deterministic.
-3. **Compression** from phase 28's codecs: `-z`, `-j`, `-J`, `--lzma`, `--lzip`,
-   `--zstd` (archives somewhat larger than GNU's, whose zstd writes at level 3), `-a`;
-   `-Z`, `--lzop` and `-I PROGRAM` said plainly.
-4. **Changing archives**: `-r`, `-u`, `-A`, `-d` (`--compare`), `--delete`, on
-   uncompressed archives as GNU allows them.
-5. **Windows**, from phase 27's Unix face: modes, owners and their ids, read-only,
-   times; symbolic links made when Windows allows it, else GNU's "Cannot create symlink"
-   and status 2; names Windows cannot hold reported, not mangled; long paths.
-6. The page, `builtins.md`, `CARRIED`, `DELIBERATE_SHADOWS` (System32's `tar.exe`), the
-   README's tool list, and an oracle: `tests/oracle/tar_cases.sh` under GNU tar 1.35 in
-   WSL, with GNU gzip, bzip2, xz and zstd beside it; archives cash makes read by GNU tar
-   and `tar.exe`, and theirs by cash.
-
 ## Phase 30. `zip`, `unzip`, `zipinfo`
 
 1. **On the `zip` crate** (zip-rs, MIT, 8.6) with phase 28's codecs (deflate, deflate64,
-   bzip2, lzma, xz; zstd and PPMd as they allow without C), and on phase 29's `walk`,
-   `names`, `extract`, `select`, `listing`: Info-ZIP zip 3.0's and UnZip 6.00's options,
+   bzip2, lzma, xz; zstd and PPMd as they allow without C), on cash-archive's `select`
+   and `listing`, and on tar's walk, names and extraction, moved into cash-archive as
+   zip comes to share them (design 3.12): Info-ZIP zip 3.0's and UnZip 6.00's options,
    messages and exit statuses, `zipinfo`'s listings; Info-ZIP's extra fields (extended
    times, Unix modes) so archives round-trip with Info-ZIP, Explorer and `tar.exe`;
    writing to standard output streamed; traditional encryption read (`-P`).

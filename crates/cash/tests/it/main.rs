@@ -204,6 +204,8 @@ mod stty_builtin;
 mod subshell_levels;
 // `sudo`, `su` and `sudoedit`, as far as they go without a UAC prompt or a password.
 mod sudo;
+// `tar`: GNU tar 1.35's golden output, Windows' own tar.exe, names and links.
+mod tar_builtin;
 mod terminal_profile;
 // D48/D49/D56: the bundled awk, sed and bc in a pipeline.
 mod text_tools;

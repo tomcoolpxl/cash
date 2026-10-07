@@ -6,5 +6,13 @@
 //!
 //! - [`codec`]: gzip, bzip2, xz, lzma, lzip and zstd streams, recognised by their magic
 //!   or their suffix, read and written in pure Rust.
+//! - [`member`]: an archive entry as every format has it.
+//! - [`tar`]: tar archives, read and written as GNU tar 1.35 reads and writes them.
+//! - [`select`]: which members a name or a pattern selects, as `fnmatch` decides.
+//! - [`listing`]: mode strings, and names quoted as GNU tar quotes them.
 
 pub mod codec;
+pub mod listing;
+pub mod member;
+pub mod select;
+pub mod tar;

@@ -2756,6 +2756,11 @@ thing" for tar, zip and the rest, designed before anything is built.
 - Passed over: uutils/tar, at 0.0.1 less than `tar.exe` already does; `libzstd-rs-sys`,
   a prerelease without a Rust API, to replace `ruzstd` once it has one; `xz2` and
   `liblzma`, which build liblzma's C.
+- **As built** (phases 28 and 29, 2026-10-07): each compressor keeps its own flow on
+  shared blocks rather than one driver with profiles; tar writes and reads its own
+  headers rather than the `tar` crate's; its walk, names and extraction stay in its
+  front end until zip shares them; cash-core's `Pattern` and cash-sed are unchanged.
+  The reasons are in the design's 3.11 and 3.12.
 
 ### D77 — `gzip`, `gunzip` and `zcat`, and the compatibility corners
 
