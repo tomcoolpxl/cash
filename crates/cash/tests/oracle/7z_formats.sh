@@ -299,3 +299,27 @@ z l -slt p.zip | grep -E '^(Path|Size|Method|Characteristics) ='
 z a -si -mx0 -pab sc.zip < d/a.txt
 zs a -si -mx0 -pab -mem=AES128 sa.zip < d/a.txt
 zt -pab sa.zip
+
+echo "== read: -si"
+z l -si < ../a.txt.gz
+z l -si -tzip < s.zip
+z t -si -tzip < s.zip
+z l -si -tgzip < ../a.txt.gz
+z l -slt -si -tgzip < ../a.txt.gz
+z t -si -tgzip < ../a.txt.gz
+z e -si -tgzip -osi1 < ../a.txt.gz
+ls si1
+z l -sinamed.gz -tgzip < ../a.txt.gz
+z l -si -tgzip < ../n.gz
+z t -si -tgzip < x.tar
+z l -slt -si -ttar < x.tar
+z t -si -ttar < x.tar
+z x -si -ttar -osi2 < s.tar
+find si2 | sort
+7z e -si -ttar -so named.txt < s.tar
+for f in xz bz2 zst lzma; do
+  t=$f
+  case $f in bz2) t=bzip2;; zst) t=zstd;; esac
+  z l -slt -si -t$t < ../a.txt.$f
+  z t -si -t$t < ../a.txt.$f
+done

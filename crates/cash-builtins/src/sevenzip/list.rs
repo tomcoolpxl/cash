@@ -5,6 +5,14 @@ use super::cmdline::Options;
 use super::extract::{Found, archive_props, forced_kind, open_asking, open_error};
 use super::{Console, Env, Stop, code, text};
 use std::fmt::Write as _;
+use std::io;
+
+/// `E_NOTIMPL`, as Windows' error code.
+#[expect(
+    clippy::cast_possible_wrap,
+    reason = "HRESULTs are Windows' codes as they are"
+)]
+const E_NOTIMPL: i32 = 0x8000_4001_u32 as i32;
 
 /// Sums over the items listed: `CListStat`.
 #[derive(Default, Clone, Copy)]
@@ -55,6 +63,7 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
 ) -> Result<u8, Stop> {
     let mut errors = 0u64;
     let mut warnings = 0u64;
+    let mut not_implemented = false;
     let mut total = Stat::default();
     let mut archives = 0u64;
     let mut total_size = 0u64;
@@ -94,6 +103,12 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
                         archive.name.replace('\\', "/"),
                         text::system_message(error)
                     ));
+                } else if matches!(failure, super::archive::OpenFailure::NotImplemented) {
+                    console.se(&format!(
+                        "\nERROR: {} : opening : Not implemented\n",
+                        archive.name.replace('\\', "/")
+                    ));
+                    not_implemented = true;
                 } else {
                     console.se(&format!(
                         "\nERROR: {} : {}\n",
@@ -144,11 +159,12 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
             }
         }
         if stat.packed.is_none() {
-            stat.packed = Some(if stat.files + stat.dirs == 0 {
-                0
+            // Standard input's size is not known to 7-Zip.
+            stat.packed = if stat.files + stat.dirs == 0 {
+                Some(0)
             } else {
-                archive.size
-            });
+                (!archive.stdin).then_some(archive.size)
+            };
         }
         if stat.files == 0 {
             stat.size.get_or_insert(0);
@@ -176,6 +192,10 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
     if errors > 0 {
         if options.headers {
             console.stdout(&format!("\nErrors: {errors}\n"));
+        }
+        // The open's own error ends the command, as a system error.
+        if not_implemented {
+            return Err(Stop::System(io::Error::from_raw_os_error(E_NOTIMPL)));
         }
         return Ok(code::FATAL);
     }

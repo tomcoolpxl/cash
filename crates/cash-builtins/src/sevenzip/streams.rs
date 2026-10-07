@@ -21,7 +21,7 @@ pub(super) struct Stream {
     pub(super) path: PathBuf,
     codec: Codec,
     /// Whether the handler gives the size it decoded (all but lzma's).
-    reports_size: bool,
+    pub(super) reports_size: bool,
     /// A gzip stream's header: its size and its extra flags, which a renaming keeps.
     pub(super) gzip_header: Option<(u64, u8)>,
 }
@@ -395,6 +395,24 @@ fn host_os(os: u8) -> String {
 
 /// A .xz stream's first block header: its filters as 7-Zip names them, and which
 /// sizes it holds (`BlockPackSize BlockUnpackSize`).
+/// Whether every block of an xz file gives its uncompressed size in its header (XZ
+/// Utils' blocks do, 7-Zip's do not): what 7-Zip, reading the file in one pass,
+/// reports as the size it decoded.
+pub(super) fn xz_sizes_in_headers(path: &Path) -> bool {
+    let Ok(mut file) = File::open(path) else {
+        return false;
+    };
+    let Ok(info) = codec::xz::file_info(&mut file) else {
+        return false;
+    };
+    info.streams.iter().flat_map(|s| &s.blocks).all(|block| {
+        let mut flags = [0u8; 2];
+        file.seek(SeekFrom::Start(block.comp_offset)).is_ok()
+            && file.read_exact(&mut flags).is_ok()
+            && flags[1] & 0x80 != 0
+    })
+}
+
 fn xz_first_block(head: &[u8]) -> (String, String) {
     let mut methods = String::new();
     let mut characts = String::new();

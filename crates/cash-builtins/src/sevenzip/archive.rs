@@ -4,7 +4,7 @@
 use std::fmt::Write as _;
 use std::fs::File;
 use std::io::{self, Read, Seek, SeekFrom};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use cash_archive::sevenz::{self, ArchiveReader, Block, Password, Problem};
 
@@ -247,7 +247,100 @@ pub(super) enum OpenFailure {
     WrongPassword,
     /// Its header is encrypted and no password was given: one is to be asked for.
     PasswordNeeded,
+    /// Standard input as an archive of a format 7-Zip cannot read in one pass, or of
+    /// no format named (`E_NOTIMPL`).
+    NotImplemented,
     Io(io::Error),
+}
+
+/// Standard input spooled to a file for `-si`, removed when done with.
+pub(super) struct Spool(pub(super) PathBuf);
+
+impl Drop for Spool {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
+
+/// Opens standard input's archive (`-si`) as 7-Zip opens a stream it reads once
+/// (`IArchiveOpenSeq`): as the format `-t` names only, tar or a stream format; what one
+/// pass cannot know before the data is left out (the archive's size, a stream's sizes
+/// and method), and names made from the archive's are made from `-si`'s.
+pub(super) fn open_stdin(
+    path: &Path,
+    forced: Option<Kind>,
+    name: &str,
+    zone: &cash_core::timefmt::Zone,
+) -> Result<Opened, OpenFailure> {
+    let kind = forced
+        .filter(|k| {
+            matches!(
+                k,
+                Kind::Tar | Kind::Gzip | Kind::Bzip2 | Kind::Xz | Kind::Zstd | Kind::Lzma
+            )
+        })
+        .ok_or(OpenFailure::NotImplemented)?;
+    let mut opened = open(path, Some(kind), None, zone)?;
+    opened.physical_size = None;
+    opened.tail = 0;
+    let spool_name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let made = super::streams::default_name(&spool_name, kind);
+    for item in &mut opened.items {
+        if item.path == made {
+            item.path = super::streams::default_name(name, kind);
+        }
+    }
+    let blank_sizes = |items: &mut Vec<Item>| {
+        for item in items {
+            item.size = None;
+            item.packed = None;
+        }
+    };
+    match kind {
+        Kind::Tar => {
+            opened.seq_headers = opened
+                .props
+                .iter()
+                .find(|(n, _)| *n == "Headers Size")
+                .and_then(|(_, v)| v.parse().ok());
+            opened.props.retain(|(n, _)| *n != "Headers Size");
+            for (n, v) in &mut opened.props {
+                if *n == "Characteristics" {
+                    "ASCII".clone_into(v);
+                }
+            }
+        }
+        Kind::Gzip => {
+            blank_sizes(&mut opened.items);
+            for item in &mut opened.items {
+                item.crc = None;
+            }
+        }
+        Kind::Xz | Kind::Lzma => {
+            opened.props.clear();
+            blank_sizes(&mut opened.items);
+            for item in &mut opened.items {
+                item.method = None;
+            }
+            let reports = kind == Kind::Xz && super::streams::xz_sizes_in_headers(path);
+            if let Backend::Stream(stream) = &mut opened.backend {
+                stream.reports_size = reports;
+            }
+        }
+        Kind::Zstd => {
+            blank_sizes(&mut opened.items);
+            for (n, v) in &mut opened.props {
+                if *n == "Method" {
+                    "header-open-only: data-frames:0".clone_into(v);
+                }
+            }
+        }
+        _ => blank_sizes(&mut opened.items),
+    }
+    Ok(opened)
 }
 
 /// An archive, open.
@@ -269,6 +362,9 @@ pub(super) struct Opened {
     pub(super) error_flags: Vec<&'static str>,
     /// What looked wrong ("Headers Error").
     pub(super) warning_flags: Vec<&'static str>,
+    /// A tar read in one pass from standard input: its headers' bytes, which 7-Zip
+    /// counts as what it read when it copies the data it extracts uncounted.
+    pub(super) seq_headers: Option<u64>,
     backend: Backend,
 }
 
@@ -371,6 +467,7 @@ pub(super) fn open(
             tail: len.saturating_sub(opening.physical_size),
             error_flags: Vec::new(),
             warning_flags: Vec::new(),
+            seq_headers: None,
             backend: Backend::Zip(Box::new(opening.zip)),
         }
     } else if kind == Kind::Tar {
@@ -389,6 +486,7 @@ pub(super) fn open(
             tail: len.saturating_sub(opening.physical_size),
             error_flags: opening.error_flags,
             warning_flags: opening.warning_flags,
+            seq_headers: None,
             backend: Backend::Tar(opening.tar),
         }
     } else {
@@ -408,6 +506,7 @@ pub(super) fn open(
             tail: 0,
             error_flags: Vec::new(),
             warning_flags: Vec::new(),
+            seq_headers: None,
             backend: Backend::Stream(opening.stream),
         }
     };
@@ -505,6 +604,7 @@ fn open_7z(mut file: File, password: Option<&str>) -> Result<Opened, OpenFailure
         tail: len.saturating_sub(physical_size),
         error_flags: Vec::new(),
         warning_flags: Vec::new(),
+        seq_headers: None,
         backend: Backend::SevenZ(Box::new(reader)),
     })
 }

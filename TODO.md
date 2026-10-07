@@ -494,8 +494,7 @@ same day: 7z and the formats cash has, Windows 7-Zip's words with LF and `/`,
 2. **`7z` and `7za` reading** (done 2026-10-07): the parser, `l` (with `-slt`, `-ba`),
    `t`, `x`, `e`, the overwrite question and `-ao`, `-o`, `-p`, `-so`, `-i`/`-x`, `-r`;
    the oracle (`7z_cases.sh`, 7-Zip 26.03 from Scoop). Left for later in the phase: the
-   progress line on a console (`-bsp`, `-bd`), `-si` reading (7-Zip opens tar and the
-   stream formats from standard input as it reads them; cash cannot open them so yet),
+   progress line on a console (`-bsp`, `-bd`), `-si` reading (done with step 4),
    `-bt`, `-spe`, `-snz`, `-ai`/`-ax` beyond names, and `i`'s listing is cash's own
    short one.
 3. **Writing 7z** (done 2026-10-07): `a`, `u`, `d`, `rn`, the `-u` matrix and `-u!name`,
@@ -514,7 +513,10 @@ same day: 7z and the formats cash has, Windows 7-Zip's words with LF and `/`,
    Deflate, BZip2, LZMA, PPMd, xz; ZipCrypto and AES; kept items copied, renamed ones
    under a new local header), gzip, bzip2 and xz (one file); the format by extension or
    `-t`, an archive there opened as that format only; times compared at the precision
-   the format keeps; `-si` for every format, `-so` for tar and the streams; `-mm=` and
+   the format keeps; `-si` for every format, `-so` for tar and the streams; `-si -t`
+   reading for `l`, `t`, `x` and `e` as 7-Zip's one-pass opening shows it (tar and the
+   streams, "Not implemented" for 7z and zip; standard input kept in a temporary file
+   meanwhile, where 7-Zip reads it as it goes); `-mm=` and
    `-mNAME-` as 7-Zip takes them (the 7z path too). `7z_formats.sh` matches line for
    line, its tars and stored zips by `cksum`; 7-Zip tests every archive cash writes.
    Left, where cash differs:

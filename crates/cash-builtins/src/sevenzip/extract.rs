@@ -16,11 +16,13 @@ use super::censor::{has_wildcard, mask_matches, split_path};
 use super::cmdline::{Command, Options, Overwrite, PathKeep};
 use super::{Console, Env, Stop, code, list, text};
 
-/// An archive the scan found: its name as given, its path, its size.
+/// An archive the scan found: its name as given, its path, its size, and whether it is
+/// standard input (`-si`), spooled to that path.
 pub(super) struct Found {
     pub(super) name: String,
     pub(super) path: PathBuf,
     pub(super) size: u64,
+    pub(super) stdin: bool,
 }
 
 pub(super) fn run<SE: cash_core::ShellExtensions>(
@@ -29,6 +31,11 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
     console: &Console<'_, SE>,
 ) -> Result<u8, Stop> {
     let found = scan(options, env, console)?;
+    let _spools: Vec<archive::Spool> = found
+        .iter()
+        .filter(|f| f.stdin)
+        .map(|f| archive::Spool(f.path.clone()))
+        .collect();
     if options.command == Command::List {
         return list::run(options, env, console, &found);
     }
@@ -43,10 +50,19 @@ fn scan<SE: cash_core::ShellExtensions>(
     console: &Console<'_, SE>,
 ) -> Result<Vec<Found>, Stop> {
     if let Some(name) = &options.stdin {
+        // 7-Zip reads standard input once as it opens it; cash keeps it in a file.
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.subsec_nanos());
+        let path = std::env::temp_dir().join(format!("cash-7z-si-{}-{nanos}", std::process::id()));
+        let size = fs::File::create(&path)
+            .and_then(|mut file| io::copy(&mut env.context.stdin(), &mut file))
+            .map_err(Stop::System)?;
         return Ok(vec![Found {
             name: name.clone(),
-            path: PathBuf::new(),
-            size: 0,
+            path,
+            size,
+            stdin: true,
         }]);
     }
     if options.headers {
@@ -97,6 +113,7 @@ fn walk<SE: cash_core::ShellExtensions>(
             Ok(meta) => found.push(Found {
                 name,
                 size: if meta.is_dir() { u64::MAX } else { meta.len() },
+                stdin: false,
                 path,
             }),
             Err(error) => {
@@ -150,6 +167,7 @@ fn expand<SE: cash_core::ShellExtensions>(
                     size: e.metadata().map_or(0, |m| m.len()),
                     path: env.path(&name),
                     name,
+                    stdin: false,
                 }
             })
         })
@@ -171,6 +189,14 @@ pub(super) fn open_asking<SE: cash_core::ShellExtensions>(
     prompt: &dyn Fn(&str),
     asked: &mut bool,
 ) -> Result<Result<Opened, OpenFailure>, Stop> {
+    if found.stdin {
+        return Ok(archive::open_stdin(
+            &found.path,
+            forced,
+            &found.name,
+            &env.zone,
+        ));
+    }
     let opened = archive::open(&found.path, forced, password.as_deref(), &env.zone);
     if !matches!(opened, Err(OpenFailure::PasswordNeeded)) {
         return Ok(opened);
@@ -394,6 +420,10 @@ fn extract_all<SE: cash_core::ShellExtensions>(
 }
 
 /// One archive: `BeforeOpen`, `OpenResult`, its items, `ExtractResult`.
+#[expect(
+    clippy::too_many_lines,
+    reason = "7-Zip's extraction of one archive, step by step"
+)]
 fn extract_archive<SE: cash_core::ShellExtensions>(
     options: &Options,
     env: &Env<'_, SE>,
@@ -433,6 +463,11 @@ fn extract_archive<SE: cash_core::ShellExtensions>(
                     archive.name.replace('\\', "/"),
                     text::system_message(error)
                 ));
+            } else if matches!(failure, OpenFailure::NotImplemented) {
+                console.se(&format!(
+                    "ERROR: {}\nCannot open the file as archive\n\nNot implemented\n",
+                    archive.name.replace('\\', "/")
+                ));
             } else {
                 console.se(&format!(
                     "ERROR: {}\n{}",
@@ -471,7 +506,21 @@ fn extract_archive<SE: cash_core::ShellExtensions>(
     let warned = !warnings.is_empty() || opened.type_warning.is_some();
     console.so(&archive_props(archive, &opened));
     console.so("\n");
-    totals.packed += archive.size;
+    totals.packed += match opened.seq_headers {
+        // A tar from standard input: its headers, and the data of the items skipped.
+        Some(headers) => {
+            let censor = &options.censor;
+            let all = censor.all_allowed() && !options.exclude_dirs && !options.exclude_files;
+            headers
+                + opened
+                    .items
+                    .iter()
+                    .filter(|item| !(all || censor.wants(&item.path, item.is_dir)))
+                    .filter_map(|item| item.packed)
+                    .sum::<u64>()
+        }
+        None => archive.size,
+    };
     let errors = extract_items(options, env, console, &mut opened, password, totals)?;
     console.flush_so();
     if errors == 0 && !open_error {

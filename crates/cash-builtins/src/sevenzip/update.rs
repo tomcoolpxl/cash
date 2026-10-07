@@ -791,6 +791,7 @@ fn open_source<SE: cash_core::ShellExtensions>(
         name: arc_name.to_owned(),
         path: arc_path.to_path_buf(),
         size: meta.len(),
+        stdin: false,
     };
     // The handler takes -m before it opens the archive: a bad one fails the opening.
     if let Err(error) = check_properties(named.unwrap_or(Kind::SevenZ), &options.properties) {

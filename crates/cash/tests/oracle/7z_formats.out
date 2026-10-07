@@ -3527,3 +3527,454 @@ Everything is Ok
 rc=0
 Everything is Ok
 rc=0
+== read: -si
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+
+Listing archive: 
+
+
+Errors: 1
+
+ERROR:  : opening : Not implemented
+
+
+System ERROR:
+Not implemented
+rc=2
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+
+Listing archive: 
+
+
+Errors: 1
+
+ERROR:  : opening : Not implemented
+
+
+System ERROR:
+Not implemented
+rc=2
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+
+Testing archive: 
+ERROR: 
+Cannot open the file as archive
+
+Not implemented
+
+Can't open as archive: 1
+Files: 0
+Size:       0
+Compressed: 0
+rc=2
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+
+Listing archive: 
+
+--
+Path = 
+Type = gzip
+Headers Size = 16
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00 .....                            a.txt
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00                                  1 files
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+
+Listing archive: 
+
+--
+Path = 
+Type = gzip
+Headers Size = 16
+
+----------
+Path = a.txt
+Size = 
+Packed Size = 
+Modified = 2026-10-07 08:00:00
+Host OS = Unix
+CRC = 
+
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+
+Testing archive: 
+--
+Path = 
+Type = gzip
+Headers Size = 16
+
+Everything is Ok
+
+Size:       13
+Compressed: 39
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+
+Extracting archive: 
+--
+Path = 
+Type = gzip
+Headers Size = 16
+
+Everything is Ok
+
+Size:       13
+Compressed: 39
+rc=0
+a.txt
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+
+Listing archive: named.gz
+
+--
+Path = named.gz
+Type = gzip
+Headers Size = 16
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00 .....                            a.txt
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00                                  1 files
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+
+Listing archive: 
+
+--
+Path = 
+Type = gzip
+Headers Size = 10
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+                    .....                            ~
+------------------- ----- ------------ ------------  ------------------------
+                                                     1 files
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+
+Testing archive: 
+ERROR: 
+
+Open ERROR: Cannot open the file as [gzip] archive
+
+
+ERRORS:
+Is not archive
+
+Can't open as archive: 1
+Files: 0
+Size:       0
+Compressed: 0
+rc=2
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+
+Listing archive: 
+
+--
+Path = 
+Type = tar
+Code Page = UTF-8
+Characteristics = ASCII
+
+----------
+Path = d/empty
+Folder = -
+Size = 0
+Packed Size = 0
+Modified = 2026-10-07 08:00:00
+Created = 
+Accessed = 
+Mode = -rwxrwxrwx
+User = 
+Group = 
+User ID = 0
+Group ID = 0
+Symbolic Link = 
+Hard Link = 
+Characteristics = 0 GNU ASCII
+Comment = 
+Device Major = 
+Device Minor = 
+
+Path = d/moved
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2026-10-07 08:00:00
+Created = 
+Accessed = 
+Mode = drwxrwxrwx
+User = 
+Group = 
+User ID = 0
+Group ID = 0
+Symbolic Link = 
+Hard Link = 
+Characteristics = 5 GNU ASCII
+Comment = 
+Device Major = 
+Device Minor = 
+
+Path = d/moved/b.txt
+Folder = -
+Size = 10
+Packed Size = 512
+Modified = 2026-10-07 08:00:00
+Created = 
+Accessed = 
+Mode = -rwxrwxrwx
+User = 
+Group = 
+User ID = 0
+Group ID = 0
+Symbolic Link = 
+Hard Link = 
+Characteristics = 0 GNU ASCII
+Comment = 
+Device Major = 
+Device Minor = 
+
+Path = d/ro.txt
+Folder = -
+Size = 3
+Packed Size = 512
+Modified = 2026-10-07 08:00:00
+Created = 
+Accessed = 
+Mode = -r-xr-xr-x
+User = 
+Group = 
+User ID = 0
+Group ID = 0
+Symbolic Link = 
+Hard Link = 
+Characteristics = 0 GNU ASCII
+Comment = 
+Device Major = 
+Device Minor = 
+
+Path = d/sub
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2026-10-07 08:00:00
+Created = 
+Accessed = 
+Mode = drwxrwxrwx
+User = 
+Group = 
+User ID = 0
+Group ID = 0
+Symbolic Link = 
+Hard Link = 
+Characteristics = 5 GNU ASCII
+Comment = 
+Device Major = 
+Device Minor = 
+
+Path = d/sub/b.txt
+Folder = -
+Size = 10
+Packed Size = 512
+Modified = 2026-10-07 09:00:00
+Created = 
+Accessed = 
+Mode = -rwxrwxrwx
+User = 
+Group = 
+User ID = 0
+Group ID = 0
+Symbolic Link = 
+Hard Link = 
+Characteristics = 0 GNU ASCII
+Comment = 
+Device Major = 
+Device Minor = 
+
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+
+Testing archive: 
+--
+Path = 
+Type = tar
+Code Page = UTF-8
+Characteristics = ASCII
+
+Everything is Ok
+
+Folders: 2
+Files: 4
+Size:       23
+Compressed: 4096
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+
+Extracting archive: 
+--
+Path = 
+Type = tar
+Code Page = UTF-8
+Characteristics = ASCII
+
+Everything is Ok
+
+Size:       36
+Compressed: 1536
+rc=0
+si2
+si2/named.txt
+alpha alpha alpha alpha alpha alpha
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+
+Listing archive: 
+
+--
+Path = 
+Type = xz
+
+----------
+Size = 
+Packed Size = 
+Method = 
+
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+
+Testing archive: 
+--
+Path = 
+Type = xz
+
+Everything is Ok
+
+Size:       13
+Compressed: 80
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+
+Listing archive: 
+
+--
+Path = 
+Type = bzip2
+
+----------
+Size = 
+Packed Size = 
+
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+
+Testing archive: 
+--
+Path = 
+Type = bzip2
+
+Everything is Ok
+
+Size:       13
+Compressed: 53
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+
+Listing archive: 
+
+--
+Path = 
+Type = zstd
+Method = header-open-only: data-frames:0
+
+----------
+Size = 
+Packed Size = 
+
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+
+Testing archive: 
+--
+Path = 
+Type = zstd
+Method = header-open-only: data-frames:0
+
+Everything is Ok
+
+Size:       13
+Compressed: 30
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+
+Listing archive: 
+
+--
+Path = 
+Type = lzma
+
+----------
+Size = 
+Packed Size = 
+Method = 
+
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+
+Testing archive: 
+--
+Path = 
+Type = lzma
+
+Everything is Ok
+
+Size:       0
+Compressed: 36
+rc=0
