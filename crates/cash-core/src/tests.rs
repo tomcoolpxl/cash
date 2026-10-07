@@ -11,10 +11,6 @@ use crate::{ExecutionParameters, Shell, error, extendedtests, extensions};
 /// * `expr` - The test expression to evaluate.
 /// * `shell` - The shell context in which to evaluate the expression.
 /// * `params` - The execution parameters to use during evaluation.
-#[expect(
-    clippy::double_must_use,
-    reason = "async_recursion's expansion marks the boxed future it returns #[must_use]"
-)]
 #[async_recursion::async_recursion]
 pub async fn eval_expr(
     expr: &cash_parser::ast::TestExpr,

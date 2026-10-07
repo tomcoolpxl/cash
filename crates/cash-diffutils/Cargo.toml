@@ -26,7 +26,7 @@ itoa = "1.0.11"
 regex = { workspace = true }
 same-file = "1.0.6"
 # Myers in linear space, as GNU diff has it; upstream's `diff` crate kept every step.
-similar = "2.7.0"
+similar = "3.2.0"
 unicode-width = { workspace = true }
 
 [dev-dependencies]

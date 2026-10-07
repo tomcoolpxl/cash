@@ -1249,10 +1249,6 @@ impl<'a, SE: extensions::ShellExtensions> WordExpander<'a, SE> {
         reason = "one match arm per word-piece kind; splitting it would scatter the \
                   grammar across helpers without making any arm easier to read"
     )]
-    #[expect(
-        clippy::double_must_use,
-        reason = "async_recursion's expansion marks the boxed future it returns #[must_use]"
-    )]
     #[async_recursion::async_recursion]
     async fn expand_word_piece(
         &mut self,
