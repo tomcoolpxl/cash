@@ -638,6 +638,7 @@ pub(super) fn write<SE: cash_core::ShellExtensions>(
                 item.size = 0;
                 write_new(&mut w, &item, None)?;
                 files_read += 1;
+                job.item_done();
                 continue;
             }
             job.announce(ui);
@@ -659,7 +660,7 @@ pub(super) fn write<SE: cash_core::ShellExtensions>(
                         // kpidHardLink, asked after the file is open: a file with other
                         // names, met before, is a hard link to the name it was met under.
                         if job.options.hard_links
-                            && matches!(file, Some(Input::File(_)))
+                            && file.as_ref().is_some_and(Input::is_file)
                             && let Ok(info) = cash_win32::fs::file_info(&di.path)
                             && info.links > 1
                         {
@@ -684,6 +685,7 @@ pub(super) fn write<SE: cash_core::ShellExtensions>(
                 write_new(&mut w, &item, file)?;
                 processed[d] = true;
                 files_read += 1;
+                job.item_done();
             }
         } else if let Some(old) = old {
             let tar = tar.ok_or_else(|| Stop::System(win_error(win::E_FAIL)))?;
@@ -871,7 +873,11 @@ fn relative_path(to: &str, from: &str) -> String {
 
 /// A new item's header and data; when the file's size changed while it was read, the
 /// header is written again with the size it had.
-fn write_new(w: &mut TarOut<&mut Out<'_>>, item: &Header, file: Option<Input>) -> Result<(), Stop> {
+fn write_new(
+    w: &mut TarOut<&mut Out<'_>>,
+    item: &Header,
+    file: Option<Input<'_>>,
+) -> Result<(), Stop> {
     let header_pos = w.out.position();
     w.header(item)?;
     let Some(mut file) = file else {

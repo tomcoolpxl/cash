@@ -316,6 +316,20 @@ impl Parsed {
     pub(super) fn errors_target(&self) -> Target {
         self.target(Key::ErrStream).unwrap_or(Target::Err)
     }
+
+    /// Where the progress line goes: nowhere with `-bd`; as `-bsp` says; else to
+    /// standard output when it is a console and not `-so`'s.
+    pub(super) fn percents_target(&self, stdout_terminal: bool) -> Target {
+        if self.there(Key::DisablePercents) {
+            return Target::Off;
+        }
+        let default = if self.there(Key::StdOut) || !stdout_terminal {
+            Target::Off
+        } else {
+            Target::Out
+        };
+        self.target(Key::PercentStream).unwrap_or(default)
+    }
 }
 
 /// `CParser::ParseStrings`: the switches by their longest name, case aside.

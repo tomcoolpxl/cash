@@ -401,6 +401,10 @@ impl Bundle {
 
 /// `h`: 7-Zip's `HashCalc` with its console: "Scanning", the counts, a line for each
 /// file and folder, the sums.
+#[expect(
+    clippy::too_many_lines,
+    reason = "7-Zip's HashCalc and its console, step by step"
+)]
 pub(super) fn run<SE: cash_core::ShellExtensions>(
     options: &Options,
     env: &Env<'_, SE>,
@@ -415,6 +419,10 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
         if headers {
             console.so("Scanning\n");
         }
+        console.progress_quiet(|s| {
+            s.clear();
+            "Scan".clone_into(&mut s.command);
+        });
         items = scan::scan(
             &options.censor,
             options.symlinks.unwrap_or(false),
@@ -423,7 +431,11 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
                 common_error(console, path, error, true);
                 warnings.scan.push((path.to_owned(), copy_error(error)));
             },
+            &mut |stat, path| super::update::scan_progress(console, stat, path),
         );
+        // FinishScanning.
+        console.close_progress();
+        console.progress_quiet(super::percent::State::clear);
         if headers {
             let stat = Stat::of(&items);
             console.so(&format!(
@@ -433,10 +445,16 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
         }
     }
     let mut bundle = Bundle::new(options.hash_methods.as_deref().unwrap_or_default())?;
+    // SetTotal: the bytes found, before the header.
+    if options.stdin.is_none() {
+        let total = Stat::of(&items).size;
+        console.progress(|s| s.total = total);
+    }
     if headers {
         console.so(&bundle.header());
     }
     let mut buf = vec![0u8; 1 << 15];
+    let mut done = 0u64;
     for item in &items {
         // A link -snl keeps is hashed as a file of its reparse data, a folder's too.
         let is_dir = item.is_dir && item.reparse.is_none();
@@ -458,9 +476,17 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
                 }
             }
         };
+        // GetStream: the line names the item.
+        console.progress(|s| item.name.clone_into(&mut s.file_name));
         bundle.start();
         if !is_dir {
+            // SetCompleted every 256 reads, the first before any.
+            let mut step = 0u32;
             loop {
+                if step.trailing_zeros() >= 8 {
+                    console.progress(|s| s.completed = done);
+                }
+                step = step.wrapping_add(1);
                 let n = match input.read(&mut buf) {
                     Ok(0) => break,
                     Ok(n) => n,
@@ -468,6 +494,7 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
                     Err(e) => return Err(Stop::System(e)),
                 };
                 bundle.update(&buf[..n]);
+                done = done.saturating_add(n as u64);
             }
         }
         let size = bundle.cur_size;
@@ -482,6 +509,8 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
             "{}\n",
             bundle.line(CURRENT, !is_dir, size, &shown)
         ));
+        console.progress(|s| s.files += 1);
+        console.progress(|s| s.completed = done);
     }
     if headers {
         let mut s = bundle.separator();

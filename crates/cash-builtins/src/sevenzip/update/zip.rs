@@ -888,6 +888,7 @@ pub(super) fn write<SE: cash_core::ShellExtensions>(
             )?;
             processed[d] = true;
             files_read += 1;
+            job.item_done();
             records.push(rec);
         } else {
             let (Some(a), Some(zip), Some(file)) = (ui.up.arc, zip, source.as_mut()) else {
@@ -1009,7 +1010,7 @@ fn new_props<SE: cash_core::ShellExtensions>(
 )]
 fn add_file(
     rec: &mut Record,
-    file: &mut Input,
+    file: &mut Input<'_>,
     ui: &Item,
     sequence: &[u16],
     crypto: Option<&Crypto>,

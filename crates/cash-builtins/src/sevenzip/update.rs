@@ -269,9 +269,24 @@ fn progress<SE: cash_core::ShellExtensions>(
     mark: &str,
     name: &str,
 ) {
-    if options.log_level >= level {
+    let logged = options.log_level >= level;
+    if logged {
         console.so(&format!("{mark} {name}\n"));
     }
+    console.progress_item(mark, name, logged);
+}
+
+/// `ScanProgress`: the items and bytes found so far, and the folder being looked in.
+pub(super) fn scan_progress<SE: cash_core::ShellExtensions>(
+    console: &Console<'_, SE>,
+    stat: &Stat,
+    path: &str,
+) {
+    console.progress(|s| {
+        s.files = stat.dirs + stat.files;
+        s.completed = stat.size;
+        path.clone_into(&mut s.file_name);
+    });
 }
 
 /// The archive's name with its extension as `-sa` has it (`CArchivePath`).
@@ -603,6 +618,7 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
             .any(|(_, actions, _)| need_scanning(*actions))
     {
         console.so("Scanning the drive:\n");
+        console.progress_quiet(|s| "Scan ".clone_into(&mut s.command));
         dir_items = scan::scan(
             &options.censor,
             options.symlinks.unwrap_or(false),
@@ -611,7 +627,11 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
                 common_error(console, path, error, true);
                 warnings.scan.push((path.to_owned(), copy_error(error)));
             },
+            &mut |stat, path| scan_progress(console, stat, path),
         );
+        // FinishScanning.
+        console.close_progress();
+        console.progress_quiet(super::percent::State::clear);
         let stat = Stat::of(&dir_items);
         console.so(&format!(
             "{}\n\n",
@@ -677,6 +697,8 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
                 "Creating archive: "
             }
         ));
+        // StartArchive.
+        console.progress_quiet(super::percent::State::clear);
         let out_path = if at == 0 && create_temp {
             let path = temp_name(env, update.working_dir.as_deref(), &arc_path)?;
             temp_path = Some(path.clone());
@@ -1161,6 +1183,8 @@ impl<SE: cash_core::ShellExtensions> Job<'_, '_, SE> {
         }
         let _ = writeln!(s, "Add new data to archive: {}\n", new.text());
         console.so(&s);
+        // SetTotal: what is read from the disk.
+        console.progress(|s| s.total = new.size);
 
         if self.kind != Kind::SevenZ {
             return self.write_other(source.as_ref(), &ups, out_path, warnings, processed);
@@ -1510,19 +1534,30 @@ impl<SE: cash_core::ShellExtensions> Job<'_, '_, SE> {
         }
     }
 
+    /// `SetOperationResult`: an item written, counted on the progress line.
+    fn item_done(&self) {
+        self.console.progress_quiet(|s| s.files += 1);
+    }
+
     /// A new file, open, or standard input for `-si`; or the warning that it would not
     /// open, kept for the end (`OpenFileError`), and `None`.
-    fn open_new(&self, d: usize, warnings: &mut Warnings) -> Option<Input> {
+    fn open_new(&self, d: usize, warnings: &mut Warnings) -> Option<Input<'_>> {
         let di = &self.dir_items[d];
+        let console = self.console;
+        // SetCompleted with each read, SetOperationResult once the item is written.
+        let heard = Box::new(move |n: u64| {
+            console.progress(|s| s.completed = s.completed.saturating_add(n));
+        });
+        let input = |feed| Some(Input { feed, heard });
         if di.path.as_os_str().is_empty() {
-            return Some(Input::Stdin(Box::new(self.env.context.stdin())));
+            return input(Feed::Stdin(Box::new(self.env.context.stdin())));
         }
         // A link -snl keeps: its reparse data rather than what it names.
         if let Some(data) = &di.reparse {
-            return Some(Input::Data(io::Cursor::new(data.clone())));
+            return input(Feed::Data(io::Cursor::new(data.clone())));
         }
         match File::open(&di.path) {
-            Ok(file) => Some(Input::File(file)),
+            Ok(file) => input(Feed::File(file)),
             Err(error) => {
                 common_error(self.console, &di.shown, &error, true);
                 warnings.failed.push((di.shown.clone(), copy_error(&error)));
@@ -1826,6 +1861,7 @@ impl<SE: cash_core::ShellExtensions> Job<'_, '_, SE> {
                         return Err(Stop::from(error));
                     }
                     files_read += 1;
+                    self.item_done();
                     processed[d] = true;
                 }
                 Ok::<(), Stop>(())
@@ -2026,12 +2062,18 @@ impl Write for Out<'_> {
     }
 }
 
-/// A new item's data: its file, a link's reparse data (`-snl`), or standard input
-/// (`-si`).
-enum Input {
+/// Where a new item's data comes from: its file, a link's reparse data (`-snl`), or
+/// standard input (`-si`).
+enum Feed {
     File(File),
     Data(io::Cursor<Vec<u8>>),
     Stdin(Box<dyn Read>),
+}
+
+/// A new item's data, each read told to the progress line (`SetCompleted`).
+struct Input<'a> {
+    feed: Feed,
+    heard: Box<dyn Fn(u64) + 'a>,
 }
 
 /// Data that can be read again.
@@ -2039,51 +2081,58 @@ trait Rewind: Read + Seek {}
 
 impl<T: Read + Seek> Rewind for T {}
 
-impl Input {
+impl Input<'_> {
     /// The data, which can be read again; not standard input.
     fn seekable(&mut self) -> Option<&mut dyn Rewind> {
-        match self {
-            Self::File(file) => Some(file),
-            Self::Data(data) => Some(data),
-            Self::Stdin(_) => None,
+        match &mut self.feed {
+            Feed::File(file) => Some(file),
+            Feed::Data(data) => Some(data),
+            Feed::Stdin(_) => None,
         }
+    }
+
+    /// Whether the data is a file's.
+    const fn is_file(&self) -> bool {
+        matches!(self.feed, Feed::File(_))
     }
 
     /// The open file's metadata (`IStreamGetProps`), which a link's data has not.
     fn metadata(&self) -> Option<fs::Metadata> {
-        match self {
-            Self::File(file) => file.metadata().ok(),
+        match &self.feed {
+            Feed::File(file) => file.metadata().ok(),
             _ => None,
         }
     }
 
     /// The size the data has now, else `fallback`.
     fn size_or(&self, fallback: u64) -> u64 {
-        match self {
-            Self::File(file) => file.metadata().map_or(fallback, |m| m.len()),
-            Self::Data(data) => data.get_ref().len() as u64,
-            Self::Stdin(_) => fallback,
+        match &self.feed {
+            Feed::File(file) => file.metadata().map_or(fallback, |m| m.len()),
+            Feed::Data(data) => data.get_ref().len() as u64,
+            Feed::Stdin(_) => fallback,
         }
     }
 }
 
-impl Read for Input {
+impl Read for Input<'_> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        match self {
-            Self::File(file) => file.read(buf),
-            Self::Data(data) => data.read(buf),
-            Self::Stdin(stdin) => stdin.read(buf),
-        }
+        let n = match &mut self.feed {
+            Feed::File(file) => file.read(buf),
+            Feed::Data(data) => data.read(buf),
+            Feed::Stdin(stdin) => stdin.read(buf),
+        }?;
+        (self.heard)(n as u64);
+        Ok(n)
     }
 }
 
 /// A file being read into a block, its read error kept for the message.
-struct Watched {
-    file: Input,
+struct Watched<'a> {
+    file: Input<'a>,
     error: Option<io::Error>,
 }
 
-impl Read for Watched {
+impl Read for Watched<'_> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.file.read(buf).inspect_err(|error| {
             self.error = Some(copy_error(error));

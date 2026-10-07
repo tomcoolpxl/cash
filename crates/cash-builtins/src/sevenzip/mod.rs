@@ -21,6 +21,7 @@ mod help;
 mod links;
 mod list;
 mod methods;
+mod percent;
 mod scan;
 mod streams;
 mod tar7;
@@ -124,6 +125,11 @@ struct Console<'a, SE: cash_core::ShellExtensions> {
     terminal: [bool; 2],
     messages: Cell<Target>,
     errors: Cell<Target>,
+    /// The progress line (`-bsp`), off unless standard output is a console.
+    percents: Cell<Target>,
+    percent: RefCell<percent::Percent>,
+    /// `PercentsNameLevel`: 2 when the line names each item, else 1, where the log does.
+    percent_names: Cell<u32>,
 }
 
 impl<'a, SE: cash_core::ShellExtensions> Console<'a, SE> {
@@ -136,6 +142,9 @@ impl<'a, SE: cash_core::ShellExtensions> Console<'a, SE> {
             terminal,
             messages: Cell::new(Target::Out),
             errors: Cell::new(Target::Err),
+            percents: Cell::new(Target::Off),
+            percent: RefCell::new(percent::Percent::default()),
+            percent_names: Cell::new(1),
         }
     }
 
@@ -147,7 +156,15 @@ impl<'a, SE: cash_core::ShellExtensions> Console<'a, SE> {
         }
     }
 
+    /// Writes `text`, the progress line wiped first.
     fn write(&self, target: Target, text: &str) {
+        if Self::slot(target).is_some() {
+            self.close_progress();
+        }
+        self.write_raw(target, text);
+    }
+
+    fn write_raw(&self, target: Target, text: &str) {
         let Some(slot) = Self::slot(target) else {
             return;
         };
@@ -155,6 +172,61 @@ impl<'a, SE: cash_core::ShellExtensions> Console<'a, SE> {
         if self.terminal[slot] {
             self.flush(target);
         }
+    }
+
+    /// Whether the progress line is shown (`NeedPercents`).
+    const fn progress_on(&self) -> bool {
+        Self::slot(self.percents.get()).is_some()
+    }
+
+    /// Changes what the progress line shows, and shows it if it is time.
+    fn progress(&self, change: impl FnOnce(&mut percent::State)) {
+        if !self.progress_on() {
+            return;
+        }
+        let text = {
+            let mut percent = self.percent.borrow_mut();
+            change(&mut percent.state);
+            percent.print()
+        };
+        if let Some(text) = text {
+            self.write_raw(self.percents.get(), &text);
+        }
+    }
+
+    /// Changes what the progress line will show next, without showing it.
+    fn progress_quiet(&self, change: impl FnOnce(&mut percent::State)) {
+        if self.progress_on() {
+            change(&mut self.percent.borrow_mut().state);
+        }
+    }
+
+    /// `ClosePrint`: the progress line wiped, if one is shown.
+    fn close_progress(&self) {
+        if !self.progress_on() {
+            return;
+        }
+        let wipe = self.percent.borrow_mut().close();
+        if let Some(wipe) = wipe {
+            self.write_raw(self.percents.get(), &wipe);
+            self.flush(self.percents.get());
+        }
+    }
+
+    /// An item as the log and the progress line show it (`PrintProgress`,
+    /// `PrepareOperation`): the line names it when the log does not.
+    fn progress_item(&self, command: &str, name: &str, logged: bool) {
+        let names = self.percent_names.get();
+        self.progress(|state| {
+            if names >= 1 {
+                state.file_name.clear();
+                state.command.clear();
+                if names > 1 || !logged {
+                    command.clone_into(&mut state.command);
+                    name.clone_into(&mut state.file_name);
+                }
+            }
+        });
     }
 
     fn flush(&self, target: Target) {
@@ -211,6 +283,7 @@ impl<'a, SE: cash_core::ShellExtensions> Console<'a, SE> {
 
     /// Everything held, standard output first, as the C library flushes at exit.
     fn finish(&self) {
+        self.close_progress();
         self.flush(Target::Out);
         self.flush(Target::Err);
     }
@@ -263,6 +336,9 @@ fn run_to_code<SE: cash_core::ShellExtensions>(
     };
     console.messages.set(parsed.messages_target());
     console.errors.set(parsed.errors_target());
+    console
+        .percents
+        .set(parsed.percents_target(console.terminal[0]));
     if parsed.help {
         console.so(help::BANNER);
         console.so(&help::usage(name));
@@ -275,6 +351,9 @@ fn run_to_code<SE: cash_core::ShellExtensions>(
         Ok(options) => options,
         Err(error) => return command_line_error(console, &error),
     };
+    if options.log_level == 0 || console.percents.get() != console.messages.get() {
+        console.percent_names.set(2);
+    }
     let env = Env {
         context,
         zone: Zone::of_shell(context.shell),

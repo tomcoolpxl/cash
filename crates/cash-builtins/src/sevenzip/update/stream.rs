@@ -309,6 +309,7 @@ pub(super) fn write<SE: cash_core::ShellExtensions>(
         }
     }
     processed[d] = true;
+    job.item_done();
     Ok(1)
 }
 

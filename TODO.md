@@ -494,9 +494,10 @@ same day: 7z and the formats cash has, Windows 7-Zip's words with LF and `/`,
 2. **`7z` and `7za` reading** (done 2026-10-07): the parser, `l` (with `-slt`, `-ba`),
    `t`, `x`, `e`, the overwrite question and `-ao`, `-o`, `-p`, `-so`, `-i`/`-x`, `-r`;
    the oracle (`7z_cases.sh`, 7-Zip 26.03 from Scoop). Left for later in the phase: the
-   progress line on a console (`-bsp`, `-bd`), `-si` reading (done with step 4),
-   `-bt`, `-spe`, `-snz`, `-ai`/`-ax` beyond names, and `i`'s listing is cash's own
-   short one.
+   progress line on a console (`-bsp`, `-bd`; done 2026-10-07, 7-Zip's
+   `CPercentPrinter` and its hooks in scanning, opening, extracting, adding and `h`,
+   matched against `-bsp1` into a pipe), `-si` reading (done with step 4), `-bt`,
+   `-spe`, `-snz`, `-ai`/`-ax` beyond names, and `i`'s listing is cash's own short one.
 3. **Writing 7z** (done 2026-10-07): `a`, `u`, `d`, `rn`, the `-u` matrix and `-u!name`,
    `-m` (levels, methods, solid limits, filters chosen by a file's head as 7-Zip's
    analysis does, `-mhe`, `-mhc`, times, `-mqs`), `-p` typed or given, `-sdel`, `-stl`,
@@ -556,7 +557,9 @@ same day: 7z and the formats cash has, Windows 7-Zip's words with LF and `/`,
    does the latter for every format. `h` on hash files (7-Zip 23's `-thash`) is not
    taken; 7-Zip's split handler also reads `NAME.aa`, `NAME.ab` volumes, cash's only
    numbered ones.
-6. The page, `builtins.md`, `CARRIED`, `DELIBERATE_SHADOWS`, doctor.
+6. The page, `builtins.md`, `CARRIED`, `DELIBERATE_SHADOWS`, doctor. `CARRIED` has
+   `7z` and `7za`; doctor's new note names a 7-Zip on `PATH` outside System32 that
+   cash's `7z` goes ahead of (2026-10-07).
 
 ---
 

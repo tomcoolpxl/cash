@@ -68,10 +68,14 @@ fn scan<SE: cash_core::ShellExtensions>(
     if options.headers {
         console.so("Scanning the drive for archives:\n");
     }
+    console.progress_quiet(|s| "Scan".clone_into(&mut s.command));
     let mut found = Vec::new();
     for (prefix, node) in options.archive_censor.pairs() {
         walk(env, console, prefix, node, &mut found)?;
     }
+    // FinishScanning.
+    console.close_progress();
+    console.progress_quiet(super::percent::State::clear);
     found.sort_by_key(|a| a.name.to_lowercase());
     if options.headers {
         let size: u64 = found
@@ -102,6 +106,16 @@ fn walk<SE: cash_core::ShellExtensions>(
     node: &super::censor::Node,
     found: &mut Vec<Found>,
 ) -> Result<(), Stop> {
+    // ScanProgress: what was found so far, and the folder looked in.
+    let bytes = found
+        .iter()
+        .filter(|f| f.size != u64::MAX)
+        .fold(0u64, |sum, f| sum.saturating_add(f.size));
+    console.progress(|s| {
+        s.files = found.len() as u64;
+        s.completed = bytes;
+        dir.clone_into(&mut s.file_name);
+    });
     for (parts, wildcards) in node.masks() {
         if wildcards && parts.iter().any(|p| has_wildcard(p)) {
             found.extend(expand(env, dir, parts));
@@ -519,7 +533,14 @@ fn extract_archive<SE: cash_core::ShellExtensions>(
             return Ok(());
         }
     };
-    // `OpenResult`: the errors on the errors' stream, the warnings on the messages'.
+    // `OpenResult`: the progress line cleared; the errors on the errors' stream, the
+    // warnings on the messages'.
+    console.close_progress();
+    console.progress_quiet(|s| {
+        s.files = 0;
+        s.command.clear();
+        s.file_name.clear();
+    });
     let open_error = !opened.error_flags.is_empty();
     if open_error {
         totals.open_errors += 1;
@@ -665,6 +686,18 @@ fn extract_items<SE: cash_core::ShellExtensions>(
     let mut post_links: Vec<links::PostLink> = Vec::new();
     let mut stop: Option<Stop> = None;
     let mut hash = totals.hash.take();
+    // SetTotal: what is to be decoded; SetCompleted from none.
+    let total = items
+        .iter()
+        .zip(&decode)
+        .filter(|(_, d)| **d)
+        .map(|(item, _)| item.size.unwrap_or(0))
+        .fold(0u64, u64::saturating_add);
+    console.progress(|s| {
+        s.total = total;
+        s.completed = 0;
+    });
+    let mut done = 0u64;
     let result: Result<(), Stop> = opened.extract(&|index| decode[index], |index, data| {
         let item = &items[index];
         let skip = !wanted[index];
@@ -751,21 +784,34 @@ fn extract_items<SE: cash_core::ShellExtensions>(
             }
             None => data,
         };
+        let mut shown_data;
+        let data: &mut dyn Data = if console.progress_on() {
+            shown_data = Shown {
+                data,
+                console,
+                done: &mut done,
+            };
+            &mut shown_data
+        } else {
+            data
+        };
         let level = if skip || passed { 2 } else { 1 };
-        if options.log_level >= level {
+        let mark = if skip || passed {
+            "."
+        } else if test {
+            "T"
+        } else {
+            "-"
+        };
+        let logged = options.log_level >= level;
+        if logged {
             let mut shown = item.path.clone();
             if item.is_dir && !shown.ends_with('/') {
                 shown.push('/');
             }
-            let mark = if skip || passed {
-                "."
-            } else if test {
-                "T"
-            } else {
-                "-"
-            };
             console.so(&format!("{mark} {shown}\n"));
         }
+        console.progress_item(mark, &item.path, logged);
         if item.is_dir {
             totals.folders += 1;
         } else {
@@ -823,9 +869,20 @@ fn extract_items<SE: cash_core::ShellExtensions>(
         if hashing && let Some(bundle) = hash.as_mut() {
             bundle.finish(item.is_dir, &item.path);
         }
+        console.progress_quiet(|s| {
+            s.command.clear();
+            s.file_name.clear();
+            s.files += 1;
+        });
         Ok(true)
     });
     totals.hash = hash;
+    // ExtractResult: the progress line wiped.
+    console.close_progress();
+    console.progress_quiet(|s| {
+        s.command.clear();
+        s.file_name.clear();
+    });
     // CloseArc: the links, even after a break.
     errors += links::make(console, &post_links, &out_dir, options.dangerous_level);
     // A break still counts the errors met before it.
@@ -844,6 +901,37 @@ fn extract_items<SE: cash_core::ShellExtensions>(
         );
     }
     Ok(errors)
+}
+
+/// An item's data counted on the progress line as it is read (`SetCompleted`).
+struct Shown<'a, 'c, SE: cash_core::ShellExtensions> {
+    data: &'a mut dyn Data,
+    console: &'a Console<'c, SE>,
+    done: &'a mut u64,
+}
+
+impl<SE: cash_core::ShellExtensions> Read for Shown<'_, '_, SE> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let n = self.data.read(buf)?;
+        *self.done = self.done.saturating_add(n as u64);
+        let done = *self.done;
+        self.console.progress(|s| s.completed = done);
+        Ok(n)
+    }
+}
+
+impl<SE: cash_core::ShellExtensions> Data for Shown<'_, '_, SE> {
+    fn finish(&mut self) -> Result<(), Problem> {
+        self.data.finish()
+    }
+
+    fn encrypted(&self) -> bool {
+        self.data.encrypted()
+    }
+
+    fn unpacked(&self) -> Option<u64> {
+        self.data.unpacked()
+    }
 }
 
 /// An item's data passing through `-scrc`'s hashes.

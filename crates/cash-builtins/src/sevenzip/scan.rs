@@ -90,17 +90,21 @@ impl Stat {
     pub(super) fn of(items: &[DirItem]) -> Self {
         let mut stat = Self::default();
         for item in items {
-            if item.is_dir {
-                stat.dirs += 1;
-            } else {
-                stat.files += 1;
-                // A link kept as a link counts as its own size, nothing (`SetLinkInfo`).
-                if item.reparse.is_none() {
-                    stat.size = stat.size.wrapping_add(item.size);
-                }
-            }
+            stat.add(item);
         }
         stat
+    }
+
+    const fn add(&mut self, item: &DirItem) {
+        if item.is_dir {
+            self.dirs += 1;
+        } else {
+            self.files += 1;
+            // A link kept as a link counts as its own size, nothing (`SetLinkInfo`).
+            if item.reparse.is_none() {
+                self.size = self.size.wrapping_add(item.size);
+            }
+        }
     }
 }
 
@@ -135,12 +139,14 @@ impl Found {
 /// `warn` hears each path that could not be read, with why.
 ///
 /// With `symlinks` (`-snl`) a junction or a symbolic link is kept as one, its reparse
-/// data read, a folder not entered; else it is followed.
+/// data read, a folder not entered; else it is followed. `progress` hears the count so
+/// far as each folder is entered (`ScanProgress`).
 pub(super) fn scan(
     censor: &Censor,
     symlinks: bool,
     resolve: &dyn Fn(&str) -> PathBuf,
     warn: &mut dyn FnMut(&str, &io::Error),
+    progress: &mut dyn FnMut(&Stat, &str),
 ) -> Vec<DirItem> {
     let mut walker = Walker {
         symlinks,
@@ -149,6 +155,8 @@ pub(super) fn scan(
         exclude_files: censor.exclude_files,
         resolve,
         warn,
+        progress,
+        stat: Stat::default(),
         items: Vec::new(),
     };
     for (prefix, node) in censor.pairs() {
@@ -164,6 +172,8 @@ struct Walker<'a> {
     exclude_files: bool,
     resolve: &'a dyn Fn(&str) -> PathBuf,
     warn: &'a mut dyn FnMut(&str, &io::Error),
+    progress: &'a mut dyn FnMut(&Stat, &str),
+    stat: Stat,
     items: Vec<DirItem>,
 }
 
@@ -264,6 +274,9 @@ impl Walker<'_> {
             accessed: found.accessed,
             reparse,
         });
+        if let Some(item) = self.items.last() {
+            self.stat.add(item);
+        }
     }
 
     /// `EnumerateDirItems_Spec`: the folder `name` under `phy`, with `stack`'s masks.
@@ -298,6 +311,7 @@ impl Walker<'_> {
         let Some(&node) = stack.last() else {
             return;
         };
+        (self.progress)(&self.stat, phy);
         if !enter && node.need_check_sub_dirs() {
             enter = true;
         }
