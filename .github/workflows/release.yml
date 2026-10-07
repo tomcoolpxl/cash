@@ -205,11 +205,14 @@ jobs:
       # The installer on a machine that never had cash: a silent install into the
       # runner's temp folder, a command through the installed cash, doctor, the update
       # check against the real releases page, then a silent uninstall that leaves
-      # nothing. What the winget submission needs to have seen once per release.
+      # nothing. What the winget submission needs to have seen once per release. The
+      # update check sends the job's token: GitHub refuses (403) anonymous API calls
+      # from a runner's shared address once that address has used its hourly share.
       - name: Install, run and uninstall the installer on this runner
         shell: pwsh
         env:
           TAG: ${{ steps.tag.outputs.tag }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $setup = "cash-$env:TAG-setup.exe"
           $root = Join-Path $env:RUNNER_TEMP 'cash-smoke'
