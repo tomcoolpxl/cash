@@ -16,6 +16,7 @@ members = [
     "crates/cash-diffutils",
     "crates/cash-picker",
     "crates/cash-getopt",
+    "crates/cash-archive",
     "xtask",
 ]
 default-members = ["crates/cash"]
@@ -35,6 +36,7 @@ keywords = ["cli", "shell", "sh", "bash", "windows"]
 readme = "README.md"
 
 [workspace.dependencies]
+cash-archive = { version = "1.3.13", path = "crates/cash-archive" }
 cash-awk = { version = "1.3.13", path = "crates/cash-awk" }
 cash-bc = { version = "1.3.13", path = "crates/cash-bc" }
 cash-builtins = { version = "1.3.13", path = "crates/cash-builtins" }

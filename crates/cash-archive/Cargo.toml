@@ -1,0 +1,30 @@
+[package]
+name = "cash-archive"
+description = "Archives and compressed streams for cash's tar, zip and compressors, in pure Rust (spec D78)"
+version.workspace = true
+authors.workspace = true
+categories.workspace = true
+edition.workspace = true
+keywords.workspace = true
+license.workspace = true
+readme.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+# gzip: deflate on the pure-Rust backend (miniz_oxide), and the trailer's CRC-32.
+flate2 = { workspace = true, features = ["rust_backend"] }
+crc32fast = { workspace = true }
+# bzip2 on libbz2-rs-sys, Trifecta Tech's pure-Rust port of libbzip2 (its default
+# backend), under the bzip2-1.0.6 license.
+bzip2 = "0.6.1"
+# xz, lzma and lzip: a pure-Rust port of XZ for Java.
+lzma-rust2 = "0.21.0"
+# zstd: pure Rust; writes at its fast level only, until libzstd-rs-sys has a Rust API.
+ruzstd = "0.9.0"
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true
