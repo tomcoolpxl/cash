@@ -1,9 +1,9 @@
-# 7z on RAR archives, run under 7-Zip 26.03 (the oracle: Scoop's 7z.exe on Windows) and
-# under cash's builtin: rars' fixtures (crates/cash-archive/tests/fixtures/rar), the RAR 5
-# and 7 archives of WinRAR 7.12 and 7.21, libarchive's and rarfile's tests, and rars'
-# own, listed technically and in columns; volume sets from their first volume and a later
-# one; encrypted headers with the password, a wrong one and none; and files named as RAR
-# volumes that are none. 7z_rar.out is 7-Zip's output.
+# 7z on RAR 5 and 7 archives, run under 7-Zip 26.03 (the oracle: Scoop's 7z.exe on
+# Windows) and under cash's builtin: rars' fixtures (crates/cash-archive/tests/fixtures/rar),
+# the archives of WinRAR 7.12 and 7.21, libarchive's and rarfile's tests, and rars' own,
+# listed technically and in columns, tested, and some extracted; volume sets from their
+# first volume and a later one; encrypted headers with the password, a wrong one and none;
+# and files named as RAR volumes that are none. 7z_rar.out is 7-Zip's output.
 #
 # As in 7z_cases.sh, `z` turns 7-Zip's CRLF and `\` into LF and `/`. 7-Zip shows times in
 # Windows' zone by the bias of the day it runs (`FileTimeToLocalFileTime`), whatever the
@@ -84,5 +84,109 @@ for a in x.rar x.r00 x.r01 x.part1.rar; do
   echo "== l $a, which is not one"
   z l "$a"
 done
+
+
+# t: each archive above, with the password where one is wanted; the out-of-window
+# match left out, which 7-Zip's decoder refuses and rar's fills with zeros, as WinRAR
+# does. x: a selection, each file written and its CRC; symbolic links left out, as
+# making one needs a right a CI runner has and a desktop may not.
+for a in golden/stored_comment.rar golden/stored_comment_metadata.rar \
+    golden/stored_quick_open.rar golden/stored_rar50.rar golden/stored_rar70.rar \
+    golden/stored_recovery_1.rar golden/stored_recovery_10.rar \
+    golden/stored_recovery_5.rar golden/stored_recovery_50.rar \
+    golden/stored_volume_0.rar golden/stored_volume_1.rar \
+    golden/stored_volume_2.rar golden/stored_volume_3.rar \
+    rar50/algorithm_version_2.rar rar50/algorithm_version_2_stored.rar \
+    rar50/ams_archive_name_rar721.rar rar50/crc32_wrong_beside_blake2sp.rar \
+    rar50/empty_file.rar rar50/encrypted_multivol.part1.rar \
+    rar50/encrypted_multivol.part2.rar rar50/encrypted_multivol.part3.rar \
+    rar50/filter_arm.rar rar50/filter_delta.rar rar50/filter_e8.rar \
+    rar50/filter_e8e9.rar rar50/first_block_without_tables.rar rar50/m1_fastest.rar \
+    rar50/m3_default.rar rar50/m5_max.rar rar50/multifile.rar \
+    rar50/multivol.part1.rar rar50/multivol.part2.rar rar50/multivol.part3.rar \
+    rar50/multivol_rev.part1.rar rar50/multivol_rev.part2.rar \
+    rar50/multivol_rev.part3.rar rar50/multivol_rev.part4.rar \
+    rar50/multivol_rev.part5.rar rar50/password_aes.rar rar50/password_crc32.rar \
+    rar50/plaintext_stored_multivol.part2.rar rar50/solid.rar \
+    rar50/solid_multivol.part01.rar rar50/solid_multivol.part02.rar \
+    rar50/solid_multivol.part03.rar rar50/solid_multivol.part04.rar \
+    rar50/solid_multivol.part05.rar rar50/solid_multivol.part06.rar \
+    rar50/stored.rar rar50/stored_blake2.rar rar50/stored_multivol.part1.rar \
+    rar50/stored_multivol.part2.rar rar50/stored_multivol.part3.rar \
+    rar50/subdata_size_underflow.rar rar50/wild/hardlink.rar \
+    rar50/wild/invalid_hash_valid_htime_exfld.rar \
+    rar50/wild/libarchive_loop_bug.rar \
+    rar50/wild/libarchive_multiple_files_solid.rar rar50/wild/libarchive_solid.rar \
+    rar50/wild/rarfile_hlink.rar rar50/wild/rarfile_solid.rar \
+    rar50/wild/rarfile_solid_qo.rar rar50/wild/symlink.rar \
+    rar50/with_all_services.rar rar50/with_comment.rar rar50/with_quickopen.rar \
+    rar50/with_recovery.rar rar50/header_encrypted.rar \
+    rar50/header_encrypted_comment.rar \
+    rar50/header_encrypted_stored_multivol.part1.rar; do
+  echo "== t -ppassword $a"
+  z t -ppassword "$a"
+done
+for a in rar50/zeroed_password_check.rar; do
+  echo "== t -psecret $a"
+  z t -psecret "$a"
+done
+for a in rar50/winrar721_header_encrypted_quickopen.rar; do
+  echo "== t -pPassword $a"
+  z t -pPassword "$a"
+done
+
+# `x` into a folder of its own, then each file it holds and its CRC.
+xt() {
+  rm -rf out
+  z x -y -oout "$@"
+  (cd out 2>/dev/null && find . -type f | sort | while read -r f; do echo "$f $(cksum < "$f")"; done)
+}
+echo "== x rar50/multifile.rar"
+xt rar50/multifile.rar
+echo "== x rar50/solid.rar"
+xt rar50/solid.rar
+echo "== x rar50/m5_max.rar"
+xt rar50/m5_max.rar
+echo "== x rar50/multivol.part1.rar"
+xt rar50/multivol.part1.rar
+echo "== x rar50/solid_multivol.part01.rar"
+xt rar50/solid_multivol.part01.rar
+echo "== x rar50/stored_multivol.part1.rar"
+xt rar50/stored_multivol.part1.rar
+echo "== x rar50/filter_arm.rar"
+xt rar50/filter_arm.rar
+echo "== x rar50/filter_delta.rar"
+xt rar50/filter_delta.rar
+echo "== x rar50/filter_e8.rar"
+xt rar50/filter_e8.rar
+echo "== x rar50/filter_e8e9.rar"
+xt rar50/filter_e8e9.rar
+echo "== x rar50/algorithm_version_2.rar"
+xt rar50/algorithm_version_2.rar
+echo "== x rar50/with_all_services.rar"
+xt rar50/with_all_services.rar
+echo "== x golden/stored_rar70.rar"
+xt golden/stored_rar70.rar
+echo "== x rar50/wild/hardlink.rar"
+xt rar50/wild/hardlink.rar
+echo "== x rar50/wild/rarfile_hlink.rar"
+xt rar50/wild/rarfile_hlink.rar
+echo "== x rar50/wild/libarchive_solid.rar"
+xt rar50/wild/libarchive_solid.rar
+echo "== x rar50/wild/libarchive_multiple_files_solid.rar"
+xt rar50/wild/libarchive_multiple_files_solid.rar
+echo "== x -ppassword rar50/password_aes.rar"
+xt -ppassword rar50/password_aes.rar
+echo "== x -ppassword rar50/password_crc32.rar"
+xt -ppassword rar50/password_crc32.rar
+echo "== x -ppassword rar50/encrypted_multivol.part1.rar"
+xt -ppassword rar50/encrypted_multivol.part1.rar
+echo "== x -ppassword rar50/header_encrypted.rar"
+xt -ppassword rar50/header_encrypted.rar
+echo "== x rar50/solid.rar tiny.txt"
+xt rar50/solid.rar tiny.txt
+echo "== e, a wrong password"
+rm -rf out
+z e -y -oout -pwrong rar50/password_aes.rar
 
 cd / && rm -rf "$dir"

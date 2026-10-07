@@ -4583,3 +4583,2763 @@ ERROR: x.part1.rar : Cannot open the file as archive
 
 
 rc=2
+== t -ppassword golden/stored_comment.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1165 bytes (2 KiB)
+
+Testing archive: golden/stored_comment.rar
+--
+Path = golden/stored_comment.rar
+Type = Rar5
+Physical Size = 1165
+Characteristics = Comment
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+Comment = golden archive comment
+
+Everything is Ok
+
+Size:       1024
+Compressed: 1165
+rc=0
+== t -ppassword golden/stored_comment_metadata.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1192 bytes (2 KiB)
+
+Testing archive: golden/stored_comment_metadata.rar
+--
+Path = golden/stored_comment_metadata.rar
+Type = Rar5
+Physical Size = 1192
+Characteristics = Metadata arc-name ctime-win Locator QuickOpen:0 Comment
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+Name = golden.rar
+Created = 2022-11-24 12:26:38.4140288
+Comment = golden archive comment
+
+Everything is Ok
+
+Size:       1024
+Compressed: 1192
+rc=0
+== t -ppassword golden/stored_quick_open.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 3056 bytes (3 KiB)
+
+Testing archive: golden/stored_quick_open.rar
+--
+Path = golden/stored_quick_open.rar
+Type = Rar5
+Physical Size = 3056
+Characteristics = Locator QuickOpen:2785
+Encrypted = -
+Solid = -
+Blocks = 3
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Files: 3
+Size:       2567
+Compressed: 3056
+rc=0
+== t -ppassword golden/stored_rar50.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 4294 bytes (5 KiB)
+
+Testing archive: golden/stored_rar50.rar
+--
+Path = golden/stored_rar50.rar
+Type = Rar5
+Physical Size = 4294
+Encrypted = -
+Solid = -
+Blocks = 2
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Files: 2
+Size:       4133
+Compressed: 4294
+rc=0
+== t -ppassword golden/stored_rar70.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 4294 bytes (5 KiB)
+
+Testing archive: golden/stored_rar70.rar
+--
+Path = golden/stored_rar70.rar
+Type = Rar5
+Physical Size = 4294
+Encrypted = -
+Solid = -
+Blocks = 2
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Files: 2
+Size:       4133
+Compressed: 4294
+rc=0
+== t -ppassword golden/stored_recovery_1.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 9387 bytes (10 KiB)
+
+Testing archive: golden/stored_recovery_1.rar
+--
+Path = golden/stored_recovery_1.rar
+Type = Rar5
+Physical Size = 9387
+Characteristics = Recovery Locator Recovery:8279
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       8192
+Compressed: 9387
+rc=0
+== t -ppassword golden/stored_recovery_10.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 9387 bytes (10 KiB)
+
+Testing archive: golden/stored_recovery_10.rar
+--
+Path = golden/stored_recovery_10.rar
+Type = Rar5
+Physical Size = 9387
+Characteristics = Recovery Locator Recovery:8279
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       8192
+Compressed: 9387
+rc=0
+== t -ppassword golden/stored_recovery_5.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 9387 bytes (10 KiB)
+
+Testing archive: golden/stored_recovery_5.rar
+--
+Path = golden/stored_recovery_5.rar
+Type = Rar5
+Physical Size = 9387
+Characteristics = Recovery Locator Recovery:8279
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       8192
+Compressed: 9387
+rc=0
+== t -ppassword golden/stored_recovery_50.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 12585 bytes (13 KiB)
+
+Testing archive: golden/stored_recovery_50.rar
+--
+Path = golden/stored_recovery_50.rar
+Type = Rar5
+Physical Size = 12585
+Characteristics = Recovery Locator Recovery:8279
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       8192
+Compressed: 12585
+rc=0
+== t -ppassword golden/stored_volume_0.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1594 bytes (2 KiB)
+
+Testing archive: golden/stored_volume_0.rar
+--
+Path = golden/stored_volume_0.rar
+Type = Rar5
+Physical Size = 1594
+Total Physical Size = 5376
+Characteristics = Volume VolumeField
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = +
+Volume Index = 0
+Volumes = 4
+
+Everything is Ok
+
+Size:       5000
+Compressed: 5376
+rc=0
+== t -ppassword golden/stored_volume_1.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1594 bytes (2 KiB)
+
+Testing archive: golden/stored_volume_1.rar
+
+ERRORS:
+Headers Error
+
+--
+Path = golden/stored_volume_1.rar
+Type = Rar5
+ERRORS:
+Headers Error
+Physical Size = 1594
+Total Physical Size = 3782
+Characteristics = Volume VolumeField
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = +
+Volume Index = 1
+Volumes = 3
+
+ERROR: Data Error : split.bin
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Open Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword golden/stored_volume_2.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1594 bytes (2 KiB)
+
+Testing archive: golden/stored_volume_2.rar
+
+ERRORS:
+Headers Error
+
+--
+Path = golden/stored_volume_2.rar
+Type = Rar5
+ERRORS:
+Headers Error
+Physical Size = 1594
+Total Physical Size = 2188
+Characteristics = Volume VolumeField
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = +
+Volume Index = 2
+Volumes = 2
+
+ERROR: Data Error : split.bin
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Open Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword golden/stored_volume_3.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 594 bytes (1 KiB)
+
+Testing archive: golden/stored_volume_3.rar
+
+ERRORS:
+Headers Error
+
+--
+Path = golden/stored_volume_3.rar
+Type = Rar5
+ERRORS:
+Headers Error
+Physical Size = 594
+Characteristics = Volume VolumeField
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = +
+Volume Index = 3
+Volumes = 1
+
+ERROR: Data Error : split.bin
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Open Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar50/algorithm_version_2.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2943 bytes (3 KiB)
+
+Testing archive: rar50/algorithm_version_2.rar
+--
+Path = rar50/algorithm_version_2.rar
+Type = Rar5
+Physical Size = 2943
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v8
+Multivolume = -
+Volumes = 1
+
+ERROR: Unsupported Method : mid.txt
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar50/algorithm_version_2_stored.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 103 bytes (1 KiB)
+
+Testing archive: rar50/algorithm_version_2_stored.rar
+--
+Path = rar50/algorithm_version_2_stored.rar
+Type = Rar5
+Physical Size = 103
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v8
+Multivolume = -
+Volumes = 1
+
+ERROR: Unsupported Method : hello.txt
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar50/ams_archive_name_rar721.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 175 bytes (1 KiB)
+
+Testing archive: rar50/ams_archive_name_rar721.rar
+--
+Path = rar50/ams_archive_name_rar721.rar
+Type = Rar5
+Physical Size = 175
+Characteristics = Metadata arc-name ctime-win Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+Name = ams_archive_name_rar721.rar
+Created = 2026-04-27 06:23:44.6414898
+
+Everything is Ok
+
+Size:       31
+Compressed: 175
+rc=0
+== t -ppassword rar50/crc32_wrong_beside_blake2sp.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 138 bytes (1 KiB)
+
+Testing archive: rar50/crc32_wrong_beside_blake2sp.rar
+--
+Path = rar50/crc32_wrong_beside_blake2sp.rar
+Type = Rar5
+Physical Size = 138
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+
+ERROR: CRC Failed : hello.txt
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar50/empty_file.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 104 bytes (1 KiB)
+
+Testing archive: rar50/empty_file.rar
+--
+Path = rar50/empty_file.rar
+Type = Rar5
+Physical Size = 104
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       0
+Compressed: 104
+rc=0
+== t -ppassword rar50/encrypted_multivol.part1.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2048 bytes (2 KiB)
+
+Testing archive: rar50/encrypted_multivol.part1.rar
+--
+Path = rar50/encrypted_multivol.part1.rar
+Type = Rar5
+Physical Size = 2048
+Total Physical Size = 4962
+Characteristics = Volume Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m3
+Multivolume = +
+Volume Index = 0
+Volumes = 3
+
+Everything is Ok
+
+Size:       4096
+Compressed: 4962
+rc=0
+== t -ppassword rar50/encrypted_multivol.part2.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2048 bytes (2 KiB)
+
+Testing archive: rar50/encrypted_multivol.part2.rar
+
+ERRORS:
+Headers Error
+
+--
+Path = rar50/encrypted_multivol.part2.rar
+Type = Rar5
+ERRORS:
+Headers Error
+Physical Size = 2048
+Total Physical Size = 2914
+Characteristics = Volume VolumeField Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m3
+Multivolume = +
+Volume Index = 1
+Volumes = 2
+
+ERROR: Data Error in encrypted file. Wrong password? : random_4k.bin
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Open Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar50/encrypted_multivol.part3.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 866 bytes (1 KiB)
+
+Testing archive: rar50/encrypted_multivol.part3.rar
+
+ERRORS:
+Headers Error
+
+--
+Path = rar50/encrypted_multivol.part3.rar
+Type = Rar5
+ERRORS:
+Headers Error
+Physical Size = 866
+Characteristics = Volume VolumeField Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m3
+Multivolume = +
+Volume Index = 2
+Volumes = 1
+
+ERROR: Data Error in encrypted file. Wrong password? : random_4k.bin
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Open Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar50/filter_arm.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 3639 bytes (4 KiB)
+
+Testing archive: rar50/filter_arm.rar
+--
+Path = rar50/filter_arm.rar
+Type = Rar5
+Physical Size = 3639
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m5
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       4096
+Compressed: 3639
+rc=0
+== t -ppassword rar50/filter_delta.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 717 bytes (1 KiB)
+
+Testing archive: rar50/filter_delta.rar
+--
+Path = rar50/filter_delta.rar
+Type = Rar5
+Physical Size = 717
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:512K:m5
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       262144
+Compressed: 717
+rc=0
+== t -ppassword rar50/filter_e8.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 891 bytes (1 KiB)
+
+Testing archive: rar50/filter_e8.rar
+--
+Path = rar50/filter_e8.rar
+Type = Rar5
+Physical Size = 891
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:256K:m5
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       196608
+Compressed: 891
+rc=0
+== t -ppassword rar50/filter_e8e9.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 899 bytes (1 KiB)
+
+Testing archive: rar50/filter_e8e9.rar
+--
+Path = rar50/filter_e8e9.rar
+Type = Rar5
+Physical Size = 899
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:256K:m5
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       196608
+Compressed: 899
+rc=0
+== t -ppassword rar50/first_block_without_tables.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2943 bytes (3 KiB)
+
+Testing archive: rar50/first_block_without_tables.rar
+--
+Path = rar50/first_block_without_tables.rar
+Type = Rar5
+Physical Size = 2943
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m3
+Multivolume = -
+Volumes = 1
+
+ERROR: Data Error : mid.txt
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar50/m1_fastest.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 12582 bytes (13 KiB)
+
+Testing archive: rar50/m1_fastest.rar
+--
+Path = rar50/m1_fastest.rar
+Type = Rar5
+Physical Size = 12582
+Characteristics = Locator QuickOpen:12457
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       65536
+Compressed: 12582
+rc=0
+== t -ppassword rar50/m3_default.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 10007 bytes (10 KiB)
+
+Testing archive: rar50/m3_default.rar
+--
+Path = rar50/m3_default.rar
+Type = Rar5
+Physical Size = 10007
+Characteristics = Locator QuickOpen:9882
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m3
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       65536
+Compressed: 10007
+rc=0
+== t -ppassword rar50/m5_max.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 9922 bytes (10 KiB)
+
+Testing archive: rar50/m5_max.rar
+--
+Path = rar50/m5_max.rar
+Type = Rar5
+Physical Size = 9922
+Characteristics = Locator QuickOpen:9797
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m5
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       65536
+Compressed: 9922
+rc=0
+== t -ppassword rar50/multifile.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 4389 bytes (5 KiB)
+
+Testing archive: rar50/multifile.rar
+--
+Path = rar50/multifile.rar
+Type = Rar5
+Physical Size = 4389
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 3
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Files: 3
+Size:       4135
+Compressed: 4389
+rc=0
+== t -ppassword rar50/multivol.part1.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2048 bytes (2 KiB)
+
+Testing archive: rar50/multivol.part1.rar
+--
+Path = rar50/multivol.part1.rar
+Type = Rar5
+Physical Size = 2048
+Total Physical Size = 4705
+Characteristics = Volume Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m3
+Multivolume = +
+Volume Index = 0
+Volumes = 3
+
+Everything is Ok
+
+Size:       4096
+Compressed: 4705
+rc=0
+== t -ppassword rar50/multivol.part2.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2048 bytes (2 KiB)
+
+Testing archive: rar50/multivol.part2.rar
+
+ERRORS:
+Headers Error
+
+--
+Path = rar50/multivol.part2.rar
+Type = Rar5
+ERRORS:
+Headers Error
+Physical Size = 2048
+Total Physical Size = 2657
+Characteristics = Volume VolumeField Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m3
+Multivolume = +
+Volume Index = 1
+Volumes = 2
+
+ERROR: Data Error : random_4k.bin
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Open Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar50/multivol.part3.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 609 bytes (1 KiB)
+
+Testing archive: rar50/multivol.part3.rar
+
+ERRORS:
+Headers Error
+
+--
+Path = rar50/multivol.part3.rar
+Type = Rar5
+ERRORS:
+Headers Error
+Physical Size = 609
+Characteristics = Volume VolumeField Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m3
+Multivolume = +
+Volume Index = 2
+Volumes = 1
+
+ERROR: Data Error : random_4k.bin
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Open Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar50/multivol_rev.part1.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 4096 bytes (4 KiB)
+
+Testing archive: rar50/multivol_rev.part1.rar
+--
+Path = rar50/multivol_rev.part1.rar
+Type = Rar5
+Physical Size = 4096
+Total Physical Size = 17416
+Characteristics = Volume Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = +
+Volume Index = 0
+Volumes = 5
+
+Everything is Ok
+
+Size:       16384
+Compressed: 17416
+rc=0
+== t -ppassword rar50/multivol_rev.part2.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 4096 bytes (4 KiB)
+
+Testing archive: rar50/multivol_rev.part2.rar
+
+ERRORS:
+Headers Error
+
+--
+Path = rar50/multivol_rev.part2.rar
+Type = Rar5
+ERRORS:
+Headers Error
+Physical Size = 4096
+Total Physical Size = 13320
+Characteristics = Volume VolumeField Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = +
+Volume Index = 1
+Volumes = 4
+
+ERROR: Data Error : random_16k.bin
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Open Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar50/multivol_rev.part3.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 4096 bytes (4 KiB)
+
+Testing archive: rar50/multivol_rev.part3.rar
+
+ERRORS:
+Headers Error
+
+--
+Path = rar50/multivol_rev.part3.rar
+Type = Rar5
+ERRORS:
+Headers Error
+Physical Size = 4096
+Total Physical Size = 9224
+Characteristics = Volume VolumeField Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = +
+Volume Index = 2
+Volumes = 3
+
+ERROR: Data Error : random_16k.bin
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Open Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar50/multivol_rev.part4.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 4096 bytes (4 KiB)
+
+Testing archive: rar50/multivol_rev.part4.rar
+
+ERRORS:
+Headers Error
+
+--
+Path = rar50/multivol_rev.part4.rar
+Type = Rar5
+ERRORS:
+Headers Error
+Physical Size = 4096
+Total Physical Size = 5128
+Characteristics = Volume VolumeField Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = +
+Volume Index = 3
+Volumes = 2
+
+ERROR: Data Error : random_16k.bin
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Open Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar50/multivol_rev.part5.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1032 bytes (2 KiB)
+
+Testing archive: rar50/multivol_rev.part5.rar
+
+ERRORS:
+Headers Error
+
+--
+Path = rar50/multivol_rev.part5.rar
+Type = Rar5
+ERRORS:
+Headers Error
+Physical Size = 1032
+Characteristics = Volume VolumeField Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = +
+Volume Index = 4
+Volumes = 1
+
+ERROR: Data Error : random_16k.bin
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Open Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar50/password_aes.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 201 bytes (1 KiB)
+
+Testing archive: rar50/password_aes.rar
+--
+Path = rar50/password_aes.rar
+Type = Rar5
+Physical Size = 201
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m3
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       30
+Compressed: 201
+rc=0
+== t -ppassword rar50/password_crc32.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 170 bytes (1 KiB)
+
+Testing archive: rar50/password_crc32.rar
+--
+Path = rar50/password_crc32.rar
+Type = Rar5
+Physical Size = 170
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m3
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       30
+Compressed: 170
+rc=0
+== t -ppassword rar50/plaintext_stored_multivol.part2.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2048 bytes (2 KiB)
+
+Testing archive: rar50/plaintext_stored_multivol.part2.rar
+
+ERRORS:
+Headers Error
+ERRORS:
+Missing volume : plaintext_stored_multivol.part3.rar
+
+--
+Path = rar50/plaintext_stored_multivol.part2.rar
+Type = Rar5
+ERRORS:
+Headers Error
+ERROR = Missing volume : plaintext_stored_multivol.part3.rar
+Physical Size = 2048
+Characteristics = Volume VolumeField Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = +
+Volume Index = 1
+Volumes = 1
+
+ERROR: Data Error : stored_4k.bin
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Open Errors: 2
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar50/solid.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 228 bytes (1 KiB)
+
+Testing archive: rar50/solid.rar
+--
+Path = rar50/solid.rar
+Type = Rar5
+Physical Size = 228
+Characteristics = Solid Locator QuickOpen:0
+Encrypted = -
+Solid = +
+Blocks = 1
+Method = v6:1M:m3
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Files: 2
+Size:       39
+Compressed: 228
+rc=0
+== t -ppassword rar50/solid_multivol.part01.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2048 bytes (2 KiB)
+
+Testing archive: rar50/solid_multivol.part01.rar
+--
+Path = rar50/solid_multivol.part01.rar
+Type = Rar5
+Physical Size = 2048
+Total Physical Size = 11150
+Characteristics = Volume Solid Locator QuickOpen:0
+Encrypted = -
+Solid = +
+Blocks = 1
+Method = v6:1M:m3
+Multivolume = +
+Volume Index = 0
+Volumes = 6
+
+Everything is Ok
+
+Files: 2
+Size:       65545
+Compressed: 11150
+rc=0
+== t -ppassword rar50/solid_multivol.part02.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2048 bytes (2 KiB)
+
+Testing archive: rar50/solid_multivol.part02.rar
+
+ERRORS:
+Headers Error
+
+--
+Path = rar50/solid_multivol.part02.rar
+Type = Rar5
+ERRORS:
+Headers Error
+Physical Size = 2048
+Total Physical Size = 9102
+Characteristics = Volume VolumeField Solid Locator QuickOpen:0
+Encrypted = -
+Solid = +
+Blocks = 0
+Method = v6:1M:m3
+Multivolume = +
+Volume Index = 1
+Volumes = 5
+
+ERROR: Data Error : bigtext_64k.bin
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Open Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar50/solid_multivol.part03.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2048 bytes (2 KiB)
+
+Testing archive: rar50/solid_multivol.part03.rar
+
+ERRORS:
+Headers Error
+
+--
+Path = rar50/solid_multivol.part03.rar
+Type = Rar5
+ERRORS:
+Headers Error
+Physical Size = 2048
+Total Physical Size = 7054
+Characteristics = Volume VolumeField Solid Locator QuickOpen:0
+Encrypted = -
+Solid = +
+Blocks = 0
+Method = v6:1M:m3
+Multivolume = +
+Volume Index = 2
+Volumes = 4
+
+ERROR: Data Error : bigtext_64k.bin
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Open Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar50/solid_multivol.part04.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2048 bytes (2 KiB)
+
+Testing archive: rar50/solid_multivol.part04.rar
+
+ERRORS:
+Headers Error
+
+--
+Path = rar50/solid_multivol.part04.rar
+Type = Rar5
+ERRORS:
+Headers Error
+Physical Size = 2048
+Total Physical Size = 5006
+Characteristics = Volume VolumeField Solid Locator QuickOpen:0
+Encrypted = -
+Solid = +
+Blocks = 0
+Method = v6:1M:m3
+Multivolume = +
+Volume Index = 3
+Volumes = 3
+
+ERROR: Data Error : bigtext_64k.bin
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Open Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar50/solid_multivol.part05.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2048 bytes (2 KiB)
+
+Testing archive: rar50/solid_multivol.part05.rar
+
+ERRORS:
+Headers Error
+
+--
+Path = rar50/solid_multivol.part05.rar
+Type = Rar5
+ERRORS:
+Headers Error
+Physical Size = 2048
+Total Physical Size = 2958
+Characteristics = Volume VolumeField Solid Locator QuickOpen:0
+Encrypted = -
+Solid = +
+Blocks = 0
+Method = v6:1M:m3
+Multivolume = +
+Volume Index = 4
+Volumes = 2
+
+ERROR: Data Error : bigtext_64k.bin
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Open Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar50/solid_multivol.part06.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 910 bytes (1 KiB)
+
+Testing archive: rar50/solid_multivol.part06.rar
+
+ERRORS:
+Headers Error
+
+--
+Path = rar50/solid_multivol.part06.rar
+Type = Rar5
+ERRORS:
+Headers Error
+Physical Size = 910
+Characteristics = Volume VolumeField Solid Locator QuickOpen:0
+Encrypted = -
+Solid = +
+Blocks = 0
+Method = v6:1M:m3
+Multivolume = +
+Volume Index = 5
+Volumes = 1
+
+ERROR: Data Error : bigtext_64k.bin
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Open Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar50/stored.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 103 bytes (1 KiB)
+
+Testing archive: rar50/stored.rar
+--
+Path = rar50/stored.rar
+Type = Rar5
+Physical Size = 103
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       30
+Compressed: 103
+rc=0
+== t -ppassword rar50/stored_blake2.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 134 bytes (1 KiB)
+
+Testing archive: rar50/stored_blake2.rar
+--
+Path = rar50/stored_blake2.rar
+Type = Rar5
+Physical Size = 134
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       30
+Compressed: 134
+rc=0
+== t -ppassword rar50/stored_multivol.part1.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2048 bytes (2 KiB)
+
+Testing archive: rar50/stored_multivol.part1.rar
+--
+Path = rar50/stored_multivol.part1.rar
+Type = Rar5
+Physical Size = 2048
+Total Physical Size = 4653
+Characteristics = Volume Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = +
+Volume Index = 0
+Volumes = 3
+
+Everything is Ok
+
+Size:       4096
+Compressed: 4653
+rc=0
+== t -ppassword rar50/stored_multivol.part2.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2048 bytes (2 KiB)
+
+Testing archive: rar50/stored_multivol.part2.rar
+
+ERRORS:
+Headers Error
+
+--
+Path = rar50/stored_multivol.part2.rar
+Type = Rar5
+ERRORS:
+Headers Error
+Physical Size = 2048
+Total Physical Size = 2605
+Characteristics = Volume VolumeField Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = +
+Volume Index = 1
+Volumes = 2
+
+ERROR: Data Error : random_4k.bin
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Open Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar50/stored_multivol.part3.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 557 bytes (1 KiB)
+
+Testing archive: rar50/stored_multivol.part3.rar
+
+ERRORS:
+Headers Error
+
+--
+Path = rar50/stored_multivol.part3.rar
+Type = Rar5
+ERRORS:
+Headers Error
+Physical Size = 557
+Characteristics = Volume VolumeField Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = +
+Volume Index = 2
+Volumes = 1
+
+ERROR: Data Error : random_4k.bin
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Open Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar50/subdata_size_underflow.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 370 bytes (1 KiB)
+
+Testing archive: rar50/subdata_size_underflow.rar
+--
+Path = rar50/subdata_size_underflow.rar
+Type = Rar5
+Physical Size = 370
+Characteristics = Recovery Locator QuickOpen:0 Recovery:121
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       30
+Compressed: 370
+rc=0
+== t -ppassword rar50/wild/hardlink.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 122 bytes (1 KiB)
+
+Testing archive: rar50/wild/hardlink.rar
+--
+Path = rar50/wild/hardlink.rar
+Type = Rar5
+Physical Size = 122
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 2
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Files: 2
+Size:       10
+Compressed: 122
+rc=0
+== t -ppassword rar50/wild/invalid_hash_valid_htime_exfld.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 120 bytes (1 KiB)
+
+Testing archive: rar50/wild/invalid_hash_valid_htime_exfld.rar
+
+ERRORS:
+Headers Error
+
+--
+Path = rar50/wild/invalid_hash_valid_htime_exfld.rar
+Type = Rar5
+ERRORS:
+Headers Error
+Physical Size = 120
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+
+
+
+Archives with Errors: 1
+
+Open Errors: 1
+
+rc=2
+== t -ppassword rar50/wild/libarchive_loop_bug.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 8346 bytes (9 KiB)
+
+Testing archive: rar50/wild/libarchive_loop_bug.rar
+
+ERRORS:
+Headers Error
+
+--
+Path = rar50/wild/libarchive_loop_bug.rar
+Type = Rar5
+ERRORS:
+Headers Error
+Physical Size = 8346
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m3
+Multivolume = -
+Volumes = 1
+
+ERROR: Data Error : a
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Open Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar50/wild/libarchive_multiple_files_solid.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 677 bytes (1 KiB)
+
+Testing archive: rar50/wild/libarchive_multiple_files_solid.rar
+--
+Path = rar50/wild/libarchive_multiple_files_solid.rar
+Type = Rar5
+Physical Size = 677
+Characteristics = Solid Locator QuickOpen:0
+Encrypted = -
+Solid = +
+Blocks = 1
+Method = v6:1M:m5
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Files: 4
+Size:       16384
+Compressed: 677
+rc=0
+== t -ppassword rar50/wild/libarchive_solid.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1050 bytes (2 KiB)
+
+Testing archive: rar50/wild/libarchive_solid.rar
+--
+Path = rar50/wild/libarchive_solid.rar
+Type = Rar5
+Physical Size = 1050
+Characteristics = Solid Locator QuickOpen:0
+Encrypted = -
+Solid = +
+Blocks = 1
+Method = v6:1M:m5
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Files: 7
+Size:       25776
+Compressed: 1050
+rc=0
+== t -ppassword rar50/wild/rarfile_hlink.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 230 bytes (1 KiB)
+
+Testing archive: rar50/wild/rarfile_hlink.rar
+--
+Path = rar50/wild/rarfile_hlink.rar
+Type = Rar5
+Physical Size = 230
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 3
+Method = v6:128K:m0:m3
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Files: 3
+Size:       6144
+Compressed: 230
+rc=0
+== t -ppassword rar50/wild/rarfile_solid.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 169 bytes (1 KiB)
+
+Testing archive: rar50/wild/rarfile_solid.rar
+--
+Path = rar50/wild/rarfile_solid.rar
+Type = Rar5
+Physical Size = 169
+Characteristics = Solid Locator QuickOpen:0
+Encrypted = -
+Solid = +
+Blocks = 1
+Method = v6:1M:m3
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Files: 2
+Size:       4096
+Compressed: 169
+rc=0
+== t -ppassword rar50/wild/rarfile_solid_qo.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 508 bytes (1 KiB)
+
+Testing archive: rar50/wild/rarfile_solid_qo.rar
+--
+Path = rar50/wild/rarfile_solid_qo.rar
+Type = Rar5
+Physical Size = 508
+Characteristics = Solid Locator QuickOpen:275
+Encrypted = -
+Solid = +
+Blocks = 1
+Method = v6:1M:m3
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Files: 4
+Size:       8192
+Compressed: 508
+rc=0
+== t -ppassword rar50/wild/symlink.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 190 bytes (1 KiB)
+
+Testing archive: rar50/wild/symlink.rar
+--
+Path = rar50/wild/symlink.rar
+Type = Rar5
+Physical Size = 190
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 4
+Method = v6:32M:m0
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Folders: 1
+Files: 3
+Size:       16
+Compressed: 190
+rc=0
+== t -ppassword rar50/with_all_services.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1002 bytes (1 KiB)
+
+Testing archive: rar50/with_all_services.rar
+--
+Path = rar50/with_all_services.rar
+Type = Rar5
+Physical Size = 1002
+Characteristics = Recovery Locator QuickOpen:256 Recovery:437 Comment
+Encrypted = -
+Solid = -
+Blocks = 2
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+Comment = 
+{
+This is the archive comment.
+}
+
+Everything is Ok
+
+Files: 2
+Size:       39
+Compressed: 1002
+rc=0
+== t -ppassword rar50/with_comment.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 188 bytes (1 KiB)
+
+Testing archive: rar50/with_comment.rar
+--
+Path = rar50/with_comment.rar
+Type = Rar5
+Physical Size = 188
+Characteristics = Locator QuickOpen:0 Comment
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+Comment = 
+{
+This is the archive comment.
+}
+
+Everything is Ok
+
+Size:       30
+Compressed: 188
+rc=0
+== t -ppassword rar50/with_quickopen.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 396 bytes (1 KiB)
+
+Testing archive: rar50/with_quickopen.rar
+--
+Path = rar50/with_quickopen.rar
+Type = Rar5
+Physical Size = 396
+Characteristics = Locator QuickOpen:199
+Encrypted = -
+Solid = -
+Blocks = 2
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Files: 2
+Size:       39
+Compressed: 396
+rc=0
+== t -ppassword rar50/with_recovery.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 370 bytes (1 KiB)
+
+Testing archive: rar50/with_recovery.rar
+--
+Path = rar50/with_recovery.rar
+Type = Rar5
+Physical Size = 370
+Characteristics = Recovery Locator QuickOpen:0 Recovery:121
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       30
+Compressed: 370
+rc=0
+== t -ppassword rar50/header_encrypted.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 302 bytes (1 KiB)
+
+Testing archive: rar50/header_encrypted.rar
+--
+Path = rar50/header_encrypted.rar
+Type = Rar5
+Physical Size = 302
+Characteristics = Locator QuickOpen:0
+Encrypted = +
+Solid = -
+Blocks = 1
+Method = v6:128K:m3
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       30
+Compressed: 302
+rc=0
+== t -ppassword rar50/header_encrypted_comment.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 462 bytes (1 KiB)
+
+Testing archive: rar50/header_encrypted_comment.rar
+--
+Path = rar50/header_encrypted_comment.rar
+Type = Rar5
+Physical Size = 462
+Characteristics = Locator QuickOpen:0 Comment
+Encrypted = +
+Solid = -
+Blocks = 1
+Method = v6:128K:m3
+Multivolume = -
+Volumes = 1
+Comment = 
+{
+Encrypted archive comment fixture.
+}
+
+Everything is Ok
+
+Size:       40
+Compressed: 462
+rc=0
+== t -ppassword rar50/header_encrypted_stored_multivol.part1.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2048 bytes (2 KiB)
+
+Testing archive: rar50/header_encrypted_stored_multivol.part1.rar
+--
+Path = rar50/header_encrypted_stored_multivol.part1.rar
+Type = Rar5
+Physical Size = 2048
+Total Physical Size = 5358
+Characteristics = Volume Locator QuickOpen:0
+Encrypted = +
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = +
+Volume Index = 0
+Volumes = 3
+
+Everything is Ok
+
+Size:       4096
+Compressed: 5358
+rc=0
+== t -psecret rar50/zeroed_password_check.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 211 bytes (1 KiB)
+
+Testing archive: rar50/zeroed_password_check.rar
+--
+Path = rar50/zeroed_password_check.rar
+Type = Rar5
+Physical Size = 211
+Characteristics = Locator QuickOpen:0 Comment
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+Comment = 
+{
+an archive comment
+}
+
+Everything is Ok
+
+Size:       34
+Compressed: 211
+rc=0
+== t -pPassword rar50/winrar721_header_encrypted_quickopen.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 8702 bytes (9 KiB)
+
+Testing archive: rar50/winrar721_header_encrypted_quickopen.rar
+--
+Path = rar50/winrar721_header_encrypted_quickopen.rar
+Type = Rar5
+Physical Size = 8702
+Characteristics = Locator QuickOpen:8368
+Encrypted = +
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       8191
+Compressed: 8702
+rc=0
+== x rar50/multifile.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 4389 bytes (5 KiB)
+
+Extracting archive: rar50/multifile.rar
+--
+Path = rar50/multifile.rar
+Type = Rar5
+Physical Size = 4389
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 3
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Files: 3
+Size:       4135
+Compressed: 4389
+rc=0
+./hello.txt 3232419072 30
+./random_4k.bin 3580297721 4096
+./tiny.txt 2558135348 9
+== x rar50/solid.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 228 bytes (1 KiB)
+
+Extracting archive: rar50/solid.rar
+--
+Path = rar50/solid.rar
+Type = Rar5
+Physical Size = 228
+Characteristics = Solid Locator QuickOpen:0
+Encrypted = -
+Solid = +
+Blocks = 1
+Method = v6:1M:m3
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Files: 2
+Size:       39
+Compressed: 228
+rc=0
+./hello.txt 3232419072 30
+./tiny.txt 2558135348 9
+== x rar50/m5_max.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 9922 bytes (10 KiB)
+
+Extracting archive: rar50/m5_max.rar
+--
+Path = rar50/m5_max.rar
+Type = Rar5
+Physical Size = 9922
+Characteristics = Locator QuickOpen:9797
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m5
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       65536
+Compressed: 9922
+rc=0
+./bigtext_64k.bin 209337893 65536
+== x rar50/multivol.part1.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2048 bytes (2 KiB)
+
+Extracting archive: rar50/multivol.part1.rar
+--
+Path = rar50/multivol.part1.rar
+Type = Rar5
+Physical Size = 2048
+Total Physical Size = 4705
+Characteristics = Volume Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m3
+Multivolume = +
+Volume Index = 0
+Volumes = 3
+
+Everything is Ok
+
+Size:       4096
+Compressed: 4705
+rc=0
+./random_4k.bin 3580297721 4096
+== x rar50/solid_multivol.part01.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2048 bytes (2 KiB)
+
+Extracting archive: rar50/solid_multivol.part01.rar
+--
+Path = rar50/solid_multivol.part01.rar
+Type = Rar5
+Physical Size = 2048
+Total Physical Size = 11150
+Characteristics = Volume Solid Locator QuickOpen:0
+Encrypted = -
+Solid = +
+Blocks = 1
+Method = v6:1M:m3
+Multivolume = +
+Volume Index = 0
+Volumes = 6
+
+Everything is Ok
+
+Files: 2
+Size:       65545
+Compressed: 11150
+rc=0
+./bigtext_64k.bin 209337893 65536
+./tiny.txt 2558135348 9
+== x rar50/stored_multivol.part1.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2048 bytes (2 KiB)
+
+Extracting archive: rar50/stored_multivol.part1.rar
+--
+Path = rar50/stored_multivol.part1.rar
+Type = Rar5
+Physical Size = 2048
+Total Physical Size = 4653
+Characteristics = Volume Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m0
+Multivolume = +
+Volume Index = 0
+Volumes = 3
+
+Everything is Ok
+
+Size:       4096
+Compressed: 4653
+rc=0
+./random_4k.bin 3580297721 4096
+== x rar50/filter_arm.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 3639 bytes (4 KiB)
+
+Extracting archive: rar50/filter_arm.rar
+--
+Path = rar50/filter_arm.rar
+Type = Rar5
+Physical Size = 3639
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m5
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       4096
+Compressed: 3639
+rc=0
+./arm_synthetic.bin 716294440 4096
+== x rar50/filter_delta.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 717 bytes (1 KiB)
+
+Extracting archive: rar50/filter_delta.rar
+--
+Path = rar50/filter_delta.rar
+Type = Rar5
+Physical Size = 717
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:512K:m5
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       262144
+Compressed: 717
+rc=0
+./delta_4ch_ramp.bin 1706389234 262144
+== x rar50/filter_e8.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 891 bytes (1 KiB)
+
+Extracting archive: rar50/filter_e8.rar
+--
+Path = rar50/filter_e8.rar
+Type = Rar5
+Physical Size = 891
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:256K:m5
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       196608
+Compressed: 891
+rc=0
+./x86_e8_stream.bin 3800935325 196608
+== x rar50/filter_e8e9.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 899 bytes (1 KiB)
+
+Extracting archive: rar50/filter_e8e9.rar
+--
+Path = rar50/filter_e8e9.rar
+Type = Rar5
+Physical Size = 899
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:256K:m5
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       196608
+Compressed: 899
+rc=0
+./x86_e8e9_stream.bin 3207282340 196608
+== x rar50/algorithm_version_2.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2943 bytes (3 KiB)
+
+Extracting archive: rar50/algorithm_version_2.rar
+--
+Path = rar50/algorithm_version_2.rar
+Type = Rar5
+Physical Size = 2943
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v8
+Multivolume = -
+Volumes = 1
+
+ERROR: Unsupported Method : mid.txt
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2
+./mid.txt 4294967295 0
+== x rar50/with_all_services.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1002 bytes (1 KiB)
+
+Extracting archive: rar50/with_all_services.rar
+--
+Path = rar50/with_all_services.rar
+Type = Rar5
+Physical Size = 1002
+Characteristics = Recovery Locator QuickOpen:256 Recovery:437 Comment
+Encrypted = -
+Solid = -
+Blocks = 2
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+Comment = 
+{
+This is the archive comment.
+}
+
+Everything is Ok
+
+Files: 2
+Size:       39
+Compressed: 1002
+rc=0
+./hello.txt 3232419072 30
+./tiny.txt 2558135348 9
+== x golden/stored_rar70.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 4294 bytes (5 KiB)
+
+Extracting archive: golden/stored_rar70.rar
+--
+Path = golden/stored_rar70.rar
+Type = Rar5
+Physical Size = 4294
+Encrypted = -
+Solid = -
+Blocks = 2
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Files: 2
+Size:       4133
+Compressed: 4294
+rc=0
+./first.bin 3586510027 4096
+./second.bin 3485950043 37
+== x rar50/wild/hardlink.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 122 bytes (1 KiB)
+
+Extracting archive: rar50/wild/hardlink.rar
+--
+Path = rar50/wild/hardlink.rar
+Type = Rar5
+Physical Size = 122
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 2
+Method = v6:128K:m0
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       5
+Compressed: 122
+rc=0
+./file.txt 1232204886 5
+./hardlink.txt 1232204886 5
+== x rar50/wild/rarfile_hlink.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 230 bytes (1 KiB)
+
+Extracting archive: rar50/wild/rarfile_hlink.rar
+--
+Path = rar50/wild/rarfile_hlink.rar
+Type = Rar5
+Physical Size = 230
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 3
+Method = v6:128K:m0:m3
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       2048
+Compressed: 230
+rc=0
+./stest1.txt 2553982975 2048
+./stest2.txt 2553982975 2048
+./stest3.txt 2553982975 2048
+== x rar50/wild/libarchive_solid.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1050 bytes (2 KiB)
+
+Extracting archive: rar50/wild/libarchive_solid.rar
+--
+Path = rar50/wild/libarchive_solid.rar
+Type = Rar5
+Physical Size = 1050
+Characteristics = Solid Locator QuickOpen:0
+Encrypted = -
+Solid = +
+Blocks = 1
+Method = v6:1M:m5
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Files: 7
+Size:       25776
+Compressed: 1050
+rc=0
+./test1.bin 664958642 4096
+./test2.bin 746753614 4096
+./test3.bin 3380852157 4096
+./test4.bin 3265482049 4096
+./test5.bin 2562383595 4096
+./test6.bin 2476353047 4096
+./test.bin 2690314213 1200
+== x rar50/wild/libarchive_multiple_files_solid.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 677 bytes (1 KiB)
+
+Extracting archive: rar50/wild/libarchive_multiple_files_solid.rar
+--
+Path = rar50/wild/libarchive_multiple_files_solid.rar
+Type = Rar5
+Physical Size = 677
+Characteristics = Solid Locator QuickOpen:0
+Encrypted = -
+Solid = +
+Blocks = 1
+Method = v6:1M:m5
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Files: 4
+Size:       16384
+Compressed: 677
+rc=0
+./test1.bin 664958642 4096
+./test2.bin 746753614 4096
+./test3.bin 3380852157 4096
+./test4.bin 3265482049 4096
+== x -ppassword rar50/password_aes.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 201 bytes (1 KiB)
+
+Extracting archive: rar50/password_aes.rar
+--
+Path = rar50/password_aes.rar
+Type = Rar5
+Physical Size = 201
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m3
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       30
+Compressed: 201
+rc=0
+./hello.txt 3232419072 30
+== x -ppassword rar50/password_crc32.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 170 bytes (1 KiB)
+
+Extracting archive: rar50/password_crc32.rar
+--
+Path = rar50/password_crc32.rar
+Type = Rar5
+Physical Size = 170
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m3
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       30
+Compressed: 170
+rc=0
+./hello.txt 3232419072 30
+== x -ppassword rar50/encrypted_multivol.part1.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2048 bytes (2 KiB)
+
+Extracting archive: rar50/encrypted_multivol.part1.rar
+--
+Path = rar50/encrypted_multivol.part1.rar
+Type = Rar5
+Physical Size = 2048
+Total Physical Size = 4962
+Characteristics = Volume Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m3
+Multivolume = +
+Volume Index = 0
+Volumes = 3
+
+Everything is Ok
+
+Size:       4096
+Compressed: 4962
+rc=0
+./random_4k.bin 3580297721 4096
+== x -ppassword rar50/header_encrypted.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 302 bytes (1 KiB)
+
+Extracting archive: rar50/header_encrypted.rar
+--
+Path = rar50/header_encrypted.rar
+Type = Rar5
+Physical Size = 302
+Characteristics = Locator QuickOpen:0
+Encrypted = +
+Solid = -
+Blocks = 1
+Method = v6:128K:m3
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       30
+Compressed: 302
+rc=0
+./hello.txt 3232419072 30
+== x rar50/solid.rar tiny.txt
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 228 bytes (1 KiB)
+
+Extracting archive: rar50/solid.rar
+--
+Path = rar50/solid.rar
+Type = Rar5
+Physical Size = 228
+Characteristics = Solid Locator QuickOpen:0
+Encrypted = -
+Solid = +
+Blocks = 1
+Method = v6:1M:m3
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Files: 2
+Size:       39
+Compressed: 228
+rc=0
+./tiny.txt 2558135348 9
+== e, a wrong password
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 201 bytes (1 KiB)
+
+Extracting archive: rar50/password_aes.rar
+--
+Path = rar50/password_aes.rar
+Type = Rar5
+Physical Size = 201
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 1
+Method = v6:128K:m3
+Multivolume = -
+Volumes = 1
+
+ERROR: Wrong password : hello.txt
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2

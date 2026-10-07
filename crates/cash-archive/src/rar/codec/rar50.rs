@@ -4208,6 +4208,62 @@ impl Default for Unpack50Decoder {
     }
 }
 
+/// A filter the decoder met in a member: a range of its output to transform before the
+/// bytes there are final (`Unpack50Decoder::decode_member_with_filters_to_sink`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MemberFilter(PendingFilter);
+
+impl MemberFilter {
+    /// Where the range begins in the member's output.
+    pub fn start(&self) -> usize {
+        self.0.start
+    }
+
+    /// The range's length.
+    pub fn length(&self) -> usize {
+        self.0.length
+    }
+
+    /// Transforms `data`, which is the range's output, in place.
+    pub fn apply(&self, data: &mut [u8]) -> Result<()> {
+        apply_filter_data_with_allowance(
+            data,
+            &self.0,
+            &crate::rar::read_control::ReadControl::default(),
+            &Allowance::default(),
+        )
+    }
+}
+
+impl Unpack50Decoder {
+    /// As `decode_member_from_reader_with_dictionary_to_sink`, for a member with filters
+    /// too: each is handed to `filters` when it is met, before the output it covers, and
+    /// the sink gets that output unfiltered.
+    #[allow(clippy::too_many_arguments)]
+    pub fn decode_member_with_filters_to_sink<E>(
+        &mut self,
+        input: &mut impl Read,
+        algorithm_version: u8,
+        output_size: usize,
+        dictionary_size: usize,
+        solid: bool,
+        sink: impl FnMut(DecodedChunk<'_>) -> std::result::Result<(), E>,
+        filters: &mut dyn FnMut(MemberFilter) -> std::result::Result<(), E>,
+    ) -> std::result::Result<(), StreamDecodeError<E>> {
+        self.state.read_control = self.read_control.clone();
+        let mut forward = |filter: PendingFilter| filters(MemberFilter(filter));
+        self.state.decode_to_sink_with_filters(
+            input,
+            algorithm_version,
+            output_size,
+            dictionary_size,
+            solid,
+            sink,
+            Some(&mut forward),
+        )
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct PendingFilter {
     pub(crate) start: usize,

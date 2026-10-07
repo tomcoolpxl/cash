@@ -3,6 +3,7 @@
 //! read into items, and each property as 7-Zip shows it. The data is decoded by
 //! cash-archive's `rar`.
 
+mod data;
 mod rar4;
 mod rar5;
 mod volname;
@@ -10,7 +11,7 @@ mod volname;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use super::archive::{Item, OpenFailure, Prop};
+use super::archive::{Data, Item, OpenFailure, Prop};
 
 /// What opening a RAR archive found.
 pub(super) struct Opening {
@@ -27,11 +28,62 @@ pub(super) struct Opening {
     pub(super) rar: Rar,
 }
 
-/// A RAR archive, open, for reading its items' data.
-#[expect(dead_code, reason = "read by extraction, the next step")]
-pub(super) enum Rar {
+/// A RAR archive, open, for reading its items' data with the password it was opened
+/// with or was given after.
+pub(super) struct Rar {
+    format: Format,
+    password: Option<String>,
+}
+
+enum Format {
     Four(Box<rar4::Rar4>),
     Five(Box<rar5::Rar5>),
+}
+
+impl Rar {
+    pub(super) fn set_password(&mut self, password: &str) {
+        self.password = Some(password.to_owned());
+    }
+
+    /// Whether extracting the item asks for a password.
+    pub(super) fn needs_password(&self, index: usize) -> bool {
+        match &self.format {
+            Format::Five(rar) => rar.needs_password(index),
+            Format::Four(rar) => rar.needs_password(index),
+        }
+    }
+
+    /// Hands the items `wanted` names their data, in the archive's order, decoding the
+    /// solid items before them that their streams need.
+    pub(super) fn extract<E: From<io::Error>>(
+        &self,
+        items: &[Item],
+        wanted: &dyn Fn(usize) -> bool,
+        each: impl FnMut(usize, &mut dyn Data) -> Result<bool, E>,
+    ) -> Result<(), E> {
+        let password = self.password.as_deref();
+        let encrypted = |index: usize| items.get(index).is_some_and(|i| i.encrypted);
+        match &self.format {
+            Format::Five(rar) => {
+                let steps = data::plan5(rar, wanted);
+                data::run(
+                    &steps,
+                    &encrypted,
+                    |steps, tx| data::work5(rar, password, steps, tx),
+                    each,
+                )
+            }
+            Format::Four(rar) => {
+                let steps = data::plan4(rar, wanted);
+                data::run(
+                    &steps,
+                    &encrypted,
+                    |steps, tx| data::work4(rar, password, steps, tx),
+                    each,
+                )
+            }
+        }
+    }
 }
 
 /// Opens a RAR 5 archive and the volumes after it.
@@ -72,7 +124,10 @@ pub(super) fn open5(
             .as_ref()
             .map(|name| format!("Missing volume : {name}")),
         volumes: rar.volumes.clone(),
-        rar: Rar::Five(Box::new(rar)),
+        rar: Rar {
+            format: Format::Five(Box::new(rar)),
+            password: password.map(str::to_owned),
+        },
     })
 }
 
@@ -106,11 +161,9 @@ pub(super) fn open4(
             .as_ref()
             .map(|name| format!("Missing volume : {name}")),
         volumes: rar.volumes.clone(),
-        rar: Rar::Four(Box::new(rar)),
+        rar: Rar {
+            format: Format::Four(Box::new(rar)),
+            password: password.map(str::to_owned),
+        },
     })
-}
-
-/// The data of RAR items is not read yet.
-pub(super) fn unsupported() -> io::Error {
-    io::Error::new(io::ErrorKind::Unsupported, "RAR data is not read yet")
 }

@@ -481,11 +481,21 @@ fn extract_archive<SE: cash_core::ShellExtensions>(
         s.command.clear();
         s.file_name.clear();
     });
-    let open_error = !opened.error_flags.is_empty();
+    // The flags and the message, each under its heading, and each an open error.
+    let open_error = !opened.error_flags.is_empty() || opened.error_message.is_some();
     if open_error {
-        totals.open_errors += 1;
         console.flush_so();
-        console.se(&format!("\nERRORS:\n{}\n\n", opened.error_flags.join("\n")));
+        let mut text = String::from("\n");
+        if !opened.error_flags.is_empty() {
+            totals.open_errors += 1;
+            let _ = writeln!(text, "ERRORS:\n{}", opened.error_flags.join("\n"));
+        }
+        if let Some(message) = &opened.error_message {
+            totals.open_errors += 1;
+            let _ = writeln!(text, "ERRORS:\n{message}");
+        }
+        text.push('\n');
+        console.se(&text);
         console.flush_se();
     }
     let warnings = opened.warnings();
@@ -520,7 +530,11 @@ fn extract_archive<SE: cash_core::ShellExtensions>(
                     .filter_map(|item| item.packed)
                     .sum::<u64>()
         }
-        None => opened.split.as_ref().map_or(archive.size, |s| s.total),
+        None => opened
+            .split
+            .as_ref()
+            .or(opened.volumes.as_ref())
+            .map_or(archive.size, |s| s.total),
     };
     // -snz: the archive's Zone.Identifier, for what is extracted.
     let zone = if options.zone == Zone::None || archive.stdin {
@@ -599,10 +613,10 @@ fn extract_items<SE: cash_core::ShellExtensions>(
     }
     let decode = decode_set(&items, &wanted);
     if password.is_none()
-        && items
+        && decode
             .iter()
-            .zip(&decode)
-            .any(|(item, d)| *d && item.encrypted)
+            .enumerate()
+            .any(|(index, d)| *d && opened.needs_password(index))
     {
         let typed = ask_password(env, &|t| console.so(t))?;
         opened.set_password(&typed);

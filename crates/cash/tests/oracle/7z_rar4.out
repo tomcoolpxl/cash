@@ -10951,3 +10951,2598 @@ Enter password (will not be echoed):
 
 Break signaled
 rc=255
+== t -ppassword rar15_40/empty_compressed_payload_rar30.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 61 bytes (1 KiB)
+
+Testing archive: rar15_40/empty_compressed_payload_rar30.rar
+--
+Path = rar15_40/empty_compressed_payload_rar30.rar
+Type = Rar
+Physical Size = 61
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+ERROR: Data Error : empty.bin
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar15_40/encrypted/per_file_rar300_password.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 124 bytes (1 KiB)
+
+Testing archive: rar15_40/encrypted/per_file_rar300_password.rar
+--
+Path = rar15_40/encrypted/per_file_rar300_password.rar
+Type = Rar
+Physical Size = 124
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       30
+Compressed: 124
+rc=0
+== t -ppassword rar15_40/ppmd/farmanager170.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 996166 bytes (973 KiB)
+
+Testing archive: rar15_40/ppmd/farmanager170.rar
+--
+Path = rar15_40/ppmd/farmanager170.rar
+Type = Rar
+Physical Size = 996166
+Characteristics = Lock Solid
+Solid = +
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Folders: 39
+Files: 290
+Size:       3343305
+Compressed: 996166
+rc=0
+== t -ppassword rar15_40/ppmd/ppmd_escape_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 408 bytes (1 KiB)
+
+Testing archive: rar15_40/ppmd/ppmd_escape_rar300.rar
+--
+Path = rar15_40/ppmd/ppmd_escape_rar300.rar
+Type = Rar
+Physical Size = 408
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       65536
+Compressed: 408
+rc=0
+== t -ppassword rar15_40/ppmd/ppmd_lorem_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 13349 bytes (14 KiB)
+
+Testing archive: rar15_40/ppmd/ppmd_lorem_rar300.rar
+--
+Path = rar15_40/ppmd/ppmd_lorem_rar300.rar
+Type = Rar
+Physical Size = 13349
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       130048
+Compressed: 13349
+rc=0
+== t -ppassword rar15_40/ppmd/ppmd_lz_match_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 275 bytes (1 KiB)
+
+Testing archive: rar15_40/ppmd/ppmd_lz_match_rar300.rar
+--
+Path = rar15_40/ppmd/ppmd_lz_match_rar300.rar
+Type = Rar
+Physical Size = 275
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       44544
+Compressed: 275
+rc=0
+== t -ppassword rar15_40/ppmd/ppmd_lz_repeat_rar3.cbr
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 381 bytes (1 KiB)
+
+Testing archive: rar15_40/ppmd/ppmd_lz_repeat_rar3.cbr
+--
+Path = rar15_40/ppmd/ppmd_lz_repeat_rar3.cbr
+Type = Rar
+Physical Size = 381
+Solid = -
+Blocks = 2
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Files: 2
+Size:       307
+Compressed: 381
+rc=0
+== t -ppassword rar15_40/ppmd/ppmd_mixed_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 78931 bytes (78 KiB)
+
+Testing archive: rar15_40/ppmd/ppmd_mixed_rar300.rar
+--
+Path = rar15_40/ppmd/ppmd_mixed_rar300.rar
+Type = Rar
+Physical Size = 78931
+Solid = -
+Blocks = 2
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Files: 2
+Size:       195584
+Compressed: 78931
+rc=0
+== t -ppassword rar15_40/ppmd/ppmd_solid_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 19925 bytes (20 KiB)
+
+Testing archive: rar15_40/ppmd/ppmd_solid_rar300.rar
+--
+Path = rar15_40/ppmd/ppmd_solid_rar300.rar
+Type = Rar
+Physical Size = 19925
+Characteristics = Solid
+Solid = +
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Files: 2
+Size:       196608
+Compressed: 19925
+rc=0
+== t -ppassword rar15_40/rar154/audio_dos_names_unpack15.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 42948 bytes (42 KiB)
+
+Testing archive: rar15_40/rar154/audio_dos_names_unpack15.rar
+--
+Path = rar15_40/rar154/audio_dos_names_unpack15.rar
+Type = Rar
+Physical Size = 42948
+Solid = -
+Blocks = 2
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Files: 2
+Size:       56571
+Compressed: 42948
+rc=0
+== t -ppassword rar15_40/rar154/audio_win_names_unpack15.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 42964 bytes (42 KiB)
+
+Testing archive: rar15_40/rar154/audio_win_names_unpack15.rar
+--
+Path = rar15_40/rar154/audio_win_names_unpack15.rar
+Type = Rar
+Physical Size = 42964
+Solid = -
+Blocks = 2
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Files: 2
+Size:       56571
+Compressed: 42964
+rc=0
+== t -ppassword rar15_40/rar154/doc_154_best.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 189390 bytes (185 KiB)
+
+Testing archive: rar15_40/rar154/doc_154_best.rar
+--
+Path = rar15_40/rar154/doc_154_best.rar
+Type = Rar
+Physical Size = 189390
+Solid = -
+Blocks = 17
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Files: 17
+Size:       502961
+Compressed: 189390
+rc=0
+== t -ppassword rar15_40/rar154/random.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 730112 bytes (713 KiB)
+
+Testing archive: rar15_40/rar154/random.rar
+--
+Path = rar15_40/rar154/random.rar
+Type = Rar
+Physical Size = 730112
+Total Physical Size = 2099392
+Characteristics = Volume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 3
+
+ERROR: CRC Failed : random.bin
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar15_40/rar154/readme_154_normal.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2129 bytes (3 KiB)
+
+Testing archive: rar15_40/rar154/readme_154_normal.rar
+--
+Path = rar15_40/rar154/readme_154_normal.rar
+Type = Rar
+Physical Size = 2129
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       4198
+Compressed: 2129
+rc=0
+== t -ppassword rar15_40/rar154/readme_154_password.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2129 bytes (3 KiB)
+
+Testing archive: rar15_40/rar154/readme_154_password.rar
+--
+Path = rar15_40/rar154/readme_154_password.rar
+Type = Rar
+Physical Size = 2129
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+ERROR: Unsupported Method : README.md
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar15_40/rar154/readme_154_store_solid.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2129 bytes (3 KiB)
+
+Testing archive: rar15_40/rar154/readme_154_store_solid.rar
+--
+Path = rar15_40/rar154/readme_154_store_solid.rar
+Type = Rar
+Physical Size = 2129
+Characteristics = Solid
+Solid = +
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       4198
+Compressed: 2129
+rc=0
+== t -ppassword rar15_40/rar202/comment_nopsw.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 204 bytes (1 KiB)
+
+Testing archive: rar15_40/rar202/comment_nopsw.rar
+--
+Path = rar15_40/rar202/comment_nopsw.rar
+Type = Rar
+Physical Size = 204
+Characteristics = Comment
+Solid = -
+Blocks = 2
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Files: 2
+Size:       14
+Compressed: 204
+rc=0
+== t -ppassword rar15_40/rar202/comment_psw.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 254 bytes (1 KiB)
+
+Testing archive: rar15_40/rar202/comment_psw.rar
+--
+Path = rar15_40/rar202/comment_psw.rar
+Type = Rar
+Physical Size = 254
+Characteristics = Comment
+Solid = -
+Blocks = 2
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Files: 2
+Size:       14
+Compressed: 254
+rc=0
+== t -ppassword rar15_40/rar250/AUDIO.RAR
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2000 bytes (2 KiB)
+
+Testing archive: rar15_40/rar250/AUDIO.RAR
+--
+Path = rar15_40/rar250/AUDIO.RAR
+Type = Rar
+Physical Size = 2000
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       32768
+Compressed: 2000
+rc=0
+== t -ppassword rar15_40/rar250/AUTOREJ.RAR
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 115 bytes (1 KiB)
+
+Testing archive: rar15_40/rar250/AUTOREJ.RAR
+--
+Path = rar15_40/rar250/AUTOREJ.RAR
+Type = Rar
+Physical Size = 115
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       2300
+Compressed: 115
+rc=0
+== t -ppassword rar15_40/rar250/BIGLZ.RAR
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 4459 bytes (5 KiB)
+
+Testing archive: rar15_40/rar250/BIGLZ.RAR
+--
+Path = rar15_40/rar250/BIGLZ.RAR
+Type = Rar
+Physical Size = 4459
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       167936
+Compressed: 4459
+rc=0
+== t -ppassword rar15_40/rar250/SOLID.RAR
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 281 bytes (1 KiB)
+
+Testing archive: rar15_40/rar250/SOLID.RAR
+--
+Path = rar15_40/rar250/SOLID.RAR
+Type = Rar
+Physical Size = 281
+Characteristics = Solid
+Solid = +
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Files: 2
+Size:       29640
+Compressed: 281
+rc=0
+== t -ppassword rar15_40/rar250/unpack20_audio_text.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 28125 bytes (28 KiB)
+
+Testing archive: rar15_40/rar250/unpack20_audio_text.rar
+--
+Path = rar15_40/rar250/unpack20_audio_text.rar
+Type = Rar
+Physical Size = 28125
+Solid = -
+Blocks = 2
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Files: 2
+Size:       56571
+Compressed: 28125
+rc=0
+== t -ppassword rar15_40/rar250/unpack20_keep_tables.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 25262 bytes (25 KiB)
+
+Testing archive: rar15_40/rar250/unpack20_keep_tables.rar
+--
+Path = rar15_40/rar250/unpack20_keep_tables.rar
+Type = Rar
+Physical Size = 25262
+Solid = -
+Blocks = 2
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Files: 2
+Size:       54288
+Compressed: 25262
+rc=0
+== t -ppassword rar15_40/rar250/unpack20_multiblock.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 4827 bytes (5 KiB)
+
+Testing archive: rar15_40/rar250/unpack20_multiblock.rar
+--
+Path = rar15_40/rar250/unpack20_multiblock.rar
+Type = Rar
+Physical Size = 4827
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       16384
+Compressed: 4827
+rc=0
+== t -ppassword rar15_40/rar250_protect_head_rr1.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 651 bytes (1 KiB)
+
+Testing archive: rar15_40/rar250_protect_head_rr1.rar
+--
+Path = rar15_40/rar250_protect_head_rr1.rar
+Type = Rar
+Physical Size = 651
+Characteristics = Recovery
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       51
+Compressed: 651
+rc=0
+== t -ppassword rar15_40/rar250_protect_head_rr5.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 105447 bytes (103 KiB)
+
+Testing archive: rar15_40/rar250_protect_head_rr5.rar
+--
+Path = rar15_40/rar250_protect_head_rr5.rar
+Type = Rar
+Physical Size = 105447
+Characteristics = Recovery
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       102400
+Compressed: 105447
+rc=0
+== t -ppassword rar15_40/rar300/compressed_multivol_prng_rar300.r00
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1000 bytes (1 KiB)
+
+Testing archive: rar15_40/rar300/compressed_multivol_prng_rar300.r00
+--
+Path = rar15_40/rar300/compressed_multivol_prng_rar300.r00
+Type = Rar
+Physical Size = 1000
+Total Physical Size = 3502
+Characteristics = Volume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 4
+
+ERROR: Data Error : cvolume.bin
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar15_40/rar300/compressed_multivol_prng_rar300.r01
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1000 bytes (1 KiB)
+
+Testing archive: rar15_40/rar300/compressed_multivol_prng_rar300.r01
+--
+Path = rar15_40/rar300/compressed_multivol_prng_rar300.r01
+Type = Rar
+Physical Size = 1000
+Total Physical Size = 2502
+Characteristics = Volume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 3
+
+ERROR: Data Error : cvolume.bin
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar15_40/rar300/compressed_multivol_prng_rar300.r02
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1000 bytes (1 KiB)
+
+Testing archive: rar15_40/rar300/compressed_multivol_prng_rar300.r02
+
+ERRORS:
+Missing volume : compressed_multivol_prng_rar300.r02.r00
+
+--
+Path = rar15_40/rar300/compressed_multivol_prng_rar300.r02
+Type = Rar
+ERROR = Missing volume : compressed_multivol_prng_rar300.r02.r00
+Physical Size = 1000
+Characteristics = Volume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 1
+
+ERROR: Data Error : cvolume.bin
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Open Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar15_40/rar300/compressed_multivol_prng_rar300.r03
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 502 bytes (1 KiB)
+
+Testing archive: rar15_40/rar300/compressed_multivol_prng_rar300.r03
+--
+Path = rar15_40/rar300/compressed_multivol_prng_rar300.r03
+Type = Rar
+Physical Size = 502
+Characteristics = Volume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 1
+
+ERROR: Data Error : cvolume.bin
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar15_40/rar300/compressed_multivol_prng_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1000 bytes (1 KiB)
+
+Testing archive: rar15_40/rar300/compressed_multivol_prng_rar300.rar
+--
+Path = rar15_40/rar300/compressed_multivol_prng_rar300.rar
+Type = Rar
+Physical Size = 1000
+Total Physical Size = 4502
+Characteristics = Volume FirstVolume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 5
+
+Everything is Ok
+
+Size:       4096
+Compressed: 4502
+rc=0
+== t -ppassword rar15_40/rar300/compressed_text_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 125 bytes (1 KiB)
+
+Testing archive: rar15_40/rar300/compressed_text_rar300.rar
+--
+Path = rar15_40/rar300/compressed_text_rar300.rar
+Type = Rar
+Physical Size = 125
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       2400
+Compressed: 125
+rc=0
+== t -ppassword rar15_40/rar300/encrypted_multivol_rar300.r00
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1732 bytes (2 KiB)
+
+Testing archive: rar15_40/rar300/encrypted_multivol_rar300.r00
+--
+Path = rar15_40/rar300/encrypted_multivol_rar300.r00
+Type = Rar
+Physical Size = 1732
+Characteristics = Volume FirstVolume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 1
+
+ERROR: Data Error in encrypted file. Wrong password? : bigtext_64k.bin
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar15_40/rar300/encrypted_multivol_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 8192 bytes (8 KiB)
+
+Testing archive: rar15_40/rar300/encrypted_multivol_rar300.rar
+--
+Path = rar15_40/rar300/encrypted_multivol_rar300.rar
+Type = Rar
+Physical Size = 8192
+Total Physical Size = 9924
+Characteristics = Volume FirstVolume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 2
+
+Everything is Ok
+
+Size:       65536
+Compressed: 9924
+rc=0
+== t -ppassword rar15_40/rar300/encrypted_newnaming_rar300.part01.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 8192 bytes (8 KiB)
+
+Testing archive: rar15_40/rar300/encrypted_newnaming_rar300.part01.rar
+--
+Path = rar15_40/rar300/encrypted_newnaming_rar300.part01.rar
+Type = Rar
+Physical Size = 8192
+Total Physical Size = 9924
+Characteristics = Volume NewVolName FirstVolume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 2
+
+Everything is Ok
+
+Size:       65536
+Compressed: 9924
+rc=0
+== t -ppassword rar15_40/rar300/encrypted_newnaming_rar300.part02.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1732 bytes (2 KiB)
+
+Testing archive: rar15_40/rar300/encrypted_newnaming_rar300.part02.rar
+--
+Path = rar15_40/rar300/encrypted_newnaming_rar300.part02.rar
+Type = Rar
+Physical Size = 1732
+Characteristics = Volume NewVolName FirstVolume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 1
+
+ERROR: Data Error in encrypted file. Wrong password? : bigtext_64k.bin
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar15_40/rar300/multivol_newnaming_rar300.part01.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 8192 bytes (8 KiB)
+
+Testing archive: rar15_40/rar300/multivol_newnaming_rar300.part01.rar
+--
+Path = rar15_40/rar300/multivol_newnaming_rar300.part01.rar
+Type = Rar
+Physical Size = 8192
+Total Physical Size = 9900
+Characteristics = Volume NewVolName FirstVolume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 2
+
+Everything is Ok
+
+Size:       65536
+Compressed: 9900
+rc=0
+== t -ppassword rar15_40/rar300/multivol_newnaming_rar300.part02.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1708 bytes (2 KiB)
+
+Testing archive: rar15_40/rar300/multivol_newnaming_rar300.part02.rar
+--
+Path = rar15_40/rar300/multivol_newnaming_rar300.part02.rar
+Type = Rar
+Physical Size = 1708
+Characteristics = Volume NewVolName FirstVolume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 1
+
+ERROR: Data Error : bigtext_64k.bin
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar15_40/rar300/multivol_oldnaming_rar300.r00
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1708 bytes (2 KiB)
+
+Testing archive: rar15_40/rar300/multivol_oldnaming_rar300.r00
+--
+Path = rar15_40/rar300/multivol_oldnaming_rar300.r00
+Type = Rar
+Physical Size = 1708
+Characteristics = Volume FirstVolume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 1
+
+ERROR: Data Error : bigtext_64k.bin
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar15_40/rar300/multivol_oldnaming_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 8192 bytes (8 KiB)
+
+Testing archive: rar15_40/rar300/multivol_oldnaming_rar300.rar
+--
+Path = rar15_40/rar300/multivol_oldnaming_rar300.rar
+Type = Rar
+Physical Size = 8192
+Total Physical Size = 9900
+Characteristics = Volume FirstVolume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 2
+
+Everything is Ok
+
+Size:       65536
+Compressed: 9900
+rc=0
+== t -ppassword rar15_40/rar300/rarvm_audio_stereo_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 15767 bytes (16 KiB)
+
+Testing archive: rar15_40/rar300/rarvm_audio_stereo_rar300.rar
+--
+Path = rar15_40/rar300/rarvm_audio_stereo_rar300.rar
+Type = Rar
+Physical Size = 15767
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       705644
+Compressed: 15767
+rc=0
+== t -ppassword rar15_40/rar300/rarvm_delta_4ch_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 795 bytes (1 KiB)
+
+Testing archive: rar15_40/rar300/rarvm_delta_4ch_rar300.rar
+--
+Path = rar15_40/rar300/rarvm_delta_4ch_rar300.rar
+Type = Rar
+Physical Size = 795
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       262144
+Compressed: 795
+rc=0
+== t -ppassword rar15_40/rar300/rarvm_itanium_synthetic_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 3064 bytes (3 KiB)
+
+Testing archive: rar15_40/rar300/rarvm_itanium_synthetic_rar300.rar
+--
+Path = rar15_40/rar300/rarvm_itanium_synthetic_rar300.rar
+Type = Rar
+Physical Size = 3064
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       1048576
+Compressed: 3064
+rc=0
+== t -ppassword rar15_40/rar300/rarvm_rgb_gradient_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 896 bytes (1 KiB)
+
+Testing archive: rar15_40/rar300/rarvm_rgb_gradient_rar300.rar
+--
+Path = rar15_40/rar300/rarvm_rgb_gradient_rar300.rar
+Type = Rar
+Physical Size = 896
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       196662
+Compressed: 896
+rc=0
+== t -ppassword rar15_40/rar300/rarvm_x86_e8_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 543 bytes (1 KiB)
+
+Testing archive: rar15_40/rar300/rarvm_x86_e8_rar300.rar
+--
+Path = rar15_40/rar300/rarvm_x86_e8_rar300.rar
+Type = Rar
+Physical Size = 543
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       196608
+Compressed: 543
+rc=0
+== t -ppassword rar15_40/rar300/rarvm_x86_e8e9_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 584 bytes (1 KiB)
+
+Testing archive: rar15_40/rar300/rarvm_x86_e8e9_rar300.rar
+--
+Path = rar15_40/rar300/rarvm_x86_e8e9_rar300.rar
+Type = Rar
+Physical Size = 584
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       196608
+Compressed: 584
+rc=0
+== t -ppassword rar15_40/rar300/rev_newstyle.part1.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2048 bytes (2 KiB)
+
+Testing archive: rar15_40/rar300/rev_newstyle.part1.rar
+--
+Path = rar15_40/rar300/rev_newstyle.part1.rar
+Type = Rar
+Physical Size = 2048
+Total Physical Size = 6440
+Characteristics = Volume NewVolName FirstVolume VolCRC
+Solid = -
+Blocks = 1
+Multivolume = +
+Volume Index = 0
+Volumes = 4
+
+Everything is Ok
+
+Size:       6000
+Compressed: 6440
+rc=0
+== t -ppassword rar15_40/rar300/rev_newstyle.part2.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2048 bytes (2 KiB)
+
+Testing archive: rar15_40/rar300/rev_newstyle.part2.rar
+--
+Path = rar15_40/rar300/rev_newstyle.part2.rar
+Type = Rar
+Physical Size = 2048
+Total Physical Size = 4392
+Characteristics = Volume NewVolName VolCRC
+Solid = -
+Blocks = 1
+Multivolume = +
+Volume Index = 1
+Volumes = 3
+
+ERROR: CRC Failed : tmp/rars-rar4-rev-gen/payload.bin
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar15_40/rar300/rev_newstyle.part3.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2048 bytes (2 KiB)
+
+Testing archive: rar15_40/rar300/rev_newstyle.part3.rar
+--
+Path = rar15_40/rar300/rev_newstyle.part3.rar
+Type = Rar
+Physical Size = 2048
+Total Physical Size = 2344
+Characteristics = Volume NewVolName VolCRC
+Solid = -
+Blocks = 1
+Multivolume = +
+Volume Index = 2
+Volumes = 2
+
+ERROR: CRC Failed : tmp/rars-rar4-rev-gen/payload.bin
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar15_40/rar300/rev_newstyle.part4.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 296 bytes (1 KiB)
+
+Testing archive: rar15_40/rar300/rev_newstyle.part4.rar
+--
+Path = rar15_40/rar300/rev_newstyle.part4.rar
+Type = Rar
+Physical Size = 296
+Characteristics = Volume NewVolName VolCRC
+Solid = -
+Blocks = 1
+Multivolume = +
+Volume Index = 3
+Volumes = 1
+
+ERROR: CRC Failed : tmp/rars-rar4-rev-gen/payload.bin
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar15_40/rar300/rev_oldstyle.part1.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2048 bytes (2 KiB)
+
+Testing archive: rar15_40/rar300/rev_oldstyle.part1.rar
+--
+Path = rar15_40/rar300/rev_oldstyle.part1.rar
+Type = Rar
+Physical Size = 2048
+Total Physical Size = 6368
+Characteristics = Volume NewVolName FirstVolume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 4
+
+Everything is Ok
+
+Size:       6000
+Compressed: 6368
+rc=0
+== t -ppassword rar15_40/rar300/rev_oldstyle.part2.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2048 bytes (2 KiB)
+
+Testing archive: rar15_40/rar300/rev_oldstyle.part2.rar
+--
+Path = rar15_40/rar300/rev_oldstyle.part2.rar
+Type = Rar
+Physical Size = 2048
+Total Physical Size = 4320
+Characteristics = Volume NewVolName
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 3
+
+ERROR: CRC Failed : tmp/rars-rar3-rev-gen/payload.bin
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar15_40/rar300/rev_oldstyle.part3.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2048 bytes (2 KiB)
+
+Testing archive: rar15_40/rar300/rev_oldstyle.part3.rar
+--
+Path = rar15_40/rar300/rev_oldstyle.part3.rar
+Type = Rar
+Physical Size = 2048
+Total Physical Size = 2272
+Characteristics = Volume NewVolName
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 2
+
+ERROR: CRC Failed : tmp/rars-rar3-rev-gen/payload.bin
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar15_40/rar300/rev_oldstyle.part4.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 224 bytes (1 KiB)
+
+Testing archive: rar15_40/rar300/rev_oldstyle.part4.rar
+--
+Path = rar15_40/rar300/rev_oldstyle.part4.rar
+Type = Rar
+Physical Size = 224
+Characteristics = Volume NewVolName
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 1
+
+ERROR: CRC Failed : tmp/rars-rar3-rev-gen/payload.bin
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar15_40/rar300/solid_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 9956 bytes (10 KiB)
+
+Testing archive: rar15_40/rar300/solid_rar300.rar
+--
+Path = rar15_40/rar300/solid_rar300.rar
+Type = Rar
+Physical Size = 9956
+Characteristics = Solid
+Solid = +
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Files: 3
+Size:       65575
+Compressed: 9956
+rc=0
+== t -ppassword rar15_40/rar300/solid_simple_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 153 bytes (1 KiB)
+
+Testing archive: rar15_40/rar300/solid_simple_rar300.rar
+--
+Path = rar15_40/rar300/solid_simple_rar300.rar
+Type = Rar
+Physical Size = 153
+Characteristics = Solid
+Solid = +
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Files: 2
+Size:       95
+Compressed: 153
+rc=0
+== t -ppassword rar15_40/rar300/stored_multivol_rar300.r00
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1000 bytes (1 KiB)
+
+Testing archive: rar15_40/rar300/stored_multivol_rar300.r00
+--
+Path = rar15_40/rar300/stored_multivol_rar300.r00
+Type = Rar
+Physical Size = 1000
+Total Physical Size = 2664
+Characteristics = Volume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 3
+
+ERROR: CRC Failed : stored-volume.txt
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar15_40/rar300/stored_multivol_rar300.r01
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1000 bytes (1 KiB)
+
+Testing archive: rar15_40/rar300/stored_multivol_rar300.r01
+--
+Path = rar15_40/rar300/stored_multivol_rar300.r01
+Type = Rar
+Physical Size = 1000
+Total Physical Size = 1664
+Characteristics = Volume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 2
+
+ERROR: CRC Failed : stored-volume.txt
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar15_40/rar300/stored_multivol_rar300.r02
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 664 bytes (1 KiB)
+
+Testing archive: rar15_40/rar300/stored_multivol_rar300.r02
+--
+Path = rar15_40/rar300/stored_multivol_rar300.r02
+Type = Rar
+Physical Size = 664
+Characteristics = Volume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 1
+
+ERROR: CRC Failed : stored-volume.txt
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar15_40/rar300/stored_multivol_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1000 bytes (1 KiB)
+
+Testing archive: rar15_40/rar300/stored_multivol_rar300.rar
+--
+Path = rar15_40/rar300/stored_multivol_rar300.rar
+Type = Rar
+Physical Size = 1000
+Total Physical Size = 3664
+Characteristics = Volume FirstVolume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 4
+
+Everything is Ok
+
+Size:       3360
+Compressed: 3664
+rc=0
+== t -ppassword rar15_40/rar300/with_comment_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 175 bytes (1 KiB)
+
+Testing archive: rar15_40/rar300/with_comment_rar300.rar
+--
+Path = rar15_40/rar300/with_comment_rar300.rar
+Type = Rar
+Physical Size = 175
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       30
+Compressed: 175
+rc=0
+== t -ppassword rar15_40/rar300/with_compressed_recovery_header_synthetic.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 15552 bytes (16 KiB)
+
+Testing archive: rar15_40/rar300/with_compressed_recovery_header_synthetic.rar
+--
+Path = rar15_40/rar300/with_compressed_recovery_header_synthetic.rar
+Type = Rar
+Physical Size = 15552
+Characteristics = Recovery
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       65536
+Compressed: 15552
+rc=0
+== t -ppassword rar15_40/rar300/with_compressed_recovery_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 16324 bytes (16 KiB)
+
+Testing archive: rar15_40/rar300/with_compressed_recovery_rar300.rar
+--
+Path = rar15_40/rar300/with_compressed_recovery_rar300.rar
+Type = Rar
+Physical Size = 16324
+Characteristics = Recovery
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       65536
+Compressed: 16324
+rc=0
+== t -ppassword rar15_40/rar300/with_recovery_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 15552 bytes (16 KiB)
+
+Testing archive: rar15_40/rar300/with_recovery_rar300.rar
+--
+Path = rar15_40/rar300/with_recovery_rar300.rar
+Type = Rar
+Physical Size = 15552
+Characteristics = Recovery
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       65536
+Compressed: 15552
+rc=0
+== t -ppassword rar15_40/rar420/ext_time_rar420.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 103 bytes (1 KiB)
+
+Testing archive: rar15_40/rar420/ext_time_rar420.rar
+--
+Path = rar15_40/rar420/ext_time_rar420.rar
+Type = Rar
+Physical Size = 103
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       30
+Compressed: 103
+rc=0
+== t -ppassword rar15_40/rars_generated/comments.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 133 bytes (1 KiB)
+
+Testing archive: rar15_40/rars_generated/comments.rar
+--
+Path = rar15_40/rars_generated/comments.rar
+Type = Rar
+Physical Size = 133
+Characteristics = Comment
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       21
+Compressed: 133
+rc=0
+== t -ppassword rar15_40/rars_generated/compressed.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 87 bytes (1 KiB)
+
+Testing archive: rar15_40/rars_generated/compressed.rar
+--
+Path = rar15_40/rars_generated/compressed.rar
+Type = Rar
+Physical Size = 87
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       21
+Compressed: 87
+rc=0
+== t -ppassword rar15_40/rars_generated/encrypted.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 87 bytes (1 KiB)
+
+Testing archive: rar15_40/rars_generated/encrypted.rar
+--
+Path = rar15_40/rars_generated/encrypted.rar
+Type = Rar
+Physical Size = 87
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+ERROR: Unsupported Method : payload.txt
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar15_40/rars_generated/solid.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 153 bytes (1 KiB)
+
+Testing archive: rar15_40/rars_generated/solid.rar
+--
+Path = rar15_40/rars_generated/solid.rar
+Type = Rar
+Physical Size = 153
+Characteristics = Solid
+Solid = +
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Files: 2
+Size:       46
+Compressed: 153
+rc=0
+== t -ppassword rar15_40/rars_generated/split-encrypted.r00
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 73 bytes (1 KiB)
+
+Testing archive: rar15_40/rars_generated/split-encrypted.r00
+--
+Path = rar15_40/rars_generated/split-encrypted.r00
+Type = Rar
+Physical Size = 73
+Total Physical Size = 140
+Characteristics = Volume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 2
+
+ERROR: Unsupported Method : payload.txt
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar15_40/rars_generated/split-encrypted.r01
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 67 bytes (1 KiB)
+
+Testing archive: rar15_40/rars_generated/split-encrypted.r01
+--
+Path = rar15_40/rars_generated/split-encrypted.r01
+Type = Rar
+Physical Size = 67
+Characteristics = Volume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 1
+
+ERROR: Unsupported Method : payload.txt
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar15_40/rars_generated/split-encrypted.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 73 bytes (1 KiB)
+
+Testing archive: rar15_40/rars_generated/split-encrypted.rar
+--
+Path = rar15_40/rars_generated/split-encrypted.rar
+Type = Rar
+Physical Size = 73
+Total Physical Size = 213
+Characteristics = Volume FirstVolume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 3
+
+ERROR: Unsupported Method : payload.txt
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar15_40/rars_generated/split-store.r00
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 73 bytes (1 KiB)
+
+Testing archive: rar15_40/rars_generated/split-store.r00
+--
+Path = rar15_40/rars_generated/split-store.r00
+Type = Rar
+Physical Size = 73
+Total Physical Size = 137
+Characteristics = Volume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 2
+
+ERROR: CRC Failed : payload.txt
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar15_40/rars_generated/split-store.r01
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 64 bytes (1 KiB)
+
+Testing archive: rar15_40/rars_generated/split-store.r01
+--
+Path = rar15_40/rars_generated/split-store.r01
+Type = Rar
+Physical Size = 64
+Characteristics = Volume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 1
+
+ERROR: CRC Failed : payload.txt
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar15_40/rars_generated/split-store.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 73 bytes (1 KiB)
+
+Testing archive: rar15_40/rars_generated/split-store.rar
+--
+Path = rar15_40/rars_generated/split-store.rar
+Type = Rar
+Physical Size = 73
+Total Physical Size = 210
+Characteristics = Volume FirstVolume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 3
+
+ERROR: CRC Failed : payload.txt
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2
+== t -ppassword rar15_40/rars_generated/stored.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 84 bytes (1 KiB)
+
+Testing archive: rar15_40/rars_generated/stored.rar
+--
+Path = rar15_40/rars_generated/stored.rar
+Type = Rar
+Physical Size = 84
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       21
+Compressed: 84
+rc=0
+== t -ppassword rar15_40/rarvm/delta_64_channels.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 424 bytes (1 KiB)
+
+Testing archive: rar15_40/rarvm/delta_64_channels.rar
+--
+Path = rar15_40/rarvm/delta_64_channels.rar
+Type = Rar
+Physical Size = 424
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       25600
+Compressed: 424
+rc=0
+== t -ppassword rar15_40/rarvm/filter_bsdcat_exe.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 94301 bytes (93 KiB)
+
+Testing archive: rar15_40/rarvm/filter_bsdcat_exe.rar
+--
+Path = rar15_40/rarvm/filter_bsdcat_exe.rar
+Type = Rar
+Physical Size = 94301
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       204288
+Compressed: 94301
+rc=0
+== t -ppassword rar15_40/rarvm/ppmd_embedded_vm_filter.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 3429 bytes (4 KiB)
+
+Testing archive: rar15_40/rarvm/ppmd_embedded_vm_filter.rar
+--
+Path = rar15_40/rarvm/ppmd_embedded_vm_filter.rar
+Type = Rar
+Physical Size = 3429
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       710400
+Compressed: 3429
+rc=0
+== t -ppassword rar15_40/rarvm/solid_e8_filter_member_offset.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 483 bytes (1 KiB)
+
+Testing archive: rar15_40/rarvm/solid_e8_filter_member_offset.rar
+--
+Path = rar15_40/rarvm/solid_e8_filter_member_offset.rar
+Type = Rar
+Physical Size = 483
+Characteristics = Solid
+Solid = +
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Files: 2
+Size:       6684
+Compressed: 483
+rc=0
+== t -ppassword rar15_40/rarvm/vm_encoded_u32_filter.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 94301 bytes (93 KiB)
+
+Testing archive: rar15_40/rarvm/vm_encoded_u32_filter.rar
+--
+Path = rar15_40/rarvm/vm_encoded_u32_filter.rar
+Type = Rar
+Physical Size = 94301
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       204288
+Compressed: 94301
+rc=0
+== t -ppassword rar15_40/solid_flag_cleared_rar15.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 197 bytes (1 KiB)
+
+Testing archive: rar15_40/solid_flag_cleared_rar15.rar
+--
+Path = rar15_40/solid_flag_cleared_rar15.rar
+Type = Rar
+Physical Size = 197
+Characteristics = Solid
+Solid = +
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Files: 2
+Size:       5400
+Compressed: 197
+rc=0
+== t -ppassword rar15_40/zero_head_size.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 197 bytes (1 KiB)
+
+Testing archive: rar15_40/zero_head_size.rar
+
+ERRORS:
+Headers Error
+
+
+WARNINGS:
+There are data after the end of archive
+
+--
+Path = rar15_40/zero_head_size.rar
+Type = Rar
+ERRORS:
+Headers Error
+WARNINGS:
+There are data after the end of archive
+Physical Size = 20
+Tail Size = 177
+Characteristics = Solid
+Solid = +
+Blocks = 0
+Multivolume = -
+Volumes = 1
+
+
+No files to process
+
+
+Archives with Errors: 1
+
+Warnings: 1
+
+Open Errors: 1
+
+rc=2
+== t -pjunrar rar15_40/encrypted/rar4_junrar_password.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 110 bytes (1 KiB)
+
+Testing archive: rar15_40/encrypted/rar4_junrar_password.rar
+--
+Path = rar15_40/encrypted/rar4_junrar_password.rar
+Type = Rar
+Physical Size = 110
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       6
+Compressed: 110
+rc=0
+== x rar15_40/rar300/compressed_text_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 125 bytes (1 KiB)
+
+Extracting archive: rar15_40/rar300/compressed_text_rar300.rar
+--
+Path = rar15_40/rar300/compressed_text_rar300.rar
+Type = Rar
+Physical Size = 125
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       2400
+Compressed: 125
+rc=0
+./text.txt 2848318136 2400
+== x rar15_40/rar300/multivol_oldnaming_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 8192 bytes (8 KiB)
+
+Extracting archive: rar15_40/rar300/multivol_oldnaming_rar300.rar
+--
+Path = rar15_40/rar300/multivol_oldnaming_rar300.rar
+Type = Rar
+Physical Size = 8192
+Total Physical Size = 9900
+Characteristics = Volume FirstVolume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 2
+
+Everything is Ok
+
+Size:       65536
+Compressed: 9900
+rc=0
+./bigtext_64k.bin 209337893 65536
+== x rar15_40/rar300/multivol_newnaming_rar300.part01.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 8192 bytes (8 KiB)
+
+Extracting archive: rar15_40/rar300/multivol_newnaming_rar300.part01.rar
+--
+Path = rar15_40/rar300/multivol_newnaming_rar300.part01.rar
+Type = Rar
+Physical Size = 8192
+Total Physical Size = 9900
+Characteristics = Volume NewVolName FirstVolume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 2
+
+Everything is Ok
+
+Size:       65536
+Compressed: 9900
+rc=0
+./bigtext_64k.bin 209337893 65536
+== x rar15_40/rar300/compressed_multivol_prng_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1000 bytes (1 KiB)
+
+Extracting archive: rar15_40/rar300/compressed_multivol_prng_rar300.rar
+--
+Path = rar15_40/rar300/compressed_multivol_prng_rar300.rar
+Type = Rar
+Physical Size = 1000
+Total Physical Size = 4502
+Characteristics = Volume FirstVolume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 5
+
+Everything is Ok
+
+Size:       4096
+Compressed: 4502
+rc=0
+./cvolume.bin 1408808409 4096
+== x rar15_40/rar154/doc_154_best.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 189390 bytes (185 KiB)
+
+Extracting archive: rar15_40/rar154/doc_154_best.rar
+--
+Path = rar15_40/rar154/doc_154_best.rar
+Type = Rar
+Physical Size = 189390
+Solid = -
+Blocks = 17
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Files: 17
+Size:       502961
+Compressed: 189390
+rc=0
+./ARCH~Y3X.MD 3609138109 53262
+./CRC3~F4U.MD 1543853338 5271
+./ENCR~BXO.MD 3245739127 30796
+./FILT~XX0.MD 402726026 27069
+./HUFF~BID.MD 407627394 11958
+./IMPL~KS0.MD 2532704443 8846
+./INTE~BSL.MD 399289662 32722
+./LZ_M~HYW.MD 986255670 14181
+./PATH~EJS.MD 2526026026 13819
+./PPMD~D4Q.MD 1504504537 38140
+./RAR1~FHU.MD 2015200403 40371
+./RAR1~OEK.MD 2199260701 101788
+./RAR5~YP0.MD 3073603322 71276
+./RARV~0F3.MD 66561776 12429
+./READ~0WB.MD 3456043495 22024
+./README.md 2491222674 4198
+./TEST~FAD.MD 86371494 14811
+== x rar15_40/rar154/readme_154_store_solid.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2129 bytes (3 KiB)
+
+Extracting archive: rar15_40/rar154/readme_154_store_solid.rar
+--
+Path = rar15_40/rar154/readme_154_store_solid.rar
+Type = Rar
+Physical Size = 2129
+Characteristics = Solid
+Solid = +
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       4198
+Compressed: 2129
+rc=0
+./README.md 2491222674 4198
+== x rar15_40/rar250/SOLID.RAR
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 281 bytes (1 KiB)
+
+Extracting archive: rar15_40/rar250/SOLID.RAR
+--
+Path = rar15_40/rar250/SOLID.RAR
+Type = Rar
+Physical Size = 281
+Characteristics = Solid
+Solid = +
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Files: 2
+Size:       29640
+Compressed: 281
+rc=0
+./SOLID1.TXT 2162242009 15840
+./SOLID2.TXT 2646967546 13800
+== x rar15_40/rar250/BIGLZ.RAR
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 4459 bytes (5 KiB)
+
+Extracting archive: rar15_40/rar250/BIGLZ.RAR
+--
+Path = rar15_40/rar250/BIGLZ.RAR
+Type = Rar
+Physical Size = 4459
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       167936
+Compressed: 4459
+rc=0
+./BIGLZ.BIN 1852091043 167936
+== x rar15_40/rar250/AUDIO.RAR
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 2000 bytes (2 KiB)
+
+Extracting archive: rar15_40/rar250/AUDIO.RAR
+--
+Path = rar15_40/rar250/AUDIO.RAR
+Type = Rar
+Physical Size = 2000
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       32768
+Compressed: 2000
+rc=0
+./PCM_LR.WAV 907236321 32768
+== x rar15_40/rar250/unpack20_keep_tables.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 25262 bytes (25 KiB)
+
+Extracting archive: rar15_40/rar250/unpack20_keep_tables.rar
+--
+Path = rar15_40/rar250/unpack20_keep_tables.rar
+Type = Rar
+Physical Size = 25262
+Solid = -
+Blocks = 2
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Files: 2
+Size:       54288
+Compressed: 25262
+rc=0
+./file_id.diz 3168664058 76
+./unrar 1856036476 54212
+== x rar15_40/ppmd/ppmd_solid_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 19925 bytes (20 KiB)
+
+Extracting archive: rar15_40/ppmd/ppmd_solid_rar300.rar
+--
+Path = rar15_40/ppmd/ppmd_solid_rar300.rar
+Type = Rar
+Physical Size = 19925
+Characteristics = Solid
+Solid = +
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Files: 2
+Size:       196608
+Compressed: 19925
+rc=0
+./solid_lorem_a.txt 2356235847 98304
+./solid_lorem_b.txt 1307504487 98304
+== x rar15_40/ppmd/ppmd_mixed_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 78931 bytes (78 KiB)
+
+Extracting archive: rar15_40/ppmd/ppmd_mixed_rar300.rar
+--
+Path = rar15_40/ppmd/ppmd_mixed_rar300.rar
+Type = Rar
+Physical Size = 78931
+Solid = -
+Blocks = 2
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Files: 2
+Size:       195584
+Compressed: 78931
+rc=0
+./binary_64k.bin 2626457086 65536
+./lorem_127k.txt 1273973605 130048
+== x rar15_40/rarvm/delta_64_channels.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 424 bytes (1 KiB)
+
+Extracting archive: rar15_40/rarvm/delta_64_channels.rar
+--
+Path = rar15_40/rarvm/delta_64_channels.rar
+Type = Rar
+Physical Size = 424
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       25600
+Compressed: 424
+rc=0
+./delta64.bin 628226845 25600
+== x rar15_40/rarvm/filter_bsdcat_exe.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 94301 bytes (93 KiB)
+
+Extracting archive: rar15_40/rarvm/filter_bsdcat_exe.rar
+--
+Path = rar15_40/rarvm/filter_bsdcat_exe.rar
+Type = Rar
+Physical Size = 94301
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       204288
+Compressed: 94301
+rc=0
+./bsdcat.exe 1677992472 204288
+== x rar15_40/rarvm/ppmd_embedded_vm_filter.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 3429 bytes (4 KiB)
+
+Extracting archive: rar15_40/rarvm/ppmd_embedded_vm_filter.rar
+--
+Path = rar15_40/rarvm/ppmd_embedded_vm_filter.rar
+Type = Rar
+Physical Size = 3429
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       710400
+Compressed: 3429
+rc=0
+./ppmd_branch_mix.bin 3866435894 710400
+== x rar15_40/rarvm/vm_encoded_u32_filter.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 94301 bytes (93 KiB)
+
+Extracting archive: rar15_40/rarvm/vm_encoded_u32_filter.rar
+--
+Path = rar15_40/rarvm/vm_encoded_u32_filter.rar
+Type = Rar
+Physical Size = 94301
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       204288
+Compressed: 94301
+rc=0
+./bsdcat.exe 1677992472 204288
+== x -ppassword rar15_40/encrypted/per_file_rar300_password.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 124 bytes (1 KiB)
+
+Extracting archive: rar15_40/encrypted/per_file_rar300_password.rar
+--
+Path = rar15_40/encrypted/per_file_rar300_password.rar
+Type = Rar
+Physical Size = 124
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       30
+Compressed: 124
+rc=0
+./hello.txt 2705916704 30
+== x -ppassword rar15_40/rar202/comment_psw.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 254 bytes (1 KiB)
+
+Extracting archive: rar15_40/rar202/comment_psw.rar
+--
+Path = rar15_40/rar202/comment_psw.rar
+Type = Rar
+Physical Size = 254
+Characteristics = Comment
+Solid = -
+Blocks = 2
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Files: 2
+Size:       14
+Compressed: 254
+rc=0
+./FILE1.TXT 1070326284 7
+./FILE2.TXT 1606176866 7
+== x -ppassword rar15_40/rar300/encrypted_multivol_rar300.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 8192 bytes (8 KiB)
+
+Extracting archive: rar15_40/rar300/encrypted_multivol_rar300.rar
+--
+Path = rar15_40/rar300/encrypted_multivol_rar300.rar
+Type = Rar
+Physical Size = 8192
+Total Physical Size = 9924
+Characteristics = Volume FirstVolume
+Solid = -
+Blocks = 1
+Multivolume = +
+Volumes = 2
+
+Everything is Ok
+
+Size:       65536
+Compressed: 9924
+rc=0
+./bigtext_64k.bin 209337893 65536
+== x -ppassword rar15_40/encrypted/header_rar300_password.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 164 bytes (1 KiB)
+
+Extracting archive: rar15_40/encrypted/header_rar300_password.rar
+--
+Path = rar15_40/encrypted/header_rar300_password.rar
+Type = Rar
+Physical Size = 164
+Characteristics = BlockEncryption
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Size:       30
+Compressed: 164
+rc=0
+./hello.txt 2705916704 30
+== e, a wrong password
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 124 bytes (1 KiB)
+
+Extracting archive: rar15_40/encrypted/per_file_rar300_password.rar
+--
+Path = rar15_40/encrypted/per_file_rar300_password.rar
+Type = Rar
+Physical Size = 124
+Solid = -
+Blocks = 1
+Multivolume = -
+Volumes = 1
+
+ERROR: Data Error in encrypted file. Wrong password? : hello.txt
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2

@@ -204,6 +204,11 @@ impl RarItem {
         a
     }
 
+    /// Where the data begins.
+    pub(super) const fn data_pos(&self) -> u64 {
+        self.position + self.main_part_size + self.comment_size + self.align_size
+    }
+
     /// `GetName`: the Unicode name when there is one, else the name in the OEM code page.
     fn name(&self) -> String {
         if self.flags & file_flags::UNICODE_NAME != 0
@@ -689,7 +694,7 @@ fn read_time_2(p: &[u8], mask: u8) -> Option<(RarTime, &[u8])> {
 }
 
 /// The password as given, its first 127 UTF-16 units: what RAR 3's key is made from.
-fn password_utf8(password: &str) -> String {
+pub(super) fn password_utf8(password: &str) -> String {
     let mut units: Vec<u16> = password.encode_utf16().collect();
     units.truncate(127);
     String::from_utf16_lossy(&units)
@@ -927,11 +932,28 @@ impl Rar4 {
 
     /// Each listed item, with its properties as 7-Zip gives them.
     pub(super) fn listed(&self, zone: &cash_core::timefmt::Zone) -> Vec<Item> {
+        // Each solid stream is a block, for 7z's choice of what to decode and what to ask
+        // a password for.
+        let mut block = 0u64;
         self.refs
             .iter()
             .enumerate()
-            .map(|(index, r)| self.listed_item(index, r, zone))
+            .map(|(index, r)| {
+                let mut item = self.listed_item(index, r, zone);
+                if !self.is_solid(index) {
+                    block += 1;
+                }
+                item.block = Some(block);
+                item
+            })
             .collect()
+    }
+
+    /// Whether extracting the item asks for a password, as `Extract` does: RAR 2.0's
+    /// and 3's encryption, not RAR 1.5's.
+    pub(super) fn needs_password(&self, index: usize) -> bool {
+        let item = &self.items[self.refs[index].item];
+        item.is_encrypted() && !item.is_dir() && item.unpack_version >= 20
     }
 
     fn listed_item(&self, index: usize, r: &Ref, zone: &cash_core::timefmt::Zone) -> Item {

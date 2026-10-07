@@ -480,7 +480,7 @@ enum Backend {
     Stream(super::streams::Stream),
     Tar(super::tar7::Tar),
     Zip(Box<super::zip7::Zip>),
-    Rar(#[expect(dead_code, reason = "read by extraction, the next step")] Box<super::rar7::Rar>),
+    Rar(Box<super::rar7::Rar>),
 }
 
 /// An item's data as extraction reads it: read it, then `finish` says whether all of
@@ -1023,12 +1023,22 @@ impl Opened {
         list
     }
 
+    /// Whether extracting the item asks for a password: an encrypted one, of those the
+    /// format's handler would ask for.
+    pub(super) fn needs_password(&self, index: usize) -> bool {
+        match &self.backend {
+            Backend::Rar(rar) => rar.needs_password(index),
+            _ => self.items.get(index).is_some_and(|item| item.encrypted),
+        }
+    }
+
     /// The password encrypted data is read with, typed after the archive was opened.
     pub(super) fn set_password(&mut self, password: &str) {
         match &mut self.backend {
             Backend::SevenZ(reader) => reader.set_password(Password::from(password)),
             Backend::Zip(zip) => zip.set_password(password),
-            Backend::Stream(_) | Backend::Tar(_) | Backend::Rar(_) => {}
+            Backend::Rar(rar) => rar.set_password(password),
+            Backend::Stream(_) | Backend::Tar(_) => {}
         }
     }
 
@@ -1113,7 +1123,7 @@ impl Opened {
                 }
                 Ok(())
             }
-            Backend::Rar(_) => Err(super::rar7::unsupported().into()),
+            Backend::Rar(rar) => rar.extract(&self.items, wanted, each),
         }
     }
 }

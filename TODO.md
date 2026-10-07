@@ -628,14 +628,24 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
 
 1. **`7z l`, `t`, `x`, `e` on `.rar`**, as 7-Zip 26.03's `Rar5Handler.cpp` and
    `RarHandler.cpp` do (their sources in the scratchpad's `7zsrc`, fetched with the
-   user's leave on 2026-10-07). `l` is in, RAR 1.5 to 7 (`sevenzip/rar7`: the
-   headers, volumes by `RarVol.h`'s namings, encrypted headers and comments, every
-   `-slt` property; `7z_rar.sh` and `7z_rar4.sh` check it against 7-Zip on 160 of rars'
-   fixtures). Left: `t`, `x` and `e` (the data through rar's decoders, solid
-   streams, split items, encryption and the checks 7-Zip makes, copy links); alternate
-   streams (`STM`) and ACLs, whose `NT Security` 7-Zip shows as the descriptor's SDDL
-   text; an SFX's archive inside its `.exe` (7-Zip opens an `.exe` as PE first, which
-   cash's 7z does not read). `7z a` on a `.rar` name refuses as 7-Zip does.
+   user's leave on 2026-10-07). `l`, `t`, `x` and `e` are in, RAR 1.5 to 7
+   (`sevenzip/rar7`; `7z_rar.sh` and `7z_rar4.sh` check them against 7-Zip on 160 of
+   rars' fixtures). Left:
+   - 7-Zip's strictness where rar's decoders are WinRAR's: a match reaching before the
+     start of the data is a data error in 7-Zip and zeros in rar (RAR 2.0, 2.9 and 5;
+     `zero_fill/`), a RAR 1.5 volume opened in the middle is a data error in 7-Zip and
+     a CRC error in rar (`rar154/random.r00`), and a RAR 3 VM program that is none of the
+     standard filters is an unsupported method in 7-Zip and run by rar
+     (`rarvm/generic_delta_padding_mutation.rar`). A strict mode in rar's decoders.
+   - Copy links (`-oi`): 7-Zip copies the data of the file named (`FillLinks`); 7z
+     reports an unsupported method.
+   - Output on a data error: 7-Zip has written what decoded before it, rar's RAR 1.5 to
+     4 decoders hand over nothing (`compressed_multivol_prng_rar300.r02`).
+   - Alternate streams (`STM`) and ACLs, whose `NT Security` 7-Zip shows as the
+     descriptor's SDDL text.
+   - An SFX's archive inside its `.exe` (7-Zip opens an `.exe` as PE first, which
+     cash's 7z does not read).
+   - `7z a` on a `.rar` name refuses as 7-Zip does (to check).
 2. **`rar` and `unrar` builtins** with RARLAB's console interface, reading and writing:
    a family of their own, so a shared design in `research/` and a pick list before any
    code (what of `rar`'s switches, which RAR generation by default, the oracle: WinRAR's
@@ -654,6 +664,11 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
 
 ## Found along the way
 
+- **7z asks for a password before extracting, 7-Zip when it gets to the first
+  encrypted item** (found on 2026-10-07 with RAR, true of zip too): with no password to
+  type, 7-Zip has written the items before it and leaves that item's empty file. In the
+  page's notes; asking at the item would mean handing the password to a decoder already
+  under way.
 - **7z's times and 7-Zip's differ by an hour across daylight saving** (found on
   2026-10-07 with a RAR's November creation time): 7-Zip turns every UTC time into local
   time with `FileTimeToLocalFileTime`, the offset of the day it runs, where cash's 7z

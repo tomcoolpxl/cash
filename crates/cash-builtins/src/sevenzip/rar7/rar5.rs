@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 
 use cash_archive::rar::crypto::rar50::{Rar50Cipher, Rar50Keys};
 
-use super::super::archive::{Item, Prop, TimePrec};
+use super::super::archive::{Item, Link, Prop, TimePrec};
 use super::volname::VolumeName;
 
 const MARKER: [u8; 8] = *b"Rar!\x1a\x07\x01\x00";
@@ -311,6 +311,26 @@ impl RarItem {
         }
     }
 
+    /// The Huffman revision 7-Zip decodes with: RAR 7's compatible streams are RAR 5's.
+    pub(super) const fn algo_huff_rev(&self) -> u32 {
+        let w = self.algo_raw();
+        if w == 1 && self.is_rar5_compat() {
+            0
+        } else {
+            w
+        }
+    }
+
+    /// `Get_DictSize64`: the dictionary of RAR 5 and 7's algorithms, none of others.
+    pub(super) fn dict_size(&self) -> u64 {
+        if self.algo_raw() <= 1 { self.dict() } else { 0 }
+    }
+
+    /// A Unix symbolic link, which RAR 7.13 and before stored with a size and no data.
+    pub(super) const fn is_unix_symlink(&self) -> bool {
+        self.host_os == HOST_UNIX && self.attrib & 0o170_000 == 0o120_000
+    }
+
     /// The dictionary the method's bits give: `(32 + frac) << (12 + main)`.
     fn dict(&self) -> u64 {
         (32 + u64::from(self.dict_frac()))
@@ -380,6 +400,23 @@ impl RarItem {
 
     pub(super) fn is_encrypted(&self) -> bool {
         self.find_extra(extra_id::CRYPTO).is_some()
+    }
+
+    /// The encryption record.
+    pub(super) fn crypto_record(&self) -> Option<&[u8]> {
+        self.extra_record(extra_id::CRYPTO)
+    }
+
+    /// `NeedUse_as_CopyLink_or_HardLink` but for the size: a copy or a hard link, whose
+    /// data is another item's.
+    pub(super) fn is_link_with_no_data(&self) -> bool {
+        self.find_link()
+            .is_some_and(|l| l.kind == link_type::FILE_COPY || l.kind == link_type::HARD_LINK)
+    }
+
+    pub(super) fn is_copy_link(&self) -> bool {
+        self.find_link()
+            .is_some_and(|l| l.kind == link_type::FILE_COPY)
     }
 
     /// `FindExtra_Blake`: where a `BLAKE2sp` digest is.
@@ -730,17 +767,17 @@ struct HeaderKeys {
 }
 
 /// The encryption record's fields (`CCryptoInfo` and the decoder's properties).
-struct CryptoProps {
-    flags: u64,
-    count: u8,
-    salt: [u8; 16],
-    iv: Option<[u8; 16]>,
-    check: Option<[u8; 12]>,
+pub(super) struct CryptoProps {
+    pub(super) flags: u64,
+    pub(super) count: u8,
+    pub(super) salt: [u8; 16],
+    pub(super) iv: Option<[u8; 16]>,
+    pub(super) check: Option<[u8; 12]>,
 }
 
 impl CryptoProps {
     /// `SetDecoderProps`: version 0's fields; the IV only in a file's record.
-    fn parse(p: &[u8], with_iv: bool) -> Option<Self> {
+    pub(super) fn parse(p: &[u8], with_iv: bool) -> Option<Self> {
         let mut c = Cursor::new(p);
         let algo = c.var()?;
         let flags = c.var()?;
@@ -774,6 +811,14 @@ pub(super) fn password_bytes(password: &str) -> Vec<u8> {
     let mut units: Vec<u16> = password.encode_utf16().collect();
     units.truncate(127);
     String::from_utf16_lossy(&units).into_bytes()
+}
+
+/// Whether the record's check, when its own checksum is right, says the password is the
+/// one that made `keys`.
+pub(super) fn check_matches(keys: &Rar50Keys, check: [u8; 12]) -> bool {
+    use sha2::Digest as _;
+    let sum = sha2::Sha256::digest(&check[..8]);
+    sum[..4] != check[8..] || keys.password_check == check[..8]
 }
 
 /// `CalcKey_and_CheckPassword`: the keys, and whether the record's check (when its own
@@ -1566,7 +1611,34 @@ impl Rar5 {
 
     /// Each listed item, with its properties as 7-Zip gives them.
     pub(super) fn listed(&self) -> Vec<Item> {
-        self.refs.iter().map(|r| self.listed_item(r)).collect()
+        // Each solid stream is a block, for 7z's choice of what to decode and what to ask
+        // a password for; a service stream decodes on its own.
+        let mut block = 0u64;
+        self.refs
+            .iter()
+            .map(|r| {
+                let mut item = self.listed_item(r);
+                let first = &self.items[r.item];
+                if !first.is_service() {
+                    if !first.is_solid() {
+                        block += 1;
+                    }
+                    item.block = Some(block);
+                }
+                item
+            })
+            .collect()
+    }
+
+    /// Whether extracting the item asks for a password, as `CUnpacker::Create` does:
+    /// one encrypted with a method 7-Zip decodes.
+    pub(super) fn needs_password(&self, index: usize) -> bool {
+        let item = &self.items[self.refs[index].item];
+        item.is_encrypted()
+            && !item.is_dir()
+            && item.algo_raw() <= 1
+            && item.method_number() <= 5
+            && !(item.pack_size == 0 && item.is_link_with_no_data())
     }
 
     #[expect(
@@ -1672,6 +1744,27 @@ impl Rar5 {
                 listed.time_extra[slot] = stamp.extra;
             }
         }
+        // `ReadLink`: a hard link's path is from the archive's root, a symbolic link's
+        // (of Unix or Windows, or a junction) from its own folder.
+        let hard = item.link_target(link_type::HARD_LINK);
+        let symbolic = item.link_target(link_type::UNIX_SYMLINK);
+        listed.link = if !hard.is_empty() {
+            Some(Link {
+                hard: true,
+                relative: false,
+                junction: false,
+                path: hard,
+            })
+        } else if !symbolic.is_empty() {
+            Some(Link {
+                hard: false,
+                relative: true,
+                junction: false,
+                path: symbolic,
+            })
+        } else {
+            None
+        };
         listed.extra = vec![
             (Prop::Folder, plus(item.is_dir())),
             (Prop::AltStream, plus(item.is_stm())),
