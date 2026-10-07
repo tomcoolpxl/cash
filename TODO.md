@@ -497,8 +497,16 @@ same day: 7z and the formats cash has, Windows 7-Zip's words with LF and `/`,
    progress line on a console (`-bsp`, `-bd`), `-si` reading (stream formats, step 4),
    `-bt`, `-spe`, `-snz`, `-ai`/`-ax` beyond names, and `i`'s listing is cash's own
    short one.
-3. **Writing 7z**: `a`, `u`, `d`, `rn`, the `-u` matrix, `-m` (levels, methods, filters,
-   solid, `-mhe`, `-mhc`, times), `-si`, `-sdel`, `-stl`.
+3. **Writing 7z** (done 2026-10-07): `a`, `u`, `d`, `rn`, the `-u` matrix and `-u!name`,
+   `-m` (levels, methods, solid limits, filters chosen by a file's head as 7-Zip's
+   analysis does, `-mhe`, `-mhc`, times, `-mqs`), `-p` typed or given, `-sdel`, `-stl`,
+   `-w`, `-sa`; old blocks copied as they are or repacked; the oracle's update sections
+   match 7-Zip 26.03 line for line and its stored archives byte for byte. Left: `-si`
+   (step 4, with the stream formats), `-spf` for update, 7-Zip's BCJ2 (it filters x86
+   executables with BCJ2 from `-mx8`; cash has no BCJ2 encoder and uses BCJ), analysis
+   levels other than the default (`-myx`), memory limits (`-mmemuse` is taken, not
+   applied). Compressed archives are not 7-Zip's bytes (other LZMA, PPMd and bzip2
+   encoders), so the oracle compares their listings without sizes.
 4. **The other formats** through cash-archive: zip (7-Zip's records), tar, gzip, bzip2,
    xz both ways; zstd and lzma read.
 5. **Volumes, `h` and `-scrc`, links, `-sns`/`-sni`**.

@@ -46,6 +46,23 @@ impl Block {
         self.num_unpack_sub_streams
     }
 
+    /// The coder that gives out the block's data, the last the data passes through
+    /// when read: its filter, when it has one (7-Zip's `UnpackCoder`).
+    pub fn unpack_coder(&self) -> Option<&Coder> {
+        let mut first_out = 0u64;
+        for coder in &self.coders {
+            let outs = first_out..first_out + coder.num_out_streams;
+            if outs
+                .clone()
+                .any(|out| self.find_bind_pair_for_out_stream(out).is_none())
+            {
+                return Some(coder);
+            }
+            first_out = outs.end;
+        }
+        None
+    }
+
     pub(crate) fn find_bind_pair_for_in_stream(&self, index: u64) -> Option<&BindPair> {
         self.bind_pairs.iter().find(|bp| bp.in_index == index)
     }

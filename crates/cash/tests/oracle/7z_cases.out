@@ -1842,7 +1842,6 @@ rc=0
 ./d/empty
 ./d/sub
 ./d/sub/b.txt
-./o.txt
 
 7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
 
@@ -1874,3 +1873,1314 @@ Everything is Ok
 Size:       6
 Compressed: 259
 rc=0
+rc=0
+== add
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+2 folders, 4 files, 29 bytes (1 KiB)
+
+Creating archive: ../new.7z
+
+Add new data to archive: 2 folders, 4 files, 29 bytes (1 KiB)
+
+
+Files read from disk: 3
+Archive size: 299 bytes (1 KiB)
+Everything is Ok
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 299 bytes (1 KiB)
+
+Listing archive: ../new.7z
+
+--
+Path = ../new.7z
+Type = 7z
+Physical Size = 299
+Headers Size = 270
+Method = Copy
+Solid = -
+Blocks = 3
+
+----------
+Path = d
+Size = 0
+Packed Size = 0
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = D
+CRC = 
+Encrypted = -
+Method = 
+Block = 
+
+Path = d/sub
+Size = 0
+Packed Size = 0
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = D
+CRC = 
+Encrypted = -
+Method = 
+Block = 
+
+Path = d/empty
+Size = 0
+Packed Size = 0
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = A
+CRC = 
+Encrypted = -
+Method = 
+Block = 
+
+Path = d/a.txt
+Size = 6
+Packed Size = 6
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = A
+CRC = 363A3020
+Encrypted = -
+Method = Copy
+Block = 0
+
+Path = d/c.txt
+Size = 12
+Packed Size = 12
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = A
+CRC = C5BFCCA0
+Encrypted = -
+Method = Copy
+Block = 1
+
+Path = d/sub/b.txt
+Size = 11
+Packed Size = 11
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = A
+CRC = 076B0B50
+Encrypted = -
+Method = Copy
+Block = 2
+
+rc=0
+819386c2cf98d159
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Open archive: ../new.7z
+--
+Path = ../new.7z
+Type = 7z
+Physical Size = 299
+Headers Size = 270
+Method = Copy
+Solid = -
+Blocks = 3
+
+Scanning the drive:
+1 file, 6 bytes (1 KiB)
+
+Updating archive: ../new.7z
+
+Keep old data in archive: 2 folders, 3 files, 23 bytes (1 KiB)
+Add new data to archive: 1 file, 6 bytes (1 KiB)
+
+U d/a.txt
+
+Files read from disk: 1
+Archive size: 299 bytes (1 KiB)
+Everything is Ok
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Open archive: ../new.7z
+--
+Path = ../new.7z
+Type = 7z
+Physical Size = 299
+Headers Size = 270
+Method = Copy
+Solid = -
+Blocks = 3
+
+Scanning the drive:
+
+WARNING: The system cannot find the file specified.
+nosuch.txt
+
+0 files, 0 bytes
+
+Updating archive: ../new.7z
+
+Keep old data in archive: 2 folders, 4 files, 29 bytes (1 KiB)
+Add new data to archive: 0 files, 0 bytes
+
+
+Files read from disk: 0
+Archive size: 299 bytes (1 KiB)
+
+Scan WARNINGS for files and folders:
+
+nosuch.txt : The system cannot find the file specified.
+----------------
+Scan WARNINGS: 1
+rc=1
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+
+WARNING: The system cannot find the file specified.
+nosuch.txt
+
+0 files, 0 bytes
+
+Creating archive: ../empty.7z
+
+Add new data to archive: 0 files, 0 bytes
+
+
+Files read from disk: 0
+Archive size: 32 bytes (1 KiB)
+
+Scan WARNINGS for files and folders:
+
+nosuch.txt : The system cannot find the file specified.
+----------------
+Scan WARNINGS: 1
+rc=1
+../empty.7z
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+1 folder, 2 files, 17 bytes (1 KiB)
+
+Creating archive: ../one.7z
+
+Add new data to archive: 1 folder, 2 files, 17 bytes (1 KiB)
+
+
+Files read from disk: 2
+Archive size: 195 bytes (1 KiB)
+Everything is Ok
+rc=0
+2026-10-07 08:00:00 D....            0            0  d/sub
+2026-10-07 08:00:00 ....A            6            6  d/a.txt
+2026-10-07 08:00:00 ....A           11           11  d/sub/b.txt
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+3 files, 29 bytes (1 KiB)
+
+Creating archive: ../txt.7z
+
+Add new data to archive: 3 files, 29 bytes (1 KiB)
+
+
+Files read from disk: 3
+Archive size: 231 bytes (1 KiB)
+Everything is Ok
+rc=0
+2026-10-07 08:00:00 ....A            6            6  d/a.txt
+2026-10-07 08:00:00 ....A           12           12  d/c.txt
+2026-10-07 08:00:00 ....A           11           11  d/sub/b.txt
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+1 folder, 3 files, 18 bytes (1 KiB)
+
+Creating archive: ../nosub.7z
+
+Add new data to archive: 1 folder, 3 files, 18 bytes (1 KiB)
+
+
+Files read from disk: 2
+Archive size: 224 bytes (1 KiB)
+Everything is Ok
+rc=0
+2026-10-07 08:00:00 D....            0            0  d
+2026-10-07 08:00:00 ....A            0            0  d/empty
+2026-10-07 08:00:00 ....A            6            6  d/a.txt
+2026-10-07 08:00:00 ....A           12           12  d/c.txt
+rc=0
+== update
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Open archive: ../up.7z
+--
+Path = ../up.7z
+Type = 7z
+Physical Size = 299
+Headers Size = 270
+Method = Copy
+Solid = -
+Blocks = 3
+
+Scanning the drive:
+2 folders, 4 files, 31 bytes (1 KiB)
+
+Updating archive: ../up.7z
+
+Keep old data in archive: 2 folders, 3 files, 23 bytes (1 KiB)
+Add new data to archive: 1 file, 8 bytes (1 KiB)
+
+U d/a.txt
+
+Files read from disk: 1
+Archive size: 301 bytes (1 KiB)
+Everything is Ok
+rc=0
+2026-10-07 08:00:00 D....            0            0  d
+2026-10-07 08:00:00 D....            0            0  d/sub
+2026-10-07 08:00:00 ....A            0            0  d/empty
+2026-10-07 08:00:00 ....A           12           12  d/c.txt
+2026-10-07 08:00:00 ....A           11           11  d/sub/b.txt
+2026-10-07 09:00:00 ....A            8            8  d/a.txt
+rc=0
+81fea9c8cf4c7240
+== delete
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Open archive: del.7z
+--
+Path = del.7z
+Type = 7z
+Physical Size = 299
+Headers Size = 270
+Method = Copy
+Solid = -
+Blocks = 3
+
+Updating archive: del.7z
+
+
+Delete data from archive: 1 file, 6 bytes (1 KiB)
+Keep old data in archive: 2 folders, 3 files, 23 bytes (1 KiB)
+Add new data to archive: 0 files, 0 bytes
+
+
+Files read from disk: 0
+Archive size: 265 bytes (1 KiB)
+Everything is Ok
+rc=0
+2026-10-07 08:00:00 D....            0            0  d
+2026-10-07 08:00:00 D....            0            0  d/sub
+2026-10-07 08:00:00 ....A            0            0  d/empty
+2026-10-07 08:00:00 ....A           12           12  d/c.txt
+2026-10-07 08:00:00 ....A           11           11  d/sub/b.txt
+rc=0
+9fbf0a09bdee02d7
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Open archive: del.7z
+--
+Path = del.7z
+Type = 7z
+Physical Size = 265
+Headers Size = 242
+Method = Copy
+Solid = -
+Blocks = 2
+
+Updating archive: del.7z
+
+Keep old data in archive: 2 folders, 3 files, 23 bytes (1 KiB)
+Add new data to archive: 0 files, 0 bytes
+
+
+Files read from disk: 0
+Archive size: 265 bytes (1 KiB)
+Everything is Ok
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Open archive: del.7z
+--
+Path = del.7z
+Type = 7z
+Physical Size = 265
+Headers Size = 242
+Method = Copy
+Solid = -
+Blocks = 2
+
+Updating archive: del.7z
+
+
+Delete data from archive: 2 folders, 3 files, 23 bytes (1 KiB)
+Add new data to archive: 0 files, 0 bytes
+
+
+Files read from disk: 0
+Archive size: 32 bytes (1 KiB)
+Everything is Ok
+rc=0
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Creating archive: nosuch.7z
+
+Add new data to archive: 0 files, 0 bytes
+
+
+Files read from disk: 0
+Archive size: 32 bytes (1 KiB)
+Everything is Ok
+rc=0
+== rename
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Open archive: ren.7z
+--
+Path = ren.7z
+Type = 7z
+Physical Size = 299
+Headers Size = 270
+Method = Copy
+Solid = -
+Blocks = 3
+
+Updating archive: ren.7z
+
+Keep old data in archive: 2 folders, 4 files, 29 bytes (1 KiB)
+Add new data to archive: 0 files, 0 bytes
+
+
+Files read from disk: 0
+Archive size: 307 bytes (1 KiB)
+Everything is Ok
+rc=0
+2026-10-07 08:00:00 D....            0            0  d
+2026-10-07 08:00:00 D....            0            0  d/folder
+2026-10-07 08:00:00 ....A            0            0  d/void
+2026-10-07 08:00:00 ....A           12           12  d/c.txt
+2026-10-07 08:00:00 ....A           11           11  d/folder/b.txt
+2026-10-07 08:00:00 ....A            6            6  d/a.txt
+rc=0
+eb629fece6ea42a7
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+
+
+Command Line Error:
+There is no second file name for rename pair:
+d/void
+rc=7
+== compressed
+rc=0
+Path = ../c.7z
+Method = LZMA2:12
+Solid = +
+Blocks = 1
+Path = d
+Size = 0
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = D
+CRC = 
+Encrypted = -
+Method = 
+Block = 
+Path = d/sub
+Size = 0
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = D
+CRC = 
+Encrypted = -
+Method = 
+Block = 
+Path = d/empty
+Size = 0
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = A
+CRC = 
+Encrypted = -
+Method = 
+Block = 
+Path = d/a.txt
+Size = 8
+Modified = 2026-10-07 09:00:00.0000000
+Attributes = A
+CRC = 6F1CEEAC
+Encrypted = -
+Method = LZMA2:12
+Block = 0
+Path = d/c.txt
+Size = 12
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = A
+CRC = C5BFCCA0
+Encrypted = -
+Method = LZMA2:12
+Block = 0
+Path = d/sub/b.txt
+Size = 11
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = A
+CRC = 076B0B50
+Encrypted = -
+Method = LZMA2:12
+Block = 0
+rc=0
+Testing archive: ../c.7z
+Method = LZMA2:12
+Solid = +
+Blocks = 1
+Everything is Ok
+Folders: 2
+Files: 4
+Size:       31
+rc=0
+rc=0
+Path = ../c1.7z
+Method = LZMA2:12
+Solid = -
+Blocks = 3
+Path = d
+Size = 0
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = D
+CRC = 
+Encrypted = -
+Method = 
+Block = 
+Path = d/sub
+Size = 0
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = D
+CRC = 
+Encrypted = -
+Method = 
+Block = 
+Path = d/empty
+Size = 0
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = A
+CRC = 
+Encrypted = -
+Method = 
+Block = 
+Path = d/a.txt
+Size = 8
+Modified = 2026-10-07 09:00:00.0000000
+Attributes = A
+CRC = 6F1CEEAC
+Encrypted = -
+Method = LZMA2:12
+Block = 0
+Path = d/c.txt
+Size = 12
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = A
+CRC = C5BFCCA0
+Encrypted = -
+Method = LZMA2:12
+Block = 1
+Path = d/sub/b.txt
+Size = 11
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = A
+CRC = 076B0B50
+Encrypted = -
+Method = LZMA2:12
+Block = 2
+rc=0
+rc=0
+Path = ../cp.7z
+Method = PPMD 7zAES
+Solid = +
+Blocks = 1
+Path = d
+Size = 0
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = D
+CRC = 
+Encrypted = -
+Method = 
+Block = 
+Path = d/sub
+Size = 0
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = D
+CRC = 
+Encrypted = -
+Method = 
+Block = 
+Path = d/empty
+Size = 0
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = A
+CRC = 
+Encrypted = -
+Method = 
+Block = 
+Path = d/a.txt
+Size = 8
+Modified = 2026-10-07 09:00:00.0000000
+Attributes = A
+CRC = 6F1CEEAC
+Encrypted = +
+Method = PPMD:o6:mem16 7zAES:19
+Block = 0
+Path = d/c.txt
+Size = 12
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = A
+CRC = C5BFCCA0
+Encrypted = +
+Method = PPMD:o6:mem16 7zAES:19
+Block = 0
+Path = d/sub/b.txt
+Size = 11
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = A
+CRC = 076B0B50
+Encrypted = +
+Method = PPMD:o6:mem16 7zAES:19
+Block = 0
+rc=0
+rc=0
+Path = ../c9.7z
+Method = LZMA2:12
+Solid = +
+Blocks = 1
+Path = d
+Size = 0
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = D
+CRC = 
+Encrypted = -
+Method = 
+Block = 
+Path = d/sub
+Size = 0
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = D
+CRC = 
+Encrypted = -
+Method = 
+Block = 
+Path = d/empty
+Size = 0
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = A
+CRC = 
+Encrypted = -
+Method = 
+Block = 
+Path = d/a.txt
+Size = 8
+Modified = 2026-10-07 09:00:00.0000000
+Attributes = A
+CRC = 6F1CEEAC
+Encrypted = -
+Method = LZMA2:12
+Block = 0
+Path = d/c.txt
+Size = 12
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = A
+CRC = C5BFCCA0
+Encrypted = -
+Method = LZMA2:12
+Block = 0
+Path = d/sub/b.txt
+Size = 11
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = A
+CRC = 076B0B50
+Encrypted = -
+Method = LZMA2:12
+Block = 0
+rc=0
+rc=0
+Path = ../cb.7z
+Method = BZip2
+Solid = -
+Blocks = 1
+Path = d/a.txt
+Size = 8
+Modified = 2026-10-07 09:00:00.0000000
+Attributes = A
+CRC = 6F1CEEAC
+Encrypted = -
+Method = BZip2
+Block = 0
+rc=0
+== solid
+rc=0
+Path = sol.7z
+Method = LZMA2:12
+Solid = +
+Blocks = 1
+Path = d
+Size = 0
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = D
+CRC = 
+Encrypted = -
+Method = 
+Block = 
+Path = d/sub
+Size = 0
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = D
+CRC = 
+Encrypted = -
+Method = 
+Block = 
+Path = d/empty
+Size = 0
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = A
+CRC = 
+Encrypted = -
+Method = 
+Block = 
+Path = d/a.txt
+Size = 8
+Modified = 2026-10-07 09:00:00.0000000
+Attributes = A
+CRC = 6F1CEEAC
+Encrypted = -
+Method = LZMA2:12
+Block = 0
+Path = d/sub/b.txt
+Size = 11
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = A
+CRC = 076B0B50
+Encrypted = -
+Method = LZMA2:12
+Block = 0
+rc=0
+Testing archive: sol.7z
+Method = LZMA2:12
+Solid = +
+Blocks = 1
+Everything is Ok
+Folders: 2
+Files: 3
+Size:       19
+rc=0
+rc=0
+Path = sol.7z
+Method = LZMA2:12
+Solid = +
+Blocks = 1
+Path = d
+Size = 0
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = D
+CRC = 
+Encrypted = -
+Method = 
+Block = 
+Path = d/sub
+Size = 0
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = D
+CRC = 
+Encrypted = -
+Method = 
+Block = 
+Path = d/empty
+Size = 0
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = A
+CRC = 
+Encrypted = -
+Method = 
+Block = 
+Path = d/A.txt
+Size = 8
+Modified = 2026-10-07 09:00:00.0000000
+Attributes = A
+CRC = 6F1CEEAC
+Encrypted = -
+Method = LZMA2:12
+Block = 0
+Path = d/sub/b.txt
+Size = 11
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = A
+CRC = 076B0B50
+Encrypted = -
+Method = LZMA2:12
+Block = 0
+rc=0
+== verbose
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Open archive: v.7z
+--
+Path = v.7z
+Type = 7z
+Method = LZMA2:12
+Solid = +
+Blocks = 1
+
+Updating archive: v.7z
+
+
+Delete data from archive: 1 file, 12 bytes (1 KiB)
+Keep old data in archive: 2 folders, 3 files, 19 bytes (1 KiB)
+Add new data to archive: 0 files, 0 bytes
+
+R #0
+R d/a.txt
+. d/c.txt
+R d/sub/b.txt
+
+Files read from disk: 0
+Everything is Ok
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Open archive: ../v.7z
+--
+Path = ../v.7z
+Type = 7z
+Method = LZMA2:12
+Solid = +
+Blocks = 1
+
+Scanning the drive:
+2 folders, 4 files, 31 bytes (1 KiB)
+
+Updating archive: ../v.7z
+
+Keep old data in archive: 2 folders, 3 files, 19 bytes (1 KiB)
+Add new data to archive: 1 file, 12 bytes (1 KiB)
+
+= #0
+= d/a.txt
+= d/sub/b.txt
++ d/c.txt
+
+Files read from disk: 1
+Everything is Ok
+rc=0
+Path = v.7z
+Method = LZMA2:12
+Solid = +
+Blocks = 2
+Path = d
+Size = 0
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = D
+CRC = 
+Encrypted = -
+Method = 
+Block = 
+Path = d/sub
+Size = 0
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = D
+CRC = 
+Encrypted = -
+Method = 
+Block = 
+Path = d/empty
+Size = 0
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = A
+CRC = 
+Encrypted = -
+Method = 
+Block = 
+Path = d/a.txt
+Size = 8
+Modified = 2026-10-07 09:00:00.0000000
+Attributes = A
+CRC = 6F1CEEAC
+Encrypted = -
+Method = LZMA2:12
+Block = 0
+Path = d/sub/b.txt
+Size = 11
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = A
+CRC = 076B0B50
+Encrypted = -
+Method = LZMA2:12
+Block = 0
+Path = d/c.txt
+Size = 12
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = A
+CRC = C5BFCCA0
+Encrypted = -
+Method = LZMA2:12
+Block = 1
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Open archive: v0.7z
+--
+Path = v0.7z
+Type = 7z
+Physical Size = 299
+Headers Size = 270
+Method = Copy
+Solid = -
+Blocks = 3
+
+Updating archive: v0.7z
+
+
+Delete data from archive: 1 file, 12 bytes (1 KiB)
+Keep old data in archive: 2 folders, 3 files, 17 bytes (1 KiB)
+Add new data to archive: 0 files, 0 bytes
+
+= #1
+= d/sub/b.txt
+= #2
+= d/a.txt
+
+Files read from disk: 0
+Archive size: 259 bytes (1 KiB)
+Everything is Ok
+rc=0
+== update errors
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Open archive: ../bad.7z
+ERROR: ../bad.7z
+Cannot open the file as archive
+
+
+
+System ERROR:
+The parameter is incorrect.
+rc=2
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+2 folders, 4 files, 31 bytes (1 KiB)
+
+Creating archive: ../bad2.7z
+
+
+
+System ERROR:
+The parameter is incorrect.
+rc=2
+No such file or directory
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Open archive: ../junk.7z
+ERROR: ../junk.7z
+../junk.7z
+Open ERROR: Cannot open the file as [7z] archive
+
+
+ERRORS:
+Is not archive
+
+
+System ERROR:
+Incorrect function.
+rc=2
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Everything is Ok
+rc=0
+No such file or directory
+
+
+System ERROR:
+Not implemented
+rc=2
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+
+
+Command Line Error:
+incorrect update switch command
+q9
+rc=7
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+
+
+Command Line Error:
+incorrect update switch command
+r1
+rc=7
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Open archive: nosuch.7z
+--
+Path = nosuch.7z
+Type = 7z
+Physical Size = 32
+Headers Size = 32
+Solid = -
+Blocks = 0
+
+Updating archive: nosuch.7z
+
+Add new data to archive: 0 files, 0 bytes
+
+
+Files read from disk: 0
+Archive size: 32 bytes (1 KiB)
+Everything is Ok
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+
+
+ERROR:
+can't find archive
+rc=2
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+
+
+Command Line Error:
+There is no second file name for rename pair:
+d/void
+rc=7
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+
+
+Command Line Error:
+Unsupported rename command:
+d/*
+x
+
+rc=7
+== switches for update
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+2 files, 20 bytes (1 KiB)
+
+Creating archive: ../sw.7z
+
+Add new data to archive: 2 files, 20 bytes (1 KiB)
+
+
+Files read from disk: 2
+Archive size: 170 bytes (1 KiB)
+Everything is Ok
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Open archive: ../sw.7z
+--
+Path = ../sw.7z
+Type = 7z
+Physical Size = 170
+Headers Size = 150
+Method = Copy
+Solid = -
+Blocks = 2
+
+Scanning the drive:
+1 file, 8 bytes (1 KiB)
+
+Updating archive: ../sw.7z
+
+Keep old data in archive: 2 files, 20 bytes (1 KiB)
+Add new data to archive: 0 files, 0 bytes
+
+
+Files read from disk: 0
+Archive size: 170 bytes (1 KiB)
+Everything is Ok
+rc=0
+2026-10-07 09:00:00 ....A            8            8  d/a.txt
+2026-10-07 08:00:00 ....A           12           12  d/c.txt
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Open archive: ../sw.7z
+--
+Path = ../sw.7z
+Type = 7z
+Physical Size = 170
+Headers Size = 150
+Method = Copy
+Solid = -
+Blocks = 2
+
+Scanning the drive:
+1 folder, 1 file, 11 bytes (1 KiB)
+
+Updating archive: ../sw.7z
+
+Keep old data in archive: 2 files, 20 bytes (1 KiB)
+Add new data to archive: 1 folder, 1 file, 11 bytes (1 KiB)
+
+
+Files read from disk: 1
+Archive size: 253 bytes (1 KiB)
+Creating archive: ../sw2.7z
+
+Keep old data in archive: 2 files, 20 bytes (1 KiB)
+Add new data to archive: 1 folder, 1 file, 11 bytes (1 KiB)
+
+
+Files read from disk: 1
+Archive size: 253 bytes (1 KiB)
+Everything is Ok
+rc=0
+2026-10-07 08:00:00 D....            0            0  d/sub
+2026-10-07 09:00:00 ....A            8            8  d/a.txt
+2026-10-07 08:00:00 ....A           12           12  d/c.txt
+2026-10-07 08:00:00 ....A           11           11  d/sub/b.txt
+rc=0
+2026-10-07 08:00:00 D....            0            0  d/sub
+2026-10-07 09:00:00 ....A            8            8  d/a.txt
+2026-10-07 08:00:00 ....A           12           12  d/c.txt
+2026-10-07 08:00:00 ....A           11           11  d/sub/b.txt
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+1 file, 12 bytes (1 KiB)
+
+Creating archive: ../t.7z
+
+Add new data to archive: 1 file, 12 bytes (1 KiB)
+
+
+Files read from disk: 1
+Archive size: 150 bytes (1 KiB)
+Everything is Ok
+rc=0
+Path = ../t.7z
+Path = d/c.txt
+Modified = 2026-10-07 08:00:00.0000000
+Created = (set)
+Accessed = (set)
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+1 file, 12 bytes (1 KiB)
+
+Creating archive: ../t2.7z
+
+Add new data to archive: 1 file, 12 bytes (1 KiB)
+
+
+Files read from disk: 1
+Archive size: 94 bytes (1 KiB)
+Everything is Ok
+rc=0
+Path = ../t2.7z
+Path = d/c.txt
+Modified = 
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+2 files, 20 bytes (1 KiB)
+
+Creating archive: ../x.7z
+
+Add new data to archive: 2 files, 20 bytes (1 KiB)
+
+
+Files read from disk: 2
+Archive size: 170 bytes (1 KiB)
+Everything is Ok
+rc=0
+2026-10-07 09:00:00 ....A            8            8  d/a.txt
+2026-10-07 08:00:00 ....A           12           12  d/c.txt
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+1 file, 12 bytes (1 KiB)
+
+Creating archive: ../nm.7z
+
+Add new data to archive: 1 file, 12 bytes (1 KiB)
+
+
+Files read from disk: 1
+Archive size: 118 bytes (1 KiB)
+Everything is Ok
+rc=0
+nm.7z
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+1 folder, 2 files, 6 bytes (1 KiB)
+
+Creating archive: gone.7z
+
+Add new data to archive: 1 folder, 2 files, 6 bytes (1 KiB)
+
++ gone/1.txt
++ gone/2.txt
+
+Files read from disk: 2
+Archive size: 192 bytes (1 KiB)
+
+: Removing files after including to archive
+Removing gone/1.txt
+Removing gone/2.txt
+Removing gone
+
+Everything is Ok
+rc=0
+0
+ D....            0            0  gone
+ ....A            3            3  gone/1.txt
+ ....A            3            3  gone/2.txt
+
+== filters
+rc=0
+Path = ../f.7z
+Method = Delta LZMA2:12 BCJ
+Solid = -
+Blocks = 3
+Path = t.txt
+Size = 11
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = A
+CRC = F7293622
+Encrypted = -
+Method = LZMA2:12
+Block = 0
+Path = s.wav
+Size = 300
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = A
+CRC = 8D15E20D
+Encrypted = -
+Method = Delta:4 LZMA2:12
+Block = 1
+Path = app.exe
+Size = 1026
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = A
+CRC = 50D0E371
+Encrypted = -
+Method = BCJ LZMA2:12
+Block = 2
+rc=0
+rc=0
+Path = ../f0.7z
+Method = LZMA2:12
+Solid = +
+Blocks = 1
+Path = app.exe
+Size = 1026
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = A
+CRC = 50D0E371
+Encrypted = -
+Method = LZMA2:12
+Block = 0
+Path = s.wav
+Size = 300
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = A
+CRC = 8D15E20D
+Encrypted = -
+Method = LZMA2:12
+Block = 0
+Path = t.txt
+Size = 11
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = A
+CRC = F7293622
+Encrypted = -
+Method = LZMA2:12
+Block = 0
+rc=0
+rc=0
+Path = ../f1.7z
+Method = LZMA2:12 BCJ
+Solid = -
+Blocks = 1
+Path = t.txt
+Size = 11
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = A
+CRC = F7293622
+Encrypted = -
+Method = BCJ LZMA2:12
+Block = 0
+rc=0
+rc=0
+s.wav
+t.txt
+app.exe
+
+rc=0
+Path = ../f2.7z
+Blocks = 2
+Path = app.exe
+Block = 0
+Path = s.wav
+Block = 0
+Path = t.txt
+Block = 1
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+1 file, 11 bytes (1 KiB)
+
+Creating archive: ../pw.7z
+
+Add new data to archive: 1 file, 11 bytes (1 KiB)
+
+
+Enter password (will not be echoed):
+
+Files read from disk: 1
+Archive size: 146 bytes (1 KiB)
+Everything is Ok
+rc=0
+Path = ../pw.7z
+Method = Copy 7zAES
+Path = t.txt
+Encrypted = +
+Method = Copy 7zAES:19

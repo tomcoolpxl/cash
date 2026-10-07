@@ -18,7 +18,10 @@ mod cmdline;
 mod extract;
 mod help;
 mod list;
+mod methods;
+mod scan;
 mod text;
+mod update;
 
 use std::cell::{Cell, RefCell};
 use std::io::{self, Write};
@@ -92,6 +95,8 @@ enum Stop {
     System(io::Error),
     /// A message: "ERROR:" and the message.
     Message(String),
+    /// A command line refused once the command had started: "Command Line Error:".
+    CommandLine(CmdLineError),
 }
 
 impl From<io::Error> for Stop {
@@ -284,6 +289,7 @@ fn run_to_code<SE: cash_core::ShellExtensions>(
             console.se(&format!("{message}\n"));
             code::FATAL
         }
+        Err(Stop::CommandLine(error)) => command_line_error(console, &error),
     }
 }
 
@@ -322,9 +328,9 @@ fn dispatch<SE: cash_core::ShellExtensions>(
         Command::Benchmark => Err(Stop::Message(
             "the benchmark is not part of cash's 7z".to_owned(),
         )),
-        Command::Add | Command::Update | Command::Delete | Command::Rename => Err(Stop::Message(
-            "update commands are not implemented".to_owned(),
-        )),
+        Command::Add | Command::Update | Command::Delete | Command::Rename => {
+            update::run(options, env, console)
+        }
         Command::Hash => Err(Stop::Message("the h command is not implemented".to_owned())),
     }
 }

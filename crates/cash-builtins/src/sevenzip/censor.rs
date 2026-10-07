@@ -171,6 +171,38 @@ impl Node {
         items.iter().any(|item| item.check(path, is_file, case))
     }
 
+    /// `CCensorNode::NeedCheckSubDirs`: a mask here reaches below this folder.
+    pub(super) fn need_check_sub_dirs(&self) -> bool {
+        self.includes
+            .iter()
+            .any(|item| item.recursive || item.parts.len() > 1)
+    }
+
+    /// `CCensorNode::AreThereIncludeItems`: a mask here or under it takes something.
+    pub(super) fn are_there_include_items(&self) -> bool {
+        !self.includes.is_empty() || self.children.iter().any(Self::are_there_include_items)
+    }
+
+    /// `CCensorNode::FindSubNode`.
+    pub(super) fn find_sub_node(&self, name: &str, case: bool) -> Option<usize> {
+        self.children
+            .iter()
+            .position(|c| compare_names(&c.name, name, case))
+    }
+
+    /// `CanUseFsDirect`: when every mask here is one plain name, those names, each with
+    /// whether it may be a file and a folder; the folder need not be listed.
+    pub(super) fn direct_names(&self) -> Option<Vec<(String, bool, bool)>> {
+        self.includes
+            .iter()
+            .map(|item| {
+                let plain =
+                    !item.recursive && item.parts.len() == 1 && !has_wildcard(&item.parts[0]);
+                plain.then(|| (item.parts[0].clone(), item.for_file, item.for_dir))
+            })
+            .collect()
+    }
+
     /// `CCensorNode::CheckPathVect`: whether some mask speaks of the path, and if so,
     /// whether it is in.
     fn check_vect(&self, path: &[String], is_file: bool, case: bool) -> Option<bool> {
@@ -373,6 +405,60 @@ impl Censor {
     pub(super) fn all_allowed(&self) -> bool {
         self.pairs.len() == 1 && self.pairs[0].0.is_empty() && self.pairs[0].1.all_allowed()
     }
+
+    /// Whether an item already in an archive is one an update's names speak of
+    /// (`Censor_CheckPath`): some prefix's tree takes it and none leaves it out, the
+    /// prefixes aside.
+    pub(super) fn takes(&self, path: &str, is_dir: bool) -> bool {
+        if self.pairs.len() == 1 && self.pairs[0].1.all_allowed() {
+            return true;
+        }
+        let parts = split_path(path);
+        let mut found = false;
+        for (_, node) in &self.pairs {
+            match node.check_vect(&parts, !is_dir, self.case_sensitive) {
+                Some(false) => return false,
+                Some(true) => found = true,
+                None => {}
+            }
+        }
+        found
+    }
+}
+
+/// `CCensorNode::CheckPathToRoot`: whether a mask of the last folder of `stack`, or of
+/// a folder above it (the path growing by each folder's name), speaks of `path`.
+pub(super) fn check_to_root(
+    stack: &[&Node],
+    include: bool,
+    path: &[String],
+    is_file: bool,
+    case: bool,
+) -> bool {
+    let mut parts = path.to_vec();
+    for (at, node) in stack.iter().enumerate().rev() {
+        if node.check_current(include, &parts, is_file, case) {
+            return true;
+        }
+        if at > 0 {
+            parts.insert(0, node.name.clone());
+        }
+    }
+    false
+}
+
+/// `CompareFileNames`: as 7-Zip sorts names on Windows, without case unless `case`, and
+/// with `/` as the `\` it is there.
+pub(super) fn compare_file_names(a: &str, b: &str, case: bool) -> std::cmp::Ordering {
+    let key = |c: char| {
+        let c = if c == '/' { '\\' } else { c };
+        if case {
+            c
+        } else {
+            c.to_uppercase().next().unwrap_or(c)
+        }
+    };
+    a.chars().map(key).cmp(b.chars().map(key))
 }
 
 /// `SplitPathToParts`: at `/` and `\`.

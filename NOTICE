@@ -100,6 +100,8 @@ and 7-Zip's kinds of data problems, maps entries without data that stand between
 block's entries, reads the facts 7-Zip lists (physical and headers size, encrypted
 headers, the start header's version) and copies packed blocks raw; the writer lays the
 header out as 7-Zip does (alignment, property order, no packed-stream CRCs), copies
-blocks from another archive, ends coder chains explicitly, rounds the LZMA2 dictionary
-property up, and writes AES as 7-Zip does (2^19 rounds, no salt); Deflate64 is read;
-brotli, LZ4, zstd, the WebAssembly parts and the file-walking helpers are left out.
+blocks from another archive, takes a block's entries one by one as they are read (so a
+file that will not open is left out), ends coder chains explicitly, rounds the LZMA2
+dictionary property up, and writes AES as 7-Zip does (2^19 rounds, no salt); Deflate64
+is read; brotli, LZ4, zstd, the WebAssembly parts and the file-walking helpers are left
+out.

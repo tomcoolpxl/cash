@@ -21,7 +21,7 @@ pub(super) struct CmdLineError {
 }
 
 impl CmdLineError {
-    fn new(message: &str) -> Self {
+    pub(super) fn new(message: &str) -> Self {
         Self {
             message: message.to_owned(),
             line: None,
@@ -420,11 +420,15 @@ pub(super) struct Options {
     pub(super) censor: Censor,
     /// The archives the command reads (its name, `-ai`, `-ax`).
     pub(super) archive_censor: Censor,
+    /// The archive's name as given.
+    pub(super) archive_name: Option<String>,
     pub(super) password: Option<String>,
     pub(super) archive_type: Option<String>,
     pub(super) output_dir: Option<String>,
     pub(super) overwrite: Overwrite,
     pub(super) stdout: bool,
+    /// One of `-bso1`, `-bse1` or `-bsp1` sends messages to standard output.
+    pub(super) stdout_shared: bool,
     pub(super) stdin: Option<String>,
     pub(super) headers: bool,
     pub(super) tech: bool,
@@ -432,6 +436,10 @@ pub(super) struct Options {
     pub(super) path_keep: PathKeep,
     pub(super) exclude_dirs: bool,
     pub(super) exclude_files: bool,
+    /// `-m`'s names and values.
+    pub(super) properties: Vec<(String, Option<String>)>,
+    /// The update group's settings.
+    pub(super) update: Option<Update>,
 }
 
 fn stoi(s: &str) -> Option<u32> {
@@ -532,11 +540,15 @@ pub(super) fn parse_command(parsed: &Parsed) -> Result<Options, CmdLineError> {
         index += 1;
     }
 
-    // The names after the archive's: `*` when there are none and no -i.
-    if words.len() == index && !there_are_includes {
+    // The names after the archive's: `*` when there are none and no -i; for rn, pairs of
+    // old and new names, the censor `*` unless -i.
+    let rename = command == Command::Rename;
+    if (rename || words.len() == index) && !there_are_includes {
         censor.add_pre_item(true, "*", Recursion::None, true, MarkMode::FileOrDir);
     }
     let stop = parsed.stop_index.unwrap_or(words.len());
+    let mut rename_pairs = Vec::new();
+    let mut old_name: Option<String> = None;
     for (at, word) in words.iter().enumerate().skip(index) {
         if word.is_empty() {
             return Err(CmdLineError::new("Empty file path"));
@@ -544,12 +556,36 @@ pub(super) fn parse_command(parsed: &Parsed) -> Result<Options, CmdLineError> {
         if at < stop
             && let Some(list) = word.strip_prefix('@')
         {
-            for name in read_list_file(list)? {
+            let list_names = read_list_file(list)?;
+            if rename {
+                if list_names.len() % 2 != 0 {
+                    return Err(CmdLineError::with(
+                        "Incorrect item in listfile.\nCheck charset encoding and -scs switch.",
+                        list,
+                    ));
+                }
+                for pair in list_names.chunks(2) {
+                    rename_pairs.push(rename_pair(&pair[0], &pair[1], wildcards)?);
+                }
+                continue;
+            }
+            for name in list_names {
                 censor.add_pre_item(true, &name, names.recursion, names.wildcards, names.mark);
+            }
+        } else if rename {
+            match old_name.take() {
+                None => old_name = Some(word.clone()),
+                Some(old) => rename_pairs.push(rename_pair(&old, word, wildcards)?),
             }
         } else {
             censor.add_pre_item(true, word, names.recursion, names.wildcards, names.mark);
         }
+    }
+    if let Some(old) = old_name {
+        return Err(CmdLineError::with(
+            "There is no second file name for rename pair:",
+            &old,
+        ));
     }
 
     let mut path_keep = if matches!(command, Command::Extract) {
@@ -618,23 +654,247 @@ pub(super) fn parse_command(parsed: &Parsed) -> Result<Options, CmdLineError> {
         censor.extend_exclude();
     }
 
+    let name_mode = match parsed.get(Key::ArcNameMode).char_index {
+        Some(1) => NameMode::Exact,
+        Some(2) => NameMode::Add,
+        _ => NameMode::Smart,
+    };
+    let update = if command.is_update_group() {
+        Some(update_options(parsed, command, rename_pairs, name_mode)?)
+    } else {
+        None
+    };
+    let properties = parsed
+        .get(Key::Property)
+        .strings
+        .iter()
+        .map(|s| match s.split_once('=') {
+            Some((name, value)) => (name.to_owned(), Some(value.to_owned())),
+            None => (s.clone(), None),
+        })
+        .collect();
+
     Ok(Options {
         command,
         exclude_dirs: censor.exclude_dirs,
         exclude_files: censor.exclude_files,
         censor,
         archive_censor,
+        archive_name,
         password: parsed.string(Key::Password).map(str::to_owned),
         archive_type: parsed.string(Key::ArchiveType).map(str::to_owned),
         output_dir: parsed.string(Key::OutputDir).map(str::to_owned),
         overwrite,
         stdout,
+        stdout_shared: [Key::OutStream, Key::ErrStream, Key::PercentStream]
+            .into_iter()
+            .any(|key| parsed.target(key) == Some(Target::Out)),
         stdin,
         headers: parsed.headers,
         tech: parsed.there(Key::TechMode),
         log_level,
         path_keep,
+        properties,
+        update,
     })
+}
+
+/// What 7-Zip does with an item in a state of an update (`NPairAction`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Action {
+    Ignore,
+    Copy,
+    Compress,
+    CompressAsAnti,
+}
+
+/// An action for each state (`CActionSet`), in 7-Zip's order `p q r x y z w`: an item
+/// the names leave out, one only in the archive, one only on disk, one newer in the
+/// archive, one older there, the same, and one of the same time and another size.
+pub(super) type ActionSet = [Action; 7];
+
+const ADD: ActionSet = [
+    Action::Copy,
+    Action::Copy,
+    Action::Compress,
+    Action::Compress,
+    Action::Compress,
+    Action::Compress,
+    Action::Compress,
+];
+
+const UPDATE: ActionSet = [
+    Action::Copy,
+    Action::Copy,
+    Action::Compress,
+    Action::Copy,
+    Action::Compress,
+    Action::Copy,
+    Action::Compress,
+];
+
+const DELETE: ActionSet = [
+    Action::Copy,
+    Action::Ignore,
+    Action::Ignore,
+    Action::Ignore,
+    Action::Ignore,
+    Action::Ignore,
+    Action::Ignore,
+];
+
+/// How the archive's name gets its extension (`-sa`): added when it has none, never,
+/// or always.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum NameMode {
+    Smart,
+    Exact,
+    Add,
+}
+
+/// What `a`, `u`, `d` and `rn` are to do beyond the names.
+#[derive(Debug)]
+pub(super) struct Update {
+    /// The actions on the archive named, unless `-u-` said to leave it.
+    pub(super) itself: Option<ActionSet>,
+    /// The other archives `-u…!name` writes, each with its actions.
+    pub(super) others: Vec<(String, ActionSet)>,
+    /// `-w`: where the new archive is written before it replaces the old one; empty
+    /// for the system's temporary folder.
+    pub(super) working_dir: Option<String>,
+    /// `-v`: the sizes of the volumes.
+    pub(super) volumes: Vec<u64>,
+    /// `-sfx`.
+    pub(super) sfx: bool,
+    /// `-sdel`: the files taken in are deleted afterwards.
+    pub(super) delete_after: bool,
+    /// `-stl`: the archive gets the newest time of its items.
+    pub(super) set_arc_mtime: bool,
+    pub(super) name_mode: NameMode,
+    /// `rn`'s old and new names.
+    pub(super) rename_pairs: Vec<(String, String)>,
+}
+
+/// `SetAddCommandOptions` and the update group's part of `Parse2`.
+fn update_options(
+    parsed: &Parsed,
+    command: Command,
+    rename_pairs: Vec<(String, String)>,
+    name_mode: NameMode,
+) -> Result<Update, CmdLineError> {
+    let default = match command {
+        Command::Add => ADD,
+        Command::Delete => DELETE,
+        _ => UPDATE,
+    };
+    let mut itself = Some(default);
+    let mut others = Vec::new();
+    if parsed.there(Key::Update) {
+        for text in &parsed.get(Key::Update).strings {
+            if text == "-" {
+                itself = None;
+                continue;
+            }
+            let mut actions = default;
+            let error = || CmdLineError::with("incorrect update switch command", text);
+            let rest = parse_actions(text, &mut actions).ok_or_else(error)?;
+            if rest.is_empty() {
+                if itself.is_some() {
+                    itself = Some(actions);
+                }
+                continue;
+            }
+            match rest.strip_prefix('!') {
+                Some(name) if !name.is_empty() => others.push((name.to_owned(), actions)),
+                _ => return Err(error()),
+            }
+        }
+    }
+    let working_dir = parsed.string(Key::WorkingDir).map(str::to_owned);
+    let mut volumes = Vec::new();
+    if parsed.there(Key::Volume) {
+        let list = &parsed.get(Key::Volume).strings;
+        for (at, text) in list.iter().enumerate() {
+            let size = complex_size(text)
+                .ok_or_else(|| CmdLineError::with("Incorrect volume size:", text))?;
+            if at + 1 == list.len() && size == 0 {
+                return Err(CmdLineError::new("zero size last volume is not allowed"));
+            }
+            volumes.push(size);
+        }
+    }
+    if command == Command::Rename && usize::from(itself.is_some()) + others.len() != 1 {
+        return Err(CmdLineError::new(
+            "Only one archive can be created with rename command",
+        ));
+    }
+    Ok(Update {
+        itself,
+        others,
+        working_dir,
+        volumes,
+        sfx: parsed.there(Key::Sfx),
+        delete_after: parsed.there(Key::DeleteAfterCompressing),
+        set_arc_mtime: parsed.there(Key::SetArcMTime),
+        name_mode,
+        rename_pairs,
+    })
+}
+
+/// `ParseUpdateCommandString2`: a state letter and an action digit, again and again;
+/// what follows them, or `None` for a pair 7-Zip refuses.
+fn parse_actions<'a>(text: &'a str, actions: &mut ActionSet) -> Option<&'a str> {
+    const STATES: &str = "pqrxyzw";
+    // The action a state cannot take: copying what is only on disk, compressing what is
+    // only in the archive or left out.
+    const REFUSED: [Option<usize>; 7] = [Some(2), Some(2), Some(1), None, None, None, None];
+    let mut rest = text;
+    loop {
+        let mut chars = rest.chars();
+        let Some(c) = chars.next() else {
+            return Some(rest);
+        };
+        let Some(state) = STATES.find(c.to_ascii_lowercase()).filter(|_| c.is_ascii()) else {
+            return Some(rest);
+        };
+        let digit = chars.next()?.to_digit(10)? as usize;
+        if digit >= 4 || REFUSED[state] == Some(digit) {
+            return None;
+        }
+        actions[state] = [
+            Action::Ignore,
+            Action::Copy,
+            Action::Compress,
+            Action::CompressAsAnti,
+        ][digit];
+        rest = chars.as_str();
+    }
+}
+
+/// `ParseComplexSize`: a number, then nothing or one of `b`, `k`, `m`, `g`, `t`.
+fn complex_size(text: &str) -> Option<u64> {
+    let digits = text.bytes().take_while(u8::is_ascii_digit).count();
+    let number: u64 = text.get(..digits)?.parse().ok()?;
+    let bits = match text.get(digits..)?.to_ascii_lowercase().as_str() {
+        "" | "b" => 0,
+        "k" => 10,
+        "m" => 20,
+        "g" => 30,
+        "t" => 40,
+        _ => return None,
+    };
+    (bits == 0 || number < 1 << (64 - bits)).then(|| number << bits)
+}
+
+/// `AddRenamePair`: an old name without wildcards and its new name.
+fn rename_pair(old: &str, new: &str, wildcards: bool) -> Result<(String, String), CmdLineError> {
+    if wildcards && super::censor::has_wildcard(old) {
+        return Err(CmdLineError::with(
+            "Unsupported rename command:",
+            &format!("{old}\n{new}\n"),
+        ));
+    }
+    Ok((old.to_owned(), new.to_owned()))
 }
 
 fn charset_known(name: &str, bytes_only: bool) -> Result<(), CmdLineError> {

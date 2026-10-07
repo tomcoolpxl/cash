@@ -143,57 +143,71 @@ impl<W: Write + Seek> ArchiveWriter<W> {
     /// the entries take the sizes and CRCs of what was read.
     pub fn push_block<R: Read>(
         &mut self,
-        mut entries: Vec<ArchiveEntry>,
+        entries: Vec<ArchiveEntry>,
         readers: Vec<R>,
     ) -> Result<()> {
         if entries.len() != readers.len() || entries.is_empty() {
             return Err(Error::other("a block needs one reader for each entry"));
         }
+        self.push_block_by(|block| {
+            for (entry, mut reader) in entries.into_iter().zip(readers) {
+                block.add(entry, &mut reader)?;
+            }
+            Ok::<(), Error>(())
+        })?;
+        Ok(())
+    }
+
+    /// Adds one block, which `fill` gives its entries and their data one by one, as
+    /// it reads them; returns how many it gave. A block `fill` gives nothing gets no
+    /// place in the archive: the output goes back to where it began, and what the
+    /// coders wrote past that is to be cut off once the archive is finished.
+    pub fn push_block_by<E: From<Error>>(
+        &mut self,
+        fill: impl FnOnce(&mut BlockSink<'_>) -> std::result::Result<(), E>,
+    ) -> std::result::Result<usize, E> {
         let methods = self.content_methods.clone();
+        let start = self.output.stream_position().map_err(Error::from)?;
         let packed = Rc::new(Cell::new(0));
         let mut sizes = Vec::new();
-        {
+        let entries = {
             let sink: Chain<'_> = Box::new(Sink(Counted {
                 inner: &mut self.output,
                 count: Rc::clone(&packed),
             }));
-            let mut chain = create_writer(&methods, sink, &mut sizes)?;
-            let mut buf = vec![0u8; 64 * 1024];
-            for (entry, mut reader) in entries.iter_mut().zip(readers) {
-                let mut hasher = Hasher::new();
-                let mut size = 0u64;
-                loop {
-                    let n = match reader.read(&mut buf) {
-                        Ok(0) => break,
-                        Ok(n) => n,
-                        Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                        Err(e) => return Err(Error::io_msg(e, entry.name.clone())),
-                    };
-                    hasher.update(&buf[..n]);
-                    size += n as u64;
-                    chain.write_all(&buf[..n])?;
-                }
-                entry.has_stream = true;
-                entry.size = size;
-                entry.crc = u64::from(hasher.finalize());
-                entry.has_crc = true;
-            }
-            chain.finish()?;
+            let chain = create_writer(&methods, sink, &mut sizes)?;
+            let mut block = BlockSink {
+                chain,
+                entries: Vec::new(),
+                buf: vec![0u8; 64 * 1024],
+            };
+            fill(&mut block)?;
+            let BlockSink { chain, entries, .. } = block;
+            chain.finish().map_err(Error::from)?;
+            entries
+        };
+        if entries.is_empty() {
+            self.output
+                .seek(SeekFrom::Start(start))
+                .map_err(Error::from)?;
+            return Ok(0);
         }
+        let mut entries = entries;
         let total = entries.iter().map(|e| e.size).sum();
         let sizes = unpack_sizes(&sizes, total);
         self.pack_sizes.push(packed.get());
         if let Some(first) = entries.first_mut() {
             first.compressed_size = packed.get();
         }
+        let count = entries.len();
         self.blocks.push(BlockInfo {
             coders: Coders::Methods(methods),
             sizes,
             crc: None,
-            sub_streams: entries.len(),
+            sub_streams: count,
         });
         self.files.extend(entries);
-        Ok(())
+        Ok(count)
     }
 
     /// Adds a block copied as it is from another archive: `copy` writes its packed
@@ -423,6 +437,45 @@ impl<W: Write + Seek> ArchiveWriter<W> {
             }
             header.extend_from_slice(&[0, 0]);
         }
+    }
+}
+
+/// A block being written: each entry added is compressed as it is read.
+pub struct BlockSink<'a> {
+    chain: Chain<'a>,
+    entries: Vec<ArchiveEntry>,
+    buf: Vec<u8>,
+}
+
+impl BlockSink<'_> {
+    /// Adds `entry` with the data `reader` gives, to its end; the entry takes the size
+    /// and CRC of what was read.
+    pub fn add(&mut self, mut entry: ArchiveEntry, reader: &mut dyn Read) -> Result<()> {
+        let mut hasher = Hasher::new();
+        let mut size = 0u64;
+        loop {
+            let n = match reader.read(&mut self.buf) {
+                Ok(0) => break,
+                Ok(n) => n,
+                Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                Err(e) => return Err(Error::io_msg(e, entry.name)),
+            };
+            let data = self.buf.get(..n).unwrap_or_default();
+            hasher.update(data);
+            size += n as u64;
+            self.chain.write_all(data)?;
+        }
+        entry.has_stream = true;
+        entry.size = size;
+        entry.crc = u64::from(hasher.finalize());
+        entry.has_crc = true;
+        self.entries.push(entry);
+        Ok(())
+    }
+
+    /// The entries added so far.
+    pub fn entries(&self) -> &[ArchiveEntry] {
+        &self.entries
     }
 }
 

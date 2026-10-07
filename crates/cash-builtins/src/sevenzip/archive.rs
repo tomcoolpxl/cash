@@ -52,7 +52,7 @@ impl Kind {
     }
 
     /// The format a name's suffix suggests.
-    fn by_extension(path: &Path) -> Option<Self> {
+    pub(super) fn by_extension(path: &Path) -> Option<Self> {
         let ext = path.extension()?.to_string_lossy().to_ascii_lowercase();
         Some(match ext.as_str() {
             "7z" => Self::SevenZ,
@@ -497,6 +497,16 @@ impl Opened {
     /// The password encrypted data is read with, typed after the archive was opened.
     pub(super) fn set_password(&mut self, password: &str) {
         self.reader.set_password(Password::from(password));
+    }
+
+    /// The 7z reader underneath, which updating copies blocks from.
+    pub(super) const fn reader(&mut self) -> &mut ArchiveReader<File> {
+        &mut self.reader
+    }
+
+    /// The 7z archive's blocks, items and header, as read.
+    pub(super) const fn archive(&self) -> &sevenz::Archive {
+        self.reader.archive()
     }
 
     /// Reads the items `wanted` names in the archive's order, handing each its data.
