@@ -18,6 +18,7 @@ mod cmdline;
 mod extract;
 mod hash;
 mod help;
+mod links;
 mod list;
 mod methods;
 mod scan;

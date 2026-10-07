@@ -4,6 +4,10 @@
 # -mhe=on). What is listed, tested, extracted and said is checked line for line.
 # 7z_cases.out is 7-Zip's output.
 #
+# The links section makes hard links and a junction with PowerShell; danger.tgz holds a
+# tar of links, symbolic ones only of the kind 7-Zip refuses to make, since making one
+# takes a right some machines give and others do not.
+#
 # 7-Zip on Windows ends lines with CRLF and shows `\` in names; cash's 7z writes LF and
 # `/` (the user's choice, 2026-10-07), so `z` turns 7-Zip's into those. 7-Zip shows
 # times in Windows' own zone and ignores TZ: the fixtures' times, and those the script
@@ -388,4 +392,57 @@ z a -v0 bad.7z d
 z a -vx bad.7z d
 7z a -so -v5k -ttar so d > /dev/null
 echo "rc=$?"
+cd ..
+
+echo "== links"
+mkdir -p ld/d/sub
+cd ld || exit 1
+printf 'alpha\n' > d/a.txt
+printf 'beta\n' > d/sub/b.txt
+powershell -NoProfile -Command "New-Item -ItemType HardLink -Path d\\h.txt -Target d\\a.txt | Out-Null; New-Item -ItemType HardLink -Path d\\sub\\h2.txt -Target d\\a.txt | Out-Null; New-Item -ItemType Junction -Path d\\jn -Target (Resolve-Path d\\sub) | Out-Null"
+links() { grep -E '^(Path|Size|Mode|Attributes|Symbolic Link|Hard Link) = |^rc='; }
+zd() { z "$@" | sed "s#$dir#DIR#g"; }
+z a -snh -bb3 h.tar d
+z l -slt h.tar | links
+z a -snh -snl -bb3 hl.tar d
+z l -slt hl.tar | links
+zs a -snl -bb3 l.7z d
+z l -slt l.7z | links
+zs a -snl -bb3 l.zip d
+z l -slt l.zip | links
+zs a -snh -bb3 h.7z d
+z t -bb3 h.tar
+z x -bb3 -oxh h.tar
+stat -c '%h %s %n' xh/d/a.txt xh/d/h.txt xh/d/sub/b.txt xh/d/sub/h2.txt
+z x -snl- -bb3 -oxn hl.tar
+ls xn/d
+z u -snh -bb3 h.tar d
+z a -sns s.7z d/a.txt
+z a -sni s.tar d/a.txt
+ls s.*
+z x -sns -sni -oxs h.tar
+unhex 1f8b080000000000020aed98d10a83201846bdde53f804e9afa5cf633408166b2c1b7bfc69db5517dbd51f32bf43209450703a290d2a34f11905273ae1da761b13fb315f15d41947d6bbf7794f69bad4e200d62586bb94a252c2741bc349804a19d4b2f6aa67fd06fceebfdbf7ef6d87fe8fa03f47e45f75ffeb8dfb1eb970effd97fef5be7fdb59214dd3a8743cd13fa7ff618e4b61fe898cd3c97f5e9adeef00df26b57affd3632aaf7fdd9aad7facffecfe47f605e0f7fe6fdf7f9aef8524d6f0e1ffe33ff44b71fe8dcffed500fffcfee74b89fdb7c9ff01fae17f4cbbacd2fc93b66ef3cfff7302feaff3f55c9a7fb2b4f9cfcfc6fb09a8dc3f000000000000000000fe9f1781e1477500280000 > danger.tgz
+z x danger.tgz
+z l -slt danger.tar | links
+zd x -bb3 -ox1 danger.tar
+ls x1/d
+zd x -snld -ox2 danger.tar
+zd x -snl- -bb3 -ox3 danger.tar
+ls x3/d
+zd e -bb3 -oe1 danger.tar
+ls e1
+mkdir w
+(cd w && zd x ../danger.tar d/hok d/a.txt d/hnone)
+z x -ox6 danger.tar d/a.txt d/hok
+z x -ox6 danger.tar d/hok
+z x -y -ox6 danger.tar d/hok
+z x -aos -ox6 danger.tar d/hok
+stat -c '%h %n' x6/d/a.txt x6/d/hok
+mkdir -p x7/real
+powershell -NoProfile -Command "New-Item -ItemType Junction -Path x7\\d -Target (Resolve-Path x7\\real) | Out-Null"
+z x -ox7 danger.tar d/a.txt d/hok
+z x -snld10 -y -ox7 danger.tar d/a.txt d/hok
+ls x7/real
+zd x -scrc -bb3 -ox8 danger.tar
+z x -snldx -ox9 danger.tar
 cd ..

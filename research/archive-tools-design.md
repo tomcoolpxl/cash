@@ -347,13 +347,15 @@ Built against GNU tar 1.35's oracle, the plan moved in four places:
 - **`h`** and `-scrc`: CRC32, CRC64, XXH64, MD5, SHA-1, SHA-256, SHA-384, SHA-512,
   SHA3-256 and BLAKE2sp, `*` for all, with 7-Zip's tables; on `crc`, `twox-hash`,
   `md-5`, `sha1`, `sha2`, `sha3` (in the tree already) and `blake2s_simd` (new).
-- **Links**: `-snl` stores a symbolic link as a link (in 7z, its reparse data with the
-  reparse attribute, as 7-Zip on Windows; in tar, a link member); `-snh` stores hard
-  links as links in tar, while 7z, which has no record for one, gets the file, as 7-Zip
-  does. Links are made on extraction where Windows allows them.
-- **NTFS extras**, as 7-Zip does: `-sns` and `-sni` writing 7z, zip or tar end in
-  "System ERROR: Not implemented"; extracting writes `file:stream` items as alternate
-  streams, unless `-sns-`.
+- **Links**: `-snl` stores a symbolic link or a junction as a link, not followed (in 7z
+  and zip, the reparse attribute and, for a file, its reparse data, as 7-Zip on Windows;
+  in tar, a symbolic link member relative to its folder); `-snh` stores hard links as
+  links in tar, while 7z and zip, which have no record for one, get the file, as 7-Zip
+  does. A tar's links are made on extraction after the rest, weighed by `-snld` as 7-Zip
+  weighs them; symbolic links where Windows allows them.
+- **NTFS extras**, as 7-Zip does: `-sns` and `-sni` writing 7z, zip, tar, gzip, bzip2
+  or xz end in "System ERROR: Not implemented"; extracting, they change nothing, as no
+  format here has alternate streams or security.
 - **Refused**: `b`, `-sfx`, `-seml`, `-slp`, `-stm`, `-ad`, with 7-Zip's words for an
   unsupported switch.
 - **Front end** `cash-builtins/src/sevenzip`: 7-Zip's parser (switches anywhere,

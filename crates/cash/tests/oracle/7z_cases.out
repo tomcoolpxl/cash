@@ -4082,3 +4082,816 @@ rc=7
 System ERROR:
 Unspecified error
 rc=2
+== links
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+3 folders, 6 files, 34 bytes (1 KiB)
+
+Creating archive: h.tar
+
+Add new data to archive: 3 folders, 6 files, 34 bytes (1 KiB)
+
++ d/
++ d/a.txt
++ d/h.txt
++ d/jn/
++ d/jn/b.txt
++ d/jn/h2.txt
++ d/sub/
++ d/sub/b.txt
++ d/sub/h2.txt
+
+Files read from disk: 9
+Archive size: 7168 bytes (7 KiB)
+Everything is Ok
+rc=0
+Path = h.tar
+Path = d
+Size = 0
+Mode = drwxrwxrwx
+Symbolic Link = 
+Hard Link = 
+Path = d/a.txt
+Size = 6
+Mode = -rwxrwxrwx
+Symbolic Link = 
+Hard Link = 
+Path = d/h.txt
+Size = 0
+Mode = -rwxrwxrwx
+Symbolic Link = 
+Hard Link = d/a.txt
+Path = d/jn
+Size = 0
+Mode = drwxrwxrwx
+Symbolic Link = 
+Hard Link = 
+Path = d/jn/b.txt
+Size = 5
+Mode = -rwxrwxrwx
+Symbolic Link = 
+Hard Link = 
+Path = d/jn/h2.txt
+Size = 0
+Mode = -rwxrwxrwx
+Symbolic Link = 
+Hard Link = d/a.txt
+Path = d/sub
+Size = 0
+Mode = drwxrwxrwx
+Symbolic Link = 
+Hard Link = 
+Path = d/sub/b.txt
+Size = 5
+Mode = -rwxrwxrwx
+Symbolic Link = 
+Hard Link = 
+Path = d/sub/h2.txt
+Size = 0
+Mode = -rwxrwxrwx
+Symbolic Link = 
+Hard Link = d/a.txt
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+3 folders, 4 files, 23 bytes (1 KiB)
+
+Creating archive: hl.tar
+
+Add new data to archive: 3 folders, 4 files, 23 bytes (1 KiB)
+
++ d/
++ d/a.txt
++ d/h.txt
++ d/sub/
++ d/sub/b.txt
++ d/sub/h2.txt
+
+Files read from disk: 7
+Archive size: 5632 bytes (6 KiB)
+Everything is Ok
+rc=0
+Path = hl.tar
+Path = d
+Size = 0
+Mode = drwxrwxrwx
+Symbolic Link = 
+Hard Link = 
+Path = d/a.txt
+Size = 6
+Mode = -rwxrwxrwx
+Symbolic Link = 
+Hard Link = 
+Path = d/h.txt
+Size = 0
+Mode = -rwxrwxrwx
+Symbolic Link = 
+Hard Link = d/a.txt
+Path = d/jn
+Size = 3
+Mode = lrwxrwxrwx
+Symbolic Link = sub
+Hard Link = 
+Path = d/sub
+Size = 0
+Mode = drwxrwxrwx
+Symbolic Link = 
+Hard Link = 
+Path = d/sub/b.txt
+Size = 5
+Mode = -rwxrwxrwx
+Symbolic Link = 
+Hard Link = 
+Path = d/sub/h2.txt
+Size = 0
+Mode = -rwxrwxrwx
+Symbolic Link = 
+Hard Link = d/a.txt
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+3 folders, 4 files, 23 bytes (1 KiB)
+
+Creating archive: l.7z
+
+Add new data to archive: 3 folders, 4 files, 23 bytes (1 KiB)
+
++ d/a.txt
++ d/h.txt
++ d/sub/b.txt
++ d/sub/h2.txt
+
+Files read from disk: 4
+Everything is Ok
+rc=0
+Path = l.7z
+Path = d
+Size = 0
+Attributes = D
+Path = d/jn
+Size = 0
+Attributes = DL
+Path = d/sub
+Size = 0
+Attributes = D
+Path = d/a.txt
+Size = 6
+Attributes = A
+Path = d/h.txt
+Size = 6
+Attributes = A
+Path = d/sub/b.txt
+Size = 5
+Attributes = A
+Path = d/sub/h2.txt
+Size = 6
+Attributes = A
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+3 folders, 4 files, 23 bytes (1 KiB)
+
+Creating archive: l.zip
+
+Add new data to archive: 3 folders, 4 files, 23 bytes (1 KiB)
+
++ d/a.txt
++ d/h.txt
++ d/sub/b.txt
++ d/sub/h2.txt
+
+Files read from disk: 4
+Everything is Ok
+rc=0
+Path = l.zip
+Path = d
+Size = 0
+Attributes = D
+Path = d/a.txt
+Size = 6
+Attributes = A
+Path = d/h.txt
+Size = 6
+Attributes = A
+Path = d/jn
+Size = 0
+Attributes = DL
+Path = d/sub
+Size = 0
+Attributes = D
+Path = d/sub/b.txt
+Size = 5
+Attributes = A
+Path = d/sub/h2.txt
+Size = 6
+Attributes = A
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+3 folders, 6 files, 34 bytes (1 KiB)
+
+Creating archive: h.7z
+
+Add new data to archive: 3 folders, 6 files, 34 bytes (1 KiB)
+
++ d/a.txt
++ d/h.txt
++ d/jn/b.txt
++ d/jn/h2.txt
++ d/sub/b.txt
++ d/sub/h2.txt
+
+Files read from disk: 6
+Everything is Ok
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 7168 bytes (7 KiB)
+
+Testing archive: h.tar
+--
+Path = h.tar
+Type = tar
+Physical Size = 7168
+Headers Size = 5632
+Code Page = UTF-8
+Characteristics = GNU ASCII
+
+T d/
+T d/a.txt
+T d/h.txt
+T d/jn/
+T d/jn/b.txt
+T d/jn/h2.txt
+T d/sub/
+T d/sub/b.txt
+T d/sub/h2.txt
+Everything is Ok
+
+Folders: 3
+Files: 6
+Size:       16
+Compressed: 7168
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 7168 bytes (7 KiB)
+
+Extracting archive: h.tar
+--
+Path = h.tar
+Type = tar
+Physical Size = 7168
+Headers Size = 5632
+Code Page = UTF-8
+Characteristics = GNU ASCII
+
+- d/
+- d/a.txt
+- d/jn/
+- d/jn/b.txt
+- d/sub/
+- d/sub/b.txt
+Everything is Ok
+
+Folders: 3
+Files: 3
+Size:       16
+Compressed: 7168
+rc=0
+4 6 xh/d/a.txt
+4 6 xh/d/h.txt
+1 5 xh/d/sub/b.txt
+4 6 xh/d/sub/h2.txt
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 5632 bytes (6 KiB)
+
+Extracting archive: hl.tar
+--
+Path = hl.tar
+Type = tar
+Physical Size = 5632
+Headers Size = 4608
+Code Page = UTF-8
+Characteristics = GNU ASCII
+
+- d/
+- d/a.txt
+- d/jn/
+- d/sub/
+- d/sub/b.txt
+Everything is Ok
+
+Folders: 3
+Files: 2
+Size:       14
+Compressed: 5632
+rc=0
+a.txt
+h.txt
+sub
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Open archive: h.tar
+--
+Path = h.tar
+Type = tar
+Physical Size = 7168
+Headers Size = 5632
+Code Page = UTF-8
+Characteristics = GNU ASCII
+
+Scanning the drive:
+3 folders, 6 files, 34 bytes (1 KiB)
+
+Updating archive: h.tar
+
+Keep old data in archive: 3 folders, 3 files, 16 bytes (1 KiB)
+Add new data to archive: 3 files, 18 bytes (1 KiB)
+
+U d/h.txt
+U d/jn/h2.txt
+U d/sub/h2.txt
+
+Files read from disk: 3
+Archive size: 7680 bytes (8 KiB)
+Everything is Ok
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+1 file, 6 bytes (1 KiB)
+
+Creating archive: s.7z
+
+
+
+System ERROR:
+Not implemented
+rc=2
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+1 file, 6 bytes (1 KiB)
+
+Creating archive: s.tar
+
+
+
+System ERROR:
+Not implemented
+rc=2
+ls: cannot access 's.*': No such file or directory
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 7680 bytes (8 KiB)
+
+Extracting archive: h.tar
+--
+Path = h.tar
+Type = tar
+Physical Size = 7680
+Headers Size = 5632
+Code Page = UTF-8
+Characteristics = GNU ASCII
+
+Everything is Ok
+
+Folders: 3
+Files: 4
+Size:       22
+Compressed: 7680
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 272 bytes (1 KiB)
+
+Extracting archive: danger.tgz
+--
+Path = danger.tgz
+Type = gzip
+Headers Size = 10
+
+Everything is Ok
+
+Size:       10240
+Compressed: 272
+rc=0
+Path = danger.tar
+Path = d/a.txt
+Size = 6
+Mode = -rw-r--r--
+Symbolic Link = 
+Hard Link = 
+Path = d/sub/b.txt
+Size = 5
+Mode = -rw-r--r--
+Symbolic Link = 
+Hard Link = 
+Path = d/up
+Size = 7
+Mode = lrwxrwxrwx
+Symbolic Link = ../../x
+Hard Link = 
+Path = d/dots
+Size = 15
+Mode = lrwxrwxrwx
+Symbolic Link = sub/../../a.txt
+Hard Link = 
+Path = d/lvl
+Size = 2
+Mode = lrwxrwxrwx
+Symbolic Link = ..
+Hard Link = 
+Path = d/hup
+Size = 0
+Mode = -rw-r--r--
+Symbolic Link = 
+Hard Link = ../a.txt
+Path = d/habs
+Size = 0
+Mode = -rw-r--r--
+Symbolic Link = 
+Hard Link = /d/a.txt
+Path = d/hok
+Size = 0
+Mode = -rw-r--r--
+Symbolic Link = 
+Hard Link = d/a.txt
+Path = d/hsub
+Size = 0
+Mode = -rw-r--r--
+Symbolic Link = 
+Hard Link = d/sub/b.txt
+Path = d/hnone
+Size = 0
+Mode = -rw-r--r--
+Symbolic Link = 
+Hard Link = d/none.txt
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 10240 bytes (10 KiB)
+
+Extracting archive: danger.tar
+--
+Path = danger.tar
+Type = tar
+Physical Size = 10240
+Headers Size = 9216
+Code Page = UTF-8
+Characteristics = GNU ASCII
+
+- d/a.txt
+- d/sub/b.txt
+ERROR: Dangerous link path was ignored : d/up : ../../x
+ERROR: Dangerous link path was ignored : d/dots : sub/../../a.txt
+ERROR: Dangerous link path was ignored : d/lvl : ..
+ERROR: Dangerous link path was ignored : d/hup : ../a.txt
+ERROR: Cannot create hard link : The system cannot find the file specified. : x1/d/hnone : DIR/ld/x1/d/none.txt
+
+Sub items Errors: 5
+
+Archives with Errors: 1
+
+Sub items Errors: 5
+rc=2
+a.txt
+dots
+habs
+hok
+hsub
+hup
+lvl
+sub
+up
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 10240 bytes (10 KiB)
+
+Extracting archive: danger.tar
+--
+Path = danger.tar
+Type = tar
+Physical Size = 10240
+Headers Size = 9216
+Code Page = UTF-8
+Characteristics = GNU ASCII
+
+ERROR: Dangerous link path was ignored : d/up : ../../x
+ERROR: Dangerous link path was ignored : d/dots : sub/../../a.txt
+ERROR: Dangerous link path was ignored : d/lvl : ..
+ERROR: Dangerous link path was ignored : d/hup : ../a.txt
+ERROR: Cannot create hard link : The system cannot find the file specified. : x2/d/hnone : DIR/ld/x2/d/none.txt
+
+Sub items Errors: 5
+
+Archives with Errors: 1
+
+Sub items Errors: 5
+rc=2
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 10240 bytes (10 KiB)
+
+Extracting archive: danger.tar
+--
+Path = danger.tar
+Type = tar
+Physical Size = 10240
+Headers Size = 9216
+Code Page = UTF-8
+Characteristics = GNU ASCII
+
+- d/a.txt
+- d/sub/b.txt
+ERROR: Dangerous link path was ignored : d/hup : ../a.txt
+ERROR: Cannot create hard link : The system cannot find the file specified. : x3/d/hnone : DIR/ld/x3/d/none.txt
+
+Sub items Errors: 2
+
+Archives with Errors: 1
+
+Sub items Errors: 2
+rc=2
+a.txt
+habs
+hok
+hsub
+hup
+sub
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 10240 bytes (10 KiB)
+
+Extracting archive: danger.tar
+--
+Path = danger.tar
+Type = tar
+Physical Size = 10240
+Headers Size = 9216
+Code Page = UTF-8
+Characteristics = GNU ASCII
+
+- d/a.txt
+- d/sub/b.txt
+ERROR: Dangerous link path was ignored : d/up : ../../x
+ERROR: Dangerous link path was ignored : d/dots : sub/../../a.txt
+ERROR: Dangerous link path was ignored : d/lvl : ..
+ERROR: Dangerous link path was ignored : d/hup : ../a.txt
+ERROR: Cannot create hard link : The system cannot find the path specified. : e1/habs : DIR/ld/e1/d/a.txt
+ERROR: Cannot create hard link : The system cannot find the path specified. : e1/hok : DIR/ld/e1/d/a.txt
+ERROR: Cannot create hard link : The system cannot find the path specified. : e1/hsub : DIR/ld/e1/d/sub/b.txt
+ERROR: Cannot create hard link : The system cannot find the path specified. : e1/hnone : DIR/ld/e1/d/none.txt
+
+Sub items Errors: 8
+
+Archives with Errors: 1
+
+Sub items Errors: 8
+rc=2
+a.txt
+b.txt
+dots
+hup
+lvl
+up
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 10240 bytes (10 KiB)
+
+Extracting archive: ../danger.tar
+--
+Path = ../danger.tar
+Type = tar
+Physical Size = 10240
+Headers Size = 9216
+Code Page = UTF-8
+Characteristics = GNU ASCII
+
+ERROR: Cannot create hard link : The system cannot find the file specified. : ./d/hnone : DIR/ld/w/d/none.txt
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 10240 bytes (10 KiB)
+
+Extracting archive: danger.tar
+--
+Path = danger.tar
+Type = tar
+Physical Size = 10240
+Headers Size = 9216
+Code Page = UTF-8
+Characteristics = GNU ASCII
+
+Everything is Ok
+
+Size:       6
+Compressed: 10240
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 10240 bytes (10 KiB)
+
+Extracting archive: danger.tar
+--
+Path = danger.tar
+Type = tar
+Physical Size = 10240
+Headers Size = 9216
+Code Page = UTF-8
+Characteristics = GNU ASCII
+
+
+Would you like to replace the existing file:
+  Path:     x6/d/hok
+  Size:     6 bytes (1 KiB)
+  Modified: 2026-10-07 08:00:00
+with the file from archive:
+  Path:     d/hok
+  Size:     0 bytes
+  Modified: 2026-10-07 08:00:00
+? (Y)es / (N)o / (A)lways / (S)kip all / A(u)to rename all / (Q)uit? 
+
+
+Break signaled
+rc=255
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 10240 bytes (10 KiB)
+
+Extracting archive: danger.tar
+--
+Path = danger.tar
+Type = tar
+Physical Size = 10240
+Headers Size = 9216
+Code Page = UTF-8
+Characteristics = GNU ASCII
+
+Everything is Ok
+
+Files: 0
+Size:       0
+Compressed: 10240
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 10240 bytes (10 KiB)
+
+Extracting archive: danger.tar
+--
+Path = danger.tar
+Type = tar
+Physical Size = 10240
+Headers Size = 9216
+Code Page = UTF-8
+Characteristics = GNU ASCII
+
+Everything is Ok
+
+Files: 0
+Size:       0
+Compressed: 10240
+rc=0
+2 x6/d/a.txt
+2 x6/d/hok
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 10240 bytes (10 KiB)
+
+Extracting archive: danger.tar
+--
+Path = danger.tar
+Type = tar
+Physical Size = 10240
+Headers Size = 9216
+Code Page = UTF-8
+Characteristics = GNU ASCII
+
+ERROR: Dangerous link via another link was ignored : d/hok : d/a.txt
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 10240 bytes (10 KiB)
+
+Extracting archive: danger.tar
+--
+Path = danger.tar
+Type = tar
+Physical Size = 10240
+Headers Size = 9216
+Code Page = UTF-8
+Characteristics = GNU ASCII
+
+Everything is Ok
+
+Size:       6
+Compressed: 10240
+rc=0
+a.txt
+hok
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 10240 bytes (10 KiB)
+
+Extracting archive: danger.tar
+--
+Path = danger.tar
+Type = tar
+Physical Size = 10240
+Headers Size = 9216
+Code Page = UTF-8
+Characteristics = GNU ASCII
+
+- d/a.txt
+- d/sub/b.txt
+- d/up
+- d/dots
+- d/lvl
+- d/hup
+- d/habs
+- d/hok
+- d/hsub
+- d/hnone
+ERROR: Dangerous link path was ignored : d/up : ../../x
+ERROR: Dangerous link path was ignored : d/dots : sub/../../a.txt
+ERROR: Dangerous link path was ignored : d/lvl : ..
+ERROR: Dangerous link path was ignored : d/hup : ../a.txt
+ERROR: Cannot create hard link : The system cannot find the file specified. : x8/d/hnone : DIR/ld/x8/d/none.txt
+
+Sub items Errors: 5
+
+Archives with Errors: 1
+
+Sub items Errors: 5
+rc=2
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+
+
+Command Line Error:
+Unsupported switch postfix -snld
+x
+rc=7

@@ -232,6 +232,16 @@ pub(super) struct Item {
     pub(super) host_os: Option<String>,
     /// The format's other properties, by name.
     pub(super) extra: Vec<(Prop, String)>,
+    /// What a link names (`kpidSymLink`, `kpidHardLink`): a tar's.
+    pub(super) link: Option<Link>,
+}
+
+/// A link an item is, and the path it names as the archive keeps it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct Link {
+    /// A hard link, its path from the archive's root; else a symbolic link.
+    pub(super) hard: bool,
+    pub(super) path: String,
 }
 
 /// Why an archive did not open, in 7-Zip's kinds.
@@ -707,6 +717,7 @@ fn items_of(archive: &sevenz::Archive) -> Vec<Item> {
                 mtime_prec: TimePrec::Exact,
                 host_os: None,
                 extra: Vec::new(),
+                link: None,
             }
         })
         .collect()

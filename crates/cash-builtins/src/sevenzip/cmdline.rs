@@ -440,6 +440,16 @@ pub(super) struct Options {
     pub(super) properties: Vec<(String, Option<String>)>,
     /// `-scrc`'s hashes, when it was given (an empty name for CRC32).
     pub(super) hash_methods: Option<Vec<String>>,
+    /// `-snl`, `-snl-`: links stored as links, made as links; none when not given.
+    pub(super) symlinks: Option<bool>,
+    /// `-snh`: hard links stored as links.
+    pub(super) hard_links: bool,
+    /// `-snld`: how dangerous a link extraction makes (5 unless given, 9 bare).
+    pub(super) dangerous_level: u32,
+    /// `-sns`, `-sni`: NTFS alternate streams and security, which 7-Zip's formats here
+    /// do not keep.
+    pub(super) alt_streams: bool,
+    pub(super) nt_security: bool,
     /// The update group's settings.
     pub(super) update: Option<Update>,
 }
@@ -500,6 +510,14 @@ pub(super) fn parse_command(parsed: &Parsed) -> Result<Options, CmdLineError> {
     if let Some(charset) = parsed.string(Key::ListfileCharSet) {
         charset_known(charset, false)?;
     }
+
+    let flag = |key: Key| parsed.there(key).then(|| !parsed.get(key).minus);
+    let dangerous_level = match parsed.string(Key::SymLinksAllowDangerous) {
+        None => 5,
+        Some("") => 9,
+        Some(level) => stoi(level)
+            .ok_or_else(|| CmdLineError::with("Unsupported switch postfix -snld", level))?,
+    };
 
     // Names are compared without case, as on Windows, unless -ssc.
     let case_sensitive = parsed.there(Key::CaseSensitive) && !parsed.get(Key::CaseSensitive).minus;
@@ -707,6 +725,11 @@ pub(super) fn parse_command(parsed: &Parsed) -> Result<Options, CmdLineError> {
         hash_methods: parsed
             .there(Key::Hash)
             .then(|| parsed.get(Key::Hash).strings.clone()),
+        symlinks: flag(Key::SymLinks),
+        hard_links: flag(Key::HardLinks).unwrap_or(false),
+        dangerous_level,
+        alt_streams: flag(Key::AltStreams).unwrap_or(false),
+        nt_security: parsed.there(Key::NtSecurity),
         update,
     })
 }

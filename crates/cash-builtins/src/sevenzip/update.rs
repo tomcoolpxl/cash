@@ -603,10 +603,15 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
             .any(|(_, actions, _)| need_scanning(*actions))
     {
         console.so("Scanning the drive:\n");
-        dir_items = scan::scan(&options.censor, &|p| env.path(p), &mut |path, error| {
-            common_error(console, path, error, true);
-            warnings.scan.push((path.to_owned(), copy_error(error)));
-        });
+        dir_items = scan::scan(
+            &options.censor,
+            options.symlinks.unwrap_or(false),
+            &|p| env.path(p),
+            &mut |path, error| {
+                common_error(console, path, error, true);
+                warnings.scan.push((path.to_owned(), copy_error(error)));
+            },
+        );
         let stat = Stat::of(&dir_items);
         console.so(&format!(
             "{}\n\n",
@@ -1116,6 +1121,10 @@ impl<SE: cash_core::ShellExtensions> Job<'_, '_, SE> {
         processed: &mut [bool],
     ) -> Result<(u64, u64, Option<usize>), Stop> {
         let console = self.console;
+        // No format written here keeps NTFS streams or security.
+        if self.options.alt_streams || self.options.nt_security {
+            return Err(Stop::System(win_error(win::E_NOTIMPL)));
+        }
         check_properties(self.kind, &self.options.properties)?;
         let mut deleted = Stat2::default();
         let ups = if self.rename {
@@ -1507,6 +1516,10 @@ impl<SE: cash_core::ShellExtensions> Job<'_, '_, SE> {
         let di = &self.dir_items[d];
         if di.path.as_os_str().is_empty() {
             return Some(Input::Stdin(Box::new(self.env.context.stdin())));
+        }
+        // A link -snl keeps: its reparse data rather than what it names.
+        if let Some(data) = &di.reparse {
+            return Some(Input::Data(io::Cursor::new(data.clone())));
         }
         match File::open(&di.path) {
             Ok(file) => Some(Input::File(file)),
@@ -2013,26 +2026,44 @@ impl Write for Out<'_> {
     }
 }
 
-/// A new item's data: its file, or standard input (`-si`).
+/// A new item's data: its file, a link's reparse data (`-snl`), or standard input
+/// (`-si`).
 enum Input {
     File(File),
+    Data(io::Cursor<Vec<u8>>),
     Stdin(Box<dyn Read>),
 }
 
+/// Data that can be read again.
+trait Rewind: Read + Seek {}
+
+impl<T: Read + Seek> Rewind for T {}
+
 impl Input {
-    /// The file, which can be read again and asked its size; not standard input.
-    const fn file(&mut self) -> Option<&mut File> {
+    /// The data, which can be read again; not standard input.
+    fn seekable(&mut self) -> Option<&mut dyn Rewind> {
         match self {
             Self::File(file) => Some(file),
+            Self::Data(data) => Some(data),
             Self::Stdin(_) => None,
         }
     }
 
-    /// The size the file has now, else `fallback`.
-    fn size_or(&mut self, fallback: u64) -> u64 {
-        self.file()
-            .and_then(|f| f.metadata().ok())
-            .map_or(fallback, |m| m.len())
+    /// The open file's metadata (`IStreamGetProps`), which a link's data has not.
+    fn metadata(&self) -> Option<fs::Metadata> {
+        match self {
+            Self::File(file) => file.metadata().ok(),
+            _ => None,
+        }
+    }
+
+    /// The size the data has now, else `fallback`.
+    fn size_or(&self, fallback: u64) -> u64 {
+        match self {
+            Self::File(file) => file.metadata().map_or(fallback, |m| m.len()),
+            Self::Data(data) => data.get_ref().len() as u64,
+            Self::Stdin(_) => fallback,
+        }
     }
 }
 
@@ -2040,6 +2071,7 @@ impl Read for Input {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         match self {
             Self::File(file) => file.read(buf),
+            Self::Data(data) => data.read(buf),
             Self::Stdin(stdin) => stdin.read(buf),
         }
     }

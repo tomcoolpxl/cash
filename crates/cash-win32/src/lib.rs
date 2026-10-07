@@ -65,6 +65,7 @@ pub mod poll;
 // A process's priority class, and the niceness it stands for, for `nice` and `renice`.
 pub mod priority;
 pub mod process;
+pub mod reparse;
 pub mod resolve;
 /// Which processes hold a file open, through the Restart Manager.
 pub mod restart;

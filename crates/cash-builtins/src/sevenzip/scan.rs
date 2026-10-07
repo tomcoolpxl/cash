@@ -40,6 +40,8 @@ pub(super) struct DirItem {
     pub(super) modified: u64,
     pub(super) created: u64,
     pub(super) accessed: u64,
+    /// With `-snl`, a link's reparse data, which is not followed.
+    pub(super) reparse: Option<Vec<u8>>,
 }
 
 /// The size of an item whose size is not known: standard input from a pipe.
@@ -64,6 +66,7 @@ pub(super) fn stdin_item(name: &str, meta: Option<&fs::Metadata>) -> DirItem {
         modified: now,
         created: now,
         accessed: now,
+        reparse: None,
     };
     if let Some(m) = meta {
         item.size = m.file_size();
@@ -91,7 +94,10 @@ impl Stat {
                 stat.dirs += 1;
             } else {
                 stat.files += 1;
-                stat.size = stat.size.wrapping_add(item.size);
+                // A link kept as a link counts as its own size, nothing (`SetLinkInfo`).
+                if item.reparse.is_none() {
+                    stat.size = stat.size.wrapping_add(item.size);
+                }
             }
         }
         stat
@@ -127,12 +133,17 @@ impl Found {
 
 /// Walks the disk as the censor says, the paths it gives made absolute by `resolve`;
 /// `warn` hears each path that could not be read, with why.
+///
+/// With `symlinks` (`-snl`) a junction or a symbolic link is kept as one, its reparse
+/// data read, a folder not entered; else it is followed.
 pub(super) fn scan(
     censor: &Censor,
+    symlinks: bool,
     resolve: &dyn Fn(&str) -> PathBuf,
     warn: &mut dyn FnMut(&str, &io::Error),
 ) -> Vec<DirItem> {
     let mut walker = Walker {
+        symlinks,
         case: censor.case_sensitive,
         exclude_dirs: censor.exclude_dirs,
         exclude_files: censor.exclude_files,
@@ -147,6 +158,7 @@ pub(super) fn scan(
 }
 
 struct Walker<'a> {
+    symlinks: bool,
     case: bool,
     exclude_dirs: bool,
     exclude_files: bool,
@@ -188,7 +200,7 @@ impl Walker<'_> {
                 continue;
             }
             let meta = entry.metadata()?;
-            if meta.file_attributes() & ATTRIBUTE_REPARSE_POINT != 0 {
+            if meta.file_attributes() & ATTRIBUTE_REPARSE_POINT != 0 && !self.symlinks {
                 return Ok(Found::of(entry_name, &fs::metadata(&path)?));
             }
             return Ok(Found::of(entry_name, &meta));
@@ -205,6 +217,7 @@ impl Walker<'_> {
             let name = entry.file_name().to_string_lossy().into_owned();
             let mut meta = entry.metadata()?;
             if meta.file_attributes() & ATTRIBUTE_REPARSE_POINT != 0
+                && !self.symlinks
                 && let Ok(target) = fs::metadata(entry.path())
             {
                 meta = target;
@@ -219,18 +232,37 @@ impl Walker<'_> {
         (self.warn)(shown, error);
     }
 
+    /// Whether the scan keeps `found` as a link: `-snl`, and a reparse point.
+    const fn kept_link(&self, found: &Found) -> bool {
+        self.symlinks && found.attrib & ATTRIBUTE_REPARSE_POINT != 0
+    }
+
     fn add(&mut self, phy: &str, log: &str, found: &Found) {
         let shown = format!("{phy}{}", found.name);
+        let path = self.path(&shown);
+        let mut size = found.size;
+        let mut reparse = None;
+        if self.kept_link(found) {
+            // SetLinkInfo: the link's reparse data, its size the item's.
+            match cash_win32::reparse::data(&path) {
+                Ok(data) => {
+                    size = data.len() as u64;
+                    reparse = Some(data);
+                }
+                Err(error) => self.error(&shown, &error),
+            }
+        }
         self.items.push(DirItem {
             name: format!("{log}{}", found.name),
-            path: self.path(&shown),
+            path,
             shown,
             is_dir: found.is_dir(),
-            size: found.size,
+            size,
             attrib: found.attrib,
             modified: found.modified,
             created: found.created,
             accessed: found.accessed,
+            reparse,
         });
     }
 
@@ -328,7 +360,7 @@ impl Walker<'_> {
             if self.can_include(is_dir) {
                 self.add(phy, log, &found);
             }
-            if !is_dir {
+            if !is_dir || self.kept_link(&found) {
                 continue;
             }
             if let Some(index) = node.find_sub_node(name, self.case) {
@@ -397,7 +429,7 @@ impl Walker<'_> {
                 enter = true;
             }
         }
-        if !is_dir {
+        if !is_dir || self.kept_link(found) {
             return;
         }
         let Some(&node) = stack.last() else {

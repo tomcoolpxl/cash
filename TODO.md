@@ -537,9 +537,25 @@ same day: 7z and the formats cash has, Windows 7-Zip's words with LF and `/`,
    format (7z, zip and tar to 7-Zip's bytes), "Volumes: N"; `NAME.001` reads as 7-Zip's
    "Split" level over the archive inside, the volumes not opened again, their sizes in
    the totals. The spanning is cash-archive's `volumes` (`Spanned`, `numbered`,
-   `SpannedWriter`), which zip's split parts use too. Left: links, `-sns`/`-sni`; `h`
-   on hash files (7-Zip 23's `-thash`) is not taken; 7-Zip's split handler also reads
-   `NAME.aa`, `NAME.ab` volumes, cash's only numbered ones.
+   `SpannedWriter`), which zip's split parts use too. Links and `-sns`/`-sni` done
+   2026-10-07: `-snl` keeps a junction or a symbolic link as one (not entered, its
+   reparse data read: a symbolic link in tar, relative to its folder; in 7z and zip the
+   reparse attribute, and for a file the data as 7-Zip passes it; `h` hashes the data);
+   `-snh` makes a file met again under another name a tar hard link; extraction makes a
+   tar's links after every item, from empty placeholders, with 7-Zip's `-snld` danger
+   checks and words, `-snl-` leaving symbolic links out; `-sns`/`-sni` "Not implemented"
+   when writing, nothing when extracting (no format here has streams). Also fixed: the
+   overwrite question now comes before the item's `-` line, a skipped file shows as
+   skipped, and a break still reports "Sub items Errors". Not done, and not testable on
+   a machine without the right to make symbolic links: 7-Zip makes a 7z's or zip's item
+   with the reparse attribute and data under 4 KiB a link (`is_SymLink_in_Data`,
+   "Incorrect reparse stream"), and a zip's Unix symbolic link (mode `S_IFLNK`) one;
+   cash writes their data as a file. A made symbolic link does not get the item's times
+   (7-Zip's `SetLinkFileTime`). A file answered "No" or skipped: 7-Zip's tar handler
+   neither shows nor counts it, its 7z handler shows it at `-bb2` and counts it; cash
+   does the latter for every format. `h` on hash files (7-Zip 23's `-thash`) is not
+   taken; 7-Zip's split handler also reads `NAME.aa`, `NAME.ab` volumes, cash's only
+   numbered ones.
 6. The page, `builtins.md`, `CARRIED`, `DELIBERATE_SHADOWS`, doctor.
 
 ---
@@ -659,6 +675,16 @@ not used.
   command's. cash prints the message regardless; the hint is suppressed when the function
   is defined, as decided, but the function itself does not run. Implement Bash's
   behaviour, with the hint only when no function is defined.
+- **`rm -rf` fails on a junction whose target it removed first** (found 2026-10-07,
+  phase 31): in `t/` holding `sub/` and `jn` (a junction to `sub`), `rm -rf t` removes
+  `sub` and then says `rm: cannot remove 't\jn': Permission denied`, leaving `t` and the
+  dangling junction (status 1). `rm -rf t/jn` alone works and keeps `sub`. A junction
+  left dangling seems to be removed as a file (`DeleteFileW`, refused) where it is a
+  folder link (`RemoveDirectoryW`). Its `\` in the message is not cash's `/` either.
+- **`pwd -W` is refused though the usage offers it** (found 2026-10-07): `pwd -W` says
+  "-W: invalid option" then "usage: pwd [-LPW]". MSYS2's Bash has `-W` (the Windows
+  path); either take it (cash's paths are Windows paths already) or drop it from the
+  usage.
 - A test in the full suite leaves `x.lnk` in the repository root: a 0-byte named pipe as
   MSYS2 makes them (its `mkfifo` writes a FIFO as a special `.lnk` file), timestamped
   during the 1.4.3 gate on 2026-10-06. No test names `x` with `mkfifo`; one of them runs

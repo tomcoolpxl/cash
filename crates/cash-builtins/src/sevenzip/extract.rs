@@ -14,7 +14,7 @@ use cash_core::openfiles::OpenFiles;
 use super::archive::{self, Data, Item, Kind, OpenFailure, Opened};
 use super::censor::{has_wildcard, mask_matches, split_path};
 use super::cmdline::{Command, Options, Overwrite, PathKeep};
-use super::{Console, Env, Stop, code, list, text};
+use super::{Console, Env, Stop, code, links, list, text};
 
 /// An archive the scan found: its name as given, its path, its size, and whether it is
 /// standard input (`-si`), spooled to that path.
@@ -432,14 +432,16 @@ fn extract_all<SE: cash_core::ShellExtensions>(
         Ok(())
     })();
     let error = totals.counts(console);
-    outcome?;
-    let code = if error { code::FATAL } else { 0 };
-    if totals.with_errors != 0 || totals.file_errors != 0 {
+    let failed = totals.with_errors != 0 || totals.file_errors != 0;
+    if failed {
         console.so("\n");
         if totals.file_errors != 0 {
             console.so(&format!("Sub items Errors: {}\n", totals.file_errors));
         }
-    } else {
+    }
+    outcome?;
+    let code = if error { code::FATAL } else { 0 };
+    if !failed {
         if totals.folders != 0 {
             console.so(&format!("Folders: {}\n", totals.folders));
         }
@@ -660,6 +662,7 @@ fn extract_items<SE: cash_core::ShellExtensions>(
     let mut overwrite = options.overwrite;
     let mut errors = 0u64;
     let mut folder_times: Vec<(PathBuf, u64)> = Vec::new();
+    let mut post_links: Vec<links::PostLink> = Vec::new();
     let mut stop: Option<Stop> = None;
     let mut hash = totals.hash.take();
     let result: Result<(), Stop> = opened.extract(&|index| decode[index], |index, data| {
@@ -667,6 +670,78 @@ fn extract_items<SE: cash_core::ShellExtensions>(
         let skip = !wanted[index];
         // -scrc hashes what is tested, folders too, and the files extracted.
         let hashing = !skip && (test || !item.is_dir);
+        // A link extracted is a placeholder now, the link at the end; the tar handler
+        // asks no stream for a file one, so it is neither shown nor counted, unless
+        // -scrc hashes it.
+        let as_link = item
+            .link
+            .as_ref()
+            .filter(|_| !test && !skip && !options.stdout);
+        if let Some(link) = as_link {
+            let (path, relative) = target(&out_dir, item, options.path_keep);
+            let shown = format!("{base}{relative}");
+            if link.hard || options.symlinks != Some(false) {
+                let room = if item.is_dir {
+                    Ok(Some(path))
+                } else {
+                    make_room(env, console, item, &path, &shown, &mut overwrite)
+                };
+                match room {
+                    Ok(Some(path)) => match links::placeholder(&path, &shown) {
+                        Ok(()) => post_links.push(links::PostLink {
+                            item_path: item.path.clone(),
+                            parts: relative.split('/').map(str::to_owned).collect(),
+                            is_dir: item.is_dir,
+                            link: link.clone(),
+                            path,
+                            shown,
+                            modified: item.modified,
+                        }),
+                        Err(message) => {
+                            errors += 1;
+                            console.flush_so();
+                            console.se(&format!("ERROR: {message}\n"));
+                            console.flush_se();
+                        }
+                    },
+                    Ok(None) => return Ok(true),
+                    Err(Stop::System(error)) => {
+                        errors += 1;
+                        console.flush_so();
+                        console.se(&format!("ERROR: {}\n", text::system_message(&error)));
+                        console.flush_se();
+                        return Ok(true);
+                    }
+                    Err(other) => {
+                        stop = Some(other);
+                        return Ok(false);
+                    }
+                }
+            }
+            if !item.is_dir && hash.is_none() {
+                return Ok(true);
+            }
+        }
+        // GetStream asks about a file already there before the item is shown; one not
+        // to be replaced is shown as skipped.
+        let room = if !test && !skip && !options.stdout && as_link.is_none() && !item.is_dir {
+            let (path, relative) = target(&out_dir, item, options.path_keep);
+            let shown = format!("{base}{relative}");
+            Some(
+                match make_room(env, console, item, &path, &shown, &mut overwrite) {
+                    Ok(room) => Ok(room),
+                    Err(Stop::System(e)) => Err(e),
+                    Err(Stop::Message(m)) => Err(io::Error::other(m)),
+                    Err(other) => {
+                        stop = Some(other);
+                        return Ok(false);
+                    }
+                },
+            )
+        } else {
+            None
+        };
+        let passed = matches!(room, Some(Ok(None)));
         let mut hashed;
         let data: &mut dyn Data = match hash.as_mut().filter(|_| hashing) {
             Some(bundle) => {
@@ -676,13 +751,13 @@ fn extract_items<SE: cash_core::ShellExtensions>(
             }
             None => data,
         };
-        let level = if skip { 2 } else { 1 };
+        let level = if skip || passed { 2 } else { 1 };
         if options.log_level >= level {
             let mut shown = item.path.clone();
             if item.is_dir && !shown.ends_with('/') {
                 shown.push('/');
             }
-            let mark = if skip {
+            let mark = if skip || passed {
                 "."
             } else if test {
                 "T"
@@ -696,7 +771,7 @@ fn extract_items<SE: cash_core::ShellExtensions>(
         } else {
             totals.files += 1;
         }
-        let outcome = if test || skip {
+        let outcome = if test || skip || as_link.is_some() {
             io::copy(data, &mut io::sink()).map(|_| ())
         } else if options.stdout {
             if item.is_dir {
@@ -704,32 +779,26 @@ fn extract_items<SE: cash_core::ShellExtensions>(
             } else {
                 copy_to_stdout(console, data)
             }
-        } else {
-            let (path, relative) = target(&out_dir, item, options.path_keep);
-            if item.is_dir {
-                let made = fs::create_dir_all(&path);
-                if made.is_ok()
-                    && let Some(time) = item.modified
-                {
-                    folder_times.push((path, time));
-                }
-                made
-            } else {
-                let shown = format!("{base}{relative}");
-                match write_file(env, console, item, &path, &shown, data, &mut overwrite) {
-                    Ok(()) => Ok(()),
-                    Err(Stop::System(e)) => Err(e),
-                    Err(Stop::Message(m)) => Err(io::Error::other(m)),
-                    Err(other) => {
-                        stop = Some(other);
-                        return Ok(false);
-                    }
-                }
+        } else if let Some(room) = room {
+            match room {
+                Ok(Some(path)) => write_file(item, &path, data),
+                Ok(None) => Ok(()),
+                Err(e) => Err(e),
             }
+        } else {
+            let (path, _) = target(&out_dir, item, options.path_keep);
+            let made = fs::create_dir_all(&path);
+            if made.is_ok()
+                && let Some(time) = item.modified
+            {
+                folder_times.push((path, time));
+            }
+            made
         };
         let finished = data.finish();
-        // The size known before decoding, else the one the format reports after.
-        if !item.is_dir {
+        // The size known before decoding, else the one the format reports after; a
+        // folder's is a link's name.
+        if !item.is_dir || item.link.is_some() {
             totals.size += item.size.or_else(|| data.unpacked()).unwrap_or(0);
         }
         if let Err(problem) = finished {
@@ -757,8 +826,11 @@ fn extract_items<SE: cash_core::ShellExtensions>(
         Ok(true)
     });
     totals.hash = hash;
-    result?;
-    if let Some(stop) = stop {
+    // CloseArc: the links, even after a break.
+    errors += links::make(console, &post_links, &out_dir, options.dangerous_level);
+    // A break still counts the errors met before it.
+    if let Some(stop) = result.err().or(stop) {
+        totals.file_errors += errors;
         return Err(stop);
     }
     for (path, time) in folder_times.into_iter().rev() {
@@ -927,7 +999,7 @@ fn auto_rename(path: &Path) -> Option<PathBuf> {
         .find(|p| fs::symlink_metadata(p).is_err())
 }
 
-fn system_time(ticks: u64) -> SystemTime {
+pub(super) fn system_time(ticks: u64) -> SystemTime {
     let epoch = SystemTime::UNIX_EPOCH - Duration::from_hours(3_234_576);
     epoch + Duration::from_nanos(ticks.saturating_mul(100))
 }
@@ -938,17 +1010,50 @@ enum Answer {
     No,
 }
 
-/// Writes one file, asking first when one is there (`AskOverwrite`), then its times and
-/// attributes.
-fn write_file<SE: cash_core::ShellExtensions>(
+/// Writes one file where `make_room` made room for it, then its times and attributes.
+fn write_file(item: &Item, path: &Path, data: &mut dyn Data) -> io::Result<()> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let mut file = fs::File::create(path)?;
+    let mut buf = vec![0u8; 64 * 1024];
+    loop {
+        match data.read(&mut buf) {
+            Ok(0) | Err(_) => break,
+            Ok(n) => file.write_all(&buf[..n])?,
+        }
+    }
+    drop(file);
+    if let Some(time) = item.modified {
+        let _ = cash_win32::unix::set_times(
+            path,
+            &cash_win32::unix::Times {
+                modified: system_time(time),
+                accessed: item.accessed.map(system_time),
+                created: item.created.map(system_time),
+            },
+        );
+    }
+    if let Some(attrib) = item.attrib {
+        let settable = attrib & 0x7 | attrib & 0x20;
+        if settable != 0x20 {
+            let _ = cash_win32::unix::set_attributes(path, settable & 0x27);
+        }
+    }
+    Ok(())
+}
+
+/// `CheckExistFile`: when a file is where an item goes, the question (`AskOverwrite`)
+/// or `-ao`'s answer, and what was there moved or removed; the path to write, or `None`
+/// for an item skipped.
+fn make_room<SE: cash_core::ShellExtensions>(
     env: &Env<'_, SE>,
     console: &Console<'_, SE>,
     item: &Item,
     path: &Path,
     shown: &str,
-    data: &mut dyn Data,
     overwrite: &mut Overwrite,
-) -> Result<(), Stop> {
+) -> Result<Option<PathBuf>, Stop> {
     let mut path = path.to_path_buf();
     if let Ok(existing) = fs::symlink_metadata(&path) {
         let mut mode = *overwrite;
@@ -960,7 +1065,7 @@ fn write_file<SE: cash_core::ShellExtensions>(
                         mode = new_mode;
                     }
                     if matches!(answer, Answer::No) {
-                        return Ok(());
+                        return Ok(None);
                     }
                     if mode == Overwrite::Ask {
                         mode = Overwrite::All;
@@ -970,7 +1075,7 @@ fn write_file<SE: cash_core::ShellExtensions>(
             }
         }
         match mode {
-            Overwrite::Skip => return Ok(()),
+            Overwrite::Skip => return Ok(None),
             Overwrite::Rename => {
                 path = auto_rename(&path)
                     .ok_or_else(|| Stop::Message("Cannot create file with auto name".to_owned()))?;
@@ -992,35 +1097,7 @@ fn write_file<SE: cash_core::ShellExtensions>(
             }
         }
     }
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    let mut file = fs::File::create(&path)?;
-    let mut buf = vec![0u8; 64 * 1024];
-    loop {
-        match data.read(&mut buf) {
-            Ok(0) | Err(_) => break,
-            Ok(n) => file.write_all(&buf[..n])?,
-        }
-    }
-    drop(file);
-    if let Some(time) = item.modified {
-        let _ = cash_win32::unix::set_times(
-            &path,
-            &cash_win32::unix::Times {
-                modified: system_time(time),
-                accessed: item.accessed.map(system_time),
-                created: item.created.map(system_time),
-            },
-        );
-    }
-    if let Some(attrib) = item.attrib {
-        let settable = attrib & 0x7 | attrib & 0x20;
-        if settable != 0x20 {
-            let _ = cash_win32::unix::set_attributes(&path, settable & 0x27);
-        }
-    }
-    Ok(())
+    Ok(Some(path))
 }
 
 /// `AskOverwrite` and `ScanUserYesNoAllQuit`: the question, then a line until it is

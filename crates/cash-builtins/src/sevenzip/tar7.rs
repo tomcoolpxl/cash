@@ -1247,6 +1247,12 @@ fn listed_item(item: &TarItem) -> Item {
             item.dev_minor.map(|v| v.to_string()).unwrap_or_default(),
         ),
     ];
+    if (item.is_symlink() || item.is_hardlink()) && !item.link_name.is_empty() {
+        listed.link = Some(super::archive::Link {
+            hard: item.is_hardlink(),
+            path: text(&item.link_name),
+        });
+    }
     listed
 }
 

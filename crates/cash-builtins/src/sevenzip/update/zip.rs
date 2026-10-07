@@ -871,7 +871,7 @@ pub(super) fn write<SE: cash_core::ShellExtensions>(
                 continue;
             };
             // UpdatePropsFromStream: the open file's size and attributes.
-            if let Some(meta) = file.file().and_then(|f| f.metadata().ok()) {
+            if let Some(meta) = file.metadata() {
                 use std::os::windows::fs::MetadataExt;
                 rec.external_attrib = meta.file_attributes();
             }
@@ -1021,7 +1021,7 @@ fn add_file(
     let size = file.size_or(ui.size);
     // Standard input is read once: no second method, and no ZipCrypto, whose header
     // needs the CRC first.
-    let in_seq = file.file().is_none();
+    let in_seq = file.seekable().is_none();
     if in_seq && crypto.is_some_and(|c| c.aes.is_none()) {
         return Err(Stop::System(win_error(win::E_NOTIMPL)));
     }
@@ -1087,7 +1087,7 @@ fn add_file(
     let mut crc_first = None;
     if let Some(Crypto { aes: None, .. }) = crypto
         && !rec.has_descriptor()
-        && let Some(f) = file.file()
+        && let Some(f) = file.seekable()
     {
         let mut counted = Counted {
             inner: &mut *f,
@@ -1101,7 +1101,7 @@ fn add_file(
     let mut result = (first, 0, 0, 0);
     for (i, &id) in sequence.iter().enumerate() {
         if i > 0 {
-            let Some(f) = file.file() else {
+            let Some(f) = file.seekable() else {
                 break;
             };
             if !out.truncate_to(data_start).map_err(Stop::System)? {

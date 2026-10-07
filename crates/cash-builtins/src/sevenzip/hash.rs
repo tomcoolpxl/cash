@@ -415,10 +415,15 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
         if headers {
             console.so("Scanning\n");
         }
-        items = scan::scan(&options.censor, &|p| env.path(p), &mut |path, error| {
-            common_error(console, path, error, true);
-            warnings.scan.push((path.to_owned(), copy_error(error)));
-        });
+        items = scan::scan(
+            &options.censor,
+            options.symlinks.unwrap_or(false),
+            &|p| env.path(p),
+            &mut |path, error| {
+                common_error(console, path, error, true);
+                warnings.scan.push((path.to_owned(), copy_error(error)));
+            },
+        );
         if headers {
             let stat = Stat::of(&items);
             console.so(&format!(
@@ -433,9 +438,13 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
     }
     let mut buf = vec![0u8; 1 << 15];
     for item in &items {
+        // A link -snl keeps is hashed as a file of its reparse data, a folder's too.
+        let is_dir = item.is_dir && item.reparse.is_none();
         let mut input: Box<dyn Read> = if item.path.as_os_str().is_empty() {
             Box::new(env.context.stdin())
-        } else if item.is_dir {
+        } else if let Some(data) = &item.reparse {
+            Box::new(io::Cursor::new(data.clone()))
+        } else if is_dir {
             Box::new(io::empty())
         } else {
             match File::open(&item.path) {
@@ -450,7 +459,7 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
             }
         };
         bundle.start();
-        if !item.is_dir {
+        if !is_dir {
             loop {
                 let n = match input.read(&mut buf) {
                     Ok(0) => break,
@@ -462,16 +471,16 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
             }
         }
         let size = bundle.cur_size;
-        bundle.finish(item.is_dir, &item.name);
+        bundle.finish(is_dir, &item.name);
         let mut shown = item.name.clone();
         if shown.is_empty() {
             shown.push_str("[Content]");
-        } else if item.is_dir && !shown.ends_with('/') {
+        } else if is_dir && !shown.ends_with('/') {
             shown.push('/');
         }
         console.so(&format!(
             "{}\n",
-            bundle.line(CURRENT, !item.is_dir, size, &shown)
+            bundle.line(CURRENT, !is_dir, size, &shown)
         ));
     }
     if headers {

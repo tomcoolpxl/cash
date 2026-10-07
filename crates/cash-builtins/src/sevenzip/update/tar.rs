@@ -5,9 +5,13 @@
 //! the archive ending in two empty records. Items kept as they were are copied whole,
 //! headers and all; renamed ones get a new header over their old data.
 
+use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::io::{self, Read, Write};
+use std::path::Path;
 
 use super::super::archive::Opened;
+use super::super::censor::compare_file_names;
 use super::super::methods::MethodError;
 use super::super::scan::UNKNOWN_SIZE;
 use super::super::tar7::{Tar, TarItem};
@@ -562,6 +566,10 @@ fn pax_order(items: &[Item]) -> Vec<usize> {
 }
 
 /// The tar handler's `UpdateItems` and `UpdateArchive`; returns the files read.
+#[expect(
+    clippy::too_many_lines,
+    reason = "7-Zip's tar UpdateArchive, item by item"
+)]
 pub(super) fn write<SE: cash_core::ShellExtensions>(
     job: &Job<'_, '_, SE>,
     opened: Option<&Opened>,
@@ -586,6 +594,9 @@ pub(super) fn write<SE: cash_core::ShellExtensions>(
         posix: settings.posix,
         digits_max: settings.digits_max,
     };
+    // -snh: each file with other names, by volume and the low half of its index, and
+    // the name it was first written under.
+    let mut hard: HashMap<(u32, u64), Vec<u8>> = HashMap::new();
     for i in order {
         let ui = &items[i];
         let old = ui.up.arc.and_then(|a| tar.and_then(|t| t.items.get(a)));
@@ -615,6 +626,20 @@ pub(super) fn write<SE: cash_core::ShellExtensions>(
                 continue;
             };
             let di = &job.dir_items[d];
+            // kpidSymLink: a link -snl keeps is a symbolic link, its data not asked for.
+            if let Some(name) = di
+                .reparse
+                .as_deref()
+                .and_then(|r| symlink_name(&di.path, r))
+            {
+                item.link_flag = b'2';
+                item.link_name = name.into_bytes();
+                item.pack_size = 0;
+                item.size = 0;
+                write_new(&mut w, &item, None)?;
+                files_read += 1;
+                continue;
+            }
             job.announce(ui);
             let mut file = None;
             let mut need_write = true;
@@ -623,7 +648,7 @@ pub(super) fn write<SE: cash_core::ShellExtensions>(
                 item.size = 0;
             } else {
                 match job.open_new(d, warnings) {
-                    Some(mut input) => {
+                    Some(input) => {
                         let size = input.size_or(di.size);
                         if size == UNKNOWN_SIZE {
                             return Err(Stop::System(win_error(win::E_INVALIDARG)));
@@ -631,6 +656,26 @@ pub(super) fn write<SE: cash_core::ShellExtensions>(
                         item.pack_size = size;
                         item.size = size;
                         file = Some(input);
+                        // kpidHardLink, asked after the file is open: a file with other
+                        // names, met before, is a hard link to the name it was met under.
+                        if job.options.hard_links
+                            && matches!(file, Some(Input::File(_)))
+                            && let Ok(info) = cash_win32::fs::file_info(&di.path)
+                            && info.links > 1
+                        {
+                            match hard.entry((info.volume, info.index & 0xFFFF_FFFF)) {
+                                Entry::Occupied(first) => {
+                                    item.link_flag = b'1';
+                                    item.link_name.clone_from(first.get());
+                                    item.pack_size = 0;
+                                    item.size = 0;
+                                    file = None;
+                                }
+                                Entry::Vacant(slot) => {
+                                    slot.insert(di.name.replace('\\', "/").into_bytes());
+                                }
+                            }
+                        }
                     }
                     None => need_write = false,
                 }
@@ -768,6 +813,62 @@ fn new_props_header<SE: cash_core::ShellExtensions>(
     item
 }
 
+/// `kpidSymLink` of a link `-snl` kept: the path its reparse data names, made relative to
+/// the link's folder when it is absolute (`GetRelativePath`), `/` between its parts.
+fn symlink_name(link: &Path, data: &[u8]) -> Option<String> {
+    let mut path = cash_win32::reparse::target(data)?.path;
+    if path.is_empty() {
+        return None;
+    }
+    let separator = |b: Option<&u8>| matches!(b, Some(b'\\' | b'/'));
+    let bytes = path.as_bytes();
+    let absolute = separator(bytes.first()) || is_drive(&path);
+    if absolute && let Ok(full) = std::path::absolute(link) {
+        let full = full.to_string_lossy().into_owned();
+        // "\path" is from the root of the link's own drive.
+        if separator(bytes.first()) && !separator(bytes.get(1)) && is_drive_root(&full) {
+            path = format!(
+                "{}{}",
+                full.get(..3).unwrap_or_default(),
+                path.get(1..).unwrap_or_default()
+            );
+        }
+        path = relative_path(&path, &full);
+    }
+    Some(path.replace('\\', "/"))
+}
+
+/// `IsDrivePath2`: a letter and a colon.
+const fn is_drive(path: &str) -> bool {
+    let b = path.as_bytes();
+    b.len() >= 2 && b[0].is_ascii_alphabetic() && b[1] == b':'
+}
+
+/// `IsDrivePath`: a letter, a colon and a separator.
+fn is_drive_root(path: &str) -> bool {
+    is_drive(path) && matches!(path.as_bytes().get(2), Some(b'\\' | b'/'))
+}
+
+/// `GetRelativePath`: `to` as seen from the folder `from` is in, `..\\` up to what they
+/// share; `to` itself when they share not even their drive.
+fn relative_path(to: &str, from: &str) -> String {
+    let to_parts: Vec<&str> = to.split(['\\', '/']).collect();
+    let from_parts: Vec<&str> = from.split(['\\', '/']).collect();
+    let mut i = 0;
+    while i + 1 < from_parts.len()
+        && i + 1 < to_parts.len()
+        && compare_file_names(from_parts[i], to_parts[i], false).is_eq()
+    {
+        i += 1;
+    }
+    if i == 0 && (is_drive_root(to) || is_drive_root(from)) {
+        return to.to_owned();
+    }
+    let mut s = "..\\".repeat(from_parts.len().saturating_sub(i + 1));
+    s.push_str(&to_parts[i..].join("\\"));
+    s
+}
+
 /// A new item's header and data; when the file's size changed while it was read, the
 /// header is written again with the size it had.
 fn write_new(w: &mut TarOut<&mut Out<'_>>, item: &Header, file: Option<Input>) -> Result<(), Stop> {
@@ -827,6 +928,14 @@ fn copy_old(tar: &Tar, pos: u64, size: u64, out: &mut Out<'_>) -> Result<(), Sto
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn link_targets_are_kept_relative_to_the_link() {
+        assert_eq!(relative_path(r"C:\d\sub", r"C:\d\jn"), "sub");
+        assert_eq!(relative_path(r"C:\e\f", r"C:\d\g\jn"), r"..\..\e\f");
+        assert_eq!(relative_path(r"D:\x", r"C:\d\jn"), r"D:\x");
+        assert_eq!(relative_path(r"c:\D\Sub", r"C:\d\jn"), "Sub");
+    }
 
     #[test]
     fn pax_lines_count_their_own_length() {
