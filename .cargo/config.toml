@@ -1,6 +1,6 @@
-# `cargo xtask ...` runs the workspace's own task runner (`xtask/`), for local use:
-# `cargo xtask gen ...`, `cargo xtask check ...`, `cargo xtask ci quick`. CI itself runs
-# plain cargo commands (.github/workflows/ci.yml).
+# `cargo xtask ...` runs the workspace's own task runner (`xtask/`): `cargo xtask gen ...`,
+# `cargo xtask check ...`, `cargo xtask ci quick`. CI runs the same commands
+# (.github/workflows/ci.yml).
 [alias]
 xtask = "run --package xtask --quiet --"
 

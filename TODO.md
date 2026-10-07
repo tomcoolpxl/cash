@@ -12,7 +12,7 @@ for working through it.
   compare with Git Bash 5.3, fix it with a test that fails without the fix, and commit.
   A done item is deleted here in the same commit.
 - **Per phase:** `cargo fmt --all`, `cargo clippy --workspace --all-targets`, the full
-  nextest run with `--retries 0`; then `main` is brought up to the branch and pushed,
+  nextest run (`--profile full --retries 0`, both lanes); then `main` is brought up to the branch and pushed,
   the phase is released once CI is green, and a short report is written. The next phase
   starts without waiting. The work stops only for a decision marked **yours** below, or
   for a release whose CI fails.

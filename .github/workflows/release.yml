@@ -21,48 +21,17 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
-  NEXTEST_PROFILE: ci
 
 # Third-party actions are pinned to a commit, with the version it was in a comment;
 # Dependabot proposes the updates (.github/dependabot.yml).
 jobs:
-  # ── Gate: run the full CI suite on the commit being released ──────────
+  # ── Gate: both lanes of CI on the commit being released ───────────────
+  # The tag's commit, also when the run was started by hand from another branch.
   ci:
-    name: CI Gate (Windows)
-    runs-on: windows-latest
-    steps:
-      # The tag's commit, also when the run was started by hand from another branch.
-      - name: Checkout code
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ inputs.tag || github.ref }}
-          persist-credentials: false
-
-      - name: Install Rust toolchain
-        run: rustup toolchain install --profile minimal
-
-      - name: Rust Cache
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-
-      - name: Install cargo-nextest and cargo-deny
-        uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
-        with:
-          tool: cargo-nextest,cargo-deny
-
-      # The same steps as ci.yml.
-      - name: RustSec advisories
-        run: cargo deny check advisories
-
-      - name: Check and test
-        run: cargo xtask ci full
-
-      - name: Clippy, all features
-        run: cargo xtask check lint --all-features
-
-      - name: Report flaky tests
-        if: always()
-        shell: pwsh
-        run: ./.github/scripts/report-flaky.ps1 -Results target/nextest/ci/test-results.xml
+    name: CI Gate
+    uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ inputs.tag || github.ref }}
 
   # ── Build release binary and publish GitHub Release ───────────────────
   release:

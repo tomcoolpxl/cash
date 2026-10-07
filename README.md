@@ -222,8 +222,9 @@ the releases page.
 
 ```bash
 cargo build                                    # target\debug\cash.exe
-cargo xtask ci quick                           # format check, clippy, unit tests
-cargo xtask ci full                            # everything CI runs
+cargo xtask ci quick                           # format check, clippy, docs, the quick tests
+cargo xtask test slow                          # the slow tests: cash.exe's and sed's
+cargo xtask ci full                            # all of it, as before a release
 powershell -File scripts\tidy.ps1 -Report      # delete unused build output, show sizes
 ```
 

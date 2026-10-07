@@ -7,10 +7,11 @@
 //!
 //! nextest, which CI and `cargo xtask` use, still runs every test in a process of its
 //! own; plain `cargo test` runs them on threads of one process, as it always ran the
-//! tests of one file. To run one file's tests:
+//! tests of one file. They are in nextest's slow lane (`.config/nextest.toml`), which its
+//! default profile leaves out. To run one file's tests:
 //!
 //! ```text
-//! cargo nextest run -p cash -E 'binary(it) and test(/^acceptance::/)'
+//! cargo nextest run --profile slow -p cash -E 'binary(it) and test(/^acceptance::/)'
 //! cargo test -p cash --test it acceptance::
 //! ```
 //!

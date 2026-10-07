@@ -1,13 +1,13 @@
 //! Test commands for running various test suites.
 //!
-//! This module provides commands for running different types of tests:
+//! The tests run in two lanes, each a nextest profile whose default filter picks its
+//! tests (`.config/nextest.toml`):
 //!
-//! - **Unit tests**: Fast tests that don't execute `cash.exe` (everything but the `cash`
-//!   package's tests)
-//! - **Integration tests**: All workspace tests, including the `cash` package's tests that
-//!   drive `cash.exe`
+//! - **Quick**: every crate's own tests, which CI runs on every push beside the lints
+//! - **Slow**: the tests that drive `cash.exe` and sed's ported suite, which CI runs on
+//!   every push split over parallel runners, and before a release
 //!
-//! Both unit and integration tests support optional coverage collection via
+//! `all` runs both in one nextest run. Each supports optional coverage collection via
 //! `cargo-llvm-cov`.
 
 use std::path::{Path, PathBuf};
@@ -18,10 +18,36 @@ use xshell::{Shell, cmd};
 
 use crate::common::{BuildProfile, find_workspace_root};
 
-/// The nextest filter for unit tests. The tests that drive `cash.exe` all live in the `cash`
-/// package, because `CARGO_BIN_EXE_cash` is only defined for the crate that declares the
-/// binary; everything else is a unit test.
-const UNIT_TEST_FILTER: &str = "not package(cash)";
+/// A lane of the test suite.
+#[derive(Clone, Copy, Debug)]
+pub enum Lane {
+    /// The default profile: every crate's own tests.
+    Quick,
+    /// The tests the quick lane leaves out.
+    Slow,
+    /// Both lanes, in one run.
+    All,
+}
+
+impl Lane {
+    /// The nextest profile whose default filter picks the lane's tests.
+    const fn nextest_profile(self) -> &'static str {
+        match self {
+            Self::Quick => "default",
+            Self::Slow => "slow",
+            Self::All => "full",
+        }
+    }
+
+    /// The lane, in a sentence: "the tests of {}".
+    const fn words(self) -> &'static str {
+        match self {
+            Self::Quick => "the quick lane",
+            Self::Slow => "the slow lane",
+            Self::All => "both lanes",
+        }
+    }
+}
 
 /// Build profile arguments shared by the test commands.
 #[derive(Args, Debug, Clone)]
@@ -53,6 +79,16 @@ impl BinaryArgs {
     }
 }
 
+impl Default for BinaryArgs {
+    fn default() -> Self {
+        Self {
+            profile: BuildProfile::Debug,
+            debug: false,
+            release: false,
+        }
+    }
+}
+
 /// Run tests.
 #[derive(Parser)]
 pub struct TestCommand {
@@ -68,35 +104,35 @@ pub struct TestCommand {
 /// Test subcommands.
 #[derive(Subcommand, Clone)]
 pub enum TestSubcommand {
-    /// Run unit tests (fast tests that don't execute cash.exe).
+    /// Run the quick lane: every crate's own tests, as CI does on every push.
     ///
-    /// Excludes the `cash` package's tests, which drive the binary.
-    Unit(UnitTestArgs),
+    /// Leaves out the slow lane: the tests that drive cash.exe and sed's ported suite.
+    #[clap(alias = "unit")]
+    Quick(LaneArgs),
 
-    /// Run all workspace tests (unit + integration tests).
-    ///
-    /// This includes all tests: unit tests plus the `cash` package's tests that
-    /// drive cash.exe.
-    Integration(IntegrationTestArgs),
+    /// Run the slow lane: the tests that drive cash.exe and sed's ported suite, or a
+    /// part of them.
+    Slow(LaneArgs),
+
+    /// Run every test of the workspace, both lanes in one run.
+    #[clap(alias = "integration")]
+    All(LaneArgs),
 
     /// Run the tests of the patched crates in `vendor/`, which are outside the workspace.
     Vendored,
 }
 
-/// Arguments for unit tests.
+/// Arguments for a lane's tests.
 #[derive(Args, Clone, Default)]
-pub struct UnitTestArgs {
+pub struct LaneArgs {
     /// Coverage options.
     #[clap(flatten)]
     pub coverage: CoverageArgs,
-}
 
-/// Arguments for integration tests.
-#[derive(Args, Clone, Default)]
-pub struct IntegrationTestArgs {
-    /// Coverage options.
-    #[clap(flatten)]
-    pub coverage: CoverageArgs,
+    /// Run one part of the lane's tests, as nextest's `--partition` does: `hash:1/4` is
+    /// the first of four. CI runs the slow lane so, on four runners at once.
+    #[clap(long)]
+    pub partition: Option<String>,
 
     /// Copy the nextest `JUnit` XML results to this path after the test run.
     /// The copy is performed even if tests fail, so CI can always upload results.
@@ -122,68 +158,47 @@ pub fn run(cmd: &TestCommand, verbose: bool) -> Result<()> {
     let sh = Shell::new()?;
 
     match &cmd.subcommand {
-        TestSubcommand::Unit(args) => run_unit_tests(&sh, &cmd.binary_args, args, verbose),
-        TestSubcommand::Integration(args) => {
-            run_integration_tests(&sh, &cmd.binary_args, args, verbose)
-        }
+        TestSubcommand::Quick(args) => run_lane(&sh, &cmd.binary_args, Lane::Quick, args, verbose),
+        TestSubcommand::Slow(args) => run_lane(&sh, &cmd.binary_args, Lane::Slow, args, verbose),
+        TestSubcommand::All(args) => run_lane(&sh, &cmd.binary_args, Lane::All, args, verbose),
         TestSubcommand::Vendored => run_vendored_tests(verbose),
     }
 }
 
-/// Run unit tests (excludes integration test binaries).
-///
-/// Unit tests are fast tests that don't execute cash.exe.
-pub fn run_unit_tests(
+/// Runs a lane's tests, or the part of them `args.partition` names.
+pub fn run_lane(
     sh: &Shell,
     binary_args: &BinaryArgs,
-    args: &UnitTestArgs,
+    lane: Lane,
+    args: &LaneArgs,
     verbose: bool,
 ) -> Result<()> {
     let profile = binary_args.effective_profile();
-    eprintln!("Running unit tests ({profile:?} profile)...");
+    let part = args
+        .partition
+        .as_deref()
+        .map_or_else(String::new, |part| format!(", part {part}"));
+    eprintln!(
+        "Running the tests of {} ({profile:?} profile{part})...",
+        lane.words()
+    );
 
-    if args.coverage.coverage {
-        run_tests_with_coverage(
-            sh,
-            profile,
-            Some(UNIT_TEST_FILTER),
-            &args.coverage.coverage_output,
-            verbose,
-        )
-    } else {
-        run_nextest(sh, profile, Some(UNIT_TEST_FILTER), verbose)?;
-        eprintln!("Unit tests passed.");
-        Ok(())
-    }
-}
-
-/// Run all workspace tests (unit + integration).
-///
-/// This runs all tests in the workspace, including the integration tests
-/// that drive cash.exe.
-pub fn run_integration_tests(
-    sh: &Shell,
-    binary_args: &BinaryArgs,
-    args: &IntegrationTestArgs,
-    verbose: bool,
-) -> Result<()> {
-    let profile = binary_args.effective_profile();
-
-    eprintln!("Running integration tests ({profile:?} profile)...");
-
-    let filter = None;
-
+    let nextest = Nextest {
+        build_profile: profile,
+        lane,
+        partition: args.partition.as_deref(),
+    };
     let test_result = if args.coverage.coverage {
-        run_tests_with_coverage(sh, profile, filter, &args.coverage.coverage_output, verbose)
+        run_tests_with_coverage(sh, &nextest, &args.coverage.coverage_output, verbose)
     } else {
-        run_nextest(sh, profile, filter, verbose).map(|()| {
-            eprintln!("Integration tests passed.");
+        run_nextest(sh, &nextest, verbose).map(|()| {
+            eprintln!("The tests of {} passed.", lane.words());
         })
     };
 
     // Copy nextest results if requested (even on test failure, so CI can upload them).
     if let Some(ref output) = args.results_output {
-        copy_nextest_results(output)?;
+        copy_nextest_results(lane, output)?;
     }
 
     test_result
@@ -278,44 +293,56 @@ fn require_nextest(sh: &Shell) -> Result<()> {
         )
 }
 
-/// Run cargo nextest with optional filter expression.
-fn run_nextest(
-    sh: &Shell,
-    profile: BuildProfile,
-    filter_expr: Option<&str>,
-    verbose: bool,
-) -> Result<()> {
+/// A nextest run of a lane.
+struct Nextest<'a> {
+    /// The cargo profile the tests are built with.
+    build_profile: BuildProfile,
+    /// The lane, whose nextest profile picks the tests.
+    lane: Lane,
+    /// The part of the lane's tests to run, as nextest's `--partition` takes it.
+    partition: Option<&'a str>,
+}
+
+impl Nextest<'_> {
+    /// The arguments of `cargo nextest run`.
+    fn args(&self) -> Vec<&str> {
+        let mut args = vec![
+            "nextest",
+            "run",
+            "--workspace",
+            "--no-fail-fast",
+            "--profile",
+            self.lane.nextest_profile(),
+        ];
+        if self.build_profile == BuildProfile::Release {
+            args.push("--release");
+        }
+        if let Some(partition) = self.partition {
+            args.push("--partition");
+            args.push(partition);
+        }
+        args
+    }
+}
+
+/// Runs cargo nextest.
+fn run_nextest(sh: &Shell, nextest: &Nextest<'_>, verbose: bool) -> Result<()> {
     require_nextest(sh)?;
-    let mut args = vec!["nextest", "run", "--workspace", "--no-fail-fast"];
-
-    if profile == BuildProfile::Release {
-        args.push("--release");
-    }
-
-    // Add filter expression if provided
-    let filter_value = filter_expr.map(str::to_string);
-    if let Some(ref value) = filter_value {
-        args.push("-E");
-        args.push(value);
-    }
-
+    let args = nextest.args();
     if verbose {
         eprintln!("Running: cargo {}", args.join(" "));
     }
-
     cmd!(sh, "cargo {args...}").run().context("Tests failed")?;
     Ok(())
 }
 
 /// Copy the nextest `JUnit` XML results to the given output path.
-fn copy_nextest_results(output: &Path) -> Result<()> {
+fn copy_nextest_results(lane: Lane, output: &Path) -> Result<()> {
     let workspace_root = find_workspace_root()?;
-    // nextest writes the results under the profile it ran, which `NEXTEST_PROFILE` picks
-    // (CI runs `ci`).
-    let profile = std::env::var("NEXTEST_PROFILE").unwrap_or_else(|_| "default".to_owned());
+    // nextest writes the results under the profile it ran.
     let source = workspace_root
         .join("target/nextest")
-        .join(profile)
+        .join(lane.nextest_profile())
         .join("test-results.xml");
     std::fs::copy(&source, output).with_context(|| {
         format!(
@@ -339,14 +366,16 @@ fn copy_nextest_results(output: &Path) -> Result<()> {
 /// Requires `cargo-llvm-cov` to be installed: `cargo install cargo-llvm-cov`
 fn run_tests_with_coverage(
     sh: &Shell,
-    profile: BuildProfile,
-    filter_expr: Option<&str>,
+    nextest: &Nextest<'_>,
     output: &Path,
     verbose: bool,
 ) -> Result<()> {
     let output_path = output.display().to_string();
 
-    eprintln!("Running tests with coverage ({profile:?} profile)...");
+    eprintln!(
+        "Running tests with coverage ({:?} profile)...",
+        nextest.build_profile
+    );
     eprintln!("Coverage output: {output_path}");
 
     // Set up llvm-cov environment
@@ -373,20 +402,8 @@ fn run_tests_with_coverage(
         .run()
         .context("Failed to clean coverage data")?;
 
-    // Build cargo nextest args
     require_nextest(sh)?;
-    let mut test_args = vec!["nextest", "run", "--workspace", "--no-fail-fast"];
-    if profile == BuildProfile::Release {
-        test_args.push("--release");
-    }
-
-    // Add filter expression if provided
-    let filter_value = filter_expr.map(str::to_string);
-    if let Some(ref value) = filter_value {
-        test_args.push("-E");
-        test_args.push(value);
-    }
-
+    let test_args = nextest.args();
     if verbose {
         eprintln!("Running: cargo {}", test_args.join(" "));
     }
@@ -421,4 +438,28 @@ fn run_tests_with_coverage(
 
     eprintln!("Tests with coverage completed successfully.");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    /// The `default-filter` of a profile of `.config/nextest.toml`.
+    fn default_filter(config: &str, profile: &str) -> String {
+        let section = format!("[profile.{profile}]");
+        let after = config.split_once(&section).unwrap().1;
+        let line = after
+            .lines()
+            .find_map(|line| line.strip_prefix("default-filter = "))
+            .unwrap();
+        line.trim_matches('\'').to_owned()
+    }
+
+    /// nextest has no named filters, so the slow lane's is written twice; the quick lane
+    /// is to be every test the slow lane leaves out, and no other.
+    #[test]
+    fn the_quick_lane_is_every_test_the_slow_lane_leaves_out() {
+        let config = include_str!("../../.config/nextest.toml");
+        let slow = default_filter(config, "slow");
+        assert_eq!(default_filter(config, "default"), format!("not ({slow})"));
+        assert_eq!(default_filter(config, "full"), "all()");
+    }
 }

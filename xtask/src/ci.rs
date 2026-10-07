@@ -4,23 +4,22 @@
 //!
 //! ## Quick workflow (`cargo xtask ci quick`)
 //!
-//! Fast inner-loop checks for rapid iteration:
+//! What CI runs on every push, but the slow lane:
 //! 1. **Format check** - Fast, catches formatting issues early
 //! 2. **Lint check** - Clippy, which also proves the code compiles
-//! 3. **Unit tests** - Every test outside the `cash` package
+//! 3. **Documentation** - `cargo doc`, which fails on a link to something that is not there
+//! 4. **Quick lane** - Every crate's own tests (`.config/nextest.toml`)
+//! 5. **Doc tests** - The examples in documentation comments, which nextest does not run
+//! 6. **Vendored crates' tests** - reedline's and crossterm's own, outside the workspace
 //!
 //! ## Full workflow (`cargo xtask ci full`)
 //!
-//! Everything CI checks on a push, and what should pass before one:
-//! 1. **Format check** and **Lint check**, as above
-//! 2. **All tests** - The whole workspace, including the tests that drive cash.exe
-//! 3. **Doc tests** - The examples in documentation comments, which nextest does not run
-//! 4. **Documentation** - `cargo doc`, which fails on a link to something that is not there
-//! 5. **Vendored crates' tests** - reedline's and crossterm's own, outside the workspace
+//! The same, with both lanes of tests in one run: what should pass before a release.
 //!
 //! The ordering is intentional: fast checks run first to provide quick feedback,
-//! with slower comprehensive tests running last. CI runs `ci full` and then lints
-//! with every feature enabled (.github/workflows/ci.yml).
+//! with slower comprehensive tests running last. On every push, CI runs `ci quick`,
+//! lints with every feature enabled, and runs the slow lane in four parts on runners of
+//! their own (`cargo xtask test slow --partition hash:N/4`, .github/workflows/ci.yml).
 //!
 //! Both workflows run their tests through cargo-nextest (`cargo binstall cargo-nextest`),
 //! which runs each test in a process of its own.
@@ -29,9 +28,7 @@ use anyhow::Result;
 use clap::Parser;
 
 use crate::check::{self, CheckCommand, LintArgs};
-use crate::test::{
-    self, BinaryArgs, IntegrationTestArgs, TestCommand, TestSubcommand, UnitTestArgs,
-};
+use crate::test::{self, BinaryArgs, Lane, LaneArgs};
 
 /// Type alias for a named step in a CI workflow.
 type Step<'a> = (&'a str, Box<dyn Fn() -> Result<()> + 'a>);
@@ -39,14 +36,15 @@ type Step<'a> = (&'a str, Box<dyn Fn() -> Result<()> + 'a>);
 /// Run CI workflows.
 #[derive(Parser)]
 pub enum CiCommand {
-    /// Run quick inner-loop checks: fmt, lint, unit tests.
+    /// Run what CI runs on every push but the slow lane: fmt, lint, the documentation,
+    /// the quick lane's tests, doc tests, the vendored crates' tests.
     ///
     /// Use this for rapid iteration during development.
     Quick(QuickArgs),
 
-    /// Run the full workflow: fmt, lint, every test, doc tests, the documentation.
+    /// Run the full workflow: the quick one with every test, the slow lane's too.
     ///
-    /// This is what CI runs on every push.
+    /// This is what should pass before a release.
     Full(FullArgs),
 }
 
@@ -69,38 +67,28 @@ pub struct FullArgs {
 /// Run a CI workflow command.
 pub fn run(cmd: &CiCommand, verbose: bool) -> Result<()> {
     match cmd {
-        CiCommand::Quick(args) => run_quick(args, verbose),
-        CiCommand::Full(args) => run_full(args, verbose),
+        CiCommand::Quick(args) => {
+            eprintln!("Running quick checks...\n");
+            run_steps(
+                &steps(Lane::Quick, verbose),
+                args.continue_on_error,
+                "Quick checks",
+            )
+        }
+        CiCommand::Full(args) => {
+            eprintln!("Running full checks...\n");
+            run_steps(
+                &steps(Lane::All, verbose),
+                args.continue_on_error,
+                "Full checks",
+            )
+        }
     }
 }
 
-/// Create a `TestCommand` for unit tests.
-fn make_unit_test_command() -> TestCommand {
-    TestCommand {
-        binary_args: BinaryArgs {
-            profile: crate::common::BuildProfile::Debug,
-            debug: false,
-            release: false,
-        },
-        subcommand: TestSubcommand::Unit(UnitTestArgs::default()),
-    }
-}
-
-/// Create a `TestCommand` for integration tests.
-fn make_integration_test_command() -> TestCommand {
-    TestCommand {
-        binary_args: BinaryArgs {
-            profile: crate::common::BuildProfile::Debug,
-            debug: false,
-            release: false,
-        },
-        subcommand: TestSubcommand::Integration(IntegrationTestArgs::default()),
-    }
-}
-
-/// The checks every workflow starts with, fastest first. Clippy compiles everything
-/// `cargo check` would, so a separate build check would only repeat it.
-fn static_checks(verbose: bool) -> Vec<Step<'static>> {
+/// A workflow's steps, fastest first, with the tests of `lane`. Clippy compiles
+/// everything `cargo check` would, so a separate build check would only repeat it.
+fn steps(lane: Lane, verbose: bool) -> Vec<Step<'static>> {
     vec![
         (
             "Format check",
@@ -114,39 +102,30 @@ fn static_checks(verbose: bool) -> Vec<Step<'static>> {
             "Lint check",
             Box::new(move || check::run(&CheckCommand::Lint(LintArgs::default()), verbose)),
         ),
+        ("Documentation", Box::new(move || test::run_docs(verbose))),
+        (
+            match lane {
+                Lane::Quick => "Quick lane's tests",
+                Lane::Slow => "Slow lane's tests",
+                Lane::All => "All tests",
+            },
+            Box::new(move || {
+                let sh = xshell::Shell::new()?;
+                test::run_lane(
+                    &sh,
+                    &BinaryArgs::default(),
+                    lane,
+                    &LaneArgs::default(),
+                    verbose,
+                )
+            }),
+        ),
+        ("Doc tests", Box::new(move || test::run_doc_tests(verbose))),
+        (
+            "Vendored crates' tests",
+            Box::new(move || test::run_vendored_tests(verbose)),
+        ),
     ]
-}
-
-/// Run quick inner-loop checks.
-fn run_quick(args: &QuickArgs, verbose: bool) -> Result<()> {
-    eprintln!("Running quick checks...\n");
-
-    let mut steps = static_checks(verbose);
-    steps.push((
-        "Unit tests",
-        Box::new(move || test::run(&make_unit_test_command(), verbose)),
-    ));
-
-    run_steps(&steps, args.continue_on_error, "Quick checks")
-}
-
-/// Run the full workflow, as CI does.
-fn run_full(args: &FullArgs, verbose: bool) -> Result<()> {
-    eprintln!("Running full checks...\n");
-
-    let mut steps = static_checks(verbose);
-    steps.push((
-        "All tests",
-        Box::new(move || test::run(&make_integration_test_command(), verbose)),
-    ));
-    steps.push(("Doc tests", Box::new(move || test::run_doc_tests(verbose))));
-    steps.push(("Documentation", Box::new(move || test::run_docs(verbose))));
-    steps.push((
-        "Vendored crates' tests",
-        Box::new(move || test::run_vendored_tests(verbose)),
-    ));
-
-    run_steps(&steps, args.continue_on_error, "Full checks")
 }
 
 /// Run a series of steps, optionally continuing on error.

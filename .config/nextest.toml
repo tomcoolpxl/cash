@@ -1,18 +1,36 @@
+# Two lanes. The default profile is the quick one: every crate's own tests, which CI runs
+# on every push beside the lints. The slow profile is the rest, most of the test time: the
+# tests that drive cash.exe (the `cash` package's, but for cash.exe's own unit tests) and
+# sed's ported suite. CI runs it on every push too, in four parts on runners of their own,
+# and before a release. The full profile is both, as one run.
+#
+# A filter given on the command line only narrows the profile's: a test of the slow lane
+# runs with `--profile slow` or `--profile full`.
+#
+# The slow lane's filter is written twice, here negated and in `profile.slow`, as nextest
+# has no named filters; the two are to change together (xtask's test checks it).
 [profile.default]
+default-filter = 'not ((package(cash) and not binary_id(cash::bin/cash)) or binary_id(cash-sed::tests))'
 retries = 3
 status-level = "slow"
 slow-timeout = { period = "5s", terminate-after = 3, grace-period = "2s" }
 fail-fast = false
 
+# Each profile keeps its results in target/nextest/<profile>, where
+# .github/scripts/report-flaky.ps1 lists the tests that passed only on a retry.
 [profile.default.junit]
 path = "test-results.xml"
 
-# CI's profile (NEXTEST_PROFILE=ci in the workflows): the default profile's retries,
-# groups and timeouts, which it inherits, with its results in target/nextest/ci, where
-# .github/scripts/report-flaky.ps1 lists the tests that passed only on a retry.
-[profile.ci]
+[profile.slow]
+default-filter = '(package(cash) and not binary_id(cash::bin/cash)) or binary_id(cash-sed::tests)'
 
-[profile.ci.junit]
+[profile.slow.junit]
+path = "test-results.xml"
+
+[profile.full]
+default-filter = 'all()'
+
+[profile.full.junit]
 path = "test-results.xml"
 
 # nextest runs each test in a process of its own, so a lock inside a test process

@@ -1,10 +1,23 @@
 name: CI
 
+# Two lanes (.config/nextest.toml): the lints and every crate's own tests in one job, and
+# the slow lane's tests (the ones that drive cash.exe, and sed's ported suite) in four
+# parts at once, each on a runner of its own.
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  # On demand: from the Actions tab, or `gh workflow run ci.yml`.
+  workflow_dispatch:
+  # Before a release: release.yml runs both lanes on the commit it releases.
+  workflow_call:
+    inputs:
+      ref:
+        description: 'The tag or commit to check; empty for the one the run started from'
+        type: string
+        required: false
+        default: ''
 
 # Nothing here writes to the repository.
 permissions:
@@ -12,19 +25,18 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
-  # The profile whose results the flaky-test report below reads (.config/nextest.toml).
-  NEXTEST_PROFILE: ci
 
 # Third-party actions are pinned to a commit, with the version it was in a comment;
 # Dependabot proposes the updates (.github/dependabot.yml).
 jobs:
-  test:
-    name: Build, Test & Lint (Windows)
+  quick:
+    name: Lint & quick tests (Windows)
     runs-on: windows-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.ref }}
           persist-credentials: false
 
       # The version rust-toolchain.toml names, with the components it lists.
@@ -43,11 +55,11 @@ jobs:
       - name: RustSec advisories
         run: cargo deny check advisories
 
-      # The same command as a local run: format check, clippy, every test (each in a
-      # process of its own, through nextest), the doc tests, the documentation and the
-      # vendored crates' own tests.
+      # The same command as a local run: format check, clippy, the documentation, the
+      # quick lane's tests (each in a process of its own, through nextest), the doc tests
+      # and the vendored crates' own tests.
       - name: Check and test
-        run: cargo xtask ci full
+        run: cargo xtask ci quick
 
       # Local builds use the default features only, so that one build serves check,
       # clippy and the tests; the other features are linted here.
@@ -59,4 +71,42 @@ jobs:
       - name: Report flaky tests
         if: always()
         shell: pwsh
-        run: ./.github/scripts/report-flaky.ps1 -Results target/nextest/ci/test-results.xml
+        run: ./.github/scripts/report-flaky.ps1 -Results target/nextest/default/test-results.xml
+
+  slow:
+    name: Slow tests ${{ matrix.part }}/4 (Windows)
+    runs-on: windows-latest
+    strategy:
+      # Each part reports its own failures.
+      fail-fast: false
+      matrix:
+        part: [1, 2, 3, 4]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+
+      - name: Install Rust toolchain
+        run: rustup toolchain install --profile minimal
+
+      # The four parts build the same tests, and share one cache, which the first saves.
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ matrix.part == 1 }}
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
+        with:
+          tool: cargo-nextest
+
+      # nextest's hash partition: each test always falls in the same part.
+      - name: Slow lane's tests, part ${{ matrix.part }} of 4
+        run: cargo xtask test slow --partition hash:${{ matrix.part }}/4
+
+      - name: Report flaky tests
+        if: always()
+        shell: pwsh
+        run: ./.github/scripts/report-flaky.ps1 -Results target/nextest/slow/test-results.xml
