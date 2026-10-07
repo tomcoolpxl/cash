@@ -189,7 +189,6 @@ pub(super) fn open(
             item.packed = Some(len);
             item.modified =
                 (header.mtime != 0).then(|| header.mtime * 10_000_000 + UNIX_EPOCH_TICKS);
-            item.time_digits = 0;
             item.host_os = Some(host_os(header.os));
             (
                 None,

@@ -105,8 +105,11 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
                 continue;
             }
         };
-        if opened.tail > 0 || opened.type_warning.is_some() {
+        if !opened.warnings().is_empty() || opened.type_warning.is_some() {
             warnings += 1;
+        }
+        if !opened.error_flags.is_empty() {
+            errors += 1;
         }
         archives += 1;
         if options.headers {
@@ -222,15 +225,15 @@ fn technical<SE: cash_core::ShellExtensions>(
             Prop::Path => item.path.replace('\\', "/"),
             Prop::Size => item.size.map(|v| v.to_string()).unwrap_or_default(),
             Prop::PackedSize => item.packed.map(|v| v.to_string()).unwrap_or_default(),
-            Prop::Modified => item
-                .modified
-                .map_or_else(String::new, |t| text::time(&env.zone, t, item.time_digits)),
-            Prop::Created => item
-                .created
-                .map_or_else(String::new, |t| text::time(&env.zone, t, item.time_digits)),
-            Prop::Accessed => item
-                .accessed
-                .map_or_else(String::new, |t| text::time(&env.zone, t, item.time_digits)),
+            Prop::Modified => item.modified.map_or_else(String::new, |t| {
+                text::time_ns(&env.zone, t, item.time_extra[0], item.time_digits[0])
+            }),
+            Prop::Created => item.created.map_or_else(String::new, |t| {
+                text::time_ns(&env.zone, t, item.time_extra[1], item.time_digits[1])
+            }),
+            Prop::Accessed => item.accessed.map_or_else(String::new, |t| {
+                text::time_ns(&env.zone, t, item.time_extra[2], item.time_digits[2])
+            }),
             Prop::Anti => if item.anti { "+" } else { "-" }.to_owned(),
             Prop::Attributes => text::attributes_long(item.attrib.unwrap_or(0), item.is_dir),
             Prop::Crc => item.crc.map(|c| format!("{c:08X}")).unwrap_or_default(),
@@ -238,6 +241,12 @@ fn technical<SE: cash_core::ShellExtensions>(
             Prop::Method => item.method.clone().unwrap_or_default(),
             Prop::Block => item.block.map(|b| b.to_string()).unwrap_or_default(),
             Prop::HostOs => item.host_os.clone().unwrap_or_default(),
+            other => item
+                .extra
+                .iter()
+                .find(|(prop, _)| *prop == *other)
+                .map(|(_, value)| value.clone())
+                .unwrap_or_default(),
         };
         let _ = writeln!(out, "{} = {value}", prop.name());
     }

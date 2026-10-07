@@ -936,3 +936,883 @@ Files: 0
 Size:       0
 Compressed: 0
 rc=2
+== tar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 5632 bytes (6 KiB)
+
+Listing archive: gnu.tar
+
+--
+Path = gnu.tar
+Type = tar
+Physical Size = 5632
+Headers Size = 4096
+Code Page = UTF-8
+Characteristics = GNU ASCII
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00 D....            0            0  d
+2026-10-07 08:00:00 .....            6          512  d/a.txt
+2026-10-07 08:00:00 .....            5          512  d/a_long_name_that_goes_on_and_on_past_the_hundred_bytes_a_ustar_name_field_holds_in_one_header.txt
+2026-10-07 08:00:00 .....            0            0  d/empty
+2026-10-07 08:00:00 D....            0            0  d/sub
+2026-10-07 08:00:00 .....           10          512  d/sub/b.txt
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00                 21         1536  4 files, 2 folders
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 5632 bytes (6 KiB)
+
+Listing archive: gnu.tar
+
+--
+Path = gnu.tar
+Type = tar
+Physical Size = 5632
+Headers Size = 4096
+Code Page = UTF-8
+Characteristics = GNU ASCII
+
+----------
+Path = d
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2026-10-07 08:00:00
+Created = 
+Accessed = 
+Mode = drwxr-xr-x
+User = user
+Group = group
+User ID = 1000
+Group ID = 1000
+Symbolic Link = 
+Hard Link = 
+Characteristics = 5 GNU ASCII
+Comment = 
+Device Major = 
+Device Minor = 
+
+Path = d/a.txt
+Folder = -
+Size = 6
+Packed Size = 512
+Modified = 2026-10-07 08:00:00
+Created = 
+Accessed = 
+Mode = -rw-r--r--
+User = user
+Group = group
+User ID = 1000
+Group ID = 1000
+Symbolic Link = 
+Hard Link = 
+Characteristics = 0 GNU ASCII
+Comment = 
+Device Major = 
+Device Minor = 
+
+Path = d/a_long_name_that_goes_on_and_on_past_the_hundred_bytes_a_ustar_name_field_holds_in_one_header.txt
+Folder = -
+Size = 5
+Packed Size = 512
+Modified = 2026-10-07 08:00:00
+Created = 
+Accessed = 
+Mode = -rw-r--r--
+User = user
+Group = group
+User ID = 1000
+Group ID = 1000
+Symbolic Link = 
+Hard Link = 
+Characteristics = 0 GNU ASCII
+Comment = 
+Device Major = 
+Device Minor = 
+
+Path = d/empty
+Folder = -
+Size = 0
+Packed Size = 0
+Modified = 2026-10-07 08:00:00
+Created = 
+Accessed = 
+Mode = -rw-r--r--
+User = user
+Group = group
+User ID = 1000
+Group ID = 1000
+Symbolic Link = 
+Hard Link = 
+Characteristics = 0 GNU ASCII
+Comment = 
+Device Major = 
+Device Minor = 
+
+Path = d/sub
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2026-10-07 08:00:00
+Created = 
+Accessed = 
+Mode = drwxr-xr-x
+User = user
+Group = group
+User ID = 1000
+Group ID = 1000
+Symbolic Link = 
+Hard Link = 
+Characteristics = 5 GNU ASCII
+Comment = 
+Device Major = 
+Device Minor = 
+
+Path = d/sub/b.txt
+Folder = -
+Size = 10
+Packed Size = 512
+Modified = 2026-10-07 08:00:00
+Created = 
+Accessed = 
+Mode = -rw-r--r--
+User = user
+Group = group
+User ID = 1000
+Group ID = 1000
+Symbolic Link = 
+Hard Link = 
+Characteristics = 0 GNU ASCII
+Comment = 
+Device Major = 
+Device Minor = 
+
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 5632 bytes (6 KiB)
+
+Listing archive: ustar.tar
+
+--
+Path = ustar.tar
+Type = tar
+Physical Size = 5632
+Headers Size = 4096
+Code Page = UTF-8
+Characteristics = POSIX ASCII
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00 D....            0            0  d
+2026-10-07 08:00:00 .....            6          512  d/a.txt
+2026-10-07 08:00:00 .....            5          512  d/a_long_name_that_goes_on_and_on_past_the_hundred_bytes_a_ustar_name_field_holds_in_one_header.txt
+2026-10-07 08:00:00 .....            0            0  d/empty
+2026-10-07 08:00:00 D....            0            0  d/sub
+2026-10-07 08:00:00 .....           10          512  d/sub/b.txt
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00                 21         1536  4 files, 2 folders
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 5632 bytes (6 KiB)
+
+Listing archive: ustar.tar
+
+--
+Path = ustar.tar
+Type = tar
+Physical Size = 5632
+Headers Size = 4096
+Code Page = UTF-8
+Characteristics = POSIX ASCII
+
+----------
+Path = d
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2026-10-07 08:00:00
+Created = 
+Accessed = 
+Mode = drwxr-xr-x
+User = user
+Group = group
+User ID = 1000
+Group ID = 1000
+Symbolic Link = 
+Hard Link = 
+Characteristics = 5 POSIX ASCII
+Comment = 
+Device Major = 
+Device Minor = 
+
+Path = d/a.txt
+Folder = -
+Size = 6
+Packed Size = 512
+Modified = 2026-10-07 08:00:00
+Created = 
+Accessed = 
+Mode = -rw-r--r--
+User = user
+Group = group
+User ID = 1000
+Group ID = 1000
+Symbolic Link = 
+Hard Link = 
+Characteristics = 0 POSIX ASCII
+Comment = 
+Device Major = 
+Device Minor = 
+
+Path = d/a_long_name_that_goes_on_and_on_past_the_hundred_bytes_a_ustar_name_field_holds_in_one_header.txt
+Folder = -
+Size = 5
+Packed Size = 512
+Modified = 2026-10-07 08:00:00
+Created = 
+Accessed = 
+Mode = -rw-r--r--
+User = user
+Group = group
+User ID = 1000
+Group ID = 1000
+Symbolic Link = 
+Hard Link = 
+Characteristics = 0 POSIX ASCII
+Comment = 
+Device Major = 
+Device Minor = 
+
+Path = d/empty
+Folder = -
+Size = 0
+Packed Size = 0
+Modified = 2026-10-07 08:00:00
+Created = 
+Accessed = 
+Mode = -rw-r--r--
+User = user
+Group = group
+User ID = 1000
+Group ID = 1000
+Symbolic Link = 
+Hard Link = 
+Characteristics = 0 POSIX ASCII
+Comment = 
+Device Major = 
+Device Minor = 
+
+Path = d/sub
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2026-10-07 08:00:00
+Created = 
+Accessed = 
+Mode = drwxr-xr-x
+User = user
+Group = group
+User ID = 1000
+Group ID = 1000
+Symbolic Link = 
+Hard Link = 
+Characteristics = 5 POSIX ASCII
+Comment = 
+Device Major = 
+Device Minor = 
+
+Path = d/sub/b.txt
+Folder = -
+Size = 10
+Packed Size = 512
+Modified = 2026-10-07 08:00:00
+Created = 
+Accessed = 
+Mode = -rw-r--r--
+User = user
+Group = group
+User ID = 1000
+Group ID = 1000
+Symbolic Link = 
+Hard Link = 
+Characteristics = 0 POSIX ASCII
+Comment = 
+Device Major = 
+Device Minor = 
+
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 11776 bytes (12 KiB)
+
+Listing archive: posix.tar
+
+--
+Path = posix.tar
+Type = tar
+Physical Size = 11776
+Headers Size = 10240
+Code Page = UTF-8
+Characteristics = POSIX PAX atime ctime ASCII
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00 D....            0            0  d
+2026-10-07 08:00:00 .....            6          512  d/a.txt
+2026-10-07 08:00:00 .....            5          512  d/a_long_name_that_goes_on_and_on_past_the_hundred_bytes_a_ustar_name_field_holds_in_one_header.txt
+2026-10-07 08:00:00 .....            0            0  d/empty
+2026-10-07 08:00:00 D....            0            0  d/sub
+2026-10-07 08:00:00 .....           10          512  d/sub/b.txt
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00                 21         1536  4 files, 2 folders
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 11776 bytes (12 KiB)
+
+Listing archive: posix.tar
+
+--
+Path = posix.tar
+Type = tar
+Physical Size = 11776
+Headers Size = 10240
+Code Page = UTF-8
+Characteristics = POSIX PAX atime ctime ASCII
+
+----------
+Path = d
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2026-10-07 08:00:00
+Created = 2026-10-07 12:09:27.7038594
+Accessed = 2026-10-07 12:09:27.8078871
+Mode = drwxr-xr-x
+User = user
+Group = group
+User ID = 1000
+Group ID = 1000
+Symbolic Link = 
+Hard Link = 
+Characteristics = 5 POSIX ASCII PAX atime ctime
+Comment = ./PaxHeaders/d_
+Device Major = 
+Device Minor = 
+
+Path = d/a.txt
+Folder = -
+Size = 6
+Packed Size = 512
+Modified = 2026-10-07 08:00:00
+Created = 2026-10-07 12:09:27.7028601
+Accessed = 2026-10-07 12:09:27.8776916
+Mode = -rw-r--r--
+User = user
+Group = group
+User ID = 1000
+Group ID = 1000
+Symbolic Link = 
+Hard Link = 
+Characteristics = 0 POSIX ASCII PAX atime ctime
+Comment = d/PaxHeaders/a.txt_
+Device Major = 
+Device Minor = 
+
+Path = d/a_long_name_that_goes_on_and_on_past_the_hundred_bytes_a_ustar_name_field_holds_in_one_header.txt
+Folder = -
+Size = 5
+Packed Size = 512
+Modified = 2026-10-07 08:00:00
+Created = 2026-10-07 12:09:27.7038594
+Accessed = 2026-10-07 12:09:27.8776916
+Mode = -rw-r--r--
+User = user
+Group = group
+User ID = 1000
+Group ID = 1000
+Symbolic Link = 
+Hard Link = 
+Characteristics = 0 POSIX ASCII PAX atime ctime
+Comment = d/PaxHeaders/a_long_name_that_goes_on_and_on_past_the_hundred_bytes_a_ustar_name_field_holds_in_one__
+Device Major = 
+Device Minor = 
+
+Path = d/empty
+Folder = -
+Size = 0
+Packed Size = 0
+Modified = 2026-10-07 08:00:00
+Created = 2026-10-07 12:09:27.7038594
+Accessed = 2026-10-07 08:00:00
+Mode = -rw-r--r--
+User = user
+Group = group
+User ID = 1000
+Group ID = 1000
+Symbolic Link = 
+Hard Link = 
+Characteristics = 0 POSIX ASCII PAX atime ctime
+Comment = d/PaxHeaders/empty_
+Device Major = 
+Device Minor = 
+
+Path = d/sub
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2026-10-07 08:00:00
+Created = 2026-10-07 12:09:27.7038594
+Accessed = 2026-10-07 12:09:27.8098915
+Mode = drwxr-xr-x
+User = user
+Group = group
+User ID = 1000
+Group ID = 1000
+Symbolic Link = 
+Hard Link = 
+Characteristics = 5 POSIX ASCII PAX atime ctime
+Comment = d/PaxHeaders/sub_
+Device Major = 
+Device Minor = 
+
+Path = d/sub/b.txt
+Folder = -
+Size = 10
+Packed Size = 512
+Modified = 2026-10-07 08:00:00
+Created = 2026-10-07 12:09:27.7028601
+Accessed = 2026-10-07 12:09:27.8786937
+Mode = -rw-r--r--
+User = user
+Group = group
+User ID = 1000
+Group ID = 1000
+Symbolic Link = 
+Hard Link = 
+Characteristics = 0 POSIX ASCII PAX atime ctime
+Comment = d/sub/PaxHeaders/b.txt_
+Device Major = 
+Device Minor = 
+
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 5632 bytes (6 KiB)
+
+Listing archive: v7.tar
+
+--
+Path = v7.tar
+Type = tar
+Physical Size = 5632
+Headers Size = 4096
+Code Page = UTF-8
+Characteristics = ASCII
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00 D....            0            0  d
+2026-10-07 08:00:00 .....            6          512  d/a.txt
+2026-10-07 08:00:00 .....            5          512  d/a_long_name_that_goes_on_and_on_past_the_hundred_bytes_a_ustar_name_field_holds_in_one_header.txt
+2026-10-07 08:00:00 .....            0            0  d/empty
+2026-10-07 08:00:00 D....            0            0  d/sub
+2026-10-07 08:00:00 .....           10          512  d/sub/b.txt
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00                 21         1536  4 files, 2 folders
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 5632 bytes (6 KiB)
+
+Listing archive: v7.tar
+
+--
+Path = v7.tar
+Type = tar
+Physical Size = 5632
+Headers Size = 4096
+Code Page = UTF-8
+Characteristics = ASCII
+
+----------
+Path = d
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2026-10-07 08:00:00
+Created = 
+Accessed = 
+Mode = drwxr-xr-x
+User = 
+Group = 
+User ID = 1000
+Group ID = 1000
+Symbolic Link = 
+Hard Link = 
+Characteristics = 5 [00][00][00][00][00][00][00][00] ASCII
+Comment = 
+Device Major = 
+Device Minor = 
+
+Path = d/a.txt
+Folder = -
+Size = 6
+Packed Size = 512
+Modified = 2026-10-07 08:00:00
+Created = 
+Accessed = 
+Mode = -rw-r--r--
+User = 
+Group = 
+User ID = 1000
+Group ID = 1000
+Symbolic Link = 
+Hard Link = 
+Characteristics = [00] [00][00][00][00][00][00][00][00] ASCII
+Comment = 
+Device Major = 
+Device Minor = 
+
+Path = d/a_long_name_that_goes_on_and_on_past_the_hundred_bytes_a_ustar_name_field_holds_in_one_header.txt
+Folder = -
+Size = 5
+Packed Size = 512
+Modified = 2026-10-07 08:00:00
+Created = 
+Accessed = 
+Mode = -rw-r--r--
+User = 
+Group = 
+User ID = 1000
+Group ID = 1000
+Symbolic Link = 
+Hard Link = 
+Characteristics = [00] [00][00][00][00][00][00][00][00] ASCII
+Comment = 
+Device Major = 
+Device Minor = 
+
+Path = d/empty
+Folder = -
+Size = 0
+Packed Size = 0
+Modified = 2026-10-07 08:00:00
+Created = 
+Accessed = 
+Mode = -rw-r--r--
+User = 
+Group = 
+User ID = 1000
+Group ID = 1000
+Symbolic Link = 
+Hard Link = 
+Characteristics = [00] [00][00][00][00][00][00][00][00] ASCII
+Comment = 
+Device Major = 
+Device Minor = 
+
+Path = d/sub
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2026-10-07 08:00:00
+Created = 
+Accessed = 
+Mode = drwxr-xr-x
+User = 
+Group = 
+User ID = 1000
+Group ID = 1000
+Symbolic Link = 
+Hard Link = 
+Characteristics = 5 [00][00][00][00][00][00][00][00] ASCII
+Comment = 
+Device Major = 
+Device Minor = 
+
+Path = d/sub/b.txt
+Folder = -
+Size = 10
+Packed Size = 512
+Modified = 2026-10-07 08:00:00
+Created = 
+Accessed = 
+Mode = -rw-r--r--
+User = 
+Group = 
+User ID = 1000
+Group ID = 1000
+Symbolic Link = 
+Hard Link = 
+Characteristics = [00] [00][00][00][00][00][00][00][00] ASCII
+Comment = 
+Device Major = 
+Device Minor = 
+
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 5632 bytes (6 KiB)
+
+Testing archive: gnu.tar
+--
+Path = gnu.tar
+Type = tar
+Physical Size = 5632
+Headers Size = 4096
+Code Page = UTF-8
+Characteristics = GNU ASCII
+
+Everything is Ok
+
+Folders: 2
+Files: 4
+Size:       21
+Compressed: 5632
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 11776 bytes (12 KiB)
+
+Testing archive: posix.tar
+--
+Path = posix.tar
+Type = tar
+Physical Size = 11776
+Headers Size = 10240
+Code Page = UTF-8
+Characteristics = POSIX PAX atime ctime ASCII
+
+T d/
+T d/a.txt
+T d/a_long_name_that_goes_on_and_on_past_the_hundred_bytes_a_ustar_name_field_holds_in_one_header.txt
+T d/empty
+T d/sub/
+T d/sub/b.txt
+Everything is Ok
+
+Folders: 2
+Files: 4
+Size:       21
+Compressed: 11776
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 5632 bytes (6 KiB)
+
+Extracting archive: gnu.tar
+--
+Path = gnu.tar
+Type = tar
+Physical Size = 5632
+Headers Size = 4096
+Code Page = UTF-8
+Characteristics = GNU ASCII
+
+Everything is Ok
+
+Folders: 2
+Files: 4
+Size:       21
+Compressed: 5632
+rc=0
+tar
+tar/d
+tar/d/a_long_name_that_goes_on_and_on_past_the_hundred_bytes_a_ustar_name_field_holds_in_one_header.txt
+tar/d/a.txt
+tar/d/empty
+tar/d/sub
+tar/d/sub/b.txt
+alpha
+beta beta
+rc=0
+2026-10-07 08:00:00 D....            0            0  d
+2026-10-07 08:00:00 .....            6          512  d/a.txt
+2026-10-07 08:00:00 .....            5          512  d/a_long_name_that_goes_on_and_on_past_the_hundred_bytes_a_ustar_name_field_holds_in_one_header.txt
+2026-10-07 08:00:00 .....            0            0  d/empty
+2026-10-07 08:00:00 D....            0            0  d/sub
+2026-10-07 08:00:00 .....           10          512  d/sub/b.txt
+rc=0
+2026-10-07 08:00:00 D....            0            0  d
+2026-10-07 08:00:00 .....            6          512  d/a.txt
+2026-10-07 08:00:00 .....            5          512  d/a_long_name_that_goes_on_and_on_past_the_hundred_bytes_a_ustar_name_field_holds_in_one_header.txt
+2026-10-07 08:00:00 .....            0            0  d/empty
+2026-10-07 08:00:00 D....            0            0  d/sub
+2026-10-07 08:00:00 .....           10          512  d/sub/b.txt
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 3000 bytes (3 KiB)
+
+Listing archive: cut.tar
+
+--
+Path = cut.tar
+Type = tar
+ERRORS:
+Unexpected end of archive
+WARNINGS:
+There are data after the end of archive
+Physical Size = 2560
+Tail Size = 440
+Headers Size = 1536
+Code Page = UTF-8
+Characteristics = GNU ASCII
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00 D....            0            0  d
+2026-10-07 08:00:00 .....            6          512  d/a.txt
+2026-10-07 08:00:00 .....            5          512  d/a_long_name_that_goes_on_and_on_past_the_hundred_bytes_a_ustar_name_field_holds_in_one_header.txt
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00                 11         1024  2 files, 1 folders
+
+Warnings: 1
+
+Errors: 1
+rc=2
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 3000 bytes (3 KiB)
+
+Testing archive: cut.tar
+
+ERRORS:
+Unexpected end of archive
+
+
+WARNINGS:
+There are data after the end of archive
+
+--
+Path = cut.tar
+Type = tar
+ERRORS:
+Unexpected end of archive
+WARNINGS:
+There are data after the end of archive
+Physical Size = 2560
+Tail Size = 440
+Headers Size = 1536
+Code Page = UTF-8
+Characteristics = GNU ASCII
+
+
+
+Archives with Errors: 1
+
+Warnings: 1
+
+Open Errors: 1
+
+rc=2
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1100 bytes (2 KiB)
+
+Testing archive: short.tar
+
+ERRORS:
+Unexpected end of archive
+
+--
+Path = short.tar
+Type = tar
+ERRORS:
+Unexpected end of archive
+Physical Size = 1536
+Headers Size = 1024
+Code Page = UTF-8
+Characteristics = GNU ASCII
+
+
+
+Archives with Errors: 1
+
+Open Errors: 1
+
+rc=2
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 5632 bytes (6 KiB)
+
+Listing archive: bad.tar
+
+--
+Path = bad.tar
+Type = tar
+Physical Size = 5632
+Headers Size = 4096
+Code Page = UTF-8
+Characteristics = GNU ASCII
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00 D....            0            0  d
+2026-10-07 08:00:00 .....            6          512  d/a.txt
+2026-10-07 08:00:00 .....            5          512  d/a_long_name_that_goes_on_and_on_past_the_hundred_bytes_a_ustar_name_field_holds_in_one_header.txt
+2026-10-07 08:00:00 .....            0            0  d/empty
+2026-10-07 08:00:00 D....            0            0  d/sub
+2026-10-07 08:00:00 .....           10          512  d/sub/b.txt
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00                 21         1536  4 files, 2 folders
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 5632 bytes (6 KiB)
+
+Testing archive: bad.tar
+--
+Path = bad.tar
+Type = tar
+Physical Size = 5632
+Headers Size = 4096
+Code Page = UTF-8
+Characteristics = GNU ASCII
+
+Everything is Ok
+
+Folders: 2
+Files: 4
+Size:       21
+Compressed: 5632
+rc=0

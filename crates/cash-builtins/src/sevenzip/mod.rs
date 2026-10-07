@@ -21,6 +21,7 @@ mod list;
 mod methods;
 mod scan;
 mod streams;
+mod tar7;
 mod text;
 mod update;
 

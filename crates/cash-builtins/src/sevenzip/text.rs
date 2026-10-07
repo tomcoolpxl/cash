@@ -49,6 +49,11 @@ fn unix_of(ticks: u64) -> (i64, u32) {
 /// A time as 7-Zip lists it: `YYYY-MM-DD HH:MM:SS` in the shell's zone, with `digits`
 /// of the fraction (7 in a technical listing); empty for the zero time.
 pub(super) fn time(zone: &Zone, ticks: u64, digits: usize) -> String {
+    time_ns(zone, ticks, 0, digits)
+}
+
+/// [`time`] with the nanoseconds past the ticks, for 8 and 9 digits.
+pub(super) fn time_ns(zone: &Zone, ticks: u64, extra: u8, digits: usize) -> String {
     if ticks == 0 {
         return String::new();
     }
@@ -58,9 +63,9 @@ pub(super) fn time(zone: &Zone, ticks: u64, digits: usize) -> String {
     };
     let mut text = zone.format(when, "%Y-%m-%d %H:%M:%S");
     if digits > 0 {
-        let fraction = format!("{rest:07}");
+        let fraction = format!("{rest:07}{extra:02}");
         text.push('.');
-        text.push_str(fraction.get(..digits.min(7)).unwrap_or_default());
+        text.push_str(fraction.get(..digits.min(9)).unwrap_or_default());
     }
     text
 }
@@ -106,6 +111,11 @@ pub(super) fn attributes_long(attrib: u32, is_dir: bool) -> String {
         text.push_str(&posix_mode(mode));
     }
     text
+}
+
+/// A Unix mode as 7-Zip shows a tar item's `Mode`: `drwxr-xr-x`.
+pub(super) fn posix_mode_string(mode: u32) -> String {
+    posix_mode(mode)
 }
 
 fn posix_mode(a: u32) -> String {

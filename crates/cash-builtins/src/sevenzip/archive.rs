@@ -72,6 +72,9 @@ impl Kind {
         if head.starts_with(&[b'7', b'z', 0xBC, 0xAF, 0x27, 0x1C]) {
             return Some(Self::SevenZ);
         }
+        if head.get(257..262) == Some(b"ustar") {
+            return Some(Self::Tar);
+        }
         [Self::Gzip, Self::Bzip2, Self::Xz, Self::Zstd]
             .into_iter()
             .find(|&kind| super::streams::signature(kind, head))
@@ -81,7 +84,13 @@ impl Kind {
     const fn readable(self) -> bool {
         matches!(
             self,
-            Self::SevenZ | Self::Gzip | Self::Bzip2 | Self::Xz | Self::Zstd | Self::Lzma
+            Self::SevenZ
+                | Self::Tar
+                | Self::Gzip
+                | Self::Bzip2
+                | Self::Xz
+                | Self::Zstd
+                | Self::Lzma
         )
     }
 }
@@ -102,6 +111,18 @@ pub(super) enum Prop {
     Method,
     Block,
     HostOs,
+    Folder,
+    Mode,
+    User,
+    Group,
+    UserId,
+    GroupId,
+    SymLink,
+    HardLink,
+    Characteristics,
+    Comment,
+    DeviceMajor,
+    DeviceMinor,
 }
 
 impl Prop {
@@ -120,6 +141,18 @@ impl Prop {
             Self::Method => "Method",
             Self::Block => "Block",
             Self::HostOs => "Host OS",
+            Self::Folder => "Folder",
+            Self::Mode => "Mode",
+            Self::User => "User",
+            Self::Group => "Group",
+            Self::UserId => "User ID",
+            Self::GroupId => "Group ID",
+            Self::SymLink => "Symbolic Link",
+            Self::HardLink => "Hard Link",
+            Self::Characteristics => "Characteristics",
+            Self::Comment => "Comment",
+            Self::DeviceMajor => "Device Major",
+            Self::DeviceMinor => "Device Minor",
         }
     }
 }
@@ -142,10 +175,14 @@ pub(super) struct Item {
     pub(super) encrypted: bool,
     pub(super) method: Option<String>,
     pub(super) block: Option<u64>,
-    /// The digits of a second a technical listing gives the times: 7 for FILETIME, 0
-    /// for Unix times.
-    pub(super) time_digits: usize,
+    /// The digits of a second a technical listing gives the modified, created and
+    /// accessed times: 7 for FILETIME, 0 for Unix times, a pax time's own.
+    pub(super) time_digits: [usize; 3],
+    /// The nanoseconds past each time's ticks, for 8 and 9 digits.
+    pub(super) time_extra: [u8; 3],
     pub(super) host_os: Option<String>,
+    /// The format's other properties, by name.
+    pub(super) extra: Vec<(Prop, String)>,
 }
 
 /// Why an archive did not open, in 7-Zip's kinds.
@@ -180,6 +217,10 @@ pub(super) struct Opened {
     pub(super) items: Vec<Item>,
     /// Bytes after the archive's end.
     pub(super) tail: u64,
+    /// What went wrong reading it, though it opened ("Unexpected end of archive").
+    pub(super) error_flags: Vec<&'static str>,
+    /// What looked wrong ("Headers Error").
+    pub(super) warning_flags: Vec<&'static str>,
     backend: Backend,
 }
 
@@ -187,6 +228,7 @@ pub(super) struct Opened {
 enum Backend {
     SevenZ(Box<ArchiveReader<File>>),
     Stream(super::streams::Stream),
+    Tar(super::tar7::Tar),
 }
 
 /// An item's data as extraction reads it: read it, then `finish` says whether all of
@@ -220,7 +262,7 @@ pub(super) fn open(
     password: Option<&str>,
 ) -> Result<Opened, OpenFailure> {
     let mut file = File::open(path).map_err(OpenFailure::Io)?;
-    let mut head = [0u8; 32];
+    let mut head = [0u8; 1100];
     let read = read_up_to(&mut file, &mut head).map_err(OpenFailure::Io)?;
     file.seek(SeekFrom::Start(0)).map_err(OpenFailure::Io)?;
     let head = &head[..read];
@@ -240,10 +282,14 @@ pub(super) fn open(
         Some(forced) if forced == Kind::Lzma && super::streams::signature(Kind::Lzma, head) => {
             (forced, None)
         }
+        Some(forced) if forced == Kind::Tar && super::tar7::looks_like_tar(head) => (forced, None),
         Some(forced) if sniffed == Some(forced) => (forced, None),
         Some(forced) => return Err(not_archive(Some(forced))),
         None => match (by_name, sniffed) {
             (_, Some(sniffed)) => (sniffed, by_name.filter(|&n| n != sniffed)),
+            (by_name, None) if super::tar7::looks_like_tar(head) => {
+                (Kind::Tar, by_name.filter(|&n| n != Kind::Tar))
+            }
             (by_name, None) if super::streams::signature(Kind::Lzma, head) => {
                 (Kind::Lzma, by_name.filter(|&n| n != Kind::Lzma))
             }
@@ -252,6 +298,24 @@ pub(super) fn open(
     };
     let mut opened = if kind == Kind::SevenZ {
         open_7z(file, password)?
+    } else if kind == Kind::Tar {
+        let len = file.seek(SeekFrom::End(0)).map_err(OpenFailure::Io)?;
+        drop(file);
+        let Some(opening) = super::tar7::open(path).map_err(OpenFailure::Io)? else {
+            return Err(not_archive(by_name.or(Some(kind))));
+        };
+        Opened {
+            kind,
+            physical_size: Some(opening.physical_size),
+            type_warning: None,
+            props: opening.props,
+            item_props: super::tar7::ITEM_PROPS.to_vec(),
+            items: opening.items,
+            tail: len.saturating_sub(opening.physical_size),
+            error_flags: opening.error_flags,
+            warning_flags: opening.warning_flags,
+            backend: Backend::Tar(opening.tar),
+        }
     } else {
         let mut file = file;
         let Some(opening) =
@@ -267,6 +331,8 @@ pub(super) fn open(
             item_props: opening.item_props,
             items: vec![opening.item],
             tail: 0,
+            error_flags: Vec::new(),
+            warning_flags: Vec::new(),
             backend: Backend::Stream(opening.stream),
         }
     };
@@ -352,6 +418,8 @@ fn open_7z(mut file: File, password: Option<&str>) -> Result<Opened, OpenFailure
         item_props,
         items,
         tail: len.saturating_sub(physical_size),
+        error_flags: Vec::new(),
+        warning_flags: Vec::new(),
         backend: Backend::SevenZ(Box::new(reader)),
     })
 }
@@ -389,8 +457,10 @@ fn items_of(archive: &sevenz::Archive) -> Vec<Item> {
                 encrypted: block.is_some_and(|b| archive.blocks[b].is_encrypted()),
                 method: block.map(|b| block_method(&archive.blocks[b])),
                 block: block.map(|b| b as u64),
-                time_digits: 7,
+                time_digits: [7; 3],
+                time_extra: [0; 3],
                 host_os: None,
+                extra: Vec::new(),
             }
         })
         .collect()
@@ -559,6 +629,16 @@ fn archive_method(blocks: &[Block]) -> String {
 }
 
 impl Opened {
+    /// The warnings opening gave, in 7-Zip's order of its flags: the headers', then
+    /// data after the archive's end.
+    pub(super) fn warnings(&self) -> Vec<&'static str> {
+        let mut list = self.warning_flags.clone();
+        if self.tail > 0 {
+            list.push("There are data after the end of archive");
+        }
+        list
+    }
+
     /// The password encrypted data is read with, typed after the archive was opened.
     pub(super) fn set_password(&mut self, password: &str) {
         if let Backend::SevenZ(reader) = &mut self.backend {
@@ -570,7 +650,7 @@ impl Opened {
     pub(super) fn reader(&mut self) -> Option<&mut ArchiveReader<File>> {
         match &mut self.backend {
             Backend::SevenZ(reader) => Some(reader),
-            Backend::Stream(_) => None,
+            Backend::Stream(_) | Backend::Tar(_) => None,
         }
     }
 
@@ -578,7 +658,7 @@ impl Opened {
     pub(super) fn archive(&self) -> Option<&sevenz::Archive> {
         match &self.backend {
             Backend::SevenZ(reader) => Some(reader.archive()),
-            Backend::Stream(_) => None,
+            Backend::Stream(_) | Backend::Tar(_) => None,
         }
     }
 
@@ -596,6 +676,18 @@ impl Opened {
                 if wanted(0) {
                     let mut data = stream.data()?;
                     each(0, &mut data)?;
+                }
+                Ok(())
+            }
+            Backend::Tar(tar) => {
+                for index in 0..self.items.len() {
+                    if !wanted(index) {
+                        continue;
+                    }
+                    let mut data = tar.data(index)?;
+                    if !each(index, &mut data)? {
+                        break;
+                    }
                 }
                 Ok(())
             }

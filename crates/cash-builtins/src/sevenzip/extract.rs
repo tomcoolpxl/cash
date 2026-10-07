@@ -253,8 +253,12 @@ pub(super) fn archive_props(found: &Found, opened: &Opened) -> String {
         );
     }
     let _ = writeln!(text, "Type = {}", opened.kind.name());
-    if opened.tail > 0 {
-        text.push_str("WARNINGS:\nThere are data after the end of archive\n");
+    if !opened.error_flags.is_empty() {
+        let _ = writeln!(text, "ERRORS:\n{}", opened.error_flags.join("\n"));
+    }
+    let warnings = opened.warnings();
+    if !warnings.is_empty() {
+        let _ = writeln!(text, "WARNINGS:\n{}", warnings.join("\n"));
     }
     if let Some(size) = opened.physical_size {
         let _ = writeln!(text, "Physical Size = {size}");
@@ -310,6 +314,7 @@ struct Totals {
     with_errors: u64,
     with_warnings: u64,
     open_warnings: u64,
+    open_errors: u64,
     file_errors: u64,
     folders: u64,
     files: u64,
@@ -342,6 +347,10 @@ impl Totals {
         }
         if self.open_warnings != 0 {
             console.so(&format!("\nWarnings: {}\n", self.open_warnings));
+        }
+        if self.open_errors != 0 {
+            error = true;
+            console.so(&format!("\nOpen Errors: {}\n", self.open_errors));
         }
         error
     }
@@ -435,9 +444,18 @@ fn extract_archive<SE: cash_core::ShellExtensions>(
             return Ok(());
         }
     };
-    if opened.tail > 0 {
+    // `OpenResult`: the errors on the errors' stream, the warnings on the messages'.
+    let open_error = !opened.error_flags.is_empty();
+    if open_error {
+        totals.open_errors += 1;
+        console.flush_so();
+        console.se(&format!("\nERRORS:\n{}\n\n", opened.error_flags.join("\n")));
+        console.flush_se();
+    }
+    let warnings = opened.warnings();
+    if !warnings.is_empty() {
         totals.open_warnings += 1;
-        console.so("\nWARNINGS:\nThere are data after the end of archive\n\n");
+        console.so(&format!("\nWARNINGS:\n{}\n\n", warnings.join("\n")));
         console.flush_so();
     }
     // `Print_ErrorFormatIndex_Warning`: opened as another format than its name says.
@@ -450,13 +468,13 @@ fn extract_archive<SE: cash_core::ShellExtensions>(
         ));
         console.flush_so();
     }
-    let warned = opened.tail > 0 || opened.type_warning.is_some();
+    let warned = !warnings.is_empty() || opened.type_warning.is_some();
     console.so(&archive_props(archive, &opened));
     console.so("\n");
     totals.packed += archive.size;
     let errors = extract_items(options, env, console, &mut opened, password, totals)?;
     console.flush_so();
-    if errors == 0 {
+    if errors == 0 && !open_error {
         if warned {
             totals.with_warnings += 1;
         } else {
@@ -466,7 +484,10 @@ fn extract_archive<SE: cash_core::ShellExtensions>(
     } else {
         totals.with_errors += 1;
         totals.file_errors += errors;
-        console.so(&format!("\nSub items Errors: {errors}\n"));
+        console.so("\n");
+        if errors != 0 {
+            console.so(&format!("Sub items Errors: {errors}\n"));
+        }
     }
     Ok(())
 }

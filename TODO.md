@@ -508,9 +508,10 @@ same day: 7z and the formats cash has, Windows 7-Zip's words with LF and `/`,
    applied). Compressed archives are not 7-Zip's bytes (other LZMA, PPMd and bzip2
    encoders), so the oracle compares their listings without sizes.
 4. **The other formats** through cash-archive: zip (7-Zip's records), tar, gzip, bzip2,
-   xz both ways; zstd and lzma read. Reading gzip, bzip2, xz, zstd and lzma done
-   2026-10-07 (`7z_formats.sh`, line for line); left: tar and zip reading, then writing
-   gzip, bzip2, xz, tar and zip, and `-si`.
+   xz both ways; zstd and lzma read. Reading gzip, bzip2, xz, zstd, lzma and tar done
+   2026-10-07 (`7z_formats.sh`, line for line); left: zip reading, then writing gzip,
+   bzip2, xz, tar and zip, and `-si`. Not yet checked against 7-Zip: tar names that are
+   not ASCII (7-Zip prints its UTF-8 check's status after "UTF8").
 5. **Volumes, `h` and `-scrc`, links, `-sns`/`-sni`**.
 6. The page, `builtins.md`, `CARRIED`, `DELIBERATE_SHADOWS`, doctor.
 
