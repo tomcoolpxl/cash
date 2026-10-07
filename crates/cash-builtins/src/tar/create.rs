@@ -309,12 +309,11 @@ impl<SE: cash_core::ShellExtensions> Tar<'_, SE> {
             }
         };
         let encoder: Box<dyn codec::Encoder> = match codec {
-            // Each codec's own threads: zstd's one, xz's as many as memory holds,
-            // every core for gzip's chunks and bzip2's streams.
+            // Each codec's own threads: xz's as many as memory holds, every core for
+            // the others.
             Some(codec) => {
                 let level = codec.levels().2;
                 let threads = match codec {
-                    Codec::Zstd => 1,
                     Codec::Xz => {
                         let dict = u64::from(
                             codec::xz::Settings {

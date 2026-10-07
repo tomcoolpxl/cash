@@ -24,8 +24,8 @@ skippable frames and several frames in a file included. `zstd -d` also reads `.g
 - Every level compresses at ruzstd's fast level, about zstd's `-1`: files come out
   larger than zstd's at its default `-3`. The levels are read and checked as zstd checks
   them; `--long`, `--adapt`, `-B` and zstd's other tuning change nothing. `-T` is
-  zstd's: `-T0` compresses 4 MiB frames on every core, `-T4` on four, the same bytes
-  for any number; as in zstd, one thread unless `-T` or `ZSTD_NBTHREADS` says more.
+  zstd's: `-T4` compresses 4 MiB frames on four cores, `-T1` on one, the same bytes for
+  any number. Without `-T` or `ZSTD_NBTHREADS`, every core, where zstd uses one.
 - Dictionaries (`-D`, `--train`, `--patch-from`), the benchmark (`-b`) and lz4 are
   refused.
 - The file is written beside its target under a temporary name and renamed over it, so

@@ -15,7 +15,8 @@
 //!   zstd's level 1; the levels are read, checked and reported as zstd does. `--long`,
 //!   `--adapt`, `--rsyncable`, `-B`, the memory limit and zstd's other tuning are read
 //!   and change nothing. `-T`, `--single-thread` and `ZSTD_NBTHREADS` are zstd's: its
-//!   4 MiB frames are compressed that many at once, the same bytes for any number.
+//!   4 MiB frames are compressed that many at once, the same bytes for any number;
+//!   without them, every core, where zstd uses one (the user's choice, 2026-10-07).
 //! - Dictionaries (`-D`, `--train`, `--patch-from`), the benchmark (`-b`) and lz4 are
 //!   refused.
 //! - `-vv` says what `-v` says, and no progress counter is drawn at a console.
@@ -261,7 +262,7 @@ const ADVANCED_HELP: &str = concat!(
     "  --long[=#]                    Enable long distance matching with window log #. [Default: 27]\n",
     "  --patch-from=REF              Use REF as the reference point for Zstandard's diff engine. \n",
     "\n",
-    "  -T#                           Spawn # compression threads. [Default: 1; pass 0 for core count.]\n",
+    "  -T#                           Spawn # compression threads. [Default: 0, one per core; pass 1 for one.]\n",
     "  --single-thread               Share a single thread for I/O and compression (slightly different than `-T1`).\n",
     "  --auto-threads={physical|logical}\n",
     "                                Use physical/logical cores when using `-T0`. [Default: Physical]\n",
@@ -2262,8 +2263,8 @@ fn run<SE: cash_core::ShellExtensions>(
     }
     let stdout: io::BufWriter<Box<dyn Write>> =
         io::BufWriter::with_capacity(STDOUT_BUFFER, Box::new(context.stdout()));
-    // init_nbWorkers: -T, else ZSTD_NBTHREADS when it is a number, else one; 0, a core
-    // each.
+    // init_nbWorkers: -T, else ZSTD_NBTHREADS when it is a number, else every core
+    // (zstd's own default is one; the bytes are the same either way); 0, a core each.
     let threads = options
         .threads
         .or_else(|| {
@@ -2273,7 +2274,7 @@ fn run<SE: cash_core::ShellExtensions>(
                 _ => None,
             }
         })
-        .unwrap_or(1);
+        .unwrap_or(0);
     let mut run = Run {
         options,
         context,

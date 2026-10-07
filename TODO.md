@@ -585,9 +585,9 @@ the same day found no compressor in cash using more than one thread.
    9.7 s by default (three blocks), XZ Utils 6.9 s.
 2. **zstd** (done 2026-10-07): the 4 MiB frames compressed `-T` at once
    (`codec::parallel`), the same bytes for any count; `-T`, `--threads`,
-   `--single-thread`, `ZSTD_NBTHREADS` honoured, one thread by default as zstd 1.5.7
-   has it. 64 MB with `-T0`: 0.40 s → 0.12 s. **Yours**: zstd's own default is one
-   thread; cash could use every core by default, since the bytes do not change.
+   `--single-thread`, `ZSTD_NBTHREADS` honoured. Every core by default, where zstd
+   1.5.7 uses one (the user's choice, 2026-10-07: the bytes do not change); tar's
+   `--zstd` too. 64 MB: 0.40 s → 0.12 s.
 3. **gzip** (done 2026-10-07): one member of 1 MiB chunks deflated apart on all cores,
    each but the last ended with a sync flush, as pigz lays it out without its shared
    window; input of one chunk keeps today's bytes, and the layout is the same on any
@@ -602,13 +602,15 @@ the same day found no compressor in cash using more than one thread.
    twice the cores, files up to 64 MiB, 256 MiB in all; encrypted, `-l`-converted and
    larger files as before. 48 files of 1.4 MB: 0.09 s (Info-ZIP 0.86 s).
 6. **tar** gets the codecs' threads through `-z`, `-j`, `-J`, `--zstd` (done
-   2026-10-07): `codec::writer_on`, each codec's own default (zstd one thread, xz as many
-   as memory holds, gzip and bzip2 every core). `tar -cj` of 64 MB: 12.5 s → 0.56 s.
+   2026-10-07): `codec::writer_on`, each codec's own default (xz as many as memory
+   holds, the others every core). `tar -cj` of 64 MB: 12.5 s → 0.56 s.
 7. The pages (`gzip.md`, `bzip2.md`, `xz.md`, `zstd.md`, `zip.md`, `tar.md`) say
    what runs on several cores (done 2026-10-07); the oracles pass. The timings above
    were taken by hand on an idle machine; no timing test was added, since one would fail
    on a busy CI machine.
-8. Release 1.10.0 with 7z and this.
+8. Release 1.10.0 with 7z and this: the version raised 2026-10-07, after the full suite
+   (4384 tests), clippy with every feature, the doc tests and `cargo doc` passed; the tag
+   is yours to push once CI is green.
 
 ---
 
