@@ -40,6 +40,18 @@ zip = { version = "8.6", default-features = false, features = ["legacy-zip"] }
 cbc = "0.2"
 getrandom = "0.4"
 sha2 = { workspace = true }
+# RAR (`rar`, taken from rars): finding archives inside other files, and compressing on
+# a pool of threads; aes, hmac, sha1, sha2 and getrandom as above.
+aho-corasick = "1.1"
+rayon = "1.12"
+
+[features]
+# rars' parts, kept as it gates them; cash builds them all.
+default = ["write", "parallel", "recovery", "encryption"]
+write = []
+parallel = []
+recovery = []
+encryption = []
 
 [dev-dependencies]
 tempfile = { workspace = true }

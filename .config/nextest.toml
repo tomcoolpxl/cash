@@ -1,7 +1,7 @@
 # Two lanes. The default profile is the quick one: every crate's own tests, which CI runs
 # on every push beside the lints. The slow profile is the rest, most of the test time: the
-# tests that drive cash.exe (the `cash` package's, but for cash.exe's own unit tests) and
-# sed's ported suite. CI runs it on every push too, in four parts on runners of their own,
+# tests that drive cash.exe (the `cash` package's, but for cash.exe's own unit tests),
+# rars' tests (cash-archive's `rar`) and sed's ported suite. CI runs it on every push too, in four parts on runners of their own,
 # and before a release. The full profile is both, as one run.
 #
 # A filter given on the command line only narrows the profile's: a test of the slow lane
@@ -10,7 +10,7 @@
 # The slow lane's filter is written twice, here negated and in `profile.slow`, as nextest
 # has no named filters; the two are to change together (xtask's test checks it).
 [profile.default]
-default-filter = 'not ((package(cash) and not binary_id(cash::bin/cash)) or binary_id(cash-sed::tests))'
+default-filter = 'not ((package(cash) and not binary_id(cash::bin/cash)) or binary_id(cash-archive::rar) or (package(cash-archive) and test(/^rar::/)) or binary_id(cash-sed::tests))'
 retries = 3
 status-level = "slow"
 slow-timeout = { period = "5s", terminate-after = 3, grace-period = "2s" }
@@ -22,7 +22,7 @@ fail-fast = false
 path = "test-results.xml"
 
 [profile.slow]
-default-filter = '(package(cash) and not binary_id(cash::bin/cash)) or binary_id(cash-sed::tests)'
+default-filter = '(package(cash) and not binary_id(cash::bin/cash)) or binary_id(cash-archive::rar) or (package(cash-archive) and test(/^rar::/)) or binary_id(cash-sed::tests)'
 
 [profile.slow.junit]
 path = "test-results.xml"
@@ -75,6 +75,12 @@ threads-required = "num-test-threads"
 [[profile.default.overrides]]
 filter = 'package(cash-win32) and test(=sysinfo::tests::more_busy_threads_than_processors_make_a_queue)'
 threads-required = "num-test-threads"
+
+# rars' tests, taken in with it (cash-archive's `rar`): its key derivations and its
+# writers of many volumes run unoptimized here, 15 to 60 s for the heaviest.
+[[profile.default.overrides]]
+filter = 'package(cash-archive) and (binary(rar) or test(/^rar::/))'
+slow-timeout = { period = "60s", terminate-after = 3 }
 
 # Each starts PowerShell once or twice, and each compiles a C# helper: 2 to 5 s on an idle
 # machine.

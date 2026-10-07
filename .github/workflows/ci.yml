@@ -1,8 +1,8 @@
 name: CI
 
 # Two lanes (.config/nextest.toml): the lints and every crate's own tests in one job, and
-# the slow lane's tests (the ones that drive cash.exe, and sed's ported suite) in four
-# parts at once, each on a runner of its own.
+# the slow lane's tests (the ones that drive cash.exe, rars' and sed's ported suite) in
+# four parts at once, each on a runner of its own.
 on:
   push:
     branches: [ main ]

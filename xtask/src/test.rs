@@ -4,8 +4,8 @@
 //! tests (`.config/nextest.toml`):
 //!
 //! - **Quick**: every crate's own tests, which CI runs on every push beside the lints
-//! - **Slow**: the tests that drive `cash.exe` and sed's ported suite, which CI runs on
-//!   every push split over parallel runners, and before a release
+//! - **Slow**: the tests that drive `cash.exe`, rars' tests and sed's ported suite, which
+//!   CI runs on every push split over parallel runners, and before a release
 //!
 //! `all` runs both in one nextest run. Each supports optional coverage collection via
 //! `cargo-llvm-cov`.
@@ -106,12 +106,13 @@ pub struct TestCommand {
 pub enum TestSubcommand {
     /// Run the quick lane: every crate's own tests, as CI does on every push.
     ///
-    /// Leaves out the slow lane: the tests that drive cash.exe and sed's ported suite.
+    /// Leaves out the slow lane: the tests that drive cash.exe, rars' tests and sed's
+    /// ported suite.
     #[clap(alias = "unit")]
     Quick(LaneArgs),
 
-    /// Run the slow lane: the tests that drive cash.exe and sed's ported suite, or a
-    /// part of them.
+    /// Run the slow lane: the tests that drive cash.exe, rars' tests and sed's ported
+    /// suite, or a part of them.
     Slow(LaneArgs),
 
     /// Run every test of the workspace, both lanes in one run.

@@ -1,0 +1,361 @@
+//! Reading and writing archive members one at a time.
+//!
+//! The RAR 1.3 to 4.x codecs compress a member as a unit, so those writers
+//! cannot avoid having a member resident. What they can avoid is having *every*
+//! member resident, which is what they used to do: the caller read all the
+//! inputs, the writer built the whole archive in a `Vec`, and peak memory was a
+//! multiple of the total input rather than of the largest member.
+
+use crate::rar::error::{Error, Result};
+use crate::rar::streaming::EntrySource;
+use std::borrow::Cow;
+use std::io::{Read, Write};
+
+pub(crate) use crate::rar::entropy::fill_entropy;
+
+/// Attribute a writer failure without blaming a member for cancellation.
+pub(crate) fn member_error(error: Error, name: &[u8], operation: &'static str) -> Error {
+    if error.kind() == crate::rar::ErrorKind::Cancelled || error.entry_context().is_some() {
+        error
+    } else {
+        error.at_entry(name.to_vec(), operation)
+    }
+}
+
+/// How much of a member is read at a time when it is walked rather than held.
+const WALK_CHUNK: usize = 256 * 1024;
+
+/// Where one member's bytes come from.
+///
+/// A caller who already holds the whole input hands over a slice; one writing
+/// from disk hands over a source that is opened when the member is coded and
+/// closed again straight after. Everything downstream is the same either way.
+pub(crate) enum MemberBytes<'a> {
+    Borrowed(&'a [u8]),
+    Source(&'a EntrySource),
+}
+
+impl<'a> MemberBytes<'a> {
+    pub(crate) fn len(&self) -> Result<u64> {
+        match self {
+            Self::Borrowed(data) => Ok(data.len() as u64),
+            Self::Source(source) => source.len(),
+        }
+    }
+
+    /// The whole member, borrowed when the caller already had it.
+    #[cfg(test)]
+    pub(crate) fn load(&self) -> Result<Cow<'_, [u8]>> {
+        self.load_with_progress(None)
+    }
+
+    pub(crate) fn load_with_progress(
+        &self,
+        progress: Option<crate::rar::write_progress::ProgressReporter<'_>>,
+    ) -> Result<Cow<'_, [u8]>> {
+        crate::rar::write_progress::check_cancelled(progress)?;
+        match self {
+            Self::Borrowed(data) => Ok(Cow::Borrowed(data)),
+            Self::Source(source) => {
+                let expected = source.len()?;
+                let capacity = usize::try_from(expected).map_err(|_| {
+                    Error::InvalidArgument("member is larger than this host can hold")
+                })?;
+                let mut data = Vec::with_capacity(capacity);
+                crate::rar::write_progress::check_cancelled(progress)?;
+                let mut reader = crate::rar::write_progress::CancellableIo {
+                    inner: source.open()?,
+                    progress,
+                };
+                reader.by_ref().take(expected).read_to_end(&mut data)?;
+                crate::rar::write_progress::check_cancelled(progress)?;
+                check_source_length(
+                    &mut reader,
+                    data.len() as u64,
+                    expected,
+                    "entry source size changed while compressing",
+                )?;
+                crate::rar::write_progress::check_cancelled(progress)?;
+                Ok(Cow::Owned(data))
+            }
+        }
+    }
+
+    /// Walks the member in chunks without holding it, which is how a stored
+    /// one is checksummed on its way through.
+    #[cfg(test)]
+    pub(crate) fn walk(&self, visit: impl FnMut(&[u8])) -> Result<()> {
+        self.walk_with_progress(None, visit)
+    }
+
+    pub(crate) fn walk_with_progress(
+        &self,
+        progress: Option<crate::rar::write_progress::ProgressReporter<'_>>,
+        mut visit: impl FnMut(&[u8]),
+    ) -> Result<()> {
+        crate::rar::write_progress::check_cancelled(progress)?;
+        match self {
+            Self::Borrowed(data) => {
+                for chunk in data.chunks(WALK_CHUNK) {
+                    crate::rar::write_progress::check_cancelled(progress)?;
+                    visit(chunk);
+                }
+            }
+            Self::Source(source) => {
+                let expected = source.len()?;
+                crate::rar::write_progress::check_cancelled(progress)?;
+                let mut reader = crate::rar::write_progress::CancellableIo {
+                    inner: source.open()?,
+                    progress,
+                };
+                let mut limited = reader.by_ref().take(expected);
+                let mut observed = 0;
+                let mut buffer = vec![0u8; WALK_CHUNK];
+                loop {
+                    let read = limited.read(&mut buffer)?;
+                    if read == 0 {
+                        break;
+                    }
+                    observed += read as u64;
+                    visit(&buffer[..read]);
+                }
+                crate::rar::write_progress::check_cancelled(progress)?;
+                check_source_length(
+                    &mut reader,
+                    observed,
+                    expected,
+                    "entry source size changed while reading",
+                )?;
+            }
+        }
+        crate::rar::write_progress::check_cancelled(progress)?;
+        Ok(())
+    }
+
+    /// The source behind this member, when there is one to copy from.
+    pub(crate) fn source(&self) -> Option<&'a EntrySource> {
+        match self {
+            Self::Borrowed(_) => None,
+            Self::Source(source) => Some(source),
+        }
+    }
+}
+
+/// A member's bytes as they will appear in the archive.
+pub(crate) enum MemberPayload<'a> {
+    /// Already in memory: everything compressed, and anything encrypted.
+    Packed(Vec<u8>),
+    /// Copied from the source as the archive is written, which keeps a stored
+    /// member off the heap however large it is.
+    Copied(&'a EntrySource),
+}
+
+impl MemberPayload<'_> {
+    /// How many bytes this payload puts in the archive. A copied member is
+    /// stored verbatim, so its packed size is the size it came in at.
+    pub(crate) fn size(&self, unpacked_size: u64) -> u64 {
+        match self {
+            Self::Packed(packed) => packed.len() as u64,
+            Self::Copied(_) => unpacked_size,
+        }
+    }
+
+    pub(crate) fn write_to(&self, output: &mut dyn Write, expected: u64) -> Result<()> {
+        match self {
+            Self::Packed(packed) => output.write_all(packed)?,
+            Self::Copied(source) => {
+                let mut reader = source.open()?;
+                let copied = std::io::copy(&mut reader.by_ref().take(expected), output)?;
+                check_source_length(
+                    &mut *reader,
+                    copied,
+                    expected,
+                    "entry source size changed while writing",
+                )?;
+            }
+        }
+        Ok(())
+    }
+}
+
+// Consume at most the advertised length plus one probe byte, including for a
+// source that keeps growing. The extra byte is never passed to a codec or sink.
+pub(crate) fn check_source_length(
+    reader: &mut dyn Read,
+    observed: u64,
+    expected: u64,
+    message: &'static str,
+) -> Result<()> {
+    if observed != expected {
+        return Err(Error::SourceChanged(message));
+    }
+    let mut probe = [0];
+    loop {
+        match reader.read(&mut probe) {
+            Ok(0) => return Ok(()),
+            Ok(_) => return Err(Error::SourceChanged(message)),
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(error) => return Err(error.into()),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn source_end_probe_retries_interruptions_and_reports_other_io_errors() {
+        struct Probe {
+            calls: usize,
+            fail: bool,
+        }
+        impl std::io::Read for Probe {
+            fn read(&mut self, _: &mut [u8]) -> std::io::Result<usize> {
+                self.calls += 1;
+                if self.calls == 1 {
+                    Err(std::io::ErrorKind::Interrupted.into())
+                } else if self.fail {
+                    Err(std::io::ErrorKind::PermissionDenied.into())
+                } else {
+                    Ok(0)
+                }
+            }
+        }
+        let mut end = Probe {
+            calls: 0,
+            fail: false,
+        };
+        super::check_source_length(&mut end, 7, 7, "changed").unwrap();
+        assert_eq!(end.calls, 2);
+        let mut failed = Probe {
+            calls: 0,
+            fail: true,
+        };
+        assert_eq!(
+            super::check_source_length(&mut failed, 7, 7, "changed")
+                .unwrap_err()
+                .kind(),
+            crate::rar::ErrorKind::Io
+        );
+    }
+
+    #[test]
+    fn member_error_preserves_cancellation_and_existing_context() {
+        assert_eq!(
+            super::member_error(crate::rar::Error::Cancelled, b"file", "writing"),
+            crate::rar::Error::Cancelled
+        );
+        let existing = crate::rar::Error::InvalidArgument("source failed")
+            .at_entry(b"file".to_vec(), "reading");
+        let error = super::member_error(existing, b"file", "writing");
+        assert_eq!(error.entry_context(), Some((b"file".as_slice(), "reading")));
+    }
+
+    use super::*;
+
+    #[cfg(target_pointer_width = "32")]
+    #[test]
+    fn oversized_member_is_refused_before_opening_its_source() {
+        let length = u64::from(u32::MAX) + 1;
+        let source = EntrySource::from_opener(length, || {
+            panic!("an unrepresentable member must not open its source")
+        });
+        let member = MemberBytes::Source(&source);
+        assert_eq!(member.len().unwrap(), length);
+        assert_eq!(
+            member.load().unwrap_err(),
+            Error::InvalidArgument("member is larger than this host can hold")
+        );
+    }
+
+    #[test]
+    fn changed_sources_are_bounded_and_rejected() {
+        use std::io::{Cursor, Seek, SeekFrom};
+        use std::sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        };
+
+        struct Counted {
+            data: Cursor<Vec<u8>>,
+            read: Arc<AtomicUsize>,
+        }
+        impl Read for Counted {
+            fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+                let count = self.data.read(buffer)?;
+                self.read.fetch_add(count, Ordering::Relaxed);
+                Ok(count)
+            }
+        }
+        impl Seek for Counted {
+            fn seek(&mut self, position: SeekFrom) -> std::io::Result<u64> {
+                self.data.seek(position)
+            }
+        }
+
+        for expected in [0, 8] {
+            for actual in [0, 3, 8, 1024 * 1024] {
+                let read = Arc::new(AtomicUsize::new(0));
+                let source = EntrySource::from_opener(expected, {
+                    let read = Arc::clone(&read);
+                    move || {
+                        Ok(Box::new(Counted {
+                            data: Cursor::new(vec![42; actual]),
+                            read: Arc::clone(&read),
+                        }))
+                    }
+                });
+                let bytes = MemberBytes::Source(&source);
+                let valid = actual as u64 == expected;
+                assert_eq!(bytes.load().is_ok(), valid);
+                assert!(read.swap(0, Ordering::Relaxed) as u64 <= expected + 1);
+                let mut visited = 0;
+                assert_eq!(bytes.walk(|chunk| visited += chunk.len()).is_ok(), valid);
+                assert!(visited as u64 <= expected);
+                assert!(read.swap(0, Ordering::Relaxed) as u64 <= expected + 1);
+                let mut output = Vec::new();
+                assert_eq!(
+                    MemberPayload::Copied(&source)
+                        .write_to(&mut output, expected)
+                        .is_ok(),
+                    valid
+                );
+                assert!(output.len() as u64 <= expected);
+                assert!(read.load(Ordering::Relaxed) as u64 <= expected + 1);
+            }
+        }
+    }
+
+    #[test]
+    fn a_source_walks_in_chunks_and_loads_whole() {
+        let data: Vec<u8> = (0..WALK_CHUNK * 2 + 7).map(|index| index as u8).collect();
+        let source = EntrySource::from_bytes(data.clone());
+        let bytes = MemberBytes::Source(&source);
+
+        assert_eq!(bytes.len().unwrap(), data.len() as u64);
+        assert_eq!(bytes.load().unwrap().as_ref(), data.as_slice());
+
+        let mut chunks = Vec::new();
+        let mut seen = Vec::new();
+        bytes
+            .walk(|chunk| {
+                chunks.push(chunk.len());
+                seen.extend_from_slice(chunk);
+            })
+            .unwrap();
+        assert_eq!(seen, data);
+        assert!(chunks.len() > 1, "a large source should arrive in pieces");
+    }
+
+    #[test]
+    fn borrowed_bytes_are_never_copied() {
+        let data = b"already in memory".to_vec();
+        let bytes = MemberBytes::Borrowed(&data);
+        assert!(matches!(bytes.load().unwrap(), Cow::Borrowed(_)));
+        assert!(bytes.source().is_none());
+        let mut visited = Vec::new();
+        bytes
+            .walk(|chunk| visited.extend_from_slice(chunk))
+            .unwrap();
+        assert_eq!(visited, data);
+    }
+}

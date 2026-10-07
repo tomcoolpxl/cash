@@ -624,20 +624,27 @@ Apache-2.0 that reads RAR 1.3 to 7 (encrypted too) and writes RAR 2.9 and 5/7; y
 reads RAR and writes none; 7-Zip's own RAR code is under the unRAR restriction and is
 not used.
 
-1. **rars taken in** as `cash-archive::rar`, cash's own code from then on, as
-   sevenz-rust2 was (0.10.0; its license in `licenses/`, `NOTICE`; Python, npm, wasm and
-   the CLI left out; its tests and fixtures kept; cash's lints, panics fixed by hand).
-2. **`7z l`, `t`, `x`, `e` on `.rar`**: 7-Zip's listing properties and words for RAR,
+rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
+
+1. **`7z l`, `t`, `x`, `e` on `.rar`**: 7-Zip's listing properties and words for RAR,
    solid archives, volumes (`.part1.rar`, `.r00`: a naming function in cash-archive's
    `volumes` beside `numbered`, the files read through its `Spanned` where rars takes
    one stream), encrypted headers and data, checked
    against Scoop's 7-Zip with an oracle as for 7z. `7z a` on a `.rar` name refuses as
    7-Zip does.
-3. **`rar` and `unrar` builtins** with RARLAB's console interface, reading and writing:
+2. **`rar` and `unrar` builtins** with RARLAB's console interface, reading and writing:
    a family of their own, so a shared design in `research/` and a pick list before any
    code (what of `rar`'s switches, which RAR generation by default, the oracle: WinRAR's
    `rar.exe`/`unrar.exe` if the user has them).
-4. Pages, `builtins.md`, doctor's shadows (`rar`, `unrar`, `7z`'s RAR).
+3. Pages, `builtins.md`, doctor's shadows (`rar`, `unrar`, `7z`'s RAR).
+4. **rar's spool files outlive a killed process**: its writer spools to
+   `.rars-spool-<pid>-<n>` in `WriterResources`' temp folder, the working folder when none
+   is named, and removes them on drop; three were left in `crates/cash-archive` by tests
+   that timed out on 2026-10-07. cash's callers are to name a temp folder, and the files
+   to be opened delete-on-close, so that no exit leaves one.
+5. **rar's AES key schedules are not wiped**: rars cleared them through the `aes`
+   crate's `zeroize` feature; the passwords, keys and IVs are cleared by `crypto::wipe`,
+   the `Aes128`/`Aes256` round keys are not. Wipe them, or say why not.
 
 ---
 

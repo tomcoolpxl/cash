@@ -540,6 +540,7 @@ name = "cash-archive"
 version = "1.10.0"
 dependencies = [
  "aes",
+ "aho-corasick",
  "bzip2",
  "cbc",
  "crc32fast",
@@ -550,6 +551,7 @@ dependencies = [
  "lzma-rust2",
  "pbkdf2",
  "ppmd-rust",
+ "rayon",
  "ruzstd",
  "sha1",
  "sha2",

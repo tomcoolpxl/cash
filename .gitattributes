@@ -18,6 +18,8 @@
 tests/fixtures/crlf/** -text
 tests/fixtures/bom/**  -text
 *.crlf  -text
+# rars' archives and what they hold, byte for byte (rar13/README is CRLF).
+crates/cash-archive/tests/fixtures/rar/** -text
 *.bom   -text
 # Git Bash's output, byte for byte, CRs included (tests/git-prompt-differential.sh --freeze).
 tests/git-prompt/** -text

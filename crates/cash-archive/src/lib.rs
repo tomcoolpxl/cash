@@ -16,6 +16,7 @@
 pub mod codec;
 pub mod listing;
 pub mod member;
+pub mod rar;
 pub mod select;
 pub mod sevenz;
 pub mod tar;
