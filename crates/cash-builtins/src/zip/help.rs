@@ -34,8 +34,9 @@ See \"unzip -hh\" or unzip.txt for more help.  Examples:
 pub(super) const UNZIP_VERSION: &str = "\
 UnZip (cash): UnZip 6.00's options, in pure Rust.
 
-Reads stored, deflated, Deflate64, bzip2, LZMA, xz and zstd members, Zip64 archives,
-and the traditional PKWARE encryption; restores times and the read-only attribute.
+Reads stored, deflated, Deflate64, bzip2, LZMA, xz, zstd and PPMd members, PKZIP 1's
+shrunk, reduced and imploded ones, Zip64 and split archives, the traditional PKWARE
+encryption and WinZip's AES; restores times and the read-only attribute.
 
 UnZip and ZipInfo environment options:
            UNZIP:  read before the command line
@@ -96,6 +97,6 @@ pub(super) const ZIP_VERSION: &str = "\
 Zip (cash): Zip 3.0's options, in pure Rust.
 
 Writes stored, deflated (miniz_oxide) and bzip2 members, Zip64 when a member or the
-archive needs it, Info-ZIP's universal-time and Unix owner fields, and the traditional
-PKWARE encryption.
+archive needs it, split archives, Info-ZIP's universal-time and Unix owner fields, and
+the traditional PKWARE encryption; converts line ends, and repairs damaged archives.
 ";
