@@ -563,9 +563,10 @@ same day: 7z and the formats cash has, Windows 7-Zip's words with LF and `/`,
    does the latter for every format. `h` on hash files (7-Zip 23's `-thash`) is not
    taken; 7-Zip's split handler also reads `NAME.aa`, `NAME.ab` volumes, cash's only
    numbered ones.
-6. The page, `builtins.md`, `CARRIED`, `DELIBERATE_SHADOWS`, doctor. `CARRIED` has
-   `7z` and `7za`; doctor's new note names a 7-Zip on `PATH` outside System32 that
-   cash's `7z` goes ahead of (2026-10-07).
+6. The page, `builtins.md`, `CARRIED`, `DELIBERATE_SHADOWS`, doctor (done
+   2026-10-07). `CARRIED` has `7z` and `7za`; doctor's new note names a 7-Zip on `PATH`
+   outside System32 that cash's `7z` goes ahead of. The phase's full suite passed the
+   same day (4374 tests).
 
 ---
 
@@ -575,13 +576,18 @@ Asked by the user on 2026-10-07 ("if the algorithm allows it, parallelization is
 decided by pick list the same day: after phase 31, released with it as 1.10.0. A survey
 the same day found no compressor in cash using more than one thread.
 
-1. **xz**: `XzWriterMt` (lzma-rust2) on all cores by default, as XZ Utils 5.8 does
-   (`-T0`), with its block size (three dictionaries, at least 1 MiB); `-T1` the one-thread
-   stream; `-T N` honoured, `--block-size` still exact (`xz_builtin.rs` counts blocks).
-   Decoding a file (seekable) with `XzReaderMt`. The help text already promises it.
-2. **zstd**: the 4 MiB frames cash already writes compressed on a pool, the same bytes
-   for any thread count (as libzstd); `-T`, `--single-thread`, `--auto-threads`,
-   `ZSTD_NBTHREADS` honoured.
+1. **xz** (done 2026-10-07): `XzWriterMt` (lzma-rust2) on all cores by default, as XZ
+   Utils 5.8 does (`-T0`), with its block size (three dictionaries, at least 1 MiB) and
+   as many threads as a quarter of the memory holds; `-T1` the one-thread stream; `-T N`
+   and `-T +1` honoured, `--block-size` still exact. A file of one stream and several
+   blocks decodes with `XzReaderMt`; others (lzma-rust2 0.21's threaded reader loses a
+   second stream) go through the stream decoder. 64 MB of text: 23.7 s on one thread,
+   9.7 s by default (three blocks), XZ Utils 6.9 s.
+2. **zstd** (done 2026-10-07): the 4 MiB frames compressed `-T` at once
+   (`codec::parallel`), the same bytes for any count; `-T`, `--threads`,
+   `--single-thread`, `ZSTD_NBTHREADS` honoured, one thread by default as zstd 1.5.7
+   has it. 64 MB with `-T0`: 0.40 s → 0.12 s. **Yours**: zstd's own default is one
+   thread; cash could use every core by default, since the bytes do not change.
 3. **gzip**: one member of chunks compressed apart on all cores, each ended with a sync
    flush, the CRCs combined (`crc32fast`), as pigz lays it out without its shared
    window; input of one chunk keeps today's bytes. No new option (GNU's gzip has none).

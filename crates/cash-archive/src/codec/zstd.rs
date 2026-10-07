@@ -129,7 +129,8 @@ impl<R: Read> Read for Reader<R> {
     }
 }
 
-/// Writes a zstd stream at `ruzstd`'s fast level, a frame for each [`FRAME`] bytes.
+/// Writes a zstd stream at `ruzstd`'s fast level, a frame for each [`FRAME`] bytes,
+/// frames compressed on several threads at once: the same bytes for any number.
 pub struct Writer<W: Write> {
     inner: W,
     pending: Vec<u8>,
@@ -137,6 +138,19 @@ pub struct Writer<W: Write> {
     wrote: bool,
     /// Whether each frame ends with its checksum.
     check: bool,
+    /// How many frames are compressed at once.
+    threads: usize,
+}
+
+/// One frame of `data`, with its checksum or without.
+fn compress_frame(data: &[u8], check: bool) -> Vec<u8> {
+    let mut compressed = Vec::with_capacity(data.len() / 2 + 64);
+    let mut compressor = FrameCompressor::new(CompressionLevel::Fastest);
+    compressor.set_source(data);
+    compressor.set_drain(&mut compressed);
+    compressor.compress();
+    drop(compressor);
+    finished_frame(compressed, data.len() as u64, check)
 }
 
 impl<W: Write> Writer<W> {
@@ -152,31 +166,44 @@ impl<W: Write> Writer<W> {
             pending: Vec::new(),
             wrote: false,
             check,
+            threads: 1,
         }
     }
 
-    /// Compresses what is pending as one frame, and writes it.
-    fn frame(&mut self) -> io::Result<()> {
-        let mut compressed = Vec::with_capacity(self.pending.len() / 2 + 64);
-        let mut compressor = FrameCompressor::new(CompressionLevel::Fastest);
-        compressor.set_source(self.pending.as_slice());
-        compressor.set_drain(&mut compressed);
-        compressor.compress();
-        drop(compressor);
-        let frame = finished_frame(compressed, self.pending.len() as u64, self.check);
-        self.pending.clear();
-        self.wrote = true;
-        self.inner.write_all(&frame)
+    /// The same writer compressing `threads` frames at once.
+    #[must_use]
+    pub fn with_threads(mut self, threads: usize) -> Self {
+        self.threads = threads.max(1);
+        self
     }
 
-    /// Writes the last frame, and hands the writer back.
+    /// Compresses what is pending as frames of [`FRAME`] bytes, at once, and writes
+    /// them in order; nothing pending is one empty frame.
+    fn frames(&mut self) -> io::Result<()> {
+        let check = self.check;
+        let chunks: Vec<&[u8]> = if self.pending.is_empty() {
+            vec![&[]]
+        } else {
+            self.pending.chunks(FRAME).collect()
+        };
+        let frames =
+            super::parallel::map_ordered(chunks, |chunk| Ok(compress_frame(chunk, check)))?;
+        self.pending.clear();
+        self.wrote = true;
+        for frame in frames {
+            self.inner.write_all(&frame)?;
+        }
+        Ok(())
+    }
+
+    /// Writes the last frames, and hands the writer back.
     ///
     /// # Errors
     ///
-    /// When the frame cannot be written.
+    /// When a frame cannot be written.
     pub fn finish(mut self) -> io::Result<W> {
         if !self.pending.is_empty() || !self.wrote {
-            self.frame()?;
+            self.frames()?;
         }
         self.inner.flush()?;
         Ok(self.inner)
@@ -185,12 +212,13 @@ impl<W: Write> Writer<W> {
 
 impl<W: Write> Write for Writer<W> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        let room = FRAME - self.pending.len();
+        let batch = FRAME * self.threads;
+        let room = batch - self.pending.len();
         let taken = buf.len().min(room);
         self.pending
             .extend_from_slice(buf.get(..taken).unwrap_or_default());
-        if self.pending.len() >= FRAME {
-            self.frame()?;
+        if self.pending.len() >= batch {
+            self.frames()?;
         }
         Ok(taken)
     }
@@ -342,6 +370,28 @@ impl<W: Write> super::Encoder for Writer<W> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn frames_made_at_once_are_the_bytes_made_one_by_one() {
+        let data: Vec<u8> = (0..3 * FRAME + 12345)
+            .map(|i| {
+                u8::try_from(i * 7 % 251).unwrap_or(0) ^ u8::try_from(i / 4096 % 7).unwrap_or(0)
+            })
+            .collect();
+        let make = |threads| {
+            let mut writer = Writer::new(Vec::new()).with_threads(threads);
+            for piece in data.chunks(100_000) {
+                writer.write_all(piece).unwrap();
+            }
+            writer.finish().unwrap()
+        };
+        let one = make(1);
+        assert_eq!(make(4), one);
+        assert_eq!(make(16), one);
+        let mut back = Vec::new();
+        Reader::new(one.as_slice()).read_to_end(&mut back).unwrap();
+        assert_eq!(back, data);
+    }
 
     #[test]
     fn a_long_stream_is_several_frames_and_reads_as_one() {

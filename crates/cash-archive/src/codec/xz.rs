@@ -11,7 +11,8 @@ use std::num::NonZeroU64;
 
 use lzma_rust2::{
     Action, CheckType, EncodeMode, LzipStream, Lzma2Options, Lzma2Stream, Lzma2Writer, LzmaOptions,
-    LzmaStream, LzmaWriter, MfType, Status, StreamResult, XzOptions, XzStream, XzWriter,
+    LzmaStream, LzmaWriter, MfType, Status, StreamResult, XzOptions, XzReaderMt, XzStream,
+    XzWriter, XzWriterMt,
 };
 
 use super::Encoder;
@@ -301,6 +302,49 @@ pub fn decompress(
     Ok(read)
 }
 
+/// A .xz file of several blocks decoded `threads` blocks at once (liblzma's threaded
+/// decoder), its blocks found by its indexes; returns the bytes read.
+///
+/// `None` when it is not one to decode so: fewer than two threads or blocks, or indexes
+/// that do not read, which the stream decoder then words.
+pub fn decompress_file_mt<R: Read + Seek>(
+    file: &mut R,
+    output: &mut dyn Write,
+    threads: usize,
+) -> Option<Result<u64, Broken>> {
+    if threads < 2 {
+        return None;
+    }
+    let info = file_info(file).ok()?;
+    // One stream, unpadded: lzma-rust2 0.21's threaded reader loses a second one.
+    if info.block_count() < 2 || info.streams.len() != 1 || info.padding() != 0 {
+        return None;
+    }
+    file.seek(io::SeekFrom::Start(0)).ok()?;
+    let workers = u32::try_from(threads).unwrap_or(u32::MAX);
+    let mut reader = XzReaderMt::new(&mut *file, true, workers).ok()?;
+    let mut buf = vec![0u8; 1 << 16];
+    loop {
+        let n = match reader.read(&mut buf) {
+            Ok(0) => break,
+            Ok(n) => n,
+            Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+            Err(e) => {
+                return Some(Err(match e.kind() {
+                    // Damaged data is said either way ("dist overflow" is `Other`).
+                    io::ErrorKind::InvalidData | io::ErrorKind::Other => Broken::Corrupt,
+                    io::ErrorKind::UnexpectedEof => Broken::Truncated,
+                    _ => Broken::Read(e),
+                }));
+            }
+        };
+        if let Err(e) = output.write_all(buf.get(..n).unwrap_or_default()) {
+            return Some(Err(Broken::Write(e)));
+        }
+    }
+    Some(Ok(info.file_size()))
+}
+
 /// An integrity check of a .xz stream, by its id.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Check {
@@ -347,6 +391,10 @@ pub struct Settings {
     pub check: Check,
     /// Start a new .xz block after this many bytes of input.
     pub block_size: Option<NonZeroU64>,
+    /// `None`: one thread, one block unless `block_size`. `Some(n)`: blocks compressed
+    /// `n` at once (0, one a core), each of `block_size` or of three dictionaries and
+    /// at least 1 MiB, as liblzma's threaded encoder cuts them.
+    pub threads: Option<u32>,
 }
 
 impl Settings {
@@ -403,13 +451,21 @@ pub fn compressor<'a>(
                 let block = u32::try_from(block.get()).unwrap_or(u32::MAX);
                 lzma_options.dict_size = lzma_options.dict_size.min(block.max(4096));
             }
+            let dict = u64::from(lzma_options.dict_size);
             let mut options = XzOptions {
                 lzma_options,
                 ..XzOptions::default()
             };
             options.set_check_sum_type(settings.check.check_type());
-            options.set_block_size(settings.block_size);
-            Box::new(XzWriter::new(inner, options)?)
+            if let Some(threads) = settings.threads {
+                let block = settings.block_size.unwrap_or_else(|| default_block(dict));
+                options.set_block_size(Some(block));
+                let workers = u32::try_from(super::parallel::threads(threads)).unwrap_or(1);
+                Box::new(XzWriterMt::new(inner, options, workers)?)
+            } else {
+                options.set_block_size(settings.block_size);
+                Box::new(XzWriter::new(inner, options)?)
+            }
         }
         Format::Lzma => Box::new(LzmaWriter::new_use_header(inner, &lzma_options, None)?),
         Format::Raw => Box::new(Lzma2Writer::new(
@@ -420,6 +476,37 @@ pub fn compressor<'a>(
             },
         )),
     })
+}
+
+/// liblzma's block size for its threaded encoder: three dictionaries, at least 1 MiB.
+#[must_use]
+pub fn default_block(dict_size: u64) -> NonZeroU64 {
+    NonZeroU64::new((dict_size * 3).max(1 << 20)).unwrap_or(NonZeroU64::MIN)
+}
+
+/// What liblzma's encoder of `preset` holds besides its buffers (the `CompMem` column
+/// of xz's manual), for counting the threads memory allows.
+#[must_use]
+pub const fn encoder_memory(preset: u32) -> u64 {
+    const MIB: u64 = 1 << 20;
+    MIB * match preset {
+        0 => 3,
+        1 => 9,
+        2 => 17,
+        3 => 32,
+        4 => 48,
+        5 | 6 => 94,
+        7 => 186,
+        8 => 370,
+        _ => 674,
+    }
+}
+
+impl<W: Write> Encoder for XzWriterMt<W> {
+    fn finish(self: Box<Self>) -> io::Result<()> {
+        let mut inner = (*self).finish()?;
+        inner.flush()
+    }
 }
 
 /// A .xz writer whose LZMA2 is as `lzma_options` say, `check` on each block and a new
@@ -762,6 +849,7 @@ mod tests {
             extreme: false,
             check: Check::Crc64,
             block_size: None,
+            threads: None,
         };
         let mut out = Vec::new();
         let mut encoder = compressor(format, &settings, &mut out).unwrap();
@@ -780,6 +868,54 @@ mod tests {
             8 << 20,
         )?;
         Ok(out)
+    }
+
+    /// Data that compresses, in blocks of 64 KiB, made on four threads.
+    fn threaded_blocks(data: &[u8]) -> Vec<u8> {
+        let settings = Settings {
+            preset: 1,
+            extreme: false,
+            check: Check::Crc64,
+            block_size: NonZeroU64::new(64 << 10),
+            threads: Some(4),
+        };
+        let mut out = Vec::new();
+        let mut encoder = compressor(Format::Xz, &settings, &mut out).unwrap();
+        encoder.write_all(data).unwrap();
+        encoder.finish().unwrap();
+        out
+    }
+
+    #[test]
+    fn blocks_made_and_read_on_threads_give_the_data_back() {
+        let data: Vec<u8> = (0..300_000u32)
+            .flat_map(|i| (i % 1000).to_le_bytes())
+            .collect();
+        let packed = threaded_blocks(&data);
+        let info = file_info(&mut io::Cursor::new(&packed)).unwrap();
+        assert_eq!(info.block_count(), data.len().div_ceil(64 << 10) as u64);
+        let mut back = Vec::new();
+        let read = decompress_file_mt(&mut io::Cursor::new(&packed), &mut back, 4)
+            .unwrap()
+            .unwrap();
+        assert_eq!(read, packed.len() as u64);
+        assert_eq!(back, data);
+        // One thread, or one block, is the stream decoder's.
+        assert!(decompress_file_mt(&mut io::Cursor::new(&packed), &mut Vec::new(), 1).is_none());
+        let one = threaded_blocks(&data[..1000]);
+        assert!(decompress_file_mt(&mut io::Cursor::new(&one), &mut Vec::new(), 4).is_none());
+    }
+
+    #[test]
+    fn a_damaged_block_read_on_threads_is_corrupt() {
+        let data: Vec<u8> = (0..200_000u32)
+            .flat_map(|i| (i % 777).to_le_bytes())
+            .collect();
+        let mut packed = threaded_blocks(&data);
+        let middle = packed.len() / 2;
+        packed[middle] ^= 0x55;
+        let outcome = decompress_file_mt(&mut io::Cursor::new(&packed), &mut Vec::new(), 4);
+        assert!(matches!(outcome, Some(Err(Broken::Corrupt))), "{outcome:?}");
     }
 
     #[test]

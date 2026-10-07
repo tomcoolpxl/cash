@@ -26,8 +26,11 @@ Utils' tables.
   unchanged without `-f` or `-k`, as xz leaves it; cash's own tool links are hard links.
 - Windows has no mode bits: a read-only input gives a read-only output, and that is all.
 - Custom filter chains (`--filters`, `--lzma2=...`, the BCJ filters, `--delta`) are
-  refused; cash compresses with the presets. `-T`, the memory limits, `--block-list`
-  and `--flush-timeout` are checked and change nothing: cash compresses on one thread.
+  refused; cash compresses with the presets. As in xz, every core compresses by
+  default, each a block of three dictionaries (fewer cores when a quarter of the memory
+  would not hold them all), and a file of several blocks decompresses on every core;
+  `-T1` is one thread and one block. The memory limits, `--block-list` and
+  `--flush-timeout` are checked and change nothing.
 - `-vv` says what `-v` says, and `-lvv` what `-lv` says. At a console, `-v` shows each
   file's final line.
 - The words of `XZ_DEFAULTS` and `XZ_OPT` are read before the command line's, as xz reads

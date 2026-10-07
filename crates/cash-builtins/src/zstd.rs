@@ -12,9 +12,10 @@
 //! Where cash differs, on purpose:
 //! - The version line, also at the top of `-v` and `-H`, is cash's.
 //! - Every level, `-1` to `-22` and `--fast`, compresses at ruzstd's fast level, about
-//!   zstd's level 1; the levels are read, checked and reported as zstd does. `-T`,
-//!   `--long`, `--adapt`, `--rsyncable`, `-B`, the memory limit and zstd's other tuning
-//!   are read and change nothing.
+//!   zstd's level 1; the levels are read, checked and reported as zstd does. `--long`,
+//!   `--adapt`, `--rsyncable`, `-B`, the memory limit and zstd's other tuning are read
+//!   and change nothing. `-T`, `--single-thread` and `ZSTD_NBTHREADS` are zstd's: its
+//!   4 MiB frames are compressed that many at once, the same bytes for any number.
 //! - Dictionaries (`-D`, `--train`, `--patch-from`), the benchmark (`-b`) and lz4 are
 //!   refused.
 //! - `-vv` says what `-v` says, and no progress counter is drawn at a console.
@@ -192,6 +193,9 @@ struct Options {
     /// Asked for and refused: dictionaries and `--patch-from`.
     dictionary: Option<&'static str>,
     window_log: Option<u32>,
+    /// `-T#`, `--threads=#`, `--single-thread`: the frames compressed at once, 0 for one
+    /// a core; unset, `ZSTD_NBTHREADS`, else one.
+    threads: Option<u32>,
 }
 
 /// What reading the command line came to.
@@ -423,6 +427,7 @@ fn preset(name: &str) -> Options {
         files: Vec::new(),
         dictionary: None,
         window_log: None,
+        threads: None,
     };
     if name == "unzstd" {
         options.operation = Operation::Decompress;
@@ -463,13 +468,14 @@ fn long_switch(options: &mut Options, word: &str) -> Option<Result<(), Parsed>> 
         "--check" => o.check = true,
         "--no-check" => o.check = false,
         "--pass-through" => o.pass_through = Some(true),
+        // zstd's single-thread mode: the frames one after the other.
+        "--single-thread" => o.threads = Some(1),
         "--no-pass-through" => o.pass_through = Some(false),
         "--test" => o.operation = Operation::Test,
         "--train" => o.operation = Operation::Train,
         "--keep" => o.remove = false,
         "--rm" => o.remove = true,
         "--adapt"
-        | "--single-thread"
         | "--sparse"
         | "--no-sparse"
         | "--asyncio"
@@ -512,8 +518,11 @@ fn long_with_value(
     word: &str,
 ) -> Result<(), Parsed> {
     let display = options.display;
+    if let Some(rest) = word.strip_prefix("--threads") {
+        options.threads = Some(words.number(rest, display)?);
+        return Ok(());
+    }
     let numeric = [
-        "--threads",
         "--memlimit",
         "--memory",
         "--memlimit-decompress",
@@ -698,7 +707,8 @@ fn short_options(
             'l' => options.operation = Operation::List,
             'r' => options.recursive = true,
             'b' => options.operation = Operation::Bench,
-            'M' | 'e' | 'i' | 'B' | 'T' | 's' | 'P' => {
+            'T' => options.threads = Some(number(&mut rest)?),
+            'M' | 'e' | 'i' | 'B' | 's' | 'P' => {
                 number(&mut rest)?;
             }
             'p' => {
@@ -1119,6 +1129,8 @@ struct Run<'a, SE: cash_core::ShellExtensions> {
     bytes_in: u64,
     bytes_out: u64,
     has_stdin_input: bool,
+    /// The frames compressed at once.
+    threads: usize,
 }
 
 impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
@@ -1367,13 +1379,14 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
                         extreme: false,
                         check: xz::Check::Crc64,
                         block_size: None,
+                        threads: None,
                     };
                     xz::compressor(format, &settings, &mut written)?
                 }
-                Kind::Zstd | Kind::Lz4 => Box::new(cash_archive::codec::zstd::Writer::with_check(
-                    &mut written,
-                    self.options.check,
-                )),
+                Kind::Zstd | Kind::Lz4 => Box::new(
+                    cash_archive::codec::zstd::Writer::with_check(&mut written, self.options.check)
+                        .with_threads(self.threads),
+                ),
             };
             io::copy(&mut read, &mut encoder)?;
             encoder.finish()?;
@@ -2249,6 +2262,18 @@ fn run<SE: cash_core::ShellExtensions>(
     }
     let stdout: io::BufWriter<Box<dyn Write>> =
         io::BufWriter::with_capacity(STDOUT_BUFFER, Box::new(context.stdout()));
+    // init_nbWorkers: -T, else ZSTD_NBTHREADS when it is a number, else one; 0, a core
+    // each.
+    let threads = options
+        .threads
+        .or_else(|| {
+            let value = exported(context, "ZSTD_NBTHREADS")?;
+            match read_u32(&value) {
+                Ok((n, "")) => Some(n),
+                _ => None,
+            }
+        })
+        .unwrap_or(1);
     let mut run = Run {
         options,
         context,
@@ -2258,6 +2283,7 @@ fn run<SE: cash_core::ShellExtensions>(
         bytes_in: 0,
         bytes_out: 0,
         has_stdin_input: false,
+        threads: cash_archive::codec::parallel::threads(threads),
     };
     let outcome = run.run_all();
     let flushed = run.stdout.flush();

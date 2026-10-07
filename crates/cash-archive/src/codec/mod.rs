@@ -18,6 +18,7 @@
 
 pub mod bzip2;
 pub mod gzip;
+pub mod parallel;
 pub mod xz;
 pub mod zstd;
 

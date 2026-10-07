@@ -14,9 +14,12 @@
 //! - Custom filter chains (`--filters`, `--lzma1`, `--lzma2`, the BCJ filters and
 //!   `--delta`) are refused; the presets, `-e`, `--check` and `--block-size` are what
 //!   cash compresses with. `--block-list`, `--flush-timeout`, the memory limits,
-//!   `--no-adjust`, `--no-sync`, `--no-sparse` and `-T` are read and checked, and change
-//!   nothing: cash compresses on one thread, in one block unless `--block-size` says
-//!   otherwise. `--ignore-check` is read, and checks are verified all the same.
+//!   `--no-adjust`, `--no-sync` and `--no-sparse` are read and checked, and change
+//!   nothing. `-T` is xz's: by default every core compresses blocks of three
+//!   dictionaries (as many cores as a quarter of the memory allows), `-T1` one thread
+//!   and one block unless `--block-size`; a file of one stream and several blocks
+//!   decompresses on every core too. `--ignore-check` is read, and checks are verified
+//!   all the same.
 //! - `-vv` says what `-v` says, and `-lvv` what `-lv` says: the filter chains and memory
 //!   figures there are liblzma's. At a console, `-v` shows each file's final line, not
 //!   one redrawn every second.
@@ -271,6 +274,9 @@ struct Options {
     extreme: bool,
     check: Check,
     block_size: Option<NonZeroU64>,
+    /// `-T`: `None` for one thread (`-T1`), else the threads (0, one a core; `+1`, the
+    /// threaded encoder on one).
+    threads: Option<u32>,
     suffix: Option<String>,
     names: Option<NameList>,
     files: Vec<String>,
@@ -527,8 +533,11 @@ fn apply(invoked: &str, options: &mut Options, id: Id, value: Option<&str>) -> R
         }
         Id::Letter('t') => options.mode = Mode::Test,
         Id::Letter('T') => {
+            let forced = value.starts_with('+');
             let threads = value.strip_prefix('+').unwrap_or(value);
-            number("threads", threads, 0, 16384).map_err(fatal)?;
+            let n = number("threads", threads, 0, 16384).map_err(fatal)?;
+            let n = u32::try_from(n).unwrap_or(16384);
+            options.threads = (n != 1 || forced).then_some(n);
         }
         Id::Letter('v') => options.verbosity = (options.verbosity + 1).min(4),
         Id::Letter('V') => {
@@ -640,6 +649,7 @@ fn parse(invoked: &str, environment: &[Option<String>], words: &[String]) -> Par
         extreme: false,
         check: Check::Crc64,
         block_size: None,
+        threads: Some(0),
         suffix: None,
         names: None,
         files: Vec::new(),
@@ -868,6 +878,37 @@ struct Run<'a, SE: cash_core::ShellExtensions> {
 }
 
 impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
+    /// The threads compressing: as `-T` says, and with `-T0` one a core, as many as a
+    /// quarter of the memory holds, each with its encoder and two blocks (xz's default
+    /// limit for threads it chooses itself).
+    fn threads(&self) -> Option<u32> {
+        let asked = self.options.threads?;
+        if asked != 0 {
+            return Some(asked);
+        }
+        let cores = u32::try_from(cash_archive::codec::parallel::threads(0)).unwrap_or(1);
+        let preset = self.options.preset.min(9);
+        let dict = u64::from(
+            Settings {
+                preset,
+                extreme: self.options.extreme,
+                check: self.options.check,
+                block_size: None,
+                threads: None,
+            }
+            .dict_size(),
+        );
+        let block = self
+            .options
+            .block_size
+            .unwrap_or_else(|| xz::default_block(dict))
+            .get();
+        let each = xz::encoder_memory(preset).saturating_add(block.saturating_mul(2));
+        let budget = cash_win32::process::total_physical_memory().map_or(u64::MAX, |m| m / 4);
+        let fit = u32::try_from(budget / each.max(1)).unwrap_or(u32::MAX);
+        Some(cores.min(fit).max(1))
+    }
+
     fn say(&self, text: &str) -> Result<(), Stop> {
         self.context.stderr().write_all(text.as_bytes())?;
         Ok(())
@@ -1214,6 +1255,7 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
                 extreme: self.options.extreme,
                 check: self.options.check,
                 block_size: self.options.block_size,
+                threads: self.threads(),
             };
             let mut written = Counted::new(&mut output);
             let mut read = Counted::new(&mut input);
@@ -1230,17 +1272,36 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
                 extreme: self.options.extreme,
                 check: self.options.check,
                 block_size: None,
+                threads: None,
             };
-            let mut all = BufReader::with_capacity(64 << 10, io::Cursor::new(first).chain(input));
             let mut written = Counted::new(&mut output);
-            xz::decompress(
-                format,
-                &mut all,
-                &mut written,
-                self.options.single_stream,
-                settings.dict_size(),
-            )
-            .map(|read| (read, written.count))
+            // A file of several blocks, on every core.
+            let threads = self
+                .options
+                .threads
+                .map_or(1, cash_archive::codec::parallel::threads);
+            let threaded = match &source {
+                Source::File(path, _) if format == Format::Xz && !self.options.single_stream => {
+                    fs::File::open(path).ok().and_then(|mut file| {
+                        xz::decompress_file_mt(&mut file, &mut written, threads)
+                    })
+                }
+                _ => None,
+            };
+            if let Some(threaded) = threaded {
+                threaded.map(|read| (read, written.count))
+            } else {
+                let mut all =
+                    BufReader::with_capacity(64 << 10, io::Cursor::new(first).chain(input));
+                xz::decompress(
+                    format,
+                    &mut all,
+                    &mut written,
+                    self.options.single_stream,
+                    settings.dict_size(),
+                )
+                .map(|read| (read, written.count))
+            }
         };
         match outcome {
             Ok((compressed, uncompressed)) => {
