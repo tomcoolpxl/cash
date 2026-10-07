@@ -327,6 +327,34 @@ pub struct NewMember {
     pub size_hint: Option<u64>,
 }
 
+/// A member's data compressed ahead, on another thread, for [`Writer::add_ahead`].
+#[derive(Clone, Debug)]
+pub struct Ahead {
+    crc: u32,
+    size: u64,
+    compressed: Vec<u8>,
+    text: TextCheck,
+}
+
+/// All of `input` compressed by `method` at `level` into memory, as [`Writer::add`]
+/// compresses a member: so that members can be compressed on several threads, then
+/// written in order.
+///
+/// # Errors
+///
+/// When reading the input fails.
+pub fn compress_ahead(input: &mut dyn Read, method: u16, level: u32) -> io::Result<Ahead> {
+    let mut compressed = Vec::new();
+    let mut text = TextCheck::default();
+    let (crc, size) = compress(input, &mut compressed, method, level, &mut text)?;
+    Ok(Ahead {
+        crc,
+        size,
+        compressed,
+        text,
+    })
+}
+
 /// What adding a member came to.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct Added {
@@ -440,11 +468,35 @@ impl<O: Output> Writer<O> {
     /// # Errors
     ///
     /// When reading the input or writing the archive fails.
+    pub fn add(&mut self, member: &NewMember, input: Input<'_>) -> io::Result<Added> {
+        self.add_with(member, input, None)
+    }
+
+    /// [`Self::add`] with the member's data compressed ahead by [`compress_ahead`]: the
+    /// same bytes. `input` is read again only when the data is stored after all.
+    ///
+    /// # Errors
+    ///
+    /// When reading the input or writing the archive fails.
+    pub fn add_ahead(
+        &mut self,
+        member: &NewMember,
+        ahead: Ahead,
+        input: Input<'_>,
+    ) -> io::Result<Added> {
+        self.add_with(member, input, Some(ahead))
+    }
+
     #[expect(
         clippy::too_many_lines,
         reason = "zip's zipup: the header, the data, the retry as stored, the sizes"
     )]
-    pub fn add(&mut self, member: &NewMember, mut input: Input<'_>) -> io::Result<Added> {
+    fn add_with(
+        &mut self,
+        member: &NewMember,
+        mut input: Input<'_>,
+        mut ahead: Option<Ahead>,
+    ) -> io::Result<Added> {
         let start = self.at;
         let folder = matches!(input, Input::None);
         let mut method = if folder {
@@ -540,12 +592,21 @@ impl<O: Output> Writer<O> {
                 } else {
                     Box::new(&mut counting)
                 };
-                let (crc, size) = match &mut input {
-                    Input::None => (0, 0),
-                    Input::File(file) => {
+                // Data compressed ahead stands for the first pass, never encrypted.
+                let ready = ahead
+                    .take()
+                    .filter(|_| method != method::STORED && !encrypted && !folder);
+                let (crc, size) = match (ready, &mut input) {
+                    (Some(ready), _) => {
+                        sink.write_all(&ready.compressed)?;
+                        check = ready.text;
+                        (ready.crc, ready.size)
+                    }
+                    (None, Input::None) => (0, 0),
+                    (None, Input::File(file)) => {
                         compress(*file, &mut sink, method, member.level, &mut check)?
                     }
-                    Input::Stream(stream) => {
+                    (None, Input::Stream(stream)) => {
                         compress(*stream, &mut sink, method, member.level, &mut check)?
                     }
                 };
@@ -915,6 +976,38 @@ mod tests {
             .map(io::Cursor::into_inner)
             .unwrap_or_default();
         assert_eq!(bytes, unhex(INFO_ZIP_X));
+    }
+
+    #[test]
+    fn data_compressed_ahead_is_the_same_archive() {
+        // Text that shrinks, and text that does not: stored after the deflate pass.
+        let inputs = [
+            "hello world, hello world\n".repeat(400).into_bytes(),
+            b"hello\n".to_vec(),
+            (0..4000u32)
+                .map(|n| (n.wrapping_mul(2_654_435_761) >> 24) as u8)
+                .collect(),
+        ];
+        let write = |ahead: bool| {
+            let mut writer = Writer::new(io::Cursor::new(Vec::new()));
+            for (i, data) in inputs.iter().enumerate() {
+                let mut member = hello(method::DEFLATED, true);
+                member.name = format!("m{i}").into_bytes();
+                let mut file = io::Cursor::new(data.clone());
+                if ahead {
+                    let early =
+                        compress_ahead(&mut io::Cursor::new(data.clone()), method::DEFLATED, 6)
+                            .unwrap();
+                    writer
+                        .add_ahead(&member, early, Input::File(&mut file))
+                        .unwrap();
+                } else {
+                    writer.add(&member, Input::File(&mut file)).unwrap();
+                }
+            }
+            writer.finish(b"").map(io::Cursor::into_inner).unwrap()
+        };
+        assert_eq!(write(true), write(false));
     }
 
     #[test]

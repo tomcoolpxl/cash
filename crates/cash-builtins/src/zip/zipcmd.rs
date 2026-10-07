@@ -7,7 +7,9 @@ use std::io::{self, Read, Seek, SeekFrom};
 use std::path::PathBuf;
 
 use cash_archive::zip::read::{self, Archive, OpenError};
-use cash_archive::zip::write::{Input, NewMember, SplitOutput, Stream, Writer};
+use cash_archive::zip::write::{
+    Ahead, Input, NewMember, SplitOutput, Stream, Writer, compress_ahead,
+};
 use cash_archive::zip::{
     DOS_DIRECTORY, DOS_READ_ONLY, DosTime, Entry, S_IFDIR, S_IFIFO, S_IFLNK, S_IFREG, extra_id,
     field, method, percent,
@@ -88,6 +90,13 @@ struct Options {
     zipfile: Option<String>,
     files: Vec<String>,
 }
+
+/// The largest file compressed ahead, in memory, while others are; a larger one is
+/// compressed as it is written.
+const AHEAD_LARGEST: u64 = 64 << 20;
+
+/// The input a batch compressed ahead may hold in all.
+const AHEAD_BUDGET: u64 = 256 << 20;
 
 /// zip's options of two letters, tried before one.
 const TWO_LETTERS: [&str; 31] = [
@@ -1093,7 +1102,8 @@ impl<SE: cash_core::ShellExtensions> Zip<'_, SE> {
         }
     }
 
-    /// Writes the plan: old entries copied, files added.
+    /// Writes the plan: old entries copied, files added. The files of a batch are
+    /// compressed at once, on every core, then written in order: the same bytes.
     fn write_items<O: cash_archive::zip::write::Output>(
         &mut self,
         writer: &mut Writer<O>,
@@ -1101,7 +1111,90 @@ impl<SE: cash_core::ShellExtensions> Zip<'_, SE> {
         old: &mut Option<(ArchiveSource, Archive)>,
         written: &mut Vec<(String, PathBuf)>,
     ) -> io::Result<()> {
-        for item in items {
+        let threads = cash_archive::codec::parallel::threads(0);
+        let mut items = items.into_iter().peekable();
+        while items.peek().is_some() {
+            let batch: Vec<Item> = items.by_ref().take(threads * 2).collect();
+            let mut budget = AHEAD_BUDGET;
+            let jobs: Vec<Option<(PathBuf, u16, u32)>> = batch
+                .iter()
+                .map(|item| match item {
+                    Item::New(source, _) => self.ahead_job(source).filter(|_| {
+                        let size = source.view.as_ref().map_or(0, |v| v.size);
+                        let fits = size <= budget;
+                        budget = budget.saturating_sub(size);
+                        fits
+                    }),
+                    Item::Copy(_) => None,
+                })
+                .collect();
+            let aheads = if jobs.iter().flatten().count() > 1 {
+                cash_archive::codec::parallel::map_ordered(jobs, |job| {
+                    Ok(job.and_then(|(path, method, level)| {
+                        fs::File::open(&path)
+                            .and_then(|mut file| compress_ahead(&mut file, method, level))
+                            .ok()
+                    }))
+                })?
+            } else {
+                vec![None; batch.len()]
+            };
+            for (item, ahead) in batch.into_iter().zip(aheads) {
+                self.write_item(writer, item, ahead, old, written)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// The file `source` is, and how to compress it, when it can be compressed ahead:
+    /// a plain file, compressed, not encrypted, not converted, and not large.
+    fn ahead_job(&self, source: &Source) -> Option<(PathBuf, u16, u32)> {
+        let view = source.view.as_ref()?;
+        if view.kind != unix::Kind::File
+            || view.size > AHEAD_LARGEST
+            || self.options.password.is_some()
+            || self.options.eol.is_some()
+        {
+            return None;
+        }
+        let method = self.method_for(source, false);
+        (method != method::STORED)
+            .then(|| (source.path.clone(), method, self.options.level.max(1)))
+            .and_then(|(path, method, level)| Some((path?, method, level)))
+    }
+
+    /// How `source` is compressed: stored at `-0`, for a suffix of `-n`'s, and for a
+    /// symbolic link; else `-Z`'s method, deflate unless it says.
+    fn method_for(&self, source: &Source, symlink: bool) -> u16 {
+        let suffix_stored = self
+            .options
+            .suffixes
+            .clone()
+            .unwrap_or_else(|| {
+                [".Z", ".zip", ".zoo", ".arc", ".lzh", ".arj"]
+                    .iter()
+                    .map(|s| (*s).to_owned())
+                    .collect()
+            })
+            .iter()
+            .any(|s| source.name.ends_with(s.as_str()));
+        if self.options.level == 0 || suffix_stored || symlink {
+            method::STORED
+        } else {
+            self.options.method.unwrap_or(method::DEFLATED)
+        }
+    }
+
+    /// One item of the plan.
+    fn write_item<O: cash_archive::zip::write::Output>(
+        &mut self,
+        writer: &mut Writer<O>,
+        item: Item,
+        ahead: Option<Ahead>,
+        old: &mut Option<(ArchiveSource, Archive)>,
+        written: &mut Vec<(String, PathBuf)>,
+    ) -> io::Result<()> {
+        {
             match item {
                 Item::Copy(index) => {
                     if let Some((file, archive)) = old.as_mut() {
@@ -1114,7 +1207,7 @@ impl<SE: cash_core::ShellExtensions> Zip<'_, SE> {
                     }
                 }
                 Item::New(source, word) => {
-                    self.add(writer, &source, word)?;
+                    self.add(writer, &source, word, ahead)?;
                     if let Some(path) = &source.path {
                         written.push((source.name.clone(), path.clone()));
                     }
@@ -1134,6 +1227,7 @@ impl<SE: cash_core::ShellExtensions> Zip<'_, SE> {
         writer: &mut Writer<O>,
         source: &Source,
         word: &str,
+        ahead: Option<Ahead>,
     ) -> io::Result<()> {
         let speak = !self.options.quiet;
         if speak {
@@ -1174,23 +1268,7 @@ impl<SE: cash_core::ShellExtensions> Zip<'_, SE> {
         if mode & 0o200 == 0 {
             dos_bits |= u32::from(DOS_READ_ONLY);
         }
-        let suffix_stored = self
-            .options
-            .suffixes
-            .clone()
-            .unwrap_or_else(|| {
-                [".Z", ".zip", ".zoo", ".arc", ".lzh", ".arj"]
-                    .iter()
-                    .map(|s| (*s).to_owned())
-                    .collect()
-            })
-            .iter()
-            .any(|s| source.name.ends_with(s.as_str()));
-        let method = if self.options.level == 0 || suffix_stored || symlink {
-            method::STORED
-        } else {
-            self.options.method.unwrap_or(method::DEFLATED)
-        };
+        let method = self.method_for(source, symlink);
         let (local_extra, central_extra) = if self.options.no_extra || source.view.is_none() {
             (Vec::new(), Vec::new())
         } else {
@@ -1269,7 +1347,10 @@ impl<SE: cash_core::ShellExtensions> Zip<'_, SE> {
                             writer.add(&member, Input::File(&mut file))?
                         }
                     }
-                    None => writer.add(&member, Input::File(&mut file))?,
+                    None => match ahead {
+                        Some(ahead) => writer.add_ahead(&member, ahead, Input::File(&mut file))?,
+                        None => writer.add(&member, Input::File(&mut file))?,
+                    },
                 },
                 Err(e) => {
                     if speak {

@@ -597,12 +597,17 @@ the same day found no compressor in cash using more than one thread.
    layout); one block's input keeps bzip2 1.0.8's bytes. The oracle's `BZIP2=-1` case
    on 300 kB is now three streams (216 bytes, not 134), a divergence in the test.
    64 MB: 2.4 s → 0.39 s.
-5. **zip**: members compressed in parallel, written in order, the same bytes.
+5. **zip** (done 2026-10-07): members compressed in parallel, written in order, the
+   same bytes (`compress_ahead`, `add_ahead`; a test compares with `add`). Batches of
+   twice the cores, files up to 64 MiB, 256 MiB in all; encrypted, `-l`-converted and
+   larger files as before. 48 files of 1.4 MB: 0.09 s (Info-ZIP 0.86 s).
 6. **tar** gets the codecs' threads through `-z`, `-j`, `-J`, `--zstd` (done
    2026-10-07): `codec::writer_on`, each codec's own default (zstd one thread, xz as many
    as memory holds, gzip and bzip2 every core). `tar -cj` of 64 MB: 12.5 s → 0.56 s.
-7. The pages (`gzip.md`, `bzip2.md`, `xz.md`, `zstd.md`, `zip.md`) say what runs on
-   several cores; the oracles keep passing; a timing test only on an idle CPU.
+7. The pages (`gzip.md`, `bzip2.md`, `xz.md`, `zstd.md`, `zip.md`, `tar.md`) say
+   what runs on several cores (done 2026-10-07); the oracles pass. The timings above
+   were taken by hand on an idle machine; no timing test was added, since one would fail
+   on a busy CI machine.
 8. Release 1.10.0 with 7z and this.
 
 ---

@@ -31,6 +31,9 @@ Info-ZIP's unzip read, with Unix modes and times.
   out. A drive and a leading `/` are left out of a member's name.
 - Deflate is miniz_oxide's, so a compressed member's bytes, and sometimes its size, are
   not zip's own. Text is told from binary over the whole file.
+- Files are compressed several at once, on every core, and written in order: the same
+  archive as one at a time. A file over 64 MiB, an encrypted one and one `-l` converts
+  are compressed as they are written.
 - A name with characters beyond ASCII is stored as UTF-8 and marked so.
 - `-sv` names the parts once the archive is written, not while it is, and `-sp` (a
   pause to change disks) is refused.
