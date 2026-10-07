@@ -743,7 +743,11 @@ fn open_source<SE: cash_core::ShellExtensions>(
                     code: win::E_NOTIMPL,
                 }));
             }
-            let header_encrypted = opened.archive().header_encrypted();
+            // Updating other formats comes later in the phase.
+            let Some(archive) = opened.archive() else {
+                return Err(Stop::System(win_error(win::E_NOTIMPL)));
+            };
+            let header_encrypted = archive.header_encrypted();
             Ok(Ok(Some(Source {
                 opened,
                 mtime: Some(meta.last_write_time()),
@@ -1034,7 +1038,7 @@ impl<SE: cash_core::ShellExtensions> Job<'_, '_, SE> {
         }
 
         // The 7z handler's items, and which times and attributes it keeps.
-        let db = source.as_ref().map(|s| s.opened.archive().clone());
+        let db = source.as_ref().and_then(|s| s.opened.archive().cloned());
         let files = db.as_ref().map_or(&[][..], |db| db.files.as_slice());
         let kept = |explicit: Option<bool>, default: bool, has: &dyn Fn(&ArchiveEntry) -> bool| {
             explicit.unwrap_or_else(|| {
@@ -1428,7 +1432,10 @@ impl<SE: cash_core::ShellExtensions> Job<'_, '_, SE> {
                 progress(self.console, self.options, 3, "=", &db.files[f].name);
             }
             let entries: Vec<ArchiveEntry> = block_files.iter().map(|&f| entry_for(f)).collect();
-            let reader = source.opened.reader();
+            let reader = source
+                .opened
+                .reader()
+                .ok_or_else(|| Stop::System(win_error(win::E_NOTIMPL)))?;
             writer.push_copied_block(entries, block, |out| reader.copy_packed(block_index, out))?;
             return Ok(());
         }
@@ -1447,7 +1454,10 @@ impl<SE: cash_core::ShellExtensions> Job<'_, '_, SE> {
         for (at, &f) in block_files.iter().enumerate() {
             place[f] = Some(at);
         }
-        let reader = source.opened.reader();
+        let reader = source
+            .opened
+            .reader()
+            .ok_or_else(|| Stop::System(win_error(win::E_NOTIMPL)))?;
         let console = self.console;
         let options = self.options;
         writer.push_block_by(|sink| {

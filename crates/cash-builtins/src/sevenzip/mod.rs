@@ -20,6 +20,7 @@ mod help;
 mod list;
 mod methods;
 mod scan;
+mod streams;
 mod text;
 mod update;
 

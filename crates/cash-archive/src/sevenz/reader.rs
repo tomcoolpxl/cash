@@ -1728,6 +1728,9 @@ pub enum Problem {
     UnexpectedEnd,
     /// The data is encrypted and no password was given.
     PasswordNeeded,
+    /// More follows the data where the format says it ends (7-Zip's
+    /// `kDataAfterEnd`, for the formats of one stream).
+    DataAfterEnd,
 }
 
 impl Problem {

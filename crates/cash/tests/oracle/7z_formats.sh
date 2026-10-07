@@ -1,0 +1,94 @@
+# 7z on the formats besides 7z, run under 7-Zip 26.03 (the oracle: Scoop's 7z.exe on
+# Windows) and under cash's builtin: gzip, bzip2, xz and lzma streams, kept here as hex
+# (made by cash 1.9.0's gzip, bzip2 and xz from "hello stream\n" of 2026-10-07 08:00
+# UTC, and 3000 numbers in 4 KiB xz blocks; zstd's by cash 1.10's zstd, with and
+# without its checksum). 7z_formats.out is 7-Zip's output.
+#
+# As in 7z_cases.sh, `z` turns 7-Zip's CRLF and `\` into LF and `/`. 7-Zip shows times
+# in Windows' own zone: the fixtures' 08:00 UTC is 10:00 in Brussels.
+#
+# Regenerate the golden file (on Windows, with Scoop's 7-Zip and a cash without the
+# builtin, such as 1.9.0), then shift the Brussels times to UTC:
+#   cash 7z_formats.sh | sed 's/2026-10-07 10:00:00/2026-10-07 08:00:00/' > 7z_formats.out
+
+exec 2>&1 </dev/null
+export TZ=UTC0
+dir=$(mktemp -d)
+cd "$dir" || exit 1
+z() { 7z "$@" > "$dir/o.txt" 2>&1; r=$?; tr -d '\r' < "$dir/o.txt" | sed 's#\\#/#g'; echo "rc=$r"; }
+unhex() { printf "$(printf '%s' "$1" | sed 's/../\\x&/g')"; }
+unhex 1f8b080800fcc56a0003612e74787400cb48cdc9c957282e294a4dcce5020097f486bb0d000000 > a.txt.gz
+unhex 425a6839314159265359746f435a000002d1800010400022469c0020002201a6408069a68c211149476f78bb9229c28483a37a1ad0 > a.txt.bz2
+unhex fd377a585a000004e6d6b44604c0110d2101160000000000000000008888cd6801000c68656c6c6f2073747265616d0a000000004432b405aac6da0200012d0d79931d7e1fb6f37d010000000004595a > a.txt.xz
+unhex 5d00008000ffffffffffffffff00341949ee8de916728c0b9ccbb8e907ec59fffe8be800 > a.txt.lzma
+unhex 1f8b0800000000000003cb48cdc9c957282e294a4dcce5020097f486bb0d000000 > n.gz
+unhex fd377a585a000004e6d6b44603c0960480202101160000006bdadf24e00fff020e5d001882828f224ef8a655f7f099a5250d9045915a51b49bcaacdc0532ec85529fb1486defdce84bb961bae09c537f98c8a9540efc3d2ad306d766443d5664a6cd3dd7c71f44f418df020b3fe2c6c67be1e77f79441c79b742ae65b81bb50e84e19a820623395a7f72aa43faa59a1f92c0be4571794ad593c6900a39ad9c65872ab61a38c7e19317cad03e09eab052f0106026c05e5f10910db979787d974260d0a63877e123e8bb284f88522d7558263f66fde29cebd3af61d9357afffb62b13c7c931cf264b84d1c852ab15c000636014aebbc0548ef5c68b53c71819e2c6ce46706cf852a7509198cbc17440dcd3c69c636c49e9cd2ee3b35123e9352979d91e14d56315ecae59682af400c85a34956c8916a4035f914e4552d51352452848017202d5c038cc1e87a2d757a5c84c4e937fe871a7b45c49400e0186d9fb727c28fd8cc2b4d806ca8237dc6bd38ef67d411e23098e3ff4321123d65a397612ca7e68f91e71aa64b5323633058a1703eb19103694f8a36986d44ac7244a07ed6b7a506ffed3cf76de9dda2fc1fec7a0c2761f0f5dbdfe066bfc150fb60566632a87818c6ee814291c9d49e4092992a7ee367cf03a320c0c3904039c8cd16acc0a56f1e534c0fd6794ab087d75723489565214e89b285842cbc10b1d97a76632dac26559ef994518d89f0a0afb10eb4d651ed00d4b143b3eb78bb42f1bf5779700f3a7b27af8446bc9ebf01b5f631aeb40000006b5ba3bf11cc694003c0c5028020210116000000aa9ee605e00fff013d5d001882826984d0b70665085debc3df29ffcc5a059a2c6ad1afa7c8f14b39a9ca00e1bd799fea668a46d7e50c61276163b4b8f0ccbf3142cd8b75fd96433f7333eae9c2ad2d30e3170cfbc05989938cd10c12976f7bf296d4ad962c19e8f4faf8b299af6563dac14f6775a9bedac17d425a558700bf939198d7b4f980063eedaa847c7296f9952b04e6ca872f5b8481461e00da8371928eded5714a38c4cb9e772bc2aa8b6bb43b7787ff646b9aa152af2ef055b240fb346b3c78268cd2c12d677bcf01ae2df40a99b8cbb839381d39ba9cfd7d8aba698e09fc5c37d24d3dfec38f76ce3a77736d7e13d8f813fe954f8f7e795374aa48ee1e2b1abe13ccd97714ca59aab4d5635131587a80e3b88f172cdb3d7c6a45c42395770e494c5dea2779b1719e68599f33cff5fdc7eab4694b549ce33c9528fbcf927e530adeb416000000006ba871e6cff07c4b03c0ff0280202101160000005b8c377ae00fff01775d00050d2a2faddc49e101c025f948b09d840ecaf7d4f964ebe424d67a0917fb6a3b9351d6ddc57c9d01b0b1bac31707a2042040e2ff853ade65806e5f22223bfc48d50c569de793e8ef8438672ed4e47a3991c3447608516c1c7a4f68d94349ae2f5bb526044447a11f8cfb44dd44967095aa03061494a4704ba477d5d61bf7ae937a8236379f3069aef0c225538066e76bc70210361239585e3fee06dbde65dc64a58f2e3ff115a5fec65df4fee3d48dd0ac1178ae6f379800788bc7a0ff4bf2cfee038a70b22e50eff1797efaab009a9369787cc2e23cae669e24f4332f24266672130e3f5d96082e0ad3d3b02e67c1c99618ac81bc84b29f6f1bca7c1e0b8bf92358f15372e1ee6596a94c4a648dfb24fe61fe8d22b4866d6972e6fde3e90618edcc2d9c5dee45396ed49cf6410ebaf99f583a80675e69c36c575921df9b708e6259aa0d5c80898a23613fddeb470fbd9274f8a582d3617dcab2fb8e14555f0222b58480d5b009a4f8126261817db2c4cdb17402c26bbf0000acb8a287b3d2724403c0ff01c50c210116000000ff2fda2ae0064400f75d00190d836d10a3abeeef6357164d76cd03cae733175d13c017bbaa9d95b9619645132a16806ed4ea29e80d4fb82694d2ede94b797b3b92dfb6c8c1f956057be1e765da0fd20ec7b3c88d982db7247b27935e69d29cda4c23f0a3cba95e84851f26dd2e55138dd64af49682ed40dd5f4386ed4202a328136d75392a8fd3067623ce38da46ceb5c5cf7c037807fcfe3a56391e278bcc5d639b3a7acf04831e24870dec01c29e288cfe3e591e4045cbcabb49702506c555194d616f75618ba707a283d209b9f9d4408cbb255d3b4281d4bd9c0e6dabe0689dc4b269a95b2c378547067936f7ad660a19d0744a07eae432a23bb1a7e78036970000004eb7884ca552a3ed0004ae048020dd028020970380209702c50c000072ae5e8a09f462e6050000000004595a > big.txt.xz
+unhex 28b52ffd84380d00000069000068656c6c6f2073747265616d0a7bcf528b > a.txt.zst
+unhex 28b52ffd80380d00000069000068656c6c6f2073747265616d0a > nc.zst
+
+echo "== list"
+for f in a.txt.gz a.txt.bz2 a.txt.xz a.txt.lzma n.gz big.txt.xz a.txt.zst nc.zst; do
+  z l $f
+  z l -slt $f
+done
+
+echo "== test"
+for f in a.txt.gz a.txt.bz2 a.txt.xz a.txt.lzma n.gz big.txt.xz a.txt.zst nc.zst; do
+  z t $f
+done
+z t -bb1 a.txt.gz
+
+echo "== extract"
+z x a.txt.gz -oout
+stat -c '%Y %n' out/a.txt
+z x a.txt.bz2 -obz
+z e -so a.txt.xz
+z e -so a.txt.lzma
+z e -so a.txt.zst
+z x n.gz -oout
+z x big.txt.xz -oout
+find out bz | sort
+cat out/a.txt out/n bz/a.txt
+wc -c < out/big.txt
+
+echo "== names"
+cp a.txt.gz noext
+z l noext
+cp a.txt.gz x.tgz
+z l -ba x.tgz
+cp a.txt.bz2 y.TBZ
+z l -ba y.TBZ
+cp a.txt.lzma l.bin
+z l l.bin
+z l -tlzma l.bin
+z l -tgzip l.bin
+cp a.txt.gz gz.7z
+z l gz.7z
+z t gz.7z
+
+echo "== damaged"
+cp a.txt.gz tail.gz
+printf 'tailjunk' >> tail.gz
+z t tail.gz
+head -c 20 a.txt.gz > cut.gz
+z t cut.gz
+z l cut.gz
+cp a.txt.gz crc.gz
+printf 'X' | dd of=crc.gz bs=1 seek=33 conv=notrunc 2>/dev/null
+z t crc.gz
+cp a.txt.bz2 tail.bz2
+printf 'tailjunk' >> tail.bz2
+z t tail.bz2
+cp a.txt.xz tail.xz
+printf 'tailjunk' >> tail.xz
+z l tail.xz
+z t tail.xz
+cat a.txt.gz a.txt.gz > two.gz
+z l two.gz
+z t two.gz
+cat a.txt.bz2 a.txt.bz2 > two.bz2
+z t two.bz2
+z e -so two.gz
+printf 'junk' > j.gz
+z l j.gz
+z t j.gz

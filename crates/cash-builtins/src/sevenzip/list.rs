@@ -105,7 +105,7 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
                 continue;
             }
         };
-        if opened.tail > 0 {
+        if opened.tail > 0 || opened.type_warning.is_some() {
             warnings += 1;
         }
         archives += 1;
@@ -224,19 +224,20 @@ fn technical<SE: cash_core::ShellExtensions>(
             Prop::PackedSize => item.packed.map(|v| v.to_string()).unwrap_or_default(),
             Prop::Modified => item
                 .modified
-                .map_or_else(String::new, |t| text::time(&env.zone, t, 7)),
+                .map_or_else(String::new, |t| text::time(&env.zone, t, item.time_digits)),
             Prop::Created => item
                 .created
-                .map_or_else(String::new, |t| text::time(&env.zone, t, 7)),
+                .map_or_else(String::new, |t| text::time(&env.zone, t, item.time_digits)),
             Prop::Accessed => item
                 .accessed
-                .map_or_else(String::new, |t| text::time(&env.zone, t, 7)),
+                .map_or_else(String::new, |t| text::time(&env.zone, t, item.time_digits)),
             Prop::Anti => if item.anti { "+" } else { "-" }.to_owned(),
             Prop::Attributes => text::attributes_long(item.attrib.unwrap_or(0), item.is_dir),
             Prop::Crc => item.crc.map(|c| format!("{c:08X}")).unwrap_or_default(),
             Prop::Encrypted => if item.encrypted { "+" } else { "-" }.to_owned(),
             Prop::Method => item.method.clone().unwrap_or_default(),
             Prop::Block => item.block.map(|b| b.to_string()).unwrap_or_default(),
+            Prop::HostOs => item.host_os.clone().unwrap_or_default(),
         };
         let _ = writeln!(out, "{} = {value}", prop.name());
     }

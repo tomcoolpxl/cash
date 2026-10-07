@@ -67,10 +67,22 @@ impl Kind {
         })
     }
 
-    /// The format the first bytes say.
+    /// The format the first bytes say, of those with a signature.
     fn sniff(head: &[u8]) -> Option<Self> {
-        head.starts_with(&[b'7', b'z', 0xBC, 0xAF, 0x27, 0x1C])
-            .then_some(Self::SevenZ)
+        if head.starts_with(&[b'7', b'z', 0xBC, 0xAF, 0x27, 0x1C]) {
+            return Some(Self::SevenZ);
+        }
+        [Self::Gzip, Self::Bzip2, Self::Xz, Self::Zstd]
+            .into_iter()
+            .find(|&kind| super::streams::signature(kind, head))
+    }
+
+    /// Whether the format is one cash's 7z opens.
+    const fn readable(self) -> bool {
+        matches!(
+            self,
+            Self::SevenZ | Self::Gzip | Self::Bzip2 | Self::Xz | Self::Zstd | Self::Lzma
+        )
     }
 }
 
@@ -89,6 +101,7 @@ pub(super) enum Prop {
     Encrypted,
     Method,
     Block,
+    HostOs,
 }
 
 impl Prop {
@@ -106,6 +119,7 @@ impl Prop {
             Self::Encrypted => "Encrypted",
             Self::Method => "Method",
             Self::Block => "Block",
+            Self::HostOs => "Host OS",
         }
     }
 }
@@ -128,6 +142,10 @@ pub(super) struct Item {
     pub(super) encrypted: bool,
     pub(super) method: Option<String>,
     pub(super) block: Option<u64>,
+    /// The digits of a second a technical listing gives the times: 7 for FILETIME, 0
+    /// for Unix times.
+    pub(super) time_digits: usize,
+    pub(super) host_os: Option<String>,
 }
 
 /// Why an archive did not open, in 7-Zip's kinds.
@@ -150,7 +168,11 @@ pub(super) enum OpenFailure {
 /// An archive, open.
 pub(super) struct Opened {
     pub(super) kind: Kind,
-    pub(super) physical_size: u64,
+    /// The archive's size, when its format knows it on opening.
+    pub(super) physical_size: Option<u64>,
+    /// The format its name says, when it opened as another (7-Zip's
+    /// `ErrorFormatIndex`).
+    pub(super) type_warning: Option<Kind>,
     /// What `Print_OpenArchive_Props` shows after the physical size.
     pub(super) props: Vec<(&'static str, String)>,
     /// The properties a technical listing shows for each item.
@@ -158,7 +180,13 @@ pub(super) struct Opened {
     pub(super) items: Vec<Item>,
     /// Bytes after the archive's end.
     pub(super) tail: u64,
-    reader: ArchiveReader<File>,
+    backend: Backend,
+}
+
+/// What reads an open archive's data.
+enum Backend {
+    SevenZ(Box<ArchiveReader<File>>),
+    Stream(super::streams::Stream),
 }
 
 /// An item's data as extraction reads it: read it, then `finish` says whether all of
@@ -168,6 +196,10 @@ pub(super) trait Data: Read {
     fn finish(&mut self) -> Result<(), Problem>;
     /// Whether the item's data is encrypted, which 7-Zip names in its errors.
     fn encrypted(&self) -> bool;
+    /// The size the format reports once the data is decoded, when it knew none before.
+    fn unpacked(&self) -> Option<u64> {
+        None
+    }
 }
 
 impl Data for sevenz::EntryReader<'_> {
@@ -191,7 +223,8 @@ pub(super) fn open(
     let mut head = [0u8; 32];
     let read = read_up_to(&mut file, &mut head).map_err(OpenFailure::Io)?;
     file.seek(SeekFrom::Start(0)).map_err(OpenFailure::Io)?;
-    let sniffed = Kind::sniff(&head[..read]);
+    let head = &head[..read];
+    let sniffed = Kind::sniff(head).filter(|k| k.readable());
     let not_archive = |tried: Option<Kind>| OpenFailure::NotArchive {
         tried,
         flags: if tried.is_some() {
@@ -200,16 +233,45 @@ pub(super) fn open(
             Vec::new()
         },
     };
-    let kind = match (forced, sniffed) {
-        (Some(forced), Some(sniffed)) if forced == sniffed => forced,
-        (Some(forced), _) => return Err(not_archive(Some(forced))),
-        (None, Some(sniffed)) => sniffed,
-        (None, None) => return Err(not_archive(Kind::by_extension(path))),
+    // The format -t names; else the one the name's extension names, then the one the
+    // first bytes say, then lzma, which has no signature (7-Zip's `CArc::OpenStream`).
+    let by_name = Kind::by_extension(path);
+    let (kind, type_warning) = match forced {
+        Some(forced) if forced == Kind::Lzma && super::streams::signature(Kind::Lzma, head) => {
+            (forced, None)
+        }
+        Some(forced) if sniffed == Some(forced) => (forced, None),
+        Some(forced) => return Err(not_archive(Some(forced))),
+        None => match (by_name, sniffed) {
+            (_, Some(sniffed)) => (sniffed, by_name.filter(|&n| n != sniffed)),
+            (by_name, None) if super::streams::signature(Kind::Lzma, head) => {
+                (Kind::Lzma, by_name.filter(|&n| n != Kind::Lzma))
+            }
+            (by_name, None) => return Err(not_archive(by_name)),
+        },
     };
-    match kind {
-        Kind::SevenZ => open_7z(file, password),
-        other => Err(not_archive(Some(other))),
-    }
+    let mut opened = if kind == Kind::SevenZ {
+        open_7z(file, password)?
+    } else {
+        let mut file = file;
+        let Some(opening) =
+            super::streams::open(kind, &mut file, path, head).map_err(OpenFailure::Io)?
+        else {
+            return Err(not_archive(by_name.or(Some(kind))));
+        };
+        Opened {
+            kind,
+            physical_size: opening.physical_size,
+            type_warning: None,
+            props: opening.props,
+            item_props: opening.item_props,
+            items: vec![opening.item],
+            tail: 0,
+            backend: Backend::Stream(opening.stream),
+        }
+    };
+    opened.type_warning = type_warning;
+    Ok(opened)
 }
 
 fn read_up_to(file: &mut File, buf: &mut [u8]) -> io::Result<usize> {
@@ -284,12 +346,13 @@ fn open_7z(mut file: File, password: Option<&str>) -> Result<Opened, OpenFailure
     let reader = ArchiveReader::from_archive(archive, file, pw);
     Ok(Opened {
         kind: Kind::SevenZ,
-        physical_size,
+        physical_size: Some(physical_size),
+        type_warning: None,
         props,
         item_props,
         items,
         tail: len.saturating_sub(physical_size),
-        reader,
+        backend: Backend::SevenZ(Box::new(reader)),
     })
 }
 
@@ -326,6 +389,8 @@ fn items_of(archive: &sevenz::Archive) -> Vec<Item> {
                 encrypted: block.is_some_and(|b| archive.blocks[b].is_encrypted()),
                 method: block.map(|b| block_method(&archive.blocks[b])),
                 block: block.map(|b| b as u64),
+                time_digits: 7,
+                host_os: None,
             }
         })
         .collect()
@@ -496,27 +561,45 @@ fn archive_method(blocks: &[Block]) -> String {
 impl Opened {
     /// The password encrypted data is read with, typed after the archive was opened.
     pub(super) fn set_password(&mut self, password: &str) {
-        self.reader.set_password(Password::from(password));
+        if let Backend::SevenZ(reader) = &mut self.backend {
+            reader.set_password(Password::from(password));
+        }
     }
 
     /// The 7z reader underneath, which updating copies blocks from.
-    pub(super) const fn reader(&mut self) -> &mut ArchiveReader<File> {
-        &mut self.reader
+    pub(super) fn reader(&mut self) -> Option<&mut ArchiveReader<File>> {
+        match &mut self.backend {
+            Backend::SevenZ(reader) => Some(reader),
+            Backend::Stream(_) => None,
+        }
     }
 
     /// The 7z archive's blocks, items and header, as read.
-    pub(super) const fn archive(&self) -> &sevenz::Archive {
-        self.reader.archive()
+    pub(super) fn archive(&self) -> Option<&sevenz::Archive> {
+        match &self.backend {
+            Backend::SevenZ(reader) => Some(reader.archive()),
+            Backend::Stream(_) => None,
+        }
     }
 
     /// Reads the items `wanted` names in the archive's order, handing each its data.
-    pub(super) fn extract<E>(
+    pub(super) fn extract<E: From<io::Error>>(
         &mut self,
         wanted: &dyn Fn(usize) -> bool,
         mut each: impl FnMut(usize, &mut dyn Data) -> Result<bool, E>,
     ) -> Result<(), E> {
-        self.reader
-            .for_each_entries(wanted, |index, _entry, reader| each(index, reader))
+        match &mut self.backend {
+            Backend::SevenZ(reader) => {
+                reader.for_each_entries(wanted, |index, _entry, reader| each(index, reader))
+            }
+            Backend::Stream(stream) => {
+                if wanted(0) {
+                    let mut data = stream.data()?;
+                    each(0, &mut data)?;
+                }
+                Ok(())
+            }
+        }
     }
 }
 

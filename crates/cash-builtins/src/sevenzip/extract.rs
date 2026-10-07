@@ -244,15 +244,21 @@ pub(super) fn read_line<SE: cash_core::ShellExtensions>(
 
 /// `Print_OpenArchive_Props`: the archive's facts.
 pub(super) fn archive_props(found: &Found, opened: &Opened) -> String {
-    let mut text = format!(
-        "--\nPath = {}\nType = {}\n",
-        found.name.replace('\\', "/"),
-        opened.kind.name()
-    );
+    let mut text = format!("--\nPath = {}\n", found.name.replace('\\', "/"));
+    if let Some(named) = opened.type_warning {
+        let _ = writeln!(
+            text,
+            "Open WARNING: Cannot open the file as [{}] archive",
+            named.name()
+        );
+    }
+    let _ = writeln!(text, "Type = {}", opened.kind.name());
     if opened.tail > 0 {
         text.push_str("WARNINGS:\nThere are data after the end of archive\n");
     }
-    let _ = writeln!(text, "Physical Size = {}", opened.physical_size);
+    if let Some(size) = opened.physical_size {
+        let _ = writeln!(text, "Physical Size = {size}");
+    }
     if opened.tail > 0 {
         let _ = writeln!(text, "Tail Size = {}", opened.tail);
     }
@@ -429,12 +435,22 @@ fn extract_archive<SE: cash_core::ShellExtensions>(
             return Ok(());
         }
     };
-    let warned = opened.tail > 0;
-    if warned {
+    if opened.tail > 0 {
         totals.open_warnings += 1;
         console.so("\nWARNINGS:\nThere are data after the end of archive\n\n");
         console.flush_so();
     }
+    // `Print_ErrorFormatIndex_Warning`: opened as another format than its name says.
+    if let Some(named) = opened.type_warning {
+        console.so(&format!(
+            "WARNING:\n{}\nCannot open the file as [{}] archive\nThe file is open as [{}] archive\n\n",
+            archive.name.replace('\\', "/"),
+            named.name(),
+            opened.kind.name()
+        ));
+        console.flush_so();
+    }
+    let warned = opened.tail > 0 || opened.type_warning.is_some();
     console.so(&archive_props(archive, &opened));
     console.so("\n");
     totals.packed += archive.size;
@@ -559,7 +575,6 @@ fn extract_items<SE: cash_core::ShellExtensions>(
             totals.folders += 1;
         } else {
             totals.files += 1;
-            totals.size += item.size.unwrap_or(0);
         }
         let outcome = if test || skip {
             io::copy(data, &mut io::sink()).map(|_| ())
@@ -593,6 +608,10 @@ fn extract_items<SE: cash_core::ShellExtensions>(
             }
         };
         let finished = data.finish();
+        // The size known before decoding, else the one the format reports after.
+        if !item.is_dir {
+            totals.size += item.size.or_else(|| data.unpacked()).unwrap_or(0);
+        }
         if let Err(problem) = finished {
             if !skip {
                 errors += 1;
@@ -655,6 +674,7 @@ const fn problem_words(problem: Problem, encrypted: bool) -> &'static str {
         }
         Problem::Data | Problem::PasswordNeeded => "Data Error",
         Problem::UnexpectedEnd => "Unexpected end of data",
+        Problem::DataAfterEnd => "There are some data after the end of the payload data",
     }
 }
 

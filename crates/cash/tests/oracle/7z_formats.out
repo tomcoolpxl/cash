@@ -1,0 +1,938 @@
+== list
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 39 bytes (1 KiB)
+
+Listing archive: a.txt.gz
+
+--
+Path = a.txt.gz
+Type = gzip
+Headers Size = 16
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00 .....           13           39  a.txt
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00                 13           39  1 files
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 39 bytes (1 KiB)
+
+Listing archive: a.txt.gz
+
+--
+Path = a.txt.gz
+Type = gzip
+Headers Size = 16
+
+----------
+Path = a.txt
+Size = 13
+Packed Size = 39
+Modified = 2026-10-07 08:00:00
+Host OS = Unix
+CRC = BB86F497
+
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 53 bytes (1 KiB)
+
+Listing archive: a.txt.bz2
+
+--
+Path = a.txt.bz2
+Type = bzip2
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+                    .....                            a.txt
+------------------- ----- ------------ ------------  ------------------------
+                                                 53  1 files
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 53 bytes (1 KiB)
+
+Listing archive: a.txt.bz2
+
+--
+Path = a.txt.bz2
+Type = bzip2
+
+----------
+Size = 
+Packed Size = 
+
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 80 bytes (1 KiB)
+
+Listing archive: a.txt.xz
+
+--
+Path = a.txt.xz
+Type = xz
+Physical Size = 80
+Method = LZMA2:23 CRC64
+Streams = 1
+Blocks = 1
+Characteristics = BlockPackSize BlockUnpackSize
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+                    .....           13           80  a.txt
+------------------- ----- ------------ ------------  ------------------------
+                                    13           80  1 files
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 80 bytes (1 KiB)
+
+Listing archive: a.txt.xz
+
+--
+Path = a.txt.xz
+Type = xz
+Physical Size = 80
+Method = LZMA2:23 CRC64
+Streams = 1
+Blocks = 1
+Characteristics = BlockPackSize BlockUnpackSize
+
+----------
+Size = 13
+Packed Size = 80
+Method = LZMA2:23 CRC64
+
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 36 bytes (1 KiB)
+
+Listing archive: a.txt.lzma
+
+--
+Path = a.txt.lzma
+Type = lzma
+Method = LZMA:23
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+                    .....                            a.txt
+------------------- ----- ------------ ------------  ------------------------
+                                                 36  1 files
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 36 bytes (1 KiB)
+
+Listing archive: a.txt.lzma
+
+--
+Path = a.txt.lzma
+Type = lzma
+Method = LZMA:23
+
+----------
+Size = 
+Packed Size = 
+Method = LZMA:23
+
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 33 bytes (1 KiB)
+
+Listing archive: n.gz
+
+--
+Path = n.gz
+Type = gzip
+Headers Size = 10
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+                    .....           13           33  n
+------------------- ----- ------------ ------------  ------------------------
+                                    13           33  1 files
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 33 bytes (1 KiB)
+
+Listing archive: n.gz
+
+--
+Path = n.gz
+Type = gzip
+Headers Size = 10
+
+----------
+Path = n
+Size = 13
+Packed Size = 33
+Modified = 
+Host OS = Unix
+CRC = BB86F497
+
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1648 bytes (2 KiB)
+
+Listing archive: big.txt.xz
+
+--
+Path = big.txt.xz
+Type = xz
+Physical Size = 1648
+Method = LZMA2:23 CRC64
+Streams = 1
+Blocks = 4
+Cluster Size = 4096
+Characteristics = BlockPackSize BlockUnpackSize
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+                    .....        13893         1648  big.txt
+------------------- ----- ------------ ------------  ------------------------
+                                 13893         1648  1 files
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1648 bytes (2 KiB)
+
+Listing archive: big.txt.xz
+
+--
+Path = big.txt.xz
+Type = xz
+Physical Size = 1648
+Method = LZMA2:23 CRC64
+Streams = 1
+Blocks = 4
+Cluster Size = 4096
+Characteristics = BlockPackSize BlockUnpackSize
+
+----------
+Size = 13893
+Packed Size = 1648
+Method = LZMA2:23 CRC64
+
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 30 bytes (1 KiB)
+
+Listing archive: a.txt.zst
+
+--
+Path = a.txt.zst
+Type = zstd
+Method = header-open-only: XXH64 wnd-desc-log-MAX:17 wnd-MAX:128KiB wnd-use-MAX:13 content-size-frame-max:13 content-size-total:13
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+                    .....                            a.txt
+------------------- ----- ------------ ------------  ------------------------
+                                                 30  1 files
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 30 bytes (1 KiB)
+
+Listing archive: a.txt.zst
+
+--
+Path = a.txt.zst
+Type = zstd
+Method = header-open-only: XXH64 wnd-desc-log-MAX:17 wnd-MAX:128KiB wnd-use-MAX:13 content-size-frame-max:13 content-size-total:13
+
+----------
+Size = 
+Packed Size = 
+
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 26 bytes (1 KiB)
+
+Listing archive: nc.zst
+
+--
+Path = nc.zst
+Type = zstd
+Method = header-open-only: NO-XXH64 wnd-desc-log-MAX:17 wnd-MAX:128KiB wnd-use-MAX:13 content-size-frame-max:13 content-size-total:13
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+                    .....                            nc
+------------------- ----- ------------ ------------  ------------------------
+                                                 26  1 files
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 26 bytes (1 KiB)
+
+Listing archive: nc.zst
+
+--
+Path = nc.zst
+Type = zstd
+Method = header-open-only: NO-XXH64 wnd-desc-log-MAX:17 wnd-MAX:128KiB wnd-use-MAX:13 content-size-frame-max:13 content-size-total:13
+
+----------
+Size = 
+Packed Size = 
+
+rc=0
+== test
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 39 bytes (1 KiB)
+
+Testing archive: a.txt.gz
+--
+Path = a.txt.gz
+Type = gzip
+Headers Size = 16
+
+Everything is Ok
+
+Size:       13
+Compressed: 39
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 53 bytes (1 KiB)
+
+Testing archive: a.txt.bz2
+--
+Path = a.txt.bz2
+Type = bzip2
+
+Everything is Ok
+
+Size:       13
+Compressed: 53
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 80 bytes (1 KiB)
+
+Testing archive: a.txt.xz
+--
+Path = a.txt.xz
+Type = xz
+Physical Size = 80
+Method = LZMA2:23 CRC64
+Streams = 1
+Blocks = 1
+Characteristics = BlockPackSize BlockUnpackSize
+
+Everything is Ok
+
+Size:       13
+Compressed: 80
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 36 bytes (1 KiB)
+
+Testing archive: a.txt.lzma
+--
+Path = a.txt.lzma
+Type = lzma
+Method = LZMA:23
+
+Everything is Ok
+
+Size:       0
+Compressed: 36
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 33 bytes (1 KiB)
+
+Testing archive: n.gz
+--
+Path = n.gz
+Type = gzip
+Headers Size = 10
+
+Everything is Ok
+
+Size:       13
+Compressed: 33
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1648 bytes (2 KiB)
+
+Testing archive: big.txt.xz
+--
+Path = big.txt.xz
+Type = xz
+Physical Size = 1648
+Method = LZMA2:23 CRC64
+Streams = 1
+Blocks = 4
+Cluster Size = 4096
+Characteristics = BlockPackSize BlockUnpackSize
+
+Everything is Ok
+
+Size:       13893
+Compressed: 1648
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 30 bytes (1 KiB)
+
+Testing archive: a.txt.zst
+--
+Path = a.txt.zst
+Type = zstd
+Method = header-open-only: XXH64 wnd-desc-log-MAX:17 wnd-MAX:128KiB wnd-use-MAX:13 content-size-frame-max:13 content-size-total:13
+
+Everything is Ok
+
+Size:       13
+Compressed: 30
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 26 bytes (1 KiB)
+
+Testing archive: nc.zst
+--
+Path = nc.zst
+Type = zstd
+Method = header-open-only: NO-XXH64 wnd-desc-log-MAX:17 wnd-MAX:128KiB wnd-use-MAX:13 content-size-frame-max:13 content-size-total:13
+
+Everything is Ok
+
+Size:       13
+Compressed: 26
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 39 bytes (1 KiB)
+
+Testing archive: a.txt.gz
+--
+Path = a.txt.gz
+Type = gzip
+Headers Size = 16
+
+T a.txt
+Everything is Ok
+
+Size:       13
+Compressed: 39
+rc=0
+== extract
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 39 bytes (1 KiB)
+
+Extracting archive: a.txt.gz
+--
+Path = a.txt.gz
+Type = gzip
+Headers Size = 16
+
+Everything is Ok
+
+Size:       13
+Compressed: 39
+rc=0
+1791360000 out/a.txt
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 53 bytes (1 KiB)
+
+Extracting archive: a.txt.bz2
+--
+Path = a.txt.bz2
+Type = bzip2
+
+Everything is Ok
+
+Size:       13
+Compressed: 53
+rc=0
+hello stream
+rc=0
+hello stream
+rc=0
+hello stream
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 33 bytes (1 KiB)
+
+Extracting archive: n.gz
+--
+Path = n.gz
+Type = gzip
+Headers Size = 10
+
+Everything is Ok
+
+Size:       13
+Compressed: 33
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1648 bytes (2 KiB)
+
+Extracting archive: big.txt.xz
+--
+Path = big.txt.xz
+Type = xz
+Physical Size = 1648
+Method = LZMA2:23 CRC64
+Streams = 1
+Blocks = 4
+Cluster Size = 4096
+Characteristics = BlockPackSize BlockUnpackSize
+
+Everything is Ok
+
+Size:       13893
+Compressed: 1648
+rc=0
+bz
+bz/a.txt
+out
+out/a.txt
+out/big.txt
+out/n
+hello stream
+hello stream
+hello stream
+13893
+== names
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 39 bytes (1 KiB)
+
+Listing archive: noext
+
+--
+Path = noext
+Type = gzip
+Headers Size = 16
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00 .....           13           39  a.txt
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00                 13           39  1 files
+rc=0
+2026-10-07 08:00:00 .....           13           39  a.txt
+rc=0
+                    .....                            y.tar
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 36 bytes (1 KiB)
+
+Listing archive: l.bin
+
+--
+Path = l.bin
+Type = lzma
+Method = LZMA:23
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+                    .....                            l
+------------------- ----- ------------ ------------  ------------------------
+                                                 36  1 files
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 36 bytes (1 KiB)
+
+Listing archive: l.bin
+
+--
+Path = l.bin
+Type = lzma
+Method = LZMA:23
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+                    .....                            l
+------------------- ----- ------------ ------------  ------------------------
+                                                 36  1 files
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 36 bytes (1 KiB)
+
+Listing archive: l.bin
+
+
+Errors: 1
+
+ERROR: l.bin : l.bin
+Open ERROR: Cannot open the file as [gzip] archive
+
+
+ERRORS:
+Is not archive
+
+rc=2
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 39 bytes (1 KiB)
+
+Listing archive: gz.7z
+
+--
+Path = gz.7z
+Open WARNING: Cannot open the file as [7z] archive
+Type = gzip
+Headers Size = 16
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00 .....           13           39  a.txt
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00                 13           39  1 files
+
+Warnings: 1
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 39 bytes (1 KiB)
+
+Testing archive: gz.7z
+WARNING:
+gz.7z
+Cannot open the file as [7z] archive
+The file is open as [gzip] archive
+
+--
+Path = gz.7z
+Open WARNING: Cannot open the file as [7z] archive
+Type = gzip
+Headers Size = 16
+
+Everything is Ok
+
+Archives with Warnings: 1
+Size:       13
+Compressed: 39
+rc=0
+== damaged
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 47 bytes (1 KiB)
+
+Testing archive: tail.gz
+--
+Path = tail.gz
+Type = gzip
+Headers Size = 16
+
+ERROR: There are some data after the end of the payload data : a.txt
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 20 bytes (1 KiB)
+
+Testing archive: cut.gz
+--
+Path = cut.gz
+Type = gzip
+Headers Size = 16
+
+ERROR: Unexpected end of data : a.txt
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 20 bytes (1 KiB)
+
+Listing archive: cut.gz
+
+--
+Path = cut.gz
+Type = gzip
+Headers Size = 16
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00 .....   3385673931           20  a.txt
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00         3385673931           20  1 files
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 39 bytes (1 KiB)
+
+Testing archive: crc.gz
+--
+Path = crc.gz
+Type = gzip
+Headers Size = 16
+
+ERROR: CRC Failed : a.txt
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 61 bytes (1 KiB)
+
+Testing archive: tail.bz2
+--
+Path = tail.bz2
+Type = bzip2
+
+ERROR: There are some data after the end of the payload data : tail
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 88 bytes (1 KiB)
+
+Listing archive: tail.xz
+
+--
+Path = tail.xz
+Type = xz
+Method = LZMA2:23
+Characteristics = BlockPackSize BlockUnpackSize
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+                    .....                            tail
+------------------- ----- ------------ ------------  ------------------------
+                                                 88  1 files
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 88 bytes (1 KiB)
+
+Testing archive: tail.xz
+--
+Path = tail.xz
+Type = xz
+Method = LZMA2:23
+Characteristics = BlockPackSize BlockUnpackSize
+
+ERROR: There are some data after the end of the payload data : tail
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 78 bytes (1 KiB)
+
+Listing archive: two.gz
+
+--
+Path = two.gz
+Type = gzip
+Headers Size = 16
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00 .....           13           78  a.txt
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00                 13           78  1 files
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 78 bytes (1 KiB)
+
+Testing archive: two.gz
+--
+Path = two.gz
+Type = gzip
+Headers Size = 16
+
+Everything is Ok
+
+Size:       13
+Compressed: 78
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 106 bytes (1 KiB)
+
+Testing archive: two.bz2
+--
+Path = two.bz2
+Type = bzip2
+
+Everything is Ok
+
+Size:       26
+Compressed: 106
+rc=0
+hello stream
+hello stream
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 4 bytes (1 KiB)
+
+Listing archive: j.gz
+
+
+Errors: 1
+
+ERROR: j.gz : j.gz
+Open ERROR: Cannot open the file as [gzip] archive
+
+
+ERRORS:
+Is not archive
+
+rc=2
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 4 bytes (1 KiB)
+
+Testing archive: j.gz
+ERROR: j.gz
+j.gz
+Open ERROR: Cannot open the file as [gzip] archive
+
+
+ERRORS:
+Is not archive
+
+Can't open as archive: 1
+Files: 0
+Size:       0
+Compressed: 0
+rc=2

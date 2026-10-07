@@ -243,6 +243,8 @@ pub enum CodecError {
     Truncated,
     /// A feature of the format this reader does not have.
     Unsupported(String),
+    /// Something other than another member follows the last one ([`members_reader`]).
+    TrailingData,
 }
 
 impl fmt::Display for CodecError {
@@ -253,6 +255,7 @@ impl fmt::Display for CodecError {
             Self::Checksum => f.write_str("checksum mismatch"),
             Self::Truncated => f.write_str("unexpected end of input"),
             Self::Unsupported(what) => write!(f, "unsupported: {what}"),
+            Self::TrailingData => f.write_str("data after the end of the stream"),
         }
     }
 }
@@ -353,6 +356,89 @@ pub fn reader<'a>(codec: Codec, inner: impl Read + 'a) -> Box<dyn Read + 'a> {
         }),
         Codec::Lzma => Box::new(LazyLzma::Header(Some(Box::new(inner)))),
         Codec::Zstd => Box::new(zstd::Reader::new(inner)),
+    }
+}
+
+/// A reader of every member or stream in turn, as 7-Zip's handlers read them.
+///
+/// Another follows where one starts with the format's magic, the input ends where it
+/// ends, and anything else is [`CodecError::TrailingData`] (gzip, bzip2, xz); other
+/// codecs read as [`reader`] reads them.
+pub fn members_reader<'a, R: BufRead + 'a>(codec: Codec, inner: R) -> Box<dyn Read + 'a> {
+    match codec {
+        Codec::Gzip => Box::new(Checked {
+            inner: Members {
+                decoder: Some(flate2::bufread::GzDecoder::new(inner)),
+                magic: &[0x1F, 0x8B],
+                make: flate2::bufread::GzDecoder::new,
+                unmake: flate2::bufread::GzDecoder::into_inner,
+            },
+            classify: classify_by_kind,
+        }),
+        Codec::Bzip2 => Box::new(Checked {
+            inner: Members {
+                decoder: Some(::bzip2::bufread::BzDecoder::new(inner)),
+                magic: b"BZh",
+                make: ::bzip2::bufread::BzDecoder::new,
+                unmake: ::bzip2::bufread::BzDecoder::into_inner,
+            },
+            classify: classify_bzip2,
+        }),
+        Codec::Xz => Box::new(Checked {
+            inner: lzma_rust2::XzReader::new(inner, true),
+            classify: classify_xz_members,
+        }),
+        other => reader(other, inner),
+    }
+}
+
+/// lzma-rust2's words for what follows the last .xz stream when it is neither stream
+/// padding nor another stream: trailing data; other errors as [`classify_by_kind`].
+fn classify_xz_members(error: &io::Error) -> Option<CodecError> {
+    let words = error.to_string();
+    if [
+        "invalid data after stream",
+        "incomplete XZ magic bytes",
+        "invalid data after stream padding",
+    ]
+    .contains(&words.as_str())
+    {
+        return Some(CodecError::TrailingData);
+    }
+    classify_by_kind(error)
+}
+
+/// One member's decoder at a time, over the input the last one gave back.
+struct Members<R, D> {
+    decoder: Option<D>,
+    magic: &'static [u8],
+    make: fn(R) -> D,
+    unmake: fn(D) -> R,
+}
+
+impl<R: BufRead, D: Read> Read for Members<R, D> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        loop {
+            let Some(decoder) = self.decoder.as_mut() else {
+                return Ok(0);
+            };
+            let n = decoder.read(buf)?;
+            if n > 0 || buf.is_empty() {
+                return Ok(n);
+            }
+            let Some(decoder) = self.decoder.take() else {
+                return Ok(0);
+            };
+            let mut inner = (self.unmake)(decoder);
+            let rest = inner.fill_buf()?;
+            if rest.is_empty() {
+                return Ok(0);
+            }
+            if !rest.starts_with(self.magic) {
+                return Err(CodecError::TrailingData.into_io());
+            }
+            self.decoder = Some((self.make)(inner));
+        }
     }
 }
 
