@@ -385,10 +385,6 @@ impl ScriptLineProvider {
 }
 
 #[cfg(test)]
-#[expect(
-    clippy::panic,
-    reason = "a failed assumption in a test should abort it loudly"
-)]
 mod tests {
     use super::*;
     use std::io::Write;

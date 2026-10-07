@@ -819,7 +819,6 @@ impl Interpreter {
 impl Interpreter {
     /// Run a program, collecting its output for tests that assert on it.
     #[expect(
-        clippy::expect_used,
         clippy::unwrap_in_result,
         reason = "test helper: output that is not UTF-8 should fail the test loudly"
     )]
@@ -834,10 +833,6 @@ impl Interpreter {
 }
 
 #[cfg(test)]
-#[expect(
-    clippy::expect_used,
-    reason = "a failed assumption in a test should abort it loudly"
-)]
 mod tests {
     use super::*;
 

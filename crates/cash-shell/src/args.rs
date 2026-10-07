@@ -343,7 +343,6 @@ mod tests {
     }
 
     #[test]
-    #[expect(clippy::expect_used)]
     fn test_will_read_commands_from_stdin() {
         // (arguments, whether commands will be read from stdin)
         let cases = [

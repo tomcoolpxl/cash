@@ -917,10 +917,6 @@ impl ExecutionResult {
     }
 
     #[cfg(test)]
-    #[expect(
-        clippy::panic,
-        reason = "a test that expects a value fails loudly without one"
-    )]
     pub(crate) fn unwrap_expr(self) -> AwkValue {
         match self {
             ExecutionResult::Expression(value) => value,

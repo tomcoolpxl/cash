@@ -2405,7 +2405,6 @@ impl Display for ArithmeticTarget {
 }
 
 #[cfg(test)]
-#[expect(clippy::panic)]
 mod tests {
     use super::*;
     use crate::{ParserOptions, SourcePosition};

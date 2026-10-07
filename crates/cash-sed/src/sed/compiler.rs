@@ -2290,11 +2290,6 @@ fn get_cmd_spec(
 }
 
 #[cfg(test)]
-#[expect(
-    clippy::expect_used,
-    clippy::panic,
-    reason = "a failed assumption in a test should abort it loudly"
-)]
 mod tests {
     use super::*;
     use crate::sed::fast_io::IOChunk;

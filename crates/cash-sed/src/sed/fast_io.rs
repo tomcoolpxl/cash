@@ -689,7 +689,6 @@ pub fn main() -> io::Result<()> {
 
 #[cfg(test)]
 #[expect(
-    clippy::panic,
     clippy::panic_in_result_fn,
     clippy::unwrap_in_result,
     reason = "a failed assumption in a test should abort it loudly"

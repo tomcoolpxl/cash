@@ -1,4 +1,7 @@
 allow-unwrap-in-tests = true
+# A test asserts loudly on failure, with a message where it has one to give.
+allow-expect-in-tests = true
+allow-panic-in-tests = true
 
 # Product and platform names that are not code items, so `doc_markdown` must not ask for
 # backticks around them. `..` keeps clippy's own default list.

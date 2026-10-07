@@ -839,11 +839,6 @@ pub fn parse_program(text: &str, file_path: Option<&str>) -> Result<Program, Par
 }
 
 #[cfg(test)]
-#[expect(
-    clippy::expect_used,
-    clippy::panic,
-    reason = "a failed assumption in a test should abort it loudly"
-)]
 mod test {
     use super::*;
 

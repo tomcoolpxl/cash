@@ -917,10 +917,6 @@ fn finish(options: &Options, status: u8, refused_input: bool) -> ExecutionResult
 }
 
 #[cfg(test)]
-#[expect(
-    clippy::panic,
-    reason = "a failed assumption in a test should abort it loudly"
-)]
 mod tests {
     use super::*;
 

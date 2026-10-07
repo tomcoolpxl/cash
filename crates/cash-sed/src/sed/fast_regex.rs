@@ -797,10 +797,6 @@ impl<'t> Captures<'t> {
 }
 
 #[cfg(test)]
-#[expect(
-    clippy::expect_used,
-    reason = "a failed assumption in a test should abort it loudly"
-)]
 mod tests {
     use super::*;
 

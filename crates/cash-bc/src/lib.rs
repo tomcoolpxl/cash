@@ -302,10 +302,6 @@ fn run(args: Args) -> i32 {
 }
 
 #[cfg(test)]
-#[expect(
-    clippy::expect_used,
-    reason = "a failed assumption in a test should abort it loudly"
-)]
 mod tests {
     use super::{Args, run_on_thread};
     use clap::Parser;

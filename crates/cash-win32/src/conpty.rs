@@ -476,7 +476,6 @@ mod tests {
     use super::*;
 
     #[test]
-    #[expect(clippy::expect_used)]
     fn test_conpty_echo() {
         let cmd = Path::new("C:\\Windows\\System32\\cmd.exe");
         let mut session = ConPtySession::start(cmd, &["/c", "echo", "HELLO_CONPTY"], None)

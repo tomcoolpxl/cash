@@ -58,11 +58,6 @@ mod string;
 mod value;
 
 #[cfg(test)]
-#[expect(
-    clippy::expect_used,
-    clippy::panic,
-    reason = "a failed assumption in a test should abort it loudly"
-)]
 mod tests;
 
 const STACK_SIZE: usize = 2048;

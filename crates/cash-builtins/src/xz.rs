@@ -1722,7 +1722,6 @@ fn run<SE: cash_core::ShellExtensions>(
 }
 
 #[cfg(test)]
-#[expect(clippy::panic, reason = "a test stops on what it did not expect")]
 mod tests {
     use super::*;
 

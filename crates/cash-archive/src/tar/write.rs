@@ -445,7 +445,6 @@ impl<W: Write> Writer<W> {
 }
 
 #[cfg(test)]
-#[expect(clippy::panic, reason = "a test stops on what it did not expect")]
 mod tests {
     use super::*;
     use crate::tar::read::{Event, Reader};
