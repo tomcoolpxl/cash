@@ -70,6 +70,8 @@ mod sevenzip;
 // cash: `rar` and `unrar`, WinRAR 7.23's console interfaces on cash-archive's RAR, which
 // Windows does not have.
 mod rar;
+// RAR's packed data read and decoded, for `7z` and `rar` both.
+mod rardata;
 mod tar;
 // cash: `zip`, `unzip` and `zipinfo`, Info-ZIP's interfaces on cash-archive: Windows has
 // none of them, and Explorer's zip folders are not scriptable.
