@@ -371,6 +371,56 @@ Built against GNU tar 1.35's oracle, the plan moved in four places:
   -mhc=off` are 7-Zip's byte for byte; compressed sizes are compared apart, since the
   LZMA encoder is not 7-Zip's.
 
+### 3.15 rar and unrar (phase 33, decided 2026-10-07)
+
+RARLAB's console tools under their own names: `rar` reading and writing, `unrar` reading,
+as WinRAR 7.23's `Rar.exe` and the freeware `UnRAR.exe` 7.23 have them. The user's picks
+are in section 7: the fuller set, RAR 5 by default, WinRAR as the oracle.
+
+- **The library is rars**, cash's own since phase 33 (`cash-archive::rar`). It reads RAR
+  1.3 to 7 and writes every generation from 1.3 to 7: solid, AES (RAR 2.0, 3 and 5),
+  encrypted headers (RAR 3 and later), volumes, comments, RAR 5's recovery record and
+  quick-open index. It repairs from RAR 3's and 5's recovery records and RAR 3's `.rev`
+  volumes, and writes no `.rev`. Its decoders accept what WinRAR accepts, which is what
+  rar's `t` and `x` want. 7z's RAR reading stays in `sevenzip/rar7`, 7-Zip's view of the
+  same archives: rar and 7z share the library, not a front end.
+- **Two names, one module** (`cash-builtins/src/rar`), as 7z and 7za are: `unrar` has
+  UnRAR's commands (`e`, `x`, `t`, `p`, `l…`, `v…`) and switches, and answers the others
+  as UnRAR does.
+- **Face**: rar's words, listings (`l`, `lt`, `lta`, `lb`, `v`, `vt`, `vta`, `vb`),
+  progress lines, questions (`[Y]es, [N]o, [A]ll, n[E]ver, [R]ename, [Q]uit`) and exit
+  codes (0 to 12, and 255 on Ctrl-C), with LF and `/` as tar, zip and 7z print. The
+  banner's place holds `RAR (cash)` and `UNRAR (cash)`, as 7z's holds `7-Zip (cash)`;
+  `-idc` and `-inul` leave it out. Switches start with `-` (rar on Windows takes `/` too,
+  which in cash is a path) and stand anywhere until `--`. The `RAR` variable and
+  `rar.ini` supply default switches as rar reads them, and `-cfg-` ignores both.
+- **What is written**: RAR 5 by default, `-ma4` for RAR 4 (RAR 2.9's format, which
+  WinRAR writes for `-ma4`). rars' compressor is not WinRAR's, so compressed sizes differ;
+  stored archives (`-m0`) are compared byte for byte, as 7z's `-mx0` are.
+- **Windows facts**: attributes and times as WinRAR stores them on Windows (`-ts` for the
+  three times). `-ol` stores symbolic links and junctions as links and `-oh` hard links,
+  as 7z's `-snl` and `-snh` do. NTFS streams and security (`-os`, `-ow`) get "not
+  implemented", as 7z's `-sns` and `-sni` do.
+- **Commands and switches**: the fuller set. The everyday set: `a`, `u`, `f`,
+  `m`, `mf`, `d`, `x`, `e`, `t`, `p`, the listings, `c`, `cw`, `rn`, `k`, `rr`. Its
+  switches: selection (`-r`, `-r-`, `-r0`, `-x`, `-n`, their `@` lists, `-ed`, `-e`,
+  `-sl`, `-sm`, `-ta`, `-tb`, `-tn`, `-to`), names (`-ep`, `-ep1` to `-ep4`, `-ap`,
+  `-ad`, `-op`, `-cl`, `-cu`), update and overwrite (`-u`, `-f`, `-o+`, `-o-`, `-or`,
+  `-y`, `-df`, `-t`, `-tk`, `-tl`), compression (`-m0` to `-m5`, `-ma`, `-md`, `-ms`,
+  `-mt`, `-s` and its forms, `-ht`, `-qo`, `-oi`), volumes (`-v`, `-vn`), encryption
+  (`-p`, `-hp`), comments (`-z`, `-c-`), messages (`-id`, `-inul`, `-ierr`), and `-si`,
+  `-w`, `-kb`, `-dh`, `-ai`. The fuller set adds `r` (repair), `rc` (rebuild missing
+  volumes from `.rev` files), `ch`, `i`, `-ag`, `-as`, `-dr`, `-dw`, `-sc` and `-log`.
+  Refused with rar's words in every set: SFX (`s`, `-sfx`), `rv` (rars writes no
+  `.rev`), `-ieml`, `-ioff`, `-isnd`, `-ri`, `-vp`, `-om`, `-oc`.
+- **Spool files first**: TODO's item on rars' spool files (deleted on close, in the temp
+  folder cash names) is fixed before `rar a` is built, since rar's writes are the path
+  that spools.
+- **Oracle**: Scoop's WinRAR 7.23. `tests/oracle/rar_cases.sh` and
+  `unrar_cases.sh`, made under the originals and checked in. As 7z's are, they run under
+  a cash with no builtin of that name, with CRLF and `\` turned to LF and `/`. CI runs
+  the golden files only.
+
 ## 4. Rules every part keeps
 
 - **No C.** Every backend is Rust; `cargo deny` and the release's license list stay the
@@ -425,6 +475,9 @@ Built against GNU tar 1.35's oracle, the plan moved in four places:
    writing; 7z and the formats cash already has; Windows 7-Zip's words with LF and `/`;
    `sevenz-rust2` internalized; volumes, `h`, links, and `-sns`/`-sni` as 7-Zip has
    them.
+6. **rar and unrar** (phase 33; 3.15): the fuller set of rar's commands and switches
+   (the everyday set with `r`, `rc`, `ch`, `i` and their switches); RAR 5 written by
+   default, as WinRAR does; the oracle is Scoop's WinRAR 7.23 (`Rar.exe` and `UnRAR.exe`).
 
 ## 8. Open, decided later in their phases
 
