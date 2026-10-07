@@ -1,0 +1,233 @@
+//! `zip`, `unzip` and `zipinfo`: the golden output of `tests/oracle/zip_cases.sh` and
+//! `unzip_cases.sh`, and what the oracles cannot show: Windows' own readers and writers
+//! of zip archives (`tar.exe` and `PowerShell`), names Windows cannot hold, symbolic links,
+//! owners, absolute names with a drive, substitution files and the console's questions.
+//!
+//! The scripts ran under Info-ZIP's zip 3.0 and `UnZip` 6.00 to make the golden files;
+//! here they run under cash. Where cash differs on purpose, the expected text is
+//! replaced in the test with the reason beside it.
+
+#![allow(
+    clippy::tests_outside_test_module,
+    clippy::expect_used,
+    reason = "an integration test is outside a test module by construction"
+)]
+
+use crate::common::{Scratch, golden, run, run_in, run_oracle_script, with_divergence};
+use crate::read_console::Script;
+
+#[test]
+fn zip_matches_info_zip_3_0() {
+    // zip joins a comment's lines with CRLF, which the golden file's reading turns to LF.
+    assert_eq!(
+        run_oracle_script("zip_cases").replace("\r\n", "\n"),
+        golden("zip_cases")
+    );
+}
+
+#[test]
+fn unzip_and_zipinfo_match_unzip_6_00() {
+    // cash's own version lines, in the usages.
+    let expected = with_divergence(
+        &golden("unzip_cases"),
+        "UnZip 6.00 of 20 April 2009, by Info-ZIP.  Maintained by C. Spieler.  Send\n\
+         bug reports using http://www.info-zip.org/zip-bug.html; see README for details.\n",
+        "UnZip (cash): UnZip 6.00's options, in pure Rust.\n",
+        1,
+    );
+    let expected = with_divergence(
+        &expected,
+        "ZipInfo 3.00 of 20 April 2009, by Greg Roelofs and the Info-ZIP group.\n",
+        "ZipInfo (cash): ZipInfo 3.00's options, in pure Rust.\n",
+        1,
+    );
+    assert_eq!(run_oracle_script("unzip_cases"), expected);
+}
+
+#[test]
+fn the_three_are_builtins_with_pages() {
+    for (name, word) in [
+        ("zip", "zip 3.0"),
+        ("unzip", "UnZip 6.00"),
+        ("zipinfo", "ZipInfo 3.00"),
+    ] {
+        let out = run(&format!("type {name}"));
+        assert!(
+            out.stdout.contains("shell builtin"),
+            "{name}: {}",
+            out.stdout
+        );
+        let page = run(&format!("help {name}"));
+        assert_eq!(page.code, 0, "{}", page.stderr);
+        assert!(page.stdout.contains(word), "{name}: {}", page.stdout);
+    }
+}
+
+/// Both ways with Windows' own: `tar.exe` (bsdtar, on libarchive) reads what cash's zip
+/// writes and writes what cash's unzip reads; so does `PowerShell`'s .NET, whose
+/// Compress-Archive writes `\` between a name's parts.
+#[test]
+fn windows_and_cash_read_each_others_archives() {
+    let scratch = Scratch::new("zip-windows");
+    let out = run_in(
+        scratch.path(),
+        "t=\"$SYSTEMROOT/System32/tar.exe\"; mkdir -p src/sub; printf 'hello\\n' > src/a.txt; \
+         printf 'world\\n' > src/sub/b.txt; head -c 3000 /dev/zero | tr '\\0' a > src/big.txt; \
+         zip -qr c.zip src; mkdir x; \"$t\" -xf c.zip -C x && cat x/src/a.txt x/src/sub/b.txt; \
+         cmp x/src/big.txt src/big.txt && echo same; \
+         \"$t\" -a -cf w.zip src; unzip -tq w.zip; unzip -p w.zip src/sub/b.txt; \
+         powershell -NoProfile -Command 'Compress-Archive -Path src -DestinationPath p.zip; \
+         Expand-Archive -Path c.zip -DestinationPath e' && cat e/src/a.txt; \
+         unzip -tq p.zip; unzip -p p.zip src/sub/b.txt",
+    );
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert_eq!(
+        out.stdout,
+        "hello\nworld\nsame\nNo errors detected in compressed data of w.zip.\nworld\nhello\n\
+         No errors detected in compressed data of p.zip.\nworld"
+    );
+}
+
+/// `ab:cd`, `CON` and `end.` from Python's zipfile, with `ok` beside them.
+const BAD_NAMES: &str = "504b0304140000000000831822507073dba506000000060000000500000061623a636461623a63640a\
+    504b030414000000000083182250a7690c5d040000000400000003000000434f4e434f4e0a\
+    504b030414000000000083182250de0c05e8050000000500000004000000656e642e656e642e0a\
+    504b0304140000000000831822507d0e16da0300000003000000020000006f6b6f6b0a\
+    504b01021403140000000000831822507073dba50600000006000000050000000000000000000000a4810000000061623a6364\
+    504b0102140314000000000083182250a7690c5d0400000004000000030000000000000000000000a48129000000434f4e\
+    504b0102140314000000000083182250de0c05e80500000005000000040000000000000000000000a4814e000000656e642e\
+    504b01021403140000000000831822507d0e16da0300000003000000020000000000000000000000a481750000006f6b\
+    504b05060000000004000400c6000000980000000000";
+
+fn unhex(text: &str) -> Vec<u8> {
+    let digits: Vec<u8> = text.bytes().filter(u8::is_ascii_hexdigit).collect();
+    digits
+        .chunks(2)
+        .map(|pair| {
+            u8::from_str_radix(std::str::from_utf8(pair).expect("hex"), 16).expect("hex digits")
+        })
+        .collect()
+}
+
+/// A member whose name Windows cannot hold is refused by name, `UnZip`'s way for a file it
+/// cannot create; the rest is extracted.
+#[test]
+fn a_name_windows_cannot_hold_is_refused() {
+    let scratch = Scratch::new("zip-names");
+    std::fs::write(scratch.join("bad.zip"), unhex(BAD_NAMES)).expect("the archive");
+    let out = run_in(scratch.path(), "unzip -q bad.zip; echo \"rc=$?\"; ls");
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert_eq!(out.stdout, "rc=50\nbad.zip\nok");
+    assert_eq!(
+        out.stderr,
+        "error:  cannot create ab:cd\n        Invalid argument\n\
+         error:  cannot create CON\n        Invalid argument\n\
+         error:  cannot create end.\n        Invalid argument"
+    );
+}
+
+/// An absolute name loses its drive in the archive, as zip drops a leading `/`; unzip
+/// strips a drive as it strips a `/`.
+#[test]
+fn a_drive_is_left_out_of_a_name() {
+    let scratch = Scratch::new("zip-drive");
+    let out = run_in(
+        scratch.path(),
+        "printf 'x\\n' > f; zip -q a.zip \"$PWD/f\"; unzip -Z1 a.zip | sed \"s|^${PWD#?:/}/||\"",
+    );
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert_eq!(out.stdout, "f");
+}
+
+/// zip records the file's owner and group by their numbers, as `id` gives them, and
+/// zipinfo shows them; `-X` leaves them out.
+#[test]
+fn the_owner_is_recorded_by_number() {
+    let scratch = Scratch::new("zip-owner");
+    let out = run_in(
+        scratch.path(),
+        "printf 'x\\n' > f; zip -q o.zip f; zip -qX x.zip f; \
+         zipinfo -v o.zip | grep -c 'Unix UID/GID (any size)'; zipinfo -v x.zip | grep -c 'UID/GID'; \
+         printf '%08x\\n' \"$(stat -c %u f)\"",
+    );
+    assert_eq!(out.stderr, "");
+    let lines: Vec<&str> = out.stdout.lines().collect();
+    assert_eq!(lines.first(), Some(&"1"), "{}", out.stdout);
+    assert_eq!(lines.get(1), Some(&"0"), "{}", out.stdout);
+}
+
+/// A symbolic link stored with `-y` comes back as one where Windows allows it, else as a
+/// file holding its target, as `UnZip` writes one on a system without links.
+#[test]
+fn a_symbolic_link_comes_back_where_windows_allows_one() {
+    let scratch = Scratch::new("zip-symlink");
+    std::fs::write(scratch.join("probe-target"), "").expect("a file");
+    let allowed =
+        std::os::windows::fs::symlink_file("probe-target", scratch.join("probe-link")).is_ok();
+    let out = run_in(
+        scratch.path(),
+        "printf 'hi\\n' > a.txt; ln -s a.txt l 2>/dev/null || exit 0; zip -qy l.zip l a.txt; \
+         zipinfo l.zip | sed -n 3p | cut -c1-10; mkdir x; cd x; unzip -q ../l.zip; cat l",
+    );
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    if allowed {
+        assert_eq!(out.stdout, "lrwxrwxrwx\nhi");
+    }
+}
+
+#[test]
+fn substitution_files_are_read_and_written() {
+    let scratch = Scratch::new("zip-substitution");
+    let out = run_in(
+        scratch.path(),
+        "printf 'hi\\n' > f; zip -q a.zip f; unzip -p <(cat a.zip) f; zipinfo -1 <(cat a.zip); \
+         zip -q >(cat > b.zip) f; sleep 1; unzip -p b.zip f",
+    );
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert_eq!(out.stdout, "hi\nf\nhi");
+}
+
+/// At a console, an existing file is asked about, and `A` replaces it and all after it.
+#[test]
+fn the_replace_question_is_asked_at_a_console() {
+    let left = Script::start(
+        "unzip-replace",
+        "printf 'new\\n' > f; printf 'two\\n' > g; zip -q a.zip f g; printf 'old\\n' > f; \
+         unzip a.zip; echo \"rc=$?\" > out.txt; cat f >> out.txt",
+    )
+    .at_prompt("replace f? [y]es, [n]o, [A]ll, [N]one, [r]ename: ")
+    .type_keys("A\r")
+    .finish();
+    assert_eq!(left.out, "rc=0\nnew");
+}
+
+/// At a console, the password of an encrypted member is asked for, and kept for the next.
+#[test]
+fn a_password_is_asked_for_at_a_console() {
+    let left = Script::start(
+        "unzip-password",
+        "printf 'secret\\n' > f; printf 'more\\n' > g; zip -q -P pw e.zip f g; rm f g; \
+         unzip -q e.zip; echo \"rc=$?\" > out.txt; cat f g >> out.txt",
+    )
+    .at_prompt("[e.zip] f password: ")
+    .type_keys("pw\r")
+    .finish();
+    assert_eq!(left.out, "rc=0\nsecret\nmore");
+    assert!(!left.screen.contains("pw\n"), "{}", left.screen);
+}
+
+/// `zip -e` asks for the password twice at the console, and does not show it.
+#[test]
+fn zip_asks_for_a_password_twice() {
+    let left = Script::start(
+        "zip-encrypt",
+        "printf 'x\\n' > f; zip -q -e e.zip f; echo \"rc=$?\" > out.txt; \
+         unzip -P pw -p e.zip f >> out.txt",
+    )
+    .at_prompt("Enter password: ")
+    .type_keys("pw\r")
+    .at_prompt("Verify password: ")
+    .type_keys("pw\r")
+    .finish();
+    assert_eq!(left.out, "rc=0\nx");
+}

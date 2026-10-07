@@ -67,6 +67,9 @@ mod ss;
 // cash: `tar`, GNU tar 1.35's interface on cash-archive; Windows' own `tar.exe` is bsdtar,
 // with other options and other words.
 mod tar;
+// cash: `zip`, `unzip` and `zipinfo`, Info-ZIP's interfaces on cash-archive: Windows has
+// none of them, and Explorer's zip folders are not scriptable.
+mod zip;
 // cash: `tput`, ncurses' for xterm-256color without terminfo: the terminal is VT.
 mod tput;
 // cash: `getconf`, glibc's names with the values Windows has.

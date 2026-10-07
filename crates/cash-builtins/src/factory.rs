@@ -404,6 +404,18 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
         builtin::<zstd::ZstdcatCommand, SE>().with_substitution_files(),
     );
     m.insert(
+        "zip".into(),
+        builtin::<zip::ZipCommand, SE>().with_substitution_files(),
+    );
+    m.insert(
+        "unzip".into(),
+        builtin::<zip::UnzipCommand, SE>().with_substitution_files(),
+    );
+    m.insert(
+        "zipinfo".into(),
+        builtin::<zip::ZipinfoCommand, SE>().with_substitution_files(),
+    );
+    m.insert(
         "coolfetch".into(),
         builtin::<coolfetch::CoolfetchCommand, SE>(),
     );

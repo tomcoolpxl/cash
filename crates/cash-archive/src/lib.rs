@@ -10,9 +10,11 @@
 //! - [`tar`]: tar archives, read and written as GNU tar 1.35 reads and writes them.
 //! - [`select`]: which members a name or a pattern selects, as `fnmatch` decides.
 //! - [`listing`]: mode strings, and names quoted as GNU tar quotes them.
+//! - [`zip`]: zip archives, read and written as Info-ZIP's zip 3.0 and unzip 6.00 do.
 
 pub mod codec;
 pub mod listing;
 pub mod member;
 pub mod select;
 pub mod tar;
+pub mod zip;

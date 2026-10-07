@@ -1,0 +1,308 @@
+== stored, the bytes
+  adding: src/a.txt (stored 0%)
+  adding: src/sub/b.txt (stored 0%)
+  adding: src/bin.dat (stored 0%)
+rc=0
+792daba460085cbcbbc2fbcce643f13bdc6ca007ce9ced908ece40952455fdf3  -
+337
+  adding: src/ (stored 0%)
+  adding: src/sub/ (stored 0%)
+  adding: src/sub/b.txt (stored 0%)
+rc=0
+37e1c530516984dbc00d9baee20ceb873300ac212815cf8cd4c6b62d694acf2b  -
+Archive:  sd.zip
+Zip file size: 306 bytes, number of entries: 3
+drwxrwxr-x  3.0 unx        0 b- stor 20-Jan-02 03:04 src/
+drwxrwxr-x  3.0 unx        0 b- stor 20-Jan-02 03:04 src/sub/
+-rw-rw-r--  3.0 unx        6 b- stor 20-Jan-02 03:04 src/sub/b.txt
+3 files, 6 bytes uncompressed, 6 bytes compressed:  0.0%
+  adding: src/a.txt (stored 0%)
+rc=0
+438729bc8f50f5d4c4c8ce44c2612f8e70abdbd5511094c7271a18c86af7d215  -
+Central directory entry #1:
+---------------------------
+
+  src/a.txt
+
+  offset of local header from start of archive:   0
+                                                  (0000000000000000h) bytes
+  file system or operating system of origin:      Unix
+  version of encoding software:                   3.0
+  minimum file system compatibility required:     MS-DOS, OS/2 or NT FAT
+  minimum software version required to extract:   1.0
+  compression method:                             none (stored)
+  file security status:                           not encrypted
+  extended local header:                          no
+  file last modified on (DOS date/time):          2020 Jan 2 03:04:06
+  32-bit CRC value (hex):                         363a3020
+  compressed size:                                6 bytes
+  uncompressed size:                              6 bytes
+  length of filename:                             9 characters
+  length of extra field:                          0 bytes
+  length of file comment:                         0 characters
+  disk number on which file begins:               disk 1
+  apparent file type:                             text
+  Unix file attributes (100664 octal):            -rw-rw-r--
+  MS-DOS file attributes (00 hex):                none
+
+  There is no file comment.
+
+== add and list
+  adding: src/a.txt (stored 0%)
+  adding: src/big.txt (deflated 99%)
+  adding: src/bin.dat (stored 0%)
+rc=0
+Archive:  a.zip
+  Length      Date    Time    Name
+---------  ---------- -----   ----
+        6  2020-01-02 03:04   src/a.txt
+     3000  2020-01-02 03:04   src/big.txt
+        9  2020-01-02 03:04   src/bin.dat
+---------                     -------
+     3015                     3 files
+Archive:  a.zip
+-rw-rw-r--  3.0 unx        6 tx stor 20-Jan-02 03:04 src/a.txt
+-rw-rw-r--  3.0 unx     3000 tx defN 20-Jan-02 03:04 src/big.txt
+-rw-rw-r--  3.0 unx        9 bx stor 20-Jan-02 03:04 src/bin.dat
+No errors detected in compressed data of a.zip.
+== recurse
+  adding: r/ (stored 0%)
+  adding: r/one/ (stored 0%)
+  adding: r/one/two/ (stored 0%)
+  adding: r/one/two/f (stored 0%)
+rc=0
+r/
+r/one/
+r/one/two/
+r/one/two/f
+  adding: r/one/two/f (stored 0%)
+rc=0
+r/one/two/f
+f
+  adding: r/ (stored 0%)
+rc=0
+r/
+== junk, exclude, include
+  adding: a.txt (stored 0%)
+  adding: b.txt (stored 0%)
+rc=0
+a.txt
+b.txt
+  adding: src/a.txt (stored 0%)
+  adding: src/sub/b.txt (stored 0%)
+rc=0
+src/a.txt
+src/sub/b.txt
+  adding: src/a.txt (stored 0%)
+rc=0
+src/a.txt
+  adding: r/ (stored 0%)
+  adding: r/one/ (stored 0%)
+rc=0
+r/
+r/one/
+== names
+  adding: ../src/a.txt (stored 0%)
+  adding: sub/b.txt (stored 0%)
+rc=0
+../src/a.txt
+sub/b.txt
+1
+== update, freshen, delete
+updating: src/a.txt (stored 0%)
+rc=0
+  adding: src/sub/b.txt (stored 0%)
+rc=0
+freshening: src/a.txt (stored 0%)
+rc=0
+rc=12
+rc=12
+deleting: src/big.txt
+deleting: src/bin.dat
+deleting: src/sub/b.txt
+rc=0
+	zip warning: name not matched: nosuch
+
+zip error: Nothing to do! (u.zip)
+rc=12
+src/a.txt
+updating: src/a.txt (stored 0%)
+  adding: src/sub/b.txt (stored 0%)
+  adding: src/bin.dat (stored 0%)
+rc=0
+src/a.txt
+src/sub/b.txt
+src/bin.dat
+deleting: src/sub/b.txt
+rc=0
+src/a.txt
+src/bin.dat
+deleting: src/a.txt
+	zip warning: zip file empty
+rc=0
+Archive:  del.zip
+warning [del.zip]:  zipfile is empty
+rc=1
+== nothing to do
+
+zip error: Nothing to do! (c.zip)
+rc=12
+	zip warning: name not matched: nosuch
+
+zip error: Nothing to do! (c.zip)
+rc=12
+	zip warning: name not matched: nosuch
+zip I/O error: No such file or directory
+zip error: File not found or no read permission (nosuch)
+rc=18
+none
+	zip warning: nosuch.zip not found or empty
+	zip warning: name not matched: a
+
+zip error: Nothing to do! (nosuch.zip)
+rc=12
+== errors
+
+zip error: Invalid command arguments (short option 'Y' not supported)
+rc=16
+
+zip error: Invalid command arguments (long option 'nosuch' not supported)
+rc=16
+
+zip error: Invalid command arguments (option 'b' (dir to use for temp archive) requires a value)
+rc=16
+	zip warning: valid compression methods are:  store, deflate, bzip2
+	zip warning: unknown compression method found:  foo
+
+zip error: Invalid command arguments (Option -Z (--compression-method):  unknown method)
+rc=16
+	zip warning: missing end signature--probably not a zip file (did you
+	zip warning: remember to use binary mode when you transferred it?)
+	zip warning: (if you are trying to read a damaged archive try -F)
+
+zip error: Zip file structure invalid (junk.zip)
+rc=3
+zip I/O error: No such file or directory
+zip error: Could not create output file (nodir/x.zip)
+rc=15
+
+zip error: Invalid command arguments (invalid date entered for -t option - use mmddyyyy or yyyy-mm-dd)
+rc=16
+== suffixes
+noext.zip
+  adding: big.zip (stored 0%)
+  adding: big.gz (deflated 99%)
+rc=0
+Archive:  sfx.zip
+-rw-rw-r--  3.0 unx     3000 bx stor 20-Jan-02 03:04 big.zip
+-rw-rw-r--  3.0 unx     3000 tx defN 20-Jan-02 03:04 big.gz
+  adding: big.zip (deflated 99%)
+  adding: big.gz (stored 0%)
+rc=0
+Archive:  sfx2.zip
+-rw-rw-r--  3.0 unx     3000 tx defN 20-Jan-02 03:04 big.zip
+-rw-rw-r--  3.0 unx     3000 bx stor 20-Jan-02 03:04 big.gz
+== standard input and output
+rc=0
+piped
+prw-------  3.0 unx        6 t- stor 2
+  adding: src/a.txt (deflated -32%)
+  adding: src/big.txt (deflated 99%)
+Archive:  o.zip
+-rw-rw-r--  3.0 unx        6 tX defN 20-Jan-02 03:04 src/a.txt
+-rw-rw-r--  3.0 unx     3000 tX defN 20-Jan-02 03:04 src/big.txt
+No errors detected in compressed data of o.zip.
+  adding: - (deflated -28%)
+filter
+== comments
+  adding: src/a.txt (stored 0%)
+enter new zip file comment (end with .):
+rc=0
+Archive:  c2.zip
+the comment
+line 2
+current zip file comment is:
+the comment
+line 2
+enter new zip file comment (end with .):
+rc=0
+Archive:  c2.zip
+one
+  adding: src/a.txt (stored 0%)
+  adding: src/sub/b.txt (stored 0%)
+Enter comment for src/a.txt:
+Enter comment for src/sub/b.txt:
+rc=0
+------------------------- file comment begins ----------------------------
+first
+-------------------------- file comment ends -----------------------------
+--
+------------------------- file comment begins ----------------------------
+second
+-------------------------- file comment ends -----------------------------
+== encryption
+  adding: src/a.txt (stored 0%)
+  adding: src/big.txt (deflated 99%)
+rc=0
+No errors detected in compressed data of e.zip.
+hello
+Archive:  e.zip
+-rw-rw-r--  3.0 unx        6 TX stor 20-Jan-02 03:04 src/a.txt
+-rw-rw-r--  3.0 unx     3000 TX defN 20-Jan-02 03:04 src/big.txt
+
+zip error: Invalid command arguments (stderr is not a tty)
+rc=16
+== bzip2 and levels
+  adding: src/big.txt (bzipped 99%)
+  adding: src/a.txt (stored 0%)
+rc=0
+Archive:  bz.zip
+-rw-rw-r--  3.0 unx     3000 bx bzp2 20-Jan-02 03:04 src/big.txt
+-rw-rw-r--  3.0 unx        6 bx stor 20-Jan-02 03:04 src/a.txt
+903418600 3000
+  compression sub-type (deflation):               fast
+    3000  Defl:X
+== move, test, latest
+  adding: mv.txt (stored 0%)
+rc=0
+gone
+  adding: src/a.txt (stored 0%)
+test of t.zip OK
+rc=0
+  adding: src/a.txt (stored 0%)
+rc=0
+1577934246
+== show files
+Would Add/Update:
+  src/a.txt
+Total 1 entries (6 bytes)
+rc=0
+Archive contains:
+  src/a.txt
+  src/sub/b.txt
+Total 2 entries (12 bytes)
+rc=0
+Would Add/Update:
+  src/a.txt
+  src/big.txt
+Total 2 entries (3006 bytes)
+rc=0
+== dates and names from input
+
+zip error: Nothing to do! (tt.zip)
+rc=12
+  adding: src/a.txt (stored 0%)
+rc=0
+  adding: src/a.txt (stored 0%)
+  adding: src/sub/b.txt (stored 0%)
+rc=0
+== verbose
+  adding: src/a.txt 	(in=6) (out=6) (stored 0%)
+  adding: src/big.txt 	(in=3000) (out=3000) (stored 0%)
+total bytes=3006, compressed=3006 -> 0% savings
+rc=0
+== help
+  -e   encrypt                      -n   don't compress these suffixes
+  -h2  show more help
+  
+rc=0

@@ -222,6 +222,8 @@ mod winpaths;
 mod xxd_builtin;
 // `xz` and its five other names: XZ Utils 5.8's golden output, and the file handling.
 mod xz_builtin;
+// `zip`, `unzip` and `zipinfo`: Info-ZIP's golden output, Windows' own readers and writers.
+mod zip_builtin;
 // `zstd`, `unzstd` and `zstdcat`: zstd 1.5.7's golden output, and the file handling.
 mod zstd_builtin;
 

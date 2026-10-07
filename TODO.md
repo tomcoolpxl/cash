@@ -474,35 +474,24 @@ script-visible Bash behaviour or a kinder refusal.
    `C`, `POSIX`, `C.UTF-8` and the Windows locales as `en_US.UTF-8` names; bare `locale`
    printing `LANG`, `LC_*`), the values Windows has, GNU's output shapes.
 
-## Phases 26 to 30. Archive and compression tools, on shared parts
-
-Chosen by the user on 2026-10-07, by pick lists, after asking for "a common thing"
-rather than tar alone: the design is `research/archive-tools-design.md` (D78). The
-family: the `bzip2`, `xz` and `zstd` commands with their aliases, `tar`, and `zip`,
-`unzip`, `zipinfo`; the z-tools, `cpio` and `lzip` are not wanted now. Two new library
-crates, `cash-archive` and `cash-getopt`. Everything in pure Rust; the bzip2-1.0.6
-license accepted for `libbz2-rs-sys`. Order: the groundwork, the compressors, tar, zip.
-Passed over: uutils/tar (0.0.1, less than `tar.exe` does), `libzstd-rs-sys` (a
-prerelease without a Rust API), `xz2` and `liblzma` (C).
-
-## Phase 30. `zip`, `unzip`, `zipinfo`
-
-1. **On the `zip` crate** (zip-rs, MIT, 8.6) with phase 28's codecs (deflate, deflate64,
-   bzip2, lzma, xz; zstd and PPMd as they allow without C), on cash-archive's `select`
-   and `listing`, and on tar's walk, names and extraction, moved into cash-archive as
-   zip comes to share them (design 3.12): Info-ZIP zip 3.0's and UnZip 6.00's options,
-   messages and exit statuses, `zipinfo`'s listings; Info-ZIP's extra fields (extended
-   times, Unix modes) so archives round-trip with Info-ZIP, Explorer and `tar.exe`;
-   writing to standard output streamed; traditional encryption read (`-P`).
-2. The pages, `builtins.md`, `CARRIED`; the GnuWin32 `zip` and `unzip` rows leave
-   `help tools` and `tests/fixtures/tools-ids.txt`; oracles under Info-ZIP in WSL.
-3. Decided in the phase: one deflate backend for all (`miniz_oxide` or `zlib-rs`), the
-   numeric owner (RID or MSYS's mapping), and what host a zip says it was made on.
-
 ---
 
 ## Found along the way
 
+- **Archive tools: what is left out on purpose** (phases 29 and 30, 2026-10-07). zip
+  refuses `-l`/`-ll` (line ends), `-R`, `-F`/`-FF`, `-s` (splits), `-U`, `-A`, `-J`,
+  `-DF`, `-AC`/`-AS` and the logs; unzip skips shrunk, reduced, imploded and `PPMd`
+  members and WinZip's AES, and does not expand a wildcard in the archive's own name
+  (`unzip '*.zip'`). Each can be added when someone needs it.
+- **Three zip choices made without a pick list** (phase 30, 2026-10-07, under "do not
+  stop"): deflate on `miniz_oxide`, the RID as the numeric owner, and "made on Unix" (design
+  3.13). **Yours** to confirm or change.
+- **`TAR_OPTIONS` and the command line** (phase 29, 2026-10-07): GNU tar drops the
+  `TAR_OPTIONS` side of `--one-top-level` against `-P` given on the command line; cash
+  refuses the pair wherever they come from.
+- **zip -v's space before the tab** (phase 30, 2026-10-07): zip prints it where its
+  progress dots would start; cash prints it for a stored member and for one of 64 KiB
+  or more, which matched every case tried. A file between those may differ.
 - **The first cash window after a Scoop update is blank for 1 to 3 seconds** (the user,
   2026-10-06); after that every start is fast. Measured here: a copy of `cash.exe` with
   a changed hash takes 1.2 to 2.3 s on its first run and about 50 ms after, which is

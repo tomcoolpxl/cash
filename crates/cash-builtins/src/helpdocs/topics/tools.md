@@ -69,8 +69,6 @@ manager has no package for it.
 | gcc | BrechtSanders.WinLibs.POSIX.UCRT | mingw | GCC, as MinGW-w64 (WinLibs) |
 | clang | LLVM.LLVM | llvm | LLVM and Clang |
 | 7z | 7zip.7zip | 7zip | 7-Zip |
-| zip | GnuWin32.Zip | zip | Info-ZIP's zip |
-| unzip | GnuWin32.UnZip | unzip | Info-ZIP's unzip |
 | wget | JernejSimoncic.Wget | wget | GNU wget |
 | aria2c | aria2.aria2 | aria2 | aria2 download utility |
 | rclone | Rclone.Rclone | rclone | rsync for cloud storage |

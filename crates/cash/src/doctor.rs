@@ -99,7 +99,8 @@ const CARRIED: &[&str] = &[
     "ping", "stty", "tput", "iconv", "column", "xxd", "hexdump", "uuidgen", "xdg-open", "pbcopy",
     "pbpaste", "flock", "watch", "free", "nice", "renice", "nc", "diff", "cmp", "grep", "suspend",
     "mkfifo", "stdbuf", "getconf", "locale", "gzip", "gunzip", "zcat", "bzip2", "bunzip2", "bzcat",
-    "xz", "unxz", "xzcat", "lzma", "unlzma", "lzcat", "zstd", "unzstd", "zstdcat", "tar",
+    "xz", "unxz", "xzcat", "lzma", "unlzma", "lzcat", "zstd", "unzstd", "zstdcat", "tar", "zip",
+    "unzip", "zipinfo",
 ];
 
 /// Run the diagnostic. Returns a process exit code.

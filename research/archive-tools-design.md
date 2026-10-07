@@ -176,9 +176,9 @@ writer aimed at standard output.
   written (see 3.12 for why not the `tar` crate's). Writing builds the 512-byte headers
   here, so a deterministic archive is GNU's byte for byte (the checksum field's format,
   padding to the 10,240-byte record).
-- **zip**: the `zip` crate (zip-rs, MIT, 8.6, the same codecs), with Info-ZIP's extra
-  fields (extended times, Unix modes), so archives round-trip with Info-ZIP, Explorer and
-  `tar.exe`.
+- **zip**: its own records, read and written (see 3.13 for why not the `zip` crate's),
+  with Info-ZIP's extra fields (extended times, Unix owners), so archives round-trip with
+  Info-ZIP, Explorer and `tar.exe`.
 - **cpio**: newc and odc, small enough to write here.
 
 ### 3.8 cash-win32: one Unix face for a Windows file
@@ -279,6 +279,32 @@ Built against GNU tar 1.35's oracle, the plan moved in four places:
   cash-sed's translation of GNU's syntax, with tar's own `s///` parser and flags (`r`,
   `s`, `h`, `x`, `g`, a number), not a new cash-sed entry point (3.10 is not done).
 
+### 3.13 zip, unzip and zipinfo, as built (phase 30, 2026-10-07)
+
+- **The records are cash's own** (`cash-archive/src/zip`: `read`, `write`, `crypt`), not
+  the `zip` crate's. zipinfo's `-v` prints every field of every record (the version
+  made by and needed, the flags, the internal attributes, each extra field), and zip's
+  own records carry what the crate does not let a writer set: "made by Unix, 3.0", the
+  deflate level in the flags, the text bit, the descriptor and encryption choices. A
+  stored archive without extra fields (`-0 -X`) is Info-ZIP's byte for byte, which the
+  oracle checks. The codecs are the ones the other tools use (deflate on `flate2`,
+  bzip2, LZMA and xz on `lzma-rust2`, zstd on `ruzstd`), and Deflate64 on the small
+  `deflate64` crate; the traditional encryption is forty lines.
+- **The front ends follow Info-ZIP's own flows**: UnZip's `extract_or_test_member` and
+  its messages, ZipInfo's listings, zip's `zipup` with the retry as stored, its update
+  order (members replaced where they stand, new ones after), and its option table.
+  `select`'s `fnmatch` serves both (UnZip's `*` crosses `/` unless `-W`).
+- **Decided in the phase**, under the instruction to finish phase 30 without stopping,
+  and open to the user's change: deflate on `miniz_oxide` (gzip's already; output
+  differs from Info-ZIP's own deflate either way); the numeric owner is the RID, as
+  `id`, `stat` and tar give it; a zip says it was made on Unix (3.0), so Linux's UnZip
+  restores the modes from the Unix face, and MS-DOS's directory and read-only bits are
+  set beside them for Windows' readers.
+- **Not moved into cash-archive**: tar's walk and extraction stay in tar's front end,
+  as zip's do in zip's. The two walks share less than 3.4 planned: tar sorts, follows
+  `-h`, counts hard links; zip filters by date and suffix and never stores links unless
+  `-y`. A shared walker would be two walkers behind one name.
+
 ## 4. Rules every part keeps
 
 - **No C.** Every backend is Rust; `cargo deny` and the release's license list stay the
@@ -332,10 +358,6 @@ Built against GNU tar 1.35's oracle, the plan moved in four places:
 
 ## 8. Open, decided later in their phases
 
-- One deflate backend for all: `miniz_oxide` (gzip's today) or `zlib-rs` (the `zip`
-  crate's default, faster, the same output as zlib).
-- A file's numeric owner in an archive: the RID (`id`'s and `stat`'s number today), or
-  MSYS's mapping, which Git Bash's tar writes.
-- What a zip made in cash says it was made on (MS-DOS or Unix), which decides how
-  Linux's UnZip restores its modes.
+- Decided in phase 30 (3.13): deflate on `miniz_oxide`; the RID as the numeric owner; a
+  zip made on Unix. Each is the user's to reopen.
 - `zstd` levels above `ruzstd`'s fast one.

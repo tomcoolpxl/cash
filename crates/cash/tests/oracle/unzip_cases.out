@@ -1,0 +1,721 @@
+== list
+Archive:  a.zip
+a comment
+  Length      Date    Time    Name
+---------  ---------- -----   ----
+        0  2020-01-02 03:04   src/
+        6  2020-01-02 03:04   src/a.txt
+     3000  2020-01-02 03:04   src/big.txt
+        9  2020-01-02 03:04   src/bin.dat
+        0  2020-01-02 03:04   src/sub/
+        6  2020-01-02 03:04   src/sub/b.txt
+---------                     -------
+     3021                     6 files
+rc=0
+Archive:  a.zip
+a comment
+ Length   Method    Size  Cmpr    Date    Time   CRC-32   Name
+--------  ------  ------- ---- ---------- ----- --------  ----
+       0  Stored        0   0% 2020-01-02 03:04 00000000  src/
+       6  Stored        6   0% 2020-01-02 03:04 363a3020  src/a.txt
+    3000  Defl:N       21  99% 2020-01-02 03:04 5edc3cc8  src/big.txt
+       9  Stored        9   0% 2020-01-02 03:04 ca1e4dbf  src/bin.dat
+       0  Stored        0   0% 2020-01-02 03:04 00000000  src/sub/
+       6  Stored        6   0% 2020-01-02 03:04 dd3861a8  src/sub/b.txt
+--------          -------  ---                            -------
+    3021               42  99%                            6 files
+rc=0
+  Length      Date    Time    Name
+---------  ---------- -----   ----
+        0  2020-01-02 03:04   src/
+        6  2020-01-02 03:04   src/a.txt
+     3000  2020-01-02 03:04   src/big.txt
+        9  2020-01-02 03:04   src/bin.dat
+        0  2020-01-02 03:04   src/sub/
+        6  2020-01-02 03:04   src/sub/b.txt
+---------                     -------
+     3021                     6 files
+        0  2020-01-02 03:04   src/
+        6  2020-01-02 03:04   src/a.txt
+     3000  2020-01-02 03:04   src/big.txt
+        9  2020-01-02 03:04   src/bin.dat
+        0  2020-01-02 03:04   src/sub/
+        6  2020-01-02 03:04   src/sub/b.txt
+Archive:  a.zip
+a comment
+  Length      Date    Time    Name
+---------  ---------- -----   ----
+        6  2020-01-02 03:04   src/a.txt
+     3000  2020-01-02 03:04   src/big.txt
+        6  2020-01-02 03:04   src/sub/b.txt
+---------                     -------
+     3012                     3 files
+rc=0
+Archive:  a.zip
+a comment
+  Length      Date    Time    Name
+---------  ---------- -----   ----
+---------                     -------
+        0                     0 files
+rc=11
+Archive:  a.zip
+a comment
+  Length      Date    Time    Name
+---------  ---------- -----   ----
+        6  2020-01-02 03:04   src/a.txt
+---------                     -------
+        6                     1 file
+rc=0
+Archive:  a.zip
+a comment
+  Length      Date    Time    Name
+---------  ---------- -----   ----
+---------                     -------
+        0                     0 files
+rc=11
+Archive:  a.zip
+a comment
+  Length      Date    Time    Name
+---------  ---------- -----   ----
+        6  2020-01-02 03:04   src/a.txt
+     3000  2020-01-02 03:04   src/big.txt
+---------                     -------
+     3006                     2 files
+Archive:  a.zip
+a comment
+  Length      Date    Time    Name
+---------  ---------- -----   ----
+        0  2020-01-02 03:04   src/
+        6  2020-01-02 03:04   src/a.txt
+     3000  2020-01-02 03:04   src/big.txt
+        9  2020-01-02 03:04   src/bin.dat
+---------                     -------
+     3015                     4 files
+rc=0
+Archive:  a.zip
+a comment
+  Length      Date    Time    Name
+---------  ---------- -----   ----
+        0  2020-01-02 03:04   src/
+---------                     -------
+        0                     1 file
+rc=0
+== zipinfo
+Archive:  a.zip
+Zip file size: 953 bytes, number of entries: 6
+drwxrwxr-x  3.0 unx        0 bx stor 20-Jan-02 03:04 src/
+-rw-rw-r--  3.0 unx        6 tx stor 20-Jan-02 03:04 src/a.txt
+-rw-rw-r--  3.0 unx     3000 tx defN 20-Jan-02 03:04 src/big.txt
+-rw-rw-r--  3.0 unx        9 bx stor 20-Jan-02 03:04 src/bin.dat
+drwxrwxr-x  3.0 unx        0 bx stor 20-Jan-02 03:04 src/sub/
+-rw-rw-r--  3.0 unx        6 tx stor 20-Jan-02 03:04 src/sub/b.txt
+6 files, 3021 bytes uncompressed, 42 bytes compressed:  98.6%
+rc=0
+Archive:  a.zip
+Zip file size: 953 bytes, number of entries: 6
+drwxrwxr-x  3.0 unx        0 bx        0 stor 20-Jan-02 03:04 src/
+-rw-rw-r--  3.0 unx        6 tx        6 stor 20-Jan-02 03:04 src/a.txt
+-rw-rw-r--  3.0 unx     3000 tx       21 defN 20-Jan-02 03:04 src/big.txt
+-rw-rw-r--  3.0 unx        9 bx        9 stor 20-Jan-02 03:04 src/bin.dat
+drwxrwxr-x  3.0 unx        0 bx        0 stor 20-Jan-02 03:04 src/sub/
+-rw-rw-r--  3.0 unx        6 tx        6 stor 20-Jan-02 03:04 src/sub/b.txt
+6 files, 3021 bytes uncompressed, 42 bytes compressed:  98.6%
+Archive:  a.zip
+Zip file size: 953 bytes, number of entries: 6
+drwxrwxr-x  3.0 unx        0 bx  0% stor 20-Jan-02 03:04 src/
+-rw-rw-r--  3.0 unx        6 tx  0% stor 20-Jan-02 03:04 src/a.txt
+-rw-rw-r--  3.0 unx     3000 tx 99% defN 20-Jan-02 03:04 src/big.txt
+-rw-rw-r--  3.0 unx        9 bx  0% stor 20-Jan-02 03:04 src/bin.dat
+drwxrwxr-x  3.0 unx        0 bx  0% stor 20-Jan-02 03:04 src/sub/
+-rw-rw-r--  3.0 unx        6 tx  0% stor 20-Jan-02 03:04 src/sub/b.txt
+6 files, 3021 bytes uncompressed, 42 bytes compressed:  98.6%
+src/
+src/a.txt
+src/big.txt
+src/bin.dat
+src/sub/
+src/sub/b.txt
+Archive:  a.zip
+Zip file size: 953 bytes, number of entries: 6
+src/
+src/a.txt
+src/big.txt
+src/bin.dat
+src/sub/
+src/sub/b.txt
+6 files, 3021 bytes uncompressed, 42 bytes compressed:  98.6%
+Archive:  a.zip
+Zip file size: 953 bytes, number of entries: 6
+6 files, 3021 bytes uncompressed, 42 bytes compressed:  98.6%
+-rw-rw-r--  3.0 unx        6 tx stor 20200102.030405 src/a.txt
+Archive:  a.zip
+a comment
+Zip file size: 953 bytes, number of entries: 6
+drwxrwxr-x  3.0 unx        0 bx stor 20-Jan-02 03:04 src/
+-rw-rw-r--  3.0 unx        6 tx stor 20-Jan-02 03:04 src/a.txt
+-rw-rw-r--  3.0 unx     3000 tx defN 20-Jan-02 03:04 src/big.txt
+-rw-rw-r--  3.0 unx        9 bx stor 20-Jan-02 03:04 src/bin.dat
+drwxrwxr-x  3.0 unx        0 bx stor 20-Jan-02 03:04 src/sub/
+-rw-rw-r--  3.0 unx        6 tx stor 20-Jan-02 03:04 src/sub/b.txt
+6 files, 3021 bytes uncompressed, 42 bytes compressed:  98.6%
+caution: filename not matched:  nosuch
+rc=11
+src/
+src/a.txt
+src/big.txt
+src/bin.dat
+src/sub/
+src/sub/b.txt
+-rw-rw-r--  3.0 unx        6 tx stor 20-Jan-02 03:04 src/sub/b.txt
+drwxrwxr-x  3.0 unx        0 bx stor 20-Jan-02 03:04 src/
+-rw-rw-r--  3.0 unx        6 tx stor 20-Jan-02 03:04 src/a.txt
+-rw-rw-r--  3.0 unx     3000 tx defN 20-Jan-02 03:04 src/big.txt
+-rw-rw-r--  3.0 unx        9 bx stor 20-Jan-02 03:04 src/bin.dat
+== zipinfo -v
+Archive:  a.zip
+The zipfile comment is 9 bytes long and contains the following text:
+======================== zipfile comment begins ==========================
+a comment
+========================= zipfile comment ends ===========================
+
+End-of-central-directory record:
+-------------------------------
+
+  Zip archive file size:                       953 (00000000000003B9h)
+  Actual end-cent-dir record offset:           922 (000000000000039Ah)
+  Expected end-cent-dir record offset:         922 (000000000000039Ah)
+  (based on the length of the central directory and its expected offset)
+
+  This zipfile constitutes the sole disk of a single-part archive; its
+  central directory contains 6 entries.
+  The central directory is 476 (00000000000001DCh) bytes long,
+  and its (expected) offset in bytes from the beginning of the zipfile
+  is 446 (00000000000001BEh).
+
+
+Central directory entry #2:
+---------------------------
+
+  src/a.txt
+
+  offset of local header from start of archive:   62
+                                                  (000000000000003Eh) bytes
+  file system or operating system of origin:      Unix
+  version of encoding software:                   3.0
+  minimum file system compatibility required:     MS-DOS, OS/2 or NT FAT
+  minimum software version required to extract:   1.0
+  compression method:                             none (stored)
+  file security status:                           not encrypted
+  extended local header:                          no
+  file last modified on (DOS date/time):          2020 Jan 2 03:04:06
+  file last modified on (UT extra field modtime): 2020 Jan 2 03:04:05 local
+  file last modified on (UT extra field modtime): 2020 Jan 2 03:04:05 UTC
+  32-bit CRC value (hex):                         363a3020
+  compressed size:                                6 bytes
+  uncompressed size:                              6 bytes
+  length of filename:                             9 characters
+  length of extra field:                          24 bytes
+  length of file comment:                         0 characters
+  disk number on which file begins:               disk 1
+  apparent file type:                             text
+  Unix file attributes (100664 octal):            -rw-rw-r--
+  MS-DOS file attributes (00 hex):                none
+
+  The central-directory extra field contains:
+  - A subfield with ID 0x5455 (universal time) and 5 data bytes.
+    The local extra field has UTC/GMT modification/access times.
+  - A subfield with ID 0x7875 (Unix UID/GID (any size)) and 11 data bytes:
+    01 04 e8 03 00 00 04 e8 03 00 00.
+
+  There is no file comment.
+
+Central directory entry #3:
+---------------------------
+
+  src/big.txt
+
+  offset of local header from start of archive:   135
+                                                  (0000000000000087h) bytes
+  file system or operating system of origin:      Unix
+  version of encoding software:                   3.0
+  minimum file system compatibility required:     MS-DOS, OS/2 or NT FAT
+  minimum software version required to extract:   2.0
+  compression method:                             deflated
+  compression sub-type (deflation):               normal
+  file security status:                           not encrypted
+  extended local header:                          no
+  file last modified on (DOS date/time):          2020 Jan 2 03:04:06
+  file last modified on (UT extra field modtime): 2020 Jan 2 03:04:05 local
+  file last modified on (UT extra field modtime): 2020 Jan 2 03:04:05 UTC
+  32-bit CRC value (hex):                         5edc3cc8
+  compressed size:                                21 bytes
+  uncompressed size:                              3000 bytes
+  length of filename:                             11 characters
+  length of extra field:                          24 bytes
+  length of file comment:                         0 characters
+  disk number on which file begins:               disk 1
+  apparent file type:                             text
+  Unix file attributes (100664 octal):            -rw-rw-r--
+  MS-DOS file attributes (00 hex):                none
+
+  The central-directory extra field contains:
+  - A subfield with ID 0x5455 (universal time) and 5 data bytes.
+    The local extra field has UTC/GMT modification/access times.
+  - A subfield with ID 0x7875 (Unix UID/GID (any size)) and 11 data bytes:
+    01 04 e8 03 00 00 04 e8 03 00 00.
+
+  There is no file comment.
+
+Central directory entry #5:
+---------------------------
+
+  src/sub/
+
+  offset of local header from start of archive:   303
+                                                  (000000000000012Fh) bytes
+  file system or operating system of origin:      Unix
+  version of encoding software:                   3.0
+  minimum file system compatibility required:     MS-DOS, OS/2 or NT FAT
+  minimum software version required to extract:   1.0
+  compression method:                             none (stored)
+  file security status:                           not encrypted
+  extended local header:                          no
+  file last modified on (DOS date/time):          2020 Jan 2 03:04:06
+  file last modified on (UT extra field modtime): 2020 Jan 2 03:04:05 local
+  file last modified on (UT extra field modtime): 2020 Jan 2 03:04:05 UTC
+  32-bit CRC value (hex):                         00000000
+  compressed size:                                0 bytes
+  uncompressed size:                              0 bytes
+  length of filename:                             8 characters
+  length of extra field:                          24 bytes
+  length of file comment:                         0 characters
+  disk number on which file begins:               disk 1
+  apparent file type:                             binary
+  Unix file attributes (040775 octal):            drwxrwxr-x
+  MS-DOS file attributes (10 hex):                dir 
+
+  The central-directory extra field contains:
+  - A subfield with ID 0x5455 (universal time) and 5 data bytes.
+    The local extra field has UTC/GMT modification/access times.
+  - A subfield with ID 0x7875 (Unix UID/GID (any size)) and 11 data bytes:
+    01 04 e8 03 00 00 04 e8 03 00 00.
+
+  There is no file comment.
+
+== other archives
+Archive:  bz.zip
+Zip file size: 217 bytes, number of entries: 1
+-rw-rw-r--  3.0 unx     3000 bx bzp2 20-Jan-02 03:04 src/big.txt
+1 file, 3000 bytes uncompressed, 45 bytes compressed:  98.5%
+Archive:  e.zip
+Zip file size: 390 bytes, number of entries: 2
+-rw-rw-r--  3.0 unx        6 TX stor 20-Jan-02 03:04 src/a.txt
+-rw-rw-r--  3.0 unx        6 TX stor 20-Jan-02 03:04 src/sub/b.txt
+2 files, 12 bytes uncompressed, 12 bytes compressed:  0.0%
+Archive:  l.zip
+Zip file size: 323 bytes, number of entries: 2
+lrwxrwxrwx  3.0 unx        5 bx stor 20-Jan-02 03:04 src/link
+-rw-rw-r--  3.0 unx        6 tx stor 20-Jan-02 03:04 src/a.txt
+2 files, 11 bytes uncompressed, 11 bytes compressed:  0.0%
+Archive:  fat.zip
+Zip file size: 293 bytes, number of entries: 3
+-r--a--     2.0 fat        5 b- stor 20-Jan-02 03:04 DOS.TXT
+drwx---     2.0 fat        0 b- stor 20-Jan-02 03:04 DIR/
+-rwxa--     2.0 fat        2 b- stor 20-Jan-02 03:04 RUN.EXE
+3 files, 7 bytes uncompressed, 7 bytes compressed:  0.0%
+Archive:  evil.zip
+Zip file size: 305 bytes, number of entries: 3
+-rw-r--r--  2.0 unx        4 b- stor 20-Jan-02 03:04 /abs/x
+-rw-r--r--  2.0 unx        3 b- stor 20-Jan-02 03:04 ../up/y
+-rw-r--r--  2.0 unx        2 b- stor 20-Jan-02 03:04 ok/../../z
+3 files, 9 bytes uncompressed, 9 bytes compressed:  0.0%
+Archive:  bz.zip
+ Length   Method    Size  Cmpr    Date    Time   CRC-32   Name
+--------  ------  ------- ---- ---------- ----- --------  ----
+    3000  BZip2        45  99% 2020-01-02 03:04 5edc3cc8  src/big.txt
+--------          -------  ---                            -------
+    3000               45  99%                            1 file
+Archive:  e.zip
+ Length   Method    Size  Cmpr    Date    Time   CRC-32   Name
+--------  ------  ------- ---- ---------- ----- --------  ----
+       6  Stored        6   0% 2020-01-02 03:04 363a3020  src/a.txt
+       6  Stored        6   0% 2020-01-02 03:04 dd3861a8  src/sub/b.txt
+--------          -------  ---                            -------
+      12               12   0%                            2 files
+== comment
+Archive:  a.zip
+a comment
+rc=0
+Archive:  bz.zip
+rc=0
+== test
+Archive:  a.zip
+a comment
+    testing: src/                     OK
+    testing: src/a.txt                OK
+    testing: src/big.txt              OK
+    testing: src/bin.dat              OK
+    testing: src/sub/                 OK
+    testing: src/sub/b.txt            OK
+No errors detected in compressed data of a.zip.
+rc=0
+No errors detected in compressed data of a.zip.
+rc=0
+rc=0
+Archive:  bz.zip
+    testing: src/big.txt              OK
+No errors detected in compressed data of bz.zip.
+rc=0
+Archive:  a.zip
+a comment
+    testing: src/a.txt                OK
+caution: filename not matched:  nosuch
+At least one error was detected in a.zip.
+rc=11
+== extract
+Archive:  ../a.zip
+a comment
+   creating: src/
+ extracting: src/a.txt               
+  inflating: src/big.txt             
+ extracting: src/bin.dat             
+   creating: src/sub/
+ extracting: src/sub/b.txt           
+rc=0
+.
+./src
+./src/a.txt
+./src/big.txt
+./src/bin.dat
+./src/sub
+./src/sub/b.txt
+664 1577934245 src/a.txt
+664 1577934245 src/big.txt
+664 1577934245 src/bin.dat
+775 1577934245 src/sub
+775 1577934245 src
+hello
+903418600 3000 src/big.txt
+1258773985 9 src/bin.dat
+== extract again
+Archive:  ../a.zip
+a comment
+replace src/a.txt? [y]es, [n]o, [A]ll, [N]one, [r]ename:  NULL
+(EOF or read error, treating as "[N]one" ...)
+rc=1
+Archive:  ../a.zip
+a comment
+rc=0
+Archive:  ../a.zip
+a comment
+ extracting: src/a.txt               
+rc=0
+rc=0
+Archive:  ../a.zip
+a comment
+replace src/a.txt? [y]es, [n]o, [A]ll, [N]one, [r]ename: replace src/big.txt? [y]es, [n]o, [A]ll, [N]one, [r]ename:   inflating: src/big.txt             
+replace src/bin.dat? [y]es, [n]o, [A]ll, [N]one, [r]ename: rc=0
+Archive:  ../a.zip
+a comment
+replace src/a.txt? [y]es, [n]o, [A]ll, [N]one, [r]ename:  extracting: src/a.txt               
+  inflating: src/big.txt             
+ extracting: src/bin.dat             
+ extracting: src/sub/b.txt           
+rc=0
+== freshen and update
+Archive:  ../a.zip
+a comment
+rc=0
+Archive:  ../a.zip
+a comment
+ extracting: src/a.txt               
+rc=0
+hello
+Archive:  ../a.zip
+a comment
+  inflating: src/big.txt             
+rc=0
+Archive:  ../a.zip
+a comment
+caution: filename not matched:  src/nosuch
+rc=11
+== -d and -j
+Archive:  a.zip
+a comment
+ extracting: out/src/a.txt           
+ extracting: out/src/sub/b.txt       
+rc=0
+out
+out/src
+out/src/a.txt
+out/src/sub
+out/src/sub/b.txt
+Archive:  a.zip
+a comment
+checkdir:  cannot create extraction directory: deep/er
+           No such file or directory
+rc=2
+Archive:  a.zip
+a comment
+ extracting: flat/a.txt              
+  inflating: flat/big.txt            
+ extracting: flat/bin.dat            
+ extracting: flat/b.txt              
+rc=0
+flat
+flat/a.txt
+flat/b.txt
+flat/big.txt
+flat/bin.dat
+Archive:  a.zip
+a comment
+ extracting: out/src/a.txt           
+rc=0
+== to standard output
+hello
+world
+rc=0
+Archive:  a.zip
+a comment
+ extracting: src/a.txt               
+hello
+
+  inflating: src/big.txt             
+aaaaaaaaaaa
+903418600 3000
+== not matched
+Archive:  a.zip
+a comment
+caution: filename not matched:  nosuch
+rc=11
+Archive:  a.zip
+a comment
+ extracting: nm/src/a.txt            
+caution: filename not matched:  nosuch
+rc=11
+Archive:  a.zip
+a comment
+  inflating: nm/src/big.txt          
+ extracting: nm/src/bin.dat          
+   creating: nm/src/sub/
+ extracting: nm/src/sub/b.txt        
+caution: excluded filename not matched:  nosuch
+rc=0
+== password
+Archive:  e.zip
+    testing: src/a.txt                OK
+    testing: src/sub/b.txt            OK
+No errors detected in compressed data of e.zip.
+rc=0
+Archive:  e.zip
+   skipping: src/a.txt               incorrect password
+   skipping: src/sub/b.txt           incorrect password
+Caution:  zero files tested in e.zip.
+2 files skipped because of incorrect password.
+rc=82
+hello
+rc=0
+Archive:  e.zip
+   skipping: src/a.txt               unable to get password
+   skipping: src/sub/b.txt           unable to get password
+At least one error was detected in e.zip.
+rc=5
+Archive:  e.zip
+ extracting: pw/src/a.txt            
+ extracting: pw/src/sub/b.txt        
+rc=0
+world
+Archive:  e.zip
+   skipping: src/a.txt               incorrect password
+   skipping: src/sub/b.txt           incorrect password
+rc=82
+== symbolic link
+Archive:  ../l.zip
+    linking: src/link                -> a.txt 
+ extracting: src/a.txt               
+finishing deferred symbolic links:
+  src/link               -> a.txt
+rc=0
+== names
+Archive:  ../evil.zip
+warning:  stripped absolute path spec from /abs/x
+ extracting: abs/x                   
+warning:  skipped "../" path component(s) in ../up/y
+ extracting: up/y                    
+warning:  skipped "../" path component(s) in ok/../../z
+ extracting: ok/z                    
+rc=1
+.
+./abs
+./abs/x
+./ok
+./ok/z
+./up
+./up/y
+Archive:  ../fat.zip
+ extracting: DOS.TXT                 
+   creating: DIR/
+ extracting: RUN.EXE                 
+rc=0
+.
+./DIR
+./DOS.TXT
+./RUN.EXE
+444 DOS.TXT
+== empty and broken
+Archive:  empty.zip
+warning [empty.zip]:  zipfile is empty
+rc=1
+Archive:  empty.zip
+warning [empty.zip]:  zipfile is empty
+rc=1
+Archive:  empty.zip
+Zip file size: 22 bytes, number of entries: 0
+Empty zipfile.
+rc=1
+Archive:  junk.zip
+  End-of-central-directory signature not found.  Either this file is not
+  a zipfile, or it constitutes one disk of a multi-part archive.  In the
+  latter case the central directory and zipfile comment will be found on
+  the last disk(s) of this archive.
+unzip:  cannot find zipfile directory in one of junk.zip or
+        junk.zip.zip, and cannot find junk.zip.ZIP, period.
+rc=9
+Archive:  junk.zip
+[junk.zip]
+  End-of-central-directory signature not found.  Either this file is not
+  a zipfile, or it constitutes one disk of a multi-part archive.  In the
+  latter case the central directory and zipfile comment will be found on
+  the last disk(s) of this archive.
+zipinfo:  cannot find zipfile directory in one of junk or
+          junk.zip, and cannot find junk.ZIP, period.
+rc=9
+unzip:  cannot find or open nosuch, nosuch.zip or nosuch.ZIP.
+rc=9
+unzip:  cannot find or open nosuch.zip, nosuch.zip.zip or nosuch.zip.ZIP.
+rc=9
+zipinfo:  cannot find or open nosuch, nosuch.zip or nosuch.ZIP.
+rc=9
+== extra bytes
+Archive:  sfx.zip
+a comment
+warning [sfx.zip]:  15 extra bytes at beginning or within zipfile
+  (attempting to process anyway)
+  Length      Date    Time    Name
+---------  ---------- -----   ----
+        0  2020-01-02 03:04   src/
+        6  2020-01-02 03:04   src/a.txt
+     3000  2020-01-02 03:04   src/big.txt
+        9  2020-01-02 03:04   src/bin.dat
+        0  2020-01-02 03:04   src/sub/
+        6  2020-01-02 03:04   src/sub/b.txt
+---------                     -------
+     3021                     6 files
+rc=1
+warning [sfx.zip]:  15 extra bytes at beginning or within zipfile
+  (attempting to process anyway)
+src/
+src/a.txt
+src/big.txt
+src/bin.dat
+src/sub/
+src/sub/b.txt
+rc=1
+warning [sfx.zip]:  15 extra bytes at beginning or within zipfile
+  (attempting to process anyway)
+No errors detected in compressed data of sfx.zip.
+rc=1
+warning [sfx.zip]:  15 extra bytes at beginning or within zipfile
+  (attempting to process anyway)
+hello
+rc=1
+== bad CRC
+Archive:  bad.zip
+a comment
+    testing: src/                     OK
+    testing: src/a.txt                bad CRC 7c5e941d  (should be 363a3020)
+    testing: src/big.txt              OK
+    testing: src/bin.dat              OK
+    testing: src/sub/                 OK
+    testing: src/sub/b.txt            OK
+At least one error was detected in bad.zip.
+rc=2
+Archive:  bad.zip
+a comment
+ extracting: bc/src/a.txt             bad CRC 7c5e941d  (should be 363a3020)
+rc=2
+Jello
+Jello
+src/a.txt               bad CRC 7c5e941d  (should be 363a3020)
+rc=2
+== options
+UnZip 6.00 of 20 April 2009, by Info-ZIP.  Maintained by C. Spieler.  Send
+bug reports using http://www.info-zip.org/zip-bug.html; see README for details.
+
+Usage: unzip [-Z] [-opts[modifiers]] file[.zip] [list] [-x xlist] [-d exdir]
+  Default action is to extract files in list, except those in xlist, to exdir;
+  file[.zip] may be a wildcard.  -Z => ZipInfo mode ("unzip -Z" for usage).
+
+  -p  extract files to pipe, no messages     -l  list files (short format)
+  -f  freshen existing files, create none    -t  test compressed archive data
+  -u  update files, create if necessary      -z  display archive comment only
+  -v  list verbosely/show version info       -T  timestamp archive to latest
+  -x  exclude files that follow (in xlist)   -d  extract files into exdir
+modifiers:
+  -n  never overwrite existing files         -q  quiet mode (-qq => quieter)
+  -o  overwrite files WITHOUT prompting      -a  auto-convert any text files
+  -j  junk paths (do not make directories)   -aa treat ALL files as text
+  -U  use escapes for all non-ASCII Unicode  -UU ignore any Unicode fields
+  -C  match filenames case-insensitively     -L  make (some) names lowercase
+  -X  restore UID/GID info                   -V  retain VMS version numbers
+  -K  keep setuid/setgid/tacky permissions   -M  pipe through "more" pager
+  -O  CHARSET  specify a character encoding for DOS, Windows and OS/2 archives
+  -I  CHARSET  specify a character encoding for UNIX and other archives
+
+See "unzip -hh" or unzip.txt for more help.  Examples:
+  unzip data1 -x joe   => extract all files except joe from zipfile data1.zip
+  unzip -p foo | more  => send contents of foo.zip via pipe into program more
+  unzip -fo foo ReadMe => quietly replace existing ReadMe if archive file newer
+rc=10
+rc=0
+  unzip data1 -x joe   => extract all files except joe from zipfile data1.zip
+  unzip -p foo | more  => send contents of foo.zip via pipe into program more
+  unzip -fo foo ReadMe => quietly replace existing ReadMe if archive file newer
+ZipInfo 3.00 of 20 April 2009, by Greg Roelofs and the Info-ZIP group.
+
+List name, date/time, attribute, size, compression method, etc., about files
+in list (excluding those in xlist) contained in the specified .zip archive(s).
+"file[.zip]" may be a wildcard name containing *, ?, [] (e.g., "[a-j]*.zip").
+
+   usage:  zipinfo [-12smlvChMtTz] file[.zip] [list...] [-x xlist...]
+      or:  unzip -Z [-12smlvChMtTz] file[.zip] [list...] [-x xlist...]
+
+main listing-format options:             -s  short Unix "ls -l" format (def.)
+  -1  filenames ONLY, one per line       -m  medium Unix "ls -l" format
+  -2  just filenames but allow -h/-t/-z  -l  long Unix "ls -l" format
+                                         -v  verbose, multi-page format
+miscellaneous options:
+  -h  print header line       -t  print totals for listed files or for all
+  -z  print zipfile comment   -T  print file times in sortable decimal format
+  -C  be case-insensitive     -M  page output through built-in "more"
+  -x  exclude filenames that follow from listing
+  -O  CHARSET  specify a character encoding for DOS, Windows and OS/2 archives
+  -I  CHARSET  specify a character encoding for UNIX and other archives
+rc=10
+caution:  both -n and -o specified; ignoring -o
+Archive:  a.zip
+a comment
+  Length      Date    Time    Name
+caution:  not extracting; -d ignored
+Archive:  a.zip
+a comment
+        0  2020-01-02 03:04   src/
+        6  2020-01-02 03:04   src/a.txt
+error:  must specify directory to which to extract with -d option
+rc=10
+Updated time stamp for t.zip.
+rc=0
+1577934245
+Archive:  a.zip
+a comment
+src/a.txt

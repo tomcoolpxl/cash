@@ -2761,6 +2761,11 @@ thing" for tar, zip and the rest, designed before anything is built.
   headers rather than the `tar` crate's; its walk, names and extraction stay in its
   front end until zip shares them; cash-core's `Pattern` and cash-sed are unchanged.
   The reasons are in the design's 3.11 and 3.12.
+- **As built, zip** (phase 30, 2026-10-07): its own records rather than the `zip`
+  crate's, for zipinfo's every field and zip's own header values; deflate on
+  `miniz_oxide`, the RID as the numeric owner and "made on Unix", chosen in the phase
+  without a pick list because the user asked for phase 30 to be finished without
+  stopping (design 3.13), each open to change.
 
 ### D77 — `gzip`, `gunzip` and `zcat`, and the compatibility corners
 
