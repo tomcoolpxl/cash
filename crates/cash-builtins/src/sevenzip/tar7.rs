@@ -6,13 +6,13 @@
 //! counts as headers, and the properties it shows.
 
 use std::fmt::Write as _;
-use std::fs::File;
 use std::io::{self, Read, Seek, SeekFrom};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use cash_archive::sevenz::Problem;
 
 use super::archive::{Data, Item, Prop, TimePrec};
+use super::volume::{Location, Source};
 
 const RECORD: u64 = 512;
 
@@ -192,7 +192,7 @@ pub(super) struct Opening {
 
 /// A tar archive's items, for reading their data.
 pub(super) struct Tar {
-    pub(super) path: PathBuf,
+    pub(super) location: Location,
     pub(super) items: Vec<TarItem>,
     /// Whether pax headers stood as items of their own (`_are_Pax_Items`).
     pub(super) pax_items: bool,
@@ -294,7 +294,7 @@ fn string(field: &[u8]) -> Vec<u8> {
 
 /// The archive's file, read record by record (`CArchive`).
 struct Reader {
-    file: File,
+    file: Source,
     phy_size: u64,
     headers_size: u64,
     fault: Option<Fault>,
@@ -1040,9 +1040,10 @@ pub(super) const ITEM_PROPS: [Prop; 18] = [
     clippy::too_many_lines,
     reason = "7-Zip's Open2 and the archive's facts"
 )]
-pub(super) fn open(path: &Path) -> io::Result<Option<Opening>> {
+/// `name` is the archive's name, which a tar without items needs to open.
+pub(super) fn open(location: &Location, name: &Path) -> io::Result<Option<Opening>> {
     let mut reader = Reader {
-        file: File::open(path)?,
+        file: location.open()?,
         phy_size: 0,
         headers_size: 0,
         fault: None,
@@ -1101,7 +1102,7 @@ pub(super) fn open(path: &Path) -> io::Result<Option<Opening>> {
         if last_fault.is_some() {
             return Ok(None);
         }
-        if !path
+        if !name
             .extension()
             .is_some_and(|ext| ext.eq_ignore_ascii_case("tar"))
         {
@@ -1160,7 +1161,7 @@ pub(super) fn open(path: &Path) -> io::Result<Option<Opening>> {
         error_flags,
         warning_flags,
         tar: Tar {
-            path: path.to_path_buf(),
+            location: location.clone(),
             items,
             pax_items: flags.pax_items,
             faulty: last_fault.is_some() || flags.warning,
@@ -1259,7 +1260,7 @@ impl Tar {
         } else if item.is_dir() {
             Box::new(io::empty())
         } else {
-            let mut file = File::open(&self.path)?;
+            let mut file = self.location.open()?;
             file.seek(SeekFrom::Start(item.data_pos()))?;
             let stored = file.take(item.pack_size_aligned());
             if item.is_sparse() {

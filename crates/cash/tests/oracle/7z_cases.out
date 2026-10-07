@@ -3615,3 +3615,470 @@ Scanning the drive for archives:
 System ERROR:
 Not implemented
 rc=2
+== volumes
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+1 folder, 2 files, 13899 bytes (14 KiB)
+
+Creating archive: x.7z
+
+Add new data to archive: 1 folder, 2 files, 13899 bytes (14 KiB)
+
+
+Files read from disk: 2
+Archive size: 14061 bytes (14 KiB)
+Volumes: 3
+Everything is Ok
+rc=0
+5120 x.7z.001
+5120 x.7z.002
+3821 x.7z.003
+3563352094 5120
+61882764 14061
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+1 folder, 2 files, 13899 bytes (14 KiB)
+
+Creating archive: y.7z
+
+Add new data to archive: 1 folder, 2 files, 13899 bytes (14 KiB)
+
+
+Files read from disk: 2
+Archive size: 14061 bytes (14 KiB)
+Volumes: 4
+Everything is Ok
+rc=0
+5120 y.7z.001
+3072 y.7z.002
+3072 y.7z.003
+2797 y.7z.004
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+1 folder, 2 files, 13899 bytes (14 KiB)
+
+Creating archive: w.7z
+
+Add new data to archive: 1 folder, 2 files, 13899 bytes (14 KiB)
+
+
+Files read from disk: 2
+Archive size: 14061 bytes (14 KiB)
+Volumes: 3
+Everything is Ok
+rc=0
+5000 w.7z.001
+5000 w.7z.002
+4061 w.7z.003
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+1 folder, 2 files, 13899 bytes (14 KiB)
+
+Creating archive: one.7z
+
+Add new data to archive: 1 folder, 2 files, 13899 bytes (14 KiB)
+
+
+Files read from disk: 2
+Archive size: 14061 bytes (14 KiB)
+Volumes: 1
+Everything is Ok
+rc=0
+one.7z.001
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 5120 bytes (5 KiB)
+
+Listing archive: x.7z.001
+
+--
+Path = x.7z.001
+Type = Split
+Physical Size = 5120
+Volumes = 3
+Total Physical Size = 14061
+----
+Path = x.7z
+Size = 14061
+--
+Path = x.7z
+Type = 7z
+Physical Size = 14061
+Headers Size = 162
+Method = Copy
+Solid = -
+Blocks = 2
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00 D....            0            0  d
+2026-10-07 08:00:00 ....A            6            6  d/a.txt
+2026-10-07 08:00:00 ....A        13893        13893  d/n.txt
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00              13899        13899  2 files, 1 folders
+
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00              13899        13899  2 files, 1 folders
+
+Archives: 1
+Volumes: 3
+Total archives size: 14061
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 5120 bytes (5 KiB)
+
+Listing archive: x.7z.001
+
+--
+Path = x.7z.001
+Type = Split
+Physical Size = 5120
+Volumes = 3
+Total Physical Size = 14061
+----
+Path = x.7z
+Size = 14061
+--
+Path = x.7z
+Type = 7z
+Physical Size = 14061
+Headers Size = 162
+Method = Copy
+Solid = -
+Blocks = 2
+
+----------
+Path = d
+Size = 0
+Packed Size = 0
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = D
+CRC = 
+Encrypted = -
+Method = 
+Block = 
+
+Path = d/a.txt
+Size = 6
+Packed Size = 6
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = A
+CRC = 9F606EEC
+Encrypted = -
+Method = Copy
+Block = 0
+
+Path = d/n.txt
+Size = 13893
+Packed Size = 13893
+Modified = 2026-10-07 08:00:00.0000000
+Attributes = A
+CRC = 2D054FE3
+Encrypted = -
+Method = Copy
+Block = 1
+
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 5120 bytes (5 KiB)
+
+Testing archive: x.7z.001
+--
+Path = x.7z.001
+Type = Split
+Physical Size = 5120
+Volumes = 3
+Total Physical Size = 14061
+----
+Path = x.7z
+Size = 14061
+--
+Path = x.7z
+Type = 7z
+Physical Size = 14061
+Headers Size = 162
+Method = Copy
+Solid = -
+Blocks = 2
+
+Everything is Ok
+
+Folders: 1
+Files: 2
+Size:       13899
+Compressed: 14061
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 5120 bytes (5 KiB)
+
+Extracting archive: x.7z.001
+--
+Path = x.7z.001
+Type = Split
+Physical Size = 5120
+Volumes = 3
+Total Physical Size = 14061
+----
+Path = x.7z
+Size = 14061
+--
+Path = x.7z
+Type = 7z
+Physical Size = 14061
+Headers Size = 162
+Method = Copy
+Solid = -
+Blocks = 2
+
+Everything is Ok
+
+Folders: 1
+Files: 2
+Size:       13899
+Compressed: 14061
+rc=0
+a.txt
+n.txt
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 5120 bytes (5 KiB)
+
+Listing archive: x.7z.002
+
+
+Errors: 1
+
+ERROR: x.7z.002 : Cannot open the file as archive
+
+
+rc=2
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+3 files, 14061 bytes (14 KiB)
+
+Listing archive: x.7z.001
+
+--
+Path = x.7z.001
+Type = Split
+Physical Size = 5120
+Volumes = 3
+Total Physical Size = 14061
+----
+Path = x.7z
+Size = 14061
+--
+Path = x.7z
+Type = 7z
+Physical Size = 14061
+Headers Size = 162
+Method = Copy
+Solid = -
+Blocks = 2
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00 D....            0            0  d
+2026-10-07 08:00:00 ....A            6            6  d/a.txt
+2026-10-07 08:00:00 ....A        13893        13893  d/n.txt
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00              13899        13899  2 files, 1 folders
+
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00              13899        13899  2 files, 1 folders
+
+Archives: 1
+Volumes: 3
+Total archives size: 14061
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 5120 bytes (5 KiB)
+
+Testing archive: x.7z.001
+ERROR: x.7z.001
+x.7z
+Open ERROR: Cannot open the file as [7z] archive
+
+
+ERRORS:
+Unexpected end of archive
+
+Can't open as archive: 1
+Files: 0
+Size:       0
+Compressed: 0
+rc=2
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+1 folder, 2 files, 13899 bytes (14 KiB)
+
+Creating archive: x.zip
+
+Add new data to archive: 1 folder, 2 files, 13899 bytes (14 KiB)
+
+
+Files read from disk: 2
+Archive size: 14181 bytes (14 KiB)
+Volumes: 3
+Everything is Ok
+rc=0
+5120 x.zip.001
+5120 x.zip.002
+3941 x.zip.003
+3044767762 14181
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 5120 bytes (5 KiB)
+
+Listing archive: x.zip.001
+
+--
+Path = x.zip.001
+Type = Split
+Physical Size = 5120
+Volumes = 3
+Total Physical Size = 14181
+----
+Path = x.zip
+Size = 14181
+--
+Path = x.zip
+Type = zip
+Physical Size = 14181
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+1980-01-01 00:00:00 D....            0            0  d
+1980-01-01 00:00:00 ....A            6            6  d/a.txt
+1980-01-01 00:00:00 ....A        13893        13893  d/n.txt
+------------------- ----- ------------ ------------  ------------------------
+1980-01-01 00:00:00              13899        13899  2 files, 1 folders
+
+------------------- ----- ------------ ------------  ------------------------
+1980-01-01 00:00:00              13899        13899  2 files, 1 folders
+
+Archives: 1
+Volumes: 3
+Total archives size: 14181
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive:
+1 folder, 2 files, 13899 bytes (14 KiB)
+
+Creating archive: x.tar
+
+Add new data to archive: 1 folder, 2 files, 13899 bytes (14 KiB)
+
+
+Files read from disk: 3
+Archive size: 17408 bytes (17 KiB)
+Volumes: 4
+Everything is Ok
+rc=0
+5120 x.tar.001
+5120 x.tar.002
+5120 x.tar.003
+2048 x.tar.004
+869983487 17408
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 5120 bytes (5 KiB)
+
+Testing archive: x.tar.001
+--
+Path = x.tar.001
+Type = Split
+Physical Size = 5120
+Volumes = 4
+Total Physical Size = 17408
+----
+Path = x.tar
+Size = 17408
+--
+Path = x.tar
+Type = tar
+Physical Size = 17408
+Headers Size = 2560
+Code Page = UTF-8
+Characteristics = GNU ASCII
+
+Everything is Ok
+
+Folders: 1
+Files: 2
+Size:       13899
+Compressed: 17408
+rc=0
+rc=0
+Type = Split
+Type = gzip
+Everything is Ok
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+
+Error:
+Updating for multivolume archives is not implemented
+x.7z.001
+
+
+System ERROR:
+Not implemented
+rc=2
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+
+
+Command Line Error:
+zero size last volume is not allowed
+rc=7
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+
+
+Command Line Error:
+Incorrect volume size:
+x
+rc=7
+
+
+System ERROR:
+Unspecified error
+rc=2

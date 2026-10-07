@@ -270,7 +270,22 @@ pub(super) fn read_line<SE: cash_core::ShellExtensions>(
 
 /// `Print_OpenArchive_Props`: the archive's facts.
 pub(super) fn archive_props(found: &Found, opened: &Opened) -> String {
-    let mut text = format!("--\nPath = {}\n", found.name.replace('\\', "/"));
+    let mut name = found.name.replace('\\', "/");
+    let mut text = String::from("--\n");
+    // A split archive: its level, then its one item, the archive inside.
+    if let Some(split) = &opened.split {
+        let _ = write!(
+            text,
+            "Path = {name}\nType = Split\nPhysical Size = {}\nVolumes = {}\n\
+             Total Physical Size = {}\n----\n",
+            split.first_size,
+            split.parts.len(),
+            split.total
+        );
+        name = inner_name(&name);
+        let _ = write!(text, "Path = {name}\nSize = {}\n--\n", split.total);
+    }
+    let _ = writeln!(text, "Path = {name}");
     if let Some(named) = opened.type_warning {
         let _ = writeln!(
             text,
@@ -298,6 +313,12 @@ pub(super) fn archive_props(found: &Found, opened: &Opened) -> String {
     text
 }
 
+/// The archive inside a split one: the first volume's name less `.001`.
+fn inner_name(name: &str) -> String {
+    name.rsplit_once('.')
+        .map_or_else(|| name.to_owned(), |(stem, _)| stem.to_owned())
+}
+
 /// `Print_OpenArchive_Error`: why an archive did not open, and its flags.
 pub(super) fn open_error(found: &Found, failure: &OpenFailure, password_asked: bool) -> String {
     let mut text = String::new();
@@ -307,12 +328,17 @@ pub(super) fn open_error(found: &Found, failure: &OpenFailure, password_asked: b
         }
         _ if password_asked => text.push_str("Cannot open encrypted archive. Wrong password?"),
         OpenFailure::NotArchive {
-            tried: Some(kind), ..
+            tried: Some(kind),
+            in_split,
+            ..
         } => {
+            let mut name = found.name.replace('\\', "/");
+            if *in_split {
+                name = inner_name(&name);
+            }
             let _ = write!(
                 text,
-                "{}\nOpen ERROR: Cannot open the file as [{}] archive\n",
-                found.name.replace('\\', "/"),
+                "{name}\nOpen ERROR: Cannot open the file as [{}] archive\n",
                 kind.name()
             );
         }
@@ -531,7 +557,7 @@ fn extract_archive<SE: cash_core::ShellExtensions>(
                     .filter_map(|item| item.packed)
                     .sum::<u64>()
         }
-        None => archive.size,
+        None => opened.split.as_ref().map_or(archive.size, |s| s.total),
     };
     let errors = extract_items(options, env, console, &mut opened, password, totals)?;
     console.flush_so();

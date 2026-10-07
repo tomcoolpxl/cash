@@ -153,75 +153,7 @@ fn find_end<R: Read + Seek>(input: &mut R, file_size: u64) -> Result<(u64, Vec<u
 
 /// Several files read as one: the parts of a split archive, in order, the last (the
 /// `.zip`) at the end.
-pub struct Concat<F> {
-    parts: Vec<(F, u64)>,
-    position: u64,
-}
-
-impl<F: Read + Seek> Concat<F> {
-    /// The parts, in order.
-    ///
-    /// # Errors
-    ///
-    /// When a part's size cannot be found.
-    pub fn new(files: Vec<F>) -> io::Result<Self> {
-        let mut parts = Vec::with_capacity(files.len());
-        for mut file in files {
-            let size = file.seek(SeekFrom::End(0))?;
-            parts.push((file, size));
-        }
-        Ok(Self { parts, position: 0 })
-    }
-
-    /// Where each part starts in the whole.
-    pub fn bases(&self) -> Vec<u64> {
-        let mut at = 0;
-        self.parts
-            .iter()
-            .map(|(_, size)| {
-                let base = at;
-                at += size;
-                base
-            })
-            .collect()
-    }
-
-    fn total(&self) -> u64 {
-        self.parts.iter().map(|(_, size)| size).sum()
-    }
-}
-
-impl<F: Read + Seek> Read for Concat<F> {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        let mut base = 0;
-        for (file, size) in &mut self.parts {
-            if self.position < base + *size {
-                let within = self.position - base;
-                file.seek(SeekFrom::Start(within))?;
-                let left = usize::try_from(*size - within).unwrap_or(usize::MAX);
-                let want = buf.len().min(left);
-                let n = file.read(buf.get_mut(..want).unwrap_or_default())?;
-                self.position += n as u64;
-                return Ok(n);
-            }
-            base += *size;
-        }
-        Ok(0)
-    }
-}
-
-impl<F: Read + Seek> Seek for Concat<F> {
-    fn seek(&mut self, to: SeekFrom) -> io::Result<u64> {
-        let target = match to {
-            SeekFrom::Start(at) => i128::from(at),
-            SeekFrom::End(delta) => i128::from(self.total()) + i128::from(delta),
-            SeekFrom::Current(delta) => i128::from(self.position) + i128::from(delta),
-        };
-        self.position = u64::try_from(target)
-            .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "seek before the start"))?;
-        Ok(self.position)
-    }
-}
+pub use crate::volumes::Spanned as Concat;
 
 /// Reads an archive's end record and central directory.
 ///

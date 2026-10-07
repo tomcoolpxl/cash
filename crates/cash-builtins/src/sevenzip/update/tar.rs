@@ -5,7 +5,6 @@
 //! the archive ending in two empty records. Items kept as they were are copied whole,
 //! headers and all; renamed ones get a new header over their old data.
 
-use std::fs::File;
 use std::io::{self, Read, Write};
 
 use super::super::archive::Opened;
@@ -816,7 +815,7 @@ fn copy_old(tar: &Tar, pos: u64, size: u64, out: &mut Out<'_>) -> Result<(), Sto
     if size == 0 {
         return Ok(());
     }
-    let mut file = File::open(&tar.path).map_err(Stop::System)?;
+    let mut file = tar.location.open().map_err(Stop::System)?;
     file.seek(io::SeekFrom::Start(pos)).map_err(Stop::System)?;
     let copied = io::copy(&mut file.take(size), out).map_err(Stop::System)?;
     if copied != size {

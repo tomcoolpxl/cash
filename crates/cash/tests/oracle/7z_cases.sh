@@ -345,3 +345,47 @@ z t -scrc h.7z
 z e -scrc -so h.7z d/a.txt
 z t -scrcfoo h.7z
 cd ..
+
+echo "== volumes"
+mkdir -p vd/d
+cd vd || exit 1
+seq 1 3000 > d/n.txt
+printf 'alpha\n' > d/a.txt
+touch -d '2026-10-07 08:00:00' d/n.txt d/a.txt d
+sizes() { for f in "$@"; do echo "$(wc -c < "$f") $f"; done; }
+z a -mx0 -mhc=off -v5k x.7z d
+sizes x.7z.*
+cksum < x.7z.001
+cat x.7z.001 x.7z.002 x.7z.003 | cksum
+z a -mx0 -mhc=off -v5k -v3k y.7z d
+sizes y.7z.*
+z a -mx0 -mhc=off -v5000b w.7z d
+sizes w.7z.*
+z a -mx0 -mhc=off -v100k one.7z d
+ls one.7z*
+z l x.7z.001
+z l -slt x.7z.001
+z t x.7z.001
+z x -ovx x.7z.001
+ls vx/d
+z l x.7z.002
+z l 'x.7z.*'
+mv x.7z.003 x.7z.3
+z t x.7z.001
+mv x.7z.3 x.7z.003
+z a -mx0 -mtm- -v5k x.zip d
+sizes x.zip.*
+cat x.zip.001 x.zip.002 x.zip.003 | cksum
+z l x.zip.001
+z a -v5k x.tar d
+sizes x.tar.*
+cat x.tar.0* | cksum
+z t x.tar.001
+z a -bso0 -v2k x.gz d/n.txt
+z t x.gz.001 | grep -E '^(Type|Everything is Ok|rc)'
+z u -v5k x.7z d
+z a -v0 bad.7z d
+z a -vx bad.7z d
+7z a -so -v5k -ttar so d > /dev/null
+echo "rc=$?"
+cd ..

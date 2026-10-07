@@ -4,7 +4,6 @@
 //! names the file and gives its time in Unix seconds, MS-DOS's host and the level's
 //! extra flags; xz's blocks are checked with CRC32 unless `-mcrc` says otherwise.
 
-use std::fs::File;
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::num::NonZeroU64;
 
@@ -232,7 +231,7 @@ pub(super) fn write<SE: cash_core::ShellExtensions>(
         let stream = opened
             .and_then(Opened::stream)
             .ok_or_else(|| Stop::System(win_error(win::E_NOTIMPL)))?;
-        let mut file = File::open(&stream.path).map_err(Stop::System)?;
+        let mut file = stream.location.open().map_err(Stop::System)?;
         if kind == Kind::Gzip
             && ui.up.new_props
             && let Some((header_size, xfl)) = stream.gzip_header

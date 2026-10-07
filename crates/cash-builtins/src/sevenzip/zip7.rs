@@ -5,15 +5,14 @@
 //! data through cash-archive's zip reader.
 
 use std::fmt::Write as _;
-use std::fs::File;
 use std::io::{self, BufReader, Read, Seek, SeekFrom};
-use std::path::{Path, PathBuf};
 
 use cash_archive::sevenz::Problem;
 use cash_archive::zip::read::{self as zread, DataError};
 use cash_archive::zip::{Entry, method};
 
 use super::archive::{Data, Item, Prop, TimePrec};
+use super::volume::Location;
 
 /// FILETIME ticks at the Unix epoch.
 const UNIX_EPOCH_TICKS: u64 = 116_444_736_000_000_000;
@@ -28,7 +27,7 @@ pub(super) struct Opening {
 
 /// A zip archive, open, for reading its items' data.
 pub(super) struct Zip {
-    pub(super) path: PathBuf,
+    pub(super) location: Location,
     pub(super) archive: zread::Archive,
     password: Option<String>,
 }
@@ -368,8 +367,11 @@ fn has_crc(entry: &Entry) -> bool {
 }
 
 /// Opens `path` as a zip (`CHandler::Open`); `None` when it is not one.
-pub(super) fn open(path: &Path, zone: &cash_core::timefmt::Zone) -> io::Result<Option<Opening>> {
-    let mut file = File::open(path)?;
+pub(super) fn open(
+    location: &Location,
+    zone: &cash_core::timefmt::Zone,
+) -> io::Result<Option<Opening>> {
+    let mut file = location.open()?;
     let archive = match zread::open(&mut file) {
         Ok(archive) => archive,
         Err(zread::OpenError::Io(error)) => return Err(error),
@@ -393,7 +395,7 @@ pub(super) fn open(path: &Path, zone: &cash_core::timefmt::Zone) -> io::Result<O
         props,
         items,
         zip: Zip {
-            path: path.to_path_buf(),
+            location: location.clone(),
             archive,
             password: None,
         },
@@ -473,7 +475,7 @@ impl Zip {
     /// Item `index`'s data, decrypted and decompressed, its CRC checked at the end.
     pub(super) fn data(&self, index: usize) -> io::Result<ZipData> {
         let entry = &self.archive.entries[index];
-        let mut file = File::open(&self.path)?;
+        let mut file = self.location.open()?;
         let local = zread::local(&mut file, &self.archive, entry);
         let check = has_crc(entry);
         let mut data = ZipData {

@@ -2,11 +2,12 @@
 //! and each item's data, whatever the format.
 
 use std::fmt::Write as _;
-use std::fs::File;
 use std::io::{self, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
 use cash_archive::sevenz::{self, ArchiveReader, Block, Password, Problem};
+
+use super::volume::{Location, Source};
 
 /// The formats 7z knows, by 7-Zip's names for them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -242,6 +243,9 @@ pub(super) enum OpenFailure {
     NotArchive {
         tried: Option<Kind>,
         flags: Vec<&'static str>,
+        /// The archive was inside a split one's volumes, and is named by the first
+        /// volume's name less `.001`.
+        in_split: bool,
     },
     /// Its header is encrypted and the password given or typed is not the one.
     WrongPassword,
@@ -325,7 +329,8 @@ pub(super) fn open_stdin(
             for item in &mut opened.items {
                 item.method = None;
             }
-            let reports = kind == Kind::Xz && super::streams::xz_sizes_in_headers(path);
+            let reports =
+                kind == Kind::Xz && super::streams::xz_sizes_in_headers(&Location::single(path));
             if let Backend::Stream(stream) = &mut opened.backend {
                 stream.reports_size = reports;
             }
@@ -365,12 +370,22 @@ pub(super) struct Opened {
     /// A tar read in one pass from standard input: its headers' bytes, which 7-Zip
     /// counts as what it read when it copies the data it extracts uncounted.
     pub(super) seq_headers: Option<u64>,
+    /// The split archive whose volumes hold this one.
+    pub(super) split: Option<Split>,
     backend: Backend,
+}
+
+/// A split archive (`SplitHandler.cpp`): its volumes, the first one's size and the sum.
+#[derive(Clone, Debug)]
+pub(super) struct Split {
+    pub(super) parts: Vec<PathBuf>,
+    pub(super) first_size: u64,
+    pub(super) total: u64,
 }
 
 /// What reads an open archive's data.
 enum Backend {
-    SevenZ(Box<ArchiveReader<File>>),
+    SevenZ(Box<ArchiveReader<Source>>),
     Stream(super::streams::Stream),
     Tar(super::tar7::Tar),
     Zip(Box<super::zip7::Zip>),
@@ -401,17 +416,54 @@ impl Data for sevenz::EntryReader<'_> {
 
 /// Opens `path` as `forced`, or as its first bytes say; a format its name suggests is
 /// the one an error names.
-#[expect(
-    clippy::too_many_lines,
-    reason = "each format's opening, in 7-Zip's order"
-)]
 pub(super) fn open(
     path: &Path,
     forced: Option<Kind>,
     password: Option<&str>,
     zone: &cash_core::timefmt::Zone,
 ) -> Result<Opened, OpenFailure> {
-    let mut file = File::open(path).map_err(OpenFailure::Io)?;
+    // A first volume, NAME.001, opens through the split handler: the archive NAME, its
+    // volumes read as one.
+    if forced.is_none()
+        && path
+            .extension()
+            .is_some_and(|e| e.eq_ignore_ascii_case("001"))
+    {
+        let location = Location::volumes(path);
+        let sizes = location.sizes();
+        let inner = path.with_extension("");
+        let mut opened =
+            open_at(&location, &inner, None, password, zone).map_err(|failure| match failure {
+                OpenFailure::NotArchive { tried, flags, .. } => OpenFailure::NotArchive {
+                    tried,
+                    flags,
+                    in_split: true,
+                },
+                other => other,
+            })?;
+        opened.split = Some(Split {
+            parts: location.parts().to_vec(),
+            first_size: sizes.first().copied().unwrap_or(0),
+            total: sizes.iter().sum(),
+        });
+        return Ok(opened);
+    }
+    open_at(&Location::single(path), path, forced, password, zone)
+}
+
+/// Opens the archive at `location`, named `name` (whose extension names its format).
+#[expect(
+    clippy::too_many_lines,
+    reason = "each format's opening, in 7-Zip's order"
+)]
+fn open_at(
+    location: &Location,
+    path: &Path,
+    forced: Option<Kind>,
+    password: Option<&str>,
+    zone: &cash_core::timefmt::Zone,
+) -> Result<Opened, OpenFailure> {
+    let mut file = location.open().map_err(OpenFailure::Io)?;
     let mut head = [0u8; 1100];
     let read = read_up_to(&mut file, &mut head).map_err(OpenFailure::Io)?;
     file.seek(SeekFrom::Start(0)).map_err(OpenFailure::Io)?;
@@ -424,6 +476,7 @@ pub(super) fn open(
         } else {
             Vec::new()
         },
+        in_split: false,
     };
     // The format -t names; else the one the name's extension names, then the one the
     // first bytes say, then lzma, which has no signature (7-Zip's `CArc::OpenStream`).
@@ -451,7 +504,7 @@ pub(super) fn open(
     } else if kind == Kind::Zip {
         let len = file.seek(SeekFrom::End(0)).map_err(OpenFailure::Io)?;
         drop(file);
-        let Some(mut opening) = super::zip7::open(path, zone).map_err(OpenFailure::Io)? else {
+        let Some(mut opening) = super::zip7::open(location, zone).map_err(OpenFailure::Io)? else {
             return Err(not_archive(by_name.or(Some(kind))));
         };
         if let Some(password) = password {
@@ -468,12 +521,13 @@ pub(super) fn open(
             error_flags: Vec::new(),
             warning_flags: Vec::new(),
             seq_headers: None,
+            split: None,
             backend: Backend::Zip(Box::new(opening.zip)),
         }
     } else if kind == Kind::Tar {
         let len = file.seek(SeekFrom::End(0)).map_err(OpenFailure::Io)?;
         drop(file);
-        let Some(opening) = super::tar7::open(path).map_err(OpenFailure::Io)? else {
+        let Some(opening) = super::tar7::open(location, path).map_err(OpenFailure::Io)? else {
             return Err(not_archive(by_name.or(Some(kind))));
         };
         Opened {
@@ -487,12 +541,13 @@ pub(super) fn open(
             error_flags: opening.error_flags,
             warning_flags: opening.warning_flags,
             seq_headers: None,
+            split: None,
             backend: Backend::Tar(opening.tar),
         }
     } else {
         let mut file = file;
         let Some(opening) =
-            super::streams::open(kind, &mut file, path, head).map_err(OpenFailure::Io)?
+            super::streams::open(kind, &mut file, path, location, head).map_err(OpenFailure::Io)?
         else {
             return Err(not_archive(by_name.or(Some(kind))));
         };
@@ -507,6 +562,7 @@ pub(super) fn open(
             error_flags: Vec::new(),
             warning_flags: Vec::new(),
             seq_headers: None,
+            split: None,
             backend: Backend::Stream(opening.stream),
         }
     };
@@ -524,7 +580,7 @@ pub(super) fn open(
     Ok(opened)
 }
 
-fn read_up_to(file: &mut File, buf: &mut [u8]) -> io::Result<usize> {
+fn read_up_to(file: &mut impl Read, buf: &mut [u8]) -> io::Result<usize> {
     let mut done = 0;
     while done < buf.len() {
         match file.read(&mut buf[done..])? {
@@ -535,7 +591,7 @@ fn read_up_to(file: &mut File, buf: &mut [u8]) -> io::Result<usize> {
     Ok(done)
 }
 
-fn open_7z(mut file: File, password: Option<&str>) -> Result<Opened, OpenFailure> {
+fn open_7z(mut file: Source, password: Option<&str>) -> Result<Opened, OpenFailure> {
     let len = file.seek(SeekFrom::End(0)).map_err(OpenFailure::Io)?;
     file.seek(SeekFrom::Start(0)).map_err(OpenFailure::Io)?;
     let pw = password.map_or_else(Password::empty, Password::from);
@@ -551,18 +607,21 @@ fn open_7z(mut file: File, password: Option<&str>) -> Result<Opened, OpenFailure
             return Err(OpenFailure::NotArchive {
                 tried: Some(Kind::SevenZ),
                 flags: vec!["Unexpected end of archive"],
+                in_split: false,
             });
         }
         Err(sevenz::Error::Io(e, _)) if e.kind() == io::ErrorKind::UnexpectedEof => {
             return Err(OpenFailure::NotArchive {
                 tried: Some(Kind::SevenZ),
                 flags: vec!["Unexpected end of archive"],
+                in_split: false,
             });
         }
         Err(_) => {
             return Err(OpenFailure::NotArchive {
                 tried: Some(Kind::SevenZ),
                 flags: vec!["Headers Error"],
+                in_split: false,
             });
         }
     };
@@ -605,6 +664,7 @@ fn open_7z(mut file: File, password: Option<&str>) -> Result<Opened, OpenFailure
         error_flags: Vec::new(),
         warning_flags: Vec::new(),
         seq_headers: None,
+        split: None,
         backend: Backend::SevenZ(Box::new(reader)),
     })
 }
@@ -835,7 +895,7 @@ impl Opened {
     }
 
     /// The 7z reader underneath, which updating copies blocks from.
-    pub(super) fn reader(&mut self) -> Option<&mut ArchiveReader<File>> {
+    pub(super) fn reader(&mut self) -> Option<&mut ArchiveReader<Source>> {
         match &mut self.backend {
             Backend::SevenZ(reader) => Some(reader),
             Backend::Stream(_) | Backend::Tar(_) | Backend::Zip(_) => None,

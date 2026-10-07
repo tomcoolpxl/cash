@@ -4,21 +4,21 @@
 //! handler knows before decoding; and its data, decoded on reading.
 
 use std::fmt::Write as _;
-use std::fs::File;
 use std::io::{self, Read, Seek, SeekFrom};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use cash_archive::codec::{self, Codec, CodecError};
 use cash_archive::sevenz::Problem;
 
 use super::archive::{Data, Item, Kind, Prop, TimePrec};
+use super::volume::{Location, Source};
 
 /// FILETIME ticks at the Unix epoch.
 const UNIX_EPOCH_TICKS: u64 = 116_444_736_000_000_000;
 
 /// A stream archive's data, for decoding.
 pub(super) struct Stream {
-    pub(super) path: PathBuf,
+    pub(super) location: Location,
     codec: Codec,
     /// Whether the handler gives the size it decoded (all but lzma's).
     pub(super) reports_size: bool,
@@ -146,14 +146,16 @@ fn le32(b: &[u8], at: usize) -> Option<u64> {
 
 /// Opens a stream archive of `kind` whose first bytes are `head`.
 #[expect(clippy::too_many_lines, reason = "each format's facts in turn")]
+/// `name` is the archive's name, the item's when the stream has none.
 pub(super) fn open(
     kind: Kind,
-    file: &mut File,
-    path: &Path,
+    file: &mut Source,
+    name: &Path,
+    location: &Location,
     head: &[u8],
 ) -> io::Result<Option<Opening>> {
     let len = file.seek(SeekFrom::End(0))?;
-    let file_name = path
+    let file_name = name
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
@@ -169,7 +171,7 @@ pub(super) fn open(
         _ => Codec::Lzma,
     };
     let mut stream = Stream {
-        path: path.to_path_buf(),
+        location: location.clone(),
         codec,
         reports_size: true,
         gzip_header: None,
@@ -314,7 +316,7 @@ struct GzipHeader {
 
 /// `CItem::ReadHeader`: the fixed part, then the extra field, name, comment and CRC
 /// its flags say are there.
-fn gzip_header(file: &mut File) -> io::Result<Option<GzipHeader>> {
+fn gzip_header(file: &mut Source) -> io::Result<Option<GzipHeader>> {
     file.seek(SeekFrom::Start(0))?;
     let mut bytes = Vec::new();
     file.by_ref().take(1 << 16).read_to_end(&mut bytes)?;
@@ -398,8 +400,8 @@ fn host_os(os: u8) -> String {
 /// Whether every block of an xz file gives its uncompressed size in its header (XZ
 /// Utils' blocks do, 7-Zip's do not): what 7-Zip, reading the file in one pass,
 /// reports as the size it decoded.
-pub(super) fn xz_sizes_in_headers(path: &Path) -> bool {
-    let Ok(mut file) = File::open(path) else {
+pub(super) fn xz_sizes_in_headers(location: &Location) -> bool {
+    let Ok(mut file) = location.open() else {
         return false;
     };
     let Ok(info) = codec::xz::file_info(&mut file) else {
@@ -661,7 +663,7 @@ fn lzma_method(props: u8, dict: u32) -> String {
 impl Stream {
     /// The item's data, decoded as it is read.
     pub(super) fn data(&self) -> io::Result<StreamData> {
-        let file = File::open(&self.path)?;
+        let file = self.location.open()?;
         Ok(StreamData {
             reader: codec::members_reader(self.codec, io::BufReader::new(file)),
             out: 0,

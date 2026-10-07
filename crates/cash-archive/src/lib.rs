@@ -19,4 +19,5 @@ pub mod member;
 pub mod select;
 pub mod sevenz;
 pub mod tar;
+pub mod volumes;
 pub mod zip;

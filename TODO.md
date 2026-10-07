@@ -533,8 +533,13 @@ same day: 7z and the formats cash has, Windows 7-Zip's words with LF and `/`,
 5. **Volumes, `h` and `-scrc`, links, `-sns`/`-sni`**. `h` and `-scrc` done 2026-10-07:
    7-Zip's ten hashes (BLAKE2sp from `blake2s_simd`), its columns and its sums for data
    and for data and names, `-ba`, `-si`; `t` and `x` sum what they read (`t` folders
-   too, as 26.03 does). Left: volumes, links, `-sns`/`-sni`; `h` on hash files
-   (7-Zip 23's `-thash`) is not taken.
+   too, as 26.03 does). Volumes done 2026-10-07: `-v` writes `NAME.001` and on in every
+   format (7z, zip and tar to 7-Zip's bytes), "Volumes: N"; `NAME.001` reads as 7-Zip's
+   "Split" level over the archive inside, the volumes not opened again, their sizes in
+   the totals. The spanning is cash-archive's `volumes` (`Spanned`, `numbered`,
+   `SpannedWriter`), which zip's split parts use too. Left: links, `-sns`/`-sni`; `h`
+   on hash files (7-Zip 23's `-thash`) is not taken; 7-Zip's split handler also reads
+   `NAME.aa`, `NAME.ab` volumes, cash's only numbered ones.
 6. The page, `builtins.md`, `CARRIED`, `DELIBERATE_SHADOWS`, doctor.
 
 ---
@@ -581,7 +586,9 @@ not used.
    sevenz-rust2 was (0.10.0; its license in `licenses/`, `NOTICE`; Python, npm, wasm and
    the CLI left out; its tests and fixtures kept; cash's lints, panics fixed by hand).
 2. **`7z l`, `t`, `x`, `e` on `.rar`**: 7-Zip's listing properties and words for RAR,
-   solid archives, volumes (`.part1.rar`, `.r00`), encrypted headers and data, checked
+   solid archives, volumes (`.part1.rar`, `.r00`: a naming function in cash-archive's
+   `volumes` beside `numbered`, the files read through its `Spanned` where rars takes
+   one stream), encrypted headers and data, checked
    against Scoop's 7-Zip with an oracle as for 7z. `7z a` on a `.rar` name refuses as
    7-Zip does.
 3. **`rar` and `unrar` builtins** with RARLAB's console interface, reading and writing:

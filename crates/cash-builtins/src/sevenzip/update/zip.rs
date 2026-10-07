@@ -6,7 +6,6 @@
 //! page cannot hold it; `ZipCrypto`, or AES with `-mem`. Items kept are copied whole;
 //! renamed ones get a new local header over their old data.
 
-use std::fs::File;
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::num::NonZeroU64;
 
@@ -19,6 +18,7 @@ use super::super::archive::Opened;
 use super::super::extract::ask_password;
 use super::super::methods::{self, MethodError, lzma_params, param, size};
 use super::super::text;
+use super::super::volume::Source;
 use super::super::zip7::Zip;
 use super::{Input, Item, Job, Out, Stop, Warnings, progress, win, win_error};
 
@@ -824,7 +824,7 @@ pub(super) fn write<SE: cash_core::ShellExtensions>(
         && !settings.remove_sfx
     {
         let stub = u64::try_from(zip.archive.extra_bytes).unwrap_or(0);
-        let mut file = File::open(&zip.path).map_err(Stop::System)?;
+        let mut file = zip.location.open().map_err(Stop::System)?;
         let copied = io::copy(&mut (&mut file).take(stub), out).map_err(Stop::System)?;
         if copied != stub {
             return Err(Stop::System(win_error(win::E_FAIL)));
@@ -837,7 +837,7 @@ pub(super) fn write<SE: cash_core::ShellExtensions>(
     let mut records: Vec<Record> = Vec::new();
     let mut files_read = 0u64;
     let mut source = match zip {
-        Some(z) => Some(File::open(&z.path).map_err(Stop::System)?),
+        Some(z) => Some(z.location.open().map_err(Stop::System)?),
         None => None,
     };
     for ui in items {
@@ -1161,7 +1161,7 @@ fn add_file(
 /// descriptor as they were; or, with new properties, a new local header over its data.
 fn copy_old(
     zip: &Zip,
-    file: &mut File,
+    file: &mut Source,
     entry: &Entry,
     props: Option<NewProps>,
     out: &mut Out<'_>,

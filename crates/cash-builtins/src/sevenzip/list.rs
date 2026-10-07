@@ -66,11 +66,17 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
     let mut not_implemented = false;
     let mut total = Stat::default();
     let mut archives = 0u64;
+    let mut volumes = 0u64;
     let mut total_size = 0u64;
+    // The volumes after a split archive's first, which 7-Zip does not open again.
+    let mut used: Vec<std::path::PathBuf> = Vec::new();
     let mut password = options.password.clone();
     let censor = &options.censor;
     let all = censor.all_allowed();
     for archive in found {
+        if used.contains(&archive.path) {
+            continue;
+        }
         if archive.size == u64::MAX {
             console.flush_stdout();
             console.se(&format!("\nERROR: {} is not a file\n\n", archive.name));
@@ -127,6 +133,12 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
             errors += 1;
         }
         archives += 1;
+        volumes += 1;
+        if let Some(split) = &opened.split {
+            volumes += split.parts.len() as u64 - 1;
+            total_size += split.total - archive.size;
+            used.extend(split.parts.iter().skip(1).cloned());
+        }
         if options.headers {
             console.stdout(&archive_props(archive, &opened));
             console.stdout("\n");
@@ -163,7 +175,7 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
             stat.packed = if stat.files + stat.dirs == 0 {
                 Some(0)
             } else {
-                (!archive.stdin).then_some(archive.size)
+                (!archive.stdin).then(|| opened.split.as_ref().map_or(archive.size, |s| s.total))
             };
         }
         if stat.files == 0 {
@@ -176,14 +188,14 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
         total.add(&stat);
         console.flush_stdout();
     }
-    if options.headers && !options.tech && found.len() > 1 {
+    if options.headers && !options.tech && (found.len() > 1 || volumes > 1) {
         if total.files == 0 {
             total.size.get_or_insert(0);
         }
         console.stdout(&format!("\n{LINES}\n"));
         console.stdout(&sum(env, &total));
         console.stdout(&format!(
-            "\nArchives: {archives}\nVolumes: {archives}\nTotal archives size: {total_size}\n"
+            "\nArchives: {archives}\nVolumes: {volumes}\nTotal archives size: {total_size}\n"
         ));
     }
     if options.headers && warnings > 0 {

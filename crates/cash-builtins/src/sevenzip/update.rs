@@ -19,6 +19,7 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use cash_archive::sevenz::{self, ArchiveEntry, ArchiveWriter, NtTime, TimesKept};
+use cash_archive::volumes;
 use cash_core::timefmt::Zone;
 
 use super::archive::{self, Kind, OpenFailure, Opened, TimePrec};
@@ -76,6 +77,9 @@ struct ErrorInfo {
     message: String,
     files: Vec<String>,
     code: u32,
+    /// Whether the code is the error's system error (`SystemError`), shown with it;
+    /// else only the command's result.
+    system: bool,
 }
 
 /// A pair's state (`NPairState`), in the order of an action set.
@@ -535,6 +539,10 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
                 "I won't write data and program's messages to same stream",
             )));
         }
+        // Volumes are files: standard output is not cut into them.
+        if !update.volumes.is_empty() {
+            return Err(Stop::System(win_error(win::E_FAIL)));
+        }
     }
     let given = options.archive_name.clone().unwrap_or_default();
     // The format -t names, else the one the name's extension names (`InitFormatIndex`);
@@ -555,8 +563,24 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
     let arc_path = env.path(&arc_name);
     let rename = options.command == Command::Rename;
     let mut warnings = Warnings::default();
+    // With -v the archive there would be its first volume.
+    let (there_name, there_path) = if update.volumes.is_empty() {
+        (arc_name, arc_path.clone())
+    } else {
+        let name = format!("{arc_name}.001");
+        let path = env.path(&name);
+        (name, path)
+    };
 
-    let source = open_source(options, env, console, &arc_name, &arc_path, rename, named)?;
+    let source = open_source(
+        options,
+        env,
+        console,
+        &there_name,
+        &there_path,
+        rename,
+        named,
+    )?;
     let source = match source {
         Ok(source) => source,
         Err(info) => return Err(report_error(console, &warnings, &info)),
@@ -595,11 +619,16 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
         && (source.is_some() || update.working_dir.is_some())
         && update.volumes.is_empty();
     for (at, (name, _, _)) in commands.iter().enumerate() {
-        if !options.stdout && (at > 0 || !create_temp) && env.path(name).exists() {
+        if !options.stdout
+            && update.volumes.is_empty()
+            && (at > 0 || !create_temp)
+            && env.path(name).exists()
+        {
             let info = ErrorInfo {
                 message: "The file already exists".to_owned(),
                 files: vec![name.clone()],
                 code: win::FILE_EXISTS,
+                system: true,
             };
             return Err(report_error(console, &warnings, &info));
         }
@@ -665,20 +694,28 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
         };
         let result = job.compress(&mut source, &out_path, &mut warnings, &mut processed);
         match result {
-            Ok((files_read, size)) => {
+            Ok((files_read, size, volumes)) => {
                 console.so(&format!(
                     "\nFiles read from disk: {files_read}\nArchive size: {}\n",
                     text::size_smart(size)
                 ));
+                if let Some(volumes) = volumes {
+                    console.so(&format!("Volumes: {volumes}\n"));
+                }
             }
             Err(stop) => {
                 if !options.stdout {
                     let _ = fs::remove_file(&out_path);
+                    for n in 1.. {
+                        if fs::remove_file(volumes::numbered_path(&out_path, n)).is_err() {
+                            break;
+                        }
+                    }
                 }
                 return Err(stop);
             }
         }
-        if update.set_arc_mtime && !options.stdout {
+        if update.set_arc_mtime && !options.stdout && update.volumes.is_empty() {
             set_latest_mtime(&out_path, &dir_items, &arc_items, &pairs);
         }
     }
@@ -767,6 +804,7 @@ fn open_source<SE: cash_core::ShellExtensions>(
             message: "There is a folder with the name of archive".to_owned(),
             files: vec![arc_name.to_owned()],
             code: win::ACCESS_DENIED,
+            system: true,
         }));
     }
     if !options.stdout
@@ -777,6 +815,7 @@ fn open_source<SE: cash_core::ShellExtensions>(
             message: "The file is read-only".to_owned(),
             files: vec![arc_name.to_owned()],
             code: win::ACCESS_DENIED,
+            system: true,
         }));
     }
     if update.is_some_and(|u| !u.volumes.is_empty()) {
@@ -784,6 +823,7 @@ fn open_source<SE: cash_core::ShellExtensions>(
             message: "Updating for multivolume archives is not implemented".to_owned(),
             files: vec![arc_name.to_owned()],
             code: win::E_NOTIMPL,
+            system: false,
         }));
     }
     console.so(&format!("Open archive: {arc_name}\n"));
@@ -798,6 +838,7 @@ fn open_source<SE: cash_core::ShellExtensions>(
         let failure = OpenFailure::NotArchive {
             tried: None,
             flags: Vec::new(),
+            in_split: false,
         };
         console.flush_so();
         console.se(&format!(
@@ -822,6 +863,7 @@ fn open_source<SE: cash_core::ShellExtensions>(
                     message: "There is some data block after the end of the archive".to_owned(),
                     files: Vec::new(),
                     code: win::E_NOTIMPL,
+                    system: false,
                 }));
             }
             let header_encrypted = opened
@@ -866,8 +908,10 @@ fn report_error<SE: cash_core::ShellExtensions>(
         message.push_str(file);
         message.push('\n');
     }
-    message.push_str(&text::system_message(&error));
-    message.push('\n');
+    if info.system {
+        message.push_str(&text::system_message(&error));
+        message.push('\n');
+    }
     summary(console, &format!("\nError:\n{message}"));
     Stop::System(error)
 }
@@ -1070,7 +1114,7 @@ impl<SE: cash_core::ShellExtensions> Job<'_, '_, SE> {
         out_path: &Path,
         warnings: &mut Warnings,
         processed: &mut [bool],
-    ) -> Result<(u64, u64), Stop> {
+    ) -> Result<(u64, u64, Option<usize>), Stop> {
         let console = self.console;
         check_properties(self.kind, &self.options.properties)?;
         let mut deleted = Stat2::default();
@@ -1131,7 +1175,7 @@ impl<SE: cash_core::ShellExtensions> Job<'_, '_, SE> {
         out_path: &Path,
         warnings: &mut Warnings,
         processed: &mut [bool],
-    ) -> Result<(u64, u64), Stop> {
+    ) -> Result<(u64, u64, Option<usize>), Stop> {
         let console = self.console;
         let settings = Settings::parse(&self.options.properties)?;
 
@@ -1183,7 +1227,7 @@ impl<SE: cash_core::ShellExtensions> Job<'_, '_, SE> {
             compress_main_header = false;
         }
 
-        let file = File::create(out_path).map_err(Stop::System)?;
+        let file = Target::create(out_path, self.volume_sizes()).map_err(Stop::System)?;
         let mut writer = ArchiveWriter::new(file)?;
         writer.set_times(TimesKept {
             modified: true,
@@ -1344,6 +1388,7 @@ impl<SE: cash_core::ShellExtensions> Job<'_, '_, SE> {
         let mut file = writer.finish().map_err(Stop::System)?;
         let size = file.stream_position().map_err(Stop::System)?;
         file.set_len(size).map_err(Stop::System)?;
+        let volumes = file.volumes();
         for item in &items {
             if item.up.new_data
                 && let Some(d) = item.up.dir
@@ -1352,7 +1397,7 @@ impl<SE: cash_core::ShellExtensions> Job<'_, '_, SE> {
                 processed[d] = true;
             }
         }
-        Ok((files_read, size))
+        Ok((files_read, size, volumes))
     }
 
     /// tar, gzip, bzip2 and xz: the items from the disk and the old archive's listing,
@@ -1364,7 +1409,7 @@ impl<SE: cash_core::ShellExtensions> Job<'_, '_, SE> {
         out_path: &Path,
         warnings: &mut Warnings,
         processed: &mut [bool],
-    ) -> Result<(u64, u64), Stop> {
+    ) -> Result<(u64, u64, Option<usize>), Stop> {
         let opened = source.map(|s| &s.opened);
         let listed = opened.map_or(&[][..], |o| o.items.as_slice());
         let items: Vec<Item> = ups.iter().map(|up| self.listed_item(up, listed)).collect();
@@ -1373,7 +1418,9 @@ impl<SE: cash_core::ShellExtensions> Job<'_, '_, SE> {
         let mut out = if self.options.stdout {
             Out::new(Sink::Stdout(&to_stdout))
         } else {
-            Out::new(Sink::File(File::create(out_path).map_err(Stop::System)?))
+            Out::new(Sink::File(
+                Target::create(out_path, self.volume_sizes()).map_err(Stop::System)?,
+            ))
         };
         let files_read = match self.kind {
             Kind::Tar => tar::write(self, opened, &items, &mut out, warnings, processed)?,
@@ -1383,8 +1430,16 @@ impl<SE: cash_core::ShellExtensions> Job<'_, '_, SE> {
             )?,
             _ => return Err(Stop::System(win_error(win::E_NOTIMPL))),
         };
-        let size = out.finish().map_err(Stop::System)?;
-        Ok((files_read, size))
+        let (size, volumes) = out.finish().map_err(Stop::System)?;
+        Ok((files_read, size, volumes))
+    }
+
+    /// `-v`'s volume sizes; none for one file.
+    fn volume_sizes(&self) -> &[u64] {
+        self.options
+            .update
+            .as_ref()
+            .map_or(&[][..], |u| u.volumes.as_slice())
     }
 
     /// An item of the new archive for a pair's outcome, from the disk or from the old
@@ -1598,7 +1653,7 @@ impl<SE: cash_core::ShellExtensions> Job<'_, '_, SE> {
     )]
     fn old_block(
         &self,
-        writer: &mut ArchiveWriter<File>,
+        writer: &mut ArchiveWriter<Target>,
         source: &mut Source,
         db: &sevenz::Archive,
         block_index: usize,
@@ -1698,7 +1753,7 @@ impl<SE: cash_core::ShellExtensions> Job<'_, '_, SE> {
     /// were read.
     fn new_blocks(
         &self,
-        writer: &mut ArchiveWriter<File>,
+        writer: &mut ArchiveWriter<Target>,
         settings: &Settings,
         new_items: &[usize],
         items: &[Item],
@@ -1805,9 +1860,67 @@ fn check_properties(kind: Kind, properties: &[(String, Option<String>)]) -> Resu
     Ok(())
 }
 
-/// Where an archive of the other formats goes: its file, or standard output (`-so`).
-enum Sink<'a> {
+/// The new archive's bytes: its file, or with `-v` its volumes (`name.001` and on).
+enum Target {
     File(File),
+    Volumes(volumes::SpannedWriter),
+}
+
+impl Target {
+    fn create(path: &Path, sizes: &[u64]) -> io::Result<Self> {
+        Ok(if sizes.is_empty() {
+            Self::File(File::create(path)?)
+        } else {
+            Self::Volumes(volumes::SpannedWriter::create(path, sizes.to_vec())?)
+        })
+    }
+
+    /// Cuts what was written at `len`.
+    fn set_len(&mut self, len: u64) -> io::Result<()> {
+        match self {
+            Self::File(file) => file.set_len(len),
+            Self::Volumes(out) => out.truncate(len),
+        }
+    }
+
+    /// How many volumes hold the archive, with `-v`.
+    const fn volumes(&self) -> Option<usize> {
+        match self {
+            Self::File(_) => None,
+            Self::Volumes(out) => Some(out.volumes()),
+        }
+    }
+}
+
+impl Write for Target {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        match self {
+            Self::File(file) => file.write(bytes),
+            Self::Volumes(out) => out.write(bytes),
+        }
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        match self {
+            Self::File(file) => file.flush(),
+            Self::Volumes(out) => out.flush(),
+        }
+    }
+}
+
+impl Seek for Target {
+    fn seek(&mut self, to: SeekFrom) -> io::Result<u64> {
+        match self {
+            Self::File(file) => file.seek(to),
+            Self::Volumes(out) => out.seek(to),
+        }
+    }
+}
+
+/// Where an archive of the other formats goes: its file or volumes, or standard output
+/// (`-so`).
+enum Sink<'a> {
+    File(Target),
     Stdout(&'a dyn Fn(&[u8]) -> io::Result<()>),
 }
 
@@ -1871,14 +1984,17 @@ impl<'a> Out<'a> {
         Ok(true)
     }
 
-    /// Writes what is held; returns the archive's size.
-    fn finish(mut self) -> io::Result<u64> {
+    /// Writes what is held; returns the archive's size, and its volumes with `-v`.
+    fn finish(mut self) -> io::Result<(u64, Option<usize>)> {
         self.drain()?;
-        if let Sink::File(file) = &mut self.sink {
+        let volumes = if let Sink::File(file) = &mut self.sink {
             file.flush()?;
             file.set_len(self.pos)?;
-        }
-        Ok(self.pos)
+            file.volumes()
+        } else {
+            None
+        };
+        Ok((self.pos, volumes))
     }
 }
 
