@@ -166,8 +166,14 @@ struct_excessive_bools = "allow"
 [profile.dev]
 debug = "line-tables-only"
 
+# Dependencies are optimized in debug and test builds too: they are not what is debugged
+# here, they are built once and cached, and the tests spent their time in them. rars'
+# tests ran their key derivations in sha1, sha2, hmac and aes unoptimized: cash-archive's
+# tests took 1,370 s of test time, 730 s with this (2026-10-07). Overflow checks and debug
+# assertions stay on.
 [profile.dev.package."*"]
 debug = false
+opt-level = 2
 
 [profile.debugging]
 inherits = "dev"
@@ -175,6 +181,7 @@ debug = true
 
 [profile.debugging.package."*"]
 debug = true
+opt-level = 0
 
 # The everyday optimized build for local use: thin LTO over parallel codegen units builds
 # in a fraction of the time `dist` takes.
