@@ -166,13 +166,57 @@ struct_excessive_bools = "allow"
 [profile.dev]
 debug = "line-tables-only"
 
-# Dependencies are optimized in debug and test builds too: they are not what is debugged
-# here, they are built once and cached, and the tests spent their time in them. rars'
-# tests ran their key derivations in sha1, sha2, hmac and aes unoptimized: cash-archive's
-# tests took 1,370 s of test time, 730 s with this (2026-10-07). Overflow checks and debug
-# assertions stay on.
 [profile.dev.package."*"]
 debug = false
+
+# The crates the tests spend their time in are optimized in debug and test builds too:
+# hashing, ciphers and compression, which the tests ran unoptimized. rars' tests took
+# 1,370 s of test time with sha1, sha2, hmac and aes unoptimized, 730 s optimized
+# (2026-10-07). Only these: every dependency at opt-level 2 made a cold CI build of the
+# tests take twice as long, 13 minutes. Overflow checks and debug assertions stay on.
+[profile.dev.package.sha1]
+opt-level = 2
+
+[profile.dev.package.sha2]
+opt-level = 2
+
+[profile.dev.package.aes]
+opt-level = 2
+
+[profile.dev.package.hmac]
+opt-level = 2
+
+[profile.dev.package.pbkdf2]
+opt-level = 2
+
+[profile.dev.package.crc32fast]
+opt-level = 2
+
+[profile.dev.package.adler2]
+opt-level = 2
+
+[profile.dev.package.miniz_oxide]
+opt-level = 2
+
+[profile.dev.package.libbz2-rs-sys]
+opt-level = 2
+
+[profile.dev.package.lzma-rust2]
+opt-level = 2
+
+[profile.dev.package.ruzstd]
+opt-level = 2
+
+[profile.dev.package.deflate64]
+opt-level = 2
+
+[profile.dev.package.ppmd-rust]
+opt-level = 2
+
+[profile.dev.package.blake3]
+opt-level = 2
+
+[profile.dev.package.twox-hash]
 opt-level = 2
 
 [profile.debugging]
@@ -181,7 +225,6 @@ debug = true
 
 [profile.debugging.package."*"]
 debug = true
-opt-level = 0
 
 # The everyday optimized build for local use: thin LTO over parallel codegen units builds
 # in a fraction of the time `dist` takes.
