@@ -11,10 +11,12 @@
 //! - [`select`]: which members a name or a pattern selects, as `fnmatch` decides.
 //! - [`listing`]: mode strings, and names quoted as GNU tar quotes them.
 //! - [`zip`]: zip archives, read and written as Info-ZIP's zip 3.0 and unzip 6.00 do.
+//! - [`sevenz`]: 7z archives, read and written as 7-Zip does.
 
 pub mod codec;
 pub mod listing;
 pub mod member;
 pub mod select;
+pub mod sevenz;
 pub mod tar;
 pub mod zip;

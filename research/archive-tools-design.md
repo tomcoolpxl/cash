@@ -327,7 +327,7 @@ Built against GNU tar 1.35's oracle, the plan moved in four places:
     times, attributes with the Unix-mode extension read;
   - 7-Zip's `-mx` table (dictionary, word and solid block sizes), `-mhc`, `-mhe`, `-ms`,
     `-mf`, `-mtm`/`-mtc`/`-mta`, AES with 2^19 rounds; the LZMA2 dictionary property's
-    rounding fixed; one thread unless `-mmt`;
+    rounding fixed; LZMA2 in chunks on all cores, as 7-Zip's `-mmt` is on by default;
   - typed errors: a wrong password told from a CRC failure, truncated data noticed, no
     panic on a header without file records or a time past 2^63;
   - the codecs shared with the rest of cash-archive (deflate on `flate2`, Deflate64, zstd

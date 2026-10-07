@@ -85,3 +85,21 @@ contributors, used under the Apache License 2.0, whose text is in
 Changes: the two tables were lower-cased, de-duplicated and sorted into Rust constant
 arrays for a binary search; lsd's theme files, its configuration and the rest of its
 code are not used.
+
+## sevenz-rust2
+
+`crates/cash-archive/src/sevenz`, the 7z format that `7z` and `7za` read and write, is
+taken from [sevenz-rust2](https://github.com/hasenbanck/sevenz-rust2) 0.23.0, itself a
+fork of [sevenz-rust](https://github.com/dyz1990/sevenz-rust), © their authors, used
+under the Apache License 2.0, whose text is in
+[licenses/sevenz-rust2-Apache-2.0.txt](licenses/sevenz-rust2-Apache-2.0.txt). Every file
+of the module came from it and has been modified.
+
+Changes: the reader hands out entries in the archive's order with their own CRC checks
+and 7-Zip's kinds of data problems, maps entries without data that stand between a
+block's entries, reads the facts 7-Zip lists (physical and headers size, encrypted
+headers, the start header's version) and copies packed blocks raw; the writer lays the
+header out as 7-Zip does (alignment, property order, no packed-stream CRCs), copies
+blocks from another archive, ends coder chains explicitly, rounds the LZMA2 dictionary
+property up, and writes AES as 7-Zip does (2^19 rounds, no salt); Deflate64 is read;
+brotli, LZ4, zstd, the WebAssembly parts and the file-walking helpers are left out.

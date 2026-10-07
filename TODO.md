@@ -498,7 +498,35 @@ same day: 7z and the formats cash has, Windows 7-Zip's words with LF and `/`,
 4. **The other formats** through cash-archive: zip (7-Zip's records), tar, gzip, bzip2,
    xz both ways; zstd and lzma read.
 5. **Volumes, `h` and `-scrc`, links, `-sns`/`-sni`**.
-6. The page, `builtins.md`, `CARRIED`, `DELIBERATE_SHADOWS`, doctor; release 1.10.0.
+6. The page, `builtins.md`, `CARRIED`, `DELIBERATE_SHADOWS`, doctor.
+
+---
+
+## Phase 32. Every core, where the format allows it
+
+Asked by the user on 2026-10-07 ("if the algorithm allows it, parallelization is used"),
+decided by pick list the same day: after phase 31, released with it as 1.10.0. A survey
+the same day found no compressor in cash using more than one thread.
+
+1. **xz**: `XzWriterMt` (lzma-rust2) on all cores by default, as XZ Utils 5.8 does
+   (`-T0`), with its block size (three dictionaries, at least 1 MiB); `-T1` the one-thread
+   stream; `-T N` honoured, `--block-size` still exact (`xz_builtin.rs` counts blocks).
+   Decoding a file (seekable) with `XzReaderMt`. The help text already promises it.
+2. **zstd**: the 4 MiB frames cash already writes compressed on a pool, the same bytes
+   for any thread count (as libzstd); `-T`, `--single-thread`, `--auto-threads`,
+   `ZSTD_NBTHREADS` honoured.
+3. **gzip**: one member of chunks compressed apart on all cores, each ended with a sync
+   flush, the CRCs combined (`crc32fast`), as pigz lays it out without its shared
+   window; input of one chunk keeps today's bytes. No new option (GNU's gzip has none).
+4. **bzip2**: input cut at 900 KB blocks, each a bzip2 stream compressed on its own
+   core, concatenated (pbzip2's layout); one block's input keeps bzip2 1.0.8's bytes,
+   which the oracle checks. Larger input differs from bzip2's from then on, the user's
+   choice.
+5. **zip**: members compressed in parallel, written in order, the same bytes.
+6. **tar** gets the codecs' threads through `-z`, `-j`, `-J`, `--zstd`.
+7. The pages (`gzip.md`, `bzip2.md`, `xz.md`, `zstd.md`, `zip.md`) say what runs on
+   several cores; the oracles keep passing; a timing test only on an idle CPU.
+8. Release 1.10.0 with 7z and this.
 
 ---
 
