@@ -391,7 +391,9 @@ are in section 7: the fuller set, RAR 5 by default, WinRAR as the oracle.
   progress lines, questions (`[Y]es, [N]o, [A]ll, n[E]ver, [R]ename, [Q]uit`) and exit
   codes (0 to 12, and 255 on Ctrl-C), with LF and `/` as tar, zip and 7z print. The
   banner's place holds `RAR (cash)` and `UNRAR (cash)`, as 7z's holds `7-Zip (cash)`;
-  `-idc` and `-inul` leave it out. Switches start with `-` (rar on Windows takes `/` too,
+  `-idc` and `-inul` leave it out. All of it is learned by watching the tools and
+  reading `Rar.txt`, never from UnRAR's source (section 7); the help screen is cash's
+  own text. Switches start with `-` (rar on Windows takes `/` too,
   which in cash is a path) and stand anywhere until `--`. The `RAR` variable and
   `rar.ini` supply default switches as rar reads them, and `-cfg-` ignores both.
 - **What is written**: RAR 5 by default, `-ma4` for RAR 4 (RAR 2.9's format, which
@@ -478,6 +480,10 @@ are in section 7: the fuller set, RAR 5 by default, WinRAR as the oracle.
 6. **rar and unrar** (phase 33; 3.15): the fuller set of rar's commands and switches
    (the everyday set with `r`, `rc`, `ch`, `i` and their switches); RAR 5 written by
    default, as WinRAR does; the oracle is Scoop's WinRAR 7.23 (`Rar.exe` and `UnRAR.exe`).
+   Built by observation (asked the same day, after the licences were read): rar's face
+   learned only from running `Rar.exe` and `UnRAR.exe` and from reading `Rar.txt`; never
+   from UnRAR's source, whose licence forbids using it to develop a RAR-compatible
+   archiver; `-?` in cash's own words, not RAR's help text.
 
 ## 8. Open, decided later in their phases
 
