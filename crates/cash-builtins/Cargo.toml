@@ -192,6 +192,15 @@ crc32fast = { workspace = true }
 cash-getopt = { workspace = true }
 # Archives and compressed streams, the codecs gzip and the other compressors share (D78).
 cash-archive = { workspace = true }
+# `7z h` and `-scrc`: 7-Zip's hashes. All but blake2s_simd (BLAKE2sp, by the authors of
+# the blake2b_simd already in the tree) were already in the tree.
+sha1 = "0.11.0"
+sha2 = { workspace = true }
+sha3 = "0.12.0"
+md-5 = "0.11.0"
+crc = "3.3.0"
+twox-hash = "2.1.5"
+blake2s_simd = "1.0"
 
 [dev-dependencies]
 anyhow = { workspace = true }

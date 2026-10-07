@@ -316,3 +316,32 @@ zs a -mm=PPMd mm.7z n1.txt -bso0
 zl mm.7z
 zs a -mhc- -mtc- -mx0 hc.7z n1.txt n2.txt
 od -A n -t x1 -N 8 hc.7z
+
+echo "== hash"
+mkdir -p hd/d/sub
+cd hd || exit 1
+printf 'alpha\n' > d/a.txt
+printf 'beta\n' > d/sub/b.txt
+: > d/empty
+touch -d '2026-10-07 08:00:00' d/a.txt d/sub/b.txt d/empty d/sub d
+z h d
+z h d/a.txt
+z h -scrcsha256 d/a.txt d/sub
+z h -scrcCRC32 -scrcCRC64 -scrcSHA1 d/a.txt
+z h '-scrc*' d/a.txt
+z h -ba d
+z h -scrcfoo d/a.txt
+z h nothere
+z h d/empty
+z h -r '*.txt'
+printf 'alpha\n' | z h -si
+z h -scrcBLAKE2sp d/a.txt
+z h -scrcXXH64 -scrcMD5 -scrcSHA512 -scrcSHA384 -scrcSHA3-256 d/a.txt
+z h -bb3 d/sub
+z a -bso0 h.7z d
+z t -scrcSHA256 h.7z
+z x -scrcSHA256 -ohx h.7z
+z t -scrc h.7z
+z e -scrc -so h.7z d/a.txt
+z t -scrcfoo h.7z
+cd ..

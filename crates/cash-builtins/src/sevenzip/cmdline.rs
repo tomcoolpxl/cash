@@ -438,6 +438,8 @@ pub(super) struct Options {
     pub(super) exclude_files: bool,
     /// `-m`'s names and values.
     pub(super) properties: Vec<(String, Option<String>)>,
+    /// `-scrc`'s hashes, when it was given (an empty name for CRC32).
+    pub(super) hash_methods: Option<Vec<String>>,
     /// The update group's settings.
     pub(super) update: Option<Update>,
 }
@@ -702,6 +704,9 @@ pub(super) fn parse_command(parsed: &Parsed) -> Result<Options, CmdLineError> {
         log_level,
         path_keep,
         properties,
+        hash_methods: parsed
+            .there(Key::Hash)
+            .then(|| parsed.get(Key::Hash).strings.clone()),
         update,
     })
 }

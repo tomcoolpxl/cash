@@ -530,7 +530,11 @@ same day: 7z and the formats cash has, Windows 7-Zip's words with LF and `/`,
    Not yet checked against 7-Zip: tar names that are not ASCII (7-Zip prints its UTF-8
    check's status after "UTF8"); zips 7-Zip reads by their local headers (no central
    directory, "Local" in Characteristics), split zips, Unix-made zips' names and modes.
-5. **Volumes, `h` and `-scrc`, links, `-sns`/`-sni`**.
+5. **Volumes, `h` and `-scrc`, links, `-sns`/`-sni`**. `h` and `-scrc` done 2026-10-07:
+   7-Zip's ten hashes (BLAKE2sp from `blake2s_simd`), its columns and its sums for data
+   and for data and names, `-ba`, `-si`; `t` and `x` sum what they read (`t` folders
+   too, as 26.03 does). Left: volumes, links, `-sns`/`-sni`; `h` on hash files
+   (7-Zip 23's `-thash`) is not taken.
 6. The page, `builtins.md`, `CARRIED`, `DELIBERATE_SHADOWS`, doctor.
 
 ---

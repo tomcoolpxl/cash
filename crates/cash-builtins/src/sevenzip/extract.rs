@@ -346,6 +346,8 @@ struct Totals {
     files: u64,
     size: u64,
     packed: u64,
+    /// `-scrc`'s hashes of what was tested or extracted.
+    hash: Option<super::hash::Bundle>,
 }
 
 impl Totals {
@@ -388,7 +390,14 @@ fn extract_all<SE: cash_core::ShellExtensions>(
     console: &Console<'_, SE>,
     found: &[Found],
 ) -> Result<u8, Stop> {
-    let mut totals = Totals::default();
+    let mut totals = Totals {
+        hash: options
+            .hash_methods
+            .as_deref()
+            .map(super::hash::Bundle::new)
+            .transpose()?,
+        ..Totals::default()
+    };
     let mut password = options.password.clone();
     let outcome = (|| -> Result<(), Stop> {
         for archive in found {
@@ -415,6 +424,9 @@ fn extract_all<SE: cash_core::ShellExtensions>(
             "Size:       {}\nCompressed: {}\n",
             totals.size, totals.packed
         ));
+        if let Some(hash) = &totals.hash {
+            console.so(&format!("\n{}", hash.stat()));
+        }
     }
     Ok(code)
 }
@@ -623,9 +635,21 @@ fn extract_items<SE: cash_core::ShellExtensions>(
     let mut errors = 0u64;
     let mut folder_times: Vec<(PathBuf, u64)> = Vec::new();
     let mut stop: Option<Stop> = None;
+    let mut hash = totals.hash.take();
     let result: Result<(), Stop> = opened.extract(&|index| decode[index], |index, data| {
         let item = &items[index];
         let skip = !wanted[index];
+        // -scrc hashes what is tested, folders too, and the files extracted.
+        let hashing = !skip && (test || !item.is_dir);
+        let mut hashed;
+        let data: &mut dyn Data = match hash.as_mut().filter(|_| hashing) {
+            Some(bundle) => {
+                bundle.start();
+                hashed = Hashed { data, bundle };
+                &mut hashed
+            }
+            None => data,
+        };
         let level = if skip { 2 } else { 1 };
         if options.log_level >= level {
             let mut shown = item.path.clone();
@@ -701,8 +725,12 @@ fn extract_items<SE: cash_core::ShellExtensions>(
             console.se(&format!("ERROR: {}\n", text::system_message(&error)));
             console.flush_se();
         }
+        if hashing && let Some(bundle) = hash.as_mut() {
+            bundle.finish(item.is_dir, &item.path);
+        }
         Ok(true)
     });
+    totals.hash = hash;
     result?;
     if let Some(stop) = stop {
         return Err(stop);
@@ -718,6 +746,34 @@ fn extract_items<SE: cash_core::ShellExtensions>(
         );
     }
     Ok(errors)
+}
+
+/// An item's data passing through `-scrc`'s hashes.
+struct Hashed<'a> {
+    data: &'a mut dyn Data,
+    bundle: &'a mut super::hash::Bundle,
+}
+
+impl Read for Hashed<'_> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let n = self.data.read(buf)?;
+        self.bundle.update(&buf[..n]);
+        Ok(n)
+    }
+}
+
+impl Data for Hashed<'_> {
+    fn finish(&mut self) -> Result<(), Problem> {
+        self.data.finish()
+    }
+
+    fn encrypted(&self) -> bool {
+        self.data.encrypted()
+    }
+
+    fn unpacked(&self) -> Option<u64> {
+        self.data.unpacked()
+    }
 }
 
 fn copy_to_stdout<SE: cash_core::ShellExtensions>(

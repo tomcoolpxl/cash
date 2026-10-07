@@ -3231,3 +3231,387 @@ Files read from disk: 2
 Everything is Ok
 rc=0
  37 7a bc af 27 1c 00 04
+== hash
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning
+2 folders, 3 files, 11 bytes (1 KiB)
+
+CRC32             Size  Name
+-------- -------------  ------------
+                        d/
+9F606EEC             6  d/a.txt
+00000000             0  d/empty
+                        d/sub/
+E6E3A775             5  d/sub/b.txt
+-------- -------------  ------------
+86441661-00000001            11  
+
+Folders: 2
+Files: 3
+Size: 11
+
+CRC32  for data:              86441661-00000001
+CRC32  for data and names:    7040DABF-00000002
+
+Everything is Ok
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning
+1 file, 6 bytes (1 KiB)
+
+CRC32             Size  Name
+-------- -------------  ------------
+9F606EEC             6  d/a.txt
+-------- -------------  ------------
+9F606EEC             6  
+
+Size: 6
+
+CRC32  for data:              9F606EEC
+
+Everything is Ok
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning
+1 folder, 2 files, 11 bytes (1 KiB)
+
+SHA256                                                                    Size  Name
+---------------------------------------------------------------- -------------  ------------
+b6a98d9ce9a2d9149288fa3df42d377c3e42737afdcdaf714e33c0a100b51060             6  d/a.txt
+                                                                                d/sub/
+f2c82decdd7181cf98945929a62598db7e6b477e11f6e0eb0ae97020eff151ad             5  d/sub/b.txt
+---------------------------------------------------------------- -------------  ------------
+a872bb88c7145be42a1d54679a53cf57bdadbaf80ec4905d591c31c2efa6620d-00000001            11  
+
+Folders: 1
+Files: 2
+Size: 11
+
+SHA256 for data:              a872bb88c7145be42a1d54679a53cf57bdadbaf80ec4905d591c31c2efa6620d-00000001
+SHA256 for data and names:    585acd87181dc07fe68aeeef358bc763409c91f20c3ce178971f342d3ea9e7ad-00000001
+
+Everything is Ok
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning
+1 file, 6 bytes (1 KiB)
+
+CRC32    CRC64            SHA1                                              Size  Name
+-------- ---------------- ---------------------------------------- -------------  ------------
+9F606EEC F29D99B8323EABCD d046cd9b7ffb7661e449683313d41f6fc33e3130             6  d/a.txt
+-------- ---------------- ---------------------------------------- -------------  ------------
+9F606EEC F29D99B8323EABCD d046cd9b7ffb7661e449683313d41f6fc33e3130             6  
+
+Size: 6
+
+CRC32  for data:              9F606EEC
+
+CRC64  for data:              F29D99B8323EABCD
+
+SHA1   for data:              d046cd9b7ffb7661e449683313d41f6fc33e3130
+
+Everything is Ok
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning
+1 file, 6 bytes (1 KiB)
+
+CRC32    CRC64            SHA256                                                           SHA1                                     BLAKE2sp                                                         MD5                              XXH64            SHA384                                                                                           SHA512                                                                                                                           SHA3-256                                                                  Size  Name
+-------- ---------------- ---------------------------------------------------------------- ---------------------------------------- ---------------------------------------------------------------- -------------------------------- ---------------- ------------------------------------------------------------------------------------------------ -------------------------------------------------------------------------------------------------------------------------------- ---------------------------------------------------------------- -------------  ------------
+9F606EEC F29D99B8323EABCD b6a98d9ce9a2d9149288fa3df42d377c3e42737afdcdaf714e33c0a100b51060 d046cd9b7ffb7661e449683313d41f6fc33e3130 feba9b5e9bec38f4e3a61e028722f2c9ae849044fa66473460424d0902864922 9f9f90dbe3e5ee1218c86b8839db1995 E56631E04077C052 c186fccb11e85363edbb872e2426dc1de5826946fd1130465391e76ec3744350343fa502fabc4be3ac76d6737e01071b 62d0791d22f871ef4b4e8f6fa1374091f6d540ba5e3e9bc23b0e6fd2e3d6534f9087b8c195634c7627fc26a33f17576b4e107da4ab421d486acc2636538bb58f 78ba0c354ff15c2c2423ef5fe725bd990cef933d75b970febe1ad7384fcfd518             6  d/a.txt
+-------- ---------------- ---------------------------------------------------------------- ---------------------------------------- ---------------------------------------------------------------- -------------------------------- ---------------- ------------------------------------------------------------------------------------------------ -------------------------------------------------------------------------------------------------------------------------------- ---------------------------------------------------------------- -------------  ------------
+9F606EEC F29D99B8323EABCD b6a98d9ce9a2d9149288fa3df42d377c3e42737afdcdaf714e33c0a100b51060 d046cd9b7ffb7661e449683313d41f6fc33e3130 feba9b5e9bec38f4e3a61e028722f2c9ae849044fa66473460424d0902864922 9f9f90dbe3e5ee1218c86b8839db1995 E56631E04077C052 c186fccb11e85363edbb872e2426dc1de5826946fd1130465391e76ec3744350343fa502fabc4be3ac76d6737e01071b 62d0791d22f871ef4b4e8f6fa1374091f6d540ba5e3e9bc23b0e6fd2e3d6534f9087b8c195634c7627fc26a33f17576b4e107da4ab421d486acc2636538bb58f 78ba0c354ff15c2c2423ef5fe725bd990cef933d75b970febe1ad7384fcfd518             6  
+
+Size: 6
+
+CRC32  for data:              9F606EEC
+
+CRC64  for data:              F29D99B8323EABCD
+
+SHA256 for data:              b6a98d9ce9a2d9149288fa3df42d377c3e42737afdcdaf714e33c0a100b51060
+
+SHA1   for data:              d046cd9b7ffb7661e449683313d41f6fc33e3130
+
+BLAKE2sp for data:              feba9b5e9bec38f4e3a61e028722f2c9ae849044fa66473460424d0902864922
+
+MD5    for data:              9f9f90dbe3e5ee1218c86b8839db1995
+
+XXH64  for data:              E56631E04077C052
+
+SHA384 for data:              c186fccb11e85363edbb872e2426dc1de5826946fd1130465391e76ec3744350343fa502fabc4be3ac76d6737e01071b
+
+SHA512 for data:              62d0791d22f871ef4b4e8f6fa1374091f6d540ba5e3e9bc23b0e6fd2e3d6534f9087b8c195634c7627fc26a33f17576b4e107da4ab421d486acc2636538bb58f
+
+SHA3-256 for data:              78ba0c354ff15c2c2423ef5fe725bd990cef933d75b970febe1ad7384fcfd518
+
+Everything is Ok
+rc=0
+                        d/
+9F606EEC             6  d/a.txt
+00000000             0  d/empty
+                        d/sub/
+E6E3A775             5  d/sub/b.txt
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning
+1 file, 6 bytes (1 KiB)
+
+
+
+System ERROR:
+Not implemented
+rc=2
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning
+
+WARNING: The system cannot find the file specified.
+nothere
+
+0 files, 0 bytes
+
+CRC32             Size  Name
+-------- -------------  ------------
+-------- -------------  ------------
+00000000-00000000             0  
+
+Files: 0
+Size: 0
+
+CRC32  for data:              00000000-00000000
+CRC32  for data and names:    00000000-00000000
+
+
+Scan WARNINGS for files and folders:
+
+nothere : The system cannot find the file specified.
+----------------
+Scan WARNINGS: 1
+rc=1
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning
+1 file, 0 bytes
+
+CRC32             Size  Name
+-------- -------------  ------------
+00000000             0  d/empty
+-------- -------------  ------------
+00000000             0  
+
+Size: 0
+
+CRC32  for data:              00000000
+
+Everything is Ok
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning
+2 files, 11 bytes (1 KiB)
+
+CRC32             Size  Name
+-------- -------------  ------------
+9F606EEC             6  d/a.txt
+E6E3A775             5  d/sub/b.txt
+-------- -------------  ------------
+86441661-00000001            11  
+
+Files: 2
+Size: 11
+
+CRC32  for data:              86441661-00000001
+CRC32  for data and names:    9C068519-00000000
+
+Everything is Ok
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+CRC32             Size  Name
+-------- -------------  ------------
+9F606EEC             6  [Content]
+-------- -------------  ------------
+9F606EEC             6  
+
+Size: 6
+
+CRC32  for data:              9F606EEC
+
+Everything is Ok
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning
+1 file, 6 bytes (1 KiB)
+
+BLAKE2sp                                                                  Size  Name
+---------------------------------------------------------------- -------------  ------------
+feba9b5e9bec38f4e3a61e028722f2c9ae849044fa66473460424d0902864922             6  d/a.txt
+---------------------------------------------------------------- -------------  ------------
+feba9b5e9bec38f4e3a61e028722f2c9ae849044fa66473460424d0902864922             6  
+
+Size: 6
+
+BLAKE2sp for data:              feba9b5e9bec38f4e3a61e028722f2c9ae849044fa66473460424d0902864922
+
+Everything is Ok
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning
+1 file, 6 bytes (1 KiB)
+
+MD5                              XXH64            SHA384                                                                                           SHA512                                                                                                                           SHA3-256                                                                  Size  Name
+-------------------------------- ---------------- ------------------------------------------------------------------------------------------------ -------------------------------------------------------------------------------------------------------------------------------- ---------------------------------------------------------------- -------------  ------------
+9f9f90dbe3e5ee1218c86b8839db1995 E56631E04077C052 c186fccb11e85363edbb872e2426dc1de5826946fd1130465391e76ec3744350343fa502fabc4be3ac76d6737e01071b 62d0791d22f871ef4b4e8f6fa1374091f6d540ba5e3e9bc23b0e6fd2e3d6534f9087b8c195634c7627fc26a33f17576b4e107da4ab421d486acc2636538bb58f 78ba0c354ff15c2c2423ef5fe725bd990cef933d75b970febe1ad7384fcfd518             6  d/a.txt
+-------------------------------- ---------------- ------------------------------------------------------------------------------------------------ -------------------------------------------------------------------------------------------------------------------------------- ---------------------------------------------------------------- -------------  ------------
+9f9f90dbe3e5ee1218c86b8839db1995 E56631E04077C052 c186fccb11e85363edbb872e2426dc1de5826946fd1130465391e76ec3744350343fa502fabc4be3ac76d6737e01071b 62d0791d22f871ef4b4e8f6fa1374091f6d540ba5e3e9bc23b0e6fd2e3d6534f9087b8c195634c7627fc26a33f17576b4e107da4ab421d486acc2636538bb58f 78ba0c354ff15c2c2423ef5fe725bd990cef933d75b970febe1ad7384fcfd518             6  
+
+Size: 6
+
+MD5    for data:              9f9f90dbe3e5ee1218c86b8839db1995
+
+XXH64  for data:              E56631E04077C052
+
+SHA384 for data:              c186fccb11e85363edbb872e2426dc1de5826946fd1130465391e76ec3744350343fa502fabc4be3ac76d6737e01071b
+
+SHA512 for data:              62d0791d22f871ef4b4e8f6fa1374091f6d540ba5e3e9bc23b0e6fd2e3d6534f9087b8c195634c7627fc26a33f17576b4e107da4ab421d486acc2636538bb58f
+
+SHA3-256 for data:              78ba0c354ff15c2c2423ef5fe725bd990cef933d75b970febe1ad7384fcfd518
+
+Everything is Ok
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning
+1 folder, 1 file, 5 bytes (1 KiB)
+
+CRC32             Size  Name
+-------- -------------  ------------
+                        d/sub/
+E6E3A775             5  d/sub/b.txt
+-------- -------------  ------------
+E6E3A775             5  
+
+Folders: 1
+Files: 1
+Size: 5
+
+CRC32  for data:              E6E3A775
+CRC32  for data and names:    C5051F82-00000000
+
+Everything is Ok
+rc=0
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 193 bytes (1 KiB)
+
+Testing archive: h.7z
+--
+Path = h.7z
+Type = 7z
+Physical Size = 193
+Headers Size = 178
+Method = LZMA2:12
+Solid = +
+Blocks = 1
+
+Everything is Ok
+
+Folders: 2
+Files: 3
+Size:       11
+Compressed: 193
+
+SHA256 for data:              8b2380cb5f1178f8c418493034c3887ce45bfcdc735f24aafdb1cadd67f91a63-00000001
+SHA256 for data and names:    9322447f677371e25af65bbd0a09563c3f755cdf20e5ff5842e54d314523bc27-00000002
+
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 193 bytes (1 KiB)
+
+Extracting archive: h.7z
+--
+Path = h.7z
+Type = 7z
+Physical Size = 193
+Headers Size = 178
+Method = LZMA2:12
+Solid = +
+Blocks = 1
+
+Everything is Ok
+
+Folders: 2
+Files: 3
+Size:       11
+Compressed: 193
+
+SHA256 for data:              8b2380cb5f1178f8c418493034c3887ce45bfcdc735f24aafdb1cadd67f91a63-00000001
+SHA256 for data and names:    40fba1f505cf343235826b5c1d0ee5c9f2af6ff6d33150af5013b1a20aa7c963-00000001
+
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 193 bytes (1 KiB)
+
+Testing archive: h.7z
+--
+Path = h.7z
+Type = 7z
+Physical Size = 193
+Headers Size = 178
+Method = LZMA2:12
+Solid = +
+Blocks = 1
+
+Everything is Ok
+
+Folders: 2
+Files: 3
+Size:       11
+Compressed: 193
+
+CRC32  for data:              86441661-00000001
+CRC32  for data and names:    7040DABF-00000002
+
+rc=0
+alpha
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 193 bytes (1 KiB)
+
+
+System ERROR:
+Not implemented
+rc=2

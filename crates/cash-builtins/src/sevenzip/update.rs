@@ -34,12 +34,12 @@ mod tar;
 mod zip;
 
 /// Windows' codes for the errors 7-Zip's update reports.
-mod win {
+pub(super) mod win {
     /// `ERROR_INVALID_FUNCTION`: what 7-Zip shows for `S_FALSE`.
     pub(super) const INVALID_FUNCTION: u32 = 1;
     pub(super) const ACCESS_DENIED: u32 = 5;
     pub(super) const FILE_EXISTS: u32 = 80;
-    pub(super) const E_NOTIMPL: u32 = 0x8000_4001;
+    pub(in super::super) const E_NOTIMPL: u32 = 0x8000_4001;
     pub(super) const E_FAIL: u32 = 0x8000_4005;
     pub(super) const E_INVALIDARG: u32 = 0x8007_0057;
 }
@@ -48,7 +48,7 @@ mod win {
     clippy::cast_possible_wrap,
     reason = "HRESULTs are Windows' codes as they are"
 )]
-fn win_error(code: u32) -> io::Error {
+pub(super) fn win_error(code: u32) -> io::Error {
     io::Error::from_raw_os_error(code as i32)
 }
 
@@ -217,7 +217,7 @@ impl Stat2 {
 }
 
 /// `Print_DirItemsStat`: "N folders, N files, N bytes (N KiB)".
-fn stat_text(dirs: u64, files: u64, size: u64) -> String {
+pub(super) fn stat_text(dirs: u64, files: u64, size: u64) -> String {
     let mut s = String::new();
     if dirs != 0 {
         s.push_str(&text::count(dirs, "folder", "folders"));
@@ -235,14 +235,14 @@ fn stat_text(dirs: u64, files: u64, size: u64) -> String {
 /// What the run reports at its end: the paths the scan could not read and the files
 /// that would not open, each with why.
 #[derive(Default)]
-struct Warnings {
-    scan: Vec<(String, io::Error)>,
-    failed: Vec<(String, io::Error)>,
+pub(super) struct Warnings {
+    pub(super) scan: Vec<(String, io::Error)>,
+    pub(super) failed: Vec<(String, io::Error)>,
 }
 
 /// `CCallbackConsoleBase::CommonError`: the messages so far, then the warning or error,
 /// its words and the path.
-fn common_error<SE: cash_core::ShellExtensions>(
+pub(super) fn common_error<SE: cash_core::ShellExtensions>(
     console: &Console<'_, SE>,
     path: &str,
     error: &io::Error,
@@ -715,7 +715,7 @@ fn stdin_metadata<SE: cash_core::ShellExtensions>(env: &Env<'_, SE>) -> Option<f
 }
 
 /// A copy of an error, for keeping one that is also reported.
-fn copy_error(error: &io::Error) -> io::Error {
+pub(super) fn copy_error(error: &io::Error) -> io::Error {
     error.raw_os_error().map_or_else(
         || io::Error::new(error.kind(), error.to_string()),
         io::Error::from_raw_os_error,
@@ -901,7 +901,7 @@ fn report_scan_warnings<SE: cash_core::ShellExtensions>(
 }
 
 /// `WarningsCheck` when all went through: the warnings, else "Everything is Ok".
-fn warnings_check<SE: cash_core::ShellExtensions>(
+pub(super) fn warnings_check<SE: cash_core::ShellExtensions>(
     console: &Console<'_, SE>,
     warnings: &Warnings,
 ) -> u8 {

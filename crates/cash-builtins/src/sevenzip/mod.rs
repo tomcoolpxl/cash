@@ -16,6 +16,7 @@ mod archive;
 mod censor;
 mod cmdline;
 mod extract;
+mod hash;
 mod help;
 mod list;
 mod methods;
@@ -334,6 +335,6 @@ fn dispatch<SE: cash_core::ShellExtensions>(
         Command::Add | Command::Update | Command::Delete | Command::Rename => {
             update::run(options, env, console)
         }
-        Command::Hash => Err(Stop::Message("the h command is not implemented".to_owned())),
+        Command::Hash => hash::run(options, env, console),
     }
 }
