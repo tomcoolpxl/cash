@@ -18,6 +18,7 @@ name = "diffutils"
 path = "src/bin/diffutils.rs"
 
 [dependencies]
+cash-getopt = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 glob = { workspace = true }

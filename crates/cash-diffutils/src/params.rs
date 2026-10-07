@@ -8,8 +8,8 @@
 use std::ffi::OsString;
 use std::io::IsTerminal as _;
 
-use crate::getopt::{self, Arg, Item, Long, Short};
 use crate::utils::quote;
+use cash_getopt::{Arg, Getopt, Item, Long, Short};
 
 /// The output format.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -125,7 +125,7 @@ pub enum Refusal {
     Plain(String),
 }
 
-const SHORTS: &[Short] = &[
+const SHORTS: &[Short<&str>] = &[
     Short {
         letter: 'a',
         arg: Arg::No,
@@ -339,7 +339,7 @@ const SHORTS: &[Short] = &[
     },
 ];
 
-const LONGS: &[Long] = &[
+const LONGS: &[Long<'static, &str>] = &[
     Long {
         name: "brief",
         arg: Arg::No,
@@ -628,7 +628,9 @@ pub fn parse_params(args: &[OsString]) -> Result<Request, Refusal> {
         || (OsString::from("diff"), args),
         |(exe, rest)| (exe.clone(), rest),
     );
-    let parsed = getopt::parse(rest, SHORTS, LONGS).map_err(Refusal::Usage)?;
+    let parsed = Getopt::new(SHORTS, LONGS)
+        .parse(rest)
+        .map_err(|problem| Refusal::Usage(problem.to_string()))?;
     let mut params = Params {
         executable,
         option_words: parsed.option_words,
@@ -651,11 +653,11 @@ pub fn parse_params(args: &[OsString]) -> Result<Request, Refusal> {
 
     for item in parsed.items {
         let (id, value) = match item {
-            Item::Operand(word) => {
+            Item::Operand { value: word, .. } => {
                 operands.push(word);
                 continue;
             }
-            Item::Option { id, value } => (id, value),
+            Item::Option { id, value, .. } => (id, value),
         };
         let was_digit = last_was_digit;
         last_was_digit = id.len() == 1 && id.as_bytes()[0].is_ascii_digit();

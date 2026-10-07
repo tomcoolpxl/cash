@@ -1,0 +1,17 @@
+[package]
+name = "cash-getopt"
+description = "GNU getopt_long, once, for every cash tool that reads its command line as the GNU tools do (spec D78)"
+version.workspace = true
+authors.workspace = true
+categories.workspace = true
+edition.workspace = true
+keywords.workspace = true
+license.workspace = true
+readme.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

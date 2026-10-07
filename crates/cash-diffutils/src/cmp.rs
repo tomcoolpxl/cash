@@ -6,8 +6,8 @@
 //! `cmp`: upstream's comparison, behind GNU cmp 3.12's command line and messages
 //! (CASH-PATCHES.md).
 
-use crate::getopt::{self, Arg, Item, Long, Short};
 use crate::utils::{format_failure_to_read_input_file, locale_is_posix, quote};
+use cash_getopt::{Arg, Getopt, Item, Long, Short};
 use std::ffi::OsString;
 use std::io::{BufRead, BufReader, BufWriter, Read, Write};
 use std::{cmp, fs, io};
@@ -69,7 +69,7 @@ pub enum Request {
     Version,
 }
 
-const SHORTS: &[Short] = &[
+const SHORTS: &[Short<&str>] = &[
     Short {
         letter: 'b',
         arg: Arg::No,
@@ -102,7 +102,7 @@ const SHORTS: &[Short] = &[
     },
 ];
 
-const LONGS: &[Long] = &[
+const LONGS: &[Long<'static, &str>] = &[
     Long {
         name: "bytes",
         arg: Arg::Required,
@@ -187,7 +187,9 @@ pub fn parse_params(args: &[OsString]) -> Result<Request, String> {
         || (OsString::from("cmp"), args),
         |(exe, rest)| (exe.clone(), rest),
     );
-    let parsed = getopt::parse(rest, SHORTS, LONGS)?;
+    let parsed = Getopt::new(SHORTS, LONGS)
+        .parse(rest)
+        .map_err(|problem| problem.to_string())?;
     let mut params = Params {
         executable,
         ..Default::default()
@@ -195,11 +197,11 @@ pub fn parse_params(args: &[OsString]) -> Result<Request, String> {
     let mut operands: Vec<OsString> = Vec::new();
     for item in parsed.items {
         let (id, value) = match item {
-            Item::Operand(word) => {
+            Item::Operand { value: word, .. } => {
                 operands.push(word);
                 continue;
             }
-            Item::Option { id, value } => (id, value),
+            Item::Option { id, value, .. } => (id, value),
         };
         let text = value
             .map(|v| v.to_string_lossy().into_owned())

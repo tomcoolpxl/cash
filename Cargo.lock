@@ -516,6 +516,7 @@ version = "1.8.1"
 dependencies = [
  "anyhow",
  "cash-core",
+ "cash-getopt",
  "cash-parser",
  "cash-picker",
  "cash-sed",
@@ -677,6 +678,7 @@ dependencies = [
 name = "cash-diffutils"
 version = "1.8.1"
 dependencies = [
+ "cash-getopt",
  "chrono",
  "chrono-tz",
  "glob",
@@ -687,6 +689,10 @@ dependencies = [
  "similar",
  "unicode-width 0.2.2",
 ]
+
+[[package]]
+name = "cash-getopt"
+version = "1.8.1"
 
 [[package]]
 name = "cash-interactive"

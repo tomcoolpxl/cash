@@ -188,6 +188,8 @@ uuid = { workspace = true, features = ["v1", "v3", "v4", "v5", "v6", "v7"] }
 # the trailer and GNU gzip's interface done here; crc32fast for the trailer's CRC-32.
 flate2 = { workspace = true, features = ["rust_backend"] }
 crc32fast = { workspace = true }
+# Every GNU-style command line, read once (D78).
+cash-getopt = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }

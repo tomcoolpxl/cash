@@ -18,7 +18,7 @@ and `cmp_cases.sh`. Every change is listed here.
 
 ## Rewritten
 
-- `src/params.rs`: a parser over `src/getopt.rs` (new), a `getopt_long`-style reader:
+- `src/params.rs`: a parser over the `cash-getopt` crate (cash's, D78), `getopt_long`:
   bundled short options (`-ruN`), an argument attached or in the next word (`-U3`,
   `-U 3`, `--unified=3`), unambiguous prefixes of long options, operands anywhere,
   `--`, and getopt's own messages (`unrecognized option '--foo'`, `invalid option --
@@ -72,7 +72,7 @@ and `cmp_cases.sh`. Every change is listed here.
 
 ## Patches to upstream's cmp
 
-- The command line is read by `src/getopt.rs`: `-i4`, `-n 5`, `-ls`, long-option
+- The command line is read by the `cash-getopt` crate: `-i4`, `-n 5`, `-ls`, long-option
   prefixes, and GNU's messages with the `Try 'cmp --help' for more information.` line:
   `missing operand after 'cmp'`, `extra operand '3'`, `invalid --ignore-initial value
   'x'`, `invalid --bytes value 'x'`, `options -l and -s are incompatible`.

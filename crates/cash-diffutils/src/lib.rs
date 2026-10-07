@@ -48,7 +48,6 @@ pub mod context_diff;
 pub mod diff;
 pub mod ed_diff;
 pub mod engine;
-pub mod getopt;
 pub mod normal_diff;
 pub mod params;
 pub mod side_diff;
