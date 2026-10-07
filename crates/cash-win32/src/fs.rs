@@ -10,10 +10,10 @@ use std::sync::Mutex;
 
 use windows_sys::Win32::Security::{
     AccessCheck, DACL_SECURITY_INFORMATION, DuplicateToken, GENERIC_MAPPING,
-    GROUP_SECURITY_INFORMATION, GetFileSecurityW, GetLengthSid, GetSecurityDescriptorOwner,
-    GetSidSubAuthority, GetSidSubAuthorityCount, IsValidSid, LookupAccountSidW,
-    OBJECT_SECURITY_INFORMATION, OWNER_SECURITY_INFORMATION, PRIVILEGE_SET, PSID, SID_NAME_USE,
-    SecurityImpersonation, TOKEN_DUPLICATE, TOKEN_QUERY,
+    GROUP_SECURITY_INFORMATION, GetFileSecurityW, GetLengthSid, GetSecurityDescriptorGroup,
+    GetSecurityDescriptorOwner, GetSidSubAuthority, GetSidSubAuthorityCount, IsValidSid,
+    LookupAccountSidW, OBJECT_SECURITY_INFORMATION, OWNER_SECURITY_INFORMATION, PRIVILEGE_SET,
+    PSID, SID_NAME_USE, SecurityImpersonation, TOKEN_DUPLICATE, TOKEN_QUERY,
 };
 use windows_sys::Win32::Storage::FileSystem::{
     BY_HANDLE_FILE_INFORMATION, GetFileInformationByHandle,
@@ -67,12 +67,17 @@ pub fn get_file_owner_info(path: &Path) -> Option<FileOwner> {
     owner_of(&mut buffer)
 }
 
-/// What `ls -l` shows of a file's security: its owner, and whether this process may
-/// write to it (for a folder, create files in it) by its access list.
+/// What `ls -l` shows of a file's security: its owner and group, and whether this
+/// process may write to it (for a folder, create files in it) by its access list.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct FileSecurity {
     /// The owner's account name.
     pub owner: Option<String>,
+    /// The owner, with its RID.
+    pub owner_account: Option<FileOwner>,
+    /// The file's primary group, with its RID: `None` on a local machine, `Domain Users`
+    /// in a domain, as Windows sets it on a new file.
+    pub group: Option<FileOwner>,
     /// Whether the access list grants this process write access; `None` when it could
     /// not be read.
     pub writable: Option<bool>,
@@ -90,14 +95,20 @@ pub fn file_security(path: &Path) -> FileSecurity {
         path,
         OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
     ) else {
+        let owner_account = get_file_owner_info(path);
         return FileSecurity {
-            owner: get_file_owner(path),
+            owner: owner_account.as_ref().map(|owner| owner.name.clone()),
+            owner_account,
+            group: None,
             writable: None,
         };
     };
     let writable = may_write(&mut buffer);
+    let owner_account = owner_of(&mut buffer);
     FileSecurity {
-        owner: owner_of(&mut buffer).map(|owner| owner.name),
+        owner: owner_account.as_ref().map(|owner| owner.name.clone()),
+        owner_account,
+        group: group_of(&mut buffer),
         writable,
     }
 }
@@ -222,8 +233,31 @@ fn owner_of(buffer: &mut [u8]) -> Option<FileOwner> {
     if ok == 0 || p_sid.is_null() {
         return None;
     }
+    account_of(p_sid)
+}
 
-    // SAFETY: `p_sid` is a valid PSID returned by `GetSecurityDescriptorOwner`.
+/// The primary group a security descriptor names, with its account name.
+fn group_of(buffer: &mut [u8]) -> Option<FileOwner> {
+    let mut p_sid = std::ptr::null_mut();
+    let mut defaulted = 0;
+    // SAFETY: `buffer` contains a valid SECURITY_DESCRIPTOR retrieved by `GetFileSecurityW`
+    // with the group asked for.
+    let ok = unsafe {
+        GetSecurityDescriptorGroup(
+            buffer.as_mut_ptr().cast(),
+            &raw mut p_sid,
+            &raw mut defaulted,
+        )
+    };
+    if ok == 0 || p_sid.is_null() {
+        return None;
+    }
+    account_of(p_sid)
+}
+
+/// The account a SID names, with its RID; names cached.
+fn account_of(p_sid: PSID) -> Option<FileOwner> {
+    // SAFETY: `p_sid` is a valid PSID from a security descriptor.
     let sid_len = unsafe { GetLengthSid(p_sid) } as usize;
     // SAFETY: `p_sid` points to a valid SID buffer of length `sid_len`.
     let sid_bytes = unsafe { std::slice::from_raw_parts(p_sid.cast::<u8>(), sid_len) };

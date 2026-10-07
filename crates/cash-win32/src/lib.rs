@@ -83,6 +83,7 @@ pub mod terminal;
 // A terminal's settings as `stty` sees them, over the console's four modes.
 pub mod termios;
 pub mod text;
+pub mod unix;
 pub mod userpath;
 #[cfg(any(test, feature = "pseudo-console"))]
 pub mod vtscreen;

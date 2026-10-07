@@ -34,6 +34,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use cash_core::openfiles::{OpenFile, OpenFiles};
 use cash_core::{ExecutionResult, ShellFd, builtins};
 use cash_getopt::{Arg, Getopt, Item, Long};
+use cash_win32::unix::Replacement;
 use clap::Parser;
 use flate2::{Compress, Compression, Decompress, FlushCompress, FlushDecompress, Status};
 
@@ -955,106 +956,6 @@ struct Done {
     crc: u32,
 }
 
-/// The output of one file, written beside its target and renamed over it at the end.
-struct Target {
-    /// The name the output will have.
-    path: PathBuf,
-    /// Where it is being written.
-    temporary: PathBuf,
-    file: fs::File,
-}
-
-impl Target {
-    fn create(path: PathBuf) -> io::Result<Self> {
-        let directory = path
-            .parent()
-            .filter(|p| !p.as_os_str().is_empty())
-            .map_or_else(|| PathBuf::from("."), Path::to_path_buf);
-        let base = path
-            .file_name()
-            .map_or_else(|| "file".into(), |n| n.to_string_lossy().into_owned());
-        let mut attempt = 0_u32;
-        loop {
-            let candidate =
-                directory.join(format!(".{base}.cash-{}-{attempt}.tmp", std::process::id()));
-            match fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&candidate)
-            {
-                Ok(file) => {
-                    return Ok(Self {
-                        path,
-                        temporary: candidate,
-                        file,
-                    });
-                }
-                Err(e) if e.kind() == io::ErrorKind::AlreadyExists && attempt < 100 => {
-                    attempt += 1;
-                }
-                Err(e) => return Err(e),
-            }
-        }
-    }
-
-    /// Finishes the file: its times and read-only bit, a sync when asked, and the
-    /// rename over `path`, which is removed first when it exists.
-    fn finish(self, times: fs::FileTimes, read_only: bool, synchronous: bool) -> io::Result<()> {
-        let file = self.file;
-        let result = file
-            .set_times(times)
-            .and_then(|()| if synchronous { file.sync_all() } else { Ok(()) })
-            .and_then(|()| {
-                if read_only {
-                    let mut permissions = file.metadata()?.permissions();
-                    permissions.set_readonly(true);
-                    file.set_permissions(permissions)
-                } else {
-                    Ok(())
-                }
-            });
-        drop(file);
-        let result = result.and_then(|()| {
-            if fs::symlink_metadata(&self.path).is_ok() {
-                remove_even_read_only(&self.path)?;
-            }
-            fs::rename(&self.temporary, &self.path)
-        });
-        if result.is_err() {
-            let _ = fs::remove_file(&self.temporary);
-        }
-        result
-    }
-
-    /// Gives the file up: nothing is left behind.
-    fn abandon(self) {
-        drop(self.file);
-        let _ = fs::remove_file(&self.temporary);
-    }
-}
-
-/// Removes `path`, clearing its read-only bit first: Windows refuses to delete a
-/// read-only file, where Unix deletes by the folder's permissions.
-fn remove_even_read_only(path: &Path) -> io::Result<()> {
-    match fs::remove_file(path) {
-        Err(e) if e.kind() == io::ErrorKind::PermissionDenied => {
-            let mut permissions = fs::metadata(path)?.permissions();
-            if permissions.readonly() {
-                #[expect(
-                    clippy::permissions_set_readonly_false,
-                    reason = "Windows only: the read-only attribute, not Unix modes"
-                )]
-                permissions.set_readonly(false);
-                fs::set_permissions(path, permissions)?;
-                fs::remove_file(path)
-            } else {
-                Err(e)
-            }
-        }
-        other => other,
-    }
-}
-
 fn strerror(error: &io::Error) -> String {
     cash_core::error::os_error_text(error)
 }
@@ -1529,7 +1430,7 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
             if !self.may_overwrite(&oname, &target_path)? {
                 return Ok(());
             }
-            let mut target = match Target::create(target_path) {
+            let mut target = match Replacement::create(target_path) {
                 Ok(target) => target,
                 Err(e) => return self.error(&format!("{oname}: {}", strerror(&e))),
             };
@@ -1541,7 +1442,7 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
             }
             let done = match self.compress_into(
                 &mut input,
-                &mut target.file,
+                target.file(),
                 name,
                 &oname,
                 stamp,
@@ -1558,7 +1459,7 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
                 return self.error(&format!("{oname}: {}", strerror(&e)));
             }
             if !options.keep {
-                if let Err(e) = remove_even_read_only(&path) {
+                if let Err(e) = cash_win32::unix::remove_even_read_only(&path) {
                     self.error(&format!("{name}: {}", strerror(&e)))?;
                 }
             }
@@ -1624,7 +1525,7 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
         if !self.may_overwrite(&oname, &target_path)? {
             return Ok(());
         }
-        let mut target = match Target::create(target_path) {
+        let mut target = match Replacement::create(target_path) {
             Ok(target) => target,
             Err(e) => return self.error(&format!("{oname}: {}", strerror(&e))),
         };
@@ -1632,7 +1533,7 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
             write!(self.stderr(), "{name}:\t")?;
         }
         let member = first.unwrap_or_default();
-        let done = match self.decompress_rest(&mut input, &mut target.file, name, &oname, &member) {
+        let done = match self.decompress_rest(&mut input, target.file(), name, &oname, &member) {
             Ok(Some(done)) => done,
             Ok(None) => {
                 target.abandon();
@@ -1649,7 +1550,7 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
             return self.error(&format!("{oname}: {}", strerror(&e)));
         }
         if !options.keep {
-            if let Err(e) = remove_even_read_only(&path) {
+            if let Err(e) = cash_win32::unix::remove_even_read_only(&path) {
                 self.error(&format!("{name}: {}", strerror(&e)))?;
             }
         }

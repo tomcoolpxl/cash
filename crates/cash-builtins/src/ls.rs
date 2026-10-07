@@ -220,9 +220,9 @@ struct ItemInfo {
 
 impl ItemInfo {
     fn is_executable(&self) -> bool {
-        *self
-            .executable
-            .get_or_init(|| self.kind == EntryKind::File && is_executable(&self.path))
+        *self.executable.get_or_init(|| {
+            self.kind == EntryKind::File && cash_win32::unix::is_executable(&self.path)
+        })
     }
 }
 
@@ -1304,48 +1304,33 @@ fn inspect_path(
 /// The owner and the permission string `-l` shows, from one read of the file's security.
 fn fill_long(item: &mut ItemInfo, metadata: &Metadata) {
     let security = cash_win32::fs::file_security(&item.path);
-    item.owner = security.owner.unwrap_or_else(cash_win32::fs::current_user);
-    item.group = item.owner.clone();
+    item.owner = security
+        .owner
+        .clone()
+        .unwrap_or_else(cash_win32::fs::current_user);
+    // The file's primary group, read for what it is; where it cannot be read, the owner.
+    item.group = security
+        .group
+        .map_or_else(|| item.owner.clone(), |group| group.name);
     item.permissions = format_permissions(item, metadata, security.writable);
 }
 
-/// Unix permission bits for a Windows file, which has an access list instead. `r` is
-/// always there. `w` is whether this process may write it: its access list allows it
-/// (`writable`, when it could be read) and, for a file, the read-only attribute is not
-/// set; a folder's read-only attribute only marks it as customised, and does not stop
-/// writing. `x` is a program by extension or a `#!` line, and every folder. The owner
-/// and group positions carry the answer; others read only.
+/// Unix permission bits for a Windows file, which has an access list instead, by the
+/// rule `cash_win32::unix` keeps for `ls`, `stat`, `tar` and `zip` alike.
 fn format_permissions(item: &ItemInfo, metadata: &Metadata, writable: Option<bool>) -> String {
-    if item.kind == EntryKind::Symlink {
-        return String::from("lrwxrwxrwx");
-    }
-    let is_dir = item.kind == EntryKind::Dir;
-    let write = writable.unwrap_or(true) && (is_dir || !metadata.permissions().readonly());
-    let run = is_dir || item.is_executable();
-    let (w, x) = (if write { 'w' } else { '-' }, if run { 'x' } else { '-' });
-    std::format!("{}r{w}{x}r{w}{x}r-{x}", if is_dir { 'd' } else { '-' })
-}
-
-fn is_executable(path: &Path) -> bool {
-    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
-    if ext.eq_ignore_ascii_case("exe")
-        || ext.eq_ignore_ascii_case("cmd")
-        || ext.eq_ignore_ascii_case("bat")
-        || ext.eq_ignore_ascii_case("com")
-        || ext.eq_ignore_ascii_case("ps1")
-    {
-        return true;
-    }
-
-    if let Ok(mut f) = std::fs::File::open(path) {
-        use std::io::Read as _;
-        let mut magic = [0u8; 2];
-        if f.read_exact(&mut magic).is_ok() && &magic == b"#!" {
-            return true;
-        }
-    }
-
-    false
+    use cash_win32::unix::{Kind, mode_string, permissions};
+    let kind = match item.kind {
+        EntryKind::Symlink => Kind::Symlink,
+        EntryKind::Dir => Kind::Dir,
+        EntryKind::File | EntryKind::CharDevice => Kind::File,
+    };
+    let bits = permissions(
+        kind,
+        writable,
+        metadata.permissions().readonly(),
+        item.is_executable(),
+    );
+    mode_string(kind.type_bits() | bits)
 }
 
 fn format_human_size(bytes: u64) -> String {

@@ -313,8 +313,30 @@ fn stat_reports_file_attributes() {
     let ftype = cash("stat -c %F Cargo.toml");
     assert_eq!(ftype.stdout, "regular file");
 
+    // One rule for a file's mode, `ls -l`'s: the access list decides `w` for owner and
+    // group (D78). `stat` said 644 by the read-only bit alone.
     let octal = cash("stat -c %a Cargo.toml");
-    assert_eq!(octal.stdout, "644");
+    assert_eq!(octal.stdout, "664");
+    let both = cash("stat -c %A Cargo.toml; ls -l Cargo.toml");
+    let mut lines = both.stdout.lines();
+    let from_stat = lines.next().unwrap_or_default();
+    let from_ls = lines.next().unwrap_or_default();
+    assert!(
+        from_ls.starts_with(&format!("{from_stat} ")),
+        "stat and ls disagree:\n{}",
+        both.stdout
+    );
+    // The group is the file's own, read, not the owner repeated.
+    let names = cash("stat -c '%U %G %u %g' Cargo.toml");
+    let fields: Vec<&str> = names.stdout.split(' ').collect();
+    assert_eq!(fields.len(), 4, "{}", names.stdout);
+    let ls_group = from_ls.split_whitespace().nth(3).unwrap_or_default();
+    assert_eq!(
+        fields.get(1).copied(),
+        Some(ls_group),
+        "{}\n{from_ls}",
+        names.stdout
+    );
 }
 
 #[test]

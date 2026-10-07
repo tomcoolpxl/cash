@@ -18,7 +18,7 @@
 
 use std::fs;
 use std::io::{Read, Write};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::SystemTime;
 
 use cash_core::{ExecutionResult, builtins};
@@ -612,46 +612,24 @@ fn describe(error: &std::io::Error) -> String {
     cash_core::error::os_error_text(error)
 }
 
-/// Replace `target` with `bytes` via a temporary file in the same directory.
+/// Replace `target` with `bytes` via a temporary file in the same directory
+/// (`cash_win32::unix::Replacement`); a read-only target stays read-only, as GNU's
+/// keeps the mode.
 fn write_replacing(
     target: &Path,
     bytes: &[u8],
     modified: Option<SystemTime>,
 ) -> std::io::Result<()> {
-    let directory = target
-        .parent()
-        .filter(|p| !p.as_os_str().is_empty())
-        .map_or_else(|| PathBuf::from("."), Path::to_path_buf);
-    let base = target
-        .file_name()
-        .map_or_else(|| "file".into(), |n| n.to_string_lossy().into_owned());
-
-    let mut attempt = 0_u32;
-    let (temporary, mut file) = loop {
-        let candidate =
-            directory.join(format!(".{base}.cash-{}-{attempt}.tmp", std::process::id()));
-        match fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&candidate)
-        {
-            Ok(file) => break (candidate, file),
-            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists && attempt < 100 => {
-                attempt += 1;
-            }
-            Err(e) => return Err(e),
-        }
-    };
-
-    let written = file
-        .write_all(bytes)
-        .and_then(|()| modified.map_or(Ok(()), |time| file.set_modified(time)));
-    drop(file);
-    let result = written.and_then(|()| fs::rename(&temporary, target));
-    if result.is_err() {
-        let _ = fs::remove_file(&temporary);
+    let read_only = fs::metadata(target).is_ok_and(|m| m.permissions().readonly());
+    let mut replacement = cash_win32::unix::Replacement::create(target.to_path_buf())?;
+    if let Err(error) = replacement.write_all(bytes) {
+        replacement.abandon();
+        return Err(error);
     }
-    result
+    let times = modified.map_or_else(fs::FileTimes::new, |time| {
+        fs::FileTimes::new().set_modified(time)
+    });
+    replacement.finish(times, read_only, false)
 }
 
 /// Standard error, silenced by `-q`.

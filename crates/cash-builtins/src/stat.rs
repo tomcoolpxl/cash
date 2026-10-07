@@ -4,6 +4,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use cash_core::{ExecutionResult, builtins};
+use cash_win32::unix::{Kind, mode_string, permissions};
 use clap::Parser;
 
 use std::os::windows::fs::MetadataExt;
@@ -157,68 +158,47 @@ impl FileStatInfo {
         let size = meta.len();
         let blocks = size.div_ceil(512);
 
-        let (file_type, raw_mode, octal_perms, human_perms) = if meta.is_dir() {
-            (
-                "directory".to_string(),
-                0o040_755,
-                "755".to_string(),
-                "drwxr-xr-x".to_string(),
-            )
+        let (kind, file_type) = if meta.is_dir() {
+            (Kind::Dir, "directory")
         } else if meta.is_symlink() {
-            (
-                "symbolic link".to_string(),
-                0o120_777,
-                "777".to_string(),
-                "lrwxrwxrwx".to_string(),
-            )
+            (Kind::Symlink, "symbolic link")
+        } else if size == 0 {
+            (Kind::File, "regular empty file")
         } else {
-            let readonly = meta.permissions().readonly();
-            let is_exe = path
-                .extension()
-                .and_then(|ext| ext.to_str())
-                .is_some_and(|ext| {
-                    ext.eq_ignore_ascii_case("exe")
-                        || ext.eq_ignore_ascii_case("bat")
-                        || ext.eq_ignore_ascii_case("cmd")
-                });
-
-            let ftype = if size == 0 {
-                "regular empty file".to_string()
-            } else {
-                "regular file".to_string()
-            };
-
-            if readonly {
-                (
-                    ftype,
-                    0o100_444,
-                    "444".to_string(),
-                    "-r--r--r--".to_string(),
-                )
-            } else if is_exe {
-                (
-                    ftype,
-                    0o100_755,
-                    "755".to_string(),
-                    "-rwxr-xr-x".to_string(),
-                )
-            } else {
-                (
-                    ftype,
-                    0o100_644,
-                    "644".to_string(),
-                    "-rw-r--r--".to_string(),
-                )
-            }
+            (Kind::File, "regular file")
         };
+        // The mode by the rule `ls -l` shows, `cash_win32::unix`'s: the access list
+        // decides `w`, a program or a folder gets `x`.
+        let security = cash_win32::fs::file_security(path);
+        let bits = permissions(
+            kind,
+            security.writable,
+            meta.permissions().readonly(),
+            kind == Kind::File && cash_win32::unix::is_executable(path),
+        );
+        let raw_mode = kind.type_bits() | bits;
+        let octal_perms = format!("{bits:o}");
+        let human_perms = mode_string(raw_mode);
+        let file_type = file_type.to_owned();
 
         let (inode, links, device) = query_file_index_and_links(path);
 
-        let (user, uid) = file_owner(path);
-        // Windows files have no POSIX group, so the group is the owner, as in `ls -l`
-        // and `id -g`.
-        let group = user.clone();
-        let gid = uid;
+        // The owner SID from the file's security descriptor, its RID the uid, which is
+        // what `id -u` reports for that account; only when neither the file's nor the
+        // process's SID can be read, 65534 (`nobody`) rather than a number that would
+        // claim some real account (0 is root).
+        let (user, uid) = security
+            .owner_account
+            .clone()
+            .or_else(cash_win32::fs::current_owner)
+            .map_or_else(
+                || (cash_win32::fs::current_user(), 65534),
+                |owner| (owner.name, owner.rid),
+            );
+        // The file's primary group, as `ls -l` shows it; the owner where it cannot be read.
+        let (group, gid) = security
+            .group
+            .map_or_else(|| (user.clone(), uid), |group| (group.name, group.rid));
 
         let (atime, mtime, btime) = {
             let a = filetime_to_unix(meta.last_access_time());
@@ -345,23 +325,6 @@ fn dev_info<SE: cash_core::ShellExtensions>(
             FileStatInfo::special(written, "character special file", 0o020_666)
         }
     })
-}
-
-/// The file's owner name and uid.
-///
-/// cash: the owner came from `%USERNAME%` with a fixed uid of 1000, so a file owned by
-/// another account — or by BUILTIN\Administrators, as an elevated admin's files are on
-/// Windows Server — was reported as the current user's. The owner SID is read from the
-/// file's security descriptor instead, as `ls -l` does; the uid is its RID, which is
-/// what `id -u` reports for that account.
-fn file_owner(path: &Path) -> (String, u32) {
-    let owner = cash_win32::fs::get_file_owner_info(path).or_else(cash_win32::fs::current_owner);
-    // Only when neither the file's nor the process's SID can be read: 65534 is `nobody`,
-    // rather than a number that would claim some real account (0 is root).
-    owner.map_or_else(
-        || (cash_win32::fs::current_user(), 65534),
-        |owner| (owner.name, owner.rid),
-    )
 }
 
 /// The inode, links and device `stat` shows. A folder's are its own: it could not be

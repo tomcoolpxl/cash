@@ -485,17 +485,6 @@ license accepted for `libbz2-rs-sys`. Order: the groundwork, the compressors, ta
 Passed over: uutils/tar (0.0.1, less than `tar.exe` does), `libzstd-rs-sys` (a
 prerelease without a Rust API), `xz2` and `liblzma` (C).
 
-## Phase 27. One Unix face for a Windows file
-
-1. **cash-win32**: `unix_view` (mode, owner and group with their RIDs, link count,
-   times to the nanosecond, identity), with `ls`'s rule for the mode (the access list
-   decides `w`); `replace` (gzip's `Target`); `symlink` (Developer Mode or elevated, a
-   typed refusal otherwise), `hard_link`, `set_times` (folders too), `set_attributes`;
-   `check_name` (reserved names, `<>:"|?*`, a trailing dot or space).
-2. **Onto it**: `ls` (the group read for the first time, not the owner again), `stat`
-   (its mode follows `ls`'s rule, so it changes for some files), `dos2unix` (gains the
-   read-only handling it lacks), gzip's in-place replacement.
-
 ## Phase 28. `cash-archive`'s codecs, the compressor driver, `bzip2`, `xz`, `zstd`
 
 1. **`codec`**: gzip (flate2), bzip2 (`bzip2` on `libbz2-rs-sys`), xz, lzma and lzip
