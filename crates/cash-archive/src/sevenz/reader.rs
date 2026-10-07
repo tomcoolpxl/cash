@@ -1731,6 +1731,8 @@ pub enum Problem {
     /// More follows the data where the format says it ends (7-Zip's
     /// `kDataAfterEnd`, for the formats of one stream).
     DataAfterEnd,
+    /// The password given does not open the data (zip's check byte).
+    WrongPassword,
 }
 
 impl Problem {

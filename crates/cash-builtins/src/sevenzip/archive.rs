@@ -75,6 +75,12 @@ impl Kind {
         if head.get(257..262) == Some(b"ustar") {
             return Some(Self::Tar);
         }
+        if head.starts_with(b"PK\x03\x04")
+            || head.starts_with(b"PK\x05\x06")
+            || head.starts_with(b"PK\x07\x08")
+        {
+            return Some(Self::Zip);
+        }
         [Self::Gzip, Self::Bzip2, Self::Xz, Self::Zstd]
             .into_iter()
             .find(|&kind| super::streams::signature(kind, head))
@@ -85,6 +91,7 @@ impl Kind {
         matches!(
             self,
             Self::SevenZ
+                | Self::Zip
                 | Self::Tar
                 | Self::Gzip
                 | Self::Bzip2
@@ -123,6 +130,9 @@ pub(super) enum Prop {
     Comment,
     DeviceMajor,
     DeviceMinor,
+    Version,
+    VolumeIndex,
+    Offset,
 }
 
 impl Prop {
@@ -153,6 +163,9 @@ impl Prop {
             Self::Comment => "Comment",
             Self::DeviceMajor => "Device Major",
             Self::DeviceMinor => "Device Minor",
+            Self::Version => "Version",
+            Self::VolumeIndex => "Volume Index",
+            Self::Offset => "Offset",
         }
     }
 }
@@ -229,6 +242,7 @@ enum Backend {
     SevenZ(Box<ArchiveReader<File>>),
     Stream(super::streams::Stream),
     Tar(super::tar7::Tar),
+    Zip(Box<super::zip7::Zip>),
 }
 
 /// An item's data as extraction reads it: read it, then `finish` says whether all of
@@ -260,6 +274,7 @@ pub(super) fn open(
     path: &Path,
     forced: Option<Kind>,
     password: Option<&str>,
+    zone: &cash_core::timefmt::Zone,
 ) -> Result<Opened, OpenFailure> {
     let mut file = File::open(path).map_err(OpenFailure::Io)?;
     let mut head = [0u8; 1100];
@@ -298,6 +313,27 @@ pub(super) fn open(
     };
     let mut opened = if kind == Kind::SevenZ {
         open_7z(file, password)?
+    } else if kind == Kind::Zip {
+        let len = file.seek(SeekFrom::End(0)).map_err(OpenFailure::Io)?;
+        drop(file);
+        let Some(mut opening) = super::zip7::open(path, zone).map_err(OpenFailure::Io)? else {
+            return Err(not_archive(by_name.or(Some(kind))));
+        };
+        if let Some(password) = password {
+            opening.zip.set_password(password);
+        }
+        Opened {
+            kind,
+            physical_size: Some(opening.physical_size),
+            type_warning: None,
+            props: opening.props,
+            item_props: super::zip7::ITEM_PROPS.to_vec(),
+            items: opening.items,
+            tail: len.saturating_sub(opening.physical_size),
+            error_flags: Vec::new(),
+            warning_flags: Vec::new(),
+            backend: Backend::Zip(Box::new(opening.zip)),
+        }
     } else if kind == Kind::Tar {
         let len = file.seek(SeekFrom::End(0)).map_err(OpenFailure::Io)?;
         drop(file);
@@ -641,8 +677,10 @@ impl Opened {
 
     /// The password encrypted data is read with, typed after the archive was opened.
     pub(super) fn set_password(&mut self, password: &str) {
-        if let Backend::SevenZ(reader) = &mut self.backend {
-            reader.set_password(Password::from(password));
+        match &mut self.backend {
+            Backend::SevenZ(reader) => reader.set_password(Password::from(password)),
+            Backend::Zip(zip) => zip.set_password(password),
+            Backend::Stream(_) | Backend::Tar(_) => {}
         }
     }
 
@@ -650,7 +688,7 @@ impl Opened {
     pub(super) fn reader(&mut self) -> Option<&mut ArchiveReader<File>> {
         match &mut self.backend {
             Backend::SevenZ(reader) => Some(reader),
-            Backend::Stream(_) | Backend::Tar(_) => None,
+            Backend::Stream(_) | Backend::Tar(_) | Backend::Zip(_) => None,
         }
     }
 
@@ -658,7 +696,7 @@ impl Opened {
     pub(super) fn archive(&self) -> Option<&sevenz::Archive> {
         match &self.backend {
             Backend::SevenZ(reader) => Some(reader.archive()),
-            Backend::Stream(_) | Backend::Tar(_) => None,
+            Backend::Stream(_) | Backend::Tar(_) | Backend::Zip(_) => None,
         }
     }
 
@@ -685,6 +723,18 @@ impl Opened {
                         continue;
                     }
                     let mut data = tar.data(index)?;
+                    if !each(index, &mut data)? {
+                        break;
+                    }
+                }
+                Ok(())
+            }
+            Backend::Zip(zip) => {
+                for index in 0..self.items.len() {
+                    if !wanted(index) {
+                        continue;
+                    }
+                    let mut data = zip.data(index)?;
                     if !each(index, &mut data)? {
                         break;
                     }

@@ -1816,3 +1816,645 @@ Files: 4
 Size:       21
 Compressed: 5632
 rc=0
+== zip
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1465 bytes (2 KiB)
+
+Listing archive: i.zip
+
+--
+Path = i.zip
+Type = zip
+Physical Size = 1465
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00 D....            0            0  d
+2026-10-07 08:00:00 ....A           36           12  d/a.txt
+2026-10-07 08:00:00 ....A            0            0  d/empty
+2026-10-07 08:00:00 D....            0            0  d/sub
+2026-10-07 08:00:00 ....A           10           10  d/sub/b.txt
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00                 46           22  3 files, 2 folders
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1465 bytes (2 KiB)
+
+Listing archive: i.zip
+
+--
+Path = i.zip
+Type = zip
+Physical Size = 1465
+
+----------
+Path = d
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2026-10-07 08:00:00
+Created = 
+Accessed = 
+Attributes = D
+Encrypted = -
+Comment = 
+CRC = 
+Method = Store
+Characteristics = SD UT:MAC:1
+Host OS = FAT
+Version = 10
+Volume Index = 0
+Offset = 0
+
+Path = d/a.txt
+Folder = -
+Size = 36
+Packed Size = 12
+Modified = 2026-10-07 08:00:00
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Comment = 
+CRC = E0AC0FD0
+Method = Deflate
+Characteristics = SD UT:MAC:1
+Host OS = FAT
+Version = 20
+Volume Index = 0
+Offset = 210
+
+Path = d/empty
+Folder = -
+Size = 0
+Packed Size = 0
+Modified = 2026-10-07 08:00:00
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Comment = 
+CRC = 00000000
+Method = Store
+Characteristics = SD UT:MAC:1
+Host OS = FAT
+Version = 10
+Volume Index = 0
+Offset = 437
+
+Path = d/sub
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2026-10-07 08:00:00
+Created = 
+Accessed = 
+Attributes = D
+Encrypted = -
+Comment = 
+CRC = 
+Method = Store
+Characteristics = SD UT:MAC:1
+Host OS = FAT
+Version = 10
+Volume Index = 0
+Offset = 652
+
+Path = d/sub/b.txt
+Folder = -
+Size = 10
+Packed Size = 10
+Modified = 2026-10-07 08:00:00
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Comment = 
+CRC = 02DAF5B5
+Method = Store
+Characteristics = SD UT:MAC:1
+Host OS = FAT
+Version = 10
+Volume Index = 0
+Offset = 866
+
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 682 bytes (1 KiB)
+
+Listing archive: s.zip
+
+--
+Path = s.zip
+Type = zip
+Physical Size = 682
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00 D....            0            0  d
+2026-10-07 08:00:00 ....A           36           24  d/a.txt
+2026-10-07 08:00:00 ....A            0            0  d/empty
+2026-10-07 08:00:00 D....            0            0  d/sub
+2026-10-07 08:00:00 ....A           10           10  d/sub/b.txt
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00                 46           34  3 files, 2 folders
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 682 bytes (1 KiB)
+
+Listing archive: s.zip
+
+--
+Path = s.zip
+Type = zip
+Physical Size = 682
+
+----------
+Path = d
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2026-10-07 08:00:00.0000000
+Created = 
+Accessed = 
+Attributes = D
+Encrypted = -
+Comment = 
+CRC = 
+Method = Store
+Characteristics = NTFS
+Host OS = FAT
+Version = 20
+Volume Index = 0
+Offset = 0
+
+Path = d/a.txt
+Folder = -
+Size = 36
+Packed Size = 24
+Modified = 2026-10-07 08:00:00.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Comment = 
+CRC = E0AC0FD0
+Method = Deflate
+Characteristics = NTFS
+Host OS = FAT
+Version = 20
+Volume Index = 0
+Offset = 32
+
+Path = d/empty
+Folder = -
+Size = 0
+Packed Size = 0
+Modified = 2026-10-07 08:00:00.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Comment = 
+CRC = 00000000
+Method = Store
+Characteristics = NTFS
+Host OS = FAT
+Version = 10
+Volume Index = 0
+Offset = 93
+
+Path = d/sub
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2026-10-07 08:00:00.0000000
+Created = 
+Accessed = 
+Attributes = D
+Encrypted = -
+Comment = 
+CRC = 
+Method = Store
+Characteristics = NTFS
+Host OS = FAT
+Version = 20
+Volume Index = 0
+Offset = 130
+
+Path = d/sub/b.txt
+Folder = -
+Size = 10
+Packed Size = 10
+Modified = 2026-10-07 08:00:00.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Comment = 
+CRC = 02DAF5B5
+Method = Store
+Characteristics = NTFS
+Host OS = FAT
+Version = 10
+Volume Index = 0
+Offset = 166
+
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 120 bytes (1 KiB)
+
+Listing archive: dos.zip
+
+--
+Path = dos.zip
+Type = zip
+Physical Size = 120
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+2026-10-06 10:00:00 ....A            4            4  old/o.txt
+------------------- ----- ------------ ------------  ------------------------
+2026-10-06 10:00:00                  4            4  1 files
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 120 bytes (1 KiB)
+
+Listing archive: dos.zip
+
+--
+Path = dos.zip
+Type = zip
+Physical Size = 120
+
+----------
+Path = old/o.txt
+Folder = -
+Size = 4
+Packed Size = 4
+Modified = 2026-10-06 10:00:00
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Comment = 
+CRC = E2884DB0
+Method = Store
+Characteristics = 
+Host OS = FAT
+Version = 10
+Volume Index = 0
+Offset = 0
+
+rc=0
+----------
+Path = d/a.txt
+Folder = -
+Size = 36
+Packed Size = 24
+Modified = 2026-10-07 08:00:00
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = +
+Comment = 
+CRC = E0AC0FD0
+Method = ZipCrypto Deflate
+Characteristics = SD UT:MAC:1 : Encrypt Descriptor
+Host OS = FAT
+Version = 20
+Volume Index = 0
+Offset = 0
+
+rc=0
+----------
+Path = d/a.txt
+Folder = -
+Size = 36
+Packed Size = 52
+Modified = 2026-10-07 08:00:00.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = +
+Comment = 
+CRC = 
+Method = AES-256 Deflate
+Characteristics = NTFS WzAES : Encrypt
+Host OS = FAT
+Version = 51
+Volume Index = 0
+Offset = 0
+
+rc=0
+----------
+Path = d/a.txt
+Folder = -
+Size = 36
+Packed Size = 36
+Modified = 2026-10-07 08:00:00.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Comment = 
+CRC = E0AC0FD0
+Method = Store
+Characteristics = NTFS
+Host OS = FAT
+Version = 10
+Volume Index = 0
+Offset = 0
+
+rc=0
+----------
+Path = d/a.txt
+Folder = -
+Size = 36
+Packed Size = 29
+Modified = 2026-10-07 08:00:00.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Comment = 
+CRC = E0AC0FD0
+Method = LZMA:eos
+Characteristics = NTFS
+Host OS = FAT
+Version = 63
+Volume Index = 0
+Offset = 0
+
+rc=0
+----------
+Path = d/a.txt
+Folder = -
+Size = 36
+Packed Size = 24
+Modified = 2026-10-07 08:00:00.0000000
+Created = 
+Accessed = 
+Attributes = A
+Encrypted = -
+Comment = 
+CRC = E0AC0FD0
+Method = Deflate64
+Characteristics = NTFS
+Host OS = FAT
+Version = 21
+Volume Index = 0
+Offset = 0
+
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1465 bytes (2 KiB)
+
+Testing archive: i.zip
+--
+Path = i.zip
+Type = zip
+Physical Size = 1465
+
+Everything is Ok
+
+Folders: 2
+Files: 3
+Size:       46
+Compressed: 1465
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 682 bytes (1 KiB)
+
+Testing archive: s.zip
+--
+Path = s.zip
+Type = zip
+Physical Size = 682
+
+Everything is Ok
+
+Folders: 2
+Files: 3
+Size:       46
+Compressed: 682
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 184 bytes (1 KiB)
+
+Testing archive: bz.zip
+--
+Path = bz.zip
+Type = zip
+Physical Size = 184
+
+Everything is Ok
+
+Size:       36
+Compressed: 184
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 177 bytes (1 KiB)
+
+Testing archive: lz.zip
+--
+Path = lz.zip
+Type = zip
+Physical Size = 177
+
+Everything is Ok
+
+Size:       36
+Compressed: 177
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 172 bytes (1 KiB)
+
+Testing archive: d64.zip
+--
+Path = d64.zip
+Type = zip
+Physical Size = 172
+
+Everything is Ok
+
+Size:       36
+Compressed: 172
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 120 bytes (1 KiB)
+
+Testing archive: dos.zip
+--
+Path = dos.zip
+Type = zip
+Physical Size = 120
+
+Everything is Ok
+
+Size:       4
+Compressed: 120
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 347 bytes (1 KiB)
+
+Testing archive: e.zip
+--
+Path = e.zip
+Type = zip
+Physical Size = 347
+
+Everything is Ok
+
+Size:       36
+Compressed: 347
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 222 bytes (1 KiB)
+
+Testing archive: aes.zip
+--
+Path = aes.zip
+Type = zip
+Physical Size = 222
+
+Everything is Ok
+
+Size:       36
+Compressed: 222
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 347 bytes (1 KiB)
+
+Testing archive: e.zip
+--
+Path = e.zip
+Type = zip
+Physical Size = 347
+
+ERROR: Wrong password : d/a.txt
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 222 bytes (1 KiB)
+
+Testing archive: aes.zip
+--
+Path = aes.zip
+Type = zip
+Physical Size = 222
+
+ERROR: Wrong password : d/a.txt
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2
+alpha alpha alpha alpha alpha alpha
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1465 bytes (2 KiB)
+
+Extracting archive: i.zip
+--
+Path = i.zip
+Type = zip
+Physical Size = 1465
+
+Everything is Ok
+
+Folders: 2
+Files: 3
+Size:       46
+Compressed: 1465
+rc=0
+zip
+zip/d
+zip/d/a.txt
+zip/d/empty
+zip/d/sub
+zip/d/sub/b.txt
+alpha alpha alpha alpha alpha alpha
+2026-10-07 08:00:00 D....            0            0  d
+2026-10-07 08:00:00 ....A           36           12  d/a.txt
+2026-10-07 08:00:00 ....A            0            0  d/empty
+2026-10-07 08:00:00 D....            0            0  d/sub
+2026-10-07 08:00:00 ....A           10           10  d/sub/b.txt
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 1465 bytes (2 KiB)
+
+Testing archive: crc.zip
+--
+Path = crc.zip
+Type = zip
+Physical Size = 1465
+
+Everything is Ok
+
+Folders: 2
+Files: 3
+Size:       46
+Compressed: 1465
+rc=0

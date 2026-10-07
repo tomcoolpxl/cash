@@ -91,6 +91,26 @@ impl Zone {
     pub fn format_system_time(&self, when: SystemTime, format: &str) -> String {
         self.format(DateTime::<Utc>::from(when), format)
     }
+
+    /// A wall time in this zone as Unix seconds: the earlier of two in the hour the
+    /// clocks go back, none in the hour they skip.
+    #[must_use]
+    pub fn local_to_unix(&self, wall: chrono::NaiveDateTime) -> Option<i64> {
+        match self {
+            Self::Local => wall
+                .and_local_timezone(chrono::Local)
+                .earliest()
+                .map(|t| t.timestamp()),
+            Self::Named(zone) => wall
+                .and_local_timezone(*zone)
+                .earliest()
+                .map(|t| t.timestamp()),
+            Self::Fixed { offset, .. } => wall
+                .and_local_timezone(*offset)
+                .earliest()
+                .map(|t| t.timestamp()),
+        }
+    }
 }
 
 /// A POSIX `TZ` of a name of three or more letters and an offset: `JST-9`, `UTC0`,

@@ -24,6 +24,7 @@ mod streams;
 mod tar7;
 mod text;
 mod update;
+mod zip7;
 
 use std::cell::{Cell, RefCell};
 use std::io::{self, Write};

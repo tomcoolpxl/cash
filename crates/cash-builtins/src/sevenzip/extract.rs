@@ -171,20 +171,27 @@ pub(super) fn open_asking<SE: cash_core::ShellExtensions>(
     prompt: &dyn Fn(&str),
     asked: &mut bool,
 ) -> Result<Result<Opened, OpenFailure>, Stop> {
-    let opened = archive::open(&found.path, forced_kind(options), password.as_deref());
+    let opened = archive::open(
+        &found.path,
+        forced_kind(options),
+        password.as_deref(),
+        &env.zone,
+    );
     if !matches!(opened, Err(OpenFailure::PasswordNeeded)) {
         return Ok(opened);
     }
     *password = Some(ask_password(env, prompt)?);
     *asked = true;
-    Ok(
-        archive::open(&found.path, forced_kind(options), password.as_deref()).map_err(|failure| {
-            match failure {
-                OpenFailure::PasswordNeeded => OpenFailure::WrongPassword,
-                other => other,
-            }
-        }),
+    Ok(archive::open(
+        &found.path,
+        forced_kind(options),
+        password.as_deref(),
+        &env.zone,
     )
+    .map_err(|failure| match failure {
+        OpenFailure::PasswordNeeded => OpenFailure::WrongPassword,
+        other => other,
+    }))
 }
 
 /// `GetPassword`: the question, a line read without echo, a new line; the end of the
@@ -696,6 +703,7 @@ const fn problem_words(problem: Problem, encrypted: bool) -> &'static str {
         Problem::Data | Problem::PasswordNeeded => "Data Error",
         Problem::UnexpectedEnd => "Unexpected end of data",
         Problem::DataAfterEnd => "There are some data after the end of the payload data",
+        Problem::WrongPassword => "Wrong password",
     }
 }
 
