@@ -1,6 +1,6 @@
 ---
 names: bzip2 bunzip2 bzcat
-see: gzip xz
+see: gzip xz zstd
 ---
 ## Description
 

@@ -220,6 +220,8 @@ mod winpaths;
 mod xxd_builtin;
 // `xz` and its five other names: XZ Utils 5.8's golden output, and the file handling.
 mod xz_builtin;
+// `zstd`, `unzstd` and `zstdcat`: zstd 1.5.7's golden output, and the file handling.
+mod zstd_builtin;
 
 // The upstream bc suite (see bc.rs) reaches its test library as `crate::plib`.
 use bc::plib;

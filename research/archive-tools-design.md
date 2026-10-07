@@ -218,15 +218,40 @@ pub fn substitute(s: &Substitution, input: &[u8]) -> Option<Vec<u8>>;
 `extra_flags` lets tar accept its `r` `s` `h` `x` flags; nothing about `sed` itself
 changes.
 
-### 3.11 The compressor driver (cash-builtins)
+### 3.11 The compressors (cash-builtins): shared blocks, a flow per tool
 
-`gzip`, `bzip2`, `xz`, `zstd` and their aliases have one shape: compress or decompress
-files in place by suffix, `-c`, `-d`, `-k`, `-f`, `-t`, `-q`, `-v`, levels, standard
-input and output, a refusal to write compressed data to a terminal. One driver does the
-shape; a `Profile` per tool says what differs: names and their presets (`bzcat` =
-`bzip2 -dc`), the option table, defaults (`zstd` keeps its input, the others delete
-it), suffixes, messages, exit statuses (gzip 0/1/2, bzip2 0/1/2/3, zstd 0/1), the `-l`
-table. gzip moves onto it first, with its oracle unchanged as the proof.
+`gzip`, `bzip2`, `xz`, `zstd` and their aliases look alike from afar: compress or
+decompress files in place by suffix, `-c`, `-d`, `-k`, `-f`, `-t`, `-q`, `-v`, levels,
+standard input and output, a refusal to write compressed data to a terminal. The plan
+was one driver with a `Profile` per tool. Built against the four oracles (phase 28,
+2026-10-07), that did not hold: the tools check a file in different orders (bzip2: the
+input exists, its suffix, a directory, the output exists, its links; xz: it opens the
+input, reads the first 8 KiB to tell the format, and only then looks at the suffix and
+the output; zstd: the suffix before the file exists), read their command lines
+differently (bzip2 two passes over flags placed anywhere, zstd its own loop with
+prefix-matched long options and values glued to letters, gzip and xz `getopt_long`),
+answer an existing output differently (gzip and zstd ask, bzip2 and xz refuse), keep
+or remove the input by default differently, buffer standard output differently (bzip2's
+and zstd's stdio buffer puts an error before the data; gzip and xz write as they go),
+and word every failure in their own long or short way. A profile would have been all
+exceptions.
+
+So the shared parts are building blocks, and each tool keeps its own flow, written
+after its original's functions (bzip2's `compress`/`uncompress`/`testf`, xz's
+`coder_run` with `io_open_src`/`io_open_dest`, zstd's `FIO_*` and its main loop):
+
+- `cash-builtins/src/compress.rs`: where a file's output goes (`Output`: standard
+  output, nowhere for `-t`, or a `Replacement` file), byte counts for `-v` (`Counted`),
+  the console's yes or no (`answer_is_yes`), `is_terminal`, `strerror`, `times_of`.
+- cash-archive's codecs, each with what its tool needs beyond a reader and a writer:
+  `codec::bzip2::decompress_streams` (one stream at a time, "no stream here" told from
+  damage), `codec::xz` (xz's own format tests, liblzma's view of what may follow a
+  stream, the presets with `-e`, the .xz index for `-l`), `codec::zstd`
+  (`decompress_frame` with zstd's error words and its 128 KiB output buffer, frames that
+  say their content size), `codec::Lookahead` (look at the next bytes before reading).
+- cash-win32's `Replacement` (written beside the target, renamed over it) and the Unix
+  face (read-only and times carried over).
+- tests/it/common.rs: the oracle helpers, with divergences stated where cash differs.
 
 ## 4. Rules every part keeps
 

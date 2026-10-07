@@ -1,0 +1,558 @@
+== bad options
+Incorrect parameter: -Y 
+Compress or decompress the INPUT file(s); reads from STDIN if INPUT is `-` or not provided.
+
+Usage: zstd [OPTIONS...] [INPUT... | -] [-o OUTPUT]
+
+Options:
+  -o OUTPUT                     Write output to a single file, OUTPUT.
+  -k, --keep                    Preserve INPUT file(s). [Default] 
+  --rm                          Remove INPUT file(s) after successful (de)compression.
+
+  -#                            Desired compression level, where `#` is a number between 1 and 19;
+                                lower numbers provide faster compression, higher numbers yield
+                                better compression ratios. [Default: 3]
+
+  -d, --decompress              Perform decompression.
+  -D DICT                       Use DICT as the dictionary for compression or decompression.
+
+  -f, --force                   Disable input and output checks. Allows overwriting existing files,
+                                receiving input from the console, printing output to STDOUT, and
+                                operating on links, block devices, etc. Unrecognized formats will be
+                                passed-through through as-is.
+
+  -h                            Display short usage and exit.
+  -H, --help                    Display full help and exit.
+  -V, --version                 Display the program version and exit.
+
+rc=1
+h
+Incorrect parameter: --foo 
+Compress or decompress the INPUT file(s); reads from STDIN if INPUT is `-` or not provided.
+
+Usage: zstd [OPTIONS...] [INPUT... | -] [-o OUTPUT]
+
+Options:
+  -o OUTPUT                     Write output to a single file, OUTPUT.
+  -k, --keep                    Preserve INPUT file(s). [Default] 
+  --rm                          Remove INPUT file(s) after successful (de)compression.
+
+  -#                            Desired compression level, where `#` is a number between 1 and 19;
+                                lower numbers provide faster compression, higher numbers yield
+                                better compression ratios. [Default: 3]
+
+  -d, --decompress              Perform decompression.
+  -D DICT                       Use DICT as the dictionary for compression or decompression.
+
+  -f, --force                   Disable input and output checks. Allows overwriting existing files,
+                                receiving input from the console, printing output to STDOUT, and
+                                operating on links, block devices, etc. Unrecognized formats will be
+                                passed-through through as-is.
+
+  -h                            Display short usage and exit.
+  -H, --help                    Display full help and exit.
+  -V, --version                 Display the program version and exit.
+
+rc=1
+Incorrect parameter: --decom 
+Compress or decompress the INPUT file(s); reads from STDIN if INPUT is `-` or not provided.
+
+Usage: zstd [OPTIONS...] [INPUT... | -] [-o OUTPUT]
+
+Options:
+  -o OUTPUT                     Write output to a single file, OUTPUT.
+  -k, --keep                    Preserve INPUT file(s). [Default] 
+  --rm                          Remove INPUT file(s) after successful (de)compression.
+
+  -#                            Desired compression level, where `#` is a number between 1 and 19;
+                                lower numbers provide faster compression, higher numbers yield
+                                better compression ratios. [Default: 3]
+
+  -d, --decompress              Perform decompression.
+  -D DICT                       Use DICT as the dictionary for compression or decompression.
+
+  -f, --force                   Disable input and output checks. Allows overwriting existing files,
+                                receiving input from the console, printing output to STDOUT, and
+                                operating on links, block devices, etc. Unrecognized formats will be
+                                passed-through through as-is.
+
+  -h                            Display short usage and exit.
+  -H, --help                    Display full help and exit.
+  -V, --version                 Display the program version and exit.
+
+rc=1
+error: missing command argument 
+rc=1
+Incorrect parameter: -x 
+Compress or decompress the INPUT file(s); reads from STDIN if INPUT is `-` or not provided.
+
+Usage: zstd [OPTIONS...] [INPUT... | -] [-o OUTPUT]
+
+Options:
+  -o OUTPUT                     Write output to a single file, OUTPUT.
+  -k, --keep                    Preserve INPUT file(s). [Default] 
+  --rm                          Remove INPUT file(s) after successful (de)compression.
+
+  -#                            Desired compression level, where `#` is a number between 1 and 19;
+                                lower numbers provide faster compression, higher numbers yield
+                                better compression ratios. [Default: 3]
+
+  -d, --decompress              Perform decompression.
+  -D DICT                       Use DICT as the dictionary for compression or decompression.
+
+  -f, --force                   Disable input and output checks. Allows overwriting existing files,
+                                receiving input from the console, printing output to STDOUT, and
+                                operating on links, block devices, etc. Unrecognized formats will be
+                                passed-through through as-is.
+
+  -h                            Display short usage and exit.
+  -H, --help                    Display full help and exit.
+  -V, --version                 Display the program version and exit.
+
+rc=1
+error: command cannot be separated from its argument by another command 
+rc=1
+Incorrect parameter: --fast=0 
+Compress or decompress the INPUT file(s); reads from STDIN if INPUT is `-` or not provided.
+
+Usage: zstd [OPTIONS...] [INPUT... | -] [-o OUTPUT]
+
+Options:
+  -o OUTPUT                     Write output to a single file, OUTPUT.
+  -k, --keep                    Preserve INPUT file(s). [Default] 
+  --rm                          Remove INPUT file(s) after successful (de)compression.
+
+  -#                            Desired compression level, where `#` is a number between 1 and 19;
+                                lower numbers provide faster compression, higher numbers yield
+                                better compression ratios. [Default: 3]
+
+  -d, --decompress              Perform decompression.
+  -D DICT                       Use DICT as the dictionary for compression or decompression.
+
+  -f, --force                   Disable input and output checks. Allows overwriting existing files,
+                                receiving input from the console, printing output to STDOUT, and
+                                operating on links, block devices, etc. Unrecognized formats will be
+                                passed-through through as-is.
+
+  -h                            Display short usage and exit.
+  -H, --help                    Display full help and exit.
+  -V, --version                 Display the program version and exit.
+
+rc=1
+== round trips
+level 1 ok
+level 3 ok
+level 19 ok
+y ok
+y same
+hello
+ 28 b5 2f fd
+hello
+== zstd's files
+hello
+hello
+goodbye world
+hi
+hello
+hello
+goodbye world
+rc=0
+7 files decompressed :     55 bytes total 
+rc=0
+z1.zst              : 6 bytes 
+rc=0
+== keep by default
+rc=0
+r
+r.zst
+rnd
+1577934245 r.zst
+rc=0
+r
+r.zst
+rnd
+1577934245 r
+hello
+zstd: r.zst already exists; not overwritten  
+rc=1
+r
+r.zst
+rnd
+zstd: r already exists; not overwritten  
+rc=1
+r
+r.zst
+rnd
+== -v and the summary
+ v : P % ( N B = > N
+ B , v . z s t ) \n
+ v . z s t
+ : 6 b y t e s \n
+ v : P % ( N B = > N
+ B , v . z s t ) \n
+zstd: v.zst already exists; not overwritten  
+rc=1
+v.zst               : 6 bytes 
+rc=0
+ v . z s t
+ : 6 b y t e s \n
+ e : ( N B = > N B
+ , e . z s t ) \n
+ e . z s t
+ : 0 b y t e s \n
+== two files
+ 2 files compressed : P% ( N B => N B)
+2 files decompressed :     20 bytes total 
+2 files decompressed :     20 bytes total 
+zstd: can't stat nosuch : No such file or directory -- ignored 
+2 files decompressed :     20 bytes total 
+rc=1
+== -o
+rc=0
+out.zst
+rc=0
+hello
+Concatenating multiple processed inputs into a single output loses file metadata. 
+Aborting. 
+rc=1
+zstd: WARNING: all input files will be processed and concatenated into a single output file: two.zst 
+The concatenated output CANNOT regenerate original file names nor directory structure. 
+Proceed? (y/n): Aborting... 
+rc=1
+ls: cannot access 'two*': No such file or directory
+zstd: WARNING: all input files will be processed and concatenated into a single output file: two.zst 
+The concatenated output CANNOT regenerate original file names nor directory structure. 
+ 2 files compressed : P% ( N B => N B)
+hello
+goodbye world
+zstd: out.zst already exists; not overwritten  
+rc=1
+rc=0
+zstd: Refusing to open an output file which will overwrite the input file 
+rc=1
+== -c and stdout
+hello
+zstd: h: unsupported format 
+hello
+rc=1
+hello
+hello
+rc=0
+c
+c.zst
+hello
+rc=0
+hello
+rc=0
+hello
+rc=0
+zstd: h: unsupported format 
+rc=1
+== -f and overwrite
+zstd: o.zst already exists; not overwritten  
+rc=1
+o
+o.zst
+out.zst
+rc=0
+zstd: o already exists; not overwritten  
+rc=1
+rc=0
+zstd: o.zst already exists; overwrite (y/n) ? Not overwritten  
+ 
+rc=1
+zstd: o already exists; overwrite (y/n) ? Not overwritten  
+ 
+rc=1
+== -t on good and corrupt
+rc=0
+trunc.zst : Read error (39) : premature end 
+rc=1
+trunc.zst : Read error (39) : premature end 
+rc=1
+trunc.zst
+bad.zst : Decoding error (36) : Restored data doesn't match checksum 
+rc=1
+bad.zst : Decoding error (36) : Restored data doesn't match checksum 
+rc=1
+ 68 65 6c ff 6f 0a
+rc=0
+zstd: n.zst: unsupported format 
+rc=1
+zstd: n.zst: unsupported format 
+rc=1
+zstd: n.zst: unsupported format 
+rc=1
+zstd: n.zst: unsupported format 
+rc=1
+zstd: can't stat nosuch : No such file or directory -- ignored 
+rc=1
+zstd: empty.zst: unexpected end of file 
+rc=1
+zstd: empty.zst: unexpected end of file 
+rc=1
+zstd: /*stdin*\: unknown header 
+rc=1
+zstd: /*stdin*\: unexpected end of file 
+rc=1
+zstd: /*stdin*\: unsupported format 
+rc=1
+== trailing
+zstd: tg.zst: unsupported format 
+rc=1
+zstd: tg.zst: unsupported format 
+hello
+rc=1
+hello
+hello
+rc=0
+zstd: tg.zst: unsupported format 
+2 files decompressed :     12 bytes total 
+rc=1
+== other formats
+hello
+hello
+hello
+rc=0
+h.gz                : 6 bytes 
+rc=0
+h
+h.gz
+h.lzma
+h.xz
+h.xz                : 6 bytes 
+rc=0
+hello
+hello
+hello
+== suffix rules
+zstd: a already exists; not overwritten  
+rc=1
+rc=0
+zstd: cc.ZST: unknown suffix (.zst/.tzst/.gz/.tgz/.lzma/.xz/.txz/.lz4/.tlz4 expected). Can't derive the output file name. Specify it with -o dstFileName. Ignoring.
+rc=1
+a
+a.zst
+b
+b.tar
+b.tzst
+b.zst
+back
+bad.zst
+c
+c.zst
+cc.ZST
+e
+e.zst
+empty.zst
+g
+good.zst
+h
+h.gz
+h.lzma
+h.xz
+n.zst
+o
+o.zst
+out.zst
+r
+r.zst
+rnd
+tg.zst
+trunc.zst
+two.zst
+v
+v.zst
+y
+z1.zst
+z2.zst
+z3.zst
+z4.zst
+z5.zst
+zm.zst
+zs.zst
+zstd: u.txt: unknown suffix (.zst/.tzst/.gz/.tgz/.lzma/.xz/.txz/.lz4/.tlz4 expected). Can't derive the output file name. Specify it with -o dstFileName. Ignoring.
+rc=1
+u.txt
+== already has suffix
+rc=0
+a2.zst
+a2.zst.zst
+rc=0
+b2.tzst
+b2.tzst.zst
+rc=0
+x2.zst
+== missing and directory
+zstd: can't stat nosuch : No such file or directory -- ignored 
+rc=1
+zstd: can't stat nosuch : No such file or directory -- ignored 
+rc=1
+zstd: nosuch: unknown suffix (.zst/.tzst/.gz/.tgz/.lzma/.xz/.txz/.lz4/.tlz4 expected). Can't derive the output file name. Specify it with -o dstFileName. Ignoring.
+rc=1
+zstd: can't stat nosuch : No such file or directory -- ignored 
+rc=1
+zstd: d is a directory -- ignored 
+rc=1
+zstd: d: unknown suffix (.zst/.tzst/.gz/.tgz/.lzma/.xz/.txz/.lz4/.tlz4 expected). Can't derive the output file name. Specify it with -o dstFileName. Ignoring.
+rc=1
+zstd: d is a directory -- ignored 
+rc=1
+== -r
+rc=0
+tree
+tree/a
+tree/a.zst
+tree/sub
+tree/sub/b
+tree/sub/b.zst
+rc=1
+zstd: tree/a: unknown suffix (.zst/.tzst/.gz/.tgz/.lzma/.xz/.txz/.lz4/.tlz4 expected). Can't derive the output file name. Specify it with -o dstFileName. Ignoring.
+zstd: tree/sub/b: unknown suffix (.zst/.tzst/.gz/.tgz/.lzma/.xz/.txz/.lz4/.tlz4 expected). Can't derive the output file name. Specify it with -o dstFileName. Ignoring.
+tree
+tree/a
+tree/a.zst
+tree/sub
+tree/sub/b
+tree/sub/b.zst
+== output dirs
+rc=0
+g.zst
+h.zst
+rc=0
+g.zst
+h
+h.zst
+rc=0
+mo
+mo/src
+mo/src/sub
+mo/src/sub/x.zst
+== --filelist
+rc=0
+g.zst
+h.zst
+zstd: error reading nolist 
+rc=1
+== --rm and -c
+rc=0
+q
+Note: src files are not removed when output is stdout 
+q :P% ( N B => N B, /*stdout*\) 
+== stdin and dash
+hi
+hi
+hi
+hello
+hello
+goodbye world
+zstd: /*stdin*\: unknown header 
+rc=1
+== -l
+Frames  Skips  Compressed  Uncompressed  Ratio  Check  Filename
+     1      0      19   B         6   B  0.316  XXH64  z1.zst
+rc=0
+Frames  Skips  Compressed  Uncompressed  Ratio  Check  Filename
+     1      0      19   B         6   B  0.316  XXH64  z1.zst
+     1      0      15   B         6   B  0.400   None  z2.zst
+     1      0      27   B        14   B  0.519  XXH64  z3.zst
+     1      0      13   B         0   B  0.000  XXH64  z4.zst
+     1      0      16   B                       XXH64  z5.zst
+     2      1      31   B         6   B  0.194  XXH64  zs.zst
+     2      0      46   B        20   B  0.435  XXH64  zm.zst
+----------------------------------------------------------------- 
+     9      1     167   B                              7 files
+rc=0
+z1.zst 
+# Zstandard Frames: 1
+DictID: 0
+Window Size: 6 B (6 B)
+Compressed Size: 19 B (19 B)
+Decompressed Size: 6 B (6 B)
+Ratio: 0.3158
+Check: XXH64 91bd8853
+
+zs.zst 
+# Zstandard Frames: 1
+# Skippable Frames: 1
+DictID: 0
+Window Size: 6 B (6 B)
+Compressed Size: 31 B (31 B)
+Decompressed Size: 6 B (6 B)
+Ratio: 0.1935
+Check: XXH64 91bd8853
+
+zm.zst 
+# Zstandard Frames: 2
+DictID: 0
+Window Size: 14 B (14 B)
+Compressed Size: 46 B (46 B)
+Decompressed Size: 20 B (20 B)
+Ratio: 0.4348
+Check: XXH64
+
+z5.zst 
+# Zstandard Frames: 1
+DictID: 0
+Window Size: 2.00 MiB (2097152 B)
+Compressed Size: 16 B (16 B)
+Check: XXH64 92503d34
+
+rc=0
+Frames  Skips  Compressed  Uncompressed  Ratio  Check  Filename
+     1      0      19   B         6   B  0.316  XXH64  z1.zst
+     1      0      16   B                       XXH64  z5.zst
+----------------------------------------------------------------- 
+     2      0      35   B                       XXH64  2 files
+rc=0
+Error: reached end of file with incomplete frame 
+Frames  Skips  Compressed  Uncompressed  Ratio  Check  Filename
+File "tg.zst" not compressed by zstd 
+rc=1
+Error: could not read checksum 
+Error while parsing "trunc.zst" 
+Frames  Skips  Compressed  Uncompressed  Ratio  Check  Filename
+     0      0      12   B         6   B  0.500  XXH64  trunc.zst
+rc=1
+Frames  Skips  Compressed  Uncompressed  Ratio  Check  Filename
+File "h" not compressed by zstd 
+rc=1
+Error : nosuch is not a file 
+Frames  Skips  Compressed  Uncompressed  Ratio  Check  Filename
+rc=1
+Error : d is not a file 
+Frames  Skips  Compressed  Uncompressed  Ratio  Check  Filename
+rc=1
+zstd: --list does not support reading from standard input 
+No files given 
+rc=1
+zstd: --list does not support reading from standard input 
+rc=1
+Frames  Skips  Compressed  Uncompressed  Ratio  Check  Filename
+     1      0      19   B         6   B  0.316  XXH64  z1.zst
+rc=0
+== levels
+hello
+rc=0
+Warning : compression level higher than max, reduced to 19 
+Warning : compression level higher than max, reduced to 22 
+hello
+hello
+hello
+hello
+zstd: error 11 : Parameter is out of bound 
+rc=11
+== environment
+hello
+Ignore environment variable setting ZSTD_CLEVEL=x: not a valid integer value 
+hello
+hello
+== --version
+*** Zstandard CLI (64-bit) v1.5.7, by Yann Collet ***
+*** Zstandard CLI (64-bit) v1.5.7, by Yann Collet ***
+== read-only input
+rc=0
+read-only
+rc=0
+read-only
+ro

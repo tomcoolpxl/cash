@@ -1,6 +1,6 @@
 ---
 names: gzip gunzip zcat
-see: cat crlf
+see: cat crlf bzip2 xz zstd
 ---
 ## Description
 

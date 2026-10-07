@@ -485,19 +485,6 @@ license accepted for `libbz2-rs-sys`. Order: the groundwork, the compressors, ta
 Passed over: uutils/tar (0.0.1, less than `tar.exe` does), `libzstd-rs-sys` (a
 prerelease without a Rust API), `xz2` and `liblzma` (C).
 
-## Phase 28. `cash-archive`'s codecs, the compressor driver, `bzip2`, `xz`, `zstd`
-
-1. **`codec`**: gzip (flate2), bzip2 (`bzip2` on `libbz2-rs-sys`), xz, lzma and lzip
-   (`lzma-rust2`), zstd (`ruzstd`, writing at its fast level); recognised by magic and by
-   suffix, concatenated streams, `-l`'s facts, typed errors; gzip's member code and its
-   `Input` reader moved in. TODO, later: `libzstd-rs-sys` once it has a Rust API.
-2. **The driver**: one in-place compress/decompress engine with a `Profile` per tool
-   (names and presets, options, defaults, suffixes, messages, exit statuses, `-l`); gzip
-   moved onto it first, its oracle unchanged.
-3. **`bzip2` `bunzip2` `bzcat`** (bzip2 1.0.8), **`xz` `unxz` `xzcat` `lzma` `unlzma`
-   `lzcat`** (XZ Utils 5.8), **`zstd` `unzstd` `zstdcat`** (zstd 1.5.7): options,
-   messages and statuses from WSL oracles; pages, `builtins.md`, `CARRIED`.
-
 ## Phase 29. `tar`
 
 cash's own `tar`, GNU tar 1.35's interface, messages and exit codes, on cash-archive's
@@ -574,6 +561,10 @@ cash-core's `Pattern` path flags and cash-sed's one-`s///` entry point (design 3
   `scoop\apps\cash`, which the window typing `scoop update` always does); only the notes
   are cash's. They now say the listed cash is that window; the bucket has them
   (pushed 2026-10-07).
+- **zstd compresses at ruzstd's fast level only** (phase 28, 2026-10-07): every level
+  `-1` to `-22` gives about zstd's `-1`, larger than zstd's default `-3`. When
+  `libzstd-rs-sys` (Trifecta Tech's port of libzstd) has a Rust API, the levels can be
+  real; until then the page says so.
 - **Ten oracle tests keep their own copies of the oracle helpers** (found 2026-10-07,
   phase 28): `oracle_dir`, `run_oracle_script`, `golden` and `with_divergence` are
   written out again in `gzip_builtin.rs`, `grep_builtin.rs`, `column_builtin.rs` and

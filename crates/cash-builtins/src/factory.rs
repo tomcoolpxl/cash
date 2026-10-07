@@ -387,6 +387,18 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
         builtin::<xz::LzcatCommand, SE>().with_substitution_files(),
     );
     m.insert(
+        "zstd".into(),
+        builtin::<zstd::ZstdCommand, SE>().with_substitution_files(),
+    );
+    m.insert(
+        "unzstd".into(),
+        builtin::<zstd::UnzstdCommand, SE>().with_substitution_files(),
+    );
+    m.insert(
+        "zstdcat".into(),
+        builtin::<zstd::ZstdcatCommand, SE>().with_substitution_files(),
+    );
+    m.insert(
         "coolfetch".into(),
         builtin::<coolfetch::CoolfetchCommand, SE>(),
     );

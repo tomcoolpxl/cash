@@ -33,6 +33,7 @@ Feature work follows the sequence below.
 | 20 | `grep`, `diff` and `cmp`: the standing rule reversed under "install cash, have everything" | **Active** (built 2026-10-06, for 1.7.0) | TODO.md phase 23; spec D76 |
 | 21 | `gzip`, `gunzip` and `zcat` in pure Rust | **Active** (built 2026-10-06, for 1.8.0) | TODO.md phase 24; spec D77 |
 | 22 | Compatibility corners: `/dev/tcp`, `command_not_found_handle`, kept `abbr`, kinder refusals, `getconf`, `locale` | **Active** (built 2026-10-06, for 1.8.0) | TODO.md phase 25; spec D77 |
+| 23 | Archive and compression tools on shared parts: `bzip2`, `xz`, `zstd` and their names, `tar`, `zip`/`unzip`/`zipinfo` | **Active** (the compressors built 2026-10-07; `tar` and zip to come) | [Design](research/archive-tools-design.md); TODO.md phases 29–30; spec D78 |
 | — | Found on the way (not planned items) | **Complete** | MSYS2 argument encoding (spec D52); `shopt winpaths` and bash-worded `cd` errors (D53); a `TERM` that no longer reaches the whole console (D21) |
 
 The authoritative feature order is therefore:

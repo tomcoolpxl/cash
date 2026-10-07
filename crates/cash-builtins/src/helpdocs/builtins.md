@@ -154,12 +154,15 @@ an entry or page names no builtin.
 - `unix2dos`: Convert LF line endings to CRLF.
 - `unlzma`: Uncompress `.lzma` files in place: `xz --format=lzma -d`.
 - `unxz`: Uncompress `.xz` files in place: `xz -d`.
+- `unzstd`: Uncompress `.zst` files: `zstd -d`.
 - `uuidgen`: Print a new UUID: random, time-based, or a hash of a name.
 - `xargs`: Build and run command lines from standard input.
 - `xxd`: Dump bytes in hex, or turn a hex dump back into bytes.
 - `xz`: Compress files to `.xz` in place, or uncompress or list them, with XZ Utils' options.
 - `xzcat`: Print `.xz` files uncompressed to standard output: `xz -dc`.
 - `zcat`: Print `.gz` files uncompressed to standard output: `gzip -dc`.
+- `zstd`: Compress files to `.zst`, or uncompress or list them, with zstd's options.
+- `zstdcat`: Print `.zst` files uncompressed to standard output: `zstd -dcf`.
 
 ## Coreutils written for Windows
 

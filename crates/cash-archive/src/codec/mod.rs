@@ -22,7 +22,95 @@ pub mod xz;
 pub mod zstd;
 
 use std::fmt;
-use std::io::{self, Read, Write};
+use std::io::{self, BufRead, Read, Write};
+
+/// Input that can be looked at ahead: as many bytes as are asked for, or as many as
+/// there are, before any is read.
+pub struct Lookahead<R> {
+    inner: R,
+    buffer: Vec<u8>,
+    /// Where the bytes not yet read start in `buffer`.
+    at: usize,
+}
+
+impl<R: Read> Lookahead<R> {
+    /// Input from `inner`.
+    pub const fn new(inner: R) -> Self {
+        Self {
+            inner,
+            buffer: Vec::new(),
+            at: 0,
+        }
+    }
+
+    /// The next `n` bytes, or fewer at the end of the input, still to be read.
+    ///
+    /// # Errors
+    ///
+    /// When reading fails.
+    pub fn peek(&mut self, n: usize) -> io::Result<&[u8]> {
+        while self.buffer.len() - self.at < n {
+            if self.at > 0 {
+                self.buffer.drain(..self.at);
+                self.at = 0;
+            }
+            let had = self.buffer.len();
+            self.buffer.resize(had + (64 << 10), 0);
+            let got = match self
+                .inner
+                .read(self.buffer.get_mut(had..).unwrap_or_default())
+            {
+                Ok(got) => got,
+                Err(e) if e.kind() == io::ErrorKind::Interrupted => 0,
+                Err(e) => {
+                    self.buffer.truncate(had);
+                    return Err(e);
+                }
+            };
+            self.buffer.truncate(had + got);
+            if got == 0 {
+                break;
+            }
+        }
+        Ok(self.buffer.get(self.at..).unwrap_or_default())
+    }
+
+    /// The reader, with what was looked at and not read lost.
+    pub fn into_inner(self) -> R {
+        self.inner
+    }
+}
+
+impl<R: Read> Read for Lookahead<R> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        if self.at < self.buffer.len() {
+            let available = self.buffer.get(self.at..).unwrap_or_default();
+            let n = available.len().min(buf.len());
+            if let (Some(to), Some(from)) = (buf.get_mut(..n), available.get(..n)) {
+                to.copy_from_slice(from);
+            }
+            self.at += n;
+            return Ok(n);
+        }
+        self.inner.read(buf)
+    }
+}
+
+impl<R: Read> BufRead for Lookahead<R> {
+    fn fill_buf(&mut self) -> io::Result<&[u8]> {
+        if self.at >= self.buffer.len() {
+            self.buffer.clear();
+            self.at = 0;
+            self.peek(1)
+        } else {
+            Ok(self.buffer.get(self.at..).unwrap_or_default())
+        }
+    }
+
+    fn consume(&mut self, amount: usize) {
+        self.at = (self.at + amount).min(self.buffer.len());
+    }
+}
 
 /// A compression format.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]

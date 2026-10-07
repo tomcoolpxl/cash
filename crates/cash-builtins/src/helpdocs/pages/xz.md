@@ -1,6 +1,6 @@
 ---
 names: xz unxz xzcat lzma unlzma lzcat
-see: gzip bzip2
+see: gzip bzip2 zstd
 ---
 ## Description
 

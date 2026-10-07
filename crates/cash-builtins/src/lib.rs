@@ -103,6 +103,9 @@ mod watch;
 // cash: `xz`, `unxz`, `xzcat`, `lzma`, `unlzma` and `lzcat`, XZ Utils 5.8's interface on
 // lzma-rust2; a clean Windows machine has none.
 mod xz;
+// cash: `zstd`, `unzstd` and `zstdcat`, zstd 1.5.7's interface on ruzstd; a clean Windows
+// machine has none.
+mod zstd;
 
 // cash (D48): one pager behind both `less` and `more`. `less` is not coreutils, and the
 // bundled `more` corrupted a pipe.
