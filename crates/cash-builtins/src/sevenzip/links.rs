@@ -36,13 +36,14 @@ struct LinkInfo {
     hard: bool,
     /// A symbolic link relative to its own folder; else from the output folder.
     relative: bool,
+    junction: bool,
     path: String,
 }
 
 impl LinkInfo {
     fn of(link: &Link) -> Self {
         let mut path = link.path.replace('/', "\\");
-        let mut relative = !link.hard;
+        let mut relative = link.relative && !link.hard;
         if let Some(rest) = path.strip_prefix(r"\??\") {
             relative = false;
             path = match rest.strip_prefix("UNC\\") {
@@ -62,6 +63,7 @@ impl LinkInfo {
         Self {
             hard: link.hard,
             relative,
+            junction: link.junction,
             path,
         }
     }
@@ -300,8 +302,9 @@ fn make_one(post: &PostLink, out_dir: &Path, level: u32) -> Result<(), String> {
         }
         return Ok(());
     }
-    let data = cash_win32::reparse::link_data(&target.replace('/', "\\"), false);
-    cash_win32::reparse::set(&post.path, post.is_dir, &data).map_err(|e| {
+    let data = cash_win32::reparse::link_data(&target.replace('/', "\\"), link.junction);
+    let is_dir = post.is_dir || link.junction;
+    cash_win32::reparse::set(&post.path, is_dir, &data).map_err(|e| {
         format!(
             "Cannot create symbolic link : {} : {}",
             text::system_message(&e),
@@ -348,6 +351,8 @@ mod tests {
         let of = |hard, path: &str| {
             let info = LinkInfo::of(&Link {
                 hard,
+                relative: !hard,
+                junction: false,
                 path: path.to_owned(),
             });
             (info.relative, info.path)

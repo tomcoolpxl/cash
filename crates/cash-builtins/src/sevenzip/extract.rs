@@ -777,7 +777,49 @@ fn extract_items<SE: cash_core::ShellExtensions>(
                     let zone = (!zone.is_empty()
                         && (options.zone == Zone::All || is_office(&path)))
                     .then_some(zone);
-                    write_file(item, &path, data, zone)
+                    match data_link_kind(item) {
+                        None => write_file(item, &path, data, zone),
+                        // is_SymLink_in_Data: the data read whole, then the link it
+                        // names made at the end; data that names none is written as
+                        // it is, and said so.
+                        Some(unix) => {
+                            let mut bytes = Vec::new();
+                            let _ = data.read_to_end(&mut bytes);
+                            if let Some(link) = archive::Link::of_data(&bytes, unix) {
+                                if options.symlinks != Some(false) {
+                                    let (_, relative) = target(item, options.path_keep);
+                                    let shown = format!("{base}{relative}");
+                                    if let Err(message) = links::placeholder(&path, &shown) {
+                                        errors += 1;
+                                        console.flush_so();
+                                        console.se(&format!("ERROR: {message}\n"));
+                                        console.flush_se();
+                                    } else {
+                                        post_links.push(links::PostLink {
+                                            item_path: item.path.clone(),
+                                            parts: relative.split('/').map(str::to_owned).collect(),
+                                            is_dir: false,
+                                            link,
+                                            path,
+                                            shown,
+                                            modified: item.modified,
+                                        });
+                                    }
+                                }
+                                Ok(())
+                            } else {
+                                errors += 1;
+                                console.flush_so();
+                                console.se(&format!(
+                                    "ERROR: Incorrect reparse stream : {}\n",
+                                    item.path
+                                ));
+                                console.flush_se();
+                                let mut kept = Bytes(io::Cursor::new(bytes));
+                                write_file(item, &path, &mut kept, zone)
+                            }
+                        }
+                    }
                 }
                 Ok(None) => Ok(()),
                 Err(e) => Err(e),
@@ -852,6 +894,43 @@ fn extract_items<SE: cash_core::ShellExtensions>(
         );
     }
     Ok(errors)
+}
+
+/// `is_SymLink_in_Data`: an item under 4 KiB whose data 7-Zip takes for a link, a Unix
+/// symbolic link's path (`true`) or Windows reparse data (the reparse attribute).
+fn data_link_kind(item: &Item) -> Option<bool> {
+    item.size.filter(|&size| size != 0 && size < 1 << 12)?;
+    let attrib = item.attrib?;
+    if attrib & 0x8000 != 0 && (attrib >> 16) & 0o170_000 == 0o120_000 {
+        Some(true)
+    } else if attrib & 0x400 != 0 {
+        Some(false)
+    } else {
+        None
+    }
+}
+
+/// An item's data already read, written as a file's.
+struct Bytes(io::Cursor<Vec<u8>>);
+
+impl Read for Bytes {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.0.read(buf)
+    }
+}
+
+impl Data for Bytes {
+    fn finish(&mut self) -> Result<(), Problem> {
+        Ok(())
+    }
+
+    fn encrypted(&self) -> bool {
+        false
+    }
+
+    fn unpacked(&self) -> Option<u64> {
+        None
+    }
 }
 
 /// An item's data counted on the progress line as it is read (`SetCompleted`).

@@ -241,7 +241,34 @@ pub(super) struct Item {
 pub(super) struct Link {
     /// A hard link, its path from the archive's root; else a symbolic link.
     pub(super) hard: bool,
+    /// A symbolic link whose path is from its own folder (a tar's, a Unix one, a
+    /// Windows one so flagged); else from the output folder.
+    pub(super) relative: bool,
+    /// A junction rather than a symbolic link (Windows reparse data).
+    pub(super) junction: bool,
     pub(super) path: String,
+}
+
+impl Link {
+    /// A link kept in an item's data (`is_SymLink_in_Data`): a Unix symbolic link's
+    /// path, or Windows reparse data; `None` for data that is neither.
+    pub(super) fn of_data(data: &[u8], unix: bool) -> Option<Self> {
+        if unix {
+            return (!data.is_empty()).then(|| Self {
+                hard: false,
+                relative: true,
+                junction: false,
+                path: String::from_utf8_lossy(data).into_owned(),
+            });
+        }
+        let target = cash_win32::reparse::target(data)?;
+        Some(Self {
+            hard: false,
+            relative: target.relative,
+            junction: target.junction,
+            path: target.path,
+        })
+    }
 }
 
 /// Why an archive did not open, in 7-Zip's kinds.

@@ -551,12 +551,14 @@ same day: 7z and the formats cash has, Windows 7-Zip's words with LF and `/`,
    checks and words, `-snl-` leaving symbolic links out; `-sns`/`-sni` "Not implemented"
    when writing, nothing when extracting (no format here has streams). Also fixed: the
    overwrite question now comes before the item's `-` line, a skipped file shows as
-   skipped, and a break still reports "Sub items Errors". Not done, and not testable on
-   a machine without the right to make symbolic links: 7-Zip makes a 7z's or zip's item
-   with the reparse attribute and data under 4 KiB a link (`is_SymLink_in_Data`,
-   "Incorrect reparse stream"), and a zip's Unix symbolic link (mode `S_IFLNK`) one;
-   cash writes their data as a file. A made symbolic link does not get the item's times
-   (7-Zip's `SetLinkFileTime`). A file answered "No" or skipped: 7-Zip's tar handler
+   skipped, and a break still reports "Sub items Errors". 7-Zip's links kept in an
+   item's data (`is_SymLink_in_Data`) done the same day: a zip's Unix symbolic link
+   (mode `S_IFLNK`) and an item with the reparse attribute, under 4 KiB, read whole and
+   made a link at the end, or written as they are with "Incorrect reparse stream" (the
+   oracle checks a Unix zip's links 7-Zip refuses; a symbolic link actually made needs
+   the right this machine lacks, so it is checked only by `cash-win32`'s test, which
+   takes either outcome). A made symbolic link does not get the item's times (7-Zip's
+   `SetLinkFileTime`). A file answered "No" or skipped: 7-Zip's tar handler
    neither shows nor counts it, its 7z handler shows it at `-bb2` and counts it; cash
    does the latter for every format. `h` on hash files (7-Zip 23's `-thash`) is not
    taken; 7-Zip's split handler also reads `NAME.aa`, `NAME.ab` volumes, cash's only

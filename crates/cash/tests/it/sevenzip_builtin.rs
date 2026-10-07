@@ -25,7 +25,7 @@ fn seven_z_matches_7_zip_26_03() {
         &golden("7z_cases"),
         "7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03\n",
         "7-Zip (cash) : 7-Zip 26.03's options, in pure Rust\n",
-        176,
+        179,
     );
     assert_eq!(run_oracle_script("7z_cases"), expected);
 }

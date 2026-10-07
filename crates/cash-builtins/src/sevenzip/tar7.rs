@@ -1250,6 +1250,8 @@ fn listed_item(item: &TarItem) -> Item {
     if (item.is_symlink() || item.is_hardlink()) && !item.link_name.is_empty() {
         listed.link = Some(super::archive::Link {
             hard: item.is_hardlink(),
+            relative: !item.is_hardlink(),
+            junction: false,
             path: text(&item.link_name),
         });
     }

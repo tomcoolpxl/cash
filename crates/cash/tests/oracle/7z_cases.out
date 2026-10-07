@@ -4895,6 +4895,90 @@ Command Line Error:
 Unsupported switch postfix -snld
 x
 rc=7
+Path = ulink.zip
+Path = d/a.txt
+Size = 6
+Attributes =  -rw-r--r--
+Host OS = Unix
+Path = d/up
+Size = 7
+Attributes =  lrwxrwxrwx
+Host OS = Unix
+Path = d/lvl
+Size = 2
+Attributes =  lrwxrwxrwx
+Host OS = Unix
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 297 bytes (1 KiB)
+
+Extracting archive: ulink.zip
+--
+Path = ulink.zip
+Type = zip
+Physical Size = 297
+
+- d/a.txt
+- d/up
+- d/lvl
+ERROR: Dangerous link path was ignored : d/up : ../../x
+ERROR: Dangerous link path was ignored : d/lvl : ..
+
+Sub items Errors: 2
+
+Archives with Errors: 1
+
+Sub items Errors: 2
+rc=2
+a.txt
+lvl
+up
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 297 bytes (1 KiB)
+
+Extracting archive: ulink.zip
+--
+Path = ulink.zip
+Type = zip
+Physical Size = 297
+
+- d/a.txt
+- d/up
+- d/lvl
+Everything is Ok
+
+Files: 3
+Size:       15
+Compressed: 297
+rc=0
+a.txt
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 297 bytes (1 KiB)
+
+Testing archive: ulink.zip
+--
+Path = ulink.zip
+Type = zip
+Physical Size = 297
+
+T d/a.txt
+T d/up
+T d/lvl
+Everything is Ok
+
+Files: 3
+Size:       15
+Compressed: 297
+rc=0
 == archive names, -spe, -snz
 
 7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03

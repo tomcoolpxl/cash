@@ -362,8 +362,10 @@ Built against GNU tar 1.35's oracle, the plan moved in four places:
   `--`, `@listfile`, `-i`/`-x`/`-ai`/`-ax` with `r`, `m`, `w` and `!`), its update
   matrix (`-u` with `p` `q` `r` `x` `y` `z` `w` and `!newArchive`), the overwrite
   question and `-ao`, `-o`, `-p` (asked at the console when needed), `-r`, `-y`, `-so`,
-  `-si`, `-sdel`, `-stl`, `-spf`, `-spe`, `-ssc`, `-w`, `-bb`, `-bs`, `-bd`, `-bt`, the
-  progress line on a console, `-slt`.
+  `-si`, `-sdel`, `-stl`, `-spf`, `-spe`, `-snz`, `-ssc`, `-w`, `-bb`, `-bs`, `-bd`,
+  `-bt`, the progress line on a console, `-slt`. Archives are found by the scan `a`
+  uses, folders entered. `i` lists what cash has, shorter than 7-Zip's list of formats
+  and codecs cash has not.
 - **Oracle**: `tests/oracle/7z_cases.sh`, made by Scoop's 7-Zip 26.03 under a cash that
   has no `7z` builtin, CRLF and `\` turned to LF and `/`. Archives made with `-mx0
   -mhc=off` are 7-Zip's byte for byte; compressed sizes are compared apart, since the
