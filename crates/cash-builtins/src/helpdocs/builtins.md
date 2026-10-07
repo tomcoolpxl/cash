@@ -145,14 +145,20 @@ an entry or page names no builtin.
 - `hexdump`: Dump bytes in hex, octal, decimal or text, or in a format of your own.
 - `iconv`: Convert text between character sets, through Windows' code pages.
 - `less`: Page through text.
+- `lzcat`: Print `.lzma` files uncompressed to standard output: `xz --format=lzma -dc`.
+- `lzma`: Compress files to `.lzma` in place, or uncompress them: `xz --format=lzma`.
 - `more`: Page through text, with `more`'s defaults.
 - `rev`: Reverse the characters of each line.
 - `sed`: Edit a stream of text with a script: substitute, delete, insert.
 - `tree`: Show a folder hierarchy as a tree.
 - `unix2dos`: Convert LF line endings to CRLF.
+- `unlzma`: Uncompress `.lzma` files in place: `xz --format=lzma -d`.
+- `unxz`: Uncompress `.xz` files in place: `xz -d`.
 - `uuidgen`: Print a new UUID: random, time-based, or a hash of a name.
 - `xargs`: Build and run command lines from standard input.
 - `xxd`: Dump bytes in hex, or turn a hex dump back into bytes.
+- `xz`: Compress files to `.xz` in place, or uncompress or list them, with XZ Utils' options.
+- `xzcat`: Print `.xz` files uncompressed to standard output: `xz -dc`.
 - `zcat`: Print `.gz` files uncompressed to standard output: `gzip -dc`.
 
 ## Coreutils written for Windows

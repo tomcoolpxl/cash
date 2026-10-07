@@ -12,11 +12,13 @@
 //! only (about zstd's level 1), as one frame for each [`zstd::FRAME`] bytes.
 //!
 //! [`bzip2`] reads bzip2 streams one at a time, as the `bzip2` command needs them.
+//! [`xz`] tells .xz, .lzma and .lz apart and reads a .xz index, as `xz` needs them.
 //! [`gzip`] holds the gzip member reader and writer the `gzip` command needs, its
 //! header's fields and `-l`'s numbers.
 
 pub mod bzip2;
 pub mod gzip;
+pub mod xz;
 pub mod zstd;
 
 use std::fmt;

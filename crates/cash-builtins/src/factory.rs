@@ -363,6 +363,30 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
         builtin::<bzip2::BzcatCommand, SE>().with_substitution_files(),
     );
     m.insert(
+        "xz".into(),
+        builtin::<xz::XzCommand, SE>().with_substitution_files(),
+    );
+    m.insert(
+        "unxz".into(),
+        builtin::<xz::UnxzCommand, SE>().with_substitution_files(),
+    );
+    m.insert(
+        "xzcat".into(),
+        builtin::<xz::XzcatCommand, SE>().with_substitution_files(),
+    );
+    m.insert(
+        "lzma".into(),
+        builtin::<xz::LzmaCommand, SE>().with_substitution_files(),
+    );
+    m.insert(
+        "unlzma".into(),
+        builtin::<xz::UnlzmaCommand, SE>().with_substitution_files(),
+    );
+    m.insert(
+        "lzcat".into(),
+        builtin::<xz::LzcatCommand, SE>().with_substitution_files(),
+    );
+    m.insert(
         "coolfetch".into(),
         builtin::<coolfetch::CoolfetchCommand, SE>(),
     );

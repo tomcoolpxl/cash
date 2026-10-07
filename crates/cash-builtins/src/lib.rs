@@ -100,6 +100,9 @@ mod coolfetch;
 mod top;
 // cash: `watch`, procps-ng's, which Windows and Git for Windows both lack.
 mod watch;
+// cash: `xz`, `unxz`, `xzcat`, `lzma`, `unlzma` and `lzcat`, XZ Utils 5.8's interface on
+// lzma-rust2; a clean Windows machine has none.
+mod xz;
 
 // cash (D48): one pager behind both `less` and `more`. `less` is not coreutils, and the
 // bundled `more` corrupted a pipe.

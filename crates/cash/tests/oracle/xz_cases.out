@@ -1,0 +1,560 @@
+== --help
+Usage: xz [OPTION]... [FILE]...
+Compress or decompress FILEs in the .xz format.
+
+Mandatory arguments to long options are mandatory for short options too.
+
+  -z, --compress      force compression
+  -d, --decompress    force decompression
+  -t, --test          test compressed file integrity
+  -l, --list          list information about .xz files
+  -k, --keep          keep (don't delete) input files
+  -f, --force         force overwrite of output file and (de)compress links
+  -c, --stdout        write to standard output and don't delete input files
+rc=0
+Usage: unxz [OPTION]... [FILE]...
+Usage: xzcat [OPTION]... [FILE]...
+Usage: lzma [OPTION]... [FILE]...
+== bad options
+xz: invalid option -- 'Y'
+xz: Try 'xz --help' for more information.
+rc=1
+h
+xz: unrecognized option '--foo'
+xz: Try 'xz --help' for more information.
+rc=1
+xz: option '--de' is ambiguous; possibilities: '--decompress' '--delta'
+xz: Try 'xz --help' for more information.
+rc=1
+hello
+xz: foo: Unknown file format type
+rc=1
+xz: foo: Unsupported integrity check type
+rc=1
+xz: x: Value is not a non-negative decimal integer
+rc=1
+== formats
+ fd 37 7a 58 5a 00
+ fd 37 7a 58 5a 00
+ 5d 00 00
+ 5d 00 00
+xz: Compression of lzip files (.lz) is not supported
+xz: Using a preset in raw mode is discouraged.
+xz: The exact options of the presets may vary between software versions.
+rc=0
+xz: Using a preset in raw mode is discouraged.
+xz: The exact options of the presets may vary between software versions.
+hello
+rc=0
+hello
+rc=0
+== round trips
+level 0 ok
+level 1 ok
+level 6 ok
+level 9 ok
+extreme ok
+y ok
+y same
+hello
+hello
+hello
+xz: Compression of lzip files (.lz) is not supported
+xz: (stdin): File format not recognized
+hello
+== replace in place
+rc=0
+r.xz
+raw.bin
+rnd
+1577934245 r.xz
+rc=0
+r
+raw.bin
+rnd
+1577934245 r
+hello
+r2.lzma
+r2
+xz: Compression of lzip files (.lz) is not supported
+r3
+xz: r3.lz: No such file or directory
+r3
+== -v
+ v : N / 6 B R \n
+ v . x z : N / 6 B R \n
+ t . x z : N / 6 B R \n
+rc=0
+ y v : N / 2 9 3 . 0 K i
+ B R \n
+ y v . x z : N / 2 9 3 . 0
+ K i B R \n
+== -k and -c
+rc=0
+k
+k.xz
+xz: k: File exists
+rc=1
+rc=0
+k
+k.xz
+k
+k.xz
+kc.xz
+hello
+kc.xz
+== unxz and xzcat
+hello
+rc=0
+z.xz
+rc=0
+z2
+hello
+rc=0
+xzcat: h: File format not recognized
+rc=1
+unxz: h: File format not recognized
+rc=1
+xzcat: nosuch: No such file or directory
+rc=1
+rc=0
+z
+z.xz
+z2
+hello
+hello
+xz: h: File format not recognized
+hello
+rc=1
+lzcat: h: File format not recognized
+rc=1
+hello
+rc=0
+== -f and overwrite
+xz: o.xz: File exists
+rc=1
+xz: o.xz: File exists
+rc=1
+o
+o.xz
+rc=0
+o.xz
+xz: o: File exists
+rc=1
+rc=0
+o
+== -t on good and corrupt
+rc=0
+xz: trunc.xz: Unexpected end of input
+rc=1
+xz: trunc.xz: Unexpected end of input
+rc=1
+trunc.xz
+xz: trunc.xz: Unexpected end of input
+rc=0
+xz: bad.xz: Compressed data is corrupt
+rc=1
+xz: bad.xz: Compressed data is corrupt
+rc=1
+bad.xz
+xz: n.xz: File format not recognized
+rc=1
+xz: n.xz: File format not recognized
+rc=1
+n.xz
+xz: n.xz: File format not recognized
+rc=1
+xz: n.xz: File format not recognized
+rc=1
+xz: bad.xz: Compressed data is corrupt
+rc=1
+xz: nosuch: No such file or directory
+rc=1
+xz: empty.xz: File format not recognized
+rc=1
+xz: empty.xz: File format not recognized
+rc=1
+empty.xz
+xz: hdr.xz: File format not recognized
+rc=1
+xz: (stdin): File format not recognized
+rc=1
+xz: (stdin): File format not recognized
+rc=1
+xz: n.xz: File format not recognized
+rc=1
+rc=1
+== trailing
+xz: tg.xz: Unexpected end of input
+rc=1
+hello
+xz: tg.xz: Unexpected end of input
+rc=1
+xz: tg.xz: Unexpected end of input
+rc=1
+tg.xz
+hello
+rc=0
+hello
+hello
+rc=0
+hello
+rc=0
+== suffix rules
+rc=0
+rc=0
+xz: c.XZ: Filename has an unknown suffix, skipping
+rc=2
+rc=0
+rc=0
+rc=0
+a
+b.tar
+bad.xz
+c.XZ
+d
+e
+e2.tar
+empty.xz
+f
+g
+good.xz
+h
+hdr.xz
+k
+k.xz
+kc.xz
+n.xz
+o
+r
+r2
+r3
+raw.bin
+rnd
+t.xz
+tg.xz
+trunc.xz
+two.xz
+tz.xz
+v
+xa.xz
+xb.xz
+xc.xz
+xe.xz
+xl.lzma
+xm.xz
+xn.xz
+xs.xz
+y
+yv
+z
+z.xz
+z2
+xz: u.txt: Filename has an unknown suffix, skipping
+rc=2
+u.txt
+hello
+rc=0
+rc=0
+s
+rc=0
+h.suf
+hdr.xz
+h
+hdr.xz
+xz: .xz: Filename has an unknown suffix, skipping
+rc=2
+.xz
+== already has suffix
+xz: a2.xz: File already has '.xz' suffix, skipping
+rc=2
+rc=2
+xz: a2.xz: File already has '.xz' suffix, skipping
+rc=2
+a2.xz
+xz: b2.txz: File already has '.txz' suffix, skipping
+rc=2
+lzma: c2.lzma: File already has '.lzma' suffix, skipping
+rc=2
+b2.txz
+c2.lzma
+== missing and directory
+xz: nosuch: No such file or directory
+rc=1
+xz: nosuch: No such file or directory
+rc=1
+xz: nosuch: No such file or directory
+rc=1
+xz: nosuch: No such file or directory
+rc=1
+xz: nosuch: No such file or directory
+rc=1
+h.xz
+hdr.xz
+xz: dd1: Is a directory, skipping
+rc=2
+xz: dd1: Is a directory, skipping
+rc=2
+xz: dd1: Is a directory, skipping
+rc=2
+xz: dd1: Is a directory, skipping
+rc=2
+xz: dd1: Is a directory, skipping
+rc=2
+h.xz
+hdr.xz
+== hard links
+xz: l1: Input file has more than one hard link, skipping
+rc=2
+rc=2
+hello
+rc=0
+rc=0
+l1.xz
+l2
+== stdin and dash
+hi
+hi
+hi
+hello
+hi
+hello
+goodbye world
+xz: (stdin): File format not recognized
+rc=1
+== -l
+Strms  Blocks   Compressed Uncompressed  Ratio  Check   Filename
+    1       1         N B          N B    ---  CRC64   l.xz
+rc=0
+xz: h: Too small to be a valid .xz file
+rc=1
+xz: nosuch: No such file or directory
+rc=1
+xz: --list does not support reading from standard input
+rc=1
+== -q and warnings
+xz: nosuch: No such file or directory
+rc=1
+rc=1
+== environment
+300000
+xz: unrecognized option '--foo'
+xz: Try 'xz --help' for more information.
+rc=1
+== XZ Utils' files
+hello
+hello
+hello
+hello
+hello
+hello
+hello
+hello
+rc=0
+rc=0
+ x a . x z : 7 2 B / 6
+ B > 9 . 9 9 9 \n
+ x m . x z : 1 4 8 B / 1
+ 2 B > 9 . 9 9 9 \n
+== -l of XZ Utils' files
+Strms  Blocks   Compressed Uncompressed  Ratio  Check   Filename
+    1       1         72 B          6 B    ---  CRC64   xa.xz
+rc=0
+Strms  Blocks   Compressed Uncompressed  Ratio  Check   Filename
+    1       1         72 B          6 B    ---  CRC64   xa.xz
+    1       1         64 B          6 B    ---  CRC64   xb.xz
+    1       1         96 B          6 B    ---  SHA-256 xs.xz
+    1       1         68 B          6 B    ---  CRC32   xc.xz
+    1       1         64 B          6 B    ---  None    xn.xz
+    1       0         32 B          0 B    ---  CRC64   xe.xz
+    2       2        148 B         12 B    ---  CRC64   xm.xz
+-------------------------------------------------------------------------------
+    8       7        544 B         42 B    ---  None,CRC32,CRC64,SHA-256 7 files
+rc=0
+xa.xz (1/1)
+  Streams:           1
+  Blocks:            1
+  Compressed size:   72 B
+  Uncompressed size: 6 B
+  Ratio:             ---
+  Check:             CRC64
+  Stream Padding:    0 B
+  Streams:
+    Stream    Blocks      CompOffset    UncompOffset        CompSize      UncompSize  Ratio  Check      Padding
+         1         1               0               0              72               6    ---  CRC64            0
+  Blocks:
+    Stream     Block      CompOffset    UncompOffset       TotalSize      UncompSize  Ratio  Check
+         1         1              12               0              40               6  6.667  CRC64
+rc=0
+xa.xz (1/2)
+  Streams:           1
+  Blocks:            1
+  Compressed size:   72 B
+  Uncompressed size: 6 B
+  Ratio:             ---
+  Check:             CRC64
+  Stream Padding:    0 B
+  Streams:
+    Stream    Blocks      CompOffset    UncompOffset        CompSize      UncompSize  Ratio  Check      Padding
+         1         1               0               0              72               6    ---  CRC64            0
+  Blocks:
+    Stream     Block      CompOffset    UncompOffset       TotalSize      UncompSize  Ratio  Check
+         1         1              12               0              40               6  6.667  CRC64
+
+xb.xz (2/2)
+  Streams:           1
+  Blocks:            1
+  Compressed size:   64 B
+  Uncompressed size: 6 B
+  Ratio:             ---
+  Check:             CRC64
+  Stream Padding:    0 B
+  Streams:
+    Stream    Blocks      CompOffset    UncompOffset        CompSize      UncompSize  Ratio  Check      Padding
+         1         1               0               0              64               6    ---  CRC64            0
+  Blocks:
+    Stream     Block      CompOffset    UncompOffset       TotalSize      UncompSize  Ratio  Check
+         1         1              12               0              32               6  5.333  CRC64
+
+Totals:
+  Number of files:   2
+  Streams:           2
+  Blocks:            2
+  Compressed size:   136 B
+  Uncompressed size: 12 B
+  Ratio:             ---
+  Check:             CRC64
+  Stream Padding:    0 B
+rc=0
+xm.xz (1/2)
+  Streams:           2
+  Blocks:            2
+  Compressed size:   148 B
+  Uncompressed size: 12 B
+  Ratio:             ---
+  Check:             CRC64
+  Stream Padding:    12 B
+  Streams:
+    Stream    Blocks      CompOffset    UncompOffset        CompSize      UncompSize  Ratio  Check      Padding
+         1         1               0               0              72               6    ---  CRC64            4
+         2         1              76               6              64               6    ---  CRC64            8
+  Blocks:
+    Stream     Block      CompOffset    UncompOffset       TotalSize      UncompSize  Ratio  Check
+         1         1              12               0              40               6  6.667  CRC64
+         2         1              88               6              32               6  5.333  CRC64
+
+xe.xz (2/2)
+  Streams:           1
+  Blocks:            0
+  Compressed size:   32 B
+  Uncompressed size: 0 B
+  Ratio:             ---
+  Check:             CRC64
+  Stream Padding:    0 B
+  Streams:
+    Stream    Blocks      CompOffset    UncompOffset        CompSize      UncompSize  Ratio  Check      Padding
+         1         0               0               0              32               0    ---  CRC64            0
+
+Totals:
+  Number of files:   2
+  Streams:           3
+  Blocks:            2
+  Compressed size:   180 B
+  Uncompressed size: 12 B
+  Ratio:             ---
+  Check:             CRC64
+  Stream Padding:    12 B
+rc=0
+name	xa.xz
+file	1	1	72	6	---	CRC64	0
+totals	1	1	72	6	---	CRC64	0	1
+rc=0
+name	xa.xz
+file	1	1	72	6	---	CRC64	0
+name	xb.xz
+file	1	1	64	6	---	CRC64	0
+totals	2	2	136	12	---	CRC64	0	2
+rc=0
+name	xm.xz
+file	2	2	148	12	---	CRC64	12
+stream	1	1	0	0	72	6	---	CRC64	4
+stream	2	1	76	6	64	6	---	CRC64	8
+block	1	1	1	12	0	40	6	6.667	CRC64
+block	2	1	2	88	6	32	6	5.333	CRC64
+totals	2	2	148	12	---	CRC64	12	1
+rc=0
+name	xs.xz
+file	1	1	96	6	---	SHA-256	0
+name	xc.xz
+file	1	1	68	6	---	CRC32	0
+totals	2	2	164	12	---	CRC32,SHA-256	0	2
+xz: junk.xz: File format not recognized
+rc=1
+xz: junk.xz: File format not recognized
+Strms  Blocks   Compressed Uncompressed  Ratio  Check   Filename
+    1       1         72 B          6 B    ---  CRC64   xa.xz
+    1       1         72 B          6 B    ---  CRC64   xa.xz
+-------------------------------------------------------------------------------
+    2       2        144 B         12 B    ---  CRC64   2 files
+rc=1
+xz: cut.xz: Compressed data is corrupt
+rc=1
+xz: zero.xz: File is empty
+rc=1
+xz: ldir: Is a directory, skipping
+rc=2
+xz: --list works only on .xz files (--format=xz or --format=auto)
+xz: Try 'lzmainfo' with .lzma files.
+rc=1
+xz: --list works only on .xz files (--format=xz or --format=auto)
+rc=1
+lzma: --list works only on .xz files (--format=xz or --format=auto)
+lzma: Try 'lzmainfo' with .lzma files.
+rc=1
+xz: nosuch: No such file or directory
+rc=1
+== --files
+hello
+hello
+rc=0
+hello
+hello
+rc=0
+hello
+xz: (stdin): Unexpected end of input when reading filenames
+rc=1
+== values
+xz: x: Value is not a non-negative decimal integer
+rc=1
+xz: -1: Value is not a non-negative decimal integer
+rc=1
+xz: Value of the option 'threads' must be in the range [0, 16384]
+rc=1
+hello
+hello
+hello
+xz: X: Invalid multiplier suffix
+xz: Valid suffixes are 'KiB' (2^10), 'MiB' (2^20), and 'GiB' (2^30).
+rc=1
+xz: crc16: Unsupported integrity check type
+rc=1
+xz: : Invalid filename suffix
+rc=1
+hello
+xz: Value of the option 'memlimit%' must be in the range [1, 100]
+rc=1
+hello
+xz: x: Value is not a non-negative decimal integer
+rc=1
+== --version
+xz (XZ Utils) 5.8.3
+xz (XZ Utils) 5.8.3
+xz (XZ Utils) 5.8.3
+XZ_VERSION=50080032
+LIBLZMA_VERSION=50080032
+== read-only input
+rc=0
+read-only
+rc=0
+read-only
+ro
