@@ -358,7 +358,15 @@ fn run_to_code<SE: cash_core::ShellExtensions>(
         context,
         zone: Zone::of_shell(context.shell),
     };
-    match dispatch(&options, &env, console) {
+    let started = options.show_time.then(Started::now);
+    let result = dispatch(&options, &env, console);
+    // -bt: before the error a failed command ends in.
+    if let Some(started) = &started
+        && !matches!(result, Err(Stop::CommandLine(_)))
+    {
+        console.so(&started.report());
+    }
+    match result {
         Ok(code) => code,
         Err(Stop::Break) => {
             console.print_error("Break signaled");
@@ -375,6 +383,75 @@ fn run_to_code<SE: cash_core::ShellExtensions>(
             code::FATAL
         }
         Err(Stop::CommandLine(error)) => command_line_error(console, &error),
+    }
+}
+
+/// Where `-bt` counts from: the process's use of the machine, and the time, when the
+/// command began.
+struct Started {
+    usage: cash_win32::process::OwnUsage,
+    at: u64,
+}
+
+impl Started {
+    fn now() -> Self {
+        Self {
+            usage: cash_win32::process::own_usage(),
+            at: cash_win32::process::now_filetime(),
+        }
+    }
+
+    /// `PrintStat`: the kernel's, the command's own, their sum and the clock's time
+    /// since it began, its CPU cycles, and the most memory the shell's process held.
+    fn report(&self) -> String {
+        use std::fmt::Write as _;
+
+        let now = cash_win32::process::own_usage();
+        let total = cash_win32::process::now_filetime().saturating_sub(self.at);
+        let kernel = now.kernel.saturating_sub(self.usage.kernel);
+        let user = now.user.saturating_sub(self.usage.user);
+        let process = kernel + user;
+        let cycles = now
+            .cycles
+            .zip(self.usage.cycles)
+            .map(|(end, start)| end.saturating_sub(start));
+        let time = |s: &mut String, name: &str, value: u64| {
+            let share = if total == 0 {
+                0
+            } else {
+                u128::from(value) * 100 / u128::from(total)
+            };
+            let _ = write!(
+                s,
+                "\n{name} Time ={:>6}.{:03} ={share:>5}%",
+                value / 10_000_000,
+                value % 10_000_000 / 10_000
+            );
+        };
+        let megabytes = |bytes: u64| bytes.div_ceil(1 << 20);
+        let mut s = String::new();
+        time(&mut s, "Kernel ", kernel);
+        if let Some(cycles) = cycles {
+            let _ = write!(s, "    Cnt:{:>15} MCycles", cycles / 1_000_000);
+        }
+        time(&mut s, "User   ", user);
+        if let Some(cycles) = cycles {
+            let _ = write!(
+                s,
+                "    Freq (cnt/ptime):{:>6} MHz",
+                cycles / (process / 10).max(1)
+            );
+        }
+        time(&mut s, "Process", process);
+        if let Some(bytes) = now.peak_committed {
+            let _ = write!(s, "    Virtual  Memory ={:>7} MB", megabytes(bytes));
+        }
+        time(&mut s, "Global ", total);
+        if let Some(bytes) = now.peak_resident {
+            let _ = write!(s, "    Physical Memory ={:>7} MB", megabytes(bytes));
+        }
+        s.push('\n');
+        s
     }
 }
 

@@ -464,8 +464,24 @@ pub(super) struct Options {
     /// do not keep.
     pub(super) alt_streams: bool,
     pub(super) nt_security: bool,
+    /// `-spe`: the output folder's name taken off items that all begin with it.
+    pub(super) elim_dup: bool,
+    /// `-bt`: the time and memory used, at the end.
+    pub(super) show_time: bool,
+    /// `-snz`: the archive's Zone.Identifier given to what is extracted.
+    pub(super) zone: Zone,
     /// The update group's settings.
     pub(super) update: Option<Update>,
+}
+
+/// `-snz`, `-snz1`: every file extracted gets the archive's Zone.Identifier; `-snz2`,
+/// Office's files only; `-snz0` or none, no file.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) enum Zone {
+    #[default]
+    None,
+    All,
+    Office,
 }
 
 fn stoi(s: &str) -> Option<u32> {
@@ -526,6 +542,12 @@ pub(super) fn parse_command(parsed: &Parsed) -> Result<Options, CmdLineError> {
     }
 
     let flag = |key: Key| parsed.there(key).then(|| !parsed.get(key).minus);
+    let zone = match parsed.string(Key::ZoneFile) {
+        None | Some("0") => Zone::None,
+        Some("" | "1") => Zone::All,
+        Some("2") => Zone::Office,
+        Some(other) => return Err(CmdLineError::with("Unsupported -snz:", other)),
+    };
     let dangerous_level = match parsed.string(Key::SymLinksAllowDangerous) {
         None => 5,
         Some("") => 9,
@@ -744,6 +766,9 @@ pub(super) fn parse_command(parsed: &Parsed) -> Result<Options, CmdLineError> {
         dangerous_level,
         alt_streams: flag(Key::AltStreams).unwrap_or(false),
         nt_security: parsed.there(Key::NtSecurity),
+        elim_dup: flag(Key::ElimDup).unwrap_or(false),
+        show_time: parsed.there(Key::ShowTime),
+        zone,
         update,
     })
 }

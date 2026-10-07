@@ -4895,3 +4895,353 @@ Command Line Error:
 Unsupported switch postfix -snld
 x
 rc=7
+== archive names, -spe, -snz
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+2 files, 518 bytes (1 KiB)
+
+Listing archive: a.7z
+
+--
+Path = a.7z
+Type = 7z
+Physical Size = 259
+Headers Size = 242
+Method = Copy
+Solid = -
+Blocks = 2
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00 D....            0            0  d
+2026-10-07 08:00:00 D....            0            0  d/sub
+2026-10-07 08:00:00 ....A            0            0  d/empty
+2026-10-07 08:00:00 ....A            6            6  d/a.txt
+2026-10-07 08:00:00 ....A           11           11  d/sub/b.txt
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00                 17           17  3 files, 2 folders
+
+Listing archive: sub/b.7z
+
+--
+Path = sub/b.7z
+Type = 7z
+Physical Size = 259
+Headers Size = 242
+Method = Copy
+Solid = -
+Blocks = 2
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00 D....            0            0  d
+2026-10-07 08:00:00 D....            0            0  d/sub
+2026-10-07 08:00:00 ....A            0            0  d/empty
+2026-10-07 08:00:00 ....A            6            6  d/a.txt
+2026-10-07 08:00:00 ....A           11           11  d/sub/b.txt
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00                 17           17  3 files, 2 folders
+
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00                 34           34  6 files, 4 folders
+
+Archives: 2
+Volumes: 2
+Total archives size: 518
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 259 bytes (1 KiB)
+
+Listing archive: sub/b.7z
+
+--
+Path = sub/b.7z
+Type = 7z
+Physical Size = 259
+Headers Size = 242
+Method = Copy
+Solid = -
+Blocks = 2
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00 D....            0            0  d
+2026-10-07 08:00:00 D....            0            0  d/sub
+2026-10-07 08:00:00 ....A            0            0  d/empty
+2026-10-07 08:00:00 ....A            6            6  d/a.txt
+2026-10-07 08:00:00 ....A           11           11  d/sub/b.txt
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00                 17           17  3 files, 2 folders
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 259 bytes (1 KiB)
+
+Testing archive: a.7z
+--
+Path = a.7z
+Type = 7z
+Physical Size = 259
+Headers Size = 242
+Method = Copy
+Solid = -
+Blocks = 2
+
+Everything is Ok
+
+Folders: 2
+Files: 3
+Size:       17
+Compressed: 259
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 259 bytes (1 KiB)
+
+Listing archive: a.7z
+
+--
+Path = a.7z
+Type = 7z
+Physical Size = 259
+Headers Size = 242
+Method = Copy
+Solid = -
+Blocks = 2
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00 D....            0            0  d
+2026-10-07 08:00:00 D....            0            0  d/sub
+2026-10-07 08:00:00 ....A            0            0  d/empty
+2026-10-07 08:00:00 ....A            6            6  d/a.txt
+2026-10-07 08:00:00 ....A           11           11  d/sub/b.txt
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00                 17           17  3 files, 2 folders
+rc=0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+
+
+Command Line Error:
+Cannot find archive
+rc=7
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+
+ERROR: The system cannot find the file specified.
+nosuch.7z
+
+
+
+System ERROR:
+The system cannot find the file specified.
+rc=2
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 folder, 2 files, 260 bytes (1 KiB)
+
+Listing archive: sub/b.7z
+
+--
+Path = sub/b.7z
+Type = 7z
+Physical Size = 259
+Headers Size = 242
+Method = Copy
+Solid = -
+Blocks = 2
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00 D....            0            0  d
+2026-10-07 08:00:00 D....            0            0  d/sub
+2026-10-07 08:00:00 ....A            0            0  d/empty
+2026-10-07 08:00:00 ....A            6            6  d/a.txt
+2026-10-07 08:00:00 ....A           11           11  d/sub/b.txt
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00                 17           17  3 files, 2 folders
+
+Listing archive: sub/c.txt
+
+
+------------------- ----- ------------ ------------  ------------------------
+2026-10-07 08:00:00                 17           17  3 files, 2 folders
+
+Archives: 1
+Volumes: 1
+Total archives size: 260
+
+Errors: 1
+
+ERROR: sub/c.txt : Cannot open the file as archive
+
+
+rc=2
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 259 bytes (1 KiB)
+
+Extracting archive: a.7z
+--
+Path = a.7z
+Type = 7z
+Physical Size = 259
+Headers Size = 242
+Method = Copy
+Solid = -
+Blocks = 2
+
+- d/
+- d/sub/
+- d/empty
+- d/a.txt
+- d/sub/b.txt
+Everything is Ok
+
+Folders: 2
+Files: 3
+Size:       17
+Compressed: 259
+rc=0
+q
+q/d
+q/d/a.txt
+q/d/empty
+q/d/sub
+q/d/sub/b.txt
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 259 bytes (1 KiB)
+
+Extracting archive: a.7z
+--
+Path = a.7z
+Type = 7z
+Physical Size = 259
+Headers Size = 242
+Method = Copy
+Solid = -
+Blocks = 2
+
+Everything is Ok
+
+Folders: 2
+Files: 3
+Size:       17
+Compressed: 259
+rc=0
+q2
+q2/e
+q2/e/d
+q2/e/d/a.txt
+q2/e/d/empty
+q2/e/d/sub
+q2/e/d/sub/b.txt
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 259 bytes (1 KiB)
+
+Extracting archive: a.7z
+--
+Path = a.7z
+Type = 7z
+Physical Size = 259
+Headers Size = 242
+Method = Copy
+Solid = -
+Blocks = 2
+
+Everything is Ok
+
+Folders: 2
+Files: 3
+Size:       17
+Compressed: 259
+rc=0
+q3
+q3/d
+q3/d/a.txt
+q3/d/b.txt
+q3/d/d
+q3/d/empty
+q3/d/sub
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 259 bytes (1 KiB)
+
+Extracting archive: a.7z
+--
+Path = a.7z
+Type = 7z
+Physical Size = 259
+Headers Size = 242
+Method = Copy
+Solid = -
+Blocks = 2
+
+Everything is Ok
+
+Folders: 2
+Files: 3
+Size:       17
+Compressed: 259
+rc=0
+[ZoneTransfer]
+ZoneId=3
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 259 bytes (1 KiB)
+
+Extracting archive: a.7z
+--
+Path = a.7z
+Type = 7z
+Physical Size = 259
+Headers Size = 242
+Method = Copy
+Solid = -
+Blocks = 2
+
+Everything is Ok
+
+Folders: 2
+Files: 3
+Size:       17
+Compressed: 259
+rc=0
+The system cannot find the file specified.
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+
+
+Command Line Error:
+Unsupported -snz:
+x
+rc=7

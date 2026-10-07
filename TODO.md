@@ -497,7 +497,11 @@ same day: 7z and the formats cash has, Windows 7-Zip's words with LF and `/`,
    progress line on a console (`-bsp`, `-bd`; done 2026-10-07, 7-Zip's
    `CPercentPrinter` and its hooks in scanning, opening, extracting, adding and `h`,
    matched against `-bsp1` into a pipe), `-si` reading (done with step 4), `-bt`,
-   `-spe`, `-snz`, `-ai`/`-ax` beyond names, and `i`'s listing is cash's own short one.
+   `-spe`, `-snz`, `-ai`/`-ax` beyond names (all done 2026-10-07: archives are found by
+   the scan `a` uses, folders entered, `-air`/`-ax` honoured, "Cannot find archive" when
+   none; `-bt` reports the command's own times and cycles, the shell process's memory
+   peaks), and `i`'s listing is cash's own short one, on purpose: 7-Zip's lists formats
+   and codecs cash does not have.
 3. **Writing 7z** (done 2026-10-07): `a`, `u`, `d`, `rn`, the `-u` matrix and `-u!name`,
    `-m` (levels, methods, solid limits, filters chosen by a file's head as 7-Zip's
    analysis does, `-mhe`, `-mhc`, times, `-mqs`), `-p` typed or given, `-sdel`, `-stl`,

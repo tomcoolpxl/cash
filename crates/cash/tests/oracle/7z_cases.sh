@@ -450,3 +450,30 @@ ls x7/real
 zd x -scrc -bb3 -ox8 danger.tar
 z x -snldx -ox9 danger.tar
 cd ..
+
+echo "== archive names, -spe, -snz"
+mkdir -p an/sub
+cd an || exit 1
+cp ../stored.7z a.7z
+cp ../stored.7z sub/b.7z
+printf 'x' > sub/c.txt
+z l -an -air!*.7z
+z l -an -air!*.7z -ax!a.7z
+z t -an -ai!*.7z
+z l -r '*.7z'
+z l '*.nosuch'
+z l -an -ai!nosuch.7z
+z l sub
+z x -spe -bb3 -oq/d a.7z
+find q | sort
+z x -spe -oq2/e a.7z
+find q2 | sort
+z e -spe -oq3/d a.7z
+find q3 | sort
+printf '[ZoneTransfer]\r\nZoneId=3\r\n' > 'a.7z:Zone.Identifier'
+z x -snz -oz1 a.7z
+cat 'z1/d/a.txt:Zone.Identifier' | tr -d '\r'
+z x -snz2 -oz2 a.7z
+cat 'z2/d/a.txt:Zone.Identifier' 2>&1 | head -1 | sed 's/.*: //'
+z x -snzx -oz3 a.7z
+cd ..

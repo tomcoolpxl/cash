@@ -12,9 +12,9 @@ use cash_archive::sevenz::Problem;
 use cash_core::openfiles::OpenFiles;
 
 use super::archive::{self, Data, Item, Kind, OpenFailure, Opened};
-use super::censor::{has_wildcard, mask_matches, split_path};
-use super::cmdline::{Command, Options, Overwrite, PathKeep};
-use super::{Console, Env, Stop, code, links, list, text};
+use super::censor::{compare_file_names, split_path};
+use super::cmdline::{CmdLineError, Command, Options, Overwrite, PathKeep, Zone};
+use super::{Console, Env, Stop, code, links, list, scan, text};
 
 /// An archive the scan found: its name as given, its path, its size, and whether it is
 /// standard input (`-si`), spooled to that path.
@@ -42,8 +42,9 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
     extract_all(options, env, console, &found)
 }
 
-/// 7-Zip's scan for archives: the archive's name, or the files its wildcard names in
-/// its folder, sorted; "Scanning the drive for archives:" and what was found.
+/// 7-Zip's scan for archives (`EnumerateDirItemsAndSort`): the files the archive's name,
+/// `-ai` and `-ax` give, folders entered as `a` enters them, sorted by their full paths;
+/// "Scanning the drive for archives:" and what was found, else "Cannot find archive".
 fn scan<SE: cash_core::ShellExtensions>(
     options: &Options,
     env: &Env<'_, SE>,
@@ -69,123 +70,59 @@ fn scan<SE: cash_core::ShellExtensions>(
         console.so("Scanning the drive for archives:\n");
     }
     console.progress_quiet(|s| "Scan".clone_into(&mut s.command));
-    let mut found = Vec::new();
-    for (prefix, node) in options.archive_censor.pairs() {
-        walk(env, console, prefix, node, &mut found)?;
-    }
+    // ScanError stops the scan at the first path that cannot be read.
+    let mut failed: Option<io::Error> = None;
+    let items = scan::scan(
+        &options.archive_censor,
+        false,
+        &|p| env.path(p),
+        &mut |path, error| {
+            if failed.is_none() {
+                console.flush_so();
+                console.se(&format!(
+                    "\nERROR: {}\n{path}\n\n",
+                    text::system_message(error)
+                ));
+                console.flush_se();
+                failed = Some(super::update::copy_error(error));
+            }
+        },
+        &mut |stat, path| super::update::scan_progress(console, stat, path),
+    );
     // FinishScanning.
     console.close_progress();
     console.progress_quiet(super::percent::State::clear);
-    found.sort_by_key(|a| a.name.to_lowercase());
+    if let Some(error) = failed {
+        return Err(Stop::System(error));
+    }
+    let stat = scan::Stat::of(&items);
+    let mut found: Vec<Found> = items
+        .into_iter()
+        .filter(|item| !item.is_dir)
+        .map(|item| Found {
+            name: item.shown,
+            path: item.path,
+            size: item.size,
+            stdin: false,
+        })
+        .collect();
+    if found.is_empty() {
+        return Err(Stop::CommandLine(CmdLineError::new("Cannot find archive")));
+    }
+    // Sorted by full path, each once.
+    found.sort_by(|a, b| {
+        compare_file_names(&a.path.to_string_lossy(), &b.path.to_string_lossy(), false)
+    });
+    found.dedup_by(|a, b| {
+        compare_file_names(&a.path.to_string_lossy(), &b.path.to_string_lossy(), false).is_eq()
+    });
     if options.headers {
-        let size: u64 = found
-            .iter()
-            .filter(|f| f.size != u64::MAX)
-            .map(|f| f.size)
-            .sum();
-        let files = found.len() as u64;
         console.so(&format!(
-            "{}{}\n",
-            text::count(files, "file", "files"),
-            if files == 0 && size == 0 {
-                ", 0 bytes".to_owned()
-            } else {
-                format!(", {}", text::size_smart(size))
-            }
+            "{}\n",
+            super::update::stat_text(stat.dirs, stat.files, stat.size)
         ));
     }
     Ok(found)
-}
-
-/// The archives a censor's folder names: each mask's file, or the files its wildcard
-/// names; then the folders under it.
-fn walk<SE: cash_core::ShellExtensions>(
-    env: &Env<'_, SE>,
-    console: &Console<'_, SE>,
-    dir: &str,
-    node: &super::censor::Node,
-    found: &mut Vec<Found>,
-) -> Result<(), Stop> {
-    // ScanProgress: what was found so far, and the folder looked in.
-    let bytes = found
-        .iter()
-        .filter(|f| f.size != u64::MAX)
-        .fold(0u64, |sum, f| sum.saturating_add(f.size));
-    console.progress(|s| {
-        s.files = found.len() as u64;
-        s.completed = bytes;
-        dir.clone_into(&mut s.file_name);
-    });
-    for (parts, wildcards) in node.masks() {
-        if wildcards && parts.iter().any(|p| has_wildcard(p)) {
-            found.extend(expand(env, dir, parts));
-            continue;
-        }
-        let name = format!("{dir}{}", parts.join("/"));
-        let path = env.path(&name);
-        match fs::metadata(&path) {
-            Ok(meta) => found.push(Found {
-                name,
-                size: if meta.is_dir() { u64::MAX } else { meta.len() },
-                stdin: false,
-                path,
-            }),
-            Err(error) => {
-                console.flush_so();
-                console.se(&format!(
-                    "\nERROR: {}\n{name}\n\n",
-                    text::system_message(&error)
-                ));
-                console.flush_se();
-                return Err(Stop::System(error));
-            }
-        }
-    }
-    for child in node.children() {
-        walk(
-            env,
-            console,
-            &format!("{dir}{}/", child.name()),
-            child,
-            found,
-        )?;
-    }
-    Ok(())
-}
-
-/// The files a wildcard names in its folder.
-fn expand<SE: cash_core::ShellExtensions>(
-    env: &Env<'_, SE>,
-    prefix: &str,
-    parts: &[String],
-) -> Vec<Found> {
-    let Some((mask, folders)) = parts.split_last() else {
-        return Vec::new();
-    };
-    let mut dir = prefix.to_owned();
-    for folder in folders {
-        dir.push_str(folder);
-        dir.push('/');
-    }
-    let Ok(entries) = fs::read_dir(env.path(if dir.is_empty() { "." } else { &dir })) else {
-        return Vec::new();
-    };
-    entries
-        .filter_map(Result::ok)
-        .filter(|e| e.file_type().is_ok_and(|t| t.is_file()))
-        .filter_map(|e| {
-            let file_name = e.file_name().to_string_lossy().into_owned();
-            mask_matches(mask, &file_name, false).then(|| {
-                let name = format!("{dir}{file_name}");
-                Found {
-                    size: e.metadata().map_or(0, |m| m.len()),
-                    path: env.path(&name),
-                    name,
-                    stdin: false,
-                }
-            })
-        })
-        .collect()
 }
 
 /// The archive's format as `-t` names it.
@@ -582,7 +519,13 @@ fn extract_archive<SE: cash_core::ShellExtensions>(
         }
         None => opened.split.as_ref().map_or(archive.size, |s| s.total),
     };
-    let errors = extract_items(options, env, console, &mut opened, password, totals)?;
+    // -snz: the archive's Zone.Identifier, for what is extracted.
+    let zone = if options.zone == Zone::None || archive.stdin {
+        Vec::new()
+    } else {
+        read_zone(&archive.path)
+    };
+    let errors = extract_items(options, env, console, &mut opened, password, totals, &zone)?;
     console.flush_so();
     if errors == 0 && !open_error {
         if warned {
@@ -637,6 +580,7 @@ fn extract_items<SE: cash_core::ShellExtensions>(
     opened: &mut Opened,
     password: &mut Option<String>,
     totals: &mut Totals,
+    zone: &[u8],
 ) -> Result<u64, Stop> {
     let test = options.command == Command::Test;
     let items = opened.items.clone();
@@ -671,6 +615,8 @@ fn extract_items<SE: cash_core::ShellExtensions>(
         }
         None => (env.path("."), "./".to_owned()),
     };
+    let elim = elim_prefix(options, &items);
+    let target = |item: &Item, keep| target(&out_dir, item, keep, elim.as_deref());
     if !test && !options.stdout && options.output_dir.is_some() {
         fs::create_dir_all(&out_dir).map_err(|e| {
             Stop::Message(format!(
@@ -711,7 +657,7 @@ fn extract_items<SE: cash_core::ShellExtensions>(
             .as_ref()
             .filter(|_| !test && !skip && !options.stdout);
         if let Some(link) = as_link {
-            let (path, relative) = target(&out_dir, item, options.path_keep);
+            let (path, relative) = target(item, options.path_keep);
             let shown = format!("{base}{relative}");
             if link.hard || options.symlinks != Some(false) {
                 let room = if item.is_dir {
@@ -758,7 +704,7 @@ fn extract_items<SE: cash_core::ShellExtensions>(
         // GetStream asks about a file already there before the item is shown; one not
         // to be replaced is shown as skipped.
         let room = if !test && !skip && !options.stdout && as_link.is_none() && !item.is_dir {
-            let (path, relative) = target(&out_dir, item, options.path_keep);
+            let (path, relative) = target(item, options.path_keep);
             let shown = format!("{base}{relative}");
             Some(
                 match make_room(env, console, item, &path, &shown, &mut overwrite) {
@@ -827,12 +773,17 @@ fn extract_items<SE: cash_core::ShellExtensions>(
             }
         } else if let Some(room) = room {
             match room {
-                Ok(Some(path)) => write_file(item, &path, data),
+                Ok(Some(path)) => {
+                    let zone = (!zone.is_empty()
+                        && (options.zone == Zone::All || is_office(&path)))
+                    .then_some(zone);
+                    write_file(item, &path, data, zone)
+                }
                 Ok(None) => Ok(()),
                 Err(e) => Err(e),
             }
         } else {
-            let (path, _) = target(&out_dir, item, options.path_keep);
+            let (path, _) = target(item, options.path_keep);
             let made = fs::create_dir_all(&path);
             if made.is_ok()
                 && let Some(time) = item.modified
@@ -991,11 +942,48 @@ const fn problem_words(problem: Problem, encrypted: bool) -> &'static str {
     }
 }
 
+/// `-spe`: the output folder's own name when every item (those -x leaves out by kind
+/// aside) is that folder or under it, to be taken off them all.
+fn elim_prefix(options: &Options, items: &[Item]) -> Option<String> {
+    if !options.elim_dup || options.path_keep == PathKeep::Absolute {
+        return None;
+    }
+    let dir = options.output_dir.as_deref()?;
+    let name = dir
+        .trim_end_matches(['/', '\\'])
+        .rsplit(['/', '\\'])
+        .next()?;
+    if name.is_empty() {
+        return None;
+    }
+    let all = items
+        .iter()
+        .filter(|item| {
+            !(if item.is_dir {
+                options.exclude_dirs
+            } else {
+                options.exclude_files
+            })
+        })
+        .all(|item| {
+            let parts = split_path(&item.path);
+            parts
+                .first()
+                .is_some_and(|first| compare_file_names(first, name, false).is_eq())
+                && (parts.len() > 1 || item.is_dir)
+        });
+    all.then(|| name.to_owned())
+}
+
 /// Where an item goes on disk: the output folder, then its path (`x`) or its name
-/// (`e`), each part made one Windows can hold (`Correct_FsPath`); and that path as
-/// shown, relative to the output folder.
-fn target(out_dir: &Path, item: &Item, keep: PathKeep) -> (PathBuf, String) {
+/// (`e`), less `-spe`'s folder, each part made one Windows can hold (`Correct_FsPath`);
+/// and that path as shown, relative to the output folder.
+fn target(out_dir: &Path, item: &Item, keep: PathKeep, elim: Option<&str>) -> (PathBuf, String) {
     let mut parts = split_path(&item.path);
+    // -spe's folder comes off with paths kept; `e` keeps names alone anyway.
+    if elim.is_some() && keep != PathKeep::None && !parts.is_empty() {
+        parts.remove(0);
+    }
     if keep == PathKeep::None {
         parts = parts.split_off(parts.len().saturating_sub(1));
     }
@@ -1098,8 +1086,44 @@ enum Answer {
     No,
 }
 
-/// Writes one file where `make_room` made room for it, then its times and attributes.
-fn write_file(item: &Item, path: &Path, data: &mut dyn Data) -> io::Result<()> {
+/// The Zone.Identifier stream of the archive at `path`, if it has one under 32 KiB
+/// (`ReadZoneFile_Of_BaseFile`).
+fn read_zone(path: &Path) -> Vec<u8> {
+    let mut stream = path.as_os_str().to_owned();
+    stream.push(":Zone.Identifier");
+    match fs::read(&stream) {
+        Ok(data) if !data.is_empty() && data.len() < 1 << 15 => data,
+        _ => Vec::new(),
+    }
+}
+
+/// Whether a file is Office's, which `-snz2` gives the zone to (`kOfficeExtensions`).
+fn is_office(path: &Path) -> bool {
+    const OFFICE: &str = "doc dot wbk docx docm dotx dotm docb wll wwl xls xlt xlm xlsx \
+                          xlsm xltx xltm xlsb xla xlam ppt pot pps ppa ppam pptx pptm \
+                          potx potm ppam ppsx ppsm sldx sldm";
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let Some((_, ext)) = name.rsplit_once('.') else {
+        return false;
+    };
+    !ext.is_empty()
+        && ext.is_ascii()
+        && OFFICE
+            .split_whitespace()
+            .any(|known| known.eq_ignore_ascii_case(ext))
+}
+
+/// Writes one file where `make_room` made room for it, then the zone `-snz` gives it,
+/// then its times and attributes.
+fn write_file(
+    item: &Item,
+    path: &Path,
+    data: &mut dyn Data,
+    zone: Option<&[u8]>,
+) -> io::Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
@@ -1112,6 +1136,13 @@ fn write_file(item: &Item, path: &Path, data: &mut dyn Data) -> io::Result<()> {
         }
     }
     drop(file);
+    // Before the times, which writing the stream would change; a volume without streams
+    // (FAT) keeps none, and says nothing.
+    if let Some(zone) = zone {
+        let mut stream = path.as_os_str().to_owned();
+        stream.push(":Zone.Identifier");
+        let _ = fs::write(&stream, zone);
+    }
     if let Some(time) = item.modified {
         let _ = cash_win32::unix::set_times(
             path,

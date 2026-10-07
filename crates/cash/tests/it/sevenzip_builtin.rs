@@ -25,7 +25,7 @@ fn seven_z_matches_7_zip_26_03() {
         &golden("7z_cases"),
         "7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03\n",
         "7-Zip (cash) : 7-Zip 26.03's options, in pure Rust\n",
-        163,
+        176,
     );
     assert_eq!(run_oracle_script("7z_cases"), expected);
 }
@@ -63,6 +63,25 @@ fn seven_za_is_the_same_command_under_its_own_name() {
     );
     let page = run("help 7z");
     assert!(page.stdout.contains("7-Zip 26.03"), "{}", page.stdout);
+}
+
+/// `-bt`'s report: its numbers are the machine's of the moment, its lines 7-Zip's.
+#[test]
+fn bt_reports_the_times_and_the_memory_used() {
+    let dir = Scratch::new("7z-bt");
+    std::fs::write(dir.join("stored.7z"), STORED).expect("write the archive");
+    let out = run_in(
+        dir.path(),
+        // A number as wide as its column leaves no space before it.
+        "7z t -bt stored.7z | tail -4 | sed -E 's/[0-9]+/N/g; s/ +/ /g; s/:N/: N/'",
+    );
+    assert_eq!(
+        out.stdout,
+        "Kernel Time = N.N = N% Cnt: N MCycles\n\
+         User Time = N.N = N% Freq (cnt/ptime): N MHz\n\
+         Process Time = N.N = N% Virtual Memory = N MB\n\
+         Global Time = N.N = N% Physical Memory = N MB"
+    );
 }
 
 #[test]

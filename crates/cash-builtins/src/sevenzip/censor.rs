@@ -238,13 +238,6 @@ impl Node {
     pub(super) fn name(&self) -> &str {
         &self.name
     }
-
-    /// The masks at this level, for walking a folder on disk.
-    pub(super) fn masks(&self) -> impl Iterator<Item = (&[String], bool)> {
-        self.includes
-            .iter()
-            .map(|i| (i.parts.as_slice(), i.wildcards))
-    }
 }
 
 /// All of a command's masks, by the prefix their names began with.

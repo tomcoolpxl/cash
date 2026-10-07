@@ -207,6 +207,55 @@ pub fn own_cpu_time() -> (u64, u64) {
     (as_u64(user), as_u64(kernel))
 }
 
+/// This process's use of the machine, as 7-Zip's `-bt` reports its own: CPU time in
+/// 100-nanosecond units, CPU cycles, and the most memory committed and resident.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct OwnUsage {
+    /// CPU time in the kernel.
+    pub kernel: u64,
+    /// CPU time in the process itself.
+    pub user: u64,
+    /// CPU cycles (`QueryProcessCycleTime`).
+    pub cycles: Option<u64>,
+    /// The most memory committed (`PeakPagefileUsage`), in bytes.
+    pub peak_committed: Option<u64>,
+    /// The most memory resident (`PeakWorkingSetSize`), in bytes.
+    pub peak_resident: Option<u64>,
+}
+
+/// This process's [`OwnUsage`] now.
+#[must_use]
+pub fn own_usage() -> OwnUsage {
+    use windows_sys::Win32::System::ProcessStatus::{
+        K32GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS,
+    };
+    use windows_sys::Win32::System::WindowsProgramming::QueryProcessCycleTime;
+
+    let (user, kernel) = own_cpu_time();
+    let mut usage = OwnUsage {
+        kernel,
+        user,
+        ..OwnUsage::default()
+    };
+    // SAFETY: takes no arguments; the pseudo-handle it returns needs no closing.
+    let current = unsafe { GetCurrentProcess() };
+    let mut cycles = 0u64;
+    // SAFETY: `current` is this process's handle and `cycles` a valid out-param.
+    if unsafe { QueryProcessCycleTime(current, &raw mut cycles) } != 0 {
+        usage.cycles = Some(cycles);
+    }
+    let mut counters = PROCESS_MEMORY_COUNTERS {
+        cb: u32::try_from(size_of::<PROCESS_MEMORY_COUNTERS>()).unwrap_or(u32::MAX),
+        ..Default::default()
+    };
+    // SAFETY: `current` is this process's handle, and `counters` is correctly sized.
+    if unsafe { K32GetProcessMemoryInfo(current, &raw mut counters, counters.cb) } != 0 {
+        usage.peak_committed = Some(counters.PeakPagefileUsage as u64);
+        usage.peak_resident = Some(counters.PeakWorkingSetSize as u64);
+    }
+    usage
+}
+
 /// When a process started, as a `FILETIME` count, or `None` if it cannot be opened.
 #[must_use]
 pub fn started(pid: u32) -> Option<u64> {

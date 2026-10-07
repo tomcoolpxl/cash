@@ -189,7 +189,8 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
         console.flush_stdout();
     }
     if options.headers && !options.tech && (found.len() > 1 || volumes > 1) {
-        if total.files == 0 {
+        // No size at all when no archive was listed.
+        if total.files == 0 && archives != 0 {
             total.size.get_or_insert(0);
         }
         console.stdout(&format!("\n{LINES}\n"));
