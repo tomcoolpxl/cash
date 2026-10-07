@@ -41,6 +41,7 @@ use std::time::{Duration, Instant};
 
 use cash_core::openfiles::OpenFile;
 use cash_core::{ExecutionResult, builtins};
+use cash_getopt::{Getopt, Item};
 use cash_win32::conin::Line;
 use clap::Parser;
 use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
@@ -388,59 +389,21 @@ impl Reading {
     }
 }
 
-/// Whether `letter` is an option, and whether it takes a value.
-fn option_kind(letter: char) -> Option<bool> {
-    let mut letters = GETOPT.chars().peekable();
-    while let Some(known) = letters.next() {
-        let takes_value = letters.next_if_eq(&':').is_some();
-        if known == letter {
-            return Some(takes_value);
-        }
-    }
-    None
-}
-
-/// Reads the command line as netcat does: `getopt`, with GNU's permutation of operands
-/// among options, then the destination and the port.
+/// Reads the command line as netcat does: `getopt` (`cash-getopt`, without long
+/// options), with GNU's permutation of operands among options, then the destination and
+/// the port.
 fn parse(args: &[String]) -> Result<Parsed, Refusal> {
     let mut reading = Reading {
         options: Options::default(),
         help: false,
     };
-    let mut operands: Vec<&str> = Vec::new();
-    let mut index = 0;
-    while let Some(arg) = args.get(index) {
-        index += 1;
-        if arg == "--" {
-            operands.extend(args.iter().skip(index).map(String::as_str));
-            break;
-        }
-        let Some(cluster) = arg.strip_prefix('-').filter(|rest| !rest.is_empty()) else {
-            operands.push(arg);
-            continue;
-        };
-        for (at, letter) in cluster.char_indices() {
-            let Some(takes_value) = option_kind(letter) else {
-                return Err(Refusal::usage(format!("invalid option -- '{letter}'")));
-            };
-            if !takes_value {
-                reading.apply(letter, None)?;
-                continue;
-            }
-            let rest = cluster.get(at + letter.len_utf8()..).unwrap_or_default();
-            let value = if rest.is_empty() {
-                let Some(next) = args.get(index) else {
-                    return Err(Refusal::usage(format!(
-                        "option requires an argument -- '{letter}'"
-                    )));
-                };
-                index += 1;
-                next.as_str()
-            } else {
-                rest
-            };
-            reading.apply(letter, Some(value))?;
-            break;
+    let mut operands: Vec<String> = Vec::new();
+    let shorts = cash_getopt::optstring(GETOPT);
+    let getopt: Getopt<'_, '_, char> = Getopt::new(&shorts, &[]);
+    for next in getopt.read(args) {
+        match next.map_err(|problem| Refusal::usage(problem.to_string()))? {
+            Item::Option { id, value, .. } => reading.apply(id, value.as_deref())?,
+            Item::Operand { value, .. } => operands.push(value),
         }
     }
     if reading.help {
@@ -452,12 +415,13 @@ fn parse(args: &[String]) -> Result<Parsed, Refusal> {
     // from -p: `nc -l -p PORT [HOST]`.
     let listen_port = read.listen.then(|| read.source_port.clone()).flatten();
     let (host, port) = match (operands.as_slice(), listen_port) {
-        ([host, port], _) => (Some((*host).to_owned()), (*port).to_owned()),
-        ([port], None) if read.listen => (None, (*port).to_owned()),
-        ([host], Some(port)) => (Some((*host).to_owned()), port),
+        ([host, port], _) => (Some(host.clone()), port.clone()),
+        ([port], None) if read.listen => (None, port.clone()),
+        ([host], Some(port)) => (Some(host.clone()), port),
         ([], Some(port)) => (None, port),
         _ => return Err(Refusal::usage(String::new())),
     };
+
     let options = Options { host, port, ..read };
 
     if options.listen && options.scan {
@@ -1455,8 +1419,8 @@ mod tests {
     use cash_core::net::SERVICES;
 
     use super::{
-        Family, Options, Parsed, Refusal, build_ports, option_kind, parse, service_name,
-        service_port, single_port, strtonum, succeeded, telnet_answers, valid_tos, with_crlf,
+        Family, GETOPT, Options, Parsed, Refusal, build_ports, parse, service_name, service_port,
+        single_port, strtonum, succeeded, telnet_answers, valid_tos, with_crlf,
     };
 
     fn args(line: &str) -> Vec<String> {
@@ -1627,12 +1591,19 @@ mod tests {
 
     #[test]
     fn every_getopt_letter_is_known() {
+        let shorts = cash_getopt::optstring(GETOPT);
+        let kind = |letter: char| {
+            shorts
+                .iter()
+                .find(|short| short.letter == letter)
+                .map(|short| short.arg == cash_getopt::Arg::Required)
+        };
         for letter in "46bCDdFhIiklMmNnOPpqrSsTtUuVvWwXxZz".chars() {
-            assert!(option_kind(letter).is_some(), "{letter}");
+            assert!(kind(letter).is_some(), "{letter}");
         }
-        assert_eq!(option_kind('w'), Some(true));
-        assert_eq!(option_kind('v'), Some(false));
-        assert_eq!(option_kind('e'), None);
+        assert_eq!(kind('w'), Some(true));
+        assert_eq!(kind('v'), Some(false));
+        assert_eq!(kind('e'), None);
     }
 
     #[test]

@@ -21,6 +21,7 @@ use std::io::Write as _;
 use std::time::Duration;
 
 use cash_core::{ExecutionResult, builtins};
+use cash_getopt::{Arg, Getopt, Item, Long, Short};
 use cash_win32::memory::{MemoryCounts, PageFiles};
 use clap::Parser;
 
@@ -163,6 +164,7 @@ impl Refused {
 }
 
 /// What one option asks for.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Flag {
     Help,
     Version,
@@ -178,65 +180,53 @@ enum Flag {
     Count,
 }
 
-const fn short_flag(letter: char) -> Option<Flag> {
-    Some(match letter {
-        'b' => Flag::Unit {
-            power: 0,
-            si: false,
-        },
-        'k' => Flag::Unit {
-            power: 1,
-            si: false,
-        },
-        'm' => Flag::Unit {
-            power: 2,
-            si: false,
-        },
-        'g' => Flag::Unit {
-            power: 3,
-            si: false,
-        },
-        'h' => Flag::Human,
-        'l' => Flag::Lohi,
-        'L' => Flag::Line,
-        't' => Flag::Total,
-        'v' => Flag::Committed,
-        'w' => Flag::Wide,
-        's' => Flag::Seconds,
-        'c' => Flag::Count,
-        'V' => Flag::Version,
-        _ => return None,
-    })
+/// A unit option's flag.
+const fn unit(power: u32, si: bool) -> Flag {
+    Flag::Unit { power, si }
 }
 
-fn long_flag(name: &str) -> Option<Flag> {
-    let unit = |power, si| Some(Flag::Unit { power, si });
-    match name {
-        "bytes" => unit(0, false),
-        "kibi" => unit(1, false),
-        "mebi" => unit(2, false),
-        "gibi" => unit(3, false),
-        "tebi" => unit(4, false),
-        "pebi" => unit(5, false),
-        "kilo" => unit(1, true),
-        "mega" => unit(2, true),
-        "giga" => unit(3, true),
-        "tera" => unit(4, true),
-        "peta" => unit(5, true),
-        "human" => Some(Flag::Human),
-        "si" => Some(Flag::Si),
-        "lohi" => Some(Flag::Lohi),
-        "line" => Some(Flag::Line),
-        "total" => Some(Flag::Total),
-        "committed" => Some(Flag::Committed),
-        "wide" => Some(Flag::Wide),
-        "seconds" => Some(Flag::Seconds),
-        "count" => Some(Flag::Count),
-        "help" => Some(Flag::Help),
-        "version" => Some(Flag::Version),
-        _ => None,
-    }
-}
+/// procps 4.0's short options, each known by its flag.
+const SHORT_OPTIONS: &[Short<Flag>] = &[
+    Short::new('b', Arg::No, unit(0, false)),
+    Short::new('k', Arg::No, unit(1, false)),
+    Short::new('m', Arg::No, unit(2, false)),
+    Short::new('g', Arg::No, unit(3, false)),
+    Short::new('h', Arg::No, Flag::Human),
+    Short::new('l', Arg::No, Flag::Lohi),
+    Short::new('L', Arg::No, Flag::Line),
+    Short::new('t', Arg::No, Flag::Total),
+    Short::new('v', Arg::No, Flag::Committed),
+    Short::new('w', Arg::No, Flag::Wide),
+    Short::new('s', Arg::Required, Flag::Seconds),
+    Short::new('c', Arg::Required, Flag::Count),
+    Short::new('V', Arg::No, Flag::Version),
+];
+
+/// procps 4.0's long options, in its table's order, which an ambiguity message follows.
+const LONG_OPTIONS: &[Long<'static, Flag>] = &[
+    Long::new("bytes", Arg::No, unit(0, false)),
+    Long::new("kilo", Arg::No, unit(1, true)),
+    Long::new("mega", Arg::No, unit(2, true)),
+    Long::new("giga", Arg::No, unit(3, true)),
+    Long::new("tera", Arg::No, unit(4, true)),
+    Long::new("peta", Arg::No, unit(5, true)),
+    Long::new("kibi", Arg::No, unit(1, false)),
+    Long::new("mebi", Arg::No, unit(2, false)),
+    Long::new("gibi", Arg::No, unit(3, false)),
+    Long::new("tebi", Arg::No, unit(4, false)),
+    Long::new("pebi", Arg::No, unit(5, false)),
+    Long::new("human", Arg::No, Flag::Human),
+    Long::new("si", Arg::No, Flag::Si),
+    Long::new("lohi", Arg::No, Flag::Lohi),
+    Long::new("line", Arg::No, Flag::Line),
+    Long::new("total", Arg::No, Flag::Total),
+    Long::new("committed", Arg::No, Flag::Committed),
+    Long::new("seconds", Arg::Required, Flag::Seconds),
+    Long::new("count", Arg::Required, Flag::Count),
+    Long::new("wide", Arg::No, Flag::Wide),
+    Long::new("help", Arg::No, Flag::Help),
+    Long::new("version", Arg::No, Flag::Version),
+];
 
 /// What a parse ends in.
 enum Parsed {
@@ -273,72 +263,8 @@ fn parse_count(text: &str) -> Result<u64, Refused> {
     }
 }
 
-/// One option as the command line gave it: the flag, its value if it takes one.
-type Given = (Flag, Option<String>);
-
-/// Reads a long option, `long` without its dashes, taking its value from `words` when it
-/// needs one and has none after `=`.
-fn long_option(
-    long: &str,
-    words: &mut std::slice::Iter<'_, String>,
-    flags: &mut Vec<Given>,
-) -> Result<(), Refused> {
-    let (name, value) = long
-        .split_once('=')
-        .map_or((long, None), |(name, value)| (name, Some(value.to_owned())));
-    let Some(flag) = long_flag(name) else {
-        return Err(Refused::with_usage(std::format!(
-            "unrecognized option '--{name}'"
-        )));
-    };
-    let takes_value = matches!(flag, Flag::Seconds | Flag::Count);
-    if !takes_value && value.is_some() {
-        return Err(Refused::with_usage(std::format!(
-            "option '--{name}' doesn't allow an argument"
-        )));
-    }
-    let value = if takes_value && value.is_none() {
-        Some(words.next().cloned().ok_or_else(|| {
-            Refused::with_usage(std::format!("option '--{name}' requires an argument"))
-        })?)
-    } else {
-        value
-    };
-    flags.push((flag, value));
-    Ok(())
-}
-
-/// Reads a cluster of short options, `-htw`, where one that takes a value (`-s`, `-c`)
-/// takes the rest of the word or the next word, as `getopt` has it.
-fn short_cluster(
-    cluster: &str,
-    words: &mut std::slice::Iter<'_, String>,
-    flags: &mut Vec<Given>,
-) -> Result<(), Refused> {
-    for (at, letter) in cluster.char_indices() {
-        let Some(flag) = short_flag(letter) else {
-            return Err(Refused::with_usage(std::format!(
-                "invalid option -- '{letter}'"
-            )));
-        };
-        if matches!(flag, Flag::Seconds | Flag::Count) {
-            let rest = cluster.get(at + letter.len_utf8()..).unwrap_or("");
-            let value = if rest.is_empty() {
-                words.next().cloned().ok_or_else(|| {
-                    Refused::with_usage(std::format!("option requires an argument -- '{letter}'"))
-                })?
-            } else {
-                rest.to_owned()
-            };
-            flags.push((flag, Some(value)));
-            return Ok(());
-        }
-        flags.push((flag, None));
-    }
-    Ok(())
-}
-
-/// Reads the command line as procps's `getopt_long` loop does.
+/// Reads the command line as procps's `getopt_long` loop does (`cash-getopt`): each
+/// option acted on as it comes, so `free -Vz` prints the version.
 fn parse(args: &[String]) -> Result<Parsed, Refused> {
     let mut scale = Scale {
         power: 1,
@@ -356,47 +282,33 @@ fn parse(args: &[String]) -> Result<Parsed, Refused> {
         seconds: None,
         count: None,
     };
-    let mut words = args.iter();
-    while let Some(word) = words.next() {
-        let mut flags: Vec<Given> = Vec::new();
-        if word == "--" {
-            // `--` ends the options; anything after is an operand `free` has none of.
-            if words.next().is_some() {
-                return Err(Refused::with_usage(String::new()));
-            }
-            break;
-        }
-        if let Some(long) = word.strip_prefix("--") {
-            long_option(long, &mut words, &mut flags)?;
-        } else if let Some(cluster) = word.strip_prefix('-').filter(|c| !c.is_empty()) {
-            short_cluster(cluster, &mut words, &mut flags)?;
-        } else {
-            // An operand: `free` takes none.
-            return Err(Refused::with_usage(String::new()));
-        }
-
-        for (flag, value) in flags {
-            match flag {
-                Flag::Help => return Ok(Parsed::Help),
-                Flag::Version => return Ok(Parsed::Version),
-                Flag::Unit { power, si } => {
-                    if unit_set {
-                        return Err(Refused::plain("Multiple unit options don't make sense."));
-                    }
-                    unit_set = true;
-                    scale.power = power;
-                    scale.si |= si;
+    for next in Getopt::new(SHORT_OPTIONS, LONG_OPTIONS).read(args) {
+        let (flag, value) = match next {
+            Ok(Item::Option { id, value, .. }) => (id, value),
+            // `free` takes no operands, before `--` or after it.
+            Ok(Item::Operand { .. }) => return Err(Refused::with_usage(String::new())),
+            Err(problem) => return Err(Refused::with_usage(problem.to_string())),
+        };
+        match flag {
+            Flag::Help => return Ok(Parsed::Help),
+            Flag::Version => return Ok(Parsed::Version),
+            Flag::Unit { power, si } => {
+                if unit_set {
+                    return Err(Refused::plain("Multiple unit options don't make sense."));
                 }
-                Flag::Human => scale.human = true,
-                Flag::Si => scale.si = true,
-                Flag::Lohi => options.lohi = true,
-                Flag::Line => options.line = true,
-                Flag::Total => options.total = true,
-                Flag::Committed => options.committed = true,
-                Flag::Wide => options.wide = true,
-                Flag::Seconds => options.seconds = Some(parse_seconds(&value.unwrap_or_default())?),
-                Flag::Count => options.count = Some(parse_count(&value.unwrap_or_default())?),
+                unit_set = true;
+                scale.power = power;
+                scale.si |= si;
             }
+            Flag::Human => scale.human = true,
+            Flag::Si => scale.si = true,
+            Flag::Lohi => options.lohi = true,
+            Flag::Line => options.line = true,
+            Flag::Total => options.total = true,
+            Flag::Committed => options.committed = true,
+            Flag::Wide => options.wide = true,
+            Flag::Seconds => options.seconds = Some(parse_seconds(&value.unwrap_or_default())?),
+            Flag::Count => options.count = Some(parse_count(&value.unwrap_or_default())?),
         }
     }
     options.scale = scale;

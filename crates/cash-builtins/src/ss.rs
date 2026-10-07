@@ -27,6 +27,7 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, ToSocketAddrs};
 use std::time::Duration;
 
 use cash_core::{ExecutionExitCode, ExecutionResult, builtins};
+use cash_getopt::{Arg, Getopt, Item, Long, Problem, Short, Written};
 use cash_win32::net::{self, Proto, Socket, TcpState};
 use clap::Parser;
 
@@ -729,53 +730,53 @@ enum Code {
 
 /// iproute2 7.2's long options, in its order (which `getopt_long`'s ambiguity message
 /// follows), and whether each takes an argument.
-const LONG_OPTIONS: &[(&str, bool, Code)] = &[
-    ("numeric", false, Code::Short('n')),
-    ("resolve", false, Code::Short('r')),
-    ("options", false, Code::Short('o')),
-    ("extended", false, Code::Short('e')),
-    ("memory", false, Code::Short('m')),
-    ("info", false, Code::Short('i')),
-    ("processes", false, Code::Short('p')),
-    ("threads", false, Code::Short('T')),
-    ("bpf", false, Code::Short('b')),
-    ("events", false, Code::Short('E')),
-    ("tcp", false, Code::Short('t')),
-    ("sctp", false, Code::Short('S')),
-    ("udp", false, Code::Short('u')),
-    ("raw", false, Code::Short('w')),
-    ("unix", false, Code::Short('x')),
-    ("tipc", false, Code::Long("tipc")),
-    ("vsock", false, Code::Long("vsock")),
-    ("all", false, Code::Short('a')),
-    ("listening", false, Code::Short('l')),
-    ("bound-inactive", false, Code::Short('B')),
-    ("ipv4", false, Code::Short('4')),
-    ("ipv6", false, Code::Short('6')),
-    ("packet", false, Code::Short('0')),
-    ("family", true, Code::Short('f')),
-    ("socket", true, Code::Short('A')),
-    ("query", true, Code::Short('A')),
-    ("summary", false, Code::Short('s')),
-    ("diag", true, Code::Short('D')),
-    ("filter", true, Code::Short('F')),
-    ("version", false, Code::Short('V')),
-    ("help", false, Code::Short('h')),
-    ("context", false, Code::Short('Z')),
-    ("contexts", false, Code::Short('z')),
-    ("net", true, Code::Short('N')),
-    ("tipcinfo", false, Code::Long("tipcinfo")),
-    ("tos", false, Code::Long("tos")),
-    ("cgroup", false, Code::Long("cgroup")),
-    ("kill", false, Code::Short('K')),
-    ("no-header", false, Code::Short('H')),
-    ("no-queues", false, Code::Short('Q')),
-    ("xdp", false, Code::Long("xdp")),
-    ("mptcp", false, Code::Short('M')),
-    ("oneline", false, Code::Short('O')),
-    ("inet-sockopt", false, Code::Long("inet-sockopt")),
-    ("bpf-maps", false, Code::Long("bpf-maps")),
-    ("bpf-map-id", true, Code::Long("bpf-map-id")),
+const LONG_OPTIONS: &[Long<'static, Code>] = &[
+    Long::new("numeric", Arg::No, Code::Short('n')),
+    Long::new("resolve", Arg::No, Code::Short('r')),
+    Long::new("options", Arg::No, Code::Short('o')),
+    Long::new("extended", Arg::No, Code::Short('e')),
+    Long::new("memory", Arg::No, Code::Short('m')),
+    Long::new("info", Arg::No, Code::Short('i')),
+    Long::new("processes", Arg::No, Code::Short('p')),
+    Long::new("threads", Arg::No, Code::Short('T')),
+    Long::new("bpf", Arg::No, Code::Short('b')),
+    Long::new("events", Arg::No, Code::Short('E')),
+    Long::new("tcp", Arg::No, Code::Short('t')),
+    Long::new("sctp", Arg::No, Code::Short('S')),
+    Long::new("udp", Arg::No, Code::Short('u')),
+    Long::new("raw", Arg::No, Code::Short('w')),
+    Long::new("unix", Arg::No, Code::Short('x')),
+    Long::new("tipc", Arg::No, Code::Long("tipc")),
+    Long::new("vsock", Arg::No, Code::Long("vsock")),
+    Long::new("all", Arg::No, Code::Short('a')),
+    Long::new("listening", Arg::No, Code::Short('l')),
+    Long::new("bound-inactive", Arg::No, Code::Short('B')),
+    Long::new("ipv4", Arg::No, Code::Short('4')),
+    Long::new("ipv6", Arg::No, Code::Short('6')),
+    Long::new("packet", Arg::No, Code::Short('0')),
+    Long::new("family", Arg::Required, Code::Short('f')),
+    Long::new("socket", Arg::Required, Code::Short('A')),
+    Long::new("query", Arg::Required, Code::Short('A')),
+    Long::new("summary", Arg::No, Code::Short('s')),
+    Long::new("diag", Arg::Required, Code::Short('D')),
+    Long::new("filter", Arg::Required, Code::Short('F')),
+    Long::new("version", Arg::No, Code::Short('V')),
+    Long::new("help", Arg::No, Code::Short('h')),
+    Long::new("context", Arg::No, Code::Short('Z')),
+    Long::new("contexts", Arg::No, Code::Short('z')),
+    Long::new("net", Arg::Required, Code::Short('N')),
+    Long::new("tipcinfo", Arg::No, Code::Long("tipcinfo")),
+    Long::new("tos", Arg::No, Code::Long("tos")),
+    Long::new("cgroup", Arg::No, Code::Long("cgroup")),
+    Long::new("kill", Arg::No, Code::Short('K')),
+    Long::new("no-header", Arg::No, Code::Short('H')),
+    Long::new("no-queues", Arg::No, Code::Short('Q')),
+    Long::new("xdp", Arg::No, Code::Long("xdp")),
+    Long::new("mptcp", Arg::No, Code::Short('M')),
+    Long::new("oneline", Arg::No, Code::Short('O')),
+    Long::new("inet-sockopt", Arg::No, Code::Long("inet-sockopt")),
+    Long::new("bpf-maps", Arg::No, Code::Long("bpf-maps")),
+    Long::new("bpf-map-id", Arg::Required, Code::Long("bpf-map-id")),
 ];
 
 /// iproute2 7.2's short options (`halBetuwxnro460spTbEf:mMiA:D:F:vVzZN:KHQSO`).
@@ -786,36 +787,20 @@ const fn takes_argument(flag: char) -> bool {
     matches!(flag, 'f' | 'A' | 'D' | 'F' | 'N')
 }
 
-/// How a long option name failed to match.
-enum LongError {
-    Unrecognized,
-    Ambiguous(Vec<&'static str>),
-}
-
-/// `getopt_long`'s lookup: an exact name, or an unambiguous prefix (several prefixes of
-/// the same option, `--so` and `--q` for `-A`, are not ambiguous).
-fn find_long(name: &str) -> Result<(&'static str, bool, Code), LongError> {
-    if let Some(&option) = LONG_OPTIONS.iter().find(|(long, _, _)| *long == name) {
-        return Ok(option);
-    }
-    let candidates: Vec<(&'static str, bool, Code)> = LONG_OPTIONS
-        .iter()
-        .copied()
-        .filter(|(long, _, _)| !name.is_empty() && long.starts_with(name))
-        .collect();
-    match candidates.first() {
-        None => Err(LongError::Unrecognized),
-        Some(&first)
-            if candidates
-                .iter()
-                .all(|&(_, value, code)| (value, code) == (first.1, first.2)) =>
-        {
-            Ok(first)
-        }
-        Some(_) => Err(LongError::Ambiguous(
-            candidates.iter().map(|(long, _, _)| *long).collect(),
-        )),
-    }
+/// iproute2 7.2's short options, each known as [`Code::Short`] (the option string is
+/// `halBetuwxnro460spTbEf:mMiA:D:F:vVzZN:KHQSO`).
+fn short_options() -> Vec<Short<Code>> {
+    cash_getopt::optstring(SHORT_OPTIONS)
+        .into_iter()
+        .map(|short| {
+            let arg = if takes_argument(short.letter) {
+                Arg::Required
+            } else {
+                Arg::No
+            };
+            Short::new(short.letter, arg, Code::Short(short.letter))
+        })
+        .collect()
 }
 
 /// The refusal for an option Windows cannot back.
@@ -864,120 +849,86 @@ fn usage_error(
     Ok(Parsed::Exit(option_error()))
 }
 
-#[expect(
-    clippy::too_many_lines,
-    reason = "getopt_long's long and short forms, with their errors, in one loop"
-)]
+/// The refusal for a cluster of short options (`-ano`) that holds a flag Windows cannot
+/// back, said before anything in it is applied, so a netstat habit gets one clear
+/// message. An option's argument (`-finet`) is not more flags.
+fn refused_cluster(
+    word: &str,
+    context: &cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
+) -> Result<Option<Parsed>, cash_core::Error> {
+    let Some(flags) = word
+        .strip_prefix('-')
+        .filter(|f| !f.is_empty() && !f.starts_with('-'))
+    else {
+        return Ok(None);
+    };
+    let letters = flags
+        .char_indices()
+        .find(|&(_, f)| takes_argument(f))
+        .map_or(flags, |(at, f)| {
+            flags.get(..at + f.len_utf8()).unwrap_or(flags)
+        });
+    let Some(message) = letters.chars().find_map(|f| refusal(Code::Short(f))) else {
+        return Ok(None);
+    };
+    writeln!(context.stderr(), "ss: {message}")?;
+    if looks_like_netstat(letters) {
+        writeln!(
+            context.stderr(),
+            "ss: -{flags} looks like netstat's flags; the ss spelling is `ss -tuanp` (netstat.exe is still available)"
+        )?;
+    }
+    Ok(Some(Parsed::Exit(ExecutionResult::general_error())))
+}
+
+/// Reads the command line as `getopt_long` does (`cash-getopt`), each option applied as
+/// it comes; words that are not options are the filter.
 fn parse(
     args: &[String],
     context: &cash_core::ExecutionContext<'_, impl cash_core::ShellExtensions>,
 ) -> Result<Parsed, cash_core::Error> {
     let mut options = Options::new();
-    let mut args = args.iter();
-
-    while let Some(arg) = args.next() {
-        if arg == "--" {
-            options.filter.extend(args.by_ref().cloned());
-            break;
-        }
-        if let Some(long) = arg.strip_prefix("--") {
-            let (name, value) = long
-                .split_once('=')
-                .map_or((long, None), |(n, v)| (n, Some(v.to_owned())));
-            let (full, takes_value, code) = match find_long(name) {
-                Ok(option) => option,
-                Err(LongError::Unrecognized) => {
-                    return usage_error(&format!("ss: unrecognized option '{arg}'"), context);
-                }
-                Err(LongError::Ambiguous(names)) => {
-                    let names: Vec<String> = names.iter().map(|n| format!("'--{n}'")).collect();
-                    return usage_error(
-                        &format!(
-                            "ss: option '{arg}' is ambiguous; possibilities: {}",
-                            names.join(" ")
-                        ),
-                        context,
-                    );
-                }
-            };
-            let value = match (takes_value, value) {
-                (false, Some(_)) => {
-                    return usage_error(
-                        &format!("ss: option '--{full}' doesn't allow an argument"),
-                        context,
-                    );
-                }
-                (true, None) => match args.next() {
-                    Some(value) => Some(value.clone()),
-                    None => {
-                        return usage_error(
-                            &format!("ss: option '--{full}' requires an argument"),
-                            context,
-                        );
-                    }
-                },
-                (_, value) => value,
-            };
-            if let Some(message) = refusal(code) {
-                writeln!(context.stderr(), "ss: {message}")?;
-                return Ok(Parsed::Exit(ExecutionResult::general_error()));
+    let shorts = short_options();
+    let mut reader = Getopt::new(&shorts, LONG_OPTIONS).read(args);
+    let mut checked = None;
+    while let Some(next) = reader.next() {
+        // A cluster's first option or problem: the whole cluster is looked at first.
+        let cluster = match &next {
+            Ok(Item::Option {
+                word,
+                written: Written::Short(_),
+                ..
+            }) => Some(*word),
+            Err(Problem::UnknownShort { .. } | Problem::ShortNeedsValue { .. }) => {
+                Some(reader.current_word())
             }
-            if let Code::Short(flag) = code
-                && let Some(result) = apply(flag, value, &mut options, context)?
-            {
-                return Ok(Parsed::Exit(result));
-            }
-            continue;
-        }
-        let Some(flags) = arg.strip_prefix('-').filter(|f| !f.is_empty()) else {
-            options.filter.push(arg.clone());
-            continue;
+            _ => None,
         };
-        // Refuse before applying anything, so a netstat habit gets one clear message.
-        // An option's argument (`-finet`) is not more flags.
-        let letters = flags
-            .char_indices()
-            .find(|&(_, f)| takes_argument(f))
-            .map_or(flags, |(at, f)| {
-                flags.get(..at + f.len_utf8()).unwrap_or(flags)
-            });
-        if let Some(message) = letters.chars().find_map(|f| refusal(Code::Short(f))) {
-            writeln!(context.stderr(), "ss: {message}")?;
-            if looks_like_netstat(letters) {
-                writeln!(
-                    context.stderr(),
-                    "ss: -{flags} looks like netstat's flags; the ss spelling is `ss -tuanp` (netstat.exe is still available)"
-                )?;
+        if let Some(word) = cluster
+            && checked != Some(word)
+        {
+            checked = Some(word);
+            let text = args.get(word).map_or("", String::as_str);
+            if let Some(refused) = refused_cluster(text, context)? {
+                return Ok(refused);
             }
+        }
+        let (code, value) = match next {
+            Ok(Item::Option { id, value, .. }) => (id, value),
+            Ok(Item::Operand { value, .. }) => {
+                options.filter.push(value);
+                continue;
+            }
+            Err(problem) => return usage_error(&format!("ss: {problem}"), context),
+        };
+        if let Some(message) = refusal(code) {
+            writeln!(context.stderr(), "ss: {message}")?;
             return Ok(Parsed::Exit(ExecutionResult::general_error()));
         }
-        for (index, flag) in flags.char_indices() {
-            if !SHORT_OPTIONS.contains(flag) {
-                return usage_error(&format!("ss: invalid option -- '{flag}'"), context);
-            }
-            if takes_argument(flag) {
-                let attached = flags.get(index + flag.len_utf8()..).unwrap_or("");
-                let value = if attached.is_empty() {
-                    match args.next() {
-                        Some(value) => value.clone(),
-                        None => {
-                            return usage_error(
-                                &format!("ss: option requires an argument -- '{flag}'"),
-                                context,
-                            );
-                        }
-                    }
-                } else {
-                    attached.to_owned()
-                };
-                if let Some(result) = apply(flag, Some(value), &mut options, context)? {
-                    return Ok(Parsed::Exit(result));
-                }
-                break;
-            }
-            if let Some(result) = apply(flag, None, &mut options, context)? {
-                return Ok(Parsed::Exit(result));
-            }
+        if let Code::Short(flag) = code
+            && let Some(result) = apply(flag, value, &mut options, context)?
+        {
+            return Ok(Parsed::Exit(result));
         }
     }
     Ok(Parsed::Run(Box::new(options)))
@@ -1993,16 +1944,23 @@ mod tests {
 
     #[test]
     fn long_options_match_as_getopt_long_does() {
-        assert_eq!(find_long("num").ok().map(|o| o.2), Some(Code::Short('n')));
-        assert_eq!(find_long("so").ok().map(|o| o.2), Some(Code::Short('A')));
+        let shorts = short_options();
+        let getopt = Getopt::new(&shorts, LONG_OPTIONS);
+        let find = |name: &str| getopt.long(name).map(|long| long.id);
+        assert_eq!(find("num"), Ok(Code::Short('n')));
+        // `--so` is `--socket` and `--query` is the same option: no ambiguity.
+        assert_eq!(find("so"), Ok(Code::Short('A')));
+        assert_eq!(find("context"), Ok(Code::Short('Z')));
         assert_eq!(
-            find_long("context").ok().map(|o| o.2),
-            Some(Code::Short('Z'))
+            find("n"),
+            Err(cash_getopt::LongMiss::Ambiguous(vec![
+                "numeric".into(),
+                "net".into(),
+                "no-header".into(),
+                "no-queues".into()
+            ]))
         );
-        assert!(
-            matches!(find_long("n"), Err(LongError::Ambiguous(names)) if names == ["numeric", "net", "no-header", "no-queues"])
-        );
-        assert!(matches!(find_long("bogus"), Err(LongError::Unrecognized)));
+        assert_eq!(find("bogus"), Err(cash_getopt::LongMiss::Unknown));
     }
 
     #[test]

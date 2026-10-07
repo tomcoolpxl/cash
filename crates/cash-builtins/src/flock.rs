@@ -35,6 +35,7 @@ use std::time::{Duration, Instant};
 
 use cash_core::openfiles::OpenFile;
 use cash_core::{ExecutionResult, builtins};
+use cash_getopt::{Arg, Getopt, Item, Long, Order};
 use cash_win32::filelock::{self, Range};
 use clap::Parser;
 
@@ -97,25 +98,28 @@ pub(crate) struct FlockCommand {
 }
 
 /// The long options, in util-linux's order (which an ambiguity message follows), each
-/// with whether it takes a value.
-const LONG_OPTIONS: &[(&str, bool)] = &[
-    ("shared", false),
-    ("exclusive", false),
-    ("unlock", false),
-    ("nonblocking", false),
-    ("nb", false),
-    ("timeout", true),
-    ("wait", true),
-    ("conflict-exit-code", true),
-    ("close", false),
-    ("no-fork", false),
-    ("help", false),
-    ("version", false),
-    ("fcntl", false),
-    ("start", true),
-    ("length", true),
-    ("verbose", false),
+/// known by the letter it is applied under.
+const LONG_OPTIONS: &[Long<'static, char>] = &[
+    Long::new("shared", Arg::No, 's'),
+    Long::new("exclusive", Arg::No, 'x'),
+    Long::new("unlock", Arg::No, 'u'),
+    Long::new("nonblocking", Arg::No, 'n'),
+    Long::new("nb", Arg::No, 'n'),
+    Long::new("timeout", Arg::Required, 'w'),
+    Long::new("wait", Arg::Required, 'w'),
+    Long::new("conflict-exit-code", Arg::Required, 'E'),
+    Long::new("close", Arg::No, 'o'),
+    Long::new("no-fork", Arg::No, 'F'),
+    Long::new("help", Arg::No, 'h'),
+    Long::new("version", Arg::No, 'V'),
+    Long::new("fcntl", Arg::No, 'f'),
+    Long::new("start", Arg::Required, 'S'),
+    Long::new("length", Arg::Required, 'L'),
+    Long::new("verbose", Arg::No, 'v'),
 ];
+
+/// util-linux's short options.
+const SHORT_OPTIONS: &str = "sxeunoFhVw:E:";
 
 /// How long to wait for the lock.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -239,26 +243,6 @@ impl Reading {
     }
 }
 
-/// The letter a long option is applied under.
-fn long_letter(name: &str) -> char {
-    match name {
-        "shared" => 's',
-        "exclusive" => 'x',
-        "unlock" => 'u',
-        "nonblocking" | "nb" => 'n',
-        "timeout" | "wait" => 'w',
-        "conflict-exit-code" => 'E',
-        "close" => 'o',
-        "no-fork" => 'F',
-        "help" => 'h',
-        "version" => 'V',
-        "fcntl" => 'f',
-        "start" => 'S',
-        "length" => 'L',
-        _ => 'v',
-    }
-}
-
 /// `-w`'s value: seconds, fractions allowed, as `strtod` reads them. Not a number is
 /// refused as util-linux refuses it; a negative or infinite one fails its timer.
 fn parse_timeout(text: &str) -> Result<Duration, Refusal> {
@@ -296,80 +280,17 @@ fn parse_descriptor(text: &str) -> Option<i32> {
     text.trim_start().parse::<i32>().ok()
 }
 
-/// Reads the command line as util-linux does: `getopt_long` with options ending at the
-/// first non-option, then the file or descriptor and the command.
-#[expect(
-    clippy::too_many_lines,
-    reason = "one pass over the command line, long and short options alike"
-)]
+/// Reads the command line as util-linux does: `getopt_long` (`cash-getopt`) with options
+/// ending at the first non-option, then the file or descriptor and the command.
 fn parse(args: &[String]) -> Result<Options, Refusal> {
     let mut reading = Reading::default();
-    let mut index = 0;
-    while let Some(arg) = args.get(index) {
-        if arg == "--" {
-            index += 1;
-            break;
-        }
-        if !arg.starts_with('-') || arg == "-" {
-            break;
-        }
-        index += 1;
-        if let Some(long) = arg.strip_prefix("--") {
-            let (name, value) = match long.split_once('=') {
-                Some((name, value)) => (name, Some(value)),
-                None => (long, None),
-            };
-            let (full, takes_value) = find_long(name, arg)?;
-            let letter = long_letter(full);
-            if takes_value {
-                let value = if let Some(value) = value {
-                    value
-                } else {
-                    let Some(next) = args.get(index) else {
-                        return Err(Refusal::usage(format!(
-                            "option '--{full}' requires an argument"
-                        )));
-                    };
-                    index += 1;
-                    next
-                };
-                reading.apply(letter, Some(value))?;
-            } else {
-                if value.is_some() {
-                    return Err(Refusal::usage(format!(
-                        "option '--{full}' doesn't allow an argument"
-                    )));
-                }
-                reading.apply(letter, None)?;
-            }
-            continue;
-        }
-        let short = arg.strip_prefix('-').unwrap_or(arg);
-        for (at, letter) in short.char_indices() {
-            match letter {
-                's' | 'x' | 'e' | 'u' | 'n' | 'o' | 'F' | 'h' | 'V' => {
-                    reading.apply(letter, None)?;
-                }
-                'w' | 'E' => {
-                    let rest = short.get(at + letter.len_utf8()..).unwrap_or("");
-                    let value = if rest.is_empty() {
-                        let Some(next) = args.get(index) else {
-                            return Err(Refusal::usage(format!(
-                                "option requires an argument -- '{letter}'"
-                            )));
-                        };
-                        index += 1;
-                        next.as_str()
-                    } else {
-                        rest
-                    };
-                    reading.apply(letter, Some(value))?;
-                    break;
-                }
-                other => {
-                    return Err(Refusal::usage(format!("invalid option -- '{other}'")));
-                }
-            }
+    let shorts = cash_getopt::optstring(SHORT_OPTIONS);
+    let mut rest = Vec::new();
+    let getopt = Getopt::new(&shorts, LONG_OPTIONS).order(Order::StopAtOperand);
+    for next in getopt.read(args) {
+        match next.map_err(|problem| Refusal::usage(problem.to_string()))? {
+            Item::Option { id, value, .. } => reading.apply(id, value.as_deref())?,
+            Item::Operand { value, .. } => rest.push(value),
         }
     }
 
@@ -385,8 +306,7 @@ fn parse(args: &[String]) -> Result<Options, Refusal> {
         ));
     }
 
-    let rest = &args[index..];
-    let action = match rest {
+    let action = match rest.as_slice() {
         [] => return Err(Refusal::usage("not enough arguments".to_owned())),
         [one] => Action::Descriptor(
             parse_descriptor(one)
@@ -409,30 +329,6 @@ fn parse(args: &[String]) -> Result<Options, Refusal> {
         },
     };
     Ok(Options::for_action(&reading, action))
-}
-
-/// The long option `name` means: itself, or the one it is a unique prefix of. `arg` is
-/// the word as typed, which an unrecognized option is reported as.
-fn find_long(name: &str, arg: &str) -> Result<(&'static str, bool), Refusal> {
-    if let Some(&(full, takes_value)) = LONG_OPTIONS.iter().find(|(full, _)| *full == name) {
-        return Ok((full, takes_value));
-    }
-    let candidates: Vec<&(&str, bool)> = LONG_OPTIONS
-        .iter()
-        .filter(|(full, _)| !name.is_empty() && full.starts_with(name))
-        .collect();
-    match candidates.as_slice() {
-        [(full, takes_value)] => Ok((full, *takes_value)),
-        [] => Err(Refusal::usage(format!("unrecognized option '{arg}'"))),
-        many => {
-            let possibilities: Vec<String> =
-                many.iter().map(|(full, _)| format!("'--{full}'")).collect();
-            Err(Refusal::usage(format!(
-                "option '--{name}' is ambiguous; possibilities: {}",
-                possibilities.join(" ")
-            )))
-        }
-    }
 }
 
 impl Options {

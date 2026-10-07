@@ -34,6 +34,7 @@ use std::io::{Read, Write};
 use std::path::Path;
 
 use cash_core::{ExecutionResult, builtins};
+use cash_getopt::{Arg, Getopt, Item, Long, Short};
 use cash_win32::codepage;
 use clap::Parser;
 
@@ -1359,27 +1360,39 @@ enum Parsed {
     Fail(String),
 }
 
-/// The long options and whether each takes a value; a prefix that names one of them is
-/// accepted, as glibc's argp accepts it.
-const LONG_OPTIONS: &[(&str, bool)] = &[
-    ("from-code", true),
-    ("to-code", true),
-    ("output", true),
-    ("list", false),
-    ("silent", false),
-    ("verbose", false),
-    ("help", false),
-    ("usage", false),
-    ("version", false),
+/// The long options, each known by its name, as glibc's argp reads them.
+const LONG_OPTIONS: &[Long<'static, &str>] = &[
+    Long::new("from-code", Arg::Required, "from-code"),
+    Long::new("to-code", Arg::Required, "to-code"),
+    Long::new("output", Arg::Required, "output"),
+    Long::new("list", Arg::No, "list"),
+    Long::new("silent", Arg::No, "silent"),
+    Long::new("verbose", Arg::No, "verbose"),
+    Long::new("help", Arg::No, "help"),
+    Long::new("usage", Arg::No, "usage"),
+    Long::new("version", Arg::No, "version"),
 ];
 
-/// Applies a long option; `Some` is an early exit.
-fn apply_long(options: &mut Options, name: &str, value: Option<String>) -> Option<Parsed> {
+/// The short options, each known by the long option it stands for; `-c` has none.
+const SHORT_OPTIONS: &[Short<&str>] = &[
+    Short::new('c', Arg::No, "discard"),
+    Short::new('s', Arg::No, "silent"),
+    Short::new('l', Arg::No, "list"),
+    Short::new('?', Arg::No, "help"),
+    Short::new('V', Arg::No, "version"),
+    Short::new('f', Arg::Required, "from-code"),
+    Short::new('t', Arg::Required, "to-code"),
+    Short::new('o', Arg::Required, "output"),
+];
+
+/// Applies an option; `Some` is an early exit.
+fn apply(options: &mut Options, name: &str, value: Option<String>) -> Option<Parsed> {
     match name {
         "from-code" => options.from = value.unwrap_or_default(),
         "to-code" => options.to = value.unwrap_or_default(),
         "output" => options.output = value,
         "list" => options.list = true,
+        "discard" => options.discard = true,
         "silent" => {}
         "verbose" => options.verbose = true,
         "help" => return Some(Parsed::Help),
@@ -1390,95 +1403,18 @@ fn apply_long(options: &mut Options, name: &str, value: Option<String>) -> Optio
     None
 }
 
+/// Reads the command line as glibc's argp does, on `getopt_long` (`cash-getopt`).
 fn parse(args: &[String]) -> Parsed {
     let mut options = Options::default();
-    let mut only_files = false;
-    let mut iter = args.iter();
-    while let Some(arg) = iter.next() {
-        if only_files || arg == "-" || !arg.starts_with('-') {
-            options.files.push(arg.clone());
-            continue;
-        }
-        if arg == "--" {
-            only_files = true;
-            continue;
-        }
-        if let Some(long) = arg.strip_prefix("--") {
-            let (name, inline) = long
-                .split_once('=')
-                .map_or((long, None), |(name, value)| (name, Some(value)));
-            let candidates: Vec<&(&str, bool)> = LONG_OPTIONS
-                .iter()
-                .filter(|(full, _)| full.starts_with(name))
-                .collect();
-            let (full, takes_value) = match candidates.as_slice() {
-                [one] => **one,
-                [] => return Parsed::Fail(format!("iconv: unrecognized option '{arg}'")),
-                many => {
-                    let possibilities: Vec<String> =
-                        many.iter().map(|(full, _)| format!("'--{full}'")).collect();
-                    return Parsed::Fail(format!(
-                        "iconv: option '--{name}' is ambiguous; possibilities: {}",
-                        possibilities.join(" ")
-                    ));
+    for next in Getopt::new(SHORT_OPTIONS, LONG_OPTIONS).read(args) {
+        match next {
+            Ok(Item::Option { id, value, .. }) => {
+                if let Some(early) = apply(&mut options, id, value) {
+                    return early;
                 }
-            };
-            let value = if takes_value {
-                match inline {
-                    Some(value) => Some(value.to_owned()),
-                    None => match iter.next() {
-                        Some(value) => Some(value.clone()),
-                        None => {
-                            return Parsed::Fail(format!(
-                                "iconv: option '--{full}' requires an argument"
-                            ));
-                        }
-                    },
-                }
-            } else {
-                if inline.is_some() {
-                    return Parsed::Fail(format!(
-                        "iconv: option '--{full}' doesn't allow an argument"
-                    ));
-                }
-                None
-            };
-            if let Some(early) = apply_long(&mut options, full, value) {
-                return early;
             }
-            continue;
-        }
-
-        let mut letters = arg.strip_prefix('-').unwrap_or(arg).chars();
-        while let Some(letter) = letters.next() {
-            match letter {
-                'c' => options.discard = true,
-                's' => {}
-                'l' => options.list = true,
-                '?' => return Parsed::Help,
-                'V' => return Parsed::Version,
-                'f' | 't' | 'o' => {
-                    let attached: String = letters.by_ref().collect();
-                    let value = if attached.is_empty() {
-                        match iter.next() {
-                            Some(value) => value.clone(),
-                            None => {
-                                return Parsed::Fail(format!(
-                                    "iconv: option requires an argument -- '{letter}'"
-                                ));
-                            }
-                        }
-                    } else {
-                        attached
-                    };
-                    match letter {
-                        'f' => options.from = value,
-                        't' => options.to = value,
-                        _ => options.output = Some(value),
-                    }
-                }
-                other => return Parsed::Fail(format!("iconv: invalid option -- '{other}'")),
-            }
+            Ok(Item::Operand { value, .. }) => options.files.push(value),
+            Err(problem) => return Parsed::Fail(format!("iconv: {problem}")),
         }
     }
     Parsed::Run(options)

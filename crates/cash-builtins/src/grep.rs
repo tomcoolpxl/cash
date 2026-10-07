@@ -28,6 +28,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use cash_core::{ExecutionResult, builtins};
+use cash_getopt::{Arg, Getopt, Item, Long};
 use clap::Parser;
 use grep_searcher::{BinaryDetection, Searcher, SearcherBuilder, Sink, SinkContext, SinkMatch};
 
@@ -129,69 +130,64 @@ const OFFSET_WIDTH: usize = 19;
 // ---------------------------------------------------------------------------------
 // Options
 
-/// Whether an option takes an argument.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Takes {
-    Nothing,
-    Required,
-    Optional,
-}
-
 /// GNU grep's long options, in its order (which the ambiguity message lists).
-const LONG_OPTIONS: &[(&str, Takes, &str)] = &[
-    ("basic-regexp", Takes::Nothing, "G"),
-    ("extended-regexp", Takes::Nothing, "E"),
-    ("fixed-regexp", Takes::Nothing, "F"),
-    ("fixed-strings", Takes::Nothing, "F"),
-    ("perl-regexp", Takes::Nothing, "P"),
-    ("after-context", Takes::Required, "A"),
-    ("before-context", Takes::Required, "B"),
-    ("binary-files", Takes::Required, "binary-files"),
-    ("byte-offset", Takes::Nothing, "b"),
-    ("context", Takes::Required, "C"),
-    ("color", Takes::Optional, "color"),
-    ("colour", Takes::Optional, "color"),
-    ("count", Takes::Nothing, "c"),
-    ("devices", Takes::Required, "D"),
-    ("directories", Takes::Required, "d"),
-    ("dereference-recursive", Takes::Nothing, "R"),
-    ("exclude", Takes::Required, "exclude"),
-    ("exclude-from", Takes::Required, "exclude-from"),
-    ("exclude-dir", Takes::Required, "exclude-dir"),
-    ("file", Takes::Required, "f"),
-    ("files-with-matches", Takes::Nothing, "l"),
-    ("files-without-match", Takes::Nothing, "L"),
-    ("group-separator", Takes::Required, "group-separator"),
-    ("help", Takes::Nothing, "help"),
-    ("include", Takes::Required, "include"),
-    ("ignore-case", Takes::Nothing, "i"),
-    ("no-ignore-case", Takes::Nothing, "no-ignore-case"),
-    ("initial-tab", Takes::Nothing, "T"),
-    ("label", Takes::Required, "label"),
-    ("line-buffered", Takes::Nothing, "line-buffered"),
-    ("line-number", Takes::Nothing, "n"),
-    ("line-regexp", Takes::Nothing, "x"),
-    ("max-count", Takes::Required, "m"),
-    ("no-filename", Takes::Nothing, "h"),
-    ("no-group-separator", Takes::Nothing, "no-group-separator"),
-    ("no-messages", Takes::Nothing, "s"),
-    ("null", Takes::Nothing, "Z"),
-    ("null-data", Takes::Nothing, "z"),
-    ("only-matching", Takes::Nothing, "o"),
-    ("quiet", Takes::Nothing, "q"),
-    ("recursive", Takes::Nothing, "r"),
-    ("regexp", Takes::Required, "e"),
-    ("invert-match", Takes::Nothing, "v"),
-    ("silent", Takes::Nothing, "q"),
-    ("text", Takes::Nothing, "a"),
-    ("binary", Takes::Nothing, "U"),
-    ("version", Takes::Nothing, "V"),
-    ("with-filename", Takes::Nothing, "H"),
-    ("word-regexp", Takes::Nothing, "w"),
+const LONG_OPTIONS: &[Long<'static, &str>] = &[
+    Long::new("basic-regexp", Arg::No, "G"),
+    Long::new("extended-regexp", Arg::No, "E"),
+    Long::new("fixed-regexp", Arg::No, "F"),
+    Long::new("fixed-strings", Arg::No, "F"),
+    Long::new("perl-regexp", Arg::No, "P"),
+    Long::new("after-context", Arg::Required, "A"),
+    Long::new("before-context", Arg::Required, "B"),
+    Long::new("binary-files", Arg::Required, "binary-files"),
+    Long::new("byte-offset", Arg::No, "b"),
+    Long::new("context", Arg::Required, "C"),
+    Long::new("color", Arg::Optional, "color"),
+    Long::new("colour", Arg::Optional, "color"),
+    Long::new("count", Arg::No, "c"),
+    Long::new("devices", Arg::Required, "D"),
+    Long::new("directories", Arg::Required, "d"),
+    Long::new("dereference-recursive", Arg::No, "R"),
+    Long::new("exclude", Arg::Required, "exclude"),
+    Long::new("exclude-from", Arg::Required, "exclude-from"),
+    Long::new("exclude-dir", Arg::Required, "exclude-dir"),
+    Long::new("file", Arg::Required, "f"),
+    Long::new("files-with-matches", Arg::No, "l"),
+    Long::new("files-without-match", Arg::No, "L"),
+    Long::new("group-separator", Arg::Required, "group-separator"),
+    Long::new("help", Arg::No, "help"),
+    Long::new("include", Arg::Required, "include"),
+    Long::new("ignore-case", Arg::No, "i"),
+    Long::new("no-ignore-case", Arg::No, "no-ignore-case"),
+    Long::new("initial-tab", Arg::No, "T"),
+    Long::new("label", Arg::Required, "label"),
+    Long::new("line-buffered", Arg::No, "line-buffered"),
+    Long::new("line-number", Arg::No, "n"),
+    Long::new("line-regexp", Arg::No, "x"),
+    Long::new("max-count", Arg::Required, "m"),
+    Long::new("no-filename", Arg::No, "h"),
+    Long::new("no-group-separator", Arg::No, "no-group-separator"),
+    Long::new("no-messages", Arg::No, "s"),
+    Long::new("null", Arg::No, "Z"),
+    Long::new("null-data", Arg::No, "z"),
+    Long::new("only-matching", Arg::No, "o"),
+    Long::new("quiet", Arg::No, "q"),
+    Long::new("recursive", Arg::No, "r"),
+    Long::new("regexp", Arg::Required, "e"),
+    Long::new("invert-match", Arg::No, "v"),
+    Long::new("silent", Arg::No, "q"),
+    Long::new("text", Arg::No, "a"),
+    Long::new("binary", Arg::No, "U"),
+    Long::new("version", Arg::No, "V"),
+    Long::new("with-filename", Arg::No, "H"),
+    Long::new("word-regexp", Arg::No, "w"),
 ];
 
 /// GNU grep's short options; the digits of `-NUM` are read apart.
 const SHORT_OPTIONS: &str = "A:B:C:D:EFGHILPRTUVX:abcd:e:f:hilm:noqrsuvwxyZz";
+
+/// The digits of `-NUM`, short options of their own.
+const DIGITS: &str = "0123456789";
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum BinaryFiles {
@@ -427,144 +423,39 @@ impl Options {
         Ok(())
     }
 
-    /// Parses the command line as `getopt_long` does: options and operands in any
-    /// order, clusters, `--name=value`, unique prefixes, `--` ending the options.
+    /// Parses the command line as `getopt_long` does (`cash-getopt`): options and
+    /// operands in any order, clusters, `--name=value`, unique prefixes, `--` ending the
+    /// options. Digits in one word make `-NUM`, the context, as GNU grep reads them: a
+    /// new word starts a new number.
     fn parse(args: &[String]) -> Result<Self, Early> {
         let mut options = Self::new();
-        let mut index = 0;
-        while let Some(arg) = args.get(index) {
-            index += 1;
-            if arg == "--" {
-                options.files.extend(args.iter().skip(index).cloned());
-                break;
-            }
-            if let Some(text) = arg.strip_prefix("--") {
-                let (id, value) = long_option(text, args, &mut index)?;
-                options.apply(id, value)?;
-            } else if arg.len() > 1 && arg.starts_with('-') {
-                let body = arg.get(1..).unwrap_or_default();
-                options.short_cluster(body, args, &mut index)?;
-            } else {
-                options.files.push(arg.clone());
+        let mut shorts = cash_getopt::optstring_ids(SHORT_OPTIONS);
+        shorts.extend(cash_getopt::optstring_ids(DIGITS));
+        let mut number: Option<(usize, usize)> = None;
+        for next in Getopt::new(&shorts, LONG_OPTIONS).read(args) {
+            match next.map_err(|problem| Early::Usage(problem.to_string()))? {
+                Item::Option {
+                    id, value, word, ..
+                } => {
+                    let digit = id.parse::<usize>().ok().filter(|_| DIGITS.contains(id));
+                    if let Some(digit) = digit {
+                        let context = match number {
+                            Some((same, so_far)) if same == word => {
+                                so_far.saturating_mul(10).saturating_add(digit)
+                            }
+                            _ => digit,
+                        };
+                        number = Some((word, context));
+                        options.default_context = Some(context);
+                    } else {
+                        options.apply(id, value)?;
+                    }
+                }
+                Item::Operand { value, .. } => options.files.push(value),
             }
         }
         Ok(options)
     }
-
-    /// Applies a cluster of short options (`-rni`); the first that takes an argument
-    /// takes the rest of the cluster, or the next word. Digits make `-NUM`.
-    fn short_cluster(
-        &mut self,
-        body: &str,
-        args: &[String],
-        index: &mut usize,
-    ) -> Result<(), Early> {
-        let mut digits: Option<usize> = None;
-        for (at, c) in body.char_indices() {
-            if let Some(digit) = c.to_digit(10) {
-                let digit = usize::try_from(digit).unwrap_or(0);
-                digits = Some(digits.unwrap_or(0).saturating_mul(10).saturating_add(digit));
-                continue;
-            }
-            let takes = match SHORT_OPTIONS.find(c) {
-                Some(pos) if c != ':' => {
-                    if SHORT_OPTIONS
-                        .get(pos + 1..)
-                        .is_some_and(|r| r.starts_with(':'))
-                    {
-                        Takes::Required
-                    } else {
-                        Takes::Nothing
-                    }
-                }
-                _ => return Err(Early::Usage(std::format!("invalid option -- '{c}'"))),
-            };
-            let id = c.to_string();
-            if takes == Takes::Nothing {
-                self.apply(&id, None)?;
-                continue;
-            }
-            let rest = body.get(at + c.len_utf8()..).unwrap_or_default();
-            let value = if rest.is_empty() {
-                let Some(value) = args.get(*index) else {
-                    return Err(Early::Usage(std::format!(
-                        "option requires an argument -- '{c}'"
-                    )));
-                };
-                *index += 1;
-                value.clone()
-            } else {
-                rest.to_owned()
-            };
-            self.apply(&id, Some(value))?;
-            break;
-        }
-        if let Some(n) = digits {
-            self.default_context = Some(n);
-        }
-        Ok(())
-    }
-}
-
-/// A long option `text` (after its `--`): its id and its value, taken from `args` at
-/// `index` when it needs one.
-fn long_option(
-    text: &str,
-    args: &[String],
-    index: &mut usize,
-) -> Result<(&'static str, Option<String>), Early> {
-    let (name, inline) = text
-        .split_once('=')
-        .map_or((text, None), |(n, v)| (n, Some(v.to_owned())));
-    let exact = LONG_OPTIONS.iter().find(|(n, _, _)| *n == name).copied();
-    let candidates: Vec<(&str, Takes, &str)> = LONG_OPTIONS
-        .iter()
-        .filter(|(n, _, _)| n.starts_with(name))
-        .copied()
-        .collect();
-    // Prefixes of options that are the same option (`--col`) are not ambiguous.
-    let one_option = candidates
-        .first()
-        .is_some_and(|first| candidates.iter().all(|c| c.2 == first.2 && c.1 == first.1));
-    let found = exact.or_else(|| {
-        if one_option {
-            candidates.first().copied()
-        } else {
-            None
-        }
-    });
-    let Some((full, takes, id)) = found else {
-        if candidates.is_empty() {
-            return Err(Early::Usage(std::format!("unrecognized option '--{text}'")));
-        }
-        let listed: Vec<String> = candidates
-            .iter()
-            .map(|(n, _, _)| std::format!("'--{n}'"))
-            .collect();
-        return Err(Early::Usage(std::format!(
-            "option '--{name}' is ambiguous; possibilities: {}",
-            listed.join(" ")
-        )));
-    };
-    let value = match (takes, inline) {
-        (Takes::Nothing, Some(_)) => {
-            return Err(Early::Usage(std::format!(
-                "option '--{full}' doesn't allow an argument"
-            )));
-        }
-        (Takes::Nothing | Takes::Optional, None) => None,
-        (_, Some(value)) => Some(value),
-        (Takes::Required, None) => {
-            let Some(value) = args.get(*index) else {
-                return Err(Early::Usage(std::format!(
-                    "option '--{full}' requires an argument"
-                )));
-            };
-            *index += 1;
-            Some(value.clone())
-        }
-    };
-    Ok((id, value))
 }
 
 /// A number as `strtoimax` reads one for `-A`, `-B`, `-C` and `-m`.

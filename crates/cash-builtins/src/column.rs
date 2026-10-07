@@ -22,6 +22,7 @@
 use std::io::{Read, Write};
 
 use cash_core::{ExecutionResult, builtins};
+use cash_getopt::{Arg, Getopt, Item, Long};
 use clap::Parser;
 use unicode_width::UnicodeWidthChar as _;
 
@@ -831,49 +832,41 @@ fn parse_u32(text: &str, what: &str) -> Result<u32, String> {
 // ---------------------------------------------------------------------------------
 // Options
 
-/// Whether an option takes an argument.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Takes {
-    Nothing,
-    Required,
-    Optional,
-}
-
 /// util-linux's long options, in its order (which the ambiguity message lists).
-const LONG_OPTIONS: &[(&str, Takes, &str)] = &[
-    ("columns", Takes::Required, "c"),
-    ("color", Takes::Optional, "color"),
-    ("fillrows", Takes::Nothing, "x"),
-    ("help", Takes::Nothing, "h"),
-    ("input-separator", Takes::Required, "s"),
-    ("json", Takes::Nothing, "J"),
-    ("keep-empty-lines", Takes::Nothing, "L"),
-    ("output-separator", Takes::Required, "o"),
-    ("output-width", Takes::Required, "c"),
-    ("separator", Takes::Required, "s"),
-    ("table", Takes::Nothing, "t"),
-    ("table-colorscheme", Takes::Required, "colorscheme"),
-    ("table-columns", Takes::Required, "N"),
-    ("table-column", Takes::Required, "C"),
-    ("table-columns-limit", Takes::Required, "l"),
-    ("table-hide", Takes::Required, "H"),
-    ("table-name", Takes::Required, "n"),
-    ("table-maxout", Takes::Nothing, "m"),
-    ("table-noextreme", Takes::Required, "E"),
-    ("table-noheadings", Takes::Nothing, "d"),
-    ("table-order", Takes::Required, "O"),
-    ("table-right", Takes::Required, "R"),
-    ("table-truncate", Takes::Required, "T"),
-    ("table-wrap", Takes::Required, "W"),
-    ("table-empty-lines", Takes::Nothing, "L"),
-    ("table-header-repeat", Takes::Nothing, "e"),
-    ("table-header-as-columns", Takes::Nothing, "K"),
-    ("tree", Takes::Required, "r"),
-    ("tree-id", Takes::Required, "i"),
-    ("tree-parent", Takes::Required, "p"),
-    ("use-spaces", Takes::Required, "S"),
-    ("version", Takes::Nothing, "V"),
-    ("wrap-separator", Takes::Required, "wrap-separator"),
+const LONG_OPTIONS: &[Long<'static, &str>] = &[
+    Long::new("columns", Arg::Required, "c"),
+    Long::new("color", Arg::Optional, "color"),
+    Long::new("fillrows", Arg::No, "x"),
+    Long::new("help", Arg::No, "h"),
+    Long::new("input-separator", Arg::Required, "s"),
+    Long::new("json", Arg::No, "J"),
+    Long::new("keep-empty-lines", Arg::No, "L"),
+    Long::new("output-separator", Arg::Required, "o"),
+    Long::new("output-width", Arg::Required, "c"),
+    Long::new("separator", Arg::Required, "s"),
+    Long::new("table", Arg::No, "t"),
+    Long::new("table-colorscheme", Arg::Required, "colorscheme"),
+    Long::new("table-columns", Arg::Required, "N"),
+    Long::new("table-column", Arg::Required, "C"),
+    Long::new("table-columns-limit", Arg::Required, "l"),
+    Long::new("table-hide", Arg::Required, "H"),
+    Long::new("table-name", Arg::Required, "n"),
+    Long::new("table-maxout", Arg::No, "m"),
+    Long::new("table-noextreme", Arg::Required, "E"),
+    Long::new("table-noheadings", Arg::No, "d"),
+    Long::new("table-order", Arg::Required, "O"),
+    Long::new("table-right", Arg::Required, "R"),
+    Long::new("table-truncate", Arg::Required, "T"),
+    Long::new("table-wrap", Arg::Required, "W"),
+    Long::new("table-empty-lines", Arg::No, "L"),
+    Long::new("table-header-repeat", Arg::No, "e"),
+    Long::new("table-header-as-columns", Arg::No, "K"),
+    Long::new("tree", Arg::Required, "r"),
+    Long::new("tree-id", Arg::Required, "i"),
+    Long::new("tree-parent", Arg::Required, "p"),
+    Long::new("use-spaces", Arg::Required, "S"),
+    Long::new("version", Arg::No, "V"),
+    Long::new("wrap-separator", Arg::Required, "wrap-separator"),
 ];
 
 /// util-linux's short options.
@@ -1041,73 +1034,21 @@ impl Options {
         Ok(())
     }
 
-    /// Parses the command line as `getopt_long` does: options and files in any order,
-    /// clusters, `--name=value`, unique prefixes, `--` ending the options.
+    /// Parses the command line as `getopt_long` does (`cash-getopt`): options and files
+    /// in any order, clusters, `--name=value`, unique prefixes, `--` ending the options.
     fn parse(args: &[String]) -> Result<Self, Early> {
         let mut options = Self::new();
         let mut seen = Vec::new();
-        let mut index = 0;
-        while let Some(arg) = args.get(index) {
-            index += 1;
-            if arg == "--" {
-                options.files.extend(args.iter().skip(index).cloned());
-                break;
-            }
-            if let Some(text) = arg.strip_prefix("--") {
-                let (id, value, shown) = long_option(text, args, &mut index)?;
-                options.apply(id, value, &shown, &mut seen)?;
-            } else if arg.len() > 1 && arg.starts_with('-') {
-                let body = arg.get(1..).unwrap_or_default();
-                options.short_cluster(body, args, &mut index, &mut seen)?;
-            } else {
-                options.files.push(arg.clone());
+        let shorts = cash_getopt::optstring_ids(SHORT_OPTIONS);
+        for next in Getopt::new(&shorts, LONG_OPTIONS).read(args) {
+            match next.map_err(|problem| hinted(problem.to_string()))? {
+                Item::Option {
+                    id, value, written, ..
+                } => options.apply(id, value, &written.to_string(), &mut seen)?,
+                Item::Operand { value, .. } => options.files.push(value),
             }
         }
         Ok(options)
-    }
-
-    /// Applies a cluster of short options (`-ts,`); the first that takes an argument
-    /// takes the rest of the cluster, or the next word.
-    fn short_cluster(
-        &mut self,
-        body: &str,
-        args: &[String],
-        index: &mut usize,
-        seen: &mut Vec<String>,
-    ) -> Result<(), Early> {
-        for (at, c) in body.char_indices() {
-            let takes = match SHORT_OPTIONS.find(c) {
-                Some(pos) if c != ':' => {
-                    if SHORT_OPTIONS
-                        .get(pos + 1..)
-                        .is_some_and(|r| r.starts_with(':'))
-                    {
-                        Takes::Required
-                    } else {
-                        Takes::Nothing
-                    }
-                }
-                _ => return Err(hinted(std::format!("invalid option -- '{c}'"))),
-            };
-            let id = c.to_string();
-            if takes == Takes::Nothing {
-                self.apply(&id, None, &std::format!("-{c}"), seen)?;
-                continue;
-            }
-            let rest = body.get(at + c.len_utf8()..).unwrap_or_default();
-            let value = if rest.is_empty() {
-                let Some(value) = args.get(*index) else {
-                    return Err(hinted(std::format!("option requires an argument -- '{c}'")));
-                };
-                *index += 1;
-                value.clone()
-            } else {
-                rest.to_owned()
-            };
-            self.apply(&id, Some(value), &std::format!("-{c}"), seen)?;
-            break;
-        }
-        Ok(())
     }
 
     /// What `--table-*` options need: the table mode; and what `-J` needs: names.
@@ -1133,60 +1074,6 @@ const fn hinted(message: String) -> Early {
         message,
         hint: true,
     }
-}
-
-/// A long option `text` (after its `--`): its id, its value (taken from `args` at
-/// `index` when it needs one), and how to name it.
-fn long_option(
-    text: &str,
-    args: &[String],
-    index: &mut usize,
-) -> Result<(&'static str, Option<String>, String), Early> {
-    let (name, inline) = text
-        .split_once('=')
-        .map_or((text, None), |(n, v)| (n, Some(v.to_owned())));
-    let exact = LONG_OPTIONS.iter().find(|(n, _, _)| *n == name).copied();
-    let candidates: Vec<(&str, Takes, &str)> = LONG_OPTIONS
-        .iter()
-        .filter(|(n, _, _)| n.starts_with(name))
-        .copied()
-        .collect();
-    let found = exact.or(match candidates.as_slice() {
-        [one] => Some(*one),
-        _ => None,
-    });
-    let Some((full, takes, id)) = found else {
-        if candidates.is_empty() {
-            return Err(hinted(std::format!("unrecognized option '--{text}'")));
-        }
-        let listed: Vec<String> = candidates
-            .iter()
-            .map(|(n, _, _)| std::format!("'--{n}'"))
-            .collect();
-        return Err(hinted(std::format!(
-            "option '--{text}' is ambiguous; possibilities: {}",
-            listed.join(" ")
-        )));
-    };
-    let value = match (takes, inline) {
-        (Takes::Nothing, Some(_)) => {
-            return Err(hinted(std::format!(
-                "option '--{full}' doesn't allow an argument"
-            )));
-        }
-        (Takes::Nothing | Takes::Optional, None) => None,
-        (_, Some(value)) => Some(value),
-        (Takes::Required, None) => {
-            let Some(value) = args.get(*index) else {
-                return Err(hinted(std::format!(
-                    "option '--{full}' requires an argument"
-                )));
-            };
-            *index += 1;
-            Some(value.clone())
-        }
-    };
-    Ok((id, value, std::format!("--{full}")))
 }
 
 /// The output width: `-c`, else the console's when standard output is one, else

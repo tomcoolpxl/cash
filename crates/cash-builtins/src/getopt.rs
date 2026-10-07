@@ -15,6 +15,7 @@
 use std::io::Write;
 
 use cash_core::{ExecutionResult, builtins};
+use cash_getopt::{Arg, Getopt, Item, Long, Short};
 use clap::Parser;
 
 /// Parse command options for a script, util-linux style.
@@ -24,14 +25,6 @@ pub(crate) struct GetoptCommand {
     /// getopt's own options, then the parameters to parse: parsed here.
     #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
     args: Vec<String>,
-}
-
-/// Whether an option takes an argument.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Takes {
-    Nothing,
-    Required,
-    Optional,
 }
 
 /// What to do with the first non-option.
@@ -45,16 +38,20 @@ enum Order {
     InPlace,
 }
 
-/// An option set, as `getopt_long` takes one.
+/// An option set, as `getopt_long` takes one, read by `cash-getopt`: each option known
+/// by its index in `names`, the canonical name getopt prints (`-a`, `--alpha`).
 struct Spec {
-    shorts: Vec<(char, Takes)>,
-    longs: Vec<(String, Takes)>,
+    names: Vec<String>,
+    kinds: Vec<Arg>,
+    shorts: Vec<Short<usize>>,
+    /// The long options' names, without their dashes, and their ids.
+    longs: Vec<(String, usize)>,
     order: Order,
     long_only: bool,
 }
 
-/// One thing found on the command line.
-enum Item {
+/// One thing found on the command line, as getopt prints it.
+enum Said {
     /// An option by its canonical name (`-a`, `--alpha`) and its argument, if it takes one.
     Opt(String, Option<String>),
     /// A non-option.
@@ -64,171 +61,96 @@ enum Item {
 /// A command line as `getopt_long` would see it: the options and non-options found, in
 /// order, the non-options left after the options end, and the errors on the way.
 struct Parsed {
-    items: Vec<Item>,
+    items: Vec<Said>,
     rest: Vec<String>,
     errors: Vec<String>,
 }
 
 impl Spec {
-    fn short(&self, c: char) -> Option<Takes> {
-        self.shorts.iter().find(|(s, _)| *s == c).map(|(_, t)| *t)
+    /// The option set of an option string's letters and the `-l` lists' names.
+    fn new(shorts: &[Short<char>], longs: &[(String, Arg)], order: Order, long_only: bool) -> Self {
+        let mut spec = Self {
+            names: Vec::new(),
+            kinds: Vec::new(),
+            shorts: Vec::new(),
+            longs: Vec::new(),
+            order,
+            long_only,
+        };
+        for short in shorts {
+            let id = spec.add(std::format!("-{}", short.letter), short.arg);
+            spec.shorts.push(Short::new(short.letter, short.arg, id));
+        }
+        for (name, arg) in longs {
+            // A name listed twice is one option.
+            if spec.longs.iter().any(|(listed, _)| listed == name) {
+                continue;
+            }
+            let id = spec.add(std::format!("--{name}"), *arg);
+            spec.longs.push((name.clone(), id));
+        }
+        spec
     }
 
-    /// The long option `name` means: exact, or else a unique prefix.
-    fn long(&self, name: &str) -> Result<(String, Takes), Vec<String>> {
-        if let Some((n, t)) = self.longs.iter().find(|(n, _)| n == name) {
-            return Ok((n.clone(), *t));
-        }
-        let mut candidates: Vec<&(String, Takes)> = self
+    fn add(&mut self, name: String, arg: Arg) -> usize {
+        self.names.push(name);
+        self.kinds.push(arg);
+        self.names.len() - 1
+    }
+
+    fn kind(&self, id: usize) -> Arg {
+        self.kinds.get(id).copied().unwrap_or(Arg::No)
+    }
+
+    /// Parses `args` as `getopt_long` does, past every error, as util-linux's getopt.
+    fn parse(&self, args: &[String]) -> Parsed {
+        let longs: Vec<Long<'_, usize>> = self
             .longs
             .iter()
-            .filter(|(n, _)| n.starts_with(name))
+            .map(|(name, id)| Long::new(name.as_str(), self.kind(*id), *id))
             .collect();
-        candidates.dedup_by(|a, b| a.0 == b.0);
-        match candidates.as_slice() {
-            [(n, t)] => Ok((n.clone(), *t)),
-            [] => Err(Vec::new()),
-            many => Err(many.iter().map(|(n, _)| n.clone()).collect()),
-        }
-    }
-
-    /// Parses `args` as `getopt_long` does.
-    fn parse(&self, args: &[String]) -> Parsed {
+        let order = if self.order == Order::Stop {
+            cash_getopt::Order::StopAtOperand
+        } else {
+            cash_getopt::Order::Permute
+        };
+        let (read, problems) = Getopt::new(&self.shorts, &longs)
+            .order(order)
+            .long_only(self.long_only)
+            .parse_all(args);
         let mut parsed = Parsed {
             items: Vec::new(),
             rest: Vec::new(),
-            errors: Vec::new(),
+            errors: problems.iter().map(ToString::to_string).collect(),
         };
-        let mut index = 0;
-        while let Some(arg) = args.get(index) {
-            index += 1;
-            if arg == "--" {
-                parsed.rest.extend(args.iter().skip(index).cloned());
-                break;
-            }
-            let is_option = arg.len() > 1 && arg.starts_with('-');
-            if !is_option {
-                match self.order {
-                    Order::Permute => parsed.rest.push(arg.clone()),
-                    Order::InPlace => parsed.items.push(Item::Word(arg.clone())),
-                    Order::Stop => {
-                        parsed.rest.extend(args.iter().skip(index - 1).cloned());
-                        break;
+        for (at, item) in read.items.into_iter().enumerate() {
+            match item {
+                Item::Option { id, value, .. } => {
+                    let name = self.names.get(id).cloned().unwrap_or_default();
+                    // An optional argument is printed even when it is empty: `-c ''`.
+                    let value = if self.kind(id) == Arg::Optional {
+                        Some(value.unwrap_or_default())
+                    } else {
+                        value
+                    };
+                    parsed.items.push(Said::Opt(name, value));
+                }
+                Item::Operand { value, .. } => {
+                    if self.order == Order::InPlace && at < read.options_end {
+                        parsed.items.push(Said::Word(value));
+                    } else {
+                        parsed.rest.push(value);
                     }
                 }
-                continue;
             }
-            if let Some(long) = arg.strip_prefix("--") {
-                self.parse_long("--", long, args, &mut index, &mut parsed);
-                continue;
-            }
-            let body = arg.get(1..).unwrap_or_default();
-            if self.long_only {
-                let name = body.split_once('=').map_or(body, |(n, _)| n);
-                let first_is_short = body.chars().next().and_then(|c| self.short(c)).is_some();
-                // `getopt_long_only`: a long option if one matches, unless the word is a
-                // single short option; otherwise short options.
-                let matches_long = self.long(name).is_ok() && !(body.len() == 1 && first_is_short);
-                if matches_long || !first_is_short {
-                    self.parse_long("-", body, args, &mut index, &mut parsed);
-                    continue;
-                }
-            }
-            self.parse_shorts(body, args, &mut index, &mut parsed);
         }
         parsed
-    }
-
-    fn parse_long(
-        &self,
-        prefix: &str,
-        text: &str,
-        args: &[String],
-        index: &mut usize,
-        parsed: &mut Parsed,
-    ) {
-        let (name, inline) = text
-            .split_once('=')
-            .map_or((text, None), |(n, v)| (n, Some(v.to_owned())));
-        match self.long(name) {
-            Ok((full, takes)) => {
-                let canonical = std::format!("--{full}");
-                match (takes, inline) {
-                    (Takes::Nothing, Some(_)) => parsed.errors.push(std::format!(
-                        "option '{prefix}{full}' doesn't allow an argument"
-                    )),
-                    (Takes::Nothing, None) => parsed.items.push(Item::Opt(canonical, None)),
-                    (_, Some(value)) => parsed.items.push(Item::Opt(canonical, Some(value))),
-                    (Takes::Optional, None) => {
-                        parsed.items.push(Item::Opt(canonical, Some(String::new())));
-                    }
-                    (Takes::Required, None) => {
-                        if let Some(value) = args.get(*index) {
-                            *index += 1;
-                            parsed.items.push(Item::Opt(canonical, Some(value.clone())));
-                        } else {
-                            parsed
-                                .errors
-                                .push(std::format!("option '{prefix}{full}' requires an argument"));
-                        }
-                    }
-                }
-            }
-            Err(possibilities) if possibilities.is_empty() => {
-                parsed
-                    .errors
-                    .push(std::format!("unrecognized option '{prefix}{text}'"));
-            }
-            Err(possibilities) => {
-                let listed: Vec<String> = possibilities
-                    .iter()
-                    .map(|p| std::format!("'{prefix}{p}'"))
-                    .collect();
-                parsed.errors.push(std::format!(
-                    "option '{prefix}{name}' is ambiguous; possibilities: {}",
-                    listed.join(" ")
-                ));
-            }
-        }
-    }
-
-    fn parse_shorts(&self, body: &str, args: &[String], index: &mut usize, parsed: &mut Parsed) {
-        for (at, c) in body.char_indices() {
-            let rest = body.get(at + c.len_utf8()..).unwrap_or_default();
-            match self.short(c) {
-                None => parsed.errors.push(std::format!("invalid option -- '{c}'")),
-                Some(Takes::Nothing) => parsed.items.push(Item::Opt(std::format!("-{c}"), None)),
-                Some(Takes::Optional) => {
-                    parsed
-                        .items
-                        .push(Item::Opt(std::format!("-{c}"), Some(rest.to_owned())));
-                    return;
-                }
-                Some(Takes::Required) => {
-                    if !rest.is_empty() {
-                        parsed
-                            .items
-                            .push(Item::Opt(std::format!("-{c}"), Some(rest.to_owned())));
-                    } else if let Some(value) = args.get(*index) {
-                        *index += 1;
-                        parsed
-                            .items
-                            .push(Item::Opt(std::format!("-{c}"), Some(value.clone())));
-                    } else {
-                        parsed
-                            .errors
-                            .push(std::format!("option requires an argument -- '{c}'"));
-                    }
-                    return;
-                }
-            }
-        }
     }
 }
 
 /// Short options from an option string, with its leading `+`/`-` and `:` taken off; the
 /// returned order and silence come from those.
-fn short_options(optstring: &str) -> (Vec<(char, Takes)>, Option<Order>, bool) {
+fn short_options(optstring: &str) -> (Vec<Short<char>>, Option<Order>, bool) {
     let mut text = optstring;
     let order = match text.chars().next() {
         Some('+') => Some(Order::Stop),
@@ -239,38 +161,23 @@ fn short_options(optstring: &str) -> (Vec<(char, Takes)>, Option<Order>, bool) {
         text = text.get(1..).unwrap_or_default();
     }
     let silent = text.starts_with(':');
-    let mut shorts = Vec::new();
-    let chars: Vec<char> = text.chars().collect();
-    let mut i = 0;
-    while let Some(&c) = chars.get(i) {
-        i += 1;
-        if c == ':' {
-            continue;
-        }
-        let takes = match (chars.get(i), chars.get(i + 1)) {
-            (Some(':'), Some(':')) => Takes::Optional,
-            (Some(':'), _) => Takes::Required,
-            _ => Takes::Nothing,
-        };
-        shorts.push((c, takes));
-    }
-    (shorts, order, silent)
+    (cash_getopt::optstring(text), order, silent)
 }
 
 /// Long options from `-l` lists: separated by commas or white space, `name:` taking an
 /// argument and `name::` an optional one.
-fn long_options(lists: &[String]) -> Vec<(String, Takes)> {
+fn long_options(lists: &[String]) -> Vec<(String, Arg)> {
     lists
         .iter()
         .flat_map(|list| list.split(|c: char| c == ',' || c.is_whitespace()))
         .filter(|name| !name.is_empty())
         .map(|name| {
             if let Some(n) = name.strip_suffix("::") {
-                (n.to_owned(), Takes::Optional)
+                (n.to_owned(), Arg::Optional)
             } else if let Some(n) = name.strip_suffix(':') {
-                (n.to_owned(), Takes::Required)
+                (n.to_owned(), Arg::Required)
             } else {
-                (name.to_owned(), Takes::Nothing)
+                (name.to_owned(), Arg::No)
             }
         })
         .collect()
@@ -295,14 +202,14 @@ fn render(parsed: &Parsed, unquoted: bool) -> String {
     for item in &parsed.items {
         line.push(' ');
         match item {
-            Item::Opt(name, value) => {
+            Said::Opt(name, value) => {
                 line.push_str(name);
                 if let Some(value) = value {
                     line.push(' ');
                     line.push_str(&word(value));
                 }
             }
-            Item::Word(text) => line.push_str(&word(text)),
+            Said::Word(text) => line.push_str(&word(text)),
         }
     }
     line.push_str(" --");
@@ -355,39 +262,28 @@ Options:
 
 /// Parses getopt's own options, which stop at the first non-option.
 fn parse_own(args: &[String]) -> Result<Own, String> {
-    let spec = Spec {
-        shorts: vec![
-            ('a', Takes::Nothing),
-            ('h', Takes::Nothing),
-            ('l', Takes::Required),
-            ('n', Takes::Required),
-            ('o', Takes::Required),
-            ('q', Takes::Nothing),
-            ('Q', Takes::Nothing),
-            ('s', Takes::Required),
-            ('T', Takes::Nothing),
-            ('u', Takes::Nothing),
-            ('V', Takes::Nothing),
-        ],
-        longs: [
-            ("alternative", Takes::Nothing),
-            ("help", Takes::Nothing),
-            ("longoptions", Takes::Required),
-            ("name", Takes::Required),
-            ("options", Takes::Required),
-            ("quiet", Takes::Nothing),
-            ("quiet-output", Takes::Nothing),
-            ("shell", Takes::Required),
-            ("test", Takes::Nothing),
-            ("unquoted", Takes::Nothing),
-            ("version", Takes::Nothing),
-        ]
-        .iter()
-        .map(|(n, t)| ((*n).to_owned(), *t))
-        .collect(),
-        order: Order::Stop,
-        long_only: false,
-    };
+    let longs: Vec<(String, Arg)> = [
+        ("alternative", Arg::No),
+        ("help", Arg::No),
+        ("longoptions", Arg::Required),
+        ("name", Arg::Required),
+        ("options", Arg::Required),
+        ("quiet", Arg::No),
+        ("quiet-output", Arg::No),
+        ("shell", Arg::Required),
+        ("test", Arg::No),
+        ("unquoted", Arg::No),
+        ("version", Arg::No),
+    ]
+    .iter()
+    .map(|(name, arg)| ((*name).to_owned(), *arg))
+    .collect();
+    let spec = Spec::new(
+        &cash_getopt::optstring("ahl:n:o:qQs:TuV"),
+        &longs,
+        Order::Stop,
+        false,
+    );
     let parsed = spec.parse(args);
     if let Some(error) = parsed.errors.into_iter().next() {
         return Err(error);
@@ -397,7 +293,7 @@ fn parse_own(args: &[String]) -> Result<Own, String> {
         ..Own::default()
     };
     for item in parsed.items {
-        let Item::Opt(name, value) = item else {
+        let Said::Opt(name, value) = item else {
             continue;
         };
         let value = value.unwrap_or_default();
@@ -497,12 +393,12 @@ impl builtins::Command for GetoptCommand {
             .env()
             .get_str("POSIXLY_CORRECT", context.shell)
             .is_some();
-        let spec = Spec {
-            shorts,
-            longs: long_options(&own.longs),
-            order: order.unwrap_or(if posixly { Order::Stop } else { Order::Permute }),
-            long_only: own.alternative,
-        };
+        let spec = Spec::new(
+            &shorts,
+            &long_options(&own.longs),
+            order.unwrap_or(if posixly { Order::Stop } else { Order::Permute }),
+            own.alternative,
+        );
         let parsed = spec.parse(&own.params);
 
         if !own.quiet && !silent {

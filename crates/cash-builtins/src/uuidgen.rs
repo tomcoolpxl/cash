@@ -11,6 +11,7 @@
 use std::io::Write;
 
 use cash_core::{ExecutionResult, builtins};
+use cash_getopt::{Arg, Getopt, Item, Long, Short};
 use clap::Parser;
 use uuid::Uuid;
 
@@ -52,20 +53,20 @@ pub(crate) struct UuidgenCommand {
 }
 
 /// The long options in util-linux's order (the order an ambiguity lists them in), each
-/// with its letter and whether it takes a value.
-const LONG_OPTIONS: &[(&str, char, bool)] = &[
-    ("random", 'r', false),
-    ("time", 't', false),
-    ("version", 'V', false),
-    ("help", 'h', false),
-    ("namespace", 'n', true),
-    ("name", 'N', true),
-    ("md5", 'm', false),
-    ("count", 'C', true),
-    ("sha1", 's', false),
-    ("time-v6", '6', false),
-    ("time-v7", '7', false),
-    ("hex", 'x', false),
+/// known by its letter.
+const LONG_OPTIONS: &[Long<'static, char>] = &[
+    Long::new("random", Arg::No, 'r'),
+    Long::new("time", Arg::No, 't'),
+    Long::new("version", Arg::No, 'V'),
+    Long::new("help", Arg::No, 'h'),
+    Long::new("namespace", Arg::Required, 'n'),
+    Long::new("name", Arg::Required, 'N'),
+    Long::new("md5", Arg::No, 'm'),
+    Long::new("count", Arg::Required, 'C'),
+    Long::new("sha1", Arg::No, 's'),
+    Long::new("time-v6", Arg::No, '6'),
+    Long::new("time-v7", Arg::No, '7'),
+    Long::new("hex", Arg::No, 'x'),
 ];
 
 /// The options that cannot be combined, a row each; the first one given of a row is
@@ -76,8 +77,8 @@ const EXCLUSIVE: &[&str] = &["67mrst", "Cms", "Nrt", "nrt"];
 fn long_name(letter: char) -> &'static str {
     LONG_OPTIONS
         .iter()
-        .find(|(_, short, _)| *short == letter)
-        .map_or("", |(name, _, _)| name)
+        .find(|long| long.id == letter)
+        .map_or("", |long| long.name)
 }
 
 /// What the options asked for.
@@ -129,105 +130,28 @@ impl Failure {
     }
 }
 
-/// The options parsed in order, as `getopt_long` hands them over and util-linux takes
-/// them.
+/// The options parsed in order, as `getopt_long` hands them over (`cash-getopt`) and
+/// util-linux takes them.
 ///
 /// `-h` and `-V` act at once, a conflict is reported where the second option is met,
 /// and words that are not options are ignored.
 fn parse(args: &[String]) -> Result<Parsed, Failure> {
     let mut request = Request::default();
     let mut first_of_row: Vec<Option<char>> = vec![None; EXCLUSIVE.len()];
-    let mut index = 0;
-    while let Some(word) = args.get(index) {
-        index += 1;
-        if word == "--" {
-            break;
-        }
-        if let Some(long) = word.strip_prefix("--") {
-            let (given, inline) = match long.split_once('=') {
-                Some((name, value)) => (name, Some(value.to_owned())),
-                None => (long, None),
-            };
-            let (name, letter, takes_value) = find_long(given, word)?;
-            let value = if takes_value {
-                if let Some(value) = inline {
-                    Some(value)
-                } else {
-                    let value = args.get(index).cloned().ok_or_else(|| {
-                        Failure::usage(format!("option '--{name}' requires an argument"))
-                    })?;
-                    index += 1;
-                    Some(value)
-                }
-            } else if inline.is_some() {
-                return Err(Failure::usage(format!(
-                    "option '--{name}' doesn't allow an argument"
-                )));
-            } else {
-                None
-            };
-            if let Some(early) = apply(&mut request, &mut first_of_row, letter, value)? {
-                return Ok(early);
-            }
-            continue;
-        }
-        let Some(cluster) = word.strip_prefix('-').filter(|cluster| !cluster.is_empty()) else {
-            continue;
+    let shorts: Vec<Short<char>> = LONG_OPTIONS
+        .iter()
+        .map(|long| Short::new(long.id, long.arg, long.id))
+        .collect();
+    for next in Getopt::new(&shorts, LONG_OPTIONS).read(args) {
+        let (letter, value) = match next.map_err(|problem| Failure::usage(problem.to_string()))? {
+            Item::Option { id, value, .. } => (id, value),
+            Item::Operand { .. } => continue,
         };
-        let letters: Vec<char> = cluster.chars().collect();
-        let mut at = 0;
-        while let Some(&letter) = letters.get(at) {
-            at += 1;
-            let Some(&(_, _, takes_value)) = LONG_OPTIONS.iter().find(|(_, s, _)| *s == letter)
-            else {
-                return Err(Failure::usage(format!("invalid option -- '{letter}'")));
-            };
-            let value = if takes_value {
-                let rest: String = letters.get(at..).unwrap_or_default().iter().collect();
-                at = letters.len();
-                if rest.is_empty() {
-                    let value = args.get(index).cloned().ok_or_else(|| {
-                        Failure::usage(format!("option requires an argument -- '{letter}'"))
-                    })?;
-                    index += 1;
-                    Some(value)
-                } else {
-                    Some(rest)
-                }
-            } else {
-                None
-            };
-            if let Some(early) = apply(&mut request, &mut first_of_row, letter, value)? {
-                return Ok(early);
-            }
+        if let Some(early) = apply(&mut request, &mut first_of_row, letter, value)? {
+            return Ok(early);
         }
     }
     Ok(Parsed::Run(request))
-}
-
-/// The long option `given` names: by its full name, else as an unambiguous prefix.
-fn find_long(given: &str, word: &str) -> Result<(&'static str, char, bool), Failure> {
-    if let Some(exact) = LONG_OPTIONS.iter().find(|(name, _, _)| *name == given) {
-        return Ok(*exact);
-    }
-    let matches: Vec<&(&str, char, bool)> = LONG_OPTIONS
-        .iter()
-        .filter(|(name, _, _)| !given.is_empty() && name.starts_with(given))
-        .collect();
-    match matches.as_slice() {
-        [one] => Ok(**one),
-        [] => Err(Failure::usage(format!("unrecognized option '{word}'"))),
-        several => {
-            let possibilities: Vec<String> = several
-                .iter()
-                .map(|(name, _, _)| format!("'--{name}'"))
-                .collect();
-            Err(Failure::usage(format!(
-                "option '--{given}' is ambiguous; possibilities: {}",
-                possibilities.join(" ")
-            )))
-        }
-    }
 }
 
 /// One option taken: a conflict with an earlier one is refused first, as util-linux

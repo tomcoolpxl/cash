@@ -26,6 +26,7 @@ use std::time::{Duration, Instant};
 
 use cash_core::openfiles::{OpenFile, OpenFiles};
 use cash_core::{ExecutionResult, builtins};
+use cash_getopt::{Arg, Getopt, Item, Long, Order, Problem, Short};
 use clap::Parser;
 use unicode_width::UnicodeWidthChar as _;
 
@@ -118,10 +119,8 @@ impl Default for Options {
 #[derive(Debug, PartialEq, Eq)]
 enum OptionError {
     Invalid(char),
-    Unrecognized(String),
-    Ambiguous(String, Vec<&'static str>),
-    MissingArgument { option: String, long: bool },
-    NoArgument(&'static str),
+    /// What `getopt_long` says is wrong with the command line.
+    Getopt(Problem),
     BadInterval(String),
     BadCycles(String),
     EnvInterval(String),
@@ -131,22 +130,7 @@ impl OptionError {
     fn message(&self) -> String {
         match self {
             Self::Invalid(letter) => format!("invalid option -- '{letter}'"),
-            Self::Unrecognized(option) => format!("unrecognized option '--{option}'"),
-            Self::Ambiguous(option, choices) => {
-                let choices: Vec<String> = choices.iter().map(|c| format!("'--{c}'")).collect();
-                format!(
-                    "option '--{option}' is ambiguous; possibilities: {}",
-                    choices.join(" ")
-                )
-            }
-            Self::MissingArgument {
-                option,
-                long: false,
-            } => format!("option requires an argument -- '{option}'"),
-            Self::MissingArgument { option, long: true } => {
-                format!("option '--{option}' requires an argument")
-            }
-            Self::NoArgument(option) => format!("option '--{option}' doesn't allow an argument"),
+            Self::Getopt(problem) => problem.to_string(),
             Self::BadInterval(text) => {
                 format!("failed to parse argument: '{text}': Invalid argument")
             }
@@ -159,157 +143,60 @@ impl OptionError {
 
     /// getopt's errors are followed by the usage; procps's own are not.
     const fn shows_usage(&self) -> bool {
-        matches!(
-            self,
-            Self::Invalid(_)
-                | Self::Unrecognized(_)
-                | Self::Ambiguous(..)
-                | Self::MissingArgument { .. }
-                | Self::NoArgument(_)
-        )
+        matches!(self, Self::Invalid(_) | Self::Getopt(_))
     }
 }
 
-/// Whether a long option takes an argument.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Takes {
-    Nothing,
-    Required,
-    Optional,
-}
-
-/// The long options, each with its letter.
-const LONG_OPTIONS: &[(&str, char, Takes)] = &[
-    ("beep", 'b', Takes::Nothing),
-    ("color", 'c', Takes::Nothing),
-    ("no-color", 'C', Takes::Nothing),
-    ("differences", 'd', Takes::Optional),
-    ("errexit", 'e', Takes::Nothing),
-    ("follow", 'f', Takes::Nothing),
-    ("chgexit", 'g', Takes::Nothing),
-    ("equexit", 'q', Takes::Required),
-    ("interval", 'n', Takes::Required),
-    ("precise", 'p', Takes::Nothing),
-    ("no-rerun", 'r', Takes::Nothing),
-    ("shotsdir", 's', Takes::Required),
-    ("no-title", 't', Takes::Nothing),
-    ("no-wrap", 'w', Takes::Nothing),
-    ("exec", 'x', Takes::Nothing),
-    ("help", 'h', Takes::Nothing),
-    ("version", 'v', Takes::Nothing),
+/// The long options, each known by its letter, which is its short option too.
+const LONG_OPTIONS: &[Long<'static, char>] = &[
+    Long::new("beep", Arg::No, 'b'),
+    Long::new("color", Arg::No, 'c'),
+    Long::new("no-color", Arg::No, 'C'),
+    Long::new("differences", Arg::Optional, 'd'),
+    Long::new("errexit", Arg::No, 'e'),
+    Long::new("follow", Arg::No, 'f'),
+    Long::new("chgexit", Arg::No, 'g'),
+    Long::new("equexit", Arg::Required, 'q'),
+    Long::new("interval", Arg::Required, 'n'),
+    Long::new("precise", Arg::No, 'p'),
+    Long::new("no-rerun", Arg::No, 'r'),
+    Long::new("shotsdir", Arg::Required, 's'),
+    Long::new("no-title", Arg::No, 't'),
+    Long::new("no-wrap", Arg::No, 'w'),
+    Long::new("exec", Arg::No, 'x'),
+    Long::new("help", Arg::No, 'h'),
+    Long::new("version", Arg::No, 'v'),
 ];
 
-/// Parses the arguments as procps does, with POSIX option order: the first word that is
-/// not an option is the command, and everything after it belongs to the command.
+/// Parses the arguments as procps does (`cash-getopt`), with POSIX option order: the
+/// first word that is not an option is the command, and everything after it belongs to
+/// the command.
 fn parse_options(args: &[String], env_interval: Option<&str>) -> Result<Options, OptionError> {
     let mut options = Options::default();
     if let Some(text) = env_interval {
         options.interval =
             parse_interval(text).ok_or_else(|| OptionError::EnvInterval(text.to_owned()))?;
     }
-
-    let mut args = args.iter();
-    while let Some(arg) = args.next() {
-        if arg == "--" {
-            options.command.extend(args.cloned());
-            break;
+    let shorts: Vec<Short<char>> = LONG_OPTIONS
+        .iter()
+        .map(|long| Short::new(long.id, long.arg, long.id))
+        .collect();
+    let getopt = Getopt::new(&shorts, LONG_OPTIONS).order(Order::StopAtOperand);
+    for next in getopt.read(args) {
+        match next.map_err(OptionError::Getopt)? {
+            Item::Option { id: 'd', value, .. } => {
+                set_differences(&mut options, value.as_deref());
+            }
+            Item::Option {
+                id: letter @ ('n' | 'q' | 's'),
+                value,
+                ..
+            } => set_valued(&mut options, letter, &value.unwrap_or_default())?,
+            Item::Option { id, .. } => set_flag(&mut options, id)?,
+            Item::Operand { value, .. } => options.command.push(value),
         }
-        if let Some(long) = arg.strip_prefix("--") {
-            parse_long(&mut options, long, &mut args)?;
-            continue;
-        }
-        if arg.chars().count() < 2 || !arg.starts_with('-') {
-            options.command.push(arg.clone());
-            options.command.extend(args.cloned());
-            break;
-        }
-        parse_cluster(&mut options, arg, &mut args)?;
     }
     Ok(options)
-}
-
-/// `-abc`, with `-d`'s argument attached and `-n`'s attached or next.
-fn parse_cluster<'a>(
-    options: &mut Options,
-    arg: &str,
-    rest: &mut impl Iterator<Item = &'a String>,
-) -> Result<(), OptionError> {
-    let mut letters = arg.chars().skip(1);
-    while let Some(letter) = letters.next() {
-        match letter {
-            'd' => {
-                let attached: String = letters.by_ref().collect();
-                set_differences(options, (!attached.is_empty()).then_some(attached.as_str()));
-            }
-            'n' | 'q' | 's' => {
-                let attached: String = letters.by_ref().collect();
-                let value = if attached.is_empty() {
-                    rest.next()
-                        .ok_or_else(|| OptionError::MissingArgument {
-                            option: letter.to_string(),
-                            long: false,
-                        })?
-                        .clone()
-                } else {
-                    attached
-                };
-                set_valued(options, letter, &value)?;
-            }
-            letter => set_flag(options, letter)?,
-        }
-    }
-    Ok(())
-}
-
-/// `--name`, `--name=value` or `--name value`, with an unambiguous prefix accepted as
-/// getopt accepts one.
-fn parse_long<'a>(
-    options: &mut Options,
-    long: &str,
-    rest: &mut impl Iterator<Item = &'a String>,
-) -> Result<(), OptionError> {
-    let (name, value) = long
-        .split_once('=')
-        .map_or((long, None), |(name, value)| (name, Some(value)));
-    let candidates: Vec<&(&str, char, Takes)> = LONG_OPTIONS
-        .iter()
-        .filter(|(full, ..)| full.starts_with(name))
-        .collect();
-    let &(full, letter, takes) = match candidates.as_slice() {
-        [one] => *one,
-        [] => return Err(OptionError::Unrecognized(long.to_owned())),
-        several => match several.iter().find(|(full, ..)| *full == name) {
-            Some(exact) => *exact,
-            None => {
-                return Err(OptionError::Ambiguous(
-                    name.to_owned(),
-                    several.iter().map(|(full, ..)| *full).collect(),
-                ));
-            }
-        },
-    };
-
-    match takes {
-        Takes::Nothing if value.is_some() => Err(OptionError::NoArgument(full)),
-        Takes::Nothing => set_flag(options, letter),
-        Takes::Optional => {
-            set_differences(options, value);
-            Ok(())
-        }
-        Takes::Required => {
-            let value = match value {
-                Some(value) => value.to_owned(),
-                None => rest
-                    .next()
-                    .ok_or_else(|| OptionError::MissingArgument {
-                        option: full.to_owned(),
-                        long: true,
-                    })?
-                    .clone(),
-            };
-            set_valued(options, letter, &value)
-        }
-    }
 }
 
 const fn set_flag(options: &mut Options, letter: char) -> Result<(), OptionError> {
@@ -1246,28 +1133,21 @@ mod tests {
         assert_eq!(options.interval, 0.2);
         assert_eq!(options.equexit, Some(2));
         assert!(options.no_title);
+        let said = |args: &[&str]| parse(args).unwrap_err().message();
         assert_eq!(
-            parse(&["--no-", "cmd"]).unwrap_err(),
-            OptionError::Ambiguous(
-                String::from("no-"),
-                vec!["no-color", "no-rerun", "no-title", "no-wrap"]
-            )
+            said(&["--no-", "cmd"]),
+            "option '--no-' is ambiguous; possibilities: '--no-color' '--no-rerun' \
+             '--no-title' '--no-wrap'"
         );
         assert_eq!(
-            parse(&["--beep=1", "cmd"]).unwrap_err(),
-            OptionError::NoArgument("beep")
+            said(&["--beep=1", "cmd"]),
+            "option '--beep' doesn't allow an argument"
         );
         assert_eq!(
-            parse(&["--interval"]).unwrap_err(),
-            OptionError::MissingArgument {
-                option: String::from("interval"),
-                long: true
-            }
+            said(&["--interval"]),
+            "option '--interval' requires an argument"
         );
-        assert_eq!(
-            parse(&["--bogus", "cmd"]).unwrap_err(),
-            OptionError::Unrecognized(String::from("bogus"))
-        );
+        assert_eq!(said(&["--bogus", "cmd"]), "unrecognized option '--bogus'");
     }
 
     #[test]

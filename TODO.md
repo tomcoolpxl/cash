@@ -485,17 +485,6 @@ license accepted for `libbz2-rs-sys`. Order: the groundwork, the compressors, ta
 Passed over: uutils/tar (0.0.1, less than `tar.exe` does), `libzstd-rs-sys` (a
 prerelease without a Rust API), `xz2` and `liblzma` (C).
 
-## Phase 26. `cash-getopt`, and every option parser on it
-
-1. **The crate**: `cash-diffutils::getopt` lifted into a leaf crate and grown to the
-   `getopt` builtin's reach: optional values, the three orders (permute, stop at the
-   first operand, in place), long-only, items returned in order, typed problems that
-   each tool words; GNU tar's old-style keys (`tar xzf a.tgz`) as a helper.
-2. **Onto it, each under its own tests and oracle**: diff and cmp; gzip; grep (with its
-   `-NUM`); column; hexdump; ss; uuidgen; flock (stops at the first operand); iconv;
-   watch (POSIX order); free (which takes no prefixes today, though procps's does);
-   nc; and the `getopt` builtin itself where its canonical output allows.
-
 ## Phase 27. One Unix face for a Windows file
 
 1. **cash-win32**: `unix_view` (mode, owner and group with their RIDs, link count,

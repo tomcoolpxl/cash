@@ -23,6 +23,7 @@
 use std::io::{Read, Write};
 
 use cash_core::{ExecutionResult, builtins};
+use cash_getopt::{Arg, Getopt, Item, Long, Short};
 use clap::Parser;
 
 /// Display file contents in hexadecimal, decimal, octal, or ascii.
@@ -1072,40 +1073,25 @@ fn parse_size(text: &str) -> Result<u64, &'static str> {
     u64::try_from(value).map_err(|_| "Numerical result out of range")
 }
 
-/// The long options, in util-linux's order, with the short option each stands for and
-/// whether it takes an argument.
-const LONG_OPTIONS: &[(&str, char, Takes)] = &[
-    ("one-byte-octal", 'b', Takes::Nothing),
-    ("one-byte-hex", 'X', Takes::Nothing),
-    ("one-byte-char", 'c', Takes::Nothing),
-    ("canonical", 'C', Takes::Nothing),
-    ("two-bytes-decimal", 'd', Takes::Nothing),
-    ("two-bytes-octal", 'o', Takes::Nothing),
-    ("two-bytes-hex", 'x', Takes::Nothing),
-    ("color", 'L', Takes::Optional),
-    ("format", 'e', Takes::Required),
-    ("format-file", 'f', Takes::Required),
-    ("length", 'n', Takes::Required),
-    ("skip", 's', Takes::Required),
-    ("no-squeezing", 'v', Takes::Nothing),
-    ("help", 'h', Takes::Nothing),
-    ("version", 'V', Takes::Nothing),
+/// The long options, in util-linux's order, each known by the short option it stands
+/// for.
+const LONG_OPTIONS: &[Long<'static, char>] = &[
+    Long::new("one-byte-octal", Arg::No, 'b'),
+    Long::new("one-byte-hex", Arg::No, 'X'),
+    Long::new("one-byte-char", Arg::No, 'c'),
+    Long::new("canonical", Arg::No, 'C'),
+    Long::new("two-bytes-decimal", Arg::No, 'd'),
+    Long::new("two-bytes-octal", Arg::No, 'o'),
+    Long::new("two-bytes-hex", Arg::No, 'x'),
+    Long::new("color", Arg::Optional, 'L'),
+    Long::new("format", Arg::Required, 'e'),
+    Long::new("format-file", Arg::Required, 'f'),
+    Long::new("length", Arg::Required, 'n'),
+    Long::new("skip", Arg::Required, 's'),
+    Long::new("no-squeezing", Arg::No, 'v'),
+    Long::new("help", Arg::No, 'h'),
+    Long::new("version", Arg::No, 'V'),
 ];
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Takes {
-    Nothing,
-    Required,
-    Optional,
-}
-
-/// What a short option takes.
-fn takes(short: char) -> Option<Takes> {
-    LONG_OPTIONS
-        .iter()
-        .find(|(_, s, _)| *s == short)
-        .map(|(_, _, takes)| *takes)
-}
 
 /// What the command line asks for, in order.
 #[derive(Default)]
@@ -1237,9 +1223,9 @@ impl Request {
     }
 }
 
-/// Reads the command line as `getopt_long` does: clusters, attached and separate values,
-/// long options and their unique prefixes, files anywhere.
-#[expect(clippy::too_many_lines, reason = "getopt_long's cases, kept together")]
+/// Reads the command line as `getopt_long` does (`cash-getopt`): clusters, attached and
+/// separate values, long options and their unique prefixes, files anywhere. Every long
+/// option has its letter, which is the short option.
 fn parse(
     args: &[String],
     read_file: &dyn Fn(&str) -> std::io::Result<Vec<u8>>,
@@ -1248,111 +1234,17 @@ fn parse(
         squeeze: true,
         ..Request::default()
     };
-    let mut i = 0;
-    while i < args.len() {
-        let arg = args[i].as_str();
-        if arg == "--" {
-            request
-                .files
-                .extend(args.get(i + 1..).unwrap_or_default().iter().cloned());
-            break;
+    let shorts: Vec<Short<char>> = LONG_OPTIONS
+        .iter()
+        .map(|long| Short::new(long.id, long.arg, long.id))
+        .collect();
+    for next in Getopt::new(&shorts, LONG_OPTIONS).read(args) {
+        match next.map_err(|problem| Early::Option(problem.to_string()))? {
+            Item::Option { id, value, .. } => request.apply(id, value.as_deref(), read_file)?,
+            Item::Operand { value, .. } => request.files.push(value),
         }
-        if let Some(long) = arg.strip_prefix("--") {
-            let (name, value) = long
-                .split_once('=')
-                .map_or((long, None), |(name, value)| (name, Some(value)));
-            let exact = LONG_OPTIONS.iter().find(|(n, _, _)| *n == name).copied();
-            let candidates: Vec<(&str, char, Takes)> = LONG_OPTIONS
-                .iter()
-                .filter(|(n, _, _)| n.starts_with(name))
-                .copied()
-                .collect();
-            let (_, short, takes) = match (exact, candidates.as_slice()) {
-                (Some(option), _) => option,
-                (None, [option]) => *option,
-                (None, []) => {
-                    return Err(Early::Option(format!("unrecognized option '--{name}'")));
-                }
-                (None, _) => {
-                    let names: Vec<String> = candidates
-                        .iter()
-                        .map(|(n, _, _)| format!("'--{n}'"))
-                        .collect();
-                    let names = names.join(" ");
-                    return Err(Early::Option(format!(
-                        "option '--{name}' is ambiguous; possibilities: {names}"
-                    )));
-                }
-            };
-            let full = long_name(short);
-            let value = match (takes, value) {
-                (Takes::Nothing, Some(_)) => {
-                    return Err(Early::Option(format!(
-                        "option '--{full}' doesn't allow an argument"
-                    )));
-                }
-                (Takes::Nothing | Takes::Optional, value) => value.map(str::to_owned),
-                (Takes::Required, Some(value)) => Some(value.to_owned()),
-                (Takes::Required, None) => {
-                    i += 1;
-                    match args.get(i) {
-                        Some(value) => Some(value.clone()),
-                        None => {
-                            return Err(Early::Option(format!(
-                                "option '--{full}' requires an argument"
-                            )));
-                        }
-                    }
-                }
-            };
-            request.apply(short, value.as_deref(), read_file)?;
-        } else if arg.len() > 1 && arg.starts_with('-') {
-            let mut at = 1;
-            while let Some(short) = arg.get(at..).and_then(|rest| rest.chars().next()) {
-                at += short.len_utf8();
-                let Some(takes) = takes(short) else {
-                    return Err(Early::Option(format!("invalid option -- '{short}'")));
-                };
-                let rest = arg.get(at..).unwrap_or_default();
-                let value = match takes {
-                    Takes::Nothing => None,
-                    Takes::Optional => {
-                        at = arg.len();
-                        (!rest.is_empty()).then(|| rest.to_owned())
-                    }
-                    Takes::Required => {
-                        at = arg.len();
-                        if rest.is_empty() {
-                            i += 1;
-                            match args.get(i) {
-                                Some(value) => Some(value.clone()),
-                                None => {
-                                    return Err(Early::Option(format!(
-                                        "option requires an argument -- '{short}'"
-                                    )));
-                                }
-                            }
-                        } else {
-                            Some(rest.to_owned())
-                        }
-                    }
-                };
-                request.apply(short, value.as_deref(), read_file)?;
-            }
-        } else {
-            request.files.push(arg.to_owned());
-        }
-        i += 1;
     }
     Ok(request)
-}
-
-/// The long name of a short option.
-fn long_name(short: char) -> &'static str {
-    LONG_OPTIONS
-        .iter()
-        .find(|(_, s, _)| *s == short)
-        .map_or("", |(name, _, _)| name)
 }
 
 impl builtins::Command for HexdumpCommand {

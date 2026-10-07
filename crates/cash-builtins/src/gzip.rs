@@ -33,6 +33,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use cash_core::openfiles::{OpenFile, OpenFiles};
 use cash_core::{ExecutionResult, ShellFd, builtins};
+use cash_getopt::{Arg, Getopt, Item, Long};
 use clap::Parser;
 use flate2::{Compress, Compression, Decompress, FlushCompress, FlushDecompress, Status};
 
@@ -127,41 +128,34 @@ enum Preset {
     ToStdout,
 }
 
-/// Whether a long option takes a value.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum Takes {
-    Nothing,
-    Required,
-}
-
-/// GNU gzip's long options in its table's order, which the ambiguity message follows:
-/// name, argument, and the short option it stands for.
-const LONG_OPTIONS: &[(&str, Takes, char)] = &[
-    ("ascii", Takes::Nothing, 'a'),
-    ("to-stdout", Takes::Nothing, 'c'),
-    ("stdout", Takes::Nothing, 'c'),
-    ("decompress", Takes::Nothing, 'd'),
-    ("uncompress", Takes::Nothing, 'd'),
-    ("force", Takes::Nothing, 'f'),
-    ("help", Takes::Nothing, 'h'),
-    ("keep", Takes::Nothing, 'k'),
-    ("list", Takes::Nothing, 'l'),
-    ("license", Takes::Nothing, 'L'),
-    ("no-name", Takes::Nothing, 'n'),
-    ("name", Takes::Nothing, 'N'),
-    ("quiet", Takes::Nothing, 'q'),
-    ("silent", Takes::Nothing, 'q'),
-    ("synchronous", Takes::Nothing, 'Y'),
-    ("recursive", Takes::Nothing, 'r'),
-    ("suffix", Takes::Required, 'S'),
-    ("test", Takes::Nothing, 't'),
-    ("verbose", Takes::Nothing, 'v'),
-    ("version", Takes::Nothing, 'V'),
-    ("fast", Takes::Nothing, '1'),
-    ("best", Takes::Nothing, '9'),
-    ("lzw", Takes::Nothing, 'Z'),
-    ("bits", Takes::Required, 'b'),
-    ("rsyncable", Takes::Nothing, 'R'),
+/// GNU gzip's long options in its table's order, which the ambiguity message follows,
+/// each known by the short option it stands for.
+const LONG_OPTIONS: &[Long<'static, char>] = &[
+    Long::new("ascii", Arg::No, 'a'),
+    Long::new("to-stdout", Arg::No, 'c'),
+    Long::new("stdout", Arg::No, 'c'),
+    Long::new("decompress", Arg::No, 'd'),
+    Long::new("uncompress", Arg::No, 'd'),
+    Long::new("force", Arg::No, 'f'),
+    Long::new("help", Arg::No, 'h'),
+    Long::new("keep", Arg::No, 'k'),
+    Long::new("list", Arg::No, 'l'),
+    Long::new("license", Arg::No, 'L'),
+    Long::new("no-name", Arg::No, 'n'),
+    Long::new("name", Arg::No, 'N'),
+    Long::new("quiet", Arg::No, 'q'),
+    Long::new("silent", Arg::No, 'q'),
+    Long::new("synchronous", Arg::No, 'Y'),
+    Long::new("recursive", Arg::No, 'r'),
+    Long::new("suffix", Arg::Required, 'S'),
+    Long::new("test", Arg::No, 't'),
+    Long::new("verbose", Arg::No, 'v'),
+    Long::new("version", Arg::No, 'V'),
+    Long::new("fast", Arg::No, '1'),
+    Long::new("best", Arg::No, '9'),
+    Long::new("lzw", Arg::No, 'Z'),
+    Long::new("bits", Arg::Required, 'b'),
+    Long::new("rsyncable", Arg::No, 'R'),
 ];
 
 /// GNU gzip's short options; a colon follows one that takes a value.
@@ -273,6 +267,8 @@ fn usage_failure(message: &str) -> Parsed {
 /// one winning, `--` ends the reading, and every other option or word is passed over
 /// without a word.
 fn level_from_environment(gzip: &str) -> Option<u32> {
+    let shorts = cash_getopt::optstring(SHORT_OPTIONS);
+    let getopt = Getopt::new(&shorts, LONG_OPTIONS);
     let mut level = None;
     let mut words = gzip.split_whitespace();
     while let Some(word) = words.next() {
@@ -283,23 +279,11 @@ fn level_from_environment(gzip: &str) -> Option<u32> {
             let (name, inline) = text
                 .split_once('=')
                 .map_or((text, None), |(n, v)| (n, Some(v)));
-            let candidates: Vec<&(&str, Takes, char)> = LONG_OPTIONS
-                .iter()
-                .filter(|(n, _, _)| n.starts_with(name))
-                .collect();
-            let exact = candidates.iter().find(|(n, _, _)| *n == name);
-            let found = exact.or_else(|| {
-                let first = candidates.first()?;
-                candidates
-                    .iter()
-                    .all(|c| c.2 == first.2 && c.1 == first.1)
-                    .then_some(first)
-            });
-            if let Some((_, takes, id)) = found {
-                if let Some(digit) = id.to_digit(10) {
+            if let Ok(found) = getopt.long(name) {
+                if let Some(digit) = found.id.to_digit(10) {
                     level = Some(digit);
                 }
-                if *takes == Takes::Required && inline.is_none() {
+                if found.arg == Arg::Required && inline.is_none() {
                     words.next();
                 }
             }
@@ -322,113 +306,9 @@ fn level_from_environment(gzip: &str) -> Option<u32> {
     level
 }
 
-/// A long option `text` (after its `--`): the short option it stands for and its
-/// value, taken from `args` at `index` when it needs one.
-fn long_option(
-    text: &str,
-    args: &[String],
-    index: &mut usize,
-) -> Result<(char, Option<String>), Parsed> {
-    let (name, inline) = text
-        .split_once('=')
-        .map_or((text, None), |(n, v)| (n, Some(v.to_owned())));
-    let exact = LONG_OPTIONS.iter().find(|(n, _, _)| *n == name).copied();
-    let candidates: Vec<(&str, Takes, char)> = LONG_OPTIONS
-        .iter()
-        .filter(|(n, _, _)| n.starts_with(name))
-        .copied()
-        .collect();
-    // Prefixes of options that are the same option are not ambiguous.
-    let one_option = candidates
-        .first()
-        .is_some_and(|first| candidates.iter().all(|c| c.2 == first.2 && c.1 == first.1));
-    let found = exact.or_else(|| {
-        if one_option {
-            candidates.first().copied()
-        } else {
-            None
-        }
-    });
-    let Some((full, takes, id)) = found else {
-        if candidates.is_empty() {
-            return Err(usage_failure(&format!("unrecognized option '--{text}'")));
-        }
-        let listed: Vec<String> = candidates
-            .iter()
-            .map(|(n, _, _)| format!("'--{n}'"))
-            .collect();
-        return Err(usage_failure(&format!(
-            "option '--{name}' is ambiguous; possibilities: {}",
-            listed.join(" ")
-        )));
-    };
-    let value = match (takes, inline) {
-        (Takes::Nothing, Some(_)) => {
-            return Err(usage_failure(&format!(
-                "option '--{full}' doesn't allow an argument"
-            )));
-        }
-        (Takes::Nothing, None) => None,
-        (Takes::Required, Some(value)) => Some(value),
-        (Takes::Required, None) => {
-            let Some(value) = args.get(*index) else {
-                return Err(usage_failure(&format!(
-                    "option '--{full}' requires an argument"
-                )));
-            };
-            *index += 1;
-            Some(value.clone())
-        }
-    };
-    Ok((id, value))
-}
-
-/// A cluster of short options (`-cn9`); the first that takes a value takes the rest of
-/// the cluster, or the next word.
-fn short_cluster(
-    reading: &mut Reading,
-    body: &str,
-    args: &[String],
-    index: &mut usize,
-) -> Result<(), Parsed> {
-    for (at, c) in body.char_indices() {
-        let takes = match SHORT_OPTIONS.find(c) {
-            Some(pos) if c != ':' => {
-                if SHORT_OPTIONS
-                    .get(pos + 1..)
-                    .is_some_and(|r| r.starts_with(':'))
-                {
-                    Takes::Required
-                } else {
-                    Takes::Nothing
-                }
-            }
-            _ => return Err(usage_failure(&format!("invalid option -- '{c}'"))),
-        };
-        if takes == Takes::Nothing {
-            reading.apply(c, None)?;
-            continue;
-        }
-        let rest = body.get(at + c.len_utf8()..).unwrap_or_default();
-        let value = if rest.is_empty() {
-            let Some(value) = args.get(*index) else {
-                return Err(usage_failure(&format!(
-                    "option requires an argument -- '{c}'"
-                )));
-            };
-            *index += 1;
-            value.clone()
-        } else {
-            rest.to_owned()
-        };
-        reading.apply(c, Some(value))?;
-        break;
-    }
-    Ok(())
-}
-
-/// Reads the command line as `getopt_long` reads it: options and operands in any order,
-/// clusters, `--name=value`, unique prefixes, `--` ending the options.
+/// Reads the command line as `getopt_long` reads it (`cash-getopt`): options and
+/// operands in any order, clusters, `--name=value`, unique prefixes, `--` ending the
+/// options; each option acted on as it comes, so `--help` before a bad option wins.
 fn parse(preset: Preset, env_level: Option<u32>, args: &[String]) -> Parsed {
     let mut reading = Reading {
         options: Options {
@@ -452,24 +332,15 @@ fn parse(preset: Preset, env_level: Option<u32>, args: &[String]) -> Parsed {
         no_name: None,
         no_time: None,
     };
-    let mut index = 0;
-    while let Some(arg) = args.get(index) {
-        index += 1;
-        if arg == "--" {
-            reading
-                .options
-                .files
-                .extend(args.iter().skip(index).cloned());
-            break;
-        }
-        let step = if let Some(text) = arg.strip_prefix("--") {
-            long_option(text, args, &mut index).and_then(|(id, value)| reading.apply(id, value))
-        } else if arg.len() > 1 && arg.starts_with('-') {
-            let body = arg.get(1..).unwrap_or_default();
-            short_cluster(&mut reading, body, args, &mut index)
-        } else {
-            reading.options.files.push(arg.clone());
-            Ok(())
+    let shorts = cash_getopt::optstring(SHORT_OPTIONS);
+    for next in Getopt::new(&shorts, LONG_OPTIONS).read(args) {
+        let step = match next {
+            Ok(Item::Option { id, value, .. }) => reading.apply(id, value),
+            Ok(Item::Operand { value, .. }) => {
+                reading.options.files.push(value);
+                Ok(())
+            }
+            Err(problem) => Err(usage_failure(&problem.to_string())),
         };
         if let Err(early) = step {
             return early;
