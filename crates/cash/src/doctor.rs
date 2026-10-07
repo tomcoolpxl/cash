@@ -126,6 +126,7 @@ pub fn run() -> u8 {
     check_busybox(&mut findings, &builtins, &entries, &pathext, &cwd);
     check_dos_shadowing(&mut findings, &builtins, &entries, &pathext, &cwd);
     check_deliberate_shadows(&mut findings, &builtins, &entries, &pathext, &cwd);
+    check_program_shadows(&mut findings, &builtins, &entries, &pathext, &cwd);
     check_platform(&mut findings);
     check_carapace(&mut findings, &entries, &pathext, &cwd);
     check_sudo(&mut findings, &entries, &pathext, &cwd);
@@ -936,9 +937,92 @@ fn check_deliberate_shadows(
     });
 }
 
+/// Programs outside System32 that cash's own commands shadow on purpose, and how its own
+/// differ: 7-Zip from Scoop or its installer.
+const PROGRAM_SHADOWS: &[(&str, &str)] = &[
+    (
+        "7z",
+        "7-Zip 26.03's options and words, LF and / in what it prints",
+    ),
+    ("7za", "the same, under 7-Zip's standalone name"),
+];
+
+/// Names cash answers although a program elsewhere on `PATH` has them, in one note.
+fn check_program_shadows(
+    findings: &mut Vec<Finding>,
+    builtins: &std::collections::HashSet<String>,
+    entries: &[PathBuf],
+    pathext: &[String],
+    cwd: &Path,
+) {
+    let found: Vec<(&str, &str, PathBuf)> = PROGRAM_SHADOWS
+        .iter()
+        .filter(|(command, _)| builtins.contains(*command))
+        .filter_map(|&(command, how)| {
+            let dispatch = resolve(command, entries, pathext, cwd)?;
+            let target = dispatch.target();
+            (!is_system32(target)).then(|| (command, how, target.to_path_buf()))
+        })
+        .collect();
+    findings.extend(program_shadows_note(&found));
+}
+
+/// The note for the programs found: the first named by its path, to run it by.
+fn program_shadows_note(found: &[(&str, &str, PathBuf)]) -> Option<Finding> {
+    let (command, _, path) = found.first()?;
+    let names: Vec<String> = found
+        .iter()
+        .map(|(name, _, _)| (*name).to_owned())
+        .collect();
+    let text = if found.len() == 1 {
+        format!("{command} is cash's own, ahead of {}:", shown(path))
+    } else {
+        format!(
+            "{} are cash's own, ahead of the programs on PATH:",
+            join_and(&names)
+        )
+    };
+    Some(Finding {
+        level: Level::Note,
+        text,
+        rows: found
+            .iter()
+            .map(|(name, how, _)| ((*name).to_owned(), (*how).to_owned()))
+            .collect(),
+        fix: Some(format!(
+            "run the program by its path, {}, or switch cash's off: {}",
+            pasted(path),
+            unbroken(&format!("enable -n {command}"))
+        )),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_7_zip_on_path_is_named_by_its_path() {
+        let path = PathBuf::from(r"C:\Tools\7-Zip\7z.exe");
+        let note = program_shadows_note(&[("7z", "how", path)]);
+        assert_eq!(
+            note.as_ref().map(|n| n.text.as_str()),
+            Some("7z is cash's own, ahead of C:/Tools/7-Zip/7z.exe:")
+        );
+        assert_eq!(
+            note.as_ref().map(|n| n.rows.clone()),
+            Some(vec![("7z".to_owned(), "how".to_owned())])
+        );
+        let fix = note.and_then(|n| n.fix).map(|f| f.replace(NO_BREAK, " "));
+        assert_eq!(
+            fix.as_deref(),
+            Some(
+                "run the program by its path, C:/Tools/7-Zip/7z.exe, or switch cash's off: \
+                 enable -n 7z"
+            )
+        );
+        assert!(program_shadows_note(&[]).is_none());
+    }
 
     fn note_with_rows() -> Finding {
         Finding {
