@@ -104,6 +104,15 @@ impl Kind {
         })
     }
 
+    /// The format an update finds by the name's suffix (`InitFormatIndex`): as
+    /// `by_extension`, and `.rar` and `.r00`, which both RAR handlers claim, are RAR's.
+    pub(super) fn for_update(path: &Path) -> Option<Self> {
+        Self::by_extension(path).or_else(|| {
+            let ext = path.extension()?.to_string_lossy().to_ascii_lowercase();
+            matches!(ext.as_str(), "rar" | "r00").then_some(Self::Rar)
+        })
+    }
+
     /// Whether a name's suffix names this format: RAR's two handlers share `.rar`.
     pub(super) fn named_by(self, by_name: Self) -> bool {
         self == by_name

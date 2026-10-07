@@ -188,5 +188,10 @@ xt rar50/solid.rar tiny.txt
 echo "== e, a wrong password"
 rm -rf out
 z e -y -oout -pwrong rar50/password_aes.rar
+echo "== a: RAR is not written, to a new archive named so nor to one there"
+printf 'x\n' > f.txt
+z a new.rar f.txt
+z a rar50/stored.rar f.txt
+ls new.rar 2>&1 | wc -l
 
 cd / && rm -rf "$dir"

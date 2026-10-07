@@ -564,7 +564,7 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
     // an archive there opens as that one only.
     let named = forced_kind(options).or_else(|| {
         (update.name_mode != NameMode::Add)
-            .then(|| Kind::by_extension(Path::new(&given)))
+            .then(|| Kind::for_update(Path::new(&given)))
             .flatten()
     });
     if named.is_some_and(|k| !k.writable()) || update.sfx {

@@ -645,7 +645,6 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      descriptor's SDDL text.
    - An SFX's archive inside its `.exe` (7-Zip opens an `.exe` as PE first, which
      cash's 7z does not read).
-   - `7z a` on a `.rar` name refuses as 7-Zip does (to check).
 2. **`rar` and `unrar` builtins** with RARLAB's console interface, reading and writing:
    a family of their own, so a shared design in `research/` and a pick list before any
    code (what of `rar`'s switches, which RAR generation by default, the oracle: WinRAR's
@@ -664,6 +663,10 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
 
 ## Found along the way
 
+- **`seven_z_matches_7_zip_26_03` failed twice** in nextest runs of the twelve 7z tests
+  on 2026-10-07, each right after a build, and passed alone and in seven runs after,
+  three of them beside the other three oracle scripts; the difference was not caught.
+  Run it with `--failure-output final` until it fails, and see what moved.
 - **7z asks for a password before extracting, 7-Zip when it gets to the first
   encrypted item** (found on 2026-10-07 with RAR, true of zip too): with no password to
   type, 7-Zip has written the items before it and leaves that item's empty file. In the
