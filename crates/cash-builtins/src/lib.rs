@@ -25,8 +25,13 @@ mod dirhistory;
 
 // cash (D48): `ps`, which uutils does not carry and whose PATH stand-in reports MSYS
 // pids that `kill` cannot use.
+// cash: `bzip2`, `bunzip2` and `bzcat`, bzip2 1.0.8's interface on libbz2-rs-sys; a clean
+// Windows machine has none.
+mod bzip2;
 // cash: `column`, util-linux's, checked against 2.42.3 case by case.
 mod column;
+// cash: what the compressors share (D78): where output goes, byte counts, the console.
+mod compress;
 mod croot;
 mod fileuse;
 // cash: `flock`, util-linux's, on LockFileEx; the lock is one byte far past the content.

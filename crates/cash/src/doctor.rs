@@ -98,7 +98,7 @@ const CARRIED: &[&str] = &[
     "logname", "hostid", "pathchk", "install", "dos2unix", "unix2dos", "fuser", "lsof", "ss",
     "ping", "stty", "tput", "iconv", "column", "xxd", "hexdump", "uuidgen", "xdg-open", "pbcopy",
     "pbpaste", "flock", "watch", "free", "nice", "renice", "nc", "diff", "cmp", "grep", "suspend",
-    "mkfifo", "stdbuf", "getconf", "locale", "gzip", "gunzip", "zcat",
+    "mkfifo", "stdbuf", "getconf", "locale", "gzip", "gunzip", "zcat", "bzip2", "bunzip2", "bzcat",
 ];
 
 /// Run the diagnostic. Returns a process exit code.

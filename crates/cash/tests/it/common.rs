@@ -111,6 +111,43 @@ pub fn run_in(dir: &Path, script: &str) -> Output {
     output_of(cash_command().args(["-c", script]).current_dir(dir))
 }
 
+/// The folder of the oracle scripts and their golden files, `tests/oracle`.
+pub fn oracle_dir() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("oracle")
+}
+
+/// Runs `tests/oracle/NAME.sh` under cash with no standard input: its standard output
+/// and error together, as the golden file was made.
+pub fn run_oracle_script(name: &str) -> String {
+    let out = cash_command()
+        .arg(format!("{name}.sh"))
+        .current_dir(oracle_dir())
+        .stdin(std::process::Stdio::null())
+        .output()
+        .expect("run cash");
+    String::from_utf8_lossy(&out.stdout).into_owned() + &String::from_utf8_lossy(&out.stderr)
+}
+
+/// `tests/oracle/NAME.out`, the original tool's output, with Unix line ends.
+pub fn golden(name: &str) -> String {
+    std::fs::read_to_string(oracle_dir().join(format!("{name}.out")))
+        .expect("read golden output")
+        .replace("\r\n", "\n")
+}
+
+/// `golden` with `from` replaced by `to`, where cash differs on purpose; `from` must
+/// occur exactly `times` times, so a difference cannot hide in the golden file.
+pub fn with_divergence(golden: &str, from: &str, to: &str, times: usize) -> String {
+    assert_eq!(
+        golden.matches(from).count(),
+        times,
+        "golden text moved: {from}"
+    );
+    golden.replace(from, to)
+}
+
 /// The folder Git for Windows is installed in, found through the `git` on `PATH`
 /// (`git --exec-path` is `<root>/mingw64/libexec/git-core`), with forward slashes.
 ///

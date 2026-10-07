@@ -11,9 +11,11 @@
 //! `lzma-rust2` for xz, lzma and lzip, `ruzstd` for zstd, which writes at its fast level
 //! only (about zstd's level 1), as one frame for each [`zstd::FRAME`] bytes.
 //!
+//! [`bzip2`] reads bzip2 streams one at a time, as the `bzip2` command needs them.
 //! [`gzip`] holds the gzip member reader and writer the `gzip` command needs, its
 //! header's fields and `-l`'s numbers.
 
+pub mod bzip2;
 pub mod gzip;
 pub mod zstd;
 
@@ -228,11 +230,11 @@ fn classify_by_kind(error: &io::Error) -> Option<CodecError> {
 fn classify_bzip2(error: &io::Error) -> Option<CodecError> {
     if let Some(inner) = error
         .get_ref()
-        .and_then(|e| e.downcast_ref::<bzip2::Error>())
+        .and_then(|e| e.downcast_ref::<::bzip2::Error>())
     {
         return Some(match inner {
-            bzip2::Error::DataMagic => CodecError::NotThisFormat,
-            bzip2::Error::Data => CodecError::Checksum,
+            ::bzip2::Error::DataMagic => CodecError::NotThisFormat,
+            ::bzip2::Error::Data => CodecError::Checksum,
             other => CodecError::Corrupt(other.to_string()),
         });
     }
@@ -248,7 +250,7 @@ pub fn reader<'a>(codec: Codec, inner: impl Read + 'a) -> Box<dyn Read + 'a> {
             classify: classify_by_kind,
         }),
         Codec::Bzip2 => Box::new(Checked {
-            inner: bzip2::read::MultiBzDecoder::new(inner),
+            inner: ::bzip2::read::MultiBzDecoder::new(inner),
             classify: classify_bzip2,
         }),
         Codec::Xz => Box::new(Checked {
@@ -307,7 +309,7 @@ impl<W: Write> Encoder for flate2::write::GzEncoder<W> {
     }
 }
 
-impl<W: Write> Encoder for bzip2::write::BzEncoder<W> {
+impl<W: Write> Encoder for ::bzip2::write::BzEncoder<W> {
     fn finish(self: Box<Self>) -> io::Result<()> {
         let mut inner = (*self).finish()?;
         inner.flush()
@@ -356,9 +358,9 @@ pub fn writer<'a>(
                 .mtime(0)
                 .write(inner, flate2::Compression::new(level)),
         ),
-        Codec::Bzip2 => Box::new(bzip2::write::BzEncoder::new(
+        Codec::Bzip2 => Box::new(::bzip2::write::BzEncoder::new(
             inner,
-            bzip2::Compression::new(level),
+            ::bzip2::Compression::new(level),
         )),
         Codec::Xz => Box::new(lzma_rust2::XzWriter::new(
             inner,

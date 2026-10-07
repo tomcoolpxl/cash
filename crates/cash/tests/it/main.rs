@@ -41,6 +41,8 @@ mod brush_names;
 // Comprehensive parameter matrix across builtins.
 mod builtin_parameters;
 mod bundled_paths;
+// `bzip2`, `bunzip2` and `bzcat`: bzip2 1.0.8's golden output, and the file handling.
+mod bzip2_builtin;
 mod cd_errors;
 // `pbcopy`, `pbpaste`, `uuidgen` and `xdg-open`: the clipboard round trip, util-linux's
 // golden output, and `start` under the name scripts try first.

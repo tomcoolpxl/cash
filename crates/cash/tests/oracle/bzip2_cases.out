@@ -1,0 +1,574 @@
+== --help
+bzip2, a block-sorting file compressor.  Version 1.0.8, 13-Jul-2019.
+
+   usage: bzip2 [flags and input files in any order]
+
+   -h --help           print this message
+   -d --decompress     force decompression
+   -z --compress       force compression
+   -k --keep           keep (don't delete) input files
+   -f --force          overwrite existing output files
+   -t --test           test compressed file integrity
+   -c --stdout         output to standard out
+   -q --quiet          suppress noncritical error messages
+   -v --verbose        be verbose (a 2nd -v gives more)
+   -L --license        display software version & license
+   -V --version        display software version & license
+   -s --small          use less memory (at most 2500k)
+   -1 .. -9            set block size to 100k .. 900k
+   --fast              alias for -1
+   --best              alias for -9
+
+   If invoked as `bzip2', default action is to compress.
+              as `bunzip2',  default action is to decompress.
+              as `bzcat', default action is to decompress to stdout.
+
+   If no file names are given, bzip2 compresses or decompresses
+   from standard input to standard output.  You can combine
+   short flags, so `-v -4' means the same as -v4 or -4v, &c.
+
+rc=0
+bzip2, a block-sorting file compressor.  Version 1.0.8, 13-Jul-2019.
+
+   usage: bunzip2 [flags and input files in any order]
+bzip2, a block-sorting file compressor.  Version 1.0.8, 13-Jul-2019.
+
+   usage: bzcat [flags and input files in any order]
+== bad options
+bzip2: Bad flag `-Y'
+bzip2, a block-sorting file compressor.  Version 1.0.8, 13-Jul-2019.
+
+   usage: bzip2 [flags and input files in any order]
+
+   -h --help           print this message
+   -d --decompress     force decompression
+   -z --compress       force compression
+   -k --keep           keep (don't delete) input files
+   -f --force          overwrite existing output files
+   -t --test           test compressed file integrity
+   -c --stdout         output to standard out
+   -q --quiet          suppress noncritical error messages
+   -v --verbose        be verbose (a 2nd -v gives more)
+   -L --license        display software version & license
+   -V --version        display software version & license
+   -s --small          use less memory (at most 2500k)
+   -1 .. -9            set block size to 100k .. 900k
+   --fast              alias for -1
+   --best              alias for -9
+
+   If invoked as `bzip2', default action is to compress.
+              as `bunzip2',  default action is to decompress.
+              as `bzcat', default action is to decompress to stdout.
+
+   If no file names are given, bzip2 compresses or decompresses
+   from standard input to standard output.  You can combine
+   short flags, so `-v -4' means the same as -v4 or -4v, &c.
+
+rc=1
+h
+bzip2: Bad flag `--foo'
+bzip2, a block-sorting file compressor.  Version 1.0.8, 13-Jul-2019.
+
+   usage: bzip2 [flags and input files in any order]
+
+   -h --help           print this message
+   -d --decompress     force decompression
+   -z --compress       force compression
+   -k --keep           keep (don't delete) input files
+   -f --force          overwrite existing output files
+   -t --test           test compressed file integrity
+   -c --stdout         output to standard out
+   -q --quiet          suppress noncritical error messages
+   -v --verbose        be verbose (a 2nd -v gives more)
+   -L --license        display software version & license
+   -V --version        display software version & license
+   -s --small          use less memory (at most 2500k)
+   -1 .. -9            set block size to 100k .. 900k
+   --fast              alias for -1
+   --best              alias for -9
+
+   If invoked as `bzip2', default action is to compress.
+              as `bunzip2',  default action is to decompress.
+              as `bzcat', default action is to decompress to stdout.
+
+   If no file names are given, bzip2 compresses or decompresses
+   from standard input to standard output.  You can combine
+   short flags, so `-v -4' means the same as -v4 or -4v, &c.
+
+rc=1
+bzip2: Bad flag `--hel'
+bzip2, a block-sorting file compressor.  Version 1.0.8, 13-Jul-2019.
+
+   usage: bzip2 [flags and input files in any order]
+
+   -h --help           print this message
+   -d --decompress     force decompression
+   -z --compress       force compression
+   -k --keep           keep (don't delete) input files
+   -f --force          overwrite existing output files
+   -t --test           test compressed file integrity
+   -c --stdout         output to standard out
+   -q --quiet          suppress noncritical error messages
+   -v --verbose        be verbose (a 2nd -v gives more)
+   -L --license        display software version & license
+   -V --version        display software version & license
+   -s --small          use less memory (at most 2500k)
+   -1 .. -9            set block size to 100k .. 900k
+   --fast              alias for -1
+   --best              alias for -9
+
+   If invoked as `bzip2', default action is to compress.
+              as `bunzip2',  default action is to decompress.
+              as `bzcat', default action is to decompress to stdout.
+
+   If no file names are given, bzip2 compresses or decompresses
+   from standard input to standard output.  You can combine
+   short flags, so `-v -4' means the same as -v4 or -4v, &c.
+
+rc=1
+bzip2: Can't open input file -Y: No such file or directory.
+rc=1
+== compressed bytes
+ 42 5a 68 39 31 41 59 26 53 59 c1 c0 80 e2 00 00
+ 01 41 00 00 10 02 44 a0 00 30 cd 00 c3 46 29 97
+ 17 72 45 38 50 90 c1 c0 80 e2
+ 42 5a 68 39 17 72 45 38 50 90 00 00 00 00
+ 42 5a 68 31 31 41 59 26 53 59 c1 c0 80 e2 00 00
+ 01 41 00 00 10 02 44 a0 00 30 cd 00 c3 46 29 97
+ 17 72 45 38 50 90 c1 c0 80 e2
+ 42 5a 68 31 31 41 59 26 53 59 2c a2 90 12 00 00
+ 03 51 80 00 10 40 00 16 84 90 a0 20 00 22 06 81
+ 90 80 69 a6 81 51 9a ac 82 a4 af 17 72 45 38 50
+ 90 2c a2 90 12
+ 42 5a 68 39 31 41 59 26 53 59 c1 c0 80 e2 00 00
+ 01 41 00 00 10 02 44 a0 00 30 cd 00 c3 46 29 97
+ 17 72 45 38 50 90 c1 c0 80 e2
+ 42 5a 68 39 31 41 59 26 53 59 c1 c0 80 e2 00 00
+ 01 41 00 00 10 02 44 a0 00 30 cd 00 c3 46 29 97
+ 17 72 45 38 50 90 c1 c0 80 e2
+ 42 5a 68 39 31 41 59 26 53 59 c1 c0 80 e2 00 00
+ 01 41 00 00 10 02 44 a0 00 30 cd 00 c3 46 29 97
+ 17 72 45 38 50 90 c1 c0 80 e2
+== round trips
+level 1 ok
+level 5 ok
+level 9 ok
+y ok
+y same
+hello
+== replace in place
+rc=0
+r.bz2
+rnd
+1577934245 r.bz2
+rc=0
+r
+rnd
+1577934245 r
+hello
+== -v
+  v:        0.143:1, 56.000 bits/byte, -600.00% saved, 6 in, 42 out.
+rc=0
+  v.bz2:   done
+rc=0
+  h:        0.143:1, 56.000 bits/byte, -600.00% saved, 6 in, 42 out.
+  (stdin):  0.143:1, 56.000 bits/byte, -600.00% saved, 6 in, 42 out.
+  t.bz2:   ok
+rc=0
+rc=0
+  (stdin): ok
+  (stdin): done
+  ev:       no data compressed.
+  ev.bz2:  done
+ev
+  h:       
+    block 1: crc = 0xc1c080e2, combined CRC = 0xc1c080e2, size = 6
+    final combined CRC = 0xc1c080e2
+    0.143:1, 56.000 bits/byte, -600.00% saved, 6 in, 42 out.
+  h:        0.143:1, 56.000 bits/byte, -600.00% saved, 6 in, 42 out.
+== -k and -c
+rc=0
+k
+k.bz2
+bzip2: Output file k already exists.
+rc=1
+rc=0
+k
+k.bz2
+k
+k.bz2
+kc.bz2
+hello
+kc.bz2
+== bunzip2 and bzcat
+hello
+rc=0
+z.bz2
+rc=0
+z2
+hello
+rc=0
+bzcat: h is not a bzip2 file.
+rc=2
+bunzip2: Can't guess original name for h -- using h.out
+bunzip2: h is not a bzip2 file.
+rc=2
+bzcat: Can't open input file nosuch: No such file or directory.
+rc=1
+rc=0
+z
+z.bz2
+z2
+hello
+hello
+bzip2: h is not a bzip2 file.
+hello
+rc=2
+ 42 5a 68 39 31 41 59 26 53 59 c1 c0 80 e2 00 00
+ 01 41 00 00 10 02 44 a0 00 30 cd 00 c3 46 29 97
+ 17 72 45 38 50 90 c1 c0 80 e2
+ 42 5a 68 39 31 41 59 26 53 59 c1 c0 80 e2 00 00
+ 01 41 00 00 10 02 44 a0 00 30 cd 00 c3 46 29 97
+ 17 72 45 38 50 90 c1 c0 80 e2
+rc=0
+== -f and overwrite
+bzip2: Output file o.bz2 already exists.
+rc=1
+bzip2: Output file o.bz2 already exists.
+rc=1
+o
+o.bz2
+rc=0
+o.bz2
+bzip2: Output file o already exists.
+rc=1
+rc=0
+o
+== -t on good and corrupt
+rc=0
+bzip2: trunc.bz2: file ends unexpectedly
+
+You can use the `bzip2recover' program to attempt to recover
+data from undamaged sections of corrupted files.
+
+rc=2
+  trunc.bz2: file ends unexpectedly
+
+You can use the `bzip2recover' program to attempt to recover
+data from undamaged sections of corrupted files.
+
+rc=2
+
+bzip2: Compressed file ends unexpectedly;
+	perhaps it is corrupted?  *Possible* reason follows.
+bzip2: No such file or directory
+	Input file = trunc.bz2, output file = trunc
+
+It is possible that the compressed file(s) have become corrupted.
+You can use the -tvv option to test integrity of such files.
+
+You can use the `bzip2recover' program to attempt to recover
+data from undamaged sections of corrupted files.
+
+bzip2: Deleting output file trunc, if it exists.
+rc=2
+trunc.bz2
+
+bzip2: Compressed file ends unexpectedly;
+	perhaps it is corrupted?  *Possible* reason follows.
+bzip2: Success
+	Input file = trunc.bz2, output file = (stdout)
+
+It is possible that the compressed file(s) have become corrupted.
+You can use the -tvv option to test integrity of such files.
+
+You can use the `bzip2recover' program to attempt to recover
+data from undamaged sections of corrupted files.
+
+rc=0
+bzip2: bad.bz2: data integrity (CRC) error in data
+
+You can use the `bzip2recover' program to attempt to recover
+data from undamaged sections of corrupted files.
+
+rc=2
+
+bzip2: Data integrity error when decompressing.
+	Input file = bad.bz2, output file = bad
+
+It is possible that the compressed file(s) have become corrupted.
+You can use the -tvv option to test integrity of such files.
+
+You can use the `bzip2recover' program to attempt to recover
+data from undamaged sections of corrupted files.
+
+bzip2: Deleting output file bad, if it exists.
+rc=2
+bad.bz2
+bzip2: n.bz2: bad magic number (file not created by bzip2)
+
+You can use the `bzip2recover' program to attempt to recover
+data from undamaged sections of corrupted files.
+
+rc=2
+bzip2: n.bz2 is not a bzip2 file.
+rc=2
+n.bz2
+bzip2: n.bz2 is not a bzip2 file.
+rc=2
+bzip2: n.bz2: bad magic number (file not created by bzip2)
+
+You can use the `bzip2recover' program to attempt to recover
+data from undamaged sections of corrupted files.
+
+rc=2
+bzip2: bad.bz2: data integrity (CRC) error in data
+
+You can use the `bzip2recover' program to attempt to recover
+data from undamaged sections of corrupted files.
+
+rc=2
+bzip2: Can't open input nosuch: No such file or directory.
+rc=1
+bzip2: empty.bz2: file ends unexpectedly
+
+You can use the `bzip2recover' program to attempt to recover
+data from undamaged sections of corrupted files.
+
+rc=2
+
+bzip2: Compressed file ends unexpectedly;
+	perhaps it is corrupted?  *Possible* reason follows.
+bzip2: No such file or directory
+	Input file = empty.bz2, output file = empty
+
+It is possible that the compressed file(s) have become corrupted.
+You can use the -tvv option to test integrity of such files.
+
+You can use the `bzip2recover' program to attempt to recover
+data from undamaged sections of corrupted files.
+
+bzip2: Deleting output file empty, if it exists.
+rc=2
+empty.bz2
+bzip2: hdr.bz2: file ends unexpectedly
+
+You can use the `bzip2recover' program to attempt to recover
+data from undamaged sections of corrupted files.
+
+rc=2
+bzip2: (stdin) is not a bzip2 file.
+rc=2
+
+bzip2: Compressed file ends unexpectedly;
+	perhaps it is corrupted?  *Possible* reason follows.
+bzip2: Inappropriate ioctl for device
+	Input file = (stdin), output file = (stdout)
+
+It is possible that the compressed file(s) have become corrupted.
+You can use the -tvv option to test integrity of such files.
+
+You can use the `bzip2recover' program to attempt to recover
+data from undamaged sections of corrupted files.
+
+rc=2
+== trailing
+bzip2: tg.bz2: trailing garbage after EOF ignored
+rc=0
+
+bzip2: tg.bz2: trailing garbage after EOF ignored
+hello
+rc=0
+
+bzip2: tg.bz2: trailing garbage after EOF ignored
+rc=0
+tg
+
+bzip2: tz.bz2: trailing garbage after EOF ignored
+hello
+rc=0
+hello
+hello
+rc=0
+  two.bz2: ok
+rc=0
+== suffix rules
+rc=0
+rc=0
+rc=0
+rc=0
+bzip2: Can't guess original name for e2.BZ2 -- using e2.BZ2.out
+rc=0
+rc=0
+a
+b
+bad.bz2
+c.tar
+d.tar
+e
+e2.BZ2.out
+empty.bz2
+ev
+f.tbz2
+g
+good.bz2
+h
+hdr.bz2
+k
+k.bz2
+kc.bz2
+n.bz2
+o
+r
+rnd
+t.bz2
+tg
+trunc.bz2
+two.bz2
+tz.bz2
+v
+y
+z
+z.bz2
+z2
+bzip2: Can't guess original name for u.txt -- using u.txt.out
+rc=0
+u.txt.out
+bzip2: Can't open input file u.txt: No such file or directory.
+rc=1
+bzip2: Can't create output file : No such file or directory.
+rc=1
+.bz2
+bad.bz2
+empty.bz2
+f.tbz2
+good.bz2
+hdr.bz2
+k.bz2
+kc.bz2
+n.bz2
+t.bz2
+trunc.bz2
+two.bz2
+tz.bz2
+z.bz2
+== already has suffix
+bzip2: Input file a2.bz2 already has .bz2 suffix.
+rc=1
+rc=1
+bzip2: Input file a2.bz2 already has .bz2 suffix.
+rc=1
+a2.bz2
+bzip2: Input file b2.tbz2 already has .tbz2 suffix.
+rc=1
+bzip2: Input file c2.tbz already has .tbz suffix.
+rc=1
+bzip2: Input file d2.bz already has .bz suffix.
+rc=1
+b2.tbz2
+c2.tbz
+d2.bz
+== missing and directory
+bzip2: Can't open input file nosuch: No such file or directory.
+rc=1
+bzip2: Can't open input file nosuch: No such file or directory.
+rc=1
+bzip2: Can't open input file nosuch: No such file or directory.
+rc=1
+bzip2: Can't open input file nosuch: No such file or directory.
+rc=1
+bzip2: Can't open input file nosuch: No such file or directory.
+rc=1
+h.bz2
+hdr.bz2
+bzip2: Input file d is a directory.
+rc=1
+bzip2: Input file d is a directory.
+rc=1
+bzip2: Input file d is a directory.
+rc=1
+bzip2: Input file d is a directory.
+rc=1
+bzip2: Input file d is a directory.
+rc=1
+h.bz2
+hdr.bz2
+== hard links
+bzip2: Input file l1 has 1 other link.
+rc=1
+bzip2: Input file l1 has 1 other link.
+rc=1
+hello
+bzip2: Input file l1 has 1 other link.
+rc=1
+rc=0
+l1.bz2
+l2
+== stdin and dash
+hi
+hi
+hello
+bzip2: Can't open input file -: No such file or directory.
+
+bzip2: Compressed file ends unexpectedly;
+	perhaps it is corrupted?  *Possible* reason follows.
+bzip2: Inappropriate ioctl for device
+	Input file = (stdin), output file = (stdout)
+
+It is possible that the compressed file(s) have become corrupted.
+You can use the -tvv option to test integrity of such files.
+
+You can use the `bzip2recover' program to attempt to recover
+data from undamaged sections of corrupted files.
+
+hello
+ 42 5a 68 39 17 72 45 38 50 90 00 00 00 00
+bzip2: (stdin) is not a bzip2 file.
+rc=2
+== -s and -q
+hello
+ 42 5a 68 32 31 41 59 26 53 59 c1 c0 80 e2 00 00
+ 01 41 00 00 10 02 44 a0 00 30 cd 00 c3 46 29 97
+ 17 72 45 38 50 90 c1 c0 80 e2
+bzip2: Can't open input file nosuch: No such file or directory.
+rc=1
+bzip2: --repetitive-fast is redundant in versions 0.9.5 and above
+ 42 5a 68 39 31 41 59 26 53 59 c1 c0 80 e2 00 00
+ 01 41 00 00 10 02 44 a0 00 30 cd 00 c3 46 29 97
+ 17 72 45 38 50 90 c1 c0 80 e2
+bzip2: --repetitive-best is redundant in versions 0.9.5 and above
+ 42 5a 68 39 31 41 59 26 53 59 c1 c0 80 e2 00 00
+ 01 41 00 00 10 02 44 a0 00 30 cd 00 c3 46 29 97
+ 17 72 45 38 50 90 c1 c0 80 e2
+ 42 5a 68 39 31 41 59 26 53 59 c1 c0 80 e2 00 00
+ 01 41 00 00 10 02 44 a0 00 30 cd 00 c3 46 29 97
+ 17 72 45 38 50 90 c1 c0 80 e2
+== long options
+  lo:       0.143:1, 56.000 bits/byte, -600.00% saved, 6 in, 42 out.
+rc=0
+hello
+rc=0
+rc=0
+ 42 5a 68 39 31 41 59 26 53 59 c1 c0 80 e2 00 00
+ 01 41 00 00 10 02 44 a0 00 30 cd 00 c3 46 29 97
+ 17 72 45 38 50 90 c1 c0 80 e2
+hello
+== environment
+134
+  h:        0.143:1, 56.000 bits/byte, -600.00% saved, 6 in, 42 out.
+bzip2: h is not a bzip2 file.
+rc=0
+== -L and -V
+bzip2, a block-sorting file compressor.  Version 1.0.8, 13-Jul-2019.
+bzip2, a block-sorting file compressor.  Version 1.0.8, 13-Jul-2019.
+bzip2, a block-sorting file compressor.  Version 1.0.8, 13-Jul-2019.
+bzip2, a block-sorting file compressor.  Version 1.0.8, 13-Jul-2019.
+== -c to a file already there
+rc=0
+hello
+== read-only input
+rc=0
+read-only
+rc=0
+read-only
+ro

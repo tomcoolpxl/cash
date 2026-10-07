@@ -572,9 +572,13 @@ cash-core's `Pattern` path flags and cash-sed's one-`s///` entry point (design 3
 - **The Scoop update output** (the user, 2026-10-06): the warning and the process table
   are Scoop's own (`test_running_process`, printed whenever a cash runs from
   `scoop\apps\cash`, which the window typing `scoop update` always does); only the notes
-  are cash's. They now say the listed cash is that window. **Waits for the user's yes:**
-  push the synced notes, a local commit in `C:\Users\thraa\github\scoop-bucket`, to
-  `tomcoolpxl/scoop-bucket`.
+  are cash's. They now say the listed cash is that window; the bucket has them
+  (pushed 2026-10-07).
+- **Ten oracle tests keep their own copies of the oracle helpers** (found 2026-10-07,
+  phase 28): `oracle_dir`, `run_oracle_script`, `golden` and `with_divergence` are
+  written out again in `gzip_builtin.rs`, `grep_builtin.rs`, `column_builtin.rs` and
+  seven more under `crates/cash/tests/it`. `common.rs` has them now, and the bzip2, xz
+  and zstd tests use those; move the ten onto them.
 - **CI's annotations show four `ENOENT ... opendir 'D:\a\cash\cash\target\doc\cash_core\tests\trybuild'`**
   (and `...\tests\target`) errors on every green run, 1.8.0's and 1.8.1's included
   (seen 2026-10-06). The job passes; the cleanup of the Rust Cache step

@@ -27,7 +27,7 @@
 
 use std::fmt::Write as _;
 use std::fs;
-use std::io::{self, Read, Write};
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -39,6 +39,8 @@ use cash_core::{ExecutionResult, ShellFd, builtins};
 use cash_getopt::{Arg, Getopt, Item, Long};
 use cash_win32::unix::Replacement;
 use clap::Parser;
+
+use crate::compress::strerror;
 
 /// The name every message begins with, whichever of the three names ran.
 const PROGRAM: &str = "gzip";
@@ -530,10 +532,6 @@ struct Done {
     crc: u32,
 }
 
-fn strerror(error: &io::Error) -> String {
-    cash_core::error::os_error_text(error)
-}
-
 /// One run of the command over its files.
 struct Run<'a, SE: cash_core::ShellExtensions> {
     options: Options,
@@ -624,7 +622,7 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
     }
 
     fn is_terminal(&self, fd: ShellFd) -> bool {
-        self.context.try_fd(fd).is_some_and(|f| f.is_terminal())
+        crate::compress::is_terminal(self.context, fd)
     }
 
     /// Standard input's modification time when it is a file, as GNU gzip stores it for
@@ -843,27 +841,7 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
 
     /// Reads one line of standard input: `y` or `Y` first is yes.
     fn answer_is_yes(&self) -> Result<bool, Stop> {
-        let console = self
-            .context
-            .try_fd(OpenFiles::STDIN_FD)
-            .and_then(|file| file.console(true, true));
-        let line = if let Some(mut console) = console {
-            match console.line()? {
-                cash_win32::conin::Line::Typed(text) => text,
-                cash_win32::conin::Line::EndOfInput | cash_win32::conin::Line::Interrupted => {
-                    String::new()
-                }
-            }
-        } else {
-            let mut stdin = self.context.stdin();
-            let mut bytes = Vec::new();
-            let mut byte = [0u8; 1];
-            while stdin.read(&mut byte)? == 1 && byte[0] != b'\n' {
-                bytes.push(byte[0]);
-            }
-            String::from_utf8_lossy(&bytes).into_owned()
-        };
-        Ok(matches!(line.chars().next(), Some('y' | 'Y')))
+        Ok(crate::compress::answer_is_yes(self.context)?)
     }
 
     /// `-v` says of an extra field that it is ignored.

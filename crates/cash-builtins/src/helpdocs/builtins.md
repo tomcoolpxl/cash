@@ -128,6 +128,9 @@ an entry or page names no builtin.
 
 - `awk`: Scan and process text with the AWK language.
 - `bc`: Calculate with arbitrary precision, in POSIX bc's language.
+- `bunzip2`: Uncompress `.bz2` files in place: `bzip2 -d`.
+- `bzcat`: Print `.bz2` files uncompressed to standard output: `bzip2 -dc`.
+- `bzip2`: Compress files to `.bz2` in place, or uncompress them, with bzip2's flags.
 - `cmp`: Compare two files byte by byte, and say where they first differ.
 - `column`: Lay a list out in columns, or align a table on a separator.
 - `diff`: Compare two files line by line, or two folders file by file.

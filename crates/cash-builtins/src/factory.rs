@@ -349,6 +349,19 @@ pub fn default_builtins<SE: cash_core::ShellExtensions>(
         "zcat".into(),
         builtin::<gzip::ZcatCommand, SE>().with_substitution_files(),
     );
+    // The same for the other compressors.
+    m.insert(
+        "bzip2".into(),
+        builtin::<bzip2::Bzip2Command, SE>().with_substitution_files(),
+    );
+    m.insert(
+        "bunzip2".into(),
+        builtin::<bzip2::Bunzip2Command, SE>().with_substitution_files(),
+    );
+    m.insert(
+        "bzcat".into(),
+        builtin::<bzip2::BzcatCommand, SE>().with_substitution_files(),
+    );
     m.insert(
         "coolfetch".into(),
         builtin::<coolfetch::CoolfetchCommand, SE>(),
