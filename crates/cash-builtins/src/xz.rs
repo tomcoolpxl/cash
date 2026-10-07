@@ -282,6 +282,16 @@ struct Options {
     files: Vec<String>,
 }
 
+/// The threads xz chooses for itself (`-T0`): one a core, as many as a quarter of the
+/// memory holds, each with its encoder of `preset` and two blocks of `block` bytes.
+pub(crate) fn auto_threads(preset: u32, block: u64) -> usize {
+    let cores = cash_archive::codec::parallel::threads(0);
+    let each = xz::encoder_memory(preset).saturating_add(block.saturating_mul(2));
+    let budget = cash_win32::process::total_physical_memory().map_or(u64::MAX, |m| m / 4);
+    let fit = usize::try_from(budget / each.max(1)).unwrap_or(usize::MAX);
+    cores.min(fit).max(1)
+}
+
 /// What reading the command line came to.
 #[derive(Debug)]
 enum Parsed {
@@ -886,7 +896,6 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
         if asked != 0 {
             return Some(asked);
         }
-        let cores = u32::try_from(cash_archive::codec::parallel::threads(0)).unwrap_or(1);
         let preset = self.options.preset.min(9);
         let dict = u64::from(
             Settings {
@@ -903,10 +912,7 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
             .block_size
             .unwrap_or_else(|| xz::default_block(dict))
             .get();
-        let each = xz::encoder_memory(preset).saturating_add(block.saturating_mul(2));
-        let budget = cash_win32::process::total_physical_memory().map_or(u64::MAX, |m| m / 4);
-        let fit = u32::try_from(budget / each.max(1)).unwrap_or(u32::MAX);
-        Some(cores.min(fit).max(1))
+        u32::try_from(auto_threads(preset, block)).ok()
     }
 
     fn say(&self, text: &str) -> Result<(), Stop> {

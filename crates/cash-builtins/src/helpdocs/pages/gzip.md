@@ -33,6 +33,9 @@ miniz_oxide, about fifteen percent larger than GNU gzip's `-1`.
   carries deflate only. `tar.exe` reads a `.tar.Z`.
 - The `GZIP` environment variable is read as GNU gzip 1.14 reads it: a level in it
   counts, the rest is ignored.
+- Input over 1 MiB is compressed on every core, as pigz lays it out: 1 MiB chunks
+  deflated apart, in one member any gzip reads. The bytes are the same on any machine;
+  input of one chunk is what one thread writes.
 
 ## Examples
 

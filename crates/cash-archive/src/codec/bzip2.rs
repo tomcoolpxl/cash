@@ -72,6 +72,90 @@ pub fn decompress_streams<R: BufRead>(
     }
 }
 
+/// Writes bzip2 streams of `level` hundred thousand bytes each, `threads` compressed
+/// at once and written in order (pbzip2's layout); input of one stream's size is one
+/// stream, as bzip2 writes it.
+pub struct ParallelWriter<W: Write> {
+    inner: W,
+    pending: Vec<u8>,
+    level: u32,
+    threads: usize,
+    /// Whether a stream was written: an empty input is still one empty stream.
+    wrote: bool,
+}
+
+impl<W: Write> ParallelWriter<W> {
+    /// A writer into `inner` of blocks of `level` (1 to 9) hundred thousand bytes.
+    pub fn new(inner: W, level: u32, threads: usize) -> Self {
+        Self {
+            inner,
+            pending: Vec::new(),
+            level: level.clamp(1, 9),
+            threads: threads.max(1),
+            wrote: false,
+        }
+    }
+
+    /// The input each stream holds.
+    const fn chunk(&self) -> usize {
+        self.level as usize * 100_000
+    }
+
+    /// What is pending made streams of [`Self::chunk`] bytes, at once, and written.
+    fn streams(&mut self) -> io::Result<()> {
+        let level = self.level;
+        let chunks: Vec<&[u8]> = if self.pending.is_empty() {
+            vec![&[]]
+        } else {
+            self.pending.chunks(self.chunk()).collect()
+        };
+        let streams = super::parallel::map_ordered(chunks, |chunk| {
+            let mut out = Vec::with_capacity(chunk.len() / 3 + 64);
+            let mut encoder =
+                ::bzip2::write::BzEncoder::new(&mut out, ::bzip2::Compression::new(level));
+            encoder.write_all(chunk)?;
+            encoder.finish()?;
+            Ok(out)
+        })?;
+        self.pending.clear();
+        self.wrote = true;
+        for stream in streams {
+            self.inner.write_all(&stream)?;
+        }
+        Ok(())
+    }
+
+    /// Writes the last streams, and hands the writer back.
+    ///
+    /// # Errors
+    ///
+    /// When a stream cannot be written.
+    pub fn finish(mut self) -> io::Result<W> {
+        if !self.pending.is_empty() || !self.wrote {
+            self.streams()?;
+        }
+        self.inner.flush()?;
+        Ok(self.inner)
+    }
+}
+
+impl<W: Write> Write for ParallelWriter<W> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        let batch = self.chunk() * self.threads;
+        let taken = buf.len().min(batch - self.pending.len());
+        self.pending
+            .extend_from_slice(buf.get(..taken).unwrap_or_default());
+        if self.pending.len() >= batch {
+            self.streams()?;
+        }
+        Ok(taken)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.inner.flush()
+    }
+}
+
 /// What an error from the decoder of stream number `stream` means.
 fn stopped(error: io::Error, stream: u32) -> Result<Ending, Broken> {
     let inner = error

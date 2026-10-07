@@ -309,7 +309,29 @@ impl<SE: cash_core::ShellExtensions> Tar<'_, SE> {
             }
         };
         let encoder: Box<dyn codec::Encoder> = match codec {
-            Some(codec) => codec::writer(codec, sink, codec.levels().2)?,
+            // Each codec's own threads: zstd's one, xz's as many as memory holds,
+            // every core for gzip's chunks and bzip2's streams.
+            Some(codec) => {
+                let level = codec.levels().2;
+                let threads = match codec {
+                    Codec::Zstd => 1,
+                    Codec::Xz => {
+                        let dict = u64::from(
+                            codec::xz::Settings {
+                                preset: level,
+                                extreme: false,
+                                check: codec::xz::Check::Crc64,
+                                block_size: None,
+                                threads: None,
+                            }
+                            .dict_size(),
+                        );
+                        crate::xz::auto_threads(level, codec::xz::default_block(dict).get())
+                    }
+                    _ => 0,
+                };
+                codec::writer_on(codec, sink, level, threads)?
+            }
             None => Box::new(Plain(sink)),
         };
         let mut output = Output {

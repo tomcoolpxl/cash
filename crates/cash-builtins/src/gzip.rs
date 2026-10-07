@@ -32,7 +32,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use cash_archive::codec::gzip::{
-    Input, Member, Start, Trouble, deflate_all, header, inflate_member, read_start,
+    Input, Member, Start, Trouble, deflate_parallel, header, inflate_member, read_start,
 };
 use cash_core::openfiles::{OpenFile, OpenFiles};
 use cash_core::{ExecutionResult, ShellFd, builtins};
@@ -1150,7 +1150,8 @@ impl<SE: cash_core::ShellExtensions> Run<'_, SE> {
         if let Err(e) = out.write_all(&header) {
             return Err(self.stream_failed(Trouble::Write(e), iname, oname));
         }
-        match deflate_all(input, out, self.options.level) {
+        let threads = cash_archive::codec::parallel::threads(0);
+        match deflate_parallel(input, out, self.options.level, threads) {
             // GNU gzip counts the trailer with the header when it shows the ratio.
             Ok((counts, written)) => Ok(Done {
                 bytes_in: counts.size,

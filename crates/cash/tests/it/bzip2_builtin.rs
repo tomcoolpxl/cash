@@ -35,6 +35,14 @@ fn bzip2_matches_bzip2_1_0_8() {
         "  h:        0.143:1, 56.000 bits/byte, -600.00% saved, 6 in, 42 out.\n",
         1,
     );
+    // -1 on 300 kB: cash writes a stream of each 100 kB, compressed on every core
+    // (pbzip2's layout, the user's choice), where bzip2 writes one stream of three blocks.
+    let expected = with_divergence(
+        &expected,
+        "== environment\n134\n",
+        "== environment\n216\n",
+        1,
+    );
     assert_eq!(run_oracle_script("bzip2_cases"), expected);
 }
 

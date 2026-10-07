@@ -7,7 +7,8 @@ see: gzip bzip2 xz zstd
 `tar -cf ARCHIVE FILE...` packs files and folders into an archive, `tar -tf ARCHIVE`
 lists it and `tar -xf ARCHIVE` unpacks it. `-z`, `-j`, `-J`, `--lzma`, `--lzip` and
 `--zstd` compress the archive, or `-a` by its suffix; reading finds the compression by
-itself. `-r` and `-u` add to an archive, `-A` joins archives, `--delete` removes
+itself. Compression runs as cash's `gzip`, `bzip2`, `xz` and `zstd` run by default:
+the first three on every core, zstd on one. `-r` and `-u` add to an archive, `-A` joins archives, `--delete` removes
 members and `-d` compares an archive with the files.
 
 The options, messages, listings and exit status are GNU tar 1.35's, and so are the

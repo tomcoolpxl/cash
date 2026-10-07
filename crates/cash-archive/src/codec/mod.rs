@@ -556,6 +556,54 @@ pub fn writer<'a>(
     })
 }
 
+impl<W: Write> Encoder for gzip::ParallelWriter<W> {
+    fn finish(self: Box<Self>) -> io::Result<()> {
+        (*self).finish().map(drop)
+    }
+}
+
+impl<W: Write> Encoder for bzip2::ParallelWriter<W> {
+    fn finish(self: Box<Self>) -> io::Result<()> {
+        (*self).finish().map(drop)
+    }
+}
+
+/// [`writer`] laid out for threads, `threads` (0, one a core) compressed at once.
+///
+/// gzip's chunks, bzip2's streams, xz's blocks of three dictionaries and zstd's frames;
+/// the bytes are the same for any number of threads. lzip and lzma are [`writer`]'s.
+///
+/// # Errors
+///
+/// When the codec's header cannot be written.
+pub fn writer_on<'a>(
+    codec: Codec,
+    inner: impl Write + 'a,
+    level: u32,
+    threads: usize,
+) -> io::Result<Box<dyn Encoder + 'a>> {
+    let threads = if threads == 0 {
+        parallel::threads(0)
+    } else {
+        threads
+    };
+    let (low, high, _) = codec.levels();
+    let level = level.clamp(low, high);
+    Ok(match codec {
+        Codec::Gzip => Box::new(gzip::ParallelWriter::new(inner, level, threads)),
+        Codec::Bzip2 => Box::new(bzip2::ParallelWriter::new(inner, level, threads)),
+        Codec::Xz => {
+            let mut options = lzma_rust2::XzOptions::with_preset(level);
+            let dict = u64::from(options.lzma_options.dict_size);
+            options.set_block_size(Some(xz::default_block(dict)));
+            let workers = u32::try_from(threads).unwrap_or(u32::MAX);
+            Box::new(lzma_rust2::XzWriterMt::new(inner, options, workers)?)
+        }
+        Codec::Zstd => Box::new(zstd::Writer::new(inner).with_threads(threads)),
+        Codec::Lzip | Codec::Lzma => return writer(codec, inner, level),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -581,6 +629,54 @@ mod tests {
             assert_eq!(round_trip(codec, b""), b"", "{codec} of nothing");
             assert_eq!(round_trip(codec, b"hello\n"), b"hello\n", "{codec}");
         }
+    }
+
+    /// `data` through [`writer_on`] at `level` on four threads, and back.
+    fn threaded_round_trip(codec: Codec, level: u32, data: &[u8]) -> Vec<u8> {
+        let mut packed = Vec::new();
+        let mut encoder = writer_on(codec, &mut packed, level, 4).unwrap();
+        for piece in data.chunks(300_000) {
+            encoder.write_all(piece).unwrap();
+        }
+        encoder.finish().unwrap();
+        let mut out = Vec::new();
+        reader(codec, packed.as_slice())
+            .read_to_end(&mut out)
+            .unwrap();
+        out
+    }
+
+    #[test]
+    fn every_codec_round_trips_on_threads() {
+        // Over five of gzip's chunks, bzip2's 100 kB streams and zstd's frames.
+        let data: Vec<u8> = (0..6_000_000u32)
+            .map(|n| u8::try_from((n % 251) ^ (n / 70_000 % 3)).unwrap_or(0))
+            .collect();
+        for codec in [Codec::Gzip, Codec::Bzip2, Codec::Zstd] {
+            assert!(threaded_round_trip(codec, 1, &data) == data, "{codec}");
+        }
+        let small: Vec<u8> = data.iter().copied().take(3_000_000).collect();
+        assert!(threaded_round_trip(Codec::Xz, 0, &small) == small, "xz");
+        for codec in Codec::ALL {
+            assert!(
+                threaded_round_trip(codec, codec.levels().2, b"").is_empty(),
+                "{codec}"
+            );
+        }
+    }
+
+    #[test]
+    fn one_bzip2_stream_is_bzip2_s_bytes() {
+        let data: Vec<u8> = (0..50_000u32).map(|n| (n % 97) as u8).collect();
+        let mut alone = Vec::new();
+        let mut encoder = writer(Codec::Bzip2, &mut alone, 9).unwrap();
+        encoder.write_all(&data).unwrap();
+        encoder.finish().unwrap();
+        let mut threaded = Vec::new();
+        let mut encoder = writer_on(Codec::Bzip2, &mut threaded, 9, 4).unwrap();
+        encoder.write_all(&data).unwrap();
+        encoder.finish().unwrap();
+        assert_eq!(threaded, alone);
     }
 
     #[test]

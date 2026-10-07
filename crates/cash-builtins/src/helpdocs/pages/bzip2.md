@@ -27,6 +27,10 @@ ignored, as bzip2 does.
 - `-vv` says what `-v` says: bzip2's block-by-block trace is printed by libbzip2 itself.
 - The words of the `BZIP2` and `BZIP` environment variables are read before the command
   line's, as bzip2 reads them.
+- Input larger than one block is compressed on every core, as pbzip2 lays it out: a
+  stream for each block's input (`-1` to `-9`, 100 to 900 kB), one after another, which
+  any bzip2 reads as one file. Input of one block is the stream bzip2 writes, byte for
+  byte.
 
 ## Examples
 

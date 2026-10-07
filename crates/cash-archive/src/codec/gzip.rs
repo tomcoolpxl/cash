@@ -450,6 +450,196 @@ pub fn deflate_all(
     Ok((Counts { crc, size }, written))
 }
 
+/// What each thread deflates on its own: pigz's layout, without its shared window.
+pub const PARALLEL_CHUNK: usize = 1 << 20;
+
+/// The next `PARALLEL_CHUNK` bytes of `input`, fewer at its end.
+fn next_chunk(input: &mut Input) -> io::Result<Vec<u8>> {
+    let mut chunk = Vec::with_capacity(PARALLEL_CHUNK);
+    while chunk.len() < PARALLEL_CHUNK && input.fill()? {
+        let take = input.available().len().min(PARALLEL_CHUNK - chunk.len());
+        chunk.extend_from_slice(input.available().get(..take).unwrap_or_default());
+        input.advance(take);
+    }
+    Ok(chunk)
+}
+
+/// One chunk deflated apart: ended with a sync flush, so the next one's blocks follow
+/// on a byte, or, the `last`, with the final block.
+fn deflate_chunk(data: &[u8], level: u32, last: bool) -> io::Result<Vec<u8>> {
+    let mut deflater = Compress::new(Compression::new(level), false);
+    let mut out = Vec::with_capacity(data.len() / 2 + 1024);
+    let flush = if last {
+        FlushCompress::Finish
+    } else {
+        FlushCompress::Sync
+    };
+    loop {
+        if out.capacity() - out.len() < 1024 {
+            out.reserve(out.capacity().max(64 << 10));
+        }
+        let taken = to_usize(deflater.total_in());
+        let status = deflater
+            .compress_vec(data.get(taken..).unwrap_or_default(), &mut out, flush)
+            .map_err(io::Error::other)?;
+        let all_in = to_usize(deflater.total_in()) == data.len();
+        if last && status == Status::StreamEnd {
+            return Ok(out);
+        }
+        // A flush is done when it leaves room in the output.
+        if !last && all_in && out.len() < out.capacity() {
+            return Ok(out);
+        }
+    }
+}
+
+/// Writes one gzip member as tar's `gzip` does (no name, no time), its chunks deflated
+/// `threads` at once as [`deflate_parallel`] lays them out.
+pub struct ParallelWriter<W: Write> {
+    inner: W,
+    pending: Vec<u8>,
+    level: u32,
+    threads: usize,
+    hasher: crc32fast::Hasher,
+    size: u64,
+    /// Whether the header is written.
+    started: bool,
+}
+
+impl<W: Write> ParallelWriter<W> {
+    /// A writer into `inner` at `level`.
+    pub fn new(inner: W, level: u32, threads: usize) -> Self {
+        Self {
+            inner,
+            pending: Vec::new(),
+            level,
+            threads: threads.max(1),
+            hasher: crc32fast::Hasher::new(),
+            size: 0,
+            started: false,
+        }
+    }
+
+    /// The pending chunks deflated at once and written, the last one ended if `last`.
+    fn chunks(&mut self, last: bool) -> io::Result<()> {
+        if !self.started {
+            self.inner.write_all(&header(0, self.level, None))?;
+            self.started = true;
+        }
+        let level = self.level;
+        let chunks: Vec<&[u8]> = if self.pending.is_empty() {
+            vec![&[]]
+        } else {
+            self.pending.chunks(PARALLEL_CHUNK).collect()
+        };
+        let count = chunks.len();
+        let jobs: Vec<(usize, &[u8])> = chunks.into_iter().enumerate().collect();
+        let deflated = super::parallel::map_ordered(jobs, |(at, chunk)| {
+            deflate_chunk(chunk, level, last && at + 1 == count)
+        })?;
+        self.hasher.update(&self.pending);
+        self.size += self.pending.len() as u64;
+        self.pending.clear();
+        for packed in deflated {
+            self.inner.write_all(&packed)?;
+        }
+        Ok(())
+    }
+
+    /// Writes the last chunks and the trailer, and hands the writer back.
+    ///
+    /// # Errors
+    ///
+    /// When it cannot be written.
+    pub fn finish(mut self) -> io::Result<W> {
+        self.chunks(true)?;
+        let crc = self.hasher.clone().finalize();
+        self.inner.write_all(&crc.to_le_bytes())?;
+        self.inner.write_all(&low_32(self.size).to_le_bytes())?;
+        self.inner.flush()?;
+        Ok(self.inner)
+    }
+}
+
+impl<W: Write> Write for ParallelWriter<W> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        // One chunk more than the threads take, kept back: the last one is ended.
+        let batch = PARALLEL_CHUNK * (self.threads + 1);
+        let taken = buf.len().min(batch - self.pending.len());
+        self.pending
+            .extend_from_slice(buf.get(..taken).unwrap_or_default());
+        if self.pending.len() >= batch {
+            let keep = self.pending.split_off(PARALLEL_CHUNK * self.threads);
+            self.chunks(false)?;
+            self.pending = keep;
+        }
+        Ok(taken)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.inner.flush()
+    }
+}
+
+/// [`deflate_all`] laid out for threads: chunks deflated apart, `threads` at once.
+///
+/// Each chunk but the last ends with a sync flush, in one member whose CRC is the
+/// whole's (pigz's layout without its shared window). The bytes are the same for any
+/// number of threads; input of one chunk is [`deflate_all`]'s, byte for byte.
+///
+/// # Errors
+///
+/// As [`deflate_all`]'s.
+pub fn deflate_parallel(
+    input: &mut Input,
+    out: &mut dyn Write,
+    level: u32,
+    threads: usize,
+) -> Result<(Counts, u64), Trouble> {
+    let threads = threads.max(1);
+    let first = next_chunk(input).map_err(Trouble::Read)?;
+    if input.at_end().map_err(Trouble::Read)? {
+        let mut alone = Input::new(Box::new(io::Cursor::new(first)));
+        return deflate_all(&mut alone, out, level);
+    }
+    let mut hasher = crc32fast::Hasher::new();
+    let mut size = 0u64;
+    let mut written = 0u64;
+    let mut pending = vec![first];
+    loop {
+        while pending.len() < threads {
+            let chunk = next_chunk(input).map_err(Trouble::Read)?;
+            if chunk.is_empty() {
+                break;
+            }
+            pending.push(chunk);
+        }
+        let ended = input.at_end().map_err(Trouble::Read)?;
+        let count = pending.len();
+        let jobs: Vec<(usize, &Vec<u8>)> = pending.iter().enumerate().collect();
+        let deflated = super::parallel::map_ordered(jobs, |(at, chunk)| {
+            deflate_chunk(chunk, level, ended && at + 1 == count)
+        })
+        .map_err(|_| Trouble::Format)?;
+        for (chunk, packed) in pending.iter().zip(&deflated) {
+            hasher.update(chunk);
+            size += chunk.len() as u64;
+            out.write_all(packed).map_err(Trouble::Write)?;
+            written += packed.len() as u64;
+        }
+        pending.clear();
+        if ended {
+            break;
+        }
+    }
+    let crc = hasher.finalize();
+    let mut trailer = crc.to_le_bytes().to_vec();
+    trailer.extend_from_slice(&low_32(size).to_le_bytes());
+    out.write_all(&trailer).map_err(Trouble::Write)?;
+    written += trailer.len() as u64;
+    Ok((Counts { crc, size }, written))
+}
+
 /// A count as a `usize`, as large as can be when it does not fit.
 pub fn to_usize(n: u64) -> usize {
     usize::try_from(n).unwrap_or(usize::MAX)
@@ -537,6 +727,51 @@ mod tests {
         assert!(matches!(start_of(b"\0\0x", 2, false), Ok(Start::Garbage)));
         assert!(matches!(start_of(b"junk", 2, false), Ok(Start::Garbage)));
         assert!(matches!(start_of(b"j", 2, false), Err(Trouble::Eof)));
+    }
+
+    /// `data` deflated on four threads, then inflated: the data, and its counts.
+    fn parallel_round_trip(data: &[u8]) -> (Vec<u8>, Vec<u8>, Counts) {
+        let mut packed = Vec::new();
+        let mut input = Input::new(Box::new(io::Cursor::new(data.to_vec())));
+        let (counts, written) = deflate_parallel(&mut input, &mut packed, 6, 4).unwrap();
+        assert_eq!(written, packed.len() as u64);
+        let mut back = Vec::new();
+        let mut written_back = 0;
+        let mut reading = Input::new(Box::new(io::Cursor::new(packed.clone())));
+        let read = inflate_member(&mut reading, &mut back, &mut written_back).unwrap();
+        assert_eq!(read, counts);
+        (packed, back, counts)
+    }
+
+    #[test]
+    fn chunks_deflated_apart_inflate_as_one_member() {
+        let text: Vec<u8> = (0..900_000u32)
+            .flat_map(|i| format!("{} ", i % 4099).into_bytes())
+            .collect();
+        for len in [text.len(), 2 * PARALLEL_CHUNK, 2 * PARALLEL_CHUNK + 1] {
+            let data = text.get(..len).unwrap_or(&text);
+            let (_, back, counts) = parallel_round_trip(data);
+            assert_eq!(back, data);
+            assert_eq!(counts.crc, crc32fast::hash(data));
+        }
+    }
+
+    #[test]
+    fn one_chunk_is_deflated_as_before() {
+        // 800 KB: under one chunk.
+        let data: Vec<u8> = (0..200_000u32)
+            .flat_map(|i| (i % 300).to_le_bytes())
+            .collect();
+        let (packed, _, _) = parallel_round_trip(&data);
+        let mut before = Vec::new();
+        let mut input = Input::new(Box::new(io::Cursor::new(data)));
+        deflate_all(&mut input, &mut before, 6).unwrap();
+        assert_eq!(packed, before);
+        let (empty, back, _) = parallel_round_trip(&[]);
+        assert_eq!(back, b"");
+        let mut before = Vec::new();
+        deflate_all(&mut Input::new(Box::new(io::empty())), &mut before, 6).unwrap();
+        assert_eq!(empty, before);
     }
 
     #[test]

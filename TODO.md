@@ -588,15 +588,19 @@ the same day found no compressor in cash using more than one thread.
    `--single-thread`, `ZSTD_NBTHREADS` honoured, one thread by default as zstd 1.5.7
    has it. 64 MB with `-T0`: 0.40 s → 0.12 s. **Yours**: zstd's own default is one
    thread; cash could use every core by default, since the bytes do not change.
-3. **gzip**: one member of chunks compressed apart on all cores, each ended with a sync
-   flush, the CRCs combined (`crc32fast`), as pigz lays it out without its shared
-   window; input of one chunk keeps today's bytes. No new option (GNU's gzip has none).
-4. **bzip2**: input cut at 900 KB blocks, each a bzip2 stream compressed on its own
-   core, concatenated (pbzip2's layout); one block's input keeps bzip2 1.0.8's bytes,
-   which the oracle checks. Larger input differs from bzip2's from then on, the user's
-   choice.
+3. **gzip** (done 2026-10-07): one member of 1 MiB chunks deflated apart on all cores,
+   each but the last ended with a sync flush, as pigz lays it out without its shared
+   window; input of one chunk keeps today's bytes, and the layout is the same on any
+   machine. No new option (GNU's gzip has none). 64 MB: 0.41 s → 0.09 s.
+4. **bzip2** (done 2026-10-07): input cut at the block size (`-1` to `-9`, 100 to
+   900 kB), each a bzip2 stream compressed on its own core, concatenated (pbzip2's
+   layout); one block's input keeps bzip2 1.0.8's bytes. The oracle's `BZIP2=-1` case
+   on 300 kB is now three streams (216 bytes, not 134), a divergence in the test.
+   64 MB: 2.4 s → 0.39 s.
 5. **zip**: members compressed in parallel, written in order, the same bytes.
-6. **tar** gets the codecs' threads through `-z`, `-j`, `-J`, `--zstd`.
+6. **tar** gets the codecs' threads through `-z`, `-j`, `-J`, `--zstd` (done
+   2026-10-07): `codec::writer_on`, each codec's own default (zstd one thread, xz as many
+   as memory holds, gzip and bzip2 every core). `tar -cj` of 64 MB: 12.5 s → 0.56 s.
 7. The pages (`gzip.md`, `bzip2.md`, `xz.md`, `zstd.md`, `zip.md`) say what runs on
    several cores; the oracles keep passing; a timing test only on an idle CPU.
 8. Release 1.10.0 with 7z and this.

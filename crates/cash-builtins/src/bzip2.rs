@@ -358,7 +358,8 @@ fn compress_stream(
     block: u32,
 ) -> io::Result<(u64, u64)> {
     let mut written = Counted::new(output);
-    let mut encoder = codec::writer(Codec::Bzip2, &mut written, block)?;
+    // pbzip2's layout on every core: a stream of each block's input.
+    let mut encoder = codec::writer_on(Codec::Bzip2, &mut written, block, 0)?;
     let mut buffer = vec![0_u8; CHUNK];
     let mut read = 0_u64;
     loop {
