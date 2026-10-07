@@ -3,7 +3,8 @@
 //! Verifies that `stat` names a file's real owner — read from its security descriptor —
 //! rather than the current user with a placeholder uid. On Windows Server an elevated
 //! administrator's new files are owned by BUILTIN\Administrators (GitHub's runners), so
-//! the two differ there; the owner is checked against `Get-Acl`, an independent source.
+//! the two differ there; the owner and the group (`None` there) are checked against
+//! `Get-Acl`, an independent source.
 
 #![allow(
     clippy::tests_outside_test_module,
@@ -31,14 +32,17 @@ fn cash(script: &str) -> String {
     String::from_utf8_lossy(&out.stdout).trim_end().to_string()
 }
 
-/// The file's owner name (without its domain) and its SID's RID, from `Get-Acl`.
-fn acl_owner(path: &Path) -> (String, u32) {
+/// An account's name (without its domain) and its SID's RID.
+type Account = (String, u32);
+
+/// The file's owner and group, from `Get-Acl`.
+fn acl_accounts(path: &Path) -> (Account, Account) {
     // `$args` does not reach a `-Command` script, so the path is embedded as a
     // single-quoted literal, with any `'` doubled.
     let literal = path.to_string_lossy().replace('\'', "''");
     let script = format!(
-        "$acl = Get-Acl -LiteralPath '{literal}'; $acl.Owner; \
-         $acl.GetOwner([System.Security.Principal.SecurityIdentifier]).Value"
+        "$acl = Get-Acl -LiteralPath '{literal}'; $sid = [System.Security.Principal.SecurityIdentifier]; \
+         $acl.Owner; $acl.GetOwner($sid).Value; $acl.Group; $acl.GetGroup($sid).Value"
     );
     let out = Command::new("powershell")
         // Run from PowerShell 7, the inherited PSModulePath points Windows PowerShell at
@@ -55,16 +59,20 @@ fn acl_owner(path: &Path) -> (String, u32) {
     );
     let text = String::from_utf8_lossy(&out.stdout);
     let mut lines = text.lines().map(str::trim).filter(|line| !line.is_empty());
-    let owner = lines.next().expect("no owner from Get-Acl");
-    let sid = lines.next().expect("no owner SID from Get-Acl");
-    let name = owner.rsplit('\\').next().unwrap().to_string();
-    let rid = sid
-        .rsplit('-')
-        .next()
-        .unwrap()
-        .parse()
-        .expect("SID has a RID");
-    (name, rid)
+    let mut account = || {
+        let name = lines.next().expect("no account from Get-Acl");
+        let sid = lines.next().expect("no SID from Get-Acl");
+        let rid = sid
+            .rsplit('-')
+            .next()
+            .unwrap()
+            .parse()
+            .expect("SID has a RID");
+        (name.rsplit('\\').next().unwrap().to_string(), rid)
+    };
+    let owner = account();
+    let group = account();
+    (owner, group)
 }
 
 fn sample_file(scratch: &Scratch) -> (PathBuf, String) {
@@ -78,20 +86,20 @@ fn sample_file(scratch: &Scratch) -> (PathBuf, String) {
 fn stat_names_the_files_real_owner() {
     let scratch = Scratch::new("owner-name");
     let (file, posix) = sample_file(&scratch);
-    let (owner, _) = acl_owner(&file);
+    let ((owner, _), (group, _)) = acl_accounts(&file);
 
     let out = cash(&format!("stat -c '%U|%G' '{posix}'"));
-    assert_eq!(out, format!("{owner}|{owner}"));
+    assert_eq!(out, format!("{owner}|{group}"));
 }
 
 #[test]
 fn stat_uid_is_the_owner_sids_rid() {
     let scratch = Scratch::new("owner-rid");
     let (file, posix) = sample_file(&scratch);
-    let (_, rid) = acl_owner(&file);
+    let ((_, rid), (_, gid)) = acl_accounts(&file);
 
     let out = cash(&format!("stat -c '%u|%g' '{posix}'"));
-    assert_eq!(out, format!("{rid}|{rid}"));
+    assert_eq!(out, format!("{rid}|{gid}"));
     assert_ne!(out, "1000|1000", "stat still prints the placeholder uid");
 }
 
@@ -99,7 +107,7 @@ fn stat_uid_is_the_owner_sids_rid() {
 fn stat_default_report_names_the_real_owner() {
     let scratch = Scratch::new("default-report");
     let (file, posix) = sample_file(&scratch);
-    let (owner, rid) = acl_owner(&file);
+    let ((owner, rid), (group, gid)) = acl_accounts(&file);
 
     let out = cash(&format!("stat '{posix}'"));
     let row = out
@@ -111,13 +119,14 @@ fn stat_default_report_names_the_real_owner() {
     let squeeze = |s: &str| s.split_whitespace().collect::<String>();
     let row = squeeze(row);
     let owner = squeeze(&owner);
+    let group = squeeze(&group);
     assert!(
         row.contains(&format!("Uid:({rid}/{owner})")),
         "the Uid field should be {rid}/{owner}: {row}"
     );
     assert!(
-        row.contains(&format!("Gid:({rid}/{owner})")),
-        "the Gid field should be {rid}/{owner}: {row}"
+        row.contains(&format!("Gid:({gid}/{group})")),
+        "the Gid field should be {gid}/{group}: {row}"
     );
 }
 
