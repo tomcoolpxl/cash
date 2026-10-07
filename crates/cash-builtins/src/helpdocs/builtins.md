@@ -150,12 +150,14 @@ an entry or page names no builtin.
 - `lzcat`: Print `.lzma` files uncompressed to standard output: `xz --format=lzma -dc`.
 - `lzma`: Compress files to `.lzma` in place, or uncompress them: `xz --format=lzma`.
 - `more`: Page through text, with `more`'s defaults.
+- `rar`: Add to, list, test, extract or change a RAR archive, with rar's commands and switches.
 - `rev`: Reverse the characters of each line.
 - `sed`: Edit a stream of text with a script: substitute, delete, insert.
 - `tar`: Pack files into an archive, or list or unpack one, with GNU tar's options.
 - `tree`: Show a folder hierarchy as a tree.
 - `unix2dos`: Convert LF line endings to CRLF.
 - `unlzma`: Uncompress `.lzma` files in place: `xz --format=lzma -d`.
+- `unrar`: List, test or extract a RAR archive, with unrar's commands and switches.
 - `unxz`: Uncompress `.xz` files in place: `xz -d`.
 - `unzip`: List, test or extract a zip archive, with Info-ZIP's options.
 - `unzstd`: Uncompress `.zst` files: `zstd -d`.
