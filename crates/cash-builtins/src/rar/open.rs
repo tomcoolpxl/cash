@@ -129,6 +129,26 @@ pub(super) struct Opened {
     pub(super) archive: rar::Archive,
     pub(super) facts: Facts,
     pub(super) items: Vec<Item>,
+    /// Damage after the headers read: whether the archive ended early ("Unexpected end
+    /// of archive") or a header is wrong ("Corrupt header is found").
+    pub(super) damage: Option<Damage>,
+}
+
+/// How a damaged archive's headers stopped reading.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Damage {
+    Truncated,
+    Corrupt,
+}
+
+impl Damage {
+    /// rar's words for it.
+    pub(super) const fn words(self) -> &'static str {
+        match self {
+            Self::Truncated => "Unexpected end of archive",
+            Self::Corrupt => "Corrupt header is found",
+        }
+    }
 }
 
 /// Why an archive did not open, as rar words it.
@@ -170,19 +190,35 @@ fn try_open<SE: cash_core::ShellExtensions>(
     if metadata.is_dir() {
         return Err(Failure::NotRar);
     }
+    // The password opens encrypted headers; a file's encryption is the extraction's.
+    let main = main_facts(&found.path);
+    let password = password.filter(|_| main.encrypted_headers);
     let options = match password {
         Some(password) => ArchiveReadOptions::with_password(password.as_bytes()),
         None => ArchiveReadOptions::new(),
-    };
+    }
+    .with_lenient(true);
     let archive = match ArchiveReader::read_path_with_options(&found.path, options) {
         Ok(archive) => archive,
         Err(error) => return Err(failure(&found.path, &error)),
     };
     let (facts, items) = describe(rar, &found.path, &archive);
+    let damage = match archive.damage() {
+        None => None,
+        Some(error) => {
+            if items.is_empty() {
+                if let Failure::WrongPassword(facts) = failure(&found.path, error) {
+                    return Err(Failure::WrongPassword(facts));
+                }
+            }
+            Some(damage_of(error))
+        }
+    };
     Ok(Opened {
         archive,
         facts,
         items,
+        damage,
     })
 }
 
@@ -206,6 +242,15 @@ fn failure(path: &Path, error: &rar::Error) -> Failure {
             }
             Failure::Corrupt { facts, truncated }
         }
+    }
+}
+
+/// The damage an error that ended a lenient read means.
+fn damage_of(error: &rar::Error) -> Damage {
+    if matches!(error.root_cause(), rar::Error::TooShort) || error.kind() == ErrorKind::Io {
+        Damage::Truncated
+    } else {
+        Damage::Corrupt
     }
 }
 
@@ -302,7 +347,7 @@ fn describe<SE: cash_core::ShellExtensions>(
     path: &Path,
     archive: &rar::Archive,
 ) -> (Facts, Vec<Item>) {
-    if let Some(archive) = archive.as_rar50() {
+    let (mut facts, items) = if let Some(archive) = archive.as_rar50() {
         (
             item::rar5_facts(archive, &rar.zone),
             item::rar5_items(archive, &rar.zone),
@@ -316,7 +361,15 @@ fn describe<SE: cash_core::ShellExtensions>(
         (item::rar13_facts(archive), item::rar13_items(archive))
     } else {
         (Facts::default(), Vec::new())
+    };
+    // A volume is the first when its first file does not go on from another, whatever
+    // its flag says, as rar judges it: RAR before 3.0 flags none, and a flag can lie.
+    if facts.volume
+        && let Some(first) = items.iter().find(|item| item.is_file_like())
+    {
+        facts.first_volume = !first.split_before;
     }
+    (facts, items)
 }
 
 /// Words a failure, setting its code: on the messages' stream what rar puts there, on
@@ -399,21 +452,22 @@ pub(super) fn next_volume(display: &str, new_numbering: bool) -> Option<String> 
 
 /// `name.part01.rar` to `name.part02.rar`, the digits' count kept unless it grows.
 fn next_part_name(name: &str) -> Option<String> {
-    let lower = name.to_ascii_lowercase();
-    let stem_end = lower.rfind('.')?;
-    let stem = lower.get(..stem_end)?;
-    let digits_start = stem.rfind(|c: char| !c.is_ascii_digit())? + 1;
-    if digits_start >= stem.len() || !stem.get(..digits_start)?.ends_with("part") {
-        return None;
-    }
-    let digits = name.get(digits_start..stem_end)?;
+    // The last run of digits before the extension: `x.part1.rar`, `x_volume_0.rar`.
+    let stem_end = name.rfind('.')?;
+    let stem = name.get(..stem_end)?;
+    let digits_end = stem.rfind(|c: char| c.is_ascii_digit())? + 1;
+    let digits_start = stem
+        .get(..digits_end)?
+        .rfind(|c: char| !c.is_ascii_digit())
+        .map_or(0, |at| at + 1);
+    let digits = name.get(digits_start..digits_end)?;
     let number: u64 = digits.parse().ok()?;
     let next = format!("{:0width$}", number + 1, width = digits.len());
     Some(format!(
         "{}{}{}",
         name.get(..digits_start)?,
         next,
-        name.get(stem_end..)?
+        name.get(digits_end..)?
     ))
 }
 

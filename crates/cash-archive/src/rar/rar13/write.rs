@@ -1728,6 +1728,7 @@ mod tests {
     fn rejects_malformed_comment_extensions() {
         let packed_too_short = Archive {
             sfx_offset: 0,
+            damage: None,
             main: MainHeader {
                 flags: MHD_COMMENT | MHD_PACK_COMMENT,
                 head_size: MAIN_HEAD_SIZE,
@@ -1745,6 +1746,7 @@ mod tests {
 
         let unpacked_too_short = Archive {
             sfx_offset: 0,
+            damage: None,
             main: MainHeader {
                 flags: MHD_COMMENT,
                 head_size: MAIN_HEAD_SIZE,
@@ -1760,6 +1762,7 @@ mod tests {
     fn rejects_malformed_av_extensions() {
         let too_short = Archive {
             sfx_offset: 0,
+            damage: None,
             main: MainHeader {
                 flags: MHD_AV,
                 head_size: MAIN_HEAD_SIZE,
@@ -1775,6 +1778,7 @@ mod tests {
 
         let bad_prefix = Archive {
             sfx_offset: 0,
+            damage: None,
             main: MainHeader {
                 flags: MHD_AV,
                 head_size: MAIN_HEAD_SIZE,

@@ -219,9 +219,20 @@ pub struct ArchiveReadOptions<'a> {
     /// borrow a sibling's spare. Insufficient allowance returns ResourceLimit;
     /// increase the limit or use sequential extraction. Partial output can remain.
     pub max_reader_workspace_bytes: Option<u64>,
+    /// Keep the headers read before the first that does not read, as RAR's own tools
+    /// list and extract what precedes the damage, instead of refusing the archive.
+    /// The error is the archive's [`Archive::damage`]. The signature and main header
+    /// must still read.
+    pub lenient: bool,
 }
 
 impl<'a> ArchiveReadOptions<'a> {
+    /// Keeps what reads of a damaged archive; see [`Self::lenient`].
+    pub fn with_lenient(mut self, lenient: bool) -> Self {
+        self.lenient = lenient;
+        self
+    }
+
     /// Uses a shared cancellation signal without retaining policy in the archive.
     pub fn with_cancellation(mut self, token: &'a ReadCancellation) -> Self {
         self.cancellation = Some(token);
@@ -642,6 +653,15 @@ impl Write for SharedBuffer {
 }
 
 impl Archive {
+    /// The error that ended a lenient read early, the headers before it kept.
+    pub fn damage(&self) -> Option<&Error> {
+        match self {
+            Self::Rar13(archive) => archive.damage.as_ref(),
+            Self::Rar15To40(archive) => archive.damage.as_ref(),
+            Self::Rar50Plus(archive) => archive.damage.as_ref(),
+        }
+    }
+
     /// Returns the detected archive family.
     pub fn family(&self) -> ArchiveFamily {
         match self {

@@ -89,6 +89,8 @@ pub struct Archive {
     pub sfx_offset: usize,
     pub main: MainHeader,
     pub blocks: Vec<Block>,
+    /// What ended a lenient read before the end: see `ArchiveReadOptions::lenient`.
+    pub damage: Option<Error>,
     source: ArchiveSource,
 }
 
@@ -798,81 +800,90 @@ impl Archive {
         }
         let mut encrypted_header_ciphers = EncryptedHeaderCipherCache::default();
 
-        while pos < archive.len() {
-            if archive.len() - pos < 7 {
-                break;
-            }
-            let (block, header, total) = if main.has_encrypted_headers() {
-                crate::rar::crypto::require_encryption()?;
-                let password = password.ok_or(Error::NeedPassword)?;
-                let encrypted = decrypt_encrypted_header_at(
-                    archive,
-                    pos,
-                    password,
-                    &mut encrypted_header_ciphers,
-                    &mut budget,
-                )?;
-                (encrypted.block, encrypted.header, encrypted.total_size)
-            } else {
-                admit_plain_header(archive, pos, &mut budget)?;
-                let block = parse_block_header(archive, pos)?;
-                let total = block_total_size(&block)?;
-                let header = archive[pos..pos + block.head_size as usize].to_vec();
-                (block, header, total)
-            };
-            match block.head_type {
-                FILE_HEAD => {
-                    let mut file = parse_file_like_header(&header, relative_block(&block), 0)?;
-                    let total = file_block_total_size(&block, total, file.pack_size)?;
-                    let next = checked_block_next(&block, total, archive.len())?;
-                    file.block.offset = block.offset;
-                    file.packed_range = packed_range(sig.offset, next, file.pack_size);
-                    blocks.push(Block::File(file));
-                    pos = next;
-                }
-                NEWSUB_HEAD => {
-                    let mut file = parse_file_like_header(&header, relative_block(&block), 0)?;
-                    let total = file_block_total_size(&block, total, file.pack_size)?;
-                    let next = checked_block_next(&block, total, archive.len())?;
-                    file.block.offset = block.offset;
-                    file.packed_range = packed_range(sig.offset, next, file.pack_size);
-                    let kind = classify_new_sub(&file.name);
-                    blocks.push(Block::NewSub(NewSubHeader { file, kind }));
-                    pos = next;
-                }
-                COMM_HEAD => {
-                    let next = checked_block_next(&block, total, archive.len())?;
-                    let mut comment = parse_comment_header(&header, relative_block(&block))?;
-                    comment.block.offset = block.offset;
-                    comment.packed_range =
-                        sig.offset + block.offset + 13..sig.offset + block.offset + total;
-                    blocks.push(Block::Comment(comment));
-                    pos = next;
-                }
-                PROTECT_HEAD => {
-                    let next = checked_block_next(&block, total, archive.len())?;
-                    let protect = parse_protect_header(&header, &block, sig.offset, total)?;
-                    blocks.push(Block::Protect(protect));
-                    pos = next;
-                }
-                ENDARC_HEAD => {
-                    let _next = checked_block_next(&block, total, archive.len())?;
-                    blocks.push(Block::End(block));
+        let mut walk = || -> Result<()> {
+            while pos < archive.len() {
+                if archive.len() - pos < 7 {
                     break;
                 }
-                _ => {
-                    let next = checked_block_next(&block, total, archive.len())?;
-                    blocks.push(Block::Unknown(block));
-                    pos = next;
+                let (block, header, total) = if main.has_encrypted_headers() {
+                    crate::rar::crypto::require_encryption()?;
+                    let password = password.ok_or(Error::NeedPassword)?;
+                    let encrypted = decrypt_encrypted_header_at(
+                        archive,
+                        pos,
+                        password,
+                        &mut encrypted_header_ciphers,
+                        &mut budget,
+                    )?;
+                    (encrypted.block, encrypted.header, encrypted.total_size)
+                } else {
+                    admit_plain_header(archive, pos, &mut budget)?;
+                    let block = parse_block_header(archive, pos)?;
+                    let total = block_total_size(&block)?;
+                    let header = archive[pos..pos + block.head_size as usize].to_vec();
+                    (block, header, total)
+                };
+                match block.head_type {
+                    FILE_HEAD => {
+                        let mut file = parse_file_like_header(&header, relative_block(&block), 0)?;
+                        let total = file_block_total_size(&block, total, file.pack_size)?;
+                        let next = checked_block_next(&block, total, archive.len())?;
+                        file.block.offset = block.offset;
+                        file.packed_range = packed_range(sig.offset, next, file.pack_size);
+                        blocks.push(Block::File(file));
+                        pos = next;
+                    }
+                    NEWSUB_HEAD => {
+                        let mut file = parse_file_like_header(&header, relative_block(&block), 0)?;
+                        let total = file_block_total_size(&block, total, file.pack_size)?;
+                        let next = checked_block_next(&block, total, archive.len())?;
+                        file.block.offset = block.offset;
+                        file.packed_range = packed_range(sig.offset, next, file.pack_size);
+                        let kind = classify_new_sub(&file.name);
+                        blocks.push(Block::NewSub(NewSubHeader { file, kind }));
+                        pos = next;
+                    }
+                    COMM_HEAD => {
+                        let next = checked_block_next(&block, total, archive.len())?;
+                        let mut comment = parse_comment_header(&header, relative_block(&block))?;
+                        comment.block.offset = block.offset;
+                        comment.packed_range =
+                            sig.offset + block.offset + 13..sig.offset + block.offset + total;
+                        blocks.push(Block::Comment(comment));
+                        pos = next;
+                    }
+                    PROTECT_HEAD => {
+                        let next = checked_block_next(&block, total, archive.len())?;
+                        let protect = parse_protect_header(&header, &block, sig.offset, total)?;
+                        blocks.push(Block::Protect(protect));
+                        pos = next;
+                    }
+                    ENDARC_HEAD => {
+                        let _next = checked_block_next(&block, total, archive.len())?;
+                        blocks.push(Block::End(block));
+                        break;
+                    }
+                    _ => {
+                        let next = checked_block_next(&block, total, archive.len())?;
+                        blocks.push(Block::Unknown(block));
+                        pos = next;
+                    }
                 }
             }
-        }
+            Ok(())
+        };
+        let damage = match walk() {
+            Ok(()) => None,
+            Err(error) if options.lenient => Some(error),
+            Err(error) => return Err(error),
+        };
 
         options.check_cancelled()?;
         Ok(Self {
             sfx_offset: sig.offset,
             main,
             blocks,
+            damage,
             source: ArchiveSource::Memory(input),
         })
     }
@@ -924,87 +935,97 @@ impl Archive {
         }
         let mut encrypted_header_ciphers = EncryptedHeaderCipherCache::default();
 
-        while file_len.saturating_sub((sfx_offset + pos) as u64) >= 7 {
-            let (block, header, total) = if main.has_encrypted_headers() {
-                crate::rar::crypto::require_encryption()?;
-                let password = password.ok_or(Error::NeedPassword)?;
-                let encrypted = read_encrypted_header_at(
-                    &mut file,
-                    file_len,
-                    sfx_offset,
-                    pos,
-                    password,
-                    &mut encrypted_header_ciphers,
-                    &mut budget,
-                )?;
-                (encrypted.block, encrypted.header, encrypted.total_size)
-            } else {
-                let block =
-                    read_block_header_at(&mut file, file_len, sfx_offset, pos, &mut budget)?;
-                let total = block_total_size(&block)?;
-                let header = read_exact_at(&mut file, sfx_offset + pos, block.head_size as usize)?;
-                (block, header, total)
-            };
-            match block.head_type {
-                FILE_HEAD => {
-                    let mut file_header =
-                        parse_file_like_header(&header, relative_block(&block), 0)?;
-                    let total = file_block_total_size(&block, total, file_header.pack_size)?;
-                    let next = checked_file_block_next(sfx_offset, &block, total, file_len)?;
-                    file_header.block.offset = block.offset;
-                    file_header.packed_range =
-                        packed_range(sfx_offset, next, file_header.pack_size);
-                    blocks.push(Block::File(file_header));
-                    pos = next;
-                }
-                NEWSUB_HEAD => {
-                    let mut file_header =
-                        parse_file_like_header(&header, relative_block(&block), 0)?;
-                    let total = file_block_total_size(&block, total, file_header.pack_size)?;
-                    let next = checked_file_block_next(sfx_offset, &block, total, file_len)?;
-                    file_header.block.offset = block.offset;
-                    file_header.packed_range =
-                        packed_range(sfx_offset, next, file_header.pack_size);
-                    let kind = classify_new_sub(&file_header.name);
-                    blocks.push(Block::NewSub(NewSubHeader {
-                        file: file_header,
-                        kind,
-                    }));
-                    pos = next;
-                }
-                COMM_HEAD => {
-                    let next = checked_file_block_next(sfx_offset, &block, total, file_len)?;
-                    let mut comment = parse_comment_header(&header, relative_block(&block))?;
-                    comment.block.offset = block.offset;
-                    comment.packed_range =
-                        sfx_offset + block.offset + 13..sfx_offset + block.offset + total;
-                    blocks.push(Block::Comment(comment));
-                    pos = next;
-                }
-                PROTECT_HEAD => {
-                    let next = checked_file_block_next(sfx_offset, &block, total, file_len)?;
-                    let protect = parse_protect_header(&header, &block, sfx_offset, total)?;
-                    blocks.push(Block::Protect(protect));
-                    pos = next;
-                }
-                ENDARC_HEAD => {
-                    let _next = checked_file_block_next(sfx_offset, &block, total, file_len)?;
-                    blocks.push(Block::End(block));
-                    break;
-                }
-                _ => {
-                    let next = checked_file_block_next(sfx_offset, &block, total, file_len)?;
-                    blocks.push(Block::Unknown(block));
-                    pos = next;
+        let mut walk = || -> Result<()> {
+            while file_len.saturating_sub((sfx_offset + pos) as u64) >= 7 {
+                let (block, header, total) = if main.has_encrypted_headers() {
+                    crate::rar::crypto::require_encryption()?;
+                    let password = password.ok_or(Error::NeedPassword)?;
+                    let encrypted = read_encrypted_header_at(
+                        &mut file,
+                        file_len,
+                        sfx_offset,
+                        pos,
+                        password,
+                        &mut encrypted_header_ciphers,
+                        &mut budget,
+                    )?;
+                    (encrypted.block, encrypted.header, encrypted.total_size)
+                } else {
+                    let block =
+                        read_block_header_at(&mut file, file_len, sfx_offset, pos, &mut budget)?;
+                    let total = block_total_size(&block)?;
+                    let header =
+                        read_exact_at(&mut file, sfx_offset + pos, block.head_size as usize)?;
+                    (block, header, total)
+                };
+                match block.head_type {
+                    FILE_HEAD => {
+                        let mut file_header =
+                            parse_file_like_header(&header, relative_block(&block), 0)?;
+                        let total = file_block_total_size(&block, total, file_header.pack_size)?;
+                        let next = checked_file_block_next(sfx_offset, &block, total, file_len)?;
+                        file_header.block.offset = block.offset;
+                        file_header.packed_range =
+                            packed_range(sfx_offset, next, file_header.pack_size);
+                        blocks.push(Block::File(file_header));
+                        pos = next;
+                    }
+                    NEWSUB_HEAD => {
+                        let mut file_header =
+                            parse_file_like_header(&header, relative_block(&block), 0)?;
+                        let total = file_block_total_size(&block, total, file_header.pack_size)?;
+                        let next = checked_file_block_next(sfx_offset, &block, total, file_len)?;
+                        file_header.block.offset = block.offset;
+                        file_header.packed_range =
+                            packed_range(sfx_offset, next, file_header.pack_size);
+                        let kind = classify_new_sub(&file_header.name);
+                        blocks.push(Block::NewSub(NewSubHeader {
+                            file: file_header,
+                            kind,
+                        }));
+                        pos = next;
+                    }
+                    COMM_HEAD => {
+                        let next = checked_file_block_next(sfx_offset, &block, total, file_len)?;
+                        let mut comment = parse_comment_header(&header, relative_block(&block))?;
+                        comment.block.offset = block.offset;
+                        comment.packed_range =
+                            sfx_offset + block.offset + 13..sfx_offset + block.offset + total;
+                        blocks.push(Block::Comment(comment));
+                        pos = next;
+                    }
+                    PROTECT_HEAD => {
+                        let next = checked_file_block_next(sfx_offset, &block, total, file_len)?;
+                        let protect = parse_protect_header(&header, &block, sfx_offset, total)?;
+                        blocks.push(Block::Protect(protect));
+                        pos = next;
+                    }
+                    ENDARC_HEAD => {
+                        let _next = checked_file_block_next(sfx_offset, &block, total, file_len)?;
+                        blocks.push(Block::End(block));
+                        break;
+                    }
+                    _ => {
+                        let next = checked_file_block_next(sfx_offset, &block, total, file_len)?;
+                        blocks.push(Block::Unknown(block));
+                        pos = next;
+                    }
                 }
             }
-        }
+            Ok(())
+        };
+        let damage = match walk() {
+            Ok(()) => None,
+            Err(error) if options.lenient => Some(error),
+            Err(error) => return Err(error),
+        };
 
         options.check_cancelled()?;
         Ok(Self {
             sfx_offset,
             main,
             blocks,
+            damage,
             source,
         })
     }

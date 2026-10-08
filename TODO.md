@@ -636,7 +636,10 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      `zero_fill/`), a RAR 1.5 volume opened in the middle is a data error in 7-Zip and
      a CRC error in rar (`rar154/random.r00`), and a RAR 3 VM program that is none of the
      standard filters is an unsupported method in 7-Zip and run by rar
-     (`rarvm/generic_delta_padding_mutation.rar`). A strict mode in rar's decoders.
+     (`rarvm/generic_delta_padding_mutation.rar`). A strict mode in rar's decoders:
+     the last has one now, `Unpack29::with_standard_filters_only`, which the rar builtin
+     uses (WinRAR 7.23 refuses such a program too); 7z would word its refusal as
+     "Unsupported Method".
    - Copy links (`-oi`): 7-Zip copies the data of the file named (`FillLinks`); 7z
      reports an unsupported method.
    - Output on a data error: 7-Zip has written what decoded before it, rar's RAR 1.5 to
@@ -650,12 +653,16 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
    2026-10-07/08 (the fuller set, RAR 5, Scoop's WinRAR 7.23 as the oracle, built by
    observation only). Done: the command line (`RARINISWITCHES`, `rar.ini`, every switch
    read), the banner and `-?`, and the listings `l`/`lt`/`lta`/`lb`/`v…` with `-v`
-   (`rar_list.sh`, 12,470 lines like WinRAR's). Left, in order:
-   - `t`, `x`, `e`, `p`: overwrite questions, passwords, paths (`-ep*`, `-ap`, `-ad`,
-     `-op`), `-kb`, links, times, volumes, `-mes`, `-ver`; their oracle.
-   - `a`, `u`, `f`, `m`, `mf`, `d`, with the archiving switches; their oracle. Before
-     it, a question for the user: rar 7.23 refuses `-ma4` ("Unknown option"), so
-     writing RAR 4 is cash's own extension or none.
+   (`rar_list.sh`, 12,470 lines like WinRAR's); `t`, `x`, `e`, `p` with the overwrite
+   question and `-o`, passwords asked per file, the path switches, volumes from any
+   one, damaged headers (rars' lenient read), recovery records and `.rev` files
+   (`rar_extract.sh`, 2,880 lines). Left, in order:
+   - `t` checks a RAR 3 `.rev` file only by reading it: its own checksum's place is
+     to be learned from Rar.exe (damage one and watch), not from UnRAR's source.
+   - Extraction's links (`-ol`), `-ts`'s other times, `-ver`, `-f`/`-u` on
+     extraction, `-ad1`/`-ad2`, `-ai` on folders: built, not yet in the oracle.
+   - `a`, `u`, `f`, `m`, `mf`, `d`, with the archiving switches; their oracle. RAR 5
+     only: `-ma4` is refused as rar 7.23 refuses it (the user's pick, 2026-10-08).
    - `c`, `cw`, `rn`, `k`, `rr`, `ch`, `r`, `rc`, `i`; `s` and `rv` refused.
    - A lenient read in rars, so a damaged archive lists the files before its damage, as
      rar does; today rars stops at the first bad header and rar's two "Corrupt header"

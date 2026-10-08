@@ -398,9 +398,9 @@ are in section 7: the fuller set, RAR 5 by default, WinRAR as the oracle.
   `%APPDATA%\WinRAR\rar.ini` (`switches=`, `switches_<command>=`) supply default
   switches as rar reads them, and `-cfg-` ignores both. Names and messages are UTF-8
   everywhere; rar writes the ANSI code page into files and pipes unless `-scfr`.
-- **What is written**: RAR 5. rar 7.23 has no `-ma4` any more ("Unknown option: ma4",
-  observed 2026-10-08), though the user's pick assumed it had: writing RAR 4 through
-  rars stays a question for the user before `a` is built. rars' compressor is not
+- **What is written**: RAR 5 only. rar 7.23 has no `-ma4` any more ("Unknown option:
+  ma4", observed 2026-10-08), though the user's first pick assumed it had; asked again,
+  the user chose to refuse it as rar 7.23 does (section 7). rars' compressor is not
   WinRAR's, so compressed sizes differ; stored archives (`-m0`) are compared byte for
   byte, as 7z's `-mx0` are.
 - **Windows facts**: attributes and times as WinRAR stores them on Windows (`-ts` for the
@@ -484,6 +484,8 @@ are in section 7: the fuller set, RAR 5 by default, WinRAR as the oracle.
 6. **rar and unrar** (phase 33; 3.15): the fuller set of rar's commands and switches
    (the everyday set with `r`, `rc`, `ch`, `i` and their switches); RAR 5 written by
    default, as WinRAR does; the oracle is Scoop's WinRAR 7.23 (`Rar.exe` and `UnRAR.exe`).
+   `-ma4` refused as rar 7.23 refuses it, "Unknown option" (asked 2026-10-08, once rar
+   7.23 was seen to have dropped it).
    Built by observation (asked the same day, after the licences were read): rar's face
    learned only from running `Rar.exe` and `UnRAR.exe` and from reading `Rar.txt`; never
    from UnRAR's source, whose licence forbids using it to develop a RAR-compatible

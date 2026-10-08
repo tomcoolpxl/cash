@@ -3043,6 +3043,7 @@ mod tests {
         let source: Arc<[u8]> = Arc::from(data.to_vec().into_boxed_slice());
         Archive {
             sfx_offset: 0,
+            damage: None,
             main: MainHeader {
                 block: empty_block(1, 0, 0..0),
                 archive_flags: 0,
@@ -3125,6 +3126,7 @@ mod tests {
         let bytes: Arc<[u8]> = Arc::from(source.into_boxed_slice());
         Archive {
             sfx_offset: 0,
+            damage: None,
             main: MainHeader {
                 block: empty_block(1, 0, 0..0),
                 archive_flags: 0,

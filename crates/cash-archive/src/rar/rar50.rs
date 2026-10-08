@@ -79,6 +79,8 @@ pub struct Archive {
     pub sfx_offset: usize,
     pub main: MainHeader,
     pub blocks: Vec<Block>,
+    /// What ended a lenient read before the end: see `ArchiveReadOptions::lenient`.
+    pub damage: Option<Error>,
     source: ArchiveSource,
 }
 
@@ -642,7 +644,7 @@ impl Archive {
         options.check_cancelled()?;
         // parse_shared supplies the exact signature found in this buffer.
         let archive_len = input.len();
-        let (main, blocks) = parse_archive_blocks(
+        let (main, blocks, damage) = parse_archive_blocks(
             archive_len,
             options,
             |offset, budget| {
@@ -665,6 +667,7 @@ impl Archive {
             sfx_offset,
             main,
             blocks,
+            damage,
             source,
         })
     }
@@ -684,7 +687,7 @@ impl Archive {
 
         let control = crate::rar::read_control::ReadControl::new(options.cancellation);
         let file_cell = std::cell::RefCell::new(control.reader(file));
-        let (main, blocks) = parse_archive_blocks(
+        let (main, blocks, damage) = parse_archive_blocks(
             archive_len,
             options,
             |offset, budget| {
@@ -713,6 +716,7 @@ impl Archive {
             sfx_offset,
             main,
             blocks,
+            damage,
             source,
         })
     }
@@ -1782,7 +1786,7 @@ fn parse_archive_blocks<F, G>(
     options: crate::rar::ArchiveReadOptions<'_>,
     mut read_block: F,
     mut read_encrypted_block: G,
-) -> Result<(MainHeader, Vec<Block>)>
+) -> Result<(MainHeader, Vec<Block>, Option<Error>)>
 where
     F: FnMut(usize, &mut crate::rar::parse_budget::ParseBudget) -> Result<ParsedBlockHeader>,
     G: FnMut(
@@ -1827,59 +1831,70 @@ where
     pos = first.next_offset;
 
     let mut blocks = Vec::new();
-    while pos < archive_len {
-        let parsed = if let Some(keys) = &header_keys {
-            read_encrypted_block(pos, keys, &mut budget).map_err(|error| at_offset(error, pos))?
-        } else {
-            read_block(pos, &mut budget).map_err(|error| at_offset(error, pos))?
-        };
-        let next = parsed.next_offset;
-        match parsed.block.header_type {
-            HEAD_FILE => {
-                let mut file =
-                    parse_file_header_bytes(&parsed).map_err(|error| at_offset(error, pos))?;
-                attach_file_crypto(&mut file, password).map_err(|error| at_offset(error, pos))?;
-                blocks.push(Block::File(file));
+    let mut walk = || -> Result<()> {
+        while pos < archive_len {
+            let parsed = if let Some(keys) = &header_keys {
+                read_encrypted_block(pos, keys, &mut budget)
+                    .map_err(|error| at_offset(error, pos))?
+            } else {
+                read_block(pos, &mut budget).map_err(|error| at_offset(error, pos))?
+            };
+            let next = parsed.next_offset;
+            match parsed.block.header_type {
+                HEAD_FILE => {
+                    let mut file =
+                        parse_file_header_bytes(&parsed).map_err(|error| at_offset(error, pos))?;
+                    attach_file_crypto(&mut file, password)
+                        .map_err(|error| at_offset(error, pos))?;
+                    blocks.push(Block::File(file));
+                }
+                HEAD_SERVICE => {
+                    let mut service =
+                        parse_file_header_bytes(&parsed).map_err(|error| at_offset(error, pos))?;
+                    attach_service_crypto(&mut service, password)
+                        .map_err(|error| at_offset(error, pos))?;
+                    blocks.push(Block::Service(service));
+                }
+                HEAD_CRYPT => {
+                    return Err(Error::UnsupportedFeature {
+                        version: crate::rar::version::ArchiveVersion::Rar50,
+                        feature: "RAR 5 encrypted headers",
+                    });
+                }
+                HEAD_END => {
+                    main.rewrite_metadata_complete &= next == archive_len;
+                    // A block with no room for the vint reads as no flags rather
+                    // than as a broken archive. Hand-built and truncated archives
+                    // do turn up with an empty end block, and the field only says
+                    // whether to look for another volume.
+                    let flags = read_vint_at(
+                        &parsed.header,
+                        parsed.type_specific_range.start,
+                        parsed.type_specific_range.end,
+                    )
+                    .map(|(flags, _)| flags)
+                    .unwrap_or(0);
+                    blocks.push(Block::End(EndHeader {
+                        block: parsed.block,
+                        flags,
+                    }));
+                    break;
+                }
+                _ => blocks.push(Block::Unknown(parsed.block)),
             }
-            HEAD_SERVICE => {
-                let mut service =
-                    parse_file_header_bytes(&parsed).map_err(|error| at_offset(error, pos))?;
-                attach_service_crypto(&mut service, password)
-                    .map_err(|error| at_offset(error, pos))?;
-                blocks.push(Block::Service(service));
-            }
-            HEAD_CRYPT => {
-                return Err(Error::UnsupportedFeature {
-                    version: crate::rar::version::ArchiveVersion::Rar50,
-                    feature: "RAR 5 encrypted headers",
-                });
-            }
-            HEAD_END => {
-                main.rewrite_metadata_complete &= next == archive_len;
-                // A block with no room for the vint reads as no flags rather
-                // than as a broken archive. Hand-built and truncated archives
-                // do turn up with an empty end block, and the field only says
-                // whether to look for another volume.
-                let flags = read_vint_at(
-                    &parsed.header,
-                    parsed.type_specific_range.start,
-                    parsed.type_specific_range.end,
-                )
-                .map(|(flags, _)| flags)
-                .unwrap_or(0);
-                blocks.push(Block::End(EndHeader {
-                    block: parsed.block,
-                    flags,
-                }));
-                break;
-            }
-            _ => blocks.push(Block::Unknown(parsed.block)),
+            pos = next;
         }
-        pos = next;
-    }
+        Ok(())
+    };
+    let damage = match walk() {
+        Ok(()) => None,
+        Err(error) if options.lenient => Some(error),
+        Err(error) => return Err(error),
+    };
 
-    main.rewrite_metadata_complete &= matches!(blocks.last(), Some(Block::End(_)));
-    Ok((main, blocks))
+    main.rewrite_metadata_complete &=
+        damage.is_none() && matches!(blocks.last(), Some(Block::End(_)));
+    Ok((main, blocks, damage))
 }
 
 /// Walks the records of a RAR 5 extra area, handing each one to `handle`.

@@ -55,6 +55,16 @@ fn list_set<SE: cash_core::ShellExtensions>(
             }
         };
         let totals = list_one(rar, &found, &opened, verbose, form, masks);
+        if let Some(damage) = opened.damage {
+            // rar says it twice: once reading, once at the end.
+            let words = damage.words();
+            rar.console.err(&format!("\n{words}\n{words}"));
+            rar.fail(if damage == open::Damage::Truncated {
+                super::code::WARNING
+            } else {
+                super::code::CRC
+            });
+        }
         grand.files += totals.files;
         grand.size += totals.size;
         grand.packed += totals.packed;
@@ -456,6 +466,15 @@ impl Masks {
             include,
             exclude: exclude.into_iter().filter(|m| !m.is_empty()).collect(),
             filter: filter.into_iter().filter(|m| !m.is_empty()).collect(),
+        })
+    }
+
+    /// The folders masks name before their last part, wildcard-free: `SUBDIR` of
+    /// `SUBDIR\*`, what `-ep1` takes off the names it matches.
+    pub(super) fn bases(&self) -> impl Iterator<Item = &str> {
+        self.include.iter().filter_map(|mask| {
+            let (base, _) = mask.rsplit_once('/')?;
+            (!base.is_empty() && !open::has_wildcard(base)).then_some(base)
         })
     }
 

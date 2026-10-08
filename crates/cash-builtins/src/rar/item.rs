@@ -269,7 +269,7 @@ pub(super) fn rar5_facts(archive: &rar50::Archive, zone: &Zone) -> Facts {
         recovery: main.has_recovery_record(),
         locked: main.is_locked(),
         encrypted_headers: main.encrypted_headers,
-        first_volume: main.volume_number.is_none(),
+        first_volume: main.volume_number.unwrap_or(0) == 0,
         new_numbering: true,
         original_name: metadata
             .and_then(|m| m.name.as_ref())

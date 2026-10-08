@@ -19,6 +19,8 @@
 #![expect(dead_code, reason = "rar's other commands follow in this phase")]
 
 mod cmdline;
+mod entry;
+mod extract;
 mod help;
 mod item;
 mod list;
@@ -121,6 +123,8 @@ enum Stop {
     Break,
     /// Standard input ended at a question: "Program aborted", with the code.
     Aborted(u8),
+    /// "Quit" at a question.
+    Quit,
 }
 
 /// Where rar's words go: messages to standard output (standard error with `-ierr`),
@@ -130,6 +134,8 @@ struct Console<'a, SE: cash_core::ShellExtensions> {
     silent: Cell<bool>,
     to_stderr: Cell<bool>,
     quiet: Cell<bool>,
+    /// `p`: standard output is the files' data, and no message goes there.
+    data_only: Cell<bool>,
 }
 
 impl<'a, SE: cash_core::ShellExtensions> Console<'a, SE> {
@@ -139,6 +145,7 @@ impl<'a, SE: cash_core::ShellExtensions> Console<'a, SE> {
             silent: Cell::new(false),
             to_stderr: Cell::new(false),
             quiet: Cell::new(false),
+            data_only: Cell::new(false),
         }
     }
 
@@ -161,7 +168,7 @@ impl<'a, SE: cash_core::ShellExtensions> Console<'a, SE> {
 
     /// A message: a listing, a file's progress, a summary.
     fn msg(&self, text: &str) {
-        if !self.silent.get() && !self.quiet.get() {
+        if !self.silent.get() && !self.quiet.get() && !self.data_only.get() {
             self.write(self.to_stderr.get(), text);
         }
     }
@@ -175,7 +182,7 @@ impl<'a, SE: cash_core::ShellExtensions> Console<'a, SE> {
 
     /// A message `-idq` does not hide, on the messages' stream.
     fn notice(&self, text: &str) {
-        if !self.silent.get() {
+        if !self.silent.get() && !self.data_only.get() {
             self.write(self.to_stderr.get(), text);
         }
     }
@@ -265,7 +272,7 @@ impl<SE: cash_core::ShellExtensions> Rar<'_, SE> {
             None => "\nEnter password (will not be echoed): ".to_owned(),
         };
         self.console.err(&question);
-        if let Some(line) = self.read_line(false)? {
+        if let Some(line) = self.read_answer(false)? {
             self.console.err("\n");
             return Ok(line);
         }
@@ -418,6 +425,9 @@ fn run_with<SE: cash_core::ShellExtensions>(
     if !switches.no_banner && !bannerless {
         console.msg(help::banner(tool));
     }
+    if matches!(command, Some(Command::Print)) && parsed.archive.is_some() {
+        console.data_only.set(true);
+    }
     let (Some(command), false) = (command, switches.help) else {
         console.msg(&help::usage(tool));
         let code = if parsed.command.is_none() || switches.help {
@@ -450,6 +460,10 @@ fn run_with<SE: cash_core::ShellExtensions>(
         Err(Stop::Aborted(code)) => {
             rar.console.notice("\n\nProgram aborted\n");
             code
+        }
+        Err(Stop::Quit) => {
+            rar.console.notice("\nProgram aborted\n");
+            code::BREAK
         }
     }
 }
@@ -589,8 +603,12 @@ fn dispatch<SE: cash_core::ShellExtensions>(
     command: &Command,
     parsed: &Parsed,
 ) -> Result<(), Stop> {
-    if let Command::List { verbose, form } = command {
-        return list::run(rar, *verbose, *form, parsed);
+    match command {
+        Command::List { verbose, form } => return list::run(rar, *verbose, *form, parsed),
+        Command::Test | Command::Extract | Command::ExtractFull | Command::Print => {
+            return extract::run(rar, command, parsed);
+        }
+        _ => {}
     }
     rar.console.err(&format!(
         "\n{}: this command is not in cash's {} yet\n",

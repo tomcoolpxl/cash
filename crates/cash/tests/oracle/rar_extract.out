@@ -1,0 +1,2880 @@
+== t golden/stored_comment.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Archive comment:
+golden archive comment
+
+Testing archive golden/stored_comment.rar
+
+Testing     payload.bin                                                    OK 
+All OK
+rc=0
+== t golden/stored_quick_open.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive golden/stored_quick_open.rar
+
+Testing     alpha.bin                                                      OK 
+Testing     beta.bin                                                       OK 
+Testing     gamma.bin                                                      OK 
+All OK
+rc=0
+== t golden/stored_rar70.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive golden/stored_rar70.rar
+
+Testing     first.bin                                                      OK 
+Testing     second.bin                                                     OK 
+All OK
+rc=0
+== t golden/stored_recovery_5.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive golden/stored_recovery_5.rar
+
+Testing     protected.bin                                                  OK 
+Testing the recovery record         OK
+All OK
+rc=0
+== t golden/stored_volume_0.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive golden/stored_volume_0.rar
+
+Testing     split.bin                                                    
+
+Testing archive golden/stored_volume_1.rar
+
+...         split.bin                                                    
+
+Testing archive golden/stored_volume_2.rar
+
+...         split.bin                                                    
+
+Testing archive golden/stored_volume_3.rar
+
+...         split.bin                                                      OK 
+All OK
+rc=0
+== t rar50/algorithm_version_2.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/algorithm_version_2.rar
+
+No files to extract
+--- stderr
+
+Unknown method in mid.txt
+You may need a newer version of RAR.
+rc=2
+== t rar50/algorithm_version_2_stored.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/algorithm_version_2_stored.rar
+
+Testing     hello.txt                                                      OK 
+All OK
+rc=0
+== t rar50/ams_archive_name_rar721.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/ams_archive_name_rar721.rar
+
+Testing     hello7.txt                                                     OK 
+All OK
+rc=0
+== t rar50/crc32_wrong_beside_blake2sp.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/crc32_wrong_beside_blake2sp.rar
+
+Testing     hello.txt                                                      OK 
+All OK
+rc=0
+== t rar50/empty_file.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/empty_file.rar
+
+Testing     empty.bin                                                      OK 
+All OK
+rc=0
+== t rar50/filter_arm.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/filter_arm.rar
+
+Testing     arm_synthetic.bin                                              OK 
+All OK
+rc=0
+== t rar50/filter_delta.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/filter_delta.rar
+
+Testing     delta_4ch_ramp.bin                                             OK 
+All OK
+rc=0
+== t rar50/filter_e8.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/filter_e8.rar
+
+Testing     x86_e8_stream.bin                                              OK 
+All OK
+rc=0
+== t rar50/filter_e8e9.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/filter_e8e9.rar
+
+Testing     x86_e8e9_stream.bin                                            OK 
+All OK
+rc=0
+== t rar50/first_block_without_tables.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/first_block_without_tables.rar
+
+Testing     mid.txt                                                      
+Total errors: 1
+--- stderr
+
+mid.txt              - checksum error
+rc=3
+== t rar50/m1_fastest.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/m1_fastest.rar
+
+Testing     bigtext_64k.bin                                                OK 
+All OK
+rc=0
+== t rar50/m3_default.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/m3_default.rar
+
+Testing     bigtext_64k.bin                                                OK 
+All OK
+rc=0
+== t rar50/m5_max.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/m5_max.rar
+
+Testing     bigtext_64k.bin                                                OK 
+All OK
+rc=0
+== t rar50/multifile.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/multifile.rar
+
+Testing     hello.txt                                                      OK 
+Testing     tiny.txt                                                       OK 
+Testing     random_4k.bin                                                  OK 
+All OK
+rc=0
+== t rar50/multivol.part1.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/multivol.part1.rar
+
+Testing     random_4k.bin                                                
+
+Testing archive rar50/multivol.part2.rar
+
+...         random_4k.bin                                                
+
+Testing archive rar50/multivol.part3.rar
+
+...         random_4k.bin                                                  OK 
+All OK
+rc=0
+== t rar50/multivol.part2.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/multivol.part2.rar
+
+Testing archive rar50/multivol.part1.rar
+
+Testing     random_4k.bin                                                
+
+Testing archive rar50/multivol.part2.rar
+
+...         random_4k.bin                                                
+
+Testing archive rar50/multivol.part3.rar
+
+...         random_4k.bin                                                  OK 
+All OK
+rc=0
+== t rar50/multivol.part3.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/multivol.part3.rar
+
+Testing archive rar50/multivol.part1.rar
+
+Testing     random_4k.bin                                                
+
+Testing archive rar50/multivol.part2.rar
+
+...         random_4k.bin                                                
+
+Testing archive rar50/multivol.part3.rar
+
+...         random_4k.bin                                                  OK 
+All OK
+rc=0
+== t rar50/multivol_rev.part1.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/multivol_rev.part1.rar
+
+Testing     random_16k.bin                                               
+
+Testing archive rar50/multivol_rev.part2.rar
+
+...         random_16k.bin                                               
+
+Testing archive rar50/multivol_rev.part3.rar
+
+...         random_16k.bin                                               
+
+Testing archive rar50/multivol_rev.part4.rar
+
+...         random_16k.bin                                               
+
+Testing archive rar50/multivol_rev.part5.rar
+
+...         random_16k.bin                                                 OK 
+
+Testing     rar50/multivol_rev.part1.rev                                   OK 
+Testing     rar50/multivol_rev.part2.rev                                   OK 
+All OK
+rc=0
+== t rar50/solid.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/solid.rar
+
+Testing     hello.txt                                                      OK 
+Testing     tiny.txt                                                       OK 
+All OK
+rc=0
+== t rar50/solid_multivol.part01.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/solid_multivol.part01.rar
+
+Testing     tiny.txt                                                       OK 
+Testing     bigtext_64k.bin                                              
+
+Testing archive rar50/solid_multivol.part02.rar
+
+...         bigtext_64k.bin                                              
+
+Testing archive rar50/solid_multivol.part03.rar
+
+...         bigtext_64k.bin                                              
+
+Testing archive rar50/solid_multivol.part04.rar
+
+...         bigtext_64k.bin                                              
+
+Testing archive rar50/solid_multivol.part05.rar
+
+...         bigtext_64k.bin                                              
+
+Testing archive rar50/solid_multivol.part06.rar
+
+...         bigtext_64k.bin                                                OK 
+All OK
+rc=0
+== t rar50/solid_multivol.part04.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/solid_multivol.part04.rar
+
+Testing archive rar50/solid_multivol.part01.rar
+
+Testing     tiny.txt                                                       OK 
+Testing     bigtext_64k.bin                                              
+
+Testing archive rar50/solid_multivol.part02.rar
+
+...         bigtext_64k.bin                                              
+
+Testing archive rar50/solid_multivol.part03.rar
+
+...         bigtext_64k.bin                                              
+
+Testing archive rar50/solid_multivol.part04.rar
+
+...         bigtext_64k.bin                                              
+
+Testing archive rar50/solid_multivol.part05.rar
+
+...         bigtext_64k.bin                                              
+
+Testing archive rar50/solid_multivol.part06.rar
+
+...         bigtext_64k.bin                                                OK 
+All OK
+rc=0
+== t rar50/stored.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/stored.rar
+
+Testing     hello.txt                                                      OK 
+All OK
+rc=0
+== t rar50/stored_blake2.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/stored_blake2.rar
+
+Testing     hello.txt                                                      OK 
+All OK
+rc=0
+== t rar50/stored_multivol.part1.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/stored_multivol.part1.rar
+
+Testing     random_4k.bin                                                
+
+Testing archive rar50/stored_multivol.part2.rar
+
+...         random_4k.bin                                                
+
+Testing archive rar50/stored_multivol.part3.rar
+
+...         random_4k.bin                                                  OK 
+All OK
+rc=0
+== t rar50/subdata_size_underflow.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/subdata_size_underflow.rar
+
+Testing     hello.txt                                                      OK 
+Testing the recovery record         OK
+All OK
+rc=0
+== t rar50/wild/hardlink.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/wild/hardlink.rar
+
+Testing     file.txt                                                       OK 
+Testing     hardlink.txt                                                   OK 
+All OK
+rc=0
+== t rar50/wild/invalid_hash_valid_htime_exfld.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/wild/invalid_hash_valid_htime_exfld.rar
+
+Testing     file.txt                                                       OK 
+All OK
+rc=0
+== t rar50/wild/libarchive_loop_bug.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/wild/libarchive_loop_bug.rar
+
+Testing     a                                                               ? 
+All OK
+rc=0
+== t rar50/wild/libarchive_multiple_files_solid.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/wild/libarchive_multiple_files_solid.rar
+
+Testing     test1.bin                                                      OK 
+Testing     test2.bin                                                      OK 
+Testing     test3.bin                                                      OK 
+Testing     test4.bin                                                      OK 
+All OK
+rc=0
+== t rar50/wild/libarchive_solid.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/wild/libarchive_solid.rar
+
+Testing     test.bin                                                       OK 
+Testing     test1.bin                                                      OK 
+Testing     test2.bin                                                      OK 
+Testing     test3.bin                                                      OK 
+Testing     test4.bin                                                      OK 
+Testing     test5.bin                                                      OK 
+Testing     test6.bin                                                      OK 
+All OK
+rc=0
+== t rar50/wild/rarfile_hlink.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/wild/rarfile_hlink.rar
+
+Testing     stest1.txt                                                     OK 
+Testing     stest2.txt                                                     OK 
+Testing     stest3.txt                                                     OK 
+All OK
+rc=0
+== t rar50/wild/rarfile_solid.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/wild/rarfile_solid.rar
+
+Testing     stest1.txt                                                     OK 
+Testing     stest2.txt                                                     OK 
+All OK
+rc=0
+== t rar50/wild/rarfile_solid_qo.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/wild/rarfile_solid_qo.rar
+
+Testing     somedir/stest1.txt                                             OK 
+Testing     stest1.txt                                                     OK 
+Testing     somedir/stest2.txt                                             OK 
+Testing     stest2.txt                                                     OK 
+All OK
+rc=0
+== t rar50/wild/symlink.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/wild/symlink.rar
+
+Testing     file.txt                                                       OK 
+Testing     symlink.txt                                                    OK 
+Testing     dirlink                                                        OK 
+Testing     dir                                                       OK
+All OK
+rc=0
+== t rar50/with_all_services.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Archive comment:
+This is the archive comment.
+
+
+Testing archive rar50/with_all_services.rar
+
+Testing     hello.txt                                                      OK 
+Testing     tiny.txt                                                       OK 
+Testing the recovery record         OK
+All OK
+rc=0
+== t rar50/with_comment.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Archive comment:
+This is the archive comment.
+
+
+Testing archive rar50/with_comment.rar
+
+Testing     hello.txt                                                      OK 
+All OK
+rc=0
+== t rar50/with_quickopen.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/with_quickopen.rar
+
+Testing     hello.txt                                                      OK 
+Testing     tiny.txt                                                       OK 
+All OK
+rc=0
+== t rar50/with_recovery.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/with_recovery.rar
+
+Testing     hello.txt                                                      OK 
+Testing the recovery record         OK
+All OK
+rc=0
+== t rar50/zero_fill_out_of_window.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/zero_fill_out_of_window.rar
+
+Testing     zerofill.bin                                                   OK 
+All OK
+rc=0
+== t rar15_40/empty_compressed_payload_rar30.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/empty_compressed_payload_rar30.rar
+
+Testing     empty.bin                                                      OK 
+All OK
+rc=0
+== t rar15_40/ppmd/farmanager170.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/ppmd/farmanager170.rar
+
+Testing     File_id.diz                                                    OK 
+Testing     Addons/XLat/Descript.ion                                       OK 
+Testing     Addons/Tables/Hebrew/Descript.ion                              OK 
+Testing     Addons/Shell/Descript.ion                                      OK 
+Testing     Plugins/Editor/Descript.ion                                    OK 
+Testing     Addons/Tables/Descript.ion                                     OK 
+Testing     Addons/Tables/Western European/Descript.ion                    OK 
+Testing     Addons/Colors/Descript.ion                                     OK 
+Testing     Addons/SetUp/Descript.ion                                      OK 
+Testing     Addons/XLat/Russian/Descript.ion                               OK 
+Testing     Addons/Descript.ion                                            OK 
+Testing     Addons/Tables/Central European/Descript.ion                    OK 
+Testing     Plugins/Descript.ion                                           OK 
+Testing     Addons/Tables/Cyrillic/E-Mail Double Conversion/Descript.ion       OK 
+Testing     Documentation/eng/Descript.ion                                 OK 
+Testing     Documentation/rus/Descript.ion                                 OK 
+Testing     Addons/Archivers/Descript.ion                                  OK 
+Testing     Addons/Tables/Cyrillic/Descript.ion                            OK 
+Testing     Descript.ion                                                   OK 
+Testing     Addons/Colors/Custom Highlighting/Descript.ion                 OK 
+Testing     Addons/Colors/Default Highlighting/Descript.ion                OK 
+Testing     Addons/Macros/Descript.ion                                     OK 
+Testing     Documentation/rus/Arc.Support.txt                              OK 
+Testing     Documentation/eng/Arc.Support.txt                              OK 
+Testing     Documentation/eng/Bug.Report.txt                               OK 
+Testing     Documentation/rus/Bug.Report.txt                               OK 
+Testing     Plugins/FTP/BugReport_rus.txt                                  OK 
+Testing     Plugins/FTP/dirlist_rus.txt                                    OK 
+Testing     Documentation/eng/Far.FAQ.txt                                  OK 
+Testing     Documentation/rus/Far.FAQ.txt                                  OK 
+Testing     Far.Site.txt                                                   OK 
+Testing     Plugins/FTP/FtpCmds.txt                                        OK 
+Testing     Plugins/FTP/FtpCmds_rus.txt                                    OK 
+Testing     License.txt                                                    OK 
+Testing     License.xUSSR.txt                                              OK 
+Testing     Plugins/FTP/Notes.txt                                          OK 
+Testing     Plugins/FTP/Notes_rus.txt                                      OK 
+Testing     Documentation/rus/Plugins.Install.txt                          OK 
+Testing     Documentation/eng/Plugins.Install.txt                          OK 
+Testing     Documentation/eng/Plugins.Review.txt                           OK 
+Testing     Documentation/rus/Plugins.Review.txt                           OK 
+Testing     Addons/Readme.txt                                              OK 
+Testing     Readme.txt                                                     OK 
+Testing     Addons/Tables/Cyrillic/E-Mail Double Conversion/readme.txt       OK 
+Testing     Addons/Tables/README.TXT                                       OK 
+Testing     Plugins/FTP/lib/ReadMe_eng.txt                                 OK 
+Testing     Plugins/FTP/ReadMe_eng.txt                                     OK 
+Testing     Register.txt                                                   OK 
+Testing     Documentation/eng/TechInfo.txt                                 OK 
+Testing     Documentation/rus/TechInfo.txt                                 OK 
+Testing     Documentation/rus/WhatsNew.Api.txt                             OK 
+Testing     Documentation/eng/WhatsNew.Api.txt                             OK 
+Testing     Documentation/eng/WhatsNew.Plugins.txt                         OK 
+Testing     Documentation/rus/WhatsNew.Plugins.txt                         OK 
+Testing     Documentation/eng/WhatsNew.txt                                 OK 
+Testing     Documentation/rus/WhatsNew.txt                                 OK 
+Testing     Plugins/MultiArc/Formats/Custom.ini                            OK 
+Testing     ClearPluginsCache.bat                                          OK 
+Testing     Addons/Colors/export_colors.bat                                OK 
+Testing     Addons/Colors/Custom Highlighting/import_colors.bat            OK 
+Testing     Addons/Colors/Default Highlighting/import_colors.bat           OK 
+Testing     Addons/Colors/import_colors.bat                                OK 
+Testing     RestoreSettings.bat                                            OK 
+Testing     SaveSettings.bat                                               OK 
+Testing     Addons/Shell/FARHere.inf                                       OK 
+Testing     Far.exe                                                        OK 
+Testing     Plugins/Editor/Align/Align.dll                                 OK 
+Testing     Plugins/Editor/AutoWrap/AutoWrap.dll                           OK 
+Testing     Plugins/Editor/Brackets/Brackets.dll                           OK 
+Testing     Plugins/Compare/Compare.dll                                    OK 
+Testing     Plugins/Editor/DrawLine/DrawLine.dll                           OK 
+Testing     Plugins/Editor/EditCase/EditCase.dll                           OK 
+Testing     Plugins/EMenu/EMenu.dll                                        OK 
+Testing     Plugins/FARCmds/FARCmds.dll                                    OK 
+Testing     Plugins/FTP/FarFtp.dll                                         OK 
+Testing     Plugins/FileCase/FileCase.dll                                  OK 
+Testing     Plugins/HlfViewer/HlfViewer.dll                                OK 
+Testing     Plugins/MultiArc/MultiArc.dll                                  OK 
+Testing     Plugins/Network/Network.dll                                    OK 
+Testing     Plugins/PrintMan/PrintMan.dll                                  OK 
+Testing     Plugins/ProcList/Proclist.dll                                  OK 
+Testing     Plugins/TmpPanel/TmpPanel.dll                                  OK 
+Testing     Addons/Archivers                                          OK
+Testing     Addons/Tables/Central European                            OK
+Testing     Addons/Colors/Custom Highlighting                         OK
+Testing     Addons/Colors/Default Highlighting                        OK
+Testing     Addons/Colors                                             OK
+Testing     Addons/Tables/Cyrillic/E-Mail Double Conversion           OK
+Testing     Addons/Tables/Cyrillic                                    OK
+Testing     Addons/Tables/Hebrew                                      OK
+Testing     Addons/XLat/Russian                                       OK
+Testing     Addons/SetUp                                              OK
+Testing     Addons/Shell                                              OK
+Testing     Addons/XLat                                               OK
+Testing     Addons/Macros/AltBS.reg                                        OK 
+Testing     Addons/Macros/AltDown.reg                                      OK 
+Testing     Addons/Macros/AltMenu.reg                                      OK 
+Testing     Addons/XLat/Russian/AltR.reg                                   OK 
+Testing     Addons/Macros/AltScreens.reg                                   OK 
+Testing     Addons/Macros/AltSearch.reg                                    OK 
+Testing     Addons/Macros/AltX.reg                                         OK 
+Testing     Addons/XLat/Russian/Apps.reg                                   OK 
+Testing     Addons/Macros/Apps.reg                                         OK 
+Testing     Addons/Archivers/Arj.reg                                       OK 
+Testing     Addons/Colors/Default Highlighting/black_from_Fonarev.reg       OK 
+Testing     Addons/Colors/Custom Highlighting/black_from_Fonarev.reg       OK 
+Testing     Addons/Colors/Default Highlighting/black_from_july.reg         OK 
+Testing     Addons/Colors/Custom Highlighting/black_from_july.reg          OK 
+Testing     Addons/Colors/Default Highlighting/black_from_Myodov.reg       OK 
+Testing     Addons/Colors/Custom Highlighting/black_from_Myodov.reg        OK 
+Testing     Addons/Macros/BS.reg                                           OK 
+Testing     Addons/Colors/Default Highlighting/Colors_from_admin_essp_ru.reg       OK 
+Testing     Addons/Colors/Custom Highlighting/Colors_from_admin_essp_ru.reg       OK 
+Testing     Addons/Colors/Default Highlighting/Colors_from_Gernichenko.reg       OK 
+Testing     Addons/Colors/Custom Highlighting/Colors_from_Gernichenko.reg       OK 
+Testing     Addons/Colors/Default Highlighting/Colors_from_Sadovoj.reg       OK 
+Testing     Addons/Colors/Custom Highlighting/Colors_from_Sadovoj.reg       OK 
+Testing     Addons/Macros/CtrlDel.reg                                      OK 
+Testing     Addons/Macros/CtrlF10.reg                                      OK 
+Testing     Addons/Macros/CtrlIns...reg                                    OK 
+Testing     Addons/Macros/CtrlLeft.reg                                     OK 
+Testing     Addons/Macros/CtrlQ.reg                                        OK 
+Testing     Addons/XLat/Russian/CtrlR.reg                                  OK 
+Testing     Addons/Macros/CtrlRight.reg                                    OK 
+Testing     Addons/Macros/CtrlS.reg                                        OK 
+Testing     Addons/Macros/CtrlShiftBackSlash.reg                           OK 
+Testing     Addons/Macros/CtrlShiftPgUpDn.reg                              OK 
+Testing     Addons/Macros                                             OK
+Testing     Addons/XLat/Russian/CtrlShiftX.reg                             OK 
+Testing     Addons/Macros/CtrlUpDown.reg                                   OK 
+Testing     Addons/Macros/CtrlW.reg                                        OK 
+Testing     Addons/Tables/Central European/Czech - CP-895 (Kamenicti).reg       OK 
+Testing     Addons/SetUp/Default165.reg                                    OK 
+Testing     Addons/Macros/Del.reg                                          OK 
+Testing     Addons/Tables/Western European/Dist.Ger.reg                    OK 
+Testing     Addons/Tables/Western European                            OK
+Testing     Addons/Tables/Cyrillic/Dist.Rus.reg                            OK 
+Testing     Addons/Tables/Cyrillic/Dist.Ukr.reg                            OK 
+Testing     Addons/Tables/Cyrillic/DKOI8 (Mainframe).reg                   OK 
+Testing     Addons/Tables/Cyrillic/DM (Amiga).reg                          OK 
+Testing     Addons/Colors/Default Highlighting/dn_like.reg                 OK 
+Testing     Addons/Colors/Custom Highlighting/dn_like.reg                  OK 
+Testing     Addons/Tables/Cyrillic/E-Mail Double Conversion/Email DKWD.reg       OK 
+Testing     Addons/Tables/Cyrillic/E-Mail Double Conversion/Email DWKD.reg       OK 
+Testing     Addons/Tables/Cyrillic/E-Mail Double Conversion/Email KWKD.reg       OK 
+Testing     Addons/Tables/Cyrillic/E-Mail Double Conversion/Email WK.reg       OK 
+Testing     Addons/Tables/Cyrillic/E-Mail Double Conversion/Email WKWD.reg       OK 
+Testing     Addons/Macros/Esc.reg                                          OK 
+Testing     Addons/SetUp/Executor.4NT.reg                                  OK 
+Testing     Addons/SetUp/Executor.CMD.reg                                  OK 
+Testing     Addons/SetUp/Executor.COMMAND.reg                              OK 
+Testing     Addons/Macros/F3.reg                                           OK 
+Testing     Addons/Macros/F9DeactivateMenu.reg                             OK 
+Testing     Addons/Macros/F9Table.reg                                      OK 
+Testing     Addons/Colors/Default Highlighting/FARColors242.reg            OK 
+Testing     Addons/Colors/Custom Highlighting/FARColors242.reg             OK 
+Testing     Addons/Archivers/FarUC2.reg                                    OK 
+Testing     Addons/Colors/Default Highlighting/GreenMile.reg               OK 
+Testing     Addons/Colors/Custom Highlighting/GreenMile.reg                OK 
+Testing     Addons/Colors/Default Highlighting/hell.reg                    OK 
+Testing     Addons/Colors/Custom Highlighting/hell.reg                     OK 
+Testing     Addons/Tables/Central European/Hungarian - CWI.reg             OK 
+Testing     Addons/Archivers/InfoZIP.reg                                   OK 
+Testing     Addons/Tables/Western European/ISO-8859-1 (Latin I).reg        OK 
+Testing     Addons/Tables/Central European/ISO-8859-2 (Latin II).reg       OK 
+Testing     Addons/Tables/Cyrillic/ISO-8859-5.reg                          OK 
+Testing     Addons/Tables/Cyrillic/KOI8-R.reg                              OK 
+Testing     Addons/Tables/Cyrillic/KOI8-U.reg                              OK 
+Testing     Addons/Archivers/LGHA.reg                                      OK 
+Testing     Addons/Archivers/Lha32.reg                                     OK 
+Testing     Addons/Archivers/Lha32a.reg                                    OK 
+Testing     Addons/Archivers/Lha32b.reg                                    OK 
+Testing     Addons/Archivers/LhArk.reg                                     OK 
+Testing     Addons/Macros/Lynx-mot.reg                                     OK 
+Testing     Addons/Tables/Western European/Macintosh Standard.reg          OK 
+Testing     Addons/Tables/Cyrillic/Macintosh Standard.reg                  OK 
+Testing     Addons/Colors/Default Highlighting/nc5pal2.reg                 OK 
+Testing     Addons/Colors/Custom Highlighting/nc5pal2.reg                  OK 
+Testing     Addons/Macros/Notepad.reg                                      OK 
+Testing     Addons/Macros/Numpad.reg                                       OK 
+Testing     Addons/Macros/OpeningLastFile.reg                              OK 
+Testing     Addons/Archivers/PkZip25.reg                                   OK 
+Testing     Addons/Archivers/PkZip25Dos.reg                                OK 
+Testing     Addons/Tables/Central European/Polish - CP-896 (Mazovia).reg       OK 
+Testing     Addons/XLat/Russian/Qwerty.reg                                 OK 
+Testing     Addons/Archivers/Rar20.reg                                     OK 
+Testing     Addons/Colors/Default Highlighting/Rodion_Doroshkevich.reg       OK 
+Testing     Addons/Colors/Custom Highlighting/Rodion_Doroshkevich.reg       OK 
+Testing     Addons/Tables/Cyrillic/RUSCII (GOST Ukrainian).reg             OK 
+Testing     Addons/Macros/ShiftBS.reg                                      OK 
+Testing     Addons/Macros/ShiftF1.reg                                      OK 
+Testing     Addons/Macros/ShiftInsSearch.reg                               OK 
+Testing     Addons/Macros/ShiftTab.reg                                     OK 
+Testing     Addons/Macros/Space.reg                                        OK 
+Testing     Addons/Macros/SwitchMainLanguage.reg                           OK 
+Testing     Addons/Colors/Default Highlighting/VaxColors.reg               OK 
+Testing     Addons/Colors/Custom Highlighting/VaxColors.reg                OK 
+Testing     Addons/Macros/View.PgDn.reg                                    OK 
+Testing     Addons/Macros/View.Space.reg                                   OK 
+Testing     Addons/Macros/ViewerAddSubstract.reg                           OK 
+Testing     Addons/Macros/WheelScreenSwitch.reg                            OK 
+Testing     Addons/Tables/Central European/Windows-1250.reg                OK 
+Testing     Addons/Tables/Cyrillic/Windows-1251.reg                        OK 
+Testing     Addons/Tables/Western European/Windows-1252.reg                OK 
+Testing     Addons/Tables/Hebrew/Windows-1255.reg                          OK 
+Testing     Addons/Tables                                             OK
+Testing     Addons/SetUp/WindowsGUI.reg                                    OK 
+Testing     Addons/Archivers/WinZipCL.reg                                  OK 
+Testing     Addons                                                    OK
+Testing     Plugins/Editor/Align                                      OK
+Testing     Plugins/Editor/AutoWrap                                   OK
+Testing     Plugins/Editor/Brackets                                   OK
+Testing     Documentation                                             OK
+Testing     Plugins/Editor/DrawLine                                   OK
+Testing     Plugins/Editor/EditCase                                   OK
+Testing     Plugins/Editor                                            OK
+Testing     Plugins/EMenu                                             OK
+Testing     Documentation/eng                                         OK
+Testing     Plugins/FARCmds                                           OK
+Testing     Plugins/FileCase                                          OK
+Testing     Plugins/MultiArc/Formats                                  OK
+Testing     Plugins/HlfViewer                                         OK
+Testing     Plugins/FTP/lib                                           OK
+Testing     Plugins/FTP                                               OK
+Testing     Plugins/MultiArc                                          OK
+Testing     Plugins/Network                                           OK
+Testing     Plugins/PrintMan                                          OK
+Testing     Plugins/ProcList                                          OK
+Testing     Documentation/rus                                         OK
+Testing     Plugins/TmpPanel                                          OK
+Testing     Plugins/FTP/lib/ftpDirList.fll                                 OK 
+Testing     Plugins/FTP/lib/ftpProgress.fll                                OK 
+Testing     Plugins/MultiArc/Formats/Ace.fmt                               OK 
+Testing     Plugins/MultiArc/Formats/Arc.fmt                               OK 
+Testing     Plugins/MultiArc/Formats/Arj.fmt                               OK 
+Testing     Plugins/MultiArc/Formats/Cab.fmt                               OK 
+Testing     Plugins/MultiArc/Formats/Custom.fmt                            OK 
+Testing     Plugins/MultiArc/Formats/Ha.fmt                                OK 
+Testing     Plugins/MultiArc/Formats/Lzh.fmt                               OK 
+Testing     Plugins/MultiArc/Formats/Rar.fmt                               OK 
+Testing     Plugins/MultiArc/Formats/TarGz.fmt                             OK 
+Testing     Plugins/MultiArc/Formats/Zip.fmt                               OK 
+Testing     REGISTER.FRM                                                   OK 
+Testing     Plugins/MultiArc/ArcEng.hlf                                    OK 
+Testing     Plugins/MultiArc/ArcRus.hlf                                    OK 
+Testing     Plugins/Editor/Brackets/BrackEng.hlf                           OK 
+Testing     Plugins/Editor/Brackets/BrackRus.hlf                           OK 
+Testing     Plugins/FileCase/CaseEng.hlf                                   OK 
+Testing     Plugins/FileCase/CaseRus.hlf                                   OK 
+Testing     Plugins/Compare/CmpEng.hlf                                     OK 
+Testing     Plugins/Compare/CmpRus.hlf                                     OK 
+Testing     Plugins/Compare                                           OK
+Testing     Plugins/Editor/DrawLine/DrawEng.hlf                            OK 
+Testing     Plugins/Editor/DrawLine/DrawRus.hlf                            OK 
+Testing     Plugins/Editor/EditCase/ECaseEng.hlf                           OK 
+Testing     Plugins/Editor/EditCase/ECaseRus.hlf                           OK 
+Testing     Plugins/EMenu/EMenuEng.hlf                                     OK 
+Testing     Plugins/EMenu/EMenuRus.hlf                                     OK 
+Testing     Plugins/FARCmds/FARCmdsEng.hlf                                 OK 
+Testing     Plugins/FARCmds/FARCmdsRus.hlf                                 OK 
+Testing     FarEng.hlf                                                     OK 
+Testing     FarRus.hlf                                                     OK 
+Testing     Plugins/FTP/FtpEng.hlf                                         OK 
+Testing     Plugins/FTP/FtpRus.hlf                                         OK 
+Testing     Plugins/HlfViewer/HlfViewerEng.hlf                             OK 
+Testing     Plugins/HlfViewer/HlfViewerRus.hlf                             OK 
+Testing     Plugins/Network/NetEng.hlf                                     OK 
+Testing     Plugins/Network/NetRus.hlf                                     OK 
+Testing     Plugins/PrintMan/PrnManEn.hlf                                  OK 
+Testing     Plugins/PrintMan/PrnManRu.hlf                                  OK 
+Testing     Plugins/ProcList/ProcEng.hlf                                   OK 
+Testing     Plugins/ProcList/ProcRus.hlf                                   OK 
+Testing     Plugins/TmpPanel/TmpEng.hlf                                    OK 
+Testing     Plugins/TmpPanel/TmpRus.hlf                                    OK 
+Testing     Far.ico                                                        OK 
+Testing     Plugins/Editor/Align/AlignEng.lng                              OK 
+Testing     Plugins/Editor/Align/AlignRus.lng                              OK 
+Testing     Plugins/MultiArc/ArcEng.lng                                    OK 
+Testing     Plugins/MultiArc/ArcRus.lng                                    OK 
+Testing     Plugins/Editor/Brackets/BrackEng.lng                           OK 
+Testing     Plugins/Editor/Brackets/BrackRus.lng                           OK 
+Testing     Plugins/FileCase/CaseEng.lng                                   OK 
+Testing     Plugins/FileCase/CaseRus.lng                                   OK 
+Testing     Plugins/Compare/CompEng.lng                                    OK 
+Testing     Plugins/Compare/CompRus.lng                                    OK 
+Testing     Plugins/Editor/DrawLine/DrawEng.lng                            OK 
+Testing     Plugins/Editor/DrawLine/DrawRus.lng                            OK 
+Testing     Plugins/Editor/EditCase/ECaseEng.lng                           OK 
+Testing     Plugins/Editor/EditCase/ECaseRus.lng                           OK 
+Testing     Plugins/EMenu/EMenuEng.lng                                     OK 
+Testing     Plugins/EMenu/EMenuRus.lng                                     OK 
+Testing     Plugins/FARCmds/FARCmdsEng.lng                                 OK 
+Testing     Plugins/FARCmds/FARCmdsRus.lng                                 OK 
+Testing     FarEng.lng                                                     OK 
+Testing     FarRus.lng                                                     OK 
+Testing     Plugins/FTP/FtpEng.lng                                         OK 
+Testing     Plugins/FTP/FtpRus.lng                                         OK 
+Testing     Plugins/HlfViewer/HlfViewerEng.lng                             OK 
+Testing     Plugins/HlfViewer/HlfViewerRus.lng                             OK 
+Testing     Plugins/Network/NetEng.lng                                     OK 
+Testing     Plugins/Network/NetRus.lng                                     OK 
+Testing     Plugins/PrintMan/PrnManEn.lng                                  OK 
+Testing     Plugins/PrintMan/PrnManRu.lng                                  OK 
+Testing     Plugins/ProcList/ProcEng.lng                                   OK 
+Testing     Plugins/ProcList/ProcRus.lng                                   OK 
+Testing     Plugins/TmpPanel/TmpEng.lng                                    OK 
+Testing     Plugins/TmpPanel/TmpRus.lng                                    OK 
+Testing     Plugins/Editor/AutoWrap/WrapEng.lng                            OK 
+Testing     Plugins/Editor/AutoWrap/WrapRus.lng                            OK 
+Testing     Plugins/Editor/Brackets/BrackDel.reg                           OK 
+Testing     Plugins/Editor/Brackets/BrackEng.reg                           OK 
+Testing     Plugins/Editor/Brackets/BrackRus.reg                           OK 
+Testing     Plugins/EMenu/EMenuDel.reg                                     OK 
+Testing     Plugins/EMenu/Hotkey Clipboard.reg                             OK 
+Testing     Plugins/EMenu/Hotkey Properties.reg                            OK 
+Testing     Plugins/EMenu/Hotkey.reg                                       OK 
+Testing     Plugins/FTP/lib/Progress_FarCopy.reg                           OK 
+Testing     Plugins/FTP/lib/Progress_JM.reg                                OK 
+Testing     Plugins/FTP/lib/Progress_Wesha.reg                             OK 
+Testing     Plugins/FTP/lib/Progress_ZeMA.reg                              OK 
+Testing     Plugins/TmpPanel/shortcuts.eng.reg                             OK 
+Testing     Plugins/TmpPanel/shortcuts.rus.reg                             OK 
+Testing     Plugins/FTP/TechInfo.reg                                       OK 
+Testing     Plugins/FTP/TechInfo_rus.reg                                   OK 
+Testing     Plugins/TmpPanel/disks.eng.temp                                OK 
+Testing     Plugins/TmpPanel/disks.rus.temp                                OK 
+Testing     Plugins/TmpPanel/shortcuts.eng.temp                            OK 
+Testing     Plugins/TmpPanel/shortcuts.rus.temp                            OK 
+Testing     Plugins                                                   OK
+All OK
+rc=0
+== t rar15_40/ppmd/ppmd_escape_rar300.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/ppmd/ppmd_escape_rar300.rar
+
+Testing     escape_64k.bin                                                 OK 
+All OK
+rc=0
+== t rar15_40/ppmd/ppmd_lz_match_rar300.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/ppmd/ppmd_lz_match_rar300.rar
+
+Testing     repeated_phrase_64k.txt                                        OK 
+All OK
+rc=0
+== t rar15_40/ppmd/ppmd_solid_rar300.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/ppmd/ppmd_solid_rar300.rar
+
+Testing     solid_lorem_a.txt                                              OK 
+Testing     solid_lorem_b.txt                                              OK 
+All OK
+rc=0
+== t rar15_40/rar154/audio_dos_names_unpack15.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/rar154/audio_dos_names_unpack15.rar
+
+Testing     BOATMO~1.WAV                                                   OK 
+Testing     LICENSE.TXT                                                    OK 
+All OK
+rc=0
+== t rar15_40/rar154/doc_154_best.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/rar154/doc_154_best.rar
+
+Testing     ARCH~Y3X.MD                                                    OK 
+Testing     CRC3~F4U.MD                                                    OK 
+Testing     ENCR~BXO.MD                                                    OK 
+Testing     FILT~XX0.MD                                                    OK 
+Testing     HUFF~BID.MD                                                    OK 
+Testing     IMPL~KS0.MD                                                    OK 
+Testing     INTE~BSL.MD                                                    OK 
+Testing     LZ_M~HYW.MD                                                    OK 
+Testing     PATH~EJS.MD                                                    OK 
+Testing     PPMD~D4Q.MD                                                    OK 
+Testing     RAR1~FHU.MD                                                    OK 
+Testing     RAR1~OEK.MD                                                    OK 
+Testing     RAR5~YP0.MD                                                    OK 
+Testing     RARV~0F3.MD                                                    OK 
+Testing     README.md                                                      OK 
+Testing     READ~0WB.MD                                                    OK 
+Testing     TEST~FAD.MD                                                    OK 
+All OK
+rc=0
+== t rar15_40/rar154/random.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/rar154/random.rar
+
+Testing     random.bin                                                   
+
+Testing archive rar15_40/rar154/random.r00
+
+...         random.bin                                                   
+
+Testing archive rar15_40/rar154/random.r01
+
+...         random.bin                                                     OK 
+All OK
+rc=0
+== t rar15_40/rar154/random.r00
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/rar154/random.r00
+
+Testing archive rar15_40/rar154/random.rar
+
+Testing     random.bin                                                   
+
+Testing archive rar15_40/rar154/random.r00
+
+...         random.bin                                                   
+
+Testing archive rar15_40/rar154/random.r01
+
+...         random.bin                                                     OK 
+All OK
+rc=0
+== t rar15_40/rar154/readme_154_store_solid.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/rar154/readme_154_store_solid.rar
+
+Testing     README.md                                                      OK 
+All OK
+rc=0
+== t rar15_40/rar202/comment_nopsw.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/rar202/comment_nopsw.rar
+
+Testing     FILE1.TXT                                                      OK 
+Testing     FILE2.TXT                                                      OK 
+Total errors: 3
+--- stderr
+
+The archive comment is corrupt
+rc=3
+== t rar15_40/rar250/AUDIO.RAR
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/rar250/AUDIO.RAR
+
+Testing     PCM_LR.WAV                                                     OK 
+All OK
+rc=0
+== t rar15_40/rar250/AUTOREJ.RAR
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/rar250/AUTOREJ.RAR
+
+Testing     PLAIN.TXT                                                      OK 
+All OK
+rc=0
+== t rar15_40/rar250/BIGLZ.RAR
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/rar250/BIGLZ.RAR
+
+Testing     BIGLZ.BIN                                                      OK 
+All OK
+rc=0
+== t rar15_40/rar250/SOLID.RAR
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/rar250/SOLID.RAR
+
+Testing     SOLID1.TXT                                                     OK 
+Testing     SOLID2.TXT                                                     OK 
+All OK
+rc=0
+== t rar15_40/rar250/unpack20_audio_text.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/rar250/unpack20_audio_text.rar
+
+Testing     BoatModernEnglish.wav                                          OK 
+Testing     LICENSE.txt                                                    OK 
+All OK
+rc=0
+== t rar15_40/rar250/unpack20_keep_tables.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/rar250/unpack20_keep_tables.rar
+
+Testing     unrar                                                          OK 
+Testing     file_id.diz                                                    OK 
+All OK
+rc=0
+== t rar15_40/rar250/unpack20_multiblock.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/rar250/unpack20_multiblock.rar
+
+Testing     multiblock.bin                                                 OK 
+All OK
+rc=0
+== t rar15_40/rar250_protect_head_rr1.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/rar250_protect_head_rr1.rar
+
+Testing     TEST.TXT                                                       OK 
+All OK
+rc=0
+== t rar15_40/rar300/compressed_multivol_prng_rar300.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/rar300/compressed_multivol_prng_rar300.rar
+
+Testing     cvolume.bin                                                  
+
+Testing archive rar15_40/rar300/compressed_multivol_prng_rar300.r00
+
+...         cvolume.bin                                                  
+
+Testing archive rar15_40/rar300/compressed_multivol_prng_rar300.r01
+
+...         cvolume.bin                                                  
+
+Testing archive rar15_40/rar300/compressed_multivol_prng_rar300.r02
+
+...         cvolume.bin                                                  
+
+Testing archive rar15_40/rar300/compressed_multivol_prng_rar300.r03
+
+...         cvolume.bin                                                    OK 
+All OK
+rc=0
+== t rar15_40/rar300/compressed_multivol_prng_rar300.r02
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/rar300/compressed_multivol_prng_rar300.r02
+
+Testing archive rar15_40/rar300/compressed_multivol_prng_rar300.rar
+
+Testing     cvolume.bin                                                  
+
+Testing archive rar15_40/rar300/compressed_multivol_prng_rar300.r00
+
+...         cvolume.bin                                                  
+
+Testing archive rar15_40/rar300/compressed_multivol_prng_rar300.r01
+
+...         cvolume.bin                                                  
+
+Testing archive rar15_40/rar300/compressed_multivol_prng_rar300.r02
+
+...         cvolume.bin                                                  
+
+Testing archive rar15_40/rar300/compressed_multivol_prng_rar300.r03
+
+...         cvolume.bin                                                    OK 
+All OK
+rc=0
+== t rar15_40/rar300/compressed_text_rar300.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/rar300/compressed_text_rar300.rar
+
+Testing     text.txt                                                       OK 
+All OK
+rc=0
+== t rar15_40/rar300/multivol_newnaming_rar300.part01.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/rar300/multivol_newnaming_rar300.part01.rar
+
+Testing     bigtext_64k.bin                                              
+
+Testing archive rar15_40/rar300/multivol_newnaming_rar300.part02.rar
+
+...         bigtext_64k.bin                                                OK 
+All OK
+rc=0
+== t rar15_40/rar300/multivol_oldnaming_rar300.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/rar300/multivol_oldnaming_rar300.rar
+
+Testing     bigtext_64k.bin                                              
+
+Testing archive rar15_40/rar300/multivol_oldnaming_rar300.r00
+
+...         bigtext_64k.bin                                                OK 
+All OK
+rc=0
+== t rar15_40/rar300/rarvm_audio_stereo_rar300.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/rar300/rarvm_audio_stereo_rar300.rar
+
+Testing     audio_stereo_pcm.wav                                           OK 
+All OK
+rc=0
+== t rar15_40/rar300/rarvm_delta_4ch_rar300.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/rar300/rarvm_delta_4ch_rar300.rar
+
+Testing     delta_4ch_ramp.bin                                             OK 
+All OK
+rc=0
+== t rar15_40/rar300/rarvm_itanium_synthetic_rar300.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/rar300/rarvm_itanium_synthetic_rar300.rar
+
+Testing     itanium_synthetic_bundles.bin                                  OK 
+All OK
+rc=0
+== t rar15_40/rar300/rarvm_rgb_gradient_rar300.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/rar300/rarvm_rgb_gradient_rar300.rar
+
+Testing     rgb_gradient_24bit.bmp                                         OK 
+All OK
+rc=0
+== t rar15_40/rar300/rarvm_x86_e8_rar300.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/rar300/rarvm_x86_e8_rar300.rar
+
+Testing     x86_e8_stream.bin                                              OK 
+All OK
+rc=0
+== t rar15_40/rar300/rarvm_x86_e8e9_rar300.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/rar300/rarvm_x86_e8e9_rar300.rar
+
+Testing     x86_e8e9_stream.bin                                            OK 
+All OK
+rc=0
+== t rar15_40/rar300/rev_newstyle.part1.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/rar300/rev_newstyle.part1.rar
+
+Testing     tmp/rars-rar4-rev-gen/payload.bin                            
+
+Testing archive rar15_40/rar300/rev_newstyle.part2.rar
+
+...         tmp/rars-rar4-rev-gen/payload.bin                            
+
+Testing archive rar15_40/rar300/rev_newstyle.part3.rar
+
+...         tmp/rars-rar4-rev-gen/payload.bin                            
+
+Testing archive rar15_40/rar300/rev_newstyle.part4.rar
+
+...         tmp/rars-rar4-rev-gen/payload.bin                              OK 
+
+Testing     rar15_40/rar300/rev_newstyle.part1.rev                         OK 
+Testing     rar15_40/rar300/rev_newstyle.part2.rev                         OK 
+All OK
+rc=0
+== t rar15_40/rar300/solid_rar300.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/rar300/solid_rar300.rar
+
+Testing     hello.txt                                                      OK 
+Testing     tiny.txt                                                       OK 
+Testing     bigtext_64k.bin                                                OK 
+All OK
+rc=0
+== t rar15_40/rar300/solid_simple_rar300.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/rar300/solid_simple_rar300.rar
+
+Testing     one.txt                                                        OK 
+Testing     two.txt                                                        OK 
+All OK
+rc=0
+== t rar15_40/rar300/stored_multivol_rar300.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/rar300/stored_multivol_rar300.rar
+
+Testing     stored-volume.txt                                            
+
+Testing archive rar15_40/rar300/stored_multivol_rar300.r00
+
+...         stored-volume.txt                                            
+
+Testing archive rar15_40/rar300/stored_multivol_rar300.r01
+
+...         stored-volume.txt                                            
+
+Testing archive rar15_40/rar300/stored_multivol_rar300.r02
+
+...         stored-volume.txt                                              OK 
+All OK
+rc=0
+== t rar15_40/rar300/with_comment_rar300.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Archive comment:
+This is the archive comment.
+
+
+Testing archive rar15_40/rar300/with_comment_rar300.rar
+
+Testing     hello.txt                                                      OK 
+All OK
+rc=0
+== t rar15_40/rar300/with_recovery_rar300.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/rar300/with_recovery_rar300.rar
+
+Testing     bigtext_64k.bin                                                OK 
+All OK
+rc=0
+== t rar15_40/rar420/ext_time_rar420.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/rar420/ext_time_rar420.rar
+
+Testing     hello.txt                                                      OK 
+All OK
+rc=0
+== t rar15_40/rarvm/delta_64_channels.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/rarvm/delta_64_channels.rar
+
+Testing     delta64.bin                                                    OK 
+All OK
+rc=0
+== t rar15_40/rarvm/filter_bsdcat_exe.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/rarvm/filter_bsdcat_exe.rar
+
+Testing     bsdcat.exe                                                     OK 
+All OK
+rc=0
+== t rar15_40/rarvm/generic_delta_padding_mutation.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/rarvm/generic_delta_padding_mutation.rar
+
+Testing     itanium_synthetic_bundles.bin                                
+Total errors: 1
+--- stderr
+
+itanium_synthetic_bundles.bin - checksum error
+rc=3
+== t rar15_40/rarvm/solid_e8_filter_member_offset.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/rarvm/solid_e8_filter_member_offset.rar
+
+Testing     lead.txt                                                       OK 
+Testing     tiny_e8e9.exe                                                  OK 
+All OK
+rc=0
+== t rar15_40/rarvm/vm_encoded_u32_filter.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/rarvm/vm_encoded_u32_filter.rar
+
+Testing     bsdcat.exe                                                     OK 
+All OK
+rc=0
+== t rar15_40/solid_flag_cleared_rar15.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/solid_flag_cleared_rar15.rar
+
+Testing     a.txt                                                          OK 
+Testing     b.txt                                                          OK 
+All OK
+rc=0
+== t rar15_40/zero_fill/rar20.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/zero_fill/rar20.rar
+
+Testing     zerofill.bin                                                   OK 
+All OK
+rc=0
+== t rar15_40/zero_fill/rar29.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/zero_fill/rar29.rar
+
+Testing     zerofill.bin                                                   OK 
+All OK
+rc=0
+== t rar13/BIG80K.RAR
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar13/BIG80K.RAR
+
+Testing     BIG80K.TXT                                                     OK 
+All OK
+rc=0
+== t rar13/CMULTIV.RAR
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar13/CMULTIV.RAR
+
+Testing     CMULTI.TXT                                                   
+
+Testing archive rar13/CMULTIV.R00
+
+...         CMULTI.TXT                                                   
+
+Testing archive rar13/CMULTIV.R01
+
+...         CMULTI.TXT                                                   
+
+Testing archive rar13/CMULTIV.R02
+
+...         CMULTI.TXT                                                   
+
+Testing archive rar13/CMULTIV.R03
+
+...         CMULTI.TXT                                                   
+
+Testing archive rar13/CMULTIV.R04
+
+...         CMULTI.TXT                                                   
+
+Testing archive rar13/CMULTIV.R05
+
+...         CMULTI.TXT                                                   
+
+Testing archive rar13/CMULTIV.R06
+
+...         CMULTI.TXT                                                     OK 
+All OK
+rc=0
+== t rar13/COMMENT.RAR
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Archive comment:
+This is the archive comment.
+
+
+Testing archive rar13/COMMENT.RAR
+
+Testing     HELLO.TXT                                                      OK 
+All OK
+rc=0
+== t rar13/EMPTY.RAR
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar13/EMPTY.RAR
+
+Testing     EMPTY.BIN                                                      OK 
+All OK
+rc=0
+== t rar13/FCOMM.RAR
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar13/FCOMM.RAR
+
+Testing     HELLO.TXT                                                      OK 
+All OK
+rc=0
+== t rar13/MULTIFIL.RAR
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar13/MULTIFIL.RAR
+
+Testing     HELLO.TXT                                                      OK 
+Testing     TINY.TXT                                                       OK 
+All OK
+rc=0
+== t rar13/MULTIVOL.RAR
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar13/MULTIVOL.RAR
+
+Testing     RANDOM.BIN                                                   
+
+Testing archive rar13/MULTIVOL.R00
+
+...         RANDOM.BIN                                                   
+
+Testing archive rar13/MULTIVOL.R01
+
+...         RANDOM.BIN                                                   
+
+Testing archive rar13/MULTIVOL.R02
+
+...         RANDOM.BIN                                                     OK 
+All OK
+rc=0
+== t rar13/README.RAR
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar13/README.RAR
+
+Testing     README                                                         OK 
+All OK
+rc=0
+== t rar13/README_store.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar13/README_store.rar
+
+Testing     README                                                         OK 
+All OK
+rc=0
+== t rar13/REPEATB.RAR
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar13/REPEATB.RAR
+
+Testing     REPEATB.BIN                                                    OK 
+All OK
+rc=0
+== t rar13/SOLID.RAR
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar13/SOLID.RAR
+
+Testing     BIG80K.TXT                                                     OK 
+Testing     HELLO.TXT                                                      OK 
+Testing     TINY.TXT                                                       OK 
+All OK
+rc=0
+== t rar13/WITHDIR.RAR
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar13/WITHDIR.RAR
+
+Testing     SUBDIR                                                    OK
+Testing     SUBDIR/INNER.TXT                                               OK 
+All OK
+rc=0
+== t rar13/solid_flag_cleared.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar13/solid_flag_cleared.rar
+
+Testing     a.txt                                                          OK 
+Testing     b.txt                                                          OK 
+All OK
+rc=0
+== t, encrypted, with the password, a wrong one and none
+== t -ppassword rar50/password_aes.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/password_aes.rar
+
+Testing     hello.txt                                                      OK 
+All OK
+rc=0
+== t -pwrong rar50/password_aes.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/password_aes.rar
+
+Total errors: 1
+--- stderr
+
+Incorrect password for hello.txt
+rc=11
+== t rar50/password_aes.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/password_aes.rar
+
+
+Program aborted
+--- stderr
+
+Enter password (will not be echoed) for hello.txt: Read error in the file stdin
+rc=12
+== t -ppassword rar50/password_crc32.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/password_crc32.rar
+
+Testing     hello.txt                                                      OK 
+All OK
+rc=0
+== t -pwrong rar50/password_crc32.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/password_crc32.rar
+
+Total errors: 1
+--- stderr
+
+Incorrect password for hello.txt
+rc=11
+== t rar50/password_crc32.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/password_crc32.rar
+
+
+Program aborted
+--- stderr
+
+Enter password (will not be echoed) for hello.txt: Read error in the file stdin
+rc=12
+== t -ppassword rar50/encrypted_multivol.part1.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/encrypted_multivol.part1.rar
+
+Testing     random_4k.bin                                                
+
+Testing archive rar50/encrypted_multivol.part2.rar
+
+...         random_4k.bin                                                
+
+Testing archive rar50/encrypted_multivol.part3.rar
+
+...         random_4k.bin                                                  OK 
+All OK
+rc=0
+== t -pwrong rar50/encrypted_multivol.part1.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/encrypted_multivol.part1.rar
+
+
+Testing archive rar50/encrypted_multivol.part2.rar
+
+
+Testing archive rar50/encrypted_multivol.part3.rar
+
+Total errors: 3
+--- stderr
+
+Incorrect password for random_4k.bin
+Incorrect password for random_4k.bin
+Incorrect password for random_4k.bin
+rc=11
+== t rar50/encrypted_multivol.part1.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/encrypted_multivol.part1.rar
+
+
+Program aborted
+--- stderr
+
+Enter password (will not be echoed) for random_4k.bin: Read error in the file stdin
+The system cannot find the file specified.
+rc=12
+== t -ppassword rar50/header_encrypted.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/header_encrypted.rar
+
+Testing     hello.txt                                                      OK 
+All OK
+rc=0
+== t -pwrong rar50/header_encrypted.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Total errors: 1
+--- stderr
+
+Incorrect password for rar50/header_encrypted.rar
+rc=11
+== t rar50/header_encrypted.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+
+Program aborted
+--- stderr
+
+Enter password (will not be echoed) for rar50/header_encrypted.rar: Read error in the file stdin
+rc=12
+== t -ppassword rar15_40/encrypted/per_file_rar300_password.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/encrypted/per_file_rar300_password.rar
+
+Testing     hello.txt                                                      OK 
+All OK
+rc=0
+== t -pwrong rar15_40/encrypted/per_file_rar300_password.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/encrypted/per_file_rar300_password.rar
+
+Testing     hello.txt                                                    
+Total errors: 1
+--- stderr
+
+Checksum error in the encrypted file hello.txt. Corrupt file or wrong password.
+rc=3
+== t rar15_40/encrypted/per_file_rar300_password.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/encrypted/per_file_rar300_password.rar
+
+
+Program aborted
+--- stderr
+
+Enter password (will not be echoed) for hello.txt: Read error in the file stdin
+rc=12
+== t -ppassword rar15_40/encrypted/per_file_rar4_libarchive_mixed.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/encrypted/per_file_rar4_libarchive_mixed.rar
+
+Testing     a.txt                                                          OK 
+Testing     b.txt                                                          OK 
+Testing     c.txt                                                          OK 
+Testing     d.txt                                                        
+Total errors: 1
+--- stderr
+
+Checksum error in the encrypted file d.txt. Corrupt file or wrong password.
+rc=3
+== t -pwrong rar15_40/encrypted/per_file_rar4_libarchive_mixed.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/encrypted/per_file_rar4_libarchive_mixed.rar
+
+Testing     a.txt                                                          OK 
+Testing     b.txt                                                        
+Testing     c.txt                                                          OK 
+Testing     d.txt                                                        
+Total errors: 2
+--- stderr
+
+Checksum error in the encrypted file b.txt. Corrupt file or wrong password.
+Checksum error in the encrypted file d.txt. Corrupt file or wrong password.
+rc=3
+== t rar15_40/encrypted/per_file_rar4_libarchive_mixed.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/encrypted/per_file_rar4_libarchive_mixed.rar
+
+Testing     a.txt                                                          OK 
+
+Program aborted
+--- stderr
+
+Enter password (will not be echoed) for b.txt: Read error in the file stdin
+rc=12
+== t -ppassword rar15_40/encrypted/header_rar300_password.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/encrypted/header_rar300_password.rar
+
+Testing     hello.txt                                                      OK 
+All OK
+rc=0
+== t -pwrong rar15_40/encrypted/header_rar300_password.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+No files to extract
+--- stderr
+
+Checksum error in the encrypted file rar15_40/encrypted/header_rar300_password.rar. Corrupt file or wrong password.
+rc=3
+== t rar15_40/encrypted/header_rar300_password.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+
+Program aborted
+--- stderr
+
+Enter password (will not be echoed) for rar15_40/encrypted/header_rar300_password.rar: Read error in the file stdin
+rc=12
+== t -ppassword rar15_40/rar154/readme_154_password.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/rar154/readme_154_password.rar
+
+Testing     README.md                                                      OK 
+All OK
+rc=0
+== t -pwrong rar15_40/rar154/readme_154_password.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/rar154/readme_154_password.rar
+
+Testing     README.md                                                    
+Total errors: 1
+--- stderr
+
+Checksum error in the encrypted file README.md. Corrupt file or wrong password.
+rc=3
+== t rar15_40/rar154/readme_154_password.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/rar154/readme_154_password.rar
+
+
+Program aborted
+--- stderr
+
+Enter password (will not be echoed) for README.md: Read error in the file stdin
+rc=12
+== t -ppassword rar13/README_password=password.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar13/README_password=password.rar
+
+Testing     README                                                         OK 
+All OK
+rc=0
+== t -pwrong rar13/README_password=password.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar13/README_password=password.rar
+
+Testing     README                                                       
+Total errors: 1
+--- stderr
+
+Checksum error in the encrypted file README. Corrupt file or wrong password.
+rc=3
+== t rar13/README_password=password.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar13/README_password=password.rar
+
+
+Program aborted
+--- stderr
+
+Enter password (will not be echoed) for README: Read error in the file stdin
+rc=12
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Archive comment:
+an archive comment
+
+
+Testing archive rar50/zeroed_password_check.rar
+
+Testing     s.txt                                                          OK 
+All OK
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Archive comment:
+Hello, world
+
+Testing archive rar15_40/encrypted/header_enc_1234.rar
+
+Testing     2中文.txt                                                        OK 
+Testing     1File.txt                                                      OK 
+All OK
+rc=0
+== -mes skips what is encrypted
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar15_40/encrypted/per_file_rar4_libarchive_mixed.rar
+
+Testing     a.txt                                                          OK 
+Testing     c.txt                                                          OK 
+All OK
+rc=0
+== t, the messages' switches
+== t -idn
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Archive comment:
+This is the archive comment.
+
+
+Testing archive rar50/with_comment.rar
+
+All OK
+rc=0
+== t -idd
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Archive comment:
+This is the archive comment.
+
+
+Testing archive rar50/with_comment.rar
+
+Testing     hello.txt                                                      OK 
+rc=0
+== t -idp
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Archive comment:
+This is the archive comment.
+
+
+Testing archive rar50/with_comment.rar
+
+Testing     hello.txt                                                 OK 
+All OK
+rc=0
+== t -idq
+rc=0
+== t -idc
+
+Archive comment:
+This is the archive comment.
+
+
+Testing archive rar50/with_comment.rar
+
+Testing     hello.txt                                                      OK 
+All OK
+rc=0
+== t -inul
+rc=0
+== t -ierr
+--- stderr
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Archive comment:
+This is the archive comment.
+
+
+Testing archive rar50/with_comment.rar
+
+Testing     hello.txt                                                      OK 
+All OK
+
+rc=0
+== t -c-
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/with_comment.rar
+
+Testing     hello.txt                                                      OK 
+All OK
+rc=0
+== t, masks
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/multifile.rar
+
+Testing     hello.txt                                                      OK 
+All OK
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/multifile.rar
+
+Testing     tiny.txt                                                       OK 
+Testing     random_4k.bin                                                  OK 
+All OK
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/multifile.rar
+
+No files to extract
+rc=10
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/multifile.rar
+
+Testing     random_4k.bin                                                  OK 
+All OK
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar50/multifile.rar
+
+Testing     hello.txt                                                      OK 
+Testing     tiny.txt                                                       OK 
+All OK
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar13/WITHDIR.RAR
+
+Testing     SUBDIR                                                    OK
+Testing     SUBDIR/INNER.TXT                                               OK 
+All OK
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive rar13/WITHDIR.RAR
+
+Testing     SUBDIR/INNER.TXT                                               OK 
+All OK
+rc=0
+== t, damaged data
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive bad5.rar
+
+Testing     hello.txt                                                      OK 
+Total errors: 2
+--- stderr
+
+Corrupt header is found
+rc=3
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive bad4.rar
+
+Testing     text.txt                                                       OK 
+Total errors: 2
+--- stderr
+
+Unexpected end of archive
+rc=3
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive lonely/multivol.part1.rar
+
+Testing     random_4k.bin                                                     
+Total errors: 2
+--- stderr
+
+Cannot find volume lonely/multivol.part2.rar
+random_4k.bin        - checksum error
+rc=6
+== x into a new folder, then again over what is there
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from rar50/multifile.rar
+
+Creating    out1                                                      OK
+Extracting  out1/hello.txt                                                 OK 
+Extracting  out1/tiny.txt                                                  OK 
+Extracting  out1/random_4k.bin                                             OK 
+All OK
+rc=0
+./hello.txt 3232419072 30
+./random_4k.bin 3580297721 4096
+./tiny.txt 2558135348 9
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from rar50/multifile.rar
+
+
+Program aborted
+--- stderr
+
+
+Would you like to replace the existing file out1/hello.txt
+    30 bytes, modified on 2026-04-27 07:23
+with a new one
+    30 bytes, modified on 2026-04-27 07:23
+
+[Y]es, [N]o, [A]ll, n[E]ver, [R]ename, [Q]uit Read error in the file stdin
+rc=12
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from rar50/multifile.rar
+
+Extracting  out1/hello.txt                                                 OK 
+Extracting  out1/tiny.txt                                                  OK 
+Extracting  out1/random_4k.bin                                             OK 
+All OK
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from rar50/multifile.rar
+
+Extracting  out1/hello.txt                                                 OK 
+Extracting  out1/tiny.txt                                                  OK 
+Extracting  out1/random_4k.bin                                             OK 
+All OK
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from rar50/multifile.rar
+
+No files to extract
+rc=10
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from rar50/multifile.rar
+
+Extracting  out1/hello(1).txt                                              OK 
+Extracting  out1/tiny(1).txt                                               OK 
+Extracting  out1/random_4k(1).bin                                          OK 
+All OK
+rc=0
+./hello(1).txt 3232419072 30
+./hello.txt 3232419072 30
+./random_4k(1).bin 3580297721 4096
+./random_4k.bin 3580297721 4096
+./tiny(1).txt 2558135348 9
+./tiny.txt 2558135348 9
+== answers piped in: y, n, A, E, Q
+== answer y
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from rar50/multifile.rar
+
+Extracting  out2/hello.txt                                                 OK 
+
+Program aborted
+--- stderr
+
+
+Would you like to replace the existing file out2/hello.txt
+    30 bytes, modified on 2026-04-27 07:23
+with a new one
+    30 bytes, modified on 2026-04-27 07:23
+
+[Y]es, [N]o, [A]ll, n[E]ver, [R]ename, [Q]uit 
+
+Would you like to replace the existing file out2/tiny.txt
+     9 bytes, modified on 2026-04-27 07:23
+with a new one
+     9 bytes, modified on 2026-04-27 07:23
+
+[Y]es, [N]o, [A]ll, n[E]ver, [R]ename, [Q]uit Read error in the file stdin
+The pipe has been ended.
+rc=12
+./hello.txt 3232419072 30
+./tiny.txt 2558135348 9
+== answer n
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from rar50/multifile.rar
+
+
+Program aborted
+--- stderr
+
+
+Would you like to replace the existing file out2/hello.txt
+    30 bytes, modified on 2026-04-27 07:23
+with a new one
+    30 bytes, modified on 2026-04-27 07:23
+
+[Y]es, [N]o, [A]ll, n[E]ver, [R]ename, [Q]uit 
+
+Would you like to replace the existing file out2/tiny.txt
+     9 bytes, modified on 2026-04-27 07:23
+with a new one
+     9 bytes, modified on 2026-04-27 07:23
+
+[Y]es, [N]o, [A]ll, n[E]ver, [R]ename, [Q]uit Read error in the file stdin
+The pipe has been ended.
+rc=12
+./hello.txt 3232419072 30
+./tiny.txt 2558135348 9
+== answer a
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from rar50/multifile.rar
+
+Extracting  out2/hello.txt                                                 OK 
+Extracting  out2/tiny.txt                                                  OK 
+Extracting  out2/random_4k.bin                                             OK 
+All OK
+--- stderr
+
+
+Would you like to replace the existing file out2/hello.txt
+    30 bytes, modified on 2026-04-27 07:23
+with a new one
+    30 bytes, modified on 2026-04-27 07:23
+
+[Y]es, [N]o, [A]ll, n[E]ver, [R]ename, [Q]uit 
+rc=0
+./hello.txt 3232419072 30
+./random_4k.bin 3580297721 4096
+./tiny.txt 2558135348 9
+== answer e
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from rar50/multifile.rar
+
+Extracting  out2/random_4k.bin                                             OK 
+All OK
+--- stderr
+
+
+Would you like to replace the existing file out2/hello.txt
+    30 bytes, modified on 2026-04-27 07:23
+with a new one
+    30 bytes, modified on 2026-04-27 07:23
+
+[Y]es, [N]o, [A]ll, n[E]ver, [R]ename, [Q]uit 
+rc=0
+./hello.txt 3232419072 30
+./random_4k.bin 3580297721 4096
+./tiny.txt 2558135348 9
+== answer q
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from rar50/multifile.rar
+
+Program aborted
+--- stderr
+
+
+Would you like to replace the existing file out2/hello.txt
+    30 bytes, modified on 2026-04-27 07:23
+with a new one
+    30 bytes, modified on 2026-04-27 07:23
+
+[Y]es, [N]o, [A]ll, n[E]ver, [R]ename, [Q]uit 
+rc=255
+./hello.txt 3232419072 30
+./tiny.txt 2558135348 9
+== answer Y
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from rar50/multifile.rar
+
+Extracting  out2/hello.txt                                                 OK 
+
+Program aborted
+--- stderr
+
+
+Would you like to replace the existing file out2/hello.txt
+    30 bytes, modified on 2026-04-27 07:23
+with a new one
+    30 bytes, modified on 2026-04-27 07:23
+
+[Y]es, [N]o, [A]ll, n[E]ver, [R]ename, [Q]uit 
+
+Would you like to replace the existing file out2/tiny.txt
+     9 bytes, modified on 2026-04-27 07:23
+with a new one
+     9 bytes, modified on 2026-04-27 07:23
+
+[Y]es, [N]o, [A]ll, n[E]ver, [R]ename, [Q]uit Read error in the file stdin
+The pipe has been ended.
+rc=12
+./hello.txt 3232419072 30
+./tiny.txt 2558135348 9
+== answer N
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from rar50/multifile.rar
+
+
+Program aborted
+--- stderr
+
+
+Would you like to replace the existing file out2/hello.txt
+    30 bytes, modified on 2026-04-27 07:23
+with a new one
+    30 bytes, modified on 2026-04-27 07:23
+
+[Y]es, [N]o, [A]ll, n[E]ver, [R]ename, [Q]uit 
+
+Would you like to replace the existing file out2/tiny.txt
+     9 bytes, modified on 2026-04-27 07:23
+with a new one
+     9 bytes, modified on 2026-04-27 07:23
+
+[Y]es, [N]o, [A]ll, n[E]ver, [R]ename, [Q]uit Read error in the file stdin
+The pipe has been ended.
+rc=12
+./hello.txt 3232419072 30
+./tiny.txt 2558135348 9
+== a rename, its name piped in
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from rar50/multifile.rar
+
+Enter new name: 
+
+Program aborted
+--- stderr
+
+
+Would you like to replace the existing file out2/hello.txt
+    30 bytes, modified on 2026-04-27 07:23
+with a new one
+    30 bytes, modified on 2026-04-27 07:23
+
+[Y]es, [N]o, [A]ll, n[E]ver, [R]ename, [Q]uit Read error in the file stdin
+The pipe has been ended.
+rc=12
+./hello.txt 3232419072 30
+== the path switches
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from rar13/WITHDIR.RAR
+
+Creating    out3                                                      OK
+Creating    out3/SUBDIR                                               OK
+Extracting  out3/SUBDIR/INNER.TXT                                          OK 
+All OK
+rc=0
+./SUBDIR/
+./SUBDIR/INNER.TXT 1202536031 16
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from rar13/WITHDIR.RAR
+
+Creating    out4                                                      OK
+Extracting  out4/INNER.TXT                                                 OK 
+All OK
+rc=0
+./INNER.TXT 1202536031 16
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from rar13/WITHDIR.RAR
+
+Creating    out5                                                      OK
+Extracting  out5/INNER.TXT                                                 OK 
+All OK
+rc=0
+./INNER.TXT 1202536031 16
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from rar13/WITHDIR.RAR
+
+Creating    out6                                                      OK
+Extracting  out6/INNER.TXT                                                 OK 
+All OK
+rc=0
+./INNER.TXT 1202536031 16
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from rar13/WITHDIR.RAR
+
+Creating    out7                                                      OK
+Extracting  out7/INNER.TXT                                                 OK 
+All OK
+rc=0
+./INNER.TXT 1202536031 16
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from rar13/WITHDIR.RAR
+
+Creating    out8                                                      OK
+Extracting  out8/INNER.TXT                                                 OK 
+All OK
+rc=0
+./INNER.TXT 1202536031 16
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from rar50/multifile.rar
+
+Creating    out9                                                      OK
+Creating    out9/multifile                                            OK
+Extracting  out9/multifile/hello.txt                                       OK 
+Extracting  out9/multifile/tiny.txt                                        OK 
+Extracting  out9/multifile/random_4k.bin                                   OK 
+All OK
+rc=0
+./multifile/
+./multifile/hello.txt 3232419072 30
+./multifile/random_4k.bin 3580297721 4096
+./multifile/tiny.txt 2558135348 9
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from rar50/multifile.rar
+
+Creating    out10                                                     OK
+Extracting  out10/hello.txt                                                OK 
+Extracting  out10/tiny.txt                                                 OK 
+Extracting  out10/random_4k.bin                                            OK 
+All OK
+rc=0
+./hello.txt 3232419072 30
+./random_4k.bin 3580297721 4096
+./tiny.txt 2558135348 9
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from rar13/WITHDIR.RAR
+
+Creating    out11                                                     OK
+Creating    out11/deeper                                              OK
+Creating    out11/deeper/SUBDIR                                       OK
+Extracting  out11/deeper/SUBDIR/INNER.TXT                                  OK 
+All OK
+rc=0
+./deeper/
+./deeper/SUBDIR/
+./deeper/SUBDIR/INNER.TXT 1202536031 16
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from rar50/multifile.rar
+
+Creating    out12                                                     OK
+Extracting  out12/hello.txt                                                OK 
+Extracting  out12/tiny.txt                                                 OK 
+All OK
+rc=0
+./hello.txt 3232419072 30
+./tiny.txt 2558135348 9
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from rar13/WITHDIR.RAR
+
+Creating    out13                                                     OK
+Creating    out13/subdir                                              OK
+Extracting  out13/subdir/inner.txt                                         OK 
+All OK
+rc=0
+./subdir/
+./subdir/inner.txt 1202536031 16
+== volumes, from the first and from a later one
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from rar50/multivol.part1.rar
+
+Creating    out14                                                     OK
+Extracting  out14/random_4k.bin                                          
+
+Extracting from rar50/multivol.part2.rar
+
+...         random_4k.bin                                                
+
+Extracting from rar50/multivol.part3.rar
+
+...         random_4k.bin                                                  OK 
+All OK
+rc=0
+./random_4k.bin 3580297721 4096
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from rar50/solid_multivol.part03.rar
+
+Extracting from rar50/solid_multivol.part01.rar
+
+Creating    out15                                                     OK
+Extracting  out15/tiny.txt                                                 OK 
+Extracting  out15/bigtext_64k.bin                                        
+
+Extracting from rar50/solid_multivol.part02.rar
+
+...         bigtext_64k.bin                                              
+
+Extracting from rar50/solid_multivol.part03.rar
+
+...         bigtext_64k.bin                                              
+
+Extracting from rar50/solid_multivol.part04.rar
+
+...         bigtext_64k.bin                                              
+
+Extracting from rar50/solid_multivol.part05.rar
+
+...         bigtext_64k.bin                                              
+
+Extracting from rar50/solid_multivol.part06.rar
+
+...         bigtext_64k.bin                                                OK 
+All OK
+rc=0
+./bigtext_64k.bin 209337893 65536
+./tiny.txt 2558135348 9
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from rar15_40/rar300/multivol_oldnaming_rar300.r00
+
+Extracting from rar15_40/rar300/multivol_oldnaming_rar300.rar
+
+Creating    out16                                                     OK
+Extracting  out16/bigtext_64k.bin                                        
+
+Extracting from rar15_40/rar300/multivol_oldnaming_rar300.r00
+
+...         bigtext_64k.bin                                                OK 
+All OK
+rc=0
+./bigtext_64k.bin 209337893 65536
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from lonely/multivol.part1.rar
+
+Creating    out17                                                     OK
+Extracting  out17/random_4k.bin                                               
+Total errors: 2
+--- stderr
+
+Cannot find volume lonely/multivol.part2.rar
+random_4k.bin        - checksum error
+rc=6
+== encrypted, extracted
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from rar50/password_aes.rar
+
+Creating    out18                                                     OK
+Extracting  out18/hello.txt                                                OK 
+All OK
+rc=0
+./hello.txt 3232419072 30
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from rar50/password_aes.rar
+
+Total errors: 1
+--- stderr
+
+Incorrect password for hello.txt
+rc=11
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from rar50/header_encrypted.rar
+
+Creating    out20                                                     OK
+Extracting  out20/hello.txt                                                OK 
+All OK
+rc=0
+./hello.txt 3232419072 30
+== damaged, extracted, kept or not
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from bad5.rar
+
+Creating    out21                                                     OK
+Extracting  out21/hello.txt                                                OK 
+Total errors: 2
+--- stderr
+
+Corrupt header is found
+rc=3
+./hello.txt 3232419072 30
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from bad5.rar
+
+Creating    out22                                                     OK
+Extracting  out22/hello.txt                                                OK 
+Total errors: 2
+--- stderr
+
+Corrupt header is found
+rc=3
+./hello.txt 3232419072 30
+== p
+Hello, RAR 5.0 fixture world.
+rc=0
+Hello, RAR 5.0 fixture world.
+AAAAAAAA
+rc=0
+AAAAAAAA
+rc=0
+Hello, RAR 5.0 fixture world.
+rc=0
+--- stderr
+
+Enter password (will not be echoed) for hello.txt: Read error in the file stdin
+rc=12
+Hello, RAR 5.0 fixture world.
+--- stderr
+
+Corrupt header is found
+
+rc=3
+== unrar
+
+UNRAR 7.23 x64 freeware      Copyright (c) 1993-2026 Alexander Roshal
+
+Testing archive rar50/multifile.rar
+
+Testing     hello.txt                                                      OK 
+Testing     tiny.txt                                                       OK 
+Testing     random_4k.bin                                                  OK 
+All OK
+rc=0
+
+UNRAR 7.23 x64 freeware      Copyright (c) 1993-2026 Alexander Roshal
+
+Extracting from rar50/multifile.rar
+
+Creating    out23                                                     OK
+Extracting  out23/hello.txt                                                OK 
+Extracting  out23/tiny.txt                                                 OK 
+Extracting  out23/random_4k.bin                                            OK 
+All OK
+rc=0
+./hello.txt 3232419072 30
+./random_4k.bin 3580297721 4096
+./tiny.txt 2558135348 9
+
+UNRAR 7.23 x64 freeware      Copyright (c) 1993-2026 Alexander Roshal
+
+Extracting from rar13/WITHDIR.RAR
+
+Creating    out24                                                     OK
+Extracting  out24/INNER.TXT                                                OK 
+All OK
+rc=0
+./INNER.TXT 1202536031 16
+Hello, RAR 5.0 fixture world.
+rc=0
+unrar a: rc=7

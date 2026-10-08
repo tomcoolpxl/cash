@@ -44,6 +44,14 @@ fn rar_lists_as_winrar_7_23_does() {
 }
 
 #[test]
+fn rar_tests_extracts_and_prints_as_winrar_7_23_does() {
+    assert_eq!(
+        run_oracle_script("rar_extract"),
+        with_cash_banners("rar_extract", 181, 3)
+    );
+}
+
+#[test]
 fn rar_and_unrar_name_themselves_as_cash() {
     let out = run("rar -iver; unrar -iver; rar | sed -n 2,3p; unrar | sed -n 2p");
     assert_eq!(

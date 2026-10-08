@@ -2470,6 +2470,8 @@ fn canonical_codes(lengths: &[u8]) -> Vec<Option<HuffmanCode>> {
 pub struct Unpack29 {
     pub(crate) read_control: crate::rar::read_control::ReadControl,
     state: Reader29State<Allowance>,
+    /// Refuse a VM program that is none of the standard filters, as WinRAR 7.23 does.
+    standard_filters_only: bool,
 }
 impl Clone for Reader29State<Allowance> {
     fn clone(&self) -> Self {
@@ -2487,13 +2489,22 @@ impl Unpack29 {
         Self {
             read_control: Default::default(),
             state: Reader29State::with_allowance(&Allowance::default()),
+            standard_filters_only: false,
         }
+    }
+
+    /// Refuses, as data that does not decode, a RAR 3 VM program that is none of the
+    /// six standard filters, as WinRAR 7.23 refuses it; by default it is run.
+    pub fn with_standard_filters_only(mut self) -> Self {
+        self.standard_filters_only = true;
+        self
     }
     pub fn reset_non_solid(&mut self) {
         self.state.reset_non_solid();
     }
     pub fn decode_member(&mut self, input: &[u8], output_size: usize) -> Result<Vec<u8>> {
         self.state.read_control = self.read_control.clone();
+        self.state.standard_filters_only = self.standard_filters_only;
         self.state
             .decode_member_owned(input, output_size)
             .map(Buffer::into_vec)
@@ -2505,6 +2516,7 @@ impl Unpack29 {
         out: &mut impl Write,
     ) -> Result<()> {
         self.state.read_control = self.read_control.clone();
+        self.state.standard_filters_only = self.standard_filters_only;
         self.state.decode_member_to(input, output_size, out)
     }
     pub fn decode_member_from_reader(
@@ -2514,11 +2526,13 @@ impl Unpack29 {
         out: &mut impl Write,
     ) -> Result<()> {
         self.state.read_control = self.read_control.clone();
+        self.state.standard_filters_only = self.standard_filters_only;
         self.state
             .decode_member_from_reader(input, output_size, out)
     }
     pub fn decode_non_solid_member(&mut self, input: &[u8], output_size: usize) -> Result<Vec<u8>> {
         self.state.read_control = self.read_control.clone();
+        self.state.standard_filters_only = self.standard_filters_only;
         self.state
             .decode_non_solid_member_owned(input, output_size)
             .map(Buffer::into_vec)
@@ -2530,6 +2544,7 @@ impl Unpack29 {
         out: &mut impl Write,
     ) -> Result<()> {
         self.state.read_control = self.read_control.clone();
+        self.state.standard_filters_only = self.standard_filters_only;
         self.state
             .decode_non_solid_member_to(input, output_size, out)
     }
@@ -2540,6 +2555,7 @@ impl Unpack29 {
         out: &mut impl Write,
     ) -> Result<()> {
         self.state.read_control = self.read_control.clone();
+        self.state.standard_filters_only = self.standard_filters_only;
         self.state
             .decode_non_solid_member_from_reader(input, output_size, out)
     }
@@ -2569,6 +2585,7 @@ pub(crate) struct Reader29State<B: Budget> {
     base_offset: usize,
     output: Buffer<u8, B>,
     last_block_end: Option<LzBlockEnd>,
+    pub(crate) standard_filters_only: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -2650,6 +2667,7 @@ impl<B: Budget> Reader29State<B> {
             base_offset: 0,
             output: Buffer::new(allowance),
             last_block_end: None,
+            standard_filters_only: false,
         }
     }
 
@@ -2705,12 +2723,15 @@ impl<B: Budget> Reader29State<B> {
             base_offset: self.base_offset,
             output: Buffer::copied(&self.output, &allowance)?,
             last_block_end: self.last_block_end,
+            standard_filters_only: self.standard_filters_only,
         })
     }
     pub fn reset_non_solid(&mut self) {
         let control = self.read_control.clone();
+        let standard_filters_only = self.standard_filters_only;
         *self = Self::with_allowance(&self.output.allowance());
         self.read_control = control;
+        self.standard_filters_only = standard_filters_only;
     }
 
     pub fn decode_non_solid_member_owned(
@@ -3302,10 +3323,16 @@ impl<B: Budget> Reader29State<B> {
             for _ in 0..code_size {
                 code.push_admitted(vm.read_bits(8)? as u8);
             }
+            let standard_only = self.standard_filters_only;
             let kind = identify_standard_filter(&code)
                 .map(VmProgramKind::Standard)
                 .map_or_else(
                     || {
+                        if standard_only {
+                            return Err(Error::InvalidData(
+                                "RAR 2.9 VM program is none of the standard filters",
+                            ));
+                        }
                         rarvm::OwnedProgram::parse(&code, &self.output.allowance())
                             .map(VmProgramKind::Generic)
                     },

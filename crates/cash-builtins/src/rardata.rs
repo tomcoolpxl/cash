@@ -14,9 +14,11 @@ use cash_archive::rar::codec::rar29::Unpack29;
 use cash_archive::rar::codec::rar50::{
     DecodedChunk, MemberFilter, StreamDecodeError, Unpack50Decoder,
 };
+use cash_archive::rar::crypto::rar13::Rar13Cipher;
+use cash_archive::rar::crypto::rar15::Rar15Cipher;
 use cash_archive::rar::crypto::rar20::Rar20Cipher;
 use cash_archive::rar::crypto::rar30::Rar30Cipher;
-use cash_archive::rar::crypto::rar50::Rar50Cipher;
+use cash_archive::rar::crypto::rar50::{Rar50Cipher, Rar50Keys};
 use cash_archive::rar::rar50::blake2sp;
 
 /// How many bytes are read, decrypted or handed on at a time.
@@ -78,7 +80,6 @@ impl<'a> VolsReader<'a> {
     }
 
     /// Calls `hook` with each part's index after the first, as reading reaches it.
-    #[expect(dead_code, reason = "rar's extraction, the next commit, calls it")]
     pub(crate) fn on_next(mut self, hook: &'a mut dyn FnMut(usize) -> io::Result<()>) -> Self {
         self.on_next = Some(hook);
         self
@@ -182,6 +183,10 @@ pub(crate) enum Cipher {
     Rar5(Box<Rar50Cipher>),
     Rar3(Box<Rar30Cipher>),
     Rar2(Box<Rar20Cipher>),
+    /// RAR 1.5's, a byte at a time.
+    Rar15(Box<Rar15Cipher>),
+    /// RAR 1.3's, a byte at a time.
+    Rar13(Box<Rar13Cipher>),
 }
 
 impl Cipher {
@@ -190,11 +195,57 @@ impl Cipher {
             Self::Rar5(c) => c.decrypt_in_place(data).is_ok(),
             Self::Rar3(c) => c.decrypt_in_place(data).is_ok(),
             Self::Rar2(c) => c.decrypt_in_place(data).is_ok(),
+            Self::Rar15(c) => {
+                c.crypt_in_place(data);
+                true
+            }
+            Self::Rar13(c) => {
+                for byte in data {
+                    *byte = c.decrypt_byte(*byte);
+                }
+                true
+            }
+        }
+    }
+
+    /// The block it decrypts whole: AES's 16 bytes, or a byte.
+    const fn block(&self) -> usize {
+        match self {
+            Self::Rar5(_) | Self::Rar3(_) | Self::Rar2(_) => 16,
+            Self::Rar15(_) | Self::Rar13(_) => 1,
         }
     }
 }
 
-/// The packed data, decrypted 16 bytes at a time; an incomplete block at the end is
+/// A password as RAR 3 to 7 key their ciphers with: at most 127 UTF-16 units, as UTF-8.
+pub(crate) fn password_utf8(password: &str) -> String {
+    let mut units: Vec<u16> = password.encode_utf16().collect();
+    units.truncate(127);
+    String::from_utf16_lossy(&units)
+}
+
+/// Whether a RAR 5 encryption record's check, when its own checksum is right, says the
+/// password is the one that made `keys`.
+pub(crate) fn rar5_check_matches(keys: &Rar50Keys, check: [u8; 12]) -> bool {
+    use sha2::Digest as _;
+    let sum = sha2::Sha256::digest(&check[..8]);
+    sum[..4] != check[8..] || keys.password_check == check[..8]
+}
+
+/// RAR 5's keys for a password, and whether the record's check (when its own checksum
+/// is right) says the password is the one.
+pub(crate) fn rar5_derive_keys(
+    check: Option<[u8; 12]>,
+    salt: [u8; 16],
+    count: u8,
+    password: &str,
+) -> Option<(Rar50Keys, bool)> {
+    let keys = Rar50Keys::derive(password_utf8(password).as_bytes(), salt, count).ok()?;
+    let ok = check.is_none_or(|check| rar5_check_matches(&keys, check));
+    Some((keys, ok))
+}
+
+/// The packed data, decrypted a block at a time; an incomplete block at the end is
 /// dropped.
 pub(crate) struct DecryptReader<R> {
     inner: R,
@@ -219,6 +270,7 @@ impl<R: Read> Read for DecryptReader<R> {
         if self.at == self.buf.len() {
             self.buf.clear();
             self.at = 0;
+            let block = self.cipher.block();
             let mut chunk = vec![0u8; CHUNK];
             let mut got = 0;
             while got < chunk.len() {
@@ -227,11 +279,11 @@ impl<R: Read> Read for DecryptReader<R> {
                     break;
                 }
                 got += n;
-                if got % 16 == 0 && got >= 16 {
+                if got % block == 0 && got >= block {
                     break;
                 }
             }
-            got -= got % 16;
+            got -= got % block;
             chunk.truncate(got);
             if !self.cipher.decrypt(&mut chunk) {
                 return Err(io::Error::other("RAR data does not decrypt"));
@@ -444,7 +496,8 @@ impl io::Write for SinkWriter<'_> {
 }
 
 /// A RAR 1.5 to 4 item decoded by the decoder of its unpack version, solid with the one
-/// before or not.
+/// before or not; `standard_filters_only`, RAR 3's VM programs refused unless they are
+/// standard filters, as `WinRAR` 7.23 refuses them.
 pub(crate) fn decode4(
     decoders: &mut Vec<(u8, Decoder4)>,
     version: u8,
@@ -452,6 +505,7 @@ pub(crate) fn decode4(
     input: &mut dyn Read,
     output_size: usize,
     out: &mut dyn Sink,
+    standard_filters_only: bool,
 ) -> Result<(), DecodeError> {
     let at = if let Some(at) = decoders.iter().position(|(v, _)| *v == version) {
         at
@@ -460,6 +514,8 @@ pub(crate) fn decode4(
             Decoder4::V15(Box::new(Unpack15::new()))
         } else if version < 29 {
             Decoder4::V20(Box::new(Unpack20::new()))
+        } else if standard_filters_only {
+            Decoder4::V29(Box::new(Unpack29::new().with_standard_filters_only()))
         } else {
             Decoder4::V29(Box::new(Unpack29::new()))
         };

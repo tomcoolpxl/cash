@@ -90,6 +90,8 @@ pub struct Archive {
     pub sfx_offset: usize,
     pub main: MainHeader,
     pub entries: Vec<Entry>,
+    /// What ended a lenient read before the end: see `ArchiveReadOptions::lenient`.
+    pub damage: Option<Error>,
     source: ArchiveSource,
 }
 
@@ -393,44 +395,50 @@ impl Archive {
         let mut pos = main.head_size as usize;
         let mut entries = Vec::new();
 
-        while pos < archive.len() {
-            if archive.len() - pos < FILE_HEAD_BASE_SIZE {
-                break;
-            }
+        let mut walk = || -> Result<()> {
+            while pos < archive.len() {
+                if archive.len() - pos < FILE_HEAD_BASE_SIZE {
+                    break;
+                }
 
-            admit_header(
-                &archive[pos..],
-                (archive.len() - pos) as u64,
-                false,
-                &mut budget,
-                pos,
-            )?;
-            let (header, name, extra, consumed) = FileHeader::parse(&archive[pos..])?;
-            let data_start = pos + consumed;
-            let data_end =
-                data_start
-                    .checked_add(header.pack_size as usize)
-                    .ok_or(Error::InvalidHeader(
-                        "RAR 1.3 file data size overflows usize",
-                    ))?;
-            if data_end > archive.len() {
-                return Err(Error::TooShort);
-            }
+                admit_header(
+                    &archive[pos..],
+                    (archive.len() - pos) as u64,
+                    false,
+                    &mut budget,
+                    pos,
+                )?;
+                let (header, name, extra, consumed) = FileHeader::parse(&archive[pos..])?;
+                let data_start = pos + consumed;
+                let data_end = data_start.checked_add(header.pack_size as usize).ok_or(
+                    Error::InvalidHeader("RAR 1.3 file data size overflows usize"),
+                )?;
+                if data_end > archive.len() {
+                    return Err(Error::TooShort);
+                }
 
-            entries.push(Entry {
-                header,
-                name,
-                extra,
-                packed_range: sig.offset + data_start..sig.offset + data_end,
-            });
-            pos = data_end;
-        }
+                entries.push(Entry {
+                    header,
+                    name,
+                    extra,
+                    packed_range: sig.offset + data_start..sig.offset + data_end,
+                });
+                pos = data_end;
+            }
+            Ok(())
+        };
+        let damage = match walk() {
+            Ok(()) => None,
+            Err(error) if options.lenient => Some(error),
+            Err(error) => return Err(error),
+        };
 
         options.check_cancelled()?;
         Ok(Self {
             sfx_offset: sig.offset,
             main,
             entries,
+            damage,
             source: ArchiveSource::Memory(input),
         })
     }
@@ -461,44 +469,51 @@ impl Archive {
         let mut pos = main.head_size as usize;
         let mut entries = Vec::new();
 
-        while (sfx_offset + pos) as u64 + FILE_HEAD_BASE_SIZE as u64 <= file_len {
-            let header_prefix = read_exact_at(&mut file, sfx_offset + pos, FILE_HEAD_BASE_SIZE)?;
-            let head_size = read_u16(&header_prefix, 10)? as usize;
-            admit_header(
-                &header_prefix,
-                file_len
-                    .checked_sub((sfx_offset + pos) as u64)
-                    .ok_or(Error::TooShort)?,
-                false,
-                &mut budget,
-                pos,
-            )?;
-            let header_bytes = read_exact_at(&mut file, sfx_offset + pos, head_size)?;
-            let (header, name, extra, consumed) = FileHeader::parse(&header_bytes)?;
-            let data_start = pos + consumed;
-            let data_end =
-                data_start
-                    .checked_add(header.pack_size as usize)
-                    .ok_or(Error::InvalidHeader(
-                        "RAR 1.3 file data size overflows usize",
-                    ))?;
-            if (sfx_offset + data_end) as u64 > file_len {
-                return Err(Error::TooShort);
+        let mut walk = || -> Result<()> {
+            while (sfx_offset + pos) as u64 + FILE_HEAD_BASE_SIZE as u64 <= file_len {
+                let header_prefix =
+                    read_exact_at(&mut file, sfx_offset + pos, FILE_HEAD_BASE_SIZE)?;
+                let head_size = read_u16(&header_prefix, 10)? as usize;
+                admit_header(
+                    &header_prefix,
+                    file_len
+                        .checked_sub((sfx_offset + pos) as u64)
+                        .ok_or(Error::TooShort)?,
+                    false,
+                    &mut budget,
+                    pos,
+                )?;
+                let header_bytes = read_exact_at(&mut file, sfx_offset + pos, head_size)?;
+                let (header, name, extra, consumed) = FileHeader::parse(&header_bytes)?;
+                let data_start = pos + consumed;
+                let data_end = data_start.checked_add(header.pack_size as usize).ok_or(
+                    Error::InvalidHeader("RAR 1.3 file data size overflows usize"),
+                )?;
+                if (sfx_offset + data_end) as u64 > file_len {
+                    return Err(Error::TooShort);
+                }
+                entries.push(Entry {
+                    header,
+                    name,
+                    extra,
+                    packed_range: sfx_offset + data_start..sfx_offset + data_end,
+                });
+                pos = data_end;
             }
-            entries.push(Entry {
-                header,
-                name,
-                extra,
-                packed_range: sfx_offset + data_start..sfx_offset + data_end,
-            });
-            pos = data_end;
-        }
+            Ok(())
+        };
+        let damage = match walk() {
+            Ok(()) => None,
+            Err(error) if options.lenient => Some(error),
+            Err(error) => return Err(error),
+        };
 
         options.check_cancelled()?;
         Ok(Self {
             sfx_offset,
             main,
             entries,
+            damage,
             source,
         })
     }

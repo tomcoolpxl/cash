@@ -1296,6 +1296,7 @@ mod tests {
     fn empty_archive() -> Archive {
         Archive {
             sfx_offset: 0,
+            damage: None,
             main: MainHeader {
                 head_crc: 0,
                 flags: 0,
@@ -1318,6 +1319,7 @@ mod tests {
     fn archive_with_source(blocks: Vec<Block>, source: Vec<u8>) -> Archive {
         Archive {
             sfx_offset: 0,
+            damage: None,
             main: MainHeader {
                 head_crc: 0,
                 flags: 0,
@@ -1505,6 +1507,7 @@ mod tests {
         empty.file_crc = 0;
         let archive = Archive {
             sfx_offset: 0,
+            damage: None,
             main: MainHeader {
                 head_crc: 0,
                 flags: super::super::MHD_SOLID,

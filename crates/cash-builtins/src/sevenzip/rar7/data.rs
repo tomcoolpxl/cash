@@ -632,6 +632,7 @@ pub(super) fn work4(
                             &mut input,
                             output_size,
                             &mut out,
+                            false,
                         )
                     }
                 }
