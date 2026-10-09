@@ -725,10 +725,21 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      file because it is being used by another process", then "WARNING: Cannot open N
      files", rc 6), unless `-dh`; cash read it, and its writer stopped on "entry source
      size changed while reading". Names not there now give rc 10, as rar's do, not 1.
-   - Writing, not yet in the oracle or not yet WinRAR's:
-     WinRAR's layout for volumes with `-hp` or `-rr` (they keep rars' own, payload-sized);
-     the quick-open room kept for earlier big files in the same volume (taken as their
-     header and 18 bytes each, as for the file going in, unchecked with two); (updating
+   - Volume sets with `-rr`, `-p` and `-hp`: done 2026-10-09 (`rar_volumes.sh`, 130
+     lines). They kept rars' own payload-sized layout, so a set with a recovery record
+     or encrypted headers came out larger than the size asked; now WinRAR's: each
+     volume's recovery record after its quick-open one, covering what is before it and
+     sized from the room left, and `-hp` headers encrypted in every volume, no
+     quick-open record. The quick-open room kept for a file going in is its header and
+     18 bytes, for each earlier one in the volume its header and 16 (seen in twelve
+     `-rr` sets and a `-p` one, all WinRAR's to the byte). A volume's number has the
+     digits of the volumes foreseen from the bound, as Rar.exe's. A folder among
+     encrypted files has no encryption record, in volumes and single archives alike, as
+     WinRAR writes it (it was 49 bytes larger). Left: WinRAR's `-hp` archives and
+     volumes have an encrypted quick-open record (224 bytes in a single archive) and,
+     in volumes, parts cut at 16-byte multiples; cash's have none, so their sizes and
+     cut points differ.
+   - Writing, not yet in the oracle or not yet WinRAR's: (updating
      an archive whose files are encrypted without its password done 2026-10-09, in
      `rar_add_names.sh`: a non-solid RAR 5 archive's members are carried by rars'
      new `carrying_builder`, which asks the password only for encrypted headers and

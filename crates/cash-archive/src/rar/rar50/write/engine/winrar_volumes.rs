@@ -16,8 +16,12 @@ use crate::rar::rar50::write::winrar::{
 /// A quick-open entry's framing beyond the header it caches, as WinRAR reserves it.
 const ENTRY_RESERVE: u64 = 18;
 
-/// The end header: CRC, size, type, flags and end flags, one byte each but the CRC.
-const END_LEN: u64 = 8;
+/// The same for a header cached already, of an earlier file in the volume.
+const CACHED_RESERVE: u64 = 16;
+
+/// The room WinRAR keeps for a recovery record's header, beyond its payload: the
+/// header itself takes 23 or 24 bytes.
+const RECOVERY_HEADER_RESERVE: u64 = 30;
 
 struct Volume {
     index: u64,
@@ -30,6 +34,12 @@ struct Volume {
 struct Writer<'a, 'p> {
     volume_size: u64,
     quick_open: bool,
+    /// A recovery record in each volume, of this percent.
+    recovery_percent: Option<u64>,
+    /// Encrypted headers: each volume opens with the encryption header after its
+    /// signature, and every header after it is encrypted.
+    header_keys: Option<&'a HeaderEncryptionKeys>,
+    head_crypt: Bytes,
     quick_open_over: Option<u64>,
     checksums: crate::rar::rar50::Checksums,
     solid: bool,
@@ -44,12 +54,21 @@ pub(super) fn write(
     members: Records<VolumeMember<'_>>,
     plan: &EnginePlan<'_>,
     volume_size: u64,
+    header_keys: Option<&HeaderEncryptionKeys>,
     sink: &mut dyn crate::rar::rar50::VolumeSink,
     resources: &WriterResources,
 ) -> Result<()> {
+    let mut head_crypt = Bytes::new(resources);
+    if let Some(keys) = header_keys {
+        write_head_crypt(&mut head_crypt, keys, resources)?;
+    }
     let mut writer = Writer {
         volume_size,
-        quick_open: plan.quick_open,
+        // Encrypted headers keep no quick-open index in rars.
+        quick_open: plan.quick_open && header_keys.is_none(),
+        recovery_percent: plan.recovery_percent,
+        header_keys,
+        head_crypt,
         quick_open_over: plan.layout.quick_open_over,
         checksums: plan.layout.checksums,
         solid: plan.compress.solid,
@@ -65,6 +84,70 @@ pub(super) fn write(
             .map_err(|error| member_error(error, member.name, "writing volume member"))?;
     }
     writer.finish(volume, false)
+}
+
+/// A recovery record's payload for `covered` bytes at `percent`.
+fn recovery_payload(covered: u64, percent: u64) -> Result<u64> {
+    #[cfg(feature = "recovery")]
+    {
+        Ok(plan_inline_recovery(covered, percent)?.payload_size()?)
+    }
+    #[cfg(not(feature = "recovery"))]
+    {
+        let _ = (covered, percent);
+        Err(Error::FeatureDisabled {
+            feature: "recovery",
+        })
+    }
+}
+
+/// How many data shards a recovery record over `covered` bytes cuts them into: one
+/// for each 1,024 bytes up to 200.
+fn recovery_shard_count(covered: u64) -> u64 {
+    covered.div_ceil(1024).clamp(1, 200)
+}
+
+/// The most of `room` bytes that `fits`, where `covered` gives what a recovery record
+/// would cover with so many in; `None` when not even none does. The record's size
+/// rises with what it covers but for where its shard count changes, every 1,024 bytes
+/// below 200 KB: within each such run the most that fits is found by halving, the
+/// runs taken from the top down.
+fn most_that_fits(
+    room: u64,
+    covered: &dyn Fn(u64) -> Result<u64>,
+    fits: &dyn Fn(u64) -> Result<bool>,
+) -> Result<Option<u64>> {
+    let mut high = room;
+    loop {
+        let shards = recovery_shard_count(covered(high)?);
+        // The lowest length still in this run.
+        let (mut low_bound, mut high_bound) = (0, high);
+        while low_bound < high_bound {
+            let middle = low_bound + (high_bound - low_bound) / 2;
+            if recovery_shard_count(covered(middle)?) == shards {
+                high_bound = middle;
+            } else {
+                low_bound = middle + 1;
+            }
+        }
+        let floor = low_bound;
+        if fits(floor)? {
+            let (mut low, mut top) = (floor, high);
+            while low < top {
+                let middle = top - (top - low) / 2;
+                if fits(middle)? {
+                    low = middle;
+                } else {
+                    top = middle - 1;
+                }
+            }
+            return Ok(Some(low));
+        }
+        if floor == 0 {
+            return Ok(None);
+        }
+        high = floor - 1;
+    }
 }
 
 impl Writer<'_, '_> {
@@ -90,22 +173,24 @@ impl Writer<'_, '_> {
                 let cached: u64 = volume
                     .cached
                     .iter()
-                    .map(|(_, header)| header.len() as u64 + ENTRY_RESERVE)
+                    .map(|(_, header)| header.len() as u64 + CACHED_RESERVE)
                     .sum();
                 let entries = cached + header_len + ENTRY_RESERVE;
                 self.quick_open_header_len(entries)? + entries
             } else {
                 0
             };
-            let used = RAR50_SIGNATURE.len() as u64
+            let ahead = RAR50_SIGNATURE.len() as u64
+                + self.head_crypt.len() as u64
                 + self.main_header_len(volume.index)?
                 + volume.body_len
-                + header_len
-                + reserve
-                + END_LEN;
+                + header_len;
+            let used = ahead + reserve + self.end_header(false)?.len() as u64;
             let remaining = member.payload_len - start;
-            let room = self.volume_size.saturating_sub(used);
-            if used > self.volume_size || (room == 0 && remaining > 0) {
+            let room = self.room(volume, used, ahead, header_len, remaining)?;
+            let room_for_record = room.is_some();
+            let room = room.unwrap_or(0);
+            if used > self.volume_size || !room_for_record || (room == 0 && remaining > 0) {
                 if volume.body_len == 0 {
                     return Err(Error::InvalidArgument(
                         "RAR 5 volume size is too small for a header",
@@ -153,6 +238,71 @@ impl Writer<'_, '_> {
         }
     }
 
+    /// How much of a member's data fits in the volume after `used` bytes of blocks,
+    /// at most `remaining`. With a recovery record, the most whose record, covering
+    /// all before it, still fits, with room for its header: `ahead` bytes come before
+    /// the data, the quick-open block after it; `None` when not even the header does.
+    fn room(
+        &self,
+        volume: &Volume,
+        used: u64,
+        ahead: u64,
+        header_len: u64,
+        remaining: u64,
+    ) -> Result<Option<u64>> {
+        let room = self.volume_size.saturating_sub(used).min(remaining);
+        let Some(percent) = self.recovery_percent else {
+            return Ok(Some(room));
+        };
+        let fits = |covered: u64, length: u64| -> Result<bool> {
+            let payload = recovery_payload(covered, percent)?;
+            Ok(used + length + self.recovery_header_reserve() + payload <= self.volume_size)
+        };
+        // WinRAR sizes the record as covering the quick-open block's reserve; the block
+        // written may be shorter, so the record over what is written is checked too,
+        // and what fits by it taken when that one would not.
+        let reserved = |length: u64| -> Result<u64> { Ok(used + length) };
+        let exact = |length: u64| -> Result<u64> {
+            Ok(ahead + length + self.quick_open_len(volume, header_len, length)?)
+        };
+        if let Some(length) =
+            most_that_fits(room, &reserved, &|length| fits(reserved(length)?, length))?
+            && fits(exact(length)?, length)?
+        {
+            return Ok(Some(length));
+        }
+        most_that_fits(room, &exact, &|length| fits(exact(length)?, length))
+    }
+
+    /// The quick-open block's length with `length` bytes of this member's data in the
+    /// volume after its header, as [`Self::finish`] will write it: none without quick
+    /// open or a header to cache.
+    fn quick_open_len(&self, volume: &Volume, header_len: u64, length: u64) -> Result<u64> {
+        if !self.quick_open {
+            return Ok(0);
+        }
+        let body_len = volume.body_len + header_len + length;
+        let mut payload = Vec::new();
+        let mut checksum = crate::rar::crc32::Crc32::new();
+        for (offset, header) in &volume.cached {
+            append_quick_open_entry(&mut payload, &mut checksum, body_len - offset, header)?;
+        }
+        if self.quick_open_over.is_none_or(|over| length > over) {
+            // This member's header, as long as it will be.
+            let header = vec![0u8; usize::try_from(header_len).unwrap_or(0)];
+            append_quick_open_entry(
+                &mut payload,
+                &mut checksum,
+                body_len - volume.body_len,
+                &header,
+            )?;
+        }
+        if payload.is_empty() {
+            return Ok(0);
+        }
+        Ok(self.quick_open_header_len(payload.len() as u64)? + payload.len() as u64)
+    }
+
     fn next_volume(&mut self, volume: &mut Volume) -> Result<()> {
         let next = self.volume(volume.index + 1)?;
         let full = std::mem::replace(volume, next);
@@ -167,18 +317,35 @@ impl Writer<'_, '_> {
         if self.solid {
             flags |= MHFL_SOLID;
         }
+        if self.recovery_percent.is_some() {
+            flags |= crate::rar::rar50::MHFL_RECOVERY;
+        }
         flags
     }
 
-    fn main_header(&self, index: u64, quick_open_offset: u64) -> Result<Bytes> {
+    fn main_header(
+        &self,
+        index: u64,
+        quick_open_offset: u64,
+        recovery_offset: u64,
+    ) -> Result<Bytes> {
         let mut extra = Bytes::new(self.resources);
-        if self.quick_open {
+        if self.quick_open || self.recovery_percent.is_some() {
             super::super::headers::write_locator_record(
                 &mut extra,
-                Some(quick_open_offset),
-                None,
+                self.quick_open.then_some(quick_open_offset),
+                self.recovery_percent.map(|_| recovery_offset),
                 self.offset_width,
             )?;
+        }
+        if let Some(keys) = self.header_keys {
+            return encrypted_main_header_block(
+                &keys.keys,
+                self.archive_flags(index),
+                (index > 0).then_some(index),
+                &extra,
+                self.resources,
+            );
         }
         let mut main = Bytes::new(self.resources);
         write_main_header_with(
@@ -193,7 +360,41 @@ impl Writer<'_, '_> {
     }
 
     fn main_header_len(&self, index: u64) -> Result<u64> {
-        Ok(self.main_header(index, 0)?.len() as u64)
+        Ok(self.main_header(index, 0, 0)?.len() as u64)
+    }
+
+    /// The end header, encrypted with the other headers.
+    fn end_header(&self, more_volumes_follow: bool) -> Result<Bytes> {
+        let end_flags = if more_volumes_follow {
+            crate::rar::rar50::EFL_NEXT_VOLUME
+        } else {
+            0
+        };
+        if let Some(keys) = self.header_keys {
+            return encrypted_header_block(
+                &keys.keys,
+                HEAD_END,
+                0,
+                None,
+                &super::super::end_header_specific(end_flags),
+                &[],
+                &[],
+                self.resources,
+            );
+        }
+        let mut end = Bytes::new(self.resources);
+        write_end_header_with(&mut end, HFL_SKIP_IF_UNKNOWN, end_flags, self.resources)?;
+        Ok(end)
+    }
+
+    /// The room a recovery record's header gets: WinRAR's 30 bytes, or encrypted, as
+    /// long as 30 bytes encrypt to with their initialisation vector.
+    fn recovery_header_reserve(&self) -> u64 {
+        if self.header_keys.is_some() {
+            16 + RECOVERY_HEADER_RESERVE.div_ceil(16) * 16
+        } else {
+            RECOVERY_HEADER_RESERVE
+        }
     }
 
     fn quick_open_header_len(&self, payload_len: u64) -> Result<u64> {
@@ -279,6 +480,18 @@ impl Writer<'_, '_> {
         if fragment.is_some() {
             flags |= crate::rar::rar50::HFL_SPLIT_AFTER;
         }
+        if let Some(keys) = self.header_keys {
+            return super::super::headers::encrypted_header_block_padded(
+                &keys.keys,
+                HEAD_FILE,
+                flags,
+                Some(fragment_len),
+                width,
+                &specific,
+                &extra,
+                resources,
+            );
+        }
         super::super::headers::block_header_image_padded(
             HEAD_FILE,
             flags,
@@ -326,30 +539,50 @@ impl Writer<'_, '_> {
         } else {
             0
         };
-        let main = self.main_header(volume.index, quick_open_offset)?;
+        let quick_open_len = quick_open
+            .as_ref()
+            .map_or(0, |(header, payload)| (header.len() + payload.len()) as u64);
+        let recovery_offset = main_len + volume.body_len + quick_open_len;
+        let main = self.main_header(volume.index, quick_open_offset, recovery_offset)?;
 
-        let end_flags = if more_volumes_follow {
-            crate::rar::rar50::EFL_NEXT_VOLUME
-        } else {
-            0
-        };
-        let mut end = Bytes::new(self.resources);
-        write_end_header_with(&mut end, HFL_SKIP_IF_UNKNOWN, end_flags, self.resources)?;
+        let end = self.end_header(more_volumes_follow)?;
 
         let raw_output = self.sink.start_volume(volume.index)?;
         let mut output = CancellableIo {
             inner: raw_output,
             progress: self.progress,
         };
-        output.write_all(RAR50_SIGNATURE)?;
-        output.write_all(&main)?;
+        // With a recovery record, what comes before it is kept too, for it to cover.
+        let mut prefix = match self.recovery_percent {
+            Some(_) => Some(Spool::create(self.resources)?),
+            None => None,
+        };
+        let mut before = Tee {
+            output: &mut output,
+            mirror: prefix.as_mut(),
+        };
+        before.write_all(RAR50_SIGNATURE)?;
+        before.write_all(&self.head_crypt)?;
+        before.write_all(&main)?;
         volume.body.rewind()?;
-        std::io::copy(&mut volume.body, &mut output)?;
-        let mut written = RAR50_SIGNATURE.len() as u64 + main.len() as u64 + volume.body_len;
+        std::io::copy(&mut volume.body, &mut before)?;
+        let mut written =
+            (RAR50_SIGNATURE.len() + self.head_crypt.len() + main.len()) as u64 + volume.body_len;
         if let Some((header, payload)) = &quick_open {
-            output.write_all(header)?;
-            output.write_all(payload)?;
+            before.write_all(header)?;
+            before.write_all(payload)?;
             written += header.len() as u64 + payload.len() as u64;
+        }
+        if let (Some(percent), Some(prefix)) = (self.recovery_percent, prefix.as_mut()) {
+            written += write_recovery_service_with(
+                percent,
+                prefix,
+                self.header_keys,
+                true,
+                self.resources,
+                self.progress,
+                &mut output,
+            )?;
         }
         output.write_all(&end)?;
         written += end.len() as u64;

@@ -177,7 +177,7 @@ slow-timeout = { period = "30s", terminate-after = 3 }
 # another: 20 s, 23 s and about as long alone on an idle machine in a debug build
 # (2026-10-08).
 [[profile.default.overrides]]
-filter = 'binary(it) and test(/^rar_builtin::rar_(lists|tests_extracts_and_prints|adds_updates_moves_and_deletes|comments_renames_locks_and_changes|finds_strings|repairs|reconstructs_volumes|extracts_by_switches|keeps_versions|extracts_links|keeps_times|adds_by_name|names_by_date|logs_names)_as_winrar_7_23_does$/)'
+filter = 'binary(it) and test(/^rar_builtin::rar_(lists|tests_extracts_and_prints|adds_updates_moves_and_deletes|comments_renames_locks_and_changes|finds_strings|repairs|reconstructs_volumes|extracts_by_switches|keeps_versions|extracts_links|keeps_times|adds_by_name|names_by_date|logs_names|cuts_volumes_with_recovery_records)_as_winrar_7_23_does$/)'
 slow-timeout = { period = "30s", terminate-after = 3 }
 
 # Runs the grep oracle script, some 900 grep cases, many in `| od | sed` pipelines of

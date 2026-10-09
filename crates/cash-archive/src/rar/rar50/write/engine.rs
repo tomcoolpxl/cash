@@ -1582,15 +1582,16 @@ pub(super) fn write_volumes(
         });
     }
 
-    // WinRAR's volumes count their headers in their size; this framing has no
-    // encrypted headers or recovery records in it yet, which keep rars' own.
-    if plan.layout.winrar && header_keys.is_none() && plan.recovery_percent.is_none() {
+    // WinRAR's volumes count their headers, encrypted or not, and recovery records
+    // in their size.
+    if plan.layout.winrar {
         report_emission(plan.progress, true);
         winrar_volumes::write(
             entries,
             members,
             &plan,
             max_payload_per_volume,
+            header_keys.as_ref(),
             sink,
             resources,
         )?;

@@ -1,0 +1,130 @@
+== -v37k -rr1
+v.part01.rar 37888
+v.part02.rar 37888
+v.part03.rar 37888
+v.part04.rar 37888
+v.part05.rar 37888
+v.part06.rar 37888
+v.part07.rar 37888
+v.part08.rar 37888
+v.part09.rar 35998
+ Name: a.bin	 Packed size: 36329
+ Name: a.bin	 Packed size: 36328
+ Name: a.bin	 Packed size: 36328
+ Name: a.bin	 Packed size: 36328
+ Name: a.bin	 Packed size: 36328
+ Name: a.bin	 Packed size: 36328
+ Name: a.bin	 Packed size: 36328
+ Name: a.bin	 Packed size: 36328
+ Name: a.bin	 Packed size: 9375
+ Name: b.bin	 Packed size: 25000
+t: 0
+== -v37k -rr5
+v.part01.rar 37888
+v.part02.rar 37888
+v.part03.rar 37888
+v.part04.rar 37888
+v.part05.rar 37888
+v.part06.rar 37888
+v.part07.rar 37888
+v.part08.rar 37888
+v.part09.rar 35998
+ Name: a.bin	 Packed size: 36329
+ Name: a.bin	 Packed size: 36328
+ Name: a.bin	 Packed size: 36328
+ Name: a.bin	 Packed size: 36328
+ Name: a.bin	 Packed size: 36328
+ Name: a.bin	 Packed size: 36328
+ Name: a.bin	 Packed size: 36328
+ Name: a.bin	 Packed size: 36328
+ Name: a.bin	 Packed size: 9375
+ Name: b.bin	 Packed size: 25000
+t: 0
+== -v37k -rr20
+v.part01.rar 37888
+v.part02.rar 37888
+v.part03.rar 37888
+v.part04.rar 37888
+v.part05.rar 37888
+v.part06.rar 37888
+v.part07.rar 37888
+v.part08.rar 37888
+v.part09.rar 37888
+v.part10.rar 37888
+v.part11.rar 33330
+ Name: a.bin	 Packed size: 29831
+ Name: a.bin	 Packed size: 29830
+ Name: a.bin	 Packed size: 29830
+ Name: a.bin	 Packed size: 29830
+ Name: a.bin	 Packed size: 29830
+ Name: a.bin	 Packed size: 29830
+ Name: a.bin	 Packed size: 29830
+ Name: a.bin	 Packed size: 29830
+ Name: a.bin	 Packed size: 29830
+ Name: a.bin	 Packed size: 29830
+ Name: a.bin	 Packed size: 1699
+ Name: b.bin	 Packed size: 25000
+t: 0
+== -v50k -rr1
+v.part1.rar 51200
+v.part2.rar 51200
+v.part3.rar 51200
+v.part4.rar 51200
+v.part5.rar 51200
+v.part6.rar 51200
+v.part7.rar 29302
+ Name: a.bin	 Packed size: 49535
+ Name: a.bin	 Packed size: 49534
+ Name: a.bin	 Packed size: 49534
+ Name: a.bin	 Packed size: 49534
+ Name: a.bin	 Packed size: 49534
+ Name: a.bin	 Packed size: 49534
+ Name: a.bin	 Packed size: 2795
+ Name: b.bin	 Packed size: 25000
+t: 0
+== -v50k -rr5
+v.part1.rar 51200
+v.part2.rar 51200
+v.part3.rar 51200
+v.part4.rar 51200
+v.part5.rar 51200
+v.part6.rar 51200
+v.part7.rar 38100
+ Name: a.bin	 Packed size: 48091
+ Name: a.bin	 Packed size: 48090
+ Name: a.bin	 Packed size: 48090
+ Name: a.bin	 Packed size: 48090
+ Name: a.bin	 Packed size: 48090
+ Name: a.bin	 Packed size: 48090
+ Name: a.bin	 Packed size: 11459
+ Name: b.bin	 Packed size: 25000
+t: 0
+== -v100k -rr5
+v.part1.rar 102400
+v.part2.rar 102400
+v.part3.rar 102400
+v.part4.rar 43494
+ Name: a.bin	 Packed size: 94863
+ Name: a.bin	 Packed size: 94862
+ Name: a.bin	 Packed size: 94862
+ Name: a.bin	 Packed size: 15413
+ Name: b.bin	 Packed size: 25000
+t: 0
+== -v20k -psecret: a folder among encrypted files stays plain
+v.part1.rar 20480
+v.part2.rar 20480
+v.part3.rar 20480
+v.part4.rar 20480
+v.part5.rar 4595
+ Name: src/a.bin	 Packed size: 20224
+ Name: src/a.bin	 Packed size: 20223
+ Name: src/a.bin	 Packed size: 19553
+ Name: src/b.bin	 Packed size: 468
+ Name: src/b.bin	 Packed size: 20223
+ Name: src/b.bin	 Packed size: 4317
+ Name: src	
+t: 0
+one archive: 85482
+== a volume's number gets the digits of the volumes foreseen
+80592 bytes: v.part1.rar .. v.part8.rar, 8 volumes
+80593 bytes: v.part01.rar .. v.part08.rar, 8 volumes

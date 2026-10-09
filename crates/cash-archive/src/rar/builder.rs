@@ -1747,8 +1747,9 @@ impl Builder {
                 .with_attributes(entry.rar50_attr())
                 .with_host_os(entry.rar50_host_os())
                 .with_carried(entry.carried.clone());
-            // A carried member's data is already as encrypted as it is going to be.
-            let data_password = if entry.carried.is_some() {
+            // A carried member's data is already as encrypted as it is going to be; a
+            // folder has none, and WinRAR gives it no encryption record.
+            let data_password = if entry.carried.is_some() || entry.is_directory {
                 None
             } else {
                 entry

@@ -374,8 +374,13 @@ pub fn write_streaming_volumes_with_progress(
     if extras.layout.winrar {
         options.features.quick_open = false;
     }
+    // Folders hold no data to encrypt, so they stay plain among encrypted files.
     let encrypted = entries.iter().any(|entry| entry.password.is_some());
-    if encrypted && !entries.iter().all(|entry| entry.password.is_some()) {
+    if encrypted
+        && !entries
+            .iter()
+            .all(|entry| entry.password.is_some() || entry.is_directory)
+    {
         return Err(Error::UnsupportedFeature {
             version: options.target,
             feature: "RAR 5 writer mixing encrypted and plain members",

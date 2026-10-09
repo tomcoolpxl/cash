@@ -250,11 +250,8 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
     }
     let legacy = builder.format().family() != ArchiveFamily::Rar50Plus;
     if !legacy && compressing {
-        builder = builder.rar50_dictionary_size(Some(dictionary(
-            switches.dictionary,
-            &sources,
-            solid,
-        )));
+        builder =
+            builder.rar50_dictionary_size(Some(dictionary(switches.dictionary, &sources, solid)));
     }
 
     // The archived members kept, carried as they are or read back to be written again.
@@ -312,6 +309,7 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
             &path,
             &resources,
             &lines,
+            volume_digits(&sources, u64::try_from(size).unwrap_or(u64::MAX)),
         ),
         None => write_single(rar, &builder, &path, &resources, &lines, &notes)
             .map(|()| vec![path.clone()]),
@@ -1192,6 +1190,19 @@ const fn area<SE: cash_core::ShellExtensions>(rar: &Rar<'_, SE>) -> &'static str
     if rar.switches.no_percent { "" } else { "     " }
 }
 
+/// The digits rar writes a volume's number in: as many as the volumes it foresees, one
+/// for each seven eighths of a volume the archive's bound counts, and one more.
+fn volume_digits(sources: &[Source], volume_size: u64) -> usize {
+    let bound = sources.iter().fold(1u64, |total, source| {
+        total.saturating_add(rar::rar50::Layout::member_bound(
+            source.size,
+            source.name.as_bytes(),
+        ))
+    });
+    let foreseen = (bound - 1) / (volume_size * 7 / 8).max(1) + 1;
+    foreseen.to_string().len()
+}
+
 /// Writes a volume set, `NAME.part1.rar` on, then shows the lines: a member cut across
 /// volumes gets a line in each, after the volume's "Creating archive".
 fn write_volumes<SE: cash_core::ShellExtensions>(
@@ -1201,10 +1212,12 @@ fn write_volumes<SE: cash_core::ShellExtensions>(
     path: &Path,
     resources: &WriterResources,
     lines: &[Option<(String, Action)>],
+    width: usize,
 ) -> rar::Result<Vec<PathBuf>> {
     let mut sink = VolumeFiles {
         first: path.to_path_buf(),
         written: Vec::new(),
+        width,
     };
     builder.write_volumes_to(&mut sink, resources, None)?;
     let written = sink.written;
@@ -1294,6 +1307,8 @@ fn shown_beside(display: &str, path: &Path) -> String {
 struct VolumeFiles {
     first: PathBuf,
     written: Vec<PathBuf>,
+    /// The digits a volume's number is written in.
+    width: usize,
 }
 
 impl VolumeFiles {
@@ -1312,7 +1327,11 @@ impl VolumeFiles {
             .parent()
             .map(Path::to_path_buf)
             .unwrap_or_default();
-        dir.join(format!("{stem}.part{}.{ext}", index + 1))
+        dir.join(format!(
+            "{stem}.part{:0width$}.{ext}",
+            index + 1,
+            width = self.width
+        ))
     }
 }
 
