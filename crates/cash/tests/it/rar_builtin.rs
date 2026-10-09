@@ -88,6 +88,25 @@ fn rar_repairs_as_winrar_7_23_does() {
 }
 
 #[test]
+fn rar_reconstructs_volumes_as_winrar_7_23_does() {
+    assert_eq!(
+        run_oracle_script("rar_reconstruct"),
+        with_cash_banners("rar_reconstruct", 13, 0)
+    );
+}
+
+#[test]
+fn rar_says_it_makes_no_recovery_volumes_or_sfx() {
+    let out = run("rar rv2 -idq a.rar; echo \"rc=$?\"; rar s -idq a.rar; echo \"rc=$?\"");
+    assert_eq!(out.stdout, "rc=2\nrc=2");
+    assert_eq!(
+        out.stderr,
+        "\nrar: cash's rar does not make recovery volumes\n\n\
+         rar: cash's rar does not make self-extracting archives"
+    );
+}
+
+#[test]
 fn rar_and_unrar_name_themselves_as_cash() {
     let out = run("rar -iver; unrar -iver; rar | sed -n 2,3p; unrar | sed -n 2p");
     assert_eq!(

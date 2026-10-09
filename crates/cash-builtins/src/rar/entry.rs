@@ -111,11 +111,6 @@ impl Entry {
     pub(super) const fn encrypted(&self) -> bool {
         self.crypto.is_some()
     }
-
-    /// How many volumes after its own its data goes on into.
-    pub(super) const fn later_parts(&self) -> usize {
-        self.parts.len().saturating_sub(1)
-    }
 }
 
 /// The files of a set's volumes, in order, a split file's parts joined.

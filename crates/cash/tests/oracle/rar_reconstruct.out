@@ -1,0 +1,249 @@
+== RAR 5: one volume missing
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+2 recovery volumes found
+Calculating checksums of all volumes.
+s/multivol_rev.part1.rar
+s/multivol_rev.part3.rar
+s/multivol_rev.part4.rar
+s/multivol_rev.part5.rar
+s/multivol_rev.part1.rev
+s/multivol_rev.part2.rev
+1 volumes missing
+Reconstructing...
+Creating s/multivol_rev.part2.rar     
+Done
+rc=0
+multivol_rev.part1.rar 2233597020 4096
+multivol_rev.part1.rev 3757662665 4183
+multivol_rev.part2.rar 173665089 4096
+multivol_rev.part2.rev 3485079130 4183
+multivol_rev.part3.rar 2157973076 4096
+multivol_rev.part4.rar 2075952831 4096
+multivol_rev.part5.rar 1251371947 1032
+== named by a later volume, and by a recovery volume
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+2 recovery volumes found
+Calculating checksums of all volumes.
+s/multivol_rev.part1.rar
+s/multivol_rev.part2.rar
+s/multivol_rev.part3.rar
+s/multivol_rev.part4.rar
+s/multivol_rev.part1.rev
+s/multivol_rev.part2.rev
+1 volumes missing
+Reconstructing...
+Creating s/multivol_rev.part5.rar     
+Done
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+2 recovery volumes found
+Calculating checksums of all volumes.
+s/multivol_rev.part1.rar
+s/multivol_rev.part2.rar
+s/multivol_rev.part3.rar
+s/multivol_rev.part5.rar
+s/multivol_rev.part1.rev
+s/multivol_rev.part2.rev
+1 volumes missing
+Reconstructing...
+Creating s/multivol_rev.part4.rar     
+Done
+rc=0
+multivol_rev.part1.rar 2233597020 4096
+multivol_rev.part1.rev 3757662665 4183
+multivol_rev.part2.rar 173665089 4096
+multivol_rev.part2.rev 3485079130 4183
+multivol_rev.part3.rar 2157973076 4096
+multivol_rev.part4.rar 2075952831 4096
+multivol_rev.part5.rar 1251371947 1032
+== named by the missing volume
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+--- stderr
+
+Cannot open s/multivol_rev.part1.rar
+The system cannot find the file specified.
+rc=10
+multivol_rev.part1.rev
+multivol_rev.part2.rar
+multivol_rev.part2.rev
+multivol_rev.part3.rar
+multivol_rev.part4.rar
+multivol_rev.part5.rar
+== one damaged, one missing
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+2 recovery volumes found
+Calculating checksums of all volumes.
+s/multivol_rev.part1.rar
+s/multivol_rev.part2.rar
+s/multivol_rev.part3.rar
+s/multivol_rev.part3.rar - checksum error
+s/multivol_rev.part4.rar
+s/multivol_rev.part1.rev
+s/multivol_rev.part2.rev
+2 volumes missing
+Reconstructing...
+ERROR: Bad archive s/multivol_rev.part3.rar
+
+Renaming s/multivol_rev.part3.rar to s/multivol_rev.part3.rar.bad
+Creating s/multivol_rev.part3.rar
+Creating s/multivol_rev.part5.rar     
+Done
+rc=0
+multivol_rev.part1.rar 2233597020 4096
+multivol_rev.part1.rev 3757662665 4183
+multivol_rev.part2.rar 173665089 4096
+multivol_rev.part2.rev 3485079130 4183
+multivol_rev.part3.rar 2157973076 4096
+multivol_rev.part3.rar.bad 3442706590 4096
+multivol_rev.part4.rar 2075952831 4096
+multivol_rev.part5.rar 1251371947 1032
+== a recovery volume damaged
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+2 recovery volumes found
+Calculating checksums of all volumes.
+s/multivol_rev.part1.rar
+s/multivol_rev.part2.rar
+s/multivol_rev.part3.rar
+s/multivol_rev.part5.rar
+s/multivol_rev.part1.rev
+s/multivol_rev.part1.rev - checksum error
+s/multivol_rev.part2.rev
+1 volumes missing
+Reconstructing...
+Creating s/multivol_rev.part4.rar     
+Done
+rc=0
+multivol_rev.part1.rar 2233597020 4096
+multivol_rev.part1.rev 1594870013 4183
+multivol_rev.part2.rar 173665089 4096
+multivol_rev.part2.rev 3485079130 4183
+multivol_rev.part3.rar 2157973076 4096
+multivol_rev.part4.rar 2075952831 4096
+multivol_rev.part5.rar 1251371947 1032
+== too many missing
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+2 recovery volumes found
+Calculating checksums of all volumes.
+s/multivol_rev.part3.rar
+s/multivol_rev.part5.rar
+s/multivol_rev.part1.rev
+s/multivol_rev.part2.rev
+3 volumes missing
+Reconstruction impossible
+rc=0
+multivol_rev.part1.rev
+multivol_rev.part2.rev
+multivol_rev.part3.rar
+multivol_rev.part5.rar
+== nothing missing
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+2 recovery volumes found
+Calculating checksums of all volumes.
+s/multivol_rev.part1.rar
+s/multivol_rev.part2.rar
+s/multivol_rev.part3.rar
+s/multivol_rev.part4.rar
+s/multivol_rev.part5.rar
+s/multivol_rev.part1.rev
+s/multivol_rev.part2.rev
+0 volumes missing
+Nothing to reconstruct
+rc=0
+== no recovery volumes
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+0 recovery volumes found
+rc=0
+== quietly
+rc=0
+multivol_rev.part1.rar 2233597020 4096
+multivol_rev.part1.rev 3757662665 4183
+multivol_rev.part2.rar 173665089 4096
+multivol_rev.part2.rev 3485079130 4183
+multivol_rev.part3.rar 2157973076 4096
+multivol_rev.part4.rar 2075952831 4096
+multivol_rev.part5.rar 1251371947 1032
+== RAR 3, new-style names
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Calculating checksums of all volumes.
+s/rev_newstyle.part1.rev
+s/rev_newstyle.part2.rev
+2 recovery volumes found
+s/rev_newstyle.part1.rar
+Cannot find volume s/rev_newstyle.part2.rar
+s/rev_newstyle.part3.rar
+s/rev_newstyle.part4.rar
+1 volumes missing
+Reconstructing...     
+Done
+rc=0
+rev_newstyle.part1.rar 363285731 2048
+rev_newstyle.part1.rev 4286413014 2048
+rev_newstyle.part2.rar 789634926 2048
+rev_newstyle.part2.rev 2529629668 2048
+rev_newstyle.part3.rar 2572222812 2048
+rev_newstyle.part4.rar 435273338 296
+== RAR 3, old-style names
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+2 recovery volumes found
+s/rev_oldstyle.part1.rar
+s/rev_oldstyle.part2.rar
+Cannot find volume s/rev_oldstyle.part3.rar
+s/rev_oldstyle.part4.rar
+1 volumes missing
+Reconstructing...     
+Done
+rc=0
+rev_oldstyle.part1.rar 1715718676 2048
+rev_oldstyle.part2.rar 3271270382 2048
+rev_oldstyle.part3.rar 4191654563 2048
+rev_oldstyle.part4.rar 3993228418 224
+rev_oldstyle.part4_2_1.rev 2370400561 2048
+rev_oldstyle.part4_2_2.rev 1297740245 2048
+== not a volume, and missing
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+--- stderr
+
+Cannot open missing.rar
+The system cannot find the file specified.
+rc=10

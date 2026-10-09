@@ -665,8 +665,9 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
    to 7, as rar copies it). Left, in order:
    - `t` checks a RAR 3 `.rev` file only by reading it: its own checksum's place is
      to be learned from Rar.exe (damage one and watch), not from UnRAR's source.
-   - Extraction's links (`-ol`), `-ts`'s other times, `-ver`, `-f`/`-u` on
-     extraction, `-ad1`/`-ad2`, `-ai` on folders: built, not yet in the oracle.
+   - Extraction's links (`-ol`), `-ver`, `-f`/`-u` on extraction, `-ad1`/`-ad2`,
+     `-ai` on folders: built, not yet in the oracle. `-ts`, `-tsc`, `-tsa` and `-tsm-`
+     on extraction: compared with Rar.exe by hand (2026-10-09), not in the oracle.
    - Writing, not yet in the oracle or not yet WinRAR's: `-ts`'s creation and access
      times (a file's creation time is the run's); `-df`'s "NOT DELETED" when a folder
      is not empty; `-r` with a plain file name (rar looks for it in every folder);
@@ -691,9 +692,16 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      recovery record whose header is damaged (rar finds its chunks by their marks and
      mends with them, cash finds none); RAR 1.5 to 4 rebuilds, unobserved (WinRAR 7.23
      writes no RAR 4 to damage).
-   - `rc` (RAR 5 `.rev` volumes: rars' `repair_rev5_volumes_to` mends them, RAR 3's
-     `repair_rev3_volumes_to`); `s` and `rv` refused.
-   - The `expect(dead_code)` at the top of `rar/mod.rs` goes when every part is used.
+   - `rc`: done 2026-10-09 (`rar_reconstruct.sh`, 249 lines, RAR 5 and both RAR 3
+     namings, the volumes rebuilt WinRAR's byte for byte); `s` and `rv` refused in
+     words of their own. Left of it: a RAR 3 volume that is there but damaged (its
+     recovery volumes keep no checksum of it; what rar does then is unobserved), and
+     old-style volume names (`NAME.rar`, `NAME.r00`: WinRAR 7.23 names RAR 5 volumes
+     `.partN` even with `-vn`).
+   - The `expect(dead_code)` at the top of `rar/mod.rs`: gone 2026-10-09, with the
+     items it covered that nothing used; extraction now restores the creation and
+     access times `-ts`, `-tsc` and `-tsa` ask for, and `-tsm-` leaves the modification
+     time as written, as Rar.txt says.
 3. **The page, `builtins.md`, doctor** (done 2026-10-09): `help rar` covers both names;
    `CARRIED` and doctor's note on a program cash goes ahead of have `rar` and `unrar`,
    so a WinRAR on `PATH` is named with the way to reach it; 7z's page already says it

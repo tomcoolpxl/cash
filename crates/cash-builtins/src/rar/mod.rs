@@ -15,9 +15,6 @@
 //! - `rar.ini` is read from `%APPDATA%\WinRAR`, one of the two places rar reads it from;
 //!   the other, rar's own folder, cash has not.
 
-// Phase 33 builds rar a command at a time; this goes once every part has its use.
-#![expect(dead_code, reason = "rar's other commands follow in this phase")]
-
 mod add;
 mod cmdline;
 mod delete;
@@ -29,6 +26,7 @@ mod item;
 mod list;
 mod modify;
 mod open;
+mod reconstruct;
 mod repair;
 
 use std::cell::{Cell, RefCell};
@@ -112,12 +110,10 @@ mod code {
     pub(super) const WRITE: u8 = 5;
     pub(super) const OPEN: u8 = 6;
     pub(super) const USER: u8 = 7;
-    pub(super) const MEMORY: u8 = 8;
     pub(super) const CREATE: u8 = 9;
     pub(super) const NO_FILES: u8 = 10;
     pub(super) const PASSWORD: u8 = 11;
     pub(super) const READ: u8 = 12;
-    pub(super) const BAD_ARCHIVE: u8 = 13;
     pub(super) const BREAK: u8 = 255;
 }
 
@@ -633,16 +629,25 @@ fn dispatch<SE: cash_core::ShellExtensions>(
         }
         Command::Delete => return delete::run(rar, parsed),
         Command::Repair => return repair::run(rar, parsed),
+        Command::Reconstruct => {
+            reconstruct::run(rar, parsed);
+            return Ok(());
+        }
         Command::Comment
         | Command::CommentWrite
         | Command::Rename
         | Command::Lock
         | Command::RecoveryRecord(_)
         | Command::Change => return modify::run(rar, command, parsed),
-        _ => {}
+        Command::RecoveryVolumes(_) | Command::Sfx(_) => {}
     }
+    let what = if matches!(command, Command::Sfx(_)) {
+        "self-extracting archives"
+    } else {
+        "recovery volumes"
+    };
     rar.console.err(&format!(
-        "\n{}: this command is not in cash's {} yet\n",
+        "\n{}: cash's {} does not make {what}\n",
         rar.tool.name(),
         rar.tool.name()
     ));

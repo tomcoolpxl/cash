@@ -124,33 +124,6 @@ impl Command {
             Self::Extract | Self::List { .. } | Self::Print | Self::Test | Self::ExtractFull
         )
     }
-
-    /// Whether the last name may be the folder to extract to (`path_to_extract\`).
-    pub(super) const fn takes_destination(&self) -> bool {
-        matches!(
-            self,
-            Self::Extract | Self::ExtractFull | Self::Repair | Self::Reconstruct
-        )
-    }
-
-    /// Whether the command changes or makes an archive.
-    pub(super) const fn writes(&self) -> bool {
-        matches!(
-            self,
-            Self::Add
-                | Self::Comment
-                | Self::Change
-                | Self::Delete
-                | Self::Freshen
-                | Self::Lock
-                | Self::Move { .. }
-                | Self::Rename
-                | Self::RecoveryRecord(_)
-                | Self::RecoveryVolumes(_)
-                | Self::Sfx(_)
-                | Self::Update
-        )
-    }
 }
 
 impl FindSpec {

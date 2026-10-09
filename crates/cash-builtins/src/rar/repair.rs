@@ -128,13 +128,13 @@ fn repair<SE: cash_core::ShellExtensions>(
     Ok(())
 }
 
-fn done<SE: cash_core::ShellExtensions>(rar: &Rar<'_, SE>) {
+pub(super) fn done<SE: cash_core::ShellExtensions>(rar: &Rar<'_, SE>) {
     if !rar.switches.no_done {
         rar.console.msg("\nDone\n");
     }
 }
 
-fn write<SE: cash_core::ShellExtensions>(rar: &Rar<'_, SE>, shown: &str, bytes: &[u8]) {
+pub(super) fn write<SE: cash_core::ShellExtensions>(rar: &Rar<'_, SE>, shown: &str, bytes: &[u8]) {
     let path: PathBuf = rar.path(shown);
     let written = std::fs::File::create(&path).and_then(|mut file| file.write_all(bytes));
     if let Err(error) = written {

@@ -304,7 +304,7 @@ fn vint(bytes: &[u8], at: &mut usize) -> Option<u64> {
 
 /// The facts a file's main header gives, for an archive whose other headers do not
 /// read: its format and flags; RAR 5's are hidden when its headers are encrypted.
-fn main_facts(path: &Path) -> Facts {
+pub(super) fn main_facts(path: &Path) -> Facts {
     let Some(bytes) = read_at(path, 0, 64) else {
         return Facts {
             format: "RAR 5",

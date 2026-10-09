@@ -1144,14 +1144,34 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
         }
     }
 
-    /// A file written: its times and attributes as the archive keeps them.
+    /// A file written: its times and attributes as the archive keeps them. Its
+    /// modification time unless `-tsm-`; its creation and access times when `-ts`,
+    /// `-tsc` or `-tsa` asks for them.
     fn finish_file(&self, entry: &Entry, path: &Path) {
-        let modified = entry.modified.and_then(|time| self.system_time(time));
+        let asked = self.rar.switches.times;
+        let restore = |which: Option<char>, time: Option<Time>| {
+            which
+                .filter(|&precision| precision != '-')
+                .and(time)
+                .and_then(|time| self.system_time(time))
+        };
+        let stored = if asked.modified == Some('-') {
+            None
+        } else {
+            entry.modified.and_then(|time| self.system_time(time))
+        };
+        let created = restore(asked.created, entry.created);
+        let accessed = restore(asked.accessed, entry.accessed);
+        let modified = stored.or_else(|| {
+            (created.is_some() || accessed.is_some())
+                .then(|| std::fs::metadata(path).and_then(|m| m.modified()).ok())
+                .flatten()
+        });
         if let Some(modified) = modified {
             let times = cash_win32::unix::Times {
                 modified,
-                accessed: None,
-                created: None,
+                accessed,
+                created,
             };
             let _ = cash_win32::unix::set_times(path, &times);
         }
