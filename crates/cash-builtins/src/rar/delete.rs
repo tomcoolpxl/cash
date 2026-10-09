@@ -77,6 +77,16 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
     };
     builder = builder.comment(opened.archive.comment(password.as_deref()).ok().flatten());
     builder = builder.layout(add::layout(rar));
+    if opened.archive.as_rar50().is_some() {
+        let quick_open = add::quick_open_on(rar, opened.facts.encrypted_headers);
+        builder = match builder.archive_metadata(None, false, quick_open) {
+            Ok(builder) => builder,
+            Err(error) => {
+                rar.console.err(&format!("\n{error}"));
+                return Err(Stop::Aborted(code::FATAL));
+            }
+        };
+    }
     let kept: Vec<usize> = (0..members.len()).filter(|&index| !gone[index]).collect();
     let mut keeper = add::Keeper::new(rar, &opened, &found.path, &kept, password.as_deref())?;
     for &index in &kept {

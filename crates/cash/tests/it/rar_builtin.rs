@@ -64,6 +64,14 @@ fn rar_adds_updates_moves_and_deletes_as_winrar_7_23_does() {
 }
 
 #[test]
+fn rar_comments_renames_locks_and_changes_as_winrar_7_23_does() {
+    assert_eq!(
+        run_oracle_script("rar_modify"),
+        with_cash_banners("rar_modify", 30, 0)
+    );
+}
+
+#[test]
 fn rar_and_unrar_name_themselves_as_cash() {
     let out = run("rar -iver; unrar -iver; rar | sed -n 2,3p; unrar | sed -n 2p");
     assert_eq!(

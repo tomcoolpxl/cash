@@ -26,6 +26,7 @@ mod extract;
 mod help;
 mod item;
 mod list;
+mod modify;
 mod open;
 
 use std::cell::{Cell, RefCell};
@@ -625,6 +626,12 @@ fn dispatch<SE: cash_core::ShellExtensions>(
             return add::run(rar, command, parsed);
         }
         Command::Delete => return delete::run(rar, parsed),
+        Command::Comment
+        | Command::CommentWrite
+        | Command::Rename
+        | Command::Lock
+        | Command::RecoveryRecord(_)
+        | Command::Change => return modify::run(rar, command, parsed),
         _ => {}
     }
     rar.console.err(&format!(

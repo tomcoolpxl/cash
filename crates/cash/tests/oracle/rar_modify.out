@@ -1,0 +1,474 @@
+== c, from a file and from standard input; cw
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Processing archive c1.rar
+Reading comment from cmt.txt
+Adding a comment to c1.rar
+
+Done
+rc=0
+
+Archive comment:
+first line
+second line
+
+
+Archive: c1.rar
+Details: RAR 5
+
+ Attributes       Size     Date    Time   Name
+----------- ----------  ---------- -----  ----
+    ..A....          6  2025-03-01 11:00  src/a.txt
+    ..A....          6  2025-03-01 11:00  src/c.dat
+    ..A....          6  2025-03-01 11:00  src/sub/b.txt
+    ...D...          0  2025-03-01 12:00  src/sub
+    ...D...          0  2025-03-01 12:00  src
+----------- ----------  ---------- -----  ----
+                    18                    5
+
+rc=0
+560167674 286
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Write comment to out.txt
+rc=0
+   f   i   r   s   t       l   i   n   e  \r  \n   s   e   c   o
+   n   d       l   i   n   e  \r  \n
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+first line
+second line
+
+rc=0
+first line
+second line
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Comment is not present
+rc=0
+ls: cannot access 'none.txt': No such file or directory
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Processing archive c2.rar
+Reading comment from stdin
+
+Adding a comment to c2.rar
+
+Done
+rc=0
+from stdin
+line two
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Processing archive c2.rar
+Reading comment from cmt.txt
+Adding a comment to c2.rar
+
+Done
+rc=0
+first line
+second line
+rc=0
+== rn
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Processing archive r1.rar
+Renaming src/a.txt to src/z.txt
+Done
+rc=0
+src/z.txt
+src/c.dat
+src/sub/b.txt
+src/sub
+src
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Processing archive r1.rar
+Done
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Processing archive r1.rar
+Renaming src/z.txt to src/z.bak
+Done
+rc=0
+src/z.bak
+src/c.dat
+src/sub/b.txt
+src/sub
+src
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Processing archive r1.rar
+Done
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Processing archive r1.rar
+Renaming src/sub to src/dir/b.txt
+Renaming src/sub to src/dir
+Done
+rc=0
+src/z.bak
+src/c.dat
+src/dir/b.txt
+src/dir
+src
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+rc=0
+
+Testing archive r1.rar
+
+Testing     src/z.bak                                                      OK 
+Testing     src/c.dat                                                      OK 
+Testing     src/dir/b.txt                                                  OK 
+Testing     src/dir                                                   OK
+Testing     src                                                       OK
+All OK
+rc=0
+== k
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Processing archive k1.rar
+Locking archive
+Done
+rc=0
+1310671393 237
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Processing archive k1.rar
+Done
+--- stderr
+
+
+ERROR: Locked archive
+rc=4
+
+Archive: k1.rar
+Details: RAR 5, lock
+
+        Name: src/a.txt
+        Type: File
+        Size: 6
+ Packed size: 6
+       Ratio: 100%
+    Modified: 2025-03-01 11:00:00,000000000
+  Attributes: ..A....
+       CRC32: 363A3020
+     Host OS: Windows
+ Compression: RAR 5.0(v50) -m0 -md=128k
+
+        Name: src/c.dat
+        Type: File
+        Size: 6
+ Packed size: 6
+       Ratio: 100%
+    Modified: 2025-03-01 11:00:00,000000000
+  Attributes: ..A....
+       CRC32: 782C91F2
+     Host OS: Windows
+ Compression: RAR 5.0(v50) -m0 -md=128k
+
+        Name: src/sub/b.txt
+        Type: File
+        Size: 6
+ Packed size: 6
+       Ratio: 100%
+    Modified: 2025-03-01 11:00:00,000000000
+  Attributes: ..A....
+       CRC32: DD3861A8
+     Host OS: Windows
+ Compression: RAR 5.0(v50) -m0 -md=128k
+
+        Name: src/sub
+        Type: Directory
+    Modified: 2025-03-01 12:00:00,000000000
+  Attributes: ...D...
+     Host OS: Windows
+ Compression: RAR 5.0(v50) -m0
+
+        Name: src
+        Type: Directory
+    Modified: 2025-03-01 12:00:00,000000000
+  Attributes: ...D...
+     Host OS: Windows
+ Compression: RAR 5.0(v50) -m0
+
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Processing archive k1.rar
+Done
+--- stderr
+
+
+ERROR: Locked archive
+rc=4
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Processing archive k1.rar
+Done
+--- stderr
+
+
+ERROR: Locked archive
+rc=4
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Processing archive k1.rar
+Done
+--- stderr
+
+
+ERROR: Locked archive
+rc=4
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Processing archive k1.rar
+Done
+--- stderr
+
+
+ERROR: Locked archive
+rc=4
+== rr
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Processing archive rr1.rar
+Adding the data recovery record     
+Done
+rc=0
+
+Archive: rr1.rar
+Details: RAR 5, recovery record
+
+ Attributes       Size     Date    Time   Name
+----------- ----------  ---------- -----  ----
+    ..A....          6  2025-03-01 11:00  src/a.txt
+    ..A....          6  2025-03-01 11:00  src/c.dat
+    ..A....          6  2025-03-01 11:00  src/sub/b.txt
+    ...D...          0  2025-03-01 12:00  src/sub
+    ...D...          0  2025-03-01 12:00  src
+----------- ----------  ---------- -----  ----
+                    18                    5
+
+rc=0
+
+Testing archive rr1.rar
+
+Testing     src/a.txt                                                      OK 
+Testing     src/c.dat                                                      OK 
+Testing     src/sub/b.txt                                                  OK 
+Testing     src/sub                                                   OK
+Testing     src                                                       OK
+Testing the recovery record         OK
+All OK
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Processing archive rr1.rar
+Adding the data recovery record     
+Done
+rc=0
+
+Testing archive rr1.rar
+
+Testing     src/a.txt                                                      OK 
+Testing     src/c.dat                                                      OK 
+Testing     src/sub/b.txt                                                  OK 
+Testing     src/sub                                                   OK
+Testing     src                                                       OK
+Testing the recovery record         OK
+All OK
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Processing archive rr2.rar
+Adding the data recovery record     
+Done
+rc=0
+
+Testing archive rr2.rar
+
+Testing     src/a.txt                                                      OK 
+Testing     src/c.dat                                                      OK 
+Testing     src/sub/b.txt                                                  OK 
+Testing     src/sub                                                   OK
+Testing     src                                                       OK
+Testing the recovery record         OK
+All OK
+rc=0
+== ch
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Processing archive ch1.rar
+Done
+rc=0
+4174718894 237
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Processing archive ch1.rar
+Done
+rc=0
+SRC/A.TXT
+SRC/C.DAT
+SRC/SUB/B.TXT
+SRC/SUB
+SRC
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Processing archive ch1.rar
+Done
+rc=0
+src/a.txt
+src/c.dat
+src/sub/b.txt
+src/sub
+src
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Processing archive ch1.rar
+Reading comment from cmt.txt
+Adding a comment to ch1.rar
+
+Done
+rc=0
+
+Archive comment:
+first line
+second line
+
+
+Archive: ch1.rar
+Details: RAR 5
+
+ Attributes       Size     Date    Time   Name
+----------- ----------  ---------- -----  ----
+    ..A....          6  2025-03-01 11:00  src/a.txt
+    ..A....          6  2025-03-01 11:00  src/c.dat
+    ..A....          6  2025-03-01 11:00  src/sub/b.txt
+    ...D...          0  2025-03-01 12:00  src/sub
+    ...D...          0  2025-03-01 12:00  src
+----------- ----------  ---------- -----  ----
+                    18                    5
+
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Processing archive ch1.rar
+Done
+rc=0
+
+Archive comment:
+first line
+second line
+
+
+Testing archive ch1.rar
+
+Testing     src/a.txt                                                      OK 
+Testing     src/c.dat                                                      OK 
+Testing     src/sub/b.txt                                                  OK 
+Testing     src/sub                                                   OK
+Testing     src                                                       OK
+All OK
+rc=0
+== missing archive
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Done
+--- stderr
+
+Cannot open missing.rar
+The system cannot find the file specified.
+rc=10
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Done
+--- stderr
+
+Cannot open missing.rar
+The system cannot find the file specified.
+rc=10
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+--- stderr
+
+Cannot open missing.rar
+The system cannot find the file specified.
+rc=10
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Done
+--- stderr
+
+Cannot open missing.rar
+The system cannot find the file specified.
+rc=10

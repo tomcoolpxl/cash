@@ -393,7 +393,16 @@ fn read_comment<SE: cash_core::ShellExtensions>(
     let Some(arg) = &rar.switches.comment_file else {
         return Ok(None);
     };
-    let bytes = if let Some(file) = arg.text() {
+    comment_from(rar, display, arg.text()).map(Some)
+}
+
+/// A comment read from `file`, else from standard input, with rar's lines on the way.
+pub(super) fn comment_from<SE: cash_core::ShellExtensions>(
+    rar: &Rar<'_, SE>,
+    display: &str,
+    file: Option<&str>,
+) -> Result<Vec<u8>, Stop> {
+    let bytes = if let Some(file) = file {
         rar.console.msg(&format!("\nReading comment from {file}"));
         match std::fs::read(rar.path(file)) {
             Ok(bytes) => bytes,
@@ -406,6 +415,7 @@ fn read_comment<SE: cash_core::ShellExtensions>(
             }
         }
     } else {
+        rar.console.msg("\nReading comment from stdin\n");
         let mut bytes = Vec::new();
         let _ = io::Read::read_to_end(&mut rar.context.stdin(), &mut bytes);
         bytes
@@ -413,7 +423,7 @@ fn read_comment<SE: cash_core::ShellExtensions>(
     rar.console
         .msg(&format!("\nAdding a comment to {display}\n"));
     // RAR 5 keeps a comment in UTF-8: a text file is read in its own encoding.
-    Ok(Some(super::decode_text(&bytes).into_bytes()))
+    Ok(super::decode_text(&bytes).into_bytes())
 }
 
 /// The builder's settings from the switches, over those of the archive updated.
@@ -446,8 +456,7 @@ fn settings<SE: cash_core::ShellExtensions>(
     }
     builder = builder.layout(layout(rar));
     if builder.format().family() == ArchiveFamily::Rar50Plus {
-        // Quick open is on unless `-qo-`; rars keeps no index under encrypted headers.
-        let quick_open = switches.quick_open != Some('-') && !builder_encrypts_headers(rar, old);
+        let quick_open = quick_open_on(rar, old.is_some_and(|o| o.facts.encrypted_headers));
         builder = builder
             .archive_metadata(None, switches.lock, quick_open)
             .map_err(|error| {
@@ -476,11 +485,15 @@ pub(super) fn layout<SE: cash_core::ShellExtensions>(rar: &Rar<'_, SE>) -> rar::
         .with_quick_open_over(over)
 }
 
-fn builder_encrypts_headers<SE: cash_core::ShellExtensions>(
+/// Whether an archive written gets quick-open information: unless `-qo-`, and not under
+/// encrypted headers (`-hp`, or an archive that has them), where rars keeps no index.
+pub(super) fn quick_open_on<SE: cash_core::ShellExtensions>(
     rar: &Rar<'_, SE>,
-    old: Option<&open::Opened>,
+    encrypted_headers: bool,
 ) -> bool {
-    rar.switches.header_password.is_some() || old.is_some_and(|o| o.facts.encrypted_headers)
+    rar.switches.quick_open != Some('-')
+        && !encrypted_headers
+        && rar.switches.header_password.is_none()
 }
 
 /// `-rr[N]`'s size as a percentage of the archive: `N`, `N%` or `Np`; 3 by default.
@@ -711,7 +724,10 @@ fn unix_seconds(time: SystemTime) -> i64 {
 
 /// An archived member's modification time as whole seconds since 1970: RAR 5's own,
 /// RAR 1.5 to 4's MS-DOS time on the zone's wall clock.
-fn member_seconds(member: &rar::ArchiveMember, zone: &cash_core::timefmt::Zone) -> Option<i64> {
+pub(super) fn member_seconds(
+    member: &rar::ArchiveMember,
+    zone: &cash_core::timefmt::Zone,
+) -> Option<i64> {
     if let Ok(Some(FileTimes {
         modified: Some(stamp),
         ..

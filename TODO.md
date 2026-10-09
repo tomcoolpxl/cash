@@ -676,7 +676,12 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      an archive whose files are encrypted without its password (rar copies them, rars'
      preserving builder asks for it); `-as`, `-dr`, `-dw`, `-ag`, `-log` read, not done;
      `-md` read and not applied (rars' builder keeps its dictionary size to itself).
-   - `c`, `cw`, `rn`, `k`, `rr`, `ch`, `r`, `rc`, `i`; `s` and `rv` refused.
+   - `c`, `cw`, `rn`, `k`, `rr` and `ch`: done 2026-10-09 (`rar_modify.sh`, 474 lines,
+     the rewrites WinRAR's byte for byte). Left of them: `c` and `k` on a volume set,
+     which rar 7.23 does and cash refuses as it refuses `a` ("Cannot modify volume");
+     `rr` above 100% (rar takes up to 1000%, rars' writer 100); `ch` takes `-cl`, `-cu`,
+     `-z`, `-k` and `-tl`, not the other switches rar lets it change (`-amr`, `-ma`…).
+   - `r`, `rc`, `i`; `s` and `rv` refused.
    - The `expect(dead_code)` at the top of `rar/mod.rs` goes when every part is used.
 3. **The page, `builtins.md`, doctor** (done 2026-10-09): `help rar` covers both names;
    `CARRIED` and doctor's note on a program cash goes ahead of have `rar` and `unrar`,
