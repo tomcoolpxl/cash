@@ -11,7 +11,7 @@ use windows_sys::Win32::Foundation::{
 };
 use windows_sys::Win32::Globalization::{
     CPINFOEXW, GetCPInfoExW, IsDBCSLeadByteEx, IsValidCodePage, MB_ERR_INVALID_CHARS,
-    MultiByteToWideChar, WC_NO_BEST_FIT_CHARS, WideCharToMultiByte,
+    MB_USEGLYPHCHARS, MultiByteToWideChar, WC_NO_BEST_FIT_CHARS, WideCharToMultiByte,
 };
 
 /// Whether `code_page` is one this Windows can convert.
@@ -72,12 +72,27 @@ pub enum DecodeError {
 /// `bytes` in `code_page` as UTF-16. With `strict`, a sequence the code page has no
 /// character for is [`DecodeError::Invalid`]; without it, Windows substitutes.
 pub fn decode(code_page: u32, bytes: &[u8], strict: bool) -> Result<Vec<u16>, DecodeError> {
+    decode_with(
+        code_page,
+        bytes,
+        if strict { MB_ERR_INVALID_CHARS } else { 0 },
+    )
+}
+
+/// `bytes` in `code_page` as UTF-16, control codes as the pictures the code page
+/// shows for them on a console (`MB_USEGLYPHCHARS`: OEM 437's `☺` for 1, `◙` for a
+/// line feed, `⌂` for 127).
+pub fn decode_glyphs(code_page: u32, bytes: &[u8]) -> Result<Vec<u16>, DecodeError> {
+    decode_with(code_page, bytes, MB_USEGLYPHCHARS)
+}
+
+/// [`decode`] with `MultiByteToWideChar`'s `flags`.
+fn decode_with(code_page: u32, bytes: &[u8], flags: u32) -> Result<Vec<u16>, DecodeError> {
     if bytes.is_empty() {
         return Ok(Vec::new());
     }
     let length =
         i32::try_from(bytes.len()).map_err(|_| DecodeError::Failed(ERROR_INVALID_PARAMETER))?;
-    let flags = if strict { MB_ERR_INVALID_CHARS } else { 0 };
     // SAFETY: always safe; it clears the stale value a zero return would be judged by.
     unsafe { SetLastError(0) };
     // SAFETY: the input pointer is valid for `length` bytes; a null buffer with no

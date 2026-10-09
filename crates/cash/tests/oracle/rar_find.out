@@ -255,6 +255,14 @@ rc=0
 
 RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
 Trial version             Type 'rar -?' for help
+          
+Found  solid.rar / src/small.txt
+  hello world HELLO again  
+Done
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
 
 Done
 --- stderr
@@ -262,3 +270,100 @@ Done
 Cannot open missing.rar
 The system cannot find the file specified.
 rc=10
+== the tables: ANSI Windows' 1252, OEM the console's 437, letters folded in each
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Found  tables.rar / tables/oem.txt
+  before café after◙
+Found  tables.rar / tables/ansi.txt
+  before café after  
+Found  tables.rar / tables/utf8.txt
+  before café after 
+Found  tables.rar / tables/ctl.txt
+  a☺b○c⌂d café x←y◙
+Done
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Found  tables.rar / tables/oem.txt
+  before café after◙
+Found  tables.rar / tables/ansi.txt
+  before café after  
+Found  tables.rar / tables/utf8.txt
+  before café after 
+Found  tables.rar / tables/ctl.txt
+  a☺b○c⌂d café x←y◙
+Done
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Found  tables.rar / tables/oem.txt
+  before café after◙
+Found  tables.rar / tables/ansi.txt
+  before café after  
+Found  tables.rar / tables/utf8.txt
+  before café after 
+Found  tables.rar / tables/ctl.txt
+  a☺b○c⌂d café x←y◙
+Done
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Found  tables.rar / tables/ansi.txt
+  before café after  
+Done
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Found  tables.rar / tables/oem.txt
+  before caf‚ after  
+Found  tables.rar / tables/ctl.txt
+  a b cd caf‚ x y  
+Done
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Found  tables.rar / tables/oem.txt
+  before caf‚ after  
+Found  tables.rar / tables/ctl.txt
+  a b cd caf‚ x y  
+Done
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Found  tables.rar / tables/oem.txt
+  before caf‚ after  
+Found  tables.rar / tables/ansi.txt
+  before café after  
+Found  tables.rar / tables/utf8.txt
+  before cafÃ© after  
+Done
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Found  tables.rar / tables/oem.txt
+  before caf‚ after  
+Found  tables.rar / tables/ansi.txt
+  before café after  
+Found  tables.rar / tables/utf8.txt
+  before cafÃ© after  
+Found  tables.rar / tables/ctl.txt
+  a b cd caf‚ x y  
+Done
+rc=0

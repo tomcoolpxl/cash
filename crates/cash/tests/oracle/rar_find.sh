@@ -53,9 +53,24 @@ for a in stored.rar solid.rar; do
   z rar it=café $a
   z rar i=café $a
 done
-# A name chosen; in a solid archive rar also wipes the progress of the files it decodes
-# to get there, which leaves spaces cash, with no progress shown, has no reason for.
+# A name chosen; in a solid archive rar also writes over a progress's place for each
+# file it decodes to get there, which leaves spaces.
 z rar i=hello stored.rar 'src\small.txt'
+z rar i=hello solid.rar 'src\small.txt'
 z rar i=hello missing.rar
+
+echo "== the tables: ANSI Windows' 1252, OEM the console's 437, letters folded in each"
+# café in OEM 437 (0x82, which 1252 reads as a low quotation mark), in ANSI 1252 and
+# in UTF-8, and control codes, which OEM shows as the console's pictures.
+mkdir tables
+printf 'before caf\202 after\n' > tables/oem.txt
+printf 'before caf\351 after\n' > tables/ansi.txt
+printf 'before caf\303\251 after\n' > tables/utf8.txt
+printf 'a\001b\tc\177d caf\202 x\033y\n' > tables/ctl.txt
+touch -d '2025-03-01T10:00:00Z' tables/*
+rar a -m0 -idq tables.rar tables/oem.txt tables/ansi.txt tables/utf8.txt tables/ctl.txt
+for spec in it=café it=CAFÉ ict=café i=café it=caf‚ i=caf‚ it=after i=caf; do
+  z rar "$spec" tables.rar
+done
 
 cd / && rm -rf "$dir"

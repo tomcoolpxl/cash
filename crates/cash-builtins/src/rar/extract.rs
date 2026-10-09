@@ -698,6 +698,9 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
                 }
                 if said {
                     self.wipe_progress();
+                } else if self.job.mode == Mode::Find {
+                    // `i` writes its progress's place over, a file's worth at a time.
+                    self.rar.console.msg(&format!("{}     ", "\u{8}".repeat(5)));
                 }
             }
             return Ok(());

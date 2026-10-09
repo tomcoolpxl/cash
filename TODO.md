@@ -929,9 +929,14 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      a file's five bytes from a mebibyte on (a 1.2 MB record took four). Reading,
      testing, repairing and changing such an archive work. With `-idq`, rar ends
      standard error's open line at the end ("Cannot open ..." too); cash does now.
-   - `i`: done 2026-10-09 (`rar_find.sh`, 264 lines). Its OEM table is not looked in
-     with `t` (ANSI, UTF-8 and UTF-16 are); a name chosen in a solid archive leaves
-     out the spaces rar's progress leaves.
+   - `i`: done 2026-10-09 (`rar_find.sh`, 264 lines then). Its tables and a solid
+     archive's names: done 2026-10-09 (`rar_find.sh`, now 369 lines). `t` looks in the
+     OEM code page too, whose control codes show as the console's pictures (`◙` for a
+     line feed); ANSI is Windows' code page (1252: 0x82 a low quotation mark), where
+     cash read Latin-1; letters fold in every table (`CAFÉ` finds UTF-8's `café`). A
+     file named in a solid archive: each file decoded on the way writes over a
+     progress's place, five backspaces and five spaces, as Rar.exe does.
+     `cash_win32::codepage::decode_glyphs` decodes with the console's pictures.
    - `r`: done 2026-10-09 (`rar_repair.sh`, 253 lines; `t` now tests a recovery record
      by its own chunks' checksums, and finds an archive "ended early" only where its
      locator points at a missing quick-open record, as rar does). Damage the record

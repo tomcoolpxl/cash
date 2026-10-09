@@ -20,10 +20,58 @@ const HEX_SIDE: usize = 5;
 /// How the bytes of a string, and of what is shown around it, are read.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Table {
-    /// Windows' ANSI code page, Latin-1 to cash.
+    /// Windows' ANSI code page.
     Ansi,
+    /// Windows' OEM code page, the console's.
+    Oem,
     Utf8,
     Utf16,
+}
+
+/// A single-byte code page's characters by byte, as Windows decodes them: plainly,
+/// as a console shows them (control codes as pictures), and as lower case letters.
+/// Latin-1 where Windows cannot say, or the code page takes more than a byte.
+struct CodePage {
+    chars: [char; 256],
+    shown: [char; 256],
+    lower: [char; 256],
+}
+
+impl CodePage {
+    /// Windows' code page `code_page`: 0 the ANSI one, 1 the OEM one.
+    fn of(code_page: u32) -> Self {
+        let bytes: Vec<u8> = (0..=255).collect();
+        let table = |units: Option<Vec<u16>>| -> Option<[char; 256]> {
+            let units = units.filter(|units| units.len() == 256)?;
+            let mut chars = ['\0'; 256];
+            for (slot, unit) in chars.iter_mut().zip(units) {
+                *slot = char::from_u32(u32::from(unit))?;
+            }
+            Some(chars)
+        };
+        let latin1: [char; 256] =
+            std::array::from_fn(|byte| char::from(u8::try_from(byte).unwrap_or(0)));
+        let chars =
+            table(cash_win32::codepage::decode(code_page, &bytes, false).ok()).unwrap_or(latin1);
+        let shown =
+            table(cash_win32::codepage::decode_glyphs(code_page, &bytes).ok()).unwrap_or(chars);
+        let lower = chars.map(|c| c.to_lowercase().next().unwrap_or(c));
+        Self {
+            chars,
+            shown,
+            lower,
+        }
+    }
+
+    /// `text` in the code page, when it has a byte for every character.
+    fn encode(&self, text: &str) -> Option<Vec<u8>> {
+        text.chars()
+            .map(|c| {
+                let byte = self.chars.iter().position(|&d| d == c)?;
+                u8::try_from(byte).ok()
+            })
+            .collect()
+    }
 }
 
 /// The string to look for, in each table it is looked for in.
@@ -31,13 +79,17 @@ pub(super) struct Needles {
     list: Vec<(Table, Vec<u8>)>,
     case_sensitive: bool,
     hex: bool,
+    ansi: CodePage,
+    oem: CodePage,
 }
 
 impl Needles {
     /// `i`'s string as its parameters ask: `h` hexadecimal bytes, `t` every table
-    /// (ANSI, UTF-8, UTF-16), else ANSI alone; `c` case sensitive. `None` when there
-    /// is nothing to look for.
+    /// (ANSI, OEM, UTF-8, UTF-16), else ANSI alone; `c` case sensitive. `None` when
+    /// there is nothing to look for.
     pub(super) fn new(spec: &FindSpec) -> Option<Self> {
+        let ansi = CodePage::of(0);
+        let oem = CodePage::of(1);
         let mut list = Vec::new();
         if spec.hex {
             let digits: Vec<u8> = spec.text.bytes().filter(u8::is_ascii_hexdigit).collect();
@@ -51,15 +103,13 @@ impl Needles {
                 list.push((Table::Ansi, bytes));
             }
         } else {
-            let ansi: Option<Vec<u8>> = spec
-                .text
-                .chars()
-                .map(|c| u8::try_from(u32::from(c)).ok())
-                .collect();
-            if let Some(ansi) = ansi {
-                list.push((Table::Ansi, ansi));
+            if let Some(bytes) = ansi.encode(&spec.text) {
+                list.push((Table::Ansi, bytes));
             }
             if spec.all_tables {
+                if let Some(bytes) = oem.encode(&spec.text) {
+                    list.push((Table::Oem, bytes));
+                }
                 list.push((Table::Utf8, spec.text.as_bytes().to_vec()));
                 list.push((
                     Table::Utf16,
@@ -75,7 +125,17 @@ impl Needles {
             list,
             case_sensitive: spec.case_sensitive || spec.hex,
             hex: spec.hex,
+            ansi,
+            oem,
         })
+    }
+
+    /// The code page `table` reads by.
+    const fn page(&self, table: Table) -> &CodePage {
+        match table {
+            Table::Oem => &self.oem,
+            _ => &self.ansi,
+        }
     }
 
     fn longest(&self) -> usize {
@@ -150,13 +210,40 @@ impl<'n> Matcher<'n> {
         best
     }
 
+    /// Whether bytes `a` are the string `b` in `table`, letters compared without
+    /// their case unless `c` asks.
     fn equal(&self, table: Table, a: &[u8], b: &[u8]) -> bool {
-        if self.needles.case_sensitive {
+        if self.needles.case_sensitive || a == b {
             return a == b;
         }
-        a.iter()
-            .zip(b)
-            .all(|(&x, &y)| fold(table, x) == fold(table, y))
+        let lower = |chars: &mut dyn Iterator<Item = char>| -> Vec<char> {
+            chars.flat_map(char::to_lowercase).collect()
+        };
+        match table {
+            Table::Ansi | Table::Oem => {
+                let page = self.needles.page(table);
+                a.iter()
+                    .zip(b)
+                    .all(|(&x, &y)| page.lower[usize::from(x)] == page.lower[usize::from(y)])
+            }
+            Table::Utf8 => match (std::str::from_utf8(a), std::str::from_utf8(b)) {
+                (Ok(x), Ok(y)) => lower(&mut x.chars()) == lower(&mut y.chars()),
+                _ => false,
+            },
+            Table::Utf16 => {
+                let decode = |bytes: &[u8]| {
+                    let units = bytes
+                        .as_chunks::<2>()
+                        .0
+                        .iter()
+                        .map(|&pair| u16::from_le_bytes(pair));
+                    char::decode_utf16(units)
+                        .map(|c| c.unwrap_or(char::REPLACEMENT_CHARACTER))
+                        .collect::<Vec<char>>()
+                };
+                lower(&mut decode(a).into_iter()) == lower(&mut decode(b).into_iter())
+            }
+        }
     }
 
     /// The line rar shows for the match, once decoding is over (`eof`) or stopped.
@@ -185,8 +272,20 @@ impl<'n> Matcher<'n> {
             end = hit.at + hit.len + nul;
         }
         let bytes = &self.kept[start..end];
+        // ANSI's control codes are spaces, DEL kept; OEM's are the console's pictures;
+        // UTF-8's and UTF-16's are spaces.
         let mut text: String = match hit.table {
-            Table::Ansi => bytes.iter().map(|&b| char::from(b)).collect(),
+            Table::Ansi => bytes
+                .iter()
+                .map(|&b| match self.needles.ansi.chars[usize::from(b)] {
+                    c if u32::from(c) < 0x20 => ' ',
+                    c => c,
+                })
+                .collect(),
+            Table::Oem => bytes
+                .iter()
+                .map(|&b| self.needles.oem.shown[usize::from(b)])
+                .collect(),
             Table::Utf8 => String::from_utf8_lossy(bytes).into_owned(),
             Table::Utf16 => {
                 let units: Vec<u16> = bytes
@@ -198,10 +297,12 @@ impl<'n> Matcher<'n> {
                 String::from_utf16_lossy(&units)
             }
         };
-        text = text
-            .chars()
-            .map(|c| if c.is_control() { ' ' } else { c })
-            .collect();
+        if matches!(hit.table, Table::Utf8 | Table::Utf16) {
+            text = text
+                .chars()
+                .map(|c| if c.is_control() { ' ' } else { c })
+                .collect();
+        }
         // At the file's end, ANSI's text ends in a space where its NUL would be.
         if hit.table == Table::Ansi && !self.complete && end == self.kept.len() {
             text.push(' ');
@@ -282,15 +383,6 @@ impl Matcher<'_> {
     }
 }
 
-/// A byte with its case folded, as the table reads it.
-const fn fold(table: Table, byte: u8) -> u8 {
-    match byte {
-        b'A'..=b'Z' => byte + 32,
-        0xC0..=0xDE if byte != 0xD7 && matches!(table, Table::Ansi) => byte + 32,
-        _ => byte,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -305,6 +397,27 @@ mod tests {
             }
         }
         matcher.shown()
+    }
+
+    #[test]
+    fn i_reads_ansi_and_oem_by_windows_code_pages() {
+        // OEM 437's é is 0x82, which ANSI 1252 reads as a low quotation mark; OEM shows
+        // a line feed as its picture.
+        let oem = b"before caf\x82 after\n";
+        assert_eq!(
+            find("t=CAFÉ", oem).as_deref(),
+            Some("before café after\u{25d9}")
+        );
+        assert_eq!(
+            find("=caf\u{201a}", oem).as_deref(),
+            Some("before caf\u{201a} after  ")
+        );
+        assert_eq!(find("=café", oem), None);
+        // Letters fold in UTF-8 too.
+        assert_eq!(
+            find("t=CAFÉ", "before café after\n".as_bytes()).as_deref(),
+            Some("before café after ")
+        );
     }
 
     #[test]

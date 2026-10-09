@@ -103,7 +103,7 @@ fn rar_comments_renames_locks_and_changes_as_winrar_7_23_does() {
 fn rar_finds_strings_as_winrar_7_23_does() {
     assert_eq!(
         run_oracle_script("rar_find"),
-        with_cash_banners("rar_find", 26, 0)
+        with_cash_banners("rar_find", 35, 0)
     );
 }
 
