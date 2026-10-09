@@ -399,6 +399,69 @@ Testing     src/text.txt                                                   OK
 Testing the recovery record         OK
 All OK
 rc=0
+== the main header damaged: said corrupt, and asked whether to mark the archive solid
+-- answered y
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Searching for recovery record      
+Data recovery record not found
+Reconstructing mainbad.rar
+Building rebuilt.mainbad.rar      
+Found  src/noise.bin     
+Found  src/small.txt     
+Found  src/text.txt     
+Done
+--- stderr
+
+Corrupt header is found
+Main archive header is corrupt
+Corrupt header is found
+Main archive header is corrupt
+The archive header is corrupt. Mark archive as solid? [Y]es, [N]o 
+rc=3
+208247997 117205
+-- answered n
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Searching for recovery record      
+Data recovery record not found
+Reconstructing mainbad.rar
+Building rebuilt.mainbad.rar      
+Found  src/noise.bin     
+Found  src/small.txt     
+Found  src/text.txt     
+Done
+--- stderr
+
+Corrupt header is found
+Main archive header is corrupt
+Corrupt header is found
+Main archive header is corrupt
+The archive header is corrupt. Mark archive as solid? [Y]es, [N]o 
+rc=3
+2549627748 117205
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Searching for recovery record      
+Data recovery record not found
+Reconstructing mainbad.rar
+Building rebuilt.mainbad.rar      
+
+Program aborted
+--- stderr
+
+Corrupt header is found
+Main archive header is corrupt
+Corrupt header is found
+Main archive header is corrupt
+The archive header is corrupt. Mark archive as solid? [Y]es, [N]o Read error in the file stdin
+rc=12
 == a file that is no archive
 
 RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026

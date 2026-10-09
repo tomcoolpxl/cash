@@ -89,8 +89,33 @@ fn repair<SE: cash_core::ShellExtensions>(
             }
             return Ok(());
         }
+        // A main header that does not check: its flags unknown, the record is
+        // looked for by its marks.
+        Err(_) if main_header_damaged(&bytes) => {
+            rar.console
+                .msg(&format!("\nSearching for recovery record{area}"));
+            if let Ok(Some(marked)) = recovery::rar5::recovery_by_marks(&bytes) {
+                let mended = marked
+                    .mended
+                    .map(|mended| marked.damaged.iter().cloned().zip(mended).collect());
+                if !mend(
+                    rar,
+                    folder,
+                    &name,
+                    bytes.clone(),
+                    &marked.damaged,
+                    mended,
+                    marked.intact,
+                ) {
+                    reconstruct(rar, found, folder, &name, &bytes, false)?;
+                }
+            } else {
+                reconstruct(rar, found, folder, &name, &bytes, true)?;
+            }
+            return Ok(());
+        }
         Err(_) => {
-            reconstruct(rar, found, folder, &name, &bytes, true);
+            reconstruct(rar, found, folder, &name, &bytes, true)?;
             return Ok(());
         }
     };
@@ -105,7 +130,7 @@ fn repair<SE: cash_core::ShellExtensions>(
         let (damaged, mended, intact, base) = recovered(archive, password, &bytes);
         // Damage the record cannot mend is said, and the archive rebuilt instead.
         if !mend(rar, folder, &name, base, &damaged, mended, intact) {
-            reconstruct(rar, found, folder, &name, &bytes, false);
+            reconstruct(rar, found, folder, &name, &bytes, false)?;
         }
         return Ok(());
     }
@@ -115,8 +140,7 @@ fn repair<SE: cash_core::ShellExtensions>(
         done(rar);
         return Ok(());
     }
-    reconstruct(rar, found, folder, &name, &bytes, true);
-    Ok(())
+    reconstruct(rar, found, folder, &name, &bytes, true)
 }
 
 /// What a recovery record mends.
@@ -247,7 +271,7 @@ fn reconstruct<SE: cash_core::ShellExtensions>(
     name: &str,
     bytes: &[u8],
     not_found: bool,
-) {
+) -> Result<(), Stop> {
     if not_found {
         rar.console.msg("\nData recovery record not found");
     }
@@ -255,7 +279,19 @@ fn reconstruct<SE: cash_core::ShellExtensions>(
         .msg(&format!("\nReconstructing {}", found.display));
     let shown = format!("{folder}rebuilt.{name}");
     rar.console.msg(&format!("\nBuilding {shown}{}", area(rar)));
-    let (rebuilt, names) = rebuild(bytes);
+    // A main header that does not check is said corrupt, twice, and rar asks whether
+    // the archive it rebuilds is solid.
+    let solid = if main_header_damaged(bytes) {
+        for _ in 0..2 {
+            rar.console
+                .err("\nCorrupt header is found\nMain archive header is corrupt");
+        }
+        rar.fail(code::CRC);
+        ask_solid(rar)?
+    } else {
+        false
+    };
+    let (rebuilt, names) = rebuild(bytes, solid);
     for found_name in &names {
         rar.console.msg(&format!("\nFound  {found_name}     "));
     }
@@ -263,6 +299,28 @@ fn reconstruct<SE: cash_core::ShellExtensions>(
         write(rar, &shown, &rebuilt);
     }
     done(rar);
+    Ok(())
+}
+
+/// Whether a RAR 5 archive's main header fails its checksum or is not one.
+fn main_header_damaged(bytes: &[u8]) -> bool {
+    bytes.starts_with(RAR5_SIGNATURE)
+        && !matches!(block5(bytes, RAR5_SIGNATURE.len()), Some((1, _, _)))
+}
+
+/// rar's question when the main header is corrupt: whether to mark the archive solid,
+/// Yes alone saying so, whatever `-y` says.
+fn ask_solid<SE: cash_core::ShellExtensions>(rar: &Rar<'_, SE>) -> Result<bool, Stop> {
+    rar.console
+        .err("\nThe archive header is corrupt. Mark archive as solid? [Y]es, [N]o ");
+    let Some(answer) = rar.read_answer(true)? else {
+        rar.console.err("Read error in the file stdin");
+        if let Some(extra) = rar.stdin_end_words(false) {
+            rar.console.err(&format!("\n{extra}"));
+        }
+        return Err(Stop::Aborted(code::READ));
+    };
+    Ok(answer.trim_start().starts_with(['y', 'Y']))
 }
 
 /// A file that is no RAR archive, with no recovery record in it either: rar searches
@@ -316,10 +374,11 @@ pub(super) fn write<SE: cash_core::ShellExtensions>(rar: &Rar<'_, SE>, shown: &s
 }
 
 /// An archive rebuilt from the blocks whose headers check, and the names of the files
-/// found; `None` when it is not a RAR 1.5 to 7 archive.
-fn rebuild(bytes: &[u8]) -> (Option<Vec<u8>>, Vec<String>) {
+/// found; `None` when it is not a RAR 1.5 to 7 archive. A RAR 5 main header that
+/// does not check is written anew, `solid` or not.
+fn rebuild(bytes: &[u8], solid: bool) -> (Option<Vec<u8>>, Vec<String>) {
     if bytes.starts_with(RAR5_SIGNATURE) {
-        rebuild5(bytes)
+        rebuild5(bytes, solid)
     } else if bytes.starts_with(RAR4_SIGNATURE) {
         rebuild4(bytes)
     } else {
@@ -394,7 +453,7 @@ fn block5(bytes: &[u8], at: usize) -> Option<(u64, usize, Option<String>)> {
 /// RAR 5: the main header as it is, then each file and service block found, the
 /// quick-open record among them, and no end header, as rar rebuilds it. A main header
 /// that does not check is replaced by a plain one.
-fn rebuild5(bytes: &[u8]) -> (Option<Vec<u8>>, Vec<String>) {
+fn rebuild5(bytes: &[u8], solid: bool) -> (Option<Vec<u8>>, Vec<String>) {
     let mut out = RAR5_SIGNATURE.to_vec();
     let mut names = Vec::new();
     let mut at = RAR5_SIGNATURE.len();
@@ -402,8 +461,9 @@ fn rebuild5(bytes: &[u8]) -> (Option<Vec<u8>>, Vec<String>) {
         out.extend_from_slice(&bytes[at..at + len]);
         at += len;
     } else {
-        // Size 3: the main type, no header flags, no archive flags.
-        let header = [0x03, 0x01, 0x00, 0x00];
+        // Size 3: the main type, header flags 4 (skip it if unknown), and the
+        // archive's flags: solid or none, as rar writes it.
+        let header = [0x03, 0x01, 0x04, if solid { 0x04 } else { 0x00 }];
         out.extend_from_slice(&crc32fast::hash(&header).to_le_bytes());
         out.extend_from_slice(&header);
     }

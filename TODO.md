@@ -948,9 +948,14 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      (two errors), the record still tested by its chunks; rars' lenient read now keeps
      it, where it ended the walk ("Unexpected end of archive"). `r` mends with it and
      leaves it out of `fixed.NAME`, which ends where it began with an end header, as
-     Rar.exe's does byte for byte. Left of it: a damaged main header (rar asks "Mark
-     archive as solid?", cash writes a plain one); RAR 1.5 to 4 rebuilds, unobserved
-     (WinRAR 7.23 writes no RAR 4 to damage).
+     Rar.exe's does byte for byte. A damaged main header: done 2026-10-09 (in
+     `rar_repair.sh`, now 494 lines): a record looked for by its marks, then
+     "Main archive header is corrupt" twice and "The archive header is corrupt. Mark
+     archive as solid? [Y]es, [N]o" (Yes alone says solid; `-y` does not answer; the
+     input's end aborts, rc 12), the new main header `03 01 04` with the solid flag or
+     none, the rebuilt archive Rar.exe's byte for byte; cash wrote header flags 0 and
+     asked nothing. Left of it: RAR 1.5 to 4 rebuilds, unobserved (WinRAR 7.23 writes
+     no RAR 4 to damage).
    - `rc`: done 2026-10-09 (`rar_reconstruct.sh`, 249 lines, RAR 5 and both RAR 3
      namings, the volumes rebuilt WinRAR's byte for byte); `s` and `rv` refused in
      words of their own. Left of it: a RAR 3 volume that is there but damaged (its

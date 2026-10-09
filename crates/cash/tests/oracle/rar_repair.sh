@@ -133,6 +133,21 @@ for args in "hp.rar" "-px hp.rar" "hprr.rar" "hpbad.rar" "-px hpbad.rar"; do
 done
 z rar t -idc -px fixed.hpbad.rar
 
+echo "== the main header damaged: said corrupt, and asked whether to mark the archive solid"
+# Rebuilt without a recovery record; the answer sets the new main header's solid flag,
+# and the end of the input aborts. -y does not answer it.
+cp norr.rar mainbad.rar
+damage mainbad.rar 9 1
+for answer in y n; do
+  rm -f rebuilt.mainbad.rar
+  echo "-- answered $answer"
+  echo $answer | z rar r mainbad.rar
+  cksum < rebuilt.mainbad.rar
+done
+rm -f rebuilt.mainbad.rar
+z rar r -y mainbad.rar
+ls rebuilt.mainbad.rar 2>/dev/null
+
 echo "== a file that is no archive"
 printf 'not an archive at all\n' > notrar.txt
 z rar r notrar.txt
