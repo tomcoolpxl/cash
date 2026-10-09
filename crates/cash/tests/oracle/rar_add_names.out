@@ -1,0 +1,152 @@
+== -r: a file's name looked for in every folder below its own
+
+Evaluation copy. Please register.
+
+Creating archive r1.rar
+
+Adding    src/sub/c.txt                                                    OK 
+Done
+rc=0
+
+Evaluation copy. Please register.
+
+Creating archive r2.rar
+
+Adding    src/a.txt                                                        OK 
+Done
+rc=0
+
+Evaluation copy. Please register.
+
+Creating archive r3.rar
+
+Adding    src/sub/c.txt                                                    OK 
+Done
+rc=0
+
+Evaluation copy. Please register.
+
+Creating archive r4.rar
+
+WARNING: No files
+rc=10
+
+Evaluation copy. Please register.
+
+Creating archive r5.rar
+
+Adding    src/a.txt                                                        OK 
+Adding    src/b.log                                                        OK 
+Adding    src/keep/k.log                                                   OK 
+Adding    src/sub/c.txt                                                    OK 
+Adding    src/keep                                                         OK 
+Adding    src/sub                                                          OK 
+Adding    src                                                              OK 
+Done
+rc=0
+src/a.txt
+src/b.log
+src/keep/k.log
+src/sub/c.txt
+src/keep
+src/sub
+src
+rc=0
+== -r0: only masks are
+
+Evaluation copy. Please register.
+
+Creating archive r6.rar
+
+WARNING: No files
+--- stderr
+
+Cannot open c.txt
+The system cannot find the file specified.
+rc=10
+
+Evaluation copy. Please register.
+
+Creating archive r7.rar
+
+Adding    src/a.txt                                                        OK 
+Adding    src/sub/c.txt                                                    OK 
+Done
+rc=0
+src/a.txt
+src/sub/c.txt
+rc=0
+== m: a folder holding a file left out is not deleted
+
+Evaluation copy. Please register.
+
+Creating archive m1.rar
+
+Adding    src/a.txt                                                        OK 
+Adding    src/sub/c.txt                                                    OK 
+Adding    src/keep                                                         OK 
+Adding    src/sub                                                          OK 
+Adding    src                                                              OK 
+Deleting src/sub/c.txt                     deleted  20%
+Deleting directory src/sub                           deleted  40%
+Deleting directory src/keep                          NOT DELETED  60%
+Deleting src/a.txt                         deleted  80%
+Deleting directory src                               NOT DELETED 100%
+Done
+--- stderr
+
+Cannot delete src/keep
+The directory is not empty.
+Cannot delete src
+The directory is not empty.
+rc=0
+src
+src/b.log
+src/keep
+src/keep/k.log
+
+Evaluation copy. Please register.
+
+Creating archive m2.rar
+
+Adding    src/a.txt                                                        OK 
+Adding    src/sub/c.txt                                                    OK 
+Adding    src/keep                                                         OK 
+Adding    src/sub                                                          OK 
+Adding    src                                                              OK 
+Deleting src/sub/c.txt                     deleted  20%
+Deleting directory src/sub                           deleted  40%
+Deleting directory src/keep                          NOT DELETED  60%
+Deleting src/a.txt                         deleted  80%
+Deleting directory src                               NOT DELETED 100%
+Done
+--- stderr
+
+Cannot delete src/keep
+The directory is not empty.
+Cannot delete src
+The directory is not empty.
+rc=0
+src
+src/b.log
+src/keep
+src/keep/k.log
+
+Evaluation copy. Please register.
+
+Creating archive m3.rar
+
+Adding    src/a.txt                                                        OK 
+Adding    src/sub/c.txt                                                    OK 
+Adding    src/keep                                                         OK 
+Adding    src/sub                                                          OK 
+Adding    src                                                              OK 
+Deleting src/sub/c.txt                     deleted  20%
+Deleting src/a.txt                         deleted  40%
+Done
+rc=0
+src
+src/b.log
+src/keep
+src/keep/k.log
+src/sub

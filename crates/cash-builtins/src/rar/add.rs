@@ -660,9 +660,26 @@ fn put<SE: cash_core::ShellExtensions>(
         builder.set_dos_attributes(&name, u64::from(source.attributes))?;
         return Ok(());
     }
+    // One precision for a file's times: whole seconds, when every time kept is asked at
+    // one second, are Unix seconds as WinRAR keeps them.
+    let kept = [
+        Some(store.modified.unwrap_or('+')),
+        store.created,
+        store.accessed,
+    ];
+    let whole = kept
+        .iter()
+        .flatten()
+        .filter(|&&precision| precision != '-')
+        .all(|&precision| precision == '1');
     let stamp = |time: Option<SystemTime>, precision: Option<char>| match precision {
         Some('-') | None => None,
-        Some(precision) => time.map(|time| filetime(time, precision == '1')),
+        Some(_) if whole => time.and_then(|time| {
+            u32::try_from(unix_seconds(time))
+                .ok()
+                .map(FileTimestamp::UnixSeconds)
+        }),
+        Some(_) => time.map(filetime),
     };
     let times = FileTimes {
         modified: stamp(source.modified, Some(store.modified.unwrap_or('+'))),
@@ -812,15 +829,12 @@ pub(super) fn keep(
 }
 
 /// A system time as a FILETIME stamp, whole seconds only with `seconds`.
-fn filetime(time: SystemTime, seconds: bool) -> FileTimestamp {
+fn filetime(time: SystemTime) -> FileTimestamp {
     let nanos: i128 = match time.duration_since(SystemTime::UNIX_EPOCH) {
         Ok(since) => i128::try_from(since.as_nanos()).unwrap_or(i128::MAX),
         Err(before) => -i128::try_from(before.duration().as_nanos()).unwrap_or(i128::MAX),
     };
-    let mut ticks = nanos / 100 + 116_444_736_000_000_000;
-    if seconds {
-        ticks -= ticks.rem_euclid(10_000_000);
-    }
+    let ticks = nanos / 100 + 116_444_736_000_000_000;
     FileTimestamp::WindowsFiletime(u64::try_from(ticks.max(0)).unwrap_or(0))
 }
 
@@ -1326,7 +1340,10 @@ impl<SE: cash_core::ShellExtensions> Walker<'_, '_, SE> {
     fn name(&mut self, arg: &str) {
         let recurse = self.rar.switches.recurse;
         let deep = matches!(recurse, Some('r' | '0'));
-        if open::has_wildcard(arg) || arg.ends_with('/') {
+        // With `-r` (not `-r0`) a file's name is looked for in every folder below its
+        // own, as a mask is; a folder's is not.
+        let searched = recurse == Some('r') && !arg.ends_with('/') && !self.rar.path(arg).is_dir();
+        if open::has_wildcard(arg) || arg.ends_with('/') || searched {
             let (folder, mask) = if arg.ends_with('/') {
                 (arg.trim_end_matches('/').to_owned(), "*".to_owned())
             } else {

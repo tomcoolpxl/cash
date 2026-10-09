@@ -124,6 +124,26 @@ fn rar_extracts_links_as_winrar_7_23_does() {
 }
 
 #[test]
+fn rar_keeps_times_as_winrar_7_23_does() {
+    assert_eq!(
+        run_oracle_script("rar_times"),
+        with_cash_banners("rar_times", 0, 0)
+    );
+}
+
+#[test]
+fn rar_adds_by_name_as_winrar_7_23_does() {
+    // A trial WinRAR says so before it writes; cash has no trial.
+    let expected = with_divergence(
+        &with_cash_banners("rar_add_names", 0, 0),
+        "\nEvaluation copy. Please register.\n",
+        "",
+        10,
+    );
+    assert_eq!(run_oracle_script("rar_add_names"), expected);
+}
+
+#[test]
 fn rar_says_it_makes_no_recovery_volumes_or_sfx() {
     let out = run("rar rv2 -idq a.rar; echo \"rc=$?\"; rar s -idq a.rar; echo \"rc=$?\"");
     assert_eq!(out.stdout, "rc=2\nrc=2");

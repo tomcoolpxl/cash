@@ -223,6 +223,9 @@ fn rar5(archive: &rar50::Archive, volume: usize, entries: &mut Vec<Entry>) {
                     (u64::from(seconds) + 11_644_473_600) * 10_000_000
                         + u64::from(nanoseconds / 100),
                 ),
+                rar::FileTimestamp::UnixSeconds(seconds) => {
+                    Time::Utc((u64::from(seconds) + 11_644_473_600) * 10_000_000)
+                }
             })
         };
         let times = header.file_times.unwrap_or_default();

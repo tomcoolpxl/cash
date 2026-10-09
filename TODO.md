@@ -699,9 +699,25 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      and adds "NAME - the file header is corrupt" after "Corrupt header is found" for
      each, reading on; cash stops at the first (seen damaging four bytes at offset 200
      of `rar_extract_switches.sh`'s `one.rar`).
-   - Writing, not yet in the oracle or not yet WinRAR's: `-ts`'s creation and access
-     times (a file's creation time is the run's); `-df`'s "NOT DELETED" when a folder
-     is not empty; `-r` with a plain file name (rar looks for it in every folder);
+   - `-ts` on `a`: done 2026-10-09 (`rar_times.sh`, 73 lines, twelve kinds and
+     precisions, the archives WinRAR's byte for byte; PowerShell sets the times first).
+     One precision a file: whole seconds only when every time kept asks for them, kept
+     then as 4-byte Unix seconds (rars' `FileTimestamp::UnixSeconds`, so such a record
+     also reads and is carried as it was); else all at full precision. lt now shows
+     "Created" and "Accessed". Left: RAR 1.5 to 4's creation and access times, in the
+     extended-time field rars decodes only the modification time of, neither listed
+     nor restored.
+   - `-df`, `m` and `mf` with a folder left holding files left out ("NOT DELETED",
+     "Cannot delete ... The directory is not empty."), and `-r` with a plain file name,
+     looked for in every folder below its own as a mask is (not with `-r0`, and a name
+     found nowhere is then no error): done 2026-10-09 (`rar_add_names.sh`, 152 lines;
+     the first was already rar's, the second is new).
+   - A file another program has open for writing: Rar.exe cannot open it ("Cannot
+     open NAME / The process cannot access the file because it is being used by
+     another process", then "WARNING: Cannot open N files", rc 6) and goes on; cash
+     reads it, and its writer stops on "entry source size changed while reading"
+     (seen adding a shell's own redirection files).
+   - Writing, not yet in the oracle or not yet WinRAR's:
      WinRAR's layout for volumes with `-hp` or `-rr` (they keep rars' own, payload-sized);
      the quick-open room kept for earlier big files in the same volume (taken as their
      header and 18 bytes each, as for the file going in, unchecked with two); updating

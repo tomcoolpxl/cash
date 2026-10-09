@@ -108,6 +108,9 @@ pub(super) struct Item {
     pub(super) split_before: bool,
     pub(super) split_after: bool,
     pub(super) modified: Option<Stamp>,
+    /// The creation and access times `-ts` keeps.
+    pub(super) created: Option<Stamp>,
+    pub(super) accessed: Option<Stamp>,
     pub(super) attributes: String,
     pub(super) hash: Hash,
     pub(super) mac: bool,
@@ -289,6 +292,18 @@ pub(super) fn rar5_facts(archive: &rar50::Archive, zone: &Zone) -> Facts {
     }
 }
 
+/// A RAR 5 time as a listing shows it, in the zone.
+fn stamp_of(zone: &Zone, stamp: rar::FileTimestamp) -> Option<Stamp> {
+    match stamp {
+        rar::FileTimestamp::Unix {
+            seconds,
+            nanoseconds,
+        } => Stamp::from_unix(zone, i64::from(seconds), nanoseconds),
+        rar::FileTimestamp::UnixSeconds(seconds) => Stamp::from_unix(zone, i64::from(seconds), 0),
+        rar::FileTimestamp::WindowsFiletime(ticks) => Stamp::from_filetime(zone, ticks),
+    }
+}
+
 /// A RAR 5 member's compression as lt shows it: `RAR 5.0(v50) -m3 -md=4m`.
 fn rar5_compression(info: u64, directory: bool) -> String {
     let version = info & 0x3F;
@@ -340,18 +355,11 @@ fn rar5_item(header: &rar50::FileHeader, service: bool, zone: &Zone) -> Item {
     } else {
         windows_attributes(header.attributes)
     };
+    let times = header.file_times.filter(|_| !service).unwrap_or_default();
     let modified = if service {
         None
-    } else if let Some(times) = header.file_times
-        && let Some(stamp) = times.modified
-    {
-        match stamp {
-            rar::FileTimestamp::Unix {
-                seconds,
-                nanoseconds,
-            } => Stamp::from_unix(zone, i64::from(seconds), nanoseconds),
-            rar::FileTimestamp::WindowsFiletime(ticks) => Stamp::from_filetime(zone, ticks),
-        }
+    } else if let Some(stamp) = times.modified {
+        stamp_of(zone, stamp)
     } else {
         header
             .htime_mtime
@@ -390,6 +398,8 @@ fn rar5_item(header: &rar50::FileHeader, service: bool, zone: &Zone) -> Item {
         split_before: header.is_split_before(),
         split_after: header.is_split_after(),
         modified,
+        created: times.created.and_then(|stamp| stamp_of(zone, stamp)),
+        accessed: times.accessed.and_then(|stamp| stamp_of(zone, stamp)),
         attributes,
         hash,
         mac,
@@ -507,6 +517,8 @@ fn rar4_item(header: &rar15_40::FileHeader, service: bool) -> Item {
         split_before: header.is_split_before(),
         split_after: header.is_split_after(),
         modified,
+        created: None,
+        accessed: None,
         attributes,
         hash: Hash::Crc32(header.file_crc),
         mac: false,
@@ -556,6 +568,8 @@ pub(super) fn rar13_items(archive: &rar13::Archive) -> Vec<Item> {
                 split_before: header.flags & 0x01 != 0,
                 split_after: header.flags & 0x02 != 0,
                 modified: Stamp::from_dos(header.file_time, 0, false),
+                created: None,
+                accessed: None,
                 attributes: windows_attributes(u64::from(header.file_attr)),
                 hash: Hash::None,
                 mac: false,

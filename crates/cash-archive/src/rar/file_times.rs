@@ -4,7 +4,13 @@ use crate::rar::{Error, Result};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FileTimestamp {
-    Unix { seconds: u32, nanoseconds: u32 },
+    Unix {
+        seconds: u32,
+        nanoseconds: u32,
+    },
+    /// Unix seconds kept whole: a record of them has no fractions after them, as
+    /// WinRAR writes one-second times (`-ts1`).
+    UnixSeconds(u32),
     WindowsFiletime(u64),
 }
 
@@ -15,6 +21,7 @@ impl FileTimestamp {
                 seconds,
                 nanoseconds,
             } => i128::from(seconds) * 1_000_000_000 + i128::from(nanoseconds),
+            Self::UnixSeconds(seconds) => i128::from(seconds) * 1_000_000_000,
             Self::WindowsFiletime(ticks) => (i128::from(ticks) - 116_444_736_000_000_000) * 100,
         }
     }
@@ -90,7 +97,8 @@ impl FileTimes {
             .flatten()
             .next()
             .ok_or(Error::InvalidArgument("file time record is empty"))?;
-        let unix = matches!(first, FileTimestamp::Unix { .. });
+        let whole = matches!(first, FileTimestamp::UnixSeconds(_));
+        let unix = whole || matches!(first, FileTimestamp::Unix { .. });
         let mut flags = u8::from(unix);
         let mut seconds = [0; 24];
         let mut seconds_len = 0;
@@ -103,13 +111,17 @@ impl FileTimes {
                     FileTimestamp::Unix {
                         seconds: value,
                         nanoseconds,
-                    } if unix && nanoseconds < 1_000_000_000 => {
+                    } if unix && !whole && nanoseconds < 1_000_000_000 => {
                         flags |= 0x10;
                         seconds[seconds_len..seconds_len + 4].copy_from_slice(&value.to_le_bytes());
                         seconds_len += 4;
                         fractions[fractions_len..fractions_len + 4]
                             .copy_from_slice(&nanoseconds.to_le_bytes());
                         fractions_len += 4;
+                    }
+                    FileTimestamp::UnixSeconds(value) if whole => {
+                        seconds[seconds_len..seconds_len + 4].copy_from_slice(&value.to_le_bytes());
+                        seconds_len += 4;
                     }
                     FileTimestamp::WindowsFiletime(ticks) if !unix => {
                         seconds[seconds_len..seconds_len + 8].copy_from_slice(&ticks.to_le_bytes());
@@ -153,18 +165,18 @@ impl FileTimes {
             }
             *slot = Some(if unix {
                 let seconds = u32::from_le_bytes(data[at * width..at * width + 4].try_into().ok()?);
-                let nanoseconds = if fractions {
+                if fractions {
                     let offset = count * width + at * 4;
-                    u32::from_le_bytes(data[offset..offset + 4].try_into().ok()?)
+                    let nanoseconds = u32::from_le_bytes(data[offset..offset + 4].try_into().ok()?);
+                    if nanoseconds >= 1_000_000_000 {
+                        return None;
+                    }
+                    FileTimestamp::Unix {
+                        seconds,
+                        nanoseconds,
+                    }
                 } else {
-                    0
-                };
-                if nanoseconds >= 1_000_000_000 {
-                    return None;
-                }
-                FileTimestamp::Unix {
-                    seconds,
-                    nanoseconds,
+                    FileTimestamp::UnixSeconds(seconds)
                 }
             } else {
                 FileTimestamp::WindowsFiletime(u64::from_le_bytes(
@@ -355,13 +367,11 @@ mod tests {
         let mut reverse_mixed = mixed;
         std::mem::swap(&mut reverse_mixed.modified, &mut reverse_mixed.created);
         assert!(reverse_mixed.encode().is_err());
-        assert_eq!(
-            FileTimes::parse(3, &123u32.to_le_bytes()).unwrap().modified,
-            Some(FileTimestamp::Unix {
-                seconds: 123,
-                nanoseconds: 0
-            })
-        );
+        // Whole seconds stay whole: written again, they have no fractions.
+        let whole = FileTimes::parse(3, &123u32.to_le_bytes()).unwrap();
+        assert_eq!(whole.modified, Some(FileTimestamp::UnixSeconds(123)));
+        let encoded = whole.encode().unwrap();
+        assert_eq!(&encoded[..], &[3, 123, 0, 0, 0]);
     }
 
     #[test]

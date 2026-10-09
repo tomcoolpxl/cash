@@ -408,6 +408,12 @@ fn technical(text: &mut String, item: &Item) {
     if let Some(stamp) = item.modified {
         field(text, "Modified", &stamp.long());
     }
+    if let Some(stamp) = item.created {
+        field(text, "Created", &stamp.long());
+    }
+    if let Some(stamp) = item.accessed {
+        field(text, "Accessed", &stamp.long());
+    }
     field(text, "Attributes", &item.attributes);
     let pack = if item.split_after { "Pack-" } else { "" };
     let mac = if item.mac { " MAC" } else { "" };
