@@ -712,11 +712,12 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      looked for in every folder below its own as a mask is (not with `-r0`, and a name
      found nowhere is then no error): done 2026-10-09 (`rar_add_names.sh`, 152 lines;
      the first was already rar's, the second is new).
-   - A file another program has open for writing: Rar.exe cannot open it ("Cannot
-     open NAME / The process cannot access the file because it is being used by
-     another process", then "WARNING: Cannot open N files", rc 6) and goes on; cash
-     reads it, and its writer stops on "entry source size changed while reading"
-     (seen adding a shell's own redirection files).
+   - A file another program has open for writing: done 2026-10-09 (in
+     `rar_add_names.sh`, now 192 lines). Rar.exe cannot open it, as it opens what it
+     adds letting no one write ("Cannot open NAME / The process cannot access the
+     file because it is being used by another process", then "WARNING: Cannot open N
+     files", rc 6), unless `-dh`; cash read it, and its writer stopped on "entry source
+     size changed while reading". Names not there now give rc 10, as rar's do, not 1.
    - Writing, not yet in the oracle or not yet WinRAR's:
      WinRAR's layout for volumes with `-hp` or `-rr` (they keep rars' own, payload-sized);
      the quick-open room kept for earlier big files in the same volume (taken as their

@@ -143,13 +143,19 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
 
     let comment = read_comment(rar, &display)?;
 
-    let (mut sources, missing) = collect(rar, parsed)?;
-    for (shown, error) in &missing {
+    let Collected {
+        mut sources,
+        missing,
+        held,
+    } = collect(rar, parsed)?;
+    for (shown, error) in missing.iter().chain(&held) {
         rar.console.err(&format!(
             "\nCannot open {shown}\n{}",
             open::system_message(error)
         ));
-        rar.fail(code::WARNING);
+    }
+    if !missing.is_empty() {
+        rar.fail(code::NO_FILES);
     }
     if solid && compressing && !switches.no_sort {
         sort_solid(rar, &mut sources);
@@ -303,6 +309,12 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
             .map(|(source, _)| source)
             .collect();
         delete_sources(rar, &archived, delete);
+    }
+    if !held.is_empty() {
+        let files = if held.len() == 1 { "file" } else { "files" };
+        rar.console
+            .msg(&format!("\nWARNING: Cannot open {} {files}", held.len()));
+        rar.fail(code::OPEN);
     }
     if !switches.no_done {
         rar.console.msg(if tested { "Done\n" } else { "\nDone\n" });
@@ -1256,8 +1268,13 @@ fn place(order: &[String], name: &str, file: &str) -> Option<usize> {
     chosen
 }
 
-/// What the names give: the sources, then the names not there with Windows' errors.
-type Collected = (Vec<Source>, Vec<(String, io::Error)>);
+/// What the names give: the sources, the names not there with Windows' errors, and the
+/// files another program holds open for writing, with theirs.
+struct Collected {
+    sources: Vec<Source>,
+    missing: Vec<(String, io::Error)>,
+    held: Vec<(String, io::Error)>,
+}
 
 /// The files and folders the names give, by rar's rules: a folder named alone is put in
 /// whole (only itself with `-r-`); a mask takes the files of its folder, and with `-r`
@@ -1302,12 +1319,18 @@ fn collect<SE: cash_core::ShellExtensions>(
         include,
         found: Vec::new(),
         missing: Vec::new(),
+        held: Vec::new(),
         walk: 0,
     };
     for name in &names {
         walker.name(name);
     }
-    let Walker { found, missing, .. } = walker;
+    let Walker {
+        found,
+        missing,
+        held,
+        ..
+    } = walker;
     // Each once, where it was first found; files first, then the folders deepest first.
     let mut seen = std::collections::HashSet::new();
     let mut files = Vec::new();
@@ -1323,7 +1346,11 @@ fn collect<SE: cash_core::ShellExtensions>(
     }
     folders.sort_by_key(|folder| std::cmp::Reverse(depth(&folder.name)));
     files.extend(folders);
-    Ok((files, missing))
+    Ok(Collected {
+        sources: files,
+        missing,
+        held,
+    })
 }
 
 /// Walks the names given, keeping what the switches let in.
@@ -1333,6 +1360,7 @@ struct Walker<'r, 'a, SE: cash_core::ShellExtensions> {
     include: Vec<String>,
     found: Vec<Source>,
     missing: Vec<(String, io::Error)>,
+    held: Vec<(String, io::Error)>,
     walk: usize,
 }
 
@@ -1469,6 +1497,15 @@ impl<SE: cash_core::ShellExtensions> Walker<'_, '_, SE> {
         if !time_filters(self.rar, modified) {
             return;
         }
+        // A file another program is writing is not read, as rar reads none, unless `-dh`.
+        if !is_dir
+            && !switches.shared
+            && let Err(error) = open_unshared(path)
+            && error.raw_os_error() == Some(ERROR_SHARING_VIOLATION)
+        {
+            self.held.push((shown.to_owned(), error));
+            return;
+        }
         self.found.push(Source {
             path: path.to_path_buf(),
             shown: shown.to_owned(),
@@ -1481,6 +1518,20 @@ impl<SE: cash_core::ShellExtensions> Walker<'_, '_, SE> {
             walk,
         });
     }
+}
+
+/// Windows' error for a file another handle's sharing does not allow opening.
+const ERROR_SHARING_VIOLATION: i32 = 32;
+
+/// Opens a file to read while letting no one else write it, as rar opens what it adds:
+/// a file another program has open for writing does not open.
+fn open_unshared(path: &Path) -> io::Result<std::fs::File> {
+    use std::os::windows::fs::OpenOptionsExt as _;
+    const FILE_SHARE_READ: u32 = 0x0000_0001;
+    std::fs::OpenOptions::new()
+        .read(true)
+        .share_mode(FILE_SHARE_READ)
+        .open(path)
 }
 
 /// A folder's files and folders, in the order the file system gives them.

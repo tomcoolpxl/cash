@@ -150,3 +150,43 @@ src/b.log
 src/keep
 src/keep/k.log
 src/sub
+== names not there, and a file the shell is writing
+
+Evaluation copy. Please register.
+
+Creating archive n1.rar
+
+Adding    src/a.txt                                                        OK 
+Done
+--- stderr
+
+Cannot open nothere.txt
+The system cannot find the file specified.
+Cannot open nothere2.txt
+The system cannot find the file specified.
+rc=10
+
+Evaluation copy. Please register.
+
+Creating archive n2.rar
+
+Adding    src/a.txt                                                        OK 
+WARNING: Cannot open 1 file
+Done
+--- stderr
+
+Cannot open held.txt
+The process cannot access the file because it is being used by another process.
+rc=6
+
+Evaluation copy. Please register.
+
+Creating archive n3.rar
+
+Adding    held.txt                                                         OK 
+Done
+rc=0
+src/a.txt
+rc=0
+held.txt
+rc=0

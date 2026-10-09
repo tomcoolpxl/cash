@@ -61,4 +61,15 @@ mk
 z rar mf -m0 -idc -x'*.log' m3.rar src
 find src | sort
 
+echo "== names not there, and a file the shell is writing"
+mk
+z rar a -m0 -idc n1.rar 'src\a.txt' nothere.txt nothere2.txt
+exec 3>held.txt
+printf 'x' >&3
+z rar a -m0 -idc n2.rar 'src\a.txt' held.txt
+z rar a -m0 -idc -dh n3.rar held.txt
+exec 3>&-
+z rar lb n2.rar
+z rar lb n3.rar
+
 cd / && rm -rf "$dir"
