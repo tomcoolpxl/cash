@@ -67,7 +67,8 @@ The commands, switches, messages, listings and exit codes are WinRAR 7.23's cons
 `Rar.exe` and `UnRAR.exe`'s, learned by running them and from their manual: switches
 anywhere until `--`, `RARINISWITCHES` and `%APPDATA%\WinRAR\rar.ini` for default
 switches (`-cfg-` reads neither), the overwrite question and `-o+`, `-o-`, `-or`, `-y`,
-the password asked for each archive or file that needs one, `-id` and `-inul` for
+the password asked for each archive or file that needs one (again when it is wrong, and
+whether to use it for the next file), `-id` and `-inul` for
 quieter messages, `-ierr` to send them to standard error.
 
 It is all in Rust, in cash. It reads RAR archives from 1.3 to 7, with their volumes

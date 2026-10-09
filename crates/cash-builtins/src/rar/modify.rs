@@ -51,26 +51,13 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
         display: display.clone(),
         path: rar.path(&display),
     };
-    let opened = match open::open(rar, &found)? {
-        Ok(opened) => opened,
-        Err(failure) => {
-            open::report(rar, &found, &failure, false);
-            // The report ended its line.
-            if *command != Command::CommentWrite
-                && matches!(failure, Failure::Missing(_))
-                && !rar.switches.no_done
-            {
-                rar.console.msg("Done\n");
-            }
-            return Ok(());
-        }
+    let Some(opened) = open_for_change(rar, command, &found)? else {
+        return Ok(());
     };
     if *command == Command::CommentWrite {
         comment_write(rar, &found, &opened, parsed);
         return Ok(());
     }
-
-    rar.console.msg(&format!("\nProcessing archive {display}"));
     if *command == Command::Change && rar.switches.archive_metadata == Some('r') {
         restore_metadata(rar, &found, &opened)?;
         done(rar);
@@ -136,6 +123,61 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
     }
     done(rar);
     Ok(())
+}
+
+/// The archive opened to be changed, "Processing archive" said before a question for
+/// its headers' password, else once it is open (not by `cw`); `None` when it does not
+/// open, said as rar says it.
+fn open_for_change<SE: cash_core::ShellExtensions>(
+    rar: &Rar<'_, SE>,
+    command: &Command,
+    found: &Found,
+) -> Result<Option<open::Opened>, Stop> {
+    let display = &found.display;
+    let announced = std::cell::Cell::new(false);
+    let announce = || {
+        if *command != Command::CommentWrite && !announced.replace(true) {
+            rar.console.msg(&format!("\nProcessing archive {display}"));
+        }
+    };
+    let failure = match open::open_announcing(rar, found, &announce)? {
+        Ok(opened) => {
+            announce();
+            return Ok(Some(opened));
+        }
+        Err(failure) => failure,
+    };
+    match failure {
+        Failure::NotRar | Failure::WrongPassword(_) if *command == Command::CommentWrite => {
+            return open::refuse(rar, found, &failure).map_or(Ok(None), Err);
+        }
+        // The others say what they process, and that it is a bad archive.
+        Failure::NotRar => {
+            announce();
+            rar.console
+                .err(&format!("\nERROR: Bad archive {display}\n"));
+            done(rar);
+        }
+        Failure::WrongPassword(_) => {
+            announce();
+            rar.console.err(&format!(
+                "\nIncorrect password for {display}\nERROR: Bad archive {display}\n"
+            ));
+            rar.fail(code::PASSWORD);
+            done(rar);
+        }
+        _ => {
+            open::report(rar, found, &failure, false);
+            // The report ended its line.
+            if *command != Command::CommentWrite
+                && matches!(failure, Failure::Missing(_))
+                && !rar.switches.no_done
+            {
+                rar.console.msg("Done\n");
+            }
+        }
+    }
+    Ok(None)
 }
 
 /// Whether rar refuses to change the archive, saying so: a locked one, or a RAR 1.5 to

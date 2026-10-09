@@ -64,6 +64,18 @@ fn rar_adds_updates_moves_and_deletes_as_winrar_7_23_does() {
 }
 
 #[test]
+fn rar_asks_passwords_as_winrar_7_23_does() {
+    // A trial WinRAR says so after its banner when it adds; cash has no trial.
+    let expected = with_divergence(
+        &with_cash_banners("rar_passwords", 48, 0),
+        "\nEvaluation copy. Please register.\n",
+        "",
+        4,
+    );
+    assert_eq!(run_oracle_script("rar_passwords"), expected);
+}
+
+#[test]
 fn rar_comments_renames_locks_and_changes_as_winrar_7_23_does() {
     // A trial WinRAR says so after its banner when it adds; cash has no trial.
     let expected = with_divergence(

@@ -148,6 +148,19 @@ impl FindSpec {
     }
 }
 
+/// `-hp` (`header`) or `-p` read: bare, it asks for the password there unless one was
+/// given before it, by `-p` or `-hp` for `-hp` and by `-p` alone for `-p`.
+fn set_password(s: &mut Switches, given: Arg, header: bool) {
+    let given_before = |arg: &Option<Arg>| matches!(arg, Some(Arg::Given(_)));
+    let before = given_before(&s.password) || header && given_before(&s.header_password);
+    s.early_password |= given == Arg::Bare && !before;
+    if header {
+        s.header_password = Some(given);
+    } else {
+        s.password = Some(given);
+    }
+}
+
 /// A switch's argument that may be left out: `-p` alone asks, `-ppw` gives it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum Arg {
@@ -297,6 +310,9 @@ pub(super) struct Switches {
     /// `-p` with the password, `-p` alone (ask), or `-p-` (`no_password`).
     pub(super) password: Option<Arg>,
     pub(super) no_password: bool,
+    /// A bare `-p` or `-hp` read before any password was given: rar asks for the
+    /// password there, before anything else it says.
+    pub(super) early_password: bool,
     pub(super) quick_open: Option<char>,
     /// `-r` (`Some('r')`), `-r-` (`Some('-')`), `-r0` (`Some('0')`).
     pub(super) recurse: Option<char>,
@@ -585,7 +601,7 @@ fn apply_with_argument(
         'e' if lower.starts_with("ep") => return None,
         'e' if lower.starts_with("e+") => s.include_attr = Some(parse_attributes(&arg(2))),
         'e' => s.exclude_attr = Some(parse_attributes(&arg(1))),
-        'h' if lower.starts_with("hp") => s.header_password = Some(Arg::of(arg(2))),
+        'h' if lower.starts_with("hp") => set_password(s, Arg::of(arg(2)), true),
         'h' if lower == "ht" || lower == "htb" => s.hash = Some('b'),
         'h' if lower == "htc" => s.hash = Some('c'),
         'i' if lower.starts_with("id") => {
@@ -621,7 +637,7 @@ fn apply_with_argument(
         }
         'o' if lower.starts_with("om") => s.ignored.push(text.to_owned()),
         'o' if lower.starts_with("op") => s.output_path = Some(arg(2)),
-        'p' => s.password = Some(Arg::of(arg(1))),
+        'p' => set_password(s, Arg::of(arg(1)), false),
         'q' if lower.starts_with("qo") => {
             s.quick_open = Some(match lower.get(2..)? {
                 "" => ' ',
@@ -817,6 +833,20 @@ mod tests {
 
     fn args(words: &[&str]) -> Vec<String> {
         words.iter().map(|w| (*w).to_owned()).collect()
+    }
+
+    #[test]
+    fn a_bare_password_switch_asks_unless_one_was_given_before() {
+        let early = |words: &[&str]| parse(&args(words)).unwrap().switches.early_password;
+        assert!(early(&["l", "-p", "a.rar"]));
+        assert!(early(&["l", "-hp", "a.rar"]));
+        assert!(early(&["l", "-p-", "-p", "a.rar"]));
+        assert!(early(&["l", "-p", "-pabc", "a.rar"]));
+        // -hp takes -p's password; -p asks after -hp's.
+        assert!(!early(&["l", "-pabc", "-hp", "a.rar"]));
+        assert!(early(&["l", "-hpabc", "-p", "a.rar"]));
+        assert!(!early(&["l", "-pabc", "a.rar"]));
+        assert!(!early(&["l", "a.rar"]));
     }
 
     #[test]

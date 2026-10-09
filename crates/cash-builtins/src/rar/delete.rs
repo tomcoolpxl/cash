@@ -55,10 +55,7 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
     };
     let opened = match open::open(rar, &found)? {
         Ok(opened) => opened,
-        Err(failure) => {
-            open::report(rar, &found, &failure, false);
-            return Ok(());
-        }
+        Err(failure) => return open::refuse(rar, &found, &failure).map_or(Ok(()), Err),
     };
     if opened.facts.locked {
         rar.console.err("\n\nERROR: Locked archive");

@@ -117,6 +117,7 @@ mod code {
     pub(super) const NO_FILES: u8 = 10;
     pub(super) const PASSWORD: u8 = 11;
     pub(super) const READ: u8 = 12;
+    pub(super) const BAD_ARCHIVE: u8 = 13;
     pub(super) const BREAK: u8 = 255;
 }
 
@@ -229,7 +230,53 @@ struct Rar<'a, SE: cash_core::ShellExtensions> {
     logs: Vec<log::Log>,
 }
 
-impl<SE: cash_core::ShellExtensions> Rar<'_, SE> {
+impl<'a, SE: cash_core::ShellExtensions> Rar<'a, SE> {
+    /// A run of `tool` with `switches`, and the password typed before it if any.
+    fn new(
+        tool: Tool,
+        context: &'a cash_core::ExecutionContext<'a, SE>,
+        console: &'a Console<'a, SE>,
+        switches: Switches,
+        password: Option<String>,
+    ) -> Self {
+        Self {
+            tool,
+            context,
+            console,
+            zone: Zone::of_shell(context.shell),
+            switches,
+            status: Cell::new(code::SUCCESS),
+            password: RefCell::new(password),
+            logs: Vec::new(),
+        }
+    }
+
+    /// The exit code of a run that ended with `result`, the words a stop ends with
+    /// said.
+    fn exit(&self, result: &Result<(), Stop>) -> u8 {
+        let code = match *result {
+            Ok(()) => self.status(),
+            Err(Stop::Break) => {
+                self.console.err("\nUser break\n");
+                code::BREAK
+            }
+            Err(Stop::Aborted(code)) => {
+                self.console.notice("\n\nProgram aborted\n");
+                code
+            }
+            Err(Stop::Refused(code)) => {
+                self.console.notice("\nProgram aborted\n");
+                code
+            }
+            Err(Stop::Quit) => {
+                self.console.notice("\nProgram aborted\n");
+                code::BREAK
+            }
+        };
+        self.console.finish();
+        code
+    }
+
     /// An archive's name, to the `-log` files that log archives.
     fn log_archive(&self, name: &str) {
         for log in self.logs.iter().filter(|log| log.wants_archives()) {
@@ -301,22 +348,36 @@ impl<SE: cash_core::ShellExtensions> Rar<'_, SE> {
         Ok(Some(String::from_utf8_lossy(&bytes).into_owned()))
     }
 
-    /// Asks for a password, `for` an archive or none: "Enter password (will not be
-    /// echoed)", read without echo; the end of the input aborts.
-    fn ask_password(&self, archive: Option<&str>) -> Result<String, Stop> {
-        let question = match archive {
-            Some(name) => format!("\nEnter password (will not be echoed) for {name}: "),
-            None => "\nEnter password (will not be echoed): ".to_owned(),
+    /// Asks for the password a bare `-p` or `-hp` leaves out, the line ended after it.
+    fn ask_password(&self) -> Result<String, Stop> {
+        let password = self.ask_password_for(None, false, true)?;
+        self.console.err("\n");
+        Ok(password)
+    }
+
+    /// "Enter password (will not be echoed)", `for` an archive or a file or neither,
+    /// on a line of its own unless `again` follows rar's "The specified password is
+    /// incorrect."; what is typed, without echo. At the end of the input, rar's words
+    /// (`after_a_search` as [`stdin_end_words`](Self::stdin_end_words) takes it) and
+    /// its abort.
+    pub(super) fn ask_password_for(
+        &self,
+        name: Option<&str>,
+        again: bool,
+        after_a_search: bool,
+    ) -> Result<String, Stop> {
+        let start = if again { "" } else { "\n" };
+        let question = match name {
+            Some(name) => format!("{start}Enter password (will not be echoed) for {name}: "),
+            None => format!("{start}Enter password (will not be echoed): "),
         };
         self.console.err(&question);
-        if let Some(line) = self.read_answer(false)? {
-            self.console.err("\n");
-            return Ok(line);
+        if let Some(password) = self.read_password()? {
+            return Ok(password);
         }
         self.console.err("Read error in the file stdin");
-        if archive.is_none() {
-            self.console
-                .err("\nThe system cannot find the file specified.");
+        if let Some(extra) = self.stdin_end_words(after_a_search) {
+            self.console.err(&format!("\n{extra}"));
         }
         Err(Stop::Aborted(code::READ))
     }
@@ -329,14 +390,17 @@ impl<SE: cash_core::ShellExtensions> Rar<'_, SE> {
         if self.switches.no_password {
             return Ok(None);
         }
-        let given = self
-            .switches
-            .header_password
-            .clone()
-            .or_else(|| self.switches.password.clone());
+        // A bare `-hp` or `-p` takes the password the other gave, as `-ppw -hp` does.
+        let switches = &self.switches;
+        let given = [&switches.header_password, &switches.password]
+            .into_iter()
+            .flatten()
+            .find_map(|arg| arg.text().map(str::to_owned));
         let password = match given {
-            Some(cmdline::Arg::Given(password)) => password,
-            Some(cmdline::Arg::Bare) => self.ask_password(None)?,
+            Some(password) => password,
+            None if switches.header_password.is_some() || switches.password.is_some() => {
+                self.ask_password()?
+            }
             None => return Ok(None),
         };
         *self.password.borrow_mut() = Some(password.clone());
@@ -446,12 +510,29 @@ fn run_with<SE: cash_core::ShellExtensions>(
     let mut switches = default_switches(context, args);
     merge(&mut switches, std::mem::take(&mut parsed.switches));
     console.set(&switches);
+    let command = parsed.command.as_deref().and_then(Command::parse);
+    let command = command.filter(|c| tool == Tool::Rar || c.in_unrar());
+    // rar asks for a bare `-p` or `-hp`'s password as it reads the switch, before
+    // its banner or anything else; `p` says nothing but the question then.
+    let early = if switches.early_password {
+        let asking = Rar::new(tool, context, console, switches.clone(), None);
+        console
+            .data_only
+            .set(matches!(command, Some(Command::Print)));
+        match asking.ask_password() {
+            Ok(password) => {
+                console.data_only.set(false);
+                Some(password)
+            }
+            Err(stop) => return asking.exit(&Err(stop)),
+        }
+    } else {
+        None
+    };
     if switches.version {
         console.notice(&format!("{}\n", help::VERSION));
         return code::SUCCESS;
     }
-    let command = parsed.command.as_deref().and_then(Command::parse);
-    let command = command.filter(|c| tool == Tool::Rar || c.in_unrar());
     // A bare listing and printed files have no banner, for scripts' sake.
     let bannerless = matches!(
         command,
@@ -491,44 +572,15 @@ fn run_with<SE: cash_core::ShellExtensions>(
         console.msg(&help::usage(tool));
         return code::USER;
     }
-    let logs = log::Log::open_all(&switches.log_names, switches.charsets.log, |name| {
+    let mut rar = Rar::new(tool, context, console, switches, early);
+    rar.logs = log::Log::open_all(&rar.switches.log_names, rar.switches.charsets.log, |name| {
         context.shell.absolute_path(Path::new(name))
     });
-    let rar = Rar {
-        tool,
-        context,
-        console,
-        zone: Zone::of_shell(context.shell),
-        switches,
-        status: Cell::new(code::SUCCESS),
-        password: RefCell::new(None),
-        logs,
-    };
     if let Some(name) = generated_name(&rar, &command, &parsed) {
         parsed.archive = Some(name);
     }
     let result = dispatch(&rar, &command, &parsed);
-    let code = match result {
-        Ok(()) => rar.status(),
-        Err(Stop::Break) => {
-            rar.console.err("\nUser break\n");
-            code::BREAK
-        }
-        Err(Stop::Aborted(code)) => {
-            rar.console.notice("\n\nProgram aborted\n");
-            code
-        }
-        Err(Stop::Refused(code)) => {
-            rar.console.notice("\nProgram aborted\n");
-            code
-        }
-        Err(Stop::Quit) => {
-            rar.console.notice("\nProgram aborted\n");
-            code::BREAK
-        }
-    };
-    rar.console.finish();
-    code
+    rar.exit(&result)
 }
 
 /// The command line's switches over the defaults: a switch given there wins.
@@ -622,6 +674,7 @@ fn overlay(base: Switches, typed: Switches) -> Switches {
         owners: pick!(owners, bool),
         password: pick!(password, opt),
         no_password: pick!(no_password, bool),
+        early_password: pick!(early_password, bool),
         quick_open: pick!(quick_open, opt),
         recurse: pick!(recurse, opt),
         recovery_record: pick!(recovery_record, opt),

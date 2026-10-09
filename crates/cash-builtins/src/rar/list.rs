@@ -53,6 +53,8 @@ fn list_set<SE: cash_core::ShellExtensions>(
                         open::report_missing(rar, &found, error);
                     }
                     Failure::Missing(_) if listed > 0 => {}
+                    // A bare listing says nothing of a file that is no archive.
+                    Failure::NotRar if form == ListForm::Bare => {}
                     _ => open::report(rar, &found, &failure, form == ListForm::Plain),
                 }
                 break;

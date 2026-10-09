@@ -830,10 +830,36 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      `rar50_dictionary_size` is public now. Sizes above 4 GB (RAR 7's) are not tried.
    - `c`, `cw`, `rn`, `k`, `rr` and `ch`: done 2026-10-09 (`rar_modify.sh`, 474 lines then,
      the rewrites WinRAR's byte for byte). Left of them: `ch` takes `-cl`, `-cu`, `-z`,
-     `-k`, `-tl`, `-rr`, `-ts`, `-ams` and `-amr`, not the other switches Rar.exe was
-     seen to act on there: `-qo-`/`-qo+` (quick open dropped or for every file), `-hp`
-     (headers encrypted). `-ep`, `-htb`, `-s`, `-p` and `-df` change nothing there;
-     `-ma4` is refused as by cash.
+     `-k`, `-tl`, `-rr`, `-ts`, `-ams`, `-amr` and `-qo` (its three forms, seen
+     WinRAR's byte for byte on 2026-10-09), not `-hp`: Rar.exe encrypts a plain
+     archive's headers with it, and refuses an archive whose files are encrypted
+     ("Cannot change the header encryption mode in already encrypted archive", rc 2).
+     `-ep`, `-htb`, `-s`, `-p` and `-df` change nothing there; `-ma4` is refused as by
+     cash.
+   - Passwords typed, and archives that do not open to be changed: done 2026-10-09
+     (`rar_passwords.sh`, 676 lines). A bare `-p` or `-hp` is asked for as rar reads
+     it, before its banner and the other switches' words, unless a password came
+     before it (`-hp` takes `-p`'s; `-p` asks after `-hp`'s); cash asked after its
+     banner. A password from a pipe is all one read gives, its line ends trimmed
+     (`x\ny` is wrong). After a password typed for the headers or a file, no line
+     ends. A wrong one typed is "The specified password is incorrect." and asked for
+     again until it is right or the input ends; cash said "Incorrect password". After
+     a password typed for a file, each encrypted file asks "NAME - use current
+     password? [Y]es, [N]o, [A]ll" (No asks for another, All stops asking and makes a
+     wrong one an error). The end of the input at a question for a file's or the
+     headers' password says "The pipe has been ended." for a pipe. `-p-` asks nothing
+     and finds encrypted headers' password wrong. `c`, `k`, `rn`, `ch` and `rr` say
+     "Processing archive" before the headers' question, and of a wrong password
+     "Incorrect password for X / ERROR: Bad archive X", rc 11; `a`, `u`, `f`, `m`, `d`
+     and `cw` stop with "Incorrect password for X" and "Program aborted", rc 13 (Bad
+     archive, in Rar.txt). A file that is no RAR archive: "ERROR: Bad archive X" with
+     "Program aborted", rc 13, for `a`, `u`, `f`, `m`, `d` and `cw`; with "Processing
+     archive" and Done, rc 0, for the others that change; "No files to extract", rc
+     10, after `x`, `e`, `t` and `p`'s "is not RAR archive"; nothing from `lb`. Left:
+     `r` on encrypted headers without the password asks none and says "No files
+     found", rc 10, and on a file that is no archive searches twice; cash asks, and
+     rebuilds. And the order of switches: rar asks at a bare `-p` before reading an
+     `-inul` after it, whose words cash's question leaves out.
    - `-ams`, `-tl` and `ch -amr`: done 2026-10-09 (in `rar_modify.sh`, now 981 lines,
      WinRAR's byte for byte but a recovery record's bytes). `-ams` saves the archive's
      file name and the time it is written (with `-tl` its newest file's, folders left
@@ -910,6 +936,13 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
 ---
 
 ## Found along the way
+
+- **cash's `printf` writes a line's end in a write of its own** (found on 2026-10-09
+  with `rar_passwords.sh`): `printf 'v\n'` into a pipe whose reader is waiting gives it
+  `v`, then `\n` (a Python ReadFile loop showed both, under 1.10.0 and now); `echo v` and
+  `cat` write the line at once, as bash's printf does. A program reading a line per
+  read sees an empty one: Rar.exe took it for a cancelled password and stopped with 255.
+  printf should gather its output and write it once.
 
 - **WinRAR matches an archived name typed with `/` to nothing** (found on 2026-10-09
   with `rar d`): Rar.exe 7.23 on Windows takes `\` alone between folders in the names

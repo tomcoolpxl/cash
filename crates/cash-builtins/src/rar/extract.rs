@@ -165,7 +165,8 @@ pub(super) fn test_written<SE: cash_core::ShellExtensions>(
 struct Tally {
     errors: u32,
     done: u32,
-    /// The archives worked through, not stopped as they opened.
+    /// The archives worked through, not stopped as they opened, and files that
+    /// are no RAR archive.
     sets: u32,
 }
 
@@ -319,6 +320,11 @@ struct Work<'r, 'a, SE: cash_core::ShellExtensions> {
     recovery: Vec<Option<bool>>,
     /// The volumes whose recovery record was said, before this one.
     recovery_said: usize,
+    /// The password was typed for a file: each encrypted file after asks whether to
+    /// use it.
+    typed: bool,
+    /// "All" answered to that question: no more of it.
+    use_all: bool,
 }
 
 /// What a file keeps of its times and attributes.
@@ -358,6 +364,10 @@ fn set<SE: cash_core::ShellExtensions>(
         Ok(opened) => opened,
         Err(failure) => {
             open_failed(rar, job, found, &failure);
+            // A file that is no RAR archive counts as one with nothing to extract.
+            if matches!(failure, Failure::NotRar) && job.mode != Mode::Find {
+                tally.sets += 1;
+            }
             return Ok(());
         }
     };
@@ -464,6 +474,8 @@ fn set<SE: cash_core::ShellExtensions>(
         temps: std::collections::HashMap::new(),
         recovery: Vec::new(),
         recovery_said: 0,
+        typed: false,
+        use_all: false,
     };
     for volume in &work.volumes {
         rar.log_archive(&volume.display);
@@ -542,9 +554,10 @@ fn open_failed<SE: cash_core::ShellExtensions>(
             ));
             rar.fail(code::NO_FILES);
         }
+        // Its line is ended by what follows: "No files to extract", or `i`'s Done.
         Failure::NotRar => {
             rar.console
-                .msg(&format!("\n{} is not RAR archive\n", found.display));
+                .msg(&format!("\n{} is not RAR archive", found.display));
         }
         Failure::WrongPassword(facts) => {
             if facts.format == "RAR 5" {
@@ -778,43 +791,81 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
             self.errors += 1;
             self.rar.fail(code::CRC);
         }
-        if entry.encrypted() && self.rar.password.borrow().is_none() {
-            let password = self.ask_password(&entry.name)?;
-            *self.rar.password.borrow_mut() = Some(password);
+        // A wrong password is asked for again when it was typed for this file, or is
+        // the one typed before that rar was told to use; else it is an error.
+        let mut retry = false;
+        if entry.encrypted() {
+            if self.rar.password.borrow().is_none() {
+                self.new_password(&entry.name, false)?;
+                retry = true;
+            } else if self.typed && !self.use_all {
+                retry = self.use_current(&entry.name)?;
+            }
         }
         if let Some(Crypto::Rar5 {
             salt, count, check, ..
         }) = &entry.crypto
-            && !self.rar5_keys(*salt, *count, *check)
         {
-            for (index, part) in entry.parts.iter().enumerate() {
-                if index > 0 {
-                    self.announce(part.volume);
+            while !self.rar5_keys(*salt, *count, *check) {
+                if retry {
+                    self.rar
+                        .console
+                        .err("\nThe specified password is incorrect.\n");
+                    self.new_password(&entry.name, true)?;
+                    continue;
                 }
-                self.error(
-                    &format!("\nIncorrect password for {}", entry.name),
-                    code::PASSWORD,
-                );
+                for (index, part) in entry.parts.iter().enumerate() {
+                    if index > 0 {
+                        self.announce(part.volume);
+                    }
+                    self.error(
+                        &format!("\nIncorrect password for {}", entry.name),
+                        code::PASSWORD,
+                    );
+                }
+                return Ok(false);
             }
-            return Ok(false);
         }
         Ok(true)
     }
 
-    /// The password for a file, asked for at the console or read from standard input.
-    fn ask_password(&self, name: &str) -> Result<String, Stop> {
+    /// A password typed for the file `name`, the one used from then on; `again` after
+    /// rar's "The specified password is incorrect.".
+    fn new_password(&mut self, name: &str, again: bool) -> Result<(), Stop> {
+        let password = self
+            .rar
+            .ask_password_for(Some(name), again, self.volumes.len() > 1)?;
+        *self.rar.password.borrow_mut() = Some(password);
+        self.keys = None;
+        self.typed = true;
+        Ok(())
+    }
+
+    /// rar's question before an encrypted file when the password was typed for
+    /// another: No asks for a new one, All stops the question; whether a wrong one
+    /// is asked for again (all but All).
+    fn use_current(&mut self, name: &str) -> Result<bool, Stop> {
         self.rar.console.err(&format!(
-            "\nEnter password (will not be echoed) for {name}: "
+            "\n{name} - use current password? [Y]es, [N]o, [A]ll "
         ));
-        if let Some(line) = self.rar.read_answer(false)? {
-            self.rar.console.err("\n");
-            return Ok(line);
+        let Some(answer) = self.rar.read_answer(true)? else {
+            self.rar.console.err("Read error in the file stdin");
+            if let Some(extra) = self.rar.stdin_end_words(false) {
+                self.rar.console.err(&format!("\n{extra}"));
+            }
+            return Err(Stop::Aborted(code::READ));
+        };
+        match answer.trim().chars().next().map(|c| c.to_ascii_lowercase()) {
+            Some('n') => {
+                self.new_password(name, false)?;
+                Ok(true)
+            }
+            Some('a') => {
+                self.use_all = true;
+                Ok(false)
+            }
+            _ => Ok(true),
         }
-        self.rar.console.err("Read error in the file stdin");
-        if let Some(extra) = self.rar.stdin_end_words(self.volumes.len() > 1) {
-            self.rar.console.err(&format!("\n{extra}"));
-        }
-        Err(Stop::Aborted(code::READ))
     }
 
     /// RAR 5's keys for the password and an encryption record, made once a salt and a
@@ -1966,6 +2017,24 @@ impl<SE: cash_core::ShellExtensions> Sink for PrintTo<'_, '_, SE> {
 }
 
 impl<SE: cash_core::ShellExtensions> Rar<'_, SE> {
+    /// A password typed: a line at the console, else all one read of standard input
+    /// gives, its line ends trimmed, as rar takes it whole; `None` at the end of the
+    /// input.
+    pub(super) fn read_password(&self) -> Result<Option<String>, Stop> {
+        let stdin = self.context.try_fd(OpenFiles::STDIN_FD);
+        if stdin.is_some_and(|file| file.is_terminal()) {
+            return self.read_line(false);
+        }
+        let mut buffer = vec![0u8; 4096];
+        let got = self.context.stdin().read(&mut buffer).unwrap_or(0);
+        if got == 0 {
+            return Ok(None);
+        }
+        buffer.truncate(got);
+        let text = String::from_utf8_lossy(&buffer);
+        Ok(Some(text.trim_end_matches(['\r', '\n']).to_owned()))
+    }
+
     /// An answer to a question: a line typed at the console, else the first line of what
     /// one read of standard input gives, as rar reads a pipe a buffer at a time; `None` at
     /// the end of the input.

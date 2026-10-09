@@ -173,15 +173,35 @@ pub(super) fn open<SE: cash_core::ShellExtensions>(
     rar: &Rar<'_, SE>,
     found: &Found,
 ) -> Result<Result<Opened, Failure>, Stop> {
+    open_announcing(rar, found, &|| {})
+}
+
+/// As [`open`], `announce` called before the password is asked for, as rar's
+/// changing commands say what they are processing then. A password typed and
+/// wrong is asked for again until it is right or the input ends; `-p-` asks none.
+pub(super) fn open_announcing<SE: cash_core::ShellExtensions>(
+    rar: &Rar<'_, SE>,
+    found: &Found,
+    announce: &dyn Fn(),
+) -> Result<Result<Opened, Failure>, Stop> {
     let given = rar.given_password()?;
-    match try_open(rar, found, given.as_deref()) {
-        Err(Failure::WrongPassword(_)) if given.is_none() => {
-            let password = rar.ask_password(Some(&found.display))?;
-            *rar.password.borrow_mut() = Some(password.clone());
-            Ok(try_open(rar, found, Some(&password)))
-        }
-        other => Ok(other),
+    let mut result = try_open(rar, found, given.as_deref());
+    if given.is_some() || rar.switches.no_password {
+        return Ok(result);
     }
+    let mut again = false;
+    while matches!(result, Err(Failure::WrongPassword(_))) {
+        if again {
+            rar.console.err("\nThe specified password is incorrect.\n");
+        } else {
+            announce();
+        }
+        let password = rar.ask_password_for(Some(&found.display), again, false)?;
+        result = try_open(rar, found, Some(&password));
+        *rar.password.borrow_mut() = Some(password);
+        again = true;
+    }
+    Ok(result)
 }
 
 fn try_open<SE: cash_core::ShellExtensions>(
@@ -463,6 +483,32 @@ pub(super) fn report<SE: cash_core::ShellExtensions>(
 
 /// "Cannot open" an archive that is not there, with Windows' words; a bare listing has
 /// no blank line before it, the others do.
+/// `a`, `u`, `f`, `m`, `d` and `cw` given an archive that does not open: a file
+/// that is no RAR archive, or a RAR 5 archive whose headers' password is wrong, is
+/// a bad archive, which stops the command; else the failure is reported as `l`
+/// reports it, and `None`.
+pub(super) fn refuse<SE: cash_core::ShellExtensions>(
+    rar: &Rar<'_, SE>,
+    found: &Found,
+    failure: &Failure,
+) -> Option<Stop> {
+    match failure {
+        Failure::NotRar => {
+            rar.console
+                .err(&format!("\nERROR: Bad archive {}\n", found.display));
+        }
+        Failure::WrongPassword(facts) if facts.format == "RAR 5" => {
+            rar.console
+                .err(&format!("\nIncorrect password for {}", found.display));
+        }
+        _ => {
+            report(rar, found, failure, false);
+            return None;
+        }
+    }
+    Some(Stop::Refused(code::BAD_ARCHIVE))
+}
+
 pub(super) fn report_missing<SE: cash_core::ShellExtensions>(
     rar: &Rar<'_, SE>,
     found: &Found,
