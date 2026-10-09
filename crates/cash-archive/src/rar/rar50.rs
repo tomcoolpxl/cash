@@ -155,6 +155,28 @@ pub struct ArchiveMetadataRecord {
     pub creation_time: Option<u64>,
 }
 
+impl ArchiveMetadataRecord {
+    /// The archive's original name and a time as a Windows FILETIME, as WinRAR saves
+    /// them with `-ams`.
+    pub fn new(name: Option<Vec<u8>>, creation_time: Option<u64>) -> Self {
+        Self {
+            flags: u64::from(name.is_some()) | u64::from(creation_time.is_some()) << 1,
+            name,
+            creation_time,
+        }
+    }
+
+    /// The time saved as a Windows FILETIME, whichever way it is kept.
+    pub fn creation_filetime(&self) -> Option<u64> {
+        let time = self.creation_time?;
+        match (self.flags & 4 != 0, self.flags & 8 != 0) {
+            (false, _) => Some(time),
+            (true, false) => Some((time + 11_644_473_600) * 10_000_000),
+            (true, true) => Some(time / 100 + 116_444_736_000_000_000),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Block {

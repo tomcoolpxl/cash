@@ -1257,13 +1257,14 @@ impl Builder {
         self.rename_by_id(self.entry_id(old)?, new)
     }
 
-    /// Rename exactly one member. A new duplicate name is rejected. Name-based
+    /// Rename exactly one member. A new duplicate name is rejected unless
+    /// [`allow_duplicate_names`](Self::allow_duplicate_names). Name-based
     /// hard-link/file-copy targets follow the nearest preceding target identity.
     pub fn rename_by_id(&mut self, id: usize, new: Vec<u8>) -> Result<()> {
         let new = self.validate_name(new)?;
         let index = self.index_by_id(id)?;
         let old = self.entries[index].name.clone();
-        if old != new {
+        if old != new && !self.allow_duplicate_names {
             self.reject_duplicate_name(&new)?;
         }
         let unicode_name = if old != new && self.entries[index].legacy_unicode_name.is_some() {
@@ -2948,6 +2949,18 @@ mod tests {
         assert_eq!(builder.names().collect::<Vec<_>>(), vec![&b"c.txt"[..]]);
         assert!(builder.remove(b"gone").is_err());
         assert!(builder.rename(b"gone", b"x".to_vec()).is_err());
+    }
+
+    #[test]
+    fn renames_onto_a_taken_name_only_when_duplicates_are_allowed() {
+        let mut builder = builder_with(ArchiveVersion::Rar50);
+        assert!(builder.rename(b"a.txt", b"dir/b.txt".to_vec()).is_err());
+        let mut builder = builder_with(ArchiveVersion::Rar50).allow_duplicate_names(true);
+        builder.rename(b"a.txt", b"dir/b.txt".to_vec()).unwrap();
+        assert_eq!(
+            builder.names().collect::<Vec<_>>(),
+            vec![&b"dir/b.txt"[..], &b"dir/b.txt"[..]]
+        );
     }
 
     #[test]

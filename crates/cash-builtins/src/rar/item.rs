@@ -295,7 +295,7 @@ pub(super) fn rar5_facts(archive: &rar50::Archive, zone: &Zone) -> Facts {
                 String::from_utf8_lossy(name.get(..end).unwrap_or_default()).into_owned()
             }),
         original_time: metadata
-            .and_then(|m| m.creation_time)
+            .and_then(|m| m.creation_filetime())
             .and_then(|ticks| Stamp::from_filetime(zone, ticks)),
         end: end.is_some(),
         end_volume: None,

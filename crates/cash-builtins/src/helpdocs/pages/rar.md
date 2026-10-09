@@ -50,8 +50,11 @@ or standard output. `rar rn ARCHIVE OLD NEW…` renames files (a folder with wha
 holds; `*` and `?` in OLD and NEW for patterns such as `'src/*.txt' 'src/*.bak'`).
 `rar k` locks an archive against change, `rar rr[N]` gives it a recovery record of N%
 (3 by default, up to 1000), and `rar ch` changes it by switches (`-cl`, `-cu`, `-z`,
-`-k`, `-tl`). Each copies the archive's files as they are; given a volume of a set, each
-changes that volume by itself. `rar i=TEXT` looks for a string in the archived files
+`-k`, `-tl`, `-ams`). Each copies the archive's files as they are; given a volume of a
+set, each changes that volume by itself. With any command that writes, `-ams` saves the
+archive's name and time inside it and `-tl` sets its time to its newest file's;
+`rar ch -amr` gives the archive back that name and time, asking before it replaces a
+file of that name. `rar i=TEXT` looks for a string in the archived files
 and shows where it is (`ic=` case-sensitive, `ih=` hexadecimal bytes,
 `it=` in UTF-8 and UTF-16 too). `rar r` repairs a damaged archive: with a recovery
 record, what it protects is mended into `fixed.NAME`; without one, every file whose

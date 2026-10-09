@@ -155,6 +155,22 @@ Testing     src/dir                                                   OK
 Testing     src                                                       OK
 All OK
 rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Processing archive r2.rar
+Renaming src/a.txt to src/one
+Renaming src/c.dat to src/one
+Done
+rc=0
+src/one
+src/one
+src/sub/b.txt
+src/sub
+src
+rc=0
+r2.rar 1743938546 233
 == k
 
 RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
@@ -715,6 +731,214 @@ Program aborted
 
 ERROR: Cannot modify volume
 rc=4
+== -ams saves the archive's name and time, -tl stamps it, ch -amr restores them
+-- a -m0 -ams -tl
+rc=0
+am/t.rar 3411003351 300 2025-04-01T02:00:00
+Original name: t.rar
+Original time: 2025-04-01 02:00:00,000000000
+-- d -ams -tl
+rc=0
+am/t.rar 156085767 208 2025-03-01T11:00:00
+Original name: t.rar
+Original time: 2025-03-01 11:00:00,000000000
+-- c -zcmt.txt -ams -tl
+rc=0
+am/t.rar 1823705512 303 2025-03-01T11:00:00
+Original name: t.rar
+Original time: 2025-03-01 11:00:00,000000000
+-- k -ams -tl
+rc=0
+am/t.rar 3275897136 254 2025-03-01T11:00:00
+Original name: t.rar
+Original time: 2025-03-01 11:00:00,000000000
+-- rn -ams -tl
+rc=0
+am/t.rar 1259452727 254 2025-03-01T11:00:00
+Original name: t.rar
+Original time: 2025-03-01 11:00:00,000000000
+-- ch -ams -tl
+rc=0
+am/t.rar 278049677 254 2025-03-01T11:00:00
+Original name: t.rar
+Original time: 2025-03-01 11:00:00,000000000
+-- rr -ams -tl
+rc=0
+am/t.rar 610 bytes 2025-03-01T11:00:00
+Original name: t.rar
+Original time: 2025-03-01 11:00:00,000000000
+-- a -m0 -tl
+rc=0
+am/t.rar 3547686057 283 2025-04-01T02:00:00
+-- d -tl
+rc=0
+am/t.rar 1242578169 191 2025-03-01T11:00:00
+-- c -zcmt.txt -tl
+rc=0
+am/t.rar 560167674 286 2025-03-01T11:00:00
+-- k -tl
+rc=0
+am/t.rar 1310671393 237 2025-03-01T11:00:00
+-- rn -tl
+rc=0
+am/t.rar 2740333844 237 2025-03-01T11:00:00
+-- ch -tl
+rc=0
+am/t.rar 2909476730 243 2025-03-01T11:00:00
+-- rr -tl
+rc=0
+am/t.rar 575 bytes 2025-03-01T11:00:00
+-- ch -amr, the name free
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Processing archive am/other.rar
+am/other.rar is renamed to am/orig.rar
+Done
+rc=0
+am/orig.rar 263 2025-03-01T11:00:00
+-- ch -amr, the name taken, answered y
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Processing archive am/other.rar
+am/other.rar is renamed to am/orig.rar
+Done
+--- stderr
+
+
+Overwrite am/orig.rar?
+[Y]es, [N]o, [A]ll, n[E]ver, [Q]uit 
+rc=0
+am/orig.rar 263 2025-03-01T11:00:00
+-- ch -amr, the name taken, answered n
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Processing archive am/other.rar
+Done
+--- stderr
+
+
+Overwrite am/orig.rar?
+[Y]es, [N]o, [A]ll, n[E]ver, [Q]uit 
+rc=0
+am/orig.rar 4 2026-02-02T01:00:00
+am/other.rar 263 2025-03-01T11:00:00
+-- ch -amr, the name taken, answered q
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Processing archive am/other.rar
+Program aborted
+--- stderr
+
+
+Overwrite am/orig.rar?
+[Y]es, [N]o, [A]ll, n[E]ver, [Q]uit 
+rc=255
+am/orig.rar 4 2026-02-02T01:00:00
+am/other.rar 263 2025-03-01T11:00:00
+-- ch -amr, the name taken, answered x
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Processing archive am/other.rar
+
+Program aborted
+--- stderr
+
+
+Overwrite am/orig.rar?
+[Y]es, [N]o, [A]ll, n[E]ver, [Q]uit 
+[Y]es, [N]o, [A]ll, n[E]ver, [Q]uit Read error in the file stdin
+The pipe has been ended.
+rc=12
+am/orig.rar 4 2026-02-02T01:00:00
+am/other.rar 263 2025-03-01T11:00:00
+-- ch -amr -o+, the name taken
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Processing archive am/other.rar
+am/other.rar is renamed to am/orig.rar
+Done
+rc=0
+am/orig.rar 263 2025-03-01T11:00:00
+-- ch -amr -o-, the name taken
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Processing archive am/other.rar
+Done
+rc=0
+am/orig.rar 4 2026-02-02T01:00:00
+am/other.rar 263 2025-03-01T11:00:00
+-- ch -amr -or, the name taken
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Processing archive am/other.rar
+Done
+--- stderr
+
+Cannot rename am/other.rar to am/orig(1).rar
+The system cannot find the file specified.
+rc=0
+am/orig.rar 4 2026-02-02T01:00:00
+am/other.rar 263 2025-03-01T11:00:00
+-- ch -amr -y, the name taken
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Processing archive am/other.rar
+am/other.rar is renamed to am/orig.rar
+Done
+rc=0
+am/orig.rar 263 2025-03-01T11:00:00
+-- ch -amr -k -tl, the name taken
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Processing archive am/other.rar
+
+Program aborted
+--- stderr
+
+
+Overwrite am/orig.rar?
+[Y]es, [N]o, [A]ll, n[E]ver, [Q]uit Read error in the file stdin
+rc=12
+am/orig.rar 4 2026-02-02T01:00:00
+am/other.rar 263 2025-03-01T11:00:00
+-- ch -amr, the archive's own name
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Processing archive am/orig.rar
+Done
+rc=0
+am/orig.rar 263 2025-03-01T11:00:00
+-- ch -amr, nothing saved
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Processing archive am/plain.rar
+Done
+rc=0
+am/plain.rar 243 2026-01-01T01:00:00
 == missing archive
 
 RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026

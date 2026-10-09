@@ -67,7 +67,7 @@ fn rar_adds_updates_moves_and_deletes_as_winrar_7_23_does() {
 fn rar_comments_renames_locks_and_changes_as_winrar_7_23_does() {
     // A trial WinRAR says so after its banner when it adds; cash has no trial.
     let expected = with_divergence(
-        &with_cash_banners("rar_modify", 30, 0),
+        &with_cash_banners("rar_modify", 43, 0),
         "\nEvaluation copy. Please register.\n",
         "",
         5,

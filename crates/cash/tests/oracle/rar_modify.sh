@@ -67,6 +67,11 @@ z rar rn r1.rar 'src\sub' 'src\dir'
 z rar lb r1.rar
 z rar rn r1.rar onlyone
 z rar t -idc r1.rar
+# Two files given one name: rar keeps both under it.
+cp base.rar r2.rar
+z rar rn r2.rar 'src\*.dat' 'src\one' 'src\a.txt' 'src\one'
+z rar lb r2.rar
+echo "r2.rar $(cksum < r2.rar)"
 
 echo "== k"
 cp base.rar k1.rar
@@ -178,6 +183,68 @@ rm -rf vs && cp -r vs0 vs
 z rar rr -idq vs/v.part2.rar
 z rar t -idc vs/v.part1.rar
 z rar d -idc vs/v.part1.rar vs.bin
+
+echo "== -ams saves the archive's name and time, -tl stamps it, ch -amr restores them"
+# With -tl both times are the newest file's, folders left out, so each run is the same:
+# the archive's own time is shown in the zone, what it saves by lt. A recovery record
+# of an archive this small differs from one run of rar to the next: rr is shown by size.
+mkdir am
+printf 'newer\n' > new.txt
+touch -d '2025-04-01T00:00:00Z' new.txt
+for sw in "-ams -tl" "-tl"; do
+  for cmd in "a -m0" "d" "c -zcmt.txt" "k" "rn" "ch" "rr"; do
+    cp base.rar am/t.rar
+    touch -d '2026-01-01T00:00:00Z' am/t.rar
+    echo "-- $cmd $sw"
+    set -- $cmd
+    op=$1
+    shift
+    case $op in
+      a) set -- "$@" $sw am/t.rar new.txt ;;
+      d) set -- "$@" $sw am/t.rar 'src\c.dat' ;;
+      rn) set -- "$@" $sw am/t.rar 'src\a.txt' 'src\z.txt' ;;
+      *) set -- "$@" $sw am/t.rar ;;
+    esac
+    z rar "$op" -idq "$@"
+    if [ "$op" = rr ]; then
+      echo "am/t.rar $(stat -c %s am/t.rar) bytes $(date -r am/t.rar +%FT%T)"
+    else
+      echo "am/t.rar $(cksum < am/t.rar) $(date -r am/t.rar +%FT%T)"
+    fi
+    rar lt am/t.rar | tr -d '\r' | grep '^Original'
+  done
+done
+rar a -m0 -idq -ams -tl am/orig.rar src
+taken() {
+  rm -f am/*.rar && cp am0.rar am/other.rar
+  printf 'old\n' > am/orig.rar && touch -d '2026-02-02T00:00:00Z' am/orig.rar
+}
+listed() { for f in am/*; do echo "$f $(stat -c %s "$f") $(date -r "$f" +%FT%T)"; done; }
+mv am/orig.rar am0.rar
+echo "-- ch -amr, the name free"
+rm -f am/*.rar && cp am0.rar am/other.rar
+z rar ch -amr am/other.rar
+listed
+for answer in y n q x; do
+  echo "-- ch -amr, the name taken, answered $answer"
+  taken
+  printf '%s\n' "$answer" | z rar ch -amr am/other.rar
+  listed
+done
+for sw in -o+ -o- -or -y "-k -tl"; do
+  echo "-- ch -amr $sw, the name taken"
+  taken
+  z rar ch -amr $sw am/other.rar
+  listed
+done
+echo "-- ch -amr, the archive's own name"
+rm -f am/*.rar && cp am0.rar am/orig.rar && touch -d '2026-01-01T00:00:00Z' am/orig.rar
+z rar ch -amr am/orig.rar
+listed
+echo "-- ch -amr, nothing saved"
+rm -f am/*.rar && cp base.rar am/plain.rar && touch -d '2026-01-01T00:00:00Z' am/plain.rar
+z rar ch -amr am/plain.rar
+listed
 
 echo "== missing archive"
 z rar c -zcmt.txt missing.rar

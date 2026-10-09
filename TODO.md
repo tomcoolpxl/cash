@@ -830,11 +830,27 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      `rar50_dictionary_size` is public now. Sizes above 4 GB (RAR 7's) are not tried.
    - `c`, `cw`, `rn`, `k`, `rr` and `ch`: done 2026-10-09 (`rar_modify.sh`, 474 lines then,
      the rewrites WinRAR's byte for byte). Left of them: `ch` takes `-cl`, `-cu`, `-z`,
-     `-k`, `-tl`, `-rr` and now `-ts`, not the other switches Rar.exe was seen to act on
-     there: `-am`/`-ams` (the archive's name and time saved in its main header), `-amr`
-     (restoring them: it asks to overwrite the saved name), `-qo-`/`-qo+` (quick open
-     dropped or for every file), `-hp` (headers encrypted). `-ep`, `-htb`, `-s`, `-p`
-     and `-df` change nothing there; `-ma4` is refused as by cash.
+     `-k`, `-tl`, `-rr`, `-ts`, `-ams` and `-amr`, not the other switches Rar.exe was
+     seen to act on there: `-qo-`/`-qo+` (quick open dropped or for every file), `-hp`
+     (headers encrypted). `-ep`, `-htb`, `-s`, `-p` and `-df` change nothing there;
+     `-ma4` is refused as by cash.
+   - `-ams`, `-tl` and `ch -amr`: done 2026-10-09 (in `rar_modify.sh`, now 981 lines,
+     WinRAR's byte for byte but a recovery record's bytes). `-ams` saves the archive's
+     file name and the time it is written (with `-tl` its newest file's, folders left
+     out) in its main header, for `a`, `u`, `f`, `m`, `d`, `c`, `k`, `rn`, `ch` and `rr`;
+     cash saved neither. `-tl` sets the archive's own time to its newest file's after
+     every one of them; cash did it for `ch` only. `ch -amr` sets the archive's
+     creation and modification times to the saved one, then renames it to the saved
+     name ("X is renamed to Y"), asking "Overwrite NAME?" with Yes, No, All, nEver and
+     Quit when the name is taken (`-o+` and `-y` replace, `-o-` leaves, `-or` fails as
+     Rar.exe's does: "Cannot rename X to NAME(1).rar", rc 0); the file replaced is
+     deleted first, so the archive takes its creation time as Windows gives it; other
+     switches are ignored. Rar.exe deletes the archive itself when the saved name
+     differs only in case; cash renames it (in "Found along the way"). `lt`'s
+     "Original time" now reads a saved time stored as Unix seconds or nanoseconds too.
+     `rn` of two files to one name kept the first only and said "duplicate archive
+     entry name"; rar keeps both under the name, and so does cash (rars' builder's
+     `rename_by_id` honours `allow_duplicate_names`).
    - A change stores the kept files' times again by `-ts`: done 2026-10-09 (in
      `rar_times.sh`, now 118 lines, WinRAR's byte for byte). `a`, `u`, `f`, `m`, `d`,
      `c`, `k`, `ch` and `rr` write every member kept with the times the switches keep,
@@ -894,6 +910,23 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
 ---
 
 ## Found along the way
+
+- **WinRAR matches an archived name typed with `/` to nothing** (found on 2026-10-09
+  with `rar d`): Rar.exe 7.23 on Windows takes `\` alone between folders in the names
+  after the archive's, so `t`, `p`, `e`, `x` and `d` given `src/a.txt`, `*/a.txt` or
+  `src/*` say no files and return 10, where `src\a.txt` works. cash's rar takes both,
+  which in a shell where `/` is typed is what a user means. Whether cash should follow
+  Rar.exe here is **yours**; the oracles use `\`.
+- **`ch -amr` on a saved name differing only in case deletes the archive in Rar.exe**
+  (found on 2026-10-09): `M2.RAR` saved as `m2.rar` is asked about as taken (it is
+  itself), and on Yes or `-o+` Rar.exe deletes it, then cannot rename it ("Cannot
+  rename M2.RAR to m2.rar / The system cannot find the file specified.", rc 0). cash
+  renames it instead, a difference kept on purpose and out of the oracle.
+- **Rar.exe's recovery record of a tiny archive differs between runs** (found on
+  2026-10-09): `rr` on the same 156-byte archive twice gave chunks with different
+  checksums and parity, the data shards' checksums alike; what it pads a short shard
+  with seems not to be zeros. Larger archives' records are the same each run, and
+  cash's match them; the oracles show a small archive's record by its size.
 
 - **The ConPTY tests that run PowerShell time out in CI now and then**: PowerShell
   started by the test prints nothing in 30 s (`conpty_interactive_tests.rs:220`).

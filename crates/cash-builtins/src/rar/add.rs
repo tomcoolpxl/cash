@@ -302,6 +302,17 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
         },
         None => Builder::new(ArchiveVersion::Rar50),
     };
+    // The newest file's time among those written: `-tl` and `-ams` take it.
+    let newest = slots
+        .iter()
+        .filter_map(|slot| match *slot {
+            Slot::Kept(index) if !members[index].meta.is_directory => {
+                member_time(&members[index], &rar.zone)
+            }
+            Slot::Put(index) if !sources[index].is_dir => sources[index].modified,
+            _ => None,
+        })
+        .max();
     builder = settings(
         rar,
         builder,
@@ -309,6 +320,7 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
         password.as_deref(),
         comment,
         old.as_ref(),
+        saved_metadata(rar, &path, newest),
     )?;
     // WinRAR's bound on an archive it updates counts the old members and every file
     // named, whether written or not.
@@ -402,6 +414,11 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
             return Ok(());
         }
     };
+    if switches.latest_time {
+        for path in &written {
+            stamp_time(path, newest);
+        }
+    }
     // `-log`: the archive, each volume of it, and the files put in, in their order.
     for path in &written {
         rar.log_archive(&shown_beside(&display, path));
@@ -472,6 +489,52 @@ fn list_identical<SE: cash_core::ShellExtensions>(
         &name,
     ));
     Ok(())
+}
+
+/// `-ams`: the archive's own name and a time saved in its main header, as rar saves
+/// them: the time it is written, or with `-tl` its newest file's.
+pub(super) fn saved_metadata<SE: cash_core::ShellExtensions>(
+    rar: &Rar<'_, SE>,
+    path: &Path,
+    newest: Option<SystemTime>,
+) -> Option<rar::rar50::ArchiveMetadataRecord> {
+    if rar.switches.archive_metadata != Some('s') {
+        return None;
+    }
+    let name = path
+        .file_name()?
+        .to_string_lossy()
+        .into_owned()
+        .into_bytes();
+    let time = if rar.switches.latest_time {
+        newest
+    } else {
+        Some(SystemTime::now())
+    };
+    let ticks = time.map(|time| match filetime(time) {
+        FileTimestamp::WindowsFiletime(ticks) => ticks,
+        _ => 0,
+    });
+    Some(rar::rar50::ArchiveMetadataRecord::new(Some(name), ticks))
+}
+
+/// `-tl`: an archive's time set to `time`, its newest file's, as rar sets it.
+pub(super) fn stamp_time(path: &Path, time: Option<SystemTime>) {
+    if let Some(time) = time
+        && let Ok(file) = std::fs::File::options().write(true).open(path)
+    {
+        let _ = file.set_modified(time);
+    }
+}
+
+/// A member's modification time as the system's, to the second.
+pub(super) fn member_time(
+    member: &rar::ArchiveMember,
+    zone: &cash_core::timefmt::Zone,
+) -> Option<SystemTime> {
+    let seconds = member_seconds(member, zone)?;
+    let since = std::time::Duration::from_secs(u64::try_from(seconds).ok()?);
+    SystemTime::UNIX_EPOCH.checked_add(since)
 }
 
 /// An archived member's name as rar compares it: `/` between folders.
@@ -731,6 +794,7 @@ fn settings<SE: cash_core::ShellExtensions>(
     password: Option<&[u8]>,
     comment: Option<Vec<u8>>,
     old: Option<&open::Opened>,
+    metadata: Option<rar::rar50::ArchiveMetadataRecord>,
 ) -> Result<Builder, Stop> {
     let switches = &rar.switches;
     let level = switches.method.unwrap_or(3);
@@ -755,7 +819,7 @@ fn settings<SE: cash_core::ShellExtensions>(
     if builder.format().family() == ArchiveFamily::Rar50Plus {
         let quick_open = quick_open_on(rar);
         builder = builder
-            .archive_metadata(None, switches.lock, quick_open)
+            .archive_metadata(metadata, switches.lock, quick_open)
             .map_err(|error| {
                 rar.console.err(&format!("\n{error}"));
                 Stop::Aborted(code::FATAL)

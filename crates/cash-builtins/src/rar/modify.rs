@@ -7,7 +7,7 @@ use std::path::Path;
 use cash_archive::rar::{ArchiveFamily, Builder, WriterResources};
 
 use super::add;
-use super::cmdline::{Command, Name, Parsed};
+use super::cmdline::{Command, Name, Overwrite, Parsed};
 use super::list::{self, Comment};
 use super::open::{self, Failure, Found};
 use super::{Rar, Stop, code};
@@ -20,7 +20,7 @@ struct Change {
     recovery_percent: Option<u64>,
     /// Old name to new, as the archive holds them.
     renames: Vec<(Vec<u8>, Vec<u8>)>,
-    /// `-tl`: the archive's time is its newest file's.
+    /// `-tl`: the archive's time is its newest file's, whatever the command.
     latest_time: bool,
     /// `rn`: the files' times kept as they are.
     keep_times: bool,
@@ -71,15 +71,21 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
     }
 
     rar.console.msg(&format!("\nProcessing archive {display}"));
+    if *command == Command::Change && rar.switches.archive_metadata == Some('r') {
+        restore_metadata(rar, &found, &opened)?;
+        done(rar);
+        return Ok(());
+    }
     if refused(rar, &opened) {
         return Ok(());
     }
+    let switches = &rar.switches;
     let mut change = Change {
         recovery_percent: add::asked_recovery_percent(rar),
         keep_times: *command == Command::Rename,
+        latest_time: switches.latest_time,
         ..Change::default()
     };
-    let switches = &rar.switches;
     // `ch -tl` alone leaves the archive as it is, setting only its time.
     let mut time_only = false;
     match command {
@@ -109,7 +115,6 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
             if change.lock {
                 rar.console.msg("\nLocking archive");
             }
-            change.latest_time = switches.latest_time;
             if let Some(case) = switches.case {
                 change.renames = case_renames(&opened, case);
             }
@@ -117,6 +122,7 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
                 && change.comment.is_none()
                 && !change.lock
                 && switches.case.is_none()
+                && switches.archive_metadata != Some('s')
                 && change.recovery_percent.is_none();
         }
     }
@@ -124,7 +130,7 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
         rar.console.msg("\nAdding the data recovery record     ");
     }
     if time_only {
-        stamp_latest(rar, &found.path, &opened);
+        add::stamp_time(&found.path, newest(rar, &opened));
     } else if *command != Command::Rename || !change.renames.is_empty() {
         rewrite(rar, &found.path, &opened, &change)?;
     }
@@ -149,6 +155,134 @@ fn refused<SE: cash_core::ShellExtensions>(rar: &Rar<'_, SE>, opened: &open::Ope
     rar.fail(code::LOCKED);
     done(rar);
     true
+}
+
+/// `ch -amr`: the archive given back the name and time `-ams` saved in it, its times
+/// set first, and nothing else changed; without them rar does nothing. A file of that
+/// name is asked about, or left by `-o-`, replaced by `-o+` and `-y`; `-or` fails to
+/// find the new name it makes, as rar 7.23's does.
+fn restore_metadata<SE: cash_core::ShellExtensions>(
+    rar: &Rar<'_, SE>,
+    found: &Found,
+    opened: &open::Opened,
+) -> Result<(), Stop> {
+    let Some(metadata) = opened
+        .archive
+        .as_rar50()
+        .and_then(|archive| archive.main.archive_metadata())
+    else {
+        return Ok(());
+    };
+    if let Some(time) = metadata.creation_filetime().and_then(filetime_system) {
+        let times = cash_win32::unix::Times {
+            modified: time,
+            accessed: None,
+            created: Some(time),
+        };
+        let _ = cash_win32::unix::set_times(&found.path, &times);
+    }
+    // The name up to its first NUL, and only its last part: never a path elsewhere.
+    let Some(saved) = metadata.name.as_ref().and_then(|name| {
+        let end = name.iter().position(|&b| b == 0).unwrap_or(name.len());
+        let text = String::from_utf8_lossy(name.get(..end).unwrap_or_default()).into_owned();
+        Path::new(&text.replace('\\', "/"))
+            .file_name()
+            .map(|part| part.to_string_lossy().into_owned())
+    }) else {
+        return Ok(());
+    };
+    if found.path.file_name() == Some(std::ffi::OsStr::new(&saved)) {
+        return Ok(());
+    }
+    let target = found.path.with_file_name(&saved);
+    // The folder the archive was named in, as it was named.
+    let folder = found
+        .display
+        .rfind('/')
+        .and_then(|slash| found.display.get(..=slash))
+        .unwrap_or_default();
+    let shown = format!("{folder}{saved}");
+    if std::fs::symlink_metadata(&target).is_ok() {
+        let switches = &rar.switches;
+        let replace = if switches.yes {
+            true
+        } else {
+            match switches.overwrite {
+                Some(Overwrite::All) => true,
+                Some(Overwrite::Skip) => false,
+                Some(Overwrite::Rename) => {
+                    let (stem, extension) = saved
+                        .rsplit_once('.')
+                        .map_or((saved.as_str(), String::new()), |(stem, extension)| {
+                            (stem, format!(".{extension}"))
+                        });
+                    rar.console.err(&format!(
+                        "\nCannot rename {} to {}{stem}(1){extension}\nThe system cannot find the file specified.",
+                        found.display,
+                        folder
+                    ));
+                    false
+                }
+                Some(Overwrite::Ask) | None => ask_overwrite(rar, &shown)?,
+            }
+        };
+        if !replace {
+            return Ok(());
+        }
+        // rar deletes the file it replaces, so the archive renamed takes its creation
+        // time, as Windows gives a name's new file. A name differing only in case is
+        // the archive itself, which rar 7.23 deletes, losing it: cash renames it.
+        let current = found
+            .path
+            .file_name()
+            .map(|name| name.to_string_lossy().to_lowercase());
+        if current.as_deref() != Some(saved.to_lowercase().as_str()) {
+            let _ = std::fs::remove_file(&target);
+        }
+    }
+    // A rename that fails is said, the exit code left as it is, as rar leaves it.
+    if let Err(error) = std::fs::rename(&found.path, &target) {
+        rar.console.err(&format!(
+            "\nCannot rename {} to {shown}\n{}",
+            found.display,
+            open::system_message(&error)
+        ));
+        return Ok(());
+    }
+    rar.console
+        .msg(&format!("\n{} is renamed to {shown}", found.display));
+    Ok(())
+}
+
+/// rar's question before `ch -amr` replaces a file: yes or no, `Quit` stopping it.
+fn ask_overwrite<SE: cash_core::ShellExtensions>(
+    rar: &Rar<'_, SE>,
+    shown: &str,
+) -> Result<bool, Stop> {
+    const CHOICES: &str = "[Y]es, [N]o, [A]ll, n[E]ver, [Q]uit ";
+    rar.console
+        .err(&format!("\n\nOverwrite {shown}?\n{CHOICES}"));
+    loop {
+        let Some(answer) = rar.read_answer(true)? else {
+            rar.console.err("Read error in the file stdin");
+            if let Some(extra) = rar.stdin_end_words(false) {
+                rar.console.err(&format!("\n{extra}"));
+            }
+            return Err(Stop::Aborted(code::READ));
+        };
+        match answer.trim().chars().next().map(|c| c.to_ascii_lowercase()) {
+            Some('y' | 'a') => return Ok(true),
+            Some('n' | 'e') => return Ok(false),
+            Some('q') => return Err(Stop::Quit),
+            _ => rar.console.err(&format!("\n{CHOICES}")),
+        }
+    }
+}
+
+/// A FILETIME as the system's time.
+fn filetime_system(ticks: u64) -> Option<std::time::SystemTime> {
+    let nanos = (u128::from(ticks) * 100).checked_sub(11_644_473_600 * 1_000_000_000)?;
+    std::time::UNIX_EPOCH.checked_add(std::time::Duration::from_nanos(u64::try_from(nanos).ok()?))
 }
 
 fn done<SE: cash_core::ShellExtensions>(rar: &Rar<'_, SE>) {
@@ -353,8 +487,9 @@ fn rewrite<SE: cash_core::ShellExtensions>(
     // archive's own, which a rewrite of a locked one never sees.
     if builder.format().family() == ArchiveFamily::Rar50Plus {
         let quick_open = add::quick_open_on(rar);
+        let metadata = add::saved_metadata(rar, path, newest(rar, opened));
         builder = builder
-            .archive_metadata(None, change.lock, quick_open)
+            .archive_metadata(metadata, change.lock, quick_open)
             .map_err(|error| {
                 rar.console.err(&format!("\n{error}"));
                 Stop::Aborted(code::FATAL)
@@ -375,6 +510,10 @@ fn rewrite<SE: cash_core::ShellExtensions>(
             return Err(Stop::Aborted(code::FATAL));
         }
     }
+    // rar renames two files to one name when asked, keeping both.
+    if !change.renames.is_empty() {
+        builder = builder.allow_duplicate_names(true);
+    }
     for (old, new) in &change.renames {
         if let Err(error) = rename(&mut builder, old, new) {
             rar.console.err(&format!("\n{error}"));
@@ -389,42 +528,26 @@ fn rewrite<SE: cash_core::ShellExtensions>(
         return Ok(());
     }
     if change.latest_time {
-        stamp_latest(rar, path, opened);
+        add::stamp_time(path, newest(rar, opened));
     }
     Ok(())
 }
 
-/// `-tl`: the archive's time set to its newest file's.
-fn stamp_latest<SE: cash_core::ShellExtensions>(
+/// The archive's newest file's time, which `-tl` and `-ams` take.
+fn newest<SE: cash_core::ShellExtensions>(
     rar: &Rar<'_, SE>,
-    path: &Path,
     opened: &open::Opened,
-) {
-    let latest = opened
+) -> Option<std::time::SystemTime> {
+    opened
         .archive
         .members()
         .filter(|member| !member.meta.is_directory)
-        .filter_map(|member| member_time(&member, &rar.zone))
-        .max();
-    if let Some(time) = latest
-        && let Ok(file) = std::fs::File::options().write(true).open(path)
-    {
-        let _ = file.set_modified(time);
-    }
+        .filter_map(|member| add::member_time(&member, &rar.zone))
+        .max()
 }
 
 fn rename(builder: &mut Builder, old: &[u8], new: &[u8]) -> cash_archive::rar::Result<()> {
     builder.rename(old, new.to_vec())
-}
-
-/// A member's modification time as the system's.
-fn member_time(
-    member: &cash_archive::rar::ArchiveMember,
-    zone: &cash_core::timefmt::Zone,
-) -> Option<std::time::SystemTime> {
-    let seconds = add::member_seconds(member, zone)?;
-    let since = std::time::Duration::from_secs(u64::try_from(seconds).ok()?);
-    std::time::SystemTime::UNIX_EPOCH.checked_add(since)
 }
 
 #[cfg(test)]
