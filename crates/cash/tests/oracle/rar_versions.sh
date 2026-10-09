@@ -84,5 +84,23 @@ z rar lb d1.rar
 cp v.rar d2.rar
 z rar d d2.rar 'src\f.txt;1'
 z rar lb d2.rar
+echo "== a solid archive: its files written again keep their versions"
+# Compressed, so shown by names and what they hold, not checksums; quiet, for rar's
+# "Analyzing" and "Repacking" lines of a solid update are not cash's yet.
+mkdir s
+printf 'one\n' > s/f.txt
+printf 'other\n' > s/g.txt
+touch -d '2024-01-01T00:00:00Z' s/f.txt s/g.txt
+rar a -s -ver -idq solid.rar s
+printf 'two\n' > s/f.txt
+touch -d '2024-01-02T00:00:00Z' s/f.txt
+z rar a -s -ver -idq solid.rar 's\f.txt'
+printf 'three\n' > s/f.txt
+touch -d '2024-01-03T00:00:00Z' s/f.txt
+z rar a -s -ver -idq solid.rar 's\f.txt'
+z rar lb solid.rar
+z rar t -idq solid.rar
+z rar x -ver -idq solid.rar o8/
+show o8
 
 cd / && rm -rf "$dir"

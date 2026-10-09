@@ -313,3 +313,18 @@ src/f.txt;2
 src/g.txt
 src/f.txt
 rc=0
+== a solid archive: its files written again keep their versions
+rc=0
+rc=0
+s/f.txt;1
+s/g.txt
+s/f.txt;2
+s/f.txt
+s
+rc=0
+rc=0
+rc=0
+./s/f.txt: three
+./s/f.txt;1: one
+./s/f.txt;2: two
+./s/g.txt: other

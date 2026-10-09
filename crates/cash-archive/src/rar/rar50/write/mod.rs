@@ -92,6 +92,8 @@ pub struct ArchiveEntry {
     pub services: Vec<ServiceEntry>,
     /// Packed data carried from another archive in place of `source`'s.
     pub carried: Option<Carried>,
+    /// The older version of its file it is, `;N`, when not carried.
+    pub version: Option<u64>,
 }
 
 /// A member's packed data carried as it is from another RAR 5 archive: not compressed
@@ -179,11 +181,17 @@ impl ArchiveEntry {
             password: None,
             services: Vec::new(),
             carried: None,
+            version: None,
         }
     }
 
     pub fn with_carried(mut self, carried: Option<Carried>) -> Self {
         self.carried = carried;
+        self
+    }
+
+    pub fn with_version(mut self, version: Option<u64>) -> Self {
+        self.version = version;
         self
     }
 

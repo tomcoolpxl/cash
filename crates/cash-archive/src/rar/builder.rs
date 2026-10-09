@@ -109,6 +109,8 @@ struct BuilderEntry {
     /// RAR 1.5 to 4 packed data carried in `data`, written as it is.
     legacy_carried: Option<rar15_40::LegacyCarried>,
     attributes: EntryAttributes,
+    /// The older version of its file a RAR 5 member not carried is, `;N`.
+    version: Option<u64>,
 }
 
 #[derive(Debug, Clone)]
@@ -120,9 +122,11 @@ struct EntryEncryption {
 impl BuilderEntry {
     /// Whether it is an older version of a file, kept beside it under its name.
     fn is_older_version(&self) -> bool {
-        self.carried
-            .as_ref()
-            .is_some_and(|carried| carried.version.is_some())
+        self.version.is_some()
+            || self
+                .carried
+                .as_ref()
+                .is_some_and(|carried| carried.version.is_some())
     }
 
     fn attributes(&self) -> u64 {
@@ -376,6 +380,7 @@ impl Builder {
             redirection_size: None,
             carried: None,
             legacy_carried: None,
+            version: None,
             attributes: mode.map_or(
                 EntryAttributes::Dos(u64::from(DOS_ARCHIVE_ATTR)),
                 EntryAttributes::Unix,
@@ -410,6 +415,7 @@ impl Builder {
             redirection_size: None,
             carried: None,
             legacy_carried: None,
+            version: None,
             attributes: mode.map_or(
                 EntryAttributes::Dos(u64::from(DOS_ARCHIVE_ATTR)),
                 EntryAttributes::Unix,
@@ -482,6 +488,7 @@ impl Builder {
             redirection_size: None,
             carried: None,
             legacy_carried: None,
+            version: None,
             attributes: mode.map_or(EntryAttributes::Dos(0x10), |mode| {
                 EntryAttributes::Unix((mode & 0o7777) | 0o040000)
             }),
@@ -553,6 +560,7 @@ impl Builder {
             redirection_size: None,
             carried: None,
             legacy_carried: None,
+            version: None,
             attributes: EntryAttributes::Unix(0o120000 | (mode.unwrap_or(0o777) & 0o7777)),
         })
     }
@@ -595,6 +603,7 @@ impl Builder {
             redirection_size: Some(size),
             carried: None,
             legacy_carried: None,
+            version: None,
             attributes: EntryAttributes::Dos(if is_directory { 0x10 } else { 0x20 }),
         })
     }
@@ -654,21 +663,26 @@ impl Builder {
             redirection_size: None,
             carried: Some(carried),
             legacy_carried: None,
+            version: None,
             attributes,
         })
     }
 
-    /// Makes the RAR 5 member [`Self::carry`] took last an older version of its file,
-    /// number `version` (`name;N` in rar's listings), or, with `None`, the file itself.
-    pub fn set_carried_version(&mut self, version: Option<u64>) -> Result<()> {
-        let carried = self
+    /// Makes the RAR 5 member added last, carried by [`Self::carry`] or not, an older
+    /// version of its file, number `version` (`name;N` in rar's listings), or, with
+    /// `None`, the file itself.
+    pub fn set_version(&mut self, version: Option<u64>) -> Result<()> {
+        if self.format.family() != ArchiveFamily::Rar50Plus {
+            return Err(Error::InvalidArgument("file versions need RAR5/7 output"));
+        }
+        let entry = self
             .entries
             .last_mut()
-            .and_then(|entry| entry.carried.as_mut())
-            .ok_or(Error::InvalidArgument(
-                "no RAR 5 member was carried to version",
-            ))?;
-        carried.version = version;
+            .ok_or(Error::InvalidArgument("no member was added to version"))?;
+        match entry.carried.as_mut() {
+            Some(carried) => carried.version = version,
+            None => entry.version = version,
+        }
         Ok(())
     }
 
@@ -727,6 +741,7 @@ impl Builder {
             redirection_size: None,
             carried: None,
             legacy_carried: Some(carried),
+            version: None,
             attributes,
         })
     }
@@ -760,6 +775,7 @@ impl Builder {
             redirection_size: Some(meta.unpacked_size),
             carried: None,
             legacy_carried: None,
+            version: None,
             attributes: if meta.host_os == Some(1) {
                 EntryAttributes::Unix(meta.file_attr as u32)
             } else {
@@ -1788,7 +1804,8 @@ impl Builder {
                 .with_file_times(entry.file_times)
                 .with_attributes(entry.rar50_attr())
                 .with_host_os(entry.rar50_host_os())
-                .with_carried(entry.carried.clone());
+                .with_carried(entry.carried.clone())
+                .with_version(entry.version);
             // A carried member's data is already as encrypted as it is going to be; a
             // folder has none, and WinRAR gives it no encryption record.
             let data_password = if entry.carried.is_some() || entry.is_directory {

@@ -920,6 +920,13 @@ fn prepare_member(
     if let Some(times) = entry.file_times {
         write_extra_record(&mut extra, super::super::FHEXTRA_HTIME, &times.encode()?)?;
     }
+    if let Some(version) = entry.version {
+        // No flags, then the number, as for a carried member.
+        let mut record = Bytes::new(resources);
+        record.vint(0)?;
+        record.vint(version)?;
+        write_extra_record(&mut extra, super::super::FHEXTRA_VERSION, &record)?;
+    }
     if let Some(link) = &entry.redirection {
         let mut record = Bytes::new(resources);
         record.vint(link.redirection_type)?;

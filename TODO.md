@@ -733,9 +733,17 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      replaced as `name;N` with `-ver`, `-verN` drops the oldest beyond N and numbers
      the rest again, listings show `;N` and lt "File version", `x`/`t`/`p` take an older
      version only named exactly, all with `-ver`, version N plainly named with `-verN`,
-     `d` matches the `;N` name. Left: versions in a solid archive (its members are
-     rewritten, not carried, and lose their numbers), and a file comment on a member
-     with older versions (set by name, it may land on the wrong one).
+     `d` matches the `;N` name. Versions in a solid archive: done 2026-10-09 (in
+     `rar_versions.sh`, now 330 lines): its members, written again rather than carried,
+     lost their numbers, and a second `-ver` update failed on "duplicate archive entry
+     name"; rars' builder's `set_version` now numbers any member, carried or not. Left:
+     a file comment on a member with older versions (set by name, it may land on the
+     wrong one).
+   - A solid archive's update: rar says "Updating solid archive" (cash does now), and
+     shows its repacking: "Analyzing archived files:" and "Repacking archived files:"
+     with counters it backspaces over, the members before the change repacked first,
+     then the change, then the rest. Not cash's yet; the oracle's solid updates are
+     quiet.
    - A damaged folder header near an archive's end: Rar.exe still tests the folder "OK"
      and adds "NAME - the file header is corrupt" after "Corrupt header is found" for
      each, reading on; cash stops at the first (seen damaging four bytes at offset 200

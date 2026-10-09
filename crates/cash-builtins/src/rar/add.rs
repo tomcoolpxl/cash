@@ -156,6 +156,7 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
         return list_identical(rar, parsed, identical);
     }
     let words = match (&old, solid) {
+        (Some(old), _) if old.facts.solid => "Updating solid archive",
         (Some(_), _) => "Updating archive",
         (None, true) => "Creating solid archive",
         (None, false) => "Creating archive",
@@ -280,6 +281,11 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
     }
 
     let versions = version_files(rar, old.as_ref(), &members, &names, &mut actions);
+    // The version each member already is.
+    let had: Vec<Option<u64>> = match &old {
+        Some(opened) => member_versions(&opened.archive, members.len()),
+        None => Vec::new(),
+    };
     let mut dropped = versions.dropped.clone();
     dropped.extend(&synced);
     let slots = plan(&sources, &actions, &members, &dropped);
@@ -340,12 +346,16 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
     let mut lines: Vec<Option<(String, Action)>> = Vec::new();
     for slot in &slots {
         let added = match (*slot, keeper.as_mut()) {
+            // An older version keeps its number, or gets its new one: a member carried
+            // has its own, one written again in a solid archive has it set here.
             (Slot::Kept(index), Some(keeper)) => keeper
                 .keep(&mut builder, index, password.is_some())
-                .and_then(|()| match versions.numbers.get(&index) {
-                    Some(&number) => builder.set_carried_version(Some(number)),
-                    None => Ok(()),
-                })
+                .and_then(
+                    |()| match versions.numbers.get(&index).copied().or(had[index]) {
+                        Some(number) => builder.set_version(Some(number)),
+                        None => Ok(()),
+                    },
+                )
                 .map(|()| None),
             (Slot::Kept(_), None) => Ok(None),
             (Slot::Put(index), _) => {
