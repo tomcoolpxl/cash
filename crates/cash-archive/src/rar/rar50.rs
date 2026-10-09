@@ -27,9 +27,10 @@ pub(crate) mod write;
 pub use extract::{extract_volumes_to, extract_volumes_to_with_redirections};
 #[cfg(feature = "write")]
 pub use write::{
-    ArchiveEntry, ArchiveExtras, ArchiveMetadataEntry, CollectedVolumes, Rar50Writer, ServiceEntry,
-    VolumeSink, WriterOptions, write_streaming_archive_to, write_streaming_archive_with_progress,
-    write_streaming_volumes_to, write_streaming_volumes_with_progress,
+    ArchiveEntry, ArchiveExtras, ArchiveMetadataEntry, Carried, Checksums, CollectedVolumes,
+    Layout, Rar50Writer, ServiceEntry, VolumeSink, WriterOptions, write_streaming_archive_to,
+    write_streaming_archive_with_progress, write_streaming_volumes_to,
+    write_streaming_volumes_with_progress,
 };
 
 const HEAD_MAIN: u64 = 1;

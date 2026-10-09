@@ -34,6 +34,22 @@ impl<const N: usize> HeaderScratch<N> {
             }
         }
     }
+    /// A vint at least `width` bytes long: the value's own bytes, then continuation
+    /// bytes carrying zeros. Readers take it as the value; WinRAR writes sizes and
+    /// offsets this way to patch them in place later.
+    pub(crate) fn vint_padded(&mut self, value: u64, width: usize) {
+        let natural = vint_len(value);
+        if natural >= width {
+            self.vint(value);
+            return;
+        }
+        let mut value = value;
+        for index in 0..width {
+            let last = index + 1 == width;
+            self.extend_from_slice(&[(value as u8 & 0x7f) | if last { 0 } else { 0x80 }]);
+            value >>= 7;
+        }
+    }
     pub(crate) fn as_slice(&self) -> &[u8] {
         &self.bytes[..self.len]
     }
@@ -47,6 +63,12 @@ impl<const N: usize> std::ops::Deref for HeaderScratch<N> {
     fn deref(&self) -> &[u8] {
         self.as_slice()
     }
+}
+
+/// How many bytes a vint takes for `value`, unpadded.
+pub(crate) fn vint_len(value: u64) -> usize {
+    let bits = 64 - value.leading_zeros() as usize;
+    bits.div_ceil(7).max(1)
 }
 
 pub(crate) fn image_size_error() -> Error {
@@ -82,6 +104,18 @@ impl<'a> HeaderImage<'a> {
         specific: &'a [u8],
         extra: &'a [u8],
     ) -> Result<Self> {
+        Self::padded(kind, flags, data_size, 0, specific, extra)
+    }
+
+    /// As [`Self::new`], the data size written at least `data_width` bytes wide.
+    pub(crate) fn padded(
+        kind: u64,
+        flags: u64,
+        data_size: Option<u64>,
+        data_width: usize,
+        specific: &'a [u8],
+        extra: &'a [u8],
+    ) -> Result<Self> {
         let mut prefix = HeaderScratch::new();
         prefix.vint(kind);
         prefix.vint(flags);
@@ -89,7 +123,7 @@ impl<'a> HeaderImage<'a> {
             prefix.vint(extra.len() as u64);
         }
         if let Some(data_size) = data_size {
-            prefix.vint(data_size);
+            prefix.vint_padded(data_size, data_width);
         }
         let body_len = checked_image_len(&[prefix.len(), specific.len(), extra.len()])?;
         let mut size = HeaderScratch::new();

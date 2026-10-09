@@ -429,9 +429,11 @@ impl Archive {
                     issues.push("volume layout".into());
                 }
 
+                // 0x0004 is the "skip if unknown" flag WinRAR puts on the main and
+                // end headers and on its quick-open and recovery blocks.
                 if !main.rewrite_metadata_complete
                     || main.archive_flags & !0x1f != 0
-                    || main.block.flags & !1 != 0
+                    || main.block.flags & !5 != 0
                     || main.block.data_size.unwrap_or(0) != 0
                 {
                     issues.push("main header metadata, extra records or unknown flags".into());
@@ -490,7 +492,7 @@ impl Archive {
                                     || service.modification_time().is_some()
                                     || service.file_times.is_some()
                                     || service.file_flags & !4 != 0
-                                    || service.block.flags & !3 != 0
+                                    || service.block.flags & !7 != 0
                                     || service.attributes != 0
                                     || service.host_os != 0
                                     || service.compression_info != 0
@@ -531,7 +533,9 @@ impl Archive {
                             // Canonical end headers contain only type, block flags
                             // and end flags. Reject extra fields instead of silently
                             // certifying metadata this reader does not expose.
-                            if end.flags != 0 || end.block.flags != 0 || end.block.header_size != 3
+                            if end.flags != 0
+                                || end.block.flags & !4 != 0
+                                || end.block.header_size != 3
                             {
                                 issues.push(
                                     "end header flags, volume continuation or extra metadata"

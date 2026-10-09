@@ -16,7 +16,7 @@
 //! over a few dozen bytes, instead of over the whole archive.
 
 use super::ArchiveMetadataEntry;
-use super::headers::{block_header_image, resolved_main_extra, stored_file_specific};
+use super::headers::{block_header_image, resolved_main_extra_with, stored_file_specific};
 use crate::rar::detect::RAR50_SIGNATURE;
 use crate::rar::rar50::{FHEXTRA_SUBDATA, HEAD_MAIN, HEAD_SERVICE, HFL_DATA, HFL_EXTRA};
 use crate::rar::streaming::preparation::Bytes;
@@ -39,6 +39,12 @@ pub(super) struct LayoutInputs<'a> {
     pub(super) body_len: u64,
     pub(super) quick_open_payload_len: Option<u64>,
     pub(super) recovery_percent: Option<u64>,
+    /// WinRAR's framing: the skip flag on the main header, a quick-open service
+    /// without a CRC32, and with `always_locate` a locator even with no quick-open
+    /// block, its offsets `offset_width` bytes wide.
+    pub(super) winrar: bool,
+    pub(super) always_locate: bool,
+    pub(super) offset_width: usize,
 }
 
 #[derive(Debug)]
@@ -60,6 +66,9 @@ pub(super) fn resolve_layout(
 ) -> Result<ResolvedLayout> {
     let signature_len = RAR50_SIGNATURE.len() as u64;
     let quick_open_block_len = match inputs.quick_open_payload_len {
+        Some(payload_len) if inputs.winrar => {
+            index_service_block_len(b"QO", payload_len, None, inputs, resources)?
+        }
         Some(payload_len) => {
             stored_service_block_len(b"QO", payload_len, &[], inputs.header_encrypted, resources)?
         }
@@ -79,10 +88,12 @@ pub(super) fn resolve_layout(
     // possible width changes, plus the initial update and propagation, settle
     // within five passes. Allocation or arithmetic failures return via `?`.
     loop {
-        let mut main_extra = resolved_main_extra(
+        let mut main_extra = resolved_main_extra_with(
             inputs.archive_metadata,
             quick_open_offset,
             recovery_offset,
+            inputs.always_locate,
+            inputs.offset_width,
             resources,
         )?;
         if let Some(metadata) = inputs.metadata_record {
@@ -129,9 +140,14 @@ fn main_header_len(
     if let Some(volume_number) = inputs.volume_number {
         specific.vint(volume_number)?;
     }
+    let skip = if inputs.winrar {
+        super::winrar::HFL_SKIP_IF_UNKNOWN
+    } else {
+        0
+    };
     let header = block_header_image(
         HEAD_MAIN,
-        if extra.is_empty() { 0 } else { HFL_EXTRA },
+        skip | if extra.is_empty() { 0 } else { HFL_EXTRA },
         None,
         &specific,
         extra,
@@ -141,6 +157,30 @@ fn main_header_len(
         header.len() as u64,
         inputs.header_encrypted,
     ))
+}
+
+/// Size of a quick-open or recovery block in WinRAR's framing, header and payload.
+pub(super) fn index_service_block_len(
+    name: &[u8],
+    data_len: u64,
+    service_data: Option<&[u8]>,
+    inputs: &LayoutInputs<'_>,
+    resources: &WriterResources,
+) -> Result<u64> {
+    let parts =
+        super::headers::service_parts(name, data_len, 0, service_data, true, true, resources)?;
+    let header = super::headers::block_header_image_padded(
+        HEAD_SERVICE,
+        parts.flags,
+        Some(data_len),
+        parts.data_width,
+        &parts.specific,
+        &parts.extra,
+        resources,
+    )?;
+    emitted_header_len(header.len() as u64, inputs.header_encrypted)
+        .checked_add(data_len)
+        .ok_or(Error::InvalidArgument("RAR 5 service block size overflows"))
 }
 
 /// Size of a stored service block, header and payload together.
@@ -223,6 +263,9 @@ mod tests {
             body_len,
             quick_open_payload_len: None,
             recovery_percent: Some(5),
+            winrar: false,
+            always_locate: false,
+            offset_width: 0,
         }
     }
 

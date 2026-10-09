@@ -80,6 +80,22 @@ impl EntrySource {
         Self::from_factory(PathSource(path.into()))
     }
 
+    /// `len` bytes of the file at `path` from `offset` on: an archived member's packed
+    /// data, copied to a new archive as it is.
+    pub fn from_path_range(path: impl Into<PathBuf>, offset: u64, len: u64) -> Self {
+        let path: PathBuf = path.into();
+        Self::from_opener(len, move || {
+            let mut file = File::open(&path)?;
+            file.seek(SeekFrom::Start(offset))?;
+            Ok(Box::new(RangeReader {
+                file,
+                start: offset,
+                len,
+                position: 0,
+            }) as Box<dyn EntryReader>)
+        })
+    }
+
     pub fn from_opener<F>(len: u64, open: F) -> Self
     where
         F: Fn() -> Result<Box<dyn EntryReader>> + Send + Sync + 'static,
@@ -100,6 +116,43 @@ impl EntrySource {
 
     pub fn open(&self) -> Result<Box<dyn EntryReader>> {
         self.0.open()
+    }
+}
+
+/// A file's bytes from `start` for `len`, read and sought within that range only.
+struct RangeReader {
+    file: File,
+    start: u64,
+    len: u64,
+    position: u64,
+}
+
+impl Read for RangeReader {
+    fn read(&mut self, out: &mut [u8]) -> std::io::Result<usize> {
+        let left = self.len.saturating_sub(self.position);
+        let want = out.len().min(usize::try_from(left).unwrap_or(usize::MAX));
+        if want == 0 {
+            return Ok(0);
+        }
+        let read = self.file.read(&mut out[..want])?;
+        self.position += read as u64;
+        Ok(read)
+    }
+}
+
+impl Seek for RangeReader {
+    fn seek(&mut self, from: SeekFrom) -> std::io::Result<u64> {
+        let target = match from {
+            SeekFrom::Start(offset) => Some(offset),
+            SeekFrom::End(delta) => self.len.checked_add_signed(delta),
+            SeekFrom::Current(delta) => self.position.checked_add_signed(delta),
+        }
+        .ok_or_else(|| {
+            std::io::Error::new(std::io::ErrorKind::InvalidInput, "seek out of range")
+        })?;
+        self.file.seek(SeekFrom::Start(self.start + target))?;
+        self.position = target;
+        Ok(target)
     }
 }
 

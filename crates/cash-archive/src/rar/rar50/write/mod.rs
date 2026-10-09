@@ -15,6 +15,7 @@ mod filter_policy;
 pub(crate) mod headers;
 mod layout;
 mod plan;
+mod winrar;
 #[cfg(test)]
 use filter_policy::encode_options_for_level;
 use filter_policy::{
@@ -89,6 +90,49 @@ pub struct ArchiveEntry {
     pub password: Option<Vec<u8>>,
     /// Service records attached to this member, such as a file comment.
     pub services: Vec<ServiceEntry>,
+    /// Packed data carried from another archive in place of `source`'s.
+    pub carried: Option<Carried>,
+}
+
+/// A member's packed data carried as it is from another RAR 5 archive: not compressed
+/// or encrypted again, its checksums, compression information and encryption record
+/// put in the new header unchanged. The member must not continue a solid stream.
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub struct Carried {
+    /// Exactly the member's packed bytes.
+    pub packed: EntrySource,
+    pub packed_size: u64,
+    pub unpacked_size: u64,
+    pub compression_info: u64,
+    pub crc32: Option<u32>,
+    pub hash: Option<super::FileHash>,
+    pub encryption: Option<super::FileEncryption>,
+}
+
+impl Carried {
+    /// The member `file` of the archive at `path`, as the archive holds it.
+    pub fn of(file: &super::FileHeader, path: &std::path::Path) -> Result<Self> {
+        if file.compression_info & 0x40 != 0 {
+            return Err(Error::InvalidArgument(
+                "a member continuing a solid stream cannot be carried alone",
+            ));
+        }
+        let range = &file.block.data_range;
+        Ok(Self {
+            packed: EntrySource::from_path_range(
+                path,
+                range.start as u64,
+                (range.end - range.start) as u64,
+            ),
+            packed_size: (range.end - range.start) as u64,
+            unpacked_size: file.unpacked_size,
+            compression_info: file.compression_info,
+            crc32: file.data_crc32,
+            hash: file.hash.clone(),
+            encryption: file.encryption.clone(),
+        })
+    }
 }
 
 /// A small named record attached to an archive or a member.
@@ -131,7 +175,13 @@ impl ArchiveEntry {
             host_os: 0,
             password: None,
             services: Vec::new(),
+            carried: None,
         }
+    }
+
+    pub fn with_carried(mut self, carried: Option<Carried>) -> Self {
+        self.carried = carried;
+        self
     }
 
     pub fn with_directory(mut self, is_directory: bool) -> Self {
@@ -314,6 +364,13 @@ pub fn write_streaming_volumes_with_progress(
     let progress: Option<&dyn WriteProgress> =
         (progress.is_some() || resources.has_cancellation()).then_some(&control);
     crate::rar::write_progress::check_cancelled(progress.map(ProgressReporter))?;
+    // WinRAR's volumes each carry a quick-open block; rars' own carry none, and the
+    // plan below refuses one for them.
+    let mut options = options;
+    let quick_open = extras.layout.winrar && options.features.quick_open;
+    if extras.layout.winrar {
+        options.features.quick_open = false;
+    }
     let encrypted = entries.iter().any(|entry| entry.password.is_some());
     if encrypted && !entries.iter().all(|entry| entry.password.is_some()) {
         return Err(Error::UnsupportedFeature {
@@ -392,16 +449,80 @@ pub fn write_streaming_volumes_with_progress(
             archive_metadata: None,
             metadata_record: None,
             locked: extras.locked,
-            // No volume writer emits the index, and `validate_plan` refuses a
-            // set that asks for one, so this is the only value that can get
-            // here rather than a decision taken quietly on the caller's behalf.
-            quick_open: false,
+            // rars' volume writer emits no index, and `validate_plan` refuses a
+            // set that asks it for one; WinRAR's framing writes one per volume.
+            quick_open,
+            layout: extras.layout,
             progress: progress.map(ProgressReporter),
         },
         max_payload_per_volume,
         sink,
         resources,
     )
+}
+
+/// How the writer lays its headers out, beyond what readers need.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct Layout {
+    /// WinRAR 7's framing: sizes and offsets padded as WinRAR pads them, a locator
+    /// in the main header whenever quick open is on, the skip flag on blocks a
+    /// reader may pass over, no checksum on folders, and plain checksums under
+    /// encrypted headers. A stored archive comes out as WinRAR 7.23's, byte for
+    /// byte; one volume set too, each volume the size asked, its end zero-filled.
+    /// The builder also marks RAR 1.5 to 4 members with DOS attributes as made on
+    /// Windows, as WinRAR does when it updates such an archive.
+    pub winrar: bool,
+    /// The checksums each file carries.
+    pub checksums: Checksums,
+    /// With quick open on, only members whose stored data is longer than this go in
+    /// the index (WinRAR's default is 4,096 bytes); `None` puts every member in.
+    pub quick_open_over: Option<u64>,
+}
+
+impl Layout {
+    /// WinRAR 7's layout as `Rar.exe` writes by default: CRC32 checksums, and quick
+    /// open (when on) for members stored in more than 4,096 bytes.
+    pub const fn winrar() -> Self {
+        Self {
+            winrar: true,
+            checksums: Checksums::Crc32,
+            quick_open_over: Some(4096),
+        }
+    }
+
+    pub const fn with_checksums(mut self, checksums: Checksums) -> Self {
+        self.checksums = checksums;
+        self
+    }
+
+    pub const fn with_quick_open_over(mut self, over: Option<u64>) -> Self {
+        self.quick_open_over = over;
+        self
+    }
+}
+
+/// The checksums a file's header carries.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum Checksums {
+    /// CRC32 and BLAKE2sp both.
+    #[default]
+    Both,
+    /// CRC32 only, as WinRAR writes by default.
+    Crc32,
+    /// BLAKE2sp only, as WinRAR writes with `-htb`.
+    Blake2,
+}
+
+impl Checksums {
+    pub(super) const fn crc32(self) -> bool {
+        !matches!(self, Self::Blake2)
+    }
+
+    pub(super) const fn blake2(self) -> bool {
+        !matches!(self, Self::Crc32)
+    }
 }
 
 /// Archive-level options that sit alongside the members.
@@ -425,9 +546,16 @@ pub struct ArchiveExtras<'a> {
     pub filter_policy: FilterPolicy,
     /// Percentage of the archive to spend on a recovery record.
     pub recovery_percent: Option<u64>,
+    /// How the headers are laid out.
+    pub layout: Layout,
 }
 
 impl<'a> ArchiveExtras<'a> {
+    pub fn with_layout(mut self, layout: Layout) -> Self {
+        self.layout = layout;
+        self
+    }
+
     pub fn with_comment(mut self, comment: &'a [u8]) -> Self {
         self.comment = Some(comment);
         self
@@ -547,6 +675,7 @@ pub(crate) fn write_streaming_archive_reporting(
             metadata_record: extras.metadata_record,
             locked: extras.locked,
             quick_open: options.features.quick_open,
+            layout: extras.layout,
             progress,
         },
         resources,

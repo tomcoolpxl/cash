@@ -33,6 +33,12 @@ const DOS_ARCHIVE_ATTR: u32 = 0x20;
 // while retaining DOS_ARCHIVE_ATTR would make reference extractors interpret
 // 0x20 as Unix permissions, producing an unexpectedly restricted file.
 const RAR15_HOST_UNIX: u8 = 3;
+const RAR15_HOST_WIN32: u8 = 2;
+
+/// RAR 5's "data continues from / into another volume" header flags.
+const fn rar50_split_flags() -> u64 {
+    0x0008 | 0x0010
+}
 const RAR50_HOST_UNIX: u64 = 1;
 
 type PendingArchive =
@@ -98,6 +104,10 @@ struct BuilderEntry {
     encryption: Option<EntryEncryption>,
     redirection: Option<rar50::FileRedirection>,
     redirection_size: Option<u64>,
+    /// Packed data carried from another archive, written as it is.
+    carried: Option<rar50::Carried>,
+    /// RAR 1.5 to 4 packed data carried in `data`, written as it is.
+    legacy_carried: Option<rar15_40::LegacyCarried>,
     attributes: EntryAttributes,
 }
 
@@ -143,11 +153,14 @@ impl BuilderEntry {
         }
     }
 
-    fn rar15_host_os(&self) -> u8 {
+    /// `windows`: DOS attributes are Windows', as WinRAR marks them.
+    fn rar15_host_os(&self, windows: bool) -> u8 {
         // The RAR 1.5 writer still downgrades Unix metadata to DOS for old
         // extractor compatibility; RAR 2.x-4.x retain the Unix host and mode.
         if matches!(self.attributes, EntryAttributes::Unix(_)) {
             RAR15_HOST_UNIX
+        } else if windows {
+            RAR15_HOST_WIN32
         } else {
             0 // MS-DOS host, DOS attributes.
         }
@@ -188,6 +201,7 @@ pub struct Builder {
     legacy_unpack_version: Option<u8>,
     rar50_dictionary_size: Option<u64>,
     volume_size: Option<usize>,
+    rar50_layout: rar50::Layout,
     entries: Vec<BuilderEntry>,
     next_entry_id: usize,
     allow_duplicate_names: bool,
@@ -213,6 +227,7 @@ impl Builder {
             legacy_unpack_version: None,
             rar50_dictionary_size: None,
             volume_size: None,
+            rar50_layout: rar50::Layout::default(),
             entries: Vec::new(),
             next_entry_id: 0,
             allow_duplicate_names: false,
@@ -287,6 +302,13 @@ impl Builder {
         self
     }
 
+    /// How a RAR 5 or 7 archive's headers are laid out: rars' own compact form, or
+    /// WinRAR's (see [`rar50::Layout`]). Other formats ignore it.
+    pub fn layout(mut self, layout: rar50::Layout) -> Self {
+        self.rar50_layout = layout;
+        self
+    }
+
     /// Split the output into volumes of at most this many bytes.
     /// [`build_volumes`](Self::build_volumes) requires it; the single-archive
     /// entry points refuse to run while it is set.
@@ -343,6 +365,8 @@ impl Builder {
             encryption: None,
             redirection: None,
             redirection_size: None,
+            carried: None,
+            legacy_carried: None,
             attributes: mode.map_or(
                 EntryAttributes::Dos(u64::from(DOS_ARCHIVE_ATTR)),
                 EntryAttributes::Unix,
@@ -375,6 +399,8 @@ impl Builder {
             encryption: None,
             redirection: None,
             redirection_size: None,
+            carried: None,
+            legacy_carried: None,
             attributes: mode.map_or(
                 EntryAttributes::Dos(u64::from(DOS_ARCHIVE_ATTR)),
                 EntryAttributes::Unix,
@@ -445,6 +471,8 @@ impl Builder {
             encryption: None,
             redirection: None,
             redirection_size: None,
+            carried: None,
+            legacy_carried: None,
             attributes: mode.map_or(EntryAttributes::Dos(0x10), |mode| {
                 EntryAttributes::Unix((mode & 0o7777) | 0o040000)
             }),
@@ -514,7 +542,127 @@ impl Builder {
             encryption: None,
             redirection: Some(link),
             redirection_size: None,
+            carried: None,
+            legacy_carried: None,
             attributes: EntryAttributes::Unix(0o120000 | (mode.unwrap_or(0o777) & 0o7777)),
+        })
+    }
+
+    /// Queue file `index` of the RAR 5 or 7 archive read from `path` as it is: its
+    /// packed and perhaps encrypted data copied, not decoded or compressed again; its
+    /// name, times, attributes, checksums and encryption record kept. RAR 5 and 7
+    /// output only, one archive, not solid; a member continuing a solid stream, a
+    /// split one or a link cannot be carried.
+    pub fn carry(
+        &mut self,
+        archive: &crate::rar::Archive,
+        index: usize,
+        path: &Path,
+    ) -> Result<()> {
+        let source = match archive {
+            crate::rar::Archive::Rar50Plus(source) => source,
+            crate::rar::Archive::Rar15To40(source) => return self.carry_legacy(source, index),
+            crate::rar::Archive::Rar13(_) => {
+                return Err(Error::InvalidArgument("RAR 1.3 members cannot be carried"));
+            }
+        };
+        if self.format.family() != ArchiveFamily::Rar50Plus
+            || self.volume_size.is_some()
+            || self.solid
+        {
+            return Err(Error::InvalidArgument(
+                "carried members need single-archive, non-solid RAR5/7 output",
+            ));
+        }
+        let file = source.files().nth(index).ok_or(Error::EntryNotFound)?;
+        if file.block.flags & (rar50_split_flags()) != 0 || file.redirection.is_some() {
+            return Err(Error::InvalidArgument(
+                "split members and links cannot be carried",
+            ));
+        }
+        let carried = rar50::Carried::of(file, path)?;
+        let attributes = if file.host_os == RAR50_HOST_UNIX {
+            EntryAttributes::Unix(u32::try_from(file.attributes).unwrap_or(0o644))
+        } else {
+            EntryAttributes::Dos(file.attributes)
+        };
+        self.push(BuilderEntry {
+            id: 0,
+            name: self.validate_name(file.name.clone())?,
+            data: Vec::new(),
+            source: Some(carried.packed.clone()),
+            is_directory: file.file_flags & 1 != 0,
+            mtime: file.mtime,
+            mtime_nanoseconds: None,
+            file_times: file.file_times,
+            legacy_extended_times: None,
+            legacy_unicode_name: None,
+            file_comment: None,
+            encryption: None,
+            redirection: None,
+            redirection_size: None,
+            carried: Some(carried),
+            legacy_carried: None,
+            attributes,
+        })
+    }
+
+    /// [`Self::carry`] for a RAR 1.5 to 4 archive, into one of the same family: the
+    /// member's packed bytes are held, as the legacy writers hold every member.
+    fn carry_legacy(&mut self, source: &rar15_40::Archive, index: usize) -> Result<()> {
+        // Split before and after, and solid continuation.
+        const NOT_ALONE: u16 = 0x0001 | 0x0002 | 0x0010;
+        const PASSWORD: u16 = 0x0004;
+        const DICTIONARY: u16 = 0x00e0;
+        if self.format.family() != ArchiveFamily::Rar15To40
+            || self.volume_size.is_some()
+            || self.solid
+        {
+            return Err(Error::InvalidArgument(
+                "carried legacy members need single-archive, non-solid RAR 1.5-4 output",
+            ));
+        }
+        let file = source.files().nth(index).ok_or(Error::EntryNotFound)?;
+        if file.block.flags & NOT_ALONE != 0 || file.block.flags & DICTIONARY == DICTIONARY {
+            return Err(Error::InvalidArgument(
+                "split, solid or directory members cannot be carried",
+            ));
+        }
+        let unpacked_size = usize::try_from(file.unp_size)
+            .map_err(|_| Error::InvalidArgument("RAR 1.5 writer does not support large files"))?;
+        let packed = file.packed_data(source)?;
+        let carried = rar15_40::LegacyCarried {
+            method: file.method,
+            unpack_version: file.unp_ver,
+            unpacked_size,
+            file_crc: file.file_crc,
+            salt: file.salt,
+            encrypted: file.block.flags & PASSWORD != 0,
+            dictionary_flags: file.block.flags & DICTIONARY,
+        };
+        let attributes = if file.host_os == RAR15_HOST_UNIX {
+            EntryAttributes::Unix(file.attr)
+        } else {
+            EntryAttributes::Dos(u64::from(file.attr))
+        };
+        self.push(BuilderEntry {
+            id: 0,
+            name: self.validate_name(file.name.clone())?,
+            data: packed,
+            source: None,
+            is_directory: false,
+            mtime: Some(file.file_time),
+            mtime_nanoseconds: None,
+            file_times: None,
+            legacy_extended_times: (!file.ext_time.is_empty()).then(|| file.ext_time.clone()),
+            legacy_unicode_name: file.unicode_name.clone(),
+            file_comment: None,
+            encryption: None,
+            redirection: None,
+            redirection_size: None,
+            carried: None,
+            legacy_carried: Some(carried),
+            attributes,
         })
     }
 
@@ -545,6 +693,8 @@ impl Builder {
             encryption: None,
             redirection: Some(link.clone()),
             redirection_size: Some(meta.unpacked_size),
+            carried: None,
+            legacy_carried: None,
             attributes: if meta.host_os == Some(1) {
                 EntryAttributes::Unix(meta.file_attr as u32)
             } else {
@@ -1295,7 +1445,8 @@ impl Builder {
             self.rar50_options(),
             rar50::ArchiveExtras::default()
                 .with_recovery_percent(self.recovery_percent)
-                .with_filter_policy(self.rar50_filter_policy()),
+                .with_filter_policy(self.rar50_filter_policy())
+                .with_layout(self.rar50_layout),
             volume_size as u64,
             sink,
             resources,
@@ -1346,7 +1497,11 @@ impl Builder {
         if self.entries.is_empty() {
             return Err(Error::InvalidArgument("archive builder has no entries"));
         }
-        if self.archive_metadata.is_some() || self.locked || self.quick_open {
+        // WinRAR's volumes each carry a quick-open block; rars' own carry none.
+        if self.archive_metadata.is_some()
+            || self.locked
+            || (self.quick_open && !self.rar50_layout.winrar)
+        {
             return Err(Error::InvalidArgument(
                 "archive metadata settings are not supported in volume output",
             ));
@@ -1558,13 +1713,19 @@ impl Builder {
                 .with_mtime_nanoseconds(entry.mtime_nanoseconds)
                 .with_file_times(entry.file_times)
                 .with_attributes(entry.rar50_attr())
-                .with_host_os(entry.rar50_host_os());
-            let data_password = entry
-                .encryption
-                .as_ref()
-                .map_or(self.password.as_deref(), |encryption| {
-                    encryption.data_password.as_deref()
-                });
+                .with_host_os(entry.rar50_host_os())
+                .with_carried(entry.carried.clone());
+            // A carried member's data is already as encrypted as it is going to be.
+            let data_password = if entry.carried.is_some() {
+                None
+            } else {
+                entry
+                    .encryption
+                    .as_ref()
+                    .map_or(self.password.as_deref(), |encryption| {
+                        encryption.data_password.as_deref()
+                    })
+            };
             let comment_password = entry
                 .encryption
                 .as_ref()
@@ -1603,7 +1764,8 @@ impl Builder {
     ) -> Result<()> {
         let mut extras = rar50::ArchiveExtras::default()
             .with_recovery_percent(self.recovery_percent)
-            .with_filter_policy(self.rar50_filter_policy());
+            .with_filter_policy(self.rar50_filter_policy())
+            .with_layout(self.rar50_layout);
         extras.metadata_record = self.archive_metadata.as_ref();
         extras.locked = self.locked;
         if self.encrypt_headers {
@@ -1645,13 +1807,18 @@ impl Builder {
                     data: &entry.data,
                     file_time: entry.mtime.unwrap_or(0),
                     file_attr: entry.rar15_attr(),
-                    host_os: entry.rar15_host_os(),
-                    password: entry
-                        .encryption
-                        .as_ref()
-                        .map_or(self.password.as_deref(), |encryption| {
-                            encryption.data_password.as_deref()
-                        }),
+                    host_os: entry.rar15_host_os(self.rar50_layout.winrar),
+                    // A carried member's data is already as encrypted as it is going to be.
+                    password: if entry.legacy_carried.is_some() {
+                        None
+                    } else {
+                        entry
+                            .encryption
+                            .as_ref()
+                            .map_or(self.password.as_deref(), |encryption| {
+                                encryption.data_password.as_deref()
+                            })
+                    },
                     file_comment: entry.file_comment.as_deref(),
                 },
                 metadata: rar15_40::RetainedMemberMetadata {
@@ -1660,6 +1827,7 @@ impl Builder {
                     extended_times: entry.legacy_extended_times.as_deref(),
                     is_directory: entry.is_directory,
                     is_symlink: matches!(entry.attributes, EntryAttributes::Unix(mode) if mode & 0o170000 == 0o120000),
+                    carried: entry.legacy_carried,
                 },
             })
             .collect();
@@ -1762,7 +1930,7 @@ impl Builder {
                     data: &entry.data,
                     file_time: entry.mtime.unwrap_or(0),
                     file_attr: entry.rar15_attr(),
-                    host_os: entry.rar15_host_os(),
+                    host_os: entry.rar15_host_os(self.rar50_layout.winrar),
                     password: self.password.as_deref(),
                     file_comment: entry.file_comment.as_deref(),
                 },
@@ -1777,7 +1945,7 @@ impl Builder {
                     data: &entry.data,
                     file_time: entry.mtime.unwrap_or(0),
                     file_attr: entry.rar15_attr(),
-                    host_os: entry.rar15_host_os(),
+                    host_os: entry.rar15_host_os(self.rar50_layout.winrar),
                     password: self.password.as_deref(),
                     file_comment: entry.file_comment.as_deref(),
                 },

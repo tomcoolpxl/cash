@@ -16,10 +16,11 @@ use super::compress::{self, CompressPlan, CompressedMember};
 use super::headers::write_vint;
 use super::headers::{
     HeaderEncryptionKeys, PreparedHeader, block_header_image, encrypted_header_block,
-    encrypted_main_header_block, file_specific, header_encryption_keys, header_encryption_password,
-    prepared_header_image, stored_file_specific, write_end_header, write_extra_record,
-    write_file_encryption_record, write_hash_record_with_value, write_head_crypt,
-    write_main_header,
+    encrypted_main_header_block, encrypted_main_header_block_with, file_specific,
+    header_encryption_keys, header_encryption_password, prepared_header_image,
+    prepared_header_image_padded, stored_file_specific, write_end_header, write_end_header_with,
+    write_extra_record, write_file_encryption_record, write_file_encryption_record_with,
+    write_hash_record_with_value, write_head_crypt, write_main_header, write_main_header_with,
 };
 use super::layout::{LayoutInputs, resolve_layout};
 use super::{ArchiveEntry, encrypt_reader_to};
@@ -40,6 +41,8 @@ use crate::rar::write_progress::{CancellableIo, ProgressReporter, check_cancelle
 use crate::rar::{Error, Result, WriterResources};
 use std::io::{Read, Write};
 
+mod winrar_volumes;
+
 pub(super) struct EnginePlan<'a> {
     pub(super) compress: CompressPlan,
     pub(super) recovery_percent: Option<u64>,
@@ -50,6 +53,7 @@ pub(super) struct EnginePlan<'a> {
     pub(super) metadata_record: Option<&'a crate::rar::rar50::ArchiveMetadataRecord>,
     pub(super) locked: bool,
     pub(super) quick_open: bool,
+    pub(super) layout: super::Layout,
     pub(super) progress: Option<ProgressReporter<'a>>,
 }
 
@@ -90,6 +94,11 @@ enum Payload<'a> {
         plain: Owned<PlainPayload<'a>>,
         keys: Rar50Keys,
         iv: [u8; 16],
+    },
+    /// Another archive's packed data, copied as it is.
+    Carried {
+        source: crate::rar::EntrySource,
+        len: u64,
     },
 }
 
@@ -230,9 +239,19 @@ pub(super) fn write_archive(
         None
     };
 
-    let mut sources = Records::new(entries.len(), resources)?;
-    for entry in entries {
-        sources.push(entry.source.clone())?;
+    // Members carried from another archive keep their packed data: only the others
+    // are compressed, each known to the compressor by its place among them.
+    let fresh: Vec<usize> = (0..entries.len())
+        .filter(|&index| entries[index].carried.is_none())
+        .collect();
+    if plan.compress.solid && fresh.len() < entries.len() {
+        return Err(Error::InvalidArgument(
+            "carried members cannot join a solid stream",
+        ));
+    }
+    let mut sources = Records::new(fresh.len(), resources)?;
+    for &index in &fresh {
+        sources.push(entries[index].source.clone())?;
     }
     let total_input = total_input_size(entries)?;
     let total_entries = entries.len();
@@ -255,10 +274,12 @@ pub(super) fn write_archive(
         resources,
         &MemberProgress {
             entries,
+            indices: Some(&fresh),
             work: &work,
         },
-        &|index, error| member_error(error, &entries[index].name, "compressing"),
+        &|index, error| member_error(error, &entries[fresh[index]].name, "compressing"),
     )?;
+    let mut compressed = compressed.into_iter();
 
     // Everything between the main header and the quick-open block, in order.
     // Entries and their owned service vectors contain records larger than a byte
@@ -269,18 +290,39 @@ pub(super) fn write_archive(
         usize::from(plan.archive_comment.is_some()),
         |total, entry| total + 1 + entry.services.len(),
     );
+    let winrar = plan.layout.winrar;
     let mut blocks = Records::<PreparedBlock<'_>>::new(block_count, resources)?;
     if let Some(comment) = &plan.archive_comment {
-        blocks.push(prepare_comment(comment, header_keys.as_ref(), resources)?)?;
+        blocks.push(prepare_comment(
+            comment,
+            header_keys.as_ref(),
+            winrar,
+            resources,
+        )?)?;
     }
-    for (index, (entry, member)) in entries.iter().zip(compressed).enumerate() {
+    for (index, entry) in entries.iter().enumerate() {
         check_cancelled(plan.progress)?;
-        let mut block = prepare_member(entry, member, &plan, header_keys.as_ref(), resources)
-            .map_err(|error| member_error(error, &entry.name, "preparing"))?;
+        let block = match &entry.carried {
+            Some(carried) => {
+                let size = carried.packed_size;
+                work.entry_started(index, total_entries, &entry.name, size);
+                let block = prepare_carried(entry, carried, &plan, header_keys.as_ref(), resources);
+                work.advance(size);
+                work.entry_finished(index, total_entries, &entry.name, size);
+                block
+            }
+            None => {
+                let member = compressed
+                    .next()
+                    .ok_or(Error::WriterFailure("a compressed member is missing"))?;
+                prepare_member(entry, member, &plan, header_keys.as_ref(), resources)
+            }
+        };
+        let mut block = block.map_err(|error| member_error(error, &entry.name, "preparing"))?;
         block.entry_index = Some(index);
         blocks.push(block)?;
         for service in &entry.services {
-            let mut block = prepare_service(service, header_keys.as_ref(), resources)
+            let mut block = prepare_service(service, header_keys.as_ref(), winrar, resources)
                 .map_err(|error| member_error(error, &entry.name, "preparing service"))?;
             block.entry_index = Some(index);
             blocks.push(block)?;
@@ -307,13 +349,22 @@ pub(super) fn write_archive(
     // Quick-open stores how far back each cached header sits from the
     // quick-open block itself. Both move together when the prefix grows, so
     // the distances only need positions within the body.
-    let quick_open_payload = if plan.quick_open {
+    // With a threshold, only members whose stored data is longer go in; WinRAR
+    // writes no block at all when none does.
+    let cached = |block: &PreparedBlock<'_>| {
+        block.quick_open_cached
+            && plan
+                .layout
+                .quick_open_over
+                .is_none_or(|over| block.payload_len > over)
+    };
+    let quick_open_payload = if plan.quick_open && !(winrar && !blocks.iter().any(cached)) {
         let mut payload = Spool::create(resources)?;
         let mut checksum = crate::rar::crc32::Crc32::new();
         let mut offset = 0u64;
         for block in &blocks {
             check_cancelled(plan.progress)?;
-            if block.quick_open_cached {
+            if cached(block) {
                 append_quick_open_entry(
                     &mut payload,
                     &mut checksum,
@@ -324,11 +375,13 @@ pub(super) fn write_archive(
             offset += block.len()?;
         }
         let payload_len = payload.len();
-        let header = stored_service_header(
+        let header = service_header(
             b"QO",
             payload_len,
             checksum.finish(),
-            &[],
+            None,
+            true,
+            winrar,
             header_keys.as_ref(),
             resources,
         )?;
@@ -376,9 +429,21 @@ pub(super) fn write_archive(
             body_len,
             quick_open_payload_len: quick_open_payload.as_ref().map(|block| block.payload_len),
             recovery_percent: plan.recovery_percent,
+            winrar,
+            always_locate: winrar && plan.quick_open,
+            offset_width: if winrar {
+                super::winrar::offset_width(entries)
+            } else {
+                0
+            },
         },
         resources,
     )?;
+    let skip = if winrar {
+        super::winrar::HFL_SKIP_IF_UNKNOWN
+    } else {
+        0
+    };
 
     report_emission(plan.progress, true);
     // Only mirror the archive when a recovery record has to read it back.
@@ -393,8 +458,9 @@ pub(super) fn write_archive(
         };
 
         let main = match &header_keys {
-            Some(keys) => encrypted_main_header_block(
+            Some(keys) => encrypted_main_header_block_with(
                 &keys.keys,
+                skip,
                 main_flags,
                 None,
                 &layout.main_extra,
@@ -402,7 +468,14 @@ pub(super) fn write_archive(
             )?,
             None => {
                 let mut main = Bytes::new(resources);
-                write_main_header(&mut main, main_flags, None, &layout.main_extra, resources)?;
+                write_main_header_with(
+                    &mut main,
+                    skip,
+                    main_flags,
+                    None,
+                    &layout.main_extra,
+                    resources,
+                )?;
                 main
             }
         };
@@ -448,10 +521,11 @@ pub(super) fn write_archive(
             Some(mirror.len() - RAR50_SIGNATURE.len() as u64),
             "recovery record is not where the locator points"
         );
-        write_recovery_service(
+        write_recovery_service_with(
             recovery_percent,
             mirror,
             header_keys.as_ref(),
+            winrar,
             resources,
             plan.progress,
             output,
@@ -462,7 +536,7 @@ pub(super) fn write_archive(
         Some(keys) => output.write_all(&encrypted_header_block(
             &keys.keys,
             HEAD_END,
-            0,
+            skip,
             None,
             &super::end_header_specific(0),
             &[],
@@ -471,7 +545,7 @@ pub(super) fn write_archive(
         )?)?,
         None => {
             let mut end = Bytes::new(resources);
-            write_end_header(&mut end, 0, resources)?;
+            write_end_header_with(&mut end, skip, 0, resources)?;
             output.write_all(&end)?;
         }
     }
@@ -541,16 +615,18 @@ fn append_quick_open_entry(
 fn stored_service_block<'a>(
     name: &[u8],
     data: &'a [u8],
-    service_data: &[u8],
     header_keys: Option<&HeaderEncryptionKeys>,
+    winrar: bool,
     resources: &WriterResources,
 ) -> Result<PreparedBlock<'a>> {
     Ok(PreparedBlock {
-        header: stored_service_header(
+        header: service_header(
             name,
             data.len() as u64,
             crate::rar::crc32::crc32(data),
-            service_data,
+            None,
+            false,
+            winrar,
             header_keys,
             resources,
         )?,
@@ -561,23 +637,35 @@ fn stored_service_block<'a>(
     })
 }
 
-fn stored_service_header(
+/// A stored service's header: a comment's or another named record's, or with
+/// `index` the quick-open block's, in rars' framing or WinRAR's.
+#[allow(clippy::too_many_arguments)]
+fn service_header(
     name: &[u8],
     data_len: u64,
     crc32: u32,
-    service_data: &[u8],
+    service_data: Option<&[u8]>,
+    index: bool,
+    winrar: bool,
     header_keys: Option<&HeaderEncryptionKeys>,
     resources: &WriterResources,
 ) -> Result<PreparedHeader> {
-    let mut extra = Bytes::new(resources);
-    write_extra_record(&mut extra, FHEXTRA_SUBDATA, service_data)?;
-    let specific = stored_file_specific(name, data_len, crc32, 0, None, 0, resources)?;
-    prepared_header_image(
+    let parts = super::headers::service_parts(
+        name,
+        data_len,
+        crc32,
+        service_data,
+        index,
+        winrar,
+        resources,
+    )?;
+    prepared_header_image_padded(
         HEAD_SERVICE,
-        HFL_EXTRA | HFL_DATA,
+        parts.flags,
         Some(data_len),
-        &specific,
-        &extra,
+        parts.data_width,
+        &parts.specific,
+        &parts.extra,
         header_keys,
         resources,
     )
@@ -586,13 +674,15 @@ fn stored_service_header(
 fn prepare_comment<'a>(
     comment: &ArchiveCommentPlan<'a>,
     header_keys: Option<&HeaderEncryptionKeys>,
+    winrar: bool,
     resources: &WriterResources,
 ) -> Result<PreparedBlock<'a>> {
     match comment {
         ArchiveCommentPlan::Plain(data) => {
-            let mut block = stored_service_block(b"CMT", data, &[], header_keys, resources)?;
-            // Plain comments are listed by quick-open; encrypted ones are not.
-            block.quick_open_cached = header_keys.is_none();
+            let mut block = stored_service_block(b"CMT", data, header_keys, winrar, resources)?;
+            // Plain comments are listed by quick-open, in rars' archives; encrypted
+            // ones are not, and WinRAR's index has members only.
+            block.quick_open_cached = header_keys.is_none() && !winrar;
             Ok(block)
         }
         ArchiveCommentPlan::Encrypted { data, password } => {
@@ -604,6 +694,7 @@ fn prepare_comment<'a>(
 fn prepare_service<'a>(
     service: &'a super::ServiceEntry,
     header_keys: Option<&HeaderEncryptionKeys>,
+    winrar: bool,
     resources: &WriterResources,
 ) -> Result<PreparedBlock<'a>> {
     match service.password.as_deref() {
@@ -615,7 +706,7 @@ fn prepare_service<'a>(
             header_keys,
             resources,
         ),
-        None => stored_service_block(&service.name, &service.data, &[], header_keys, resources),
+        None => stored_service_block(&service.name, &service.data, header_keys, winrar, resources),
     }
 }
 
@@ -721,6 +812,10 @@ fn prepare_member(
         MemberPlainPayload::Packed(member.packed)
     };
 
+    let winrar = plan.layout.winrar;
+    // WinRAR keys a file's checksums to its password only when the headers that
+    // hold them are plain.
+    let mac = !(winrar && header_keys.is_some());
     let mut extra = Bytes::new(resources);
     let (payload, payload_len, data_crc32, hash) = match entry.password.as_deref() {
         Some(password) => {
@@ -736,9 +831,21 @@ fn prepare_member(
             )?;
             let keys =
                 Rar50Keys::derive(password, salt, WRITE_KDF_COUNT_LOG).map_err(Error::from)?;
-            write_file_encryption_record(&mut extra, salt, iv, keys.checked_password_record()?)?;
-            let crc32 = keys.checked_crc_mac(member.crc32)?;
-            let hash = keys.checked_hash_mac(member.hash)?;
+            write_file_encryption_record_with(
+                &mut extra,
+                salt,
+                iv,
+                keys.checked_password_record()?,
+                mac,
+            )?;
+            let (crc32, hash) = if mac {
+                (
+                    keys.checked_crc_mac(member.crc32)?,
+                    keys.checked_hash_mac(member.hash)?,
+                )
+            } else {
+                (member.crc32, member.hash)
+            };
             (
                 Payload::Encrypted {
                     plain: Owned::new(plain.into(), resources)?,
@@ -754,7 +861,10 @@ fn prepare_member(
         None => (plain.into(), plain_len, member.crc32, member.hash),
     };
     // A link has no file payload to hash; its target is protected by the header CRC.
-    if entry.redirection.is_none() {
+    // WinRAR gives a folder no checksum at all.
+    let checksums = plan.layout.checksums;
+    let checked = !(winrar && entry.is_directory);
+    if entry.redirection.is_none() && checked && checksums.blake2() {
         write_hash_record_with_value(&mut extra, hash)?;
     }
     super::headers::write_mtime_record(&mut extra, entry.mtime, entry.mtime_nanoseconds)?;
@@ -770,29 +880,51 @@ fn prepare_member(
         write_extra_record(&mut extra, super::super::FHEXTRA_REDIR, &record)?;
     }
 
-    let specific = file_specific(
-        &entry.name,
-        // Match Unix link stat size, while the packed payload remains empty.
-        entry
-            .redirection
-            .as_ref()
-            .map_or(member.input_size, |link| {
-                entry
-                    .redirection_size
-                    .unwrap_or_else(|| decoded_rar50_name_len(&link.target_name) as u64)
-            }),
-        data_crc32,
-        entry.attributes,
-        entry.mtime.filter(|_| entry.mtime_nanoseconds.is_none()),
-        compression_info,
-        entry.host_os,
-        entry.is_directory,
+    // Match Unix link stat size, while the packed payload remains empty.
+    let unpacked_size = entry
+        .redirection
+        .as_ref()
+        .map_or(member.input_size, |link| {
+            entry
+                .redirection_size
+                .unwrap_or_else(|| decoded_rar50_name_len(&link.target_name) as u64)
+        });
+    // WinRAR pads a file's sizes, both to the width its unpacked size gets.
+    let size_width = if winrar && !entry.is_directory {
+        super::winrar::size_width(unpacked_size)
+    } else {
+        0
+    };
+    let specific = super::headers::file_fields(
+        &super::headers::FileFields {
+            name: &entry.name,
+            unpacked_size,
+            size_width,
+            crc32: (checked && checksums.crc32()).then_some(data_crc32),
+            attributes: entry.attributes,
+            mtime: entry.mtime.filter(|_| entry.mtime_nanoseconds.is_none()),
+            compression_info,
+            compression_width: if winrar {
+                super::winrar::COMPRESSION_WIDTH
+            } else {
+                0
+            },
+            host_os: entry.host_os,
+            is_directory: entry.is_directory,
+        },
         resources,
     )?;
-    let header = prepared_header_image(
+    // WinRAR leaves the extra area out when nothing is in it.
+    let flags = if winrar && extra.is_empty() {
+        HFL_DATA
+    } else {
+        HFL_EXTRA | HFL_DATA
+    };
+    let header = prepared_header_image_padded(
         HEAD_FILE,
-        HFL_EXTRA | HFL_DATA,
+        flags,
         Some(payload_len),
+        size_width,
         &specific,
         &extra,
         header_keys,
@@ -808,6 +940,89 @@ fn prepare_member(
     })
 }
 
+/// A carried member's header around its packed data, which goes out as it is.
+fn prepare_carried(
+    entry: &ArchiveEntry,
+    carried: &super::Carried,
+    plan: &EnginePlan<'_>,
+    header_keys: Option<&HeaderEncryptionKeys>,
+    resources: &WriterResources,
+) -> Result<PreparedBlock<'static>> {
+    let winrar = plan.layout.winrar;
+    let mut extra = Bytes::new(resources);
+    if let Some(encryption) = &carried.encryption {
+        let mut record = Bytes::new(resources);
+        record.vint(encryption.version)?;
+        record.vint(encryption.flags)?;
+        record.extend_from_slice(&[encryption.kdf_count])?;
+        record.extend_from_slice(&encryption.salt)?;
+        record.extend_from_slice(&encryption.iv)?;
+        if let Some(check) = encryption.check_value {
+            record.extend_from_slice(&check)?;
+        }
+        write_extra_record(&mut extra, crate::rar::rar50::FHEXTRA_CRYPT, &record)?;
+    }
+    if let Some(hash) = &carried.hash {
+        let mut record = Bytes::new(resources);
+        record.vint(hash.hash_type)?;
+        record.extend_from_slice(&hash.data)?;
+        write_extra_record(&mut extra, crate::rar::rar50::FHEXTRA_HASH, &record)?;
+    }
+    super::headers::write_mtime_record(&mut extra, entry.mtime, entry.mtime_nanoseconds)?;
+    if let Some(times) = entry.file_times {
+        write_extra_record(&mut extra, super::super::FHEXTRA_HTIME, &times.encode()?)?;
+    }
+    let size_width = if winrar && !entry.is_directory {
+        super::winrar::size_width(carried.unpacked_size)
+    } else {
+        0
+    };
+    let specific = super::headers::file_fields(
+        &super::headers::FileFields {
+            name: &entry.name,
+            unpacked_size: carried.unpacked_size,
+            size_width,
+            crc32: carried.crc32,
+            attributes: entry.attributes,
+            mtime: entry.mtime.filter(|_| entry.mtime_nanoseconds.is_none()),
+            compression_info: carried.compression_info,
+            compression_width: if winrar {
+                super::winrar::COMPRESSION_WIDTH
+            } else {
+                0
+            },
+            host_os: entry.host_os,
+            is_directory: entry.is_directory,
+        },
+        resources,
+    )?;
+    let flags = if winrar && extra.is_empty() {
+        HFL_DATA
+    } else {
+        HFL_EXTRA | HFL_DATA
+    };
+    let header = prepared_header_image_padded(
+        HEAD_FILE,
+        flags,
+        Some(carried.packed_size),
+        size_width,
+        &specific,
+        &extra,
+        header_keys,
+        resources,
+    )?;
+    Ok(PreparedBlock {
+        header,
+        payload: Payload::Carried {
+            source: carried.packed.clone(),
+            len: carried.packed_size,
+        },
+        payload_len: carried.packed_size,
+        quick_open_cached: true,
+        entry_index: None,
+    })
+}
+
 fn write_payload(
     payload: Payload<'_>,
     output: &mut dyn Write,
@@ -818,6 +1033,16 @@ fn write_payload(
     match payload {
         Payload::Borrowed(data) => {
             output.write_all(data)?;
+            Ok(())
+        }
+        Payload::Carried { source, len } => {
+            let mut reader = source.open()?;
+            let copied = std::io::copy(&mut reader.by_ref().take(len), output)?;
+            if copied != len {
+                return Err(Error::SourceChanged(
+                    "carried member's archive changed while writing",
+                ));
+            }
             Ok(())
         }
         Payload::Stored(source) => {
@@ -893,12 +1118,34 @@ fn write_recovery_service(
     progress: Option<ProgressReporter<'_>>,
     output: &mut dyn Write,
 ) -> Result<u64> {
+    write_recovery_service_with(
+        recovery_percent,
+        prefix,
+        header_keys,
+        false,
+        resources,
+        progress,
+        output,
+    )
+}
+
+/// As [`write_recovery_service`], its header in WinRAR's framing with `winrar`.
+fn write_recovery_service_with(
+    recovery_percent: u64,
+    prefix: &mut Spool,
+    header_keys: Option<&HeaderEncryptionKeys>,
+    winrar: bool,
+    resources: &WriterResources,
+    progress: Option<ProgressReporter<'_>>,
+    output: &mut dyn Write,
+) -> Result<u64> {
     #[cfg(not(feature = "recovery"))]
     {
         let _ = (
             recovery_percent,
             prefix,
             header_keys,
+            winrar,
             resources,
             progress,
             output,
@@ -914,6 +1161,7 @@ fn write_recovery_service(
                 recovery_percent,
                 prefix,
                 header_keys,
+                winrar,
                 resources,
                 progress,
                 output,
@@ -924,6 +1172,7 @@ fn write_recovery_service(
             recovery_percent,
             prefix,
             header_keys,
+            winrar,
             resources,
             progress,
             output,
@@ -933,10 +1182,12 @@ fn write_recovery_service(
 }
 
 #[cfg(feature = "recovery")]
+#[allow(clippy::too_many_arguments)]
 fn recovery_service_with_allowance<B: crate::rar::codec::workspace::Budget>(
     recovery_percent: u64,
     prefix: &mut Spool,
     header_keys: Option<&HeaderEncryptionKeys>,
+    winrar: bool,
     resources: &WriterResources,
     progress: Option<ProgressReporter<'_>>,
     output: &mut dyn Write,
@@ -997,34 +1248,33 @@ fn recovery_service_with_allowance<B: crate::rar::codec::workspace::Budget>(
 
     let mut service_data = Bytes::new(resources);
     service_data.vint(recovery_percent)?;
-    let mut extra = Bytes::new(resources);
-    write_extra_record(&mut extra, FHEXTRA_SUBDATA, &service_data)?;
-    let specific = stored_file_specific(
+    let parts = super::headers::service_parts(
         b"RR",
         built.payload_len,
         built.payload_crc32,
-        0,
-        None,
-        0,
+        Some(&service_data),
+        true,
+        winrar,
         resources,
     )?;
     let header = match header_keys {
-        Some(keys) => encrypted_header_block(
+        Some(keys) => super::headers::encrypted_header_block_padded(
             &keys.keys,
             HEAD_SERVICE,
-            HFL_EXTRA | HFL_DATA,
+            parts.flags,
             Some(built.payload_len),
-            &specific,
-            &extra,
-            &[],
+            parts.data_width,
+            &parts.specific,
+            &parts.extra,
             resources,
         )?,
-        None => block_header_image(
+        None => super::headers::block_header_image_padded(
             HEAD_SERVICE,
-            HFL_EXTRA | HFL_DATA,
+            parts.flags,
             Some(built.payload_len),
-            &specific,
-            &extra,
+            parts.data_width,
+            &parts.specific,
+            &parts.extra,
             resources,
         )?,
     };
@@ -1217,7 +1467,14 @@ struct VolumeMember<'a> {
 
 struct MemberProgress<'a, 'p> {
     entries: &'a [ArchiveEntry],
+    /// The entry each compressed source is, when not all are compressed.
+    indices: Option<&'a [usize]>,
     work: &'a crate::rar::write_progress::WorkTracker<'p>,
+}
+impl MemberProgress<'_, '_> {
+    fn entry(&self, index: usize) -> usize {
+        self.indices.map_or(index, |indices| indices[index])
+    }
 }
 impl compress::CompressionProgress for MemberProgress<'_, '_> {
     fn is_cancelled(&self) -> bool {
@@ -1227,10 +1484,12 @@ impl compress::CompressionProgress for MemberProgress<'_, '_> {
         self.work.advance(bytes)
     }
     fn started(&self, index: usize, size: u64) {
+        let index = self.entry(index);
         self.work
             .entry_started(index, self.entries.len(), &self.entries[index].name, size);
     }
     fn finished(&self, index: usize, size: u64) {
+        let index = self.entry(index);
         self.work
             .entry_finished(index, self.entries.len(), &self.entries[index].name, size);
     }
@@ -1247,6 +1506,11 @@ pub(super) fn write_volumes(
 ) -> Result<()> {
     if max_payload_per_volume == 0 {
         return Err(Error::InvalidArgument("RAR 5 volume payload size is zero"));
+    }
+    if entries.iter().any(|entry| entry.carried.is_some()) {
+        return Err(Error::InvalidArgument(
+            "carried members are not supported in volume output",
+        ));
     }
     for entry in entries {
         super::validate_entry(entry)?;
@@ -1288,6 +1552,7 @@ pub(super) fn write_volumes(
         resources,
         &MemberProgress {
             entries,
+            indices: None,
             work: &work,
         },
         &|index, error| member_error(error, &entries[index].name, "compressing"),
@@ -1311,6 +1576,23 @@ pub(super) fn write_volumes(
             total_entries: Some(total_entries),
             pass: 1,
         });
+    }
+
+    // WinRAR's volumes count their headers in their size; this framing has no
+    // encrypted headers or recovery records in it yet, which keep rars' own.
+    if plan.layout.winrar && header_keys.is_none() && plan.recovery_percent.is_none() {
+        report_emission(plan.progress, true);
+        winrar_volumes::write(
+            entries,
+            members,
+            &plan,
+            max_payload_per_volume,
+            sink,
+            resources,
+        )?;
+        check_cancelled(plan.progress)?;
+        report_emission(plan.progress, false);
+        return Ok(());
     }
 
     report_emission(plan.progress, true);
@@ -1580,6 +1862,9 @@ impl VolumeWriter<'_> {
                 body_len: body.len(),
                 quick_open_payload_len: None,
                 recovery_percent: self.recovery_percent,
+                winrar: false,
+                always_locate: false,
+                offset_width: 0,
             },
             self.resources,
         )?;
@@ -1945,8 +2230,9 @@ mod service_payload_tests {
     fn prepared_services_borrow_input_and_stream_identical_ciphertext() {
         for size in [0usize, 1, 15, 16, 65535, 65536, 65537, 131089] {
             let data: Vec<u8> = (0..size).map(|i| (i % 251) as u8).collect();
-            let plain = stored_service_block(b"CMT", &data, &[], None, &WriterResources::default())
-                .unwrap();
+            let plain =
+                stored_service_block(b"CMT", &data, None, false, &WriterResources::default())
+                    .unwrap();
             let Payload::Borrowed(borrowed) = plain.payload else {
                 panic!("expected borrowed service")
             };
@@ -2646,6 +2932,7 @@ mod emission_ledger_tests {
             metadata_record: None,
             locked: false,
             quick_open: false,
+            layout: crate::rar::rar50::Layout::default(),
             progress: None,
         }
     }

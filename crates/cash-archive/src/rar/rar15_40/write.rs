@@ -253,6 +253,21 @@ pub(crate) struct RetainedMemberMetadata<'a> {
     pub(crate) extended_times: Option<&'a [u8]>,
     pub(crate) is_directory: bool,
     pub(crate) is_symlink: bool,
+    /// The file's data is its packed form from another archive, written as it is.
+    pub(crate) carried: Option<LegacyCarried>,
+}
+
+/// What a carried member's header needs that its packed data does not say: how it
+/// was packed, its size and checksum, its encryption.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct LegacyCarried {
+    pub(crate) method: u8,
+    pub(crate) unpack_version: u8,
+    pub(crate) unpacked_size: usize,
+    pub(crate) file_crc: u32,
+    pub(crate) salt: Option<[u8; 8]>,
+    pub(crate) encrypted: bool,
+    pub(crate) dictionary_flags: u16,
 }
 
 pub(crate) struct RetainedFileEntry<'a> {
@@ -284,6 +299,10 @@ pub(crate) fn write_archive_with_retained_metadata(
             member.extended_times = entry.metadata.extended_times;
             member.is_directory = entry.metadata.is_directory;
             member.is_symlink = entry.metadata.is_symlink;
+            member.carried = entry.metadata.carried;
+            if let Some(carried) = entry.metadata.carried {
+                member.unpack_version = Some(carried.unpack_version);
+            }
             member
         })
         .collect();
@@ -1226,6 +1245,7 @@ struct Member<'a> {
     extended_times: Option<&'a [u8]>,
     is_directory: bool,
     is_symlink: bool,
+    carried: Option<LegacyCarried>,
 }
 
 impl<'a> Member<'a> {
@@ -1243,6 +1263,7 @@ impl<'a> Member<'a> {
             extended_times: None,
             is_directory: false,
             is_symlink: false,
+            carried: None,
         }
     }
 
@@ -1260,6 +1281,7 @@ impl<'a> Member<'a> {
             extended_times: None,
             is_directory: false,
             is_symlink: false,
+            carried: None,
         }
     }
 
@@ -1277,6 +1299,7 @@ impl<'a> Member<'a> {
             extended_times: None,
             is_directory: false,
             is_symlink: false,
+            carried: None,
         }
     }
 
@@ -1320,6 +1343,17 @@ fn encode_member<'a>(
     progress: &WorkTracker<'_>,
 ) -> Result<EncodedMember<'a>> {
     progress.check()?;
+    // A carried member's bytes are its packed data, already coded.
+    if let Some(carried) = member.carried {
+        let packed = member.bytes.load_with_progress(progress.reporter())?;
+        progress.advance(packed.len() as u64);
+        return Ok(EncodedMember {
+            payload: MemberPayload::Packed(packed.into_owned()),
+            method: carried.method,
+            unpacked_size: carried.unpacked_size,
+            file_crc: carried.file_crc,
+        });
+    }
     let unpacked_size = member.unpacked_size()?;
     validate_member(member.name, unpacked_size)?;
     if member.is_directory {
@@ -1411,15 +1445,17 @@ fn write_member(
 ) -> Result<()> {
     let target = options.target;
     crate::rar::write_progress::check_cancelled(progress)?;
-    let (payload, salt) = match encoded.payload {
-        MemberPayload::Packed(mut packed) => {
+    let (payload, salt) = match (encoded.payload, member.carried) {
+        // Carried data is as encrypted as it was, under its own salt.
+        (payload, Some(carried)) => (payload, carried.salt),
+        (MemberPayload::Packed(mut packed), None) => {
             let salt =
                 encrypt_packed_data_with_progress(&mut packed, target, member.password, progress)?;
             (MemberPayload::Packed(packed), salt)
         }
         // Unencrypted by construction, so the stored bytes are their own
         // payload and their size is the member's.
-        copied => (copied, None),
+        (copied, None) => (copied, None),
     };
     let packed_size = payload.size(encoded.unpacked_size as u64);
     let packed_size = usize::try_from(packed_size)
@@ -1427,6 +1463,9 @@ fn write_member(
     let mut flags = writer_file_flags(member.password, member.file_comment, solid_continuation);
     if salt.is_some() {
         flags |= FHD_SALT;
+    }
+    if member.carried.is_some_and(|carried| carried.encrypted) {
+        flags |= FHD_PASSWORD;
     }
     let wire_name = member.unicode_name.unwrap_or(member.name);
     if member.unicode_name.is_some() {
@@ -1451,10 +1490,12 @@ fn write_member(
             host_os: member.host_os,
             target,
             method: encoded.method,
-            dictionary_flags: if member.is_directory && target != ArchiveVersion::Rar15 {
-                FHD_DIRECTORY_MASK
-            } else {
-                dictionary_flags_for_options(options)?
+            dictionary_flags: match member.carried {
+                Some(carried) => carried.dictionary_flags,
+                None if member.is_directory && target != ArchiveVersion::Rar15 => {
+                    FHD_DIRECTORY_MASK
+                }
+                None => dictionary_flags_for_options(options)?,
             },
             flags,
             salt,

@@ -86,9 +86,21 @@ pub(super) fn write_file_encryption_record(
     iv: [u8; 16],
     check_value: [u8; 12],
 ) -> Result<()> {
+    write_file_encryption_record_with(out, salt, iv, check_value, true)
+}
+
+/// The file encryption record; `mac` says the file's checksums are keyed by the
+/// password, which WinRAR does only when the headers are not encrypted.
+pub(super) fn write_file_encryption_record_with(
+    out: &mut impl HeaderOutput,
+    salt: [u8; 16],
+    iv: [u8; 16],
+    check_value: [u8; 12],
+    mac: bool,
+) -> Result<()> {
     let mut record = HeaderScratch::<47>::new();
     record.vint(0);
-    record.vint(0x0003);
+    record.vint(if mac { 0x0003 } else { 0x0001 });
     record.extend_from_slice(&[WRITE_KDF_COUNT_LOG]);
     record.extend_from_slice(&salt);
     record.extend_from_slice(&iv);
@@ -133,11 +145,59 @@ pub(super) fn block_header_image(
     extra: &[u8],
     resources: &WriterResources,
 ) -> Result<Bytes> {
-    HeaderImage::new(header_type, flags, data_size, type_specific, extra)?.render(
-        None,
-        &[],
+    block_header_image_padded(
+        header_type,
+        flags,
+        data_size,
+        0,
+        type_specific,
+        extra,
         resources,
     )
+}
+
+/// As [`block_header_image`], the data size at least `data_width` bytes wide.
+pub(super) fn block_header_image_padded(
+    header_type: u64,
+    flags: u64,
+    data_size: Option<u64>,
+    data_width: usize,
+    type_specific: &[u8],
+    extra: &[u8],
+    resources: &WriterResources,
+) -> Result<Bytes> {
+    HeaderImage::padded(
+        header_type,
+        flags,
+        data_size,
+        data_width,
+        type_specific,
+        extra,
+    )?
+    .render(None, &[], resources)
+}
+
+/// As [`encrypted_header_block`], the data size at least `data_width` bytes wide.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn encrypted_header_block_padded(
+    keys: &Rar50Keys,
+    header_type: u64,
+    flags: u64,
+    data_size: Option<u64>,
+    data_width: usize,
+    type_specific: &[u8],
+    extra: &[u8],
+    resources: &WriterResources,
+) -> Result<Bytes> {
+    HeaderImage::padded(
+        header_type,
+        flags,
+        data_size,
+        data_width,
+        type_specific,
+        extra,
+    )?
+    .render(Some(keys), &[], resources)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -271,29 +331,134 @@ pub(super) fn file_specific(
     is_directory: bool,
     resources: &WriterResources,
 ) -> Result<Bytes> {
-    if name.is_empty() {
+    file_fields(
+        &FileFields {
+            name,
+            unpacked_size,
+            size_width: 0,
+            crc32: Some(data_crc32),
+            attributes,
+            mtime,
+            compression_info,
+            compression_width: 0,
+            host_os,
+            is_directory,
+        },
+        resources,
+    )
+}
+
+/// A file or service header's own fields, with the widths WinRAR pads them to (0 for
+/// none) and its CRC32 left out when the file carries none.
+pub(super) struct FileFields<'a> {
+    pub(super) name: &'a [u8],
+    pub(super) unpacked_size: u64,
+    pub(super) size_width: usize,
+    pub(super) crc32: Option<u32>,
+    pub(super) attributes: u64,
+    pub(super) mtime: Option<u32>,
+    pub(super) compression_info: u64,
+    pub(super) compression_width: usize,
+    pub(super) host_os: u64,
+    pub(super) is_directory: bool,
+}
+
+pub(super) fn file_fields(fields: &FileFields<'_>, resources: &WriterResources) -> Result<Bytes> {
+    if fields.name.is_empty() {
         return Err(Error::InvalidArgument("RAR 5 file name is empty"));
     }
-    let mut file_flags = FHFL_CRC32;
-    if is_directory {
+    let mut file_flags = 0;
+    if fields.crc32.is_some() {
+        file_flags |= FHFL_CRC32;
+    }
+    if fields.is_directory {
         file_flags |= FHFL_DIRECTORY;
     }
-    if mtime.is_some() {
+    if fields.mtime.is_some() {
         file_flags |= FHFL_MTIME;
     }
 
     let mut specific = HeaderScratch::<68>::new();
     specific.vint(file_flags);
-    specific.vint(unpacked_size);
-    specific.vint(attributes);
-    if let Some(mtime) = mtime {
+    specific.vint_padded(fields.unpacked_size, fields.size_width);
+    specific.vint(fields.attributes);
+    if let Some(mtime) = fields.mtime {
         specific.extend_from_slice(&mtime.to_le_bytes());
     }
-    specific.extend_from_slice(&data_crc32.to_le_bytes());
-    specific.vint(compression_info);
-    specific.vint(host_os);
-    specific.vint(name.len() as u64);
-    join_record(&[specific.as_slice(), name], resources)
+    if let Some(crc32) = fields.crc32 {
+        specific.extend_from_slice(&crc32.to_le_bytes());
+    }
+    specific.vint_padded(fields.compression_info, fields.compression_width);
+    specific.vint(fields.host_os);
+    specific.vint(fields.name.len() as u64);
+    join_record(&[specific.as_slice(), fields.name], resources)
+}
+
+/// A stored service block's header parts. rars writes every service with a service
+/// data record and a CRC32. WinRAR writes the record only when there is service data,
+/// leaves the CRC32 out of the quick-open and recovery blocks (`index`), sets their
+/// skip flag, and pads the sizes.
+pub(super) struct ServiceParts {
+    pub(super) flags: u64,
+    pub(super) specific: Bytes,
+    pub(super) extra: Bytes,
+    pub(super) data_width: usize,
+}
+
+pub(super) fn service_parts(
+    name: &[u8],
+    data_len: u64,
+    crc32: u32,
+    service_data: Option<&[u8]>,
+    index: bool,
+    winrar: bool,
+    resources: &WriterResources,
+) -> Result<ServiceParts> {
+    let mut extra = Bytes::new(resources);
+    if !winrar || service_data.is_some() {
+        write_extra_record(
+            &mut extra,
+            crate::rar::rar50::FHEXTRA_SUBDATA,
+            service_data.unwrap_or_default(),
+        )?;
+    }
+    let data_width = if winrar {
+        super::winrar::size_width(data_len)
+    } else {
+        0
+    };
+    let specific = file_fields(
+        &FileFields {
+            name,
+            unpacked_size: data_len,
+            size_width: data_width,
+            crc32: (!winrar || !index).then_some(crc32),
+            attributes: 0,
+            mtime: None,
+            compression_info: 0,
+            compression_width: if winrar {
+                super::winrar::COMPRESSION_WIDTH
+            } else {
+                0
+            },
+            host_os: 0,
+            is_directory: false,
+        },
+        resources,
+    )?;
+    let mut flags = crate::rar::rar50::HFL_DATA;
+    if !extra.is_empty() {
+        flags |= HFL_EXTRA;
+    }
+    if winrar && index {
+        flags |= super::winrar::HFL_SKIP_IF_UNKNOWN;
+    }
+    Ok(ServiceParts {
+        flags,
+        specific,
+        extra,
+        data_width,
+    })
 }
 
 pub(super) fn write_mtime_record(
@@ -382,6 +547,7 @@ pub(super) fn write_locator_record(
     out: &mut impl HeaderOutput,
     quick_open_offset: Option<u64>,
     recovery_record_offset: Option<u64>,
+    width: usize,
 ) -> Result<()> {
     let mut flags = 0;
     if quick_open_offset.is_some() {
@@ -394,26 +560,56 @@ pub(super) fn write_locator_record(
     let mut record = HeaderScratch::<21>::new();
     record.vint(flags);
     if let Some(quick_open_offset) = quick_open_offset {
-        record.vint(quick_open_offset);
+        record.vint_padded(quick_open_offset, width);
     }
     if let Some(recovery_record_offset) = recovery_record_offset {
-        record.vint(recovery_record_offset);
+        record.vint_padded(recovery_record_offset, width);
     }
     write_extra_record(out, MHEXTRA_LOCATOR, record.as_slice())?;
 
     Ok(())
 }
 
+/// The main header's extra area: a locator for the quick-open and recovery blocks,
+/// its offsets `width` bytes wide at the least, then the archive's metadata. With
+/// `always_locate`, the locator names a quick-open block at 0 when there is none, as
+/// WinRAR's does.
+#[cfg(test)]
 pub(super) fn resolved_main_extra(
     archive_metadata: Option<ArchiveMetadataEntry<'_>>,
     quick_open_offset: Option<u64>,
     recovery_offset: Option<u64>,
     resources: &WriterResources,
 ) -> Result<Bytes> {
+    resolved_main_extra_with(
+        archive_metadata,
+        quick_open_offset,
+        recovery_offset,
+        false,
+        0,
+        resources,
+    )
+}
+
+pub(super) fn resolved_main_extra_with(
+    archive_metadata: Option<ArchiveMetadataEntry<'_>>,
+    quick_open_offset: Option<u64>,
+    recovery_offset: Option<u64>,
+    always_locate: bool,
+    width: usize,
+    resources: &WriterResources,
+) -> Result<Bytes> {
     let mut main_extra = Bytes::new(resources);
-    let locator_quick_open_offset = quick_open_offset.or_else(|| archive_metadata.map(|_| 0));
+    let locator_quick_open_offset = quick_open_offset
+        .or_else(|| archive_metadata.map(|_| 0))
+        .or_else(|| always_locate.then_some(0));
     if locator_quick_open_offset.is_some() || recovery_offset.is_some() {
-        write_locator_record(&mut main_extra, locator_quick_open_offset, recovery_offset)?;
+        write_locator_record(
+            &mut main_extra,
+            locator_quick_open_offset,
+            recovery_offset,
+            width,
+        )?;
     }
     if let Some(archive_metadata) = archive_metadata {
         main_extra.extend_from_slice(&archive_metadata_record(archive_metadata, resources)?)?;
@@ -428,6 +624,18 @@ pub(super) fn write_main_header(
     extra: &[u8],
     resources: &WriterResources,
 ) -> Result<()> {
+    write_main_header_with(out, 0, archive_flags, volume_number, extra, resources)
+}
+
+/// The main header, `header_flags` added to the block's own (WinRAR's skip flag).
+pub(super) fn write_main_header_with(
+    out: &mut impl HeaderOutput,
+    header_flags: u64,
+    archive_flags: u64,
+    volume_number: Option<u64>,
+    extra: &[u8],
+    resources: &WriterResources,
+) -> Result<()> {
     let mut specific = HeaderScratch::<20>::new();
     specific.vint(archive_flags);
     if let Some(volume_number) = volume_number {
@@ -436,7 +644,7 @@ pub(super) fn write_main_header(
     write_block(
         out,
         HEAD_MAIN,
-        if extra.is_empty() { 0 } else { HFL_EXTRA },
+        header_flags | if extra.is_empty() { 0 } else { HFL_EXTRA },
         None,
         specific.as_slice(),
         extra,
@@ -452,6 +660,17 @@ pub(super) fn encrypted_main_header_block(
     extra: &[u8],
     resources: &WriterResources,
 ) -> Result<Bytes> {
+    encrypted_main_header_block_with(keys, 0, archive_flags, volume_number, extra, resources)
+}
+
+pub(super) fn encrypted_main_header_block_with(
+    keys: &Rar50Keys,
+    header_flags: u64,
+    archive_flags: u64,
+    volume_number: Option<u64>,
+    extra: &[u8],
+    resources: &WriterResources,
+) -> Result<Bytes> {
     let mut specific = HeaderScratch::<20>::new();
     specific.vint(archive_flags);
     if let Some(volume_number) = volume_number {
@@ -460,7 +679,7 @@ pub(super) fn encrypted_main_header_block(
     encrypted_header_block(
         keys,
         HEAD_MAIN,
-        if extra.is_empty() { 0 } else { HFL_EXTRA },
+        header_flags | if extra.is_empty() { 0 } else { HFL_EXTRA },
         None,
         specific.as_slice(),
         extra,
@@ -529,10 +748,19 @@ pub(crate) fn write_end_header(
     end_flags: u64,
     resources: &WriterResources,
 ) -> Result<()> {
+    write_end_header_with(out, 0, end_flags, resources)
+}
+
+pub(crate) fn write_end_header_with(
+    out: &mut impl HeaderOutput,
+    header_flags: u64,
+    end_flags: u64,
+    resources: &WriterResources,
+) -> Result<()> {
     write_block(
         out,
         HEAD_END,
-        0,
+        header_flags,
         None,
         &end_header_specific(end_flags),
         &[],
@@ -607,7 +835,38 @@ pub(super) fn prepared_header_image(
     keys: Option<&HeaderEncryptionKeys>,
     resources: &crate::rar::WriterResources,
 ) -> Result<PreparedHeader> {
-    let image = HeaderImage::new(header_type, flags, data_size, type_specific, extra)?;
+    prepared_header_image_padded(
+        header_type,
+        flags,
+        data_size,
+        0,
+        type_specific,
+        extra,
+        keys,
+        resources,
+    )
+}
+
+/// As [`prepared_header_image`], the data size at least `data_width` bytes wide.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn prepared_header_image_padded(
+    header_type: u64,
+    flags: u64,
+    data_size: Option<u64>,
+    data_width: usize,
+    type_specific: &[u8],
+    extra: &[u8],
+    keys: Option<&HeaderEncryptionKeys>,
+    resources: &crate::rar::WriterResources,
+) -> Result<PreparedHeader> {
+    let image = HeaderImage::padded(
+        header_type,
+        flags,
+        data_size,
+        data_width,
+        type_specific,
+        extra,
+    )?;
     let length = image.header_len(keys.is_some())?;
     let charge = resources.reserve_prepared_header(length as u64)?;
     let bytes = image.render(keys.map(|keys| &keys.keys), &[], resources)?;
@@ -793,7 +1052,7 @@ mod scratch_tests {
             buffered_record(super::super::super::FHEXTRA_HTIME, &body)
         );
         actual.clear();
-        write_locator_record(&mut actual, Some(u64::MAX), Some(u64::MAX)).unwrap();
+        write_locator_record(&mut actual, Some(u64::MAX), Some(u64::MAX), 0).unwrap();
         let mut body = Vec::new();
         write_vint(
             &mut body,
