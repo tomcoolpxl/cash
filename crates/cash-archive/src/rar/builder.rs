@@ -963,6 +963,27 @@ impl Builder {
     }
 
     /// Set complete RAR5/7 timestamps without narrowing FILETIME or discarding fractions.
+    /// The identity of the member added last, for the `_by_id` setters: an older version
+    /// of a file shares its name.
+    pub fn last_entry_id(&self) -> Option<usize> {
+        self.entries.last().map(|entry| entry.id)
+    }
+
+    /// Sets a RAR5/7 member's modification time in its header's own field, Unix
+    /// seconds, or none: as `-tsm1` keeps it, or with `None` and no file times, none.
+    pub fn set_mtime_by_id(&mut self, id: usize, mtime: Option<u32>) -> Result<()> {
+        if self.format.family() != ArchiveFamily::Rar50Plus {
+            return Err(Error::InvalidArgument(
+                "a header's Unix time needs RAR5/7 output",
+            ));
+        }
+        let index = self.index_by_id(id)?;
+        let entry = &mut self.entries[index];
+        entry.mtime = mtime;
+        entry.mtime_nanoseconds = None;
+        Ok(())
+    }
+
     pub fn set_file_times(
         &mut self,
         name: &[u8],

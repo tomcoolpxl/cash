@@ -917,12 +917,12 @@ fn put<SE: cash_core::ShellExtensions>(
         return Ok(());
     }
     let name = source.name.clone().into_bytes();
-    let store = rar.switches.times;
-    // `-tsm1` alone: whole seconds in the header's own Unix time, as WinRAR keeps them.
-    let unix = (store.modified == Some('1') && store.created.is_none() && store.accessed.is_none())
-        .then(|| source.modified.map(unix_seconds))
-        .flatten()
-        .and_then(|seconds| u32::try_from(seconds).ok());
+    let (unix, times) = stamped(
+        rar.switches.times,
+        source.modified,
+        source.created,
+        source.accessed,
+    );
     if let Some(link) = link {
         builder.add_link(name.clone(), link, source.is_dir, source.size, unix)?;
     } else if source.is_dir {
@@ -935,12 +935,29 @@ fn put<SE: cash_core::ShellExtensions>(
             None,
         )?;
     }
-    if unix.is_some() {
-        builder.set_dos_attributes(&name, u64::from(source.attributes))?;
-        return Ok(());
+    if unix.is_none() && times != FileTimes::default() {
+        builder.set_file_times(&name, Some(times))?;
     }
-    // One precision for a file's times: whole seconds, when every time kept is asked at
-    // one second, are Unix seconds as WinRAR keeps them.
+    builder.set_dos_attributes(&name, u64::from(source.attributes))?;
+    Ok(())
+}
+
+/// The times a file is stored with under `-ts`: with `-tsm1` alone, whole seconds in
+/// the header's own Unix time, as `WinRAR` keeps them; else those kept, at one
+/// precision for the file: whole seconds, when every time kept is asked at one second,
+/// as Unix seconds, else in full.
+fn stamped(
+    store: super::cmdline::TimeStore,
+    modified: Option<SystemTime>,
+    created: Option<SystemTime>,
+    accessed: Option<SystemTime>,
+) -> (Option<u32>, FileTimes) {
+    if store.modified == Some('1') && store.created.is_none() && store.accessed.is_none() {
+        let unix = modified
+            .map(unix_seconds)
+            .and_then(|seconds| u32::try_from(seconds).ok());
+        return (unix, FileTimes::default());
+    }
     let kept = [
         Some(store.modified.unwrap_or('+')),
         store.created,
@@ -961,15 +978,73 @@ fn put<SE: cash_core::ShellExtensions>(
         Some(_) => time.map(filetime),
     };
     let times = FileTimes {
-        modified: stamp(source.modified, Some(store.modified.unwrap_or('+'))),
-        created: stamp(source.created, store.created),
-        accessed: stamp(source.accessed, store.accessed),
+        modified: stamp(modified, Some(store.modified.unwrap_or('+'))),
+        created: stamp(created, store.created),
+        accessed: stamp(accessed, store.accessed),
     };
-    if times != FileTimes::default() {
-        builder.set_file_times(&name, Some(times))?;
+    (None, times)
+}
+
+/// A kept member's times stored anew by `-ts`, as rar stores them when it writes an
+/// archive again (`rn` aside): by default its modification time alone, its creation
+/// and access times gone. RAR 5 output only.
+fn restamp(
+    builder: &mut Builder,
+    store: super::cmdline::TimeStore,
+    member: &rar::ArchiveMember,
+) -> rar::Result<()> {
+    if builder.format().family() != ArchiveFamily::Rar50Plus
+        || !matches!(member.detail, rar::ArchiveMemberDetail::Rar50Plus { .. })
+    {
+        return Ok(());
     }
-    builder.set_dos_attributes(&name, u64::from(source.attributes))?;
-    Ok(())
+    let times = member.file_times()?.unwrap_or_default();
+    let modified = times.modified.map(system_time).or_else(|| {
+        member.meta.file_time.map(|seconds| {
+            let nanos = member
+                .meta
+                .mtime_refinement
+                .map_or(0, |time| time.nanoseconds);
+            SystemTime::UNIX_EPOCH + std::time::Duration::new(u64::from(seconds), nanos)
+        })
+    });
+    let (unix, stored) = stamped(
+        store,
+        modified,
+        times.created.map(system_time),
+        times.accessed.map(system_time),
+    );
+    // The member just added: an older version shares its name with the file.
+    let Some(id) = builder.last_entry_id() else {
+        return Ok(());
+    };
+    builder.set_mtime_by_id(id, unix)?;
+    builder.set_file_times_by_id(id, (stored != FileTimes::default()).then_some(stored))
+}
+
+/// A stored time as a system time.
+fn system_time(stamp: FileTimestamp) -> SystemTime {
+    let since = |seconds: i64, nanos: u32| {
+        let at = std::time::Duration::new(seconds.unsigned_abs(), nanos);
+        if seconds >= 0 {
+            SystemTime::UNIX_EPOCH + at
+        } else {
+            SystemTime::UNIX_EPOCH - at
+        }
+    };
+    match stamp {
+        FileTimestamp::WindowsFiletime(ticks) => {
+            let ticks = i128::from(ticks) - 116_444_736_000_000_000;
+            let seconds = i64::try_from(ticks.div_euclid(10_000_000)).unwrap_or(0);
+            let nanos = u32::try_from(ticks.rem_euclid(10_000_000) * 100).unwrap_or(0);
+            since(seconds, nanos)
+        }
+        FileTimestamp::Unix {
+            seconds,
+            nanoseconds,
+        } => since(i64::from(seconds), nanoseconds),
+        FileTimestamp::UnixSeconds(seconds) => since(i64::from(seconds), 0),
+    }
 }
 
 /// The archived members a rewrite keeps. An archive's files are carried as they are,
@@ -982,6 +1057,9 @@ pub(super) struct Keeper<'o> {
     members: Vec<rar::ArchiveMember>,
     staged: std::collections::HashMap<usize, EntrySource>,
     comments: Vec<Option<Vec<u8>>>,
+    /// `-ts`, to store each member's times again by, as rar does when it writes an
+    /// archive anew; `None` keeps them as they are, as `rn` does.
+    times: Option<super::cmdline::TimeStore>,
 }
 
 impl<'o> Keeper<'o> {
@@ -1030,7 +1108,14 @@ impl<'o> Keeper<'o> {
             members,
             staged,
             comments,
+            times: Some(rar.switches.times),
         })
+    }
+
+    /// Keeps each member's times as they are, as `rn` does.
+    pub(super) const fn keeping_times(mut self) -> Self {
+        self.times = None;
+        self
     }
 
     /// Queues member `index` in `builder`; `encrypting` as [`keep`]'s.
@@ -1047,10 +1132,14 @@ impl<'o> Keeper<'o> {
             if comment.is_some() {
                 let _ = builder.set_file_comment(&member.meta.name, comment);
             }
-            return Ok(());
+        } else {
+            let source = self.staged.remove(&index);
+            keep(builder, member, source, comment, encrypting)?;
         }
-        let source = self.staged.remove(&index);
-        keep(builder, member, source, comment, encrypting)
+        match self.times {
+            Some(store) => restamp(builder, store, member),
+            None => Ok(()),
+        }
     }
 }
 

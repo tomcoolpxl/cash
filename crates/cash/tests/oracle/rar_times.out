@@ -71,3 +71,48 @@ rc=0
 out/src/f.txt m 2024-01-02 03:04:05.1234567 c (now) a 2022-03-04 05:06:07.2500000
 rc=0
 out/src/f.txt m (now) c 2023-05-06 07:08:09.5000000 a (now)
+== a change stores the files' times again by -ts; rn keeps them
+-- k  
+rc=0
+6563149 123
+0
+-- c -zcmt.txt 
+rc=0
+2296543213 152
+0
+-- rn  src\f.txt src\h.txt
+rc=0
+3861736623 155
+4
+-- ch  
+rc=0
+3740068221 123
+0
+-- ch -tsc 
+rc=0
+2687447306 139
+2
+-- ch -tsm1 
+rc=0
+1219818224 107
+0
+-- ch -tsm- 
+rc=0
+718205126 99
+0
+-- a -m0 n.txt
+rc=0
+3939636219 163
+0
+-- d  src\g.txt
+rc=0
+2144112817 77
+0
+-- d -tsa src\g.txt
+rc=0
+1716349123 85
+1
+-- k -tsc -tsa 
+rc=0
+4282380892 155
+4

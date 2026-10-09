@@ -62,4 +62,24 @@ for sw in "" "-ts" "-tsc" "-tsa" "-tsm- -tsc"; do
   times out/src/f.txt | sed -E 's/20(2[6-9]|[3-9][0-9])-[0-9-]+ [0-9:.]+/(now)/g'
 done
 
+echo "== a change stores the files' times again by -ts; rn keeps them"
+# t1.rar keeps all three times; each command on a copy of it, and how many creation
+# and access times are left. (A file added with -tsc or -tsa would bring its own, which
+# differ from run to run.)
+printf 'note\n' > cmt.txt
+printf 'n\n' > n.txt
+touch -d '2024-03-03T00:00:00Z' n.txt
+for case in "k||" "c|-zcmt.txt|" "rn||src\\f.txt src\\h.txt" "ch||" "ch|-tsc|" "ch|-tsm1|" \
+    "ch|-tsm-|" "a|-m0|n.txt" "d||src\\g.txt" "d|-tsa|src\\g.txt" "k|-tsc -tsa|"; do
+  op=${case%%|*}
+  rest=${case#*|}
+  switches=${rest%%|*}
+  names=${rest#*|}
+  cp t1.rar ch.rar
+  echo "-- $op $switches $names"
+  z rar $op -idq $switches ch.rar $names
+  cksum < ch.rar
+  rar lt -idc ch.rar | tr -d '\r' | grep -c 'Created\|Accessed'
+done
+
 cd / && rm -rf "$dir"

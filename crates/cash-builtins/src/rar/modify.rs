@@ -22,6 +22,8 @@ struct Change {
     renames: Vec<(Vec<u8>, Vec<u8>)>,
     /// `-tl`: the archive's time is its newest file's.
     latest_time: bool,
+    /// `rn`: the files' times kept as they are.
+    keep_times: bool,
 }
 
 pub(super) fn run<SE: cash_core::ShellExtensions>(
@@ -69,21 +71,12 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
     }
 
     rar.console.msg(&format!("\nProcessing archive {display}"));
-    // A volume is changed by itself, the others of its set left as they are, as rar
-    // changes one; a RAR 1.5 to 4 volume is not.
-    if opened.facts.locked || opened.facts.volume && opened.archive.as_rar50().is_none() {
-        let words = if opened.facts.locked {
-            "Locked archive"
-        } else {
-            "Cannot modify volume"
-        };
-        rar.console.err(&format!("\n\nERROR: {words}"));
-        rar.fail(code::LOCKED);
-        done(rar);
+    if refused(rar, &opened) {
         return Ok(());
     }
     let mut change = Change {
         recovery_percent: add::asked_recovery_percent(rar),
+        keep_times: *command == Command::Rename,
         ..Change::default()
     };
     let switches = &rar.switches;
@@ -137,6 +130,25 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
     }
     done(rar);
     Ok(())
+}
+
+/// Whether rar refuses to change the archive, saying so: a locked one, or a RAR 1.5 to
+/// 4 volume. A RAR 5 volume is changed by itself, the others of its set left as they
+/// are, as rar changes one.
+fn refused<SE: cash_core::ShellExtensions>(rar: &Rar<'_, SE>, opened: &open::Opened) -> bool {
+    let legacy_volume = opened.facts.volume && opened.archive.as_rar50().is_none();
+    if !opened.facts.locked && !legacy_volume {
+        return false;
+    }
+    let words = if opened.facts.locked {
+        "Locked archive"
+    } else {
+        "Cannot modify volume"
+    };
+    rar.console.err(&format!("\n\nERROR: {words}"));
+    rar.fail(code::LOCKED);
+    done(rar);
+    true
 }
 
 fn done<SE: cash_core::ShellExtensions>(rar: &Rar<'_, SE>) {
@@ -349,7 +361,13 @@ fn rewrite<SE: cash_core::ShellExtensions>(
             })?;
     }
     let all: Vec<usize> = (0..opened.archive.members().count()).collect();
-    let mut keeper = add::Keeper::new(rar, opened, path, &all, password.as_deref())?;
+    let keeper = add::Keeper::new(rar, opened, path, &all, password.as_deref())?;
+    // `rn` keeps the files' times as they are; the others store them again by `-ts`.
+    let mut keeper = if change.keep_times {
+        keeper.keeping_times()
+    } else {
+        keeper
+    };
     for (index, member) in opened.archive.members().enumerate() {
         if let Err(error) = keeper.keep(&mut builder, index, password.is_some()) {
             rar.console

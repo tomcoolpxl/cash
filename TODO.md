@@ -830,7 +830,17 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      `rar50_dictionary_size` is public now. Sizes above 4 GB (RAR 7's) are not tried.
    - `c`, `cw`, `rn`, `k`, `rr` and `ch`: done 2026-10-09 (`rar_modify.sh`, 474 lines then,
      the rewrites WinRAR's byte for byte). Left of them: `ch` takes `-cl`, `-cu`, `-z`,
-     `-k` and `-tl`, not the other switches rar lets it change (`-amr`, `-ma`…).
+     `-k`, `-tl`, `-rr` and now `-ts`, not the other switches Rar.exe was seen to act on
+     there: `-am`/`-ams` (the archive's name and time saved in its main header), `-amr`
+     (restoring them: it asks to overwrite the saved name), `-qo-`/`-qo+` (quick open
+     dropped or for every file), `-hp` (headers encrypted). `-ep`, `-htb`, `-s`, `-p`
+     and `-df` change nothing there; `-ma4` is refused as by cash.
+   - A change stores the kept files' times again by `-ts`: done 2026-10-09 (in
+     `rar_times.sh`, now 118 lines, WinRAR's byte for byte). `a`, `u`, `f`, `m`, `d`,
+     `c`, `k`, `ch` and `rr` write every member kept with the times the switches keep,
+     at their precision: by default the modification time alone, its creation and
+     access times dropped; `rn` keeps them as they are. cash carried them as they were.
+     rars' builder gains `last_entry_id` and `set_mtime_by_id`.
    - `c`, `k`, `rn`, `ch` and `rr` on a volume: done 2026-10-09 (in `rar_modify.sh`, now
      757 lines, WinRAR's byte for byte but a recovery record's bytes). cash refused a
      volume ("Cannot modify volume"); rar changes the volume named by itself, whichever
