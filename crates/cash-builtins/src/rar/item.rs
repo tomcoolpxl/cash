@@ -532,8 +532,12 @@ fn rar4_item(header: &rar15_40::FileHeader, service: bool) -> Item {
         split_before: header.is_split_before(),
         split_after: header.is_split_after(),
         modified,
-        created: None,
-        accessed: None,
+        created: header
+            .ctime()
+            .and_then(|(time, r)| Stamp::from_dos(time, r.nanoseconds, r.add_second)),
+        accessed: header
+            .atime()
+            .and_then(|(time, r)| Stamp::from_dos(time, r.nanoseconds, r.add_second)),
         attributes,
         hash: Hash::Crc32(header.file_crc),
         mac: false,

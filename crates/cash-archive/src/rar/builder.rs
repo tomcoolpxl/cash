@@ -3036,6 +3036,52 @@ mod tests {
     }
 
     #[test]
+    fn reads_rar4_creation_and_access_times_from_the_extended_times() {
+        // Modified with three sub-second bytes; created with its own DOS time, a second
+        // added and three bytes; accessed with one byte; no archiving time.
+        let mut builder = Builder::new(ArchiveVersion::Rar30);
+        builder
+            .add_bytes(
+                b"hello.txt".to_vec(),
+                b"hi\n".to_vec(),
+                Some(0x5422_6083),
+                None,
+            )
+            .unwrap();
+        builder
+            .set_legacy_extended_times(
+                b"hello.txt",
+                Some(vec![
+                    0x90, 0xBF, 0x87, 0xD6, 0x12, 5, 57, 166, 86, 0xB1, 0xCB, 0x74, 163, 32, 67,
+                    88, 0x80,
+                ]),
+            )
+            .unwrap();
+        let archive = crate::rar::ArchiveReader::read(&builder.to_bytes().unwrap()).unwrap();
+        let header = archive
+            .as_rar15_40()
+            .unwrap()
+            .files()
+            .next()
+            .unwrap()
+            .clone();
+        let mtime = header.mtime_refinement().unwrap();
+        assert_eq!((mtime.add_second, mtime.nanoseconds), (false, 123_456_700));
+        let (ctime, refinement) = header.ctime().unwrap();
+        assert_eq!(ctime, 0x56a6_3905);
+        assert_eq!(
+            (refinement.add_second, refinement.nanoseconds),
+            (true, 765_432_100)
+        );
+        let (atime, refinement) = header.atime().unwrap();
+        assert_eq!(atime, 0x5843_20a3);
+        assert_eq!(
+            (refinement.add_second, refinement.nanoseconds),
+            (false, 838_860_800)
+        );
+    }
+
+    #[test]
     fn renames_onto_a_taken_name_only_when_duplicates_are_allowed() {
         let mut builder = builder_with(ArchiveVersion::Rar50);
         assert!(builder.rename(b"a.txt", b"dir/b.txt".to_vec()).is_err());

@@ -338,8 +338,8 @@ fn rar4(archive: &rar15_40::Archive, volume: usize, entries: &mut Vec<Entry>) {
                 nanos: refinement.map_or(0, |r| r.nanoseconds),
                 add_second: refinement.is_some_and(|r| r.add_second),
             }),
-            created: None,
-            accessed: None,
+            created: header.ctime().map(dos_time),
+            accessed: header.atime().map(dos_time),
             attributes: u64::from(header.attr),
             host: match header.host_os {
                 0..=2 | 4 => Host::Windows,
@@ -349,6 +349,15 @@ fn rar4(archive: &rar15_40::Archive, volume: usize, entries: &mut Vec<Entry>) {
             volume,
             version: None,
         });
+    }
+}
+
+/// A time RAR 1.5 to 4 keep as a DOS time and its refinement.
+const fn dos_time((time, refinement): (u32, cash_archive::rar::TimeRefinement)) -> Time {
+    Time::Dos {
+        time,
+        nanos: refinement.nanoseconds,
+        add_second: refinement.add_second,
     }
 }
 

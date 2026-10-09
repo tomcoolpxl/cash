@@ -766,9 +766,12 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      One precision a file: whole seconds only when every time kept asks for them, kept
      then as 4-byte Unix seconds (rars' `FileTimestamp::UnixSeconds`, so such a record
      also reads and is carried as it was); else all at full precision. lt now shows
-     "Created" and "Accessed". Left: RAR 1.5 to 4's creation and access times, in the
-     extended-time field rars decodes only the modification time of, neither listed
-     nor restored.
+     "Created" and "Accessed". RAR 1.5 to 4's creation and access times: done
+     2026-10-09 (in `rar_times.sh`, now 132 lines). WinRAR 7.23 writes no RAR 4, so
+     rars wrote one with them in its extended-time field (cash's fixture
+     `times_rar4.rar`): Rar.exe lists them as "Created" and "Accessed" and restores
+     them with `-tsc`, `-tsa` and `-ts`, local DOS times to the 100 ns; rars decoded
+     only the modification time. rars' RAR 1.5 to 4 header has `ctime` and `atime`.
    - `-df`, `m` and `mf` with a folder left holding files left out ("NOT DELETED",
      "Cannot delete ... The directory is not empty."), and `-r` with a plain file name,
      looked for in every folder below its own as a mask is (not with `-r0`, and a name

@@ -392,6 +392,58 @@ impl FileHeader {
         })
     }
 
+    /// The creation time the extended-time field keeps: its DOS time and refinement.
+    pub fn ctime(&self) -> Option<(u32, crate::rar::TimeRefinement)> {
+        self.extended_time(1)
+    }
+
+    /// The access time the extended-time field keeps: its DOS time and refinement.
+    pub fn atime(&self) -> Option<(u32, crate::rar::TimeRefinement)> {
+        self.extended_time(2)
+    }
+
+    /// The time at `index` in the extended-time field (0 modification, 1 creation, 2
+    /// access, 3 archiving): its DOS time and refinement. Each one present follows the
+    /// one before it, a DOS time of its own, all but the modification time's, then its
+    /// sub-second bytes, as [`mtime_refinement`](Self::mtime_refinement) reads them.
+    fn extended_time(&self, index: usize) -> Option<(u32, crate::rar::TimeRefinement)> {
+        const PRESENT: u16 = 0x8;
+        let flag_bytes = self.ext_time.get(..2)?;
+        let flags = u16::from_le_bytes([flag_bytes[0], flag_bytes[1]]);
+        let mut at = 2;
+        for place in 0..4 {
+            let mode = (flags >> (12 - place * 4)) & 0xf;
+            if mode & PRESENT == 0 {
+                if place == index {
+                    return None;
+                }
+                continue;
+            }
+            let time = if place == 0 {
+                self.file_time
+            } else {
+                let bytes = self.ext_time.get(at..at + 4)?;
+                at += 4;
+                u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]])
+            };
+            let mut ticks = 0u32;
+            for _ in 0..mode & 0x3 {
+                ticks = (u32::from(*self.ext_time.get(at)?) << 16) | (ticks >> 8);
+                at += 1;
+            }
+            if place == index {
+                return Some((
+                    time,
+                    crate::rar::TimeRefinement {
+                        add_second: mode & 0x4 != 0,
+                        nanoseconds: ticks * 100,
+                    },
+                ));
+            }
+        }
+        None
+    }
+
     pub fn metadata(&self) -> ExtractedEntryMeta {
         ExtractedEntryMeta {
             name_is_unicode: self.unicode_name.is_some(),

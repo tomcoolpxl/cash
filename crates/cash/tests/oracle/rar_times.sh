@@ -14,6 +14,7 @@
 exec </dev/null
 export TZ=Europe/Brussels
 export RARINISWITCHES=-scfr
+own=$(cd ../fixtures/rar && pwd)
 dir=$(mktemp -d)
 cd "$dir" || exit 1
 z() {
@@ -60,6 +61,18 @@ for sw in "" "-ts" "-tsc" "-tsa" "-tsm- -tsc"; do
   z rar x -idq $sw t1.rar out/
   # A time the archive does not give is the run's: from 2026 on.
   times out/src/f.txt | sed -E 's/20(2[6-9]|[3-9][0-9])-[0-9-]+ [0-9:.]+/(now)/g'
+done
+
+echo "== RAR 1.5 to 4: creation and access times in the extended-time field"
+# cash's fixture times_rar4.rar, written by rars: hello.txt modified 2022-01-02
+# 03:04:06.1234567, created 2023-05-06 07:08:11.7654321 (one second added) and accessed
+# 2024-02-03 04:05:06.8388608 (one sub-second byte), all local DOS times.
+rar4=$own/times_rar4.rar
+rar lt -idc "$rar4" | tr -d '\r' | grep 'Modified\|Created\|Accessed'
+for sw in "" "-tsc" "-tsa" "-ts" "-tsc-"; do
+  rm -rf out4
+  z rar x -idq $sw "$rar4" out4/
+  times out4/hello.txt | sed -E 's/20(2[6-9]|[3-9][0-9])-[0-9-]+ [0-9:.]+/(now)/g'
 done
 
 echo "== a change stores the files' times again by -ts; rn keeps them"

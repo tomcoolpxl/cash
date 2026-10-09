@@ -71,6 +71,20 @@ rc=0
 out/src/f.txt m 2024-01-02 03:04:05.1234567 c (now) a 2022-03-04 05:06:07.2500000
 rc=0
 out/src/f.txt m (now) c 2023-05-06 07:08:09.5000000 a (now)
+== RAR 1.5 to 4: creation and access times in the extended-time field
+    Modified: 2022-01-02 03:04:06,123456700
+     Created: 2023-05-06 07:08:11,765432100
+    Accessed: 2024-02-03 04:05:06,838860800
+rc=0
+out4/hello.txt m 2022-01-02 02:04:06.1234567 c (now) a (now)
+rc=0
+out4/hello.txt m 2022-01-02 02:04:06.1234567 c 2023-05-06 05:08:11.7654321 a (now)
+rc=0
+out4/hello.txt m 2022-01-02 02:04:06.1234567 c (now) a 2024-02-03 03:05:06.8388608
+rc=0
+out4/hello.txt m 2022-01-02 02:04:06.1234567 c 2023-05-06 05:08:11.7654321 a 2024-02-03 03:05:06.8388608
+rc=0
+out4/hello.txt m 2022-01-02 02:04:06.1234567 c (now) a (now)
 == a change stores the files' times again by -ts; rn keeps them
 -- k  
 rc=0
