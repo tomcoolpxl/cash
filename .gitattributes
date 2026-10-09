@@ -34,3 +34,4 @@ tests/git-prompt/** -text
 # Archives are bytes.
 *.zip binary
 *.7z binary
+*.rar binary

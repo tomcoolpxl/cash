@@ -672,8 +672,21 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      their errors added up: done 2026-10-09 (`rar_extract_switches.sh`, 363 lines; this
      line said "built" of them, but extraction read none, set no folder's time, and
      summed up each archive alone). `-ts`, `-tsc`, `-tsa` and `-tsm-` on extraction:
-     compared with Rar.exe by hand, not in the oracle. Left, not built: links (`-ol`;
-     extraction writes a link as a plain file).
+     compared with Rar.exe by hand, not in the oracle.
+   - Links on extraction: done 2026-10-09 (`rar_links.sh`, 176 lines; extraction wrote
+     each link as an empty file, saying OK). Hard links, file references, `-ol-`, and
+     symbolic links skipped as unsafe (absolute, or more `..` than the link's own
+     folders) are in the oracle, with two archives of cash's own fixtures
+     (`crates/cash/tests/fixtures/rar`: `copies.rar` made by Rar.exe `-oi`,
+     `links_unsafe.rar` rars' `symlink.rar` with its targets changed). Left out of it,
+     compared by hand: a symbolic link Windows refuses for want of the right ("Cannot
+     create symbolic link ... You may need to run RAR as administrator", a folder's
+     link leaving an empty folder, as rar's does) and one it makes, which needs that
+     right. Left: a file reference whose file is not asked for is written straight
+     from the archive, where rar unpacks the file to a temporary
+     `__tmp_reference_source_N.rartemp` first and says so; in a solid archive that file
+     has gone by, and is not found; junctions are made as folder links; links are not
+     stored (`a -ol`, `-oh`, `-oi`).
    - `-ver`: done 2026-10-09 (`rar_versions.sh`, 315 lines, the archives WinRAR's byte
      for byte): rars reads and writes the version record, `a`/`u`/`f` keep the file
      replaced as `name;N` with `-ver`, `-verN` drops the oldest beyond N and numbers

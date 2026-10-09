@@ -14,7 +14,11 @@ files, `-x` and `-n` leave some out or keep only some, `@list` reads them from a
 `-ad` puts each archive's files in a folder named after it, `-ad1` that folder beside
 the archive, `-ad2` the archive's own folder; `-ts`, `-tsc`, `-tsa` give back the
 creation and access times kept. Folders get their times and attributes back, `-ai`
-leaving the attributes. `unrar` has these commands alone.
+leaving the attributes. A hard link is made to the file it names, extracted before it;
+a file reference is a copy; a symbolic link is made when Windows allows it (an
+administrator's right, or Developer Mode), skipped with `-ol-`, and skipped as unsafe
+when its target is absolute or climbs out by `..`, unless `-ola`. `unrar` has these
+commands alone.
 
 `rar a ARCHIVE NAMES` adds files and folders, making the archive if need be (`.rar` is
 added to a name without an extension); `rar u` adds what is new or newer, `rar f` only

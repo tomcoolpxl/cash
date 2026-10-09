@@ -15,7 +15,7 @@ use cash_archive::rar::rar50::blake2sp;
 use cash_core::openfiles::{FileKind, OpenFiles};
 
 use super::cmdline::{Arg, Command, FindSpec, Name, Overwrite, Parsed};
-use super::entry::{self, Crypto, Entry, Host, Method, Time, Volume};
+use super::entry::{self, Crypto, Entry, Host, Link, Method, Time, Volume};
 use super::find;
 use super::list::{self, Comment, Masks};
 use super::open::{self, Failure, Found};
@@ -404,7 +404,7 @@ fn set<SE: cash_core::ShellExtensions>(
     };
     let entries = entry::entries(&work.volumes);
     for entry in &entries {
-        work.entry(entry)?;
+        work.entry(entry, &entries)?;
     }
     work.finish_folders();
     if job.mode == Mode::Test {
@@ -561,7 +561,7 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
     }
 
     /// One file of the set.
-    fn entry(&mut self, entry: &Entry) -> Result<(), Stop> {
+    fn entry(&mut self, entry: &Entry, entries: &[Entry]) -> Result<(), Stop> {
         let wanted = self.wanted(entry);
         if !wanted {
             // A solid stream decodes what it does not want, quietly, for what follows.
@@ -579,7 +579,7 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
             Mode::Test => self.test(entry),
             Mode::Print => self.print(entry),
             Mode::Find => self.find(entry),
-            Mode::Extract { paths } => self.extract(entry, paths),
+            Mode::Extract { paths } => self.extract(entry, paths, entries),
         }
     }
 
@@ -977,7 +977,7 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
         }))
     }
 
-    fn extract(&mut self, entry: &Entry, paths: bool) -> Result<(), Stop> {
+    fn extract(&mut self, entry: &Entry, paths: bool, entries: &[Entry]) -> Result<(), Stop> {
         let relative = self.target_name(entry, paths);
         let Some(relative) = relative else {
             return Ok(());
@@ -1005,31 +1005,36 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
         if !self.ready(entry)? {
             return Ok(());
         }
-        if let Some(parent) = Path::new(&shown).parent()
-            && !parent.as_os_str().is_empty()
-        {
-            let parent = parent.to_string_lossy().replace('\\', "/");
-            self.make_folders(&parent);
+        if let Some(link) = &entry.link {
+            return self.extract_link(entry, link, &shown, path, paths, entries);
         }
+        self.make_parent(&shown);
         let Some(path) = self.overwrite(entry, &shown, path)? else {
             return Ok(());
         };
         let shown = path_shown(&shown, &path, self.rar);
         self.file_line("Extracting  ", &shown);
-        let file = match File::create(&path) {
+        self.write_out(entry, entry, &path, &shown);
+        Ok(())
+    }
+
+    /// The data of `data` written to `path`, checked, with the times and attributes of
+    /// `entry`; a file that does not check removed, unless `-kb`.
+    fn write_out(&mut self, data: &Entry, entry: &Entry, path: &Path, shown: &str) {
+        let file = match File::create(path) {
             Ok(file) => file,
             Err(error) => {
                 self.error(
                     &format!("\nCannot create {shown}\n{}", open::system_message(&error)),
                     code::CREATE,
                 );
-                return Ok(());
+                return;
             }
         };
         let mut out = FileOut {
             file: BufWriter::new(file),
         };
-        let verdict = self.decode(entry, &mut out, Some(&shown));
+        let verdict = self.decode(data, &mut out, Some(shown));
         let flushed = out.file.flush();
         drop(out);
         let verdict = match (verdict, flushed) {
@@ -1038,12 +1043,206 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
         };
         let good = matches!(verdict, Verdict::Ok | Verdict::Unchecked);
         if good {
-            self.finish_file(entry, &path);
+            self.finish_file(entry, path);
         } else if !self.rar.switches.keep_broken && !matches!(verdict, Verdict::Write(_)) {
-            let _ = std::fs::remove_file(&path);
+            let _ = std::fs::remove_file(path);
         }
-        self.verdict(entry, verdict);
+        self.verdict(data, verdict);
+    }
+
+    /// A link, made as the archive keeps it: a hard link to a file extracted before it,
+    /// a copy of one, or a symbolic link, which Windows lets only some make. `-ol-`
+    /// leaves symbolic links out; without `-ola` one that could reach outside the
+    /// destination is skipped, said.
+    fn extract_link(
+        &mut self,
+        entry: &Entry,
+        link: &Link,
+        shown: &str,
+        path: PathBuf,
+        paths: bool,
+        entries: &[Entry],
+    ) -> Result<(), Stop> {
+        match link {
+            Link::Hard(_) | Link::Copy(_) => {
+                self.extract_file_link(entry, link, shown, path, paths, entries)
+            }
+            Link::Unix(target) | Link::Windows(target) | Link::Junction(target) => {
+                self.extract_symlink(entry, target, shown, path)
+            }
+        }
+    }
+
+    /// A hard link, to its file extracted before it, or a file reference, a copy of
+    /// its file: from the archive when the file is not there.
+    fn extract_file_link(
+        &mut self,
+        entry: &Entry,
+        link: &Link,
+        shown: &str,
+        path: PathBuf,
+        paths: bool,
+        entries: &[Entry],
+    ) -> Result<(), Stop> {
+        let (Link::Hard(target) | Link::Copy(target)) = link else {
+            return Ok(());
+        };
+        let hard = matches!(link, Link::Hard(_));
+        let target = target.replace('\\', "/");
+        let target_path = self.rar.path(&self.beside_destination(&target, paths));
+        if hard && !target_path.is_file() {
+            self.file_line("Extracting  ", shown);
+            self.wipe_progress();
+            self.error(
+                &format!(
+                    "\nCannot create hard link {shown}\nYou need to unpack the link target first"
+                ),
+                code::CREATE,
+            );
+            return Ok(());
+        }
+        self.make_parent(shown);
+        let Some(path) = self.overwrite(entry, shown, path)? else {
+            return Ok(());
+        };
+        let shown = path_shown(shown, &path, self.rar);
+        self.file_line("Extracting  ", &shown);
+        let _ = std::fs::remove_file(&path);
+        if !hard && !target_path.is_file() {
+            match entries
+                .iter()
+                .find(|e| e.name.eq_ignore_ascii_case(&target))
+            {
+                Some(data) => self.write_out(data, entry, &path, &shown),
+                None => self.error(
+                    &format!(
+                        "\nCannot create {shown}\n{}",
+                        open::system_message(&io::Error::from_raw_os_error(2))
+                    ),
+                    code::CREATE,
+                ),
+            }
+            return Ok(());
+        }
+        let made = if hard {
+            std::fs::hard_link(&target_path, &path)
+        } else {
+            std::fs::copy(&target_path, &path).map(|_| ())
+        };
+        match made {
+            Ok(()) => {
+                self.finish_file(entry, &path);
+                self.ok();
+                self.done += 1;
+            }
+            Err(error) => self.error(
+                &format!("\nCannot create {shown}\n{}", open::system_message(&error)),
+                code::CREATE,
+            ),
+        }
         Ok(())
+    }
+
+    /// A symbolic link: left out with `-ol-`, skipped as unsafe without `-ola`, made
+    /// when Windows allows it.
+    fn extract_symlink(
+        &mut self,
+        entry: &Entry,
+        target: &str,
+        shown: &str,
+        path: PathBuf,
+    ) -> Result<(), Stop> {
+        if self.rar.switches.links.as_deref() == Some("-") {
+            return Ok(());
+        }
+        let target = if target.is_empty() {
+            self.stored_target(entry)
+        } else {
+            target.to_owned()
+        };
+        self.make_parent(shown);
+        let Some(path) = self.overwrite(entry, shown, path)? else {
+            return Ok(());
+        };
+        let shown = path_shown(shown, &path, self.rar);
+        self.file_line("Extracting  ", &shown);
+        let target = target.replace('/', "\\");
+        if self.rar.switches.links.as_deref() != Some("a") && !safe_link(&entry.name, &target) {
+            self.error(
+                &format!(
+                    "\nSkipping the potentially unsafe {} -> {} link. For archives from a trustworthy source use -ola to extract it anyway.",
+                    entry.name,
+                    target.replace('\\', "/")
+                ),
+                code::WARNING,
+            );
+            return Ok(());
+        }
+        let _ = std::fs::remove_file(&path);
+        let made = if entry.link_to_folder {
+            std::os::windows::fs::symlink_dir(&target, &path)
+        } else {
+            std::os::windows::fs::symlink_file(&target, &path)
+        };
+        match made {
+            Ok(()) => {
+                self.ok();
+                self.done += 1;
+            }
+            Err(error) => {
+                // rar makes a folder's link on a folder it makes first.
+                if entry.link_to_folder {
+                    let _ = std::fs::create_dir(&path);
+                }
+                self.error(
+                    &format!(
+                        "\nCannot create symbolic link {shown}\nYou may need to run RAR as administrator\n{}",
+                        open::system_message(&error)
+                    ),
+                    code::CREATE,
+                );
+            }
+        }
+        Ok(())
+    }
+
+    /// The progress a file's line shows, wiped: five spaces.
+    fn wipe_progress(&self) {
+        if !self.rar.switches.no_names && !self.rar.switches.no_percent {
+            self.say("     ");
+        }
+    }
+
+    /// Makes the folders a file's name holds, saying so.
+    fn make_parent(&mut self, shown: &str) {
+        if let Some(parent) = Path::new(shown).parent()
+            && !parent.as_os_str().is_empty()
+        {
+            let parent = parent.to_string_lossy().replace('\\', "/");
+            self.make_folders(&parent);
+        }
+    }
+
+    /// An archived name where it is extracted: in the destination, its folders kept or
+    /// not.
+    fn beside_destination(&self, name: &str, paths: bool) -> String {
+        let keep_paths = paths && !matches!(self.rar.switches.exclude_paths, Some(0));
+        let name = if keep_paths {
+            name
+        } else {
+            name.rsplit('/').next().unwrap_or(name)
+        };
+        match self.destination() {
+            Some(dest) => format!("{dest}/{name}"),
+            None => name.to_owned(),
+        }
+    }
+
+    /// A RAR 1.5 to 4 symbolic link's target, which it keeps as its data.
+    fn stored_target(&mut self, entry: &Entry) -> String {
+        let mut target = Collect(Vec::new());
+        let _ = self.decode(entry, &mut target, None);
+        String::from_utf8_lossy(&target.0).into_owned()
     }
 
     /// Where files go: the destination named; with `-ad1` a folder named after the
@@ -1512,6 +1711,28 @@ impl Sink for Hashed<'_> {
         self.written += data.len() as u64;
         self.out.put(data)
     }
+}
+
+/// Bytes kept in memory: a link's target.
+struct Collect(Vec<u8>);
+
+impl Sink for Collect {
+    fn put(&mut self, data: &[u8]) -> io::Result<()> {
+        self.0.extend_from_slice(data);
+        Ok(())
+    }
+}
+
+/// Whether a symbolic link stays inside the destination as rar judges it: a target
+/// neither absolute nor going up by `..` more often than the link's own folders.
+fn safe_link(name: &str, target: &str) -> bool {
+    let absolute = target.starts_with(['\\', '/']) || target.as_bytes().get(1) == Some(&b':');
+    let ups = target
+        .split(['\\', '/'])
+        .filter(|part| *part == "..")
+        .count();
+    let depth = name.matches('/').count();
+    !absolute && ups <= depth
 }
 
 /// Bytes tested, and dropped.

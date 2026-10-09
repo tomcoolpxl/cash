@@ -1,0 +1,176 @@
+== hard links
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from hardlink.rar
+
+Creating    o1                                                        OK
+Extracting  o1/file.txt                                                    OK 
+Extracting  o1/hardlink.txt                                                OK 
+All OK
+rc=0
+./file.txt 5 bytes, 2 link(s) 1232204886 5
+./hardlink.txt 5 bytes, 2 link(s) 1232204886 5
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from rarfile_hlink.rar
+
+Creating    o2                                                        OK
+Extracting  o2/stest1.txt                                                  OK 
+Extracting  o2/stest2.txt                                                  OK 
+Extracting  o2/stest3.txt                                                  OK 
+All OK
+rc=0
+./stest1.txt 2048 bytes, 3 link(s) 2553982975 2048
+./stest2.txt 2048 bytes, 3 link(s) 2553982975 2048
+./stest3.txt 2048 bytes, 3 link(s) 2553982975 2048
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from rarfile_hlink.rar
+
+Creating    o3                                                        OK
+Extracting  o3/stest1.txt                                                  OK 
+Extracting  o3/stest2.txt                                                  OK 
+Extracting  o3/stest3.txt                                                  OK 
+All OK
+rc=0
+./stest1.txt 2048 bytes, 3 link(s) 2553982975 2048
+./stest2.txt 2048 bytes, 3 link(s) 2553982975 2048
+./stest3.txt 2048 bytes, 3 link(s) 2553982975 2048
+== a hard link whose file is not there
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from hardlink.rar
+
+Extracting  o4/hardlink.txt                                                   
+Total errors: 1
+--- stderr
+
+Cannot create hard link o4/hardlink.txt
+You need to unpack the link target first
+rc=9
+o4 is not made
+== over files there
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from hardlink.rar
+
+Extracting  o1/file.txt                                                    OK 
+Extracting  o1/hardlink.txt                                                OK 
+All OK
+rc=0
+./file.txt 5 bytes, 2 link(s) 1232204886 5
+./hardlink.txt 5 bytes, 2 link(s) 1232204886 5
+== a file reference: a copy of its file
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from copies.rar
+
+Creating    o5                                                        OK
+Creating    o5/src                                                    OK
+Extracting  o5/src/a.txt                                                   OK 
+Extracting  o5/src/b.txt                                                   OK 
+All OK
+rc=0
+./src/a.txt 372890 bytes, 1 link(s) 1033082428 372890
+./src/b.txt 372890 bytes, 1 link(s) 1033082428 372890
+== symbolic links left out with -ol-
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from symlink.rar
+
+Creating    o7                                                        OK
+Extracting  o7/file.txt                                                    OK 
+Creating    o7/dir                                                    OK
+All OK
+rc=0
+./file.txt 5 bytes, 1 link(s) 1232204886 5
+== symbolic links skipped as unsafe
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from links_unsafe.rar
+
+Creating    o8                                                        OK
+Extracting  o8/file.txt                                                    OK 
+Extracting  o8/symlink.txt                                               
+Extracting  o8/dirlink                                                   
+Creating    o8/dir                                                    OK
+Total errors: 2
+--- stderr
+
+Skipping the potentially unsafe symlink.txt -> ../x.txt link. For archives from a trustworthy source use -ola to extract it anyway.
+Skipping the potentially unsafe dirlink -> ../ link. For archives from a trustworthy source use -ola to extract it anyway.
+rc=1
+./file.txt 5 bytes, 1 link(s) 1232204886 5
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from links_unsafe.rar
+
+Creating    o9                                                        OK
+Extracting  o9/file.txt                                                    OK 
+Extracting  o9/symlink.txt                                               
+Extracting  o9/dirlink                                                   
+Total errors: 2
+--- stderr
+
+Skipping the potentially unsafe symlink.txt -> ../x.txt link. For archives from a trustworthy source use -ola to extract it anyway.
+Skipping the potentially unsafe dirlink -> ../ link. For archives from a trustworthy source use -ola to extract it anyway.
+rc=1
+== tested and printed: a link has no data of its own
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive links_unsafe.rar
+
+Testing     file.txt                                                       OK 
+Testing     symlink.txt                                                    OK 
+Testing     dirlink                                                        OK 
+Testing     dir                                                       OK
+All OK
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive copies.rar
+
+Testing     src/a.txt                                                      OK 
+Testing     src/b.txt                                                      OK 
+Testing     src                                                       OK
+All OK
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive hardlink.rar
+
+Testing     file.txt                                                       OK 
+Testing     hardlink.txt                                                   OK 
+All OK
+rc=0
+1234
+rc=0
+file.txt
+symlink.txt
+dirlink
+dir
+rc=0
