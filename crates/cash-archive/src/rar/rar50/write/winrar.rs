@@ -28,14 +28,21 @@ pub(super) fn size_width(size: u64) -> usize {
 pub(super) fn offset_width(entries: &[ArchiveEntry]) -> usize {
     let estimate = entries.iter().fold(1u64, |total, entry| {
         let size = entry.source.len().unwrap_or(0);
-        let name = std::str::from_utf8(&entry.name)
-            .map_or(entry.name.len(), |name| name.encode_utf16().count());
-        total
-            .saturating_add(size)
-            .saturating_add(32)
-            .saturating_add(3 * name as u64)
+        total.saturating_add(member_bound(size, &entry.name))
     });
-    vint_len(estimate.saturating_mul(4096))
+    bound_width(estimate)
+}
+
+/// What one member adds to the bound: its size, 32 bytes, three for every character
+/// of its name.
+pub(super) fn member_bound(size: u64, name: &[u8]) -> u64 {
+    let name = std::str::from_utf8(name).map_or(name.len(), |name| name.encode_utf16().count());
+    size.saturating_add(32).saturating_add(3 * name as u64)
+}
+
+/// The width of offsets with room for a bound, counted in 4,096ths.
+pub(super) fn bound_width(bound: u64) -> usize {
+    vint_len(bound.saturating_mul(4096))
 }
 
 #[cfg(test)]

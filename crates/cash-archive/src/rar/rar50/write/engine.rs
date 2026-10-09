@@ -431,10 +431,10 @@ pub(super) fn write_archive(
             recovery_percent: plan.recovery_percent,
             winrar,
             always_locate: winrar && plan.quick_open,
-            offset_width: if winrar {
-                super::winrar::offset_width(entries)
-            } else {
-                0
+            offset_width: match (winrar, plan.layout.offset_bound) {
+                (false, _) => 0,
+                (true, Some(bound)) => super::winrar::bound_width(bound),
+                (true, None) => super::winrar::offset_width(entries),
             },
         },
         resources,

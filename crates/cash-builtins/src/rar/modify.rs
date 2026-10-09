@@ -316,7 +316,9 @@ fn rewrite<SE: cash_core::ShellExtensions>(
         Some(comment) => Some(comment.clone()),
         None => opened.archive.comment(password.as_deref()).ok().flatten(),
     };
-    builder = builder.comment(comment).layout(add::layout(rar));
+    builder = builder
+        .comment(comment)
+        .layout(add::layout(rar, Some(add::old_bound(&opened.archive))));
     if let Some(percent) = change.recovery_percent {
         builder = builder.recovery_percent(Some(percent));
     }

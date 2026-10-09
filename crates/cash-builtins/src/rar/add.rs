@@ -50,6 +50,8 @@ struct Source {
     /// Its name in the archive, `/` between folders.
     name: String,
     is_dir: bool,
+    /// Its size in bytes; a folder's is 0.
+    size: u64,
     modified: Option<SystemTime>,
     created: Option<SystemTime>,
     accessed: Option<SystemTime>,
@@ -190,14 +192,30 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
         };
         actions.push(action);
     }
-    if actions.iter().all(Option::is_none) {
+    // `-as`: the members no name gave are taken out.
+    let synced: Vec<usize> = if switches.synchronize {
+        (0..members.len())
+            .filter(|&index| {
+                let name = member_name(&members[index]);
+                !sources
+                    .iter()
+                    .any(|source| source.name.eq_ignore_ascii_case(&name))
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
+    if actions.iter().all(Option::is_none) && synced.is_empty() {
         rar.console.msg("\nWARNING: No files\n");
         rar.fail(code::NO_FILES);
         return Ok(());
     }
 
     let versions = version_files(rar, old.as_ref(), &members, &names, &mut actions);
-    let slots = plan(&sources, &actions, &members, &versions.dropped);
+    let mut dropped = versions.dropped.clone();
+    dropped.extend(&synced);
+    let slots = plan(&sources, &actions, &members, &dropped);
+    let notes = deletions_among(&slots, &actions, &synced, &names);
     let password = data_password(rar)?;
     let mut builder = match &old {
         Some(opened) => match opened.archive.preserving_builder(password.as_deref()) {
@@ -217,6 +235,19 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
         comment,
         old.as_ref(),
     )?;
+    // WinRAR's bound on an archive it updates counts the old members and every file
+    // named, whether written or not.
+    if let Some(opened) = &old {
+        let bound = sources
+            .iter()
+            .fold(old_bound(&opened.archive), |total, source| {
+                total.saturating_add(rar::rar50::Layout::member_bound(
+                    source.size,
+                    source.name.as_bytes(),
+                ))
+            });
+        builder = builder.layout(layout(rar, Some(bound)));
+    }
     let legacy = builder.format().family() != ArchiveFamily::Rar50Plus;
 
     // The archived members kept, carried as they are or read back to be written again.
@@ -275,7 +306,8 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
             &resources,
             &lines,
         ),
-        None => write_single(rar, &builder, &path, &resources, &lines).map(|()| vec![path.clone()]),
+        None => write_single(rar, &builder, &path, &resources, &lines, &notes)
+            .map(|()| vec![path.clone()]),
     };
     let written = match written {
         Ok(written) => written,
@@ -459,7 +491,7 @@ fn plan(
         }
     }
     for (index, member) in members.iter().enumerate() {
-        if member.meta.is_directory {
+        if member.meta.is_directory && !dropped.contains(&index) {
             let slot = replacing(index).map_or(Slot::Kept(index), Slot::Put);
             folders.push((depth(&member_name(member)), slot));
         }
@@ -467,6 +499,29 @@ fn plan(
     folders.sort_by_key(|(depth, _)| std::cmp::Reverse(*depth));
     slots.extend(folders.into_iter().map(|(_, slot)| slot));
     slots
+}
+
+/// `-as`'s "Deleting" lines, by the member written they come before: each before the
+/// first that was after it in the archive, the rest after the last.
+fn deletions_among(
+    slots: &[Slot],
+    actions: &[Option<(Action, Option<usize>)>],
+    synced: &[usize],
+    names: &[String],
+) -> Vec<Vec<String>> {
+    let place = |slot: &Slot| match *slot {
+        Slot::Kept(index) => Some(index),
+        Slot::Put(source) => actions[source].and_then(|(_, member)| member),
+    };
+    let mut notes = vec![Vec::new(); slots.len() + 1];
+    for &member in synced {
+        let at = slots
+            .iter()
+            .position(|slot| place(slot).is_some_and(|index| index > member))
+            .unwrap_or(slots.len());
+        notes[at].push(format!("\nDeleting {}", names[member]));
+    }
+    notes
 }
 
 fn depth(name: &str) -> usize {
@@ -576,7 +631,7 @@ fn settings<SE: cash_core::ShellExtensions>(
     if let Some(percent) = &switches.recovery_record {
         builder = builder.recovery_percent(Some(recovery_percent(percent)));
     }
-    builder = builder.layout(layout(rar));
+    builder = builder.layout(layout(rar, None));
     if builder.format().family() == ArchiveFamily::Rar50Plus {
         let quick_open = quick_open_on(rar, old.is_some_and(|o| o.facts.encrypted_headers));
         builder = builder
@@ -591,7 +646,10 @@ fn settings<SE: cash_core::ShellExtensions>(
 
 /// `WinRAR`'s layout: CRC32, or BLAKE2 with `-htb`; quick open for members stored in
 /// more than 4,096 bytes, or for all with `-qo+`.
-pub(super) fn layout<SE: cash_core::ShellExtensions>(rar: &Rar<'_, SE>) -> rar::rar50::Layout {
+pub(super) fn layout<SE: cash_core::ShellExtensions>(
+    rar: &Rar<'_, SE>,
+    bound: Option<u64>,
+) -> rar::rar50::Layout {
     let checksums = if rar.switches.hash == Some('b') {
         rar::rar50::Checksums::Blake2
     } else {
@@ -605,6 +663,19 @@ pub(super) fn layout<SE: cash_core::ShellExtensions>(rar: &Rar<'_, SE>) -> rar::
     rar::rar50::Layout::winrar()
         .with_checksums(checksums)
         .with_quick_open_over(over)
+        .with_offset_bound(bound)
+}
+
+/// The bound `WinRAR` gives the locator's offsets when it changes an archive: from the
+/// old archive's members, the ones dropped too, each counted as a member written is
+/// (seen with stored members).
+pub(super) fn old_bound(archive: &rar::Archive) -> u64 {
+    archive.members().fold(1, |total, member| {
+        total.saturating_add(rar::rar50::Layout::member_bound(
+            member.meta.unpacked_size,
+            &member.meta.name,
+        ))
+    })
 }
 
 /// Whether an archive written gets quick-open information: unless `-qo-`, and not under
@@ -912,6 +983,7 @@ fn write_single<SE: cash_core::ShellExtensions>(
     path: &Path,
     resources: &WriterResources,
     lines: &[Option<(String, Action)>],
+    notes: &[Vec<String>],
 ) -> rar::Result<()> {
     let (sender, events) = mpsc::channel();
     let sender = Mutex::new(sender);
@@ -933,7 +1005,7 @@ fn write_single<SE: cash_core::ShellExtensions>(
             let _ = sender.send(event);
         }
     };
-    let mut shown = Shown::new(rar, lines);
+    let mut shown = Shown::new(rar, lines, notes);
     std::thread::scope(|scope| {
         let writer = scope.spawn(move || {
             let result = builder.write_to_path_with_resources(path, resources, Some(&progress));
@@ -957,6 +1029,8 @@ fn write_single<SE: cash_core::ShellExtensions>(
 struct Shown<'r, 'a, SE: cash_core::ShellExtensions> {
     rar: &'r Rar<'a, SE>,
     lines: &'r [Option<(String, Action)>],
+    /// Lines said before a member's, by its place, and after the last: `-as`'s.
+    notes: &'r [Vec<String>],
     started: Vec<bool>,
     finished: Vec<bool>,
     /// The first member whose line is not ended.
@@ -966,10 +1040,15 @@ struct Shown<'r, 'a, SE: cash_core::ShellExtensions> {
 }
 
 impl<'r, 'a, SE: cash_core::ShellExtensions> Shown<'r, 'a, SE> {
-    fn new(rar: &'r Rar<'a, SE>, lines: &'r [Option<(String, Action)>]) -> Self {
+    fn new(
+        rar: &'r Rar<'a, SE>,
+        lines: &'r [Option<(String, Action)>],
+        notes: &'r [Vec<String>],
+    ) -> Self {
         Self {
             rar,
             lines,
+            notes,
             started: vec![false; lines.len()],
             finished: vec![false; lines.len()],
             next: 0,
@@ -1011,9 +1090,20 @@ impl<'r, 'a, SE: cash_core::ShellExtensions> Shown<'r, 'a, SE> {
             }
             self.end(index);
         }
+        self.note(self.lines.len());
+    }
+
+    /// The lines said before member `index`'s.
+    fn note(&self, index: usize) {
+        if !self.rar.switches.no_names {
+            for note in self.notes.get(index).into_iter().flatten() {
+                self.rar.console.msg(note);
+            }
+        }
     }
 
     fn begin(&mut self, index: usize) {
+        self.note(index);
         if let Some((shown, action)) = &self.lines[index] {
             self.rar.console.msg(&line_start(self.rar, *action, shown));
         }
@@ -1511,6 +1601,7 @@ impl<SE: cash_core::ShellExtensions> Walker<'_, '_, SE> {
             shown: shown.to_owned(),
             name: archive_name(self.rar, shown, base, path),
             is_dir,
+            size: if is_dir { 0 } else { metadata.len() },
             modified,
             created: metadata.created().ok(),
             accessed: metadata.accessed().ok(),

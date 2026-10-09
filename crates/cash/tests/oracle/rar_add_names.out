@@ -150,6 +150,94 @@ src/b.log
 src/keep
 src/keep/k.log
 src/sub
+== -as: what no name gives is taken out of the archive
+
+Evaluation copy. Please register.
+
+Creating archive s.rar
+
+Adding    src/a.txt                                                        OK 
+Adding    src/b.log                                                        OK 
+Adding    src/keep/k.log                                                   OK 
+Adding    src/sub/c.txt                                                    OK 
+Adding    src/keep                                                         OK 
+Adding    src/sub                                                          OK 
+Adding    src                                                              OK 
+Done
+rc=0
+
+Evaluation copy. Please register.
+
+Updating archive s.rar
+
+Updating  src/a.txt                                                        OK 
+Deleting src/b.log
+Updating  src/keep/k.log                                                   OK 
+Updating  src/sub/c.txt                                                    OK 
+Updating  src/keep                                                         OK 
+Updating  src/sub                                                          OK 
+Updating  src                                                              OK 
+Done
+rc=0
+src/a.txt
+src/keep/k.log
+src/sub/c.txt
+src/keep
+src/sub
+src
+rc=0
+
+Evaluation copy. Please register.
+
+Updating archive s.rar
+
+Updating  src/a.txt                                                        OK 
+Deleting src/keep/k.log
+Deleting src/sub/c.txt
+Deleting src/keep
+Deleting src/sub
+Deleting src
+Done
+rc=0
+src/a.txt
+rc=0
+
+Evaluation copy. Please register.
+
+Updating archive s.rar
+
+Adding    src/b.log                                                        OK 
+Adding    src/keep/k.log                                                   OK 
+Adding    src/sub/c.txt                                                    OK 
+Adding    src/keep                                                         OK 
+Adding    src/sub                                                          OK 
+Adding    src                                                              OK 
+Done
+rc=0
+src/a.txt
+src/b.log
+src/keep/k.log
+src/sub/c.txt
+src/keep
+src/sub
+src
+rc=0
+
+Evaluation copy. Please register.
+
+Updating archive s.rar
+
+Deleting src/a.txt
+Done
+rc=0
+src/b.log
+src/keep/k.log
+src/sub/c.txt
+src/keep
+src/sub
+src
+rc=0
+245430301 266
 == -dw: wiped, then deleted, as -df deletes (-dr's Recycle Bin is left out)
 
 Evaluation copy. Please register.
@@ -184,6 +272,18 @@ src/keep
 src/sub
 src
 rc=0
+== the locator's room on update counts the old members and every file named
+rc=0
+1891161940 391
+rc=0
+322871068 388
+rc=0
+1204636630 388
+rc=0
+rc=0
+1302623781 386
+rc=0
+3749141051 504
 == names not there, and a file the shell is writing
 
 Evaluation copy. Please register.

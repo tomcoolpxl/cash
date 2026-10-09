@@ -76,7 +76,7 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
         }
     };
     builder = builder.comment(opened.archive.comment(password.as_deref()).ok().flatten());
-    builder = builder.layout(add::layout(rar));
+    builder = builder.layout(add::layout(rar, Some(add::old_bound(&opened.archive))));
     if opened.archive.as_rar50().is_some() {
         let quick_open = add::quick_open_on(rar, opened.facts.encrypted_headers);
         builder = match builder.archive_metadata(None, false, quick_open) {

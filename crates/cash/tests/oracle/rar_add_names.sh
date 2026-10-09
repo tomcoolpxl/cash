@@ -61,11 +61,51 @@ mk
 z rar mf -m0 -idc -x'*.log' m3.rar src
 find src | sort
 
+echo "== -as: what no name gives is taken out of the archive"
+mk
+z rar a -m0 -idc s.rar src
+rm src/b.log
+z rar a -m0 -idc -as s.rar src
+z rar lb s.rar
+z rar a -m0 -idc -as s.rar 'src\a.txt'
+z rar lb s.rar
+mk
+z rar u -m0 -idc -as s.rar src
+z rar lb s.rar
+rm src/a.txt
+# The folder's time as it was, whatever rm did to it: not newer, not updated.
+touch -d '2024-01-01T00:00:00Z' src
+z rar u -m0 -idc -as s.rar src
+z rar lb s.rar
+cksum < s.rar
+
 echo "== -dw: wiped, then deleted, as -df deletes (-dr's Recycle Bin is left out)"
 mk
 z rar a -m0 -idc -dw -x'*.log' w1.rar src
 find src | sort
 z rar lb w1.rar
+
+echo "== the locator's room on update counts the old members and every file named"
+mkdir b
+for f in a b c d; do printf '0123456789%.0s' 1 2 3 4 5 6 7 8 > b/$f.txt; done
+touch -d '2024-01-01T00:00:00Z' b/*.txt
+z rar a -m0 -idq l3.rar 'b\a.txt' 'b\b.txt' 'b\c.txt'
+cksum < l3.rar
+cp l3.rar l3a.rar
+z rar a -m0 -idq l3a.rar 'b\a.txt'
+cksum < l3a.rar
+cp l3.rar l3u.rar
+touch -d '2025-01-01T00:00:00Z' b/c.txt
+z rar u -m0 -idq l3u.rar 'b\a.txt' 'b\b.txt' 'b\c.txt'
+touch -d '2024-01-01T00:00:00Z' b/c.txt
+cksum < l3u.rar
+z rar a -m0 -idq l4.rar 'b\a.txt' 'b\b.txt' 'b\c.txt' 'b\d.txt'
+cp l4.rar l4d.rar
+z rar d -idq l4d.rar 'b\a.txt'
+cksum < l4d.rar
+cp l4.rar l4n.rar
+z rar rn -idq l4n.rar 'b\a.txt' 'b\z.txt'
+cksum < l4n.rar
 
 echo "== names not there, and a file the shell is writing"
 mk

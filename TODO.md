@@ -712,6 +712,13 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      looked for in every folder below its own as a mask is (not with `-r0`, and a name
      found nowhere is then no error): done 2026-10-09 (`rar_add_names.sh`, 152 lines;
      the first was already rar's, the second is new).
+   - The locator's padding when an archive is changed: done 2026-10-09 (in
+     `rar_add_names.sh`, now 326 lines). WinRAR's bound counts the old archive's
+     members, dropped ones too, and for `a`, `u` and `f` every file named, written or
+     not; cash counted the members written, so an update or `d` near a width's edge
+     came out a byte short (rars' `Layout::offset_bound`, given by cash). Seen with
+     stored members; whether a compressed one counts its packed or unpacked size is
+     not yet seen (cash counts the unpacked).
    - A file another program has open for writing: done 2026-10-09 (in
      `rar_add_names.sh`, now 192 lines). Rar.exe cannot open it, as it opens what it
      adds letting no one write ("Cannot open NAME / The process cannot access the
@@ -723,7 +730,9 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      the quick-open room kept for earlier big files in the same volume (taken as their
      header and 18 bytes each, as for the file going in, unchecked with two); updating
      an archive whose files are encrypted without its password (rar copies them, rars'
-     preserving builder asks for it); `-as`, `-ag`, `-log` read, not done (`-dw` and
+     preserving builder asks for it); `-ag`, `-log` read, not done (`-as` done
+     2026-10-09: what no name gives taken out, its "Deleting" lines in their places; and
+     `-dw` and
      `-dr` done 2026-10-09: `-dw` in `rar_add_names.sh`; `-dr`, a folder archived whole
      recycled whole and lines without a share, compared with Rar.exe by hand, out of
      the oracle not to fill the Recycle Bin);

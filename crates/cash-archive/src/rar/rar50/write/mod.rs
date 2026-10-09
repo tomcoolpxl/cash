@@ -481,6 +481,11 @@ pub struct Layout {
     /// With quick open on, only members whose stored data is longer than this go in
     /// the index (WinRAR's default is 4,096 bytes); `None` puts every member in.
     pub quick_open_over: Option<u64>,
+    /// The bound on the archive the locator's offsets get room for, counted by the
+    /// caller: WinRAR's, when it changes an archive, counts the old archive's members
+    /// and every file named, not only those written. `None` counts the members
+    /// written, each its size, 32 bytes and three for every character of its name.
+    pub offset_bound: Option<u64>,
 }
 
 impl Layout {
@@ -491,7 +496,19 @@ impl Layout {
             winrar: true,
             checksums: Checksums::Crc32,
             quick_open_over: Some(4096),
+            offset_bound: None,
         }
+    }
+
+    pub const fn with_offset_bound(mut self, bound: Option<u64>) -> Self {
+        self.offset_bound = bound;
+        self
+    }
+
+    /// What a member of `size` bytes named `name` adds to an offset bound; a bound
+    /// starts at 1.
+    pub fn member_bound(size: u64, name: &[u8]) -> u64 {
+        winrar::member_bound(size, name)
     }
 
     pub const fn with_checksums(mut self, checksums: Checksums) -> Self {
