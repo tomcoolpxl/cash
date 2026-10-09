@@ -948,6 +948,38 @@ where
     )
 }
 
+/// The protected prefix's shards whose checksums fail, by their ranges in it, whether
+/// the record can mend them or not.
+pub(crate) fn damaged_prefix_shard_ranges_with_control<F>(
+    protected_size: usize,
+    recovery_data: &[u8],
+    mut read_range: F,
+    control: &crate::rar::read_control::ReadControl,
+) -> Result<Vec<std::ops::Range<usize>>>
+where
+    F: FnMut(std::ops::Range<usize>) -> Result<Vec<u8>>,
+{
+    check_repair(control)?;
+    let chunks = parse_available_inline_recovery_chunks_with_control(recovery_data, control)?;
+    let first = chunks.first().ok_or(Error::BadRecoveryChunk)?;
+    if first.protected_size != protected_size as u64 {
+        return Err(Error::BadRecoveryChunk);
+    }
+    let shard_ranges = split_prefix_shard_ranges(protected_size, first.plan)?;
+    let mut damaged = Vec::new();
+    for (index, range) in shard_ranges.into_iter().enumerate() {
+        check_repair(control)?;
+        let shard = read_range(range.clone())?;
+        if shard.len() != range.len() {
+            return Err(Error::ShardSizeMismatch);
+        }
+        if repair_crc(&shard, 0, control)? != first.data_shard_states[index] {
+            damaged.push(range);
+        }
+    }
+    Ok(damaged)
+}
+
 pub(crate) fn repair_inline_recovery_prefix_shards_with_control<F>(
     protected_size: usize,
     recovery_data: &[u8],
@@ -1097,6 +1129,72 @@ pub(crate) struct InlineRepairOptions<'a> {
     /// Byte range holding this archive's recovery record, when a parsed
     /// archive already said where it lives.
     pub record_range: Option<std::ops::Range<usize>>,
+}
+
+/// An archive's recovery record found by its chunks' marks rather than its headers,
+/// as rar finds one in an archive whose headers it cannot read.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MarkedRecovery {
+    /// The damaged shards of the data the record protects, from the archive's start.
+    pub damaged: Vec<std::ops::Range<usize>>,
+    /// Their bytes mended, in their order; `None` when the record cannot mend them
+    /// all.
+    pub mended: Option<Vec<Vec<u8>>>,
+    /// Whether every chunk of the record is there.
+    pub intact: bool,
+}
+
+/// The recovery record of the archive `input` holds, found by its chunks' marks: what
+/// it mends, or `None` when no chunk of it is found.
+pub fn recovery_by_marks(input: &[u8]) -> Result<Option<MarkedRecovery>> {
+    let control = crate::rar::read_control::ReadControl::default();
+    let chunks = match find_inline_recovery_chunks_with_control(input, &control) {
+        Ok(chunks) => select_record_chunks(chunks, None)?,
+        Err(Error::BadRecoveryChunk) => return Ok(None),
+        Err(error) => return Err(error),
+    };
+    let first = chunks.first().ok_or(Error::BadRecoveryChunk)?;
+    let protected_size =
+        usize::try_from(first.chunk.protected_size).map_err(|_| Error::PlanOverflow)?;
+    if protected_size > input.len() {
+        return Err(Error::BadRecoveryChunk);
+    }
+    let mut recovery_data = Vec::with_capacity(
+        chunks
+            .iter()
+            .map(|found| found.chunk.plan.shard_size as usize)
+            .sum(),
+    );
+    for found in &chunks {
+        append_inline_recovery_chunk(input, found, &mut recovery_data);
+    }
+    let read = |range: std::ops::Range<usize>| {
+        input
+            .get(range)
+            .map(<[u8]>::to_vec)
+            .ok_or(Error::BadRecoveryChunk)
+    };
+    let damaged =
+        damaged_prefix_shard_ranges_with_control(protected_size, &recovery_data, read, &control)?;
+    let mended = if damaged.is_empty() {
+        Some(Vec::new())
+    } else {
+        repair_inline_recovery_prefix_shards_with_control(
+            protected_size,
+            &recovery_data,
+            read,
+            &control,
+        )
+        .ok()
+        .map(|shards| shards.into_iter().map(|(_, bytes)| bytes).collect())
+    };
+    let (available, expected) =
+        inline_recovery_chunk_counts_with_control(&recovery_data, &control)?;
+    Ok(Some(MarkedRecovery {
+        damaged,
+        mended,
+        intact: available == expected,
+    }))
 }
 
 pub fn repair_inline_recovery_archive(input: &[u8]) -> Result<Vec<u8>> {

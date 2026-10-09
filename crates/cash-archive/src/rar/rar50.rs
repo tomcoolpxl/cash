@@ -971,6 +971,46 @@ impl Archive {
 
     /// Whether every chunk of the recovery record checks: the record itself whole,
     /// whatever the state of the data it protects.
+    /// The protected data's shards whose checksums fail, by their ranges in the
+    /// archive, whether the recovery record can mend them or not.
+    pub fn recovery_damaged_shards(&self, password: Option<&[u8]>) -> Result<Vec<Range<usize>>> {
+        #[cfg(not(feature = "recovery"))]
+        {
+            let _ = (self, password);
+            Err(Error::FeatureDisabled {
+                feature: "recovery",
+            })
+        }
+        #[cfg(feature = "recovery")]
+        {
+            let control = crate::rar::read_control::ReadControl::new(None);
+            let recovery = self.recovery_service()?;
+            let recovery_data = recovery.decoded_recovery_data(self, password, &control)?;
+            let prefix_start = self.sfx_offset;
+            let prefix_len =
+                recovery
+                    .block
+                    .offset
+                    .checked_sub(prefix_start)
+                    .ok_or(Error::InvalidHeader(
+                        "RAR 5 recovery prefix range overflows archive bounds",
+                    ))?;
+            let ranges = crate::rar::recovery::rar5::damaged_prefix_shard_ranges_with_control(
+                prefix_len,
+                &recovery_data,
+                |range| {
+                    self.read_range(prefix_start + range.start..prefix_start + range.end)
+                        .map_err(|_| crate::rar::recovery::rar5::Error::BadRecoveryChunk)
+                },
+                &control,
+            )?;
+            Ok(ranges
+                .into_iter()
+                .map(|range| prefix_start + range.start..prefix_start + range.end)
+                .collect())
+        }
+    }
+
     pub fn recovery_record_intact(&self, password: Option<&[u8]>) -> Result<bool> {
         #[cfg(not(feature = "recovery"))]
         {

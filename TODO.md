@@ -879,11 +879,15 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      archive, in Rar.txt). A file that is no RAR archive: "ERROR: Bad archive X" with
      "Program aborted", rc 13, for `a`, `u`, `f`, `m`, `d` and `cw`; with "Processing
      archive" and Done, rc 0, for the others that change; "No files to extract", rc
-     10, after `x`, `e`, `t` and `p`'s "is not RAR archive"; nothing from `lb`. Left:
-     `r` on encrypted headers without the password asks none and says "No files
-     found", rc 10, and on a file that is no archive searches twice; cash asks, and
-     rebuilds. And the order of switches: rar asks at a bare `-p` before reading an
-     `-inul` after it, whose words cash's question leaves out.
+     10, after `x`, `e`, `t` and `p`'s "is not RAR archive"; nothing from `lb`. `r`
+     on these: done 2026-10-09 (in `rar_repair.sh`, now 373 lines). It asks no
+     password: headers it cannot read, encrypted or no archive's, are searched for a
+     recovery record by its chunks' marks (rars' `recovery_by_marks`), which mends
+     them; without one, encrypted headers give "No files found", rc 10, and a file
+     that is no archive a second search, "Reconstructing", "Building", corrupt-header
+     and "No files found" words, rc 10, and nothing written. Encrypted headers are
+     never rebuilt, read or not. Left: the order of switches: rar asks at a bare `-p`
+     before reading an `-inul` after it, whose words cash's question leaves out.
    - `-ams`, `-tl` and `ch -amr`: done 2026-10-09 (in `rar_modify.sh`, now 981 lines,
      WinRAR's byte for byte but a recovery record's bytes). `-ams` saves the archive's
      file name and the time it is written (with `-tl` its newest file's, folders left
@@ -930,11 +934,14 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      out the spaces rar's progress leaves.
    - `r`: done 2026-10-09 (`rar_repair.sh`, 253 lines; `t` now tests a recovery record
      by its own chunks' checksums, and finds an archive "ended early" only where its
-     locator points at a missing quick-open record, as rar does). Left of it: a damaged
-     main header (rar asks "Mark archive as solid?", cash writes a plain one); a
-     recovery record whose header is damaged (rar finds its chunks by their marks and
-     mends with them, cash finds none); RAR 1.5 to 4 rebuilds, unobserved (WinRAR 7.23
-     writes no RAR 4 to damage).
+     locator points at a missing quick-open record, as rar does). Damage the record
+     cannot mend: done 2026-10-09 (in `rar_repair.sh`): each damaged block "cannot
+     recover data", "0 blocks are recovered", and the archive rebuilt instead; cash
+     said nothing of them and wrote nothing. Left of it: a damaged main header (rar
+     asks "Mark archive as solid?", cash writes a plain one); a recovery record whose
+     header is damaged (rar finds its chunks by their marks and mends with them; rars
+     can now, `recovery_by_marks`, but `r` looks by marks only when the headers do not
+     read); RAR 1.5 to 4 rebuilds, unobserved (WinRAR 7.23 writes no RAR 4 to damage).
    - `rc`: done 2026-10-09 (`rar_reconstruct.sh`, 249 lines, RAR 5 and both RAR 3
      namings, the volumes rebuilt WinRAR's byte for byte); `s` and `rv` refused in
      words of their own. Left of it: a RAR 3 volume that is there but damaged (its

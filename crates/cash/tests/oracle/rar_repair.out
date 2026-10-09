@@ -240,6 +240,126 @@ Details: RAR 5
                     24                    1
 
 rc=0
+== damage the recovery record cannot mend: said, and the archive rebuilt instead
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Searching for recovery record      
+Data recovery record found
+Analyzing file data      
+Building fixed.worse.rar      
+Corrupt 1020 bytes at 00000000 000007f8 - cannot recover data     
+Corrupt 1020 bytes at 00000000 00002bd4 - cannot recover data     
+Corrupt 1020 bytes at 00000000 00004bb4 - cannot recover data     
+Corrupt 1020 bytes at 00000000 00006b94 - cannot recover data     
+Corrupt 1020 bytes at 00000000 00008b74 - cannot recover data     
+Corrupt 1020 bytes at 00000000 0000ab54 - cannot recover data     
+Corrupt 1020 bytes at 00000000 0000c738 - cannot recover data     
+Corrupt 1020 bytes at 00000000 0000cb34 - cannot recover data     
+Corrupt 1020 bytes at 00000000 0000e718 - cannot recover data     
+Corrupt 1020 bytes at 00000000 000106f8 - cannot recover data     
+Corrupt 1020 bytes at 00000000 000126d8 - cannot recover data     
+0 blocks are recovered, 0 blocks are relocated
+Reconstructing worse.rar
+Building rebuilt.worse.rar      
+Found  src/noise.bin     
+Found  src/small.txt     
+Found  src/text.txt     
+Done
+rc=0
+rebuilt.worse.rar
+== encrypted headers: no password asked, the recovery record found by its marks
+-- r hp.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Searching for recovery record      
+Data recovery record not found
+Done
+--- stderr
+
+No files found
+rc=10
+-- r -px hp.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Data recovery record not found
+Done
+rc=0
+-- r hprr.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Searching for recovery record      
+Data recovery record found
+Analyzing file data      
+Building fixed.hprr.rar      
+0 blocks are recovered, 0 blocks are relocated
+Done
+rc=0
+-- r hpbad.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Searching for recovery record      
+Data recovery record found
+Analyzing file data      
+Building fixed.hpbad.rar      
+Corrupt 1024 bytes at 00000000 00001000 - data recovered     
+Corrupt 1024 bytes at 00000000 00001400 - data recovered     
+2 blocks are recovered, 0 blocks are relocated
+Done
+rc=0
+fixed.hpbad.rar
+-- r -px hpbad.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Searching for recovery record      
+Data recovery record found
+Analyzing file data      
+Building fixed.hpbad.rar      
+Corrupt 1024 bytes at 00000000 00001000 - data recovered     
+Corrupt 1024 bytes at 00000000 00001400 - data recovered     
+2 blocks are recovered, 0 blocks are relocated
+Done
+rc=0
+fixed.hpbad.rar
+
+Testing archive fixed.hpbad.rar
+
+Testing     src/noise.bin                                                  OK 
+Testing     src/small.txt                                                  OK 
+Testing     src/text.txt                                                   OK 
+Testing the recovery record         OK
+All OK
+rc=0
+== a file that is no archive
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Searching for recovery record      
+Data recovery record not found
+Searching for recovery record
+Data recovery record not found
+Reconstructing notrar.txt
+Building rebuilt.notrar.txt      
+Done
+--- stderr
+
+Unexpected end of archive
+ - the file header is corrupt
+Unexpected end of archive
+No files found
+rc=10
 == missing
 
 RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026

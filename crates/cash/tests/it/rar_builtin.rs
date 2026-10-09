@@ -111,7 +111,7 @@ fn rar_finds_strings_as_winrar_7_23_does() {
 fn rar_repairs_as_winrar_7_23_does() {
     assert_eq!(
         run_oracle_script("rar_repair"),
-        with_cash_banners("rar_repair", 11, 0)
+        with_cash_banners("rar_repair", 18, 0)
     );
 }
 

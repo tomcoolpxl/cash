@@ -4235,6 +4235,71 @@ mod tests {
 
     #[test]
     #[cfg(feature = "recovery")]
+    fn recovery_found_by_its_marks_mends_what_it_can_and_says_what_it_cannot() {
+        let features = FeatureSet::store_only();
+        let payload = b"marked recovery payload\n".repeat(400);
+        let bytes = rar50::Rar50Writer::new(
+            rar50_options_with_features(ArchiveVersion::Rar50, features).with_compression_level(0),
+        )
+        .entries(
+            [rar50_entry(b"marked.txt", &payload)
+                .with_attributes(0x20)
+                .with_host_os(3)]
+            .to_vec(),
+        )
+        .recovery_percent(Some(5))
+        .finish()
+        .unwrap();
+        let none = recovery::rar5::recovery_by_marks(b"no record here").unwrap();
+        assert_eq!(none, None);
+        let whole = recovery::rar5::recovery_by_marks(&bytes).unwrap().unwrap();
+        assert!(whole.damaged.is_empty() && whole.intact);
+
+        // One damaged shard is mended, as the parsed archive mends it.
+        let mut damaged = bytes.clone();
+        damaged[200..260].fill(0xa5);
+        let marked = recovery::rar5::recovery_by_marks(&damaged)
+            .unwrap()
+            .unwrap();
+        let ranges = ArchiveReader::read(&damaged)
+            .unwrap()
+            .as_rar50()
+            .unwrap()
+            .recovery_damaged_shards(None)
+            .unwrap();
+        assert_eq!(marked.damaged, ranges);
+        let mended = marked.mended.unwrap();
+        for (range, bytes_mended) in ranges.iter().zip(&mended) {
+            assert_eq!(&bytes[range.clone()], bytes_mended.as_slice());
+        }
+
+        // Every shard damaged: each said, none mended.
+        let mut ruined = bytes.clone();
+        let protected = whole_protected_len(&bytes);
+        for at in (100..protected).step_by(64) {
+            ruined[at] ^= 0xff;
+        }
+        let marked = recovery::rar5::recovery_by_marks(&ruined).unwrap().unwrap();
+        assert!(marked.damaged.len() > 1);
+        assert_eq!(marked.mended, None);
+    }
+
+    /// The bytes before an archive's recovery record: what it protects.
+    #[cfg(feature = "recovery")]
+    fn whole_protected_len(bytes: &[u8]) -> usize {
+        let archive = ArchiveReader::read(bytes).unwrap();
+        archive
+            .as_rar50()
+            .unwrap()
+            .services()
+            .find(|service| service.name == b"RR")
+            .unwrap()
+            .block
+            .offset
+    }
+
+    #[test]
+    #[cfg(feature = "recovery")]
     fn archive_facade_reports_rar13_family_for_unsupported_recovery_repair() {
         let bytes = rar13::write_stored_archive(
             &[rar13::StoredEntry {

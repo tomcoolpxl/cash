@@ -204,7 +204,8 @@ pub(super) fn open_announcing<SE: cash_core::ShellExtensions>(
     Ok(result)
 }
 
-fn try_open<SE: cash_core::ShellExtensions>(
+/// Opens `found` with `password` alone, asking for none.
+pub(super) fn try_open<SE: cash_core::ShellExtensions>(
     rar: &Rar<'_, SE>,
     found: &Found,
     password: Option<&str>,

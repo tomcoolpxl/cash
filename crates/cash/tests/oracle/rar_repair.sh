@@ -98,6 +98,32 @@ rar a -m0 -idq -zsrc/small.txt cmt.rar src/small.txt
 z rar r cmt.rar
 z rar l rebuilt.cmt.rar
 
+echo "== damage the recovery record cannot mend: said, and the archive rebuilt instead"
+cp rr.rar worse.rar
+for at in 3000 12000 20000 28000 36000 44000 52000 60000 68000 76000; do
+  damage worse.rar $at 50
+done
+z rar r worse.rar
+ls fixed.worse.rar rebuilt.worse.rar 2>/dev/null
+
+echo "== encrypted headers: no password asked, the recovery record found by its marks"
+rar a -m0 -idq -hpx hp.rar src/small.txt src/text.txt
+rar a -m0 -rr5 -idq -hpx hprr.rar src/noise.bin src/small.txt src/text.txt
+cp hprr.rar hpbad.rar
+damage hpbad.rar 5000 200
+for args in "hp.rar" "-px hp.rar" "hprr.rar" "hpbad.rar" "-px hpbad.rar"; do
+  rm -f fixed.* rebuilt.*
+  echo "-- r $args"
+  z rar r $args
+  ls fixed.* rebuilt.* 2>/dev/null
+done
+z rar t -idc -px fixed.hpbad.rar
+
+echo "== a file that is no archive"
+printf 'not an archive at all\n' > notrar.txt
+z rar r notrar.txt
+ls rebuilt.* 2>/dev/null
+
 echo "== missing"
 z rar r missing.rar
 

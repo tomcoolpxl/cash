@@ -8,7 +8,9 @@ use std::io::Write as _;
 use std::path::PathBuf;
 
 use super::cmdline::{Name, Parsed};
-use super::open::{self, Found};
+use cash_archive::rar::recovery;
+
+use super::open::{self, Failure, Found};
 use super::{Rar, Stop, code};
 
 pub(super) fn run<SE: cash_core::ShellExtensions>(
@@ -51,73 +53,171 @@ fn repair<SE: cash_core::ShellExtensions>(
         .next()
         .unwrap_or(&found.display)
         .to_owned();
-    let area = if rar.switches.no_percent {
-        ""
-    } else {
-        "      "
-    };
-    let opened = open::open(rar, found)?.ok();
-    let rar5 = opened
-        .as_ref()
-        .and_then(|opened| opened.archive.as_rar50())
-        .filter(|archive| archive.main.has_recovery_record());
-    if let Some(archive) = rar5 {
-        let password = rar.password.borrow().clone();
-        let password = password.as_deref().map(str::as_bytes);
-        rar.console
-            .msg(&format!("\nSearching for recovery record{area}"));
-        rar.console.msg("\nData recovery record found");
-        rar.console.msg(&format!("\nAnalyzing file data{area}"));
-        let shown = format!("{folder}fixed.{name}");
-        rar.console.msg(&format!("\nBuilding {shown}{area}"));
-        let damaged = archive
-            .recovery_damaged_ranges(password)
-            .unwrap_or_default();
-        for range in &damaged {
-            let start = range.start as u64;
-            rar.console.msg(&format!(
-                "\nCorrupt {} bytes at {:08x} {:08x} - data recovered     ",
-                range.len(),
-                start >> 32,
-                start & 0xFFFF_FFFF
-            ));
-        }
-        if !damaged.is_empty() {
-            let mut mended = Vec::new();
-            if let Err(error) = archive.repair_recovery_to_with_report(&mut mended, password) {
-                rar.console.err(&format!("\n{error}"));
-                rar.fail(code::CRC);
-            } else {
-                // Only the damaged shards change: the recovery record stays as it is,
-                // damaged or not.
-                let mut fixed = bytes;
-                for range in &damaged {
-                    if let (Some(to), Some(from)) =
-                        (fixed.get_mut(range.clone()), mended.get(range.clone()))
-                    {
-                        to.copy_from_slice(from);
+    let area = area(rar);
+    // rar asks for no password here: headers it cannot read are searched for a
+    // recovery record by its chunks' marks.
+    let given = rar.given_password()?;
+    let opened = match open::try_open(rar, found, given.as_deref()) {
+        Ok(opened) => opened,
+        Err(failure @ (Failure::WrongPassword(_) | Failure::NotRar)) => {
+            rar.console
+                .msg(&format!("\nSearching for recovery record{area}"));
+            match recovery::rar5::recovery_by_marks(&bytes) {
+                Ok(Some(marked)) => {
+                    let mended = marked
+                        .mended
+                        .map(|mended| marked.damaged.iter().cloned().zip(mended).collect());
+                    if !mend(
+                        rar,
+                        folder,
+                        &name,
+                        bytes,
+                        &marked.damaged,
+                        mended,
+                        marked.intact,
+                    ) {
+                        done(rar);
                     }
                 }
-                write(rar, &shown, &fixed);
+                _ if matches!(failure, Failure::NotRar) => unreadable(rar, found, folder, &name),
+                _ => {
+                    rar.console.msg("\nData recovery record not found");
+                    rar.console.err("\nNo files found");
+                    rar.fail(code::NO_FILES);
+                    done(rar);
+                }
             }
+            return Ok(());
         }
-        rar.console.msg(&format!(
-            "\n{} blocks are recovered, 0 blocks are relocated",
-            damaged.len()
-        ));
-        if !archive.recovery_record_intact(password).unwrap_or(false) {
-            rar.console.msg("\nRecovery record is corrupt.");
-            rar.fail(code::CRC);
+        Err(_) => {
+            reconstruct(rar, found, folder, &name, &bytes, true);
+            return Ok(());
         }
+    };
+    let rar5 = opened
+        .archive
+        .as_rar50()
+        .filter(|archive| archive.main.has_recovery_record());
+    if let Some(archive) = rar5 {
+        let password = given.as_deref().map(str::as_bytes);
+        rar.console
+            .msg(&format!("\nSearching for recovery record{area}"));
+        let damaged = archive
+            .recovery_damaged_shards(password)
+            .unwrap_or_default();
+        let mut repaired = Vec::new();
+        let mended = if damaged.is_empty() {
+            Some(Vec::new())
+        } else {
+            archive
+                .repair_recovery_to_with_report(&mut repaired, password)
+                .ok()
+                .map(|_| {
+                    damaged
+                        .iter()
+                        .filter_map(|range| {
+                            Some((range.clone(), repaired.get(range.clone())?.to_vec()))
+                        })
+                        .collect()
+                })
+        };
+        let intact = archive.recovery_record_intact(password).unwrap_or(false);
+        // Damage the record cannot mend is said, and the archive rebuilt instead.
+        if !mend(rar, folder, &name, bytes.clone(), &damaged, mended, intact) {
+            reconstruct(rar, found, folder, &name, &bytes, false);
+        }
+        return Ok(());
+    }
+    // Encrypted headers are not rebuilt, read or not.
+    if opened.facts.encrypted_headers {
+        rar.console.msg("\nData recovery record not found");
         done(rar);
         return Ok(());
     }
-    rar.console.msg("\nData recovery record not found");
+    reconstruct(rar, found, folder, &name, &bytes, true);
+    Ok(())
+}
+
+/// The recovery record found: the damaged shards, said each, and when it mends them
+/// (`mended`, each range with its bytes), written into `fixed.NAME` with the rest as
+/// it was; and whether the record itself is whole. Whether it mended them: else
+/// nothing is written and the run goes on.
+fn mend<SE: cash_core::ShellExtensions>(
+    rar: &Rar<'_, SE>,
+    folder: &str,
+    name: &str,
+    bytes: Vec<u8>,
+    damaged: &[std::ops::Range<usize>],
+    mended: Option<Vec<(std::ops::Range<usize>, Vec<u8>)>>,
+    intact: bool,
+) -> bool {
+    let area = area(rar);
+    rar.console.msg("\nData recovery record found");
+    rar.console.msg(&format!("\nAnalyzing file data{area}"));
+    let shown = format!("{folder}fixed.{name}");
+    rar.console.msg(&format!("\nBuilding {shown}{area}"));
+    let outcome = if mended.is_some() {
+        "data recovered"
+    } else {
+        "cannot recover data"
+    };
+    for range in damaged {
+        let start = range.start as u64;
+        rar.console.msg(&format!(
+            "\nCorrupt {} bytes at {:08x} {:08x} - {outcome}     ",
+            range.len(),
+            start >> 32,
+            start & 0xFFFF_FFFF
+        ));
+    }
+    let Some(mended) = mended else {
+        rar.console
+            .msg("\n0 blocks are recovered, 0 blocks are relocated");
+        return false;
+    };
+    if !mended.is_empty() {
+        // Only the damaged shards change: the recovery record stays as it is, damaged
+        // or not.
+        let mut fixed = bytes;
+        for (range, mended) in &mended {
+            if let Some(to) = fixed.get_mut(range.clone())
+                && to.len() == mended.len()
+            {
+                to.copy_from_slice(mended);
+            }
+        }
+        write(rar, &shown, &fixed);
+    }
+    rar.console.msg(&format!(
+        "\n{} blocks are recovered, 0 blocks are relocated",
+        mended.len()
+    ));
+    if !intact {
+        rar.console.msg("\nRecovery record is corrupt.");
+        rar.fail(code::CRC);
+    }
+    done(rar);
+    true
+}
+
+/// No recovery record, or one that cannot mend (said before, `not_found` false):
+/// the archive rebuilt into `rebuilt.NAME` from the blocks whose headers check.
+fn reconstruct<SE: cash_core::ShellExtensions>(
+    rar: &Rar<'_, SE>,
+    found: &Found,
+    folder: &str,
+    name: &str,
+    bytes: &[u8],
+    not_found: bool,
+) {
+    if not_found {
+        rar.console.msg("\nData recovery record not found");
+    }
     rar.console
         .msg(&format!("\nReconstructing {}", found.display));
     let shown = format!("{folder}rebuilt.{name}");
-    rar.console.msg(&format!("\nBuilding {shown}{area}"));
-    let (rebuilt, names) = rebuild(&bytes);
+    rar.console.msg(&format!("\nBuilding {shown}{}", area(rar)));
+    let (rebuilt, names) = rebuild(bytes);
     for found_name in &names {
         rar.console.msg(&format!("\nFound  {found_name}     "));
     }
@@ -125,7 +225,38 @@ fn repair<SE: cash_core::ShellExtensions>(
         write(rar, &shown, &rebuilt);
     }
     done(rar);
-    Ok(())
+}
+
+/// A file that is no RAR archive, with no recovery record in it either: rar searches
+/// again, tries to rebuild it, finds a header to be corrupt and no file, and writes
+/// nothing.
+fn unreadable<SE: cash_core::ShellExtensions>(
+    rar: &Rar<'_, SE>,
+    found: &Found,
+    folder: &str,
+    name: &str,
+) {
+    rar.console.msg("\nData recovery record not found");
+    rar.console.msg("\nSearching for recovery record");
+    rar.console.msg("\nData recovery record not found");
+    rar.console
+        .msg(&format!("\nReconstructing {}", found.display));
+    rar.console
+        .msg(&format!("\nBuilding {folder}rebuilt.{name}{}", area(rar)));
+    rar.console.err(
+        "\nUnexpected end of archive\n - the file header is corrupt\nUnexpected end of archive\nNo files found",
+    );
+    rar.fail(code::NO_FILES);
+    done(rar);
+}
+
+/// The place of a percentage after a line: none with `-idp`.
+const fn area<SE: cash_core::ShellExtensions>(rar: &Rar<'_, SE>) -> &'static str {
+    if rar.switches.no_percent {
+        ""
+    } else {
+        "      "
+    }
 }
 
 pub(super) fn done<SE: cash_core::ShellExtensions>(rar: &Rar<'_, SE>) {
