@@ -149,6 +149,36 @@ for p in 150% 3000; do
   z rar t -idq rrc.rar
 done
 
+echo "== a volume changed by itself: c, k, rn, ch and rr on one volume of a set"
+# Each on a fresh copy of a three-volume set, naming its first or its second volume:
+# that one alone is written again, without its zero fill. A volume given a recovery
+# record is shown by size; its record is tested as t leaves it. d is refused.
+mkdir vs0
+awk 'BEGIN { srand(5); for (i = 0; i < 50000; i++) printf "%c", 33 + int(rand() * 90) }' > vs.bin
+touch -d '2024-01-01T00:00:00Z' vs.bin
+rar a -m0 -idq -v20k vs0/v.rar vs.bin
+for part in 1 2; do
+  for cmd in "c -zcmt.txt" "k" "rn vs.bin vt.bin" "ch -k" "rr"; do
+    rm -rf vs && cp -r vs0 vs
+    echo "-- part$part: $cmd"
+    set -- $cmd
+    op=$1
+    shift
+    z rar "$op" -idc "vs/v.part$part.rar" "$@"
+    for f in vs/v.part1.rar vs/v.part2.rar vs/v.part3.rar; do
+      if [ "$op" = rr ] && [ "$f" = "vs/v.part$part.rar" ]; then
+        echo "$f $(stat -c %s "$f") bytes"
+      else
+        echo "$f $(cksum < "$f")"
+      fi
+    done
+  done
+done
+rm -rf vs && cp -r vs0 vs
+z rar rr -idq vs/v.part2.rar
+z rar t -idc vs/v.part1.rar
+z rar d -idc vs/v.part1.rar vs.bin
+
 echo "== missing archive"
 z rar c -zcmt.txt missing.rar
 z rar k missing.rar

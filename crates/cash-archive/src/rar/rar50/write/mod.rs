@@ -112,6 +112,8 @@ pub struct Carried {
     pub encryption: Option<super::FileEncryption>,
     /// The older version it is, `;N`, or none.
     pub version: Option<u64>,
+    /// A volume's part of a file: its split flags, kept.
+    pub split: u64,
 }
 
 impl Carried {
@@ -136,6 +138,8 @@ impl Carried {
             hash: file.hash.clone(),
             encryption: file.encryption.clone(),
             version: file.version,
+            split: file.block.flags
+                & (crate::rar::rar50::HFL_SPLIT_BEFORE | crate::rar::rar50::HFL_SPLIT_AFTER),
         })
     }
 }
@@ -499,6 +503,25 @@ pub struct Layout {
     /// and every file named, not only those written. `None` counts the members
     /// written, each its size, 32 bytes and three for every character of its name.
     pub offset_bound: Option<u64>,
+    /// Written as one volume of a set rather than an archive alone: the volume
+    /// changed by itself, as `Rar.exe` changes one (`c`, `k`, `rr`, `rn`, `ch`).
+    pub volume_of: Option<VolumeOf>,
+}
+
+/// Which volume of its set an archive written alone is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct VolumeOf {
+    /// Its number, from 0 for the second: the first has none.
+    pub number: Option<u64>,
+    /// Whether more volumes follow it: its end header says so.
+    pub more: bool,
+}
+
+impl VolumeOf {
+    pub const fn new(number: Option<u64>, more: bool) -> Self {
+        Self { number, more }
+    }
 }
 
 impl Layout {
@@ -510,7 +533,13 @@ impl Layout {
             checksums: Checksums::Crc32,
             quick_open_over: Some(4096),
             offset_bound: None,
+            volume_of: None,
         }
+    }
+
+    pub const fn with_volume_of(mut self, volume: Option<VolumeOf>) -> Self {
+        self.volume_of = volume;
+        self
     }
 
     pub const fn with_offset_bound(mut self, bound: Option<u64>) -> Self {

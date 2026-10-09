@@ -28,8 +28,8 @@ pub use extract::{extract_volumes_to, extract_volumes_to_with_redirections};
 #[cfg(feature = "write")]
 pub use write::{
     ArchiveEntry, ArchiveExtras, ArchiveMetadataEntry, Carried, Checksums, CollectedVolumes,
-    Layout, Rar50Writer, ServiceEntry, VolumeSink, WriterOptions, write_streaming_archive_to,
-    write_streaming_archive_with_progress, write_streaming_volumes_to,
+    Layout, Rar50Writer, ServiceEntry, VolumeOf, VolumeSink, WriterOptions,
+    write_streaming_archive_to, write_streaming_archive_with_progress, write_streaming_volumes_to,
     write_streaming_volumes_with_progress,
 };
 
@@ -1968,7 +1968,8 @@ where
                     });
                 }
                 HEAD_END => {
-                    main.rewrite_metadata_complete &= next == archive_len;
+                    // A volume but the last is zero-filled to its size after its end.
+                    main.rewrite_metadata_complete &= next == archive_len || main.is_volume();
                     // A block with no room for the vint reads as no flags rather
                     // than as a broken archive. Hand-built and truncated archives
                     // do turn up with an empty end block, and the field only says

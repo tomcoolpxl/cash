@@ -213,6 +213,8 @@ pub struct Builder {
     rar50_dictionary_size: Option<u64>,
     volume_size: Option<usize>,
     rar50_layout: rar50::Layout,
+    /// Written as one volume of a set, its split parts carried.
+    volume_of: Option<rar50::VolumeOf>,
     entries: Vec<BuilderEntry>,
     next_entry_id: usize,
     allow_duplicate_names: bool,
@@ -239,6 +241,7 @@ impl Builder {
             rar50_dictionary_size: None,
             volume_size: None,
             rar50_layout: rar50::Layout::default(),
+            volume_of: None,
             entries: Vec::new(),
             next_entry_id: 0,
             allow_duplicate_names: false,
@@ -319,6 +322,14 @@ impl Builder {
     /// WinRAR's (see [`rar50::Layout`]). Other formats ignore it.
     pub fn layout(mut self, layout: rar50::Layout) -> Self {
         self.rar50_layout = layout;
+        self
+    }
+
+    /// Writes the archive as one volume of a set, by itself, as `Rar.exe` writes a
+    /// volume it changes alone: its number and whether more follow, and its files'
+    /// parts carried as they are, split ones too. RAR 5 and 7, one archive.
+    pub fn volume_of(mut self, volume: Option<rar50::VolumeOf>) -> Self {
+        self.volume_of = volume;
         self
     }
 
@@ -635,7 +646,9 @@ impl Builder {
             ));
         }
         let file = source.files().nth(index).ok_or(Error::EntryNotFound)?;
-        if file.block.flags & (rar50_split_flags()) != 0 || file.redirection.is_some() {
+        // A volume written by itself carries its files' parts, split or not.
+        let split = file.block.flags & (rar50_split_flags()) != 0;
+        if split && self.volume_of.is_none() || file.redirection.is_some() {
             return Err(Error::InvalidArgument(
                 "split members and links cannot be carried",
             ));
@@ -1857,7 +1870,7 @@ impl Builder {
         let mut extras = rar50::ArchiveExtras::default()
             .with_recovery_percent(self.recovery_percent)
             .with_filter_policy(self.rar50_filter_policy())
-            .with_layout(self.rar50_layout);
+            .with_layout(self.rar50_layout.with_volume_of(self.volume_of));
         extras.metadata_record = self.archive_metadata.as_ref();
         extras.locked = self.locked;
         if self.encrypt_headers {

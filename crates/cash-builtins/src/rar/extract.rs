@@ -205,6 +205,27 @@ fn reference_sources(entries: &[Entry], wanted: &[bool]) -> std::collections::Ha
         .collect()
 }
 
+/// The lines rar says for the recovery records of volumes `from` to before `to`, and
+/// how many of them failed.
+fn recovery_lines(recovery: &[Option<bool>], from: usize, to: usize) -> (String, u32) {
+    let mut text = String::new();
+    let mut failed = 0;
+    for intact in recovery
+        .get(from..to.min(recovery.len()))
+        .unwrap_or_default()
+    {
+        match intact {
+            Some(true) => text.push_str("\nTesting the recovery record         OK"),
+            Some(false) => {
+                text.push_str("\nTesting the recovery record        Failed");
+                failed += 1;
+            }
+            None => {}
+        }
+    }
+    (text, failed)
+}
+
 /// Whether an archive is solid, its files one stream.
 fn archive_solid(archive: &cash_archive::rar::Archive) -> bool {
     use cash_archive::rar::Archive;
@@ -294,6 +315,10 @@ struct Work<'r, 'a, SE: cash_core::ShellExtensions> {
     sources: std::collections::HashSet<usize>,
     /// Those unpacked, each to a temporary file removed at the end: by their name.
     temps: std::collections::HashMap<String, PathBuf>,
+    /// `t`: each volume's recovery record, whether it is intact, if it has one.
+    recovery: Vec<Option<bool>>,
+    /// The volumes whose recovery record was said, before this one.
+    recovery_said: usize,
 }
 
 /// What a file keeps of its times and attributes.
@@ -437,12 +462,17 @@ fn set<SE: cash_core::ShellExtensions>(
         solid: false,
         sources: std::collections::HashSet::new(),
         temps: std::collections::HashMap::new(),
+        recovery: Vec::new(),
+        recovery_said: 0,
     };
     for volume in &work.volumes {
         rar.log_archive(&volume.display);
     }
     let entries = entry::entries(&work.volumes);
     let wanted: Vec<bool> = entries.iter().map(|entry| work.wanted(entry)).collect();
+    if job.mode == Mode::Test {
+        work.test_recovery();
+    }
     work.solid = work
         .volumes
         .first()
@@ -583,6 +613,7 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
     fn announce(&mut self, volume: usize) {
         if volume > self.announced && volume < self.volumes.len() {
             self.announced = volume;
+            self.say_recovery(volume);
             let text = format!(
                 "\n\n{} {}\n",
                 self.job.mode.archive_verb(),
@@ -920,10 +951,20 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
         };
         let quiet_lines = !self.job.mode.quiet();
         let mut announced = self.announced;
+        let recovery = &self.recovery;
+        let mut recovery_said = self.recovery_said;
+        let mut recovery_failed = 0;
         let mut hook = |part: usize| -> io::Result<()> {
             let volume = entry.parts.get(part).map_or(0, |p| p.volume);
             if volume > announced {
                 announced = volume;
+                // The recovery record of a volume left is tested on leaving it.
+                let (text, failed) = recovery_lines(recovery, recovery_said, volume);
+                recovery_said = recovery_said.max(volume);
+                recovery_failed += failed;
+                if quiet_lines {
+                    console.msg(&text);
+                }
                 if quiet_lines {
                     console.msg(&format!(
                         "\n\n{verb} {}\n",
@@ -981,6 +1022,10 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
             (result, vols.crc_ok)
         };
         self.announced = announced;
+        self.recovery_said = recovery_said;
+        for _ in 0..recovery_failed {
+            self.error("\nRecovery record is corrupt.", code::CRC);
+        }
         self.solid_ready = true;
         if let Some(name) = split_on {
             return Verdict::MissingVolume(name);
@@ -1705,21 +1750,31 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
     /// `t`'s test of each RAR 5 volume's recovery record: every chunk of it checks,
     /// whether or not the data it protects is damaged.
     fn test_recovery_records(&mut self) {
-        for index in 0..self.volumes.len() {
-            let archive = &self.volumes[index].archive;
-            let Some(rar5) = archive.as_rar50() else {
-                continue;
-            };
-            if !rar5.main.has_recovery_record() {
-                continue;
-            }
-            self.say("\nTesting the recovery record");
-            if rar5.recovery_record_intact(None).unwrap_or(false) {
-                self.say("         OK");
-            } else {
-                self.say("        Failed");
-                self.error("\nRecovery record is corrupt.", code::CRC);
-            }
+        self.say_recovery(self.volumes.len());
+    }
+
+    /// `t`: each volume's recovery record, tested before the work starts.
+    fn test_recovery(&mut self) {
+        self.recovery = self
+            .volumes
+            .iter()
+            .map(|volume| {
+                let rar5 = volume.archive.as_rar50()?;
+                rar5.main
+                    .has_recovery_record()
+                    .then(|| rar5.recovery_record_intact(None).unwrap_or(false))
+            })
+            .collect();
+    }
+
+    /// The recovery records of the volumes left before volume `until`, said as rar
+    /// says them when it leaves each.
+    fn say_recovery(&mut self, until: usize) {
+        let (text, failed) = recovery_lines(&self.recovery, self.recovery_said, until);
+        self.recovery_said = self.recovery_said.max(until);
+        self.say(&text);
+        for _ in 0..failed {
+            self.error("\nRecovery record is corrupt.", code::CRC);
         }
     }
 

@@ -829,10 +829,18 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      twice, to 128 KB (1 MB solid), as the headers Rar.exe writes record it; rars' builder's
      `rar50_dictionary_size` is public now. Sizes above 4 GB (RAR 7's) are not tried.
    - `c`, `cw`, `rn`, `k`, `rr` and `ch`: done 2026-10-09 (`rar_modify.sh`, 474 lines then,
-     the rewrites WinRAR's byte for byte). Left of them: `c` and `k` on a volume set,
-     which rar 7.23 does and cash refuses as it refuses `a` ("Cannot modify volume");
-     `ch` takes `-cl`, `-cu`, `-z`, `-k` and `-tl`, not the other switches rar lets it
-     change (`-amr`, `-ma`…).
+     the rewrites WinRAR's byte for byte). Left of them: `ch` takes `-cl`, `-cu`, `-z`,
+     `-k` and `-tl`, not the other switches rar lets it change (`-amr`, `-ma`…).
+   - `c`, `k`, `rn`, `ch` and `rr` on a volume: done 2026-10-09 (in `rar_modify.sh`, now
+     757 lines, WinRAR's byte for byte but a recovery record's bytes). cash refused a
+     volume ("Cannot modify volume"); rar changes the volume named by itself, whichever
+     it is, the others left as they are (`rn` renames that volume's part only), and
+     writes it without its zero fill; `d` it refuses still. rars' builder writes one
+     volume of a set (`volume_of`: its number, and more to follow in its end header),
+     carrying split parts, and rewrite's `volume_builder` sets it up; a volume's zero
+     fill and "more volumes" end flag no longer count as unsupported. `t` now tests a
+     volume's recovery record as it leaves that volume, where it tested them all at the
+     end.
    - Recovery records above 100%: done 2026-10-09 (in `rar_modify.sh`, now 639 lines).
      cash took anything above 100 as the default 3%; now up to 1000%, more recovery
      shards than data ones, as WinRAR writes them; `-rr0` none; above 1000 rar's
@@ -877,10 +885,15 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
 
 ## Found along the way
 
-- **`conpty_a_program_that_ran_leaves_a_healthy_prompt_where_it_was` timed out in CI**
-  (run 37953062174, 2026-10-09, slow lane 1/4, both tries): PowerShell started by the
-  test printed nothing in 30 s, on a runner whose setup also logged a "bash startup
-  failure". The two runs after it, on later commits, passed. Watch for it again.
+- **The ConPTY tests that run PowerShell time out in CI now and then**: PowerShell
+  started by the test prints nothing in 30 s (`conpty_interactive_tests.rs:220`).
+  Run 37953062174 (2026-10-09, slow lane 1/4, both tries):
+  `conpty_a_program_that_ran_leaves_a_healthy_prompt_where_it_was`, on a runner whose
+  setup also logged a "bash startup failure". Run 37963172593 (the same day, slow lane
+  4/4, both tries): `..._leaves_a_scroll_region_...`, `..._dies_in_full_screen_...` and
+  `..._had_vt_input_on_does_not_eat_keys_typed_ahead` (line 402). Runs between passed;
+  the commits touched only rar. Look at PowerShell's start on the runner (a first-run
+  cache?) before raising the wait.
 
 - **`rm -rf` stops at a junction** (found on 2026-10-09 with `rar_add_links.sh`): a
   folder holding a junction gives "rm: cannot remove 'top\junc': Permission denied",

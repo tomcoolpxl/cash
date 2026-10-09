@@ -209,7 +209,31 @@ impl Archive {
         &self,
         password: Option<&[u8]>,
     ) -> crate::rar::Result<crate::rar::Builder> {
-        self.builder_preserving(password, true)
+        self.builder_preserving(password, true, false)
+    }
+
+    /// [`Self::carrying_builder`] for one volume of a RAR 5 set, written again by itself
+    /// as `Rar.exe` writes a volume it changes alone (`c`, `k`, `rr`, `rn`, `ch`): its
+    /// files' parts carried as they are, split ones too, and the volume the same one of
+    /// its set, its number and whether more follow kept.
+    pub fn volume_builder(
+        &self,
+        password: Option<&[u8]>,
+    ) -> crate::rar::Result<crate::rar::Builder> {
+        let Archive::Rar50Plus(archive) = self else {
+            return Err(crate::rar::Error::InvalidArgument(
+                "only a RAR 5 volume is changed by itself",
+            ));
+        };
+        let more = archive.blocks.iter().any(
+            |block| matches!(block, crate::rar::rar50::Block::End(end) if end.has_next_volume()),
+        );
+        Ok(self
+            .builder_preserving(password, true, true)?
+            .volume_of(Some(crate::rar::rar50::VolumeOf::new(
+                archive.main.volume_number,
+                more,
+            ))))
     }
 
     /// Configure a builder with supported source format, solid and encryption settings.
@@ -218,15 +242,22 @@ impl Archive {
         &self,
         password: Option<&[u8]>,
     ) -> crate::rar::Result<crate::rar::Builder> {
-        self.builder_preserving(password, false)
+        self.builder_preserving(password, false, false)
     }
 
     fn builder_preserving(
         &self,
         password: Option<&[u8]>,
         carrying: bool,
+        volume: bool,
     ) -> crate::rar::Result<crate::rar::Builder> {
-        let issues = self.rewrite_preservation_issues();
+        let mut issues = self.rewrite_preservation_issues();
+        // A volume written by itself keeps its volume's layout and its split parts.
+        if volume {
+            issues.retain(|issue| {
+                issue != "volume layout" && !issue.ends_with(": split-volume layout")
+            });
+        }
         if !issues.is_empty() {
             return Err(crate::rar::Error::InvalidArgument(
                 "archive has unsupported preservation settings",
@@ -565,7 +596,9 @@ impl Archive {
                             // Canonical end headers contain only type, block flags
                             // and end flags. Reject extra fields instead of silently
                             // certifying metadata this reader does not expose.
-                            if end.flags != 0
+                            // A volume's may say more volumes follow.
+                            let next_volume = if main.is_volume() { 1 } else { 0 };
+                            if end.flags & !next_volume != 0
                                 || end.block.flags & !4 != 0
                                 || end.block.header_size != 3
                             {

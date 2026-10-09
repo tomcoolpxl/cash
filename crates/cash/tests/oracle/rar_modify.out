@@ -597,6 +597,124 @@ Adjusting -rr3000 value to 1000.
 rc=0
 109253 bytes
 rc=0
+== a volume changed by itself: c, k, rn, ch and rr on one volume of a set
+-- part1: c -zcmt.txt
+
+Processing archive vs/v.part1.rar
+Reading comment from cmt.txt
+Adding a comment to vs/v.part1.rar
+
+Done
+rc=0
+vs/v.part1.rar 1590457509 20521
+vs/v.part2.rar 4219456232 20480
+vs/v.part3.rar 980987897 9486
+-- part1: k
+
+Processing archive vs/v.part1.rar
+Locking archive
+Done
+rc=0
+vs/v.part1.rar 3811965161 20472
+vs/v.part2.rar 4219456232 20480
+vs/v.part3.rar 980987897 9486
+-- part1: rn vs.bin vt.bin
+
+Processing archive vs/v.part1.rar
+Renaming vs.bin to vt.bin
+Done
+rc=0
+vs/v.part1.rar 1963591032 20472
+vs/v.part2.rar 4219456232 20480
+vs/v.part3.rar 980987897 9486
+-- part1: ch -k
+
+Processing archive vs/v.part1.rar
+Locking archive
+Done
+rc=0
+vs/v.part1.rar 3811965161 20472
+vs/v.part2.rar 4219456232 20480
+vs/v.part3.rar 980987897 9486
+-- part1: rr
+
+Processing archive vs/v.part1.rar
+Adding the data recovery record     
+Done
+rc=0
+vs/v.part1.rar 21755 bytes
+vs/v.part2.rar 4219456232 20480
+vs/v.part3.rar 980987897 9486
+-- part2: c -zcmt.txt
+
+Processing archive vs/v.part2.rar
+Reading comment from cmt.txt
+Adding a comment to vs/v.part2.rar
+
+Done
+rc=0
+vs/v.part1.rar 4100442652 20480
+vs/v.part2.rar 1612445866 20521
+vs/v.part3.rar 980987897 9486
+-- part2: k
+
+Processing archive vs/v.part2.rar
+Locking archive
+Done
+rc=0
+vs/v.part1.rar 4100442652 20480
+vs/v.part2.rar 1638784617 20472
+vs/v.part3.rar 980987897 9486
+-- part2: rn vs.bin vt.bin
+
+Processing archive vs/v.part2.rar
+Renaming vs.bin to vt.bin
+Done
+rc=0
+vs/v.part1.rar 4100442652 20480
+vs/v.part2.rar 3571007606 20472
+vs/v.part3.rar 980987897 9486
+-- part2: ch -k
+
+Processing archive vs/v.part2.rar
+Locking archive
+Done
+rc=0
+vs/v.part1.rar 4100442652 20480
+vs/v.part2.rar 1638784617 20472
+vs/v.part3.rar 980987897 9486
+-- part2: rr
+
+Processing archive vs/v.part2.rar
+Adding the data recovery record     
+Done
+rc=0
+vs/v.part1.rar 4100442652 20480
+vs/v.part2.rar 21755 bytes
+vs/v.part3.rar 980987897 9486
+rc=0
+
+Testing archive vs/v.part1.rar
+
+Testing     vs.bin                                                       
+
+Testing archive vs/v.part2.rar
+
+...         vs.bin                                                       
+Testing the recovery record         OK
+
+Testing archive vs/v.part3.rar
+
+...         vs.bin                                                         OK 
+All OK
+rc=0
+
+Program aborted
+--- stderr
+
+
+ERROR: Cannot modify volume
+rc=4
 == missing archive
 
 RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026

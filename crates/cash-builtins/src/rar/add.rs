@@ -815,7 +815,10 @@ pub(super) fn rewriting_builder(
     opened: &open::Opened,
     password: Option<&[u8]>,
 ) -> rar::Result<Builder> {
-    let builder = if opened.archive.as_rar50().is_some() && !opened.facts.solid {
+    let builder = if opened.facts.volume {
+        // A volume is written again by itself, as rar writes one it changes alone.
+        opened.archive.volume_builder(password)?
+    } else if opened.archive.as_rar50().is_some() && !opened.facts.solid {
         opened.archive.carrying_builder(password)?
     } else {
         opened.archive.preserving_builder(password)?

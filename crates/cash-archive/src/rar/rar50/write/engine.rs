@@ -422,13 +422,27 @@ pub(super) fn write_archive(
     if plan.recovery_percent.is_some() {
         main_flags |= MHFL_RECOVERY;
     }
+    // One volume of a set, written by itself.
+    let volume = plan.layout.volume_of;
+    let volume_number = volume.and_then(|volume| volume.number);
+    if volume.is_some() {
+        main_flags |= crate::rar::rar50::MHFL_VOLUME;
+    }
+    if volume_number.is_some() {
+        main_flags |= crate::rar::rar50::MHFL_VOLUME_NUMBER;
+    }
+    let end_flags = if volume.is_some_and(|volume| volume.more) {
+        crate::rar::rar50::EFL_NEXT_VOLUME
+    } else {
+        0
+    };
 
     let layout = resolve_layout(
         &LayoutInputs {
             header_encrypted: plan.header_encrypted,
             head_crypt_len,
             main_flags,
-            volume_number: None,
+            volume_number,
             archive_metadata: plan.archive_metadata,
             metadata_record: plan.metadata_record,
             body_len,
@@ -467,7 +481,7 @@ pub(super) fn write_archive(
                 &keys.keys,
                 skip,
                 main_flags,
-                None,
+                volume_number,
                 &layout.main_extra,
                 resources,
             )?,
@@ -477,7 +491,7 @@ pub(super) fn write_archive(
                     &mut main,
                     skip,
                     main_flags,
-                    None,
+                    volume_number,
                     &layout.main_extra,
                     resources,
                 )?;
@@ -544,14 +558,14 @@ pub(super) fn write_archive(
             HEAD_END,
             skip,
             None,
-            &super::end_header_specific(0),
+            &super::end_header_specific(end_flags),
             &[],
             &[],
             resources,
         )?)?,
         None => {
             let mut end = Bytes::new(resources);
-            write_end_header_with(&mut end, skip, 0, resources)?;
+            write_end_header_with(&mut end, skip, end_flags, resources)?;
             output.write_all(&end)?;
         }
     }
@@ -1066,11 +1080,12 @@ fn prepare_carried(
         },
         resources,
     )?;
+    // A volume's part of a file keeps its split flags.
     let flags = if winrar && extra.is_empty() {
         HFL_DATA
     } else {
         HFL_EXTRA | HFL_DATA
-    };
+    } | carried.split;
     let header = prepared_header_image_padded(
         HEAD_FILE,
         flags,

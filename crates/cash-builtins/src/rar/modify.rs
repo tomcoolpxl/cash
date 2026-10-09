@@ -69,7 +69,9 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
     }
 
     rar.console.msg(&format!("\nProcessing archive {display}"));
-    if opened.facts.locked || opened.facts.volume {
+    // A volume is changed by itself, the others of its set left as they are, as rar
+    // changes one; a RAR 1.5 to 4 volume is not.
+    if opened.facts.locked || opened.facts.volume && opened.archive.as_rar50().is_none() {
         let words = if opened.facts.locked {
             "Locked archive"
         } else {
