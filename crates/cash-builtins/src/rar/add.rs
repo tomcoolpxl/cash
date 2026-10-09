@@ -17,9 +17,9 @@ use cash_archive::rar::{
 };
 
 use super::cmdline::{Command, Name, Parsed};
-use super::list;
 use super::open::{self, Found};
 use super::{Rar, Stop, code};
+use super::{identical, list};
 use crate::rardata;
 
 /// Which files are put in.
@@ -136,6 +136,10 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
     let compressing = switches.method != Some(0);
     let solid = (compressing && switches.solid.as_deref().is_some_and(|s| s != "-"))
         || old.as_ref().is_some_and(|o| o.facts.solid);
+    let identical = switches.identical.as_deref().and_then(identical::parse);
+    if let Some(identical) = identical.filter(|identical| identical.level >= 3) {
+        return list_identical(rar, parsed, identical);
+    }
     let words = match (&old, solid) {
         (Some(_), _) => "Updating archive",
         (None, true) => "Creating solid archive",
@@ -210,6 +214,29 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
         rar.fail(code::NO_FILES);
         return Ok(());
     }
+    // `-oi`: each set of identical files put in, its first kept, the rest references.
+    let mut links: Vec<Option<rar::rar50::FileRedirection>> = vec![None; sources.len()];
+    if let Some(identical) = identical {
+        let files: Vec<(usize, u64, &Path)> = sources
+            .iter()
+            .enumerate()
+            .filter(|(index, source)| !source.is_dir && actions[*index].is_some())
+            .map(|(index, source)| (index, source.size, source.path.as_path()))
+            .collect();
+        let (looked, sets) = identical::sets(&files, identical.least);
+        let line = |index: usize| format!("{:>12}  {}", sources[index].size, sources[index].shown);
+        rar.console
+            .msg(&identical::searched(identical.level, looked, &sets, &line));
+        for set in &sets {
+            for &index in &set[1..] {
+                links[index] = Some(rar::rar50::FileRedirection::new(
+                    5,
+                    0,
+                    sources[set[0]].name.clone().into_bytes(),
+                ));
+            }
+        }
+    }
 
     let versions = version_files(rar, old.as_ref(), &members, &names, &mut actions);
     let mut dropped = versions.dropped.clone();
@@ -283,7 +310,7 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
             (Slot::Put(index), _) => {
                 let source = &sources[index];
                 let action = actions[index].map_or(Action::Add, |(action, _)| action);
-                put(&mut builder, rar, source, legacy)
+                put(&mut builder, rar, source, legacy, links[index].clone())
                     .map(|()| Some((source.shown.clone(), action)))
             }
         };
@@ -365,6 +392,33 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
     if !switches.no_done {
         rar.console.msg(if tested { "Done\n" } else { "\nDone\n" });
     }
+    Ok(())
+}
+
+/// `-oi3` and `-oi4`: the identical files among those named, listed; no archive is
+/// written.
+fn list_identical<SE: cash_core::ShellExtensions>(
+    rar: &Rar<'_, SE>,
+    parsed: &Parsed,
+    identical: identical::Identical,
+) -> Result<(), Stop> {
+    let Collected { sources, .. } = collect(rar, parsed)?;
+    let files: Vec<(usize, u64, &Path)> = sources
+        .iter()
+        .enumerate()
+        .filter(|(_, source)| !source.is_dir)
+        .map(|(index, source)| (index, source.size, source.path.as_path()))
+        .collect();
+    let (looked, sets) = identical::sets(&files, identical.least);
+    let line = |index: usize| format!("{:>12}  {}", sources[index].size, sources[index].shown);
+    let name = |index: usize| sources[index].shown.clone();
+    rar.console.msg(&identical::listed(
+        identical.level,
+        looked,
+        &sets,
+        &line,
+        &name,
+    ));
     Ok(())
 }
 
@@ -765,12 +819,14 @@ fn recovery_percent(text: &str) -> u64 {
         .unwrap_or(3)
 }
 
-/// A source queued in the builder, with its times and attributes.
+/// A source queued in the builder, with its times and attributes; with `link`, as that
+/// link, its data not read.
 fn put<SE: cash_core::ShellExtensions>(
     builder: &mut Builder,
     rar: &Rar<'_, SE>,
     source: &Source,
     legacy: bool,
+    link: Option<rar::rar50::FileRedirection>,
 ) -> rar::Result<()> {
     if legacy {
         // RAR 1.5 to 4 names take Windows' separator, times its local wall clock.
@@ -796,7 +852,9 @@ fn put<SE: cash_core::ShellExtensions>(
         .then(|| source.modified.map(unix_seconds))
         .flatten()
         .and_then(|seconds| u32::try_from(seconds).ok());
-    if source.is_dir {
+    if let Some(link) = link {
+        builder.add_link(name.clone(), link, source.is_dir, source.size, unix)?;
+    } else if source.is_dir {
         builder.add_directory(name.clone(), unix, None)?;
     } else {
         builder.add_source(

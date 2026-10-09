@@ -557,6 +557,48 @@ impl Builder {
         })
     }
 
+    /// Queue a RAR5/7 link of any kind, without reading what it points at: a hard link
+    /// or file reference (types 4 and 5) to an earlier member of `size` bytes, or a
+    /// symbolic link or junction (2 and 3), `is_directory` when it stands for a folder.
+    /// `mtime` is a header Unix time, as for [`Self::add_directory`]. Single-archive
+    /// output only.
+    pub fn add_link(
+        &mut self,
+        name: Vec<u8>,
+        link: rar50::FileRedirection,
+        is_directory: bool,
+        size: u64,
+        mtime: Option<u32>,
+    ) -> Result<()> {
+        if self.format.family() != ArchiveFamily::Rar50Plus
+            || self.volume_size.is_some()
+            || !link.is_supported()
+        {
+            return Err(Error::InvalidArgument(
+                "links require single-archive RAR5/7 output and a nonempty UTF-8 target",
+            ));
+        }
+        self.push(BuilderEntry {
+            id: 0,
+            name: self.validate_name(name)?,
+            data: Vec::new(),
+            source: None,
+            is_directory,
+            mtime,
+            mtime_nanoseconds: None,
+            file_times: None,
+            legacy_extended_times: None,
+            legacy_unicode_name: None,
+            file_comment: None,
+            encryption: None,
+            redirection: Some(link),
+            redirection_size: Some(size),
+            carried: None,
+            legacy_carried: None,
+            attributes: EntryAttributes::Dos(if is_directory { 0x10 } else { 0x20 }),
+        })
+    }
+
     /// Queue file `index` of the RAR 5 or 7 archive read from `path` as it is: its
     /// packed and perhaps encrypted data copied, not decoded or compressed again; its
     /// name, times, attributes, checksums and encryption record kept. RAR 5 and 7

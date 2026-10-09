@@ -938,8 +938,13 @@ fn prepare_member(
                 .redirection_size
                 .unwrap_or_else(|| decoded_rar50_name_len(&link.target_name) as u64)
         });
-    // WinRAR pads a file's sizes, both to the width its unpacked size gets.
-    let size_width = if winrar && !entry.is_directory {
+    // WinRAR pads a file's sizes, both to the width its unpacked size gets; a hard
+    // link's it leaves as they are.
+    let hard_link = entry
+        .redirection
+        .as_ref()
+        .is_some_and(|link| link.redirection_type == 4);
+    let size_width = if winrar && !entry.is_directory && !hard_link {
         super::winrar::size_width(unpacked_size)
     } else {
         0

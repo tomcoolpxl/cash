@@ -23,6 +23,7 @@ mod entry;
 mod extract;
 mod find;
 mod help;
+mod identical;
 mod item;
 mod list;
 mod log;
@@ -447,7 +448,16 @@ fn run_with<SE: cash_core::ShellExtensions>(
             } | Command::Print
         )
     ) && parsed.archive.is_some()
-        && !switches.help;
+        && !switches.help
+        // `-oi4` lists bare names, rar's banner left out.
+        || matches!(
+            command,
+            Some(Command::Add | Command::Update | Command::Freshen | Command::Move { .. })
+        ) && switches
+            .identical
+            .as_deref()
+            .and_then(identical::parse)
+            .is_some_and(|identical| identical.level == 4);
     if !switches.no_banner && !bannerless {
         console.msg(help::banner(tool));
     }

@@ -176,6 +176,18 @@ fn rar_cuts_volumes_with_recovery_records_as_winrar_7_23_does() {
 }
 
 #[test]
+fn rar_adds_links_as_winrar_7_23_does() {
+    // A trial WinRAR says so after its banner when it adds; cash has no trial.
+    let expected = with_divergence(
+        &with_cash_banners("rar_add_links", 10, 0),
+        "\nEvaluation copy. Please register.\n",
+        "",
+        15,
+    );
+    assert_eq!(run_oracle_script("rar_add_links"), expected);
+}
+
+#[test]
 fn rar_says_it_makes_no_recovery_volumes_or_sfx() {
     let out = run("rar rv2 -idq a.rar; echo \"rc=$?\"; rar s -idq a.rar; echo \"rc=$?\"");
     assert_eq!(out.stdout, "rc=2\nrc=2");

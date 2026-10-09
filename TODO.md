@@ -686,7 +686,16 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      from the archive, where rar unpacks the file to a temporary
      `__tmp_reference_source_N.rartemp` first and says so; in a solid archive that file
      has gone by, and is not found; junctions are made as folder links; links are not
-     stored (`a -ol`, `-oh`, `-oi`).
+     stored (`a -ol`, `-oh`).
+   - `-oi`, identical files as references: done 2026-10-09 (`rar_add_links.sh`, 328
+     lines, the archives WinRAR's byte for byte). Files of the least size or more
+     (64 KB, or `-oi:SIZE` with rar's units) with the same size and the same bytes,
+     among those put in: each set's first in archive order is stored, the rest as
+     type-5 references to it, their sizes padded as a file's. "Searching for identical
+     files" and the count, `-oi2` listing the sets first (by size, smallest first, a
+     blank line between), `-oi3` and `-oi4` listing only, no archive and for `-oi4` no
+     banner. rars' builder has `add_link` for any kind now. Not tried: `-oi` with
+     volumes (rars' volume writer takes no links) or a solid archive's reordering.
    - `-ver`: done 2026-10-09 (`rar_versions.sh`, 315 lines, the archives WinRAR's byte
      for byte): rars reads and writes the version record, `a`/`u`/`f` keep the file
      replaced as `name;N` with `-ver`, `-verN` drops the oldest beyond N and numbers

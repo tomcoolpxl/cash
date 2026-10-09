@@ -1,0 +1,328 @@
+== identical files, -oi
+-- -oi g
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive o.rar
+
+Searching for identical files         4 found.
+
+Adding    g/a1                                                             OK 
+Adding    g/a2                                                             OK 
+Adding    g/b1                                                             OK 
+Adding    g/b2                                                             OK 
+Adding    g/b3                                                             OK 
+Adding    g/c1                                                             OK 
+Adding    g/c2                                                             OK 
+Adding    g/d1                                                             OK 
+Adding    g/d2                                                             OK 
+Adding    g                                                                OK 
+Done
+rc=0
+2496772861 347318
+-- -oi n
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive o.rar
+
+Searching for identical files
+
+Adding    n/x                                                              OK 
+Adding    n                                                                OK 
+Done
+rc=0
+3018826297 97
+-- -oi2 g
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive o.rar
+
+Searching for identical files      
+
+       65536  g/c1
+       65536  g/c2
+
+       70000  g/a1
+       70000  g/a2
+
+       80000  g/b1
+       80000  g/b2
+       80000  g/b3   4 found.
+
+Adding    g/a1                                                             OK 
+Adding    g/a2                                                             OK 
+Adding    g/b1                                                             OK 
+Adding    g/b2                                                             OK 
+Adding    g/b3                                                             OK 
+Adding    g/c1                                                             OK 
+Adding    g/c2                                                             OK 
+Adding    g/d1                                                             OK 
+Adding    g/d2                                                             OK 
+Adding    g                                                                OK 
+Done
+rc=0
+2496772861 347318
+-- -oi2 n
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive o.rar
+
+Searching for identical files
+
+Adding    n/x                                                              OK 
+Adding    n                                                                OK 
+Done
+rc=0
+3018826297 97
+-- -oi3 g
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Searching for identical files      
+
+       65536  g/c1
+       65536  g/c2
+
+       70000  g/a1
+       70000  g/a2
+
+       80000  g/b1
+       80000  g/b2
+       80000  g/b3
+
+4 found.
+
+rc=0
+-- -oi3 n
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Searching for identical files
+
+rc=0
+-- -oi4 g
+
+Evaluation copy. Please register.
+g/c2
+g/a2
+g/b2
+g/b3
+rc=0
+-- -oi4 n
+
+Evaluation copy. Please register.
+rc=0
+-- -oi:1K g
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive o.rar
+
+Searching for identical files         5 found.
+
+Adding    g/a1                                                             OK 
+Adding    g/a2                                                             OK 
+Adding    g/b1                                                             OK 
+Adding    g/b2                                                             OK 
+Adding    g/b3                                                             OK 
+Adding    g/c1                                                             OK 
+Adding    g/c2                                                             OK 
+Adding    g/d1                                                             OK 
+Adding    g/d2                                                             OK 
+Adding    g                                                                OK 
+Done
+rc=0
+2000812137 281743
+-- -oi:1K n
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive o.rar
+
+Searching for identical files
+
+Adding    n/x                                                              OK 
+Adding    n                                                                OK 
+Done
+rc=0
+3018826297 97
+-- -oi2:65537 g
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive o.rar
+
+Searching for identical files      
+
+       70000  g/a1
+       70000  g/a2
+
+       80000  g/b1
+       80000  g/b2
+       80000  g/b3   3 found.
+
+Adding    g/a1                                                             OK 
+Adding    g/a2                                                             OK 
+Adding    g/b1                                                             OK 
+Adding    g/b2                                                             OK 
+Adding    g/b3                                                             OK 
+Adding    g/c1                                                             OK 
+Adding    g/c2                                                             OK 
+Adding    g/d1                                                             OK 
+Adding    g/d2                                                             OK 
+Adding    g                                                                OK 
+Done
+rc=0
+900098138 412894
+-- -oi2:65537 n
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive o.rar
+
+Searching for identical files
+
+Adding    n/x                                                              OK 
+Adding    n                                                                OK 
+Done
+rc=0
+3018826297 97
+-- -oi4:64k g
+
+Evaluation copy. Please register.
+g/c2
+g/a2
+g/b2
+g/b3
+rc=0
+-- -oi4:64k n
+
+Evaluation copy. Please register.
+rc=0
+        Name: g/a1
+        Type: File
+        Name: g/a2
+        Type: File reference
+      Target: g/a1
+        Name: g/b1
+        Type: File
+        Name: g/b2
+        Type: File reference
+      Target: g/b1
+        Name: g/b3
+        Type: File reference
+      Target: g/b1
+        Name: g/c1
+        Type: File
+        Name: g/c2
+        Type: File reference
+      Target: g/c1
+        Name: g/d1
+        Type: File
+        Name: g/d2
+        Type: File
+        Name: g
+        Type: Directory
+-- the references extract as their files
+
+Extracting from o.rar
+
+Creating    x/g                                                       OK
+Extracting  x/g/a1                                                         OK 
+Extracting  x/g/a2                                                         OK 
+Extracting  x/g/b1                                                         OK 
+Extracting  x/g/b2                                                         OK 
+Extracting  x/g/b3                                                         OK 
+Extracting  x/g/c1                                                         OK 
+Extracting  x/g/c2                                                         OK 
+Extracting  x/g/d1                                                         OK 
+Extracting  x/g/d2                                                         OK 
+All OK
+rc=0
+g/a1 same
+g/a2 same
+g/b1 same
+g/b2 same
+g/b3 same
+g/c1 same
+g/c2 same
+g/d1 same
+g/d2 same
+-- an update finds them among the files it puts in
+
+Evaluation copy. Please register.
+
+Updating archive u.rar
+
+Searching for identical files         4 found.
+
+Updating  g/a1                                                             OK 
+Adding    g/a2                                                             OK 
+Adding    g/b1                                                             OK 
+Adding    g/b2                                                             OK 
+Adding    g/b3                                                             OK 
+Adding    g/c1                                                             OK 
+Adding    g/c2                                                             OK 
+Adding    g/d1                                                             OK 
+Adding    g/d2                                                             OK 
+Adding    g                                                                OK 
+Done
+rc=0
+2496772861 347318
+        Name: g/a1
+        Type: File
+        Name: g/a2
+        Type: File reference
+      Target: g/a1
+        Name: g/b1
+        Type: File
+        Name: g/b2
+        Type: File reference
+      Target: g/b1
+        Name: g/b3
+        Type: File reference
+      Target: g/b1
+        Name: g/c1
+        Type: File
+        Name: g/c2
+        Type: File reference
+      Target: g/c1
+        Name: g/d1
+        Type: File
+        Name: g/d2
+        Type: File
+        Name: g
+        Type: Directory

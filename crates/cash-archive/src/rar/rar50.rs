@@ -241,6 +241,17 @@ pub struct FileRedirection {
 }
 
 impl FileRedirection {
+    /// A link of `redirection_type` (1 Unix symbolic link, 2 Windows symbolic link,
+    /// 3 junction, 4 hard link, 5 file reference) to `target_name`; `flags` 1 says the
+    /// target is a folder.
+    pub fn new(redirection_type: u64, flags: u64, target_name: Vec<u8>) -> Self {
+        Self {
+            redirection_type,
+            flags,
+            target_name,
+        }
+    }
+
     /// Validates the redirection kinds whose metadata the writer can retain.
     pub fn is_supported(&self) -> bool {
         (1..=5).contains(&self.redirection_type)
