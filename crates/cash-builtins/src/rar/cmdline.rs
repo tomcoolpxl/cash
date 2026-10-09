@@ -155,7 +155,7 @@ impl Command {
 
 impl FindSpec {
     /// `i[i|c|h|t]=<string>`, or `i<string>` with no parameters.
-    fn parse(rest: &str) -> Self {
+    pub(super) fn parse(rest: &str) -> Self {
         let mut spec = Self::default();
         let Some((params, text)) = rest.split_once('=') else {
             rest.clone_into(&mut spec.text);

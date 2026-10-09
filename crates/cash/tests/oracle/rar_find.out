@@ -1,0 +1,264 @@
+== stored.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Found  stored.rar / src/small.txt
+  hello world HELLO again  
+Found  stored.rar / src/text.txt
+  line 0 of the text file with hello in it line 1 of the text file with
+Done
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Found  stored.rar / src/small.txt
+  hello world HELLO again  
+Found  stored.rar / src/text.txt
+  line 0 of the text file with hello in it line 1 of the text file with
+Done
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Found  stored.rar / src/small.txt
+  HELLO again  
+Done
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Found  stored.rar / src/small.txt
+  hello world HELLO again  
+Found  stored.rar / src/text.txt
+  line 0 of the text file with hello in it line 1 of the text file with
+Done
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Found  stored.rar / src/deep.txt
+  uvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrNEEDLEABCDEFGHIJKLM
+Found  stored.rar / src/end.txt
+  aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaNEEDLE 
+Found  stored.rar / src/tabs.txt
+  four NEEDLE five six 
+Found  stored.rar / src/twice.txt
+  NEEDLE first xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+Found  stored.rar / src/utf.txt
+  cafÃ© NEEDLE naÃ¯ve 
+Done
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Found  stored.rar / src/deep.txt
+  uvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrNEEDLEABCDEFGHIJKLM
+Found  stored.rar / src/end.txt
+  aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaNEEDLE 
+Found  stored.rar / src/tabs.txt
+  four NEEDLE five six 
+Found  stored.rar / src/twice.txt
+  NEEDLE first xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+Found  stored.rar / src/utf.txt
+  cafÃ© NEEDLE naÃ¯ve 
+Done
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Done
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Found  stored.rar / src/small.txt
+  hello worl ( 68-65-6c-6c-6f 20 77 6f 72 6c )
+Found  stored.rar / src/text.txt
+  with hello in i ( 77 69 74 68 20 68-65-6c-6c-6f 20 69 6e 20 69 )
+Done
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Found  stored.rar / src/deep.txt
+  nopqrNEEDLEABCDE ( 6e 6f 70 71 72 4e-45-45-44-4c-45 41 42 43 44 45 )
+Found  stored.rar / src/end.txt
+  aaaaaNEEDLE ( 61 61 61 61 61 4e-45-45-44-4c-45 )
+Found  stored.rar / src/tabs.txt
+  four?NEEDLE five ( 66 6f 75 72 01 4e-45-45-44-4c-45 20 66 69 76 65 )
+Found  stored.rar / src/twice.txt
+  NEEDLE firs ( 4e-45-45-44-4c-45 20 66 69 72 73 )
+Found  stored.rar / src/utf.txt
+  afÃ© NEEDLE naÃ¯ ( 61 66 c3 a9 20 4e-45-45-44-4c-45 20 6e 61 c3 af )
+Done
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Done
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Found  stored.rar / src/utf.txt
+  café NEEDLE naïve
+Done
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Done
+rc=0
+== solid.rar
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Found  solid.rar / src/small.txt
+  hello world HELLO again  
+Found  solid.rar / src/text.txt
+  line 0 of the text file with hello in it line 1 of the text file with
+Done
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Found  solid.rar / src/small.txt
+  hello world HELLO again  
+Found  solid.rar / src/text.txt
+  line 0 of the text file with hello in it line 1 of the text file with
+Done
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Found  solid.rar / src/small.txt
+  HELLO again  
+Done
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Found  solid.rar / src/small.txt
+  hello world HELLO again  
+Found  solid.rar / src/text.txt
+  line 0 of the text file with hello in it line 1 of the text file with
+Done
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Found  solid.rar / src/deep.txt
+  uvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrNEEDLEABCDEFGHIJKLM
+Found  solid.rar / src/end.txt
+  aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaNEEDLE 
+Found  solid.rar / src/tabs.txt
+  four NEEDLE five six 
+Found  solid.rar / src/twice.txt
+  NEEDLE first xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+Found  solid.rar / src/utf.txt
+  cafÃ© NEEDLE naÃ¯ve 
+Done
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Found  solid.rar / src/deep.txt
+  uvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrNEEDLEABCDEFGHIJKLM
+Found  solid.rar / src/end.txt
+  aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaNEEDLE 
+Found  solid.rar / src/tabs.txt
+  four NEEDLE five six 
+Found  solid.rar / src/twice.txt
+  NEEDLE first xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+Found  solid.rar / src/utf.txt
+  cafÃ© NEEDLE naÃ¯ve 
+Done
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Done
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Found  solid.rar / src/small.txt
+  hello worl ( 68-65-6c-6c-6f 20 77 6f 72 6c )
+Found  solid.rar / src/text.txt
+  with hello in i ( 77 69 74 68 20 68-65-6c-6c-6f 20 69 6e 20 69 )
+Done
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Found  solid.rar / src/deep.txt
+  nopqrNEEDLEABCDE ( 6e 6f 70 71 72 4e-45-45-44-4c-45 41 42 43 44 45 )
+Found  solid.rar / src/end.txt
+  aaaaaNEEDLE ( 61 61 61 61 61 4e-45-45-44-4c-45 )
+Found  solid.rar / src/tabs.txt
+  four?NEEDLE five ( 66 6f 75 72 01 4e-45-45-44-4c-45 20 66 69 76 65 )
+Found  solid.rar / src/twice.txt
+  NEEDLE firs ( 4e-45-45-44-4c-45 20 66 69 72 73 )
+Found  solid.rar / src/utf.txt
+  afÃ© NEEDLE naÃ¯ ( 61 66 c3 a9 20 4e-45-45-44-4c-45 20 6e 61 c3 af )
+Done
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Done
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Found  solid.rar / src/utf.txt
+  café NEEDLE naïve
+Done
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Done
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Found  stored.rar / src/small.txt
+  hello world HELLO again  
+Done
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Done
+--- stderr
+
+Cannot open missing.rar
+The system cannot find the file specified.
+rc=10

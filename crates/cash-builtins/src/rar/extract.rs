@@ -14,8 +14,9 @@ use cash_archive::rar::crypto::rar50::{Rar50Cipher, Rar50Keys};
 use cash_archive::rar::rar50::blake2sp;
 use cash_core::openfiles::{FileKind, OpenFiles};
 
-use super::cmdline::{Command, Name, Overwrite, Parsed};
+use super::cmdline::{Command, FindSpec, Name, Overwrite, Parsed};
 use super::entry::{self, Crypto, Entry, Host, Method, Time, Volume};
+use super::find;
 use super::list::{self, Comment, Masks};
 use super::open::{self, Failure, Found};
 use super::{Rar, Stop, code};
@@ -30,13 +31,15 @@ enum Mode {
         paths: bool,
     },
     Print,
+    /// `i`: a string looked for in each file.
+    Find,
 }
 
 impl Mode {
     /// The words that begin an archive's work.
     const fn archive_verb(self) -> &'static str {
         match self {
-            Self::Test | Self::Print => "Testing archive",
+            Self::Test | Self::Print | Self::Find => "Testing archive",
             Self::Extract { .. } => "Extracting from",
         }
     }
@@ -44,9 +47,15 @@ impl Mode {
     /// The twelve columns that begin a file's line.
     const fn file_verb(self) -> &'static str {
         match self {
-            Self::Test | Self::Print => "Testing     ",
+            Self::Test | Self::Print | Self::Find => "Testing     ",
             Self::Extract { .. } => "Extracting  ",
         }
+    }
+
+    /// Whether the work has no lines of its own: `p` writes the files, `i` what it
+    /// finds.
+    const fn quiet(self) -> bool {
+        matches!(self, Self::Print | Self::Find)
     }
 }
 
@@ -56,6 +65,8 @@ struct Job {
     masks: Masks,
     /// The folder to extract into, as typed, `/` its separator, none at its end.
     dest: Option<String>,
+    /// `i`'s string and how to look for it.
+    find: Option<FindSpec>,
 }
 
 pub(super) fn run<SE: cash_core::ShellExtensions>(
@@ -67,6 +78,7 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
         Command::Test => Mode::Test,
         Command::Extract => Mode::Extract { paths: false },
         Command::ExtractFull => Mode::Extract { paths: true },
+        Command::Find(_) => Mode::Find,
         _ => Mode::Print,
     };
     let mut parsed = parsed.clone();
@@ -88,12 +100,22 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
         mode,
         masks: Masks::new(rar, &parsed)?,
         dest,
+        find: match command {
+            Command::Find(spec) => Some(spec.clone()),
+            _ => None,
+        },
     };
     let Some(archive) = parsed.archive.as_deref() else {
         return Ok(());
     };
+    // An archive not there leaves its line ended.
+    let mut ended = false;
     for found in open::find(rar, archive) {
+        ended = !found.path.is_file();
         set(rar, &job, &found)?;
+    }
+    if mode == Mode::Find && !rar.switches.no_done {
+        rar.console.msg(if ended { "Done\n" } else { "\nDone\n" });
     }
     Ok(())
 }
@@ -108,12 +130,24 @@ pub(super) fn test_written<SE: cash_core::ShellExtensions>(
         mode: Mode::Test,
         masks: Masks::all(),
         dest: None,
+        find: None,
     };
     let found = Found {
         display: display.to_owned(),
         path,
     };
     set(rar, &job, &found)
+}
+
+/// Whether an archive is solid, its files one stream.
+fn archive_solid(archive: &cash_archive::rar::Archive) -> bool {
+    use cash_archive::rar::Archive;
+    match archive {
+        Archive::Rar13(archive) => archive.main.is_solid(),
+        Archive::Rar15To40(archive) => archive.main.is_solid(),
+        Archive::Rar50Plus(archive) => archive.main.is_solid(),
+        _ => false,
+    }
 }
 
 /// The first volume of the set `display` belongs to, by its naming.
@@ -206,7 +240,7 @@ fn set<SE: cash_core::ShellExtensions>(
         }
     };
     let mut comment_errors = 0;
-    if job.mode != Mode::Print && !rar.switches.no_comments {
+    if !job.mode.quiet() && !rar.switches.no_comments {
         match list::comment(rar, found, &opened) {
             Some(Comment::Text(text)) => {
                 rar.console.msg(&format!(
@@ -313,7 +347,7 @@ fn set<SE: cash_core::ShellExtensions>(
     }
     if let Some(damage) = damage {
         // Counted twice, as rar counts it: reading, and at the end.
-        let end = if job.mode == Mode::Print { "\n" } else { "" };
+        let end = if job.mode.quiet() { "\n" } else { "" };
         work.error(&format!("\n{}{end}", damage.words()), code::CRC);
         work.errors += 1;
     }
@@ -389,7 +423,7 @@ fn open_failed<SE: cash_core::ShellExtensions>(
 
 /// A message `p` does not write: its standard output is the files'.
 fn msg<SE: cash_core::ShellExtensions>(rar: &Rar<'_, SE>, job: &Job, text: &str) {
-    if job.mode != Mode::Print {
+    if !job.mode.quiet() {
         rar.console.msg(text);
     }
 }
@@ -460,6 +494,7 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
         match self.job.mode {
             Mode::Test => self.test(entry),
             Mode::Print => self.print(entry),
+            Mode::Find => self.find(entry),
             Mode::Extract { paths } => self.extract(entry, paths),
         }
     }
@@ -491,6 +526,40 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
         let mut out = PrintTo { rar: self.rar };
         let verdict = self.decode(entry, &mut out, None);
         self.verdict(entry, verdict);
+        Ok(())
+    }
+
+    /// `i`: the file read through for the string, and where it is shown when found.
+    fn find(&mut self, entry: &Entry) -> Result<(), Stop> {
+        if entry.directory || entry.link.is_some() {
+            return Ok(());
+        }
+        let Some(needles) = self.job.find.as_ref().and_then(find::Needles::new) else {
+            return Ok(());
+        };
+        if !self.ready(entry)? {
+            return Ok(());
+        }
+        // A solid stream's next file needs this one decoded to its end.
+        let solid = self
+            .volumes
+            .first()
+            .is_some_and(|volume| archive_solid(&volume.archive));
+        let mut matcher = find::Matcher::new(&needles, !solid);
+        let verdict = self.decode(entry, &mut matcher, None);
+        // A found string stops the reading: its file is not checked to the end.
+        let stopped = matches!(&verdict, Verdict::Write(error) if find::stopped(error));
+        if let Some(shown) = matcher.shown() {
+            let archive = self.volumes.first().map_or("", |v| v.display.as_str());
+            self.rar
+                .console
+                .notice(&format!("\nFound  {archive} / {}\n  {shown}", entry.name));
+        }
+        if stopped {
+            self.done += 1;
+        } else {
+            self.verdict(entry, verdict);
+        }
         Ok(())
     }
 
@@ -676,13 +745,13 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
         let volume_names: Vec<String> = self.volumes.iter().map(|v| v.display.clone()).collect();
         let verb = self.job.mode.archive_verb();
         let console = self.rar.console;
-        let print = self.job.mode != Mode::Print && !self.rar.switches.no_names;
+        let print = !self.job.mode.quiet() && !self.rar.switches.no_names;
         let area = if self.rar.switches.no_percent {
             ""
         } else {
             "     "
         };
-        let quiet_lines = self.job.mode != Mode::Print;
+        let quiet_lines = !self.job.mode.quiet();
         let mut announced = self.announced;
         let mut hook = |part: usize| -> io::Result<()> {
             let volume = entry.parts.get(part).map_or(0, |p| p.volume);

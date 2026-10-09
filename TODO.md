@@ -681,7 +681,13 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      which rar 7.23 does and cash refuses as it refuses `a` ("Cannot modify volume");
      `rr` above 100% (rar takes up to 1000%, rars' writer 100); `ch` takes `-cl`, `-cu`,
      `-z`, `-k` and `-tl`, not the other switches rar lets it change (`-amr`, `-ma`…).
-   - `r`, `rc`, `i`; `s` and `rv` refused.
+   - `i`: done 2026-10-09 (`rar_find.sh`, 264 lines). Its OEM table is not looked in
+     with `t` (ANSI, UTF-8 and UTF-16 are); a name chosen in a solid archive leaves
+     out the spaces rar's progress leaves.
+   - `r` (with a recovery record: rars' repair report has to say which blocks it
+     mended, for rar's "Corrupt N bytes at" lines; without one: a rebuild that finds
+     the headers after damage, as rar's does) and `rc` (RAR 5 `.rev` volumes: rars
+     reads them, mends none); `s` and `rv` refused.
    - The `expect(dead_code)` at the top of `rar/mod.rs` goes when every part is used.
 3. **The page, `builtins.md`, doctor** (done 2026-10-09): `help rar` covers both names;
    `CARRIED` and doctor's note on a program cash goes ahead of have `rar` and `unrar`,

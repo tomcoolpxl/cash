@@ -23,6 +23,7 @@ mod cmdline;
 mod delete;
 mod entry;
 mod extract;
+mod find;
 mod help;
 mod item;
 mod list;
@@ -619,7 +620,11 @@ fn dispatch<SE: cash_core::ShellExtensions>(
 ) -> Result<(), Stop> {
     match command {
         Command::List { verbose, form } => return list::run(rar, *verbose, *form, parsed),
-        Command::Test | Command::Extract | Command::ExtractFull | Command::Print => {
+        Command::Test
+        | Command::Extract
+        | Command::ExtractFull
+        | Command::Print
+        | Command::Find(_) => {
             return extract::run(rar, command, parsed);
         }
         Command::Add | Command::Update | Command::Freshen | Command::Move { .. } => {
