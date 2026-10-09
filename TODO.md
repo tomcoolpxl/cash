@@ -770,9 +770,11 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      `rar_add_names.sh`, now 326 lines). WinRAR's bound counts the old archive's
      members, dropped ones too, and for `a`, `u` and `f` every file named, written or
      not; cash counted the members written, so an update or `d` near a width's edge
-     came out a byte short (rars' `Layout::offset_bound`, given by cash). Seen with
-     stored members; whether a compressed one counts its packed or unpacked size is
-     not yet seen (cash counts the unpacked).
+     came out a byte short (rars' `Layout::offset_bound`, given by cash). An old member
+     counts by its packed size (done 2026-10-09, in `rar_add_names.sh`, now 391 lines:
+     seen with compressed members near a width's edge); and a compressed member copied
+     has its data size written as wide as its unpacked size takes, a stored one's not
+     padded, where cash wrote both unpadded.
    - A file another program has open for writing: done 2026-10-09 (in
      `rar_add_names.sh`, now 192 lines). Rar.exe cannot open it, as it opens what it
      adds letting no one write ("Cannot open NAME / The process cannot access the

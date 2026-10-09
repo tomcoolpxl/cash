@@ -284,6 +284,12 @@ rc=0
 1302623781 386
 rc=0
 3749141051 504
+-- a compressed member copied: its data size as wide as its unpacked size, the
+-- room counting its packed size (rars' m3_default.rar, made by Rar.exe)
+rc=0
+2104858637 10126
+rc=0
+2599693661 10006
 == an archive whose files are encrypted, changed without its password
 
 Evaluation copy. Please register.

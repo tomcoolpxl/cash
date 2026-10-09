@@ -835,12 +835,12 @@ pub(super) fn asked_recovery_percent<SE: cash_core::ShellExtensions>(
 }
 
 /// The bound `WinRAR` gives the locator's offsets when it changes an archive: from the
-/// old archive's members, the ones dropped too, each counted as a member written is
-/// (seen with stored members).
+/// old archive's members, the ones dropped too, each counted as a member written is but
+/// by its packed size (seen with compressed members near a width's edge).
 pub(super) fn old_bound(archive: &rar::Archive) -> u64 {
     let members = archive.members().fold(1u64, |total, member| {
         total.saturating_add(rar::rar50::Layout::member_bound(
-            member.meta.unpacked_size,
+            member.meta.packed_size,
             &member.meta.name,
         ))
     });

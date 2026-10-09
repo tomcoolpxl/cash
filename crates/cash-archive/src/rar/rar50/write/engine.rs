@@ -1040,8 +1040,13 @@ fn prepare_carried(
         record.vint(version)?;
         write_extra_record(&mut extra, super::super::FHEXTRA_VERSION, &record)?;
     }
-    // WinRAR writes a copied member's sizes as they are: there is nothing to patch.
-    let size_width = 0;
+    // WinRAR writes a copied member's data size as wide as its unpacked size takes, and
+    // that one as it is: a stored member's come out unpadded, a compressed one's padded.
+    let size_width = if winrar {
+        crate::rar::rar50::framing::vint_len(carried.unpacked_size)
+    } else {
+        0
+    };
     let specific = super::headers::file_fields(
         &super::headers::FileFields {
             name: &entry.name,

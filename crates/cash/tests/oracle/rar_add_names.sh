@@ -13,6 +13,7 @@
 exec </dev/null
 export TZ=Europe/Brussels
 export RARINISWITCHES=-scfr
+fx=$(cd ../../../cash-archive/tests/fixtures/rar/rar50 && pwd)
 dir=$(mktemp -d)
 # Work beside `z`'s files, not among them: a mask would take them.
 mkdir "$dir/w"
@@ -106,6 +107,13 @@ cksum < l4d.rar
 cp l4.rar l4n.rar
 z rar rn -idq l4n.rar 'b\a.txt' 'b\z.txt'
 cksum < l4n.rar
+echo "-- a compressed member copied: its data size as wide as its unpacked size, the"
+echo "-- room counting its packed size (rars' m3_default.rar, made by Rar.exe)"
+cp "$fx/m3_default.rar" l5.rar
+z rar a -m0 -idq l5.rar 'b\a.txt'
+cksum < l5.rar
+z rar d -idq l5.rar 'b\a.txt'
+cksum < l5.rar
 
 echo "== an archive whose files are encrypted, changed without its password"
 printf 'secret\n' > s1.txt
