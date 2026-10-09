@@ -249,6 +249,13 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
         builder = builder.layout(layout(rar, Some(bound)));
     }
     let legacy = builder.format().family() != ArchiveFamily::Rar50Plus;
+    if !legacy && compressing {
+        builder = builder.rar50_dictionary_size(Some(dictionary(
+            switches.dictionary,
+            &sources,
+            solid,
+        )));
+    }
 
     // The archived members kept, carried as they are or read back to be written again.
     let kept: Vec<usize> = slots
@@ -673,6 +680,28 @@ pub(super) fn layout<SE: cash_core::ShellExtensions>(
         .with_checksums(checksums)
         .with_quick_open_over(over)
         .with_offset_bound(bound)
+}
+
+/// The dictionary rar packs with, as Rar.txt says and `Rar.exe` records: `-md`'s, 32 MB
+/// without it, halved while the largest file (all of them, in a solid archive) would
+/// fit in it twice, to 128 KB at the least, or 1 MB in a solid archive.
+fn dictionary(asked: Option<u64>, sources: &[Source], solid: bool) -> u64 {
+    let files = sources.iter().filter(|source| !source.is_dir);
+    let size = if solid {
+        files.map(|source| source.size).sum()
+    } else {
+        files.map(|source| source.size).max().unwrap_or(0)
+    };
+    let mut dictionary = asked.unwrap_or(32 << 20);
+    let least = if solid {
+        dictionary.min(1 << 20)
+    } else {
+        128 << 10
+    };
+    while dictionary > least && size.saturating_mul(2) <= dictionary {
+        dictionary /= 2;
+    }
+    dictionary
 }
 
 /// The builder a rewrite of `opened` starts from. A non-solid RAR 5 archive's members

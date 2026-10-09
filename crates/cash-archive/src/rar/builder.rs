@@ -293,7 +293,9 @@ impl Builder {
         self
     }
 
-    pub(crate) fn rar50_dictionary_size(mut self, size: Option<u64>) -> Self {
+    /// The dictionary a RAR 5 or 7 archive's compressed members are packed with, and
+    /// their headers record; `None` keeps the writer's own.
+    pub fn rar50_dictionary_size(mut self, size: Option<u64>) -> Self {
         self.rar50_dictionary_size = size;
         self
     }

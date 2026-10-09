@@ -335,6 +335,14 @@ Done
 rc=0
 s2.txt
 rc=0
+== -md: the dictionary, halved while the largest file (all, if solid) fits twice
+'': 256k 256k 
+'-md128k': 128k 128k 
+'-md1m': 256k 256k 
+'-md64m': 256k 256k 
+'-s': 1m 1m 
+'-s -md256k': 256k 256k 
+a small file alone: 128k
 == names not there, and a file the shell is writing
 
 Evaluation copy. Please register.

@@ -123,6 +123,18 @@ z rar t -idc -psecret enc2.rar s9.txt
 z rar d -idc enc2.rar s9.txt
 z rar lb enc2.rar
 
+echo "== -md: the dictionary, halved while the largest file (all, if solid) fits twice"
+awk 'BEGIN { srand(1); for (i = 0; i < 2000; i++) printf "line %d %d\n", i, int(rand() * 1000000) }' > d1.txt
+awk 'BEGIN { srand(2); for (i = 0; i < 8000; i++) printf "line %d %d\n", i, int(rand() * 1000000) }' > d2.txt
+for sw in "" -md128k -md1m -md64m -s "-s -md256k"; do
+  rm -f md.rar
+  rar a -m3 -idq $sw md.rar d1.txt d2.txt
+  echo "'$sw': $(rar lt -idc md.rar | tr -d '\r' | grep Compression | sed 's/.*-md=//' | tr '\n' ' ')"
+done
+rm -f md.rar
+rar a -m3 -idq md.rar d1.txt
+echo "a small file alone: $(rar lt -idc md.rar | tr -d '\r' | grep Compression | sed 's/.*-md=//')"
+
 echo "== names not there, and a file the shell is writing"
 mk
 z rar a -m0 -idc n1.rar 'src\a.txt' nothere.txt nothere2.txt

@@ -740,7 +740,10 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      `-dr` done 2026-10-09: `-dw` in `rar_add_names.sh`; `-dr`, a folder archived whole
      recycled whole and lines without a share, compared with Rar.exe by hand, out of
      the oracle not to fill the Recycle Bin);
-     `-md` read and not applied (rars' builder keeps its dictionary size to itself).
+     `-md` done 2026-10-09 (in `rar_add_names.sh`): the dictionary asked
+     (32 MB without), halved while the largest file, or all in a solid archive, fits
+     twice, to 128 KB (1 MB solid), as the headers Rar.exe writes record it; rars' builder's
+     `rar50_dictionary_size` is public now. Sizes above 4 GB (RAR 7's) are not tried.
    - `c`, `cw`, `rn`, `k`, `rr` and `ch`: done 2026-10-09 (`rar_modify.sh`, 474 lines,
      the rewrites WinRAR's byte for byte). Left of them: `c` and `k` on a volume set,
      which rar 7.23 does and cash refuses as it refuses `a` ("Cannot modify volume");
