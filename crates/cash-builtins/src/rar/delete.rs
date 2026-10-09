@@ -10,6 +10,7 @@ use super::add;
 use super::cmdline::Parsed;
 use super::list::Masks;
 use super::open::{self, Found};
+use super::repack::Repack;
 use super::{Rar, Stop, code};
 
 /// The archive's builder for `d`: its comment and layout kept, its main header's
@@ -39,6 +40,31 @@ fn rewriter<SE: cash_core::ShellExtensions>(
             .map_err(fatal)?;
     }
     Ok(builder)
+}
+
+/// "Deleting NAME" for each member going, in the archive's order, logged; a solid
+/// archive's repacking said between them as rar goes through its members, every one
+/// repacked when none goes.
+fn say_deletions<SE: cash_core::ShellExtensions>(
+    rar: &Rar<'_, SE>,
+    names: &[String],
+    gone: &[bool],
+    solid: bool,
+) {
+    let mut repack = (solid && !rar.switches.no_percent).then(|| Repack::new(rar, None));
+    for (name, &gone) in names.iter().zip(gone) {
+        if !gone {
+            if let Some(repack) = &mut repack {
+                repack.kept(0);
+            }
+            continue;
+        }
+        if let Some(repack) = &mut repack {
+            repack.dropped(0);
+        }
+        rar.console.msg(&format!("\nDeleting {name}"));
+        rar.log_file(name);
+    }
 }
 
 pub(super) fn run<SE: cash_core::ShellExtensions>(
@@ -75,15 +101,14 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
     let members: Vec<cash_archive::rar::ArchiveMember> = opened.archive.members().collect();
     let names: Vec<String> = add::member_names(&opened.archive, &members);
     let gone: Vec<bool> = names.iter().map(|name| masks.wants(name)).collect();
+    if gone.contains(&true) {
+        rar.log_archive(&found.display);
+    }
+    say_deletions(rar, &names, &gone, opened.facts.solid);
     if !gone.contains(&true) {
         rar.console.msg("\nNo files to delete\n");
         rar.fail(code::NO_FILES);
         return Ok(());
-    }
-    rar.log_archive(&found.display);
-    for (name, _) in names.iter().zip(&gone).filter(|(_, gone)| **gone) {
-        rar.console.msg(&format!("\nDeleting {name}"));
-        rar.log_file(name);
     }
     if !gone.contains(&false) {
         rar.console

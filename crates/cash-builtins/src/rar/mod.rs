@@ -30,6 +30,7 @@ mod log;
 mod modify;
 mod open;
 mod reconstruct;
+mod repack;
 mod repair;
 
 use std::cell::{Cell, RefCell};

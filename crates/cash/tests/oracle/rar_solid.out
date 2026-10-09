@@ -1,0 +1,458 @@
+== a file replaced, files added: the kept ones repacked, the replaced analyzed
+-- base: a t.rar src/b.txt
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Updating solid archive t.rar
+
+Repacking archived files:             <<<<<<<<<<<<      1     <<<< 33%
+Updating  src/b.txt                                                        OK 
+Analyzing archived files:       1<<<<<<<
+Repacking archived files:             <<<<<<<<<<<<      1     <<<< 66%<<<<<<<<<<<<      2     <<<<100%
+Done
+rc=0
+src/a.txt
+src/b.txt
+src/c.txt
+src/d.txt
+-- base: u t.rar src/b.txt src/d.txt
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Updating solid archive t.rar
+
+Repacking archived files:             <<<<<<<<<<<<      1     <<<< 49%
+Updating  src/b.txt                                                        OK 
+Analyzing archived files:       1<<<<<<<
+Repacking archived files:             <<<<<<<<<<<<      1     <<<< 99%
+Updating  src/d.txt                                                        OK 
+Done
+rc=0
+src/a.txt
+src/b.txt
+src/c.txt
+src/d.txt
+-- base: u t.rar src/a.txt
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Updating solid archive t.rar
+
+Updating  src/a.txt                                                        OK 
+Analyzing archived files:       1<<<<<<<
+Repacking archived files:             <<<<<<<<<<<<      1     <<<< 33%<<<<<<<<<<<<      2     <<<< 66%<<<<<<<<<<<<      3     <<<<100%
+Done
+rc=0
+src/a.txt
+src/b.txt
+src/c.txt
+src/d.txt
+-- base: a t.rar src/b.txt src/e.txt src/f.txt
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Updating solid archive t.rar
+
+Repacking archived files:             <<<<<<<<<<<<      1     <<<< 19%
+Updating  src/b.txt                                                        OK 
+Analyzing archived files:       1<<<<<<<
+Repacking archived files:             <<<<<<<<<<<<      1     <<<< 40%<<<<<<<<<<<<      2     <<<< 60%
+Adding    src/e.txt                                                        OK 
+Adding    src/f.txt                                                        OK 
+Done
+rc=0
+src/a.txt
+src/b.txt
+src/c.txt
+src/d.txt
+src/e.txt
+src/f.txt
+-- base: f t.rar src\*
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Updating solid archive t.rar
+
+Updating  src/a.txt                                                        OK 
+Updating  src/b.txt                                                        OK 
+Analyzing archived files:       1<<<<<<<      2<<<<<<<
+Repacking archived files:             <<<<<<<<<<<<      1     <<<< 99%
+Updating  src/d.txt                                                        OK 
+Done
+rc=0
+src/a.txt
+src/b.txt
+src/c.txt
+src/d.txt
+-- tree: u t.rar src/b.txt
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Updating solid archive t.rar
+
+Repacking archived files:             <<<<<<<<<<<<      1     <<<< 24%
+Updating  src/b.txt                                                        OK 
+Analyzing archived files:       1<<<<<<<
+Repacking archived files:             <<<<<<<<<<<<      1     <<<< 50%<<<<<<<<<<<<      2     <<<< 75%<<<<<<<<<<<<      3     <<<<100%<<<<<<<<<<<<      4     <<<<<<<<<<<<      5     <<<<<<<<<<<<      6     
+Done
+rc=0
+src/a.txt
+src/b.txt
+src/c.txt
+src/d.txt
+src/sub/d.txt
+src/empty.txt
+src/sub
+src
+-- tree: a t.rar src/e.txt src/b.txt
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Updating solid archive t.rar
+
+Repacking archived files:             <<<<<<<<<<<<      1     <<<< 19%
+Updating  src/b.txt                                                        OK 
+Analyzing archived files:       1<<<<<<<
+Repacking archived files:             <<<<<<<<<<<<      1     <<<< 40%<<<<<<<<<<<<      2     <<<< 60%<<<<<<<<<<<<      3     <<<< 80%<<<<<<<<<<<<      4     
+Adding    src/e.txt                                                        OK <<<<<<<<<<<<      5     <<<<<<<<<<<<      6     
+Done
+rc=0
+src/a.txt
+src/b.txt
+src/c.txt
+src/d.txt
+src/sub/d.txt
+src/empty.txt
+src/e.txt
+src/sub
+src
+-- tree: a t.rar src\*.txt
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Updating solid archive t.rar
+
+Updating  src/a.txt                                                        OK 
+Updating  src/b.txt                                                        OK 
+Updating  src/c.txt                                                        OK 
+Updating  src/d.txt                                                        OK 
+Analyzing archived files:       1<<<<<<<      2<<<<<<<      3<<<<<<<      4<<<<<<<
+Repacking archived files:             <<<<<<<<<<<<      1     <<<< 50%
+Updating  src/empty.txt                                                    OK 
+Adding    src/e.txt                                                        OK 
+Adding    src/f.txt                                                        OK 
+Analyzing archived files:       1<<<<<<<
+Repacking archived files:             <<<<<<<<<<<<      1     <<<<<<<<<<<<      2     
+Done
+rc=0
+src/a.txt
+src/b.txt
+src/c.txt
+src/d.txt
+src/sub/d.txt
+src/empty.txt
+src/e.txt
+src/f.txt
+src/sub
+src
+-- tree: a -r t.rar src\*.txt
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Updating solid archive t.rar
+
+Updating  src/a.txt                                                        OK 
+Updating  src/b.txt                                                        OK 
+Updating  src/c.txt                                                        OK 
+Updating  src/d.txt                                                        OK 
+Updating  src/sub/d.txt                                                    OK 
+Updating  src/empty.txt                                                    OK 
+Adding    src/e.txt                                                        OK 
+Adding    src/f.txt                                                        OK 
+Analyzing archived files:       1<<<<<<<      2<<<<<<<      3<<<<<<<      4<<<<<<<      5<<<<<<<      6<<<<<<<
+Repacking archived files:             <<<<<<<<<<<<      1     <<<<<<<<<<<<      2     
+Done
+rc=0
+src/a.txt
+src/b.txt
+src/c.txt
+src/d.txt
+src/sub/d.txt
+src/empty.txt
+src/e.txt
+src/f.txt
+src/sub
+src
+-- tree: u t.rar src/a.txt src/b.txt src/c.txt src/d.txt
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Updating solid archive t.rar
+
+Updating  src/a.txt                                                        OK 
+Updating  src/b.txt                                                        OK 
+Analyzing archived files:       1<<<<<<<      2<<<<<<<
+Repacking archived files:             <<<<<<<<<<<<      1     <<<< 50%
+Updating  src/d.txt                                                        OK 
+Analyzing archived files:       1<<<<<<<
+Repacking archived files:             <<<<<<<<<<<<      1     <<<<100%<<<<<<<<<<<<      2     <<<<<<<<<<<<      3     <<<<<<<<<<<<      4     
+Done
+rc=0
+src/a.txt
+src/b.txt
+src/c.txt
+src/d.txt
+src/sub/d.txt
+src/empty.txt
+src/sub
+src
+== files only added: the old ones before analyzed, those after repacked
+-- base: a t.rar src/e.txt
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Updating solid archive t.rar
+
+Analyzing archived files:       1<<<<<<<      2<<<<<<<      3<<<<<<<      4<<<<<<<
+Adding    src/e.txt                                                        OK 
+Done
+rc=0
+src/a.txt
+src/b.txt
+src/c.txt
+src/d.txt
+src/e.txt
+-- base: a t.rar src/e.txt src/f.txt
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Updating solid archive t.rar
+
+Analyzing archived files:       1<<<<<<<      2<<<<<<<      3<<<<<<<      4<<<<<<<
+Adding    src/e.txt                                                        OK 
+Adding    src/f.txt                                                        OK 
+Done
+rc=0
+src/a.txt
+src/b.txt
+src/c.txt
+src/d.txt
+src/e.txt
+src/f.txt
+-- tree: a t.rar src/e.txt
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Updating solid archive t.rar
+
+Analyzing archived files:       1<<<<<<<      2<<<<<<<      3<<<<<<<      4<<<<<<<      5<<<<<<<      6<<<<<<<
+Adding    src/e.txt                                                        OK 
+Repacking archived files:             <<<<<<<<<<<<      1     <<<<<<<<<<<<      2     
+Done
+rc=0
+src/a.txt
+src/b.txt
+src/c.txt
+src/d.txt
+src/sub/d.txt
+src/empty.txt
+src/e.txt
+src/sub
+src
+== d: no percentages, and every file repacked when none goes
+-- base: d t.rar src\b.txt
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Deleting from t.rar
+Repacking archived files:             <<<<<<<<<<<<      1     
+Deleting src/b.txt
+Analyzing archived files:       1<<<<<<<
+Repacking archived files:             <<<<<<<<<<<<      1     <<<<<<<<<<<<      2     
+Done
+rc=0
+src/a.txt
+src/c.txt
+src/d.txt
+-- base: d t.rar src\a.txt
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Deleting from t.rar
+Deleting src/a.txt
+Analyzing archived files:       1<<<<<<<
+Repacking archived files:             <<<<<<<<<<<<      1     <<<<<<<<<<<<      2     <<<<<<<<<<<<      3     
+Done
+rc=0
+src/b.txt
+src/c.txt
+src/d.txt
+-- base: d t.rar src\d.txt
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Deleting from t.rar
+Repacking archived files:             <<<<<<<<<<<<      1     <<<<<<<<<<<<      2     <<<<<<<<<<<<      3     
+Deleting src/d.txt
+Done
+rc=0
+src/a.txt
+src/b.txt
+src/c.txt
+-- base: d t.rar src\b.txt src\c.txt
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Deleting from t.rar
+Repacking archived files:             <<<<<<<<<<<<      1     
+Deleting src/b.txt
+Deleting src/c.txt
+Analyzing archived files:       1<<<<<<<      2<<<<<<<
+Repacking archived files:             <<<<<<<<<<<<      1     
+Done
+rc=0
+src/a.txt
+src/d.txt
+-- base: d t.rar nothing.txt
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Deleting from t.rar
+Repacking archived files:             <<<<<<<<<<<<      1     <<<<<<<<<<<<      2     <<<<<<<<<<<<      3     <<<<<<<<<<<<      4     
+No files to delete
+rc=10
+src/a.txt
+src/b.txt
+src/c.txt
+src/d.txt
+-- tree: d t.rar src\sub
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Deleting from t.rar
+Repacking archived files:             <<<<<<<<<<<<      1     <<<<<<<<<<<<      2     <<<<<<<<<<<<      3     <<<<<<<<<<<<      4     
+Deleting src/sub/d.txt
+Analyzing archived files:       1<<<<<<<
+Repacking archived files:             <<<<<<<<<<<<      1     
+Deleting src/sub
+Analyzing archived files:       1<<<<<<<
+Repacking archived files:             <<<<<<<<<<<<      1     
+Done
+rc=0
+src/a.txt
+src/b.txt
+src/c.txt
+src/d.txt
+src/empty.txt
+src
+-- tree: d t.rar src\empty.txt
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Deleting from t.rar
+Repacking archived files:             <<<<<<<<<<<<      1     <<<<<<<<<<<<      2     <<<<<<<<<<<<      3     <<<<<<<<<<<<      4     <<<<<<<<<<<<      5     
+Deleting src/empty.txt
+Analyzing archived files:       1<<<<<<<
+Repacking archived files:             <<<<<<<<<<<<      1     <<<<<<<<<<<<      2     
+Done
+rc=0
+src/a.txt
+src/b.txt
+src/c.txt
+src/d.txt
+src/sub/d.txt
+src/sub
+src
+-- tree: d t.rar src\*.txt
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Deleting from t.rar
+Deleting src/a.txt
+Deleting src/b.txt
+Deleting src/c.txt
+Deleting src/d.txt
+Deleting src/sub/d.txt
+Deleting src/empty.txt
+Analyzing archived files:       1<<<<<<<      2<<<<<<<      3<<<<<<<      4<<<<<<<      5<<<<<<<      6<<<<<<<
+Repacking archived files:             <<<<<<<<<<<<      1     <<<<<<<<<<<<      2     
+Done
+rc=0
+src/sub
+src
+== -idp: none of it
+-- base: a -idp t.rar src/b.txt
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Updating solid archive t.rar
+
+Updating  src/b.txt                                                       OK 
+Done
+rc=0
+src/a.txt
+src/b.txt
+src/c.txt
+src/d.txt
+-- base: d -idp t.rar src\b.txt
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Deleting from t.rar
+Deleting src/b.txt
+Done
+rc=0
+src/a.txt
+src/c.txt
+src/d.txt

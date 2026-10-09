@@ -739,11 +739,19 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      name"; rars' builder's `set_version` now numbers any member, carried or not. Left:
      a file comment on a member with older versions (set by name, it may land on the
      wrong one).
-   - A solid archive's update: rar says "Updating solid archive" (cash does now), and
-     shows its repacking: "Analyzing archived files:" and "Repacking archived files:"
-     with counters it backspaces over, the members before the change repacked first,
-     then the change, then the rest. Not cash's yet; the oracle's solid updates are
-     quiet.
+   - A solid archive's update: done 2026-10-09 (`rar_solid.sh`, 458 lines, the
+     counters' backspaces and shares kept). Rar.exe says "Updating solid archive" and
+     shows its repacking as it goes through the members: with a file replaced or a
+     member dropped, every member kept is repacked, counted run by run after
+     "Repacking archived files:" (seven columns, backspaced over, and the share of the
+     bytes written so far after each holding data, not in `d`); a member replaced or
+     dropped is said, and before the next kept one "Analyzing archived files:" counts
+     those since the last; a file added leaves the run going, its next count written
+     after the file's OK. With files only added, the old members before the first are
+     analyzed, those after repacked. `d` with nothing to delete repacks every member
+     before "No files to delete". `-idp` shows none of it. A file's line under `-idp`
+     keeps four spaces where its share would be (cash kept none: no oracle had `-idp`
+     on `a`).
    - A damaged header that still parses: done 2026-10-09 (in
      `rar_extract_switches.sh`, now 568 lines). rars' lenient read stopped at the first
      header failing its checksum; past the main header it now keeps it, marked

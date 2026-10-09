@@ -18,6 +18,7 @@ use cash_archive::rar::{
 
 use super::cmdline::{Command, Name, Parsed};
 use super::open::{self, Found};
+use super::repack::Repack;
 use super::{Rar, Stop, code};
 use super::{identical, list};
 use crate::rardata;
@@ -407,8 +408,15 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
             &lines,
             volume_digits(&sources, u64::try_from(size).unwrap_or(u64::MAX)),
         ),
-        None => write_single(rar, &builder, &path, &resources, &lines, &notes)
-            .map(|()| vec![path.clone()]),
+        None => {
+            // A solid archive changed says its repacking between the lines.
+            let repack = old
+                .as_ref()
+                .filter(|old| old.facts.solid && !switches.no_percent)
+                .map(|_| repack_plan(&slots, &members, &sources, &actions, &notes));
+            write_single(rar, &builder, &path, &resources, &lines, &notes, repack)
+        }
+        .map(|()| vec![path.clone()]),
     };
     let written = match written {
         Ok(written) => written,
@@ -1366,6 +1374,7 @@ fn write_single<SE: cash_core::ShellExtensions>(
     resources: &WriterResources,
     lines: &[Option<(String, Action)>],
     notes: &[Vec<String>],
+    repack: Option<RepackPlan>,
 ) -> rar::Result<()> {
     let (sender, events) = mpsc::channel();
     let sender = Mutex::new(sender);
@@ -1388,6 +1397,10 @@ fn write_single<SE: cash_core::ShellExtensions>(
         }
     };
     let mut shown = Shown::new(rar, lines, notes);
+    shown.repack = repack.map(|plan| {
+        let total = plan.total;
+        (plan, Repack::new(rar, Some(total)))
+    });
     std::thread::scope(|scope| {
         let writer = scope.spawn(move || {
             let result = builder.write_to_path_with_resources(path, resources, Some(&progress));
@@ -1419,6 +1432,10 @@ struct Shown<'r, 'a, SE: cash_core::ShellExtensions> {
     next: usize,
     /// Whether `next`'s line is begun.
     begun: bool,
+    /// A solid archive's repacking, said between the lines.
+    repack: Option<(RepackPlan, Repack<'r, 'a, SE>)>,
+    /// Whether the old members were said analyzed, before the first file added.
+    analyzed: bool,
 }
 
 impl<'r, 'a, SE: cash_core::ShellExtensions> Shown<'r, 'a, SE> {
@@ -1435,6 +1452,8 @@ impl<'r, 'a, SE: cash_core::ShellExtensions> Shown<'r, 'a, SE> {
             finished: vec![false; lines.len()],
             next: 0,
             begun: false,
+            repack: None,
+            analyzed: false,
         }
     }
 
@@ -1485,7 +1504,24 @@ impl<'r, 'a, SE: cash_core::ShellExtensions> Shown<'r, 'a, SE> {
     }
 
     fn begin(&mut self, index: usize) {
+        // `-as`'s deletions before the member are old members dropped.
+        let dropped = self.notes.get(index).map_or(0, Vec::len);
+        if let Some((_, repack)) = &mut self.repack {
+            for _ in 0..dropped {
+                repack.dropped(0);
+            }
+        }
         self.note(index);
+        if let Some((plan, repack)) = &mut self.repack {
+            match plan.kinds.get(index) {
+                Some(Repacked::Kept(_)) => repack.kept_begin(),
+                Some(Repacked::New(_)) if plan.analyzed > 0 && !self.analyzed => {
+                    repack.analyze(plan.analyzed);
+                    self.analyzed = true;
+                }
+                _ => {}
+            }
+        }
         if let Some((shown, action)) = &self.lines[index] {
             self.rar.console.msg(&line_start(self.rar, *action, shown));
         }
@@ -1496,8 +1532,101 @@ impl<'r, 'a, SE: cash_core::ShellExtensions> Shown<'r, 'a, SE> {
         if self.lines[index].is_some() && !self.rar.switches.no_names {
             self.rar.console.msg("  OK ");
         }
+        if let Some((plan, repack)) = &mut self.repack {
+            match plan.kinds.get(index) {
+                Some(&Repacked::Kept(size)) => repack.kept_end(size),
+                Some(&Repacked::Replacing(size)) => repack.dropped(size),
+                Some(&Repacked::New(size)) => repack.added(size),
+                _ => {}
+            }
+        }
         self.next += 1;
         self.begun = false;
+    }
+}
+
+/// What a member written is to a solid archive's repacking, with its bytes.
+#[derive(Clone, Copy)]
+enum Repacked {
+    /// An old member kept, packed again.
+    Kept(u64),
+    /// An old member before the first file added, when files are only added: the
+    /// stream goes on after it, which is only decoded.
+    Analyzed,
+    /// A file put in an old member's place.
+    Replacing(u64),
+    /// A file added after the old members.
+    New(u64),
+}
+
+/// A solid archive's repacking, planned from what is written in its order.
+struct RepackPlan {
+    kinds: Vec<Repacked>,
+    /// The bytes written in all.
+    total: u64,
+    /// The old members analyzed before the first file added, when files are only
+    /// added.
+    analyzed: u64,
+}
+
+fn repack_plan(
+    slots: &[Slot],
+    members: &[rar::ArchiveMember],
+    sources: &[Source],
+    actions: &[Option<(Action, Option<usize>)>],
+    notes: &[Vec<String>],
+) -> RepackPlan {
+    let mut kinds: Vec<Repacked> = slots
+        .iter()
+        .map(|slot| match *slot {
+            Slot::Kept(index) => {
+                let meta = &members[index].meta;
+                Repacked::Kept(if meta.is_directory {
+                    0
+                } else {
+                    meta.unpacked_size
+                })
+            }
+            Slot::Put(index) => {
+                let size = if sources[index].is_dir {
+                    0
+                } else {
+                    sources[index].size
+                };
+                if actions[index].and_then(|(_, member)| member).is_some() {
+                    Repacked::Replacing(size)
+                } else {
+                    Repacked::New(size)
+                }
+            }
+        })
+        .collect();
+    // Files only added: the stream goes on from the old members before the first.
+    let changed = kinds
+        .iter()
+        .any(|kind| matches!(kind, Repacked::Replacing(_)))
+        || notes.iter().any(|note| !note.is_empty());
+    let mut analyzed = 0;
+    if !changed {
+        for kind in &mut kinds {
+            if !matches!(kind, Repacked::Kept(_)) {
+                break;
+            }
+            *kind = Repacked::Analyzed;
+            analyzed += 1;
+        }
+    }
+    let total = kinds
+        .iter()
+        .map(|&kind| match kind {
+            Repacked::Kept(size) | Repacked::Replacing(size) | Repacked::New(size) => size,
+            Repacked::Analyzed => 0,
+        })
+        .fold(0u64, u64::saturating_add);
+    RepackPlan {
+        kinds,
+        total,
+        analyzed,
     }
 }
 
@@ -1517,9 +1646,14 @@ fn line_start<SE: cash_core::ShellExtensions>(
     format!("\n{verb}{shown:<58}{}", area(rar))
 }
 
-/// The percentage's place after a name: none with `-idp`.
+/// The percentage's place after a name, which "  OK" is written back over: with `-idp`
+/// four spaces, written over by nothing.
 const fn area<SE: cash_core::ShellExtensions>(rar: &Rar<'_, SE>) -> &'static str {
-    if rar.switches.no_percent { "" } else { "     " }
+    if rar.switches.no_percent {
+        "    "
+    } else {
+        "     "
+    }
 }
 
 /// The digits rar writes a volume's number in: as many as the volumes it foresees, one

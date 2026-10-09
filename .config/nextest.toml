@@ -178,7 +178,7 @@ slow-timeout = { period = "30s", terminate-after = 3 }
 # (2026-10-08). The passwords script answers rar's questions a second apart: 35 s, 23 of
 # them waiting (2026-10-09).
 [[profile.default.overrides]]
-filter = 'binary(it) and test(/^rar_builtin::rar_(lists|tests_extracts_and_prints|adds_updates_moves_and_deletes|comments_renames_locks_and_changes|finds_strings|repairs|reconstructs_volumes|extracts_by_switches|keeps_versions|extracts_links|keeps_times|adds_by_name|names_by_date|logs_names|cuts_volumes_with_recovery_records|adds_links|asks_passwords)_as_winrar_7_23_does$/)'
+filter = 'binary(it) and test(/^rar_builtin::rar_(lists|tests_extracts_and_prints|adds_updates_moves_and_deletes|comments_renames_locks_and_changes|finds_strings|repairs|reconstructs_volumes|extracts_by_switches|keeps_versions|extracts_links|keeps_times|adds_by_name|names_by_date|logs_names|cuts_volumes_with_recovery_records|adds_links|asks_passwords|repacks_solid_archives)_as_winrar_7_23_does$/)'
 slow-timeout = { period = "30s", terminate-after = 3 }
 
 # Runs the grep oracle script, some 900 grep cases, many in `| od | sed` pipelines of
