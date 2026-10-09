@@ -514,6 +514,7 @@ fn run_with<SE: cash_core::ShellExtensions>(
         }
     };
     let mut switches = default_switches(context, args);
+    let defaults = (switches.silent, switches.quiet, switches.to_stderr);
     merge(&mut switches, std::mem::take(&mut parsed.switches));
     console.set(&switches);
     let command = parsed.command.as_deref().and_then(Command::parse);
@@ -521,13 +522,22 @@ fn run_with<SE: cash_core::ShellExtensions>(
     // rar asks for a bare `-p` or `-hp`'s password as it reads the switch, before
     // its banner or anything else; `p` says nothing but the question then.
     let early = if switches.early_password {
-        let asking = Rar::new(tool, context, console, switches.clone(), None);
+        // The console as the switches read before the question leave it.
+        let mut before = switches.clone();
+        if let Some((silent, quiet, to_stderr)) = switches.early_console {
+            before.silent = defaults.0 || silent;
+            before.quiet = defaults.1 || quiet;
+            before.to_stderr = defaults.2 || to_stderr;
+        }
+        console.set(&before);
+        let asking = Rar::new(tool, context, console, before, None);
         console
             .data_only
             .set(matches!(command, Some(Command::Print)));
         match asking.ask_password() {
             Ok(password) => {
                 console.data_only.set(false);
+                console.set(&switches);
                 Some(password)
             }
             Err(stop) => return asking.exit(&Err(stop)),
@@ -681,6 +691,7 @@ fn overlay(base: Switches, typed: Switches) -> Switches {
         password: pick!(password, opt),
         no_password: pick!(no_password, bool),
         early_password: pick!(early_password, bool),
+        early_console: pick!(early_console, opt),
         quick_open: pick!(quick_open, opt),
         recurse: pick!(recurse, opt),
         recovery_record: pick!(recovery_record, opt),

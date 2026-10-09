@@ -850,7 +850,7 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      byte for byte on 2026-10-09) and `-hp` (below). `-ep`, `-htb`, `-s`, `-p` and
      `-df` change nothing there; `-ma4` is refused as by cash.
    - `-hp` on the commands that change an archive: done 2026-10-09 (in
-     `rar_passwords.sh`, now 803 lines, by size and details, the salts being
+     `rar_passwords.sh`, now 791 lines, by size and details, the salts being
      random). `a`, `u`, `f`, `m`, `d`, `c`, `k`, `rn`, `ch` and `rr` encrypt a plain
      archive's headers with it; cash did in `a` alone. An archive whose headers are
      plain and some files encrypted is refused: "Cannot change the header encryption
@@ -891,8 +891,10 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      them; without one, encrypted headers give "No files found", rc 10, and a file
      that is no archive a second search, "Reconstructing", "Building", corrupt-header
      and "No files found" words, rc 10, and nothing written. Encrypted headers are
-     never rebuilt, read or not. Left: the order of switches: rar asks at a bare `-p`
-     before reading an `-inul` after it, whose words cash's question leaves out.
+     never rebuilt, read or not. The order of switches: done 2026-10-10 (in
+     `rar_passwords.sh`): rar asks at a bare `-p` before reading an `-inul`, `-idq`
+     or `-ierr` after it, so the question and "Program aborted" heed only those
+     before; cash's heeded all.
    - `-ams`, `-tl` and `ch -amr`: done 2026-10-09 (in `rar_modify.sh`, now 981 lines,
      WinRAR's byte for byte but a recovery record's bytes). `-ams` saves the archive's
      file name and the time it is written (with `-tl` its newest file's, folders left

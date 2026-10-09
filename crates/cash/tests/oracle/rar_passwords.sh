@@ -56,6 +56,10 @@ printf '' | z rar l -hp plain.rar
 echo x | z rar lb -p plain.rar
 z rar -p
 z rar p -p plain.rar
+# The question heeds the switches read before it: -inul after it silences only what
+# follows.
+z rar x -p -inul plain.rar
+z rar x -inul -p plain.rar
 # A bare -hp takes the password -p gave; a bare -p asks after -hp's.
 z rar lb -pabc -hp plain.rar
 z rar lb -hpabc -p plain.rar

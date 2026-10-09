@@ -153,7 +153,10 @@ impl FindSpec {
 fn set_password(s: &mut Switches, given: Arg, header: bool) {
     let given_before = |arg: &Option<Arg>| matches!(arg, Some(Arg::Given(_)));
     let before = given_before(&s.password) || header && given_before(&s.header_password);
-    s.early_password |= given == Arg::Bare && !before;
+    if given == Arg::Bare && !before && !s.early_password {
+        s.early_password = true;
+        s.early_console = Some((s.silent, s.quiet, s.to_stderr));
+    }
     if header {
         s.header_password = Some(given);
     } else {
@@ -313,6 +316,9 @@ pub(super) struct Switches {
     /// A bare `-p` or `-hp` read before any password was given: rar asks for the
     /// password there, before anything else it says.
     pub(super) early_password: bool,
+    /// `-inul`, `-idq` and `-ierr` as they stood when that bare switch was read:
+    /// the question and what ends it heed only those before it.
+    pub(super) early_console: Option<(bool, bool, bool)>,
     pub(super) quick_open: Option<char>,
     /// `-r` (`Some('r')`), `-r-` (`Some('-')`), `-r0` (`Some('0')`).
     pub(super) recurse: Option<char>,
@@ -847,6 +853,20 @@ mod tests {
         assert!(early(&["l", "-hpabc", "-p", "a.rar"]));
         assert!(!early(&["l", "-pabc", "a.rar"]));
         assert!(!early(&["l", "a.rar"]));
+        // What the console was when it asked: the switches before it alone.
+        let console = |words: &[&str]| parse(&args(words)).unwrap().switches.early_console;
+        assert_eq!(
+            console(&["x", "-p", "-inul", "a.rar"]),
+            Some((false, false, false))
+        );
+        assert_eq!(
+            console(&["x", "-inul", "-p", "a.rar"]),
+            Some((true, false, false))
+        );
+        assert_eq!(
+            console(&["x", "-idq", "-ierr", "-p", "a.rar"]),
+            Some((false, true, true))
+        );
     }
 
     #[test]
