@@ -232,6 +232,55 @@ rev_oldstyle.part3.rar 4191654563 2048
 rev_oldstyle.part4.rar 3993228418 224
 rev_oldstyle.part4_2_1.rev 2370400561 2048
 rev_oldstyle.part4_2_2.rev 1297740245 2048
+== t of damaged RAR 3 recovery volumes: the newer naming's checksum
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive s/rev_newstyle.part1.rar
+
+Testing     tmp/rars-rar4-rev-gen/payload.bin                            
+
+Testing archive s/rev_newstyle.part2.rar
+
+...         tmp/rars-rar4-rev-gen/payload.bin                            
+
+Testing archive s/rev_newstyle.part3.rar
+
+...         tmp/rars-rar4-rev-gen/payload.bin                            
+
+Testing archive s/rev_newstyle.part4.rar
+
+...         tmp/rars-rar4-rev-gen/payload.bin                              OK 
+
+Testing     s/rev_newstyle.part1.rev                                     
+Testing     s/rev_newstyle.part2.rev                                       OK 
+Total errors: 1
+--- stderr
+
+s/rev_newstyle.part1.rev - checksum error
+rc=3
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive s/rev_oldstyle.part1.rar
+
+Testing     tmp/rars-rar3-rev-gen/payload.bin                            
+
+Testing archive s/rev_oldstyle.part2.rar
+
+...         tmp/rars-rar3-rev-gen/payload.bin                            
+
+Testing archive s/rev_oldstyle.part3.rar
+
+...         tmp/rars-rar3-rev-gen/payload.bin                            
+
+Testing archive s/rev_oldstyle.part4.rar
+
+...         tmp/rars-rar3-rev-gen/payload.bin                              OK 
+All OK
+rc=0
 == not a volume, and missing
 
 RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026

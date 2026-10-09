@@ -241,7 +241,7 @@ fn rar3_new<SE: cash_core::ShellExtensions>(rar: &Rar<'_, SE>, set: &Set, revs: 
 /// A RAR 3 recovery volume's last seven bytes, under the newer naming: the count of
 /// volumes less one, of recovery volumes less one, its own number from 0, and the CRC32
 /// of what comes before that checksum.
-fn trailer(bytes: &[u8]) -> Option<(usize, usize, usize)> {
+pub(super) fn trailer(bytes: &[u8]) -> Option<(usize, usize, usize)> {
     let len = bytes.len();
     let at = len.checked_sub(7)?;
     let crc = u32::from_le_bytes(bytes.get(len - 4..)?.try_into().ok()?);

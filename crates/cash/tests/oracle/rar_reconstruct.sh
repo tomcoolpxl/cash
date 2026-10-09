@@ -106,6 +106,13 @@ rm s/rev_oldstyle.part3.rar
 z rar rc s/rev_oldstyle.part1.rar
 sums
 
+echo "== t of damaged RAR 3 recovery volumes: the newer naming's checksum"
+rm -rf s && mkdir s && cp "$fx"/rar15_40/rar300/rev_newstyle.* "$fx"/rar15_40/rar300/rev_oldstyle.* s/
+damage s/rev_newstyle.part1.rev 100 4
+damage s/rev_oldstyle.part4_2_1.rev 100 4
+z rar t s/rev_newstyle.part1.rar
+z rar t s/rev_oldstyle.part1.rar
+
 echo "== not a volume, and missing"
 cp "$fx"/rar50/stored.rar one.rar
 z rar rc one.rar

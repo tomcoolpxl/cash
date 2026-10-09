@@ -91,7 +91,7 @@ fn rar_repairs_as_winrar_7_23_does() {
 fn rar_reconstructs_volumes_as_winrar_7_23_does() {
     assert_eq!(
         run_oracle_script("rar_reconstruct"),
-        with_cash_banners("rar_reconstruct", 13, 0)
+        with_cash_banners("rar_reconstruct", 15, 0)
     );
 }
 

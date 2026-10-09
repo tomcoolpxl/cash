@@ -663,8 +663,10 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
    flags, CRC32 or BLAKE2, the quick-open threshold, volumes counting their headers) and
    carried members (`Builder::carry`: an archive's packed data copied on update, RAR 1.5
    to 7, as rar copies it). Left, in order:
-   - `t` checks a RAR 3 `.rev` file only by reading it: its own checksum's place is
-     to be learned from Rar.exe (damage one and watch), not from UnRAR's source.
+   - `t` of a RAR 3 `.rev` file: done 2026-10-09. Damaging them under Rar.exe showed
+     the newer naming's last four bytes are a CRC32 of the rest (and the three before
+     them its counts and number), which `t` checks; the older naming's are not tested
+     by rar, nor by cash (`rar_reconstruct.sh`).
    - Extraction's links (`-ol`), `-ver`, `-f`/`-u` on extraction, `-ad1`/`-ad2`,
      `-ai` on folders: built, not yet in the oracle. `-ts`, `-tsc`, `-tsa` and `-tsm-`
      on extraction: compared with Rar.exe by hand (2026-10-09), not in the oracle.

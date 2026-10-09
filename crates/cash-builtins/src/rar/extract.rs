@@ -1239,8 +1239,8 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
         }
     }
 
-    /// `t`'s test of a volume set's recovery volumes, `NAME.partN.rev`: each whole, its
-    /// own checksum right where it keeps one (RAR 5's).
+    /// `t`'s test of a volume set's recovery volumes, `NAME.partN.rev`, each by its own
+    /// checksum: RAR 5's in its header, RAR 3's at its end.
     fn test_recovery_volumes(&mut self, new_numbering: bool) {
         if self.volumes.len() < 2 || !new_numbering {
             return;
@@ -1260,8 +1260,11 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
         for name in found {
             self.file_line("Testing     ", &name);
             let good = std::fs::read(self.rar.path(&name)).is_ok_and(|bytes| {
-                !bytes.starts_with(b"Rar!\x1aRev")
-                    || cash_archive::rar::rar50::Rev5Volume::parse(&bytes).is_ok()
+                if bytes.starts_with(b"Rar!\x1aRev") {
+                    cash_archive::rar::rar50::Rev5Volume::parse(&bytes).is_ok()
+                } else {
+                    super::reconstruct::trailer(&bytes).is_some()
+                }
             });
             if good {
                 self.ok();
