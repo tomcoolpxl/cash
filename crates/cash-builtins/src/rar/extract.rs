@@ -65,6 +65,9 @@ struct Job {
     masks: Masks,
     /// The folder to extract into, as typed, `/` its separator, none at its end.
     dest: Option<String>,
+    /// The same with its separator at its end if typed so, as a temporary file's line
+    /// shows it.
+    dest_typed: Option<String>,
     /// `i`'s string and how to look for it.
     find: Option<FindSpec>,
 }
@@ -82,24 +85,28 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
         _ => Mode::Print,
     };
     let mut parsed = parsed.clone();
-    let mut dest = None;
+    let mut dest_typed = None;
     // `path_to_extract\`: the last name, when it ends in a separator.
     if matches!(mode, Mode::Extract { .. })
         && let Some(Name::Plain(last)) = parsed.names.last()
         && last.ends_with(['/', '\\'])
     {
-        dest = Some(last.replace('\\', "/").trim_end_matches('/').to_owned());
+        dest_typed = Some(last.replace('\\', "/"));
         parsed.names.pop();
     }
     if let Some(path) = &rar.switches.output_path
         && !path.is_empty()
     {
-        dest = Some(path.replace('\\', "/").trim_end_matches('/').to_owned());
+        dest_typed = Some(path.replace('\\', "/"));
     }
+    let dest = dest_typed
+        .as_ref()
+        .map(|typed| typed.trim_end_matches('/').to_owned());
     let job = Job {
         mode,
         masks: Masks::new(rar, &parsed)?,
         dest,
+        dest_typed,
         find: match command {
             Command::Find(spec) => Some(spec.clone()),
             _ => None,
@@ -140,6 +147,7 @@ pub(super) fn test_written<SE: cash_core::ShellExtensions>(
         mode: Mode::Test,
         masks: Masks::all(),
         dest: None,
+        dest_typed: None,
         find: None,
     };
     let found = Found {
@@ -176,6 +184,25 @@ fn summary<SE: cash_core::ShellExtensions>(rar: &Rar<'_, SE>, job: &Job, tally: 
     } else {
         msg(rar, job, "\nAll OK\n");
     }
+}
+
+/// The files a file reference asked for copies that are not asked for themselves, by
+/// their place: rar unpacks each first, to a temporary file.
+fn reference_sources(entries: &[Entry], wanted: &[bool]) -> std::collections::HashSet<usize> {
+    entries
+        .iter()
+        .zip(wanted)
+        .filter_map(|(entry, &wanted)| match (&entry.link, wanted) {
+            (Some(Link::Copy(target)), true) => Some(target.replace('\\', "/")),
+            _ => None,
+        })
+        .filter_map(|target| {
+            entries
+                .iter()
+                .position(|entry| entry.name.eq_ignore_ascii_case(&target))
+        })
+        .filter(|&at| !wanted[at])
+        .collect()
 }
 
 /// Whether an archive is solid, its files one stream.
@@ -261,6 +288,12 @@ struct Work<'r, 'a, SE: cash_core::ShellExtensions> {
     missing: Option<String>,
     /// The folders extracted, given their times and attributes after their files.
     folders: Vec<(PathBuf, Stamps)>,
+    /// Whether the archive is solid, its files one stream.
+    solid: bool,
+    /// The files not asked for that a file reference asked for copies: by their place.
+    sources: std::collections::HashSet<usize>,
+    /// Those unpacked, each to a temporary file removed at the end: by their name.
+    temps: std::collections::HashMap<String, PathBuf>,
 }
 
 /// What a file keeps of its times and attributes.
@@ -401,13 +434,32 @@ fn set<SE: cash_core::ShellExtensions>(
         }),
         missing,
         folders: Vec::new(),
+        solid: false,
+        sources: std::collections::HashSet::new(),
+        temps: std::collections::HashMap::new(),
     };
     for volume in &work.volumes {
         rar.log_archive(&volume.display);
     }
     let entries = entry::entries(&work.volumes);
-    for entry in &entries {
-        work.entry(entry, &entries)?;
+    let wanted: Vec<bool> = entries.iter().map(|entry| work.wanted(entry)).collect();
+    work.solid = work
+        .volumes
+        .first()
+        .is_some_and(|volume| archive_solid(&volume.archive));
+    if matches!(job.mode, Mode::Extract { .. }) {
+        work.sources = reference_sources(&entries, &wanted);
+    }
+    // rar reads no further than the last file asked for, when one is.
+    let last = wanted.iter().rposition(|&wanted| wanted);
+    for (index, entry) in entries.iter().enumerate() {
+        if last.is_some_and(|last| index > last) {
+            break;
+        }
+        work.entry(index, entry, &entries, wanted[index])?;
+    }
+    for temp in work.temps.values() {
+        let _ = std::fs::remove_file(temp);
     }
     work.finish_folders();
     if job.mode == Mode::Test {
@@ -563,15 +615,32 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
         by_name && !(self.rar.switches.skip_encrypted && entry.encrypted())
     }
 
-    /// One file of the set.
-    fn entry(&mut self, entry: &Entry, entries: &[Entry]) -> Result<(), Stop> {
-        let wanted = self.wanted(entry);
+    /// One file of the set, `index` its place, `wanted` whether it was asked for.
+    fn entry(
+        &mut self,
+        index: usize,
+        entry: &Entry,
+        entries: &[Entry],
+        wanted: bool,
+    ) -> Result<(), Stop> {
         if !wanted {
-            // A solid stream decodes what it does not want, quietly, for what follows.
-            if entry.solid && !entry.directory && entry.link.is_none() {
-                let _ = self.decode(entry, &mut Discard, None);
-            } else {
+            if self.sources.contains(&index) {
+                self.unpack_source(entry);
+            } else if !self.solid {
                 self.solid_ready = false;
+            } else if !entry.directory {
+                // A solid stream decodes what it does not want, for what follows, and
+                // says so when it tests or extracts.
+                let said = matches!(self.job.mode, Mode::Test | Mode::Extract { .. });
+                if said {
+                    self.file_line("Skipping    ", &entry.name);
+                }
+                if entry.link.is_none() {
+                    let _ = self.decode(entry, &mut Discard, None);
+                }
+                if said {
+                    self.wipe_progress();
+                }
             }
             return Ok(());
         }
@@ -1116,6 +1185,11 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
         let shown = path_shown(shown, &path, self.rar);
         self.file_line("Extracting  ", &shown);
         let _ = std::fs::remove_file(&path);
+        // A file not asked for was unpacked to a temporary file for its references.
+        let target_path = match self.temps.get(&target.to_lowercase()) {
+            Some(temp) if !hard && !target_path.is_file() => temp.clone(),
+            _ => target_path,
+        };
         if !hard && !target_path.is_file() {
             match entries
                 .iter()
@@ -1246,6 +1320,24 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
                 code::CREATE,
             ),
         }
+    }
+
+    /// A file not asked for that a reference asked for copies: unpacked first to a
+    /// temporary file in the destination, as rar does, said as rar says it.
+    fn unpack_source(&mut self, entry: &Entry) {
+        let name = format!(
+            "__tmp_reference_source_{}.{}.rartemp",
+            std::process::id(),
+            self.temps.len()
+        );
+        let shown = match &self.job.dest_typed {
+            Some(dest) => format!("{dest}/{name}"),
+            None => name,
+        };
+        let path = self.rar.path(&shown);
+        self.file_line("Extracting  ", &shown);
+        self.write_out(entry, entry, &path, &shown);
+        self.temps.insert(entry.name.to_lowercase(), path);
     }
 
     /// The progress a file's line shows, wiped: five spaces.

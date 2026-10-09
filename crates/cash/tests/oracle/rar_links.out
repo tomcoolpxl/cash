@@ -174,6 +174,99 @@ symlink.txt
 dirlink
 dir
 rc=0
+== a file reference whose file is not asked for: that file unpacked first
+-- refs: r\a2
+
+Extracting from refs.rar
+
+Extracting  o11//__tmp_reference_source_N.N.rartemp OK 
+Creating    o11/r                                                     OK
+Extracting  o11/r/a2                                                       OK 
+All OK
+rc=0
+./r/a2 70000 bytes, 1 link(s) 3614392508 70000
+-- refs: r\a2 r\a3
+
+Extracting from refs.rar
+
+Extracting  o11//__tmp_reference_source_N.N.rartemp OK 
+Creating    o11/r                                                     OK
+Extracting  o11/r/a2                                                       OK 
+Extracting  o11/r/a3                                                       OK 
+All OK
+rc=0
+./r/a2 70000 bytes, 1 link(s) 3614392508 70000
+./r/a3 70000 bytes, 1 link(s) 3614392508 70000
+-- refs: r\s r\a3
+
+Extracting from refs.rar
+
+Extracting  o11//__tmp_reference_source_N.N.rartemp OK 
+Creating    o11/r                                                     OK
+Extracting  o11/r/a3                                                       OK 
+Extracting  o11/r/s                                                        OK 
+All OK
+rc=0
+./r/a3 70000 bytes, 1 link(s) 3614392508 70000
+./r/s 6 bytes, 1 link(s) 70640329 6
+-- refs: r\a3 r\a1
+
+Extracting from refs.rar
+
+Creating    o11/r                                                     OK
+Extracting  o11/r/a1                                                       OK 
+Extracting  o11/r/a3                                                       OK 
+All OK
+rc=0
+./r/a1 70000 bytes, 1 link(s) 3614392508 70000
+./r/a3 70000 bytes, 1 link(s) 3614392508 70000
+-- refs_solid: r\a2
+
+Extracting from refs_solid.rar
+
+Extracting  o11//__tmp_reference_source_N.N.rartemp OK 
+Creating    o11/r                                                     OK
+Extracting  o11/r/a2                                                       OK 
+All OK
+rc=0
+./r/a2 70000 bytes, 1 link(s) 3614392508 70000
+-- refs_solid: r\a2 r\a3
+
+Extracting from refs_solid.rar
+
+Extracting  o11//__tmp_reference_source_N.N.rartemp OK 
+Creating    o11/r                                                     OK
+Extracting  o11/r/a2                                                       OK 
+Extracting  o11/r/a3                                                       OK 
+All OK
+rc=0
+./r/a2 70000 bytes, 1 link(s) 3614392508 70000
+./r/a3 70000 bytes, 1 link(s) 3614392508 70000
+-- refs_solid: r\s r\a3
+
+Extracting from refs_solid.rar
+
+Extracting  o11//__tmp_reference_source_N.N.rartemp OK 
+Skipping    r/a2                                                              
+Creating    o11/r                                                     OK
+Extracting  o11/r/a3                                                       OK 
+Extracting  o11/r/s                                                        OK 
+All OK
+rc=0
+./r/a3 70000 bytes, 1 link(s) 3614392508 70000
+./r/s 6 bytes, 1 link(s) 70640329 6
+-- refs_solid: r\a3 r\a1
+
+Extracting from refs_solid.rar
+
+Creating    o11/r                                                     OK
+Extracting  o11/r/a1                                                       OK 
+Skipping    r/a2                                                              
+Extracting  o11/r/a3                                                       OK 
+All OK
+rc=0
+./r/a1 70000 bytes, 1 link(s) 3614392508 70000
+./r/a3 70000 bytes, 1 link(s) 3614392508 70000
 == a junction: unsafe for its absolute target, made with -ola, left out with -ol-
 -- , its folder there: no
 

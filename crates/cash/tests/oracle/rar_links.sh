@@ -70,6 +70,28 @@ z rar t copies.rar
 z rar t hardlink.rar
 z rar p -inul hardlink.rar
 z rar lb links_unsafe.rar
+echo "== a file reference whose file is not asked for: that file unpacked first"
+# To a temporary file in the destination, named with numbers of the run's (masked here),
+# and removed at the end; in a solid archive too, where it is gone by then.
+mkdir r
+awk 'BEGIN { srand(5); for (i = 0; i < 70000; i++) printf "%c", 33 + int(rand() * 90) }' > r/a1
+cp r/a1 r/a2
+cp r/a1 r/a3
+printf 'small\n' > r/s
+touch -d '2024-01-01T00:00:00Z' r/* r
+rar a -m0 -oi -idq refs.rar r
+rar a -m3 -s -oi -idq refs_solid.rar r
+set -f
+for archive in refs refs_solid; do
+  for names in 'r\a2' 'r\a2 r\a3' 'r\s r\a3' 'r\a3 r\a1'; do
+    rm -rf o11 && mkdir o11
+    echo "-- $archive: $names"
+    z rar x -idc $archive.rar $names o11/ |
+      sed 's/__tmp_reference_source_[0-9]*\.[0-9]*\.rartemp */__tmp_reference_source_N.N.rartemp /'
+    files o11
+  done
+done
+set +f
 echo "== a junction: unsafe for its absolute target, made with -ola, left out with -ol-"
 # Made here and stored with -ol, its target this run's folder: the message shows it masked.
 # cash's rm (uutils') cannot remove a junction yet: cmd's rmdir takes each away.

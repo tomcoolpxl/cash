@@ -111,5 +111,27 @@ echo "== e -ad1"
 cp one.rar a3/two.rar
 z rar e -ad1 a3/two.rar
 tree a3/two
+echo "== a solid archive: the files before one asked for decoded on the way"
+# Each skipped is said, in t and e too; after the last asked for, nothing is read; with
+# nothing asked for, everything is skipped.
+mkdir g
+awk 'BEGIN { srand(5); for (i = 0; i < 70000; i++) printf "%c", 33 + int(rand() * 90) }' > g/a1
+awk 'BEGIN { srand(6); for (i = 0; i < 30000; i++) printf "%c", 33 + int(rand() * 90) }' > g/a2
+cp g/a1 g/a3
+printf 'small\n' > g/s
+touch -d '2024-01-01T00:00:00Z' g/* g
+rar a -m3 -s -idq solid.rar g
+# The names split into words, but not globbed: rar's own wildcards.
+set -f
+for names in 'g\s' 'g\a2' 'g\s g\a3' 'g\a3 g\a1' '*\a2' 'g\none'; do
+  rm -rf o11 && mkdir o11
+  echo "-- x $names"
+  z rar x -idc solid.rar $names o11/
+  (cd o11 && find . -type f | sort)
+done
+set +f
+echo "-- e and t"
+z rar e -idc solid.rar 'g\s' o11/
+z rar t -idc solid.rar 'g\a3'
 
 cd / && rm -rf "$dir"

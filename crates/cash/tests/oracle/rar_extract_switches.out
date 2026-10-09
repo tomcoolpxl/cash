@@ -361,3 +361,89 @@ rc=0
 ./a.txt 2024-01-01 00:00:00 A
 ./b.txt 2024-01-01 00:00:00 AR
 ./c.txt 2024-01-01 00:00:00 A
+== a solid archive: the files before one asked for decoded on the way
+-- x g\s
+
+Extracting from solid.rar
+
+Skipping    g/a1                                                              
+Skipping    g/a2                                                              
+Skipping    g/a3                                                              
+Creating    o11/g                                                     OK
+Extracting  o11/g/s                                                        OK 
+All OK
+rc=0
+./g/s
+-- x g\a2
+
+Extracting from solid.rar
+
+Skipping    g/a1                                                              
+Creating    o11/g                                                     OK
+Extracting  o11/g/a2                                                       OK 
+All OK
+rc=0
+./g/a2
+-- x g\s g\a3
+
+Extracting from solid.rar
+
+Skipping    g/a1                                                              
+Skipping    g/a2                                                              
+Creating    o11/g                                                     OK
+Extracting  o11/g/a3                                                       OK 
+Extracting  o11/g/s                                                        OK 
+All OK
+rc=0
+./g/a3
+./g/s
+-- x g\a3 g\a1
+
+Extracting from solid.rar
+
+Creating    o11/g                                                     OK
+Extracting  o11/g/a1                                                       OK 
+Skipping    g/a2                                                              
+Extracting  o11/g/a3                                                       OK 
+All OK
+rc=0
+./g/a1
+./g/a3
+-- x *\a2
+
+Extracting from solid.rar
+
+Skipping    g/a1                                                              
+Creating    o11/g                                                     OK
+Extracting  o11/g/a2                                                       OK 
+All OK
+rc=0
+./g/a2
+-- x g\none
+
+Extracting from solid.rar
+
+Skipping    g/a1                                                              
+Skipping    g/a2                                                              
+Skipping    g/a3                                                              
+Skipping    g/s                                                               
+No files to extract
+rc=10
+-- e and t
+
+Extracting from solid.rar
+
+Skipping    g/a1                                                              
+Skipping    g/a2                                                              
+Skipping    g/a3                                                              
+Extracting  o11/s                                                          OK 
+All OK
+rc=0
+
+Testing archive solid.rar
+
+Skipping    g/a1                                                              
+Skipping    g/a2                                                              
+Testing     g/a3                                                           OK 
+All OK
+rc=0

@@ -682,10 +682,20 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      compared by hand: a symbolic link Windows refuses for want of the right ("Cannot
      create symbolic link ... You may need to run RAR as administrator", a folder's
      link leaving an empty folder, as rar's does) and one it makes, which needs that
-     right. Left: a file reference whose file is not asked for is written straight
-     from the archive, where rar unpacks the file to a temporary
-     `__tmp_reference_source_N.rartemp` first and says so; in a solid archive that file
-     has gone by, and is not found.
+     right.
+   - A file reference whose file is not asked for: done 2026-10-09 (in
+     `rar_links.sh`, now 319 lines). The file is unpacked first to a temporary
+     `__tmp_reference_source_N.N.rartemp` in the destination, as typed (`x//` for `x/`),
+     the reference copied from it, the temporary file removed at the end; in a solid
+     archive too, where cash had nothing left to copy.
+   - A solid archive's files after one not asked for: done 2026-10-09
+     (`rar_extract_switches.sh`, now 449 lines). cash decoded a skipped file only when
+     it continued the stream, so a solid archive's first file, when not asked for, was
+     not decoded and every file after it failed its checksum: `rar x solid.rar
+     dir\later` gave "checksum error". Now each file not asked for is decoded on the
+     way, a "Skipping" line said for it in `x`, `e` and `t` (none in `p`), and nothing
+     is read after the last file asked for; with none asked for, every file is skipped,
+     as rar does.
    - Junctions on extraction: done 2026-10-09 (in `rar_links.sh`, now 226 lines).
      cash made a junction a plain folder, whatever the switches. Now a junction is a
      link: skipped as unsafe (its target is absolute) without `-ola`, left out with
@@ -843,6 +853,11 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
 ---
 
 ## Found along the way
+
+- **`conpty_a_program_that_ran_leaves_a_healthy_prompt_where_it_was` timed out in CI**
+  (run 37953062174, 2026-10-09, slow lane 1/4, both tries): PowerShell started by the
+  test printed nothing in 30 s, on a runner whose setup also logged a "bash startup
+  failure". The two runs after it, on later commits, passed. Watch for it again.
 
 - **`rm -rf` stops at a junction** (found on 2026-10-09 with `rar_add_links.sh`): a
   folder holding a junction gives "rm: cannot remove 'top\junc': Permission denied",
