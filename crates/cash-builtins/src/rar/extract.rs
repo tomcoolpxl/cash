@@ -110,10 +110,20 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
     };
     // An archive not there leaves its line ended.
     let mut ended = false;
+    // The archives a wildcard matches have one summary, their errors added up.
+    let mut tally = Tally::default();
+    let mut worked_through = false;
     for found in open::find(rar, archive) {
         ended = !found.path.is_file();
-        set(rar, &job, &found)?;
+        // The last line of an archive worked through ends before the next begins.
+        if worked_through {
+            msg(rar, &job, "\n");
+        }
+        let sets = tally.sets;
+        set(rar, &job, &found, &mut tally)?;
+        worked_through = tally.sets > sets;
     }
+    summary(rar, &job, &tally);
     if mode == Mode::Find && !rar.switches.no_done {
         rar.console.msg(if ended { "Done\n" } else { "\nDone\n" });
     }
@@ -136,7 +146,36 @@ pub(super) fn test_written<SE: cash_core::ShellExtensions>(
         display: display.to_owned(),
         path,
     };
-    set(rar, &job, &found)
+    let mut tally = Tally::default();
+    set(rar, &job, &found, &mut tally)?;
+    summary(rar, &job, &tally);
+    Ok(())
+}
+
+/// What the archives of one name came to, for the one summary rar gives them all.
+#[derive(Default)]
+struct Tally {
+    errors: u32,
+    done: u32,
+    /// The archives worked through, not stopped as they opened.
+    sets: u32,
+}
+
+/// The end: "All OK", "Total errors", or "No files to extract".
+fn summary<SE: cash_core::ShellExtensions>(rar: &Rar<'_, SE>, job: &Job, tally: &Tally) {
+    if tally.sets == 0 {
+        return;
+    }
+    if tally.errors > 0 {
+        msg(rar, job, &format!("\nTotal errors: {}\n", tally.errors));
+    } else if tally.done == 0 {
+        msg(rar, job, "\nNo files to extract\n");
+        rar.fail(code::NO_FILES);
+    } else if rar.switches.no_done {
+        msg(rar, job, "\n");
+    } else {
+        msg(rar, job, "\nAll OK\n");
+    }
 }
 
 /// Whether an archive is solid, its files one stream.
@@ -220,6 +259,30 @@ struct Work<'r, 'a, SE: cash_core::ShellExtensions> {
     overwrite: Overwrite,
     /// The name of a volume a set goes on into that is not there.
     missing: Option<String>,
+    /// The folders extracted, given their times and attributes after their files.
+    folders: Vec<(PathBuf, Stamps)>,
+}
+
+/// What a file keeps of its times and attributes.
+#[derive(Clone, Copy)]
+struct Stamps {
+    modified: Option<Time>,
+    created: Option<Time>,
+    accessed: Option<Time>,
+    attributes: u64,
+    host: Host,
+}
+
+impl Stamps {
+    const fn of(entry: &Entry) -> Self {
+        Self {
+            modified: entry.modified,
+            created: entry.created,
+            accessed: entry.accessed,
+            attributes: entry.attributes,
+            host: entry.host,
+        }
+    }
 }
 
 /// One archive and the volumes after it.
@@ -231,6 +294,7 @@ fn set<SE: cash_core::ShellExtensions>(
     rar: &Rar<'_, SE>,
     job: &Job,
     found: &Found,
+    tally: &mut Tally,
 ) -> Result<(), Stop> {
     let opened = match open::open(rar, found)? {
         Ok(opened) => opened,
@@ -336,11 +400,13 @@ fn set<SE: cash_core::ShellExtensions>(
             Overwrite::Ask
         }),
         missing,
+        folders: Vec::new(),
     };
     let entries = entry::entries(&work.volumes);
     for entry in &entries {
         work.entry(entry)?;
     }
+    work.finish_folders();
     if job.mode == Mode::Test {
         work.test_recovery_records();
         work.test_recovery_volumes(new_numbering);
@@ -355,7 +421,9 @@ fn set<SE: cash_core::ShellExtensions>(
             work.errors += 1;
         }
     }
-    work.summary();
+    tally.errors += work.errors;
+    tally.done += work.done;
+    tally.sets += 1;
     Ok(())
 }
 
@@ -902,16 +970,24 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
         let Some(relative) = relative else {
             return Ok(());
         };
-        let shown = match &self.job.dest {
+        let shown = match self.destination() {
             Some(dest) => format!("{dest}/{relative}"),
             None => relative,
         };
         let path = self.rar.path(&shown);
         if entry.directory {
             if paths && !matches!(self.rar.switches.exclude_paths, Some(0)) {
+                // `-f` freshens what is there: a folder that is not stays so.
+                if self.rar.switches.freshen && !path.is_dir() {
+                    return Ok(());
+                }
                 self.make_folders(&shown);
+                self.folders.push((path, Stamps::of(entry)));
                 self.done += 1;
             }
+            return Ok(());
+        }
+        if !self.fresher(entry, &path) {
             return Ok(());
         }
         if !self.ready(entry)? {
@@ -956,6 +1032,42 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
         }
         self.verdict(entry, verdict);
         Ok(())
+    }
+
+    /// Where files go: the destination named; with `-ad1` a folder named after the
+    /// archive, beside it; with `-ad2` the archive's own folder.
+    fn destination(&self) -> Option<String> {
+        let archive = self.volumes.first().map_or("", |v| v.display.as_str());
+        let folder = archive
+            .rfind('/')
+            .map(|at| archive.get(..at).unwrap_or_default().to_owned());
+        match self.rar.switches.alt_destination {
+            Some(1) => {
+                let stem = Path::new(archive)
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                Some(folder.map_or_else(|| stem.clone(), |folder| format!("{folder}/{stem}")))
+            }
+            Some(2) => folder,
+            _ => self.job.dest.clone(),
+        }
+    }
+
+    /// `-f` and `-u`: a file that is there is written only when the archive's copy is
+    /// newer, one that is not only without `-f`.
+    fn fresher(&self, entry: &Entry, path: &Path) -> bool {
+        let switches = &self.rar.switches;
+        if !switches.freshen && !switches.update {
+            return true;
+        }
+        let Ok(on_disk) = std::fs::metadata(path).and_then(|m| m.modified()) else {
+            return !switches.freshen;
+        };
+        entry
+            .modified
+            .and_then(|time| self.system_time(time))
+            .is_some_and(|archived| archived > on_disk)
     }
 
     /// The name a file is extracted under, relative to the destination: its archived
@@ -1144,10 +1256,22 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
         }
     }
 
-    /// A file written: its times and attributes as the archive keeps them. Its
-    /// modification time unless `-tsm-`; its creation and access times when `-ts`,
-    /// `-tsc` or `-tsa` asks for them.
+    /// The folders extracted, given their times and attributes now their files are in.
+    fn finish_folders(&mut self) {
+        for (path, stamps) in std::mem::take(&mut self.folders).iter().rev() {
+            self.finish(stamps, path, true);
+        }
+    }
+
+    /// A file written: its times and attributes as the archive keeps them.
     fn finish_file(&self, entry: &Entry, path: &Path) {
+        self.finish(&Stamps::of(entry), path, false);
+    }
+
+    /// A file's or folder's times and attributes, as the archive keeps them. Its
+    /// modification time unless `-tsm-`; its creation and access times when `-ts`,
+    /// `-tsc` or `-tsa` asks for them; its attributes unless `-ai`.
+    fn finish(&self, entry: &Stamps, path: &Path, folder: bool) {
         let asked = self.rar.switches.times;
         let restore = |which: Option<char>, time: Option<Time>| {
             which
@@ -1181,6 +1305,7 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
                 let _ = cash_win32::unix::set_attributes(path, attributes);
             }
         } else if !self.rar.switches.ignore_attributes
+            && !folder
             && entry.host == Host::Unix
             && entry.attributes & 0o200 == 0
         {
@@ -1272,20 +1397,6 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
             } else {
                 self.error(&format!("\n{name:<20} - checksum error"), code::CRC);
             }
-        }
-    }
-
-    /// The end of a set: "All OK", "Total errors", or "No files to extract".
-    fn summary(&self) {
-        if self.errors > 0 {
-            self.say(&format!("\nTotal errors: {}\n", self.errors));
-        } else if self.done == 0 {
-            self.say("\nNo files to extract\n");
-            self.rar.fail(code::NO_FILES);
-        } else if self.rar.switches.no_done {
-            self.say("\n");
-        } else {
-            self.say("\nAll OK\n");
         }
     }
 }

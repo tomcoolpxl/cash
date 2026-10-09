@@ -1,0 +1,363 @@
+== folders keep their times and attributes
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from one.rar
+
+Creating    o1                                                        OK
+Creating    o1/src                                                    OK
+Extracting  o1/src/a.txt                                                   OK 
+Extracting  o1/src/b.txt                                                   OK 
+Creating    o1/src/sub                                                OK
+Extracting  o1/src/sub/c.txt                                               OK 
+Creating    o1/src/empty                                              OK
+All OK
+rc=0
+./src 2024-03-03 00:00:00 -
+./src/a.txt 2024-01-01 00:00:00 A
+./src/b.txt 2024-01-01 00:00:00 AR
+./src/empty 2024-02-02 00:00:00 -
+./src/sub 2024-02-02 00:00:00 H
+./src/sub/c.txt 2024-01-01 00:00:00 A
+== -ai: the times, not the attributes
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from one.rar
+
+Creating    o2                                                        OK
+Creating    o2/src                                                    OK
+Extracting  o2/src/a.txt                                                   OK 
+Extracting  o2/src/b.txt                                                   OK 
+Creating    o2/src/sub                                                OK
+Extracting  o2/src/sub/c.txt                                               OK 
+Creating    o2/src/empty                                              OK
+All OK
+rc=0
+./src 2024-03-03 00:00:00 -
+./src/a.txt 2024-01-01 00:00:00 A
+./src/b.txt 2024-01-01 00:00:00 A
+./src/empty 2024-02-02 00:00:00 -
+./src/sub 2024-02-02 00:00:00 -
+./src/sub/c.txt 2024-01-01 00:00:00 A
+== x -f -o+ over files older and newer
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from one.rar
+
+Extracting  o3/src/a.txt                                                   OK 
+All OK
+rc=0
+./src 2024-03-03 00:00:00 -
+./src/a.txt 2024-01-01 00:00:00 A
+./src/b.txt 2025-01-01 00:00:00 A
+== x -u -o+ over files older and newer
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from one.rar
+
+Extracting  o3/src/a.txt                                                   OK 
+Creating    o3/src/sub                                                OK
+Extracting  o3/src/sub/c.txt                                               OK 
+Creating    o3/src/empty                                              OK
+All OK
+rc=0
+./src 2024-03-03 00:00:00 -
+./src/a.txt 2024-01-01 00:00:00 A
+./src/b.txt 2025-01-01 00:00:00 A
+./src/empty 2024-02-02 00:00:00 -
+./src/sub 2024-02-02 00:00:00 H
+./src/sub/c.txt 2024-01-01 00:00:00 A
+== x -f -o- over files older and newer
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from one.rar
+
+All OK
+rc=0
+./src 2024-03-03 00:00:00 -
+./src/a.txt 2020-01-01 00:00:00 A
+./src/b.txt 2025-01-01 00:00:00 A
+== x -u -o- over files older and newer
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from one.rar
+
+Creating    o3/src/sub                                                OK
+Extracting  o3/src/sub/c.txt                                               OK 
+Creating    o3/src/empty                                              OK
+All OK
+rc=0
+./src 2024-03-03 00:00:00 -
+./src/a.txt 2020-01-01 00:00:00 A
+./src/b.txt 2025-01-01 00:00:00 A
+./src/empty 2024-02-02 00:00:00 -
+./src/sub 2024-02-02 00:00:00 H
+./src/sub/c.txt 2024-01-01 00:00:00 A
+== x -f -y over files older and newer
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from one.rar
+
+Extracting  o3/src/a.txt                                                   OK 
+All OK
+rc=0
+./src 2024-03-03 00:00:00 -
+./src/a.txt 2024-01-01 00:00:00 A
+./src/b.txt 2025-01-01 00:00:00 A
+== x -f over files older and newer
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from one.rar
+
+
+Program aborted
+--- stderr
+
+
+Would you like to replace the existing file o3/src/a.txt
+     4 bytes, modified on 2020-01-01 01:00
+with a new one
+     4 bytes, modified on 2024-01-01 01:00
+
+[Y]es, [N]o, [A]ll, n[E]ver, [R]ename, [Q]uit Read error in the file stdin
+rc=12
+./src 2021-01-01 00:00:00 -
+./src/a.txt 2020-01-01 00:00:00 A
+./src/b.txt 2025-01-01 00:00:00 A
+== -f with nothing there
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from one.rar
+
+No files to extract
+rc=10
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from one.rar
+
+No files to extract
+rc=10
+== e -f and e -u
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from one.rar
+
+Extracting  o5/src/a.txt                                                   OK 
+All OK
+rc=0
+./src 2021-01-01 00:00:00 -
+./src/a.txt 2024-01-01 00:00:00 A
+./src/b.txt 2025-01-01 00:00:00 A
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from one.rar
+
+Extracting  o6/src/a.txt                                                   OK 
+Extracting  o6/src/c.txt                                                   OK 
+All OK
+rc=0
+./src now -
+./src/a.txt 2024-01-01 00:00:00 A
+./src/b.txt 2025-01-01 00:00:00 A
+./src/c.txt 2024-01-01 00:00:00 A
+== -o+ over an older folder
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from one.rar
+
+Extracting  o7/src/a.txt                                                   OK 
+Extracting  o7/src/b.txt                                                   OK 
+Creating    o7/src/sub                                                OK
+Extracting  o7/src/sub/c.txt                                               OK 
+Creating    o7/src/empty                                              OK
+All OK
+rc=0
+./src 2024-03-03 00:00:00 -
+./src/a.txt 2024-01-01 00:00:00 A
+./src/b.txt 2024-01-01 00:00:00 AR
+./src/empty 2024-02-02 00:00:00 -
+./src/sub 2024-02-02 00:00:00 H
+./src/sub/c.txt 2024-01-01 00:00:00 A
+== -ad: a folder for each archive in the destination
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from a1/one.rar
+
+Creating    o8                                                        OK
+Creating    o8/one                                                    OK
+Creating    o8/one/src                                                OK
+Extracting  o8/one/src/a.txt                                               OK 
+Extracting  o8/one/src/b.txt                                               OK 
+Creating    o8/one/src/sub                                            OK
+Extracting  o8/one/src/sub/c.txt                                           OK 
+Creating    o8/one/src/empty                                          OK
+
+Extracting from a1/two.rar
+
+Creating    o8/two                                                    OK
+Creating    o8/two/src                                                OK
+Extracting  o8/two/src/a.txt                                               OK 
+Extracting  o8/two/src/b.txt                                               OK 
+Creating    o8/two/src/sub                                            OK
+Extracting  o8/two/src/sub/c.txt                                           OK 
+Creating    o8/two/src/empty                                          OK
+All OK
+rc=0
+./one now -
+./one/src 2024-03-03 00:00:00 -
+./one/src/a.txt 2024-01-01 00:00:00 A
+./one/src/b.txt 2024-01-01 00:00:00 AR
+./one/src/empty 2024-02-02 00:00:00 -
+./one/src/sub 2024-02-02 00:00:00 H
+./one/src/sub/c.txt 2024-01-01 00:00:00 A
+./two now -
+./two/src 2024-03-03 00:00:00 -
+./two/src/a.txt 2024-01-01 00:00:00 A
+./two/src/b.txt 2024-01-01 00:00:00 AR
+./two/src/empty 2024-02-02 00:00:00 -
+./two/src/sub 2024-02-02 00:00:00 H
+./two/src/sub/c.txt 2024-01-01 00:00:00 A
+== the archives a wildcard matches: one summary, their errors added up
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive a1/bad.rar
+
+Testing     src/a.txt                                                      OK 
+Testing     src/b.txt                                                      OK 
+Testing     src/sub/c.txt                                                
+Testing     src/empty                                                 OK
+Testing     src/sub                                                   OK
+Testing     src                                                       OK
+
+Testing archive a1/one.rar
+
+Testing     src/a.txt                                                      OK 
+Testing     src/b.txt                                                      OK 
+Testing     src/sub/c.txt                                                  OK 
+Testing     src/empty                                                 OK
+Testing     src/sub                                                   OK
+Testing     src                                                       OK
+
+Testing archive a1/two.rar
+
+Testing     src/a.txt                                                      OK 
+Testing     src/b.txt                                                      OK 
+Testing     src/sub/c.txt                                                  OK 
+Testing     src/empty                                                 OK
+Testing     src/sub                                                   OK
+Testing     src                                                       OK
+Total errors: 1
+--- stderr
+
+src/sub/c.txt        - checksum error
+rc=3
+== -ad1: a folder for each beside it, the destination ignored
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from a2/one.rar
+
+Creating    a2/one                                                    OK
+Creating    a2/one/src                                                OK
+Extracting  a2/one/src/a.txt                                               OK 
+Extracting  a2/one/src/b.txt                                               OK 
+Creating    a2/one/src/sub                                            OK
+Extracting  a2/one/src/sub/c.txt                                           OK 
+Creating    a2/one/src/empty                                          OK
+
+Extracting from a2/two.rar
+
+Creating    a2/two                                                    OK
+Creating    a2/two/src                                                OK
+Extracting  a2/two/src/a.txt                                               OK 
+Extracting  a2/two/src/b.txt                                               OK 
+Creating    a2/two/src/sub                                            OK
+Extracting  a2/two/src/sub/c.txt                                           OK 
+Creating    a2/two/src/empty                                          OK
+All OK
+rc=0
+./one now -
+./one.rar now A
+./one/src 2024-03-03 00:00:00 -
+./one/src/a.txt 2024-01-01 00:00:00 A
+./one/src/b.txt 2024-01-01 00:00:00 AR
+./one/src/empty 2024-02-02 00:00:00 -
+./one/src/sub 2024-02-02 00:00:00 H
+./one/src/sub/c.txt 2024-01-01 00:00:00 A
+./two now -
+./two.rar now A
+./two/src 2024-03-03 00:00:00 -
+./two/src/a.txt 2024-01-01 00:00:00 A
+./two/src/b.txt 2024-01-01 00:00:00 AR
+./two/src/empty 2024-02-02 00:00:00 -
+./two/src/sub 2024-02-02 00:00:00 H
+./two/src/sub/c.txt 2024-01-01 00:00:00 A
+o9 is not made
+== -ad2: the archive's own folder
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from a3/one.rar
+
+Creating    a3/src                                                    OK
+Extracting  a3/src/a.txt                                                   OK 
+Extracting  a3/src/b.txt                                                   OK 
+Creating    a3/src/sub                                                OK
+Extracting  a3/src/sub/c.txt                                               OK 
+Creating    a3/src/empty                                              OK
+All OK
+rc=0
+./one.rar now A
+./src 2024-03-03 00:00:00 -
+./src/a.txt 2024-01-01 00:00:00 A
+./src/b.txt 2024-01-01 00:00:00 AR
+./src/empty 2024-02-02 00:00:00 -
+./src/sub 2024-02-02 00:00:00 H
+./src/sub/c.txt 2024-01-01 00:00:00 A
+== e -ad1
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from a3/two.rar
+
+Creating    a3/two                                                    OK
+Extracting  a3/two/a.txt                                                   OK 
+Extracting  a3/two/b.txt                                                   OK 
+Extracting  a3/two/c.txt                                                   OK 
+All OK
+rc=0
+./a.txt 2024-01-01 00:00:00 A
+./b.txt 2024-01-01 00:00:00 AR
+./c.txt 2024-01-01 00:00:00 A

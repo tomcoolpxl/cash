@@ -667,9 +667,17 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      the newer naming's last four bytes are a CRC32 of the rest (and the three before
      them its counts and number), which `t` checks; the older naming's are not tested
      by rar, nor by cash (`rar_reconstruct.sh`).
-   - Extraction's links (`-ol`), `-ver`, `-f`/`-u` on extraction, `-ad1`/`-ad2`,
-     `-ai` on folders: built, not yet in the oracle. `-ts`, `-tsc`, `-tsa` and `-tsm-`
-     on extraction: compared with Rar.exe by hand (2026-10-09), not in the oracle.
+   - Extraction: `-f`/`-u`, `-ad1`/`-ad2`, folders' times and attributes (`-ai`
+     keeping the times only), and one summary for the archives a wildcard matches,
+     their errors added up: done 2026-10-09 (`rar_extract_switches.sh`, 363 lines; this
+     line said "built" of them, but extraction read none, set no folder's time, and
+     summed up each archive alone). `-ts`, `-tsc`, `-tsa` and `-tsm-` on extraction:
+     compared with Rar.exe by hand, not in the oracle. Left, not built: links (`-ol`;
+     extraction writes a link as a plain file) and `-ver` (versions, on `a` and `x`).
+   - A damaged folder header near an archive's end: Rar.exe still tests the folder "OK"
+     and adds "NAME - the file header is corrupt" after "Corrupt header is found" for
+     each, reading on; cash stops at the first (seen damaging four bytes at offset 200
+     of `rar_extract_switches.sh`'s `one.rar`).
    - Writing, not yet in the oracle or not yet WinRAR's: `-ts`'s creation and access
      times (a file's creation time is the run's); `-df`'s "NOT DELETED" when a folder
      is not empty; `-r` with a plain file name (rar looks for it in every folder);
