@@ -305,7 +305,7 @@ fn rewrite<SE: cash_core::ShellExtensions>(
     change: &Change,
 ) -> Result<(), Stop> {
     let password = add::data_password(rar)?;
-    let mut builder = match opened.archive.preserving_builder(password.as_deref()) {
+    let mut builder = match add::rewriting_builder(opened, password.as_deref()) {
         Ok(builder) => builder,
         Err(error) => {
             rar.console.err(&format!("\n{error}"));

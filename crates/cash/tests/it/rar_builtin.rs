@@ -138,7 +138,7 @@ fn rar_adds_by_name_as_winrar_7_23_does() {
         &with_cash_banners("rar_add_names", 0, 0),
         "\nEvaluation copy. Please register.\n",
         "",
-        19,
+        21,
     );
     assert_eq!(run_oracle_script("rar_add_names"), expected);
 }

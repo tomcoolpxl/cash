@@ -199,11 +199,32 @@ impl Archive {
             .collect()
     }
 
+    /// [`Self::preserving_builder`] for a rewrite that carries a RAR 5 archive's members
+    /// as they are ([`crate::rar::Builder::carry`]): their encrypted data is copied with
+    /// its encryption record and needs no password, as `Rar.exe` copies it. The
+    /// password is still required for encrypted headers and encrypted comments, which
+    /// are written anew; otherwise the one given, if any, encrypts what is added.
+    /// Other formats are as [`Self::preserving_builder`].
+    pub fn carrying_builder(
+        &self,
+        password: Option<&[u8]>,
+    ) -> crate::rar::Result<crate::rar::Builder> {
+        self.builder_preserving(password, true)
+    }
+
     /// Configure a builder with supported source format, solid and encryption settings.
     /// Member data/comment passwords are retained separately when entries are copied.
     pub fn preserving_builder(
         &self,
         password: Option<&[u8]>,
+    ) -> crate::rar::Result<crate::rar::Builder> {
+        self.builder_preserving(password, false)
+    }
+
+    fn builder_preserving(
+        &self,
+        password: Option<&[u8]>,
+        carrying: bool,
     ) -> crate::rar::Result<crate::rar::Builder> {
         let issues = self.rewrite_preservation_issues();
         if !issues.is_empty() {
@@ -285,10 +306,12 @@ impl Archive {
                             .map(|info| info.dictionary_size)
                     })
                     .transpose()?;
+                // Carried members keep their encrypted data as it is: only what is
+                // written anew, headers and comments, needs the password then.
                 let encrypted = archive.main.encrypted_headers
                     || archive.blocks.iter().any(|block| match block {
-                        crate::rar::rar50::Block::File(file)
-                        | crate::rar::rar50::Block::Service(file) => file.encrypted,
+                        crate::rar::rar50::Block::File(file) => file.encrypted && !carrying,
+                        crate::rar::rar50::Block::Service(file) => file.encrypted,
                         _ => false,
                     });
                 let password = if encrypted {
@@ -298,6 +321,11 @@ impl Archive {
                             .ok_or(crate::rar::Error::NeedPassword)?
                             .to_vec(),
                     )
+                } else if carrying {
+                    // The password given, if any, is the files added's.
+                    password
+                        .filter(|password| !password.is_empty())
+                        .map(<[u8]>::to_vec)
                 } else {
                     None
                 };

@@ -107,6 +107,22 @@ cp l4.rar l4n.rar
 z rar rn -idq l4n.rar 'b\a.txt' 'b\z.txt'
 cksum < l4n.rar
 
+echo "== an archive whose files are encrypted, changed without its password"
+printf 'secret\n' > s1.txt
+printf 'plain\n' > s2.txt
+touch -d '2024-01-01T00:00:00Z' s1.txt s2.txt
+rar a -m0 -idq -psecret enc.rar s1.txt
+z rar a -m0 -idc enc.rar s2.txt
+z rar t -idc -psecret enc.rar
+cp enc.rar enc2.rar
+z rar rn -idc enc2.rar s1.txt s9.txt
+z rar lb enc2.rar
+z rar a -m0 -idc -pother enc2.rar s2.txt
+z rar t -idc -pother enc2.rar s2.txt
+z rar t -idc -psecret enc2.rar s9.txt
+z rar d -idc enc2.rar s9.txt
+z rar lb enc2.rar
+
 echo "== names not there, and a file the shell is writing"
 mk
 z rar a -m0 -idc n1.rar 'src\a.txt' nothere.txt nothere2.txt

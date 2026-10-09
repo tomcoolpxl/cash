@@ -218,7 +218,7 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
     let notes = deletions_among(&slots, &actions, &synced, &names);
     let password = data_password(rar)?;
     let mut builder = match &old {
-        Some(opened) => match opened.archive.preserving_builder(password.as_deref()) {
+        Some(opened) => match rewriting_builder(opened, password.as_deref()) {
             Ok(builder) => builder,
             Err(error) => {
                 rar.console.err(&format!("\n{error}"));
@@ -673,6 +673,20 @@ pub(super) fn layout<SE: cash_core::ShellExtensions>(
         .with_checksums(checksums)
         .with_quick_open_over(over)
         .with_offset_bound(bound)
+}
+
+/// The builder a rewrite of `opened` starts from. A non-solid RAR 5 archive's members
+/// are carried as they are, so their encrypted data needs no password, as rar asks none
+/// for it; what is written anew still does.
+pub(super) fn rewriting_builder(
+    opened: &open::Opened,
+    password: Option<&[u8]>,
+) -> rar::Result<Builder> {
+    if opened.archive.as_rar50().is_some() && !opened.facts.solid {
+        opened.archive.carrying_builder(password)
+    } else {
+        opened.archive.preserving_builder(password)
+    }
 }
 
 /// The bound `WinRAR` gives the locator's offsets when it changes an archive: from the

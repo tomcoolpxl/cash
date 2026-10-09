@@ -728,9 +728,11 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
    - Writing, not yet in the oracle or not yet WinRAR's:
      WinRAR's layout for volumes with `-hp` or `-rr` (they keep rars' own, payload-sized);
      the quick-open room kept for earlier big files in the same volume (taken as their
-     header and 18 bytes each, as for the file going in, unchecked with two); updating
-     an archive whose files are encrypted without its password (rar copies them, rars'
-     preserving builder asks for it); (`-log` done 2026-10-09, `rar_log.sh`: A, F, P, U
+     header and 18 bytes each, as for the file going in, unchecked with two); (updating
+     an archive whose files are encrypted without its password done 2026-10-09, in
+     `rar_add_names.sh`: a non-solid RAR 5 archive's members are carried by rars'
+     new `carrying_builder`, which asks the password only for encrypted headers and
+     comments; a solid one's, read back and written again, still need it); (`-log` done 2026-10-09, `rar_log.sh`: A, F, P, U
      for a, x, t, l, lb and d, in UTF-8 where Rar.exe writes ANSI unless -sc...g says; `-ag` done 2026-10-09,
      `rar_agname.sh` and unit tests from the names Rar.exe gave; `-as` done
      2026-10-09: what no name gives taken out, its "Deleting" lines in their places; and

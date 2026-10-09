@@ -284,6 +284,57 @@ rc=0
 1302623781 386
 rc=0
 3749141051 504
+== an archive whose files are encrypted, changed without its password
+
+Evaluation copy. Please register.
+
+Updating archive enc.rar
+
+Adding    s2.txt                                                           OK 
+Done
+rc=0
+
+Testing archive enc.rar
+
+Testing     s1.txt                                                         OK 
+Testing     s2.txt                                                         OK 
+All OK
+rc=0
+
+Processing archive enc2.rar
+Renaming s1.txt to s9.txt
+Done
+rc=0
+s9.txt
+s2.txt
+rc=0
+
+Evaluation copy. Please register.
+
+Updating archive enc2.rar
+
+Updating  s2.txt                                                           OK 
+Done
+rc=0
+
+Testing archive enc2.rar
+
+Testing     s2.txt                                                         OK 
+All OK
+rc=0
+
+Testing archive enc2.rar
+
+Testing     s9.txt                                                         OK 
+All OK
+rc=0
+
+Deleting from enc2.rar
+Deleting s9.txt
+Done
+rc=0
+s2.txt
+rc=0
 == names not there, and a file the shell is writing
 
 Evaluation copy. Please register.
