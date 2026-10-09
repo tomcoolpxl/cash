@@ -61,6 +61,12 @@ mk
 z rar mf -m0 -idc -x'*.log' m3.rar src
 find src | sort
 
+echo "== -dw: wiped, then deleted, as -df deletes (-dr's Recycle Bin is left out)"
+mk
+z rar a -m0 -idc -dw -x'*.log' w1.rar src
+find src | sort
+z rar lb w1.rar
+
 echo "== names not there, and a file the shell is writing"
 mk
 z rar a -m0 -idc n1.rar 'src\a.txt' nothere.txt nothere2.txt

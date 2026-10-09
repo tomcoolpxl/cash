@@ -150,6 +150,40 @@ src/b.log
 src/keep
 src/keep/k.log
 src/sub
+== -dw: wiped, then deleted, as -df deletes (-dr's Recycle Bin is left out)
+
+Evaluation copy. Please register.
+
+Creating archive w1.rar
+
+Adding    src/a.txt                                                        OK 
+Adding    src/sub/c.txt                                                    OK 
+Adding    src/keep                                                         OK 
+Adding    src/sub                                                          OK 
+Adding    src                                                              OK 
+Deleting src/sub/c.txt                     deleted  20%
+Deleting directory src/sub                           deleted  40%
+Deleting directory src/keep                          NOT DELETED  60%
+Deleting src/a.txt                         deleted  80%
+Deleting directory src                               NOT DELETED 100%
+Done
+--- stderr
+
+Cannot delete src/keep
+The directory is not empty.
+Cannot delete src
+The directory is not empty.
+rc=0
+src
+src/b.log
+src/keep
+src/keep/k.log
+src/a.txt
+src/sub/c.txt
+src/keep
+src/sub
+src
+rc=0
 == names not there, and a file the shell is writing
 
 Evaluation copy. Please register.

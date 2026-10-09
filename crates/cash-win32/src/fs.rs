@@ -474,3 +474,41 @@ pub fn file_info(path: &Path) -> std::io::Result<FileInfo> {
 fn file_identity(path: &Path) -> Option<(u32, u64)> {
     file_info(path).ok().map(|info| (info.volume, info.index))
 }
+
+/// Moves a file or folder to the Recycle Bin, as Explorer's Delete does, asking nothing
+/// and showing nothing. The path is made whole first: the bin keeps where it came from.
+///
+/// # Errors
+///
+/// When the shell does not move it, with its code.
+pub fn recycle(path: &Path) -> std::io::Result<()> {
+    use windows_sys::Win32::UI::Shell::{
+        FO_DELETE, FOF_ALLOWUNDO, FOF_NOCONFIRMATION, FOF_NOERRORUI, FOF_SILENT, SHFILEOPSTRUCTW,
+        SHFileOperationW,
+    };
+    let whole = std::path::absolute(path)?;
+    // The list of names ends in a second NUL.
+    let mut from = crate::wide::to_wide_nul(&whole);
+    from.push(0);
+    let flags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT;
+    let mut operation = SHFILEOPSTRUCTW {
+        wFunc: FO_DELETE,
+        pFrom: from.as_ptr(),
+        fFlags: u16::try_from(flags).unwrap_or(u16::MAX),
+        ..SHFILEOPSTRUCTW::default()
+    };
+    // SAFETY: `operation` is a valid SHFILEOPSTRUCTW whose `pFrom` points at a
+    // double-NUL-terminated wide string that lives across the call.
+    let result = unsafe { SHFileOperationW(&raw mut operation) };
+    if result != 0 {
+        return Err(std::io::Error::other(format!(
+            "the shell could not move it to the Recycle Bin (code {result:#x})"
+        )));
+    }
+    if operation.fAnyOperationsAborted != 0 {
+        return Err(std::io::Error::other(
+            "moving it to the Recycle Bin was stopped",
+        ));
+    }
+    Ok(())
+}

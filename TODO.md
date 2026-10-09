@@ -723,7 +723,10 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      the quick-open room kept for earlier big files in the same volume (taken as their
      header and 18 bytes each, as for the file going in, unchecked with two); updating
      an archive whose files are encrypted without its password (rar copies them, rars'
-     preserving builder asks for it); `-as`, `-dr`, `-dw`, `-ag`, `-log` read, not done;
+     preserving builder asks for it); `-as`, `-ag`, `-log` read, not done (`-dw` and
+     `-dr` done 2026-10-09: `-dw` in `rar_add_names.sh`; `-dr`, a folder archived whole
+     recycled whole and lines without a share, compared with Rar.exe by hand, out of
+     the oracle not to fill the Recycle Bin);
      `-md` read and not applied (rars' builder keeps its dictionary size to itself).
    - `c`, `cw`, `rn`, `k`, `rr` and `ch`: done 2026-10-09 (`rar_modify.sh`, 474 lines,
      the rewrites WinRAR's byte for byte). Left of them: `c` and `k` on a volume set,

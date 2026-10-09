@@ -95,7 +95,7 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
     let delete = match command {
         Command::Move { files_only: true } => Delete::Files,
         Command::Move { files_only: false } => Delete::All,
-        _ if switches.delete_files => Delete::All,
+        _ if switches.delete_files || switches.recycle || switches.wipe => Delete::All,
         _ => Delete::None,
     };
     let Some(archive) = parsed.archive.as_deref() else {
@@ -1520,6 +1520,80 @@ impl<SE: cash_core::ShellExtensions> Walker<'_, '_, SE> {
     }
 }
 
+/// The folders `-dr` sends to the Recycle Bin whole, as rar does: those at the top of
+/// what was archived whose every file and folder was archived.
+fn whole_folders(archived: &[&Source]) -> Vec<PathBuf> {
+    let paths: std::collections::HashSet<&Path> = archived
+        .iter()
+        .map(|source| source.path.as_path())
+        .collect();
+    let folders: std::collections::HashSet<&Path> = archived
+        .iter()
+        .filter(|source| source.is_dir)
+        .map(|source| source.path.as_path())
+        .collect();
+    folders
+        .iter()
+        .filter(|folder| {
+            !folder
+                .parent()
+                .is_some_and(|parent| folders.contains(parent))
+        })
+        .filter(|folder| all_archived(folder, &paths))
+        .map(|folder| folder.to_path_buf())
+        .collect()
+}
+
+/// Whether everything below a folder was archived.
+fn all_archived(folder: &Path, paths: &std::collections::HashSet<&Path>) -> bool {
+    let Ok(entries) = std::fs::read_dir(folder) else {
+        return false;
+    };
+    entries.flatten().all(|entry| {
+        let path = entry.path();
+        paths.contains(path.as_path())
+            && (!entry.file_type().is_ok_and(|kind| kind.is_dir()) || all_archived(&path, paths))
+    })
+}
+
+/// A folder to the Recycle Bin once its files have gone: as `rd`, an empty one only.
+fn recycle_folder(path: &Path) -> io::Result<()> {
+    if std::fs::read_dir(path)?.next().is_some() {
+        // What `rd` says of it, in Windows' words.
+        return Err(io::Error::from_raw_os_error(145));
+    }
+    cash_win32::fs::recycle(path)
+}
+
+/// `-dw`: a file's data overwritten with zero bytes, the file cut to nothing and
+/// renamed, then deleted, so that its data is not found again on the disk.
+fn wipe(path: &Path) -> io::Result<()> {
+    use std::io::{Seek as _, Write as _};
+    {
+        let mut file = std::fs::OpenOptions::new().write(true).open(path)?;
+        let mut left = file.metadata()?.len();
+        let zeros = [0u8; 16 * 1024];
+        file.seek(io::SeekFrom::Start(0))?;
+        while left > 0 {
+            let step = usize::try_from(left.min(zeros.len() as u64)).unwrap_or(zeros.len());
+            file.write_all(&zeros[..step])?;
+            left -= step as u64;
+        }
+        file.sync_all()?;
+        file.set_len(0)?;
+    }
+    let renamed = path.with_file_name(format!(
+        "{:08x}.tmp",
+        std::process::id() ^ u32::try_from(path.as_os_str().len()).unwrap_or(0)
+    ));
+    let gone = if std::fs::rename(path, &renamed).is_ok() {
+        &renamed
+    } else {
+        path
+    };
+    std::fs::remove_file(gone)
+}
+
 /// Windows' error for a file another handle's sharing does not allow opening.
 const ERROR_SHARING_VIOLATION: i32 = 32;
 
@@ -1717,20 +1791,45 @@ fn delete_sources<SE: cash_core::ShellExtensions>(
     let total = archived.len().max(1);
     let mut order: Vec<&Source> = archived.to_vec();
     order.sort_by_key(|source| std::cmp::Reverse(source.walk));
+    let whole = if rar.switches.recycle && delete == Delete::All {
+        whole_folders(archived)
+    } else {
+        Vec::new()
+    };
     let mut done = 0;
     for source in order {
         if source.is_dir && delete == Delete::Files {
             continue;
         }
+        // In a folder that goes to the Recycle Bin whole: gone with it.
+        if whole
+            .iter()
+            .any(|folder| source.path != *folder && source.path.starts_with(folder))
+        {
+            continue;
+        }
         done += 1;
         let percent = done * 100 / total;
+        let recycle = rar.switches.recycle;
         let removed = if source.is_dir {
-            std::fs::remove_dir(&source.path)
+            if whole.contains(&source.path) {
+                cash_win32::fs::recycle(&source.path)
+            } else if recycle {
+                recycle_folder(&source.path)
+            } else {
+                std::fs::remove_dir(&source.path)
+            }
         } else {
             if source.attributes & 0x1 != 0 {
                 let _ = cash_win32::unix::set_attributes(&source.path, source.attributes & !0x1);
             }
-            std::fs::remove_file(&source.path)
+            if recycle {
+                cash_win32::fs::recycle(&source.path)
+            } else if rar.switches.wipe {
+                wipe(&source.path)
+            } else {
+                std::fs::remove_file(&source.path)
+            }
         };
         let head = if source.is_dir {
             "Deleting directory "
@@ -1742,8 +1841,14 @@ fn delete_sources<SE: cash_core::ShellExtensions>(
         } else {
             "NOT DELETED"
         };
+        // The Recycle Bin's deletions show no share of the work.
+        let share = if recycle {
+            String::new()
+        } else {
+            format!("{percent:>4}%")
+        };
         rar.console
-            .msg(&format!("\n{head}{:<34}{word}{percent:>4}%", source.shown));
+            .msg(&format!("\n{head}{:<34}{word}{share}", source.shown));
         if let Err(error) = removed {
             rar.console.err(&format!(
                 "\nCannot delete {}\n{}",
