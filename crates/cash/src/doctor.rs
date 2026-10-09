@@ -100,7 +100,7 @@ const CARRIED: &[&str] = &[
     "pbpaste", "flock", "watch", "free", "nice", "renice", "nc", "diff", "cmp", "grep", "suspend",
     "mkfifo", "stdbuf", "getconf", "locale", "gzip", "gunzip", "zcat", "bzip2", "bunzip2", "bzcat",
     "xz", "unxz", "xzcat", "lzma", "unlzma", "lzcat", "zstd", "unzstd", "zstdcat", "tar", "zip",
-    "unzip", "zipinfo", "7z", "7za",
+    "unzip", "zipinfo", "7z", "7za", "rar", "unrar",
 ];
 
 /// Run the diagnostic. Returns a process exit code.
@@ -945,6 +945,11 @@ const PROGRAM_SHADOWS: &[(&str, &str)] = &[
         "7-Zip 26.03's options and words, LF and / in what it prints",
     ),
     ("7za", "the same, under 7-Zip's standalone name"),
+    (
+        "rar",
+        "WinRAR 7.23's commands and words, LF and / in what it prints",
+    ),
+    ("unrar", "the same, UnRAR's commands only"),
 ];
 
 /// Names cash answers although a program elsewhere on `PATH` has them, in one note.

@@ -674,10 +674,14 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      the quick-open room kept for earlier big files in the same volume (taken as their
      header and 18 bytes each, as for the file going in, unchecked with two); updating
      an archive whose files are encrypted without its password (rar copies them, rars'
-     preserving builder asks for it); `-as`, `-dr`, `-dw`, `-ag`, `-log` read, not done.
+     preserving builder asks for it); `-as`, `-dr`, `-dw`, `-ag`, `-log` read, not done;
+     `-md` read and not applied (rars' builder keeps its dictionary size to itself).
    - `c`, `cw`, `rn`, `k`, `rr`, `ch`, `r`, `rc`, `i`; `s` and `rv` refused.
    - The `expect(dead_code)` at the top of `rar/mod.rs` goes when every part is used.
-3. Pages, `builtins.md`, doctor's shadows (`rar`, `unrar`, `7z`'s RAR).
+3. **The page, `builtins.md`, doctor** (done 2026-10-09): `help rar` covers both names;
+   `CARRIED` and doctor's note on a program cash goes ahead of have `rar` and `unrar`,
+   so a WinRAR on `PATH` is named with the way to reach it; 7z's page already says it
+   reads RAR.
 4. **rar's spool files outlive a killed process**: done 2026-10-08. Spools and reader
    scratch files are opened delete-on-close, a spool keeping that handle while it lives,
    and a writer with no temp folder named spools in the system's, not the process's
