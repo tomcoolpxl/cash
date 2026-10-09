@@ -991,7 +991,8 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
             None => relative,
         };
         let path = self.rar.path(&shown);
-        if entry.directory {
+        // A junction, or a folder's symbolic link, is a link to make, not a folder.
+        if entry.directory && entry.link.is_none() {
             if paths && !matches!(self.rar.switches.exclude_paths, Some(0)) {
                 // `-f` freshens what is there: a folder that is not stays so.
                 if self.rar.switches.freshen && !path.is_dir() {
@@ -1073,9 +1074,10 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
             Link::Hard(_) | Link::Copy(_) => {
                 self.extract_file_link(entry, link, shown, path, paths, entries)
             }
-            Link::Unix(target) | Link::Windows(target) | Link::Junction(target) => {
-                self.extract_symlink(entry, target, shown, path)
+            Link::Unix(target) | Link::Windows(target) => {
+                self.extract_symlink(entry, target, shown, path, false)
             }
+            Link::Junction(target) => self.extract_symlink(entry, target, shown, path, true),
         }
     }
 
@@ -1150,14 +1152,16 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
         Ok(())
     }
 
-    /// A symbolic link: left out with `-ol-`, skipped as unsafe without `-ola`, made
-    /// when Windows allows it.
+    /// A symbolic link or, with `junction`, a junction: left out with `-ol-`, skipped as
+    /// unsafe without `-ola`, made when Windows allows it. Its folder is made once it is
+    /// to be made, its line said first.
     fn extract_symlink(
         &mut self,
         entry: &Entry,
         target: &str,
         shown: &str,
         path: PathBuf,
+        junction: bool,
     ) -> Result<(), Stop> {
         if self.rar.switches.links.as_deref() == Some("-") {
             return Ok(());
@@ -1167,7 +1171,6 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
         } else {
             target.to_owned()
         };
-        self.make_parent(shown);
         let Some(path) = self.overwrite(entry, shown, path)? else {
             return Ok(());
         };
@@ -1183,6 +1186,11 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
                 ),
                 code::WARNING,
             );
+            return Ok(());
+        }
+        self.make_parent(&shown);
+        if junction {
+            self.make_junction(entry, &target, &shown, &path);
             return Ok(());
         }
         let _ = std::fs::remove_file(&path);
@@ -1212,6 +1220,32 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
             }
         }
         Ok(())
+    }
+
+    /// A junction to `target`, its `\??\` taken off for the reparse data to put back.
+    /// rar ends its line with a question mark over the progress, after the line of the
+    /// folder it made for it if any.
+    fn make_junction(&mut self, entry: &Entry, target: &str, shown: &str, path: &Path) {
+        let target = target.strip_prefix(r"\??\").unwrap_or(target);
+        let data = cash_win32::reparse::link_data(target, true);
+        match cash_win32::reparse::set(path, true, &data) {
+            Ok(()) => {
+                if !self.rar.switches.no_names {
+                    let back = if self.rar.switches.no_percent {
+                        ""
+                    } else {
+                        "\u{8}\u{8}\u{8}\u{8}\u{8}"
+                    };
+                    self.say(&format!("{back}   ? "));
+                }
+                self.done += 1;
+                self.rar.log_file(&entry.name);
+            }
+            Err(error) => self.error(
+                &format!("\nCannot create {shown}\n{}", open::system_message(&error)),
+                code::CREATE,
+            ),
+        }
     }
 
     /// The progress a file's line shows, wiped: five spaces.

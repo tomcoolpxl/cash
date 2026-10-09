@@ -70,5 +70,25 @@ z rar t copies.rar
 z rar t hardlink.rar
 z rar p -inul hardlink.rar
 z rar lb links_unsafe.rar
+echo "== a junction: unsafe for its absolute target, made with -ola, left out with -ol-"
+# Made here and stored with -ol, its target this run's folder: the message shows it masked.
+# cash's rm (uutils') cannot remove a junction yet: cmd's rmdir takes each away.
+mkdir real top
+printf 'inside\n' > real/in.txt
+cmd /c 'mklink /J top\junc real' > /dev/null
+rar a -m0 -ol -idq junc.rar top/junc
+cmd /c 'rmdir top\junc'
+for sw in "" -ola -ol-; do
+  for there in no yes; do
+    rm -rf o10 && mkdir o10
+    [ $there = yes ] && mkdir o10/top
+    echo "-- $sw, its folder there: $there"
+    z rar x $sw -idc junc.rar o10/ | sed 's#-> /??/.*/real link#-> /??/(this folder)/real link#'
+    if [ -L o10/top/junc ]; then
+      echo "o10/top/junc is a link to a folder holding $(ls o10/top/junc)"
+      cmd /c 'rmdir o10\top\junc'
+    fi
+  done
+done
 
 cd / && rm -rf "$dir"

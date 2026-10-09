@@ -174,3 +174,53 @@ symlink.txt
 dirlink
 dir
 rc=0
+== a junction: unsafe for its absolute target, made with -ola, left out with -ol-
+-- , its folder there: no
+
+Extracting from junc.rar
+
+Extracting  o10/top/junc                                                 
+Total errors: 1
+--- stderr
+
+Skipping the potentially unsafe top/junc -> /??/(this folder)/real link. For archives from a trustworthy source use -ola to extract it anyway.
+rc=1
+-- , its folder there: yes
+
+Extracting from junc.rar
+
+Extracting  o10/top/junc                                                 
+Total errors: 1
+--- stderr
+
+Skipping the potentially unsafe top/junc -> /??/(this folder)/real link. For archives from a trustworthy source use -ola to extract it anyway.
+rc=1
+-- -ola, its folder there: no
+
+Extracting from junc.rar
+
+Extracting  o10/top/junc                                                 
+Creating    o10/top                                                   OK   ? 
+All OK
+rc=0
+o10/top/junc is a link to a folder holding in.txt
+-- -ola, its folder there: yes
+
+Extracting from junc.rar
+
+Extracting  o10/top/junc                                                    ? 
+All OK
+rc=0
+o10/top/junc is a link to a folder holding in.txt
+-- -ol-, its folder there: no
+
+Extracting from junc.rar
+
+No files to extract
+rc=10
+-- -ol-, its folder there: yes
+
+Extracting from junc.rar
+
+No files to extract
+rc=10

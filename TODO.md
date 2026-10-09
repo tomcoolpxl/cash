@@ -685,7 +685,13 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      right. Left: a file reference whose file is not asked for is written straight
      from the archive, where rar unpacks the file to a temporary
      `__tmp_reference_source_N.rartemp` first and says so; in a solid archive that file
-     has gone by, and is not found; junctions are made as folder links.
+     has gone by, and is not found.
+   - Junctions on extraction: done 2026-10-09 (in `rar_links.sh`, now 226 lines).
+     cash made a junction a plain folder, whatever the switches. Now a junction is a
+     link: skipped as unsafe (its target is absolute) without `-ola`, left out with
+     `-ol-` ("No files to extract", rc 10), and made a junction with `-ola`, its line
+     ending in rar's "   ? " after the line of the folder made for it. A link's folder
+     is made only once the link is to be made, after its line, as rar does.
    - `-ol` on `a`: done 2026-10-09 (in `rar_add_links.sh`, now 613 lines). A junction
      is followed without it (its target's files under its name, its own entry a plain
      folder with its own time), left out with `-ol-`, and with `-ol` or `-ola` stored as

@@ -16,8 +16,9 @@ the archive, `-ad2` the archive's own folder; `-ts`, `-tsc`, `-tsa` give back th
 creation and access times kept. Folders get their times and attributes back, `-ai`
 leaving the attributes. A hard link is made to the file it names, extracted before it;
 a file reference is a copy; a symbolic link is made when Windows allows it (an
-administrator's right, or Developer Mode), skipped with `-ol-`, and skipped as unsafe
-when its target is absolute or climbs out by `..`, unless `-ola`. `unrar` has these
+administrator's right, or Developer Mode), a junction always; either is skipped with
+`-ol-`, and skipped as unsafe when its target is absolute (a junction's always is) or
+climbs out by `..`, unless `-ola`. `unrar` has these
 commands alone.
 
 `rar a ARCHIVE NAMES` adds files and folders, making the archive if need be (`.rar` is
