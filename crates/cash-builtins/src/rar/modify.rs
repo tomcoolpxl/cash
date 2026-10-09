@@ -79,14 +79,23 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
         done(rar);
         return Ok(());
     }
-    let mut change = Change::default();
+    let mut change = Change {
+        recovery_percent: add::asked_recovery_percent(rar),
+        ..Change::default()
+    };
     let switches = &rar.switches;
+    // `ch -tl` alone leaves the archive as it is, setting only its time.
+    let mut time_only = false;
     match command {
         Command::Comment => {
             let file = switches.comment_file.as_ref().and_then(|arg| arg.text());
             change.comment = Some(add::comment_from(rar, &display, file)?);
         }
         Command::Lock => {
+            // The recovery record `-rr` asks for is announced before the lock.
+            if change.recovery_percent.is_some() {
+                rar.console.msg("\nAdding the data recovery record     ");
+            }
             rar.console.msg("\nLocking archive");
             change.lock = true;
         }
@@ -100,16 +109,26 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
                 change.comment = Some(add::comment_from(rar, &display, arg.text())?);
             }
             change.lock = switches.lock;
+            if change.lock {
+                rar.console.msg("\nLocking archive");
+            }
             change.latest_time = switches.latest_time;
             if let Some(case) = switches.case {
                 change.renames = case_renames(&opened, case);
             }
+            time_only = change.latest_time
+                && change.comment.is_none()
+                && !change.lock
+                && switches.case.is_none()
+                && change.recovery_percent.is_none();
         }
     }
-    if change.recovery_percent.is_some() {
+    if change.recovery_percent.is_some() && *command != Command::Lock {
         rar.console.msg("\nAdding the data recovery record     ");
     }
-    if *command != Command::Rename || !change.renames.is_empty() {
+    if time_only {
+        stamp_latest(rar, &found.path, &opened);
+    } else if *command != Command::Rename || !change.renames.is_empty() {
         rewrite(rar, &found.path, &opened, &change)?;
     }
     done(rar);
@@ -325,7 +344,7 @@ fn rewrite<SE: cash_core::ShellExtensions>(
     // WinRAR's rewrite has its quick-open locator as a new archive has; the lock is the
     // archive's own, which a rewrite of a locked one never sees.
     if builder.format().family() == ArchiveFamily::Rar50Plus {
-        let quick_open = add::quick_open_on(rar, opened.facts.encrypted_headers);
+        let quick_open = add::quick_open_on(rar);
         builder = builder
             .archive_metadata(None, change.lock, quick_open)
             .map_err(|error| {
@@ -335,15 +354,11 @@ fn rewrite<SE: cash_core::ShellExtensions>(
     }
     let all: Vec<usize> = (0..opened.archive.members().count()).collect();
     let mut keeper = add::Keeper::new(rar, opened, path, &all, password.as_deref())?;
-    let mut latest: Option<std::time::SystemTime> = None;
     for (index, member) in opened.archive.members().enumerate() {
         if let Err(error) = keeper.keep(&mut builder, index, password.is_some()) {
             rar.console
                 .err(&format!("\n{}\n{error}", add::member_name(&member)));
             return Err(Stop::Aborted(code::FATAL));
-        }
-        if !member.meta.is_directory {
-            latest = latest.max(member_time(&member, &rar.zone));
         }
     }
     for (old, new) in &change.renames {
@@ -359,13 +374,29 @@ fn rewrite<SE: cash_core::ShellExtensions>(
         rar.fail(code::CREATE);
         return Ok(());
     }
-    if change.latest_time
-        && let Some(time) = latest
+    if change.latest_time {
+        stamp_latest(rar, path, opened);
+    }
+    Ok(())
+}
+
+/// `-tl`: the archive's time set to its newest file's.
+fn stamp_latest<SE: cash_core::ShellExtensions>(
+    rar: &Rar<'_, SE>,
+    path: &Path,
+    opened: &open::Opened,
+) {
+    let latest = opened
+        .archive
+        .members()
+        .filter(|member| !member.meta.is_directory)
+        .filter_map(|member| member_time(&member, &rar.zone))
+        .max();
+    if let Some(time) = latest
         && let Ok(file) = std::fs::File::options().write(true).open(path)
     {
         let _ = file.set_modified(time);
     }
-    Ok(())
 }
 
 fn rename(builder: &mut Builder, old: &[u8], new: &[u8]) -> cash_archive::rar::Result<()> {

@@ -209,6 +209,47 @@ fn header_encryption_uses_a_shared_entry_password_without_a_builder_default() {
     );
 }
 
+/// WinRAR keeps its quick-open block under encrypted headers, itself encrypted, and
+/// counts the locator's offsets from the main header, after the encryption header.
+#[test]
+fn winrar_layout_encrypts_its_quick_open_block_with_the_headers() {
+    let mut builder = Builder::new(ArchiveVersion::Rar50)
+        .store(true)
+        .password(Some(b"secret".to_vec()))
+        .header_encryption(true)
+        .layout(cash_archive::rar::rar50::Layout::winrar())
+        .archive_metadata(None, false, true)
+        .unwrap();
+    builder
+        .add_bytes(b"big".to_vec(), vec![b'x'; 5000], None, None)
+        .unwrap();
+    let archive = ArchiveReader::read_owned_with_options(
+        builder.to_bytes().unwrap(),
+        cash_archive::rar::ArchiveReadOptions::with_password(b"secret"),
+    )
+    .unwrap();
+    let rar50 = archive.as_rar50().unwrap();
+    let index = rar50
+        .services()
+        .find(|service| service.name == b"QO")
+        .unwrap();
+    assert!(index.encrypted);
+    // The block's data is padded to whole AES blocks.
+    assert_eq!(index.unpacked_size % 16, 0);
+    let offset = rar50.main.locator().unwrap().quick_open_offset.unwrap();
+    assert_eq!(
+        rar50.main.block.offset + usize::try_from(offset).unwrap(),
+        index.block.offset
+    );
+    assert_eq!(
+        archive
+            .read_member(b"big", Some(b"secret"))
+            .unwrap()
+            .unwrap(),
+        vec![b'x'; 5000]
+    );
+}
+
 #[test]
 fn missing_header_password_fails_before_reading_a_source() {
     let mut builder = Builder::new(ArchiveVersion::Rar50)

@@ -664,8 +664,14 @@ pub(crate) fn write_streaming_archive_reporting(
         ));
     }
     let recovery_percent = extras.recovery_percent;
+    // WinRAR keeps its quick-open block under encrypted headers, encrypted itself;
+    // rars' own framing has none there, and the plan refuses one for it.
+    let mut checked = options;
+    if extras.layout.winrar {
+        checked.features.quick_open = false;
+    }
     validate_plan(
-        options,
+        checked,
         PlanShape::new()
             .compressed(true)
             .filtered(extras.filter_policy != FilterPolicy::None),

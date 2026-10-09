@@ -80,7 +80,7 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
     builder = builder.comment(opened.archive.comment(password.as_deref()).ok().flatten());
     builder = builder.layout(add::layout(rar, Some(add::old_bound(&opened.archive))));
     if opened.archive.as_rar50().is_some() {
-        let quick_open = add::quick_open_on(rar, opened.facts.encrypted_headers);
+        let quick_open = add::quick_open_on(rar);
         builder = match builder.archive_metadata(None, false, quick_open) {
             Ok(builder) => builder,
             Err(error) => {
@@ -96,6 +96,10 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
             rar.console.err(&format!("\n{}\n{error}", names[index]));
             return Err(Stop::Aborted(code::FATAL));
         }
+    }
+    if let Some(percent) = add::asked_recovery_percent(rar) {
+        builder = builder.recovery_percent(Some(percent));
+        rar.console.msg("\nAdding the data recovery record     ");
     }
     let resources = WriterResources::default().with_temp_dir(add::work_dir(rar, &found.path));
     if let Err(error) = builder.write_to_path_with_resources(&found.path, &resources, None) {

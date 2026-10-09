@@ -23,7 +23,7 @@ touch -d '2024-01-01T00:00:00Z' a.bin b.bin pool.bin
 # Each volume's name and size, then each part's packed size.
 shape() {
   for f in o/*; do echo "${f#o/} $(stat -c %s "$f")"; done
-  rar lt -v -idc "o/$(ls o | head -1)" | tr -d '\r' | grep "Name:\|Packed size" | paste - - | sed 's/  */ /g; s#\\#/#g'
+  rar lt -v -idc "$@" "o/$(ls o | head -1)" | tr -d '\r' | grep "Name:\|Packed size" | paste - - | sed 's/  */ /g; s#\\#/#g'
 }
 
 for case in "-v37k -rr1" "-v37k -rr5" "-v37k -rr20" "-v50k -rr1" "-v50k -rr5" "-v100k -rr5"; do
@@ -35,18 +35,25 @@ for case in "-v37k -rr1" "-v37k -rr5" "-v37k -rr20" "-v50k -rr1" "-v50k -rr5" "-
   echo "t: $?"
 done
 
-echo "== -v20k -psecret: a folder among encrypted files stays plain"
-rm -rf o src && mkdir o src
+# Encrypted, a folder among the files: its header has no encryption record; with -hp
+# the quick-open block is encrypted too, in each volume and in one archive.
+rm -rf src && mkdir src
 head -c 60000 a.bin > src/a.bin
 cp b.bin src/b.bin
 touch -d '2024-01-01T00:00:00Z' src/a.bin src/b.bin src
-rar a -m0 -idq -v20k -psecret o/v.rar src
-shape
-rar t -idq -psecret "o/$(ls o | head -1)"
-echo "t: $?"
-rm -f s.rar
-rar a -m0 -idq -psecret s.rar src
-echo "one archive: $(stat -c %s s.rar)"
+for case in "-psecret" "-hpsecret" "-hpsecret -rr3"; do
+  echo "== -v20k $case, a folder among the files"
+  rm -rf o && mkdir o
+  rar a -m0 -idq -v20k $case o/v.rar src
+  shape -psecret
+  rar t -idq -psecret "o/$(ls o | head -1)"
+  echo "t: $?"
+  rm -f s.rar
+  rar a -m0 -idq $case s.rar src
+  echo "one archive: $(stat -c %s s.rar)"
+  rar d -idq -psecret s.rar 'src\b.bin'
+  echo "after d: $(stat -c %s s.rar)"
+done
 
 echo "== a volume's number gets the digits of the volumes foreseen"
 for n in 80592 80593; do

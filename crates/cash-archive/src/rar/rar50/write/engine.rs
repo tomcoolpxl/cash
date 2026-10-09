@@ -375,23 +375,27 @@ pub(super) fn write_archive(
             offset += block.len()?;
         }
         let payload_len = payload.len();
-        let header = service_header(
-            b"QO",
-            payload_len,
-            checksum.finish(),
-            None,
-            true,
-            winrar,
-            header_keys.as_ref(),
-            resources,
-        )?;
         payload.park();
-        Some(PreparedBlock {
-            header,
-            payload: Payload::Packed(payload),
-            payload_len,
-            quick_open_cached: false,
-            entry_index: None,
+        Some(match &header_keys {
+            // Only WinRAR's layout keeps an index under encrypted headers: the plan
+            // refuses one for rars' own.
+            Some(keys) => encrypted_index_block(b"QO", payload, payload_len, keys, resources)?,
+            None => PreparedBlock {
+                header: service_header(
+                    b"QO",
+                    payload_len,
+                    checksum.finish(),
+                    None,
+                    true,
+                    winrar,
+                    None,
+                    resources,
+                )?,
+                payload: Payload::Packed(payload),
+                payload_len,
+                quick_open_cached: false,
+                entry_index: None,
+            },
         })
     } else {
         None
@@ -405,6 +409,7 @@ pub(super) fn write_archive(
         }
         None => Bytes::new(resources),
     };
+    let head_crypt_len = head_crypt.len() as u64;
 
     let mut main_flags = if plan.locked {
         crate::rar::rar50::MHFL_LOCKED
@@ -421,7 +426,7 @@ pub(super) fn write_archive(
     let layout = resolve_layout(
         &LayoutInputs {
             header_encrypted: plan.header_encrypted,
-            head_crypt_len: head_crypt.len() as u64,
+            head_crypt_len,
             main_flags,
             volume_number: None,
             archive_metadata: plan.archive_metadata,
@@ -516,9 +521,10 @@ pub(super) fn write_archive(
         // The recovery block has to start exactly where the locator in the
         // main header says it does.
         debug_assert_eq!(layout.recovery_prefix_len, Some(mirror.len()));
+        let origin = RAR50_SIGNATURE.len() as u64 + if winrar { head_crypt_len } else { 0 };
         debug_assert_eq!(
             layout.recovery_offset,
-            Some(mirror.len() - RAR50_SIGNATURE.len() as u64),
+            Some(mirror.len() - origin),
             "recovery record is not where the locator points"
         );
         write_recovery_service_with(
@@ -669,6 +675,49 @@ fn service_header(
         header_keys,
         resources,
     )
+}
+
+/// WinRAR's index block under encrypted headers: the cached headers as they lie
+/// encrypted in the archive, encrypted again with the headers' key and the block's
+/// own IV, zero-padded to 16 bytes, the padded length its size.
+fn encrypted_index_block(
+    name: &[u8],
+    plain: Spool,
+    plain_len: u64,
+    header_keys: &HeaderEncryptionKeys,
+    resources: &WriterResources,
+) -> Result<PreparedBlock<'static>> {
+    let mut iv = [0u8; 16];
+    crate::rar::write_stream::fill_entropy(
+        &mut iv,
+        "RAR 5 writer could not generate encryption IV",
+    )?;
+    let payload_len = plain_len.checked_add(15).ok_or(Error::InvalidArgument(
+        "RAR 5 encrypted data size overflows",
+    ))? & !15;
+    let parts = super::headers::service_parts(name, payload_len, 0, None, true, true, resources)?
+        .encrypted(header_keys.salt, iv)?;
+    let header = prepared_header_image_padded(
+        HEAD_SERVICE,
+        parts.flags,
+        Some(payload_len),
+        parts.data_width,
+        &parts.specific,
+        &parts.extra,
+        Some(header_keys),
+        resources,
+    )?;
+    Ok(PreparedBlock {
+        header,
+        payload: Payload::Encrypted {
+            plain: Owned::new(PlainPayload::Packed(plain), resources)?,
+            keys: header_keys.keys.clone(),
+            iv,
+        },
+        payload_len,
+        quick_open_cached: false,
+        entry_index: None,
+    })
 }
 
 fn prepare_comment<'a>(
@@ -1467,6 +1516,9 @@ struct VolumeMember<'a> {
     source: FragmentSource,
     /// Encryption record for the file header, when the payload is encrypted.
     encryption: Option<([u8; 16], [u8; 16], [u8; 12])>,
+    /// The file's checksums are keyed to its password: in the last part only, in
+    /// WinRAR's framing, the others holding their own data's plain checksums.
+    mac: bool,
 }
 
 struct MemberProgress<'a, 'p> {
@@ -1695,6 +1747,17 @@ fn prepare_volume_member<'a>(
             }
             let payload_len = encrypted.len();
             encrypted.park();
+            // WinRAR keys a file's checksums to its password only when the headers
+            // that hold them are plain.
+            let mac = !(plan.layout.winrar && plan.header_encrypted);
+            let (crc32, hash) = if mac {
+                (
+                    keys.checked_crc_mac(member.crc32)?,
+                    keys.checked_hash_mac(member.hash)?,
+                )
+            } else {
+                (member.crc32, member.hash)
+            };
             Ok(VolumeMember {
                 name: &entry.name,
                 is_directory: entry.is_directory,
@@ -1704,12 +1767,13 @@ fn prepare_volume_member<'a>(
                 attributes: entry.attributes,
                 host_os: entry.host_os,
                 unpacked_size: member.input_size,
-                crc32: keys.checked_crc_mac(member.crc32)?,
-                hash: keys.checked_hash_mac(member.hash)?,
+                crc32,
+                hash,
                 compression_info,
                 payload_len,
                 source: FragmentSource::Packed(encrypted),
                 encryption: Some((salt, iv, keys.checked_password_record()?)),
+                mac,
             })
         }
         None => Ok(VolumeMember {
@@ -1734,6 +1798,7 @@ fn prepare_volume_member<'a>(
                 FragmentSource::Packed(member.packed)
             },
             encryption: None,
+            mac: false,
         }),
     }
 }

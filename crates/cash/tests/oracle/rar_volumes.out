@@ -110,7 +110,7 @@ v.part4.rar 43494
  Name: a.bin	 Packed size: 15413
  Name: b.bin	 Packed size: 25000
 t: 0
-== -v20k -psecret: a folder among encrypted files stays plain
+== -v20k -psecret, a folder among the files
 v.part1.rar 20480
 v.part2.rar 20480
 v.part3.rar 20480
@@ -125,6 +125,38 @@ v.part5.rar 4595
  Name: src	
 t: 0
 one archive: 85482
+after d: 60278
+== -v20k -hpsecret, a folder among the files
+v.part1.rar 20480
+v.part2.rar 20480
+v.part3.rar 20480
+v.part4.rar 20480
+v.part5.rar 5518
+ Name: src/a.bin	 Packed size: 20000
+ Name: src/a.bin	 Packed size: 20000
+ Name: src/a.bin	 Packed size: 20000
+ Name: src/b.bin	 Packed size: 20000
+ Name: src/b.bin	 Packed size: 5008
+ Name: src	
+t: 0
+one archive: 85758
+after d: 60510
+== -v20k -hpsecret -rr3, a folder among the files
+v.part1.rar 20480
+v.part2.rar 20480
+v.part3.rar 20480
+v.part4.rar 20480
+v.part5.rar 11976
+ Name: src/a.bin	 Packed size: 18710
+ Name: src/a.bin	 Packed size: 18710
+ Name: src/a.bin	 Packed size: 18710
+ Name: src/a.bin	 Packed size: 3870
+ Name: src/b.bin	 Packed size: 14728
+ Name: src/b.bin	 Packed size: 10280
+ Name: src	
+t: 0
+one archive: 89338
+after d: 60510
 == a volume's number gets the digits of the volumes foreseen
 80592 bytes: v.part1.rar .. v.part8.rar, 8 volumes
 80593 bytes: v.part01.rar .. v.part08.rar, 8 volumes

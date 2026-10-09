@@ -405,6 +405,20 @@ pub(super) struct ServiceParts {
     pub(super) data_width: usize,
 }
 
+/// The password check in the encryption record of WinRAR's quick-open block under
+/// encrypted headers: eight zero bytes, then the first four of their SHA-256.
+const INDEX_PASSWORD_CHECK: [u8; 12] = [0, 0, 0, 0, 0, 0, 0, 0, 0xaf, 0x55, 0x70, 0xf5];
+
+impl ServiceParts {
+    /// The encryption record WinRAR gives its quick-open block under encrypted headers:
+    /// the archive's salt, the block's own IV, and a zero password check.
+    pub(super) fn encrypted(mut self, salt: [u8; 16], iv: [u8; 16]) -> Result<Self> {
+        write_file_encryption_record_with(&mut self.extra, salt, iv, INDEX_PASSWORD_CHECK, false)?;
+        self.flags |= HFL_EXTRA;
+        Ok(self)
+    }
+}
+
 pub(super) fn service_parts(
     name: &[u8],
     data_len: u64,
@@ -880,6 +894,14 @@ pub(super) fn prepared_header_image_padded(
 mod prepared_header_tests {
     use super::*;
     use crate::rar::{ErrorKind, WriterResources};
+
+    #[test]
+    fn the_index_password_check_is_eight_zeros_and_their_checksum() {
+        use sha2::Digest;
+        let digest = sha2::Sha256::digest([0u8; 8]);
+        assert_eq!(INDEX_PASSWORD_CHECK[..8], [0; 8]);
+        assert_eq!(INDEX_PASSWORD_CHECK[8..], digest[..4]);
+    }
 
     #[test]
     fn exact_images_match_existing_serialization_and_include_encryption_padding() {

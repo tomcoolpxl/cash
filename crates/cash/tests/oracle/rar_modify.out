@@ -432,6 +432,139 @@ Testing     src/sub                                                   OK
 Testing     src                                                       OK
 All OK
 rc=0
+== a change drops the recovery record, unless -rr asks again
+-- a n.txt
+
+Evaluation copy. Please register.
+
+Updating archive r.rar
+
+Adding    n.txt                                                            OK 
+Done
+rc=0
+280 bytes, 0 record, time now
+-- u n.txt
+
+Evaluation copy. Please register.
+
+Updating archive r.rar
+
+Adding    n.txt                                                            OK 
+Done
+rc=0
+280 bytes, 0 record, time now
+-- f src/a.txt
+
+Evaluation copy. Please register.
+
+Updating archive r.rar
+
+WARNING: No files
+rc=10
+587 bytes, 1 record, time untouched
+-- m n.txt
+
+Evaluation copy. Please register.
+
+Updating archive r.rar
+
+Adding    n.txt                                                            OK 
+Deleting n.txt                             deleted 100%
+Done
+rc=0
+280 bytes, 0 record, time now
+-- d src\c.dat
+
+Deleting from r.rar
+Deleting src/c.dat
+Done
+rc=0
+192 bytes, 0 record, time now
+-- c -zcmt.txt
+
+Processing archive r.rar
+Reading comment from cmt.txt
+Adding a comment to r.rar
+
+Done
+rc=0
+287 bytes, 0 record, time now
+-- rn src\c.dat src\d.dat
+
+Processing archive r.rar
+Renaming src/c.dat to src/d.dat
+Done
+rc=0
+238 bytes, 0 record, time now
+-- k
+
+Processing archive r.rar
+Locking archive
+Done
+rc=0
+238 bytes, 0 record, time now
+-- ch -cl
+
+Processing archive r.rar
+Done
+rc=0
+238 bytes, 0 record, time now
+-- ch -k
+
+Processing archive r.rar
+Locking archive
+Done
+rc=0
+238 bytes, 0 record, time now
+-- ch -tl
+
+Processing archive r.rar
+Done
+rc=0
+587 bytes, 1 record, time 2025-03-01 10:00:00
+-- ch -tl -cl
+
+Processing archive r.rar
+Done
+rc=0
+238 bytes, 0 record, time 2025-03-01 10:00:00
+-- a -rr1 n.txt
+
+Evaluation copy. Please register.
+
+Updating archive r.rar
+
+Adding    n.txt                                                            OK 
+Adding the data recovery record     
+Done
+rc=0
+663 bytes, 1 record, time now
+-- d -rr1 src\c.dat
+
+Deleting from r.rar
+Deleting src/c.dat
+Adding the data recovery record     
+Done
+rc=0
+487 bytes, 1 record, time now
+-- k -rr1
+
+Processing archive r.rar
+Adding the data recovery record     
+Locking archive
+Done
+rc=0
+579 bytes, 1 record, time now
+-- c -rr1 -zcmt.txt
+
+Processing archive r.rar
+Reading comment from cmt.txt
+Adding a comment to r.rar
+
+Adding the data recovery record     
+Done
+rc=0
+678 bytes, 1 record, time now
 == missing archive
 
 RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026

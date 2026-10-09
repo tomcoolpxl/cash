@@ -593,13 +593,14 @@ fn preservation_preflight_checks_derived_service_and_locator_consistency() {
             .any(|issue| issue.contains("locator refers to a missing service"))
     );
 
-    let mut conflicting_encryption = seed;
-    conflicting_encryption.main.encrypted_headers = true;
+    // WinRAR keeps a quick-open block under encrypted headers, written anew like
+    // any other.
+    let mut encrypted_index = seed;
+    encrypted_index.main.encrypted_headers = true;
     assert!(
-        Archive::Rar50Plus(conflicting_encryption)
+        Archive::Rar50Plus(encrypted_index)
             .rewrite_preservation_issues()
-            .iter()
-            .any(|issue| issue.contains("quick-open index with encrypted headers"))
+            .is_empty()
     );
 }
 

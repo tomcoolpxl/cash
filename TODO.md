@@ -735,10 +735,27 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      `-rr` sets and a `-p` one, all WinRAR's to the byte). A volume's number has the
      digits of the volumes foreseen from the bound, as Rar.exe's. A folder among
      encrypted files has no encryption record, in volumes and single archives alike, as
-     WinRAR writes it (it was 49 bytes larger). Left: WinRAR's `-hp` archives and
-     volumes have an encrypted quick-open record (224 bytes in a single archive) and,
-     in volumes, parts cut at 16-byte multiples; cash's have none, so their sizes and
-     cut points differ.
+     WinRAR writes it (it was 49 bytes larger).
+   - `-hp`'s quick-open block: done 2026-10-09 (`rar_volumes.sh`, now 162 lines;
+     `rar_modify.sh`). WinRAR keeps one under encrypted headers, in one archive and in
+     each volume: the cached headers as they lie encrypted, encrypted again with the
+     headers' key under an encryption record of its own (the archive's salt, an IV, a
+     password check of eight zero bytes and their SHA-256's first four), padded to 16
+     bytes, the padded length its size. In a volume it is kept 16 bytes more room, and
+     an encrypted recovery header 54 (it takes 48). The locator's offsets count from
+     the main header, after the encryption header: cash's counted from the signature,
+     38 bytes off under `-hp`. A split part's encryption record does not say its
+     checksums are keyed to the password (only the last part's does, and none under
+     `-hp`): WinRAR's `t` called every part of cash's `-p` sets "packed data checksum
+     error". cash refused to change an archive with an encrypted quick-open block, so
+     WinRAR's `-hp` archives could not be updated; it changes them now, its own too.
+   - A change drops the recovery record unless `-rr` asks again: done 2026-10-09
+     (`rar_modify.sh`, now 607 lines). `a`, `u`, `m`, `d`, `c`, `rn`, `k` and `ch` all
+     write the archive anew without one, as WinRAR does; cash kept it. `-rr` on `d`,
+     `k` and `c` adds one, its line before "Locking archive" for `k`. `ch -tl` alone
+     leaves the archive's bytes alone and sets its time only; `ch -k` says "Locking
+     archive". The locator's padding when changing counts the old archive's recovery
+     and quick-open records as members too (a byte short before).
    - Writing, not yet in the oracle or not yet WinRAR's: (updating
      an archive whose files are encrypted without its password done 2026-10-09, in
      `rar_add_names.sh`: a non-solid RAR 5 archive's members are carried by rars'
@@ -755,7 +772,7 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      (32 MB without), halved while the largest file, or all in a solid archive, fits
      twice, to 128 KB (1 MB solid), as the headers Rar.exe writes record it; rars' builder's
      `rar50_dictionary_size` is public now. Sizes above 4 GB (RAR 7's) are not tried.
-   - `c`, `cw`, `rn`, `k`, `rr` and `ch`: done 2026-10-09 (`rar_modify.sh`, 474 lines,
+   - `c`, `cw`, `rn`, `k`, `rr` and `ch`: done 2026-10-09 (`rar_modify.sh`, 474 lines then,
      the rewrites WinRAR's byte for byte). Left of them: `c` and `k` on a volume set,
      which rar 7.23 does and cash refuses as it refuses `a` ("Cannot modify volume");
      `rr` above 100% (rar takes up to 1000%, rars' writer 100); `ch` takes `-cl`, `-cu`,

@@ -53,7 +53,8 @@ pub(super) struct ResolvedLayout {
     pub(super) main_extra: Bytes,
     pub(super) main_header_len: u64,
     /// Value stored in the locator: the block's position measured from the end
-    /// of the signature. The quick-open offset is settled the same way but is
+    /// of the signature, or in WinRAR's layout from the main header. The
+    /// quick-open offset is settled the same way but is
     /// only ever written into `main_extra`, so it is not repeated here.
     pub(super) recovery_offset: Option<u64>,
     /// Bytes the recovery record protects, i.e. everything before it.
@@ -75,6 +76,15 @@ pub(super) fn resolve_layout(
         None => 0,
     };
 
+    // WinRAR counts the locator's offsets from the main header, after the encryption
+    // header of `-hp`; rars' own, from the end of the signature.
+    let origin = if inputs.winrar {
+        signature_len
+            .checked_add(inputs.head_crypt_len)
+            .ok_or(Error::InvalidArgument("RAR 5 archive layout overflows"))?
+    } else {
+        signature_len
+    };
     let mut quick_open_offset = inputs.quick_open_payload_len.map(|_| 0);
     let mut recovery_offset = inputs.recovery_percent.map(|_| 0);
 
@@ -112,8 +122,8 @@ pub(super) fn resolve_layout(
             .checked_add(quick_open_block_len)
             .ok_or(Error::InvalidArgument("RAR 5 archive layout overflows"))?;
 
-        let next_quick_open = quick_open_offset.map(|_| quick_open_position - signature_len);
-        let next_recovery = recovery_offset.map(|_| recovery_position - signature_len);
+        let next_quick_open = quick_open_offset.map(|_| quick_open_position - origin);
+        let next_recovery = recovery_offset.map(|_| recovery_position - origin);
 
         if next_quick_open == quick_open_offset && next_recovery == recovery_offset {
             return Ok(ResolvedLayout {
@@ -167,8 +177,12 @@ pub(super) fn index_service_block_len(
     inputs: &LayoutInputs<'_>,
     resources: &WriterResources,
 ) -> Result<u64> {
-    let parts =
+    let mut parts =
         super::headers::service_parts(name, data_len, 0, service_data, true, true, resources)?;
+    // Under encrypted headers WinRAR's index is encrypted too, its record a fixed size.
+    if inputs.header_encrypted {
+        parts = parts.encrypted([0; 16], [0; 16])?;
+    }
     let header = super::headers::block_header_image_padded(
         HEAD_SERVICE,
         parts.flags,

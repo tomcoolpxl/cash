@@ -647,7 +647,7 @@ fn settings<SE: cash_core::ShellExtensions>(
     }
     builder = builder.layout(layout(rar, None));
     if builder.format().family() == ArchiveFamily::Rar50Plus {
-        let quick_open = quick_open_on(rar, old.is_some_and(|o| o.facts.encrypted_headers));
+        let quick_open = quick_open_on(rar);
         builder = builder
             .archive_metadata(None, switches.lock, quick_open)
             .map_err(|error| {
@@ -709,34 +709,51 @@ pub(super) fn rewriting_builder(
     opened: &open::Opened,
     password: Option<&[u8]>,
 ) -> rar::Result<Builder> {
-    if opened.archive.as_rar50().is_some() && !opened.facts.solid {
-        opened.archive.carrying_builder(password)
+    let builder = if opened.archive.as_rar50().is_some() && !opened.facts.solid {
+        opened.archive.carrying_builder(password)?
     } else {
-        opened.archive.preserving_builder(password)
-    }
+        opened.archive.preserving_builder(password)?
+    };
+    // WinRAR drops the recovery record of an archive it changes, unless `-rr` asks for
+    // one again.
+    Ok(builder.recovery_percent(None))
+}
+
+/// The recovery record `-rr` asks for, as a percentage of the archive.
+pub(super) fn asked_recovery_percent<SE: cash_core::ShellExtensions>(
+    rar: &Rar<'_, SE>,
+) -> Option<u64> {
+    rar.switches
+        .recovery_record
+        .as_deref()
+        .map(recovery_percent)
 }
 
 /// The bound `WinRAR` gives the locator's offsets when it changes an archive: from the
 /// old archive's members, the ones dropped too, each counted as a member written is
 /// (seen with stored members).
 pub(super) fn old_bound(archive: &rar::Archive) -> u64 {
-    archive.members().fold(1, |total, member| {
+    let members = archive.members().fold(1u64, |total, member| {
         total.saturating_add(rar::rar50::Layout::member_bound(
             member.meta.unpacked_size,
             &member.meta.name,
         ))
+    });
+    // Its recovery record counts too, as a member would.
+    archive.as_rar50().map_or(members, |archive| {
+        archive.services().fold(members, |total, service| {
+            total.saturating_add(rar::rar50::Layout::member_bound(
+                service.unpacked_size,
+                &service.name,
+            ))
+        })
     })
 }
 
-/// Whether an archive written gets quick-open information: unless `-qo-`, and not under
-/// encrypted headers (`-hp`, or an archive that has them), where rars keeps no index.
-pub(super) fn quick_open_on<SE: cash_core::ShellExtensions>(
-    rar: &Rar<'_, SE>,
-    encrypted_headers: bool,
-) -> bool {
+/// Whether an archive written gets quick-open information: unless `-qo-`. Under
+/// encrypted headers it is encrypted too, as `WinRAR`'s is.
+pub(super) fn quick_open_on<SE: cash_core::ShellExtensions>(rar: &Rar<'_, SE>) -> bool {
     rar.switches.quick_open != Some('-')
-        && !encrypted_headers
-        && rar.switches.header_password.is_none()
 }
 
 /// `-rr[N]`'s size as a percentage of the archive: `N`, `N%` or `Np`; 3 by default.

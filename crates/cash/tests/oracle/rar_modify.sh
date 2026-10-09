@@ -103,6 +103,32 @@ z rar l -idc ch1.rar
 z rar ch -tl ch1.rar
 z rar t -idc ch1.rar
 
+echo "== a change drops the recovery record, unless -rr asks again"
+# Each on a fresh stored archive with a 3% record, dated 2020: its size, whether it has a
+# record still, and its time (untouched, now, or its newest file's with -tl). A record's
+# bytes differ from one Rar.exe run to the next, so the sizes are shown, not checksums.
+printf 'new\n' > n.txt
+touch -d '2025-03-01T12:00:00Z' n.txt
+for cmd in "a n.txt" "u n.txt" "f src/a.txt" "m n.txt" "d src\\c.dat" "c -zcmt.txt" \
+  "rn src\\c.dat src\\d.dat" "k" "ch -cl" "ch -k" "ch -tl" "ch -tl -cl" "a -rr1 n.txt" \
+  "d -rr1 src\\c.dat" "k -rr1" "c -rr1 -zcmt.txt"; do
+  rm -f r.rar
+  rar a -m0 -idq -rr3 r.rar src
+  touch -d '2020-01-01T00:00:00Z' r.rar
+  [ -e n.txt ] || { printf 'new\n' > n.txt; touch -d '2025-03-01T12:00:00Z' n.txt; }
+  echo "-- $cmd"
+  set -- $cmd
+  op=$1
+  shift
+  z rar "$op" -idc r.rar "$@"
+  case $(stat -c %y r.rar | cut -c1-4) in
+    2020) t=untouched ;;
+    2025) t=$(stat -c %y r.rar | cut -c1-19) ;;
+    *) t=now ;;
+  esac
+  echo "$(stat -c %s r.rar) bytes, $(rar lt -idc r.rar | tr -d '\r' | grep -c 'Details:.*recovery record') record, time $t"
+done
+
 echo "== missing archive"
 z rar c -zcmt.txt missing.rar
 z rar k missing.rar

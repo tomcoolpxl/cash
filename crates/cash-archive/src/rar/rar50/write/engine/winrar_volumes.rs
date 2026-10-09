@@ -23,6 +23,10 @@ const CACHED_RESERVE: u64 = 16;
 /// header itself takes 23 or 24 bytes.
 const RECOVERY_HEADER_RESERVE: u64 = 30;
 
+/// The same under encrypted headers, where the header takes 48 bytes with its
+/// initialisation vector: seen as the parts WinRAR cuts.
+const ENCRYPTED_RECOVERY_HEADER_RESERVE: u64 = 54;
+
 struct Volume {
     index: u64,
     body: Spool,
@@ -64,8 +68,7 @@ pub(super) fn write(
     }
     let mut writer = Writer {
         volume_size,
-        // Encrypted headers keep no quick-open index in rars.
-        quick_open: plan.quick_open && header_keys.is_none(),
+        quick_open: plan.quick_open,
         recovery_percent: plan.recovery_percent,
         header_keys,
         head_crypt,
@@ -176,7 +179,9 @@ impl Writer<'_, '_> {
                     .map(|(_, header)| header.len() as u64 + CACHED_RESERVE)
                     .sum();
                 let entries = cached + header_len + ENTRY_RESERVE;
-                self.quick_open_header_len(entries)? + entries
+                // Encrypted, the block's data is padded to 16 bytes: 16 more are kept.
+                let padding = if self.header_keys.is_some() { 16 } else { 0 };
+                self.quick_open_header_len(entries)? + entries + padding
             } else {
                 0
             };
@@ -300,7 +305,12 @@ impl Writer<'_, '_> {
         if payload.is_empty() {
             return Ok(0);
         }
-        Ok(self.quick_open_header_len(payload.len() as u64)? + payload.len() as u64)
+        let payload_len = if self.header_keys.is_some() {
+            (payload.len() as u64).div_ceil(16) * 16
+        } else {
+            payload.len() as u64
+        };
+        Ok(self.quick_open_header_len(payload_len)? + payload_len)
     }
 
     fn next_volume(&mut self, volume: &mut Volume) -> Result<()> {
@@ -387,18 +397,19 @@ impl Writer<'_, '_> {
         Ok(end)
     }
 
-    /// The room a recovery record's header gets: WinRAR's 30 bytes, or encrypted, as
-    /// long as 30 bytes encrypt to with their initialisation vector.
+    /// The room a recovery record's header gets: WinRAR's 30 bytes, or encrypted 54.
     fn recovery_header_reserve(&self) -> u64 {
         if self.header_keys.is_some() {
-            16 + RECOVERY_HEADER_RESERVE.div_ceil(16) * 16
+            ENCRYPTED_RECOVERY_HEADER_RESERVE
         } else {
             RECOVERY_HEADER_RESERVE
         }
     }
 
+    /// The quick-open block's header length, with an encryption record and encrypted
+    /// itself under encrypted headers.
     fn quick_open_header_len(&self, payload_len: u64) -> Result<u64> {
-        let parts = super::super::headers::service_parts(
+        let mut parts = super::super::headers::service_parts(
             b"QO",
             payload_len,
             0,
@@ -407,7 +418,10 @@ impl Writer<'_, '_> {
             true,
             self.resources,
         )?;
-        Ok(super::super::headers::block_header_image_padded(
+        if self.header_keys.is_some() {
+            parts = parts.encrypted([0; 16], [0; 16])?;
+        }
+        let len = super::super::headers::block_header_image_padded(
             HEAD_SERVICE,
             parts.flags,
             Some(payload_len),
@@ -416,7 +430,12 @@ impl Writer<'_, '_> {
             &parts.extra,
             self.resources,
         )?
-        .len() as u64)
+        .len() as u64;
+        Ok(if self.header_keys.is_some() {
+            16 + len.div_ceil(16) * 16
+        } else {
+            len
+        })
     }
 
     /// One fragment's header in WinRAR's framing; see [`fragment_header`] for what
@@ -431,7 +450,9 @@ impl Writer<'_, '_> {
         let resources = self.resources;
         let mut extra = Bytes::new(resources);
         if let Some((salt, iv, check_value)) = member.encryption {
-            write_file_encryption_record(&mut extra, salt, iv, check_value)?;
+            // A part that is not the last holds its own data's plain checksums.
+            let mac = member.mac && fragment.is_none();
+            write_file_encryption_record_with(&mut extra, salt, iv, check_value, mac)?;
         }
         let checked = !member.is_directory;
         if checked && self.checksums.blake2() {
@@ -511,7 +532,7 @@ impl Writer<'_, '_> {
         let quick_open = if volume.cached.is_empty() {
             None
         } else {
-            let mut payload = Vec::new();
+            let mut payload = Spool::create(self.resources)?;
             let mut checksum = crate::rar::crc32::Crc32::new();
             for (offset, header) in &volume.cached {
                 append_quick_open_entry(
@@ -521,27 +542,37 @@ impl Writer<'_, '_> {
                     header,
                 )?;
             }
-            let header = service_header(
-                b"QO",
-                payload.len() as u64,
-                checksum.finish(),
-                None,
-                true,
-                true,
-                None,
-                self.resources,
-            )?;
-            Some((header, payload))
+            let payload_len = payload.len();
+            payload.park();
+            Some(match self.header_keys {
+                Some(keys) => {
+                    encrypted_index_block(b"QO", payload, payload_len, keys, self.resources)?
+                }
+                None => PreparedBlock {
+                    header: service_header(
+                        b"QO",
+                        payload_len,
+                        checksum.finish(),
+                        None,
+                        true,
+                        true,
+                        None,
+                        self.resources,
+                    )?,
+                    payload: Payload::Packed(payload),
+                    payload_len,
+                    quick_open_cached: false,
+                    entry_index: None,
+                },
+            })
         };
-        // Offsets count from the end of the signature.
+        // Offsets count from the main header.
         let quick_open_offset = if quick_open.is_some() {
             main_len + volume.body_len
         } else {
             0
         };
-        let quick_open_len = quick_open
-            .as_ref()
-            .map_or(0, |(header, payload)| (header.len() + payload.len()) as u64);
+        let quick_open_len = quick_open.as_ref().map_or(Ok(0), PreparedBlock::len)?;
         let recovery_offset = main_len + volume.body_len + quick_open_len;
         let main = self.main_header(volume.index, quick_open_offset, recovery_offset)?;
 
@@ -568,10 +599,10 @@ impl Writer<'_, '_> {
         std::io::copy(&mut volume.body, &mut before)?;
         let mut written =
             (RAR50_SIGNATURE.len() + self.head_crypt.len() + main.len()) as u64 + volume.body_len;
-        if let Some((header, payload)) = &quick_open {
-            before.write_all(header)?;
-            before.write_all(payload)?;
-            written += header.len() as u64 + payload.len() as u64;
+        if let Some(block) = quick_open {
+            before.write_all(&block.header)?;
+            write_payload(block.payload, &mut before, self.resources, self.progress)?;
+            written += quick_open_len;
         }
         if let (Some(percent), Some(prefix)) = (self.recovery_percent, prefix.as_mut()) {
             written += write_recovery_service_with(

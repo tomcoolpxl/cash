@@ -514,9 +514,13 @@ impl Archive {
                         }
                         Block::Service(service) => {
                             if service.name == b"QO" || service.name == b"RR" {
+                                // WinRAR encrypts its quick-open block under
+                                // encrypted headers; it is written anew all the same.
+                                let encrypted_index =
+                                    service.name == b"QO" && main.encrypted_headers;
                                 if !derived_services.insert(service.name.clone())
                                     || !service.rewrite_metadata_complete
-                                    || service.encrypted
+                                    || (service.encrypted && !encrypted_index)
                                     || service.modification_time().is_some()
                                     || service.file_times.is_some()
                                     || service.file_flags & !4 != 0
@@ -576,9 +580,6 @@ impl Archive {
                 }
                 if main.has_recovery_record() != derived_services.contains(b"RR".as_slice()) {
                     issues.push("recovery flag and service disagree".into());
-                }
-                if main.encrypted_headers && derived_services.contains(b"QO".as_slice()) {
-                    issues.push("quick-open index with encrypted headers".into());
                 }
                 for extra in &main.extras {
                     if let crate::rar::rar50::MainExtraRecord::Locator(locator) = extra {

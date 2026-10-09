@@ -10,7 +10,7 @@
     reason = "an integration test is outside a test module by construction"
 )]
 
-use crate::common::{Scratch, golden, run, run_in, run_oracle_script, with_divergence};
+use crate::common::{golden, run, run_oracle_script, with_divergence};
 
 /// The golden file `name` with cash's banners in rar's and unrar's places, `rar` and
 /// `unrar` times each.
@@ -65,10 +65,14 @@ fn rar_adds_updates_moves_and_deletes_as_winrar_7_23_does() {
 
 #[test]
 fn rar_comments_renames_locks_and_changes_as_winrar_7_23_does() {
-    assert_eq!(
-        run_oracle_script("rar_modify"),
-        with_cash_banners("rar_modify", 30, 0)
+    // A trial WinRAR says so after its banner when it adds; cash has no trial.
+    let expected = with_divergence(
+        &with_cash_banners("rar_modify", 30, 0),
+        "\nEvaluation copy. Please register.\n",
+        "",
+        5,
     );
+    assert_eq!(run_oracle_script("rar_modify"), expected);
 }
 
 #[test]
@@ -168,30 +172,6 @@ fn rar_cuts_volumes_with_recovery_records_as_winrar_7_23_does() {
     assert_eq!(
         run_oracle_script("rar_volumes"),
         with_cash_banners("rar_volumes", 0, 0)
-    );
-}
-
-/// Volumes whose headers are encrypted, a recovery record in each or not, are each the
-/// size asked and read back: they used to come out larger, their headers on top of a
-/// volume's worth of data. (Rar.exe's own cut them elsewhere, its quick-open record
-/// under the encryption, which cash's lack.)
-#[test]
-fn rar_volumes_with_encrypted_headers_keep_their_size() {
-    let scratch = Scratch::new("rar-hp-volumes");
-    let out = run_in(
-        scratch.path(),
-        "awk 'BEGIN { srand(5); for (i = 0; i < 70000; i++) printf \"%c\", 33 + int(rand() * 90) }' > a.bin
-         for sw in '' -rr3; do
-           rm -rf o && mkdir o
-           rar a -m0 -idq -hpsecret -v20k $sw o/v.rar a.bin
-           for f in o/*; do stat -c %s \"$f\"; done
-           rar t -idq -psecret o/v.part1.rar && echo tested
-         done",
-    );
-    assert_eq!(
-        out.stdout, "20480\n20480\n20480\n9448\ntested\n20480\n20480\n20480\n14550\ntested",
-        "{}",
-        out.stderr
     );
 }
 
