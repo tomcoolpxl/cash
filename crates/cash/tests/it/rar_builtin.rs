@@ -144,6 +144,18 @@ fn rar_adds_by_name_as_winrar_7_23_does() {
 }
 
 #[test]
+fn rar_names_by_date_as_winrar_7_23_does() {
+    // A trial WinRAR says so before it writes; cash has no trial.
+    let expected = with_divergence(
+        &with_cash_banners("rar_agname", 0, 0),
+        "\nEvaluation copy. Please register.\n",
+        "",
+        8,
+    );
+    assert_eq!(run_oracle_script("rar_agname"), expected);
+}
+
+#[test]
 fn rar_says_it_makes_no_recovery_volumes_or_sfx() {
     let out = run("rar rv2 -idq a.rar; echo \"rc=$?\"; rar s -idq a.rar; echo \"rc=$?\"");
     assert_eq!(out.stdout, "rc=2\nrc=2");

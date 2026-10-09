@@ -16,6 +16,7 @@
 //!   the other, rar's own folder, cash has not.
 
 mod add;
+mod agname;
 mod cmdline;
 mod delete;
 mod entry;
@@ -458,6 +459,30 @@ fn run_with<SE: cash_core::ShellExtensions>(
         status: Cell::new(code::SUCCESS),
         password: RefCell::new(None),
     };
+    // `-ag`: the archive's name with the date in it.
+    if let (Some(format), Some(archive)) = (
+        rar.switches.generate_name.as_deref(),
+        parsed.archive.as_deref(),
+    ) {
+        let format = if format.is_empty() {
+            rar.switches
+                .generate_default
+                .as_deref()
+                .filter(|format| !format.is_empty())
+                .unwrap_or(agname::DEFAULT_FORMAT)
+        } else {
+            format
+        };
+        let archiving = matches!(
+            command,
+            Command::Add | Command::Update | Command::Freshen | Command::Move { .. }
+        );
+        let now = rar.zone.to_local(chrono::Utc::now());
+        let name = agname::generated(archive, format, now, archiving, |name| {
+            rar.path(&cmdline::with_default_extension(name)).is_file()
+        });
+        parsed.archive = Some(name);
+    }
     let result = dispatch(&rar, &command, &parsed);
     match result {
         Ok(()) => rar.status(),

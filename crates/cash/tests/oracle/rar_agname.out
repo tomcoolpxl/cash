@@ -1,0 +1,85 @@
+== N: the first number whose archive is new
+
+Evaluation copy. Please register.
+
+Creating archive g1.rar
+
+Adding    f.txt                                                            OK 
+Done
+rc=0
+
+Evaluation copy. Please register.
+
+Creating archive g2.rar
+
+Adding    f.txt                                                            OK 
+Done
+rc=0
+
+Evaluation copy. Please register.
+
+Creating archive g01.rar
+
+Adding    f.txt                                                            OK 
+Done
+rc=0
+== N reading: the last there
+f.txt
+rc=0
+--- stderr
+
+Cannot open nothing1.rar
+The system cannot find the file specified.
+rc=10
+== + puts it before the name; {} holds text
+
+Evaluation copy. Please register.
+
+Creating archive 1-h.rar
+
+Adding    f.txt                                                            OK 
+Done
+rc=0
+
+Evaluation copy. Please register.
+
+Creating archive i.part1v1.rar
+
+Adding    f.txt                                                            OK 
+Done
+rc=0
+== the date
+
+Evaluation copy. Please register.
+
+Creating archive d(today).rar
+
+Adding    f.txt                                                            OK 
+Done
+rc=0
+
+Evaluation copy. Please register.
+
+Creating archive e(today).rar
+
+Adding    f.txt                                                            OK 
+Done
+rc=0
+== -agf: a default format, from RARINISWITCHES
+
+Evaluation copy. Please register.
+
+Creating archive k(year)y.rar
+
+Adding    f.txt                                                            OK 
+Done
+rc=0
+1-h.rar
+d(today).rar
+e(today).rar
+f.txt
+g01.rar
+g1.rar
+g2.rar
+i.part1v1.rar
+k(year)y.rar
