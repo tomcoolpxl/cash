@@ -1997,9 +1997,10 @@ where
                 read_block(pos, &mut budget).map_err(|error| at_offset(error, pos))?
             };
             let next = parsed.next_offset;
-            // Only a file header is read on past its checksum, as WinRAR reads one: any
-            // other block that fails it ends the walk.
-            if parsed.block.damaged && parsed.block.header_type != HEAD_FILE {
+            // Only a file's or a service's header is read on past its checksum, as
+            // WinRAR reads them: any other block that fails it ends the walk.
+            if parsed.block.damaged && !matches!(parsed.block.header_type, HEAD_FILE | HEAD_SERVICE)
+            {
                 return Err(at_offset(
                     Error::Crc32Mismatch {
                         expected: parsed.block.header_crc,

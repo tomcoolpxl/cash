@@ -937,11 +937,15 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      locator points at a missing quick-open record, as rar does). Damage the record
      cannot mend: done 2026-10-09 (in `rar_repair.sh`): each damaged block "cannot
      recover data", "0 blocks are recovered", and the archive rebuilt instead; cash
-     said nothing of them and wrote nothing. Left of it: a damaged main header (rar
-     asks "Mark archive as solid?", cash writes a plain one); a recovery record whose
-     header is damaged (rar finds its chunks by their marks and mends with them; rars
-     can now, `recovery_by_marks`, but `r` looks by marks only when the headers do not
-     read); RAR 1.5 to 4 rebuilds, unobserved (WinRAR 7.23 writes no RAR 4 to damage).
+     said nothing of them and wrote nothing. A recovery record whose header fails its
+     checksum: done 2026-10-09 (in `rar_repair.sh`). Rar.exe reads on past a service
+     header as past a file's, "RR - the file header is corrupt" in `l`, `t` and `x`
+     (two errors), the record still tested by its chunks; rars' lenient read now keeps
+     it, where it ended the walk ("Unexpected end of archive"). `r` mends with it and
+     leaves it out of `fixed.NAME`, which ends where it began with an end header, as
+     Rar.exe's does byte for byte. Left of it: a damaged main header (rar asks "Mark
+     archive as solid?", cash writes a plain one); RAR 1.5 to 4 rebuilds, unobserved
+     (WinRAR 7.23 writes no RAR 4 to damage).
    - `rc`: done 2026-10-09 (`rar_reconstruct.sh`, 249 lines, RAR 5 and both RAR 3
      namings, the volumes rebuilt WinRAR's byte for byte); `s` and `rv` refused in
      words of their own. Left of it: a RAR 3 volume that is there but damaged (its

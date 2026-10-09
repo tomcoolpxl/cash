@@ -1142,6 +1142,8 @@ pub struct MarkedRecovery {
     pub mended: Option<Vec<Vec<u8>>>,
     /// Whether every chunk of the record is there.
     pub intact: bool,
+    /// The bytes the record protects, from the archive's start.
+    pub protected: usize,
 }
 
 /// The recovery record of the archive `input` holds, found by its chunks' marks: what
@@ -1194,6 +1196,7 @@ pub fn recovery_by_marks(input: &[u8]) -> Result<Option<MarkedRecovery>> {
         damaged,
         mended,
         intact: available == expected,
+        protected: protected_size,
     }))
 }
 

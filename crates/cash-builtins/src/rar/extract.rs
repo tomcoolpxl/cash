@@ -325,6 +325,8 @@ struct Work<'r, 'a, SE: cash_core::ShellExtensions> {
     typed: bool,
     /// "All" answered to that question: no more of it.
     use_all: bool,
+    /// The volumes whose damaged service headers were said, before this one.
+    services_said: usize,
 }
 
 /// What a file keeps of its times and attributes.
@@ -476,6 +478,7 @@ fn set<SE: cash_core::ShellExtensions>(
         recovery_said: 0,
         typed: false,
         use_all: false,
+        services_said: 0,
     };
     for volume in &work.volumes {
         rar.log_archive(&volume.display);
@@ -504,6 +507,7 @@ fn set<SE: cash_core::ShellExtensions>(
         let _ = std::fs::remove_file(temp);
     }
     work.finish_folders();
+    work.say_damaged_services(work.volumes.len());
     if job.mode == Mode::Test {
         work.test_recovery_records();
         work.test_recovery_volumes(new_numbering);
@@ -1818,9 +1822,26 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
             .collect();
     }
 
+    /// The service headers that failed their checksums in the volumes before `until`,
+    /// said as a file's are, two errors each.
+    fn say_damaged_services(&mut self, until: usize) {
+        while self.services_said < until.min(self.volumes.len()) {
+            let names = open::damaged_services(&self.volumes[self.services_said].archive);
+            self.services_said += 1;
+            for name in names {
+                self.rar.console.err(&format!(
+                    "\nCorrupt header is found\n{name} - the file header is corrupt"
+                ));
+                self.errors += 2;
+                self.rar.fail(code::CRC);
+            }
+        }
+    }
+
     /// The recovery records of the volumes left before volume `until`, said as rar
     /// says them when it leaves each.
     fn say_recovery(&mut self, until: usize) {
+        self.say_damaged_services(until);
         let (text, failed) = recovery_lines(&self.recovery, self.recovery_said, until);
         self.recovery_said = self.recovery_said.max(until);
         self.say(&text);

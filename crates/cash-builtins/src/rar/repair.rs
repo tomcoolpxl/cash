@@ -8,7 +8,7 @@ use std::io::Write as _;
 use std::path::PathBuf;
 
 use super::cmdline::{Name, Parsed};
-use cash_archive::rar::recovery;
+use cash_archive::rar::{rar50, recovery};
 
 use super::open::{self, Failure, Found};
 use super::{Rar, Stop, code};
@@ -102,28 +102,9 @@ fn repair<SE: cash_core::ShellExtensions>(
         let password = given.as_deref().map(str::as_bytes);
         rar.console
             .msg(&format!("\nSearching for recovery record{area}"));
-        let damaged = archive
-            .recovery_damaged_shards(password)
-            .unwrap_or_default();
-        let mut repaired = Vec::new();
-        let mended = if damaged.is_empty() {
-            Some(Vec::new())
-        } else {
-            archive
-                .repair_recovery_to_with_report(&mut repaired, password)
-                .ok()
-                .map(|_| {
-                    damaged
-                        .iter()
-                        .filter_map(|range| {
-                            Some((range.clone(), repaired.get(range.clone())?.to_vec()))
-                        })
-                        .collect()
-                })
-        };
-        let intact = archive.recovery_record_intact(password).unwrap_or(false);
+        let (damaged, mended, intact, base) = recovered(archive, password, &bytes);
         // Damage the record cannot mend is said, and the archive rebuilt instead.
-        if !mend(rar, folder, &name, bytes.clone(), &damaged, mended, intact) {
+        if !mend(rar, folder, &name, base, &damaged, mended, intact) {
             reconstruct(rar, found, folder, &name, &bytes, false);
         }
         return Ok(());
@@ -136,6 +117,63 @@ fn repair<SE: cash_core::ShellExtensions>(
     }
     reconstruct(rar, found, folder, &name, &bytes, true);
     Ok(())
+}
+
+/// What a recovery record mends.
+type Recovered = (
+    Vec<std::ops::Range<usize>>,
+    Option<Vec<(std::ops::Range<usize>, Vec<u8>)>>,
+    bool,
+    Vec<u8>,
+);
+
+/// What the recovery record of a RAR 5 archive read mends: the damaged shards, each
+/// with its bytes when it mends them all, whether the record is whole, and the archive
+/// the mended shards go into. A record whose header failed its checksum is left out of
+/// that archive, which ends where it began, as rar writes it; one whose header does not
+/// read at all is found by its chunks' marks.
+fn recovered(archive: &rar50::Archive, password: Option<&[u8]>, bytes: &[u8]) -> Recovered {
+    let Ok(damaged) = archive.recovery_damaged_shards(password) else {
+        return match recovery::rar5::recovery_by_marks(bytes) {
+            Ok(Some(marked)) => {
+                let mended = marked
+                    .mended
+                    .map(|mended| marked.damaged.iter().cloned().zip(mended).collect());
+                let prefix = bytes.get(..marked.protected).unwrap_or(bytes);
+                let base = [prefix, &RAR5_END[..]].concat();
+                (marked.damaged, mended, marked.intact, base)
+            }
+            _ => (Vec::new(), Some(Vec::new()), false, bytes.to_vec()),
+        };
+    };
+    let mut repaired = Vec::new();
+    let mended = if damaged.is_empty() {
+        Some(Vec::new())
+    } else {
+        archive
+            .repair_recovery_to_with_report(&mut repaired, password)
+            .ok()
+            .map(|_| {
+                damaged
+                    .iter()
+                    .filter_map(|range| {
+                        Some((range.clone(), repaired.get(range.clone())?.to_vec()))
+                    })
+                    .collect()
+            })
+    };
+    let intact = archive.recovery_record_intact(password).unwrap_or(false);
+    let damaged_header = archive.blocks.iter().find_map(|block| match block {
+        rar50::Block::Service(header) if header.name == b"RR" && header.block.damaged => {
+            Some(header.block.offset)
+        }
+        _ => None,
+    });
+    let base = match damaged_header.and_then(|at| bytes.get(..at)) {
+        Some(prefix) => [prefix, &RAR5_END[..]].concat(),
+        None => bytes.to_vec(),
+    };
+    (damaged, mended, intact, base)
 }
 
 /// The recovery record found: the damaged shards, said each, and when it mends them
@@ -291,6 +329,8 @@ fn rebuild(bytes: &[u8]) -> (Option<Vec<u8>>, Vec<String>) {
 
 const RAR5_SIGNATURE: &[u8] = b"Rar!\x1a\x07\x01\x00";
 const RAR4_SIGNATURE: &[u8] = b"Rar!\x1a\x07\x00";
+/// RAR 5's end header as `WinRAR` writes it: no more volumes.
+const RAR5_END: [u8; 8] = [0x1d, 0x77, 0x56, 0x51, 0x03, 0x05, 0x04, 0x00];
 
 /// A RAR 5 vint at `at`: its value and the position after it.
 fn vint(bytes: &[u8], mut at: usize) -> Option<(u64, usize)> {

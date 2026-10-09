@@ -269,6 +269,64 @@ Found  src/text.txt
 Done
 rc=0
 rebuilt.worse.rar
+== the recovery record's own header damaged: the record found by its marks
+src/noise.bin
+src/small.txt
+src/text.txt
+--- stderr
+
+Corrupt header is found
+RR - the file header is corrupt
+rc=3
+
+Testing archive rrhdr.rar
+
+Testing     src/noise.bin                                                  OK 
+Testing     src/small.txt                                                  OK 
+Testing     src/text.txt                                                   OK 
+Testing the recovery record         OK
+Total errors: 2
+--- stderr
+
+Corrupt header is found
+RR - the file header is corrupt
+rc=3
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Searching for recovery record      
+Data recovery record found
+Analyzing file data      
+Building fixed.rrhdr.rar      
+0 blocks are recovered, 0 blocks are relocated
+Done
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Searching for recovery record      
+Data recovery record found
+Analyzing file data      
+Building fixed.rrhdr.rar      
+Corrupt 1020 bytes at 00000000 00000ff0 - data recovered     
+Corrupt 1020 bytes at 00000000 000013ec - data recovered     
+2 blocks are recovered, 0 blocks are relocated
+Done
+rc=0
+
+Testing archive fixed.rrhdr.rar
+
+Testing     src/noise.bin                                                  OK 
+Testing     src/small.txt                                                  OK 
+Testing     src/text.txt                                                   OK 
+Testing the recovery record        Failed
+Total errors: 1
+--- stderr
+
+Recovery record is corrupt.
+rc=3
 == encrypted headers: no password asked, the recovery record found by its marks
 -- r hp.rar
 

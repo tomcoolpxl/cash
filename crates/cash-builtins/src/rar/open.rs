@@ -510,6 +510,23 @@ pub(super) fn refuse<SE: cash_core::ShellExtensions>(
     Some(Stop::Refused(code::BAD_ARCHIVE))
 }
 
+/// The names of the services whose headers failed their checksums, read on as rar
+/// reads them: a recovery record's "RR", a comment's "CMT".
+pub(super) fn damaged_services(archive: &rar::Archive) -> Vec<String> {
+    archive.as_rar50().map_or_else(Vec::new, |archive| {
+        archive
+            .blocks
+            .iter()
+            .filter_map(|block| match block {
+                rar::rar50::Block::Service(header) if header.block.damaged => {
+                    Some(String::from_utf8_lossy(&header.name).into_owned())
+                }
+                _ => None,
+            })
+            .collect()
+    })
+}
+
 /// rar's refusal to encrypt the headers (`-hp`) of an archive whose headers are plain
 /// and some of whose files are encrypted, said: whether it refuses.
 pub(super) fn header_mode_refused<SE: cash_core::ShellExtensions>(

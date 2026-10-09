@@ -106,6 +106,20 @@ done
 z rar r worse.rar
 ls fixed.worse.rar rebuilt.worse.rar 2>/dev/null
 
+echo "== the recovery record's own header damaged: the record found by its marks"
+# The header ends where its first chunk's mark begins: its last byte changed, its
+# checksum fails. It is read on, said corrupt as a file's header is.
+rb=$(grep -obUa '{RB}' rr.rar | head -1 | cut -d: -f1)
+cp rr.rar rrhdr.rar
+damage rrhdr.rar $((rb - 1)) 1
+z rar lb rrhdr.rar
+z rar t -idc rrhdr.rar
+z rar r rrhdr.rar
+ls fixed.rrhdr.rar 2>/dev/null
+damage rrhdr.rar 5000 200
+z rar r rrhdr.rar
+z rar t -idc fixed.rrhdr.rar
+
 echo "== encrypted headers: no password asked, the recovery record found by its marks"
 rar a -m0 -idq -hpx hp.rar src/small.txt src/text.txt
 rar a -m0 -rr5 -idq -hpx hprr.rar src/noise.bin src/small.txt src/text.txt

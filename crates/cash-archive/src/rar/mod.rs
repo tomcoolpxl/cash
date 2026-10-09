@@ -4284,6 +4284,40 @@ mod tests {
         assert_eq!(marked.mended, None);
     }
 
+    #[test]
+    fn a_lenient_read_keeps_a_service_header_failing_its_checksum() {
+        let bytes = rar50::Rar50Writer::new(
+            rar50_options_with_features(ArchiveVersion::Rar50, FeatureSet::store_only())
+                .with_compression_level(0),
+        )
+        .entries(
+            [rar50_entry(b"kept.txt", b"kept payload\n")
+                .with_attributes(0x20)
+                .with_host_os(3)]
+            .to_vec(),
+        )
+        .recovery_percent(Some(5))
+        .finish()
+        .unwrap();
+        // The recovery header's last byte, just before its first chunk's mark.
+        let mark = bytes.windows(4).position(|w| w == b"{RB}").unwrap();
+        let mut damaged = bytes.clone();
+        damaged[mark - 1] ^= 0xff;
+        assert!(ArchiveReader::read(&damaged).is_err());
+        let archive = ArchiveReader::read_owned_with_options(
+            damaged,
+            ArchiveReadOptions::new().with_lenient(true),
+        )
+        .unwrap();
+        let rar5 = archive.as_rar50().unwrap();
+        let service = rar5
+            .services()
+            .find(|service| service.name == b"RR")
+            .unwrap();
+        assert!(service.block.damaged);
+        assert!(archive.damage().is_none());
+    }
+
     /// The bytes before an archive's recovery record: what it protects.
     #[cfg(feature = "recovery")]
     fn whole_protected_len(bytes: &[u8]) -> usize {
