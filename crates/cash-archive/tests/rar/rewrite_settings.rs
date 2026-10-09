@@ -651,7 +651,9 @@ fn preservation_preflight_checks_every_derived_service_field() {
         });
     });
     check(q, |service| service.file_flags |= 8);
-    check(q, |service| service.block.flags |= 4);
+    // 0x04, "skip if unknown", is WinRAR's own on a quick-open block, so it passes;
+    // 0x20, "depends on the preceding block", is no derived service's.
+    check(q, |service| service.block.flags |= 0x20);
     check(q, |service| service.attributes = 1);
     check(q, |service| service.host_os = 1);
     check(q, |service| service.compression_info = 1);

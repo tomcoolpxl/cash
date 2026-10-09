@@ -972,11 +972,8 @@ fn prepare_carried(
     if let Some(times) = entry.file_times {
         write_extra_record(&mut extra, super::super::FHEXTRA_HTIME, &times.encode()?)?;
     }
-    let size_width = if winrar && !entry.is_directory {
-        super::winrar::size_width(carried.unpacked_size)
-    } else {
-        0
-    };
+    // WinRAR writes a copied member's sizes as they are: there is nothing to patch.
+    let size_width = 0;
     let specific = super::headers::file_fields(
         &super::headers::FileFields {
             name: &entry.name,
