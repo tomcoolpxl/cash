@@ -1,7 +1,8 @@
 # rar's a storing links, run under WinRAR 7.23's Rar.exe (the oracle: Scoop's
 # extras/winrar on Windows) and under cash's builtin: identical files kept as references
 # to the first of each set (-oi, its listings -oi2, -oi3 and -oi4, and its least size),
-# and hard links as links to the first name archived (-oh).
+# hard links as links to the first name archived (-oh), and junctions followed, left
+# out or stored as links (-ol).
 # Stored archives' own CRC, for they are WinRAR's byte for byte. rar_add_links.out is
 # the original's output.
 #
@@ -90,5 +91,25 @@ for sw in -oh "" "-oh -oi:1"; do
   z rar x -idq o.rar x/
   for f in x/h/*; do echo "$f $(stat -c '%s bytes, %h link(s)' "$f")"; done
 done
+
+echo "== junctions, -ol"
+# A junction is followed without -ol, left out with -ol-, and stored as the link with
+# -ol, inside a folder, named, or taken by a mask without -r. Its own time is when it
+# was made and its target this run's folder, so the archives are shown by what they hold.
+mkdir real top
+printf 'inside\n' > real/in.txt
+printf 'beside\n' > top/f.txt
+cmd /c 'mklink /J top\junc real' > /dev/null
+for sw in -ol -ola "" -ol-; do
+  for what in top top/junc 'top/*'; do
+    rm -f o.rar
+    echo "-- $sw $what"
+    z rar a -m0 $sw -idc o.rar "$what"
+    [ -e o.rar ] && rar lt -idc o.rar | tr -d '\r' | grep "Name:\|Type:\|Target:\|Attributes:" |
+      sed -e 's#\\#/#g' -e 's#Target: /??/.*/real$#Target: /??/(this folder)/real#'
+  done
+done
+# cash's rm (uutils') cannot remove a junction yet: cmd's rmdir takes it away.
+cmd /c 'rmdir top\junc'
 
 cd / && rm -rf "$dir"

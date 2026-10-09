@@ -27,7 +27,7 @@ impl Kind {
             Self::Service => "Service",
             Self::UnixLink => "Unix symbolic link",
             Self::WindowsLink => "Windows symbolic link",
-            Self::Junction => "Windows junction",
+            Self::Junction => "NTFS junction point",
             Self::HardLink => "Hard link",
             Self::FileCopy => "File reference",
         }
@@ -102,6 +102,8 @@ impl Stamp {
 pub(super) struct Item {
     pub(super) name: String,
     pub(super) kind: Kind,
+    /// A folder, or a link standing for one: listed without sizes.
+    pub(super) folder: bool,
     pub(super) target: Option<String>,
     pub(super) size: u64,
     pub(super) packed: u64,
@@ -389,6 +391,7 @@ fn rar5_item(header: &rar50::FileHeader, service: bool, zone: &Zone) -> Item {
     Item {
         name,
         kind,
+        folder: directory,
         target: header
             .redirection
             .as_ref()
@@ -511,6 +514,7 @@ fn rar4_item(header: &rar15_40::FileHeader, service: bool) -> Item {
     Item {
         name: String::from_utf8_lossy(&header.name).into_owned(),
         kind,
+        folder: directory,
         target: None,
         size: header.unp_size,
         packed: header.pack_size,
@@ -557,6 +561,7 @@ pub(super) fn rar13_items(archive: &rar13::Archive) -> Vec<Item> {
             }
             Item {
                 name: String::from_utf8_lossy(&entry.name).into_owned(),
+                folder: directory,
                 kind: if directory {
                     Kind::Directory
                 } else {

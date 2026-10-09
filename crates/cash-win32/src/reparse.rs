@@ -67,6 +67,8 @@ pub struct Target {
     /// The path, as 7-Zip's `CReparseAttr::GetPath` gives it: the substitute name, its
     /// `\??\` taken off before a drive and made `\\?\` before anything else.
     pub path: String,
+    /// The substitute name as the data holds it, `\??\` and all: what `WinRAR` stores.
+    pub substitute: String,
     /// A symbolic link whose path is relative to its folder.
     pub relative: bool,
     /// A junction rather than a symbolic link.
@@ -114,10 +116,11 @@ pub fn target(data: &[u8]) -> Option<Target> {
             rest.to_owned()
         }
         Some(rest) => format!(r"\\?\{rest}"),
-        None => substitute,
+        None => substitute.clone(),
     };
     Some(Target {
         path,
+        substitute,
         relative,
         junction,
     })
@@ -261,6 +264,7 @@ mod tests {
             target(&junction),
             Some(Target {
                 path: r"C:\d\sub".to_owned(),
+                substitute: r"\??\C:\d\sub".to_owned(),
                 relative: false,
                 junction: true,
             })
@@ -270,6 +274,7 @@ mod tests {
             target(&relative),
             Some(Target {
                 path: "a.txt".to_owned(),
+                substitute: "a.txt".to_owned(),
                 relative: true,
                 junction: false,
             })

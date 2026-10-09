@@ -420,3 +420,194 @@ x/h/a 5 bytes, 3 link(s)
 x/h/b 5 bytes, 3 link(s)
 x/h/c 5 bytes, 3 link(s)
 x/h/p 6 bytes, 1 link(s)
+== junctions, -ol
+-- -ol top
+
+Evaluation copy. Please register.
+
+Creating archive o.rar
+
+Adding    top/f.txt                                                        OK 
+Adding    top/junc                                                         OK 
+Adding    top                                                              OK 
+Done
+rc=0
+        Name: top/f.txt
+        Type: File
+  Attributes: ..A....
+        Name: top/junc
+        Type: NTFS junction point
+      Target: /??/(this folder)/real
+  Attributes: ...D...
+        Name: top
+        Type: Directory
+  Attributes: ...D...
+-- -ol top/junc
+
+Evaluation copy. Please register.
+
+Creating archive o.rar
+
+Adding    top/junc                                                         OK 
+Done
+rc=0
+        Name: top/junc
+        Type: NTFS junction point
+      Target: /??/(this folder)/real
+  Attributes: ...D...
+-- -ol top/*
+
+Evaluation copy. Please register.
+
+Creating archive o.rar
+
+Adding    top/f.txt                                                        OK 
+Adding    top/junc                                                         OK 
+Done
+rc=0
+        Name: top/f.txt
+        Type: File
+  Attributes: ..A....
+        Name: top/junc
+        Type: NTFS junction point
+      Target: /??/(this folder)/real
+  Attributes: ...D...
+-- -ola top
+
+Evaluation copy. Please register.
+
+Creating archive o.rar
+
+Adding    top/f.txt                                                        OK 
+Adding    top/junc                                                         OK 
+Adding    top                                                              OK 
+Done
+rc=0
+        Name: top/f.txt
+        Type: File
+  Attributes: ..A....
+        Name: top/junc
+        Type: NTFS junction point
+      Target: /??/(this folder)/real
+  Attributes: ...D...
+        Name: top
+        Type: Directory
+  Attributes: ...D...
+-- -ola top/junc
+
+Evaluation copy. Please register.
+
+Creating archive o.rar
+
+Adding    top/junc                                                         OK 
+Done
+rc=0
+        Name: top/junc
+        Type: NTFS junction point
+      Target: /??/(this folder)/real
+  Attributes: ...D...
+-- -ola top/*
+
+Evaluation copy. Please register.
+
+Creating archive o.rar
+
+Adding    top/f.txt                                                        OK 
+Adding    top/junc                                                         OK 
+Done
+rc=0
+        Name: top/f.txt
+        Type: File
+  Attributes: ..A....
+        Name: top/junc
+        Type: NTFS junction point
+      Target: /??/(this folder)/real
+  Attributes: ...D...
+--  top
+
+Evaluation copy. Please register.
+
+Creating archive o.rar
+
+Adding    top/f.txt                                                        OK 
+Adding    top/junc/in.txt                                                  OK 
+Adding    top/junc                                                         OK 
+Adding    top                                                              OK 
+Done
+rc=0
+        Name: top/f.txt
+        Type: File
+  Attributes: ..A....
+        Name: top/junc/in.txt
+        Type: File
+  Attributes: ..A....
+        Name: top/junc
+        Type: Directory
+  Attributes: ...D...
+        Name: top
+        Type: Directory
+  Attributes: ...D...
+--  top/junc
+
+Evaluation copy. Please register.
+
+Creating archive o.rar
+
+Adding    top/junc/in.txt                                                  OK 
+Adding    top/junc                                                         OK 
+Done
+rc=0
+        Name: top/junc/in.txt
+        Type: File
+  Attributes: ..A....
+        Name: top/junc
+        Type: Directory
+  Attributes: ...D...
+--  top/*
+
+Evaluation copy. Please register.
+
+Creating archive o.rar
+
+Adding    top/f.txt                                                        OK 
+Done
+rc=0
+        Name: top/f.txt
+        Type: File
+  Attributes: ..A....
+-- -ol- top
+
+Evaluation copy. Please register.
+
+Creating archive o.rar
+
+Adding    top/f.txt                                                        OK 
+Adding    top                                                              OK 
+Done
+rc=0
+        Name: top/f.txt
+        Type: File
+  Attributes: ..A....
+        Name: top
+        Type: Directory
+  Attributes: ...D...
+-- -ol- top/junc
+
+Evaluation copy. Please register.
+
+Creating archive o.rar
+
+WARNING: No files
+rc=10
+-- -ol- top/*
+
+Evaluation copy. Please register.
+
+Creating archive o.rar
+
+Adding    top/f.txt                                                        OK 
+Done
+rc=0
+        Name: top/f.txt
+        Type: File
+  Attributes: ..A....

@@ -61,6 +61,8 @@ struct Source {
     walk: usize,
     /// With `-oh`, a file that has other names.
     hard: Option<HardLinked>,
+    /// With `-ol`, the symbolic link or junction it is, stored as such.
+    link: Option<rar::rar50::FileRedirection>,
 }
 
 /// A file with other names: which file it is, and the times its folder's entry gives,
@@ -227,7 +229,9 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
         rar.fail(code::NO_FILES);
         return Ok(());
     }
-    let mut links: Vec<Option<rar::rar50::FileRedirection>> = vec![None; sources.len()];
+    // `-ol`: the symbolic links and junctions met, stored as such.
+    let mut links: Vec<Option<rar::rar50::FileRedirection>> =
+        sources.iter().map(|source| source.link.clone()).collect();
     // `-oh`: a file's other names put in after it are hard links to it, with the times
     // their folders' entries give.
     let mut named: std::collections::HashMap<(u32, u64), usize> = std::collections::HashMap::new();
@@ -1666,7 +1670,7 @@ impl<SE: cash_core::ShellExtensions> Walker<'_, '_, SE> {
         }
         let arg = arg.trim_end_matches('/');
         let path = self.rar.path(arg);
-        let metadata = match std::fs::metadata(&path) {
+        let metadata = match std::fs::symlink_metadata(&path) {
             Ok(metadata) => metadata,
             Err(error) => {
                 self.missing.push((arg.to_owned(), error));
@@ -1677,23 +1681,46 @@ impl<SE: cash_core::ShellExtensions> Walker<'_, '_, SE> {
             Some(at) => arg.get(..=at).unwrap_or_default().to_owned(),
             None => String::new(),
         };
-        if metadata.is_dir() && recurse != Some('-') {
-            self.folder(&path, arg, &base, &metadata);
-        } else {
-            self.keep(&path, arg, &base, &metadata);
+        match self.seen(&path, &metadata) {
+            Kind::Folder if recurse != Some('-') => self.folder(&path, arg, &base, &metadata),
+            Kind::Skip => {}
+            kind => self.keep(&path, arg, &base, &metadata, kind),
+        }
+    }
+
+    /// What the walk makes of what it meets, `metadata` its own: a symbolic link or a
+    /// junction is followed as rar follows it without `-ol`, left out with `-ol-`, and
+    /// stored as the link with `-ol`.
+    fn seen(&self, path: &Path, metadata: &std::fs::Metadata) -> Kind {
+        if !metadata.file_type().is_symlink() {
+            return if metadata.is_dir() {
+                Kind::Folder
+            } else {
+                Kind::File
+            };
+        }
+        match self.rar.switches.links.as_deref() {
+            Some("-") => Kind::Skip,
+            Some(_) => stored_link(path, metadata)
+                .map_or(Kind::Skip, |(link, folder)| Kind::Link(link, folder)),
+            None => match std::fs::metadata(path) {
+                Ok(followed) if followed.is_dir() => Kind::Folder,
+                Ok(_) => Kind::File,
+                Err(_) => Kind::Skip,
+            },
         }
     }
 
     /// A folder, then what it holds in the file system's order, each folder in turn.
     fn folder(&mut self, path: &Path, shown: &str, base: &str, metadata: &std::fs::Metadata) {
-        self.keep(path, shown, base, metadata);
+        self.keep(path, shown, base, metadata, Kind::Folder);
         for (name, metadata) in listing(path) {
             let child = path.join(&name);
             let shown = format!("{shown}/{name}");
-            if metadata.is_dir() {
-                self.folder(&child, &shown, base, &metadata);
-            } else {
-                self.keep(&child, &shown, base, &metadata);
+            match self.seen(&child, &metadata) {
+                Kind::Folder => self.folder(&child, &shown, base, &metadata),
+                Kind::Skip => {}
+                kind => self.keep(&child, &shown, base, &metadata, kind),
             }
         }
     }
@@ -1709,28 +1736,34 @@ impl<SE: cash_core::ShellExtensions> Walker<'_, '_, SE> {
         };
         for (name, metadata) in listing(&path) {
             let shown = format!("{prefix}{name}");
-            if metadata.is_dir() {
-                if deep {
-                    if open::mask_matches(mask, &name) {
-                        self.keep(&path.join(&name), &shown, base, &metadata);
+            let child = path.join(&name);
+            match self.seen(&child, &metadata) {
+                Kind::Folder => {
+                    if deep {
+                        if open::mask_matches(mask, &name) {
+                            self.keep(&child, &shown, base, &metadata, Kind::Folder);
+                        }
+                        self.masked(&shown, mask, base, deep);
                     }
-                    self.masked(&shown, mask, base, deep);
                 }
-            } else if open::mask_matches(mask, &name) {
-                self.keep(&path.join(&name), &shown, base, &metadata);
+                Kind::Skip => {}
+                // A link stored, a folder's too, is taken as a file is.
+                kind => {
+                    if open::mask_matches(mask, &name) {
+                        self.keep(&child, &shown, base, &metadata, kind);
+                    }
+                }
             }
         }
     }
 
-    /// One file or folder, if the switches let it in.
-    fn keep(&mut self, path: &Path, shown: &str, base: &str, metadata: &std::fs::Metadata) {
+    /// Whether the switches let a file, folder or link in: `-ed`, `-x` and `-n`, the
+    /// sizes, the attributes and the times asked.
+    fn admits(&self, shown: &str, metadata: &std::fs::Metadata, is_dir: bool) -> bool {
         use std::os::windows::fs::MetadataExt;
-        let walk = self.walk;
-        self.walk += 1;
         let switches = &self.rar.switches;
-        let is_dir = metadata.is_dir();
         if is_dir && (switches.no_empty_dirs || switches.exclude_paths == Some(0)) {
-            return;
+            return false;
         }
         let last = shown.rsplit('/').next().unwrap_or(shown);
         if self
@@ -1738,7 +1771,7 @@ impl<SE: cash_core::ShellExtensions> Walker<'_, '_, SE> {
             .iter()
             .any(|mask| mask_match(mask, shown, last))
         {
-            return;
+            return false;
         }
         if !self.include.is_empty()
             && !self
@@ -1746,14 +1779,14 @@ impl<SE: cash_core::ShellExtensions> Walker<'_, '_, SE> {
                 .iter()
                 .any(|mask| mask_match(mask, shown, last))
         {
-            return;
+            return false;
         }
         if !is_dir {
             let size = metadata.len();
             if switches.size_less.is_some_and(|limit| size >= limit)
                 || switches.size_more.is_some_and(|limit| size <= limit)
             {
-                return;
+                return false;
             }
         }
         let attributes = metadata.file_attributes();
@@ -1764,10 +1797,51 @@ impl<SE: cash_core::ShellExtensions> Walker<'_, '_, SE> {
                 .include_attr
                 .is_some_and(|mask| attributes & mask == 0)
         {
+            return false;
+        }
+        time_filters(self.rar, metadata.modified().ok())
+    }
+
+    /// One file, folder or link, if the switches let it in.
+    fn keep(
+        &mut self,
+        path: &Path,
+        shown: &str,
+        base: &str,
+        metadata: &std::fs::Metadata,
+        kind: Kind,
+    ) {
+        use std::os::windows::fs::MetadataExt;
+        let walk = self.walk;
+        self.walk += 1;
+        let switches = &self.rar.switches;
+        let (is_dir, link) = match kind {
+            Kind::Folder => (true, None),
+            Kind::Link(link, folder) => (folder, Some(link)),
+            Kind::File | Kind::Skip => (false, None),
+        };
+        if !self.admits(shown, metadata, is_dir) {
             return;
         }
+        let attributes = metadata.file_attributes();
         let modified = metadata.modified().ok();
-        if !time_filters(self.rar, modified) {
+        // A link stored is not read: its own times and attributes, the reparse point's
+        // among them, are what is kept.
+        if let Some(link) = link {
+            self.found.push(Source {
+                path: path.to_path_buf(),
+                shown: shown.to_owned(),
+                name: archive_name(self.rar, shown, base, path),
+                is_dir,
+                size: 0,
+                modified,
+                created: metadata.created().ok(),
+                accessed: metadata.accessed().ok(),
+                attributes: attributes & (0x2837 | REPARSE_POINT),
+                walk,
+                hard: None,
+                link: Some(link),
+            });
             return;
         }
         // A file another program is writing is not read, as rar reads none, unless `-dh`.
@@ -1818,8 +1892,45 @@ impl<SE: cash_core::ShellExtensions> Walker<'_, '_, SE> {
             attributes: attributes & 0x2837,
             walk,
             hard,
+            link: None,
         });
     }
+}
+
+/// What the walk makes of a file system entry.
+enum Kind {
+    File,
+    Folder,
+    /// A symbolic link or junction stored as one (`-ol`), and whether it stands for a
+    /// folder.
+    Link(rar::rar50::FileRedirection, bool),
+    /// Left out: a link with `-ol-`, or one that cannot be followed or read.
+    Skip,
+}
+
+/// Windows' attribute of a symbolic link or junction (`FILE_ATTRIBUTE_REPARSE_POINT`).
+const REPARSE_POINT: u32 = 0x400;
+
+/// `-ol`'s record of a symbolic link or junction, as rar stores it: type 2 or 3, the
+/// substitute name its reparse data holds, `\??\` and all, with `/` between folders; and
+/// whether it stands for a folder.
+fn stored_link(
+    path: &Path,
+    metadata: &std::fs::Metadata,
+) -> Option<(rar::rar50::FileRedirection, bool)> {
+    use std::os::windows::fs::MetadataExt;
+    let data = cash_win32::reparse::data(path).ok()?;
+    let target = cash_win32::reparse::target(&data)?;
+    let folder = metadata.file_attributes() & 0x10 != 0;
+    let kind = if target.junction { 3 } else { 2 };
+    Some((
+        rar::rar50::FileRedirection::new(
+            kind,
+            u64::from(folder),
+            target.substitute.replace('\\', "/").into_bytes(),
+        ),
+        folder,
+    ))
 }
 
 /// The folders `-dr` sends to the Recycle Bin whole, as rar does: those at the top of

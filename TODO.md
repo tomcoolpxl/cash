@@ -685,8 +685,18 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      right. Left: a file reference whose file is not asked for is written straight
      from the archive, where rar unpacks the file to a temporary
      `__tmp_reference_source_N.rartemp` first and says so; in a solid archive that file
-     has gone by, and is not found; junctions are made as folder links; symbolic links
-     and junctions are not stored (`a -ol`).
+     has gone by, and is not found; junctions are made as folder links.
+   - `-ol` on `a`: done 2026-10-09 (in `rar_add_links.sh`, now 613 lines). A junction
+     is followed without it (its target's files under its name, its own entry a plain
+     folder with its own time), left out with `-ol-`, and with `-ol` or `-ola` stored as
+     a type-3 link: a folder entry with the reparse attribute (0x410), the substitute
+     name its reparse data holds (`\??\C:\...`) with `/`, flag 1, taken by a mask
+     without `-r` as a file is. A tree holding a junction used to fail whole ("Access
+     is denied"). `lt` named a junction "Windows junction", where rar says "NTFS
+     junction point", and gave a folder link sizes, which rar leaves out. Symbolic
+     links (type 2, the substitute name likewise) are not observed: making one needs a
+     right this desktop lacks; rar's word for them, "Windows symbolic link", was seen by
+     listing a junction archive retyped to 2.
    - `-oh`, hard links: done 2026-10-09 (in `rar_add_links.sh`, now 422 lines). A
      file's other names put in after its first are type-4 links to it, their sizes not
      padded, with the times the folder's entry gives (a name not used since the file
@@ -828,6 +838,13 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
 
 ## Found along the way
 
+- **`rm -rf` stops at a junction** (found on 2026-10-09 with `rar_add_links.sh`): a
+  folder holding a junction gives "rm: cannot remove 'top\junc': Permission denied",
+  rc 1, in 1.10.0 too. It does not follow the junction (the target's files survive); it
+  fails to take away the link itself, which a folder link needs `RemoveDirectoryW` for.
+  `rm` is uutils' `uu_rm` 0.12.0 from crates.io: the fix means a near-upstream copy in
+  `vendor/uutils` (as `uu_sort` and the others), or seeing whether a newer uutils has it.
+  The oracle takes its junction away with `cmd /c rmdir` meanwhile.
 - **`seven_z_matches_7_zip_26_03` failed twice** in nextest runs of the twelve 7z tests
   on 2026-10-07, each right after a build, and passed alone and in seven runs after,
   three of them beside the other three oracle scripts; the difference was not caught.

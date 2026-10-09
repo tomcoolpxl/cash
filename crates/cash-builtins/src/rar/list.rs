@@ -401,7 +401,7 @@ fn technical(text: &mut String, item: &Item) {
     if let Some(target) = &item.target {
         field(text, "Target", target);
     }
-    if item.kind != Kind::Directory {
+    if !item.folder {
         field(text, "Size", &item.size.to_string());
         field(text, "Packed size", &item.packed.to_string());
         field(text, "Ratio", &item_ratio(item));
