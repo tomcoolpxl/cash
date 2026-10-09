@@ -25,6 +25,7 @@ mod find;
 mod help;
 mod item;
 mod list;
+mod log;
 mod modify;
 mod open;
 mod reconstruct;
@@ -209,9 +210,25 @@ struct Rar<'a, SE: cash_core::ShellExtensions> {
     status: Cell<u8>,
     /// The password given or typed, kept for the archives that follow.
     password: RefCell<Option<String>>,
+    /// `-log`'s files.
+    logs: Vec<log::Log>,
 }
 
 impl<SE: cash_core::ShellExtensions> Rar<'_, SE> {
+    /// An archive's name, to the `-log` files that log archives.
+    fn log_archive(&self, name: &str) {
+        for log in self.logs.iter().filter(|log| log.wants_archives()) {
+            log.write(name);
+        }
+    }
+
+    /// A file's name, to the `-log` files that log files.
+    fn log_file(&self, name: &str) {
+        for log in self.logs.iter().filter(|log| log.wants_files()) {
+            log.write(name);
+        }
+    }
+
     /// A path made absolute against the shell's folder.
     fn path(&self, name: &str) -> PathBuf {
         self.context.shell.absolute_path(Path::new(name))
@@ -450,6 +467,9 @@ fn run_with<SE: cash_core::ShellExtensions>(
         console.msg(&help::usage(tool));
         return code::USER;
     }
+    let logs = log::Log::open_all(&switches.log_names, switches.charsets.log, |name| {
+        context.shell.absolute_path(Path::new(name))
+    });
     let rar = Rar {
         tool,
         context,
@@ -458,29 +478,9 @@ fn run_with<SE: cash_core::ShellExtensions>(
         switches,
         status: Cell::new(code::SUCCESS),
         password: RefCell::new(None),
+        logs,
     };
-    // `-ag`: the archive's name with the date in it.
-    if let (Some(format), Some(archive)) = (
-        rar.switches.generate_name.as_deref(),
-        parsed.archive.as_deref(),
-    ) {
-        let format = if format.is_empty() {
-            rar.switches
-                .generate_default
-                .as_deref()
-                .filter(|format| !format.is_empty())
-                .unwrap_or(agname::DEFAULT_FORMAT)
-        } else {
-            format
-        };
-        let archiving = matches!(
-            command,
-            Command::Add | Command::Update | Command::Freshen | Command::Move { .. }
-        );
-        let now = rar.zone.to_local(chrono::Utc::now());
-        let name = agname::generated(archive, format, now, archiving, |name| {
-            rar.path(&cmdline::with_default_extension(name)).is_file()
-        });
+    if let Some(name) = generated_name(&rar, &command, &parsed) {
         parsed.archive = Some(name);
     }
     let result = dispatch(&rar, &command, &parsed);
@@ -633,6 +633,33 @@ fn overlay(base: Switches, typed: Switches) -> Switches {
         help: pick!(help, bool),
         ignored: pick!(ignored, vec),
     }
+}
+
+/// `-ag`: the archive's name with the date in it.
+fn generated_name<SE: cash_core::ShellExtensions>(
+    rar: &Rar<'_, SE>,
+    command: &Command,
+    parsed: &Parsed,
+) -> Option<String> {
+    let format = rar.switches.generate_name.as_deref()?;
+    let archive = parsed.archive.as_deref()?;
+    let format = if format.is_empty() {
+        rar.switches
+            .generate_default
+            .as_deref()
+            .filter(|format| !format.is_empty())
+            .unwrap_or(agname::DEFAULT_FORMAT)
+    } else {
+        format
+    };
+    let archiving = matches!(
+        command,
+        Command::Add | Command::Update | Command::Freshen | Command::Move { .. }
+    );
+    let now = rar.zone.to_local(chrono::Utc::now());
+    Some(agname::generated(archive, format, now, archiving, |name| {
+        rar.path(&cmdline::with_default_extension(name)).is_file()
+    }))
 }
 
 fn dispatch<SE: cash_core::ShellExtensions>(

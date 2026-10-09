@@ -318,6 +318,15 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
             return Ok(());
         }
     };
+    // `-log`: the archive, each volume of it, and the files put in, in their order.
+    for path in &written {
+        rar.log_archive(&shown_beside(&display, path));
+    }
+    for slot in &slots {
+        if let Slot::Put(index) = *slot {
+            rar.log_file(&sources[index].name);
+        }
+    }
 
     if switches.recovery_record.is_some() {
         rar.console.msg("\nAdding the data recovery record     ");

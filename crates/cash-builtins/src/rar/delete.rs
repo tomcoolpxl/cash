@@ -47,8 +47,10 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
         rar.fail(code::NO_FILES);
         return Ok(());
     }
+    rar.log_archive(&found.display);
     for (name, _) in names.iter().zip(&gone).filter(|(_, gone)| **gone) {
         rar.console.msg(&format!("\nDeleting {name}"));
+        rar.log_file(name);
     }
     if !gone.contains(&false) {
         rar.console

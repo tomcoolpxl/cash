@@ -730,7 +730,8 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      the quick-open room kept for earlier big files in the same volume (taken as their
      header and 18 bytes each, as for the file going in, unchecked with two); updating
      an archive whose files are encrypted without its password (rar copies them, rars'
-     preserving builder asks for it); `-log` read, not done (`-ag` done 2026-10-09,
+     preserving builder asks for it); (`-log` done 2026-10-09, `rar_log.sh`: A, F, P, U
+     for a, x, t, l, lb and d, in UTF-8 where Rar.exe writes ANSI unless -sc...g says; `-ag` done 2026-10-09,
      `rar_agname.sh` and unit tests from the names Rar.exe gave; `-as` done
      2026-10-09: what no name gives taken out, its "Deleting" lines in their places; and
      `-dw` and

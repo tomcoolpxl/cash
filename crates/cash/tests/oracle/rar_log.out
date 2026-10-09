@@ -1,0 +1,53 @@
+-- rarinfo.log
+   l   .   r   a   r  \r  \n
+-- a.log
+   l   2   .   r   a   r  \r  \n
+-- af.log
+   s   r   c   \   a   .   t   x   t  \r  \n   s   r   c   \   b
+   .   t   x   t  \r  \n   s   r   c   \   s   u   b   \   c   .
+   t   x   t  \r  \n   s   r   c   \   s   u   b  \r  \n   s   r
+   c  \r  \n
+-- f.log
+   s   r   c   \   a   .   t   x   t  \r  \n   s   r   c   \   b
+   .   t   x   t  \r  \n   s   r   c   \   s   u   b   \   c   .
+   t   x   t  \r  \n   s   r   c   \   s   u   b  \r  \n   s   r
+   c  \r  \n
+-- p.log
+   o   l   d  \r  \n   s   r   c   \   a   .   t   x   t  \r  \n
+   s   r   c   \   b   .   t   x   t  \r  \n   s   r   c   \   s
+   u   b   \   c   .   t   x   t  \r  \n   s   r   c   \   s   u
+   b  \r  \n   s   r   c  \r  \n
+-- x.log
+   s   r   c   \   a   .   t   x   t  \r  \n   s   r   c   \   b
+   .   t   x   t  \r  \n   s   r   c   \   s   u   b   \   c   .
+   t   x   t  \r  \n   s   r   c   \   s   u   b  \r  \n   s   r
+   c  \r  \n
+-- t.log
+   s   r   c   \   a   .   t   x   t  \r  \n   s   r   c   \   b
+   .   t   x   t  \r  \n   s   r   c   \   s   u   b   \   c   .
+   t   x   t  \r  \n
+-- ta.log
+   l   .   r   a   r  \r  \n
+-- l.log
+   s   r   c   \   a   .   t   x   t  \r  \n   s   r   c   \   b
+   .   t   x   t  \r  \n   s   r   c   \   s   u   b   \   c   .
+   t   x   t  \r  \n   s   r   c   \   s   u   b  \r  \n   s   r
+   c  \r  \n
+-- lb.log
+   s   r   c   \   a   .   t   x   t  \r  \n   s   r   c   \   b
+   .   t   x   t  \r  \n   s   r   c   \   s   u   b   \   c   .
+   t   x   t  \r  \n   s   r   c   \   s   u   b  \r  \n   s   r
+   c  \r  \n
+-- tm.log
+   s   r   c   \   s   u   b   \   c   .   t   x   t  \r  \n
+-- d.log
+   s   r   c   \   a   .   t   x   t  \r  \n
+-- u.log
+   s   r   c   \   a   .   t   x   t  \r  \n   s   r   c   \   b
+   .   t   x   t  \r  \n   s   r   c   \   s   u   b   \   c   .
+   t   x   t  \r  \n   s   r   c   \   s   u   b  \r  \n   s   r
+   c  \r  \n
+== U: UTF-16, no byte-order mark
+-- fu.log
+ 73 00 72 00 63 00 5c 00 e9 00 2e 00 74 00 78 00
+ 74 00 0d 00 0a 00

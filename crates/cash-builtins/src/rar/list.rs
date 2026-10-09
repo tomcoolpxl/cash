@@ -192,6 +192,10 @@ fn list_one<SE: cash_core::ShellExtensions>(
             (form == ListForm::TechnicalAll || item.is_file_like()) && masks.wants(&item.name)
         })
         .collect();
+    rar.log_archive(&found.display);
+    for item in &items {
+        rar.log_file(&item.name);
+    }
     if form == ListForm::Bare {
         let mut text = String::new();
         for item in &items {

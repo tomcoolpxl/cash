@@ -402,6 +402,9 @@ fn set<SE: cash_core::ShellExtensions>(
         missing,
         folders: Vec::new(),
     };
+    for volume in &work.volumes {
+        rar.log_archive(&volume.display);
+    }
     let entries = entry::entries(&work.volumes);
     for entry in &entries {
         work.entry(entry, &entries)?;
@@ -597,6 +600,7 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
         self.file_line(self.job.mode.file_verb(), &entry.name);
         let verdict = self.decode(entry, &mut Discard, Some(&entry.name));
         self.verdict(entry, verdict);
+        self.rar.log_file(&entry.name);
         Ok(())
     }
 
@@ -996,6 +1000,7 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
                 self.make_folders(&shown);
                 self.folders.push((path, Stamps::of(entry)));
                 self.done += 1;
+                self.rar.log_file(&entry.name);
             }
             return Ok(());
         }
@@ -1015,6 +1020,7 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
         let shown = path_shown(&shown, &path, self.rar);
         self.file_line("Extracting  ", &shown);
         self.write_out(entry, entry, &path, &shown);
+        self.rar.log_file(&entry.name);
         Ok(())
     }
 
@@ -1134,6 +1140,7 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
                 self.finish_file(entry, &path);
                 self.ok();
                 self.done += 1;
+                self.rar.log_file(&entry.name);
             }
             Err(error) => self.error(
                 &format!("\nCannot create {shown}\n{}", open::system_message(&error)),
@@ -1188,6 +1195,7 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
             Ok(()) => {
                 self.ok();
                 self.done += 1;
+                self.rar.log_file(&entry.name);
             }
             Err(error) => {
                 // rar makes a folder's link on a folder it makes first.
