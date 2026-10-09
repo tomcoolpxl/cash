@@ -1707,6 +1707,7 @@ fn write_volumes<SE: cash_core::ShellExtensions>(
         Some(at) => display.get(..=at).unwrap_or_default(),
         None => "",
     };
+    let solid = builder.is_solid();
     let mut volume = 0;
     for (index, line) in lines.iter().enumerate() {
         let spans = parts.get(index).cloned().unwrap_or_default();
@@ -1714,7 +1715,7 @@ fn write_volumes<SE: cash_core::ShellExtensions>(
         let first = spans.next().unwrap_or(volume);
         while volume < first {
             volume += 1;
-            announce_volume(rar, folder, &written, volume);
+            announce_volume(rar, folder, &written, volume, solid);
         }
         let Some((shown, action)) = line else {
             for next in spans {
@@ -1729,7 +1730,7 @@ fn write_volumes<SE: cash_core::ShellExtensions>(
                 rar.console.msg("    ");
             }
             volume = next;
-            announce_volume(rar, folder, &written, volume);
+            announce_volume(rar, folder, &written, volume, solid);
             if !rar.switches.no_names {
                 rar.console
                     .msg(&format!("\n...       {shown:<58}{}", area(rar)));
@@ -1742,19 +1743,26 @@ fn write_volumes<SE: cash_core::ShellExtensions>(
     Ok(written)
 }
 
+/// The line a volume after the first begins with: "Creating solid archive" for a solid
+/// set's, as rar says it of the first.
 fn announce_volume<SE: cash_core::ShellExtensions>(
     rar: &Rar<'_, SE>,
     folder: &str,
     written: &[PathBuf],
     volume: usize,
+    solid: bool,
 ) {
     let name = written
         .get(volume)
         .and_then(|path| path.file_name())
         .map(|name| name.to_string_lossy().into_owned())
         .unwrap_or_default();
-    rar.console
-        .msg(&format!("\n\nCreating archive {folder}{name}\n"));
+    let words = if solid {
+        "Creating solid archive"
+    } else {
+        "Creating archive"
+    };
+    rar.console.msg(&format!("\n\n{words} {folder}{name}\n"));
 }
 
 /// A file written beside the archive, shown as the archive's name is.

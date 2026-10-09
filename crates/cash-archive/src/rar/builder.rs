@@ -257,6 +257,11 @@ impl Builder {
         self.format
     }
 
+    /// Whether the archive is written solid.
+    pub const fn is_solid(&self) -> bool {
+        self.solid
+    }
+
     /// Compression level, 0 to 5. `None` leaves the writer's default in place.
     pub fn compression_level(mut self, level: Option<u8>) -> Self {
         self.compression = level;
@@ -1643,7 +1648,8 @@ impl Builder {
                 "archive metadata settings are not supported in volume output",
             ));
         }
-        if self.entries.iter().any(|entry| entry.redirection.is_some()) {
+        if !self.rar50_layout.winrar && self.entries.iter().any(|entry| entry.redirection.is_some())
+        {
             return Err(Error::InvalidArgument(
                 "symbolic links are not supported in volume output",
             ));
@@ -3100,6 +3106,43 @@ mod tests {
             .to_bytes()
             .unwrap_err();
         assert!(error.to_string().contains("build_volumes"));
+    }
+
+    #[test]
+    fn winrar_volumes_hold_links() {
+        let mut builder = Builder::new(ArchiveVersion::Rar50);
+        builder
+            .add_bytes(b"big.bin".to_vec(), vec![7u8; 300_000], None, None)
+            .unwrap();
+        builder
+            .add_link(
+                b"copy.bin".to_vec(),
+                rar50::FileRedirection::new(5, 0, b"big.bin".to_vec()),
+                false,
+                300_000,
+                None,
+            )
+            .unwrap();
+        let volumes = builder
+            .store(true)
+            .layout(rar50::Layout::winrar())
+            .volume_size(Some(64 * 1024))
+            .build_volumes(None)
+            .unwrap();
+        let last = crate::rar::ArchiveReader::read(volumes.last().unwrap()).unwrap();
+        let link = last
+            .as_rar50()
+            .unwrap()
+            .files()
+            .find(|file| file.name == b"copy.bin")
+            .unwrap()
+            .redirection
+            .clone()
+            .unwrap();
+        assert_eq!(
+            (link.redirection_type, link.target_name),
+            (5, b"big.bin".to_vec())
+        );
     }
 
     #[test]

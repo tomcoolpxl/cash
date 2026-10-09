@@ -206,7 +206,7 @@ fn rar_adds_links_as_winrar_7_23_does() {
         &with_cash_banners("rar_add_links", 10, 0),
         "\nEvaluation copy. Please register.\n",
         "",
-        30,
+        31,
     );
     assert_eq!(run_oracle_script("rar_add_links"), expected);
 }

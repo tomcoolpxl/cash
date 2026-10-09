@@ -455,7 +455,8 @@ impl Writer<'_, '_> {
             write_file_encryption_record_with(&mut extra, salt, iv, check_value, mac)?;
         }
         let checked = !member.is_directory;
-        if checked && self.checksums.blake2() {
+        // A link has no payload to hash.
+        if checked && member.redirection.is_none() && self.checksums.blake2() {
             write_hash_record_with_value(&mut extra, fragment.map_or(member.hash, |f| f.hash))?;
         }
         super::super::headers::write_mtime_record(
@@ -470,7 +471,19 @@ impl Writer<'_, '_> {
                 &times.encode()?,
             )?;
         }
-        let width = if member.is_directory {
+        if let Some(link) = member.redirection {
+            let mut record = Bytes::new(resources);
+            record.vint(link.redirection_type)?;
+            record.vint(link.flags)?;
+            record.vint(link.target_name.len() as u64)?;
+            record.extend_from_slice(&link.target_name)?;
+            write_extra_record(&mut extra, super::super::super::FHEXTRA_REDIR, &record)?;
+        }
+        // WinRAR pads a file's sizes; a hard link's it leaves as they are.
+        let hard_link = member
+            .redirection
+            .is_some_and(|link| link.redirection_type == 4);
+        let width = if member.is_directory || hard_link {
             0
         } else {
             size_width(member.unpacked_size)

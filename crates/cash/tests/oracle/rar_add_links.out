@@ -326,6 +326,69 @@ rc=0
         Type: File
         Name: g
         Type: Directory
+-- in volumes: the references cut no data, each volume WinRAR's
+
+Evaluation copy. Please register.
+
+Creating archive vol/o.rar
+
+Searching for identical files         4 found.
+
+Adding    g/a1                                                             OK 
+Adding    g/a2                                                             OK 
+Adding    g/b1                                                               
+
+Creating archive vol/o.part2.rar
+
+...       g/b1                                                             OK 
+Adding    g/b2                                                             OK 
+Adding    g/b3                                                             OK 
+Adding    g/c1                                                               
+
+Creating archive vol/o.part3.rar
+
+...       g/c1                                                             OK 
+Adding    g/c2                                                             OK 
+Adding    g/d1                                                             OK 
+Adding    g/d2                                                               
+
+Creating archive vol/o.part4.rar
+
+...       g/d2                                                             OK 
+Adding    g                                                                OK 
+Done
+rc=0
+vol/o.part1.rar 125439930 102400
+vol/o.part2.rar 3794708563 102400
+vol/o.part3.rar 33124794 102400
+vol/o.part4.rar 110253130 40589
+
+Testing archive vol/o.part1.rar
+
+Testing     g/a1                                                           OK 
+Testing     g/a2                                                           OK 
+Testing     g/b1                                                         
+
+Testing archive vol/o.part2.rar
+
+...         g/b1                                                           OK 
+Testing     g/b2                                                           OK 
+Testing     g/b3                                                           OK 
+Testing     g/c1                                                         
+
+Testing archive vol/o.part3.rar
+
+...         g/c1                                                           OK 
+Testing     g/c2                                                           OK 
+Testing     g/d1                                                           OK 
+Testing     g/d2                                                         
+
+Testing archive vol/o.part4.rar
+
+...         g/d2                                                           OK 
+Testing     g                                                         OK
+All OK
+rc=0
 == hard links, -oh
 -- -oh
 

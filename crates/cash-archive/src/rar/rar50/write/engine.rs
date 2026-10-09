@@ -1618,6 +1618,8 @@ struct VolumeMember<'a> {
     /// The file's checksums are keyed to its password: in the last part only, in
     /// WinRAR's framing, the others holding their own data's plain checksums.
     mac: bool,
+    /// A link's record: what it points at, with no data of its own.
+    redirection: Option<&'a super::super::FileRedirection>,
 }
 
 struct MemberProgress<'a, 'p> {
@@ -1873,6 +1875,7 @@ fn prepare_volume_member<'a>(
                 source: FragmentSource::Packed(encrypted),
                 encryption: Some((salt, iv, keys.checked_password_record()?)),
                 mac,
+                redirection: entry.redirection.as_ref(),
             })
         }
         None => Ok(VolumeMember {
@@ -1883,7 +1886,15 @@ fn prepare_volume_member<'a>(
             file_times: entry.file_times,
             attributes: entry.attributes,
             host_os: entry.host_os,
-            unpacked_size: member.input_size,
+            // A link's size is its target's, its payload empty.
+            unpacked_size: entry
+                .redirection
+                .as_ref()
+                .map_or(member.input_size, |link| {
+                    entry
+                        .redirection_size
+                        .unwrap_or_else(|| decoded_rar50_name_len(&link.target_name) as u64)
+                }),
             crc32: member.crc32,
             hash: member.hash,
             compression_info,
@@ -1898,6 +1909,7 @@ fn prepare_volume_member<'a>(
             },
             encryption: None,
             mac: false,
+            redirection: entry.redirection.as_ref(),
         }),
     }
 }

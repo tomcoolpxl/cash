@@ -726,8 +726,13 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      type-5 references to it, their sizes padded as a file's. "Searching for identical
      files" and the count, `-oi2` listing the sets first (by size, smallest first, a
      blank line between), `-oi3` and `-oi4` listing only, no archive and for `-oi4` no
-     banner. rars' builder has `add_link` for any kind now. Not tried: `-oi` with
-     volumes (rars' volume writer takes no links) or a solid archive's reordering.
+     banner. rars' builder has `add_link` for any kind now. `-oi` with volumes: done
+     2026-10-10 (in `rar_add_links.sh`, now 676 lines, each volume WinRAR's byte for
+     byte): rars' WinRAR volume framing now carries a link's record (a hard link's
+     sizes unpadded), where cash refused ("symbolic links are not supported in volume
+     output"). A solid archive's reordering with `-oi` was compared by hand, its
+     listing Rar.exe's. A solid set's later volumes say "Creating solid archive" (cash
+     said "Creating archive"); where a compressed set splits stays cash's own.
    - `-ver`: done 2026-10-09 (`rar_versions.sh`, 315 lines, the archives WinRAR's byte
      for byte): rars reads and writes the version record, `a`/`u`/`f` keep the file
      replaced as `name;N` with `-ver`, `-verN` drops the oldest beyond N and numbers

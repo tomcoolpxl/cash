@@ -426,8 +426,8 @@ pub fn write_streaming_volumes_with_progress(
             shape,
         )?;
     }
-    // The volume preparation path does not carry redirection metadata.
-    if entries.iter().any(|entry| entry.redirection.is_some()) {
+    // Only WinRAR's volume framing carries redirection records.
+    if !extras.layout.winrar && entries.iter().any(|entry| entry.redirection.is_some()) {
         return Err(Error::InvalidArgument(
             "symbolic links are not supported in volume output",
         ));

@@ -71,6 +71,11 @@ rar a -m0 -idq u.rar g/a1
 z rar a -m0 -oi -idc u.rar g
 cksum < u.rar
 kinds u.rar
+echo "-- in volumes: the references cut no data, each volume WinRAR's"
+rm -rf vol && mkdir vol
+z rar a -m0 -oi -v100k -idc vol/o.rar g
+for f in vol/*; do echo "$f $(cksum < "$f")"; done
+z rar t -idc vol/o.part1.rar
 
 echo "== hard links, -oh"
 # Each name touched: a folder's entry for a name not used since the file changed keeps
