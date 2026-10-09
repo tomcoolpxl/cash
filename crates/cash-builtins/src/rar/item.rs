@@ -34,6 +34,12 @@ impl Kind {
     }
 }
 
+/// A FILETIME as rar reads it: rar keeps times as nanoseconds in 64 bits, so one after
+/// 2185, a damaged header's say, wraps around (seen: a damaged date shown as 1899).
+pub(super) const fn rar_ticks(ticks: u64) -> u64 {
+    ticks.wrapping_mul(100) / 100
+}
+
 /// A file's checksum, as kept.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum Hash {
@@ -73,8 +79,9 @@ impl Stamp {
         })
     }
 
-    /// A Windows FILETIME on the zone's wall clock.
+    /// A Windows FILETIME on the zone's wall clock, as rar reads it.
     fn from_filetime(zone: &Zone, ticks: u64) -> Option<Self> {
+        let ticks = rar_ticks(ticks);
         let seconds = i64::try_from(ticks / 10_000_000).ok()? - 11_644_473_600;
         let nanos = u32::try_from(ticks % 10_000_000).ok()? * 100;
         Self::from_unix(zone, seconds, nanos)
@@ -104,6 +111,8 @@ pub(super) struct Item {
     pub(super) kind: Kind,
     /// A folder, or a link standing for one: listed without sizes.
     pub(super) folder: bool,
+    /// Its header failed its checksum and was read as it stands.
+    pub(super) damaged: bool,
     pub(super) target: Option<String>,
     pub(super) size: u64,
     pub(super) packed: u64,
@@ -392,6 +401,7 @@ fn rar5_item(header: &rar50::FileHeader, service: bool, zone: &Zone) -> Item {
         name,
         kind,
         folder: directory,
+        damaged: header.block.damaged,
         target: header
             .redirection
             .as_ref()
@@ -515,6 +525,7 @@ fn rar4_item(header: &rar15_40::FileHeader, service: bool) -> Item {
         name: String::from_utf8_lossy(&header.name).into_owned(),
         kind,
         folder: directory,
+        damaged: false,
         target: None,
         size: header.unp_size,
         packed: header.pack_size,
@@ -562,6 +573,7 @@ pub(super) fn rar13_items(archive: &rar13::Archive) -> Vec<Item> {
             Item {
                 name: String::from_utf8_lossy(&entry.name).into_owned(),
                 folder: directory,
+                damaged: false,
                 kind: if directory {
                     Kind::Directory
                 } else {

@@ -7,6 +7,9 @@ pub(crate) struct ParseBudget {
     byte_limit: Option<u64>,
     count: u64,
     bytes: u64,
+    /// A block header whose CRC fails is kept, marked damaged, not refused: set
+    /// by a lenient read once past the main header.
+    pub(crate) lenient_crc: bool,
 }
 
 impl ParseBudget {
@@ -17,6 +20,7 @@ impl ParseBudget {
             byte_limit: options.max_header_bytes,
             count: 0,
             bytes: 0,
+            lenient_crc: false,
         }
     }
 

@@ -623,6 +623,16 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
         entries: &[Entry],
         wanted: bool,
     ) -> Result<(), Stop> {
+        // A header that failed its checksum is said so where it is, two errors, and
+        // used as it stands, as rar does.
+        if entry.damaged {
+            self.rar.console.err(&format!(
+                "\nCorrupt header is found\n{} - the file header is corrupt",
+                entry.name
+            ));
+            self.errors += 2;
+            self.rar.fail(code::CRC);
+        }
         if !wanted {
             if self.sources.contains(&index) {
                 self.unpack_source(entry);

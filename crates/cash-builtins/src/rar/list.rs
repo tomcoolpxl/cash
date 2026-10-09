@@ -196,12 +196,14 @@ fn list_one<SE: cash_core::ShellExtensions>(
     for item in &items {
         rar.log_file(&item.name);
     }
+    let damage_check = |rar: &Rar<'_, SE>| damaged_headers(rar, opened);
     if form == ListForm::Bare {
         let mut text = String::new();
         for item in &items {
             let _ = writeln!(text, "{}", item.name);
         }
         rar.console.msg(&text);
+        damage_check(rar);
         return totals;
     }
     let mut text = String::new();
@@ -248,6 +250,7 @@ fn list_one<SE: cash_core::ShellExtensions>(
         }
         rar.console.msg(&text);
         comment_check(rar);
+        damage_check(rar);
         return totals;
     }
     match form {
@@ -272,7 +275,19 @@ fn list_one<SE: cash_core::ShellExtensions>(
     }
     rar.console.msg(&text);
     comment_check(rar);
+    damage_check(rar);
     totals
+}
+
+/// Each header that failed its checksum, read as it stands, said as rar says it.
+fn damaged_headers<SE: cash_core::ShellExtensions>(rar: &Rar<'_, SE>, opened: &open::Opened) {
+    for item in opened.items.iter().filter(|item| item.damaged) {
+        rar.console.err(&format!(
+            "\nCorrupt header is found\n{} - the file header is corrupt",
+            item.name
+        ));
+        rar.fail(super::code::CRC);
+    }
 }
 
 /// `l`'s and `v`'s columns: a row an item, a total of what is not a part carried over.

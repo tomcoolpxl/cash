@@ -744,10 +744,15 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      with counters it backspaces over, the members before the change repacked first,
      then the change, then the rest. Not cash's yet; the oracle's solid updates are
      quiet.
-   - A damaged folder header near an archive's end: Rar.exe still tests the folder "OK"
-     and adds "NAME - the file header is corrupt" after "Corrupt header is found" for
-     each, reading on; cash stops at the first (seen damaging four bytes at offset 200
-     of `rar_extract_switches.sh`'s `one.rar`).
+   - A damaged header that still parses: done 2026-10-09 (in
+     `rar_extract_switches.sh`, now 568 lines). rars' lenient read stopped at the first
+     header failing its checksum; past the main header it now keeps it, marked
+     `damaged`, as Rar.exe does: `t`, `x`, `l` and `lb` say "Corrupt header is found"
+     and "NAME - the file header is corrupt" on standard error, two errors each, rc 3,
+     and use the header as it stands. A time past 2185 is read wrapped around, as rar
+     keeps times as nanoseconds in 64 bits (a damaged one showed as 1899). Its hour
+     before 1914 is the zone's own of the day in cash, Windows' present one in Rar.exe
+     (masked in the oracle; a 1795 date was 42 minutes apart).
    - `-ts` on `a`: done 2026-10-09 (`rar_times.sh`, 73 lines, twelve kinds and
      precisions, the archives WinRAR's byte for byte; PowerShell sets the times first).
      One precision a file: whole seconds only when every time kept asks for them, kept

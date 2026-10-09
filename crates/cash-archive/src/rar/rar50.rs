@@ -194,6 +194,8 @@ pub struct BlockHeader {
     // source-absolute so SFX-prefixed archives can be read directly.
     pub header_range: Range<usize>,
     pub data_range: Range<usize>,
+    /// Its CRC did not match, and a lenient read kept it as it stands.
+    pub damaged: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1922,6 +1924,8 @@ where
     pos = first.next_offset;
 
     let mut blocks = Vec::new();
+    // Past the main header, a lenient read keeps a header whose CRC fails.
+    budget.lenient_crc = options.lenient;
     let mut walk = || -> Result<()> {
         while pos < archive_len {
             let parsed = if let Some(keys) = &header_keys {
@@ -1931,6 +1935,17 @@ where
                 read_block(pos, &mut budget).map_err(|error| at_offset(error, pos))?
             };
             let next = parsed.next_offset;
+            // Only a file header is read on past its checksum, as WinRAR reads one: any
+            // other block that fails it ends the walk.
+            if parsed.block.damaged && parsed.block.header_type != HEAD_FILE {
+                return Err(at_offset(
+                    Error::Crc32Mismatch {
+                        expected: parsed.block.header_crc,
+                        actual: crc32(&parsed.header[4..]),
+                    },
+                    pos,
+                ));
+            }
             match parsed.block.header_type {
                 HEAD_FILE => {
                     let mut file =
@@ -2102,6 +2117,7 @@ fn parse_block_header_bytes(
         },
         header_total,
         &budget.control,
+        budget.lenient_crc,
     )
 }
 
@@ -2176,6 +2192,7 @@ fn parse_encrypted_block_header_bytes(
             },
             disk_header_len,
             &budget.control,
+            budget.lenient_crc,
         )
     }
 }
@@ -2219,6 +2236,7 @@ fn read_block_header_at(
         },
         header_total,
         &budget.control,
+        budget.lenient_crc,
     )
 }
 
@@ -2291,6 +2309,7 @@ fn read_encrypted_block_header_at(
             },
             disk_header_len,
             &budget.control,
+            budget.lenient_crc,
         )
     }
 }
@@ -2303,12 +2322,18 @@ fn parse_block_header_image(
     prefix: HeaderPrefix,
     disk_header_len: usize,
     control: &crate::rar::read_control::ReadControl,
+    lenient_crc: bool,
 ) -> Result<ParsedBlockHeader> {
     control.check()?;
     let header_total = header.len();
     // All four callers decoded this same immutable size prefix before reading
-    // or decrypting the complete header image.
-    validate_block_header_crc(&header, prefix.crc)?;
+    // or decrypting the complete header image. A lenient read keeps a header
+    // that fails it, as WinRAR does, when the rest of it parses.
+    let damaged = match validate_block_header_crc(&header, prefix.crc) {
+        Ok(()) => false,
+        Err(_) if lenient_crc => true,
+        Err(error) => return Err(error),
+    };
     let type_start = 4 + prefix.size_len;
     let mut reader = SliceReader::new(&header, type_start, header_total);
     let header_type = reader.read_vint()?;
@@ -2360,6 +2385,7 @@ fn parse_block_header_image(
             offset: sfx_offset + offset,
             header_range: (offset + type_specific_start)..(offset + type_specific_end),
             data_range: data_start..data_end,
+            damaged,
         },
         header,
         type_specific_range: type_specific_start..type_specific_end,
@@ -4464,6 +4490,7 @@ mod tests {
                 offset: 0,
                 header_range: 0..0,
                 data_range: 0..0,
+                damaged: false,
             },
             file_flags: 0,
             rewrite_metadata_complete: true,

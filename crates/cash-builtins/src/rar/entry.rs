@@ -109,6 +109,8 @@ pub(super) struct Entry {
     pub(super) volume: usize,
     /// An older version of a file (`-ver`): its number, its name ending in `;N`.
     pub(super) version: Option<u64>,
+    /// Its header failed its checksum and was read as it stands.
+    pub(super) damaged: bool,
 }
 
 impl Entry {
@@ -215,7 +217,9 @@ fn rar5(archive: &rar50::Archive, volume: usize, entries: &mut Vec<Entry>) {
         });
         let time = |stamp: Option<rar::FileTimestamp>| {
             stamp.map(|stamp| match stamp {
-                rar::FileTimestamp::WindowsFiletime(ticks) => Time::Utc(ticks),
+                rar::FileTimestamp::WindowsFiletime(ticks) => {
+                    Time::Utc(super::item::rar_ticks(ticks))
+                }
                 rar::FileTimestamp::Unix {
                     seconds,
                     nanoseconds,
@@ -255,6 +259,7 @@ fn rar5(archive: &rar50::Archive, volume: usize, entries: &mut Vec<Entry>) {
                 .as_ref()
                 .is_some_and(|e| e.flags & 0x02 != 0),
             sum13: None,
+            damaged: header.block.damaged,
             bad_comment: false,
             modified,
             created: time(times.created),
@@ -325,6 +330,7 @@ fn rar4(archive: &rar15_40::Archive, volume: usize, entries: &mut Vec<Entry>) {
             blake: None,
             mac: false,
             sum13: None,
+            damaged: false,
             // rar 7.23 reads no RAR 1.5 to 2.9 file comment, stored or packed.
             bad_comment: header.block.flags & 0x0008 != 0,
             modified: Some(Time::Dos {
@@ -384,6 +390,7 @@ fn rar1(archive: &rar13::Archive, volume: usize, entries: &mut Vec<Entry>) {
             blake: None,
             mac: false,
             sum13: Some(header.file_crc),
+            damaged: false,
             bad_comment: false,
             modified: Some(Time::Dos {
                 time: header.file_time,

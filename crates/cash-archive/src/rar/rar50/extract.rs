@@ -3099,6 +3099,7 @@ mod tests {
             offset: 0,
             header_range: 0..0,
             data_range,
+            damaged: false,
         }
     }
 

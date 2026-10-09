@@ -133,5 +133,20 @@ set +f
 echo "-- e and t"
 z rar e -idc solid.rar 'g\s' o11/
 z rar t -idc solid.rar 'g\a3'
+echo "== damaged folder headers near the end: said, and read as they stand"
+# Four bytes of one.rar overwritten with 'X': at 200 they hit two headers, the empty
+# folder's time among them; at 230 one. rar reads a time past 2185 as wrapped around.
+for at in 200 230; do
+  head -c $at one.rar > dmg$at.rar
+  printf 'XXXX' >> dmg$at.rar
+  tail -c +$((at + 5)) one.rar >> dmg$at.rar
+  z rar t -idc dmg$at.rar
+  # The wrapped date's hour: Rar.exe gives 1899 Windows' present offset, cash the zone's
+  # own of the day (Brussels kept UTC then), as 7z and 7-Zip differ.
+  z rar l -idc dmg$at.rar | sed 's/1899-01-04 0[67]:13/1899-01-04 0?:13/'
+  rm -rf o12 && mkdir o12
+  z rar x -idc dmg$at.rar o12/
+  tree o12
+done
 
 cd / && rm -rf "$dir"

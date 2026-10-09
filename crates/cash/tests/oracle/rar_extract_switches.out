@@ -447,3 +447,122 @@ Skipping    g/a2
 Testing     g/a3                                                           OK 
 All OK
 rc=0
+== damaged folder headers near the end: said, and read as they stand
+
+Testing archive dmg200.rar
+
+Testing     src/a.txt                                                      OK 
+Testing     src/b.txt                                                      OK 
+Testing     src/sub/c.txt                                                  OK 
+Testing     src/empty                                                 OK
+Testing     src/sub                                                   OK
+Testing     src                                                       OK
+Total errors: 4
+--- stderr
+
+Corrupt header is found
+src/empty - the file header is corrupt
+Corrupt header is found
+src/sub - the file header is corrupt
+rc=3
+
+Archive: dmg200.rar
+Details: RAR 5
+
+ Attributes       Size     Date    Time   Name
+----------- ----------  ---------- -----  ----
+    ..A....          4  2024-01-01 01:00  src/a.txt
+    ..A...R          4  2024-01-01 01:00  src/b.txt
+    ..A....          6  2024-01-01 01:00  src/sub/c.txt
+    ...D...          0  1899-01-04 0?:13  src/empty
+    ...D.H.          0  2024-02-02 01:00  src/sub
+    ...D...          0  2024-03-03 01:00  src
+----------- ----------  ---------- -----  ----
+                    14                    6
+
+--- stderr
+
+Corrupt header is found
+src/empty - the file header is corrupt
+Corrupt header is found
+src/sub - the file header is corrupt
+rc=3
+
+Extracting from dmg200.rar
+
+Creating    o12/src                                                   OK
+Extracting  o12/src/a.txt                                                  OK 
+Extracting  o12/src/b.txt                                                  OK 
+Creating    o12/src/sub                                               OK
+Extracting  o12/src/sub/c.txt                                              OK 
+Creating    o12/src/empty                                             OK
+Total errors: 4
+--- stderr
+
+Corrupt header is found
+src/empty - the file header is corrupt
+Corrupt header is found
+src/sub - the file header is corrupt
+rc=3
+./src 2024-03-03 00:00:00 -
+./src/a.txt 2024-01-01 00:00:00 A
+./src/b.txt 2024-01-01 00:00:00 AR
+./src/empty now -
+./src/sub 2024-02-02 00:00:00 H
+./src/sub/c.txt 2024-01-01 00:00:00 A
+
+Testing archive dmg230.rar
+
+Testing     src/a.txt                                                      OK 
+Testing     src/b.txt                                                      OK 
+Testing     src/sub/c.txt                                                  OK 
+Testing     src/empty                                                 OK
+Testing     src/sub                                                   OK
+Testing     src                                                       OK
+Total errors: 2
+--- stderr
+
+Corrupt header is found
+src/sub - the file header is corrupt
+rc=3
+
+Archive: dmg230.rar
+Details: RAR 5
+
+ Attributes       Size     Date    Time   Name
+----------- ----------  ---------- -----  ----
+    ..A....          4  2024-01-01 01:00  src/a.txt
+    ..A...R          4  2024-01-01 01:00  src/b.txt
+    ..A....          6  2024-01-01 01:00  src/sub/c.txt
+    ...D...          0  2024-02-02 01:00  src/empty
+    ...D.H.          0  2024-02-01 22:48  src/sub
+    ...D...          0  2024-03-03 01:00  src
+----------- ----------  ---------- -----  ----
+                    14                    6
+
+--- stderr
+
+Corrupt header is found
+src/sub - the file header is corrupt
+rc=3
+
+Extracting from dmg230.rar
+
+Creating    o12/src                                                   OK
+Extracting  o12/src/a.txt                                                  OK 
+Extracting  o12/src/b.txt                                                  OK 
+Creating    o12/src/sub                                               OK
+Extracting  o12/src/sub/c.txt                                              OK 
+Creating    o12/src/empty                                             OK
+Total errors: 2
+--- stderr
+
+Corrupt header is found
+src/sub - the file header is corrupt
+rc=3
+./src 2024-03-03 00:00:00 -
+./src/a.txt 2024-01-01 00:00:00 A
+./src/b.txt 2024-01-01 00:00:00 AR
+./src/empty 2024-02-02 00:00:00 -
+./src/sub 2024-02-01 21:48:08 H
+./src/sub/c.txt 2024-01-01 00:00:00 A
