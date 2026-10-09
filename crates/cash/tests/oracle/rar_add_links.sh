@@ -1,6 +1,7 @@
 # rar's a storing links, run under WinRAR 7.23's Rar.exe (the oracle: Scoop's
 # extras/winrar on Windows) and under cash's builtin: identical files kept as references
-# to the first of each set (-oi, its listings -oi2, -oi3 and -oi4, and its least size).
+# to the first of each set (-oi, its listings -oi2, -oi3 and -oi4, and its least size),
+# and hard links as links to the first name archived (-oh).
 # Stored archives' own CRC, for they are WinRAR's byte for byte. rar_add_links.out is
 # the original's output.
 #
@@ -69,5 +70,25 @@ rar a -m0 -idq u.rar g/a1
 z rar a -m0 -oi -idc u.rar g
 cksum < u.rar
 kinds u.rar
+
+echo "== hard links, -oh"
+# Each name touched: a folder's entry for a name not used since the file changed keeps
+# its old times, which rar stores for a hard link, and they would not be the same twice.
+mkdir h
+printf 'hard\n' > h/a
+ln h/a h/b
+ln h/a h/c
+printf 'plain\n' > h/p
+touch -d '2024-01-01T00:00:00Z' h/a h/b h/c h/p h
+for sw in -oh "" "-oh -oi:1"; do
+  rm -f o.rar
+  echo "-- $sw"
+  z rar a -m0 $sw -idc o.rar h
+  cksum < o.rar
+  kinds o.rar
+  rm -rf x && mkdir x
+  z rar x -idq o.rar x/
+  for f in x/h/*; do echo "$f $(stat -c '%s bytes, %h link(s)' "$f")"; done
+done
 
 cd / && rm -rf "$dir"

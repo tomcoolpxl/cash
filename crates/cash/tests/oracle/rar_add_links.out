@@ -326,3 +326,97 @@ rc=0
         Type: File
         Name: g
         Type: Directory
+== hard links, -oh
+-- -oh
+
+Evaluation copy. Please register.
+
+Creating archive o.rar
+
+Adding    h/a                                                              OK 
+Adding    h/b                                                              OK 
+Adding    h/c                                                              OK 
+Adding    h/p                                                              OK 
+Adding    h                                                                OK 
+Done
+rc=0
+862178091 226
+        Name: h/a
+        Type: File
+        Name: h/b
+        Type: Hard link
+      Target: h/a
+        Name: h/c
+        Type: Hard link
+      Target: h/a
+        Name: h/p
+        Type: File
+        Name: h
+        Type: Directory
+rc=0
+x/h/a 5 bytes, 3 link(s)
+x/h/b 5 bytes, 3 link(s)
+x/h/c 5 bytes, 3 link(s)
+x/h/p 6 bytes, 1 link(s)
+-- 
+
+Evaluation copy. Please register.
+
+Creating archive o.rar
+
+Adding    h/a                                                              OK 
+Adding    h/b                                                              OK 
+Adding    h/c                                                              OK 
+Adding    h/p                                                              OK 
+Adding    h                                                                OK 
+Done
+rc=0
+4245740082 224
+        Name: h/a
+        Type: File
+        Name: h/b
+        Type: File
+        Name: h/c
+        Type: File
+        Name: h/p
+        Type: File
+        Name: h
+        Type: Directory
+rc=0
+x/h/a 5 bytes, 1 link(s)
+x/h/b 5 bytes, 1 link(s)
+x/h/c 5 bytes, 1 link(s)
+x/h/p 6 bytes, 1 link(s)
+-- -oh -oi:1
+
+Evaluation copy. Please register.
+
+Creating archive o.rar
+
+Searching for identical files         2 found.
+
+Adding    h/a                                                              OK 
+Adding    h/b                                                              OK 
+Adding    h/c                                                              OK 
+Adding    h/p                                                              OK 
+Adding    h                                                                OK 
+Done
+rc=0
+862178091 226
+        Name: h/a
+        Type: File
+        Name: h/b
+        Type: Hard link
+      Target: h/a
+        Name: h/c
+        Type: Hard link
+      Target: h/a
+        Name: h/p
+        Type: File
+        Name: h
+        Type: Directory
+rc=0
+x/h/a 5 bytes, 3 link(s)
+x/h/b 5 bytes, 3 link(s)
+x/h/c 5 bytes, 3 link(s)
+x/h/p 6 bytes, 1 link(s)

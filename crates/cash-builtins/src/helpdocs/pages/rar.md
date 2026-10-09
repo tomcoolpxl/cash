@@ -37,6 +37,7 @@ times too. `-ag` puts the date in the archive's name (`-agYYYY-MM-DD`, `N` for a
 that makes it new), and `-log` writes the archives' or files' names to a file. `-oi`
 keeps identical files of 64 KB or more (`-oi:SIZE`) as references to the first of each
 set, `-oi2` listing the sets first; `-oi3` and `-oi4` only list them, writing nothing.
+`-oh` keeps a file's other names as hard links to the first one archived.
 With `-ver` a file replaced stays as an older version, `name;1`, `name;2` and on (`-ver3`
 keeps three); those are listed, but `x`, `t` and `p` take them only when named exactly,
 or every one with `-ver`, or version N under its file's name with `-verN`.

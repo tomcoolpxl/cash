@@ -685,8 +685,14 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      right. Left: a file reference whose file is not asked for is written straight
      from the archive, where rar unpacks the file to a temporary
      `__tmp_reference_source_N.rartemp` first and says so; in a solid archive that file
-     has gone by, and is not found; junctions are made as folder links; links are not
-     stored (`a -ol`, `-oh`).
+     has gone by, and is not found; junctions are made as folder links; symbolic links
+     and junctions are not stored (`a -ol`).
+   - `-oh`, hard links: done 2026-10-09 (in `rar_add_links.sh`, now 422 lines). A
+     file's other names put in after its first are type-4 links to it, their sizes not
+     padded, with the times the folder's entry gives (a name not used since the file
+     changed keeps old ones there, and rar stores those). `-oi` counts them among the
+     identical files, and they stay hard links. A file's own size and times are now
+     taken from the file opened, not its folder's entry, as rar's are.
    - `-oi`, identical files as references: done 2026-10-09 (`rar_add_links.sh`, 328
      lines, the archives WinRAR's byte for byte). Files of the least size or more
      (64 KB, or `-oi:SIZE` with rar's units) with the same size and the same bytes,

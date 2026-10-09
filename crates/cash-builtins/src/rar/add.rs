@@ -59,6 +59,19 @@ struct Source {
     /// Its place in the walk, each folder before what it holds: rar deletes in the
     /// opposite order.
     walk: usize,
+    /// With `-oh`, a file that has other names.
+    hard: Option<HardLinked>,
+}
+
+/// A file with other names: which file it is, and the times its folder's entry gives,
+/// which a hard link stored keeps.
+#[derive(Clone, Copy, Debug)]
+struct HardLinked {
+    /// Its volume's serial number and its file index there.
+    identity: (u32, u64),
+    modified: Option<SystemTime>,
+    created: Option<SystemTime>,
+    accessed: Option<SystemTime>,
 }
 
 /// Whether a source is new to the archive or takes an archived member's place.
@@ -214,8 +227,29 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
         rar.fail(code::NO_FILES);
         return Ok(());
     }
-    // `-oi`: each set of identical files put in, its first kept, the rest references.
     let mut links: Vec<Option<rar::rar50::FileRedirection>> = vec![None; sources.len()];
+    // `-oh`: a file's other names put in after it are hard links to it, with the times
+    // their folders' entries give.
+    let mut named: std::collections::HashMap<(u32, u64), usize> = std::collections::HashMap::new();
+    for index in 0..sources.len() {
+        let Some(hard) = sources[index].hard.filter(|_| actions[index].is_some()) else {
+            continue;
+        };
+        let Some(&first) = named.get(&hard.identity) else {
+            named.insert(hard.identity, index);
+            continue;
+        };
+        links[index] = Some(rar::rar50::FileRedirection::new(
+            4,
+            0,
+            sources[first].name.clone().into_bytes(),
+        ));
+        let source = &mut sources[index];
+        source.modified = hard.modified;
+        source.created = hard.created;
+        source.accessed = hard.accessed;
+    }
+    // `-oi`: each set of identical files put in, its first kept, the rest references.
     if let Some(identical) = identical {
         let files: Vec<(usize, u64, &Path)> = sources
             .iter()
@@ -228,12 +262,15 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
         rar.console
             .msg(&identical::searched(identical.level, looked, &sets, &line));
         for set in &sets {
+            // Hard links stay hard links, counted all the same.
             for &index in &set[1..] {
-                links[index] = Some(rar::rar50::FileRedirection::new(
-                    5,
-                    0,
-                    sources[set[0]].name.clone().into_bytes(),
-                ));
+                if links[index].is_none() {
+                    links[index] = Some(rar::rar50::FileRedirection::new(
+                        5,
+                        0,
+                        sources[set[0]].name.clone().into_bytes(),
+                    ));
+                }
             }
         }
     }
@@ -1734,25 +1771,53 @@ impl<SE: cash_core::ShellExtensions> Walker<'_, '_, SE> {
             return;
         }
         // A file another program is writing is not read, as rar reads none, unless `-dh`.
-        if !is_dir
-            && !switches.shared
-            && let Err(error) = open_unshared(path)
-            && error.raw_os_error() == Some(ERROR_SHARING_VIOLATION)
-        {
-            self.held.push((shown.to_owned(), error));
-            return;
+        let mut opened = None;
+        if !is_dir && !switches.shared {
+            match open_unshared(path) {
+                Err(error) if error.raw_os_error() == Some(ERROR_SHARING_VIOLATION) => {
+                    self.held.push((shown.to_owned(), error));
+                    return;
+                }
+                Ok(file) => opened = Some(file),
+                Err(_) => {}
+            }
         }
+        // A file's size and times are its own: its folder's entry for a hard link's
+        // other name may not have caught up with them.
+        let own = if is_dir {
+            None
+        } else {
+            match &opened {
+                Some(file) => file.metadata().ok(),
+                None => std::fs::metadata(path).ok(),
+            }
+        };
+        let times = own.as_ref().unwrap_or(metadata);
+        let hard = if !is_dir && switches.hard_links {
+            cash_win32::fs::file_info(path)
+                .ok()
+                .filter(|info| info.links > 1)
+                .map(|info| HardLinked {
+                    identity: (info.volume, info.index),
+                    modified,
+                    created: metadata.created().ok(),
+                    accessed: metadata.accessed().ok(),
+                })
+        } else {
+            None
+        };
         self.found.push(Source {
             path: path.to_path_buf(),
             shown: shown.to_owned(),
             name: archive_name(self.rar, shown, base, path),
             is_dir,
-            size: if is_dir { 0 } else { metadata.len() },
-            modified,
-            created: metadata.created().ok(),
-            accessed: metadata.accessed().ok(),
+            size: if is_dir { 0 } else { times.len() },
+            modified: times.modified().ok(),
+            created: times.created().ok(),
+            accessed: times.accessed().ok(),
             attributes: attributes & 0x2837,
             walk,
+            hard,
         });
     }
 }
