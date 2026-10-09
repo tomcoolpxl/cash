@@ -419,6 +419,14 @@ impl RarItem {
             .is_some_and(|l| l.kind == link_type::FILE_COPY)
     }
 
+    /// `NeedUse_as_HardLink`.
+    pub(super) fn is_hard_link_with_no_data(&self) -> bool {
+        self.pack_size == 0
+            && self
+                .find_link()
+                .is_some_and(|l| l.kind == link_type::HARD_LINK)
+    }
+
     /// `FindExtra_Blake`: where a `BLAKE2sp` digest is.
     pub(super) fn blake_offset(&self) -> Option<usize> {
         let (offset, size) = self.find_extra(extra_id::HASH)?;
@@ -1129,6 +1137,7 @@ pub(super) struct Ref {
     pub(super) item: usize,
     pub(super) last: usize,
     pub(super) parent: Option<usize>,
+    pub(super) link: Option<usize>,
 }
 
 /// A RAR 5 archive, open.
@@ -1319,6 +1328,7 @@ impl Rar5 {
                     item: rar.items.len(),
                     last: rar.items.len(),
                     parent: None,
+                    link: None,
                 };
                 if need_add {
                     if item.is_service() {
@@ -1374,7 +1384,50 @@ impl Rar5 {
             }
         }
         rar.fill_stats();
+        rar.fill_links();
         Ok(Ok(rar))
+    }
+
+    /// `FillLinks`, the linking half: each copy link with no data of its own points at
+    /// the last file before it of the name it gives and of its version, when that file
+    /// is of its size; at the file that one points at, if it is a link too. A link
+    /// forward, or to itself, is left alone (7-Zip's search finds the link first).
+    fn fill_links(&mut self) {
+        let until_nul = |b: &[u8]| b.split(|&c| c == 0).next().unwrap_or_default().to_vec();
+        let mut last: std::collections::HashMap<(Option<u64>, Vec<u8>), usize> =
+            std::collections::HashMap::new();
+        for i in 0..self.refs.len() {
+            let item = &self.items[self.refs[i].item];
+            if item.is_dir() || item.is_service() {
+                continue;
+            }
+            let own = (item.version, until_nul(&item.name));
+            if item.pack_size == 0
+                && let Some(link) = item.find_link()
+                && link.kind == link_type::FILE_COPY
+            {
+                let name = item
+                    .extra
+                    .get(link.name_offset..link.name_offset + link.name_len)
+                    .map(until_nul)
+                    .unwrap_or_default();
+                let key = (item.version, name);
+                if key != own
+                    && let Some(&j) = last.get(&key)
+                {
+                    let target = &self.items[self.refs[j].item];
+                    if target.size == item.size {
+                        let to = self.refs[j].link.or_else(|| {
+                            (!(target.pack_size == 0 && target.is_copy_link())).then_some(j)
+                        });
+                        if to.is_some() {
+                            self.refs[i].link = to;
+                        }
+                    }
+                }
+            }
+            last.insert(own, i);
+        }
     }
 
     /// An ACL service header: an error where 7-Zip finds one, else its data kept for the
@@ -1631,9 +1684,11 @@ impl Rar5 {
     }
 
     /// Whether extracting the item asks for a password, as `CUnpacker::Create` does:
-    /// one encrypted with a method 7-Zip decodes.
+    /// one encrypted with a method 7-Zip decodes. A copy link's is its target's, decoded
+    /// for it.
     pub(super) fn needs_password(&self, index: usize) -> bool {
-        let item = &self.items[self.refs[index].item];
+        let r = &self.refs[index];
+        let item = &self.items[self.refs[r.link.unwrap_or(index)].item];
         item.is_encrypted()
             && !item.is_dir()
             && item.algo_raw() <= 1

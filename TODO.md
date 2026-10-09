@@ -640,8 +640,15 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      the last has one now, `Unpack29::with_standard_filters_only`, which the rar builtin
      uses (WinRAR 7.23 refuses such a program too); 7z would word its refusal as
      "Unsupported Method".
-   - Copy links (`-oi`): 7-Zip copies the data of the file named (`FillLinks`); 7z
-     reports an unsupported method.
+   - Copy links (`-oi`): done 2026-10-10. A link points at the last file before it of
+     its target's name, version and size (`FillLinks`). One to a file that starts its
+     stream decodes that file again; one to a solid file takes a copy kept as that file
+     was decoded, up to 4 GiB. 7z now plans RAR from the files asked for, as 7-Zip's
+     handler does, and skips a link inside a chain undecoded. `t -scrc` extracts to the
+     hasher, and the summary's `Size` counts what a file or the hashes took. 7-Zip's
+     own slips are kept: a link decoded inside a solid stream breaks the file after it,
+     and a link to a solid file that no stream goes on from comes out empty, "Everything
+     is Ok" (`copy_links_*.rar` in `7z_rar.sh`).
    - Output on a data error: 7-Zip has written what decoded before it, rar's RAR 1.5 to
      4 decoders hand over nothing (`compressed_multivol_prng_rar300.r02`).
    - Alternate streams (`STM`) and ACLs, whose `NT Security` 7-Zip shows as the

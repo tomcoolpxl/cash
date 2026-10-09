@@ -1091,9 +1091,14 @@ impl Opened {
         }
     }
 
-    /// Reads the items `wanted` names in the archive's order, handing each its data.
+    /// Reads the items `wanted` names in the archive's order, handing each its data;
+    /// `testing`, as `7z t` does, for the formats that tell the two apart. RAR is given
+    /// the items asked for, `asked`, and hands over those its solid streams decode before
+    /// them as well, as 7-Zip's handler skips them.
     pub(super) fn extract<E: From<io::Error>>(
         &mut self,
+        testing: bool,
+        asked: &dyn Fn(usize) -> bool,
         wanted: &dyn Fn(usize) -> bool,
         mut each: impl FnMut(usize, &mut dyn Data) -> Result<bool, E>,
     ) -> Result<(), E> {
@@ -1132,7 +1137,7 @@ impl Opened {
                 }
                 Ok(())
             }
-            Backend::Rar(rar) => rar.extract(&self.items, wanted, each),
+            Backend::Rar(rar) => rar.extract(&self.items, testing, asked, each),
         }
     }
 }

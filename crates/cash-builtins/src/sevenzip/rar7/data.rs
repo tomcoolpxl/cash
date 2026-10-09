@@ -36,7 +36,30 @@ pub(super) enum Message {
 pub(super) struct Step {
     pub(super) index: usize,
     pub(super) wanted: bool,
+    /// Whether an item not wanted is decoded: when extracting, 7-Zip decodes one only
+    /// for a solid item after it.
+    pub(super) decode: bool,
+    /// Whether the item's result is kept for the copy links that take its data
+    /// (`kStatus_Link`), and how many of those take its data, kept with it.
+    pub(super) kept: bool,
+    pub(super) links: usize,
 }
+
+impl Step {
+    const fn new(index: usize, wanted: bool) -> Self {
+        Self {
+            index,
+            wanted,
+            decode: true,
+            kept: false,
+            links: 0,
+        }
+    }
+}
+
+/// The largest file whose data 7-Zip keeps for the copy links to it
+/// (`k_CopyLinkFile_MaxSize`, 64-bit).
+const MAX_KEPT: u64 = 1 << 32;
 
 /// What an item decodes to: its checksums taken, the bytes sent on in chunks, none past
 /// the size where the format stops there (RAR 5's `COutStreamWithHash`).
@@ -47,6 +70,8 @@ struct Out<'a> {
     crc: crc32fast::Hasher,
     blake: Option<blake2sp::Hasher>,
     pending: Vec<u8>,
+    /// A copy of all written, for the copy links that take it (`CLinkFile::Data`).
+    keep: Option<Vec<u8>>,
 }
 
 impl<'a> Out<'a> {
@@ -58,6 +83,7 @@ impl<'a> Out<'a> {
             crc: crc32fast::Hasher::new(),
             blake: blake.then(blake2sp::Hasher::new),
             pending: Vec::with_capacity(CHUNK),
+            keep: None,
         }
     }
 
@@ -70,6 +96,9 @@ impl<'a> Out<'a> {
             }
             None => data,
         };
+        if let Some(keep) = &mut self.keep {
+            keep.extend_from_slice(data);
+        }
         self.crc.update(data);
         if let Some(blake) = &mut self.blake {
             blake.update(data);
@@ -160,7 +189,8 @@ impl Data for ChannelData<'_> {
     }
 }
 
-/// Decodes `steps` on a worker thread and hands each wanted item's data to `each`, in
+/// Decodes `steps` on a worker thread and hands the data of each item wanted, or
+/// decoded for the stream (7-Zip's `PrepareOperation` on a skipped one), to `each`, in
 /// order; stops where `each` says to.
 pub(super) fn run<E: From<io::Error>>(
     steps: &[Step],
@@ -179,7 +209,7 @@ pub(super) fn run<E: From<io::Error>>(
                 result: None,
                 encrypted: encrypted(step.index),
             };
-            if step.wanted {
+            if step.wanted || step.decode {
                 let go_on = each(step.index, &mut data)?;
                 let _ = data.drain();
                 if !go_on {
@@ -196,25 +226,41 @@ pub(super) fn run<E: From<io::Error>>(
 // ---------- RAR 5 ----------
 
 /// `Extract`'s first pass: the items wanted, and the solid ones before each that its
-/// stream needs.
-pub(super) fn plan5(rar: &rar5::Rar5, wanted: &dyn Fn(usize) -> bool) -> Vec<Step> {
+/// stream needs. A copy link to a solid file takes that file's data, kept as the file is
+/// decoded (its stream before it decoded too); one to a file that starts its stream
+/// decodes that file again.
+pub(super) fn plan5(rar: &rar5::Rar5, wanted: &dyn Fn(usize) -> bool, testing: bool) -> Vec<Step> {
+    const EXTRACT: u8 = 1;
+    const SKIP: u8 = 2;
+    const LINK: u8 = 4;
     let count = rar.refs.len();
+    let item = |i: usize| &rar.items[rar.refs[i].item];
     let mut status = vec![0u8; count];
+    let mut links = vec![0usize; count];
+    let mut any_kept = false;
     let mut solid_limit = 0;
     for index in (0..count).filter(|&i| wanted(i)) {
-        status[index] |= 1;
-        let item = &rar.items[rar.refs[index].item];
-        if item.is_service() {
+        status[index] |= EXTRACT;
+        if let Some(link) = rar.refs[index].link {
+            if link < index && item(link).is_solid() && (testing || item(link).size <= MAX_KEPT) {
+                status[link] |= LINK;
+                any_kept = true;
+                if !testing {
+                    links[link] += 1;
+                }
+            }
             continue;
         }
-        if item.is_solid() {
+        if item(index).is_service() {
+            continue;
+        }
+        if item(index).is_solid() {
             let mut j = index;
             while j > solid_limit {
                 j -= 1;
-                let item2 = &rar.items[rar.refs[j].item];
-                if !item2.is_service() {
-                    status[j] |= 2;
-                    if !item2.is_solid() {
+                if !item(j).is_service() {
+                    status[j] |= SKIP;
+                    if !item(j).is_solid() {
                         break;
                     }
                 }
@@ -222,13 +268,56 @@ pub(super) fn plan5(rar: &rar5::Rar5, wanted: &dyn Fn(usize) -> bool) -> Vec<Ste
         }
         solid_limit = index + 1;
     }
+    if any_kept {
+        let mut solid_limit = 0;
+        for i in 0..count {
+            if status[i] & LINK == 0 {
+                continue;
+            }
+            if item(i).is_solid() {
+                let mut j = i;
+                while j > solid_limit {
+                    j -= 1;
+                    if !item(j).is_service() {
+                        if status[j] != 0 {
+                            break;
+                        }
+                        status[j] = SKIP;
+                        if !item(j).is_solid() {
+                            break;
+                        }
+                    }
+                }
+            }
+            solid_limit = i + 1;
+        }
+    }
+    // Extracting, an item not wanted is decoded when the next file's stream goes on
+    // from it (`needCallback`); a folder is always shown.
+    let next_solid = |index: usize| {
+        (index + 1..count)
+            .map(item)
+            .find(|i| !i.is_service())
+            .is_some_and(rar5::RarItem::is_solid)
+    };
     status
         .iter()
         .enumerate()
         .filter(|(_, s)| **s != 0)
-        .map(|(index, s)| Step {
-            index,
-            wanted: s & 1 != 0,
+        .map(|(index, &s)| {
+            let it = item(index);
+            Step {
+                index,
+                wanted: s & EXTRACT != 0,
+                decode: testing
+                    || it.is_dir()
+                    || (!it.is_service()
+                        && !it.is_hard_link_with_no_data()
+                        && rar.refs[index].link.is_none()
+                        && next_solid(index)),
+                kept: s & LINK != 0,
+                links: links[index],
+            }
         })
         .collect()
 }
@@ -241,6 +330,15 @@ struct KeyCache {
     ok: bool,
 }
 
+/// What a file copy links take their data from was decoded to (`CLinkFile`): its
+/// result, and its data while links still want it.
+struct Kept {
+    index: usize,
+    data: Vec<u8>,
+    result: Result<(), Problem>,
+    links: usize,
+}
+
 /// The worker for RAR 5: each step's item decoded and sent.
 #[expect(
     clippy::too_many_lines,
@@ -249,6 +347,7 @@ struct KeyCache {
 pub(super) fn work5(
     rar: &rar5::Rar5,
     password: Option<&str>,
+    testing: bool,
     steps: &[Step],
     tx: &SyncSender<Message>,
 ) {
@@ -257,10 +356,19 @@ pub(super) fn work5(
     let mut decoders: [Option<Unpack50Decoder>; 2] = [None, None];
     let mut solid_allowed = false;
     let mut cache: Option<KeyCache> = None;
+    let mut kept: Vec<Kept> = steps
+        .iter()
+        .filter(|s| s.kept)
+        .map(|s| Kept {
+            index: s.index,
+            data: Vec::new(),
+            result: Ok(()),
+            links: s.links,
+        })
+        .collect();
     for step in steps {
         let r = rar.refs[step.index];
         let item = &rar.items[r.item];
-        let last = &rar.items[r.last];
         let mut is_solid = false;
         if !item.is_service() {
             if item.is_solid() {
@@ -275,8 +383,45 @@ pub(super) fn work5(
             }
             continue;
         }
+        // A copy link to a file that starts its stream decodes that file; one to a solid
+        // file takes what was kept of it.
+        let mut r = r;
+        let mut from = None;
+        if let Some(link) = r.link {
+            if !rar.items[rar.refs[link].item].is_solid() {
+                r = rar.refs[link];
+            } else if link < step.index {
+                from = kept.iter().position(|k| k.index == link);
+            }
+        }
+        if !step.wanted && !step.decode {
+            if !done(Ok(())) {
+                return;
+            }
+            continue;
+        }
+        if let Some(at) = from {
+            let source = &mut kept[at];
+            if step.wanted && !testing {
+                for chunk in source.data.chunks(CHUNK) {
+                    if tx.send(Message::Bytes(chunk.to_vec())).is_err() {
+                        return;
+                    }
+                }
+                source.links = source.links.saturating_sub(1);
+                if source.links == 0 {
+                    source.data = Vec::new();
+                }
+            }
+            if !done(source.result) {
+                return;
+            }
+            continue;
+        }
+        let item = &rar.items[r.item];
+        let last = &rar.items[r.last];
         if item.pack_size == 0 && item.is_link_with_no_data() {
-            if !done(if item.is_copy_link() {
+            if !done(if item.is_copy_link() && !testing {
                 Err(Problem::UnsupportedMethod)
             } else {
                 Ok(())
@@ -358,6 +503,9 @@ pub(super) fn work5(
         // `CUnpacker::Code`.
         let size = (!last.is_unknown_size()).then_some(last.size);
         let mut out = Out::new(tx, size, last.blake_offset().is_some());
+        if step.kept && step.links != 0 && size.is_some() {
+            out.keep = Some(Vec::new());
+        }
         let parts = parts5(rar, r.item);
         let mut vols = VolsReader::new(&rar.volumes, &mut files, parts);
         let pack_size = rar.pack_size(&r);
@@ -416,6 +564,8 @@ pub(super) fn work5(
         }
         let vols_ok = vols.crc_ok;
         let mut result = decoded;
+        // The links' result is the decoder's and the checksums', not the parts'.
+        let mut linked = decoded;
         if result.is_ok() {
             let crc_ok = hash_ok(
                 last,
@@ -423,9 +573,16 @@ pub(super) fn work5(
                 out.blake.take(),
                 mac.as_ref(),
             );
+            if !crc_ok {
+                linked = Err(Problem::Crc);
+            }
             if !crc_ok || !vols_ok {
                 result = Err(Problem::Crc);
             }
+        }
+        if let Some(source) = kept.iter_mut().find(|k| step.kept && k.index == step.index) {
+            source.result = linked;
+            source.data = out.keep.take().unwrap_or_default();
         }
         if !done(result) {
             return;
@@ -524,10 +681,7 @@ pub(super) fn plan4(rar: &rar4::Rar4, wanted: &dyn Fn(usize) -> bool) -> Vec<Ste
             .find(|&j| !rar.is_solid(j))
             .unwrap_or(last_index);
         for j in last_index..=index {
-            steps.push(Step {
-                index: j,
-                wanted: j == index,
-            });
+            steps.push(Step::new(j, j == index));
         }
         last_index = index + 1;
     }

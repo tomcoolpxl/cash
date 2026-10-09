@@ -49,7 +49,7 @@ fn seven_z_reads_rar_as_7_zip_26_03_does() {
         &golden("7z_rar"),
         "7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03\n",
         "7-Zip (cash) : 7-Zip 26.03's options, in pure Rust\n",
-        183,
+        199,
     );
     assert_eq!(run_oracle_script("7z_rar"), expected);
 }

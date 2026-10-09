@@ -53,11 +53,13 @@ impl Rar {
         }
     }
 
-    /// Hands the items `wanted` names their data, in the archive's order, decoding the
-    /// solid items before them that their streams need.
+    /// Hands the items `wanted` names their data, in the archive's order, and those of
+    /// the solid items before them that their streams need, as skipped. Testing, a RAR 5
+    /// copy link's data is not asked for, only its target's result.
     pub(super) fn extract<E: From<io::Error>>(
         &self,
         items: &[Item],
+        testing: bool,
         wanted: &dyn Fn(usize) -> bool,
         each: impl FnMut(usize, &mut dyn Data) -> Result<bool, E>,
     ) -> Result<(), E> {
@@ -65,11 +67,11 @@ impl Rar {
         let encrypted = |index: usize| items.get(index).is_some_and(|i| i.encrypted);
         match &self.format {
             Format::Five(rar) => {
-                let steps = data::plan5(rar, wanted);
+                let steps = data::plan5(rar, wanted, testing);
                 data::run(
                     &steps,
                     &encrypted,
-                    |steps, tx| data::work5(rar, password, steps, tx),
+                    |steps, tx| data::work5(rar, password, testing, steps, tx),
                     each,
                 )
             }

@@ -194,4 +194,31 @@ z a new.rar f.txt
 z a rar50/stored.rar f.txt
 ls new.rar 2>&1 | wc -l
 
+# WinRAR 7.23's -oi:1 (see rar50/README-copy-links.md): s/d.bin is a copy link to s/b.bin.
+echo "== copy links: one to a file that starts its stream decodes that file again, one to a"
+echo "== solid file takes what was kept as that file was decoded"
+for a in rar50/copy_links_plain.rar rar50/copy_links_solid.rar; do
+  echo "== x -bb3 $a"
+  xt -bb3 "$a"
+  echo "== t -bb3 $a"
+  z t -bb3 "$a"
+  echo "== t -scrcCRC32 $a"
+  z t -scrcCRC32 "$a"
+  echo "== x -bb3 $a s/d.bin"
+  xt -bb3 "$a" s/d.bin
+  echo "== t -bb3 $a s/d.bin"
+  z t -bb3 "$a" s/d.bin
+done
+echo "== a link to a solid file that no stream after goes on from: 7-Zip does not decode the"
+echo "== file, and writes the link empty"
+xt -bb3 rar50/copy_links_groups.rar s/d.bin
+z t -bb3 rar50/copy_links_groups.rar s/d.bin
+echo "== a link inside a solid stream decodes its file into the stream, and the file after"
+echo "== fails; a link only skipped is not decoded"
+z t rar50/copy_links_mid_stream.rar
+xt -bb3 rar50/copy_links_mid_stream.rar t/f.bin
+echo "== a link to an encrypted file asks for the password"
+xt -ppassword rar50/copy_links_password.rar s/d.bin
+xt rar50/copy_links_password.rar s/d.bin
+
 cd / && rm -rf "$dir"

@@ -7361,3 +7361,489 @@ System ERROR:
 Not implemented
 rc=2
 1
+== copy links: one to a file that starts its stream decodes that file again, one to a
+== solid file takes what was kept as that file was decoded
+== x -bb3 rar50/copy_links_plain.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 8690 bytes (9 KiB)
+
+Extracting archive: rar50/copy_links_plain.rar
+--
+Path = rar50/copy_links_plain.rar
+Type = Rar5
+Physical Size = 8690
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 6
+Method = v6:128K:m0:m3
+Multivolume = -
+Volumes = 1
+
+- s/a.bin
+- s/b.bin
+- s/c.bin
+- s/d.bin
+- s/e.bin
+- s/
+Everything is Ok
+
+Folders: 1
+Files: 5
+Size:       14000
+Compressed: 8690
+rc=0
+./s/a.bin 1279837009 3000
+./s/b.bin 334200866 4000
+./s/c.bin 3783658082 2000
+./s/d.bin 334200866 4000
+./s/e.bin 3196537578 1000
+== t -bb3 rar50/copy_links_plain.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 8690 bytes (9 KiB)
+
+Testing archive: rar50/copy_links_plain.rar
+--
+Path = rar50/copy_links_plain.rar
+Type = Rar5
+Physical Size = 8690
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 6
+Method = v6:128K:m0:m3
+Multivolume = -
+Volumes = 1
+
+T s/a.bin
+T s/b.bin
+T s/c.bin
+T s/d.bin
+T s/e.bin
+T s/
+Everything is Ok
+
+Folders: 1
+Files: 5
+Size:       14000
+Compressed: 8690
+rc=0
+== t -scrcCRC32 rar50/copy_links_plain.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 8690 bytes (9 KiB)
+
+Testing archive: rar50/copy_links_plain.rar
+--
+Path = rar50/copy_links_plain.rar
+Type = Rar5
+Physical Size = 8690
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 6
+Method = v6:128K:m0:m3
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Folders: 1
+Files: 5
+Size:       14000
+Compressed: 8690
+
+CRC32  for data:              0D85427D-00000002
+CRC32  for data and names:    837E98B3-00000003
+
+rc=0
+== x -bb3 rar50/copy_links_plain.rar s/d.bin
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 8690 bytes (9 KiB)
+
+Extracting archive: rar50/copy_links_plain.rar
+--
+Path = rar50/copy_links_plain.rar
+Type = Rar5
+Physical Size = 8690
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 6
+Method = v6:128K:m0:m3
+Multivolume = -
+Volumes = 1
+
+- s/d.bin
+Everything is Ok
+
+Size:       4000
+Compressed: 8690
+rc=0
+./s/d.bin 334200866 4000
+== t -bb3 rar50/copy_links_plain.rar s/d.bin
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 8690 bytes (9 KiB)
+
+Testing archive: rar50/copy_links_plain.rar
+--
+Path = rar50/copy_links_plain.rar
+Type = Rar5
+Physical Size = 8690
+Characteristics = Locator QuickOpen:0
+Encrypted = -
+Solid = -
+Blocks = 6
+Method = v6:128K:m0:m3
+Multivolume = -
+Volumes = 1
+
+T s/d.bin
+Everything is Ok
+
+Size:       4000
+Compressed: 8690
+rc=0
+== x -bb3 rar50/copy_links_solid.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 8599 bytes (9 KiB)
+
+Extracting archive: rar50/copy_links_solid.rar
+--
+Path = rar50/copy_links_solid.rar
+Type = Rar5
+Physical Size = 8599
+Characteristics = Solid Locator QuickOpen:0
+Encrypted = -
+Solid = +
+Blocks = 1
+Method = v6:1M:m0:m3
+Multivolume = -
+Volumes = 1
+
+- s/a.bin
+- s/b.bin
+- s/c.bin
+- s/d.bin
+- s/e.bin
+- s/
+Everything is Ok
+
+Folders: 1
+Files: 5
+Size:       14000
+Compressed: 8599
+rc=0
+./s/a.bin 1279837009 3000
+./s/b.bin 334200866 4000
+./s/c.bin 3783658082 2000
+./s/d.bin 334200866 4000
+./s/e.bin 3196537578 1000
+== t -bb3 rar50/copy_links_solid.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 8599 bytes (9 KiB)
+
+Testing archive: rar50/copy_links_solid.rar
+--
+Path = rar50/copy_links_solid.rar
+Type = Rar5
+Physical Size = 8599
+Characteristics = Solid Locator QuickOpen:0
+Encrypted = -
+Solid = +
+Blocks = 1
+Method = v6:1M:m0:m3
+Multivolume = -
+Volumes = 1
+
+T s/a.bin
+T s/b.bin
+T s/c.bin
+T s/d.bin
+T s/e.bin
+T s/
+Everything is Ok
+
+Folders: 1
+Files: 5
+Size:       14000
+Compressed: 8599
+rc=0
+== t -scrcCRC32 rar50/copy_links_solid.rar
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 8599 bytes (9 KiB)
+
+Testing archive: rar50/copy_links_solid.rar
+--
+Path = rar50/copy_links_solid.rar
+Type = Rar5
+Physical Size = 8599
+Characteristics = Solid Locator QuickOpen:0
+Encrypted = -
+Solid = +
+Blocks = 1
+Method = v6:1M:m0:m3
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Folders: 1
+Files: 5
+Size:       14000
+Compressed: 8599
+
+CRC32  for data:              0D85427D-00000002
+CRC32  for data and names:    837E98B3-00000003
+
+rc=0
+== x -bb3 rar50/copy_links_solid.rar s/d.bin
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 8599 bytes (9 KiB)
+
+Extracting archive: rar50/copy_links_solid.rar
+--
+Path = rar50/copy_links_solid.rar
+Type = Rar5
+Physical Size = 8599
+Characteristics = Solid Locator QuickOpen:0
+Encrypted = -
+Solid = +
+Blocks = 1
+Method = v6:1M:m0:m3
+Multivolume = -
+Volumes = 1
+
+. s/a.bin
+. s/b.bin
+- s/d.bin
+Everything is Ok
+
+Files: 3
+Size:       11000
+Compressed: 8599
+rc=0
+./s/d.bin 334200866 4000
+== t -bb3 rar50/copy_links_solid.rar s/d.bin
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 8599 bytes (9 KiB)
+
+Testing archive: rar50/copy_links_solid.rar
+--
+Path = rar50/copy_links_solid.rar
+Type = Rar5
+Physical Size = 8599
+Characteristics = Solid Locator QuickOpen:0
+Encrypted = -
+Solid = +
+Blocks = 1
+Method = v6:1M:m0:m3
+Multivolume = -
+Volumes = 1
+
+. s/a.bin
+. s/b.bin
+T s/d.bin
+Everything is Ok
+
+Files: 3
+Size:       11000
+Compressed: 8599
+rc=0
+== a link to a solid file that no stream after goes on from: 7-Zip does not decode the
+== file, and writes the link empty
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 8656 bytes (9 KiB)
+
+Extracting archive: rar50/copy_links_groups.rar
+--
+Path = rar50/copy_links_groups.rar
+Type = Rar5
+Physical Size = 8656
+Characteristics = Solid Locator QuickOpen:0
+Encrypted = -
+Solid = +
+Blocks = 3
+Method = v6:1M:m0:m3
+Multivolume = -
+Volumes = 1
+
+. s/a.bin
+- s/d.bin
+Everything is Ok
+
+Files: 2
+Size:       3000
+Compressed: 8656
+rc=0
+./s/d.bin 4294967295 0
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 8656 bytes (9 KiB)
+
+Testing archive: rar50/copy_links_groups.rar
+--
+Path = rar50/copy_links_groups.rar
+Type = Rar5
+Physical Size = 8656
+Characteristics = Solid Locator QuickOpen:0
+Encrypted = -
+Solid = +
+Blocks = 3
+Method = v6:1M:m0:m3
+Multivolume = -
+Volumes = 1
+
+. s/a.bin
+. s/b.bin
+T s/d.bin
+Everything is Ok
+
+Files: 3
+Size:       11000
+Compressed: 8656
+rc=0
+== a link inside a solid stream decodes its file into the stream, and the file after
+== fails; a link only skipped is not decoded
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 8765 bytes (9 KiB)
+
+Testing archive: rar50/copy_links_mid_stream.rar
+--
+Path = rar50/copy_links_mid_stream.rar
+Type = Rar5
+Physical Size = 8765
+Characteristics = Solid Locator QuickOpen:0
+Encrypted = -
+Solid = +
+Blocks = 2
+Method = v6:1M:m0:m3
+Multivolume = -
+Volumes = 1
+
+ERROR: Data Error : t/f.bin
+
+Sub items Errors: 1
+
+Archives with Errors: 1
+
+Sub items Errors: 1
+rc=2
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 8765 bytes (9 KiB)
+
+Extracting archive: rar50/copy_links_mid_stream.rar
+--
+Path = rar50/copy_links_mid_stream.rar
+Type = Rar5
+Physical Size = 8765
+Characteristics = Solid Locator QuickOpen:0
+Encrypted = -
+Solid = +
+Blocks = 2
+Method = v6:1M:m0:m3
+Multivolume = -
+Volumes = 1
+
+. t/d.bin
+- t/f.bin
+Everything is Ok
+
+Files: 2
+Size:       6100
+Compressed: 8765
+rc=0
+./t/f.bin 2916605156 3100
+== a link to an encrypted file asks for the password
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 8869 bytes (9 KiB)
+
+Extracting archive: rar50/copy_links_password.rar
+--
+Path = rar50/copy_links_password.rar
+Type = Rar5
+Physical Size = 8869
+Characteristics = Solid Locator QuickOpen:0
+Encrypted = -
+Solid = +
+Blocks = 1
+Method = v6:1M:m0:m3
+Multivolume = -
+Volumes = 1
+
+Everything is Ok
+
+Files: 3
+Size:       11000
+Compressed: 8869
+rc=0
+./s/d.bin 334200866 4000
+
+7-Zip 26.03 (x64) : Copyright (c) 1999-2026 Igor Pavlov : 2026-09-03
+
+Scanning the drive for archives:
+1 file, 8869 bytes (9 KiB)
+
+Extracting archive: rar50/copy_links_password.rar
+--
+Path = rar50/copy_links_password.rar
+Type = Rar5
+Physical Size = 8869
+Characteristics = Solid Locator QuickOpen:0
+Encrypted = -
+Solid = +
+Blocks = 1
+Method = v6:1M:m0:m3
+Multivolume = -
+Volumes = 1
+
+
+Enter password (will not be echoed):
+
+
+
+Break signaled
+rc=255

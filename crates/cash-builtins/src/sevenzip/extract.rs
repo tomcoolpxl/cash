@@ -661,7 +661,11 @@ fn extract_items<SE: cash_core::ShellExtensions>(
         s.completed = 0;
     });
     let mut done = 0u64;
-    let result: Result<(), Stop> = opened.extract(&|index| decode[index], |index, data| {
+    let asked = |index: usize| wanted[index];
+    let decoded = |index: usize| decode[index];
+    // Hashing, 7-Zip tests by extracting to the hasher.
+    let testing = test && hash.is_none();
+    let result: Result<(), Stop> = opened.extract(testing, &asked, &decoded, |index, data| {
         let item = &items[index];
         let skip = !wanted[index];
         // -scrc hashes what is tested, folders too, and the files extracted.
@@ -738,6 +742,11 @@ fn extract_items<SE: cash_core::ShellExtensions>(
             None
         };
         let passed = matches!(room, Some(Ok(None)));
+        let read = std::cell::Cell::new(0u64);
+        let mut counted = Counted { data, read: &read };
+        let data: &mut dyn Data = &mut counted;
+        let through_hash = hashing && hash.is_some();
+        let mut written = false;
         let mut hashed;
         let data: &mut dyn Data = match hash.as_mut().filter(|_| hashing) {
             Some(bundle) => {
@@ -795,7 +804,10 @@ fn extract_items<SE: cash_core::ShellExtensions>(
                         && (options.zone == Zone::All || is_office(&path)))
                     .then_some(zone);
                     match data_link_kind(item) {
-                        None => write_file(item, &path, data, zone),
+                        None => {
+                            written = true;
+                            write_file(item, &path, data, zone)
+                        }
                         // is_SymLink_in_Data: the data read whole, then the link it
                         // names made at the end; data that names none is written as
                         // it is, and said so.
@@ -852,10 +864,15 @@ fn extract_items<SE: cash_core::ShellExtensions>(
             made
         };
         let finished = data.finish();
-        // The size known before decoding, else the one the format reports after; a
-        // folder's is a link's name.
+        // What a file or the hashes took, as 7-Zip counts its streams' bytes; else the
+        // size known before decoding, else the one the format reports after. A folder's
+        // is a link's name.
         if !item.is_dir || item.link.is_some() {
-            totals.size += item.size.or_else(|| data.unpacked()).unwrap_or(0);
+            totals.size += if written || through_hash {
+                read.get()
+            } else {
+                item.size.or_else(|| data.unpacked()).unwrap_or(0)
+            };
         }
         if let Err(problem) = finished {
             if !skip {
@@ -968,6 +985,34 @@ impl<SE: cash_core::ShellExtensions> Read for Shown<'_, '_, SE> {
 }
 
 impl<SE: cash_core::ShellExtensions> Data for Shown<'_, '_, SE> {
+    fn finish(&mut self) -> Result<(), Problem> {
+        self.data.finish()
+    }
+
+    fn encrypted(&self) -> bool {
+        self.data.encrypted()
+    }
+
+    fn unpacked(&self) -> Option<u64> {
+        self.data.unpacked()
+    }
+}
+
+/// An item's data, the bytes read counted.
+struct Counted<'a> {
+    data: &'a mut dyn Data,
+    read: &'a std::cell::Cell<u64>,
+}
+
+impl Read for Counted<'_> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let n = self.data.read(buf)?;
+        self.read.set(self.read.get().saturating_add(n as u64));
+        Ok(n)
+    }
+}
+
+impl Data for Counted<'_> {
     fn finish(&mut self) -> Result<(), Problem> {
         self.data.finish()
     }
