@@ -118,6 +118,13 @@ struct EntryEncryption {
 }
 
 impl BuilderEntry {
+    /// Whether it is an older version of a file, kept beside it under its name.
+    fn is_older_version(&self) -> bool {
+        self.carried
+            .as_ref()
+            .is_some_and(|carried| carried.version.is_some())
+    }
+
     fn attributes(&self) -> u64 {
         match self.attributes {
             // add_bytes/add_source can receive permission bits alone, whereas
@@ -607,6 +614,20 @@ impl Builder {
         })
     }
 
+    /// Makes the RAR 5 member [`Self::carry`] took last an older version of its file,
+    /// number `version` (`name;N` in rar's listings), or, with `None`, the file itself.
+    pub fn set_carried_version(&mut self, version: Option<u64>) -> Result<()> {
+        let carried = self
+            .entries
+            .last_mut()
+            .and_then(|entry| entry.carried.as_mut())
+            .ok_or(Error::InvalidArgument(
+                "no RAR 5 member was carried to version",
+            ))?;
+        carried.version = version;
+        Ok(())
+    }
+
     /// [`Self::carry`] for a RAR 1.5 to 4 archive, into one of the same family: the
     /// member's packed bytes are held, as the legacy writers hold every member.
     fn carry_legacy(&mut self, source: &rar15_40::Archive, index: usize) -> Result<()> {
@@ -1078,9 +1099,13 @@ impl Builder {
         self
     }
 
-    /// Resolve a unique queued name to its stable ID.
+    /// Resolve a unique queued name to its stable ID: the file's, not an older
+    /// version's of it.
     pub fn entry_id(&self, name: &[u8]) -> Result<usize> {
-        let mut matches = self.entries.iter().filter(|entry| entry.name == name);
+        let mut matches = self
+            .entries
+            .iter()
+            .filter(|entry| entry.name == name && !entry.is_older_version());
         let entry = matches
             .next()
             .ok_or_else(|| Error::EntryNotFound.at_entry(name.to_vec(), "selecting"))?;
@@ -1186,7 +1211,8 @@ impl Builder {
     }
 
     fn push(&mut self, mut entry: BuilderEntry) -> Result<()> {
-        if !self.allow_duplicate_names {
+        // An older version of a file (`name;N`) shares its name.
+        if !self.allow_duplicate_names && !entry.is_older_version() {
             self.reject_duplicate_name(&entry.name)?;
         }
         let next = self
@@ -1200,7 +1226,11 @@ impl Builder {
     }
 
     fn reject_duplicate_name(&self, name: &[u8]) -> Result<()> {
-        if self.entries.iter().any(|entry| entry.name == name) {
+        if self
+            .entries
+            .iter()
+            .any(|entry| entry.name == name && !entry.is_older_version())
+        {
             return Err(Error::AtEntry {
                 name: name.to_vec(),
                 operation: "adding",

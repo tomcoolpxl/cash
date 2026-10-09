@@ -972,6 +972,13 @@ fn prepare_carried(
     if let Some(times) = entry.file_times {
         write_extra_record(&mut extra, super::super::FHEXTRA_HTIME, &times.encode()?)?;
     }
+    if let Some(version) = carried.version {
+        // No flags, then the number.
+        let mut record = Bytes::new(resources);
+        record.vint(0)?;
+        record.vint(version)?;
+        write_extra_record(&mut extra, super::super::FHEXTRA_VERSION, &record)?;
+    }
     // WinRAR writes a copied member's sizes as they are: there is nothing to patch.
     let size_width = 0;
     let specific = super::headers::file_fields(

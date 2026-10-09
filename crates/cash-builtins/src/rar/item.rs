@@ -117,6 +117,8 @@ pub(super) struct Item {
     pub(super) encrypted: bool,
     /// A recovery record's share of the archive, its `RR%`.
     pub(super) recovery_percent: Option<u64>,
+    /// An older version of a file (`-ver`), its name ending in `;N`.
+    pub(super) version: Option<u64>,
 }
 
 impl Item {
@@ -287,13 +289,30 @@ pub(super) fn rar5_facts(archive: &rar50::Archive, zone: &Zone) -> Facts {
     }
 }
 
-fn rar5_item(header: &rar50::FileHeader, service: bool, zone: &Zone) -> Item {
-    let info = header.compression_info;
+/// A RAR 5 member's compression as lt shows it: `RAR 5.0(v50) -m3 -md=4m`.
+fn rar5_compression(info: u64, directory: bool) -> String {
     let version = info & 0x3F;
-    let solid = info & 0x40 != 0;
     let method = (info >> 7) & 7;
     let power = (info >> 10) & 0x1F;
     let fraction = (info >> 15) & 0x1F;
+    let (label, dict) = match version {
+        0 => ("v50", Some((128u64 << 10) << power)),
+        1 => (
+            "v70",
+            Some(((128u64 << 10) << power) / 32 * (32 + fraction)),
+        ),
+        _ => ("v0", Some(0)),
+    };
+    let mut compression = format!("RAR 5.0({label}) -m{method}");
+    if !directory && let Some(dict) = dict {
+        compression.push_str(" -md=");
+        compression.push_str(&dictionary(dict));
+    }
+    compression
+}
+
+fn rar5_item(header: &rar50::FileHeader, service: bool, zone: &Zone) -> Item {
+    let solid = header.compression_info & 0x40 != 0;
     let directory = header.is_directory();
     let kind = if service {
         Kind::Service
@@ -308,19 +327,7 @@ fn rar5_item(header: &rar50::FileHeader, service: bool, zone: &Zone) -> Item {
             _ => Kind::File,
         }
     };
-    let (label, dict) = match version {
-        0 => ("v50", Some((128u64 << 10) << power)),
-        1 => (
-            "v70",
-            Some(((128u64 << 10) << power) / 32 * (32 + fraction)),
-        ),
-        _ => ("v0", Some(0)),
-    };
-    let mut compression = format!("RAR 5.0({label}) -m{method}");
-    if !directory && let Some(dict) = dict {
-        compression.push_str(" -md=");
-        compression.push_str(&dictionary(dict));
-    }
+    let compression = rar5_compression(header.compression_info, directory);
     let host = match header.host_os {
         0 => Some("Windows"),
         1 => Some("Unix"),
@@ -367,8 +374,12 @@ fn rar5_item(header: &rar50::FileHeader, service: bool, zone: &Zone) -> Item {
     let recovery_percent = (service && header.name == b"RR")
         .then(|| header.recovery_record().ok().flatten().map(|r| r.percent))
         .flatten();
+    let mut name = String::from_utf8_lossy(&header.name).into_owned();
+    if let Some(version) = header.version {
+        name = format!("{name};{version}");
+    }
     Item {
-        name: String::from_utf8_lossy(&header.name).into_owned(),
+        name,
         kind,
         target: header
             .redirection
@@ -387,6 +398,7 @@ fn rar5_item(header: &rar50::FileHeader, service: bool, zone: &Zone) -> Item {
         solid,
         encrypted: header.encrypted,
         recovery_percent,
+        version: header.version,
     }
 }
 
@@ -503,6 +515,7 @@ fn rar4_item(header: &rar15_40::FileHeader, service: bool) -> Item {
         solid: header.is_solid(),
         encrypted: header.is_encrypted(),
         recovery_percent: None,
+        version: None,
     }
 }
 
@@ -552,6 +565,7 @@ pub(super) fn rar13_items(archive: &rar13::Archive) -> Vec<Item> {
                 solid: false,
                 encrypted: header.flags & 0x04 != 0,
                 recovery_percent: None,
+                version: None,
             }
         })
         .collect()

@@ -14,7 +14,7 @@ use cash_archive::rar::crypto::rar50::{Rar50Cipher, Rar50Keys};
 use cash_archive::rar::rar50::blake2sp;
 use cash_core::openfiles::{FileKind, OpenFiles};
 
-use super::cmdline::{Command, FindSpec, Name, Overwrite, Parsed};
+use super::cmdline::{Arg, Command, FindSpec, Name, Overwrite, Parsed};
 use super::entry::{self, Crypto, Entry, Host, Method, Time, Volume};
 use super::find;
 use super::list::{self, Comment, Masks};
@@ -544,8 +544,20 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
     }
 
     fn wanted(&self, entry: &Entry) -> bool {
-        self.job.masks.wants(&entry.name)
-            && !(self.rar.switches.skip_encrypted && entry.encrypted())
+        let masks = &self.job.masks;
+        let by_name = match (&self.rar.switches.versions, entry.version) {
+            // The files themselves; an older version only when a name is it exactly.
+            (None, None) => masks.wants(&entry.name),
+            (None, Some(_)) => masks.names(&entry.name),
+            // `-ver`: every version, under its `;N` name.
+            (Some(Arg::Bare), _) => masks.wants(&entry.name),
+            // `-verN`: version N alone, under its file's name.
+            (Some(Arg::Given(number)), Some(version)) => {
+                number.parse() == Ok(version) && masks.wants(unversioned(entry))
+            }
+            (Some(Arg::Given(_)), None) => false,
+        };
+        by_name && !(self.rar.switches.skip_encrypted && entry.encrypted())
     }
 
     /// One file of the set.
@@ -1074,7 +1086,11 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
     /// name with `-ap`'s or `-ep4`'s prefix taken off, its folders kept or not, in
     /// `-cl`'s or `-cu`'s case. `None` when `-ap` leaves it out.
     fn target_name(&self, entry: &Entry, paths: bool) -> Option<String> {
-        let mut name = entry.name.clone();
+        let mut name = if matches!(self.rar.switches.versions, Some(Arg::Given(_))) {
+            unversioned(entry).to_owned()
+        } else {
+            entry.name.clone()
+        };
         for prefix in [
             &self.rar.switches.archive_path,
             &self.rar.switches.exclude_prefix,
@@ -1399,6 +1415,14 @@ impl<SE: cash_core::ShellExtensions> Work<'_, '_, SE> {
             }
         }
     }
+}
+
+/// An entry's name without the `;N` an older version's ends in.
+fn unversioned(entry: &Entry) -> &str {
+    entry
+        .version
+        .and_then(|version| entry.name.strip_suffix(&format!(";{version}")))
+        .unwrap_or(&entry.name)
 }
 
 /// The recovery volumes' names a set's first volume, `NAME.part1.rar`, gives:

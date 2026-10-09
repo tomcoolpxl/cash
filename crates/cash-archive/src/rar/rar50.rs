@@ -68,6 +68,7 @@ const MHEXTRA_LOCATOR_RECOVERY: u64 = 0x0002;
 const FHEXTRA_CRYPT: u64 = 0x01;
 const FHEXTRA_HASH: u64 = 0x02;
 const FHEXTRA_HTIME: u64 = 0x03;
+const FHEXTRA_VERSION: u64 = 0x04;
 const FHEXTRA_REDIR: u64 = 0x05;
 const FHEXTRA_SUBDATA: u64 = 0x07;
 const MHEXTRA_ARCHIVE_METADATA: u64 = 0x02;
@@ -225,6 +226,9 @@ pub struct FileHeader {
     pub service_data: Option<Vec<u8>>,
     pub encrypted: bool,
     pub encryption: Option<FileEncryption>,
+    /// An older version of a file kept beside the newer (`-ver`): its number, from 1,
+    /// shown after its name as `;N`.
+    pub version: Option<u64>,
     crypto: Option<FileCryptoState>,
 }
 
@@ -1529,6 +1533,7 @@ fn parse_file_header_bytes(parsed: &ParsedBlockHeader) -> Result<FileHeader> {
         service_data: None,
         encrypted: false,
         encryption: None,
+        version: None,
         crypto: None,
     };
     parse_file_extra_area(
@@ -1600,6 +1605,14 @@ fn parse_file_extra_area(
                 file.rewrite_metadata_complete &=
                     is_service && (data.is_empty() || file.name == b"RR");
                 file.service_data = Some(input[data].to_vec());
+            }
+            FHEXTRA_VERSION => {
+                // Flags, none known, then the version's number.
+                let (flags, flags_len) = read_vint_at(input, data.start, data.end)?;
+                let (version, version_len) = read_vint_at(input, data.start + flags_len, data.end)?;
+                file.rewrite_metadata_complete &=
+                    !is_service && flags == 0 && flags_len + version_len == data.len();
+                file.version = Some(version);
             }
             _ => {
                 file.rewrite_metadata_complete = false;
@@ -4458,6 +4471,7 @@ mod tests {
             service_data: None,
             encrypted: false,
             encryption: None,
+            version: None,
             crypto: None,
         };
 

@@ -40,7 +40,7 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
     rar.console.msg(&format!("\nDeleting from {display}"));
 
     let members: Vec<cash_archive::rar::ArchiveMember> = opened.archive.members().collect();
-    let names: Vec<String> = members.iter().map(add::member_name).collect();
+    let names: Vec<String> = add::member_names(&opened.archive, &members);
     let gone: Vec<bool> = names.iter().map(|name| masks.wants(name)).collect();
     if !gone.contains(&true) {
         rar.console.msg("\nNo files to delete\n");

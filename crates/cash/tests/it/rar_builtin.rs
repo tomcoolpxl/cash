@@ -104,6 +104,18 @@ fn rar_extracts_by_switches_as_winrar_7_23_does() {
 }
 
 #[test]
+fn rar_keeps_versions_as_winrar_7_23_does() {
+    // A trial WinRAR says so after its banner when it writes; cash has no trial.
+    let expected = with_divergence(
+        &with_cash_banners("rar_versions", 18, 0),
+        "\nEvaluation copy. Please register.\n",
+        "",
+        5,
+    );
+    assert_eq!(run_oracle_script("rar_versions"), expected);
+}
+
+#[test]
 fn rar_says_it_makes_no_recovery_volumes_or_sfx() {
     let out = run("rar rv2 -idq a.rar; echo \"rc=$?\"; rar s -idq a.rar; echo \"rc=$?\"");
     assert_eq!(out.stdout, "rc=2\nrc=2");

@@ -673,7 +673,15 @@ rars is in, as `cash-archive::rar` (its tests in the slow lane). What is left:
      line said "built" of them, but extraction read none, set no folder's time, and
      summed up each archive alone). `-ts`, `-tsc`, `-tsa` and `-tsm-` on extraction:
      compared with Rar.exe by hand, not in the oracle. Left, not built: links (`-ol`;
-     extraction writes a link as a plain file) and `-ver` (versions, on `a` and `x`).
+     extraction writes a link as a plain file).
+   - `-ver`: done 2026-10-09 (`rar_versions.sh`, 315 lines, the archives WinRAR's byte
+     for byte): rars reads and writes the version record, `a`/`u`/`f` keep the file
+     replaced as `name;N` with `-ver`, `-verN` drops the oldest beyond N and numbers
+     the rest again, listings show `;N` and lt "File version", `x`/`t`/`p` take an older
+     version only named exactly, all with `-ver`, version N plainly named with `-verN`,
+     `d` matches the `;N` name. Left: versions in a solid archive (its members are
+     rewritten, not carried, and lose their numbers), and a file comment on a member
+     with older versions (set by name, it may land on the wrong one).
    - A damaged folder header near an archive's end: Rar.exe still tests the folder "OK"
      and adds "NAME - the file header is corrupt" after "Corrupt header is found" for
      each, reading on; cash stops at the first (seen damaging four bytes at offset 200

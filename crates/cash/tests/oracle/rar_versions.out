@@ -1,0 +1,315 @@
+== a -ver, twice; u -ver
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Creating archive v.rar
+
+Adding    src/f.txt                                                        OK 
+Adding    src/g.txt                                                        OK 
+Done
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Updating archive v.rar
+
+Adding    src/f.txt                                                        OK 
+Adding    src/g.txt                                                        OK 
+Done
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Updating archive v.rar
+
+Adding    src/f.txt                                                        OK 
+Done
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Archive: v.rar
+Details: RAR 5
+
+        Name: src/f.txt;1
+        Type: File
+        Size: 3
+ Packed size: 3
+       Ratio: 100%
+    Modified: 2024-01-01 01:00:00,000000000
+  Attributes: ..A....
+       CRC32: 89B5235C
+     Host OS: Windows
+ Compression: RAR 5.0(v50) -m0 -md=128k
+File version: 1
+
+        Name: src/g.txt;1
+        Type: File
+        Size: 3
+ Packed size: 3
+       Ratio: 100%
+    Modified: 2024-01-01 01:00:00,000000000
+  Attributes: ..A....
+       CRC32: 9451EA1B
+     Host OS: Windows
+ Compression: RAR 5.0(v50) -m0 -md=128k
+File version: 1
+
+        Name: src/f.txt;2
+        Type: File
+        Size: 4
+ Packed size: 4
+       Ratio: 100%
+    Modified: 2024-02-01 01:00:00,000000000
+  Attributes: ..A....
+       CRC32: 8800A253
+     Host OS: Windows
+ Compression: RAR 5.0(v50) -m0 -md=128k
+File version: 2
+
+        Name: src/g.txt
+        Type: File
+        Size: 3
+ Packed size: 3
+       Ratio: 100%
+    Modified: 2024-01-01 01:00:00,000000000
+  Attributes: ..A....
+       CRC32: 9451EA1B
+     Host OS: Windows
+ Compression: RAR 5.0(v50) -m0 -md=128k
+
+        Name: src/f.txt
+        Type: File
+        Size: 5
+ Packed size: 5
+       Ratio: 100%
+    Modified: 2024-03-01 01:00:00,000000000
+  Attributes: ..A....
+       CRC32: A244D37F
+     Host OS: Windows
+ Compression: RAR 5.0(v50) -m0 -md=128k
+
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Archive: v.rar
+Details: RAR 5
+
+ Attributes       Size     Date    Time   Name
+----------- ----------  ---------- -----  ----
+    ..A....          3  2024-01-01 01:00  src/f.txt;1
+    ..A....          3  2024-01-01 01:00  src/g.txt;1
+    ..A....          4  2024-02-01 01:00  src/f.txt;2
+    ..A....          3  2024-01-01 01:00  src/g.txt
+    ..A....          5  2024-03-01 01:00  src/f.txt
+----------- ----------  ---------- -----  ----
+                    18                    5
+
+rc=0
+2635039310 263
+== -ver2: the oldest beyond two go, the rest numbered again
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Updating archive v2.rar
+
+Deleting src/f.txt;1
+Adding    src/f.txt                                                        OK 
+Done
+rc=0
+src/g.txt;1
+src/f.txt;1
+src/g.txt
+src/f.txt;2
+src/f.txt
+rc=0
+3847369105 266
+== an update without -ver replaces the file itself
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Evaluation copy. Please register.
+
+Updating archive v3.rar
+
+Updating  src/f.txt                                                        OK 
+Done
+rc=0
+src/f.txt;1
+src/g.txt;1
+src/f.txt;2
+src/g.txt
+src/f.txt
+rc=0
+== x and t: the files themselves, an older version named exactly
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from v.rar
+
+Creating    o1                                                        OK
+Creating    o1/src                                                    OK
+Extracting  o1/src/g.txt                                                   OK 
+Extracting  o1/src/f.txt                                                   OK 
+All OK
+rc=0
+./src/f.txt: v3--
+./src/g.txt: g1
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from v.rar
+
+Creating    o2                                                        OK
+Creating    o2/src                                                    OK
+Extracting  o2/src/f.txt;1                                                 OK 
+All OK
+rc=0
+./src/f.txt;1: v1
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from v.rar
+
+No files to extract
+rc=10
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive v.rar
+
+Testing     src/g.txt                                                      OK 
+Testing     src/f.txt                                                      OK 
+All OK
+rc=0
+== -ver: every version, under its name
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from v.rar
+
+Creating    o4                                                        OK
+Creating    o4/src                                                    OK
+Extracting  o4/src/f.txt;1                                                 OK 
+Extracting  o4/src/g.txt;1                                                 OK 
+Extracting  o4/src/f.txt;2                                                 OK 
+Extracting  o4/src/g.txt                                                   OK 
+Extracting  o4/src/f.txt                                                   OK 
+All OK
+rc=0
+./src/f.txt: v3--
+./src/f.txt;1: v1
+./src/f.txt;2: v2-
+./src/g.txt: g1
+./src/g.txt;1: g1
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Testing archive v.rar
+
+Testing     src/f.txt;1                                                    OK 
+Testing     src/g.txt;1                                                    OK 
+Testing     src/f.txt;2                                                    OK 
+Testing     src/g.txt                                                      OK 
+Testing     src/f.txt                                                      OK 
+All OK
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from v.rar
+
+Creating    o5                                                        OK
+Extracting  o5/f.txt;1                                                     OK 
+Extracting  o5/g.txt;1                                                     OK 
+Extracting  o5/f.txt;2                                                     OK 
+Extracting  o5/g.txt                                                       OK 
+Extracting  o5/f.txt                                                       OK 
+All OK
+rc=0
+./f.txt: v3--
+./f.txt;1: v1
+./f.txt;2: v2-
+./g.txt: g1
+./g.txt;1: g1
+v1
+g1
+v2-
+g1
+v3--
+rc=0
+v2-
+rc=0
+== -verN: version N alone, under its file's name
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from v.rar
+
+Creating    o6                                                        OK
+Creating    o6/src                                                    OK
+Extracting  o6/src/f.txt                                                   OK 
+Extracting  o6/src/g.txt                                                   OK 
+All OK
+rc=0
+./src/f.txt: v1
+./src/g.txt: g1
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Extracting from v.rar
+
+No files to extract
+rc=10
+== d: the file itself, or a version named
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Deleting from d1.rar
+Deleting src/f.txt
+Done
+rc=0
+src/f.txt;1
+src/g.txt;1
+src/f.txt;2
+src/g.txt
+rc=0
+
+RAR 7.23 x64   Copyright (c) 1993-2026 Alexander Roshal   27 Jun 2026
+Trial version             Type 'rar -?' for help
+
+Deleting from d2.rar
+Deleting src/f.txt;1
+Done
+rc=0
+src/g.txt;1
+src/f.txt;2
+src/g.txt
+src/f.txt
+rc=0

@@ -105,6 +105,8 @@ pub(super) struct Entry {
     pub(super) host: Host,
     /// The volume its first part is in.
     pub(super) volume: usize,
+    /// An older version of a file (`-ver`): its number, its name ending in `;N`.
+    pub(super) version: Option<u64>,
 }
 
 impl Entry {
@@ -142,7 +144,10 @@ fn rar5(archive: &rar50::Archive, volume: usize, entries: &mut Vec<Entry>) {
         let rar50::Block::File(header) = block else {
             continue;
         };
-        let name = String::from_utf8_lossy(&header.name).into_owned();
+        let mut name = String::from_utf8_lossy(&header.name).into_owned();
+        if let Some(version) = header.version {
+            name = format!("{name};{version}");
+        }
         let crypto = header.encryption.as_ref().map(|e| Crypto::Rar5 {
             salt: e.salt,
             iv: e.iv,
@@ -252,6 +257,7 @@ fn rar5(archive: &rar50::Archive, volume: usize, entries: &mut Vec<Entry>) {
                 _ => Host::Other,
             },
             volume,
+            version: header.version,
         });
     }
 }
@@ -325,6 +331,7 @@ fn rar4(archive: &rar15_40::Archive, volume: usize, entries: &mut Vec<Entry>) {
                 _ => Host::Other,
             },
             volume,
+            version: None,
         });
     }
 }
@@ -377,6 +384,7 @@ fn rar1(archive: &rar13::Archive, volume: usize, entries: &mut Vec<Entry>) {
             attributes: u64::from(header.file_attr),
             host: Host::Windows,
             volume,
+            version: None,
         });
     }
 }

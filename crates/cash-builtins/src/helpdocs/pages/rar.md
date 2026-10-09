@@ -10,7 +10,11 @@ volumes after it); `rar t` tests it; `rar x` extracts it with its folders and `r
 without them, into the current folder or the folder named last with a trailing `\` or
 `/`, or `-op`; `rar p` prints files to standard output. Names after the archive choose
 files, `-x` and `-n` leave some out or keep only some, `@list` reads them from a file.
-`unrar` has these commands alone.
+`-f` extracts only files that are there and older, `-u` those and the files not there;
+`-ad` puts each archive's files in a folder named after it, `-ad1` that folder beside
+the archive, `-ad2` the archive's own folder; `-ts`, `-tsc`, `-tsa` give back the
+creation and access times kept. Folders get their times and attributes back, `-ai`
+leaving the attributes. `unrar` has these commands alone.
 
 `rar a ARCHIVE NAMES` adds files and folders, making the archive if need be (`.rar` is
 added to a name without an extension); `rar u` adds what is new or newer, `rar f` only
@@ -24,6 +28,9 @@ checksums for CRC32, `-qo` the quick-open record, `-rr` a recovery record,
 `-k` locks the archive, `-z` adds a comment, `-p` and `-hp` encrypt the data and the
 names, `-v` cuts the archive into volumes (`NAME.part1.rar` and on), `-t` tests what was
 written, `-df` deletes what was added, `-ts` keeps the creation and access times too.
+With `-ver` a file replaced stays as an older version, `name;1`, `name;2` and on (`-ver3`
+keeps three); those are listed, but `x`, `t` and `p` take them only when named exactly,
+or every one with `-ver`, or version N under its file's name with `-verN`.
 
 `rar c` adds a comment, from `-z`'s file or standard input; `rar cw` writes it to a file
 or standard output. `rar rn ARCHIVE OLD NEW…` renames files (a folder with what it

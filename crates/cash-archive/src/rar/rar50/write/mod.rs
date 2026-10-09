@@ -108,6 +108,8 @@ pub struct Carried {
     pub crc32: Option<u32>,
     pub hash: Option<super::FileHash>,
     pub encryption: Option<super::FileEncryption>,
+    /// The older version it is, `;N`, or none.
+    pub version: Option<u64>,
 }
 
 impl Carried {
@@ -131,6 +133,7 @@ impl Carried {
             crc32: file.data_crc32,
             hash: file.hash.clone(),
             encryption: file.encryption.clone(),
+            version: file.version,
         })
     }
 }

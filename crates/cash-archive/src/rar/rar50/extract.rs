@@ -394,6 +394,7 @@ impl FileHeader {
             service_data: None,
             encrypted: self.encrypted,
             encryption: self.encryption.clone(),
+            version: self.version,
             crypto: self.crypto.clone(),
         };
         let mut session = DecoderSession::with_allowance(
@@ -2119,6 +2120,7 @@ mod tests {
             service_data: None,
             encrypted: false,
             encryption: None,
+            version: None,
             crypto: None,
         }
     }
@@ -2744,6 +2746,7 @@ mod tests {
             service_data: None,
             encrypted: false,
             encryption: None,
+            version: None,
             crypto: None,
         };
 
@@ -3074,6 +3077,7 @@ mod tests {
                 service_data: None,
                 encrypted: false,
                 encryption: None,
+                version: None,
                 crypto: None,
             })],
             source: ArchiveSource::Memory(source),
@@ -3118,6 +3122,7 @@ mod tests {
             service_data: None,
             encrypted: false,
             encryption: None,
+            version: None,
             crypto: None,
         }
     }

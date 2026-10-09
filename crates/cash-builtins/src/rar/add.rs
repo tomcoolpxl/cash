@@ -160,7 +160,10 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
         .as_ref()
         .map(|o| o.archive.members().collect())
         .unwrap_or_default();
-    let names: Vec<String> = members.iter().map(member_name).collect();
+    let names: Vec<String> = old
+        .as_ref()
+        .map(|o| member_names(&o.archive, &members))
+        .unwrap_or_default();
     let mut actions: Vec<Option<(Action, Option<usize>)>> = Vec::new();
     for source in &sources {
         let there = names
@@ -187,7 +190,8 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
         return Ok(());
     }
 
-    let slots = plan(&sources, &actions, &members);
+    let versions = version_files(rar, old.as_ref(), &members, &names, &mut actions);
+    let slots = plan(&sources, &actions, &members, &versions.dropped);
     let password = data_password(rar)?;
     let mut builder = match &old {
         Some(opened) => match opened.archive.preserving_builder(password.as_deref()) {
@@ -229,6 +233,10 @@ pub(super) fn run<SE: cash_core::ShellExtensions>(
         let added = match (*slot, keeper.as_mut()) {
             (Slot::Kept(index), Some(keeper)) => keeper
                 .keep(&mut builder, index, password.is_some())
+                .and_then(|()| match versions.numbers.get(&index) {
+                    Some(&number) => builder.set_carried_version(Some(number)),
+                    None => Ok(()),
+                })
                 .map(|()| None),
             (Slot::Kept(_), None) => Ok(None),
             (Slot::Put(index), _) => {
@@ -307,12 +315,114 @@ pub(super) fn member_name(member: &rar::ArchiveMember) -> String {
     String::from_utf8_lossy(&member.meta.name).replace('\\', "/")
 }
 
+/// Each member's version, when it is an older version of its file (`-ver`).
+pub(super) fn member_versions(archive: &rar::Archive, count: usize) -> Vec<Option<u64>> {
+    let mut versions: Vec<Option<u64>> = archive
+        .as_rar50()
+        .map(|archive| archive.files().map(|file| file.version).collect())
+        .unwrap_or_default();
+    versions.resize(count, None);
+    versions
+}
+
+/// The members' names as rar compares them, an older version's with its `;N`.
+pub(super) fn member_names(archive: &rar::Archive, members: &[rar::ArchiveMember]) -> Vec<String> {
+    members
+        .iter()
+        .zip(member_versions(archive, members.len()))
+        .map(|(member, version)| match version {
+            Some(version) => format!("{};{version}", member_name(member)),
+            None => member_name(member),
+        })
+        .collect()
+}
+
+/// What `-ver` makes of the members sources replace.
+#[derive(Default)]
+struct Versions {
+    /// The number each member kept is to have, by its index.
+    numbers: std::collections::HashMap<usize, u64>,
+    /// The members `-verN`'s limit drops.
+    dropped: Vec<usize>,
+}
+
+/// `-ver`: a file a source replaces keeps its place as an older version, one past its
+/// file's last, and the source is added after the rest; with `-verN` the oldest beyond
+/// N go, said, and those left are numbered from 1 again. Only a RAR 5 archive keeps
+/// versions.
+fn version_files<SE: cash_core::ShellExtensions>(
+    rar: &Rar<'_, SE>,
+    old: Option<&open::Opened>,
+    members: &[rar::ArchiveMember],
+    names: &[String],
+    actions: &mut [Option<(Action, Option<usize>)>],
+) -> Versions {
+    let mut versions = Versions::default();
+    let Some(asked) = &rar.switches.versions else {
+        return versions;
+    };
+    let Some(archive) = old
+        .map(|old| &old.archive)
+        .filter(|a| a.as_rar50().is_some())
+    else {
+        return versions;
+    };
+    let had = member_versions(archive, members.len());
+    let bases: Vec<String> = members
+        .iter()
+        .map(|member| member_name(member).to_lowercase())
+        .collect();
+    let number =
+        |versions: &Versions, index: usize| versions.numbers.get(&index).copied().or(had[index]);
+    let mut retired = Vec::new();
+    for action in actions.iter_mut() {
+        let Some((Action::Update, Some(member))) = *action else {
+            continue;
+        };
+        if members[member].meta.is_directory {
+            continue;
+        }
+        let last = (0..members.len())
+            .filter(|&index| bases[index] == bases[member])
+            .filter_map(|index| number(&versions, index))
+            .max()
+            .unwrap_or(0);
+        versions.numbers.insert(member, last + 1);
+        *action = Some((Action::Add, None));
+        retired.push(member);
+    }
+    let Some(limit) = asked.text().and_then(|text| text.parse::<usize>().ok()) else {
+        return versions;
+    };
+    let mut seen = std::collections::HashSet::new();
+    for member in retired {
+        if !seen.insert(bases[member].clone()) {
+            continue;
+        }
+        let mut older: Vec<(u64, usize)> = (0..members.len())
+            .filter(|&index| bases[index] == bases[member])
+            .filter_map(|index| number(&versions, index).map(|n| (n, index)))
+            .collect();
+        older.sort_unstable();
+        let excess = older.len().saturating_sub(limit);
+        for &(_, index) in older.get(..excess).unwrap_or_default() {
+            rar.console.msg(&format!("\nDeleting {}", names[index]));
+            versions.dropped.push(index);
+        }
+        for (n, &(_, index)) in older.get(excess..).unwrap_or_default().iter().enumerate() {
+            versions.numbers.insert(index, n as u64 + 1);
+        }
+    }
+    versions
+}
+
 /// The order rar writes in: the archive's files where they were, a replaced one in its
 /// place; then the new files; then every folder, the new before the old, deepest first.
 fn plan(
     sources: &[Source],
     actions: &[Option<(Action, Option<usize>)>],
     members: &[rar::ArchiveMember],
+    dropped: &[usize],
 ) -> Vec<Slot> {
     let replacing = |member: usize| {
         actions
@@ -321,7 +431,7 @@ fn plan(
     };
     let mut slots = Vec::new();
     for (index, member) in members.iter().enumerate() {
-        if !member.meta.is_directory {
+        if !member.meta.is_directory && !dropped.contains(&index) {
             slots.push(replacing(index).map_or(Slot::Kept(index), Slot::Put));
         }
     }

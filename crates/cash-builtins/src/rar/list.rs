@@ -426,6 +426,9 @@ fn technical(text: &mut String, item: &Item) {
         field(text, "Host OS", host);
     }
     field(text, "Compression", &item.compression);
+    if let Some(version) = item.version {
+        field(text, "File version", &version.to_string());
+    }
     let mut flags = String::new();
     if item.encrypted {
         flags.push_str("encrypted ");
@@ -502,6 +505,16 @@ impl Masks {
         (self.include.is_empty() || self.include.iter().any(|mask| matches(mask, &name)))
             && !self.exclude.iter().any(|mask| matches(mask, &name))
             && (self.filter.is_empty() || self.filter.iter().any(|mask| matches(mask, &name)))
+    }
+
+    /// Whether a name is wanted by a mask that is that name, no wildcard in it: how an
+    /// older version of a file, `name;N`, is chosen without `-ver`.
+    pub(super) fn names(&self, name: &str) -> bool {
+        let name = name.replace('\\', "/");
+        self.include
+            .iter()
+            .any(|mask| !open::has_wildcard(mask) && mask.eq_ignore_ascii_case(&name))
+            && self.wants(&name)
     }
 }
 
