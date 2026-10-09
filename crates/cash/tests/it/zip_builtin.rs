@@ -45,6 +45,16 @@ fn unzip_and_zipinfo_match_unzip_6_00() {
 }
 
 #[test]
+fn zip_usage_begins_as_info_zips_does_without_the_copyright() {
+    let out = run("zip -h | head -2");
+    assert_eq!(
+        out.stdout,
+        "Zip 3.0 (July 5th 2008). Usage:\n\
+         zip [-options] [-b path] [-t mmddyyyy] [-n suffixes] [zipfile list] [-xi list]"
+    );
+}
+
+#[test]
 fn the_three_are_builtins_with_pages() {
     for (name, word) in [
         ("zip", "zip 3.0"),

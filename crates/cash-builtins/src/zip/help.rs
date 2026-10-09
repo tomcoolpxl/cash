@@ -1,4 +1,5 @@
-//! The usage texts: Info-ZIP's, with cash's own first lines.
+//! The usage texts: Info-ZIP's, with cash's own first lines; zip's without its
+//! copyright line.
 
 /// `unzip`'s usage, after its version line.
 pub(super) const UNZIP_USAGE: &str = "\
@@ -67,9 +68,9 @@ miscellaneous options:
   -I  CHARSET  specify a character encoding for UNIX and other archives
 ";
 
-/// `zip -h`.
+/// `zip -h`: Info-ZIP's, from its version line on.
 pub(super) const ZIP_USAGE: &str = "\
-Zip (cash): Zip 3.0's options, in pure Rust. Usage:
+Zip 3.0 (July 5th 2008). Usage:
 zip [-options] [-b path] [-t mmddyyyy] [-n suffixes] [zipfile list] [-xi list]
   The default action is to add or replace zipfile entries from list, which
   can include the special name - to compress standard input.
